@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
@@ -44,31 +46,31 @@ func (c *retryingCIDataClient) ListAllJobs(ctx context.Context) ([]jobrunaggrega
 	return ret, err
 }
 
-func (c *retryingCIDataClient) GetLastJobRunWithTestRunDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
-	var ret *jobrunaggregatorapi.JobRunRow
+func (c *retryingCIDataClient) ListProwJobRunsSince(ctx context.Context, since *time.Time) ([]*jobrunaggregatorapi.TestPlatformProwJobRow, error) {
+	var ret []*jobrunaggregatorapi.TestPlatformProwJobRow
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
 		var innerErr error
-		ret, innerErr = c.delegate.GetLastJobRunWithTestRunDataForJobName(ctx, jobName)
+		ret, innerErr = c.delegate.ListProwJobRunsSince(ctx, since)
 		return innerErr
 	})
 	return ret, err
 }
 
-func (c *retryingCIDataClient) GetLastJobRunWithDisruptionDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
-	var ret *jobrunaggregatorapi.JobRunRow
+func (c *retryingCIDataClient) GetLastJobRunEndTimeFromTable(ctx context.Context, tableName string) (*time.Time, error) {
+	var ret *time.Time
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
 		var innerErr error
-		ret, innerErr = c.delegate.GetLastJobRunWithDisruptionDataForJobName(ctx, jobName)
+		ret, innerErr = c.delegate.GetLastJobRunEndTimeFromTable(ctx, tableName)
 		return innerErr
 	})
 	return ret, err
 }
 
-func (c *retryingCIDataClient) GetLastJobRunWithAlertDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
-	var ret *jobrunaggregatorapi.JobRunRow
+func (c *retryingCIDataClient) ListUploadedJobRunIDsSinceFromTable(ctx context.Context, table string, since *time.Time) (map[string]bool, error) {
+	var ret map[string]bool
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
 		var innerErr error
-		ret, innerErr = c.delegate.GetLastJobRunWithAlertDataForJobName(ctx, jobName)
+		ret, innerErr = c.delegate.ListUploadedJobRunIDsSinceFromTable(ctx, table, since)
 		return innerErr
 	})
 	return ret, err
@@ -167,6 +169,7 @@ func isReadQuotaError(err error) bool {
 		return false
 	}
 	if strings.Contains(err.Error(), "exceeded quota for concurrent queries") {
+		logrus.WithError(err).Warn("hit a read quota error")
 		return true
 	}
 	return false

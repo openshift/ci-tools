@@ -100,49 +100,19 @@ func (mr *MockCIDataClientMockRecorder) GetLastAggregationForJob(arg0, arg1, arg
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLastAggregationForJob", reflect.TypeOf((*MockCIDataClient)(nil).GetLastAggregationForJob), arg0, arg1, arg2)
 }
 
-// GetLastJobRunWithAlertDataForJobName mocks base method.
-func (m *MockCIDataClient) GetLastJobRunWithAlertDataForJobName(arg0 context.Context, arg1 string) (*jobrunaggregatorapi.JobRunRow, error) {
+// GetLastJobRunEndTimeFromTable mocks base method.
+func (m *MockCIDataClient) GetLastJobRunEndTimeFromTable(arg0 context.Context, arg1 string) (*time.Time, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLastJobRunWithAlertDataForJobName", arg0, arg1)
-	ret0, _ := ret[0].(*jobrunaggregatorapi.JobRunRow)
+	ret := m.ctrl.Call(m, "GetLastJobRunEndTimeFromTable", arg0, arg1)
+	ret0, _ := ret[0].(*time.Time)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetLastJobRunWithAlertDataForJobName indicates an expected call of GetLastJobRunWithAlertDataForJobName.
-func (mr *MockCIDataClientMockRecorder) GetLastJobRunWithAlertDataForJobName(arg0, arg1 interface{}) *gomock.Call {
+// GetLastJobRunEndTimeFromTable indicates an expected call of GetLastJobRunEndTimeFromTable.
+func (mr *MockCIDataClientMockRecorder) GetLastJobRunEndTimeFromTable(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLastJobRunWithAlertDataForJobName", reflect.TypeOf((*MockCIDataClient)(nil).GetLastJobRunWithAlertDataForJobName), arg0, arg1)
-}
-
-// GetLastJobRunWithDisruptionDataForJobName mocks base method.
-func (m *MockCIDataClient) GetLastJobRunWithDisruptionDataForJobName(arg0 context.Context, arg1 string) (*jobrunaggregatorapi.JobRunRow, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLastJobRunWithDisruptionDataForJobName", arg0, arg1)
-	ret0, _ := ret[0].(*jobrunaggregatorapi.JobRunRow)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetLastJobRunWithDisruptionDataForJobName indicates an expected call of GetLastJobRunWithDisruptionDataForJobName.
-func (mr *MockCIDataClientMockRecorder) GetLastJobRunWithDisruptionDataForJobName(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLastJobRunWithDisruptionDataForJobName", reflect.TypeOf((*MockCIDataClient)(nil).GetLastJobRunWithDisruptionDataForJobName), arg0, arg1)
-}
-
-// GetLastJobRunWithTestRunDataForJobName mocks base method.
-func (m *MockCIDataClient) GetLastJobRunWithTestRunDataForJobName(arg0 context.Context, arg1 string) (*jobrunaggregatorapi.JobRunRow, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLastJobRunWithTestRunDataForJobName", arg0, arg1)
-	ret0, _ := ret[0].(*jobrunaggregatorapi.JobRunRow)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetLastJobRunWithTestRunDataForJobName indicates an expected call of GetLastJobRunWithTestRunDataForJobName.
-func (mr *MockCIDataClientMockRecorder) GetLastJobRunWithTestRunDataForJobName(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLastJobRunWithTestRunDataForJobName", reflect.TypeOf((*MockCIDataClient)(nil).GetLastJobRunWithTestRunDataForJobName), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLastJobRunEndTimeFromTable", reflect.TypeOf((*MockCIDataClient)(nil).GetLastJobRunEndTimeFromTable), arg0, arg1)
 }
 
 // ListAggregatedTestRunsForJob mocks base method.
@@ -205,6 +175,21 @@ func (mr *MockCIDataClientMockRecorder) ListDisruptionHistoricalData(arg0 interf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListDisruptionHistoricalData", reflect.TypeOf((*MockCIDataClient)(nil).ListDisruptionHistoricalData), arg0)
 }
 
+// ListProwJobRunsSince mocks base method.
+func (m *MockCIDataClient) ListProwJobRunsSince(arg0 context.Context, arg1 *time.Time) ([]*jobrunaggregatorapi.TestPlatformProwJobRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListProwJobRunsSince", arg0, arg1)
+	ret0, _ := ret[0].([]*jobrunaggregatorapi.TestPlatformProwJobRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListProwJobRunsSince indicates an expected call of ListProwJobRunsSince.
+func (mr *MockCIDataClientMockRecorder) ListProwJobRunsSince(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListProwJobRunsSince", reflect.TypeOf((*MockCIDataClient)(nil).ListProwJobRunsSince), arg0, arg1)
+}
+
 // ListReleaseTags mocks base method.
 func (m *MockCIDataClient) ListReleaseTags(arg0 context.Context) (sets.String, error) {
 	m.ctrl.T.Helper()
@@ -233,4 +218,19 @@ func (m *MockCIDataClient) ListUnifiedTestRunsForJobAfterDay(arg0 context.Contex
 func (mr *MockCIDataClientMockRecorder) ListUnifiedTestRunsForJobAfterDay(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListUnifiedTestRunsForJobAfterDay", reflect.TypeOf((*MockCIDataClient)(nil).ListUnifiedTestRunsForJobAfterDay), arg0, arg1, arg2)
+}
+
+// ListUploadedJobRunIDsSinceFromTable mocks base method.
+func (m *MockCIDataClient) ListUploadedJobRunIDsSinceFromTable(arg0 context.Context, arg1 string, arg2 *time.Time) (map[string]bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListUploadedJobRunIDsSinceFromTable", arg0, arg1, arg2)
+	ret0, _ := ret[0].(map[string]bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListUploadedJobRunIDsSinceFromTable indicates an expected call of ListUploadedJobRunIDsSinceFromTable.
+func (mr *MockCIDataClientMockRecorder) ListUploadedJobRunIDsSinceFromTable(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListUploadedJobRunIDsSinceFromTable", reflect.TypeOf((*MockCIDataClient)(nil).ListUploadedJobRunIDsSinceFromTable), arg0, arg1, arg2)
 }

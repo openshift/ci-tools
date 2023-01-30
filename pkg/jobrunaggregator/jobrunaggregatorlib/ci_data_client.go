@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/bigquery"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/api/iterator"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -31,30 +32,19 @@ type AggregationJobClient interface {
 	ListAggregatedTestRunsForJob(ctx context.Context, frequency, jobName string, startDay time.Time) ([]jobrunaggregatorapi.AggregatedTestRunRow, error)
 }
 
-// TestRunUploadClient client view used by the test run uploader.  This is separated to make it easier to reason about which tables
-// are in use by this client
-type TestRunUploadClient interface {
-	GetLastJobRunWithTestRunDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error)
-}
-
 // TestRunSummarizerClient client view used by the test run summarization client.
 type TestRunSummarizerClient interface {
 	GetLastAggregationForJob(ctx context.Context, frequency, jobName string) (*jobrunaggregatorapi.AggregatedTestRunRow, error)
 	ListUnifiedTestRunsForJobAfterDay(ctx context.Context, jobName string, startDay time.Time) (*UnifiedTestRunRowIterator, error)
 }
 
-// DisruptionUploadClient client view used by the disruption loader so its easier to reason about which tables are in play
-type DisruptionUploadClient interface {
-	GetLastJobRunWithDisruptionDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error)
-}
-
-// AlertUploadClient client view used by the alert loader so its easier to reason about which tables are in play
-type AlertUploadClient interface {
-	GetLastJobRunWithAlertDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error)
-}
-
 type JobLister interface {
 	ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRow, error)
+
+	// ListProwJobRunsSince lists from the testplatform BigQuery dataset in a separate project from
+	// where we normally operate. Job runs are inserted here just after their GCS artifacts are uploaded.
+	// This function is used for importing runs we do not yet have into our tables.
+	ListProwJobRunsSince(ctx context.Context, since *time.Time) ([]*jobrunaggregatorapi.TestPlatformProwJobRow, error)
 }
 
 type HistoricalDataClient interface {
@@ -65,13 +55,16 @@ type HistoricalDataClient interface {
 type CIDataClient interface {
 	JobLister
 	AggregationJobClient
-	TestRunUploadClient
-	DisruptionUploadClient
-	AlertUploadClient
 	TestRunSummarizerClient
 	HistoricalDataClient
+
 	// these deal with release tags
 	ListReleaseTags(ctx context.Context) (sets.String, error)
+
+	// GetLastJobRunEndTimeFromTable returns the last uploaded job runs EndTime in the given table.
+	GetLastJobRunEndTimeFromTable(ctx context.Context, table string) (*time.Time, error)
+
+	ListUploadedJobRunIDsSinceFromTable(ctx context.Context, table string, since *time.Time) (map[string]bool, error)
 }
 
 type ciDataClient struct {
@@ -248,50 +241,110 @@ ORDER BY Jobs.JobName ASC
 	return jobs, nil
 }
 
-func (c *ciDataClient) GetLastJobRunWithTestRunDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
-	return c.getLastJobRunWithTestRunDataForJobName(ctx, jobrunaggregatorapi.LegacyJobRunTableName, jobName)
-}
-
-func (c *ciDataClient) GetLastJobRunWithDisruptionDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
-	return c.getLastJobRunWithTestRunDataForJobName(ctx, jobrunaggregatorapi.DisruptionJobRunTableName, jobName)
-}
-
-func (c *ciDataClient) GetLastJobRunWithAlertDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
-	return c.getLastJobRunWithTestRunDataForJobName(ctx, jobrunaggregatorapi.AlertJobRunTableName, jobName)
-}
-
-func (c *ciDataClient) getLastJobRunWithTestRunDataForJobName(ctx context.Context, tableName, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
-	// the JobRun.Name is always increasing, so we can sort by that name.  The starttime is based on the prowjob
-	// time and I don't think that is coordinated.
-	// the testruns jobrun table is now distinct, so we will use the jobrun table as authoritative for what data should and should not
-	// be uploaded rather than using the absence of testruns itself.  This will avoid having a large join and if a jobrun lacks test runs
-	// for some reason, this avoids duplicate jobruns being created.
+// GetLastJobRunEndTimeFromTable retrieves the last imported job end time.
+func (c *ciDataClient) GetLastJobRunEndTimeFromTable(ctx context.Context, table string) (*time.Time, error) {
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(
-		`
-SELECT *
-FROM DATA_SET_LOCATION.` + tableName + ` as JobRuns 
-WHERE JobRuns.JobName = @JobName
-ORDER BY JobRuns.Name DESC
-LIMIT 1
-`)
+		`SELECT max(EndTime) AS EndTime FROM DATA_SET_LOCATION.` + table)
+	logrus.Debug(queryString)
+
+	type endTime struct {
+		EndTime time.Time `bigquery:"EndTime"`
+	}
 
 	query := c.client.Query(queryString)
+	rows, err := query.Read(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query job table with %q: %w", queryString, err)
+	}
+	maxEndTime := &endTime{}
+	for {
+		err = rows.Next(maxEndTime)
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			logrus.Error("error getting max end time")
+			return nil, err
+		}
+	}
+	return &maxEndTime.EndTime, nil
+}
+
+func (c *ciDataClient) ListUploadedJobRunIDsSinceFromTable(ctx context.Context, table string, since *time.Time) (map[string]bool, error) {
+	queryString := c.dataCoordinates.SubstituteDataSetLocation(
+		`SELECT Name as JobRunID  
+FROM DATA_SET_LOCATION.` + table + `
+WHERE EndTime >= @Since
+ORDER BY EndTime ASC
+`)
+	query := c.client.Query(queryString)
 	query.QueryConfig.Parameters = []bigquery.QueryParameter{
-		{Name: "JobName", Value: jobName},
+		{Name: "Since", Value: *since},
 	}
-	lastJobRunRow, err := query.Read(ctx)
+	jobRows, err := query.Read(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query aggregation table with %q: %w", queryString, err)
+		return nil, fmt.Errorf("failed to query job table with %q: %w", queryString, err)
 	}
-	lastJobRun := &jobrunaggregatorapi.JobRunRow{}
-	err = lastJobRunRow.Next(lastJobRun)
-	if err == iterator.Done {
-		return nil, nil
+
+	type jobRunID struct {
+		JobRunID string
 	}
+
+	jobRunIDs := map[string]bool{}
+	for {
+		jobRunID := &jobRunID{}
+		err = jobRows.Next(jobRunID)
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		jobRunIDs[jobRunID.JobRunID] = true
+	}
+
+	return jobRunIDs, nil
+}
+
+func (c *ciDataClient) ListProwJobRunsSince(ctx context.Context, since *time.Time) ([]*jobrunaggregatorapi.TestPlatformProwJobRow, error) {
+	// NOTE: this query is going to a different GCP project and data set to list the
+	// prow jobs stored by testplatform.
+	queryString := `SELECT 
+			prowjob_job_name, 
+			prowjob_state, 
+			prowjob_build_id, 
+			prowjob_type, 
+			prowjob_cluster, 
+            prowjob_url,
+			TIMESTAMP(prowjob_start) AS prowjob_start_ts, 
+			TIMESTAMP(prowjob_completion) AS prowjob_completion_ts ` +
+		"FROM `openshift-gce-devel.ci_analysis_us.jobs` " +
+		`WHERE TIMESTAMP(prowjob_completion) > @Since 
+           AND prowjob_url IS NOT NULL 
+           ORDER BY prowjob_completion_ts`
+	query := c.client.Query(queryString)
+	query.QueryConfig.Parameters = []bigquery.QueryParameter{
+		{Name: "Since", Value: *since},
+	}
+	jobRows, err := query.Read(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to query job table with %q: %w", queryString, err)
 	}
-	return lastJobRun, nil
+
+	jobRuns := []*jobrunaggregatorapi.TestPlatformProwJobRow{}
+	for {
+		bqjr := &jobrunaggregatorapi.TestPlatformProwJobRow{}
+		err := jobRows.Next(bqjr)
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		jobRuns = append(jobRuns, bqjr)
+	}
+
+	return jobRuns, nil
 }
 
 func (c *ciDataClient) GetBackendDisruptionStatisticsByJob(ctx context.Context, jobName string) ([]jobrunaggregatorapi.BackendDisruptionStatisticsRow, error) {

@@ -81,21 +81,22 @@ func (b *ReleaseControllerConfigBumper) BumpFilename(filename string, _ *Release
 }
 
 /*
-	Candidate bumping fields:
-		.message
-		.mirrorPrefix
-		.name
-		.overrideCLIImage
-		.check.*.consistentImages.parent
-		.publish.*
-			.verifyBugs.previousReleaseTag
-				.name
-				.tag
-			.imageStreamRef.name
-			.tagRef.name
-		.verify
-			.* (this represents the name of the job)
-			.*.prowJob.name
+Candidate bumping fields:
+
+	.message
+	.mirrorPrefix
+	.name
+	.overrideCLIImage
+	.check.*.consistentImages.parent
+	.publish.*
+		.verifyBugs.previousReleaseTag
+			.name
+			.tag
+		.imageStreamRef.name
+		.tagRef.name
+	.verify
+		.* (this represents the name of the job)
+		.*.prowJob.name
 */
 func (b *ReleaseControllerConfigBumper) BumpContent(releaseConfig *ReleaseConfig) (*ReleaseConfig, error) {
 	if err := ReplaceWithNextVersionInPlace(&releaseConfig.Message, b.mm.Major); err != nil {

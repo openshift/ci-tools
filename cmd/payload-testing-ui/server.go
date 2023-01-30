@@ -60,11 +60,13 @@ const (
 		{{ range .Items }}
 		<tr>
 			<td>
+			<nobr>
 			{{ with .ObjectMeta }}
 				{{ with $url := printf "%s/%s" .Namespace .Name }}
 				<a href="` + runsURL + `{{ $url }}">{{ $url }}</a>
 				{{ end }}
 			{{ end }}
+			</nobr>
 			</td>
 			<td>
 			{{ with .Spec.PullRequest }}
@@ -165,8 +167,8 @@ func prLink(pr *prpqv1.PullRequestUnderTest) template.HTML {
 	repo := template.HTMLEscapeString(pr.Repo)
 	title := template.HTMLEscapeString(pr.PullRequest.Title)
 	n := pr.PullRequest.Number
-	ret := fmt.Sprintf(`#<a href="http://github.com/%s/%s/pull/%d" title="%s" class="info">%d</a>`,
-		org, repo, n, title, n)
+	ret := fmt.Sprintf(`<a href="http://github.com/%s/%s/pull/%d">%s</a>`,
+		org, repo, n, title)
 	return template.HTML(ret)
 }
 

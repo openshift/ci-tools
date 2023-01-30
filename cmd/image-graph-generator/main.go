@@ -24,7 +24,7 @@ type options struct {
 
 func (o options) validate() error {
 	if o.dgraphAddress == "" {
-		return fmt.Errorf("graphql-endpoint-address is not specified")
+		return fmt.Errorf("--graphql-endpoint-address is not specified")
 	}
 	if o.configsPath == "" {
 		return fmt.Errorf("--ci-operator-configs-path is not specified")

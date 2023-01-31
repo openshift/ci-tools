@@ -487,7 +487,11 @@ func main() {
 	// remove any configs we used to generate but no longer do
 	for _, name := range toRemove.List() {
 		if err := os.Remove(path.Join(o.testGridConfigDir, fmt.Sprintf("%s.yaml", name))); err != nil {
-			logrus.WithError(err).Fatalf("Could not remove stale TestGrid config for %s", name)
+			if os.IsNotExist(err) {
+				logrus.WithError(err).Warnf("Could not remove stale TestGrid config for %s", name)
+			} else {
+				logrus.WithError(err).Fatalf("Could not remove stale TestGrid config for %s", name)
+			}
 		}
 	}
 

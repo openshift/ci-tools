@@ -53,20 +53,18 @@ const (
 		<tr>
 			<th title="The name of the Pull Request Payload Qualification Run" class="info">Name</th>
 			<th title="The repository of pull request" class="info">Repository</th>
-			<th title="Hovering over the number will display the name of the pull request" class="info">Pull Request</th>
+			<th title="The number and name of the pull request" class="info">Pull Request</th>
 		</tr>
 	</thead>
 	<tbody>
 		{{ range .Items }}
 		<tr>
 			<td>
-			<nobr>
 			{{ with .ObjectMeta }}
 				{{ with $url := printf "%s/%s" .Namespace .Name }}
-				<a href="` + runsURL + `{{ $url }}">{{ $url }}</a>
+				<a class="text-nowrap" href="` + runsURL + `{{ $url }}">{{ $url }}</a>
 				{{ end }}
 			{{ end }}
-			</nobr>
 			</td>
 			<td>
 			{{ with .Spec.PullRequest }}
@@ -167,8 +165,8 @@ func prLink(pr *prpqv1.PullRequestUnderTest) template.HTML {
 	repo := template.HTMLEscapeString(pr.Repo)
 	title := template.HTMLEscapeString(pr.PullRequest.Title)
 	n := pr.PullRequest.Number
-	ret := fmt.Sprintf(`<a href="http://github.com/%s/%s/pull/%d">%s</a>`,
-		org, repo, n, title)
+	ret := fmt.Sprintf(`<a href="http://github.com/%s/%s/pull/%d">#%d: %s</a>`,
+		org, repo, n, n, title)
 	return template.HTML(ret)
 }
 

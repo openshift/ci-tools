@@ -162,6 +162,7 @@ func (c *ciDataClient) ListAlertHistoricalData(ctx context.Context) ([]jobrunagg
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(`
     SELECT AlertName,
             Release, FromRelease, Platform, Architecture, Network, Topology,
+			JobRuns,
             IFNULL(SAFE_CAST(P95 AS STRING), "0.0") AS P95, IFNULL(SAFE_CAST(P99 AS STRING), "0.0") AS P99
     FROM DATA_SET_LOCATION.Alerts_Unified_LastWeek_P95
     WHERE

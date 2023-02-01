@@ -118,6 +118,10 @@ func (f *BigQueryAlertUploadFlags) ToOptions(ctx context.Context) (*allJobsLoade
 		jobRunTableInserter = jobrunaggregatorlib.NewDryRunInserter(os.Stdout, jobrunaggregatorapi.AlertJobRunTableName)
 		backendAlertTableInserter = jobrunaggregatorlib.NewDryRunInserter(os.Stdout, jobrunaggregatorapi.AlertsTableName)
 	}
+	alertUploader, err := newAlertUploader(backendAlertTableInserter, ciDataClient)
+	if err != nil {
+		return nil, err
+	}
 
 	return &allJobsLoaderOptions{
 		ciDataClient: ciDataClient,
@@ -127,23 +131,33 @@ func (f *BigQueryAlertUploadFlags) ToOptions(ctx context.Context) (*allJobsLoade
 		shouldCollectedDataForJobFn: func(job jobrunaggregatorapi.JobRow) bool {
 			return true
 		},
-		jobRunUploader: newAlertUploader(backendAlertTableInserter, ciDataClient),
+		jobRunUploader: alertUploader,
 		logLevel:       f.LogLevel,
 	}, nil
 }
 
 type alertUploader struct {
-	alertInserter jobrunaggregatorlib.BigQueryInserter
-	ciDataClient  jobrunaggregatorlib.CIDataClient
+	alertInserter    jobrunaggregatorlib.BigQueryInserter
+	ciDataClient     jobrunaggregatorlib.CIDataClient
+	knownAlertsCache *KnownAlertsCache
 }
 
 func newAlertUploader(alertInserter jobrunaggregatorlib.BigQueryInserter,
-	ciDataClient jobrunaggregatorlib.CIDataClient) uploader {
+	ciDataClient jobrunaggregatorlib.CIDataClient) (uploader, error) {
+
+	// Query the cache of all known alerts once before we start processing results:
+	allKnownAlerts, err := ciDataClient.ListAllKnownAlerts(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	logrus.WithField("knownAlerts", len(allKnownAlerts)).Info("loaded cache of known alerts across all releases")
+	knownAlertsCache := newKnownAlertsCache(allKnownAlerts)
 
 	return &alertUploader{
-		alertInserter: alertInserter,
-		ciDataClient:  ciDataClient,
-	}
+		alertInserter:    alertInserter,
+		ciDataClient:     ciDataClient,
+		knownAlertsCache: knownAlertsCache,
+	}, nil
 }
 
 func (o *alertUploader) getLastUploadedJobRunEndTime(ctx context.Context) (*time.Time, error) {
@@ -154,7 +168,8 @@ func (o *alertUploader) listUploadedJobRunIDsSince(ctx context.Context, since *t
 	return o.ciDataClient.ListUploadedJobRunIDsSinceFromTable(ctx, jobrunaggregatorapi.AlertJobRunTableName, since)
 }
 
-func (o *alertUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob, logger logrus.FieldLogger) error {
+func (o *alertUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo,
+	jobRelease string, prowJob *prowv1.ProwJob, logger logrus.FieldLogger) error {
 	logger.Info("uploading alert results")
 	alertData, err := jobRun.GetOpenShiftTestsFilesWithPrefix(ctx, "alert")
 	if err != nil {
@@ -162,8 +177,12 @@ func (o *alertUploader) uploadContent(ctx context.Context, jobRun jobrunaggregat
 	}
 	logger.Debug("got test files with prefix")
 	if len(alertData) > 0 {
-		alertsToPersist := getAlertsFromPerJobRunData(alertData, jobRun.GetJobRunID())
-		if err := o.alertInserter.Put(ctx, alertsToPersist); err != nil {
+		alertRows := getAlertsFromPerJobRunData(alertData, jobRun.GetJobRunID())
+
+		// pass cache of known alerts in.
+		alertRows = populateZeros(o.knownAlertsCache, alertRows, jobRelease, jobRun.GetJobRunID(), logger)
+
+		if err := o.alertInserter.Put(ctx, alertRows); err != nil {
 			return err
 		}
 		logger.Debug("insert complete")
@@ -172,6 +191,50 @@ func (o *alertUploader) uploadContent(ctx context.Context, jobRun jobrunaggregat
 	}
 
 	return nil
+}
+
+// populateZeros adds in 0 entries for observed alerts we know exist, but did not observe in this run.
+// This is critical for properly calculating the percentiles as we do not have a fixed set of possible
+// alerts.
+// For details on calculating the list of all known alerts, see ListAllKnownAlerts in the data client,
+// but TL;DR, it's every alert/namespace combo we've ever observed for a given release.
+func populateZeros(knownAlertsCache *KnownAlertsCache, observedAlertRows []jobrunaggregatorapi.AlertRow,
+	release, jobRunID string, logger logrus.FieldLogger) []jobrunaggregatorapi.AlertRow {
+
+	origCount := len(observedAlertRows)
+	injectedCtr := 0
+	for _, known := range knownAlertsCache.ListAllKnownAlertsForRelease(release) {
+		var found bool
+		for _, observed := range observedAlertRows {
+			if observed.Name == known.AlertName &&
+				observed.Namespace == known.AlertNamespace &&
+				observed.Level == known.AlertLevel {
+				found = true
+				break
+			}
+		}
+		if !found {
+			// If we did not observe an Alert+Namespace+Level combo we know exists in this release,
+			// we need to inject a 0 for the value so our percentile calculations work. (as origin does
+			// not know the list of all possible alerts, only what it observed)
+			logger.WithFields(logrus.Fields{
+				"AlertName":      known.AlertName,
+				"AlertNamespace": known.AlertNamespace,
+				"AlertLevel":     known.AlertLevel,
+			}).Debug("injecting 0s for a known but not observed alert on this run")
+			observedAlertRows = append(observedAlertRows, jobrunaggregatorapi.AlertRow{
+				JobRunName:   jobRunID,
+				Name:         known.AlertName,
+				Namespace:    known.AlertNamespace,
+				Level:        known.AlertLevel,
+				AlertSeconds: 0,
+			})
+			injectedCtr++
+		}
+	}
+	logger.Infof("job observed %d alerts, injected additional %d 0s entries for remaining known alerts",
+		origCount, injectedCtr)
+	return observedAlertRows
 }
 
 type AlertList struct {
@@ -242,7 +305,7 @@ func getAlertsFromPerJobRunData(alertData map[string]string, jobRunID string) []
 		}
 	}
 
-	// sort for stable output for testing and stuch.
+	// sort for stable output for testing and such.
 	alertList := []Alert{}
 	for _, alert := range alertMap {
 		alertList = append(alertList, *alert)
@@ -261,4 +324,26 @@ func getAlertsFromPerJobRunData(alertData map[string]string, jobRunID string) []
 	}
 
 	return ret
+}
+
+func newKnownAlertsCache(allKnownAlerts []*jobrunaggregatorapi.KnownAlertRow) *KnownAlertsCache {
+	knownAlertsByRelease := map[string][]*jobrunaggregatorapi.KnownAlertRow{}
+	for _, ka := range allKnownAlerts {
+		if _, haveReleaseAlready := knownAlertsByRelease[ka.Release]; !haveReleaseAlready {
+			knownAlertsByRelease[ka.Release] = []*jobrunaggregatorapi.KnownAlertRow{}
+		}
+		knownAlertsByRelease[ka.Release] = append(knownAlertsByRelease[ka.Release], ka)
+
+	}
+	return &KnownAlertsCache{
+		knownAlertsByRelease: knownAlertsByRelease,
+	}
+}
+
+type KnownAlertsCache struct {
+	knownAlertsByRelease map[string][]*jobrunaggregatorapi.KnownAlertRow
+}
+
+func (k *KnownAlertsCache) ListAllKnownAlertsForRelease(release string) []*jobrunaggregatorapi.KnownAlertRow {
+	return k.knownAlertsByRelease[release]
 }

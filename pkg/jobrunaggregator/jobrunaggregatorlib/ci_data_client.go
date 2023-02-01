@@ -65,6 +65,8 @@ type CIDataClient interface {
 	GetLastJobRunEndTimeFromTable(ctx context.Context, table string) (*time.Time, error)
 
 	ListUploadedJobRunIDsSinceFromTable(ctx context.Context, table string, since *time.Time) (map[string]bool, error)
+
+	ListAllKnownAlerts(ctx context.Context) ([]*jobrunaggregatorapi.KnownAlertRow, error)
 }
 
 type ciDataClient struct {
@@ -924,4 +926,34 @@ WHERE TABLE_NAME.JobName = @JobName
 func GetUTCDay(in time.Time) time.Time {
 	year, month, day := in.UTC().Date()
 	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+}
+
+func (c *ciDataClient) ListAllKnownAlerts(ctx context.Context) ([]*jobrunaggregatorapi.KnownAlertRow, error) {
+	queryString := c.dataCoordinates.SubstituteDataSetLocation(
+		`SELECT *
+FROM DATA_SET_LOCATION.Alerts_AllKnown
+ORDER BY Release, AlertName, AlertNamespace ASC
+`)
+
+	query := c.client.Query(queryString)
+	alertsRows, err := query.Read(ctx)
+	if err != nil {
+		err = fmt.Errorf("failed to query Alerts_AllKnown view with %q: %w", queryString, err)
+		logrus.Error(err.Error())
+		return nil, err
+	}
+	allKnownAlerts := []*jobrunaggregatorapi.KnownAlertRow{}
+	for {
+		knownAlert := &jobrunaggregatorapi.KnownAlertRow{}
+		err = alertsRows.Next(knownAlert)
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		allKnownAlerts = append(allKnownAlerts, knownAlert)
+	}
+
+	return allKnownAlerts, nil
 }

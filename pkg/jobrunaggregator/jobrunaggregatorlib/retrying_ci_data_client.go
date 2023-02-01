@@ -156,6 +156,16 @@ func (c *retryingCIDataClient) ListAlertHistoricalData(ctx context.Context) ([]j
 	return ret, err
 }
 
+func (c *retryingCIDataClient) ListAllKnownAlerts(ctx context.Context) ([]*jobrunaggregatorapi.KnownAlertRow, error) {
+	var ret []*jobrunaggregatorapi.KnownAlertRow
+	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
+		var innerErr error
+		ret, innerErr = c.delegate.ListAllKnownAlerts(ctx)
+		return innerErr
+	})
+	return ret, err
+}
+
 var slowBackoff = wait.Backoff{
 	Steps:    4,
 	Duration: 10 * time.Second,

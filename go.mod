@@ -205,6 +205,8 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 )
 
+require github.com/stretchr/testify v1.8.0
+
 require (
 	bitbucket.org/creachadair/stringset v0.0.9 // indirect
 	cloud.google.com/go v0.102.0 // indirect

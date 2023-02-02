@@ -14,8 +14,8 @@ const (
 	mappingFilePrefix = "mapping_"
 )
 
-func (o *Operator) UpdateMirrorMappings(path string) error {
-	err := filepath.Walk(path,
+func (o *Operator) UpdateMirrorMappings() error {
+	err := filepath.Walk(filepath.Join(o.releaseRepoPath, ReleaseMirrorMappingsPath),
 		func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err

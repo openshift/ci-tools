@@ -2,25 +2,45 @@ package imagegraphgenerator
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/shurcooL/graphql"
+
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
+
+	buildv1 "github.com/openshift/api/build/v1"
+	imagev1 "github.com/openshift/api/image/v1"
+
+	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/config"
+)
+
+const (
+	ReleaseAPPCIClusterPath      = "clusters/app.ci/"
+	ReleaseMirrorMappingsPath    = "core-services/image-mirroring/"
+	ReleaseCIOperatorConfigsPath = "ci-operator/config/"
 )
 
 type Operator struct {
-	c             *graphql.Client
-	organizations map[string]string
-	repositories  map[string]string
-	branches      map[string]string
-	images        map[string]string
+	c               *graphql.Client
+	organizations   map[string]string
+	repositories    map[string]string
+	branches        map[string]string
+	images          map[string]string
+	buildConfigs    []buildv1.BuildConfig
+	imageStreams    []imagev1.ImageStream
+	releaseRepoPath string
 }
 
-func NewOperator(c *graphql.Client) *Operator {
+func NewOperator(c *graphql.Client, releaseRepoPath string) *Operator {
 	return &Operator{
-		c:             c,
-		organizations: make(map[string]string),
-		repositories:  make(map[string]string),
-		branches:      make(map[string]string),
-		images:        make(map[string]string),
+		c:               c,
+		organizations:   make(map[string]string),
+		repositories:    make(map[string]string),
+		branches:        make(map[string]string),
+		images:          make(map[string]string),
+		releaseRepoPath: releaseRepoPath,
 	}
 }
 
@@ -39,6 +59,44 @@ func (o *Operator) Load() error {
 
 	if err := o.loadBranches(); err != nil {
 		return fmt.Errorf("couldn't get branches: %w", err)
+	}
+
+	if err := o.loadManifests(filepath.Join(o.releaseRepoPath, ReleaseAPPCIClusterPath)); err != nil {
+		return fmt.Errorf("couldn't load manifests: %w", err)
+	}
+	return nil
+}
+
+func (o *Operator) OperateOnCIOperatorConfigs() error {
+	callback := func(c *api.ReleaseBuildConfiguration, i *config.Info) error {
+		if i.Org == "openshift-priv" {
+			return nil
+		}
+
+		if err := o.AddBranchRef(i.Org, i.Repo, i.Branch); err != nil {
+			return err
+		}
+		branchID := o.Branches()[fmt.Sprintf("%s/%s:%s", i.Org, i.Repo, i.Branch)]
+
+		if c.PromotionConfiguration == nil {
+			return nil
+		}
+
+		var errs []error
+		excludedImages := sets.NewString(c.PromotionConfiguration.ExcludedImages...)
+
+		for _, image := range c.Images {
+			if !excludedImages.Has(string(image.To)) {
+				if err := o.UpdateImage(image, c, branchID); err != nil {
+					errs = append(errs, err)
+				}
+			}
+		}
+		return utilerrors.NewAggregate(errs)
+	}
+
+	if err := config.OperateOnCIOperatorConfigDir(filepath.Join(o.releaseRepoPath, ReleaseCIOperatorConfigsPath), callback); err != nil {
+		return err
 	}
 	return nil
 }

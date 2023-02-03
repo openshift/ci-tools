@@ -62,6 +62,7 @@ periodic-ci-openshift-release-master-nightly-4.10-e2e-azure-upgrade-cnv
 periodic-ci-openshift-release-master-nightly-4.10-e2e-gcp
 periodic-ci-openshift-release-master-nightly-4.10-e2e-gcp-csi
 periodic-ci-openshift-release-master-nightly-4.10-e2e-gcp-rt
+periodic-ci-openshift-release-master-nightly-4.10-e2e-gcp-serial
 periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi
 periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi-bm-upgrade
 periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi-ovn-dualstack
@@ -83,7 +84,6 @@ periodic-ci-openshift-release-master-nightly-4.10-upgrade-from-stable-4.9-e2e-aw
 periodic-ci-openshift-release-master-nightly-4.10-upgrade-from-stable-4.9-e2e-metal-ipi-bm-upgrade
 periodic-ci-openshift-release-master-nightly-4.10-upgrade-from-stable-4.9-e2e-metal-ipi-upgrade-ovn-ipv6
 release-openshift-ocp-installer-e2e-azure-serial-4.10
-release-openshift-ocp-installer-e2e-gcp-serial-4.10
 release-openshift-ocp-osd-aws-nightly-4.10
 release-openshift-ocp-osd-gcp-nightly-4.10
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.10.json
@@ -157,6 +157,7 @@ periodic-ci-openshift-release-master-nightly-4.11-e2e-azure-upgrade-cnv
 periodic-ci-openshift-release-master-nightly-4.11-e2e-gcp
 periodic-ci-openshift-release-master-nightly-4.11-e2e-gcp-csi
 periodic-ci-openshift-release-master-nightly-4.11-e2e-gcp-rt
+periodic-ci-openshift-release-master-nightly-4.11-e2e-gcp-serial
 periodic-ci-openshift-release-master-nightly-4.11-e2e-metal-ipi-bm
 periodic-ci-openshift-release-master-nightly-4.11-e2e-metal-ipi-bm-upgrade
 periodic-ci-openshift-release-master-nightly-4.11-e2e-metal-ipi-ovn-dualstack
@@ -182,7 +183,6 @@ periodic-ci-openshift-release-master-nightly-4.11-upgrade-from-stable-4.10-e2e-a
 periodic-ci-openshift-release-master-nightly-4.11-upgrade-from-stable-4.10-e2e-metal-ipi-bm-upgrade
 periodic-ci-openshift-release-master-nightly-4.11-upgrade-from-stable-4.10-e2e-metal-ipi-upgrade-ovn-ipv6
 release-openshift-ocp-installer-e2e-azure-serial-4.11
-release-openshift-ocp-installer-e2e-gcp-serial-4.11
 release-openshift-ocp-osd-aws-nightly-4.11
 release-openshift-ocp-osd-gcp-nightly-4.11
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.11.json
@@ -262,6 +262,7 @@ periodic-ci-openshift-release-master-nightly-4.12-e2e-azure-upgrade-cnv
 periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-ovn-csi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-ovn-rt
 periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-sdn
+periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-sdn-serial
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-ovn-dualstack
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-ovn-ipv6
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn-bm
@@ -288,7 +289,6 @@ periodic-ci-openshift-release-master-nightly-4.12-upgrade-from-stable-4.11-e2e-a
 periodic-ci-openshift-release-master-nightly-4.12-upgrade-from-stable-4.11-e2e-metal-ipi-sdn-bm-upgrade
 periodic-ci-openshift-release-master-nightly-4.12-upgrade-from-stable-4.11-e2e-metal-ipi-upgrade-ovn-ipv6
 release-openshift-ocp-installer-e2e-azure-serial-4.12
-release-openshift-ocp-installer-e2e-gcp-serial-4.12
 release-openshift-ocp-osd-aws-nightly-4.12
 release-openshift-ocp-osd-gcp-nightly-4.12
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.12.json
@@ -457,7 +457,6 @@ periodic-ci-openshift-release-master-ci-4.10-e2e-azure-upgrade
 periodic-ci-openshift-release-master-ci-4.10-e2e-gcp
 periodic-ci-openshift-release-master-ci-4.10-e2e-gcp-cilium
 periodic-ci-openshift-release-master-ci-4.10-e2e-gcp-ovn
-periodic-ci-openshift-release-master-ci-4.10-e2e-gcp-serial
 periodic-ci-openshift-release-master-ci-4.10-e2e-gcp-techpreview
 periodic-ci-openshift-release-master-ci-4.10-e2e-gcp-techpreview-serial
 periodic-ci-openshift-release-master-ci-4.10-e2e-gcp-upgrade
@@ -502,7 +501,6 @@ periodic-ci-openshift-release-master-ci-4.11-e2e-azure-upgrade
 periodic-ci-openshift-release-master-ci-4.11-e2e-gcp
 periodic-ci-openshift-release-master-ci-4.11-e2e-gcp-cilium
 periodic-ci-openshift-release-master-ci-4.11-e2e-gcp-ovn
-periodic-ci-openshift-release-master-ci-4.11-e2e-gcp-serial
 periodic-ci-openshift-release-master-ci-4.11-e2e-gcp-techpreview
 periodic-ci-openshift-release-master-ci-4.11-e2e-gcp-techpreview-serial
 periodic-ci-openshift-release-master-ci-4.11-e2e-gcp-upgrade
@@ -598,7 +596,6 @@ periodic-ci-openshift-release-master-ci-4.13-e2e-gcp-cilium
 periodic-ci-openshift-release-master-ci-4.13-e2e-gcp-ovn
 periodic-ci-openshift-release-master-ci-4.13-e2e-gcp-ovn-mount-ns-hiding
 periodic-ci-openshift-release-master-ci-4.13-e2e-gcp-sdn
-periodic-ci-openshift-release-master-ci-4.13-e2e-gcp-sdn-serial
 periodic-ci-openshift-release-master-ci-4.13-e2e-gcp-sdn-techpreview
 periodic-ci-openshift-release-master-ci-4.13-e2e-gcp-sdn-techpreview-serial
 periodic-ci-openshift-release-master-ci-4.13-e2e-gcp-sdn-upgrade
@@ -658,6 +655,7 @@ periodic-ci-openshift-release-master-nightly-4.10-e2e-gcp-fips
 periodic-ci-openshift-release-master-nightly-4.10-e2e-gcp-fips-serial
 periodic-ci-openshift-release-master-nightly-4.10-e2e-gcp-libvirt-cert-rotation
 periodic-ci-openshift-release-master-nightly-4.10-e2e-gcp-rt
+periodic-ci-openshift-release-master-nightly-4.10-e2e-gcp-serial
 periodic-ci-openshift-release-master-nightly-4.10-e2e-gcp-upi
 periodic-ci-openshift-release-master-nightly-4.10-e2e-ibmcloud-csi
 periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi
@@ -729,6 +727,7 @@ periodic-ci-openshift-release-master-nightly-4.11-e2e-gcp-fips
 periodic-ci-openshift-release-master-nightly-4.11-e2e-gcp-fips-serial
 periodic-ci-openshift-release-master-nightly-4.11-e2e-gcp-libvirt-cert-rotation
 periodic-ci-openshift-release-master-nightly-4.11-e2e-gcp-rt
+periodic-ci-openshift-release-master-nightly-4.11-e2e-gcp-serial
 periodic-ci-openshift-release-master-nightly-4.11-e2e-gcp-upi
 periodic-ci-openshift-release-master-nightly-4.11-e2e-ibmcloud-csi
 periodic-ci-openshift-release-master-nightly-4.11-e2e-metal-ipi-bm
@@ -808,6 +807,7 @@ periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-ovn-rt
 periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-ovn-upi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-sdn
 periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-sdn-fips-serial
+periodic-ci-openshift-release-master-nightly-4.12-e2e-gcp-sdn-serial
 periodic-ci-openshift-release-master-nightly-4.12-e2e-ibmcloud-csi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-ovn-compact
 periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-ovn-dualstack
@@ -889,6 +889,7 @@ periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-ovn-rt
 periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-ovn-upi
 periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-sdn
 periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-sdn-fips-serial
+periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-sdn-serial
 periodic-ci-openshift-release-master-nightly-4.13-e2e-ibmcloud-csi
 periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ipi-ovn-compact
 periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ipi-ovn-dualstack
@@ -945,7 +946,6 @@ release-openshift-ocp-installer-e2e-aws-csi-4.10
 release-openshift-ocp-installer-e2e-aws-mirrors-4.10
 release-openshift-ocp-installer-e2e-aws-upi-4.10
 release-openshift-ocp-installer-e2e-azure-serial-4.10
-release-openshift-ocp-installer-e2e-gcp-serial-4.10
 release-openshift-ocp-osd-aws-nightly-4.10
 release-openshift-ocp-osd-gcp-nightly-4.10
 release-openshift-origin-installer-e2e-aws-shared-vpc-4.10
@@ -962,7 +962,6 @@ release-openshift-ocp-installer-e2e-aws-csi-4.11
 release-openshift-ocp-installer-e2e-aws-mirrors-4.11
 release-openshift-ocp-installer-e2e-aws-upi-4.11
 release-openshift-ocp-installer-e2e-azure-serial-4.11
-release-openshift-ocp-installer-e2e-gcp-serial-4.11
 release-openshift-ocp-osd-aws-nightly-4.11
 release-openshift-ocp-osd-gcp-nightly-4.11
 release-openshift-origin-installer-e2e-aws-shared-vpc-4.11
@@ -975,7 +974,6 @@ release-openshift-origin-installer-e2e-gcp-shared-vpc-4.11
 release-openshift-ocp-installer-e2e-aws-csi-4.12
 release-openshift-ocp-installer-e2e-aws-mirrors-4.12
 release-openshift-ocp-installer-e2e-azure-serial-4.12
-release-openshift-ocp-installer-e2e-gcp-serial-4.12
 release-openshift-ocp-osd-aws-nightly-4.12
 release-openshift-ocp-osd-gcp-nightly-4.12
 release-openshift-origin-installer-e2e-aws-shared-vpc-4.12

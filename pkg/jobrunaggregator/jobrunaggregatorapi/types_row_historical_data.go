@@ -25,7 +25,9 @@ type HistoricalJobData struct {
 }
 
 type AlertHistoricalDataRow struct {
-	AlertName string
+	AlertName      string
+	AlertNamespace string
+	AlertLevel     string
 	HistoricalJobData
 	P95 string
 	P99 string

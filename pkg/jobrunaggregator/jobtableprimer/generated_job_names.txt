@@ -858,7 +858,6 @@ periodic-ci-openshift-release-master-nightly-4.13-e2e-aws-ovn-etcd-scaling
 periodic-ci-openshift-release-master-nightly-4.13-e2e-aws-ovn-fips
 periodic-ci-openshift-release-master-nightly-4.13-e2e-aws-ovn-fips-serial
 periodic-ci-openshift-release-master-nightly-4.13-e2e-aws-ovn-local-gateway
-periodic-ci-openshift-release-master-nightly-4.13-e2e-aws-ovn-multi
 periodic-ci-openshift-release-master-nightly-4.13-e2e-aws-ovn-proxy
 periodic-ci-openshift-release-master-nightly-4.13-e2e-aws-ovn-serial
 periodic-ci-openshift-release-master-nightly-4.13-e2e-aws-ovn-single-node
@@ -886,10 +885,12 @@ periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-ovn-csi
 periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-ovn-etcd-scaling
 periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-ovn-fips
 periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-ovn-rt
+periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-ovn-upgrade
 periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-ovn-upi
 periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-sdn
 periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-sdn-fips-serial
 periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-sdn-serial
+periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-sdn-upgrade
 periodic-ci-openshift-release-master-nightly-4.13-e2e-ibmcloud-csi
 periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ipi-ovn-compact
 periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ipi-ovn-dualstack

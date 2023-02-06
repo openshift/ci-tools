@@ -37,10 +37,17 @@ func (o *CreateJobsOptions) Run(ctx context.Context) error {
 			continue
 		}
 
+		if len(jobToCreate.Platform) == 0 {
+			// if this table has no Platform, don't add it.
+			continue
+		}
 		missingJobs = append(missingJobs, jobToCreate)
 	}
 
 	fmt.Printf("Inserting %d jobs\n", len(missingJobs))
+	for job := range missingJobs {
+		fmt.Println(job)
+	}
 	if err := o.jobInserter.Put(ctx, missingJobs); err != nil {
 		return err
 	}

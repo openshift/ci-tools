@@ -3,6 +3,8 @@ package jobtableprimer
 import (
 	"strings"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 )
 
@@ -33,6 +35,8 @@ func newJob(name string) *jobRowBuilder {
 		platform = alibaba
 	case strings.Contains(name, "ibmcloud"):
 		platform = ibmcloud
+	default:
+		logrus.Warnf("Unable to detemrine platform for job %s: %s\n", name, platform)
 	}
 
 	architecture := ""

@@ -49,8 +49,10 @@ func (a *AlertHistoricalDataRow) GetJobRuns() int {
 	return a.JobRuns
 }
 func (a *AlertHistoricalDataRow) GetKey() string {
-	return fmt.Sprintf("%s_%s_%s_%s_%s_%s_%s",
+	return fmt.Sprintf("%s_%s_%s_%s_%s_%s_%s_%s_%s",
 		a.AlertName,
+		a.AlertNamespace,
+		a.AlertLevel,
 		a.FromRelease,
 		a.Release,
 		a.Architecture,

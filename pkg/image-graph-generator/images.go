@@ -21,21 +21,6 @@ type ImageRef struct {
 	Children       []ImageRef  `graphql:"children"`
 }
 
-func (o *Operator) UpdateBaseImage(baseImage api.ImageStreamTagReference) error {
-	imageRef := &ImageRef{
-		Name:           baseImage.ISTagName(),
-		ImageStreamRef: baseImage.Name,
-		Namespace:      baseImage.Namespace,
-	}
-	if id, ok := o.images[baseImage.ISTagName()]; ok {
-		if err := o.updateImageRef(imageRef, id); err != nil {
-			return err
-		}
-		return nil
-	}
-	return nil
-}
-
 func (o *Operator) UpdateImage(image api.ProjectDirectoryImageBuildStepConfiguration, c *api.ReleaseBuildConfiguration, branchID string) error {
 	imageName := fmt.Sprintf("%s/%s:%s", c.PromotionConfiguration.Namespace, c.PromotionConfiguration.Name, string(image.To))
 	if c.PromotionConfiguration.Name == "" {

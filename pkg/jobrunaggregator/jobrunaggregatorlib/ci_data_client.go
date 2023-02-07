@@ -160,28 +160,13 @@ func (c *ciDataClient) ListDisruptionHistoricalData(ctx context.Context) ([]jobr
 
 func (c *ciDataClient) ListAlertHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalData, error) {
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(`
-    SELECT AlertName,
+    SELECT AlertName, AlertNamespace, AlertLevel,
             Release, FromRelease, Platform, Architecture, Network, Topology,
+			JobRuns,
             IFNULL(SAFE_CAST(P95 AS STRING), "0.0") AS P95, IFNULL(SAFE_CAST(P99 AS STRING), "0.0") AS P99
     FROM DATA_SET_LOCATION.Alerts_Unified_LastWeek_P95
-    WHERE
-        alertName = "etcdMembersDown" or 
-        alertName = "etcdGRPCRequestsSlow" or 
-        alertName = "etcdHighNumberOfFailedGRPCRequests" or 
-        alertName = "etcdMemberCommunicationSlow" or 
-        alertName = "etcdNoLeader" or 
-        alertName = "etcdHighFsyncDurations" or 
-        alertName = "etcdHighCommitDurations" or 
-        alertName = "etcdInsufficientMembers" or 
-        alertName = "etcdHighNumberOfLeaderChanges" or 
-        alertName = "KubeAPIErrorBudgetBurn" or 
-        alertName = "KubeClientErrors" or 
-        alertName = "KubePersistentVolumeErrors" or 
-        alertName = "MCDDrainError" or 
-        alertName = "PrometheusOperatorWatchErrors" or
-        alertName = "VSphereOpenshiftNodeHealthFail"
     ORDER BY 
-        AlertName, Release, FromRelease, Topology, Platform, Network
+        Release, AlertName, AlertNamespace, AlertLevel, FromRelease, Topology, Platform, Network
     `)
 	query := c.client.Query(queryString)
 	disruptionRow, err := query.Read(ctx)

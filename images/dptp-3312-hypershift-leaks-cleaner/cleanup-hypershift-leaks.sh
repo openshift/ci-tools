@@ -7,13 +7,22 @@ echo 'Deleting expired OpenID Connect Providers...'
 arns=`aws iam list-open-id-connect-providers --query 'OpenIDConnectProviderList[*].Arn' --output json | jq -r '.[]'`
 for arn in $arns; do
     expirationDate=$(aws iam get-open-id-connect-provider --open-id-connect-provider-arn $arn --query 'Tags[?Key==`expirationDate`].Value' --output text)
-    # If command failed or the value of tag 'expirationDate' is less than today, delete the OpenID Connect Provider
+    # if the value of `expirationDate` is `None` or empty or the command is failed
+    # then skip
     if [ $? -ne 0 ] || [ -z "$expirationDate" ]; then
         echo "Skipping $arn with no expirationDate..."
         continue
     fi
+    if [ "$expirationDate" == "None" ]; then
+        echo "Skipping $arn with expirationDate None... $expirationDate"
+        continue
+    fi
 
     expUnix=$(date -d $expirationDate +%s)
+    if [ $? -ne 0 ] || [ -z $expUnix ]; then
+        echo "Skipping $name with invalid expirationDate..."
+        continue
+    fi
     if [ $expUnix -lt $NOW ]; then
         echo "Deleting OpenID connect provider $arn with expirationDate $expirationDate..."
         aws iam delete-open-id-connect-provider --open-id-connect-provider-arn $arn
@@ -24,14 +33,27 @@ echo 'Deleting expired IAM Roles...'
 # Get all IAM Roles with ARN
 names=`aws iam list-roles --query 'Roles[*].RoleName' --output json | jq -r '.[]'`
 for name in $names; do
+    # if name starts with 'ci-' then skip
+    if [[ $name == ci-* ]]; then
+        echo "Skipping $name..."
+        continue
+    fi
     expirationDate=$(aws iam get-role --role-name $name --query 'Role.Tags[?Key==`expirationDate`].Value' --output text)
     # If the value of tag 'expirationDate' is less than today, delete the IAM Role
     if [ $? -ne 0 ] || [ -z "$expirationDate" ]; then
         echo "Skipping $name with no expirationDate..."
         continue
     fi
+    if [ "$expirationDate" == "None" ]; then
+        echo "Skipping $arn with expirationDate None... $expirationDate"
+        continue
+    fi
 
     expUnix=$(date -d $expirationDate +%s)
+    if [ $? -ne 0 ] || [ -z $expUnix ]; then
+        echo "Skipping $name with invalid expirationDate..."
+        continue
+    fi
     if [ $expUnix -lt $NOW ]; then
         # remove attached policies
         policies=`aws iam list-attached-role-policies --role-name $name --query 'AttachedPolicies[*].PolicyArn' --output json | jq -r '.[]'`

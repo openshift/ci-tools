@@ -68,6 +68,8 @@
         value: uuid
       - name: KUBECONFIG
         value: /var/run/secrets/ci.openshift.io/multi-stage/kubeconfig
+      - name: KUBECONFIGMINIMAL
+        value: /var/run/secrets/ci.openshift.io/multi-stage/kubeconfig-minimal
       - name: KUBEADMIN_PASSWORD_FILE
         value: /var/run/secrets/ci.openshift.io/multi-stage/kubeadmin-password
       - name: CLUSTER_TYPE
@@ -227,6 +229,8 @@
         value: uuid
       - name: KUBECONFIG
         value: /var/run/secrets/ci.openshift.io/multi-stage/kubeconfig
+      - name: KUBECONFIGMINIMAL
+        value: /var/run/secrets/ci.openshift.io/multi-stage/kubeconfig-minimal
       - name: KUBEADMIN_PASSWORD_FILE
         value: /var/run/secrets/ci.openshift.io/multi-stage/kubeadmin-password
       - name: CLUSTER_TYPE
@@ -379,6 +383,8 @@
         value: uuid
       - name: KUBECONFIG
         value: /var/run/secrets/ci.openshift.io/multi-stage/kubeconfig
+      - name: KUBECONFIGMINIMAL
+        value: /var/run/secrets/ci.openshift.io/multi-stage/kubeconfig-minimal
       - name: KUBEADMIN_PASSWORD_FILE
         value: /var/run/secrets/ci.openshift.io/multi-stage/kubeadmin-password
       - name: CLUSTER_TYPE
@@ -537,6 +543,8 @@
         value: uuid
       - name: KUBECONFIG
         value: /var/run/secrets/ci.openshift.io/multi-stage/kubeconfig
+      - name: KUBECONFIGMINIMAL
+        value: /var/run/secrets/ci.openshift.io/multi-stage/kubeconfig-minimal
       - name: KUBEADMIN_PASSWORD_FILE
         value: /var/run/secrets/ci.openshift.io/multi-stage/kubeadmin-password
       - name: CLUSTER_TYPE

@@ -207,6 +207,7 @@ func (s *multiStageTestStep) generatePods(
 		} else if needsKubeConfig {
 			container.Env = append(container.Env, []coreapi.EnvVar{
 				{Name: "KUBECONFIG", Value: filepath.Join(SecretMountPath, "kubeconfig")},
+				{Name: "KUBECONFIGMINIMAL", Value: filepath.Join(SecretMountPath, "kubeconfig-minimal")},
 				{Name: "KUBEADMIN_PASSWORD_FILE", Value: filepath.Join(SecretMountPath, "kubeadmin-password")},
 			}...)
 		}

@@ -414,13 +414,28 @@ func createSecret(client coreclientset.SecretInterface, name, dir string, dry bo
 // uploadKubeconfig will do a best-effort attempt at uploading a kubeconfig
 // file if one does not exist at the time we start running but one does get
 // created while executing the command
+// The function also monitors for the file kubeconfig-minimal and create secret to
+// make it available for other test steps. The purpose of kubeconfig-minimal is to
+// make a minimally functional kubeconfig available for tasks that need to run
+// before the final complete kubeconfig is available for general usage. An example
+// use case is for observers to start observing while install is still in progress.
 func uploadKubeconfig(ctx context.Context, client coreclientset.SecretInterface, name, dir string, dry bool) {
 	if _, err := os.Stat(path.Join(dir, "kubeconfig")); err == nil {
 		// kubeconfig already exists, no need to do anything
 		return
 	}
 	var uploadErr error
+	minimalUploaded := false
 	if err := wait.PollUntil(time.Second, func() (done bool, err error) {
+		if !minimalUploaded {
+			if _, uploadErr = os.Stat(path.Join(dir, "kubeconfig-minimal")); uploadErr == nil {
+				uploadErr = createSecret(client, name, dir, dry)
+				if uploadErr == nil {
+					minimalUploaded = true
+				}
+				return false, nil
+			}
+		}
 		if _, uploadErr = os.Stat(path.Join(dir, "kubeconfig")); uploadErr != nil {
 			return false, nil
 		}

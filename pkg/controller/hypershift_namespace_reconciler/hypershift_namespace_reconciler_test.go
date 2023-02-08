@@ -91,6 +91,11 @@ func TestHypershiftNamespace(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "hypershift ns with true",
+			labels:   map[string]string{"hypershift.openshift.io/hosted-control-plane": "true"},
+			expected: true,
+		},
+		{
 			name:   "non hypershift ns",
 			labels: map[string]string{"openshift.io/user-monitoring": "false"},
 		},

@@ -64,7 +64,7 @@ func hypershiftNamespace(labels map[string]string) bool {
 		return false
 	}
 	value, ok := labels["hypershift.openshift.io/hosted-control-plane"]
-	if !ok || value != "" {
+	if !ok || (value != "" && value != "true") {
 		return false
 	}
 	return true

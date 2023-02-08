@@ -67,16 +67,6 @@ func (o *Operator) UpdateImage(image api.ProjectDirectoryImageBuildStepConfigura
 func (o *Operator) addImageRef(image *ImageRef) error {
 	logrus.WithField("image", image.Name).Info("Adding image...")
 
-	var m struct {
-		AddImage struct {
-			NumUIDs int `graphql:"numUids"`
-			Image   []struct {
-				ID string `graphql:"id"`
-			} `graphql:"image"`
-		} `graphql:"addImage(input: $input)"`
-	}
-
-	type AddImageInput map[string]interface{}
 	input := AddImageInput{
 		"name":           image.Name,
 		"namespace":      image.Namespace,
@@ -116,6 +106,7 @@ func (o *Operator) addImageRef(image *ImageRef) error {
 		"input": []AddImageInput{input},
 	}
 
+	var m AddImagePayload
 	if err := o.c.Mutate(context.Background(), &m, vars); err != nil {
 		return err
 	}
@@ -134,10 +125,6 @@ func (o *Operator) updateImageRef(newImage *ImageRef, id string) error {
 			NumUIDs int `graphql:"numUids"`
 		} `graphql:"updateImage(input: $input)"`
 	}
-
-	type ImagePatch map[string]interface{}
-	type ImageFilter map[string]interface{}
-	type UpdateImageInput map[string]interface{}
 
 	patch := ImagePatch{
 		"name":           newImage.Name,

@@ -37,7 +37,7 @@ func (a *AlertHistoricalDataRow) GetJobData() HistoricalJobData {
 	return a.HistoricalJobData
 }
 func (a *AlertHistoricalDataRow) GetName() string {
-	return a.AlertName
+	return fmt.Sprintf("%s %s %s", a.AlertName, a.AlertNamespace, a.AlertLevel)
 }
 func (a *AlertHistoricalDataRow) GetP99() string {
 	return a.P99

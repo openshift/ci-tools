@@ -219,8 +219,8 @@ func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, podNam
 			if our.Cmp(their) == 1 {
 				logger.Debugf("determined %s %s of %s to be larger than %s configured", field, pair.resource, our.String(), their.String())
 				(*pair.theirs)[field] = our
-				if field == corev1.ResourceMemory && their.Value() > 0 && our.Value() > (their.Value()*10) {
-					reporter.ReportMemoryConfigurationWarning(podName, workloadType, their.String(), our.String())
+				if their.Value() > 0 && our.Value() > (their.Value()*10) {
+					reporter.ReportResourceConfigurationWarning(podName, workloadType, their.String(), our.String(), field.String())
 				}
 			}
 		}

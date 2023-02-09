@@ -190,6 +190,7 @@ func TestReportMemoryConfigurationWarning(t *testing.T) {
 		workloadType     string
 		configuredMemory string
 		determinedMemory string
+		resourceType     string
 		expected         string
 	}{
 		{
@@ -198,7 +199,8 @@ func TestReportMemoryConfigurationWarning(t *testing.T) {
 			workloadType:     "build",
 			configuredMemory: "100",
 			determinedMemory: "200",
-			expected:         `{"WorkloadName":"name","WorkloadType":"build","ConfiguredMemory":"100","DeterminedMemory":"200"}`,
+			resourceType:     "memory",
+			expected:         `{"WorkloadName":"name","WorkloadType":"build","ConfiguredAmount":"100","DeterminedAmount":"200","ResourceType":"memory"}`,
 		},
 		{
 			name:             "empty workload name",
@@ -206,7 +208,8 @@ func TestReportMemoryConfigurationWarning(t *testing.T) {
 			workloadType:     "build",
 			configuredMemory: "100",
 			determinedMemory: "200",
-			expected:         `{"WorkloadName":"","WorkloadType":"build","ConfiguredMemory":"100","DeterminedMemory":"200"}`,
+			resourceType:     "memory",
+			expected:         `{"WorkloadName":"","WorkloadType":"build","ConfiguredAmount":"100","DeterminedAmount":"200","ResourceType":"memory"}`,
 		},
 		{
 			name:             "empty workload type",
@@ -214,7 +217,17 @@ func TestReportMemoryConfigurationWarning(t *testing.T) {
 			workloadType:     "",
 			configuredMemory: "100",
 			determinedMemory: "200",
-			expected:         `{"WorkloadName":"name","WorkloadType":"","ConfiguredMemory":"100","DeterminedMemory":"200"}`,
+			resourceType:     "memory",
+			expected:         `{"WorkloadName":"name","WorkloadType":"","ConfiguredAmount":"100","DeterminedAmount":"200","ResourceType":"memory"}`,
+		},
+		{
+			name:             "empty resource type",
+			workloadName:     "name",
+			workloadType:     "step",
+			configuredMemory: "100",
+			determinedMemory: "200",
+			resourceType:     "",
+			expected:         `{"WorkloadName":"name","WorkloadType":"step","ConfiguredAmount":"100","DeterminedAmount":"200","ResourceType":""}`,
 		},
 	}
 
@@ -255,7 +268,7 @@ func TestReportMemoryConfigurationWarning(t *testing.T) {
 				},
 				address: testServer.URL,
 			}
-			podScalerReporter.ReportMemoryConfigurationWarning(tc.workloadName, tc.workloadType, tc.configuredMemory, tc.determinedMemory)
+			podScalerReporter.ReportResourceConfigurationWarning(tc.workloadName, tc.workloadType, tc.configuredMemory, tc.determinedMemory, tc.resourceType)
 		})
 	}
 }

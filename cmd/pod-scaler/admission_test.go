@@ -1044,3 +1044,77 @@ func TestDetermineWorkloadType(t *testing.T) {
 		})
 	}
 }
+
+func TestAddPriorityClass(t *testing.T) {
+	testCases := []struct {
+		name     string
+		pod      *corev1.Pod
+		expected *corev1.Pod
+	}{
+		{
+			name: "cpu under configured amount for priority scheduling",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("1")}}},
+				},
+			}},
+			expected: &corev1.Pod{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("1")}}},
+				},
+			}},
+		},
+		{
+			name: "cpu of exactly configured amount for priority scheduling",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("8")}}},
+				},
+			}},
+			expected: &corev1.Pod{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("8")}}},
+				},
+				PriorityClassName: priorityClassName,
+			}},
+		},
+		{
+			name: "cpu above configured amount for priority scheduling",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("9")}}},
+				},
+			}},
+			expected: &corev1.Pod{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("9")}}},
+				},
+				PriorityClassName: priorityClassName,
+			}},
+		},
+		{
+			name: "cpu of initContainer above configured amount for priority scheduling",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				InitContainers: []corev1.Container{
+					{Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("9")}}},
+				},
+			}},
+			expected: &corev1.Pod{Spec: corev1.PodSpec{
+				InitContainers: []corev1.Container{
+					{Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("9")}}},
+				},
+				PriorityClassName: priorityClassName,
+			}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := podMutator{cpuPriorityScheduling: 8}
+			m.addPriorityClass(tc.pod)
+			if diff := cmp.Diff(tc.pod, tc.expected); diff != "" {
+				t.Fatalf("expected pod doesn't match actual, diff: %s", diff)
+			}
+		})
+	}
+}

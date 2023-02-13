@@ -121,6 +121,28 @@ test_home_dir() {
     diff <(echo "$v") <(echo "/tmp")
 }
 
+test_git_config() {
+    echo '[INFO] Verifying existing Git configuration is used'
+    local d=$dir/git_config/home
+    local f=$d/.gitconfig
+    mkdir --parents "$d"
+    printf '[safe]\n    directory = test\n' > "$f"
+    if ! HOME=$d entrypoint-wrapper --dry-run > /dev/null \
+        bash -c '[[ "$(git config safe.directory)" == "test" ]]'
+    then
+        fail '[ERROR] entrypoint-wrapper failed'
+        return
+    fi
+    rm "$f"
+    echo '[INFO] Verifying Git configuration is created when not present'
+    if ! HOME=$d entrypoint-wrapper --dry-run > /dev/null \
+        bash -c '[[ "$(git config safe.directory)" == "*" ]]'
+    then
+        fail '[ERROR] entrypoint-wrapper failed'
+        return
+    fi
+}
+
 test_copy_kubeconfig() {
     echo '[INFO] Verifying KUBECONFIG is not set when original is not set'
     if ! v=$(unset KUBECONFIG; entrypoint-wrapper --dry-run bash -c 'echo >&3 "${KUBECONFIG}"' \
@@ -274,6 +296,7 @@ os::cmd::expect_success 'run_test test_shared_dir'
 os::cmd::expect_success 'run_test test_cli_dir'
 os::cmd::expect_success 'run_test test_copy_dir'
 os::cmd::expect_success 'run_test test_home_dir'
+os::cmd::expect_success 'run_test test_git_config'
 os::cmd::expect_success 'run_test test_copy_kubeconfig'
 os::cmd::expect_success 'run_test test_upload_on_interrupt'
 os::cmd::expect_success "run_test entrypoint-wrapper --dry-run true \> ${OUT}"

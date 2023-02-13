@@ -163,10 +163,13 @@ func (s *multiStageTestStep) generatePods(
 		pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{Name: homeVolumeName, VolumeSource: coreapi.VolumeSource{EmptyDir: &coreapi.EmptyDirVolumeSource{}}})
 		pod.Spec.Volumes = append(pod.Spec.Volumes, secretVolumes...)
 		for idx := range pod.Spec.Containers {
-			if pod.Spec.Containers[idx].Name != containerName {
-				continue
+			if c := &pod.Spec.Containers[idx]; c.Name == containerName {
+				c.VolumeMounts = append(c.VolumeMounts, coreapi.VolumeMount{
+					Name:      homeVolumeName,
+					MountPath: "/alabama",
+				})
+				break
 			}
-			pod.Spec.Containers[idx].VolumeMounts = append(pod.Spec.Containers[idx].VolumeMounts, coreapi.VolumeMount{Name: homeVolumeName, MountPath: "/alabama"})
 		}
 
 		addSecretWrapper(pod, s.vpnConf, !needsKubeConfig, genPodOpts)

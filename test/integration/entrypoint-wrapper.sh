@@ -136,7 +136,7 @@ test_git_config() {
     local f=$d/.gitconfig
     mkdir --parents "$d"
     printf '[safe]\n    directory = test\n' > "$f"
-    if ! HOME=$d entrypoint-wrapper --dry-run > /dev/null \
+    if ! GIT_CONFIG_COUNT=0 HOME=$d entrypoint-wrapper --dry-run > /dev/null \
         bash -c '[[ "$(git config safe.directory)" == "test" ]]'
     then
         fail '[ERROR] entrypoint-wrapper failed'

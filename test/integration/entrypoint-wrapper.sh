@@ -8,6 +8,7 @@ function cleanup() {
 trap "cleanup" EXIT
 
 dir=${BASETMPDIR}
+export HOME=${dir}/home
 export SHARED_DIR=${dir}/shared
 export TMPDIR=${dir}/tmp
 export CLI_DIR="/cli-dir"
@@ -29,7 +30,7 @@ fail() {
 }
 
 setup_test() {
-    mkdir -p "${SHARED_DIR}"
+    mkdir --parents "${HOME}" "${SHARED_DIR}"
     echo test0 > "${SHARED_DIR}/test0.txt"
     printf %s > "${SECRET}" '{' \
         '"kind":"Secret",' \

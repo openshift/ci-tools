@@ -340,11 +340,11 @@ func manageHome(proc *exec.Cmd) string {
 // manageGitConfig creates a default Git configuration file if necessary
 // This configuration will contain a `safe.directory` entry disabling the file
 // ownership verification (see `git-config(1)`).  If an existing configuration
-// file is found, no changes are made.
+// file is found or the home directory does not exist, no changes are made.
 func manageGitConfig(home string) error {
 	path := filepath.Join(home, ".gitconfig")
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
-	if errors.Is(err, fs.ErrExist) {
+	if errors.Is(err, fs.ErrExist) || errors.Is(err, fs.ErrNotExist) {
 		return nil
 	} else if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)

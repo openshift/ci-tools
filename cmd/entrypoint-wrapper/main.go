@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"log"
 	"os"
@@ -277,7 +278,10 @@ func (o *options) execCmd() error {
 		// the inherited set instead of overwriting
 		proc.Env = os.Environ()
 	}
-	manageHome(proc)
+	home := manageHome(proc)
+	if err := manageGitConfig(home); err != nil {
+		return fmt.Errorf("failed to create Git configuration: %w", err)
+	}
 	manageCLI(proc)
 	if o.rwKubeconfig {
 		if err := manageKubeconfig(proc); err != nil {
@@ -316,7 +320,7 @@ func manageCLI(proc *exec.Cmd) {
 }
 
 // manageHome provides a writeable home so kubectl discovery can be cached
-func manageHome(proc *exec.Cmd) {
+func manageHome(proc *exec.Cmd) string {
 	home, set := os.LookupEnv("HOME")
 	needHome := !set
 	if set {
@@ -326,9 +330,34 @@ func manageHome(proc *exec.Cmd) {
 		}
 	}
 	if needHome {
+		home = "/alabama"
 		// the last of any duplicate keys is used for env
-		proc.Env = append(proc.Env, "HOME=/alabama")
+		proc.Env = append(proc.Env, "HOME="+home)
 	}
+	return home
+}
+
+// manageGitConfig creates a default Git configuration file if necessary
+// This configuration will contain a `safe.directory` entry disabling the file
+// ownership verification (see `git-config(1)`).  If an existing configuration
+// file is found, no changes are made.
+func manageGitConfig(home string) error {
+	path := filepath.Join(home, ".gitconfig")
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+	if errors.Is(err, fs.ErrExist) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+	defer func() {
+		if err := f.Close(); err != nil {
+			logrus.WithError(err).Warn("failed to close file")
+		}
+	}()
+	if _, err := f.WriteString("[safe]\n    directory = *\n"); err != nil {
+		return fmt.Errorf("failed to write to file: %w", err)
+	}
+	return nil
 }
 
 // manageKubeconfig provides a unique writeable kubeconfig so users can for example set a namespace,

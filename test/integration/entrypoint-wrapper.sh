@@ -61,9 +61,11 @@ test_mkdir() {
     [[ ! -e "${TMPDIR}" ]]
     if ! entrypoint-wrapper --dry-run true > /dev/null 2> "${ERR}"; then
         fail '[ERROR] entrypoint-wrapper failed'
+        return
     fi
     if ! [[ -e "${TMPDIR}" ]]; then
         fail '[ERROR] entrypoint-wrapper did not create the directory'
+        return
     fi
 }
 
@@ -73,6 +75,7 @@ test_shared_dir() {
         3>&1 > /dev/null 2> "${ERR}")
     then
         fail '[ERROR] entrypoint-wrapper failed'
+        return
     fi
     diff <(echo "$v") <(cd "${TMPDIR}"/secret && pwd)
 }
@@ -83,6 +86,7 @@ test_cli_dir() {
         3>&1 > /dev/null 2> "${ERR}")
     then
         fail '[ERROR] entrypoint-wrapper failed'
+        return
     fi
     diff <(echo "$v") <(echo "${PATH}:${CLI_DIR}")
 }
@@ -93,32 +97,36 @@ test_home_dir() {
         3>&1 > /dev/null 2> "${ERR}")
     then
         fail '[ERROR] entrypoint-wrapper failed'
+        return
     fi
-    diff <(echo "$v") <(echo "/alabama")
+    diff <(echo "$v") <(echo "/alabama") || return
 
     echo '[INFO] Verifying HOME is set correctly when original is not writeable'
     if ! v=$(HOME=nowhere entrypoint-wrapper --dry-run bash -c 'echo >&3 "${HOME}"' \
         3>&1 > /dev/null 2> "${ERR}")
     then
         fail '[ERROR] entrypoint-wrapper failed'
+        return
     fi
-    diff <(echo "$v") <(echo "/alabama")
+    diff <(echo "$v") <(echo "/alabama") || return
 
     echo '[INFO] Verifying that setting HOME does not change the rest of the env'
     if ! v=$(unset HOME; WHOA=yes entrypoint-wrapper --dry-run bash -c 'echo >&3 "${WHOA}"' \
         3>&1 > /dev/null 2> "${ERR}")
     then
         fail '[ERROR] entrypoint-wrapper failed'
+        return
     fi
-    diff <(echo "$v") <(echo "yes")
+    diff <(echo "$v") <(echo "yes") || return
 
     echo '[INFO] Verifying HOME is untouched when original is writeable'
     if ! v=$(HOME=/tmp entrypoint-wrapper --dry-run bash -c 'echo >&3 "${HOME}"' \
         3>&1 > /dev/null 2> "${ERR}")
     then
         fail '[ERROR] entrypoint-wrapper failed'
+        return
     fi
-    diff <(echo "$v") <(echo "/tmp")
+    diff <(echo "$v") <(echo "/tmp") || return
 }
 
 test_git_config() {
@@ -149,14 +157,16 @@ test_copy_kubeconfig() {
         3>&1 > /dev/null 2> "${ERR}")
     then
         fail '[ERROR] entrypoint-wrapper failed'
+        return
     fi
-    diff <(echo "$v") <(echo "")
+    diff <(echo "$v") <(echo "") || return
 
     echo '[INFO] Verifying KUBECONFIG is set correctly when original is set'
     if ! v=$(KUBECONFIG=a entrypoint-wrapper --dry-run bash -c 'echo >&3 "${KUBECONFIG}"' \
         3>&1 > /dev/null 2> "${ERR}")
     then
         fail '[ERROR] entrypoint-wrapper failed'
+        return
     fi
     if [[ "${v}" == "a" ]]; then
       echo "\$KUBECONFIG was not changed!"
@@ -168,8 +178,9 @@ test_copy_kubeconfig() {
         3>&1 > /dev/null 2> "${ERR}")
     then
         fail '[ERROR] entrypoint-wrapper failed'
+        return
     fi
-    diff <(echo "$v") <(echo "yes")
+    diff <(echo "$v") <(echo "yes") || return
 
     echo '[INFO] Verifying KUBECONFIG is populated when possible'
     echo "test" > "${dir}/kubeconfig.new"
@@ -181,8 +192,9 @@ test_copy_kubeconfig() {
         3>&1 > /dev/null 2> "${ERR}")
     then
         fail '[ERROR] entrypoint-wrapper failed'
+        return
     fi
-    diff <(echo "$v") <(echo "test")
+    diff <(echo "$v") <(echo "test") || return
     wait
 }
 
@@ -236,13 +248,16 @@ test_copy_dir() {
     [[ ! -e "${TMPDIR}/secret/test.txt" ]]
     if ! entrypoint-wrapper --dry-run true > /dev/null 2> "${ERR}"; then
         fail '[ERROR] entrypoint-wrapper failed'
+        return
     fi
     echo test0 | diff "${TMPDIR}/secret/test0.txt" -
     if [[ -L "${TMPDIR}/secret/..data" ]]; then
         fail '[ERROR] symlinks should not be copied'
+        return
     fi
     if [[ -e "${TMPDIR}/secret/..2020_03_09_17_18_45.291041453" ]]; then
         fail '[ERROR] directories should not be copied'
+        return
     fi
 }
 
@@ -256,10 +271,12 @@ test_signal() {
     then
         kill "${pid}"
         fail '[ERROR] timeout while waiting for `sleep` to start:'
+        return
     fi
     kill -s "$1" "${pid}"
     if wait "$pid"; then
         fail "[ERROR] entrypoint-wrapper did not fail as expected:"
+        return
     elif ! cmp --quiet "${OUT}" "${SECRET}"; then
         echo '[ERROR] output:'
         cat "${OUT}"

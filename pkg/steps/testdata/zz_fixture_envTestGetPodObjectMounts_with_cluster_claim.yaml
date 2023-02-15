@@ -12,6 +12,12 @@
   value: "true"
 - name: PROW_JOB_ID
   value: podStep.jobSpec.ProwJobID
+- name: GIT_CONFIG_COUNT
+  value: "1"
+- name: GIT_CONFIG_KEY_0
+  value: safe.directory
+- name: GIT_CONFIG_VALUE_0
+  value: '*'
 - name: ENTRYPOINT_OPTIONS
   value: '{"timeout":60000000000,"grace_period":1000000000,"artifact_dir":"/logs/artifacts","args":["/bin/bash","-c","#!/bin/bash\nset
     -eu\npodStep.config.Command"],"container_name":"podStep.name","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}'

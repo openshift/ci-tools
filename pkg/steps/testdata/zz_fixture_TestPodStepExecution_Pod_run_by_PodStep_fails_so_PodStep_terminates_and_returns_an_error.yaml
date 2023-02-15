@@ -49,6 +49,12 @@ spec:
       value: repo
     - name: REPO_OWNER
       value: org
+    - name: GIT_CONFIG_COUNT
+      value: "1"
+    - name: GIT_CONFIG_KEY_0
+      value: safe.directory
+    - name: GIT_CONFIG_VALUE_0
+      value: '*'
     - name: ENTRYPOINT_OPTIONS
       value: '{"timeout":60000000000,"grace_period":1000000000,"artifact_dir":"/logs/artifacts","args":["/bin/bash","-c","#!/bin/bash\nset
         -eu\nlaunch-tests"],"container_name":"StepName","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}'

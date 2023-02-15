@@ -32,17 +32,17 @@ var (
 		},
 		[]string{"job_name", "type", "state", "reason", "cluster"},
 	)
-	podScalerHighMemCounter = prometheus.NewCounterVec(
+	podScalerHighResourceCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "pod_scaler_admission_high_determined_memory",
-			Help: "number of times pod-scaler determined higher memory than configured, sorted by label/type",
+			Name: "pod_scaler_admission_high_determined_resource",
+			Help: "number of times pod-scaler determined higher resource amount than what was configured, sorted by label/type",
 		},
-		[]string{"workload_name", "workload_type", "configured_memory", "determined_memory"},
+		[]string{"workload_name", "workload_type", "configured_amount", "determined_amount", "resource_type"},
 	)
 )
 
 func init() {
-	prometheus.MustRegister(errorRate, podScalerHighMemCounter)
+	prometheus.MustRegister(errorRate, podScalerHighResourceCounter)
 }
 
 type options struct {
@@ -102,11 +102,14 @@ func validatePodScalerRequest(request *results.PodScalerRequest) error {
 	if request.WorkloadType == "" {
 		return fmt.Errorf("workload_type field in request is empty")
 	}
-	if request.ConfiguredMemory == "" {
-		return fmt.Errorf("configured_memory field in request is empty")
+	if request.ConfiguredAmount == "" {
+		return fmt.Errorf("configured_amount field in request is empty")
 	}
-	if request.DeterminedMemory == "" {
-		return fmt.Errorf("determined_memory field in request is empty")
+	if request.DeterminedAmount == "" {
+		return fmt.Errorf("determined_amount field in request is empty")
+	}
+	if request.ResourceType == "" {
+		return fmt.Errorf("resource_type field in request is empty")
 	}
 	return nil
 }
@@ -127,14 +130,15 @@ func withErrorRate(request *results.Request) {
 	errorRate.With(labels).Inc()
 }
 
-func recordHighMemory(request *results.PodScalerRequest) {
+func recordHighResource(request *results.PodScalerRequest) {
 	labels := prometheus.Labels{
 		"workload_name":     request.WorkloadName,
 		"workload_type":     request.WorkloadType,
-		"configured_memory": request.ConfiguredMemory,
-		"determined_memory": request.DeterminedMemory,
+		"configured_amount": request.ConfiguredAmount,
+		"determined_amount": request.DeterminedAmount,
+		"resource_type":     request.ResourceType,
 	}
-	podScalerHighMemCounter.With(labels).Inc()
+	podScalerHighResourceCounter.With(labels).Inc()
 }
 
 type validator interface {
@@ -201,7 +205,7 @@ func handlePodScalerResult() http.HandlerFunc {
 			return
 		}
 
-		recordHighMemory(request)
+		recordHighResource(request)
 		w.WriteHeader(http.StatusOK)
 		log.WithFields(log.Fields{"request": request, "duration": time.Since(start).String()}).Info("Pod-scaler request processed")
 	}

@@ -99,8 +99,9 @@ type Request struct {
 type PodScalerRequest struct {
 	WorkloadName     string
 	WorkloadType     string
-	ConfiguredMemory string
-	DeterminedMemory string
+	ConfiguredAmount string
+	DeterminedAmount string
+	ResourceType     string
 }
 
 const (
@@ -170,7 +171,7 @@ func (r *reporter) report(request Request) {
 }
 
 type PodScalerReporter interface {
-	ReportMemoryConfigurationWarning(workloadName, workloadType, configuredMemory, determinedMemory string)
+	ReportResourceConfigurationWarning(workloadName, workloadType, configuredAmount, determinedAmount, resourceType string)
 }
 
 type podScalerReporter struct {
@@ -193,14 +194,15 @@ func (o *Options) PodScalerReporter() (PodScalerReporter, error) {
 	}, nil
 }
 
-// ReportMemoryConfigurationWarning is used to send the information about memory configuration
+// ReportResourceConfigurationWarning is used to send the information about resource configuration
 // from pod-scaler-admission to result-aggregator.
-func (r *podScalerReporter) ReportMemoryConfigurationWarning(workloadName, workloadType, configuredMemory, determinedMemory string) {
+func (r *podScalerReporter) ReportResourceConfigurationWarning(workloadName, workloadType, configuredAmount, determinedAmount, resourceType string) {
 	request := PodScalerRequest{
 		WorkloadName:     workloadName,
 		WorkloadType:     workloadType,
-		ConfiguredMemory: configuredMemory,
-		DeterminedMemory: determinedMemory,
+		ConfiguredAmount: configuredAmount,
+		DeterminedAmount: determinedAmount,
+		ResourceType:     resourceType,
 	}
 
 	data, err := json.Marshal(request)

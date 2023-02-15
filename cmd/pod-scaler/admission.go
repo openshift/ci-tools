@@ -220,7 +220,7 @@ func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, podNam
 				logger.Debugf("determined %s %s of %s to be larger than %s configured", field, pair.resource, our.String(), their.String())
 				(*pair.theirs)[field] = our
 				if their.Value() > 0 && our.Value() > (their.Value()*10) {
-					reporter.ReportMemoryConfigurationWarning(podName, workloadType, their.String(), our.String())
+					reporter.ReportResourceConfigurationWarning(podName, workloadType, their.String(), our.String(), field.String())
 				}
 			}
 		}

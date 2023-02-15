@@ -35,7 +35,7 @@ type mockReporter struct {
 	called bool
 }
 
-func (r *mockReporter) ReportMemoryConfigurationWarning(string, string, string, string) {
+func (r *mockReporter) ReportResourceConfigurationWarning(string, string, string, string, string) {
 	r.called = true
 }
 

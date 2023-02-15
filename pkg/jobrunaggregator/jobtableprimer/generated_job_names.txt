@@ -227,8 +227,6 @@ periodic-ci-openshift-multiarch-master-nightly-4.12-ocp-e2e-ovn-remote-libvirt-s
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.12-s390x.json
 
 // begin https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.12.json
-periodic-ci-openshift-microshift-main-periodic-ocp-4.12-conformance-parallel
-periodic-ci-openshift-microshift-main-periodic-ocp-4.12-conformance-serial
 periodic-ci-openshift-release-master-ci-4.12-e2e-aws-ovn
 periodic-ci-openshift-release-master-ci-4.12-e2e-aws-sdn-techpreview
 periodic-ci-openshift-release-master-ci-4.12-e2e-aws-sdn-techpreview-serial

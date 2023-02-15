@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/shurcooL/graphql"
-
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -23,7 +21,7 @@ const (
 )
 
 type Operator struct {
-	c               *graphql.Client
+	c               Client
 	organizations   map[string]string
 	repositories    map[string]string
 	branches        map[string]string
@@ -33,7 +31,7 @@ type Operator struct {
 	releaseRepoPath string
 }
 
-func NewOperator(c *graphql.Client, releaseRepoPath string) *Operator {
+func NewOperator(c Client, releaseRepoPath string) *Operator {
 	return &Operator{
 		c:               c,
 		organizations:   make(map[string]string),
@@ -67,35 +65,35 @@ func (o *Operator) Load() error {
 	return nil
 }
 
-func (o *Operator) OperateOnCIOperatorConfigs() error {
-	callback := func(c *api.ReleaseBuildConfiguration, i *config.Info) error {
-		if i.Org == "openshift-priv" {
-			return nil
-		}
-
-		if err := o.AddBranchRef(i.Org, i.Repo, i.Branch); err != nil {
-			return err
-		}
-		branchID := o.Branches()[fmt.Sprintf("%s/%s:%s", i.Org, i.Repo, i.Branch)]
-
-		if c.PromotionConfiguration == nil {
-			return nil
-		}
-
-		var errs []error
-		excludedImages := sets.NewString(c.PromotionConfiguration.ExcludedImages...)
-
-		for _, image := range c.Images {
-			if !excludedImages.Has(string(image.To)) {
-				if err := o.UpdateImage(image, c, branchID); err != nil {
-					errs = append(errs, err)
-				}
-			}
-		}
-		return utilerrors.NewAggregate(errs)
+func (o *Operator) callback(c *api.ReleaseBuildConfiguration, i *config.Info) error {
+	if i.Org == "openshift-priv" {
+		return nil
 	}
 
-	if err := config.OperateOnCIOperatorConfigDir(filepath.Join(o.releaseRepoPath, ReleaseCIOperatorConfigsPath), callback); err != nil {
+	if err := o.AddBranchRef(i.Org, i.Repo, i.Branch); err != nil {
+		return err
+	}
+	branchID := o.Branches()[fmt.Sprintf("%s/%s:%s", i.Org, i.Repo, i.Branch)]
+
+	if c.PromotionConfiguration == nil {
+		return nil
+	}
+
+	var errs []error
+	excludedImages := sets.NewString(c.PromotionConfiguration.ExcludedImages...)
+
+	for _, image := range c.Images {
+		if !excludedImages.Has(string(image.To)) {
+			if err := o.UpdateImage(image, c, branchID); err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+	return utilerrors.NewAggregate(errs)
+}
+
+func (o *Operator) OperateOnCIOperatorConfigs() error {
+	if err := config.OperateOnCIOperatorConfigDir(filepath.Join(o.releaseRepoPath, ReleaseCIOperatorConfigsPath), o.callback); err != nil {
 		return err
 	}
 	return nil

@@ -100,14 +100,15 @@ func TestMutatePods(t *testing.T) {
 	}
 
 	mutator := podMutator{
-		logger:               logger,
-		client:               client.BuildV1(),
-		resources:            resources,
-		mutateResourceLimits: true,
-		decoder:              decoder,
-		cpuCap:               10,
-		memoryCap:            "20Gi",
-		reporter:             &defaultReporter,
+		logger:                logger,
+		client:                client.BuildV1(),
+		resources:             resources,
+		mutateResourceLimits:  true,
+		decoder:               decoder,
+		cpuCap:                10,
+		memoryCap:             "20Gi",
+		cpuPriorityScheduling: 8,
+		reporter:              &defaultReporter,
 	}
 
 	var testCases = []struct {

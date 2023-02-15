@@ -172,10 +172,12 @@ func (s *server) respondToNewPR(pullRequest *github.PullRequest, logger *logrus.
 	repo := pullRequest.Base.Repo.Name
 	number := pullRequest.Number
 	user := pullRequest.User.Login
-	var comment string
 	presubmits, periodics, err := s.getAffectedJobs(pullRequest, logger)
 	if err != nil {
-		s.reportFailure("unable to determine affected jobs. This could be due to a branch that needs to be rebased.", err, org, repo, user, number, false, logger)
+		lines := []string{"unable to determine affected jobs. This could be due to a branch that needs to be rebased."}
+		lines = append(lines, s.getUsageDetailsLines()...)
+		comment := strings.Join(lines, "\n")
+		s.reportFailure(comment, err, org, repo, user, number, false, logger)
 		return
 	}
 	foundJobsToRehearse := len(presubmits) > 0 || len(periodics) > 0
@@ -195,7 +197,7 @@ func (s *server) respondToNewPR(pullRequest *github.PullRequest, logger *logrus.
 		}...)
 		lines = append(lines, s.getUsageDetailsLines()...)
 	}
-	comment = strings.Join(lines, "\n")
+	comment := strings.Join(lines, "\n")
 	if err := s.ghc.CreateComment(org, repo, number, comment); err != nil {
 		logger.WithError(err).Error("failed to create comment")
 	}

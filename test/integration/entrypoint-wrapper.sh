@@ -188,8 +188,9 @@ test_copy_kubeconfig() {
     ( sleep 1 && mv "${dir}/kubeconfig.new" "${dir}/kubeconfig" ) &
     if ! v=$( \
         KUBECONFIG="${dir}/kubeconfig" \
-        entrypoint-wrapper --dry-run \
-            bash -c 'for i in {0..9}; do if [[ -f "${KUBECONFIG}" ]]; then cat "${KUBECONFIG}" >&3; break; fi; sleep 0.2; done' \
+            timeout 5s \
+            entrypoint-wrapper --dry-run \
+            bash -c 'until [[ -f "${KUBECONFIG}" ]]; do sleep 0.2; done; cat "${KUBECONFIG}" >&3' \
         3>&1 > /dev/null 2> "${ERR}")
     then
         fail '[ERROR] entrypoint-wrapper failed'

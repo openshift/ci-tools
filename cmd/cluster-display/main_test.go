@@ -205,7 +205,7 @@ func TestGetClusterPage(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			page, _ := getClusterPage(context.TODO(), tc.clients, true, tc.getter)
+			page := getClusterPage(context.TODO(), tc.clients, true, tc.getter)
 			if diff := cmp.Diff(page.Data, tc.expected); diff != "" {
 				t.Errorf("result differs from expected output, diff:\n%s", diff)
 			}

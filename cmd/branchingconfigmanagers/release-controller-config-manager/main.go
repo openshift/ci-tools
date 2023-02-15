@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"path"
-	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -57,13 +56,13 @@ func main() {
 	logrus.SetLevel(logrus.Level(o.logLevel))
 	logrus.Debugf("using options %+v", o)
 
-	if err := reconcile(time.Now(), o); err != nil {
+	if err := reconcile(o); err != nil {
 		logrus.WithError(err).Fatal("failed to reconcile the status")
 	}
 	logrus.Info("status reconciled")
 }
 
-func reconcile(now time.Time, o *options) error {
+func reconcile(o *options) error {
 	releaseControllerConfigsDir := path.Join(o.releaseRepoDir, releaseControllerConfigPath)
 	b, err := bumper.NewReleaseControllerConfigBumper(o.curOCPVersion, releaseControllerConfigsDir)
 	if err != nil {

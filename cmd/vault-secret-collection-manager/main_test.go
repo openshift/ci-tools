@@ -285,8 +285,8 @@ func TestSecretCollectionManager(t *testing.T) {
 			}
 
 			for _, scenario := range tc.permCheckScenarios {
-				permCheckScenario := scenario
-				t.Run(fmt.Sprintf("path: %s, user: %s, expectSuccess: %t", permCheckScenario.path, permCheckScenario.user, permCheckScenario.expectSuccess), func(t *testing.T) {
+				scenario := scenario
+				t.Run(fmt.Sprintf("path: %s, user: %s, expectSuccess: %t", scenario.path, scenario.user, scenario.expectSuccess), func(t *testing.T) {
 					t.Parallel()
 					client, err := vaultclient.NewFromUserPass("http://"+vaultAddr, scenario.user, "password")
 					if err != nil {

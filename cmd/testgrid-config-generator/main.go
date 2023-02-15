@@ -220,6 +220,9 @@ func addDashboardTab(p prowConfig.Periodic,
 		case util.IsSpecialInformingJobOnTestGrid(prowName):
 			// the standard release periodics should always appear in testgrid
 			dashboardType = "informing"
+		case strings.Contains(prowName, "-lp-interop"):
+			// OpenShift layered product interop testing
+			dashboardType = "informing"
 		default:
 			// unknown labels or non standard jobs do not appear in testgrid
 			return
@@ -253,6 +256,9 @@ func addDashboardTab(p prowConfig.Periodic,
 		case strings.HasPrefix(prowName, "promote-release-openshift-"):
 			// TODO fix these jobs to have a consistent name
 			stream = "ocp"
+		case strings.Contains(prowName, "-lp-interop"):
+			// OpenShift layered product interop testing
+			stream = "lp-interop"
 		default:
 			logrus.Warningf("unrecognized release type in job: %s", prowName)
 			return

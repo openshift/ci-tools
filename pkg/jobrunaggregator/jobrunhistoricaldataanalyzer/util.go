@@ -15,6 +15,11 @@ import (
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 )
 
+// minJobRuns is the minimum number of runs for which we'll do a comparison in the pull request message.
+// if under this, we don't particularly care if you're up or down, though we will still include you in the
+// data file, and let origin sort out what to do with that data.
+const minJobRuns = 100
+
 func readHistoricalDataFile(filePath, dataType string) ([]jobrunaggregatorapi.HistoricalData, error) {
 	currentData, err := os.ReadFile(filePath)
 	if err != nil {
@@ -131,7 +136,7 @@ func formatTableOutput(data []parsedJobData, filter bool) string {
 	buffer.WriteString("| Name | Release | From | Arch | Network | Platform | Topology | Job Results | P95 | P95 % Increase | P99 | P99 % Increase |\n")
 	buffer.WriteString("| ---- | ------- | ---- | ---- | ------- | -------- |--------- | ----------- | --- | -------------- | --- | -------------- |\n")
 	for _, d := range data {
-		if d.TimeDiffP99 == 0 && filter {
+		if (d.JobResults < minJobRuns || d.TimeDiffP99 == 0) && filter {
 			continue
 		}
 		buffer.WriteString(

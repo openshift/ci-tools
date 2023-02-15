@@ -126,7 +126,6 @@ func (c *ciDataClient) ListDisruptionHistoricalData(ctx context.Context) ([]jobr
 		GROUP BY
 			BackendName, Release, FromRelease, Platform, Architecture, Network, Topology
 	)
-	WHERE JobRuns >= 100
 	ORDER BY Release, FromRelease, Platform, Architecture, Network, Topology, BackendName
     `)
 	query := c.client.Query(queryString)

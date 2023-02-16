@@ -885,6 +885,7 @@ periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-ovn-fips
 periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-ovn-rt
 periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-ovn-upgrade
 periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-ovn-upi
+periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-ovn-xpn
 periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-sdn
 periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-sdn-fips-serial
 periodic-ci-openshift-release-master-nightly-4.13-e2e-gcp-sdn-serial

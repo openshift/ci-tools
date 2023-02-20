@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"path"
-	"time"
 
 	"github.com/sirupsen/logrus"
 	"gopkg.in/ini.v1"
@@ -59,13 +58,13 @@ func main() {
 	logrus.SetLevel(logrus.Level(o.logLevel))
 	logrus.Debugf("using options %+v", o)
 
-	if err = reconcile(time.Now(), o); err != nil {
+	if err = reconcile(o); err != nil {
 		logrus.WithError(err).Fatal("failed to reconcile the status")
 	}
 	logrus.Info("status reconciled")
 }
 
-func reconcile(now time.Time, o *options) error {
+func reconcile(o *options) error {
 	logrus.Debugf("using options %+v", o)
 	bumpOpts := bumper.RepoBumperOptions{
 		FilesDir:      path.Join(o.releaseRepoDir, rpmMirroringServicesPath),

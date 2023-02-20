@@ -161,7 +161,7 @@ func (g *clusterInfoGetter) GetClusterDetails(ctx context.Context, cluster strin
 	}, nil
 }
 
-func getClusterPage(ctx context.Context, clients map[string]ctrlruntimeclient.Client, skipHive bool, getter ClusterInfoGetter) (*Page, error) {
+func getClusterPage(ctx context.Context, clients map[string]ctrlruntimeclient.Client, skipHive bool, getter ClusterInfoGetter) *Page {
 	var data []map[string]string
 
 	for cluster, client := range clients {
@@ -179,7 +179,7 @@ func getClusterPage(ctx context.Context, clients map[string]ctrlruntimeclient.Cl
 	sort.Slice(data, func(i, j int) bool {
 		return data[i]["cluster"] < data[j]["cluster"]
 	})
-	return &Page{Data: data}, nil
+	return &Page{Data: data}
 }
 
 func resolveProduct(ctx context.Context, client ctrlruntimeclient.Client, version string) (string, error) {
@@ -220,7 +220,7 @@ func getRouter(ctx context.Context, hiveClient ctrlruntimeclient.Client, clients
 			page, err = getClusterPoolPage(ctx, hiveClient)
 		case "clusters":
 			skipHive := r.URL.Query().Get("skipHive") == "true"
-			page, err = getClusterPage(ctx, allClients, skipHive, &clusterInfoGetter{})
+			page = getClusterPage(ctx, allClients, skipHive, &clusterInfoGetter{})
 		default:
 			http.Error(w, fmt.Sprintf("Unknown crd: %s", crd), http.StatusBadRequest)
 			return

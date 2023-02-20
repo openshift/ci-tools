@@ -1253,9 +1253,9 @@ func TestMultiStageParams(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.id, func(t *testing.T) {
 			t.Parallel()
-
 			configSpec := api.ReleaseBuildConfiguration{
 				Tests: tc.testConfig,
 			}

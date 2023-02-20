@@ -957,9 +957,12 @@ func runStep(ctx context.Context, step api.Step) (api.CIOperatorStepDetails, err
 			StepName:    step.Name(),
 			Description: step.Description(),
 			StartedAt:   &start,
-			FinishedAt:  func() *time.Time { start.Add(duration); return &start }(),
-			Duration:    &duration,
-			Failed:      &failed,
+			FinishedAt: func() *time.Time {
+				ret := start.Add(duration)
+				return &ret
+			}(),
+			Duration: &duration,
+			Failed:   &failed,
 		},
 		Substeps: subSteps,
 	}, err

@@ -49,6 +49,7 @@ baseurl = https://fake-repo.com/ocp/4-11/test
 	ini.PrettyEqual = true
 
 	for _, test := range tests {
+		test := test
 		t.Run(test.id, func(t *testing.T) {
 			t.Parallel()
 			b, err := bumper.NewRepoBumper(&bumper.RepoBumperOptions{

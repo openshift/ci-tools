@@ -8,6 +8,7 @@ import (
 	"os"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
@@ -17,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/test-infra/prow/config/org"
 	"k8s.io/test-infra/prow/flagutil"
@@ -372,12 +374,8 @@ func ensureGroups(ctx context.Context, clients map[string]ctrlruntimeclient.Clie
 		if dryRun {
 			return nil
 		}
-		if modified, err := upsertGroup(ctx, client, group); err != nil {
-			return fmt.Errorf("failed to upsert group %s on cluster %s: %w", group.Name, cluster, err)
-		} else if modified {
-			logger.Info("Upserted group (created or modified on the cluster")
-		} else {
-			logger.Info("Group with expected members already present in the cluster")
+		if err := upsertGroupWithRetry(ctx, client, cluster, group, logger); err != nil {
+			return fmt.Errorf("failed to upsert group %s on cluster %s after retrying: %w", group.Name, cluster, err)
 		}
 
 		return nil
@@ -434,6 +432,25 @@ func validate(group *userv1.Group) error {
 			return fmt.Errorf("duplicate member: %s", m)
 		}
 		members.Insert(m)
+	}
+	return nil
+}
+
+func upsertGroupWithRetry(ctx context.Context, client ctrlruntimeclient.Client, cluster string, group *userv1.Group, logger *logrus.Entry) error {
+	if err := wait.ExponentialBackoff(wait.Backoff{Steps: 4, Factor: 2, Duration: time.Second}, func() (bool, error) {
+		modified, err := upsertGroup(ctx, client, group)
+		if err != nil {
+			logger.WithError(err).WithField("cluster", cluster).WithField("group", group.Name).Warn("Failed to upsert group")
+			return false, nil
+		}
+		if modified {
+			logger.Info("Upserted group (created or modified on the cluster")
+			return true, nil
+		}
+		logger.Info("Group with expected members already present in the cluster")
+		return true, nil
+	}); err != nil {
+		return fmt.Errorf("failed to upsert group %s on cluster %s: %w", group.Name, cluster, err)
 	}
 	return nil
 }

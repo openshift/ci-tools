@@ -10,7 +10,11 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
+	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/kube"
@@ -36,6 +40,7 @@ var (
 	ocpPayloadTestsPattern              = regexp.MustCompile(`(?mi)^/payload\s+(?P<ocp>4\.\d+)\s+(?P<release>\w+)\s+(?P<jobs>\w+)\s*$`)
 	ocpPayloadJobTestsPattern           = regexp.MustCompile(`(?mi)^/payload-job\s+((?:[-\w.]+\s*?)+)\s*$`)
 	ocpPayloadAggregatedJobTestsPattern = regexp.MustCompile(`(?mi)^/payload-aggregate\s+(?P<job>[-\w.]+)\s+(?P<aggregate>\d+)\s*$`)
+	ocpPayloadAbortPattern              = regexp.MustCompile(`(?mi)^/payload-abort$`)
 )
 
 func helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, error) {
@@ -50,6 +55,12 @@ func helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, error) {
 		Description: "The payload-testing plugin triggers a run of specified release qualification jobs against PR code",
 		WhoCanUse:   "Members of the trusted organization for the repo.",
 		Examples:    []string{"/payload 4.10 nightly informing", "/payload 4.8 ci all"},
+	})
+	pluginHelp.AddCommand(pluginhelp.Command{
+		Usage:       "/payload-abort",
+		Description: "The payload-testing plugin aborts all active payload jobs for the PR",
+		WhoCanUse:   "Members of the trusted organization for the repo.",
+		Examples:    []string{"/payload-abort"},
 	})
 	return pluginHelp, nil
 }
@@ -179,6 +190,23 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 	}
 
 	logger.WithField("ic.Comment.Body", ic.Comment.Body).Trace("received a comment")
+
+	startTrustedUser := time.Now()
+	trusted, err := s.trustedChecker.trustedUser(ic.Comment.User.Login, org, repo, prNumber)
+	logger.WithField("duration", time.Since(startTrustedUser)).Debug("trustedUser completed")
+	if err != nil {
+		logger.WithError(err).WithField("user", ic.Comment.User.Login).Error("could not check if the user is trusted")
+		return formatError(fmt.Errorf("could not check if the user %s is trusted for pull request %s/%s#%d: %w", ic.Comment.User.Login, org, repo, prNumber, err))
+	}
+	if !trusted {
+		logger.WithField("user", ic.Comment.User.Login).Error("the user is not trusted")
+		return fmt.Sprintf("user %s is not trusted for pull request %s/%s#%d", ic.Comment.User.Login, org, repo, prNumber)
+	}
+
+	if ocpPayloadAbortPattern.MatchString(strings.TrimSpace(ic.Comment.Body)) {
+		return s.abortAll(logger, ic)
+	}
+
 	specs := specsFromComment(ic.Comment.Body)
 	jobsFromComment := jobsFromComment(ic.Comment.Body)
 	if len(specs) == 0 {
@@ -194,18 +222,6 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 
 	if len(specs) == 0 {
 		return ""
-	}
-
-	startTrustedUser := time.Now()
-	trusted, err := s.trustedChecker.trustedUser(ic.Comment.User.Login, org, repo, prNumber)
-	logger.WithField("duration", time.Since(startTrustedUser)).Debug("trustedUser completed")
-	if err != nil {
-		logger.WithError(err).WithField("user", ic.Comment.User.Login).Error("could not check if the user is trusted")
-		return formatError(fmt.Errorf("could not check if the user %s is trusted for pull request %s/%s#%d: %w", ic.Comment.User.Login, org, repo, prNumber, err))
-	}
-	if !trusted {
-		logger.WithField("user", ic.Comment.User.Login).Error("the user is not trusted")
-		return fmt.Sprintf("user %s is not trusted for pull request %s/%s#%d", ic.Comment.User.Login, org, repo, prNumber)
 	}
 
 	startGetPullRequest := time.Now()
@@ -322,6 +338,86 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 	}
 	logger.WithField("duration", time.Since(start)).Debug("handle completed")
 	return strings.Join(messages, "\n")
+}
+
+func (s *server) abortAll(logger *logrus.Entry, ic github.IssueCommentEvent) string {
+	org := ic.Repo.Owner.Login
+	repo := ic.Repo.Name
+	prNumber := ic.Issue.Number
+
+	jobs, err := s.getPayloadJobsForPR(org, repo, prNumber)
+	if err != nil {
+		return formatError(err)
+	}
+	if len(jobs) == 0 {
+		return fmt.Sprintf("no active payload jobs found to abort for pull request %s/%s#%d", org, repo, prNumber)
+	}
+
+	for _, jobName := range jobs {
+		jobLogger := logger.WithField("jobName", jobName)
+		job := &prowapi.ProwJob{}
+		if err := s.kubeClient.Get(s.ctx, ctrlruntimeclient.ObjectKey{Name: jobName, Namespace: s.namespace}, job); err != nil {
+			jobLogger.WithError(err).Error("failed to get prowjob")
+			return fmt.Sprintf("failed to gather payload jobs for pull request %s/%s#%d in order to abort", org, repo, prNumber)
+		}
+		// Do not abort jobs that already completed
+		if job.Complete() {
+			continue
+		}
+		jobLogger.Debugf("aborting prowjob")
+		job.Status.State = prowapi.AbortedState
+		// We use Update and not Patch here, because we are not the authority of the .Status.State field
+		// and must not overwrite changes made to it in the interim by the responsible agent.
+		// The accepted trade-off for now is that this leads to failure if unrelated fields where changed
+		// by another different actor.
+		if err = s.kubeClient.Update(s.ctx, job); err != nil && !apierrors.IsConflict(err) {
+			jobLogger.WithError(err).Errorf("failed to abort prowjob")
+			return fmt.Sprintf("failed to abort payload job: %s for pull request %s/%s#%d", job.Name, org, repo, prNumber)
+		} else {
+			jobLogger.Debugf("aborted prowjob")
+		}
+	}
+
+	return fmt.Sprintf("aborted active payload jobs for pull request %s/%s#%d", org, repo, prNumber)
+}
+
+func (s *server) getPayloadJobsForPR(org, repo string, prNumber int) ([]string, error) {
+	var l prpqv1.PullRequestPayloadQualificationRunList
+	labelSelector, err := labelSelectorForPayloadPRPQRs(org, repo, prNumber)
+	if err != nil {
+		return nil, fmt.Errorf("could not create label selector for prpqrs genearted for pull request %s/%s#%d: %w", org, repo, prNumber, err)
+	}
+	opt := ctrlruntimeclient.ListOptions{Namespace: s.namespace, LabelSelector: labelSelector}
+	if err := s.kubeClient.List(s.ctx, &l, &opt); err != nil {
+		logrus.WithError(err).Error("failed to list runs")
+		return nil, fmt.Errorf("failed to gather payload job runs for pull request %s/%s#%d in order to abort", org, repo, prNumber)
+	}
+
+	var jobs []string
+	for _, item := range l.Items {
+		for _, job := range item.Status.Jobs {
+			jobs = append(jobs, job.ProwJob)
+		}
+	}
+
+	return jobs, nil
+}
+
+func labelSelectorForPayloadPRPQRs(org, repo string, prNumber int) (labels.Selector, error) {
+	orgRequirement, err := labels.NewRequirement(kube.OrgLabel, selection.Equals, []string{org})
+	if err != nil {
+		return nil, err
+	}
+	repoRequirement, err := labels.NewRequirement(kube.RepoLabel, selection.Equals, []string{repo})
+	if err != nil {
+		return nil, err
+	}
+	pullRequirement, err := labels.NewRequirement(kube.PullLabel, selection.Equals, []string{strconv.Itoa(prNumber)})
+	if err != nil {
+		return nil, err
+	}
+
+	return labels.NewSelector().Add(*orgRequirement, *repoRequirement, *pullRequirement), nil
 }
 
 type prpqrBuilder struct {

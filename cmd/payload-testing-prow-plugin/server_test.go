@@ -7,18 +7,18 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/sirupsen/logrus"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/test-infra/prow/github"
-	"k8s.io/test-infra/prow/github/fakegithub"
-	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
-
 	"github.com/openshift/ci-tools/pkg/api"
 	prpqv1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
 	"github.com/openshift/ci-tools/pkg/release/config"
 	"github.com/openshift/ci-tools/pkg/testhelper"
+	"github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/scheme"
+	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	"k8s.io/test-infra/prow/github"
+	"k8s.io/test-infra/prow/github/fakegithub"
+	"k8s.io/test-infra/prow/kube"
+	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func (j1 jobSetSpecification) Equals(j2 jobSetSpecification) bool {
@@ -124,6 +124,130 @@ func TestMessage(t *testing.T) {
 			actual := message(tc.spec, fakeResolve(tc.spec.ocp, tc.spec.releaseType, tc.spec.jobs))
 			if diff := cmp.Diff(tc.expected, actual); diff != "" {
 				t.Errorf("%s differs from expected:\n%s", tc.name, diff)
+			}
+		})
+	}
+}
+
+func TestGetPayloadJobsForPR(t *testing.T) {
+	testCases := []struct {
+		name     string
+		org      string
+		repo     string
+		prNumber int
+		s        *server
+		expected []string
+	}{
+		{
+			name:     "jobs exist",
+			org:      "org",
+			repo:     "repo",
+			prNumber: 123,
+			s: &server{
+				kubeClient: fakeclient.NewClientBuilder().WithRuntimeObjects(
+					&prpqv1.PullRequestPayloadQualificationRun{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: "ci",
+							Name:      "1",
+							Labels: map[string]string{
+								kube.OrgLabel:  "org",
+								kube.RepoLabel: "repo",
+								kube.PullLabel: "123",
+							},
+						},
+						Spec: prpqv1.PullRequestPayloadTestSpec{},
+						Status: prpqv1.PullRequestPayloadTestStatus{
+							Jobs: []prpqv1.PullRequestPayloadJobStatus{
+								{
+									ProwJob: "some-job",
+								},
+								{
+									ProwJob: "another-job",
+								},
+							},
+						},
+					},
+					&prpqv1.PullRequestPayloadQualificationRun{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: "ci",
+							Name:      "2",
+							Labels: map[string]string{
+								kube.OrgLabel:  "org",
+								kube.RepoLabel: "repo",
+								kube.PullLabel: "123",
+							},
+						},
+						Spec: prpqv1.PullRequestPayloadTestSpec{},
+						Status: prpqv1.PullRequestPayloadTestStatus{
+							Jobs: []prpqv1.PullRequestPayloadJobStatus{
+								{
+									ProwJob: "different-job",
+								},
+							},
+						},
+					},
+					&prpqv1.PullRequestPayloadQualificationRun{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: "ci",
+							Name:      "3",
+							Labels: map[string]string{
+								kube.OrgLabel:  "org",
+								kube.RepoLabel: "repo",
+								kube.PullLabel: "124",
+							},
+						},
+						Spec: prpqv1.PullRequestPayloadTestSpec{},
+						Status: prpqv1.PullRequestPayloadTestStatus{
+							Jobs: []prpqv1.PullRequestPayloadJobStatus{
+								{
+									ProwJob: "some-job-for-different-pr",
+								},
+							},
+						},
+					},
+				).Build(),
+				namespace: "ci",
+			},
+			expected: []string{"some-job", "another-job", "different-job"},
+		},
+		{
+			name:     "no jobs for PR",
+			org:      "org",
+			repo:     "repo",
+			prNumber: 123,
+			s: &server{
+				kubeClient: fakeclient.NewClientBuilder().WithRuntimeObjects(
+					&prpqv1.PullRequestPayloadQualificationRun{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: "ci",
+							Labels: map[string]string{
+								kube.OrgLabel:  "org",
+								kube.RepoLabel: "repo",
+								kube.PullLabel: "124",
+							},
+						},
+						Spec: prpqv1.PullRequestPayloadTestSpec{},
+						Status: prpqv1.PullRequestPayloadTestStatus{
+							Jobs: []prpqv1.PullRequestPayloadJobStatus{
+								{
+									ProwJob: "some-job-for-different-pr",
+								},
+							},
+						},
+					},
+				).Build(),
+				namespace: "ci",
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			jobs, err := tc.s.getPayloadJobsForPR(tc.org, tc.repo, tc.prNumber)
+			if err != nil {
+				t.Fatalf("couldn't get jobs")
+			}
+			if diff := cmp.Diff(tc.expected, jobs); diff != "" {
+				t.Fatalf("actual jobs don't match expected, diff: %s", diff)
 			}
 		})
 	}
@@ -505,6 +629,54 @@ trigger 0 job(s) of type all for the ci release of OCP 4.8
 				},
 			},
 			expected: `the repo org/repo does not contribute to the OpenShift official images`,
+		},
+		{
+			name: "abort all jobs",
+			s: &server{
+				ghc: ghc,
+				ctx: context.TODO(),
+				kubeClient: fakeclient.NewClientBuilder().WithRuntimeObjects(
+					&prpqv1.PullRequestPayloadQualificationRun{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: "ci",
+							Labels: map[string]string{
+								kube.OrgLabel:  "org",
+								kube.RepoLabel: "repo",
+								kube.PullLabel: "123",
+							},
+						},
+						Spec: prpqv1.PullRequestPayloadTestSpec{},
+						Status: prpqv1.PullRequestPayloadTestStatus{
+							Jobs: []prpqv1.PullRequestPayloadJobStatus{
+								{
+									ProwJob: "some-job",
+								},
+							},
+						},
+					},
+					&prowapi.ProwJob{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "some-job",
+							Namespace: "ci",
+						},
+						Status: prowapi.ProwJobStatus{State: prowapi.PendingState},
+					},
+				).Build(),
+				namespace:      "ci",
+				trustedChecker: &fakeTrustedChecker{},
+			},
+			ic: github.IssueCommentEvent{
+				GUID: "guid",
+				Repo: github.Repo{Owner: github.User{Login: "org"}, Name: "repo"},
+				Issue: github.Issue{
+					Number:      123,
+					PullRequest: &struct{}{},
+				},
+				Comment: github.IssueComment{
+					Body: "/payload-abort",
+				},
+			},
+			expected: `aborted active payload jobs for pull request org/repo#123`,
 		},
 	}
 	for _, tc := range testCases {

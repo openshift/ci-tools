@@ -829,6 +829,9 @@ periodic-ci-openshift-release-master-nightly-4.12-e2e-ovirt-ovn
 periodic-ci-openshift-release-master-nightly-4.12-e2e-ovirt-sdn
 periodic-ci-openshift-release-master-nightly-4.12-e2e-telco5g
 periodic-ci-openshift-release-master-nightly-4.12-e2e-telco5g-cnftests
+periodic-ci-openshift-release-master-nightly-4.12-e2e-vsphere-8-ovn
+periodic-ci-openshift-release-master-nightly-4.12-e2e-vsphere-8-ovn-csi
+periodic-ci-openshift-release-master-nightly-4.12-e2e-vsphere-8-ovn-upi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-vsphere-ovn
 periodic-ci-openshift-release-master-nightly-4.12-e2e-vsphere-ovn-csi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-vsphere-ovn-etcd-scaling

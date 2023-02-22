@@ -40,24 +40,28 @@ func (f *FakePodExecutor) Get(ctx context.Context, n ctrlruntimeclient.ObjectKey
 		return err
 	}
 	if pod, ok := o.(*coreapi.Pod); ok {
-		fail := f.Failures.Has(n.Name)
-		if fail {
-			pod.Status.Phase = coreapi.PodFailed
-		} else {
-			pod.Status.Phase = coreapi.PodSucceeded
-		}
-		for _, container := range pod.Spec.Containers {
-			terminated := &coreapi.ContainerStateTerminated{}
-			if fail {
-				terminated.ExitCode = 1
-			}
-			pod.Status.ContainerStatuses = append(pod.Status.ContainerStatuses, coreapi.ContainerStatus{
-				Name:  container.Name,
-				State: coreapi.ContainerState{Terminated: terminated}})
-		}
+		f.process(pod)
 	}
 
 	return nil
+}
+
+func (f *FakePodExecutor) process(pod *coreapi.Pod) {
+	fail := f.Failures.Has(pod.Name)
+	if fail {
+		pod.Status.Phase = coreapi.PodFailed
+	} else {
+		pod.Status.Phase = coreapi.PodSucceeded
+	}
+	for _, container := range pod.Spec.Containers {
+		terminated := &coreapi.ContainerStateTerminated{}
+		if fail {
+			terminated.ExitCode = 1
+		}
+		pod.Status.ContainerStatuses = append(pod.Status.ContainerStatuses, coreapi.ContainerStatus{
+			Name:  container.Name,
+			State: coreapi.ContainerState{Terminated: terminated}})
+	}
 }
 
 type FakePodClient struct {

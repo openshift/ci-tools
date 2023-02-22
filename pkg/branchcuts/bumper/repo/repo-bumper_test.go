@@ -1,4 +1,4 @@
-package bumper_test
+package repo_test
 
 import (
 	"strings"
@@ -6,7 +6,7 @@ import (
 
 	"gopkg.in/ini.v1"
 
-	"github.com/openshift/ci-tools/pkg/branchcuts/bumper"
+	"github.com/openshift/ci-tools/pkg/branchcuts/bumper/repo"
 )
 
 func TestBumpRepo(t *testing.T) {
@@ -52,7 +52,7 @@ baseurl = https://fake-repo.com/ocp/4-11/test
 		test := test
 		t.Run(test.id, func(t *testing.T) {
 			t.Parallel()
-			b, err := bumper.NewRepoBumper(&bumper.RepoBumperOptions{
+			b, err := repo.NewRepoBumper(&repo.RepoBumperOptions{
 				CurOCPRelease: test.curOCPRelease,
 			})
 			if err != nil {

@@ -13,6 +13,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api/ocplifecycle"
 	"github.com/openshift/ci-tools/pkg/branchcuts/bumper"
+	"github.com/openshift/ci-tools/pkg/branchcuts/bumper/repo"
 )
 
 const (
@@ -66,14 +67,14 @@ func main() {
 
 func reconcile(o *options) error {
 	logrus.Debugf("using options %+v", o)
-	bumpOpts := bumper.RepoBumperOptions{
+	bumpOpts := repo.RepoBumperOptions{
 		FilesDir:      path.Join(o.releaseRepoDir, rpmMirroringServicesPath),
 		GlobPattern:   fmt.Sprintf(rpmMirroringServicesGlobPatternFormat, o.curOCPVersion),
 		CurOCPRelease: o.curOCPVersion,
 	}
 	logrus.Debugf("bumpOpts: %+v", bumpOpts)
 
-	b, err := bumper.NewRepoBumper(&bumpOpts)
+	b, err := repo.NewRepoBumper(&bumpOpts)
 	if err != nil {
 		return fmt.Errorf("new repo bumper: %w", err)
 	}

@@ -302,6 +302,16 @@ periodic-ci-openshift-hypershift-main-periodics-4.13-e2e-conformance-kubevirt
 periodic-ci-openshift-hypershift-main-periodics-4.13-e2e-ibmcloud-iks
 periodic-ci-openshift-hypershift-main-periodics-4.13-e2e-ibmcloud-roks
 periodic-ci-openshift-hypershift-main-periodics-4.13-e2e-powervs-periodic
+periodic-ci-openshift-hypershift-main-periodics-4.14-conformance-agent-ovn
+periodic-ci-openshift-hypershift-main-periodics-4.14-conformance-aws-ovn
+periodic-ci-openshift-hypershift-main-periodics-4.14-conformance-aws-ovn-proxy
+periodic-ci-openshift-hypershift-main-periodics-4.14-conformance-mce-aws-ovn
+periodic-ci-openshift-hypershift-main-periodics-4.14-e2e-aws-ovn-periodic-conformance-serial
+periodic-ci-openshift-hypershift-main-periodics-4.14-e2e-aws-periodic
+periodic-ci-openshift-hypershift-main-periodics-4.14-e2e-conformance-kubevirt
+periodic-ci-openshift-hypershift-main-periodics-4.14-e2e-ibmcloud-iks
+periodic-ci-openshift-hypershift-main-periodics-4.14-e2e-ibmcloud-roks
+periodic-ci-openshift-hypershift-main-periodics-4.14-e2e-powervs-periodic
 // end https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/hypershift/openshift-hypershift-main-periodics.yaml
 
 // begin https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/multiarch/openshift-multiarch-master-periodics.yaml
@@ -428,6 +438,42 @@ periodic-ci-openshift-multiarch-master-nightly-4.13-upgrade-from-nightly-4.12-oc
 periodic-ci-openshift-multiarch-master-nightly-4.13-upgrade-from-nightly-4.12-ocp-ovn-remote-libvirt-s390x
 periodic-ci-openshift-multiarch-master-nightly-4.13-upgrade-from-stable-4.12-ocp-e2e-aws-heterogeneous-upgrade
 periodic-ci-openshift-multiarch-master-nightly-4.13-upgrade-from-stable-4.12-ocp-e2e-aws-sdn-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-aws-ovn-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-aws-ovn-arm64-single-node
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-aws-ovn-arm64-techpreview
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-aws-ovn-arm64-techpreview-serial
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-aws-ovn-heterogeneous
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-aws-ovn-heterogeneous-upgrade
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-aws-sdn-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-aws-upi-ovn-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-azure-ovn-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-compact-ovn-remote-libvirt-ppc64le
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-compact-ovn-remote-libvirt-s390x
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-ovn-ppc64le-powervs
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-ovn-remote-libvirt-ppc64le
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-ovn-remote-libvirt-s390x
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-ovn-serial-aws-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-sdn-serial-aws-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-serial-aws-ovn-heterogeneous
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-serial-ovn-ppc64le-powervs
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-serial-ovn-remote-libvirt-ppc64le
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-serial-ovn-remote-libvirt-s390x
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-upgrade-aws-ovn-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-fips-ovn-remote-libvirt-ppc64le
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-fips-ovn-remote-libvirt-s390x
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-image-ecosystem-aws-ovn-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-image-ecosystem-ovn-remote-libvirt-ppc64le
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-image-ecosystem-ovn-remote-libvirt-s390x
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-installer-e2e-aws-ovn-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-jenkins-e2e-aws-ovn-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-jenkins-e2e-ovn-remote-libvirt-ppc64le
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-jenkins-e2e-ovn-remote-libvirt-s390x
+periodic-ci-openshift-multiarch-master-nightly-4.14-upgrade-from-nightly-4.13-ocp-e2e-aws-heterogeneous-upgrade
+periodic-ci-openshift-multiarch-master-nightly-4.14-upgrade-from-nightly-4.13-ocp-e2e-aws-sdn-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.14-upgrade-from-nightly-4.13-ocp-ovn-remote-libvirt-ppc64le
+periodic-ci-openshift-multiarch-master-nightly-4.14-upgrade-from-nightly-4.13-ocp-ovn-remote-libvirt-s390x
+periodic-ci-openshift-multiarch-master-nightly-4.14-upgrade-from-stable-4.13-ocp-e2e-aws-heterogeneous-upgrade
+periodic-ci-openshift-multiarch-master-nightly-4.14-upgrade-from-stable-4.13-ocp-e2e-aws-sdn-arm64
 // end https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/multiarch/openshift-multiarch-master-periodics.yaml
 
 // begin https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-master-periodics.yaml

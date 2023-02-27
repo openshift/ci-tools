@@ -75,8 +75,8 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 	// the aggregator has a long time.  The jobs it aggregates only have 4h (we think).
 	durationToWait := o.timeout - 20*time.Minute
 	// TODO: drop back to 4:15, this was temporary due to slow jobs on azure going over 4h timeout
-	if durationToWait > (7*time.Hour + 15*time.Minute) {
-		durationToWait = 7*time.Hour + 15*time.Minute
+	if durationToWait > (6*time.Hour + 15*time.Minute) {
+		durationToWait = 6*time.Hour + 15*time.Minute
 	}
 	timeToStopWaiting := o.jobRunStartEstimate.Add(durationToWait)
 

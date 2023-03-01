@@ -197,6 +197,19 @@ func TestMultiStage(t *testing.T) {
 				`Container test in pod shm-increase-step-with-increased-shm completed successfully`,
 			},
 		},
+		{
+			name: "pending timeout",
+			args: []string{
+				"--pod-pending-timeout", "30s",
+				"--unresolved-config", "config.yaml",
+				"--target", "pending",
+			},
+			env: []string{defaultJobSpec},
+			output: []string{
+				`pod pending for more than 30s: container \"test\" has not started in`,
+				"Error: ErrImagePull",
+			},
+		},
 	}
 
 	for _, testCase := range testCases {

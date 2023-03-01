@@ -11,12 +11,16 @@ import (
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 )
 
-// releaseTransitionDataMinThresholdRatio defines the minimum threshold ratio we require to
-// make the transition from using old release data to using new release data. During a release
-// transition (new release cut), it will take time for the new release job run data to reach to
-// certain required size to be meaningful to use. During this transition period, we continue
-// using data collected from the old release for disruption and alert comparisons.
-const releaseTransitionDataMinThresholdRatio = 0.6
+const (
+	// releaseTransitionDataMinThresholdRatio defines the minimum threshold ratio we require to
+	// make the transition from using old release data to using new release data. During a release
+	// transition (new release cut), it will take time for the new release job run data to reach to
+	// certain required size to be meaningful to use. During this transition period, we continue
+	// using data collected from the old release for disruption and alert comparisons.
+	releaseTransitionDataMinThresholdRatio = 0.6
+	// newReleaseJobRunsThreshold defines the jobRuns count above which data is counted for new releases
+	newReleaseJobRunsThreshold = 100
+)
 
 type JobRunHistoricalDataAnalyzerOptions struct {
 	ciDataClient jobrunaggregatorlib.CIDataClient
@@ -79,7 +83,7 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 	if newReleaseUpdate {
 		newReleaseDataCount := 0
 		for _, data := range newDataMap {
-			if data.GetJobData().Release == currentRelease {
+			if data.GetJobData().Release == currentRelease && data.GetJobRuns() > newReleaseJobRunsThreshold {
 				newReleaseDataCount++
 			}
 		}

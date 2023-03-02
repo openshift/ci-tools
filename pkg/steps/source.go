@@ -7,6 +7,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -17,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/errors"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/clonerefs"
@@ -158,7 +160,7 @@ func (s *sourceStep) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return handleBuild(ctx, s.client, *createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret, fromDigest))
+	return handleBuilds(ctx, s.client, *createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret, fromDigest))
 }
 
 func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef corev1.ObjectReference, resources api.ResourceConfiguration, cloneAuthConfig *CloneAuthConfig, pullSecret *corev1.Secret, fromDigest string) *buildapi.Build {
@@ -366,6 +368,52 @@ func isBuildPhaseTerminated(phase buildapi.BuildPhase) bool {
 		return false
 	}
 	return true
+}
+
+func handleBuilds(ctx context.Context, buildClient BuildClient, build buildapi.Build) error {
+	var wg sync.WaitGroup
+
+	builds := constructMultiArchBuilds(build, buildClient.NodeArchitectures())
+	errChan := make(chan error, len(builds))
+
+	wg.Add(len(builds))
+	for _, build := range builds {
+		go func(b buildapi.Build) {
+			defer wg.Done()
+			if err := handleBuild(ctx, buildClient, b); err != nil {
+				errChan <- fmt.Errorf("error occurred handling build %s: %w", b.Name, err)
+			}
+		}(build)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	var errs []error
+	for err := range errChan {
+		errs = append(errs, err)
+	}
+
+	return utilerrors.NewAggregate(errs)
+}
+
+func constructMultiArchBuilds(build buildapi.Build, nodeArchitectures []string) []buildapi.Build {
+	var ret []buildapi.Build
+
+	for _, arch := range nodeArchitectures {
+		b := build
+
+		if arch != string(api.AMD64Arch) {
+			b.Name = fmt.Sprintf("%s-%s", b.Name, arch)
+		}
+
+		b.Spec.NodeSelector = map[string]string{
+			corev1.LabelArchStable: arch,
+		}
+		ret = append(ret, b)
+	}
+
+	return ret
 }
 
 func handleBuild(ctx context.Context, buildClient BuildClient, build buildapi.Build) error {

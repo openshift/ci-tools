@@ -832,8 +832,18 @@ func (o *options) Run() []error {
 
 	o.resolveConsoleHost()
 
+	client, err := coreclientset.NewForConfig(o.clusterConfig)
+	if err != nil {
+		return []error{fmt.Errorf("could not get core client for cluster config: %w", err)}
+	}
+
+	nodeArchitectures, err := resolveNodeArchitectures(ctx, client.Nodes())
+	if err != nil {
+		return []error{fmt.Errorf("could not resolve the node architectures: %w", err)}
+	}
+
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig, o.podPendingTimeout, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig, o.consoleHost, o.nodeName)
+	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig, o.podPendingTimeout, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig, o.consoleHost, o.nodeName, nodeArchitectures)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}
@@ -889,10 +899,6 @@ func (o *options) Run() []error {
 			if err := o.initializeLeaseClient(); err != nil {
 				return []error{fmt.Errorf("failed to create the lease client: %w", err)}
 			}
-		}
-		client, err := coreclientset.NewForConfig(o.clusterConfig)
-		if err != nil {
-			return []error{fmt.Errorf("could not get core client for cluster config: %w", err)}
 		}
 		go monitorNamespace(ctx, cancel, o.namespace, client.Namespaces())
 		authClient, err := authclientset.NewForConfig(o.clusterConfig)
@@ -2058,6 +2064,20 @@ func (o *options) loadConfig(info *api.Metadata) (*api.ReleaseBuildConfiguration
 		}
 	}
 	return &configSpec, nil
+}
+
+func resolveNodeArchitectures(ctx context.Context, client coreclientset.NodeInterface) ([]string, error) {
+	ret := sets.NewString()
+	nodeList, err := client.List(ctx, meta.ListOptions{})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine the node architectures: %w", err)
+	}
+
+	for _, node := range nodeList.Items {
+		ret.Insert(node.Status.NodeInfo.Architecture)
+	}
+	return ret.List(), nil
 }
 
 func monitorNamespace(ctx context.Context, cancel func(), namespace string, client coreclientset.NamespaceInterface) {

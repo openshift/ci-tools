@@ -22,7 +22,8 @@ import (
 type Config struct {
 	// the job will be run on the same cloud as the one for the e2e test
 	DetermineE2EByJob bool `json:"determineE2EByJob,omitempty"`
-	// the job will have exchanged cloud label if mapping defined
+	// the job will be run on the target cloud if it otherwise runs on the source cloud.
+	// The field has effect only when DetermineE2EByJob is true.
 	CloudMapping map[api.Cloud]api.Cloud `json:"cloudMapping,omitempty"`
 	// the cluster cluster name if no other condition matches
 	Default api.Cluster `json:"default"`

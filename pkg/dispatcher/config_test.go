@@ -664,3 +664,47 @@ func TestValidate(t *testing.T) {
 		})
 	}
 }
+
+func TestConfigDetermineCloudMapping(t *testing.T) {
+	configWithMapping := configWithBuildFarmWithJobsAndDetermineE2EByJob
+	configWithMapping.CloudMapping = map[api.Cloud]api.Cloud{
+		"openstack-vexxhost": "aws",
+	}
+	tests := []struct {
+		name    string
+		config  Config
+		jobBase prowconfig.JobBase
+		want    string
+	}{
+		{
+			name:   "Override cloud mapping when DetermineE2EByJob true and mapping provided",
+			config: configWithMapping,
+			jobBase: prowconfig.JobBase{
+				Name: "some-job",
+				Labels: map[string]string{
+					"ci-operator.openshift.io/cloud": "openstack-vexxhost",
+				},
+			},
+			want: "aws",
+		},
+		{
+			name:   "Override cloud mapping when DetermineE2EByJob true and mapping not provided",
+			config: configWithBuildFarmWithJobsAndDetermineE2EByJob,
+			jobBase: prowconfig.JobBase{
+				Name: "some-job",
+				Labels: map[string]string{
+					"ci-operator.openshift.io/cloud": "openstack-vexxhost",
+				},
+			},
+			want: "openstack-vexxhost",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &tc.config
+			if got := cfg.DetermineCloudMapping(tc.jobBase); got != tc.want {
+				t.Errorf("Config.DetermineCloudMapping() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

@@ -23,8 +23,9 @@ import (
 )
 
 const (
-	versionLowerLabel = "version_lower"
-	versionUpperLabel = "version_upper"
+	versionLowerLabel  = "version_lower"
+	versionUpperLabel  = "version_upper"
+	versionStreamLabel = "version_stream"
 )
 
 type options struct {
@@ -171,6 +172,9 @@ func main() {
 				ReleaseImage: pullspec,
 			},
 		}
+		if bounds.Stream != "" {
+			clusterimageset.ObjectMeta.Annotations[versionStreamLabel] = bounds.Stream
+		}
 		raw, err := yaml.Marshal(clusterimageset)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("Could not marshal yaml for clusterimageset %s: %w", name, err))
@@ -239,7 +243,7 @@ func labelsToBounds(labels map[string]string) (*api.VersionBounds, error) {
 		return nil, nil
 	}
 	if labels[versionLowerLabel] != "" || labels[versionUpperLabel] != "" {
-		bounds := api.VersionBounds{Upper: labels[versionUpperLabel], Lower: labels[versionLowerLabel]}
+		bounds := api.VersionBounds{Upper: labels[versionUpperLabel], Lower: labels[versionLowerLabel], Stream: labels[versionStreamLabel]}
 		if bounds.Lower == "" {
 			return nil, fmt.Errorf("if `version_upper` is set, `version_lower` must also be set")
 		}

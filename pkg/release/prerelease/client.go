@@ -8,7 +8,7 @@ import (
 
 // endpoint determines the API endpoint to use for a prerelease
 func endpoint(prerelease api.Prerelease) string {
-	stream := prerelease.Stream
+	stream := prerelease.VersionBounds.Stream
 	if stream == "" {
 		stream = "4-stable"
 	}

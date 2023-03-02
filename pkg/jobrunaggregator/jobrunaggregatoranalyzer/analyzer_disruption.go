@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
 
 	"gopkg.in/yaml.v2"
 
@@ -15,6 +16,10 @@ import (
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 	"github.com/openshift/ci-tools/pkg/junit"
 )
+
+func isExcludedDisruptionBackend(name string) bool {
+	return strings.Contains(name, "ci-cluster-network-liveness")
+}
 
 func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx context.Context, jobGCSBucketRoot string, finishedJobsToAggregate []jobrunaggregatorapi.JobRunInfo) (*junit.TestSuite, error) {
 	disruptionJunitSuite := &junit.TestSuite{
@@ -64,6 +69,9 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 
 		allBackends := getAllDisruptionBackendNames(jobRunIDToBackendNameToAvailabilityResult)
 		for _, backendName := range allBackends.List() {
+			if isExcludedDisruptionBackend(backendName) {
+				continue
+			}
 			jobRunIDToAvailabilityResultForBackend := getDisruptionForBackend(jobRunIDToBackendNameToAvailabilityResult, backendName)
 			failedJobRunIDs, successfulJobRunIDs, status, message, err := disruptionCheckFn(ctx, jobRunIDToAvailabilityResultForBackend, backendName)
 			if err != nil {

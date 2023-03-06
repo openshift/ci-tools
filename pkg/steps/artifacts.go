@@ -323,6 +323,9 @@ func addCloning(
 	if err != nil {
 		return fmt.Errorf("failed to construct clonerefs: %w", err)
 	}
+	if len(refs) == 0 {
+		return nil
+	}
 	pod.Spec.InitContainers = util.Insert(pod.Spec.InitContainers, 0, *cloneRefsContainer)
 	pod.Spec.Volumes = append(pod.Spec.Volumes, codeVolume)
 	pod.Spec.Volumes = append(pod.Spec.Volumes, cloneRefsVolumes...)

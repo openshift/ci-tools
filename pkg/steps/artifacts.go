@@ -284,14 +284,14 @@ func addPodUtils(pod *coreapi.Pod, artifactDir string, decorationConfig *prowv1.
 		return fmt.Errorf("could not inject entrypoint: %w", err)
 	}
 	pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env, coreapi.EnvVar{Name: artifactEnv, Value: logMount.MountPath + "/artifacts"})
-
-	sidecar, err := decorate.Sidecar(decorationConfig, blobStorageOptions, blobStorageMounts, logMount, nil, rawJobSpec, !decorate.RequirePassingEntries, true, secretsToCensor, *wrapperOptions)
-	if err != nil {
-		return fmt.Errorf("could not create sidecar: %w", err)
+	if decorationConfig.GCSConfiguration != nil {
+		sidecar, err := decorate.Sidecar(decorationConfig, blobStorageOptions, blobStorageMounts, logMount, nil, rawJobSpec, !decorate.RequirePassingEntries, true, secretsToCensor, *wrapperOptions)
+		if err != nil {
+			return fmt.Errorf("could not create sidecar: %w", err)
+		}
+		pod.Spec.Containers = append(pod.Spec.Containers, *sidecar)
+		pod.Spec.Volumes = append(pod.Spec.Volumes, blobStorageVolumes...)
 	}
-	pod.Spec.Containers = append(pod.Spec.Containers, *sidecar)
-	pod.Spec.Volumes = append(pod.Spec.Volumes, blobStorageVolumes...)
-
 	if clone {
 		if err := addCloning(pod, *decorationConfig, rawJobSpec, jobSpec, logMount, blobStorageOptions, blobStorageMounts); err != nil {
 			return err
@@ -323,6 +323,7 @@ func addCloning(
 	if err != nil {
 		return fmt.Errorf("failed to construct clonerefs: %w", err)
 	}
+	pod.Spec.InitContainers = util.Insert(pod.Spec.InitContainers, 0, *cloneRefsContainer)
 	pod.Spec.Volumes = append(pod.Spec.Volumes, codeVolume)
 	pod.Spec.Volumes = append(pod.Spec.Volumes, cloneRefsVolumes...)
 	if len(refs) > 0 {
@@ -331,11 +332,13 @@ func addCloning(
 			pod.Spec.Containers[i].VolumeMounts = append(container.VolumeMounts, codeMount)
 		}
 	}
-	initUpload, err := decorate.InitUpload(&decorationConfig, blobStorageOptions, blobStorageMounts, &logMount, nil, rawJobSpec)
-	if err != nil {
-		return fmt.Errorf("failed to construct initupload: %w", err)
+	if decorationConfig.GCSConfiguration != nil {
+		initUpload, err := decorate.InitUpload(&decorationConfig, blobStorageOptions, blobStorageMounts, &logMount, nil, rawJobSpec)
+		if err != nil {
+			return fmt.Errorf("failed to construct initupload: %w", err)
+		}
+		pod.Spec.InitContainers = util.Insert(pod.Spec.InitContainers, 1, *initUpload)
 	}
-	pod.Spec.InitContainers = append([]corev1.Container{*cloneRefsContainer, *initUpload}, pod.Spec.InitContainers...)
 	return nil
 }
 

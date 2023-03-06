@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -15,6 +16,8 @@ import (
 	"github.com/sirupsen/logrus"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/serializer/json"
+	"k8s.io/client-go/kubernetes/scheme"
 
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 
@@ -56,6 +59,13 @@ func (o *options) validate() error {
 	return nil
 }
 
+func addSchemes() error {
+	if err := hivev1.AddToScheme(scheme.Scheme); err != nil {
+		return fmt.Errorf("failed to add hivev1 to scheme: %w", err)
+	}
+	return nil
+}
+
 func main() {
 	o, err := gatherOptions()
 	if err != nil {
@@ -63,6 +73,25 @@ func main() {
 	}
 	if err := o.validate(); err != nil {
 		logrus.WithError(err).Fatal("Invalid option")
+	}
+
+	if err := addSchemes(); err != nil {
+		logrus.WithError(err).Fatal("Failed to set up scheme")
+	}
+
+	s := json.NewSerializerWithOptions(json.DefaultMetaFactory, scheme.Scheme,
+		scheme.Scheme, json.SerializerOptions{Yaml: true, Pretty: false, Strict: false})
+
+	if err := filepath.WalkDir(o.poolDir, func(path string, info fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() || !strings.HasSuffix(info.Name(), "_clusterpool.yaml") {
+			return nil
+		}
+		return ensureLabelsOnClusterPool(s, path, path)
+	}); err != nil {
+		logrus.WithError(err).Fatal("Failed to ensure labels on cluster pools")
 	}
 
 	// key: version_in; value: list of file paths
@@ -221,6 +250,47 @@ func main() {
 		}
 		os.Exit(1)
 	}
+}
+
+func ensureLabelsOnClusterPool(s *json.Serializer, input, output string) error {
+	raw, err := os.ReadFile(input)
+	if err != nil {
+		return fmt.Errorf("failed to read file %s: %w", input, err)
+	}
+	pool := hivev1.ClusterPool{}
+	_, _, err = s.Decode(raw, nil, &pool)
+	if err != nil {
+		return fmt.Errorf("failed to decode from %s: %w", input, err)
+	}
+	if newPool, modified := ensureLabels(pool); modified {
+		logrus.WithField("namespace", newPool.Namespace).WithField("name", newPool.Name).
+			Info("Adding labels to the cluster pool")
+		buf := new(bytes.Buffer)
+		if err := s.Encode(&newPool, buf); err != nil {
+			return fmt.Errorf("failed to encode the new pool from %s: %w", input, err)
+		}
+		if err := os.WriteFile(output, buf.Bytes(), 0644); err != nil {
+			return fmt.Errorf("failed to write updated file %s: %w", output, err)
+		}
+	}
+	return nil
+}
+
+func ensureLabels(pool hivev1.ClusterPool) (hivev1.ClusterPool, bool) {
+	var modified bool
+	if value, ok := pool.Labels["owner"]; ok {
+		if pool.Spec.Labels == nil {
+			pool.Spec.Labels = map[string]string{}
+		}
+		if pool.Spec.Labels["tp.openshift.io/owner"] != value {
+			modified = true
+			pool.Spec.Labels["tp.openshift.io/owner"] = value
+		}
+	} else {
+		logrus.WithField("namespace", pool.Namespace).WithField("name", pool.Name).
+			Warn("The cluster pool has no owner label")
+	}
+	return pool, modified
 }
 
 func nameFromPullspec(pullspec string, bounds api.VersionBounds) string {

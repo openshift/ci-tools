@@ -78,6 +78,11 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 				return nil, err
 			}
 
+			// Temporarily skip all azure disruption aggregation due to https://issues.redhat.com/browse/TRT-889
+			if strings.Contains(o.jobName, "azure") {
+				status = testCaseSkipped
+			}
+
 			testCaseName := fmt.Sprintf(testCaseNamePattern, backendName)
 			testSuiteName := "aggregated-disruption"
 			junitTestCase, err := disruptionToJUnitTestCase(testCaseName, testSuiteName, jobGCSBucketRoot, failedJobRunIDs, successfulJobRunIDs, status, message)

@@ -364,13 +364,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        prerelease:\n" +
 	"            architecture: ' '\n" +
 	"            product: ' '\n" +
-	"            # Stream allows for custom release streams to be selected,\n" +
-	"            # e.g. 4-dev-preview. The architecture suffix should not be\n" +
-	"            # included. Defaults to 4-stable.\n" +
-	"            stream: ' '\n" +
 	"            # VersionBounds describe the allowable version bounds to search in\n" +
 	"            version_bounds:\n" +
 	"                lower: ' '\n" +
+	"                # Stream dictates which stream to search for a version within the specified bounds\n" +
+	"                # defaults to 4-stable.\n" +
+	"                stream: ' '\n" +
 	"                upper: ' '\n" +
 	"        # Release describes a released payload\n" +
 	"        release:\n" +
@@ -1122,13 +1121,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        prerelease:\n" +
 	"            architecture: ' '\n" +
 	"            product: ' '\n" +
-	"            # Stream allows for custom release streams to be selected,\n" +
-	"            # e.g. 4-dev-preview. The architecture suffix should not be\n" +
-	"            # included. Defaults to 4-stable.\n" +
-	"            stream: ' '\n" +
 	"            # VersionBounds describe the allowable version bounds to search in\n" +
 	"            version_bounds:\n" +
 	"                lower: ' '\n" +
+	"                # Stream dictates which stream to search for a version within the specified bounds\n" +
+	"                # defaults to 4-stable.\n" +
+	"                stream: ' '\n" +
 	"                upper: ' '\n" +
 	"        # Release describes a released payload\n" +
 	"        release:\n" +

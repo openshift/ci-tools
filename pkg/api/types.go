@@ -279,17 +279,15 @@ type Prerelease struct {
 	ReleaseDescriptor
 	// VersionBounds describe the allowable version bounds to search in
 	VersionBounds VersionBounds `json:"version_bounds"`
-
-	// Stream allows for custom release streams to be selected,
-	// e.g. 4-dev-preview.  The architecture suffix should not be
-	// included.  Defaults to 4-stable.
-	Stream string `json:"stream,omitempty"`
 }
 
-// VersionBounds describe the upper and lower bounds on a version search
+// VersionBounds describe the upper and lower bounds and stream on a version search
 type VersionBounds struct {
 	Lower string `json:"lower"`
 	Upper string `json:"upper"`
+	// Stream dictates which stream to search for a version within the specified bounds
+	// defaults to 4-stable.
+	Stream string `json:"stream,omitempty"`
 }
 
 func (b *VersionBounds) Query() string {

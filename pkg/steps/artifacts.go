@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/remotecommand"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	"k8s.io/test-infra/prow/gcsupload"
 	"k8s.io/test-infra/prow/pod-utils/decorate"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -277,7 +278,7 @@ func addPodUtils(pod *coreapi.Pod, artifactDir string, decorationConfig *prowv1.
 	blobStorageVolumes, blobStorageMounts, blobStorageOptions := decorate.BlobStorageOptions(*decorationConfig, false)
 	blobStorageOptions.SubDir = artifactDir
 	pod.Spec.InitContainers = append(pod.Spec.InitContainers, decorate.PlaceEntrypoint(decorationConfig, toolsMount))
-
+	pod.Spec.Volumes = append(pod.Spec.Volumes, logVolume, toolsVolume)
 	wrapperOptions, err := decorate.InjectEntrypoint(&pod.Spec.Containers[0], decorationConfig.Timeout.Get(), decorationConfig.GracePeriod.Get(), "", "", false, logMount, toolsMount)
 	if err != nil {
 		return fmt.Errorf("could not inject entrypoint: %w", err)
@@ -289,37 +290,52 @@ func addPodUtils(pod *coreapi.Pod, artifactDir string, decorationConfig *prowv1.
 		return fmt.Errorf("could not create sidecar: %w", err)
 	}
 	pod.Spec.Containers = append(pod.Spec.Containers, *sidecar)
-
-	pod.Spec.Volumes = append(pod.Spec.Volumes, logVolume, toolsVolume)
 	pod.Spec.Volumes = append(pod.Spec.Volumes, blobStorageVolumes...)
 
 	if clone {
-		// Unless build_root.from_repository: true is set, the decorationConfig the ci-operator pod gets has cloning
-		// disabled.
-		decorationConfig := *decorationConfig
-		decorationConfig.SkipCloning = nil
-
-		codeMount, codeVolume := decorate.CodeMountAndVolume()
-		cloneRefsContainer, refs, cloneRefsVolumes, err := decorate.CloneRefs(prowv1.ProwJob{Spec: prowv1.ProwJobSpec{Refs: jobSpec.Refs, ExtraRefs: jobSpec.ExtraRefs, DecorationConfig: &decorationConfig}}, codeMount, logMount)
-		if err != nil {
-			return fmt.Errorf("failed to construct clonerefs: %w", err)
+		if err := addCloning(pod, *decorationConfig, rawJobSpec, jobSpec, logMount, blobStorageOptions, blobStorageMounts); err != nil {
+			return err
 		}
-		initUpload, err := decorate.InitUpload(&decorationConfig, blobStorageOptions, blobStorageMounts, &logMount, nil, rawJobSpec)
-		if err != nil {
-			return fmt.Errorf("failed to get initUpload container: %w", err)
-		}
-		pod.Spec.InitContainers = append([]corev1.Container{*cloneRefsContainer, *initUpload}, pod.Spec.InitContainers...)
-		pod.Spec.Volumes = append(pod.Spec.Volumes, codeVolume)
-		pod.Spec.Volumes = append(pod.Spec.Volumes, cloneRefsVolumes...)
-
-		if len(refs) > 0 {
-			for i, container := range pod.Spec.Containers {
-				pod.Spec.Containers[i].WorkingDir = decorate.DetermineWorkDir(codeMount.MountPath, refs)
-				pod.Spec.Containers[i].VolumeMounts = append(container.VolumeMounts, codeMount)
-			}
-		}
-
 	}
+	return nil
+}
+
+func addCloning(
+	pod *coreapi.Pod,
+	decorationConfig prowv1.DecorationConfig,
+	rawJobSpec string,
+	jobSpec *api.JobSpec,
+	logMount coreapi.VolumeMount,
+	blobStorageOptions gcsupload.Options,
+	blobStorageMounts []coreapi.VolumeMount,
+) error {
+	// Unless build_root.from_repository: true is set, the decorationConfig the
+	// ci-operator pod gets has cloning disabled.
+	decorationConfig.SkipCloning = nil
+	codeMount, codeVolume := decorate.CodeMountAndVolume()
+	cloneRefsContainer, refs, cloneRefsVolumes, err := decorate.CloneRefs(prowv1.ProwJob{
+		Spec: prowv1.ProwJobSpec{
+			Refs:             jobSpec.Refs,
+			ExtraRefs:        jobSpec.ExtraRefs,
+			DecorationConfig: &decorationConfig,
+		},
+	}, codeMount, logMount)
+	if err != nil {
+		return fmt.Errorf("failed to construct clonerefs: %w", err)
+	}
+	pod.Spec.Volumes = append(pod.Spec.Volumes, codeVolume)
+	pod.Spec.Volumes = append(pod.Spec.Volumes, cloneRefsVolumes...)
+	if len(refs) > 0 {
+		for i, container := range pod.Spec.Containers {
+			pod.Spec.Containers[i].WorkingDir = decorate.DetermineWorkDir(codeMount.MountPath, refs)
+			pod.Spec.Containers[i].VolumeMounts = append(container.VolumeMounts, codeMount)
+		}
+	}
+	initUpload, err := decorate.InitUpload(&decorationConfig, blobStorageOptions, blobStorageMounts, &logMount, nil, rawJobSpec)
+	if err != nil {
+		return fmt.Errorf("failed to construct initupload: %w", err)
+	}
+	pod.Spec.InitContainers = append([]corev1.Container{*cloneRefsContainer, *initUpload}, pod.Spec.InitContainers...)
 	return nil
 }
 

@@ -3,6 +3,7 @@ package jobrunaggregatoranalyzer
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +24,8 @@ const (
 	testCasePassed  testCaseStatus = "passed"
 	testCaseSkipped testCaseStatus = "skipped"
 )
+
+const newReleaseJobRunsThreshold = 100
 
 type baseline interface {
 	CheckFailed(ctx context.Context, jobName string, suiteNames []string, testCaseDetails *jobrunaggregatorlib.TestCaseDetails) (status testCaseStatus, message string, err error)
@@ -203,9 +206,78 @@ func (a *weeklyAverageFromTenDays) getAggregatedTestRuns(ctx context.Context) (m
 	return a.aggregatedTestRunsByName, a.queryTestRunsErr
 }
 
+func getMajor(in string) int {
+	major, err := strconv.ParseInt(strings.Split(in, ".")[0], 10, 32)
+	if err != nil {
+		panic(err)
+	}
+	return int(major)
+}
+
+func getMinor(in string) int {
+	minor, err := strconv.ParseInt(strings.Split(in, ".")[1], 10, 32)
+	if err != nil {
+		panic(err)
+	}
+	return int(minor)
+}
+
+func (a *weeklyAverageFromTenDays) getFallBackJobName(ctx context.Context, jobName string) (string, error) {
+	allJobs, err := a.bigQueryClient.ListAllJobs(ctx)
+	if err != nil {
+		return jobName, err
+	}
+	var targetFromRelease, targetToRelease string
+	var job *jobrunaggregatorapi.JobRow
+	for _, j := range allJobs {
+		if j.JobName == jobName {
+			job = &j
+			break
+		}
+	}
+	if job != nil {
+		if len(job.FromRelease) > 0 {
+			fromReleaseMajor := getMajor(job.FromRelease)
+			fromReleaseMinor := getMinor(job.FromRelease)
+			targetFromRelease = fmt.Sprintf("%d.%d", fromReleaseMajor, fromReleaseMinor-1)
+		}
+		if len(job.Release) > 0 {
+			toReleaseMajor := getMajor(job.Release)
+			toReleaseMinor := getMinor(job.Release)
+			targetToRelease = fmt.Sprintf("%d.%d", toReleaseMajor, toReleaseMinor-1)
+		}
+
+		for _, j := range allJobs {
+			if j.Architecture == job.Architecture &&
+				j.Topology == job.Topology &&
+				j.Network == job.Network &&
+				j.Platform == job.Platform &&
+				j.FromRelease == targetFromRelease &&
+				j.Release == targetToRelease &&
+				j.IPMode == job.IPMode {
+				return j.JobName, nil
+			}
+		}
+	}
+	return jobName, nil
+}
+
 func (a *weeklyAverageFromTenDays) getDisruptionByBackend(ctx context.Context) (map[string]backendDisruptionStats, error) {
 	a.queryDisruptionOnce.Do(func() {
-		rows, err := a.bigQueryClient.GetBackendDisruptionStatisticsByJob(ctx, a.jobName)
+		jobName := a.jobName
+		count, err := a.bigQueryClient.GetBackendDisruptionRowCountByJob(ctx, jobName)
+		if err != nil {
+			a.queryDisruptionErr = err
+			return
+		}
+		if count < newReleaseJobRunsThreshold {
+			jobName, err = a.getFallBackJobName(ctx, a.jobName)
+			if err != nil {
+				a.queryDisruptionErr = err
+				return
+			}
+		}
+		rows, err := a.bigQueryClient.GetBackendDisruptionStatisticsByJob(ctx, jobName)
 		if err != nil {
 			a.queryDisruptionErr = err
 			return

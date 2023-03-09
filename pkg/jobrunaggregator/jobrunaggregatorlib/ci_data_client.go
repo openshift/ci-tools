@@ -26,6 +26,9 @@ type AggregationJobClient interface {
 	// nil means that no jobRun as found after the specified time.
 	GetJobRunForJobNameAfterTime(ctx context.Context, jobName string, targetTime time.Time) (*jobrunaggregatorapi.JobRunRow, error)
 
+	// GetBackendDisruptionRowCountByJob gets the row count for disruption data for one job
+	GetBackendDisruptionRowCountByJob(ctx context.Context, jobName string) (uint64, error)
+
 	// GetBackendDisruptionStatisticsByJob gets the mean and p95 disruption per backend from the week from 10 days ago.
 	GetBackendDisruptionStatisticsByJob(ctx context.Context, jobName string) ([]jobrunaggregatorapi.BackendDisruptionStatisticsRow, error)
 
@@ -331,6 +334,32 @@ func (c *ciDataClient) ListProwJobRunsSince(ctx context.Context, since *time.Tim
 	}
 
 	return jobRuns, nil
+}
+
+func (c *ciDataClient) GetBackendDisruptionRowCountByJob(ctx context.Context, jobName string) (uint64, error) {
+	queryString := c.dataCoordinates.SubstituteDataSetLocation(`
+SELECT
+	Name
+FROM
+	DATA_SET_LOCATION.BackendDisruption_JobRuns
+WHERE
+	StartTime BETWEEN TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 10 DAY)
+AND
+	TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 3 DAY)
+AND
+	JobName = @JobName
+`)
+	query := c.client.Query(queryString)
+	query.QueryConfig.Parameters = []bigquery.QueryParameter{
+		{Name: "JobName", Value: jobName},
+	}
+
+	it, err := query.Read(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	return it.TotalRows, nil
 }
 
 func (c *ciDataClient) GetBackendDisruptionStatisticsByJob(ctx context.Context, jobName string) ([]jobrunaggregatorapi.BackendDisruptionStatisticsRow, error) {

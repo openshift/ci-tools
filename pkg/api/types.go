@@ -1159,6 +1159,7 @@ const (
 	ClusterProfileAWS1QE                ClusterProfile = "aws-1-qe"
 	ClusterProfileAWSSdQE               ClusterProfile = "aws-sd-qe"
 	ClusterProfileAWSGluster            ClusterProfile = "aws-gluster"
+	ClusterProfileAWSManagedCSPIQE      ClusterProfile = "aws-managed-cspi-qe"
 	ClusterProfileAWSOSDMSP             ClusterProfile = "aws-osd-msp"
 	ClusterProfileAWSOutpost            ClusterProfile = "aws-outpost"
 	ClusterProfileAWSINTEROPQE          ClusterProfile = "aws-interop-qe"
@@ -1243,6 +1244,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSCSPIQE,
 		ClusterProfileAWSChinaQE,
 		ClusterProfileAWSGluster,
+		ClusterProfileAWSManagedCSPIQE,
 		ClusterProfileAWSGovCloudQE,
 		ClusterProfileAWSOSDMSP,
 		ClusterProfileAWSQE,
@@ -1324,6 +1326,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSCentos40,
 		ClusterProfileAWSCSPIQE,
 		ClusterProfileAWSGluster,
+		ClusterProfileAWSManagedCSPIQE,
 		ClusterProfileAWSCPaaS,
 		ClusterProfileAWS2,
 		ClusterProfileAWS3,
@@ -1477,6 +1480,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-china-qe-quota-slice"
 	case ClusterProfileAWSCSPIQE:
 		return "aws-cspi-qe-quota-slice"
+	case ClusterProfileAWSManagedCSPIQE:
+		return "aws-managed-cspi-qe-quota-slice"
 	case ClusterProfileAWSGovCloudQE:
 		return "aws-usgov-qe-quota-slice"
 	case ClusterProfileAWSSC2SQE:

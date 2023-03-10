@@ -28,6 +28,9 @@ Patches:
 - op: add
   path: /spec/containers/1/resources
   value: {}
+- op: add
+  path: /spec/priorityClassName
+  value: openshift-user-critical
 allowed: true
 patchType: JSONPatch
 uid: ""

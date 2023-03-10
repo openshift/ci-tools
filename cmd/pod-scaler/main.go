@@ -60,12 +60,11 @@ type consumerOptions struct {
 	port   int
 	uiPort int
 
-	dataDir               string
-	certDir               string
-	mutateResourceLimits  bool
-	cpuCap                int64
-	memoryCap             string
-	cpuPriorityScheduling int64
+	dataDir              string
+	certDir              string
+	mutateResourceLimits bool
+	cpuCap               int64
+	memoryCap            string
 }
 
 func bindOptions(fs *flag.FlagSet) *options {
@@ -87,7 +86,6 @@ func bindOptions(fs *flag.FlagSet) *options {
 	fs.StringVar(&o.gcsCredentialsFile, "gcs-credentials-file", "", "File where GCS credentials are stored.")
 	fs.Int64Var(&o.cpuCap, "cpu-cap", 10, "The maximum CPU request value, ex: 10")
 	fs.StringVar(&o.memoryCap, "memory-cap", "20Gi", "The maximum memory request value, ex: '20Gi'")
-	fs.Int64Var(&o.cpuPriorityScheduling, "cpu-priority-scheduling", 8, "Pods with CPU requests at, or above, this value will be admitted with priority scheduling")
 	o.resultsOptions.Bind(fs)
 	return &o
 }
@@ -259,7 +257,7 @@ func mainAdmission(opts *options, cache cache) {
 		logrus.WithError(err).Fatal("Failed to create pod-scaler reporter.")
 	}
 
-	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, reporter)
+	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, reporter)
 }
 
 func loaders(cache cache) map[string][]*cacheReloader {

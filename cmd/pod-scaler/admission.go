@@ -33,7 +33,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps"
 )
 
-func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool, cpuCap int64, memoryCap string, cpuPriorityScheduling int64, reporter results.PodScalerReporter) {
+func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool, cpuCap int64, memoryCap string, reporter results.PodScalerReporter) {
 	logger := logrus.WithField("component", "pod-scaler admission")
 	logger.Infof("Initializing admission webhook server with %d loaders.", len(loaders))
 	health := pjutil.NewHealthOnPort(healthPort)
@@ -46,7 +46,7 @@ func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Int
 		Port:    port,
 		CertDir: certDir,
 	}
-	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources, mutateResourceLimits: mutateResourceLimits, cpuCap: cpuCap, memoryCap: memoryCap, cpuPriorityScheduling: cpuPriorityScheduling, reporter: reporter}})
+	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources, mutateResourceLimits: mutateResourceLimits, cpuCap: cpuCap, memoryCap: memoryCap, reporter: reporter}})
 	logger.Info("Serving admission webhooks.")
 	if err := server.StartStandalone(interrupts.Context(), nil); err != nil {
 		logrus.WithError(err).Fatal("Failed to serve webhooks.")
@@ -54,15 +54,14 @@ func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Int
 }
 
 type podMutator struct {
-	logger                *logrus.Entry
-	client                buildclientv1.BuildV1Interface
-	resources             *resourceServer
-	mutateResourceLimits  bool
-	decoder               *admission.Decoder
-	cpuCap                int64
-	memoryCap             string
-	cpuPriorityScheduling int64
-	reporter              results.PodScalerReporter
+	logger               *logrus.Entry
+	client               buildclientv1.BuildV1Interface
+	resources            *resourceServer
+	mutateResourceLimits bool
+	decoder              *admission.Decoder
+	cpuCap               int64
+	memoryCap            string
+	reporter             results.PodScalerReporter
 }
 
 func (m *podMutator) Handle(ctx context.Context, req admission.Request) admission.Response {
@@ -100,7 +99,6 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 		return admission.Allowed("Failed to handle rehearsal Pod, ignoring.")
 	}
 	mutatePodResources(pod, m.resources, m.mutateResourceLimits, m.cpuCap, m.memoryCap, m.reporter, logger)
-	m.addPriorityClass(pod)
 
 	marshaledPod, err := json.Marshal(pod)
 	if err != nil {
@@ -305,20 +303,4 @@ func determineWorkloadType(annotations, labels map[string]string) string {
 		return "step"
 	}
 	return "undefined"
-}
-
-const priorityClassName = "openshift-user-critical"
-
-func (m *podMutator) addPriorityClass(pod *corev1.Pod) {
-	addClass := func(containers []corev1.Container) {
-		for _, container := range containers {
-			quantityForPriorityScheduling := *resource.NewQuantity(m.cpuPriorityScheduling, resource.DecimalSI)
-			if container.Resources.Requests.Cpu().Cmp(quantityForPriorityScheduling) >= 0 {
-				pod.Spec.PriorityClassName = priorityClassName
-				break
-			}
-		}
-	}
-	addClass(pod.Spec.Containers)
-	addClass(pod.Spec.InitContainers)
 }

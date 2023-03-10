@@ -75,6 +75,7 @@ func FromConfig(
 	hiveKubeconfig *rest.Config,
 	consoleHost string,
 	nodeName string,
+	nodeArchitectures []string,
 ) ([]api.Step, []api.Step, error) {
 	crclient, err := ctrlruntimeclient.NewWithWatch(clusterConfig, ctrlruntimeclient.Options{})
 	crclient = secretrecordingclient.Wrap(crclient, censor)
@@ -86,7 +87,7 @@ func FromConfig(
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not get build client for cluster config: %w", err)
 	}
-	buildClient := steps.NewBuildClient(client, buildGetter.RESTClient())
+	buildClient := steps.NewBuildClient(client, buildGetter.RESTClient(), nodeArchitectures)
 
 	templateGetter, err := templateclientset.NewForConfig(clusterConfig)
 	if err != nil {

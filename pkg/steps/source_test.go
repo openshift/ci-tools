@@ -393,7 +393,7 @@ func TestWaitForBuild(t *testing.T) {
 	}{
 		{
 			name:        "timeout",
-			buildClient: NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects().Build()), nil),
+			buildClient: NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects().Build()), nil, nil),
 			expected:    fmt.Errorf("timed out waiting for the condition"),
 		},
 		{
@@ -407,7 +407,7 @@ func TestWaitForBuild(t *testing.T) {
 					Status: buildapi.BuildStatus{
 						Phase: buildapi.BuildPhaseComplete,
 					},
-				}).Build()), nil),
+				}).Build()), nil, nil),
 		},
 		{
 			name: "build failed",
@@ -442,7 +442,8 @@ func TestWaitForBuild(t *testing.T) {
 
 type fakeBuildClient struct {
 	loggingclient.LoggingClient
-	logContent string
+	logContent        string
+	nodeArchitectures []string
 }
 
 func NewFakeBuildClient(client loggingclient.LoggingClient, logContent string) BuildClient {
@@ -454,4 +455,84 @@ func NewFakeBuildClient(client loggingclient.LoggingClient, logContent string) B
 
 func (c *fakeBuildClient) Logs(namespace, name string, options *buildapi.BuildLogOptions) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader(c.logContent)), nil
+}
+
+func (c *fakeBuildClient) NodeArchitectures() []string {
+	return c.nodeArchitectures
+}
+
+func Test_constructMultiArchBuilds(t *testing.T) {
+	tests := []struct {
+		name              string
+		build             buildapi.Build
+		nodeArchitectures []string
+		want              []buildapi.Build
+	}{
+		{
+			name:              "basic case - only amd64",
+			nodeArchitectures: []string{"amd64"},
+			build: buildapi.Build{
+				ObjectMeta: meta.ObjectMeta{Name: "test-build"},
+			},
+			want: []buildapi.Build{
+				{
+					ObjectMeta: meta.ObjectMeta{Name: "test-build"},
+					Spec: buildapi.BuildSpec{
+						CommonSpec: buildapi.CommonSpec{
+							NodeSelector: map[string]string{
+								"kubernetes.io/arch": "amd64",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:              "basic case - multi architectures",
+			nodeArchitectures: []string{"amd64", "arm64", "ppc64"},
+			build: buildapi.Build{
+				ObjectMeta: meta.ObjectMeta{Name: "test-build"},
+			},
+			want: []buildapi.Build{
+				{
+					ObjectMeta: meta.ObjectMeta{Name: "test-build"},
+					Spec: buildapi.BuildSpec{
+						CommonSpec: buildapi.CommonSpec{
+							NodeSelector: map[string]string{
+								"kubernetes.io/arch": "amd64",
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: meta.ObjectMeta{Name: "test-build-arm64"},
+					Spec: buildapi.BuildSpec{
+						CommonSpec: buildapi.CommonSpec{
+							NodeSelector: map[string]string{
+								"kubernetes.io/arch": "arm64",
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: meta.ObjectMeta{Name: "test-build-ppc64"},
+					Spec: buildapi.BuildSpec{
+						CommonSpec: buildapi.CommonSpec{
+							NodeSelector: map[string]string{
+								"kubernetes.io/arch": "ppc64",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if diff := cmp.Diff(constructMultiArchBuilds(tt.build, tt.nodeArchitectures), tt.want); diff != "" {
+				t.Fatal(diff)
+			}
+		})
+	}
 }

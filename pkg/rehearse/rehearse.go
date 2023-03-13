@@ -128,20 +128,14 @@ func (r RehearsalConfig) DetermineAffectedJobs(candidate RehearsalCandidate, can
 		logger.Infof("determineAffectedJobs ran in %s", time.Since(start).Truncate(time.Second))
 	}()
 
-	prConfig := config.GetAllConfigs(candidatePath, logger)
+	prConfig, err := config.GetAllConfigs(candidatePath)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("could not load configuration from candidate revision of release repo: %w", err)
+	}
 	baseSHA := candidate.base.sha
-	masterConfig, err := config.GetAllConfigsFromSHA(candidatePath, baseSHA, logger)
+	masterConfig, err := config.GetAllConfigsFromSHA(candidatePath, baseSHA)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("could not load configuration from base revision of release repo: %w", err)
-	}
-
-	// We always need both Prow config versions, otherwise we cannot compare them
-	if masterConfig.Prow == nil || prConfig.Prow == nil {
-		return nil, nil, nil, nil, fmt.Errorf("could not load Prow configs from base or tested revision of release repo: %w", err)
-	}
-	// We always need PR versions of ciop config, otherwise we cannot provide them to rehearsed jobs
-	if prConfig.CiOperator == nil {
-		return nil, nil, nil, nil, fmt.Errorf("could not load ci-operator configs from tested revision of release repo: %w", err)
 	}
 
 	configUpdaterCfg, err := loadConfigUpdaterCfg(candidatePath)
@@ -201,7 +195,10 @@ func (r RehearsalConfig) SetupJobs(candidate RehearsalCandidate, candidatePath s
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	prConfig := config.GetAllConfigs(candidatePath, logger)
+	prConfig, err := config.GetAllConfigs(candidatePath)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
 	org := candidate.org
 	repo := candidate.repo
 	prNumber := candidate.prNumber

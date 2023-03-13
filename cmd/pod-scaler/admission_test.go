@@ -1089,6 +1089,10 @@ func TestDetermineWorkloadName(t *testing.T) {
 }
 
 func TestAddPriorityClass(t *testing.T) {
+	var priority *int32
+	priority = new(int32)
+	*priority = 10
+
 	testCases := []struct {
 		name     string
 		pod      *corev1.Pod
@@ -1127,6 +1131,21 @@ func TestAddPriorityClass(t *testing.T) {
 				Containers: []corev1.Container{
 					{Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("9")}}},
 				},
+			}},
+			expected: &corev1.Pod{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("9")}}},
+				},
+				PriorityClassName: priorityClassName,
+			}},
+		},
+		{
+			name: "cpu above configured amount for priority scheduling with priority defined",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("9")}}},
+				},
+				Priority: priority,
 			}},
 			expected: &corev1.Pod{Spec: corev1.PodSpec{
 				Containers: []corev1.Container{

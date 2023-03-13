@@ -327,15 +327,23 @@ func determineWorkloadName(podName, containerName, workloadType string, labels m
 const priorityClassName = "openshift-user-critical"
 
 func (m *podMutator) addPriorityClass(pod *corev1.Pod) {
-	addClass := func(containers []corev1.Container) {
+	shouldAdd := func(containers []corev1.Container) bool {
 		for _, container := range containers {
 			quantityForPriorityScheduling := *resource.NewQuantity(m.cpuPriorityScheduling, resource.DecimalSI)
 			if container.Resources.Requests.Cpu().Cmp(quantityForPriorityScheduling) >= 0 {
-				pod.Spec.PriorityClassName = priorityClassName
-				break
+				return true
 			}
 		}
+		return false
 	}
-	addClass(pod.Spec.Containers)
-	addClass(pod.Spec.InitContainers)
+
+	add := shouldAdd(pod.Spec.Containers)
+	if !add {
+		add = shouldAdd(pod.Spec.InitContainers)
+	}
+
+	if add {
+		pod.Spec.Priority = nil // We cannot have Priority defined if we add the PriorityClassName
+		pod.Spec.PriorityClassName = priorityClassName
+	}
 }

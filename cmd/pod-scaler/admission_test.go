@@ -1089,8 +1089,7 @@ func TestDetermineWorkloadName(t *testing.T) {
 }
 
 func TestAddPriorityClass(t *testing.T) {
-	var priority *int32
-	priority = new(int32)
+	priority := new(int32)
 	*priority = 10
 
 	testCases := []struct {

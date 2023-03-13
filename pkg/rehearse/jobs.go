@@ -233,7 +233,7 @@ func filterPeriodics(changedPeriodics config.Periodics, logger logrus.FieldLogge
 		}
 
 		if !hasRehearsableLabel(periodic.Labels) {
-			jobLogger.Warnf("job is not allowed to be rehearsed. Label %s is required", jobconfig.CanBeRehearsedLabel)
+			jobLogger.Debugf("job is not allowed to be rehearsed. Label %s is required", jobconfig.CanBeRehearsedLabel)
 			continue
 		}
 

@@ -175,16 +175,18 @@ func main() {
 }
 
 const (
-	primaryOnCallQuery     = "DPTP Primary On-Call"
-	secondaryUSOnCallQuery = "DPTP Secondary On-Call (US)"
-	secondaryEUOnCallQuery = "DPTP Secondary On-Call (EU)"
-	helpdeskQuery          = "DPTP Help Desk"
-	intakeQuery            = "DPTP Intake"
-	roleTriagePrimary      = "@dptp-triage Primary"
-	roleTriageSecondaryUS  = "@dptp-triage Secondary (US)"
-	roleTriageSecondaryEU  = "@dptp-triage Secondary (EU)"
-	roleHelpdesk           = "@dptp-helpdesk"
-	roleIntake             = "@dptp-intake"
+	primaryOnCallQuery                = "DPTP Primary On-Call"
+	secondaryUSOnCallQuery            = "DPTP Secondary On-Call (US)"
+	secondaryEUOnCallQuery            = "DPTP Secondary On-Call (EU)"
+	helpdeskQuery                     = "DPTP Help Desk"
+	intakeQuery                       = "DPTP Intake"
+	roleTriagePrimary                 = "@dptp-triage Primary"
+	roleTriageSecondaryUS             = "@dptp-triage Secondary (US)"
+	roleTriageSecondaryEU             = "@dptp-triage Secondary (EU)"
+	roleHelpdesk                      = "@dptp-helpdesk"
+	roleIntake                        = "@dptp-intake"
+	jiraUnassignedAssigneeDisplayName = "<Unassigned>"
+	jiraUnassignedAssigneeAvatarUrl   = "https://issues.redhat.com/secure/useravatar?size=mm&avatarId=10283"
 )
 
 func sendTeamDigest(userIdsByRole map[string]user, jiraClient *jiraapi.Client, slackClient *slack.Client) error {
@@ -445,25 +447,31 @@ func getIssuesNeedingApproval(jiraClient *jiraapi.Client) ([]slack.Block, error)
 	idByUser := map[string]slack.Block{}
 	blocksByUser := map[string][]slack.Block{}
 	for _, issue := range issues {
-		if _, recorded := idByUser[issue.Fields.Assignee.DisplayName]; !recorded {
-			idByUser[issue.Fields.Assignee.DisplayName] = &slack.ContextBlock{
+		assigneeDisplayName := jiraUnassignedAssigneeDisplayName
+		assigneeAvatarUrl := jiraUnassignedAssigneeAvatarUrl
+		if issue.Fields.Assignee != nil {
+			assigneeDisplayName = issue.Fields.Assignee.DisplayName
+			assigneeAvatarUrl = issue.Fields.Assignee.AvatarUrls.Four8X48
+		}
+		if _, recorded := idByUser[assigneeDisplayName]; !recorded {
+			idByUser[assigneeDisplayName] = &slack.ContextBlock{
 				Type: slack.MBTContext,
 				ContextElements: slack.ContextElements{
 					Elements: []slack.MixedElement{
 						&slack.ImageBlockElement{
 							Type:     slack.METImage,
-							ImageURL: issue.Fields.Assignee.AvatarUrls.Four8X48,
-							AltText:  issue.Fields.Assignee.DisplayName,
+							ImageURL: assigneeAvatarUrl,
+							AltText:  assigneeDisplayName,
 						},
 						&slack.TextBlockObject{
 							Type: slack.MarkdownType,
-							Text: issue.Fields.Assignee.DisplayName,
+							Text: assigneeDisplayName,
 						},
 					},
 				},
 			}
 		}
-		blocksByUser[issue.Fields.Assignee.DisplayName] = append(blocksByUser[issue.Fields.Assignee.DisplayName], blockForIssue(issue))
+		blocksByUser[assigneeDisplayName] = append(blocksByUser[assigneeDisplayName], blockForIssue(issue))
 	}
 
 	for user, id := range idByUser {

@@ -9,6 +9,7 @@ import (
 	"github.com/mattn/go-zglob"
 	"github.com/sirupsen/logrus"
 
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/plugins"
@@ -119,25 +120,26 @@ func NewLocalJobSpec(path string) (*pjdwapi.JobSpec, error) {
 }
 
 // GetAllConfigs loads all configuration from the working copy of the release repo (usually openshift/release).
-// When an error occurs during some config loading, the error is not propagated, but the returned struct field will
-// have a nil value in the appropriate field. The error is only logged.
-func GetAllConfigs(releaseRepoPath string, logger *logrus.Entry) *ReleaseRepoConfig {
+// When an error occurs during some config loading, the error will be propagated, however the returned struct field will
+// also have a nil value in the appropriate field.
+func GetAllConfigs(releaseRepoPath string) (*ReleaseRepoConfig, error) {
 	config := &ReleaseRepoConfig{}
+	var errs []error
 	var err error
 	ciopConfigPath := filepath.Join(releaseRepoPath, CiopConfigInRepoPath)
 	config.CiOperator, err = LoadDataByFilename(ciopConfigPath)
 	if err != nil {
-		logger.WithError(err).Warn("failed to load ci-operator configuration from release repo")
+		errs = append(errs, fmt.Errorf("failed to load ci-operator configuration from release repo: %w", err))
 	}
 
 	prowConfigPath := filepath.Join(releaseRepoPath, ConfigInRepoPath)
 	prowJobConfigPath := filepath.Join(releaseRepoPath, JobConfigInRepoPath)
 	config.Prow, err = prowconfig.Load(prowConfigPath, prowJobConfigPath, nil, "")
 	if err != nil {
-		logger.WithError(err).Warn("failed to load Prow configuration from release repo")
+		errs = append(errs, fmt.Errorf("failed to load Prow configuration from release repo: %w", err))
 	}
 
-	return config
+	return config, utilerrors.NewAggregate(errs)
 }
 
 // GetAllConfigsFromSHA loads all configuration from given SHA revision of the release repo (usually openshift/release).
@@ -145,7 +147,7 @@ func GetAllConfigs(releaseRepoPath string, logger *logrus.Entry) *ReleaseRepoCon
 // revision that was checked out in the working copy when this method was called. Errors occurred during these git
 // manipulations are propagated in the error return value. Errors occurred during the actual config loading are not
 // propagated, but the returned struct field will have a nil value in the appropriate field. The error is only logged.
-func GetAllConfigsFromSHA(releaseRepoPath, sha string, logger *logrus.Entry) (*ReleaseRepoConfig, error) {
+func GetAllConfigsFromSHA(releaseRepoPath, sha string) (*ReleaseRepoConfig, error) {
 	currentSHA, err := revParse(releaseRepoPath, "HEAD")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SHA of current HEAD: %w", err)
@@ -161,13 +163,17 @@ func GetAllConfigsFromSHA(releaseRepoPath, sha string, logger *logrus.Entry) (*R
 		return nil, fmt.Errorf("could not checkout worktree: %w", err)
 	}
 
-	config := GetAllConfigs(releaseRepoPath, logger)
-
-	if err := gitCheckout(releaseRepoPath, restoreRev); err != nil {
-		return config, fmt.Errorf("failed to check out tested revision back: %w", err)
+	var errs []error
+	config, err := GetAllConfigs(releaseRepoPath)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("failed to get all configs: %w", err))
 	}
 
-	return config, nil
+	if err = gitCheckout(releaseRepoPath, restoreRev); err != nil {
+		errs = append(errs, fmt.Errorf("failed to check out tested revision back: %w", err))
+	}
+
+	return config, utilerrors.NewAggregate(errs)
 }
 
 func GetChangedTemplates(path, baseRev string) ([]string, error) {

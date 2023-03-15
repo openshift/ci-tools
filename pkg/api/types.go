@@ -1215,6 +1215,7 @@ const (
 	ClusterProfileVSphere8              ClusterProfile = "vsphere-8"
 	ClusterProfileVSphereDiscon         ClusterProfile = "vsphere-discon"
 	ClusterProfileVSphereClusterbot     ClusterProfile = "vsphere-clusterbot"
+	ClusterProfileVSphereIBM7           ClusterProfile = "vsphere-ibm-7"
 	ClusterProfileVSpherePlatformNone   ClusterProfile = "vsphere-platform-none"
 	ClusterProfileVSphereMultizone      ClusterProfile = "vsphere-multizone"
 	ClusterProfileVSphereConnected      ClusterProfile = "vsphere-connected"
@@ -1310,6 +1311,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileVSphere8,
 		ClusterProfileVSphereClusterbot,
 		ClusterProfileVSphereDiscon,
+		ClusterProfileVSphereIBM7,
 		ClusterProfileVSphereMultizone,
 		ClusterProfileVSphereConnected,
 		ClusterProfileVSpherePlatformNone,
@@ -1430,6 +1432,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileVSphere8,
 		ClusterProfileVSphereDiscon,
 		ClusterProfileVSphereClusterbot,
+		ClusterProfileVSphereIBM7,
 		ClusterProfileVSpherePlatformNone,
 		ClusterProfileVSphereConnected,
 		ClusterProfileVSphereMultizone:
@@ -1586,6 +1589,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "packet-edge-quota-slice"
 	case ClusterProfileVSphere:
 		return "vsphere-quota-slice"
+	case ClusterProfileVSphereIBM7:
+		return "vsphere-ibm-7-quota-slice"
 	case ClusterProfileVSphere8:
 		return "vsphere-8-quota-slice"
 	case ClusterProfileVSphereDiscon:
@@ -1663,6 +1668,7 @@ func (p ClusterProfile) Secret() string {
 		ClusterProfileVSphereClusterbot,
 		ClusterProfileVSphereDiscon,
 		ClusterProfileVSphereConnected,
+		ClusterProfileVSphereIBM7,
 		ClusterProfileVSphereMultizone,
 		ClusterProfileVSpherePlatformNone:
 		name = p.ClusterType()

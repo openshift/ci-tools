@@ -19,15 +19,10 @@ import (
 	coreapi "k8s.io/api/core/v1"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/remotecommand"
-	toolswatch "k8s.io/client-go/tools/watch"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/decorate"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -140,55 +135,6 @@ func (n *TestCaseNotifier) SubTests(prefix string) []*junit.TestCase {
 	return tests
 }
 
-type evaluator func(obj runtime.Object) (bool, error)
-
-// waitForConditionOnObject uses a watch to wait for a condition to be true on an object.
-// When the condition is satisfied or the timeout expires, the object is returned along
-// with any errors encountered.
-func waitForConditionOnObject(ctx context.Context, client ctrlruntimeclient.WithWatch, identifier ctrlruntimeclient.ObjectKey, list ctrlruntimeclient.ObjectList, into ctrlruntimeclient.Object, evaluate evaluator, timeout time.Duration) error {
-	lw := &cache.ListWatch{
-		ListFunc: func(options metav1.ListOptions) (object runtime.Object, e error) {
-			options.FieldSelector = fields.OneTermEqualSelector("metadata.name", identifier.Name).String()
-			res := list
-			return res, client.List(ctx, res, &ctrlruntimeclient.ListOptions{Namespace: identifier.Namespace, Raw: &options})
-		},
-		WatchFunc: func(options metav1.ListOptions) (i watch.Interface, e error) {
-			opts := &ctrlruntimeclient.ListOptions{
-				Namespace:     identifier.Namespace,
-				FieldSelector: fields.OneTermEqualSelector("metadata.name", identifier.Name),
-				Raw:           &options,
-			}
-			res := list
-			return client.Watch(ctx, res, opts)
-		},
-	}
-
-	// objects in this call here are always expected to exist in advance
-	var existsPrecondition toolswatch.PreconditionFunc
-
-	waitForObjectStatus := func(event watch.Event) (bool, error) {
-		if event.Type == watch.Deleted {
-			return false, fmt.Errorf("%s was deleted", identifier.String())
-		}
-		// the outer library will handle errors, we have no pod data to review in this case
-		if event.Type != watch.Added && event.Type != watch.Modified {
-			return false, nil
-		}
-		return evaluate(event.Object)
-	}
-
-	waitTimeout, cancel := toolswatch.ContextWithOptionalTimeout(ctx, timeout)
-	defer cancel()
-	_, syncErr := toolswatch.UntilWithSync(waitTimeout, lw, into, existsPrecondition, waitForObjectStatus)
-
-	// Hack to make sure this ends up in the logging client
-	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: identifier.Namespace, Name: identifier.Name}, into); err != nil {
-		logrus.WithError(err).Warn("failed to get object after finishing watch")
-	}
-
-	return syncErr
-}
-
 func waitForContainer(podClient kubernetes.PodClient, ns, name, containerName string) error {
 	logrus.WithFields(logrus.Fields{
 		"namespace": ns,
@@ -215,7 +161,7 @@ func waitForContainer(podClient kubernetes.PodClient, ns, name, containerName st
 		return false, nil
 	}
 
-	return waitForConditionOnObject(ctx, podClient, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, &corev1.PodList{}, &corev1.Pod{}, evaluatorFunc, 300*5*time.Second)
+	return kubernetes.WaitForConditionOnObject(ctx, podClient, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, &corev1.PodList{}, &corev1.Pod{}, evaluatorFunc, 300*5*time.Second)
 }
 
 func copyArtifacts(podClient kubernetes.PodClient, into, ns, name, containerName string, paths []string) error {

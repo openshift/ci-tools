@@ -12,9 +12,9 @@ import (
 )
 
 func TestCheckPending(t *testing.T) {
-	t0 := time.Time{}
-	withinLimit := metav1.Time{Time: t0.Add(-time.Minute)}
-	outsideLimit := metav1.Time{Time: t0.Add(-time.Hour)}
+	timeout, now := 30*time.Minute, time.Time{}
+	withinLimit := metav1.Time{Time: now.Add(-time.Minute)}
+	outsideLimit := metav1.Time{Time: now.Add(-time.Hour)}
 	running := corev1.ContainerStatus{
 		Name: "running",
 		State: corev1.ContainerState{
@@ -43,14 +43,20 @@ func TestCheckPending(t *testing.T) {
 			},
 		},
 	}
-	err := errors.New(`container "waiting" has not started in 30m0s`)
+	err := errors.New(`container "waiting" has not started in 1h0m0s`)
 	for _, tc := range []struct {
-		name     string
-		pod      corev1.Pod
-		expected error
+		// input
+		name string
+		pod  corev1.Pod
+		// output
+		next time.Time
+		err  error
 	}{{
 		name: "pod status is unknown",
-		pod:  corev1.Pod{Status: corev1.PodStatus{Phase: corev1.PodUnknown}},
+		pod: corev1.Pod{Status: corev1.PodStatus{
+			Phase: corev1.PodUnknown,
+		}},
+		next: now.Add(timeout),
 	}, {
 		name: "pod is running",
 		pod: corev1.Pod{
@@ -62,6 +68,7 @@ func TestCheckPending(t *testing.T) {
 				ContainerStatuses: []corev1.ContainerStatus{running},
 			},
 		},
+		next: now.Add(timeout),
 	}, {
 		name: "pod succeeded",
 		pod: corev1.Pod{
@@ -83,7 +90,7 @@ func TestCheckPending(t *testing.T) {
 			Status: corev1.PodStatus{
 				Phase: corev1.PodFailed,
 				ContainerStatuses: []corev1.ContainerStatus{{
-					Name: "succeeded",
+					Name: "failed",
 					State: corev1.ContainerState{
 						Terminated: &corev1.ContainerStateTerminated{
 							ExitCode: 1,
@@ -101,6 +108,7 @@ func TestCheckPending(t *testing.T) {
 				ContainerStatuses:     []corev1.ContainerStatus{waiting},
 			},
 		},
+		next: now.Add(timeout),
 	}, {
 		name: "init container is running",
 		pod: corev1.Pod{
@@ -112,6 +120,7 @@ func TestCheckPending(t *testing.T) {
 				ContainerStatuses: []corev1.ContainerStatus{waiting},
 			},
 		},
+		next: now.Add(timeout),
 	}, {
 		name: "first init container is waiting within limit",
 		pod: corev1.Pod{
@@ -122,6 +131,7 @@ func TestCheckPending(t *testing.T) {
 				ContainerStatuses:     []corev1.ContainerStatus{waiting},
 			},
 		},
+		next: withinLimit.Add(timeout),
 	}, {
 		name: "first init container is waiting outside limit",
 		pod: corev1.Pod{
@@ -132,7 +142,7 @@ func TestCheckPending(t *testing.T) {
 				ContainerStatuses:     []corev1.ContainerStatus{waiting},
 			},
 		},
-		expected: err,
+		err: err,
 	}, {
 		name: "init container is waiting within limit",
 		pod: corev1.Pod{
@@ -145,6 +155,7 @@ func TestCheckPending(t *testing.T) {
 				ContainerStatuses: []corev1.ContainerStatus{waiting},
 			},
 		},
+		next: withinLimit.Add(timeout),
 	}, {
 		name: "init container is waiting outside limit",
 		pod: corev1.Pod{
@@ -157,7 +168,7 @@ func TestCheckPending(t *testing.T) {
 				ContainerStatuses: []corev1.ContainerStatus{waiting},
 			},
 		},
-		expected: err,
+		err: err,
 	}, {
 		name: "pod is pending within limit",
 		pod: corev1.Pod{
@@ -167,6 +178,7 @@ func TestCheckPending(t *testing.T) {
 				ContainerStatuses: []corev1.ContainerStatus{running, waiting},
 			},
 		},
+		next: withinLimit.Add(timeout),
 	}, {
 		name: "pod is pending outside limit",
 		pod: corev1.Pod{
@@ -178,7 +190,7 @@ func TestCheckPending(t *testing.T) {
 				ContainerStatuses: []corev1.ContainerStatus{running, waiting},
 			},
 		},
-		expected: err,
+		err: err,
 	}, {
 		name: "pod with init container is pending within limit",
 		pod: corev1.Pod{
@@ -190,6 +202,7 @@ func TestCheckPending(t *testing.T) {
 				ContainerStatuses: []corev1.ContainerStatus{running, waiting},
 			},
 		},
+		next: withinLimit.Add(timeout),
 	}, {
 		name: "pod with init container is pending outside limit",
 		pod: corev1.Pod{
@@ -201,11 +214,19 @@ func TestCheckPending(t *testing.T) {
 				ContainerStatuses: []corev1.ContainerStatus{running, waiting},
 			},
 		},
-		expected: err,
+		err: err,
+	}, {
+		name: "pod is pending inside limit without container information",
+		pod: corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{CreationTimestamp: withinLimit},
+			Status:     corev1.PodStatus{Phase: corev1.PodPending},
+		},
+		next: withinLimit.Add(timeout),
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			ret := checkPending(tc.pod, 30*time.Minute, t0)
-			testhelper.Diff(t, "error", ret, tc.expected, testhelper.EquateErrorMessage)
+			ret, err := checkPending(tc.pod, timeout, now)
+			testhelper.Diff(t, "next", ret, tc.next)
+			testhelper.Diff(t, "error", err, tc.err, testhelper.EquateErrorMessage)
 		})
 	}
 }

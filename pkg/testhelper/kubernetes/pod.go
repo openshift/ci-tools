@@ -9,13 +9,16 @@ import (
 	"time"
 
 	coreapi "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 type FakePodExecutor struct {
@@ -40,24 +43,53 @@ func (f *FakePodExecutor) Get(ctx context.Context, n ctrlruntimeclient.ObjectKey
 		return err
 	}
 	if pod, ok := o.(*coreapi.Pod); ok {
-		fail := f.Failures.Has(n.Name)
-		if fail {
-			pod.Status.Phase = coreapi.PodFailed
-		} else {
-			pod.Status.Phase = coreapi.PodSucceeded
-		}
-		for _, container := range pod.Spec.Containers {
-			terminated := &coreapi.ContainerStateTerminated{}
-			if fail {
-				terminated.ExitCode = 1
-			}
-			pod.Status.ContainerStatuses = append(pod.Status.ContainerStatuses, coreapi.ContainerStatus{
-				Name:  container.Name,
-				State: coreapi.ContainerState{Terminated: terminated}})
-		}
+		f.process(pod)
 	}
-
 	return nil
+}
+
+func (f *FakePodExecutor) Watch(ctx context.Context, list ctrlruntimeclient.ObjectList, opts ...ctrlruntimeclient.ListOption) (watch.Interface, error) {
+	if err := f.LoggingClient.List(ctx, list, opts...); err != nil {
+		return nil, err
+	}
+	filter(list, opts...)
+	items := list.(*coreapi.PodList).Items
+	ch := make(chan watch.Event, len(items))
+	for _, x := range items {
+		f.process(&x)
+		ch <- watch.Event{Type: watch.Modified, Object: &x}
+	}
+	return watch.NewProxyWatcher(ch), nil
+}
+
+func (f *FakePodExecutor) process(pod *coreapi.Pod) {
+	fail := f.Failures.Has(pod.Name)
+	if fail {
+		pod.Status.Phase = coreapi.PodFailed
+	} else {
+		pod.Status.Phase = coreapi.PodSucceeded
+	}
+	for _, container := range pod.Spec.Containers {
+		terminated := &coreapi.ContainerStateTerminated{}
+		if fail {
+			terminated.ExitCode = 1
+		}
+		pod.Status.ContainerStatuses = append(pod.Status.ContainerStatuses, coreapi.ContainerStatus{
+			Name:  container.Name,
+			State: coreapi.ContainerState{Terminated: terminated}})
+	}
+}
+
+// The fake client version we use (v0.12.3) does not implement field selectors.
+func filter(list ctrlruntimeclient.ObjectList, opts ...ctrlruntimeclient.ListOption) {
+	var o ctrlruntimeclient.ListOptions
+	for _, x := range opts {
+		x.ApplyToList(&o)
+	}
+	items := &list.(*coreapi.PodList).Items
+	*items = util.RemoveIf(*items, func(p coreapi.Pod) bool {
+		return !o.FieldSelector.Matches(fields.Set{"metadata.name": p.Name})
+	})
 }
 
 type FakePodClient struct {
@@ -65,7 +97,7 @@ type FakePodClient struct {
 	Namespace, Name string
 }
 
-func (FakePodClient) PendingTimeout() time.Duration { return 0 }
+func (FakePodClient) PendingTimeout() time.Duration { return 30 * time.Minute }
 
 func (f *FakePodClient) Exec(namespace, name string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error) {
 	if namespace != f.Namespace {

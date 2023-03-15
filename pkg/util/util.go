@@ -36,3 +36,16 @@ func Contains[T comparable](s []T, x T) bool {
 	}
 	return false
 }
+
+// RemoveIf retains only elements which are not selected by a predicate
+// The slice is modified in place and (potentially a subset) is returned.
+func RemoveIf[T any](s []T, p func(T) bool) []T {
+	i := 0
+	for _, x := range s {
+		if !p(x) {
+			s[i] = x
+			i++
+		}
+	}
+	return s[:i]
+}

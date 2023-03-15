@@ -29,6 +29,7 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
@@ -545,7 +546,6 @@ func waitForBuild(ctx context.Context, buildClient BuildClient, namespace, name 
 			b.Status.Phase == buildapi.BuildPhaseError
 	}
 
-	build := &buildapi.Build{}
 	logrus.WithFields(logrus.Fields{
 		"namespace": namespace,
 		"name":      name,
@@ -569,7 +569,7 @@ func waitForBuild(ctx context.Context, buildClient BuildClient, namespace, name 
 		return false, nil
 	}
 
-	return waitForConditionOnObject(ctx, buildClient, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, &buildapi.BuildList{}, build, evaluatorFunc, timeout)
+	return kubernetes.WaitForConditionOnObject(ctx, buildClient, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, &buildapi.BuildList{}, &buildapi.Build{}, evaluatorFunc, timeout)
 }
 
 func buildDuration(build *buildapi.Build) time.Duration {

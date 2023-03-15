@@ -550,8 +550,7 @@ func commandConfigMapForTest(testName string) string {
 
 func addCommandScript(name string, pod *coreapi.Pod) {
 	volumeName := "commands-script"
-	// 0777 in decimal is 511
-	mode := int32(511)
+	mode := int32(0o777)
 	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
 		Name: volumeName,
 		VolumeSource: coreapi.VolumeSource{

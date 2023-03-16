@@ -1011,6 +1011,7 @@ func TestFromConfig(t *testing.T) {
 			"base_image", "base_rpm_image-without-rpms", "rpms",
 			"src", "bin", "to",
 			"ci-bundle0", "ci-index",
+			"my-bundle", "ci-index-my-bundle",
 		},
 	}, {
 		name: "release",
@@ -1140,6 +1141,50 @@ func TestFromConfig(t *testing.T) {
 		expectedParams: map[string]string{
 			"LOCAL_IMAGE_CI_BUNDLE0": "public_docker_image_repository:ci-bundle0",
 			"LOCAL_IMAGE_CI_INDEX":   "public_docker_image_repository:ci-index",
+		},
+	}, {
+		name: "named bundle source",
+		config: api.ReleaseBuildConfiguration{
+			Operator: &api.OperatorStepConfiguration{
+				Bundles: []api.Bundle{{
+					As:             "my-bundle",
+					DockerfilePath: "dockerfile_path",
+					ContextDir:     "context_dir",
+				}},
+			},
+		},
+		expectedSteps: []string{
+			"src-bundle",
+			"my-bundle",
+			"ci-index-my-bundle-gen",
+			"ci-index-my-bundle",
+			"[output-images]",
+			"[images]",
+		},
+		expectedParams: map[string]string{
+			"LOCAL_IMAGE_CI_INDEX_MY_BUNDLE": "public_docker_image_repository:ci-index-my-bundle",
+			"LOCAL_IMAGE_MY_BUNDLE":          "public_docker_image_repository:my-bundle",
+		},
+	}, {
+		name: "named bundle source with index skipped",
+		config: api.ReleaseBuildConfiguration{
+			Operator: &api.OperatorStepConfiguration{
+				Bundles: []api.Bundle{{
+					As:                "my-bundle",
+					DockerfilePath:    "dockerfile_path",
+					ContextDir:        "context_dir",
+					SkipBuildingIndex: true,
+				}},
+			},
+		},
+		expectedSteps: []string{
+			"src-bundle",
+			"my-bundle",
+			"[output-images]",
+			"[images]",
+		},
+		expectedParams: map[string]string{
+			"LOCAL_IMAGE_MY_BUNDLE": "public_docker_image_repository:my-bundle",
 		},
 	}, {
 		name: "image build",

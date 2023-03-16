@@ -972,23 +972,6 @@ func sortStepConfig(in []api.StepConfiguration) []api.StepConfiguration {
 	return in
 }
 
-type environmentOverride struct {
-	m map[string]string
-}
-
-func (e environmentOverride) Has(name string) bool {
-	_, ok := e.m[name]
-	return ok
-}
-
-func (e environmentOverride) HasInput(name string) bool {
-	return e.Has(name)
-}
-
-func (e environmentOverride) Get(name string) (string, error) {
-	return e.m[name], nil
-}
-
 func TestFromConfig(t *testing.T) {
 	ns := "ns"
 	httpClient := release.NewFakeHTTPClient(func(req *http.Request) (*http.Response, error) {
@@ -1237,11 +1220,6 @@ func TestFromConfig(t *testing.T) {
 				},
 			},
 		},
-		env: environmentOverride{
-			m: map[string]string{
-				utils.ReleaseImageEnv(api.LatestReleaseName): "latest",
-			},
-		},
 		expectedSteps: []string{
 			"[release:initial]",
 			"[release:latest]",
@@ -1273,11 +1251,6 @@ func TestFromConfig(t *testing.T) {
 				Releases: map[string]api.UnresolvedRelease{
 					"release": {Release: &api.Release{Version: "4.1.0"}},
 				},
-			},
-		},
-		env: environmentOverride{
-			m: map[string]string{
-				utils.ReleaseImageEnv("release"): "release",
 			},
 		},
 		expectedSteps: []string{"[release:release]", "[images]"},

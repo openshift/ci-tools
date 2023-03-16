@@ -1,8 +1,9 @@
-package bumper
+package repo
 
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"io/fs"
 	"io/ioutil"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"gopkg.in/ini.v1"
 
 	"github.com/openshift/ci-tools/pkg/api/ocplifecycle"
+	"github.com/openshift/ci-tools/pkg/branchcuts/bumper"
 )
 
 type (
@@ -29,7 +31,7 @@ type (
 
 	rhelRepo struct {
 		BaseUrl           string `ini:"baseurl,omitempty"`
-		Enabled           int    `ini:"baseurl,omitempty"`
+		Enabled           int    `ini:"enabled,omitempty"`
 		FailoverMethod    bool   `ini:"failovermethod,omitempty"`
 		GPGCheck          int    `ini:"gpgcheck,omitempty"`
 		GPGKey            string `ini:"gpgkey,omitempty"`
@@ -46,7 +48,7 @@ type (
 var (
 	majorMinorSeparators = []string{".", "-"}
 
-	_ Bumper[*ini.File] = &RepoBumper{}
+	_ bumper.Bumper[*ini.File] = &RepoBumper{}
 )
 
 func NewRepoBumper(o *RepoBumperOptions) (*RepoBumper, error) {
@@ -76,7 +78,12 @@ func (b *RepoBumper) GetFiles() ([]string, error) {
 }
 
 func (b *RepoBumper) Unmarshall(file string) (*ini.File, error) {
-	return ini.Load(file)
+	f, err := os.Open(file)
+	if err != nil {
+		return nil, fmt.Errorf("open file %q: %w", file, err)
+	}
+	source := NewIniReadCloser(f, b.bumpText)
+	return ini.Load(io.ReadCloser(source))
 }
 
 func (b *RepoBumper) BumpFilename(filename string, _ *ini.File) (string, error) {
@@ -89,20 +96,26 @@ func (b *RepoBumper) BumpContent(file *ini.File) (*ini.File, error) {
 	for _, section := range file.Sections() {
 		repo := rhelRepo{}
 		if err := section.MapTo(&repo); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("section to repo: %w", err)
 		}
 
-		for _, s := range majorMinorSeparators {
-			curRelease := fmt.Sprintf("%d%s%d", b.OCPRelease.Major, s, b.OCPRelease.Minor)
-			futureRelease := fmt.Sprintf("%d%s%d", b.OCPRelease.Major, s, b.OCPRelease.Minor+1)
-			repo.BaseUrl = strings.ReplaceAll(repo.BaseUrl, curRelease, futureRelease)
-		}
+		repo.Name = b.bumpText(repo.Name)
+		repo.BaseUrl = b.bumpText(repo.BaseUrl)
 
 		if err := section.ReflectFrom(&repo); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("repo to section: %w", err)
 		}
 	}
 	return file, nil
+}
+
+func (b *RepoBumper) bumpText(text string) string {
+	for _, s := range majorMinorSeparators {
+		curRelease := fmt.Sprintf("%d%s%d", b.OCPRelease.Major, s, b.OCPRelease.Minor)
+		futureRelease := fmt.Sprintf("%d%s%d", b.OCPRelease.Major, s, b.OCPRelease.Minor+1)
+		text = strings.ReplaceAll(text, curRelease, futureRelease)
+	}
+	return text
 }
 
 func (b *RepoBumper) Marshall(file *ini.File, bumpedFilename, dir string) error {

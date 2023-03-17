@@ -174,10 +174,8 @@ func (s *server) respondToNewPR(pullRequest *github.PullRequest, logger *logrus.
 	user := pullRequest.User.Login
 	presubmits, periodics, err := s.getAffectedJobs(pullRequest, logger)
 	if err != nil {
-		lines := []string{"unable to determine affected jobs. This could be due to a branch that needs to be rebased."}
-		lines = append(lines, s.getUsageDetailsLines()...)
-		comment := strings.Join(lines, "\n")
-		s.reportFailure(comment, err, org, repo, user, number, false, logger)
+		comment := "unable to determine affected jobs. This could be due to a branch that needs to be rebased."
+		s.reportFailure(comment, err, org, repo, user, number, false, true, logger)
 		return
 	}
 	foundJobsToRehearse := len(presubmits) > 0 || len(periodics) > 0
@@ -294,7 +292,7 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 
 				candidate, err := s.prepareCandidate(repoClient, pullRequest)
 				if err != nil {
-					s.reportFailure("unable prepare a candidate for rehearsal; rehearsals will not be run. This could be due to a branch that needs to be rebased.", err, org, repo, user, number, false, logger)
+					s.reportFailure("unable prepare a candidate for rehearsal; rehearsals will not be run. This could be due to a branch that needs to be rebased.", err, org, repo, user, number, false, false, logger)
 					continue
 				}
 
@@ -304,7 +302,7 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 				presubmits, periodics, changedTemplates, changedClusterProfiles, err := rc.DetermineAffectedJobs(candidate, candidatePath, logger)
 				if err != nil {
 					logger.WithError(err).Error("couldn't determine affected jobs")
-					s.reportFailure("unable to determine affected jobs", err, org, repo, user, number, true, logger)
+					s.reportFailure("unable to determine affected jobs", err, org, repo, user, number, true, false, logger)
 					continue
 				}
 				requestedOnly := command != rehearseNormal && command != rehearseMore && command != rehearseMax && command != rehearseAutoAck
@@ -334,20 +332,20 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 					prConfig, prRefs, imageStreamTags, presubmitsToRehearse, err := rc.SetupJobs(candidate, candidatePath, presubmits, periodics, changedTemplates, changedClusterProfiles, limit, logger)
 					if err != nil {
 						logger.WithError(err).Error("couldn't set up jobs")
-						s.reportFailure("unable to set up jobs", err, org, repo, user, number, true, logger)
+						s.reportFailure("unable to set up jobs", err, org, repo, user, number, true, false, logger)
 						continue
 					}
 
 					if err := prConfig.Prow.ValidateJobConfig(); err != nil {
 						logger.WithError(err).Error("validation of job config failed")
-						s.reportFailure("config validation failed", err, org, repo, user, number, false, logger)
+						s.reportFailure("config validation failed", err, org, repo, user, number, false, false, logger)
 						continue
 					}
 
 					success, err := rc.RehearseJobs(candidate, candidatePath, prRefs, imageStreamTags, presubmitsToRehearse, changedTemplates, changedClusterProfiles, logger)
 					if err != nil {
 						logger.WithError(err).Error("couldn't rehearse jobs")
-						s.reportFailure("failed to create rehearsal jobs", err, org, repo, user, number, true, logger)
+						s.reportFailure("failed to create rehearsal jobs", err, org, repo, user, number, true, false, logger)
 						continue
 					}
 
@@ -394,10 +392,13 @@ func (s *server) getAffectedJobs(pullRequest *github.PullRequest, logger *logrus
 	return presubmits, periodics, err
 }
 
-func (s *server) reportFailure(message string, err error, org, repo, user string, number int, addContact bool, l *logrus.Entry) {
-	comment := fmt.Sprintf("@%s, `pj-rehearse`: %s ERROR: '%v'.", user, message, err)
+func (s *server) reportFailure(message string, err error, org, repo, user string, number int, addContact, addUsageDetails bool, l *logrus.Entry) {
+	comment := fmt.Sprintf("@%s, `pj-rehearse`: %s ERROR: \n ```\n%v\n```.", user, message, err)
 	if addContact {
 		comment += " If the problem persists, please [contact](https://docs.ci.openshift.org/docs/getting-started/useful-links/#contact) Test Platform."
+	}
+	if addUsageDetails {
+		comment += strings.Join(s.getUsageDetailsLines(), "\n")
 	}
 	if err := s.ghc.CreateComment(org, repo, number, comment); err != nil {
 		l.WithError(err).Error("failed to create comment")

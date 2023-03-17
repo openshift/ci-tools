@@ -26,6 +26,16 @@ func TestOptionalOperators(t *testing.T) {
 		indexName:  "ci-index-named-bundle",
 		bundleName: "named-bundle",
 		target:     "verify-db-named",
+	}, {
+		name:       "ci-index",
+		indexName:  "ci-index",
+		bundleName: "ci-bundle1",
+		target:     "ci-index",
+	}, {
+		name:       "ci-index-named-bundle",
+		indexName:  "ci-index-named-bundle",
+		bundleName: "named-bundle",
+		target:     "ci-index-named-bundle",
 	}}
 	for _, testCase := range testCases {
 		testCase := testCase

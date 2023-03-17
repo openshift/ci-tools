@@ -142,9 +142,6 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"          context_dir: ' '\n" +
 	"          # DockerfilePath defines where the dockerfile for build the bundle exists relative to the contextdir\n" +
 	"          dockerfile_path: ' '\n" +
-	"          # Skip building the index image for this bundle. Default to false.\n" +
-	"          # This field works only for named bundles, i.e., \"as\" is not empty.\n" +
-	"          skip_building_index: true\n" +
 	"          # UpdateGraph defines the update mode to use when adding the bundle to the base index.\n" +
 	"          # Can be: semver (default), semver-skippatch, or replaces\n" +
 	"          update_graph: ' '\n" +

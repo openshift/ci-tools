@@ -1855,9 +1855,6 @@ type Bundle struct {
 	// UpdateGraph defines the update mode to use when adding the bundle to the base index.
 	// Can be: semver (default), semver-skippatch, or replaces
 	UpdateGraph IndexUpdate `json:"update_graph,omitempty"`
-	// Skip building the index image for this bundle. Default to false.
-	// This field works only for named bundles, i.e., "as" is not empty.
-	SkipBuildingIndex bool `json:"skip_building_index,omitempty"`
 }
 
 // IndexGeneratorStepConfiguration describes a step that creates an index database and

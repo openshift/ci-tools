@@ -703,26 +703,30 @@ func FromConfigStatic(config *api.ReleaseBuildConfiguration) api.GraphConfigurat
 				},
 			}
 			buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: bundle})
-			// Build index generator
-			indexName := api.PipelineImageStreamTagReference(api.IndexName(bundleConfig.As))
-			updateGraph := bundleConfig.UpdateGraph
-			if updateGraph == "" {
-				updateGraph = api.IndexUpdateSemver
+			if !bundleConfig.SkipBuildingIndex {
+				// Build index generator
+				indexName := api.PipelineImageStreamTagReference(api.IndexName(bundleConfig.As))
+				updateGraph := bundleConfig.UpdateGraph
+				if updateGraph == "" {
+					updateGraph = api.IndexUpdateSemver
+				}
+				buildSteps = append(buildSteps, api.StepConfiguration{IndexGeneratorStepConfiguration: &api.IndexGeneratorStepConfiguration{
+					To:            api.IndexGeneratorName(indexName),
+					OperatorIndex: []string{bundleConfig.As},
+					BaseIndex:     bundleConfig.BaseIndex,
+					UpdateGraph:   updateGraph,
+				}})
+				// Build the index
+				index := &api.ProjectDirectoryImageBuildStepConfiguration{
+					To: indexName,
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						DockerfilePath: steps.IndexDockerfileName,
+					},
+				}
+				buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: index})
+			} else {
+				logrus.WithField("bundle", bundleConfig.As).Info("Skipped building index image")
 			}
-			buildSteps = append(buildSteps, api.StepConfiguration{IndexGeneratorStepConfiguration: &api.IndexGeneratorStepConfiguration{
-				To:            api.IndexGeneratorName(indexName),
-				OperatorIndex: []string{bundleConfig.As},
-				BaseIndex:     bundleConfig.BaseIndex,
-				UpdateGraph:   updateGraph,
-			}})
-			// Build the index
-			index := &api.ProjectDirectoryImageBuildStepConfiguration{
-				To: indexName,
-				ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
-					DockerfilePath: steps.IndexDockerfileName,
-				},
-			}
-			buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: index})
 		}
 		// Build non-named bundles following old naming system
 		var bundles []string

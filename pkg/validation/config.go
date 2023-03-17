@@ -296,7 +296,10 @@ func validateOperator(ctx *configContext, input *api.OperatorStepConfiguration, 
 			validationErrors = append(validationErrors, err)
 		}
 		if bundle.As == "" && bundle.BaseIndex != "" {
-			validationErrors = append(validationErrors, ctxN.AddField("base_index").errorf("base_index requires as to be set"))
+			validationErrors = append(validationErrors, ctxN.AddField("base_index").errorf("base_index requires 'as' to be set"))
+		}
+		if bundle.As == "" && bundle.SkipBuildingIndex {
+			validationErrors = append(validationErrors, ctxN.AddField("skip_building_index").errorf("skip_building_index requires 'as' to be set"))
 		}
 		if bundle.UpdateGraph != "" {
 			if bundle.BaseIndex == "" {

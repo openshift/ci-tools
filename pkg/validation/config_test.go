@@ -535,7 +535,7 @@ func TestValidateOperator(t *testing.T) {
 			},
 			withResolvesTo: goodStepLink,
 			output: []error{
-				errors.New("operator.bundles[0].base_index: base_index requires as to be set"),
+				errors.New("operator.bundles[0].base_index: base_index requires 'as' to be set"),
 			},
 		},
 		{
@@ -550,6 +550,46 @@ func TestValidateOperator(t *testing.T) {
 			withResolvesTo: goodStepLink,
 			output: []error{
 				errors.New("operator.bundles[0].update_graph: update_graph must be semver, semver-skippatch, or replaces"),
+			},
+		},
+		{
+			name: "SkipBuildingIndex can be set",
+			input: &api.OperatorStepConfiguration{
+				Bundles: []api.Bundle{{
+					As:                "my-bundle",
+					DockerfilePath:    "./dockerfile",
+					ContextDir:        ".",
+					BaseIndex:         "an-index",
+					UpdateGraph:       "replaces",
+					SkipBuildingIndex: true,
+				}},
+				Substitutions: []api.PullSpecSubstitution{
+					{
+						PullSpec: "original",
+						With:     "substitute",
+					},
+				},
+			},
+			withResolvesTo: goodStepLink,
+		},
+		{
+			name: "SkipBuildingIndex cannot be set on an unnamed bundle",
+			input: &api.OperatorStepConfiguration{
+				Bundles: []api.Bundle{{
+					DockerfilePath:    "./dockerfile",
+					ContextDir:        ".",
+					SkipBuildingIndex: true,
+				}},
+				Substitutions: []api.PullSpecSubstitution{
+					{
+						PullSpec: "original",
+						With:     "substitute",
+					},
+				},
+			},
+			withResolvesTo: goodStepLink,
+			output: []error{
+				errors.New("operator.bundles[0].skip_building_index: skip_building_index requires 'as' to be set"),
 			},
 		},
 	}

@@ -358,6 +358,43 @@ func TestGenerateJobs(t *testing.T) {
 				Branch: "branch",
 			}},
 		}, {
+			id:   "operator section creates ci-index-my-bundle presubmit job",
+			keep: true,
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{},
+				Operator: &ciop.OperatorStepConfiguration{
+					Bundles: []ciop.Bundle{{
+						As:             "my-bundle",
+						DockerfilePath: "bundle.Dockerfile",
+						ContextDir:     "manifests",
+					}},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		}, {
+			id:   "operator section without index creates ci-index-my-bundle presubmit job",
+			keep: true,
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{},
+				Operator: &ciop.OperatorStepConfiguration{
+					Bundles: []ciop.Bundle{{
+						As:                "my-bundle",
+						DockerfilePath:    "bundle.Dockerfile",
+						ContextDir:        "manifests",
+						SkipBuildingIndex: true,
+					}},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		}, {
 			id: "two tests and empty Images with one test configured as a postsubmit",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{

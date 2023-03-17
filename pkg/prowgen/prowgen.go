@@ -130,7 +130,11 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			}
 			indexName := api.IndexName(bundle.As)
 			jobBaseGen := newJobBaseBuilder().TestName(indexName)
-			jobBaseGen.PodSpec.Add(Targets(indexName))
+			if bundle.SkipBuildingIndex {
+				jobBaseGen.PodSpec.Add(Targets(bundle.As))
+			} else {
+				jobBaseGen.PodSpec.Add(Targets(indexName))
+			}
 			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, indexName, info))
 		}
 		if containsUnnamedBundle {

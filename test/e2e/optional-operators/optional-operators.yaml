@@ -24,6 +24,10 @@ operator:
     base_index: operator-index-46
   - context_dir: "test/manifests"
     dockerfile_path: "bundle.Dockerfile"
+  - as: named-skip-index-bundle
+    context_dir: "test/manifests"
+    dockerfile_path: "bundle.Dockerfile"
+    skip_building_index: true
   substitutions:
   - pullspec: quay.io/openshift/origin-metering-reporting-operator:4.6
     with: metering-reporting-operator # another `images:` list item

@@ -1044,3 +1044,45 @@ func TestDetermineWorkloadType(t *testing.T) {
 		})
 	}
 }
+
+func TestDetermineWorkloadName(t *testing.T) {
+	testCases := []struct {
+		name         string
+		workloadType string
+		labels       map[string]string
+		expected     string
+	}{
+		{
+			name:         "workload is prowjob",
+			workloadType: WorkloadTypeProwjob,
+			labels:       map[string]string{"prow.k8s.io/job": "prowjobName"},
+			expected:     "prowjobName",
+		},
+		{
+			name:         "workload is a step",
+			workloadType: WorkloadTypeStep,
+			labels:       nil,
+			expected:     "pod-container",
+		},
+		{
+			name:         "workload is a build",
+			workloadType: WorkloadTypeBuild,
+			labels:       nil,
+			expected:     "pod-container",
+		},
+		{
+			name:         "workload type is undefined",
+			workloadType: WorkloadTypeUndefined,
+			labels:       nil,
+			expected:     "pod-container",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if diff := cmp.Diff(determineWorkloadName("pod", "container", tc.workloadType, tc.labels), tc.expected); diff != "" {
+				t.Errorf("result differs from expected output, diff:\n%s", diff)
+			}
+		})
+	}
+}

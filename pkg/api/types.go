@@ -2,10 +2,7 @@ package api
 
 import (
 	"fmt"
-	"runtime"
 	"strings"
-
-	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -389,32 +386,6 @@ func (i *ImageStreamTagReference) ISTagName() string {
 	return fmt.Sprintf("%s/%s:%s", i.Namespace, i.Name, i.Tag)
 }
 
-// MultiArchImageStreamTagReference is a ImageStreamTagReference that can resolve
-// the namespace on the runtime based on the os architecture
-type MultiArchImageStreamTagReference struct {
-	ImageStreamTagReference `json:",inline"`
-}
-
-func (m *MultiArchImageStreamTagReference) ISTagName() string {
-	return fmt.Sprintf("%s/%s:%s", m.ResolveNamespace(), m.Name, m.Tag)
-}
-
-func (m MultiArchImageStreamTagReference) ResolveNamespace() string {
-	return ResolveMultiArchNamespaceFor(m.ImageStreamTagReference.Namespace)
-}
-
-func ResolveMultiArchNamespaceFor(namespace string) string {
-	var ret string
-	arch := runtime.GOARCH
-	if arch == "amd64" {
-		return namespace
-	}
-
-	ret = fmt.Sprintf("%s-%s", namespace, arch)
-	logrus.Debugf("Resolved multi-arch namespace for %s to %s for %s architecture", namespace, ret, arch)
-	return ret
-}
-
 // ReleaseTagConfiguration describes how a release is
 // assembled from release artifacts. A release image stream is a
 // single stream with multiple tags (openshift/origin-v3.9:control-plane),
@@ -576,8 +547,8 @@ func (config *InputImageTagStepConfiguration) AddSources(sources ...ImageStreamS
 }
 
 type InputImage struct {
-	BaseImage MultiArchImageStreamTagReference `json:"base_image"`
-	To        PipelineImageStreamTagReference  `json:"to,omitempty"`
+	BaseImage ImageStreamTagReference         `json:"base_image"`
+	To        PipelineImageStreamTagReference `json:"to,omitempty"`
 }
 
 type ImageStreamSourceType string

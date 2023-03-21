@@ -41,9 +41,9 @@ type promotionStep struct {
 
 func targetName(config api.PromotionConfiguration) string {
 	if len(config.Name) > 0 {
-		return fmt.Sprintf("%s/%s:${component}", api.ResolveMultiArchNamespaceFor(config.Namespace), config.Name)
+		return fmt.Sprintf("%s/%s:${component}", config.Namespace, config.Name)
 	}
-	return fmt.Sprintf("%s/${component}:%s", api.ResolveMultiArchNamespaceFor(config.Namespace), config.Tag)
+	return fmt.Sprintf("%s/${component}:%s", config.Namespace, config.Tag)
 }
 
 func (s *promotionStep) Inputs() (api.InputDefinition, error) {
@@ -157,7 +157,7 @@ func registryDomain(configuration *api.PromotionConfiguration) string {
 	return registry
 }
 
-func getImageMirrorTarget(tags map[string][]api.MultiArchImageStreamTagReference, pipeline *imagev1.ImageStream, registry string) (srcTargetMap map[string]string, namespaces sets.String) {
+func getImageMirrorTarget(tags map[string][]api.ImageStreamTagReference, pipeline *imagev1.ImageStream, registry string) (srcTargetMap map[string]string, namespaces sets.String) {
 	if pipeline == nil {
 		return nil, nil
 	}
@@ -172,7 +172,7 @@ func getImageMirrorTarget(tags map[string][]api.MultiArchImageStreamTagReference
 		dockerImageReference = getPublicImageReference(dockerImageReference, pipeline.Status.PublicDockerImageRepository)
 		for _, dst := range dsts {
 			imageMirror[fmt.Sprintf("%s/%s", registry, dst.ISTagName())] = dockerImageReference
-			namespaces.Insert(dst.ResolveNamespace())
+			namespaces.Insert(dst.Namespace)
 		}
 	}
 	if len(imageMirror) == 0 {
@@ -224,7 +224,7 @@ func getPromotionPod(imageMirrorTarget map[string]string, namespace string) *cor
 			Containers: []coreapi.Container{
 				{
 					Name:    "promotion",
-					Image:   fmt.Sprintf("%s/%s/4.12:cli", api.DomainForService(api.ServiceRegistry), api.ResolveMultiArchNamespaceFor("ocp")),
+					Image:   fmt.Sprintf("%s/%s/4.12:cli", api.DomainForService(api.ServiceRegistry), "ocp"),
 					Command: command,
 					Args:    args,
 					VolumeMounts: []coreapi.VolumeMount{
@@ -293,8 +293,8 @@ func toPromote(config api.PromotionConfiguration, images []api.ProjectDirectoryI
 }
 
 // PromotedTags returns the tags that are being promoted for the given ReleaseBuildConfiguration
-func PromotedTags(configuration *api.ReleaseBuildConfiguration) []api.MultiArchImageStreamTagReference {
-	var tags []api.MultiArchImageStreamTagReference
+func PromotedTags(configuration *api.ReleaseBuildConfiguration) []api.ImageStreamTagReference {
+	var tags []api.ImageStreamTagReference
 	mapping, _ := PromotedTagsWithRequiredImages(configuration)
 	for _, dest := range mapping {
 		tags = append(tags, dest...)
@@ -329,7 +329,7 @@ func WithCommitSha(commitSha string) PromotedTagsOption {
 // PromotedTagsWithRequiredImages returns the tags that are being promoted for the given ReleaseBuildConfiguration
 // accounting for the list of required images. Promoted tags are mapped by the source tag in the pipeline ImageStream
 // we will promote to the output.
-func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration, options ...PromotedTagsOption) (map[string][]api.MultiArchImageStreamTagReference, sets.String) {
+func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration, options ...PromotedTagsOption) (map[string][]api.ImageStreamTagReference, sets.String) {
 	opts := &PromotedTagsOptions{
 		requiredImages: sets.NewString(),
 	}
@@ -341,34 +341,28 @@ func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration
 		return nil, nil
 	}
 	tags, names := toPromote(*configuration.PromotionConfiguration, configuration.Images, opts.requiredImages)
-	promotedTags := map[string][]api.MultiArchImageStreamTagReference{}
+	promotedTags := map[string][]api.ImageStreamTagReference{}
 	for dst, src := range tags {
-		var tag api.MultiArchImageStreamTagReference
+		var tag api.ImageStreamTagReference
 		if configuration.PromotionConfiguration.Name != "" {
-			tag = api.MultiArchImageStreamTagReference{
-				ImageStreamTagReference: api.ImageStreamTagReference{
-					Namespace: configuration.PromotionConfiguration.Namespace,
-					Name:      configuration.PromotionConfiguration.Name,
-					Tag:       dst,
-				},
+			tag = api.ImageStreamTagReference{
+				Namespace: configuration.PromotionConfiguration.Namespace,
+				Name:      configuration.PromotionConfiguration.Name,
+				Tag:       dst,
 			}
 		} else { // promotion.Tag must be set
-			tag = api.MultiArchImageStreamTagReference{
-				ImageStreamTagReference: api.ImageStreamTagReference{
-					Namespace: configuration.PromotionConfiguration.Namespace,
-					Name:      dst,
-					Tag:       configuration.PromotionConfiguration.Tag,
-				},
+			tag = api.ImageStreamTagReference{
+				Namespace: configuration.PromotionConfiguration.Namespace,
+				Name:      dst,
+				Tag:       configuration.PromotionConfiguration.Tag,
 			}
 		}
 		promotedTags[src] = append(promotedTags[src], tag)
 		if configuration.PromotionConfiguration.TagByCommit && opts.commitSha != "" {
-			promotedTags[src] = append(promotedTags[src], api.MultiArchImageStreamTagReference{
-				ImageStreamTagReference: api.ImageStreamTagReference{
-					Namespace: configuration.PromotionConfiguration.Namespace,
-					Name:      dst,
-					Tag:       opts.commitSha,
-				},
+			promotedTags[src] = append(promotedTags[src], api.ImageStreamTagReference{
+				Namespace: configuration.PromotionConfiguration.Namespace,
+				Name:      dst,
+				Tag:       opts.commitSha,
 			})
 		}
 	}

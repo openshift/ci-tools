@@ -242,20 +242,16 @@ func TestIsBundleImage(t *testing.T) {
 }
 
 func TestInputImageTagStepConfiguration(t *testing.T) {
-	baseImage := MultiArchImageStreamTagReference{
-		ImageStreamTagReference{
-			Name:      "image",
-			Namespace: "ns",
-			Tag:       "tag",
-		},
+	baseImage := ImageStreamTagReference{
+		Name:      "image",
+		Namespace: "ns",
+		Tag:       "tag",
 	}
 
-	otherImage := MultiArchImageStreamTagReference{
-		ImageStreamTagReference{
-			Name:      "image2",
-			Namespace: "ns",
-			Tag:       "tag",
-		},
+	otherImage := ImageStreamTagReference{
+		Name:      "image2",
+		Namespace: "ns",
+		Tag:       "tag",
 	}
 
 	baseConfig := InputImageTagStepConfiguration{

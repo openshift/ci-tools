@@ -718,9 +718,7 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 					{
 						InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 							InputImage: api.InputImage{
-								BaseImage: api.MultiArchImageStreamTagReference{
-									ImageStreamTagReference: api.ImageStreamTagReference{Namespace: namespace, Name: streamName, Tag: tagName}},
-							},
+								BaseImage: api.ImageStreamTagReference{Namespace: namespace, Name: streamName, Tag: tagName}},
 						},
 					},
 				},

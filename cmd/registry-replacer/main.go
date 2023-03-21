@@ -833,7 +833,7 @@ func updateDockerfilesToMatchOCPBuildData(
 		if promotedTag.Namespace != "ocp" || promotedTag.Name != majorMinorVersion {
 			continue
 		}
-		promotedTags[promotedTag.Tag] = promotedTag.ImageStreamTagReference
+		promotedTags[promotedTag.Tag] = promotedTag
 	}
 	if len(promotedTags) == 0 {
 		return

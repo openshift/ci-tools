@@ -49,7 +49,7 @@ func addCloneRefs(cfg *api.SourceStepConfiguration) *api.SourceStepConfiguration
 }
 
 func TestStepConfigsForBuild(t *testing.T) {
-	noopResolver := func(root, cache *api.MultiArchImageStreamTagReference) (*api.MultiArchImageStreamTagReference, error) {
+	noopResolver := func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error) {
 		return root, nil
 	}
 	var testCases = []struct {
@@ -93,12 +93,10 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					InputImage: api.InputImage{
-						BaseImage: api.MultiArchImageStreamTagReference{
-							ImageStreamTagReference: api.ImageStreamTagReference{
-								Namespace: "root-ns",
-								Name:      "root-name",
-								Tag:       "manual",
-							},
+						BaseImage: api.ImageStreamTagReference{
+							Namespace: "root-ns",
+							Name:      "root-name",
+							Tag:       "manual",
 						},
 						To: api.PipelineImageStreamTagReferenceRoot,
 					},
@@ -129,7 +127,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
-			resolver: func(root, cache *api.MultiArchImageStreamTagReference) (*api.MultiArchImageStreamTagReference, error) {
+			resolver: func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error) {
 				return cache, nil
 			},
 			output: []api.StepConfiguration{{
@@ -140,12 +138,10 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					InputImage: api.InputImage{
-						BaseImage: api.MultiArchImageStreamTagReference{
-							ImageStreamTagReference: api.ImageStreamTagReference{
-								Namespace: "build-cache",
-								Name:      "org-repo",
-								Tag:       "branch",
-							},
+						BaseImage: api.ImageStreamTagReference{
+							Namespace: "build-cache",
+							Name:      "org-repo",
+							Tag:       "branch",
 						},
 						To: api.PipelineImageStreamTagReferenceRoot,
 					},
@@ -179,12 +175,10 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					InputImage: api.InputImage{
-						BaseImage: api.MultiArchImageStreamTagReference{
-							ImageStreamTagReference: api.ImageStreamTagReference{
-								Namespace: "stream-namespace",
-								Name:      "stream-name",
-								Tag:       "stream-tag",
-							},
+						BaseImage: api.ImageStreamTagReference{
+							Namespace: "stream-namespace",
+							Name:      "stream-name",
+							Tag:       "stream-tag",
 						},
 						To: api.PipelineImageStreamTagReferenceRoot,
 					},
@@ -238,7 +232,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
-			resolver: func(root, cache *api.MultiArchImageStreamTagReference) (*api.MultiArchImageStreamTagReference, error) {
+			resolver: func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error) {
 				return cache, nil
 			},
 			output: []api.StepConfiguration{{
@@ -249,12 +243,10 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					InputImage: api.InputImage{
-						BaseImage: api.MultiArchImageStreamTagReference{
-							ImageStreamTagReference: api.ImageStreamTagReference{
-								Namespace: "build-cache",
-								Name:      "org-repo",
-								Tag:       "branch",
-							},
+						BaseImage: api.ImageStreamTagReference{
+							Namespace: "build-cache",
+							Name:      "org-repo",
+							Tag:       "branch",
 						},
 						To: api.PipelineImageStreamTagReferenceRoot,
 					},
@@ -316,12 +308,10 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					InputImage: api.InputImage{
-						BaseImage: api.MultiArchImageStreamTagReference{
-							ImageStreamTagReference: api.ImageStreamTagReference{
-								Namespace: "root-ns",
-								Name:      "root-name",
-								Tag:       "manual",
-							},
+						BaseImage: api.ImageStreamTagReference{
+							Namespace: "root-ns",
+							Name:      "root-name",
+							Tag:       "manual",
 						},
 						To: api.PipelineImageStreamTagReferenceRoot,
 					},
@@ -367,12 +357,10 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					InputImage: api.InputImage{
-						BaseImage: api.MultiArchImageStreamTagReference{
-							ImageStreamTagReference: api.ImageStreamTagReference{
-								Namespace: "root-ns",
-								Name:      "root-name",
-								Tag:       "manual",
-							},
+						BaseImage: api.ImageStreamTagReference{
+							Namespace: "root-ns",
+							Name:      "root-name",
+							Tag:       "manual",
 						},
 						To: api.PipelineImageStreamTagReferenceRoot,
 					},
@@ -427,12 +415,10 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					InputImage: api.InputImage{
-						BaseImage: api.MultiArchImageStreamTagReference{
-							ImageStreamTagReference: api.ImageStreamTagReference{
-								Namespace: "root-ns",
-								Name:      "root-name",
-								Tag:       "manual",
-							},
+						BaseImage: api.ImageStreamTagReference{
+							Namespace: "root-ns",
+							Name:      "root-name",
+							Tag:       "manual",
 						},
 						To: api.PipelineImageStreamTagReferenceRoot,
 					},
@@ -482,12 +468,10 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					InputImage: api.InputImage{
-						BaseImage: api.MultiArchImageStreamTagReference{
-							ImageStreamTagReference: api.ImageStreamTagReference{
-								Namespace: "root-ns",
-								Name:      "root-name",
-								Tag:       "manual",
-							},
+						BaseImage: api.ImageStreamTagReference{
+							Namespace: "root-ns",
+							Name:      "root-name",
+							Tag:       "manual",
 						},
 						To: api.PipelineImageStreamTagReferenceRoot,
 					},
@@ -542,12 +526,10 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					InputImage: api.InputImage{
-						BaseImage: api.MultiArchImageStreamTagReference{
-							ImageStreamTagReference: api.ImageStreamTagReference{
-								Namespace: "root-ns",
-								Name:      "root-name",
-								Tag:       "manual",
-							},
+						BaseImage: api.ImageStreamTagReference{
+							Namespace: "root-ns",
+							Name:      "root-name",
+							Tag:       "manual",
 						},
 						To: api.PipelineImageStreamTagReferenceRoot,
 					},
@@ -556,13 +538,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					InputImage: api.InputImage{
-						BaseImage: api.MultiArchImageStreamTagReference{
-							ImageStreamTagReference: api.ImageStreamTagReference{
-								Namespace: "namespace",
-								Name:      "name",
-								Tag:       "tag",
-								As:        "name",
-							},
+						BaseImage: api.ImageStreamTagReference{
+							Namespace: "namespace",
+							Name:      "name",
+							Tag:       "tag",
+							As:        "name",
 						},
 						To: api.PipelineImageStreamTagReference("name"),
 					},
@@ -605,12 +585,10 @@ func TestStepConfigsForBuild(t *testing.T) {
 				{
 					InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 						InputImage: api.InputImage{
-							BaseImage: api.MultiArchImageStreamTagReference{
-								ImageStreamTagReference: api.ImageStreamTagReference{
-									Namespace: "root-ns",
-									Name:      "root-name",
-									Tag:       "manual",
-								},
+							BaseImage: api.ImageStreamTagReference{
+								Namespace: "root-ns",
+								Name:      "root-name",
+								Tag:       "manual",
 							},
 							To: api.PipelineImageStreamTagReferenceRoot,
 						},
@@ -626,13 +604,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 				{
 					InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 						InputImage: api.InputImage{
-							BaseImage: api.MultiArchImageStreamTagReference{
-								ImageStreamTagReference: api.ImageStreamTagReference{
-									Namespace: "test",
-									Name:      "other",
-									Tag:       "tag",
-									As:        "name",
-								},
+							BaseImage: api.ImageStreamTagReference{
+								Namespace: "test",
+								Name:      "other",
+								Tag:       "tag",
+								As:        "name",
 							},
 							To: api.PipelineImageStreamTagReference("name"),
 						},
@@ -684,12 +660,10 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					InputImage: api.InputImage{
-						BaseImage: api.MultiArchImageStreamTagReference{
-							ImageStreamTagReference: api.ImageStreamTagReference{
-								Namespace: "root-ns",
-								Name:      "root-name",
-								Tag:       "manual",
-							},
+						BaseImage: api.ImageStreamTagReference{
+							Namespace: "root-ns",
+							Name:      "root-name",
+							Tag:       "manual",
 						},
 						To: api.PipelineImageStreamTagReferenceRoot,
 					},
@@ -698,13 +672,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					InputImage: api.InputImage{
-						BaseImage: api.MultiArchImageStreamTagReference{
-							ImageStreamTagReference: api.ImageStreamTagReference{
-								Namespace: "namespace",
-								Name:      "name",
-								Tag:       "tag",
-								As:        "name",
-							},
+						BaseImage: api.ImageStreamTagReference{
+							Namespace: "namespace",
+							Name:      "name",
+							Tag:       "tag",
+							As:        "name",
 						},
 						To: api.PipelineImageStreamTagReference("name-without-rpms"),
 					},
@@ -765,12 +737,10 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					InputImage: api.InputImage{
-						BaseImage: api.MultiArchImageStreamTagReference{
-							ImageStreamTagReference: api.ImageStreamTagReference{
-								Namespace: "root-ns",
-								Name:      "root-name",
-								Tag:       "manual",
-							},
+						BaseImage: api.ImageStreamTagReference{
+							Namespace: "root-ns",
+							Name:      "root-name",
+							Tag:       "manual",
 						},
 						To: api.PipelineImageStreamTagReferenceRoot,
 					},
@@ -847,12 +817,10 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					InputImage: api.InputImage{
-						BaseImage: api.MultiArchImageStreamTagReference{
-							ImageStreamTagReference: api.ImageStreamTagReference{
-								Namespace: "root-ns",
-								Name:      "root-name",
-								Tag:       "manual",
-							},
+						BaseImage: api.ImageStreamTagReference{
+							Namespace: "root-ns",
+							Name:      "root-name",
+							Tag:       "manual",
 						},
 						To: api.PipelineImageStreamTagReferenceRoot,
 					},
@@ -912,12 +880,10 @@ func TestStepConfigsForBuild(t *testing.T) {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 
 					InputImage: api.InputImage{
-						BaseImage: api.MultiArchImageStreamTagReference{
-							ImageStreamTagReference: api.ImageStreamTagReference{
-								Namespace: "root-ns",
-								Name:      "root-name",
-								Tag:       "manual",
-							},
+						BaseImage: api.ImageStreamTagReference{
+							Namespace: "root-ns",
+							Name:      "root-name",
+							Tag:       "manual",
 						},
 						To: api.PipelineImageStreamTagReferenceRoot,
 					},

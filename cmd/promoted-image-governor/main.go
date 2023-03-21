@@ -426,9 +426,9 @@ func main() {
 	var ignoredCommitTags []*regexp.Regexp
 	if err := config.OperateOnCIOperatorConfigDir(abs, func(cfg *api.ReleaseBuildConfiguration, metadata *config.Info) error {
 		for _, isTagRef := range release.PromotedTags(cfg) {
-			promotedTags = append(promotedTags, isTagRef.ImageStreamTagReference)
-			if _, ok := opts.explains[isTagRef.ImageStreamTagReference]; ok {
-				opts.explains[isTagRef.ImageStreamTagReference] = cfg.Metadata.AsString()
+			promotedTags = append(promotedTags, isTagRef)
+			if _, ok := opts.explains[isTagRef]; ok {
+				opts.explains[isTagRef] = cfg.Metadata.AsString()
 			}
 			if cfg.PromotionConfiguration.TagByCommit {
 				ignoreRegex, err := regexp.Compile(fmt.Sprintf("%s/%s:[0-9a-f]{5,40}", isTagRef.Namespace, isTagRef.Name))

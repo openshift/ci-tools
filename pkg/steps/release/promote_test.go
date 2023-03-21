@@ -147,7 +147,7 @@ func TestPromotedTags(t *testing.T) {
 	var testCases = []struct {
 		name     string
 		input    *api.ReleaseBuildConfiguration
-		expected []api.MultiArchImageStreamTagReference
+		expected []api.ImageStreamTagReference
 	}{
 		{
 			name:     "no promotion, no output",
@@ -165,8 +165,8 @@ func TestPromotedTags(t *testing.T) {
 					Name:      "fred",
 				},
 			},
-			expected: []api.MultiArchImageStreamTagReference{
-				{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "roger", Name: "fred", Tag: "foo"}},
+			expected: []api.ImageStreamTagReference{
+				{Namespace: "roger", Name: "fred", Tag: "foo"},
 			},
 		},
 		{
@@ -194,8 +194,8 @@ func TestPromotedTags(t *testing.T) {
 					Tag:       "fred",
 				},
 			},
-			expected: []api.MultiArchImageStreamTagReference{
-				{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "roger", Name: "foo", Tag: "fred"}},
+			expected: []api.ImageStreamTagReference{
+				{Namespace: "roger", Name: "foo", Tag: "fred"},
 			},
 		},
 		{
@@ -212,9 +212,9 @@ func TestPromotedTags(t *testing.T) {
 					},
 				},
 			},
-			expected: []api.MultiArchImageStreamTagReference{
-				{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "roger", Name: "foo", Tag: "fred"}},
-				{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "roger", Name: "output", Tag: "fred"}},
+			expected: []api.ImageStreamTagReference{
+				{Namespace: "roger", Name: "foo", Tag: "fred"},
+				{Namespace: "roger", Name: "output", Tag: "fred"},
 			},
 		},
 		{
@@ -246,8 +246,8 @@ func TestPromotedTags(t *testing.T) {
 					Branch: "branch",
 				},
 			},
-			expected: []api.MultiArchImageStreamTagReference{
-				{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "build-cache", Name: "org-repo", Tag: "branch"}},
+			expected: []api.ImageStreamTagReference{
+				{Namespace: "build-cache", Name: "org-repo", Tag: "branch"},
 			},
 		},
 		{
@@ -268,10 +268,10 @@ func TestPromotedTags(t *testing.T) {
 					Branch: "release-4.6",
 				},
 			},
-			expected: []api.MultiArchImageStreamTagReference{
-				{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "ocp", Name: "4.6", Tag: "base"}},
-				{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "ocp", Name: "4.6", Tag: "base-7"}},
-				{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "ocp", Name: "4.6", Tag: "base-8"}},
+			expected: []api.ImageStreamTagReference{
+				{Namespace: "ocp", Name: "4.6", Tag: "base"},
+				{Namespace: "ocp", Name: "4.6", Tag: "base-7"},
+				{Namespace: "ocp", Name: "4.6", Tag: "base-8"},
 			},
 		},
 	}
@@ -290,7 +290,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 		name     string
 		input    *api.ReleaseBuildConfiguration
 		options  []PromotedTagsOption
-		expected map[string][]api.MultiArchImageStreamTagReference
+		expected map[string][]api.ImageStreamTagReference
 		names    sets.String
 	}{
 		{
@@ -308,9 +308,9 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					Name:      "fred",
 				},
 			},
-			expected: map[string][]api.MultiArchImageStreamTagReference{
+			expected: map[string][]api.ImageStreamTagReference{
 				"foo": {
-					{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "roger", Name: "fred", Tag: "foo"}},
+					{Namespace: "roger", Name: "fred", Tag: "foo"},
 				},
 			},
 		},
@@ -326,9 +326,9 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					Name:      "fred",
 				},
 			},
-			expected: map[string][]api.MultiArchImageStreamTagReference{
+			expected: map[string][]api.ImageStreamTagReference{
 				"foo": {
-					{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "roger", Name: "fred", Tag: "foo"}},
+					{Namespace: "roger", Name: "fred", Tag: "foo"},
 				},
 			},
 		},
@@ -344,9 +344,9 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 				},
 			},
 			options: []PromotedTagsOption{WithRequiredImages(sets.NewString("foo"))},
-			expected: map[string][]api.MultiArchImageStreamTagReference{
+			expected: map[string][]api.ImageStreamTagReference{
 				"foo": {
-					{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "roger", Name: "fred", Tag: "foo"}},
+					{Namespace: "roger", Name: "fred", Tag: "foo"},
 				},
 			},
 		},
@@ -375,9 +375,9 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					Tag:       "fred",
 				},
 			},
-			expected: map[string][]api.MultiArchImageStreamTagReference{
+			expected: map[string][]api.ImageStreamTagReference{
 				"foo": {
-					{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "roger", Name: "foo", Tag: "fred"}},
+					{Namespace: "roger", Name: "foo", Tag: "fred"},
 				},
 			},
 		},
@@ -394,10 +394,10 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 				},
 			},
 			options: []PromotedTagsOption{WithCommitSha("sha")},
-			expected: map[string][]api.MultiArchImageStreamTagReference{
+			expected: map[string][]api.ImageStreamTagReference{
 				"foo": {
-					{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "roger", Name: "foo", Tag: "fred"}},
-					{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "roger", Name: "foo", Tag: "sha"}},
+					{Namespace: "roger", Name: "foo", Tag: "fred"},
+					{Namespace: "roger", Name: "foo", Tag: "sha"},
 				},
 			},
 		},
@@ -415,12 +415,12 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					},
 				},
 			},
-			expected: map[string][]api.MultiArchImageStreamTagReference{
+			expected: map[string][]api.ImageStreamTagReference{
 				"foo": {
-					{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "roger", Name: "foo", Tag: "fred"}},
+					{Namespace: "roger", Name: "foo", Tag: "fred"},
 				},
 				"src": {
-					{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "roger", Name: "output", Tag: "fred"}},
+					{Namespace: "roger", Name: "output", Tag: "fred"},
 				},
 			},
 		},
@@ -436,7 +436,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					ExcludedImages: []string{"foo"},
 				},
 			},
-			expected: map[string][]api.MultiArchImageStreamTagReference{},
+			expected: map[string][]api.ImageStreamTagReference{},
 		},
 		{
 			name: "promotion set and binaries built, means binaries promoted",
@@ -453,8 +453,8 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					Branch: "branch",
 				},
 			},
-			expected: map[string][]api.MultiArchImageStreamTagReference{
-				"bin": {{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "build-cache", Name: "org-repo", Tag: "branch"}}},
+			expected: map[string][]api.ImageStreamTagReference{
+				"bin": {{Namespace: "build-cache", Name: "org-repo", Tag: "branch"}},
 			},
 		},
 		{
@@ -473,7 +473,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					Branch: "branch",
 				},
 			},
-			expected: map[string][]api.MultiArchImageStreamTagReference{},
+			expected: map[string][]api.ImageStreamTagReference{},
 		},
 		{
 			name: "promotion with AdditionalImages: many to one",
@@ -493,13 +493,13 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					Branch: "release-4.6",
 				},
 			},
-			expected: map[string][]api.MultiArchImageStreamTagReference{
+			expected: map[string][]api.ImageStreamTagReference{
 				"base-7": {
-					{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "ocp", Name: "4.6", Tag: "base-7"}},
+					{Namespace: "ocp", Name: "4.6", Tag: "base-7"},
 				},
 				"base-8": {
-					{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "ocp", Name: "4.6", Tag: "base"}},
-					{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "ocp", Name: "4.6", Tag: "base-8"}},
+					{Namespace: "ocp", Name: "4.6", Tag: "base"},
+					{Namespace: "ocp", Name: "4.6", Tag: "base-8"},
 				},
 			},
 		},
@@ -518,7 +518,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 func TestBuildCacheFor(t *testing.T) {
 	var testCases = []struct {
 		input  api.Metadata
-		output api.MultiArchImageStreamTagReference
+		output api.ImageStreamTagReference
 	}{
 		{
 			input: api.Metadata{
@@ -526,12 +526,10 @@ func TestBuildCacheFor(t *testing.T) {
 				Repo:   "repo",
 				Branch: "branch",
 			},
-			output: api.MultiArchImageStreamTagReference{
-				ImageStreamTagReference: api.ImageStreamTagReference{
-					Namespace: "build-cache",
-					Name:      "org-repo",
-					Tag:       "branch",
-				},
+			output: api.ImageStreamTagReference{
+				Namespace: "build-cache",
+				Name:      "org-repo",
+				Tag:       "branch",
 			},
 		},
 		{
@@ -541,12 +539,10 @@ func TestBuildCacheFor(t *testing.T) {
 				Branch:  "branch",
 				Variant: "variant",
 			},
-			output: api.MultiArchImageStreamTagReference{
-				ImageStreamTagReference: api.ImageStreamTagReference{
-					Namespace: "build-cache",
-					Name:      "org-repo",
-					Tag:       "branch-variant",
-				},
+			output: api.ImageStreamTagReference{
+				Namespace: "build-cache",
+				Name:      "org-repo",
+				Tag:       "branch-variant",
 			},
 		},
 	}
@@ -584,7 +580,7 @@ func TestGetPromotionPod(t *testing.T) {
 func TestGetImageMirror(t *testing.T) {
 	var testCases = []struct {
 		name     string
-		tags     map[string][]api.MultiArchImageStreamTagReference
+		tags     map[string][]api.ImageStreamTagReference
 		pipeline *imageapi.ImageStream
 		expected map[string]string
 	}{
@@ -597,12 +593,12 @@ func TestGetImageMirror(t *testing.T) {
 		},
 		{
 			name: "basic case",
-			tags: map[string][]api.MultiArchImageStreamTagReference{
+			tags: map[string][]api.ImageStreamTagReference{
 				"b": {
-					{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "ci", Name: "a", Tag: "latest"}},
+					{Namespace: "ci", Name: "a", Tag: "latest"},
 				},
 				"d": {
-					{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "ci", Name: "c", Tag: "latest"}},
+					{Namespace: "ci", Name: "c", Tag: "latest"},
 				},
 			},
 			pipeline: &imageapi.ImageStream{
@@ -634,13 +630,13 @@ func TestGetImageMirror(t *testing.T) {
 		},
 		{
 			name: "image promoted to multiple names",
-			tags: map[string][]api.MultiArchImageStreamTagReference{
+			tags: map[string][]api.ImageStreamTagReference{
 				"b": {
-					{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "ci", Name: "a", Tag: "promoted"}},
-					{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "ci", Name: "a", Tag: "also-promoted"}},
+					{Namespace: "ci", Name: "a", Tag: "promoted"},
+					{Namespace: "ci", Name: "a", Tag: "also-promoted"},
 				},
 				"d": {
-					{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "ci", Name: "c", Tag: "latest"}},
+					{Namespace: "ci", Name: "c", Tag: "latest"},
 				},
 			},
 			pipeline: &imageapi.ImageStream{

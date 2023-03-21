@@ -69,7 +69,7 @@ func TestInputImageStreamTagsFromResolvedConfig(cfg api.ReleaseBuildConfiguratio
 			insert(*cfg.BuildRootImage.ImageStreamTagReference, result)
 		}
 		if cfg.BuildRootImage.UseBuildCache {
-			insert(api.BuildCacheFor(cfg.Metadata).ImageStreamTagReference, result)
+			insert(api.BuildCacheFor(cfg.Metadata), result)
 		}
 	}
 
@@ -85,7 +85,7 @@ func TestInputImageStreamTagsFromResolvedConfig(cfg api.ReleaseBuildConfiguratio
 
 	for _, rawStep := range cfg.RawSteps {
 		if rawStep.InputImageTagStepConfiguration != nil {
-			insert(rawStep.InputImageTagStepConfiguration.BaseImage.ImageStreamTagReference, result)
+			insert(rawStep.InputImageTagStepConfiguration.BaseImage, result)
 		}
 		if rawStep.SourceStepConfiguration != nil {
 			insert(rawStep.SourceStepConfiguration.ClonerefsImage, result)

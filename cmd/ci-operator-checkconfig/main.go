@@ -131,7 +131,7 @@ func (o *options) validateConfiguration(
 		return err
 	}
 	for _, tag := range release.PromotedTags(configuration) {
-		seenCh <- promotedTag{tag.ImageStreamTagReference, repoInfo}
+		seenCh <- promotedTag{tag, repoInfo}
 	}
 	if configuration.PromotionConfiguration != nil && configuration.PromotionConfiguration.RegistryOverride != "" {
 		return errors.New("setting promotion.registry_override is not allowed")

@@ -159,3 +159,16 @@ func (c *CiOperatorCommand) VerboseOutputContains(t *T, name string, fragments .
 		}
 	}
 }
+
+func (c *CiOperatorCommand) VerboseOutputDoesNotContain(t *T, name string, fragments ...string) {
+	verboseOutput, err := ioutil.ReadFile(filepath.Join(c.artifactDir, "ci-operator.log"))
+	if err != nil {
+		t.Errorf("could not open ci-operator log for checking output: %v", err)
+		return
+	}
+	for _, item := range fragments {
+		if bytes.Contains(verboseOutput, []byte(item)) {
+			t.Errorf("%s: found line in output\nline: %s\noutput:\n%v", name, item, string(verboseOutput))
+		}
+	}
+}

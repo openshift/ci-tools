@@ -291,16 +291,23 @@ func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceL
 	mutateResources(pod.Spec.Containers)
 }
 
+const (
+	WorkloadTypeProwjob   = "prowjob"
+	WorkloadTypeBuild     = "build"
+	WorkloadTypeStep      = "step"
+	WorkloadTypeUndefined = "undefined"
+)
+
 // determineWorkloadType returns the workload type to be used in metrics
 func determineWorkloadType(annotations, labels map[string]string) string {
 	if _, isBuildPod := annotations[buildv1.BuildLabel]; isBuildPod {
-		return "build"
+		return WorkloadTypeBuild
 	}
 	if _, isProwjob := labels["prow.k8s.io/job"]; isProwjob {
-		return "prowjob"
+		return WorkloadTypeProwjob
 	}
 	if _, isStep := labels[steps.LabelMetadataStep]; isStep {
-		return "step"
+		return WorkloadTypeStep
 	}
-	return "undefined"
+	return WorkloadTypeUndefined
 }

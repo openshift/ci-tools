@@ -1017,22 +1017,22 @@ func TestDetermineWorkloadType(t *testing.T) {
 			name:        "no labels or annotations",
 			annotations: map[string]string{},
 			labels:      map[string]string{},
-			expected:    "undefined",
+			expected:    WorkloadTypeUndefined,
 		},
 		{
 			name:        "build pod",
 			annotations: map[string]string{buildv1.BuildLabel: "buildName"},
-			expected:    "build",
+			expected:    WorkloadTypeBuild,
 		},
 		{
 			name:     "prowjob",
 			labels:   map[string]string{"prow.k8s.io/job": "jobName"},
-			expected: "prowjob",
+			expected: WorkloadTypeProwjob,
 		},
 		{
 			name:     "step",
 			labels:   map[string]string{steps.LabelMetadataStep: "e2e"},
-			expected: "step",
+			expected: WorkloadTypeStep,
 		},
 	}
 

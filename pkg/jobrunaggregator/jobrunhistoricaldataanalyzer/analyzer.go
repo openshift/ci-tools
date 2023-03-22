@@ -23,22 +23,37 @@ const (
 )
 
 type JobRunHistoricalDataAnalyzerOptions struct {
-	ciDataClient jobrunaggregatorlib.CIDataClient
-	outputFile   string
-	newFile      string
-	currentFile  string
-	dataType     string
-	leeway       float64
+	ciDataClient    jobrunaggregatorlib.CIDataClient
+	outputFile      string
+	newFile         string
+	currentFile     string
+	dataType        string
+	leeway          float64
+	targetRelease   string
+	previousRelease string
 }
 
 func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
+
 	var newHistoricalData []jobrunaggregatorapi.HistoricalData
 
-	// We check what the current active release version is
-	currentRelease, previousRelease, err := fetchCurrentRelease()
-	if err != nil {
-		return err
+	// targetRelease will either be what the caller specified on the CLI, or the most recent release.
+	// previousRelease will be the one prior to targetRelease.
+	var targetRelease, previousRelease string
+	var err error
+	if o.targetRelease != "" {
+		// If we were given a target release, use that:
+		targetRelease = o.targetRelease
+		// CLI validates that previous release is set if target release is:
+		previousRelease = o.previousRelease
+	} else {
+		// We check what the current active release version is
+		targetRelease, previousRelease, err = fetchCurrentRelease()
+		if err != nil {
+			return err
+		}
 	}
+	fmt.Printf("Using target release: %s, previous release: %s\n", targetRelease, previousRelease)
 
 	currentHistoricalData, err := readHistoricalDataFile(o.currentFile, o.dataType)
 	if err != nil {
@@ -83,7 +98,7 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 	if newReleaseUpdate {
 		newReleaseDataCount := 0
 		for _, data := range newDataMap {
-			if data.GetJobData().Release == currentRelease && data.GetJobRuns() > newReleaseJobRunsThreshold {
+			if data.GetJobData().Release == targetRelease && data.GetJobRuns() > newReleaseJobRunsThreshold {
 				newReleaseDataCount++
 			}
 		}
@@ -92,15 +107,15 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 			fmt.Printf("We are in release transition from %s to %s. We continue to use old release data set for the following reason:\n"+
 				"- The number of new release data set need to reach at least %d percent of the number of the old release data set.\n"+
 				"- Currently we have only %d new release data set and the required number is %d based on old release data set count of %d\n",
-				previousRelease, currentRelease, int(releaseTransitionDataMinThresholdRatio*100), newReleaseDataCount,
+				previousRelease, targetRelease, int(releaseTransitionDataMinThresholdRatio*100), newReleaseDataCount,
 				int(float64(len(currentDataMap))*releaseTransitionDataMinThresholdRatio), len(currentDataMap))
 			newReleaseUpdate = false
-			currentRelease = previousRelease
+			targetRelease = previousRelease
 		} else {
 			msg := fmt.Sprintf("We are transitioning to use data set from new release %s for the following reason:\n"+
 				"- The number of new release data set has reached at least %d percent of the number of the old release data set.\n"+
 				"- Currently we have %d new release data set and the required number is %d based on old release data set count of %d\n",
-				currentRelease, int(releaseTransitionDataMinThresholdRatio*100), newReleaseDataCount,
+				targetRelease, int(releaseTransitionDataMinThresholdRatio*100), newReleaseDataCount,
 				int(float64(len(currentDataMap))*releaseTransitionDataMinThresholdRatio), len(currentDataMap))
 			if err := requireReviewFile(msg); err != nil {
 				return err
@@ -108,7 +123,7 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 		}
 	}
 
-	result := o.compareAndUpdate(newDataMap, currentDataMap, currentRelease, newReleaseUpdate)
+	result := o.compareAndUpdate(newDataMap, currentDataMap, targetRelease, newReleaseUpdate)
 
 	err = o.renderResultFiles(result)
 	if err != nil {

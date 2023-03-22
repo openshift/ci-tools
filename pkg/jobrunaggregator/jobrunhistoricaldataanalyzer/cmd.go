@@ -17,11 +17,13 @@ type JobRunHistoricalDataAnalyzerFlags struct {
 	DataCoordinates *jobrunaggregatorlib.BigQueryDataCoordinates
 	Authentication  *jobrunaggregatorlib.GoogleAuthenticationFlags
 
-	NewFile     string
-	CurrentFile string
-	DataType    string
-	Leeway      float64
-	OutputFile  string
+	NewFile         string
+	CurrentFile     string
+	DataType        string
+	Leeway          float64
+	OutputFile      string
+	TargetRelease   string
+	PreviousRelease string
 }
 
 var supportedDataTypes = sets.NewString("alerts", "disruptions")
@@ -41,6 +43,8 @@ func (f *JobRunHistoricalDataAnalyzerFlags) BindFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&f.NewFile, "new", f.NewFile, "local file with the new query results to compare against")
 	fs.StringVar(&f.CurrentFile, "current", f.CurrentFile, "local file with the current query results")
 	fs.StringVar(&f.OutputFile, "output-file", f.OutputFile, "output file for the resulting comparison results")
+	fs.StringVar(&f.TargetRelease, "target-release", f.TargetRelease, "override for release to generate data for, omit to use the most recent release. Be sure to checkout the correct branch for --current.")
+	fs.StringVar(&f.PreviousRelease, "previous-release", f.PreviousRelease, "override for previous release to generate data when we do not have enough for target release. Must be specified if using --target-release.")
 	fs.Float64Var(&f.Leeway, "leeway", f.Leeway, "percent leeway threshold for increased time diff")
 }
 
@@ -64,6 +68,10 @@ func (f *JobRunHistoricalDataAnalyzerFlags) Validate() error {
 		return fmt.Errorf("leeway percent must be above 0")
 	}
 
+	if f.TargetRelease != "" && f.PreviousRelease == "" {
+		return fmt.Errorf("must specify --previous-release with --target-release")
+	}
+
 	return nil
 }
 
@@ -82,12 +90,14 @@ func (f *JobRunHistoricalDataAnalyzerFlags) ToOptions(ctx context.Context) (*Job
 	}
 
 	return &JobRunHistoricalDataAnalyzerOptions{
-		ciDataClient: ciDataClient,
-		newFile:      f.NewFile,
-		currentFile:  f.CurrentFile,
-		leeway:       f.Leeway,
-		dataType:     f.DataType,
-		outputFile:   f.OutputFile,
+		ciDataClient:    ciDataClient,
+		newFile:         f.NewFile,
+		currentFile:     f.CurrentFile,
+		leeway:          f.Leeway,
+		dataType:        f.DataType,
+		outputFile:      f.OutputFile,
+		targetRelease:   f.TargetRelease,
+		previousRelease: f.PreviousRelease,
 	}, nil
 }
 

@@ -197,7 +197,7 @@ func mutatePodLabels(pod *corev1.Pod, build *buildv1.Build) {
 }
 
 // useOursIfLarger updates fields in theirs when ours are larger
-func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, podName, workloadType string, reporter results.PodScalerReporter, logger *logrus.Entry) {
+func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, workloadName, workloadType string, reporter results.PodScalerReporter, logger *logrus.Entry) {
 	for _, item := range []*corev1.ResourceRequirements{allOfOurs, allOfTheirs} {
 		if item.Requests == nil {
 			item.Requests = corev1.ResourceList{}
@@ -220,7 +220,7 @@ func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, podNam
 				logger.Debugf("determined %s %s of %s to be larger than %s configured", field, pair.resource, our.String(), their.String())
 				(*pair.theirs)[field] = our
 				if their.Value() > 0 && our.Value() > (their.Value()*10) {
-					reporter.ReportResourceConfigurationWarning(podName, workloadType, their.String(), our.String(), field.String())
+					reporter.ReportResourceConfigurationWarning(workloadName, workloadType, their.String(), our.String(), field.String())
 				}
 			}
 		}
@@ -279,7 +279,9 @@ func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceL
 			resources, recommendationExists := server.recommendedRequestFor(meta)
 			if recommendationExists {
 				logger.Debugf("recommendation exists for: %s", containers[i].Name)
-				useOursIfLarger(&resources, &containers[i].Resources, fmt.Sprintf("%s-%s", pod.Name, containers[i].Name), determineWorkloadType(pod.Annotations, pod.Labels), reporter, logger)
+				workloadType := determineWorkloadType(pod.Annotations, pod.Labels)
+				workloadName := determineWorkloadName(pod.Name, containers[i].Name, workloadType, pod.Labels)
+				useOursIfLarger(&resources, &containers[i].Resources, workloadName, workloadType, reporter, logger)
 				if mutateResourceLimits {
 					reconcileLimits(&containers[i].Resources)
 				}
@@ -291,16 +293,31 @@ func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceL
 	mutateResources(pod.Spec.Containers)
 }
 
+const (
+	WorkloadTypeProwjob   = "prowjob"
+	WorkloadTypeBuild     = "build"
+	WorkloadTypeStep      = "step"
+	WorkloadTypeUndefined = "undefined"
+)
+
 // determineWorkloadType returns the workload type to be used in metrics
 func determineWorkloadType(annotations, labels map[string]string) string {
 	if _, isBuildPod := annotations[buildv1.BuildLabel]; isBuildPod {
-		return "build"
+		return WorkloadTypeBuild
 	}
 	if _, isProwjob := labels["prow.k8s.io/job"]; isProwjob {
-		return "prowjob"
+		return WorkloadTypeProwjob
 	}
 	if _, isStep := labels[steps.LabelMetadataStep]; isStep {
-		return "step"
+		return WorkloadTypeStep
 	}
-	return "undefined"
+	return WorkloadTypeUndefined
+}
+
+// determineWorkloadName returns the workload name we will see in the metrics
+func determineWorkloadName(podName, containerName, workloadType string, labels map[string]string) string {
+	if workloadType == WorkloadTypeProwjob {
+		return labels["prow.k8s.io/job"]
+	}
+	return fmt.Sprintf("%s-%s", podName, containerName)
 }

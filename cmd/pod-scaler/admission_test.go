@@ -1017,28 +1017,70 @@ func TestDetermineWorkloadType(t *testing.T) {
 			name:        "no labels or annotations",
 			annotations: map[string]string{},
 			labels:      map[string]string{},
-			expected:    "undefined",
+			expected:    WorkloadTypeUndefined,
 		},
 		{
 			name:        "build pod",
 			annotations: map[string]string{buildv1.BuildLabel: "buildName"},
-			expected:    "build",
+			expected:    WorkloadTypeBuild,
 		},
 		{
 			name:     "prowjob",
 			labels:   map[string]string{"prow.k8s.io/job": "jobName"},
-			expected: "prowjob",
+			expected: WorkloadTypeProwjob,
 		},
 		{
 			name:     "step",
 			labels:   map[string]string{steps.LabelMetadataStep: "e2e"},
-			expected: "step",
+			expected: WorkloadTypeStep,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			if diff := cmp.Diff(determineWorkloadType(tc.annotations, tc.labels), tc.expected); diff != "" {
+				t.Errorf("result differs from expected output, diff:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestDetermineWorkloadName(t *testing.T) {
+	testCases := []struct {
+		name         string
+		workloadType string
+		labels       map[string]string
+		expected     string
+	}{
+		{
+			name:         "workload is prowjob",
+			workloadType: WorkloadTypeProwjob,
+			labels:       map[string]string{"prow.k8s.io/job": "prowjobName"},
+			expected:     "prowjobName",
+		},
+		{
+			name:         "workload is a step",
+			workloadType: WorkloadTypeStep,
+			labels:       nil,
+			expected:     "pod-container",
+		},
+		{
+			name:         "workload is a build",
+			workloadType: WorkloadTypeBuild,
+			labels:       nil,
+			expected:     "pod-container",
+		},
+		{
+			name:         "workload type is undefined",
+			workloadType: WorkloadTypeUndefined,
+			labels:       nil,
+			expected:     "pod-container",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if diff := cmp.Diff(determineWorkloadName("pod", "container", tc.workloadType, tc.labels), tc.expected); diff != "" {
 				t.Errorf("result differs from expected output, diff:\n%s", diff)
 			}
 		})

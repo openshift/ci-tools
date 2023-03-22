@@ -1134,6 +1134,7 @@ const (
 	ClusterProfileAWSOSDMSP             ClusterProfile = "aws-osd-msp"
 	ClusterProfileAWSOutpost            ClusterProfile = "aws-outpost"
 	ClusterProfileAWSINTEROPQE          ClusterProfile = "aws-interop-qe"
+	ClusterProfileAWSLocalZones         ClusterProfile = "aws-local-zones"
 	ClusterProfileAlibabaCloud          ClusterProfile = "alibabacloud"
 	ClusterProfileAlibabaCloudQE        ClusterProfile = "alibabacloud-qe"
 	ClusterProfileAlibabaCloudCNQE      ClusterProfile = "alibabacloud-cn-qe"
@@ -1226,6 +1227,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSSC2SQE,
 		ClusterProfileAWSOutpost,
 		ClusterProfileAWSINTEROPQE,
+		ClusterProfileAWSLocalZones,
 		ClusterProfileAlibabaCloud,
 		ClusterProfileAlibabaCloudQE,
 		ClusterProfileAlibabaCloudCNQE,
@@ -1311,7 +1313,8 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWS1QE,
 		ClusterProfileAWSSdQE,
 		ClusterProfileAWSVirtualization,
-		ClusterProfileFleetManagerQE:
+		ClusterProfileFleetManagerQE,
+		ClusterProfileAWSLocalZones:
 		return string(CloudAWS)
 	case
 		ClusterProfileAlibabaCloud,
@@ -1467,6 +1470,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-interop-qe-quota-slice"
 	case ClusterProfileAWSVirtualization:
 		return "aws-virtualization-quota-slice"
+	case ClusterProfileAWSLocalZones:
+		return "aws-local-zones-quota-slice"
 	case ClusterProfileAlibabaCloud:
 		return "alibabacloud-quota-slice"
 	case ClusterProfileAlibabaCloudQE:
@@ -1615,7 +1620,8 @@ func (p ClusterProfile) ConfigMap() string {
 		ClusterProfileGCPLoggingCRIO,
 		ClusterProfileGCPLoggingJSONFile,
 		ClusterProfileGCPLoggingJournald,
-		ClusterProfileOvirt:
+		ClusterProfileOvirt,
+		ClusterProfileAWSLocalZones:
 		return fmt.Sprintf("cluster-profile-%s", p)
 	default:
 		return ""

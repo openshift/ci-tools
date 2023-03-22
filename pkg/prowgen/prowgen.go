@@ -128,14 +128,17 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 				containsUnnamedBundle = true
 				continue
 			}
-			indexName := api.IndexName(bundle.As)
-			jobBaseGen := newJobBaseBuilder().TestName(indexName)
+			testName := api.IndexName(bundle.As)
+			if bundle.SkipBuildingIndex {
+				testName = fmt.Sprintf("ci-bundle-%s", bundle.As)
+			}
+			jobBaseGen := newJobBaseBuilder().TestName(testName)
 			if bundle.SkipBuildingIndex {
 				jobBaseGen.PodSpec.Add(Targets(bundle.As))
 			} else {
-				jobBaseGen.PodSpec.Add(Targets(indexName))
+				jobBaseGen.PodSpec.Add(Targets(testName))
 			}
-			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, indexName, info))
+			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, testName, info))
 		}
 		if containsUnnamedBundle {
 			name := string(api.PipelineImageStreamTagReferenceIndexImage)

@@ -5,14 +5,14 @@ presubmits:
     branches:
     - ^branch$
     - ^branch-
-    context: ci/prow/ci-index-my-bundle
+    context: ci/prow/ci-bundle-my-bundle
     decorate: true
     decoration_config:
       skip_cloning: true
     labels:
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-organization-repository-branch-ci-index-my-bundle
-    rerun_command: /test ci-index-my-bundle
+    name: pull-ci-organization-repository-branch-ci-bundle-my-bundle
+    rerun_command: /test ci-bundle-my-bundle
     spec:
       containers:
       - args:
@@ -46,4 +46,4 @@ presubmits:
       - name: result-aggregator
         secret:
           secretName: result-aggregator
-    trigger: (?m)^/test( | .* )ci-index-my-bundle,?($|\s.*)
+    trigger: (?m)^/test( | .* )ci-bundle-my-bundle,?($|\s.*)

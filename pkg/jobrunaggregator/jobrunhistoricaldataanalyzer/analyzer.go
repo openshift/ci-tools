@@ -6,12 +6,9 @@ import (
 	"fmt"
 	"html/template"
 	"os"
-	"strconv"
-	"strings"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -26,13 +23,14 @@ const (
 )
 
 type JobRunHistoricalDataAnalyzerOptions struct {
-	ciDataClient  jobrunaggregatorlib.CIDataClient
-	outputFile    string
-	newFile       string
-	currentFile   string
-	dataType      string
-	leeway        float64
-	targetRelease string
+	ciDataClient    jobrunaggregatorlib.CIDataClient
+	outputFile      string
+	newFile         string
+	currentFile     string
+	dataType        string
+	leeway          float64
+	targetRelease   string
+	previousRelease string
 }
 
 func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
@@ -46,13 +44,8 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 	if o.targetRelease != "" {
 		// If we were given a target release, use that:
 		targetRelease = o.targetRelease
-		tokens := strings.Split(o.targetRelease, ".")
-		minor, err := strconv.Atoi(tokens[1])
-		prevMinor := minor - 1
-		if err != nil {
-			return errors.Wrap(err, "error calculating previous minor version for "+targetRelease)
-		}
-		previousRelease = fmt.Sprintf("%s.%d", tokens[0], prevMinor)
+		// CLI validates that previous release is set if target release is:
+		previousRelease = o.previousRelease
 	} else {
 		// We check what the current active release version is
 		targetRelease, previousRelease, err = fetchCurrentRelease()
@@ -60,7 +53,7 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 			return err
 		}
 	}
-	fmt.Printf("Using target release: %s, prior release: %s\n", targetRelease, previousRelease)
+	fmt.Printf("Using target release: %s, previous release: %s\n", targetRelease, previousRelease)
 
 	currentHistoricalData, err := readHistoricalDataFile(o.currentFile, o.dataType)
 	if err != nil {

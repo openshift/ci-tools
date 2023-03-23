@@ -1620,8 +1620,7 @@ func (p ClusterProfile) ConfigMap() string {
 		ClusterProfileGCPLoggingCRIO,
 		ClusterProfileGCPLoggingJSONFile,
 		ClusterProfileGCPLoggingJournald,
-		ClusterProfileOvirt,
-		ClusterProfileAWSLocalZones:
+		ClusterProfileOvirt:
 		return fmt.Sprintf("cluster-profile-%s", p)
 	default:
 		return ""
@@ -1663,7 +1662,7 @@ func (p ClusterProfile) Secret() string {
 // LeaseTypeFromClusterType maps cluster types to lease types
 func LeaseTypeFromClusterType(t string) (string, error) {
 	switch t {
-	case "aws", "aws-arm64", "aws-c2s", "aws-china", "aws-usgov", "aws-sc2s", "aws-osd-msp", "aws-outpost", "alibaba", "azure-2", "azure4", "azure-arc", "azure-arm64", "azurestack", "azuremag", "equinix-ocp-metal", "gcp", "libvirt-ppc64le", "libvirt-s390x", "nutanix", "nutanix-qe", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet", "packet-edge", "powervs", "kubevirt", "aws-cpaas", "osd-ephemeral", "gcp-virtualization", "aws-virtualization", "azure-virtualization":
+	case "aws", "aws-arm64", "aws-c2s", "aws-china", "aws-usgov", "aws-sc2s", "aws-osd-msp", "aws-outpost", "aws-local-zones", "alibaba", "azure-2", "azure4", "azure-arc", "azure-arm64", "azurestack", "azuremag", "equinix-ocp-metal", "gcp", "libvirt-ppc64le", "libvirt-s390x", "nutanix", "nutanix-qe", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet", "packet-edge", "powervs", "kubevirt", "aws-cpaas", "osd-ephemeral", "gcp-virtualization", "aws-virtualization", "azure-virtualization":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

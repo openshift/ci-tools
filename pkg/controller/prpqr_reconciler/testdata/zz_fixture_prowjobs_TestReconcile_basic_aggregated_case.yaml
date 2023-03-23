@@ -41,7 +41,7 @@
       - args:
         - --gcs-upload-secret=/secrets/gcs/service-account.json
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --input-hash=prpqr-test-0
+        - --input-hash=prpqr-test
         - --report-credentials-file=/etc/report/credentials
         - --target=test-name
         - --with-test-from=test-org/test-repo@test-branch:test-name
@@ -119,7 +119,7 @@
       - args:
         - --gcs-upload-secret=/secrets/gcs/service-account.json
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --input-hash=prpqr-test-1
+        - --input-hash=prpqr-test
         - --report-credentials-file=/etc/report/credentials
         - --target=test-name
         - --with-test-from=test-org/test-repo@test-branch:test-name

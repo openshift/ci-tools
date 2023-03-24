@@ -328,7 +328,7 @@ func TestRetestOrBackoff(t *testing.T) {
 			c: &RetestController{
 				ghClient: ghc,
 				logger:   logger,
-				backoff:  &backoffCache{cache: map[string]*pullRequest{}, logger: logger},
+				backoff:  &fileBackoffCache{cache: map[string]*pullRequest{}, logger: logger},
 				config:   config,
 			},
 			expected: "/retest-required\n\nRemaining retests: 2 against base HEAD abcde and 8 for PR HEAD  in total\n",
@@ -347,7 +347,7 @@ func TestRetestOrBackoff(t *testing.T) {
 			c: &RetestController{
 				ghClient: ghc,
 				logger:   logger,
-				backoff:  &backoffCache{cache: map[string]*pullRequest{}, logger: logger},
+				backoff:  &fileBackoffCache{cache: map[string]*pullRequest{}, logger: logger},
 				config:   config,
 			},
 			expected:      "",
@@ -469,7 +469,7 @@ func TestLoadFromDiskNow(t *testing.T) {
 	logger := logrus.NewEntry(logrus.StandardLogger())
 	testCases := []struct {
 		name        string
-		cache       backoffCache
+		cache       fileBackoffCache
 		now         time.Time
 		file        string
 		expectedMap map[string]*pullRequest
@@ -478,7 +478,7 @@ func TestLoadFromDiskNow(t *testing.T) {
 		{
 			name: "basic case",
 			file: "basic_case.yaml",
-			cache: backoffCache{
+			cache: fileBackoffCache{
 				cacheRecordAge: time.Hour,
 				logger:         logger,
 			},
@@ -493,14 +493,14 @@ func TestLoadFromDiskNow(t *testing.T) {
 		{
 			name: "file no exist",
 			file: "no-exist.cache",
-			cache: backoffCache{
+			cache: fileBackoffCache{
 				logger: logger,
 			},
 		},
 		{
 			name: "wrong format",
 			file: "wrong_format.yaml",
-			cache: backoffCache{
+			cache: fileBackoffCache{
 				logger: logger,
 			},
 			expected: errors.New("failed to unmarshal: error unmarshaling JSON: while decoding JSON: json: cannot unmarshal string into Go value of type map[string]*retester.pullRequest"),
@@ -524,7 +524,7 @@ func TestLoadFromDiskNow(t *testing.T) {
 	}
 }
 
-func TestSaveToDisk(t *testing.T) {
+func TestSaveFileBackoffCache(t *testing.T) {
 	dir, err := ioutil.TempDir("", "saveToDisk")
 	if err != nil {
 		t.Errorf("failed to create temporary directory %s: %s", dir, err.Error())
@@ -532,13 +532,13 @@ func TestSaveToDisk(t *testing.T) {
 	defer os.RemoveAll(dir)
 	testCases := []struct {
 		name            string
-		cache           backoffCache
+		cache           fileBackoffCache
 		expected        error
 		expectedContent string
 	}{
 		{
 			name: "basic case",
-			cache: backoffCache{cache: map[string]*pullRequest{"pr1": {PRSha: "sha1", RetestsForBaseSha: 2, RetestsForPrSha: 3, LastConsideredTime: now},
+			cache: fileBackoffCache{cache: map[string]*pullRequest{"pr1": {PRSha: "sha1", RetestsForBaseSha: 2, RetestsForPrSha: 3, LastConsideredTime: now},
 				"pr3": {PRSha: "sha2", RetestsForBaseSha: 1, RetestsForPrSha: 3, LastConsideredTime: justNow}}},
 			expectedContent: `pr1:
   last_considered_time: "2022-08-18T00:00:00Z"
@@ -561,7 +561,7 @@ pr3:
 			if tc.name != "empty file name" {
 				tc.cache.file = filepath.Join(dir, tc.name)
 			}
-			actual := tc.cache.saveToDisk()
+			actual := tc.cache.save()
 			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("Error differs from expected:\n%s", diff)
 			}
@@ -619,7 +619,7 @@ func TestCheck(t *testing.T) {
 
 	testCases := []struct {
 		name           string
-		cache          backoffCache
+		cache          fileBackoffCache
 		pr             tide.PullRequest
 		baseSha        string
 		policy         RetesterPolicy
@@ -628,7 +628,7 @@ func TestCheck(t *testing.T) {
 	}{
 		{
 			name:  "hold PR",
-			cache: backoffCache{cache: map[string]*pullRequest{"org/repo#123": {PRSha: "holdPR", RetestsForBaseSha: 3, RetestsForPrSha: 9}}, logger: logger},
+			cache: fileBackoffCache{cache: map[string]*pullRequest{"org/repo#123": {PRSha: "holdPR", RetestsForBaseSha: 3, RetestsForPrSha: 9}}, logger: logger},
 			pr: tide.PullRequest{Number: githubv4.Int(123),
 				Repository: struct {
 					Name          githubv4.String
@@ -642,7 +642,7 @@ func TestCheck(t *testing.T) {
 		},
 		{
 			name:  "pause PR",
-			cache: backoffCache{cache: map[string]*pullRequest{"org/repo#123": {PRSha: "pausePR", RetestsForBaseSha: 3, RetestsForPrSha: 3}}, logger: logger},
+			cache: fileBackoffCache{cache: map[string]*pullRequest{"org/repo#123": {PRSha: "pausePR", RetestsForBaseSha: 3, RetestsForPrSha: 3}}, logger: logger},
 			pr: tide.PullRequest{Number: githubv4.Int(123),
 				Repository: struct {
 					Name          githubv4.String
@@ -656,7 +656,7 @@ func TestCheck(t *testing.T) {
 		},
 		{
 			name:           "retest PR",
-			cache:          backoffCache{cache: map[string]*pullRequest{}, logger: logger},
+			cache:          fileBackoffCache{cache: map[string]*pullRequest{}, logger: logger},
 			pr:             tide.PullRequest{HeadRefOID: "retestPR"},
 			policy:         RetesterPolicy{3, 9, &True},
 			expected:       2,
@@ -736,7 +736,7 @@ func TestRunWithCandidates(t *testing.T) {
 				configGetter:  configAgent.Config,
 				logger:        logger,
 				usesGitHubApp: true,
-				backoff:       &backoffCache{cache: map[string]*pullRequest{}, logger: logger},
+				backoff:       &fileBackoffCache{cache: map[string]*pullRequest{}, logger: logger},
 				config:        config,
 			}
 			actual := c.runWithCandidates(tc.candidates)
@@ -794,7 +794,7 @@ func TestFindCandidates(t *testing.T) {
 				configGetter:  configAgent.Config,
 				logger:        logger,
 				usesGitHubApp: true,
-				backoff:       &backoffCache{cache: map[string]*pullRequest{}, logger: logger},
+				backoff:       &fileBackoffCache{cache: map[string]*pullRequest{}, logger: logger},
 				config:        config,
 			}
 			actual, err := findCandidates(c.configGetter, c.ghClient, c.usesGitHubApp, c.logger)

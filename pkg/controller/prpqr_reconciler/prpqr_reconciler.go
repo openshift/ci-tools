@@ -451,7 +451,6 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 
 	var aggregateIndex *int
 	if aggregatedOptions != nil {
-		hashInput = prowgen.CustomHashInput(fmt.Sprintf("%s-%d", prpqrName, aggregatedOptions.aggregatedIndex))
 		if aggregatedOptions.labels != nil {
 			for k, v := range aggregatedOptions.labels {
 				labels[k] = v

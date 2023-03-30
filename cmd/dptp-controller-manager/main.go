@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -66,6 +67,7 @@ type options struct {
 	testImagesDistributorOptions         testImagesDistributorOptions
 	serviceAccountSecretRefresherOptions serviceAccountSecretRefresherOptions
 	imagePusherOptions                   imagePusherOptions
+	promotionReconcilerOptions           promotionReconcilerOptions
 	*flagutil.GitHubOptions
 	releaseRepoGitSyncPath string
 }
@@ -85,6 +87,11 @@ type testImagesDistributorOptions struct {
 	forbiddenRegistries                sets.String
 	ignoreClusterNamesRaw              flagutil.Strings
 	ignoreClusterNames                 sets.String
+}
+
+type promotionReconcilerOptions struct {
+	ignoreImageStreamsRaw flagutil.Strings
+	ignoreImageStreams    []*regexp.Regexp
 }
 
 type imagePusherOptions struct {
@@ -122,6 +129,7 @@ func newOpts() (*options, error) {
 	fs.BoolVar(&opts.serviceAccountSecretRefresherOptions.removeOldSecrets, "serviceAccountRefresherOptions.remove-old-secrets", false, "whether the serviceaccountsecretrefresher should delete secrets older than 30 days")
 	fs.Var(&opts.serviceAccountSecretRefresherOptions.ignoreServiceAccounts, "serviceAccountRefresherOptions.ignore-service-account", "The service account to ignore. It must be in namespace/name format (e.G `ci/sync-rover-groups-updater`). Can be passed multiple times.")
 	fs.Var(&opts.imagePusherOptions.imageStreamsRaw, "imagePusherOptions.image-stream", "An imagestream that will be synced. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
+	fs.Var(&opts.promotionReconcilerOptions.ignoreImageStreamsRaw, "promotionReconcilerOptions.ignore-image-stream", "The image stream to ignore. It is an regular expression (e.G ^openshift-priv/.+). Can be passed multiple times.")
 	fs.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
 	fs.StringVar(&opts.releaseRepoGitSyncPath, "release-repo-git-sync-path", "", "Path to release repository dir")
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -181,6 +189,17 @@ func newOpts() (*options, error) {
 	imagePusherImageStreams, isErrors := completeImageStream("uniRegistrySyncerOptions.image-stream", opts.imagePusherOptions.imageStreamsRaw)
 	errs = append(errs, isErrors...)
 	opts.imagePusherOptions.imageStreams = imagePusherImageStreams
+
+	if raws := opts.promotionReconcilerOptions.ignoreImageStreamsRaw.Strings(); len(raws) > 0 {
+		for _, raw := range raws {
+			re, err := regexp.Compile(raw)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("failed to compile regex from %q: %w", raw, err))
+				continue
+			}
+			opts.promotionReconcilerOptions.ignoreImageStreams = append(opts.promotionReconcilerOptions.ignoreImageStreams, re)
+		}
+	}
 
 	if opts.enabledControllersSet.Has(testimagesdistributor.ControllerName) && opts.stepConfigPath == "" {
 		errs = append(errs, fmt.Errorf("--step-config-path is required when the %s controller is enabled", testimagesdistributor.ControllerName))
@@ -415,6 +434,7 @@ func main() {
 			ConfigGetter:          configAgent.Config,
 			GitHubClient:          gitHubClient,
 			RegistryManager:       registryMgr,
+			IgnoredImageStreams:   opts.promotionReconcilerOptions.ignoreImageStreams,
 		}
 		if err := promotionreconciler.AddToManager(mgr, promotionreconcilerOptions); err != nil {
 			logrus.WithError(err).Fatal("Failed to add imagestreamtagreconciler")

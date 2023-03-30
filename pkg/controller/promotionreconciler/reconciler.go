@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -40,6 +41,8 @@ type Options struct {
 	// that contains our imageRegistry. This cluster is
 	// most likely not the one the normal manager talks to.
 	RegistryManager controllerruntime.Manager
+
+	IgnoredImageStreams []*regexp.Regexp
 }
 
 const ControllerName = "promotionreconciler"
@@ -83,13 +86,29 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 
 	if err := c.Watch(
 		&source.Kind{Type: &imagev1.ImageStream{}},
-		imagestreamtagmapper.New(func(r reconcile.Request) []reconcile.Request { return []reconcile.Request{r} }),
+		imagestreamtagmapper.New(func(r reconcile.Request) []reconcile.Request {
+			if ignored(r, opts.IgnoredImageStreams) {
+				return nil
+			}
+			return []reconcile.Request{r}
+		}),
 	); err != nil {
 		return fmt.Errorf("failed to create watch for ImageStreams: %w", err)
 	}
 	r.log.Info("Successfully added reconciler to manager")
 
 	return nil
+}
+
+func ignored(r reconcile.Request, ignoredImageStreams []*regexp.Regexp) bool {
+	is := fmt.Sprintf("%s/%s", r.Namespace, r.Name)
+	for _, re := range ignoredImageStreams {
+		if re.MatchString(is) {
+			logrus.WithField("is", is).Info("Ignored image stream")
+			return true
+		}
+	}
+	return false
 }
 
 // ciOperatorConfigGetter is needed to for testing. In non-test scenarios it is implemented

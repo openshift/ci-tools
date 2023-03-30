@@ -563,6 +563,14 @@ func CustomHashInput(input string) PodSpecMutator {
 	}
 }
 
+func TargetAdditionalSuffix(suffix string) PodSpecMutator {
+	return func(spec *corev1.PodSpec) error {
+		container := &spec.Containers[0]
+		addUniqueParameter(container, fmt.Sprintf("--target-additional-suffix=%s", suffix))
+		return nil
+	}
+}
+
 // InjectTestFrom configures ci-operator to inject the specified test from the
 // specified ci-operator config into the base config and target it
 func InjectTestFrom(source *cioperatorapi.MetadataWithTest) PodSpecMutator {

@@ -414,6 +414,8 @@ type options struct {
 
 	multiStageParamOverrides stringSlice
 	dependencyOverrides      stringSlice
+
+	targetAdditionalSuffix string
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
@@ -481,6 +483,8 @@ func bindOptions(flag *flag.FlagSet) *options {
 
 	flag.Var(&opt.multiStageParamOverrides, "multi-stage-param", "A repeatable option where one or more environment parameters can be passed down to the multi-stage steps. This parameter should be in the format NAME=VAL. e.g --multi-stage-param PARAM1=VAL1 --multi-stage-param PARAM2=VAL2.")
 	flag.Var(&opt.dependencyOverrides, "dependency-override-param", "A repeatable option used to override dependencies with external pull specs. This parameter should be in the format ENVVARNAME=PULLSPEC, e.g. --dependency-override-param=OO_INDEX=registry.mydomain.com:5000/pushed/myimage. This would override the value for the OO_INDEX environment variable for any tests/steps that currently have that dependency configured.")
+
+	flag.StringVar(&opt.targetAdditionalSuffix, "target-additional-suffix", "", "Inject an additional suffix onto the targeted test's 'as' name. Used for adding an aggregate index")
 
 	opt.resultsOptions.Bind(flag)
 	return opt
@@ -690,6 +694,8 @@ func (o *options) Complete() error {
 		return err
 	}
 
+	appendAdditionalSuffixToTarget(o)
+
 	return overrideTestStepDependencyParams(o)
 }
 
@@ -710,6 +716,27 @@ func parseKeyValParams(input []string, paramType string) (map[string]string, err
 	}
 
 	return params, nil
+}
+
+func appendAdditionalSuffixToTarget(o *options) {
+	if o.targetAdditionalSuffix == "" {
+		return
+	}
+
+	for i, test := range o.configSpec.Tests {
+		for j, target := range o.targets.values {
+			if test.As == target {
+				targetWithSuffix := fmt.Sprintf("%s-%s", test.As, o.targetAdditionalSuffix)
+				o.configSpec.Tests[i].As = targetWithSuffix
+				if j == 0 { //only set if it is the first target
+					o.jobSpec.Target = targetWithSuffix
+				}
+				o.targets.values[j] = targetWithSuffix
+				logrus.Debugf("added suffix to target, now: %s", test.As)
+				break
+			}
+		}
+	}
 }
 
 func overrideMultiStageParams(o *options) error {

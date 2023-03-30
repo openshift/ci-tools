@@ -1543,3 +1543,70 @@ func TestGenerateAuthorAccessRoleBinding(t *testing.T) {
 		})
 	}
 }
+
+func TestAppendAdditionalSuffixToTarget(t *testing.T) {
+	testCases := []struct {
+		name                   string
+		targetAdditionalSuffix string
+		targets                stringSlice
+		expectedTargets        stringSlice
+		tests                  []api.TestStepConfiguration
+		expectedTests          []api.TestStepConfiguration
+		jobSpec                api.JobSpec
+		expectedJobSpec        api.JobSpec
+	}{
+		{
+			name:            "no target-additional-suffix set",
+			targets:         stringSlice{[]string{"e2e"}},
+			expectedTargets: stringSlice{[]string{"e2e"}},
+			tests:           []api.TestStepConfiguration{{As: "e2e"}},
+			expectedTests:   []api.TestStepConfiguration{{As: "e2e"}},
+			jobSpec:         api.JobSpec{Target: "e2e"},
+			expectedJobSpec: api.JobSpec{Target: "e2e"},
+		},
+		{
+			name:                   "basic target-additional-suffix set",
+			targetAdditionalSuffix: "1",
+			targets:                stringSlice{[]string{"e2e"}},
+			expectedTargets:        stringSlice{[]string{"e2e-1"}},
+			tests:                  []api.TestStepConfiguration{{As: "e2e"}},
+			expectedTests:          []api.TestStepConfiguration{{As: "e2e-1"}},
+			jobSpec:                api.JobSpec{Target: "e2e"},
+			expectedJobSpec:        api.JobSpec{Target: "e2e-1"},
+		},
+		{
+			name:                   "target-additional-suffix set with multiple targets",
+			targetAdditionalSuffix: "1",
+			targets:                stringSlice{[]string{"e2e", "unit"}},
+			expectedTargets:        stringSlice{[]string{"e2e-1", "unit-1"}},
+			tests:                  []api.TestStepConfiguration{{As: "e2e"}, {As: "unit"}},
+			expectedTests:          []api.TestStepConfiguration{{As: "e2e-1"}, {As: "unit-1"}},
+			jobSpec:                api.JobSpec{Target: "e2e"},
+			expectedJobSpec:        api.JobSpec{Target: "e2e-1"},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			o := &options{
+				targetAdditionalSuffix: tc.targetAdditionalSuffix,
+				configSpec: &api.ReleaseBuildConfiguration{
+					Tests: tc.tests,
+				},
+				jobSpec: &tc.jobSpec,
+				targets: tc.targets,
+			}
+
+			appendAdditionalSuffixToTarget(o)
+
+			if diff := cmp.Diff(tc.expectedTargets.values, o.targets.values); diff != "" {
+				t.Fatalf("expectedTargets differ from actual, diff: %s", diff)
+			}
+			if diff := cmp.Diff(tc.expectedTests, o.configSpec.Tests); diff != "" {
+				t.Fatalf("expectedTests differ from actual, diff: %s", diff)
+			}
+			if diff := cmp.Diff(tc.expectedJobSpec.Target, o.jobSpec.Target); diff != "" {
+				t.Fatalf("expectedJobSpec Target differs from actual, diff: %s", diff)
+			}
+		})
+	}
+}

@@ -39,6 +39,13 @@ func TestMultiStage(t *testing.T) {
 			output:  []string{"Container test in pod success completed successfully"},
 		},
 		{
+			name:    "target-additional-suffix set",
+			args:    []string{"--target=success", "--target-additional-suffix=1"},
+			env:     []string{defaultJobSpec},
+			success: true,
+			output:  []string{"Container test in pod success-1 completed successfully"},
+		},
+		{
 			name:    "without references",
 			args:    []string{"--unresolved-config=config.yaml", "--target=without-references"},
 			env:     []string{defaultJobSpec},

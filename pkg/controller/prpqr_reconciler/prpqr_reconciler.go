@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -469,6 +470,9 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 		}
 		jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, fakeProwgenInfo, prowgen.NewCiOperatorPodSpecGenerator(), ciopConfig.Tests[i])
 		jobBaseGen.PodSpec.Add(prowgen.InjectTestFrom(inject))
+		if aggregateIndex != nil {
+			jobBaseGen.PodSpec.Add(prowgen.TargetAdditionalSuffix(strconv.Itoa(*aggregateIndex)))
+		}
 
 		// Avoid sharing when we run the same job multiple times.
 		// PRPQR name should be safe to use as a discriminating input, because

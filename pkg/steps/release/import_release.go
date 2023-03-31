@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blang/semver"
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
@@ -235,11 +236,28 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 		return fmt.Errorf("unexpected image stream contents: %w", err)
 	}
 
+	var prefix string
+	version, err := semver.Parse(releaseIS.ObjectMeta.Name)
+	if err != nil {
+		logrus.WithError(err).Errorf("Failed to parse release %s ImageStream name %s as a semantic version.", pullSpec, releaseIS.ObjectMeta.Name)
+	} else {
+		prefix = fmt.Sprintf("%d.%d.%d-0", version.Major, version.Minor, version.Patch)
+	}
+
 	// update the stable image stream to have all of the tags from the payload
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		stable := &imagev1.ImageStream{}
 		if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: streamName}, stable); err != nil {
 			return fmt.Errorf("could not resolve imagestream %s: %w", streamName, err)
+		}
+
+		if prefix != "" {
+			if stable.ObjectMeta.Annotations == nil {
+				stable.ObjectMeta.Annotations = make(map[string]string, 1)
+			}
+			if _, ok := stable.ObjectMeta.Annotations[releaseConfigAnnotation]; !ok {
+				stable.ObjectMeta.Annotations[releaseConfigAnnotation] = fmt.Sprintf(`{"name": "%s"}`, prefix)
+			}
 		}
 
 		existing := sets.NewString()

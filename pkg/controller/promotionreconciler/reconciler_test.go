@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"regexp"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -319,6 +320,46 @@ func TestReconcile(t *testing.T) {
 
 			if err := tc.verify(err, req); err != nil {
 				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestIgnored(t *testing.T) {
+	testCases := []struct {
+		name                string
+		ignoredImageStreams []*regexp.Regexp
+		request             reconcile.Request
+		expected            bool
+	}{
+		{
+			name:                "not ignored",
+			ignoredImageStreams: []*regexp.Regexp{regexp.MustCompile(`^openshift-priv/.+`)},
+			request: reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: "ns",
+					Name:      "name",
+				},
+			},
+		},
+		{
+			name:                "ignored",
+			ignoredImageStreams: []*regexp.Regexp{regexp.MustCompile(`^openshift-priv/.+`)},
+			request: reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: "openshift-priv",
+					Name:      "name",
+				},
+			},
+			expected: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := ignored(tc.request, tc.ignoredImageStreams)
+			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}
 		})
 	}

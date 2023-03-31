@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -229,7 +230,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 			}
 			prowjobsToCreate = append(prowjobsToCreate, aggregatedProwjobs...)
 
-			submitted := generateJobNameToSubmit(baseMetadata, inject, &prpqr.Spec.PullRequest)
+			submitted := generateJobNameToSubmit(baseMetadata, inject, &prpqr.Spec.PullRequest, nil)
 			aggregatorJob, err := generateAggregatorJob(baseMetadata, uid, mimickedJob, jobSpec.JobName(jobconfig.PeriodicPrefix), req.Name, req.Namespace, r.prowConfigGetter.Config(), time.Now(), submitted)
 			if err != nil {
 				logger.WithError(err).Error("Failed to generate an aggregator prowjob")
@@ -437,35 +438,31 @@ func resolveCiopConfig(rc injectingResolverClient, baseCiop *api.Metadata, injec
 type aggregatedOptions struct {
 	labels          map[string]string
 	aggregatedIndex int
-	releaseJobName  string
 }
 
 func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter periodicDefaulter, baseCiop *api.Metadata, prpqrName, prpqrNamespace string, pr *v1.PullRequestUnderTest, mimickedJob string, inject *api.MetadataWithTest, aggregatedOptions *aggregatedOptions) (*prowv1.ProwJob, error) {
 	fakeProwgenInfo := &prowgen.ProwgenInfo{Metadata: *baseCiop}
 
-	var annotations map[string]string
+	annotations := map[string]string{
+		releaseJobNameAnnotation: mimickedJob,
+	}
 	labels := map[string]string{
 		releaseJobNameLabel: jobNameHash(mimickedJob),
 	}
 
-	hashInput := prowgen.CustomHashInput(prpqrName)
+	var aggregateIndex *int
 	if aggregatedOptions != nil {
-		hashInput = prowgen.CustomHashInput(fmt.Sprintf("%s-%d", prpqrName, aggregatedOptions.aggregatedIndex))
 		if aggregatedOptions.labels != nil {
 			for k, v := range aggregatedOptions.labels {
 				labels[k] = v
 			}
 		}
-		annotations = map[string]string{
-			releaseJobNameAnnotation: aggregatedOptions.releaseJobName,
-		}
+		aggregateIndex = &aggregatedOptions.aggregatedIndex
 	} else {
 		labels[v1.PullRequestPayloadQualificationRunLabel] = prpqrName
-		annotations = map[string]string{
-			releaseJobNameAnnotation: mimickedJob,
-		}
 	}
 
+	hashInput := prowgen.CustomHashInput(prpqrName)
 	var periodic *prowconfig.Periodic
 	for i := range ciopConfig.Tests {
 		if ciopConfig.Tests[i].As != inject.Test {
@@ -473,6 +470,9 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 		}
 		jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, fakeProwgenInfo, prowgen.NewCiOperatorPodSpecGenerator(), ciopConfig.Tests[i])
 		jobBaseGen.PodSpec.Add(prowgen.InjectTestFrom(inject))
+		if aggregateIndex != nil {
+			jobBaseGen.PodSpec.Add(prowgen.TargetAdditionalSuffix(strconv.Itoa(*aggregateIndex)))
+		}
 
 		// Avoid sharing when we run the same job multiple times.
 		// PRPQR name should be safe to use as a discriminating input, because
@@ -494,7 +494,7 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 		periodic = prowgen.GeneratePeriodicForTest(jobBaseGen, fakeProwgenInfo, prowgen.FromConfigSpec(ciopConfig), func(options *prowgen.GeneratePeriodicOptions) {
 			options.Cron = "@yearly"
 		})
-		periodic.Name = generateJobNameToSubmit(baseCiop, inject, pr)
+		periodic.Name = generateJobNameToSubmit(baseCiop, inject, pr, aggregateIndex)
 		break
 	}
 	// We did not find the injected test: this is a bug
@@ -547,7 +547,6 @@ func generateAggregatedProwjobs(uid string, ciopConfig *api.ReleaseBuildConfigur
 		opts := &aggregatedOptions{
 			labels:          map[string]string{aggregationIDLabel: uid},
 			aggregatedIndex: i,
-			releaseJobName:  spec.JobName(jobconfig.PeriodicPrefix),
 		}
 		jobName := fmt.Sprintf("%s-%d", spec.JobName(jobconfig.PeriodicPrefix), i)
 
@@ -626,10 +625,14 @@ func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobNa
 	return &pj, nil
 }
 
-func generateJobNameToSubmit(baseCiop *api.Metadata, inject *api.MetadataWithTest, pr *v1.PullRequestUnderTest) string {
+func generateJobNameToSubmit(baseCiop *api.Metadata, inject *api.MetadataWithTest, pr *v1.PullRequestUnderTest, index *int) string {
 	var variant string
 	if inject.Variant != "" {
 		variant = fmt.Sprintf("-%s", inject.Variant)
 	}
-	return fmt.Sprintf("%s-%s-%d%s-%s", baseCiop.Org, baseCiop.Repo, pr.PullRequest.Number, variant, inject.Test)
+	jobName := fmt.Sprintf("%s-%s-%d%s-%s", baseCiop.Org, baseCiop.Repo, pr.PullRequest.Number, variant, inject.Test)
+	if index != nil {
+		jobName = fmt.Sprintf("%s-%d", jobName, *index)
+	}
+	return jobName
 }

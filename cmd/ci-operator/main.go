@@ -1025,7 +1025,23 @@ func (o *options) resolveInputs(steps []api.Step) error {
 	}
 
 	// a change in the config for the build changes the output
-	configSpec, err := yaml.Marshal(o.configSpec)
+	cs := o.configSpec
+	// The targetAdditionalSuffix should be trimmed for the input purposes as the intent is to have the different suffix resolve the same
+	targetAdditionalSuffix := o.targetAdditionalSuffix
+	if targetAdditionalSuffix != "" {
+		cs = o.configSpec.DeepCopy()
+		for i, test := range cs.Tests {
+			for _, target := range o.targets.values {
+				if test.As == target {
+					suffix := fmt.Sprintf("-%s", targetAdditionalSuffix)
+					logrus.Debugf("Trimming suffix: %s from: %s for input resolution", suffix, target)
+					cs.Tests[i].As = strings.TrimSuffix(test.As, suffix)
+					break
+				}
+			}
+		}
+	}
+	configSpec, err := yaml.Marshal(cs)
 	if err != nil {
 		panic(err)
 	}

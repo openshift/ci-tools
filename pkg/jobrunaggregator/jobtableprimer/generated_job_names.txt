@@ -291,28 +291,33 @@ release-openshift-ocp-osd-aws-nightly-4.12
 release-openshift-ocp-osd-gcp-nightly-4.12
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.12.json
 
-// begin https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/hypershift/openshift-hypershift-main-periodics.yaml
-periodic-ci-openshift-hypershift-main-periodics-4.13-conformance-agent-ovn
-periodic-ci-openshift-hypershift-main-periodics-4.13-conformance-aws-ovn
-periodic-ci-openshift-hypershift-main-periodics-4.13-conformance-aws-ovn-proxy
-periodic-ci-openshift-hypershift-main-periodics-4.13-conformance-mce-aws-ovn
-periodic-ci-openshift-hypershift-main-periodics-4.13-e2e-aws-ovn-periodic-conformance-serial
-periodic-ci-openshift-hypershift-main-periodics-4.13-e2e-aws-periodic
-periodic-ci-openshift-hypershift-main-periodics-4.13-e2e-conformance-kubevirt
-periodic-ci-openshift-hypershift-main-periodics-4.13-e2e-ibmcloud-iks
-periodic-ci-openshift-hypershift-main-periodics-4.13-e2e-ibmcloud-roks
-periodic-ci-openshift-hypershift-main-periodics-4.13-e2e-powervs-periodic
-periodic-ci-openshift-hypershift-main-periodics-4.14-conformance-agent-ovn
-periodic-ci-openshift-hypershift-main-periodics-4.14-conformance-aws-ovn
-periodic-ci-openshift-hypershift-main-periodics-4.14-conformance-aws-ovn-proxy
-periodic-ci-openshift-hypershift-main-periodics-4.14-conformance-mce-aws-ovn
-periodic-ci-openshift-hypershift-main-periodics-4.14-e2e-aws-ovn-periodic-conformance-serial
-periodic-ci-openshift-hypershift-main-periodics-4.14-e2e-aws-periodic
-periodic-ci-openshift-hypershift-main-periodics-4.14-e2e-conformance-kubevirt
-periodic-ci-openshift-hypershift-main-periodics-4.14-e2e-ibmcloud-iks
-periodic-ci-openshift-hypershift-main-periodics-4.14-e2e-ibmcloud-roks
-periodic-ci-openshift-hypershift-main-periodics-4.14-e2e-powervs-periodic
-// end https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/hypershift/openshift-hypershift-main-periodics.yaml
+// begin https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/hypershift/openshift-hypershift-release-4.13-periodics.yaml
+periodic-ci-openshift-hypershift-release-4.13-periodics-e2e-agent-ovn-conformance
+periodic-ci-openshift-hypershift-release-4.13-periodics-e2e-aws-ovn
+periodic-ci-openshift-hypershift-release-4.13-periodics-e2e-aws-ovn-conformance
+periodic-ci-openshift-hypershift-release-4.13-periodics-e2e-aws-ovn-conformance-serial
+periodic-ci-openshift-hypershift-release-4.13-periodics-e2e-aws-ovn-mce-conformance
+periodic-ci-openshift-hypershift-release-4.13-periodics-e2e-aws-ovn-proxy-conformance
+periodic-ci-openshift-hypershift-release-4.13-periodics-e2e-ibmcloud-iks
+periodic-ci-openshift-hypershift-release-4.13-periodics-e2e-ibmcloud-roks
+periodic-ci-openshift-hypershift-release-4.13-periodics-e2e-kubevirt-conformance
+periodic-ci-openshift-hypershift-release-4.13-periodics-e2e-kubevirt-mce-conformance
+periodic-ci-openshift-hypershift-release-4.13-periodics-e2e-powervs
+// end https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/hypershift/openshift-hypershift-release-4.13-periodics.yaml
+
+// begin https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/hypershift/openshift-hypershift-release-4.14-periodics.yaml
+periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-agent-ovn-conformance
+periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-aws-ovn
+periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-aws-ovn-conformance
+periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-aws-ovn-conformance-serial
+periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-aws-ovn-mce-conformance
+periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-aws-ovn-proxy-conformance
+periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-ibmcloud-iks
+periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-ibmcloud-roks
+periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-kubevirt-conformance
+periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-kubevirt-mce-conformance
+periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-powervs
+// end https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/hypershift/openshift-hypershift-release-4.14-periodics.yaml
 
 // begin https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/multiarch/openshift-multiarch-master-periodics.yaml
 periodic-ci-openshift-multiarch-master-nightly-4.10-ocp-e2e-aws-arm64
@@ -411,6 +416,7 @@ periodic-ci-openshift-multiarch-master-nightly-4.13-ocp-e2e-aws-ovn-heterogeneou
 periodic-ci-openshift-multiarch-master-nightly-4.13-ocp-e2e-aws-sdn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.13-ocp-e2e-aws-upi-ovn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.13-ocp-e2e-azure-ovn-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.13-ocp-e2e-azure-ovn-heterogeneous
 periodic-ci-openshift-multiarch-master-nightly-4.13-ocp-e2e-compact-ovn-remote-libvirt-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.13-ocp-e2e-compact-ovn-remote-libvirt-s390x
 periodic-ci-openshift-multiarch-master-nightly-4.13-ocp-e2e-ovn-ppc64le-powervs
@@ -447,6 +453,7 @@ periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-aws-ovn-heterogeneou
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-aws-sdn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-aws-upi-ovn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-azure-ovn-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-azure-ovn-heterogeneous
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-compact-ovn-remote-libvirt-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-compact-ovn-remote-libvirt-s390x
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-ovn-ppc64le-powervs
@@ -689,6 +696,7 @@ periodic-ci-openshift-release-master-ci-4.14-e2e-azure-sdn-upgrade
 periodic-ci-openshift-release-master-ci-4.14-e2e-gcp-cilium
 periodic-ci-openshift-release-master-ci-4.14-e2e-gcp-ovn
 periodic-ci-openshift-release-master-ci-4.14-e2e-gcp-ovn-mount-ns-hiding
+periodic-ci-openshift-release-master-ci-4.14-e2e-gcp-ovn-upgrade
 periodic-ci-openshift-release-master-ci-4.14-e2e-gcp-sdn
 periodic-ci-openshift-release-master-ci-4.14-e2e-gcp-sdn-techpreview
 periodic-ci-openshift-release-master-ci-4.14-e2e-gcp-sdn-techpreview-serial
@@ -844,6 +852,7 @@ periodic-ci-openshift-release-master-nightly-4.11-e2e-ovirt-csi
 periodic-ci-openshift-release-master-nightly-4.11-e2e-ovirt-ovn
 periodic-ci-openshift-release-master-nightly-4.11-e2e-telco5g
 periodic-ci-openshift-release-master-nightly-4.11-e2e-telco5g-cnftests
+periodic-ci-openshift-release-master-nightly-4.11-e2e-telco5g-ptp
 periodic-ci-openshift-release-master-nightly-4.11-e2e-vsphere
 periodic-ci-openshift-release-master-nightly-4.11-e2e-vsphere-csi
 periodic-ci-openshift-release-master-nightly-4.11-e2e-vsphere-ovn
@@ -925,6 +934,7 @@ periodic-ci-openshift-release-master-nightly-4.12-e2e-ovirt-ovn
 periodic-ci-openshift-release-master-nightly-4.12-e2e-ovirt-sdn
 periodic-ci-openshift-release-master-nightly-4.12-e2e-telco5g
 periodic-ci-openshift-release-master-nightly-4.12-e2e-telco5g-cnftests
+periodic-ci-openshift-release-master-nightly-4.12-e2e-telco5g-ptp
 periodic-ci-openshift-release-master-nightly-4.12-e2e-vsphere-8-ovn
 periodic-ci-openshift-release-master-nightly-4.12-e2e-vsphere-8-ovn-csi
 periodic-ci-openshift-release-master-nightly-4.12-e2e-vsphere-8-ovn-upi
@@ -950,6 +960,7 @@ periodic-ci-openshift-release-master-nightly-4.13-e2e-alibaba-csi
 periodic-ci-openshift-release-master-nightly-4.13-e2e-alibaba-ovn
 periodic-ci-openshift-release-master-nightly-4.13-e2e-aws-csi
 periodic-ci-openshift-release-master-nightly-4.13-e2e-aws-driver-toolkit
+periodic-ci-openshift-release-master-nightly-4.13-e2e-aws-ovn-cpu-partitioning
 periodic-ci-openshift-release-master-nightly-4.13-e2e-aws-ovn-etcd-scaling
 periodic-ci-openshift-release-master-nightly-4.13-e2e-aws-ovn-fips
 periodic-ci-openshift-release-master-nightly-4.13-e2e-aws-ovn-fips-serial
@@ -1012,6 +1023,7 @@ periodic-ci-openshift-release-master-nightly-4.13-e2e-ovirt-ovn
 periodic-ci-openshift-release-master-nightly-4.13-e2e-ovirt-sdn
 periodic-ci-openshift-release-master-nightly-4.13-e2e-telco5g
 periodic-ci-openshift-release-master-nightly-4.13-e2e-telco5g-cnftests
+periodic-ci-openshift-release-master-nightly-4.13-e2e-telco5g-ptp
 periodic-ci-openshift-release-master-nightly-4.13-e2e-vsphere-8-ovn
 periodic-ci-openshift-release-master-nightly-4.13-e2e-vsphere-8-ovn-csi
 periodic-ci-openshift-release-master-nightly-4.13-e2e-vsphere-8-ovn-upi
@@ -1039,6 +1051,7 @@ periodic-ci-openshift-release-master-nightly-4.14-e2e-alibaba-csi
 periodic-ci-openshift-release-master-nightly-4.14-e2e-alibaba-ovn
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-csi
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-driver-toolkit
+periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-cpu-partitioning
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-etcd-scaling
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-fips
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-fips-serial
@@ -1101,6 +1114,7 @@ periodic-ci-openshift-release-master-nightly-4.14-e2e-ovirt-ovn
 periodic-ci-openshift-release-master-nightly-4.14-e2e-ovirt-sdn
 periodic-ci-openshift-release-master-nightly-4.14-e2e-telco5g
 periodic-ci-openshift-release-master-nightly-4.14-e2e-telco5g-cnftests
+periodic-ci-openshift-release-master-nightly-4.14-e2e-telco5g-ptp
 periodic-ci-openshift-release-master-nightly-4.14-e2e-vsphere-8-ovn
 periodic-ci-openshift-release-master-nightly-4.14-e2e-vsphere-8-ovn-csi
 periodic-ci-openshift-release-master-nightly-4.14-e2e-vsphere-8-ovn-upi
@@ -1116,12 +1130,14 @@ periodic-ci-openshift-release-master-nightly-4.14-e2e-vsphere-ovn-upi-serial
 periodic-ci-openshift-release-master-nightly-4.14-e2e-vsphere-sdn
 periodic-ci-openshift-release-master-nightly-4.14-e2e-vsphere-upi-zones
 periodic-ci-openshift-release-master-nightly-4.14-e2e-vsphere-zones
+periodic-ci-openshift-release-master-nightly-4.14-install-analysis-all
 periodic-ci-openshift-release-master-nightly-4.14-openshift-e2e-aws-ovn-single-node-workers-upgrade-conformance
 periodic-ci-openshift-release-master-nightly-4.14-upgrade-from-stable-4.12-e2e-aws-sdn-upgrade-paused
 periodic-ci-openshift-release-master-nightly-4.14-upgrade-from-stable-4.13-e2e-aws-sdn-upgrade
 periodic-ci-openshift-release-master-nightly-4.14-upgrade-from-stable-4.13-e2e-aws-upgrade-ovn-single-node
 periodic-ci-openshift-release-master-nightly-4.14-upgrade-from-stable-4.13-e2e-metal-ipi-sdn-bm-upgrade
 periodic-ci-openshift-release-master-nightly-4.14-upgrade-from-stable-4.13-e2e-metal-ipi-upgrade-ovn-ipv6
+periodic-ci-openshift-release-master-nightly-4.14-upgrade-from-stable-4.13-e2e-vsphere-zones-upgrade
 // end https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-master-periodics.yaml
 
 // begin https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-release-4.10-periodics.yaml

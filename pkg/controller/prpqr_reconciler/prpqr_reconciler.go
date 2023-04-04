@@ -465,10 +465,20 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 	hashInput := prowgen.CustomHashInput(prpqrName)
 	var periodic *prowconfig.Periodic
 	for i := range ciopConfig.Tests {
-		if ciopConfig.Tests[i].As != inject.Test {
+		test := ciopConfig.Tests[i].DeepCopy()
+		if test.As != inject.Test {
 			continue
 		}
-		jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, fakeProwgenInfo, prowgen.NewCiOperatorPodSpecGenerator(), ciopConfig.Tests[i])
+		if aggregatedOptions != nil {
+			for j, secret := range test.Secrets {
+				secret.Name = fmt.Sprintf("%s-%s", secret.Name, strconv.Itoa(aggregatedOptions.aggregatedIndex))
+				test.Secrets[j] = secret
+			}
+			if test.Secret != nil {
+				test.Secret.Name = fmt.Sprintf("%s-%s", test.Secret.Name, strconv.Itoa(aggregatedOptions.aggregatedIndex))
+			}
+		}
+		jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, fakeProwgenInfo, prowgen.NewCiOperatorPodSpecGenerator(), *test)
 		jobBaseGen.PodSpec.Add(prowgen.InjectTestFrom(inject))
 		if aggregateIndex != nil {
 			jobBaseGen.PodSpec.Add(prowgen.TargetAdditionalSuffix(strconv.Itoa(*aggregateIndex)))

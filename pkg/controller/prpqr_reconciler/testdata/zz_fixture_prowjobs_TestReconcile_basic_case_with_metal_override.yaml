@@ -43,7 +43,6 @@
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
         - --input-hash=prpqr-test
         - --report-credentials-file=/etc/report/credentials
-        - --secret-dir=/secrets/secret
         - --target=test-name-metal
         - --with-test-from=test-org/test-repo@test-branch:test-name-metal
         command:
@@ -64,9 +63,6 @@
         - mountPath: /etc/report
           name: result-aggregator
           readOnly: true
-        - mountPath: /secrets/secret
-          name: secret
-          readOnly: true
       serviceAccountName: ci-operator
       volumes:
       - name: pull-secret
@@ -75,9 +71,6 @@
       - name: result-aggregator
         secret:
           secretName: result-aggregator
-      - name: secret
-        secret:
-          secretName: secret
     report: true
     type: periodic
   status:

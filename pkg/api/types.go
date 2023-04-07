@@ -1270,6 +1270,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileLibvirtS390x,
 		ClusterProfileNutanix,
 		ClusterProfileNutanixQE,
+		ClusterProfileNutanixQEDis,
 		ClusterProfileOSDEphemeral,
 		ClusterProfileOpenStack,
 		ClusterProfileOpenStackHwoffload,

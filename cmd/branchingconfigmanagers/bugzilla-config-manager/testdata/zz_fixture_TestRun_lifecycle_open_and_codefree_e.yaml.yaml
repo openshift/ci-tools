@@ -1,9 +1,12 @@
 default:
   main:
+    EnableBackporting: null
     target_release: 4.9.0
   master:
+    EnableBackporting: null
     target_release: 4.9.0
   openshift-4.9:
+    EnableBackporting: null
     dependent_bug_states:
     - status: MODIFIED
     - status: ON_QA
@@ -13,6 +16,7 @@ default:
     target_release: 4.9.0
     validate_by_default: true
   openshift-4.10:
+    EnableBackporting: null
     dependent_bug_states:
     - status: MODIFIED
     - status: ON_QA
@@ -22,6 +26,7 @@ default:
     target_release: 4.10.0
     validate_by_default: true
   release-4.9:
+    EnableBackporting: null
     dependent_bug_states:
     - status: MODIFIED
     - status: ON_QA
@@ -31,6 +36,7 @@ default:
     target_release: 4.9.0
     validate_by_default: true
   release-4.10:
+    EnableBackporting: null
     dependent_bug_states:
     - status: MODIFIED
     - status: ON_QA

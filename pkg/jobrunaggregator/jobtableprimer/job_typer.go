@@ -83,11 +83,8 @@ func newJob(name string) *jobRowBuilder {
 
 	fromRelease := ""
 	if runsUpgrade {
-		switch {
-		case len(versions) == 1:
-			fromRelease = versions[0]
-		case len(versions) >= 2:
-			fromRelease = versions[1]
+		if len(versions) > 0 {
+			fromRelease = versions[len(versions)-1]
 		}
 	}
 

@@ -1,0 +1,14 @@
+agent: kubernetes
+cron: '@yearly'
+decorate: true
+decoration_config:
+  skip_cloning: true
+extra_refs:
+- base_ref: branch
+  org: org
+  repo: repo
+labels:
+  pj-rehearse.openshift.io/can-be-rehearsed: "true"
+name: periodic-ci-org-repo-branch-testname
+prowjob_defaults:
+  tenant_id: gangway-api

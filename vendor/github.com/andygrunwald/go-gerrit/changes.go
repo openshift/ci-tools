@@ -3,8 +3,21 @@ package gerrit
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
+)
+
+// RevisionKind describes the change kind.
+//
+// Gerrit API docs: https://gerrit-review.googlesource.com/Documentation/rest-api-changes.html#revision-info
+type RevisionKind string
+
+const (
+	Rework                 RevisionKind = "REWORK"
+	TrivialRebase          RevisionKind = "TRIVIAL_REBASE"
+	MergeFirstParentUpdate RevisionKind = "MERGE_FIRST_PARENT_UPDATE"
+	NoCodeChange           RevisionKind = "NO_CODE_CHANGE"
+	NoChange               RevisionKind = "NO_CHANGE"
 )
 
 // ChangesService contains Change related REST endpoints
@@ -56,6 +69,11 @@ type CommitMessageInput struct {
 	Message       string       `json:"message,omitempty"`
 	Notify        string       `json:"notify,omitempty"`
 	NotifyDetails []NotifyInfo `json:"notify_details"`
+}
+
+// ReadyForReviewInput entity contains information for transitioning a change from WIP to ready.
+type ReadyForReviewInput struct {
+	Message string `json:"message,omitempty"`
 }
 
 // ChangeEditInput entity contains information for restoring a path within change edit.
@@ -223,16 +241,22 @@ type ReviewerInput struct {
 
 // ReviewInput entity contains information for adding a review to a revision.
 type ReviewInput struct {
-	Message               string                         `json:"message,omitempty"`
-	Tag                   string                         `json:"tag,omitempty"`
-	Labels                map[string]string              `json:"labels,omitempty"`
-	Comments              map[string][]CommentInput      `json:"comments,omitempty"`
-	RobotComments         map[string][]RobotCommentInput `json:"robot_comments,omitempty"`
-	StrictLabels          bool                           `json:"strict_labels,omitempty"`
-	Drafts                string                         `json:"drafts,omitempty"`
-	Notify                string                         `json:"notify,omitempty"`
-	OmitDuplicateComments bool                           `json:"omit_duplicate_comments,omitempty"`
-	OnBehalfOf            string                         `json:"on_behalf_of,omitempty"`
+	Message                          string                         `json:"message,omitempty"`
+	Tag                              string                         `json:"tag,omitempty"`
+	Labels                           map[string]string              `json:"labels,omitempty"`
+	Comments                         map[string][]CommentInput      `json:"comments,omitempty"`
+	RobotComments                    map[string][]RobotCommentInput `json:"robot_comments,omitempty"`
+	StrictLabels                     bool                           `json:"strict_labels,omitempty"`
+	Drafts                           string                         `json:"drafts,omitempty"`
+	Notify                           string                         `json:"notify,omitempty"`
+	OmitDuplicateComments            bool                           `json:"omit_duplicate_comments,omitempty"`
+	OnBehalfOf                       string                         `json:"on_behalf_of,omitempty"`
+	Reviewers                        []ReviewerInput                `json:"reviewers,omitempty"`
+	Ready                            bool                           `json:"ready,omitempty"`
+	WorkInProgress                   bool                           `json:"work_in_progress,omitempty"`
+	AddToAttentionSet                []AttentionSetInput            `json:"add_to_attention_set,omitempty"`
+	RemoveFromAttentionSet           []AttentionSetInput            `json:"remove_from_attention_set,omitempty"`
+	IgnoreAutomaticAttentionSetRules bool                           `json:"ignore_automatic_attention_set_rules,omitempty"`
 }
 
 // RelatedChangeAndCommitInfo entity contains information about a related change and commit.
@@ -343,17 +367,6 @@ type FixReplacementInfo struct {
 	Replacement string `json:"replacement,omitempty"`
 }
 
-//  AttentionSetInfo entity contains details of users that are in the attention set.
-// https://gerrit-review.googlesource.com/Documentation/rest-api-changes.html#attention-set-info
-type AttentionSetInfo struct {
-	// AccountInfo entity.
-	Account AccountInfo `json:"account"`
-	// The timestamp of the last update.
-	LastUpdate Timestamp `json:"last_update"`
-	// The reason of for adding or removing the user.
-	Reason string `json:"reason"`
-}
-
 // DiffIntralineInfo entity contains information about intraline edits in a file.
 //
 // The information consists of a list of <skip length, mark length> pairs,
@@ -366,6 +379,27 @@ type AttentionSetInfo struct {
 // is included in the length calculation, and thus it is possible for
 // the edits to span newlines.
 type DiffIntralineInfo [][2]int
+
+// ChangeInput entity contains information about creating a new change.
+//
+// Docs: https://gerrit-review.googlesource.com/Documentation/rest-api-changes.html#change-input
+type ChangeInput struct {
+	Project           string                 `json:"project"`
+	Branch            string                 `json:"branch"`
+	Subject           string                 `json:"subject"`
+	Topic             string                 `json:"topic,omitempty"`
+	Status            string                 `json:"status,omitempty"`
+	IsPrivate         bool                   `json:"is_private,omitempty"`
+	WorkInProgress    bool                   `json:"work_in_progress,omitempty"`
+	BaseChange        string                 `json:"base_change,omitempty"`
+	BaseCommit        string                 `json:"base_commit,omitempty"`
+	NewBranch         bool                   `json:"new_branch,omitempty"`
+	ValidationOptions map[string]interface{} `json:"validation_options,omitempty"`
+	Merge             *MergeInput            `json:"merge,omitempty"`
+	Author            *AccountInput          `json:"author,omitempty"`
+	Notify            string                 `json:"notify,omitempty"`
+	NotifyDetails     string                 `json:"notify_details,omitempty"`
+}
 
 // ChangeInfo entity contains information about a change.
 type ChangeInfo struct {
@@ -436,8 +470,19 @@ type LabelInfo struct {
 	Values map[string]string `json:"values,omitempty"`
 }
 
+// The MergeInput entity contains information about the merge
+//
+// Docs: https://gerrit-review.googlesource.com/Documentation/rest-api-changes.html#merge-input
+type MergeInput struct {
+	Source         string `json:"source"`
+	SourceBranch   string `json:"source_branch,omitempty"`
+	Strategy       string `json:"strategy,omitempty"`
+	AllowConflicts bool   `json:"allow_conflicts,omitempty"`
+}
+
 // RevisionInfo entity contains information about a patch set.
 type RevisionInfo struct {
+	Kind              RevisionKind          `json:"kind,omitempty"`
 	Draft             bool                  `json:"draft,omitempty"`
 	Number            int                   `json:"_number"`
 	Created           Timestamp             `json:"created"`
@@ -479,6 +524,9 @@ type QueryOptions struct {
 	// The n parameter can be used to limit the returned results.
 	// If the n query parameter is supplied and additional changes exist that match the query beyond the end, the last change object has a _more_changes: true JSON field set.
 	Limit int `url:"n,omitempty"`
+
+	// The S or start query parameter can be supplied to skip a number of changes from the list.
+	Start int `url:"start,omitempty"`
 }
 
 // QueryChangeOptions specifies the parameters to the ChangesService.QueryChanges.
@@ -703,15 +751,18 @@ func (s *ChangesService) getCommentInfoMapSliceResponse(u string) (*map[string][
 }
 
 // CreateChange creates a new change.
-// The change info ChangeInfo entity must be provided in the request body.
+//
+// The change input ChangeInput entity must be provided in the request body.
+//
 // Only the following attributes are honored: project, branch, subject, status and topic.
 // The first three attributes are mandatory.
+//
 // Valid values for status are: DRAFT and NEW.
 //
 // As response a ChangeInfo entity is returned that describes the resulting change.
 //
 // Gerrit API docs: https://gerrit-review.googlesource.com/Documentation/rest-api-changes.html#create-change
-func (s *ChangesService) CreateChange(input *ChangeInfo) (*ChangeInfo, *Response, error) {
+func (s *ChangesService) CreateChange(input *ChangeInput) (*ChangeInfo, *Response, error) {
 	u := "changes/"
 
 	req, err := s.client.NewRequest("POST", u, input)
@@ -738,6 +789,24 @@ func (s *ChangesService) SetCommitMessage(changeID string, input *CommitMessageI
 	u := fmt.Sprintf("changes/%s/message", changeID)
 
 	req, err := s.client.NewRequest("PUT", u, input)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.client.Do(req, nil)
+}
+
+// SetReadyForReview marks the change as ready for review (set WIP property to false)
+// Changes may only be marked ready by the owner, project owners or site administrators.
+// Activates notifications of reviewer. The request body does not need to include a
+// WorkInProgressInput entity if no review comment is added.
+// Marking a change ready for review also adds all of the reviewers of the change to the attention set.
+//
+// Gerrit API docs: https://gerrit-review.googlesource.com/Documentation/rest-api-changes.html#set-ready-for-review
+func (s *ChangesService) SetReadyForReview(changeID string, input *ReadyForReviewInput) (*Response, error) {
+	u := fmt.Sprintf("changes/%s/ready", changeID)
+
+	req, err := s.client.NewRequest("POST", u, input)
 	if err != nil {
 		return nil, err
 	}
@@ -778,10 +847,13 @@ func (s *ChangesService) DeleteTopic(changeID string) (*Response, error) {
 	return s.client.DeleteRequest(u, nil)
 }
 
-// DeleteDraftChange deletes a draft change.
+// DeleteChange deletes a new or abandoned change
 //
-// Gerrit API docs: https://gerrit-review.googlesource.com/Documentation/rest-api-changes.html#delete-draft-change
-func (s *ChangesService) DeleteDraftChange(changeID string) (*Response, error) {
+// New or abandoned changes can be deleted by their owner if the user is granted the Delete Own Changes
+// permission, otherwise only by administrators.
+//
+// Gerrit API docs: https://gerrit-review.googlesource.com/Documentation/rest-api-changes.html#delete-change
+func (s *ChangesService) DeleteChange(changeID string) (*Response, error) {
 	u := fmt.Sprintf("changes/%s", changeID)
 	return s.client.DeleteRequest(u, nil)
 }
@@ -853,7 +925,7 @@ func (s *ChangesService) change(tail string, changeID string, input interface{})
 		return nil, resp, err
 	}
 	if resp.StatusCode == http.StatusConflict {
-		body, err := ioutil.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return v, resp, err
 		}

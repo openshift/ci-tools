@@ -71,24 +71,21 @@ func ShardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs, f ShardProwConf
 	}
 
 	for orgRepoBranch, orgMergeConfig := range pc.Tide.MergeType {
-		var orgRepo prowconfig.OrgRepo
 		org, repo, branch := prowconfigutils.ExtractOrgRepoBranch(orgRepoBranch)
-		if org != "" && repo != "" && branch != "" {
-			// org/repo@branch configuration: do nothing
-		} else if org != "" && repo != "" {
-			// org/repo configuration
-			orgRepo.Org = org
-			orgRepo.Repo = repo
+		orgRepo := prowconfig.OrgRepo{Org: org, Repo: repo}
+		switch {
+		// org/repo
+		case org != "" && repo != "" && branch == "":
 			setOrgRepoOnConfigs(orgRepo, orgMergeConfig.MergeType)
-		} else {
-			orgRepo.Org = orgRepoBranch
+		// org
+		case org != "" && repo == "" && branch == "":
 			if orgMergeConfig.MergeType != "" {
 				setOrgRepoOnConfigs(orgRepo, orgMergeConfig.MergeType)
 			} else {
-				for repo, repoMergeConfig := range orgMergeConfig.Repos {
-					if repo != prowconfigutils.TideRepoMergeTypeWildcard &&
+				for r, repoMergeConfig := range orgMergeConfig.Repos {
+					if r != prowconfigutils.TideRepoMergeTypeWildcard &&
 						repoMergeConfig.MergeType != "" {
-						orgRepo.Repo = repo
+						orgRepo.Repo = r
 						setOrgRepoOnConfigs(orgRepo, repoMergeConfig.MergeType)
 					}
 				}

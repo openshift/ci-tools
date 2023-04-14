@@ -95,9 +95,9 @@ func TestShardProwConfig(t *testing.T) {
 			name: "Org and repo mergemethod config gets written out",
 			in: &config.ProwConfig{
 				Tide: config.Tide{
-					TideGitHubConfig: config.TideGitHubConfig{MergeType: map[string]types.PullRequestMergeType{
-						"openshift":         types.MergeSquash,
-						"openshift/release": types.MergeRebase,
+					TideGitHubConfig: config.TideGitHubConfig{MergeType: map[string]config.TideOrgMergeType{
+						"openshift":         {MergeType: types.MergeSquash},
+						"openshift/release": {MergeType: types.MergeRebase},
 					}},
 				},
 			},
@@ -131,9 +131,9 @@ func TestShardProwConfig(t *testing.T) {
 					},
 				},
 				Tide: config.Tide{
-					TideGitHubConfig: config.TideGitHubConfig{MergeType: map[string]types.PullRequestMergeType{
-						"openshift":         types.MergeSquash,
-						"openshift/release": types.MergeRebase,
+					TideGitHubConfig: config.TideGitHubConfig{MergeType: map[string]config.TideOrgMergeType{
+						"openshift":         {MergeType: types.MergeSquash},
+						"openshift/release": {MergeType: types.MergeRebase},
 					}},
 				},
 			},

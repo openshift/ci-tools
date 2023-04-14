@@ -221,39 +221,39 @@ func TestInjectPrivateReposTideQueries(t *testing.T) {
 func TestInjectPrivateMergeType(t *testing.T) {
 	testCases := []struct {
 		id             string
-		tideMergeTypes map[string]types.PullRequestMergeType
-		expected       map[string]types.PullRequestMergeType
+		tideMergeTypes map[string]prowconfig.TideOrgMergeType
+		expected       map[string]prowconfig.TideOrgMergeType
 	}{
 		{
 			id: "no changes expected",
-			tideMergeTypes: map[string]types.PullRequestMergeType{
-				"anotherOrg/Repo": types.MergeMerge,
-				"openshift/Repo2": types.MergeRebase,
-				"testshift/Repo3": types.MergeSquash,
+			tideMergeTypes: map[string]prowconfig.TideOrgMergeType{
+				"anotherOrg/Repo": {MergeType: types.MergeMerge},
+				"openshift/Repo2": {MergeType: types.MergeRebase},
+				"testshift/Repo3": {MergeType: types.MergeSquash},
 			},
-			expected: map[string]types.PullRequestMergeType{
-				"anotherOrg/Repo": types.MergeMerge,
-				"openshift/Repo2": types.MergeRebase,
-				"testshift/Repo3": types.MergeSquash,
+			expected: map[string]prowconfig.TideOrgMergeType{
+				"anotherOrg/Repo": {MergeType: types.MergeMerge},
+				"openshift/Repo2": {MergeType: types.MergeRebase},
+				"testshift/Repo3": {MergeType: types.MergeSquash},
 			},
 		},
 		{
 			id: "changes expected",
-			tideMergeTypes: map[string]types.PullRequestMergeType{
-				"anotherOrg/Repo":       types.MergeMerge,
-				"openshift/testRepo1":   types.MergeSquash,
-				"openshift/anotherRepo": types.MergeSquash,
-				"testshift/anotherRepo": types.MergeMerge,
-				"testshift/testRepo3":   types.MergeMerge,
+			tideMergeTypes: map[string]prowconfig.TideOrgMergeType{
+				"anotherOrg/Repo":       {MergeType: types.MergeMerge},
+				"openshift/testRepo1":   {MergeType: types.MergeSquash},
+				"openshift/anotherRepo": {MergeType: types.MergeSquash},
+				"testshift/anotherRepo": {MergeType: types.MergeMerge},
+				"testshift/testRepo3":   {MergeType: types.MergeMerge},
 			},
-			expected: map[string]types.PullRequestMergeType{
-				"anotherOrg/Repo":          types.MergeMerge,
-				"openshift/testRepo1":      types.MergeSquash,
-				"openshift/anotherRepo":    types.MergeSquash,
-				"testshift/anotherRepo":    types.MergeMerge,
-				"testshift/testRepo3":      types.MergeMerge,
-				"openshift-priv/testRepo1": types.MergeSquash,
-				"openshift-priv/testRepo3": types.MergeMerge,
+			expected: map[string]prowconfig.TideOrgMergeType{
+				"anotherOrg/Repo":          {MergeType: types.MergeMerge},
+				"openshift/testRepo1":      {MergeType: types.MergeSquash},
+				"openshift/anotherRepo":    {MergeType: types.MergeSquash},
+				"testshift/anotherRepo":    {MergeType: types.MergeMerge},
+				"testshift/testRepo3":      {MergeType: types.MergeMerge},
+				"openshift-priv/testRepo1": {MergeType: types.MergeSquash},
+				"openshift-priv/testRepo3": {MergeType: types.MergeMerge},
 			},
 		},
 	}

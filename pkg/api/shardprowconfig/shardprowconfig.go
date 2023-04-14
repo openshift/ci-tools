@@ -14,6 +14,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/prowconfigsharding"
+	"github.com/openshift/ci-tools/pkg/prowconfigutils"
 )
 
 type ShardProwConfigFunctors interface {
@@ -58,20 +59,42 @@ func ShardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs, f ShardProwConf
 		delete(pc.BranchProtection.Orgs, org)
 	}
 
-	for orgOrgRepoString, mergeMethod := range pc.Tide.MergeType {
-		var orgRepo prowconfig.OrgRepo
-		if idx := strings.Index(orgOrgRepoString, "/"); idx != -1 {
-			orgRepo.Org = orgOrgRepoString[:idx]
-			orgRepo.Repo = orgOrgRepoString[idx+1:]
-		} else {
-			orgRepo.Org = orgOrgRepoString
-		}
-
+	setOrgRepoOnConfigs := func(orgRepo prowconfig.OrgRepo, mergeType types.PullRequestMergeType) {
 		if configsByOrgRepo[orgRepo] == nil {
 			configsByOrgRepo[orgRepo] = &ProwConfigWithPointers{}
 		}
-		configsByOrgRepo[orgRepo].Tide = &TideConfig{MergeType: map[string]types.PullRequestMergeType{orgOrgRepoString: mergeMethod}}
-		delete(pc.Tide.MergeType, orgOrgRepoString)
+		orgRepoString := orgRepo.Org
+		if orgRepo.Repo != "" {
+			orgRepoString = fmt.Sprintf("%s/%s", orgRepo.Org, orgRepo.Repo)
+		}
+		configsByOrgRepo[orgRepo].Tide = &TideConfig{MergeType: map[string]types.PullRequestMergeType{orgRepoString: mergeType}}
+	}
+
+	for orgRepoBranch, orgMergeConfig := range pc.Tide.MergeType {
+		var orgRepo prowconfig.OrgRepo
+		org, repo, branch := prowconfigutils.ExtractOrgRepoBranch(orgRepoBranch)
+		if org != "" && repo != "" && branch != "" {
+			// org/repo@branch configuration: do nothing
+		} else if org != "" && repo != "" {
+			// org/repo configuration
+			orgRepo.Org = org
+			orgRepo.Repo = repo
+			setOrgRepoOnConfigs(orgRepo, orgMergeConfig.MergeType)
+		} else {
+			orgRepo.Org = orgRepoBranch
+			if orgMergeConfig.MergeType != "" {
+				setOrgRepoOnConfigs(orgRepo, orgMergeConfig.MergeType)
+			} else {
+				for repo, repoMergeConfig := range orgMergeConfig.Repos {
+					if repo != prowconfigutils.TideRepoMergeTypeWildcard &&
+						repoMergeConfig.MergeType != "" {
+						orgRepo.Repo = repo
+						setOrgRepoOnConfigs(orgRepo, repoMergeConfig.MergeType)
+					}
+				}
+			}
+		}
+		delete(pc.Tide.MergeType, orgRepoBranch)
 	}
 
 	f.GetDataFromProwConfig(pc)

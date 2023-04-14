@@ -19,13 +19,13 @@ import (
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	prowflagutil "k8s.io/test-infra/prow/flagutil"
-	"k8s.io/test-infra/prow/git/types"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/plugins"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/prowconfigsharding"
+	"github.com/openshift/ci-tools/pkg/prowconfigutils"
 )
 
 const (
@@ -232,15 +232,41 @@ func setPrivateReposTideQueries(tideQueries []prowconfig.TideQuery, orgRepos org
 	}
 }
 
-func injectPrivateMergeType(tideMergeTypes map[string]types.PullRequestMergeType, orgRepos orgReposWithOfficialImages) {
+func injectPrivateMergeType(tideMergeTypes map[string]prowconfig.TideOrgMergeType, orgRepos orgReposWithOfficialImages) {
 	logrus.Info("Processing...")
 
-	for orgRepo, value := range tideMergeTypes {
-		if orgRepos.isOfficialRepoFull(orgRepo) {
-			repo := strings.Split(orgRepo, "/")[1]
+	// FIXME(danilo-gemoli): iteration isn't deterministic as tideMergeTypes is a map
+	for orgRepoBranch, orgMergeType := range tideMergeTypes {
+		org, repo, branch := prowconfigutils.ExtractOrgRepoBranch(orgRepoBranch)
+		switch {
+		// org/repo@branch shorthand
+		case org != "" && repo != "" && branch != "":
+			if orgRepos.isOfficialRepoFull(org + "/" + repo) {
+				logrus.WithField("repo", repo).Info("Found")
+				tideMergeTypes[privateOrgRepo(repo)+"@"+branch] = orgMergeType
+			}
+		// org/repo shorthand
+		case org != "" && repo != "":
+			if orgRepos.isOfficialRepoFull(org + "/" + repo) {
+				logrus.WithField("repo", repo).Info("Found")
+				tideMergeTypes[privateOrgRepo(repo)] = orgMergeType
+			}
+		// org config
+		default:
+			// FIXME(danilo-gemoli): iteration isn't deterministic as orgMergeType.Repos is a map
+			for repo, repoMergeType := range orgMergeType.Repos {
+				if orgRepos.isOfficialRepoFull(org + "/" + repo) {
+					logrus.WithField("repo", repo).Info("Found")
+					if _, ok := tideMergeTypes[openshiftPrivOrg]; !ok {
+						tideMergeTypes[openshiftPrivOrg] = prowconfig.TideOrgMergeType{}
+					}
+					privateOrgConfig := tideMergeTypes[openshiftPrivOrg]
+					if _, ok := privateOrgConfig.Repos[repo]; !ok {
+						privateOrgConfig.Repos[repo] = repoMergeType
+					}
 
-			logrus.WithField("repo", repo).Info("Found")
-			tideMergeTypes[privateOrgRepo(repo)] = value
+				}
+			}
 		}
 	}
 }

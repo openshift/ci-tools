@@ -269,7 +269,9 @@ func (f *fakeResolverClient) ConfigWithTest(base *api.Metadata, testSource *api.
 		Metadata: *base,
 		Tests: []api.TestStepConfiguration{
 			{
-				As: testSource.Test,
+				As:                          testSource.Test,
+				Secret:                      &api.Secret{Name: "secret"},
+				MultiStageTestConfiguration: &api.MultiStageTestConfiguration{ClusterProfile: api.ClusterProfileAWS},
 			},
 		},
 	}, nil

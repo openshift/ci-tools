@@ -172,11 +172,12 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 	commands := fmt.Sprintf(`
 set -euo pipefail
 export HOME=/tmp
-mkdir -p $HOME/.docker
+export XDG_RUNTIME_DIR=/tmp/run
+mkdir -p $HOME/.docker "${XDG_RUNTIME_DIR}"
 if [[ -d /pull ]]; then
 	cp /pull/.dockerconfigjson $HOME/.docker/config.json
 fi
-oc registry login
+oc registry login --to $HOME/.docker/config.json
 oc adm release extract --from=%q --file=image-references > ${ARTIFACT_DIR}/%s
 # while release creation may happen more than once in the lifetime of a test
 # namespace, only one release creation Pod will ever run at once. Therefore,

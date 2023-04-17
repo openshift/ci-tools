@@ -212,6 +212,8 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 		Commands: fmt.Sprintf(`
 set -xeuo pipefail
 export HOME=/tmp
+export XDG_RUNTIME_DIR=/tmp/run
+mkdir -p "${XDG_RUNTIME_DIR}"
 oc registry login
 oc adm release new --max-per-registry=32 -n %q --from-image-stream %q --to-image-base %q --to-image %q --name %q
 oc adm release extract --from=%q --to=${ARTIFACT_DIR}/release-payload-%s

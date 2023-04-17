@@ -229,6 +229,7 @@ func main() {
 		logger.Debug("starting eventServer")
 		eventServer := githubeventserver.New(o.githubEventServerOptions, webhookTokenGenerator, logger)
 		eventServer.RegisterHandlePullRequestEvent(s.handlePullRequestCreation)
+		eventServer.RegisterHandlePullRequestEvent(s.handleNewPush)
 		eventServer.RegisterHandleIssueCommentEvent(s.handleIssueComment)
 		eventServer.RegisterHelpProvider(s.helpProvider, logger)
 

@@ -612,6 +612,7 @@ const (
 	ClusterVSphere Cluster = "vsphere"
 	ClusterARM01   Cluster = "arm01"
 	ClusterHive    Cluster = "hive"
+	ClusterMulti01 Cluster = "multi01"
 )
 
 // TestStepConfiguration describes a step that runs a

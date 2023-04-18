@@ -23,6 +23,7 @@ import (
 )
 
 const (
+	rehearsalNotifier  = "[REHEARSALNOTIFIER]"
 	pjRehearse         = "pj-rehearse"
 	needsOkToTestLabel = "needs-ok-to-test"
 	rehearseNormal     = "/pj-rehearse"
@@ -31,7 +32,6 @@ const (
 	rehearseSkip       = "/pj-rehearse skip"
 	rehearseAck        = "/pj-rehearse ack"
 	rehearseReject     = "/pj-rehearse reject"
-	rehearseRefresh    = "/pj-rehearse refresh"
 	rehearseAutoAck    = "/pj-rehearse auto-ack"
 	rehearseAbort      = "/pj-rehearse abort"
 )
@@ -44,6 +44,8 @@ type githubClient interface {
 	RemoveLabel(org, repo string, number int, label string) error
 	GetPullRequest(org, repo string, number int) (*github.PullRequest, error)
 	GetRef(org, repo, ref string) (string, error)
+	ListIssueComments(org, repo string, number int) ([]github.IssueComment, error)
+	DeleteComment(org, repo string, id int) error
 }
 
 type server struct {
@@ -86,12 +88,6 @@ func (s *server) helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, e
 		Description: fmt.Sprintf("Run up to %d affected job rehearsals for the change in the PR.", s.rehearsalConfig.MaxLimit),
 		WhoCanUse:   "Anyone can use on trusted PRs",
 		Examples:    []string{rehearseMax},
-	})
-	pluginHelp.AddCommand(pluginhelp.Command{
-		Usage:       rehearseRefresh,
-		Description: "Request an updated list of affected jobs. Useful when there is a new push to the branch.",
-		WhoCanUse:   "Anyone can use on trusted PRs",
-		Examples:    []string{rehearseRefresh},
 	})
 	pluginHelp.AddCommand(pluginhelp.Command{
 		Usage:       rehearseSkip,
@@ -201,6 +197,66 @@ func (s *server) respondToNewPR(pullRequest *github.PullRequest, logger *logrus.
 	}
 }
 
+func (s *server) handleNewPush(l *logrus.Entry, event github.PullRequestEvent) {
+	if github.PullRequestActionSynchronize == event.Action {
+		org := event.Repo.Owner.Login
+		repo := event.Repo.Name
+		number := event.PullRequest.Number
+		logger := l.WithFields(logrus.Fields{
+			"org":  org,
+			"repo": repo,
+			"pr":   number,
+		})
+		logger.Debug("handling new push")
+		pullRequest, err := s.ghc.GetPullRequest(org, repo, number)
+		if err != nil {
+			// This should only happen under GitHub api degradation
+			logger.WithError(err).Error("failed to get pull request")
+			return
+		}
+
+		comments, err := s.ghc.ListIssueComments(org, repo, number)
+		if err != nil {
+			// This also shouldn't happen, but if it does just log and continue it doesn't affect the rest of the process
+			logger.WithError(err).Error("failed to get comments for pull request")
+		}
+		for _, comment := range comments {
+			if strings.HasPrefix(comment.Body, rehearsalNotifier) {
+				logger.Debugf("found %s in comment...deleting", rehearsalNotifier)
+				if err := s.ghc.DeleteComment(org, repo, comment.ID); err != nil {
+					logger.WithError(err).Error("error deleting comment")
+				}
+			}
+		}
+
+		presubmits, periodics, err := s.getAffectedJobs(pullRequest, logger)
+		user := pullRequest.User.Login
+		if err != nil {
+			comment := "unable to determine affected jobs. This could be due to a branch that needs to be rebased."
+			s.reportFailure(comment, err, org, repo, user, number, false, true, logger)
+			return
+		}
+		foundJobsToRehearse := len(presubmits) > 0 || len(periodics) > 0
+		if foundJobsToRehearse {
+			if err := s.ghc.RemoveLabel(org, repo, number, rehearse.RehearsalsAckLabel); err != nil {
+				// We shouldn't get an error here if the label doesn't exist, so any error is legitimate
+				logger.WithError(err).Errorf("failed to remove '%s' label", rehearse.RehearsalsAckLabel)
+			}
+		} else {
+			s.acknowledgeRehearsals(org, repo, number, logger)
+		}
+		jobTableLines, jobCount := s.getJobsTableLines(presubmits, periodics, user)
+		if jobCount > s.rehearsalConfig.MaxLimit {
+			fileLocation := s.dumpAffectedJobsToGCS(pullRequest, presubmits, periodics, jobCount, logger)
+			jobTableLines = append(jobTableLines, fmt.Sprintf("A full list of affected jobs can be found [here](%s%s)", s.rehearsalConfig.GCSBrowserPrefix, fileLocation))
+		}
+		jobTableLines = append(jobTableLines, s.getUsageDetailsLines()...)
+		if err = s.ghc.CreateComment(org, repo, number, strings.Join(jobTableLines, "\n")); err != nil {
+			logger.WithError(err).Error("failed to create comment")
+		}
+	}
+}
+
 func (s *server) handleIssueComment(l *logrus.Entry, event github.IssueCommentEvent) {
 	if !event.Issue.IsPullRequest() || github.IssueCommentActionCreated != event.Action {
 		return
@@ -249,26 +305,6 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 			case rehearseReject:
 				if err := s.ghc.RemoveLabel(org, repo, number, rehearse.RehearsalsAckLabel); err != nil {
 					logger.WithError(err).Errorf("failed to remove '%s' label", rehearse.RehearsalsAckLabel)
-				}
-			case rehearseRefresh:
-				presubmits, periodics, err := s.getAffectedJobs(pullRequest, logger)
-				if err != nil {
-					if err = s.ghc.CreateComment(org, repo, pullRequest.Number, fmt.Sprintf("@%s, pj-rehearse couldn't determine affected jobs. This could be due to a branch that needs to be rebased.", user)); err != nil {
-						logger.WithError(err).Error("failed to create comment")
-					}
-				}
-				foundJobsToRehearse := len(presubmits) > 0 || len(periodics) > 0
-				if !foundJobsToRehearse {
-					s.acknowledgeRehearsals(org, repo, number, logger)
-				}
-				jobTableLines, jobCount := s.getJobsTableLines(presubmits, periodics, user)
-				if jobCount > s.rehearsalConfig.MaxLimit {
-					fileLocation := s.dumpAffectedJobsToGCS(pullRequest, presubmits, periodics, jobCount, logger)
-					jobTableLines = append(jobTableLines, fmt.Sprintf("A full list of affected jobs can be found [here](%s%s)", s.rehearsalConfig.GCSBrowserPrefix, fileLocation))
-				}
-				jobTableLines = append(jobTableLines, s.getUsageDetailsLines()...)
-				if err = s.ghc.CreateComment(org, repo, number, strings.Join(jobTableLines, "\n")); err != nil {
-					logger.WithError(err).Error("failed to create comment")
 				}
 			case rehearseAbort:
 				s.rehearsalConfig.AbortAllRehearsalJobs(org, repo, number, logger)
@@ -445,11 +481,11 @@ func (s *server) prepareCandidate(repoClient git.RepoClient, pullRequest *github
 // and the total number of affected jobs
 func (s *server) getJobsTableLines(presubmits config.Presubmits, periodics config.Periodics, user string) ([]string, int) {
 	if len(presubmits) == 0 && len(periodics) == 0 {
-		return []string{fmt.Sprintf("@%s: no rehearsable tests are affected by this change", user)}, 0
+		return []string{fmt.Sprintf("%s \n@%s: no rehearsable tests are affected by this change", rehearsalNotifier, user)}, 0
 	}
 
 	lines := []string{
-		fmt.Sprintf("@%s: the `pj-rehearse` plugin accommodates running rehearsal tests for the changes in this PR. Expand **'Interacting with pj-rehearse'** for usage details. The following rehearsable tests have been affected by this change:", user),
+		fmt.Sprintf("%s \n@%s: the `pj-rehearse` plugin accommodates running rehearsal tests for the changes in this PR. Expand **'Interacting with pj-rehearse'** for usage details. The following rehearsable tests have been affected by this change:", rehearsalNotifier, user),
 		"",
 		"Test name | Repo | Type | Reason",
 		"--- | --- | --- | ---",
@@ -499,7 +535,6 @@ func (s *server) getUsageDetailsLines() []string {
 		fmt.Sprintf("Comment: `%s` to run up to %d rehearsals", rehearseMax, rc.MaxLimit),
 		fmt.Sprintf("Comment: `%s` to run up to %d rehearsals, and add the `%s` label on success", rehearseAutoAck, rc.NormalLimit, rehearse.RehearsalsAckLabel),
 		fmt.Sprintf("Comment: `%s` to abort all active rehearsals", rehearseAbort),
-		fmt.Sprintf("Comment: `%s` to get an updated list of affected jobs (useful if you have new pushes to the branch)", rehearseRefresh),
 		"",
 		fmt.Sprintf("Once you are satisfied with the results of the rehearsals, comment: `%s` to unblock merge. When the `%s` label is present on your PR, merge will no longer be blocked by rehearsals.", rehearseAck, rehearse.RehearsalsAckLabel),
 		fmt.Sprintf("If you would like the `%s` label removed, comment: `%s` to re-block merging.", rehearse.RehearsalsAckLabel, rehearseReject),

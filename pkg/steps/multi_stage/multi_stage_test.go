@@ -80,7 +80,7 @@ func TestRequires(t *testing.T) {
 				As:                                 "some-e2e",
 				ClusterClaim:                       tc.clusterClaim,
 				MultiStageTestConfigurationLiteral: &tc.steps,
-			}, &tc.config, api.NewDeferredParameters(nil), nil, nil, nil, "node-name")
+			}, &tc.config, api.NewDeferredParameters(nil), nil, nil, nil, "node-name", "")
 			ret := step.Requires()
 			if len(ret) == len(tc.req) {
 				matches := true
@@ -249,6 +249,37 @@ func TestEnvironment(t *testing.T) {
 			})
 			if diff := cmp.Diff(tc.expected, got); diff != "" {
 				t.Errorf("%s: result differs from expected:\n %s", tc.name, diff)
+			}
+		})
+	}
+}
+
+func TestProfileSecretName(t *testing.T) {
+	t.Parallel()
+	testCases := []struct {
+		name             string
+		stepName         string
+		additionalSuffix string
+		expected         string
+	}{
+		{
+			name:     "no additional suffix",
+			stepName: "step",
+			expected: "step-cluster-profile",
+		},
+		{
+			name:             "additional suffix",
+			stepName:         "step-0",
+			additionalSuffix: "0",
+			expected:         "step-cluster-profile",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			step := multiStageTestStep{name: tc.stepName, additionalSuffix: tc.additionalSuffix}
+			result := step.profileSecretName()
+			if diff := cmp.Diff(tc.expected, result); diff != "" {
+				t.Fatalf("result does not match expected, diff: %s", diff)
 			}
 		})
 	}

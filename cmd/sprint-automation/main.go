@@ -40,6 +40,8 @@ type options struct {
 
 	slackTokenPath string
 	weekStart      bool
+
+	enableBuild02UpgradeNotification bool
 }
 
 func (o *options) Validate() error {
@@ -71,6 +73,7 @@ func gatherOptions(fs *flag.FlagSet, args ...string) options {
 
 	fs.StringVar(&o.slackTokenPath, "slack-token-path", "", "Path to the file containing the Slack token to use.")
 	fs.BoolVar(&o.weekStart, "week-start", false, "If set to true run in 'Monday' mode: performing, additional, Monday only activities")
+	fs.BoolVar(&o.enableBuild02UpgradeNotification, "enable-build02-upgrade-notification", false, "If set to true send notification when build02 needs an upgrade")
 
 	if err := fs.Parse(args); err != nil {
 		logrus.WithError(err).Fatal("Could not parse args.")
@@ -162,15 +165,20 @@ func main() {
 		clients[cluster] = client
 	}
 
-	versionInfo, err := upgradeBuild02(context.TODO(), clients[api.ClusterBuild01], clients[api.ClusterBuild02])
-	if err != nil {
-		logrus.WithError(err).Fatal("could not determine if build02 needs to upgraded")
-	}
-	if versionInfo != nil {
-		logrus.WithField("toVersion", versionInfo.version).Info("Posting @dptp-triage about upgrading build02 to Slack")
-		if err := sendTriageBuild02Upgrade(slackClient, versionInfo.version, versionInfo.stableDuration); err != nil {
-			logrus.WithError(err).Fatal("Could not post @dptp-triage about upgrading build02 to Slack.")
+	if o.enableBuild02UpgradeNotification {
+		versionInfo, err := upgradeBuild02(context.TODO(), clients[api.ClusterBuild01], clients[api.ClusterBuild02])
+		if err != nil {
+			logrus.WithError(err).Fatal("could not determine if build02 needs to upgraded")
 		}
+		if versionInfo != nil {
+			logrus.WithField("toVersion", versionInfo.version).Info("Posting @dptp-triage about upgrading build02 to Slack")
+			if err := sendTriageBuild02Upgrade(slackClient, versionInfo.version, versionInfo.stableDuration); err != nil {
+				logrus.WithError(err).Fatal("Could not post @dptp-triage about upgrading build02 to Slack.")
+			}
+		}
+	} else {
+		logrus.WithField("enableBuild02UpgradeNotification", o.enableBuild02UpgradeNotification).
+			Info("Skipped checking if build02 needs an upgrade")
 	}
 }
 

@@ -220,13 +220,11 @@ func (s *server) handleNewPush(l *logrus.Entry, event github.PullRequestEvent) {
 			// This also shouldn't happen, but if it does just log and continue it doesn't affect the rest of the process
 			logger.WithError(err).Error("failed to get comments for pull request")
 		}
-		if len(comments) > 0 {
-			for _, comment := range comments {
-				if strings.HasPrefix(comment.Body, rehearsalNotifier) {
-					logger.Debugf("found %s in comment...deleting", rehearsalNotifier)
-					if err := s.ghc.DeleteComment(org, repo, comment.ID); err != nil {
-						logger.WithError(err).Error("error deleting comment")
-					}
+		for _, comment := range comments {
+			if strings.HasPrefix(comment.Body, rehearsalNotifier) {
+				logger.Debugf("found %s in comment...deleting", rehearsalNotifier)
+				if err := s.ghc.DeleteComment(org, repo, comment.ID); err != nil {
+					logger.WithError(err).Error("error deleting comment")
 				}
 			}
 		}

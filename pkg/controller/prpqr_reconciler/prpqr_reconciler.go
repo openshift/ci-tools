@@ -471,6 +471,7 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 			continue
 		}
 		test := ciopConfig.Tests[i].DeepCopy()
+		//TODO: Not sure if these secret changes are necessary, but leaving for now
 		if aggregatedOptions != nil {
 			index := strconv.Itoa(aggregatedOptions.aggregatedIndex)
 			for j, secret := range test.Secrets {
@@ -479,13 +480,6 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 			}
 			if test.Secret != nil {
 				test.Secret.Name = fmt.Sprintf("%s-%s", test.Secret.Name, index)
-			}
-			if test.MultiStageTestConfiguration != nil && test.MultiStageTestConfiguration.ClusterProfile != "" {
-				test.MultiStageTestConfiguration.ClusterProfile = api.ClusterProfile(fmt.Sprintf("%s-%s", test.MultiStageTestConfiguration.ClusterProfile, index))
-			} else if test.MultiStageTestConfigurationLiteral != nil && test.MultiStageTestConfigurationLiteral.ClusterProfile != "" {
-				test.MultiStageTestConfigurationLiteral.ClusterProfile = api.ClusterProfile(fmt.Sprintf("%s-%s", test.MultiStageTestConfigurationLiteral.ClusterProfile, index))
-			} else if test.OpenshiftInstallerClusterTestConfiguration != nil && test.OpenshiftInstallerClusterTestConfiguration.ClusterProfile != "" {
-				test.OpenshiftInstallerClusterTestConfiguration.ClusterProfile = api.ClusterProfile(fmt.Sprintf("%s-%s", test.OpenshiftInstallerClusterTestConfiguration.ClusterProfile, index))
 			}
 		}
 		jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, fakeProwgenInfo, prowgen.NewCiOperatorPodSpecGenerator(), *test)

@@ -111,6 +111,9 @@ type Info struct {
 	RepoPath string
 }
 
+type InfoIterFunc func(string, *Info) error
+type ConfigIterFunc func(*cioperatorapi.ReleaseBuildConfiguration, *Info) error
+
 // We use the directory/file naming convention to encode useful information
 // about component repository information.
 // The convention for ci-operator config files in this repo:
@@ -184,7 +187,7 @@ func isMountSpecialFile(path string) bool {
 
 // OperateOnCIOperatorConfig runs the callback on the parsed data from
 // the CI Operator configuration file provided
-func OperateOnCIOperatorConfig(path string, callback func(*cioperatorapi.ReleaseBuildConfiguration, *Info) error) error {
+func OperateOnCIOperatorConfig(path string, callback ConfigIterFunc) error {
 	info, err := InfoFromPath(path)
 	if err != nil {
 		logrus.WithField("source-file", path).WithError(err).Error("Failed to resolve info from CI Operator configuration path")
@@ -204,11 +207,11 @@ func OperateOnCIOperatorConfig(path string, callback func(*cioperatorapi.Release
 
 // OperateOnCIOperatorConfigDir runs the callback on all CI Operator
 // configuration files found while walking the directory provided
-func OperateOnCIOperatorConfigDir(configDir string, callback func(*cioperatorapi.ReleaseBuildConfiguration, *Info) error) error {
+func OperateOnCIOperatorConfigDir(configDir string, callback ConfigIterFunc) error {
 	return OperateOnCIOperatorConfigSubdir(configDir, "", callback)
 }
 
-func OperateOnCIOperatorConfigSubdir(configDir, subDir string, callback func(*cioperatorapi.ReleaseBuildConfiguration, *Info) error) error {
+func OperateOnCIOperatorConfigSubdir(configDir, subDir string, callback ConfigIterFunc) error {
 	type item struct {
 		config *cioperatorapi.ReleaseBuildConfiguration
 		info   *Info
@@ -271,6 +274,24 @@ func OperateOnCIOperatorConfigSubdir(configDir, subDir string, callback func(*ci
 	}
 	done := func() { close(outputCh) }
 	return util.ProduceMapReduce(0, produce, map_, reduce, done, errCh)
+}
+
+func OperateOnCIOperatorConfigPaths(path string, callback InfoIterFunc) error {
+	return filepath.WalkDir(path, func(path string, fsInfo fs.DirEntry, err error) error {
+		if err != nil {
+			logrus.WithField("source-file", path).WithError(err).Error("Failed to walk CI Operator configuration dir")
+			return err
+		}
+		if !isConfigFile(fsInfo) {
+			return nil
+		}
+		info, err := InfoFromPath(path)
+		if err != nil {
+			logrus.WithField("source-file", path).WithError(err).Error("Failed to resolve info from CI Operator configuration path")
+			return err
+		}
+		return callback(path, info)
+	})
 }
 
 func LoggerForInfo(info Info) *logrus.Entry {

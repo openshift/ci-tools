@@ -116,6 +116,18 @@ func (a *registryAgent) ResolveConfig(config api.ReleaseBuildConfiguration) (api
 	return registry.ResolveConfig(a.resolver, config)
 }
 
+func (a *registryAgent) ResolveWorkflow(name string) (api.MultiStageTestConfigurationLiteral, error) {
+	a.lock.RLock()
+	defer a.lock.RUnlock()
+	return a.resolver.ResolveWorkflow(name)
+}
+
+func (a *registryAgent) ResolveChain(name string) (api.RegistryChain, error) {
+	a.lock.RLock()
+	defer a.lock.RUnlock()
+	return a.resolver.ResolveChain(name)
+}
+
 func (a *registryAgent) GetGeneration() int {
 	a.lock.RLock()
 	defer a.lock.RUnlock()

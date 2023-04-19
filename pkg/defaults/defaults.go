@@ -76,6 +76,7 @@ func FromConfig(
 	consoleHost string,
 	nodeName string,
 	nodeArchitectures []string,
+	targetAdditionalSuffix string,
 ) ([]api.Step, []api.Step, error) {
 	crclient, err := ctrlruntimeclient.NewWithWatch(clusterConfig, ctrlruntimeclient.Options{})
 	crclient = secretrecordingclient.Wrap(crclient, censor)
@@ -112,7 +113,7 @@ func FromConfig(
 	httpClient := retryablehttp.NewClient()
 	httpClient.Logger = nil
 
-	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, consoleHost, nodeName)
+	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, consoleHost, nodeName, targetAdditionalSuffix)
 }
 
 func fromConfig(
@@ -137,6 +138,7 @@ func fromConfig(
 	censor *secrets.DynamicCensor,
 	consoleHost string,
 	nodeName string,
+	targetAdditionalSuffix string,
 ) ([]api.Step, []api.Step, error) {
 	requiredNames := sets.NewString()
 	for _, target := range requiredTargets {
@@ -159,7 +161,7 @@ func fromConfig(
 	rawSteps = append(graphConf.Steps, rawSteps...)
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
-			steps, testHasReleaseStep, err := stepForTest(ctx, config, params, podClient, leaseClient, templateClient, client, hiveClient, jobSpec, inputImages, testStep, &imageConfigs, pullSecret, censor, nodeName)
+			steps, testHasReleaseStep, err := stepForTest(ctx, config, params, podClient, leaseClient, templateClient, client, hiveClient, jobSpec, inputImages, testStep, &imageConfigs, pullSecret, censor, nodeName, targetAdditionalSuffix)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -386,6 +388,7 @@ func stepForTest(
 	pullSecret *coreapi.Secret,
 	censor *secrets.DynamicCensor,
 	nodeName string,
+	targetAdditionalSuffix string,
 ) ([]api.Step, bool, error) {
 	var hasReleaseStep bool
 	if test := c.MultiStageTestConfigurationLiteral; test != nil {
@@ -394,7 +397,7 @@ func stepForTest(
 			params = api.NewDeferredParameters(params)
 		}
 		var testSteps []api.Step
-		step := multi_stage.MultiStageTestStep(*c, config, params, podClient, jobSpec, leases, nodeName)
+		step := multi_stage.MultiStageTestStep(*c, config, params, podClient, jobSpec, leases, nodeName, targetAdditionalSuffix)
 		if len(leases) != 0 {
 			step = steps.LeaseStep(leaseClient, leases, step, jobSpec.Namespace)
 			addProvidesForStep(step, params)

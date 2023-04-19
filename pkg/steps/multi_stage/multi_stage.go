@@ -83,10 +83,11 @@ var envForProfile = []string{
 }
 
 type multiStageTestStep struct {
-	name     string
-	nodeName string
-	profile  api.ClusterProfile
-	config   *api.ReleaseBuildConfiguration
+	name             string
+	additionalSuffix string
+	nodeName         string
+	profile          api.ClusterProfile
+	config           *api.ReleaseBuildConfiguration
 	// params exposes getters for variables created by other steps
 	params          api.Parameters
 	env             api.TestEnvironment
@@ -111,8 +112,9 @@ func MultiStageTestStep(
 	jobSpec *api.JobSpec,
 	leases []api.StepLease,
 	nodeName string,
+	targetAdditionalSuffix string,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, params, client, jobSpec, leases, nodeName)
+	return newMultiStageTestStep(testConfig, config, params, client, jobSpec, leases, nodeName, targetAdditionalSuffix)
 }
 
 func newMultiStageTestStep(
@@ -123,6 +125,7 @@ func newMultiStageTestStep(
 	jobSpec *api.JobSpec,
 	leases []api.StepLease,
 	nodeName string,
+	targetAdditionalSuffix string,
 ) *multiStageTestStep {
 	ms := testConfig.MultiStageTestConfigurationLiteral
 	var flags stepFlag
@@ -133,27 +136,32 @@ func newMultiStageTestStep(
 		flags |= allowBestEffortPostSteps
 	}
 	return &multiStageTestStep{
-		name:         testConfig.As,
-		nodeName:     nodeName,
-		profile:      ms.ClusterProfile,
-		config:       config,
-		params:       params,
-		env:          ms.Environment,
-		client:       client,
-		jobSpec:      jobSpec,
-		observers:    ms.Observers,
-		pre:          ms.Pre,
-		test:         ms.Test,
-		post:         ms.Post,
-		flags:        flags,
-		leases:       leases,
-		clusterClaim: testConfig.ClusterClaim,
-		subLock:      &sync.Mutex{},
+		name:             testConfig.As,
+		additionalSuffix: targetAdditionalSuffix,
+		nodeName:         nodeName,
+		profile:          ms.ClusterProfile,
+		config:           config,
+		params:           params,
+		env:              ms.Environment,
+		client:           client,
+		jobSpec:          jobSpec,
+		observers:        ms.Observers,
+		pre:              ms.Pre,
+		test:             ms.Test,
+		post:             ms.Post,
+		flags:            flags,
+		leases:           leases,
+		clusterClaim:     testConfig.ClusterClaim,
+		subLock:          &sync.Mutex{},
 	}
 }
 
 func (s *multiStageTestStep) profileSecretName() string {
-	return s.name + "-cluster-profile"
+	name := s.name
+	if s.additionalSuffix != "" {
+		name = strings.TrimSuffix(name, fmt.Sprintf("-%s", s.additionalSuffix))
+	}
+	return name + "-cluster-profile"
 }
 
 func (s *multiStageTestStep) Inputs() (api.InputDefinition, error) {

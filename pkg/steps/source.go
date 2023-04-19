@@ -360,6 +360,37 @@ func buildInputsFromStep(inputs map[string]api.ImageBuildInputs) []buildapi.Imag
 	return refs
 }
 
+func handleFailedBuild(ctx context.Context, client BuildClient, ns, name string, err error) error {
+	b := &buildapi.Build{}
+	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, b); err != nil {
+		return fmt.Errorf("could not get build %s: %w", name, err)
+	}
+
+	if !isBuildPhaseTerminated(b.Status.Phase) {
+		return err
+	}
+
+	if !(isInfraReason(b.Status.Reason) || hintsAtInfraReason(b.Status.LogSnippet)) {
+		return err
+	}
+
+	logrus.Infof("Build %s previously failed from an infrastructure error (%s), retrying...", name, b.Status.Reason)
+	zero := int64(0)
+	foreground := metav1.DeletePropagationForeground
+	opts := metav1.DeleteOptions{
+		GracePeriodSeconds: &zero,
+		Preconditions:      &metav1.Preconditions{UID: &b.UID},
+		PropagationPolicy:  &foreground,
+	}
+	if err := client.Delete(ctx, b, &ctrlruntimeclient.DeleteOptions{Raw: &opts}); err != nil && !kerrors.IsNotFound(err) && !kerrors.IsConflict(err) {
+		return fmt.Errorf("could not delete build %s: %w", name, err)
+	}
+	if err := waitForBuildDeletion(ctx, client, ns, name); err != nil {
+		return fmt.Errorf("could not wait for build %s to be deleted: %w", name, err)
+	}
+	return nil
+}
+
 func isBuildPhaseTerminated(phase buildapi.BuildPhase) bool {
 	switch phase {
 	case buildapi.BuildPhaseNew,
@@ -436,35 +467,7 @@ func handleBuild(ctx context.Context, client BuildClient, build buildapi.Build) 
 			return true, nil
 		}
 		errs = append(errs, err)
-
-		b := &buildapi.Build{}
-		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, b); err != nil {
-			return false, fmt.Errorf("could not get build %s: %w", name, err)
-		}
-
-		if !isBuildPhaseTerminated(b.Status.Phase) {
-			return false, err
-		}
-
-		if !(isInfraReason(b.Status.Reason) || hintsAtInfraReason(b.Status.LogSnippet)) {
-			return false, err
-		}
-
-		logrus.Infof("Build %s previously failed from an infrastructure error (%s), retrying...", name, b.Status.Reason)
-		zero := int64(0)
-		foreground := metav1.DeletePropagationForeground
-		opts := metav1.DeleteOptions{
-			GracePeriodSeconds: &zero,
-			Preconditions:      &metav1.Preconditions{UID: &b.UID},
-			PropagationPolicy:  &foreground,
-		}
-		if err := client.Delete(ctx, &attempt, &ctrlruntimeclient.DeleteOptions{Raw: &opts}); err != nil && !kerrors.IsNotFound(err) && !kerrors.IsConflict(err) {
-			return false, fmt.Errorf("could not delete build %s: %w", name, err)
-		}
-		if err := waitForBuildDeletion(ctx, client, ns, name); err != nil {
-			return false, fmt.Errorf("could not wait for build %s to be deleted: %w", name, err)
-		}
-		return false, nil
+		return false, handleFailedBuild(ctx, client, ns, name, err)
 	}); err != nil {
 		if err == wait.ErrWaitTimeout {
 			return fmt.Errorf("build not successful after %d attempts: %w", attempts, utilerrors.NewAggregate(errs))

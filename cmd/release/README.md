@@ -146,7 +146,7 @@ $ release job | yq --slurp '[.[]|.postsubmits|values[]|length]|add'
 View contents.
 
 ```console
-$ release job --list ci-operator/jobs/openshift/ci-tools
+$ release job --list openshift/ci-tools
 ci-operator/jobs/openshift/ci-tools/openshift-ci-tools-master-periodics.yaml
 ci-operator/jobs/openshift/ci-tools/openshift-ci-tools-master-postsubmits.yaml
 ci-operator/jobs/openshift/ci-tools/openshift-ci-tools-master-presubmits.yaml

@@ -457,17 +457,15 @@ func handleBuild(ctx context.Context, client BuildClient, build buildapi.Build) 
 		if err := client.Create(ctx, &attempt); err != nil && !kerrors.IsAlreadyExists(err) {
 			return false, fmt.Errorf("could not create build %s: %w", name, err)
 		}
-
-		err := waitForBuildOrTimeout(ctx, client, ns, name)
-		if err == nil {
-			if err := gatherSuccessfulBuildLog(client, ns, name); err != nil {
-				// log error but do not fail successful build
-				logrus.WithError(err).Warnf("Failed gathering successful build %s logs into artifacts.", name)
-			}
-			return true, nil
+		if err := waitForBuildOrTimeout(ctx, client, ns, name); err != nil {
+			errs = append(errs, err)
+			return false, handleFailedBuild(ctx, client, ns, name, err)
 		}
-		errs = append(errs, err)
-		return false, handleFailedBuild(ctx, client, ns, name, err)
+		if err := gatherSuccessfulBuildLog(client, ns, name); err != nil {
+			// log error but do not fail successful build
+			logrus.WithError(err).Warnf("Failed gathering successful build %s logs into artifacts.", name)
+		}
+		return true, nil
 	}); err != nil {
 		if err == wait.ErrWaitTimeout {
 			return fmt.Errorf("build not successful after %d attempts: %w", attempts, utilerrors.NewAggregate(errs))

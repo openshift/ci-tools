@@ -80,3 +80,39 @@ for name in $names; do
         aws iam delete-role --role-name $name
     fi
 done
+
+echo 'Deleting expired Route53 zones...'
+# Get all Route53 hosted zones within ".hypershift.local" domain
+zones=$(aws route53 list-hosted-zones --query 'HostedZones[?ends_with(Name, `hypershift.local.`)].{Id:Id, Name:Name}' --output json | jq -c '.[]')
+
+for zone in $zones; do
+    zone_id=$(echo $zone | jq -r '.Id' | cut -d '/' -f 3)
+    zone_name=$(echo $zone | jq -r '.Name')
+
+    # Get the creationDate value from the openshift_creationDate tag
+    creationDate=$(aws route53 list-tags-for-resource --resource-type hostedzone --resource-id $zone_id --query 'ResourceTagSet.Tags[?Key==`openshift_creationDate`].Value' --output text)
+
+    # Skip if there is no creationDate or the command failed
+    if [ $? -ne 0 ] || [ -z "$creationDate" ]; then
+        echo "Skipping $zone_name with no openshift_creationDate..."
+        continue
+    fi
+
+    # Convert the creationDate to a Unix timestamp
+    creationUnix=$(date -d $creationDate +%s)
+    if [ $? -ne 0 ] || [ -z $creationUnix ]; then
+        echo "Skipping $zone_name with invalid openshift_creationDate..."
+        continue
+    fi
+
+    # Calculate the age of the zone in seconds
+    zone_age_seconds=$((NOW - creationUnix))
+
+    # Check if the zone is older than 12hr (43200 seconds)
+    if [ $zone_age_seconds -gt 43200 ]; then
+        echo "Deleting Route53 zone $zone_name with openshift_creationDate $creationDate..."
+        aws route53 delete-hosted-zone --id $zone_id
+    else
+        echo "Skipping $zone_name with openshift_creationDate $creationDate..."
+    fi
+done

@@ -83,7 +83,7 @@ done
 
 echo 'Deleting expired Route53 zones...'
 # Get all Route53 hosted zones within ".hypershift.local" domain
-zones=$(aws route53 list-hosted-zones --query 'HostedZones[?ends_with(Name, `hypershift.local.`)].{Id:Id, Name:Name}' --output json | jq -c '.[]')
+zones=$(aws route53 list-hosted-zones --query 'HostedZones[?ends_with(Name, `hypershift.local.`) || ends_with(Name, `hypershift.aws-2.ci.openshift.org.`)].{Id:Id, Name:Name}' --output json | jq -c '.[]')
 
 for zone in $zones; do
     zone_id=$(echo $zone | jq -r '.Id' | cut -d '/' -f 3)
@@ -110,6 +110,18 @@ for zone in $zones; do
 
     # Check if the zone is older than 12hr (43200 seconds)
     if [ $zone_age_seconds -gt 43200 ]; then
+        # Get the resource record sets in the hosted zone
+        record_sets=$(aws route53 list-resource-record-sets --hosted-zone-id $zone_id --query 'ResourceRecordSets[?Type != `SOA` && Type != `NS`]' --output json | jq -c '.[]')
+
+        # Delete the resource record sets
+        for record_set in $record_sets; do
+            record_name=$(echo $record_set | jq -r '.Name')
+            record_type=$(echo $record_set | jq -r '.Type')
+
+            echo "Deleting resource record set $record_name ($record_type) in zone $zone_name..."
+            aws route53 change-resource-record-sets --hosted-zone-id $zone_id --change-batch "{\"Changes\": [{\"Action\": \"DELETE\", \"ResourceRecordSet\": $record_set}]}"
+        done
+
         echo "Deleting Route53 zone $zone_name with openshift_creationDate $creationDate..."
         aws route53 delete-hosted-zone --id $zone_id
     else

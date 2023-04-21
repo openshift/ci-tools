@@ -533,10 +533,10 @@ func hintsAtInfraReason(logSnippet string) bool {
 }
 
 func waitForBuildOrTimeout(ctx context.Context, buildClient BuildClient, namespace, name string) error {
-	return waitForBuild(ctx, buildClient, namespace, name, 0, buildDuration)
+	return waitForBuild(ctx, buildClient, namespace, name, buildDuration)
 }
 
-func waitForBuild(ctx context.Context, buildClient BuildClient, namespace, name string, timeout time.Duration, buildDurationFunc func(*buildapi.Build) time.Duration) error {
+func waitForBuild(ctx context.Context, buildClient BuildClient, namespace, name string, buildDurationFunc func(*buildapi.Build) time.Duration) error {
 	isOK := func(b *buildapi.Build) bool {
 		return b.Status.Phase == buildapi.BuildPhaseComplete
 	}
@@ -569,7 +569,7 @@ func waitForBuild(ctx context.Context, buildClient BuildClient, namespace, name 
 		return false, nil
 	}
 
-	return kubernetes.WaitForConditionOnObject(ctx, buildClient, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, &buildapi.BuildList{}, &buildapi.Build{}, evaluatorFunc, timeout)
+	return kubernetes.WaitForConditionOnObject(ctx, buildClient, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, &buildapi.BuildList{}, &buildapi.Build{}, evaluatorFunc, 0)
 }
 
 func buildDuration(build *buildapi.Build) time.Duration {

@@ -392,11 +392,6 @@ func TestWaitForBuild(t *testing.T) {
 		expected    error
 	}{
 		{
-			name:        "timeout",
-			buildClient: NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects().Build()), nil, nil),
-			expected:    fmt.Errorf("timed out waiting for the condition"),
-		},
-		{
 			name: "build succeeded",
 			buildClient: NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 				&buildapi.Build{
@@ -430,7 +425,7 @@ func TestWaitForBuild(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			actual := waitForBuild(context.TODO(), testCase.buildClient, "some-ns", "some-build", 90*time.Millisecond, func(build *buildapi.Build) time.Duration {
+			actual := waitForBuild(context.TODO(), testCase.buildClient, "some-ns", "some-build", func(build *buildapi.Build) time.Duration {
 				return 3 * time.Second
 			})
 			if diff := cmp.Diff(testCase.expected, actual, testhelper.EquateErrorMessage); diff != "" {

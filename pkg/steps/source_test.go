@@ -418,6 +418,74 @@ func TestWaitForBuild(t *testing.T) {
 			expected: fmt.Errorf("build didn't start running within 0s (phase: Pending)"),
 		},
 		{
+			name: "timeout with pod",
+			buildClient: NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
+				&buildapi.Build{
+					ObjectMeta: meta.ObjectMeta{
+						Name:              "some-build",
+						Namespace:         ns,
+						CreationTimestamp: start,
+						Annotations: map[string]string{
+							buildapi.BuildPodNameAnnotation: "some-build-build",
+						},
+					},
+					Status: buildapi.BuildStatus{
+						Phase:               buildapi.BuildPhasePending,
+						StartTimestamp:      &start,
+						CompletionTimestamp: &end,
+					},
+				},
+				&coreapi.Pod{
+					ObjectMeta: meta.ObjectMeta{
+						Name:      "some-build-build",
+						Namespace: ns,
+					},
+				},
+			).Build()), nil, nil),
+			expected: fmt.Errorf("build didn't start running within 0s (phase: Pending):\nFound 0 events for Pod some-build-build:"),
+		},
+		{
+			name: "timeout with pod and events",
+			buildClient: NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
+				&buildapi.Build{
+					ObjectMeta: meta.ObjectMeta{
+						Name:              "some-build",
+						Namespace:         ns,
+						CreationTimestamp: start,
+						Annotations: map[string]string{
+							buildapi.BuildPodNameAnnotation: "some-build-build",
+						},
+					},
+					Status: buildapi.BuildStatus{
+						Phase:               buildapi.BuildPhasePending,
+						StartTimestamp:      &start,
+						CompletionTimestamp: &end,
+					},
+				},
+				&coreapi.Pod{
+					ObjectMeta: meta.ObjectMeta{
+						Name:      "some-build-build",
+						Namespace: ns,
+						UID:       "UID",
+					},
+					Status: coreapi.PodStatus{
+						ContainerStatuses: []coreapi.ContainerStatus{{
+							Name: "the-container",
+							State: coreapi.ContainerState{
+								Waiting: &coreapi.ContainerStateWaiting{
+									Reason:  "the_reason",
+									Message: "the_message",
+								},
+							},
+						}},
+					},
+				},
+			).Build()), nil, nil),
+			expected: fmt.Errorf(`build didn't start running within 0s (phase: Pending):
+* Container the-container is not ready with reason the_reason and message the_message
+Found 0 events for Pod some-build-build:`),
+		},
+		{
 			name: "build succeeded",
 			buildClient: NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 				&buildapi.Build{

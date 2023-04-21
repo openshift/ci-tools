@@ -71,7 +71,7 @@ func WaitForConditionOnObject(ctx context.Context, client ctrlruntimeclient.With
 
 type PodClient interface {
 	loggingclient.LoggingClient
-	PendingTimeout() time.Duration
+	GetPendingTimeout() time.Duration
 	// WithNewLoggingClient returns a new instance of the PodClient that resets
 	// its LoggingClient.
 	WithNewLoggingClient() PodClient
@@ -95,7 +95,7 @@ type podClient struct {
 	pendingTimeout time.Duration
 }
 
-func (c podClient) PendingTimeout() time.Duration { return c.pendingTimeout }
+func (c podClient) GetPendingTimeout() time.Duration { return c.pendingTimeout }
 
 func (c podClient) Exec(namespace, pod string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error) {
 	u := c.client.Post().Resource("pods").Namespace(namespace).Name(pod).SubResource("exec").VersionedParams(opts, scheme.ParameterCodec).URL()

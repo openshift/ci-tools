@@ -700,10 +700,16 @@ func addLabelsToBuild(refs *prowv1.Refs, build *buildapi.Build, contextDir strin
 	}
 
 	for k, v := range labels {
-		build.Spec.Output.ImageLabels = append(build.Spec.Output.ImageLabels, buildapi.ImageLabel{
-			Name:  k,
-			Value: v,
-		})
+		// set only non-empty values
+		// Sometimes we get empty value e.g., of refs.BaseSHA where we should
+		// give the build-api the chance to fill in the values
+		// https://issues.redhat.com/browse/OCPBUGS-3785?focusedId=22143769&page=com.atlassian.jira.plugin.system.issuetabpanels%3Acomment-tabpanel#comment-22143769
+		if v != "" {
+			build.Spec.Output.ImageLabels = append(build.Spec.Output.ImageLabels, buildapi.ImageLabel{
+				Name:  k,
+				Value: v,
+			})
+		}
 	}
 	sort.Slice(build.Spec.Output.ImageLabels, func(i, j int) bool {
 		return build.Spec.Output.ImageLabels[i].Name < build.Spec.Output.ImageLabels[j].Name

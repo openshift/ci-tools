@@ -3,13 +3,13 @@
   metadata:
     annotations:
       prow.k8s.io/context: ""
-      prow.k8s.io/job: test-org-test-repo-100-test-name-0
-      releaseJobName: periodic-ci-test-org-test-repo-test-branch-test-name-0
+      prow.k8s.io/job: test-org-test-repo-100-test-name
+      releaseJobName: periodic-ci-test-org-test-repo-test-branch-test-name
     creationTimestamp: null
     labels:
       created-by-prow: "true"
       prow.k8s.io/context: ""
-      prow.k8s.io/job: test-org-test-repo-100-test-name-0
+      prow.k8s.io/job: test-org-test-repo-100-test-name
       prow.k8s.io/refs.base_ref: test-branch
       prow.k8s.io/refs.org: test-org
       prow.k8s.io/refs.pull: "100"
@@ -36,16 +36,14 @@
         sha: "12345"
         title: test-pr
       repo: test-repo
-    job: test-org-test-repo-100-test-name-0
+    job: test-org-test-repo-100-test-name
     pod_spec:
       containers:
       - args:
         - --gcs-upload-secret=/secrets/gcs/service-account.json
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --input-hash=prpqr-test
+        - --input-hash=prpqr-test-0
         - --report-credentials-file=/etc/report/credentials
-        - --secret-dir=/secrets/secret-0
-        - --target-additional-suffix=0
         - --target=test-name
         - --with-test-from=test-org/test-repo@test-branch:test-name
         command:
@@ -66,9 +64,6 @@
         - mountPath: /etc/report
           name: result-aggregator
           readOnly: true
-        - mountPath: /secrets/secret-0
-          name: secret-0
-          readOnly: true
       serviceAccountName: ci-operator
       volumes:
       - name: pull-secret
@@ -77,9 +72,6 @@
       - name: result-aggregator
         secret:
           secretName: result-aggregator
-      - name: secret-0
-        secret:
-          secretName: secret-0
     report: true
     type: periodic
   status:
@@ -90,13 +82,13 @@
   metadata:
     annotations:
       prow.k8s.io/context: ""
-      prow.k8s.io/job: test-org-test-repo-100-test-name-1
-      releaseJobName: periodic-ci-test-org-test-repo-test-branch-test-name-1
+      prow.k8s.io/job: test-org-test-repo-100-test-name
+      releaseJobName: periodic-ci-test-org-test-repo-test-branch-test-name
     creationTimestamp: null
     labels:
       created-by-prow: "true"
       prow.k8s.io/context: ""
-      prow.k8s.io/job: test-org-test-repo-100-test-name-1
+      prow.k8s.io/job: test-org-test-repo-100-test-name
       prow.k8s.io/refs.base_ref: test-branch
       prow.k8s.io/refs.org: test-org
       prow.k8s.io/refs.pull: "100"
@@ -123,16 +115,14 @@
         sha: "12345"
         title: test-pr
       repo: test-repo
-    job: test-org-test-repo-100-test-name-1
+    job: test-org-test-repo-100-test-name
     pod_spec:
       containers:
       - args:
         - --gcs-upload-secret=/secrets/gcs/service-account.json
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --input-hash=prpqr-test
+        - --input-hash=prpqr-test-1
         - --report-credentials-file=/etc/report/credentials
-        - --secret-dir=/secrets/secret-1
-        - --target-additional-suffix=1
         - --target=test-name
         - --with-test-from=test-org/test-repo@test-branch:test-name
         command:
@@ -153,9 +143,6 @@
         - mountPath: /etc/report
           name: result-aggregator
           readOnly: true
-        - mountPath: /secrets/secret-1
-          name: secret-1
-          readOnly: true
       serviceAccountName: ci-operator
       volumes:
       - name: pull-secret
@@ -164,9 +151,6 @@
       - name: result-aggregator
         secret:
           secretName: result-aggregator
-      - name: secret-1
-        secret:
-          secretName: secret-1
     report: true
     type: periodic
   status:

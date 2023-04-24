@@ -39,6 +39,7 @@ spec:
       value: base-ref
     - name: PULL_BASE_SHA
       value: base-sha
+    - name: PULL_HEAD_REF
     - name: PULL_NUMBER
       value: "123"
     - name: PULL_PULL_SHA

@@ -137,7 +137,7 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
 			generateOption: func(options *GeneratePeriodicOptions) {
 				options.Cron = "@yearly"
-				options.Api = true
+				options.RemoteApi = true
 			},
 		},
 		{

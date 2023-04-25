@@ -3,6 +3,7 @@ package jobrunaggregatorlib
 import (
 	"encoding/json"
 	"math"
+	"strings"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -46,6 +47,44 @@ type BackendDisruption struct {
 	ConnectionType     string
 	DisruptedDuration  v1.Duration
 	DisruptionMessages []string
+}
+
+// defined in origin/platformidentification/types.go
+// minimized here
+type ClusterData struct {
+	MasterNodesUpdated string
+}
+
+func GetMasterNodesUpdatedStatusFromClusterData(clusterData map[string]string) string {
+	// default is unknown
+	masterNodesUpdated := ""
+
+	// there can be multiple files (upgrade / conformance) if any of them indicate the master nodes updated
+	// we indicate that for the entire run
+	for _, clusterdataResults := range clusterData {
+		if len(clusterdataResults) == 0 {
+			continue
+		}
+
+		cd := &ClusterData{}
+		if err := json.Unmarshal([]byte(clusterdataResults), cd); err != nil {
+			continue
+		}
+
+		// if the value is y then set it and quit scanning
+		if strings.ToUpper(cd.MasterNodesUpdated) == "Y" {
+			masterNodesUpdated = cd.MasterNodesUpdated
+			break
+		}
+
+		// if we don't have a value yet use whatever value we have
+		if len(masterNodesUpdated) == 0 {
+			masterNodesUpdated = cd.MasterNodesUpdated
+			continue
+		}
+	}
+
+	return masterNodesUpdated
 }
 
 func GetServerAvailabilityResultsFromDirectData(backendDisruptionData map[string]string) map[string]AvailabilityResult {

@@ -163,17 +163,21 @@ func (o *disruptionUploader) uploadContent(ctx context.Context, jobRun jobrunagg
 		return nil
 	}
 
-	return o.uploadBackendDisruptionFromDirectData(ctx, jobRun.GetJobRunID(), backendDisruptionData, logger)
+	clusterData, _ := jobRun.GetOpenShiftTestsFilesWithPrefix(ctx, "cluster-data")
+
+	return o.uploadBackendDisruptionFromDirectData(ctx, jobRun.GetJobRunID(), clusterData, backendDisruptionData, logger)
 }
 
-func (o *disruptionUploader) uploadBackendDisruptionFromDirectData(ctx context.Context, jobRunName string, backendDisruptionData map[string]string,
+func (o *disruptionUploader) uploadBackendDisruptionFromDirectData(ctx context.Context, jobRunName string, clusterData map[string]string, backendDisruptionData map[string]string,
 	logger logrus.FieldLogger) error {
 
 	serverAvailabilityResults := jobrunaggregatorlib.GetServerAvailabilityResultsFromDirectData(backendDisruptionData)
-	return o.uploadBackendDisruption(ctx, jobRunName, serverAvailabilityResults, logger)
+	masterNodesUpdated := jobrunaggregatorlib.GetMasterNodesUpdatedStatusFromClusterData(clusterData)
+	return o.uploadBackendDisruption(ctx, jobRunName, masterNodesUpdated, serverAvailabilityResults, logger)
 }
 
 func (o *disruptionUploader) uploadBackendDisruption(ctx context.Context, jobRunName string,
+	masterNodesUpdated string,
 	serverAvailabilityResults map[string]jobrunaggregatorlib.AvailabilityResult,
 	logger logrus.FieldLogger) error {
 
@@ -182,9 +186,10 @@ func (o *disruptionUploader) uploadBackendDisruption(ctx context.Context, jobRun
 	for _, backendName := range sets.StringKeySet(serverAvailabilityResults).List() {
 		unavailability := serverAvailabilityResults[backendName]
 		row := &jobrunaggregatorapi.BackendDisruptionRow{
-			BackendName:       backendName,
-			JobRunName:        jobRunName,
-			DisruptionSeconds: unavailability.SecondsUnavailable,
+			BackendName:        backendName,
+			JobRunName:         jobRunName,
+			DisruptionSeconds:  unavailability.SecondsUnavailable,
+			MasterNodesUpdated: masterNodesUpdated,
 		}
 		rows = append(rows, row)
 	}

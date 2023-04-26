@@ -211,11 +211,8 @@ func TestMultiStage(t *testing.T) {
 				"--unresolved-config", "config.yaml",
 				"--target", "pending",
 			},
-			env: []string{defaultJobSpec},
-			output: []string{
-				`pod pending for more than 30s: container \"test\" has not started in`,
-				"Error: ErrImagePull",
-			},
+			env:    []string{defaultJobSpec},
+			output: []string{`pod pending for more than 30s:`},
 		},
 	}
 

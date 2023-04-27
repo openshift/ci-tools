@@ -5,6 +5,8 @@ import (
 	"math"
 	"strings"
 
+	"github.com/sirupsen/logrus"
+
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
@@ -49,12 +51,15 @@ type BackendDisruption struct {
 	DisruptionMessages []string
 }
 
-// defined in origin/platformidentification/types.go
-// minimized here
+// ClusterData is defined in origin/platformidentification/types.go
+// it is duplicated in a minimized form here
 type ClusterData struct {
 	MasterNodesUpdated string
 }
 
+// GetMasterNodesUpdatedStatusFromClusterData takes multiple file contents as a copy of the ClusterData
+// file is created for multiple test phases (upgrade / conformance) in the same manor that multiple disruption
+// files are created for the multiple phases
 func GetMasterNodesUpdatedStatusFromClusterData(clusterData map[string]string) string {
 	// default is unknown
 	masterNodesUpdated := ""
@@ -68,16 +73,17 @@ func GetMasterNodesUpdatedStatusFromClusterData(clusterData map[string]string) s
 
 		cd := &ClusterData{}
 		if err := json.Unmarshal([]byte(clusterdataResults), cd); err != nil {
+			logrus.WithError(err).Error("error unmarshalling clusterdataJson")
 			continue
 		}
 
-		// if the value is y then set it and quit scanning
+		// if the value is y then return it
+		// as it supersedes all other values
 		if strings.ToUpper(cd.MasterNodesUpdated) == "Y" {
-			masterNodesUpdated = cd.MasterNodesUpdated
-			break
+			return cd.MasterNodesUpdated
 		}
 
-		// if we don't have a value yet use whatever value we have
+		// if we don't have a value yet use whatever value we have coming in
 		if len(masterNodesUpdated) == 0 {
 			masterNodesUpdated = cd.MasterNodesUpdated
 			continue
@@ -96,6 +102,7 @@ func GetServerAvailabilityResultsFromDirectData(backendDisruptionData map[string
 		}
 		allDisruptions := &BackendDisruptionList{}
 		if err := json.Unmarshal([]byte(disruptionJSON), allDisruptions); err != nil {
+			logrus.WithError(err).Error("error unmarshalling disruptionJson")
 			continue
 		}
 

@@ -163,7 +163,11 @@ func (o *disruptionUploader) uploadContent(ctx context.Context, jobRun jobrunagg
 		return nil
 	}
 
-	clusterData, _ := jobRun.GetOpenShiftTestsFilesWithPrefix(ctx, "cluster-data")
+	clusterData, err := jobRun.GetOpenShiftTestsFilesWithPrefix(ctx, "cluster-data")
+	if err != nil {
+		// log but continue on
+		logger.WithError(err).Error("error getting cluster-data in GetOpenShiftTestsFilesWithPrefix")
+	}
 
 	return o.uploadBackendDisruptionFromDirectData(ctx, jobRun.GetJobRunID(), clusterData, backendDisruptionData, logger)
 }

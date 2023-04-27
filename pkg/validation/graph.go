@@ -1,6 +1,7 @@
 package validation
 
 import (
+	"errors"
 	"fmt"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -86,7 +87,18 @@ func validateTestStepConfiguration(
 ) (ret []error) {
 	c := s.ContainerTestConfiguration
 	if _, ok := pipelineImages[c.From]; !ok {
-		ret = append(ret, fmt.Errorf("tests[%s].from: unknown image %q", s.As, c.From))
+		msg := fmt.Sprintf("tests[%s].from: unknown image %q", s.As, c.From)
+		if s := pipelineImageToConfigField[c.From]; s != "" {
+			msg = fmt.Sprintf("%s (configuration is missing `%s`)", msg, s)
+		}
+		ret = append(ret, errors.New(msg))
 	}
 	return
+}
+
+var pipelineImageToConfigField = map[api.PipelineImageStreamTagReference]string{
+	api.PipelineImageStreamTagReferenceRoot:         api.PipelineImageStreamTagSourceRoot,
+	api.PipelineImageStreamTagReferenceBinaries:     api.PipelineImageStreamTagSourceBinaries,
+	api.PipelineImageStreamTagReferenceTestBinaries: api.PipelineImageStreamTagSourceTestBinaries,
+	api.PipelineImageStreamTagReferenceRPMs:         api.PipelineImageStreamTagSourceRPMs,
 }

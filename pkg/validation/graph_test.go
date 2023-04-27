@@ -197,11 +197,35 @@ func TestIsValidGraph_ContainerTestFrom(t *testing.T) {
 		config   api.ReleaseBuildConfiguration
 		expected error
 	}{{
-		name: "invalid",
+		name: "invalid image",
 		config: api.ReleaseBuildConfiguration{
 			Tests: tests("invalid"),
 		},
 		expected: errs(`tests[test-invalid].from: unknown image "invalid"`),
+	}, {
+		name: "missing `root` image",
+		config: api.ReleaseBuildConfiguration{
+			Tests: tests("root"),
+		},
+		expected: errs("tests[test-root].from: unknown image \"root\" (configuration is missing `build_root`)"),
+	}, {
+		name: "missing `bin` image",
+		config: api.ReleaseBuildConfiguration{
+			Tests: tests("bin"),
+		},
+		expected: errs("tests[test-bin].from: unknown image \"bin\" (configuration is missing `binary_build_commands`)"),
+	}, {
+		name: "missing `test-bin` image",
+		config: api.ReleaseBuildConfiguration{
+			Tests: tests("test-bin"),
+		},
+		expected: errs("tests[test-test-bin].from: unknown image \"test-bin\" (configuration is missing `test_binary_build_commands`)"),
+	}, {
+		name: "missing `rpms` image",
+		config: api.ReleaseBuildConfiguration{
+			Tests: tests("rpms"),
+		},
+		expected: errs("tests[test-rpms].from: unknown image \"rpms\" (configuration is missing `rpm_build_commands`)"),
 	}, {
 		name:   "from src",
 		config: api.ReleaseBuildConfiguration{Tests: tests("src")},

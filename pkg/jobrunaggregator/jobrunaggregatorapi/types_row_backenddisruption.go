@@ -27,8 +27,7 @@ INNER JOIN openshift-ci-data-analysis.ci_data.Jobs on JobRuns.JobName = Jobs.Job
 const BackendDisruptionTableName = "BackendDisruption"
 
 type BackendDisruptionRow struct {
-	BackendName        string
-	JobRunName         string
-	DisruptionSeconds  int
-	MasterNodesUpdated string
+	BackendName       string
+	JobRunName        string
+	DisruptionSeconds int
 }

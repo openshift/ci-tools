@@ -163,25 +163,17 @@ func (o *disruptionUploader) uploadContent(ctx context.Context, jobRun jobrunagg
 		return nil
 	}
 
-	clusterData, err := jobRun.GetOpenShiftTestsFilesWithPrefix(ctx, "cluster-data")
-	if err != nil {
-		// log but continue on
-		logger.WithError(err).Error("error getting cluster-data in GetOpenShiftTestsFilesWithPrefix")
-	}
-
-	return o.uploadBackendDisruptionFromDirectData(ctx, jobRun.GetJobRunID(), clusterData, backendDisruptionData, logger)
+	return o.uploadBackendDisruptionFromDirectData(ctx, jobRun.GetJobRunID(), backendDisruptionData, logger)
 }
 
-func (o *disruptionUploader) uploadBackendDisruptionFromDirectData(ctx context.Context, jobRunName string, clusterData map[string]string, backendDisruptionData map[string]string,
+func (o *disruptionUploader) uploadBackendDisruptionFromDirectData(ctx context.Context, jobRunName string, backendDisruptionData map[string]string,
 	logger logrus.FieldLogger) error {
 
 	serverAvailabilityResults := jobrunaggregatorlib.GetServerAvailabilityResultsFromDirectData(backendDisruptionData)
-	masterNodesUpdated := jobrunaggregatorlib.GetMasterNodesUpdatedStatusFromClusterData(clusterData)
-	return o.uploadBackendDisruption(ctx, jobRunName, masterNodesUpdated, serverAvailabilityResults, logger)
+	return o.uploadBackendDisruption(ctx, jobRunName, serverAvailabilityResults, logger)
 }
 
 func (o *disruptionUploader) uploadBackendDisruption(ctx context.Context, jobRunName string,
-	masterNodesUpdated string,
 	serverAvailabilityResults map[string]jobrunaggregatorlib.AvailabilityResult,
 	logger logrus.FieldLogger) error {
 
@@ -190,10 +182,9 @@ func (o *disruptionUploader) uploadBackendDisruption(ctx context.Context, jobRun
 	for _, backendName := range sets.StringKeySet(serverAvailabilityResults).List() {
 		unavailability := serverAvailabilityResults[backendName]
 		row := &jobrunaggregatorapi.BackendDisruptionRow{
-			BackendName:        backendName,
-			JobRunName:         jobRunName,
-			DisruptionSeconds:  unavailability.SecondsUnavailable,
-			MasterNodesUpdated: masterNodesUpdated,
+			BackendName:       backendName,
+			JobRunName:        jobRunName,
+			DisruptionSeconds: unavailability.SecondsUnavailable,
 		}
 		rows = append(rows, row)
 	}

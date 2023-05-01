@@ -3,13 +3,13 @@
   metadata:
     annotations:
       prow.k8s.io/context: ""
-      prow.k8s.io/job: test-org-test-repo-100-test-name-0
-      releaseJobName: periodic-ci-test-org-test-repo-test-branch-test-name-0
+      prow.k8s.io/job: test-org-test-repo-100-test-name
+      releaseJobName: periodic-ci-test-org-test-repo-test-branch-test-name
     creationTimestamp: null
     labels:
       created-by-prow: "true"
       prow.k8s.io/context: ""
-      prow.k8s.io/job: test-org-test-repo-100-test-name-0
+      prow.k8s.io/job: test-org-test-repo-100-test-name
       prow.k8s.io/refs.base_ref: test-branch
       prow.k8s.io/refs.org: test-org
       prow.k8s.io/refs.pull: "100"
@@ -36,7 +36,7 @@
         sha: "12345"
         title: test-pr
       repo: test-repo
-    job: test-org-test-repo-100-test-name-0
+    job: test-org-test-repo-100-test-name
     pod_spec:
       containers:
       - args:
@@ -90,13 +90,13 @@
   metadata:
     annotations:
       prow.k8s.io/context: ""
-      prow.k8s.io/job: test-org-test-repo-100-test-name-1
-      releaseJobName: periodic-ci-test-org-test-repo-test-branch-test-name-1
+      prow.k8s.io/job: test-org-test-repo-100-test-name
+      releaseJobName: periodic-ci-test-org-test-repo-test-branch-test-name
     creationTimestamp: null
     labels:
       created-by-prow: "true"
       prow.k8s.io/context: ""
-      prow.k8s.io/job: test-org-test-repo-100-test-name-1
+      prow.k8s.io/job: test-org-test-repo-100-test-name
       prow.k8s.io/refs.base_ref: test-branch
       prow.k8s.io/refs.org: test-org
       prow.k8s.io/refs.pull: "100"
@@ -123,7 +123,7 @@
         sha: "12345"
         title: test-pr
       repo: test-repo
-    job: test-org-test-repo-100-test-name-1
+    job: test-org-test-repo-100-test-name
     pod_spec:
       containers:
       - args:

@@ -232,7 +232,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 			}
 			prowjobsToCreate = append(prowjobsToCreate, aggregatedProwjobs...)
 
-			submitted := generateJobNameToSubmit(baseMetadata, inject, &prpqr.Spec.PullRequest, nil)
+			submitted := generateJobNameToSubmit(baseMetadata, inject, &prpqr.Spec.PullRequest)
 			aggregatorJob, err := generateAggregatorJob(baseMetadata, uid, mimickedJob, jobSpec.JobName(jobconfig.PeriodicPrefix), req.Name, req.Namespace, r.prowConfigGetter.Config(), time.Now(), submitted)
 			if err != nil {
 				logger.WithError(err).Error("Failed to generate an aggregator prowjob")
@@ -440,6 +440,7 @@ func resolveCiopConfig(rc injectingResolverClient, baseCiop *api.Metadata, injec
 type aggregatedOptions struct {
 	labels          map[string]string
 	aggregatedIndex int
+	releaseJobName  string
 }
 
 func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter periodicDefaulter, baseCiop *api.Metadata, prpqrName, prpqrNamespace string, pr *v1.PullRequestUnderTest, mimickedJob string, inject *api.MetadataWithTest, aggregatedOptions *aggregatedOptions) (*prowv1.ProwJob, error) {
@@ -458,6 +459,9 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 			for k, v := range aggregatedOptions.labels {
 				labels[k] = v
 			}
+		}
+		annotations = map[string]string{
+			releaseJobNameAnnotation: aggregatedOptions.releaseJobName,
 		}
 		aggregateIndex = &aggregatedOptions.aggregatedIndex
 	} else {
@@ -508,7 +512,7 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 		periodic = prowgen.GeneratePeriodicForTest(jobBaseGen, fakeProwgenInfo, prowgen.FromConfigSpec(ciopConfig), func(options *prowgen.GeneratePeriodicOptions) {
 			options.Cron = "@yearly"
 		})
-		periodic.Name = generateJobNameToSubmit(baseCiop, inject, pr, aggregateIndex)
+		periodic.Name = generateJobNameToSubmit(baseCiop, inject, pr)
 
 		// TODO: Temporarily bumping the timeout to 6 hours to allow extra time for the Kube rebase.  We'll remove this once the rebase lands...
 		if periodic.DecorationConfig == nil {
@@ -568,6 +572,7 @@ func generateAggregatedProwjobs(uid string, ciopConfig *api.ReleaseBuildConfigur
 		opts := &aggregatedOptions{
 			labels:          map[string]string{aggregationIDLabel: uid},
 			aggregatedIndex: i,
+			releaseJobName:  spec.JobName(jobconfig.PeriodicPrefix),
 		}
 		jobName := fmt.Sprintf("%s-%d", spec.JobName(jobconfig.PeriodicPrefix), i)
 
@@ -646,14 +651,10 @@ func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobNa
 	return &pj, nil
 }
 
-func generateJobNameToSubmit(baseCiop *api.Metadata, inject *api.MetadataWithTest, pr *v1.PullRequestUnderTest, index *int) string {
+func generateJobNameToSubmit(baseCiop *api.Metadata, inject *api.MetadataWithTest, pr *v1.PullRequestUnderTest) string {
 	var variant string
 	if inject.Variant != "" {
 		variant = fmt.Sprintf("-%s", inject.Variant)
 	}
-	jobName := fmt.Sprintf("%s-%s-%d%s-%s", baseCiop.Org, baseCiop.Repo, pr.PullRequest.Number, variant, inject.Test)
-	if index != nil {
-		jobName = fmt.Sprintf("%s-%d", jobName, *index)
-	}
-	return jobName
+	return fmt.Sprintf("%s-%s-%d%s-%s", baseCiop.Org, baseCiop.Repo, pr.PullRequest.Number, variant, inject.Test)
 }

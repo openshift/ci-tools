@@ -83,7 +83,7 @@ done
 
 echo 'Deleting expired Route53 zones...'
 # Get all Route53 hosted zones within ".hypershift.local" domain
-zones=$(aws route53 list-hosted-zones --query 'HostedZones[?ends_with(Name, `hypershift.local.`) || ends_with(Name, `hypershift.aws-2.ci.openshift.org.`)].{Id:Id, Name:Name}' --output json | jq -c '.[]')
+zones=$(aws route53 list-hosted-zones --query 'HostedZones[?ends_with(Name, `hypershift.local.`) || ends_with(Name, `.hypershift.aws-2.ci.openshift.org.`)].{Id:Id, Name:Name}' --output json | jq -c '.[]')
 
 for zone in $zones; do
     zone_id=$(echo $zone | jq -r '.Id' | cut -d '/' -f 3)

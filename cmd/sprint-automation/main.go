@@ -427,7 +427,7 @@ func sendNextWeeksRoleDigest(client *pagerduty.Client, slackClient *slack.Client
 }
 
 func getIssuesNeedingApproval(jiraClient *jiraapi.Client) ([]slack.Block, error) {
-	issues, response, err := jiraClient.Issue.Search(fmt.Sprintf(`project=%s AND status="Review"`, jira.ProjectDPTP), nil)
+	issues, response, err := jiraClient.Issue.Search(fmt.Sprintf(`project=%s AND status=Review AND issuetype!=Sub-task`, jira.ProjectDPTP), nil)
 	if err := jirautil.HandleJiraError(response, err); err != nil {
 		return nil, fmt.Errorf("could not query for Jira issues: %w", err)
 	}

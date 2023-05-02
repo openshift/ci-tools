@@ -11,7 +11,8 @@ import (
 )
 
 type ldapGroupResolver struct {
-	conn ldapConn
+	conn  ldapConn
+	users []User
 }
 
 type ldapConn interface {
@@ -79,13 +80,17 @@ func (r *ldapGroupResolver) resolve(name string) (*Group, error) {
 	}, nil
 }
 
-func (r *ldapGroupResolver) getGitHubUserKerberosIDMapping() (map[string]string, error) {
+func (r *ldapGroupResolver) collectGitHubUsers() ([]User, error) {
 	if r.conn == nil {
 		return nil, fmt.Errorf("ldapGroupResolver's connection is nil")
 	}
 
+	if r.users != nil {
+		return r.users, nil
+	}
+
 	searchReq := ldapv3.NewSearchRequest("ou=users,dc=redhat,dc=com", ldapv3.ScopeWholeSubtree, 0, 0, 0,
-		false, "(rhatSocialURL=GitHub*)", []string{"uid", "rhatSocialURL"}, []ldapv3.Control{})
+		false, "(rhatSocialURL=GitHub*)", []string{"uid", "rhatSocialURL", "rhatCostCenter"}, []ldapv3.Control{})
 
 	result, err := r.conn.Search(searchReq)
 	if err != nil {
@@ -97,7 +102,7 @@ func (r *ldapGroupResolver) getGitHubUserKerberosIDMapping() (map[string]string,
 		return nil, nil
 	}
 
-	ret := map[string]string{}
+	var ret []User
 
 	for _, entry := range result.Entries {
 		kerberosID := entry.GetAttributeValue("uid")
@@ -115,9 +120,21 @@ func (r *ldapGroupResolver) getGitHubUserKerberosIDMapping() (map[string]string,
 			logrus.WithField("kerberosID", kerberosID).WithField("entry", entry).Warn("failed to parse GitHub ID")
 			continue
 		}
-		ret[gitHubID] = kerberosID
+		ret = append(ret, User{UID: kerberosID, GitHubUsername: gitHubID, CostCenter: entry.GetAttributeValue("rhatCostCenter")})
 	}
 
+	return ret, nil
+}
+
+func (r *ldapGroupResolver) getGitHubUserKerberosIDMapping() (map[string]string, error) {
+	users, err := r.collectGitHubUsers()
+	if err != nil {
+		return nil, fmt.Errorf("failed to collect GitHub users: %w", err)
+	}
+	ret := map[string]string{}
+	for _, user := range users {
+		ret[user.GitHubUsername] = user.UID
+	}
 	return ret, nil
 }
 

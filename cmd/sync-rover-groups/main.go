@@ -34,6 +34,7 @@ type options struct {
 	groupsFile       string
 	configFile       string
 	mappingFile      string
+	githubUsersFile  string
 }
 
 func parseOptions() *options {
@@ -46,6 +47,7 @@ func parseOptions() *options {
 	fs.StringVar(&opts.groupsFile, "groups-file", "/tmp/groups.yaml", "The file to store the groups in yaml format")
 	fs.StringVar(&opts.configFile, "config-file", "", "The yaml file storing the config file for the groups")
 	fs.StringVar(&opts.mappingFile, "mapping-file", "", "File used to store the mapping results of m(github_login)=kerberos_id.")
+	fs.StringVar(&opts.githubUsersFile, "github-users-file", "", "File used to store GitHub users.")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse args")
 	}
@@ -120,6 +122,20 @@ func main() {
 	groupCollector := newYamlGroupCollector(opts.validateSubjects)
 	groupResolver := &ldapGroupResolver{conn: conn}
 
+	if opts.githubUsersFile != "" {
+		users, err := groupResolver.collectGitHubUsers()
+		if err != nil {
+			logrus.WithError(err).Fatal("failed to collect GitHub users")
+		}
+		data, err := yaml.Marshal(users)
+		if err != nil {
+			logrus.WithError(err).Fatal("failed to marshal users")
+		}
+		if err := os.WriteFile(opts.githubUsersFile, data, 0644); err != nil {
+			logrus.WithError(err).WithField("file", opts.githubUsersFile).Fatal("failed to write file")
+		}
+	}
+
 	if opts.mappingFile != "" {
 		mapping, err := groupResolver.getGitHubUserKerberosIDMapping()
 		if err != nil {
@@ -154,9 +170,16 @@ type Group struct {
 	Members []string `json:"members"`
 }
 
+type User struct {
+	GitHubUsername string `json:"github_username,omitempty"`
+	UID            string `json:"uid,omitempty"`
+	CostCenter     string `json:"cost_center,omitempty"`
+}
+
 type groupResolver interface {
 	resolve(name string) (*Group, error)
 	getGitHubUserKerberosIDMapping() (map[string]string, error)
+	collectGitHubUsers() ([]User, error)
 }
 
 type groupCollector interface {

@@ -22,6 +22,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/testhelper"
+	testhelper_kube "github.com/openshift/ci-tools/pkg/testhelper/kubernetes"
 )
 
 func TestCreateBuild(t *testing.T) {
@@ -386,20 +387,112 @@ func init() {
 }
 
 func TestWaitForBuild(t *testing.T) {
+	ns := "ns"
 	now := meta.Time{Time: time.Now()}
 	start, end := meta.Time{Time: now.Time.Add(-3 * time.Second)}, now
 	var testCases = []struct {
 		name        string
 		buildClient BuildClient
+		timeout     time.Duration
 		expected    error
 	}{
+		{
+			name: "timeout",
+			buildClient: NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
+				&buildapi.Build{
+					ObjectMeta: meta.ObjectMeta{
+						Name:              "some-build",
+						Namespace:         ns,
+						CreationTimestamp: start,
+						Annotations: map[string]string{
+							buildapi.BuildPodNameAnnotation: "some-build-build",
+						},
+					},
+					Status: buildapi.BuildStatus{
+						Phase:               buildapi.BuildPhasePending,
+						StartTimestamp:      &start,
+						CompletionTimestamp: &end,
+					},
+				},
+			).Build()), nil, nil),
+			expected: fmt.Errorf("build didn't start running within 0s (phase: Pending)"),
+		},
+		{
+			name: "timeout with pod",
+			buildClient: NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
+				&buildapi.Build{
+					ObjectMeta: meta.ObjectMeta{
+						Name:              "some-build",
+						Namespace:         ns,
+						CreationTimestamp: start,
+						Annotations: map[string]string{
+							buildapi.BuildPodNameAnnotation: "some-build-build",
+						},
+					},
+					Status: buildapi.BuildStatus{
+						Phase:               buildapi.BuildPhasePending,
+						StartTimestamp:      &start,
+						CompletionTimestamp: &end,
+					},
+				},
+				&coreapi.Pod{
+					ObjectMeta: meta.ObjectMeta{
+						Name:      "some-build-build",
+						Namespace: ns,
+					},
+				},
+			).Build()), nil, nil),
+			expected: fmt.Errorf("build didn't start running within 0s (phase: Pending):\nFound 0 events for Pod some-build-build:"),
+		},
+		{
+			name: "timeout with pod and events",
+			buildClient: NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
+				&buildapi.Build{
+					ObjectMeta: meta.ObjectMeta{
+						Name:              "some-build",
+						Namespace:         ns,
+						CreationTimestamp: start,
+						Annotations: map[string]string{
+							buildapi.BuildPodNameAnnotation: "some-build-build",
+						},
+					},
+					Status: buildapi.BuildStatus{
+						Phase:               buildapi.BuildPhasePending,
+						StartTimestamp:      &start,
+						CompletionTimestamp: &end,
+					},
+				},
+				&coreapi.Pod{
+					ObjectMeta: meta.ObjectMeta{
+						Name:      "some-build-build",
+						Namespace: ns,
+						UID:       "UID",
+					},
+					Status: coreapi.PodStatus{
+						ContainerStatuses: []coreapi.ContainerStatus{{
+							Name: "the-container",
+							State: coreapi.ContainerState{
+								Waiting: &coreapi.ContainerStateWaiting{
+									Reason:  "the_reason",
+									Message: "the_message",
+								},
+							},
+						}},
+					},
+				},
+			).Build()), nil, nil),
+			expected: fmt.Errorf(`build didn't start running within 0s (phase: Pending):
+* Container the-container is not ready with reason the_reason and message the_message
+Found 0 events for Pod some-build-build:`),
+		},
 		{
 			name: "build succeeded",
 			buildClient: NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 				&buildapi.Build{
 					ObjectMeta: meta.ObjectMeta{
-						Name:      "some-build",
-						Namespace: "some-ns",
+						Name:              "some-build",
+						Namespace:         ns,
+						CreationTimestamp: start,
 					},
 					Status: buildapi.BuildStatus{
 						Phase:               buildapi.BuildPhaseComplete,
@@ -407,14 +500,16 @@ func TestWaitForBuild(t *testing.T) {
 						CompletionTimestamp: &end,
 					},
 				}).Build()), nil, nil),
+			timeout: 30 * time.Minute,
 		},
 		{
 			name: "build failed",
 			buildClient: NewFakeBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 				&buildapi.Build{
 					ObjectMeta: meta.ObjectMeta{
-						Name:      "some-build",
-						Namespace: "some-ns",
+						Name:              "some-build",
+						Namespace:         ns,
+						CreationTimestamp: start,
 					},
 					Status: buildapi.BuildStatus{
 						Phase:               buildapi.BuildPhaseCancelled,
@@ -425,13 +520,70 @@ func TestWaitForBuild(t *testing.T) {
 						CompletionTimestamp: &end,
 					},
 				}).Build()), "abc\n"), // the line break is for gotestsum https://github.com/gotestyourself/gotestsum/issues/141#issuecomment-1209146526
+			timeout:  30 * time.Minute,
 			expected: fmt.Errorf("%s\n\n%s", "the build some-build failed after 3s with reason reason: msg", "snippet"),
+		},
+		{
+			name: "build already succeeded",
+			buildClient: NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
+				&buildapi.Build{
+					ObjectMeta: meta.ObjectMeta{
+						Name:      "some-build",
+						Namespace: ns,
+						CreationTimestamp: meta.Time{
+							Time: now.Add(-60 * time.Minute),
+						},
+					},
+					Status: buildapi.BuildStatus{
+						Phase: buildapi.BuildPhaseComplete,
+						StartTimestamp: &meta.Time{
+							Time: now.Add(-60 * time.Minute),
+						},
+						CompletionTimestamp: &meta.Time{
+							Time: now.Add(-59 * time.Minute),
+						},
+					},
+				}).Build()), nil, nil),
+			timeout: 30 * time.Minute,
+		},
+		{
+			name: "build already failed",
+			buildClient: NewFakeBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
+				&buildapi.Build{
+					ObjectMeta: meta.ObjectMeta{
+						Name:      "some-build",
+						Namespace: ns,
+						CreationTimestamp: meta.Time{
+							Time: now.Add(-60 * time.Minute),
+						},
+					},
+					Status: buildapi.BuildStatus{
+						Phase:      buildapi.BuildPhaseCancelled,
+						Reason:     "reason",
+						Message:    "msg",
+						LogSnippet: "snippet",
+						StartTimestamp: &meta.Time{
+							Time: now.Add(-60 * time.Minute),
+						},
+						CompletionTimestamp: &meta.Time{
+							Time: now.Add(-59 * time.Minute),
+						},
+					},
+				}).Build()), "abc\n"),
+			timeout:  30 * time.Minute,
+			expected: fmt.Errorf("%s\n\n%s", "the build some-build failed after 1m0s with reason reason: msg", "snippet"),
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			actual := waitForBuild(context.TODO(), testCase.buildClient, "some-ns", "some-build")
+			client := testhelper_kube.FakePodClient{
+				FakePodExecutor: &testhelper_kube.FakePodExecutor{
+					LoggingClient: testCase.buildClient,
+				},
+				PendingTimeout: testCase.timeout,
+			}
+			actual := waitForBuild(context.TODO(), testCase.buildClient, &client, ns, "some-build")
 			if diff := cmp.Diff(testCase.expected, actual, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("%s: mismatch (-expected +actual), diff: %s", testCase.name, diff)
 			}

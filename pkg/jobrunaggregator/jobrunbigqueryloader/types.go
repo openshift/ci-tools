@@ -9,19 +9,20 @@ import (
 	"github.com/openshift/ci-tools/pkg/junit"
 )
 
-func newJobRunRow(jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob) *jobrunaggregatorapi.JobRunRow {
+func newJobRunRow(jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob, masterNodesUpdated string) *jobrunaggregatorapi.JobRunRow {
 	var endTime time.Time
 	if prowJob.Status.CompletionTime != nil {
 		endTime = prowJob.Status.CompletionTime.Time
 	}
 	return &jobrunaggregatorapi.JobRunRow{
-		Name:       jobRun.GetJobRunID(),
-		JobName:    jobRun.GetJobName(),
-		Status:     string(prowJob.Status.State),
-		StartTime:  prowJob.Status.StartTime.Time,
-		EndTime:    endTime,
-		ReleaseTag: prowJob.Labels["release.openshift.io/analysis"],
-		Cluster:    prowJob.Spec.Cluster,
+		Name:               jobRun.GetJobRunID(),
+		JobName:            jobRun.GetJobName(),
+		Status:             string(prowJob.Status.State),
+		StartTime:          prowJob.Status.StartTime.Time,
+		EndTime:            endTime,
+		ReleaseTag:         prowJob.Labels["release.openshift.io/analysis"],
+		Cluster:            prowJob.Spec.Cluster,
+		MasterNodesUpdated: masterNodesUpdated,
 	}
 
 }

@@ -248,7 +248,15 @@ func (o *jobRunLoaderOptions) uploadJobRun(ctx context.Context, jobRun jobrunagg
 		return err
 	}
 	o.logger.Info("inserting job run row")
-	jobRunRow := newJobRunRow(jobRun, prowJob)
+
+	clusterData, err := jobRun.GetOpenShiftTestsFilesWithPrefix(ctx, "cluster-data")
+	if err != nil {
+		// log but continue on
+		o.logger.WithError(err).Error("error getting cluster-data in GetOpenShiftTestsFilesWithPrefix")
+	}
+	masterNodesUpdated := jobrunaggregatorlib.GetMasterNodesUpdatedStatusFromClusterData(clusterData)
+
+	jobRunRow := newJobRunRow(jobRun, prowJob, masterNodesUpdated)
 	if err := o.jobRunInserter.Put(ctx, jobRunRow); err != nil {
 		o.logger.WithError(err).Error("error inserting job run row")
 		return err

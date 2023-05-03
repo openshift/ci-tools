@@ -50,6 +50,12 @@ const (
     "description": "the build farm cluster that the CI job ran on: build01, build02, build03, vsphere, etc",
     "type": "STRING",
     "mode": "NULLABLE"
+  },
+  {
+    "name": "MasterNodesUpdated",
+    "description": "indicator if master nodes restarted during the jobrun",
+    "type": "STRING",
+    "mode": "NULLABLE"
   }
 ]
 `
@@ -76,13 +82,14 @@ INNER JOIN openshift-ci-data-analysis.ci_data.Jobs on JobRuns.JobName = Jobs.Job
 )
 
 type JobRunRow struct {
-	Name       string
-	JobName    string
-	Status     string
-	StartTime  time.Time
-	EndTime    time.Time
-	ReleaseTag string
-	Cluster    string
+	Name               string
+	JobName            string
+	Status             string
+	StartTime          time.Time
+	EndTime            time.Time
+	ReleaseTag         string
+	Cluster            string
+	MasterNodesUpdated string
 }
 
 // TestPlatformProwJobRow is a transient struct for processing results from the bigquery jobs table populated

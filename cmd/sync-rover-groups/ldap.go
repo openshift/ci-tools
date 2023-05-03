@@ -128,18 +128,6 @@ func (r *ldapGroupResolver) collectGitHubUsers() ([]rover.User, error) {
 	return ret, nil
 }
 
-func (r *ldapGroupResolver) getGitHubUserKerberosIDMapping() (map[string]string, error) {
-	users, err := r.collectGitHubUsers()
-	if err != nil {
-		return nil, fmt.Errorf("failed to collect GitHub users: %w", err)
-	}
-	ret := map[string]string{}
-	for _, user := range users {
-		ret[user.GitHubUsername] = user.UID
-	}
-	return ret, nil
-}
-
 // getGitHubID returns the GitHub ID from the value
 // which are the values of "rhatSocialURL" fields set up by Red Hatters at Rover.
 // A user can have multiple "rhatSocialURL"s for GitHub, Twitter, LinkedIn etc, even multiple for GitHub.

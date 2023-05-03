@@ -34,7 +34,6 @@ type options struct {
 	validateSubjects bool
 	groupsFile       string
 	configFile       string
-	mappingFile      string
 	githubUsersFile  string
 }
 
@@ -47,7 +46,6 @@ func parseOptions() *options {
 	fs.StringVar(&opts.ldapServer, "ldap-server", "ldap.corp.redhat.com", "LDAP server")
 	fs.StringVar(&opts.groupsFile, "groups-file", "/tmp/groups.yaml", "The file to store the groups in yaml format")
 	fs.StringVar(&opts.configFile, "config-file", "", "The yaml file storing the config file for the groups")
-	fs.StringVar(&opts.mappingFile, "mapping-file", "", "File used to store the mapping results of m(github_login)=kerberos_id.")
 	fs.StringVar(&opts.githubUsersFile, "github-users-file", "", "File used to store GitHub users.")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse args")
@@ -66,8 +64,8 @@ func (o *options) validate() error {
 	if len(values) == 0 {
 		return fmt.Errorf("--manifest-dir must be set")
 	}
-	if o.validateSubjects && o.mappingFile != "" {
-		return fmt.Errorf("--mapping-file cannot be set when --validate-subjects is true")
+	if o.validateSubjects && o.githubUsersFile != "" {
+		return fmt.Errorf("--github-users-file cannot be set when --validate-subjects is true")
 	}
 	return nil
 }
@@ -137,22 +135,6 @@ func main() {
 		}
 	}
 
-	if opts.mappingFile != "" {
-		mapping, err := groupResolver.getGitHubUserKerberosIDMapping()
-		if err != nil {
-			logrus.WithError(err).Fatal("failed to get GitHub User and KerberosID mapping")
-		}
-		bytes, err := yaml.Marshal(mapping)
-		if err != nil {
-			logrus.WithError(err).Fatal("failed to marshal GitHub User and KerberosID mapping")
-		}
-		if err := ioutil.WriteFile(opts.mappingFile, bytes, 0644); err != nil {
-			logrus.WithField("path", opts.mappingFile).WithError(err).
-				Fatal("failed to write GitHub User and KerberosID mapping to file")
-		}
-		logrus.WithField("path", opts.mappingFile).Info("Saved the mapping")
-	}
-
 	groups, err := roverGroups(opts.manifestDirs, config, opts.validateSubjects, groupCollector, groupResolver)
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to get rover groups")
@@ -173,7 +155,6 @@ type Group struct {
 
 type groupResolver interface {
 	resolve(name string) (*Group, error)
-	getGitHubUserKerberosIDMapping() (map[string]string, error)
 	collectGitHubUsers() ([]rover.User, error)
 }
 

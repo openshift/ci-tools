@@ -8,11 +8,9 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
 
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -137,7 +135,6 @@ type sourceStep struct {
 	config          api.SourceStepConfiguration
 	resources       api.ResourceConfiguration
 	client          BuildClient
-	podClient       kubernetes.PodClient
 	jobSpec         *api.JobSpec
 	cloneAuthConfig *CloneAuthConfig
 	pullSecret      *corev1.Secret
@@ -163,7 +160,7 @@ func (s *sourceStep) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return handleBuilds(ctx, s.client, s.podClient, *createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret, fromDigest))
+	return handleBuilds(ctx, s.client, *createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret, fromDigest))
 }
 
 func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef corev1.ObjectReference, resources api.ResourceConfiguration, cloneAuthConfig *CloneAuthConfig, pullSecret *corev1.Secret, fromDigest string) *buildapi.Build {
@@ -406,7 +403,7 @@ func isBuildPhaseTerminated(phase buildapi.BuildPhase) bool {
 	return true
 }
 
-func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubernetes.PodClient, build buildapi.Build) error {
+func handleBuilds(ctx context.Context, buildClient BuildClient, build buildapi.Build) error {
 	var wg sync.WaitGroup
 
 	builds := constructMultiArchBuilds(build, buildClient.NodeArchitectures())
@@ -416,7 +413,7 @@ func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubern
 	for _, build := range builds {
 		go func(b buildapi.Build) {
 			defer wg.Done()
-			if err := handleBuild(ctx, buildClient, podClient, b); err != nil {
+			if err := handleBuild(ctx, buildClient, b); err != nil {
 				errChan <- fmt.Errorf("error occurred handling build %s: %w", b.Name, err)
 			}
 		}(build)
@@ -452,7 +449,7 @@ func constructMultiArchBuilds(build buildapi.Build, nodeArchitectures []string) 
 	return ret
 }
 
-func handleBuild(ctx context.Context, client BuildClient, podClient kubernetes.PodClient, build buildapi.Build) error {
+func handleBuild(ctx context.Context, client BuildClient, build buildapi.Build) error {
 	const attempts = 5
 	ns, name := build.Namespace, build.Name
 	var errs []error
@@ -466,7 +463,7 @@ func handleBuild(ctx context.Context, client BuildClient, podClient kubernetes.P
 		} else {
 			return false, fmt.Errorf("could not create build %s: %w", name, err)
 		}
-		if err := waitForBuildOrTimeout(ctx, client, podClient, ns, name); err != nil {
+		if err := waitForBuildOrTimeout(ctx, client, ns, name); err != nil {
 			errs = append(errs, err)
 			return false, handleFailedBuild(ctx, client, ns, name, err)
 		}
@@ -542,45 +539,19 @@ func hintsAtInfraReason(logSnippet string) bool {
 		strings.Contains(logSnippet, "connection reset by peer")
 }
 
-func waitForBuildOrTimeout(
-	ctx context.Context,
-	buildClient BuildClient,
-	podClient kubernetes.PodClient,
-	namespace, name string,
-) error {
-	return waitForBuild(ctx, buildClient, podClient, namespace, name)
+func waitForBuildOrTimeout(ctx context.Context, buildClient BuildClient, namespace, name string) error {
+	return waitForBuild(ctx, buildClient, namespace, name)
 }
 
-func waitForBuild(
-	ctx context.Context,
-	buildClient BuildClient,
-	podClient kubernetes.PodClient,
-	namespace, name string,
-) error {
+func waitForBuild(ctx context.Context, buildClient BuildClient, namespace, name string) error {
 	logrus.WithFields(logrus.Fields{
 		"namespace": namespace,
 		"name":      name,
 	}).Trace("Waiting for build to be complete.")
-	var ret atomic.Pointer[buildapi.Build]
-	var eg *errgroup.Group
-	eg, ctx = errgroup.WithContext(ctx)
-	pendingCtx, cancel := context.WithCancel(ctx)
-	pendingCheck := func() error {
-		timeout := podClient.GetPendingTimeout()
-		t0 := ret.Load().CreationTimestamp
-		select {
-		case <-pendingCtx.Done():
-		case <-time.After(time.Until(t0.Add(timeout))):
-			err := util.PendingBuildError(ctx, podClient, ret.Load())
-			logrus.Infof(err.Error())
-			return err
-		}
-		return nil
-	}
-	eg.Go(func() error {
-		defer cancel()
-		return kubernetes.WaitForConditionOnObject(ctx, buildClient, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, &buildapi.BuildList{}, &buildapi.Build{}, func(obj runtime.Object) (bool, error) {
-			build := obj.(*buildapi.Build)
+
+	evaluatorFunc := func(obj runtime.Object) (bool, error) {
+		switch build := obj.(type) {
+		case *buildapi.Build:
 			switch build.Status.Phase {
 			case buildapi.BuildPhaseComplete:
 				logrus.Infof("Build %s succeeded after %s", build.Name, buildDuration(build).Truncate(time.Second))
@@ -590,13 +561,13 @@ func waitForBuild(
 				printBuildLogs(buildClient, build.Namespace, build.Name)
 				return true, util.AppendLogToError(fmt.Errorf("the build %s failed after %s with reason %s: %s", build.Name, buildDuration(build).Truncate(time.Second), build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
 			}
-			if ret.Swap(build) == nil {
-				eg.Go(pendingCheck)
-			}
-			return false, nil
-		}, 0)
-	})
-	return eg.Wait()
+		default:
+			return false, fmt.Errorf("build/%v ns/%v got an event that did not contain a build: %v", name, namespace, obj)
+		}
+		return false, nil
+	}
+
+	return kubernetes.WaitForConditionOnObject(ctx, buildClient, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, &buildapi.BuildList{}, &buildapi.Build{}, evaluatorFunc, 0)
 }
 
 func buildDuration(build *buildapi.Build) time.Duration {
@@ -674,20 +645,12 @@ func (s *sourceStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func SourceStep(
-	config api.SourceStepConfiguration,
-	resources api.ResourceConfiguration,
-	buildClient BuildClient,
-	podClient kubernetes.PodClient,
-	jobSpec *api.JobSpec,
-	cloneAuthConfig *CloneAuthConfig,
-	pullSecret *corev1.Secret,
-) api.Step {
+func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient,
+	jobSpec *api.JobSpec, cloneAuthConfig *CloneAuthConfig, pullSecret *corev1.Secret) api.Step {
 	return &sourceStep{
 		config:          config,
 		resources:       resources,
 		client:          buildClient,
-		podClient:       podClient,
 		jobSpec:         jobSpec,
 		cloneAuthConfig: cloneAuthConfig,
 		pullSecret:      pullSecret,

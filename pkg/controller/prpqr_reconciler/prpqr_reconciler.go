@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 
@@ -446,15 +445,14 @@ type aggregatedOptions struct {
 func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter periodicDefaulter, baseCiop *api.Metadata, prpqrName, prpqrNamespace string, pr *v1.PullRequestUnderTest, mimickedJob string, inject *api.MetadataWithTest, aggregatedOptions *aggregatedOptions) (*prowv1.ProwJob, error) {
 	fakeProwgenInfo := &prowgen.ProwgenInfo{Metadata: *baseCiop}
 
-	annotations := map[string]string{
-		releaseJobNameAnnotation: mimickedJob,
-	}
+	var annotations map[string]string
 	labels := map[string]string{
 		releaseJobNameLabel: jobNameHash(mimickedJob),
 	}
 
-	var aggregateIndex *int
+	hashInput := prowgen.CustomHashInput(prpqrName)
 	if aggregatedOptions != nil {
+		hashInput = prowgen.CustomHashInput(fmt.Sprintf("%s-%d", prpqrName, aggregatedOptions.aggregatedIndex))
 		if aggregatedOptions.labels != nil {
 			for k, v := range aggregatedOptions.labels {
 				labels[k] = v
@@ -463,34 +461,20 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 		annotations = map[string]string{
 			releaseJobNameAnnotation: aggregatedOptions.releaseJobName,
 		}
-		aggregateIndex = &aggregatedOptions.aggregatedIndex
 	} else {
 		labels[v1.PullRequestPayloadQualificationRunLabel] = prpqrName
+		annotations = map[string]string{
+			releaseJobNameAnnotation: mimickedJob,
+		}
 	}
 
-	hashInput := prowgen.CustomHashInput(prpqrName)
 	var periodic *prowconfig.Periodic
 	for i := range ciopConfig.Tests {
 		if ciopConfig.Tests[i].As != inject.Test {
 			continue
 		}
-		test := ciopConfig.Tests[i].DeepCopy()
-		//TODO: Not sure if these secret changes are necessary, but leaving for now
-		if aggregatedOptions != nil {
-			index := strconv.Itoa(aggregatedOptions.aggregatedIndex)
-			for j, secret := range test.Secrets {
-				secret.Name = fmt.Sprintf("%s-%s", secret.Name, index)
-				test.Secrets[j] = secret
-			}
-			if test.Secret != nil {
-				test.Secret.Name = fmt.Sprintf("%s-%s", test.Secret.Name, index)
-			}
-		}
-		jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, fakeProwgenInfo, prowgen.NewCiOperatorPodSpecGenerator(), *test)
+		jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, fakeProwgenInfo, prowgen.NewCiOperatorPodSpecGenerator(), ciopConfig.Tests[i])
 		jobBaseGen.PodSpec.Add(prowgen.InjectTestFrom(inject))
-		if aggregateIndex != nil {
-			jobBaseGen.PodSpec.Add(prowgen.TargetAdditionalSuffix(strconv.Itoa(*aggregateIndex)))
-		}
 
 		// Avoid sharing when we run the same job multiple times.
 		// PRPQR name should be safe to use as a discriminating input, because

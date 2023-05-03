@@ -269,8 +269,7 @@ func (f *fakeResolverClient) ConfigWithTest(base *api.Metadata, testSource *api.
 		Metadata: *base,
 		Tests: []api.TestStepConfiguration{
 			{
-				As:     testSource.Test,
-				Secret: &api.Secret{Name: "secret"},
+				As: testSource.Test,
 			},
 		},
 	}, nil

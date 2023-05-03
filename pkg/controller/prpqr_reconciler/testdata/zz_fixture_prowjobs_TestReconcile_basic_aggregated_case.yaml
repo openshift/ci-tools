@@ -42,10 +42,8 @@
       - args:
         - --gcs-upload-secret=/secrets/gcs/service-account.json
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --input-hash=prpqr-test
+        - --input-hash=prpqr-test-0
         - --report-credentials-file=/etc/report/credentials
-        - --secret-dir=/secrets/secret-0
-        - --target-additional-suffix=0
         - --target=test-name
         - --with-test-from=test-org/test-repo@test-branch:test-name
         command:
@@ -66,9 +64,6 @@
         - mountPath: /etc/report
           name: result-aggregator
           readOnly: true
-        - mountPath: /secrets/secret-0
-          name: secret-0
-          readOnly: true
       serviceAccountName: ci-operator
       volumes:
       - name: pull-secret
@@ -77,9 +72,6 @@
       - name: result-aggregator
         secret:
           secretName: result-aggregator
-      - name: secret-0
-        secret:
-          secretName: secret-0
     report: true
     type: periodic
   status:
@@ -129,10 +121,8 @@
       - args:
         - --gcs-upload-secret=/secrets/gcs/service-account.json
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --input-hash=prpqr-test
+        - --input-hash=prpqr-test-1
         - --report-credentials-file=/etc/report/credentials
-        - --secret-dir=/secrets/secret-1
-        - --target-additional-suffix=1
         - --target=test-name
         - --with-test-from=test-org/test-repo@test-branch:test-name
         command:
@@ -153,9 +143,6 @@
         - mountPath: /etc/report
           name: result-aggregator
           readOnly: true
-        - mountPath: /secrets/secret-1
-          name: secret-1
-          readOnly: true
       serviceAccountName: ci-operator
       volumes:
       - name: pull-secret
@@ -164,9 +151,6 @@
       - name: result-aggregator
         secret:
           secretName: result-aggregator
-      - name: secret-1
-        secret:
-          secretName: secret-1
     report: true
     type: periodic
   status:

@@ -22,6 +22,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/group"
+	"github.com/openshift/ci-tools/pkg/rover"
 )
 
 type options struct {
@@ -170,16 +171,10 @@ type Group struct {
 	Members []string `json:"members"`
 }
 
-type User struct {
-	GitHubUsername string `json:"github_username,omitempty"`
-	UID            string `json:"uid,omitempty"`
-	CostCenter     string `json:"cost_center,omitempty"`
-}
-
 type groupResolver interface {
 	resolve(name string) (*Group, error)
 	getGitHubUserKerberosIDMapping() (map[string]string, error)
-	collectGitHubUsers() ([]User, error)
+	collectGitHubUsers() ([]rover.User, error)
 }
 
 type groupCollector interface {

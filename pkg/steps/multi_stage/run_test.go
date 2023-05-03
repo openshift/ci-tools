@@ -88,10 +88,7 @@ func TestRun(t *testing.T) {
 				},
 			}
 			jobSpec.SetNamespace("ns")
-			client := &testhelper_kube.FakePodClient{
-				PendingTimeout:  30 * time.Minute,
-				FakePodExecutor: crclient,
-			}
+			client := &testhelper_kube.FakePodClient{FakePodExecutor: crclient}
 			step := MultiStageTestStep(api.TestStepConfiguration{
 				As: name,
 				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{

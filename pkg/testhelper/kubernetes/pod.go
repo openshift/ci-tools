@@ -95,12 +95,9 @@ func filter(list ctrlruntimeclient.ObjectList, opts ...ctrlruntimeclient.ListOpt
 type FakePodClient struct {
 	*FakePodExecutor
 	Namespace, Name string
-	PendingTimeout  time.Duration
 }
 
-func (f FakePodClient) GetPendingTimeout() time.Duration {
-	return f.PendingTimeout
-}
+func (FakePodClient) PendingTimeout() time.Duration { return 30 * time.Minute }
 
 func (f *FakePodClient) Exec(namespace, name string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error) {
 	if namespace != f.Namespace {

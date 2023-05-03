@@ -11,7 +11,6 @@ import (
 	routev1 "github.com/openshift/api/route/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
 )
 
@@ -24,7 +23,6 @@ type rpmImageInjectionStep struct {
 	config     api.RPMImageInjectionStepConfiguration
 	resources  api.ResourceConfiguration
 	client     BuildClient
-	podClient  kubernetes.PodClient
 	jobSpec    *api.JobSpec
 	pullSecret *coreapi.Secret
 }
@@ -50,7 +48,7 @@ func (s *rpmImageInjectionStep) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return handleBuilds(ctx, s.client, s.podClient, *buildFromSource(
+	return handleBuilds(ctx, s.client, *buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,
 		buildapi.BuildSource{
 			Type:       buildapi.BuildSourceDockerfile,
@@ -86,19 +84,11 @@ func (s *rpmImageInjectionStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func RPMImageInjectionStep(
-	config api.RPMImageInjectionStepConfiguration,
-	resources api.ResourceConfiguration,
-	buildClient BuildClient,
-	podClient kubernetes.PodClient,
-	jobSpec *api.JobSpec,
-	pullSecret *coreapi.Secret,
-) api.Step {
+func RPMImageInjectionStep(config api.RPMImageInjectionStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &rpmImageInjectionStep{
 		config:     config,
 		resources:  resources,
 		client:     buildClient,
-		podClient:  podClient,
 		jobSpec:    jobSpec,
 		pullSecret: pullSecret,
 	}

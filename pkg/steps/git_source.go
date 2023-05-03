@@ -11,7 +11,6 @@ import (
 	buildapi "github.com/openshift/api/build/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
 )
 
@@ -19,7 +18,6 @@ type gitSourceStep struct {
 	config          api.ProjectDirectoryImageBuildInputs
 	resources       api.ResourceConfiguration
 	buildClient     BuildClient
-	podClient       kubernetes.PodClient
 	jobSpec         *api.JobSpec
 	cloneAuthConfig *CloneAuthConfig
 	pullSecret      *coreapi.Secret
@@ -44,7 +42,7 @@ func (s *gitSourceStep) run(ctx context.Context) error {
 			secretName = s.cloneAuthConfig.Secret.Name
 		}
 
-		return handleBuilds(ctx, s.buildClient, s.podClient, *buildFromSource(s.jobSpec, "", api.PipelineImageStreamTagReferenceRoot, buildapi.BuildSource{
+		return handleBuilds(ctx, s.buildClient, *buildFromSource(s.jobSpec, "", api.PipelineImageStreamTagReferenceRoot, buildapi.BuildSource{
 			Type:         buildapi.BuildSourceGit,
 			Dockerfile:   s.config.DockerfileLiteral,
 			ContextDir:   s.config.ContextDir,
@@ -101,20 +99,11 @@ func determineRefsWorkdir(refs *prowapi.Refs, extraRefs []prowapi.Refs) *prowapi
 }
 
 // GitSourceStep returns gitSourceStep that holds all the required information to create a build from a git source.
-func GitSourceStep(
-	config api.ProjectDirectoryImageBuildInputs,
-	resources api.ResourceConfiguration,
-	buildClient BuildClient,
-	podClient kubernetes.PodClient,
-	jobSpec *api.JobSpec,
-	cloneAuthConfig *CloneAuthConfig,
-	pullSecret *coreapi.Secret,
-) api.Step {
+func GitSourceStep(config api.ProjectDirectoryImageBuildInputs, resources api.ResourceConfiguration, buildClient BuildClient, jobSpec *api.JobSpec, cloneAuthConfig *CloneAuthConfig, pullSecret *coreapi.Secret) api.Step {
 	return &gitSourceStep{
 		config:          config,
 		resources:       resources,
 		buildClient:     buildClient,
-		podClient:       podClient,
 		jobSpec:         jobSpec,
 		cloneAuthConfig: cloneAuthConfig,
 		pullSecret:      pullSecret,

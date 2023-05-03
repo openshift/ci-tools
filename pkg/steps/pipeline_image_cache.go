@@ -11,7 +11,6 @@ import (
 	buildapi "github.com/openshift/api/build/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
@@ -25,7 +24,6 @@ type pipelineImageCacheStep struct {
 	config     api.PipelineImageCacheStepConfiguration
 	resources  api.ResourceConfiguration
 	client     BuildClient
-	podClient  kubernetes.PodClient
 	jobSpec    *api.JobSpec
 	pullSecret *coreapi.Secret
 }
@@ -46,7 +44,7 @@ func (s *pipelineImageCacheStep) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return handleBuild(ctx, s.client, s.podClient, *buildFromSource(
+	return handleBuild(ctx, s.client, *buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,
 		buildapi.BuildSource{
 			Type:       buildapi.BuildSourceDockerfile,
@@ -87,19 +85,11 @@ func (s *pipelineImageCacheStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func PipelineImageCacheStep(
-	config api.PipelineImageCacheStepConfiguration,
-	resources api.ResourceConfiguration,
-	client BuildClient,
-	podClient kubernetes.PodClient,
-	jobSpec *api.JobSpec,
-	pullSecret *coreapi.Secret,
-) api.Step {
+func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, resources api.ResourceConfiguration, client BuildClient, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &pipelineImageCacheStep{
 		config:     config,
 		resources:  resources,
 		client:     client,
-		podClient:  podClient,
 		jobSpec:    jobSpec,
 		pullSecret: pullSecret,
 	}

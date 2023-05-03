@@ -153,6 +153,7 @@ func TestTargetAdditionalSuffix(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			tc := tc
 			t.Parallel()
 			g := NewCiOperatorPodSpecGenerator()
 			g.Add(TargetAdditionalSuffix(tc.input))

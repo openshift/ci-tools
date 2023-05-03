@@ -8,11 +8,13 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	"github.com/openshift/ci-tools/pkg/rover"
 )
 
 type ldapGroupResolver struct {
 	conn  ldapConn
-	users []User
+	users []rover.User
 }
 
 type ldapConn interface {
@@ -80,7 +82,7 @@ func (r *ldapGroupResolver) resolve(name string) (*Group, error) {
 	}, nil
 }
 
-func (r *ldapGroupResolver) collectGitHubUsers() ([]User, error) {
+func (r *ldapGroupResolver) collectGitHubUsers() ([]rover.User, error) {
 	if r.conn == nil {
 		return nil, fmt.Errorf("ldapGroupResolver's connection is nil")
 	}
@@ -102,7 +104,7 @@ func (r *ldapGroupResolver) collectGitHubUsers() ([]User, error) {
 		return nil, nil
 	}
 
-	var ret []User
+	var ret []rover.User
 
 	for _, entry := range result.Entries {
 		kerberosID := entry.GetAttributeValue("uid")
@@ -120,7 +122,7 @@ func (r *ldapGroupResolver) collectGitHubUsers() ([]User, error) {
 			logrus.WithField("kerberosID", kerberosID).WithField("entry", entry).Warn("failed to parse GitHub ID")
 			continue
 		}
-		ret = append(ret, User{UID: kerberosID, GitHubUsername: gitHubID, CostCenter: entry.GetAttributeValue("rhatCostCenter")})
+		ret = append(ret, rover.User{UID: kerberosID, GitHubUsername: gitHubID, CostCenter: entry.GetAttributeValue("rhatCostCenter")})
 	}
 
 	return ret, nil

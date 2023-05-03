@@ -10,8 +10,10 @@ import (
 	"sync"
 	"time"
 
+	"cloud.google.com/go/bigquery"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
+	"google.golang.org/api/option"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -32,13 +34,13 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/group"
+	"github.com/openshift/ci-tools/pkg/rover"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 type options struct {
 	kubernetesOptions flagutil.KubernetesOptions
 
-	mappingFile    string
 	logLevel       string
 	dryRun         bool
 	groupsFile     string
@@ -47,6 +49,8 @@ type options struct {
 
 	peribolosConfig        string
 	orgFromPeribolosConfig string
+	githubUsersFile        string
+	gcpCredentialsFile     string
 }
 
 func parseOptions() *options {
@@ -55,12 +59,13 @@ func parseOptions() *options {
 	opts.kubernetesOptions.AddFlags(fs)
 	fs.StringVar(&opts.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
 	fs.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
-	fs.StringVar(&opts.mappingFile, "mapping-file", "", "File to the mapping results of m(github_login)=kerberos_id.")
 	fs.StringVar(&opts.groupsFile, "groups-file", "", "The yaml file storing the groups")
 	fs.StringVar(&opts.configFile, "config-file", "", "The yaml file storing the config file for the groups")
 	fs.IntVar(&opts.maxConcurrency, "concurrency", 60, "Maximum number of concurrent in-flight goroutines to handle groups.")
 	fs.StringVar(&opts.peribolosConfig, "peribolos-config", "", "Peribolos configuration file")
 	fs.StringVar(&opts.orgFromPeribolosConfig, "org-from-peribolos-config", "openshift-priv", "Org from peribolos configuration")
+	fs.StringVar(&opts.githubUsersFile, "github-users-file", "", "File used to store GitHub users.")
+	fs.StringVar(&opts.gcpCredentialsFile, "gcp-credentials-file", "", "The json file storing the gcp credentials.")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse args")
 	}
@@ -74,8 +79,11 @@ func (o *options) validate() error {
 	}
 	logrus.SetLevel(level)
 
-	if o.mappingFile == "" {
-		return fmt.Errorf("--mapping-file must not be empty")
+	if o.githubUsersFile == "" {
+		return fmt.Errorf("--github-users-file must not be empty")
+	}
+	if o.gcpCredentialsFile == "" {
+		return fmt.Errorf("--gcp-credentials-file must not be empty")
 	}
 	if o.groupsFile == "" {
 		return fmt.Errorf("--groups-file must not be empty")
@@ -177,20 +185,54 @@ func main() {
 
 	ctx := interrupts.Context()
 
-	mapping, err := func(path string) (map[string]string, error) {
-		logrus.WithField("path", path).Debug("Loading the mapping file ...")
-		bytes, err := ioutil.ReadFile(path)
+	users, err := func(path string) ([]rover.User, error) {
+		logrus.WithField("path", path).Debug("Loading the GitHub users file ...")
+		bytes, err := os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read file %s: %w", path, err)
 		}
-		var mapping map[string]string
-		if err := yaml.Unmarshal(bytes, &mapping); err != nil {
+		var users []rover.User
+		if err := yaml.Unmarshal(bytes, &users); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal: %w", err)
 		}
-		return mapping, nil
-	}(opts.mappingFile)
+		return users, nil
+	}(opts.githubUsersFile)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to load the mapping")
+		logrus.WithError(err).Fatal("Failed to load the GitHub users")
+	}
+
+	gcpClient, err := bigquery.NewClient(ctx, "openshift-gce-devel", option.WithCredentialsFile(opts.gcpCredentialsFile))
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create the GCP client")
+	}
+	defer func() {
+		if err := gcpClient.Close(); err != nil {
+			logrus.WithError(err).Fatal("Failed to close the GCP client")
+		}
+	}()
+
+	var userItems []*UserItem
+	now := time.Now()
+	for _, user := range users {
+		userItems = append(userItems, &UserItem{
+			Created:        now,
+			UID:            user.UID,
+			GitHubUsername: user.GitHubUsername,
+			CostCenter:     user.CostCenter,
+		})
+	}
+	if err := insertRows(ctx, gcpClient, userItems); err != nil {
+		logrus.WithError(err).Fatal("Failed to insert users to bigquery")
+	}
+
+	mapping := map[string]string{}
+	for _, user := range users {
+		if uid, ok := mapping[user.GitHubUsername]; ok {
+			logrus.WithField("uid1", uid).WithField("uid2", user.UID).WithField("github_username", user.GitHubUsername).
+				Warn("Two users with the same GitHub username: ignoring the latter")
+			continue
+		}
+		mapping[user.GitHubUsername] = user.UID
 	}
 
 	data, err := ioutil.ReadFile(opts.groupsFile)
@@ -216,6 +258,30 @@ func main() {
 	if err := ensureGroups(ctx, clients, groups, opts.maxConcurrency, opts.dryRun); err != nil {
 		logrus.WithError(err).Fatal("could not ensure groups")
 	}
+}
+
+type UserItem struct {
+	Created        time.Time
+	GitHubUsername string
+	UID            string
+	CostCenter     string
+}
+
+func (u *UserItem) Save() (map[string]bigquery.Value, string, error) {
+	return map[string]bigquery.Value{
+		"github_username": u.GitHubUsername,
+		"uid":             u.UID,
+		"cost_center":     u.CostCenter,
+		"created":         u.Created,
+	}, bigquery.NoDedupeID, nil
+}
+
+func insertRows(ctx context.Context, client *bigquery.Client, users []*UserItem) error {
+	inserter := client.Dataset("ci_analysis_us").Table("users").Inserter()
+	if err := inserter.Put(ctx, users); err != nil {
+		return err
+	}
+	return nil
 }
 
 func getOpenshiftPrivAdmins(peribolosConfig, orgFromPeribolosConfig string) (sets.String, error) {

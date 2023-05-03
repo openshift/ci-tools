@@ -211,14 +211,16 @@ func main() {
 		}
 	}()
 
-	var userItems []*UserItem
+	var userItems []*rover.UserItem
 	now := time.Now()
 	for _, user := range users {
-		userItems = append(userItems, &UserItem{
-			Created:        now,
-			UID:            user.UID,
-			GitHubUsername: user.GitHubUsername,
-			CostCenter:     user.CostCenter,
+		userItems = append(userItems, &rover.UserItem{
+			Created: now,
+			User: rover.User{
+				UID:            user.UID,
+				GitHubUsername: user.GitHubUsername,
+				CostCenter:     user.CostCenter,
+			},
 		})
 	}
 	if err := insertRows(ctx, gcpClient, userItems); err != nil {
@@ -260,23 +262,7 @@ func main() {
 	}
 }
 
-type UserItem struct {
-	Created        time.Time
-	GitHubUsername string
-	UID            string
-	CostCenter     string
-}
-
-func (u *UserItem) Save() (map[string]bigquery.Value, string, error) {
-	return map[string]bigquery.Value{
-		"github_username": u.GitHubUsername,
-		"uid":             u.UID,
-		"cost_center":     u.CostCenter,
-		"created":         u.Created,
-	}, bigquery.NoDedupeID, nil
-}
-
-func insertRows(ctx context.Context, client *bigquery.Client, users []*UserItem) error {
+func insertRows(ctx context.Context, client *bigquery.Client, users []*rover.UserItem) error {
 	inserter := client.Dataset("ci_analysis_us").Table("users").Inserter()
 	if err := inserter.Put(ctx, users); err != nil {
 		return err

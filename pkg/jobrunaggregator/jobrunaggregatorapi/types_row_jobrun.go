@@ -1,6 +1,10 @@
 package jobrunaggregatorapi
 
-import "time"
+import (
+	"time"
+
+	"cloud.google.com/go/bigquery"
+)
 
 const (
 	LegacyJobRunTableName     = "JobRuns"
@@ -89,7 +93,7 @@ type JobRunRow struct {
 	EndTime            time.Time
 	ReleaseTag         string
 	Cluster            string
-	MasterNodesUpdated string
+	MasterNodesUpdated bigquery.NullString
 }
 
 // TestPlatformProwJobRow is a transient struct for processing results from the bigquery jobs table populated

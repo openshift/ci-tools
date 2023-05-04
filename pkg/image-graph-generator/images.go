@@ -3,6 +3,7 @@ package imagegraphgenerator
 import (
 	"context"
 	"fmt"
+	"regexp"
 
 	"github.com/sirupsen/logrus"
 
@@ -17,14 +18,19 @@ type ImageRef struct {
 	FromRoot       bool        `graphql:"fromRoot"`
 	Source         string      `graphql:"source"`
 	Branches       []BranchRef `graphql:"branches"`
-	Parent         *ImageRef   `graphql:"parent"`
+	Parents        []ImageRef  `graphql:"parents"`
 	Children       []ImageRef  `graphql:"children"`
 }
 
 func (o *Operator) UpdateImage(image api.ProjectDirectoryImageBuildStepConfiguration, c *api.ReleaseBuildConfiguration, branchID string) error {
 	imageName := fmt.Sprintf("%s/%s:%s", c.PromotionConfiguration.Namespace, c.PromotionConfiguration.Name, string(image.To))
+
 	if c.PromotionConfiguration.Name == "" {
-		imageName = fmt.Sprintf("%s/%s:latest", c.PromotionConfiguration.Namespace, string(image.To))
+		if c.PromotionConfiguration.Tag == "" {
+			imageName = fmt.Sprintf("%s/%s:latest", c.PromotionConfiguration.Namespace, string(image.To))
+		} else {
+			imageName = fmt.Sprintf("%s/%s:%s", c.PromotionConfiguration.Namespace, c.PromotionConfiguration.Tag, string(image.To))
+		}
 	}
 
 	imageRef := &ImageRef{
@@ -39,14 +45,39 @@ func (o *Operator) UpdateImage(image api.ProjectDirectoryImageBuildStepConfigura
 	} else if string(image.From) != "" {
 		fromImage, ok := c.BaseImages[string(image.From)]
 		if ok {
-			imageRef.Parent = &ImageRef{
+			parent := ImageRef{
 				Name:           fromImage.ISTagName(),
 				ImageStreamRef: fromImage.Name,
 				Namespace:      fromImage.Namespace,
 			}
 
 			if v, ok := o.images[fromImage.ISTagName()]; ok {
-				imageRef.Parent.ID = v
+				parent.ID = v
+			}
+
+			imageRef.Parents = append(imageRef.Parents, parent)
+		}
+	}
+
+	if image.ProjectDirectoryImageBuildInputs.Inputs != nil {
+		for _, imageInput := range image.ProjectDirectoryImageBuildInputs.Inputs {
+			for _, as := range imageInput.As {
+				imageInfo := extractImageFromURL(as)
+				if imageInfo == nil {
+					continue
+				}
+				fullName := fmt.Sprintf("%s/%s:%s", imageInfo.namespace, imageInfo.name, imageInfo.tag)
+				parent := ImageRef{
+					Name:           fullName,
+					ImageStreamRef: imageInfo.name,
+					Namespace:      imageInfo.namespace,
+				}
+
+				if v, ok := o.images[fullName]; ok {
+					parent.ID = v
+				}
+
+				imageRef.Parents = append(imageRef.Parents, parent)
 			}
 		}
 	}
@@ -84,22 +115,27 @@ func (o *Operator) addImageRef(image *ImageRef) error {
 		}
 	}
 
-	if image.Parent != nil {
+	var parents []interface{}
+	for _, parent := range image.Parents {
 		p := map[string]interface{}{
-			"name":           image.Parent.Name,
-			"imageStreamRef": image.Parent.ImageStreamRef,
-			"namespace":      image.Parent.Namespace,
-			"fromRoot":       image.Parent.FromRoot,
+			"name":           parent.Name,
+			"imageStreamRef": parent.ImageStreamRef,
+			"namespace":      parent.Namespace,
+			"fromRoot":       parent.FromRoot,
 		}
 
-		if image.Parent.Source != "" {
-			p["source"] = image.Parent.Source
+		if parent.Source != "" {
+			p["source"] = parent.Source
 		}
 
-		if v, ok := o.images[image.Parent.Name]; ok {
+		if v, ok := o.images[parent.Name]; ok {
 			p["id"] = v
 		}
-		input["parent"] = p
+		parents = append(parents, p)
+	}
+
+	if len(parents) > 0 {
+		input["parents"] = parents
 	}
 
 	vars := map[string]interface{}{
@@ -142,23 +178,28 @@ func (o *Operator) updateImageRef(newImage *ImageRef, id string) error {
 		}
 	}
 
-	if newImage.Parent != nil {
+	var parents []interface{}
+	for _, parent := range newImage.Parents {
 		p := map[string]interface{}{
-			"name":           newImage.Parent.Name,
-			"imageStreamRef": newImage.Parent.ImageStreamRef,
-			"namespace":      newImage.Parent.Namespace,
-			"fromRoot":       newImage.Parent.FromRoot,
+			"name":           parent.Name,
+			"imageStreamRef": parent.ImageStreamRef,
+			"namespace":      parent.Namespace,
+			"fromRoot":       parent.FromRoot,
 		}
 
 		if newImage.Source != "" {
-			p["source"] = newImage.Parent.Source
+			p["source"] = parent.Source
 		}
 
-		if v, ok := o.images[newImage.Parent.Name]; ok {
+		if v, ok := o.images[parent.Name]; ok {
 			p["id"] = v
 		}
 
-		patch["parent"] = p
+		parents = append(parents, p)
+	}
+
+	if len(parents) > 0 {
+		patch["parents"] = parents
 	}
 
 	vars := map[string]interface{}{"input": UpdateImageInput{"set": patch, "filter": ImageFilter{"id": id}}}
@@ -192,4 +233,29 @@ func (o *Operator) loadImages() error {
 		o.images[image.Name] = image.ID
 	}
 	return nil
+}
+
+type imageInfo struct {
+	registry  string
+	namespace string
+	name      string
+	tag       string
+}
+
+func extractImageFromURL(imageURL string) *imageInfo {
+	re := regexp.MustCompile(`^(.+?)/(.+?)/(.+?):(.+)$`)
+	matches := re.FindStringSubmatch(imageURL)
+	if matches == nil {
+		return nil
+	}
+	registry := matches[1]
+	namespace := matches[2]
+	imageName := matches[3]
+	tag := matches[4]
+	return &imageInfo{
+		registry:  registry,
+		namespace: namespace,
+		name:      imageName,
+		tag:       tag,
+	}
 }

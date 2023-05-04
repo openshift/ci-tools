@@ -23,8 +23,8 @@ type Image  {
 	name: String! @search(by:[exact])
 	namespace: String!
 	imageStreamRef: String!
-	parent: Image @hasInverse(field:children)
-	children: [Image] @hasInverse(field:parent)
+	parents: [Image] @hasInverse(field:children)
+	children: [Image] @hasInverse(field:parents)
 	fromRoot: Boolean
 	branches: [Branch] @hasInverse(field:images)
 	source: String

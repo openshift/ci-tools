@@ -1,6 +1,7 @@
 package imagegraphgenerator
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -88,6 +89,37 @@ func TestOperator_UpdateImage(t *testing.T) {
 			}
 			if diff := cmp.Diff(fc.images, tt.expected); diff != "" {
 				t.Fatal(diff)
+			}
+		})
+	}
+}
+
+func Test_extractImageFromURL(t *testing.T) {
+	tests := []struct {
+		name     string
+		imageURL string
+		want     *imageInfo
+	}{
+		{
+			name:     "basic case",
+			imageURL: "registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.20-openshift-4.14",
+			want: &imageInfo{
+				registry:  "registry.ci.openshift.org",
+				namespace: "ocp",
+				name:      "builder",
+				tag:       "rhel-8-golang-1.20-openshift-4.14",
+			},
+		},
+		{
+			name:     "wrong case",
+			imageURL: "golang:${GOLANG_VERSION}",
+			want:     nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := extractImageFromURL(tt.imageURL); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("extractImageFromURL() = %v, want %v", got, tt.want)
 			}
 		})
 	}

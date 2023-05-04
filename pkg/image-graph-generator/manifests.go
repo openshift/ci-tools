@@ -152,7 +152,7 @@ func (o *Operator) AddManifestImages() error {
 							return err
 						}
 					}
-					imageRef.Parent = parent
+					imageRef.Parents = append(imageRef.Parents, *parent)
 				}
 			}
 		}

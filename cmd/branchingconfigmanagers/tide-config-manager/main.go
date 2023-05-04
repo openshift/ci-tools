@@ -7,8 +7,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
-	"strings"
-	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
@@ -26,11 +24,27 @@ import (
 type options struct {
 	prowConfigDir            string
 	shardedProwConfigBaseDir string
-	lifecycleConfigFile      string
+	lifecyclePhase           string
 	excludedReposFile        string
-	overrideTimeRaw          string
-	overrideTime             *time.Time
+	currentOCPVersion        string
 }
+
+const (
+	branching              = "branching"
+	preGeneralAvailability = "pre-general-availability"
+	GeneralAvailability    = "general-availability"
+	staffEngApproved       = "staff-eng-approved"
+	cherryPickApproved     = "cherry-pick-approved"
+	backportRiskAssessed   = "backport-risk-assessed"
+	qeApproved             = "qe-approved"
+	docsApproved           = "docs-approved"
+	pxApproved             = "px-approved"
+	validBug               = "bugzilla/valid-bug"
+	release                = "release-"
+	openshift              = "openshift-"
+	mainBranch             = "main"
+	masterBranch           = "master"
+)
 
 func gatherOptions() (*options, error) {
 	o := &options{}
@@ -39,9 +53,9 @@ func gatherOptions() (*options, error) {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&o.prowConfigDir, "prow-config-dir", "", "Path to the Prow configuration directory.")
 	fs.StringVar(&o.shardedProwConfigBaseDir, "sharded-prow-config-base-dir", "", "Basedir for the sharded prow config. If set, org and repo-specific config will get removed from the main prow config and written out in an org/repo tree below the base dir.")
-	fs.StringVar(&o.lifecycleConfigFile, "lifecycle-config", "", "Path to the lifecycle config file")
+	fs.StringVar(&o.lifecyclePhase, "lifecycle-phase", "", "Lifecycle phase, one of: branching, pre-general-availability, general-availability")
+	fs.StringVar(&o.currentOCPVersion, "current-release", "", "Current OCP version")
 	fs.StringVar(&o.excludedReposFile, "excluded-repos-config", "", "Path to the GA's excluded repos config file.")
-	fs.StringVar(&o.overrideTimeRaw, "override-time", "", "Act as if this was the current time, must be in RFC3339 format")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse input")
 	}
@@ -49,9 +63,8 @@ func gatherOptions() (*options, error) {
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		errs = append(errs, fmt.Errorf("couldn't parse arguments: %w", err))
 	}
-
-	if o.lifecycleConfigFile == "" {
-		errs = append(errs, errors.New("--lifecycle-config is required"))
+	if o.lifecyclePhase != branching && o.lifecyclePhase != preGeneralAvailability && o.lifecyclePhase != GeneralAvailability {
+		errs = append(errs, errors.New("--lifecycle-phase is required and has to be one of: branching, pre-general-availability, general-availability"))
 	}
 	if o.prowConfigDir == "" {
 		errs = append(errs, errors.New("--prow-config-dir is required"))
@@ -59,13 +72,12 @@ func gatherOptions() (*options, error) {
 	if o.shardedProwConfigBaseDir == "" {
 		errs = append(errs, errors.New("--sharded-prow-config-base-dir is required"))
 	}
+	if o.currentOCPVersion == "" {
+		errs = append(errs, errors.New("--current-release is required"))
+	}
 
-	if o.overrideTimeRaw != "" {
-		if parsed, err := time.Parse(time.RFC3339, o.overrideTimeRaw); err != nil {
-			errs = append(errs, fmt.Errorf("failed to parse %q as RFC3339 time: %w", o.overrideTimeRaw, err))
-		} else {
-			o.overrideTime = &parsed
-		}
+	if _, err := ocplifecycle.ParseMajorMinor(o.currentOCPVersion); o.currentOCPVersion != "" && err != nil {
+		errs = append(errs, fmt.Errorf("error parsing current-release %s", o.currentOCPVersion))
 	}
 
 	return o, utilerrors.NewAggregate(errs)
@@ -77,25 +89,10 @@ func main() {
 		logrus.WithError(err).Fatal("failed to gather options")
 	}
 
-	if err := updateProwConfigs(o, time.Now()); err != nil {
+	if err := updateProwConfigs(o); err != nil {
 		logrus.WithError(err).Fatal("could not update Prow configuration")
 	}
 }
-
-const (
-	staffEngApproved   = "staff-eng-approved"
-	cherryPickApproved = "cherry-pick-approved"
-	qeApproved         = "qe-approved"
-	docsApproved       = "docs-approved"
-	pxApproved         = "px-approved"
-	validBug           = "bugzilla/valid-bug"
-	release            = "release-"
-	openshift          = "openshift-"
-	mainBranch         = "main"
-	masterBranch       = "master"
-	openshiftPriv      = "openshift-priv"
-	ocpProductName     = "ocp"
-)
 
 type sharedDataDelegate struct {
 	excludedLabels sets.String
@@ -112,133 +109,63 @@ func newSharedDataDelegate() *sharedDataDelegate {
 
 }
 
-type featureFreezeEvent struct {
-	excludedOrgs                  []string
-	repos                         sets.String
-	openshiftReleaseBranches      sets.String
-	openshiftReleaseBranchesPlus1 sets.String
+type branchingDayEvent struct {
+	repos                    sets.String
+	openshiftReleaseBranches sets.String
 	*sharedDataDelegate
 }
 
-func newFeatureFreezeEvent(current, future string, delegate *sharedDataDelegate) featureFreezeEvent {
-	return featureFreezeEvent{
-		excludedOrgs:                  []string{openshiftPriv},
-		repos:                         sets.NewString(),
-		openshiftReleaseBranches:      sets.NewString(release+current, openshift+current),
-		openshiftReleaseBranchesPlus1: sets.NewString(release+future, openshift+future),
-		sharedDataDelegate:            delegate,
+func newBranchingDayEvent(current string, delegate *sharedDataDelegate) branchingDayEvent {
+	return branchingDayEvent{
+		repos:                    sets.NewString(),
+		openshiftReleaseBranches: sets.NewString(release+current, openshift+current),
+		sharedDataDelegate:       delegate,
 	}
 }
 
-func (ffe featureFreezeEvent) ModifyQuery(q *prowconfig.TideQuery, repo string) {
-	ffe.ensureFeatureFreezeApprovals(q)
-	if ffe.repos.Has(repo) {
-		ffe.ensureFeatureFreezeBugs(q)
-	}
-}
-
-func (ffe featureFreezeEvent) GetDataFromProwConfig(pc *prowconfig.ProwConfig) {
-	for _, query := range pc.Tide.Queries {
-		branches := sets.NewString(query.IncludedBranches...)
-		labels := sets.NewString(query.Labels...)
-		ffe.rewriteReposToExcludeOrgs(&query)
-		if branches.Intersection(ffe.openshiftReleaseBranchesPlus1).Len() > 0 && labels.Has(staffEngApproved) {
-			ffe.repos.Insert(query.Repos...)
-			continue
-		}
-		if branches.Intersection(ffe.openshiftReleaseBranches).Len() > 0 && labels.Has(cherryPickApproved) {
-			ffe.repos.Insert(query.Repos...)
-		}
-	}
-}
-
-func (ffe *featureFreezeEvent) rewriteReposToExcludeOrgs(q *prowconfig.TideQuery) {
-	repos := []string{}
-	for _, repo := range q.Repos {
-		for _, org := range ffe.excludedOrgs {
-			if strings.Contains(repo, org) {
-				continue
-			}
-			repos = append(repos, repo)
-		}
-	}
-	q.Repos = repos
-}
-
-func (ffe *featureFreezeEvent) ensureFeatureFreezeBugs(q *prowconfig.TideQuery) {
-	requiredLabels := sets.NewString(q.Labels...)
+func (bde branchingDayEvent) ModifyQuery(q *prowconfig.TideQuery, repo string) {
+	reqLabels := sets.NewString(q.Labels...)
 	branches := sets.NewString(q.IncludedBranches...)
-	if branches.Intersection(ffe.mainMaster).Len() == 0 {
-		return
+
+	if branches.Intersection(bde.openshiftReleaseBranches).Len() > 0 {
+		if reqLabels.Has(staffEngApproved) {
+			reqLabels.Delete(staffEngApproved)
+			reqLabels.Insert(cherryPickApproved, backportRiskAssessed)
+		}
 	}
-	if requiredLabels.Intersection(ffe.excludedLabels).Len() > 0 {
-		return
-	}
-	requiredLabels = requiredLabels.Union(ffe.validBug)
-	q.Labels = requiredLabels.List()
+	q.Labels = reqLabels.List()
 }
 
-func (ffe *featureFreezeEvent) ensureFeatureFreezeApprovals(q *prowconfig.TideQuery) {
-	requiredLabels := sets.NewString(q.Labels...)
-	branches := sets.NewString(q.IncludedBranches...)
-	if branches.Intersection(ffe.mainMaster).Len() == 0 {
-		return
-	}
-	if requiredLabels.Intersection(ffe.excludedLabels).Len() == 0 {
-		return
-	}
-	requiredLabels = requiredLabels.Union(ffe.excludedLabels)
-	requiredLabels = requiredLabels.Difference(ffe.validBug)
-	q.Labels = requiredLabels.List()
+func (bde branchingDayEvent) GetDataFromProwConfig(pc *prowconfig.ProwConfig) {
 }
 
-type codeFreezeEvent struct {
-	repos                          sets.String
-	noFeatureFreezeRepos           sets.String
-	bugzillaLabelOnMainMasterRepos sets.String
+type preGeneralAvailabilityEvent struct {
+	repos                    sets.String
+	openshiftReleaseBranches sets.String
 	*sharedDataDelegate
 }
 
-func newCodeFreezeEvent(delegate *sharedDataDelegate) codeFreezeEvent {
-	return codeFreezeEvent{
-		repos:                          sets.NewString(),
-		noFeatureFreezeRepos:           sets.NewString(),
-		bugzillaLabelOnMainMasterRepos: sets.NewString(),
-		sharedDataDelegate:             delegate,
+func newPreGeneralAvailability(current string, delegate *sharedDataDelegate) preGeneralAvailabilityEvent {
+	return preGeneralAvailabilityEvent{
+		repos:                    sets.NewString(),
+		openshiftReleaseBranches: sets.NewString(release+current, openshift+current),
+		sharedDataDelegate:       delegate,
 	}
 }
 
-func (cfe codeFreezeEvent) ModifyQuery(q *prowconfig.TideQuery, repo string) {
-	if cfe.repos.Has(repo) {
-		branches := sets.NewString(q.IncludedBranches...)
-		if len(branches.Intersection(cfe.mainMaster)) == 0 {
-			return
+func (pga preGeneralAvailabilityEvent) ModifyQuery(q *prowconfig.TideQuery, repo string) {
+	reqLabels := sets.NewString(q.Labels...)
+	branches := sets.NewString(q.IncludedBranches...)
+
+	if branches.Intersection(pga.openshiftReleaseBranches).Len() > 0 {
+		if reqLabels.Has(cherryPickApproved) && reqLabels.Has(backportRiskAssessed) {
+			reqLabels.Insert(staffEngApproved)
 		}
-		q.Labels = sets.NewString(q.Labels...).Difference(cfe.validBug).List()
 	}
+	q.Labels = reqLabels.List()
 }
 
-func (cfe codeFreezeEvent) GetDataFromProwConfig(pc *prowconfig.ProwConfig) {
-	for _, query := range pc.Tide.Queries {
-		branches := sets.NewString(query.IncludedBranches...)
-		if len(branches.Intersection(cfe.mainMaster)) == 0 {
-			continue
-		}
-		labels := sets.NewString(query.Labels...)
-		if len(labels.Intersection(cfe.excludedLabels)) > 0 {
-			for _, repo := range query.Repos {
-				cfe.noFeatureFreezeRepos.Insert(repo)
-			}
-		}
-		if len(labels.Intersection(cfe.validBug)) > 0 {
-			for _, repo := range query.Repos {
-				cfe.bugzillaLabelOnMainMasterRepos.Insert(repo)
-			}
-		}
-	}
-	for repo := range cfe.bugzillaLabelOnMainMasterRepos.Difference(cfe.noFeatureFreezeRepos) {
-		cfe.repos.Insert(repo)
-	}
+func (pga preGeneralAvailabilityEvent) GetDataFromProwConfig(pc *prowconfig.ProwConfig) {
 }
 
 type excludedRepos struct {
@@ -297,12 +224,25 @@ func newGeneralAvailabilityEvent(past, current, future string, repos excludedRep
 }
 
 func (gae generalAvailabilityEvent) ModifyQuery(q *prowconfig.TideQuery, repo string) {
+	gae.deleteCherryPickApprovedBackportRiskAssesedLabels(q)
 	gae.ensureStaffEngApprovedLabel(q)
 	gae.ensureCherryPickApprovedLabel(q)
 	gae.overrideExcludedBranches(q)
 }
 
 func (gae generalAvailabilityEvent) GetDataFromProwConfig(*prowconfig.ProwConfig) {}
+
+func (gae *generalAvailabilityEvent) deleteCherryPickApprovedBackportRiskAssesedLabels(q *prowconfig.TideQuery) {
+	reqLabels := sets.NewString(q.Labels...)
+	branches := sets.NewString(q.IncludedBranches...)
+
+	if branches.Intersection(gae.openshiftReleaseBranches).Len() > 0 {
+		if reqLabels.Has(cherryPickApproved) && reqLabels.Has(backportRiskAssessed) && reqLabels.Has(staffEngApproved) {
+			reqLabels.Delete(cherryPickApproved, backportRiskAssessed)
+		}
+	}
+	q.Labels = reqLabels.List()
+}
 
 func (gae *generalAvailabilityEvent) ensureCherryPickApprovedLabel(q *prowconfig.TideQuery) {
 	reqLabels := sets.NewString(q.Labels...)
@@ -363,7 +303,7 @@ func (gae *generalAvailabilityEvent) overrideExcludedBranches(q *prowconfig.Tide
 	q.ExcludedBranches = branches.List()
 }
 
-func updateProwConfigs(o *options, now time.Time) error {
+func updateProwConfigs(o *options) error {
 	configPath := path.Join(o.prowConfigDir, config.ProwConfigFile)
 	var additionalConfigs []string
 	additionalConfigs = append(additionalConfigs, o.shardedProwConfigBaseDir)
@@ -373,52 +313,36 @@ func updateProwConfigs(o *options, now time.Time) error {
 		return fmt.Errorf("failed to load Prow config in strict mode: %w", err)
 	}
 
-	lifecycleConfig, err := ocplifecycle.LoadConfig(o.lifecycleConfigFile)
-	if err != nil {
-		return fmt.Errorf("failed to load the lifecycle configuration: %w", err)
-	}
-
-	timelineOpts := ocplifecycle.TimelineOptions{
-		OnlyEvents: sets.NewString([]string{
-			string(ocplifecycle.LifecycleEventFeatureFreeze),
-			string(ocplifecycle.LifecycleEventCodeFreeze),
-			string(ocplifecycle.LifecycleEventGenerallyAvailable),
-		}...),
-	}
-
-	timeline := lifecycleConfig.GetTimeline(ocpProductName, timelineOpts)
-	event := timeline.GetExactLifecyclePhase(now)
-	if event == nil {
-		return nil
-	}
-
 	repos := excludedRepos{}
 	if o.excludedReposFile != "" {
 		if err = repos.loadExcludedReposConfig(o.excludedReposFile); err != nil {
 			return fmt.Errorf("failed to load the excluded repos configuration: %w", err)
 		}
 	}
-	return reconcile(event, &config.ProwConfig, afero.NewBasePathFs(afero.NewOsFs(), o.shardedProwConfigBaseDir), repos)
+	return reconcile(o.currentOCPVersion, o.lifecyclePhase, &config.ProwConfig, afero.NewBasePathFs(afero.NewOsFs(), o.shardedProwConfigBaseDir), repos)
 }
 
-func reconcile(event *ocplifecycle.Event, config *prowconfig.ProwConfig, target afero.Fs, repos excludedRepos) error {
+func reconcile(currentOCPVersion, lifecyclePhase string, config *prowconfig.ProwConfig, target afero.Fs, repos excludedRepos) error {
 	delegate := newSharedDataDelegate()
-	currentVersion, err := ocplifecycle.ParseMajorMinor(event.ProductVersion)
+	currentVersion, err := ocplifecycle.ParseMajorMinor(currentOCPVersion)
 	if err != nil {
-		return fmt.Errorf("failed to parse %s as majorMinor version: %w", event.ProductVersion, err)
+		return fmt.Errorf("failed to parse %s as majorMinor version: %w", currentOCPVersion, err)
 	}
-	if event.LifecyclePhase.Event == ocplifecycle.LifecycleEventFeatureFreeze {
+	if lifecyclePhase == branching {
 		_, err = shardprowconfig.ShardProwConfig(config, target,
-			newFeatureFreezeEvent(
+			newBranchingDayEvent(
 				currentVersion.GetVersion(),
-				currentVersion.GetFutureVersion(),
 				delegate),
 		)
 	}
-	if event.LifecyclePhase.Event == ocplifecycle.LifecycleEventCodeFreeze {
-		_, err = shardprowconfig.ShardProwConfig(config, target, newCodeFreezeEvent(delegate))
+	if lifecyclePhase == preGeneralAvailability {
+		_, err = shardprowconfig.ShardProwConfig(config, target,
+			newPreGeneralAvailability(
+				currentVersion.GetVersion(),
+				delegate),
+		)
 	}
-	if event.LifecyclePhase.Event == ocplifecycle.LifecycleEventGenerallyAvailable {
+	if lifecyclePhase == GeneralAvailability {
 		_, err = shardprowconfig.ShardProwConfig(config, target,
 			newGeneralAvailabilityEvent(
 				currentVersion.GetPastVersion(),

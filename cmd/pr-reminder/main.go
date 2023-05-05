@@ -21,14 +21,16 @@ import (
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/labels"
 	"k8s.io/test-infra/prow/logrusutil"
+
+	"github.com/openshift/ci-tools/pkg/rover"
 )
 
 type options struct {
-	config              string
-	githubMappingConfig string
-	slackTokenPath      string
-	validateOnly        bool
-	logLevel            string
+	config         string
+	githubUsers    string
+	slackTokenPath string
+	validateOnly   bool
+	logLevel       string
 
 	flagutil.GitHubOptions
 }
@@ -43,7 +45,7 @@ func (o *options) validate() error {
 		return fmt.Errorf("--config-path is required")
 	}
 
-	if o.githubMappingConfig == "" {
+	if o.githubUsers == "" {
 		return fmt.Errorf("--rover-groups-config-path is required")
 	}
 
@@ -58,7 +60,7 @@ func parseOptions() (options, error) {
 	var o options
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&o.config, "config-path", "", "The config file location")
-	fs.StringVar(&o.githubMappingConfig, "github-mapping-config-path", "", "the github-mapping config file location")
+	fs.StringVar(&o.githubUsers, "github-users-file", "", "The GitHub users' info file location")
 	fs.StringVar(&o.slackTokenPath, "slack-token-path", "", "Path to the file containing the Slack token to use.")
 	fs.BoolVar(&o.validateOnly, "validate-only", false, "Run the tool in validate-only mode. This will simply validate the config.")
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
@@ -283,10 +285,11 @@ func main() {
 		logrus.WithError(err).Fatal("failed to load config")
 	}
 
-	var gtk githubToKerberos
-	if err = loadConfig(o.githubMappingConfig, &gtk); err != nil {
+	roverUsers := []rover.User{}
+	if err = loadConfig(o.githubUsers, &roverUsers); err != nil {
 		logrus.WithError(err).Fatal("failed to load rover groups config")
 	}
+	gtk := githubToKerberos(rover.MapGithubToKerberos(roverUsers))
 
 	if err := secret.Add(o.slackTokenPath); err != nil {
 		logrus.WithError(err).Fatal("failed to start secrets agent")

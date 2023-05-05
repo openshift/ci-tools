@@ -474,19 +474,7 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 		if ciopConfig.Tests[i].As != inject.Test {
 			continue
 		}
-		test := ciopConfig.Tests[i].DeepCopy()
-		//TODO: Not sure if these secret changes are necessary, but leaving for now
-		if aggregatedOptions != nil {
-			index := strconv.Itoa(aggregatedOptions.aggregatedIndex)
-			for j, secret := range test.Secrets {
-				secret.Name = fmt.Sprintf("%s-%s", secret.Name, index)
-				test.Secrets[j] = secret
-			}
-			if test.Secret != nil {
-				test.Secret.Name = fmt.Sprintf("%s-%s", test.Secret.Name, index)
-			}
-		}
-		jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, fakeProwgenInfo, prowgen.NewCiOperatorPodSpecGenerator(), *test)
+		jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, fakeProwgenInfo, prowgen.NewCiOperatorPodSpecGenerator(), ciopConfig.Tests[i])
 		jobBaseGen.PodSpec.Add(prowgen.InjectTestFrom(inject))
 		if aggregateIndex != nil {
 			jobBaseGen.PodSpec.Add(prowgen.TargetAdditionalSuffix(strconv.Itoa(*aggregateIndex)))
@@ -520,7 +508,6 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 		}
 		periodic.DecorationConfig.Timeout = &prowv1.Duration{Duration: 6 * time.Hour}
 
-		break
 	}
 	// We did not find the injected test: this is a bug
 	if periodic == nil {

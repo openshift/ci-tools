@@ -20,6 +20,7 @@ that, it adds several lightweight features required by Test Platform team, its w
    resource that would be placed in that namespace are not yet present in the cluster (in a normal dry run, applying the
    resource to a namespace that does not exist in the cluster would fail). It does so by bookkeeping which namespaces
    would be applied if not in dry run, and creating them temporarily if they do not exist.
+7. Add `--server-side` to the `apply` command if a filename starts with `SS_`
 
 ## Why it exists
 

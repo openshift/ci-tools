@@ -98,6 +98,7 @@ func TestMakeOcApply(t *testing.T) {
 		path       string
 		user       string
 		dry        dryRunMethod
+		apply      applyMethod
 
 		expected []string
 	}{
@@ -156,7 +157,7 @@ func TestMakeOcApply(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cmd := makeOcApply(tc.kubeConfig, tc.context, tc.path, tc.user, tc.dry)
+			cmd := makeOcApply(tc.kubeConfig, tc.context, tc.path, tc.user, tc.dry, tc.apply)
 			if diff := cmp.Diff(tc.expected, cmd.Args); diff != "" {
 				t.Errorf("Command differs from expected:\n%s", diff)
 			}
@@ -349,6 +350,30 @@ func TestAsGenericManifest(t *testing.T) {
 			expectedNamespaces: namespaceActions{
 				Created: sets.New[string]("this-is-missing"),
 				Assumed: sets.New[string]("this-is-missing"),
+			},
+		},
+		{
+			description: "success: file with name starts with '_SS' is applied with --server-side",
+			applier:     &configApplier{path: "SS_path", dry: dryNone},
+			executions:  []response{{err: nil}},
+			expectedCalls: [][]string{
+				{"oc", "apply", "-f", "SS_path", "-o", "name", "--server-side=true"},
+			},
+		},
+		{
+			description: "success: enable server-side apply",
+			applier:     &configApplier{path: "path", dry: dryNone, apply: applyServer},
+			executions:  []response{{err: nil}},
+			expectedCalls: [][]string{
+				{"oc", "apply", "-f", "path", "-o", "name", "--server-side=true"},
+			},
+		},
+		{
+			description: "success: no duplicated --server-side flag",
+			applier:     &configApplier{path: "_SS_path", dry: dryNone, apply: applyServer},
+			executions:  []response{{err: nil}},
+			expectedCalls: [][]string{
+				{"oc", "apply", "-f", "_SS_path", "-o", "name", "--server-side=true"},
 			},
 		},
 	}

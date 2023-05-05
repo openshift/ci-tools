@@ -31,6 +31,7 @@ import (
 
 type command string
 type dryRunMethod string
+type applyMethod string
 
 type options struct {
 	user        *nullableStringFlag
@@ -39,6 +40,7 @@ type options struct {
 	context     string
 	kubeConfig  string
 	dryRun      dryRunMethod
+	apply       applyMethod
 }
 
 const (
@@ -50,6 +52,9 @@ const (
 	dryAuto   dryRunMethod = "auto"
 	dryServer dryRunMethod = "server"
 	dryClient dryRunMethod = "client"
+
+	applyServer applyMethod = "server"
+	applyClient applyMethod = "client"
 )
 
 const defaultAdminUser = "system:admin"
@@ -73,7 +78,7 @@ func (n *nullableStringFlag) Set(val string) error {
 
 func gatherOptions() *options {
 	// nonempty dryRun is a safe default (empty means not a dry run)
-	opt := &options{user: &nullableStringFlag{}, dryRun: dryAuto}
+	opt := &options{user: &nullableStringFlag{}, dryRun: dryAuto, apply: applyClient}
 
 	var confirm bool
 	flag.BoolVar(&confirm, "confirm", false, "Set to true to make applyconfig commit the config to the cluster")
@@ -86,6 +91,11 @@ func gatherOptions() *options {
 	var dryMethod string
 	dryRunMethods := strings.Join(validDryRunMethods, ",")
 	flag.StringVar(&dryMethod, "dry-run-method", string(opt.dryRun), fmt.Sprintf("Method to use when running when --confirm is not set to true (valid values: %s)", dryRunMethods))
+
+	var applyMethod string
+	applyMethods := strings.Join([]string{string(applyServer), string(applyClient)}, ",")
+	flag.StringVar(&applyMethod, "apply-method", string(opt.apply), fmt.Sprintf("Method to use when applying the config (valid values: %s). Server-side apply is always enabled for file with names start with '_SS'.", applyMethods))
+
 	flag.Parse()
 
 	if len(opt.directories.Strings()) < 1 || opt.directories.Strings()[0] == "" {
@@ -162,10 +172,11 @@ type configApplier struct {
 	path       string
 	user       string
 	dry        dryRunMethod
+	apply      applyMethod
 	censor     *secrets.DynamicCensor
 }
 
-func makeOcApply(kubeConfig, context, path, user string, dry dryRunMethod) *exec.Cmd {
+func makeOcApply(kubeConfig, context, path, user string, dry dryRunMethod, apply applyMethod) *exec.Cmd {
 	cmd := makeOcCommand(ocApply, kubeConfig, context, path, user, "-o", "name")
 	switch dry {
 	case dryAuto:
@@ -178,6 +189,19 @@ func makeOcApply(kubeConfig, context, path, user string, dry dryRunMethod) *exec
 	default:
 		panic(fmt.Sprintf("BUG: Unknown dry run method '%s' received, this should never happen", string(dry)))
 	case dryNone:
+		// No additional args needed
+	}
+
+	fileName := filepath.Base(path)
+	if strings.HasPrefix(fileName, "SS_") {
+		logrus.Info("Use server-side apply for ", fileName)
+		cmd.Args = append(cmd.Args, "--server-side=true")
+	}
+
+	switch apply {
+	case applyServer:
+		cmd.Args = append(cmd.Args, "--server-side=true")
+	case applyClient:
 		// No additional args needed
 	}
 	return cmd
@@ -260,7 +284,7 @@ func (c *configApplier) doWithRetry(do func() ([]byte, error)) (namespaceActions
 			// via oc create / oc annotate. Otherwise, the TTL annotations would not be
 			// cleaned up when the manifests are actually applied post-merge to the
 			// cluster and NS TTL controller would reap the production namespace.
-			ocApplyCmd := makeOcApply(c.kubeConfig, c.context, "-", c.user, dryNone)
+			ocApplyCmd := makeOcApply(c.kubeConfig, c.context, "-", c.user, dryNone, c.apply)
 			ocApplyCmd.Stdin = bytes.NewBuffer(rawNs)
 			if out, err := c.runAndCheck(ocApplyCmd, "apply"); err != nil {
 				logrus.WithField("missing-namespace", ns).WithField("output", out).WithError(err).Errorf("Failed to create provisional namespace")
@@ -293,7 +317,7 @@ func (c *configApplier) doWithRetry(do func() ([]byte, error)) (namespaceActions
 
 func (c *configApplier) asGenericManifest() (namespaceActions, error) {
 	do := func() ([]byte, error) {
-		cmd := makeOcApply(c.kubeConfig, c.context, c.path, c.user, c.dry)
+		cmd := makeOcApply(c.kubeConfig, c.context, c.path, c.user, c.dry, c.apply)
 		out, err := c.runAndCheck(cmd, "apply")
 		return out, err
 	}
@@ -322,7 +346,7 @@ func (c configApplier) asTemplate(params []templateapi.Parameter) (namespaceActi
 	}
 
 	do := func() ([]byte, error) {
-		ocApplyCmd := makeOcApply(c.kubeConfig, c.context, "-", c.user, c.dry)
+		ocApplyCmd := makeOcApply(c.kubeConfig, c.context, "-", c.user, c.dry, c.apply)
 		ocApplyCmd.Stdin = bytes.NewBuffer(processed)
 		out, err := c.runAndCheck(ocApplyCmd, "apply")
 		return out, err
@@ -352,13 +376,14 @@ func isTemplate(input io.Reader) ([]templateapi.Parameter, bool) {
 	return nil, false
 }
 
-func apply(kubeConfig, context, path, user string, dry dryRunMethod, censor *secrets.DynamicCensor) (namespaceActions, error) {
+func apply(kubeConfig, context, path, user string, dry dryRunMethod, apply applyMethod, censor *secrets.DynamicCensor) (namespaceActions, error) {
 	do := configApplier{
 		kubeConfig: kubeConfig,
 		context:    context,
 		path:       path,
 		user:       user,
 		dry:        dry,
+		apply:      apply,
 		executor:   &commandExecutor{},
 		censor:     censor,
 	}
@@ -409,7 +434,7 @@ func applyConfig(rootDir string, o *options, createdNamespaces sets.Set[string],
 			return err
 		}
 
-		namespaces, err := apply(o.kubeConfig, o.context, path, o.user.val, o.dryRun, censor)
+		namespaces, err := apply(o.kubeConfig, o.context, path, o.user.val, o.dryRun, o.apply, censor)
 		if err != nil {
 			failures = true
 			return nil

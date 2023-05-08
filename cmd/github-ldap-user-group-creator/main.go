@@ -227,15 +227,7 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to insert users to bigquery")
 	}
 
-	mapping := map[string]string{}
-	for _, user := range users {
-		if uid, ok := mapping[user.GitHubUsername]; ok {
-			logrus.WithField("uid1", uid).WithField("uid2", user.UID).WithField("github_username", user.GitHubUsername).
-				Warn("Two users with the same GitHub username: ignoring the latter")
-			continue
-		}
-		mapping[user.GitHubUsername] = user.UID
-	}
+	mapping := rover.MapGithubToKerberos(users)
 
 	data, err := ioutil.ReadFile(opts.groupsFile)
 	if err != nil {

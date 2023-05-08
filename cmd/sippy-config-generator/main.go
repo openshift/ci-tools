@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -138,6 +139,13 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatalf("Failed to load Prow jobs %s", o.prowJobConfigDir)
 	}
+
+	// Ensure periodics list is sorted to produce a deterministic update
+	// to our config file.
+	sort.Slice(jobConfig.Periodics, func(i, j int) bool {
+		return jobConfig.Periodics[i].Name < jobConfig.Periodics[j].Name
+	})
+
 	for _, p := range jobConfig.Periodics {
 		if strings.Contains(p.Name, "-okd") {
 			// Don't include OKD jobs

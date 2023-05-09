@@ -10,7 +10,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
@@ -370,7 +369,7 @@ func (s *server) abortAll(logger *logrus.Entry, ic github.IssueCommentEvent) str
 		// and must not overwrite changes made to it in the interim by the responsible agent.
 		// The accepted trade-off for now is that this leads to failure if unrelated fields where changed
 		// by another different actor.
-		if err = s.kubeClient.Update(s.ctx, job); err != nil && !apierrors.IsConflict(err) {
+		if err = s.kubeClient.Update(s.ctx, job); err != nil {
 			jobLogger.WithError(err).Errorf("failed to abort prowjob")
 			return fmt.Sprintf("failed to abort payload job: %s for pull request %s/%s#%d", job.Name, org, repo, prNumber)
 		} else {
@@ -385,7 +384,7 @@ func (s *server) getPayloadJobsForPR(org, repo string, prNumber int) ([]string, 
 	var l prpqv1.PullRequestPayloadQualificationRunList
 	labelSelector, err := labelSelectorForPayloadPRPQRs(org, repo, prNumber)
 	if err != nil {
-		return nil, fmt.Errorf("could not create label selector for prpqrs genearted for pull request %s/%s#%d: %w", org, repo, prNumber, err)
+		return nil, fmt.Errorf("could not create label selector for prpqrs generated for pull request %s/%s#%d: %w", org, repo, prNumber, err)
 	}
 	opt := ctrlruntimeclient.ListOptions{Namespace: s.namespace, LabelSelector: labelSelector}
 	if err := s.kubeClient.List(s.ctx, &l, &opt); err != nil {

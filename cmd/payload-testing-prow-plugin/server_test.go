@@ -7,11 +7,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/openshift/ci-tools/pkg/api"
-	prpqv1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
-	"github.com/openshift/ci-tools/pkg/release/config"
-	"github.com/openshift/ci-tools/pkg/testhelper"
 	"github.com/sirupsen/logrus"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -19,6 +16,11 @@ import (
 	"k8s.io/test-infra/prow/github/fakegithub"
 	"k8s.io/test-infra/prow/kube"
 	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	"github.com/openshift/ci-tools/pkg/api"
+	prpqv1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
+	"github.com/openshift/ci-tools/pkg/release/config"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func (j1 jobSetSpecification) Equals(j2 jobSetSpecification) bool {

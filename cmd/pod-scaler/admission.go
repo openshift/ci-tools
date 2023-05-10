@@ -218,12 +218,25 @@ func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, worklo
 		for _, field := range []corev1.ResourceName{corev1.ResourceCPU, corev1.ResourceMemory} {
 			our := (*pair.ours)[field]
 			their := (*pair.theirs)[field]
-			if our.Cmp(their) == 1 {
-				logger.Debugf("determined %s %s of %s to be larger than %s configured", field, pair.resource, our.String(), their.String())
+			fieldLogger := logger.WithFields(logrus.Fields{
+				"workloadName": workloadName,
+				"workloadType": workloadType,
+				"field":        field,
+				"resource":     pair.resource,
+				"determined":   our.String(),
+				"configured":   their.String(),
+			})
+			cmp := our.Cmp(their)
+			if cmp == 1 {
+				fieldLogger.Debug("determined amount larger than configured")
 				(*pair.theirs)[field] = our
 				if their.Value() > 0 && our.Value() > (their.Value()*10) {
 					reporter.ReportResourceConfigurationWarning(workloadName, workloadType, their.String(), our.String(), field.String())
 				}
+			} else if cmp < 0 {
+				fieldLogger.Debug("determined amount smaller than configured")
+			} else {
+				fieldLogger.Debug("determined amount equal to configured")
 			}
 		}
 	}

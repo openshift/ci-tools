@@ -489,7 +489,29 @@ func (o *JobRunTestCaseAnalyzerOptions) Run(ctx context.Context) error {
 	platform := o.jobGetter.(*testCaseAnalyzerJobGetter).platform
 	network := o.jobGetter.(*testCaseAnalyzerJobGetter).network
 	infrastructure := o.jobGetter.(*testCaseAnalyzerJobGetter).infrastructure
-	testVariantName := fmt.Sprintf("%s-%s-%s", platform, network, infrastructure)
+	include := o.jobGetter.(*testCaseAnalyzerJobGetter).includeJobNames
+	exclude := o.jobGetter.(*testCaseAnalyzerJobGetter).excludeJobNames
+
+	var testVariants []string
+	if platform != "" {
+		testVariants = append(testVariants, platform)
+	}
+	if network != "" {
+		testVariants = append(testVariants, network)
+	}
+	if infrastructure != "" {
+		testVariants = append(testVariants, infrastructure)
+	}
+
+	testVariantName := strings.Join(testVariants, "-")
+
+	if include.Len() > 0 {
+		testVariantName += fmt.Sprintf(" including=%s", strings.Join(include.List(), ","))
+	}
+	if exclude.Len() > 0 {
+		testVariantName += fmt.Sprintf(" excluding=%s", strings.Join(exclude.List(), ","))
+	}
+	testVariantName = strings.Trim(testVariantName, " ")
 
 	finishedJobRuns, unfinishedJobRuns, _, _, err := jobrunaggregatorlib.WaitAndGetAllFinishedJobRuns(ctx, timeToStopWaiting, o, outputDir, testVariantName)
 	if err != nil {

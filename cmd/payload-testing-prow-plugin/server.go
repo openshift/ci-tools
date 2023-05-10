@@ -353,12 +353,13 @@ func (s *server) abortAll(logger *logrus.Entry, ic github.IssueCommentEvent) str
 		return fmt.Sprintf("no active payload jobs found to abort for pull request %s/%s#%d", org, repo, prNumber)
 	}
 
+	var erroredJobs []string
 	for _, jobName := range jobs {
 		jobLogger := logger.WithField("jobName", jobName)
 		job := &prowapi.ProwJob{}
 		if err := s.kubeClient.Get(s.ctx, ctrlruntimeclient.ObjectKey{Name: jobName, Namespace: s.namespace}, job); err != nil {
 			jobLogger.WithError(err).Error("failed to get prowjob")
-			return fmt.Sprintf("failed to gather payload jobs for pull request %s/%s#%d in order to abort", org, repo, prNumber)
+			erroredJobs = append(erroredJobs, jobName)
 		}
 		// Do not abort jobs that already completed
 		if job.Complete() {
@@ -372,10 +373,14 @@ func (s *server) abortAll(logger *logrus.Entry, ic github.IssueCommentEvent) str
 		// by another different actor.
 		if err = s.kubeClient.Update(s.ctx, job); err != nil {
 			jobLogger.WithError(err).Errorf("failed to abort prowjob")
-			return fmt.Sprintf("failed to abort payload job: %s for pull request %s/%s#%d", job.Name, org, repo, prNumber)
+			erroredJobs = append(erroredJobs, jobName)
 		} else {
 			jobLogger.Debugf("aborted prowjob")
 		}
+	}
+
+	if len(erroredJobs) > 0 {
+		return fmt.Sprintf("Failed to abort %d payload jobs out of %d. Failed jobs: %s", len(erroredJobs), len(jobs), strings.Join(erroredJobs, ", "))
 	}
 
 	return fmt.Sprintf("aborted active payload jobs for pull request %s/%s#%d", org, repo, prNumber)
@@ -396,7 +401,10 @@ func (s *server) getPayloadJobsForPR(org, repo string, prNumber int, logger *log
 	var jobs []string
 	for _, item := range l.Items {
 		for _, job := range item.Status.Jobs {
-			jobs = append(jobs, job.ProwJob)
+			state := job.Status.State
+			if state == prowapi.TriggeredState || state == prowapi.PendingState {
+				jobs = append(jobs, job.ProwJob)
+			}
 		}
 	}
 

@@ -141,7 +141,7 @@ func TestGetPayloadJobsForPR(t *testing.T) {
 		expected []string
 	}{
 		{
-			name:     "jobs exist",
+			name:     "jobs exist in the proper states",
 			org:      "org",
 			repo:     "repo",
 			prNumber: 123,
@@ -161,9 +161,11 @@ func TestGetPayloadJobsForPR(t *testing.T) {
 						Status: prpqv1.PullRequestPayloadTestStatus{
 							Jobs: []prpqv1.PullRequestPayloadJobStatus{
 								{
+									Status:  prowapi.ProwJobStatus{State: prowapi.PendingState},
 									ProwJob: "some-job",
 								},
 								{
+									Status:  prowapi.ProwJobStatus{State: prowapi.TriggeredState},
 									ProwJob: "another-job",
 								},
 							},
@@ -183,6 +185,7 @@ func TestGetPayloadJobsForPR(t *testing.T) {
 						Status: prpqv1.PullRequestPayloadTestStatus{
 							Jobs: []prpqv1.PullRequestPayloadJobStatus{
 								{
+									Status:  prowapi.ProwJobStatus{State: prowapi.PendingState},
 									ProwJob: "different-job",
 								},
 							},
@@ -202,6 +205,7 @@ func TestGetPayloadJobsForPR(t *testing.T) {
 						Status: prpqv1.PullRequestPayloadTestStatus{
 							Jobs: []prpqv1.PullRequestPayloadJobStatus{
 								{
+									Status:  prowapi.ProwJobStatus{State: prowapi.PendingState},
 									ProwJob: "some-job-for-different-pr",
 								},
 							},
@@ -232,7 +236,46 @@ func TestGetPayloadJobsForPR(t *testing.T) {
 						Status: prpqv1.PullRequestPayloadTestStatus{
 							Jobs: []prpqv1.PullRequestPayloadJobStatus{
 								{
+									Status:  prowapi.ProwJobStatus{State: prowapi.PendingState},
 									ProwJob: "some-job-for-different-pr",
+								},
+							},
+						},
+					},
+				).Build(),
+				namespace: "ci",
+			},
+		},
+		{
+			name:     "doesn't pick up completed jobs",
+			org:      "org",
+			repo:     "repo",
+			prNumber: 123,
+			s: &server{
+				kubeClient: fakeclient.NewClientBuilder().WithRuntimeObjects(
+					&prpqv1.PullRequestPayloadQualificationRun{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: "ci",
+							Labels: map[string]string{
+								kube.OrgLabel:  "org",
+								kube.RepoLabel: "repo",
+								kube.PullLabel: "123",
+							},
+						},
+						Spec: prpqv1.PullRequestPayloadTestSpec{},
+						Status: prpqv1.PullRequestPayloadTestStatus{
+							Jobs: []prpqv1.PullRequestPayloadJobStatus{
+								{
+									Status:  prowapi.ProwJobStatus{State: prowapi.AbortedState},
+									ProwJob: "aborted-job",
+								},
+								{
+									Status:  prowapi.ProwJobStatus{State: prowapi.SuccessState},
+									ProwJob: "succeeded-job",
+								},
+								{
+									Status:  prowapi.ProwJobStatus{State: prowapi.ErrorState},
+									ProwJob: "errored-job",
 								},
 							},
 						},
@@ -244,7 +287,7 @@ func TestGetPayloadJobsForPR(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			jobs, err := tc.s.getPayloadJobsForPR(tc.org, tc.repo, tc.prNumber)
+			jobs, err := tc.s.getPayloadJobsForPR(tc.org, tc.repo, tc.prNumber, logrus.NewEntry(nil))
 			if err != nil {
 				t.Fatalf("couldn't get jobs")
 			}
@@ -651,6 +694,7 @@ trigger 0 job(s) of type all for the ci release of OCP 4.8
 						Status: prpqv1.PullRequestPayloadTestStatus{
 							Jobs: []prpqv1.PullRequestPayloadJobStatus{
 								{
+									Status:  prowapi.ProwJobStatus{State: prowapi.PendingState},
 									ProwJob: "some-job",
 								},
 							},

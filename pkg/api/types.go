@@ -1800,6 +1800,14 @@ const (
 	PipelineImageStreamTagReferenceRPMs         PipelineImageStreamTagReference = "rpms"
 )
 
+// The fields in ReleaseBuildConfiguration which originate each pipeline image
+const (
+	PipelineImageStreamTagSourceRoot         = "build_root"
+	PipelineImageStreamTagSourceBinaries     = "binary_build_commands"
+	PipelineImageStreamTagSourceTestBinaries = "test_binary_build_commands"
+	PipelineImageStreamTagSourceRPMs         = "rpm_build_commands"
+)
+
 // SourceStepConfiguration describes a step that
 // clones the source repositories required for
 // jobs. If no output tag is provided, the default

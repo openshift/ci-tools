@@ -360,6 +360,7 @@ func (s *server) abortAll(logger *logrus.Entry, ic github.IssueCommentEvent) str
 		if err := s.kubeClient.Get(s.ctx, ctrlruntimeclient.ObjectKey{Name: jobName, Namespace: s.namespace}, job); err != nil {
 			jobLogger.WithError(err).Error("failed to get prowjob")
 			erroredJobs = append(erroredJobs, jobName)
+			continue
 		}
 		// Do not abort jobs that already completed
 		if job.Complete() {

@@ -540,3 +540,37 @@ func headContexts(ghc githubClient, pr tide.PullRequest) ([]tide.Context, error)
 
 	return contexts, nil
 }
+
+// check updates the cache and returns a retestBackoffAction according to baseSha, policy, and number of retests performed for the PR.
+func check(cache *map[string]*pullRequest, pr tide.PullRequest, baseSha string, policy RetesterPolicy) (retestBackoffAction, string) {
+	key := prKey(&pr)
+	if _, has := (*cache)[key]; !has {
+		(*cache)[key] = &pullRequest{}
+	}
+	record := (*cache)[key]
+	record.LastConsideredTime = metav1.Now()
+	if currentPRSha := string(pr.HeadRefOID); record.PRSha != currentPRSha {
+		record.PRSha = currentPRSha
+		record.RetestsForPrSha = 0
+		record.RetestsForBaseSha = 0
+	}
+	if record.BaseSha != baseSha {
+		record.BaseSha = baseSha
+		record.RetestsForBaseSha = 0
+	}
+
+	if record.RetestsForPrSha == policy.MaxRetestsForSha {
+		record.RetestsForPrSha = 0
+		record.RetestsForBaseSha = 0
+		return retestBackoffHold, fmt.Sprintf("Revision %s was retested %d times: holding", record.PRSha, policy.MaxRetestsForSha)
+	}
+
+	if record.RetestsForBaseSha == policy.MaxRetestsForShaAndBase {
+		return retestBackoffPause, fmt.Sprintf("Revision %s was retested %d times against base HEAD %s: pausing", record.PRSha, policy.MaxRetestsForShaAndBase, record.BaseSha)
+	}
+
+	record.RetestsForBaseSha++
+	record.RetestsForPrSha++
+
+	return retestBackoffRetest, fmt.Sprintf("Remaining retests: %d against base HEAD %s and %d for PR HEAD %s in total", policy.MaxRetestsForShaAndBase-record.RetestsForBaseSha, record.BaseSha, policy.MaxRetestsForSha-record.RetestsForPrSha, record.PRSha)
+}

@@ -9,7 +9,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	"io"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/test-infra/prow/tide"
 	"time"
 )
@@ -105,34 +104,5 @@ func (b *s3BackOffCache) save() error {
 }
 
 func (b *s3BackOffCache) check(pr tide.PullRequest, baseSha string, policy RetesterPolicy) (retestBackoffAction, string) {
-	key := prKey(&pr)
-	if _, has := b.cache[key]; !has {
-		b.cache[key] = &pullRequest{}
-	}
-	record := b.cache[key]
-	record.LastConsideredTime = metav1.Now()
-	if currentPRSha := string(pr.HeadRefOID); record.PRSha != currentPRSha {
-		record.PRSha = currentPRSha
-		record.RetestsForPrSha = 0
-		record.RetestsForBaseSha = 0
-	}
-	if record.BaseSha != baseSha {
-		record.BaseSha = baseSha
-		record.RetestsForBaseSha = 0
-	}
-
-	if record.RetestsForPrSha == policy.MaxRetestsForSha {
-		record.RetestsForPrSha = 0
-		record.RetestsForBaseSha = 0
-		return retestBackoffHold, fmt.Sprintf("Revision %s was retested %d times: holding", record.PRSha, policy.MaxRetestsForSha)
-	}
-
-	if record.RetestsForBaseSha == policy.MaxRetestsForShaAndBase {
-		return retestBackoffPause, fmt.Sprintf("Revision %s was retested %d times against base HEAD %s: pausing", record.PRSha, policy.MaxRetestsForShaAndBase, record.BaseSha)
-	}
-
-	record.RetestsForBaseSha++
-	record.RetestsForPrSha++
-
-	return retestBackoffRetest, fmt.Sprintf("Remaining retests: %d against base HEAD %s and %d for PR HEAD %s in total", policy.MaxRetestsForShaAndBase-record.RetestsForBaseSha, record.BaseSha, policy.MaxRetestsForSha-record.RetestsForPrSha, record.PRSha)
+	return check(&b.cache, pr, baseSha, policy)
 }

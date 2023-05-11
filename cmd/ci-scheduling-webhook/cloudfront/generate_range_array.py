@@ -42,10 +42,10 @@ from typing import List, Dict, Tuple
 # CloudFront.
 #
 # The AWS IP ranges will change periodically. Our redirections do not have to be 100% accurate.
-# both CloudFront and S3 will resolve. We just need the statistically majority of AWS
-# requests to go through S3.
+# both CloudFront and S3 will resolve. We just need the statistical majority of AWS
+# requests to go through S3 in an inexpensive region.
 #
-# It may be worth re-running this script once in awhile to refresh the IP ranges in the
+# It may be worth re-running this script once in a while to refresh the IP ranges in the
 # nodejs CloudFront Viewer request Lambda@Edge function.
 
 import urllib.request

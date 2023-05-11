@@ -20,7 +20,7 @@
             "user-agent": [
               {
                 "key": "User-Agent",
-                "value": "curl/7.66.0"
+                "value": "debug/us-west-2"
               }
             ],
             "accept": [

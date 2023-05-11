@@ -61,6 +61,8 @@ type RehearsalConfig struct {
 	MoreLimit   int
 	MaxLimit    int
 
+	StickyLabelAuthors []string
+
 	GCSBucket          string
 	GCSCredentialsFile string
 	GCSBrowserPrefix   string

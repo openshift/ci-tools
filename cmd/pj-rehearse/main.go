@@ -51,6 +51,8 @@ type options struct {
 	dryRun        bool
 	dryRunOptions dryRunOptions
 
+	stickyLabelAuthors flagutil.Strings
+
 	webhookSecretFile        string
 	githubEventServerOptions githubeventserver.Options
 	github                   prowflagutil.GitHubOptions
@@ -78,6 +80,7 @@ func gatherOptions() (options, error) {
 	fs.IntVar(&o.moreLimit, "more-limit", 20, "Upper limit of jobs attempted to rehearse with more command (if more jobs are being touched, only this many will be rehearsed)")
 	fs.IntVar(&o.maxLimit, "max-limit", 35, "Upper limit of jobs attempted to rehearse with max command (if more jobs are being touched, only this many will be rehearsed)")
 
+	fs.Var(&o.stickyLabelAuthors, "sticky-label-author", "PR Author for which the 'rehearsals-ack' label will not be removed upon a new push. Can be passed multiple times.")
 	fs.StringVar(&o.webhookSecretFile, "hmac-secret-file", "/etc/webhook/hmac", "Path to the file containing the GitHub HMAC secret.")
 
 	fs.StringVar(&o.gcsBucket, "gcs-bucket", "origin-ci-test", "GCS Bucket to upload affected jobs list")
@@ -146,6 +149,7 @@ func rehearsalConfigFromOptions(o options) rehearse.RehearsalConfig {
 		NormalLimit:        o.normalLimit,
 		MoreLimit:          o.moreLimit,
 		MaxLimit:           o.maxLimit,
+		StickyLabelAuthors: o.stickyLabelAuthors.Strings(),
 		GCSBucket:          o.gcsBucket,
 		GCSCredentialsFile: o.gcsCredentialsFile,
 		GCSBrowserPrefix:   o.gcsBrowserPrefix,
@@ -198,13 +202,13 @@ func main() {
 
 	o, err := gatherOptions()
 	if err != nil {
-		logrus.WithError(err).Fatal("failed to gather options")
+		logger.WithError(err).Fatal("failed to gather options")
 	}
 	if err := o.validate(); err != nil {
-		logrus.WithError(err).Fatal("invalid options")
+		logger.WithError(err).Fatal("invalid options")
 	}
 	if err := imagev1.Install(scheme.Scheme); err != nil {
-		logrus.WithError(err).Fatal("failed to register imagev1 scheme")
+		logger.WithError(err).Fatal("failed to register imagev1 scheme")
 	}
 
 	if o.dryRun {

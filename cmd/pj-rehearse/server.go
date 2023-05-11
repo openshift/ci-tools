@@ -238,9 +238,11 @@ func (s *server) handleNewPush(l *logrus.Entry, event github.PullRequestEvent) {
 		}
 		foundJobsToRehearse := len(presubmits) > 0 || len(periodics) > 0
 		if foundJobsToRehearse {
-			if err := s.ghc.RemoveLabel(org, repo, number, rehearse.RehearsalsAckLabel); err != nil {
-				// We shouldn't get an error here if the label doesn't exist, so any error is legitimate
-				logger.WithError(err).Errorf("failed to remove '%s' label", rehearse.RehearsalsAckLabel)
+			if !s.authorShouldHaveStickyLabel(event.PullRequest.User.Login) {
+				if err := s.ghc.RemoveLabel(org, repo, number, rehearse.RehearsalsAckLabel); err != nil {
+					// We shouldn't get an error here if the label doesn't exist, so any error is legitimate
+					logger.WithError(err).Errorf("failed to remove '%s' label", rehearse.RehearsalsAckLabel)
+				}
 			}
 		} else {
 			s.acknowledgeRehearsals(org, repo, number, logger)
@@ -255,6 +257,16 @@ func (s *server) handleNewPush(l *logrus.Entry, event github.PullRequestEvent) {
 			logger.WithError(err).Error("failed to create comment")
 		}
 	}
+}
+
+func (s *server) authorShouldHaveStickyLabel(author string) bool {
+	for _, user := range s.rehearsalConfig.StickyLabelAuthors {
+		if user == author {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (s *server) handleIssueComment(l *logrus.Entry, event github.IssueCommentEvent) {

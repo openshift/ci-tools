@@ -149,7 +149,7 @@ func rehearsalConfigFromOptions(o options) rehearse.RehearsalConfig {
 		NormalLimit:        o.normalLimit,
 		MoreLimit:          o.moreLimit,
 		MaxLimit:           o.maxLimit,
-		StickyLabelAuthors: o.stickyLabelAuthors.Strings(),
+		StickyLabelAuthors: o.stickyLabelAuthors.StringSet(),
 		GCSBucket:          o.gcsBucket,
 		GCSCredentialsFile: o.gcsCredentialsFile,
 		GCSBrowserPrefix:   o.gcsBrowserPrefix,

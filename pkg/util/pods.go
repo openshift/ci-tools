@@ -175,7 +175,7 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient kubernetes.Pod
 			if ret.Swap(pod) == nil {
 				eg.Go(pendingCheck)
 			}
-			return processPodEvent(podClient, completed, notifier, flags, pod)
+			return processPodEvent(ctx, podClient, completed, notifier, flags, pod)
 		}, 0); err != nil {
 			if errors.Is(err, wait.ErrWaitTimeout) {
 				err = ctx.Err()
@@ -193,6 +193,7 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient kubernetes.Pod
 }
 
 func processPodEvent(
+	ctx context.Context,
 	podClient kubernetes.PodClient,
 	completed map[string]time.Time,
 	notifier ContainerNotifier,
@@ -208,7 +209,7 @@ func processPodEvent(
 		if IsBitSet(flags, Interruptible) {
 			logrus.Debugf("Pod %s is being deleted as expected", pod.Name)
 		} else {
-			logrus.Warningf("Pod %s is being unexpectedly deleted", pod.Name)
+			logrus.Warningf("Pod %s is being unexpectedly deleted:\n%s", pod.Name, getEventsForPod(ctx, pod, podClient))
 		}
 	}
 	if podJobIsOK(pod) {

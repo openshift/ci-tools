@@ -26,6 +26,16 @@ import (
 	"github.com/openshift/ci-tools/pkg/kubernetes"
 )
 
+// WaitForPodFlag changes the behavior of the functions which monitor pods
+type WaitForPodFlag uint8
+
+const (
+	// SkipLogs omits informational logs, such as when the pod is part of a
+	// larger step like release creation where displaying pod specific info is
+	// confusing to an end user. Failure logs are still printed.
+	SkipLogs WaitForPodFlag = 1 << iota
+)
+
 func CreateOrRestartPod(ctx context.Context, podClient ctrlruntimeclient.Client, pod *corev1.Pod) (*corev1.Pod, error) {
 	namespace, name := pod.Namespace, pod.Name
 	if err := waitForCompletedPodDeletion(ctx, podClient, namespace, name); err != nil {
@@ -101,7 +111,7 @@ func WaitForPodDeletion(ctx context.Context, podClient ctrlruntimeclient.Client,
 	})
 }
 
-func WaitForPodCompletion(ctx context.Context, podClient kubernetes.PodClient, namespace, name string, notifier ContainerNotifier, skipLogs bool) (*corev1.Pod, error) {
+func WaitForPodCompletion(ctx context.Context, podClient kubernetes.PodClient, namespace, name string, notifier ContainerNotifier, flags WaitForPodFlag) (*corev1.Pod, error) {
 	if notifier == nil {
 		notifier = NopNotifier
 	}
@@ -110,7 +120,7 @@ func WaitForPodCompletion(ctx context.Context, podClient kubernetes.PodClient, n
 	completed := make(map[string]time.Time)
 	var pod *corev1.Pod
 	for {
-		newPod, err := waitForPodCompletionOrTimeout(ctx, podClient, namespace, name, completed, notifier, skipLogs)
+		newPod, err := waitForPodCompletionOrTimeout(ctx, podClient, namespace, name, completed, notifier, flags)
 		if newPod != nil {
 			pod = newPod
 		}
@@ -119,7 +129,7 @@ func WaitForPodCompletion(ctx context.Context, podClient kubernetes.PodClient, n
 		case <-notifierDone:
 		case <-ctxDone:
 		default:
-			skipLogs = true
+			flags |= SkipLogs
 			if err == nil {
 				select {
 				case <-notifierDone:
@@ -137,7 +147,7 @@ func WaitForPodCompletion(ctx context.Context, podClient kubernetes.PodClient, n
 	return pod, nil
 }
 
-func waitForPodCompletionOrTimeout(ctx context.Context, podClient kubernetes.PodClient, namespace, name string, completed map[string]time.Time, notifier ContainerNotifier, skipLogs bool) (*corev1.Pod, error) {
+func waitForPodCompletionOrTimeout(ctx context.Context, podClient kubernetes.PodClient, namespace, name string, completed map[string]time.Time, notifier ContainerNotifier, flags WaitForPodFlag) (*corev1.Pod, error) {
 	var ret atomic.Pointer[corev1.Pod]
 	var eg *errgroup.Group
 	eg, ctx = errgroup.WithContext(ctx)
@@ -161,7 +171,7 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient kubernetes.Pod
 			if ret.Swap(pod) == nil {
 				eg.Go(pendingCheck)
 			}
-			return processPodEvent(podClient, completed, notifier, skipLogs, pod)
+			return processPodEvent(podClient, completed, notifier, flags, pod)
 		}, 0); err != nil {
 			if errors.Is(err, wait.ErrWaitTimeout) {
 				err = ctx.Err()
@@ -182,12 +192,13 @@ func processPodEvent(
 	podClient kubernetes.PodClient,
 	completed map[string]time.Time,
 	notifier ContainerNotifier,
-	skipLogs bool,
+	flags WaitForPodFlag,
 	pod *corev1.Pod,
 ) (done bool, err error) {
 	if pod.Spec.RestartPolicy == corev1.RestartPolicyAlways {
 		return true, nil
 	}
+	skipLogs := IsBitSet(flags, SkipLogs)
 	podLogNewFailedContainers(podClient, pod, completed, notifier, skipLogs)
 	if pod.DeletionTimestamp != nil {
 		logrus.Warningf("Pod %s is being unexpectedly deleted", pod.Name)

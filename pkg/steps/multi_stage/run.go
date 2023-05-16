@@ -157,7 +157,7 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 	if _, err := util.CreateOrRestartPod(ctx, client, pod); err != nil {
 		return fmt.Errorf("failed to create or restart %s pod: %w", pod.Name, err)
 	}
-	newPod, err := util.WaitForPodCompletion(ctx, client, pod.Namespace, pod.Name, notifier, false)
+	newPod, err := util.WaitForPodCompletion(ctx, client, pod.Namespace, pod.Name, notifier, util.WaitForPodFlag(0))
 	if newPod != nil {
 		pod = newPod
 	}

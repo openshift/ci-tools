@@ -120,8 +120,11 @@ func (s *podStep) run(ctx context.Context) error {
 	defer func() {
 		s.subTests = testCaseNotifier.SubTests(s.Description() + " - ")
 	}()
-
-	if _, err := util.WaitForPodCompletion(ctx, s.client, pod.Namespace, pod.Name, testCaseNotifier, s.config.SkipLogs); err != nil {
+	var flags util.WaitForPodFlag
+	if s.config.SkipLogs {
+		flags |= util.SkipLogs
+	}
+	if _, err := util.WaitForPodCompletion(ctx, s.client, pod.Namespace, pod.Name, testCaseNotifier, flags); err != nil {
 		return fmt.Errorf("%s %q failed: %w", s.name, pod.Name, err)
 	}
 	return nil
@@ -378,5 +381,5 @@ func RunPod(ctx context.Context, podClient kubernetes.PodClient, pod *coreapi.Po
 	if err != nil {
 		return pod, err
 	}
-	return util.WaitForPodCompletion(ctx, podClient, pod.Namespace, pod.Name, nil, true)
+	return util.WaitForPodCompletion(ctx, podClient, pod.Namespace, pod.Name, nil, util.SkipLogs)
 }

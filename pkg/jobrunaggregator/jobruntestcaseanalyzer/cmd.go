@@ -299,7 +299,7 @@ func (f *JobRunsTestCaseAnalyzerFlags) Validate() error {
 func (f *JobRunsTestCaseAnalyzerFlags) testNameSuffix() string {
 	suffix := ""
 	if len(f.Platform) > 0 {
-		suffix += fmt.Sprintf("plaftorm:%s ", f.Platform)
+		suffix += fmt.Sprintf("platform:%s ", f.Platform)
 	}
 	if len(f.Network) > 0 {
 		suffix += fmt.Sprintf("network:%s ", f.Network)

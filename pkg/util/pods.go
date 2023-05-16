@@ -34,6 +34,10 @@ const (
 	// larger step like release creation where displaying pod specific info is
 	// confusing to an end user. Failure logs are still printed.
 	SkipLogs WaitForPodFlag = 1 << iota
+	// Interruptible indicates this pod is expected to potentially be cancelled
+	// Used for observer pods so that their cancellation is not reported as
+	// abnormal.
+	Interruptible
 )
 
 func CreateOrRestartPod(ctx context.Context, podClient ctrlruntimeclient.Client, pod *corev1.Pod) (*corev1.Pod, error) {
@@ -201,7 +205,11 @@ func processPodEvent(
 	skipLogs := IsBitSet(flags, SkipLogs)
 	podLogNewFailedContainers(podClient, pod, completed, notifier, skipLogs)
 	if pod.DeletionTimestamp != nil {
-		logrus.Warningf("Pod %s is being unexpectedly deleted", pod.Name)
+		if IsBitSet(flags, Interruptible) {
+			logrus.Debugf("Pod %s is being deleted as expected", pod.Name)
+		} else {
+			logrus.Warningf("Pod %s is being unexpectedly deleted", pod.Name)
+		}
 	}
 	if podJobIsOK(pod) {
 		if !skipLogs {

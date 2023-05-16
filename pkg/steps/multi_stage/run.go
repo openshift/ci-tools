@@ -100,7 +100,7 @@ func (s *multiStageTestStep) runSteps(
 func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, bestEffortSteps sets.String) error {
 	var errs []error
 	for _, pod := range pods {
-		err := s.runPod(ctx, &pod, base_steps.NewTestCaseNotifier(util.NopNotifier))
+		err := s.runPod(ctx, &pod, base_steps.NewTestCaseNotifier(util.NopNotifier), util.WaitForPodFlag(0))
 		if err == nil {
 			continue
 		}
@@ -129,7 +129,7 @@ func (s *multiStageTestStep) runObservers(ctx, textCtx context.Context, pods []c
 			}
 		}(pod)
 		go func(p coreapi.Pod) {
-			err := s.runPod(textCtx, &p, base_steps.NewTestCaseNotifier(util.NopNotifier))
+			err := s.runPod(textCtx, &p, base_steps.NewTestCaseNotifier(util.NopNotifier), util.Interruptible)
 			if ctx.Err() == nil {
 				// when the observer is cancelled, we get an error here that we need to ignore, as it's not an error
 				// for the Pod to be deleted when it's cancelled, it's just expected
@@ -150,14 +150,14 @@ func (s *multiStageTestStep) runObservers(ctx, textCtx context.Context, pods []c
 	done <- struct{}{}
 }
 
-func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notifier *base_steps.TestCaseNotifier) error {
+func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notifier *base_steps.TestCaseNotifier, flags util.WaitForPodFlag) error {
 	start := time.Now()
 	logrus.Infof("Running step %s.", pod.Name)
 	client := s.client.WithNewLoggingClient()
 	if _, err := util.CreateOrRestartPod(ctx, client, pod); err != nil {
 		return fmt.Errorf("failed to create or restart %s pod: %w", pod.Name, err)
 	}
-	newPod, err := util.WaitForPodCompletion(ctx, client, pod.Namespace, pod.Name, notifier, util.WaitForPodFlag(0))
+	newPod, err := util.WaitForPodCompletion(ctx, client, pod.Namespace, pod.Name, notifier, flags)
 	if newPod != nil {
 		pod = newPod
 	}

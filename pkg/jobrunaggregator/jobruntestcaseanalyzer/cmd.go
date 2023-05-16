@@ -299,16 +299,23 @@ func (f *JobRunsTestCaseAnalyzerFlags) Validate() error {
 func (f *JobRunsTestCaseAnalyzerFlags) testNameSuffix() string {
 	suffix := ""
 	if len(f.Platform) > 0 {
-		suffix += fmt.Sprintf("plaftorm:%s ", f.Platform)
+		suffix += fmt.Sprintf("platform:%s ", f.Platform)
 	}
 	if len(f.Network) > 0 {
 		suffix += fmt.Sprintf("network:%s ", f.Network)
 	}
 	if len(f.Infrastructure) > 0 {
-		suffix += fmt.Sprintf("infrastructure:%s", f.Infrastructure)
+		suffix += fmt.Sprintf("infrastructure:%s ", f.Infrastructure)
 	}
-	suffix = strings.TrimSpace(suffix)
-	return suffix
+
+	if len(f.IncludeJobNames) > 0 {
+		suffix += fmt.Sprintf("including:%s ", strings.Join(f.IncludeJobNames, ","))
+	}
+	if len(f.ExcludeJobNames) > 0 {
+		suffix += fmt.Sprintf("excluding:%s ", strings.Join(f.ExcludeJobNames, ","))
+	}
+
+	return strings.TrimSpace(suffix)
 }
 
 // ToOptions creates a new JobRunTestCaseAnalyzerOptions struct
@@ -339,6 +346,7 @@ func (f *JobRunsTestCaseAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunTe
 		platform:       f.Platform,
 		infrastructure: f.Infrastructure,
 		network:        f.Network,
+		testNameSuffix: f.testNameSuffix(),
 		jobGCSPrefixes: &f.JobGCSPrefixes,
 		ciDataClient:   ciDataClient,
 	}
@@ -362,6 +370,7 @@ func (f *JobRunsTestCaseAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunTe
 		ciGCSClient:         ciGCSClient,
 		gcsClient:           gcsClient,
 		testCaseCheckers:    []TestCaseChecker{minimumRequiredPassesTestCaseChecker{installTestIdentifier, f.testNameSuffix(), f.MinimumSuccessfulTestCount}},
+		testNameSuffix:      f.testNameSuffix(),
 		payloadInvocationID: f.PayloadInvocationID,
 		jobGCSPrefixes:      &f.JobGCSPrefixes,
 		jobGetter:           jobGetter,

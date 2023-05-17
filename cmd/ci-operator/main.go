@@ -140,7 +140,7 @@ of dynamic parameters that are inferred from previous steps. These parameters ar
     The job name in a form safe for use as a Kubernetes resource name.
 
   JOB_NAME_HASH
-    A short hash of the job name for making tasks unique.
+    A short hash of the job name, including target-additional-suffix if supplied, for making tasks unique.
 
   RPM_REPO_<org>_<repo>
     If the job creates RPMs this will be the public URL that can be used as the
@@ -694,7 +694,7 @@ func (o *options) Complete() error {
 		return err
 	}
 
-	appendAdditionalSuffixToTarget(o)
+	handleTargetAdditionalSuffix(o)
 
 	return overrideTestStepDependencyParams(o)
 }
@@ -718,11 +718,11 @@ func parseKeyValParams(input []string, paramType string) (map[string]string, err
 	return params, nil
 }
 
-func appendAdditionalSuffixToTarget(o *options) {
+func handleTargetAdditionalSuffix(o *options) {
 	if o.targetAdditionalSuffix == "" {
 		return
 	}
-
+	o.jobSpec.TargetAdditionalSuffix = o.targetAdditionalSuffix
 	for i, test := range o.configSpec.Tests {
 		for j, target := range o.targets.values {
 			if test.As == target {

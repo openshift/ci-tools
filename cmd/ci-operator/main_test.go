@@ -1544,7 +1544,7 @@ func TestGenerateAuthorAccessRoleBinding(t *testing.T) {
 	}
 }
 
-func TestAppendAdditionalSuffixToTarget(t *testing.T) {
+func TestHandleTargetAdditionalSuffix(t *testing.T) {
 	testCases := []struct {
 		name                   string
 		targetAdditionalSuffix string
@@ -1572,7 +1572,7 @@ func TestAppendAdditionalSuffixToTarget(t *testing.T) {
 			tests:                  []api.TestStepConfiguration{{As: "e2e"}},
 			expectedTests:          []api.TestStepConfiguration{{As: "e2e-1"}},
 			jobSpec:                api.JobSpec{Target: "e2e"},
-			expectedJobSpec:        api.JobSpec{Target: "e2e-1"},
+			expectedJobSpec:        api.JobSpec{Target: "e2e-1", TargetAdditionalSuffix: "1"},
 		},
 		{
 			name:                   "target-additional-suffix set with multiple targets",
@@ -1582,7 +1582,7 @@ func TestAppendAdditionalSuffixToTarget(t *testing.T) {
 			tests:                  []api.TestStepConfiguration{{As: "e2e"}, {As: "unit"}},
 			expectedTests:          []api.TestStepConfiguration{{As: "e2e-1"}, {As: "unit-1"}},
 			jobSpec:                api.JobSpec{Target: "e2e"},
-			expectedJobSpec:        api.JobSpec{Target: "e2e-1"},
+			expectedJobSpec:        api.JobSpec{Target: "e2e-1", TargetAdditionalSuffix: "1"},
 		},
 	}
 	for _, tc := range testCases {
@@ -1596,7 +1596,7 @@ func TestAppendAdditionalSuffixToTarget(t *testing.T) {
 				targets: tc.targets,
 			}
 
-			appendAdditionalSuffixToTarget(o)
+			handleTargetAdditionalSuffix(o)
 
 			if diff := cmp.Diff(tc.expectedTargets.values, o.targets.values); diff != "" {
 				t.Fatalf("expectedTargets differ from actual, diff: %s", diff)

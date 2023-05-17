@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 
@@ -446,15 +445,14 @@ type aggregatedOptions struct {
 func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter periodicDefaulter, baseCiop *api.Metadata, prpqrName, prpqrNamespace string, pr *v1.PullRequestUnderTest, mimickedJob string, inject *api.MetadataWithTest, aggregatedOptions *aggregatedOptions) (*prowv1.ProwJob, error) {
 	fakeProwgenInfo := &prowgen.ProwgenInfo{Metadata: *baseCiop}
 
-	annotations := map[string]string{
-		releaseJobNameAnnotation: mimickedJob,
-	}
+	var annotations map[string]string
 	labels := map[string]string{
 		releaseJobNameLabel: jobNameHash(mimickedJob),
 	}
 
-	var aggregateIndex *int
+	hashInput := prowgen.CustomHashInput(prpqrName)
 	if aggregatedOptions != nil {
+		hashInput = prowgen.CustomHashInput(fmt.Sprintf("%s-%d", prpqrName, aggregatedOptions.aggregatedIndex))
 		if aggregatedOptions.labels != nil {
 			for k, v := range aggregatedOptions.labels {
 				labels[k] = v
@@ -463,12 +461,13 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 		annotations = map[string]string{
 			releaseJobNameAnnotation: aggregatedOptions.releaseJobName,
 		}
-		aggregateIndex = &aggregatedOptions.aggregatedIndex
 	} else {
 		labels[v1.PullRequestPayloadQualificationRunLabel] = prpqrName
+		annotations = map[string]string{
+			releaseJobNameAnnotation: mimickedJob,
+		}
 	}
 
-	hashInput := prowgen.CustomHashInput(prpqrName)
 	var periodic *prowconfig.Periodic
 	for i := range ciopConfig.Tests {
 		if ciopConfig.Tests[i].As != inject.Test {
@@ -476,9 +475,6 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 		}
 		jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, fakeProwgenInfo, prowgen.NewCiOperatorPodSpecGenerator(), ciopConfig.Tests[i])
 		jobBaseGen.PodSpec.Add(prowgen.InjectTestFrom(inject))
-		if aggregateIndex != nil {
-			jobBaseGen.PodSpec.Add(prowgen.TargetAdditionalSuffix(strconv.Itoa(*aggregateIndex)))
-		}
 
 		// Avoid sharing when we run the same job multiple times.
 		// PRPQR name should be safe to use as a discriminating input, because
@@ -508,6 +504,7 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 		}
 		periodic.DecorationConfig.Timeout = &prowv1.Duration{Duration: 6 * time.Hour}
 
+		break
 	}
 	// We did not find the injected test: this is a bug
 	if periodic == nil {

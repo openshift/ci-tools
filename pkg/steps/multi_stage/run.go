@@ -123,7 +123,7 @@ func (s *multiStageTestStep) runObservers(ctx, textCtx context.Context, pods []c
 	for _, pod := range pods {
 		go func(p coreapi.Pod) {
 			<-ctx.Done()
-			logrus.Info("Signalling observers to terminate...")
+			logrus.Infof("Signalling observer pod %q to terminate...", p.Name)
 			if err := s.client.Delete(context.Background(), &p); err != nil {
 				logrus.WithError(err).Warn("failed to trigger observer to stop")
 			}

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
@@ -23,7 +22,7 @@ type s3BackOffCache struct {
 	cacheRecordAge time.Duration
 	logger         *logrus.Entry
 
-	awsSession *session.Session
+	awsClient *s3.S3
 }
 
 func (b *s3BackOffCache) load() error {
@@ -36,21 +35,7 @@ func (b *s3BackOffCache) loadFromAwsNow(now time.Time) error {
 		return nil
 	}
 
-	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String("us-east-1"),
-	})
-	if err != nil {
-		return fmt.Errorf("couldn't create new aws session")
-	}
-	b.awsSession = sess
-
-	_, err = sess.Config.Credentials.Get()
-	if err != nil {
-		return fmt.Errorf("credentials for aws not found")
-	}
-
-	svc := s3.New(b.awsSession)
-	result, err := svc.GetObject(&s3.GetObjectInput{
+	result, err := b.awsClient.GetObject(&s3.GetObjectInput{
 		Bucket: aws.String(retesterBucket),
 		Key:    aws.String(b.file),
 	})
@@ -90,8 +75,7 @@ func (b *s3BackOffCache) save() error {
 		return fmt.Errorf("failed to marshal: %w", err)
 	}
 
-	svc := s3.New(b.awsSession)
-	_, err = svc.PutObject(&s3.PutObjectInput{
+	_, err = b.awsClient.PutObject(&s3.PutObjectInput{
 		Bucket: aws.String(retesterBucket),
 		Key:    aws.String(b.file),
 		Body:   bytes.NewReader(content),

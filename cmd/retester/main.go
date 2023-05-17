@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"os"
 	"time"
 
@@ -113,7 +115,16 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to load config from file")
 	}
 
-	c := retester.NewController(gc, configAgent.Config, git.ClientFactoryFrom(gitClient), o.github.AppPrivateKeyPath != "", o.cacheFile, o.cacheRecordAge, config)
+	awsSession, err := session.NewSession(&aws.Config{Region: aws.String("us-east-1")})
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create AWS session.")
+	}
+	_, err = awsSession.Config.Credentials.Get()
+	if err != nil {
+		logrus.WithError(err).Fatal("Error getting AWS credentials.")
+	}
+
+	c := retester.NewController(gc, configAgent.Config, git.ClientFactoryFrom(gitClient), o.github.AppPrivateKeyPath != "", o.cacheFile, o.cacheRecordAge, config, awsSession)
 
 	metrics.ExposeMetrics("retester", prowConfig.PushGateway{}, prowflagutil.DefaultMetricsPort)
 

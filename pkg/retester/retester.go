@@ -3,6 +3,8 @@ package retester
 import (
 	"context"
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"io/ioutil"
 	"strings"
 	"time"
@@ -184,7 +186,7 @@ func validatePolicies(policy RetesterPolicy) []error {
 }
 
 // NewController generates a retest controller.
-func NewController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool, cacheFile string, cacheRecordAge time.Duration, config *Config) *RetestController {
+func NewController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool, cacheFile string, cacheRecordAge time.Duration, config *Config, awsSession *session.Session) *RetestController {
 	logger := logrus.NewEntry(logrus.StandardLogger())
 
 	ret := &RetestController{
@@ -193,7 +195,7 @@ func NewController(ghClient githubClient, cfg config.Getter, gitClient git.Clien
 		configGetter:  cfg,
 		logger:        logger,
 		usesGitHubApp: usesApp,
-		backoff:       &fileBackoffCache{cache: map[string]*pullRequest{}, file: cacheFile, cacheRecordAge: cacheRecordAge, logger: logger},
+		backoff:       &s3BackOffCache{cache: map[string]*pullRequest{}, file: cacheFile, cacheRecordAge: cacheRecordAge, logger: logger, awsClient: s3.New(awsSession)},
 		config:        config,
 	}
 	if err := ret.backoff.load(); err != nil {

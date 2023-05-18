@@ -1,12 +1,12 @@
 # Emergencies
-If you believe this mechanism if causing issues with the registry, you can eliminate it as a possibility by
+If you believe this mechanism is causing issues with the registry, you can eliminate it as a possibility by
 deleting the distribution's non-default behavior ([app.ci's behavior](https://us-east-1.console.aws.amazon.com/cloudfront/v3/home?region=us-west-2#/distributions/E2KP8SMSY4XB67/behaviors)). 
 This will cause CloudFront to handle the requests directly. This will increase costs, but should restore functionality to supported OpenShift product behavior.
-Not that all build farms have their own CloudFront distribution configured and share the exact same code in their non-default behavior. 
+Note that all AWS build farms have their own CloudFront distribution configured for the registry (`oc get config.imageregistry.operator.openshift.io cluster -o yaml | yq -y '.spec.storage.s3.cloudFront'`) and share the exact same code in their non-default behavior. 
 
 # Background
 The app.ci registry (registry.ci.openshif.org) and the build farm container image registries transfer a huge amount
-of data. For example, Each ephemeral cluster that is created pulls GBs of data from the registry.
+of data. For example, Each ephemeral cluster pulls GBs of data from the registry.
 
 A default install of OpenShift creates an S3 bucket to store and serve its image registry content. In brief, when such a 
 default registry pod receives a request for an image layer, it will compute a [presigned URL](https://docs.aws.amazon.com/AmazonS3/latest/userguide/ShareObjectPreSignedURL.html)
@@ -18,8 +18,8 @@ If the S3 bucket in this architecture is running in us-east-1 and the client is 
 OpenShift install, this transfer of data is completely free. The problem with this solution is that app.ci
 and all build farms reside in us-east-1, but not all clients are in us-east-1. For example, we stand up
 ephemeral clusters for testing in us-west-2 or GCP. When the client is not in the same region as the S3 bucket, transfer
-costs mount quickly. Transferring content to us-west-2 from us-east-1 costs 0.02 USD. Transferring data to GCP
-(which is just considered "the Internet" to AWS) costs between 0.05-0.09 USD. When you are transferring TB of data,
+costs mount quickly. Transferring content to us-west-2 from us-east-1 costs 0.02 USD per GB. Transferring data to GCP
+(which is just considered "the Internet" to AWS) costs between 0.05-0.09 USD per GB. When you are transferring TB of data,
 this accumulates to a large monthly expense.
 
 A partial solution to this is using CloudFront. AWS CloudFront can be enabled trivially in the OpenShift registry operator's
@@ -58,17 +58,19 @@ Cost: CloudFront GET request and serverless function execution time + Discounted
 We can do even better! What if we had a replica of the app.ci registry in every major region (us-east-1, us-east-2, us-west-1, us-west-2)? 
 If we did, then CloudFront could redirect the client to the "free" app.ci S3 replica bucket within its own region. 
 The problem with this is that when a client pushes content registry.ci.openshift.org, it is only written to one S3 bucket (the one is us-east-1). 
-To replicate the data, S3 is set up with a replication job that will copy content to the other regions within 15 minutes.
+To replicate the data, [S3 is set up with a replication job](https://aws.amazon.com/getting-started/hands-on/replicate-data-using-amazon-s3-replication/)
+that will copy content to the other regions within 15 minutes.
 
 Therefore, the content pushed to us-east-1 is not guaranteed to be on us-west-2 when a client from us-west-2 makes a request.
 To account for this replication delay, the serverless function will query for the file in the client's regional replica. If it finds the file,
 it will redirect the request to read from the replica S3 bucket directly. If it does not find the file, it will fall back to 
-the next best option. For a client in us-east-2, the next best option is to read content from app.ci's us-east-1 bucket. For
-a client from us-west-2, the next best option is to stream the content from CloudFront.
+the next best option. For a client in us-east-2, the next best option is to read content from app.ci's us-east-1 bucket
+(because east-1 to east-2 transfer is less expensive than a CloudFront transfer per GB if there is not NAT gateway
+-- which is true for our build farms). For a client from us-west-2, the next best option is to stream the content from CloudFront.
 
 # 10 Foot View
-Each build farm has its own CloudFront distribution in front of its S3 registry bucket. Our serverless function is configured
-to execute here as well, but it behaves slightly differently than when it is running on an app.ci (registry.ci.openshift.org)
+Each AWS build farm has its own CloudFront distribution in front of its S3 registry bucket. Our serverless function is configured
+to execute as a behavior for these CloudFront distributions as well, but it behaves slightly differently than when it is running on an app.ci (registry.ci.openshift.org)
 request. The build farm registries are not replicated in every region. So, when a request comes in, the serverless function
 will first check to see if the client is in the us-east-1 region (this is where all build farms reside). If the client is 
 from us-east-1, then the client is redirected to read from the build farm registry's S3 bucket in us-east-1.
@@ -113,6 +115,19 @@ The function is saved as an AWS Lambda. For app.ci's account, you can find it [h
 ![img.png](doc/cloudfront_behaviors.png)
 
 ![img.png](doc/cloudfront_behavior_config.png)
+
+## NAT Gateway Considerations
+To understand network transfer costs, it is vital to understand OpenShift's use of NAT gateways. In a default
+install, any node in the OCP VPC will move all ingress/egress through the NAT gateway EXCEPT for content from
+S3 in the same region as the node. This is because the default install includes a [Gateway Endpoint for S3](https://docs.aws.amazon.com/vpc/latest/privatelink/vpc-endpoints-s3.html).
+
+This, for example, makes transfers from nodes in us-east-1 from an S3 bucket in us-east-1 free even if there
+is an active NAT gateway (S3 goes through the Gateway Endpoint instead of the NAT gateway). However, a node
+is us-east-2 would be charged for traffic from us-east-1 to us-east-2 AND the NAT gateway cost.
+
+To limit costs, our build farms have been configured with public IP addresses and enabled to bypass the NAT
+Gateway for all ingress traffic. This makes, for example, a node in us-east-2 reading from an S3 bucket
+relatively inexpensive since traffic passes through the public IP and only inter-regional costs are encountered.
 
 # Debugging
 You can exercise the serverless function using any HTTP client by specifying the `user-agent` HTTP header to

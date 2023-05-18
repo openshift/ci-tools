@@ -95,7 +95,7 @@ func WaitAndGetAllFinishedJobRuns(ctx context.Context,
 		}
 
 		summaryHTML := htmlForJobRuns(ctx, finishedJobRuns, unfinishedJobRuns, variantInfo)
-		if err := ioutil.WriteFile(filepath.Join(outputDir, fmt.Sprintf("job-run-summary-%d.html", time.Now().UnixMilli())), []byte(summaryHTML), 0644); err != nil {
+		if err := ioutil.WriteFile(filepath.Join(outputDir, "job-run-summary.html"), []byte(summaryHTML), 0644); err != nil {
 			return finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames, err
 		}
 

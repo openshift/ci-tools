@@ -38,16 +38,9 @@ func (b *fileBackoffCache) loadFromDiskNow(now time.Time) error {
 	if err != nil {
 		return fmt.Errorf("failed to read file %s: %w", b.file, err)
 	}
-	cache := map[string]*pullRequest{}
-	if err := yaml.Unmarshal(bytes, &cache); err != nil {
-		return fmt.Errorf("failed to unmarshal: %w", err)
-	}
-	for key, pr := range cache {
-		if age := now.Sub(pr.LastConsideredTime.Time); age > b.cacheRecordAge {
-			b.logger.WithField("key", key).WithField("LastConsideredTime", pr.LastConsideredTime).
-				WithField("age", age).Info("deleting old record from cache")
-			delete(cache, key)
-		}
+	cache, err := loadAndDelete(bytes, b.logger, now, b.cacheRecordAge)
+	if err != nil {
+		return err
 	}
 	b.cache = cache
 	return nil

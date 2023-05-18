@@ -6,9 +6,9 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
 	"io"
 	"k8s.io/test-infra/prow/tide"
+	"sigs.k8s.io/yaml"
 	"time"
 )
 
@@ -48,24 +48,28 @@ func (b *s3BackOffCache) loadFromAwsNow(now time.Time) error {
 		return fmt.Errorf("failed to read file %s: %w", b.file, err)
 	}
 
-	cache := map[string]*pullRequest{}
-	if err := yaml.Unmarshal(content, &cache); err != nil {
-		return fmt.Errorf("failed to unmarshal %s: %w", b.file, err)
+	cache, err := loadAndDelete(content, b.logger, now, b.cacheRecordAge)
+	if err != nil {
+		return err
 	}
 	b.cache = cache
-	b.deleteOldRecords(&cache, now)
 	return nil
 }
 
-// deleteOldRecords deletes old records from cache
-func (b *s3BackOffCache) deleteOldRecords(cache *map[string]*pullRequest, time time.Time) {
-	for key, pr := range *cache {
-		if age := time.Sub(pr.LastConsideredTime.Time); age > b.cacheRecordAge {
-			b.logger.WithField("key", key).WithField("LastConsideredTime", pr.LastConsideredTime).
+// loadAndDelete loads content into cache and deletes old records from cache
+func loadAndDelete(content []byte, logger *logrus.Entry, now time.Time, cacheRecordAge time.Duration) (map[string]*pullRequest, error) {
+	cache := map[string]*pullRequest{}
+	if err := yaml.Unmarshal(content, &cache); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal: %w", err)
+	}
+	for key, pr := range cache {
+		if age := now.Sub(pr.LastConsideredTime.Time); age > cacheRecordAge {
+			logger.WithField("key", key).WithField("LastConsideredTime", pr.LastConsideredTime).
 				WithField("age", age).Info("deleting old record from cache")
-			delete(*cache, key)
+			delete(cache, key)
 		}
 	}
+	return cache, nil
 }
 
 // save uploads the contents of s3BackOffCache to the retester AWS S3 bucket

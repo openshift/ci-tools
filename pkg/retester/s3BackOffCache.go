@@ -3,13 +3,15 @@ package retester
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"time"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/sirupsen/logrus"
-	"io"
+
 	"k8s.io/test-infra/prow/tide"
 	"sigs.k8s.io/yaml"
-	"time"
 )
 
 const (

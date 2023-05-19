@@ -64,7 +64,7 @@ func WaitForConditionOnObject(ctx context.Context, client ctrlruntimeclient.With
 	_, syncErr := toolswatch.UntilWithSync(waitTimeout, lw, into, existsPrecondition, waitForObjectStatus)
 	// Hack to make sure this ends up in the logging client
 	if err := client.Get(context.Background(), ctrlruntimeclient.ObjectKey{Namespace: identifier.Namespace, Name: identifier.Name}, into); err != nil {
-		logrus.WithError(err).Warn("failed to get object after finishing watch")
+		logrus.WithError(err).Debug("failed to get object after finishing watch")
 	}
 	return syncErr
 }

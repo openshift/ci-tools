@@ -184,13 +184,9 @@ func main() {
 
 const (
 	primaryOnCallQuery                = "DPTP Primary On-Call"
-	secondaryUSOnCallQuery            = "DPTP Secondary On-Call (US)"
-	secondaryEUOnCallQuery            = "DPTP Secondary On-Call (EU)"
 	helpdeskQuery                     = "DPTP Help Desk"
 	intakeQuery                       = "DPTP Intake"
 	roleTriagePrimary                 = "@dptp-triage Primary"
-	roleTriageSecondaryUS             = "@dptp-triage Secondary (US)"
-	roleTriageSecondaryEU             = "@dptp-triage Secondary (EU)"
 	roleHelpdesk                      = "@dptp-helpdesk"
 	roleIntake                        = "@dptp-intake"
 	jiraUnassignedAssigneeDisplayName = "<Unassigned>"
@@ -211,7 +207,7 @@ func sendTeamDigest(userIdsByRole map[string]user, jiraClient *jiraapi.Client, s
 
 func getPagerDutyBlocks(userIdsByRole map[string]user) []slack.Block {
 	var fields []*slack.TextBlockObject
-	for _, role := range []string{roleTriagePrimary, roleTriageSecondaryUS, roleTriageSecondaryEU, roleHelpdesk, roleIntake} {
+	for _, role := range []string{roleTriagePrimary, roleHelpdesk, roleIntake} {
 		fields = append(fields, &slack.TextBlockObject{
 			Type: slack.PlainTextType,
 			Text: role,
@@ -274,14 +270,6 @@ func usersOnCallAtTime(client *pagerduty.Client, slackClient *slack.Client, year
 		{
 			role:  roleTriagePrimary,
 			query: primaryOnCallQuery,
-		},
-		{
-			role:  roleTriageSecondaryUS,
-			query: secondaryUSOnCallQuery,
-		},
-		{
-			role:  roleTriageSecondaryEU,
-			query: secondaryEUOnCallQuery,
 		},
 		{
 			role:  roleHelpdesk,

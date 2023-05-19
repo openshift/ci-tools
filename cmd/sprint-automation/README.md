@@ -10,5 +10,5 @@ Test Platform's daily helper. Utilizes slack and pager duty to do things such as
 # Local testing
 You can test out `sprint-automation` utilizing the `dptp-robot-testing` and the `hack/local-sprint-automation.sh` script:
 - Make sure to join the `dptp-robot-testing` slack space.
-- Run the `hack/local-sprint-automation.sh` script like so: `bash local-sprint-automation.sh`
+- Run the `hack/local-sprint-automation.sh` script like so: `RELEASE_REPO_DIR=<path to release repo dir> bash hack/local-sprint-automation.sh`
 - Now you can go into `dptp-robot-testing` and watch the output of your local `sprint-automation` run.

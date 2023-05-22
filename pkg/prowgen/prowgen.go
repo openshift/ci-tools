@@ -102,7 +102,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 	newJobBaseBuilder := func() *prowJobBaseBuilder {
 		return NewProwJobBaseBuilder(configSpec, info, NewCiOperatorPodSpecGenerator())
 	}
-
+	newJobBaseBuilderForPromotion := NewProwJobBaseBuilderForPromotion(configSpec, info, NewCiOperatorPodSpecGenerator())
 	imageTargets := api.ImageTargets(configSpec)
 
 	if len(imageTargets) > 0 {
@@ -116,7 +116,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, "images", info))
 
 		if configSpec.PromotionConfiguration != nil {
-			postsubmitsForPromotion, err := generatePostsubmitsForPromotion(newJobBaseBuilder, info, func(options *generatePostsubmitOptions) {
+			postsubmitsForPromotion, err := generatePostsubmitsForPromotion(newJobBaseBuilderForPromotion, info, func(options *generatePostsubmitOptions) {
 				options.imageTargets = imageTargets
 			})
 			if err != nil {
@@ -158,6 +158,17 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		PostsubmitsStatic: postsubmits,
 		Periodics:         periodics,
 	}, nil
+}
+
+func NewProwJobBaseBuilderForPromotion(configSpec *cioperatorapi.ReleaseBuildConfiguration,
+	info *ProwgenInfo, podSpecGenerator CiOperatorPodSpecGenerator) func() *prowJobBaseBuilder {
+	return func() *prowJobBaseBuilder {
+		builder := NewProwJobBaseBuilder(configSpec, info, podSpecGenerator)
+		if info.Config.MultiArch {
+			builder.Cluster(api.ClusterMulti01).WithLabel(api.ClusterLabel, string(api.ClusterMulti01))
+		}
+		return builder
+	}
 }
 
 func testContainsLease(test *cioperatorapi.TestStepConfiguration) bool {

@@ -75,7 +75,7 @@ func (i *Info) ConfigMapName() string {
 		return fmt.Sprintf("job-config-%s", cioperatorapi.FlavorForBranch(""))
 	}
 	flavor := cioperatorapi.FlavorForBranch(i.Branch)
-	if flavor == "master" {
+	if flavor == "master" || flavor == "main" {
 		return fmt.Sprintf("job-config-%s-%s", flavor, i.Type)
 	}
 

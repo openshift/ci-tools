@@ -107,9 +107,9 @@ func TestMetadata_ConfigMapName(t *testing.T) {
 			expected: "ci-operator-master-configs",
 		},
 		{
-			name:     "main branch goes to master configmap",
+			name:     "main branch goes to main configmap",
 			branch:   "main",
-			expected: "ci-operator-master-configs",
+			expected: "ci-operator-main-configs",
 		},
 		{
 			name:     "openshift 3.6 branch goes to 3.x configmap",

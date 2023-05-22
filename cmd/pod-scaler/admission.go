@@ -337,7 +337,7 @@ func determineWorkloadName(podName, containerName, workloadType string, labels m
 	return fmt.Sprintf("%s-%s", podName, containerName)
 }
 
-const priorityClassName = "openshift-user-critical"
+const priorityClassName = "high-priority-nonpreempting"
 
 func (m *podMutator) addPriorityClass(pod *corev1.Pod) {
 	shouldAdd := func(containers []corev1.Container) bool {

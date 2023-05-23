@@ -18,13 +18,18 @@ const (
 	retesterBucket = "prow-retester"
 )
 
+type s3Client interface {
+	PutObject(input *s3.PutObjectInput) (*s3.PutObjectOutput, error)
+	GetObject(input *s3.GetObjectInput) (*s3.GetObjectOutput, error)
+}
+
 type s3BackOffCache struct {
 	cache          map[string]*pullRequest
 	file           string
 	cacheRecordAge time.Duration
 	logger         *logrus.Entry
 
-	awsClient *s3.S3
+	awsClient s3Client
 }
 
 func (b *s3BackOffCache) load() error {

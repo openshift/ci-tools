@@ -351,7 +351,8 @@ func (m *podMutator) addPriorityClass(pod *corev1.Pod) {
 	}
 
 	if shouldAdd(pod.Spec.Containers) || shouldAdd(pod.Spec.InitContainers) {
-		pod.Spec.Priority = nil // We cannot have Priority defined if we add the PriorityClassName
+		pod.Spec.Priority = nil         // We cannot have Priority defined if we add the PriorityClassName
+		pod.Spec.PreemptionPolicy = nil // We cannot have PreemptionPolicy defined if we are using a priority class with preemption of "Never"
 		pod.Spec.PriorityClassName = priorityClassName
 	}
 }

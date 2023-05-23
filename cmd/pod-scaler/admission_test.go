@@ -1091,6 +1091,7 @@ func TestDetermineWorkloadName(t *testing.T) {
 func TestAddPriorityClass(t *testing.T) {
 	priority := new(int32)
 	*priority = 10
+	preemptionPolicy := corev1.PreemptLowerPriority
 
 	testCases := []struct {
 		name     string
@@ -1139,12 +1140,13 @@ func TestAddPriorityClass(t *testing.T) {
 			}},
 		},
 		{
-			name: "cpu above configured amount for priority scheduling with priority defined",
+			name: "cpu above configured amount for priority scheduling with priority and preemption policy defined",
 			pod: &corev1.Pod{Spec: corev1.PodSpec{
 				Containers: []corev1.Container{
 					{Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("9")}}},
 				},
-				Priority: priority,
+				Priority:         priority,
+				PreemptionPolicy: &preemptionPolicy,
 			}},
 			expected: &corev1.Pod{Spec: corev1.PodSpec{
 				Containers: []corev1.Container{

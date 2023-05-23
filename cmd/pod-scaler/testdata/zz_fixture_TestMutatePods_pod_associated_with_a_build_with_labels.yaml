@@ -30,7 +30,7 @@ Patches:
   value: {}
 - op: add
   path: /spec/priorityClassName
-  value: openshift-user-critical
+  value: high-priority-nonpreempting
 allowed: true
 patchType: JSONPatch
 uid: ""

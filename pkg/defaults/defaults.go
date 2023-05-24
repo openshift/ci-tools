@@ -29,16 +29,13 @@ import (
 	templateapi "github.com/openshift/api/template/v1"
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	templateclientset "github.com/openshift/client-go/template/clientset/versioned/typed/template/v1"
-	hivev1 "github.com/openshift/hive/apis/hive/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	testimagestreamtagimportv1 "github.com/openshift/ci-tools/pkg/api/testimagestreamtagimport/v1"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/lease"
 	"github.com/openshift/ci-tools/pkg/release"
-	"github.com/openshift/ci-tools/pkg/release/candidate"
 	"github.com/openshift/ci-tools/pkg/release/official"
-	"github.com/openshift/ci-tools/pkg/release/prerelease"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/steps"
@@ -162,7 +159,7 @@ func fromConfig(
 	rawSteps = append(graphConf.Steps, rawSteps...)
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
-			steps, testHasReleaseStep, err := stepForTest(ctx, config, params, podClient, leaseClient, templateClient, client, hiveClient, jobSpec, inputImages, testStep, &imageConfigs, pullSecret, censor, nodeName, targetAdditionalSuffix)
+			steps, testHasReleaseStep, err := stepForTest(config, params, podClient, leaseClient, templateClient, client, hiveClient, jobSpec, inputImages, testStep, &imageConfigs, pullSecret, censor, nodeName, targetAdditionalSuffix)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -197,12 +194,14 @@ func fromConfig(
 			if overrideCLIResolveErr != nil {
 				return nil, nil, results.ForReason("resolving_cli_override").ForError(fmt.Errorf("failed to resolve override CLI image for release %s: %w", resolveConfig.Name, overrideCLIResolveErr))
 			}
+			var source releasesteps.ReleaseSource
 			if env := utils.ReleaseImageEnv(resolveConfig.Name); params.HasInput(env) {
 				value, err = params.Get(env)
 				if err != nil {
 					return nil, nil, results.ForReason("resolving_release").ForError(fmt.Errorf("failed to get %q parameter: %w", env, err))
 				}
 				logrus.Infof("Using explicitly provided pull-spec for release %s (%s)", resolveConfig.Name, value)
+				source = releasesteps.NewReleaseSourceFromPullSpec(value)
 			} else {
 				switch {
 				case resolveConfig.Integration != nil:
@@ -219,23 +218,14 @@ func fromConfig(
 						addProvidesForStep(s, params)
 					}
 					imageStepLinks = append(imageStepLinks, snapshot.Creates()...)
-				case resolveConfig.Candidate != nil:
-					value, err = candidate.ResolvePullSpec(httpClient, *resolveConfig.Candidate)
-				case resolveConfig.Release != nil:
-					value, _, err = official.ResolvePullSpecAndVersion(httpClient, *resolveConfig.Release)
-				case resolveConfig.Prerelease != nil:
-					value, err = prerelease.ResolvePullSpec(httpClient, *resolveConfig.Prerelease)
-				}
-				if err != nil {
-					return nil, nil, results.ForReason("resolving_release").ForError(fmt.Errorf("failed to resolve release %s: %w", resolveConfig.Name, err))
+					continue
+				default:
+					source = releasesteps.NewReleaseSourceFromConfig(resolveConfig, httpClient)
 				}
 			}
-			if value != "" {
-				logrus.Infof("Resolved release %s to %s", resolveConfig.Name, value)
-				step := releasesteps.ImportReleaseStep(resolveConfig.Name, nodeName, resolveConfig.TargetName(), value, false, config.Resources, podClient, jobSpec, pullSecret, overrideCLIReleaseExtractImage)
-				buildSteps = append(buildSteps, step)
-				addProvidesForStep(step, params)
-			}
+			step := releasesteps.ImportReleaseStep(resolveConfig.Name, nodeName, resolveConfig.TargetName(), source, false, config.Resources, podClient, jobSpec, pullSecret, overrideCLIReleaseExtractImage)
+			buildSteps = append(buildSteps, step)
+			addProvidesForStep(step, params)
 			continue
 		}
 		var step api.Step
@@ -292,7 +282,8 @@ func fromConfig(
 					}
 					logrus.Infof("Using explicitly provided pull-spec for release %s (%s)", name, pullSpec)
 					target := rawStep.ReleaseImagesTagStepConfiguration.TargetName(name)
-					releaseStep = releasesteps.ImportReleaseStep(name, nodeName, target, pullSpec, true, config.Resources, podClient, jobSpec, pullSecret, nil)
+					source := releasesteps.NewReleaseSourceFromPullSpec(pullSpec)
+					releaseStep = releasesteps.ImportReleaseStep(name, nodeName, target, source, true, config.Resources, podClient, jobSpec, pullSecret, nil)
 				} else {
 					// for backwards compatibility, users get inclusion for free with tag_spec
 					cfg := *rawStep.ReleaseImagesTagStepConfiguration
@@ -374,7 +365,6 @@ func fromConfig(
 // copy of `params` and their values from `Provides` only affect themselves,
 // thus avoiding conflicts with other tests pre-pruning.
 func stepForTest(
-	ctx context.Context,
 	config *api.ReleaseBuildConfiguration,
 	params *api.DeferredParameters,
 	podClient kubernetes.PodClient,
@@ -402,18 +392,13 @@ func stepForTest(
 		if len(leases) != 0 {
 			step = steps.LeaseStep(leaseClient, leases, step, jobSpec.Namespace)
 		}
-		// hive client may not be present for jobs that execute non-claim based tests
-		if hiveClient != nil && c.ClusterClaim != nil {
+		if c.ClusterClaim != nil {
 			step = steps.ClusterClaimStep(c.As, c.ClusterClaim, hiveClient, client, jobSpec, step, censor)
-			pullSpec, err := getClusterPoolPullSpec(ctx, c.ClusterClaim, hiveClient)
-			if err != nil {
-				return nil, hasReleaseStep, err
-			}
 			hasReleaseStep = true
-			claimRelease := c.ClusterClaim.ClaimRelease(c.As)
-			logrus.Infof("Resolved release %s to %s", claimRelease.ReleaseName, pullSpec)
-			target := api.ReleaseConfiguration{Name: claimRelease.ReleaseName}.TargetName()
-			ret = append(ret, releasesteps.ImportReleaseStep(claimRelease.ReleaseName, nodeName, target, pullSpec, false, config.Resources, podClient, jobSpec, pullSecret, nil))
+			name := c.ClusterClaim.ClaimRelease(c.As).ReleaseName
+			target := api.ReleaseConfiguration{Name: name}.TargetName()
+			source := releasesteps.NewReleaseSourceFromClusterClaim(c.As, c.ClusterClaim, hiveClient)
+			ret = append(ret, releasesteps.ImportReleaseStep(name, nodeName, target, source, false, config.Resources, podClient, jobSpec, pullSecret, nil))
 		}
 		addProvidesForStep(step, params)
 		ret = append(ret, step)
@@ -934,20 +919,6 @@ func ensureImageStreamTag(ctx context.Context, client ctrlruntimeclient.Client, 
 	}); err != nil {
 		logrus.WithError(err).Warnf("Waiting for imagestreamtag %s failed", isTagRef.ISTagName())
 	}
-}
-
-func getClusterPoolPullSpec(ctx context.Context, claim *api.ClusterClaim, hiveClient ctrlruntimeclient.WithWatch) (string, error) {
-	clusterPool, err := utils.ClusterPoolFromClaim(ctx, claim, hiveClient)
-	if err != nil {
-		return "", err
-	}
-
-	clusterImageSet := &hivev1.ClusterImageSet{}
-	if err := hiveClient.Get(ctx, types.NamespacedName{Name: clusterPool.Spec.ImageSetRef.Name}, clusterImageSet); err != nil {
-		return "", fmt.Errorf("failed to find cluster image set `%s` for cluster pool `%s`: %w", clusterPool.Spec.ImageSetRef.Name, clusterPool.Name, err)
-	}
-
-	return clusterImageSet.Spec.ReleaseImage, nil
 }
 
 func resolveCLIOverrideImage(architecture api.ReleaseArchitecture, version string) (*coreapi.ObjectReference, error) {

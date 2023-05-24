@@ -290,7 +290,7 @@ func fromConfig(
 					if err != nil {
 						return nil, nil, results.ForReason("reading_release").ForError(fmt.Errorf("failed to read input release pullSpec %s: %w", name, err))
 					}
-					logrus.Infof("Resolved release %s to %s", name, pullSpec)
+					logrus.Infof("Using explicitly provided pull-spec for release %s (%s)", name, pullSpec)
 					target := rawStep.ReleaseImagesTagStepConfiguration.TargetName(name)
 					releaseStep = releasesteps.ImportReleaseStep(name, nodeName, target, pullSpec, true, config.Resources, podClient, jobSpec, pullSecret, nil)
 				} else {

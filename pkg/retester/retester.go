@@ -195,13 +195,20 @@ func NewController(ghClient githubClient, cfg config.Getter, gitClient git.Clien
 		configGetter:  cfg,
 		logger:        logger,
 		usesGitHubApp: usesApp,
-		backoff:       &s3BackOffCache{cache: map[string]*pullRequest{}, file: cacheFile, cacheRecordAge: cacheRecordAge, logger: logger, awsClient: s3.New(awsSession)},
+		backoff:       newBackoffCache(awsSession, cacheFile, cacheRecordAge, logger),
 		config:        config,
 	}
 	if err := ret.backoff.load(); err != nil {
 		logger.WithError(err).Warn("Failed to load backoff cache from disk")
 	}
 	return ret
+}
+
+func newBackoffCache(awsSession *session.Session, cacheFile string, cacheRecordAge time.Duration, logger *logrus.Entry) backoffCache {
+	if awsSession != nil {
+		return &s3BackOffCache{cache: map[string]*pullRequest{}, file: cacheFile, cacheRecordAge: cacheRecordAge, logger: logger, awsClient: s3.New(awsSession)}
+	}
+	return &fileBackoffCache{cache: map[string]*pullRequest{}, file: cacheFile, cacheRecordAge: cacheRecordAge, logger: logger}
 }
 
 func prUrl(pr tide.PullRequest) string {

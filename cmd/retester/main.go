@@ -34,6 +34,7 @@ type options struct {
 	interval time.Duration
 
 	cacheFile      string
+	cacheFileOnS3  bool
 	cacheRecordAge time.Duration
 
 	configFile string
@@ -70,6 +71,7 @@ func gatherOptions() options {
 
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Dry run for testing. Uses API tokens but does not mutate.")
 	fs.BoolVar(&o.runOnce, "run-once", false, "If true, run only once then quit.")
+	fs.BoolVar(&o.cacheFileOnS3, "cache-file-on-s3", false, "If true, use aws s3 bucket to store the cache file.")
 	fs.StringVar(&o.intervalRaw, "interval", "1h", "Parseable duration string that specifies the sync period")
 	fs.StringVar(&o.cacheFile, "cache-file", "", "File to persist cache. No persistence of cache if not set")
 	fs.StringVar(&o.cacheRecordAgeRaw, "cache-record-age", "168h", "Parseable duration string that specifies how long a cache record lives in cache after the last time it was considered")
@@ -115,13 +117,16 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to load config from file")
 	}
 
-	awsSession, err := session.NewSession(&aws.Config{Region: aws.String("us-east-1")})
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create AWS session.")
-	}
-	_, err = awsSession.Config.Credentials.Get()
-	if err != nil {
-		logrus.WithError(err).Fatal("Error getting AWS credentials.")
+	var awsSession *session.Session
+	if o.cacheFileOnS3 {
+		awsSession, err = session.NewSession(&aws.Config{Region: aws.String("us-east-1")})
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to create AWS session.")
+		}
+		_, err = awsSession.Config.Credentials.Get()
+		if err != nil {
+			logrus.WithError(err).Fatal("Error getting AWS credentials.")
+		}
 	}
 
 	c := retester.NewController(gc, configAgent.Config, git.ClientFactoryFrom(gitClient), o.github.AppPrivateKeyPath != "", o.cacheFile, o.cacheRecordAge, config, awsSession)

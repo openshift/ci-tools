@@ -200,8 +200,8 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 	destination := fmt.Sprintf("%s:%s", releaseImageStreamRepo, s.name)
 	logrus.Infof("Creating release image %s.", destination)
 	podConfig := steps.PodStepConfiguration{
-		SkipLogs: true,
-		As:       fmt.Sprintf("release-%s", s.name),
+		WaitFlags: util.SkipLogs,
+		As:        fmt.Sprintf("release-%s", s.name),
 		From: api.ImageStreamTagReference{
 			Name: streamName,
 			Tag:  "cli",

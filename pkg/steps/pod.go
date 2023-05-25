@@ -43,10 +43,7 @@ var CleanupCtx = context.Background()
 // directory structure, and input image format. More sophisticated reuse of launching
 // pods should use RunPod which is more limited.
 type PodStepConfiguration struct {
-	// SkipLogs instructs the step to omit informational logs, such as when the pod is
-	// part of a larger step like release creation where displaying pod specific info
-	// is confusing to an end user. Failure logs are still printed.
-	SkipLogs           bool
+	WaitFlags          util.WaitForPodFlag
 	As                 string
 	From               api.ImageStreamTagReference
 	Commands           string
@@ -81,7 +78,7 @@ func (s *podStep) Run(ctx context.Context) error {
 }
 
 func (s *podStep) run(ctx context.Context) error {
-	if !s.config.SkipLogs {
+	if !util.IsBitSet(s.config.WaitFlags, util.SkipLogs) {
 		logrus.Infof("Executing %s %s", s.name, s.config.As)
 	}
 	containerResources, err := ResourcesFor(s.resources.RequirementsForStep(s.config.As))
@@ -120,11 +117,7 @@ func (s *podStep) run(ctx context.Context) error {
 	defer func() {
 		s.subTests = testCaseNotifier.SubTests(s.Description() + " - ")
 	}()
-	var flags util.WaitForPodFlag
-	if s.config.SkipLogs {
-		flags |= util.SkipLogs
-	}
-	if _, err := util.WaitForPodCompletion(ctx, s.client, pod.Namespace, pod.Name, testCaseNotifier, flags); err != nil {
+	if _, err := util.WaitForPodCompletion(ctx, s.client, pod.Namespace, pod.Name, testCaseNotifier, s.config.WaitFlags); err != nil {
 		return fmt.Errorf("%s %q failed: %w", s.name, pod.Name, err)
 	}
 	return nil

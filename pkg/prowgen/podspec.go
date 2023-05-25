@@ -643,7 +643,7 @@ func (c *ciOperatorPodSpecGenerator) MustBuild() *corev1.PodSpec {
 type fakePodSpecBuilder int
 
 func (f *fakePodSpecBuilder) Add(_ ...PodSpecMutator) CiOperatorPodSpecGenerator {
-	return nil
+	return f
 }
 func (f *fakePodSpecBuilder) Build() (*corev1.PodSpec, error) {
 	return nil, nil

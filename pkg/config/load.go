@@ -14,7 +14,6 @@ import (
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
-	"github.com/openshift/ci-tools/pkg/api"
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/util"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
@@ -37,7 +36,9 @@ type Prowgen struct {
 	// Rehearsals declares any disabled rehearsals for jobs
 	Rehearsals Rehearsals `json:"rehearsals,omitempty"`
 	// Set which architecture should the images be promoted from
-	AdditionalArchitectures []api.Architecture `json:"additional_architectures"`
+	AdditionalArchitectures []cioperatorapi.Architecture `json:"additional_architectures"`
+	// If true build images targeting multiple architectures
+	MultiArch bool `json:"multi_arch"`
 }
 
 func (p *Prowgen) Validate() error {
@@ -50,7 +51,7 @@ func (p *Prowgen) Validate() error {
 	}
 	if len(invalidArchs) > 0 {
 		e := fmt.Errorf("architectures %s are not valid, available ones are: %s",
-			strings.Join(invalidArchs, ", "), strings.Join(api.GetAvailableArchitectures(), ", "))
+			strings.Join(invalidArchs, ", "), strings.Join(cioperatorapi.GetAvailableArchitectures(), ", "))
 		errs = append(errs, e)
 	}
 	return utilerrors.NewAggregate(errs)
@@ -68,6 +69,9 @@ func (p *Prowgen) MergeDefaults(defaults *Prowgen) {
 	}
 	if defaults.AdditionalArchitectures != nil {
 		p.AdditionalArchitectures = defaults.AdditionalArchitectures
+	}
+	if defaults.MultiArch {
+		p.MultiArch = true
 	}
 	p.Rehearsals.DisabledRehearsals = append(p.Rehearsals.DisabledRehearsals, defaults.Rehearsals.DisabledRehearsals...)
 }

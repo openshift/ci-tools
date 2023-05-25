@@ -1,0 +1,11 @@
+- agent: kubernetes
+  always_run: true
+  branches:
+  - ^branch$
+  decorate: true
+  decoration_config:
+    skip_cloning: true
+  labels:
+    ci-operator.openshift.io/is-promotion: "true"
+  max_concurrency: 1
+  name: branch-ci-organization-repository-branch-images

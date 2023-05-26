@@ -303,6 +303,15 @@ func updateClusterDisplay(c *secretbootstrap.Config, o options) error {
 func updateChatBotSecret(c *secretbootstrap.Config, o options) error {
 	const chatBot = "ci-chat-bot"
 	name := chatBot + "-kubeconfigs"
+	if o.useTokenFileInKubeconfig {
+		keyAndFieldToken := serviceAccountTokenFile(chatBot, o.clusterName)
+		if err := updateSecretItemContext(c, name, string(api.ClusterAPPCI), keyAndFieldToken, secretbootstrap.ItemContext{
+			Field: keyAndFieldToken,
+			Item:  chatBot,
+		}); err != nil {
+			return err
+		}
+	}
 	keyAndField := serviceAccountKubeconfigPath(chatBot, o.clusterName)
 	return updateSecretItemContext(c, name, string(api.ClusterAPPCI), keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,

@@ -48,7 +48,7 @@ require (
 	github.com/openshift-eng/openshift-goimports v0.0.0-20220201193023-4f8ea117352c
 	github.com/openshift/api v0.0.0-20230120195050-6ba31fa438f2
 	github.com/openshift/builder v0.0.0-20200325182657-6a52122d21e0
-	github.com/openshift/client-go v3.9.0+incompatible
+	github.com/openshift/client-go v0.0.0-20210730113412-1811c1b3fc0e
 	github.com/openshift/hive/apis v0.0.0-20220914191453-366466c2d2ca
 	github.com/openshift/imagebuilder v1.1.1
 	github.com/openshift/library-go v0.0.0-20210826121606-162472d92388
@@ -232,7 +232,6 @@ require (
 	github.com/go-openapi/swag v0.22.3 // indirect
 	github.com/goccy/go-json v0.9.11 // indirect
 	github.com/golang-jwt/jwt v3.2.1+incompatible // indirect
-	github.com/golang/glog v1.0.0 // indirect
 	github.com/google/flatbuffers v2.0.8+incompatible // indirect
 	github.com/google/gnostic v0.6.9 // indirect
 	github.com/google/go-containerregistry v0.14.0 // indirect

@@ -477,9 +477,6 @@ github.com/gogo/protobuf/sortkeys
 # github.com/golang-jwt/jwt v3.2.1+incompatible
 ## explicit
 github.com/golang-jwt/jwt
-# github.com/golang/glog v1.0.0
-## explicit; go 1.11
-github.com/golang/glog
 # github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da
 ## explicit
 github.com/golang/groupcache/lru
@@ -768,8 +765,8 @@ github.com/openshift/api/user/v1
 # github.com/openshift/builder v0.0.0-20200325182657-6a52122d21e0
 ## explicit; go 1.12
 github.com/openshift/builder/pkg/build/builder/util/dockerfile
-# github.com/openshift/client-go v3.9.0+incompatible
-## explicit
+# github.com/openshift/client-go v0.0.0-20210730113412-1811c1b3fc0e
+## explicit; go 1.16
 github.com/openshift/client-go/build/clientset/versioned
 github.com/openshift/client-go/build/clientset/versioned/fake
 github.com/openshift/client-go/build/clientset/versioned/scheme

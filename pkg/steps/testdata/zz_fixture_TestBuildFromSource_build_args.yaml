@@ -34,8 +34,7 @@ spec:
       namespace: test-namespace
   postCommit: {}
   resources: {}
-  source:
-    type: ""
+  source: {}
   strategy:
     dockerStrategy:
       buildArgs:

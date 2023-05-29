@@ -97,7 +97,7 @@ func AddToManager(mgr manager.Manager, ns string, rc injectingResolverClient, pr
 		UpdateFunc:  func(event.UpdateEvent) bool { return false },
 		GenericFunc: func(event.GenericEvent) bool { return false },
 	}
-	if err := c.Watch(source.NewKindWithCache(&v1.PullRequestPayloadQualificationRun{}, mgr.GetCache()), prpqrHandler(), predicateFuncs); err != nil {
+	if err := c.Watch(source.Kind(mgr.GetCache(), &v1.PullRequestPayloadQualificationRun{}), prpqrHandler(), predicateFuncs); err != nil {
 		return fmt.Errorf("failed to create watch for PullRequestPayloadQualificationRun: %w", err)
 	}
 
@@ -105,7 +105,7 @@ func AddToManager(mgr manager.Manager, ns string, rc injectingResolverClient, pr
 }
 
 func prpqrHandler() handler.EventHandler {
-	return handler.EnqueueRequestsFromMapFunc(func(o ctrlruntimeclient.Object) []reconcile.Request {
+	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o ctrlruntimeclient.Object) []reconcile.Request {
 		prpqr, ok := o.(*v1.PullRequestPayloadQualificationRun)
 		if !ok {
 			logrus.WithField("type", fmt.Sprintf("%T", o)).Error("Got object that was not a PullRequestPayloadQualificationRun")

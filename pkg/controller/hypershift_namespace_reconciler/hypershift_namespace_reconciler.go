@@ -48,7 +48,7 @@ func AddToManager(manager manager.Manager) error {
 	}
 
 	if err := c.Watch(
-		source.NewKindWithCache(&corev1.Namespace{}, manager.GetCache()),
+		source.Kind(manager.GetCache(), &corev1.Namespace{}),
 		namespaceHandler(),
 		predicates,
 	); err != nil {
@@ -71,7 +71,7 @@ func hypershiftNamespace(labels map[string]string) bool {
 }
 
 func namespaceHandler() handler.EventHandler {
-	return handler.EnqueueRequestsFromMapFunc(func(o ctrlruntimeclient.Object) []reconcile.Request {
+	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o ctrlruntimeclient.Object) []reconcile.Request {
 		ns, ok := o.(*corev1.Namespace)
 		if !ok {
 			logrus.WithField("type", fmt.Sprintf("%T", o)).Error("Got object that was not a namespace")

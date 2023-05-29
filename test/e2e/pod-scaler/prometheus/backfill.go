@@ -86,7 +86,7 @@ func Backfill(t testhelper.TestingTInterface, prometheusDir string, retentionPer
 	if err != nil {
 		t.Fatalf("Could not create temporary file for Prometheus backfill: %v", err)
 	}
-	encoder := expfmt.NewEncoder(prometheusBackfillFile, expfmt.FmtOpenMetrics)
+	encoder := expfmt.NewEncoder(prometheusBackfillFile, expfmt.FmtOpenMetrics_0_0_1)
 	for _, family := range families {
 		if err := encoder.Encode(family); err != nil {
 			t.Fatalf("Failed to write Prometheus backfill data: %v", err)

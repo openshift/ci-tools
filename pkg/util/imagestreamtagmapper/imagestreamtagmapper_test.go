@@ -1,6 +1,7 @@
 package imagestreamtagmapper_test
 
 import (
+	"context"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -187,18 +188,19 @@ func TestImageStreamTagMapper(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 
+			ctx := context.Background()
 			mapper := imagestreamtagmapper.New(upstream)
 			queue := &trackingWorkqueue{t: t}
 
 			switch e := tc.event().(type) {
 			case event.CreateEvent:
-				mapper.Create(e, queue)
+				mapper.Create(ctx, e, queue)
 			case event.UpdateEvent:
-				mapper.Update(e, queue)
+				mapper.Update(ctx, e, queue)
 			case event.DeleteEvent:
-				mapper.Delete(e, queue)
+				mapper.Delete(ctx, e, queue)
 			case event.GenericEvent:
-				mapper.Generic(e, queue)
+				mapper.Generic(ctx, e, queue)
 			default:
 				t.Fatalf("got type that was not an event but a %T", e)
 			}

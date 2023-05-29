@@ -27,7 +27,6 @@ import (
 
 	"github.com/openshift/builder/pkg/build/builder/util/dockerfile"
 	"github.com/openshift/imagebuilder"
-	dockercmd "github.com/openshift/imagebuilder/dockerfile/command"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/ocpbuilddata"
@@ -552,11 +551,11 @@ func extractReplacementCandidatesFromDockerfile(dockerfile []byte) (sets.String,
 	for _, stage := range stages {
 		for _, child := range stage.Node.Children {
 			switch {
-			case child.Value == dockercmd.From && child.Next != nil:
+			case child.Value == "from" && child.Next != nil:
 				image := child.Next.Value
 				replacementCandidates.Insert(image)
 				names[stage.Name] = image
-			case child.Value == dockercmd.Copy:
+			case child.Value == "copy":
 				if ref, ok := nodeHasFromRef(child); ok {
 					if len(ref) > 0 {
 						if _, ok := names[ref]; !ok {

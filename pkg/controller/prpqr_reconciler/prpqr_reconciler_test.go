@@ -2,6 +2,7 @@ package prpqr_reconciler
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -205,6 +206,10 @@ func TestReconcile(t *testing.T) {
 			}
 
 			pruneProwjobsForTests(t, actualProwjobsList.Items)
+			sort.Slice(actualProwjobsList.Items, func(i, j int) bool {
+				return actualProwjobsList.Items[i].Labels["releaseJobNameHash"] < actualProwjobsList.Items[j].Labels["releaseJobNameHash"]
+			})
+
 			testhelper.CompareWithFixture(t, actualProwjobsList.Items, testhelper.WithPrefix("prowjobs-"))
 
 			var actualPrpqr v1.PullRequestPayloadQualificationRunList

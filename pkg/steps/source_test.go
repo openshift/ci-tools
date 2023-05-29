@@ -16,6 +16,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	buildapi "github.com/openshift/api/build/v1"
@@ -399,96 +400,102 @@ func TestWaitForBuild(t *testing.T) {
 	}{
 		{
 			name: "timeout",
-			buildClient: NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
-				&buildapi.Build{
-					ObjectMeta: meta.ObjectMeta{
-						Name:              "some-build",
-						Namespace:         ns,
-						CreationTimestamp: start,
-						Annotations: map[string]string{
-							buildapi.BuildPodNameAnnotation: "some-build-build",
+			buildClient: NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().
+				WithIndex(&coreapi.Event{}, "involvedObject.uid", fakeInvolvedObjectUIDEventIndex).
+				WithRuntimeObjects(
+					&buildapi.Build{
+						ObjectMeta: meta.ObjectMeta{
+							Name:              "some-build",
+							Namespace:         ns,
+							CreationTimestamp: start,
+							Annotations: map[string]string{
+								buildapi.BuildPodNameAnnotation: "some-build-build",
+							},
+						},
+						Status: buildapi.BuildStatus{
+							Phase:               buildapi.BuildPhasePending,
+							StartTimestamp:      &start,
+							CompletionTimestamp: &end,
 						},
 					},
-					Status: buildapi.BuildStatus{
-						Phase:               buildapi.BuildPhasePending,
-						StartTimestamp:      &start,
-						CompletionTimestamp: &end,
-					},
-				},
-			).Build()), nil, nil),
+				).Build()), nil, nil),
 			expected: fmt.Errorf("build didn't start running within 0s (phase: Pending)"),
 		},
 		{
 			name: "timeout with pod",
-			buildClient: NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
-				&buildapi.Build{
-					ObjectMeta: meta.ObjectMeta{
-						Name:              "some-build",
-						Namespace:         ns,
-						CreationTimestamp: start,
-						Annotations: map[string]string{
-							buildapi.BuildPodNameAnnotation: "some-build-build",
+			buildClient: NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().
+				WithIndex(&coreapi.Event{}, "involvedObject.uid", fakeInvolvedObjectUIDEventIndex).
+				WithRuntimeObjects(
+					&buildapi.Build{
+						ObjectMeta: meta.ObjectMeta{
+							Name:              "some-build",
+							Namespace:         ns,
+							CreationTimestamp: start,
+							Annotations: map[string]string{
+								buildapi.BuildPodNameAnnotation: "some-build-build",
+							},
+						},
+						Status: buildapi.BuildStatus{
+							Phase:               buildapi.BuildPhasePending,
+							StartTimestamp:      &start,
+							CompletionTimestamp: &end,
 						},
 					},
-					Status: buildapi.BuildStatus{
-						Phase:               buildapi.BuildPhasePending,
-						StartTimestamp:      &start,
-						CompletionTimestamp: &end,
+					&coreapi.Pod{
+						ObjectMeta: meta.ObjectMeta{
+							Name:      "some-build-build",
+							Namespace: ns,
+						},
 					},
-				},
-				&coreapi.Pod{
-					ObjectMeta: meta.ObjectMeta{
-						Name:      "some-build-build",
-						Namespace: ns,
-					},
-				},
-			).Build()), nil, nil),
+				).Build()), nil, nil),
 			expected: fmt.Errorf("build didn't start running within 0s (phase: Pending):\nFound 0 events for Pod some-build-build:"),
 		},
 		{
 			name: "timeout with pod and events",
-			buildClient: NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
-				&buildapi.Build{
-					ObjectMeta: meta.ObjectMeta{
-						Name:              "some-build",
-						Namespace:         ns,
-						CreationTimestamp: start,
-						Annotations: map[string]string{
-							buildapi.BuildPodNameAnnotation: "some-build-build",
+			buildClient: NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().
+				WithIndex(&coreapi.Event{}, "involvedObject.uid", fakeInvolvedObjectUIDEventIndex).
+				WithRuntimeObjects(
+					&buildapi.Build{
+						ObjectMeta: meta.ObjectMeta{
+							Name:              "some-build",
+							Namespace:         ns,
+							CreationTimestamp: start,
+							Annotations: map[string]string{
+								buildapi.BuildPodNameAnnotation: "some-build-build",
+							},
+						},
+						Status: buildapi.BuildStatus{
+							Phase:               buildapi.BuildPhasePending,
+							StartTimestamp:      &start,
+							CompletionTimestamp: &end,
 						},
 					},
-					Status: buildapi.BuildStatus{
-						Phase:               buildapi.BuildPhasePending,
-						StartTimestamp:      &start,
-						CompletionTimestamp: &end,
-					},
-				},
-				&coreapi.Pod{
-					ObjectMeta: meta.ObjectMeta{
-						Name:      "some-build-build",
-						Namespace: ns,
-						UID:       "UID",
-					},
-					Status: coreapi.PodStatus{
-						ContainerStatuses: []coreapi.ContainerStatus{{
-							Name: "the-container",
-							State: coreapi.ContainerState{
-								Waiting: &coreapi.ContainerStateWaiting{
-									Reason:  "the_reason",
-									Message: "the_message",
+					&coreapi.Pod{
+						ObjectMeta: meta.ObjectMeta{
+							Name:      "some-build-build",
+							Namespace: ns,
+							UID:       "UID",
+						},
+						Status: coreapi.PodStatus{
+							ContainerStatuses: []coreapi.ContainerStatus{{
+								Name: "the-container",
+								State: coreapi.ContainerState{
+									Waiting: &coreapi.ContainerStateWaiting{
+										Reason:  "the_reason",
+										Message: "the_message",
+									},
 								},
-							},
-						}},
+							}},
+						},
 					},
-				},
-			).Build()), nil, nil),
+				).Build()), nil, nil),
 			expected: fmt.Errorf(`build didn't start running within 0s (phase: Pending):
 * Container the-container is not ready with reason the_reason and message the_message
 Found 0 events for Pod some-build-build:`),
 		},
 		{
 			name: "build succeeded",
-			buildClient: NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
+			buildClient: NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithIndex(&coreapi.Event{}, "involvedObject.uid", fakeInvolvedObjectUIDEventIndex).WithRuntimeObjects(
 				&buildapi.Build{
 					ObjectMeta: meta.ObjectMeta{
 						Name:              "some-build",
@@ -505,7 +512,7 @@ Found 0 events for Pod some-build-build:`),
 		},
 		{
 			name: "build failed",
-			buildClient: NewFakeBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
+			buildClient: NewFakeBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithIndex(&coreapi.Event{}, "involvedObject.uid", fakeInvolvedObjectUIDEventIndex).WithRuntimeObjects(
 				&buildapi.Build{
 					ObjectMeta: meta.ObjectMeta{
 						Name:              "some-build",
@@ -792,4 +799,12 @@ func Test_constructMultiArchBuilds(t *testing.T) {
 			}
 		})
 	}
+}
+
+func fakeInvolvedObjectUIDEventIndex(object client.Object) []string {
+	p, ok := object.(*coreapi.Event)
+	if !ok {
+		panic(fmt.Errorf("indexer function for type %T's involvedObject.uid field received object of type %T", coreapi.Event{}, object))
+	}
+	return []string{string(p.InvolvedObject.UID)}
 }

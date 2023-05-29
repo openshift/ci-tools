@@ -38,17 +38,15 @@ func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Int
 	logger.Infof("Initializing admission webhook server with %d loaders.", len(loaders))
 	health := pjutil.NewHealthOnPort(healthPort)
 	resources := newResourceServer(loaders, health)
-	decoder, err := admission.NewDecoder(scheme.Scheme)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create decoder from scheme.")
-	}
-	server := webhook.Server{
+	decoder := admission.NewDecoder(scheme.Scheme)
+
+	server := webhook.NewServer(webhook.Options{
 		Port:    port,
 		CertDir: certDir,
-	}
+	})
 	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources, mutateResourceLimits: mutateResourceLimits, cpuCap: cpuCap, memoryCap: memoryCap, cpuPriorityScheduling: cpuPriorityScheduling, reporter: reporter}})
 	logger.Info("Serving admission webhooks.")
-	if err := server.StartStandalone(interrupts.Context(), nil); err != nil {
+	if err := server.Start(interrupts.Context()); err != nil {
 		logrus.WithError(err).Fatal("Failed to serve webhooks.")
 	}
 }

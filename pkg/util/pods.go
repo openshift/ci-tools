@@ -98,7 +98,7 @@ func waitForCompletedPodDeletion(ctx context.Context, podClient ctrlruntimeclien
 }
 
 func WaitForPodDeletion(ctx context.Context, podClient ctrlruntimeclient.Client, namespace, name string, uid types.UID) error {
-	return wait.ExponentialBackoffWithContext(ctx, wait.Backoff{Duration: 2 * time.Second, Factor: 2, Steps: 10}, func() (done bool, err error) {
+	return wait.ExponentialBackoffWithContext(ctx, wait.Backoff{Duration: 2 * time.Second, Factor: 2, Steps: 10}, func(ctx context.Context) (done bool, err error) {
 		pod := &corev1.Pod{}
 		err = podClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, pod)
 		if kerrors.IsNotFound(err) {

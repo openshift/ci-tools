@@ -115,7 +115,7 @@ func TestRegistryClusterHandlerFactory(t *testing.T) {
 				},
 			}
 			event := event.CreateEvent{Object: obj}
-			handler.Create(event, queue)
+			handler.Create(context.Background(), event, queue)
 
 			if diff := cmp.Diff(tc.expected, queue.received); diff != "" {
 				t.Errorf("received does not match expected, diff: %s", diff)
@@ -662,7 +662,7 @@ func TestTestImageStramTagImportHandlerRoundTrips(t *testing.T) {
 	queue := &hijackingQueue{}
 
 	event := event.CreateEvent{Object: obj}
-	testImageStreamTagImportHandler(logrus.NewEntry(logrus.StandardLogger()), sets.NewString()).Create(event, queue)
+	testImageStreamTagImportHandler(logrus.NewEntry(logrus.StandardLogger()), sets.NewString()).Create(context.Background(), event, queue)
 
 	if n := len(queue.received); n != 1 {
 		t.Fatalf("expected exactly one reconcile request, got %d(%v)", n, queue.received)
@@ -890,9 +890,6 @@ func TestSourceForConfigChangeChannel(t *testing.T) {
 			defer cancel()
 			queue := &hijackingQueue{}
 
-			if err := source.InjectStopChannel(ctx.Done()); err != nil {
-				t.Fatalf("failed to inject stop channel into source: %v", err)
-			}
 			if err := source.Start(ctx, &handler.EnqueueRequestForObject{}, queue); err != nil {
 				t.Fatalf("failed to start source: %v", err)
 			}

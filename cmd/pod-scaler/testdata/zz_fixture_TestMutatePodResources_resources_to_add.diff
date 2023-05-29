@@ -16,10 +16,11 @@
 + 						s"memory": {i: resource.int64Amount{value: 600000000}, Format: "BinarySI"},
   					},
   					Requests: {s"cpu": {i: {value: 8}, Format: "DecimalSI"}, s"memory": {i: {value: 300000000}, Format: "BinarySI"}},
+  					Claims:   nil,
   				},
-  				VolumeMounts:  nil,
-  				VolumeDevices: nil,
-  				... // 11 identical fields
+  				ResizePolicy: nil,
+  				VolumeMounts: nil,
+  				... // 12 identical fields
   			},
   			{
   				... // 6 identical fields
@@ -33,10 +34,11 @@
 - 						s"memory": {i: resource.int64Amount{value: 100000000}, Format: "BinarySI"},
 + 						s"memory": {i: resource.int64Amount{value: 200000000}, s: "200000000", Format: "BinarySI"},
   					},
+  					Claims: nil,
   				},
-  				VolumeMounts:  nil,
-  				VolumeDevices: nil,
-  				... // 11 identical fields
+  				ResizePolicy: nil,
+  				VolumeMounts: nil,
+  				... // 12 identical fields
   			},
   			{
   				... // 6 identical fields
@@ -51,10 +53,11 @@
 - 						s"memory": {i: resource.int64Amount{value: 100}, Format: "BinarySI"},
 + 						s"memory": {i: resource.int64Amount{value: 200000000}, s: "200000000", Format: "BinarySI"},
   					},
+  					Claims: nil,
   				},
-  				VolumeMounts:  nil,
-  				VolumeDevices: nil,
-  				... // 11 identical fields
+  				ResizePolicy: nil,
+  				VolumeMounts: nil,
+  				... // 12 identical fields
   			},
   			{
   				... // 6 identical fields
@@ -68,15 +71,16 @@
 - 						s"memory": {i: resource.int64Amount{value: 100}, Format: "BinarySI"},
 + 						s"memory": {i: resource.int64Amount{value: 200000000}, s: "200000000", Format: "BinarySI"},
   					},
+  					Claims: nil,
   				},
-  				VolumeMounts:  nil,
-  				VolumeDevices: nil,
-  				... // 11 identical fields
+  				ResizePolicy: nil,
+  				VolumeMounts: nil,
+  				... // 12 identical fields
   			},
   		},
   		EphemeralContainers: nil,
   		RestartPolicy:       "",
-  		... // 31 identical fields
+  		... // 34 identical fields
   	},
   	Status: {},
   }

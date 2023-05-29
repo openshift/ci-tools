@@ -6,6 +6,11 @@ import (
 	"golang.org/x/exp/constraints"
 )
 
+// Zero returns the zero value of a type
+func Zero[T any]() (_ T) {
+	return
+}
+
 // SortSlice is a generic version of sort.Slice
 func SortSlice[T constraints.Ordered](s []T) {
 	sort.Slice(s, func(i, j int) bool { return s[i] < s[j] })
@@ -50,11 +55,15 @@ func RemoveIf[T any](s []T, p func(T) bool) []T {
 	return s[:i]
 }
 
+// IsBitSet tests if a single specific bit is set in a value
+func IsBitSet[T constraints.Integer](x, b T) bool {
+	return x&b != Zero[T]()
+}
+
 // PopCount returns the number of "true" argument values.
 func PopCount[T comparable](xs ...T) (ret uint) {
-	var z T
 	for _, x := range xs {
-		if x != z {
+		if x != Zero[T]() {
 			ret += 1
 		}
 	}

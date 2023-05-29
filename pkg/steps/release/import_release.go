@@ -193,7 +193,7 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 
 	// run adm release extract and grab the raw image-references from the payload
 	podConfig := steps.PodStepConfiguration{
-		SkipLogs:           true,
+		WaitFlags:          util.SkipLogs,
 		As:                 target,
 		From:               *cliImage,
 		Labels:             map[string]string{Label: s.name},

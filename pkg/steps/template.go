@@ -171,7 +171,7 @@ func (s *templateExecutionStep) run(ctx context.Context) error {
 	for _, ref := range instance.Status.Objects {
 		switch {
 		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
-			_, err := util.WaitForPodCompletion(context.TODO(), s.podClient, s.jobSpec.Namespace(), ref.Ref.Name, testCaseNotifier, false)
+			_, err := util.WaitForPodCompletion(context.TODO(), s.podClient, s.jobSpec.Namespace(), ref.Ref.Name, testCaseNotifier, util.WaitForPodFlag(0))
 			s.subTests = append(s.subTests, testCaseNotifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), ref.Ref.Name))...)
 			if err != nil {
 				return fmt.Errorf("template pod %q failed: %w", ref.Ref.Name, err)

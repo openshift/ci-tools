@@ -14,6 +14,7 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
@@ -23,6 +24,7 @@ type projectDirectoryImageBuildStep struct {
 	releaseBuildConfig *api.ReleaseBuildConfiguration
 	resources          api.ResourceConfiguration
 	client             BuildClient
+	podClient          kubernetes.PodClient
 	jobSpec            *api.JobSpec
 	pullSecret         *coreapi.Secret
 }
@@ -61,7 +63,7 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 		s.pullSecret,
 		s.config.BuildArgs,
 	)
-	return handleBuilds(ctx, s.client, *build)
+	return handleBuilds(ctx, s.client, s.podClient, *build)
 }
 
 type workingDir func(tag string) (string, error)
@@ -161,12 +163,21 @@ func (s *projectDirectoryImageBuildStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, releaseBuildConfig *api.ReleaseBuildConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
+func ProjectDirectoryImageBuildStep(
+	config api.ProjectDirectoryImageBuildStepConfiguration,
+	releaseBuildConfig *api.ReleaseBuildConfiguration,
+	resources api.ResourceConfiguration,
+	buildClient BuildClient,
+	podClient kubernetes.PodClient,
+	jobSpec *api.JobSpec,
+	pullSecret *coreapi.Secret,
+) api.Step {
 	return &projectDirectoryImageBuildStep{
 		config:             config,
 		releaseBuildConfig: releaseBuildConfig,
 		resources:          resources,
 		client:             buildClient,
+		podClient:          podClient,
 		jobSpec:            jobSpec,
 		pullSecret:         pullSecret,
 	}

@@ -16,6 +16,7 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
@@ -25,6 +26,7 @@ type indexGeneratorStep struct {
 	releaseBuildConfig *api.ReleaseBuildConfiguration
 	resources          api.ResourceConfiguration
 	client             BuildClient
+	podClient          kubernetes.PodClient
 	jobSpec            *api.JobSpec
 	pullSecret         *coreapi.Secret
 }
@@ -121,7 +123,7 @@ func (s *indexGeneratorStep) run(ctx context.Context) error {
 		s.pullSecret,
 		nil,
 	)
-	err = handleBuilds(ctx, s.client, *build)
+	err = handleBuilds(ctx, s.client, s.podClient, *build)
 	if err != nil && strings.Contains(err.Error(), "error checking provided apis") {
 		return results.ForReason("generating_index").WithError(err).Errorf("failed to generate operator index due to invalid bundle info: %v", err)
 	}
@@ -195,12 +197,21 @@ func (s *indexGeneratorStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func IndexGeneratorStep(config api.IndexGeneratorStepConfiguration, releaseBuildConfig *api.ReleaseBuildConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
+func IndexGeneratorStep(
+	config api.IndexGeneratorStepConfiguration,
+	releaseBuildConfig *api.ReleaseBuildConfiguration,
+	resources api.ResourceConfiguration,
+	buildClient BuildClient,
+	podClient kubernetes.PodClient,
+	jobSpec *api.JobSpec,
+	pullSecret *coreapi.Secret,
+) api.Step {
 	return &indexGeneratorStep{
 		config:             config,
 		releaseBuildConfig: releaseBuildConfig,
 		resources:          resources,
 		client:             buildClient,
+		podClient:          podClient,
 		jobSpec:            jobSpec,
 		pullSecret:         pullSecret,
 	}

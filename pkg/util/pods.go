@@ -157,7 +157,7 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient kubernetes.Pod
 	eg, ctx = errgroup.WithContext(ctx)
 	pendingCtx, cancel := context.WithCancel(ctx)
 	pendingCheck := func() error {
-		timeout := podClient.PendingTimeout()
+		timeout := podClient.GetPendingTimeout()
 		if pod, err := checkPendingPeriodic(pendingCtx.Done(), timeout, &ret); err != nil {
 			err = fmt.Errorf("pod pending for more than %s: %w: %s\n%s", timeout, err, getReasonsForUnreadyContainers(pod), getEventsForPod(ctx, pod, podClient))
 			logrus.Info(err)

@@ -63,22 +63,6 @@ func (b *s3BackOffCache) loadFromAwsNow(now time.Time) error {
 	return nil
 }
 
-// loadAndDelete loads content into cache and deletes old records from cache
-func loadAndDelete(content []byte, logger *logrus.Entry, now time.Time, cacheRecordAge time.Duration) (map[string]*pullRequest, error) {
-	cache := map[string]*pullRequest{}
-	if err := yaml.Unmarshal(content, &cache); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal: %w", err)
-	}
-	for key, pr := range cache {
-		if age := now.Sub(pr.LastConsideredTime.Time); age > cacheRecordAge {
-			logger.WithField("key", key).WithField("LastConsideredTime", pr.LastConsideredTime).
-				WithField("age", age).Info("deleting old record from cache")
-			delete(cache, key)
-		}
-	}
-	return cache, nil
-}
-
 // save uploads the contents of s3BackOffCache to the retester AWS S3 bucket
 func (b *s3BackOffCache) save() error {
 	content, err := yaml.Marshal(b.cache)

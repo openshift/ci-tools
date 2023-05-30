@@ -27,9 +27,15 @@ type testIdentifier struct {
 }
 
 var (
+	installTestGroup      = "install"
 	installTestSuites     = []string{"cluster install"}
 	installTest           = "install should succeed: overall"
 	installTestIdentifier = testIdentifier{testSuites: installTestSuites, testName: installTest}
+
+	overallTestGroup      = "overall"
+	overallTestsSuite     = []string{"step graph"}
+	overallTestsTest      = "Run multi-stage test test phase"
+	overallTestIdentifier = testIdentifier{testSuites: overallTestsSuite, testName: overallTestsTest}
 )
 
 // JobGetter gets related jobs for further analysis

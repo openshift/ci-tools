@@ -16,8 +16,7 @@ import (
 )
 
 const (
-	installTestGroup                  string = "install"
-	defaultMinimumSuccessfulTestCount int    = 1
+	defaultMinimumSuccessfulTestCount int = 1
 	// maxTimeout is our guess of the maximum duration for a job run
 	maxTimeout time.Duration = 4*time.Hour + 35*time.Minute
 )
@@ -34,7 +33,6 @@ var (
 	}
 	knownNetworks        = sets.String{"ovn": sets.Empty{}, "sdn": sets.Empty{}}
 	knownInfrastructures = sets.String{"upi": sets.Empty{}, "ipi": sets.Empty{}}
-	knownTestGroups      = sets.String{installTestGroup: sets.Empty{}}
 )
 
 type jobGCSPrefix struct {
@@ -80,28 +78,11 @@ func (s *jobGCSPrefixSlice) Type() string {
 	return "jobGCSPrefixSlice"
 }
 
-type stringSlice struct {
-	values []string
-}
-
-func (s *stringSlice) String() string {
-	return strings.Join(s.values, ",")
-}
-
-func (s *stringSlice) Set(value string) error {
-	s.values = append(s.values, value)
-	return nil
-}
-
-func (s *stringSlice) Type() string {
-	return "stringSlice"
-}
-
 type JobRunsTestCaseAnalyzerFlags struct {
 	DataCoordinates *jobrunaggregatorlib.BigQueryDataCoordinates
 	Authentication  *jobrunaggregatorlib.GoogleAuthenticationFlags
 
-	TestGroups                  stringSlice
+	TestGroup                   string
 	WorkingDir                  string
 	PayloadTag                  string
 	Timeout                     time.Duration
@@ -134,7 +115,7 @@ func (f *JobRunsTestCaseAnalyzerFlags) BindFlags(fs *pflag.FlagSet) {
 	f.DataCoordinates.BindFlags(fs)
 	f.Authentication.BindFlags(fs)
 
-	fs.Var(&f.TestGroups, "test-group", "One or more test groups to analyze, like install")
+	fs.StringVar(&f.TestGroup, "test-group", "install", "Test group to analyze, like install or overall")
 	fs.StringVar(&f.PayloadTag, "payload-tag", f.PayloadTag, "The release controller payload tag to analyze test case status, like 4.9.0-0.ci-2021-07-19-185802")
 	fs.StringVar(&f.EstimatedJobStartTimeString, "job-start-time", f.EstimatedJobStartTimeString, fmt.Sprintf("Start time in RFC822Z: %s. This defines the search window for job runs. Only job runs whose start time is in between job-start-time - %s and job-start-time + %s will be included.", kubeTimeSerializationLayout, jobrunaggregatorlib.JobSearchWindowStartOffset, jobrunaggregatorlib.JobSearchWindowEndOffset))
 	fs.StringVar(&f.Platform, "platform", f.Platform, "The platform used to narrow down a subset of the jobs to analyze, ex: aws|gcp|azure|vsphere")
@@ -248,13 +229,8 @@ func (f *JobRunsTestCaseAnalyzerFlags) Validate() error {
 	if err := f.Authentication.Validate(); err != nil {
 		return err
 	}
-	if len(f.TestGroups.values) == 0 {
-		return fmt.Errorf("at least one test group has to be specified")
-	}
-	for _, group := range f.TestGroups.values {
-		if _, ok := knownTestGroups[group]; !ok {
-			return fmt.Errorf("unknown test group %s, valid values are: %+q", group, knownTestGroups.List())
-		}
+	if f.TestGroup == "" {
+		return fmt.Errorf("test group has to be specified")
 	}
 	if len(f.PayloadTag) > 0 && len(f.PayloadInvocationID) > 0 {
 		return fmt.Errorf("cannot specify both --payload-tag and --payload-invocation-id")
@@ -361,6 +337,16 @@ func (f *JobRunsTestCaseAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunTe
 		jobGetter.includeJobNames.Insert(f.IncludeJobNames...)
 	}
 
+	var testIdentifierOpt testIdentifier
+	switch f.TestGroup {
+	case installTestGroup:
+		testIdentifierOpt = installTestIdentifier
+	case overallTestGroup:
+		testIdentifierOpt = overallTestIdentifier
+	default:
+		return nil, fmt.Errorf("unknown test group: %s", f.TestGroup)
+	}
+
 	return &JobRunTestCaseAnalyzerOptions{
 		payloadTag:          f.PayloadTag,
 		workingDir:          f.WorkingDir,
@@ -369,7 +355,7 @@ func (f *JobRunsTestCaseAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunTe
 		ciDataClient:        ciDataClient,
 		ciGCSClient:         ciGCSClient,
 		gcsClient:           gcsClient,
-		testCaseCheckers:    []TestCaseChecker{minimumRequiredPassesTestCaseChecker{installTestIdentifier, f.testNameSuffix(), f.MinimumSuccessfulTestCount}},
+		testCaseCheckers:    []TestCaseChecker{minimumRequiredPassesTestCaseChecker{testIdentifierOpt, f.testNameSuffix(), f.MinimumSuccessfulTestCount}},
 		testNameSuffix:      f.testNameSuffix(),
 		payloadInvocationID: f.PayloadInvocationID,
 		jobGCSPrefixes:      &f.JobGCSPrefixes,

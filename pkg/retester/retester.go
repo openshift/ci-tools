@@ -188,6 +188,12 @@ func validatePolicies(policy RetesterPolicy) []error {
 // NewController generates a retest controller.
 func NewController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool, cacheFile string, cacheRecordAge time.Duration, config *Config, awsSession *session.Session) *RetestController {
 	logger := logrus.NewEntry(logrus.StandardLogger())
+	var backoff backoffCache
+	if awsSession != nil {
+		backoff = &s3BackOffCache{cache: map[string]*pullRequest{}, file: cacheFile, cacheRecordAge: cacheRecordAge, logger: logger, awsClient: s3.New(awsSession)}
+	} else {
+		backoff = &fileBackoffCache{cache: map[string]*pullRequest{}, file: cacheFile, cacheRecordAge: cacheRecordAge, logger: logger}
+	}
 
 	ret := &RetestController{
 		ghClient:      ghClient,
@@ -195,20 +201,13 @@ func NewController(ghClient githubClient, cfg config.Getter, gitClient git.Clien
 		configGetter:  cfg,
 		logger:        logger,
 		usesGitHubApp: usesApp,
-		backoff:       newBackoffCache(awsSession, cacheFile, cacheRecordAge, logger),
+		backoff:       backoff,
 		config:        config,
 	}
 	if err := ret.backoff.load(); err != nil {
 		logger.WithError(err).Warn("Failed to load backoff cache from disk")
 	}
 	return ret
-}
-
-func newBackoffCache(awsSession *session.Session, cacheFile string, cacheRecordAge time.Duration, logger *logrus.Entry) backoffCache {
-	if awsSession != nil {
-		return &s3BackOffCache{cache: map[string]*pullRequest{}, file: cacheFile, cacheRecordAge: cacheRecordAge, logger: logger, awsClient: s3.New(awsSession)}
-	}
-	return &fileBackoffCache{cache: map[string]*pullRequest{}, file: cacheFile, cacheRecordAge: cacheRecordAge, logger: logger}
 }
 
 func prUrl(pr tide.PullRequest) string {

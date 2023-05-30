@@ -25,6 +25,10 @@ import (
 // known to be required, based on the pruned step graph.  This structure holds
 // the required configuration and clients until then.
 type ReleaseSource interface {
+	// Input provides the value for the `Inputs` method of steps
+	// The return value may be empty if the pull-spec should not contribute to
+	// the input.
+	Input(ctx context.Context) (string, error)
 	// PullSpec resolves the release pull-spec (if necessary) and returns it
 	PullSpec(ctx context.Context) (string, error)
 }
@@ -65,6 +69,10 @@ func (s fixedReleaseSource) PullSpec(ctx context.Context) (string, error) {
 	return string(s), nil
 }
 
+func (s fixedReleaseSource) Input(ctx context.Context) (string, error) {
+	return s.PullSpec(ctx)
+}
+
 type configurationReleaseSource struct {
 	pullSpec string
 	config   *api.ReleaseConfiguration
@@ -80,6 +88,10 @@ func (s configurationReleaseSource) PullSpec(
 		}
 	}
 	return s.pullSpec, nil
+}
+
+func (s *configurationReleaseSource) Input(ctx context.Context) (string, error) {
+	return s.PullSpec(ctx)
 }
 
 func (s *configurationReleaseSource) resolvePullSpec() (err error) {
@@ -117,6 +129,10 @@ func (s clusterClaimReleaseSource) PullSpec(
 		}
 	}
 	return s.pullSpec, nil
+}
+
+func (s clusterClaimReleaseSource) Input(context.Context) (string, error) {
+	return "", nil
 }
 
 func (s *clusterClaimReleaseSource) resolvePullSpec(ctx context.Context) error {

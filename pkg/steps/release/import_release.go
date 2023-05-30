@@ -66,7 +66,7 @@ type importReleaseStep struct {
 }
 
 func (s *importReleaseStep) Inputs() (api.InputDefinition, error) {
-	input, err := s.source.PullSpec(context.Background())
+	input, err := s.source.Input(context.Background())
 	return api.InputDefinition{input}, err
 }
 

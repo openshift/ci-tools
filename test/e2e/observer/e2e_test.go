@@ -36,6 +36,7 @@ func TestObservers(t *testing.T) {
 			args: []string{
 				"--unresolved-config=simple-observer.yaml",
 				"--target=with-observer",
+				"--wait-observers",
 			},
 			env:     []string{defaultJobSpec},
 			success: true,
@@ -54,6 +55,7 @@ func TestObservers(t *testing.T) {
 			args: []string{
 				"--unresolved-config=failing-observer.yaml",
 				"--target=with-failing-observer",
+				"--wait-observers",
 			},
 			env:     []string{defaultJobSpec},
 			success: true,
@@ -70,6 +72,7 @@ func TestObservers(t *testing.T) {
 			args: []string{
 				"--unresolved-config=multi-observers.yaml",
 				"--target=multi-observers",
+				"--wait-observers",
 			},
 			env:     []string{defaultJobSpec},
 			success: true,

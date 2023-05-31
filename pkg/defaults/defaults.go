@@ -397,11 +397,10 @@ func stepForTest(
 		if len(leases) != 0 {
 			params = api.NewDeferredParameters(params)
 		}
-		var testSteps []api.Step
+		var ret []api.Step
 		step := multi_stage.MultiStageTestStep(*c, config, params, podClient, jobSpec, leases, nodeName, targetAdditionalSuffix)
 		if len(leases) != 0 {
 			step = steps.LeaseStep(leaseClient, leases, step, jobSpec.Namespace)
-			addProvidesForStep(step, params)
 		}
 		// hive client may not be present for jobs that execute non-claim based tests
 		if hiveClient != nil && c.ClusterClaim != nil {
@@ -414,13 +413,12 @@ func stepForTest(
 			claimRelease := c.ClusterClaim.ClaimRelease(c.As)
 			logrus.Infof("Resolved release %s to %s", claimRelease.ReleaseName, pullSpec)
 			target := api.ReleaseConfiguration{Name: claimRelease.ReleaseName}.TargetName()
-			importStep := releasesteps.ImportReleaseStep(claimRelease.ReleaseName, nodeName, target, pullSpec, false, config.Resources, podClient, jobSpec, pullSecret, nil)
-			testSteps = append(testSteps, importStep)
-			addProvidesForStep(step, params)
+			ret = append(ret, releasesteps.ImportReleaseStep(claimRelease.ReleaseName, nodeName, target, pullSpec, false, config.Resources, podClient, jobSpec, pullSecret, nil))
 		}
-		testSteps = append(testSteps, step)
-		newSteps := stepsForStepImages(client, jobSpec, inputImages, test, imageConfigs)
-		return append(testSteps, newSteps...), hasReleaseStep, nil
+		addProvidesForStep(step, params)
+		ret = append(ret, step)
+		ret = append(ret, stepsForStepImages(client, jobSpec, inputImages, test, imageConfigs)...)
+		return ret, hasReleaseStep, nil
 	}
 	if test := c.OpenshiftInstallerClusterTestConfiguration; test != nil {
 		if !test.Upgrade {

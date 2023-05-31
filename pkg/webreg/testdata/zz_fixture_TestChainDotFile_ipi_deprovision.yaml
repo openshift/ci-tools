@@ -1,0 +1,14 @@
+digraph Webreg {
+	compound=true;
+	color=blue;
+	fontname="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif,'Apple Color Emoji','Segoe UI Emoji','Segoe UI Symbol','Noto Color Emoji'";
+	node[shape=rectangle fontname="SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace"];
+	rankdir=TB;
+	label="Chain &#34;ipi-deprovision&#34;";
+
+	0 [label="ipi-deprovision-must-gather" href="/reference/ipi-deprovision-must-gather"];
+	1 [label="ipi-deprovision-deprovision" href="/reference/ipi-deprovision-deprovision"];
+
+	0 -> 1 ;
+
+}

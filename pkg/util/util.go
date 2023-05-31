@@ -11,6 +11,15 @@ func Zero[T any]() (_ T) {
 	return
 }
 
+// CopyMap creates a new map copying all key/values from its argument
+func CopyMap[K comparable, V any](m map[K]V) map[K]V {
+	ret := make(map[K]V, len(m))
+	for k, v := range m {
+		ret[k] = v
+	}
+	return ret
+}
+
 // SortSlice is a generic version of sort.Slice
 func SortSlice[T constraints.Ordered](s []T) {
 	sort.Slice(s, func(i, j int) bool { return s[i] < s[j] })

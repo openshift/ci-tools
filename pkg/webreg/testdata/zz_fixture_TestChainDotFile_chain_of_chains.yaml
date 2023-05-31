@@ -1,0 +1,34 @@
+digraph Webreg {
+	compound=true;
+	color=blue;
+	fontname="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif,'Apple Color Emoji','Segoe UI Emoji','Segoe UI Symbol','Noto Color Emoji'";
+	node[shape=rectangle fontname="SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace"];
+	rankdir=TB;
+	label="Chain &#34;chain-of-chains&#34;";
+
+	0 [label="ipi-install-rbac" href="/reference/ipi-install-rbac"];
+	1 [label="ipi-install-install" href="/reference/ipi-install-install"];
+	2 [label="ipi-deprovision-must-gather" href="/reference/ipi-deprovision-must-gather"];
+	3 [label="ipi-deprovision-deprovision" href="/reference/ipi-deprovision-deprovision"];
+
+	0 -> 1 ;
+	1 -> 2 [ltail=cluster_0 lhead=cluster_1 minlen=2];
+	2 -> 3 ;
+
+	subgraph cluster_0 {
+		label="ipi-install";
+		labeljust="l";
+		href="/chain/ipi-install";
+		fontname="SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace";
+		0;
+		1;
+	}
+	subgraph cluster_1 {
+		label="ipi-deprovision";
+		labeljust="l";
+		href="/chain/ipi-deprovision";
+		fontname="SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace";
+		2;
+		3;
+	}
+}

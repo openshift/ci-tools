@@ -110,7 +110,7 @@ func TestRun(t *testing.T) {
 					Post:               []api.LiteralTestStep{{As: "post0"}, {As: "post1", OptionalOnSuccess: &yes}},
 					AllowSkipOnSuccess: &yes,
 				},
-			}, &api.ReleaseBuildConfiguration{}, nil, client, &jobSpec, nil, "node-name", "")
+			}, &api.ReleaseBuildConfiguration{}, nil, client, &jobSpec, nil, "node-name", "", false)
 			if err := step.Run(context.Background()); (err != nil) != (tc.failures != nil) {
 				t.Errorf("expected error: %t, got error: %v", (tc.failures != nil), err)
 			}
@@ -227,7 +227,7 @@ func TestJUnit(t *testing.T) {
 					Test: []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
 					Post: []api.LiteralTestStep{{As: "post0"}, {As: "post1"}},
 				},
-			}, &api.ReleaseBuildConfiguration{}, nil, client, &jobSpec, nil, "node-name", "")
+			}, &api.ReleaseBuildConfiguration{}, nil, client, &jobSpec, nil, "node-name", "", false)
 			if err := step.Run(context.Background()); tc.failures == nil && err != nil {
 				t.Error(err)
 				return

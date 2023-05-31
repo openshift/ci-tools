@@ -53,6 +53,9 @@ const (
 	allowSkipOnSuccess
 	// The test was configured to allow best-effort steps.
 	allowBestEffortPostSteps
+	// Wait for each observer to complete instead of cancelling their excution righ
+	// after the 'test' steps chain.
+	syncObservers
 )
 
 const (
@@ -74,7 +77,8 @@ const (
 	CommandScriptMountPath = "/var/run/configmaps/ci.openshift.io/multi-stage"
 	homeVolumeName         = "home"
 	// vpnConfPath is the path of the configuration file in the cluster profile.
-	vpnConfPath = "vpn.yaml"
+	vpnConfPath          = "vpn.yaml"
+	observersWaitTimeout = 30 * time.Minute
 )
 
 var envForProfile = []string{
@@ -113,8 +117,9 @@ func MultiStageTestStep(
 	leases []api.StepLease,
 	nodeName string,
 	targetAdditionalSuffix string,
+	waitObservers bool,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, params, client, jobSpec, leases, nodeName, targetAdditionalSuffix)
+	return newMultiStageTestStep(testConfig, config, params, client, jobSpec, leases, nodeName, targetAdditionalSuffix, waitObservers)
 }
 
 func newMultiStageTestStep(
@@ -126,6 +131,7 @@ func newMultiStageTestStep(
 	leases []api.StepLease,
 	nodeName string,
 	targetAdditionalSuffix string,
+	waitObservers bool,
 ) *multiStageTestStep {
 	ms := testConfig.MultiStageTestConfigurationLiteral
 	var flags stepFlag
@@ -134,6 +140,9 @@ func newMultiStageTestStep(
 	}
 	if p := ms.AllowBestEffortPostSteps; p != nil && *p {
 		flags |= allowBestEffortPostSteps
+	}
+	if waitObservers {
+		flags |= syncObservers
 	}
 	return &multiStageTestStep{
 		name:             testConfig.As,
@@ -223,12 +232,20 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 	} else if err := s.runSteps(ctx, "test", s.test, env, secretVolumes, secretVolumeMounts); err != nil {
 		errs = append(errs, fmt.Errorf("%q test steps failed: %w", s.name, err))
 	}
+
+	observersFinished := s.tryWaitObserversOrTimeout(observerDone, observersWaitTimeout)
 	cancel() // signal to observers that we're tearing down
+
 	s.flags &= ^shortCircuit
 	if err := s.runSteps(context.Background(), "post", s.post, env, secretVolumes, secretVolumeMounts); err != nil {
 		errs = append(errs, fmt.Errorf("%q post steps failed: %w", s.name, err))
 	}
-	<-observerDone // wait for the observers to finish so we get their jUnit
+
+	// If the observers finished we don't have to wait again for another signal that will never come (deadlock).
+	if !observersFinished {
+		<-observerDone
+	}
+
 	return utilerrors.NewAggregate(errs)
 }
 
@@ -374,6 +391,24 @@ func (s *multiStageTestStep) environment() ([]coreapi.EnvVar, error) {
 		}
 	}
 	return ret, nil
+}
+
+// If the syncObservers flag is set, wait until the observers terminate or a timeout expires.
+// Returns true if the observers finish timely, false otherwise.
+func (s *multiStageTestStep) tryWaitObserversOrTimeout(observerDone <-chan struct{}, timeout time.Duration) bool {
+	if s.flags&syncObservers == 0 {
+		return false
+	}
+	select {
+	case _, ok := <-observerDone:
+		if !ok {
+			logrus.Warn("channel was closed unexpectedly while waiting for observers")
+		}
+		return true
+	case <-time.NewTimer(timeout).C:
+		logrus.Warnf("%s timeout expired while waiting for observers", timeout)
+	}
+	return false
 }
 
 // secretsForCensoring returns the secret volumes and mounts that will allow sidecar to censor

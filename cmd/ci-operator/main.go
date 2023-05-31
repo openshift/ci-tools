@@ -420,6 +420,8 @@ type options struct {
 	dependencyOverrides      stringSlice
 
 	targetAdditionalSuffix string
+
+	waitObservers bool
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
@@ -489,6 +491,8 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.Var(&opt.dependencyOverrides, "dependency-override-param", "A repeatable option used to override dependencies with external pull specs. This parameter should be in the format ENVVARNAME=PULLSPEC, e.g. --dependency-override-param=OO_INDEX=registry.mydomain.com:5000/pushed/myimage. This would override the value for the OO_INDEX environment variable for any tests/steps that currently have that dependency configured.")
 
 	flag.StringVar(&opt.targetAdditionalSuffix, "target-additional-suffix", "", "Inject an additional suffix onto the targeted test's 'as' name. Used for adding an aggregate index")
+
+	flag.BoolVar(&opt.waitObservers, "wait-observers", false, "Wait for the observers to complete their execution")
 
 	opt.resultsOptions.Bind(flag)
 	return opt
@@ -874,7 +878,7 @@ func (o *options) Run() []error {
 	}
 
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig, o.podPendingTimeout, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig, o.consoleHost, o.nodeName, nodeArchitectures, o.targetAdditionalSuffix)
+	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig, o.podPendingTimeout, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig, o.consoleHost, o.nodeName, nodeArchitectures, o.targetAdditionalSuffix, o.waitObservers)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}

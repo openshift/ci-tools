@@ -16,10 +16,11 @@
 - 						s"memory": {i: resource.int64Amount{value: 30000000000}, Format: "BinarySI"},
 + 						s"memory": {i: resource.int64Amount{value: 21474836480}, s: "20Gi", Format: "BinarySI"},
   					},
+  					Claims: nil,
   				},
-  				VolumeMounts:  nil,
-  				VolumeDevices: nil,
-  				... // 11 identical fields
+  				ResizePolicy: nil,
+  				VolumeMounts: nil,
+  				... // 12 identical fields
   			},
   			{
   				... // 6 identical fields
@@ -32,10 +33,11 @@
 - 						s"memory": {i: resource.int64Amount{value: 10000000000}, Format: "BinarySI"},
 + 						s"memory": {i: resource.int64Amount{value: 20000000000}, s: "19531250Ki", Format: "BinarySI"},
   					},
+  					Claims: nil,
   				},
-  				VolumeMounts:  nil,
-  				VolumeDevices: nil,
-  				... // 11 identical fields
+  				ResizePolicy: nil,
+  				VolumeMounts: nil,
+  				... // 12 identical fields
   			},
   			{
   				... // 6 identical fields
@@ -49,15 +51,16 @@
 - 						s"memory": {i: resource.int64Amount{value: 100}, Format: "BinarySI"},
 + 						s"memory": {i: resource.int64Amount{value: 20000000000}, s: "19531250Ki", Format: "BinarySI"},
   					},
+  					Claims: nil,
   				},
-  				VolumeMounts:  nil,
-  				VolumeDevices: nil,
-  				... // 11 identical fields
+  				ResizePolicy: nil,
+  				VolumeMounts: nil,
+  				... // 12 identical fields
   			},
   		},
   		EphemeralContainers: nil,
   		RestartPolicy:       "",
-  		... // 31 identical fields
+  		... // 34 identical fields
   	},
   	Status: {},
   }

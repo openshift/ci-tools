@@ -2,19 +2,20 @@ package multi_stage
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 
-	coreapi "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowdapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -30,46 +31,55 @@ func TestRun(t *testing.T) {
 		name     string
 		failures sets.String
 		expected []string
-	}{{
-		name: "no step fails, no error",
-		expected: []string{
-			"test-pre0", "test-pre1",
-			"test-test0", "test-test1",
-			"test-post0",
+	}{
+		{
+			name: "no step fails, no error",
+			expected: []string{
+				"test-pre0", "test-pre1",
+				"test-test0", "test-test1",
+				"test-post0",
+			},
 		},
-	}, {
-		name:     "failure in a pre step, test should not run, post should",
-		failures: sets.NewString("test-pre0"),
-		expected: []string{
-			"test-pre0",
-			"test-post0", "test-post1",
+		{
+			name:     "failure in a pre step, test should not run, post should",
+			failures: sets.NewString("test-pre0"),
+			expected: []string{
+				"test-pre0",
+				"test-post0", "test-post1",
+			},
+		}, {
+			name:     "failure in a test step, post should run",
+			failures: sets.NewString("test-test0"),
+			expected: []string{
+				"test-pre0", "test-pre1",
+				"test-test0",
+				"test-post0", "test-post1",
+			},
 		},
-	}, {
-		name:     "failure in a test step, post should run",
-		failures: sets.NewString("test-test0"),
-		expected: []string{
-			"test-pre0", "test-pre1",
-			"test-test0",
-			"test-post0", "test-post1",
+		{
+			name:     "failure in a post step, other post steps should still run",
+			failures: sets.NewString("test-post0"),
+			expected: []string{
+				"test-pre0", "test-pre1",
+				"test-test0", "test-test1",
+				"test-post0",
+			},
 		},
-	}, {
-		name:     "failure in a post step, other post steps should still run",
-		failures: sets.NewString("test-post0"),
-		expected: []string{
-			"test-pre0", "test-pre1",
-			"test-test0", "test-test1",
-			"test-post0",
-		},
-	}} {
+	} {
 		t.Run(tc.name, func(t *testing.T) {
-			sa := &coreapi.ServiceAccount{
+			sa := &v1.ServiceAccount{
 				ObjectMeta:       metav1.ObjectMeta{Name: "test", Namespace: "ns", Labels: map[string]string{"ci.openshift.io/multi-stage-test": "test"}},
 				ImagePullSecrets: []v1.LocalObjectReference{{Name: "ci-operator-dockercfg-12345"}},
 			}
 			name := "test"
+
 			crclient := &testhelper_kube.FakePodExecutor{
-				LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient(sa.DeepCopyObject())),
-				Failures:      tc.failures,
+				LoggingClient: loggingclient.New(
+					fakectrlruntimeclient.NewClientBuilder().
+						WithIndex(&v1.Pod{}, "metadata.name", fakePodNameIndexer).
+						WithObjects(sa).
+						Build()),
+				Failures: tc.failures,
 			}
 			jobSpec := api.JobSpec{
 				JobSpec: prowdapi.JobSpec{
@@ -104,7 +114,7 @@ func TestRun(t *testing.T) {
 			if err := step.Run(context.Background()); (err != nil) != (tc.failures != nil) {
 				t.Errorf("expected error: %t, got error: %v", (tc.failures != nil), err)
 			}
-			secrets := &coreapi.SecretList{}
+			secrets := &v1.SecretList{}
 			if err := crclient.List(context.TODO(), secrets, ctrlruntimeclient.InNamespace(jobSpec.Namespace())); err != nil {
 				t.Fatal(err)
 			}
@@ -182,11 +192,15 @@ func TestJUnit(t *testing.T) {
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			sa := &coreapi.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-namespace", Labels: map[string]string{"ci.openshift.io/multi-stage-test": "test"}}}
+			sa := &v1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-namespace", Labels: map[string]string{"ci.openshift.io/multi-stage-test": "test"}}}
 
 			crclient := &testhelper_kube.FakePodExecutor{
-				LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient(sa.DeepCopyObject())),
-				Failures:      tc.failures,
+				LoggingClient: loggingclient.New(
+					fakectrlruntimeclient.NewClientBuilder().
+						WithIndex(&v1.Pod{}, "metadata.name", fakePodNameIndexer).
+						WithObjects(sa).
+						Build()),
+				Failures: tc.failures,
 			}
 			jobSpec := api.JobSpec{
 				JobSpec: prowdapi.JobSpec{
@@ -227,4 +241,12 @@ func TestJUnit(t *testing.T) {
 			}
 		})
 	}
+}
+
+func fakePodNameIndexer(object client.Object) []string {
+	p, ok := object.(*v1.Pod)
+	if !ok {
+		panic(fmt.Errorf("indexer function for type %T's metadata.name field received object of type %T", v1.Pod{}, object))
+	}
+	return []string{p.Name}
 }

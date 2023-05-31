@@ -23,7 +23,7 @@ var (
 	supportedQueries = sets.NewString(`sum(increase(prowjob_state_transitions{state="pending"}[7d])) by (job_name)`)
 )
 
-func (prometheusAPI *prometheusAPIForTest) Query(ctx context.Context, query string, ts time.Time) (model.Value, prometheusapi.Warnings, error) {
+func (prometheusAPI *prometheusAPIForTest) Query(ctx context.Context, query string, ts time.Time, opts ...prometheusapi.Option) (model.Value, prometheusapi.Warnings, error) {
 	if !supportedQueries.Has(query) {
 		return nil, nil, fmt.Errorf("not supported query: %s", query)
 	}

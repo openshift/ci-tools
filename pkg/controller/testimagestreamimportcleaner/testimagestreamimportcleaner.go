@@ -30,7 +30,7 @@ func AddToManager(
 		if err != nil {
 			return fmt.Errorf("failed to construct controller for cluster %s: %w", clusterName, err)
 		}
-		if err := c.Watch(source.NewKindWithCache(&testimagestreamtagimportv1.TestImageStreamTagImport{}, clusterManager.GetCache()), &handler.EnqueueRequestForObject{}); err != nil {
+		if err := c.Watch(source.Kind(clusterManager.GetCache(), &testimagestreamtagimportv1.TestImageStreamTagImport{}), &handler.EnqueueRequestForObject{}); err != nil {
 			return fmt.Errorf("failed to watch testimagestreamtagimports in cluster %s: %w", clusterName, err)
 		}
 	}

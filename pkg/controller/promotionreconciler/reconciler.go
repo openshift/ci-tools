@@ -13,7 +13,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/github"
-	"sigs.k8s.io/controller-runtime"
+	controllerruntime "sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -85,7 +85,7 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 	}
 
 	if err := c.Watch(
-		&source.Kind{Type: &imagev1.ImageStream{}},
+		source.Kind(mgr.GetCache(), &imagev1.ImageStream{}),
 		imagestreamtagmapper.New(func(r reconcile.Request) []reconcile.Request {
 			if ignored(r, opts.IgnoredImageStreams) {
 				return nil

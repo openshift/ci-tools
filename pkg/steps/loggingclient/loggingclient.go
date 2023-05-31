@@ -9,6 +9,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -37,7 +38,7 @@ type loggingClient struct {
 	logTo    map[string]map[string]ctrlruntimeclient.Object
 }
 
-func (lc *loggingClient) Get(ctx context.Context, key ctrlruntimeclient.ObjectKey, obj ctrlruntimeclient.Object) error {
+func (lc *loggingClient) Get(ctx context.Context, key ctrlruntimeclient.ObjectKey, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.GetOption) error {
 	if err := lc.upstream.Get(ctx, key, obj); err != nil {
 		return err
 	}
@@ -152,4 +153,16 @@ func (lc *loggingClient) Scheme() *runtime.Scheme {
 
 func (lc *loggingClient) RESTMapper() meta.RESTMapper {
 	return lc.upstream.RESTMapper()
+}
+
+func (lc *loggingClient) GroupVersionKindFor(obj runtime.Object) (schema.GroupVersionKind, error) {
+	return lc.upstream.GroupVersionKindFor(obj)
+}
+
+func (lc *loggingClient) IsObjectNamespaced(obj runtime.Object) (bool, error) {
+	return lc.upstream.IsObjectNamespaced(obj)
+}
+
+func (lc *loggingClient) SubResource(subResource string) ctrlruntimeclient.SubResourceClient {
+	return lc.upstream.SubResource(subResource)
 }

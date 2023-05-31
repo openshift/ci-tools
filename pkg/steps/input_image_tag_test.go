@@ -115,6 +115,9 @@ func TestInputImageTagStep(t *testing.T) {
 				Namespace: baseImage.Namespace,
 				Name:      "BASE@ddc0de",
 			},
+			ImportPolicy: imagev1.TagImportPolicy{
+				ImportMode: imagev1.ImportModePreserveOriginal,
+			},
 			ReferencePolicy: imagev1.TagReferencePolicy{
 				Type: imagev1.LocalTagReferencePolicy,
 			},

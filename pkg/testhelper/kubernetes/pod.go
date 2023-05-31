@@ -38,7 +38,7 @@ func (f *FakePodExecutor) Create(ctx context.Context, o ctrlruntimeclient.Object
 	return f.LoggingClient.Create(ctx, o, opts...)
 }
 
-func (f *FakePodExecutor) Get(ctx context.Context, n ctrlruntimeclient.ObjectKey, o ctrlruntimeclient.Object) error {
+func (f *FakePodExecutor) Get(ctx context.Context, n ctrlruntimeclient.ObjectKey, o ctrlruntimeclient.Object, opts ...ctrlruntimeclient.GetOption) error {
 	if err := f.LoggingClient.Get(ctx, n, o); err != nil {
 		return err
 	}
@@ -125,6 +125,24 @@ type testExecutor struct {
 }
 
 func (e testExecutor) Stream(opts remotecommand.StreamOptions) error {
+	if reflect.DeepEqual(e.command, []string{"tar", "czf", "-", "-C", "/tmp/artifacts", "."}) {
+		var tar []byte
+		tar, err := base64.StdEncoding.DecodeString(`
+H4sIAMq1b10AA+3RPQrDMAyGYc09hU8QrCpOzuOAKR2y2Ar0+HX/tnboEErhfRbxoW8QyEvzwS8uO4r
+dNI63qXOK96yP/JRELZnNdpySSlTrBQlxz6Netua5hiDLctrOa665tA+9Ut9v/pr3/x9+fQQAAAAAAA
+AAAAAAAAAA4GtXigWTnQAoAAA=`)
+		if err != nil {
+			return err
+		}
+		_, err = opts.Stdout.Write(tar)
+		return err
+	} else if reflect.DeepEqual(e.command, []string{"rm", "-f", "/tmp/done"}) {
+		return nil
+	}
+	return fmt.Errorf("unexpected command: %v", e.command)
+}
+
+func (e testExecutor) StreamWithContext(ctx context.Context, opts remotecommand.StreamOptions) error {
 	if reflect.DeepEqual(e.command, []string{"tar", "czf", "-", "-C", "/tmp/artifacts", "."}) {
 		var tar []byte
 		tar, err := base64.StdEncoding.DecodeString(`

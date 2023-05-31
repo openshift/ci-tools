@@ -2,6 +2,6 @@ Patches: null
 allowed: true
 status:
   code: 200
+  message: ignoring pod due to presence of annotation
   metadata: {}
-  reason: ignoring pod due to presence of annotation
 uid: ""

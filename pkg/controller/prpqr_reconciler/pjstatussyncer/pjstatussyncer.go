@@ -63,7 +63,7 @@ func AddToManager(mgr controllerruntime.Manager, ns string) error {
 		GenericFunc: func(event.GenericEvent) bool { return false },
 	}
 
-	if err := ctrl.Watch(source.NewKindWithCache(&prowv1.ProwJob{}, mgr.GetCache()), pjHandler(), predicateFuncs); err != nil {
+	if err := ctrl.Watch(source.Kind(mgr.GetCache(), &prowv1.ProwJob{}), pjHandler(), predicateFuncs); err != nil {
 		return fmt.Errorf("failed to create watch: %w", err)
 	}
 
@@ -71,7 +71,7 @@ func AddToManager(mgr controllerruntime.Manager, ns string) error {
 }
 
 func pjHandler() handler.EventHandler {
-	return handler.EnqueueRequestsFromMapFunc(func(o ctrlruntimeclient.Object) []reconcile.Request {
+	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o ctrlruntimeclient.Object) []reconcile.Request {
 		pj, ok := o.(*prowv1.ProwJob)
 		if !ok {
 			logrus.WithField("type", fmt.Sprintf("%T", o)).Error("Got object that was not a ProwJob")

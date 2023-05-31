@@ -72,10 +72,7 @@ func TestMutatePods(t *testing.T) {
 			},
 		},
 	)
-	decoder, err := admission.NewDecoder(scheme.Scheme)
-	if err != nil {
-		t.Fatalf("failed to create decoder from scheme: %v", err)
-	}
+	decoder := admission.NewDecoder(scheme.Scheme)
 	logger := logrus.WithField("test", t.Name())
 	resources := &resourceServer{
 		logger: logger,

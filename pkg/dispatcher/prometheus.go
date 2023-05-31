@@ -66,7 +66,7 @@ func (rt *bearerTokenAuthRoundTripper) RoundTrip(req *http.Request) (*http.Respo
 // PrometheusAPI defines what we expect Prometheus to do in the package
 type PrometheusAPI interface {
 	// Query performs a query for the given time.
-	Query(ctx context.Context, query string, ts time.Time) (model.Value, prometheusapi.Warnings, error)
+	Query(ctx context.Context, query string, ts time.Time, opts ...prometheusapi.Option) (model.Value, prometheusapi.Warnings, error)
 }
 
 // GetJobVolumesFromPrometheus gets job volumes from a Prometheus server for the given time

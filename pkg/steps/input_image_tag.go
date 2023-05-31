@@ -83,6 +83,9 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 				Name:      fmt.Sprintf("%s@%s", s.config.BaseImage.Name, s.imageName),
 				Namespace: s.config.BaseImage.Namespace,
 			},
+			ImportPolicy: imagev1.TagImportPolicy{
+				ImportMode: imagev1.ImportModePreserveOriginal,
+			},
 		},
 	}
 

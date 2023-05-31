@@ -88,7 +88,7 @@ func AddToManager(mgr manager.Manager,
 			continue
 		}
 		if err := c.Watch(
-			source.NewKindWithCache(&testimagestreamtagimportv1.TestImageStreamTagImport{}, buildClusterManager.GetCache()),
+			source.Kind(buildClusterManager.GetCache(), &testimagestreamtagimportv1.TestImageStreamTagImport{}),
 			testImageStreamTagImportHandlerForNamedCluster(buildClusterName),
 		); err != nil {
 			return fmt.Errorf("failed to watch testimagestreamtagimports in cluster %s: %w", buildClusterName, err)
@@ -97,7 +97,7 @@ func AddToManager(mgr manager.Manager,
 
 	// TODO: Watch buildCluster ImageStreams as well. For now we assume no one will tamper with them.
 	if err := c.Watch(
-		source.NewKindWithCache(&testimagestreamtagimportv1.TestImageStreamTagImport{}, mgr.GetCache()),
+		source.Kind(mgr.GetCache(), &testimagestreamtagimportv1.TestImageStreamTagImport{}),
 		testImageStreamTagImportHandler(log, ignoreClusterNames),
 	); err != nil {
 		return fmt.Errorf("failed to create watch for testimagestreamtagimports: %w", err)
@@ -117,7 +117,7 @@ func AddToManager(mgr manager.Manager,
 		return fmt.Errorf("failed to get filter for ImageStreamTags: %w", err)
 	}
 	if err := c.Watch(
-		source.NewKindWithCache(&imagev1.ImageStream{}, registryManager.GetCache()),
+		source.Kind(registryManager.GetCache(), &imagev1.ImageStream{}),
 		registryClusterHandlerFactory(buildClusters, objectFilter),
 	); err != nil {
 		return fmt.Errorf("failed to create watch for ImageStreams: %w", err)
@@ -188,7 +188,7 @@ func sourceForConfigChangeChannel(buildClusterNames sets.String, registryClient 
 }
 
 func testImageStreamTagImportHandlerForNamedCluster(clusterName string) handler.EventHandler {
-	return handler.EnqueueRequestsFromMapFunc(func(o ctrlruntimeclient.Object) []reconcile.Request {
+	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o ctrlruntimeclient.Object) []reconcile.Request {
 		testimagestreamtagimport, ok := o.(*testimagestreamtagimportv1.TestImageStreamTagImport)
 		if !ok {
 			logrus.WithField("type", fmt.Sprintf("%T", o)).Error("Got object that was not a TestImageStreamTagImport")
@@ -202,7 +202,7 @@ func testImageStreamTagImportHandlerForNamedCluster(clusterName string) handler.
 }
 
 func testImageStreamTagImportHandler(l *logrus.Entry, ignoreClusterNames sets.String) handler.EventHandler {
-	return handler.EnqueueRequestsFromMapFunc(func(o ctrlruntimeclient.Object) []reconcile.Request {
+	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o ctrlruntimeclient.Object) []reconcile.Request {
 		testimagestreamtagimport, ok := o.(*testimagestreamtagimportv1.TestImageStreamTagImport)
 		if !ok {
 			logrus.WithField("type", fmt.Sprintf("%T", o)).Error("Got object that was not an ImageStream")

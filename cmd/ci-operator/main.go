@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/bombsimon/logrusr/v3"
+	"github.com/go-logr/logr"
 	"github.com/sirupsen/logrus"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -55,6 +56,7 @@ import (
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	crcontrollerutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	ctrlruntimelog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/yaml"
 
 	buildv1 "github.com/openshift/api/build/v1"
@@ -200,6 +202,8 @@ func main() {
 	if err := flagSet.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("failed to parse flags")
 	}
+
+	ctrlruntimelog.SetLogger(logr.New(ctrlruntimelog.NullLogSink{}))
 	if opt.verbose {
 		fs := flag.NewFlagSet("", flag.ExitOnError)
 		klog.InitFlags(fs)

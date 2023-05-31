@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/defaults"
 	"github.com/openshift/ci-tools/pkg/load"
+	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/steps/release"
 	"github.com/openshift/ci-tools/pkg/util"
@@ -31,7 +33,8 @@ type options struct {
 	config.Options
 	maxConcurrency uint
 
-	resolver registry.Resolver
+	resolver        registry.Resolver
+	ciOPConfigAgent agents.ConfigAgent
 }
 
 func (o *options) parse() error {
@@ -51,6 +54,12 @@ func (o *options) parse() error {
 	if err := o.loadResolver(registryDir); err != nil {
 		return fmt.Errorf("failed to load registry: %w", err)
 	}
+	ciOPConfigAgent, err := agents.NewConfigAgent(o.ConfigDir)
+	if err != nil {
+		return fmt.Errorf("failed to create CI Op config agent: %w", err)
+	}
+	o.ciOPConfigAgent = ciOPConfigAgent
+
 	if err := o.Options.Validate(); err != nil {
 		return fmt.Errorf("failed to validate config options: %w", err)
 	}
@@ -68,11 +77,20 @@ func (o *options) validate() (ret []error) {
 	inputCh := make(chan workItem)
 	produce := func() error {
 		defer close(inputCh)
-		if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
-			inputCh <- workItem{configuration, repoInfo}
-			return nil
-		}); err != nil {
-			return fmt.Errorf("error reading configuration files: %w", err)
+		for _, v := range o.ciOPConfigAgent.GetAll() {
+			for _, configs := range v {
+				for _, c := range configs {
+					c := c
+					configFilePath := filepath.Join(o.ConfigDir, c.Metadata.RelativePath())
+					configSpecDir := filepath.Dir(configFilePath)
+					inputCh <- workItem{configuration: &c, repoInfo: &config.Info{
+						Metadata: c.Metadata,
+						Filename: configFilePath,
+						OrgPath:  filepath.Dir(configSpecDir),
+						RepoPath: configSpecDir,
+					}}
+				}
+			}
 		}
 		return nil
 	}
@@ -125,6 +143,9 @@ func (o *options) validateConfiguration(
 		} else if err := validator.IsValidResolvedConfiguration(&c); err != nil {
 			return err
 		}
+	}
+	if _, err := o.ciOPConfigAgent.GetMatchingConfig(configuration.Metadata); err != nil {
+		return err
 	}
 	graphConf := defaults.FromConfigStatic(configuration)
 	if err := validation.IsValidGraphConfiguration(graphConf.Steps); err != nil {

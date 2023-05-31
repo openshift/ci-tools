@@ -23,7 +23,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
+	"github.com/openshift/ci-tools/pkg/results"
 )
 
 // WaitForPodFlag changes the behavior of the functions which monitor pods
@@ -431,7 +433,7 @@ func checkPending(pod corev1.Pod, timeout time.Duration, now time.Time) (time.Ti
 		if t := t0.Add(timeout); now.Before(t) {
 			return t, nil
 		}
-		return time.Time{}, fmt.Errorf("container %q has not started in %s", name, now.Sub(t0))
+		return time.Time{}, results.ForReason(api.ReasonPending).ForError(fmt.Errorf("container %q has not started in %s", name, now.Sub(t0)))
 	}
 	prev := pod.CreationTimestamp.Time
 	for _, s := range pod.Status.InitContainerStatuses {

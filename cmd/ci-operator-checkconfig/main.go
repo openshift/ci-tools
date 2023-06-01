@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -22,11 +21,11 @@ import (
 	"github.com/openshift/ci-tools/pkg/validation"
 )
 
-type tagSet map[api.ImageStreamTagReference][]*config.Info
+type tagSet map[api.ImageStreamTagReference][]*api.Metadata
 
 type promotedTag struct {
 	tag      api.ImageStreamTagReference
-	repoInfo *config.Info
+	metadata *api.Metadata
 }
 
 type options struct {
@@ -70,25 +69,13 @@ func (o *options) parse() error {
 }
 
 func (o *options) validate() (ret []error) {
-	type workItem struct {
-		configuration *api.ReleaseBuildConfiguration
-		repoInfo      *config.Info
-	}
-	inputCh := make(chan workItem)
+	inputCh := make(chan api.ReleaseBuildConfiguration)
 	produce := func() error {
 		defer close(inputCh)
 		for _, v := range o.ciOPConfigAgent.GetAll() {
 			for _, configs := range v {
 				for _, c := range configs {
-					c := c
-					configFilePath := filepath.Join(o.ConfigDir, c.Metadata.RelativePath())
-					configSpecDir := filepath.Dir(configFilePath)
-					inputCh <- workItem{configuration: &c, repoInfo: &config.Info{
-						Metadata: c.Metadata,
-						Filename: configFilePath,
-						OrgPath:  filepath.Dir(configSpecDir),
-						RepoPath: configSpecDir,
-					}}
+					inputCh <- c
 				}
 			}
 		}
@@ -98,9 +85,9 @@ func (o *options) validate() (ret []error) {
 	errCh := make(chan error)
 	map_ := func() error {
 		validator := validation.NewValidator()
-		for item := range inputCh {
-			if err := o.validateConfiguration(&validator, outputCh, item.configuration, item.repoInfo); err != nil {
-				errCh <- fmt.Errorf("failed to validate configuration %s: %w", item.repoInfo.Filename, err)
+		for c := range inputCh {
+			if err := o.validateConfiguration(&validator, outputCh, c); err != nil {
+				errCh <- fmt.Errorf("failed to validate configuration %s: %w", c.Metadata.RelativePath(), err)
 			}
 		}
 		return nil
@@ -108,7 +95,7 @@ func (o *options) validate() (ret []error) {
 	seen := tagSet{}
 	reduce := func() error {
 		for i := range outputCh {
-			seen[i.tag] = append(seen[i.tag], i.repoInfo)
+			seen[i.tag] = append(seen[i.tag], i.metadata)
 		}
 		return nil
 	}
@@ -134,11 +121,10 @@ func (o *options) loadResolver(path string) error {
 func (o *options) validateConfiguration(
 	validator *validation.Validator,
 	seenCh chan<- promotedTag,
-	configuration *api.ReleaseBuildConfiguration,
-	repoInfo *config.Info,
+	configuration api.ReleaseBuildConfiguration,
 ) error {
 	if o.resolver != nil {
-		if c, err := registry.ResolveConfig(o.resolver, *configuration); err != nil {
+		if c, err := registry.ResolveConfig(o.resolver, configuration); err != nil {
 			return err
 		} else if err := validator.IsValidResolvedConfiguration(&c); err != nil {
 			return err
@@ -147,12 +133,12 @@ func (o *options) validateConfiguration(
 	if _, err := o.ciOPConfigAgent.GetMatchingConfig(configuration.Metadata); err != nil {
 		return err
 	}
-	graphConf := defaults.FromConfigStatic(configuration)
+	graphConf := defaults.FromConfigStatic(&configuration)
 	if err := validation.IsValidGraphConfiguration(graphConf.Steps); err != nil {
 		return err
 	}
-	for _, tag := range release.PromotedTags(configuration) {
-		seenCh <- promotedTag{tag, repoInfo}
+	for _, tag := range release.PromotedTags(&configuration) {
+		seenCh <- promotedTag{tag, &configuration.Metadata}
 	}
 	if configuration.PromotionConfiguration != nil && configuration.PromotionConfiguration.RegistryOverride != "" {
 		return errors.New("setting promotion.registry_override is not allowed")

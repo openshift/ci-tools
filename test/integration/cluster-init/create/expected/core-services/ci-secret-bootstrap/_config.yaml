@@ -251,6 +251,9 @@ secret_configs:
     sa.ci-chat-bot.newCluster.config:
       field: sa.ci-chat-bot.newCluster.config
       item: ci-chat-bot
+    sa.ci-chat-bot.newCluster.token.txt:
+      field: sa.ci-chat-bot.newCluster.token.txt
+      item: ci-chat-bot
   to:
   - cluster: app.ci
     name: ci-chat-bot-kubeconfigs

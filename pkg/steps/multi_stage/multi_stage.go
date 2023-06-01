@@ -225,6 +225,7 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 	}
 	observerContext, cancel := context.WithCancel(ctx)
 	observerDone := make(chan struct{})
+	defer close(observerDone)
 	go s.runObservers(observerContext, ctx, observers, observerDone)
 	s.flags |= shortCircuit
 	if err := s.runSteps(ctx, "pre", s.pre, env, secretVolumes, secretVolumeMounts); err != nil {

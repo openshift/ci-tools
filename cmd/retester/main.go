@@ -49,6 +49,9 @@ func (o *options) Validate() error {
 	if o.configFile == "" {
 		return fmt.Errorf("--config-file is required")
 	}
+	if o.cacheFileOnS3 && o.cacheFile == "" {
+		return fmt.Errorf("--cache-file is required if --cache-file-on-s3 is set to true")
+	}
 	return nil
 }
 

@@ -105,6 +105,28 @@ func TestValidate(t *testing.T) {
 			},
 			expected: errors.New("--config-path is mandatory"),
 		},
+		{
+			name: "cache-file not set when using aws",
+			o: options{
+				config:         flagutil.ConfigOptions{ConfigPath: "/etc/config/config.yaml"},
+				configFile:     "/etc/retester/config.yaml",
+				dryRun:         true,
+				interval:       time.Hour,
+				cacheRecordAge: sevenDays,
+				cacheFileOnS3:  true,
+			},
+			expected: errors.New("--cache-file is required if --cache-file-on-s3 is set to true"),
+		},
+		{
+			name: "cache-file not set when using local file cache",
+			o: options{
+				config:         flagutil.ConfigOptions{ConfigPath: "/etc/config/config.yaml"},
+				configFile:     "/etc/retester/config.yaml",
+				dryRun:         true,
+				interval:       time.Hour,
+				cacheRecordAge: sevenDays,
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

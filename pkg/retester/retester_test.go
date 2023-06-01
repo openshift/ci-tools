@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/google/go-cmp/cmp"
 	"github.com/shurcooL/githubv4"
@@ -710,6 +711,11 @@ func TestLoadFromAwsNow(t *testing.T) {
 		return nil, fmt.Errorf(sampleErrorMsg)
 	}
 
+	mockClientForNoFile := &mockS3Client{}
+	mockClientForNoFile.GetObjectFunc = func(input *s3.GetObjectInput) (*s3.GetObjectOutput, error) {
+		return nil, awserr.New(s3.ErrCodeNoSuchKey, "", nil)
+	}
+
 	testCases := []struct {
 		name          string
 		s3cache       s3BackOffCache
@@ -731,7 +737,16 @@ func TestLoadFromAwsNow(t *testing.T) {
 				logger:    logger,
 				awsClient: faultyMockClient,
 			},
-			expectedError: fmt.Errorf("couldn't get file-name file from aws s3 bucket prow-retester: %s", sampleErrorMsg),
+			expectedError: fmt.Errorf("error getting file-name file from aws s3 bucket prow-retester: %s", sampleErrorMsg),
+		},
+		{
+			name: "file not yet in the bucket",
+			s3cache: s3BackOffCache{
+				file:      "file-name",
+				logger:    logger,
+				awsClient: mockClientForNoFile,
+			},
+			expectedError: nil,
 		},
 	}
 

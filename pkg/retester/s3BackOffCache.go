@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/sirupsen/logrus"
 
@@ -47,7 +48,11 @@ func (b *s3BackOffCache) loadFromAwsNow(now time.Time) error {
 		Key:    aws.String(b.file),
 	})
 	if err != nil {
-		return fmt.Errorf("couldn't get %s file from aws s3 bucket %s: %w", b.file, retesterBucket, err)
+		if awsErr, ok := err.(awserr.Error); ok && awsErr.Code() == s3.ErrCodeNoSuchKey {
+			b.logger.WithField("file", b.file).Info("file doesn't exist in the s3 bucket")
+			return nil
+		}
+		return fmt.Errorf("error getting %s file from aws s3 bucket %s: %w", b.file, retesterBucket, err)
 	}
 
 	content, err := io.ReadAll(result.Body)

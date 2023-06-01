@@ -143,6 +143,12 @@ func generateRegistryPullCredentialsSecret(o options) secretbootstrap.SecretConf
 					Item:        buildUFarm,
 					RegistryURL: api.ServiceDomainAPPCIRegistry,
 				},
+				{
+					AuthField:   "auth",
+					EmailField:  "email",
+					Item:        "quay.io-pull-secret",
+					RegistryURL: "quay.io",
+				},
 			}),
 		},
 		To: []secretbootstrap.SecretContext{
@@ -169,12 +175,6 @@ func generatePushPullSecretFrom(clusterName string, items []secretbootstrap.Dock
 				AuthField:   registryCommandTokenField(clusterName, pull),
 				Item:        buildUFarm,
 				RegistryURL: registryUrlFor(clusterName),
-			},
-			{
-				AuthField:   "auth",
-				EmailField:  "email",
-				Item:        "quay.io-pull-secret",
-				RegistryURL: "quay.io",
 			},
 		},
 	}

@@ -80,6 +80,10 @@ type ciDataClient struct {
 	testJobRunTableName       string
 }
 
+type RowCount struct {
+	TotalRows int64
+}
+
 func NewCIDataClient(dataCoordinates BigQueryDataCoordinates, client *bigquery.Client) CIDataClient {
 	return &ciDataClient{
 		dataCoordinates:           dataCoordinates,
@@ -338,15 +342,15 @@ func (c *ciDataClient) ListProwJobRunsSince(ctx context.Context, since *time.Tim
 
 func (c *ciDataClient) GetBackendDisruptionRowCountByJob(ctx context.Context, jobName string) (uint64, error) {
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(`
-SELECT
-	Name
+SELECT Count(Name) AS TotalRows
 FROM
 	DATA_SET_LOCATION.BackendDisruption_JobRuns
 WHERE
-	StartTime <= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 3 DAY)
+    StartTime <= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 3 DAY)
 AND
 	JobName = @JobName
 `)
+
 	query := c.client.Query(queryString)
 	query.QueryConfig.Parameters = []bigquery.QueryParameter{
 		{Name: "JobName", Value: jobName},
@@ -357,7 +361,14 @@ AND
 		return 0, err
 	}
 
-	return it.TotalRows, nil
+	var rowCount = RowCount{}
+
+	err = it.Next(&rowCount)
+	if err != nil {
+		return 0, err
+	}
+
+	return uint64(rowCount.TotalRows), nil
 }
 
 func (c *ciDataClient) GetBackendDisruptionStatisticsByJob(ctx context.Context, jobName string) ([]jobrunaggregatorapi.BackendDisruptionStatisticsRow, error) {

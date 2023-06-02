@@ -1209,6 +1209,7 @@ const (
 	ClusterProfileGCPVirtualization     ClusterProfile = "gcp-virtualization"
 	ClusterProfileAWSVirtualization     ClusterProfile = "aws-virtualization"
 	ClusterProfileAzureVirtualization   ClusterProfile = "azure-virtualization"
+	ClusterProfileOCIAssisted           ClusterProfile = "oci-assisted"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -1301,6 +1302,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileVSphereMultizone,
 		ClusterProfileVSphereConnected,
 		ClusterProfileVSpherePlatformNone,
+		ClusterProfileOCIAssisted,
 	}
 }
 
@@ -1445,6 +1447,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "osd-ephemeral"
 	case ClusterProfileHyperShift:
 		return "hypershift"
+	case ClusterProfileOCIAssisted:
+		return "oci-edge"
 	default:
 		return ""
 	}
@@ -1618,6 +1622,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-3-quota-slice"
 	case ClusterProfileHyperShift:
 		return "hypershift-quota-slice"
+	case ClusterProfileOCIAssisted:
+		return "oci-edge-quota-slice"
 	default:
 		return ""
 	}

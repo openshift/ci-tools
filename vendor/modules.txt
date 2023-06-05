@@ -1684,7 +1684,7 @@ k8s.io/kube-openapi/pkg/validation/spec
 # k8s.io/kubernetes v1.15.0-alpha.0
 ## explicit
 k8s.io/kubernetes/pkg/apis/core
-# k8s.io/test-infra v0.0.0-20220913174101-46ac1a6cf806 => github.com/droslean/test-infra v0.0.0-20230529124435-53f49fdf7abc
+# k8s.io/test-infra v0.0.0-20220913174101-46ac1a6cf806 => github.com/droslean/test-infra v0.0.0-20230605181220-1c00644b5079
 ## explicit; go 1.18
 k8s.io/test-infra/ghproxy/ghcache
 k8s.io/test-infra/ghproxy/ghmetrics
@@ -1940,5 +1940,5 @@ sigs.k8s.io/yaml
 # k8s.io/client-go => k8s.io/client-go v0.27.2
 # k8s.io/component-base => k8s.io/component-base v0.27.2
 # k8s.io/kubectl => k8s.io/kubectl v0.27.2
-# k8s.io/test-infra => github.com/droslean/test-infra v0.0.0-20230529124435-53f49fdf7abc
+# k8s.io/test-infra => github.com/droslean/test-infra v0.0.0-20230605181220-1c00644b5079
 # github.com/opencontainers/runc => github.com/opencontainers/runc v1.0.0-rc9

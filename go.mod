@@ -24,7 +24,7 @@ replace (
 	k8s.io/client-go => k8s.io/client-go v0.27.2
 	k8s.io/component-base => k8s.io/component-base v0.27.2
 	k8s.io/kubectl => k8s.io/kubectl v0.27.2
-	k8s.io/test-infra => github.com/droslean/test-infra v0.0.0-20230529124435-53f49fdf7abc
+	k8s.io/test-infra => github.com/droslean/test-infra v0.0.0-20230605181220-1c00644b5079
 )
 
 require (

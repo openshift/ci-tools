@@ -330,8 +330,8 @@ github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7 h1:UhxFibDNY/bfvqU
 github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7/go.mod h1:cyGadeNEkKy96OOhEzfZl+yxihPEzKnqJwvfuSUqbZE=
 github.com/docker/swarmkit v1.12.1-0.20190926144208-d509e31c1fda/go.mod h1:n3Z4lIEl7g261ptkGDBcYi/3qBMDl9csaAhwi2MPejs=
 github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815/go.mod h1:WwZ+bS3ebgob9U8Nd0kOddGdZWjyMGR8Wziv+TBNwSE=
-github.com/droslean/test-infra v0.0.0-20230529124435-53f49fdf7abc h1:z2kC/YdTsoOqO6JqB7ymocIjXBsFmZSfsAMRDj/pTpE=
-github.com/droslean/test-infra v0.0.0-20230529124435-53f49fdf7abc/go.mod h1:JF3UR1WWjJX8fv4I1z++9HgsqGkfrIgwVmIfB57IHYs=
+github.com/droslean/test-infra v0.0.0-20230605181220-1c00644b5079 h1:TBhA+yDHFDR9nEV/OuPpMJ2PelVrZ16F0ny1daWtLBc=
+github.com/droslean/test-infra v0.0.0-20230605181220-1c00644b5079/go.mod h1:T0UGPHEqArwKvI19l3Lz86Jkv96NauB76pwHnXXOsHw=
 github.com/dustin/go-humanize v0.0.0-20171111073723-bb3d318650d4/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
 github.com/dustin/go-humanize v1.0.0/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
 github.com/elazarl/goproxy v0.0.0-20191011121108-aa519ddbe484/go.mod h1:Ro8st/ElPeALwNFlcTpWmkr6IoMFfkjXAvTHpevnDsM=

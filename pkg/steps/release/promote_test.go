@@ -1,6 +1,7 @@
 package release
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -559,6 +560,7 @@ func TestGetPromotionPod(t *testing.T) {
 		imageMirror map[string]string
 		namespace   string
 		expected    *coreapi.Pod
+		expectedErr error
 	}{
 		{
 			name: "basic case",
@@ -572,7 +574,7 @@ func TestGetPromotionPod(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, getPromotionPod(testCase.imageMirror, testCase.namespace))
+			testhelper.CompareWithFixture(t, getPromotionPod(testCase.imageMirror, testCase.namespace, "20230605"))
 		})
 	}
 }
@@ -723,6 +725,47 @@ func TestGetPublicImageReference(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			if actual, expected := getPublicImageReference(testCase.dockerImageReference, testCase.publicDockerImageRepository), testCase.expected; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect public image reference: %v", testCase.name, diff.ObjectDiff(actual, expected))
+			}
+		})
+	}
+}
+
+func TestTagInQuay(t *testing.T) {
+	var testCases = []struct {
+		name        string
+		image       string
+		date        string
+		expected    string
+		expectedErr error
+	}{
+		{
+			name:     "basic case",
+			image:    "docker-registry.default.svc:5000/ci-op-bgqwwknr/pipeline@sha256:d8385fb539f471d4f41da131366b559bb90eeeeca2edd265e10d7c2aa052a1af",
+			date:     "20230605",
+			expected: "quay.io/openshift/ci:20230605_sha256_d8385fb539f471d4f41da131366b559bb90eeeeca2edd265e10d7c2aa052a1af",
+		},
+		{
+			name:        "malformed image pull spec",
+			image:       "some.io/org/repo:tag",
+			date:        "20230605",
+			expectedErr: fmt.Errorf("malformed image pull spec: some.io/org/repo:tag"),
+		},
+		{
+			name:        "date must not be empty",
+			expectedErr: fmt.Errorf("date must not be empty"),
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			actual, actualErr := tagInQuay(testCase.image, testCase.date)
+			if diff := cmp.Diff(testCase.expectedErr, actualErr, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("%s: mismatch (-expected +actual), diff: %s", testCase.name, diff)
+			}
+			if actualErr == nil {
+				if diff := cmp.Diff(testCase.expected, actual); diff != "" {
+					t.Errorf("%s: mismatch (-expected +actual), diff: %s", testCase.name, diff)
+				}
 			}
 		})
 	}

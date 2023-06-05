@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -66,6 +67,10 @@ func mainRefs(refs *prowapi.Refs, extra []prowapi.Refs) *prowapi.Refs {
 	return nil
 }
 
+const (
+	dateFormat = "20060102"
+)
+
 func (s *promotionStep) run(ctx context.Context) error {
 	opts := []PromotedTagsOption{
 		WithRequiredImages(s.requiredImages),
@@ -101,7 +106,7 @@ func (s *promotionStep) run(ctx context.Context) error {
 		logrus.WithError(err).Warn("Failed to ensure namespaces to promote to in central registry.")
 	}
 
-	if _, err := steps.RunPod(ctx, s.client, getPromotionPod(imageMirrorTarget, s.jobSpec.Namespace())); err != nil {
+	if _, err := steps.RunPod(ctx, s.client, getPromotionPod(imageMirrorTarget, s.jobSpec.Namespace(), time.Now().Format(dateFormat))); err != nil {
 		return fmt.Errorf("unable to run promotion pod: %w", err)
 	}
 	return nil
@@ -201,7 +206,7 @@ func getPublicImageReference(dockerImageReference, publicDockerImageRepository s
 	return strings.Replace(dockerImageReference, splits[0], publicHost, 1)
 }
 
-func getPromotionPod(imageMirrorTarget map[string]string, namespace string) *coreapi.Pod {
+func getPromotionPod(imageMirrorTarget map[string]string, namespace string, date string) *coreapi.Pod {
 	keys := make([]string, 0, len(imageMirrorTarget))
 	for k := range imageMirrorTarget {
 		keys = append(keys, k)
@@ -210,6 +215,12 @@ func getPromotionPod(imageMirrorTarget map[string]string, namespace string) *cor
 
 	var images []string
 	for _, k := range keys {
+		if quayTag, err := tagInQuay(imageMirrorTarget[k], date); err != nil {
+			logrus.WithField("key", k).WithError(err).
+				Warn("Failed to get the tag in quay.io and skipped the promotion to quay for this image")
+		} else {
+			images = append(images, fmt.Sprintf("%s=%s", imageMirrorTarget[k], quayTag))
+		}
 		images = append(images, fmt.Sprintf("%s=%s", imageMirrorTarget[k], k))
 	}
 	command := []string{"/bin/sh", "-c"}
@@ -246,6 +257,17 @@ func getPromotionPod(imageMirrorTarget map[string]string, namespace string) *cor
 			},
 		},
 	}
+}
+
+func tagInQuay(image string, date string) (string, error) {
+	if date == "" {
+		return "", fmt.Errorf("date must not be empty")
+	}
+	splits := strings.Split(image, "@sha256:")
+	if len(splits) != 2 {
+		return "", fmt.Errorf("malformed image pull spec: %s", image)
+	}
+	return fmt.Sprintf("quay.io/openshift/ci:%s_sha256_%s", date, splits[1]), nil
 }
 
 // findDockerImageReference returns DockerImageReference, the string that can be used to pull this image,

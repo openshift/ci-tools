@@ -430,18 +430,19 @@ func checkPending(pod corev1.Pod, timeout time.Duration, now time.Time) (time.Ti
 	default:
 		panic(fmt.Sprintf("unknown pod phase: %s", pod.Status.Phase))
 	}
-	check := func(t0 time.Time, name string) (time.Time, error) {
+	check := func(t0 time.Time) (time.Time, error) {
 		if t := t0.Add(timeout); now.Before(t) {
 			return t, nil
 		}
-		return time.Time{}, results.ForReason(api.ReasonPending).ForError(fmt.Errorf("container %q has not started in %s", name, now.Sub(t0)))
+		names := strings.Join(pendingContainerNames(pod), ", ")
+		return time.Time{}, results.ForReason(api.ReasonPending).ForError(fmt.Errorf("containers have not started in %s: %s", now.Sub(t0), names))
 	}
 	prev := pod.CreationTimestamp.Time
 	for _, s := range pod.Status.InitContainerStatuses {
 		if s.State.Running != nil {
 			return now.Add(timeout), nil
 		} else if w := s.State.Waiting; w != nil {
-			return check(prev, s.Name)
+			return check(prev)
 		} else if t := s.State.Terminated; t != nil {
 			prev = t.FinishedAt.Time
 		} else {
@@ -450,12 +451,18 @@ func checkPending(pod corev1.Pod, timeout time.Duration, now time.Time) (time.Ti
 	}
 	for _, s := range pod.Status.ContainerStatuses {
 		if s.State.Waiting != nil {
-			if ret, err := check(prev, s.Name); err != nil {
+			if ret, err := check(prev); err != nil {
 				return ret, err
 			}
 		}
 	}
 	return prev.Add(timeout), nil
+}
+
+func pendingContainerNames(pod corev1.Pod) []string {
+	return containerNamesInState(pod, func(s corev1.ContainerStatus) bool {
+		return s.State.Waiting != nil
+	})
 }
 
 func failedContainerNames(pod *corev1.Pod) []string {

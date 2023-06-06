@@ -49,7 +49,6 @@ func TestCheckPending(t *testing.T) {
 			},
 		},
 	}
-	err := errors.New(`container "waiting" has not started in 1h0m0s`)
 	for _, tc := range []struct {
 		// input
 		name string
@@ -148,7 +147,7 @@ func TestCheckPending(t *testing.T) {
 				ContainerStatuses:     []corev1.ContainerStatus{waiting1},
 			},
 		},
-		err: err,
+		err: errors.New("containers have not started in 1h0m0s: waiting0, waiting1"),
 	}, {
 		name: "init container is waiting within limit",
 		pod: corev1.Pod{
@@ -174,7 +173,7 @@ func TestCheckPending(t *testing.T) {
 				ContainerStatuses: []corev1.ContainerStatus{waiting1},
 			},
 		},
-		err: err,
+		err: errors.New("containers have not started in 1h0m0s: waiting0, waiting1"),
 	}, {
 		name: "pod is pending within limit",
 		pod: corev1.Pod{
@@ -196,7 +195,7 @@ func TestCheckPending(t *testing.T) {
 				ContainerStatuses: []corev1.ContainerStatus{running, waiting0},
 			},
 		},
-		err: err,
+		err: errors.New("containers have not started in 1h0m0s: waiting0"),
 	}, {
 		name: "pod with init container is pending within limit",
 		pod: corev1.Pod{
@@ -220,7 +219,7 @@ func TestCheckPending(t *testing.T) {
 				ContainerStatuses: []corev1.ContainerStatus{running, waiting0},
 			},
 		},
-		err: err,
+		err: errors.New("containers have not started in 1h0m0s: waiting0"),
 	}, {
 		name: "pod is pending inside limit without container information",
 		pod: corev1.Pod{

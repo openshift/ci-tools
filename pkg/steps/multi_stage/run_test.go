@@ -42,7 +42,7 @@ func TestRun(t *testing.T) {
 		{
 			name:        "observer fails, no error",
 			observers:   []api.Observer{{Name: "obsrv0"}},
-			removeNames: sets.New[string]().Insert("test-obsrv0"),
+			removeNames: sets.New[string]("test-obsrv0"),
 			expected: []string{
 				"test-pre0", "test-pre1",
 				"test-test0", "test-test1",

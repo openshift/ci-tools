@@ -17,7 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowdapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -320,7 +319,7 @@ func TestJUnit(t *testing.T) {
 	}
 }
 
-func fakePodNameIndexer(object client.Object) []string {
+func fakePodNameIndexer(object ctrlruntimeclient.Object) []string {
 	p, ok := object.(*v1.Pod)
 	if !ok {
 		panic(fmt.Errorf("indexer function for type %T's metadata.name field received object of type %T", v1.Pod{}, object))

@@ -21,8 +21,14 @@ func TestCheckPending(t *testing.T) {
 			Running: &corev1.ContainerStateRunning{},
 		},
 	}
-	waiting := corev1.ContainerStatus{
-		Name: "waiting",
+	waiting0 := corev1.ContainerStatus{
+		Name: "waiting0",
+		State: corev1.ContainerState{
+			Waiting: &corev1.ContainerStateWaiting{Reason: "ImagePullBackOff"},
+		},
+	}
+	waiting1 := corev1.ContainerStatus{
+		Name: "waiting1",
 		State: corev1.ContainerState{
 			Waiting: &corev1.ContainerStateWaiting{Reason: "ImagePullBackOff"},
 		},
@@ -105,7 +111,7 @@ func TestCheckPending(t *testing.T) {
 			Status: corev1.PodStatus{
 				Phase:                 corev1.PodPending,
 				InitContainerStatuses: []corev1.ContainerStatus{running},
-				ContainerStatuses:     []corev1.ContainerStatus{waiting},
+				ContainerStatuses:     []corev1.ContainerStatus{waiting0},
 			},
 		},
 		next: now.Add(timeout),
@@ -117,7 +123,7 @@ func TestCheckPending(t *testing.T) {
 				InitContainerStatuses: []corev1.ContainerStatus{
 					terminatedOutside, running,
 				},
-				ContainerStatuses: []corev1.ContainerStatus{waiting},
+				ContainerStatuses: []corev1.ContainerStatus{waiting0},
 			},
 		},
 		next: now.Add(timeout),
@@ -127,8 +133,8 @@ func TestCheckPending(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{CreationTimestamp: withinLimit},
 			Status: corev1.PodStatus{
 				Phase:                 corev1.PodPending,
-				InitContainerStatuses: []corev1.ContainerStatus{waiting},
-				ContainerStatuses:     []corev1.ContainerStatus{waiting},
+				InitContainerStatuses: []corev1.ContainerStatus{waiting0},
+				ContainerStatuses:     []corev1.ContainerStatus{waiting1},
 			},
 		},
 		next: withinLimit.Add(timeout),
@@ -138,8 +144,8 @@ func TestCheckPending(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{CreationTimestamp: outsideLimit},
 			Status: corev1.PodStatus{
 				Phase:                 corev1.PodPending,
-				InitContainerStatuses: []corev1.ContainerStatus{waiting},
-				ContainerStatuses:     []corev1.ContainerStatus{waiting},
+				InitContainerStatuses: []corev1.ContainerStatus{waiting0},
+				ContainerStatuses:     []corev1.ContainerStatus{waiting1},
 			},
 		},
 		err: err,
@@ -150,9 +156,9 @@ func TestCheckPending(t *testing.T) {
 			Status: corev1.PodStatus{
 				Phase: corev1.PodPending,
 				InitContainerStatuses: []corev1.ContainerStatus{
-					terminatedWithin, waiting,
+					terminatedWithin, waiting0,
 				},
-				ContainerStatuses: []corev1.ContainerStatus{waiting},
+				ContainerStatuses: []corev1.ContainerStatus{waiting1},
 			},
 		},
 		next: withinLimit.Add(timeout),
@@ -163,9 +169,9 @@ func TestCheckPending(t *testing.T) {
 			Status: corev1.PodStatus{
 				Phase: corev1.PodPending,
 				InitContainerStatuses: []corev1.ContainerStatus{
-					terminatedOutside, waiting,
+					terminatedOutside, waiting0,
 				},
-				ContainerStatuses: []corev1.ContainerStatus{waiting},
+				ContainerStatuses: []corev1.ContainerStatus{waiting1},
 			},
 		},
 		err: err,
@@ -175,7 +181,7 @@ func TestCheckPending(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{CreationTimestamp: withinLimit},
 			Status: corev1.PodStatus{
 				Phase:             corev1.PodPending,
-				ContainerStatuses: []corev1.ContainerStatus{running, waiting},
+				ContainerStatuses: []corev1.ContainerStatus{running, waiting0},
 			},
 		},
 		next: withinLimit.Add(timeout),
@@ -187,7 +193,7 @@ func TestCheckPending(t *testing.T) {
 				InitContainerStatuses: []corev1.ContainerStatus{
 					terminatedOutside,
 				},
-				ContainerStatuses: []corev1.ContainerStatus{running, waiting},
+				ContainerStatuses: []corev1.ContainerStatus{running, waiting0},
 			},
 		},
 		err: err,
@@ -199,7 +205,7 @@ func TestCheckPending(t *testing.T) {
 				InitContainerStatuses: []corev1.ContainerStatus{
 					terminatedWithin,
 				},
-				ContainerStatuses: []corev1.ContainerStatus{running, waiting},
+				ContainerStatuses: []corev1.ContainerStatus{running, waiting0},
 			},
 		},
 		next: withinLimit.Add(timeout),
@@ -211,7 +217,7 @@ func TestCheckPending(t *testing.T) {
 				InitContainerStatuses: []corev1.ContainerStatus{
 					terminatedOutside,
 				},
-				ContainerStatuses: []corev1.ContainerStatus{running, waiting},
+				ContainerStatuses: []corev1.ContainerStatus{running, waiting0},
 			},
 		},
 		err: err,

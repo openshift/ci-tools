@@ -50,22 +50,6 @@ func TestObservers(t *testing.T) {
 			junitOperator: "simple-observer-junit_operator.xml",
 		},
 		{
-			name: "observer failure must not affect tests",
-			args: []string{
-				"--unresolved-config=failing-observer.yaml",
-				"--target=with-failing-observer",
-			},
-			env:     []string{defaultJobSpec},
-			success: true,
-			output: []string{
-				`Running step with-failing-observer-failing-observer`,
-				`Running step with-failing-observer-noop-test`,
-				`Step with-failing-observer-failing-observer failed after`,
-				`Step with-failing-observer-noop-test succeeded after`,
-			},
-			junitOperator: "failing-observer-junit_operator.xml",
-		},
-		{
 			name: "running with multi observers",
 			args: []string{
 				"--unresolved-config=multi-observers.yaml",

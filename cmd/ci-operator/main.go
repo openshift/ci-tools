@@ -140,7 +140,10 @@ of dynamic parameters that are inferred from previous steps. These parameters ar
     The job name in a form safe for use as a Kubernetes resource name.
 
   JOB_NAME_HASH
-    A short hash of the job name, including target-additional-suffix if supplied, for making tasks unique.
+    A short hash of the job name for making tasks unique. This will not account for the target-additional-suffix.
+
+  UNIQUE_HASH
+	A hash for making tasks unique, even when the job name may be the same due to using the target-additional-suffix.
 
   RPM_REPO_<org>_<repo>
     If the job creates RPMs this will be the public URL that can be used as the
@@ -1709,7 +1712,7 @@ func loadLeaseCredentials(leaseServerCredentialsFile string) (string, func() []b
 
 func (o *options) initializeLeaseClient() error {
 	var err error
-	owner := o.namespace + "-" + o.jobSpec.JobNameHash()
+	owner := o.namespace + "-" + o.jobSpec.UniqueHash()
 	username, passwordGetter, err := loadLeaseCredentials(o.leaseServerCredentialsFile)
 	if err != nil {
 		return fmt.Errorf("failed to load lease credentials: %w", err)

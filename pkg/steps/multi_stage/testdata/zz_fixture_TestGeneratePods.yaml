@@ -66,6 +66,8 @@
         value: test
       - name: JOB_NAME_HASH
         value: 5e8c9
+      - name: UNIQUE_HASH
+        value: 5e8c9
       - name: RELEASE_IMAGE_INITIAL
         value: release:initial
       - name: RELEASE_IMAGE_LATEST
@@ -233,6 +235,8 @@
         value: test
       - name: JOB_NAME_HASH
         value: 5e8c9
+      - name: UNIQUE_HASH
+        value: 5e8c9
       - name: RELEASE_IMAGE_INITIAL
         value: release:initial
       - name: RELEASE_IMAGE_LATEST
@@ -392,6 +396,8 @@
       - name: JOB_NAME_SAFE
         value: test
       - name: JOB_NAME_HASH
+        value: 5e8c9
+      - name: UNIQUE_HASH
         value: 5e8c9
       - name: RELEASE_IMAGE_INITIAL
         value: release:initial
@@ -558,6 +564,8 @@
       - name: JOB_NAME_SAFE
         value: test
       - name: JOB_NAME_HASH
+        value: 5e8c9
+      - name: UNIQUE_HASH
         value: 5e8c9
       - name: RELEASE_IMAGE_INITIAL
         value: release:initial

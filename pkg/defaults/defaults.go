@@ -147,6 +147,7 @@ func fromConfig(
 	params.Add("JOB_NAME", func() (string, error) { return jobSpec.Job, nil })
 	params.Add("JOB_NAME_HASH", func() (string, error) { return jobSpec.JobNameHash(), nil })
 	params.Add("JOB_NAME_SAFE", func() (string, error) { return strings.Replace(jobSpec.Job, "_", "-", -1), nil })
+	params.Add("UNIQUE_HASH", func() (string, error) { return jobSpec.UniqueHash(), nil })
 	params.Add("NAMESPACE", func() (string, error) { return jobSpec.Namespace(), nil })
 	inputImages := make(inputImageSet)
 	var overridableSteps, buildSteps, postSteps []api.Step

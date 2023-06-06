@@ -73,14 +73,16 @@ func (s *JobSpec) Inputs() InputDefinition {
 	return InputDefinition{string(raw)}
 }
 
-// JobNameHash returns a 5 character hash of the job name with the
-// targetAdditionalSuffix appended where applicable
 func (s JobSpec) JobNameHash() string {
-	jobName := s.Job
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(s.Job)))[:5]
+}
+
+func (s JobSpec) UniqueHash() string {
+	job := s.Job
 	if s.TargetAdditionalSuffix != "" {
-		jobName += fmt.Sprintf("-%s", s.TargetAdditionalSuffix)
+		job += fmt.Sprintf("-%s", s.TargetAdditionalSuffix)
 	}
-	return fmt.Sprintf("%x", sha256.Sum256([]byte(jobName)))[:5]
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(job)))[:5]
 }
 
 // ResolveSpecFromEnv will determine the Refs being

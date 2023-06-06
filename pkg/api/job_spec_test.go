@@ -8,7 +8,7 @@ import (
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 )
 
-func TestJobNameHash(t *testing.T) {
+func TestUniqueHash(t *testing.T) {
 	testCases := []struct {
 		name     string
 		jobSpec  JobSpec
@@ -36,9 +36,9 @@ func TestJobNameHash(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			jobNameHash := tc.jobSpec.JobNameHash()
-			if diff := cmp.Diff(jobNameHash, tc.expected); diff != "" {
-				t.Fatalf("jobNameHash doesn't match expected, diff: %s", diff)
+			uniqueHash := tc.jobSpec.UniqueHash()
+			if diff := cmp.Diff(uniqueHash, tc.expected); diff != "" {
+				t.Fatalf("uniqueHash doesn't match expected, diff: %s", diff)
 			}
 		})
 	}

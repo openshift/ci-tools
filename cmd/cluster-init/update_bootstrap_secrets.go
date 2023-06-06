@@ -125,6 +125,11 @@ func generateRegistryPushCredentialsSecret(o options) secretbootstrap.SecretConf
 					Item:        buildUFarm,
 					RegistryURL: api.ServiceDomainAPPCIRegistry,
 				},
+				{
+					AuthField:   "auth",
+					Item:        "quay-io-push-credentials",
+					RegistryURL: "quay.io/openshift/ci",
+				},
 			}),
 		},
 		To: []secretbootstrap.SecretContext{

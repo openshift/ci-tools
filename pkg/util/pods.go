@@ -459,12 +459,17 @@ func checkPending(pod corev1.Pod, timeout time.Duration, now time.Time) (time.Ti
 }
 
 func failedContainerNames(pod *corev1.Pod) []string {
+	return containerNamesInState(*pod, func(s corev1.ContainerStatus) bool {
+		t := s.State.Terminated
+		return t != nil && t.ExitCode != 0
+	})
+}
+
+func containerNamesInState(pod corev1.Pod, p func(corev1.ContainerStatus) bool) []string {
 	var names []string
 	for _, status := range append(append([]corev1.ContainerStatus{}, pod.Status.InitContainerStatuses...), pod.Status.ContainerStatuses...) {
-		if s := status.State.Terminated; s != nil {
-			if s.ExitCode != 0 {
-				names = append(names, status.Name)
-			}
+		if p(status) {
+			names = append(names, status.Name)
 		}
 	}
 	sort.Strings(names)

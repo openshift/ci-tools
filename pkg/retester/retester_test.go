@@ -4,12 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/google/go-cmp/cmp"
 	"github.com/shurcooL/githubv4"
 	"github.com/sirupsen/logrus"
@@ -574,6 +578,183 @@ pr3:
 				if diff := cmp.Diff(tc.expectedContent, actualContent); diff != "" {
 					t.Errorf("%s differs from expected:\n%s", tc.name, diff)
 				}
+			}
+		})
+	}
+}
+
+type mockS3Client struct {
+	PutObjectFunc func(input *s3.PutObjectInput) (*s3.PutObjectOutput, error)
+	GetObjectFunc func(input *s3.GetObjectInput) (*s3.GetObjectOutput, error)
+}
+
+func (m *mockS3Client) PutObject(input *s3.PutObjectInput) (*s3.PutObjectOutput, error) {
+	return m.PutObjectFunc(input)
+}
+
+func (m *mockS3Client) GetObject(input *s3.GetObjectInput) (*s3.GetObjectOutput, error) {
+	return m.GetObjectFunc(input)
+}
+
+func TestSaveS3BackoffCache(t *testing.T) {
+	svc := &mockS3Client{}
+	svc.PutObjectFunc = func(input *s3.PutObjectInput) (*s3.PutObjectOutput, error) {
+		return &s3.PutObjectOutput{}, nil
+	}
+
+	sampleErrorMsg := "some AWS error"
+	svcFaulty := &mockS3Client{}
+	svcFaulty.PutObjectFunc = func(input *s3.PutObjectInput) (*s3.PutObjectOutput, error) {
+		return &s3.PutObjectOutput{}, fmt.Errorf(sampleErrorMsg)
+	}
+
+	testCases := []struct {
+		name          string
+		s3cache       s3BackOffCache
+		expectedError error
+	}{
+		{
+			name: "successful case",
+			s3cache: s3BackOffCache{
+				cache: map[string]*pullRequest{
+					"pr1": {PRSha: "sha1", RetestsForBaseSha: 2, RetestsForPrSha: 3, LastConsideredTime: now},
+					"pr2": {PRSha: "sha2", RetestsForBaseSha: 1, RetestsForPrSha: 3, LastConsideredTime: justNow},
+				},
+				awsClient: svc,
+			},
+			expectedError: nil,
+		},
+		{
+			name: "unsuccessful case",
+			s3cache: s3BackOffCache{
+				file:      "file-name",
+				awsClient: svcFaulty,
+			},
+			expectedError: fmt.Errorf("failed to upload file file-name into prow-retester bucket: %s", sampleErrorMsg),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actualErr := tc.s3cache.save()
+			if diff := cmp.Diff(tc.expectedError, actualErr, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("error differs from expected:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestLoadAndDelete(t *testing.T) {
+	logger := logrus.NewEntry(logrus.StandardLogger())
+
+	testCases := []struct {
+		name           string
+		contentFile    string
+		cacheRecordAge time.Duration
+		now            time.Time
+		expectedError  error
+		expectedMap    map[string]*pullRequest
+	}{
+		{
+			name:           "basic case",
+			contentFile:    "basic_case.yaml",
+			cacheRecordAge: time.Hour,
+			now:            time.Date(2022, 8, 18, 0, 0, 0, 0, time.UTC),
+			expectedError:  nil,
+			expectedMap: map[string]*pullRequest{
+				"pr1": {PRSha: "sha1", RetestsForBaseSha: 2, RetestsForPrSha: 3, LastConsideredTime: now},
+				"pr3": {PRSha: "sha2", RetestsForBaseSha: 1, RetestsForPrSha: 3, LastConsideredTime: justNow},
+			},
+		},
+		{
+			name:          "wrong format",
+			contentFile:   "wrong_format.yaml",
+			expectedError: errors.New("failed to unmarshal: error unmarshaling JSON: while decoding JSON: json: cannot unmarshal string into Go value of type map[string]*retester.pullRequest"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			content, _ := os.ReadFile(filepath.Join("testdata", "loadFromDiskNow", tc.contentFile))
+			actualMap, actualErr := loadAndDelete(content, logger, tc.now, tc.cacheRecordAge)
+
+			if diff := cmp.Diff(tc.expectedError, actualErr, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("error differs from expected:\n%s", diff)
+			}
+			if tc.expectedError == nil && actualErr == nil {
+				if diff := cmp.Diff(tc.expectedMap, actualMap); diff != "" {
+					t.Errorf("map differs from expected:\n%s", diff)
+				}
+			}
+		})
+	}
+}
+
+func TestLoadFromAwsNow(t *testing.T) {
+	now := time.Date(2023, 5, 23, 0, 0, 0, 0, time.UTC)
+	logger := logrus.NewEntry(logrus.StandardLogger())
+	mockClient := &mockS3Client{}
+	mockClient.GetObjectFunc = func(input *s3.GetObjectInput) (*s3.GetObjectOutput, error) {
+		client := &s3.GetObjectOutput{}
+		client.Body = io.NopCloser(strings.NewReader(`pr1:
+  last_considered_time: "2023-05-23T00:00:00Z"
+  pr_sha: sha1
+  retests_for_base_sha: 2
+  retests_for_pr_sha: 3
+`))
+		return client, nil
+	}
+
+	faultyMockClient := &mockS3Client{}
+	sampleErrorMsg := "some AWS error"
+	faultyMockClient.GetObjectFunc = func(input *s3.GetObjectInput) (*s3.GetObjectOutput, error) {
+		return nil, fmt.Errorf(sampleErrorMsg)
+	}
+
+	mockClientForNoFile := &mockS3Client{}
+	mockClientForNoFile.GetObjectFunc = func(input *s3.GetObjectInput) (*s3.GetObjectOutput, error) {
+		return nil, awserr.New(s3.ErrCodeNoSuchKey, "", nil)
+	}
+
+	testCases := []struct {
+		name          string
+		s3cache       s3BackOffCache
+		expectedError error
+	}{
+		{
+			name: "successful case",
+			s3cache: s3BackOffCache{
+				file:      "file-name",
+				logger:    logger,
+				awsClient: mockClient,
+			},
+			expectedError: nil,
+		},
+		{
+			name: "unsuccessful case",
+			s3cache: s3BackOffCache{
+				file:      "file-name",
+				logger:    logger,
+				awsClient: faultyMockClient,
+			},
+			expectedError: fmt.Errorf("error getting file-name file from aws s3 bucket prow-retester: %s", sampleErrorMsg),
+		},
+		{
+			name: "file not yet in the bucket",
+			s3cache: s3BackOffCache{
+				file:      "file-name",
+				logger:    logger,
+				awsClient: mockClientForNoFile,
+			},
+			expectedError: nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actualErr := tc.s3cache.loadFromAwsNow(now)
+			if diff := cmp.Diff(tc.expectedError, actualErr, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("error differs from expected:\n%s", diff)
 			}
 		})
 	}

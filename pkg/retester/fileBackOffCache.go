@@ -38,19 +38,28 @@ func (b *fileBackoffCache) loadFromDiskNow(now time.Time) error {
 	if err != nil {
 		return fmt.Errorf("failed to read file %s: %w", b.file, err)
 	}
+	cache, err := loadAndDelete(bytes, b.logger, now, b.cacheRecordAge)
+	if err != nil {
+		return err
+	}
+	b.cache = cache
+	return nil
+}
+
+// loadAndDelete loads content into cache and deletes old records from cache
+func loadAndDelete(content []byte, logger *logrus.Entry, now time.Time, cacheRecordAge time.Duration) (map[string]*pullRequest, error) {
 	cache := map[string]*pullRequest{}
-	if err := yaml.Unmarshal(bytes, &cache); err != nil {
-		return fmt.Errorf("failed to unmarshal: %w", err)
+	if err := yaml.Unmarshal(content, &cache); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal: %w", err)
 	}
 	for key, pr := range cache {
-		if age := now.Sub(pr.LastConsideredTime.Time); age > b.cacheRecordAge {
-			b.logger.WithField("key", key).WithField("LastConsideredTime", pr.LastConsideredTime).
+		if age := now.Sub(pr.LastConsideredTime.Time); age > cacheRecordAge {
+			logger.WithField("key", key).WithField("LastConsideredTime", pr.LastConsideredTime).
 				WithField("age", age).Info("deleting old record from cache")
 			delete(cache, key)
 		}
 	}
-	b.cache = cache
-	return nil
+	return cache, nil
 }
 
 func (b *fileBackoffCache) save() (ret error) {
@@ -88,11 +97,16 @@ func (b *fileBackoffCache) save() (ret error) {
 }
 
 func (b *fileBackoffCache) check(pr tide.PullRequest, baseSha string, policy RetesterPolicy) (retestBackoffAction, string) {
+	return check(&b.cache, pr, baseSha, policy)
+}
+
+// check updates the cache and returns a retestBackoffAction according to baseSha, policy, and number of retests performed for the PR.
+func check(cache *map[string]*pullRequest, pr tide.PullRequest, baseSha string, policy RetesterPolicy) (retestBackoffAction, string) {
 	key := prKey(&pr)
-	if _, has := b.cache[key]; !has {
-		b.cache[key] = &pullRequest{}
+	if _, has := (*cache)[key]; !has {
+		(*cache)[key] = &pullRequest{}
 	}
-	record := b.cache[key]
+	record := (*cache)[key]
 	record.LastConsideredTime = metav1.Now()
 	if currentPRSha := string(pr.HeadRefOID); record.PRSha != currentPRSha {
 		record.PRSha = currentPRSha

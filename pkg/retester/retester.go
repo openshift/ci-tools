@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/prometheus/client_golang/prometheus"
 	githubql "github.com/shurcooL/githubv4"
 	"github.com/sirupsen/logrus"
@@ -184,8 +186,14 @@ func validatePolicies(policy RetesterPolicy) []error {
 }
 
 // NewController generates a retest controller.
-func NewController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool, cacheFile string, cacheRecordAge time.Duration, config *Config) *RetestController {
+func NewController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool, cacheFile string, cacheRecordAge time.Duration, config *Config, awsSession *session.Session) *RetestController {
 	logger := logrus.NewEntry(logrus.StandardLogger())
+	var backoff backoffCache
+	if awsSession != nil {
+		backoff = &s3BackOffCache{cache: map[string]*pullRequest{}, file: cacheFile, cacheRecordAge: cacheRecordAge, logger: logger, awsClient: s3.New(awsSession)}
+	} else {
+		backoff = &fileBackoffCache{cache: map[string]*pullRequest{}, file: cacheFile, cacheRecordAge: cacheRecordAge, logger: logger}
+	}
 
 	ret := &RetestController{
 		ghClient:      ghClient,
@@ -193,7 +201,7 @@ func NewController(ghClient githubClient, cfg config.Getter, gitClient git.Clien
 		configGetter:  cfg,
 		logger:        logger,
 		usesGitHubApp: usesApp,
-		backoff:       &fileBackoffCache{cache: map[string]*pullRequest{}, file: cacheFile, cacheRecordAge: cacheRecordAge, logger: logger},
+		backoff:       backoff,
 		config:        config,
 	}
 	if err := ret.backoff.load(); err != nil {

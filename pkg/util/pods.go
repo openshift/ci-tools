@@ -587,10 +587,10 @@ func getEventsForPod(ctx context.Context, pod *corev1.Pod, client ctrlruntimecli
 		logrus.WithError(err).Warn("Could not fetch events.")
 		return ""
 	}
-	builder := &strings.Builder{}
-	_, _ = builder.WriteString(fmt.Sprintf("Found %d events for Pod %s:", len(events.Items), pod.Name))
+	var builder strings.Builder
+	builder.WriteString(fmt.Sprintf("Found %d events for Pod %s:", len(events.Items), pod.Name))
 	for _, event := range events.Items {
-		_, _ = builder.WriteString(fmt.Sprintf("\n* %dx %s: %s", event.Count, event.Source.Component, event.Message))
+		builder.WriteString(fmt.Sprintf("\n* %s %dx %s: %s", event.LastTimestamp.Format(time.RFC3339), event.Count, event.Source.Component, event.Message))
 	}
 	return builder.String()
 }

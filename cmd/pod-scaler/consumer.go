@@ -72,9 +72,13 @@ func (c *cacheReloader) reload() {
 		return
 	}
 	c.lock.Lock()
-	c.lastUpdated = lastUpdated
-	for _, subscriber := range c.subscribers {
-		subscriber <- data
+	if len(c.subscribers) > 0 {
+		c.lastUpdated = lastUpdated
+		for _, subscriber := range c.subscribers {
+			subscriber <- data
+		}
+	} else {
+		logger.Warn("no subscribers yet, won't mark as loaded")
 	}
 	c.lock.Unlock()
 	logger.Debug("Newer update loaded.")
@@ -89,6 +93,10 @@ func digestAll(data map[string][]*cacheReloader, digesters map[string]digester, 
 	}
 	logger.Debugf("digesting %d infos.", len(infos))
 	loadDone := digest(logger, infos...)
+	// Now that the initial subscriptions are completed, lets make sure they are updated
+	for _, info := range infos {
+		info.data.reload()
+	}
 	interrupts.Run(func(ctx context.Context) {
 		select {
 		case <-ctx.Done():

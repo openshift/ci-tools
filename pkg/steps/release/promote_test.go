@@ -565,8 +565,8 @@ func TestGetPromotionPod(t *testing.T) {
 		{
 			name: "basic case",
 			imageMirror: map[string]string{
-				"registy.ci.openshift.org/ci/applyconfig:latest": "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:afd71aa3cbbf7d2e00cd8696747b2abf164700147723c657919c20b13d13ec62",
-				"registy.ci.openshift.org/ci/bin:latest":         "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb",
+				"registry.ci.openshift.org/ci/applyconfig:latest": "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:afd71aa3cbbf7d2e00cd8696747b2abf164700147723c657919c20b13d13ec62",
+				"registry.ci.openshift.org/ci/bin:latest":         "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb",
 			},
 			namespace: "ci-op-zyvwvffx",
 		},
@@ -730,19 +730,21 @@ func TestGetPublicImageReference(t *testing.T) {
 	}
 }
 
-func TestTagInQuay(t *testing.T) {
+func TestTagsInQuay(t *testing.T) {
 	var testCases = []struct {
 		name        string
 		image       string
+		target      string
 		date        string
-		expected    string
+		expected    []string
 		expectedErr error
 	}{
 		{
 			name:     "basic case",
 			image:    "docker-registry.default.svc:5000/ci-op-bgqwwknr/pipeline@sha256:d8385fb539f471d4f41da131366b559bb90eeeeca2edd265e10d7c2aa052a1af",
+			target:   "registry.ci.openshift.org/ci/ci-operator:latest",
 			date:     "20230605",
-			expected: "quay.io/openshift/ci:20230605_sha256_d8385fb539f471d4f41da131366b559bb90eeeeca2edd265e10d7c2aa052a1af",
+			expected: []string{"quay.io/openshift/ci:20230605_sha256_d8385fb539f471d4f41da131366b559bb90eeeeca2edd265e10d7c2aa052a1af", "quay.io/openshift/ci:ci_ci-operator_latest"},
 		},
 		{
 			name:        "malformed image pull spec",
@@ -751,14 +753,35 @@ func TestTagInQuay(t *testing.T) {
 			expectedErr: fmt.Errorf("malformed image pull spec: some.io/org/repo:tag"),
 		},
 		{
-			name:        "date must not be empty",
+			name:        "not to registry.ci.openshift.org",
 			expectedErr: fmt.Errorf("date must not be empty"),
+		},
+		{
+			name:        "not to registry.ci.openshift.org",
+			image:       "docker-registry.default.svc:5000/ci-op-bgqwwknr/pipeline@sha256:d8385fb539f471d4f41da131366b559bb90eeeeca2edd265e10d7c2aa052a1af",
+			target:      "some.io/ci/ci-operator:latest",
+			date:        "20230605",
+			expectedErr: fmt.Errorf("malformed image target (some.io/ci/ci-operator:latest): not to registry.ci.openshift.org"),
+		},
+		{
+			name:        "not in namespace/name format",
+			image:       "docker-registry.default.svc:5000/ci-op-bgqwwknr/pipeline@sha256:d8385fb539f471d4f41da131366b559bb90eeeeca2edd265e10d7c2aa052a1af",
+			target:      "registry.ci.openshift.org/ci-operator:latest",
+			date:        "20230605",
+			expectedErr: fmt.Errorf("malformed image target (registry.ci.openshift.org/ci-operator:latest): not in namespace/name format"),
+		},
+		{
+			name:        "not in tag format",
+			image:       "docker-registry.default.svc:5000/ci-op-bgqwwknr/pipeline@sha256:d8385fb539f471d4f41da131366b559bb90eeeeca2edd265e10d7c2aa052a1af",
+			target:      "registry.ci.openshift.org/ci/ci-operator",
+			date:        "20230605",
+			expectedErr: fmt.Errorf("malformed image target (registry.ci.openshift.org/ci/ci-operator): not in tag format"),
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			actual, actualErr := tagInQuay(testCase.image, testCase.date)
+			actual, actualErr := tagsInQuay(testCase.image, testCase.target, testCase.date)
 			if diff := cmp.Diff(testCase.expectedErr, actualErr, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("%s: mismatch (-expected +actual), diff: %s", testCase.name, diff)
 			}

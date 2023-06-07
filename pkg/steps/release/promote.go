@@ -215,11 +215,13 @@ func getPromotionPod(imageMirrorTarget map[string]string, namespace string, date
 
 	var images []string
 	for _, k := range keys {
-		if quayTag, err := tagInQuay(imageMirrorTarget[k], date); err != nil {
+		if quayTags, err := tagsInQuay(imageMirrorTarget[k], k, date); err != nil {
 			logrus.WithField("key", k).WithError(err).
 				Warn("Failed to get the tag in quay.io and skipped the promotion to quay for this image")
 		} else {
-			images = append(images, fmt.Sprintf("%s=%s", imageMirrorTarget[k], quayTag))
+			for _, quayTag := range quayTags {
+				images = append(images, fmt.Sprintf("%s=%s", imageMirrorTarget[k], quayTag))
+			}
 		}
 		images = append(images, fmt.Sprintf("%s=%s", imageMirrorTarget[k], k))
 	}
@@ -259,15 +261,33 @@ func getPromotionPod(imageMirrorTarget map[string]string, namespace string, date
 	}
 }
 
-func tagInQuay(image string, date string) (string, error) {
+func tagsInQuay(image string, target string, date string) ([]string, error) {
 	if date == "" {
-		return "", fmt.Errorf("date must not be empty")
+		return nil, fmt.Errorf("date must not be empty")
 	}
 	splits := strings.Split(image, "@sha256:")
 	if len(splits) != 2 {
-		return "", fmt.Errorf("malformed image pull spec: %s", image)
+		return nil, fmt.Errorf("malformed image pull spec: %s", image)
 	}
-	return fmt.Sprintf("quay.io/openshift/ci:%s_sha256_%s", date, splits[1]), nil
+	digest := splits[1]
+	trimmed := strings.TrimPrefix(target, "registry.ci.openshift.org/")
+	if trimmed == target {
+		return nil, fmt.Errorf("malformed image target (%s): not to registry.ci.openshift.org", target)
+	}
+	splits = strings.Split(trimmed, "/")
+	if len(splits) != 2 {
+		return nil, fmt.Errorf("malformed image target (%s): not in namespace/name format", target)
+	}
+	ns := splits[0]
+	splits = strings.Split(splits[1], ":")
+	if len(splits) != 2 {
+		return nil, fmt.Errorf("malformed image target (%s): not in tag format", target)
+	}
+	name, tag := splits[0], splits[1]
+	return []string{
+		fmt.Sprintf("quay.io/openshift/ci:%s_sha256_%s", date, digest),
+		fmt.Sprintf("quay.io/openshift/ci:%s_%s_%s", ns, name, tag),
+	}, nil
 }
 
 // findDockerImageReference returns DockerImageReference, the string that can be used to pull this image,

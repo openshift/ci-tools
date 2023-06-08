@@ -66,6 +66,8 @@
         value: test
       - name: JOB_NAME_HASH
         value: 5e8c9
+      - name: UNIQUE_HASH
+        value: 5e8c9
       - name: KUBECONFIG
         value: /var/run/secrets/ci.openshift.io/multi-stage/kubeconfig
       - name: KUBECONFIGMINIMAL
@@ -215,6 +217,8 @@
       - name: JOB_NAME_SAFE
         value: test
       - name: JOB_NAME_HASH
+        value: 5e8c9
+      - name: UNIQUE_HASH
         value: 5e8c9
       - name: KUBECONFIG
         value: /var/run/secrets/ci.openshift.io/multi-stage/kubeconfig

@@ -1439,6 +1439,7 @@ func TestFromConfig(t *testing.T) {
 					Job:  "job_name",
 					Refs: tc.refs,
 				},
+				TargetAdditionalSuffix: "1",
 			}
 			jobSpec.SetNamespace(ns)
 			params := api.NewDeferredParameters(tc.env)
@@ -1469,6 +1470,7 @@ func TestFromConfig(t *testing.T) {
 				"JOB_NAME":      "job_name",
 				"JOB_NAME_HASH": jobSpec.JobNameHash(),
 				"JOB_NAME_SAFE": "job-name",
+				"UNIQUE_HASH":   jobSpec.UniqueHash(),
 				"NAMESPACE":     ns,
 			} {
 				tc.expectedParams[k] = v

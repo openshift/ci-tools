@@ -181,6 +181,7 @@ func (s *multiStageTestStep) generatePods(
 			{Name: "NAMESPACE", Value: s.jobSpec.Namespace()},
 			{Name: "JOB_NAME_SAFE", Value: strings.Replace(s.name, "_", "-", -1)},
 			{Name: "JOB_NAME_HASH", Value: s.jobSpec.JobNameHash()},
+			{Name: "UNIQUE_HASH", Value: s.jobSpec.UniqueHash()},
 		}...)
 		container.Env = append(container.Env, env...)
 		container.Env = append(container.Env, s.generateParams(step.Environment)...)

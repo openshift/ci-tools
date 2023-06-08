@@ -142,7 +142,10 @@ of dynamic parameters that are inferred from previous steps. These parameters ar
     The job name in a form safe for use as a Kubernetes resource name.
 
   JOB_NAME_HASH
-    A short hash of the job name for making tasks unique.
+    A short hash of the job name for making tasks unique. This will not account for the target-additional-suffix.
+
+  UNIQUE_HASH
+	A hash for making tasks unique, even when the job name may be the same due to using the target-additional-suffix.
 
   RPM_REPO_<org>_<repo>
     If the job creates RPMs this will be the public URL that can be used as the
@@ -698,7 +701,7 @@ func (o *options) Complete() error {
 		return err
 	}
 
-	appendAdditionalSuffixToTarget(o)
+	handleTargetAdditionalSuffix(o)
 
 	return overrideTestStepDependencyParams(o)
 }
@@ -722,11 +725,11 @@ func parseKeyValParams(input []string, paramType string) (map[string]string, err
 	return params, nil
 }
 
-func appendAdditionalSuffixToTarget(o *options) {
+func handleTargetAdditionalSuffix(o *options) {
 	if o.targetAdditionalSuffix == "" {
 		return
 	}
-
+	o.jobSpec.TargetAdditionalSuffix = o.targetAdditionalSuffix
 	for i, test := range o.configSpec.Tests {
 		for j, target := range o.targets.values {
 			if test.As == target {
@@ -1712,7 +1715,7 @@ func loadLeaseCredentials(leaseServerCredentialsFile string) (string, func() []b
 
 func (o *options) initializeLeaseClient() error {
 	var err error
-	owner := o.namespace + "-" + o.jobSpec.JobNameHash()
+	owner := o.namespace + "-" + o.jobSpec.UniqueHash()
 	username, passwordGetter, err := loadLeaseCredentials(o.leaseServerCredentialsFile)
 	if err != nil {
 		return fmt.Errorf("failed to load lease credentials: %w", err)

@@ -100,7 +100,7 @@ func getTopLevelDirectMessageResponse(user string) []slack.Block {
 		Text: &slack.TextBlockObject{
 			Type: slack.MarkdownType,
 			Text: fmt.Sprintf("<@%s>, Test Platform responds to questions and requests via workflows located in this channel. "+
-				"Please click the :heavy_plus_sign: on the bottom left of the main channel message box, and look for the :zap: to utilize the appropriate workflow.", user),
+				"Please click the `Workflows` dropdown located on the bookmark bar at the top of this channel to utilize the appropriate workflow.", user),
 		},
 	}}
 }

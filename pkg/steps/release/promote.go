@@ -270,9 +270,9 @@ func tagsInQuay(image string, target string, date string) ([]string, error) {
 		return nil, fmt.Errorf("malformed image pull spec: %s", image)
 	}
 	digest := splits[1]
-	trimmed := strings.TrimPrefix(target, "registry.ci.openshift.org/")
+	trimmed := strings.TrimPrefix(target, fmt.Sprintf("%s/", api.ServiceDomainAPPCIRegistry))
 	if trimmed == target {
-		return nil, fmt.Errorf("malformed image target (%s): not to registry.ci.openshift.org", target)
+		return nil, fmt.Errorf("malformed image target (%s): not to %s", target, api.ServiceDomainAPPCIRegistry)
 	}
 	splits = strings.Split(trimmed, "/")
 	if len(splits) != 2 {
@@ -285,8 +285,8 @@ func tagsInQuay(image string, target string, date string) ([]string, error) {
 	}
 	name, tag := splits[0], splits[1]
 	return []string{
-		fmt.Sprintf("quay.io/openshift/ci:%s_sha256_%s", date, digest),
-		fmt.Sprintf("quay.io/openshift/ci:%s_%s_%s", ns, name, tag),
+		fmt.Sprintf("%s:%s_sha256_%s", api.QuayOpenShiftCIRepo, date, digest),
+		fmt.Sprintf("%s:%s_%s_%s", api.QuayOpenShiftCIRepo, ns, name, tag),
 	}, nil
 }
 

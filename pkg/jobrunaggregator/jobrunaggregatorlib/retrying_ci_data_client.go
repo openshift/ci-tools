@@ -26,21 +26,21 @@ func NewRetryingCIDataClient(delegate CIDataClient) CIDataClient {
 	}
 }
 
-func (c *retryingCIDataClient) GetBackendDisruptionRowCountByJob(ctx context.Context, jobName string) (uint64, error) {
+func (c *retryingCIDataClient) GetBackendDisruptionRowCountByJob(ctx context.Context, jobName, masterNodesUpdated string) (uint64, error) {
 	var ret uint64
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
 		var innerErr error
-		ret, innerErr = c.delegate.GetBackendDisruptionRowCountByJob(ctx, jobName)
+		ret, innerErr = c.delegate.GetBackendDisruptionRowCountByJob(ctx, jobName, masterNodesUpdated)
 		return innerErr
 	})
 	return ret, err
 }
 
-func (c *retryingCIDataClient) GetBackendDisruptionStatisticsByJob(ctx context.Context, jobName string) ([]jobrunaggregatorapi.BackendDisruptionStatisticsRow, error) {
+func (c *retryingCIDataClient) GetBackendDisruptionStatisticsByJob(ctx context.Context, jobName, masterNodesUpdated string) ([]jobrunaggregatorapi.BackendDisruptionStatisticsRow, error) {
 	var ret []jobrunaggregatorapi.BackendDisruptionStatisticsRow
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
 		var innerErr error
-		ret, innerErr = c.delegate.GetBackendDisruptionStatisticsByJob(ctx, jobName)
+		ret, innerErr = c.delegate.GetBackendDisruptionStatisticsByJob(ctx, jobName, masterNodesUpdated)
 		return innerErr
 	})
 	return ret, err

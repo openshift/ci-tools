@@ -21,7 +21,7 @@ func isExcludedDisruptionBackend(name string) bool {
 	return strings.Contains(name, "ci-cluster-network-liveness")
 }
 
-func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx context.Context, jobGCSBucketRoot string, finishedJobsToAggregate []jobrunaggregatorapi.JobRunInfo) (*junit.TestSuite, error) {
+func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx context.Context, jobGCSBucketRoot string, finishedJobsToAggregate []jobrunaggregatorapi.JobRunInfo, masterNodesUpdated string) (*junit.TestSuite, error) {
 	disruptionJunitSuite := &junit.TestSuite{
 		Name:      "BackendDisruption",
 		TestCases: []*junit.TestCase{},
@@ -57,7 +57,7 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 	testCaseNamePatternToDisruptionCheckFn := map[string]disruptionJunitCheckFunc{
 		"%s mean disruption should be less than historical plus five standard deviations": o.passFailCalculator.CheckDisruptionMeanWithinFiveStandardDeviations,
 		// TODO add a SKIP mechanism to disruptionJunitCheckFunc instead of the fail bool
-		//"%s mean disruption should be less than historical plus one standard deviation":  o.passFailCalculator.CheckDisruptionMeanWithinOneStandardDeviation,
+		// "%s mean disruption should be less than historical plus one standard deviation":  o.passFailCalculator.CheckDisruptionMeanWithinOneStandardDeviation,
 		"%s disruption P70 should not be worse":  checkPercentileDisruption(o.passFailCalculator, 70), // for 7 attempts, this  gives us a latch on getting worse
 		"%s disruption P85 should not be worse":  checkPercentileDisruption(o.passFailCalculator, 85), // for 5 attempts, this gives us a latch on getting worse.
 		"%s disruption P95 should not be worse":  checkPercentileDisruption(o.passFailCalculator, 95),
@@ -73,7 +73,7 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 				continue
 			}
 			jobRunIDToAvailabilityResultForBackend := getDisruptionForBackend(jobRunIDToBackendNameToAvailabilityResult, backendName)
-			failedJobRunIDs, successfulJobRunIDs, status, message, err := disruptionCheckFn(ctx, jobRunIDToAvailabilityResultForBackend, backendName)
+			failedJobRunIDs, successfulJobRunIDs, status, message, err := disruptionCheckFn(ctx, jobRunIDToAvailabilityResultForBackend, backendName, masterNodesUpdated)
 			if err != nil {
 				return nil, err
 			}
@@ -96,18 +96,18 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 }
 
 func checkPercentileDisruption(passFailCalculator baseline, percentile int) disruptionJunitCheckFunc {
-	return func(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error) {
-		return passFailCalculator.CheckPercentileDisruption(ctx, jobRunIDToAvailabilityResultForBackend, backend, percentile)
+	return func(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend, masterNodesUpdated string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error) {
+		return passFailCalculator.CheckPercentileDisruption(ctx, jobRunIDToAvailabilityResultForBackend, backend, percentile, masterNodesUpdated)
 	}
 }
 
 func checkPercentileRankDisruption(passFailCalculator baseline, maxDisruptionSeconds int) disruptionJunitCheckFunc {
-	return func(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error) {
-		return passFailCalculator.CheckPercentileRankDisruption(ctx, jobRunIDToAvailabilityResultForBackend, backend, maxDisruptionSeconds)
+	return func(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, masterNodesUpdated string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error) {
+		return passFailCalculator.CheckPercentileRankDisruption(ctx, jobRunIDToAvailabilityResultForBackend, backend, maxDisruptionSeconds, masterNodesUpdated)
 	}
 }
 
-type disruptionJunitCheckFunc func(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error)
+type disruptionJunitCheckFunc func(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend, masterNodesUpdated string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error)
 
 func disruptionToJUnitTestCase(testCaseName, testSuiteName, jobGCSBucketRoot string, failedJobRunIDs, successfulJobRunIDs []string, status testCaseStatus, message string) (*junit.TestCase, error) {
 	junitTestCase := &junit.TestCase{

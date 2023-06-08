@@ -1,7 +1,6 @@
 package release
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
 
@@ -571,10 +570,12 @@ func TestGetPromotionPod(t *testing.T) {
 			namespace: "ci-op-zyvwvffx",
 		},
 		{
-			name: "tag_by_commit is true",
+			name: "promotion-quay",
 			imageMirror: map[string]string{
-				"registry.ci.openshift.org/openstack-k8s-operators/ci-framework-image:latest":                                   "registry.build03.ci.openshift.org/ci-op-9bdij1f6/pipeline@sha256:61f8d86d5ebe135e37c547144978d66c1c6cd30f3034df1bae81d0fe3d4b073a",
-				"registry.ci.openshift.org/openstack-k8s-operators/ci-framework-image:a2a9ab5a9df0024caa4b40eac7464d065ce9547e": "registry.build03.ci.openshift.org/ci-op-9bdij1f6/pipeline@sha256:61f8d86d5ebe135e37c547144978d66c1c6cd30f3034df1bae81d0fe3d4b073a",
+				"quay.io/openshift/ci:20230619_sha256_bbb": "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
+				"quay.io/openshift/ci:20230619_sha256_ddd": "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd",
+				"quay.io/openshift/ci:ci_a_latest":         "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
+				"quay.io/openshift/ci:ci_c_latest":         "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd",
 			},
 			namespace: "ci-op-9bdij1f6",
 		},
@@ -582,17 +583,20 @@ func TestGetPromotionPod(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, getPromotionPod(testCase.imageMirror, testCase.namespace, "20230605"))
+			testhelper.CompareWithFixture(t, getPromotionPod(testCase.imageMirror, testCase.namespace, "promotion"))
 		})
 	}
 }
 
 func TestGetImageMirror(t *testing.T) {
 	var testCases = []struct {
-		name     string
-		tags     map[string][]api.ImageStreamTagReference
-		pipeline *imageapi.ImageStream
-		expected map[string]string
+		name       string
+		stepName   string
+		tags       map[string][]api.ImageStreamTagReference
+		pipeline   *imageapi.ImageStream
+		registry   string
+		mirrorFunc func(source, target string, tag api.ImageStreamTagReference, date string, imageMirror map[string]string)
+		expected   map[string]string
 	}{
 		{
 			name: "empty input",
@@ -602,7 +606,8 @@ func TestGetImageMirror(t *testing.T) {
 			pipeline: &imageapi.ImageStream{},
 		},
 		{
-			name: "basic case",
+			name:     "basic case",
+			stepName: "promotion",
 			tags: map[string][]api.ImageStreamTagReference{
 				"b": {
 					{Namespace: "ci", Name: "a", Tag: "latest"},
@@ -633,6 +638,8 @@ func TestGetImageMirror(t *testing.T) {
 					},
 				},
 			},
+			registry:   "registry.ci.openshift.org",
+			mirrorFunc: api.DefaultMirrorFunc,
 			expected: map[string]string{
 				"registry.ci.openshift.org/ci/a:latest": "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb",
 				"registry.ci.openshift.org/ci/c:latest": "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:ddd",
@@ -671,44 +678,106 @@ func TestGetImageMirror(t *testing.T) {
 					},
 				},
 			},
+			registry:   "registry.ci.openshift.org",
+			mirrorFunc: api.DefaultMirrorFunc,
 			expected: map[string]string{
 				"registry.ci.openshift.org/ci/a:promoted":      "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb",
 				"registry.ci.openshift.org/ci/a:also-promoted": "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb",
 				"registry.ci.openshift.org/ci/c:latest":        "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:ddd",
 			},
 		},
+		{
+			name: "quay.io",
+			tags: map[string][]api.ImageStreamTagReference{
+				"b": {
+					{Namespace: "ci", Name: "a", Tag: "latest"},
+				},
+				"d": {
+					{Namespace: "ci", Name: "c", Tag: "latest"},
+				},
+			},
+			pipeline: &imageapi.ImageStream{
+				Status: imageapi.ImageStreamStatus{
+					PublicDockerImageRepository: "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline",
+					Tags: []imageapi.NamedTagEventList{
+						{
+							Tag: "b",
+							Items: []imageapi.TagEvent{
+								{
+									DockerImageReference: "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb",
+								},
+							},
+						},
+						{
+							Tag: "d",
+							Items: []imageapi.TagEvent{
+								{
+									DockerImageReference: "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:ddd",
+								},
+							},
+						},
+					},
+				},
+			},
+			registry:   "quay.io/openshift/ci",
+			mirrorFunc: api.QuayMirrorFunc,
+			expected: map[string]string{
+				"quay.io/openshift/ci:20230619_sha256_bbb": "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
+				"quay.io/openshift/ci:20230619_sha256_ddd": "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd",
+				"quay.io/openshift/ci:ci_a_latest":         "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
+				"quay.io/openshift/ci:ci_c_latest":         "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd",
+			},
+		},
+		{
+			name: "image promoted to multiple names: quay.io",
+			tags: map[string][]api.ImageStreamTagReference{
+				"b": {
+					{Namespace: "ci", Name: "a", Tag: "promoted"},
+					{Namespace: "ci", Name: "a", Tag: "also-promoted"},
+				},
+				"d": {
+					{Namespace: "ci", Name: "c", Tag: "latest"},
+				},
+			},
+			pipeline: &imageapi.ImageStream{
+				Status: imageapi.ImageStreamStatus{
+					PublicDockerImageRepository: "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline",
+					Tags: []imageapi.NamedTagEventList{
+						{
+							Tag: "b",
+							Items: []imageapi.TagEvent{
+								{
+									DockerImageReference: "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb",
+								},
+							},
+						},
+						{
+							Tag: "d",
+							Items: []imageapi.TagEvent{
+								{
+									DockerImageReference: "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:ddd",
+								},
+							},
+						},
+					},
+				},
+			},
+			registry:   "quay.io/openshift/ci",
+			mirrorFunc: api.QuayMirrorFunc,
+			expected: map[string]string{
+				"quay.io/openshift/ci:20230619_sha256_bbb": "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
+				"quay.io/openshift/ci:20230619_sha256_ddd": "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd",
+				"quay.io/openshift/ci:ci_a_also-promoted":  "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
+				"quay.io/openshift/ci:ci_a_promoted":       "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
+				"quay.io/openshift/ci:ci_c_latest":         "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd",
+			},
+		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if actual, _ := getImageMirrorTarget(testCase.tags, testCase.pipeline, "registry.ci.openshift.org"); !reflect.DeepEqual(actual, testCase.expected) {
+			if actual, _ := getImageMirrorTarget(testCase.tags, testCase.pipeline, testCase.registry, "20230619", testCase.mirrorFunc); !reflect.DeepEqual(actual, testCase.expected) {
 				t.Errorf("%s: got incorrect ImageMirror mapping: %v", testCase.name, diff.ObjectDiff(actual, testCase.expected))
-			}
-		})
-	}
-}
-
-func TestRegistryDomain(t *testing.T) {
-	var testCases = []struct {
-		name     string
-		config   *api.PromotionConfiguration
-		expected string
-	}{
-		{
-			name:     "default",
-			config:   &api.PromotionConfiguration{},
-			expected: "registry.ci.openshift.org",
-		},
-		{
-			name:     "override",
-			config:   &api.PromotionConfiguration{RegistryOverride: "whoa.com.biz"},
-			expected: "whoa.com.biz",
-		},
-	}
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			if diff := cmp.Diff(testCase.expected, registryDomain(testCase.config)); diff != "" {
-				t.Errorf("%s: got incorrect registry domain: %v", testCase.name, diff)
 			}
 		})
 	}
@@ -733,70 +802,6 @@ func TestGetPublicImageReference(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			if actual, expected := getPublicImageReference(testCase.dockerImageReference, testCase.publicDockerImageRepository), testCase.expected; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect public image reference: %v", testCase.name, diff.ObjectDiff(actual, expected))
-			}
-		})
-	}
-}
-
-func TestTagsInQuay(t *testing.T) {
-	var testCases = []struct {
-		name        string
-		image       string
-		target      string
-		date        string
-		expected    []string
-		expectedErr error
-	}{
-		{
-			name:     "basic case",
-			image:    "docker-registry.default.svc:5000/ci-op-bgqwwknr/pipeline@sha256:d8385fb539f471d4f41da131366b559bb90eeeeca2edd265e10d7c2aa052a1af",
-			target:   "registry.ci.openshift.org/ci/ci-operator:latest",
-			date:     "20230605",
-			expected: []string{"quay.io/openshift/ci:20230605_sha256_d8385fb539f471d4f41da131366b559bb90eeeeca2edd265e10d7c2aa052a1af", "quay.io/openshift/ci:ci_ci-operator_latest"},
-		},
-		{
-			name:        "malformed image pull spec",
-			image:       "some.io/org/repo:tag",
-			date:        "20230605",
-			expectedErr: fmt.Errorf("malformed image pull spec: some.io/org/repo:tag"),
-		},
-		{
-			name:        "not to registry.ci.openshift.org",
-			expectedErr: fmt.Errorf("date must not be empty"),
-		},
-		{
-			name:        "not to registry.ci.openshift.org",
-			image:       "docker-registry.default.svc:5000/ci-op-bgqwwknr/pipeline@sha256:d8385fb539f471d4f41da131366b559bb90eeeeca2edd265e10d7c2aa052a1af",
-			target:      "some.io/ci/ci-operator:latest",
-			date:        "20230605",
-			expectedErr: fmt.Errorf("malformed image target (some.io/ci/ci-operator:latest): not to registry.ci.openshift.org"),
-		},
-		{
-			name:        "not in namespace/name format",
-			image:       "docker-registry.default.svc:5000/ci-op-bgqwwknr/pipeline@sha256:d8385fb539f471d4f41da131366b559bb90eeeeca2edd265e10d7c2aa052a1af",
-			target:      "registry.ci.openshift.org/ci-operator:latest",
-			date:        "20230605",
-			expectedErr: fmt.Errorf("malformed image target (registry.ci.openshift.org/ci-operator:latest): not in namespace/name format"),
-		},
-		{
-			name:        "not in tag format",
-			image:       "docker-registry.default.svc:5000/ci-op-bgqwwknr/pipeline@sha256:d8385fb539f471d4f41da131366b559bb90eeeeca2edd265e10d7c2aa052a1af",
-			target:      "registry.ci.openshift.org/ci/ci-operator",
-			date:        "20230605",
-			expectedErr: fmt.Errorf("malformed image target (registry.ci.openshift.org/ci/ci-operator): not in tag format"),
-		},
-	}
-
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			actual, actualErr := tagsInQuay(testCase.image, testCase.target, testCase.date)
-			if diff := cmp.Diff(testCase.expectedErr, actualErr, testhelper.EquateErrorMessage); diff != "" {
-				t.Errorf("%s: mismatch (-expected +actual), diff: %s", testCase.name, diff)
-			}
-			if actualErr == nil {
-				if diff := cmp.Diff(testCase.expected, actual); diff != "" {
-					t.Errorf("%s: mismatch (-expected +actual), diff: %s", testCase.name, diff)
-				}
 			}
 		})
 	}

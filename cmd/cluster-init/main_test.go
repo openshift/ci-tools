@@ -98,7 +98,7 @@ func TestValidateOptions(t *testing.T) {
 			},
 		},
 		{
-			name: "update single cluster with hosted true",
+			name: "update an existing cluster with hosted true",
 			options: options{
 				clusterName: "existingCluster",
 				releaseRepo: testdata,

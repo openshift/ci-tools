@@ -130,8 +130,22 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 	if len(o.explicitGCSPrefix) > 0 {
 		currentAggregationJunit.jobGCSBucketRoot = o.explicitGCSPrefix
 	}
+	masterNodesUpdated := ""
 	for i := range finishedJobsToAggregate {
 		jobRun := finishedJobsToAggregate[i]
+
+		// we will take the first nonempty value
+		// they should all be the same and if not then there is a different issue...
+		// could change the logic to check each value and preserve 'Y' over all others
+		// if desired
+		if len(masterNodesUpdated) == 0 {
+			// get the flag to see if masternodes have been updated
+			clusterData, err := jobRun.GetOpenShiftTestsFilesWithPrefix(ctx, "cluster-data")
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Could not fetch cluster data for %s - %v\n", jobRun.GetJobRunID(), err)
+			}
+			masterNodesUpdated = jobrunaggregatorlib.GetMasterNodesUpdatedStatusFromClusterData(clusterData)
+		}
 		currJunit, err := newJobRunJunit(ctx, jobRun)
 		if err != nil {
 			return err
@@ -174,7 +188,7 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 
 	fmt.Printf("%q for %q:  aggregating disruption tests.\n", o.jobName, o.payloadTag)
 
-	disruptionSuite, err := o.CalculateDisruptionTestSuite(ctx, currentAggregationJunit.jobGCSBucketRoot, finishedJobsToAggregate)
+	disruptionSuite, err := o.CalculateDisruptionTestSuite(ctx, currentAggregationJunit.jobGCSBucketRoot, finishedJobsToAggregate, masterNodesUpdated)
 	if err != nil {
 		return err
 	}

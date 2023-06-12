@@ -41,33 +41,33 @@ func (m *MockCIDataClient) EXPECT() *MockCIDataClientMockRecorder {
 }
 
 // GetBackendDisruptionRowCountByJob mocks base method.
-func (m *MockCIDataClient) GetBackendDisruptionRowCountByJob(arg0 context.Context, arg1 string) (uint64, error) {
+func (m *MockCIDataClient) GetBackendDisruptionRowCountByJob(arg0 context.Context, arg1, arg2 string) (uint64, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBackendDisruptionRowCountByJob", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetBackendDisruptionRowCountByJob", arg0, arg1, arg2)
 	ret0, _ := ret[0].(uint64)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetBackendDisruptionRowCountByJob indicates an expected call of GetBackendDisruptionRowCountByJob.
-func (mr *MockCIDataClientMockRecorder) GetBackendDisruptionRowCountByJob(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockCIDataClientMockRecorder) GetBackendDisruptionRowCountByJob(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBackendDisruptionRowCountByJob", reflect.TypeOf((*MockCIDataClient)(nil).GetBackendDisruptionRowCountByJob), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBackendDisruptionRowCountByJob", reflect.TypeOf((*MockCIDataClient)(nil).GetBackendDisruptionRowCountByJob), arg0, arg1, arg2)
 }
 
 // GetBackendDisruptionStatisticsByJob mocks base method.
-func (m *MockCIDataClient) GetBackendDisruptionStatisticsByJob(arg0 context.Context, arg1 string) ([]jobrunaggregatorapi.BackendDisruptionStatisticsRow, error) {
+func (m *MockCIDataClient) GetBackendDisruptionStatisticsByJob(arg0 context.Context, arg1, arg2 string) ([]jobrunaggregatorapi.BackendDisruptionStatisticsRow, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBackendDisruptionStatisticsByJob", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetBackendDisruptionStatisticsByJob", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]jobrunaggregatorapi.BackendDisruptionStatisticsRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetBackendDisruptionStatisticsByJob indicates an expected call of GetBackendDisruptionStatisticsByJob.
-func (mr *MockCIDataClientMockRecorder) GetBackendDisruptionStatisticsByJob(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockCIDataClientMockRecorder) GetBackendDisruptionStatisticsByJob(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBackendDisruptionStatisticsByJob", reflect.TypeOf((*MockCIDataClient)(nil).GetBackendDisruptionStatisticsByJob), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBackendDisruptionStatisticsByJob", reflect.TypeOf((*MockCIDataClient)(nil).GetBackendDisruptionStatisticsByJob), arg0, arg1, arg2)
 }
 
 // GetJobRunForJobNameAfterTime mocks base method.

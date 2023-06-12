@@ -30,10 +30,10 @@ const fallBackMessagePrefix = "(Using previous release historical data from job:
 
 type baseline interface {
 	CheckFailed(ctx context.Context, jobName string, suiteNames []string, testCaseDetails *jobrunaggregatorlib.TestCaseDetails) (status testCaseStatus, message string, err error)
-	CheckDisruptionMeanWithinFiveStandardDeviations(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error)
-	CheckDisruptionMeanWithinOneStandardDeviation(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error)
-	CheckPercentileDisruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, percentile int) (failureJobRunIDs []string, successJobRunIDs []string, status testCaseStatus, message string, err error)
-	CheckPercentileRankDisruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, maxDisruptionSeconds int) (failureJobRunIDs []string, successJobRunIDs []string, status testCaseStatus, message string, err error)
+	CheckDisruptionMeanWithinFiveStandardDeviations(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend, masterNodesUpdated string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error)
+	CheckDisruptionMeanWithinOneStandardDeviation(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend, masterNodesUpdated string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error)
+	CheckPercentileDisruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, percentile int, masterNodesUpdated string) (failureJobRunIDs []string, successJobRunIDs []string, status testCaseStatus, message string, err error)
+	CheckPercentileRankDisruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, maxDisruptionSeconds int, masterNodesUpdated string) (failureJobRunIDs []string, successJobRunIDs []string, status testCaseStatus, message string, err error)
 }
 
 func assignPassFail(ctx context.Context, jobName string, combined *junit.TestSuites, baselinePassFail baseline) error {
@@ -71,8 +71,8 @@ func assignPassFailForTestSuite(ctx context.Context, jobName string, parentTestS
 		// TODO once we are ready to stop failing on aggregating the availability tests, we write something here to ignore
 		//  the aggregated tests when they fail.  In actuality, this may never be the case, since we're likely to make the
 		//  individual tests nearly always pass.
-		//if jobrunaggregatorlib.IsDisruptionTest(currTestCase.Name) {
-		//}
+		// if jobrunaggregatorlib.IsDisruptionTest(currTestCase.Name) {
+		// }
 
 		status, message, err = baselinePassFail.CheckFailed(ctx, jobName, currSuiteNames, currDetails)
 		if err != nil {
@@ -279,10 +279,10 @@ func (a *weeklyAverageFromTenDays) getNormalizedFallBackJobName(ctx context.Cont
 	return jobName, nil
 }
 
-func (a *weeklyAverageFromTenDays) getDisruptionByBackend(ctx context.Context) (map[string]backendDisruptionStats, string, error) {
+func (a *weeklyAverageFromTenDays) getDisruptionByBackend(ctx context.Context, masterNodesUpdated string) (map[string]backendDisruptionStats, string, error) {
 	a.queryDisruptionOnce.Do(func() {
 		jobName := a.jobName
-		count, err := a.bigQueryClient.GetBackendDisruptionRowCountByJob(ctx, jobName)
+		count, err := a.bigQueryClient.GetBackendDisruptionRowCountByJob(ctx, jobName, masterNodesUpdated)
 		if err != nil {
 			a.queryDisruptionErr = err
 			return
@@ -295,7 +295,7 @@ func (a *weeklyAverageFromTenDays) getDisruptionByBackend(ctx context.Context) (
 			}
 			a.fallBackJobName = jobName
 		}
-		rows, err := a.bigQueryClient.GetBackendDisruptionStatisticsByJob(ctx, jobName)
+		rows, err := a.bigQueryClient.GetBackendDisruptionStatisticsByJob(ctx, jobName, masterNodesUpdated)
 		if err != nil {
 			a.queryDisruptionErr = err
 			return
@@ -312,12 +312,12 @@ func (a *weeklyAverageFromTenDays) getDisruptionByBackend(ctx context.Context) (
 	return a.disruptionByBackend, a.fallBackJobName, a.queryDisruptionErr
 }
 
-func (a *weeklyAverageFromTenDays) CheckDisruptionMeanWithinFiveStandardDeviations(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) ([]string, []string, testCaseStatus, string, error) {
-	return a.checkDisruptionMean(ctx, jobRunIDToAvailabilityResultForBackend, backend, meanPlusFiveStandardDeviations)
+func (a *weeklyAverageFromTenDays) CheckDisruptionMeanWithinFiveStandardDeviations(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, masterNodesUpdated string) ([]string, []string, testCaseStatus, string, error) {
+	return a.checkDisruptionMean(ctx, jobRunIDToAvailabilityResultForBackend, backend, meanPlusFiveStandardDeviations, masterNodesUpdated)
 }
 
-func (a *weeklyAverageFromTenDays) CheckDisruptionMeanWithinOneStandardDeviation(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) ([]string, []string, testCaseStatus, string, error) {
-	return a.checkDisruptionMean(ctx, jobRunIDToAvailabilityResultForBackend, backend, meanPlusOneStandardDeviation)
+func (a *weeklyAverageFromTenDays) CheckDisruptionMeanWithinOneStandardDeviation(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, masterNodesUpdated string) ([]string, []string, testCaseStatus, string, error) {
+	return a.checkDisruptionMean(ctx, jobRunIDToAvailabilityResultForBackend, backend, meanPlusOneStandardDeviation, masterNodesUpdated)
 }
 
 type disruptionThresholdFunc func(stats backendDisruptionStats) float64
@@ -330,11 +330,11 @@ func meanPlusOneStandardDeviation(historicalDisruptionStatistic backendDisruptio
 	return historicalDisruptionStatistic.rowData.Mean + historicalDisruptionStatistic.rowData.StandardDeviation
 }
 
-func (a *weeklyAverageFromTenDays) checkDisruptionMean(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, disruptonThresholdFn disruptionThresholdFunc) ([]string, []string, testCaseStatus, string, error) {
+func (a *weeklyAverageFromTenDays) checkDisruptionMean(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, disruptonThresholdFn disruptionThresholdFunc, masterNodesUpdated string) ([]string, []string, testCaseStatus, string, error) {
 	failedJobRunsIDs := []string{}
 	successfulJobRunIDs := []string{}
 
-	historicalDisruption, fallBackJobName, err := a.getDisruptionByBackend(ctx)
+	historicalDisruption, fallBackJobName, err := a.getDisruptionByBackend(ctx, masterNodesUpdated)
 	messagePrefix := ""
 	if len(fallBackJobName) > 0 {
 		messagePrefix = fmt.Sprintf(fallBackMessagePrefix, fallBackJobName)
@@ -421,8 +421,8 @@ func (a *weeklyAverageFromTenDays) checkDisruptionMean(ctx context.Context, jobR
 	), nil
 }
 
-func (a *weeklyAverageFromTenDays) CheckPercentileDisruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, percentile int) ([]string, []string, testCaseStatus, string, error) {
-	historicalDisruption, fallBackJobName, err := a.getDisruptionByBackend(ctx)
+func (a *weeklyAverageFromTenDays) CheckPercentileDisruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, percentile int, masterNodesUpdated string) ([]string, []string, testCaseStatus, string, error) {
+	historicalDisruption, fallBackJobName, err := a.getDisruptionByBackend(ctx, masterNodesUpdated)
 	if err != nil {
 		message := fmt.Sprintf("error getting historical disruption data, skipping: %v\n", err)
 		failureJobRunIDs := sets.StringKeySet(jobRunIDToAvailabilityResultForBackend).List()
@@ -518,8 +518,8 @@ func getPercentileRank(historicalDisruption backendDisruptionStats, disruptionTh
 	return 99
 }
 
-func (a *weeklyAverageFromTenDays) CheckPercentileRankDisruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, maxDisruptionSeconds int) ([]string, []string, testCaseStatus, string, error) {
-	historicalDisruption, fallBackJobName, err := a.getDisruptionByBackend(ctx)
+func (a *weeklyAverageFromTenDays) CheckPercentileRankDisruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, maxDisruptionSeconds int, masterNodesUpdated string) ([]string, []string, testCaseStatus, string, error) {
+	historicalDisruption, fallBackJobName, err := a.getDisruptionByBackend(ctx, masterNodesUpdated)
 	if err != nil {
 		message := fmt.Sprintf("error getting historical disruption data, skipping: %v\n", err)
 		failureJobRunIDs := sets.StringKeySet(jobRunIDToAvailabilityResultForBackend).List()

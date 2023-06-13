@@ -45,11 +45,6 @@ func WaitAndGetAllFinishedJobRuns(ctx context.Context,
 	variantInfo string) ([]jobrunaggregatorapi.JobRunInfo, []jobrunaggregatorapi.JobRunInfo, []string, []string, error) {
 	clock := clock.RealClock{}
 
-	// Polling involves some queries that can add up to substantial costs, there's little
-	// point as we have no jobs running in under 2 hours.
-	fmt.Println("waiting 2h for sub-jobs to complete before we start polling")
-	time.Sleep(2 * time.Hour)
-
 	var finishedJobRuns []jobrunaggregatorapi.JobRunInfo
 	var finishedJobRunNames []string
 	var unfinishedJobRuns []jobrunaggregatorapi.JobRunInfo

@@ -10,9 +10,11 @@ import (
 	time "time"
 
 	gomock "github.com/golang/mock/gomock"
+
+	sets "k8s.io/apimachinery/pkg/util/sets"
+
 	jobrunaggregatorapi "github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	jobrunaggregatorlib "github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
-	sets "k8s.io/apimachinery/pkg/util/sets"
 )
 
 // MockCIDataClient is a mock of CIDataClient interface.

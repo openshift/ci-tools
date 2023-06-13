@@ -570,6 +570,14 @@ func TestGetPromotionPod(t *testing.T) {
 			},
 			namespace: "ci-op-zyvwvffx",
 		},
+		{
+			name: "tag_by_commit is true",
+			imageMirror: map[string]string{
+				"registry.ci.openshift.org/openstack-k8s-operators/ci-framework-image:latest":                                   "registry.build03.ci.openshift.org/ci-op-9bdij1f6/pipeline@sha256:61f8d86d5ebe135e37c547144978d66c1c6cd30f3034df1bae81d0fe3d4b073a",
+				"registry.ci.openshift.org/openstack-k8s-operators/ci-framework-image:a2a9ab5a9df0024caa4b40eac7464d065ce9547e": "registry.build03.ci.openshift.org/ci-op-9bdij1f6/pipeline@sha256:61f8d86d5ebe135e37c547144978d66c1c6cd30f3034df1bae81d0fe3d4b073a",
+			},
+			namespace: "ci-op-9bdij1f6",
+		},
 	}
 
 	for _, testCase := range testCases {

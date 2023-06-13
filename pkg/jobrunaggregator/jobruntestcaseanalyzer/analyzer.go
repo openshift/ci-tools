@@ -349,7 +349,7 @@ func (o *JobRunTestCaseAnalyzerOptions) findJobRunsWithRetry(ctx context.Context
 	jobName string, jobRunLocator jobrunaggregatorlib.JobRunLocator) ([]jobrunaggregatorapi.JobRunInfo, error) {
 	errorsInARow := 0
 	for {
-		jobRuns, err := jobRunLocator.FindRelatedJobs(ctx)
+		jobRuns, err := jobRunLocator.FindRelatedJobRuns(ctx)
 		if err != nil {
 			if errorsInARow > 20 {
 				fmt.Printf("give up finding job runs for %s after retries: %v", jobName, err)
@@ -372,9 +372,10 @@ func (o *JobRunTestCaseAnalyzerOptions) findJobRunsWithRetry(ctx context.Context
 	}
 }
 
-// GetRelatedJobRuns gets all related job runs for analysis
+// GetRelatedJobRuns gets all related job runs for analysis which are associated with this payload.
 func (o *JobRunTestCaseAnalyzerOptions) GetRelatedJobRuns(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error) {
 	var jobRunsToReturn []jobrunaggregatorapi.JobRunInfo
+
 	jobs, err := o.jobGetter.GetJobs(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get related jobs: %w", err)

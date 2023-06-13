@@ -864,6 +864,7 @@ func (it *UnifiedTestRunRowIterator) Next() (*jobrunaggregatorapi.UnifiedTestRun
 }
 
 func (c *ciDataClient) GetJobRunForJobNameBeforeTime(ctx context.Context, jobName string, targetTime time.Time) (string, error) {
+	logrus.Info("called GetJobRunForJobNameBeforeTime")
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(
 		`SELECT Name
 FROM DATA_SET_LOCATION.JobRuns
@@ -894,6 +895,7 @@ LIMIT 1
 }
 
 func (c *ciDataClient) GetJobRunForJobNameAfterTime(ctx context.Context, jobName string, targetTime time.Time) (string, error) {
+	logrus.Info("called GetJobRunForJobNameAfterTime")
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(
 		`SELECT Name
 FROM DATA_SET_LOCATION.JobRuns

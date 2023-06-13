@@ -46,7 +46,7 @@ type JobRunAggregatorAnalyzerOptions struct {
 func (o *JobRunAggregatorAnalyzerOptions) GetRelatedJobRuns(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error) {
 	errorsInARow := 0
 	for {
-		jobsToAggregate, err := o.jobRunLocator.FindRelatedJobs(ctx)
+		jobsToAggregate, err := o.jobRunLocator.FindRelatedJobRuns(ctx)
 		if err == nil {
 			return jobsToAggregate, nil
 		}

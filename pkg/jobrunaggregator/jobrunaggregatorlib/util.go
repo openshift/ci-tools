@@ -45,6 +45,14 @@ func WaitAndGetAllFinishedJobRuns(ctx context.Context,
 	variantInfo string) ([]jobrunaggregatorapi.JobRunInfo, []jobrunaggregatorapi.JobRunInfo, []string, []string, error) {
 	clock := clock.RealClock{}
 
+	// We only look up related job runs once, we've already waiting hours before reaching this
+	// point so all our payload jobs should have been launched by now.
+	// This can get expensive as it presently has to look at all jobs we know about, all runs in the time window, and
+	// check each runs prowjob.json to see if it's associated with the payload we're interested. Doing it within the
+	// for loop was very expensive.
+	// TODO: could optimize here by querying from https://prow.ci.openshift.org/prowjobs.js instead of all the rest.
+	relatedJobRuns, err := jobRunGetter.GetRelatedJobRuns(ctx)
+
 	var finishedJobRuns []jobrunaggregatorapi.JobRunInfo
 	var finishedJobRunNames []string
 	var unfinishedJobRuns []jobrunaggregatorapi.JobRunInfo
@@ -56,8 +64,6 @@ func WaitAndGetAllFinishedJobRuns(ctx context.Context,
 		unfinishedJobRuns = []jobrunaggregatorapi.JobRunInfo{}
 		finishedJobRunNames = []string{}
 		unfinishedJobRunNames = []string{}
-
-		relatedJobRuns, err := jobRunGetter.GetRelatedJobRuns(ctx)
 
 		if err != nil {
 			return finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames, err

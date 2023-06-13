@@ -1390,10 +1390,12 @@ func (p ClusterProfile) ClusterType() string {
 		return string(CloudGCP)
 	case
 		ClusterProfileIBMCloud,
-		ClusterProfileIBMCloudQE,
-		ClusterProfileIBMCloudMultiPpc64le, // TODO: Check if the return value should be "ibmcloud-multi-ppc64le" instead of "ibmcloud"
-		ClusterProfileIBMCloudMultiS390x:
+		ClusterProfileIBMCloudQE:
 		return "ibmcloud"
+	case ClusterProfileIBMCloudMultiPpc64le:
+		return "ibmcloud-multi-ppc64le"
+	case ClusterProfileIBMCloudMultiS390x:
+		return "ibmcloud-multi-s390x"
 	case ClusterProfilePOWERVS1:
 		return "powervs-1"
 	case ClusterProfilePOWERVS2:

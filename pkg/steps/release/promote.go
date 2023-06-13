@@ -214,16 +214,29 @@ func getPromotionPod(imageMirrorTarget map[string]string, namespace string, date
 	sort.Strings(keys)
 
 	var images []string
+	targets := sets.NewString()
 	for _, k := range keys {
 		if quayTags, err := tagsInQuay(imageMirrorTarget[k], k, date); err != nil {
 			logrus.WithField("key", k).WithError(err).
 				Warn("Failed to get the tag in quay.io and skipped the promotion to quay for this image")
 		} else {
 			for _, quayTag := range quayTags {
+				if targets.Has(quayTag) {
+					logrus.WithField("source", imageMirrorTarget[k]).WithField("target", quayTag).
+						Warn("Ignored a duplicated target to quay")
+					continue
+				}
 				images = append(images, fmt.Sprintf("%s=%s", imageMirrorTarget[k], quayTag))
+				targets.Insert(quayTag)
 			}
 		}
+		if targets.Has(k) {
+			logrus.WithField("source", imageMirrorTarget[k]).WithField("target", k).
+				Warn("Ignored a duplicated target")
+			continue
+		}
 		images = append(images, fmt.Sprintf("%s=%s", imageMirrorTarget[k], k))
+		targets.Insert(k)
 	}
 	command := []string{"/bin/sh", "-c"}
 	args := []string{fmt.Sprintf("oc image mirror --registry-config=%s --continue-on-error=true --max-per-registry=20 %s", filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey), strings.Join(images, " "))}

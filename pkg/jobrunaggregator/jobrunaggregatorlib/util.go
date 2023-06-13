@@ -108,7 +108,7 @@ func WaitAndGetAllFinishedJobRuns(ctx context.Context,
 		if len(unfinishedJobRunNames) > 0 {
 			fmt.Printf("found %d unfinished related jobRuns: %v\n", len(unfinishedJobRunNames), strings.Join(unfinishedJobRunNames, ", "))
 			select {
-			case <-time.After(2 * time.Minute):
+			case <-time.After(10 * time.Minute):
 				continue
 			case <-ctx.Done():
 				return finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames, ctx.Err()

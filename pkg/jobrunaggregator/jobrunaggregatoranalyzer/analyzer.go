@@ -46,7 +46,7 @@ type JobRunAggregatorAnalyzerOptions struct {
 func (o *JobRunAggregatorAnalyzerOptions) GetRelatedJobRuns(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error) {
 	errorsInARow := 0
 	for {
-		jobsToAggregate, err := o.jobRunLocator.FindRelatedJobs(ctx)
+		jobsToAggregate, err := o.jobRunLocator.FindRelatedJobRuns(ctx)
 		if err == nil {
 			return jobsToAggregate, nil
 		}
@@ -69,8 +69,8 @@ func (o *JobRunAggregatorAnalyzerOptions) GetRelatedJobRuns(ctx context.Context)
 }
 
 func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
-	// if it hasn't been more than hour since the jobRuns started, the list isn't complete.
-	readyAt := o.jobRunStartEstimate.Add(1 * time.Hour)
+	// if it hasn't been more than two hours since the jobRuns started, the list isn't complete.
+	readyAt := o.jobRunStartEstimate.Add(2 * time.Hour)
 
 	// the aggregator has a long time.  The jobs it aggregates only have 4h (we think).
 	durationToWait := o.timeout - 20*time.Minute

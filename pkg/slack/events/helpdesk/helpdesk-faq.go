@@ -93,7 +93,54 @@ func handleReactionRemoved(event *slackevents.ReactionRemovedEvent, client helpd
 			questionLog.WithError(err).Error("unable to update helpdesk-faq config map")
 			return false, fmt.Errorf("unable to update helpdesk-faq config map: %w", err)
 		}
+	case answerReaction:
+		answerLog := logger.WithField("type", "remove-answer")
+		messageTs := event.Item.Timestamp
+		replies, _, _, err := client.GetConversationReplies(&slack.GetConversationRepliesParameters{
+			ChannelID: forumChannelId,
+			Timestamp: messageTs,
+			Inclusive: true,
+		})
+		if err != nil {
+			answerLog.WithError(err).Error("unable to retrieve message that reaction was added for")
+			return false, err
+		}
+		if len(replies) == 1 {
+			reply := replies[0]
+			questionTs := reply.Msg.ThreadTimestamp
 
+			configMap, err := getConfigMap(kubeClient)
+			if err != nil {
+				answerLog.WithError(err).Error("unable to get helpdesk-faq config map for modification")
+				return false, err
+			}
+			rawFaqItem := configMap.Data[questionTs]
+			if rawFaqItem == "" {
+				answerLog.Info("requested answer doesn't belong to an existing question, ignoring")
+				return false, nil
+			}
+
+			faqItem := &FaqItem{}
+			if err = json.Unmarshal([]byte(rawFaqItem), faqItem); err != nil {
+				answerLog.WithError(err).Error("unable to unmarshal faqItem")
+				return false, err
+			}
+
+			index := -1
+			for i, answer := range faqItem.Answers {
+				if answer.Timestamp == messageTs {
+					index = i
+					break
+				}
+			}
+			if index >= 0 {
+				faqItem.Answers = append(faqItem.Answers[:index], faqItem.Answers[index+1:]...)
+			}
+			if err := updateItemInConfigMap(kubeClient, configMap, *faqItem); err != nil {
+				answerLog.WithError(err).Error("unable to update helpdesk-faq config map")
+				return false, err
+			}
+		}
 	default:
 		logger.Debugf("emoji we do not care about: %s", event.Reaction)
 		return false, nil
@@ -115,13 +162,9 @@ func handleReactionAdded(event *slackevents.ReactionAddedEvent, client helpdeskF
 			return false, err
 		}
 
-		faqItem := FaqItem{}
 		if configMap.Data[messageTs] != "" {
-			questionLog.Info("we already have a question or answers for this faqItem, updating")
-			if err = json.Unmarshal([]byte(configMap.Data[messageTs]), &faqItem); err != nil {
-				questionLog.WithError(err).Error("unable to unmarshal faqItem")
-				return false, err
-			}
+			questionLog.Info("we already have a question for this faqItem, ignoring")
+			return false, nil
 		}
 
 		message, err := getTopLevelMessage(client, forumChannelId, messageTs, questionLog)
@@ -129,13 +172,50 @@ func handleReactionAdded(event *slackevents.ReactionAddedEvent, client helpdeskF
 			questionLog.WithError(err).Error("unable to get top-level message")
 			return false, err
 		}
-		faqItem.Question = message.Text
-		faqItem.Timestamp = messageTs
-		faqItem.Author = message.User
+		if message != nil {
+			faqItem := FaqItem{
+				Question:  message.Text,
+				Timestamp: messageTs,
+				Author:    message.User,
+			}
 
-		if err := updateItemInConfigMap(kubeClient, configMap, faqItem); err != nil {
-			questionLog.WithError(err).Error("unable to update helpdesk-faq config map")
-			return false, err
+			var cursor string
+			var hasMore bool
+			var replies []slack.Message
+			for {
+				replies, hasMore, cursor, err = client.GetConversationReplies(&slack.GetConversationRepliesParameters{
+					ChannelID: forumChannelId,
+					Timestamp: messageTs,
+					Inclusive: true,
+					Cursor:    cursor,
+				})
+				if err != nil {
+					questionLog.WithError(err).Error("unable to get replies for top-level message")
+					return false, err
+				}
+
+				for _, reply := range replies {
+					for _, reaction := range reply.Reactions {
+						if reaction.Name == answerReaction {
+							questionLog.Debugf("adding pre-marked answer with timestamp: %s", reply.Timestamp)
+							faqItem.Answers = append(faqItem.Answers, Answer{
+								Author:    reply.User,
+								Timestamp: reply.Timestamp,
+								Body:      reply.Msg.Text,
+							})
+						}
+					}
+				}
+
+				if !hasMore {
+					break
+				}
+			}
+
+			if err := updateItemInConfigMap(kubeClient, configMap, faqItem); err != nil {
+				questionLog.WithError(err).Error("unable to update helpdesk-faq config map")
+				return false, err
+			}
 		}
 	case answerReaction:
 		answerLog := logger.WithField("type", "add-answer")
@@ -159,17 +239,23 @@ func handleReactionAdded(event *slackevents.ReactionAddedEvent, client helpdeskF
 				return false, err
 			}
 			rawFaqItem := configMap.Data[questionTs]
-			faqItem := &FaqItem{}
 			if rawFaqItem == "" {
-				answerLog.Info("requested answer doesn't belong to an existing question, adding only the answer for future use") //TODO: don't do this
-				faqItem.Timestamp = questionTs
-			} else {
-				if err = json.Unmarshal([]byte(rawFaqItem), faqItem); err != nil {
-					answerLog.WithError(err).Error("unable to unmarshal faqItem")
-					return false, err
+				answerLog.Info("requested answer doesn't belong to an existing question, ignoring")
+				return false, nil
+			}
+
+			faqItem := &FaqItem{}
+			if err = json.Unmarshal([]byte(rawFaqItem), faqItem); err != nil {
+				answerLog.WithError(err).Error("unable to unmarshal faqItem")
+				return false, err
+			}
+
+			for _, answer := range faqItem.Answers {
+				if answer.Timestamp == messageTs {
+					answerLog.Debug("answer already exists, ignoring")
+					return false, nil
 				}
 			}
-			//TODO: make sure we don't add duplicates in case multiple people add the emoji
 			faqItem.Answers = append(faqItem.Answers, Answer{
 				Author:    reply.User,
 				Timestamp: messageTs,

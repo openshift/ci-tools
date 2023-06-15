@@ -247,7 +247,7 @@ func (j *gcsJobRun) GetProwJob(ctx context.Context) (*prowjobv1.ProwJob, error) 
 	if len(j.gcsProwJobPath) == 0 {
 		return nil, fmt.Errorf("missing prowjob path to GCS content for jobrun/%v/%v", j.GetJobName(), j.GetJobRunID())
 	}
-	prowBytes, err := j.GetContent(ctx, j.gcsProwJobPath)
+	prowBytes, err := j.getCurrentContent(ctx, j.gcsProwJobPath)
 	if err != nil {
 		return nil, err
 	}

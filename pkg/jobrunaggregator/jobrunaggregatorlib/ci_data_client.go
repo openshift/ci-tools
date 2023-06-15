@@ -20,11 +20,11 @@ type AggregationJobClient interface {
 	// GetJobRunForJobNameBeforeTime returns the jobRun closest to, but BEFORE, the time provided.
 	// This is useful for bounding a query of GCS buckets in a window.
 	// nil means that no jobRun was found before the specified time.
-	GetJobRunForJobNameBeforeTime(ctx context.Context, jobName string, targetTime time.Time) (*jobrunaggregatorapi.JobRunRow, error)
+	GetJobRunForJobNameBeforeTime(ctx context.Context, jobName string, targetTime time.Time) (string, error)
 	// GetJobRunForJobNameAfterTime returns the jobRun closest to, but AFTER, the time provided.
 	// This is useful for bounding a query of GCS buckets in a window.
 	// nil means that no jobRun as found after the specified time.
-	GetJobRunForJobNameAfterTime(ctx context.Context, jobName string, targetTime time.Time) (*jobrunaggregatorapi.JobRunRow, error)
+	GetJobRunForJobNameAfterTime(ctx context.Context, jobName string, targetTime time.Time) (string, error)
 
 	// GetBackendDisruptionRowCountByJob gets the row count for disruption data for one job
 	GetBackendDisruptionRowCountByJob(ctx context.Context, jobName, masterNodesUpdated string) (uint64, error)
@@ -863,9 +863,10 @@ func (it *UnifiedTestRunRowIterator) Next() (*jobrunaggregatorapi.UnifiedTestRun
 	return ret, nil
 }
 
-func (c *ciDataClient) GetJobRunForJobNameBeforeTime(ctx context.Context, jobName string, targetTime time.Time) (*jobrunaggregatorapi.JobRunRow, error) {
+func (c *ciDataClient) GetJobRunForJobNameBeforeTime(ctx context.Context, jobName string, targetTime time.Time) (string, error) {
+	logrus.Info("called GetJobRunForJobNameBeforeTime")
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(
-		`SELECT *
+		`SELECT Name
 FROM DATA_SET_LOCATION.JobRuns
 WHERE JobRuns.StartTime <= @TimeCutOff and JobRuns.JobName = @JobName
 ORDER BY JobRuns.StartTime DESC
@@ -879,23 +880,24 @@ LIMIT 1
 	}
 	rowIterator, err := query.Read(ctx)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	ret := &jobrunaggregatorapi.JobRunRow{}
 	err = rowIterator.Next(ret)
 	if err == iterator.Done {
-		return nil, nil
+		return "", nil
 	}
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	return ret, nil
+	return ret.Name, nil
 }
 
-func (c *ciDataClient) GetJobRunForJobNameAfterTime(ctx context.Context, jobName string, targetTime time.Time) (*jobrunaggregatorapi.JobRunRow, error) {
+func (c *ciDataClient) GetJobRunForJobNameAfterTime(ctx context.Context, jobName string, targetTime time.Time) (string, error) {
+	logrus.Info("called GetJobRunForJobNameAfterTime")
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(
-		`SELECT *
+		`SELECT Name
 FROM DATA_SET_LOCATION.JobRuns
 WHERE JobRuns.StartTime >= @TimeCutOff and JobRuns.JobName = @JobName
 ORDER BY JobRuns.StartTime ASC
@@ -909,18 +911,18 @@ LIMIT 1
 	}
 	rowIterator, err := query.Read(ctx)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	ret := &jobrunaggregatorapi.JobRunRow{}
 	err = rowIterator.Next(ret)
 	if err == iterator.Done {
-		return nil, nil
+		return "", nil
 	}
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	return ret, nil
+	return ret.Name, nil
 }
 
 func (c *ciDataClient) ListAggregatedTestRunsForJob(ctx context.Context, frequency, jobName string, startDay time.Time) ([]jobrunaggregatorapi.AggregatedTestRunRow, error) {

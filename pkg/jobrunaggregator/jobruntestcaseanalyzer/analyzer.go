@@ -488,7 +488,7 @@ func (o *JobRunTestCaseAnalyzerOptions) Run(ctx context.Context) error {
 	durationToWait := o.timeout - 20*time.Minute
 	timeToStopWaiting := o.jobRunStartEstimate.Add(durationToWait)
 
-	fmt.Printf("Analyzing test status for job runs for %q.  now=%v, ReadyAt=%v, timeToStopWaiting=%v.\n", matchID, time.Now(), readyAt, timeToStopWaiting)
+	fmt.Printf("Analyzing test status for job runs for %q.  now=%v, ReadyAt=%v, timeToStopWaiting=%v.\n", matchID, time.Now().UTC(), readyAt, timeToStopWaiting)
 
 	err := jobrunaggregatorlib.WaitUntilTime(ctx, readyAt)
 	if err != nil {

@@ -142,7 +142,7 @@ func (j *gcsJobRun) writeCache(ctx context.Context, parentDir string) error {
 func (j *gcsJobRun) GetCombinedJUnitTestSuites(ctx context.Context) (*junit.TestSuites, error) {
 	testSuites := &junit.TestSuites{}
 	for _, junitFile := range j.GetGCSJunitPaths() {
-		junitContent, err := j.GetContent(ctx, junitFile)
+		junitContent, err := j.getCurrentContent(ctx, junitFile)
 		if err != nil {
 			return nil, fmt.Errorf("error getting content for jobrun/%v/%v %q: %w", j.GetJobName(), j.GetJobRunID(), junitFile, err)
 		}

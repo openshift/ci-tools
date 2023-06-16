@@ -21,7 +21,7 @@ type JobRunGetter interface {
 
 // WaitUntilTime waits until readAt time has passed
 func WaitUntilTime(ctx context.Context, readyAt time.Time) error {
-	fmt.Printf("Waiting now=%v, ReadyAt=%v.\n", time.Now(), readyAt)
+	fmt.Printf("Waiting now=%v, ReadyAt=%v.\n", time.Now().UTC(), readyAt)
 
 	if time.Now().After(readyAt) {
 		return nil

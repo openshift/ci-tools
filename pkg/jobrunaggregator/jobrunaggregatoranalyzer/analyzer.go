@@ -79,7 +79,7 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 	}
 	timeToStopWaiting := o.jobRunStartEstimate.Add(durationToWait)
 
-	fmt.Printf("Aggregating job runs of type %q for %q.  now=%v, ReadyAt=%v, timeToStopWaiting=%v.\n", o.jobName, o.payloadTag, o.clock.Now(), readyAt, timeToStopWaiting)
+	fmt.Printf("Aggregating job runs of type %q for %q.  now=%v, ReadyAt=%v, timeToStopWaiting=%v.\n", o.jobName, o.payloadTag, o.clock.Now().UTC(), readyAt, timeToStopWaiting)
 	ctx, cancel := context.WithTimeout(ctx, o.timeout)
 	defer cancel()
 

@@ -349,7 +349,7 @@ func (o *JobRunTestCaseAnalyzerOptions) findJobRunsWithRetry(ctx context.Context
 	jobName string, jobRunLocator jobrunaggregatorlib.JobRunLocator) ([]jobrunaggregatorapi.JobRunInfo, error) {
 	errorsInARow := 0
 	for {
-		jobRuns, err := jobRunLocator.FindRelatedJobs(ctx)
+		jobRuns, err := jobRunLocator.FindRelatedJobRuns(ctx)
 		if err != nil {
 			if errorsInARow > 20 {
 				fmt.Printf("give up finding job runs for %s after retries: %v", jobName, err)
@@ -372,9 +372,10 @@ func (o *JobRunTestCaseAnalyzerOptions) findJobRunsWithRetry(ctx context.Context
 	}
 }
 
-// GetRelatedJobRuns gets all related job runs for analysis
+// GetRelatedJobRuns gets all related job runs for analysis which are associated with this payload.
 func (o *JobRunTestCaseAnalyzerOptions) GetRelatedJobRuns(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error) {
 	var jobRunsToReturn []jobrunaggregatorapi.JobRunInfo
+
 	jobs, err := o.jobGetter.GetJobs(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get related jobs: %w", err)
@@ -481,13 +482,13 @@ func (o *JobRunTestCaseAnalyzerOptions) Run(ctx context.Context) error {
 		return fmt.Errorf("error creating output directory %q: %w", outputDir, err)
 	}
 
-	// if it hasn't been more than hour since the jobRuns started, the list isn't complete.
-	readyAt := o.jobRunStartEstimate.Add(1 * time.Hour)
+	// if it hasn't been more than two hours since the jobRuns started, the list isn't complete.
+	readyAt := o.jobRunStartEstimate.Add(2 * time.Hour)
 
 	durationToWait := o.timeout - 20*time.Minute
 	timeToStopWaiting := o.jobRunStartEstimate.Add(durationToWait)
 
-	fmt.Printf("Analyzing test status for job runs for %q.  now=%v, ReadyAt=%v, timeToStopWaiting=%v.\n", matchID, time.Now(), readyAt, timeToStopWaiting)
+	fmt.Printf("Analyzing test status for job runs for %q.  now=%v, ReadyAt=%v, timeToStopWaiting=%v.\n", matchID, time.Now().UTC(), readyAt, timeToStopWaiting)
 
 	err := jobrunaggregatorlib.WaitUntilTime(ctx, readyAt)
 	if err != nil {

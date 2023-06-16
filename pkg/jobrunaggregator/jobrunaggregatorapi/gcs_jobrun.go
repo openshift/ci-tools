@@ -142,6 +142,7 @@ func (j *gcsJobRun) writeCache(ctx context.Context, parentDir string) error {
 func (j *gcsJobRun) GetCombinedJUnitTestSuites(ctx context.Context) (*junit.TestSuites, error) {
 	testSuites := &junit.TestSuites{}
 	for _, junitFile := range j.GetGCSJunitPaths() {
+		fmt.Printf("Getting content from gcs for Junit files\n")
 		junitContent, err := j.getCurrentContent(ctx, junitFile)
 		if err != nil {
 			return nil, fmt.Errorf("error getting content for jobrun/%v/%v %q: %w", j.GetJobName(), j.GetJobRunID(), junitFile, err)
@@ -247,6 +248,7 @@ func (j *gcsJobRun) GetProwJob(ctx context.Context) (*prowjobv1.ProwJob, error) 
 	if len(j.gcsProwJobPath) == 0 {
 		return nil, fmt.Errorf("missing prowjob path to GCS content for jobrun/%v/%v", j.GetJobName(), j.GetJobRunID())
 	}
+	fmt.Printf("Getting content from gcs for Prow Job\n")
 	prowBytes, err := j.getCurrentContent(ctx, j.gcsProwJobPath)
 	if err != nil {
 		return nil, err

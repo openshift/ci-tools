@@ -71,10 +71,10 @@ func (mr *MockCIDataClientMockRecorder) GetBackendDisruptionStatisticsByJob(arg0
 }
 
 // GetJobRunForJobNameAfterTime mocks base method.
-func (m *MockCIDataClient) GetJobRunForJobNameAfterTime(arg0 context.Context, arg1 string, arg2 time.Time) (string, error) {
+func (m *MockCIDataClient) GetJobRunForJobNameAfterTime(arg0 context.Context, arg1 string, arg2 time.Time) (*jobrunaggregatorapi.JobRunRow, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetJobRunForJobNameAfterTime", arg0, arg1, arg2)
-	ret0, _ := ret[0].(string)
+	ret0, _ := ret[0].(*jobrunaggregatorapi.JobRunRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -86,10 +86,10 @@ func (mr *MockCIDataClientMockRecorder) GetJobRunForJobNameAfterTime(arg0, arg1,
 }
 
 // GetJobRunForJobNameBeforeTime mocks base method.
-func (m *MockCIDataClient) GetJobRunForJobNameBeforeTime(arg0 context.Context, arg1 string, arg2 time.Time) (string, error) {
+func (m *MockCIDataClient) GetJobRunForJobNameBeforeTime(arg0 context.Context, arg1 string, arg2 time.Time) (*jobrunaggregatorapi.JobRunRow, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetJobRunForJobNameBeforeTime", arg0, arg1, arg2)
-	ret0, _ := ret[0].(string)
+	ret0, _ := ret[0].(*jobrunaggregatorapi.JobRunRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

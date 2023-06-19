@@ -1,10 +1,10 @@
 package jobrunaggregatorlib
 
 import (
-	"fmt"
 	"time"
 
 	"cloud.google.com/go/storage"
+	"github.com/sirupsen/logrus"
 
 	prowjobv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 )
@@ -44,7 +44,7 @@ func (a releaseControllerProwJobMatcher) shouldAggregateReleaseControllerJob(pro
 	payloadTag := GetPayloadTagFromProwJob(prowJob)
 	jobName := prowJob.Labels["prow.k8s.io/job"]
 	jobRunId := prowJob.Labels["prow.k8s.io/build-id"]
-	fmt.Printf("  checking %v/%v for payloadtag match: looking for %q found %q.\n", jobName, jobRunId, a.payloadTag, payloadTag)
+	logrus.Infof("checking %v/%v for payloadtag match: looking for %q found %q", jobName, jobRunId, a.payloadTag, payloadTag)
 	payloadTagMatches := len(a.payloadTag) > 0 && payloadTag == a.payloadTag
 
 	return payloadTagMatches

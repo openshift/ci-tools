@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
+	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 )
 
 func TestGetJobs(t *testing.T) {
@@ -31,7 +32,7 @@ func TestGetJobs(t *testing.T) {
 			mockCtrl := gomock.NewController(t)
 			defer mockCtrl.Finish()
 
-			mockCIDataClient := NewMockCIDataClient(mockCtrl)
+			mockCIDataClient := jobrunaggregatorlib.NewMockCIDataClient(mockCtrl)
 			mockCIDataClient.EXPECT().ListAllJobs(ctx).Return(createJobs(), nil)
 
 			jobGetter := &testCaseAnalyzerJobGetter{

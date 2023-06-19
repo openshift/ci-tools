@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"cloud.google.com/go/storage"
 	"gopkg.in/yaml.v2"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -337,7 +336,6 @@ type JobRunTestCaseAnalyzerOptions struct {
 	timeout             time.Duration
 	ciDataClient        jobrunaggregatorlib.CIDataClient
 	ciGCSClient         jobrunaggregatorlib.CIGCSClient
-	gcsClient           *storage.Client
 	testCaseCheckers    []TestCaseChecker
 	testNameSuffix      string
 	payloadInvocationID string
@@ -394,7 +392,6 @@ func (o *JobRunTestCaseAnalyzerOptions) GetRelatedJobRuns(ctx context.Context) (
 				o.jobRunStartEstimate,
 				o.ciDataClient,
 				o.ciGCSClient,
-				o.gcsClient,
 				"origin-ci-test",
 			)
 		}
@@ -406,7 +403,6 @@ func (o *JobRunTestCaseAnalyzerOptions) GetRelatedJobRuns(ctx context.Context) (
 				o.jobRunStartEstimate,
 				o.ciDataClient,
 				o.ciGCSClient,
-				o.gcsClient,
 				"origin-ci-test",
 				(*o.jobGCSPrefixes)[i].gcsPrefix,
 			)

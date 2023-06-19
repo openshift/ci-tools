@@ -3,7 +3,6 @@ package jobrunaggregatorlib
 import (
 	"time"
 
-	"cloud.google.com/go/storage"
 	"github.com/sirupsen/logrus"
 
 	prowjobv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -19,7 +18,6 @@ func NewPayloadAnalysisJobLocatorForReleaseController(
 	startTime time.Time,
 	ciDataClient AggregationJobClient,
 	ciGCSClient CIGCSClient,
-	gcsClient *storage.Client,
 	gcsBucketName string) JobRunLocator {
 
 	return NewPayloadAnalysisJobLocator(
@@ -30,7 +28,6 @@ func NewPayloadAnalysisJobLocatorForReleaseController(
 		startTime,
 		ciDataClient,
 		ciGCSClient,
-		gcsClient,
 		gcsBucketName,
 		"logs/"+jobName,
 	)

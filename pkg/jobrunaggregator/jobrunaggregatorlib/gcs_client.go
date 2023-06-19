@@ -16,6 +16,8 @@ import (
 
 type CIGCSClient interface {
 	ReadJobRunFromGCS(ctx context.Context, jobGCSRootLocation, jobName, jobRunID string, logger logrus.FieldLogger) (jobrunaggregatorapi.JobRunInfo, error)
+	ReadRelatedJobRuns(ctx context.Context, jobName, gcsPrefix, startingJobRunID, endingJobRunID string,
+		matcherFunc prowJobMatcherFunc) ([]jobrunaggregatorapi.JobRunInfo, error)
 }
 
 type ciGCSClient struct {
@@ -116,4 +118,80 @@ func NextJobRunID(curr string) string {
 		panic(err)
 	}
 	return fmt.Sprintf("%d", idAsInt+1)
+}
+
+func (o *ciGCSClient) ReadRelatedJobRuns(ctx context.Context,
+	jobName, gcsPrefix, startingJobRunID, endingJobRunID string,
+	matcherFunc prowJobMatcherFunc) ([]jobrunaggregatorapi.JobRunInfo, error) {
+
+	logrus.Debugf("searching GCS for related job runs in %s between %s and %s", gcsPrefix, startingJobRunID, endingJobRunID)
+	query := &storage.Query{
+		// This ends up being the equivalent of:
+		// https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/logs/periodic-ci-openshift-release-master-nightly-4.9-upgrade-from-stable-4.8-e2e-metal-ipi-upgrade
+		Prefix: gcsPrefix,
+
+		// TODO this field is apparently missing from this level of go/storage
+		// Omit owner and ACL fields for performance
+		//Projection: storage.ProjectionNoACL,
+	}
+
+	// Only retrieve the name and creation time for performance
+	if err := query.SetAttrSelection([]string{"Name", "Created"}); err != nil {
+		return nil, err
+	}
+	if startingJobRunID == "" {
+		// For debugging, you can set this to a jobID that is not that far away from
+		// jobs related to what you are trying to aggregate.
+		query.StartOffset = fmt.Sprintf("%s/%s", gcsPrefix, "0")
+	} else {
+		query.StartOffset = fmt.Sprintf("%s/%s", gcsPrefix, startingJobRunID)
+	}
+	if endingJobRunID != "" {
+		query.EndOffset = fmt.Sprintf("%s/%s", gcsPrefix, endingJobRunID)
+	}
+	fmt.Printf("  starting from %v, ending at %q\n", query.StartOffset, query.EndOffset)
+
+	// Returns an iterator which iterates over the bucket query results.
+	// Unfortunately, this will list *all* files with the query prefix.
+	bkt := o.gcsClient.Bucket(o.gcsBucketName)
+	it := bkt.Objects(ctx, query)
+
+	// Find the query results we're the most interested in. In this case, we're interested in files called prowjob.json
+	// so that we only get each jobrun once and we queue them in a channel
+	relatedJobRuns := []jobrunaggregatorapi.JobRunInfo{}
+	for {
+		attrs, err := it.Next()
+		if err == iterator.Done {
+			// we're done adding values, so close the channel
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		switch {
+		case strings.HasSuffix(attrs.Name, "prowjob.json"):
+			jobRunId := filepath.Base(filepath.Dir(attrs.Name))
+			jobRunInfo, err := o.ReadJobRunFromGCS(ctx, gcsPrefix, jobName, jobRunId, logrus.WithFields(logrus.Fields{
+				"job":    jobName,
+				"jobRun": jobRunId,
+			}))
+			if err != nil {
+				return nil, err
+			}
+			prowJob, err := jobRunInfo.GetProwJob(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get prowjob for %q/%q: %w", jobName, jobRunId, err)
+			}
+
+			if matcherFunc(prowJob) {
+				relatedJobRuns = append(relatedJobRuns, jobRunInfo)
+				break
+			}
+
+		default:
+			//fmt.Printf("checking %q\n", attrs.Name)
+		}
+	}
+	return relatedJobRuns, nil
 }

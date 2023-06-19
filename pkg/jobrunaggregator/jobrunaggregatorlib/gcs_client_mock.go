@@ -50,3 +50,18 @@ func (mr *MockCIGCSClientMockRecorder) ReadJobRunFromGCS(arg0, arg1, arg2, arg3,
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadJobRunFromGCS", reflect.TypeOf((*MockCIGCSClient)(nil).ReadJobRunFromGCS), arg0, arg1, arg2, arg3, arg4)
 }
+
+// ReadRelatedJobRuns mocks base method.
+func (m *MockCIGCSClient) ReadRelatedJobRuns(arg0 context.Context, arg1, arg2, arg3, arg4 string, arg5 prowJobMatcherFunc) ([]jobrunaggregatorapi.JobRunInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReadRelatedJobRuns", arg0, arg1, arg2, arg3, arg4, arg5)
+	ret0, _ := ret[0].([]jobrunaggregatorapi.JobRunInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ReadRelatedJobRuns indicates an expected call of ReadRelatedJobRuns.
+func (mr *MockCIGCSClientMockRecorder) ReadRelatedJobRuns(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadRelatedJobRuns", reflect.TypeOf((*MockCIGCSClient)(nil).ReadRelatedJobRuns), arg0, arg1, arg2, arg3, arg4, arg5)
+}

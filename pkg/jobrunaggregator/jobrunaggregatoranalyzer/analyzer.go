@@ -80,7 +80,13 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 	}
 	timeToStopWaiting := o.jobRunStartEstimate.Add(durationToWait)
 
-	logrus.Infof("Aggregating job runs of type %q for %q.  now=%v, ReadyAt=%v, timeToStopWaiting=%v", o.jobName, o.payloadTag, o.clock.Now().UTC(), readyAt, timeToStopWaiting)
+	logrus.WithFields(logrus.Fields{
+		"job":       o.jobName,
+		"payload":   o.payloadTag,
+		"now":       o.clock.Now().UTC().Format(time.RFC3339), // in tests, may not match the log timestamp
+		"readyAt":   readyAt.UTC().Format(time.RFC3339),
+		"timeoutAt": timeToStopWaiting.UTC().Format(time.RFC3339),
+	}).Info("aggregating job runs")
 	ctx, cancel := context.WithTimeout(ctx, o.timeout)
 	defer cancel()
 

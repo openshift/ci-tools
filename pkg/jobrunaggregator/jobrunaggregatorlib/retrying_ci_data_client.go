@@ -116,8 +116,8 @@ func (c *retryingCIDataClient) ListReleaseTags(ctx context.Context) (sets.String
 	return ret, err
 }
 
-func (c *retryingCIDataClient) GetJobRunForJobNameBeforeTime(ctx context.Context, jobName string, targetTime time.Time) (string, error) {
-	var ret string
+func (c *retryingCIDataClient) GetJobRunForJobNameBeforeTime(ctx context.Context, jobName string, targetTime time.Time) (*jobrunaggregatorapi.JobRunRow, error) {
+	var ret *jobrunaggregatorapi.JobRunRow
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
 		var innerErr error
 		ret, innerErr = c.delegate.GetJobRunForJobNameBeforeTime(ctx, jobName, targetTime)
@@ -126,8 +126,8 @@ func (c *retryingCIDataClient) GetJobRunForJobNameBeforeTime(ctx context.Context
 	return ret, err
 }
 
-func (c *retryingCIDataClient) GetJobRunForJobNameAfterTime(ctx context.Context, jobName string, targetTime time.Time) (string, error) {
-	var ret string
+func (c *retryingCIDataClient) GetJobRunForJobNameAfterTime(ctx context.Context, jobName string, targetTime time.Time) (*jobrunaggregatorapi.JobRunRow, error) {
+	var ret *jobrunaggregatorapi.JobRunRow
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
 		var innerErr error
 		ret, innerErr = c.delegate.GetJobRunForJobNameAfterTime(ctx, jobName, targetTime)

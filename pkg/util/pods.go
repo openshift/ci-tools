@@ -205,13 +205,10 @@ func processPodEvent(
 	if pod.Spec.RestartPolicy == corev1.RestartPolicyAlways {
 		return true, nil
 	}
-	skipLogs := IsBitSet(flags, SkipLogs)
-	podLogNewFailedContainers(podClient, pod, completed, notifier, skipLogs)
+	podLogNewFailedContainers(podClient, pod, completed, notifier)
 	podLogDeletion(ctx, podClient, flags, *pod)
 	if podJobIsOK(pod) {
-		if !skipLogs {
-			logrus.Debugf("Pod %s succeeded after %s", pod.Name, podDuration(pod).Truncate(time.Second))
-		}
+		logrus.Debugf("Pod %s succeeded after %s", pod.Name, podDuration(pod).Truncate(time.Second))
 		return true, nil
 	}
 	if podJobIsFailed(pod) {
@@ -477,7 +474,7 @@ func containerNamesInState(pod corev1.Pod, p func(corev1.ContainerStatus) bool) 
 	return names
 }
 
-func podLogNewFailedContainers(podClient kubernetes.PodClient, pod *corev1.Pod, completed map[string]time.Time, notifier ContainerNotifier, skipLogs bool) {
+func podLogNewFailedContainers(podClient kubernetes.PodClient, pod *corev1.Pod, completed map[string]time.Time, notifier ContainerNotifier) {
 	var statuses []corev1.ContainerStatus
 	statuses = append(statuses, pod.Status.InitContainerStatuses...)
 	statuses = append(statuses, pod.Status.ContainerStatuses...)
@@ -494,9 +491,7 @@ func podLogNewFailedContainers(podClient kubernetes.PodClient, pod *corev1.Pod, 
 		notifier.Notify(pod, status.Name)
 
 		if s.ExitCode == 0 {
-			if !skipLogs {
-				logrus.Debugf("Container %s in pod %s completed successfully", status.Name, pod.Name)
-			}
+			logrus.Debugf("Container %s in pod %s completed successfully", status.Name, pod.Name)
 			continue
 		}
 

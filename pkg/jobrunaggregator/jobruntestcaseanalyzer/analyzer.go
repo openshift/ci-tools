@@ -481,8 +481,8 @@ func (o *JobRunTestCaseAnalyzerOptions) Run(ctx context.Context) error {
 		return fmt.Errorf("error creating output directory %q: %w", outputDir, err)
 	}
 
-	// if it hasn't been more than hour since the jobRuns started, the list isn't complete.
-	readyAt := o.jobRunStartEstimate.Add(1 * time.Hour)
+	// if it hasn't been more than two hours since the jobRuns started, the list isn't complete.
+	readyAt := o.jobRunStartEstimate.Add(2 * time.Hour)
 
 	durationToWait := o.timeout - 20*time.Minute
 	timeToStopWaiting := o.jobRunStartEstimate.Add(durationToWait)

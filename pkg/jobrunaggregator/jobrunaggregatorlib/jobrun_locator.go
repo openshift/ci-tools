@@ -94,15 +94,15 @@ func (a *analysisJobAggregator) FindRelatedJobs(ctx context.Context) ([]jobrunag
 	if err := query.SetAttrSelection([]string{"Name", "Created"}); err != nil {
 		return nil, err
 	}
-	if startingJobRun == nil {
+	if startingJobRun == "" {
 		// For debugging, you can set this to a jobID that is not that far away from
 		// jobs related to what you are trying to aggregate.
 		query.StartOffset = fmt.Sprintf("%s/%s", a.gcsPrefix, "0")
 	} else {
-		query.StartOffset = fmt.Sprintf("%s/%s", a.gcsPrefix, startingJobRun.Name)
+		query.StartOffset = fmt.Sprintf("%s/%s", a.gcsPrefix, startingJobRun)
 	}
-	if endingJobRun != nil {
-		query.EndOffset = fmt.Sprintf("%s/%s", a.gcsPrefix, endingJobRun.Name)
+	if endingJobRun != "" {
+		query.EndOffset = fmt.Sprintf("%s/%s", a.gcsPrefix, endingJobRun)
 	}
 	fmt.Printf("  starting from %v, ending at %q\n", query.StartOffset, query.EndOffset)
 

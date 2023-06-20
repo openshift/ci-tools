@@ -118,6 +118,7 @@ func digest(logger *logrus.Entry, infos ...digestInfo) <-chan interface{} {
 		defer loadLock.Unlock()
 		if loaded != len(infos)-1 {
 			loaded += 1
+			logger.Debugf("Now loaded %d info(s) out of %d", loaded, len(infos))
 		} else {
 			loadDone <- struct{}{}
 		}

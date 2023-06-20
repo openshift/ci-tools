@@ -19,8 +19,13 @@ type JobRunInfo interface {
 
 	GetJobName() string
 	GetJobRunID() string
+
+	// GetHumanURL returns prow job URL for this job run.
 	GetHumanURL() string
+
+	// GetGCSArtifactURL returns the URL for this job run's artifacts in GCS.
 	GetGCSArtifactURL() string
+
 	GetGCSProwJobPath() string
 	GetGCSJunitPaths() []string
 	SetGCSProwJobPath(gcsProwJobPath string)

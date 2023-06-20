@@ -123,6 +123,9 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 						Kind: "DockerImage",
 						Name: s.pullSpec,
 					},
+					ImportPolicy: imagev1.TagImportPolicy{
+						ImportMode: imagev1.ImportModePreserveOriginal,
+					},
 					ReferencePolicy: imagev1.TagReferencePolicy{
 						Type: imagev1.LocalTagReferencePolicy,
 					},
@@ -266,6 +269,7 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 		for _, tag := range releaseIS.Spec.Tags {
 			existing.Insert(tag.Name)
 			tag.ReferencePolicy.Type = imagev1.LocalTagReferencePolicy
+			tag.ImportPolicy.ImportMode = imagev1.ImportModePreserveOriginal
 			tags = append(tags, tag)
 		}
 		for _, tag := range stable.Spec.Tags {
@@ -274,6 +278,7 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 			}
 			existing.Insert(tag.Name)
 			tag.ReferencePolicy.Type = imagev1.LocalTagReferencePolicy
+			tag.ImportPolicy.ImportMode = imagev1.ImportModePreserveOriginal
 			tags = append(tags, tag)
 		}
 		stable.Spec.Tags = tags

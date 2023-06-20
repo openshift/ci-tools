@@ -9,12 +9,13 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/stretchr/testify/assert"
+
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	prowjobv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	fakeclock "k8s.io/utils/clock/testing"
 
+	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 )
 

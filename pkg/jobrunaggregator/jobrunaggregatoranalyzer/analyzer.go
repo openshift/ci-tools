@@ -105,7 +105,8 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 	}
 
 	if len(unfinishedJobNames) > 0 {
-		logrus.Infof("%q for %q: found %d unfinished related jobRuns: %v", o.jobName, o.payloadTag, len(unfinishedJobNames), strings.Join(unfinishedJobNames, ", "))
+		logrus.WithField("job", o.jobName).WithField("payload", o.payloadTag).
+			Infof("found %d unfinished related jobRuns: %v", len(unfinishedJobNames), strings.Join(unfinishedJobNames, ", "))
 	}
 	// if more than three jobruns timed out, just fail the entire aggregation
 	if len(unfinishedJobNames) > 3 {

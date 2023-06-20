@@ -52,6 +52,15 @@ func TestAnalyzer(t *testing.T) {
 		"2000",
 		gomock.Any()).Return([]jobrunaggregatorapi.JobRunInfo{
 		buildFakeJobRunInfo(mockCtrl, false, testJobName, "1001", payloadStartTime),
+		buildFakeJobRunInfo(mockCtrl, false, testJobName, "1002", payloadStartTime),
+		buildFakeJobRunInfo(mockCtrl, false, testJobName, "1003", payloadStartTime),
+		buildFakeJobRunInfo(mockCtrl, false, testJobName, "1004", payloadStartTime),
+		buildFakeJobRunInfo(mockCtrl, true, testJobName, "1005", payloadStartTime),
+		buildFakeJobRunInfo(mockCtrl, true, testJobName, "1006", payloadStartTime),
+		buildFakeJobRunInfo(mockCtrl, true, testJobName, "1007", payloadStartTime),
+		buildFakeJobRunInfo(mockCtrl, true, testJobName, "1008", payloadStartTime),
+		buildFakeJobRunInfo(mockCtrl, false, testJobName, "1009", payloadStartTime),
+		buildFakeJobRunInfo(mockCtrl, false, testJobName, "1010", payloadStartTime),
 	}, nil)
 
 	analyzer := JobRunAggregatorAnalyzerOptions{
@@ -74,7 +83,6 @@ func TestAnalyzer(t *testing.T) {
 	}
 	err = analyzer.Run(context.TODO())
 	assert.NoError(t, err)
-
 }
 
 func buildFakeJobRunInfo(mockCtrl *gomock.Controller,
@@ -86,9 +94,13 @@ func buildFakeJobRunInfo(mockCtrl *gomock.Controller,
 	prowJob := &prowjobv1.ProwJob{
 		ObjectMeta: v1.ObjectMeta{CreationTimestamp: v1.NewTime(payloadStartTime)},
 	}
+	if finished {
+		completionTime := v1.NewTime(payloadStartTime.Add(3 * time.Hour))
+		prowJob.Status.CompletionTime = &completionTime
+	}
 
 	mockJRI := jobrunaggregatorapi.NewMockJobRunInfo(mockCtrl)
-	mockJRI.EXPECT().IsFinished(gomock.Any()).Return(finished)
+	mockJRI.EXPECT().IsFinished(gomock.Any()).Return(finished).AnyTimes()
 	mockJRI.EXPECT().GetJobName().Return(jobName).AnyTimes()
 	mockJRI.EXPECT().GetJobRunID().Return(jobRunID).AnyTimes()
 	mockJRI.EXPECT().GetHumanURL().Return("unused").AnyTimes()

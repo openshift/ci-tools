@@ -2,6 +2,7 @@ package jobrunaggregatoranalyzer
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -10,6 +11,8 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/stretchr/testify/assert"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	prowjobv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	fakeclock "k8s.io/utils/clock/testing"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
@@ -38,12 +41,18 @@ func TestAnalyzer(t *testing.T) {
 
 	mockDataClient := jobrunaggregatorlib.NewMockCIDataClient(mockCtrl)
 	mockDataClient.EXPECT().GetJobRunForJobNameBeforeTime(gomock.Any(), testJobName, startPayloadJobRunWindow).Return("1000", nil)
-	mockDataClient.EXPECT().GetJobRunForJobNameAfterTime(gomock.Any(), testJobName, endPayloadJobRunWindow).Return("1000", nil)
+	mockDataClient.EXPECT().GetJobRunForJobNameAfterTime(gomock.Any(), testJobName, endPayloadJobRunWindow).Return("2000", nil)
 
 	mockGCSClient := jobrunaggregatorlib.NewMockCIGCSClient(mockCtrl)
-	mockGCSClient.EXPECT().ReadRelatedJobRuns(gomock.Any()).Return([]jobrunaggregatorapi.JobRunInfo{
-		buildFakeJobRunInfo(mockCtrl, false),
-	})
+	mockGCSClient.EXPECT().ReadRelatedJobRuns(
+		gomock.Any(),
+		testJobName,
+		fmt.Sprintf("logs/%s", testJobName),
+		"1000",
+		"2000",
+		gomock.Any()).Return([]jobrunaggregatorapi.JobRunInfo{
+		buildFakeJobRunInfo(mockCtrl, false, testJobName, "1001", payloadStartTime),
+	}, nil)
 
 	analyzer := JobRunAggregatorAnalyzerOptions{
 		jobRunLocator: jobrunaggregatorlib.NewPayloadAnalysisJobLocatorForReleaseController(
@@ -68,7 +77,21 @@ func TestAnalyzer(t *testing.T) {
 
 }
 
-func buildFakeJobRunInfo(mockCtrl *gomock.Controller, finished bool, jobName, jobRunID string) jobrunaggregatorapi.JobRunInfo {
+func buildFakeJobRunInfo(mockCtrl *gomock.Controller,
+	finished bool,
+	jobName,
+	jobRunID string,
+	payloadStartTime time.Time) jobrunaggregatorapi.JobRunInfo {
+
+	prowJob := &prowjobv1.ProwJob{
+		ObjectMeta: v1.ObjectMeta{CreationTimestamp: v1.NewTime(payloadStartTime)},
+	}
+
 	mockJRI := jobrunaggregatorapi.NewMockJobRunInfo(mockCtrl)
+	mockJRI.EXPECT().IsFinished(gomock.Any()).Return(finished)
+	mockJRI.EXPECT().GetJobName().Return(jobName).AnyTimes()
+	mockJRI.EXPECT().GetJobRunID().Return(jobRunID).AnyTimes()
+	mockJRI.EXPECT().GetHumanURL().Return("unused").AnyTimes()
+	mockJRI.EXPECT().GetProwJob(gomock.Any()).Return(prowJob, nil).AnyTimes()
 	return mockJRI
 }

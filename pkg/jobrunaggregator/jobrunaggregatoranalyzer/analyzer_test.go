@@ -39,16 +39,16 @@ func TestAnalyzer(t *testing.T) {
 		{
 			name: "no jobs finished",
 			jobRunInfos: []jobrunaggregatorapi.JobRunInfo{
-				buildFakeJobRunInfo(mockCtrl, false, testJobName, "1001", payloadStartTime),
-				buildFakeJobRunInfo(mockCtrl, false, testJobName, "1002", payloadStartTime),
-				buildFakeJobRunInfo(mockCtrl, false, testJobName, "1003", payloadStartTime),
-				buildFakeJobRunInfo(mockCtrl, false, testJobName, "1004", payloadStartTime),
-				buildFakeJobRunInfo(mockCtrl, false, testJobName, "1005", payloadStartTime),
-				buildFakeJobRunInfo(mockCtrl, false, testJobName, "1006", payloadStartTime),
-				buildFakeJobRunInfo(mockCtrl, false, testJobName, "1007", payloadStartTime),
-				buildFakeJobRunInfo(mockCtrl, false, testJobName, "1008", payloadStartTime),
-				buildFakeJobRunInfo(mockCtrl, false, testJobName, "1009", payloadStartTime),
-				buildFakeJobRunInfo(mockCtrl, false, testJobName, "1010", payloadStartTime),
+				buildFakeJobRunInfo(mockCtrl, "1001", payloadStartTime),
+				buildFakeJobRunInfo(mockCtrl, "1002", payloadStartTime),
+				buildFakeJobRunInfo(mockCtrl, "1003", payloadStartTime),
+				buildFakeJobRunInfo(mockCtrl, "1004", payloadStartTime),
+				buildFakeJobRunInfo(mockCtrl, "1005", payloadStartTime),
+				buildFakeJobRunInfo(mockCtrl, "1006", payloadStartTime),
+				buildFakeJobRunInfo(mockCtrl, "1007", payloadStartTime),
+				buildFakeJobRunInfo(mockCtrl, "1008", payloadStartTime),
+				buildFakeJobRunInfo(mockCtrl, "1009", payloadStartTime),
+				buildFakeJobRunInfo(mockCtrl, "1010", payloadStartTime),
 			},
 			expectErrContains: "found 10 unfinished related jobRuns",
 		},
@@ -107,22 +107,23 @@ func TestAnalyzer(t *testing.T) {
 }
 
 func buildFakeJobRunInfo(mockCtrl *gomock.Controller,
-	finished bool,
-	jobName,
 	jobRunID string,
 	payloadStartTime time.Time) jobrunaggregatorapi.JobRunInfo {
 
 	prowJob := &prowjobv1.ProwJob{
 		ObjectMeta: v1.ObjectMeta{CreationTimestamp: v1.NewTime(payloadStartTime)},
 	}
-	if finished {
-		completionTime := v1.NewTime(payloadStartTime.Add(3 * time.Hour))
-		prowJob.Status.CompletionTime = &completionTime
-	}
+	/*
+		if finished {
+			completionTime := v1.NewTime(payloadStartTime.Add(3 * time.Hour))
+			prowJob.Status.CompletionTime = &completionTime
+		}
+	*/
 
 	mockJRI := jobrunaggregatorapi.NewMockJobRunInfo(mockCtrl)
-	mockJRI.EXPECT().IsFinished(gomock.Any()).Return(finished).AnyTimes()
-	mockJRI.EXPECT().GetJobName().Return(jobName).AnyTimes()
+	// pass finished in when we're ready, damn linters...
+	mockJRI.EXPECT().IsFinished(gomock.Any()).Return(false).AnyTimes()
+	mockJRI.EXPECT().GetJobName().Return(testJobName).AnyTimes()
 	mockJRI.EXPECT().GetJobRunID().Return(jobRunID).AnyTimes()
 	mockJRI.EXPECT().GetHumanURL().Return("unused").AnyTimes()
 	mockJRI.EXPECT().GetProwJob(gomock.Any()).Return(prowJob, nil).AnyTimes()

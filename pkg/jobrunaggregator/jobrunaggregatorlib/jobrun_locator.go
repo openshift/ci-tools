@@ -70,7 +70,5 @@ func (a *analysisJobAggregator) FindRelatedJobs(ctx context.Context) ([]jobrunag
 		return nil, err
 	}
 
-	relatedJobRuns, err := a.ciGCSClient.ReadRelatedJobRuns(ctx, a.jobName, a.gcsPrefix, startingJobRunID, endingJobRunID, a.prowJobMatcher)
-
-	return relatedJobRuns, nil
+	return a.ciGCSClient.ReadRelatedJobRuns(ctx, a.jobName, a.gcsPrefix, startingJobRunID, endingJobRunID, a.prowJobMatcher)
 }

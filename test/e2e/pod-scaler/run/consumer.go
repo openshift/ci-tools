@@ -100,7 +100,7 @@ func Admission(t testhelper.TestingTInterface, dataDir, kubeconfig string, paren
 func UI(t testhelper.TestingTInterface, dataDir string, parent context.Context, stream bool) string {
 	serverHostname := "127.0.0.1"
 	podScalerFlags := []string{
-		"--loglevel=info",
+		"--loglevel=trace",
 		"--log-style=text",
 		"--cache-dir", dataDir,
 		"--mode=consumer.ui",

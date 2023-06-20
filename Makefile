@@ -335,7 +335,7 @@ cmd/pod-scaler/frontend/dist: cmd/pod-scaler/frontend/node_modules
 
 local-pod-scaler-ui: cmd/pod-scaler/frontend/node_modules $(HOME)/.cache/pod-scaler/steps/container_memory_working_set_bytes.json
 	go run -tags e2e,e2e_framework ./test/e2e/pod-scaler/local/main.go --cache-dir $(HOME)/.cache/pod-scaler --serve-dev-ui
-.PHONY: local-pod-scaler
+.PHONY: local-pod-scaler-ui
 
 $(HOME)/.cache/pod-scaler/steps/container_memory_working_set_bytes.json:
 	mkdir -p $(HOME)/.cache/pod-scaler

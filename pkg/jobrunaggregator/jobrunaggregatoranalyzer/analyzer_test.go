@@ -27,62 +27,83 @@ func TestAnalyzer(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
-	workDir, err := ioutil.TempDir("/tmp/", "ci-tools-aggregator-test-workdir")
-	assert.NoError(t, err)
-	defer os.RemoveAll(workDir)
-
 	// Used for when we estimate the payload launched, as well as when the aggregator job
 	// kicked off.
 	payloadStartTime := time.Date(2023, 6, 18, 12, 0, 0, 0, time.UTC)
 
-	// matches what we do in the JobRunLocator:
-	startPayloadJobRunWindow := payloadStartTime.Add(-1 * jobrunaggregatorlib.JobSearchWindowStartOffset)
-	endPayloadJobRunWindow := payloadStartTime.Add(jobrunaggregatorlib.JobSearchWindowEndOffset)
-
-	mockDataClient := jobrunaggregatorlib.NewMockCIDataClient(mockCtrl)
-	mockDataClient.EXPECT().GetJobRunForJobNameBeforeTime(gomock.Any(), testJobName, startPayloadJobRunWindow).Return("1000", nil)
-	mockDataClient.EXPECT().GetJobRunForJobNameAfterTime(gomock.Any(), testJobName, endPayloadJobRunWindow).Return("2000", nil)
-
-	mockGCSClient := jobrunaggregatorlib.NewMockCIGCSClient(mockCtrl)
-	mockGCSClient.EXPECT().ReadRelatedJobRuns(
-		gomock.Any(),
-		testJobName,
-		fmt.Sprintf("logs/%s", testJobName),
-		"1000",
-		"2000",
-		gomock.Any()).Return([]jobrunaggregatorapi.JobRunInfo{
-		buildFakeJobRunInfo(mockCtrl, false, testJobName, "1001", payloadStartTime),
-		buildFakeJobRunInfo(mockCtrl, false, testJobName, "1002", payloadStartTime),
-		buildFakeJobRunInfo(mockCtrl, false, testJobName, "1003", payloadStartTime),
-		buildFakeJobRunInfo(mockCtrl, false, testJobName, "1004", payloadStartTime),
-		buildFakeJobRunInfo(mockCtrl, true, testJobName, "1005", payloadStartTime),
-		buildFakeJobRunInfo(mockCtrl, true, testJobName, "1006", payloadStartTime),
-		buildFakeJobRunInfo(mockCtrl, true, testJobName, "1007", payloadStartTime),
-		buildFakeJobRunInfo(mockCtrl, true, testJobName, "1008", payloadStartTime),
-		buildFakeJobRunInfo(mockCtrl, false, testJobName, "1009", payloadStartTime),
-		buildFakeJobRunInfo(mockCtrl, false, testJobName, "1010", payloadStartTime),
-	}, nil)
-
-	analyzer := JobRunAggregatorAnalyzerOptions{
-		jobRunLocator: jobrunaggregatorlib.NewPayloadAnalysisJobLocatorForReleaseController(
-			testJobName,
-			testPayloadtag,
-			payloadStartTime,
-			mockDataClient,
-			mockGCSClient,
-			"bucketname",
-		),
-		passFailCalculator:  nil,
-		explicitGCSPrefix:   "",
-		jobName:             testJobName,
-		payloadTag:          testPayloadtag,
-		workingDir:          workDir,
-		jobRunStartEstimate: payloadStartTime,
-		clock:               fakeclock.NewFakeClock(payloadStartTime),
-		timeout:             6 * time.Hour,
+	tests := []struct {
+		name              string
+		jobRunInfos       []jobrunaggregatorapi.JobRunInfo
+		expectErrContains string
+	}{
+		{
+			name: "no jobs finished",
+			jobRunInfos: []jobrunaggregatorapi.JobRunInfo{
+				buildFakeJobRunInfo(mockCtrl, false, testJobName, "1001", payloadStartTime),
+				buildFakeJobRunInfo(mockCtrl, false, testJobName, "1002", payloadStartTime),
+				buildFakeJobRunInfo(mockCtrl, false, testJobName, "1003", payloadStartTime),
+				buildFakeJobRunInfo(mockCtrl, false, testJobName, "1004", payloadStartTime),
+				buildFakeJobRunInfo(mockCtrl, false, testJobName, "1005", payloadStartTime),
+				buildFakeJobRunInfo(mockCtrl, false, testJobName, "1006", payloadStartTime),
+				buildFakeJobRunInfo(mockCtrl, false, testJobName, "1007", payloadStartTime),
+				buildFakeJobRunInfo(mockCtrl, false, testJobName, "1008", payloadStartTime),
+				buildFakeJobRunInfo(mockCtrl, false, testJobName, "1009", payloadStartTime),
+				buildFakeJobRunInfo(mockCtrl, false, testJobName, "1010", payloadStartTime),
+			},
+			expectErrContains: "found 10 unfinished related jobRuns",
+		},
 	}
-	err = analyzer.Run(context.TODO())
-	assert.NoError(t, err)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			workDir, err := ioutil.TempDir("/tmp/", "ci-tools-aggregator-test-workdir")
+			assert.NoError(t, err)
+			defer os.RemoveAll(workDir)
+
+			// matches what we do in the JobRunLocator:
+			startPayloadJobRunWindow := payloadStartTime.Add(-1 * jobrunaggregatorlib.JobSearchWindowStartOffset)
+			endPayloadJobRunWindow := payloadStartTime.Add(jobrunaggregatorlib.JobSearchWindowEndOffset)
+
+			mockDataClient := jobrunaggregatorlib.NewMockCIDataClient(mockCtrl)
+			mockDataClient.EXPECT().GetJobRunForJobNameBeforeTime(gomock.Any(), testJobName, startPayloadJobRunWindow).Return("1000", nil)
+			mockDataClient.EXPECT().GetJobRunForJobNameAfterTime(gomock.Any(), testJobName, endPayloadJobRunWindow).Return("2000", nil)
+
+			mockGCSClient := jobrunaggregatorlib.NewMockCIGCSClient(mockCtrl)
+			mockGCSClient.EXPECT().ReadRelatedJobRuns(
+				gomock.Any(),
+				testJobName,
+				fmt.Sprintf("logs/%s", testJobName),
+				"1000",
+				"2000",
+				gomock.Any()).Return(tc.jobRunInfos, nil)
+
+			analyzer := JobRunAggregatorAnalyzerOptions{
+				jobRunLocator: jobrunaggregatorlib.NewPayloadAnalysisJobLocatorForReleaseController(
+					testJobName,
+					testPayloadtag,
+					payloadStartTime,
+					mockDataClient,
+					mockGCSClient,
+					"bucketname",
+				),
+				passFailCalculator:  nil,
+				explicitGCSPrefix:   "",
+				jobName:             testJobName,
+				payloadTag:          testPayloadtag,
+				workingDir:          workDir,
+				jobRunStartEstimate: payloadStartTime,
+				clock:               fakeclock.NewFakeClock(payloadStartTime),
+				timeout:             6 * time.Hour,
+			}
+			err = analyzer.Run(context.TODO())
+			if tc.expectErrContains != "" {
+				assert.ErrorContains(t, err, tc.expectErrContains)
+			} else {
+				assert.NoError(t, err)
+			}
+
+		})
+	}
+
 }
 
 func buildFakeJobRunInfo(mockCtrl *gomock.Controller,

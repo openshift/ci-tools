@@ -79,10 +79,12 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 		durationToWait = 4*time.Hour + 15*time.Minute
 	}
 	timeToStopWaiting := o.jobRunStartEstimate.Add(durationToWait)
+	alog := logrus.WithFields(logrus.Fields{
+		"job":     o.jobName,
+		"payload": o.payloadTag,
+	})
 
-	logrus.WithFields(logrus.Fields{
-		"job":       o.jobName,
-		"payload":   o.payloadTag,
+	alog.WithFields(logrus.Fields{
 		"now":       o.clock.Now().UTC().Format(time.RFC3339), // in tests, may not match the log timestamp
 		"readyAt":   readyAt.UTC().Format(time.RFC3339),
 		"timeoutAt": timeToStopWaiting.UTC().Format(time.RFC3339),
@@ -105,14 +107,13 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 	}
 
 	if len(unfinishedJobNames) > 0 {
-		logrus.WithField("job", o.jobName).WithField("payload", o.payloadTag).
-			Infof("found %d unfinished related jobRuns: %v", len(unfinishedJobNames), strings.Join(unfinishedJobNames, ", "))
+		alog.Infof("found %d unfinished related jobRuns: %v", len(unfinishedJobNames), strings.Join(unfinishedJobNames, ", "))
 	}
 	// if more than three jobruns timed out, just fail the entire aggregation
 	if len(unfinishedJobNames) > 3 {
-		return fmt.Errorf("%q for %q: found %d unfinished related jobRuns: %v\n", o.jobName, o.payloadTag, len(unfinishedJobNames), strings.Join(unfinishedJobNames, ", "))
+		return fmt.Errorf("%s for %s: found %d unfinished related jobRuns: %v\n", o.jobName, o.payloadTag, len(unfinishedJobNames), strings.Join(unfinishedJobNames, ", "))
 	}
-	logrus.Infof("%q for %q: aggregating %d related jobRuns: %v", o.jobName, o.payloadTag, len(finishedJobsToAggregate), strings.Join(finishedJobRunNames, ", "))
+	alog.Infof("aggregating %d related jobRuns: %v", len(finishedJobsToAggregate), strings.Join(finishedJobRunNames, ", "))
 
 	aggregationConfiguration := &AggregationConfiguration{}
 	for _, jobRunName := range unfinishedJobNames {
@@ -185,7 +186,7 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 		return err
 	}
 
-	logrus.Infof("%q for %q:  aggregating junit tests", o.jobName, o.payloadTag)
+	alog.Info("aggregating junit tests")
 	currentAggregationJunitSuites, err := currentAggregationJunit.aggregateAllJobRuns()
 	if err != nil {
 		return err

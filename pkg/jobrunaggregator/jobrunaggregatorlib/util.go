@@ -85,7 +85,7 @@ func WaitAndGetAllFinishedJobRuns(ctx context.Context,
 
 			prowJob, err := jobRun.GetProwJob(ctx)
 			if err != nil {
-				logrus.WithError(err).Error("error reading prowjob %v", jobRun.GetJobRunID())
+				logrus.WithError(err).Errorf("error reading prowjob %v", jobRun.GetJobRunID())
 				unfinishedJobRunNames = append(unfinishedJobRunNames, jobRun.GetJobRunID())
 				unfinishedJobRuns = append(unfinishedJobRuns, jobRun)
 				continue

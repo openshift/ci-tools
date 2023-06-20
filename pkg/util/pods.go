@@ -538,7 +538,13 @@ func podLogDeletion(
 	if IsBitSet(flags, Interruptible) {
 		logrus.Debugf("Pod %s is being deleted as expected", pod.Name)
 	} else {
-		logrus.Warningf("Pod %s is being unexpectedly deleted:\n%s", pod.Name, getEventsForPod(ctx, &pod, podClient))
+		var f func(string, ...interface{})
+		if IsBitSet(flags, SkipLogs) {
+			f = logrus.Debugf
+		} else {
+			f = logrus.Warningf
+		}
+		f("Pod %s is being unexpectedly deleted:\n%s", pod.Name, getEventsForPod(ctx, &pod, podClient))
 	}
 }
 

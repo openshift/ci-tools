@@ -17,7 +17,7 @@ var (
 )
 
 type JobRunLocator interface {
-	FindRelatedJobRuns(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error)
+	FindRelatedJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error)
 }
 
 type prowJobMatcherFunc func(prowJob *prowjobv1.ProwJob) bool
@@ -56,9 +56,9 @@ func NewPayloadAnalysisJobLocator(
 	}
 }
 
-// FindRelatedJobRuns returns a slice of JobRunInfo which has info contained in GCS buckets
+// FindRelatedJobs returns a slice of JobRunInfo which has info contained in GCS buckets
 // used to determine pass/fail.
-func (a *analysisJobAggregator) FindRelatedJobRuns(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error) {
+func (a *analysisJobAggregator) FindRelatedJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error) {
 	startOfJobRunWindow := a.startTime.Add(-1 * JobSearchWindowStartOffset)
 	endOfJobRunWindow := a.startTime.Add(JobSearchWindowEndOffset)
 	startingJobRunID, err := a.ciDataClient.GetJobRunForJobNameBeforeTime(ctx, a.jobName, startOfJobRunWindow)

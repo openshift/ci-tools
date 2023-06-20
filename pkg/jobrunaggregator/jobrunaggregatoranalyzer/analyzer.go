@@ -47,7 +47,7 @@ type JobRunAggregatorAnalyzerOptions struct {
 func (o *JobRunAggregatorAnalyzerOptions) GetRelatedJobRuns(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error) {
 	errorsInARow := 0
 	for {
-		jobsToAggregate, err := o.jobRunLocator.FindRelatedJobRuns(ctx)
+		jobsToAggregate, err := o.jobRunLocator.FindRelatedJobs(ctx)
 		if err == nil {
 			return jobsToAggregate, nil
 		}
@@ -85,8 +85,8 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 	})
 
 	alog.WithFields(logrus.Fields{
-		"now":       o.clock.Now().UTC().Format(time.RFC3339), // in tests, may not match the log timestamp
-		"readyAt":   readyAt.UTC().Format(time.RFC3339),
+		"now":       o.clock.Now().Format(time.RFC3339), // in tests, may not match the log timestamp
+		"readyAt":   readyAt.Format(time.RFC3339),
 		"timeoutAt": timeToStopWaiting.UTC().Format(time.RFC3339),
 	}).Info("aggregating job runs")
 	ctx, cancel := context.WithTimeout(ctx, o.timeout)

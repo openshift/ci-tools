@@ -144,7 +144,7 @@ func (j *gcsJobRun) GetCombinedJUnitTestSuites(ctx context.Context) (*junit.Test
 	testSuites := &junit.TestSuites{}
 	for _, junitFile := range j.GetGCSJunitPaths() {
 		logrus.Debug("getting junit file content content from GCS")
-		junitContent, err := j.getCurrentContent(ctx, junitFile)
+		junitContent, err := j.GetContent(ctx, junitFile)
 		if err != nil {
 			return nil, fmt.Errorf("error getting content for jobrun/%v/%v %q: %w", j.GetJobName(), j.GetJobRunID(), junitFile, err)
 		}
@@ -250,7 +250,7 @@ func (j *gcsJobRun) GetProwJob(ctx context.Context) (*prowjobv1.ProwJob, error) 
 		return nil, fmt.Errorf("missing prowjob path to GCS content for jobrun/%v/%v", j.GetJobName(), j.GetJobRunID())
 	}
 	logrus.Infof("Fetching latest prowjob content from gcs: %s", j.gcsProwJobPath)
-	prowBytes, err := j.getCurrentContent(ctx, j.gcsProwJobPath)
+	prowBytes, err := j.GetContent(ctx, j.gcsProwJobPath)
 	if err != nil {
 		return nil, err
 	}

@@ -347,7 +347,7 @@ func (o *JobRunTestCaseAnalyzerOptions) findJobRunsWithRetry(ctx context.Context
 	jobName string, jobRunLocator jobrunaggregatorlib.JobRunLocator) ([]jobrunaggregatorapi.JobRunInfo, error) {
 	errorsInARow := 0
 	for {
-		jobRuns, err := jobRunLocator.FindRelatedJobRuns(ctx)
+		jobRuns, err := jobRunLocator.FindRelatedJobs(ctx)
 		if err != nil {
 			if errorsInARow > 20 {
 				fmt.Printf("give up finding job runs for %s after retries: %v", jobName, err)
@@ -370,10 +370,9 @@ func (o *JobRunTestCaseAnalyzerOptions) findJobRunsWithRetry(ctx context.Context
 	}
 }
 
-// GetRelatedJobRuns gets all related job runs for analysis which are associated with this payload.
+// GetRelatedJobRuns gets all related job runs for analysis
 func (o *JobRunTestCaseAnalyzerOptions) GetRelatedJobRuns(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error) {
 	var jobRunsToReturn []jobrunaggregatorapi.JobRunInfo
-
 	jobs, err := o.jobGetter.GetJobs(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get related jobs: %w", err)
@@ -484,7 +483,7 @@ func (o *JobRunTestCaseAnalyzerOptions) Run(ctx context.Context) error {
 	durationToWait := o.timeout - 20*time.Minute
 	timeToStopWaiting := o.jobRunStartEstimate.Add(durationToWait)
 
-	fmt.Printf("Analyzing test status for job runs for %q.  now=%v, ReadyAt=%v, timeToStopWaiting=%v.\n", matchID, time.Now().UTC(), readyAt, timeToStopWaiting)
+	fmt.Printf("Analyzing test status for job runs for %q.  now=%v, ReadyAt=%v, timeToStopWaiting=%v.\n", matchID, time.Now(), readyAt, timeToStopWaiting)
 
 	err := jobrunaggregatorlib.WaitUntilTime(ctx, readyAt)
 	if err != nil {

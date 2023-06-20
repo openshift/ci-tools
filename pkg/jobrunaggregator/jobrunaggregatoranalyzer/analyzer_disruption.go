@@ -17,8 +17,23 @@ import (
 	"github.com/openshift/ci-tools/pkg/junit"
 )
 
+// isExcludedDisruptionBackend returns true of any of the given backends are in the
+// disruption backend name.  Essentially, we want to skip testing of these disruption
+// backends for now as they run and gather more data.
 func isExcludedDisruptionBackend(name string) bool {
-	return strings.Contains(name, "ci-cluster-network-liveness")
+	excludedNames := []string{
+		"ci-cluster-network-liveness",
+		"kube-api-http1-external-lb",
+		"kube-api-http2-external-lb",
+		"openshift-api-http2-external-lb",
+	}
+
+	for _, excludedName := range excludedNames {
+		if strings.Contains(name, excludedName) {
+			return true
+		}
+	}
+	return false
 }
 
 func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx context.Context, jobGCSBucketRoot string, finishedJobsToAggregate []jobrunaggregatorapi.JobRunInfo, masterNodesUpdated string) (*junit.TestSuite, error) {

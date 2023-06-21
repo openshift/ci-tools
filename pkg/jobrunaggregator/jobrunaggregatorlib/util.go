@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"k8s.io/utils/clock"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
@@ -21,7 +23,7 @@ type JobRunGetter interface {
 
 // WaitUntilTime waits until readAt time has passed
 func WaitUntilTime(ctx context.Context, readyAt time.Time) error {
-	fmt.Printf("Waiting now=%v, ReadyAt=%v.\n", time.Now(), readyAt)
+	logrus.Infof("Waiting now=%v, ReadyAt=%v.\n", time.Now(), readyAt)
 
 	if time.Now().After(readyAt) {
 		return nil
@@ -33,7 +35,7 @@ func WaitUntilTime(ctx context.Context, readyAt time.Time) error {
 	case <-time.After(time.Until(readyAt)):
 		break
 	}
-	fmt.Printf("it is %v, finished waiting until %v.\n", time.Now(), readyAt)
+	logrus.Infof("finished waiting until %v", readyAt)
 	return nil
 }
 
@@ -70,7 +72,7 @@ func WaitAndGetAllFinishedJobRuns(ctx context.Context,
 		for i := range relatedJobRuns {
 			jobRun := relatedJobRuns[i]
 			if !jobRun.IsFinished(ctx) {
-				fmt.Printf("%v/%v is not finished\n", jobRun.GetJobName(), jobRun.GetJobRunID())
+				logrus.Debugf("%v/%v is not finished", jobRun.GetJobName(), jobRun.GetJobRunID())
 				unfinishedJobRunNames = append(unfinishedJobRunNames, jobRun.GetJobRunID())
 				unfinishedJobRuns = append(unfinishedJobRuns, jobRun)
 				continue
@@ -78,14 +80,14 @@ func WaitAndGetAllFinishedJobRuns(ctx context.Context,
 
 			prowJob, err := jobRun.GetProwJob(ctx)
 			if err != nil {
-				fmt.Printf("  error reading prowjob %v: %v\n", jobRun.GetJobRunID(), err)
+				logrus.WithError(err).Errorf("error reading prowjob %v", jobRun.GetJobRunID())
 				unfinishedJobRunNames = append(unfinishedJobRunNames, jobRun.GetJobRunID())
 				unfinishedJobRuns = append(unfinishedJobRuns, jobRun)
 				continue
 			}
 
 			if prowJob.Status.CompletionTime == nil {
-				fmt.Printf("%v/%v has no completion time for resourceVersion=%v\n", jobRun.GetJobName(), jobRun.GetJobRunID(), prowJob.ResourceVersion)
+				logrus.Debugf("%v/%v has no completion time for resourceVersion=%v", jobRun.GetJobName(), jobRun.GetJobRunID(), prowJob.ResourceVersion)
 				unfinishedJobRunNames = append(unfinishedJobRunNames, jobRun.GetJobRunID())
 				unfinishedJobRuns = append(unfinishedJobRuns, jobRun)
 				continue
@@ -101,12 +103,12 @@ func WaitAndGetAllFinishedJobRuns(ctx context.Context,
 
 		// ready or not, it's time to check
 		if clock.Now().After(timeToStopWaiting) {
-			fmt.Printf("waited long enough. Ready or not, here I come. (readyOrNot=%v now=%v)\n", timeToStopWaiting, clock.Now())
+			logrus.Infof("waited long enough. Ready or not, here I come. (readyOrNot=%v now=%v)", timeToStopWaiting, clock.Now())
 			break
 		}
 
 		if len(unfinishedJobRunNames) > 0 {
-			fmt.Printf("found %d unfinished related jobRuns: %v\n", len(unfinishedJobRunNames), strings.Join(unfinishedJobRunNames, ", "))
+			logrus.Infof("found %d unfinished related jobRuns: %v\n", len(unfinishedJobRunNames), strings.Join(unfinishedJobRunNames, ", "))
 			select {
 			case <-time.After(10 * time.Minute):
 				continue
@@ -118,7 +120,7 @@ func WaitAndGetAllFinishedJobRuns(ctx context.Context,
 		break
 	}
 
-	fmt.Printf("found %d finished jobRuns: %v and %d unfinished jobRuns: %v\n",
+	logrus.Infof("found %d finished jobRuns: %v and %d unfinished jobRuns: %v",
 		len(finishedJobRunNames), strings.Join(finishedJobRunNames, ", "), len(unfinishedJobRunNames), strings.Join(unfinishedJobRunNames, ", "))
 	return finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames, nil
 }

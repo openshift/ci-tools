@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"cloud.google.com/go/storage"
-
 	prowjobv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 )
 
@@ -21,7 +19,6 @@ func NewPayloadAnalysisJobLocatorForPR(
 	startTime time.Time,
 	ciDataClient AggregationJobClient,
 	ciGCSClient CIGCSClient,
-	gcsClient *storage.Client,
 	gcsBucketName string,
 	gcsPrefix string) JobRunLocator {
 
@@ -34,7 +31,6 @@ func NewPayloadAnalysisJobLocatorForPR(
 		startTime,
 		ciDataClient,
 		ciGCSClient,
-		gcsClient,
 		gcsBucketName,
 		gcsPrefix,
 	)

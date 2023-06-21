@@ -309,10 +309,6 @@ func (f *JobRunsTestCaseAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunTe
 		jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, bigQueryClient),
 	)
 
-	gcsClient, err := f.Authentication.NewGCSClient(ctx)
-	if err != nil {
-		return nil, err
-	}
 	ciGCSClient, err := f.Authentication.NewCIGCSClient(ctx, "origin-ci-test")
 	if err != nil {
 		return nil, err
@@ -354,7 +350,6 @@ func (f *JobRunsTestCaseAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunTe
 		timeout:             f.Timeout,
 		ciDataClient:        ciDataClient,
 		ciGCSClient:         ciGCSClient,
-		gcsClient:           gcsClient,
 		testCaseCheckers:    []TestCaseChecker{minimumRequiredPassesTestCaseChecker{testIdentifierOpt, f.testNameSuffix(), f.MinimumSuccessfulTestCount}},
 		testNameSuffix:      f.testNameSuffix(),
 		payloadInvocationID: f.PayloadInvocationID,

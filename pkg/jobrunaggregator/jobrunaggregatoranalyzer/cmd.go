@@ -133,10 +133,6 @@ func (f *JobRunsAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunAggregator
 		jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, bigQueryClient),
 	)
 
-	gcsClient, err := f.Authentication.NewGCSClient(ctx)
-	if err != nil {
-		return nil, err
-	}
 	ciGCSClient, err := f.Authentication.NewCIGCSClient(ctx, "origin-ci-test")
 	if err != nil {
 		return nil, err
@@ -150,7 +146,6 @@ func (f *JobRunsAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunAggregator
 			estimatedStartTime,
 			ciDataClient,
 			ciGCSClient,
-			gcsClient,
 			"origin-ci-test",
 		)
 	}
@@ -162,7 +157,6 @@ func (f *JobRunsAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunAggregator
 			estimatedStartTime,
 			ciDataClient,
 			ciGCSClient,
-			gcsClient,
 			"origin-ci-test",
 			f.ExplicitGCSPrefix,
 		)

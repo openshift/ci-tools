@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 
 	"k8s.io/utils/clock"
@@ -55,10 +56,10 @@ func (o *JobRunAggregatorAnalyzerOptions) GetRelatedJobRuns(ctx context.Context)
 				return nil, err
 			}
 			errorsInARow++
-			fmt.Printf("error finding jobs to aggregate: %v", err)
+			logrus.WithError(err).Error("error finding jobs to aggregate")
 		}
 
-		fmt.Printf("   waiting and will attempt to find related jobs in a minute\n")
+		logrus.Info("waiting and will attempt to find related jobs in one minute")
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -78,8 +79,16 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 		durationToWait = 4*time.Hour + 15*time.Minute
 	}
 	timeToStopWaiting := o.jobRunStartEstimate.Add(durationToWait)
+	alog := logrus.WithFields(logrus.Fields{
+		"job":     o.jobName,
+		"payload": o.payloadTag,
+	})
 
-	fmt.Printf("Aggregating job runs of type %q for %q.  now=%v, ReadyAt=%v, timeToStopWaiting=%v.\n", o.jobName, o.payloadTag, o.clock.Now(), readyAt, timeToStopWaiting)
+	alog.WithFields(logrus.Fields{
+		"now":       o.clock.Now().Format(time.RFC3339), // in tests, may not match the log timestamp
+		"readyAt":   readyAt.Format(time.RFC3339),
+		"timeoutAt": timeToStopWaiting.UTC().Format(time.RFC3339),
+	}).Info("aggregating job runs")
 	ctx, cancel := context.WithTimeout(ctx, o.timeout)
 	defer cancel()
 
@@ -98,13 +107,13 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 	}
 
 	if len(unfinishedJobNames) > 0 {
-		fmt.Printf("%q for %q: found %d unfinished related jobRuns: %v\n", o.jobName, o.payloadTag, len(unfinishedJobNames), strings.Join(unfinishedJobNames, ", "))
+		alog.Infof("found %d unfinished related jobRuns: %v", len(unfinishedJobNames), strings.Join(unfinishedJobNames, ", "))
 	}
 	// if more than three jobruns timed out, just fail the entire aggregation
 	if len(unfinishedJobNames) > 3 {
-		return fmt.Errorf("%q for %q: found %d unfinished related jobRuns: %v\n", o.jobName, o.payloadTag, len(unfinishedJobNames), strings.Join(unfinishedJobNames, ", "))
+		return fmt.Errorf("%s for %s: found %d unfinished related jobRuns: %v\n", o.jobName, o.payloadTag, len(unfinishedJobNames), strings.Join(unfinishedJobNames, ", "))
 	}
-	fmt.Printf("%q for %q: aggregating %d related jobRuns: %v\n", o.jobName, o.payloadTag, len(finishedJobsToAggregate), strings.Join(finishedJobRunNames, ", "))
+	alog.Infof("aggregating %d related jobRuns: %v", len(finishedJobsToAggregate), strings.Join(finishedJobRunNames, ", "))
 
 	aggregationConfiguration := &AggregationConfiguration{}
 	for _, jobRunName := range unfinishedJobNames {
@@ -177,7 +186,7 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 		return err
 	}
 
-	fmt.Printf("%q for %q:  aggregating junit tests.\n", o.jobName, o.payloadTag)
+	alog.Info("aggregating junit tests")
 	currentAggregationJunitSuites, err := currentAggregationJunit.aggregateAllJobRuns()
 	if err != nil {
 		return err
@@ -186,7 +195,7 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 		return err
 	}
 
-	fmt.Printf("%q for %q:  aggregating disruption tests.\n", o.jobName, o.payloadTag)
+	logrus.Infof("%q for %q:  aggregating disruption tests", o.jobName, o.payloadTag)
 
 	disruptionSuite, err := o.CalculateDisruptionTestSuite(ctx, currentAggregationJunit.jobGCSBucketRoot, finishedJobsToAggregate, masterNodesUpdated)
 	if err != nil {
@@ -205,7 +214,7 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 		return err
 	}
 
-	fmt.Printf("%q for %q:  Done aggregating.\n", o.jobName, o.payloadTag)
+	logrus.Infof("%q for %q:  Done aggregating", o.jobName, o.payloadTag)
 
 	// now scan for a failure
 	fakeSuite := &junit.TestSuite{Children: currentAggregationJunitSuites.Suites}

@@ -13,14 +13,19 @@ import (
 )
 
 // JobRunInfo is a way to interact with JobRuns and gather their junit results.
-// The backing store can vary by impl, but GCS buckets and
+// The backing store can vary by impl, GCS buckets are the only implementation today.
 type JobRunInfo interface {
 	IsFinished(ctx context.Context) bool
 
 	GetJobName() string
 	GetJobRunID() string
+
+	// GetHumanURL returns prow job URL for this job run.
 	GetHumanURL() string
+
+	// GetGCSArtifactURL returns the URL for this job run's artifacts in GCS.
 	GetGCSArtifactURL() string
+
 	GetGCSProwJobPath() string
 	GetGCSJunitPaths() []string
 	SetGCSProwJobPath(gcsProwJobPath string)

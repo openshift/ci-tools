@@ -180,7 +180,7 @@ func verifyMetadata(jobSpec *api.JobSpec, namespace string, customMetadata map[s
 	errs = append(errs, ioutil.WriteFile(filepath.Join(testArtifactDirectory, "d-ignore1.txt"), []byte(``), os.FileMode(0644)))
 	errs = append(errs, ioutil.WriteFile(filepath.Join(testArtifactDirectory, "e-ignore1.txt"), []byte(`{"invalid-field2": "invalid-value2"}`), os.FileMode(0644)))
 	if err := utilerrors.NewAggregate(errs); err != nil {
-		return fmt.Errorf("one or more of the empty *ignore files failed to write: %v", err)
+		return fmt.Errorf("one or more of the empty *ignore files failed to write: %w", err)
 	}
 
 	if err := o.writeMetadataJSON(); err != nil {

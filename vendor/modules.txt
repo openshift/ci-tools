@@ -850,10 +850,6 @@ github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
 ## explicit
 github.com/pmezard/go-difflib/difflib
-# github.com/polyfloyd/go-errorlint v0.0.0-20210722154253-910bb7978349
-## explicit; go 1.13
-github.com/polyfloyd/go-errorlint
-github.com/polyfloyd/go-errorlint/errorlint
 # github.com/prometheus/client_golang v1.15.1
 ## explicit; go 1.17
 github.com/prometheus/client_golang/api
@@ -1131,23 +1127,15 @@ golang.org/x/time/rate
 ## explicit; go 1.18
 golang.org/x/tools/cmd/goimports
 golang.org/x/tools/cmd/stringer
-golang.org/x/tools/go/analysis
-golang.org/x/tools/go/analysis/internal/analysisflags
-golang.org/x/tools/go/analysis/internal/checker
-golang.org/x/tools/go/analysis/singlechecker
-golang.org/x/tools/go/analysis/unitchecker
 golang.org/x/tools/go/ast/astutil
 golang.org/x/tools/go/gcexportdata
 golang.org/x/tools/go/internal/packagesdriver
 golang.org/x/tools/go/packages
 golang.org/x/tools/go/types/objectpath
-golang.org/x/tools/internal/diff
-golang.org/x/tools/internal/diff/lcs
 golang.org/x/tools/internal/event
 golang.org/x/tools/internal/event/core
 golang.org/x/tools/internal/event/keys
 golang.org/x/tools/internal/event/label
-golang.org/x/tools/internal/facts
 golang.org/x/tools/internal/fastwalk
 golang.org/x/tools/internal/gcimporter
 golang.org/x/tools/internal/gocommand
@@ -1155,7 +1143,6 @@ golang.org/x/tools/internal/gopathwalk
 golang.org/x/tools/internal/imports
 golang.org/x/tools/internal/packagesinternal
 golang.org/x/tools/internal/pkgbits
-golang.org/x/tools/internal/robustio
 golang.org/x/tools/internal/tokeninternal
 golang.org/x/tools/internal/typeparams
 golang.org/x/tools/internal/typesinternal

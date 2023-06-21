@@ -311,7 +311,7 @@ func handleError(w http.ResponseWriter, err error, shortErrorMessage string, sta
 		_, fprintfErr = fmt.Fprintf(w, "failed while building error page")
 	}
 	metrics.RecordError(shortErrorMessage, m.ErrorRate)
-	logrus.WithFields(logFieldsFor(endpoint, bugID)).WithError(fmt.Errorf("%s: %v", shortErrorMessage, utilerrors.NewAggregate([]error{err, wpErr, fprintfErr}))).Error("an error occurred")
+	logrus.WithFields(logFieldsFor(endpoint, bugID)).WithError(fmt.Errorf("%s: %w", shortErrorMessage, utilerrors.NewAggregate([]error{err, wpErr, fprintfErr}))).Error("an error occurred")
 }
 
 // HandlerFuncWithErrorReturn allows returning errors to be logged

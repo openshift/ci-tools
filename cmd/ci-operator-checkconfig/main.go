@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"runtime"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -30,7 +29,6 @@ type promotedTag struct {
 
 type options struct {
 	config.Options
-	maxConcurrency uint
 
 	resolver        registry.Resolver
 	ciOPConfigAgent agents.ConfigAgent
@@ -42,8 +40,6 @@ func (o *options) parse() error {
 	fs := flag.NewFlagSet("", flag.ExitOnError)
 
 	fs.StringVar(&registryDir, "registry", "", "Path to the step registry directory")
-	fs.UintVar(&o.maxConcurrency, "concurrency", uint(runtime.GOMAXPROCS(0)), "Maximum number of concurrent in-flight goroutines.")
-
 	o.Options.Bind(fs)
 
 	if err := fs.Parse(os.Args[1:]); err != nil {

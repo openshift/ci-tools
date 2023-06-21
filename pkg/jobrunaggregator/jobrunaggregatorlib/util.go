@@ -39,6 +39,45 @@ func WaitUntilTime(ctx context.Context, readyAt time.Time) error {
 	return nil
 }
 
+func getAllFinishedJobRuns(ctx context.Context, relatedJobRuns []jobrunaggregatorapi.JobRunInfo) ([]jobrunaggregatorapi.JobRunInfo, []jobrunaggregatorapi.JobRunInfo, []string, []string) {
+	finishedJobRuns := []jobrunaggregatorapi.JobRunInfo{}
+	unfinishedJobRuns := []jobrunaggregatorapi.JobRunInfo{}
+	finishedJobRunNames := []string{}
+	unfinishedJobRunNames := []string{}
+
+	if len(relatedJobRuns) == 0 {
+		return finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames
+	}
+
+	for i := range relatedJobRuns {
+		jobRun := relatedJobRuns[i]
+		if !jobRun.IsFinished(ctx) {
+			logrus.Debugf("%v/%v is not finished", jobRun.GetJobName(), jobRun.GetJobRunID())
+			unfinishedJobRunNames = append(unfinishedJobRunNames, jobRun.GetJobRunID())
+			unfinishedJobRuns = append(unfinishedJobRuns, jobRun)
+			continue
+		}
+
+		prowJob, err := jobRun.GetProwJob(ctx)
+		if err != nil {
+			logrus.WithError(err).Errorf("error reading prowjob %v", jobRun.GetJobRunID())
+			unfinishedJobRunNames = append(unfinishedJobRunNames, jobRun.GetJobRunID())
+			unfinishedJobRuns = append(unfinishedJobRuns, jobRun)
+			continue
+		}
+
+		if prowJob.Status.CompletionTime == nil {
+			logrus.Debugf("%v/%v has no completion time for resourceVersion=%v", jobRun.GetJobName(), jobRun.GetJobRunID(), prowJob.ResourceVersion)
+			unfinishedJobRunNames = append(unfinishedJobRunNames, jobRun.GetJobRunID())
+			unfinishedJobRuns = append(unfinishedJobRuns, jobRun)
+			continue
+		}
+		finishedJobRuns = append(finishedJobRuns, jobRun)
+		finishedJobRunNames = append(finishedJobRunNames, jobRun.GetJobName()+jobRun.GetJobRunID())
+	}
+	return finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames
+}
+
 // WaitAndGetAllFinishedJobRuns waits for all job runs to finish until timeToStopWaiting. It returns all finished and unfinished job runs
 func WaitAndGetAllFinishedJobRuns(ctx context.Context,
 	timeToStopWaiting time.Time,
@@ -46,60 +85,20 @@ func WaitAndGetAllFinishedJobRuns(ctx context.Context,
 	outputDir string,
 	variantInfo string) ([]jobrunaggregatorapi.JobRunInfo, []jobrunaggregatorapi.JobRunInfo, []string, []string, error) {
 	clock := clock.RealClock{}
+	finishedJobRuns := []jobrunaggregatorapi.JobRunInfo{}
+	unfinishedJobRuns := []jobrunaggregatorapi.JobRunInfo{}
+	finishedJobRunNames := []string{}
+	unfinishedJobRunNames := []string{}
 
-	var finishedJobRuns []jobrunaggregatorapi.JobRunInfo
-	var finishedJobRunNames []string
-	var unfinishedJobRuns []jobrunaggregatorapi.JobRunInfo
-	var unfinishedJobRunNames []string
+	relatedJobRuns, err := jobRunGetter.GetRelatedJobRuns(ctx)
+	if err != nil {
+		return finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames, err
+	}
+
 	for {
 		fmt.Println() // for prettier logs
-		// reset vars
-		finishedJobRuns = []jobrunaggregatorapi.JobRunInfo{}
-		unfinishedJobRuns = []jobrunaggregatorapi.JobRunInfo{}
-		finishedJobRunNames = []string{}
-		unfinishedJobRunNames = []string{}
 
-		relatedJobRuns, err := jobRunGetter.GetRelatedJobRuns(ctx)
-
-		if err != nil {
-			return finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames, err
-		}
-
-		if len(relatedJobRuns) == 0 {
-			return finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames, fmt.Errorf("found no related jobRuns")
-		}
-
-		for i := range relatedJobRuns {
-			jobRun := relatedJobRuns[i]
-			if !jobRun.IsFinished(ctx) {
-				logrus.Debugf("%v/%v is not finished", jobRun.GetJobName(), jobRun.GetJobRunID())
-				unfinishedJobRunNames = append(unfinishedJobRunNames, jobRun.GetJobRunID())
-				unfinishedJobRuns = append(unfinishedJobRuns, jobRun)
-				continue
-			}
-
-			prowJob, err := jobRun.GetProwJob(ctx)
-			if err != nil {
-				logrus.WithError(err).Errorf("error reading prowjob %v", jobRun.GetJobRunID())
-				unfinishedJobRunNames = append(unfinishedJobRunNames, jobRun.GetJobRunID())
-				unfinishedJobRuns = append(unfinishedJobRuns, jobRun)
-				continue
-			}
-
-			if prowJob.Status.CompletionTime == nil {
-				logrus.Debugf("%v/%v has no completion time for resourceVersion=%v", jobRun.GetJobName(), jobRun.GetJobRunID(), prowJob.ResourceVersion)
-				unfinishedJobRunNames = append(unfinishedJobRunNames, jobRun.GetJobRunID())
-				unfinishedJobRuns = append(unfinishedJobRuns, jobRun)
-				continue
-			}
-			finishedJobRuns = append(finishedJobRuns, jobRun)
-			finishedJobRunNames = append(finishedJobRunNames, jobRun.GetJobName()+jobRun.GetJobRunID())
-		}
-
-		summaryHTML := htmlForJobRuns(ctx, finishedJobRuns, unfinishedJobRuns, variantInfo)
-		if err := ioutil.WriteFile(filepath.Join(outputDir, "job-run-summary.html"), []byte(summaryHTML), 0644); err != nil {
-			return finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames, err
-		}
+		finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames := getAllFinishedJobRuns(ctx, relatedJobRuns)
 
 		// ready or not, it's time to check
 		if clock.Now().After(timeToStopWaiting) {
@@ -118,6 +117,19 @@ func WaitAndGetAllFinishedJobRuns(ctx context.Context,
 		}
 
 		break
+	}
+
+	// Refresh the job runs content one last time
+	relatedJobRuns, err = jobRunGetter.GetRelatedJobRuns(ctx)
+	if err != nil {
+		return finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames, err
+	}
+
+	finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames = getAllFinishedJobRuns(ctx, relatedJobRuns)
+
+	summaryHTML := htmlForJobRuns(ctx, finishedJobRuns, unfinishedJobRuns, variantInfo)
+	if err := ioutil.WriteFile(filepath.Join(outputDir, "job-run-summary.html"), []byte(summaryHTML), 0644); err != nil {
+		return finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames, err
 	}
 
 	logrus.Infof("found %d finished jobRuns: %v and %d unfinished jobRuns: %v",

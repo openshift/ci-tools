@@ -23,7 +23,7 @@ func newReloader(name string, cache cache) *cacheReloader {
 		}),
 		lock: &sync.RWMutex{},
 	}
-	interrupts.TickLiteral(reloader.reload, 10*time.Minute)
+	interrupts.TickLiteral(reloader.reload, time.Hour)
 	return reloader
 }
 
@@ -120,6 +120,7 @@ func digest(logger *logrus.Entry, infos ...digestInfo) <-chan interface{} {
 			loaded += 1
 			logger.Debugf("Now loaded %d info(s) out of %d", loaded, len(infos))
 		} else {
+			logger.Debugf("Now loaded all %d info(s)", len(infos))
 			loadDone <- struct{}{}
 		}
 	}

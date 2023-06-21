@@ -65,8 +65,8 @@ func TestAnalyzer(t *testing.T) {
 			endPayloadJobRunWindow := payloadStartTime.Add(jobrunaggregatorlib.JobSearchWindowEndOffset)
 
 			mockDataClient := jobrunaggregatorlib.NewMockCIDataClient(mockCtrl)
-			mockDataClient.EXPECT().GetJobRunForJobNameBeforeTime(gomock.Any(), testJobName, startPayloadJobRunWindow).Return("1000", nil)
-			mockDataClient.EXPECT().GetJobRunForJobNameAfterTime(gomock.Any(), testJobName, endPayloadJobRunWindow).Return("2000", nil)
+			mockDataClient.EXPECT().GetJobRunForJobNameBeforeTime(gomock.Any(), testJobName, startPayloadJobRunWindow).Return("1000", nil).Times(2)
+			mockDataClient.EXPECT().GetJobRunForJobNameAfterTime(gomock.Any(), testJobName, endPayloadJobRunWindow).Return("2000", nil).Times(2)
 
 			mockGCSClient := jobrunaggregatorlib.NewMockCIGCSClient(mockCtrl)
 			mockGCSClient.EXPECT().ReadRelatedJobRuns(
@@ -75,7 +75,7 @@ func TestAnalyzer(t *testing.T) {
 				fmt.Sprintf("logs/%s", testJobName),
 				"1000",
 				"2000",
-				gomock.Any()).Return(tc.jobRunInfos, nil)
+				gomock.Any()).Return(tc.jobRunInfos, nil).Times(2)
 
 			analyzer := JobRunAggregatorAnalyzerOptions{
 				jobRunLocator: jobrunaggregatorlib.NewPayloadAnalysisJobLocatorForReleaseController(

@@ -94,7 +94,7 @@ func (o *Options) Bind(fs *flag.FlagSet) {
 	fs.StringVar(&o.ConfigDir, "config-dir", "", "Path to CI Operator configuration directory.")
 	fs.StringVar(&o.LogLevel, "log-level", "info", "Level at which to log output.")
 	fs.StringVar(&o.Org, "org", "", "Limit repos affected to those in this org.")
-	fs.StringVar(&o.Repo, "repo", "", "Limit repos affected to this repo.")
+	fs.StringVar(&o.Repo, "repo", "", "Limit branches affected to this repo.")
 
 	fs.BoolVar(&o.onlyProcessChanges, "only-process-changes", false, "If true, compare changes with the main branch")
 }

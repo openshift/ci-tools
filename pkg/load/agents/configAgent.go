@@ -2,6 +2,7 @@ package agents
 
 import (
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"sync"
@@ -41,6 +42,8 @@ type configAgent struct {
 	lock             *sync.RWMutex
 	configs          config.ByOrgRepo
 	configPath       string
+	org              string
+	repo             string
 	generation       int
 	errorMetrics     *prometheus.CounterVec
 	indexFuncs       map[string]IndexFn
@@ -87,6 +90,9 @@ type ConfigAgentOptions struct {
 	ErrorMetric *prometheus.CounterVec
 
 	UniversalSymlinkWatcher *UniversalSymlinkWatcher
+
+	Org  string
+	Repo string
 }
 
 type ConfigAgentOption func(*ConfigAgentOptions)
@@ -94,6 +100,18 @@ type ConfigAgentOption func(*ConfigAgentOptions)
 func WithConfigMetrics(m *prometheus.CounterVec) ConfigAgentOption {
 	return func(o *ConfigAgentOptions) {
 		o.ErrorMetric = m
+	}
+}
+
+func WithOrg(org string) ConfigAgentOption {
+	return func(o *ConfigAgentOptions) {
+		o.Org = org
+	}
+}
+
+func WithRepo(repo string) ConfigAgentOption {
+	return func(o *ConfigAgentOptions) {
+		o.Repo = repo
 	}
 }
 
@@ -107,7 +125,7 @@ func NewConfigAgent(configPath string, opts ...ConfigAgentOption) (ConfigAgent, 
 	if opt.ErrorMetric == nil {
 		opt.ErrorMetric = prometheus.NewCounterVec(prometheus.CounterOpts{Name: "config_agent_errors_total"}, []string{"error"})
 	}
-	a := &configAgent{configPath: configPath, lock: &sync.RWMutex{}, errorMetrics: opt.ErrorMetric}
+	a := &configAgent{configPath: configPath, lock: &sync.RWMutex{}, errorMetrics: opt.ErrorMetric, org: opt.Org, repo: opt.Repo}
 	a.reloadConfig = a.loadFilenameToConfig
 	// Load config once so we fail early if that doesn't work and are ready as soon as we return
 	if err := a.reloadConfig(); err != nil {
@@ -226,7 +244,7 @@ func (a *configAgent) loadFilenameToConfig() error {
 		a.lock.Lock()
 		defer a.lock.Unlock()
 		startTime := time.Now()
-		configs, err := config.LoadByOrgRepo(a.configPath)
+		configs, err := config.LoadByOrgRepo(filepath.Join(a.configPath, a.org, a.repo))
 		if err != nil {
 			return time.Duration(0), fmt.Errorf("loading config failed: %w", err)
 		}

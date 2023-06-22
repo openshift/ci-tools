@@ -84,6 +84,16 @@ func revParse(repoPath string, args ...string) (string, error) {
 	return strings.TrimSpace(out), nil
 }
 
+func gitFetch(candidatePath string) error {
+	cmd := exec.Command("git", "fetch")
+	cmd.Dir = candidatePath
+	stdoutStderr, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("'%s' failed with out: %s and error %w", cmd.Args, stdoutStderr, err)
+	}
+	return nil
+}
+
 func gitCheckout(candidatePath, baseSHA string) error {
 	cmd := exec.Command("git", "checkout", baseSHA)
 	cmd.Dir = candidatePath
@@ -158,6 +168,10 @@ func GetAllConfigsFromSHA(releaseRepoPath, sha string) (*ReleaseRepoConfig, erro
 	}
 	if restoreRev == "HEAD" {
 		restoreRev = currentSHA
+	}
+	// git fetch to be sure we are in sync
+	if err := gitFetch(releaseRepoPath); err != nil {
+		return nil, fmt.Errorf("could not fetch: %w", err)
 	}
 	if err := gitCheckout(releaseRepoPath, sha); err != nil {
 		return nil, fmt.Errorf("could not checkout worktree: %w", err)

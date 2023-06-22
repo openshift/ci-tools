@@ -11,6 +11,7 @@ import (
 
 type BuildClusters struct {
 	Managed []string `json:"managed,omitempty"`
+	Hosted  []string `json:"hosted,omitempty"`
 }
 
 func updateBuildClusters(o options) error {
@@ -21,6 +22,9 @@ func updateBuildClusters(o options) error {
 	}
 
 	buildClusters.Managed = append(buildClusters.Managed, o.clusterName)
+	if o.hosted {
+		buildClusters.Hosted = append(buildClusters.Hosted, o.clusterName)
+	}
 
 	rawYaml, err := yaml.Marshal(buildClusters)
 	if err != nil {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/cmd/generic-autobumper/bumper"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -37,6 +38,8 @@ type options struct {
 	prcreation.PRCreationOptions
 
 	useTokenFileInKubeconfig bool
+
+	hosted bool
 }
 
 func (o options) String() string {
@@ -53,6 +56,7 @@ func parseOptions() (options, error) {
 	fs.StringVar(&o.githubLogin, "github-login", githubLogin, "The GitHub username to use. Set to "+githubLogin+" by default")
 	fs.StringVar(&o.assign, "assign", githubTeam, "The github username or group name to assign the created pull request to. Set to Test Platform by default")
 	fs.BoolVar(&o.useTokenFileInKubeconfig, "use-token-file-in-kubeconfig", true, "Set true if the token files are used in kubeconfigs. Set to true by default")
+	fs.BoolVar(&o.hosted, "hosted", false, "Set true if the cluster is hosted (i.e., HyperShift hosted cluster). Set to false by default")
 
 	o.GitAuthorOptions.AddFlags(fs)
 	o.PRCreationOptions.AddFlags(fs)
@@ -159,21 +163,28 @@ func main() {
 	// Each step in the process is allowed to fail independently so that the diffs for the others can still be generated
 	errorCount := 0
 	var clusters []string
+	var hostedClusters []string
+
+	buildClusters, err := loadBuildClusters(o)
+	if err != nil {
+		logrus.WithError(err).Error("failed to obtain managed build clusters")
+	}
+
 	if o.clusterName == "" {
 		// Updating ALL cluster-init managed clusters
-		buildClusters, err := loadBuildClusters(o)
-		if err != nil {
-			logrus.WithError(err).Error("failed to obtain managed build clusters")
-		}
 		clusters = buildClusters.Managed
+		hostedClusters = buildClusters.Hosted
 	} else {
 		clusters = []string{o.clusterName}
+		if o.hosted {
+			hostedClusters = append(buildClusters.Hosted, o.clusterName)
+		}
 	}
 	for _, cluster := range clusters {
 		o.clusterName = cluster
 		steps := []func(options) error{
 			updateJobs,
-			updateClusterBuildFarmDir,
+			func(o options) error { return updateClusterBuildFarmDir(o, hostedClusters) },
 			updateCiSecretBootstrap,
 			updateSecretGenerator,
 			updateSanitizeProwJobs,
@@ -228,7 +239,7 @@ func submitPR(o options) error {
 	return exec.Command("git", "checkout", master).Run()
 }
 
-func updateClusterBuildFarmDir(o options) error {
+func updateClusterBuildFarmDir(o options, hostedClusters []string) error {
 	buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)
 	if o.update {
 		logrus.Infof("Updating build dir: %s", buildDir)
@@ -238,7 +249,18 @@ func updateClusterBuildFarmDir(o options) error {
 			return fmt.Errorf("failed to create base directory for cluster: %w", err)
 		}
 	}
-	for _, item := range []string{"common", "common_except_app.ci"} {
+
+	config_dirs := []string{
+		"common",
+		"common_except_app.ci",
+	}
+
+	hostedClustersSet := sets.NewString(hostedClusters...)
+	if !hostedClustersSet.Has(o.clusterName) {
+		config_dirs = append(config_dirs, "common_except_hosted")
+	}
+
+	for _, item := range config_dirs {
 		target := fmt.Sprintf("../%s", item)
 		source := filepath.Join(buildDir, item)
 		if o.update {

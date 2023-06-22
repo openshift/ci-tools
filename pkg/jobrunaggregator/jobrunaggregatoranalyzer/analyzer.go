@@ -143,17 +143,24 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 	for i := range finishedJobsToAggregate {
 		jobRun := finishedJobsToAggregate[i]
 
-		// we will take the first nonempty value
-		// they should all be the same and if not then there is a different issue...
-		// could change the logic to check each value and preserve 'Y' over all others
-		// if desired
-		if len(masterNodesUpdated) == 0 {
+		// We found a case where the first job failed to upgrade but the others didn't
+		// original logic stopped on the first flag we found which indicated master nodes did not update
+		// and led to lower disruption values being used, causing failures.
+		// we now look at each job unless we have a 'Y' value already
+		if strings.ToUpper(masterNodesUpdated) != "Y" {
 			// get the flag to see if masternodes have been updated
 			clusterData, err := jobRun.GetOpenShiftTestsFilesWithPrefix(ctx, "cluster-data")
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Could not fetch cluster data for %s - %v\n", jobRun.GetJobRunID(), err)
 			}
-			masterNodesUpdated = jobrunaggregatorlib.GetMasterNodesUpdatedStatusFromClusterData(clusterData)
+			updatedFlag := jobrunaggregatorlib.GetMasterNodesUpdatedStatusFromClusterData(clusterData)
+
+			// if we have any value set it here
+			// if we set a 'Y' here it we won't come back in this loop based on the check above
+			if len(updatedFlag) > 0 {
+				masterNodesUpdated = updatedFlag
+			}
+
 		}
 		currJunit, err := newJobRunJunit(ctx, jobRun)
 		if err != nil {

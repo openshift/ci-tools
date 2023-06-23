@@ -49,7 +49,7 @@ func (o *options) parse() error {
 	if err := o.loadResolver(registryDir); err != nil {
 		return fmt.Errorf("failed to load registry: %w", err)
 	}
-	ciOPConfigAgent, err := agents.NewConfigAgent(o.ConfigDir)
+	ciOPConfigAgent, err := agents.NewConfigAgent(o.ConfigDir, agents.WithOrg(o.Org), agents.WithRepo(o.Repo))
 	if err != nil {
 		return fmt.Errorf("failed to create CI Op config agent: %w", err)
 	}

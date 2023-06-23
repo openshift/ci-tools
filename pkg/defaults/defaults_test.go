@@ -1365,7 +1365,7 @@ func TestFromConfig(t *testing.T) {
 		},
 		promote:       true,
 		expectedSteps: []string{"[output-images]", "[images]"},
-		expectedPost:  []string{"[promotion]"},
+		expectedPost:  []string{"[promotion]", "[promotion-quay]"},
 	}, {
 		name: "duplicate input images",
 		config: api.ReleaseBuildConfiguration{
@@ -1484,6 +1484,32 @@ func TestFromConfig(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expectedPost, postNames); diff != "" {
 				t.Errorf("unexpected post steps: %v", diff)
+			}
+		})
+	}
+}
+
+func TestRegistryDomain(t *testing.T) {
+	var testCases = []struct {
+		name     string
+		config   *api.PromotionConfiguration
+		expected string
+	}{
+		{
+			name:     "default",
+			config:   &api.PromotionConfiguration{},
+			expected: "registry.ci.openshift.org",
+		},
+		{
+			name:     "override",
+			config:   &api.PromotionConfiguration{RegistryOverride: "whoa.com.biz"},
+			expected: "whoa.com.biz",
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if diff := cmp.Diff(testCase.expected, registryDomain(testCase.config)); diff != "" {
+				t.Errorf("%s: got incorrect registry domain: %v", testCase.name, diff)
 			}
 		})
 	}

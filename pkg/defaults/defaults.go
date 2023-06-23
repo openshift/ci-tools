@@ -363,10 +363,25 @@ func fromConfig(
 		if config.PromotionConfiguration == nil {
 			return nil, nil, fmt.Errorf("cannot promote images, no promotion configuration defined")
 		}
-		postSteps = append(postSteps, releasesteps.PromotionStep(config, requiredNames, jobSpec, podClient, pushSecret))
+		postSteps = append(postSteps, releasesteps.PromotionStep(api.PromotionStepName, config, requiredNames, jobSpec, podClient, pushSecret, registryDomain(config.PromotionConfiguration), api.DefaultMirrorFunc))
+		// Used primarily (only?) by the ci-chat-bot
+		if config.PromotionConfiguration.RegistryOverride != "" {
+			logrus.Info("No images to promote to quay.io if the registry is overridden")
+		} else {
+			postSteps = append(postSteps, releasesteps.PromotionStep(api.PromotionQuayStepName, config, requiredNames, jobSpec, podClient, pushSecret, api.QuayOpenShiftCIRepo, api.QuayMirrorFunc))
+		}
 	}
 
 	return append(overridableSteps, buildSteps...), postSteps, nil
+}
+
+// registryDomain determines the domain of the registry we promote to
+func registryDomain(configuration *api.PromotionConfiguration) string {
+	registry := api.DomainForService(api.ServiceRegistry)
+	if configuration.RegistryOverride != "" {
+		registry = configuration.RegistryOverride
+	}
+	return registry
 }
 
 // stepForTest creates the appropriate step for each test type.

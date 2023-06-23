@@ -442,7 +442,7 @@ func (a *weeklyAverageFromTenDays) CheckPercentileDisruption(ctx context.Context
 		return failureJobRunIDs, []string{}, testCaseSkipped, message, nil
 	}
 
-	failureJobRunIDs, successJobRunIDs, testCaseFailed, summary := a.checkPercentileDisruption(jobRunIDToAvailabilityResultForBackend, historicalDisruptionStatistic, percentile)
+	failureJobRunIDs, successJobRunIDs, testCaseFailed, summary := a.checkPercentileDisruption(jobRunIDToAvailabilityResultForBackend, historicalDisruptionStatistic, percentile, true)
 	return failureJobRunIDs, successJobRunIDs, testCaseFailed, messagePrefix + summary, nil
 }
 
@@ -458,6 +458,7 @@ func evaluatePercentileDisruption(jobRunIDToAvailabilityResultForBackend map[str
 	for jobRunID, disruption := range jobRunIDToAvailabilityResultForBackend {
 		disruptionValue := float64(disruption.SecondsUnavailable)
 		thresholdValue := historicalThreshold
+		isFuzzy := false
 
 		// don't perform any manipulations if the disruption value is within the historical threshold
 		// or we don't have multiplier && fuzzThreshold
@@ -468,22 +469,28 @@ func evaluatePercentileDisruption(jobRunIDToAvailabilityResultForBackend map[str
 				disruptionValue = (disruptionValue - historicalThreshold) * multiplier
 				// change our comparison from the historicalThreshold to the fuzzThreshold
 				thresholdValue = fuzzThreshold
+				isFuzzy = true
 			}
+		}
+
+		fuzzyData := ""
+		if isFuzzy {
+			fuzzyData = fmt.Sprintf(" (fuzzValue=%.2f)", disruptionValue)
 		}
 
 		if disruptionValue > thresholdValue {
 			failureJobRunIDs = append(failureJobRunIDs, jobRunID)
-			failureRuns = append(failureRuns, fmt.Sprintf("%s=%ds", jobRunID, disruption.SecondsUnavailable))
+			failureRuns = append(failureRuns, fmt.Sprintf("%s=%ds%s", jobRunID, disruption.SecondsUnavailable, fuzzyData))
 		} else {
 			successJobRunIDs = append(successJobRunIDs, jobRunID)
-			successRuns = append(successRuns, fmt.Sprintf("%s=%ds", jobRunID, disruption.SecondsUnavailable))
+			successRuns = append(successRuns, fmt.Sprintf("%s=%ds%s", jobRunID, disruption.SecondsUnavailable, fuzzyData))
 		}
 	}
 
 	return failureJobRunIDs, successJobRunIDs, successRuns, failureRuns
 }
 
-func (a *weeklyAverageFromTenDays) checkPercentileDisruption(jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, historicalDisruptionStatistic backendDisruptionStats, thresholdPercentile int) ([]string, []string, testCaseStatus, string) {
+func (a *weeklyAverageFromTenDays) checkPercentileDisruption(jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, historicalDisruptionStatistic backendDisruptionStats, thresholdPercentile int, allowFuzzyMatching bool) ([]string, []string, testCaseStatus, string) {
 	threshold := historicalDisruptionStatistic.percentileByIndex[thresholdPercentile]
 
 	failureJobRunIDs, successJobRunIDs, successRuns, failureRuns := evaluatePercentileDisruption(jobRunIDToAvailabilityResultForBackend, threshold, -1, -1)
@@ -513,25 +520,34 @@ func (a *weeklyAverageFromTenDays) checkPercentileDisruption(jobRunIDToAvailabil
 		return failureJobRunIDs, successJobRunIDs, testCaseFailed, summary
 	}
 
+	fuzzyConstants := ""
 	if numberOfPasses < requiredNumberOfPasses {
-		// the further away we are from our required number of passes the greater the multiplier
-		// this rewards runs that were close to having the required number of passes and penalizes those that weren't (raising the bar for overriding the original failure)
-		multiplier := float64(requiredNumberOfPasses - numberOfPasses)
-		// disruptionValue = (disruptionValue - historicalThreshold) * multiplier
-		// this will effectively change the comparison from straight disruption to comparing the fuzziness value
-		// fuzz is meant to increase the tolerance more as the historical disruption is larger, less than 5 fuzz == 1, 5 - 9 fuzz == 2, 10- 14 fuzz == 3, etc.
-		// we can tweak the fuzz factor by lowering / increasing the divisor
-		fuzzThreshold := (int64(threshold) / 5) + 1
-		failureJobRunIDs, successJobRunIDs, successRuns, failureRuns = evaluatePercentileDisruption(jobRunIDToAvailabilityResultForBackend, threshold, float64(fuzzThreshold), multiplier)
 
-		// revalidate, if numberOfPasses is ok now then we will fall though to the pass case
-		numberOfPasses = len(successJobRunIDs)
-		numberOfFailures = len(failureJobRunIDs)
+		if allowFuzzyMatching {
+			// the further away we are from our required number of passes the greater the multiplier
+			// this rewards runs that were close to having the required number of passes and penalizes those that weren't (raising the bar for overriding the original failure)
+			// alternative considerations:
+			// multiplier := .75 / (float64(numberOfPasses / requiredNumberOfPasses))
+			// multiplier := float64(((requiredNumberOfPasses - numberOfPasses) / 2) + 1)
+			multiplier := float64(requiredNumberOfPasses - numberOfPasses)
+			// disruptionValue = (disruptionValue - historicalThreshold) * multiplier
+			// this will effectively change the comparison from straight disruption to comparing the fuzziness value
+			// fuzz is meant to increase the tolerance more as the historical disruption is larger, less than 5 fuzz == 1, 5 - 9 fuzz == 2, 10- 14 fuzz == 3, etc.
+			// we can tweak the fuzz factor by lowering / increasing the divisor
+			fuzzThreshold := float64((int64(threshold) / 5) + 1)
+			failureJobRunIDs, successJobRunIDs, successRuns, failureRuns = evaluatePercentileDisruption(jobRunIDToAvailabilityResultForBackend, threshold, fuzzThreshold, multiplier)
+
+			// revalidate, if numberOfPasses is ok now then we will fall though to the pass case
+			numberOfPasses = len(successJobRunIDs)
+			numberOfFailures = len(failureJobRunIDs)
+			fuzzyConstants = fmt.Sprintf(", with fuzzy matching values: multiplier %.2f, fuzzThreshold %.2f", multiplier, fuzzThreshold)
+		}
 
 		if numberOfPasses < requiredNumberOfPasses {
-			summary := fmt.Sprintf("Failed: Passed %d times, failed %d times.  (P%d=%.2fs requiredPasses=%d successes=%v failures=%v)",
+			summary := fmt.Sprintf("Failed: Passed %d times, failed %d times%s. (P%d=%.2fs requiredPasses=%d successes=%v failures=%v)",
 				numberOfPasses,
 				numberOfFailures,
+				fuzzyConstants,
 				thresholdPercentile, threshold,
 				requiredNumberOfPasses,
 				successRuns, failureRuns,
@@ -540,9 +556,10 @@ func (a *weeklyAverageFromTenDays) checkPercentileDisruption(jobRunIDToAvailabil
 		}
 	}
 
-	summary := fmt.Sprintf("Passed: Passed %d times, failed %d times.  (P%d=%.2fs requiredPasses=%d successes=%v failures=%v)",
+	summary := fmt.Sprintf("Passed: Passed %d times, failed %d times%s.  (P%d=%.2fs requiredPasses=%d successes=%v failures=%v)",
 		numberOfPasses,
 		numberOfFailures,
+		fuzzyConstants,
 		thresholdPercentile, threshold,
 		requiredNumberOfPasses,
 		successRuns, failureRuns,
@@ -585,7 +602,9 @@ func (a *weeklyAverageFromTenDays) CheckPercentileRankDisruption(ctx context.Con
 
 	thresholdPercentile := getPercentileRank(historicalDisruptionStatistic, maxDisruptionSeconds)
 
-	failureJobRunIDs, successJobRunIDs, testCasePassed, summary := a.checkPercentileDisruption(jobRunIDToAvailabilityResultForBackend, historicalDisruptionStatistic, thresholdPercentile)
+	// David had commented that protecting against drift for the 0 disruption thresholdPercentile is a high priority
+	// We will disable fuzzy matching for this case currently
+	failureJobRunIDs, successJobRunIDs, testCasePassed, summary := a.checkPercentileDisruption(jobRunIDToAvailabilityResultForBackend, historicalDisruptionStatistic, thresholdPercentile, false)
 	return failureJobRunIDs, successJobRunIDs, testCasePassed, messagePrefix + summary, nil
 }
 

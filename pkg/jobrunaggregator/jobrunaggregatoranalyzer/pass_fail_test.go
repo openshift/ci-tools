@@ -29,6 +29,7 @@ func TestCheckPercentileDisruption(t *testing.T) {
 		status               testCaseStatus
 		failedCount          int
 		successCount         int
+		supportsFuzziness    bool
 	}{
 		{
 			// Required Passes for 95th percentile is 6
@@ -40,6 +41,19 @@ func TestCheckPercentileDisruption(t *testing.T) {
 			status:               testCasePassed,
 			failedCount:          0,
 			successCount:         10,
+			supportsFuzziness:    true,
+		},
+		{
+			// Required Passes for 95th percentile is 6
+			// all over on disruption so it fails
+			name:                 "Test 95th Percentile all 1 over Fail",
+			disruptions:          []int{8, 8, 8, 8, 8, 8, 8, 8, 8, 8},
+			thresholdPercentile:  95,
+			historicalDisruption: 7,
+			status:               testCaseFailed,
+			failedCount:          10,
+			successCount:         0,
+			supportsFuzziness:    true,
 		},
 		{
 			// Required Passes for 95th percentile is 6
@@ -54,6 +68,7 @@ func TestCheckPercentileDisruption(t *testing.T) {
 			status:               testCasePassed,
 			failedCount:          4,
 			successCount:         6,
+			supportsFuzziness:    true,
 		},
 		{
 			// Required Passes for 95th percentile is 6
@@ -68,6 +83,7 @@ func TestCheckPercentileDisruption(t *testing.T) {
 			status:               testCasePassed,
 			failedCount:          4,
 			successCount:         6,
+			supportsFuzziness:    true,
 		},
 		{
 			// Required Passes for 95th percentile is 6
@@ -83,6 +99,106 @@ func TestCheckPercentileDisruption(t *testing.T) {
 			status:               testCaseFailed,
 			failedCount:          5,
 			successCount:         5,
+			supportsFuzziness:    true,
+		},
+		{
+			// Required Passes for 95th percentile is 6
+			// 4 Natural Passes
+			// Multiplier (6 - 4) == 2
+			// Fuzz Threshold ((historicalDisruption / 5) + 1) = 21
+			// The Disruption values that are < 113 get flipped to pass
+			// The 113 and above does not, but we have enough passes
+			name:                 "Test 95th Percentile Big Disruption Multi Fuzzy Pass",
+			disruptions:          []int{99, 105, 101, 102, 101, 108, 108, 112, 113, 186},
+			thresholdPercentile:  95,
+			historicalDisruption: 102,
+			status:               testCasePassed,
+			failedCount:          2,
+			successCount:         8,
+			supportsFuzziness:    true,
+		},
+		{
+			// Required Passes for 95th percentile is 6
+			// 4 Natural Passes
+			// Multiplier (6 - 4) == 2
+			// Fuzz Threshold ((historicalDisruption / 5) + 1) = 21
+			// The Disruption values that are < 113 get flipped to pass
+			// The 113 and above does not, so we don't have enough passes
+			name:                 "Test 95th Percentile Big Disruption Multi Fuzzy Failed",
+			disruptions:          []int{99, 105, 101, 102, 101, 147, 113, 113, 113, 186},
+			thresholdPercentile:  95,
+			historicalDisruption: 102,
+			status:               testCaseFailed,
+			failedCount:          5,
+			successCount:         5,
+			supportsFuzziness:    true,
+		},
+		{
+			// Required Passes for 95th percentile is 6
+			// 4 Natural Passes
+			// Multiplier (6 - 2) == 4
+			// Fuzz Threshold ((historicalDisruption / 5) + 1) = 2
+			// The Disruption values that are < 108 get flipped to pass
+			// But the 108s and above do not, so we don't have enough passes
+			name:                 "Test 95th Percentile Big Disruption Multi Fuzzy High Multiplier Fail",
+			disruptions:          []int{99, 105, 101, 107, 107, 108, 108, 109, 109, 186},
+			thresholdPercentile:  95,
+			historicalDisruption: 102,
+			status:               testCaseFailed,
+			failedCount:          5,
+			successCount:         5,
+			supportsFuzziness:    true,
+		},
+
+		// https://prow.ci.openshift.org/view/gs/origin-ci-test/logs/aggregated-azure-ovn-upgrade-4.14-micro-release-openshift-release-analysis-aggregator/1671560866929053696
+		//		{Failed: Passed 3 times, failed 6 times.  (P85=1.30s requiredPasses=4
+		//		successes=[1671334508823056384=1s 1671334507992584192=0s 1671334507128557568=0s]
+		//		failures=[1671334503768920064=5s 1671334504733609984=5s 1671334506289696768=2s
+		//		1671334509678694400=2s 1671334505455030272=3s 1671334510496583680=4s])
+		//		name: kube-api-new-connections disruption P85 should not be worse
+		{
+			// Required Passes for 85th percentile is 4
+			name:                 "Test 85th Percentile Pass",
+			disruptions:          []int{1, 0, 0, 5, 5, 2, 2, 3, 4},
+			thresholdPercentile:  85,
+			historicalDisruption: 1.30,
+			status:               testCasePassed,
+			failedCount:          4,
+			successCount:         5,
+			supportsFuzziness:    true,
+		},
+		{
+			// Required Passes for 85th percentile is 4
+			// Compare same case as above but with fuzzy matching disabled to ensure the flag works properly
+			name:                 "Test 85th Percentile Fail no fuzzy matching",
+			disruptions:          []int{1, 0, 0, 5, 5, 2, 2, 3, 4},
+			thresholdPercentile:  85,
+			historicalDisruption: 1.30,
+			status:               testCaseFailed,
+			failedCount:          6,
+			successCount:         3,
+			supportsFuzziness:    false,
+		},
+
+		// we don't want fuzzy matching for the zero-disruption should not be worse tests
+		// so the supportsFuzziness flag is false
+		// openshift-api-reused-connections zero-disruption should not be worse
+		//
+		// Failed: Passed 2 times, failed 7 times. (P81=0.00s requiredPasses=3
+		// successes=[1671560859370917888=0s 1671560863581999104=0s]
+		// failures=[1671560858532057088=4s 1671560863154180096=4s 1671560857697390592=1s 1671560860734066688=5s
+		// 1671560861057028096=1s 1671560866081804288=1s 1671560856858529792=2s])
+		{
+			// Required Passes for 81th percentile is 3
+			// Validate failure with fuzzy matching disabled
+			name:                 "Test 81th Percentile zero disruption should not be worse, no fuzzy matching",
+			disruptions:          []int{0, 0, 4, 4, 1, 5, 1, 1, 2},
+			thresholdPercentile:  81,
+			historicalDisruption: 0,
+			status:               testCaseFailed,
+			failedCount:          7,
+			successCount:         2,
+			supportsFuzziness:    false,
 		},
 		{
 			// Required Passes for 80th percentile is 4
@@ -94,6 +210,7 @@ func TestCheckPercentileDisruption(t *testing.T) {
 			status:               testCasePassed,
 			failedCount:          6,
 			successCount:         4,
+			supportsFuzziness:    true,
 		},
 		{
 			// Required Passes for 80th percentile is 4
@@ -108,6 +225,7 @@ func TestCheckPercentileDisruption(t *testing.T) {
 			status:               testCasePassed,
 			failedCount:          5,
 			successCount:         5,
+			supportsFuzziness:    true,
 		},
 		{
 			// Required Passes for 80th percentile is 4
@@ -123,6 +241,19 @@ func TestCheckPercentileDisruption(t *testing.T) {
 			status:               testCaseFailed,
 			failedCount:          8,
 			successCount:         2,
+			supportsFuzziness:    true,
+		},
+		{
+			// Required Passes for 80th percentile is 6
+			// all disruption so it fails
+			name:                 "Test 80th Percentile all 1 over Fail",
+			disruptions:          []int{1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+			thresholdPercentile:  80,
+			historicalDisruption: 0,
+			status:               testCaseFailed,
+			failedCount:          10,
+			successCount:         0,
+			supportsFuzziness:    true,
 		},
 	}
 
@@ -135,7 +266,7 @@ func TestCheckPercentileDisruption(t *testing.T) {
 			}
 			historicalDisruptionStatistic.percentileByIndex[test.thresholdPercentile] = test.historicalDisruption
 
-			failureJobRunIDs, successJobRunIDs, status, summary := weeklyAverageFromTenDays.checkPercentileDisruption(jobRunIDToAvailabilityResultForBackend, historicalDisruptionStatistic, test.thresholdPercentile)
+			failureJobRunIDs, successJobRunIDs, status, summary := weeklyAverageFromTenDays.checkPercentileDisruption(jobRunIDToAvailabilityResultForBackend, historicalDisruptionStatistic, test.thresholdPercentile, test.supportsFuzziness)
 
 			assert.NotNil(t, summary, "Invalid summary for: %s", test.name)
 			assert.Equal(t, test.failedCount, len(failureJobRunIDs), "Invalid failed test cont for: %s", test.name)

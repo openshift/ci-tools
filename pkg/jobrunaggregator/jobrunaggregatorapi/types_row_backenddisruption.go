@@ -1,5 +1,7 @@
 package jobrunaggregatorapi
 
+import "time"
+
 const (
 	unifiedBackendDisruptionSchema = `
 SELECT 
@@ -28,6 +30,11 @@ const BackendDisruptionTableName = "BackendDisruption"
 
 type BackendDisruptionRow struct {
 	BackendName       string
-	JobRunName        string
 	DisruptionSeconds int
+	JobName           string
+	JobRunName        string
+	JobRunStartTime   time.Time
+	JobRunEndTime     time.Time
+	ReleaseTag        string
+	Cluster           string
 }

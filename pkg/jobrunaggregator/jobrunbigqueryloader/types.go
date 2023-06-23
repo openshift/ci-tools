@@ -39,12 +39,16 @@ func newJobRunRow(jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob
 
 }
 
-func newTestRunRow(jobRun jobrunaggregatorapi.JobRunInfo, status string, testSuiteStr string, testCase *junit.TestCase) *jobrunaggregatorapi.TestRunRow {
+func newTestRunRow(jobRunRow *jobrunaggregatorapi.JobRunRow, status string, testSuiteStr string, testCase *junit.TestCase) *jobrunaggregatorapi.TestRunRow {
 	return &jobrunaggregatorapi.TestRunRow{
-		Name:       testCase.Name,
-		JobRunName: jobRun.GetJobRunID(),
-		JobName:    jobRun.GetJobName(),
-		Status:     status,
-		TestSuite:  testSuiteStr,
+		Name:            testCase.Name,
+		Status:          status,
+		TestSuite:       testSuiteStr,
+		JobName:         jobRunRow.JobName,
+		JobRunName:      jobRunRow.Name,
+		JobRunStartTime: jobRunRow.StartTime,
+		JobRunEndTime:   jobRunRow.EndTime,
+		ReleaseTag:      jobRunRow.ReleaseTag,
+		Cluster:         jobRunRow.Cluster,
 	}
 }

@@ -9,7 +9,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
@@ -198,7 +197,7 @@ func (o *allJobsLoaderOptions) newJobRunBigQueryLoaderOptions(jobName, jobRunID,
 
 // uploader encapsulates the logic for lookups and uploads specific to each type of content we ingest. (disruption, alerting, test runs, etc)
 type uploader interface {
-	uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, release string, prowJob *prowv1.ProwJob, logger logrus.FieldLogger) error
+	uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, release string, jobRunRow *jobrunaggregatorapi.JobRunRow, logger logrus.FieldLogger) error
 	getLastUploadedJobRunEndTime(ctx context.Context) (*time.Time, error)
 	listUploadedJobRunIDsSince(ctx context.Context, since *time.Time) (map[string]bool, error)
 }
@@ -263,7 +262,7 @@ func (o *jobRunLoaderOptions) uploadJobRun(ctx context.Context, jobRun jobrunagg
 	}
 
 	o.logger.Infof("uploading content for jobrun")
-	if err := o.jobRunUploader.uploadContent(ctx, jobRun, o.jobRelease, prowJob, o.logger); err != nil {
+	if err := o.jobRunUploader.uploadContent(ctx, jobRun, o.jobRelease, jobRunRow, o.logger); err != nil {
 		o.logger.WithError(err).Error("error uploading content")
 		return err
 	}

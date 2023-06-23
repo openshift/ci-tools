@@ -7,8 +7,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
-
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 	"github.com/openshift/ci-tools/pkg/junit"
@@ -36,7 +34,7 @@ func (o *testRunUploader) listUploadedJobRunIDsSince(ctx context.Context, since 
 }
 
 func (o *testRunUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, jobRelease string,
-	prowJob *prowv1.ProwJob, logger logrus.FieldLogger) error {
+	jobRunRow *jobrunaggregatorapi.JobRunRow, logger logrus.FieldLogger) error {
 
 	logger.Info("uploading junit test runs")
 	combinedJunitContent, err := jobRun.GetCombinedJUnitTestSuites(ctx)
@@ -44,23 +42,23 @@ func (o *testRunUploader) uploadContent(ctx context.Context, jobRun jobrunaggreg
 		return err
 	}
 
-	return o.uploadTestSuites(ctx, jobRun, prowJob, combinedJunitContent)
+	return o.uploadTestSuites(ctx, jobRunRow, combinedJunitContent)
 }
 
-func (o *testRunUploader) uploadTestSuites(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob, suites *junit.TestSuites) error {
+func (o *testRunUploader) uploadTestSuites(ctx context.Context, jobRunRow *jobrunaggregatorapi.JobRunRow, suites *junit.TestSuites) error {
 
 	for _, testSuite := range suites.Suites {
-		if err := o.uploadTestSuite(ctx, jobRun, prowJob, []string{}, testSuite); err != nil {
+		if err := o.uploadTestSuite(ctx, jobRunRow, []string{}, testSuite); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (o *testRunUploader) uploadTestSuite(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob, parentSuites []string, suite *junit.TestSuite) error { //nolint
+func (o *testRunUploader) uploadTestSuite(ctx context.Context, jobRunRow *jobrunaggregatorapi.JobRunRow, parentSuites []string, suite *junit.TestSuite) error { //nolint
 	currSuites := append(parentSuites, suite.Name)
 	for _, testSuite := range suite.Children {
-		if err := o.uploadTestSuite(ctx, jobRun, prowJob, currSuites, testSuite); err != nil {
+		if err := o.uploadTestSuite(ctx, jobRunRow, currSuites, testSuite); err != nil {
 			return err
 		}
 	}
@@ -83,7 +81,7 @@ func (o *testRunUploader) uploadTestSuite(ctx context.Context, jobRun jobrunaggr
 		}
 
 		testSuiteStr := strings.Join(currSuites, jobrunaggregatorlib.TestSuitesSeparator)
-		toInsert = append(toInsert, newTestRunRow(jobRun, status, testSuiteStr, testCase))
+		toInsert = append(toInsert, newTestRunRow(jobRunRow, status, testSuiteStr, testCase))
 	}
 	if err := o.testRunInserter.Put(ctx, toInsert); err != nil {
 		return err

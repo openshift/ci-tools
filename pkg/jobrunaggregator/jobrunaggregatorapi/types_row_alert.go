@@ -1,5 +1,7 @@
 package jobrunaggregatorapi
 
+import "time"
+
 const (
 	AlertsTableName = "Alerts"
 
@@ -64,9 +66,14 @@ INNER JOIN openshift-ci-data-analysis.ci_data.Jobs on JobRuns.JobName = Jobs.Job
 )
 
 type AlertRow struct {
-	JobRunName   string
-	Name         string
-	Namespace    string
-	Level        string
-	AlertSeconds int
+	Name            string
+	Namespace       string
+	Level           string
+	AlertSeconds    int
+	JobName         string
+	JobRunName      string
+	JobRunStartTime time.Time
+	JobRunEndTime   time.Time
+	Cluster         string
+	ReleaseTag      string
 }

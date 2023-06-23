@@ -255,8 +255,11 @@ func TestPopulateZeros(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			results := populateZeros(knownAlertsCache, test.observedAlerts,
-				"4.13", "1000", logrus.WithField("test", test.name))
+			jobRunRow := &jobrunaggregatorapi.JobRunRow{
+				Name: "1000",
+			}
+			results := populateZeros(jobRunRow, knownAlertsCache, test.observedAlerts,
+				"4.13", logrus.WithField("test", test.name))
 			assert.Equal(t, test.expectedAlertsToUpload, results)
 		})
 	}

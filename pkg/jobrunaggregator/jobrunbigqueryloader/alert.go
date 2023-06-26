@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
+	"cloud.google.com/go/bigquery"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
@@ -169,7 +169,7 @@ func (o *alertUploader) listUploadedJobRunIDsSince(ctx context.Context, since *t
 }
 
 func (o *alertUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo,
-	jobRelease string, prowJob *prowv1.ProwJob, logger logrus.FieldLogger) error {
+	jobRelease string, jobRunRow *jobrunaggregatorapi.JobRunRow, logger logrus.FieldLogger) error {
 	logger.Info("uploading alert results")
 	alertData, err := jobRun.GetOpenShiftTestsFilesWithPrefix(ctx, "alert")
 	if err != nil {
@@ -177,10 +177,10 @@ func (o *alertUploader) uploadContent(ctx context.Context, jobRun jobrunaggregat
 	}
 	logger.Debug("got test files with prefix")
 	if len(alertData) > 0 {
-		alertRows := getAlertsFromPerJobRunData(alertData, jobRun.GetJobRunID())
+		alertRows := getAlertsFromPerJobRunData(alertData, jobRunRow)
 
 		// pass cache of known alerts in.
-		alertRows = populateZeros(o.knownAlertsCache, alertRows, jobRelease, jobRun.GetJobRunID(), logger)
+		alertRows = populateZeros(jobRunRow, o.knownAlertsCache, alertRows, jobRelease, logger)
 
 		if err := o.alertInserter.Put(ctx, alertRows); err != nil {
 			return err
@@ -198,8 +198,10 @@ func (o *alertUploader) uploadContent(ctx context.Context, jobRun jobrunaggregat
 // alerts.
 // For details on calculating the list of all known alerts, see ListAllKnownAlerts in the data client,
 // but TL;DR, it's every alert/namespace combo we've ever observed for a given release.
-func populateZeros(knownAlertsCache *KnownAlertsCache, observedAlertRows []jobrunaggregatorapi.AlertRow,
-	release, jobRunID string, logger logrus.FieldLogger) []jobrunaggregatorapi.AlertRow {
+func populateZeros(jobRunRow *jobrunaggregatorapi.JobRunRow,
+	knownAlertsCache *KnownAlertsCache,
+	observedAlertRows []jobrunaggregatorapi.AlertRow,
+	release string, logger logrus.FieldLogger) []jobrunaggregatorapi.AlertRow {
 
 	origCount := len(observedAlertRows)
 	injectedCtr := 0
@@ -223,11 +225,31 @@ func populateZeros(knownAlertsCache *KnownAlertsCache, observedAlertRows []jobru
 				"AlertLevel":     known.AlertLevel,
 			}).Debug("injecting 0s for a known but not observed alert on this run")
 			observedAlertRows = append(observedAlertRows, jobrunaggregatorapi.AlertRow{
-				JobRunName:   jobRunID,
 				Name:         known.AlertName,
 				Namespace:    known.AlertNamespace,
 				Level:        known.AlertLevel,
 				AlertSeconds: 0,
+				JobName: bigquery.NullString{
+					StringVal: jobRunRow.JobName,
+					Valid:     true,
+				},
+				JobRunName: jobRunRow.Name,
+				JobRunStartTime: bigquery.NullTimestamp{
+					Timestamp: jobRunRow.StartTime,
+					Valid:     true,
+				},
+				JobRunEndTime: bigquery.NullTimestamp{
+					Timestamp: jobRunRow.EndTime,
+					Valid:     true,
+				},
+				Cluster: bigquery.NullString{
+					StringVal: jobRunRow.Cluster,
+					Valid:     true,
+				},
+				ReleaseTag: bigquery.NullString{
+					StringVal: jobRunRow.ReleaseTag,
+					Valid:     true,
+				},
 			})
 			injectedCtr++
 		}
@@ -280,7 +302,7 @@ type Alert struct {
 	Duration metav1.Duration
 }
 
-func getAlertsFromPerJobRunData(alertData map[string]string, jobRunID string) []jobrunaggregatorapi.AlertRow {
+func getAlertsFromPerJobRunData(alertData map[string]string, jobRunRow *jobrunaggregatorapi.JobRunRow) []jobrunaggregatorapi.AlertRow {
 	alertMap := map[AlertKey]*Alert{}
 
 	for _, alertJSON := range alertData {
@@ -315,11 +337,31 @@ func getAlertsFromPerJobRunData(alertData map[string]string, jobRunID string) []
 	ret := []jobrunaggregatorapi.AlertRow{}
 	for _, alert := range alertList {
 		ret = append(ret, jobrunaggregatorapi.AlertRow{
-			JobRunName:   jobRunID,
 			Name:         alert.Name,
 			Namespace:    alert.Namespace,
 			Level:        string(alert.Level),
 			AlertSeconds: int(math.Ceil(alert.Duration.Seconds())),
+			JobName: bigquery.NullString{
+				StringVal: jobRunRow.JobName,
+				Valid:     true,
+			},
+			JobRunName: jobRunRow.Name,
+			JobRunStartTime: bigquery.NullTimestamp{
+				Timestamp: jobRunRow.StartTime,
+				Valid:     true,
+			},
+			JobRunEndTime: bigquery.NullTimestamp{
+				Timestamp: jobRunRow.EndTime,
+				Valid:     true,
+			},
+			Cluster: bigquery.NullString{
+				StringVal: jobRunRow.Cluster,
+				Valid:     true,
+			},
+			ReleaseTag: bigquery.NullString{
+				StringVal: jobRunRow.ReleaseTag,
+				Valid:     true,
+			},
 		})
 	}
 

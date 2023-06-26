@@ -5,12 +5,12 @@ import (
 	"os"
 	"time"
 
+	"cloud.google.com/go/bigquery"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
 	"k8s.io/apimachinery/pkg/util/sets"
-	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
@@ -149,7 +149,7 @@ func (o *disruptionUploader) listUploadedJobRunIDsSince(ctx context.Context, sin
 }
 
 func (o *disruptionUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo,
-	jobRelease string, prowJob *prowv1.ProwJob, logger logrus.FieldLogger) error {
+	jobRelease string, jobRunRow *jobrunaggregatorapi.JobRunRow, logger logrus.FieldLogger) error {
 
 	logger.Info("uploading backend disruption results")
 	backendDisruptionData, err := jobRun.GetOpenShiftTestsFilesWithPrefix(ctx, "backend-disruption")
@@ -163,17 +163,20 @@ func (o *disruptionUploader) uploadContent(ctx context.Context, jobRun jobrunagg
 		return nil
 	}
 
-	return o.uploadBackendDisruptionFromDirectData(ctx, jobRun.GetJobRunID(), backendDisruptionData, logger)
+	return o.uploadBackendDisruptionFromDirectData(ctx, jobRunRow, backendDisruptionData, logger)
 }
 
-func (o *disruptionUploader) uploadBackendDisruptionFromDirectData(ctx context.Context, jobRunName string, backendDisruptionData map[string]string,
+func (o *disruptionUploader) uploadBackendDisruptionFromDirectData(
+	ctx context.Context,
+	jobRunRow *jobrunaggregatorapi.JobRunRow,
+	backendDisruptionData map[string]string,
 	logger logrus.FieldLogger) error {
 
 	serverAvailabilityResults := jobrunaggregatorlib.GetServerAvailabilityResultsFromDirectData(backendDisruptionData)
-	return o.uploadBackendDisruption(ctx, jobRunName, serverAvailabilityResults, logger)
+	return o.uploadBackendDisruption(ctx, jobRunRow, serverAvailabilityResults, logger)
 }
 
-func (o *disruptionUploader) uploadBackendDisruption(ctx context.Context, jobRunName string,
+func (o *disruptionUploader) uploadBackendDisruption(ctx context.Context, jobRunRow *jobrunaggregatorapi.JobRunRow,
 	serverAvailabilityResults map[string]jobrunaggregatorlib.AvailabilityResult,
 	logger logrus.FieldLogger) error {
 
@@ -183,8 +186,28 @@ func (o *disruptionUploader) uploadBackendDisruption(ctx context.Context, jobRun
 		unavailability := serverAvailabilityResults[backendName]
 		row := &jobrunaggregatorapi.BackendDisruptionRow{
 			BackendName:       backendName,
-			JobRunName:        jobRunName,
 			DisruptionSeconds: unavailability.SecondsUnavailable,
+			JobName: bigquery.NullString{
+				StringVal: jobRunRow.JobName,
+				Valid:     true,
+			},
+			JobRunName: jobRunRow.Name,
+			JobRunStartTime: bigquery.NullTimestamp{
+				Timestamp: jobRunRow.StartTime,
+				Valid:     true,
+			},
+			JobRunEndTime: bigquery.NullTimestamp{
+				Timestamp: jobRunRow.EndTime,
+				Valid:     true,
+			},
+			Cluster: bigquery.NullString{
+				StringVal: jobRunRow.Cluster,
+				Valid:     true,
+			},
+			ReleaseTag: bigquery.NullString{
+				StringVal: jobRunRow.ReleaseTag,
+				Valid:     true,
+			},
 		}
 		rows = append(rows, row)
 	}

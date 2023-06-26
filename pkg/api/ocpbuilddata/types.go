@@ -280,8 +280,12 @@ func replaceStream(streamName string, streamMap StreamMap) (string, error) {
 	if replacement.UpstreamImage == "" {
 		return "", fmt.Errorf("stream.yml.%s.upstream_image is an empty string", streamName)
 	}
-	if replacement.Mirror == nil || !*replacement.Mirror {
-		return "", fmt.Errorf("stream.yaml.%s.mirror is set to false, can not dereference", streamName)
+	//TODO: this is a temporary workaround until https://github.com/openshift-eng/ocp-build-data/commit/155694be74cb2f020f6fafeaf6e4b3fba89646a2 is reverted/changed
+	// We need to allow the: 'golang', 'rhel-9-golang', and 'etcd_golang' streams through in the meantime
+	if streamName != "golang" && streamName != "rhel-9-golang" && streamName != "etcd_golang" {
+		if replacement.Mirror == nil || !*replacement.Mirror {
+			return "", fmt.Errorf("stream.yaml.%s.mirror is set to false, can not dereference", streamName)
+		}
 	}
 	return replacement.UpstreamImage, nil
 }

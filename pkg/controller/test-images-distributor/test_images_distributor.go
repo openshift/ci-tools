@@ -373,6 +373,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 		Spec: imagev1.ImageStreamImportSpec{
 			Import: true,
 			Images: []imagev1.ImageImportSpec{{
+				ImportPolicy: imagev1.TagImportPolicy{ImportMode: imagev1.ImportModePreserveOriginal},
 				From: corev1.ObjectReference{
 					Kind: "DockerImage",
 					Name: pullSpec,

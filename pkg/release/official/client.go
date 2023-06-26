@@ -3,7 +3,7 @@ package official
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"regexp"
 	"sort"
@@ -60,7 +60,7 @@ func resolvePullSpec(client release.HTTPClient, endpoint string, release api.Rel
 		return "", "", fmt.Errorf("failed to request %s: got a nil response", targetName)
 	}
 	defer resp.Body.Close()
-	data, readErr := ioutil.ReadAll(resp.Body)
+	data, readErr := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		return "", "", fmt.Errorf("failed to request %s: server responded with %d: %s", targetName, resp.StatusCode, data)
 	}

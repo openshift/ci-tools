@@ -1,6 +1,8 @@
 package jobrunaggregatorapi
 
-import "time"
+import (
+	"cloud.google.com/go/bigquery"
+)
 
 const (
 	TestRunTableName = "TestRuns"
@@ -48,10 +50,10 @@ type TestRunRow struct {
 	Name            string
 	Status          string
 	TestSuite       string
-	JobName         string
+	JobName         bigquery.NullString
 	JobRunName      string
-	JobRunStartTime time.Time
-	JobRunEndTime   time.Time
-	ReleaseTag      string
-	Cluster         string
+	JobRunStartTime bigquery.NullTimestamp
+	JobRunEndTime   bigquery.NullTimestamp
+	Cluster         bigquery.NullString
+	ReleaseTag      bigquery.NullString
 }

@@ -41,14 +41,29 @@ func newJobRunRow(jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob
 
 func newTestRunRow(jobRunRow *jobrunaggregatorapi.JobRunRow, status string, testSuiteStr string, testCase *junit.TestCase) *jobrunaggregatorapi.TestRunRow {
 	return &jobrunaggregatorapi.TestRunRow{
-		Name:            testCase.Name,
-		Status:          status,
-		TestSuite:       testSuiteStr,
-		JobName:         jobRunRow.JobName,
-		JobRunName:      jobRunRow.Name,
-		JobRunStartTime: jobRunRow.StartTime,
-		JobRunEndTime:   jobRunRow.EndTime,
-		ReleaseTag:      jobRunRow.ReleaseTag,
-		Cluster:         jobRunRow.Cluster,
+		Name:      testCase.Name,
+		Status:    status,
+		TestSuite: testSuiteStr,
+		JobName: bigquery.NullString{
+			StringVal: jobRunRow.JobName,
+			Valid:     true,
+		},
+		JobRunName: jobRunRow.Name,
+		JobRunStartTime: bigquery.NullTimestamp{
+			Timestamp: jobRunRow.StartTime,
+			Valid:     true,
+		},
+		JobRunEndTime: bigquery.NullTimestamp{
+			Timestamp: jobRunRow.EndTime,
+			Valid:     true,
+		},
+		Cluster: bigquery.NullString{
+			StringVal: jobRunRow.Cluster,
+			Valid:     true,
+		},
+		ReleaseTag: bigquery.NullString{
+			StringVal: jobRunRow.ReleaseTag,
+			Valid:     true,
+		},
 	}
 }

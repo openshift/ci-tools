@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"cloud.google.com/go/bigquery"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 
@@ -256,7 +257,58 @@ func TestPopulateZeros(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			jobRunRow := &jobrunaggregatorapi.JobRunRow{
-				Name: "1000",
+				Name:       "1000",
+				JobName:    "foobar-job",
+				Cluster:    "build01",
+				ReleaseTag: "",
+			}
+			// Add some more detail to the observed/expected alerts as the bigquery null
+			// types get quite verbose to include in every test:
+			for i := range test.observedAlerts {
+				test.observedAlerts[i].JobName = bigquery.NullString{
+					StringVal: "foobar-job",
+					Valid:     true,
+				}
+				test.observedAlerts[i].Cluster = bigquery.NullString{
+					StringVal: "build01",
+					Valid:     true,
+				}
+				test.observedAlerts[i].ReleaseTag = bigquery.NullString{
+					StringVal: "",
+					Valid:     true,
+				}
+				test.observedAlerts[i].JobRunStartTime = bigquery.NullTimestamp{
+					Timestamp: time.Time{},
+					Valid:     true,
+				}
+				test.observedAlerts[i].JobRunEndTime = bigquery.NullTimestamp{
+					Timestamp: time.Time{},
+					Valid:     true,
+				}
+			}
+			// Add some more detail to the observed/expected alerts as the bigquery null
+			// types get quite verbose to include in every test:
+			for i := range test.expectedAlertsToUpload {
+				test.expectedAlertsToUpload[i].JobName = bigquery.NullString{
+					StringVal: "foobar-job",
+					Valid:     true,
+				}
+				test.expectedAlertsToUpload[i].Cluster = bigquery.NullString{
+					StringVal: "build01",
+					Valid:     true,
+				}
+				test.expectedAlertsToUpload[i].ReleaseTag = bigquery.NullString{
+					StringVal: "",
+					Valid:     true,
+				}
+				test.expectedAlertsToUpload[i].JobRunStartTime = bigquery.NullTimestamp{
+					Timestamp: time.Time{},
+					Valid:     true,
+				}
+				test.expectedAlertsToUpload[i].JobRunEndTime = bigquery.NullTimestamp{
+					Timestamp: time.Time{},
+					Valid:     true,
+				}
 			}
 			results := populateZeros(jobRunRow, knownAlertsCache, test.observedAlerts,
 				"4.13", logrus.WithField("test", test.name))

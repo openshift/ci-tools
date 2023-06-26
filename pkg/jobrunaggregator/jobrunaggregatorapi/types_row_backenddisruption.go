@@ -1,6 +1,8 @@
 package jobrunaggregatorapi
 
-import "time"
+import (
+	"cloud.google.com/go/bigquery"
+)
 
 const (
 	unifiedBackendDisruptionSchema = `
@@ -31,10 +33,10 @@ const BackendDisruptionTableName = "BackendDisruption"
 type BackendDisruptionRow struct {
 	BackendName       string
 	DisruptionSeconds int
-	JobName           string
+	JobName           bigquery.NullString
 	JobRunName        string
-	JobRunStartTime   time.Time
-	JobRunEndTime     time.Time
-	ReleaseTag        string
-	Cluster           string
+	JobRunStartTime   bigquery.NullTimestamp
+	JobRunEndTime     bigquery.NullTimestamp
+	Cluster           bigquery.NullString
+	ReleaseTag        bigquery.NullString
 }

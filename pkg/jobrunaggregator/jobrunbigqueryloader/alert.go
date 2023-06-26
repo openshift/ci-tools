@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"cloud.google.com/go/bigquery"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -224,16 +225,31 @@ func populateZeros(jobRunRow *jobrunaggregatorapi.JobRunRow,
 				"AlertLevel":     known.AlertLevel,
 			}).Debug("injecting 0s for a known but not observed alert on this run")
 			observedAlertRows = append(observedAlertRows, jobrunaggregatorapi.AlertRow{
-				Name:            known.AlertName,
-				Namespace:       known.AlertNamespace,
-				Level:           known.AlertLevel,
-				AlertSeconds:    0,
-				JobName:         jobRunRow.JobName,
-				JobRunName:      jobRunRow.Name,
-				JobRunStartTime: jobRunRow.StartTime,
-				JobRunEndTime:   jobRunRow.EndTime,
-				Cluster:         jobRunRow.Cluster,
-				ReleaseTag:      jobRunRow.ReleaseTag,
+				Name:         known.AlertName,
+				Namespace:    known.AlertNamespace,
+				Level:        known.AlertLevel,
+				AlertSeconds: 0,
+				JobName: bigquery.NullString{
+					StringVal: jobRunRow.JobName,
+					Valid:     true,
+				},
+				JobRunName: jobRunRow.Name,
+				JobRunStartTime: bigquery.NullTimestamp{
+					Timestamp: jobRunRow.StartTime,
+					Valid:     true,
+				},
+				JobRunEndTime: bigquery.NullTimestamp{
+					Timestamp: jobRunRow.EndTime,
+					Valid:     true,
+				},
+				Cluster: bigquery.NullString{
+					StringVal: jobRunRow.Cluster,
+					Valid:     true,
+				},
+				ReleaseTag: bigquery.NullString{
+					StringVal: jobRunRow.ReleaseTag,
+					Valid:     true,
+				},
 			})
 			injectedCtr++
 		}
@@ -321,16 +337,31 @@ func getAlertsFromPerJobRunData(alertData map[string]string, jobRunRow *jobrunag
 	ret := []jobrunaggregatorapi.AlertRow{}
 	for _, alert := range alertList {
 		ret = append(ret, jobrunaggregatorapi.AlertRow{
-			Name:            alert.Name,
-			Namespace:       alert.Namespace,
-			Level:           string(alert.Level),
-			AlertSeconds:    int(math.Ceil(alert.Duration.Seconds())),
-			JobName:         jobRunRow.JobName,
-			JobRunName:      jobRunRow.Name,
-			JobRunStartTime: jobRunRow.StartTime,
-			JobRunEndTime:   jobRunRow.EndTime,
-			Cluster:         jobRunRow.Cluster,
-			ReleaseTag:      jobRunRow.ReleaseTag,
+			Name:         alert.Name,
+			Namespace:    alert.Namespace,
+			Level:        string(alert.Level),
+			AlertSeconds: int(math.Ceil(alert.Duration.Seconds())),
+			JobName: bigquery.NullString{
+				StringVal: jobRunRow.JobName,
+				Valid:     true,
+			},
+			JobRunName: jobRunRow.Name,
+			JobRunStartTime: bigquery.NullTimestamp{
+				Timestamp: jobRunRow.StartTime,
+				Valid:     true,
+			},
+			JobRunEndTime: bigquery.NullTimestamp{
+				Timestamp: jobRunRow.EndTime,
+				Valid:     true,
+			},
+			Cluster: bigquery.NullString{
+				StringVal: jobRunRow.Cluster,
+				Valid:     true,
+			},
+			ReleaseTag: bigquery.NullString{
+				StringVal: jobRunRow.ReleaseTag,
+				Valid:     true,
+			},
 		})
 	}
 

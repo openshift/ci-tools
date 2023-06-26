@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"cloud.google.com/go/bigquery"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -186,12 +187,27 @@ func (o *disruptionUploader) uploadBackendDisruption(ctx context.Context, jobRun
 		row := &jobrunaggregatorapi.BackendDisruptionRow{
 			BackendName:       backendName,
 			DisruptionSeconds: unavailability.SecondsUnavailable,
-			JobName:           jobRunRow.JobName,
-			JobRunName:        jobRunRow.Name,
-			JobRunStartTime:   jobRunRow.StartTime,
-			JobRunEndTime:     jobRunRow.EndTime,
-			Cluster:           jobRunRow.Cluster,
-			ReleaseTag:        jobRunRow.ReleaseTag,
+			JobName: bigquery.NullString{
+				StringVal: jobRunRow.JobName,
+				Valid:     true,
+			},
+			JobRunName: jobRunRow.Name,
+			JobRunStartTime: bigquery.NullTimestamp{
+				Timestamp: jobRunRow.StartTime,
+				Valid:     true,
+			},
+			JobRunEndTime: bigquery.NullTimestamp{
+				Timestamp: jobRunRow.EndTime,
+				Valid:     true,
+			},
+			Cluster: bigquery.NullString{
+				StringVal: jobRunRow.Cluster,
+				Valid:     true,
+			},
+			ReleaseTag: bigquery.NullString{
+				StringVal: jobRunRow.ReleaseTag,
+				Valid:     true,
+			},
 		}
 		rows = append(rows, row)
 	}

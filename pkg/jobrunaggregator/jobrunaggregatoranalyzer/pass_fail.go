@@ -448,22 +448,33 @@ func (a *weeklyAverageFromTenDays) CheckPercentileDisruption(ctx context.Context
 
 func (a *weeklyAverageFromTenDays) checkPercentileDisruptionWithGrace(jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, historicalDisruptionStatistic backendDisruptionStats, thresholdPercentile int) ([]string, []string, testCaseStatus, string) {
 	historicalThreshold := historicalDisruptionStatistic.percentileByIndex[thresholdPercentile]
-	requiredNumberOfPasses, noGraceFailureJobRunIDs, noGraceSuccessJobRunIDs, noGraceTestCasePassed, noGraceSummary := a.innerCheckPercentileDisruptionWithGrace(jobRunIDToAvailabilityResultForBackend, historicalThreshold, thresholdPercentile)
-	numberOfPasses := len(noGraceSuccessJobRunIDs)
-	if numberOfPasses >= requiredNumberOfPasses {
+	noGraceRequiredNumberOfPasses, noGraceFailureJobRunIDs, noGraceSuccessJobRunIDs, noGraceTestCasePassed, noGraceSummary := a.innerCheckPercentileDisruptionWithGrace(jobRunIDToAvailabilityResultForBackend, historicalThreshold, thresholdPercentile)
+	noGraceNumberOfPasses := len(noGraceSuccessJobRunIDs)
+	if noGraceNumberOfPasses >= noGraceRequiredNumberOfPasses {
 		return noGraceFailureJobRunIDs, noGraceSuccessJobRunIDs, noGraceTestCasePassed, noGraceSummary
 	}
 
 	// the +1 is to have at least 1s, the 5 is arbitrary because it made forrest feel good and the denominator makes the grace smaller
 	// when there are more job runs that need to be better
-	graceSeconds := ((int(historicalThreshold) / 5) + 1) / (requiredNumberOfPasses - numberOfPasses)
-	if graceSeconds <= 0 {
-		return noGraceFailureJobRunIDs, noGraceSuccessJobRunIDs, noGraceTestCasePassed, noGraceSummary
-	}
-	thresholdWithGrace := historicalThreshold + float64(graceSeconds)
+	for i := 0; i < 10; i++ {
+		// graceSeconds gets bigger every attempt
+		// requiredOfPasses gets bigger every attempt.
+		multiplier := noGraceRequiredNumberOfPasses - noGraceNumberOfPasses - i
+		if multiplier <= 0 {
+			break
+		}
+		graceSeconds := ((int(historicalThreshold) / 5) + 1) / (multiplier)
+		withGraceRequiredNumberOfPasses := noGraceNumberOfPasses + i
+		thresholdWithGrace := historicalThreshold + float64(graceSeconds)
 
-	_, withGraceFailureJobRunIDs, withGraceSuccessJobRunIDs, withGraceTestCasePassed, withGraceSummary := a.innerCheckPercentileDisruptionWithGrace(jobRunIDToAvailabilityResultForBackend, thresholdWithGrace, thresholdPercentile)
-	return withGraceFailureJobRunIDs, withGraceSuccessJobRunIDs, withGraceTestCasePassed, withGraceSummary
+		_, withGraceFailureJobRunIDs, withGraceSuccessJobRunIDs, _, withGraceSummary := a.innerCheckPercentileDisruptionWithGrace(jobRunIDToAvailabilityResultForBackend, thresholdWithGrace, thresholdPercentile)
+		withGraceNumberOfPasses := len(noGraceSuccessJobRunIDs)
+		if withGraceNumberOfPasses >= withGraceRequiredNumberOfPasses {
+			return withGraceFailureJobRunIDs, withGraceSuccessJobRunIDs, testCasePassed, withGraceSummary
+		}
+	}
+
+	return noGraceFailureJobRunIDs, noGraceSuccessJobRunIDs, noGraceTestCasePassed, noGraceSummary
 }
 
 func (a *weeklyAverageFromTenDays) checkPercentileDisruptionWithoutGrace(jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, historicalDisruptionStatistic backendDisruptionStats, thresholdPercentile int) ([]string, []string, testCaseStatus, string) {

@@ -178,14 +178,28 @@ func TestDereferenceConfig(t *testing.T) {
 			},
 		},
 		{
-			name: "config.from.stream doesn't get replaced when stream has mirror: false",
+			name: "config.from.stream gets replaced when stream has mirror: false and is in workaround list",
 			config: OCPImageConfig{
 				From: OCPImageConfigFrom{
 					OCPImageConfigFromStream: OCPImageConfigFromStream{Stream: "golang"},
 				},
 			},
-			streamMap:     StreamMap{"golang": {UpstreamImage: "openshift/golang-builder:rhel_8_golang_1.14", Mirror: utilpointer.BoolPtr(false)}},
-			expectedError: errors.New("[failed to replace .from.stream: stream.yaml.golang.mirror is set to false, can not dereference, failed to find replacement for .from.stream]"),
+			streamMap: StreamMap{"golang": {UpstreamImage: "openshift/golang-builder:rhel_8_golang_1.14", Mirror: utilpointer.BoolPtr(false)}},
+			expectedConfig: OCPImageConfig{
+				From: OCPImageConfigFrom{
+					OCPImageConfigFromStream: OCPImageConfigFromStream{Stream: "openshift/golang-builder:rhel_8_golang_1.14"},
+				},
+			},
+		},
+		{
+			name: "config.from.stream doesn't get replaced when stream has mirror: false",
+			config: OCPImageConfig{
+				From: OCPImageConfigFrom{
+					OCPImageConfigFromStream: OCPImageConfigFromStream{Stream: "some-stream"},
+				},
+			},
+			streamMap:     StreamMap{"some-stream": {UpstreamImage: "openshift/some-stream-builder:rhel_8_golang_1.14", Mirror: utilpointer.BoolPtr(false)}},
+			expectedError: errors.New("[failed to replace .from.stream: stream.yaml.some-stream.mirror is set to false, can not dereference, failed to find replacement for .from.stream]"),
 		},
 		{
 			name: "config.from.member gets replaced",

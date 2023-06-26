@@ -266,7 +266,15 @@ func TestCheckPercentileDisruption(t *testing.T) {
 			}
 			historicalDisruptionStatistic.percentileByIndex[test.thresholdPercentile] = test.historicalDisruption
 
-			failureJobRunIDs, successJobRunIDs, status, summary := weeklyAverageFromTenDays.checkPercentileDisruption(jobRunIDToAvailabilityResultForBackend, historicalDisruptionStatistic, test.thresholdPercentile, test.supportsFuzziness)
+			var failureJobRunIDs []string
+			var successJobRunIDs []string
+			var status testCaseStatus
+			var summary string
+			if test.supportsFuzziness {
+				failureJobRunIDs, successJobRunIDs, status, summary = weeklyAverageFromTenDays.checkPercentileDisruptionWithGrace(jobRunIDToAvailabilityResultForBackend, historicalDisruptionStatistic, test.thresholdPercentile)
+			} else {
+				failureJobRunIDs, successJobRunIDs, status, summary = weeklyAverageFromTenDays.checkPercentileDisruptionWithoutGrace(jobRunIDToAvailabilityResultForBackend, historicalDisruptionStatistic, test.thresholdPercentile)
+			}
 
 			assert.NotNil(t, summary, "Invalid summary for: %s", test.name)
 			assert.Equal(t, test.failedCount, len(failureJobRunIDs), "Invalid failed test cont for: %s", test.name)

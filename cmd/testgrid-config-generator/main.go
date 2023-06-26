@@ -223,6 +223,9 @@ func addDashboardTab(p prowConfig.Periodic,
 		case strings.Contains(prowName, "-lp-interop"):
 			// OpenShift layered product interop testing
 			dashboardType = "informing"
+		case strings.Contains(prowName, "-lp-rosa-hypershift"):
+			// OpenShift layered product rosa hypershift interop testing
+			dashboardType = "informing"
 		case strings.Contains(prowName, "CSPI-QE-MSI"):
 			// Managed Services Integration (MSI) testing
 			dashboardType = "informing"
@@ -262,6 +265,9 @@ func addDashboardTab(p prowConfig.Periodic,
 		case strings.Contains(prowName, "-lp-interop"):
 			// OpenShift layered product interop testing
 			stream = "lp-interop"
+		case strings.Contains(prowName, "-lp-rosa-hypershift"):
+			// OpenShift layered product rosa hypershift interop testing
+			stream = "lp-rosa-hypershift"
 		case strings.Contains(prowName, "CSPI-QE-MSI"):
 			// Managed Services Integration (MSI) testing
 			stream = "CSPI-QE-MSI"

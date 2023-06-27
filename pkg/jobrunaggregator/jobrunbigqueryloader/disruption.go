@@ -208,6 +208,11 @@ func (o *disruptionUploader) uploadBackendDisruption(ctx context.Context, jobRun
 				StringVal: jobRunRow.ReleaseTag,
 				Valid:     true,
 			},
+			JobRunStatus: bigquery.NullString{
+				StringVal: jobRunRow.Status,
+				Valid:     true,
+			},
+			MasterNodesUpdated: jobRunRow.MasterNodesUpdated,
 		}
 		rows = append(rows, row)
 	}

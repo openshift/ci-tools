@@ -257,10 +257,11 @@ func TestPopulateZeros(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			jobRunRow := &jobrunaggregatorapi.JobRunRow{
-				Name:       "1000",
-				JobName:    "foobar-job",
-				Cluster:    "build01",
-				ReleaseTag: "",
+				Name:               "1000",
+				JobName:            "foobar-job",
+				Cluster:            "build01",
+				ReleaseTag:         "",
+				MasterNodesUpdated: bigquery.NullString{StringVal: "", Valid: true},
 			}
 			// Add some more detail to the observed/expected alerts as the bigquery null
 			// types get quite verbose to include in every test:
@@ -285,6 +286,14 @@ func TestPopulateZeros(t *testing.T) {
 					Timestamp: time.Time{},
 					Valid:     true,
 				}
+				test.observedAlerts[i].JobRunStatus = bigquery.NullString{
+					StringVal: "",
+					Valid:     true,
+				}
+				test.observedAlerts[i].MasterNodesUpdated = bigquery.NullString{
+					StringVal: "",
+					Valid:     true,
+				}
 			}
 			// Add some more detail to the observed/expected alerts as the bigquery null
 			// types get quite verbose to include in every test:
@@ -307,6 +316,14 @@ func TestPopulateZeros(t *testing.T) {
 				}
 				test.expectedAlertsToUpload[i].JobRunEndTime = bigquery.NullTimestamp{
 					Timestamp: time.Time{},
+					Valid:     true,
+				}
+				test.expectedAlertsToUpload[i].JobRunStatus = bigquery.NullString{
+					StringVal: "",
+					Valid:     true,
+				}
+				test.expectedAlertsToUpload[i].MasterNodesUpdated = bigquery.NullString{
+					StringVal: "",
 					Valid:     true,
 				}
 			}

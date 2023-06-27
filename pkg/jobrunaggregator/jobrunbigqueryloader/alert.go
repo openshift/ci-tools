@@ -7,7 +7,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"time"
 
 	"cloud.google.com/go/bigquery"
 	"github.com/sirupsen/logrus"
@@ -118,11 +117,14 @@ func (f *BigQueryAlertUploadFlags) ToOptions(ctx context.Context) (*allJobsLoade
 		jobRunTableInserter = jobrunaggregatorlib.NewDryRunInserter(os.Stdout, jobrunaggregatorapi.AlertJobRunTableName)
 		backendAlertTableInserter = jobrunaggregatorlib.NewDryRunInserter(os.Stdout, jobrunaggregatorapi.AlertsTableName)
 	}
+	pendingUploadLister := newAlertPendingUploadLister(ciDataClient)
 	alertUploader, err := newAlertUploader(backendAlertTableInserter, ciDataClient)
 	if err != nil {
 		return nil, err
 	}
 
+	jobRunUploaderRegistry := JobRunUploaderRegistry{}
+	jobRunUploaderRegistry.Register("alertUploader", alertUploader)
 	return &allJobsLoaderOptions{
 		ciDataClient: ciDataClient,
 		gcsClient:    gcsClient,
@@ -131,8 +133,9 @@ func (f *BigQueryAlertUploadFlags) ToOptions(ctx context.Context) (*allJobsLoade
 		shouldCollectedDataForJobFn: func(job jobrunaggregatorapi.JobRow) bool {
 			return true
 		},
-		jobRunUploader: alertUploader,
-		logLevel:       f.LogLevel,
+		jobRunUploaderRegistry:  jobRunUploaderRegistry,
+		pendingUploadJobsLister: pendingUploadLister,
+		logLevel:                f.LogLevel,
 	}, nil
 }
 
@@ -160,12 +163,11 @@ func newAlertUploader(alertInserter jobrunaggregatorlib.BigQueryInserter,
 	}, nil
 }
 
-func (o *alertUploader) getLastUploadedJobRunEndTime(ctx context.Context) (*time.Time, error) {
-	return o.ciDataClient.GetLastJobRunEndTimeFromTable(ctx, jobrunaggregatorapi.AlertJobRunTableName)
-}
-
-func (o *alertUploader) listUploadedJobRunIDsSince(ctx context.Context, since *time.Time) (map[string]bool, error) {
-	return o.ciDataClient.ListUploadedJobRunIDsSinceFromTable(ctx, jobrunaggregatorapi.AlertJobRunTableName, since)
+func newAlertPendingUploadLister(ciDataClient jobrunaggregatorlib.CIDataClient) pendingUploadLister {
+	return &testRunPendingUploadLister{
+		tableName:    jobrunaggregatorapi.AlertJobRunTableName,
+		ciDataClient: ciDataClient,
+	}
 }
 
 func (o *alertUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo,

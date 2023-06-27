@@ -65,5 +65,10 @@ func newTestRunRow(jobRunRow *jobrunaggregatorapi.JobRunRow, status string, test
 			StringVal: jobRunRow.ReleaseTag,
 			Valid:     true,
 		},
+		JobRunStatus: bigquery.NullString{
+			StringVal: jobRunRow.Status,
+			Valid:     true,
+		},
+		MasterNodesUpdated: jobRunRow.MasterNodesUpdated,
 	}
 }

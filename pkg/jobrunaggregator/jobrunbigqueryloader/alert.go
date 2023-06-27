@@ -250,6 +250,11 @@ func populateZeros(jobRunRow *jobrunaggregatorapi.JobRunRow,
 					StringVal: jobRunRow.ReleaseTag,
 					Valid:     true,
 				},
+				JobRunStatus: bigquery.NullString{
+					StringVal: jobRunRow.Status,
+					Valid:     true,
+				},
+				MasterNodesUpdated: jobRunRow.MasterNodesUpdated,
 			})
 			injectedCtr++
 		}
@@ -362,6 +367,11 @@ func getAlertsFromPerJobRunData(alertData map[string]string, jobRunRow *jobrunag
 				StringVal: jobRunRow.ReleaseTag,
 				Valid:     true,
 			},
+			JobRunStatus: bigquery.NullString{
+				StringVal: jobRunRow.Status,
+				Valid:     true,
+			},
+			MasterNodesUpdated: jobRunRow.MasterNodesUpdated,
 		})
 	}
 

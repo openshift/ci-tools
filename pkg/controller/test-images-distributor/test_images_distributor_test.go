@@ -317,7 +317,6 @@ func TestReconcile(t *testing.T) {
 					},
 					To:              &corev1.LocalObjectReference{Name: "Question"},
 					ReferencePolicy: imagev1.TagReferencePolicy{Type: "Local"},
-					ImportPolicy:    imagev1.TagImportPolicy{ImportMode: imagev1.ImportModePreserveOriginal},
 				}},
 			},
 			Status: imagev1.ImageStreamImportStatus{

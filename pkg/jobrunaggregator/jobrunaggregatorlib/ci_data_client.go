@@ -347,7 +347,7 @@ func buildMasterNodesUpdatedSQL(masterNodesUpdated string) string {
 	masterNodesUpdatedSQL := ""
 
 	if len(masterNodesUpdated) > 0 {
-		masterNodesUpdatedSQL = fmt.Sprintf("AND MasterNodesUpdated = '%s'", masterNodesUpdated)
+		masterNodesUpdatedSQL = fmt.Sprintf("AND JobRuns.MasterNodesUpdated = '%s'", masterNodesUpdated)
 	}
 
 	return masterNodesUpdatedSQL
@@ -357,7 +357,7 @@ func (c *ciDataClient) GetBackendDisruptionRowCountByJob(ctx context.Context, jo
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(fmt.Sprintf(`
 SELECT Count(Name) AS TotalRows
 FROM
-	DATA_SET_LOCATION.BackendDisruption_JobRuns
+	DATA_SET_LOCATION.BackendDisruption_JobRuns AS JobRuns
 WHERE
     StartTime <= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 3 DAY)
 AND

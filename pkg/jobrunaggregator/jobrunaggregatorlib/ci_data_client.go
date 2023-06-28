@@ -97,44 +97,40 @@ func (c *ciDataClient) ListDisruptionHistoricalData(ctx context.Context) ([]jobr
 	// We attempt to only fail tests when results are worse than a P99, thus only consider NURPs where
 	// we have at least 100 runs. Sort for consistent ordering to help us see changes in diffs in the pr
 	// which updates the static files in origin.
+	//
+	// Note we only consider rows where MasterNodesUpdated != "N" or FromRelease is empty.
+	// This is to ensure we only enforce
+	// on the worst case when master nodes are updated, or null which implies past release data
+	// where we don't actually know if master nodes were updated. (i.e. releases prior to 4.14)
+	// An empty FromRelease implies no upgrade and MasterNodesUpdated will always be N there.
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(`
-	SELECT * FROM (
-		SELECT
-		COUNT(*) AS JobRuns,
-		BackendName,
-		Release,
-		FromRelease,
-		Platform,
-		Architecture,
-		Network,
-		Topology,
-		IFNULL(SAFE_CAST(ANY_VALUE(P95) AS STRING), "0.0") AS P95,
-		IFNULL(SAFE_CAST(ANY_VALUE(P99) AS STRING), "0.0") AS P99
-		FROM (
-			SELECT
-				Jobs.Release,
-				Jobs.FromRelease,
-				Jobs.Platform,
-				Jobs.Architecture,
-				Jobs.Network,
-				Jobs.Topology,
-				BackendName,
-				PERCENTILE_CONT(BackendDisruption.DisruptionSeconds, 0.95) OVER(PARTITION BY BackendDisruption.BackendName, Jobs.Network, Jobs.Platform, Jobs.Release, Jobs.FromRelease, Jobs.Topology) AS P95,
-				PERCENTILE_CONT(BackendDisruption.DisruptionSeconds, 0.99) OVER(PARTITION BY BackendDisruption.BackendName, Jobs.Network, Jobs.Platform, Jobs.Release, Jobs.FromRelease, Jobs.Topology) AS P99,
-			FROM
-				DATA_SET_LOCATION.BackendDisruption as BackendDisruption
-			INNER JOIN
-				DATA_SET_LOCATION.BackendDisruption_JobRuns as JobRuns on JobRuns.Name = BackendDisruption.JobRunName
-			INNER JOIN
-				DATA_SET_LOCATION.Jobs as Jobs on Jobs.JobName = JobRuns.JobName
-			WHERE
-				JobRuns.StartTime > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 21 DAY)
-		)
-		GROUP BY
-			BackendName, Release, FromRelease, Platform, Architecture, Network, Topology
-	)
-	ORDER BY Release, FromRelease, Platform, Architecture, Network, Topology, BackendName
-    `)
+SELECT  
+    BackendName,
+    Release,
+    FromRelease,
+    MasterNodesUpdated,
+    Platform,
+    Architecture,
+    Network,
+    Topology,
+    JobRuns,
+    IFNULL(SAFE_CAST(P95 AS STRING), "0.0") AS P95,
+    IFNULL(SAFE_CAST(P99 AS STRING), "0.0") AS P99,
+FROM DATA_SET_LOCATION.BackendDisruptionPercentilesByDate
+WHERE
+    LookbackDays = 30 
+    AND ReportDate = (SELECT MAX(ReportDate) FROM DATA_SET_LOCATION.BackendDisruptionPercentilesByDate)
+    AND (MasterNodesUpdated != "N" OR FromRelease = "")
+ORDER BY 
+    Release, 
+    FromRelease, 
+    MasterNodesUpdated, 
+    Platform, 
+    Architecture, 
+    Network, 
+    Topology, 
+    BackendName
+`)
 	query := c.client.Query(queryString)
 	disruptionRow, err := query.Read(ctx)
 	if err != nil {
@@ -349,7 +345,6 @@ func buildMasterNodesUpdatedSQL(masterNodesUpdated string) string {
 	if len(masterNodesUpdated) > 0 {
 		masterNodesUpdatedSQL = fmt.Sprintf("AND JobRuns.MasterNodesUpdated = '%s'", masterNodesUpdated)
 	}
-
 	return masterNodesUpdatedSQL
 }
 

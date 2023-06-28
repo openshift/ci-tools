@@ -2,6 +2,8 @@ package jobrunaggregatorapi
 
 import (
 	"fmt"
+
+	"cloud.google.com/go/bigquery"
 )
 
 type HistoricalData interface {
@@ -14,12 +16,13 @@ type HistoricalData interface {
 }
 
 type HistoricalJobData struct {
-	Release      string
-	FromRelease  string
-	Platform     string
-	Architecture string
-	Network      string
-	Topology     string
+	Release            string
+	FromRelease        string
+	Platform           string
+	Architecture       string
+	Network            string
+	Topology           string
+	MasterNodesUpdated bigquery.NullString
 	// JobRuns is the number of job runs that were included when we queried the historical data.
 	JobRuns int
 }

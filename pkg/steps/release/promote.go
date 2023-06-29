@@ -41,13 +41,7 @@ type promotionStep struct {
 	pushSecret     *coreapi.Secret
 	registry       string
 	mirrorFunc     func(source, target string, tag api.ImageStreamTagReference, date string, imageMirror map[string]string)
-}
-
-func targetName(config api.PromotionConfiguration) string {
-	if len(config.Name) > 0 {
-		return fmt.Sprintf("%s/%s:${component}", config.Namespace, config.Name)
-	}
-	return fmt.Sprintf("%s/${component}:%s", config.Namespace, config.Tag)
+	targetNameFunc func(string, api.PromotionConfiguration) string
 }
 
 func (s *promotionStep) Inputs() (api.InputDefinition, error) {
@@ -86,7 +80,8 @@ func (s *promotionStep) run(ctx context.Context) error {
 		return nil
 	}
 
-	logger.Infof("Promoting tags to %s: %s", targetName(*s.configuration.PromotionConfiguration), strings.Join(names.List(), ", "))
+	targetName := s.targetNameFunc(s.registry, *s.configuration.PromotionConfiguration)
+	logger.Infof("Promoting tags to %s: %s", targetName, strings.Join(names.List(), ", "))
 	pipeline := &imagev1.ImageStream{}
 	if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{
 		Namespace: s.jobSpec.Namespace(),
@@ -397,7 +392,7 @@ func (s *promotionStep) Provides() api.ParameterMap {
 func (s *promotionStep) Name() string { return fmt.Sprintf("[%s]", s.name) }
 
 func (s *promotionStep) Description() string {
-	return fmt.Sprintf("Promote built images into the release image stream %s", targetName(*s.configuration.PromotionConfiguration))
+	return fmt.Sprintf("Promote built images into the release image stream %s", s.targetNameFunc(s.registry, *s.configuration.PromotionConfiguration))
 }
 
 func (s *promotionStep) Objects() []ctrlruntimeclient.Object {
@@ -415,6 +410,7 @@ func PromotionStep(
 	pushSecret *coreapi.Secret,
 	registry string,
 	mirrorFunc func(source, target string, tag api.ImageStreamTagReference, date string, imageMirror map[string]string),
+	targetNameFunc func(string, api.PromotionConfiguration) string,
 ) api.Step {
 	return &promotionStep{
 		name:           name,
@@ -425,5 +421,6 @@ func PromotionStep(
 		pushSecret:     pushSecret,
 		registry:       registry,
 		mirrorFunc:     mirrorFunc,
+		targetNameFunc: targetNameFunc,
 	}
 }

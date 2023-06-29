@@ -108,4 +108,20 @@ var (
 			}
 		}
 	}
+
+	// DefaultTargetNameFunc is the default target name function
+	DefaultTargetNameFunc = func(registry string, config PromotionConfiguration) string {
+		if len(config.Name) > 0 {
+			return fmt.Sprintf("%s/%s/%s:${component}", registry, config.Namespace, config.Name)
+		}
+		return fmt.Sprintf("%s/%s/${component}:%s", registry, config.Namespace, config.Tag)
+	}
+
+	// QuayTargetNameFunc is the target name function for quay.io
+	QuayTargetNameFunc = func(_ string, config PromotionConfiguration) string {
+		if len(config.Name) > 0 {
+			return fmt.Sprintf("%s:%s_%s_${component}", QuayOpenShiftCIRepo, config.Namespace, config.Name)
+		}
+		return fmt.Sprintf("%s:%s_${component}_%s", QuayOpenShiftCIRepo, config.Namespace, config.Tag)
+	}
 )

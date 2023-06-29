@@ -3,6 +3,7 @@ package steps
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -173,6 +174,14 @@ COPY --from=builder /database/ database`,
 }
 
 func TestDatabaseIndex(t *testing.T) {
+	rawImageStreamTag, err := os.ReadFile("testdata/isTags/59c70bff_image.yaml")
+	if err != nil {
+		t.Fatalf("failed to read image fixture: %v", err)
+	}
+	image := &apiimagev1.Image{}
+	if err := yaml.Unmarshal(rawImageStreamTag, image); err != nil {
+		t.Fatalf("failed to unmarshal image: %v", err)
+	}
 	testCases := []struct {
 		name        string
 		istFile     string
@@ -193,12 +202,12 @@ func TestDatabaseIndex(t *testing.T) {
 		name:        "no metadata",
 		istFile:     "testdata/isTags/pipeline_no_bytes_istag.yaml",
 		isTagName:   "pipeline:v4.10",
-		expectedErr: fmt.Errorf(`could not fetch Docker image metadata for ImageStreamTag pipeline:v4.10`),
+		expectedErr: fmt.Errorf(`could not fetch Docker image metadata`),
 	}, {
 		name:        "malformed json",
 		istFile:     "testdata/isTags/pipeline_malformed_istag.yaml",
 		isTagName:   "pipeline:v4.10",
-		expectedErr: fmt.Errorf(`malformed Docker image metadata on ImageStreamTag: json: cannot unmarshal string into Go value of type docker10.DockerImage`),
+		expectedErr: fmt.Errorf(`malformed Docker image metadata: json: cannot unmarshal string into Go value of type docker10.DockerImage`),
 	}, {
 		name:      "no labels",
 		istFile:   "testdata/isTags/pipeline_no_label_istag.yaml",
@@ -207,6 +216,11 @@ func TestDatabaseIndex(t *testing.T) {
 		name:      "v4.11",
 		istFile:   "testdata/isTags/pipeline_v4.11_istag.yaml",
 		isTagName: "pipeline:v4.11",
+	}, {
+		name:      "dockerImageManifests",
+		istFile:   "testdata/isTags/redhat-operator-index_v4.10_istag_manifests.yaml",
+		isTagName: "redhat-operator-index:v4.10",
+		expected:  true,
 	}}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -218,7 +232,7 @@ func TestDatabaseIndex(t *testing.T) {
 			if err := yaml.Unmarshal(rawImageStreamTag, ist); err != nil {
 				t.Fatalf("failed to unmarshal imagestreamTag: %v", err)
 			}
-			actual, actualErr := databaseIndex(NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithObjects(ist).Build()), nil, nil),
+			actual, actualErr := databaseIndex(NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithObjects(ist, image).Build()), nil, nil),
 				testCase.isTagName, "ns")
 			if diff := cmp.Diff(testCase.expectedErr, actualErr, testhelper.EquateErrorMessage); diff != "" {
 				t.Fatalf("actual did not match expected, diff: %s", diff)

@@ -42,15 +42,30 @@ func (*indexGeneratorStep) Validate() error { return nil }
 
 func databaseIndex(client ctrlruntimeclient.Client, name, namespace string) (bool, error) {
 	ist := &imagev1.ImageStreamTag{}
-	if err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, ist); err != nil {
+	ctx := context.TODO()
+	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, ist); err != nil {
 		return false, fmt.Errorf("could not fetch source ImageStreamTag: %w", err)
 	}
-	metadata := &docker10.DockerImage{}
-	if len(ist.Image.DockerImageMetadata.Raw) == 0 {
-		return false, fmt.Errorf("could not fetch Docker image metadata for ImageStreamTag %s", ist.Name)
+	dockerImageMetadata := ist.Image.DockerImageMetadata
+	for _, imageManifest := range ist.Image.DockerImageManifests {
+		// At the moment, we support only amd64
+		if imageManifest.Architecture == string(api.AMD64Arch) {
+			image := &imagev1.Image{}
+			// image is a cluster level CRD and thus no namespace should be provided to get the object
+			if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: imageManifest.Digest}, image); err != nil {
+				return false, fmt.Errorf("could not fetch source image %s: %w", imageManifest.Digest, err)
+			}
+			dockerImageMetadata = image.DockerImageMetadata
+			logrus.WithField("namespace", ist.Namespace).WithField("name", ist.Name).Debug("Found the amd64 image in manifests")
+			break
+		}
 	}
-	if err := json.Unmarshal(ist.Image.DockerImageMetadata.Raw, metadata); err != nil {
-		return false, fmt.Errorf("malformed Docker image metadata on ImageStreamTag: %w", err)
+	metadata := &docker10.DockerImage{}
+	if len(dockerImageMetadata.Raw) == 0 {
+		return false, fmt.Errorf("could not fetch Docker image metadata")
+	}
+	if err := json.Unmarshal(dockerImageMetadata.Raw, metadata); err != nil {
+		return false, fmt.Errorf("malformed Docker image metadata: %w", err)
 	}
 	if metadata.Config == nil || metadata.Config.Labels == nil {
 		return false, nil

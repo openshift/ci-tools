@@ -1,0 +1,170 @@
+apiVersion: image.openshift.io/v1
+dockerImageLayers:
+  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+    name: sha256:9df9aa2998cab73cb8c78646332865ce19dd4dc59f2d0d246b82d52befa48d22
+    size: 85691446
+  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+    name: sha256:f0e75f0712cb54427ddf23f001cb109d505557b677f932717bbd1e6219bcecb3
+    size: 1504
+  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+    name: sha256:844329b46ad7165a075146fc199f0ed7bff5b54212336c5c89b72a2dc270a08b
+    size: 18747527
+  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+    name: sha256:1097c54b9b50eb87af4e154bee3136177ec9635bb16d1e96b7cbe84fbab74829
+    size: 11514638
+  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+    name: sha256:365fc26f9c925ddab5f0457f30af36542c76174e0b6a5d4ec329d8b9696bc9fb
+    size: 139492272
+  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+    name: sha256:33232dbb73cd45af007c21561e3898a773e29e6b904d4b8cc07c5477acf4565d
+    size: 53015423
+dockerImageManifestMediaType: application/vnd.docker.distribution.manifest.v2+json
+dockerImageMetadata:
+  Architecture: amd64
+  Config:
+    Cmd:
+      - registry
+      - serve
+      - --database
+      - /database/index.db
+    Entrypoint:
+      - /bin/opm
+    Env:
+      - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      - container=oci
+      - GODEBUG=x509ignoreCN=0,madvdontneed=1
+      - __doozer=merge
+      - BUILD_RELEASE=202306131214.p0.g8de38bb.assembly.stream
+      - BUILD_VERSION=v4.10.0
+      - OS_GIT_MAJOR=4
+      - OS_GIT_MINOR=10
+      - OS_GIT_PATCH=0
+      - OS_GIT_TREE_STATE=clean
+      - OS_GIT_VERSION=v
+      - SOURCE_GIT_TREE_STATE=clean
+      - OS_GIT_COMMIT=8de38bb
+      - SOURCE_DATE_EPOCH=1675052547
+      - SOURCE_GIT_COMMIT=c
+      - SOURCE_GIT_TAG=t
+      - SOURCE_GIT_URL=https://github.com/openshift/r
+    ExposedPorts:
+      50051/tcp: {}
+    Hostname: hn
+    Labels:
+      License: GPLv2+
+      architecture: x86_64
+      build-date: 2023-06-13T13:19:00
+      com.redhat.build-host: host.example.com
+      com.redhat.component: operator-registry-container
+      com.redhat.index.delivery.distribution_scope: prod
+      com.redhat.index.delivery.version: v4.10
+      com.redhat.license_terms: https://www.example.com/agreements
+      description: This is a component of OpenShift Operator Lifecycle Manager and
+        is the base for operator catalog API containers.
+      distribution-scope: public
+      io.buildah.version: 1.29.1
+      io.k8s.description: This is a component of OpenShift Operator Lifecycle Manager
+        and is the base for operator catalog API containers.
+      io.k8s.display-name: OpenShift Operator Registry
+      io.openshift.build.commit.id: i
+      io.openshift.build.commit.url: https://github.com/openshift/operator-framework-olm/commit/i
+      io.openshift.build.source-location: https://github.com/openshift/operator-framework-olm
+      io.openshift.expose-services: ""
+      io.openshift.maintainer.component: OLM
+      io.openshift.maintainer.project: OCPBUGS
+      io.openshift.tags: openshift,base
+      maintainer: some Team <some@example.com>
+      name: openshift/no-secret
+      operators.operatorframework.io.index.database.v1: /database/index.db
+      release: hello.assembly.stream
+      summary: Operator Registry runs in a Kubernetes or OpenShift cluster to provide
+        operator catalog data to Operator Lifecycle Manager.
+      url: https://access.redhat.com/containers/#/registry.access.redhat.com/u
+      vcs-ref: x
+      vcs-type: git
+      vendor: Red Hat, Inc.
+      version: v4.10.0
+    User: "1001"
+    WorkingDir: /registry
+  Container: 59f3d7fc386ea7150f21635acc0a575ea3a80f1f0837159e1894726ea5cb7a1d
+  ContainerConfig:
+    Cmd:
+      - registry
+      - serve
+      - --database
+      - /database/index.db
+    Entrypoint:
+      - /bin/opm
+    Env:
+      - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      - container=oci
+      - GODEBUG=x509ignoreCN=0,madvdontneed=1
+      - __doozer=merge
+      - BUILD_RELEASE=a
+      - BUILD_VERSION=v4.10.0
+      - OS_GIT_MAJOR=4
+      - OS_GIT_MINOR=10
+      - OS_GIT_PATCH=0
+      - OS_GIT_TREE_STATE=clean
+      - OS_GIT_VERSION=b
+      - SOURCE_GIT_TREE_STATE=clean
+      - OS_GIT_COMMIT=e
+      - SOURCE_DATE_EPOCH=1675052547
+      - SOURCE_GIT_COMMIT=d
+      - SOURCE_GIT_TAG=c
+      - SOURCE_GIT_URL=https://github.com/openshift/operator-framework-olm
+    ExposedPorts:
+      50051/tcp: {}
+    Hostname: hn
+    Labels:
+      License: GPLv2+
+      architecture: x86_64
+      build-date: 2023-06-13T13:19:00
+      com.redhat.build-host: h.example.com
+      com.redhat.component: operator-registry-container
+      com.redhat.index.delivery.distribution_scope: prod
+      com.redhat.index.delivery.version: v4.10
+      com.redhat.license_terms: https://www.example.com/agreements
+      description: This is a component of OpenShift Operator Lifecycle Manager and
+        is the base for operator catalog API containers.
+      distribution-scope: public
+      io.buildah.version: 1.29.1
+      io.k8s.description: This is a component of OpenShift Operator Lifecycle Manager
+        and is the base for operator catalog API containers.
+      io.k8s.display-name: OpenShift Operator Registry
+      io.openshift.build.commit.id: c
+      io.openshift.build.commit.url: https://github.com/openshift/operator-framework-olm/commit/c
+      io.openshift.build.source-location: https://github.com/openshift/operator-framework-olm
+      io.openshift.expose-services: ""
+      io.openshift.maintainer.component: OLM
+      io.openshift.maintainer.project: OCPBUGS
+      io.openshift.tags: openshift,base
+      maintainer: Team <t@example.com>
+      name: openshift/ose-operator-registry
+      operators.operatorframework.io.index.database.v1: /database/index.db
+      release: r
+      summary: Operator Registry runs in a Kubernetes or OpenShift cluster to provide
+        operator catalog data to Operator Lifecycle Manager.
+      url: https://access.redhat.com/containers/#/registry.access.redhat.com/u
+      vcs-ref: r
+      vcs-type: git
+      vendor: Red Hat, Inc.
+      version: v4.10.0
+    User: "1001"
+    WorkingDir: /registry
+  Created: "2023-06-28T17:10:41Z"
+  Id: sha256:i
+  Parent: sha256:p
+  Size: 308487321
+  apiVersion: image.openshift.io/1.0
+  kind: DockerImage
+dockerImageMetadataVersion: "1.0"
+dockerImageReference: registry.ci.openshift.org/ns/redhat-operator-index@sha256:59c70bff3ab1a065bd6e577d7bbf42f52765eb22a04e4b0ec615b9960d0c913a
+kind: Image
+metadata:
+  annotations:
+    image.openshift.io/dockerLayersOrder: ascending
+  creationTimestamp: "2023-06-28T18:01:36Z"
+  name: sha256:59c70bff3ab1a065bd6e577d7bbf42f52765eb22a04e4b0ec615b9960d0c913a
+  resourceVersion: "1354079335"
+  uid: ab04dff3-0655-432c-b5f3-1cc6bb32e4e8

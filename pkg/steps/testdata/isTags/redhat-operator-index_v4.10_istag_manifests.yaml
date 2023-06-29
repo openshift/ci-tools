@@ -1,0 +1,58 @@
+apiVersion: image.openshift.io/v1
+generation: 3631
+image:
+  dockerImageManifestMediaType: application/vnd.docker.distribution.manifest.list.v2+json
+  dockerImageManifests:
+    - architecture: amd64
+      digest: sha256:59c70bff3ab1a065bd6e577d7bbf42f52765eb22a04e4b0ec615b9960d0c913a
+      manifestSize: 1252
+      mediaType: application/vnd.docker.distribution.manifest.v2+json
+      os: linux
+    - architecture: arm64
+      digest: sha256:56657601d6b6cd9e0ffe06c94d05c9b2aeb219897a15699cfa6954a3e0e45381
+      manifestSize: 1251
+      mediaType: application/vnd.docker.distribution.manifest.v2+json
+      os: linux
+    - architecture: ppc64le
+      digest: sha256:d2cc8c485bae853e37319573c4263abea54e682a7134a4e38cb2f6a57ab2efb7
+      manifestSize: 1251
+      mediaType: application/vnd.docker.distribution.manifest.v2+json
+      os: linux
+    - architecture: s390x
+      digest: sha256:ec44fc105813413dad8be273dde93537b6d31b8389255c3724e1f97d2cbd76b3
+      manifestSize: 1251
+      mediaType: application/vnd.docker.distribution.manifest.v2+json
+      os: linux
+  dockerImageMetadata:
+    ContainerConfig: {}
+    Created: "2023-06-28T18:01:35Z"
+    Id: sha256:53eb51a4b7236b5362bfe8421d29b7a2eef17ece08f6912d0792f782cacddde4
+    apiVersion: image.openshift.io/1.0
+    kind: DockerImage
+  dockerImageMetadataVersion: "1.0"
+  dockerImageReference: image-registry.openshift-image-registry.svc:5000/ns/redhat-operator-index@sha256:53eb51a4b7236b5362bfe8421d29b7a2eef17ece08f6912d0792f782cacddde4
+  metadata:
+    creationTimestamp: "2023-06-28T18:01:36Z"
+    name: sha256:53eb51a4b7236b5362bfe8421d29b7a2eef17ece08f6912d0792f782cacddde4
+    resourceVersion: "1354079339"
+    uid: ad7f847d-1adf-423d-a728-a6cf5b4fc33c
+kind: ImageStreamTag
+lookupPolicy:
+  local: true
+metadata:
+  creationTimestamp: "2023-06-28T18:01:36Z"
+  name: redhat-operator-index:v4.10
+  namespace: ns
+  resourceVersion: "1354079801"
+  uid: af5e61f5-e753-4df4-a7fa-9f2d05ede694
+tag:
+  annotations: null
+  from:
+    kind: DockerImage
+    name: registry.ci.openshift.org/ns/redhat-operator-index@sha256:53eb51a4b7236b5362bfe8421d29b7a2eef17ece08f6912d0792f782cacddde4
+  generation: 3631
+  importPolicy:
+    importMode: PreserveOriginal
+  name: v4.10
+  referencePolicy:
+    type: Local

@@ -58,7 +58,6 @@ require (
 	github.com/openshift/openshift-apiserver v0.0.0-alpha.0
 	github.com/pkg/errors v0.9.1
 	github.com/pmezard/go-difflib v1.0.0
-	github.com/polyfloyd/go-errorlint v0.0.0-20210722154253-910bb7978349
 	github.com/prometheus/client_golang v1.15.1
 	github.com/prometheus/client_model v0.4.0
 	github.com/prometheus/common v0.44.0

@@ -202,12 +202,12 @@ func TestDatabaseIndex(t *testing.T) {
 		name:        "no metadata",
 		istFile:     "testdata/isTags/pipeline_no_bytes_istag.yaml",
 		isTagName:   "pipeline:v4.10",
-		expectedErr: fmt.Errorf(`could not fetch Docker image metadata`),
+		expectedErr: fmt.Errorf(`failed to get value of the image label: found no Docker image metadata for ImageStreamTag pipeline:v4.10 in ns`),
 	}, {
 		name:        "malformed json",
 		istFile:     "testdata/isTags/pipeline_malformed_istag.yaml",
 		isTagName:   "pipeline:v4.10",
-		expectedErr: fmt.Errorf(`malformed Docker image metadata: json: cannot unmarshal string into Go value of type docker10.DockerImage`),
+		expectedErr: fmt.Errorf(`failed to get value of the image label: malformed Docker image metadata for ImageStreamTag pipeline:v4.10 in ns: json: cannot unmarshal string into Go value of type docker10.DockerImage`),
 	}, {
 		name:      "no labels",
 		istFile:   "testdata/isTags/pipeline_no_label_istag.yaml",

@@ -439,7 +439,7 @@ func constructMultiArchBuilds(build buildapi.Build, nodeArchitectures []string) 
 	for _, arch := range nodeArchitectures {
 		b := build
 
-		if arch != string(api.AMD64Arch) {
+		if arch != string(api.ReleaseArchitectureAMD64) {
 			b.Name = fmt.Sprintf("%s-%s", b.Name, arch)
 		}
 

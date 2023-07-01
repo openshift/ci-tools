@@ -36,7 +36,7 @@ type Prowgen struct {
 	// Rehearsals declares any disabled rehearsals for jobs
 	Rehearsals Rehearsals `json:"rehearsals,omitempty"`
 	// Set which architecture should the images be promoted from
-	AdditionalArchitectures []cioperatorapi.Architecture `json:"additional_architectures"`
+	AdditionalArchitectures []cioperatorapi.ReleaseArchitecture `json:"additional_architectures"`
 	// If true build images targeting multiple architectures
 	MultiArch bool `json:"multi_arch"`
 }

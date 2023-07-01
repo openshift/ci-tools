@@ -285,8 +285,8 @@ func TestGeneratePostSubmitForPromotion(t *testing.T) {
 				},
 				Config: config.Prowgen{
 					MultiArch: true,
-					AdditionalArchitectures: []ciop.Architecture{
-						api.ARM64Arch,
+					AdditionalArchitectures: []ciop.ReleaseArchitecture{
+						api.ReleaseArchitectureARM64,
 					},
 				},
 			},
@@ -587,8 +587,8 @@ func TestGenerateJobs(t *testing.T) {
 			},
 			repoInfo: &ProwgenInfo{
 				Config: config.Prowgen{
-					AdditionalArchitectures: []ciop.Architecture{
-						api.ARM64Arch,
+					AdditionalArchitectures: []ciop.ReleaseArchitecture{
+						api.ReleaseArchitectureARM64,
 					},
 				},
 				Metadata: ciop.Metadata{

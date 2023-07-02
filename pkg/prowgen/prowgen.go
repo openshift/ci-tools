@@ -247,12 +247,12 @@ func generatePostsubmitsForPromotion(jobBaseBuilderFactory func() *prowJobBaseBu
 	for _, opt := range options {
 		opt(opts)
 	}
-	architectures := append([]api.Architecture{api.AMD64Arch}, info.Config.AdditionalArchitectures...)
+	architectures := append([]api.ReleaseArchitecture{api.ReleaseArchitectureAMD64}, info.Config.AdditionalArchitectures...)
 	postsubmits := make([]prowconfig.Postsubmit, 0, len(architectures))
 	for _, arch := range architectures {
 		jobBaseBuilder := jobBaseBuilderFactory()
 		var jobBaseGen *prowJobBaseBuilder
-		if arch != api.AMD64Arch {
+		if arch != api.ReleaseArchitectureAMD64 {
 			testName := fmt.Sprintf("images-%s", string(arch))
 			cluster := arch.GetMappedCluster()
 			if cluster == "" {

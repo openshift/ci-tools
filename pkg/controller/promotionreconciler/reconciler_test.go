@@ -64,7 +64,7 @@ func TestCommitForIST(t *testing.T) {
 			if err := yaml.Unmarshal(rawImageStreamTag, ist); err != nil {
 				t.Fatalf("failed to unmarshal imagestreamTag: %v", err)
 			}
-			commit, err := commitForIST(ist)
+			commit, err := commitForIST(ist, fakectrlruntimeclient.NewFakeClient())
 			if err != nil {
 				t.Fatalf("failed to get ref for ist: %v", err)
 			}

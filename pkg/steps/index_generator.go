@@ -2,7 +2,6 @@ package steps
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -12,10 +11,10 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	buildapi "github.com/openshift/api/build/v1"
-	"github.com/openshift/api/image/docker10"
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/api/helper"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
@@ -46,31 +45,15 @@ func databaseIndex(client ctrlruntimeclient.Client, name, namespace string) (boo
 	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, ist); err != nil {
 		return false, fmt.Errorf("could not fetch source ImageStreamTag: %w", err)
 	}
-	dockerImageMetadata := ist.Image.DockerImageMetadata
-	for _, imageManifest := range ist.Image.DockerImageManifests {
-		// At the moment, we support only amd64
-		if imageManifest.Architecture == string(api.AMD64Arch) {
-			image := &imagev1.Image{}
-			// image is a cluster level CRD and thus no namespace should be provided to get the object
-			if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: imageManifest.Digest}, image); err != nil {
-				return false, fmt.Errorf("could not fetch source image %s: %w", imageManifest.Digest, err)
-			}
-			dockerImageMetadata = image.DockerImageMetadata
-			logrus.WithField("namespace", ist.Namespace).WithField("name", ist.Name).Debug("Found the amd64 image in manifests")
-			break
-		}
+	// At the moment, we support only amd64
+	labels, err := helper.LabelsOnISTagImage(ctx, client, ist, api.ReleaseArchitectureAMD64)
+	if err != nil {
+		return false, fmt.Errorf("failed to get value of the image label: %w", err)
 	}
-	metadata := &docker10.DockerImage{}
-	if len(dockerImageMetadata.Raw) == 0 {
-		return false, fmt.Errorf("could not fetch Docker image metadata")
-	}
-	if err := json.Unmarshal(dockerImageMetadata.Raw, metadata); err != nil {
-		return false, fmt.Errorf("malformed Docker image metadata: %w", err)
-	}
-	if metadata.Config == nil || metadata.Config.Labels == nil {
+	if labels == nil {
 		return false, nil
 	}
-	_, ok := metadata.Config.Labels["operators.operatorframework.io.index.database.v1"]
+	_, ok := labels["operators.operatorframework.io.index.database.v1"]
 	return ok, nil
 }
 

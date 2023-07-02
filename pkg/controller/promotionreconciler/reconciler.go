@@ -2,7 +2,6 @@ package promotionreconciler
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -19,10 +18,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	"github.com/openshift/api/image/docker10"
 	imagev1 "github.com/openshift/api/image/v1"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/api/helper"
 	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler/prowjobreconciler"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 	"github.com/openshift/ci-tools/pkg/load/agents"
@@ -169,7 +168,7 @@ func (r *reconciler) reconcile(ctx context.Context, req controllerruntime.Reques
 	}
 	log = log.WithField("org", ciOPConfig.Metadata.Org).WithField("repo", ciOPConfig.Metadata.Repo).WithField("branch", ciOPConfig.Metadata.Branch)
 
-	istCommit, err := commitForIST(ist)
+	istCommit, err := commitForIST(ist, r.client)
 	if err != nil {
 		return controllerutil.TerminalError(fmt.Errorf("failed to get commit for imageStreamTag: %w", err))
 	}
@@ -214,13 +213,15 @@ func (r *reconciler) promotionConfig(ist *imagev1.ImageStreamTag) (*cioperatorap
 	}
 }
 
-func commitForIST(ist *imagev1.ImageStreamTag) (string, error) {
-	metadata := &docker10.DockerImage{}
-	if err := json.Unmarshal(ist.Image.DockerImageMetadata.Raw, metadata); err != nil {
-		return "", fmt.Errorf("failed to unmarshal imagestream.image.dockerImageMetadata: %w", err)
+func commitForIST(ist *imagev1.ImageStreamTag, client ctrlruntimeclient.Client) (string, error) {
+	labels, err := helper.LabelsOnISTagImage(context.TODO(), client, ist, cioperatorapi.ReleaseArchitectureAMD64)
+	if err != nil {
+		return "", controllerutil.TerminalError(fmt.Errorf("failed to get value of the image label: %w", err))
 	}
-
-	commit := metadata.Config.Labels["io.openshift.build.commit.id"]
+	if labels == nil {
+		return "", controllerutil.TerminalError(errors.New("ImageStreamTag has no labels, can't find out source commit"))
+	}
+	commit := labels["io.openshift.build.commit.id"]
 	if commit == "" {
 		return "", controllerutil.TerminalError(errors.New("ImageStreamTag has no `io.openshift.build.commit.id` label, can't find out source commit"))
 	}

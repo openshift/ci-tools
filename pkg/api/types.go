@@ -2124,22 +2124,15 @@ func (m *MetadataWithTest) JobName(prefix string) string {
 	return m.Metadata.JobName(prefix, m.Test)
 }
 
-type Architecture string
-
-const (
-	AMD64Arch Architecture = "amd64"
-	ARM64Arch Architecture = "arm64"
-)
-
-var archToCluster = map[Architecture]Cluster{
-	ARM64Arch: ClusterARM01,
+var archToCluster = map[ReleaseArchitecture]Cluster{
+	ReleaseArchitectureARM64: ClusterARM01,
 }
 
-func (a Architecture) IsValid() bool {
+func (a ReleaseArchitecture) IsValid() bool {
 	return a.GetMappedCluster() != ""
 }
 
-func (a Architecture) GetMappedCluster() Cluster {
+func (a ReleaseArchitecture) GetMappedCluster() Cluster {
 	c, found := archToCluster[a]
 	if !found {
 		return ""

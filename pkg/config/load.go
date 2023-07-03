@@ -226,10 +226,6 @@ func OperateOnCIOperatorConfigSubdir(configDir, subDir string, callback ConfigIt
 		return filepath.WalkDir(filepath.Join(configDir, subDir), func(path string, info fs.DirEntry, err error) error {
 			if err != nil {
 				logrus.WithField("source-file", path).WithError(err).Error("Failed to walk CI Operator configuration dir")
-				// file may not exist due to race condition between the reload and k8s removing deleted/moved symlinks in a confimap directory; ignore it
-				if os.IsNotExist(err) {
-					return nil
-				}
 				return err
 			}
 			if isMountSpecialFile(info.Name()) {

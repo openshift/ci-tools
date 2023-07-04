@@ -619,6 +619,9 @@ const (
 // command in one of the previously built images and then
 // gathers artifacts from that step.
 type TestStepConfiguration struct {
+	// Api allows access to the test via REST interface,
+	// currently only applicable for periodic jobs.
+	Api *bool `json:"api,omitempty"`
 	// As is the name of the test.
 	As string `json:"as"`
 	// Commands are the shell commands to run in
@@ -639,10 +642,6 @@ type TestStepConfiguration struct {
 	// You cannot set the Secret and Secrets attributes
 	// at the same time.
 	Secrets []*Secret `json:"secrets,omitempty"`
-
-	// Api allows access to the test via REST interface,
-	// currently only applicable for periodic jobs.
-	RemoteApi *bool `json:"remote_api,omitempty"`
 
 	// Cron is how often the test is expected to run outside
 	// of pull request workflows. Setting this field will

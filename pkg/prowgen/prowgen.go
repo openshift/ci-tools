@@ -52,8 +52,8 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 
 		if element.IsPeriodic() {
 			api := false
-			if element.RemoteApi != nil {
-				api = *element.RemoteApi
+			if element.Api != nil {
+				api = *element.Api
 			}
 			cron := ""
 			if element.Cron != nil {
@@ -68,7 +68,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 				minimumInterval = *element.MinimumInterval
 			}
 			periodic := GeneratePeriodicForTest(g, info, FromConfigSpec(configSpec), func(options *GeneratePeriodicOptions) {
-				options.RemoteApi = api
+				options.Api = api
 				options.Cron = cron
 				options.Interval = interval
 				options.MinimumInterval = minimumInterval
@@ -297,7 +297,7 @@ type GeneratePeriodicOptions struct {
 	ReleaseController bool
 	PathAlias         *string
 	DisableRehearsal  bool
-	RemoteApi         bool
+	Api               bool
 }
 
 type GeneratePeriodicOption func(options *GeneratePeriodicOptions)
@@ -323,7 +323,7 @@ func GeneratePeriodicForTest(jobBaseBuilder *prowJobBaseBuilder, info *ProwgenIn
 	}
 
 	var prowJobDefault *prowv1.ProwJobDefault
-	if opts.RemoteApi {
+	if opts.Api {
 		prowJobDefault = &prowv1.ProwJobDefault{
 			TenantID: "gangway-api",
 		}

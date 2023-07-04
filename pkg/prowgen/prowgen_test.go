@@ -132,15 +132,6 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 			},
 		},
 		{
-			description: "periodic for standard test with api access enabled",
-			test:        "testname",
-			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-			generateOption: func(options *GeneratePeriodicOptions) {
-				options.Cron = "@yearly"
-				options.Api = true
-			},
-		},
-		{
 			description: "periodic for a test in a variant config",
 			test:        "testname",
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch", Variant: "also"}},

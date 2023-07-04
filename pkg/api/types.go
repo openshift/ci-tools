@@ -619,9 +619,6 @@ const (
 // command in one of the previously built images and then
 // gathers artifacts from that step.
 type TestStepConfiguration struct {
-	// Api allows access to the test via REST interface,
-	// currently only applicable for periodic jobs.
-	Api *bool `json:"api,omitempty"`
 	// As is the name of the test.
 	As string `json:"as"`
 	// Commands are the shell commands to run in

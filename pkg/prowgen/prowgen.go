@@ -51,10 +51,6 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		disableRehearsal := rehearsals.DisableAll || disabledRehearsals.Has(element.As)
 
 		if element.IsPeriodic() {
-			api := false
-			if element.RemoteApi != nil {
-				api = *element.RemoteApi
-			}
 			cron := ""
 			if element.Cron != nil {
 				cron = *element.Cron
@@ -68,7 +64,6 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 				minimumInterval = *element.MinimumInterval
 			}
 			periodic := GeneratePeriodicForTest(g, info, FromConfigSpec(configSpec), func(options *GeneratePeriodicOptions) {
-				options.RemoteApi = api
 				options.Cron = cron
 				options.Interval = interval
 				options.MinimumInterval = minimumInterval
@@ -297,7 +292,6 @@ type GeneratePeriodicOptions struct {
 	ReleaseController bool
 	PathAlias         *string
 	DisableRehearsal  bool
-	RemoteApi         bool
 }
 
 type GeneratePeriodicOption func(options *GeneratePeriodicOptions)
@@ -322,13 +316,6 @@ func GeneratePeriodicForTest(jobBaseBuilder *prowJobBaseBuilder, info *ProwgenIn
 		cron = hashDailyCron(base.Name)
 	}
 
-	var prowJobDefault *prowv1.ProwJobDefault
-	if opts.RemoteApi {
-		prowJobDefault = &prowv1.ProwJobDefault{
-			TenantID: "gangway-api",
-		}
-	}
-
 	// periodics are not associated with a repo per se, but we can add in an
 	// extra ref so that periodics which want to access the repo tha they are
 	// defined for can have that information
@@ -345,9 +332,6 @@ func GeneratePeriodicForTest(jobBaseBuilder *prowJobBaseBuilder, info *ProwgenIn
 		opts.Interval = ""
 		cron = "@yearly"
 		base.Labels[jc.ReleaseControllerLabel] = jc.ReleaseControllerValue
-	}
-	if prowJobDefault != nil {
-		base.ProwJobDefault = prowJobDefault
 	}
 	return &prowconfig.Periodic{
 		JobBase:         base,

@@ -640,10 +640,6 @@ type TestStepConfiguration struct {
 	// at the same time.
 	Secrets []*Secret `json:"secrets,omitempty"`
 
-	// Api allows access to the test via REST interface,
-	// currently only applicable for periodic jobs.
-	RemoteApi *bool `json:"remote_api,omitempty"`
-
 	// Cron is how often the test is expected to run outside
 	// of pull request workflows. Setting this field will
 	// create a periodic job instead of a presubmit

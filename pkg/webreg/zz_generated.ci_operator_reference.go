@@ -404,9 +404,6 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      test_step:\n" +
 	"        # AlwaysRun can be set to false to disable running the job on every PR\n" +
 	"        always_run: false\n" +
-	"        # Api allows access to the test via REST interface,\n" +
-	"        # currently only applicable for periodic jobs.\n" +
-	"        api: false\n" +
 	"        # As is the name of the test.\n" +
 	"        as: ' '\n" +
 	"        # Cluster specifies the name of the cluster where the test runs.\n" +
@@ -1184,9 +1181,6 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"tests:\n" +
 	"    - # AlwaysRun can be set to false to disable running the job on every PR\n" +
 	"      always_run: false\n" +
-	"      # Api allows access to the test via REST interface,\n" +
-	"      # currently only applicable for periodic jobs.\n" +
-	"      api: false\n" +
 	"      # As is the name of the test.\n" +
 	"      as: ' '\n" +
 	"      # Cluster specifies the name of the cluster where the test runs.\n" +

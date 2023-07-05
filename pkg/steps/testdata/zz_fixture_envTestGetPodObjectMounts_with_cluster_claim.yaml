@@ -5,7 +5,7 @@
 - name: JOB_NAME
   value: podStep.jobSpec.Job
 - name: JOB_SPEC
-  value: '{"type":"periodic","job":"podStep.jobSpec.Job","buildid":"podStep.jobSpec.BuildId","prowjobid":"podStep.jobSpec.ProwJobID","refs":{"org":"","repo":""},"decoration_config":{"timeout":"1m0s","grace_period":"1s","utility_images":{"entrypoint":"entrypoint","sidecar":"sidecar"}}}'
+  value: '{"type":"periodic","job":"podStep.jobSpec.Job","buildid":"podStep.jobSpec.BuildId","prowjobid":"podStep.jobSpec.ProwJobID","decoration_config":{"timeout":"1m0s","grace_period":"1s","utility_images":{"entrypoint":"entrypoint","sidecar":"sidecar"}}}'
 - name: JOB_TYPE
   value: periodic
 - name: OPENSHIFT_CI

@@ -78,11 +78,3 @@ func PopCount[T comparable](xs ...T) (ret uint) {
 	}
 	return
 }
-
-// Insert adds an element to a given position in the slice
-func Insert[T any](s []T, i int, x T) []T {
-	s = append(s, Zero[T]())
-	copy(s[i+1:], s[i:])
-	s[i] = x
-	return s
-}

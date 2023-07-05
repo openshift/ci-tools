@@ -200,14 +200,12 @@ func GenerateBasePod(
 	clone bool,
 ) (*coreapi.Pod, error) {
 	var env []coreapi.EnvVar
-	if jobSpec.JobSpec.Refs != nil {
-		envMap, err := downwardapi.EnvForSpec(jobSpec.JobSpec)
-		if err != nil {
-			return nil, err
-		}
-		envMap[openshiftCIEnv] = "true"
-		env = decorate.KubeEnv(envMap)
+	envMap, err := downwardapi.EnvForSpec(jobSpec.JobSpec)
+	if err != nil {
+		return nil, err
 	}
+	envMap[openshiftCIEnv] = "true"
+	env = decorate.KubeEnv(envMap)
 	// FIXME: Fix this workaround upstream and the delete this code as soon as possible
 	env = append(env, []coreapi.EnvVar{
 		{Name: "GIT_CONFIG_COUNT", Value: "1"},

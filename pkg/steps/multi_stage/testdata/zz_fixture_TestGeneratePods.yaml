@@ -32,7 +32,7 @@
       - name: JOB_SPEC
         value: '{"type":"postsubmit","job":"job","buildid":"build id","prowjobid":"prow
           job id","refs":{"org":"org","repo":"repo","base_ref":"base ref","base_sha":"base
-          sha"},"decoration_config":{"timeout":"1h0m0s","grace_period":"20s","utility_images":{"entrypoint":"entrypoint","sidecar":"sidecar"}}}'
+          sha"},"decoration_config":{"timeout":"1h0m0s","grace_period":"20s","utility_images":{"entrypoint":"entrypoint","sidecar":"sidecar"},"gcs_configuration":{}}}'
       - name: JOB_TYPE
         value: postsubmit
       - name: OPENSHIFT_CI
@@ -201,7 +201,7 @@
       - name: JOB_SPEC
         value: '{"type":"postsubmit","job":"job","buildid":"build id","prowjobid":"prow
           job id","refs":{"org":"org","repo":"repo","base_ref":"base ref","base_sha":"base
-          sha"},"decoration_config":{"timeout":"2h0m0s","grace_period":"15s","utility_images":{"entrypoint":"entrypoint","sidecar":"sidecar"}}}'
+          sha"},"decoration_config":{"timeout":"2h0m0s","grace_period":"15s","utility_images":{"entrypoint":"entrypoint","sidecar":"sidecar"},"gcs_configuration":{}}}'
       - name: JOB_TYPE
         value: postsubmit
       - name: OPENSHIFT_CI
@@ -364,7 +364,7 @@
       - name: JOB_SPEC
         value: '{"type":"postsubmit","job":"job","buildid":"build id","prowjobid":"prow
           job id","refs":{"org":"org","repo":"repo","base_ref":"base ref","base_sha":"base
-          sha"},"decoration_config":{"timeout":"2h0m0s","grace_period":"15s","utility_images":{"entrypoint":"entrypoint","sidecar":"sidecar"}}}'
+          sha"},"decoration_config":{"timeout":"2h0m0s","grace_period":"15s","utility_images":{"entrypoint":"entrypoint","sidecar":"sidecar"},"gcs_configuration":{}}}'
       - name: JOB_TYPE
         value: postsubmit
       - name: OPENSHIFT_CI
@@ -531,7 +531,7 @@
       - name: JOB_SPEC
         value: '{"type":"postsubmit","job":"job","buildid":"build id","prowjobid":"prow
           job id","refs":{"org":"org","repo":"repo","base_ref":"base ref","base_sha":"base
-          sha"},"decoration_config":{"timeout":"2h0m0s","grace_period":"15s","utility_images":{"entrypoint":"entrypoint","sidecar":"sidecar"}}}'
+          sha"},"decoration_config":{"timeout":"2h0m0s","grace_period":"15s","utility_images":{"entrypoint":"entrypoint","sidecar":"sidecar"},"gcs_configuration":{}}}'
       - name: JOB_TYPE
         value: postsubmit
       - name: OPENSHIFT_CI

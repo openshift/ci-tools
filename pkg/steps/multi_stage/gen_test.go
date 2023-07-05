@@ -67,8 +67,9 @@ func TestGeneratePods(t *testing.T) {
 			},
 			Type: "postsubmit",
 			DecorationConfig: &prowapi.DecorationConfig{
-				Timeout:     &prowapi.Duration{Duration: time.Minute},
-				GracePeriod: &prowapi.Duration{Duration: time.Second},
+				GCSConfiguration: &prowapi.GCSConfiguration{},
+				Timeout:          &prowapi.Duration{Duration: time.Minute},
+				GracePeriod:      &prowapi.Duration{Duration: time.Second},
 				UtilityImages: &prowapi.UtilityImages{
 					Sidecar:    "sidecar",
 					Entrypoint: "entrypoint",
@@ -145,8 +146,9 @@ func TestGenerateObservers(t *testing.T) {
 			},
 			Type: "postsubmit",
 			DecorationConfig: &prowapi.DecorationConfig{
-				Timeout:     &prowapi.Duration{Duration: time.Minute},
-				GracePeriod: &prowapi.Duration{Duration: time.Second},
+				GCSConfiguration: &prowapi.GCSConfiguration{},
+				Timeout:          &prowapi.Duration{Duration: time.Minute},
+				GracePeriod:      &prowapi.Duration{Duration: time.Second},
 				UtilityImages: &prowapi.UtilityImages{
 					Sidecar:    "sidecar",
 					Entrypoint: "entrypoint",

@@ -55,11 +55,17 @@ func TestFileTestResolver(t *testing.T) {
 				}
 
 				actual, actualErr = testResolver.resolve("periodic-ci-openshift-api-master-build")
-				expected = api.MetadataWithTest{}
+				expected = api.MetadataWithTest{Metadata: api.Metadata{
+					Org:    "openshift",
+					Repo:   "api",
+					Branch: "master",
+				},
+					Test: "build",
+				}
 				if diff := cmp.Diff(expected, actual); diff != "" {
 					return fmt.Errorf("actual differs from expected: %s", diff)
 				}
-				if diff := cmp.Diff(fmt.Errorf("failed to resolve job periodic-ci-openshift-api-master-build"), actualErr, testhelper.EquateErrorMessage); diff != "" {
+				if diff := cmp.Diff(nil, actualErr, testhelper.EquateErrorMessage); diff != "" {
 					return fmt.Errorf("actualErr differs from expected: %s", diff)
 				}
 

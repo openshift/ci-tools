@@ -15,7 +15,7 @@ type fileTestResolver struct {
 func (r *fileTestResolver) resolve(job string) (api.MetadataWithTest, error) {
 	byOrgRepo := r.configAgent.GetAll()
 	if v, ok := byOrgRepo["openshift"]; ok {
-		if configurations, configOK := v["release"]; configOK {
+		for _, configurations := range v {
 			for _, configuration := range configurations {
 				for _, element := range configuration.Tests {
 					if element.IsPeriodic() {

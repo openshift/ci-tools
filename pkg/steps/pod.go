@@ -199,21 +199,11 @@ func GenerateBasePod(
 	secretsToCensor []coreapi.VolumeMount,
 	clone bool,
 ) (*coreapi.Pod, error) {
-	var env []coreapi.EnvVar
-	if jobSpec.JobSpec.Refs != nil {
-		envMap, err := downwardapi.EnvForSpec(jobSpec.JobSpec)
-		if err != nil {
-			return nil, err
-		}
-		envMap[openshiftCIEnv] = "true"
-		env = decorate.KubeEnv(envMap)
+	envMap, err := downwardapi.EnvForSpec(jobSpec.JobSpec)
+	envMap[openshiftCIEnv] = "true"
+	if err != nil {
+		return nil, err
 	}
-	// FIXME: Fix this workaround upstream and the delete this code as soon as possible
-	env = append(env, []coreapi.EnvVar{
-		{Name: "GIT_CONFIG_COUNT", Value: "1"},
-		{Name: "GIT_CONFIG_KEY_0", Value: "safe.directory"},
-		{Name: "GIT_CONFIG_VALUE_0", Value: "*"},
-	}...)
 	pod := &coreapi.Pod{
 		ObjectMeta: meta.ObjectMeta{
 			Namespace: jobSpec.Namespace(),
@@ -230,7 +220,7 @@ func GenerateBasePod(
 			Containers: []coreapi.Container{
 				{
 					Image:                    image,
-					Env:                      env,
+					Env:                      decorate.KubeEnv(envMap),
 					Name:                     containerName,
 					Command:                  command,
 					Resources:                containerResources,
@@ -239,6 +229,14 @@ func GenerateBasePod(
 			},
 		},
 	}
+
+	// FIXME: Fix this workaround upstream and the delete this code as soon as possible
+	pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env, []coreapi.EnvVar{
+		{Name: "GIT_CONFIG_COUNT", Value: "1"},
+		{Name: "GIT_CONFIG_KEY_0", Value: "safe.directory"},
+		{Name: "GIT_CONFIG_VALUE_0", Value: "*"},
+	}...)
+
 	artifactDir = fmt.Sprintf("artifacts/%s", artifactDir)
 	if err := addPodUtils(pod, artifactDir, decorationConfig, rawJobSpec, secretsToCensor, clone, jobSpec); err != nil {
 		return nil, fmt.Errorf("failed to decorate pod: %w", err)

@@ -60,9 +60,8 @@ func preparePodStep(namespace string) (*podStep, stepExpectation) {
 				BaseSHA: "base-sha",
 			},
 			DecorationConfig: &prowapi.DecorationConfig{
-				GCSConfiguration: &prowapi.GCSConfiguration{},
-				Timeout:          &prowapi.Duration{Duration: time.Minute},
-				GracePeriod:      &prowapi.Duration{Duration: time.Second},
+				Timeout:     &prowapi.Duration{Duration: time.Minute},
+				GracePeriod: &prowapi.Duration{Duration: time.Second},
 				UtilityImages: &prowapi.UtilityImages{
 					Sidecar:    "sidecar",
 					Entrypoint: "entrypoint",
@@ -259,7 +258,6 @@ func expectedPodStepTemplate() *podStep {
 				BuildID:   "podStep.jobSpec.BuildId",
 				ProwJobID: "podStep.jobSpec.ProwJobID",
 				Type:      "periodic",
-				Refs:      &prowapi.Refs{},
 				DecorationConfig: &prowapi.DecorationConfig{
 					Timeout:     &prowapi.Duration{Duration: time.Minute},
 					GracePeriod: &prowapi.Duration{Duration: time.Second},

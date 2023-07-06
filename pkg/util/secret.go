@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/sirupsen/logrus"
+
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -26,6 +28,7 @@ func SecretFromDir(path string) (*coreapi.Secret, error) {
 	}
 	for _, f := range files {
 		if f.IsDir() {
+			logrus.Warningf("skipped directory %q when creating secret from directory %q", f.Name(), path)
 			continue
 		}
 		path := filepath.Join(path, f.Name())

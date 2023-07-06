@@ -54,6 +54,22 @@ func (mr *MockJobRunInfoMockRecorder) AddGCSJunitPaths(arg0 ...interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddGCSJunitPaths", reflect.TypeOf((*MockJobRunInfo)(nil).AddGCSJunitPaths), arg0...)
 }
 
+// AddGCSProwJobFileNames mocks base method.
+func (m *MockJobRunInfo) AddGCSProwJobFileNames(arg0 ...string) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{}
+	for _, a := range arg0 {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "AddGCSProwJobFileNames", varargs...)
+}
+
+// AddGCSProwJobFileNames indicates an expected call of AddGCSProwJobFileNames.
+func (mr *MockJobRunInfoMockRecorder) AddGCSProwJobFileNames(arg0 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddGCSProwJobFileNames", reflect.TypeOf((*MockJobRunInfo)(nil).AddGCSProwJobFileNames), arg0...)
+}
+
 // ClearAllContent mocks base method.
 func (m *MockJobRunInfo) ClearAllContent() {
 	m.ctrl.T.Helper()
@@ -64,21 +80,6 @@ func (m *MockJobRunInfo) ClearAllContent() {
 func (mr *MockJobRunInfoMockRecorder) ClearAllContent() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClearAllContent", reflect.TypeOf((*MockJobRunInfo)(nil).ClearAllContent))
-}
-
-// GetAllContent mocks base method.
-func (m *MockJobRunInfo) GetAllContent(arg0 context.Context) (map[string][]byte, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAllContent", arg0)
-	ret0, _ := ret[0].(map[string][]byte)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetAllContent indicates an expected call of GetAllContent.
-func (mr *MockJobRunInfoMockRecorder) GetAllContent(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllContent", reflect.TypeOf((*MockJobRunInfo)(nil).GetAllContent), arg0)
 }
 
 // GetCombinedJUnitTestSuites mocks base method.
@@ -179,6 +180,20 @@ func (m *MockJobRunInfo) GetJobName() string {
 func (mr *MockJobRunInfoMockRecorder) GetJobName() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetJobName", reflect.TypeOf((*MockJobRunInfo)(nil).GetJobName))
+}
+
+// GetJobRunFromGCS mocks base method.
+func (m *MockJobRunInfo) GetJobRunFromGCS(arg0 context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetJobRunFromGCS", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetJobRunFromGCS indicates an expected call of GetJobRunFromGCS.
+func (mr *MockJobRunInfoMockRecorder) GetJobRunFromGCS(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetJobRunFromGCS", reflect.TypeOf((*MockJobRunInfo)(nil).GetJobRunFromGCS), arg0)
 }
 
 // GetJobRunID mocks base method.

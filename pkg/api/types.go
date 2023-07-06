@@ -1192,6 +1192,7 @@ const (
 	ClusterProfilePacketSNO             ClusterProfile = "packet-sno"
 	ClusterProfileVSphere               ClusterProfile = "vsphere"
 	ClusterProfileVSphere8              ClusterProfile = "vsphere-8"
+	ClusterProfileVSphere8Vpn           ClusterProfile = "vsphere-8-vpn"
 	ClusterProfileVSphereDiscon         ClusterProfile = "vsphere-discon"
 	ClusterProfileVSphereDis            ClusterProfile = "vsphere-dis"
 	ClusterProfileVSphereClusterbot     ClusterProfile = "vsphere-clusterbot"
@@ -1297,6 +1298,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfilePacketSNO,
 		ClusterProfileVSphere,
 		ClusterProfileVSphere8,
+		ClusterProfileVSphere8Vpn,
 		ClusterProfileVSphereClusterbot,
 		ClusterProfileVSphereDiscon,
 		ClusterProfileVSphereDis,
@@ -1431,6 +1433,7 @@ func (p ClusterProfile) ClusterType() string {
 	case
 		ClusterProfileVSphere,
 		ClusterProfileVSphere8,
+		ClusterProfileVSphere8Vpn,
 		ClusterProfileVSphereDiscon,
 		ClusterProfileVSphereDis,
 		ClusterProfileVSphereClusterbot,
@@ -1611,6 +1614,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "vsphere-ibm-7-quota-slice"
 	case ClusterProfileVSphere8:
 		return "vsphere-8-quota-slice"
+	case ClusterProfileVSphere8Vpn:
+		return "vsphere-8-vpn-quota-slice"
 	case ClusterProfileVSphereDiscon:
 		return "vsphere-discon-quota-slice"
 	case ClusterProfileVSphereDis:

@@ -76,7 +76,7 @@ func WithRegistryFlat(v bool) RegistryAgentOption {
 
 // NewRegistryAgent returns a RegistryAgent interface that automatically reloads when
 // the registry is changed on disk.
-func NewRegistryAgent(registryPath string, opts ...RegistryAgentOption) (RegistryAgent, error) {
+func NewRegistryAgent(registryPath string, errCh chan error, opts ...RegistryAgentOption) (RegistryAgent, error) {
 	opt := &RegistryAgentOptions{}
 	for _, o := range opts {
 		o(opt)

@@ -449,7 +449,8 @@ func main() {
 	}
 
 	if opts.enabledControllersSet.Has(testimagesdistributor.ControllerName) {
-		registryConfigAgent, err := agents.NewRegistryAgent(opts.stepConfigPath, registryAgentOption)
+		registryErrCh := make(chan error)
+		registryConfigAgent, err := agents.NewRegistryAgent(opts.stepConfigPath, registryErrCh, registryAgentOption)
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to construct registryAgent")
 		}

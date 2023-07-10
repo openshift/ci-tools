@@ -337,6 +337,7 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct ci-operator config agent")
 	}
+	go func() { logrus.Fatal(<-configErrCh) }()
 	configAgent, err := opts.prowconfig.ConfigAgent()
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to start config agent")
@@ -454,6 +455,7 @@ func main() {
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to construct registryAgent")
 		}
+		go func() { logrus.Fatal(<-registryErrCh) }()
 
 		registriesExceptAppCI := sets.NewString()
 		for cluster := range allClustersExceptRegistryCluster {

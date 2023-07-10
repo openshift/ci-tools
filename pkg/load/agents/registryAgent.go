@@ -106,7 +106,7 @@ func NewRegistryAgent(registryPath string, errCh chan error, opts ...RegistryAge
 		opt.UniversalSymlinkWatcher.RegistryEventFn = a.loadRegistry
 	}
 
-	return a, startWatchers(registryPath, a.loadRegistry, a.errorMetrics, opt.UniversalSymlinkWatcher)
+	return a, startWatchers(registryPath, errCh, a.loadRegistry, a.errorMetrics, opt.UniversalSymlinkWatcher)
 }
 
 // ResolveConfig uses the registryAgent's resolver to resolve a provided ReleaseBuildConfiguration

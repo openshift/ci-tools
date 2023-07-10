@@ -136,7 +136,7 @@ func NewConfigAgent(configPath string, errCh chan error, opts ...ConfigAgentOpti
 		opt.UniversalSymlinkWatcher.ConfigEventFn = a.reloadConfig
 	}
 
-	return a, startWatchers(configPath, a.reloadConfig, a.errorMetrics, opt.UniversalSymlinkWatcher)
+	return a, startWatchers(configPath, errCh, a.reloadConfig, a.errorMetrics, opt.UniversalSymlinkWatcher)
 }
 
 // GetMatchingConfig loads a configuration that matches the metadata,

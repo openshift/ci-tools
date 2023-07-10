@@ -14,7 +14,7 @@ import (
 	"k8s.io/test-infra/prow/interrupts"
 )
 
-func startWatchers(path string, callback func() error, metric *prometheus.CounterVec, universalSymlinkWatcher *UniversalSymlinkWatcher) error {
+func startWatchers(path string, errCh chan<- error, callback func() error, metric *prometheus.CounterVec, universalSymlinkWatcher *UniversalSymlinkWatcher) error {
 	var watchers []func(context.Context)
 
 	if universalSymlinkWatcher != nil {
@@ -22,6 +22,7 @@ func startWatchers(path string, callback func() error, metric *prometheus.Counte
 			errFunc := func(err error, msg string) {
 				recordErrorForMetric(metric, msg)
 				logrus.WithError(err).Error(msg)
+				errCh <- err
 			}
 
 			for {

@@ -332,7 +332,8 @@ func main() {
 		}
 		interrupts.Run(watcher)
 	}
-	ciOPConfigAgent, err := agents.NewConfigAgent(opts.ciOperatorconfigPath, configAgentOption)
+	configErrCh := make(chan error)
+	ciOPConfigAgent, err := agents.NewConfigAgent(opts.ciOperatorconfigPath, configErrCh, configAgentOption)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct ci-operator config agent")
 	}

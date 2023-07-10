@@ -177,7 +177,8 @@ func main() {
 		interrupts.Run(watcher)
 	}
 
-	configAgent, err := agents.NewConfigAgent(o.configPath, agents.WithConfigMetrics(configresolverMetrics.ErrorRate), configAgentOption)
+	configErrCh := make(chan error)
+	configAgent, err := agents.NewConfigAgent(o.configPath, configErrCh, agents.WithConfigMetrics(configresolverMetrics.ErrorRate), configAgentOption)
 	if err != nil {
 		logrus.Fatalf("Failed to get config agent: %v", err)
 	}

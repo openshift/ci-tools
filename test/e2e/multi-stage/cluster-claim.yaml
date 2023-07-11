@@ -41,7 +41,7 @@ tests:
         - as: claim-step
           commands: |
             set -x
-            cmp "${KUBECONFIG}" /secrets/e2e-claim-hive-admin-kubeconfig/kubeconfig
+            [[ "$(< ${KUBECONFIG})" == "$(< /secrets/e2e-claim-hive-admin-kubeconfig/kubeconfig)" ]]
             oc config view
           from: cli
           resources:
@@ -62,7 +62,7 @@ tests:
         - as: claim-step
           commands: |
             set -x
-            cmp "${KUBECONFIG}" /secrets/e2e-claim-as-custom-hive-admin-kubeconfig/kubeconfig
+            [[ "$(< ${KUBECONFIG})" == "$(< /secrets/e2e-claim-as-custom-hive-admin-kubeconfig/kubeconfig)" ]]
             oc config view
           from: stable-custom:cli
           resources:
@@ -82,7 +82,7 @@ tests:
         - as: claim-step
           commands: |
             set -x
-            cmp "${KUBECONFIG}" /secrets/e2e-claim-depend-on-release-image-hive-admin-kubeconfig/kubeconfig
+            [[ "$(< ${KUBECONFIG})" == "$(< /secrets/e2e-claim-depend-on-release-image-hive-admin-kubeconfig/kubeconfig)" ]]
             echo "$(RELEASE_IMAGE_LATEST)"
           from: os
           resources:

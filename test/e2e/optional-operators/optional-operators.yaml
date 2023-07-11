@@ -2,7 +2,7 @@ base_images:
   os:
     name: centos
     namespace: openshift
-    tag: '7'
+    tag: 'stream9'
   operator-index-46:
     name: redhat-operator-index
     namespace: ci
@@ -101,9 +101,9 @@ tests:
       - as: success
         commands: exit 0
         from_image:
-          namespace: origin
+          namespace: openshift
           name: centos
-          tag: '8'
+          tag: 'stream9'
         resources:
           requests:
             cpu: 100m

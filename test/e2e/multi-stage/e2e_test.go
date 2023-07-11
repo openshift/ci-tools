@@ -180,7 +180,7 @@ func TestMultiStage(t *testing.T) {
 			env:     []string{defaultJobSpec},
 			success: true,
 			output: []string{
-				`Snapshot integration stream into release 4.11.`, `-latest to tag release:latest`,
+				`Snapshot integration stream into release 4.13.`, `-latest to tag release:latest`,
 				`verify-releases-latest-cli succeeded`,
 			},
 		},
@@ -190,7 +190,7 @@ func TestMultiStage(t *testing.T) {
 			env:     []string{defaultJobSpec},
 			success: true,
 			output: []string{
-				`Snapshot integration stream into release 4.11.`, `-latest to tag release:latest`,
+				`Snapshot integration stream into release 4.13.`, `-latest to tag release:latest`,
 				`verify-releases-latest-cli succeeded`,
 			},
 		},

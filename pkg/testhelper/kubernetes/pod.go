@@ -22,11 +22,81 @@ import (
 	"github.com/openshift/ci-tools/pkg/util"
 )
 
+// PodRunnerEnv is a common environment that could be shared among multiple PodPayloadRunners,
+// useful to make them communicate
+type PodRunnerEnv struct {
+	// TODO: so far its only purpose is about waiting for an observer to begin the execution: modify/extend when
+	// new needs arise
+	ObserverDone chan struct{}
+}
+
+func NewPodRunnerEnv() *PodRunnerEnv {
+	return &PodRunnerEnv{
+		ObserverDone: make(chan struct{}),
+	}
+}
+
+// PodPayload represents the actual work a pod has to perform
+type PodPayload func(pod *coreapi.Pod, env *PodRunnerEnv, dispatch func(events ...watch.Event))
+
+// PodPayloadRunner is in charge of running a payload for a given pod
+type PodPayloadRunner struct {
+	env *PodRunnerEnv
+
+	// Whether the pod is already running the payload
+	running bool
+
+	// Watchers are being used both by PodPayloadRunner and PodPayload, which can also be an async function
+	watchersL sync.Locker
+	// The payload could change the pod state during its execution and eventually inform
+	// any watchers
+	watchers []chan<- watch.Event
+
+	payload PodPayload
+}
+
+func (r *PodPayloadRunner) AddWatcher(watcher chan<- watch.Event) {
+	r.watchersL.Lock()
+	defer r.watchersL.Unlock()
+	r.watchers = append(r.watchers, watcher)
+}
+
+func (r *PodPayloadRunner) Run(pod *coreapi.Pod) {
+	// Assume payload runs once
+	if r.running {
+		return
+	}
+	r.running = true
+
+	// The payload could be an async function, it is advisable to make watchers thread safe
+	dispatch := func(events ...watch.Event) {
+		r.watchersL.Lock()
+		defer r.watchersL.Unlock()
+		for _, e := range events {
+			for _, w := range r.watchers {
+				w <- e
+			}
+		}
+	}
+
+	r.payload(pod, r.env, dispatch)
+}
+
+func NewPodPayloadRunner(payload PodPayload, env PodRunnerEnv) *PodPayloadRunner {
+	return &PodPayloadRunner{
+		env:       &env,
+		watchersL: &sync.Mutex{},
+		watchers:  make([]chan<- watch.Event, 0),
+		payload:   payload,
+	}
+}
+
 type FakePodExecutor struct {
 	Lock sync.RWMutex
 	loggingclient.LoggingClient
-	Failures    sets.Set[string]
-	CreatedPods []*coreapi.Pod
+	Failures          sets.Set[string]
+	CreatedPods       []*coreapi.Pod
+	PodPayloadRunners map[string]*PodPayloadRunner
 }
 
 func (f *FakePodExecutor) Create(ctx context.Context, o ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
@@ -49,7 +119,7 @@ func (f *FakePodExecutor) Get(ctx context.Context, n ctrlruntimeclient.ObjectKey
 		return err
 	}
 	if pod, ok := o.(*coreapi.Pod); ok {
-		f.process(pod)
+		f.process(pod, nil)
 	}
 	return nil
 }
@@ -64,13 +134,26 @@ func (f *FakePodExecutor) Watch(ctx context.Context, list ctrlruntimeclient.Obje
 	items := list.(*coreapi.PodList).Items
 	ch := make(chan watch.Event, len(items))
 	for _, x := range items {
-		f.process(&x)
-		ch <- watch.Event{Type: watch.Modified, Object: &x}
+		if f.process(&x, ch) {
+			ch <- watch.Event{Type: watch.Modified, Object: &x}
+		}
 	}
 	return watch.NewProxyWatcher(ch), nil
 }
 
-func (f *FakePodExecutor) process(pod *coreapi.Pod) {
+// Process the pod and returns whether an event saying the pod has just been modified
+// has to be dispatched or not
+func (f *FakePodExecutor) process(pod *coreapi.Pod, ch chan watch.Event) bool {
+	// If set, let the payload running to process the pod
+	if payloadRunner, ok := f.PodPayloadRunners[pod.Name]; ok {
+		if ch != nil {
+			payloadRunner.AddWatcher(ch)
+		}
+		payloadRunner.Run(pod)
+		// Do not dispatch any events here, let the PodPayload handle it
+		return false
+	}
+
 	fail := f.Failures.Has(pod.Name)
 	if fail {
 		pod.Status.Phase = coreapi.PodFailed
@@ -86,6 +169,7 @@ func (f *FakePodExecutor) process(pod *coreapi.Pod) {
 			Name:  container.Name,
 			State: coreapi.ContainerState{Terminated: terminated}})
 	}
+	return true
 }
 
 // The fake client version we use (v0.12.3) does not implement field selectors.

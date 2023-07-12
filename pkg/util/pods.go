@@ -205,19 +205,10 @@ func processPodEvent(
 	if pod.Spec.RestartPolicy == corev1.RestartPolicyAlways {
 		return true, nil
 	}
-	skipLogs := IsBitSet(flags, SkipLogs)
-	podLogNewFailedContainers(podClient, pod, completed, notifier, skipLogs)
-	if pod.DeletionTimestamp != nil {
-		if IsBitSet(flags, Interruptible) {
-			logrus.Debugf("Pod %s is being deleted as expected", pod.Name)
-		} else {
-			logrus.Warningf("Pod %s is being unexpectedly deleted:\n%s", pod.Name, getEventsForPod(ctx, pod, podClient))
-		}
-	}
+	podLogNewFailedContainers(podClient, pod, completed, notifier)
+	podLogDeletion(ctx, podClient, flags, *pod)
 	if podJobIsOK(pod) {
-		if !skipLogs {
-			logrus.Debugf("Pod %s succeeded after %s", pod.Name, podDuration(pod).Truncate(time.Second))
-		}
+		logrus.Debugf("Pod %s succeeded after %s", pod.Name, podDuration(pod).Truncate(time.Second))
 		return true, nil
 	}
 	if podJobIsFailed(pod) {
@@ -483,7 +474,7 @@ func containerNamesInState(pod corev1.Pod, p func(corev1.ContainerStatus) bool) 
 	return names
 }
 
-func podLogNewFailedContainers(podClient kubernetes.PodClient, pod *corev1.Pod, completed map[string]time.Time, notifier ContainerNotifier, skipLogs bool) {
+func podLogNewFailedContainers(podClient kubernetes.PodClient, pod *corev1.Pod, completed map[string]time.Time, notifier ContainerNotifier) {
 	var statuses []corev1.ContainerStatus
 	statuses = append(statuses, pod.Status.InitContainerStatuses...)
 	statuses = append(statuses, pod.Status.ContainerStatuses...)
@@ -500,9 +491,7 @@ func podLogNewFailedContainers(podClient kubernetes.PodClient, pod *corev1.Pod, 
 		notifier.Notify(pod, status.Name)
 
 		if s.ExitCode == 0 {
-			if !skipLogs {
-				logrus.Debugf("Container %s in pod %s completed successfully", status.Name, pod.Name)
-			}
+			logrus.Debugf("Container %s in pod %s completed successfully", status.Name, pod.Name)
 			continue
 		}
 
@@ -534,6 +523,28 @@ func podLogNewFailedContainers(podClient kubernetes.PodClient, pod *corev1.Pod, 
 	// if there are no running containers and we're in a terminal state, mark the pod complete
 	if (pod.Status.Phase == corev1.PodFailed || pod.Status.Phase == corev1.PodSucceeded) && len(podRunningContainers(pod)) == 0 {
 		notifier.Complete(pod.Name)
+	}
+}
+
+func podLogDeletion(
+	ctx context.Context,
+	podClient kubernetes.PodClient,
+	flags WaitForPodFlag,
+	pod corev1.Pod,
+) {
+	if pod.DeletionTimestamp == nil {
+		return
+	}
+	if IsBitSet(flags, Interruptible) {
+		logrus.Debugf("Pod %s is being deleted as expected", pod.Name)
+	} else {
+		var f func(string, ...interface{})
+		if IsBitSet(flags, SkipLogs) {
+			f = logrus.Debugf
+		} else {
+			f = logrus.Warningf
+		}
+		f("Pod %s is being unexpectedly deleted:\n%s", pod.Name, getEventsForPod(ctx, &pod, podClient))
 	}
 }
 

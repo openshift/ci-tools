@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -74,6 +75,7 @@ func TestRun(t *testing.T) {
 			name := "test"
 
 			crclient := &testhelper_kube.FakePodExecutor{
+				Lock: sync.RWMutex{},
 				LoggingClient: loggingclient.New(
 					fakectrlruntimeclient.NewClientBuilder().
 						WithIndex(&v1.Pod{}, "metadata.name", fakePodNameIndexer).
@@ -195,6 +197,7 @@ func TestJUnit(t *testing.T) {
 			sa := &v1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-namespace", Labels: map[string]string{"ci.openshift.io/multi-stage-test": "test"}}}
 
 			crclient := &testhelper_kube.FakePodExecutor{
+				Lock: sync.RWMutex{},
 				LoggingClient: loggingclient.New(
 					fakectrlruntimeclient.NewClientBuilder().
 						WithIndex(&v1.Pod{}, "metadata.name", fakePodNameIndexer).

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sync"
 	"time"
 
 	coreapi "k8s.io/api/core/v1"
@@ -22,12 +23,15 @@ import (
 )
 
 type FakePodExecutor struct {
+	Lock sync.RWMutex
 	loggingclient.LoggingClient
 	Failures    sets.Set[string]
 	CreatedPods []*coreapi.Pod
 }
 
 func (f *FakePodExecutor) Create(ctx context.Context, o ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
+	f.Lock.Lock()
+	defer f.Lock.Unlock()
 	if pod, ok := o.(*coreapi.Pod); ok {
 		if pod.Namespace == "" {
 			return errors.New("pod had no namespace set")
@@ -39,6 +43,8 @@ func (f *FakePodExecutor) Create(ctx context.Context, o ctrlruntimeclient.Object
 }
 
 func (f *FakePodExecutor) Get(ctx context.Context, n ctrlruntimeclient.ObjectKey, o ctrlruntimeclient.Object, opts ...ctrlruntimeclient.GetOption) error {
+	f.Lock.RLock()
+	defer f.Lock.RUnlock()
 	if err := f.LoggingClient.Get(ctx, n, o); err != nil {
 		return err
 	}
@@ -49,6 +55,8 @@ func (f *FakePodExecutor) Get(ctx context.Context, n ctrlruntimeclient.ObjectKey
 }
 
 func (f *FakePodExecutor) Watch(ctx context.Context, list ctrlruntimeclient.ObjectList, opts ...ctrlruntimeclient.ListOption) (watch.Interface, error) {
+	f.Lock.RLock()
+	defer f.Lock.RUnlock()
 	if err := f.LoggingClient.List(ctx, list, opts...); err != nil {
 		return nil, err
 	}

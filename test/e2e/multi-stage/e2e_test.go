@@ -144,6 +144,7 @@ func TestMultiStage(t *testing.T) {
 		{
 			name:     "e2e-claim",
 			args:     []string{"--unresolved-config=cluster-claim.yaml", "--target=e2e-claim"},
+			env:      []string{defaultJobSpec},
 			needHive: true,
 			success:  true,
 			output:   []string{`Imported release 4.11.`, `to tag release:latest-e2e-claim`, `e2e-claim-claim-step succeeded`},
@@ -151,6 +152,7 @@ func TestMultiStage(t *testing.T) {
 		{
 			name:     "e2e-claim-as-custom",
 			args:     []string{"--unresolved-config=cluster-claim.yaml", "--target=e2e-claim-as-custom"},
+			env:      []string{defaultJobSpec},
 			needHive: true,
 			success:  true,
 			output:   []string{`Imported release 4.11.`, `to tag release:custom-e2e-claim-as-custom`, `e2e-claim-as-custom-claim-step succeeded`},
@@ -158,6 +160,7 @@ func TestMultiStage(t *testing.T) {
 		{
 			name:     "e2e-claim depends on release image",
 			args:     []string{"--unresolved-config=cluster-claim.yaml", "--target=e2e-claim-depend-on-release-image"},
+			env:      []string{defaultJobSpec},
 			needHive: true,
 			success:  true,
 			output:   []string{`Imported release 4.11.`, `to tag release:latest-e2e-claim-depend-on-release-image`, `e2e-claim-depend-on-release-image-claim-step succeeded`},

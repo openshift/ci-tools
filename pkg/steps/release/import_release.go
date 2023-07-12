@@ -54,8 +54,7 @@ type importReleaseStep struct {
 	name     string
 	nodeName string
 	target   string
-	// pullSpec is the fully-resolved pull spec of the release payload image we are importing
-	pullSpec string
+	source   ReleaseSource
 	// append determines if we wait for other processes to create images first
 	append     bool
 	resources  api.ResourceConfiguration
@@ -67,7 +66,8 @@ type importReleaseStep struct {
 }
 
 func (s *importReleaseStep) Inputs() (api.InputDefinition, error) {
-	return api.InputDefinition{s.pullSpec}, nil
+	input, err := s.source.Input(context.Background())
+	return api.InputDefinition{input}, err
 }
 
 func (*importReleaseStep) Validate() error { return nil }
@@ -103,8 +103,10 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 	}
 
 	// tag the release image in and let it import
-	var pullSpec string
-
+	pullSpec, err := s.source.PullSpec(ctx)
+	if err != nil {
+		return err
+	}
 	// retry importing the image a few times because we might race against establishing credentials/roles
 	// and be unable to import images on the same cluster
 	streamImport := &imagev1.ImageStreamImport{
@@ -121,7 +123,7 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 					},
 					From: coreapi.ObjectReference{
 						Kind: "DockerImage",
-						Name: s.pullSpec,
+						Name: pullSpec,
 					},
 					ImportPolicy: imagev1.TagImportPolicy{
 						ImportMode: imagev1.ImportModePreserveOriginal,
@@ -415,7 +417,7 @@ func (s *importReleaseStep) Objects() []ctrlruntimeclient.Object {
 // ImportReleaseStep imports an existing update payload image
 func ImportReleaseStep(
 	name, nodeName, target string,
-	pullSpec string,
+	source ReleaseSource,
 	append bool,
 	resources api.ResourceConfiguration,
 	client kubernetes.PodClient,
@@ -426,7 +428,7 @@ func ImportReleaseStep(
 		name:                           name,
 		nodeName:                       nodeName,
 		target:                         target,
-		pullSpec:                       pullSpec,
+		source:                         source,
 		append:                         append,
 		resources:                      resources,
 		client:                         client,

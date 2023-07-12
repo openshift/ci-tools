@@ -102,3 +102,61 @@ func TestTagsInQuay(t *testing.T) {
 		})
 	}
 }
+
+func TestTargetName(t *testing.T) {
+	var testCases = []struct {
+		name     string
+		registry string
+		config   PromotionConfiguration
+		expected string
+	}{
+		{
+			name: "with name",
+			config: PromotionConfiguration{
+				Namespace: "ns",
+				Name:      "name",
+			},
+			registry: "registry.ci.openshift.org",
+			expected: "registry.ci.openshift.org/ns/name:${component}",
+		},
+		{
+			name: "with tag",
+			config: PromotionConfiguration{
+				Namespace: "ns",
+				Tag:       "tag",
+			},
+			registry: "registry.ci.openshift.org",
+			expected: "registry.ci.openshift.org/ns/${component}:tag",
+		},
+		{
+			name: "quay.io with name",
+			config: PromotionConfiguration{
+				Namespace: "ns",
+				Name:      "name",
+			},
+			registry: "quay.io/openshift/ci",
+			expected: "quay.io/openshift/ci:ns_name_${component}",
+		},
+		{
+			name: "quay.io with tag",
+			config: PromotionConfiguration{
+				Namespace: "ns",
+				Tag:       "tag",
+			},
+			registry: "quay.io/openshift/ci",
+			expected: "quay.io/openshift/ci:ns_${component}_tag",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			actual := DefaultTargetNameFunc(testCase.registry, testCase.config)
+			if testCase.registry == "quay.io/openshift/ci" {
+				actual = QuayTargetNameFunc(testCase.registry, testCase.config)
+			}
+			if diff := cmp.Diff(testCase.expected, actual); diff != "" {
+				t.Errorf("%s: mismatch (-expected +actual), diff: %s", testCase.name, diff)
+			}
+		})
+	}
+}

@@ -1303,7 +1303,12 @@ func TestFromConfig(t *testing.T) {
 				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{},
 			}},
 		},
-		expectedSteps: []string{"[release:latest-fast-as-heck-aws]", "fast-as-heck-aws", "[images]"},
+		expectedSteps: []string{
+			"[release:latest-fast-as-heck-aws]",
+			"fast-as-heck-aws",
+			"[output-images]",
+			"[images]",
+		},
 	}, {
 		name: "container test with a claim",
 		config: api.ReleaseBuildConfiguration{

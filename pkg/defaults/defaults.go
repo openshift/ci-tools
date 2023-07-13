@@ -159,12 +159,9 @@ func fromConfig(
 	rawSteps = append(graphConf.Steps, rawSteps...)
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
-			steps, testHasReleaseStep, err := stepForTest(config, params, podClient, leaseClient, templateClient, client, hiveClient, jobSpec, inputImages, testStep, &imageConfigs, pullSecret, censor, nodeName, targetAdditionalSuffix)
+			steps, err := stepForTest(config, params, podClient, leaseClient, templateClient, client, hiveClient, jobSpec, inputImages, testStep, &imageConfigs, pullSecret, censor, nodeName, targetAdditionalSuffix)
 			if err != nil {
 				return nil, nil, err
-			}
-			if testHasReleaseStep {
-				hasReleaseStep = true
 			}
 			buildSteps = append(buildSteps, steps...)
 			continue
@@ -395,8 +392,7 @@ func stepForTest(
 	censor *secrets.DynamicCensor,
 	nodeName string,
 	targetAdditionalSuffix string,
-) ([]api.Step, bool, error) {
-	var hasReleaseStep bool
+) ([]api.Step, error) {
 	if test := c.MultiStageTestConfigurationLiteral; test != nil {
 		leases := api.LeasesForTest(test)
 		if len(leases) != 0 {
@@ -409,7 +405,6 @@ func stepForTest(
 		}
 		if c.ClusterClaim != nil {
 			step = steps.ClusterClaimStep(c.As, c.ClusterClaim, hiveClient, client, jobSpec, step, censor)
-			hasReleaseStep = true
 			name := c.ClusterClaim.ClaimRelease(c.As).ReleaseName
 			target := api.ReleaseConfiguration{Name: name}.TargetName()
 			source := releasesteps.NewReleaseSourceFromClusterClaim(c.As, c.ClusterClaim, hiveClient)
@@ -418,16 +413,16 @@ func stepForTest(
 		addProvidesForStep(step, params)
 		ret = append(ret, step)
 		ret = append(ret, stepsForStepImages(client, jobSpec, inputImages, test, imageConfigs)...)
-		return ret, hasReleaseStep, nil
+		return ret, nil
 	}
 	if test := c.OpenshiftInstallerClusterTestConfiguration; test != nil {
 		if !test.Upgrade {
-			return nil, hasReleaseStep, nil
+			return nil, nil
 		}
 		params = api.NewDeferredParameters(params)
 		step, err := clusterinstall.E2ETestStep(*c.OpenshiftInstallerClusterTestConfiguration, *c, params, podClient, templateClient, jobSpec, config.Resources)
 		if err != nil {
-			return nil, hasReleaseStep, fmt.Errorf("unable to create end to end test step: %w", err)
+			return nil, fmt.Errorf("unable to create end to end test step: %w", err)
 		}
 		step = steps.LeaseStep(leaseClient, []api.StepLease{{
 			ResourceType: test.ClusterProfile.LeaseType(),
@@ -435,13 +430,13 @@ func stepForTest(
 			Count:        1,
 		}}, step, jobSpec.Namespace)
 		addProvidesForStep(step, params)
-		return []api.Step{step}, hasReleaseStep, nil
+		return []api.Step{step}, nil
 	}
 	step := steps.TestStep(*c, config.Resources, podClient, jobSpec, nodeName)
 	if c.ClusterClaim != nil {
 		step = steps.ClusterClaimStep(c.As, c.ClusterClaim, hiveClient, client, jobSpec, step, censor)
 	}
-	return []api.Step{step}, hasReleaseStep, nil
+	return []api.Step{step}, nil
 }
 
 // stepsForStepImages creates steps that import images referenced in test steps.

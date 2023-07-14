@@ -332,10 +332,12 @@ func main() {
 		}
 		interrupts.Run(watcher)
 	}
-	ciOPConfigAgent, err := agents.NewConfigAgent(opts.ciOperatorconfigPath, configAgentOption)
+	configErrCh := make(chan error)
+	ciOPConfigAgent, err := agents.NewConfigAgent(opts.ciOperatorconfigPath, configErrCh, configAgentOption)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct ci-operator config agent")
 	}
+	go func() { logrus.Fatal(<-configErrCh) }()
 	configAgent, err := opts.prowconfig.ConfigAgent()
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to start config agent")
@@ -448,10 +450,12 @@ func main() {
 	}
 
 	if opts.enabledControllersSet.Has(testimagesdistributor.ControllerName) {
-		registryConfigAgent, err := agents.NewRegistryAgent(opts.stepConfigPath, registryAgentOption)
+		registryErrCh := make(chan error)
+		registryConfigAgent, err := agents.NewRegistryAgent(opts.stepConfigPath, registryErrCh, registryAgentOption)
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to construct registryAgent")
 		}
+		go func() { logrus.Fatal(<-registryErrCh) }()
 
 		registriesExceptAppCI := sets.NewString()
 		for cluster := range allClustersExceptRegistryCluster {

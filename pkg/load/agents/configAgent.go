@@ -117,7 +117,7 @@ func WithRepo(repo string) ConfigAgentOption {
 
 // NewConfigAgent returns a ConfigAgent interface that automatically reloads when
 // configs are changed on disk.
-func NewConfigAgent(configPath string, opts ...ConfigAgentOption) (ConfigAgent, error) {
+func NewConfigAgent(configPath string, errCh chan error, opts ...ConfigAgentOption) (ConfigAgent, error) {
 	opt := &ConfigAgentOptions{}
 	for _, o := range opts {
 		o(opt)
@@ -136,7 +136,7 @@ func NewConfigAgent(configPath string, opts ...ConfigAgentOption) (ConfigAgent, 
 		opt.UniversalSymlinkWatcher.ConfigEventFn = a.reloadConfig
 	}
 
-	return a, startWatchers(configPath, a.reloadConfig, a.errorMetrics, opt.UniversalSymlinkWatcher)
+	return a, startWatchers(configPath, errCh, a.reloadConfig, a.errorMetrics, opt.UniversalSymlinkWatcher)
 }
 
 // GetMatchingConfig loads a configuration that matches the metadata,

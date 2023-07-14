@@ -84,7 +84,7 @@ func TestFileTestResolver(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			configAgent, err := agents.NewConfigAgent(tc.dir)
+			configAgent, err := agents.NewConfigAgent(tc.dir, nil)
 			if err != nil {
 				t.Fatalf("Failed to get config agent: %v", err)
 			}

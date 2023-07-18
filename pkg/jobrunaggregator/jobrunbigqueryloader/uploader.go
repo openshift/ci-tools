@@ -234,6 +234,15 @@ func (o *jobRunLoaderOptions) Run(ctx context.Context) error {
 		return nil
 	}
 
+	// Initialize our junits and file names.
+	// We aren't required to do this but if we
+	// do we can catch any errors and bail.
+	err = jobRun.GetJobRunFromGCS(ctx)
+	if err != nil {
+		o.logger.WithError(err).Error("error getting job run from GCS")
+		return err
+	}
+
 	if err := o.uploadJobRun(ctx, jobRun); err != nil {
 		return fmt.Errorf("jobrun/%v/%v failed to upload to bigquery: %w", o.jobName, o.jobRunID, err)
 	}
@@ -290,10 +299,6 @@ func (o *jobRunLoaderOptions) readJobRunFromGCS(ctx context.Context) (jobrunaggr
 	if prowjob.Status.CompletionTime == nil {
 		o.logger.Info("Removing job run because it isn't finished")
 		return nil, nil
-	}
-	if _, err := jobRunInfo.GetAllContent(ctx); err != nil {
-		o.logger.WithError(err).Error("error getting all content for jobrun")
-		return nil, fmt.Errorf("failed to get all content for jobrun/%v/%v: %w", o.jobName, o.jobRunID, err)
 	}
 
 	return jobRunInfo, nil

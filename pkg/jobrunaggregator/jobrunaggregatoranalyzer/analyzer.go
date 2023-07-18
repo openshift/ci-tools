@@ -143,6 +143,14 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 	for i := range finishedJobsToAggregate {
 		jobRun := finishedJobsToAggregate[i]
 
+		// Initialize our junits and file names.
+		// We aren't required to do this but if we
+		// do we can catch any errors and bail.
+		err := jobRun.GetJobRunFromGCS(ctx)
+		if err != nil {
+			return err
+		}
+
 		// We found a case where the first job failed to upgrade but the others didn't
 		// original logic stopped on the first flag we found which indicated master nodes did not update
 		// and led to lower disruption values being used, causing failures.
@@ -156,7 +164,7 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 			updatedFlag := jobrunaggregatorlib.GetMasterNodesUpdatedStatusFromClusterData(clusterData)
 
 			// if we have any value set it here
-			// if we set a 'Y' here it we won't come back in this loop based on the check above
+			// if we set a 'Y' here we won't come back in this loop based on the check above
 			if len(updatedFlag) > 0 {
 				masterNodesUpdated = updatedFlag
 			}

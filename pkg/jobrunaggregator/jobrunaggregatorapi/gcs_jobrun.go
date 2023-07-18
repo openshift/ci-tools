@@ -30,6 +30,7 @@ type gcsJobRun struct {
 	jobRunID            string
 	gcsProwJobPath      string
 	gcsJunitPaths       []string
+	gcsFileNames        []string
 
 	pathToContent map[string][]byte
 }
@@ -61,6 +62,9 @@ func (j *gcsJobRun) SetGCSProwJobPath(gcsProwJobPath string) {
 func (j *gcsJobRun) AddGCSJunitPaths(junitPaths ...string) {
 	j.gcsJunitPaths = append(j.gcsJunitPaths, junitPaths...)
 }
+func (j *gcsJobRun) AddGCSProwJobFileNames(fileNames ...string) {
+	j.gcsFileNames = append(j.gcsFileNames, fileNames...)
+}
 
 func (j *gcsJobRun) WriteCache(ctx context.Context, parentDir string) error {
 	if err := j.writeCache(ctx, parentDir); err != nil {
@@ -82,7 +86,7 @@ func (j *gcsJobRun) writeCache(ctx context.Context, parentDir string) error {
 		return fmt.Errorf("error serializing prowjob for %q: %w", j.GetJobRunID(), err)
 	}
 
-	contentMap, err := j.GetAllContent(ctx)
+	contentMap, err := j.getAllContent(ctx)
 	if err != nil {
 		return err
 	}
@@ -140,7 +144,73 @@ func (j *gcsJobRun) writeCache(ctx context.Context, parentDir string) error {
 	return nil
 }
 
+func (j *gcsJobRun) GetJobRunFromGCS(ctx context.Context) error {
+	query := &storage.Query{
+		// This ends up being the equivalent of:
+		// https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/logs/periodic-ci-openshift-release-master-nightly-4.9-upgrade-from-stable-4.8-e2e-metal-ipi-upgrade/1671747590984568832
+		// the next directory step is based on some bit of metadata I don't recognize
+		Prefix: j.jobRunGCSBucketRoot,
+
+		// TODO this field is apparently missing from this level of go/storage
+		// Omit owner and ACL fields for performance
+		// Projection: storage.ProjectionNoACL,
+	}
+
+	// Only retrieve the name and creation time for performance
+	if err := query.SetAttrSelection([]string{"Name", "Created"}); err != nil {
+		return err
+	}
+
+	// Returns an iterator which iterates over the bucket query results.
+	// this will list *all* files with the query prefix.
+	it := j.bkt.Objects(ctx, query)
+
+	// Find the query results we're the most interested in.
+	for {
+		attrs, err := it.Next()
+		if err == iterator.Done {
+			// we're done adding values
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		// if we have a directory then skip
+		if len(attrs.Name) == 0 {
+			continue
+		}
+
+		// add the name
+		j.AddGCSProwJobFileNames(attrs.Name)
+
+		// see if it is a junit
+		if strings.HasSuffix(attrs.Name, ".xml") && strings.Contains(attrs.Name, "/junit") {
+			logrus.Debugf("found %s", attrs.Name)
+			j.AddGCSJunitPaths(attrs.Name)
+		}
+	}
+
+	return nil
+}
+
+func (j *gcsJobRun) validateJobRunFromGCS(ctx context.Context) error {
+	if nil == j.gcsFileNames {
+		return j.GetJobRunFromGCS(ctx)
+	}
+
+	return nil
+}
+
 func (j *gcsJobRun) GetCombinedJUnitTestSuites(ctx context.Context) (*junit.TestSuites, error) {
+
+	// verifies we have loaded the available file for the job run
+	err := j.validateJobRunFromGCS(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
 	testSuites := &junit.TestSuites{}
 	for _, junitFile := range j.GetGCSJunitPaths() {
 		logrus.Debug("getting junit file content content from GCS")
@@ -193,53 +263,34 @@ func isParseFloatError(err error) bool {
 }
 
 func (j *gcsJobRun) GetOpenShiftTestsFilesWithPrefix(ctx context.Context, prefix string) (map[string]string, error) {
+
+	// verifies we have loaded the available file for the job run
+	err := j.validateJobRunFromGCS(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	fileNames := j.gcsFileNames
+
 	regex, err := regexp.Compile("/" + prefix + "[^/]*")
 	if err != nil {
 		return nil, err
 	}
 	ret := map[string]string{}
 
-	query := &storage.Query{
-		// This ends up being the equivalent of:
-		// https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/logs/periodic-ci-openshift-release-master-nightly-4.9-upgrade-from-stable-4.8-e2e-metal-ipi-upgrade
-		// the next directory step is based on some bit of metadata I don't recognize
-		Prefix: j.jobRunGCSBucketRoot,
+	// Find the query results we're the most interested in.
+	for _, name := range fileNames {
 
-		// TODO this field is apparently missing from this level of go/storage
-		// Omit owner and ACL fields for performance
-		//Projection: storage.ProjectionNoACL,
-	}
-
-	// Only retrieve the name and creation time for performance
-	if err := query.SetAttrSelection([]string{"Name", "Created"}); err != nil {
-		return nil, err
-	}
-
-	// Returns an iterator which iterates over the bucket query results.
-	// Unfortunately, this will list *all* files with the query prefix.
-	it := j.bkt.Objects(ctx, query)
-
-	// Find the query results we're the most interested in. In this case, we're interested in files called prowjob.json
-	// so that we only get each jobrun once and we queue them in a channel
-	for {
-		attrs, err := it.Next()
-		if err == iterator.Done {
-			// we're done adding values, so close the channel
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		if !regex.MatchString(attrs.Name) {
+		if !regex.MatchString(name) {
 			continue
 		}
 
-		content, err := j.getCurrentContent(ctx, attrs.Name)
+		content, err := j.getCurrentContent(ctx, name)
 		if err != nil {
 			return nil, err
 		}
-		ret[attrs.Name] = string(content)
+		ret[name] = string(content)
 	}
 
 	return ret, nil
@@ -301,7 +352,7 @@ func (j *gcsJobRun) getCurrentContent(ctx context.Context, path string) ([]byte,
 
 }
 
-func (j *gcsJobRun) GetAllContent(ctx context.Context) (map[string][]byte, error) {
+func (j *gcsJobRun) getAllContent(ctx context.Context) (map[string][]byte, error) {
 	if len(j.pathToContent) > 0 {
 		return j.pathToContent, nil
 	}

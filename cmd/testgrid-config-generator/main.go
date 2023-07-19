@@ -255,7 +255,8 @@ func addDashboardTab(p prowConfig.Periodic,
 			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-ci-"),
 			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-nightly-"),
 			strings.HasPrefix(prowName, "periodic-ci-openshift-verification-tests-master-"),
-			strings.HasPrefix(prowName, "periodic-ci-shiftstack-shiftstack-ci-main-periodic-"):
+			strings.HasPrefix(prowName, "periodic-ci-shiftstack-shiftstack-ci-main-periodic-"),
+			strings.HasPrefix(prowName, "periodic-ci-openshift-osde2e-main-nightly-"):
 			stream = "ocp"
 		case strings.Contains(prowName, "-okd-"):
 			stream = "okd"

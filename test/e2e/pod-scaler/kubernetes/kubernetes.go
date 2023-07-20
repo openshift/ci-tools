@@ -76,7 +76,10 @@ func Builds(labelsByNamespacedName map[string]map[string]map[string]string) Opti
 
 // Fake serves fake data as if it were a k8s apiserver
 func Fake(t testhelper.TestingTInterface, tmpDir string, options ...Option) string {
-	o := Options{Patterns: map[string]http.HandlerFunc{}}
+	readyPath := "/healthz/ready"
+	o := Options{Patterns: map[string]http.HandlerFunc{
+		readyPath: func(w http.ResponseWriter, _ *http.Request) {},
+	}}
 	for _, option := range options {
 		option(&o)
 	}
@@ -139,5 +142,6 @@ func Fake(t testhelper.TestingTInterface, tmpDir string, options ...Option) stri
 	}, kubeconfig, false); err != nil {
 		t.Fatalf("Failed to write temporary kubeconfig file: %v", err)
 	}
+	testhelper.WaitForHTTP200(fmt.Sprintf("http://127.0.0.1:%s%s", k8sPort, readyPath), "kubernetes server", 90, t)
 	return kubeconfigFile.Name()
 }

@@ -28,7 +28,7 @@ type KeywordsListItem struct {
 const reviewRequestWorkflow = "B03KCKGCBC7"
 
 // Handler returns a handler that knows how to respond to new messages
-// in forum-testplatform channel that mention @dptp-helpdesk.
+// in forum-ocp-testplatform channel that mention @dptp-helpdesk.
 func Handler(client messagePoster, keywordsConfig KeywordsConfig, helpdeskAlias, forumChannelId string, requireWorkflowsInForum bool) events.PartialHandler {
 	return events.PartialHandlerFunc("helpdesk",
 		func(callback *slackevents.EventsAPIEvent, logger *logrus.Entry) (handled bool, err error) {
@@ -58,7 +58,7 @@ func Handler(client messagePoster, keywordsConfig KeywordsConfig, helpdeskAlias,
 				log.Debug("Top level message not from a workflow, notifying user")
 				response = getTopLevelDirectMessageResponse(event.User)
 			} else if strings.Contains(event.Text, helpdeskAlias) {
-				log.Info("Handling response in forum-testplatform channel...")
+				log.Info("Handling response in forum-ocp-testplatform channel...")
 				response = getContactedHelpdeskResponse(event.BotID)
 			} else {
 				log.Debugf("dptp-helpdesk not mentioned in message: %s", event.Text)

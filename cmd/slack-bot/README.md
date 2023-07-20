@@ -4,7 +4,7 @@ This is a Slack bot that helps facilitate common tasks like reporting issues.
 Currently, the bot can do the following:
 - When the bot is explicitly mentioned in a message (`@DPTP bot`), it lists all available actions it knows how to do, like file a bug, request a consultation, and more. 
 - When a specific job link is included in a message, the bot responds with helpful information related to that job.
-- In the `CoreOS` slack space, when someone tags `@dptp-helpdesk` in the `forum-testplatform` channel, the bot sends an automatic reply containing helpful basic information in a new thread. 
+- In the `CoreOS` slack space, when someone tags `@dptp-helpdesk` in the `forum-ocp-testplatform` channel, the bot sends an automatic reply containing helpful basic information in a new thread. 
 
 # Local testing
 There is an alpha instance of Slack Bot running on the app.ci cluster that you can use for testing by running a mitmproxy and reverse tunneling requests to your local machine.

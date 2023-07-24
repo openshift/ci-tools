@@ -16,7 +16,7 @@ import (
 type fakeAutomationClient struct {
 	collaboratorsByRepo   map[string][]string
 	membersByOrg          map[string][]string
-	reposWithAppInstalled sets.String
+	reposWithAppInstalled sets.Set[string]
 }
 
 func (c fakeAutomationClient) IsMember(org, user string) (bool, error) {
@@ -67,14 +67,14 @@ func TestCheckRepos(t *testing.T) {
 			"org-2": {"some-user", "z-bot"},
 			"org-3": {"a-user"},
 		},
-		reposWithAppInstalled: sets.NewString("org-1/repo-a", "org-2/repo-z"),
+		reposWithAppInstalled: sets.New[string]("org-1/repo-a", "org-2/repo-z"),
 	}
 
 	testCases := []struct {
 		name        string
 		repos       []string
 		bots        []string
-		ignore      sets.String
+		ignore      sets.Set[string]
 		expected    []string
 		expectedErr error
 	}{
@@ -123,14 +123,14 @@ func TestCheckRepos(t *testing.T) {
 			name:     "ignored repo",
 			repos:    []string{"org-2/repo-z"},
 			bots:     []string{"a-bot", "b-bot"},
-			ignore:   sets.NewString("org-2/repo-z"),
+			ignore:   sets.New[string]("org-2/repo-z"),
 			expected: []string{},
 		},
 		{
 			name:     "ignored org",
 			repos:    []string{"org-2/repo-z"},
 			bots:     []string{"a-bot", "b-bot"},
-			ignore:   sets.NewString("org-2"),
+			ignore:   sets.New[string]("org-2"),
 			expected: []string{},
 		},
 		{

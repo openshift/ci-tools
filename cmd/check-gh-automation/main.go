@@ -115,13 +115,13 @@ func determineRepos(o options, logger *logrus.Entry) []string {
 		if err != nil {
 			logger.Fatalf("error loading prow config: %v", err)
 		}
-		return configAgent.Config().AllRepos.List()
+		return sets.List(configAgent.Config().AllRepos)
 	}
 
 	return gatherModifiedRepos(o.releaseRepoPath, logger)
 }
 
-func checkRepos(repos []string, bots []string, ignore sets.String, client automationClient, logger *logrus.Entry) ([]string, error) {
+func checkRepos(repos []string, bots []string, ignore sets.Set[string], client automationClient, logger *logrus.Entry) ([]string, error) {
 	logger.Infof("checking %d repo(s): %s", len(repos), strings.Join(repos, ", "))
 	failing := sets.NewString()
 	for _, orgRepo := range repos {
@@ -192,7 +192,7 @@ func gatherModifiedRepos(releaseRepoPath string, logger *logrus.Entry) []string 
 		logger.Fatalf("error determining changed configs: %v", err)
 	}
 
-	orgRepos := sets.String{}
+	orgRepos := sets.Set[string]{}
 	for _, c := range configs {
 		path := strings.TrimPrefix(c, config.CiopConfigInRepoPath+"/")
 		split := strings.Split(path, "/")
@@ -208,5 +208,5 @@ func gatherModifiedRepos(releaseRepoPath string, logger *logrus.Entry) []string 
 		return []string{}
 	}
 
-	return orgRepos.List()
+	return sets.List(orgRepos)
 }

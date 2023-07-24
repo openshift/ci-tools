@@ -20,6 +20,7 @@ package adapter
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"net/url"
 	"strconv"
 	"strings"
@@ -65,10 +66,12 @@ var gerritMetrics = struct {
 	triggerLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "gerrit_trigger_latency",
 		Help:    "Histogram of seconds between triggering event and ProwJob creation time.",
-		Buckets: []float64{5, 10, 20, 30, 60, 120, 180, 300, 600, 1200, 3600},
+		Buckets: []float64{5, 10, 20, 30, 60, 120, 180, 300, 600, 1200, 3600, 7200},
 	}, []string{
 		"org",
-		// Omit repo to avoid excessive cardinality due to the number of buckets.
+		// We would normally omit 'repo' to avoid excessive cardinality due to the number of buckets, but we need the data.
+		// Hopefully this isn't excessive enough to cause metric scraping issues.
+		"repo",
 	}),
 	changeProcessDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "gerrit_instance_process_duration",
@@ -98,8 +101,7 @@ type prowJobClient interface {
 type gerritClient interface {
 	ApplyGlobalConfig(orgRepoConfigGetter func() *config.GerritOrgRepoConfigs, lastSyncTracker *client.SyncTime, cookiefilePath, tokenPathOverride string, additionalFunc func())
 	Authenticate(cookiefilePath, tokenPath string)
-	QueryChanges(lastState client.LastSyncState, rateLimit int) map[string][]client.ChangeInfo
-	QueryChangesForInstance(instance string, lastState client.LastSyncState, rateLimit int) []client.ChangeInfo
+	QueryChangesForProject(instance, project string, lastUpdate time.Time, rateLimit int, additionalFilters ...string) ([]gerrit.ChangeInfo, error)
 	GetBranchRevision(instance, project, branch string) (string, error)
 	SetReview(instance, id, revision, message string, labels map[string]string) error
 	Account(instance string) (*gerrit.AccountInfo, error)
@@ -112,13 +114,13 @@ type Controller struct {
 	prowJobClient               prowJobClient
 	gc                          gerritClient
 	tracker                     LastSyncTracker
-	projectsOptOutHelp          map[string]sets.String
+	projectsOptOutHelp          map[string]sets.Set[string]
 	lock                        sync.RWMutex
 	cookieFilePath              string
 	configAgent                 *config.Agent
 	inRepoConfigCache           *config.InRepoConfigCache
 	inRepoConfigFailuresTracker map[string]bool
-	instancesWithWorker         map[string]bool
+	projectsWithWorker          map[string]bool
 	latestMux                   sync.Mutex
 	workerPoolSize              int
 }
@@ -130,10 +132,10 @@ type LastSyncTracker interface {
 
 // NewController returns a new gerrit controller client
 func NewController(ctx context.Context, prowJobClient prowv1.ProwJobInterface, op io.Opener,
-	ca *config.Agent, cookiefilePath, tokenPathOverride, lastSyncFallback string, workerPoolSize int, inRepoConfigCache *config.InRepoConfigCache) *Controller {
+	ca *config.Agent, cookiefilePath, tokenPathOverride, lastSyncFallback string, workerPoolSize int, maxQPS, maxBurst int, inRepoConfigCache *config.InRepoConfigCache) *Controller {
 
 	cfg := ca.Config
-	projectsOptOutHelpMap := map[string]sets.String{}
+	projectsOptOutHelpMap := map[string]sets.Set[string]{}
 	if cfg().Gerrit.OrgReposConfig != nil {
 		projectsOptOutHelpMap = cfg().Gerrit.OrgReposConfig.OptOutHelpRepos()
 	}
@@ -142,7 +144,7 @@ func NewController(ctx context.Context, prowJobClient prowv1.ProwJobInterface, o
 	if err := lastSyncTracker.Init(cfg().Gerrit.OrgReposConfig.AllRepos()); err != nil {
 		logrus.WithError(err).Fatal("Error initializing lastSyncFallback.")
 	}
-	gerritClient, err := client.NewClient(nil)
+	gerritClient, err := client.NewClient(nil, maxQPS, maxBurst)
 	if err != nil {
 		logrus.WithError(err).Fatal("Error creating gerrit client.")
 	}
@@ -156,7 +158,7 @@ func NewController(ctx context.Context, prowJobClient prowv1.ProwJobInterface, o
 		configAgent:                 ca,
 		inRepoConfigCache:           inRepoConfigCache,
 		inRepoConfigFailuresTracker: map[string]bool{},
-		instancesWithWorker:         make(map[string]bool),
+		projectsWithWorker:          make(map[string]bool),
 		workerPoolSize:              workerPoolSize,
 	}
 
@@ -232,20 +234,27 @@ func (c *Controller) syncChange(latest client.LastSyncState, changeChan <-chan C
 // Sync looks for newly made gerrit changes
 // and creates prowjobs according to specs
 func (c *Controller) Sync() {
-	processSingleInstance := func(instance string) {
+	processSingleProject := func(instance, project string) {
 		// Assumes the passed in instance was already normalized with https:// prefix.
-		log := logrus.WithField("host", instance)
-		syncTime := c.tracker.Current()
-		latest := syncTime.DeepCopy()
+		log := logrus.WithFields(logrus.Fields{"host": instance, "repo": project})
+		tracker := c.tracker.Current()
+		syncTime := time.Now()
+		if projects, ok := tracker[instance]; ok {
+			if t, ok := projects[project]; ok {
+				syncTime = t
+			}
+		}
+		latest := tracker.DeepCopy()
 
 		now := time.Now()
 		defer func() {
 			gerritMetrics.changeProcessDuration.WithLabelValues(instance).Observe(float64(time.Since(now).Seconds()))
 		}()
 
-		changes := c.gc.QueryChangesForInstance(instance, syncTime, c.config().Gerrit.RateLimit)
-		timeQueryChangesForInstance := time.Now()
-		log.WithFields(logrus.Fields{"instance": instance, "changes": len(changes), "duration(s)": time.Since(now).Seconds()}).Info("Time taken querying for gerrit changes")
+		// Ignore the error. It is already logged.
+		changes, _ := c.gc.QueryChangesForProject(instance, project, syncTime, c.config().Gerrit.RateLimit)
+		timeQueryChangesForProject := time.Now()
+		log.WithFields(logrus.Fields{"host": instance, "repo": project, "changes": len(changes), "duration(s)": time.Since(now).Seconds()}).Info("Time taken querying for gerrit changes")
 
 		if len(changes) == 0 {
 			return
@@ -253,6 +262,14 @@ func (c *Controller) Sync() {
 
 		var wg sync.WaitGroup
 		wg.Add(len(changes))
+
+		// Randomly permute the slice of changes to reduce the chance of processing repos sequentially.
+		// We can improve on this by properly parrellelizing repo processing, but this is a less invasive
+		// temporary mitigation.
+		rand.Shuffle(
+			len(changes),
+			func(i, j int) { changes[i], changes[j] = changes[j], changes[i] },
+		)
 
 		changeChan := make(chan Change)
 		for i := 0; i < c.workerPoolSize; i++ {
@@ -268,32 +285,51 @@ func (c *Controller) Sync() {
 			changeChan <- Change{changeInfo: change, instance: instance, tracker: timeBeforeSent}
 		}
 		wg.Wait()
-		gerritMetrics.changeSyncDuration.WithLabelValues(instance).Observe((float64(time.Since(timeQueryChangesForInstance).Seconds())))
+		gerritMetrics.changeSyncDuration.WithLabelValues(instance).Observe((float64(time.Since(timeQueryChangesForProject).Seconds())))
 		close(changeChan)
 		c.tracker.Update(latest)
 	}
 
-	for instance := range c.config().Gerrit.OrgReposConfig.AllRepos() {
-		if _, ok := c.instancesWithWorker[instance]; ok {
-			// The work thread of already up for this instance, nothing needs
-			// to be done.
-			continue
-		}
-		c.instancesWithWorker[instance] = true
-
-		// First time see this instance, spin up a worker thread for it
-		logrus.WithField("instance", instance).Info("Start worker for instance.")
-		go func(instance string) {
-			previousRun := time.Now()
-			for {
-				timeDiff := time.Until(previousRun.Add(c.config().Gerrit.TickInterval.Duration))
-				if timeDiff > 0 {
-					time.Sleep(timeDiff)
-				}
-				previousRun = time.Now()
-				processSingleInstance(instance)
+	// Identify projects without worker threads
+	id := func(instance, project string) string { return fmt.Sprintf("%s/%s", instance, project) }
+	needsWorker := map[string][]string{}
+	needsWorkerCount := map[string]int{}
+	for instance, projects := range c.config().Gerrit.OrgReposConfig.AllRepos() {
+		for project := range projects {
+			if _, ok := c.projectsWithWorker[id(instance, project)]; ok {
+				// The worker thread is already up for this project, nothing needs
+				// to be done.
+				continue
 			}
-		}(instance)
+			needsWorker[instance] = append(needsWorker[instance], project)
+			needsWorkerCount[instance]++
+		}
+	}
+	// First time seeing these projects, spin up worker threads for them.
+	staggerPosition := 0
+	for instance, projects := range needsWorker {
+		staggerIncement := c.config().Gerrit.TickInterval.Duration / time.Duration(needsWorkerCount[instance])
+		for _, project := range projects {
+			c.projectsWithWorker[id(instance, project)] = true
+			logrus.WithFields(logrus.Fields{"instance": instance, "repo": project}).Info("Starting worker for project.")
+			go func(instance, project string, staggerPosition int) {
+				// Stagger new worker threads across the loop period to reduce load on the Gerrit API and Git server.
+				napTime := staggerIncement * time.Duration(staggerPosition)
+				time.Sleep(napTime)
+
+				// Now start the repo worker thread.
+				previousRun := time.Now()
+				for {
+					timeDiff := time.Until(previousRun.Add(c.config().Gerrit.TickInterval.Duration))
+					if timeDiff > 0 {
+						time.Sleep(timeDiff)
+					}
+					previousRun = time.Now()
+					processSingleProject(instance, project)
+				}
+			}(instance, project, staggerPosition)
+			staggerPosition++
+		}
 	}
 }
 
@@ -369,8 +405,8 @@ func LabelsAndAnnotations(instance string, jobLabels, jobAnnotations map[string]
 // Failing means the job is complete and not passing.
 // Scans messages for prow reports, which lists jobs and whether they passed.
 // Job is included in the set if the latest report has it failing.
-func failedJobs(account int, revision int, messages ...gerrit.ChangeMessageInfo) sets.String {
-	failures := sets.String{}
+func failedJobs(account int, revision int, messages ...gerrit.ChangeMessageInfo) sets.Set[string] {
+	failures := sets.Set[string]{}
 	times := map[string]time.Time{}
 	for _, message := range messages {
 		if message.Author.AccountID != account { // Ignore reports from other accounts
@@ -633,7 +669,7 @@ func (c *Controller) processChange(logger logrus.FieldLogger, instance string, c
 				if err := c.gc.SetReview(instance, change.ID, change.CurrentRevision, message, nil); err != nil {
 					return err
 				}
-				gerritMetrics.triggerLatency.WithLabelValues(instance).Observe(float64(time.Since(msg.Date.Time).Seconds()))
+				gerritMetrics.triggerLatency.WithLabelValues(instance, change.Project).Observe(float64(time.Since(msg.Date.Time).Seconds()))
 				// Only respond to the first message that requests help information.
 				break
 			}
@@ -659,7 +695,7 @@ func (c *Controller) processChange(logger logrus.FieldLogger, instance string, c
 		}
 		logger.Infof("Triggered new job")
 		if eventTime, ok := triggerTimes[pj.Spec.Job]; ok {
-			gerritMetrics.triggerLatency.WithLabelValues(instance).Observe(float64(time.Since(eventTime).Seconds()))
+			gerritMetrics.triggerLatency.WithLabelValues(instance, change.Project).Observe(float64(time.Since(eventTime).Seconds()))
 		}
 		triggeredJobs = append(triggeredJobs, triggeredJob{
 			name:   jSpec.spec.Job,
@@ -703,7 +739,7 @@ func (c *Controller) processChange(logger logrus.FieldLogger, instance string, c
 
 // isProjectOptOutHelp returns if the project is opt-out from getting help
 // information about how to run presubmit tests on their changes.
-func isProjectOptOutHelp(projectsOptOutHelp map[string]sets.String, instance, project string) bool {
+func isProjectOptOutHelp(projectsOptOutHelp map[string]sets.Set[string], instance, project string) bool {
 	ps, ok := projectsOptOutHelp[instance]
 	if !ok {
 		return false

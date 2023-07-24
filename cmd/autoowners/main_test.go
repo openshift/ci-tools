@@ -39,8 +39,8 @@ func TestMakeHeader(t *testing.T) {
 
 func TestResolveAliases(t *testing.T) {
 	ra := RepoAliases{}
-	ra["sig-alias"] = sets.NewString("bob", "carol")
-	ra["cincinnati-reviewers"] = sets.NewString()
+	ra["sig-alias"] = sets.New[string]("bob", "carol")
+	ra["cincinnati-reviewers"] = sets.New[string]()
 
 	testCases := []struct {
 		description string
@@ -317,7 +317,7 @@ aliases:
 	notFound := &github.FileNotFound{}
 
 	ra := RepoAliases{}
-	ra["team-a"] = sets.NewString("aaa1", "aaa2")
+	ra["team-a"] = sets.New[string]("aaa1", "aaa2")
 
 	fakeFileGetter := fakeFileGetter{
 		owners:              fakeOwners,
@@ -419,7 +419,7 @@ aliases:
 						Approvers: []string{"approver-from-custom-approvers-filename", "approvers-from-custom-approvers-filename-team"},
 					},
 				},
-				repoAliases:      repoowners.RepoAliases{"approvers-from-custom-approvers-filename-team": sets.NewString("teammember-from-custom-approvers-aliases-filename")},
+				repoAliases:      repoowners.RepoAliases{"approvers-from-custom-approvers-filename-team": sets.New[string]("teammember-from-custom-approvers-aliases-filename")},
 				ownersFileExists: true,
 			},
 		},
@@ -523,7 +523,7 @@ func TestOwnersCleanerFactory(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to construct cleaner: %v", err)
 		}
-		if diff := sets.NewString(cleaner(tc.unfilteredMembers)...).Difference(sets.NewString(tc.expectedResult...)); len(diff) > 0 {
+		if diff := sets.New[string](cleaner(tc.unfilteredMembers)...).Difference(sets.New[string](tc.expectedResult...)); len(diff) > 0 {
 			t.Errorf("Actual result  does not match expected, diff: %v", diff)
 		}
 	}
@@ -564,7 +564,7 @@ func TestLoadRepos(t *testing.T) {
 			ConfigSubDirs: []string{"jobs", "config", "templates"},
 			GitHubOrg:     "openshift",
 			GitHubRepo:    "release",
-			Blocklist:     blocklist{directories: sets.NewString("testdata/test2/templates/openshift/installer")},
+			Blocklist:     blocklist{directories: sets.New[string]("testdata/test2/templates/openshift/installer")},
 			ExpectedRepos: []orgRepo{
 				{
 					Directories: []string{
@@ -590,7 +590,7 @@ func TestLoadRepos(t *testing.T) {
 			ConfigSubDirs: []string{"jobs", "config", "templates"},
 			GitHubOrg:     "openshift",
 			GitHubRepo:    "release",
-			Blocklist:     blocklist{orgs: sets.NewString("kubevirt")},
+			Blocklist:     blocklist{orgs: sets.New[string]("kubevirt")},
 			ExpectedRepos: []orgRepo{
 				{
 					Directories: []string{

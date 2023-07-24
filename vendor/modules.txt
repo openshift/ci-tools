@@ -18,7 +18,7 @@ cloud.google.com/go/bigquery/internal
 cloud.google.com/go/bigquery/internal/query
 cloud.google.com/go/bigquery/storage/apiv1
 cloud.google.com/go/bigquery/storage/apiv1/storagepb
-# cloud.google.com/go/compute v1.19.0
+# cloud.google.com/go/compute v1.19.1
 ## explicit; go 1.19
 cloud.google.com/go/compute/internal
 # cloud.google.com/go/compute/metadata v0.2.3
@@ -296,7 +296,7 @@ github.com/docker/distribution/manifest
 github.com/docker/distribution/manifest/schema1
 github.com/docker/distribution/manifest/schema2
 github.com/docker/distribution/reference
-# github.com/docker/docker v23.0.1+incompatible => github.com/openshift/moby-moby v1.4.2-0.20190308215630-da810a85109d
+# github.com/docker/docker v23.0.5+incompatible => github.com/openshift/moby-moby v1.4.2-0.20190308215630-da810a85109d
 ## explicit
 github.com/docker/docker/api/types/blkiodev
 github.com/docker/docker/api/types/container
@@ -526,7 +526,7 @@ github.com/google/go-cmp/cmp/internal/diff
 github.com/google/go-cmp/cmp/internal/flags
 github.com/google/go-cmp/cmp/internal/function
 github.com/google/go-cmp/cmp/internal/value
-# github.com/google/go-containerregistry v0.14.0
+# github.com/google/go-containerregistry v0.15.2
 ## explicit; go 1.18
 github.com/google/go-containerregistry/pkg/name
 # github.com/google/go-querystring v1.1.0
@@ -693,8 +693,8 @@ github.com/magiconair/properties
 github.com/mailru/easyjson/buffer
 github.com/mailru/easyjson/jlexer
 github.com/mailru/easyjson/jwriter
-# github.com/mattn/go-colorable v0.1.11
-## explicit; go 1.13
+# github.com/mattn/go-colorable v0.1.13
+## explicit; go 1.15
 github.com/mattn/go-colorable
 # github.com/mattn/go-isatty v0.0.16
 ## explicit; go 1.15
@@ -922,7 +922,7 @@ github.com/spf13/afero/mem
 # github.com/spf13/cast v1.4.1
 ## explicit
 github.com/spf13/cast
-# github.com/spf13/cobra v1.6.1
+# github.com/spf13/cobra v1.7.0
 ## explicit; go 1.15
 github.com/spf13/cobra
 # github.com/spf13/jwalterweatherman v1.1.0
@@ -939,8 +939,8 @@ github.com/spf13/viper/internal/encoding/hcl
 github.com/spf13/viper/internal/encoding/json
 github.com/spf13/viper/internal/encoding/toml
 github.com/spf13/viper/internal/encoding/yaml
-# github.com/stretchr/testify v1.8.2
-## explicit; go 1.13
+# github.com/stretchr/testify v1.8.3
+## explicit; go 1.20
 github.com/stretchr/testify/assert
 # github.com/subosito/gotenv v1.2.0
 ## explicit
@@ -1674,7 +1674,7 @@ k8s.io/kube-openapi/pkg/validation/spec
 # k8s.io/kubernetes v1.15.0-alpha.0
 ## explicit
 k8s.io/kubernetes/pkg/apis/core
-# k8s.io/test-infra v0.0.0-20220913174101-46ac1a6cf806 => github.com/droslean/test-infra v0.0.0-20230605181220-1c00644b5079
+# k8s.io/test-infra v0.0.0-20230723142209-fe3dc1b1379f
 ## explicit; go 1.18
 k8s.io/test-infra/ghproxy/ghcache
 k8s.io/test-infra/ghproxy/ghmetrics
@@ -1801,6 +1801,7 @@ k8s.io/test-infra/prow/spyglass
 k8s.io/test-infra/prow/spyglass/api
 k8s.io/test-infra/prow/spyglass/lenses
 k8s.io/test-infra/prow/spyglass/lenses/common
+k8s.io/test-infra/prow/throttle
 k8s.io/test-infra/prow/tide
 k8s.io/test-infra/prow/tide/blockers
 k8s.io/test-infra/prow/tide/history
@@ -1930,5 +1931,4 @@ sigs.k8s.io/yaml
 # k8s.io/client-go => k8s.io/client-go v0.27.2
 # k8s.io/component-base => k8s.io/component-base v0.27.2
 # k8s.io/kubectl => k8s.io/kubectl v0.27.2
-# k8s.io/test-infra => github.com/droslean/test-infra v0.0.0-20230605181220-1c00644b5079
 # github.com/opencontainers/runc => github.com/opencontainers/runc v1.0.0-rc9

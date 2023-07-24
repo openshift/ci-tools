@@ -143,10 +143,10 @@ func (r httpResult) resolveOwnerAliases(cleaner ownersCleaner) interface{} {
 	if !r.simpleConfig.Empty() {
 		sc := SimpleConfig{
 			Config: repoowners.Config{
-				Approvers:         cleaner(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.Approvers)).List()),
-				Reviewers:         cleaner(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.Reviewers)).List()),
-				RequiredReviewers: cleaner(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.RequiredReviewers)).List()),
-				Labels:            sets.NewString(r.simpleConfig.Labels...).List(),
+				Approvers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.Approvers)))),
+				Reviewers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.Reviewers)))),
+				RequiredReviewers: cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.RequiredReviewers)))),
+				Labels:            sets.List(sets.New[string](r.simpleConfig.Labels...)),
 			},
 			Options: r.simpleConfig.Options,
 		}
@@ -161,9 +161,9 @@ func (r httpResult) resolveOwnerAliases(cleaner ownersCleaner) interface{} {
 		}
 		for k, v := range r.fullConfig.Filters {
 			cfg := repoowners.Config{
-				Approvers:         cleaner(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.Approvers)).List()),
-				Reviewers:         cleaner(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.Reviewers)).List()),
-				RequiredReviewers: cleaner(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.RequiredReviewers)).List()),
+				Approvers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.Approvers)))),
+				Reviewers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.Reviewers)))),
+				RequiredReviewers: cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.RequiredReviewers)))),
 				Labels:            sets.NewString(v.Labels...).List(),
 			}
 			if len(cfg.Reviewers) == 0 {
@@ -438,8 +438,8 @@ func listUpdatedDirectoriesFromGitStatusOutput(s string) ([]string, error) {
 }
 
 type blocklist struct {
-	directories sets.String
-	orgs        sets.String
+	directories sets.Set[string]
+	orgs        sets.Set[string]
 }
 
 func main() {
@@ -479,8 +479,8 @@ func main() {
 	}
 	configRootDirectory := filepath.Join(o.targetDir, o.targetSubDirectory)
 	var blocked blocklist
-	blocked.directories = sets.NewString(o.blockedRepos.Strings()...)
-	blocked.orgs = sets.NewString(o.blockedOrgs.Strings()...)
+	blocked.directories = sets.New[string](o.blockedRepos.Strings()...)
+	blocked.orgs = sets.New[string](o.blockedOrgs.Strings()...)
 	if err := pullOwners(gc, configRootDirectory, blocked, configSubDirectories, o.extraDirs.Strings(), o.githubOrg, o.githubRepo, pc); err != nil {
 		logrus.WithError(err).Fatal("Error occurred when walking through the target dir.")
 	}

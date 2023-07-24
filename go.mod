@@ -24,7 +24,6 @@ replace (
 	k8s.io/client-go => k8s.io/client-go v0.27.2
 	k8s.io/component-base => k8s.io/component-base v0.27.2
 	k8s.io/kubectl => k8s.io/kubectl v0.27.2
-	k8s.io/test-infra => github.com/droslean/test-infra v0.0.0-20230605181220-1c00644b5079
 )
 
 require (
@@ -67,7 +66,7 @@ require (
 	github.com/sirupsen/logrus v1.9.2
 	github.com/slack-go/slack v0.7.3
 	github.com/spf13/afero v1.6.0
-	github.com/spf13/cobra v1.6.1
+	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5
 	golang.org/x/exp v0.0.0-20230307190834-24139beb5833
 	// https://security.snyk.io/vuln/SNYK-GOLANG-GOLANGORGXNETHTTP2-3323837
@@ -104,7 +103,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1 // indirect
 	github.com/dlclark/regexp2 v1.2.0 // indirect
-	github.com/docker/docker v23.0.1+incompatible // indirect
+	github.com/docker/docker v23.0.5+incompatible // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7 // indirect
@@ -143,7 +142,7 @@ require (
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/magiconair/properties v1.8.5 // indirect
-	github.com/mattn/go-colorable v0.1.11 // indirect
+	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.16 // indirect
 	github.com/mattn/go-runewidth v0.0.14 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
@@ -199,15 +198,15 @@ require (
 	github.com/openshift/client-go v0.0.0-20230120202327-72f107311084
 	github.com/openshift/hive/apis v0.0.0-20230525214126-ab571664f899
 	github.com/openshift/library-go v0.0.0-20230127175320-3e9e170c5942
-	github.com/stretchr/testify v1.8.2
-	k8s.io/test-infra v0.0.0-20220913174101-46ac1a6cf806
+	github.com/stretchr/testify v1.8.3
+	k8s.io/test-infra v0.0.0-20230723142209-fe3dc1b1379f
 	sigs.k8s.io/boskos v0.0.0-20230524062849-a7ef97ee445d
 )
 
 require (
 	bitbucket.org/creachadair/stringset v0.0.9 // indirect
 	cloud.google.com/go v0.110.0 // indirect
-	cloud.google.com/go/compute v1.19.0 // indirect
+	cloud.google.com/go/compute v1.19.1 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	cloud.google.com/go/iam v0.13.0 // indirect
 	contrib.go.opencensus.io/exporter/ocagent v0.7.1-0.20200907061046-05415f1de66d // indirect
@@ -243,7 +242,7 @@ require (
 	github.com/golang-jwt/jwt v3.2.1+incompatible // indirect
 	github.com/google/flatbuffers v2.0.8+incompatible // indirect
 	github.com/google/gnostic v0.6.9 // indirect
-	github.com/google/go-containerregistry v0.14.0 // indirect
+	github.com/google/go-containerregistry v0.15.2 // indirect
 	github.com/google/s2a-go v0.1.3 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.2.3 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.11.3 // indirect

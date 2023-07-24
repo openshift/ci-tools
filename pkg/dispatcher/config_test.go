@@ -115,7 +115,7 @@ var (
 					FilenamesRaw: []string{
 						"some-build-farm-presubmits.yaml",
 					},
-					Filenames: sets.NewString("some-build-farm-presubmits.yaml"),
+					Filenames: sets.New[string]("some-build-farm-presubmits.yaml"),
 				},
 			},
 			api.CloudGCP: {
@@ -168,7 +168,7 @@ var (
 					FilenamesRaw: []string{
 						"some-build-farm-presubmits.yaml",
 					},
-					Filenames: sets.NewString("some-build-farm-presubmits.yaml"),
+					Filenames: sets.New[string]("some-build-farm-presubmits.yaml"),
 				},
 			},
 			api.CloudGCP: {

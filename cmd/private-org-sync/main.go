@@ -565,8 +565,8 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to read GitHub token")
 	} else {
 		token = strings.TrimSpace(string(rawToken))
-		getter := func() sets.String {
-			return sets.NewString(token)
+		getter := func() sets.Set[string] {
+			return sets.New[string](token)
 		}
 		logrus.SetFormatter(logrusutil.NewCensoringFormatter(logrus.StandardLogger().Formatter, getter))
 	}

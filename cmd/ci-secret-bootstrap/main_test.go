@@ -1829,12 +1829,12 @@ func TestGetUnusedItems(t *testing.T) {
 		id            string
 		config        secretbootstrap.Config
 		items         map[string]vaultclient.KVData
-		allowItems    sets.String
+		allowItems    sets.Set[string]
 		expectedError string
 	}{
 		{
 			id:         "all used, no unused items expected",
-			allowItems: sets.NewString(),
+			allowItems: sets.New[string](),
 			items: map[string]vaultclient.KVData{
 				"item-name-1": {
 					Data: map[string]string{
@@ -1864,7 +1864,7 @@ func TestGetUnusedItems(t *testing.T) {
 		},
 		{
 			id:         "partly used, unused items expected",
-			allowItems: sets.NewString(),
+			allowItems: sets.New[string](),
 			items: map[string]vaultclient.KVData{
 				"item-name-1": {
 					Data: map[string]string{
@@ -1893,7 +1893,7 @@ func TestGetUnusedItems(t *testing.T) {
 		},
 		{
 			id:         "partly used with docker json config, unused items expected",
-			allowItems: sets.NewString(),
+			allowItems: sets.New[string](),
 			items: map[string]vaultclient.KVData{
 				"item-name-1": {
 					Data: map[string]string{
@@ -1929,7 +1929,7 @@ func TestGetUnusedItems(t *testing.T) {
 		},
 		{
 			id:         "partly used with an allow list, no unused items expected",
-			allowItems: sets.NewString([]string{"item-name-2"}...),
+			allowItems: sets.New[string]([]string{"item-name-2"}...),
 			items: map[string]vaultclient.KVData{
 				"item-name-1": {
 					Data: map[string]string{
@@ -2912,7 +2912,7 @@ func TestPruneIrrelevantConfiguration(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			pruneIrrelevantConfiguration(tc.given, sets.NewString("config-updater"))
+			pruneIrrelevantConfiguration(tc.given, sets.New[string]("config-updater"))
 			if diff := cmp.Diff(tc.given, tc.expected); diff != "" {
 				t.Errorf("%s: actual differs from expected: %s", tc.name, diff)
 			}

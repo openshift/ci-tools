@@ -50,26 +50,8 @@ func (s *multiStageTestStep) runSteps(
 	select {
 	case <-ctx.Done():
 		logrus.Infof("cleanup: Deleting pods with label %s=%s", MultiStageTestLabel, s.name)
-
-		// Simplify to DeleteAllOf when https://bugzilla.redhat.com/show_bug.cgi?id=1937523 is fixed across production.
-		podList := &coreapi.PodList{}
-		if err := s.client.List(base_steps.CleanupCtx, podList, ctrlruntimeclient.InNamespace(s.jobSpec.Namespace()), ctrlruntimeclient.MatchingLabels{MultiStageTestLabel: s.name}); err != nil {
-			errs = append(errs, fmt.Errorf("failed to list pods with label %s=%s: %w", MultiStageTestLabel, s.name, err))
-		} else {
-			for _, pod := range podList.Items {
-				if pod.Status.Phase == coreapi.PodSucceeded || pod.Status.Phase == coreapi.PodFailed || pod.DeletionTimestamp != nil {
-					// Ignore pods that are complete or on their way out.
-					continue
-				}
-				if err := s.client.Delete(base_steps.CleanupCtx, &pod); err != nil && !kerrors.IsNotFound(err) {
-					errs = append(errs, fmt.Errorf("failed to delete pod %s with label %s=%s: %w", pod.Name, MultiStageTestLabel, s.name, err))
-					continue
-				}
-				if err := util.WaitForPodDeletion(base_steps.CleanupCtx, s.client, s.jobSpec.Namespace(), pod.Name, pod.UID); err != nil {
-					errs = append(errs, fmt.Errorf("failed waiting for pod %s with label %s=%s to be deleted: %w", pod.Name, MultiStageTestLabel, s.name, err))
-					continue
-				}
-			}
+		if err := s.client.DeleteAllOf(base_steps.CleanupCtx, &coreapi.Pod{}, ctrlruntimeclient.InNamespace(s.jobSpec.Namespace()), ctrlruntimeclient.MatchingLabels{MultiStageTestLabel: s.name}); err != nil && !kerrors.IsNotFound(err) {
+			errs = append(errs, fmt.Errorf("failed to delete pods with label %s=%s: %w", MultiStageTestLabel, s.name, err))
 		}
 		errs = append(errs, fmt.Errorf("cancelled"))
 	default:

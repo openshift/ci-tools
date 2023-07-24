@@ -1196,7 +1196,6 @@ const (
 	ClusterProfileVSphere               ClusterProfile = "vsphere"
 	ClusterProfileVSphere8              ClusterProfile = "vsphere-8"
 	ClusterProfileVSphere8Vpn           ClusterProfile = "vsphere-8-vpn"
-	ClusterProfileVSphereDiscon         ClusterProfile = "vsphere-discon"
 	ClusterProfileVSphereDis            ClusterProfile = "vsphere-dis"
 	ClusterProfileVSphereClusterbot     ClusterProfile = "vsphere-clusterbot"
 	ClusterProfileVSphereIBM7           ClusterProfile = "vsphere-ibm-7"
@@ -1306,7 +1305,6 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileVSphere8,
 		ClusterProfileVSphere8Vpn,
 		ClusterProfileVSphereClusterbot,
-		ClusterProfileVSphereDiscon,
 		ClusterProfileVSphereDis,
 		ClusterProfileVSphereIBM7,
 		ClusterProfileVSphereMultizone,
@@ -1443,7 +1441,6 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileVSphere,
 		ClusterProfileVSphere8,
 		ClusterProfileVSphere8Vpn,
-		ClusterProfileVSphereDiscon,
 		ClusterProfileVSphereDis,
 		ClusterProfileVSphereClusterbot,
 		ClusterProfileVSphereIBM7,
@@ -1631,8 +1628,6 @@ func (p ClusterProfile) LeaseType() string {
 		return "vsphere-8-quota-slice"
 	case ClusterProfileVSphere8Vpn:
 		return "vsphere-8-vpn-quota-slice"
-	case ClusterProfileVSphereDiscon:
-		return "vsphere-discon-quota-slice"
 	case ClusterProfileVSphereDis:
 		return "vsphere-dis-quota-slice"
 	case ClusterProfileVSphereClusterbot:
@@ -1708,7 +1703,6 @@ func (p ClusterProfile) Secret() string {
 		ClusterProfileGCPLoggingJournald,
 		ClusterProfileVSphere8,
 		ClusterProfileVSphereClusterbot,
-		ClusterProfileVSphereDiscon,
 		ClusterProfileVSphereDis,
 		ClusterProfileVSphereConnected,
 		ClusterProfileVSphereIBM7,

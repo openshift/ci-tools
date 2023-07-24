@@ -120,9 +120,9 @@ func e2eWorkflowForClusterProfile(clusterProfile api.ClusterProfile) string {
 
 func migrateOpenShiftInstallerTemplates(
 	configuration *config.DataWithInfo,
-	allowedBranches sets.String,
-	allowedOrgs sets.String,
-	allowedCloudproviders sets.String,
+	allowedBranches sets.Set[string],
+	allowedOrgs sets.Set[string],
+	allowedCloudproviders sets.Set[string],
 ) (migratedCount int) {
 	if (len(allowedBranches) != 0 && !allowedBranches.Has(configuration.Info.Branch)) || (len(allowedOrgs) != 0 && !allowedOrgs.Has(configuration.Info.Org)) {
 		return 0
@@ -140,7 +140,7 @@ func migrateOpenShiftInstallerTemplates(
 			test.OpenshiftInstallerClusterTestConfiguration = nil
 			test.MultiStageTestConfiguration = &api.MultiStageTestConfiguration{
 				ClusterProfile: clusterProfile,
-				Workflow:       utilpointer.StringPtr(upgradeWorkflowForClusterProfile(clusterProfile)),
+				Workflow:       utilpointer.String(upgradeWorkflowForClusterProfile(clusterProfile)),
 			}
 		case test.Commands == "setup_ssh_bastion; TEST_SUITE=openshift/disruptive run-tests; TEST_SUITE=openshift/conformance/parallel run-tests":
 			// TODO(muller): Unfortunately there is no easy way to express this ("run same step twice")
@@ -149,7 +149,7 @@ func migrateOpenShiftInstallerTemplates(
 			test.OpenshiftInstallerClusterTestConfiguration = nil
 			test.MultiStageTestConfiguration = &api.MultiStageTestConfiguration{
 				ClusterProfile: clusterProfile,
-				Workflow:       utilpointer.StringPtr(e2eWorkflowForClusterProfile(clusterProfile)),
+				Workflow:       utilpointer.String(e2eWorkflowForClusterProfile(clusterProfile)),
 			}
 		}
 		test.Commands = ""
@@ -162,9 +162,9 @@ func migrateOpenShiftInstallerTemplates(
 
 func migrateOpenshiftInstallerCustomTestImageTemplates(
 	configuration *config.DataWithInfo,
-	allowedBranches sets.String,
-	allowedOrgs sets.String,
-	allowedCloudproviders sets.String,
+	allowedBranches sets.Set[string],
+	allowedOrgs sets.Set[string],
+	allowedCloudproviders sets.Set[string],
 ) (migratedCount int) {
 	if (len(allowedBranches) != 0 && !allowedBranches.Has(configuration.Info.Branch)) || (len(allowedOrgs) != 0 && !allowedOrgs.Has(configuration.Info.Org)) {
 		return 0
@@ -190,7 +190,7 @@ func migrateOpenshiftInstallerCustomTestImageTemplates(
 					Requests: api.ResourceList{"cpu": "100m"},
 				},
 			}}},
-			Workflow: utilpointer.StringPtr(ipiWorkflowForClusterProfile(clusterProfile)),
+			Workflow: utilpointer.String(ipiWorkflowForClusterProfile(clusterProfile)),
 		}
 		test.Commands = ""
 
@@ -215,9 +215,9 @@ func ipiWorkflowForClusterProfile(clusterProfile api.ClusterProfile) string {
 
 func migrateOpenshiftOpenshiftInstallerUPIClusterTestConfiguration(
 	configuration *config.DataWithInfo,
-	allowedBranches sets.String,
-	allowedOrgs sets.String,
-	allowedCloudproviders sets.String,
+	allowedBranches sets.Set[string],
+	allowedOrgs sets.Set[string],
+	allowedCloudproviders sets.Set[string],
 ) (migratedCount int) {
 	if (len(allowedBranches) != 0 && !allowedBranches.Has(configuration.Info.Branch)) || (len(allowedOrgs) != 0 && !allowedOrgs.Has(configuration.Info.Org)) {
 		return 0
@@ -262,7 +262,7 @@ func migrateOpenshiftOpenshiftInstallerUPIClusterTestConfiguration(
 				// https://github.com/openshift/release/blob/ea3cc4842843c941e9fa1e71ce8a4dc3ce841184/ci-operator/step-registry/openshift/e2e/test/openshift-e2e-test-ref.yaml#L10
 				"TEST_SUITE": equalSignSplit[1],
 			},
-			Workflow: utilpointer.StringPtr(fmt.Sprintf("openshift-e2e-%s-upi", providerNameForProfile(clusterProfile))),
+			Workflow: utilpointer.String(fmt.Sprintf("openshift-e2e-%s-upi", providerNameForProfile(clusterProfile))),
 		}
 		if testTypeEnv != "" {
 			// https://github.com/openshift/release/blob/ea3cc4842843c941e9fa1e71ce8a4dc3ce841184/ci-operator/step-registry/openshift/e2e/test/openshift-e2e-test-ref.yaml#L7

@@ -22,6 +22,6 @@ type Client interface {
 
 type SecretUsageComparer interface {
 	LastChanged() time.Time
-	UnusedFields(inUse sets.String) (Difference sets.String)
-	SuperfluousFields() sets.String
+	UnusedFields(inUse sets.Set[string]) (Difference sets.Set[string])
+	SuperfluousFields() sets.Set[string]
 }

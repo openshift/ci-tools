@@ -26,7 +26,7 @@ const (
 	TTLAnnotationKey = "serviaccount-secret-rotator.openshift.io/delete-after"
 )
 
-func AddToManager(clusterName string, mgr manager.Manager, enabledNamespaces, ignoreServiceAccounts sets.String, removeOldSecrets bool) error {
+func AddToManager(clusterName string, mgr manager.Manager, enabledNamespaces, ignoreServiceAccounts sets.Set[string], removeOldSecrets bool) error {
 	r := &reconciler{
 		client: mgr.GetClient(),
 		filter: func(r reconcile.Request) bool {

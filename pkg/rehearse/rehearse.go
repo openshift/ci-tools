@@ -61,7 +61,7 @@ type RehearsalConfig struct {
 	MoreLimit   int
 	MaxLimit    int
 
-	StickyLabelAuthors sets.String
+	StickyLabelAuthors sets.Set[string]
 
 	GCSBucket          string
 	GCSCredentialsFile string

@@ -42,8 +42,8 @@ type Config struct {
 }
 
 type BuildFarmConfig struct {
-	FilenamesRaw []string    `json:"filenames,omitempty"`
-	Filenames    sets.String `json:"-"`
+	FilenamesRaw []string         `json:"filenames,omitempty"`
+	Filenames    sets.Set[string] `json:"-"`
 }
 
 // JobGroups maps a group of jobs to a cluster
@@ -78,7 +78,7 @@ func isApplyConfigJob(jobBase prowconfig.JobBase) bool {
 }
 
 var (
-	knownCloudProviders = sets.NewString(string(api.CloudAWS), string(api.CloudGCP))
+	knownCloudProviders = sets.New[string](string(api.CloudAWS), string(api.CloudGCP))
 )
 
 // DetermineCloud determines which cloud this job should run.
@@ -263,16 +263,16 @@ func LoadConfig(configPath string) (*Config, error) {
 		if config.BuildFarmCloud == nil {
 			config.BuildFarmCloud = map[api.Cloud][]string{}
 		}
-		clusters := sets.NewString()
+		clusters := sets.New[string]()
 		for cluster, filenames := range config.BuildFarm[cloudProvider] {
 			clusters.Insert(string(cluster))
-			filenames.Filenames = sets.NewString()
+			filenames.Filenames = sets.New[string]()
 			for _, f := range filenames.FilenamesRaw {
 				filenames.Filenames.Insert(f)
 			}
 			config.BuildFarm[cloudProvider][cluster] = filenames
 		}
-		config.BuildFarmCloud[cloudProvider] = clusters.List()
+		config.BuildFarmCloud[cloudProvider] = sets.List(clusters)
 	}
 
 	if len(errs) > 0 {

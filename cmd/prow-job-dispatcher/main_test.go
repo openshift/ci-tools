@@ -191,7 +191,7 @@ func TestDispatchJobConfig(t *testing.T) {
 			name: "basic case: non e2e job chooses build01",
 			cv: &clusterVolume{
 				clusterVolumeMap: map[string]map[string]float64{"aws": {"build01": 0}, "gcp": {"build02": 0}},
-				cloudProviders:   sets.NewString("aws", "gcp"),
+				cloudProviders:   sets.New[string]("aws", "gcp"),
 			},
 			config: &c,
 			jc: &prowconfig.JobConfig{
@@ -216,7 +216,7 @@ func TestDispatchJobConfig(t *testing.T) {
 			name: "basic case: aws e2e job chooses build01",
 			cv: &clusterVolume{
 				clusterVolumeMap: map[string]map[string]float64{"aws": {"build01": 1}, "gcp": {"build02": 0}},
-				cloudProviders:   sets.NewString("aws", "gcp"),
+				cloudProviders:   sets.New[string]("aws", "gcp"),
 			},
 			config: &c,
 			jc: &prowconfig.JobConfig{
@@ -241,7 +241,7 @@ func TestDispatchJobConfig(t *testing.T) {
 			name: "basic case: aws and gcp e2e job chooses build02",
 			cv: &clusterVolume{
 				clusterVolumeMap: map[string]map[string]float64{"aws": {"build01": 1}, "gcp": {"build02": 0}},
-				cloudProviders:   sets.NewString("aws", "gcp"),
+				cloudProviders:   sets.New[string]("aws", "gcp"),
 			},
 			config: &c,
 			jc: &prowconfig.JobConfig{
@@ -288,7 +288,7 @@ func TestGetCloudProvidersForE2ETests(t *testing.T) {
 	testCases := []struct {
 		name     string
 		jc       *prowconfig.JobConfig
-		expected sets.String
+		expected sets.Set[string]
 	}{
 		{
 			name: "openstack",
@@ -302,7 +302,7 @@ func TestGetCloudProvidersForE2ETests(t *testing.T) {
 						}}}},
 				},
 			},
-			expected: sets.NewString(),
+			expected: sets.New[string](),
 		},
 		{
 			name: "aws",
@@ -316,7 +316,7 @@ func TestGetCloudProvidersForE2ETests(t *testing.T) {
 						}}}},
 				},
 			},
-			expected: sets.NewString("aws"),
+			expected: sets.New[string]("aws"),
 		},
 		{
 			name: "several cloud providers",
@@ -342,7 +342,7 @@ func TestGetCloudProvidersForE2ETests(t *testing.T) {
 						}}}},
 				},
 			},
-			expected: sets.NewString("aws", "gcp"),
+			expected: sets.New[string]("aws", "gcp"),
 		},
 	}
 	for _, tc := range testCases {
@@ -374,17 +374,17 @@ func TestAddEnabledClusters(t *testing.T) {
 	tests := []struct {
 		name    string
 		config  *dispatcher.Config
-		enabled sets.String
+		enabled sets.Set[string]
 	}{
 		{
 			name:    "Add gcp cluster build04",
 			config:  &dispatcher.Config{},
-			enabled: sets.NewString("build04"),
+			enabled: sets.New[string]("build04"),
 		},
 		{
 			name:    "Add multiple clusters, different providers",
 			config:  &dispatcher.Config{},
-			enabled: sets.NewString("build03", "build04", "build05"),
+			enabled: sets.New[string]("build03", "build04", "build05"),
 		},
 	}
 	for _, tc := range tests {
@@ -399,7 +399,7 @@ func TestAddEnabledClusters(t *testing.T) {
 				if !exists {
 					t.Errorf("%s: cloud provider %s not found in BuildFarmCloud", t.Name(), provider)
 				}
-				clusters := sets.NewString(c...)
+				clusters := sets.New[string](c...)
 				if !clusters.Has(cluster) {
 					t.Errorf("%s: expected %s cluster to be added under %s provider in BuildFarmCloud", t.Name(), cluster, provider)
 				}
@@ -426,12 +426,12 @@ func TestRemoveDisabledClusters(t *testing.T) {
 	tests := []struct {
 		name     string
 		config   *dispatcher.Config
-		disabled sets.String
+		disabled sets.Set[string]
 	}{
 		{
 			name:     "Remove gcp and aws clusters",
 			config:   cfgWithCloud,
-			disabled: sets.NewString("build01", "build02"),
+			disabled: sets.New[string]("build01", "build02"),
 		},
 	}
 	for _, tc := range tests {

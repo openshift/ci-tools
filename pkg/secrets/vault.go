@@ -156,7 +156,7 @@ func (c *vaultClient) GetInUseInformationForAllItems(optionalSubPath string) (ma
 				errs = append(errs, err)
 				return
 			}
-			comparer := vaultSecretUsageComparer{item: *kvData, allFields: sets.String{}, inUseFields: sets.String{}}
+			comparer := vaultSecretUsageComparer{item: *kvData, allFields: sets.Set[string]{}, inUseFields: sets.Set[string]{}}
 			for key := range kvData.Data {
 				comparer.allFields.Insert(key)
 			}
@@ -241,23 +241,23 @@ func (c *vaultClient) GetUserSecrets() (map[types.NamespacedName]map[string]stri
 
 type vaultSecretUsageComparer struct {
 	item        vaultclient.KVData
-	allFields   sets.String
-	inUseFields sets.String
+	allFields   sets.Set[string]
+	inUseFields sets.Set[string]
 }
 
 func (v *vaultSecretUsageComparer) LastChanged() time.Time {
 	return v.item.Metadata.CreatedTime
 }
 
-func (v *vaultSecretUsageComparer) markInUse(fields sets.String) (absent sets.String) {
-	v.inUseFields.Insert(fields.List()...)
+func (v *vaultSecretUsageComparer) markInUse(fields sets.Set[string]) (absent sets.Set[string]) {
+	v.inUseFields.Insert(sets.List(fields)...)
 	return fields.Difference(v.allFields)
 }
 
-func (v *vaultSecretUsageComparer) UnusedFields(inUse sets.String) (Difference sets.String) {
+func (v *vaultSecretUsageComparer) UnusedFields(inUse sets.Set[string]) (Difference sets.Set[string]) {
 	return v.markInUse(inUse)
 }
 
-func (v *vaultSecretUsageComparer) SuperfluousFields() sets.String {
+func (v *vaultSecretUsageComparer) SuperfluousFields() sets.Set[string] {
 	return v.allFields.Difference(v.inUseFields)
 }

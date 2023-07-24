@@ -123,10 +123,10 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor, kubeConfigs map
 	}
 
 	if vals := o.secretNamesRaw.Strings(); len(vals) > 0 {
-		secretNames := sets.NewString(vals...)
-		logrus.WithField("secretNames", secretNames.List()).Info("pruning irrelevant configuration ...")
+		secretNames := sets.New[string](vals...)
+		logrus.WithField("secretNames", sets.List(secretNames)).Info("pruning irrelevant configuration ...")
 		pruneIrrelevantConfiguration(&o.config, secretNames)
-		logrus.WithField("secretNames", secretNames.List()).WithField("o.config.Secrets", o.config.Secrets).Info("pruned irrelevant configuration")
+		logrus.WithField("secretNames", sets.List(secretNames)).WithField("o.config.Secrets", o.config.Secrets).Info("pruned irrelevant configuration")
 	}
 
 	if o.generatorConfigPath != "" {
@@ -183,7 +183,7 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor, kubeConfigs map
 	return o.validateCompletedOptions()
 }
 
-func pruneIrrelevantConfiguration(c *secretbootstrap.Config, secretNames sets.String) {
+func pruneIrrelevantConfiguration(c *secretbootstrap.Config, secretNames sets.Set[string]) {
 	var secretConfigs []secretbootstrap.SecretConfig
 	for _, secretConfig := range c.Secrets {
 		for _, secretContext := range secretConfig.To {
@@ -481,7 +481,7 @@ type Getter interface {
 	coreclientset.NamespacesGetter
 }
 
-func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.Secret, force bool, confirm bool, osdGlobalPullSecretGroup sets.String) error {
+func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.Secret, force bool, confirm bool, osdGlobalPullSecretGroup sets.Set[string]) error {
 	var errs []error
 
 	var dryRunOptions []string
@@ -493,7 +493,7 @@ func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.S
 	for cluster, secrets := range secretsMap {
 		logger := logrus.WithField("cluster", cluster)
 		logger.Debug("Syncing secrets for cluster")
-		existingNamespaces := sets.NewString()
+		existingNamespaces := sets.New[string]()
 		for _, secret := range secrets {
 			logger := logger.WithFields(logrus.Fields{"namespace": secret.Namespace, "name": secret.Name, "type": secret.Type})
 			logger.Debug("handling secret")
@@ -680,19 +680,19 @@ func writeSecretsToFile(secrets []*coreapi.Secret, w io.Writer) error {
 }
 
 type comparable struct {
-	fields            sets.String
-	superfluousFields sets.String
+	fields            sets.Set[string]
+	superfluousFields sets.Set[string]
 }
 
 func (c *comparable) string() string {
 	var ret string
 
 	if c.fields.Len() > 0 {
-		ret += fmt.Sprintf("Fields: '%s'", strings.Join(c.fields.List(), ", "))
+		ret += fmt.Sprintf("Fields: '%s'", strings.Join(sets.List(c.fields), ", "))
 	}
 
 	if len(c.superfluousFields) > 0 {
-		ret += fmt.Sprintf(" SuperfluousFields: %v", c.superfluousFields.List())
+		ret += fmt.Sprintf(" SuperfluousFields: %v", sets.List(c.superfluousFields))
 	}
 	return ret
 }
@@ -706,7 +706,7 @@ func constructConfigItemsByName(config secretbootstrap.Config) map[string]*compa
 				item, ok := cfgComparableItemsByName[itemContext.Item]
 				if !ok {
 					item = &comparable{
-						fields: sets.NewString(),
+						fields: sets.New[string](),
 					}
 				}
 				item.fields = insertIfNotEmpty(item.fields, itemContext.Field)
@@ -718,7 +718,7 @@ func constructConfigItemsByName(config secretbootstrap.Config) map[string]*compa
 					item, ok := cfgComparableItemsByName[context.Item]
 					if !ok {
 						item = &comparable{
-							fields: sets.NewString(),
+							fields: sets.New[string](),
 						}
 					}
 
@@ -733,7 +733,7 @@ func constructConfigItemsByName(config secretbootstrap.Config) map[string]*compa
 	return cfgComparableItemsByName
 }
 
-func insertIfNotEmpty(s sets.String, items ...string) sets.String {
+func insertIfNotEmpty(s sets.Set[string], items ...string) sets.Set[string] {
 	for _, item := range items {
 		if item != "" {
 			s.Insert(item)
@@ -742,7 +742,7 @@ func insertIfNotEmpty(s sets.String, items ...string) sets.String {
 	return s
 }
 
-func getUnusedItems(config secretbootstrap.Config, client secrets.ReadOnlyClient, allowUnused sets.String, allowUnusedAfter time.Time) error {
+func getUnusedItems(config secretbootstrap.Config, client secrets.ReadOnlyClient, allowUnused sets.Set[string], allowUnusedAfter time.Time) error {
 	allSecretStoreItems, err := client.GetInUseInformationForAllItems(config.VaultDPTPPrefix)
 	if err != nil {
 		return fmt.Errorf("failed to get in-use information from secret store: %w", err)
@@ -774,7 +774,7 @@ func getUnusedItems(config secretbootstrap.Config, client secrets.ReadOnlyClient
 		diffFields := item.UnusedFields(cfgComparableItemsByName[itemName].fields)
 		if diffFields.Len() > 0 {
 			if allowUnused.Has(itemName) {
-				l.WithField("fields", strings.Join(diffFields.List(), ",")).Info("Unused fields from item are allowed by arguments")
+				l.WithField("fields", strings.Join(sets.List(diffFields), ",")).Info("Unused fields from item are allowed by arguments")
 				continue
 			}
 
@@ -946,7 +946,7 @@ func reconcileSecrets(o options, client secrets.ReadOnlyClient) (errs []error) {
 			errs = append(errs, fmt.Errorf("failed to write secrets on dry run: %w", err))
 		}
 	} else {
-		if err := updateSecrets(o.secretsGetters, secretsMap, o.force, o.confirm, sets.NewString(o.config.OSDGlobalPullSecretGroup()...)); err != nil {
+		if err := updateSecrets(o.secretsGetters, secretsMap, o.force, o.confirm, sets.New[string](o.config.OSDGlobalPullSecretGroup()...)); err != nil {
 			errs = append(errs, fmt.Errorf("failed to update secrets: %w", err))
 		}
 		logrus.Info("Updated secrets.")

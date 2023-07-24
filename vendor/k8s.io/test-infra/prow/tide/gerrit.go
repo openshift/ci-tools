@@ -28,7 +28,6 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/config"
 	gerritadaptor "k8s.io/test-infra/prow/gerrit/adapter"
 	"k8s.io/test-infra/prow/gerrit/client"
@@ -105,6 +104,7 @@ func NewGerritController(
 	logger *logrus.Entry,
 	configOptions configflagutil.ConfigOptions,
 	cookieFilePath string,
+	maxQPS, maxBurst int,
 ) (*Controller, error) {
 	if logger == nil {
 		logger = logrus.NewEntry(logrus.StandardLogger())
@@ -125,7 +125,7 @@ func NewGerritController(
 	if err != nil {
 		return nil, fmt.Errorf("failed creating inrepoconfig cache getter: %v", err)
 	}
-	provider := newGerritProvider(logger, cfgAgent.Config, mgr.GetClient(), cacheGetter, cookieFilePath, "")
+	provider := newGerritProvider(logger, cfgAgent.Config, mgr.GetClient(), cacheGetter, cookieFilePath, "", maxQPS, maxBurst)
 	syncCtrl, err := newSyncController(ctx, logger, mgr, provider, cfgAgent.Config, gc, hist, false, statusUpdate)
 	if err != nil {
 		return nil, err
@@ -159,8 +159,9 @@ func newGerritProvider(
 	inRepoConfigCache *config.InRepoConfigCache,
 	cookiefilePath string,
 	tokenPathOverride string,
+	maxQPS, maxBurst int,
 ) *GerritProvider {
-	gerritClient, err := client.NewClient(nil)
+	gerritClient, err := client.NewClient(nil, maxQPS, maxBurst)
 	if err != nil {
 		logrus.WithError(err).Fatal("Error creating gerrit client.")
 	}
@@ -277,7 +278,7 @@ func (p *GerritProvider) headContexts(crc *CodeReviewCommon) ([]Context, error) 
 		kube.RepoLabel:        crc.Repo,
 		kube.PullLabel:        strconv.Itoa(crc.Number),
 	}
-	var pjs v1.ProwJobList
+	var pjs prowapi.ProwJobList
 	if err := p.pjclientset.List(context.Background(), &pjs, ctrlruntimeclient.MatchingLabels(selector)); err != nil {
 		return nil, fmt.Errorf("Cannot list prowjob with selector %v", selector)
 	}
@@ -427,7 +428,7 @@ func (p *GerritProvider) jobIsRequiredByTide(ps *config.Presubmit, crc *CodeRevi
 		return true
 	}
 
-	requireLabels := sets.NewString()
+	requireLabels := sets.New[string]()
 	for l, info := range crc.Gerrit.Labels {
 		if !info.Optional {
 			requireLabels.Insert(l)

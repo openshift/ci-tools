@@ -139,8 +139,8 @@ func (o *options) validate() error {
 }
 
 // getCloudProvidersForE2ETests returns a set of cloud providers where a cluster is hosted for an e2e test defined in the given Prow job config.
-func getCloudProvidersForE2ETests(jc *prowconfig.JobConfig) sets.String {
-	cloudProviders := sets.NewString()
+func getCloudProvidersForE2ETests(jc *prowconfig.JobConfig) sets.Set[string] {
+	cloudProviders := sets.New[string]()
 	for k := range jc.PresubmitsStatic {
 		for _, job := range jc.PresubmitsStatic[k] {
 			if cloud := dispatcher.DetermineCloud(job.JobBase); cloud != "" {
@@ -167,7 +167,7 @@ type clusterVolume struct {
 	// [cloudProvider][cluster]volume
 	clusterVolumeMap map[string]map[string]float64
 	// only needed for stable tests: traverse the above map by sorted key list
-	cloudProviders sets.String
+	cloudProviders sets.Set[string]
 	mutex          sync.Mutex
 }
 
@@ -182,7 +182,7 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 	var cluster, rCloudProvider string
 	min := float64(-1)
 	cv.mutex.Lock()
-	for _, cp := range cv.cloudProviders.List() {
+	for _, cp := range sets.List(cv.cloudProviders) {
 		m := cv.clusterVolumeMap[cp]
 		for c, v := range m {
 			if cloudProvider == "" || cloudProvider == cp {
@@ -266,7 +266,7 @@ func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency i
 	}
 
 	// cv stores the volume for each cluster in the build farm
-	cv := &clusterVolume{clusterVolumeMap: map[string]map[string]float64{}, cloudProviders: sets.NewString()}
+	cv := &clusterVolume{clusterVolumeMap: map[string]map[string]float64{}, cloudProviders: sets.New[string]()}
 	for cloudProvider, v := range config.BuildFarm {
 		for cluster := range v {
 			cloudProviderString := string(cloudProvider)
@@ -402,15 +402,15 @@ func getClusterProvider(cluster string) (api.Cloud, error) {
 }
 
 // removeDisabledClusters removes disabled clusters from BuildFarm and BuildFarmConfig
-func removeDisabledClusters(config *dispatcher.Config, disabled sets.String) {
+func removeDisabledClusters(config *dispatcher.Config, disabled sets.Set[string]) {
 	for provider := range config.BuildFarm {
 		for cluster := range config.BuildFarm[provider] {
 			if disabled.Has(string(cluster)) {
 				delete(config.BuildFarm[provider], cluster)
 				if clusters, ok := config.BuildFarmCloud[provider]; ok {
-					c := sets.NewString(clusters...)
+					c := sets.New[string](clusters...)
 					c = c.Delete(string(cluster))
-					config.BuildFarmCloud[provider] = c.List()
+					config.BuildFarmCloud[provider] = sets.List(c)
 				}
 			}
 		}
@@ -420,7 +420,7 @@ func removeDisabledClusters(config *dispatcher.Config, disabled sets.String) {
 type clusterProviderGetter func(cluster string) (api.Cloud, error)
 
 // addEnabledClusters adds enabled clusters to the BuildFarm and BuildFarmConfig
-func addEnabledClusters(config *dispatcher.Config, enabled sets.String, getter clusterProviderGetter) {
+func addEnabledClusters(config *dispatcher.Config, enabled sets.Set[string], getter clusterProviderGetter) {
 	if len(enabled) > 0 && config.BuildFarm == nil {
 		config.BuildFarm = make(map[api.Cloud]map[api.Cluster]*dispatcher.BuildFarmConfig)
 	}
@@ -433,7 +433,7 @@ func addEnabledClusters(config *dispatcher.Config, enabled sets.String, getter c
 			if config.BuildFarm[provider] == nil {
 				config.BuildFarm[provider] = make(map[api.Cluster]*dispatcher.BuildFarmConfig)
 			}
-			config.BuildFarm[provider][api.Cluster(cluster)] = &dispatcher.BuildFarmConfig{FilenamesRaw: []string{}, Filenames: sets.NewString()}
+			config.BuildFarm[provider][api.Cluster(cluster)] = &dispatcher.BuildFarmConfig{FilenamesRaw: []string{}, Filenames: sets.New[string]()}
 		}
 		if clusters, ok := config.BuildFarmCloud[provider]; ok {
 			clusters = append(clusters, cluster)

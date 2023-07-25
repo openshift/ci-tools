@@ -141,9 +141,13 @@ func (s *multiStageTestStep) setupRBAC(ctx context.Context) error {
 			Subjects:   subj,
 		},
 		{
-			ObjectMeta: meta.ObjectMeta{Namespace: ns, Name: "test-runner-view-binding", Labels: labels},
-			RoleRef:    rbacapi.RoleRef{Kind: "ClusterRole", Name: "view"},
-			Subjects:   subj,
+			ObjectMeta: meta.ObjectMeta{
+				Namespace: ns,
+				Name:      s.name + "-view",
+				Labels:    labels,
+			},
+			RoleRef:  rbacapi.RoleRef{Kind: "ClusterRole", Name: "view"},
+			Subjects: subj,
 		},
 	}
 	if s.vpnConf != nil {

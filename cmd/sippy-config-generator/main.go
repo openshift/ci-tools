@@ -147,12 +147,12 @@ func main() {
 	})
 
 	for _, p := range jobConfig.Periodics {
-		if strings.Contains(p.Name, "-okd") {
-			// Don't include OKD jobs
-			continue
-		}
-
 		if release, ok := p.Labels["job-release"]; ok {
+			// include OKD jobs but as a different release by appending `okd`
+			// to the release name.
+			if strings.Contains(p.Name, "-okd") {
+				release = fmt.Sprintf("%s-okd", release)
+			}
 			if _, ok := sippyConfig.Releases[release]; !ok {
 				sippyConfig.Releases[release] = v1sippy.ReleaseConfig{
 					Jobs:          make(map[string]bool),

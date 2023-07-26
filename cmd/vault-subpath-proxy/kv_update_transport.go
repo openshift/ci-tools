@@ -137,7 +137,7 @@ func (k *kvUpdateTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	keyConflictValidationErrs, err := k.validateKeysDontConflict(r.Context(), r.URL.Path, body.Data)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to validate keys don't conflict")
-		errs = append(errs, "secret key validation check failed, please contact @dptp-helpdesk in #forum-testplatform")
+		errs = append(errs, "secret key validation check failed, please contact @dptp-helpdesk in #forum-ocp-testplatform")
 	}
 	errs = append(errs, keyConflictValidationErrs...)
 

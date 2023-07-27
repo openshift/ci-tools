@@ -88,7 +88,14 @@ func digestAll(data map[string][]*cacheReloader, digesters map[string]digester, 
 	var infos []digestInfo
 	for id, d := range digesters {
 		for _, item := range data[id] {
-			infos = append(infos, digestInfo{name: item.name, data: item, digest: d})
+			s := make(chan *pod_scaler.CachedQuery, 1)
+			item.subscribe(s)
+			infos = append(infos, digestInfo{
+				name:         item.name,
+				data:         item,
+				digest:       d,
+				subscription: s,
+			})
 		}
 	}
 	logger.Debugf("digesting %d infos.", len(infos))
@@ -112,9 +119,10 @@ func digestAll(data map[string][]*cacheReloader, digesters map[string]digester, 
 type digester func(query *pod_scaler.CachedQuery)
 
 type digestInfo struct {
-	name   string
-	data   *cacheReloader
-	digest digester
+	name         string
+	data         *cacheReloader
+	digest       digester
+	subscription chan *pod_scaler.CachedQuery
 }
 
 func digest(logger *logrus.Entry, infos ...digestInfo) <-chan interface{} {
@@ -137,15 +145,13 @@ func digest(logger *logrus.Entry, infos ...digestInfo) <-chan interface{} {
 		thisOnce := &sync.Once{}
 		interrupts.Run(func(ctx context.Context) {
 			subLogger := logger.WithField("subscription", info.name)
-			subscription := make(chan *pod_scaler.CachedQuery, 1)
-			info.data.subscribe(subscription)
 			subLogger.Debug("Starting subscription.")
 			for {
 				select {
 				case <-ctx.Done():
 					subLogger.Debug("Subscription cancelled.")
 					return
-				case data := <-subscription:
+				case data := <-info.subscription:
 					subLogger.Debug("Digesting new data from subscription.")
 					info.digest(data)
 					thisOnce.Do(update)

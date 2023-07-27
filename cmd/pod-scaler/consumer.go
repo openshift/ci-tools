@@ -89,6 +89,7 @@ func digestAll(data map[string][]*cacheReloader, digesters map[string]digester, 
 	for id, d := range digesters {
 		for _, item := range data[id] {
 			s := make(chan *pod_scaler.CachedQuery, 1)
+			item.subscribe(s)
 			infos = append(infos, digestInfo{
 				name:         item.name,
 				data:         item,
@@ -144,7 +145,6 @@ func digest(logger *logrus.Entry, infos ...digestInfo) <-chan interface{} {
 		thisOnce := &sync.Once{}
 		interrupts.Run(func(ctx context.Context) {
 			subLogger := logger.WithField("subscription", info.name)
-			info.data.subscribe(info.subscription)
 			subLogger.Debug("Starting subscription.")
 			for {
 				select {

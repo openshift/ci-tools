@@ -2,6 +2,38 @@
 NOW=$(date +%s)
 echo Cleanning up resources older than $(date -u -d @$NOW +%Y-%m-%dT%H:%M:%SZ)
 
+echo 'Deleting broken HostedClusters...'
+# Get json output from oc command
+oc get hc -A -o json --as system:admin | jq -r '.items[] | select(.metadata.annotations.broken == "true" and .spec.dns.baseDomain == "hypershift.aws-2.ci.openshift.org" ) | "\(.metadata.namespace) \(.metadata.name)"' | while read cluster; do
+    echo 'Deleting' $cluster
+    echo $cluster | awk '{ print "timeout 10m ./hypershift destroy cluster aws --name " $2 " --aws-creds ./workspace/hosted-aws "  }' | bash
+done
+
+echo 'Deleting expired HostedClusters...'
+# Get json output from oc command
+clusters_json=$(oc -n clusters get hostedclusters -o json | jq -s '[.[] | select( .items[].spec.dns.baseDomain == "hypershift.aws-2.ci.openshift.org" ) | .items[].metadata]')
+# Process each cluster
+echo "${clusters_json}" | jq -c '.[]' | while read cluster; do
+    # Extract creationTimestamp and cluster name
+    creation_time_str=$(echo "${cluster}" | jq -r ".creationTimestamp")
+    cluster_name=$(echo "${cluster}" | jq -r ".name")
+
+    # Convert creationTimestamp to seconds (Unix timestamp)
+    creation_time=$(date --date="${creation_time_str}" +%s)
+
+    # Calculate the time difference in hours
+    time_diff_hr=$(( (NOW - creation_time) / 3600 ))
+
+    # If creationTimestamp is older than 12 hours, delete the cluster
+    if (( time_diff_hr > 12 )); then
+        echo "Deleting cluster ${cluster_name} created at ${creation_time_str}..."
+        timeout 10m ~/hypershift destroy cluster aws --name "${cluster_name}" --aws-creds ~/hosted-aws
+    fi
+done
+
+# echo 'Patching clusters stuck at deleting'
+# oc get hc -A -o json --as system:admin | jq -r '.items[] | select(.metadata.finalizers == ["openshift.io/destroy-cluster"]) | "\(.metadata.namespace) \(.metadata.name)"' | awk '{ print "oc patch -n " $1 " hostedclusters/" $2 " -p '\''{\"metadata\":{\"finalizers\":[]}, \"status\":{\"version\":{\"availableUpdates\":[]}}}'\'' --type=merge --as=system:admin"  }' | bash
+
 echo 'Deleting expired OpenID Connect Providers...'
 # Get all OpenID Connect Providers with ARN
 arns=`aws iam list-open-id-connect-providers --query 'OpenIDConnectProviderList[*].Arn' --output json | jq -r '.[]'`

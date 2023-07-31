@@ -278,7 +278,7 @@ func addPodUtils(pod *coreapi.Pod, artifactDir string, decorationConfig *prowv1.
 	blobStorageOptions.SubDir = artifactDir
 	pod.Spec.InitContainers = append(pod.Spec.InitContainers, decorate.PlaceEntrypoint(decorationConfig, toolsMount))
 
-	wrapperOptions, err := decorate.InjectEntrypoint(&pod.Spec.Containers[0], decorationConfig.Timeout.Get(), decorationConfig.GracePeriod.Get(), "", "", false, logMount, toolsMount)
+	wrapperOptions, err := decorate.InjectEntrypoint(&pod.Spec.Containers[0], decorationConfig.Timeout.Get(), decorationConfig.GracePeriod.Get(), "", "", false, false, logMount, toolsMount)
 	if err != nil {
 		return fmt.Errorf("could not inject entrypoint: %w", err)
 	}

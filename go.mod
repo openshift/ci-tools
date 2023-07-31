@@ -199,7 +199,7 @@ require (
 	github.com/openshift/hive/apis v0.0.0-20230525214126-ab571664f899
 	github.com/openshift/library-go v0.0.0-20230127175320-3e9e170c5942
 	github.com/stretchr/testify v1.8.3
-	k8s.io/test-infra v0.0.0-20230723142209-fe3dc1b1379f
+	k8s.io/test-infra v0.0.0-20230730002001-fe7e1271d23c
 	sigs.k8s.io/boskos v0.0.0-20230524062849-a7ef97ee445d
 )
 

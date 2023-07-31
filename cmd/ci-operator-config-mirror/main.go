@@ -235,7 +235,12 @@ func privateBaseImages(baseImages map[string]api.ImageStreamTagReference) {
 
 func privatePromotionConfiguration(promotion *api.PromotionConfiguration) {
 	if promotion.Namespace == ocpNamespace {
-		promotion.Name = fmt.Sprintf("%s-priv", promotion.Name)
+		if promotion.Name != "" {
+			promotion.Name = fmt.Sprintf("%s-priv", promotion.Name)
+		} else { // promotion.Tag must be set
+			promotion.Tag = fmt.Sprintf("%s-priv", promotion.Tag)
+		}
+		promotion.TagByCommit = false // Never use tag_by_commit for mirrored repos
 		promotion.Namespace = privatePromotionNamespace
 	}
 }

@@ -208,6 +208,11 @@ func TestPrivatePromotionConfiguration(t *testing.T) {
 			promotion: &api.PromotionConfiguration{Tag: "4.x", Namespace: "ocp"},
 			expected:  &api.PromotionConfiguration{Tag: "4.x-priv", Namespace: "ocp-private"},
 		},
+		{
+			id:        "promoted by tag, includes tag_by_commit",
+			promotion: &api.PromotionConfiguration{Tag: "4.x", Namespace: "ocp", TagByCommit: true},
+			expected:  &api.PromotionConfiguration{Tag: "4.x-priv", Namespace: "ocp-private"},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.id, func(t *testing.T) {

@@ -343,18 +343,17 @@ func buildMasterNodesUpdatedSQL(masterNodesUpdated string) string {
 	masterNodesUpdatedSQL := ""
 
 	if len(masterNodesUpdated) > 0 {
-		masterNodesUpdatedSQL = fmt.Sprintf("AND JobRuns.MasterNodesUpdated = '%s'", masterNodesUpdated)
+		masterNodesUpdatedSQL = fmt.Sprintf("AND MasterNodesUpdated = '%s'", masterNodesUpdated)
 	}
 	return masterNodesUpdatedSQL
 }
 
 func (c *ciDataClient) GetBackendDisruptionRowCountByJob(ctx context.Context, jobName, masterNodesUpdated string) (uint64, error) {
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(fmt.Sprintf(`
-SELECT Count(Name) AS TotalRows
-FROM
-	DATA_SET_LOCATION.BackendDisruption_JobRuns AS JobRuns
+SELECT COUNT(DISTINCT(JobRunName)) AS TotalRows FROM
+	DATA_SET_LOCATION.BackendDisruption 
 WHERE
-    StartTime <= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 3 DAY)
+    JobRunStartTime <= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 3 DAY)
 AND
 	JobName = @JobName
 %s`, buildMasterNodesUpdatedSQL(masterNodesUpdated)))
@@ -694,14 +693,12 @@ FROM
                     PERCENTILE_CONT(BackendDisruption.DisruptionSeconds, 0.99) OVER(PARTITION BY BackendDisruption.BackendName) AS P99,
                 FROM
                     DATA_SET_LOCATION.BackendDisruption as BackendDisruption
-                INNER JOIN
-                    DATA_SET_LOCATION.BackendDisruption_JobRuns as JobRuns on JobRuns.Name = BackendDisruption.JobRunName
                 WHERE
-                    JobRuns.StartTime BETWEEN TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 10 DAY)
+                    JobRunStartTime BETWEEN TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 10 DAY)
                 AND
                     TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 3 DAY)
                 AND
-                    JobRuns.JobName = @JobName
+                    JobName = @JobName
                 %s
             )
             GROUP BY
@@ -714,15 +711,13 @@ LEFT JOIN
             AVG(BackendDisruption.DisruptionSeconds) as Mean,
             STDDEV(BackendDisruption.DisruptionSeconds) as StandardDeviation,
             FROM
-                DATA_SET_LOCATION.BackendDisruption as BackendDisruption
-            INNER JOIN
-                DATA_SET_LOCATION.BackendDisruption_JobRuns as JobRuns on JobRuns.Name = BackendDisruption.JobRunName
+                DATA_SET_LOCATION.BackendDisruption AS BackendDisruption
             WHERE
-                JobRuns.StartTime BETWEEN TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 10 DAY)
+                JobRunStartTime BETWEEN TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 10 DAY)
             AND
                 TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 3 DAY)
             AND
-                JobRuns.JobName = @JobName
+                JobName = @JobName
             %s
             GROUP BY
                 BackendName
@@ -860,10 +855,10 @@ func (it *UnifiedTestRunRowIterator) Next() (*jobrunaggregatorapi.UnifiedTestRun
 
 func (c *ciDataClient) GetJobRunForJobNameBeforeTime(ctx context.Context, jobName string, targetTime time.Time) (string, error) {
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(
-		`SELECT Name
-FROM DATA_SET_LOCATION.JobRuns
-WHERE JobRuns.StartTime <= @TimeCutOff and JobRuns.JobName = @JobName
-ORDER BY JobRuns.StartTime DESC
+		`SELECT DISTINCT(JobRunName), JobRunStartTime
+FROM DATA_SET_LOCATION.TestRuns
+WHERE JobRunStartTime <= @TimeCutOff and JobName = @JobName
+ORDER BY JobRunStartTime DESC
 LIMIT 1
 `)
 
@@ -877,7 +872,7 @@ LIMIT 1
 		return "", err
 	}
 
-	ret := &jobrunaggregatorapi.JobRunRow{}
+	ret := &jobrunaggregatorapi.TestRunRow{}
 	err = rowIterator.Next(ret)
 	if err == iterator.Done {
 		return "", nil
@@ -885,15 +880,15 @@ LIMIT 1
 	if err != nil {
 		return "", err
 	}
-	return ret.Name, nil
+	return ret.JobRunName, nil
 }
 
 func (c *ciDataClient) GetJobRunForJobNameAfterTime(ctx context.Context, jobName string, targetTime time.Time) (string, error) {
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(
-		`SELECT Name
-FROM DATA_SET_LOCATION.JobRuns
-WHERE JobRuns.StartTime >= @TimeCutOff and JobRuns.JobName = @JobName
-ORDER BY JobRuns.StartTime ASC
+		`SELECT DISTINCT(JobRunName), JobRunStartTime
+FROM DATA_SET_LOCATION.TestRuns
+WHERE JobRunStartTime >= @TimeCutOff and JobName = @JobName
+ORDER BY JobRunStartTime ASC
 LIMIT 1
 `)
 
@@ -907,7 +902,7 @@ LIMIT 1
 		return "", err
 	}
 
-	ret := &jobrunaggregatorapi.JobRunRow{}
+	ret := &jobrunaggregatorapi.TestRunRow{}
 	err = rowIterator.Next(ret)
 	if err == iterator.Done {
 		return "", nil
@@ -915,7 +910,7 @@ LIMIT 1
 	if err != nil {
 		return "", err
 	}
-	return ret.Name, nil
+	return ret.JobRunName, nil
 }
 
 func (c *ciDataClient) ListAggregatedTestRunsForJob(ctx context.Context, frequency, jobName string, startDay time.Time) ([]jobrunaggregatorapi.AggregatedTestRunRow, error) {

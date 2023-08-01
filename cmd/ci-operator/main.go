@@ -899,7 +899,7 @@ func (o *options) Run() []error {
 	}
 	stepList, errs := nodes.TopologicalSort()
 	if errs != nil {
-		return append([]error{errors.New("could not sort nodes")}, errs...)
+		return append([]error{results.ForReason("building_graph").ForError(errors.New("could not sort nodes"))}, errs...)
 	}
 	logrus.Infof("Running %s", strings.Join(nodeNames(stepList), ", "))
 	if o.printGraph {

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -65,7 +64,7 @@ func (o *options) validate() error {
 type configsByRepo map[string][]config.DataWithInfo
 
 func (d configsByRepo) cleanDestinationSubdirs(destinationOrgPath string) error {
-	contents, err := ioutil.ReadDir(destinationOrgPath)
+	contents, err := os.ReadDir(destinationOrgPath)
 	if err != nil {
 		return fmt.Errorf("failed to read directory %s: %w", destinationOrgPath, err)
 	}
@@ -118,8 +117,11 @@ func main() {
 		}
 
 		if len(o.onlyOrg) > 0 && repoInfo.Org != o.onlyOrg {
-			logger.Warnf("Skipping... This repo doesn't belong in %s organization", o.onlyOrg)
-			return nil
+			if !o.WhitelistConfig.IsWhitelisted(repoInfo) {
+				logger.Warnf("Skipping... This repo doesn't belong to %s organization", o.onlyOrg)
+				return nil
+			}
+			logger.Warnf("Repository %s doesn't belong to the %s organization but it is whitelisted", repoInfo.Repo, o.onlyOrg)
 		}
 
 		if !api.BuildsOfficialImages(rbc, api.WithoutOKD) && !o.WhitelistConfig.IsWhitelisted(repoInfo) {

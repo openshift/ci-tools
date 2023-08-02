@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -319,7 +318,7 @@ func (i *DataWithInfo) CommitTo(dir string) error {
 		i.Logger().WithError(err).Error("failed to ensure directory existed for new CI Operator configuration")
 		return err
 	}
-	if err := ioutil.WriteFile(outputFile, raw, 0664); err != nil {
+	if err := os.WriteFile(outputFile, raw, 0664); err != nil {
 		i.Logger().WithError(err).Error("failed to write new CI Operator configuration")
 		return err
 	}

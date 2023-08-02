@@ -46,6 +46,7 @@ const (
 	manageKubeconfigMode = "manage-kubeconfig"
 	skipKubeconfigMode   = "skip-kubeconfig"
 	observerMode         = "observer"
+	errorCode            = 1
 )
 
 func init() {
@@ -62,11 +63,11 @@ func main() {
 	opt.cmd = flagSet.Args()
 	if err := opt.complete(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(1)
+		os.Exit(errorCode)
 	}
-	if err := opt.run(); err != nil {
+	if code, err := opt.run(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(1)
+		os.Exit(code)
 	}
 }
 
@@ -155,13 +156,13 @@ func (o *options) validateMode() error {
 	return nil
 }
 
-func (o *options) run() error {
+func (o *options) run() (exitCode int, err error) {
 	if err := copyDir(o.dstPath, o.srcPath); err != nil {
-		return fmt.Errorf("failed to copy secret mount: %w", err)
+		return errorCode, fmt.Errorf("failed to copy secret mount: %w", err)
 	}
 	if o.waitPath != "" {
 		if err := waitForFile(o.waitPath, o.waitTimeout); err != nil {
-			return fmt.Errorf("failed to wait for file: %w", err)
+			return errorCode, fmt.Errorf("failed to wait for file: %w", err)
 		}
 	}
 	var errs []error
@@ -169,7 +170,7 @@ func (o *options) run() error {
 	if o.uploadKubeconfig {
 		go uploadKubeconfig(ctx, o.client, o.name, o.dstPath, o.dry)
 	}
-	if err := o.execCmd(); err != nil {
+	if exitCode, err = o.execCmd(); err != nil {
 		errs = append(errs, fmt.Errorf("failed to execute wrapped command: %w", err))
 	}
 	// we will upload the secret from the post-execution state, so we know
@@ -179,9 +180,10 @@ func (o *options) run() error {
 	if o.updateSharedDir {
 		if err := createSecret(o.client, o.name, o.dstPath, o.dry); err != nil {
 			errs = append(errs, fmt.Errorf("failed to create/update secret: %w", err))
+			return errorCode, utilerrors.NewAggregate(errs)
 		}
 	}
-	return utilerrors.NewAggregate(errs)
+	return exitCode, utilerrors.NewAggregate(errs)
 }
 
 func loadClient(namespace string) (coreclientset.SecretInterface, error) {
@@ -267,7 +269,7 @@ func waitForFile(path string, timeout time.Duration) error {
 	}
 }
 
-func (o *options) execCmd() error {
+func (o *options) execCmd() (exitCode int, err error) {
 	argv := o.cmd
 	proc := exec.Command(argv[0], argv[1:]...)
 	proc.Stdout = os.Stdout
@@ -280,18 +282,18 @@ func (o *options) execCmd() error {
 	}
 	home := manageHome(proc)
 	if err := manageGitConfig(home); err != nil {
-		return fmt.Errorf("failed to create Git configuration: %w", err)
+		return errorCode, fmt.Errorf("failed to create Git configuration: %w", err)
 	}
 	manageCLI(proc)
 	if o.rwKubeconfig {
 		if err := manageKubeconfig(proc); err != nil {
-			return err
+			return errorCode, err
 		}
 	}
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	if err := proc.Start(); err != nil {
-		return fmt.Errorf("failed to start main process: %w", err)
+		return errorCode, fmt.Errorf("failed to start main process: %w", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -308,7 +310,9 @@ func (o *options) execCmd() error {
 			}
 		}
 	}()
-	return proc.Wait()
+	// we have to Wait() for the process before we can call ExitCode()
+	err = proc.Wait()
+	return proc.ProcessState.ExitCode(), err
 }
 
 // manageCLI configures the PATH to include a CLI_DIR if one was provided

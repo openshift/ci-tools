@@ -74,8 +74,8 @@ go build -gcflags='-N -l' `grep "module " go.mod |awk '{print $2}'`/cmd/job-run-
 TEMP_DIR=$(mktemp -d)
 echo "Created temp dir $TEMP_DIR"
 echo "Copying query data"
-cp "$ORIGIN_DIR/pkg/synthetictests/allowedalerts/query_results.json" "$TEMP_DIR/current-alerts.json"
-cp "$ORIGIN_DIR/pkg/synthetictests/allowedbackenddisruption/query_results.json" "$TEMP_DIR/current-disruptions.json"
+cp "$ORIGIN_DIR/pkg/monitortestlibrary/allowedalerts/query_results.json" "$TEMP_DIR/current-alerts.json"
+cp "$ORIGIN_DIR/pkg/monitortestlibrary/allowedbackenddisruption/query_results.json" "$TEMP_DIR/current-disruptions.json"
 
 
 if ! [ -z "$GC_CREDS" ]; then
@@ -107,6 +107,6 @@ fi
 cleanup
 
 if ! [ -z "$UPDATE" ]; then
-    cp ./results_disruptions.json $ORIGIN_DIR/pkg/synthetictests/allowedbackenddisruption/query_results.json
-    cp ./results_alerts.json "$ORIGIN_DIR/pkg/synthetictests/allowedalerts/query_results.json"
+    cp ./results_disruptions.json "$ORIGIN_DIR/pkg/monitortestlibrary/allowedbackenddisruption/query_results.json"
+    cp ./results_alerts.json "$ORIGIN_DIR/pkg/monitortestlibrary/allowedalerts/query_results.json"
 fi

@@ -11,6 +11,8 @@ type HistoricalData interface {
 	GetName() string
 	GetP99() string
 	GetP95() string
+	GetP75() string
+	GetP50() string
 	GetKey() string
 	GetJobRuns() int
 }
@@ -34,6 +36,8 @@ type AlertHistoricalDataRow struct {
 	HistoricalJobData
 	P95 string
 	P99 string
+	P75 string
+	P50 string
 }
 
 func (a *AlertHistoricalDataRow) GetJobData() HistoricalJobData {
@@ -47,6 +51,12 @@ func (a *AlertHistoricalDataRow) GetP99() string {
 }
 func (a *AlertHistoricalDataRow) GetP95() string {
 	return a.P95
+}
+func (a *AlertHistoricalDataRow) GetP75() string {
+	return a.P75
+}
+func (a *AlertHistoricalDataRow) GetP50() string {
+	return a.P50
 }
 func (a *AlertHistoricalDataRow) GetJobRuns() int {
 	return a.JobRuns
@@ -70,6 +80,8 @@ type DisruptionHistoricalDataRow struct {
 	HistoricalJobData
 	P95 string
 	P99 string
+	P75 string
+	P50 string
 }
 
 func (a *DisruptionHistoricalDataRow) GetJobData() HistoricalJobData {
@@ -83,6 +95,12 @@ func (a *DisruptionHistoricalDataRow) GetP99() string {
 }
 func (a *DisruptionHistoricalDataRow) GetP95() string {
 	return a.P95
+}
+func (a *DisruptionHistoricalDataRow) GetP75() string {
+	return a.P75
+}
+func (a *DisruptionHistoricalDataRow) GetP50() string {
+	return a.P50
 }
 func (a *DisruptionHistoricalDataRow) GetJobRuns() int {
 	return a.JobRuns

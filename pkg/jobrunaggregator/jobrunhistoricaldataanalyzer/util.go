@@ -80,17 +80,6 @@ func getDurationFromString(floatString string) time.Duration {
 	}
 }
 
-// If current data contains the previous release, we can assume we are in the time frame of new release branching cycle
-// This means we need to trigger a manual review of this PR
-func currentDataContainsPreviousRelease(prevVersion string, data []jobrunaggregatorapi.HistoricalData) bool {
-	for _, d := range data {
-		if d.GetJobData().Release == prevVersion {
-			return true
-		}
-	}
-	return false
-}
-
 func fetchCurrentRelease() (current string, previous string, err error) {
 	sippyRelease := struct {
 		Releases []string `json:"releases"`

@@ -4,22 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"html/template"
 	"os"
+	"text/template"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
-)
-
-const (
-	// releaseTransitionDataMinThresholdRatio defines the minimum threshold ratio we require to
-	// make the transition from using old release data to using new release data. During a release
-	// transition (new release cut), it will take time for the new release job run data to reach to
-	// certain required size to be meaningful to use. During this transition period, we continue
-	// using data collected from the old release for disruption and alert comparisons.
-	releaseTransitionDataMinThresholdRatio = 0.6
-	// newReleaseJobRunsThreshold defines the jobRuns count above which data is counted for new releases
-	newReleaseJobRunsThreshold = 100
 )
 
 type JobRunHistoricalDataAnalyzerOptions struct {
@@ -89,41 +78,9 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 	newDataMap := convertToMap(newHistoricalData)
 	currentDataMap := convertToMap(currentHistoricalData)
 
-	// We check to see if we need to transition to use new release data. We decide based on:
-	// 1. The current data set contains the previous release version
-	// 2. We have enough data count from the new release
-	// If that's the case, we will transition to use data set from the new release.
-	// We also write to a `require_review` file to record why a review would be required.
-	newReleaseUpdate := currentDataContainsPreviousRelease(previousRelease, currentHistoricalData)
-	if newReleaseUpdate {
-		newReleaseDataCount := 0
-		for _, data := range newDataMap {
-			if data.GetJobData().Release == targetRelease && data.GetJobRuns() > newReleaseJobRunsThreshold {
-				newReleaseDataCount++
-			}
-		}
-		if float64(newReleaseDataCount) < float64(len(currentDataMap))*releaseTransitionDataMinThresholdRatio {
-			// Not enough data for the new release, continue using old release data
-			fmt.Printf("We are in release transition from %s to %s. We continue to use old release data set for the following reason:\n"+
-				"- The number of new release data set need to reach at least %d percent of the number of the old release data set.\n"+
-				"- Currently we have only %d new release data set and the required number is %d based on old release data set count of %d\n",
-				previousRelease, targetRelease, int(releaseTransitionDataMinThresholdRatio*100), newReleaseDataCount,
-				int(float64(len(currentDataMap))*releaseTransitionDataMinThresholdRatio), len(currentDataMap))
-			newReleaseUpdate = false
-			targetRelease = previousRelease
-		} else {
-			msg := fmt.Sprintf("We are transitioning to use data set from new release %s for the following reason:\n"+
-				"- The number of new release data set has reached at least %d percent of the number of the old release data set.\n"+
-				"- Currently we have %d new release data set and the required number is %d based on old release data set count of %d\n",
-				targetRelease, int(releaseTransitionDataMinThresholdRatio*100), newReleaseDataCount,
-				int(float64(len(currentDataMap))*releaseTransitionDataMinThresholdRatio), len(currentDataMap))
-			if err := requireReviewFile(msg); err != nil {
-				return err
-			}
-		}
-	}
-
-	result := o.compareAndUpdate(newDataMap, currentDataMap, targetRelease, newReleaseUpdate)
+	previousResult := o.compareAndUpdate(newDataMap, currentDataMap, previousRelease)
+	currentResult := o.compareAndUpdate(newDataMap, currentDataMap, targetRelease)
+	result := mergeResults(previousResult, currentResult)
 
 	err = o.renderResultFiles(result)
 	if err != nil {
@@ -132,6 +89,17 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 
 	fmt.Printf("successfully compared (%s) with specified leeway of %.2f%%\n", o.dataType, o.leeway)
 	return nil
+}
+
+func mergeResults(previousResult, currentResult compareResults) compareResults {
+	// Append elements from previousResult and currentResult to the mergedResults
+	var mergedResults compareResults
+	mergedResults.increaseCount = previousResult.increaseCount + currentResult.increaseCount
+	mergedResults.decreaseCount = previousResult.decreaseCount + currentResult.decreaseCount
+	mergedResults.addedJobs = append(previousResult.addedJobs, currentResult.addedJobs...)
+	mergedResults.jobs = append(previousResult.jobs, currentResult.jobs...)
+	mergedResults.missingJobs = append(previousResult.missingJobs, currentResult.missingJobs...)
+	return mergedResults
 }
 
 // compareAndUpdate This will compare the recently pulled information and compare it to the currently existing data.
@@ -144,11 +112,7 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 //
 // Once we've completed recording the results of the compare, we then do a check to see which jobs were removed and we make a note of those jobs to present.
 // The missing jobs are not added back to the final list, the final list is always driven by the new data supplied for comparison gathered from Big Query.
-func (o *JobRunHistoricalDataAnalyzerOptions) compareAndUpdate(newData, currentData map[string]jobrunaggregatorapi.HistoricalData, release string, newReleaseEvent bool) compareResults {
-	// If we're in a new release event, we don't care about the current data
-	if newReleaseEvent {
-		currentData = make(map[string]jobrunaggregatorapi.HistoricalData, 0)
-	}
+func (o *JobRunHistoricalDataAnalyzerOptions) compareAndUpdate(newData, currentData map[string]jobrunaggregatorapi.HistoricalData, release string) compareResults {
 	increaseCountP99 := 0
 	decreaseCountP99 := 0
 	results := []parsedJobData{}
@@ -162,6 +126,8 @@ func (o *JobRunHistoricalDataAnalyzerOptions) compareAndUpdate(newData, currentD
 
 		newP99 := getDurationFromString(new.GetP99())
 		newP95 := getDurationFromString(new.GetP95())
+		newP75 := getDurationFromString(new.GetP75())
+		newP50 := getDurationFromString(new.GetP50())
 		d := parsedJobData{}
 
 		// If the current data contains the new data, check and record the time diff
@@ -172,6 +138,8 @@ func (o *JobRunHistoricalDataAnalyzerOptions) compareAndUpdate(newData, currentD
 			d.HistoricalData = new
 			d.DurationP99 = newP99
 			d.DurationP95 = newP95
+			d.DurationP75 = newP75
+			d.DurationP50 = newP50
 			d.JobResults = new.GetJobRuns()
 
 			timeDiffP95 := newP95 - oldP95
@@ -202,6 +170,8 @@ func (o *JobRunHistoricalDataAnalyzerOptions) compareAndUpdate(newData, currentD
 			d.HistoricalData = new
 			d.DurationP99 = newP99
 			d.DurationP95 = newP95
+			d.DurationP75 = newP75
+			d.DurationP50 = newP50
 			added = append(added, key)
 		}
 
@@ -212,10 +182,6 @@ func (o *JobRunHistoricalDataAnalyzerOptions) compareAndUpdate(newData, currentD
 	// We take note of them here and bubble up that information
 	missingJobs := []parsedJobData{}
 	for key, old := range currentData {
-		// If we're in a new event, we don't bother checking since all the current data should now in the new set
-		if newReleaseEvent {
-			break
-		}
 		if _, ok := newData[key]; !ok {
 			d := parsedJobData{}
 			d.HistoricalData = old
@@ -224,12 +190,11 @@ func (o *JobRunHistoricalDataAnalyzerOptions) compareAndUpdate(newData, currentD
 	}
 
 	return compareResults{
-		increaseCount:   increaseCountP99,
-		decreaseCount:   decreaseCountP99,
-		addedJobs:       added,
-		jobs:            results,
-		missingJobs:     missingJobs,
-		newReleaseEvent: newReleaseEvent,
+		increaseCount: increaseCountP99,
+		decreaseCount: decreaseCountP99,
+		addedJobs:     added,
+		jobs:          results,
+		missingJobs:   missingJobs,
 	}
 }
 
@@ -245,7 +210,6 @@ func (o *JobRunHistoricalDataAnalyzerOptions) renderResultFiles(result compareRe
 	args := struct {
 		DataType       string
 		Leeway         string
-		NewReleaseData bool
 		IncreasedCount int
 		DecreasedCount int
 		AddedJobs      []string
@@ -254,7 +218,6 @@ func (o *JobRunHistoricalDataAnalyzerOptions) renderResultFiles(result compareRe
 	}{
 		DataType:       o.dataType,
 		Leeway:         fmt.Sprintf("%.2f%%", o.leeway),
-		NewReleaseData: result.newReleaseEvent,
 		IncreasedCount: result.increaseCount,
 		DecreasedCount: result.decreaseCount,
 		AddedJobs:      result.addedJobs,

@@ -4,7 +4,7 @@
 #   all: Build code.
 #   build: Build code.
 #   test: Run all tests.
-#   clean: Clean up.
+# this is my new suggestion
 #
 #
 #

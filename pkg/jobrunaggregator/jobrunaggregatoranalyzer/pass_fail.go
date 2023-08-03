@@ -466,9 +466,14 @@ func (a *weeklyAverageFromTenDays) checkPercentileDisruptionWithGrace(jobRunIDTo
 	return withGraceFailureJobRunIDs, withGraceSuccessJobRunIDs, withGraceTestCasePassed, withGraceSummary
 }
 
-func (a *weeklyAverageFromTenDays) checkPercentileDisruptionWithoutGrace(jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, historicalDisruptionStatistic backendDisruptionStats, thresholdPercentile int) ([]string, []string, testCaseStatus, string) {
+// checkPercentileDisruptionWithMinimumGrace is only used for zero second disruption test.
+// We decided not to use the generic fuzzy logic in checkPercentileDisruptionWithGrace for the test.
+// Instead, we will allow 1s grace by counting jobs with single second disruption as success.
+func (a *weeklyAverageFromTenDays) checkPercentileDisruptionWithMinimumGrace(jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, historicalDisruptionStatistic backendDisruptionStats, thresholdPercentile int) ([]string, []string, testCaseStatus, string) {
 	historicalThreshold := historicalDisruptionStatistic.percentileByIndex[thresholdPercentile]
-	_, noGraceFailureJobRunIDs, noGraceSuccessJobRunIDs, noGraceTestCasePassed, noGraceSummary := a.innerCheckPercentileDisruptionWithGrace(jobRunIDToAvailabilityResultForBackend, historicalThreshold, thresholdPercentile, 0)
+	graceSeconds := 1
+	thresholdWithGrace := historicalThreshold + float64(graceSeconds)
+	_, noGraceFailureJobRunIDs, noGraceSuccessJobRunIDs, noGraceTestCasePassed, noGraceSummary := a.innerCheckPercentileDisruptionWithGrace(jobRunIDToAvailabilityResultForBackend, thresholdWithGrace, thresholdPercentile, graceSeconds)
 	return noGraceFailureJobRunIDs, noGraceSuccessJobRunIDs, noGraceTestCasePassed, noGraceSummary
 }
 
@@ -573,7 +578,7 @@ func (a *weeklyAverageFromTenDays) CheckPercentileRankDisruption(ctx context.Con
 
 	thresholdPercentile := getPercentileRank(historicalDisruptionStatistic, maxDisruptionSeconds)
 
-	failureJobRunIDs, successJobRunIDs, testCasePassed, summary := a.checkPercentileDisruptionWithoutGrace(jobRunIDToAvailabilityResultForBackend, historicalDisruptionStatistic, thresholdPercentile)
+	failureJobRunIDs, successJobRunIDs, testCasePassed, summary := a.checkPercentileDisruptionWithMinimumGrace(jobRunIDToAvailabilityResultForBackend, historicalDisruptionStatistic, thresholdPercentile)
 	return failureJobRunIDs, successJobRunIDs, testCasePassed, messagePrefix + summary, nil
 }
 

@@ -168,9 +168,9 @@ func TestCheckPercentileDisruption(t *testing.T) {
 			disruptions:          []int{1, 0, 0, 5, 5, 2, 2, 3, 4},
 			thresholdPercentile:  85,
 			historicalDisruption: 1.30,
-			status:               testCaseFailed,
-			failedCount:          6,
-			successCount:         3,
+			status:               testCasePassed,
+			failedCount:          4,
+			successCount:         5,
 			supportsFuzziness:    false,
 		},
 
@@ -189,9 +189,9 @@ func TestCheckPercentileDisruption(t *testing.T) {
 			disruptions:          []int{0, 0, 4, 4, 1, 5, 1, 1, 2},
 			thresholdPercentile:  81,
 			historicalDisruption: 0,
-			status:               testCaseFailed,
-			failedCount:          7,
-			successCount:         2,
+			status:               testCasePassed,
+			failedCount:          4,
+			successCount:         5,
 			supportsFuzziness:    false,
 		},
 		{
@@ -265,7 +265,7 @@ func TestCheckPercentileDisruption(t *testing.T) {
 			if test.supportsFuzziness {
 				failureJobRunIDs, successJobRunIDs, status, summary = weeklyAverageFromTenDays.checkPercentileDisruptionWithGrace(jobRunIDToAvailabilityResultForBackend, historicalDisruptionStatistic, test.thresholdPercentile)
 			} else {
-				failureJobRunIDs, successJobRunIDs, status, summary = weeklyAverageFromTenDays.checkPercentileDisruptionWithoutGrace(jobRunIDToAvailabilityResultForBackend, historicalDisruptionStatistic, test.thresholdPercentile)
+				failureJobRunIDs, successJobRunIDs, status, summary = weeklyAverageFromTenDays.checkPercentileDisruptionWithMinimumGrace(jobRunIDToAvailabilityResultForBackend, historicalDisruptionStatistic, test.thresholdPercentile)
 			}
 
 			assert.NotNil(t, summary, "Invalid summary for: %s", test.name)

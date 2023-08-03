@@ -1,7 +1,14 @@
+FROM registry.ci.openshift.org/ci/hypershift-cli:latest AS hypershift
+FROM registry.ci.openshift.org/ocp/4.14:cli AS oc
+
 FROM quay.io/centos/centos:stream8
 LABEL maintainer="bechen@redhat.com"
 
 RUN yum install -y unzip jq
+
+COPY --from=hypershift /usr/bin/hypershift /usr/bin/hypershift
+COPY --from=oc /usr/bin/oc /usr/bin/oc
+
 RUN cd /tmp && \
     curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
     unzip awscliv2.zip && \

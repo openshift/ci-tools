@@ -271,7 +271,15 @@ func removeFile(podClient kubernetes.PodClient, ns, name, containerName string, 
 	return nil
 }
 
-func addPodUtils(pod *coreapi.Pod, artifactDir string, decorationConfig *prowv1.DecorationConfig, rawJobSpec string, secretsToCensor []coreapi.VolumeMount, clone bool, jobSpec *api.JobSpec) error {
+func addPodUtils(
+	pod *coreapi.Pod,
+	artifactDir string,
+	decorationConfig *prowv1.DecorationConfig,
+	rawJobSpec string,
+	secretsToCensor []coreapi.VolumeMount,
+	generatePodOptions *GeneratePodOptions,
+	jobSpec *api.JobSpec,
+) error {
 	logMount, logVolume := decorate.LogMountAndVolume()
 	toolsMount, toolsVolume := decorate.ToolsMountAndVolume()
 	blobStorageVolumes, blobStorageMounts, blobStorageOptions := decorate.BlobStorageOptions(*decorationConfig, false)
@@ -293,7 +301,7 @@ func addPodUtils(pod *coreapi.Pod, artifactDir string, decorationConfig *prowv1.
 	pod.Spec.Volumes = append(pod.Spec.Volumes, logVolume, toolsVolume)
 	pod.Spec.Volumes = append(pod.Spec.Volumes, blobStorageVolumes...)
 
-	if clone {
+	if generatePodOptions.Clone {
 		// Unless build_root.from_repository: true is set, the decorationConfig the ci-operator pod gets has cloning
 		// disabled.
 		decorationConfig := *decorationConfig

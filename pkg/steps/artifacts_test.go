@@ -661,7 +661,7 @@ func TestAddPodUtils(t *testing.T) {
 		},
 		GCSCredentialsSecret: func() *string { s := "gce-sa-credentials-gcs-publisher"; return &s }(),
 	}, "rawspec", []coreapi.VolumeMount{{Name: "secret", MountPath: "/secret"}},
-		&GeneratePodOptions{Clone: false}, nil); err != nil {
+		&GeneratePodOptions{Clone: false, PropagateExitCode: true}, nil); err != nil {
 		t.Errorf("failed to decorate: %v", err)
 	}
 	testhelper.CompareWithFixture(t, base)

@@ -56,7 +56,8 @@ type PodStepConfiguration struct {
 }
 
 type GeneratePodOptions struct {
-	Clone bool
+	Clone             bool
+	PropagateExitCode bool
 }
 
 type podStep struct {
@@ -292,7 +293,7 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 	pod, err := GenerateBasePod(s.jobSpec, s.config.Labels, s.config.As,
 		s.config.NodeName, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands},
 		image, containerResources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(),
-		secretVolumeMounts, &GeneratePodOptions{Clone: clone})
+		secretVolumeMounts, &GeneratePodOptions{Clone: clone, PropagateExitCode: false})
 	if err != nil {
 		return nil, err
 	}

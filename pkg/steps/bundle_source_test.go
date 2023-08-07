@@ -2,7 +2,7 @@ package steps
 
 import (
 	"bytes"
-	"io/ioutil"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -64,18 +64,18 @@ func TestReplaceCommand(t *testing.T) {
 			t.Fatalf("Failed to run replace command  \"%s\": %v", replaceCommand(sub.PullSpec, sub.With), err)
 		}
 	}
-	files, err := ioutil.ReadDir(filepath.Join(temp, "4.6"))
+	files, err := os.ReadDir(filepath.Join(temp, "4.6"))
 	if err != nil {
 		t.Fatalf("Failed to read directory: %v", err)
 	}
 	for _, file := range files {
 		updatedFilename := filepath.Join(temp, "4.6", file.Name())
-		updated, err := ioutil.ReadFile(updatedFilename)
+		updated, err := os.ReadFile(updatedFilename)
 		if err != nil {
 			t.Fatalf("Failed to read file %s: %v", updatedFilename, err)
 		}
 		expectedFilename := filepath.Join("testdata/4.6-expected", file.Name())
-		expected, err := ioutil.ReadFile(expectedFilename)
+		expected, err := os.ReadFile(expectedFilename)
 		if err != nil {
 			t.Fatalf("Failed to read file %s: %v", expectedFilename, err)
 		}
@@ -94,7 +94,7 @@ RUN find . -type f -regex ".*\.\(yaml\|yml\)" -exec sed -i s?quay.io/openshift/o
 RUN find . -type f -regex ".*\.\(yaml\|yml\)" -exec sed -i s?quay.io/openshift/origin-metering-hadoop:4.6?some-reg/target-namespace/stable@metering-hadoop?g {} +
 RUN find . -type f -regex ".*\.\(yaml\|yml\)" -exec sed -i s?quay.io/openshift/origin-ghostunnel:4.6?some-reg/target-namespace/stable@ghostunnel?g {} +`
 
-	client := &buildClient{LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient(
+	client := &buildClient{LoggingClient: loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 		&imagev1.ImageStream{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "target-namespace",
@@ -144,7 +144,7 @@ RUN find . -type f -regex ".*\.\(yaml\|yml\)" -exec sed -i s?quay.io/openshift/o
 					}},
 				}},
 			},
-		}))}
+		}).Build())}
 
 	s := bundleSourceStep{
 		config: api.BundleSourceStepConfiguration{

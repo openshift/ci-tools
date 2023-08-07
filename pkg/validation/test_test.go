@@ -25,7 +25,7 @@ func TestValidateTests(t *testing.T) {
 	for _, tc := range []struct {
 		id            string
 		release       *api.ReleaseTagConfiguration
-		releases      sets.String
+		releases      sets.Set[string]
 		tests         []api.TestStepConfiguration
 		resolved      bool
 		expectedError error
@@ -222,7 +222,7 @@ func TestValidateTests(t *testing.T) {
 					},
 				},
 			},
-			releases: sets.NewString(api.InitialReleaseName, api.LatestReleaseName),
+			releases: sets.New[string](api.InitialReleaseName, api.LatestReleaseName),
 		},
 		{
 			id: "release must be origin",
@@ -684,7 +684,7 @@ func TestValidateTests(t *testing.T) {
 	} {
 		t.Run(tc.id, func(t *testing.T) {
 			v := newSingleUseValidator()
-			errs := v.validateTestStepConfiguration(NewConfigContext(), "tests", tc.tests, tc.release, tc.releases, sets.NewString(), tc.resolved)
+			errs := v.validateTestStepConfiguration(NewConfigContext(), "tests", tc.tests, tc.release, tc.releases, sets.New[string](), tc.resolved)
 			if tc.expectedError == nil && len(errs) > 0 {
 				t.Errorf("expected to be valid, got: %v", errs)
 			}
@@ -717,9 +717,9 @@ func TestValidateTestSteps(t *testing.T) {
 	for _, tc := range []struct {
 		name         string
 		steps        []api.TestStep
-		seen         sets.String
+		seen         sets.Set[string]
 		errs         []error
-		releases     sets.String
+		releases     sets.Set[string]
 		clusterClaim api.ClaimRelease
 	}{{
 		name: "valid step",
@@ -776,7 +776,7 @@ func TestValidateTestSteps(t *testing.T) {
 		errs: []error{errors.New(`test[2]: duplicated name "s0"`)},
 	}, {
 		name: "duplicated name from other stage",
-		seen: sets.NewString("s0"),
+		seen: sets.New[string]("s0"),
 		steps: []api.TestStep{{
 			LiteralTestStep: &api.LiteralTestStep{
 				As:        "s0",
@@ -898,7 +898,7 @@ func TestValidateTestSteps(t *testing.T) {
 				Commands:  "commands",
 				Resources: resources},
 		}},
-		releases: sets.NewString("previous"),
+		releases: sets.New[string]("previous"),
 	}, {
 		name: "invalid image 4",
 		steps: []api.TestStep{{
@@ -908,7 +908,7 @@ func TestValidateTestSteps(t *testing.T) {
 				Commands:  "commands",
 				Resources: resources},
 		}},
-		releases: sets.NewString("previous"),
+		releases: sets.New[string]("previous"),
 		errs:     []error{errors.New("test[0].from: unknown imagestream 'stable-nonexistent'")},
 	}, {
 		name: "no commands",
@@ -1089,9 +1089,9 @@ func TestValidatePostSteps(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		steps    []api.TestStep
-		seen     sets.String
+		seen     sets.Set[string]
 		errs     []error
-		releases sets.String
+		releases sets.Set[string]
 	}{{
 		name: "Valid Post steps",
 
@@ -1125,7 +1125,7 @@ func TestValidateParameters(t *testing.T) {
 		params   []api.StepParameter
 		env      api.TestEnvironment
 		err      []error
-		releases sets.String
+		releases sets.Set[string]
 	}{{
 		name: "no parameters",
 	}, {

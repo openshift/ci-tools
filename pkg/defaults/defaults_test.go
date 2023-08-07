@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"sort"
 	"testing"
@@ -896,7 +896,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			client := fakectrlruntimeclient.NewFakeClient()
+			client := fakectrlruntimeclient.NewClientBuilder().Build()
 			graphConf := FromConfigStatic(testCase.input)
 			runtimeSteps, actualError := runtimeStepConfigsForBuild(context.Background(), client, testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, graphConf.InputImages(), time.Nanosecond, testCase.consoleHost)
 			graphConf.Steps = append(graphConf.Steps, runtimeSteps...)
@@ -961,10 +961,10 @@ func TestFromConfig(t *testing.T) {
 		content := `{"nodes": [{"version": "4.1.0", "payload": "payload"}]}`
 		return &http.Response{
 			StatusCode: http.StatusOK,
-			Body:       ioutil.NopCloser(bytes.NewBuffer([]byte(content))),
+			Body:       io.NopCloser(bytes.NewBuffer([]byte(content))),
 		}, nil
 	})
-	client := loggingclient.New(fakectrlruntimeclient.NewFakeClient())
+	client := loggingclient.New(fakectrlruntimeclient.NewClientBuilder().Build())
 	if err := imageapi.AddToScheme(scheme.Scheme); err != nil {
 		t.Fatal(err)
 	}

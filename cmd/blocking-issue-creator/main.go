@@ -86,7 +86,7 @@ func main() {
 	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, api.WithoutOKD, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
 		logger := config.LoggerForInfo(*repoInfo)
 
-		branches := sets.NewString()
+		branches := sets.New[string]()
 		for _, futureRelease := range o.FutureReleases.Strings() {
 			futureBranch, err := promotion.DetermineReleaseBranch(o.CurrentRelease, futureRelease, repoInfo.Branch)
 			if err != nil {
@@ -114,10 +114,10 @@ func main() {
 	}
 }
 
-func manageIssues(client githubClient, githubLogin string, repoInfo *config.Info, branches sets.String, logger *logrus.Entry) error {
+func manageIssues(client githubClient, githubLogin string, repoInfo *config.Info, branches sets.Set[string], logger *logrus.Entry) error {
 	var branchTokens []string
 	body := fmt.Sprintf("The following branches are being fast-forwarded from the current development branch (%s) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n", repoInfo.Branch)
-	for _, branch := range branches.List() {
+	for _, branch := range sets.List(branches) {
 		body += fmt.Sprintf(" - `%s`\n", branch)
 		branchTokens = append(branchTokens, fmt.Sprintf("branch:%s", branch))
 	}

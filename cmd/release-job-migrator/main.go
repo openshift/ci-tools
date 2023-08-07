@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -429,7 +428,7 @@ func run(o options) error {
 	// key: old jobname, value: new (generated jobname)
 	replacedJobs := make(map[string]string)
 	// list of test names for detected release jobs with no configuration
-	configlessTests := sets.NewString()
+	configlessTests := sets.New[string]()
 	for _, jobConfig := range jobs {
 		for _, periodic := range jobConfig.Periodics {
 			info, isReleaseJob := getJobInfo(periodic.Name)
@@ -574,7 +573,7 @@ func run(o options) error {
 		if err != nil {
 			return fmt.Errorf("failed to marshal updated config for file %s: %w", filename, err)
 		}
-		if err := ioutil.WriteFile(filepath.Join(o.ciopConfigDir, filename), raw, 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(o.ciopConfigDir, filename), raw, 0644); err != nil {
 			return fmt.Errorf("failed to write updated config file %s: %w", filename, err)
 		}
 	}
@@ -592,7 +591,7 @@ func run(o options) error {
 		if err != nil {
 			return fmt.Errorf("failed to marshal updated jobconfig for file %s: %w", filename, err)
 		}
-		if err := ioutil.WriteFile(filepath.Join(o.jobDir, filename), raw, 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(o.jobDir, filename), raw, 0644); err != nil {
 			return fmt.Errorf("failed to write updated jobconfig file %s: %w", filename, err)
 		}
 	}
@@ -617,7 +616,7 @@ func run(o options) error {
 			newJob := fmt.Sprintf("\"name\":\"%s\"", newName)
 			raw = bytes.ReplaceAll(raw, []byte(oldJob), []byte(newJob))
 		}
-		if err := ioutil.WriteFile(path, raw, 0644); err != nil {
+		if err := os.WriteFile(path, raw, 0644); err != nil {
 			return fmt.Errorf("failed to write updated release-controller config file %s: %w", filepath.Base(path), err)
 		}
 		return nil
@@ -639,7 +638,7 @@ func run(o options) error {
 		newJob := fmt.Sprintf("%s:", newName)
 		raw = bytes.ReplaceAll(raw, []byte(oldJob), []byte(newJob))
 	}
-	if err := ioutil.WriteFile(o.testgrid, raw, 0644); err != nil {
+	if err := os.WriteFile(o.testgrid, raw, 0644); err != nil {
 		return fmt.Errorf("failed to write updated testgrid allowlist file %s: %w", o.testgrid, err)
 	}
 
@@ -659,7 +658,7 @@ func run(o options) error {
 	}
 
 	if len(configlessTests) > 0 {
-		fmt.Printf("\nThe following tests do not have entries in the generator config:\n%v\n", configlessTests.List())
+		fmt.Printf("\nThe following tests do not have entries in the generator config:\n%v\n", sets.List(configlessTests))
 	}
 
 	// keep this message at the end to make sure it is seen by whoever is running the command

@@ -5,7 +5,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -139,7 +138,7 @@ const (
 )
 
 func loadMappingConfig(path string) (*OpenshiftMappingConfig, error) {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %s", path)
 	}
@@ -211,7 +210,7 @@ func mirroredTagsByReleaseController(ctx context.Context, client ctrlruntimeclie
 		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: "ocp", Name: ref.Name}, imageStream); err != nil {
 			return nil, fmt.Errorf("could not get image stream %s in namespace ocp", ref.Name)
 		}
-		excludedTags := sets.NewString(ref.ExcludeTags...)
+		excludedTags := sets.New[string](ref.ExcludeTags...)
 		for _, tag := range imageStream.Status.Tags {
 			if !excludedTags.Has(tag.Tag) {
 				ret = append(ret, api.ImageStreamTagReference{
@@ -238,8 +237,8 @@ type OpenshiftMappingConfig struct {
 // generateMappings generates the mappings to mirror the images
 // Those mappings will be stored in https://github.com/openshift/release/tree/master/core-services/image-mirroring/openshift
 // and then used by the periodic-image-mirroring-openshift job
-func generateMappings(promotedTags []api.ImageStreamTagReference, mappingConfig *OpenshiftMappingConfig, imageStreamRefs []releaseconfig.ImageStreamRef) (map[string]map[string]sets.String, error) {
-	mappings := map[string]map[string]sets.String{}
+func generateMappings(promotedTags []api.ImageStreamTagReference, mappingConfig *OpenshiftMappingConfig, imageStreamRefs []releaseconfig.ImageStreamRef) (map[string]map[string]sets.Set[string], error) {
+	mappings := map[string]map[string]sets.Set[string]{}
 	var errs []error
 	for _, tag := range promotedTags {
 		// mirror the images if it is promoted or it is mirrored by the release controllers from OCP image streams
@@ -249,12 +248,12 @@ func generateMappings(promotedTags []api.ImageStreamTagReference, mappingConfig 
 					for _, targetTag := range targetTags {
 						filename := fmt.Sprintf("mapping_origin_%s", strings.ReplaceAll(tag.Name, ".", "_"))
 						if _, ok := mappings[filename]; !ok {
-							mappings[filename] = map[string]sets.String{}
+							mappings[filename] = map[string]sets.Set[string]{}
 						}
 						src := fmt.Sprintf("%s/%s/%s:%s", mappingConfig.SourceRegistry, mappingConfig.SourceNamespace, tag.Name, tag.Tag)
 						dst := fmt.Sprintf("%s/%s/%s-%s:%s", mappingConfig.TargetRegistry, mappingConfig.TargetNamespace, mappingConfig.SourceNamespace, tag.Tag, targetTag)
 						if _, ok = mappings[filename][src]; !ok {
-							mappings[filename][src] = sets.NewString()
+							mappings[filename][src] = sets.New[string]()
 						}
 						if mappings[filename][src].Has(dst) {
 							errs = append(errs, fmt.Errorf("cannot define the same mirroring destination %s more than once for the source %s in filename %s", dst, src, filename))
@@ -327,17 +326,17 @@ func deleteTagsOnBuildFarm(ctx context.Context, appCIClient ctrlruntimeclient.Cl
 				continue
 			}
 
-			tags := sets.NewString()
+			tags := sets.New[string]()
 			for _, tag := range imageStream.Status.Tags {
 				tags.Insert(tag.Tag)
 			}
 
-			appCITags := sets.NewString()
+			appCITags := sets.New[string]()
 			for _, tag := range appCIImageStream.Status.Tags {
 				appCITags.Insert(tag.Tag)
 			}
 
-			for _, tag := range tags.Difference(appCITags).List() {
+			for _, tag := range sets.List(tags.Difference(appCITags)) {
 				isTagOnBuildFarm := &imagev1.ImageStreamTag{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: imageStream.Namespace,
@@ -390,7 +389,7 @@ func main() {
 				return err
 			}
 			if strings.HasSuffix(path, ".json") {
-				data, err := ioutil.ReadFile(path)
+				data, err := os.ReadFile(path)
 				if err != nil {
 					logrus.WithField("source-file", path).WithError(err).Error("Failed to read file")
 					return err
@@ -457,11 +456,11 @@ func main() {
 			sort.Strings(keys)
 
 			for _, src := range keys {
-				b.WriteString(fmt.Sprintf("%s\n", strings.Join(append([]string{src}, mapping[src].List()...), " ")))
+				b.WriteString(fmt.Sprintf("%s\n", strings.Join(append([]string{src}, sets.List(mapping[src])...), " ")))
 			}
 			f := filepath.Join(opts.openshiftMappingDir, filename)
 			logrus.WithField("filename", f).Info("Writing to file")
-			if err := ioutil.WriteFile(f, b.Bytes(), 0644); err != nil {
+			if err := os.WriteFile(f, b.Bytes(), 0644); err != nil {
 				logrus.WithError(err).WithField("filename", f).Fatal("could not write to file")
 			}
 		}

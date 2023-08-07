@@ -509,7 +509,7 @@ func setupDependencies(
 	changedClusterProfiles *ConfigMaps,
 	requiredImageStreamTags apihelper.ImageStreamTagMap,
 ) (cleanup, error) {
-	buildClusters := sets.String{}
+	buildClusters := sets.Set[string]{}
 	for _, job := range jobs {
 		if _, ok := configs[job.Cluster]; !ok && !dryRun {
 			return nil, fmt.Errorf("no config for buildcluster %s provided", job.Cluster)
@@ -526,7 +526,7 @@ func setupDependencies(
 	// TODO: Remove the whole dry-run concept and write tests that just pass in a fakeclient.
 	if dryRun {
 		if len(buildClusters) > 1 {
-			buildClusters = sets.NewString("default")
+			buildClusters = sets.New[string]("default")
 		}
 	}
 

@@ -7,7 +7,6 @@ package main
 
 import (
 	"flag"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"time"
@@ -41,7 +40,7 @@ func main() {
 		logrus.WithError(err).Fatal("failed to parse flags")
 	}
 	logger := logrus.WithField("component", "local-pod-scaler")
-	tmpDir, err := ioutil.TempDir("", "podscaler")
+	tmpDir, err := os.MkdirTemp("", "podscaler")
 	if err != nil {
 		logger.WithError(err).Fatal("Failed to create temporary directory.")
 	}
@@ -60,7 +59,7 @@ func main() {
 		prometheusAddr, _ := prometheus.Initialize(t.withName("pod-scaler/local/prometheus"), tmpDir, rand.New(rand.NewSource(time.Now().UnixNano())), true)
 		kubeconfigFile := kubernetes.Fake(t.withName("pod-scaler/local/kubernetes"), tmpDir, kubernetes.Prometheus(prometheusAddr))
 
-		dataDir, err := ioutil.TempDir(tmpDir, "data")
+		dataDir, err := os.MkdirTemp(tmpDir, "data")
 		if err != nil {
 			logger.WithError(err).Fatal("Failed to create temporary directory for data.")
 		}
@@ -114,7 +113,7 @@ func (t *fakeT) SkipNow()                                  {}
 func (t *fakeT) Skipf(format string, args ...interface{})  { t.logger.Infof(format, args...) }
 func (t *fakeT) Skipped() bool                             { return false }
 func (t *fakeT) TempDir() string {
-	dir, err := ioutil.TempDir(t.tmpDir, "")
+	dir, err := os.MkdirTemp(t.tmpDir, "")
 	if err != nil {
 		t.logger.WithError(err).Fatal("Could not create temporary directory.")
 	}

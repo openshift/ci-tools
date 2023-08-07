@@ -21,9 +21,9 @@ func TestToPromote(t *testing.T) {
 		name             string
 		config           api.PromotionConfiguration
 		images           []api.ProjectDirectoryImageBuildStepConfiguration
-		requiredImages   sets.String
+		requiredImages   sets.Set[string]
 		expectedBySource map[string]string
-		expectedNames    sets.String
+		expectedNames    sets.Set[string]
 	}{
 		{
 			name: "disabled config returns nothing",
@@ -35,9 +35,9 @@ func TestToPromote(t *testing.T) {
 				{To: api.PipelineImageStreamTagReference("bar")},
 				{To: api.PipelineImageStreamTagReference("baz")},
 			},
-			requiredImages:   sets.NewString(),
+			requiredImages:   sets.New[string](),
 			expectedBySource: map[string]string{},
-			expectedNames:    sets.NewString(),
+			expectedNames:    sets.New[string](),
 		},
 		{
 			name: "enabled config returns input list",
@@ -49,9 +49,9 @@ func TestToPromote(t *testing.T) {
 				{To: api.PipelineImageStreamTagReference("bar")},
 				{To: api.PipelineImageStreamTagReference("baz")},
 			},
-			requiredImages:   sets.NewString(),
+			requiredImages:   sets.New[string](),
 			expectedBySource: map[string]string{"foo": "foo", "bar": "bar", "baz": "baz"},
-			expectedNames:    sets.NewString("foo", "bar", "baz"),
+			expectedNames:    sets.New[string]("foo", "bar", "baz"),
 		},
 		{
 			name: "enabled config with exclude returns filtered input list",
@@ -64,9 +64,9 @@ func TestToPromote(t *testing.T) {
 				{To: api.PipelineImageStreamTagReference("bar")},
 				{To: api.PipelineImageStreamTagReference("baz")},
 			},
-			requiredImages:   sets.NewString(),
+			requiredImages:   sets.New[string](),
 			expectedBySource: map[string]string{"bar": "bar", "baz": "baz"},
-			expectedNames:    sets.NewString("bar", "baz"),
+			expectedNames:    sets.New[string]("bar", "baz"),
 		},
 		{
 			name: "enabled config with optional image returns subset of input list",
@@ -78,9 +78,9 @@ func TestToPromote(t *testing.T) {
 				{To: api.PipelineImageStreamTagReference("bar"), Optional: true},
 				{To: api.PipelineImageStreamTagReference("baz")},
 			},
-			requiredImages:   sets.NewString(),
+			requiredImages:   sets.New[string](),
 			expectedBySource: map[string]string{"foo": "foo", "baz": "baz"},
-			expectedNames:    sets.NewString("foo", "baz"),
+			expectedNames:    sets.New[string]("foo", "baz"),
 		},
 		{
 			name: "enabled config with optional but required image returns full input list",
@@ -92,9 +92,9 @@ func TestToPromote(t *testing.T) {
 				{To: api.PipelineImageStreamTagReference("bar"), Optional: true},
 				{To: api.PipelineImageStreamTagReference("baz")},
 			},
-			requiredImages:   sets.NewString("bar"),
+			requiredImages:   sets.New[string]("bar"),
 			expectedBySource: map[string]string{"foo": "foo", "bar": "bar", "baz": "baz"},
-			expectedNames:    sets.NewString("foo", "bar", "baz"),
+			expectedNames:    sets.New[string]("foo", "bar", "baz"),
 		},
 		{
 			name: "enabled config with additional images returns appended input list",
@@ -107,9 +107,9 @@ func TestToPromote(t *testing.T) {
 				{To: api.PipelineImageStreamTagReference("bar")},
 				{To: api.PipelineImageStreamTagReference("baz")},
 			},
-			requiredImages:   sets.NewString(),
+			requiredImages:   sets.New[string](),
 			expectedBySource: map[string]string{"foo": "foo", "bar": "bar", "baz": "baz", "boo": "ah"},
-			expectedNames:    sets.NewString("foo", "bar", "baz", "boo"),
+			expectedNames:    sets.New[string]("foo", "bar", "baz", "boo"),
 		},
 		{
 			name: "enabled config with excludes and additional images returns filtered, appended input list",
@@ -123,9 +123,9 @@ func TestToPromote(t *testing.T) {
 				{To: api.PipelineImageStreamTagReference("bar")},
 				{To: api.PipelineImageStreamTagReference("baz")},
 			},
-			requiredImages:   sets.NewString(),
+			requiredImages:   sets.New[string](),
 			expectedBySource: map[string]string{"bar": "bar", "baz": "baz", "boo": "ah"},
-			expectedNames:    sets.NewString("bar", "baz", "boo"),
+			expectedNames:    sets.New[string]("bar", "baz", "boo"),
 		},
 	}
 
@@ -291,7 +291,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 		input    *api.ReleaseBuildConfiguration
 		options  []PromotedTagsOption
 		expected map[string][]api.ImageStreamTagReference
-		names    sets.String
+		names    sets.Set[string]
 	}{
 		{
 			name:  "no promotion, no output",
@@ -343,7 +343,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					Name:      "fred",
 				},
 			},
-			options: []PromotedTagsOption{WithRequiredImages(sets.NewString("foo"))},
+			options: []PromotedTagsOption{WithRequiredImages(sets.New[string]("foo"))},
 			expected: map[string][]api.ImageStreamTagReference{
 				"foo": {
 					{Namespace: "roger", Name: "fred", Tag: "foo"},

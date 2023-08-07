@@ -45,7 +45,7 @@ const (
 	appCIContextName = "app.ci"
 )
 
-var allControllers = sets.NewString(
+var allControllers = sets.New[string](
 	promotionreconciler.ControllerName,
 	testimagesdistributor.ControllerName,
 	serviceaccountsecretrefresher.ControllerName,
@@ -60,7 +60,7 @@ type options struct {
 	kubernetesOptions                    flagutil.KubernetesOptions
 	leaderElectionSuffix                 string
 	enabledControllers                   flagutil.Strings
-	enabledControllersSet                sets.String
+	enabledControllersSet                sets.Set[string]
 	registryClusterName                  string
 	dryRun                               bool
 	blockProfileRate                     time.Duration
@@ -78,15 +78,15 @@ func (o *options) addDefaults() {
 
 type testImagesDistributorOptions struct {
 	additionalImageStreamTagsRaw       flagutil.Strings
-	additionalImageStreamTags          sets.String
+	additionalImageStreamTags          sets.Set[string]
 	additionalImageStreamsRaw          flagutil.Strings
-	additionalImageStreams             sets.String
+	additionalImageStreams             sets.Set[string]
 	additionalImageStreamNamespacesRaw flagutil.Strings
-	additionalImageStreamNamespaces    sets.String
+	additionalImageStreamNamespaces    sets.Set[string]
 	forbiddenRegistriesRaw             flagutil.Strings
-	forbiddenRegistries                sets.String
+	forbiddenRegistries                sets.Set[string]
 	ignoreClusterNamesRaw              flagutil.Strings
-	ignoreClusterNames                 sets.String
+	ignoreClusterNames                 sets.Set[string]
 }
 
 type promotionReconcilerOptions struct {
@@ -96,7 +96,7 @@ type promotionReconcilerOptions struct {
 
 type imagePusherOptions struct {
 	imageStreamsRaw flagutil.Strings
-	imageStreams    sets.String
+	imageStreams    sets.Set[string]
 }
 
 type serviceAccountSecretRefresherOptions struct {
@@ -117,7 +117,7 @@ func newOpts() (*options, error) {
 	fs.StringVar(&opts.ciOperatorconfigPath, "ci-operator-config-path", "", "Path to the ci operator config")
 	fs.StringVar(&opts.stepConfigPath, "step-config-path", "", "Path to the registries step configuration")
 	fs.StringVar(&opts.leaderElectionSuffix, "leader-election-suffix", "", "Suffix for the leader election lock. Useful for local testing. If set, --dry-run must be set as well")
-	fs.Var(&opts.enabledControllers, "enable-controller", fmt.Sprintf("Enabled controllers. Available controllers are: %v. Can be specified multiple times. Defaults to %v", allControllers.List(), opts.enabledControllers.Strings()))
+	fs.Var(&opts.enabledControllers, "enable-controller", fmt.Sprintf("Enabled controllers. Available controllers are: %v. Can be specified multiple times. Defaults to %v", sets.List(allControllers), opts.enabledControllers.Strings()))
 	fs.Var(&opts.testImagesDistributorOptions.additionalImageStreamTagsRaw, "testImagesDistributorOptions.additional-image-stream-tag", "An imagestreamtag that will be distributed even if no test explicitly references it. It must be in namespace/name:tag format (e.G `ci/clonerefs:latest`). Can be passed multiple times.")
 	fs.Var(&opts.testImagesDistributorOptions.additionalImageStreamsRaw, "testImagesDistributorOptions.additional-image-stream", "An imagestream that will be distributed even if no test explicitly references it. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
 	fs.Var(&opts.testImagesDistributorOptions.additionalImageStreamNamespacesRaw, "testImagesDistributorOptions.additional-image-stream-namespace", "A namespace in which imagestreams will be distributed even if no test explicitly references them (e.G `ci`). Can be passed multiple times.")
@@ -168,9 +168,9 @@ func newOpts() (*options, error) {
 		errs = append(errs, err)
 	}
 	if vals := opts.enabledControllers.Strings(); len(vals) > 0 {
-		opts.enabledControllersSet = sets.NewString(vals...)
-		if diff := opts.enabledControllersSet.Difference(allControllers); len(diff.UnsortedList()) > 0 {
-			errs = append(errs, fmt.Errorf("the following controllers are unknown but were disabled via --disable-controller: %v", diff.List()))
+		opts.enabledControllersSet = sets.New[string](vals...)
+		if diff := opts.enabledControllersSet.Difference(allControllers); len(sets.List(diff)) > 0 {
+			errs = append(errs, fmt.Errorf("the following controllers are unknown but were disabled via --disable-controller: %v", sets.List(diff)))
 		}
 	}
 
@@ -220,8 +220,8 @@ func newOpts() (*options, error) {
 	return opts, utilerrors.NewAggregate(errs)
 }
 
-func completeImageStreamTags(name string, raw flagutil.Strings) (sets.String, []error) {
-	isTags := sets.String{}
+func completeImageStreamTags(name string, raw flagutil.Strings) (sets.Set[string], []error) {
+	isTags := sets.Set[string]{}
 	var errs []error
 	if vals := raw.Strings(); len(vals) > 0 {
 		for _, val := range vals {
@@ -240,8 +240,8 @@ func completeImageStreamTags(name string, raw flagutil.Strings) (sets.String, []
 	return isTags, errs
 }
 
-func completeImageStream(name string, raw flagutil.Strings) (sets.String, []error) {
-	imageStreams := sets.String{}
+func completeImageStream(name string, raw flagutil.Strings) (sets.Set[string], []error) {
+	imageStreams := sets.Set[string]{}
 	var errs []error
 	if vals := raw.Strings(); len(vals) > 0 {
 		for _, val := range vals {
@@ -256,8 +256,8 @@ func completeImageStream(name string, raw flagutil.Strings) (sets.String, []erro
 	return imageStreams, errs
 }
 
-func completeSet(raw flagutil.Strings) sets.String {
-	result := sets.String{}
+func completeSet(raw flagutil.Strings) sets.Set[string] {
+	result := sets.Set[string]{}
 	if vals := raw.Strings(); len(vals) > 0 {
 		for _, val := range vals {
 			result.Insert(val)
@@ -457,7 +457,7 @@ func main() {
 		}
 		go func() { logrus.Fatal(<-registryErrCh) }()
 
-		registriesExceptAppCI := sets.NewString()
+		registriesExceptAppCI := sets.New[string]()
 		for cluster := range allClustersExceptRegistryCluster {
 			domain, err := api.RegistryDomainForClusterName(cluster)
 			if err != nil {
@@ -465,7 +465,7 @@ func main() {
 			}
 			registriesExceptAppCI.Insert(domain)
 		}
-		logrus.WithField("registriesExceptAppCI", registriesExceptAppCI.List()).Info("forbidden registries from build-farm clusters")
+		logrus.WithField("registriesExceptAppCI", sets.List(registriesExceptAppCI)).Info("forbidden registries from build-farm clusters")
 		opts.testImagesDistributorOptions.forbiddenRegistries = opts.testImagesDistributorOptions.forbiddenRegistries.Union(registriesExceptAppCI)
 
 		if err := testimagesdistributor.AddToManager(

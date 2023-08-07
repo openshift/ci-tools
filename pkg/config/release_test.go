@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,7 +26,7 @@ func compareChanges(
 	expected []string,
 ) {
 	t.Helper()
-	tmp, err := ioutil.TempDir("", "")
+	tmp, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +37,7 @@ func compareChanges(
 		if err := os.MkdirAll(filepath.Dir(n), 0775); err != nil {
 			t.Fatal(err)
 		}
-		if err := ioutil.WriteFile(n, []byte(f+"content"), 0664); err != nil {
+		if err := os.WriteFile(n, []byte(f+"content"), 0664); err != nil {
 			t.Fatal(err)
 		}
 	}

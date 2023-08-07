@@ -58,7 +58,7 @@ func TestWaitForConditionOnObject(t *testing.T) {
 	}{
 		{
 			name:   "happy path: pod",
-			client: fakectrlruntimeclient.NewFakeClient(aPod()),
+			client: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(aPod()).Build(),
 			objectFunc: func(client ctrlruntimeclient.Client) error {
 				// wait for watch being ready
 				time.Sleep(100 * time.Millisecond)
@@ -81,7 +81,7 @@ func TestWaitForConditionOnObject(t *testing.T) {
 		},
 		{
 			name:       "timeout",
-			client:     fakectrlruntimeclient.NewFakeClient(aPod()),
+			client:     fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(aPod()).Build(),
 			objectFunc: func(client ctrlruntimeclient.Client) error { return nil },
 			expected:   fmt.Errorf("timed out waiting for the condition"),
 		},

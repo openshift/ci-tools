@@ -31,19 +31,19 @@ func init() {
 func TestMakeGroups(t *testing.T) {
 	testCases := []struct {
 		name                string
-		openshiftPrivAdmins sets.String
+		openshiftPrivAdmins sets.Set[string]
 		peribolosConfig     string
 		mapping             map[string]string
 		roverGroups         map[string][]string
 		config              *group.Config
-		clusters            sets.String
+		clusters            sets.Set[string]
 		expected            map[string]GroupClusters
 		expectedErr         error
 	}{
 		{
 			name:                "basic case",
 			peribolosConfig:     "bar",
-			openshiftPrivAdmins: sets.NewString("a", "RH-Cachito"),
+			openshiftPrivAdmins: sets.New[string]("a", "RH-Cachito"),
 			mapping:             map[string]string{"a": "b", "c": "c"},
 			roverGroups:         map[string][]string{"old-group-name": {"b", "c"}, "x": {"y", "y"}},
 			config: &group.Config{
@@ -55,10 +55,10 @@ func TestMakeGroups(t *testing.T) {
 					},
 				},
 			},
-			clusters: sets.NewString("app.ci", "build01", "build02", "hive"),
+			clusters: sets.New[string]("app.ci", "build01", "build02", "hive"),
 			expected: map[string]GroupClusters{
 				"openshift-priv-admins": {
-					Clusters: sets.NewString("app.ci"),
+					Clusters: sets.New[string]("app.ci"),
 					Group: &userv1.Group{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:   "openshift-priv-admins",
@@ -68,7 +68,7 @@ func TestMakeGroups(t *testing.T) {
 					},
 				},
 				"a-group": {
-					Clusters: sets.NewString("app.ci", "build01", "build02"),
+					Clusters: sets.New[string]("app.ci", "build01", "build02"),
 					Group: &userv1.Group{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:   "a-group",
@@ -78,7 +78,7 @@ func TestMakeGroups(t *testing.T) {
 					},
 				},
 				"c-group": {
-					Clusters: sets.NewString("app.ci", "build01", "build02"),
+					Clusters: sets.New[string]("app.ci", "build01", "build02"),
 					Group: &userv1.Group{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:   "c-group",
@@ -88,7 +88,7 @@ func TestMakeGroups(t *testing.T) {
 					},
 				},
 				"new-group-name": {
-					Clusters: sets.NewString("build01", "build02"),
+					Clusters: sets.New[string]("build01", "build02"),
 					Group: &userv1.Group{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:   "new-group-name",
@@ -98,7 +98,7 @@ func TestMakeGroups(t *testing.T) {
 					},
 				},
 				"x": {
-					Clusters: sets.NewString("app.ci", "build01", "build02", "hive"),
+					Clusters: sets.New[string]("app.ci", "build01", "build02", "hive"),
 					Group: &userv1.Group{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:   "x",
@@ -154,12 +154,12 @@ func TestEnsureGroups(t *testing.T) {
 		{
 			name: "basic case",
 			clients: map[string]ctrlruntimeclient.Client{
-				"b01": fakeclient.NewFakeClient(g01.DeepCopy()),
-				"b02": fakeclient.NewFakeClient(g03.DeepCopy()),
+				"b01": fakeclient.NewClientBuilder().WithRuntimeObjects(g01.DeepCopy()).Build(),
+				"b02": fakeclient.NewClientBuilder().WithRuntimeObjects(g03.DeepCopy()).Build(),
 			},
 			groups: map[string]GroupClusters{
 				"gh01-group": {
-					Clusters: sets.NewString("b01", "b02"),
+					Clusters: sets.New[string]("b01", "b02"),
 					Group: &userv1.Group{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:   "gh01-group",
@@ -169,7 +169,7 @@ func TestEnsureGroups(t *testing.T) {
 					},
 				},
 				"gh02-group": {
-					Clusters: sets.NewString("b01", "b02"),
+					Clusters: sets.New[string]("b01", "b02"),
 					Group: &userv1.Group{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:   "gh02-group",
@@ -207,12 +207,12 @@ func TestEnsureGroups(t *testing.T) {
 		{
 			name: "basic case: dryRun=true",
 			clients: map[string]ctrlruntimeclient.Client{
-				"b01": fakeclient.NewFakeClient(g01.DeepCopy()),
-				"b02": fakeclient.NewFakeClient(g03.DeepCopy()),
+				"b01": fakeclient.NewClientBuilder().WithRuntimeObjects(g01.DeepCopy()).Build(),
+				"b02": fakeclient.NewClientBuilder().WithRuntimeObjects(g03.DeepCopy()).Build(),
 			},
 			groups: map[string]GroupClusters{
 				"gh01-group": {
-					Clusters: sets.NewString("b01", "b02"),
+					Clusters: sets.New[string]("b01", "b02"),
 					Group: &userv1.Group{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:   "gh01-group",
@@ -222,7 +222,7 @@ func TestEnsureGroups(t *testing.T) {
 					},
 				},
 				"gh02-group": {
-					Clusters: sets.NewString("b01", "b02"),
+					Clusters: sets.New[string]("b01", "b02"),
 					Group: &userv1.Group{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:   "gh02-group",
@@ -259,11 +259,11 @@ func TestEnsureGroups(t *testing.T) {
 		{
 			name: "invalid group: duplicate members",
 			clients: map[string]ctrlruntimeclient.Client{
-				"b01": fakeclient.NewFakeClient(),
+				"b01": fakeclient.NewClientBuilder().Build(),
 			},
 			groups: map[string]GroupClusters{
 				"gh01-group": {
-					Clusters: sets.NewString("b01", "b02"),
+					Clusters: sets.New[string]("b01", "b02"),
 					Group: &userv1.Group{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:   "gh01-group",

@@ -20,7 +20,7 @@ type pipelineImageSet map[api.PipelineImageStreamTagReference]sets.Empty
 func IsValidGraphConfiguration(rawSteps []api.StepConfiguration) error {
 	var ret []error
 	var containerTests, multiStageTests []*api.TestStepConfiguration
-	names := sets.NewString()
+	names := sets.New[string]()
 	pipelineImages := pipelineImageSet{
 		// `src` can only be validated at runtime
 		api.PipelineImageStreamTagReferenceSource: {},

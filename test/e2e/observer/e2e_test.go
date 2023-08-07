@@ -5,7 +5,7 @@ package observer
 
 import (
 	"bytes"
-	"io/ioutil"
+	"os"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -104,14 +104,14 @@ func TestObservers(t *testing.T) {
 				}
 			}
 			outputjUnit := filepath.Join(cmd.ArtifactDir(), "junit_operator.xml")
-			raw, err := ioutil.ReadFile(outputjUnit)
+			raw, err := os.ReadFile(outputjUnit)
 			if err != nil {
 				t.Fatalf("could not read jUnit artifact: %v", err)
 			}
 			mungedJunit := timeRegex.ReplaceAll(raw, []byte(`time="whatever"`))
 			mungedJunit = failureTimeRegex.ReplaceAll(mungedJunit, []byte(`time&#34;:&#34;whatever&#34;`))
 			mungedJunit = sourceCodeLineRegex.ReplaceAll(mungedJunit, []byte(`$1`))
-			if err := ioutil.WriteFile(outputjUnit, mungedJunit, 0755); err != nil {
+			if err := os.WriteFile(outputjUnit, mungedJunit, 0755); err != nil {
 				t.Fatalf("could not munge jUnit artifact: %v", err)
 			}
 			expectedJunit := path.Join("artifacts", testCase.junitOperator)

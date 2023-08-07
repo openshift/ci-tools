@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
+	"os"
 	"reflect"
 	"strings"
 	"sync"
@@ -24,7 +24,7 @@ func getKuberntesAuthToken(upstreamClient *VaultClient, role string) (string, ti
 	}
 	client.SetToken("")
 
-	serviceAccountToken, err := ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/token")
+	serviceAccountToken, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/token")
 	if err != nil {
 		return "", 0, fmt.Errorf("failed to read serviceAccountToken from /var/run/secrets/kubernetes.io/serviceaccount/token: %w", err)
 	}

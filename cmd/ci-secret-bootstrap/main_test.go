@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -286,7 +285,7 @@ var (
 )
 
 func TestCompleteOptions(t *testing.T) {
-	dir, err := ioutil.TempDir("", "test")
+	dir, err := os.MkdirTemp("", "test")
 	if err != nil {
 		t.Errorf("Failed to create temp dir")
 	}
@@ -311,7 +310,7 @@ func TestCompleteOptions(t *testing.T) {
 	}
 
 	for k, v := range fileMap {
-		if err := ioutil.WriteFile(k, v, 0755); err != nil {
+		if err := os.WriteFile(k, v, 0755); err != nil {
 			t.Errorf("Failed to remove temp dir")
 		}
 	}

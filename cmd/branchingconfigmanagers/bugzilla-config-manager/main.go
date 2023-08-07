@@ -4,7 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path"
 	"sort"
 	"time"
@@ -60,7 +60,7 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to gather options")
 	}
-	configBytes, err := ioutil.ReadFile(opts.lifecycleConfigFile)
+	configBytes, err := os.ReadFile(opts.lifecycleConfigFile)
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to read --lifecycle-config")
 	}
@@ -97,7 +97,7 @@ func main() {
 		logrus.WithError(err).Fatal("failed to serialize plugin config")
 	}
 
-	if err := ioutil.WriteFile(configPath, pluginConfigRaw, 0644); err != nil {
+	if err := os.WriteFile(configPath, pluginConfigRaw, 0644); err != nil {
 		logrus.WithError(err).Fatal("failed to write main plugin config")
 	}
 }
@@ -118,8 +118,8 @@ func extractFromConfig(lifecycleConfig ocplifecycle.Config, now time.Time) (deve
 	var errs []error
 	var developmentVersionFound bool
 
-	allNonEOLVersions := sets.String{}
-	gaVersionsSet := sets.String{}
+	allNonEOLVersions := sets.Set[string]{}
+	gaVersionsSet := sets.Set[string]{}
 	for ocpProduct, productConfig := range lifecycleConfig {
 		if ocpProduct != "ocp" {
 			continue
@@ -166,7 +166,7 @@ func extractFromConfig(lifecycleConfig ocplifecycle.Config, now time.Time) (deve
 		}
 	}
 
-	for _, nonEOLVersion := range allNonEOLVersions.List() {
+	for _, nonEOLVersion := range sets.List(allNonEOLVersions) {
 		parsed, err := ocplifecycle.ParseMajorMinor(nonEOLVersion)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to parse %s as majorMinor: %w", nonEOLVersion, err))

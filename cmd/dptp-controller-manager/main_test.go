@@ -17,26 +17,26 @@ func TestCompleteImageStreamTags(t *testing.T) {
 		name           string
 		flagName       string
 		raw            flagutil.Strings
-		expected       sets.String
+		expected       sets.Set[string]
 		expectedErrors []error
 	}{
 		{
 			name:     "no flags",
 			flagName: "some-flag",
-			expected: sets.NewString(),
+			expected: sets.New[string](),
 		},
 		{
 			name:           "some flag: wrong format",
 			flagName:       "some-flag",
 			raw:            flagutil.NewStrings([]string{"namespace/name:tag", "xyz"}...),
-			expected:       sets.NewString("namespace/name:tag"),
+			expected:       sets.New[string]("namespace/name:tag"),
 			expectedErrors: []error{fmt.Errorf("--some-flag value xyz was not in namespace/name:tag format")},
 		},
 		{
 			name:     "some flags",
 			flagName: "some-flag",
 			raw:      flagutil.NewStrings([]string{"ci/applyconfig:latest", "ocp/4.6:cli"}...),
-			expected: sets.NewString([]string{"ci/applyconfig:latest", "ocp/4.6:cli"}...),
+			expected: sets.New[string]([]string{"ci/applyconfig:latest", "ocp/4.6:cli"}...),
 		},
 	}
 
@@ -58,26 +58,26 @@ func TestCompleteImageStream(t *testing.T) {
 		name           string
 		flagName       string
 		raw            flagutil.Strings
-		expected       sets.String
+		expected       sets.Set[string]
 		expectedErrors []error
 	}{
 		{
 			name:     "no flags",
 			flagName: "some-flag",
-			expected: sets.NewString(),
+			expected: sets.New[string](),
 		},
 		{
 			name:           "some flag: wrong format",
 			flagName:       "some-flag",
 			raw:            flagutil.NewStrings([]string{"namespace/name", "xyz"}...),
-			expected:       sets.NewString("namespace/name"),
+			expected:       sets.New[string]("namespace/name"),
 			expectedErrors: []error{fmt.Errorf("--some-flag value xyz was not in namespace/name format")},
 		},
 		{
 			name:     "some flags",
 			flagName: "some-flag",
 			raw:      flagutil.NewStrings([]string{"ci/applyconfig", "ocp/4.6"}...),
-			expected: sets.NewString([]string{"ci/applyconfig", "ocp/4.6"}...),
+			expected: sets.New[string]([]string{"ci/applyconfig", "ocp/4.6"}...),
 		},
 	}
 
@@ -98,16 +98,16 @@ func TestCompleteSet(t *testing.T) {
 	tests := []struct {
 		name     string
 		raw      flagutil.Strings
-		expected sets.String
+		expected sets.Set[string]
 	}{
 		{
 			name:     "no flags",
-			expected: sets.NewString(),
+			expected: sets.New[string](),
 		},
 		{
 			name:     "some flags",
 			raw:      flagutil.NewStrings([]string{"abc", "xyz"}...),
-			expected: sets.NewString([]string{"abc", "xyz"}...),
+			expected: sets.New[string]([]string{"abc", "xyz"}...),
 		},
 	}
 

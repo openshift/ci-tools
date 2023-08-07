@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -42,7 +41,7 @@ type options struct {
 	dryRun bool
 }
 
-type orgReposWithOfficialImages map[string]sets.String
+type orgReposWithOfficialImages map[string]sets.Set[string]
 
 func (o orgReposWithOfficialImages) isOfficialRepo(org, repo string) bool {
 	if _, ok := o[org]; ok {
@@ -108,7 +107,7 @@ func updateProwConfig(configFile string, config prowconfig.ProwConfig) error {
 		return fmt.Errorf("could not marshal Prow configuration: %w", err)
 	}
 
-	return ioutil.WriteFile(configFile, data, 0644)
+	return os.WriteFile(configFile, data, 0644)
 }
 
 func updateProwPlugins(pluginsFile string, config *plugins.Configuration) error {
@@ -121,20 +120,20 @@ func updateProwPlugins(pluginsFile string, config *plugins.Configuration) error 
 		return fmt.Errorf("could not marshal Prow configuration: %w", err)
 	}
 
-	return ioutil.WriteFile(pluginsFile, data, 0644)
+	return os.WriteFile(pluginsFile, data, 0644)
 }
 
 func privateOrgRepo(repo string) string {
 	return fmt.Sprintf("%s/%s", openshiftPrivOrg, repo)
 }
 
-func getOrgReposWithOfficialImages(configDir string, whitelist map[string][]string, reposInOpenShiftPrivOrg sets.String) (orgReposWithOfficialImages, error) {
+func getOrgReposWithOfficialImages(configDir string, whitelist map[string][]string, reposInOpenShiftPrivOrg sets.Set[string]) (orgReposWithOfficialImages, error) {
 	ret := make(orgReposWithOfficialImages)
 
 	for org, repos := range whitelist {
 		for _, repo := range repos {
 			if _, ok := ret[org]; !ok {
-				ret[org] = sets.NewString(repo)
+				ret[org] = sets.New[string](repo)
 			} else if reposInOpenShiftPrivOrg.Has(repo) {
 				ret[org].Insert(repo)
 			} else {
@@ -155,7 +154,7 @@ func getOrgReposWithOfficialImages(configDir string, whitelist map[string][]stri
 		}
 
 		if _, ok := ret[i.Org]; !ok {
-			ret[i.Org] = sets.NewString(i.Repo)
+			ret[i.Org] = sets.New[string](i.Repo)
 		} else if reposInOpenShiftPrivOrg.Has(i.Repo) {
 			ret[i.Org].Insert(i.Repo)
 		} else {
@@ -215,7 +214,7 @@ func setPrivateReposTideQueries(tideQueries []prowconfig.TideQuery, orgRepos org
 	logrus.Info("Processing...")
 
 	for index, tideQuery := range tideQueries {
-		repos := sets.NewString(tideQuery.Repos...)
+		repos := sets.New[string](tideQuery.Repos...)
 
 		for _, orgRepo := range tideQuery.Repos {
 			if orgRepos.isOfficialRepoFull(orgRepo) {
@@ -228,7 +227,7 @@ func setPrivateReposTideQueries(tideQueries []prowconfig.TideQuery, orgRepos org
 			}
 		}
 
-		tideQueries[index].Repos = repos.List()
+		tideQueries[index].Repos = sets.List(repos)
 	}
 }
 
@@ -314,7 +313,7 @@ func injectPrivateApprovePlugin(approves []plugins.Approve, orgRepos orgReposWit
 	logrus.Info("Processing...")
 
 	for index, approve := range approves {
-		repos := sets.NewString(approve.Repos...)
+		repos := sets.New[string](approve.Repos...)
 
 		for _, orgRepo := range approve.Repos {
 			if orgRepos.isOfficialRepoFull(orgRepo) {
@@ -325,7 +324,7 @@ func injectPrivateApprovePlugin(approves []plugins.Approve, orgRepos orgReposWit
 			}
 		}
 
-		approves[index].Repos = repos.List()
+		approves[index].Repos = sets.List(repos)
 	}
 }
 
@@ -333,7 +332,7 @@ func injectPrivateLGTMPlugin(lgtms []plugins.Lgtm, orgRepos orgReposWithOfficial
 	logrus.Info("Processing...")
 
 	for index, lgtm := range lgtms {
-		repos := sets.NewString(lgtm.Repos...)
+		repos := sets.New[string](lgtm.Repos...)
 
 		for _, orgRepo := range lgtm.Repos {
 			if orgRepos.isOfficialRepoFull(orgRepo) {
@@ -344,7 +343,7 @@ func injectPrivateLGTMPlugin(lgtms []plugins.Lgtm, orgRepos orgReposWithOfficial
 			}
 		}
 
-		lgtms[index].Repos = repos.List()
+		lgtms[index].Repos = sets.List(repos)
 	}
 }
 
@@ -371,38 +370,38 @@ func injectPrivatePlugins(prowPlugins plugins.Plugins, orgRepos orgReposWithOffi
 	for org, repos := range orgRepos {
 
 		for repo := range repos {
-			values := sets.NewString()
+			values := sets.New[string]()
 			values.Insert(prowPlugins[org].Plugins...)
 
 			if repoValues, ok := prowPlugins[fmt.Sprintf("%s/%s", org, repo)]; ok {
 				values.Insert(repoValues.Plugins...)
 			}
-			privateRepoPlugins[privateOrgRepo(repo)] = values.List()
+			privateRepoPlugins[privateOrgRepo(repo)] = sets.List(values)
 		}
 	}
 
 	commonPlugins := getCommonPlugins(privateRepoPlugins)
 	for repo, values := range privateRepoPlugins {
-		repoLevelPlugins := sets.NewString(values...)
+		repoLevelPlugins := sets.New[string](values...)
 
 		repoLevelPlugins = repoLevelPlugins.Difference(commonPlugins)
 
-		if len(repoLevelPlugins.List()) > 0 {
-			logrus.WithFields(logrus.Fields{"repo": repo, "value": repoLevelPlugins.List()}).Info("Generating repo")
-			prowPlugins[repo] = plugins.OrgPlugins{Plugins: repoLevelPlugins.List()}
+		if len(sets.List(repoLevelPlugins)) > 0 {
+			logrus.WithFields(logrus.Fields{"repo": repo, "value": sets.List(repoLevelPlugins)}).Info("Generating repo")
+			prowPlugins[repo] = plugins.OrgPlugins{Plugins: sets.List(repoLevelPlugins)}
 		}
 	}
 
-	if len(commonPlugins.List()) > 0 {
-		logrus.WithField("value", commonPlugins.List()).Info("Generating openshift-priv org.")
-		prowPlugins[openshiftPrivOrg] = plugins.OrgPlugins{Plugins: commonPlugins.List()}
+	if len(sets.List(commonPlugins)) > 0 {
+		logrus.WithField("value", sets.List(commonPlugins)).Info("Generating openshift-priv org.")
+		prowPlugins[openshiftPrivOrg] = plugins.OrgPlugins{Plugins: sets.List(commonPlugins)}
 	}
 }
 
-func getCommonPlugins(privateRepoPlugins map[string][]string) sets.String {
-	var ret sets.String
+func getCommonPlugins(privateRepoPlugins map[string][]string) sets.Set[string] {
+	var ret sets.Set[string]
 	for _, values := range privateRepoPlugins {
-		valuesSet := sets.NewString(values...)
+		valuesSet := sets.New[string](values...)
 
 		if ret == nil {
 			ret = valuesSet
@@ -474,7 +473,7 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("couldn't get openshift-priv repos")
 	}
-	reposInOpenShiftPrivOrg := sets.NewString()
+	reposInOpenShiftPrivOrg := sets.New[string]()
 	for _, repo := range repos {
 		reposInOpenShiftPrivOrg.Insert(repo.Name)
 	}

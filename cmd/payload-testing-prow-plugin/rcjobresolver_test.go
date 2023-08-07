@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"testing"
 
@@ -77,7 +77,7 @@ func TestResolve(t *testing.T) {
 }`
 				return &http.Response{
 					StatusCode: http.StatusOK,
-					Body:       ioutil.NopCloser(bytes.NewBuffer([]byte(content))),
+					Body:       io.NopCloser(bytes.NewBuffer([]byte(content))),
 				}, nil
 			})
 			jobResolver := newReleaseControllerJobResolver(httpClient)

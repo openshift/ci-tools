@@ -44,7 +44,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 	postsubmits := map[string][]prowconfig.Postsubmit{}
 	var periodics []prowconfig.Periodic
 	rehearsals := info.Config.Rehearsals
-	disabledRehearsals := sets.NewString(rehearsals.DisabledRehearsals...)
+	disabledRehearsals := sets.New[string](rehearsals.DisabledRehearsals...)
 
 	for _, element := range configSpec.Tests {
 		g := NewProwJobBaseBuilderForTest(configSpec, info, NewCiOperatorPodSpecGenerator(), element)
@@ -102,7 +102,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 
 	if len(imageTargets) > 0 {
 		// Identify which jobs need to have a release payload explicitly requested
-		var presubmitTargets = imageTargets.List()
+		var presubmitTargets = sets.List(imageTargets)
 		if api.PromotesOfficialImages(configSpec, api.WithOKD) {
 			presubmitTargets = append(presubmitTargets, "[release:latest]")
 		}
@@ -196,7 +196,7 @@ func generatePresubmitForTest(jobBaseBuilder *prowJobBaseBuilder, name string, i
 	return &prowconfig.Presubmit{
 		JobBase:   base,
 		AlwaysRun: opts.runIfChanged == "" && opts.skipIfOnlyChanged == "" && !opts.defaultDisable,
-		Brancher:  prowconfig.Brancher{Branches: sets.NewString(jc.ExactlyBranch(info.Branch), jc.FeatureBranch(info.Branch)).List()},
+		Brancher:  prowconfig.Brancher{Branches: sets.List(sets.New[string](jc.ExactlyBranch(info.Branch), jc.FeatureBranch(info.Branch)))},
 		Reporter: prowconfig.Reporter{
 			Context: fmt.Sprintf("ci/prow/%s", shortName),
 		},
@@ -213,7 +213,7 @@ func generatePresubmitForTest(jobBaseBuilder *prowJobBaseBuilder, name string, i
 type generatePostsubmitOptions struct {
 	runIfChanged      string
 	skipIfOnlyChanged string
-	imageTargets      sets.String
+	imageTargets      sets.Set[string]
 }
 
 type generatePostsubmitOption func(options *generatePostsubmitOptions)
@@ -258,7 +258,7 @@ func generatePostsubmitsForPromotion(jobBaseBuilderFactory func() *prowJobBaseBu
 			jobBaseGen = jobBaseBuilder.TestName("images")
 		}
 
-		jobBaseGen.PodSpec.Add(Promotion(), Targets(opts.imageTargets.List()...))
+		jobBaseGen.PodSpec.Add(Promotion(), Targets(sets.List(opts.imageTargets)...))
 		postsubmit := generatePostsubmitForTest(jobBaseGen, info)
 
 		postsubmit.MaxConcurrency = 1

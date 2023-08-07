@@ -26,7 +26,7 @@ func cmdProfileList(args []string) error {
 			args = append(args, string(p))
 		}
 	} else {
-		valid := sets.NewString()
+		valid := sets.New[string]()
 		for _, p := range api.ClusterProfiles() {
 			valid.Insert(string(p))
 		}

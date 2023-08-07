@@ -51,7 +51,7 @@ func TestRegistryClusterHandlerFactory(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		buildClusters sets.String
+		buildClusters sets.Set[string]
 		filter        objectFilter
 
 		expected []reconcile.Request
@@ -59,7 +59,7 @@ func TestRegistryClusterHandlerFactory(t *testing.T) {
 	}{
 		{
 			name:          "Generates requests for all buildclusters",
-			buildClusters: sets.NewString("build01", "build02"),
+			buildClusters: sets.New[string]("build01", "build02"),
 			expected: []reconcile.Request{
 				reconcileRequest("build01_"+namespace, name),
 				reconcileRequest("build02_"+namespace, name),
@@ -67,12 +67,12 @@ func TestRegistryClusterHandlerFactory(t *testing.T) {
 		},
 		{
 			name:          "Filter is respected",
-			buildClusters: sets.NewString("build01"),
+			buildClusters: sets.New[string]("build01"),
 			filter:        func(_ types.NamespacedName) bool { return false },
 		},
 		{
 			name:          "RoundTrips with DecodeRequest",
-			buildClusters: sets.NewString("build01"),
+			buildClusters: sets.New[string]("build01"),
 			expected:      []reconcile.Request{reconcileRequest("build01_"+namespace, name)},
 			verify: func(r []reconcile.Request) error {
 				if n := len(r); n != 1 {
@@ -384,8 +384,8 @@ func TestReconcile(t *testing.T) {
 		{
 			name:                "Request for non existent object doesn't error",
 			request:             types.NamespacedName{Namespace: "01_doesnotexist/doesnotexist"},
-			registryClient:      fakeclient.NewFakeClient(referenceImageStream.DeepCopy()),
-			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": fakeclient.NewFakeClient()},
+			registryClient:      fakeclient.NewClientBuilder().WithRuntimeObjects(referenceImageStream.DeepCopy()).Build(),
+			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": fakeclient.NewClientBuilder().Build()},
 			verify: func(_ ctrlruntimeclient.Client, _ map[string]ctrlruntimeclient.Client, err error) error {
 				if err != nil {
 					return fmt.Errorf("unexpected error: %w", err)
@@ -412,8 +412,8 @@ func TestReconcile(t *testing.T) {
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
 			},
-			registryClient:      fakeclient.NewFakeClient(referenceImageStream.DeepCopy(), imageStreamTagWithBuild01PullSpec()),
-			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": fakeclient.NewFakeClient()},
+			registryClient:      fakeclient.NewClientBuilder().WithRuntimeObjects(referenceImageStream.DeepCopy(), imageStreamTagWithBuild01PullSpec()).Build(),
+			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": fakeclient.NewClientBuilder().Build()},
 			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
 				if err != nil {
 					return fmt.Errorf("unexpected error: %w", err)
@@ -434,8 +434,8 @@ func TestReconcile(t *testing.T) {
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
 			},
-			registryClient:      fakeclient.NewFakeClient(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()),
-			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": fakeclient.NewFakeClient(referenceImageStreamTag.DeepCopy())},
+			registryClient:      fakeclient.NewClientBuilder().WithRuntimeObjects(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()).Build(),
+			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": fakeclient.NewClientBuilder().WithRuntimeObjects(referenceImageStreamTag.DeepCopy()).Build()},
 			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
 				if err != nil {
 					return fmt.Errorf("unexpected error: %w", err)
@@ -456,8 +456,8 @@ func TestReconcile(t *testing.T) {
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
 			},
-			registryClient:      fakeclient.NewFakeClient(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()),
-			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewFakeClient(secret.DeepCopy(), outdatedImageStreamTag()))},
+			registryClient:      fakeclient.NewClientBuilder().WithRuntimeObjects(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()).Build(),
+			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewClientBuilder().WithRuntimeObjects(secret.DeepCopy(), outdatedImageStreamTag()).Build())},
 			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
 				if err != nil {
 					return fmt.Errorf("unexpected error: %w", err)
@@ -471,12 +471,12 @@ func TestReconcile(t *testing.T) {
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
 			},
-			registryClient: fakeclient.NewFakeClient(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()),
-			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewFakeClient(
+			registryClient: fakeclient.NewClientBuilder().WithRuntimeObjects(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()).Build(),
+			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewClientBuilder().WithRuntimeObjects(
 				secret.DeepCopy(),
 				outdatedImageStreamTag(),
 				expectedNamespace.DeepCopy(),
-			))},
+			).Build())},
 			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
 				if err != nil {
 					return fmt.Errorf("unexpected error: %w", err)
@@ -490,13 +490,13 @@ func TestReconcile(t *testing.T) {
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
 			},
-			registryClient: fakeclient.NewFakeClient(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()),
-			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewFakeClient(
+			registryClient: fakeclient.NewClientBuilder().WithRuntimeObjects(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()).Build(),
+			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewClientBuilder().WithRuntimeObjects(
 				secret.DeepCopy(),
 				outdatedImageStreamTag(),
 				expectedNamespace.DeepCopy(),
 				outdatedPullSecret(),
-			))},
+			).Build())},
 			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
 				if err != nil {
 					return fmt.Errorf("unexpected error: %w", err)
@@ -510,15 +510,15 @@ func TestReconcile(t *testing.T) {
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
 			},
-			registryClient: fakeclient.NewFakeClient(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()),
-			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewFakeClient(
+			registryClient: fakeclient.NewClientBuilder().WithRuntimeObjects(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()).Build(),
+			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewClientBuilder().WithRuntimeObjects(
 				secret.DeepCopy(),
 				outdatedImageStreamTag(),
 				expectedNamespace.DeepCopy(),
 				outdatedRoleBindig(),
 				outdatedRole(),
 				expectedPullSecret.DeepCopy(),
-			))},
+			).Build())},
 			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
 				if err != nil {
 					return fmt.Errorf("unexpected error: %w", err)
@@ -532,14 +532,14 @@ func TestReconcile(t *testing.T) {
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
 			},
-			registryClient: fakeclient.NewFakeClient(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()),
-			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewFakeClient(
+			registryClient: fakeclient.NewClientBuilder().WithRuntimeObjects(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()).Build(),
+			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewClientBuilder().WithRuntimeObjects(
 				secret.DeepCopy(),
 				expectedNamespace.DeepCopy(),
 				expectedPullSecret.DeepCopy(),
 				outdatedImageStream(),
 				outdatedImageStreamTag(),
-			))},
+			).Build())},
 			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
 				if err != nil {
 					return fmt.Errorf("unexpected error: %w", err)
@@ -553,14 +553,14 @@ func TestReconcile(t *testing.T) {
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
 			},
-			registryClient: fakeclient.NewFakeClient(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()),
-			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewFakeClient(
+			registryClient: fakeclient.NewClientBuilder().WithRuntimeObjects(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()).Build(),
+			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewClientBuilder().WithRuntimeObjects(
 				secret.DeepCopy(),
 				outdatedImageStreamTag(),
 				expectedNamespace.DeepCopy(),
 				expectedPullSecret.DeepCopy(),
 				expectedImageStream.DeepCopy(),
-			))},
+			).Build())},
 			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
 				if err != nil {
 					return fmt.Errorf("unexpected error: %w", err)
@@ -574,14 +574,14 @@ func TestReconcile(t *testing.T) {
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
 			},
-			registryClient: fakeclient.NewFakeClient(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()),
-			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewFakeClient(
+			registryClient: fakeclient.NewClientBuilder().WithRuntimeObjects(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()).Build(),
+			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewClientBuilder().WithRuntimeObjects(
 				secret.DeepCopy(),
 				outdatedImageStreamTag(),
 				expectedNamespace.DeepCopy(),
 				expectedPullSecret.DeepCopy(),
 				expectedImageStream.DeepCopy(),
-			), func(c *imageImportStatusSettingClient) { c.failure = true },
+			).Build(), func(c *imageImportStatusSettingClient) { c.failure = true },
 			)},
 			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
 				exp := "imageStreamImport did not succeed: reason: , message: failing as requested"
@@ -605,7 +605,7 @@ func TestReconcile(t *testing.T) {
 				registryClusterName: "app.ci",
 				registryClient:      tc.registryClient,
 				buildClusterClients: tc.buildClusterClients,
-				forbiddenRegistries: sets.NewString("default-route-openshift-image-registry.apps.build01.ci.devcluster.openshift.com",
+				forbiddenRegistries: sets.New[string]("default-route-openshift-image-registry.apps.build01.ci.devcluster.openshift.com",
 					"registry.build01.ci.openshift.org",
 					"registry.build02.ci.openshift.org",
 				),
@@ -663,7 +663,7 @@ func TestTestImageStramTagImportHandlerRoundTrips(t *testing.T) {
 	queue := &hijackingQueue{}
 
 	event := event.CreateEvent{Object: obj}
-	testImageStreamTagImportHandler(logrus.NewEntry(logrus.StandardLogger()), sets.NewString()).Create(context.Background(), event, queue)
+	testImageStreamTagImportHandler(logrus.NewEntry(logrus.StandardLogger()), sets.New[string]()).Create(context.Background(), event, queue)
 
 	if n := len(queue.received); n != 1 {
 		t.Fatalf("expected exactly one reconcile request, got %d(%v)", n, queue.received)
@@ -692,24 +692,24 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 		config                          api.ReleaseBuildConfiguration
 		client                          ctrlruntimeclient.Client
 		buildClusterClients             map[string]ctrlruntimeclient.Client
-		additionalImageStreamTags       sets.String
-		additionalImageStreams          sets.String
-		additionalImageStreamNamespaces sets.String
+		additionalImageStreamTags       sets.Set[string]
+		additionalImageStreams          sets.Set[string]
+		additionalImageStreamNamespaces sets.Set[string]
 		expectedResult                  bool
 	}{
 		{
 			name:                      "imagestreamtag is explicitly allowed",
-			additionalImageStreamTags: sets.NewString(namespace + "/" + streamName + ":" + tagName),
+			additionalImageStreamTags: sets.New[string](namespace + "/" + streamName + ":" + tagName),
 			expectedResult:            true,
 		},
 		{
 			name:                   "imagestream is explicitly allowed",
-			additionalImageStreams: sets.NewString(namespace + "/" + streamName),
+			additionalImageStreams: sets.New[string](namespace + "/" + streamName),
 			expectedResult:         true,
 		},
 		{
 			name:                            "imagestream_namespace is explicitly allowed",
-			additionalImageStreamNamespaces: sets.NewString(namespace),
+			additionalImageStreamNamespaces: sets.New[string](namespace),
 			expectedResult:                  true,
 		},
 		{
@@ -774,19 +774,19 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 		},
 		{
 			name: "imagestreamtag is referenced by imagestreamtag import",
-			client: fakeclient.NewFakeClient((&testimagestreamtagimportv1.TestImageStreamTagImport{Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
+			client: fakeclient.NewClientBuilder().WithRuntimeObjects((&testimagestreamtagimportv1.TestImageStreamTagImport{Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
 				Namespace: namespace,
 				Name:      streamName + ":" + tagName,
-			}}).WithImageStreamLabels()),
+			}}).WithImageStreamLabels()).Build(),
 			expectedResult: true,
 		},
 		{
 			name: "imagestreamtag is referenced by imagestreatag import in a buildcluster",
-			buildClusterClients: map[string]ctrlruntimeclient.Client{"build01": fakeclient.NewFakeClient((&testimagestreamtagimportv1.TestImageStreamTagImport{
+			buildClusterClients: map[string]ctrlruntimeclient.Client{"build01": fakeclient.NewClientBuilder().WithRuntimeObjects((&testimagestreamtagimportv1.TestImageStreamTagImport{
 				Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
 					Namespace: namespace,
 					Name:      streamName + ":" + tagName,
-				}}).WithImageStreamLabels()),
+				}}).WithImageStreamLabels()).Build(),
 			},
 			expectedResult: true,
 		},
@@ -798,7 +798,7 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.client == nil {
-				tc.client = fakeclient.NewFakeClient()
+				tc.client = fakeclient.NewClientBuilder().Build()
 			}
 			if tc.buildClusterClients == nil {
 				tc.buildClusterClients = map[string]ctrlruntimeclient.Client{}
@@ -840,7 +840,7 @@ func TestSourceForConfigChangeChannel(t *testing.T) {
 		request types.NamespacedName
 	}
 
-	buildClusters := sets.NewString("build01", "build02")
+	buildClusters := sets.New[string]("build01", "build02")
 	testCases := []struct {
 		name   string
 		change agents.IndexDelta
@@ -864,7 +864,7 @@ func TestSourceForConfigChangeChannel(t *testing.T) {
 		{
 			name:   "Config for imagestream was added, we trigger an event per cluster and tag",
 			change: agents.IndexDelta{IndexKey: "imagestream_namespace/name", Added: []*api.ReleaseBuildConfiguration{{}}},
-			client: fakeclient.NewFakeClient(&imagev1.ImageStream{ObjectMeta: metav1.ObjectMeta{Namespace: "namespace", Name: "name"}, Status: imagev1.ImageStreamStatus{Tags: []imagev1.NamedTagEventList{{Tag: "foo"}, {Tag: "bar"}}}}),
+			client: fakeclient.NewClientBuilder().WithRuntimeObjects(&imagev1.ImageStream{ObjectMeta: metav1.ObjectMeta{Namespace: "namespace", Name: "name"}, Status: imagev1.ImageStreamStatus{Tags: []imagev1.NamedTagEventList{{Tag: "foo"}, {Tag: "bar"}}}}).Build(),
 
 			expected: []requestWithCluster{
 				{cluster: "build01", request: types.NamespacedName{Namespace: "namespace", Name: "name:foo"}},
@@ -881,7 +881,7 @@ func TestSourceForConfigChangeChannel(t *testing.T) {
 			t.Parallel()
 
 			if tc.client == nil {
-				tc.client = fakeclient.NewFakeClient()
+				tc.client = fakeclient.NewClientBuilder().Build()
 			}
 
 			changeChannel := make(chan agents.IndexDelta)

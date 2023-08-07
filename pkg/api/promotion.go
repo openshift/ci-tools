@@ -23,8 +23,8 @@ const (
 )
 
 // ImageTargets returns image targets
-func ImageTargets(c *ReleaseBuildConfiguration) sets.String {
-	imageTargets := sets.NewString()
+func ImageTargets(c *ReleaseBuildConfiguration) sets.Set[string] {
+	imageTargets := sets.New[string]()
 	if c.PromotionConfiguration != nil {
 		for additional := range c.PromotionConfiguration.AdditionalImages {
 			imageTargets.Insert(c.PromotionConfiguration.AdditionalImages[additional])

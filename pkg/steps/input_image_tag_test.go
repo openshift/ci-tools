@@ -33,7 +33,7 @@ func TestInputImageTagStep(t *testing.T) {
 		},
 	}
 
-	client := loggingclient.New(fakectrlruntimeclient.NewFakeClient(
+	client := loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 		&imagev1.ImageStream{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "target-namespace",
@@ -63,7 +63,7 @@ func TestInputImageTagStep(t *testing.T) {
 				Namespace: baseImage.Namespace,
 			},
 			Image: imagev1.Image{ObjectMeta: metav1.ObjectMeta{Name: "ddc0de"}},
-		}))
+		}).Build())
 
 	// Make a step instance
 	jobspec := &api.JobSpec{}

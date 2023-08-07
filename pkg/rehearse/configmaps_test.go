@@ -3,7 +3,6 @@ package rehearse
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -14,7 +13,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -35,7 +34,7 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 	testTemplatePath := filepath.Join(config.TemplatesPath, "subdir/test-template.yaml")
 	cluster := "cluster"
 	ns := "test-namespace"
-	contents, err := ioutil.ReadFile(filepath.Join(testRepoPath, testTemplatePath))
+	contents, err := os.ReadFile(filepath.Join(testRepoPath, testTemplatePath))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +112,7 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 }
 
 func TestCreateClusterProfiles(t *testing.T) {
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +128,7 @@ func TestCreateClusterProfiles(t *testing.T) {
 			t.Fatal(err)
 		}
 		content := []byte(p + " content")
-		if err := ioutil.WriteFile(path, content, 0664); err != nil {
+		if err := os.WriteFile(path, content, 0664); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -233,10 +232,10 @@ func TestNewConfigMaps(t *testing.T) {
 				"path/to/a/template.yaml",
 			},
 			expectCMS: ConfigMaps{
-				Paths:           sets.NewString("path/to/a/template.yaml"),
+				Paths:           sets.New[string]("path/to/a/template.yaml"),
 				Names:           map[string]string{"a-template-configmap": "rehearse-1234-SOMESHA-test-a-template-configmap"},
-				ProductionNames: sets.NewString("a-template-configmap"),
-				Patterns:        sets.NewString("path/to/a/template.yaml"),
+				ProductionNames: sets.New[string]("a-template-configmap"),
+				Patterns:        sets.New[string]("path/to/a/template.yaml"),
 			},
 		},
 		{
@@ -246,10 +245,10 @@ func TestNewConfigMaps(t *testing.T) {
 				"path/to/a/cluster-profile/vars-origin.yaml",
 			},
 			expectCMS: ConfigMaps{
-				Paths:           sets.NewString("path/to/a/cluster-profile/vars.yaml", "path/to/a/cluster-profile/vars-origin.yaml"),
+				Paths:           sets.New[string]("path/to/a/cluster-profile/vars.yaml", "path/to/a/cluster-profile/vars-origin.yaml"),
 				Names:           map[string]string{"a-cluster-profile-configmap": "rehearse-1234-SOMESHA-test-a-cluster-profile-configmap"},
-				ProductionNames: sets.NewString("a-cluster-profile-configmap"),
-				Patterns:        sets.NewString("path/to/a/cluster-profile/*.yaml"),
+				ProductionNames: sets.New[string]("a-cluster-profile-configmap"),
+				Patterns:        sets.New[string]("path/to/a/cluster-profile/*.yaml"),
 			},
 		},
 		{
@@ -260,7 +259,7 @@ func TestNewConfigMaps(t *testing.T) {
 				"path/to/a/template.yaml",
 			},
 			expectCMS: ConfigMaps{
-				Paths: sets.NewString(
+				Paths: sets.New[string](
 					"path/to/a/cluster-profile/vars.yaml",
 					"path/to/a/cluster-profile/vars-origin.yaml",
 					"path/to/a/template.yaml",
@@ -269,8 +268,8 @@ func TestNewConfigMaps(t *testing.T) {
 					"a-cluster-profile-configmap": "rehearse-1234-SOMESHA-test-a-cluster-profile-configmap",
 					"a-template-configmap":        "rehearse-1234-SOMESHA-test-a-template-configmap",
 				},
-				ProductionNames: sets.NewString("a-cluster-profile-configmap", "a-template-configmap"),
-				Patterns:        sets.NewString("path/to/a/cluster-profile/*.yaml", "path/to/a/template.yaml"),
+				ProductionNames: sets.New[string]("a-cluster-profile-configmap", "a-template-configmap"),
+				Patterns:        sets.New[string]("path/to/a/cluster-profile/*.yaml", "path/to/a/template.yaml"),
 			},
 		},
 	}

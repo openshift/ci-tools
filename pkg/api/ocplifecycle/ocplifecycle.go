@@ -2,7 +2,7 @@ package ocplifecycle
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,7 +16,7 @@ import (
 
 // LoadConfig loads the lifecycle configuration from a given localtion.
 func LoadConfig(path string) (Config, error) {
-	configBytes, err := ioutil.ReadFile(path)
+	configBytes, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read lifecycle config from path %s: %w", path, err)
 	}
@@ -30,12 +30,12 @@ func LoadConfig(path string) (Config, error) {
 }
 
 type TimelineOptions struct {
-	OnlyEvents sets.String
+	OnlyEvents sets.Set[string]
 }
 
 func mergeOptions(opts []TimelineOptions) TimelineOptions {
 	ret := TimelineOptions{}
-	onlyEvents := sets.NewString()
+	onlyEvents := sets.New[string]()
 
 	for _, opt := range opts {
 		onlyEvents = onlyEvents.Union(opt.OnlyEvents)
@@ -178,7 +178,7 @@ const (
 )
 
 func (le LifecycleEvent) Validate() error {
-	events := sets.NewString([]string{
+	events := sets.New[string]([]string{
 		string(LifecycleEventOpen),
 		string(LifecycleEventFeatureFreeze),
 		string(LifecycleEventCodeFreeze),

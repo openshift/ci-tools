@@ -21,8 +21,8 @@ func PromotesImagesInto(configSpec *cioperatorapi.ReleaseBuildConfiguration, pro
 }
 
 // AllPromotionImageStreamTags returns a set of all ImageStreamTags this config promotes to.
-func AllPromotionImageStreamTags(configSpec *cioperatorapi.ReleaseBuildConfiguration) sets.String {
-	result := sets.String{}
+func AllPromotionImageStreamTags(configSpec *cioperatorapi.ReleaseBuildConfiguration) sets.Set[string] {
+	result := sets.Set[string]{}
 
 	if cioperatorapi.IsPromotionDisabled(configSpec) {
 		return result

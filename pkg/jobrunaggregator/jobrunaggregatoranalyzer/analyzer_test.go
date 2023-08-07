@@ -3,7 +3,6 @@ package jobrunaggregatoranalyzer
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 	"time"
@@ -56,7 +55,7 @@ func TestAnalyzer(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			workDir, err := ioutil.TempDir("/tmp/", "ci-tools-aggregator-test-workdir")
+			workDir, err := os.MkdirTemp("/tmp/", "ci-tools-aggregator-test-workdir")
 			assert.NoError(t, err)
 			defer os.RemoveAll(workDir)
 

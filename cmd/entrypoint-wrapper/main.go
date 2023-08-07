@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -365,7 +364,7 @@ func manageGitConfig(home string) error {
 func manageKubeconfig(proc *exec.Cmd) error {
 	if original, set := os.LookupEnv("KUBECONFIG"); set {
 		tempPrefix := "temp-"
-		writableCopy, err := ioutil.TempFile("", tempPrefix+"kubeconfig-*")
+		writableCopy, err := os.CreateTemp("", tempPrefix+"kubeconfig-*")
 		if err != nil {
 			return fmt.Errorf("could not create unique, writeable $KUBECONFIG copy: %w", err)
 		}

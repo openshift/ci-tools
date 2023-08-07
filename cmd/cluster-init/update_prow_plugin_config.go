@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
@@ -15,7 +15,7 @@ import (
 func updateProwPluginConfig(o options) error {
 	logrus.Info("Updating Prow plugin config")
 	filename := filepath.Join(o.releaseRepo, "core-services", "prow", "02_config", "_plugins.yaml")
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return err
 	}
@@ -28,7 +28,7 @@ func updateProwPluginConfig(o options) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(filename, rawYaml, 0644)
+	return os.WriteFile(filename, rawYaml, 0644)
 }
 
 func updateProwPluginConfigConfigUpdater(c *plugins.Configuration, clusterName string) {
@@ -36,13 +36,13 @@ func updateProwPluginConfigConfigUpdater(c *plugins.Configuration, clusterName s
 		c.ConfigUpdater.ClusterGroups = map[string]plugins.ClusterGroup{}
 	}
 	for _, ns := range []string{"ci", "ocp"} {
-		clusters := sets.NewString(clusterName)
-		namespaces := sets.NewString(ns)
+		clusters := sets.New[string](clusterName)
+		namespaces := sets.New[string](ns)
 		key := fmt.Sprintf("build_farm_%s", ns)
 		if gc, ok := c.ConfigUpdater.ClusterGroups[key]; ok {
-			clusters = clusters.Union(sets.NewString(gc.Clusters...))
-			namespaces = namespaces.Union(sets.NewString(gc.Namespaces...))
+			clusters = clusters.Union(sets.New[string](gc.Clusters...))
+			namespaces = namespaces.Union(sets.New[string](gc.Namespaces...))
 		}
-		c.ConfigUpdater.ClusterGroups[key] = plugins.ClusterGroup{Clusters: clusters.List(), Namespaces: namespaces.List()}
+		c.ConfigUpdater.ClusterGroups[key] = plugins.ClusterGroup{Clusters: sets.List(clusters), Namespaces: sets.List(namespaces)}
 	}
 }

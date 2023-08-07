@@ -79,7 +79,7 @@ func (s *multiStageTestStep) runSteps(
 	return err
 }
 
-func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, bestEffortSteps sets.String) error {
+func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, bestEffortSteps sets.Set[string]) error {
 	var errs []error
 	for _, pod := range pods {
 		err := s.runPod(ctx, &pod, base_steps.NewTestCaseNotifier(util.NopNotifier), util.WaitForPodFlag(0))
@@ -157,7 +157,7 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 		StartedAt:   &start,
 		FinishedAt:  &finished,
 		Duration:    &duration,
-		Failed:      utilpointer.BoolPtr(err != nil),
+		Failed:      utilpointer.Bool(err != nil),
 		Manifests:   client.Objects(),
 	})
 	s.subTests = append(s.subTests, notifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), pod.Name))...)

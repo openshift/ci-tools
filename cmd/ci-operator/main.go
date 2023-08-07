@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -274,7 +273,7 @@ func setupLogger() (*secrets.DynamicCensor, io.Closer, error) {
 	logrus.SetLevel(logrus.TraceLevel)
 	censor := secrets.NewDynamicCensor()
 	logrus.SetFormatter(logrusutil.NewFormatterWithCensor(logrus.StandardLogger().Formatter, &censor))
-	logrus.SetOutput(ioutil.Discard)
+	logrus.SetOutput(io.Discard)
 	logrus.AddHook(&formattingHook{
 		formatter: logrusutil.NewFormatterWithCensor(&logrus.TextFormatter{
 			ForceColors:     true,
@@ -636,7 +635,7 @@ func (o *options) Complete() error {
 	}
 
 	for _, path := range o.templatePaths.values {
-		contents, err := ioutil.ReadFile(path)
+		contents, err := os.ReadFile(path)
 		if err != nil {
 			return fmt.Errorf("could not read dir %s for template: %w", path, err)
 		}
@@ -1267,7 +1266,7 @@ func (o *options) initializeNamespace() error {
 
 	for _, secret := range []*coreapi.Secret{o.pullSecret, o.pushSecret, o.uploadSecret} {
 		if secret != nil {
-			secret.Immutable = utilpointer.BoolPtr(true)
+			secret.Immutable = utilpointer.Bool(true)
 			if err := client.Create(ctx, secret); err != nil && !kerrors.IsAlreadyExists(err) {
 				return fmt.Errorf("couldn't create secret %s: %w", secret.Name, err)
 			}
@@ -1328,7 +1327,7 @@ func (o *options) initializeNamespace() error {
 	})
 
 	if o.cloneAuthConfig != nil && o.cloneAuthConfig.Secret != nil {
-		o.cloneAuthConfig.Secret.Immutable = utilpointer.BoolPtr(true)
+		o.cloneAuthConfig.Secret.Immutable = utilpointer.Bool(true)
 		if err := client.Create(ctx, o.cloneAuthConfig.Secret); err != nil && !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("couldn't create secret %s for %s authentication: %w", o.cloneAuthConfig.Secret.Name, o.cloneAuthConfig.Type, err)
 		}
@@ -1355,8 +1354,8 @@ func (o *options) initializeNamespace() error {
 
 func generateAuthorAccessRoleBinding(namespace string, authors []string) *rbacapi.RoleBinding {
 	var subjects []rbacapi.Subject
-	authorSet := sets.NewString(authors...)
-	for _, author := range authorSet.List() {
+	authorSet := sets.New[string](authors...)
+	for _, author := range sets.List(authorSet) {
 		subjects = append(subjects, rbacapi.Subject{Kind: "Group", Name: api.GitHubUserGroup(author)})
 	}
 	return &rbacapi.RoleBinding{
@@ -1526,7 +1525,7 @@ func (o *options) generateProwMetadata() (m prowResultMetadata) {
 func (o *options) parseCustomMetadata(customProwMetadataFile string) (customMetadata map[string]string, err error) {
 	logrus.Info("Found custom prow metadata.")
 
-	if customJSONFile, readingError := ioutil.ReadFile(customProwMetadataFile); readingError != nil {
+	if customJSONFile, readingError := os.ReadFile(customProwMetadataFile); readingError != nil {
 		logrus.WithError(readingError).Error("Failed to read custom prow metadata.")
 	} else {
 		err = json.Unmarshal(customJSONFile, &customMetadata)
@@ -1928,7 +1927,7 @@ func eventRecorder(kubeClient *coreclientset.CoreV1Client, authClient *authclien
 
 func getCloneSecretFromPath(cloneAuthType steps.CloneAuthType, secretPath string) (*coreapi.Secret, error) {
 	secret := &coreapi.Secret{Data: make(map[string][]byte)}
-	data, err := ioutil.ReadFile(secretPath)
+	data, err := os.ReadFile(secretPath)
 	if err != nil {
 		return nil, fmt.Errorf("could not read file %s for secret: %w", secretPath, err)
 	}
@@ -1963,7 +1962,7 @@ func getHashFromBytes(b []byte) string {
 }
 
 func getDockerConfigSecret(name, filename string) (*coreapi.Secret, error) {
-	src, err := ioutil.ReadFile(filename)
+	src, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("could not read file %s for secret %s: %w", filename, name, err)
 	}
@@ -1979,7 +1978,7 @@ func getDockerConfigSecret(name, filename string) (*coreapi.Secret, error) {
 }
 
 func getSecret(name, filename string) (*coreapi.Secret, error) {
-	src, err := ioutil.ReadFile(filename)
+	src, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("could not read file %s for secret %s: %w", filename, name, err)
 	}
@@ -2112,7 +2111,7 @@ func (o *options) loadConfig(info *api.Metadata) (*api.ReleaseBuildConfiguration
 }
 
 func resolveNodeArchitectures(ctx context.Context, client coreclientset.NodeInterface) ([]string, error) {
-	ret := sets.NewString()
+	ret := sets.New[string]()
 	nodeList, err := client.List(ctx, meta.ListOptions{})
 
 	if err != nil {
@@ -2122,7 +2121,7 @@ func resolveNodeArchitectures(ctx context.Context, client coreclientset.NodeInte
 	for _, node := range nodeList.Items {
 		ret.Insert(node.Status.NodeInfo.Architecture)
 	}
-	return ret.List(), nil
+	return sets.List(ret), nil
 }
 
 func monitorNamespace(ctx context.Context, cancel func(), namespace string, client coreclientset.NamespaceInterface) {

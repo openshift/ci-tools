@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"reflect"
 	"testing"
@@ -340,7 +339,7 @@ func TestSecretCollectionManager(t *testing.T) {
 				var respBody []byte
 				if err == nil {
 					var readErr error
-					respBody, readErr = ioutil.ReadAll(resp.Body)
+					respBody, readErr = io.ReadAll(resp.Body)
 					if err != nil {
 						t.Errorf("failed to read response body after policy creation failed: %v", readErr)
 					}

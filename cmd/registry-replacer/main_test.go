@@ -24,7 +24,7 @@ func TestReplacer(t *testing.T) {
 		pruneOCPBuilderReplacementsEnabled           bool
 		pruneUnusedBaseImagesEnabled                 bool
 		ensureCorrectPromotionDockerfile             bool
-		ensureCorrectPromotionDockerfileIngoredRepos sets.String
+		ensureCorrectPromotionDockerfileIngoredRepos sets.Set[string]
 		promotionTargetToDockerfileMapping           map[string]dockerfileLocation
 		files                                        map[string][]byte
 		credentials                                  *usernameToken
@@ -301,7 +301,7 @@ func TestReplacer(t *testing.T) {
 		// 		Metadata:               api.Metadata{Branch: "master", Org: "org", Repo: "repo"},
 		// 	},
 		// 	ensureCorrectPromotionDockerfile:             true,
-		// 	ensureCorrectPromotionDockerfileIngoredRepos: sets.NewString("org/repo"),
+		// 	ensureCorrectPromotionDockerfileIngoredRepos: sets.New[string]("org/repo"),
 		// 	promotionTargetToDockerfileMapping:           map[string]dockerfileLocation{fmt.Sprintf("registry.svc.ci.openshift.org/ocp/%s:promotionTarget", majorMinor.String()): {contextDir: "other_dir", dockerfile: "Dockerfile.rhel"}},
 		// },
 		// {
@@ -570,17 +570,17 @@ func TestExtractReplacementCandidatesFromDockerfile(t *testing.T) {
 	testCases := []struct {
 		name           string
 		in             string
-		expectedResult sets.String
+		expectedResult sets.Set[string]
 	}{
 		{
 			name:           "Simple",
 			in:             "FROM capetown/center:1",
-			expectedResult: sets.NewString("capetown/center:1"),
+			expectedResult: sets.New[string]("capetown/center:1"),
 		},
 		{
 			name:           "Copy --from",
 			in:             "FROM centos:7\nCOPY --from=builder /go/src/github.com/code-ready/crc /opt/crc",
-			expectedResult: sets.NewString("centos:7", "builder"),
+			expectedResult: sets.New[string]("centos:7", "builder"),
 		},
 		{
 			name: "Multiple from and copy --from",
@@ -596,7 +596,7 @@ RUN yum update -y && \
     yum clean all && rm -rf /var/cache/yum/*
 COPY --from=builder /go/src/github.com/kubernetes-sigs/aws-ebs-csi-driver/bin/aws-ebs-csi-driver /usr/bin/
 ENTRYPOINT ["/usr/bin/aws-ebs-csi-driver"]`,
-			expectedResult: sets.NewString("registry.svc.ci.openshift.org/openshift/release:golang-1.13", "registry.svc.ci.openshift.org/openshift/origin-v4.0:base"),
+			expectedResult: sets.New[string]("registry.svc.ci.openshift.org/openshift/release:golang-1.13", "registry.svc.ci.openshift.org/openshift/origin-v4.0:base"),
 		},
 		{
 			name: "Unrelated directives",
@@ -616,7 +616,7 @@ ENTRYPOINT ["/usr/bin/aws-ebs-csi-driver"]`,
 			}
 
 			if !result.Equal(tc.expectedResult) {
-				t.Errorf("result does not match expected, wanted: %v, got: %v", tc.expectedResult.List(), result.List())
+				t.Errorf("result does not match expected, wanted: %v, got: %v", sets.List(tc.expectedResult), sets.List(result))
 			}
 		})
 	}
@@ -626,7 +626,7 @@ func TestPruneUnusedReplacements(t *testing.T) {
 	testCases := []struct {
 		name            string
 		in              *api.ReleaseBuildConfiguration
-		allSourceImages sets.String
+		allSourceImages sets.Set[string]
 		expected        *api.ReleaseBuildConfiguration
 	}{
 		{
@@ -640,7 +640,7 @@ func TestPruneUnusedReplacements(t *testing.T) {
 					},
 				}},
 			},
-			allSourceImages: sets.NewString("some-image"),
+			allSourceImages: sets.New[string]("some-image"),
 			expected: &api.ReleaseBuildConfiguration{
 				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
@@ -662,7 +662,7 @@ func TestPruneUnusedReplacements(t *testing.T) {
 					}},
 				},
 			},
-			allSourceImages: sets.NewString("some-image"),
+			allSourceImages: sets.New[string]("some-image"),
 			expected: &api.ReleaseBuildConfiguration{
 				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
@@ -685,7 +685,7 @@ func TestPruneUnusedReplacements(t *testing.T) {
 					}},
 				},
 			},
-			allSourceImages: sets.NewString("some-image"),
+			allSourceImages: sets.New[string]("some-image"),
 			expected: &api.ReleaseBuildConfiguration{
 				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
@@ -769,7 +769,7 @@ func TestPruneUnusedReplacements(t *testing.T) {
 		},
 		{
 			name:            "cnc",
-			allSourceImages: sets.NewString("scratch", "centos:7", "builder"),
+			allSourceImages: sets.New[string]("scratch", "centos:7", "builder"),
 			in: &api.ReleaseBuildConfiguration{
 				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					From: "base",

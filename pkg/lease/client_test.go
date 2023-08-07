@@ -43,7 +43,7 @@ func TestAcquire(t *testing.T) {
 func TestHeartbeatCancel(t *testing.T) {
 	ctx := context.Background()
 	var calls []string
-	client := NewFakeClient("owner", "url", 0, sets.NewString("updateone owner rtype_0 leased 0"), &calls)
+	client := NewFakeClient("owner", "url", 0, sets.New[string]("updateone owner rtype_0 leased 0"), &calls)
 	var called bool
 	if _, err := client.Acquire("rtype", 1, ctx, func() { called = true }); err != nil {
 		t.Fatal(err)
@@ -102,7 +102,7 @@ func TestHeartbeatRetries(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 			var calls []string
-			client := NewFakeClient("owner", "url", 2, sets.NewString(tc.failures...), &calls)
+			client := NewFakeClient("owner", "url", 2, sets.New[string](tc.failures...), &calls)
 			var called bool
 			if _, err := client.Acquire("rtype", 1, ctx, func() { called = true }); err != nil {
 				t.Fatal(err)

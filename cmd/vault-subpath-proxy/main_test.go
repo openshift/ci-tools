@@ -247,7 +247,7 @@ path "secret/metadata/team-1/*" {
 				"some-other-secret":           "some-value",
 			},
 			clusters: map[string]ctrlruntimeclient.Client{
-				"a": fakectrlruntimeclient.NewFakeClient(),
+				"a": fakectrlruntimeclient.NewClientBuilder().Build(),
 			},
 			expectedSecrets: map[string]*corev1.SecretList{
 				"a": {Items: []corev1.Secret{
@@ -264,8 +264,8 @@ path "secret/metadata/team-1/*" {
 				"some-other-secret":           "some-value",
 			},
 			clusters: map[string]ctrlruntimeclient.Client{
-				"a": fakectrlruntimeclient.NewFakeClient(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "secret"}}),
-				"b": fakectrlruntimeclient.NewFakeClient(),
+				"a": fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "secret"}}).Build(),
+				"b": fakectrlruntimeclient.NewClientBuilder().Build(),
 			},
 			expectedSecrets: map[string]*corev1.SecretList{
 				"a": {Items: []corev1.Secret{
@@ -285,8 +285,8 @@ path "secret/metadata/team-1/*" {
 				"some-secret":                 "some-value",
 			},
 			clusters: map[string]ctrlruntimeclient.Client{
-				"a": fakectrlruntimeclient.NewFakeClient(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "secret"}}),
-				"b": fakectrlruntimeclient.NewFakeClient(),
+				"a": fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "secret"}}).Build(),
+				"b": fakectrlruntimeclient.NewClientBuilder().Build(),
 			},
 			expectedSecrets: map[string]*corev1.SecretList{
 				"a": {Items: []corev1.Secret{
@@ -303,7 +303,7 @@ path "secret/metadata/team-1/*" {
 				"some-third-secret":           "some-value",
 			},
 			clusters: map[string]ctrlruntimeclient.Client{
-				"a": fakectrlruntimeclient.NewFakeClient(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "secret"}, Data: map[string][]byte{"pre-existing": []byte("value")}}),
+				"a": fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "secret"}, Data: map[string][]byte{"pre-existing": []byte("value")}}).Build(),
 			},
 			expectedSecrets: map[string]*corev1.SecretList{
 				"a": {Items: []corev1.Secret{

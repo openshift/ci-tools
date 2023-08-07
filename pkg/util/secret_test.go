@@ -59,7 +59,7 @@ func TestUpsertImmutableSecret(t *testing.T) {
 	}{
 		{
 			name:     "the target secret is created",
-			client:   fakeclient.NewFakeClient(),
+			client:   fakeclient.NewClientBuilder().Build(),
 			expected: true,
 			verify: func(client ctrlruntimeclient.Client) error {
 				actual := &corev1.Secret{}
@@ -84,7 +84,7 @@ func TestUpsertImmutableSecret(t *testing.T) {
 		},
 		{
 			name:   "the target secret is update",
-			client: fakeclient.NewFakeClient(srcSecret.DeepCopy()),
+			client: fakeclient.NewClientBuilder().WithRuntimeObjects(srcSecret.DeepCopy()).Build(),
 			verify: func(client ctrlruntimeclient.Client) error {
 				actual := &corev1.Secret{}
 				if err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: "ns", Name: "pull-secret"}, actual); err != nil {
@@ -108,7 +108,7 @@ func TestUpsertImmutableSecret(t *testing.T) {
 		},
 		{
 			name:   "labels are ignored",
-			client: fakeclient.NewFakeClient(srcSecretWithDiffLabel.DeepCopy()),
+			client: fakeclient.NewClientBuilder().WithRuntimeObjects(srcSecretWithDiffLabel.DeepCopy()).Build(),
 			verify: func(client ctrlruntimeclient.Client) error {
 				actual := &corev1.Secret{}
 				if err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: "ns", Name: "pull-secret"}, actual); err != nil {

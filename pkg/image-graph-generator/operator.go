@@ -80,7 +80,7 @@ func (o *Operator) callback(c *api.ReleaseBuildConfiguration, i *config.Info) er
 	}
 
 	var errs []error
-	excludedImages := sets.NewString(c.PromotionConfiguration.ExcludedImages...)
+	excludedImages := sets.New[string](c.PromotionConfiguration.ExcludedImages...)
 
 	for _, image := range c.Images {
 		if !excludedImages.Has(string(image.To)) {

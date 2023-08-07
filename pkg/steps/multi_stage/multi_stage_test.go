@@ -102,7 +102,7 @@ func TestRequires(t *testing.T) {
 func TestSecretsForCensoring(t *testing.T) {
 	// this ends up returning based on alphanumeric sort of names, so name things accordingly
 	client := loggingclient.New(
-		fakectrlruntimeclient.NewFakeClient(
+		fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 			&coreapi.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "target-namespace",
@@ -135,7 +135,7 @@ func TestSecretsForCensoring(t *testing.T) {
 					Annotations: map[string]string{"kubernetes.io/service-account.name": "foo"},
 				},
 			},
-		),
+		).Build(),
 	)
 
 	volumes, mounts, err := secretsForCensoring(client, "target-namespace", context.Background())

@@ -260,9 +260,9 @@ func newNodeWithChildren() nodeWithChildren {
 	}
 }
 
-func hasCycles(node *chainNode, ancestors sets.String, traversedPath []string) error {
+func hasCycles(node *chainNode, ancestors sets.Set[string], traversedPath []string) error {
 	if ancestors == nil {
-		ancestors = sets.NewString()
+		ancestors = sets.New[string]()
 	}
 	if ancestors.Has(node.name) {
 		return fmt.Errorf("Cycle detected: %s is an ancestor of itself; traversedPath: %v", node.name, append(traversedPath, node.name))
@@ -273,7 +273,7 @@ func hasCycles(node *chainNode, ancestors sets.String, traversedPath []string) e
 			continue
 		}
 		// get new copy of ancestors and traversedPath so the root node's set isn't changed
-		ancestorsCopy := sets.NewString(ancestors.UnsortedList()...)
+		ancestorsCopy := sets.New[string](ancestors.UnsortedList()...)
 		traversedPathCopy := append(traversedPath[:0:0], traversedPath...)
 		traversedPathCopy = append(traversedPathCopy, node.name)
 		if err := hasCycles(child, ancestorsCopy, traversedPathCopy); err != nil {
@@ -341,7 +341,7 @@ func NewGraph(stepsByName ReferenceByName, chainsByName ChainByName, workflowsBy
 	}
 	// verify that no cycles exist
 	for _, chain := range chainNodes {
-		if err := hasCycles(chain, sets.NewString(), []string{}); err != nil {
+		if err := hasCycles(chain, sets.New[string](), []string{}); err != nil {
 			return nodesByName, err
 		}
 	}

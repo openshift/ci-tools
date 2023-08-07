@@ -185,13 +185,13 @@ func makeOcApply(kubeConfig, context, path, user string, dry dryRunMethod) *exec
 
 var namespaceNotFound = regexp.MustCompile(`Error from server \(NotFound\):.*namespaces "(.*)" not found.*`)
 
-func inferMissingNamespaces(applyOutput []byte) sets.String {
-	var ret sets.String
+func inferMissingNamespaces(applyOutput []byte) sets.Set[string] {
+	var ret sets.Set[string]
 	for _, line := range strings.Split(string(applyOutput), "\n") {
 		line := strings.TrimSpace(line)
 		if matches := namespaceNotFound.FindStringSubmatch(line); len(matches) == 2 {
 			if ret == nil {
-				ret = sets.NewString()
+				ret = sets.New[string]()
 			}
 			ret.Insert(matches[1])
 		}
@@ -200,17 +200,17 @@ func inferMissingNamespaces(applyOutput []byte) sets.String {
 }
 
 type namespaceActions struct {
-	Created sets.String
-	Assumed sets.String
+	Created sets.Set[string]
+	Assumed sets.Set[string]
 }
 
-func extractNamespaces(applyOutput []byte) sets.String {
-	var namespaces sets.String
+func extractNamespaces(applyOutput []byte) sets.Set[string] {
+	var namespaces sets.Set[string]
 	for _, line := range strings.Split(string(applyOutput), "\n") {
 		line := strings.TrimSpace(line)
 		if strings.HasPrefix(line, "namespace/") {
 			if namespaces == nil {
-				namespaces = sets.NewString()
+				namespaces = sets.New[string]()
 			}
 			namespaces.Insert(strings.TrimPrefix(line, "namespace/"))
 		}
@@ -267,7 +267,7 @@ func (c *configApplier) doWithRetry(do func() ([]byte, error)) (namespaceActions
 				return false
 			}
 			if namespaces.Assumed == nil {
-				namespaces.Assumed = sets.NewString()
+				namespaces.Assumed = sets.New[string]()
 			}
 			namespaces.Assumed.Insert(ns)
 		}
@@ -284,7 +284,7 @@ func (c *configApplier) doWithRetry(do func() ([]byte, error)) (namespaceActions
 	}
 
 	if namespaces.Created == nil {
-		namespaces.Created = sets.NewString()
+		namespaces.Created = sets.New[string]()
 	}
 
 	namespaces.Created = namespaces.Created.Union(extractNamespaces(out))
@@ -376,7 +376,7 @@ func apply(kubeConfig, context, path, user string, dry dryRunMethod, censor *sec
 	return do.asGenericManifest()
 }
 
-func applyConfig(rootDir string, o *options, createdNamespaces sets.String, censor *secrets.DynamicCensor) (sets.String, error) {
+func applyConfig(rootDir string, o *options, createdNamespaces sets.Set[string], censor *secrets.DynamicCensor) (sets.Set[string], error) {
 	failures := false
 	if err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -547,7 +547,7 @@ func main() {
 	censor := secrets.NewDynamicCensor()
 	logrus.SetFormatter(logrusutil.NewFormatterWithCensor(logrus.StandardLogger().Formatter, &censor))
 	var hadErr bool
-	createdNamespaces := sets.NewString()
+	createdNamespaces := sets.New[string]()
 	for _, dir := range o.directories.Strings() {
 		namespaces, err := applyConfig(dir, o, createdNamespaces, &censor)
 		if err != nil {

@@ -23,9 +23,9 @@ type options struct {
 }
 
 func (o *options) Validate() error {
-	futureReleases := sets.NewString(o.FutureReleases.Strings()...)
+	futureReleases := sets.New[string](o.FutureReleases.Strings()...)
 	if o.BumpRelease != "" && !futureReleases.Has(o.BumpRelease) {
-		return fmt.Errorf("future releases %v do not contain bump release %v", futureReleases.List(), o.BumpRelease)
+		return fmt.Errorf("future releases %v do not contain bump release %v", sets.List(futureReleases), o.BumpRelease)
 	}
 
 	return o.FutureOptions.Validate()

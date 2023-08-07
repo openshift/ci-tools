@@ -1,7 +1,7 @@
 package main
 
 import (
-	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
@@ -30,12 +30,12 @@ func updateBuildClusters(o options) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(buildClustersFile(o), rawYaml, 0644)
+	return os.WriteFile(buildClustersFile(o), rawYaml, 0644)
 }
 
 func loadBuildClusters(o options) (*BuildClusters, error) {
 	filename := buildClustersFile(o)
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}

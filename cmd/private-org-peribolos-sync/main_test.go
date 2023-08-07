@@ -16,9 +16,9 @@ func TestGenerateRepositories(t *testing.T) {
 	pntrBool := func(b bool) *bool { return &b }
 	pntrString := func(s string) *string { return &s }
 
-	orgRepos := map[string]sets.String{
-		"openshift": sets.NewString([]string{"repo1", "repo2"}...),
-		"testshift": sets.NewString([]string{"repo3", "repo4"}...),
+	orgRepos := map[string]sets.Set[string]{
+		"openshift": sets.New[string]([]string{"repo1", "repo2"}...),
+		"testshift": sets.New[string]([]string{"repo3", "repo4"}...),
 	}
 
 	expectedRepos := map[string]org.Repo{

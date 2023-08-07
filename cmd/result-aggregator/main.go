@@ -5,7 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"time"
@@ -160,7 +160,7 @@ func handleCIOperatorResult() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
-		bytes, err := ioutil.ReadAll(r.Body)
+		bytes, err := io.ReadAll(r.Body)
 		if err != nil {
 			handleError(w, fmt.Errorf("unable to ready request body: %w", err))
 			return
@@ -188,7 +188,7 @@ func handleCIOperatorResult() http.HandlerFunc {
 func handlePodScalerResult() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		bytes, err := ioutil.ReadAll(r.Body)
+		bytes, err := io.ReadAll(r.Body)
 		if err != nil {
 			handleError(w, fmt.Errorf("unable to read pod-scaler request body: %w", err))
 			return

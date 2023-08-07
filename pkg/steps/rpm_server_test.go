@@ -23,7 +23,7 @@ func TestRPMServerStepProvides(t *testing.T) {
 	if err := routev1.AddToScheme(scheme.Scheme); err != nil {
 		t.Error(err)
 	}
-	client := loggingclient.New(fakectrlruntimeclient.NewFakeClient(
+	client := loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 		&routev1.Route{
 			ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "rpm-repo"},
 			Status: routev1.RouteStatus{
@@ -36,7 +36,7 @@ func TestRPMServerStepProvides(t *testing.T) {
 				}},
 			},
 		},
-	))
+	).Build())
 	for _, tc := range []struct {
 		name     string
 		jobSpec  api.JobSpec

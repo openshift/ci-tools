@@ -923,7 +923,7 @@ func didTestRun(testCaseDetails *jobrunaggregatorlib.TestCaseDetails) bool {
 
 func getAttempts(testCaseDetails *jobrunaggregatorlib.TestCaseDetails) int {
 	// if the same job run has a pass and a fail, or multiple passes, it only counts as a single attempt.
-	jobRunsThatAttempted := sets.NewString()
+	jobRunsThatAttempted := sets.New[string]()
 	for _, failure := range testCaseDetails.Failures {
 		jobRunsThatAttempted.Insert(failure.JobRunID)
 	}
@@ -936,7 +936,7 @@ func getAttempts(testCaseDetails *jobrunaggregatorlib.TestCaseDetails) int {
 
 func getNumberOfPasses(testCaseDetails *jobrunaggregatorlib.TestCaseDetails) int {
 	// if the same job run has multiple passes, it only counts as a single pass.
-	jobRunsThatPassed := sets.NewString()
+	jobRunsThatPassed := sets.New[string]()
 	for _, pass := range testCaseDetails.Passes {
 		jobRunsThatPassed.Insert(pass.JobRunID)
 	}
@@ -948,14 +948,14 @@ func getNumberOfFailures(testCaseDetails *jobrunaggregatorlib.TestCaseDetails) i
 	return len(getFailedJobNames(testCaseDetails))
 }
 
-func getFailedJobNames(testCaseDetails *jobrunaggregatorlib.TestCaseDetails) sets.String {
+func getFailedJobNames(testCaseDetails *jobrunaggregatorlib.TestCaseDetails) sets.Set[string] {
 	// if the same job run has multiple failures, it only counts as a single failure.
-	jobRunsThatFailed := sets.NewString()
+	jobRunsThatFailed := sets.New[string]()
 	for _, failure := range testCaseDetails.Failures {
 		jobRunsThatFailed.Insert(failure.JobRunID)
 	}
 
-	jobRunsThatPassed := sets.NewString()
+	jobRunsThatPassed := sets.New[string]()
 	for _, pass := range testCaseDetails.Passes {
 		jobRunsThatPassed.Insert(pass.JobRunID)
 	}

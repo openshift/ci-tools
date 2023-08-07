@@ -23,7 +23,7 @@ import (
 
 type FakePodExecutor struct {
 	loggingclient.LoggingClient
-	Failures    sets.String
+	Failures    sets.Set[string]
 	CreatedPods []*coreapi.Pod
 }
 

@@ -7,7 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -150,7 +150,7 @@ func (i *kvSubPathInjector) inject(r *http.Response) error {
 	}
 	logrus.Trace("Attempting to insert additional data into request")
 
-	bodyRaw, err := ioutil.ReadAll(r.Body)
+	bodyRaw, err := io.ReadAll(r.Body)
 	if err != nil {
 		// Should never happen and not recoverable, as we might already have
 		// read parts of the body
@@ -160,7 +160,7 @@ func (i *kvSubPathInjector) inject(r *http.Response) error {
 	if err := r.Body.Close(); err != nil {
 		log.WithError(err).Warn("Failed to close the original response body")
 	}
-	r.Body = ioutil.NopCloser(bytes.NewBuffer(bodyRaw))
+	r.Body = io.NopCloser(bytes.NewBuffer(bodyRaw))
 
 	if err := i.injectSubpathInfoIfNeeded(bodyRaw, r); err != nil {
 		// To return or not to return?
@@ -230,7 +230,7 @@ func (i *kvSubPathInjector) injectSubpathInfoIfNeeded(reponseBody []byte, r *htt
 	}
 
 	r.StatusCode = 200
-	r.Body = ioutil.NopCloser(bytes.NewBuffer(serializedResponse))
+	r.Body = io.NopCloser(bytes.NewBuffer(serializedResponse))
 	r.ContentLength = int64(len(serializedResponse))
 	r.Header.Set("Content-Length", strconv.Itoa(len(serializedResponse)))
 	return nil

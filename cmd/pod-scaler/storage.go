@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -154,7 +153,7 @@ func loadFrom(loader loader, metricName string) ([]byte, error) {
 	if err != nil && !errors.Is(err, context.DeadlineExceeded) {
 		return nil, err
 	}
-	data, readErr := ioutil.ReadAll(reader)
+	data, readErr := io.ReadAll(reader)
 	if err := reader.Close(); err != nil {
 		readErr = kerrors.NewAggregate([]error{readErr, fmt.Errorf("could not close reader for cached data: %w", err)})
 	}

@@ -3,7 +3,7 @@ package retester
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
@@ -91,7 +91,7 @@ type RetesterPolicy struct {
 
 // LoadConfig loads retester configuration via file.
 func LoadConfig(configFilePath string) (*Config, error) {
-	data, err := ioutil.ReadFile(configFilePath)
+	data, err := os.ReadFile(configFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config %w", err)
 	}

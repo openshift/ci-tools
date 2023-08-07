@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"go/build"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -99,7 +98,7 @@ func (o *options) process() error {
 
 func readProwgenConfig(path string) (*config.Prowgen, error) {
 	var pConfig *config.Prowgen
-	b, err := ioutil.ReadFile(path)
+	b, err := os.ReadFile(path)
 	if err != nil && !os.IsNotExist(err) {
 		return nil, fmt.Errorf("prowgen config found in path %s but couldn't read the file: %w", path, err)
 	}

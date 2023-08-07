@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"net/url"
 	"os"
@@ -561,7 +560,7 @@ func main() {
 	}()
 
 	var token string
-	if rawToken, err := ioutil.ReadFile(o.tokenPath); err != nil {
+	if rawToken, err := os.ReadFile(o.tokenPath); err != nil {
 		logrus.WithError(err).Fatal("Failed to read GitHub token")
 	} else {
 		token = strings.TrimSpace(string(rawToken))
@@ -573,7 +572,7 @@ func main() {
 
 	if o.gitDir == "" {
 		var err error
-		if o.gitDir, err = ioutil.TempDir("", ""); err != nil {
+		if o.gitDir, err = os.MkdirTemp("", ""); err != nil {
 			logrus.WithError(err).Fatal("Failed to create temporary directory for git operations")
 		}
 		defer func() {

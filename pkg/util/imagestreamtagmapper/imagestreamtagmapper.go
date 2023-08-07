@@ -46,7 +46,7 @@ func (m *imagestreamtagmapper) Update(ctx context.Context, e event.UpdateEvent, 
 		return
 	}
 
-	deletedISTags := sets.NewString()
+	deletedISTags := sets.New[string]()
 	for _, tag := range newStream.Spec.Tags {
 		if tag.Annotations == nil {
 			continue

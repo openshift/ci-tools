@@ -29,7 +29,7 @@ func TestRun(t *testing.T) {
 	yes := true
 	for _, tc := range []struct {
 		name     string
-		failures sets.String
+		failures sets.Set[string]
 		expected []string
 	}{
 		{
@@ -42,14 +42,14 @@ func TestRun(t *testing.T) {
 		},
 		{
 			name:     "failure in a pre step, test should not run, post should",
-			failures: sets.NewString("test-pre0"),
+			failures: sets.New[string]("test-pre0"),
 			expected: []string{
 				"test-pre0",
 				"test-post0", "test-post1",
 			},
 		}, {
 			name:     "failure in a test step, post should run",
-			failures: sets.NewString("test-test0"),
+			failures: sets.New[string]("test-test0"),
 			expected: []string{
 				"test-pre0", "test-pre1",
 				"test-test0",
@@ -58,7 +58,7 @@ func TestRun(t *testing.T) {
 		},
 		{
 			name:     "failure in a post step, other post steps should still run",
-			failures: sets.NewString("test-post0"),
+			failures: sets.New[string]("test-post0"),
 			expected: []string{
 				"test-pre0", "test-pre1",
 				"test-test0", "test-test1",
@@ -138,7 +138,7 @@ func TestRun(t *testing.T) {
 func TestJUnit(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
-		failures sets.String
+		failures sets.Set[string]
 		expected []string
 	}{{
 		name: "no step fails",
@@ -155,7 +155,7 @@ func TestJUnit(t *testing.T) {
 		},
 	}, {
 		name:     "failure in a pre step",
-		failures: sets.NewString("test-pre0"),
+		failures: sets.New[string]("test-pre0"),
 		expected: []string{
 			"Run multi-stage test test - test-pre0 container test",
 			"Run multi-stage test pre phase",
@@ -165,7 +165,7 @@ func TestJUnit(t *testing.T) {
 		},
 	}, {
 		name:     "failure in a test step",
-		failures: sets.NewString("test-test0"),
+		failures: sets.New[string]("test-test0"),
 		expected: []string{
 			"Run multi-stage test test - test-pre0 container test",
 			"Run multi-stage test test - test-pre1 container test",
@@ -178,7 +178,7 @@ func TestJUnit(t *testing.T) {
 		},
 	}, {
 		name:     "failure in a post step",
-		failures: sets.NewString("test-post1"),
+		failures: sets.New[string]("test-post1"),
 		expected: []string{
 			"Run multi-stage test test - test-pre0 container test",
 			"Run multi-stage test test - test-pre1 container test",

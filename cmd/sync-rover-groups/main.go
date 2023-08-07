@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	ldapv3 "github.com/go-ldap/ldap/v3"
@@ -29,7 +28,7 @@ type options struct {
 	logLevelRaw      string
 	logLevel         logrus.Level
 	manifestDirRaw   flagutil.Strings
-	manifestDirs     sets.String
+	manifestDirs     sets.Set[string]
 	ldapServer       string
 	validateSubjects bool
 	groupsFile       string
@@ -92,7 +91,7 @@ func main() {
 		logrus.WithError(err).Fatal("failed to validate the option")
 	}
 	logrus.SetLevel(opts.logLevel)
-	opts.manifestDirs = sets.NewString(opts.manifestDirRaw.Strings()...)
+	opts.manifestDirs = sets.New[string](opts.manifestDirRaw.Strings()...)
 
 	var config *group.Config
 	if opts.configFile != "" {
@@ -143,7 +142,7 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to marshal groups")
 	}
-	if err := ioutil.WriteFile(opts.groupsFile, data, 0644); err != nil {
+	if err := os.WriteFile(opts.groupsFile, data, 0644); err != nil {
 		logrus.WithError(err).WithField("file", opts.groupsFile).Fatal("failed to write file")
 	}
 }
@@ -159,20 +158,20 @@ type groupResolver interface {
 }
 
 type groupCollector interface {
-	collect(dir string) (sets.String, error)
+	collect(dir string) (sets.Set[string], error)
 }
 
-func roverGroups(manifestDirs sets.String, config *group.Config, validateSubjects bool, groupCollector groupCollector, groupResolver groupResolver) (map[string][]string, error) {
+func roverGroups(manifestDirs sets.Set[string], config *group.Config, validateSubjects bool, groupCollector groupCollector, groupResolver groupResolver) (map[string][]string, error) {
 	var errs []error
 
-	groupNames := sets.NewString()
-	for _, d := range manifestDirs.List() {
+	groupNames := sets.New[string]()
+	for _, d := range sets.List(manifestDirs) {
 		names, err := groupCollector.collect(d)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to collect groups for %s: %w", d, err))
 			continue
 		}
-		groupNames.Insert(names.List()...)
+		groupNames.Insert(sets.List(names)...)
 	}
 
 	groupNames.Insert(api.CIAdminsGroupName)
@@ -189,7 +188,7 @@ func roverGroups(manifestDirs sets.String, config *group.Config, validateSubject
 
 	groups := map[string][]string{}
 	if !validateSubjects {
-		for _, name := range groupNames.List() {
+		for _, name := range sets.List(groupNames) {
 			logrus.WithField("group", name).Debug("resolving group ...")
 			g, err := groupResolver.resolve(name)
 			if err != nil {

@@ -532,7 +532,7 @@ func getClonesTemplateData(bugID int, client bugzilla.Client, allTargetVersions 
 	}
 	root := clones[0]
 	// Target versions would be used to populate the CreateClone dropdown
-	targetVersions := sets.NewString(allTargetVersions...)
+	targetVersions := sets.New[string](allTargetVersions...)
 	// Remove target versions of the original bug
 	targetVersions.Delete(bug.TargetRelease...)
 	g := new(errgroup.Group)
@@ -542,7 +542,7 @@ func getClonesTemplateData(bugID int, client bugzilla.Client, allTargetVersions 
 		prs, err = client.GetExternalBugPRsOnBug(bugID)
 		return err
 	})
-	clonedReleases := sets.NewString()
+	clonedReleases := sets.New[string]()
 	for _, clone := range clones {
 		clone := clone
 		if isTargetReleaseSet(clone) {
@@ -624,7 +624,7 @@ func getClonesTemplateData(bugID int, client bugzilla.Client, allTargetVersions 
 			targetVersions.Delete(allTargetVersions[i])
 		}
 	}
-	sortedTargetVersions := targetVersions.List()
+	sortedTargetVersions := sets.List(targetVersions)
 	err = SortTargetReleases(sortedTargetVersions, false)
 	if err != nil {
 		return nil, http.StatusInternalServerError, fmt.Errorf("error building dependence tree: %w", err)
@@ -710,9 +710,9 @@ func CreateCloneHandler(client bugzilla.Client, sortedTargetReleases []string, m
 			handleError(w, err, fmt.Sprintf("unable to fetch bug details- Bug#%d", bugID), http.StatusNotFound, endpoint, bugID, m)
 			return
 		}
-		allTargetVersions := sets.NewString(sortedTargetReleases...)
+		allTargetVersions := sets.New[string](sortedTargetReleases...)
 		if !allTargetVersions.Has(req.FormValue("release")) {
-			absentReleaseErrMsg := fmt.Sprintf("invalid argument - %s is not a valid TargetRelease, must be one of %v", req.FormValue("release"), allTargetVersions.List())
+			absentReleaseErrMsg := fmt.Sprintf("invalid argument - %s is not a valid TargetRelease, must be one of %v", req.FormValue("release"), sets.List(allTargetVersions))
 			handleError(w, fmt.Errorf(absentReleaseErrMsg), absentReleaseErrMsg, http.StatusBadRequest, endpoint, bugID, m)
 			return
 		}

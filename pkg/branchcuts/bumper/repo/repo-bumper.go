@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path"
 	"strings"
@@ -144,7 +143,7 @@ func saveIniFile(path string, f *ini.File) error {
 	if strings.HasSuffix(string(bs), doubleNewLine) {
 		bs = bs[0 : len(bs)-len(ini.LineBreak)]
 	}
-	if err := ioutil.WriteFile(path, bs, 0666); err != nil {
+	if err := os.WriteFile(path, bs, 0666); err != nil {
 		return err
 	}
 

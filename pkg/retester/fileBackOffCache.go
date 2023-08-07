@@ -3,7 +3,6 @@ package retester
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -34,7 +33,7 @@ func (b *fileBackoffCache) loadFromDiskNow(now time.Time) error {
 		b.logger.WithField("file", b.file).Info("cache file does not exit")
 		return nil
 	}
-	bytes, err := ioutil.ReadFile(b.file)
+	bytes, err := os.ReadFile(b.file)
 	if err != nil {
 		return fmt.Errorf("failed to read file %s: %w", b.file, err)
 	}
@@ -72,7 +71,7 @@ func (b *fileBackoffCache) save() (ret error) {
 	}
 	// write to a temp file and rename it to the cache file to ensure "atomic write":
 	// either it is complete or nothing
-	tmpFile, err := ioutil.TempFile(filepath.Dir(b.file), "tmp-backoff-cache")
+	tmpFile, err := os.CreateTemp(filepath.Dir(b.file), "tmp-backoff-cache")
 	if err != nil {
 		return fmt.Errorf("failed to create a temp file: %w", err)
 	}
@@ -87,7 +86,7 @@ func (b *fileBackoffCache) save() (ret error) {
 		}
 	}()
 
-	if err := ioutil.WriteFile(tmp, bytes, 0644); err != nil {
+	if err := os.WriteFile(tmp, bytes, 0644); err != nil {
 		return fmt.Errorf("failed to write file %s: %w", tmp, err)
 	}
 	if err := os.Rename(tmp, b.file); err != nil {

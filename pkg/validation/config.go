@@ -189,13 +189,13 @@ func (v *Validator) validateConfiguration(ctx *configContext, config *api.Releas
 func (v *Validator) ValidateTestStepConfiguration(ctx *configContext, config *api.ReleaseBuildConfiguration, resolved bool) []error {
 	var validationErrors []error
 
-	releases := sets.NewString()
+	releases := sets.New[string]()
 	for name := range config.Releases {
 		releases.Insert(name)
 	}
 
 	if tests := config.Tests; len(tests) != 0 {
-		images := sets.NewString()
+		images := sets.New[string]()
 		for _, i := range config.Images {
 			images.Insert(string(i.To))
 		}
@@ -392,7 +392,7 @@ func validateImageStreamTagReferenceMap(fieldRoot string, input map[string]api.I
 var (
 	openshiftWebhookForbiddingNamespaces = regexp.MustCompile("^kube|^openshift|^default$|^redhat")
 	// openshift is on every cluster we do not need to create
-	exceptions = sets.NewString("openshift")
+	exceptions = sets.New[string]("openshift")
 )
 
 func validatePromotionConfiguration(fieldRoot string, input api.PromotionConfiguration, promotesOfficialImages, imageTargets bool, promotionNamespace string, releaseTagConfiguration *api.ReleaseTagConfiguration, releases map[string]api.UnresolvedRelease) []error {

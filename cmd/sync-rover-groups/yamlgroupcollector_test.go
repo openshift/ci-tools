@@ -36,13 +36,13 @@ func TestNewYamlGroupCollector(t *testing.T) {
 		r                *yamlGroupCollector
 		dir              string
 		validateSubjects bool
-		expected         sets.String
+		expected         sets.Set[string]
 		expectedErr      error
 	}{
 		{
 			name:     "base case",
 			dir:      filepath.Join("testdata", "TestNewYamlGroupCollector", "base_case"),
-			expected: sets.NewString("dedicated-admins", "group-from-cluster-role-binding", "group-from-k8s-list", "group-from-template"),
+			expected: sets.New[string]("dedicated-admins", "group-from-cluster-role-binding", "group-from-k8s-list", "group-from-template"),
 		},
 		{
 			name:             "cannot define group",

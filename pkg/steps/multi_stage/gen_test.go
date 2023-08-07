@@ -450,7 +450,7 @@ func TestSetSecurityContexts(t *testing.T) {
 	for _, tc := range []struct {
 		name, root string
 		pod        coreapi.Pod
-		expected   sets.String
+		expected   sets.Set[string]
 	}{{
 		name: "empty",
 	}, {

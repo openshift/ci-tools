@@ -2,7 +2,6 @@ package steps
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -21,7 +20,7 @@ import (
 )
 
 func TestIndexGenDockerfile(t *testing.T) {
-	fakeClientSet := fakectrlruntimeclient.NewFakeClient(
+	fakeClientSet := fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 		&apiimagev1.ImageStream{
 			ObjectMeta: v1.ObjectMeta{
 				Namespace: "target-namespace",
@@ -46,7 +45,7 @@ func TestIndexGenDockerfile(t *testing.T) {
 					}},
 				}},
 			},
-		})
+		}).Build()
 	testCases := []struct {
 		name     string
 		step     indexGeneratorStep
@@ -224,7 +223,7 @@ func TestDatabaseIndex(t *testing.T) {
 	}}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			rawImageStreamTag, err := ioutil.ReadFile(testCase.istFile)
+			rawImageStreamTag, err := os.ReadFile(testCase.istFile)
 			if err != nil {
 				t.Fatalf("failed to read imagestreamtag fixture: %v", err)
 			}

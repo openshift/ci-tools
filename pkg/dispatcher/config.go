@@ -2,7 +2,7 @@ package dispatcher
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -312,7 +312,7 @@ func SaveConfig(config *Config, configPath string) error {
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(configPath, bytes, 0644)
+	err = os.WriteFile(configPath, bytes, 0644)
 	if err != nil {
 		return err
 	}

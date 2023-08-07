@@ -2,7 +2,6 @@ package secretbootstrap
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -243,8 +242,8 @@ func TestRoundtripConfig(t *testing.T) {
 			}
 
 			inFile := filepath.Join("testdata", "zz_fixture_TestRoundtripConfig_basic_base.yaml")
-			in, _ := ioutil.ReadFile(inFile)
-			out, _ := ioutil.ReadFile(outFile)
+			in, _ := os.ReadFile(inFile)
+			out, _ := os.ReadFile(outFile)
 			if diff := cmp.Diff(in, out); diff != "" {
 				t.Fatalf("input and output configs are not equal. %s", diff)
 			}

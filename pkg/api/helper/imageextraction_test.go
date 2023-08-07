@@ -3,11 +3,11 @@ package helper
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strconv"
 	"testing"
 
-	"github.com/google/gofuzz"
+	fuzz "github.com/google/gofuzz"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
@@ -56,10 +56,10 @@ func TestTestInputImageStreamTagsFromResolvedConfigReturnsAllImageStreamTags(t *
 			}
 			if n := len(res); n != numberInsertedElements {
 				serialized, _ := json.Marshal(cfg)
-				tmpFile, err := ioutil.TempFile("", "imagestream-extration-fuzzing")
+				tmpFile, err := os.CreateTemp("", "imagestream-extration-fuzzing")
 				if err != nil {
 					t.Errorf("failed to create tmpfile: %v", err)
-				} else if err := ioutil.WriteFile(tmpFile.Name(), serialized, 0644); err != nil {
+				} else if err := os.WriteFile(tmpFile.Name(), serialized, 0644); err != nil {
 					t.Errorf("failed to write config to disk: %v", err)
 				}
 				// Do _not_ print the cfg. You have been warned.

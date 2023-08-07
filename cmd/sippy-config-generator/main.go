@@ -91,8 +91,8 @@ func main() {
 		sippyConfig.Releases[key] = release
 	}
 
-	informingJobs := sets.NewString()
-	blockingingJobs := sets.NewString()
+	informingJobs := sets.New[string]()
+	blockingingJobs := sets.New[string]()
 	aggregateJobsMap := make(map[string][]string)
 	if err := filepath.WalkDir(o.releaseConfigDir, func(path string, info fs.DirEntry, err error) error {
 		if err != nil {

@@ -145,7 +145,7 @@ func htmlForTestCase(jobName string, parents []string, testCase *junit.TestCase,
 	if len(failedJobRuns) != len(currDetails.Failures) {
 		// this means we have flaked
 		flakeHTML = "<p><ol>\n"
-		seen := sets.String{}
+		seen := sets.Set[string]{}
 		for _, currFailure := range currDetails.Failures {
 			if seen.Has(currFailure.JobRunID) {
 				continue

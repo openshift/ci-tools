@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"sort"
 	"strings"
@@ -98,14 +97,14 @@ func main() {
 		logrus.WithError(err).Fatal("failed to serialize plugin config")
 	}
 
-	if err := ioutil.WriteFile(o.infraPeriodicsPath, periodicsRaw, 0644); err != nil {
+	if err := os.WriteFile(o.infraPeriodicsPath, periodicsRaw, 0644); err != nil {
 		logrus.WithError(err).Fatal("failed to write main plugin config")
 	}
 }
 
 func reconcile(lifecycleConfig ocplifecycle.Config, now time.Time, job *prowconfig.Periodic) error {
 	timelineOpts := ocplifecycle.TimelineOptions{
-		OnlyEvents: sets.NewString([]string{
+		OnlyEvents: sets.New[string]([]string{
 			string(ocplifecycle.LifecycleEventOpen),
 			string(ocplifecycle.LifecycleEventFeatureFreeze),
 		}...),

@@ -58,13 +58,13 @@ func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, 
 			Agent:  string(prowv1.KubernetesAgent),
 			Labels: map[string]string{},
 			UtilityConfig: prowconfig.UtilityConfig{
-				Decorate: utilpointer.BoolPtr(true),
+				Decorate: utilpointer.Bool(true),
 			},
 		},
 	}
 
 	if skipCloning(configSpec) {
-		b.base.UtilityConfig.DecorationConfig = &prowv1.DecorationConfig{SkipCloning: utilpointer.BoolPtr(true)}
+		b.base.UtilityConfig.DecorationConfig = &prowv1.DecorationConfig{SkipCloning: utilpointer.Bool(true)}
 	} else if info.Config.Private {
 		b.base.UtilityConfig.DecorationConfig = &prowv1.DecorationConfig{OauthTokenSecret: &prowv1.OauthTokenSecret{Key: cioperatorapi.OauthTokenSecretKey, Name: cioperatorapi.OauthTokenSecretName}}
 	}

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
@@ -137,7 +137,7 @@ func fromConfig(
 	nodeName string,
 	targetAdditionalSuffix string,
 ) ([]api.Step, []api.Step, error) {
-	requiredNames := sets.NewString()
+	requiredNames := sets.New[string]()
 	for _, target := range requiredTargets {
 		requiredNames.Insert(target)
 	}
@@ -152,7 +152,7 @@ func fromConfig(
 	var hasReleaseStep bool
 	resolver := rootImageResolver(client, ctx, promote)
 	imageConfigs := graphConf.InputImages()
-	rawSteps, err := runtimeStepConfigsForBuild(ctx, client, config, jobSpec, ioutil.ReadFile, resolver, imageConfigs, time.Second, consoleHost)
+	rawSteps, err := runtimeStepConfigsForBuild(ctx, client, config, jobSpec, os.ReadFile, resolver, imageConfigs, time.Second, consoleHost)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get steps from configuration: %w", err)
 	}
@@ -757,7 +757,7 @@ func FromConfigStatic(config *api.ReleaseBuildConfiguration) api.GraphConfigurat
 				test.Secrets = append(test.Secrets, test.Secret)
 			}
 			if test.ContainerTestConfiguration != nil && test.ContainerTestConfiguration.Clone == nil {
-				test.ContainerTestConfiguration.Clone = utilpointer.BoolPtr(config.IsBaseImage(string(test.ContainerTestConfiguration.From)))
+				test.ContainerTestConfiguration.Clone = utilpointer.Bool(config.IsBaseImage(string(test.ContainerTestConfiguration.From)))
 			}
 			buildSteps = append(buildSteps, api.StepConfiguration{TestStepConfiguration: test})
 		}

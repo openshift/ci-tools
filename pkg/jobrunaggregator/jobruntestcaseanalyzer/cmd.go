@@ -22,7 +22,7 @@ const (
 )
 
 var (
-	knownPlatforms = sets.String{
+	knownPlatforms = sets.Set[string]{
 		"aws":     sets.Empty{},
 		"azure":   sets.Empty{},
 		"gcp":     sets.Empty{},
@@ -31,8 +31,8 @@ var (
 		"ovirt":   sets.Empty{},
 		"vsphere": sets.Empty{},
 	}
-	knownNetworks        = sets.String{"ovn": sets.Empty{}, "sdn": sets.Empty{}}
-	knownInfrastructures = sets.String{"upi": sets.Empty{}, "ipi": sets.Empty{}}
+	knownNetworks        = sets.Set[string]{"ovn": sets.Empty{}, "sdn": sets.Empty{}}
+	knownInfrastructures = sets.Set[string]{"upi": sets.Empty{}, "ipi": sets.Empty{}}
 )
 
 type jobGCSPrefix struct {
@@ -260,7 +260,7 @@ func (f *JobRunsTestCaseAnalyzerFlags) Validate() error {
 	if len(f.Infrastructure) > 0 {
 
 		if _, ok := knownInfrastructures[f.Infrastructure]; !ok {
-			return fmt.Errorf("unknown infrastructure %s, valid values are: %+q", f.Infrastructure, knownInfrastructures.List())
+			return fmt.Errorf("unknown infrastructure %s, valid values are: %+q", f.Infrastructure, sets.List(knownInfrastructures))
 		}
 	}
 
@@ -324,12 +324,12 @@ func (f *JobRunsTestCaseAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunTe
 	}
 
 	if f.ExcludeJobNames != nil && len(f.ExcludeJobNames) > 0 {
-		jobGetter.excludeJobNames = sets.String{}
+		jobGetter.excludeJobNames = sets.Set[string]{}
 		jobGetter.excludeJobNames.Insert(f.ExcludeJobNames...)
 	}
 
 	if f.IncludeJobNames != nil && len(f.IncludeJobNames) > 0 {
-		jobGetter.includeJobNames = sets.String{}
+		jobGetter.includeJobNames = sets.Set[string]{}
 		jobGetter.includeJobNames.Insert(f.IncludeJobNames...)
 	}
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,8 +45,8 @@ type testCaseAnalyzerJobGetter struct {
 	platform        string
 	infrastructure  string
 	network         string
-	excludeJobNames sets.String
-	includeJobNames sets.String
+	excludeJobNames sets.Set[string]
+	includeJobNames sets.Set[string]
 	testNameSuffix  string
 	jobGCSPrefixes  *[]jobGCSPrefix
 	ciDataClient    jobrunaggregatorlib.CIDataClient
@@ -65,7 +64,7 @@ func (s *testCaseAnalyzerJobGetter) GetJobs(ctx context.Context) ([]jobrunaggreg
 
 	// if PR payload, only find the exact jobs
 	if s.jobGCSPrefixes != nil && len(*s.jobGCSPrefixes) > 0 {
-		jobNames := sets.String{}
+		jobNames := sets.Set[string]{}
 		for i := range *s.jobGCSPrefixes {
 			jobGCSPrefix := (*s.jobGCSPrefixes)[i]
 			jobNames.Insert(jobGCSPrefix.jobName)
@@ -139,7 +138,7 @@ func (s *testCaseAnalyzerJobGetter) isJobNameExcluded(jobName string) bool {
 	return false
 }
 
-func (s *testCaseAnalyzerJobGetter) filterJobsByNames(jobNames sets.String, allJobs []jobrunaggregatorapi.JobRow) []jobrunaggregatorapi.JobRow {
+func (s *testCaseAnalyzerJobGetter) filterJobsByNames(jobNames sets.Set[string], allJobs []jobrunaggregatorapi.JobRow) []jobrunaggregatorapi.JobRow {
 	ret := []jobrunaggregatorapi.JobRow{}
 	for i := range allJobs {
 		curr := allJobs[i]
@@ -503,7 +502,7 @@ func (o *JobRunTestCaseAnalyzerOptions) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(filepath.Join(outputDir, "junit-test-case-analysis.xml"), junitXML, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(outputDir, "junit-test-case-analysis.xml"), junitXML, 0644); err != nil {
 		return err
 	}
 	if testSuite.NumFailed > 0 {

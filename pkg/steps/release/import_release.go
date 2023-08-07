@@ -266,7 +266,7 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 			}
 		}
 
-		existing := sets.NewString()
+		existing := sets.New[string]()
 		tags := make([]imagev1.TagReference, 0, len(releaseIS.Spec.Tags)+len(stable.Spec.Tags))
 		for _, tag := range releaseIS.Spec.Tags {
 			existing.Insert(tag.Name)

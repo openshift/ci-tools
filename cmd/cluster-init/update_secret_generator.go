@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
@@ -26,7 +26,7 @@ type SecretGenConfig []secretgenerator.SecretItem
 
 func updateSecretGenerator(o options) error {
 	filename := filepath.Join(o.releaseRepo, "core-services", "ci-secret-generator", "_config.yaml")
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return err
 	}
@@ -41,7 +41,7 @@ func updateSecretGenerator(o options) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(filename, rawYaml, 0644)
+	return os.WriteFile(filename, rawYaml, 0644)
 }
 
 func updateSecretGeneratorConfig(o options, c *SecretGenConfig) error {
@@ -64,7 +64,7 @@ func appendToSecretItem(itemName string, name string, o options, c *SecretGenCon
 		return err
 	}
 	logrus.Infof("Appending to secret item: {itemName: %s, name: %s, likeCluster: %s}", itemName, name, string(api.ClusterBuild01))
-	si.Params["cluster"] = sets.NewString(si.Params["cluster"]...).Insert(o.clusterName).List()
+	si.Params["cluster"] = sets.List(sets.New[string](si.Params["cluster"]...).Insert(o.clusterName))
 	return nil
 }
 

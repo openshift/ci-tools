@@ -19,7 +19,7 @@ func TestAllPromotionImageStreamTags(t *testing.T) {
 	testCases := []struct {
 		name     string
 		config   *cioperatorapi.ReleaseBuildConfiguration
-		expected sets.String
+		expected sets.Set[string]
 	}{
 		{
 			name:   "nil promotionconfig",
@@ -63,7 +63,7 @@ func TestAllPromotionImageStreamTags(t *testing.T) {
 				},
 				Images: []cioperatorapi.ProjectDirectoryImageBuildStepConfiguration{{To: cioperatorapi.PipelineImageStreamTagReferenceSource}},
 			},
-			expected: sets.NewString("some-namespace/some-stream:src"),
+			expected: sets.New[string]("some-namespace/some-stream:src"),
 		},
 		{
 			name: "additinal image",
@@ -74,7 +74,7 @@ func TestAllPromotionImageStreamTags(t *testing.T) {
 					AdditionalImages: map[string]string{"expected": ""},
 				},
 			},
-			expected: sets.NewString("some-namespace/some-stream:expected"),
+			expected: sets.New[string]("some-namespace/some-stream:expected"),
 		},
 		{
 			name: "image and additional image",
@@ -86,7 +86,7 @@ func TestAllPromotionImageStreamTags(t *testing.T) {
 				},
 				Images: []cioperatorapi.ProjectDirectoryImageBuildStepConfiguration{{To: cioperatorapi.PipelineImageStreamTagReferenceSource}},
 			},
-			expected: sets.NewString("some-namespace/some-stream:expected", "some-namespace/some-stream:src"),
+			expected: sets.New[string]("some-namespace/some-stream:expected", "some-namespace/some-stream:src"),
 		},
 	}
 

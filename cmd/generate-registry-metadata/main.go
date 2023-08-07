@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -95,7 +94,7 @@ func writeMetadata(registryPath string, metadata api.RegistryMetadata) error {
 		if err != nil {
 			return fmt.Errorf("Failed to marshal metadata file `%s`: %w", metadataPath, err)
 		}
-		if err := ioutil.WriteFile(metadataPath, output, 0644); err != nil {
+		if err := os.WriteFile(metadataPath, output, 0644); err != nil {
 			return fmt.Errorf("Failed to write metadata file `%s`: %w", metadataPath, err)
 		}
 	}

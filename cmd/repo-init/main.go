@@ -11,7 +11,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -259,7 +258,7 @@ Now, let's configure how the repository is compiled...`)
 
 		fmt.Println(`
 Now, let's configure test jobs for the repository...`)
-		names := sets.NewString()
+		names := sets.New[string]()
 		var tests []test
 		for {
 			more := ""
@@ -358,8 +357,8 @@ A test named %s already exists. Please choose a different name.\n`, test.As)
 
 		config.CustomE2E = e2eTests
 		if len(config.CustomE2E) > 0 && !config.Promotes {
-			valid := sets.NewString("nightly", "published")
-			validFormatted := strings.Join(valid.List(), ", ")
+			valid := sets.New[string]("nightly", "published")
+			validFormatted := strings.Join(sets.List(valid), ", ")
 			releaseType := fetchWithPrompt(fmt.Sprintf("What type of OpenShift release do the end-to-end tests run on top of? [%s]", validFormatted))
 			for {
 				if !valid.Has(releaseType) {
@@ -545,7 +544,7 @@ No additional "tide" queries will be added.
 	if err := os.MkdirAll(path.Dir(p), 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
-	return ioutil.WriteFile(p, data, 0644)
+	return os.WriteFile(p, data, 0644)
 }
 
 func updatePluginConfig(config initConfig, releaseRepo string) error {
@@ -571,7 +570,7 @@ Updating Prow plugin configuration ...`)
 		return fmt.Errorf("could not marshal Prow plugin configuration: %w", err)
 	}
 
-	return ioutil.WriteFile(configPath, data, 0644)
+	return os.WriteFile(configPath, data, 0644)
 }
 
 func editPluginConfig(pluginConfig *plugins.Configuration, config initConfig) {

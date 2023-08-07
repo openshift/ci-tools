@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -198,7 +197,7 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(filepath.Join(currentAggregationDir, "aggregation-config.yaml"), aggregationConfigYAML, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(currentAggregationDir, "aggregation-config.yaml"), aggregationConfigYAML, 0644); err != nil {
 		return err
 	}
 
@@ -226,7 +225,7 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(filepath.Join(currentAggregationDir, "junit-aggregated.xml"), currentAggrationJunitXML, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(currentAggregationDir, "junit-aggregated.xml"), currentAggrationJunitXML, 0644); err != nil {
 		return err
 	}
 
@@ -237,7 +236,7 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 	jobrunaggregatorlib.OutputTestCaseFailures([]string{"root"}, fakeSuite)
 
 	summaryHTML := htmlForTestRuns(o.jobName, fakeSuite)
-	if err := ioutil.WriteFile(filepath.Join(o.workingDir, "aggregation-testrun-summary.html"), []byte(summaryHTML), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(o.workingDir, "aggregation-testrun-summary.html"), []byte(summaryHTML), 0644); err != nil {
 		return err
 	}
 

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"reflect"
@@ -260,7 +259,7 @@ func generateSecrets(o options, censor *secrets.DynamicCensor) (errs []error) {
 		var err error
 		var f *os.File
 		if o.outputFile == "" {
-			f, err = ioutil.TempFile("", "ci-secret-generator")
+			f, err = os.CreateTemp("", "ci-secret-generator")
 			if err != nil {
 				return append(errs, fmt.Errorf("failed to create tempfile: %w", err))
 			}

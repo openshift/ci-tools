@@ -2,7 +2,6 @@ package testhelper
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,7 +26,7 @@ func WriteToFixture(t *testing.T, identifier string, data []byte) {
 	if err := os.MkdirAll(filepath.Dir(golden), 0755); err != nil {
 		t.Fatalf("failed to create fixture directory: %v", err)
 	}
-	if err := ioutil.WriteFile(golden, data, 0644); err != nil {
+	if err := os.WriteFile(golden, data, 0644); err != nil {
 		t.Fatalf("failed to write testdata file: %v", err)
 	}
 }
@@ -39,7 +38,7 @@ func ReadFromFixture(t *testing.T, identifier string) []byte {
 		t.Fatalf("failed to get absolute path to testdata file: %v", err)
 	}
 
-	data, err := ioutil.ReadFile(golden)
+	data, err := os.ReadFile(golden)
 	if err != nil {
 		t.Fatalf("failed to read testdata file: %v", err)
 	}
@@ -115,11 +114,11 @@ func CompareWithFixture(t *testing.T, output interface{}, opts ...Option) {
 		if err := os.MkdirAll(filepath.Dir(golden), 0755); err != nil {
 			t.Fatalf("failed to create fixture directory: %v", err)
 		}
-		if err := ioutil.WriteFile(golden, serializedOutput, 0644); err != nil {
+		if err := os.WriteFile(golden, serializedOutput, 0644); err != nil {
 			t.Fatalf("failed to write updated fixture: %v", err)
 		}
 	}
-	expected, err := ioutil.ReadFile(golden)
+	expected, err := os.ReadFile(golden)
 	if err != nil {
 		t.Fatalf("failed to read testdata file: %v", err)
 	}

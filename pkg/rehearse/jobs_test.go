@@ -537,20 +537,20 @@ func TestExecuteJobsErrors(t *testing.T) {
 	testCases := []struct {
 		description  string
 		jobs         map[string][]prowconfig.Presubmit
-		failToCreate sets.String
+		failToCreate sets.Set[string]
 	}{{
 		description: "fail to Create a prowjob",
 		jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
 			*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
 		}},
-		failToCreate: sets.NewString("rehearse-123-job1"),
+		failToCreate: sets.New[string]("rehearse-123-job1"),
 	}, {
 		description: "fail to Create one of two prowjobs",
 		jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
 			*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
 			*makeTestingPresubmit("job2", "ci/prow/job2", "master"),
 		}},
-		failToCreate: sets.NewString("rehearse-123-job2"),
+		failToCreate: sets.New[string]("rehearse-123-job2"),
 	}}
 
 	references, chains, workflows, _, _, observers, err := load.Registry(testingRegistry, load.RegistryFlag(0))
@@ -834,7 +834,7 @@ func TestWaitForJobs(t *testing.T) {
 	}
 	testCases := []struct {
 		id      string
-		pjs     sets.String
+		pjs     sets.Set[string]
 		events  []runtime.Object
 		success bool
 		err     error
@@ -844,11 +844,11 @@ func TestWaitForJobs(t *testing.T) {
 	}, {
 		id:      "one successful job",
 		success: true,
-		pjs:     sets.NewString("success0"),
+		pjs:     sets.New[string]("success0"),
 		events:  []runtime.Object{&pjSuccess0},
 	}, {
 		id:  "mixed states",
-		pjs: sets.NewString("failure", "success0", "aborted", "error"),
+		pjs: sets.New[string]("failure", "success0", "aborted", "error"),
 		events: []runtime.Object{
 			&pjFailure, &pjPending, &pjSuccess0,
 			&pjTriggered, &pjAborted, &pjError,
@@ -856,16 +856,16 @@ func TestWaitForJobs(t *testing.T) {
 	}, {
 		id:      "ignored states",
 		success: true,
-		pjs:     sets.NewString("success0"),
+		pjs:     sets.New[string]("success0"),
 		events:  []runtime.Object{&pjPending, &pjSuccess0, &pjTriggered},
 	}, {
 		id:      "not watched",
 		success: true,
-		pjs:     sets.NewString("success1"),
+		pjs:     sets.New[string]("success1"),
 		events:  []runtime.Object{&pjSuccess0, &pjFailure, &pjSuccess1},
 	}, {
 		id:     "not watched failure",
-		pjs:    sets.NewString("failure"),
+		pjs:    sets.New[string]("failure"),
 		events: []runtime.Object{&pjSuccess0, &pjFailure},
 	}}
 	for idx := range testCases {
@@ -904,7 +904,7 @@ func TestWaitForJobsRetries(t *testing.T) {
 
 	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, logrus.NewEntry(logrus.New()), client, "")
 	executor.pollFunc = threetimesTryingPoller
-	success, err := executor.waitForJobs(sets.String{"j": {}}, &ctrlruntimeclient.ListOptions{})
+	success, err := executor.waitForJobs(sets.Set[string]{"j": {}}, &ctrlruntimeclient.ListOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -915,18 +915,18 @@ func TestWaitForJobsRetries(t *testing.T) {
 
 func TestWaitForJobsLog(t *testing.T) {
 	logger, hook := logrustest.NewNullLogger()
-	client := fakectrlruntimeclient.NewFakeClient(
+	client := fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 		&pjapi.ProwJob{
 			ObjectMeta: metav1.ObjectMeta{Name: "success"},
 			Status:     pjapi.ProwJobStatus{State: pjapi.SuccessState}},
 		&pjapi.ProwJob{
 			ObjectMeta: metav1.ObjectMeta{Name: "failure"},
 			Status:     pjapi.ProwJobStatus{State: pjapi.FailureState}},
-	)
+	).Build()
 
 	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, logger.WithFields(nil), client, "")
 	executor.pollFunc = threetimesTryingPoller
-	_, err := executor.waitForJobs(sets.NewString("success", "failure"), &ctrlruntimeclient.ListOptions{})
+	_, err := executor.waitForJobs(sets.New[string]("success", "failure"), &ctrlruntimeclient.ListOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1358,7 +1358,7 @@ func TestVariantFromLabels(t *testing.T) {
 }
 
 func newTC(initObjs ...runtime.Object) *tc {
-	return &tc{Client: fakectrlruntimeclient.NewFakeClient(initObjs...)}
+	return &tc{Client: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(initObjs...).Build()}
 }
 
 type tc struct {

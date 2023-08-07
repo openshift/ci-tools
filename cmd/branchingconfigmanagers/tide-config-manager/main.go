@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 
@@ -95,37 +94,37 @@ func main() {
 }
 
 type sharedDataDelegate struct {
-	excludedLabels sets.String
-	mainMaster     sets.String
-	validBug       sets.String
+	excludedLabels sets.Set[string]
+	mainMaster     sets.Set[string]
+	validBug       sets.Set[string]
 }
 
 func newSharedDataDelegate() *sharedDataDelegate {
 	return &sharedDataDelegate{
-		excludedLabels: sets.NewString(qeApproved, docsApproved, pxApproved),
-		mainMaster:     sets.NewString(mainBranch, masterBranch),
-		validBug:       sets.NewString(validBug),
+		excludedLabels: sets.New[string](qeApproved, docsApproved, pxApproved),
+		mainMaster:     sets.New[string](mainBranch, masterBranch),
+		validBug:       sets.New[string](validBug),
 	}
 
 }
 
 type branchingDayEvent struct {
-	repos                    sets.String
-	openshiftReleaseBranches sets.String
+	repos                    sets.Set[string]
+	openshiftReleaseBranches sets.Set[string]
 	*sharedDataDelegate
 }
 
 func newBranchingDayEvent(current string, delegate *sharedDataDelegate) branchingDayEvent {
 	return branchingDayEvent{
-		repos:                    sets.NewString(),
-		openshiftReleaseBranches: sets.NewString(release+current, openshift+current),
+		repos:                    sets.New[string](),
+		openshiftReleaseBranches: sets.New[string](release+current, openshift+current),
 		sharedDataDelegate:       delegate,
 	}
 }
 
 func (bde branchingDayEvent) ModifyQuery(q *prowconfig.TideQuery, repo string) {
-	reqLabels := sets.NewString(q.Labels...)
-	branches := sets.NewString(q.IncludedBranches...)
+	reqLabels := sets.New[string](q.Labels...)
+	branches := sets.New[string](q.IncludedBranches...)
 
 	if branches.Intersection(bde.openshiftReleaseBranches).Len() > 0 {
 		if reqLabels.Has(staffEngApproved) {
@@ -133,36 +132,36 @@ func (bde branchingDayEvent) ModifyQuery(q *prowconfig.TideQuery, repo string) {
 			reqLabels.Insert(cherryPickApproved, backportRiskAssessed)
 		}
 	}
-	q.Labels = reqLabels.List()
+	q.Labels = sets.List(reqLabels)
 }
 
 func (bde branchingDayEvent) GetDataFromProwConfig(pc *prowconfig.ProwConfig) {
 }
 
 type preGeneralAvailabilityEvent struct {
-	repos                    sets.String
-	openshiftReleaseBranches sets.String
+	repos                    sets.Set[string]
+	openshiftReleaseBranches sets.Set[string]
 	*sharedDataDelegate
 }
 
 func newPreGeneralAvailability(current string, delegate *sharedDataDelegate) preGeneralAvailabilityEvent {
 	return preGeneralAvailabilityEvent{
-		repos:                    sets.NewString(),
-		openshiftReleaseBranches: sets.NewString(release+current, openshift+current),
+		repos:                    sets.New[string](),
+		openshiftReleaseBranches: sets.New[string](release+current, openshift+current),
 		sharedDataDelegate:       delegate,
 	}
 }
 
 func (pga preGeneralAvailabilityEvent) ModifyQuery(q *prowconfig.TideQuery, repo string) {
-	reqLabels := sets.NewString(q.Labels...)
-	branches := sets.NewString(q.IncludedBranches...)
+	reqLabels := sets.New[string](q.Labels...)
+	branches := sets.New[string](q.IncludedBranches...)
 
 	if branches.Intersection(pga.openshiftReleaseBranches).Len() > 0 {
 		if reqLabels.Has(cherryPickApproved) && reqLabels.Has(backportRiskAssessed) {
 			reqLabels.Insert(staffEngApproved)
 		}
 	}
-	q.Labels = reqLabels.List()
+	q.Labels = sets.List(reqLabels)
 }
 
 func (pga preGeneralAvailabilityEvent) GetDataFromProwConfig(pc *prowconfig.ProwConfig) {
@@ -174,7 +173,7 @@ type excludedRepos struct {
 }
 
 func (er *excludedRepos) loadExcludedReposConfig(path string) error {
-	cfgBytes, err := ioutil.ReadFile(path)
+	cfgBytes, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("failed to read excluded repos config from path %s: %w", path, err)
 	}
@@ -185,11 +184,11 @@ func (er *excludedRepos) loadExcludedReposConfig(path string) error {
 }
 
 type generalAvailabilityEvent struct {
-	repos                         sets.String
-	excludedAllowList             sets.String
-	noXYAllowList                 sets.String
-	openshiftReleaseBranches      sets.String
-	openshiftReleaseBranchesPlus1 sets.String
+	repos                         sets.Set[string]
+	excludedAllowList             sets.Set[string]
+	noXYAllowList                 sets.Set[string]
+	openshiftReleaseBranches      sets.Set[string]
+	openshiftReleaseBranchesPlus1 sets.Set[string]
 	releasePast                   string
 	openshiftPast                 string
 	releaseCurrent                string
@@ -202,15 +201,15 @@ type generalAvailabilityEvent struct {
 }
 
 func newGeneralAvailabilityEvent(past, current, future string, repos excludedRepos) generalAvailabilityEvent {
-	noXYAllowList := sets.NewString(repos.NoXYAllowList...)
-	excludedAllowList := sets.NewString(repos.ExcludedAllowList...).Union(noXYAllowList)
+	noXYAllowList := sets.New[string](repos.NoXYAllowList...)
+	excludedAllowList := sets.New[string](repos.ExcludedAllowList...).Union(noXYAllowList)
 
 	return generalAvailabilityEvent{
-		repos:                         sets.NewString(),
+		repos:                         sets.New[string](),
 		excludedAllowList:             excludedAllowList,
 		noXYAllowList:                 noXYAllowList,
-		openshiftReleaseBranches:      sets.NewString(release+current, openshift+current),
-		openshiftReleaseBranchesPlus1: sets.NewString(release+future, openshift+future),
+		openshiftReleaseBranches:      sets.New[string](release+current, openshift+current),
+		openshiftReleaseBranchesPlus1: sets.New[string](release+future, openshift+future),
 		releasePast:                   release + past,
 		releaseCurrent:                release + current,
 		releaseFuture:                 release + future,
@@ -233,20 +232,20 @@ func (gae generalAvailabilityEvent) ModifyQuery(q *prowconfig.TideQuery, repo st
 func (gae generalAvailabilityEvent) GetDataFromProwConfig(*prowconfig.ProwConfig) {}
 
 func (gae *generalAvailabilityEvent) deleteCherryPickApprovedBackportRiskAssesedLabels(q *prowconfig.TideQuery) {
-	reqLabels := sets.NewString(q.Labels...)
-	branches := sets.NewString(q.IncludedBranches...)
+	reqLabels := sets.New[string](q.Labels...)
+	branches := sets.New[string](q.IncludedBranches...)
 
 	if branches.Intersection(gae.openshiftReleaseBranches).Len() > 0 {
 		if reqLabels.Has(cherryPickApproved) && reqLabels.Has(backportRiskAssessed) && reqLabels.Has(staffEngApproved) {
 			reqLabels.Delete(cherryPickApproved, backportRiskAssessed)
 		}
 	}
-	q.Labels = reqLabels.List()
+	q.Labels = sets.List(reqLabels)
 }
 
 func (gae *generalAvailabilityEvent) ensureCherryPickApprovedLabel(q *prowconfig.TideQuery) {
-	reqLabels := sets.NewString(q.Labels...)
-	branches := sets.NewString(q.IncludedBranches...)
+	reqLabels := sets.New[string](q.Labels...)
+	branches := sets.New[string](q.IncludedBranches...)
 	if reqLabels.Has(cherryPickApproved) {
 		if branches.Has(gae.releasePast) {
 			branches.Insert(gae.releaseCurrent)
@@ -261,12 +260,12 @@ func (gae *generalAvailabilityEvent) ensureCherryPickApprovedLabel(q *prowconfig
 			fmt.Printf("Suspicious cherry-pick-approved query (with %s): %s\n", gae.future, q.Repos)
 		}
 	}
-	q.IncludedBranches = branches.List()
+	q.IncludedBranches = sets.List(branches)
 }
 
 func (gae *generalAvailabilityEvent) ensureStaffEngApprovedLabel(q *prowconfig.TideQuery) {
-	reqLabels := sets.NewString(q.Labels...)
-	branches := sets.NewString(q.IncludedBranches...)
+	reqLabels := sets.New[string](q.Labels...)
+	branches := sets.New[string](q.IncludedBranches...)
 
 	if reqLabels.Has(staffEngApproved) {
 		if branches.Has(gae.releaseCurrent) {
@@ -278,15 +277,15 @@ func (gae *generalAvailabilityEvent) ensureStaffEngApprovedLabel(q *prowconfig.T
 			branches.Insert(gae.openshiftFuture)
 		}
 
-		if !(branches.Equal(sets.NewString(gae.releaseFuture)) || branches.Equal(sets.NewString(gae.openshiftFuture)) || branches.Equal(gae.openshiftReleaseBranchesPlus1)) {
+		if !(branches.Equal(sets.New[string](gae.releaseFuture)) || branches.Equal(sets.New[string](gae.openshiftFuture)) || branches.Equal(gae.openshiftReleaseBranchesPlus1)) {
 			fmt.Printf("Suspicious staff-eng-approved query: %s\n", q.Repos)
 		}
 	}
-	q.IncludedBranches = branches.List()
+	q.IncludedBranches = sets.List(branches)
 }
 
 func (gae *generalAvailabilityEvent) overrideExcludedBranches(q *prowconfig.TideQuery) {
-	branches := sets.NewString(q.ExcludedBranches...)
+	branches := sets.New[string](q.ExcludedBranches...)
 	if branches.Has(gae.releasePast) {
 		branches.Insert(gae.releaseCurrent)
 		branches.Insert(gae.releaseFuture)
@@ -300,7 +299,7 @@ func (gae *generalAvailabilityEvent) overrideExcludedBranches(q *prowconfig.Tide
 			fmt.Printf("Suspicious complement query (without %s): %s\n", gae.future, q.Repos)
 		}
 	}
-	q.ExcludedBranches = branches.List()
+	q.ExcludedBranches = sets.List(branches)
 }
 
 func updateProwConfigs(o *options) error {

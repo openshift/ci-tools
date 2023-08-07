@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -68,7 +67,7 @@ func loadRepos(configRootDir string, blocked blocklist, configSubDirs, extraDirs
 	}
 
 	for _, subdirectory := range append(configSubDirectories, extraDirs...) {
-		orgDirs, err := ioutil.ReadDir(subdirectory)
+		orgDirs, err := os.ReadDir(subdirectory)
 		if err != nil {
 			return nil, err
 		}
@@ -82,7 +81,7 @@ func loadRepos(configRootDir string, blocked blocklist, configSubDirs, extraDirs
 				logrus.WithField("org", org).Info("org is on organization blocklist, skipping")
 				continue
 			}
-			repoDirs, err := ioutil.ReadDir(filepath.Join(subdirectory, orgDir.Name()))
+			repoDirs, err := os.ReadDir(filepath.Join(subdirectory, orgDir.Name()))
 			if err != nil {
 				return nil, err
 			}
@@ -125,7 +124,7 @@ func loadRepos(configRootDir string, blocked blocklist, configSubDirs, extraDirs
 
 	var result []orgRepo
 	for _, orgRepo := range orgRepos {
-		orgRepo.Directories = sets.NewString(orgRepo.Directories...).List()
+		orgRepo.Directories = sets.List(sets.New[string](orgRepo.Directories...))
 		result = append(result, *orgRepo)
 	}
 	return result, nil
@@ -164,7 +163,7 @@ func (r httpResult) resolveOwnerAliases(cleaner ownersCleaner) interface{} {
 				Approvers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.Approvers)))),
 				Reviewers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.Reviewers)))),
 				RequiredReviewers: cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.RequiredReviewers)))),
-				Labels:            sets.NewString(v.Labels...).List(),
+				Labels:            sets.List(sets.New[string](v.Labels...)),
 			}
 			if len(cfg.Reviewers) == 0 {
 				cfg.Reviewers = cfg.Approvers
@@ -227,11 +226,11 @@ func getOwnersHTTP(fg FileGetter, orgRepo orgRepo, filenames ownersconfig.Filena
 }
 
 func addHeader(path string, header string) error {
-	content, err := ioutil.ReadFile(path)
+	content, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(path, append([]byte(header), content...), 0644)
+	return os.WriteFile(path, append([]byte(header), content...), 0644)
 }
 
 func writeOwners(orgRepo orgRepo, httpResult httpResult, cleaner ownersCleaner, header string) error {
@@ -531,7 +530,7 @@ func ownersCleanerFactory(githubOrg string, ghc githubOrgMemberLister) (ownersCl
 		return nil, fmt.Errorf("listOrgMembers failed: %w", err)
 	}
 
-	membersSet := sets.String{}
+	membersSet := sets.Set[string]{}
 	for _, member := range members {
 		membersSet.Insert(strings.ToLower(member.Login))
 	}

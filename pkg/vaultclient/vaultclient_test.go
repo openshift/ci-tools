@@ -78,7 +78,7 @@ func TestListKVRecursively(t *testing.T) {
 	}
 	expected := []string{"secret/item", "secret/nested/item", "secret/self-managed/mine-alone/my-secret"}
 
-	if diff := cmp.Diff(sets.NewString(result...).List(), expected); diff != "" {
+	if diff := cmp.Diff(sets.List(sets.New[string](result...)), expected); diff != "" {
 		t.Errorf("actual resutl differs from expected: %v", diff)
 	}
 }

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -250,7 +249,7 @@ tests:
 	}
 	for _, tc := range tests {
 		t.Run(tc.id, func(t *testing.T) {
-			tempDir, err := ioutil.TempDir("", "prowgen-test")
+			tempDir, err := os.MkdirTemp("", "prowgen-test")
 			if err != nil {
 				t.Fatalf("Unexpected error creating tmpdir: %v", err)
 			}
@@ -267,7 +266,7 @@ tests:
 			}
 
 			fullConfigPath := filepath.Join(configDir, fmt.Sprintf("%s.yaml", basename))
-			if err = ioutil.WriteFile(fullConfigPath, tc.configYAML, 0664); err != nil {
+			if err = os.WriteFile(fullConfigPath, tc.configYAML, 0664); err != nil {
 				t.Fatalf("Unexpected error writing config file: %v", err)
 			}
 
@@ -277,11 +276,11 @@ tests:
 				t.Fatalf("Unexpected error creating jobs dir: %v", err)
 			}
 			presubmitPath := filepath.Join(fullProwConfigDir, fmt.Sprintf("%s-%s-%s-presubmits.yaml", tc.org, tc.component, tc.branch))
-			if err = ioutil.WriteFile(presubmitPath, tc.prowOldPresubmitYAML, 0664); err != nil {
+			if err = os.WriteFile(presubmitPath, tc.prowOldPresubmitYAML, 0664); err != nil {
 				t.Fatalf("Unexpected error writing old presubmits: %v", err)
 			}
 			postsubmitPath := filepath.Join(fullProwConfigDir, fmt.Sprintf("%s-%s-%s-postsubmits.yaml", tc.org, tc.component, tc.branch))
-			if err = ioutil.WriteFile(postsubmitPath, tc.prowOldPostsubmitYAML, 0664); err != nil {
+			if err = os.WriteFile(postsubmitPath, tc.prowOldPostsubmitYAML, 0664); err != nil {
 				t.Fatalf("Unexpected error writing old postsubmits: %v", err)
 			}
 
@@ -290,13 +289,13 @@ tests:
 				t.Fatalf("Unexpected error generating jobs from config: %v", err)
 			}
 
-			presubmitData, err := ioutil.ReadFile(presubmitPath)
+			presubmitData, err := os.ReadFile(presubmitPath)
 			if err != nil {
 				t.Fatalf("Unexpected error reading generated presubmits: %v", err)
 			}
 			testhelper.CompareWithFixture(t, presubmitData, testhelper.WithPrefix("presubmit-"))
 
-			postsubmitData, err := ioutil.ReadFile(postsubmitPath)
+			postsubmitData, err := os.ReadFile(postsubmitPath)
 			if err != nil {
 				t.Fatalf("Unexpected error reading generated postsubmits: %v", err)
 			}

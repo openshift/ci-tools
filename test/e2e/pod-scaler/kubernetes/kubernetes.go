@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 
@@ -89,13 +90,13 @@ func Fake(t testhelper.TestingTInterface, tmpDir string, options ...Option) stri
 	for pattern, handler := range o.Patterns {
 		mux.HandleFunc(pattern, handler)
 	}
-	server := &http.Server{
-		Addr:    k8sAddr,
-		Handler: mux,
+	listener, err := net.Listen("tcp", k8sAddr)
+	if err != nil {
+		t.Fatalf("kubernetes server failed to listen: %v", err)
 	}
-
+	server := &http.Server{Handler: mux}
 	go func() {
-		if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+		if err := server.Serve(listener); !errors.Is(err, http.ErrServerClosed) {
 			t.Fatalf("kubernetes server failed to listen: %v", err)
 		}
 	}()

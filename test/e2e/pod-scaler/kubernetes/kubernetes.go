@@ -76,7 +76,7 @@ func Builds(labelsByNamespacedName map[string]map[string]map[string]string) Opti
 }
 
 // Fake serves fake data as if it were a k8s apiserver
-func Fake(t testhelper.TestingTInterface, tmpDir string, options ...Option) string {
+func Fake(setupT, t testhelper.TestingTInterface, tmpDir string, options ...Option) string {
 	readyPath := "/healthz/ready"
 	o := Options{Patterns: map[string]http.HandlerFunc{
 		readyPath: func(w http.ResponseWriter, _ *http.Request) {},
@@ -84,7 +84,7 @@ func Fake(t testhelper.TestingTInterface, tmpDir string, options ...Option) stri
 	for _, option := range options {
 		option(&o)
 	}
-	k8sPort := testhelper.GetFreePort(t)
+	k8sPort := testhelper.GetFreePort(setupT)
 	k8sAddr := "0.0.0.0:" + k8sPort
 	mux := http.NewServeMux()
 	for pattern, handler := range o.Patterns {
@@ -92,7 +92,7 @@ func Fake(t testhelper.TestingTInterface, tmpDir string, options ...Option) stri
 	}
 	listener, err := net.Listen("tcp", k8sAddr)
 	if err != nil {
-		t.Fatalf("kubernetes server failed to listen: %v", err)
+		setupT.Fatalf("kubernetes server failed to listen: %v", err)
 	}
 	server := &http.Server{Handler: mux}
 	go func() {
@@ -130,10 +130,10 @@ func Fake(t testhelper.TestingTInterface, tmpDir string, options ...Option) stri
 
 	kubeconfigFile, err := os.CreateTemp(tmpDir, "kubeconfig")
 	if err != nil {
-		t.Fatalf("Failed to create temporary kubeconfig file: %v", err)
+		setupT.Fatalf("Failed to create temporary kubeconfig file: %v", err)
 	}
 	if err := kubeconfigFile.Close(); err != nil {
-		t.Fatalf("Failed to close temporary kubeconfig file: %v", err)
+		setupT.Fatalf("Failed to close temporary kubeconfig file: %v", err)
 	}
 	if err := clientcmd.ModifyConfig(&clientcmd.PathOptions{
 		GlobalFile: kubeconfigFile.Name(),
@@ -141,8 +141,8 @@ func Fake(t testhelper.TestingTInterface, tmpDir string, options ...Option) stri
 			ExplicitPath: kubeconfigFile.Name(),
 		},
 	}, kubeconfig, false); err != nil {
-		t.Fatalf("Failed to write temporary kubeconfig file: %v", err)
+		setupT.Fatalf("Failed to write temporary kubeconfig file: %v", err)
 	}
-	testhelper.WaitForHTTP200(fmt.Sprintf("http://127.0.0.1:%s%s", k8sPort, readyPath), "kubernetes server", 90, t)
+	testhelper.WaitForHTTP200(fmt.Sprintf("http://127.0.0.1:%s%s", k8sPort, readyPath), "kubernetes server", 90, setupT)
 	return kubeconfigFile.Name()
 }

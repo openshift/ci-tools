@@ -38,7 +38,7 @@ func TestProduce(t *testing.T) {
 	t.Parallel()
 	T := testhelper.NewT(interrupts.Context(), t)
 	prometheusAddr, info := prometheus.Initialize(T, T.TempDir(), rand.New(rand.NewSource(4641280330504625122)), false)
-	kubeconfigFile := kubernetes.Fake(T, T.TempDir(), kubernetes.Prometheus(prometheusAddr))
+	kubeconfigFile := kubernetes.Fake(t, T, T.TempDir(), kubernetes.Prometheus(prometheusAddr))
 
 	dataDir := T.TempDir()
 	// we need to run the data collection in order of largest offsets as smaller ones subsume the data
@@ -130,7 +130,7 @@ func check(t *testing.T, dataDir string, checkAgainst prometheus.Data) {
 func TestBuildPodAdmission(t *testing.T) {
 	t.Parallel()
 	T := testhelper.NewT(interrupts.Context(), t)
-	kubeconfigFile := kubernetes.Fake(T, T.TempDir(), kubernetes.Builds(map[string]map[string]map[string]string{
+	kubeconfigFile := kubernetes.Fake(t, T, T.TempDir(), kubernetes.Builds(map[string]map[string]map[string]string{
 		"namespace": {
 			"withoutlabels": map[string]string{},
 			"withlabels": map[string]string{
@@ -242,7 +242,7 @@ func TestAdmission(t *testing.T) {
 	T := testhelper.NewT(interrupts.Context(), t)
 	prometheusAddr, _ := prometheus.Initialize(T, t.TempDir(), rand.New(rand.NewSource(4641280330504625122)), false)
 
-	kubeconfigFile := kubernetes.Fake(T, T.TempDir(), kubernetes.Prometheus(prometheusAddr), kubernetes.Builds(map[string]map[string]map[string]string{
+	kubeconfigFile := kubernetes.Fake(t, T, T.TempDir(), kubernetes.Prometheus(prometheusAddr), kubernetes.Builds(map[string]map[string]map[string]string{
 		"namespace": {
 			"withoutlabels": map[string]string{},
 			"withlabels": map[string]string{

@@ -57,7 +57,7 @@ func main() {
 	cacheDir := opts.cacheDir
 	if opts.cacheDir == "" {
 		prometheusAddr, _ := prometheus.Initialize(t.withName("pod-scaler/local/prometheus"), tmpDir, rand.New(rand.NewSource(time.Now().UnixNano())), true)
-		kubeconfigFile := kubernetes.Fake(t.withName("pod-scaler/local/kubernetes"), tmpDir, kubernetes.Prometheus(prometheusAddr))
+		kubeconfigFile := kubernetes.Fake(t, t.withName("pod-scaler/local/kubernetes"), tmpDir, kubernetes.Prometheus(prometheusAddr))
 
 		dataDir, err := os.MkdirTemp(tmpDir, "data")
 		if err != nil {

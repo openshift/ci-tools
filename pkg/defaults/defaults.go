@@ -137,7 +137,7 @@ func fromConfig(
 	nodeName string,
 	targetAdditionalSuffix string,
 ) ([]api.Step, []api.Step, error) {
-	requiredNames := sets.NewString()
+	requiredNames := sets.New[string]()
 	for _, target := range requiredTargets {
 		requiredNames.Insert(target)
 	}

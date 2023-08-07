@@ -22,7 +22,7 @@ const (
 	OpenShiftInstallerTemplateName                = "openshift_installer"
 )
 
-var validTemplateMigrations = sets.NewString(openshiftInstallerCustomTestImageTemplateName, OpenshiftInstallerUPITemplateName, OpenShiftInstallerTemplateName)
+var validTemplateMigrations = sets.New[string](openshiftInstallerCustomTestImageTemplateName, OpenshiftInstallerUPITemplateName, OpenShiftInstallerTemplateName)
 
 type options struct {
 	config.ConfirmableOptions
@@ -38,8 +38,8 @@ func (o options) validate() error {
 	if err := o.ConfirmableOptions.Validate(); err != nil {
 		errs = append(errs, err)
 	}
-	if diff := sets.NewString(o.enabledTemplateMigrations.Strings()...).Difference(validTemplateMigrations); len(diff) != 0 {
-		errs = append(errs, fmt.Errorf("invalid values %v for --enabled-template-migration, valid values: %v", diff.List(), validTemplateMigrations.List()))
+	if diff := sets.New[string](o.enabledTemplateMigrations.Strings()...).Difference(validTemplateMigrations); len(diff) != 0 {
+		errs = append(errs, fmt.Errorf("invalid values %v for --enabled-template-migration, valid values: %v", sets.List(diff), sets.List(validTemplateMigrations)))
 	}
 
 	return utilerrors.NewAggregate(errs)
@@ -48,7 +48,7 @@ func (o options) validate() error {
 func gatherOptions() options {
 	o := options{}
 	o.Bind(flag.CommandLine)
-	flag.Var(&o.enabledTemplateMigrations, "enabled-template-migration", fmt.Sprintf("The enabled template migrations. Can be passed multiple times. Valid values are %v", validTemplateMigrations.List()))
+	flag.Var(&o.enabledTemplateMigrations, "enabled-template-migration", fmt.Sprintf("The enabled template migrations. Can be passed multiple times. Valid values are %v", sets.List(validTemplateMigrations)))
 	flag.IntVar(&o.templateMigrationCeiling, "template-migration-ceiling", 10, "The maximum number of templates to migrate")
 	flag.Var(&o.templateMigrationAllowedBranches, "template-migration-allowed-branch", "Allowed branches to automigrate templates on. Can be passed multiple times. All branches are allowed if unset.")
 	flag.Var(&o.templateMigrationAllowedOrgs, "template-migration-allowed-org", "Allowed orgs to automigrate templates on. Can be passed multiple times. All orgs are allowed if unset.")
@@ -80,7 +80,7 @@ func main() {
 		allowedBranches := o.templateMigrationAllowedBranches.StringSet()
 		allowedOrgs := o.templateMigrationAllowedOrgs.StringSet()
 		allowedClusterProfiles := o.templateMigrationAllowedClusterProfiles.StringSet()
-		if sets.NewString(o.enabledTemplateMigrations.Strings()...).Has(openshiftInstallerCustomTestImageTemplateName) && migratedCount <= o.templateMigrationCeiling {
+		if sets.New[string](o.enabledTemplateMigrations.Strings()...).Has(openshiftInstallerCustomTestImageTemplateName) && migratedCount <= o.templateMigrationCeiling {
 			migratedCount += migrateOpenshiftInstallerCustomTestImageTemplates(&output, allowedBranches, allowedOrgs, allowedClusterProfiles)
 		}
 		if o.enabledTemplateMigrations.StringSet().Has(OpenshiftInstallerUPITemplateName) && migratedCount <= o.templateMigrationCeiling {

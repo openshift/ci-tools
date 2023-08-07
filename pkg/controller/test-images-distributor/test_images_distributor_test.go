@@ -51,7 +51,7 @@ func TestRegistryClusterHandlerFactory(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		buildClusters sets.String
+		buildClusters sets.Set[string]
 		filter        objectFilter
 
 		expected []reconcile.Request
@@ -59,7 +59,7 @@ func TestRegistryClusterHandlerFactory(t *testing.T) {
 	}{
 		{
 			name:          "Generates requests for all buildclusters",
-			buildClusters: sets.NewString("build01", "build02"),
+			buildClusters: sets.New[string]("build01", "build02"),
 			expected: []reconcile.Request{
 				reconcileRequest("build01_"+namespace, name),
 				reconcileRequest("build02_"+namespace, name),
@@ -67,12 +67,12 @@ func TestRegistryClusterHandlerFactory(t *testing.T) {
 		},
 		{
 			name:          "Filter is respected",
-			buildClusters: sets.NewString("build01"),
+			buildClusters: sets.New[string]("build01"),
 			filter:        func(_ types.NamespacedName) bool { return false },
 		},
 		{
 			name:          "RoundTrips with DecodeRequest",
-			buildClusters: sets.NewString("build01"),
+			buildClusters: sets.New[string]("build01"),
 			expected:      []reconcile.Request{reconcileRequest("build01_"+namespace, name)},
 			verify: func(r []reconcile.Request) error {
 				if n := len(r); n != 1 {
@@ -605,7 +605,7 @@ func TestReconcile(t *testing.T) {
 				registryClusterName: "app.ci",
 				registryClient:      tc.registryClient,
 				buildClusterClients: tc.buildClusterClients,
-				forbiddenRegistries: sets.NewString("default-route-openshift-image-registry.apps.build01.ci.devcluster.openshift.com",
+				forbiddenRegistries: sets.New[string]("default-route-openshift-image-registry.apps.build01.ci.devcluster.openshift.com",
 					"registry.build01.ci.openshift.org",
 					"registry.build02.ci.openshift.org",
 				),
@@ -663,7 +663,7 @@ func TestTestImageStramTagImportHandlerRoundTrips(t *testing.T) {
 	queue := &hijackingQueue{}
 
 	event := event.CreateEvent{Object: obj}
-	testImageStreamTagImportHandler(logrus.NewEntry(logrus.StandardLogger()), sets.NewString()).Create(context.Background(), event, queue)
+	testImageStreamTagImportHandler(logrus.NewEntry(logrus.StandardLogger()), sets.New[string]()).Create(context.Background(), event, queue)
 
 	if n := len(queue.received); n != 1 {
 		t.Fatalf("expected exactly one reconcile request, got %d(%v)", n, queue.received)
@@ -692,24 +692,24 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 		config                          api.ReleaseBuildConfiguration
 		client                          ctrlruntimeclient.Client
 		buildClusterClients             map[string]ctrlruntimeclient.Client
-		additionalImageStreamTags       sets.String
-		additionalImageStreams          sets.String
-		additionalImageStreamNamespaces sets.String
+		additionalImageStreamTags       sets.Set[string]
+		additionalImageStreams          sets.Set[string]
+		additionalImageStreamNamespaces sets.Set[string]
 		expectedResult                  bool
 	}{
 		{
 			name:                      "imagestreamtag is explicitly allowed",
-			additionalImageStreamTags: sets.NewString(namespace + "/" + streamName + ":" + tagName),
+			additionalImageStreamTags: sets.New[string](namespace + "/" + streamName + ":" + tagName),
 			expectedResult:            true,
 		},
 		{
 			name:                   "imagestream is explicitly allowed",
-			additionalImageStreams: sets.NewString(namespace + "/" + streamName),
+			additionalImageStreams: sets.New[string](namespace + "/" + streamName),
 			expectedResult:         true,
 		},
 		{
 			name:                            "imagestream_namespace is explicitly allowed",
-			additionalImageStreamNamespaces: sets.NewString(namespace),
+			additionalImageStreamNamespaces: sets.New[string](namespace),
 			expectedResult:                  true,
 		},
 		{
@@ -840,7 +840,7 @@ func TestSourceForConfigChangeChannel(t *testing.T) {
 		request types.NamespacedName
 	}
 
-	buildClusters := sets.NewString("build01", "build02")
+	buildClusters := sets.New[string]("build01", "build02")
 	testCases := []struct {
 		name   string
 		change agents.IndexDelta

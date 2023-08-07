@@ -16,13 +16,13 @@ import (
 func TestGetJobs(t *testing.T) {
 
 	tests := map[string]struct {
-		expectedJobNames sets.String
+		expectedJobNames sets.Set[string]
 		filters          map[string][]string
 	}{
-		"test upgrade filter":   {expectedJobNames: sets.String{"periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn-serial-ipv4": sets.Empty{}, "periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-serial-ovn-ipv6": sets.Empty{}}, filters: map[string][]string{"exclude-job-names": {"upgrade"}}},
-		"test no filter":        {expectedJobNames: sets.String{"periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn-serial-ipv4": sets.Empty{}, "periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-serial-ovn-ipv6": sets.Empty{}, "periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn-upgrade": sets.Empty{}}},
-		"test multiple filters": {expectedJobNames: sets.String{"periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn-serial-ipv4": sets.Empty{}}, filters: map[string][]string{"exclude-job-names": {"upgrade", "ipv6"}}},
-		"test include arg":      {expectedJobNames: sets.String{"periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-serial-ovn-ipv6": sets.Empty{}}, filters: map[string][]string{"include-job-names": {"ipv6"}}},
+		"test upgrade filter":   {expectedJobNames: sets.Set[string]{"periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn-serial-ipv4": sets.Empty{}, "periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-serial-ovn-ipv6": sets.Empty{}}, filters: map[string][]string{"exclude-job-names": {"upgrade"}}},
+		"test no filter":        {expectedJobNames: sets.Set[string]{"periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn-serial-ipv4": sets.Empty{}, "periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-serial-ovn-ipv6": sets.Empty{}, "periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn-upgrade": sets.Empty{}}},
+		"test multiple filters": {expectedJobNames: sets.Set[string]{"periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn-serial-ipv4": sets.Empty{}}, filters: map[string][]string{"exclude-job-names": {"upgrade", "ipv6"}}},
+		"test include arg":      {expectedJobNames: sets.Set[string]{"periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-serial-ovn-ipv6": sets.Empty{}}, filters: map[string][]string{"include-job-names": {"ipv6"}}},
 	}
 
 	for name, tc := range tests {
@@ -62,12 +62,12 @@ func TestGetJobs(t *testing.T) {
 			}
 
 			if f.ExcludeJobNames != nil && len(f.ExcludeJobNames) > 0 {
-				jobGetter.excludeJobNames = sets.String{}
+				jobGetter.excludeJobNames = sets.Set[string]{}
 				jobGetter.excludeJobNames.Insert(f.ExcludeJobNames...)
 			}
 
 			if f.IncludeJobNames != nil && len(f.IncludeJobNames) > 0 {
-				jobGetter.includeJobNames = sets.String{}
+				jobGetter.includeJobNames = sets.Set[string]{}
 				jobGetter.includeJobNames.Insert(f.IncludeJobNames...)
 			}
 

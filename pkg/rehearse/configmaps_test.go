@@ -232,10 +232,10 @@ func TestNewConfigMaps(t *testing.T) {
 				"path/to/a/template.yaml",
 			},
 			expectCMS: ConfigMaps{
-				Paths:           sets.NewString("path/to/a/template.yaml"),
+				Paths:           sets.New[string]("path/to/a/template.yaml"),
 				Names:           map[string]string{"a-template-configmap": "rehearse-1234-SOMESHA-test-a-template-configmap"},
-				ProductionNames: sets.NewString("a-template-configmap"),
-				Patterns:        sets.NewString("path/to/a/template.yaml"),
+				ProductionNames: sets.New[string]("a-template-configmap"),
+				Patterns:        sets.New[string]("path/to/a/template.yaml"),
 			},
 		},
 		{
@@ -245,10 +245,10 @@ func TestNewConfigMaps(t *testing.T) {
 				"path/to/a/cluster-profile/vars-origin.yaml",
 			},
 			expectCMS: ConfigMaps{
-				Paths:           sets.NewString("path/to/a/cluster-profile/vars.yaml", "path/to/a/cluster-profile/vars-origin.yaml"),
+				Paths:           sets.New[string]("path/to/a/cluster-profile/vars.yaml", "path/to/a/cluster-profile/vars-origin.yaml"),
 				Names:           map[string]string{"a-cluster-profile-configmap": "rehearse-1234-SOMESHA-test-a-cluster-profile-configmap"},
-				ProductionNames: sets.NewString("a-cluster-profile-configmap"),
-				Patterns:        sets.NewString("path/to/a/cluster-profile/*.yaml"),
+				ProductionNames: sets.New[string]("a-cluster-profile-configmap"),
+				Patterns:        sets.New[string]("path/to/a/cluster-profile/*.yaml"),
 			},
 		},
 		{
@@ -259,7 +259,7 @@ func TestNewConfigMaps(t *testing.T) {
 				"path/to/a/template.yaml",
 			},
 			expectCMS: ConfigMaps{
-				Paths: sets.NewString(
+				Paths: sets.New[string](
 					"path/to/a/cluster-profile/vars.yaml",
 					"path/to/a/cluster-profile/vars-origin.yaml",
 					"path/to/a/template.yaml",
@@ -268,8 +268,8 @@ func TestNewConfigMaps(t *testing.T) {
 					"a-cluster-profile-configmap": "rehearse-1234-SOMESHA-test-a-cluster-profile-configmap",
 					"a-template-configmap":        "rehearse-1234-SOMESHA-test-a-template-configmap",
 				},
-				ProductionNames: sets.NewString("a-cluster-profile-configmap", "a-template-configmap"),
-				Patterns:        sets.NewString("path/to/a/cluster-profile/*.yaml", "path/to/a/template.yaml"),
+				ProductionNames: sets.New[string]("a-cluster-profile-configmap", "a-template-configmap"),
+				Patterns:        sets.New[string]("path/to/a/cluster-profile/*.yaml", "path/to/a/template.yaml"),
 			},
 		},
 	}

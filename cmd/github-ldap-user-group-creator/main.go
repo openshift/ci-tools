@@ -117,7 +117,7 @@ func main() {
 		logrus.WithError(err).Fatal("failed to validate the option")
 	}
 
-	var openshiftPrivAdmins sets.String
+	var openshiftPrivAdmins sets.Set[string]
 	if opts.peribolosConfig != "" {
 		admins, err := getOpenshiftPrivAdmins(opts.peribolosConfig, opts.orgFromPeribolosConfig)
 		if err != nil {
@@ -166,7 +166,7 @@ func main() {
 	}
 
 	clients := map[string]ctrlruntimeclient.Client{}
-	clusters := sets.NewString()
+	clusters := sets.New[string]()
 	for cluster, config := range kubeconfigs {
 		clusters.Insert(cluster)
 		cluster, config := cluster, config
@@ -261,7 +261,7 @@ func insertRows(ctx context.Context, client *bigquery.Client, users []*rover.Use
 	return nil
 }
 
-func getOpenshiftPrivAdmins(peribolosConfig, orgFromPeribolosConfig string) (sets.String, error) {
+func getOpenshiftPrivAdmins(peribolosConfig, orgFromPeribolosConfig string) (sets.Set[string], error) {
 	b, err := gzip.ReadFileMaybeGZIP(peribolosConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read peribolos configuration file: %w", err)
@@ -272,7 +272,7 @@ func getOpenshiftPrivAdmins(peribolosConfig, orgFromPeribolosConfig string) (set
 		return nil, fmt.Errorf("failed to unmarshal peribolos config: %w", err)
 	}
 
-	members := sets.NewString()
+	members := sets.New[string]()
 	orgConfig, ok := config.Orgs[orgFromPeribolosConfig]
 	if !ok {
 		return nil, fmt.Errorf("failed to find org %s in peribolos config", orgFromPeribolosConfig)
@@ -284,20 +284,20 @@ func getOpenshiftPrivAdmins(peribolosConfig, orgFromPeribolosConfig string) (set
 }
 
 type GroupClusters struct {
-	Clusters sets.String
+	Clusters sets.Set[string]
 	Group    *userv1.Group
 }
 
-var githubRobotIds = sets.NewString("RH-Cachito", "openshift-bot", "openshift-ci-robot", "openshift-merge-robot")
+var githubRobotIds = sets.New[string]("RH-Cachito", "openshift-bot", "openshift-ci-robot", "openshift-merge-robot")
 
-func makeGroups(openshiftPrivAdmins sets.String, peribolosConfig string, mapping map[string]string, roverGroups map[string][]string, config *group.Config, clusters sets.String) (map[string]GroupClusters, error) {
+func makeGroups(openshiftPrivAdmins sets.Set[string], peribolosConfig string, mapping map[string]string, roverGroups map[string][]string, config *group.Config, clusters sets.Set[string]) (map[string]GroupClusters, error) {
 	groups := map[string]GroupClusters{}
 	var errs []error
 
-	ignoredOpenshiftPrivAdminNames := sets.NewString()
+	ignoredOpenshiftPrivAdminNames := sets.New[string]()
 	if peribolosConfig != "" {
-		kerberosIDs := sets.NewString()
-		for _, admin := range openshiftPrivAdmins.List() {
+		kerberosIDs := sets.New[string]()
+		for _, admin := range sets.List(openshiftPrivAdmins) {
 			kerberosID, ok := mapping[admin]
 			if !ok {
 				if !githubRobotIds.Has(admin) {
@@ -308,19 +308,19 @@ func makeGroups(openshiftPrivAdmins sets.String, peribolosConfig string, mapping
 			kerberosIDs.Insert(kerberosID)
 		}
 		groups[group.OpenshiftPrivAdminsGroup] = GroupClusters{
-			Clusters: sets.NewString(string(api.ClusterAPPCI)),
+			Clusters: sets.New[string](string(api.ClusterAPPCI)),
 			Group: &userv1.Group{
 				ObjectMeta: metav1.ObjectMeta{Name: group.OpenshiftPrivAdminsGroup, Labels: map[string]string{api.DPTPRequesterLabel: toolName}},
-				Users:      kerberosIDs.List(),
+				Users:      sets.List(kerberosIDs),
 			},
 		}
 	}
 	if ignoredOpenshiftPrivAdminNames.Len() > 0 {
-		logrus.WithField("ignoredOpenshiftPrivAdminNames", ignoredOpenshiftPrivAdminNames.List()).
+		logrus.WithField("ignoredOpenshiftPrivAdminNames", sets.List(ignoredOpenshiftPrivAdminNames)).
 			Error("These logins are members of openshift-priv but have no mapping to RH login.")
 	}
 
-	clustersExceptHive := clusters.Difference(sets.NewString(string(api.HiveCluster)))
+	clustersExceptHive := clusters.Difference(sets.New[string](string(api.HiveCluster)))
 	for githubLogin, kerberosId := range mapping {
 		groupName := api.GitHubUserGroup(githubLogin)
 		groups[groupName] = GroupClusters{
@@ -341,7 +341,7 @@ func makeGroups(openshiftPrivAdmins sets.String, peribolosConfig string, mapping
 			if v, ok := config.Groups[k]; ok {
 				resolved := v.ResolveClusters(config.ClusterGroups)
 				if resolved.Len() > 0 {
-					logrus.WithField("groupName", groupName).WithField("clusters", resolved.List()).
+					logrus.WithField("groupName", groupName).WithField("clusters", sets.List(resolved)).
 						Info("Group does not exists on all clusters")
 					clustersForRoverGroup = resolved
 				}
@@ -360,7 +360,7 @@ func makeGroups(openshiftPrivAdmins sets.String, peribolosConfig string, mapping
 			Clusters: clustersForRoverGroup,
 			Group: &userv1.Group{
 				ObjectMeta: metav1.ObjectMeta{Name: groupName, Labels: labels},
-				Users:      sets.NewString(v...).Delete("").List(),
+				Users:      sets.List(sets.New[string](v...).Delete("")),
 			},
 		}
 	}
@@ -428,7 +428,7 @@ func ensureGroups(ctx context.Context, clients map[string]ctrlruntimeclient.Clie
 	errLock := &sync.Mutex{}
 	sem := semaphore.NewWeighted(int64(maxConcurrency))
 	for _, groupClusters := range groupsToCreate {
-		for _, cluster := range groupClusters.Clusters.List() {
+		for _, cluster := range sets.List(groupClusters.Clusters) {
 			group := groupClusters.Group.DeepCopy()
 			if err := sem.Acquire(ctx, 1); err != nil {
 				return fmt.Errorf("failed to acquire semaphore: %w", err)
@@ -466,7 +466,7 @@ func validate(group *userv1.Group) error {
 	if group.Name == "" {
 		return fmt.Errorf("group name cannot be empty")
 	}
-	members := sets.NewString()
+	members := sets.New[string]()
 	for _, m := range group.Users {
 		if m == "" {
 			return fmt.Errorf("member name in group cannot be empty")

@@ -49,7 +49,7 @@ func Test_user_requestedToReview(t *testing.T) {
 		},
 		{
 			name: "team requested",
-			user: user{GithubId: "some-id", TeamNames: sets.NewString("some-team")},
+			user: user{GithubId: "some-id", TeamNames: sets.New[string]("some-team")},
 			pr: github.PullRequest{
 				RequestedTeams: []github.Team{
 					{
@@ -61,7 +61,7 @@ func Test_user_requestedToReview(t *testing.T) {
 		},
 		{
 			name: "team requested while user is author",
-			user: user{GithubId: "some-id", TeamNames: sets.NewString("some-team")},
+			user: user{GithubId: "some-id", TeamNames: sets.New[string]("some-team")},
 			pr: github.PullRequest{
 				User: github.User{
 					Login: "some-id",
@@ -223,22 +223,22 @@ func TestFindPRsForUsers(t *testing.T) {
 				"someuser": {
 					KerberosId: "someuser",
 					GithubId:   "id-1",
-					TeamNames:  sets.NewString("some-team"),
-					Repos:      sets.NewString("org/repo-1", "org/repo-2"),
+					TeamNames:  sets.New[string]("some-team"),
+					Repos:      sets.New[string]("org/repo-1", "org/repo-2"),
 				},
 				"user-b": {
 					KerberosId: "user-b",
 					GithubId:   "id-2",
-					TeamNames:  sets.NewString("some-team"),
-					Repos:      sets.NewString("org/repo-1", "org/repo-2"),
+					TeamNames:  sets.New[string]("some-team"),
+					Repos:      sets.New[string]("org/repo-1", "org/repo-2"),
 				},
 			},
 			expected: map[string]user{
 				"someuser": {
 					KerberosId: "someuser",
 					GithubId:   "id-1",
-					TeamNames:  sets.NewString("some-team"),
-					Repos:      sets.NewString("org/repo-1", "org/repo-2"),
+					TeamNames:  sets.New[string]("some-team"),
+					Repos:      sets.New[string]("org/repo-1", "org/repo-2"),
 					PrRequests: []prRequest{
 						{
 							Repo:        "org/repo-1",
@@ -263,8 +263,8 @@ func TestFindPRsForUsers(t *testing.T) {
 				"user-b": {
 					KerberosId: "user-b",
 					GithubId:   "id-2",
-					TeamNames:  sets.NewString("some-team"),
-					Repos:      sets.NewString("org/repo-1", "org/repo-2"),
+					TeamNames:  sets.New[string]("some-team"),
+					Repos:      sets.New[string]("org/repo-1", "org/repo-2"),
 					PrRequests: []prRequest{
 						{
 							Repo:        "org/repo-1",
@@ -357,22 +357,22 @@ func Test_config_CreateUsers(t *testing.T) {
 					KerberosId: "user1",
 					GithubId:   "user-1",
 					SlackId:    "U1000000",
-					TeamNames:  sets.NewString("some-team", "other-team"),
-					Repos:      sets.NewString("org/repo"),
+					TeamNames:  sets.New[string]("some-team", "other-team"),
+					Repos:      sets.New[string]("org/repo"),
 				},
 				"user2": {
 					KerberosId: "user2",
 					GithubId:   "user-2",
 					SlackId:    "U222222",
-					TeamNames:  sets.NewString("some-team", "other-team"),
-					Repos:      sets.NewString("org/repo"),
+					TeamNames:  sets.New[string]("some-team", "other-team"),
+					Repos:      sets.New[string]("org/repo"),
 				},
 				"user3": {
 					KerberosId: "user3",
 					GithubId:   "user-3",
 					SlackId:    "U333333",
-					TeamNames:  sets.NewString("some-team"),
-					Repos:      sets.NewString("other-org/repo"),
+					TeamNames:  sets.New[string]("some-team"),
+					Repos:      sets.New[string]("other-org/repo"),
 				},
 			},
 		},
@@ -398,8 +398,8 @@ func Test_config_CreateUsers(t *testing.T) {
 					KerberosId: "user1",
 					GithubId:   "user-1",
 					SlackId:    "U1000000",
-					TeamNames:  sets.NewString("some-team", "other-team", "additional-team"),
-					Repos:      sets.NewString("org/repo", "other-org/repo"),
+					TeamNames:  sets.New[string]("some-team", "other-team", "additional-team"),
+					Repos:      sets.New[string]("org/repo", "other-org/repo"),
 				},
 			},
 		},
@@ -417,7 +417,7 @@ func Test_config_CreateUsers(t *testing.T) {
 					KerberosId: "user1",
 					GithubId:   "user-1",
 					SlackId:    "U1000000",
-					TeamNames:  sets.NewString("some-team"),
+					TeamNames:  sets.New[string]("some-team"),
 				},
 			},
 			expectedErr: errors.New("[could not get slack id for: user4: no userId found for email: user4@redhat.com, no githubId found for: user4]"),
@@ -436,7 +436,7 @@ func Test_config_CreateUsers(t *testing.T) {
 					KerberosId: "user1",
 					GithubId:   "user-1",
 					SlackId:    "U1000000",
-					TeamNames:  sets.NewString("some-team"),
+					TeamNames:  sets.New[string]("some-team"),
 				},
 			},
 			expectedErr: errors.New("no githubId found for: user2"),
@@ -455,7 +455,7 @@ func Test_config_CreateUsers(t *testing.T) {
 					KerberosId: "user1",
 					GithubId:   "user-1",
 					SlackId:    "U1000000",
-					TeamNames:  sets.NewString("some-team"),
+					TeamNames:  sets.New[string]("some-team"),
 				},
 			},
 			expectedErr: errors.New("[could not get slack id for: user4: no userId found for email: user4@redhat.com, no githubId found for: user2]"),
@@ -555,7 +555,7 @@ func Test_filterLabels(t *testing.T) {
 	acceptedLabel := github.Label{Name: "accepted"}
 	unwantedLabel := github.Label{Name: "not interesting label"}
 
-	interestingLabels := sets.String{}
+	interestingLabels := sets.Set[string]{}
 	interestingLabels.Insert(holdLabel.Name, acceptedLabel.Name)
 
 	testCases := []struct {

@@ -740,8 +740,8 @@ func ensureGroupMembership(client *slack.Client, userIdsByRole map[string]user) 
 			return fmt.Errorf("could not find user group %s", handle)
 		}
 
-		if expected, actual := sets.NewString(userIdsByRole[role].slackId), sets.NewString(group.Users...); !expected.Equal(actual) {
-			if _, err := client.UpdateUserGroupMembers(group.ID, strings.Join(expected.List(), ",")); err != nil {
+		if expected, actual := sets.New[string](userIdsByRole[role].slackId), sets.New[string](group.Users...); !expected.Equal(actual) {
+			if _, err := client.UpdateUserGroupMembers(group.ID, strings.Join(sets.List(expected), ",")); err != nil {
 				return fmt.Errorf("failed to update group %s: %w", handle, err)
 			}
 		}

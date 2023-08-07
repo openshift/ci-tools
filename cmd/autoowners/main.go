@@ -124,7 +124,7 @@ func loadRepos(configRootDir string, blocked blocklist, configSubDirs, extraDirs
 
 	var result []orgRepo
 	for _, orgRepo := range orgRepos {
-		orgRepo.Directories = sets.NewString(orgRepo.Directories...).List()
+		orgRepo.Directories = sets.List(sets.New[string](orgRepo.Directories...))
 		result = append(result, *orgRepo)
 	}
 	return result, nil
@@ -163,7 +163,7 @@ func (r httpResult) resolveOwnerAliases(cleaner ownersCleaner) interface{} {
 				Approvers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.Approvers)))),
 				Reviewers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.Reviewers)))),
 				RequiredReviewers: cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.RequiredReviewers)))),
-				Labels:            sets.NewString(v.Labels...).List(),
+				Labels:            sets.List(sets.New[string](v.Labels...)),
 			}
 			if len(cfg.Reviewers) == 0 {
 				cfg.Reviewers = cfg.Approvers
@@ -530,7 +530,7 @@ func ownersCleanerFactory(githubOrg string, ghc githubOrgMemberLister) (ownersCl
 		return nil, fmt.Errorf("listOrgMembers failed: %w", err)
 	}
 
-	membersSet := sets.String{}
+	membersSet := sets.Set[string]{}
 	for _, member := range members {
 		membersSet.Insert(strings.ToLower(member.Login))
 	}

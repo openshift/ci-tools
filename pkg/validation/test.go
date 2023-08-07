@@ -64,27 +64,27 @@ type context struct {
 	// env is used to validate that all step parameters are set.
 	env api.TestEnvironment
 	// namesSeen is used to validate that step names are unique.
-	namesSeen sets.String
+	namesSeen sets.Set[string]
 	// leasesSeen is used to validate that lease variable names are unique.
-	leasesSeen sets.String
+	leasesSeen sets.Set[string]
 	// inputImagesSeen is used to accumulate input images across tests.
 	inputImagesSeen testInputImages
 	// releases is used to validate references to release images .
-	releases sets.String
+	releases sets.Set[string]
 }
 
 // newContext creates a top-level context.
 func newContext(
 	field fieldPath,
 	env api.TestEnvironment,
-	releases sets.String,
+	releases sets.Set[string],
 	inputImagesSeen testInputImages,
 ) *context {
 	return &context{
 		field:           field,
 		env:             env,
-		namesSeen:       sets.NewString(),
-		leasesSeen:      sets.NewString(),
+		namesSeen:       sets.New[string](),
+		leasesSeen:      sets.New[string](),
 		inputImagesSeen: inputImagesSeen,
 		releases:        releases,
 	}
@@ -119,7 +119,7 @@ func (v *Validator) validateTestStepConfiguration(
 	fieldRoot string,
 	input []api.TestStepConfiguration,
 	release *api.ReleaseTagConfiguration,
-	releases, images sets.String,
+	releases, images sets.Set[string],
 	resolved bool,
 ) []error {
 	var validationErrors []error
@@ -222,7 +222,7 @@ func (v *Validator) validateTestStepConfiguration(
 			validationErrors = append(validationErrors, fmt.Errorf("%s: secret/secrets can be only used with container-based tests (use credentials in multi-stage tests)", fieldRootN))
 		}
 
-		seen := sets.NewString()
+		seen := sets.New[string]()
 		for _, secret := range test.Secrets {
 			// K8s object names must be valid DNS 1123 subdomains.
 			if len(validation.IsDNS1123Subdomain(secret.Name)) != 0 {
@@ -451,7 +451,7 @@ func (v *Validator) validateTestConfigurationType(
 	fieldRoot string,
 	test api.TestStepConfiguration,
 	release *api.ReleaseTagConfiguration,
-	releases sets.String,
+	releases sets.Set[string],
 	inputImagesSeen testInputImages,
 	resolved bool,
 ) []error {
@@ -798,7 +798,7 @@ func validateParameters(context *context, params []api.StepParameter) error {
 
 func validateDependencies(fieldRoot string, dependencies []api.StepDependency) []error {
 	var errs []error
-	env := sets.NewString()
+	env := sets.New[string]()
 	for i, dependency := range dependencies {
 		if dependency.Name == "" {
 			errs = append(errs, fmt.Errorf("%s.dependencies[%d].name must be set", fieldRoot, i))

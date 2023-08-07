@@ -83,7 +83,7 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 		disruptionCheckFn := testCaseNamePatternToDisruptionCheckFn[testCaseNamePattern]
 
 		allBackends := getAllDisruptionBackendNames(jobRunIDToBackendNameToAvailabilityResult)
-		for _, backendName := range allBackends.List() {
+		for _, backendName := range sets.List(allBackends) {
 			if isExcludedDisruptionBackend(backendName) {
 				continue
 			}
@@ -218,8 +218,8 @@ func getDisruptionForBackend(jobRunIDToBackendNameToAvailabilityResult map[strin
 	return jobRunIDToAvailabilityResultForBackend
 }
 
-func getAllDisruptionBackendNames(jobRunIDToBackendNameToAvailabilityResult map[string]map[string]jobrunaggregatorlib.AvailabilityResult) sets.String {
-	ret := sets.String{}
+func getAllDisruptionBackendNames(jobRunIDToBackendNameToAvailabilityResult map[string]map[string]jobrunaggregatorlib.AvailabilityResult) sets.Set[string] {
+	ret := sets.Set[string]{}
 	ret.Insert(jobrunaggregatorlib.RequiredDisruptionTests().List()...)
 	for _, curr := range jobRunIDToBackendNameToAvailabilityResult {
 		ret.Insert(sets.StringKeySet(curr).List()...)

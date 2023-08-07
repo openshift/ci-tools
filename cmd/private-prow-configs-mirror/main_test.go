@@ -16,8 +16,8 @@ import (
 )
 
 var orgRepos = orgReposWithOfficialImages{
-	"openshift": sets.NewString("testRepo1", "testRepo2"),
-	"testshift": sets.NewString("testRepo3", "testRepo4"),
+	"openshift": sets.New[string]("testRepo1", "testRepo2"),
+	"testshift": sets.New[string]("testRepo3", "testRepo4"),
 }
 
 func pBool(b bool) *bool {
@@ -667,7 +667,7 @@ func TestGetCommonPlugins(t *testing.T) {
 		"openshift/arepo11": {"approve", "label", "hold", "lgtm", "milestone"},
 		"openshift/arepo12": {"approve", "label", "hold", "lgtm", "milestone"},
 	}
-	expected := sets.String{"approve": sets.Empty{}, "hold": sets.Empty{}, "label": sets.Empty{}}
+	expected := sets.Set[string]{"approve": sets.Empty{}, "hold": sets.Empty{}, "label": sets.Empty{}}
 
 	commonValues := getCommonPlugins(plugins)
 	if !reflect.DeepEqual(commonValues, expected) {

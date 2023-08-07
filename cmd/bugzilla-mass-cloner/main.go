@@ -86,7 +86,7 @@ func hasCloneForTargetRelease(client bugzillaClient, bug *bugzilla.Bug, toReleas
 	}
 
 	for _, clonedBug := range clonedBugs {
-		targetRelease := sets.NewString(clonedBug.TargetRelease...)
+		targetRelease := sets.New[string](clonedBug.TargetRelease...)
 		if targetRelease.Has(toRelease) {
 			return true, nil
 		}

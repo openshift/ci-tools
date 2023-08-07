@@ -103,12 +103,12 @@ func defaultJobConfig(jc *prowconfig.JobConfig, path string, config *dispatcher.
 			// Enforce that even hand-crafted jobs have explicit branch regexes
 			// Presubmits are generally expected to hit also on "feature branches",
 			// so we generate regexes for both exact match and feature branch patterns
-			featureBranches := sets.NewString()
+			featureBranches := sets.New[string]()
 			for _, branch := range jc.PresubmitsStatic[k][idx].Branches {
 				featureBranches.Insert(jobconfig.FeatureBranch(branch))
 				featureBranches.Insert(jobconfig.ExactlyBranch(branch))
 			}
-			jc.PresubmitsStatic[k][idx].Branches = featureBranches.List()
+			jc.PresubmitsStatic[k][idx].Branches = sets.List(featureBranches)
 		}
 	}
 	for k := range jc.PostsubmitsStatic {

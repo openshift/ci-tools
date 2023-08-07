@@ -26,7 +26,7 @@ type JobRunHistoricalDataAnalyzerFlags struct {
 	PreviousRelease string
 }
 
-var supportedDataTypes = sets.NewString("alerts", "disruptions")
+var supportedDataTypes = sets.New[string]("alerts", "disruptions")
 
 func NewJobRunHistoricalDataAnalyzerFlags() *JobRunHistoricalDataAnalyzerFlags {
 	return &JobRunHistoricalDataAnalyzerFlags{
@@ -39,7 +39,7 @@ func (f *JobRunHistoricalDataAnalyzerFlags) BindFlags(fs *pflag.FlagSet) {
 	f.DataCoordinates.BindFlags(fs)
 	f.Authentication.BindFlags(fs)
 
-	fs.StringVar(&f.DataType, "data-type", f.DataType, fmt.Sprintf("data type we are fetching %s", supportedDataTypes.List()))
+	fs.StringVar(&f.DataType, "data-type", f.DataType, fmt.Sprintf("data type we are fetching %s", sets.List(supportedDataTypes)))
 	fs.StringVar(&f.NewFile, "new", f.NewFile, "local file with the new query results to compare against")
 	fs.StringVar(&f.CurrentFile, "current", f.CurrentFile, "local file with the current query results")
 	fs.StringVar(&f.OutputFile, "output-file", f.OutputFile, "output file for the resulting comparison results")
@@ -57,7 +57,7 @@ func (f *JobRunHistoricalDataAnalyzerFlags) Validate() error {
 	}
 
 	if !supportedDataTypes.Has(f.DataType) {
-		return fmt.Errorf("must provide supported datatype %v", supportedDataTypes.List())
+		return fmt.Errorf("must provide supported datatype %v", sets.List(supportedDataTypes))
 	}
 
 	if f.CurrentFile == "" {

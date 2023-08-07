@@ -27,8 +27,8 @@ type yamlGroupCollector struct {
 
 const yamlSeparator = "\n---"
 
-func (c *yamlGroupCollector) collect(dir string) (sets.String, error) {
-	groups := sets.NewString()
+func (c *yamlGroupCollector) collect(dir string) (sets.Set[string], error) {
+	groups := sets.New[string]()
 	abs, err := filepath.Abs(dir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to determine absolute path for dir %s: %w", dir, err)
@@ -83,8 +83,8 @@ func isTemplateProcessErr(err error) bool {
 	return ok
 }
 
-func (c *yamlGroupCollector) collectGroups(doc []byte, path string, isTemplateObject bool) (sets.String, error) {
-	groups := sets.NewString()
+func (c *yamlGroupCollector) collectGroups(doc []byte, path string, isTemplateObject bool) (sets.Set[string], error) {
+	groups := sets.New[string]()
 	obj, _, err := c.decoder.Decode(doc, nil, nil)
 	if err != nil {
 		if runtime.IsNotRegisteredError(err) && (!c.validateSubjects ||
@@ -108,7 +108,7 @@ func (c *yamlGroupCollector) collectGroups(doc []byte, path string, isTemplateOb
 			return nil, err
 		}
 		if collected.Len() > 0 {
-			logrus.WithField("collected", collected.List()).WithField("path", path).Debug("Collected groups")
+			logrus.WithField("collected", sets.List(collected)).WithField("path", path).Debug("Collected groups")
 		}
 		groups = groups.Union(collected)
 	case *rbacv1.ClusterRoleBinding:
@@ -153,8 +153,8 @@ func (c *yamlGroupCollector) collectGroups(doc []byte, path string, isTemplateOb
 	return groups, nil
 }
 
-func processSubjects(subjects []rbacv1.Subject, name, t string, validateSubjects bool) (sets.String, error) {
-	groups := sets.NewString()
+func processSubjects(subjects []rbacv1.Subject, name, t string, validateSubjects bool) (sets.Set[string], error) {
+	groups := sets.New[string]()
 	for _, s := range subjects {
 		if validateSubjects && s.Kind == "User" {
 			return nil, fmt.Errorf("cannot use User as subject in %s: %s", t, name)

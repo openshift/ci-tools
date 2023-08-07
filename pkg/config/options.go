@@ -26,7 +26,7 @@ type Options struct {
 	LogLevel string
 
 	onlyProcessChanges bool
-	modifiedFiles      sets.String
+	modifiedFiles      sets.Set[string]
 }
 
 func (o *Options) Validate() error {
@@ -73,7 +73,7 @@ func (o *Options) Complete() error {
 	// M       path/of/modified/file.yaml
 	// D       path/of/deleted/file.yaml
 	// R100    path/of/renamed/old-name.yaml   path/of/renamed/new-name.yaml
-	o.modifiedFiles = sets.NewString()
+	o.modifiedFiles = sets.New[string]()
 	for _, f := range changedFilesWithStatus {
 		statusAndFile := strings.Fields(f)
 		if len(statusAndFile) > 1 && statusAndFile[0] == "M" {

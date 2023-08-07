@@ -9,7 +9,7 @@ import (
 )
 
 func TestForDuplicates(t *testing.T) {
-	seen := sets.NewString()
+	seen := sets.New[string]()
 	for _, curr := range jobsToAnalyze {
 		if seen.Has(curr.JobName) {
 			t.Error(curr.JobName)

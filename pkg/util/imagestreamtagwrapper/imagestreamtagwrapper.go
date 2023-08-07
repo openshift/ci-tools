@@ -317,7 +317,7 @@ func internalImageWithMetadata(image *imagev1.Image) error {
 		return fmt.Errorf("unrecognized container image manifest schema %d for %q (%s)", manifest.SchemaVersion, image.Name, image.DockerImageReference)
 	}
 
-	layerSet := sets.NewString()
+	layerSet := sets.New[string]()
 	if manifest.SchemaVersion == 2 {
 		layerSet.Insert(manifest.Config.Digest)
 		imageDockerImageMetadata.Size = int64(len(image.DockerImageConfig))

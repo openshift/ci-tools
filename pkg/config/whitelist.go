@@ -20,7 +20,7 @@ type WhitelistConfig struct {
 
 func (w *WhitelistConfig) IsWhitelisted(info *Info) bool {
 	if whiteRepos, ok := w.Whitelist[info.Org]; ok {
-		if sets.NewString(whiteRepos...).Has(info.Repo) {
+		if sets.New[string](whiteRepos...).Has(info.Repo) {
 			return true
 		}
 	}

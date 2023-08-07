@@ -255,7 +255,7 @@ func updateClusterBuildFarmDir(o options, hostedClusters []string) error {
 		"common_except_app.ci",
 	}
 
-	hostedClustersSet := sets.NewString(hostedClusters...)
+	hostedClustersSet := sets.New[string](hostedClusters...)
 	if !hostedClustersSet.Has(o.clusterName) {
 		config_dirs = append(config_dirs, "common_except_hosted")
 	}

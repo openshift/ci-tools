@@ -428,7 +428,7 @@ func run(o options) error {
 	// key: old jobname, value: new (generated jobname)
 	replacedJobs := make(map[string]string)
 	// list of test names for detected release jobs with no configuration
-	configlessTests := sets.NewString()
+	configlessTests := sets.New[string]()
 	for _, jobConfig := range jobs {
 		for _, periodic := range jobConfig.Periodics {
 			info, isReleaseJob := getJobInfo(periodic.Name)
@@ -658,7 +658,7 @@ func run(o options) error {
 	}
 
 	if len(configlessTests) > 0 {
-		fmt.Printf("\nThe following tests do not have entries in the generator config:\n%v\n", configlessTests.List())
+		fmt.Printf("\nThe following tests do not have entries in the generator config:\n%v\n", sets.List(configlessTests))
 	}
 
 	// keep this message at the end to make sure it is seen by whoever is running the command

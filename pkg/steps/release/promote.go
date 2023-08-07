@@ -35,7 +35,7 @@ import (
 type promotionStep struct {
 	name           string
 	configuration  *api.ReleaseBuildConfiguration
-	requiredImages sets.String
+	requiredImages sets.Set[string]
 	jobSpec        *api.JobSpec
 	client         kubernetes.PodClient
 	pushSecret     *coreapi.Secret
@@ -81,7 +81,7 @@ func (s *promotionStep) run(ctx context.Context) error {
 	}
 
 	targetName := s.targetNameFunc(s.registry, *s.configuration.PromotionConfiguration)
-	logger.Infof("Promoting tags to %s: %s", targetName, strings.Join(names.List(), ", "))
+	logger.Infof("Promoting tags to %s: %s", targetName, strings.Join(sets.List(names), ", "))
 	pipeline := &imagev1.ImageStream{}
 	if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{
 		Namespace: s.jobSpec.Namespace(),
@@ -263,9 +263,9 @@ func findDockerImageReference(is *imagev1.ImageStream, tag string) string {
 }
 
 // toPromote determines the mapping of local tag to external tag which should be promoted
-func toPromote(config api.PromotionConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.String) (map[string]string, sets.String) {
+func toPromote(config api.PromotionConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.Set[string]) (map[string]string, sets.Set[string]) {
 	tagsByDst := map[string]string{}
-	names := sets.NewString()
+	names := sets.New[string]()
 
 	if config.Disabled {
 		return tagsByDst, names
@@ -305,14 +305,14 @@ func PromotedTags(configuration *api.ReleaseBuildConfiguration) []api.ImageStrea
 }
 
 type PromotedTagsOptions struct {
-	requiredImages sets.String
+	requiredImages sets.Set[string]
 	commitSha      string
 }
 
 type PromotedTagsOption func(options *PromotedTagsOptions)
 
 // WithRequiredImages ensures that the images are promoted, even if they would otherwise be skipped.
-func WithRequiredImages(images sets.String) PromotedTagsOption {
+func WithRequiredImages(images sets.Set[string]) PromotedTagsOption {
 	return func(options *PromotedTagsOptions) {
 		options.requiredImages = images
 	}
@@ -328,9 +328,9 @@ func WithCommitSha(commitSha string) PromotedTagsOption {
 // PromotedTagsWithRequiredImages returns the tags that are being promoted for the given ReleaseBuildConfiguration
 // accounting for the list of required images. Promoted tags are mapped by the source tag in the pipeline ImageStream
 // we will promote to the output.
-func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration, options ...PromotedTagsOption) (map[string][]api.ImageStreamTagReference, sets.String) {
+func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration, options ...PromotedTagsOption) (map[string][]api.ImageStreamTagReference, sets.Set[string]) {
 	opts := &PromotedTagsOptions{
-		requiredImages: sets.NewString(),
+		requiredImages: sets.New[string](),
 	}
 	for _, opt := range options {
 		opt(opts)
@@ -404,7 +404,7 @@ func (s *promotionStep) Objects() []ctrlruntimeclient.Object {
 func PromotionStep(
 	name string,
 	configuration *api.ReleaseBuildConfiguration,
-	requiredImages sets.String,
+	requiredImages sets.Set[string],
 	jobSpec *api.JobSpec,
 	client kubernetes.PodClient,
 	pushSecret *coreapi.Secret,

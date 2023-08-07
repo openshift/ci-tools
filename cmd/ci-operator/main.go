@@ -1354,8 +1354,8 @@ func (o *options) initializeNamespace() error {
 
 func generateAuthorAccessRoleBinding(namespace string, authors []string) *rbacapi.RoleBinding {
 	var subjects []rbacapi.Subject
-	authorSet := sets.NewString(authors...)
-	for _, author := range authorSet.List() {
+	authorSet := sets.New[string](authors...)
+	for _, author := range sets.List(authorSet) {
 		subjects = append(subjects, rbacapi.Subject{Kind: "Group", Name: api.GitHubUserGroup(author)})
 	}
 	return &rbacapi.RoleBinding{
@@ -2111,7 +2111,7 @@ func (o *options) loadConfig(info *api.Metadata) (*api.ReleaseBuildConfiguration
 }
 
 func resolveNodeArchitectures(ctx context.Context, client coreclientset.NodeInterface) ([]string, error) {
-	ret := sets.NewString()
+	ret := sets.New[string]()
 	nodeList, err := client.List(ctx, meta.ListOptions{})
 
 	if err != nil {
@@ -2121,7 +2121,7 @@ func resolveNodeArchitectures(ctx context.Context, client coreclientset.NodeInte
 	for _, node := range nodeList.Items {
 		ret.Insert(node.Status.NodeInfo.Architecture)
 	}
-	return ret.List(), nil
+	return sets.List(ret), nil
 }
 
 func monitorNamespace(ctx context.Context, cancel func(), namespace string, client coreclientset.NamespaceInterface) {

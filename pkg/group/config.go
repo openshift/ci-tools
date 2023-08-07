@@ -32,8 +32,8 @@ type Target struct {
 	ClusterGroups []string `json:"cluster_groups,omitempty"`
 }
 
-func (t Target) ResolveClusters(cg map[string][]string) sets.String {
-	ret := sets.NewString(t.Clusters...)
+func (t Target) ResolveClusters(cg map[string][]string) sets.Set[string] {
+	ret := sets.New[string](t.Clusters...)
 	for _, clusterGroup := range t.ClusterGroups {
 		ret.Insert(cg[clusterGroup]...)
 	}

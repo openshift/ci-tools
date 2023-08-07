@@ -92,11 +92,11 @@ func TestAppend(t *testing.T) {
 
 func TestMergeJobConfig(t *testing.T) {
 	tests := []struct {
-		allJobs                       sets.String
+		allJobs                       sets.Set[string]
 		destination, source, expected *prowconfig.JobConfig
 	}{
 		{
-			allJobs:     sets.String{},
+			allJobs:     sets.Set[string]{},
 			destination: &prowconfig.JobConfig{},
 			source: &prowconfig.JobConfig{
 				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {
@@ -109,7 +109,7 @@ func TestMergeJobConfig(t *testing.T) {
 				}},
 			},
 		}, {
-			allJobs: sets.String{},
+			allJobs: sets.Set[string]{},
 			destination: &prowconfig.JobConfig{
 				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {
 					{JobBase: prowconfig.JobBase{Name: "another-job"}, Reporter: prowconfig.Reporter{Context: "ci/prow/another"}},
@@ -127,7 +127,7 @@ func TestMergeJobConfig(t *testing.T) {
 				}},
 			},
 		}, {
-			allJobs: sets.String{},
+			allJobs: sets.Set[string]{},
 			destination: &prowconfig.JobConfig{
 				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {
 					{JobBase: prowconfig.JobBase{Name: "same-job"}, Reporter: prowconfig.Reporter{Context: "ci/prow/same"}},
@@ -144,7 +144,7 @@ func TestMergeJobConfig(t *testing.T) {
 				}},
 			},
 		}, {
-			allJobs:     sets.String{},
+			allJobs:     sets.Set[string]{},
 			destination: &prowconfig.JobConfig{},
 			source: &prowconfig.JobConfig{
 				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{"organization/repository": {
@@ -157,7 +157,7 @@ func TestMergeJobConfig(t *testing.T) {
 				}},
 			},
 		}, {
-			allJobs: sets.String{},
+			allJobs: sets.Set[string]{},
 			destination: &prowconfig.JobConfig{
 				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{"organization/repository": {
 					{JobBase: prowconfig.JobBase{Name: "another-job", Agent: "ci/prow/another"}},
@@ -175,7 +175,7 @@ func TestMergeJobConfig(t *testing.T) {
 				}},
 			},
 		}, {
-			allJobs: sets.String{},
+			allJobs: sets.Set[string]{},
 			destination: &prowconfig.JobConfig{
 				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{"organization/repository": {
 					{JobBase: prowconfig.JobBase{Name: "same-job", Agent: "ci/prow/same"}},
@@ -192,7 +192,7 @@ func TestMergeJobConfig(t *testing.T) {
 				}},
 			},
 		}, {
-			allJobs: sets.String{},
+			allJobs: sets.Set[string]{},
 			destination: &prowconfig.JobConfig{
 				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{"organization/repository": {
 					{JobBase: prowconfig.JobBase{Name: "same-job", Agent: "ci/prow/same"}},
@@ -209,7 +209,7 @@ func TestMergeJobConfig(t *testing.T) {
 				}},
 			},
 		}, {
-			allJobs: sets.NewString("other-job"),
+			allJobs: sets.New[string]("other-job"),
 			destination: &prowconfig.JobConfig{
 				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{"organization/repository": {
 					{JobBase: prowconfig.JobBase{Name: "same-job", Agent: "ci/prow/same"}},

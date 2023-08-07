@@ -62,7 +62,7 @@ type CIDataClient interface {
 	HistoricalDataClient
 
 	// these deal with release tags
-	ListReleaseTags(ctx context.Context) (sets.String, error)
+	ListReleaseTags(ctx context.Context) (sets.Set[string], error)
 
 	// GetLastJobRunEndTimeFromTable returns the last uploaded job runs EndTime in the given table.
 	GetLastJobRunEndTimeFromTable(ctx context.Context, table string) (*time.Time, error)
@@ -820,8 +820,8 @@ ORDER BY UnifiedTestRuns.JobRunStartTime ASC
 	return &UnifiedTestRunRowIterator{delegatedIterator: it}, nil
 }
 
-func (c *ciDataClient) ListReleaseTags(ctx context.Context) (sets.String, error) {
-	set := sets.String{}
+func (c *ciDataClient) ListReleaseTags(ctx context.Context) (sets.Set[string], error) {
+	set := sets.Set[string]{}
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(`SELECT distinct(ReleaseTag) FROM DATA_SET_LOCATION.ReleaseTags`)
 	query := c.client.Query(queryString)
 	it, err := query.Read(ctx)

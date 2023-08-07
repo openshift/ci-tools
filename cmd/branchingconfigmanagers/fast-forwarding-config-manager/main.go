@@ -104,7 +104,7 @@ func main() {
 
 func reconcile(lifecycleConfig ocplifecycle.Config, now time.Time, job *prowconfig.Periodic) error {
 	timelineOpts := ocplifecycle.TimelineOptions{
-		OnlyEvents: sets.NewString([]string{
+		OnlyEvents: sets.New[string]([]string{
 			string(ocplifecycle.LifecycleEventOpen),
 			string(ocplifecycle.LifecycleEventFeatureFreeze),
 		}...),

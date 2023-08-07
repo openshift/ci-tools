@@ -86,7 +86,7 @@ func (n *TestCaseNotifier) SubTests(prefix string) []*junit.TestCase {
 	pod := n.lastPod
 	n.lastPod = nil
 
-	names := sets.NewString(strings.Split(pod.Annotations[annotationContainersForSubTestResults], ",")...)
+	names := sets.New[string](strings.Split(pod.Annotations[annotationContainersForSubTestResults], ",")...)
 	names.Delete("")
 	if len(names) == 0 {
 		return nil
@@ -354,10 +354,10 @@ done
 }
 
 type podWaitRecord map[string]struct {
-	containers sets.String
+	containers sets.Set[string]
 	done       chan struct{}
 }
-type podContainersMap map[string]sets.String
+type podContainersMap map[string]sets.Set[string]
 
 // ArtifactWorker tracks pods that have completed and have an 'artifacts' container
 // in them and will extract files from the container to a local directory. It also
@@ -376,7 +376,7 @@ type ArtifactWorker struct {
 	lock         sync.Mutex
 	remaining    podWaitRecord
 	required     podContainersMap
-	hasArtifacts sets.String
+	hasArtifacts sets.Set[string]
 }
 
 func NewArtifactWorker(podClient kubernetes.PodClient, artifactDir, namespace string) *ArtifactWorker {
@@ -388,7 +388,7 @@ func NewArtifactWorker(podClient kubernetes.PodClient, artifactDir, namespace st
 
 		remaining:    make(podWaitRecord),
 		required:     make(podContainersMap),
-		hasArtifacts: sets.NewString(),
+		hasArtifacts: sets.New[string](),
 
 		podsToDownload: make(chan string, 4),
 	}
@@ -463,14 +463,14 @@ func (w *ArtifactWorker) CollectFromPod(podName string, hasArtifacts []string, w
 
 	m, ok := w.remaining[podName]
 	if !ok {
-		m.containers = sets.NewString()
+		m.containers = sets.New[string]()
 		m.done = make(chan struct{})
 		w.remaining[podName] = m
 	}
 
 	r := w.required[podName]
 	if r == nil {
-		r = sets.NewString()
+		r = sets.New[string]()
 		w.required[podName] = r
 	}
 

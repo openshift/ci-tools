@@ -220,10 +220,10 @@ func (mr *MockCIDataClientMockRecorder) ListProwJobRunsSince(arg0, arg1 interfac
 }
 
 // ListReleaseTags mocks base method.
-func (m *MockCIDataClient) ListReleaseTags(arg0 context.Context) (sets.String, error) {
+func (m *MockCIDataClient) ListReleaseTags(arg0 context.Context) (sets.Set[string], error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListReleaseTags", arg0)
-	ret0, _ := ret[0].(sets.String)
+	ret0, _ := ret[0].(sets.Set[string])
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

@@ -30,12 +30,12 @@ func LoadConfig(path string) (Config, error) {
 }
 
 type TimelineOptions struct {
-	OnlyEvents sets.String
+	OnlyEvents sets.Set[string]
 }
 
 func mergeOptions(opts []TimelineOptions) TimelineOptions {
 	ret := TimelineOptions{}
-	onlyEvents := sets.NewString()
+	onlyEvents := sets.New[string]()
 
 	for _, opt := range opts {
 		onlyEvents = onlyEvents.Union(opt.OnlyEvents)
@@ -178,7 +178,7 @@ const (
 )
 
 func (le LifecycleEvent) Validate() error {
-	events := sets.NewString([]string{
+	events := sets.New[string]([]string{
 		string(LifecycleEventOpen),
 		string(LifecycleEventFeatureFreeze),
 		string(LifecycleEventCodeFreeze),

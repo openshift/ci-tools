@@ -123,7 +123,7 @@ func determineRepos(o options, logger *logrus.Entry) []string {
 
 func checkRepos(repos []string, bots []string, ignore sets.Set[string], client automationClient, logger *logrus.Entry) ([]string, error) {
 	logger.Infof("checking %d repo(s): %s", len(repos), strings.Join(repos, ", "))
-	failing := sets.NewString()
+	failing := sets.New[string]()
 	for _, orgRepo := range repos {
 		split := strings.Split(orgRepo, "/")
 		org, repo := split[0], split[1]
@@ -177,7 +177,7 @@ func checkRepos(repos []string, bots []string, ignore sets.Set[string], client a
 
 	}
 
-	return failing.List(), nil
+	return sets.List(failing), nil
 }
 
 const maxRepos = 10

@@ -258,7 +258,7 @@ Now, let's configure how the repository is compiled...`)
 
 		fmt.Println(`
 Now, let's configure test jobs for the repository...`)
-		names := sets.NewString()
+		names := sets.New[string]()
 		var tests []test
 		for {
 			more := ""
@@ -357,8 +357,8 @@ A test named %s already exists. Please choose a different name.\n`, test.As)
 
 		config.CustomE2E = e2eTests
 		if len(config.CustomE2E) > 0 && !config.Promotes {
-			valid := sets.NewString("nightly", "published")
-			validFormatted := strings.Join(valid.List(), ", ")
+			valid := sets.New[string]("nightly", "published")
+			validFormatted := strings.Join(sets.List(valid), ", ")
 			releaseType := fetchWithPrompt(fmt.Sprintf("What type of OpenShift release do the end-to-end tests run on top of? [%s]", validFormatted))
 			for {
 				if !valid.Has(releaseType) {

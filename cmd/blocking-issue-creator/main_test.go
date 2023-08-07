@@ -31,14 +31,14 @@ func (f fakeGithubClient) FindIssues(query, sortVerb string, asc bool) ([]github
 func TestManageIssues(t *testing.T) {
 	testCases := []struct {
 		id             string
-		branches       sets.String
+		branches       sets.Set[string]
 		issues         map[int]*github.Issue
 		repoInfo       *config.Info
 		expectedIssues []github.Issue
 	}{
 		{
 			id:       "all up to date case",
-			branches: sets.NewString([]string{"release-4.9"}...),
+			branches: sets.New[string]([]string{"release-4.9"}...),
 			repoInfo: &config.Info{
 				Metadata: cioperatorapi.Metadata{
 					Org:    "testOrg",
@@ -65,7 +65,7 @@ func TestManageIssues(t *testing.T) {
 		},
 		{
 			id:       "create case",
-			branches: sets.NewString([]string{"release-4.9"}...),
+			branches: sets.New[string]([]string{"release-4.9"}...),
 			repoInfo: &config.Info{
 				Metadata: cioperatorapi.Metadata{
 					Org:    "testOrg",
@@ -85,7 +85,7 @@ func TestManageIssues(t *testing.T) {
 		},
 		{
 			id:       "update case",
-			branches: sets.NewString([]string{"release-4.9"}...),
+			branches: sets.New[string]([]string{"release-4.9"}...),
 			repoInfo: &config.Info{Metadata: cioperatorapi.Metadata{
 				Org:    "testOrg",
 				Repo:   "testRepo",
@@ -111,7 +111,7 @@ func TestManageIssues(t *testing.T) {
 		},
 		{
 			id:       "close multiple case",
-			branches: sets.NewString([]string{"release-4.9"}...),
+			branches: sets.New[string]([]string{"release-4.9"}...),
 			repoInfo: &config.Info{Metadata: cioperatorapi.Metadata{
 				Org:    "testOrg",
 				Repo:   "testRepo",
@@ -171,7 +171,7 @@ func TestManageIssues(t *testing.T) {
 		},
 		{
 			id:       "close abandoned cases, branch list empty",
-			branches: sets.NewString(),
+			branches: sets.New[string](),
 			repoInfo: &config.Info{Metadata: cioperatorapi.Metadata{
 				Org:    "testOrg",
 				Repo:   "testRepo",

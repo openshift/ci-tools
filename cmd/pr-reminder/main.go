@@ -73,8 +73,8 @@ type config struct {
 }
 
 // getInterestedLabels returns a set of those labels we are interested in when using the PR reminder
-func getInterestedLabels() sets.String {
-	var prLabels = sets.String{}
+func getInterestedLabels() sets.Set[string] {
+	var prLabels = sets.Set[string]{}
 	prLabels.Insert("approved")
 	prLabels.Insert("lgtm")
 	prLabels.Insert("do-not-merge/hold")
@@ -82,8 +82,8 @@ func getInterestedLabels() sets.String {
 }
 
 // getUnactionablePrLabels returns a set of those labels that mark a PR which can't be reviewed in its current state
-func getUnactionablePrLabels() sets.String {
-	var prLabels = sets.String{}
+func getUnactionablePrLabels() sets.Set[string] {
+	var prLabels = sets.Set[string]{}
 	prLabels.Insert(labels.WorkInProgress, labels.NeedsRebase)
 	return prLabels
 }
@@ -133,9 +133,9 @@ func (c *config) createUsers(gtk githubToKerberos, slackClient slackClient) (map
 				}
 				u = user{
 					KerberosId: member,
-					TeamNames:  sets.NewString(team.TeamNames...),
+					TeamNames:  sets.New[string](team.TeamNames...),
 					SlackId:    slackId,
-					Repos:      sets.NewString(team.Repos...),
+					Repos:      sets.New[string](team.Repos...),
 				}
 			}
 			users[member] = u
@@ -176,8 +176,8 @@ type user struct {
 	KerberosId string
 	GithubId   string
 	SlackId    string
-	TeamNames  sets.String
-	Repos      sets.String
+	TeamNames  sets.Set[string]
+	Repos      sets.Set[string]
 	PrRequests []prRequest
 }
 
@@ -185,7 +185,7 @@ func (u *user) requestedToReview(pr github.PullRequest) bool {
 	// only check PRs that the user is not the author of, as they could have requested their own team
 	if u.GithubId != pr.User.Login {
 		for _, team := range pr.RequestedTeams {
-			for _, teamName := range u.TeamNames.List() {
+			for _, teamName := range sets.List(u.TeamNames) {
 				if teamName == team.Slug {
 					return true
 				}
@@ -331,15 +331,15 @@ func main() {
 }
 
 func findPrsForUsers(users map[string]user, ghClient prClient) map[string]user {
-	repos := sets.NewString()
+	repos := sets.New[string]()
 	for _, u := range users {
-		repos.Insert(u.Repos.List()...)
+		repos.Insert(sets.List(u.Repos)...)
 	}
 
 	logrus.Infof("finding PRs for %d users in %d repos", len(users), len(repos))
 
 	repoToPRs := make(map[string][]github.PullRequest, len(repos))
-	for _, orgRepo := range repos.List() {
+	for _, orgRepo := range sets.List(repos) {
 		split := strings.Split(orgRepo, "/")
 		org, repo := split[0], split[1]
 
@@ -351,7 +351,7 @@ func findPrsForUsers(users map[string]user, ghClient prClient) map[string]user {
 	}
 
 	for i, u := range users {
-		for _, repo := range u.Repos.List() {
+		for _, repo := range sets.List(u.Repos) {
 			for _, pr := range repoToPRs[repo] {
 				if !hasUnactionableLabels(pr.Labels) && u.requestedToReview(pr) {
 					u.PrRequests = append(u.PrRequests, prRequest{
@@ -375,7 +375,7 @@ func findPrsForUsers(users map[string]user, ghClient prClient) map[string]user {
 
 // filterLabels filters out those labels from the PR we are not interested in
 // and returns only those that are included in the interestedLabels set
-func filterLabels(labels []github.Label, interestedLabels sets.String) []string {
+func filterLabels(labels []github.Label, interestedLabels sets.Set[string]) []string {
 	var result []string
 	for _, label := range labels {
 		if interestedLabels.Has(label.Name) {

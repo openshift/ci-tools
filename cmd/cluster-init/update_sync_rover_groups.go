@@ -24,7 +24,7 @@ func updateSyncRoverGroups(o options) error {
 	if c.ClusterGroups == nil {
 		return fmt.Errorf("`cluster_groups` is not defined in the sync-rover-groups' configuration")
 	}
-	c.ClusterGroups["build-farm"] = sets.NewString(c.ClusterGroups["build-farm"]...).Insert(o.clusterName).List()
+	c.ClusterGroups["build-farm"] = sets.List(sets.New[string](c.ClusterGroups["build-farm"]...).Insert(o.clusterName))
 	rawYaml, err := yaml.Marshal(c)
 	if err != nil {
 		return err

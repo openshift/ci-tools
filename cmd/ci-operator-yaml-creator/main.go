@@ -237,11 +237,11 @@ func hasOCPBuildDataEntryFilter(ocpBuilDataDir string) (func(*config.Info) bool,
 	if err != nil {
 		return nil, fmt.Errorf("failed to load ocp build data configs: %w", err)
 	}
-	orgRepoSet := sets.String{}
+	orgRepoSet := sets.Set[string]{}
 	for _, entry := range configArray {
 		orgRepoSet.Insert(entry.PublicRepo.String())
 	}
-	logrus.WithField("art-built-repos", orgRepoSet.List()).Info("Constructed the list of art-built repos")
+	logrus.WithField("art-built-repos", sets.List(orgRepoSet)).Info("Constructed the list of art-built repos")
 
 	return func(i *config.Info) bool {
 		return orgRepoSet.Has(i.Org + "/" + i.Repo)

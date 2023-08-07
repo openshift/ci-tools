@@ -143,17 +143,17 @@ func TestError(t *testing.T) {
 	for _, tc := range []struct {
 		name            string
 		runFails        bool
-		failures        sets.String
+		failures        sets.Set[string]
 		expectedReasons []string
 		expected        []string
 	}{{
 		name:            "first acquire fails",
-		failures:        sets.NewString("acquire owner rtype0 free leased random"),
+		failures:        sets.New[string]("acquire owner rtype0 free leased random"),
 		expectedReasons: []string{"utilizing_lease:acquiring_lease"},
 		expected:        []string{"acquire owner rtype0 free leased random"},
 	}, {
 		name:            "second acquire fails",
-		failures:        sets.NewString("acquire owner rtype1 free leased random"),
+		failures:        sets.New[string]("acquire owner rtype1 free leased random"),
 		expectedReasons: []string{"utilizing_lease:acquiring_lease"},
 		expected: []string{
 			"acquire owner rtype0 free leased random",
@@ -162,7 +162,7 @@ func TestError(t *testing.T) {
 		},
 	}, {
 		name:            "first release fails",
-		failures:        sets.NewString("releaseone owner rtype0_0 free"),
+		failures:        sets.New[string]("releaseone owner rtype0_0 free"),
 		expectedReasons: []string{"utilizing_lease:releasing_lease"},
 		expected: []string{
 			"acquire owner rtype0 free leased random",
@@ -172,7 +172,7 @@ func TestError(t *testing.T) {
 		},
 	}, {
 		name:            "second release fails",
-		failures:        sets.NewString("releaseone owner rtype1_1 free"),
+		failures:        sets.New[string]("releaseone owner rtype1_1 free"),
 		expectedReasons: []string{"utilizing_lease:releasing_lease"},
 		expected: []string{
 			"acquire owner rtype0 free leased random",
@@ -193,7 +193,7 @@ func TestError(t *testing.T) {
 	}, {
 		name:     "run and release fail",
 		runFails: true,
-		failures: sets.NewString("releaseone owner rtype1_1 free"),
+		failures: sets.New[string]("releaseone owner rtype1_1 free"),
 		expectedReasons: []string{
 			"utilizing_lease:executing_test",
 			"utilizing_lease:releasing_lease",

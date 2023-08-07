@@ -70,7 +70,7 @@ const (
 )
 
 var (
-	clusterNames = sets.NewString(
+	clusterNames = sets.New[string](
 		string(ClusterAPPCI),
 		string(ClusterARM01),
 		string(ClusterBuild01),

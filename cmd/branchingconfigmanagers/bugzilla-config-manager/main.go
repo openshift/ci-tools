@@ -118,8 +118,8 @@ func extractFromConfig(lifecycleConfig ocplifecycle.Config, now time.Time) (deve
 	var errs []error
 	var developmentVersionFound bool
 
-	allNonEOLVersions := sets.String{}
-	gaVersionsSet := sets.String{}
+	allNonEOLVersions := sets.Set[string]{}
+	gaVersionsSet := sets.Set[string]{}
 	for ocpProduct, productConfig := range lifecycleConfig {
 		if ocpProduct != "ocp" {
 			continue
@@ -166,7 +166,7 @@ func extractFromConfig(lifecycleConfig ocplifecycle.Config, now time.Time) (deve
 		}
 	}
 
-	for _, nonEOLVersion := range allNonEOLVersions.List() {
+	for _, nonEOLVersion := range sets.List(allNonEOLVersions) {
 		parsed, err := ocplifecycle.ParseMajorMinor(nonEOLVersion)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to parse %s as majorMinor: %w", nonEOLVersion, err))

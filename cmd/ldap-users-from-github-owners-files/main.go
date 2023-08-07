@@ -49,7 +49,7 @@ func main() {
 			logrus.WithError(err).Error("encountered error trying to resolve owners")
 		}
 	}
-	serialized, err := json.Marshal(ldapUsers.List())
+	serialized, err := json.Marshal(sets.List(ldapUsers))
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to serialize ldap user list")
 	}
@@ -69,7 +69,7 @@ func saveMapping(path string, mapping map[string]string) error {
 	return nil
 }
 
-func getAllSecretUsers(repoBaseDir, repoSubDir string, mapping map[string]string) (sets.String, []error) {
+func getAllSecretUsers(repoBaseDir, repoSubDir string, mapping map[string]string) (sets.Set[string], []error) {
 	ownersAliasesRaw, err := os.ReadFile(repoBaseDir + "/OWNERS_ALIASES")
 	if err != nil {
 		return nil, []error{fmt.Errorf("failed to read OWNERS_ALIASES: %w", err)}
@@ -78,7 +78,7 @@ func getAllSecretUsers(repoBaseDir, repoSubDir string, mapping map[string]string
 	if err := yaml.Unmarshal(ownersAliasesRaw, &ownersAliases); err != nil {
 		return nil, []error{fmt.Errorf("failed to unmarshal owners aliases: %w", err)}
 	}
-	result := sets.String{}
+	result := sets.Set[string]{}
 	var errs []error
 	l := sync.Mutex{}
 	wg := sync.WaitGroup{}

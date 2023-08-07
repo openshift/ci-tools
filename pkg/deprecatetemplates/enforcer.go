@@ -18,7 +18,7 @@ import (
 // openshift/release is valid (and therefore, if a PR to openshift/release
 // does not diverge it from the valid state)
 type Enforcer struct {
-	existingTemplates sets.String
+	existingTemplates sets.Set[string]
 	allowlist         Allowlist
 }
 
@@ -34,13 +34,13 @@ func NewEnforcer(allowlistPath string, newJobBlockers JiraHints) (*Enforcer, err
 
 	return &Enforcer{
 		allowlist:         allowlist,
-		existingTemplates: sets.NewString(),
+		existingTemplates: sets.New[string](),
 	}, nil
 }
 
 // LoadTemplates detects all existing templates from config updater configuration
 func (e *Enforcer) LoadTemplates(cuCfg prowplugins.ConfigUpdater) {
-	templates := sets.NewString()
+	templates := sets.New[string]()
 	templatePathPrefix := "ci-operator/templates/"
 	for pattern, cmSpec := range cuCfg.Maps {
 		if strings.HasPrefix(pattern, templatePathPrefix) {

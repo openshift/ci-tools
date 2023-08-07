@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 func TestGetLDAPUsers(t *testing.T) {
@@ -18,7 +20,7 @@ func TestGetLDAPUsers(t *testing.T) {
 	if len(errs) > 0 {
 		t.Fatalf("got unexpected errors: %v", errs)
 	}
-	if diff := cmp.Diff(expected, actual.List()); diff != "" {
+	if diff := cmp.Diff(expected, sets.List(actual)); diff != "" {
 		t.Errorf("expected doesn't match actual, diff: %s", diff)
 	}
 }

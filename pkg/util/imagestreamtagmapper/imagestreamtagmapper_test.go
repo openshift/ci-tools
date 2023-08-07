@@ -205,7 +205,7 @@ func TestImageStreamTagMapper(t *testing.T) {
 				t.Fatalf("got type that was not an event but a %T", e)
 			}
 
-			if actual := sets.NewString(tc.expectedRequests...); !actual.Equal(queue.received) {
+			if actual := sets.New[string](tc.expectedRequests...); !actual.Equal(queue.received) {
 				t.Errorf("actual events don't match expected, diff: %v", queue.received.Difference(actual))
 			}
 		})
@@ -215,7 +215,7 @@ func TestImageStreamTagMapper(t *testing.T) {
 type trackingWorkqueue struct {
 	t *testing.T
 	workqueue.RateLimitingInterface
-	received sets.String
+	received sets.Set[string]
 }
 
 func (t *trackingWorkqueue) Add(item interface{}) {
@@ -224,7 +224,7 @@ func (t *trackingWorkqueue) Add(item interface{}) {
 		t.t.Fatalf("workqueue got item that was not reconcile.Request but %T", item)
 	}
 	if t.received == nil {
-		t.received = sets.String{}
+		t.received = sets.Set[string]{}
 	}
 	t.received.Insert(request.String())
 }

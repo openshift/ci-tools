@@ -21,7 +21,7 @@ import (
 	hypershiftnamespacereconciler "github.com/openshift/ci-tools/pkg/controller/hypershift_namespace_reconciler"
 )
 
-var allControllers = sets.NewString(
+var allControllers = sets.New[string](
 	poolspullsecretprovider.ControllerName,
 	hypershiftnamespacereconciler.ControllerName,
 )
@@ -30,7 +30,7 @@ type options struct {
 	leaderElectionNamespace        string
 	leaderElectionSuffix           string
 	enabledControllers             flagutil.Strings
-	enabledControllersSet          sets.String
+	enabledControllersSet          sets.Set[string]
 	dryRun                         bool
 	poolsPullSecretProviderOptions poolsPullSecretProviderOptions
 }
@@ -50,7 +50,7 @@ func newOpts() (*options, error) {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&opts.leaderElectionNamespace, "leader-election-namespace", "ci", "The namespace to use for leaderelection")
 	fs.StringVar(&opts.leaderElectionSuffix, "leader-election-suffix", "", "Suffix for the leader election lock. Useful for local testing. If set, --dry-run must be set as well")
-	fs.Var(&opts.enabledControllers, "enable-controller", fmt.Sprintf("Enabled controllers. Available controllers are: %v. Can be specified multiple times. Defaults to %v", allControllers.List(), opts.enabledControllers.Strings()))
+	fs.Var(&opts.enabledControllers, "enable-controller", fmt.Sprintf("Enabled controllers. Available controllers are: %v. Can be specified multiple times. Defaults to %v", sets.List(allControllers), opts.enabledControllers.Strings()))
 	fs.StringVar(&opts.poolsPullSecretProviderOptions.sourcePullSecretNamespace, "poolsPullSecretProviderOptions.sourcePullSecretNamespace", "ci-cluster-pool", "The namespace where the source pull secret is")
 	fs.StringVar(&opts.poolsPullSecretProviderOptions.sourcePullSecretName, "poolsPullSecretProviderOptions.sourcePullSecretName", "pull-secret", "The name of the source pull secret")
 	fs.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
@@ -63,9 +63,9 @@ func newOpts() (*options, error) {
 		errs = append(errs, errors.New("--leader-election-namespace must be set"))
 	}
 	if vals := opts.enabledControllers.Strings(); len(vals) > 0 {
-		opts.enabledControllersSet = sets.NewString(vals...)
-		if diff := opts.enabledControllersSet.Difference(allControllers); len(diff.UnsortedList()) > 0 {
-			errs = append(errs, fmt.Errorf("the following controllers are unknown but were disabled via --disable-controller: %v", diff.List()))
+		opts.enabledControllersSet = sets.New[string](vals...)
+		if diff := opts.enabledControllersSet.Difference(allControllers); len(sets.List(diff)) > 0 {
+			errs = append(errs, fmt.Errorf("the following controllers are unknown but were disabled via --disable-controller: %v", sets.List(diff)))
 		}
 	}
 	return opts, utilerrors.NewAggregate(errs)

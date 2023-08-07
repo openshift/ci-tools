@@ -519,7 +519,7 @@ func (config InputImageTagStepConfiguration) Matches(other InputImage) bool {
 
 func (config InputImageTagStepConfiguration) FormattedSources() string {
 	var formattedSources []string
-	tests := sets.String{}
+	tests := sets.Set[string]{}
 	for _, source := range config.Sources {
 		switch source.SourceType {
 		case ImageStreamSourceTest:
@@ -534,7 +534,7 @@ func (config InputImageTagStepConfiguration) FormattedSources() string {
 	}
 
 	if len(tests) > 0 {
-		formattedSources = append(formattedSources, fmt.Sprintf("test steps: %s", strings.Join(tests.List(), ",")))
+		formattedSources = append(formattedSources, fmt.Sprintf("test steps: %s", strings.Join(sets.List(tests), ",")))
 
 	}
 

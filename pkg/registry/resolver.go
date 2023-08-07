@@ -28,14 +28,14 @@ func Validate(stepsByName ReferenceByName, chainsByName ChainByName, workflowsBy
 	reg := registry{stepsByName, chainsByName, workflowsByName, observersByName}
 	var ret []error
 	for k := range chainsByName {
-		if _, err := reg.process([]api.TestStep{{Chain: &k}}, sets.NewString(), stackForChain()); err != nil {
+		if _, err := reg.process([]api.TestStep{{Chain: &k}}, sets.New[string](), stackForChain()); err != nil {
 			ret = append(ret, err...)
 		}
 	}
 	for k, v := range workflowsByName {
 		stack := stackForWorkflow(k, v.Environment, v.Dependencies)
 		for _, s := range [][]api.TestStep{v.Pre, v.Test, v.Post} {
-			if _, err := reg.process(s, sets.NewString(), stack); err != nil {
+			if _, err := reg.process(s, sets.New[string](), stack); err != nil {
 				ret = append(ret, err...)
 			}
 		}
@@ -136,28 +136,28 @@ func (r *registry) resolveTest(
 	if config.Workflow != nil {
 		stack.push(stackRecordForTest("workflow/"+*config.Workflow, nil, nil))
 	}
-	pre, errs := r.process(config.Pre, sets.NewString(), stack)
+	pre, errs := r.process(config.Pre, sets.New[string](), stack)
 	expandedFlow.Pre = append(expandedFlow.Pre, pre...)
 	resolveErrors = append(resolveErrors, errs...)
 
-	test, errs := r.process(config.Test, sets.NewString(), stack)
+	test, errs := r.process(config.Test, sets.New[string](), stack)
 	expandedFlow.Test = append(expandedFlow.Test, test...)
 	resolveErrors = append(resolveErrors, errs...)
 
-	post, errs := r.process(config.Post, sets.NewString(), stack)
+	post, errs := r.process(config.Post, sets.New[string](), stack)
 	expandedFlow.Post = append(expandedFlow.Post, post...)
 	resolveErrors = append(resolveErrors, errs...)
 	resolveErrors = append(resolveErrors, stack.checkUnused(&stack.records[0], overridden, r)...)
 
-	observerNames := sets.NewString()
+	observerNames := sets.New[string]()
 	for _, step := range append(pre, append(test, post...)...) {
-		observerNames = observerNames.Union(sets.NewString(step.Observers...))
+		observerNames = observerNames.Union(sets.New[string](step.Observers...))
 	}
 	if config.Observers != nil {
-		observerNames = observerNames.Union(sets.NewString(config.Observers.Enable...)).Delete(config.Observers.Disable...)
+		observerNames = observerNames.Union(sets.New[string](config.Observers.Enable...)).Delete(config.Observers.Disable...)
 	}
 	var observers []api.Observer
-	for _, name := range observerNames.List() {
+	for _, name := range sets.List(observerNames) {
 		observer, exists := r.observersByName[name]
 		if !exists {
 			resolveErrors = append(resolveErrors, fmt.Errorf("observer %q is referenced but no such observer is configured", name))
@@ -182,7 +182,7 @@ func (r *registry) ResolveWorkflow(name string) (api.MultiStageTestConfiguration
 }
 
 func (r *registry) ResolveChain(name string) (api.RegistryChain, error) {
-	steps, err := r.processChain(name, sets.NewString(), stack{})
+	steps, err := r.processChain(name, sets.New[string](), stack{})
 	if err != nil {
 		return api.RegistryChain{}, utilerrors.NewAggregate(err)
 	}
@@ -254,7 +254,7 @@ func mergeLeases(dst, src []api.StepLease) ([]api.StepLease, error) {
 	return ret, nil
 }
 
-func (r *registry) process(steps []api.TestStep, seen sets.String, stack stack) (ret []api.LiteralTestStep, errs []error) {
+func (r *registry) process(steps []api.TestStep, seen sets.Set[string], stack stack) (ret []api.LiteralTestStep, errs []error) {
 	for _, step := range steps {
 		if step.Chain != nil {
 			steps, err := r.processChain(*step.Chain, seen, stack)
@@ -271,7 +271,7 @@ func (r *registry) process(steps []api.TestStep, seen sets.String, stack stack) 
 	return
 }
 
-func (r *registry) processChain(name string, seen sets.String, stack stack) ([]api.LiteralTestStep, []error) {
+func (r *registry) processChain(name string, seen sets.Set[string], stack stack) ([]api.LiteralTestStep, []error) {
 	chain, ok := r.chainsByName[name]
 	if !ok {
 		return nil, []error{stack.errorf("unknown step chain: %s", name)}
@@ -284,7 +284,7 @@ func (r *registry) processChain(name string, seen sets.String, stack stack) ([]a
 	return ret, err
 }
 
-func (r *registry) processStep(step *api.TestStep, seen sets.String, stack stack) (ret api.LiteralTestStep, err []error) {
+func (r *registry) processStep(step *api.TestStep, seen sets.Set[string], stack stack) (ret api.LiteralTestStep, err []error) {
 	if ref := step.Reference; ref != nil {
 		var ok bool
 		ret, ok = r.stepsByName[*ref]

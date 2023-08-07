@@ -55,7 +55,7 @@ func (r *resolverClient) ConfigWithTest(base *api.Metadata, testSource *api.Meta
 		return nil, fmt.Errorf("failed to create request for configresolver: %w", err)
 	}
 	query := req.URL.Query()
-	optional := sets.NewString(VariantQuery, InjectFromVariantQuery)
+	optional := sets.New[string](VariantQuery, InjectFromVariantQuery)
 	for k, v := range map[string]string{
 		InjectTestQuery:        testSource.Test,
 		InjectFromOrgQuery:     testSource.Org,

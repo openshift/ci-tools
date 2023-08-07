@@ -547,7 +547,7 @@ func (jc *JobConfigurer) ConvertPeriodicsToPresubmits(periodics []prowconfig.Per
 // AddRandomJobsForChangedTemplates finds jobs from the PR config that are using a specific template with a specific cluster type.
 // The job selection is done by iterating in an unspecified order, which avoids picking the same job
 // So if a template will be changed, find the jobs that are using a template in combination with the `aws`,`openstack`,`gcs` and `libvirt` cluster types.
-func AddRandomJobsForChangedTemplates(templates sets.String, toBeRehearsed config.Presubmits, prConfigPresubmits map[string][]prowconfig.Presubmit, logger *logrus.Entry) config.Presubmits {
+func AddRandomJobsForChangedTemplates(templates sets.Set[string], toBeRehearsed config.Presubmits, prConfigPresubmits map[string][]prowconfig.Presubmit, logger *logrus.Entry) config.Presubmits {
 	clusterTypes := getClusterTypes(prConfigPresubmits)
 	rehearsals := make(config.Presubmits)
 
@@ -577,7 +577,7 @@ type periodicsByName map[string]prowconfig.Periodic
 type presubmitsByName map[string]prowconfig.Presubmit
 
 // selectJobsForRegistryStep returns all jobs affected by the provided registry node.
-func selectJobsForRegistryStep(node registry.Node, configs []*config.DataWithInfo, allPresubmits presubmitsByName, allPeriodics periodicsByName, skipJobs sets.String, logger *logrus.Entry) (presubmitsByRepo, periodicsByRepo) {
+func selectJobsForRegistryStep(node registry.Node, configs []*config.DataWithInfo, allPresubmits presubmitsByName, allPeriodics periodicsByName, skipJobs sets.Set[string], logger *logrus.Entry) (presubmitsByRepo, periodicsByRepo) {
 	selectedPresubmits := make(map[string][]prowconfig.Presubmit)
 	selectedPeriodics := make(map[string][]prowconfig.Periodic)
 
@@ -675,7 +675,7 @@ func getAffectedNodes(changed []registry.Node) []registry.Node {
 	}
 
 	var worklist []registry.Node
-	seen := sets.NewString()
+	seen := sets.New[string]()
 	keyFunc := func(node registry.Node) string { return fmt.Sprintf("type=%d name=%s", node.Type(), node.Name()) }
 	for _, node := range all {
 		key := keyFunc(node)
@@ -721,7 +721,7 @@ func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presub
 
 	selectedPresubmits := config.Presubmits{}
 	selectedPeriodics := config.Periodics{}
-	selectedNames := sets.NewString()
+	selectedNames := sets.New[string]()
 	for _, step := range stepWorklist {
 		presubmits, periodics := selectJobsForRegistryStep(step, sortedConfigs, presubmitIndex, periodicsIndex, selectedNames, logger)
 		for repo, jobs := range presubmits {
@@ -750,7 +750,7 @@ func moreRelevant(one, two *config.DataWithInfo) bool {
 }
 
 func getClusterTypes(jobs map[string][]prowconfig.Presubmit) []string {
-	ret := sets.NewString()
+	ret := sets.New[string]()
 	for _, jobs := range jobs {
 		for _, j := range jobs {
 			if j.Spec != nil && j.Spec.Containers != nil {
@@ -767,7 +767,7 @@ func getClusterTypes(jobs map[string][]prowconfig.Presubmit) []string {
 	if len(ret) == 0 {
 		return nil
 	}
-	return ret.List()
+	return sets.List(ret)
 }
 
 func isAlreadyRehearsed(toBeRehearsed config.Presubmits, clusterType, templateFile string) bool {
@@ -919,7 +919,7 @@ func (e *Executor) ExecuteJobs() (bool, error) {
 
 	selector := ctrlruntimeclient.MatchingLabels{Label: strconv.Itoa(e.prNumber)}
 
-	names := sets.NewString()
+	names := sets.New[string]()
 	for _, job := range pjs {
 		names.Insert(job.Name)
 	}
@@ -930,7 +930,7 @@ func (e *Executor) ExecuteJobs() (bool, error) {
 	return waitSuccess, err
 }
 
-func (e *Executor) waitForJobs(jobs sets.String, selector ctrlruntimeclient.ListOption) (bool, error) {
+func (e *Executor) waitForJobs(jobs sets.Set[string], selector ctrlruntimeclient.ListOption) (bool, error) {
 	if len(jobs) == 0 {
 		return true, nil
 	}

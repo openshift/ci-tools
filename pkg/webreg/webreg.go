@@ -825,7 +825,7 @@ func getEnvironmentDataItems(worklist []api.TestStep, registryRefs registry.Refe
 		data[name] = line
 	}
 
-	seenChains := sets.NewString()
+	seenChains := sets.New[string]()
 
 	for len(worklist) != 0 {
 		step := worklist[0]
@@ -897,7 +897,7 @@ func getDependencyDataItems(worklist []api.TestStep, registryRefs registry.Refer
 		data[image][variable] = line
 	}
 
-	seenChains := sets.NewString()
+	seenChains := sets.New[string]()
 	for len(worklist) != 0 {
 		step := worklist[0]
 		worklist = worklist[1:]

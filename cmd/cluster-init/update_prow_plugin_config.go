@@ -36,13 +36,13 @@ func updateProwPluginConfigConfigUpdater(c *plugins.Configuration, clusterName s
 		c.ConfigUpdater.ClusterGroups = map[string]plugins.ClusterGroup{}
 	}
 	for _, ns := range []string{"ci", "ocp"} {
-		clusters := sets.NewString(clusterName)
-		namespaces := sets.NewString(ns)
+		clusters := sets.New[string](clusterName)
+		namespaces := sets.New[string](ns)
 		key := fmt.Sprintf("build_farm_%s", ns)
 		if gc, ok := c.ConfigUpdater.ClusterGroups[key]; ok {
-			clusters = clusters.Union(sets.NewString(gc.Clusters...))
-			namespaces = namespaces.Union(sets.NewString(gc.Namespaces...))
+			clusters = clusters.Union(sets.New[string](gc.Clusters...))
+			namespaces = namespaces.Union(sets.New[string](gc.Namespaces...))
 		}
-		c.ConfigUpdater.ClusterGroups[key] = plugins.ClusterGroup{Clusters: clusters.List(), Namespaces: namespaces.List()}
+		c.ConfigUpdater.ClusterGroups[key] = plugins.ClusterGroup{Clusters: sets.List(clusters), Namespaces: sets.List(namespaces)}
 	}
 }

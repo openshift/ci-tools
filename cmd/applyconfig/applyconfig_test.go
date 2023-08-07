@@ -168,19 +168,19 @@ func TestInferMissingNamespaces(t *testing.T) {
 	testcases := []struct {
 		description   string
 		ocApplyOutput []byte
-		expected      sets.String
+		expected      sets.Set[string]
 	}{
 		{
 			description:   "single line of interest",
 			ocApplyOutput: []byte(`Error from server (NotFound): namespaces "this-is-missing" not found`),
-			expected:      sets.NewString("this-is-missing"),
+			expected:      sets.New[string]("this-is-missing"),
 		},
 		{
 			description: "single line of interest between some clutter",
 			ocApplyOutput: []byte(`a line of clutter
 Error from server (NotFound): namespaces "this-is-missing" not found
 another line of clutter`),
-			expected: sets.NewString("this-is-missing"),
+			expected: sets.New[string]("this-is-missing"),
 		},
 		{
 			description: "multiple lines of interest in clutter",
@@ -189,12 +189,12 @@ Error from server (NotFound): namespaces "this-is-missing" not found
 another line of clutter
 Error from server (NotFound): namespaces "this-is-missing-too" not found
 `),
-			expected: sets.NewString("this-is-missing", "this-is-missing-too"),
+			expected: sets.New[string]("this-is-missing", "this-is-missing-too"),
 		},
 		{
 			description:   "Message with multiple error levels",
 			ocApplyOutput: []byte(`Error from server (NotFound): error when creating "clusters/app.ci/prometheus-access/managed-services/admin_rbac.yaml": namespaces "managed-services" not found`),
-			expected:      sets.NewString("managed-services"),
+			expected:      sets.New[string]("managed-services"),
 		},
 	}
 	for _, tc := range testcases {
@@ -278,7 +278,7 @@ func TestAsGenericManifest(t *testing.T) {
 			applier:            &configApplier{path: "path", dry: dryServer},
 			executions:         []response{{output: []byte("namespace/to-be-created"), err: nil}}, // expect a single successful call
 			expectedCalls:      [][]string{{"oc", "apply", "-f", "path", "-o", "name", "--dry-run=server", "--validate=true"}},
-			expectedNamespaces: namespaceActions{Created: sets.NewString("to-be-created")},
+			expectedNamespaces: namespaceActions{Created: sets.New[string]("to-be-created")},
 		},
 		{
 			description: "success: server-side dry recovers missing namespaces by creating them",
@@ -293,7 +293,7 @@ func TestAsGenericManifest(t *testing.T) {
 				{"oc", "apply", "-f", "-", "-o", "name"},
 				{"oc", "apply", "-f", "path", "-o", "name", "--dry-run=server", "--validate=true"},
 			},
-			expectedNamespaces: namespaceActions{Assumed: sets.NewString("this-is-missing")},
+			expectedNamespaces: namespaceActions{Assumed: sets.New[string]("this-is-missing")},
 		},
 		{
 			description: "success: server-side dry recovers multiple missing namespaces by creating them",
@@ -320,7 +320,7 @@ func TestAsGenericManifest(t *testing.T) {
 				{"oc", "apply", "-f", "-", "-o", "name"},                                           // Create third namespace
 				{"oc", "apply", "-f", "path", "-o", "name", "--dry-run=server", "--validate=true"}, // Succeeds
 			},
-			expectedNamespaces: namespaceActions{Assumed: sets.NewString("missing-1", "missing-2", "missing-3")},
+			expectedNamespaces: namespaceActions{Assumed: sets.New[string]("missing-1", "missing-2", "missing-3")},
 		},
 		{
 			description: "failure: server-side dry does not try to recover from unrelated failures",
@@ -347,8 +347,8 @@ func TestAsGenericManifest(t *testing.T) {
 				{"oc", "apply", "-f", "path", "-o", "name", "--dry-run=server", "--validate=true"},
 			},
 			expectedNamespaces: namespaceActions{
-				Created: sets.NewString("this-is-missing"),
-				Assumed: sets.NewString("this-is-missing"),
+				Created: sets.New[string]("this-is-missing"),
+				Assumed: sets.New[string]("this-is-missing"),
 			},
 		},
 	}
@@ -676,21 +676,21 @@ func TestExtractNamespaces(t *testing.T) {
 	testcases := []struct {
 		description string
 		applyOutput []byte
-		expected    sets.String
+		expected    sets.Set[string]
 	}{
 		{
 			description: "empty input",
-			expected:    sets.String{},
+			expected:    sets.Set[string]{},
 		},
 		{
 			description: "single line",
 			applyOutput: []byte("namespace/ns-name"),
-			expected:    sets.NewString("ns-name"),
+			expected:    sets.New[string]("ns-name"),
 		},
 		{
 			description: "multiple lines separated by clutter",
 			applyOutput: []byte("namespace/ns-name\n\n\ncluttter\nmorecluttter\nevenmorecluttern\nnamespaceclutter\nnamespace/another-ns-name"),
-			expected:    sets.NewString("ns-name", "another-ns-name"),
+			expected:    sets.New[string]("ns-name", "another-ns-name"),
 		},
 	}
 	for _, tc := range testcases {

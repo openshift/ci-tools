@@ -106,8 +106,8 @@ func (c *retryingCIDataClient) ListUnifiedTestRunsForJobAfterDay(ctx context.Con
 	return ret, err
 }
 
-func (c *retryingCIDataClient) ListReleaseTags(ctx context.Context) (sets.String, error) {
-	var ret sets.String
+func (c *retryingCIDataClient) ListReleaseTags(ctx context.Context) (sets.Set[string], error) {
+	var ret sets.Set[string]
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
 		var innerErr error
 		ret, innerErr = c.delegate.ListReleaseTags(ctx)

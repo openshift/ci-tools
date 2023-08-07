@@ -20,7 +20,7 @@ type prometheusAPIForTest struct {
 }
 
 var (
-	supportedQueries = sets.NewString(`sum(increase(prowjob_state_transitions{state="pending"}[7d])) by (job_name)`)
+	supportedQueries = sets.New[string](`sum(increase(prowjob_state_transitions{state="pending"}[7d])) by (job_name)`)
 )
 
 func (prometheusAPI *prometheusAPIForTest) Query(ctx context.Context, query string, ts time.Time, opts ...prometheusapi.Option) (model.Value, prometheusapi.Warnings, error) {

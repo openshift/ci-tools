@@ -45,14 +45,14 @@ func updateCiSecretBootstrap(o options) error {
 
 func updateCiSecretBootstrapConfig(o options, c *secretbootstrap.Config) error {
 	for _, groupName := range []string{buildUFarm, "non_app_ci"} {
-		c.ClusterGroups[groupName] = sets.NewString(c.ClusterGroups[groupName]...).Insert(o.clusterName).List()
+		c.ClusterGroups[groupName] = sets.List(sets.New[string](c.ClusterGroups[groupName]...).Insert(o.clusterName))
 	}
 	// build02 and build02 are not OSD clusters and thus they should never be in the group
 	if o.clusterName != string(api.ClusterBuild01) && o.clusterName != string(api.ClusterBuild02) {
 		groupName := secretbootstrap.OSDGlobalPullSecretGroupName
-		c.ClusterGroups[groupName] = sets.NewString(append(c.ClusterGroups[groupName], o.clusterName)...).List()
+		c.ClusterGroups[groupName] = sets.List(sets.New[string](append(c.ClusterGroups[groupName], o.clusterName)...))
 	}
-	c.UserSecretsTargetClusters = sets.NewString(c.UserSecretsTargetClusters...).Insert(o.clusterName).List()
+	c.UserSecretsTargetClusters = sets.List(sets.New[string](c.UserSecretsTargetClusters...).Insert(o.clusterName))
 
 	for _, step := range []func(c *secretbootstrap.Config, o options) error{
 		updatePodScalerSecret,

@@ -64,13 +64,13 @@ func (s *multiStageTestStep) generatePods(
 	secretVolumes []coreapi.Volume,
 	secretVolumeMounts []coreapi.VolumeMount,
 	genPodOpts *generatePodOptions,
-) ([]coreapi.Pod, sets.String, error) {
+) ([]coreapi.Pod, sets.Set[string], error) {
 	if genPodOpts == nil {
 		genPodOpts = defaultGeneratePodOptions()
 	}
-	var bestEffortSteps sets.String
+	var bestEffortSteps sets.Set[string]
 	if s.flags&allowBestEffortPostSteps != 0 {
-		bestEffortSteps = sets.NewString()
+		bestEffortSteps = sets.New[string]()
 	}
 	var ret []coreapi.Pod
 	var errs []error

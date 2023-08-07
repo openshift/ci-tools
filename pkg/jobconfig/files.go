@@ -267,7 +267,7 @@ func readFromFile(path string) (*prowconfig.JobConfig, error) {
 // target files already exist and contain Prow job configuration, the jobs will
 // be merged. Jobs will be pruned based on the provided Generator that match the matchLabels set
 func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig, generator Generator, matchLabels labels.Set) error {
-	allJobs := sets.String{}
+	allJobs := sets.Set[string]{}
 	files := map[string]*prowconfig.JobConfig{}
 	key := fmt.Sprintf("%s/%s", org, repo)
 	for _, job := range jobConfig.PresubmitsStatic[key] {
@@ -366,7 +366,7 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig, gener
 // `destination` - if there were jobs with the same name in `destination`, they
 // will be updated. All jobs in `destination` that are not overwritten this
 // way and are not otherwise in the set of all jobs being written stay untouched.
-func mergeJobConfig(destination, source *prowconfig.JobConfig, allJobs sets.String) {
+func mergeJobConfig(destination, source *prowconfig.JobConfig, allJobs sets.Set[string]) {
 	// We do the same thing for all jobs
 	if source.PresubmitsStatic != nil {
 		if destination.PresubmitsStatic == nil {

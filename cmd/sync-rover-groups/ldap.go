@@ -60,7 +60,7 @@ func (r *ldapGroupResolver) resolve(name string) (*Group, error) {
 		return nil, fmt.Errorf("found %d group with the name: %s", l, name)
 	}
 
-	members := sets.NewString()
+	members := sets.New[string]()
 	entry := result.Entries[0]
 	for _, attribute := range entry.Attributes {
 		for _, value := range attribute.Values {
@@ -78,7 +78,7 @@ func (r *ldapGroupResolver) resolve(name string) (*Group, error) {
 	}
 	return &Group{
 		Name:    name,
-		Members: members.List(),
+		Members: sets.List(members),
 	}, nil
 }
 

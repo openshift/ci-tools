@@ -25,7 +25,7 @@ func NewJobAggregatorCommand() *cobra.Command {
 	formatter.FullTimestamp = true
 	formatter.DisableColors = false
 	log.SetFormatter(formatter)
-	log.SetLevel(log.InfoLevel)
+	log.SetLevel(log.DebugLevel)
 
 	cmd.AddCommand(jobrunbigqueryloader.NewBigQueryTestRunUploadFlagsCommand())
 	cmd.AddCommand(jobrunbigqueryloader.NewBigQueryDisruptionUploadFlagsCommand())

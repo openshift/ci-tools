@@ -307,7 +307,7 @@ func TestTestStepAndRequires(t *testing.T) {
 			name: "step without claim",
 			config: api.TestStepConfiguration{
 				As:                         "some",
-				ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "cli", Clone: utilpointer.BoolPtr(false)},
+				ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "cli", Clone: utilpointer.Bool(false)},
 			},
 			expected: []api.StepLink{api.InternalImageLink("cli")},
 		},

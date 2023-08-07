@@ -36,9 +36,9 @@ func TestShardProwConfig(t *testing.T) {
 				BranchProtection: config.BranchProtection{
 					Orgs: map[string]config.Org{
 						"openshift": {
-							Policy: config.Policy{Protect: utilpointer.BoolPtr(false)},
+							Policy: config.Policy{Protect: utilpointer.Bool(false)},
 							Repos: map[string]config.Repo{
-								"release": {Policy: config.Policy{Protect: utilpointer.BoolPtr(false)}},
+								"release": {Policy: config.Policy{Protect: utilpointer.Bool(false)}},
 							},
 						},
 					},
@@ -71,7 +71,7 @@ func TestShardProwConfig(t *testing.T) {
 					Orgs: map[string]config.Org{
 						"openshift": {
 							Repos: map[string]config.Repo{
-								"release": {Policy: config.Policy{Protect: utilpointer.BoolPtr(false)}},
+								"release": {Policy: config.Policy{Protect: utilpointer.Bool(false)}},
 							},
 						},
 					},
@@ -122,9 +122,9 @@ func TestShardProwConfig(t *testing.T) {
 				BranchProtection: config.BranchProtection{
 					Orgs: map[string]config.Org{
 						"openshift": {
-							Policy: config.Policy{Protect: utilpointer.BoolPtr(false)},
+							Policy: config.Policy{Protect: utilpointer.Bool(false)},
 							Repos: map[string]config.Repo{
-								"release": {Policy: config.Policy{Protect: utilpointer.BoolPtr(false)}},
+								"release": {Policy: config.Policy{Protect: utilpointer.Bool(false)}},
 							},
 						},
 					},

@@ -61,7 +61,7 @@ func generatePeriodic(clusterName string) prowconfig.Periodic {
 				ServiceAccountName: configUpdater,
 			},
 			UtilityConfig: prowconfig.UtilityConfig{
-				Decorate: utilpointer.BoolPtr(true),
+				Decorate: utilpointer.Bool(true),
 				ExtraRefs: []prowapi.Refs{{
 					Org:     "openshift",
 					Repo:    "release",
@@ -91,7 +91,7 @@ func generatePostsubmit(clusterName string) prowconfig.Postsubmit {
 				ServiceAccountName: configUpdater,
 			},
 			UtilityConfig: prowconfig.UtilityConfig{
-				Decorate: utilpointer.BoolPtr(true),
+				Decorate: utilpointer.Bool(true),
 			},
 			MaxConcurrency: 1,
 			Labels: map[string]string{
@@ -131,7 +131,7 @@ func generatePresubmit(clusterName string) prowconfig.Presubmit {
 						[]v1.VolumeMount{{Name: "tmp", MountPath: "/tmp"}}, []v1.EnvVar{{Name: "HOME", Value: "/tmp"}})},
 				ServiceAccountName: configUpdater,
 			},
-			UtilityConfig: prowconfig.UtilityConfig{Decorate: utilpointer.BoolPtr(true)},
+			UtilityConfig: prowconfig.UtilityConfig{Decorate: utilpointer.Bool(true)},
 			Labels: map[string]string{
 				jobconfig.CanBeRehearsedLabel: "true",
 				jobconfig.LabelBuildFarm:      clusterName,

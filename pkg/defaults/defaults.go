@@ -757,7 +757,7 @@ func FromConfigStatic(config *api.ReleaseBuildConfiguration) api.GraphConfigurat
 				test.Secrets = append(test.Secrets, test.Secret)
 			}
 			if test.ContainerTestConfiguration != nil && test.ContainerTestConfiguration.Clone == nil {
-				test.ContainerTestConfiguration.Clone = utilpointer.BoolPtr(config.IsBaseImage(string(test.ContainerTestConfiguration.From)))
+				test.ContainerTestConfiguration.Clone = utilpointer.Bool(config.IsBaseImage(string(test.ContainerTestConfiguration.From)))
 			}
 			buildSteps = append(buildSteps, api.StepConfiguration{TestStepConfiguration: test})
 		}

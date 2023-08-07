@@ -1266,7 +1266,7 @@ func (o *options) initializeNamespace() error {
 
 	for _, secret := range []*coreapi.Secret{o.pullSecret, o.pushSecret, o.uploadSecret} {
 		if secret != nil {
-			secret.Immutable = utilpointer.BoolPtr(true)
+			secret.Immutable = utilpointer.Bool(true)
 			if err := client.Create(ctx, secret); err != nil && !kerrors.IsAlreadyExists(err) {
 				return fmt.Errorf("couldn't create secret %s: %w", secret.Name, err)
 			}
@@ -1327,7 +1327,7 @@ func (o *options) initializeNamespace() error {
 	})
 
 	if o.cloneAuthConfig != nil && o.cloneAuthConfig.Secret != nil {
-		o.cloneAuthConfig.Secret.Immutable = utilpointer.BoolPtr(true)
+		o.cloneAuthConfig.Secret.Immutable = utilpointer.Bool(true)
 		if err := client.Create(ctx, o.cloneAuthConfig.Secret); err != nil && !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("couldn't create secret %s for %s authentication: %w", o.cloneAuthConfig.Secret.Name, o.cloneAuthConfig.Type, err)
 		}

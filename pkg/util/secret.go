@@ -47,7 +47,7 @@ func SecretFromDir(path string) (*coreapi.Secret, error) {
 // New values are added, existing values are overwritten. The secret will be
 // created if it doesn't already exist. Updating an existing secret happens by re-creating it.
 func UpsertImmutableSecret(ctx context.Context, client ctrlruntimeclient.Client, secret *coreapi.Secret) (created bool, err error) {
-	secret.Immutable = utilpointer.BoolPtr(true)
+	secret.Immutable = utilpointer.Bool(true)
 	err = client.Create(ctx, secret.DeepCopy())
 	if err == nil {
 		return true, nil

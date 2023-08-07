@@ -85,7 +85,7 @@ func NewRegistryAgent(registryPath string, errCh chan error, opts ...RegistryAge
 		opt.ErrorMetric = prometheus.NewCounterVec(prometheus.CounterOpts{Name: "registry_agent_errors_total"}, []string{"error"})
 	}
 	if opt.FlatRegistry == nil {
-		opt.FlatRegistry = utilpointer.BoolPtr(true)
+		opt.FlatRegistry = utilpointer.Bool(true)
 	}
 	flags := load.RegistryMetadata | load.RegistryDocumentation
 	if *opt.FlatRegistry {

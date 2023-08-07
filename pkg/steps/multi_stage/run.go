@@ -157,7 +157,7 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 		StartedAt:   &start,
 		FinishedAt:  &finished,
 		Duration:    &duration,
-		Failed:      utilpointer.BoolPtr(err != nil),
+		Failed:      utilpointer.Bool(err != nil),
 		Manifests:   client.Objects(),
 	})
 	s.subTests = append(s.subTests, notifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), pod.Name))...)

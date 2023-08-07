@@ -111,7 +111,7 @@ func main() {
 
 	var pjclient ctrlruntimeclient.Client
 	if o.dryRun {
-		pjclient = fakectrlruntimeclient.NewFakeClient()
+		pjclient = fakectrlruntimeclient.NewClientBuilder().Build()
 	} else {
 		pjclient, err = ctrlruntimeclient.New(clusterConfig, ctrlruntimeclient.Options{})
 	}

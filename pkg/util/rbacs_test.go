@@ -80,7 +80,7 @@ func TestCreateRBACs(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.id, func(t *testing.T) {
-			client := fake.NewFakeClient()
+			client := fake.NewClientBuilder().Build()
 
 			if tc.expectedError == "" {
 				go func() {

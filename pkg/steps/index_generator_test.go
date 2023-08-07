@@ -20,7 +20,7 @@ import (
 )
 
 func TestIndexGenDockerfile(t *testing.T) {
-	fakeClientSet := fakectrlruntimeclient.NewFakeClient(
+	fakeClientSet := fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 		&apiimagev1.ImageStream{
 			ObjectMeta: v1.ObjectMeta{
 				Namespace: "target-namespace",
@@ -45,7 +45,7 @@ func TestIndexGenDockerfile(t *testing.T) {
 					}},
 				}},
 			},
-		})
+		}).Build()
 	testCases := []struct {
 		name     string
 		step     indexGeneratorStep

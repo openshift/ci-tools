@@ -692,7 +692,7 @@ func TestCheckPending(t *testing.T) {
 			timeout := 30 * time.Minute
 			client := testhelper_kube.FakePodClient{
 				FakePodExecutor: &testhelper_kube.FakePodExecutor{
-					LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient()),
+					LoggingClient: loggingclient.New(fakectrlruntimeclient.NewClientBuilder().Build()),
 				},
 				PendingTimeout: timeout,
 			}

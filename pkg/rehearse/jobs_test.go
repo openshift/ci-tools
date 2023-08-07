@@ -915,14 +915,14 @@ func TestWaitForJobsRetries(t *testing.T) {
 
 func TestWaitForJobsLog(t *testing.T) {
 	logger, hook := logrustest.NewNullLogger()
-	client := fakectrlruntimeclient.NewFakeClient(
+	client := fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 		&pjapi.ProwJob{
 			ObjectMeta: metav1.ObjectMeta{Name: "success"},
 			Status:     pjapi.ProwJobStatus{State: pjapi.SuccessState}},
 		&pjapi.ProwJob{
 			ObjectMeta: metav1.ObjectMeta{Name: "failure"},
 			Status:     pjapi.ProwJobStatus{State: pjapi.FailureState}},
-	)
+	).Build()
 
 	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, logger.WithFields(nil), client, "")
 	executor.pollFunc = threetimesTryingPoller
@@ -1358,7 +1358,7 @@ func TestVariantFromLabels(t *testing.T) {
 }
 
 func newTC(initObjs ...runtime.Object) *tc {
-	return &tc{Client: fakectrlruntimeclient.NewFakeClient(initObjs...)}
+	return &tc{Client: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(initObjs...).Build()}
 }
 
 type tc struct {

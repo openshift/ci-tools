@@ -154,8 +154,8 @@ func TestEnsureGroups(t *testing.T) {
 		{
 			name: "basic case",
 			clients: map[string]ctrlruntimeclient.Client{
-				"b01": fakeclient.NewFakeClient(g01.DeepCopy()),
-				"b02": fakeclient.NewFakeClient(g03.DeepCopy()),
+				"b01": fakeclient.NewClientBuilder().WithRuntimeObjects(g01.DeepCopy()).Build(),
+				"b02": fakeclient.NewClientBuilder().WithRuntimeObjects(g03.DeepCopy()).Build(),
 			},
 			groups: map[string]GroupClusters{
 				"gh01-group": {
@@ -207,8 +207,8 @@ func TestEnsureGroups(t *testing.T) {
 		{
 			name: "basic case: dryRun=true",
 			clients: map[string]ctrlruntimeclient.Client{
-				"b01": fakeclient.NewFakeClient(g01.DeepCopy()),
-				"b02": fakeclient.NewFakeClient(g03.DeepCopy()),
+				"b01": fakeclient.NewClientBuilder().WithRuntimeObjects(g01.DeepCopy()).Build(),
+				"b02": fakeclient.NewClientBuilder().WithRuntimeObjects(g03.DeepCopy()).Build(),
 			},
 			groups: map[string]GroupClusters{
 				"gh01-group": {
@@ -259,7 +259,7 @@ func TestEnsureGroups(t *testing.T) {
 		{
 			name: "invalid group: duplicate members",
 			clients: map[string]ctrlruntimeclient.Client{
-				"b01": fakeclient.NewFakeClient(),
+				"b01": fakeclient.NewClientBuilder().Build(),
 			},
 			groups: map[string]GroupClusters{
 				"gh01-group": {

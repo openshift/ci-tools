@@ -896,7 +896,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			client := fakectrlruntimeclient.NewFakeClient()
+			client := fakectrlruntimeclient.NewClientBuilder().Build()
 			graphConf := FromConfigStatic(testCase.input)
 			runtimeSteps, actualError := runtimeStepConfigsForBuild(context.Background(), client, testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, graphConf.InputImages(), time.Nanosecond, testCase.consoleHost)
 			graphConf.Steps = append(graphConf.Steps, runtimeSteps...)
@@ -964,7 +964,7 @@ func TestFromConfig(t *testing.T) {
 			Body:       io.NopCloser(bytes.NewBuffer([]byte(content))),
 		}, nil
 	})
-	client := loggingclient.New(fakectrlruntimeclient.NewFakeClient())
+	client := loggingclient.New(fakectrlruntimeclient.NewClientBuilder().Build())
 	if err := imageapi.AddToScheme(scheme.Scheme); err != nil {
 		t.Fatal(err)
 	}

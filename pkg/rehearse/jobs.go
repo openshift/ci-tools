@@ -70,7 +70,7 @@ func init() {
 // NewProwJobClient creates a ProwJob client with a dry run capability
 func NewProwJobClient(clusterConfig *rest.Config, dry bool) (ctrlruntimeclient.Client, error) {
 	if dry {
-		return fakectrlruntimeclient.NewFakeClient(), nil
+		return fakectrlruntimeclient.NewClientBuilder().Build(), nil
 	}
 	return ctrlruntimeclient.New(clusterConfig, ctrlruntimeclient.Options{})
 }

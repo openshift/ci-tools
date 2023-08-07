@@ -50,16 +50,16 @@ func TestEnsureImageStreamTags(t *testing.T) {
 	}{
 		{
 			name: "imagestreamtag already exists, nothing to do",
-			clusterClient: fakectrlruntimeclient.NewFakeClient(
+			clusterClient: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 				&imagev1.ImageStreamTag{ObjectMeta: metav1.ObjectMeta{
 					Namespace: imageStreamTagNamespace,
 					Name:      imageStreamTagName,
 				}},
-			),
+			).Build(),
 		},
 		{
 			name: "Import already exists error gets swallowed",
-			istImportClient: fakectrlruntimeclient.NewFakeClient(
+			istImportClient: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 				&testimagestreamtagimportv1.TestImageStreamTagImport{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: importNamespace,
@@ -71,7 +71,7 @@ func TestEnsureImageStreamTags(t *testing.T) {
 						Name:        imageStreamTagName,
 					},
 				},
-			),
+			).Build(),
 			expectedImport: &testimagestreamtagimportv1.TestImageStreamTagImportSpec{
 				ClusterName: clusterName,
 				Namespace:   imageStreamTagNamespace,
@@ -97,10 +97,10 @@ func TestEnsureImageStreamTags(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 
 			if tc.clusterClient == nil {
-				tc.clusterClient = fakectrlruntimeclient.NewFakeClient()
+				tc.clusterClient = fakectrlruntimeclient.NewClientBuilder().Build()
 			}
 			if tc.istImportClient == nil {
-				tc.istImportClient = fakectrlruntimeclient.NewFakeClient()
+				tc.istImportClient = fakectrlruntimeclient.NewClientBuilder().Build()
 			}
 			if tc.targetCluster == nil {
 				tc.targetCluster = utilpointer.StringPtr(clusterName)

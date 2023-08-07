@@ -64,7 +64,7 @@ func TestCommitForIST(t *testing.T) {
 			if err := yaml.Unmarshal(rawImageStreamTag, ist); err != nil {
 				t.Fatalf("failed to unmarshal imagestreamTag: %v", err)
 			}
-			commit, err := commitForIST(ist, fakectrlruntimeclient.NewFakeClient())
+			commit, err := commitForIST(ist, fakectrlruntimeclient.NewClientBuilder().Build())
 			if err != nil {
 				t.Fatalf("failed to get ref for ist: %v", err)
 			}
@@ -292,7 +292,7 @@ func TestReconcile(t *testing.T) {
 
 			r := &reconciler{
 				log:    logrus.NewEntry(logrus.New()),
-				client: fakectrlruntimeclient.NewFakeClient(imageStreamTag),
+				client: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(imageStreamTag).Build(),
 				releaseBuildConfigs: func(_ string) ([]*cioperatorapi.ReleaseBuildConfiguration, error) {
 					return []*cioperatorapi.ReleaseBuildConfiguration{{
 						Metadata: cioperatorapi.Metadata{

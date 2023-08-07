@@ -84,7 +84,7 @@ func TestTagsToDelete(t *testing.T) {
 	}{
 		{
 			name:   "basic case",
-			client: fakeclient.NewFakeClient(ocp48Stream.DeepCopy(), ciSomeStream.DeepCopy(), origin48Stream.DeepCopy()),
+			client: fakeclient.NewClientBuilder().WithRuntimeObjects(ocp48Stream.DeepCopy(), ciSomeStream.DeepCopy(), origin48Stream.DeepCopy()).Build(),
 			promotedTags: []api.ImageStreamTagReference{
 				{
 					Namespace: "ci",

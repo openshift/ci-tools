@@ -147,7 +147,7 @@ func TestReconcile(t *testing.T) {
 			if tc.filter == nil {
 				tc.filter = func(_ reconcile.Request) bool { return true }
 			}
-			client := &serviceaccountSecretRecreatingClient{t: t, Client: fakectrlruntimeclient.NewFakeClient(tc.objects...)}
+			client := &serviceaccountSecretRecreatingClient{t: t, Client: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(tc.objects...).Build()}
 
 			r := &reconciler{
 				client:           client,

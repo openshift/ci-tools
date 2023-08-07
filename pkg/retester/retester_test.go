@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -529,7 +528,7 @@ func TestLoadFromDiskNow(t *testing.T) {
 }
 
 func TestSaveFileBackoffCache(t *testing.T) {
-	dir, err := ioutil.TempDir("", "saveToDisk")
+	dir, err := os.MkdirTemp("", "saveToDisk")
 	if err != nil {
 		t.Errorf("failed to create temporary directory %s: %s", dir, err.Error())
 	}
@@ -570,7 +569,7 @@ pr3:
 				t.Errorf("Error differs from expected:\n%s", diff)
 			}
 			if tc.expected == nil && tc.cache.file != "" {
-				actualBytes, err := ioutil.ReadFile(tc.cache.file)
+				actualBytes, err := os.ReadFile(tc.cache.file)
 				if err != nil {
 					t.Errorf("failed to read file %s: %s", tc.cache.file, err.Error())
 				}

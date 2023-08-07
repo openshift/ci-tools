@@ -2,7 +2,7 @@ package ocplifecycle
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,7 +16,7 @@ import (
 
 // LoadConfig loads the lifecycle configuration from a given localtion.
 func LoadConfig(path string) (Config, error) {
-	configBytes, err := ioutil.ReadFile(path)
+	configBytes, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read lifecycle config from path %s: %w", path, err)
 	}

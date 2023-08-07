@@ -3,7 +3,7 @@ package jobrunaggregatorlib
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -128,7 +128,7 @@ func WaitAndGetAllFinishedJobRuns(ctx context.Context,
 	finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames = getAllFinishedJobRuns(ctx, relatedJobRuns)
 
 	summaryHTML := htmlForJobRuns(ctx, finishedJobRuns, unfinishedJobRuns, variantInfo)
-	if err := ioutil.WriteFile(filepath.Join(outputDir, "job-run-summary.html"), []byte(summaryHTML), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(outputDir, "job-run-summary.html"), []byte(summaryHTML), 0644); err != nil {
 		return finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames, err
 	}
 

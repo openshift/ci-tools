@@ -6,7 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -158,7 +157,7 @@ func main() {
 				if err := replacer(
 					github.FileGetterFactory,
 					func(data []byte) error {
-						return ioutil.WriteFile(filename, data, 0644)
+						return os.WriteFile(filename, data, 0644)
 					},
 					opts.pruneUnusedReplacements,
 					opts.pruneOCPBuilderReplacements,

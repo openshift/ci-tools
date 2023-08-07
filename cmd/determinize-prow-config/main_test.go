@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -359,7 +358,7 @@ func TestShardProwConfig(t *testing.T) {
 			// This is more of test for the merging, but an important safety check.
 			// We need to do the annoying dance to get two defaulted configs that are comparable.
 			tempDir := t.TempDir()
-			if err := ioutil.WriteFile(filepath.Join(tempDir, "_old_config.yaml"), serializedOriginalConfig, 0644); err != nil {
+			if err := os.WriteFile(filepath.Join(tempDir, "_old_config.yaml"), serializedOriginalConfig, 0644); err != nil {
 				t.Fatalf("failed to write old config: %v", err)
 			}
 			oldConfigDefaulted, err := config.Load(filepath.Join(tempDir, "_old_config.yaml"), "", nil, "")
@@ -375,7 +374,7 @@ func TestShardProwConfig(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to marshal the new config: %v", err)
 			}
-			if err := ioutil.WriteFile(filepath.Join(tempDir, "_config.yaml"), serializedNewConfig, 0644); err != nil {
+			if err := os.WriteFile(filepath.Join(tempDir, "_config.yaml"), serializedNewConfig, 0644); err != nil {
 				t.Fatalf("failed to write new config: %v", err)
 			}
 
@@ -384,7 +383,7 @@ func TestShardProwConfig(t *testing.T) {
 				if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 					t.Fatalf("failed to create directories for %s: %v", path, err)
 				}
-				if err := ioutil.WriteFile(path, []byte(content), 0644); err != nil {
+				if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 					t.Fatalf("failed to write file %s: %v", name, err)
 				}
 			}

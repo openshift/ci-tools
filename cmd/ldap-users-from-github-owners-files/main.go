@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -63,7 +62,7 @@ func saveMapping(path string, mapping map[string]string) error {
 	if err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(path, bytes, 0644); err != nil {
+	if err := os.WriteFile(path, bytes, 0644); err != nil {
 		return err
 	}
 	logrus.Info("Exit after saving the mapping")
@@ -71,7 +70,7 @@ func saveMapping(path string, mapping map[string]string) error {
 }
 
 func getAllSecretUsers(repoBaseDir, repoSubDir string, mapping map[string]string) (sets.String, []error) {
-	ownersAliasesRaw, err := ioutil.ReadFile(repoBaseDir + "/OWNERS_ALIASES")
+	ownersAliasesRaw, err := os.ReadFile(repoBaseDir + "/OWNERS_ALIASES")
 	if err != nil {
 		return nil, []error{fmt.Errorf("failed to read OWNERS_ALIASES: %w", err)}
 	}
@@ -90,7 +89,7 @@ func getAllSecretUsers(repoBaseDir, repoSubDir string, mapping map[string]string
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			data, err := ioutil.ReadFile(path)
+			data, err := os.ReadFile(path)
 			if err != nil {
 				l.Lock()
 				errs = append(errs, fmt.Errorf("failed to read %s: %w", path, err))
@@ -149,7 +148,7 @@ type OwnersALISES struct {
 }
 
 func createLDAPMapping(ldapFile string) (map[string]string, []error) {
-	data, err := ioutil.ReadFile(ldapFile)
+	data, err := os.ReadFile(ldapFile)
 	if err != nil {
 		return nil, []error{fmt.Errorf("reading file failed: %w", err)}
 	}

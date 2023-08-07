@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
@@ -15,7 +15,7 @@ import (
 func updateProwPluginConfig(o options) error {
 	logrus.Info("Updating Prow plugin config")
 	filename := filepath.Join(o.releaseRepo, "core-services", "prow", "02_config", "_plugins.yaml")
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return err
 	}
@@ -28,7 +28,7 @@ func updateProwPluginConfig(o options) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(filename, rawYaml, 0644)
+	return os.WriteFile(filename, rawYaml, 0644)
 }
 
 func updateProwPluginConfigConfigUpdater(c *plugins.Configuration, clusterName string) {

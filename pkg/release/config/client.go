@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"sort"
 
@@ -51,7 +51,7 @@ func resolveJobs(client release.HTTPClient, endpoint string, jobType JobType) ([
 		return nil, errors.New("failed to request latest release: got a nil response")
 	}
 	defer resp.Body.Close()
-	data, readErr := ioutil.ReadAll(resp.Body)
+	data, readErr := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to request latest release: server responded with %d: %s", resp.StatusCode, data)
 	}

@@ -11,7 +11,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -545,7 +544,7 @@ No additional "tide" queries will be added.
 	if err := os.MkdirAll(path.Dir(p), 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
-	return ioutil.WriteFile(p, data, 0644)
+	return os.WriteFile(p, data, 0644)
 }
 
 func updatePluginConfig(config initConfig, releaseRepo string) error {
@@ -571,7 +570,7 @@ Updating Prow plugin configuration ...`)
 		return fmt.Errorf("could not marshal Prow plugin configuration: %w", err)
 	}
 
-	return ioutil.WriteFile(configPath, data, 0644)
+	return os.WriteFile(configPath, data, 0644)
 }
 
 func editPluginConfig(pluginConfig *plugins.Configuration, config initConfig) {

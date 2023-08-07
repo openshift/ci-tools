@@ -5,9 +5,9 @@ package prometheus
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math"
 	"math/rand"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -82,7 +82,7 @@ func Backfill(t testhelper.TestingTInterface, prometheusDir string, retentionPer
 	t.Logf("Generated Prometheus data in %s.", time.Since(generateStart))
 
 	writeStart := time.Now()
-	prometheusBackfillFile, err := ioutil.TempFile(prometheusDir, "backfill")
+	prometheusBackfillFile, err := os.CreateTemp(prometheusDir, "backfill")
 	if err != nil {
 		t.Fatalf("Could not create temporary file for Prometheus backfill: %v", err)
 	}

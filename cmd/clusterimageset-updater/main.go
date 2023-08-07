@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -104,7 +103,7 @@ func main() {
 		if info.IsDir() || !strings.HasSuffix(info.Name(), "_clusterpool.yaml") {
 			return nil
 		}
-		raw, err := ioutil.ReadFile(path)
+		raw, err := os.ReadFile(path)
 		if err != nil {
 			return err
 		}
@@ -149,7 +148,7 @@ func main() {
 		if info.IsDir() || !strings.HasSuffix(info.Name(), "_clusterimageset.yaml") {
 			return nil
 		}
-		raw, err := ioutil.ReadFile(path)
+		raw, err := os.ReadFile(path)
 		if err != nil {
 			return err
 		}
@@ -209,7 +208,7 @@ func main() {
 			errs = append(errs, fmt.Errorf("Could not marshal yaml for clusterimageset %s: %w", name, err))
 			continue
 		}
-		if err := ioutil.WriteFile(filepath.Join(o.outputDir, fmt.Sprintf("%s_clusterimageset.yaml", name)), raw, 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(o.outputDir, fmt.Sprintf("%s_clusterimageset.yaml", name)), raw, 0644); err != nil {
 			errs = append(errs, fmt.Errorf("Failed to write file for clusterimageset %s: %w", name, err))
 		}
 	}
@@ -225,7 +224,7 @@ func main() {
 	for bounds, files := range poolFilesByBounds {
 		imagesetName := nameFromPullspec(boundsToPullspec[bounds], bounds)
 		for _, path := range files {
-			raw, err := ioutil.ReadFile(path)
+			raw, err := os.ReadFile(path)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("Failed to read file %s: %w", path, err))
 				continue
@@ -241,7 +240,7 @@ func main() {
 				errs = append(errs, fmt.Errorf("Failed to remarshal clusterpool %s: %w", path, err))
 				continue
 			}
-			if err := ioutil.WriteFile(path, newRaw, 0644); err != nil {
+			if err := os.WriteFile(path, newRaw, 0644); err != nil {
 				errs = append(errs, fmt.Errorf("Failed to write updated file %s: %w", path, err))
 			}
 		}

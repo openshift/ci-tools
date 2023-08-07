@@ -4,7 +4,6 @@
 package lease
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -33,7 +32,7 @@ func TestLeases(t *testing.T) {
 	if err := os.MkdirAll(successClusterProfileDir, 0755); err != nil {
 		t.Fatalf("failed to create dummy secret dir: %v", err)
 	}
-	if err := ioutil.WriteFile(filepath.Join(successClusterProfileDir, "data"), []byte("nothing"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(successClusterProfileDir, "data"), []byte("nothing"), 0644); err != nil {
 		t.Fatalf("failed to create dummy secret data: %v", err)
 	}
 
@@ -41,7 +40,7 @@ func TestLeases(t *testing.T) {
 	if err := os.MkdirAll(invalidLeaseClusterProfileDir, 0755); err != nil {
 		t.Fatalf("failed to create dummy secret dir: %v", err)
 	}
-	if err := ioutil.WriteFile(filepath.Join(invalidLeaseClusterProfileDir, "data"), []byte("nothing"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(invalidLeaseClusterProfileDir, "data"), []byte("nothing"), 0644); err != nil {
 		t.Fatalf("failed to create dummy secret data: %v", err)
 	}
 

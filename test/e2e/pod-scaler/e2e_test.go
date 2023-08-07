@@ -8,7 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"net/http"
 	"os"
@@ -72,7 +72,7 @@ func TestProduce(t *testing.T) {
 func check(t *testing.T, dataDir string, checkAgainst prometheus.Data) {
 	for filename, data := range checkAgainst.ByFile {
 		var c pod_scaler.CachedQuery
-		raw, err := ioutil.ReadFile(filepath.Join(dataDir, filename))
+		raw, err := os.ReadFile(filepath.Join(dataDir, filename))
 		if err != nil {
 			t.Fatalf("%s: failed to read cache: %v", filename, err)
 		}
@@ -152,7 +152,7 @@ func TestBuildPodAdmission(t *testing.T) {
 			if err := os.MkdirAll(filepath.Join(dataDir, set), 0777); err != nil {
 				t.Fatalf("could not seed data dir: %v", err)
 			}
-			if err := ioutil.WriteFile(filepath.Join(dataDir, set, metric+".json"), []byte(`{}`), 0777); err != nil {
+			if err := os.WriteFile(filepath.Join(dataDir, set, metric+".json"), []byte(`{}`), 0777); err != nil {
 				t.Fatalf("could not seed data dir: %v", err)
 			}
 		}
@@ -219,7 +219,7 @@ func TestBuildPodAdmission(t *testing.T) {
 			if err != nil {
 				t.Fatalf("could not post request: %v", err)
 			}
-			rawResponse, err := ioutil.ReadAll(response.Body)
+			rawResponse, err := io.ReadAll(response.Body)
 			if err != nil {
 				t.Fatalf("could not read response: %v", err)
 			}
@@ -331,7 +331,7 @@ func TestAdmission(t *testing.T) {
 			if err != nil {
 				t.Fatalf("could not post request: %v", err)
 			}
-			rawResponse, err := ioutil.ReadAll(response.Body)
+			rawResponse, err := io.ReadAll(response.Body)
 			if err != nil {
 				t.Fatalf("could not read response: %v", err)
 			}

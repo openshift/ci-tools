@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -274,7 +273,7 @@ func setupLogger() (*secrets.DynamicCensor, io.Closer, error) {
 	logrus.SetLevel(logrus.TraceLevel)
 	censor := secrets.NewDynamicCensor()
 	logrus.SetFormatter(logrusutil.NewFormatterWithCensor(logrus.StandardLogger().Formatter, &censor))
-	logrus.SetOutput(ioutil.Discard)
+	logrus.SetOutput(io.Discard)
 	logrus.AddHook(&formattingHook{
 		formatter: logrusutil.NewFormatterWithCensor(&logrus.TextFormatter{
 			ForceColors:     true,
@@ -636,7 +635,7 @@ func (o *options) Complete() error {
 	}
 
 	for _, path := range o.templatePaths.values {
-		contents, err := ioutil.ReadFile(path)
+		contents, err := os.ReadFile(path)
 		if err != nil {
 			return fmt.Errorf("could not read dir %s for template: %w", path, err)
 		}
@@ -1526,7 +1525,7 @@ func (o *options) generateProwMetadata() (m prowResultMetadata) {
 func (o *options) parseCustomMetadata(customProwMetadataFile string) (customMetadata map[string]string, err error) {
 	logrus.Info("Found custom prow metadata.")
 
-	if customJSONFile, readingError := ioutil.ReadFile(customProwMetadataFile); readingError != nil {
+	if customJSONFile, readingError := os.ReadFile(customProwMetadataFile); readingError != nil {
 		logrus.WithError(readingError).Error("Failed to read custom prow metadata.")
 	} else {
 		err = json.Unmarshal(customJSONFile, &customMetadata)
@@ -1928,7 +1927,7 @@ func eventRecorder(kubeClient *coreclientset.CoreV1Client, authClient *authclien
 
 func getCloneSecretFromPath(cloneAuthType steps.CloneAuthType, secretPath string) (*coreapi.Secret, error) {
 	secret := &coreapi.Secret{Data: make(map[string][]byte)}
-	data, err := ioutil.ReadFile(secretPath)
+	data, err := os.ReadFile(secretPath)
 	if err != nil {
 		return nil, fmt.Errorf("could not read file %s for secret: %w", secretPath, err)
 	}
@@ -1963,7 +1962,7 @@ func getHashFromBytes(b []byte) string {
 }
 
 func getDockerConfigSecret(name, filename string) (*coreapi.Secret, error) {
-	src, err := ioutil.ReadFile(filename)
+	src, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("could not read file %s for secret %s: %w", filename, name, err)
 	}
@@ -1979,7 +1978,7 @@ func getDockerConfigSecret(name, filename string) (*coreapi.Secret, error) {
 }
 
 func getSecret(name, filename string) (*coreapi.Secret, error) {
-	src, err := ioutil.ReadFile(filename)
+	src, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("could not read file %s for secret %s: %w", filename, name, err)
 	}

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -98,7 +97,7 @@ func updateProwConfig(configDir, shardingBaseDir string) error {
 		return fmt.Errorf("could not marshal Prow configuration: %w", err)
 	}
 
-	return ioutil.WriteFile(configPath, data, 0644)
+	return os.WriteFile(configPath, data, 0644)
 }
 
 func updatePluginConfig(configDir, shardingBaseDir string) error {
@@ -120,5 +119,5 @@ func updatePluginConfig(configDir, shardingBaseDir string) error {
 		return fmt.Errorf("could not marshal Prow plugin configuration: %w", err)
 	}
 
-	return ioutil.WriteFile(configPath, data, 0644)
+	return os.WriteFile(configPath, data, 0644)
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -503,7 +502,7 @@ func (o *JobRunTestCaseAnalyzerOptions) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(filepath.Join(outputDir, "junit-test-case-analysis.xml"), junitXML, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(outputDir, "junit-test-case-analysis.xml"), junitXML, 0644); err != nil {
 		return err
 	}
 	if testSuite.NumFailed > 0 {

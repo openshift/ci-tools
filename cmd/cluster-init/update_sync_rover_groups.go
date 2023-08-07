@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -13,7 +13,7 @@ import (
 
 func updateSyncRoverGroups(o options) error {
 	filename := filepath.Join(o.releaseRepo, "core-services", "sync-rover-groups", "_config.yaml")
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return err
 	}
@@ -29,5 +29,5 @@ func updateSyncRoverGroups(o options) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(filename, rawYaml, 0644)
+	return os.WriteFile(filename, rawYaml, 0644)
 }

@@ -3,7 +3,7 @@ package bumper
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -42,7 +42,7 @@ func NewReleaseControllerConfigBumper(ocpVer, jobsDir string) (*ReleaseControlle
 
 func (b *ReleaseControllerConfigBumper) GetFiles() ([]string, error) {
 	files := make([]string, 0)
-	filesInfo, err := ioutil.ReadDir(b.jobsDir)
+	filesInfo, err := os.ReadDir(b.jobsDir)
 	if err != nil {
 		return files, err
 	}
@@ -200,7 +200,7 @@ func (b *ReleaseControllerConfigBumper) Marshall(releaseConfig *ReleaseConfig,
 	if err != nil {
 		return fmt.Errorf("failed to marshall release config")
 	}
-	if err := ioutil.WriteFile(absolutePath, raw, 0666); err != nil {
+	if err := os.WriteFile(absolutePath, raw, 0666); err != nil {
 		return fmt.Errorf("failed to write file %s", absolutePath)
 	}
 	return nil

@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"sort"
 	"sync"
@@ -229,7 +228,7 @@ func main() {
 
 	mapping := rover.MapGithubToKerberos(users)
 
-	data, err := ioutil.ReadFile(opts.groupsFile)
+	data, err := os.ReadFile(opts.groupsFile)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to read the group file")
 	}

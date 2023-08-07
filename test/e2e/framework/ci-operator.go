@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -148,7 +147,7 @@ func (c *CiOperatorCommand) Run() ([]byte, error) {
 }
 
 func (c *CiOperatorCommand) VerboseOutputContains(t *T, name string, fragments ...string) {
-	verboseOutput, err := ioutil.ReadFile(filepath.Join(c.artifactDir, "ci-operator.log"))
+	verboseOutput, err := os.ReadFile(filepath.Join(c.artifactDir, "ci-operator.log"))
 	if err != nil {
 		t.Errorf("could not open ci-operator log for checking output: %v", err)
 		return
@@ -161,7 +160,7 @@ func (c *CiOperatorCommand) VerboseOutputContains(t *T, name string, fragments .
 }
 
 func (c *CiOperatorCommand) VerboseOutputDoesNotContain(t *T, name string, fragments ...string) {
-	verboseOutput, err := ioutil.ReadFile(filepath.Join(c.artifactDir, "ci-operator.log"))
+	verboseOutput, err := os.ReadFile(filepath.Join(c.artifactDir, "ci-operator.log"))
 	if err != nil {
 		t.Errorf("could not open ci-operator log for checking output: %v", err)
 		return

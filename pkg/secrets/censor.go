@@ -1,7 +1,6 @@
 package secrets
 
 import (
-	"io/ioutil"
 	"os"
 	"strings"
 	"sync"
@@ -46,7 +45,7 @@ func ReadFromEnv(name string, censor *DynamicCensor) string {
 
 // ReadFromFile loads content from a file and adds it to the censor list.
 func ReadFromFile(path string, censor *DynamicCensor) (string, error) {
-	bytes, err := ioutil.ReadFile(path)
+	bytes, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}

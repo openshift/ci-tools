@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"sync"
@@ -50,7 +49,7 @@ func (rm *repoManager) init() {
 }
 
 func initRepo(stdout, stderr bumper.HideSecretsWriter) *repo {
-	path, err := ioutil.TempDir("", "repo-manager-release")
+	path, err := os.MkdirTemp("", "repo-manager-release")
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to make dir.")
 	}

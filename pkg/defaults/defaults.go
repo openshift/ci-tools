@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
@@ -152,7 +152,7 @@ func fromConfig(
 	var hasReleaseStep bool
 	resolver := rootImageResolver(client, ctx, promote)
 	imageConfigs := graphConf.InputImages()
-	rawSteps, err := runtimeStepConfigsForBuild(ctx, client, config, jobSpec, ioutil.ReadFile, resolver, imageConfigs, time.Second, consoleHost)
+	rawSteps, err := runtimeStepConfigsForBuild(ctx, client, config, jobSpec, os.ReadFile, resolver, imageConfigs, time.Second, consoleHost)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get steps from configuration: %w", err)
 	}

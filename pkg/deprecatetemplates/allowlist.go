@@ -1,7 +1,6 @@
 package deprecatetemplates
 
 import (
-	"io/ioutil"
 	"os"
 	"sort"
 	"strings"
@@ -306,7 +305,7 @@ func (a allowlist) Save(path string) error {
 		return err
 	}
 
-	if err := ioutil.WriteFile(path, raw, 0644); err != nil {
+	if err := os.WriteFile(path, raw, 0644); err != nil {
 		return err
 	}
 

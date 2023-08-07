@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"sort"
 	"testing"
@@ -961,7 +961,7 @@ func TestFromConfig(t *testing.T) {
 		content := `{"nodes": [{"version": "4.1.0", "payload": "payload"}]}`
 		return &http.Response{
 			StatusCode: http.StatusOK,
-			Body:       ioutil.NopCloser(bytes.NewBuffer([]byte(content))),
+			Body:       io.NopCloser(bytes.NewBuffer([]byte(content))),
 		}, nil
 	})
 	client := loggingclient.New(fakectrlruntimeclient.NewFakeClient())

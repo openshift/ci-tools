@@ -3,7 +3,6 @@ package rehearse
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -14,7 +13,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -35,7 +34,7 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 	testTemplatePath := filepath.Join(config.TemplatesPath, "subdir/test-template.yaml")
 	cluster := "cluster"
 	ns := "test-namespace"
-	contents, err := ioutil.ReadFile(filepath.Join(testRepoPath, testTemplatePath))
+	contents, err := os.ReadFile(filepath.Join(testRepoPath, testTemplatePath))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +112,7 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 }
 
 func TestCreateClusterProfiles(t *testing.T) {
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +128,7 @@ func TestCreateClusterProfiles(t *testing.T) {
 			t.Fatal(err)
 		}
 		content := []byte(p + " content")
-		if err := ioutil.WriteFile(path, content, 0664); err != nil {
+		if err := os.WriteFile(path, content, 0664); err != nil {
 			t.Fatal(err)
 		}
 	}

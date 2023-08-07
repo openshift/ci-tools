@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"regexp"
 	"sort"
@@ -388,7 +387,7 @@ func filterLabels(labels []github.Label, interestedLabels sets.String) []string 
 }
 
 func loadConfig(filename string, config interface{}) error {
-	configData, err := ioutil.ReadFile(filename)
+	configData, err := os.ReadFile(filename)
 	if err != nil {
 		return fmt.Errorf("failed to read config: %w", err)
 	}

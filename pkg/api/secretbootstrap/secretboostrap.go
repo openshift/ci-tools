@@ -3,7 +3,7 @@ package secretbootstrap
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"reflect"
 	"strings"
 
@@ -76,7 +76,7 @@ func SaveConfigToFile(file string, config *Config) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(file, bytes, 0644)
+	return os.WriteFile(file, bytes, 0644)
 }
 
 // Config is what we version in our repository

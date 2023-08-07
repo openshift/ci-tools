@@ -3,7 +3,6 @@ package jobconfig
 import (
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -602,7 +601,7 @@ func WriteToFile(path string, jobConfig *prowconfig.JobConfig) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal the job config (%w)", err)
 	}
-	if err := ioutil.WriteFile(path, jobConfigAsYaml, 0664); err != nil {
+	if err := os.WriteFile(path, jobConfigAsYaml, 0664); err != nil {
 		return err
 	}
 

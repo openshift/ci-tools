@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 
@@ -174,7 +173,7 @@ type excludedRepos struct {
 }
 
 func (er *excludedRepos) loadExcludedReposConfig(path string) error {
-	cfgBytes, err := ioutil.ReadFile(path)
+	cfgBytes, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("failed to read excluded repos config from path %s: %w", path, err)
 	}

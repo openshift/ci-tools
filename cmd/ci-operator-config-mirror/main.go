@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -65,7 +64,7 @@ func (o *options) validate() error {
 type configsByRepo map[string][]config.DataWithInfo
 
 func (d configsByRepo) cleanDestinationSubdirs(destinationOrgPath string) error {
-	contents, err := ioutil.ReadDir(destinationOrgPath)
+	contents, err := os.ReadDir(destinationOrgPath)
 	if err != nil {
 		return fmt.Errorf("failed to read directory %s: %w", destinationOrgPath, err)
 	}

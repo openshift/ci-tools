@@ -1,7 +1,6 @@
 package main
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -39,7 +38,7 @@ c: d
 	if err != nil {
 		t.Fatalf("got unexpected errors: %v", err)
 	}
-	bytes, err := ioutil.ReadFile(file)
+	bytes, err := os.ReadFile(file)
 	if err != nil {
 		t.Fatalf("got unexpected errors: %v", err)
 	}

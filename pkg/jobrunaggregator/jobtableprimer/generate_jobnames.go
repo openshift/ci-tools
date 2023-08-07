@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"sort"
 	"strings"
@@ -150,7 +150,7 @@ func (o *GenerateJobNamesOptions) Run(ctx context.Context) error {
 			return fmt.Errorf("error reading %v: %v", url, resp.StatusCode)
 		}
 
-		content, err := ioutil.ReadAll(resp.Body)
+		content, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return fmt.Errorf("error reading %v: %w", url, err)
 		}
@@ -181,7 +181,7 @@ func (o *GenerateJobNamesOptions) Run(ctx context.Context) error {
 			return fmt.Errorf("error reading %v: %v", url, resp.StatusCode)
 		}
 
-		content, err := ioutil.ReadAll(resp.Body)
+		content, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return fmt.Errorf("error reading %v: %w", url, err)
 		}

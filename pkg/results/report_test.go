@@ -4,7 +4,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -79,7 +79,7 @@ func TestReporter_Report(t *testing.T) {
 					return
 				}
 
-				raw, err := ioutil.ReadAll(r.Body)
+				raw, err := io.ReadAll(r.Body)
 				if err != nil {
 					t.Errorf("failed to read update body: %v", err)
 				}
@@ -118,7 +118,7 @@ func TestOptions_Reporter(t *testing.T) {
 }
 
 func TestGetUsernameAndPassword(t *testing.T) {
-	dir, err := ioutil.TempDir("", "test")
+	dir, err := os.MkdirTemp("", "test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,18 +129,18 @@ func TestGetUsernameAndPassword(t *testing.T) {
 	}()
 
 	password := filepath.Join(dir, "password")
-	if err := ioutil.WriteFile(password, []byte(`secret`), 0644); err != nil {
+	if err := os.WriteFile(password, []byte(`secret`), 0644); err != nil {
 		t.Fatal(err)
 	}
 
 	credentials := filepath.Join(dir, "credentials")
-	if err := ioutil.WriteFile(credentials, []byte(` a :b
+	if err := os.WriteFile(credentials, []byte(` a :b
 `), 0644); err != nil {
 		t.Fatal(err)
 	}
 
 	credentialsWrongFormat := filepath.Join(dir, "credentialsWrongFormat")
-	if err := ioutil.WriteFile(credentialsWrongFormat, []byte(`some
+	if err := os.WriteFile(credentialsWrongFormat, []byte(`some
 `), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +249,7 @@ func TestReportMemoryConfigurationWarning(t *testing.T) {
 					return
 				}
 
-				requestBody, err := ioutil.ReadAll(request.Body)
+				requestBody, err := io.ReadAll(request.Body)
 				if err != nil {
 					t.Errorf("failed to read request body: %v", err)
 				}

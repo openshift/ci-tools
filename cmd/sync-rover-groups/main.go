@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	ldapv3 "github.com/go-ldap/ldap/v3"
@@ -143,7 +142,7 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to marshal groups")
 	}
-	if err := ioutil.WriteFile(opts.groupsFile, data, 0644); err != nil {
+	if err := os.WriteFile(opts.groupsFile, data, 0644); err != nil {
 		logrus.WithError(err).WithField("file", opts.groupsFile).Fatal("failed to write file")
 	}
 }

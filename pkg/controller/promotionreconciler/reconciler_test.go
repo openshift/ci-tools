@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"regexp"
 	"testing"
 
@@ -56,7 +56,7 @@ func TestCommitForIST(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			rawImageStreamTag, err := ioutil.ReadFile(tc.srcFile)
+			rawImageStreamTag, err := os.ReadFile(tc.srcFile)
 			if err != nil {
 				t.Fatalf("failed to read imagestreamtag fixture: %v", err)
 			}

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -125,7 +124,7 @@ func main() {
 		logrus.WithError(err).Fatalf("%s failed to marshal output.", o.peribolosConfig)
 	}
 
-	if err := ioutil.WriteFile(o.peribolosConfig, out, 0666); err != nil {
+	if err := os.WriteFile(o.peribolosConfig, out, 0666); err != nil {
 		logrus.WithError(err).Fatal("Failed to write output.")
 	}
 }

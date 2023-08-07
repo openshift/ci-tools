@@ -3,7 +3,6 @@ package prowconfigsharding
 import (
 	"flag"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -313,7 +312,7 @@ func TestShardPluginConfig(t *testing.T) {
 			tempDir := t.TempDir()
 
 			// We need to write and load the initial config to put it through defaulting
-			if err := ioutil.WriteFile(filepath.Join(tempDir, "_original_config.yaml"), serializedInitialConfig, 0644); err != nil {
+			if err := os.WriteFile(filepath.Join(tempDir, "_original_config.yaml"), serializedInitialConfig, 0644); err != nil {
 				t.Fatalf("failed to write out serialized initial config: %v", err)
 			}
 			// Defaulting is unexported and only happens inside plugins.ConfigAgent.Load()
@@ -326,7 +325,7 @@ func TestShardPluginConfig(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to marshal the new config: %v", err)
 			}
-			if err := ioutil.WriteFile(filepath.Join(tempDir, "_plugins.yaml"), serializedNewConfig, 0644); err != nil {
+			if err := os.WriteFile(filepath.Join(tempDir, "_plugins.yaml"), serializedNewConfig, 0644); err != nil {
 				t.Fatalf("failed to write new config: %v", err)
 			}
 
@@ -335,7 +334,7 @@ func TestShardPluginConfig(t *testing.T) {
 				if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 					t.Fatalf("failed to create directories for %s: %v", path, err)
 				}
-				if err := ioutil.WriteFile(path, []byte(content), 0644); err != nil {
+				if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 					t.Fatalf("failed to write file %s: %v", name, err)
 				}
 			}

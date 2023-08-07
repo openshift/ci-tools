@@ -7,8 +7,8 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"io/ioutil"
 	"net/http"
+	"os"
 	"path"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -48,7 +48,7 @@ func Admission(t testhelper.TestingTInterface, dataDir, kubeconfig string, paren
 	// create mock report credentials
 	credFile := path.Join(t.TempDir(), "credentials")
 	var content string = "<username>:<password>"
-	err = ioutil.WriteFile(credFile, []byte(content), 0400)
+	err = os.WriteFile(credFile, []byte(content), 0400)
 	if err != nil {
 		t.Fatalf("Failed to create a mock file for report-credentials: %v", err)
 	}

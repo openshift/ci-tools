@@ -7,8 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http"
+	"os"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
@@ -127,7 +127,7 @@ func Fake(t testhelper.TestingTInterface, tmpDir string, options ...Option) stri
 		},
 	}
 
-	kubeconfigFile, err := ioutil.TempFile(tmpDir, "kubeconfig")
+	kubeconfigFile, err := os.CreateTemp(tmpDir, "kubeconfig")
 	if err != nil {
 		t.Fatalf("Failed to create temporary kubeconfig file: %v", err)
 	}

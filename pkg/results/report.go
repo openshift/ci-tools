@@ -6,8 +6,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -45,7 +46,7 @@ func (o *Options) Validate() error {
 }
 
 func getUsernameAndPassword(credentials string) (string, string, error) {
-	raw, err := ioutil.ReadFile(credentials)
+	raw, err := os.ReadFile(credentials)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to read credentials file %q: %w", credentials, err)
 	}
@@ -234,7 +235,7 @@ func sendRequest(req *http.Request, client *http.Client, username, password stri
 		}
 	}()
 	if resp != nil && resp.StatusCode != http.StatusOK {
-		body, _ := ioutil.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body)
 		logrus.Tracef("response for report was not 200: %v", string(body))
 	}
 }

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path"
 	"sort"
 	"time"
@@ -60,7 +60,7 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to gather options")
 	}
-	configBytes, err := ioutil.ReadFile(opts.lifecycleConfigFile)
+	configBytes, err := os.ReadFile(opts.lifecycleConfigFile)
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to read --lifecycle-config")
 	}
@@ -97,7 +97,7 @@ func main() {
 		logrus.WithError(err).Fatal("failed to serialize plugin config")
 	}
 
-	if err := ioutil.WriteFile(configPath, pluginConfigRaw, 0644); err != nil {
+	if err := os.WriteFile(configPath, pluginConfigRaw, 0644); err != nil {
 		logrus.WithError(err).Fatal("failed to write main plugin config")
 	}
 }

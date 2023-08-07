@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -23,7 +22,7 @@ import (
 
 // Initialize runs Prometheus with backfilled data under the given dir.
 func Initialize(t testhelper.TestingTInterface, tmpDir string, r *rand.Rand, stream bool) (string, *DataInStages) {
-	prometheusDir, err := ioutil.TempDir(tmpDir, "prometheus")
+	prometheusDir, err := os.MkdirTemp(tmpDir, "prometheus")
 	if err != nil {
 		t.Fatalf("Failed to create temporary directory for Prometheus: %v", err)
 	}
@@ -33,7 +32,7 @@ func Initialize(t testhelper.TestingTInterface, tmpDir string, r *rand.Rand, str
 	t.Logf("Prometheus data will be in %s", prometheusDir)
 
 	prometheusConfig := filepath.Join(prometheusDir, "prometheus.yaml")
-	if err := ioutil.WriteFile(prometheusConfig, []byte(`global:
+	if err := os.WriteFile(prometheusConfig, []byte(`global:
   scrape_interval: 15s`), 0666); err != nil {
 		t.Fatalf("Could not write Prometheus config file: %v", err)
 	}

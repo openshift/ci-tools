@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -79,7 +78,7 @@ func determinizeJobs(prowJobConfigDir string, config *dispatcher.Config) error {
 				continue
 			}
 
-			if err := ioutil.WriteFile(path, serialized, 0644); err != nil {
+			if err := os.WriteFile(path, serialized, 0644); err != nil {
 				errCh <- fmt.Errorf("failed to write file %q: %w", path, err)
 				continue
 			}

@@ -2,7 +2,6 @@ package steps
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -224,7 +223,7 @@ func TestDatabaseIndex(t *testing.T) {
 	}}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			rawImageStreamTag, err := ioutil.ReadFile(testCase.istFile)
+			rawImageStreamTag, err := os.ReadFile(testCase.istFile)
 			if err != nil {
 				t.Fatalf("failed to read imagestreamtag fixture: %v", err)
 			}

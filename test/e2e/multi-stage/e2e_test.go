@@ -4,7 +4,7 @@
 package multi_stage
 
 import (
-	"io/ioutil"
+	"os"
 	"strings"
 	"testing"
 
@@ -19,7 +19,7 @@ const (
 )
 
 func TestMultiStage(t *testing.T) {
-	rawConfig, err := ioutil.ReadFile("config.yaml")
+	rawConfig, err := os.ReadFile("config.yaml")
 	if err != nil {
 		t.Fatalf("failed to read config file: %v", err)
 	}

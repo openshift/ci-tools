@@ -3,8 +3,8 @@ package main
 import (
 	"embed"
 	_ "embed"
+	"io"
 	"io/fs"
-	"io/ioutil"
 	"net/http"
 	"strconv"
 	"time"
@@ -47,7 +47,7 @@ func serveUI(port, healthPort, metricsPort int) {
 	if err != nil {
 		logger.WithError(err).Fatal("Could not find index.html in static content.")
 	}
-	indexBytes, err := ioutil.ReadAll(index)
+	indexBytes, err := io.ReadAll(index)
 	if err != nil {
 		logger.WithError(err).Fatal("Could not read index.html.")
 	}

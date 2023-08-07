@@ -3,7 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/sirupsen/logrus"
@@ -218,7 +218,7 @@ func ResolveLiteralConfig(resolver Resolver, resolverMetrics *metrics.Metrics) h
 			return
 		}
 
-		encoded, err := ioutil.ReadAll(r.Body)
+		encoded, err := io.ReadAll(r.Body)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			_, _ = w.Write([]byte("Could not read unresolved config from request body."))

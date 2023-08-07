@@ -9,7 +9,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"sort"
 	"strings"
@@ -652,7 +651,7 @@ func writeSecrets(secretsMap map[string][]*coreapi.Secret) error {
 	}()
 
 	for cluster, secrets := range secretsMap {
-		tmpFile, err := ioutil.TempFile("", fmt.Sprintf("%s_*.yaml", cluster))
+		tmpFile, err := os.CreateTemp("", fmt.Sprintf("%s_*.yaml", cluster))
 		if err != nil {
 			return fmt.Errorf("failed to create tempfile: %w", err)
 		}

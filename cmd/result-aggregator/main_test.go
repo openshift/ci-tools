@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,7 +16,7 @@ import (
 )
 
 func TestValidator(t *testing.T) {
-	dir, err := ioutil.TempDir("", "test")
+	dir, err := os.MkdirTemp("", "test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,14 +27,14 @@ func TestValidator(t *testing.T) {
 	}()
 
 	passwdFileRaw := filepath.Join(dir, "passwdFile")
-	if err := ioutil.WriteFile(passwdFileRaw, []byte(`a:b
+	if err := os.WriteFile(passwdFileRaw, []byte(`a:b
 c:d
 :`), 0644); err != nil {
 		t.Fatal(err)
 	}
 
 	passwdFileRawAbnormalContent := filepath.Join(dir, "passwdFileRawAbnormalContent")
-	if err := ioutil.WriteFile(passwdFileRawAbnormalContent, []byte("some"), 0644); err != nil {
+	if err := os.WriteFile(passwdFileRawAbnormalContent, []byte("some"), 0644); err != nil {
 		t.Fatal(err)
 	}
 

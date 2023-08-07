@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -134,7 +133,7 @@ func main() {
 	if err := os.MkdirAll(path.Dir(o.publicizeConfig), os.ModePerm); err != nil && !os.IsExist(err) {
 		logrus.WithError(err).Fatal("failed to ensure directory existed for new publicize configuration")
 	}
-	if err := ioutil.WriteFile(o.publicizeConfig, b, 0664); err != nil {
+	if err := os.WriteFile(o.publicizeConfig, b, 0664); err != nil {
 		logrus.WithError(err).Fatal("failed to write new publicize configuration")
 	}
 

@@ -1,7 +1,6 @@
 package load
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -228,7 +227,7 @@ func TestRegistry(t *testing.T) {
 		})
 	}
 	// set up a temporary directory registry with a broken component
-	temp, err := ioutil.TempDir("", "")
+	temp, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("failed to create temp step registry: %v", err)
 	}
@@ -249,7 +248,7 @@ func TestRegistry(t *testing.T) {
 		t.Fatalf("failed to marshal %s into a yaml []byte: %v", deprovisionGatherRef, err)
 	}
 
-	if err := ioutil.WriteFile(filepath.Join(path, deprovisionGatherRef), fileData, 0664); err != nil {
+	if err := os.WriteFile(filepath.Join(path, deprovisionGatherRef), fileData, 0664); err != nil {
 		t.Fatalf("failed to populate temp reference file: %v", err)
 	}
 	_, _, _, _, _, _, err = Registry(temp, RegistryFlag(0))

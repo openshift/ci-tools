@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"math"
 	"os"
 	"path"
@@ -469,7 +468,7 @@ func main() {
 		logrus.WithError(err).Fatal("Could not marshal TestGrid group config")
 	}
 
-	if err := ioutil.WriteFile(groupFile, data, 0664); err != nil {
+	if err := os.WriteFile(groupFile, data, 0664); err != nil {
 		logrus.WithError(err).Fatal("Could not write TestGrid group config")
 	}
 
@@ -498,7 +497,7 @@ func main() {
 			logrus.WithError(err).Fatalf("Could not marshal TestGrid config for %s", dash.Name)
 		}
 
-		if err := ioutil.WriteFile(path.Join(o.testGridConfigDir, fmt.Sprintf("%s.yaml", dash.Name)), data, 0664); err != nil {
+		if err := os.WriteFile(path.Join(o.testGridConfigDir, fmt.Sprintf("%s.yaml", dash.Name)), data, 0664); err != nil {
 			logrus.WithError(err).Fatalf("Could not write TestGrid config for %s", dash.Name)
 		}
 	}

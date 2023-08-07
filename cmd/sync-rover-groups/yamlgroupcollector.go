@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,7 +44,7 @@ func (c *yamlGroupCollector) collect(dir string) (sets.String, error) {
 				return err
 			}
 
-			data, err := ioutil.ReadFile(path)
+			data, err := os.ReadFile(path)
 			if err != nil {
 				logrus.WithField("source-file", path).WithError(err).Error("Failed to read file")
 				return err

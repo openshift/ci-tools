@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -108,7 +107,7 @@ func updateProwConfig(configFile string, config prowconfig.ProwConfig) error {
 		return fmt.Errorf("could not marshal Prow configuration: %w", err)
 	}
 
-	return ioutil.WriteFile(configFile, data, 0644)
+	return os.WriteFile(configFile, data, 0644)
 }
 
 func updateProwPlugins(pluginsFile string, config *plugins.Configuration) error {
@@ -121,7 +120,7 @@ func updateProwPlugins(pluginsFile string, config *plugins.Configuration) error 
 		return fmt.Errorf("could not marshal Prow configuration: %w", err)
 	}
 
-	return ioutil.WriteFile(pluginsFile, data, 0644)
+	return os.WriteFile(pluginsFile, data, 0644)
 }
 
 func privateOrgRepo(repo string) string {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -97,13 +97,13 @@ func (j *gcsJobRun) writeCache(ctx context.Context, parentDir string) error {
 		if err := os.MkdirAll(immediateParentDir, 0755); err != nil {
 			return fmt.Errorf("error making directory for %q: %w", j.GetJobRunID(), err)
 		}
-		if err := ioutil.WriteFile(currentTargetFilename, content, 0644); err != nil {
+		if err := os.WriteFile(currentTargetFilename, content, 0644); err != nil {
 			return fmt.Errorf("error writing file for %q %q: %w", j.GetJobRunID(), currentTargetFilename, err)
 		}
 
 		if strings.HasSuffix(currentTargetFilename, "prowjob.json") {
 			jobRunDir = immediateParentDir
-			if err := ioutil.WriteFile(filepath.Join(immediateParentDir, "prowjob.yaml"), prowJobBytes, 0644); err != nil {
+			if err := os.WriteFile(filepath.Join(immediateParentDir, "prowjob.yaml"), prowJobBytes, 0644); err != nil {
 				return err
 			}
 		}
@@ -137,7 +137,7 @@ func (j *gcsJobRun) writeCache(ctx context.Context, parentDir string) error {
 	if err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(filepath.Join(jobRunDir, "junit-combined-testsuites.xml"), combinedJunitContent, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(jobRunDir, "junit-combined-testsuites.xml"), combinedJunitContent, 0644); err != nil {
 		return err
 	}
 
@@ -348,7 +348,7 @@ func (j *gcsJobRun) getCurrentContent(ctx context.Context, path string) ([]byte,
 	}
 	defer gcsReader.Close()
 
-	return ioutil.ReadAll(gcsReader)
+	return io.ReadAll(gcsReader)
 
 }
 

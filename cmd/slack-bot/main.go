@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -184,7 +184,7 @@ func main() {
 }
 
 func loadKeywordsConfig(configPath string, config interface{}) error {
-	configContent, err := ioutil.ReadFile(configPath)
+	configContent, err := os.ReadFile(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to read config: %w", err)
 	}
@@ -201,14 +201,14 @@ func verifiedBody(logger *logrus.Entry, request *http.Request, signingSecret fun
 		return nil, false
 	}
 
-	body, err := ioutil.ReadAll(request.Body)
+	body, err := io.ReadAll(request.Body)
 	if err != nil {
 		logger.WithError(err).Error("Failed to read an event payload.")
 		return nil, false
 	}
 
 	// need to use body again when unmarshalling
-	request.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+	request.Body = io.NopCloser(bytes.NewBuffer(body))
 
 	if _, err := verifier.Write(body); err != nil {
 		logger.WithError(err).Error("Failed to hash an event payload.")

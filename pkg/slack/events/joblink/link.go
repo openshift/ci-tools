@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/url"
 	"strconv"
 	"strings"
@@ -263,7 +263,7 @@ func contextFor(logger *logrus.Entry, infos []jobInfo, config JobGetter, gcsClie
 					logger.WithError(err).Warn("Could not open alias for read.")
 					continue
 				}
-				symlink, err := ioutil.ReadAll(reader)
+				symlink, err := io.ReadAll(reader)
 				if err != nil {
 					logger.WithError(err).Warn("Could not read alias.")
 					continue

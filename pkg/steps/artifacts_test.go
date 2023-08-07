@@ -1,7 +1,6 @@
 package steps
 
 import (
-	"io/ioutil"
 	"os"
 	"reflect"
 	"testing"
@@ -489,7 +488,7 @@ func TestTestCaseNotifier_SubTests(t *testing.T) {
 }
 
 func TestArtifactWorker(t *testing.T) {
-	tmp, err := ioutil.TempDir("", "")
+	tmp, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -500,7 +499,8 @@ func TestArtifactWorker(t *testing.T) {
 	}()
 	pod := "pod"
 	podClient := &testhelper_kube.FakePodClient{
-		FakePodExecutor: &testhelper_kube.FakePodExecutor{LoggingClient: loggingclient.New(fakectrlruntimeclient.NewFakeClient(
+
+		FakePodExecutor: &testhelper_kube.FakePodExecutor{LoggingClient: loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 			&coreapi.Pod{
 				ObjectMeta: meta.ObjectMeta{
 					Name:      pod,
@@ -516,7 +516,7 @@ func TestArtifactWorker(t *testing.T) {
 						},
 					},
 				},
-			})),
+			}).Build()),
 		},
 		Namespace: "namespace",
 		Name:      pod,
@@ -529,7 +529,7 @@ func TestArtifactWorker(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("timeout waiting for artifact worker to finish")
 	}
-	files, err := ioutil.ReadDir(tmp)
+	files, err := os.ReadDir(tmp)
 	if err != nil {
 		t.Fatal(err)
 	}

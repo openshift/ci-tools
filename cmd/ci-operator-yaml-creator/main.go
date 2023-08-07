@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
@@ -103,7 +102,7 @@ channel in the CoreOS Slack.`))
 	process := process(
 		filter,
 		github.FileGetterFactory,
-		ioutil.WriteFile,
+		os.WriteFile,
 		git.ClientFactoryFrom(gc).ClientFor,
 		o.pushCeiling,
 		func(localSourceDir, org, repo, targetBranch string) error {
@@ -224,7 +223,7 @@ func process(
 		}
 
 		path := filepath.Join(repo.Directory(), cioperatorapi.CIOperatorInrepoConfigFileName)
-		if err := ioutil.WriteFile(path, expectedSerialized, 0644); err != nil {
+		if err := os.WriteFile(path, expectedSerialized, 0644); err != nil {
 			return fmt.Errorf("falled to write %s for %s/%s: %w", path, metadata.Org, metadata.Repo, err)
 		}
 		l.WithField("path", path).Info("Wrote .ci-operator.yaml")

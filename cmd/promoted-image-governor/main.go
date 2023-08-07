@@ -5,7 +5,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -139,7 +138,7 @@ const (
 )
 
 func loadMappingConfig(path string) (*OpenshiftMappingConfig, error) {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %s", path)
 	}
@@ -390,7 +389,7 @@ func main() {
 				return err
 			}
 			if strings.HasSuffix(path, ".json") {
-				data, err := ioutil.ReadFile(path)
+				data, err := os.ReadFile(path)
 				if err != nil {
 					logrus.WithField("source-file", path).WithError(err).Error("Failed to read file")
 					return err
@@ -461,7 +460,7 @@ func main() {
 			}
 			f := filepath.Join(opts.openshiftMappingDir, filename)
 			logrus.WithField("filename", f).Info("Writing to file")
-			if err := ioutil.WriteFile(f, b.Bytes(), 0644); err != nil {
+			if err := os.WriteFile(f, b.Bytes(), 0644); err != nil {
 				logrus.WithError(err).WithField("filename", f).Fatal("could not write to file")
 			}
 		}

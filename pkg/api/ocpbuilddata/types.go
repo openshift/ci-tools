@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -371,7 +371,7 @@ func gatherAllOCPImageConfigs(ocpBuildDataDir string, majorMinor MajorMinor) (ma
 }
 
 func readYAML(path string, unmarshalTarget interface{}, majorMinor MajorMinor) error {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("failed to read %s: %w", path, err)
 	}

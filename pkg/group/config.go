@@ -2,7 +2,7 @@ package group
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/yaml"
@@ -42,7 +42,7 @@ func (t Target) ResolveClusters(cg map[string][]string) sets.String {
 
 // LoadConfig loads the config from a given file
 func LoadConfig(file string) (*Config, error) {
-	data, err := ioutil.ReadFile(file)
+	data, err := os.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config file")
 	}

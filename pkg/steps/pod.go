@@ -55,6 +55,11 @@ type PodStepConfiguration struct {
 	Clone              bool
 }
 
+type GeneratePodOptions struct {
+	Clone             bool
+	PropagateExitCode bool
+}
+
 type podStep struct {
 	name      string
 	config    PodStepConfiguration
@@ -197,7 +202,7 @@ func GenerateBasePod(
 	decorationConfig *v1.DecorationConfig,
 	rawJobSpec string,
 	secretsToCensor []coreapi.VolumeMount,
-	clone bool,
+	generatePodOptions *GeneratePodOptions,
 ) (*coreapi.Pod, error) {
 	envMap, err := downwardapi.EnvForSpec(jobSpec.JobSpec)
 	envMap[openshiftCIEnv] = "true"
@@ -238,7 +243,7 @@ func GenerateBasePod(
 	}...)
 
 	artifactDir = fmt.Sprintf("artifacts/%s", artifactDir)
-	if err := addPodUtils(pod, artifactDir, decorationConfig, rawJobSpec, secretsToCensor, clone, jobSpec); err != nil {
+	if err := addPodUtils(pod, artifactDir, decorationConfig, rawJobSpec, secretsToCensor, generatePodOptions, jobSpec); err != nil {
 		return nil, fmt.Errorf("failed to decorate pod: %w", err)
 	}
 	return pod, nil
@@ -285,7 +290,10 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 	}
 
 	artifactDir := s.name
-	pod, err := GenerateBasePod(s.jobSpec, s.config.Labels, s.config.As, s.config.NodeName, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands}, image, containerResources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(), secretVolumeMounts, clone)
+	pod, err := GenerateBasePod(s.jobSpec, s.config.Labels, s.config.As,
+		s.config.NodeName, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands},
+		image, containerResources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(),
+		secretVolumeMounts, &GeneratePodOptions{Clone: clone, PropagateExitCode: false})
 	if err != nil {
 		return nil, err
 	}

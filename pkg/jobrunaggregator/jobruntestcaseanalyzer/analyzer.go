@@ -489,7 +489,8 @@ func (o *JobRunTestCaseAnalyzerOptions) Run(ctx context.Context) error {
 		return err
 	}
 
-	finishedJobRuns, unfinishedJobRuns, _, _, err := jobrunaggregatorlib.WaitAndGetAllFinishedJobRuns(ctx, timeToStopWaiting, o, outputDir, o.testNameSuffix)
+	jobRunWaiter := jobrunaggregatorlib.DefaultJobRunWaiter{JobRunGetter: o, TimeToStopWaiting: timeToStopWaiting}
+	finishedJobRuns, unfinishedJobRuns, _, _, err := jobrunaggregatorlib.WaitAndGetAllFinishedJobRuns(ctx, o, jobRunWaiter, outputDir, o.testNameSuffix)
 	if err != nil {
 		return err
 	}

@@ -101,7 +101,8 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	finishedJobsToAggregate, _, finishedJobRunNames, unfinishedJobNames, err := jobrunaggregatorlib.WaitAndGetAllFinishedJobRuns(ctx, timeToStopWaiting, o, o.workingDir, "aggregated")
+	jobRunWaiter := jobrunaggregatorlib.DefaultJobRunWaiter{JobRunGetter: o, TimeToStopWaiting: timeToStopWaiting}
+	finishedJobsToAggregate, _, finishedJobRunNames, unfinishedJobNames, err := jobrunaggregatorlib.WaitAndGetAllFinishedJobRuns(ctx, o, jobRunWaiter, o.workingDir, "aggregated")
 	if err != nil {
 		return err
 	}

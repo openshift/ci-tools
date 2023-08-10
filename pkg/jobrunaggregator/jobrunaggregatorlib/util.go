@@ -21,6 +21,11 @@ type JobRunGetter interface {
 	GetRelatedJobRuns(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error)
 }
 
+type JobRunWaiter interface {
+	// Wait waits until all job runs finish, or time out
+	Wait(ctx context.Context) error
+}
+
 // WaitUntilTime waits until readAt time has passed
 func WaitUntilTime(ctx context.Context, readyAt time.Time) error {
 	logrus.Infof("Waiting now=%v, ReadyAt=%v.\n", time.Now(), readyAt)
@@ -78,31 +83,26 @@ func getAllFinishedJobRuns(ctx context.Context, relatedJobRuns []jobrunaggregato
 	return finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames
 }
 
-// WaitAndGetAllFinishedJobRuns waits for all job runs to finish until timeToStopWaiting. It returns all finished and unfinished job runs
-func WaitAndGetAllFinishedJobRuns(ctx context.Context,
-	timeToStopWaiting time.Time,
-	jobRunGetter JobRunGetter,
-	outputDir string,
-	variantInfo string) ([]jobrunaggregatorapi.JobRunInfo, []jobrunaggregatorapi.JobRunInfo, []string, []string, error) {
-	clock := clock.RealClock{}
-	finishedJobRuns := []jobrunaggregatorapi.JobRunInfo{}
-	unfinishedJobRuns := []jobrunaggregatorapi.JobRunInfo{}
-	finishedJobRunNames := []string{}
-	unfinishedJobRunNames := []string{}
+type DefaultJobRunWaiter struct {
+	JobRunGetter      JobRunGetter
+	TimeToStopWaiting time.Time
+}
 
-	relatedJobRuns, err := jobRunGetter.GetRelatedJobRuns(ctx)
+func (w DefaultJobRunWaiter) Wait(ctx context.Context) error {
+	clock := clock.RealClock{}
+	relatedJobRuns, err := w.JobRunGetter.GetRelatedJobRuns(ctx)
 	if err != nil {
-		return finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames, err
+		return err
 	}
 
 	for {
 		fmt.Println() // for prettier logs
 
-		finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames := getAllFinishedJobRuns(ctx, relatedJobRuns)
+		_, _, _, unfinishedJobRunNames := getAllFinishedJobRuns(ctx, relatedJobRuns)
 
 		// ready or not, it's time to check
-		if clock.Now().After(timeToStopWaiting) {
-			logrus.Infof("waited long enough. Ready or not, here I come. (readyOrNot=%v now=%v)", timeToStopWaiting, clock.Now())
+		if clock.Now().After(w.TimeToStopWaiting) {
+			logrus.Infof("waited long enough. Ready or not, here I come. (readyOrNot=%v now=%v)", w.TimeToStopWaiting, clock.Now())
 			break
 		}
 
@@ -112,15 +112,33 @@ func WaitAndGetAllFinishedJobRuns(ctx context.Context,
 			case <-time.After(10 * time.Minute):
 				continue
 			case <-ctx.Done():
-				return finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames, ctx.Err()
+				return ctx.Err()
 			}
 		}
 
 		break
 	}
+	return nil
+}
+
+// WaitAndGetAllFinishedJobRuns waits for all job runs to finish until timeToStopWaiting. It returns all finished and unfinished job runs
+func WaitAndGetAllFinishedJobRuns(ctx context.Context,
+	jobRunGetter JobRunGetter,
+	waiter JobRunWaiter,
+	outputDir string,
+	variantInfo string) ([]jobrunaggregatorapi.JobRunInfo, []jobrunaggregatorapi.JobRunInfo, []string, []string, error) {
+	finishedJobRuns := []jobrunaggregatorapi.JobRunInfo{}
+	unfinishedJobRuns := []jobrunaggregatorapi.JobRunInfo{}
+	finishedJobRunNames := []string{}
+	unfinishedJobRunNames := []string{}
+
+	err := waiter.Wait(ctx)
+	if err != nil {
+		return finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames, err
+	}
 
 	// Refresh the job runs content one last time
-	relatedJobRuns, err = jobRunGetter.GetRelatedJobRuns(ctx)
+	relatedJobRuns, err := jobRunGetter.GetRelatedJobRuns(ctx)
 	if err != nil {
 		return finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames, err
 	}

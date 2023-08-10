@@ -135,7 +135,7 @@ func (s *multiStageTestStep) generatePods(
 		labels := map[string]string{base_steps.LabelMetadataStep: step.As}
 		pod, err := base_steps.GenerateBasePod(s.jobSpec, labels, name, s.nodeName,
 			containerName, commands, image, resources, artifactDir, s.jobSpec.DecorationConfig,
-			s.jobSpec.RawSpec(), secretVolumeMounts, &base_steps.GeneratePodOptions{Clone: false})
+			s.jobSpec.RawSpec(), secretVolumeMounts, &base_steps.GeneratePodOptions{PropagateExitCode: genPodOpts.IsObserver})
 		if err != nil {
 			errs = append(errs, err)
 			continue

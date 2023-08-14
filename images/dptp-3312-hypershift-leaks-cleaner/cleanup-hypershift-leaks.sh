@@ -13,7 +13,7 @@ done
 
 echo 'Deleting expired HostedClusters...'
 # Get json output from oc command
-clusters_json=$(oc -n clusters get hostedclusters -o json | jq -s '[.[] | select( .items[].spec.dns.baseDomain == "hypershift.aws-2.ci.openshift.org" ) | .items[].metadata]')
+clusters_json=$(oc -n clusters get hostedclusters -o json | jq '[.items[] | select( .spec.dns.baseDomain == "hypershift.aws-2.ci.openshift.org" ) | .metadata]')
 # Process each cluster
 echo "${clusters_json}" | jq -c '.[]' | while read cluster; do
     # Extract creationTimestamp and cluster name

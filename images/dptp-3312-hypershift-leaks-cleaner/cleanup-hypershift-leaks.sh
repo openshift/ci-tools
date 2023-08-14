@@ -1,12 +1,14 @@
 #!/bin/bash
 NOW=$(date +%s)
 echo Cleanning up resources older than $(date -u -d @$NOW +%Y-%m-%dT%H:%M:%SZ)
+AWS_CRED_PATH=${AWS_CRED_PATH:-/token/.awscred}
+echo Using AWS_CRED_PATH=${AWS_CRED_PATH}
 
 echo 'Deleting broken HostedClusters...'
 # Get json output from oc command
-oc get hc -A -o json --as system:admin | jq -r '.items[] | select(.metadata.annotations.broken == "true" and .spec.dns.baseDomain == "hypershift.aws-2.ci.openshift.org" ) | "\(.metadata.namespace) \(.metadata.name)"' | while read cluster; do
+oc -n clusters get hostedclusters -o json | jq -r '.items[] | select(.metadata.annotations.broken == "true" and .spec.dns.baseDomain == "hypershift.aws-2.ci.openshift.org" ) | "\(.metadata.namespace) \(.metadata.name)"' | while read cluster; do
     echo 'Deleting' $cluster
-    echo $cluster | awk '{ print "timeout 10m ./hypershift destroy cluster aws --name " $2 " --aws-creds ./workspace/hosted-aws "  }' | bash
+    echo $cluster | awk -v AWS_CRED_PATH="$AWS_CRED_PATH" '{ print "timeout 5m hypershift destroy cluster aws --name " $2 " --aws-creds " AWS_CRED_PATH " --destroy-cloud-resources " }' | bash
 done
 
 echo 'Deleting expired HostedClusters...'
@@ -27,7 +29,7 @@ echo "${clusters_json}" | jq -c '.[]' | while read cluster; do
     # If creationTimestamp is older than 12 hours, delete the cluster
     if (( time_diff_hr > 12 )); then
         echo "Deleting cluster ${cluster_name} created at ${creation_time_str}..."
-        timeout 10m ~/hypershift destroy cluster aws --name "${cluster_name}" --aws-creds ~/hosted-aws
+        timeout 5m hypershift destroy cluster aws --name "${cluster_name}" --aws-creds ${AWS_CRED_PATH} --destroy-cloud-resources
     fi
 done
 

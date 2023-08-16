@@ -113,7 +113,9 @@ SELECT
     Architecture,
     Network,
     Topology,
-    JobRuns,
+	JobRuns,
+	IFNULL(SAFE_CAST(P50 AS STRING), "0.0") AS P50,
+	IFNULL(SAFE_CAST(P75 AS STRING), "0.0") AS P75,
     IFNULL(SAFE_CAST(P95 AS STRING), "0.0") AS P95,
     IFNULL(SAFE_CAST(P99 AS STRING), "0.0") AS P99,
 FROM DATA_SET_LOCATION.BackendDisruptionPercentilesByDate
@@ -155,6 +157,12 @@ ORDER BY
 		if !strings.Contains(data.P95, ".") {
 			data.P95 = data.P95 + ".0"
 		}
+		if !strings.Contains(data.P75, ".") {
+			data.P75 = data.P75 + ".0"
+		}
+		if !strings.Contains(data.P50, ".") {
+			data.P50 = data.P50 + ".0"
+		}
 		disruptionDataSet = append(disruptionDataSet, data)
 	}
 	return jobrunaggregatorapi.ConvertToHistoricalData(disruptionDataSet), nil
@@ -165,6 +173,7 @@ func (c *ciDataClient) ListAlertHistoricalData(ctx context.Context) ([]jobrunagg
     SELECT AlertName, AlertNamespace, AlertLevel,
             Release, FromRelease, Platform, Architecture, Network, Topology,
 			JobRuns,
+			IFNULL(SAFE_CAST(P50 AS STRING), "0.0") AS P50,IFNULL(SAFE_CAST(P75 AS STRING), "0.0") AS P75,
             IFNULL(SAFE_CAST(P95 AS STRING), "0.0") AS P95, IFNULL(SAFE_CAST(P99 AS STRING), "0.0") AS P99
     FROM DATA_SET_LOCATION.Alerts_Unified_LastWeek_P95
     ORDER BY 
@@ -193,6 +202,12 @@ func (c *ciDataClient) ListAlertHistoricalData(ctx context.Context) ([]jobrunagg
 		}
 		if !strings.Contains(data.P95, ".") {
 			data.P95 = data.P95 + ".0"
+		}
+		if !strings.Contains(data.P75, ".") {
+			data.P75 = data.P75 + ".0"
+		}
+		if !strings.Contains(data.P50, ".") {
+			data.P50 = data.P50 + ".0"
 		}
 		alertDataSet = append(alertDataSet, data)
 	}

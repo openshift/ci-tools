@@ -52,7 +52,7 @@ type JobLister interface {
 
 type HistoricalDataClient interface {
 	ListDisruptionHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalData, error)
-	ListAlertHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalData, error)
+	ListAlertHistoricalData(ctx context.Context) ([]*jobrunaggregatorapi.AlertHistoricalDataRow, error)
 }
 
 type CIDataClient interface {
@@ -168,7 +168,7 @@ ORDER BY
 	return jobrunaggregatorapi.ConvertToHistoricalData(disruptionDataSet), nil
 }
 
-func (c *ciDataClient) ListAlertHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalData, error) {
+func (c *ciDataClient) ListAlertHistoricalData(ctx context.Context) ([]*jobrunaggregatorapi.AlertHistoricalDataRow, error) {
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(`
     SELECT AlertName, AlertNamespace, AlertLevel,
             Release, FromRelease, Platform, Architecture, Network, Topology,
@@ -211,7 +211,7 @@ func (c *ciDataClient) ListAlertHistoricalData(ctx context.Context) ([]jobrunagg
 		}
 		alertDataSet = append(alertDataSet, data)
 	}
-	return jobrunaggregatorapi.ConvertToHistoricalData(alertDataSet), nil
+	return alertDataSet, nil
 }
 
 func (c *ciDataClient) ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRow, error) {
@@ -978,9 +978,9 @@ func GetUTCDay(in time.Time) time.Time {
 
 func (c *ciDataClient) ListAllKnownAlerts(ctx context.Context) ([]*jobrunaggregatorapi.KnownAlertRow, error) {
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(
-		`SELECT *
-FROM DATA_SET_LOCATION.Alerts_AllKnown
-ORDER BY Release, AlertName, AlertNamespace ASC
+		`SELECT AlertName, AlertNamespace, AlertLevel, Release, FirstObserved, LastObserved, Results
+	FROM DATA_SET_LOCATION.Alerts_AllKnown
+	ORDER BY Release, AlertName, AlertNamespace, FirstObserved ASC
 `)
 
 	query := c.client.Query(queryString)

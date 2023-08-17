@@ -230,7 +230,7 @@ func (p *prowJobBaseBuilder) Build(namePrefix string) prowconfig.JobBase {
 	case string(cioperatorapi.ClusterARM01):
 		p.PodSpec = p.PodSpec.Add(
 			func(spec *corev1.PodSpec) error {
-				spec.Containers[0].Image = fmt.Sprintf("%s/ci-arm64/ci-operator:latest", cioperatorapi.ServiceDomainArm01Registry)
+				spec.Containers[0].Image = fmt.Sprintf("%s/ci/ci-operator-arm64:latest", cioperatorapi.ServiceDomainArm01Registry)
 				return nil
 			},
 		)

@@ -8,9 +8,14 @@ import (
 	prowjobv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 )
 
+const (
+	// PayloadTagAnnotation is the name of the annotation for the payload tag in prow job
+	PayloadTagAnnotation = "release.openshift.io/tag"
+)
+
 // GetPayloadTagFromProwJob gets the payload tag from prow jobs.
 func GetPayloadTagFromProwJob(prowJob *prowjobv1.ProwJob) string {
-	return prowJob.Annotations["release.openshift.io/tag"]
+	return prowJob.Annotations[PayloadTagAnnotation]
 }
 
 func NewPayloadAnalysisJobLocatorForReleaseController(
@@ -39,8 +44,8 @@ type releaseControllerProwJobMatcher struct {
 
 func (a releaseControllerProwJobMatcher) shouldAggregateReleaseControllerJob(prowJob *prowjobv1.ProwJob) bool {
 	payloadTag := GetPayloadTagFromProwJob(prowJob)
-	jobName := prowJob.Labels["prow.k8s.io/job"]
-	jobRunId := prowJob.Labels["prow.k8s.io/build-id"]
+	jobName := prowJob.Annotations[prowJobJobNameAnnotation]
+	jobRunId := prowJob.Labels[prowJobJobRunIDLabel]
 	logrus.Infof("checking %v/%v for payloadtag match: looking for %q found %q", jobName, jobRunId, a.payloadTag, payloadTag)
 	payloadTagMatches := len(a.payloadTag) > 0 && payloadTag == a.payloadTag
 

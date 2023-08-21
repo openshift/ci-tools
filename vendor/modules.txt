@@ -1687,6 +1687,11 @@ k8s.io/test-infra/prow/cache
 k8s.io/test-infra/prow/client/clientset/versioned
 k8s.io/test-infra/prow/client/clientset/versioned/scheme
 k8s.io/test-infra/prow/client/clientset/versioned/typed/prowjobs/v1
+k8s.io/test-infra/prow/client/informers/externalversions
+k8s.io/test-infra/prow/client/informers/externalversions/internalinterfaces
+k8s.io/test-infra/prow/client/informers/externalversions/prowjobs
+k8s.io/test-infra/prow/client/informers/externalversions/prowjobs/v1
+k8s.io/test-infra/prow/client/listers/prowjobs/v1
 k8s.io/test-infra/prow/clonerefs
 k8s.io/test-infra/prow/cmd/generic-autobumper/bumper
 k8s.io/test-infra/prow/commentpruner

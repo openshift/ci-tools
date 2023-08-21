@@ -45,8 +45,8 @@ type perPRProwJobMatcher struct {
 
 func (a perPRProwJobMatcher) shouldAggregateReleaseControllerJob(prowJob *prowjobv1.ProwJob) bool {
 	id := prowJob.Labels[a.matchLabel]
-	jobName := prowJob.Labels["prow.k8s.io/job"]
-	jobRunId := prowJob.Labels["prow.k8s.io/build-id"]
+	jobName := prowJob.Annotations[prowJobJobNameAnnotation]
+	jobRunId := prowJob.Labels[prowJobJobRunIDLabel]
 	fmt.Printf("  checking %v/%v for matchID match: looking for %q found %q.\n", jobName, jobRunId, a.matchID, id)
 	idMatches := len(a.matchID) > 0 && id == a.matchID
 

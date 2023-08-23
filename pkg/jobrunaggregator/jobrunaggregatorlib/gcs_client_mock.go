@@ -53,7 +53,7 @@ func (mr *MockCIGCSClientMockRecorder) ReadJobRunFromGCS(arg0, arg1, arg2, arg3,
 }
 
 // ReadRelatedJobRuns mocks base method.
-func (m *MockCIGCSClient) ReadRelatedJobRuns(arg0 context.Context, arg1, arg2, arg3, arg4 string, arg5 prowJobMatcherFunc) ([]jobrunaggregatorapi.JobRunInfo, error) {
+func (m *MockCIGCSClient) ReadRelatedJobRuns(arg0 context.Context, arg1, arg2, arg3, arg4 string, arg5 ProwJobMatcherFunc) ([]jobrunaggregatorapi.JobRunInfo, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ReadRelatedJobRuns", arg0, arg1, arg2, arg3, arg4, arg5)
 	ret0, _ := ret[0].([]jobrunaggregatorapi.JobRunInfo)

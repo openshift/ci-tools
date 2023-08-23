@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+	prowjobclientset "k8s.io/test-infra/prow/client/clientset/versioned"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 )
@@ -95,6 +96,7 @@ type JobRunsTestCaseAnalyzerFlags struct {
 	JobGCSPrefixes              []jobGCSPrefix
 	ExcludeJobNames             []string
 	IncludeJobNames             []string
+	JobStateQuerySource         string
 }
 
 func NewJobRunsTestCaseAnalyzerFlags() *JobRunsTestCaseAnalyzerFlags {
@@ -122,7 +124,7 @@ func (f *JobRunsTestCaseAnalyzerFlags) BindFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&f.Infrastructure, "infrastructure", f.Infrastructure, "The infrastructure used to narrow down a subset of the jobs to analyze, ex: upi|ipi")
 	fs.StringVar(&f.Network, "network", f.Network, "The network used to narrow down a subset of the jobs to analyze, ex: sdn|ovn")
 	fs.IntVar(&f.MinimumSuccessfulTestCount, "minimum-successful-count", defaultMinimumSuccessfulTestCount, "minimum number of successful test counts among jobs meeting criteria")
-	usage := fmt.Sprintf("mutually exclusive to --payload-tag.  Matches the .label[%s] on the prowjob, which is a UID", jobrunaggregatorlib.PayloadInvocationIDLabel)
+	usage := fmt.Sprintf("mutually exclusive to --payload-tag.  Matches the .label[%s] on the prowjob, which is a UID", jobrunaggregatorlib.ProwJobPayloadInvocationIDLabel)
 	fs.StringVar(&f.PayloadInvocationID, "payload-invocation-id", f.PayloadInvocationID, usage)
 
 	fs.StringVar(&f.WorkingDir, "working-dir", f.WorkingDir, "The directory to store caches, output, and the like.")
@@ -131,6 +133,7 @@ func (f *JobRunsTestCaseAnalyzerFlags) BindFlags(fs *pflag.FlagSet) {
 
 	fs.StringArrayVar(&f.ExcludeJobNames, "exclude-job-names", f.ExcludeJobNames, "Applied only when --explicit-gcs-prefixes is not specified.  The flag can be specified multiple times to create a list of substrings used to filter JobNames from the analysis")
 	fs.StringArrayVar(&f.IncludeJobNames, "include-job-names", f.IncludeJobNames, "Applied only when --explicit-gcs-prefixes is not specified.  The flag can be specified multiple times to create a list of substrings to include in matching JobNames for analysis")
+	fs.StringVar(&f.JobStateQuerySource, "query-source", jobrunaggregatorlib.JobStateQuerySourceBigQuery, "The source from which job states are found. It is either bigquery or cluster")
 }
 
 func NewJobRunsTestCaseAnalyzerCommand() *cobra.Command {
@@ -247,13 +250,13 @@ func (f *JobRunsTestCaseAnalyzerFlags) Validate() error {
 
 	if len(f.Platform) > 0 {
 		if _, ok := knownPlatforms[f.Platform]; !ok {
-			return fmt.Errorf("unknown platform %s, valid values are: %+q", f.Platform, knownPlatforms)
+			return fmt.Errorf("unknown platform %s, valid values are: %+q", f.Platform, sets.List(knownPlatforms))
 		}
 	}
 
 	if len(f.Network) > 0 {
 		if _, ok := knownNetworks[f.Network]; !ok {
-			return fmt.Errorf("unknown network %s, valid values are: %+q", f.Network, knownNetworks)
+			return fmt.Errorf("unknown network %s, valid values are: %+q", f.Network, sets.List(knownNetworks))
 		}
 	}
 
@@ -266,6 +269,12 @@ func (f *JobRunsTestCaseAnalyzerFlags) Validate() error {
 
 	if f.Timeout > maxTimeout {
 		return fmt.Errorf("timeout value of %s is out of range, valid value should be less than %s", f.Timeout, maxTimeout)
+	}
+
+	if len(f.JobStateQuerySource) > 0 {
+		if _, ok := jobrunaggregatorlib.KnownQuerySources[f.JobStateQuerySource]; !ok {
+			return fmt.Errorf("unknown query-source %s, valid values are: %+q", f.JobStateQuerySource, sets.List(jobrunaggregatorlib.KnownQuerySources))
+		}
 	}
 
 	return nil
@@ -314,24 +323,7 @@ func (f *JobRunsTestCaseAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunTe
 		return nil, err
 	}
 
-	jobGetter := &testCaseAnalyzerJobGetter{
-		platform:       f.Platform,
-		infrastructure: f.Infrastructure,
-		network:        f.Network,
-		testNameSuffix: f.testNameSuffix(),
-		jobGCSPrefixes: &f.JobGCSPrefixes,
-		ciDataClient:   ciDataClient,
-	}
-
-	if f.ExcludeJobNames != nil && len(f.ExcludeJobNames) > 0 {
-		jobGetter.excludeJobNames = sets.Set[string]{}
-		jobGetter.excludeJobNames.Insert(f.ExcludeJobNames...)
-	}
-
-	if f.IncludeJobNames != nil && len(f.IncludeJobNames) > 0 {
-		jobGetter.includeJobNames = sets.Set[string]{}
-		jobGetter.includeJobNames.Insert(f.IncludeJobNames...)
-	}
+	jobGetter := NewTestCaseAnalyzerJobGetter(f.Platform, f.Infrastructure, f.Network, f.testNameSuffix(), f.ExcludeJobNames, f.IncludeJobNames, &f.JobGCSPrefixes, ciDataClient)
 
 	var testIdentifierOpt testIdentifier
 	switch f.TestGroup {
@@ -341,6 +333,14 @@ func (f *JobRunsTestCaseAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunTe
 		testIdentifierOpt = overallTestIdentifier
 	default:
 		return nil, fmt.Errorf("unknown test group: %s", f.TestGroup)
+	}
+
+	var prowJobClient *prowjobclientset.Clientset
+	if f.JobStateQuerySource != jobrunaggregatorlib.JobStateQuerySourceBigQuery {
+		prowJobClient, err = jobrunaggregatorlib.GetProwJobClient()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &JobRunTestCaseAnalyzerOptions{
@@ -355,5 +355,8 @@ func (f *JobRunsTestCaseAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunTe
 		payloadInvocationID: f.PayloadInvocationID,
 		jobGCSPrefixes:      &f.JobGCSPrefixes,
 		jobGetter:           jobGetter,
+		prowJobClient:       prowJobClient,
+		jobStateQuerySource: f.JobStateQuerySource,
+		prowJobMatcherFunc:  jobGetter.shouldAggregateJob,
 	}, nil
 }

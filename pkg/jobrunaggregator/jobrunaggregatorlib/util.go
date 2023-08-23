@@ -11,7 +11,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/clientcmd"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowjobclientset "k8s.io/test-infra/prow/client/clientset/versioned"
 	prowjobinformers "k8s.io/test-infra/prow/client/informers/externalversions"
@@ -22,8 +24,14 @@ import (
 )
 
 const (
-	prowJobJobNameAnnotation = "prow.k8s.io/job"
-	prowJobJobRunIDLabel     = "prow.k8s.io/build-id"
+	JobStateQuerySourceBigQuery = "bigquery"
+	JobStateQuerySourceCluster  = "cluster"
+	prowJobJobNameAnnotation    = "prow.k8s.io/job"
+	prowJobJobRunIDLabel        = "prow.k8s.io/build-id"
+)
+
+var (
+	KnownQuerySources = sets.Set[string]{JobStateQuerySourceBigQuery: sets.Empty{}, JobStateQuerySourceCluster: sets.Empty{}}
 )
 
 type JobRunGetter interface {
@@ -132,36 +140,18 @@ func (w DefaultJobRunWaiter) Wait(ctx context.Context) error {
 }
 
 type ClusterJobRunWaiter struct {
-	ProwJobClient *prowjobclientset.Clientset
-	JobName                     string
-	PayloadTag                  string
-	AggregationID               string
-	TimeToStopWaiting time.Time
-}
-
-func (w ClusterJobRunWaiter) isInterestingJob(job *prowv1.ProwJob) bool {
-	if len(w.JobName) != 0 && w.JobName != job.Annotations[prowJobJobNameAnnotation] {
-		return false
-	}
-	if len(w.PayloadTag) != 0 && GetPayloadTagFromProwJob(job) != w.PayloadTag {
-		return false
-	}
-	// Should I deal with nonexistence of this label?
-	if len(w.AggregationID) != 0 && job.Labels[AggregationIDLabel] != w.AggregationID {
-		return false
-	}
-	return true
+	ProwJobClient      *prowjobclientset.Clientset
+	TimeToStopWaiting  time.Time
+	ProwJobMatcherFunc ProwJobMatcherFunc
 }
 
 func (w ClusterJobRunWaiter) Wait(ctx context.Context) error {
 	if w.ProwJobClient == nil {
 		return fmt.Errorf("prowjob client is missing")
 	}
-	fmt.Printf("Going to wait until %+v with timeout value %+v\n", w.TimeToStopWaiting, w.TimeToStopWaiting.Sub(time.Now()))
-	//ctx, cancel := context.WithTimeout(ctx, w.TimeToStopWaiting.Sub(time.Now()))
-	//defer cancel()
+	logrus.Infof("Going to wait until %+v with timeout value %+v", w.TimeToStopWaiting, time.Until(w.TimeToStopWaiting))
 
-	prowJobInformerFactory := prowjobinformers.NewSharedInformerFactory(w.ProwJobClient, 24 * time.Hour)
+	prowJobInformerFactory := prowjobinformers.NewSharedInformerFactory(w.ProwJobClient, 24*time.Hour)
 	prowJobInformer := prowJobInformerFactory.Prow().V1().ProwJobs()
 
 	uncompletedJobMap := map[string]*prowv1.ProwJob{}
@@ -171,39 +161,39 @@ func (w ClusterJobRunWaiter) Wait(ctx context.Context) error {
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				prowJob := obj.(*prowv1.ProwJob)
-				if w.isInterestingJob(prowJob) &&
+				if w.ProwJobMatcherFunc(prowJob) &&
 					prowJob.Status.CompletionTime == nil {
 					jobRunID := prowJob.Labels[prowJobJobRunIDLabel]
 					if _, ok := uncompletedJobMap[jobRunID]; !ok {
 						uncompletedJobMap[jobRunID] = prowJob
 						wg.Add(1)
 						count++
-						fmt.Printf("AddFunc for job: %s, ID: %s, count: %d\n", prowJob.Labels[prowJobJobNameAnnotation], prowJob.Labels[prowJobJobRunIDLabel], count)
+						logrus.Infof("AddFunc for job: %s, ID: %s, count: %d", prowJob.Labels[prowJobJobNameAnnotation], prowJob.Labels[prowJobJobRunIDLabel], count)
 					}
 				}
 			},
 			UpdateFunc: func(_, newObj interface{}) {
 				prowJob := newObj.(*prowv1.ProwJob)
-				if w.isInterestingJob(prowJob) &&
+				if w.ProwJobMatcherFunc(prowJob) &&
 					prowJob.Status.CompletionTime != nil {
 					jobRunID := prowJob.Labels[prowJobJobRunIDLabel]
 					if _, ok := uncompletedJobMap[jobRunID]; ok {
 						delete(uncompletedJobMap, jobRunID)
 						wg.Done()
 						count--
-						fmt.Printf("Update for job: %s, ID: %s, count: %d\n", prowJob.Labels[prowJobJobNameAnnotation], prowJob.Labels[prowJobJobRunIDLabel], count)
+						logrus.Infof("Update for job: %s, ID: %s, count: %d", prowJob.Labels[prowJobJobNameAnnotation], prowJob.Labels[prowJobJobRunIDLabel], count)
 					}
 				}
 			},
 			DeleteFunc: func(obj interface{}) {
 				prowJob := obj.(*prowv1.ProwJob)
-				if w.isInterestingJob(prowJob) {
+				if w.ProwJobMatcherFunc(prowJob) {
 					jobRunID := prowJob.Labels[prowJobJobRunIDLabel]
 					if _, ok := uncompletedJobMap[jobRunID]; ok {
 						delete(uncompletedJobMap, jobRunID)
 						wg.Done()
 						count--
-						fmt.Printf("Delete for job: %s, ID: %s, count %d\n", prowJob.Labels[prowJobJobNameAnnotation], prowJob.Labels[prowJobJobRunIDLabel], count)
+						logrus.Infof("Delete for job: %s, ID: %s, count %d", prowJob.Labels[prowJobJobNameAnnotation], prowJob.Labels[prowJobJobRunIDLabel], count)
 					}
 				}
 			},
@@ -213,23 +203,18 @@ func (w ClusterJobRunWaiter) Wait(ctx context.Context) error {
 	if !cache.WaitForCacheSync(ctx.Done(), prowJobInformer.Informer().HasSynced) {
 		return fmt.Errorf("prowjob informer sync error")
 	}
-	fmt.Printf("cache syned\n")
 	done := make(chan error, 1)
 	go func() {
 		wg.Wait()
-		fmt.Printf("wg completed\n")
 		done <- nil
 	}()
 
 	select {
 	case <-time.After(time.Until(w.TimeToStopWaiting)):
-		fmt.Printf("stopping waiting\n")
 		break
 	case <-done:
-		fmt.Printf("done processing\n")
 		break
 	case <-ctx.Done():
-		fmt.Printf("ctx error\n")
 		return ctx.Err()
 	}
 	return nil
@@ -289,4 +274,18 @@ func OutputTestCaseFailures(parents []string, suite *junit.TestSuite) {
 	for _, child := range suite.Children {
 		OutputTestCaseFailures(currSuite, child)
 	}
+}
+
+func GetProwJobClient() (*prowjobclientset.Clientset, error) {
+	cfg := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(clientcmd.NewDefaultClientConfigLoadingRules(), &clientcmd.ConfigOverrides{})
+	clusterConfig, err := cfg.ClientConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	prowJobClient, err := prowjobclientset.NewForConfig(clusterConfig)
+	if err != nil {
+		return nil, err
+	}
+	return prowJobClient, nil
 }

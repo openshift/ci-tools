@@ -20,12 +20,12 @@ type JobRunLocator interface {
 	FindRelatedJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error)
 }
 
-type prowJobMatcherFunc func(prowJob *prowjobv1.ProwJob) bool
+type ProwJobMatcherFunc func(prowJob *prowjobv1.ProwJob) bool
 
 type analysisJobAggregator struct {
 	jobName string
 
-	prowJobMatcher prowJobMatcherFunc
+	prowJobMatcher ProwJobMatcherFunc
 	// startTime is the time when the analysis jobs were started.  We'll look plus or minus a day from here to bound the
 	// bigquery dataset.
 	startTime time.Time
@@ -38,7 +38,7 @@ type analysisJobAggregator struct {
 
 func NewPayloadAnalysisJobLocator(
 	jobName string,
-	prowJobMatcher prowJobMatcherFunc,
+	prowJobMatcher ProwJobMatcherFunc,
 	startTime time.Time,
 	ciDataClient AggregationJobClient,
 	ciGCSClient CIGCSClient,

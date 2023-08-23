@@ -9,13 +9,20 @@ import (
 )
 
 const (
-	// PayloadTagAnnotation is the name of the annotation for the payload tag in prow job
-	PayloadTagAnnotation = "release.openshift.io/tag"
+	// ProwJobPayloadTagAnnotation is the name of the annotation for the payload tag in prow job
+	ProwJobPayloadTagAnnotation = "release.openshift.io/tag"
 )
 
 // GetPayloadTagFromProwJob gets the payload tag from prow jobs.
 func GetPayloadTagFromProwJob(prowJob *prowjobv1.ProwJob) string {
-	return prowJob.Annotations[PayloadTagAnnotation]
+	return prowJob.Annotations[ProwJobPayloadTagAnnotation]
+}
+
+func NewProwJobMatcherFuncForReleaseController(jobName, payloadTag string) ProwJobMatcherFunc {
+	return releaseControllerProwJobMatcher{
+		jobName:    jobName,
+		payloadTag: payloadTag,
+	}.shouldAggregateReleaseControllerJob
 }
 
 func NewPayloadAnalysisJobLocatorForReleaseController(
@@ -27,9 +34,7 @@ func NewPayloadAnalysisJobLocatorForReleaseController(
 
 	return NewPayloadAnalysisJobLocator(
 		jobName,
-		releaseControllerProwJobMatcher{
-			payloadTag: payloadTag,
-		}.shouldAggregateReleaseControllerJob,
+		NewProwJobMatcherFuncForReleaseController(jobName, payloadTag),
 		startTime,
 		ciDataClient,
 		ciGCSClient,
@@ -39,6 +44,7 @@ func NewPayloadAnalysisJobLocatorForReleaseController(
 }
 
 type releaseControllerProwJobMatcher struct {
+	jobName    string
 	payloadTag string
 }
 
@@ -46,6 +52,9 @@ func (a releaseControllerProwJobMatcher) shouldAggregateReleaseControllerJob(pro
 	payloadTag := GetPayloadTagFromProwJob(prowJob)
 	jobName := prowJob.Annotations[prowJobJobNameAnnotation]
 	jobRunId := prowJob.Labels[prowJobJobRunIDLabel]
+	if jobName != a.jobName {
+		return false
+	}
 	logrus.Infof("checking %v/%v for payloadtag match: looking for %q found %q", jobName, jobRunId, a.payloadTag, payloadTag)
 	payloadTagMatches := len(a.payloadTag) > 0 && payloadTag == a.payloadTag
 

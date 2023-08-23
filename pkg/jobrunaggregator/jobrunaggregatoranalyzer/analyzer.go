@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
-	prowjobclientset "k8s.io/test-infra/prow/client/clientset/versioned"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 
+	prowjobclientset "k8s.io/test-infra/prow/client/clientset/versioned"
 	"k8s.io/utils/clock"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
@@ -27,7 +27,6 @@ import (
 // 4. constructs a synthentic junit that includes every test and assigns pass/fail to each test
 type JobRunAggregatorAnalyzerOptions struct {
 	jobRunLocator      jobrunaggregatorlib.JobRunLocator
-	jobRunWaiter       jobrunaggregatorlib.JobRunWaiter
 	passFailCalculator baseline
 
 	// explicitGCSPrefix is set to control the base path we search in GCSBuckets. If not set, the jobName will be used
@@ -36,7 +35,6 @@ type JobRunAggregatorAnalyzerOptions struct {
 	jobName           string
 	payloadTag        string
 	workingDir        string
-	aggregationID               string
 
 	// jobRunStartEstimate is the time that we think the job runs we're aggregating started.
 	// it should be within an hour, plus or minus.
@@ -44,8 +42,9 @@ type JobRunAggregatorAnalyzerOptions struct {
 	clock               clock.Clock
 	timeout             time.Duration
 
-	prowJobClient *prowjobclientset.Clientset
-	querySource                 string
+	prowJobClient       *prowjobclientset.Clientset
+	jobStateQuerySource string
+	prowJobMatcherFunc  jobrunaggregatorlib.ProwJobMatcherFunc
 }
 
 // GetRelatedJobRuns gets all related job runs for analysis
@@ -109,18 +108,15 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 	}
 
 	var jobRunWaiter jobrunaggregatorlib.JobRunWaiter
-	if o.querySource == bigQuerySource || o.prowJobClient == nil {
+	if o.jobStateQuerySource == jobrunaggregatorlib.JobStateQuerySourceBigQuery || o.prowJobClient == nil {
 		jobRunWaiter = jobrunaggregatorlib.DefaultJobRunWaiter{JobRunGetter: o, TimeToStopWaiting: timeToStopWaiting}
 	} else {
 		jobRunWaiter1 := jobrunaggregatorlib.ClusterJobRunWaiter{
-			ProwJobClient: o.prowJobClient,
-			JobName: o.jobName,
-			PayloadTag: o.payloadTag,
-			AggregationID: o.aggregationID,
-			TimeToStopWaiting: timeToStopWaiting,
+			ProwJobClient:      o.prowJobClient,
+			TimeToStopWaiting:  timeToStopWaiting,
+			ProwJobMatcherFunc: o.prowJobMatcherFunc,
 		}
 		jobRunWaiter = jobRunWaiter1
-		fmt.Printf("--------------waiter is %+v\n", jobRunWaiter1)
 	}
 	finishedJobsToAggregate, _, finishedJobRunNames, unfinishedJobNames, err := jobrunaggregatorlib.WaitAndGetAllFinishedJobRuns(ctx, o, jobRunWaiter, o.workingDir, "aggregated")
 	if err != nil {

@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/apimachinery/pkg/util/sets"
 	prowjobclientset "k8s.io/test-infra/prow/client/clientset/versioned"
 	"k8s.io/utils/clock"
 
@@ -27,13 +27,8 @@ type JobRunsAnalyzerFlags struct {
 	ExplicitGCSPrefix           string
 	Timeout                     time.Duration
 	EstimatedJobStartTimeString string
-	QuerySource                 string
+	JobStateQuerySource         string
 }
-
-const (
-	bigQuerySource = "big-query"
-	payloadLabel = "release.openshift.io/payload"
-)
 
 func NewJobRunsAnalyzerFlags() *JobRunsAnalyzerFlags {
 	return &JobRunsAnalyzerFlags{
@@ -59,7 +54,7 @@ func (f *JobRunsAnalyzerFlags) BindFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&f.ExplicitGCSPrefix, "explicit-gcs-prefix", f.ExplicitGCSPrefix, "only used by per PR payload promotion jobs.  This overrides the well-known mapping and becomes the required prefix for the GCS query")
 	fs.DurationVar(&f.Timeout, "timeout", f.Timeout, "Time to wait for aggregation to complete.")
 	fs.StringVar(&f.EstimatedJobStartTimeString, "job-start-time", f.EstimatedJobStartTimeString, fmt.Sprintf("Start time in RFC822Z: %s", kubeTimeSerializationLayout))
-	fs.StringVar(&f.QuerySource, "query-source", bigQuerySource, "The source from which jobs are found. It is either big-query or cluster")
+	fs.StringVar(&f.JobStateQuerySource, "query-source", jobrunaggregatorlib.JobStateQuerySourceBigQuery, "The source from which job states are found. It is either bigquery or cluster")
 }
 
 func NewJobRunsAnalyzerCommand() *cobra.Command {
@@ -122,6 +117,11 @@ func (f *JobRunsAnalyzerFlags) Validate() error {
 	if len(f.AggregationID) > 0 && len(f.ExplicitGCSPrefix) == 0 {
 		return fmt.Errorf("if --aggregation-id is specified, you must specify --explicit-gcs-prefix")
 	}
+	if len(f.JobStateQuerySource) > 0 {
+		if _, ok := jobrunaggregatorlib.KnownQuerySources[f.JobStateQuerySource]; !ok {
+			return fmt.Errorf("unknown query-source %s, valid values are: %+q", f.JobStateQuerySource, sets.List(jobrunaggregatorlib.KnownQuerySources))
+		}
+	}
 
 	return nil
 }
@@ -147,143 +147,8 @@ func (f *JobRunsAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunAggregator
 		return nil, err
 	}
 
-	var prowJobClient *prowjobclientset.Clientset
-	if f.QuerySource != bigQuerySource {
-		cfg := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(clientcmd.NewDefaultClientConfigLoadingRules(), &clientcmd.ConfigOverrides{})
-		clusterConfig, err := cfg.ClientConfig()
-		if err != nil {
-			return nil, err
-		}
-		fmt.Printf("config: %+v\n", clusterConfig)
-
-		prowJobClient, err = prowjobclientset.NewForConfig(clusterConfig)
-		if err != nil {
-			return nil, err
-		}
-
-		//list, err := prowJobClient.ProwV1().ProwJobs("ci").List(ctx, metav1.ListOptions{})
-		//fmt.Printf("err %+v, list: %+v\n", err, list)
-
-		/*prowJobInformerFactory := prowjobinformers.NewSharedInformerFactory(prowJobClient, 24 * time.Hour)
-		prowJobInformer := prowJobInformerFactory.Prow().V1().ProwJobs()
-
-		prowJobInformer.Informer().AddEventHandler(
-			cache.ResourceEventHandlerFuncs{
-				AddFunc: func(obj interface{}) {
-					prowJob := obj.(*prowv1.ProwJob)
-					fmt.Printf("AddFunc for nanmespace: %s, object: %s\n", prowJob.GetNamespace(), prowJob.GetName())
-				},
-				UpdateFunc: func(oldObj, newObj interface{}) {
-					oldProwJob := oldObj.(*prowv1.ProwJob)
-					newProwJob := newObj.(*prowv1.ProwJob)
-					fmt.Printf("UpdateFunc for nanmespace: %s, object: %s, new ns: %s, new name: %s\n",
-						oldProwJob.GetNamespace(), oldProwJob.GetName(),
-						newProwJob.GetNamespace(), newProwJob.GetName())
-				},
-				DeleteFunc: func(obj interface{}) {
-					prowJob := obj.(*prowv1.ProwJob)
-					fmt.Printf("DeleteFunc for nanmespace: %s, object: %s\n", prowJob.GetNamespace(), prowJob.GetName())
-				},
-			},
-		)
-		prowJobInformerFactory.Start(ctx.Done())
-		if !cache.WaitForCacheSync(ctx.Done(), prowJobInformer.Informer().HasSynced) {
-			return nil, fmt.Errorf("prowjob informer sync error")
-		}
-		fmt.Printf("cache syned\n")
-
-		prowJobLister := prowJobInformer.Lister()
-		var requiredLabel *labels.Requirement
-		if len(f.PayloadTag) > 0 {
-			requiredLabel, err = labels.NewRequirement(payloadLabel, selection.Equals, []string{f.PayloadTag})
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			requiredLabel, err = labels.NewRequirement(v1.PullRequestPayloadQualificationRunLabel, selection.Equals, []string{f.AggregationID})
-			if err != nil {
-				return nil, err
-			}
-		}
-		prowjobs, err := prowJobLister.ProwJobs("ci").List(labels.NewSelector().Add(*requiredLabel))
-		//prowjobs, err = prowJobLister.ProwJobs("ci").List(labels.Everything())
-		if err != nil {
-			return nil, err
-		}
-		for _, prowJob := range prowjobs {
-			fmt.Printf("prowJob: %+v\n", prowJob)
-		}
-
-		return nil, fmt.Errorf("stopped for now")*/
-
-
-
-		/*dynamicClient, err := dynamic.NewForConfig(clusterConfig)
-		if err != nil {
-			return nil, err
-		}
-		dynamicInformer := dynamicinformer.NewDynamicSharedInformerFactory(dynamicClient, 0)
-		prowJobResource := schema.GroupVersionResource{
-			Group:    "prow.k8s.io",
-			Version:  "v1",
-			Resource: "ProwJob",
-		}
-		prowJobInformer := dynamicInformer.ForResource(prowJobResource).Informer()
-		if err != nil {
-			return nil, err
-		}
-		dynamicInformer.Start(ctx.Done())
-		prowJobInformer.AddEventHandler(
-			cache.ResourceEventHandlerFuncs{
-				AddFunc: func(obj interface{}) {
-				},
-				UpdateFunc: func(oldObj, newObj interface{}) {
-				},
-				DeleteFunc: func(obj interface{}) {
-				},
-			},
-		)
-
-		prowJobLister := dynamicInformer.ForResource(prowJobResource).Lister()
-		var requiredLabel *labels.Requirement
-		if len(f.PayloadTag) > 0 {
-			requiredLabel, err = labels.NewRequirement(payloadLabel, selection.Equals, []string{f.PayloadTag})
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			requiredLabel, err = labels.NewRequirement(v1.PullRequestPayloadQualificationRunLabel, selection.Equals, []string{f.AggregationID})
-			if err != nil {
-				return nil, err
-			}
-		}
-		objs, err := prowJobLister.ByNamespace("ci").List(labels.NewSelector().Add(*requiredLabel))
-		if err != nil {
-			return nil, err
-		}
-		if len(objs) == 0 {
-			return nil, fmt.Errorf("no HostedControlPlane found in namespace")
-		}
-
-		var prowJobs []*prowv1.ProwJob
-		for _, obj := range objs {
-			unstructuredObj, ok := obj.(*unstructured.Unstructured)
-			if !ok {
-				return nil, fmt.Errorf("can't convert")
-			}
-
-			prowJob := &prowv1.ProwJob{}
-			err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.UnstructuredContent(), prowJob)
-			if err != nil {
-				return nil, err
-			}
-			prowJobs = append(prowJobs, prowJob)
-		}*/
-
-
-	}
-
 	var jobRunLocator jobrunaggregatorlib.JobRunLocator
+	var prowJobMatcherFunc jobrunaggregatorlib.ProwJobMatcherFunc
 	if len(f.PayloadTag) > 0 {
 		jobRunLocator = jobrunaggregatorlib.NewPayloadAnalysisJobLocatorForReleaseController(
 			f.JobName,
@@ -293,20 +158,29 @@ func (f *JobRunsAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunAggregator
 			ciGCSClient,
 			"origin-ci-test",
 		)
+		prowJobMatcherFunc = jobrunaggregatorlib.NewProwJobMatcherFuncForReleaseController(f.JobName, f.PayloadTag)
 	}
 	if len(f.AggregationID) > 0 {
 		jobRunLocator = jobrunaggregatorlib.NewPayloadAnalysisJobLocatorForPR(
 			f.JobName,
 			f.AggregationID,
-			jobrunaggregatorlib.AggregationIDLabel,
+			jobrunaggregatorlib.ProwJobAggregationIDLabel,
 			estimatedStartTime,
 			ciDataClient,
 			ciGCSClient,
 			"origin-ci-test",
 			f.ExplicitGCSPrefix,
 		)
+		prowJobMatcherFunc = jobrunaggregatorlib.NewProwJobMatcherFuncForPR(f.JobName, f.AggregationID, jobrunaggregatorlib.ProwJobAggregationIDLabel)
 	}
 
+	var prowJobClient *prowjobclientset.Clientset
+	if f.JobStateQuerySource != jobrunaggregatorlib.JobStateQuerySourceBigQuery {
+		prowJobClient, err = jobrunaggregatorlib.GetProwJobClient()
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	return &JobRunAggregatorAnalyzerOptions{
 		explicitGCSPrefix:   f.ExplicitGCSPrefix,
@@ -314,12 +188,12 @@ func (f *JobRunsAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunAggregator
 		passFailCalculator:  newWeeklyAverageFromTenDaysAgo(f.JobName, estimatedStartTime, 6, ciDataClient),
 		jobName:             f.JobName,
 		payloadTag:          f.PayloadTag,
-		aggregationID: f.AggregationID,
 		workingDir:          f.WorkingDir,
 		jobRunStartEstimate: estimatedStartTime,
 		clock:               clock.RealClock{},
 		timeout:             f.Timeout,
-		prowJobClient: prowJobClient,
-		querySource: f.QuerySource,
+		prowJobClient:       prowJobClient,
+		jobStateQuerySource: f.JobStateQuerySource,
+		prowJobMatcherFunc:  prowJobMatcherFunc,
 	}, nil
 }

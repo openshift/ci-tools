@@ -5,12 +5,13 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/sirupsen/logrus"
+	"gopkg.in/fsnotify.v1"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/client-go/rest"
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/logrusutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
@@ -19,7 +20,10 @@ import (
 
 	imagev1 "github.com/openshift/api/image/v1"
 
+	"github.com/openshift/ci-tools/pkg/config"
 	quayiociimagesdistributor "github.com/openshift/ci-tools/pkg/controller/quay_io_ci_images_distributor"
+	"github.com/openshift/ci-tools/pkg/load/agents"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 var allControllers = sets.New[string](
@@ -32,6 +36,7 @@ type options struct {
 	enabledControllers               flagutil.Strings
 	enabledControllersSet            sets.Set[string]
 	dryRun                           bool
+	releaseRepoGitSyncPath           string
 	quayIOCIImagesDistributorOptions quayIOCIImagesDistributorOptions
 }
 
@@ -40,8 +45,9 @@ func (o *options) addDefaults() {
 }
 
 type quayIOCIImagesDistributorOptions struct {
+	additionalImageStreamTagsRaw       flagutil.Strings
+	additionalImageStreamsRaw          flagutil.Strings
 	additionalImageStreamNamespacesRaw flagutil.Strings
-	additionalImageStreamNamespaces    sets.Set[string]
 }
 
 func newOpts() *options {
@@ -52,6 +58,9 @@ func newOpts() *options {
 	fs.StringVar(&opts.leaderElectionSuffix, "leader-election-suffix", "", "Suffix for the leader election lock. Useful for local testing. If set, --dry-run must be set as well")
 	fs.Var(&opts.enabledControllers, "enable-controller", fmt.Sprintf("Enabled controllers. Available controllers are: %v. Can be specified multiple times. Defaults to %v", allControllers.UnsortedList(), opts.enabledControllers.Strings()))
 	fs.BoolVar(&opts.dryRun, "dry-run", false, "Whether to run the controller-manager with dry-run")
+	fs.StringVar(&opts.releaseRepoGitSyncPath, "release-repo-git-sync-path", "", "Path to release repository dir")
+	fs.Var(&opts.quayIOCIImagesDistributorOptions.additionalImageStreamTagsRaw, "quayIOCIImagesDistributorOptions.additional-image-stream-tag", "An imagestreamtag that will be distributed even if no test explicitly references it. It must be in namespace/name:tag format (e.G `ci/clonerefs:latest`). Can be passed multiple times.")
+	fs.Var(&opts.quayIOCIImagesDistributorOptions.additionalImageStreamsRaw, "quayIOCIImagesDistributorOptions.additional-image-stream", "An imagestream that will be distributed even if no test explicitly references it. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
 	fs.Var(&opts.quayIOCIImagesDistributorOptions.additionalImageStreamNamespacesRaw, "quayIOCIImagesDistributorOptions.additional-image-stream-namespace", "A namespace in which imagestreams will be distributed even if no test explicitly references them (e.G `ci`). Can be passed multiple times.")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse args")
@@ -73,6 +82,9 @@ func (o *options) validate() error {
 			errs = append(errs, fmt.Errorf("the following controllers are unknown: %v", diff.UnsortedList()))
 		}
 	}
+	if o.releaseRepoGitSyncPath == "" {
+		errs = append(errs, errors.New("--release-repo-git-sync-path must be set"))
+	}
 	return utilerrors.NewAggregate(errs)
 }
 
@@ -84,10 +96,36 @@ func main() {
 	}
 
 	ctx := controllerruntime.SetupSignalHandler()
-
-	inClusterConfig, err := rest.InClusterConfig()
+	inClusterConfig, err := util.LoadClusterConfig()
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to load in-cluster config")
+	}
+
+	eventCh := make(chan fsnotify.Event)
+	errCh := make(chan error)
+	go func() { logrus.Fatal(<-errCh) }()
+	universalSymlinkWatcher := &agents.UniversalSymlinkWatcher{
+		EventCh:   eventCh,
+		ErrCh:     errCh,
+		WatchPath: opts.releaseRepoGitSyncPath,
+	}
+	configAgentOption := func(opt *agents.ConfigAgentOptions) {
+		opt.UniversalSymlinkWatcher = universalSymlinkWatcher
+	}
+	ciOperatorConfigPath := filepath.Join(opts.releaseRepoGitSyncPath, config.CiopConfigInRepoPath)
+
+	ciOPConfigAgent, err := agents.NewConfigAgent(ciOperatorConfigPath, errCh, configAgentOption)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to construct ci-operator config agent")
+	}
+
+	registryAgentOption := func(opt *agents.RegistryAgentOptions) {
+		opt.UniversalSymlinkWatcher = universalSymlinkWatcher
+	}
+	stepConfigPath := filepath.Join(opts.releaseRepoGitSyncPath, config.RegistryPath)
+	registryConfigAgent, err := agents.NewRegistryAgent(stepConfigPath, errCh, registryAgentOption)
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to construct registryAgent")
 	}
 
 	clientOptions := ctrlruntimeclient.Options{}
@@ -114,7 +152,12 @@ func main() {
 	}
 
 	if opts.enabledControllersSet.Has(quayiociimagesdistributor.ControllerName) {
-		if err := quayiociimagesdistributor.AddToManager(mgr, opts.quayIOCIImagesDistributorOptions.additionalImageStreamNamespaces); err != nil {
+		if err := quayiociimagesdistributor.AddToManager(mgr,
+			ciOPConfigAgent,
+			registryConfigAgent,
+			sets.New[string](opts.quayIOCIImagesDistributorOptions.additionalImageStreamTagsRaw.Strings()...),
+			sets.New[string](opts.quayIOCIImagesDistributorOptions.additionalImageStreamsRaw.Strings()...),
+			sets.New[string](opts.quayIOCIImagesDistributorOptions.additionalImageStreamNamespacesRaw.Strings()...)); err != nil {
 			logrus.WithField("name", quayiociimagesdistributor.ControllerName).WithError(err).Fatal("Failed to construct the controller")
 		}
 	}

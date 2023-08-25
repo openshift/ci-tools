@@ -50,6 +50,38 @@ func TestReconcile(t *testing.T) {
 		expectedShardFiles map[string]string
 	}{
 		{
+			name: "acknowledge-critical-fixes-only added during special event: ackCriticalFixes",
+			args: args{
+				event: ackCriticalFixes,
+				config: &prowconfig.ProwConfig{Tide: prowconfig.Tide{TideGitHubConfig: prowconfig.TideGitHubConfig{Queries: prowconfig.TideQueries{
+					{
+						Repos:            repos,
+						Labels:           []string{"lgtm", "approved"},
+						IncludedBranches: []string{"main", "master"},
+					},
+				}}}},
+			},
+			wantErr: false,
+			expectedShardFiles: map[string]string{
+				path: prepareProwConfig(repos, []string{ackCriticalFixes, "approved", "lgtm"}, []string{"main", "master"})},
+		},
+		{
+			name: "acknowledge-critical-fixes-only removed during special event: revertCriticalFixes",
+			args: args{
+				event: revertCriticalFixes,
+				config: &prowconfig.ProwConfig{Tide: prowconfig.Tide{TideGitHubConfig: prowconfig.TideGitHubConfig{Queries: prowconfig.TideQueries{
+					{
+						Repos:            repos,
+						Labels:           []string{"lgtm", "approved", ackCriticalFixes},
+						IncludedBranches: []string{"main", "master"},
+					},
+				}}}},
+			},
+			wantErr: false,
+			expectedShardFiles: map[string]string{
+				path: prepareProwConfig(repos, []string{"approved", "lgtm"}, []string{"main", "master"})},
+		},
+		{
 			name: "staff-eng-approved replaced by backport-risk-assesed and cherry-pick-approved during branching",
 			args: args{
 				event: branching,
@@ -185,7 +217,7 @@ func TestReconcile(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			target := afero.NewMemMapFs()
-			if err := reconcile(ocpCurrentVersion, tt.args.event, tt.args.config, target, excludedRepos{}); (err != nil) != tt.wantErr {
+			if err := reconcile(ocpCurrentVersion, tt.args.event, tt.args.config, target, excludedRepos{}, repos); (err != nil) != tt.wantErr {
 				t.Errorf("reconcile() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			shardedConfigFiles := map[string]string{}

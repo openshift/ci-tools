@@ -157,7 +157,7 @@ func (w ClusterJobRunWaiter) Wait(ctx context.Context) error {
 	uncompletedJobMap := map[string]*prowv1.ProwJob{}
 	wg := sync.WaitGroup{}
 	count := 0
-	prowJobInformer.Informer().AddEventHandler(
+	_, err := prowJobInformer.Informer().AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				prowJob := obj.(*prowv1.ProwJob)
@@ -199,6 +199,9 @@ func (w ClusterJobRunWaiter) Wait(ctx context.Context) error {
 			},
 		},
 	)
+	if err != nil {
+		return err
+	}
 	prowJobInformerFactory.Start(ctx.Done())
 	if !cache.WaitForCacheSync(ctx.Done(), prowJobInformer.Informer().HasSynced) {
 		return fmt.Errorf("prowjob informer sync error")

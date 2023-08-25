@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
@@ -21,11 +22,12 @@ import (
 )
 
 type options struct {
-	prowConfigDir            string
-	shardedProwConfigBaseDir string
-	lifecyclePhase           string
-	excludedReposFile        string
-	currentOCPVersion        string
+	prowConfigDir                  string
+	shardedProwConfigBaseDir       string
+	lifecyclePhase                 string
+	excludedReposFile              string
+	currentOCPVersion              string
+	reposGuardedByAckCriticalFixes string
 }
 
 const (
@@ -43,6 +45,8 @@ const (
 	openshift              = "openshift-"
 	mainBranch             = "main"
 	masterBranch           = "master"
+	ackCriticalFixes       = "acknowledge-critical-fixes-only"
+	revertCriticalFixes    = "revert-critical-fixes-only"
 )
 
 func gatherOptions() (*options, error) {
@@ -52,9 +56,10 @@ func gatherOptions() (*options, error) {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&o.prowConfigDir, "prow-config-dir", "", "Path to the Prow configuration directory.")
 	fs.StringVar(&o.shardedProwConfigBaseDir, "sharded-prow-config-base-dir", "", "Basedir for the sharded prow config. If set, org and repo-specific config will get removed from the main prow config and written out in an org/repo tree below the base dir.")
-	fs.StringVar(&o.lifecyclePhase, "lifecycle-phase", "", "Lifecycle phase, one of: branching, pre-general-availability, general-availability")
+	fs.StringVar(&o.lifecyclePhase, "lifecycle-phase", "", "Lifecycle phase, one of: branching, pre-general-availability, general-availability,acknowledge-critical-fixes-only, revert-critical-fixes-only")
 	fs.StringVar(&o.currentOCPVersion, "current-release", "", "Current OCP version")
 	fs.StringVar(&o.excludedReposFile, "excluded-repos-config", "", "Path to the GA's excluded repos config file.")
+	fs.StringVar(&o.reposGuardedByAckCriticalFixes, "repos-guarded-by-ack-critical-fixes", "", "Path to the list of repos that ack-critical-fixes should be applied to.")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse input")
 	}
@@ -62,21 +67,28 @@ func gatherOptions() (*options, error) {
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		errs = append(errs, fmt.Errorf("couldn't parse arguments: %w", err))
 	}
-	if o.lifecyclePhase != branching && o.lifecyclePhase != preGeneralAvailability && o.lifecyclePhase != GeneralAvailability {
-		errs = append(errs, errors.New("--lifecycle-phase is required and has to be one of: branching, pre-general-availability, general-availability"))
+
+	if o.lifecyclePhase != branching && o.lifecyclePhase != preGeneralAvailability && o.lifecyclePhase != GeneralAvailability && o.lifecyclePhase != ackCriticalFixes && o.lifecyclePhase != revertCriticalFixes {
+		errs = append(errs, errors.New("--lifecycle-phase is required and has to be one of: branching, pre-general-availability, general-availability ,acknowledge-critical-fixes-only, revert-critical-fixes-only"))
+	}
+
+	if o.lifecyclePhase == branching || o.lifecyclePhase == preGeneralAvailability || o.lifecyclePhase == GeneralAvailability {
+		if o.currentOCPVersion == "" {
+			errs = append(errs, errors.New("--current-release is required"))
+		}
+		if _, err := ocplifecycle.ParseMajorMinor(o.currentOCPVersion); o.currentOCPVersion != "" && err != nil {
+			errs = append(errs, fmt.Errorf("error parsing current-release %s", o.currentOCPVersion))
+		}
+	}
+
+	if o.lifecyclePhase == ackCriticalFixes && o.reposGuardedByAckCriticalFixes == "" {
+		errs = append(errs, errors.New("--repos-guarded-by-ack-critical-fixes is required when ack-critical-fixes is used"))
 	}
 	if o.prowConfigDir == "" {
 		errs = append(errs, errors.New("--prow-config-dir is required"))
 	}
 	if o.shardedProwConfigBaseDir == "" {
 		errs = append(errs, errors.New("--sharded-prow-config-base-dir is required"))
-	}
-	if o.currentOCPVersion == "" {
-		errs = append(errs, errors.New("--current-release is required"))
-	}
-
-	if _, err := ocplifecycle.ParseMajorMinor(o.currentOCPVersion); o.currentOCPVersion != "" && err != nil {
-		errs = append(errs, fmt.Errorf("error parsing current-release %s", o.currentOCPVersion))
 	}
 
 	return o, utilerrors.NewAggregate(errs)
@@ -108,15 +120,61 @@ func newSharedDataDelegate() *sharedDataDelegate {
 
 }
 
+type ackCriticalFixesEvent struct {
+	repos sets.Set[string]
+	*sharedDataDelegate
+}
+
+func newAckCriticalFixesEvent(repos []string, delegate *sharedDataDelegate) ackCriticalFixesEvent {
+	return ackCriticalFixesEvent{
+		repos:              sets.New[string](repos...),
+		sharedDataDelegate: delegate,
+	}
+}
+
+func (acfe ackCriticalFixesEvent) ModifyQuery(q *prowconfig.TideQuery, repo string) {
+	reqLabels := sets.New[string](q.Labels...)
+	branches := sets.New[string](q.IncludedBranches...)
+
+	if branches.Intersection(acfe.mainMaster).Len() > 0 && acfe.repos.Has(repo) {
+		reqLabels.Insert(ackCriticalFixes)
+	}
+	q.Labels = sets.List(reqLabels)
+}
+
+func (acfe ackCriticalFixesEvent) GetDataFromProwConfig(*prowconfig.ProwConfig) {
+}
+
+type revertCriticalFixesEvent struct {
+	*sharedDataDelegate
+}
+
+func newRevertCriticalFixesEvent(delegate *sharedDataDelegate) revertCriticalFixesEvent {
+	return revertCriticalFixesEvent{
+		sharedDataDelegate: delegate,
+	}
+}
+
+func (rcfe revertCriticalFixesEvent) ModifyQuery(q *prowconfig.TideQuery, repo string) {
+	reqLabels := sets.New[string](q.Labels...)
+	branches := sets.New[string](q.IncludedBranches...)
+
+	if branches.Intersection(rcfe.mainMaster).Len() > 0 {
+		reqLabels.Delete(ackCriticalFixes)
+	}
+	q.Labels = sets.List(reqLabels)
+}
+
+func (rcfe revertCriticalFixesEvent) GetDataFromProwConfig(*prowconfig.ProwConfig) {
+}
+
 type branchingDayEvent struct {
-	repos                    sets.Set[string]
 	openshiftReleaseBranches sets.Set[string]
 	*sharedDataDelegate
 }
 
 func newBranchingDayEvent(current string, delegate *sharedDataDelegate) branchingDayEvent {
 	return branchingDayEvent{
-		repos:                    sets.New[string](),
 		openshiftReleaseBranches: sets.New[string](release+current, openshift+current),
 		sharedDataDelegate:       delegate,
 	}
@@ -139,14 +197,12 @@ func (bde branchingDayEvent) GetDataFromProwConfig(pc *prowconfig.ProwConfig) {
 }
 
 type preGeneralAvailabilityEvent struct {
-	repos                    sets.Set[string]
 	openshiftReleaseBranches sets.Set[string]
 	*sharedDataDelegate
 }
 
 func newPreGeneralAvailability(current string, delegate *sharedDataDelegate) preGeneralAvailabilityEvent {
 	return preGeneralAvailabilityEvent{
-		repos:                    sets.New[string](),
 		openshiftReleaseBranches: sets.New[string](release+current, openshift+current),
 		sharedDataDelegate:       delegate,
 	}
@@ -164,7 +220,7 @@ func (pga preGeneralAvailabilityEvent) ModifyQuery(q *prowconfig.TideQuery, repo
 	q.Labels = sets.List(reqLabels)
 }
 
-func (pga preGeneralAvailabilityEvent) GetDataFromProwConfig(pc *prowconfig.ProwConfig) {
+func (pga preGeneralAvailabilityEvent) GetDataFromProwConfig(*prowconfig.ProwConfig) {
 }
 
 type excludedRepos struct {
@@ -318,11 +374,39 @@ func updateProwConfigs(o *options) error {
 			return fmt.Errorf("failed to load the excluded repos configuration: %w", err)
 		}
 	}
-	return reconcile(o.currentOCPVersion, o.lifecyclePhase, &config.ProwConfig, afero.NewBasePathFs(afero.NewOsFs(), o.shardedProwConfigBaseDir), repos)
+
+	reposGuardedByAckCriticalFixes := []string{}
+	if o.reposGuardedByAckCriticalFixes != "" {
+		content, err := os.ReadFile(o.reposGuardedByAckCriticalFixes)
+		if err != nil {
+			return fmt.Errorf("failed to read list of repos to be guarded from file %s: %w", o.reposGuardedByAckCriticalFixes, err)
+		}
+		reposGuardedByAckCriticalFixes = strings.Split(string(content), "\n")
+
+	}
+
+	return reconcile(o.currentOCPVersion, o.lifecyclePhase, &config.ProwConfig, afero.NewBasePathFs(afero.NewOsFs(), o.shardedProwConfigBaseDir), repos, reposGuardedByAckCriticalFixes)
 }
 
-func reconcile(currentOCPVersion, lifecyclePhase string, config *prowconfig.ProwConfig, target afero.Fs, repos excludedRepos) error {
+func reconcile(currentOCPVersion, lifecyclePhase string, config *prowconfig.ProwConfig, target afero.Fs, repos excludedRepos, reposGuardedByAckCriticalFixes []string) error {
 	delegate := newSharedDataDelegate()
+	var err error
+	if lifecyclePhase == ackCriticalFixes {
+		_, err = shardprowconfig.ShardProwConfig(config, target, newAckCriticalFixesEvent(reposGuardedByAckCriticalFixes, delegate))
+	}
+
+	if lifecyclePhase == revertCriticalFixes {
+		_, err = shardprowconfig.ShardProwConfig(config, target, newRevertCriticalFixesEvent(delegate))
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to shard the prow config: %w", err)
+	}
+
+	if lifecyclePhase == ackCriticalFixes || lifecyclePhase == revertCriticalFixes {
+		return nil
+	}
+
 	currentVersion, err := ocplifecycle.ParseMajorMinor(currentOCPVersion)
 	if err != nil {
 		return fmt.Errorf("failed to parse %s as majorMinor version: %w", currentOCPVersion, err)

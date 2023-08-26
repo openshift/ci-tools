@@ -23,7 +23,8 @@ import (
 )
 
 type options struct {
-	dryRun bool
+	dryRun        bool
+	dockerCfgPath string
 }
 
 func gatherOptions() (*options, error) {
@@ -31,6 +32,7 @@ func gatherOptions() (*options, error) {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
+	fs.StringVar(&o.dockerCfgPath, "docker-cfg", "/.docker/config.json", "Path of the registry credentials configuration file")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return o, fmt.Errorf("failed to parse flags: %w", err)
@@ -79,7 +81,7 @@ func main() {
 		logrus.WithError(err).Fatal("failed to retrieve the node architectures")
 	}
 
-	if err := multiarchbuildconfig.AddToManager(mgr, nodeArchitectures); err != nil {
+	if err := multiarchbuildconfig.AddToManager(mgr, nodeArchitectures, o.dockerCfgPath); err != nil {
 		logrus.WithError(err).Fatal("Failed to add multiarchbuildconfig controller to manager")
 	}
 

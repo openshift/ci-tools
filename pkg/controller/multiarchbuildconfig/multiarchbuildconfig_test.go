@@ -19,6 +19,7 @@ import (
 	buildv1 "github.com/openshift/api/build/v1"
 
 	v1 "github.com/openshift/ci-tools/pkg/api/multiarchbuildconfig/v1"
+	"github.com/openshift/ci-tools/pkg/manifestpusher"
 )
 
 func TestCheckAllBuildsFinished(t *testing.T) {
@@ -108,7 +109,7 @@ func TestReconcile(t *testing.T) {
 		name           string
 		inputMabc      *v1.MultiArchBuildConfig
 		expectedMabc   *v1.MultiArchBuildConfig
-		manifestPusher ManifestPusher
+		manifestPusher manifestpusher.ManifestPusher
 	}{
 		{
 			name: "Early exit on SuccessState",

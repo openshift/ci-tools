@@ -2,9 +2,7 @@ package manifestpusher
 
 import (
 	"bytes"
-	"encoding/base64"
 	"fmt"
-	"os"
 	"os/exec"
 
 	"github.com/sirupsen/logrus"
@@ -79,29 +77,5 @@ func (m manifestPusher) PushImageWithManifest(builds map[string]*buildv1.Build, 
 	m.logger.WithField("output", cmdOutput.String()).Debug("manifest-tool command succeeded")
 
 	m.logger.Infof("Image %s created", targetImageRef)
-	return nil
-}
-
-func CreateDockerCfg(tokenPath, registryURL, dest string) error {
-	token, err := os.ReadFile(tokenPath)
-	if err != nil {
-		return fmt.Errorf("error reading token: %w", err)
-	}
-
-	authString := base64.StdEncoding.EncodeToString([]byte("serviceaccount:" + string(token)))
-
-	configContent := fmt.Sprintf(`{
-		"auths": {
-			"%s": {
-				"auth": "%s"
-			}
-		}
-	}`, registryURL, authString)
-
-	if err = os.WriteFile(dest, []byte(configContent), 0755); err != nil {
-		return fmt.Errorf("error writing %s: %w", dest, err)
-
-	}
-
 	return nil
 }

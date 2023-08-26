@@ -111,11 +111,23 @@ func getWorkingDir(client ctrlruntimeclient.Client, source, namespace string) (s
 	if err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: source}, ist); err != nil {
 		return "", fmt.Errorf("could not fetch source ImageStreamTag: %w", err)
 	}
+	image := ist.Image
+
+	// If the image contains a manifest list, the docker metadata are empty. Instead
+	// we need to grab the metadata from one of the images in manifest list.
+	if len(ist.Image.DockerImageManifests) > 0 {
+		img := &imagev1.Image{}
+		if err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Name: ist.Image.DockerImageManifests[0].Digest}, img); err != nil {
+			return "", fmt.Errorf("could not fetch source ImageStreamTag: %w", err)
+		}
+		image = *img
+	}
+
 	metadata := &docker10.DockerImage{}
-	if len(ist.Image.DockerImageMetadata.Raw) == 0 {
+	if len(image.DockerImageMetadata.Raw) == 0 {
 		return "", fmt.Errorf("could not fetch Docker image metadata for ImageStreamTag %s", source)
 	}
-	if err := json.Unmarshal(ist.Image.DockerImageMetadata.Raw, metadata); err != nil {
+	if err := json.Unmarshal(image.DockerImageMetadata.Raw, metadata); err != nil {
 		return "", fmt.Errorf("malformed Docker image metadata on ImageStreamTag: %w", err)
 	}
 	return metadata.Config.WorkingDir, nil

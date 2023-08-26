@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	coreapi "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,6 +21,7 @@ import (
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	buildapi "github.com/openshift/api/build/v1"
+	buildv1 "github.com/openshift/api/build/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
@@ -708,6 +710,7 @@ type fakeBuildClient struct {
 	loggingclient.LoggingClient
 	logContent        string
 	nodeArchitectures []string
+	dockerCfgPath     string
 }
 
 func NewFakeBuildClient(client loggingclient.LoggingClient, logContent string) BuildClient {
@@ -723,6 +726,9 @@ func (c *fakeBuildClient) Logs(namespace, name string, options *buildapi.BuildLo
 
 func (c *fakeBuildClient) NodeArchitectures() []string {
 	return c.nodeArchitectures
+}
+func (c *fakeBuildClient) DockerCfgPath() string {
+	return c.dockerCfgPath
 }
 
 func Test_constructMultiArchBuilds(t *testing.T) {
@@ -740,11 +746,14 @@ func Test_constructMultiArchBuilds(t *testing.T) {
 			},
 			want: []buildapi.Build{
 				{
-					ObjectMeta: meta.ObjectMeta{Name: "test-build"},
+					ObjectMeta: meta.ObjectMeta{Name: "test-build-amd64"},
 					Spec: buildapi.BuildSpec{
 						CommonSpec: buildapi.CommonSpec{
 							NodeSelector: map[string]string{
 								"kubernetes.io/arch": "amd64",
+							},
+							Output: buildv1.BuildOutput{
+								To: &coreapi.ObjectReference{Name: "pipeline:test-build-amd64"},
 							},
 						},
 					},
@@ -759,11 +768,14 @@ func Test_constructMultiArchBuilds(t *testing.T) {
 			},
 			want: []buildapi.Build{
 				{
-					ObjectMeta: meta.ObjectMeta{Name: "test-build"},
+					ObjectMeta: meta.ObjectMeta{Name: "test-build-amd64"},
 					Spec: buildapi.BuildSpec{
 						CommonSpec: buildapi.CommonSpec{
 							NodeSelector: map[string]string{
 								"kubernetes.io/arch": "amd64",
+							},
+							Output: buildv1.BuildOutput{
+								To: &coreapi.ObjectReference{Name: "pipeline:test-build-amd64"},
 							},
 						},
 					},
@@ -775,6 +787,9 @@ func Test_constructMultiArchBuilds(t *testing.T) {
 							NodeSelector: map[string]string{
 								"kubernetes.io/arch": "arm64",
 							},
+							Output: buildv1.BuildOutput{
+								To: &coreapi.ObjectReference{Name: "pipeline:test-build-arm64"},
+							},
 						},
 					},
 				},
@@ -785,6 +800,9 @@ func Test_constructMultiArchBuilds(t *testing.T) {
 							NodeSelector: map[string]string{
 								"kubernetes.io/arch": "ppc64",
 							},
+							Output: buildv1.BuildOutput{
+								To: &coreapi.ObjectReference{Name: "pipeline:test-build-ppc64"},
+							},
 						},
 					},
 				},
@@ -794,7 +812,7 @@ func Test_constructMultiArchBuilds(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if diff := cmp.Diff(constructMultiArchBuilds(tt.build, tt.nodeArchitectures), tt.want); diff != "" {
+			if diff := cmp.Diff(constructMultiArchBuilds(tt.build, tt.nodeArchitectures), tt.want, cmpopts.IgnoreFields(coreapi.ObjectReference{}, "Kind")); diff != "" {
 				t.Fatal(diff)
 			}
 		})

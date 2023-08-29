@@ -279,13 +279,13 @@ func toPromote(config api.PromotionConfiguration, images []api.ProjectDirectoryI
 			names.Insert(tag)
 		}
 	}
-	for _, tag := range config.ExcludedImages {
-		delete(tagsByDst, tag)
-		names.Delete(tag)
-	}
 	for dst, src := range config.AdditionalImages {
 		tagsByDst[dst] = src
 		names.Insert(dst)
+	}
+	for _, tag := range config.ExcludedImages {
+		delete(tagsByDst, tag)
+		names.Delete(tag)
 	}
 
 	return tagsByDst, names
@@ -336,45 +336,71 @@ func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration
 		opt(opts)
 	}
 
-	if configuration == nil || configuration.PromotionConfiguration == nil || configuration.PromotionConfiguration.Disabled {
+	if configuration == nil {
 		return nil, nil
 	}
-	tags, names := toPromote(*configuration.PromotionConfiguration, configuration.Images, opts.requiredImages)
+
 	promotedTags := map[string][]api.ImageStreamTagReference{}
-	for dst, src := range tags {
-		var tag api.ImageStreamTagReference
-		if configuration.PromotionConfiguration.Name != "" {
-			tag = api.ImageStreamTagReference{
-				Namespace: configuration.PromotionConfiguration.Namespace,
-				Name:      configuration.PromotionConfiguration.Name,
-				Tag:       dst,
-			}
-		} else { // promotion.Tag must be set
-			tag = api.ImageStreamTagReference{
-				Namespace: configuration.PromotionConfiguration.Namespace,
-				Name:      dst,
-				Tag:       configuration.PromotionConfiguration.Tag,
-			}
+	promotedNames := sets.Set[string]{}
+	if configuration.PromotionConfiguration != nil && !configuration.PromotionConfiguration.Disabled {
+		tags, names := toPromote(*configuration.PromotionConfiguration, configuration.Images, opts.requiredImages)
+		for name, ref := range tagsToReferences(tags, *configuration.PromotionConfiguration, opts) {
+			promotedTags[name] = ref
 		}
-		promotedTags[src] = append(promotedTags[src], tag)
-		if configuration.PromotionConfiguration.TagByCommit && opts.commitSha != "" {
-			promotedTags[src] = append(promotedTags[src], api.ImageStreamTagReference{
-				Namespace: configuration.PromotionConfiguration.Namespace,
-				Name:      dst,
-				Tag:       opts.commitSha,
-			})
+		promotedNames.Union(names)
+
+		// promote the binary build if one exists and this isn't disabled
+		if configuration.BinaryBuildCommands != "" && !configuration.PromotionConfiguration.DisableBuildCache {
+			promotedTags[string(api.PipelineImageStreamTagReferenceBinaries)] = append(promotedTags[string(api.PipelineImageStreamTagReferenceBinaries)], api.BuildCacheFor(configuration.Metadata))
 		}
 	}
-	// promote the binary build if one exists and this isn't disabled
-	if configuration.BinaryBuildCommands != "" && !configuration.PromotionConfiguration.DisableBuildCache {
-		promotedTags[string(api.PipelineImageStreamTagReferenceBinaries)] = append(promotedTags[string(api.PipelineImageStreamTagReferenceBinaries)], api.BuildCacheFor(configuration.Metadata))
+
+	for _, cfg := range configuration.AccessoryPromotionConfiguration {
+		if cfg.Disabled {
+			continue
+		}
+		tags, names := toPromote(cfg, nil, opts.requiredImages) // images nil, since these are opt-in
+		for name, ref := range tagsToReferences(tags, cfg, opts) {
+			promotedTags[name] = ref
+		}
+		promotedNames.Union(names)
 	}
+
 	for _, tags := range promotedTags {
 		sort.Slice(tags, func(i, j int) bool {
 			return tags[i].ISTagName() < tags[j].ISTagName()
 		})
 	}
-	return promotedTags, names
+	return promotedTags, promotedNames
+}
+
+func tagsToReferences(tags map[string]string, cfg api.PromotionConfiguration, opts *PromotedTagsOptions) map[string][]api.ImageStreamTagReference {
+	promotedTags := map[string][]api.ImageStreamTagReference{}
+	for dst, src := range tags {
+		var tag api.ImageStreamTagReference
+		if cfg.Name != "" {
+			tag = api.ImageStreamTagReference{
+				Namespace: cfg.Namespace,
+				Name:      cfg.Name,
+				Tag:       dst,
+			}
+		} else { // promotion.Tag must be set
+			tag = api.ImageStreamTagReference{
+				Namespace: cfg.Namespace,
+				Name:      dst,
+				Tag:       cfg.Tag,
+			}
+		}
+		promotedTags[src] = append(promotedTags[src], tag)
+		if cfg.TagByCommit && opts.commitSha != "" {
+			promotedTags[src] = append(promotedTags[src], api.ImageStreamTagReference{
+				Namespace: cfg.Namespace,
+				Name:      dst,
+				Tag:       opts.commitSha,
+			})
+		}
+	}
+	return promotedTags
 }
 
 func (s *promotionStep) Requires() []api.StepLink {
@@ -392,7 +418,11 @@ func (s *promotionStep) Provides() api.ParameterMap {
 func (s *promotionStep) Name() string { return fmt.Sprintf("[%s]", s.name) }
 
 func (s *promotionStep) Description() string {
-	return fmt.Sprintf("Promote built images into the release image stream %s", s.targetNameFunc(s.registry, *s.configuration.PromotionConfiguration))
+	destinations := []string{s.targetNameFunc(s.registry, *s.configuration.PromotionConfiguration)}
+	for _, cfg := range s.configuration.AccessoryPromotionConfiguration {
+		destinations = append(destinations, s.targetNameFunc(s.registry, cfg))
+	}
+	return fmt.Sprintf("Promote built images into the release image streams %s", strings.Join(destinations, " "))
 }
 
 func (s *promotionStep) Objects() []ctrlruntimeclient.Object {

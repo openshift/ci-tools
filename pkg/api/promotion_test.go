@@ -53,7 +53,7 @@ func TestPromotesOfficialImages(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if actual, expected := PromotesOfficialImages(testCase.configSpec, WithOKD), testCase.expected; actual != expected {
+			if actual, expected := PromotesOfficialImages(testCase.configSpec.PromotionConfiguration, WithOKD), testCase.expected; actual != expected {
 				t.Errorf("%s: did not identify official promotion correctly, expected %v got %v", testCase.name, expected, actual)
 			}
 		})

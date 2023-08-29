@@ -316,7 +316,7 @@ func TestValidatePromotion(t *testing.T) {
 			input:                  api.PromotionConfiguration{Namespace: "foo", Tag: "bar"},
 			promotesOfficialImages: true,
 			imageTargets:           true,
-			expected:               []error{fmt.Errorf("importing the release stream is required to ensure the promoted images to the namespace foo can be integrated properly. Although it can be achieved by tag_specification or releases[\"latest\"], adding an e2e test is strongly suggested")},
+			expected:               []error{fmt.Errorf("promotion: importing the release stream is required to ensure the promoted images to the namespace foo can be integrated properly. Although it can be achieved by tag_specification or releases[\"latest\"], adding an e2e test is strongly suggested")},
 		},
 		{
 			name:                   "[release:latest] is not fulfilled because the release name is not correct",
@@ -326,7 +326,7 @@ func TestValidatePromotion(t *testing.T) {
 			releases: map[string]api.UnresolvedRelease{
 				"initial": {},
 			},
-			expected: []error{fmt.Errorf("importing the release stream is required to ensure the promoted images to the namespace foo can be integrated properly. Although it can be achieved by tag_specification or releases[\"latest\"], adding an e2e test is strongly suggested")},
+			expected: []error{fmt.Errorf("promotion: importing the release stream is required to ensure the promoted images to the namespace foo can be integrated properly. Although it can be achieved by tag_specification or releases[\"latest\"], adding an e2e test is strongly suggested")},
 		},
 		{
 			name:  "[release:latest] is fulfilled by release[latest]",
@@ -352,8 +352,9 @@ func TestValidatePromotion(t *testing.T) {
 	}
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
-			if actual, expected := validatePromotionConfiguration("promotion", test.input, test.promotesOfficialImages, test.imageTargets, test.input.Namespace, test.releaseTagConfiguration, test.releases), test.expected; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: got incorrect errors: %v", test.name, diff.ObjectDiff(actual, expected))
+			actual, expected := validatePromotionConfiguration(NewConfigContext().AddField("promotion"), test.input, test.promotesOfficialImages, test.imageTargets, test.input.Namespace, test.releaseTagConfiguration, test.releases), test.expected
+			if diff := cmp.Diff(actual, expected, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("%s: got incorrect errors: %v", test.name, diff)
 			}
 		})
 	}

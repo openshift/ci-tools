@@ -86,6 +86,14 @@ type ReleaseBuildConfiguration struct {
 	// If no promotion is defined, it is defaulted from the ReleaseTagConfiguration.
 	PromotionConfiguration *PromotionConfiguration `json:"promotion,omitempty"`
 
+	// AccessoryPromotionConfiguration determines how accessory images are
+	// promoted by this command. This promotion follows all the same rules
+	// as the main promotion, except that additional_images are required, as
+	// all promotions in these stanzas are opt-in, not opt-out like the main
+	// one. Furthermore, accessory promotion stanzas cannot be used to promote
+	// to official streams.
+	AccessoryPromotionConfiguration []PromotionConfiguration `json:"accessory_promotion,omitempty"`
+
 	// Resources is a set of resource requests or limits over the
 	// input types. The special name '*' may be used to set default
 	// requests and limits.

@@ -1410,6 +1410,13 @@ func (in *ReleaseBuildConfiguration) DeepCopyInto(out *ReleaseBuildConfiguration
 		*out = new(PromotionConfiguration)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.AccessoryPromotionConfiguration != nil {
+		in, out := &in.AccessoryPromotionConfiguration, &out.AccessoryPromotionConfiguration
+		*out = make([]PromotionConfiguration, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	if in.Resources != nil {
 		in, out := &in.Resources, &out.Resources
 		*out = make(ResourceConfiguration, len(*in))

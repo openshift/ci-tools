@@ -17,30 +17,47 @@ func PromotesImagesInto(configSpec *cioperatorapi.ReleaseBuildConfiguration, pro
 	if promotionNamespace == "" {
 		return false
 	}
-	return !cioperatorapi.IsPromotionDisabled(configSpec) && promotionNamespace == cioperatorapi.ExtractPromotionNamespace(configSpec)
+	if !cioperatorapi.IsPromotionDisabled(configSpec.PromotionConfiguration) && promotionNamespace == cioperatorapi.ExtractPromotionNamespace(configSpec.PromotionConfiguration) {
+		return true
+	}
+	for _, cfg := range configSpec.AccessoryPromotionConfiguration {
+		if !cioperatorapi.IsPromotionDisabled(&cfg) && promotionNamespace == cioperatorapi.ExtractPromotionNamespace(&cfg) {
+			return true
+		}
+	}
+	return false
 }
 
 // AllPromotionImageStreamTags returns a set of all ImageStreamTags this config promotes to.
 func AllPromotionImageStreamTags(configSpec *cioperatorapi.ReleaseBuildConfiguration) sets.Set[string] {
 	result := sets.Set[string]{}
 
-	if cioperatorapi.IsPromotionDisabled(configSpec) {
-		return result
+	promotionConfigs := []*cioperatorapi.PromotionConfiguration{
+		configSpec.PromotionConfiguration,
+	}
+	for _, cfg := range configSpec.AccessoryPromotionConfiguration {
+		promotionConfigs = append(promotionConfigs, &cfg)
 	}
 
-	namespace := cioperatorapi.ExtractPromotionNamespace(configSpec)
-	name := cioperatorapi.ExtractPromotionName(configSpec)
+	for _, cfg := range promotionConfigs {
+		if cioperatorapi.IsPromotionDisabled(cfg) {
+			return result
+		}
 
-	if namespace == "" || name == "" {
-		return result
-	}
+		namespace := cioperatorapi.ExtractPromotionNamespace(cfg)
+		name := cioperatorapi.ExtractPromotionName(cfg)
 
-	for _, image := range configSpec.Images {
-		result.Insert(fmt.Sprintf("%s/%s:%s", namespace, name, image.To))
-	}
+		if namespace == "" || name == "" {
+			return result
+		}
 
-	for additionalTagToPromote := range configSpec.PromotionConfiguration.AdditionalImages {
-		result.Insert(fmt.Sprintf("%s/%s:%s", namespace, name, additionalTagToPromote))
+		for _, image := range configSpec.Images {
+			result.Insert(fmt.Sprintf("%s/%s:%s", namespace, name, image.To))
+		}
+
+		for additionalTagToPromote := range cfg.AdditionalImages {
+			result.Insert(fmt.Sprintf("%s/%s:%s", namespace, name, additionalTagToPromote))
+		}
 	}
 
 	return result
@@ -121,7 +138,7 @@ func (o *Options) Bind(fs *flag.FlagSet) {
 func (o *Options) matches(configuration *cioperatorapi.ReleaseBuildConfiguration, includeOKD cioperatorapi.OKDInclusion) bool {
 	var imagesMatch bool
 	if o.CurrentPromotionNamespace == "" {
-		imagesMatch = cioperatorapi.PromotesOfficialImages(configuration, includeOKD)
+		imagesMatch = cioperatorapi.PromotesOfficialImages(configuration.PromotionConfiguration, includeOKD)
 	} else {
 		imagesMatch = PromotesImagesInto(configuration, o.CurrentPromotionNamespace)
 	}

@@ -154,13 +154,30 @@ func (v *Validator) validateConfiguration(ctx *configContext, config *api.Releas
 	// Validate promotion
 	if config.PromotionConfiguration != nil {
 		validationErrors = append(validationErrors,
-			validatePromotionConfiguration("promotion",
+			validatePromotionConfiguration(ctx.AddField("promotion"),
 				*config.PromotionConfiguration,
-				api.PromotesOfficialImages(config, api.WithOKD),
+				api.PromotesOfficialImages(config.PromotionConfiguration, api.WithOKD),
 				len(api.ImageTargets(config)) > 0,
-				api.ExtractPromotionNamespace(config),
+				api.ExtractPromotionNamespace(config.PromotionConfiguration),
 				config.ReleaseTagConfiguration,
 				config.Releases)...)
+	} else {
+		if len(config.AccessoryPromotionConfiguration) > 0 {
+			validationErrors = append(validationErrors, ctx.AddField("accessory_promotion").errorf("cannot specify accessory_promotion when main promotion is unset"))
+		}
+	}
+
+	for i, step := range config.AccessoryPromotionConfiguration {
+		validationErrors = append(validationErrors,
+			validatePromotionConfiguration(ctx.AddField("accessory_promotion").addIndex(i),
+				step,
+				api.PromotesOfficialImages(&step, api.WithOKD),
+				len(api.AccessoryImageTargets(&step)) > 0,
+				api.ExtractPromotionNamespace(&step),
+				config.ReleaseTagConfiguration,
+				config.Releases)...)
+		validateAccessoryPromotionConfiguration(ctx.AddField("accessory_promotion").addIndex(i),
+			step)
 	}
 
 	validationErrors = append(validationErrors, validateReleases("releases", config.Releases, config.ReleaseTagConfiguration != nil)...)
@@ -395,29 +412,42 @@ var (
 	exceptions = sets.New[string]("openshift")
 )
 
-func validatePromotionConfiguration(fieldRoot string, input api.PromotionConfiguration, promotesOfficialImages, imageTargets bool, promotionNamespace string, releaseTagConfiguration *api.ReleaseTagConfiguration, releases map[string]api.UnresolvedRelease) []error {
+func validatePromotionConfiguration(ctx *configContext, input api.PromotionConfiguration, promotesOfficialImages, imageTargets bool, promotionNamespace string, releaseTagConfiguration *api.ReleaseTagConfiguration, releases map[string]api.UnresolvedRelease) []error {
 	var validationErrors []error
 
 	if len(input.Namespace) == 0 {
-		validationErrors = append(validationErrors, fmt.Errorf("%s: no namespace defined", fieldRoot))
+		validationErrors = append(validationErrors, ctx.errorf("no namespace defined"))
 	}
 
 	if openshiftWebhookForbiddingNamespaces.MatchString(input.Namespace) && !exceptions.Has(input.Namespace) {
-		validationErrors = append(validationErrors, fmt.Errorf("%s: cannot promote to namespace %s matching this regular expression: (^kube.*|^openshift.*|^default$|^redhat.*)", fieldRoot, input.Namespace))
+		validationErrors = append(validationErrors, ctx.errorf("cannot promote to namespace %s matching this regular expression: (^kube.*|^openshift.*|^default$|^redhat.*)", input.Namespace))
 	}
 
 	if len(input.Name) == 0 && len(input.Tag) == 0 {
-		validationErrors = append(validationErrors, fmt.Errorf("%s: no name or tag defined", fieldRoot))
+		validationErrors = append(validationErrors, ctx.errorf("no name or tag defined"))
 	}
 
 	if len(input.Name) != 0 && len(input.Tag) != 0 {
-		validationErrors = append(validationErrors, fmt.Errorf("%s: both name and tag defined", fieldRoot))
+		validationErrors = append(validationErrors, ctx.errorf("both name and tag defined"))
 	}
 
 	if promotesOfficialImages && imageTargets {
 		if _, ok := releases["latest"]; !ok && releaseTagConfiguration == nil {
-			validationErrors = append(validationErrors, fmt.Errorf("importing the release stream is required to ensure the promoted images to the namespace %s can be integrated properly. Although it can be achieved by tag_specification or releases[\"latest\"], adding an e2e test is strongly suggested", promotionNamespace))
+			validationErrors = append(validationErrors, ctx.errorf("importing the release stream is required to ensure the promoted images to the namespace %s can be integrated properly. Although it can be achieved by tag_specification or releases[\"latest\"], adding an e2e test is strongly suggested", promotionNamespace))
 		}
+	}
+	return validationErrors
+}
+
+func validateAccessoryPromotionConfiguration(ctx *configContext, input api.PromotionConfiguration) []error {
+	var validationErrors []error
+
+	if len(input.AdditionalImages) == 0 {
+		validationErrors = append(validationErrors, ctx.errorf("additional images are required for accessory promotions"))
+	}
+
+	if api.PromotesOfficialImages(&input, api.WithOKD) {
+		validationErrors = append(validationErrors, ctx.errorf("accessory promotions cannot target official streams"))
 	}
 	return validationErrors
 }

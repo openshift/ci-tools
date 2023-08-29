@@ -22,7 +22,7 @@ const (
 	PromotionQuayStepName = "promotion-quay"
 )
 
-// ImageTargets returns image targets
+// ImageTargets returns image targets for the main promotion step (which is opt-out)
 func ImageTargets(c *ReleaseBuildConfiguration) sets.Set[string] {
 	imageTargets := sets.New[string]()
 	if c.PromotionConfiguration != nil {
@@ -37,21 +37,33 @@ func ImageTargets(c *ReleaseBuildConfiguration) sets.Set[string] {
 	return imageTargets
 }
 
+// AccessoryImageTargets returns image targets for an accessory promotion step (which are opt-in)
+func AccessoryImageTargets(c *PromotionConfiguration) sets.Set[string] {
+	imageTargets := sets.New[string]()
+	if c != nil {
+		for image := range c.AdditionalImages {
+			imageTargets.Insert(c.AdditionalImages[image])
+		}
+	}
+
+	return imageTargets
+}
+
 // PromotesOfficialImages determines if a configuration will result in official images
 // being promoted. This is a proxy for determining if a configuration contributes to
 // the release payload.
-func PromotesOfficialImages(configSpec *ReleaseBuildConfiguration, includeOKD OKDInclusion) bool {
+func PromotesOfficialImages(configSpec *PromotionConfiguration, includeOKD OKDInclusion) bool {
 	return !IsPromotionDisabled(configSpec) && BuildsOfficialImages(configSpec, includeOKD)
 }
 
 // IsPromotionDisabled determines if promotion is disabled in the configuration
-func IsPromotionDisabled(configSpec *ReleaseBuildConfiguration) bool {
-	return configSpec.PromotionConfiguration != nil && configSpec.PromotionConfiguration.Disabled
+func IsPromotionDisabled(configSpec *PromotionConfiguration) bool {
+	return configSpec != nil && configSpec.Disabled
 }
 
 // BuildsOfficialImages determines if a configuration will result in official images
 // being built.
-func BuildsOfficialImages(configSpec *ReleaseBuildConfiguration, includeOKD OKDInclusion) bool {
+func BuildsOfficialImages(configSpec *PromotionConfiguration, includeOKD OKDInclusion) bool {
 	promotionNamespace := ExtractPromotionNamespace(configSpec)
 	return RefersToOfficialImage(promotionNamespace, includeOKD)
 }
@@ -62,17 +74,17 @@ func RefersToOfficialImage(namespace string, includeOKD OKDInclusion) bool {
 }
 
 // ExtractPromotionNamespace extracts the promotion namespace
-func ExtractPromotionNamespace(configSpec *ReleaseBuildConfiguration) string {
-	if configSpec.PromotionConfiguration != nil && configSpec.PromotionConfiguration.Namespace != "" {
-		return configSpec.PromotionConfiguration.Namespace
+func ExtractPromotionNamespace(configSpec *PromotionConfiguration) string {
+	if configSpec != nil && configSpec.Namespace != "" {
+		return configSpec.Namespace
 	}
 	return ""
 }
 
 // ExtractPromotionName extracts the promotion name
-func ExtractPromotionName(configSpec *ReleaseBuildConfiguration) string {
-	if configSpec.PromotionConfiguration != nil && configSpec.PromotionConfiguration.Name != "" {
-		return configSpec.PromotionConfiguration.Name
+func ExtractPromotionName(configSpec *PromotionConfiguration) string {
+	if configSpec != nil && configSpec.Name != "" {
+		return configSpec.Name
 	}
 	return ""
 }

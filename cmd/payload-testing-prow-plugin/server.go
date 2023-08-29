@@ -237,7 +237,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 		logger.WithError(err).Error("could not resolve ci-operator's config")
 		return formatError(fmt.Errorf("could not resolve ci-operator's config for %s/%s/%s: %w", org, repo, pr.Base.Ref, err))
 	}
-	if !api.PromotesOfficialImages(ciOpConfig, api.WithOKD) {
+	if !api.PromotesOfficialImages(ciOpConfig.PromotionConfiguration, api.WithOKD) {
 		logger.Info("the repo does not contribute to the OpenShift official images")
 		return fmt.Sprintf("the repo %s/%s does not contribute to the OpenShift official images", org, repo)
 	}

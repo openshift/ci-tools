@@ -175,6 +175,7 @@ func main() {
 				"--current-release-minor=" + versionSplit[1],
 				"--ensure-correct-promotion-dockerfile-ignored-repos", "openshift/origin-aggregated-logging",
 				"--ensure-correct-promotion-dockerfile-ignored-repos", "openshift/console",
+				"--ensure-correct-promotion-dockerfile-ignored-repos", "openshift/linuxptp-daemon",
 			},
 		},
 		{

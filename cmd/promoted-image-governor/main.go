@@ -258,6 +258,10 @@ func generateMappings(promotedTags []api.ImageStreamTagReference, mappingConfig 
 						if mappings[filename][src].Has(dst) {
 							errs = append(errs, fmt.Errorf("cannot define the same mirroring destination %s more than once for the source %s in filename %s", dst, src, filename))
 						}
+						logrus.WithField("filename", filename).WithField("src", src).WithField("dst", dst).
+							WithField("tag.Namespace", tag.Namespace).
+							WithField("mappingConfig.SourceNamespace", mappingConfig.SourceNamespace).
+							Debug("Insert into mapping ...")
 						mappings[filename][src].Insert(dst)
 					}
 				}
@@ -285,6 +289,7 @@ func isMirroredFromOCP(tag api.ImageStreamTagReference, refs []releaseconfig.Ima
 				return false
 			}
 		}
+		logrus.WithField("tag", tag.ISTagName()).Debug("mirrored from OCP")
 		return true
 	}
 	return false

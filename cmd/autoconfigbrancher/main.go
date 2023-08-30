@@ -256,6 +256,7 @@ func main() {
 				"--release-controller-mirror-config-dir", "./core-services/release-controller/_releases",
 				"--openshift-mapping-dir", "./core-services/image-mirroring/openshift",
 				"--openshift-mapping-config", "./core-services/image-mirroring/openshift/_config.yaml",
+				"--log-level", "debug",
 				"--dry-run=true",
 			},
 		},

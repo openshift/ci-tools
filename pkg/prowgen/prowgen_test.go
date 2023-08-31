@@ -68,6 +68,24 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 			},
 		},
 		{
+			description: "presubmit with always_run but run_if_changed set",
+			test:        "testname",
+			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			generateOption: func(options *generatePresubmitOptions) {
+				options.defaultDisable = true
+				options.runIfChanged = ".*"
+			},
+		},
+		{
+			description: "presubmit with always_run but optional true",
+			test:        "testname",
+			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			generateOption: func(options *generatePresubmitOptions) {
+				options.defaultDisable = true
+				options.optional = true
+			},
+		},
+		{
 			description: "presubmit with run_if_changed",
 			test:        "testname",
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},

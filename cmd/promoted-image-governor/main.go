@@ -239,8 +239,14 @@ type OpenshiftMappingConfig struct {
 // and then used by the periodic-image-mirroring-openshift job
 func generateMappings(promotedTags []api.ImageStreamTagReference, mappingConfig *OpenshiftMappingConfig, imageStreamRefs []releaseconfig.ImageStreamRef) (map[string]map[string]sets.Set[string], error) {
 	mappings := map[string]map[string]sets.Set[string]{}
+	processedTags := sets.NewString()
 	var errs []error
 	for _, tag := range promotedTags {
+		if processedTags.Has(tag.ISTagName()) {
+			logrus.WithField("tag", tag.ISTagName()).Warn("Skipping processed tag ...")
+			continue
+		}
+		processedTags.Insert(tag.ISTagName())
 		// mirror the images if it is promoted or it is mirrored by the release controllers from OCP image streams
 		if tag.Namespace == mappingConfig.SourceNamespace || isMirroredFromOCP(tag, imageStreamRefs) {
 			if mappingConfig.Images != nil {
@@ -430,6 +436,7 @@ func main() {
 	var ignoredCommitTags []*regexp.Regexp
 	if err := config.OperateOnCIOperatorConfigDir(abs, func(cfg *api.ReleaseBuildConfiguration, metadata *config.Info) error {
 		for _, isTagRef := range release.PromotedTags(cfg) {
+			logrus.WithField("metadata", metadata).WithField("tag", isTagRef.ISTagName()).Debug("Appending promoted tag ...")
 			promotedTags = append(promotedTags, isTagRef)
 			if _, ok := opts.explains[isTagRef]; ok {
 				opts.explains[isTagRef] = cfg.Metadata.AsString()

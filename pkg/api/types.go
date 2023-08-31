@@ -1156,7 +1156,6 @@ const (
 	ClusterProfileAzureMag              ClusterProfile = "azuremag"
 	ClusterProfileAzureQE               ClusterProfile = "azure-qe"
 	ClusterProfileAzureArm64QE          ClusterProfile = "azure-arm64-qe"
-	ClusterProfileAzureMarketPlaceQE    ClusterProfile = "azure-marketplace-qe"
 	ClusterProfileAzureMagQE            ClusterProfile = "azuremag-qe"
 	ClusterProfileEquinixOcpMetal       ClusterProfile = "equinix-ocp-metal"
 	ClusterProfileEquinixOcpMetalQE     ClusterProfile = "equinix-ocp-metal-qe"
@@ -1259,7 +1258,6 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAzureMag,
 		ClusterProfileAzureMagQE,
 		ClusterProfileAzureQE,
-		ClusterProfileAzureMarketPlaceQE,
 		ClusterProfileAzureStack,
 		ClusterProfileAzureStackQE,
 		ClusterProfileEquinixOcpMetal,
@@ -1369,7 +1367,6 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAzure4,
 		ClusterProfileAzureArc,
 		ClusterProfileAzureQE,
-		ClusterProfileAzureMarketPlaceQE,
 		ClusterProfileAzureVirtualization:
 		return "azure4"
 	case
@@ -1554,8 +1551,6 @@ func (p ClusterProfile) LeaseType() string {
 		return "azuremag-qe-quota-slice"
 	case ClusterProfileAzureArm64QE:
 		return "azure-arm64-qe-quota-slice"
-	case ClusterProfileAzureMarketPlaceQE:
-		return "azure-marketplace-qe-quota-slice"
 	case ClusterProfileAzureVirtualization:
 		return "azure-virtualization-quota-slice"
 	case ClusterProfileEquinixOcpMetal:

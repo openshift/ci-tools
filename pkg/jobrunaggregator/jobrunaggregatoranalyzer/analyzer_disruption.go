@@ -26,6 +26,12 @@ func isExcludedDisruptionBackend(name string) bool {
 		"kube-api-http1-external-lb",
 		"kube-api-http2-external-lb",
 		"openshift-api-http2-external-lb",
+		"host-to-service",
+		"host-to-host",
+		"host-to-pod",
+		"pod-to-host",
+		"pod-to-pod",
+		"pod-to-service",
 	}
 
 	for _, excludedName := range excludedNames {

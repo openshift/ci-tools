@@ -193,6 +193,10 @@ func generatePresubmitForTest(jobBaseBuilder *prowJobBaseBuilder, name string, i
 
 	shortName := info.TestName(name)
 	base := jobBaseBuilder.Rehearsable(!opts.disableRehearsal).Build(jc.PresubmitPrefix)
+	triggerCommand := prowconfig.DefaultTriggerFor(shortName)
+	if opts.defaultDisable && opts.runIfChanged == "" && opts.skipIfOnlyChanged == "" && !opts.optional {
+		triggerCommand = fmt.Sprintf(`(?m)^/test( | .* )(%s|%s),?($|\s.*)`, shortName, "remaining-required")
+	}
 	return &prowconfig.Presubmit{
 		JobBase:   base,
 		AlwaysRun: opts.runIfChanged == "" && opts.skipIfOnlyChanged == "" && !opts.defaultDisable,
@@ -201,7 +205,7 @@ func generatePresubmitForTest(jobBaseBuilder *prowJobBaseBuilder, name string, i
 			Context: fmt.Sprintf("ci/prow/%s", shortName),
 		},
 		RerunCommand: prowconfig.DefaultRerunCommandFor(shortName),
-		Trigger:      prowconfig.DefaultTriggerFor(shortName),
+		Trigger:      triggerCommand,
 		RegexpChangeMatcher: prowconfig.RegexpChangeMatcher{
 			RunIfChanged:      opts.runIfChanged,
 			SkipIfOnlyChanged: opts.skipIfOnlyChanged,

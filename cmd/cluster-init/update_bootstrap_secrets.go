@@ -126,6 +126,11 @@ func generateRegistryPushCredentialsSecret(o options) secretbootstrap.SecretConf
 					RegistryURL: api.ServiceDomainAPPCIRegistry,
 				},
 				{
+					AuthField:   registryCommandTokenField(o.clusterName, push),
+					Item:        buildUFarm,
+					RegistryURL: "image-registry.openshift-image-registry.svc.cluster.local:5000",
+				},
+				{
 					AuthField:   "auth",
 					Item:        "quay-io-push-credentials",
 					RegistryURL: "quay.io/openshift/ci",

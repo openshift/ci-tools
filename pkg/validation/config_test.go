@@ -312,6 +312,18 @@ func TestValidatePromotion(t *testing.T) {
 			expected:     []error{errors.New("promotion: cannot promote to namespace openshift-some matching this regular expression: (^kube.*|^openshift.*|^default$|^redhat.*)")},
 		},
 		{
+			name:         "cannot have overlapping targets by tag",
+			input:        api.PromotionConfiguration{Namespace: "foo", Tag: "bar", Targets: []api.PromotionTarget{{Namespace: "foo", Tag: "bar"}}},
+			imageTargets: true,
+			expected:     []error{errors.New("promotion: promotes to the same target as promotion.to[0]"), errors.New("promotion.to[0]: promotes to the same target as promotion")},
+		},
+		{
+			name:         "cannot have overlapping targets by name",
+			input:        api.PromotionConfiguration{Namespace: "foo", Name: "bar", Targets: []api.PromotionTarget{{Namespace: "foo", Name: "bar"}}},
+			imageTargets: true,
+			expected:     []error{errors.New("promotion: promotes to the same target as promotion.to[0]"), errors.New("promotion.to[0]: promotes to the same target as promotion")},
+		},
+		{
 			name:                   "[release:latest] is not fulfilled",
 			input:                  api.PromotionConfiguration{Namespace: "foo", Tag: "bar"},
 			promotesOfficialImages: true,
@@ -352,8 +364,9 @@ func TestValidatePromotion(t *testing.T) {
 	}
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
-			if actual, expected := validatePromotionConfiguration("promotion", test.input, test.promotesOfficialImages, test.imageTargets, test.input.Namespace, test.releaseTagConfiguration, test.releases), test.expected; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: got incorrect errors: %v", test.name, diff.ObjectDiff(actual, expected))
+			actual, expected := validatePromotionConfiguration("promotion", test.input, test.promotesOfficialImages, test.imageTargets, test.releaseTagConfiguration, test.releases), test.expected
+			if diff := cmp.Diff(actual, expected, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("%s: got incorrect errors: %v", test.name, diff)
 			}
 		})
 	}

@@ -109,14 +109,13 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 
 	var jobRunWaiter jobrunaggregatorlib.JobRunWaiter
 	if o.jobStateQuerySource == jobrunaggregatorlib.JobStateQuerySourceBigQuery || o.prowJobClient == nil {
-		jobRunWaiter = jobrunaggregatorlib.DefaultJobRunWaiter{JobRunGetter: o, TimeToStopWaiting: timeToStopWaiting}
+		jobRunWaiter = &jobrunaggregatorlib.DefaultJobRunWaiter{JobRunGetter: o, TimeToStopWaiting: timeToStopWaiting}
 	} else {
-		jobRunWaiter1 := jobrunaggregatorlib.ClusterJobRunWaiter{
+		jobRunWaiter = &jobrunaggregatorlib.ClusterJobRunWaiter{
 			ProwJobClient:      o.prowJobClient,
 			TimeToStopWaiting:  timeToStopWaiting,
 			ProwJobMatcherFunc: o.prowJobMatcherFunc,
 		}
-		jobRunWaiter = jobRunWaiter1
 	}
 	finishedJobsToAggregate, _, finishedJobRunNames, unfinishedJobNames, err := jobrunaggregatorlib.WaitAndGetAllFinishedJobRuns(ctx, o, jobRunWaiter, o.workingDir, "aggregated")
 	if err != nil {

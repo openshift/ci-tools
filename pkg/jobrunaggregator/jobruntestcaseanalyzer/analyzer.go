@@ -408,6 +408,26 @@ type JobRunTestCaseAnalyzerOptions struct {
 	prowJobMatcherFunc  jobrunaggregatorlib.ProwJobMatcherFunc
 }
 
+func (o *JobRunTestCaseAnalyzerOptions) shouldAggregateJob(prowJob *prowjobv1.ProwJob) bool {
+	// first level of match only matches names
+	if !o.prowJobMatcherFunc(prowJob) {
+		return false
+	}
+	// second level of match deal with payload or invocation ID
+	var prowJobRunMatcherFunc jobrunaggregatorlib.ProwJobMatcherFunc
+	if len(o.payloadTag) > 0 {
+		prowJobRunMatcherFunc = jobrunaggregatorlib.NewProwJobMatcherFuncForReleaseController(prowJob.Name, o.payloadTag)
+	}
+	if len(o.payloadInvocationID) > 0 {
+		prowJobRunMatcherFunc = jobrunaggregatorlib.NewProwJobMatcherFuncForPR(prowJob.Name, o.payloadInvocationID, jobrunaggregatorlib.ProwJobPayloadInvocationIDLabel)
+	}
+
+	if prowJobRunMatcherFunc != nil {
+		return prowJobRunMatcherFunc(prowJob)
+	}
+	return true
+}
+
 func (o *JobRunTestCaseAnalyzerOptions) findJobRunsWithRetry(ctx context.Context,
 	jobName string, jobRunLocator jobrunaggregatorlib.JobRunLocator) ([]jobrunaggregatorapi.JobRunInfo, error) {
 	errorsInARow := 0
@@ -557,12 +577,12 @@ func (o *JobRunTestCaseAnalyzerOptions) Run(ctx context.Context) error {
 
 	var jobRunWaiter jobrunaggregatorlib.JobRunWaiter
 	if o.jobStateQuerySource == jobrunaggregatorlib.JobStateQuerySourceBigQuery || o.prowJobClient == nil {
-		jobRunWaiter = jobrunaggregatorlib.DefaultJobRunWaiter{JobRunGetter: o, TimeToStopWaiting: timeToStopWaiting}
+		jobRunWaiter = &jobrunaggregatorlib.DefaultJobRunWaiter{JobRunGetter: o, TimeToStopWaiting: timeToStopWaiting}
 	} else {
-		jobRunWaiter = jobrunaggregatorlib.ClusterJobRunWaiter{
+		jobRunWaiter = &jobrunaggregatorlib.ClusterJobRunWaiter{
 			ProwJobClient:      o.prowJobClient,
 			TimeToStopWaiting:  timeToStopWaiting,
-			ProwJobMatcherFunc: o.prowJobMatcherFunc,
+			ProwJobMatcherFunc: o.shouldAggregateJob,
 		}
 	}
 

@@ -15,6 +15,10 @@ type BuildClusters struct {
 }
 
 func updateBuildClusters(o options) error {
+	if o.unmanaged {
+		logrus.Infof("skipping build clusters config update for unmanaged cluster: %s", o.clusterName)
+		return nil
+	}
 	logrus.Infof("updating build clusters config to add: %s", o.clusterName)
 	buildClusters, err := loadBuildClusters(o)
 	if err != nil {

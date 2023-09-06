@@ -92,7 +92,7 @@ func TestValidateOptions(t *testing.T) {
 		{
 			name: "valid with hosted true",
 			options: options{
-				clusterName: "newcluster",
+				clusterName: "newCluster",
 				releaseRepo: testdata,
 				hosted:      true,
 			},
@@ -104,6 +104,14 @@ func TestValidateOptions(t *testing.T) {
 				releaseRepo: testdata,
 				update:      true,
 				hosted:      true,
+			},
+		},
+		{
+			name: "valid with unmanaged true",
+			options: options{
+				clusterName: "newUnmanagedCluster",
+				releaseRepo: testdata,
+				unmanaged:   true,
 			},
 		},
 	}

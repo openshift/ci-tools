@@ -48,14 +48,13 @@ func updateCiSecretBootstrapConfig(o options, c *secretbootstrap.Config) error {
 		c.ClusterGroups[groupName] = sets.List(sets.New[string](c.ClusterGroups[groupName]...).Insert(o.clusterName))
 	}
 	// build02 and build02 are not OSD clusters and thus they should never be in the group
-	if o.clusterName != string(api.ClusterBuild01) && o.clusterName != string(api.ClusterBuild02) {
+	if o.clusterName != string(api.ClusterBuild01) && o.clusterName != string(api.ClusterBuild02) && !o.unmanaged {
 		groupName := secretbootstrap.OSDGlobalPullSecretGroupName
 		c.ClusterGroups[groupName] = sets.List(sets.New[string](append(c.ClusterGroups[groupName], o.clusterName)...))
 	}
 	c.UserSecretsTargetClusters = sets.List(sets.New[string](c.UserSecretsTargetClusters...).Insert(o.clusterName))
 
-	for _, step := range []func(c *secretbootstrap.Config, o options) error{
-		updatePodScalerSecret,
+	var steps = []func(c *secretbootstrap.Config, o options) error{
 		updateBuildFarmSecrets,
 		updateDPTPControllerManagerSecret,
 		updateRehearseSecret,
@@ -66,7 +65,12 @@ func updateCiSecretBootstrapConfig(o options, c *secretbootstrap.Config) error {
 		updateSecret(generateRegistryPushCredentialsSecret),
 		updateSecret(generateRegistryPullCredentialsSecret),
 		updateSecret(generateCiOperatorSecret),
-	} {
+	}
+	if !o.unmanaged {
+		steps = append(steps, updatePodScalerSecret)
+	}
+
+	for _, step := range steps {
 		if err := step(c, o); err != nil {
 			return err
 		}

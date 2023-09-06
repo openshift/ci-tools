@@ -1443,7 +1443,6 @@ func (p ClusterProfile) ClusterType() string {
 	case
 		ClusterProfileVSphere,
 		ClusterProfileVSphere8,
-		ClusterProfileVSphere8Vpn,
 		ClusterProfileVSphereDis,
 		ClusterProfileVSphereClusterbot,
 		ClusterProfileVSphereIBM7,
@@ -1451,6 +1450,8 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileVSphereConnected,
 		ClusterProfileVSphereMultizone:
 		return "vsphere"
+	case ClusterProfileVSphere8Vpn:
+		return "vsphere02"
 	case ClusterProfileOvirt:
 		return "ovirt"
 	case

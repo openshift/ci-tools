@@ -27,7 +27,7 @@ import (
 const (
 	JobStateQuerySourceBigQuery      = "bigquery"
 	JobStateQuerySourceCluster       = "cluster"
-	prowJobJobNameAnnotation         = "prow.k8s.io/job"
+	ProwJobJobNameAnnotation         = "prow.k8s.io/job"
 	prowJobJobRunIDLabel             = "prow.k8s.io/build-id"
 	unfinishedProwJobLoggingInterval = 10 * time.Minute
 )
@@ -189,7 +189,7 @@ func (w *ClusterJobRunWaiter) Wait(ctx context.Context) error {
 	}
 	timeout := time.Until(w.TimeToStopWaiting)
 	if timeout < 0 {
-		timeout = 2 * time.Second
+		timeout = 30 * time.Second
 	}
 	logrus.Infof("Going to wait until %+v with timeout value %+v", w.TimeToStopWaiting, timeout)
 
@@ -212,7 +212,7 @@ func (w *ClusterJobRunWaiter) Wait(ctx context.Context) error {
 			return false, nil
 		},
 	)
-	if err != nil {
+	if err != nil && err != context.DeadlineExceeded {
 		return fmt.Errorf("failed waiting for prowjobs to complete: %w", err)
 	}
 	return nil
@@ -231,8 +231,10 @@ func WaitAndGetAllFinishedJobRuns(ctx context.Context,
 
 	err := waiter.Wait(ctx)
 	if err != nil {
+		logrus.Errorf("finished waiting with error %+v", err)
 		return finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames, err
 	}
+	logrus.Infof("finished waiting")
 
 	// Refresh the job runs content one last time
 	relatedJobRuns, err := jobRunGetter.GetRelatedJobRuns(ctx)

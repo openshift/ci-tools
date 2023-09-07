@@ -87,33 +87,34 @@ type testCaseAnalyzerJobGetter struct {
 }
 
 func (s *testCaseAnalyzerJobGetter) shouldAggregateJob(prowJob *prowjobv1.ProwJob) bool {
+	jobName := prowJob.Annotations[jobrunaggregatorlib.ProwJobJobNameAnnotation]
 	// if PR payload, only find the exact jobs
 	if s.jobGCSPrefixes != nil && len(*s.jobGCSPrefixes) > 0 {
-		if !s.jobNames.Has(prowJob.Name) {
+		if !s.jobNames.Has(jobName) {
 			return false
 		}
 	} else {
-		if len(s.platform) != 0 && !strings.Contains(strings.ToLower(prowJob.Name), s.platform) {
+		if len(s.platform) != 0 && !strings.Contains(strings.ToLower(jobName), s.platform) {
 			return false
 		}
 		if len(s.network) != 0 {
 			network := "sdn"
-			if strings.Contains(strings.ToLower(prowJob.Name), "ovn") {
+			if strings.Contains(strings.ToLower(jobName), "ovn") {
 				network = "ovn"
 			}
 			if s.network != network {
 				return false
 			}
 		}
-		if len(s.infrastructure) != 0 && s.infrastructure != getJobInfrastructure(prowJob.Name) {
+		if len(s.infrastructure) != 0 && s.infrastructure != getJobInfrastructure(jobName) {
 			return false
 		}
 
-		if !s.isJobNameIncluded(prowJob.Name) {
+		if !s.isJobNameIncluded(jobName) {
 			return false
 		}
 
-		if s.isJobNameExcluded(prowJob.Name) {
+		if s.isJobNameExcluded(jobName) {
 			return false
 		}
 	}
@@ -415,11 +416,12 @@ func (o *JobRunTestCaseAnalyzerOptions) shouldAggregateJob(prowJob *prowjobv1.Pr
 	}
 	// second level of match deal with payload or invocation ID
 	var prowJobRunMatcherFunc jobrunaggregatorlib.ProwJobMatcherFunc
+	jobName := prowJob.Annotations[jobrunaggregatorlib.ProwJobJobNameAnnotation]
 	if len(o.payloadTag) > 0 {
-		prowJobRunMatcherFunc = jobrunaggregatorlib.NewProwJobMatcherFuncForReleaseController(prowJob.Name, o.payloadTag)
+		prowJobRunMatcherFunc = jobrunaggregatorlib.NewProwJobMatcherFuncForReleaseController(jobName, o.payloadTag)
 	}
 	if len(o.payloadInvocationID) > 0 {
-		prowJobRunMatcherFunc = jobrunaggregatorlib.NewProwJobMatcherFuncForPR(prowJob.Name, o.payloadInvocationID, jobrunaggregatorlib.ProwJobPayloadInvocationIDLabel)
+		prowJobRunMatcherFunc = jobrunaggregatorlib.NewProwJobMatcherFuncForPR(jobName, o.payloadInvocationID, jobrunaggregatorlib.ProwJobPayloadInvocationIDLabel)
 	}
 
 	if prowJobRunMatcherFunc != nil {

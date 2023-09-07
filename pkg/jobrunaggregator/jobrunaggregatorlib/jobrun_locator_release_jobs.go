@@ -50,7 +50,7 @@ type releaseControllerProwJobMatcher struct {
 
 func (a releaseControllerProwJobMatcher) shouldAggregateReleaseControllerJob(prowJob *prowjobv1.ProwJob) bool {
 	payloadTag := GetPayloadTagFromProwJob(prowJob)
-	jobName := prowJob.Annotations[prowJobJobNameAnnotation]
+	jobName := prowJob.Annotations[ProwJobJobNameAnnotation]
 	jobRunId := prowJob.Labels[prowJobJobRunIDLabel]
 	if jobName != a.jobName {
 		return false

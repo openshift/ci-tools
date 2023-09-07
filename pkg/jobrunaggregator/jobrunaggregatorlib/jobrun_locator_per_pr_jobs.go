@@ -54,7 +54,7 @@ type perPRProwJobMatcher struct {
 
 func (a perPRProwJobMatcher) shouldAggregateReleaseControllerJob(prowJob *prowjobv1.ProwJob) bool {
 	id := prowJob.Labels[a.matchLabel]
-	jobName := prowJob.Annotations[prowJobJobNameAnnotation]
+	jobName := prowJob.Annotations[ProwJobJobNameAnnotation]
 	jobRunId := prowJob.Labels[prowJobJobRunIDLabel]
 	if releaseJobName, ok := prowJob.Annotations[prowJobReleaseJobNameAnnotation]; ok {
 		if releaseJobName != a.jobName {

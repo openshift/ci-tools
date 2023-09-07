@@ -19,7 +19,7 @@ import (
 func TestToPromote(t *testing.T) {
 	var testCases = []struct {
 		name             string
-		config           api.PromotionConfiguration
+		config           api.PromotionTarget
 		images           []api.ProjectDirectoryImageBuildStepConfiguration
 		requiredImages   sets.Set[string]
 		expectedBySource map[string]string
@@ -27,7 +27,7 @@ func TestToPromote(t *testing.T) {
 	}{
 		{
 			name: "disabled config returns nothing",
-			config: api.PromotionConfiguration{
+			config: api.PromotionTarget{
 				Disabled: true,
 			},
 			images: []api.ProjectDirectoryImageBuildStepConfiguration{
@@ -41,7 +41,7 @@ func TestToPromote(t *testing.T) {
 		},
 		{
 			name: "enabled config returns input list",
-			config: api.PromotionConfiguration{
+			config: api.PromotionTarget{
 				Disabled: false,
 			},
 			images: []api.ProjectDirectoryImageBuildStepConfiguration{
@@ -55,7 +55,7 @@ func TestToPromote(t *testing.T) {
 		},
 		{
 			name: "enabled config with exclude returns filtered input list",
-			config: api.PromotionConfiguration{
+			config: api.PromotionTarget{
 				ExcludedImages: []string{"foo"},
 				Disabled:       false,
 			},
@@ -70,7 +70,7 @@ func TestToPromote(t *testing.T) {
 		},
 		{
 			name: "enabled config with optional image returns subset of input list",
-			config: api.PromotionConfiguration{
+			config: api.PromotionTarget{
 				Disabled: false,
 			},
 			images: []api.ProjectDirectoryImageBuildStepConfiguration{
@@ -84,7 +84,7 @@ func TestToPromote(t *testing.T) {
 		},
 		{
 			name: "enabled config with optional but required image returns full input list",
-			config: api.PromotionConfiguration{
+			config: api.PromotionTarget{
 				Disabled: false,
 			},
 			images: []api.ProjectDirectoryImageBuildStepConfiguration{
@@ -98,7 +98,7 @@ func TestToPromote(t *testing.T) {
 		},
 		{
 			name: "enabled config with additional images returns appended input list",
-			config: api.PromotionConfiguration{
+			config: api.PromotionTarget{
 				AdditionalImages: map[string]string{"boo": "ah"},
 				Disabled:         false,
 			},
@@ -113,7 +113,7 @@ func TestToPromote(t *testing.T) {
 		},
 		{
 			name: "enabled config with excludes and additional images returns filtered, appended input list",
-			config: api.PromotionConfiguration{
+			config: api.PromotionTarget{
 				ExcludedImages:   []string{"foo"},
 				AdditionalImages: map[string]string{"boo": "ah"},
 				Disabled:         false,
@@ -294,8 +294,9 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 		names    sets.Set[string]
 	}{
 		{
-			name:  "no promotion, no output",
-			input: &api.ReleaseBuildConfiguration{},
+			name:     "no promotion, no output",
+			input:    &api.ReleaseBuildConfiguration{},
+			expected: map[string][]api.ImageStreamTagReference{},
 		},
 		{
 			name: "promoted image means output tags",
@@ -362,7 +363,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					Disabled:  true,
 				},
 			},
-			expected: nil,
+			expected: map[string][]api.ImageStreamTagReference{},
 		},
 		{
 			name: "promoted image by tag means output tags",

@@ -107,12 +107,12 @@ func TestTargetName(t *testing.T) {
 	var testCases = []struct {
 		name     string
 		registry string
-		config   PromotionConfiguration
+		config   PromotionTarget
 		expected string
 	}{
 		{
 			name: "with name",
-			config: PromotionConfiguration{
+			config: PromotionTarget{
 				Namespace: "ns",
 				Name:      "name",
 			},
@@ -121,7 +121,7 @@ func TestTargetName(t *testing.T) {
 		},
 		{
 			name: "with tag",
-			config: PromotionConfiguration{
+			config: PromotionTarget{
 				Namespace: "ns",
 				Tag:       "tag",
 			},
@@ -130,7 +130,7 @@ func TestTargetName(t *testing.T) {
 		},
 		{
 			name: "quay.io with name",
-			config: PromotionConfiguration{
+			config: PromotionTarget{
 				Namespace: "ns",
 				Name:      "name",
 			},
@@ -139,7 +139,7 @@ func TestTargetName(t *testing.T) {
 		},
 		{
 			name: "quay.io with tag",
-			config: PromotionConfiguration{
+			config: PromotionTarget{
 				Namespace: "ns",
 				Tag:       "tag",
 			},
@@ -158,5 +158,81 @@ func TestTargetName(t *testing.T) {
 				t.Errorf("%s: mismatch (-expected +actual), diff: %s", testCase.name, diff)
 			}
 		})
+	}
+}
+
+func TestPromotionTargets(t *testing.T) {
+	var testCases = []struct {
+		name   string
+		input  *PromotionConfiguration
+		output []PromotionTarget
+	}{
+		{
+			name: "no config",
+		},
+		{
+			name: "legacy config",
+			input: &PromotionConfiguration{
+				Namespace:        "ns",
+				Name:             "name",
+				Tag:              "tag",
+				TagByCommit:      true,
+				ExcludedImages:   []string{"*"},
+				AdditionalImages: map[string]string{"whatever": "else"},
+				Disabled:         true,
+			},
+			output: []PromotionTarget{{
+				Namespace:        "ns",
+				Name:             "name",
+				Tag:              "tag",
+				TagByCommit:      true,
+				ExcludedImages:   []string{"*"},
+				AdditionalImages: map[string]string{"whatever": "else"},
+				Disabled:         true,
+			}},
+		},
+		{
+			name: "mixed config",
+			input: &PromotionConfiguration{
+				Targets: []PromotionTarget{{
+					Namespace:        "new-ns",
+					Name:             "new-name",
+					Tag:              "new-tag",
+					TagByCommit:      true,
+					ExcludedImages:   []string{"new-*"},
+					AdditionalImages: map[string]string{"new-whatever": "new-else"},
+					Disabled:         true,
+				}},
+				Namespace:        "ns",
+				Name:             "name",
+				Tag:              "tag",
+				TagByCommit:      true,
+				ExcludedImages:   []string{"*"},
+				AdditionalImages: map[string]string{"whatever": "else"},
+				Disabled:         true,
+			},
+			output: []PromotionTarget{{
+				Namespace:        "ns",
+				Name:             "name",
+				Tag:              "tag",
+				TagByCommit:      true,
+				ExcludedImages:   []string{"*"},
+				AdditionalImages: map[string]string{"whatever": "else"},
+				Disabled:         true,
+			}, {
+				Namespace:        "new-ns",
+				Name:             "new-name",
+				Tag:              "new-tag",
+				TagByCommit:      true,
+				ExcludedImages:   []string{"new-*"},
+				AdditionalImages: map[string]string{"new-whatever": "new-else"},
+				Disabled:         true,
+			}},
+		},
+	}
+	for _, testCase := range testCases {
+		if diff := cmp.Diff(PromotionTargets(testCase.input), testCase.output); diff != "" {
+			t.Errorf("%s: incorrect targets: %v", testCase.name, diff)
+		}
 	}
 }

@@ -287,16 +287,34 @@ func TestPromotedTags(t *testing.T) {
 
 func TestPromotedTagsWithRequiredImages(t *testing.T) {
 	var testCases = []struct {
-		name     string
-		input    *api.ReleaseBuildConfiguration
-		options  []PromotedTagsOption
-		expected map[string][]api.ImageStreamTagReference
-		names    sets.Set[string]
+		name          string
+		input         *api.ReleaseBuildConfiguration
+		options       []PromotedTagsOption
+		expected      map[string][]api.ImageStreamTagReference
+		expectedNames sets.Set[string]
 	}{
 		{
 			name:     "no promotion, no output",
 			input:    &api.ReleaseBuildConfiguration{},
 			expected: map[string][]api.ImageStreamTagReference{},
+		},
+		{
+			name: "latest tag works",
+			input: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{To: api.PipelineImageStreamTagReference("ci-chat-bot")},
+				},
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Namespace: "ci",
+					Tag:       "latest",
+				},
+			},
+			expected: map[string][]api.ImageStreamTagReference{
+				"ci-chat-bot": {
+					{Namespace: "ci", Name: "ci-chat-bot", Tag: "latest"},
+				},
+			},
+			expectedNames: sets.New[string]("ci-chat-bot"),
 		},
 		{
 			name: "promoted image means output tags",
@@ -314,6 +332,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					{Namespace: "roger", Name: "fred", Tag: "foo"},
 				},
 			},
+			expectedNames: sets.New[string]("foo"),
 		},
 		{
 			name: "optional image is ignored means output tags",
@@ -332,6 +351,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					{Namespace: "roger", Name: "fred", Tag: "foo"},
 				},
 			},
+			expectedNames: sets.New[string]("foo"),
 		},
 		{
 			name: "optional image that's required means output tags",
@@ -350,6 +370,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					{Namespace: "roger", Name: "fred", Tag: "foo"},
 				},
 			},
+			expectedNames: sets.New[string]("foo"),
 		},
 		{
 			name: "promoted image but disabled promotion means no output tags",
@@ -381,6 +402,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					{Namespace: "roger", Name: "foo", Tag: "fred"},
 				},
 			},
+			expectedNames: sets.New[string]("foo"),
 		},
 		{
 			name: "promoted image tagged by commit means an additional tag",
@@ -401,6 +423,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					{Namespace: "roger", Name: "foo", Tag: "sha"},
 				},
 			},
+			expectedNames: sets.New[string]("foo"),
 		},
 		{
 			name: "promoted additional image with rename",
@@ -424,6 +447,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					{Namespace: "roger", Name: "output", Tag: "fred"},
 				},
 			},
+			expectedNames: sets.New[string]("foo", "output"),
 		},
 		{
 			name: "disabled image",
@@ -503,14 +527,18 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					{Namespace: "ocp", Name: "4.6", Tag: "base-8"},
 				},
 			},
+			expectedNames: sets.New[string]("base", "base-7", "base-8"),
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			mapping, _ := PromotedTagsWithRequiredImages(testCase.input, testCase.options...)
+			mapping, names := PromotedTagsWithRequiredImages(testCase.input, testCase.options...)
 			if actual, expected := mapping, testCase.expected; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect promoted tags: %v", testCase.name, diff.ObjectDiff(actual, expected))
+			}
+			if diff := cmp.Diff(testCase.expectedNames, names); diff != "" {
+				t.Errorf("got incorrect names: %v", diff)
 			}
 		})
 	}

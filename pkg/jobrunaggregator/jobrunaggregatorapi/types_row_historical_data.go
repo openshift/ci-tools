@@ -2,6 +2,7 @@ package jobrunaggregatorapi
 
 import (
 	"fmt"
+	"time"
 
 	"cloud.google.com/go/bigquery"
 )
@@ -33,6 +34,8 @@ type AlertHistoricalDataRow struct {
 	AlertName      string
 	AlertNamespace string
 	AlertLevel     string
+	FirstObserved  time.Time
+	LastObserved   time.Time
 	HistoricalJobData
 	P95 string
 	P99 string

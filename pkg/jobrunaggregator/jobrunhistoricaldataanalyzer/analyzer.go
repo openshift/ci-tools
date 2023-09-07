@@ -54,9 +54,9 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 
 	switch {
 	case o.newFile == "" && o.dataType == "alerts":
-		newHistoricalData, err = o.ciDataClient.ListAlertHistoricalData(ctx)
-		if err != nil {
-			return err
+		newHistoricalData = o.getAlertData(ctx)
+		if newHistoricalData == nil {
+			return fmt.Errorf("Failed while attempting to read Alert Historical Data")
 		}
 	case o.newFile == "" && o.dataType == "disruptions":
 		newHistoricalData, err = o.ciDataClient.ListDisruptionHistoricalData(ctx)
@@ -89,6 +89,34 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 
 	fmt.Printf("successfully compared (%s) with specified leeway of %.2f%%\n", o.dataType, o.leeway)
 	return nil
+}
+
+func (o *JobRunHistoricalDataAnalyzerOptions) getAlertData(ctx context.Context) []jobrunaggregatorapi.HistoricalData {
+	var allKnownAlerts []*jobrunaggregatorapi.KnownAlertRow
+	var newHistoricalData []*jobrunaggregatorapi.AlertHistoricalDataRow
+
+	newHistoricalData, err := o.ciDataClient.ListAlertHistoricalData(ctx)
+	if err != nil {
+		return nil
+	}
+	allKnownAlerts, err = o.ciDataClient.ListAllKnownAlerts(ctx)
+	if err != nil {
+		return nil
+	}
+	// Create a map to quickly access AlertHistoricalDataRow by AlertName
+	alertDataMap := make(map[string]*jobrunaggregatorapi.KnownAlertRow)
+	for _, jobData := range allKnownAlerts {
+		alertDataMap[jobData.AlertName+jobData.AlertNamespace+jobData.Release] = jobData
+	}
+	// Update the FirstObserved and LastObserved using the map
+	for _, alerts := range newHistoricalData {
+		jobData, exists := alertDataMap[alerts.AlertName+alerts.AlertNamespace+alerts.Release]
+		if exists {
+			alerts.FirstObserved = jobData.FirstObserved
+			alerts.LastObserved = jobData.LastObserved
+		}
+	}
+	return jobrunaggregatorapi.ConvertToHistoricalData(newHistoricalData)
 }
 
 func mergeResults(previousResult, currentResult compareResults) compareResults {

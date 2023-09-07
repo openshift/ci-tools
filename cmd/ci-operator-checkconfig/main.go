@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
@@ -27,19 +28,32 @@ type promotedTag struct {
 	metadata *api.Metadata
 }
 
+type ClusterProfiles []ClusterProfileDetails
+
+type ClusterProfileDetails struct {
+	ProfileName string   `yaml:"profile"`
+	Owners      []string `yaml:"owners"`
+	ClusterType string   `yaml:"cluster_type,omitempty"`
+	LeaseType   string   `yaml:"lease_type,omitempty"`
+	Secret      string   `yaml:"secret,omitempty"`
+}
+
 type options struct {
 	config.Options
 
 	resolver        registry.Resolver
 	ciOPConfigAgent agents.ConfigAgent
+	clusterProfiles ClusterProfiles
 }
 
 func (o *options) parse() error {
 	var registryDir string
+	var profilesConfigPath string
 
 	fs := flag.NewFlagSet("", flag.ExitOnError)
 
 	fs.StringVar(&registryDir, "registry", "", "Path to the step registry directory")
+	fs.StringVar(&profilesConfigPath, "cluster-profiles-config", "", "Path to the cluster profile config file")
 	o.Options.Bind(fs)
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -49,6 +63,11 @@ func (o *options) parse() error {
 	if err := o.loadResolver(registryDir); err != nil {
 		return fmt.Errorf("failed to load registry: %w", err)
 	}
+
+	if err := o.loadProfilesConfig(profilesConfigPath); err != nil {
+		return fmt.Errorf("failed to load cluster profile config: %w", err)
+	}
+
 	ciOPConfigAgent, err := agents.NewConfigAgent(o.ConfigDir, nil, agents.WithOrg(o.Org), agents.WithRepo(o.Repo))
 	if err != nil {
 		return fmt.Errorf("failed to create CI Op config agent: %w", err)
@@ -159,6 +178,17 @@ func validateTags(seen tagSet) []error {
 		dupes = append(dupes, fmt.Errorf("output tag %s is promoted from more than one place: %v", tag.ISTagName(), strings.Join(formatted, ", ")))
 	}
 	return dupes
+}
+
+func (o *options) loadProfilesConfig(configPath string) error {
+	configContents, err := os.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to read cluster profiles config: %w", err)
+	}
+	if err = yaml.Unmarshal(configContents, &o.clusterProfiles); err != nil {
+		return fmt.Errorf("failed to unmarshall cluster profiles config: %w", err)
+	}
+	return nil
 }
 
 func main() {

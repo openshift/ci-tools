@@ -24,6 +24,7 @@ type Validator struct {
 
 // NewValidator creates an object that optimizes bulk validations.
 func NewValidator() Validator {
+	// TODO: Changes here?
 	profiles := api.ClusterProfiles()
 	ret := Validator{
 		validClusterProfiles: make(clusterProfileSet, len(profiles)),

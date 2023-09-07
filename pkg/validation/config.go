@@ -158,6 +158,7 @@ func (v *Validator) validateConfiguration(ctx *configContext, config *api.Releas
 				*config.PromotionConfiguration,
 				api.PromotesOfficialImages(config, api.WithOKD),
 				len(api.ImageTargets(config)) > 0,
+				api.ExtractPromotionNamespace(config),
 				config.ReleaseTagConfiguration,
 				config.Releases)...)
 	}
@@ -394,51 +395,28 @@ var (
 	exceptions = sets.New[string]("openshift")
 )
 
-func validatePromotionConfiguration(fieldRoot string, input api.PromotionConfiguration, promotesOfficialImages, imageTargets bool, releaseTagConfiguration *api.ReleaseTagConfiguration, releases map[string]api.UnresolvedRelease) []error {
+func validatePromotionConfiguration(fieldRoot string, input api.PromotionConfiguration, promotesOfficialImages, imageTargets bool, promotionNamespace string, releaseTagConfiguration *api.ReleaseTagConfiguration, releases map[string]api.UnresolvedRelease) []error {
 	var validationErrors []error
 
-	thisFieldRoot := func(i int) string {
-		if i == 0 {
-			return fieldRoot
-		}
-		return fmt.Sprintf("%s.to[%d]", fieldRoot, i-1)
+	if len(input.Namespace) == 0 {
+		validationErrors = append(validationErrors, fmt.Errorf("%s: no namespace defined", fieldRoot))
 	}
-	targets := api.PromotionTargets(&input)
-	for i, target := range targets {
 
-		if len(input.Namespace) == 0 {
-			validationErrors = append(validationErrors, fmt.Errorf("%s: no namespace defined", thisFieldRoot(i)))
-		}
+	if openshiftWebhookForbiddingNamespaces.MatchString(input.Namespace) && !exceptions.Has(input.Namespace) {
+		validationErrors = append(validationErrors, fmt.Errorf("%s: cannot promote to namespace %s matching this regular expression: (^kube.*|^openshift.*|^default$|^redhat.*)", fieldRoot, input.Namespace))
+	}
 
-		if openshiftWebhookForbiddingNamespaces.MatchString(input.Namespace) && !exceptions.Has(input.Namespace) {
-			validationErrors = append(validationErrors, fmt.Errorf("%s: cannot promote to namespace %s matching this regular expression: (^kube.*|^openshift.*|^default$|^redhat.*)", thisFieldRoot(i), input.Namespace))
-		}
+	if len(input.Name) == 0 && len(input.Tag) == 0 {
+		validationErrors = append(validationErrors, fmt.Errorf("%s: no name or tag defined", fieldRoot))
+	}
 
-		if len(input.Name) == 0 && len(input.Tag) == 0 {
-			validationErrors = append(validationErrors, fmt.Errorf("%s: no name or tag defined", thisFieldRoot(i)))
-		}
+	if len(input.Name) != 0 && len(input.Tag) != 0 {
+		validationErrors = append(validationErrors, fmt.Errorf("%s: both name and tag defined", fieldRoot))
+	}
 
-		if len(input.Name) != 0 && len(input.Tag) != 0 {
-			validationErrors = append(validationErrors, fmt.Errorf("%s: both name and tag defined", thisFieldRoot(i)))
-		}
-
-		if promotesOfficialImages && imageTargets {
-			if _, ok := releases["latest"]; !ok && releaseTagConfiguration == nil {
-				validationErrors = append(validationErrors, fmt.Errorf("importing the release stream is required to ensure the promoted images to the namespace %s can be integrated properly. Although it can be achieved by tag_specification or releases[\"latest\"], adding an e2e test is strongly suggested", target.Namespace))
-			}
-		}
-
-		for j, other := range targets {
-			if i == j {
-				continue
-			}
-
-			if target.Namespace == other.Namespace {
-				if target.Tag == other.Tag && target.Name == other.Name {
-
-					validationErrors = append(validationErrors, fmt.Errorf("%s: promotes to the same target as %s", thisFieldRoot(i), thisFieldRoot(j)))
-				}
-			}
+	if promotesOfficialImages && imageTargets {
+		if _, ok := releases["latest"]; !ok && releaseTagConfiguration == nil {
+			validationErrors = append(validationErrors, fmt.Errorf("importing the release stream is required to ensure the promoted images to the namespace %s can be integrated properly. Although it can be achieved by tag_specification or releases[\"latest\"], adding an e2e test is strongly suggested", promotionNamespace))
 		}
 	}
 	return validationErrors

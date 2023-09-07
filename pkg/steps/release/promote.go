@@ -41,7 +41,7 @@ type promotionStep struct {
 	pushSecret     *coreapi.Secret
 	registry       string
 	mirrorFunc     func(source, target string, tag api.ImageStreamTagReference, date string, imageMirror map[string]string)
-	targetNameFunc func(string, api.PromotionTarget) string
+	targetNameFunc func(string, api.PromotionConfiguration) string
 }
 
 func (s *promotionStep) Inputs() (api.InputDefinition, error) {
@@ -80,7 +80,8 @@ func (s *promotionStep) run(ctx context.Context) error {
 		return nil
 	}
 
-	logger.Infof("Promoting tags to %s: %s", s.targets(), strings.Join(sets.List(names), ", "))
+	targetName := s.targetNameFunc(s.registry, *s.configuration.PromotionConfiguration)
+	logger.Infof("Promoting tags to %s: %s", targetName, strings.Join(sets.List(names), ", "))
 	pipeline := &imagev1.ImageStream{}
 	if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{
 		Namespace: s.jobSpec.Namespace(),
@@ -262,7 +263,7 @@ func findDockerImageReference(is *imagev1.ImageStream, tag string) string {
 }
 
 // toPromote determines the mapping of local tag to external tag which should be promoted
-func toPromote(config api.PromotionTarget, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.Set[string]) (map[string]string, sets.Set[string]) {
+func toPromote(config api.PromotionConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.Set[string]) (map[string]string, sets.Set[string]) {
 	tagsByDst := map[string]string{}
 	names := sets.New[string]()
 
@@ -335,39 +336,33 @@ func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration
 		opt(opts)
 	}
 
-	promotedTags := map[string][]api.ImageStreamTagReference{}
-	requiredImages := sets.Set[string]{}
-
-	if configuration == nil || configuration.PromotionConfiguration == nil {
-		return promotedTags, requiredImages
+	if configuration == nil || configuration.PromotionConfiguration == nil || configuration.PromotionConfiguration.Disabled {
+		return nil, nil
 	}
-
-	for _, target := range api.PromotionTargets(configuration.PromotionConfiguration) {
-		tags, names := toPromote(target, configuration.Images, opts.requiredImages)
-		requiredImages.Union(names)
-		for dst, src := range tags {
-			var tag api.ImageStreamTagReference
-			if target.Name != "" {
-				tag = api.ImageStreamTagReference{
-					Namespace: target.Namespace,
-					Name:      target.Name,
-					Tag:       dst,
-				}
-			} else { // promotion.Tag must be set
-				tag = api.ImageStreamTagReference{
-					Namespace: target.Namespace,
-					Name:      dst,
-					Tag:       target.Tag,
-				}
+	tags, names := toPromote(*configuration.PromotionConfiguration, configuration.Images, opts.requiredImages)
+	promotedTags := map[string][]api.ImageStreamTagReference{}
+	for dst, src := range tags {
+		var tag api.ImageStreamTagReference
+		if configuration.PromotionConfiguration.Name != "" {
+			tag = api.ImageStreamTagReference{
+				Namespace: configuration.PromotionConfiguration.Namespace,
+				Name:      configuration.PromotionConfiguration.Name,
+				Tag:       dst,
 			}
-			promotedTags[src] = append(promotedTags[src], tag)
-			if target.TagByCommit && opts.commitSha != "" {
-				promotedTags[src] = append(promotedTags[src], api.ImageStreamTagReference{
-					Namespace: target.Namespace,
-					Name:      dst,
-					Tag:       opts.commitSha,
-				})
+		} else { // promotion.Tag must be set
+			tag = api.ImageStreamTagReference{
+				Namespace: configuration.PromotionConfiguration.Namespace,
+				Name:      dst,
+				Tag:       configuration.PromotionConfiguration.Tag,
 			}
+		}
+		promotedTags[src] = append(promotedTags[src], tag)
+		if configuration.PromotionConfiguration.TagByCommit && opts.commitSha != "" {
+			promotedTags[src] = append(promotedTags[src], api.ImageStreamTagReference{
+				Namespace: configuration.PromotionConfiguration.Namespace,
+				Name:      dst,
+				Tag:       opts.commitSha,
+			})
 		}
 	}
 	// promote the binary build if one exists and this isn't disabled
@@ -379,7 +374,7 @@ func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration
 			return tags[i].ISTagName() < tags[j].ISTagName()
 		})
 	}
-	return promotedTags, requiredImages
+	return promotedTags, names
 }
 
 func (s *promotionStep) Requires() []api.StepLink {
@@ -396,16 +391,8 @@ func (s *promotionStep) Provides() api.ParameterMap {
 
 func (s *promotionStep) Name() string { return fmt.Sprintf("[%s]", s.name) }
 
-func (s *promotionStep) targets() string {
-	var targets []string
-	for _, target := range api.PromotionTargets(s.configuration.PromotionConfiguration) {
-		targets = append(targets, s.targetNameFunc(s.registry, target))
-	}
-	return strings.Join(targets, ", ")
-}
-
 func (s *promotionStep) Description() string {
-	return fmt.Sprintf("Promote built images into the release image streams: %s", s.targets())
+	return fmt.Sprintf("Promote built images into the release image stream %s", s.targetNameFunc(s.registry, *s.configuration.PromotionConfiguration))
 }
 
 func (s *promotionStep) Objects() []ctrlruntimeclient.Object {
@@ -423,7 +410,7 @@ func PromotionStep(
 	pushSecret *coreapi.Secret,
 	registry string,
 	mirrorFunc func(source, target string, tag api.ImageStreamTagReference, date string, imageMirror map[string]string),
-	targetNameFunc func(string, api.PromotionTarget) string,
+	targetNameFunc func(string, api.PromotionConfiguration) string,
 ) api.Step {
 	return &promotionStep{
 		name:           name,

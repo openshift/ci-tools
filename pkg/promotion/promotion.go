@@ -17,40 +17,30 @@ func PromotesImagesInto(configSpec *cioperatorapi.ReleaseBuildConfiguration, pro
 	if promotionNamespace == "" {
 		return false
 	}
-	for _, target := range cioperatorapi.PromotionTargets(configSpec.PromotionConfiguration) {
-		if !target.Disabled && promotionNamespace == target.Namespace {
-			return true
-		}
-	}
-	return false
+	return !cioperatorapi.IsPromotionDisabled(configSpec) && promotionNamespace == cioperatorapi.ExtractPromotionNamespace(configSpec)
 }
 
 // AllPromotionImageStreamTags returns a set of all ImageStreamTags this config promotes to.
 func AllPromotionImageStreamTags(configSpec *cioperatorapi.ReleaseBuildConfiguration) sets.Set[string] {
 	result := sets.Set[string]{}
 
-	for _, target := range cioperatorapi.PromotionTargets(configSpec.PromotionConfiguration) {
-		if target.Disabled {
-			continue
-		}
+	if cioperatorapi.IsPromotionDisabled(configSpec) {
+		return result
+	}
 
-		if target.Namespace == "" || target.Name == "" {
-			continue
-		}
+	namespace := cioperatorapi.ExtractPromotionNamespace(configSpec)
+	name := cioperatorapi.ExtractPromotionName(configSpec)
 
-		disabled := sets.New[string](target.ExcludedImages...)
-		if !disabled.Has("*") {
-			for _, image := range configSpec.Images {
-				result.Insert(fmt.Sprintf("%s/%s:%s", target.Namespace, target.Name, image.To))
-			}
-		}
-		for _, image := range disabled.Delete("*").UnsortedList() {
-			delete(result, image)
-		}
+	if namespace == "" || name == "" {
+		return result
+	}
 
-		for additionalTagToPromote := range configSpec.PromotionConfiguration.AdditionalImages {
-			result.Insert(fmt.Sprintf("%s/%s:%s", target.Namespace, target.Name, additionalTagToPromote))
-		}
+	for _, image := range configSpec.Images {
+		result.Insert(fmt.Sprintf("%s/%s:%s", namespace, name, image.To))
+	}
+
+	for additionalTagToPromote := range configSpec.PromotionConfiguration.AdditionalImages {
+		result.Insert(fmt.Sprintf("%s/%s:%s", namespace, name, additionalTagToPromote))
 	}
 
 	return result

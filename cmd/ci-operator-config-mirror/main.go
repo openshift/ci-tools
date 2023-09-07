@@ -108,6 +108,7 @@ func main() {
 	}()
 
 	configsByRepo := make(configsByRepo)
+
 	callback := func(rbc *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
 		logger := logrus.WithFields(logrus.Fields{"org": repoInfo.Org, "repo": repoInfo.Repo, "branch": repoInfo.Branch})
 
@@ -123,7 +124,7 @@ func main() {
 			logger.Warnf("Repository %s doesn't belong to the %s organization but it is whitelisted", repoInfo.Repo, o.onlyOrg)
 		}
 
-		if !api.BuildsAnyOfficialImages(rbc, api.WithoutOKD) && !o.WhitelistConfig.IsWhitelisted(repoInfo) {
+		if !api.BuildsOfficialImages(rbc, api.WithoutOKD) && !o.WhitelistConfig.IsWhitelisted(repoInfo) {
 			logger.Warn("Skipping...")
 			return nil
 		}
@@ -159,7 +160,7 @@ func main() {
 		}
 
 		if rbc.PromotionConfiguration != nil {
-			if !api.BuildsAnyOfficialImages(rbc, api.WithoutOKD) && o.WhitelistConfig.IsWhitelisted(repoInfo) {
+			if !api.BuildsOfficialImages(rbc, api.WithoutOKD) && o.WhitelistConfig.IsWhitelisted(repoInfo) {
 				logger.Warn("Repo is whitelisted. Disable promotion...")
 				rbc.PromotionConfiguration.Disabled = true
 			}

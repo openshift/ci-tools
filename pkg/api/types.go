@@ -430,10 +430,6 @@ func (config ReleaseConfiguration) TargetName() string {
 // config should be published to. The release tag configuration
 // defines the inputs, while this defines the outputs.
 type PromotionConfiguration struct {
-	// Targets configure a set of images to be pushed to
-	// a registry.
-	Targets []PromotionTarget `json:"to,omitempty"`
-
 	// Namespace identifies the namespace to which the built
 	// artifacts will be published to.
 	Namespace string `json:"namespace"`
@@ -484,47 +480,6 @@ type PromotionConfiguration struct {
 	// promotion does not imply output artifacts are being created
 	// for posterity.
 	DisableBuildCache bool `json:"disable_build_cache,omitempty"`
-}
-
-type PromotionTarget struct {
-	// Namespace identifies the namespace to which the built
-	// artifacts will be published to.
-	Namespace string `json:"namespace"`
-
-	// Name is an optional image stream name to use that
-	// contains all component tags. If specified, tag is
-	// ignored.
-	Name string `json:"name,omitempty"`
-
-	// Tag is the ImageStreamTag tagged in for each
-	// build image's ImageStream.
-	Tag string `json:"tag,omitempty"`
-
-	// TagByCommit determines if an image should be tagged by the
-	// git commit that was used to build it. If Tag is also set,
-	// this will cause both a floating tag and commit-specific tags
-	// to be promoted.
-	TagByCommit bool `json:"tag_by_commit,omitempty"`
-
-	// ExcludedImages are image names that will not be promoted.
-	// Exclusions are made before additional_images are included.
-	// Use exclusions when you want to build images for testing
-	// but not promote them afterwards.
-	ExcludedImages []string `json:"excluded_images,omitempty"`
-
-	// AdditionalImages is a mapping of images to promote. The
-	// images will be taken from the pipeline image stream. The
-	// key is the name to promote as and the value is the source
-	// name. If you specify a tag that does not exist as the source
-	// the destination tag will not be created.
-	AdditionalImages map[string]string `json:"additional_images,omitempty"`
-
-	// Disabled will no-op succeed instead of running the actual
-	// promotion step. This is useful when two branches need to
-	// promote to the same output imagestream on a cut-over but
-	// never concurrently, and you want to have promotion config
-	// in the ci-operator configuration files all the time.
-	Disabled bool `json:"disabled,omitempty"`
 }
 
 // StepConfiguration holds one step configuration.

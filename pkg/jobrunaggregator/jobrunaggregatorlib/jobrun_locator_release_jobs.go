@@ -18,11 +18,19 @@ func GetPayloadTagFromProwJob(prowJob *prowjobv1.ProwJob) string {
 	return prowJob.Annotations[ProwJobPayloadTagAnnotation]
 }
 
-func NewProwJobMatcherFuncForReleaseController(jobName, payloadTag string) ProwJobMatcherFunc {
-	return releaseControllerProwJobMatcher{
-		jobName:    jobName,
-		payloadTag: payloadTag,
-	}.shouldAggregateReleaseControllerJob
+func NewProwJobMatcherFuncForReleaseController(matchJobName, matchPayloadTag string) ProwJobMatcherFunc {
+	return func(prowJob *prowjobv1.ProwJob) bool {
+		payloadTag := GetPayloadTagFromProwJob(prowJob)
+		jobName := prowJob.Annotations[ProwJobJobNameAnnotation]
+		jobRunId := prowJob.Labels[prowJobJobRunIDLabel]
+		if jobName != matchJobName {
+			return false
+		}
+		logrus.Infof("checking %v/%v for payloadtag match: looking for %q found %q", jobName, jobRunId, matchPayloadTag, payloadTag)
+		payloadTagMatches := len(matchPayloadTag) > 0 && payloadTag == matchPayloadTag
+
+		return payloadTagMatches
+	}
 }
 
 func NewPayloadAnalysisJobLocatorForReleaseController(
@@ -41,22 +49,4 @@ func NewPayloadAnalysisJobLocatorForReleaseController(
 		gcsBucketName,
 		"logs/"+jobName,
 	)
-}
-
-type releaseControllerProwJobMatcher struct {
-	jobName    string
-	payloadTag string
-}
-
-func (a releaseControllerProwJobMatcher) shouldAggregateReleaseControllerJob(prowJob *prowjobv1.ProwJob) bool {
-	payloadTag := GetPayloadTagFromProwJob(prowJob)
-	jobName := prowJob.Annotations[ProwJobJobNameAnnotation]
-	jobRunId := prowJob.Labels[prowJobJobRunIDLabel]
-	if jobName != a.jobName {
-		return false
-	}
-	logrus.Infof("checking %v/%v for payloadtag match: looking for %q found %q", jobName, jobRunId, a.payloadTag, payloadTag)
-	payloadTagMatches := len(a.payloadTag) > 0 && payloadTag == a.payloadTag
-
-	return payloadTagMatches
 }

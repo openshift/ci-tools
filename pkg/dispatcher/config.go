@@ -114,6 +114,11 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 		return "", false, nil
 	}
 	if strings.Contains(jobBase.Name, "vsphere") && !isApplyConfigJob(jobBase) {
+		if cluster, ok := jobBase.Labels[api.ClusterLabel]; ok {
+			if cluster == string(api.ClusterVSphere02) {
+				return api.Cluster(cluster), false, nil
+			}
+		}
 		return api.ClusterVSphere, false, nil
 	}
 	if isSSHBastionJob(jobBase) && config.SSHBastion != "" {

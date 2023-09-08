@@ -344,7 +344,7 @@ func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration
 
 	for _, target := range api.PromotionTargets(configuration.PromotionConfiguration) {
 		tags, names := toPromote(target, configuration.Images, opts.requiredImages)
-		requiredImages.Union(names)
+		requiredImages.Insert(names.UnsortedList()...)
 		for dst, src := range tags {
 			var tag api.ImageStreamTagReference
 			if target.Name != "" {

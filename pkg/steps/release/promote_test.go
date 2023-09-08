@@ -2,6 +2,7 @@ package release
 
 import (
 	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -287,16 +288,17 @@ func TestPromotedTags(t *testing.T) {
 
 func TestPromotedTagsWithRequiredImages(t *testing.T) {
 	var testCases = []struct {
-		name     string
-		input    *api.ReleaseBuildConfiguration
-		options  []PromotedTagsOption
-		expected map[string][]api.ImageStreamTagReference
-		names    sets.Set[string]
+		name                   string
+		input                  *api.ReleaseBuildConfiguration
+		options                []PromotedTagsOption
+		expected               map[string][]api.ImageStreamTagReference
+		expectedRequiredImages sets.Set[string]
 	}{
 		{
-			name:     "no promotion, no output",
-			input:    &api.ReleaseBuildConfiguration{},
-			expected: map[string][]api.ImageStreamTagReference{},
+			name:                   "no promotion, no output",
+			input:                  &api.ReleaseBuildConfiguration{},
+			expected:               map[string][]api.ImageStreamTagReference{},
+			expectedRequiredImages: sets.New[string](),
 		},
 		{
 			name: "promoted image means output tags",
@@ -314,6 +316,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					{Namespace: "roger", Name: "fred", Tag: "foo"},
 				},
 			},
+			expectedRequiredImages: sets.New[string]("foo"),
 		},
 		{
 			name: "optional image is ignored means output tags",
@@ -332,6 +335,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					{Namespace: "roger", Name: "fred", Tag: "foo"},
 				},
 			},
+			expectedRequiredImages: sets.New[string]("foo"),
 		},
 		{
 			name: "optional image that's required means output tags",
@@ -350,6 +354,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					{Namespace: "roger", Name: "fred", Tag: "foo"},
 				},
 			},
+			expectedRequiredImages: sets.New[string]("foo"),
 		},
 		{
 			name: "promoted image but disabled promotion means no output tags",
@@ -363,7 +368,8 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					Disabled:  true,
 				},
 			},
-			expected: map[string][]api.ImageStreamTagReference{},
+			expected:               map[string][]api.ImageStreamTagReference{},
+			expectedRequiredImages: sets.New[string](),
 		},
 		{
 			name: "promoted image by tag means output tags",
@@ -381,6 +387,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					{Namespace: "roger", Name: "foo", Tag: "fred"},
 				},
 			},
+			expectedRequiredImages: sets.New[string]("foo"),
 		},
 		{
 			name: "promoted image tagged by commit means an additional tag",
@@ -401,6 +408,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					{Namespace: "roger", Name: "foo", Tag: "sha"},
 				},
 			},
+			expectedRequiredImages: sets.New[string]("foo"),
 		},
 		{
 			name: "promoted additional image with rename",
@@ -424,6 +432,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					{Namespace: "roger", Name: "output", Tag: "fred"},
 				},
 			},
+			expectedRequiredImages: sets.New[string]("output", "foo"),
 		},
 		{
 			name: "disabled image",
@@ -437,7 +446,8 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					ExcludedImages: []string{"foo"},
 				},
 			},
-			expected: map[string][]api.ImageStreamTagReference{},
+			expected:               map[string][]api.ImageStreamTagReference{},
+			expectedRequiredImages: sets.New[string](),
 		},
 		{
 			name: "promotion set and binaries built, means binaries promoted",
@@ -457,6 +467,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 			expected: map[string][]api.ImageStreamTagReference{
 				"bin": {{Namespace: "build-cache", Name: "org-repo", Tag: "branch"}},
 			},
+			expectedRequiredImages: sets.New[string](),
 		},
 		{
 			name: "promotion set and binaries built, build cache disabled means no binaries promoted",
@@ -474,7 +485,8 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					Branch: "branch",
 				},
 			},
-			expected: map[string][]api.ImageStreamTagReference{},
+			expected:               map[string][]api.ImageStreamTagReference{},
+			expectedRequiredImages: sets.New[string](),
 		},
 		{
 			name: "promotion with AdditionalImages: many to one",
@@ -503,14 +515,62 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					{Namespace: "ocp", Name: "4.6", Tag: "base-8"},
 				},
 			},
+			expectedRequiredImages: sets.New[string]("base", "base-7", "base-8"),
+		},
+		{
+			name: "promotion with multiple to stanzas",
+			input: &api.ReleaseBuildConfiguration{
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Targets: []api.PromotionTarget{{
+						ExcludedImages: []string{"*"},
+						AdditionalImages: map[string]string{
+							"other": "base",
+						},
+						Namespace: "extra",
+						Tag:       "latest",
+					}},
+					Namespace: "ocp",
+					Name:      "4.6",
+					AdditionalImages: map[string]string{
+						"base":   "base-8",
+						"base-7": "base-7",
+						"base-8": "base-8",
+					},
+				},
+				Metadata: api.Metadata{
+					Org:    "openshift",
+					Repo:   "images",
+					Branch: "release-4.6",
+				},
+			},
+			expected: map[string][]api.ImageStreamTagReference{
+				"base": {
+					{Namespace: "extra", Name: "other", Tag: "latest"},
+				},
+				"base-7": {
+					{Namespace: "ocp", Name: "4.6", Tag: "base-7"},
+				},
+				"base-8": {
+					{Namespace: "ocp", Name: "4.6", Tag: "base"},
+					{Namespace: "ocp", Name: "4.6", Tag: "base-8"},
+				},
+			},
+			expectedRequiredImages: sets.New[string]("base", "base-7", "base-8", "other"),
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			mapping, _ := PromotedTagsWithRequiredImages(testCase.input, testCase.options...)
-			if actual, expected := mapping, testCase.expected; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: got incorrect promoted tags: %v", testCase.name, diff.ObjectDiff(actual, expected))
+			mapping, requiredImages := PromotedTagsWithRequiredImages(testCase.input, testCase.options...)
+			actual, expected := mapping, testCase.expected
+			if diff := cmp.Diff(actual, expected); diff != "" {
+				t.Errorf("%s: got incorrect promoted tags: %v", testCase.name, diff)
+			}
+			if !requiredImages.Equal(testCase.expectedRequiredImages) {
+				actual, expected := requiredImages.UnsortedList(), testCase.expectedRequiredImages.UnsortedList()
+				sort.Strings(actual)
+				sort.Strings(expected)
+				t.Errorf("%s: got incorrect requiredImages: %s", testCase.name, cmp.Diff(actual, expected))
 			}
 		})
 	}

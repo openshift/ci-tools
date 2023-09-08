@@ -25,11 +25,13 @@ import (
 )
 
 const (
-	JobStateQuerySourceBigQuery      = "bigquery"
-	JobStateQuerySourceCluster       = "cluster"
-	ProwJobJobNameAnnotation         = "prow.k8s.io/job"
-	prowJobJobRunIDLabel             = "prow.k8s.io/build-id"
-	unfinishedProwJobLoggingInterval = 10 * time.Minute
+	JobStateQuerySourceBigQuery = "bigquery"
+	JobStateQuerySourceCluster  = "cluster"
+	// ProwJobJobNameAnnotation is the annotation in prowJob for the original release Job Name.
+	// It is used to match relevant job names for different aggregators
+	ProwJobJobNameAnnotation = "prow.k8s.io/job"
+	// prowJobJobRunIDLabel is the label in prowJob for the prow job run ID. It is a unique identifier for job runs across different jobs
+	prowJobJobRunIDLabel = "prow.k8s.io/build-id"
 )
 
 var (
@@ -103,12 +105,12 @@ func getAllFinishedJobRuns(ctx context.Context, relatedJobRuns []jobrunaggregato
 	return finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames
 }
 
-type DefaultJobRunWaiter struct {
+type BigQueryJobRunWaiter struct {
 	JobRunGetter      JobRunGetter
 	TimeToStopWaiting time.Time
 }
 
-func (w *DefaultJobRunWaiter) Wait(ctx context.Context) error {
+func (w *BigQueryJobRunWaiter) Wait(ctx context.Context) error {
 	clock := clock.RealClock{}
 	relatedJobRuns, err := w.JobRunGetter.GetRelatedJobRuns(ctx)
 	if err != nil {
@@ -141,19 +143,28 @@ func (w *DefaultJobRunWaiter) Wait(ctx context.Context) error {
 	return nil
 }
 
+// ClusterJobRunWaiter implements a waiter that will wait for job completion based on live stats for prow jobs
+// in the CI cluster.
+// 1. It uses kube informers/cache mechanism to list all prowJob CRs
+// 2. Filter out irrelevant prowJobs
+// 3. Check if CompletionTime for prowJob Status is set.
+// 4. If all jobs have CompletionTime set, wait is over. Otherwise, repeat above steps by polling.
+//
+// Polling only queries cache with no api-server interactions.
 type ClusterJobRunWaiter struct {
 	ProwJobClient      *prowjobclientset.Clientset
 	TimeToStopWaiting  time.Time
 	ProwJobMatcherFunc ProwJobMatcherFunc
-	nextLogTime        time.Time
 }
 
-func (w *ClusterJobRunWaiter) allProwJobFinished(allItems []*prowv1.ProwJob) bool {
+func (w *ClusterJobRunWaiter) allProwJobsFinished(allItems []*prowv1.ProwJob) bool {
 	uncompletedJobMap := map[string]*prowv1.ProwJob{}
+	totalMatchedJobs := 0
 	for _, prowJob := range allItems {
 		if !w.ProwJobMatcherFunc(prowJob) {
 			continue
 		}
+		totalMatchedJobs++
 		if prowJob.Status.CompletionTime != nil {
 			continue
 		}
@@ -162,13 +173,10 @@ func (w *ClusterJobRunWaiter) allProwJobFinished(allItems []*prowv1.ProwJob) boo
 		uncompletedJobMap[jobRunID] = prowJob
 	}
 	if len(uncompletedJobMap) == 0 {
+		logrus.Info("all jobs completed")
 		return true
 	}
-	logrus.Infof("Current time %+v and next lgo time: [%v]", time.Now(), w.nextLogTime)
-	if time.Now().After(w.nextLogTime) {
-		logrus.Infof("The following jobs are not complete: [%v]", strings.Join(sets.StringKeySet(uncompletedJobMap).List(), ", "))
-		w.nextLogTime = time.Now().Add(unfinishedProwJobLoggingInterval)
-	}
+	logrus.Infof("%d/%d jobs completed, waiting for: [%v]", totalMatchedJobs-len(uncompletedJobMap), totalMatchedJobs, strings.Join(sets.StringKeySet(uncompletedJobMap).List(), ", "))
 	return false
 }
 
@@ -206,7 +214,7 @@ func (w *ClusterJobRunWaiter) Wait(ctx context.Context) error {
 				return false, nil
 			}
 
-			if w.allProwJobFinished(allItems) {
+			if w.allProwJobsFinished(allItems) {
 				return true, nil
 			}
 			return false, nil

@@ -579,7 +579,7 @@ func (o *JobRunTestCaseAnalyzerOptions) Run(ctx context.Context) error {
 
 	var jobRunWaiter jobrunaggregatorlib.JobRunWaiter
 	if o.jobStateQuerySource == jobrunaggregatorlib.JobStateQuerySourceBigQuery || o.prowJobClient == nil {
-		jobRunWaiter = &jobrunaggregatorlib.DefaultJobRunWaiter{JobRunGetter: o, TimeToStopWaiting: timeToStopWaiting}
+		jobRunWaiter = &jobrunaggregatorlib.BigQueryJobRunWaiter{JobRunGetter: o, TimeToStopWaiting: timeToStopWaiting}
 	} else {
 		jobRunWaiter = &jobrunaggregatorlib.ClusterJobRunWaiter{
 			ProwJobClient:      o.prowJobClient,

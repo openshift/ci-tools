@@ -20,6 +20,15 @@ type JobRunLocator interface {
 	FindRelatedJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error)
 }
 
+// ProwJobMatcherFunc defines a function signature for matching prow jobs. The function is
+// used by different analyzers and lower layers to match jobs for relevant tasks.
+// - for payload based aggregator, it matches with payload tags
+// - for PR based aggregator, it matches with aggregation id or payload invocation id.
+// - for test case analyzer, there are two levels of matching: one for matching jobs (based on names etc)
+// while the other for matching job runs. The mechanism for matching job runs uses the above payload or PR
+// based aggregator matching functions
+//
+// It is kept this way to keep changes to the minimum.
 type ProwJobMatcherFunc func(prowJob *prowjobv1.ProwJob) bool
 
 type analysisJobAggregator struct {

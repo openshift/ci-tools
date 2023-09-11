@@ -2166,3 +2166,18 @@ func GetAvailableArchitectures() []string {
 	}
 	return architectures
 }
+
+type ClusterProfilesList []ClusterProfileDetails
+
+type ClusterProfileDetails struct {
+	ProfileName ClusterProfile       `yaml:"profile"`
+	Owners      ClusterProfileOwners `yaml:"owners"`
+	ClusterType string               `yaml:"cluster_type,omitempty"`
+	LeaseType   string               `yaml:"lease_type,omitempty"`
+	Secret      string               `yaml:"secret,omitempty"`
+}
+
+type ClusterProfileOwners struct {
+	Org  string `yaml:"org,omitempty"`
+	Repo string `yaml:"repo,omitempty"`
+}

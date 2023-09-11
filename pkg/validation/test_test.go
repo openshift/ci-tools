@@ -684,7 +684,7 @@ func TestValidateTests(t *testing.T) {
 	} {
 		t.Run(tc.id, func(t *testing.T) {
 			v := newSingleUseValidator()
-			errs := v.validateTestStepConfiguration(NewConfigContext(), "tests", tc.tests, tc.release, tc.releases, sets.New[string](), tc.resolved)
+			errs := v.validateTestStepConfiguration(NewConfigContext(), "tests", tc.tests, tc.release, nil, tc.releases, sets.New[string](), tc.resolved)
 			if tc.expectedError == nil && len(errs) > 0 {
 				t.Errorf("expected to be valid, got: %v", errs)
 			}
@@ -1405,7 +1405,7 @@ func TestValidateLeases(t *testing.T) {
 				MultiStageTestConfigurationLiteral: &tc.test,
 			}
 			v := NewValidator()
-			err := v.validateTestConfigurationType("tests[0]", test, nil, nil, make(testInputImages), true)
+			err := v.validateTestConfigurationType("tests[0]", test, nil, nil, nil, make(testInputImages), true)
 			if diff := diff.ObjectReflectDiff(tc.err, err); diff != "<no diffs>" {
 				t.Errorf("unexpected error: %s", diff)
 			}
@@ -1602,7 +1602,7 @@ func TestValidateTestConfigurationType(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			v := NewValidator()
-			actual := v.validateTestConfigurationType("test", tc.test, nil, nil, make(testInputImages), false)
+			actual := v.validateTestConfigurationType("test", tc.test, nil, nil, nil, make(testInputImages), false)
 			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("expected differs from actual: %s", diff)
 			}

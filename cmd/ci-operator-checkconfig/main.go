@@ -28,22 +28,12 @@ type promotedTag struct {
 	metadata *api.Metadata
 }
 
-type ClusterProfiles []ClusterProfileDetails
-
-type ClusterProfileDetails struct {
-	ProfileName string   `yaml:"profile"`
-	Owners      []string `yaml:"owners"`
-	ClusterType string   `yaml:"cluster_type,omitempty"`
-	LeaseType   string   `yaml:"lease_type,omitempty"`
-	Secret      string   `yaml:"secret,omitempty"`
-}
-
 type options struct {
 	config.Options
 
 	resolver        registry.Resolver
 	ciOPConfigAgent agents.ConfigAgent
-	clusterProfiles ClusterProfiles
+	clusterProfiles api.ClusterProfilesList
 }
 
 func (o *options) parse() error {
@@ -99,7 +89,7 @@ func (o *options) validate() (ret []error) {
 	outputCh := make(chan promotedTag)
 	errCh := make(chan error)
 	map_ := func() error {
-		validator := validation.NewValidator()
+		validator := validation.NewCPValidator(o.clusterProfiles)
 		for c := range inputCh {
 			if err := o.validateConfiguration(&validator, outputCh, c); err != nil {
 				errCh <- fmt.Errorf("failed to validate configuration %s: %w", c.Metadata.RelativePath(), err)

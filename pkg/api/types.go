@@ -1753,6 +1753,7 @@ func (p ClusterProfile) Secret() string {
 		ClusterProfileGCPLoggingJSONFile,
 		ClusterProfileGCPLoggingJournald,
 		ClusterProfileVSphere8,
+		ClusterProfileVSphere8Vpn,
 		ClusterProfileVSphereClusterbot,
 		ClusterProfileVSphereDis,
 		ClusterProfileVSphereConnected,

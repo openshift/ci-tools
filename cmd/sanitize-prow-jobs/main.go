@@ -14,6 +14,7 @@ import (
 	prowconfig "k8s.io/test-infra/prow/config"
 	"sigs.k8s.io/yaml"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/dispatcher"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/util"
@@ -99,6 +100,10 @@ func defaultJobConfig(jc *prowconfig.JobConfig, path string, config *dispatcher.
 				return err
 			}
 			jc.PresubmitsStatic[k][idx].JobBase.Cluster = string(cluster)
+
+			if string(cluster) == string(api.ClusterARM01) {
+				jc.PresubmitsStatic[k][idx].JobBase.Spec.Containers[0].Image = "ci-operator-arm64:latest"
+			}
 
 			// Enforce that even hand-crafted jobs have explicit branch regexes
 			// Presubmits are generally expected to hit also on "feature branches",

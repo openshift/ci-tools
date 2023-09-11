@@ -46,3 +46,24 @@ func TestDefaultJobConfig(t *testing.T) {
 		}
 	}
 }
+
+func TestIsCIOperatorLatest(t *testing.T) {
+	testCases := []struct {
+		name     string
+		image    string
+		expected bool
+	}{
+		{name: "standard image", image: "ci-operator:latest", expected: true},
+		{name: "full registry path", image: "registry/namespace/ci-operator:latest", expected: true},
+		{name: "different tag", image: "registry/namespace/ci-operator:other", expected: false},
+		{name: "fifferent image", image: "other-image:latest", expected: false},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.image, func(t *testing.T) {
+			got := isCIOperatorLatest(tc.image)
+			if got != tc.expected {
+				t.Errorf("For image %s, expected %v but got %v", tc.image, tc.expected, got)
+			}
+		})
+	}
+}

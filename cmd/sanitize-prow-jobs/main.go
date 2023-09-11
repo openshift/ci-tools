@@ -21,6 +21,10 @@ import (
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
+const (
+	cioperatorLatestImage = "ci-operator:latest"
+)
+
 type options struct {
 	prowJobConfigDir string
 	configPath       string
@@ -101,7 +105,7 @@ func defaultJobConfig(jc *prowconfig.JobConfig, path string, config *dispatcher.
 			}
 			jc.PresubmitsStatic[k][idx].JobBase.Cluster = string(cluster)
 
-			if string(cluster) == string(api.ClusterARM01) {
+			if string(cluster) == string(api.ClusterARM01) && isCIOperatorLatest(jc.PresubmitsStatic[k][idx].JobBase.Spec.Containers[0].Image) {
 				jc.PresubmitsStatic[k][idx].JobBase.Spec.Containers[0].Image = "ci-operator-arm64:latest"
 			}
 
@@ -123,6 +127,10 @@ func defaultJobConfig(jc *prowconfig.JobConfig, path string, config *dispatcher.
 				return err
 			}
 			jc.PostsubmitsStatic[k][idx].JobBase.Cluster = string(cluster)
+
+			if string(cluster) == string(api.ClusterARM01) && isCIOperatorLatest(jc.PostsubmitsStatic[k][idx].JobBase.Spec.Containers[0].Image) {
+				jc.PostsubmitsStatic[k][idx].JobBase.Spec.Containers[0].Image = "ci-operator-arm64:latest"
+			}
 
 			// Enforce that even hand-crafted jobs have explicit branch regexes
 			// Postsubmits are generally expected to only hit on exact match branches
@@ -179,4 +187,11 @@ func main() {
 			logrus.WithError(err).Fatal("Failed to determinize")
 		}
 	}
+}
+
+func isCIOperatorLatest(image string) bool {
+	parts := strings.Split(image, "/")
+	lastPart := parts[len(parts)-1]
+
+	return lastPart == cioperatorLatestImage
 }

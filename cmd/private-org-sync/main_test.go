@@ -94,12 +94,16 @@ func TestOptionsValidate(t *testing.T) {
 func TestOptionsMakeFilter(t *testing.T) {
 	official := &api.ReleaseBuildConfiguration{
 		PromotionConfiguration: &api.PromotionConfiguration{
-			Namespace: "ocp",
+			Targets: []api.PromotionTarget{{
+				Namespace: "ocp",
+			}},
 		},
 	}
 	notOfficial := &api.ReleaseBuildConfiguration{
 		PromotionConfiguration: &api.PromotionConfiguration{
-			Namespace: "not-ocp",
+			Targets: []api.PromotionTarget{{
+				Namespace: "not-ocp",
+			}},
 		},
 	}
 	// Check that our assumptions about what is an official image still holds

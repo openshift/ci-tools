@@ -29,15 +29,18 @@ func PromotionTargets(c *PromotionConfiguration) []PromotionTarget {
 		return nil
 	}
 
-	targets := []PromotionTarget{{
-		Name:             c.Name,
-		Namespace:        c.Namespace,
-		Tag:              c.Tag,
-		TagByCommit:      c.TagByCommit,
-		ExcludedImages:   c.ExcludedImages,
-		AdditionalImages: c.AdditionalImages,
-		Disabled:         c.Disabled,
-	}}
+	var targets []PromotionTarget
+	if c.Namespace != "" {
+		targets = append(targets, PromotionTarget{
+			Name:             c.Name,
+			Namespace:        c.Namespace,
+			Tag:              c.Tag,
+			TagByCommit:      c.TagByCommit,
+			ExcludedImages:   c.ExcludedImages,
+			AdditionalImages: c.AdditionalImages,
+			Disabled:         c.Disabled,
+		})
+	}
 	targets = append(targets, c.Targets...)
 	return targets
 }

@@ -27,7 +27,6 @@ tests:
     from: src
 - as: multistage
   steps:
-    cluster_profile: ""
     test:
     - as: e2e
       commands: make integration
@@ -39,7 +38,6 @@ tests:
     workflow: ipi
 - as: multistage2
   steps:
-    cluster_profile: ""
     test:
     - as: e2e
       commands: make integration
@@ -63,7 +61,6 @@ tests:
     workflow: ipi
 - as: multistage4
   steps:
-    cluster_profile: ""
     test:
     - as: e2e
       commands: make integration

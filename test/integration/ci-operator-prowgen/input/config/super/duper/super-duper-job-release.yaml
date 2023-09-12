@@ -18,10 +18,10 @@ resources:
 tests:
 - as: unit
   commands: make test-unit
-  cron: '@yearly'
   container:
     from: src
+  cron: '@yearly'
 zz_generated_metadata:
-  branch: master
+  branch: job-release
   org: super
   repo: duper

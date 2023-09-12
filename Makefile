@@ -200,6 +200,20 @@ local-e2e: \
 #   make update-integration
 #   make update-integration SUITE=multi-stage
 update-integration:
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/ci-operator-config-mirror/input --confirm
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/ci-operator-config-mirror/input-to-clean --confirm
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/ci-operator-config-mirror/output --confirm
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/ci-operator-config-mirror/output-only-super --confirm
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/ci-operator-prowgen/input/config --confirm
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/config-brancher/expected --confirm
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/config-brancher/input --confirm
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/pj-rehearse/candidate/ci-operator/config --confirm
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/pj-rehearse/master/ci-operator/config --confirm
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/release-job-migrator/expected2/ci-operator --confirm
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/release-job-migrator/expected/ci-operator --confirm
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/release-job-migrator/input/ci-operator --confirm
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/repo-init/expected/ci-operator/config --confirm
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/repo-init/input/ci-operator/config --confirm
 	go run ./cmd/determinize-prow-config -prow-config-dir test/integration/repo-init/expected/core-services/prow/02_config -sharded-plugin-config-base-dir test/integration/repo-init/expected/core-services/prow/02_config
 	UPDATE=true make integration
 .PHONY: update-integration

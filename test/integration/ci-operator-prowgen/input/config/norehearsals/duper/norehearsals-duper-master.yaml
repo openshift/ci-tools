@@ -22,7 +22,6 @@ tests:
   commands: make test-unit
   container:
     from: src
-  disable_rehearsal: true
 - as: upload-results
   commands: make upload-results
   container:
@@ -34,5 +33,5 @@ tests:
     from: src
 zz_generated_metadata:
   branch: master
-  org: super
+  org: norehearsals
   repo: duper

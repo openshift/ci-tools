@@ -1,5 +1,5 @@
 resources:
-  "*":
+  '*':
     requests:
       cpu: "1"
 tests:
@@ -28,3 +28,7 @@ tests:
 - as: test-with-unchanged-observer-workflow
   steps:
     workflow: uses-unchanged-observer
+zz_generated_metadata:
+  branch: master
+  org: uses
+  repo: observer

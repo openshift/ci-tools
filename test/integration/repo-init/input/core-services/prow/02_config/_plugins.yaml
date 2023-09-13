@@ -40,21 +40,7 @@ config_updater:
       cluster_groups:
       - build_farm_ci
       name: cm-path
-external_plugins:
-  openshift:
-  - endpoint: http://refresh
-    events:
-    - issue_comment
-    name: refresh
-  - endpoint: http://cherrypick
-    events:
-    - issue_comment
-    - pull_request
-    name: cherrypick
-  - endpoint: http://needs-rebase
-    events:
-    - pull_request
-    name: needs-rebase
+external_plugins: {}
 golint: {}
 goose: {}
 heart: {}

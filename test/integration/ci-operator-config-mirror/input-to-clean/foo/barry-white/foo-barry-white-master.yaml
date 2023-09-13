@@ -5,14 +5,14 @@ base_images:
     tag: base
 build_root:
   image_stream_tag:
-    namespace: openshift
     name: release
-    tag: golang-1.10    
+    namespace: openshift
+    tag: golang-1.10
 images:
 - from: base
   to: test-image
 promotion:
-  name: satin-soul  
+  name: satin-soul
   namespace: non-ocp
 resources:
   '*':
@@ -28,3 +28,7 @@ tests:
   commands: make test-unit
   container:
     from: src
+zz_generated_metadata:
+  branch: master
+  org: foo
+  repo: barry-white

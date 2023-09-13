@@ -39,7 +39,8 @@ type options struct {
 
 	useTokenFileInKubeconfig bool
 
-	hosted bool
+	hosted    bool
+	unmanaged bool
 }
 
 func (o options) String() string {
@@ -57,6 +58,7 @@ func parseOptions() (options, error) {
 	fs.StringVar(&o.assign, "assign", githubTeam, "The github username or group name to assign the created pull request to. Set to Test Platform by default")
 	fs.BoolVar(&o.useTokenFileInKubeconfig, "use-token-file-in-kubeconfig", true, "Set true if the token files are used in kubeconfigs. Set to true by default")
 	fs.BoolVar(&o.hosted, "hosted", false, "Set true if the cluster is hosted (i.e., HyperShift hosted cluster). Set to false by default")
+	fs.BoolVar(&o.unmanaged, "unmanaged", false, "Set true if the cluster is unmanaged (i.e., not managed by DPTP). Set to false by default")
 
 	o.GitAuthorOptions.AddFlags(fs)
 	o.PRCreationOptions.AddFlags(fs)

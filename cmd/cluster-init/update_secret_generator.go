@@ -55,7 +55,12 @@ func updateSecretGeneratorConfig(o options, c *SecretGenConfig) error {
 	if err := appendToSecretItem("ci-chat-bot", serviceAccountConfigPath, o, c); err != nil {
 		return err
 	}
-	return appendToSecretItem(podScaler, serviceAccountConfigPath, o, c)
+	if !o.unmanaged {
+		if err := appendToSecretItem(podScaler, serviceAccountConfigPath, o, c); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func appendToSecretItem(itemName string, name string, o options, c *SecretGenConfig) error {

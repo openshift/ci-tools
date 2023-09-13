@@ -1,11 +1,6 @@
-approve:
-- commandHelpLink: ""
-  lgtm_acts_as_approve: true
-  repos:
-  - openshift
-  require_self_approval: false
 blunderbuss:
   request_count: 2
+branch_cleaner: {}
 bugzilla: {}
 cat: {}
 cherry_pick_unapproved:
@@ -40,18 +35,12 @@ config_updater:
       cluster_groups:
       - build_farm_ci
       name: cm-path
-external_plugins: {}
 golint: {}
 goose: {}
 heart: {}
 help:
   help_guidelines_url: https://git.k8s.io/community/contributors/guide/help-wanted.md
-label:
-  additional_labels: null
-lgtm:
-- repos:
-  - openshift
-  review_acts_as_lgtm: true
+label: {}
 override: {}
 owners:
   labels_denylist:

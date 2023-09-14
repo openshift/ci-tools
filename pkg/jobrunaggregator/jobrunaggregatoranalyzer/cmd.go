@@ -9,6 +9,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+	prowjobclientset "k8s.io/test-infra/prow/client/clientset/versioned"
 	"k8s.io/utils/clock"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
@@ -25,6 +27,7 @@ type JobRunsAnalyzerFlags struct {
 	ExplicitGCSPrefix           string
 	Timeout                     time.Duration
 	EstimatedJobStartTimeString string
+	JobStateQuerySource         string
 }
 
 func NewJobRunsAnalyzerFlags() *JobRunsAnalyzerFlags {
@@ -34,7 +37,7 @@ func NewJobRunsAnalyzerFlags() *JobRunsAnalyzerFlags {
 
 		WorkingDir:                  "job-aggregator-working-dir",
 		EstimatedJobStartTimeString: time.Now().Format(kubeTimeSerializationLayout),
-		Timeout:                     3*time.Hour + 30*time.Minute,
+		Timeout:                     5*time.Hour + 30*time.Minute,
 	}
 }
 
@@ -51,6 +54,7 @@ func (f *JobRunsAnalyzerFlags) BindFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&f.ExplicitGCSPrefix, "explicit-gcs-prefix", f.ExplicitGCSPrefix, "only used by per PR payload promotion jobs.  This overrides the well-known mapping and becomes the required prefix for the GCS query")
 	fs.DurationVar(&f.Timeout, "timeout", f.Timeout, "Time to wait for aggregation to complete.")
 	fs.StringVar(&f.EstimatedJobStartTimeString, "job-start-time", f.EstimatedJobStartTimeString, fmt.Sprintf("Start time in RFC822Z: %s", kubeTimeSerializationLayout))
+	fs.StringVar(&f.JobStateQuerySource, "query-source", jobrunaggregatorlib.JobStateQuerySourceBigQuery, "The source from which job states are found. It is either bigquery or cluster")
 }
 
 func NewJobRunsAnalyzerCommand() *cobra.Command {
@@ -113,6 +117,11 @@ func (f *JobRunsAnalyzerFlags) Validate() error {
 	if len(f.AggregationID) > 0 && len(f.ExplicitGCSPrefix) == 0 {
 		return fmt.Errorf("if --aggregation-id is specified, you must specify --explicit-gcs-prefix")
 	}
+	if len(f.JobStateQuerySource) > 0 {
+		if _, ok := jobrunaggregatorlib.KnownQuerySources[f.JobStateQuerySource]; !ok {
+			return fmt.Errorf("unknown query-source %s, valid values are: %+q", f.JobStateQuerySource, sets.List(jobrunaggregatorlib.KnownQuerySources))
+		}
+	}
 
 	return nil
 }
@@ -139,6 +148,7 @@ func (f *JobRunsAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunAggregator
 	}
 
 	var jobRunLocator jobrunaggregatorlib.JobRunLocator
+	var prowJobMatcherFunc jobrunaggregatorlib.ProwJobMatcherFunc
 	if len(f.PayloadTag) > 0 {
 		jobRunLocator = jobrunaggregatorlib.NewPayloadAnalysisJobLocatorForReleaseController(
 			f.JobName,
@@ -148,18 +158,28 @@ func (f *JobRunsAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunAggregator
 			ciGCSClient,
 			"origin-ci-test",
 		)
+		prowJobMatcherFunc = jobrunaggregatorlib.NewProwJobMatcherFuncForReleaseController(f.JobName, f.PayloadTag)
 	}
 	if len(f.AggregationID) > 0 {
 		jobRunLocator = jobrunaggregatorlib.NewPayloadAnalysisJobLocatorForPR(
 			f.JobName,
 			f.AggregationID,
-			jobrunaggregatorlib.AggregationIDLabel,
+			jobrunaggregatorlib.ProwJobAggregationIDLabel,
 			estimatedStartTime,
 			ciDataClient,
 			ciGCSClient,
 			"origin-ci-test",
 			f.ExplicitGCSPrefix,
 		)
+		prowJobMatcherFunc = jobrunaggregatorlib.NewProwJobMatcherFuncForPR(f.JobName, f.AggregationID, jobrunaggregatorlib.ProwJobAggregationIDLabel)
+	}
+
+	var prowJobClient *prowjobclientset.Clientset
+	if f.JobStateQuerySource != jobrunaggregatorlib.JobStateQuerySourceBigQuery {
+		prowJobClient, err = jobrunaggregatorlib.GetProwJobClient()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &JobRunAggregatorAnalyzerOptions{
@@ -172,5 +192,8 @@ func (f *JobRunsAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunAggregator
 		jobRunStartEstimate: estimatedStartTime,
 		clock:               clock.RealClock{},
 		timeout:             f.Timeout,
+		prowJobClient:       prowJobClient,
+		jobStateQuerySource: f.JobStateQuerySource,
+		prowJobMatcherFunc:  prowJobMatcherFunc,
 	}, nil
 }

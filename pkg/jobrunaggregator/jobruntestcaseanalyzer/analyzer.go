@@ -13,6 +13,8 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+	prowjobv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	prowjobclientset "k8s.io/test-infra/prow/client/clientset/versioned"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
@@ -41,6 +43,37 @@ type JobGetter interface {
 	GetJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRow, error)
 }
 
+func NewTestCaseAnalyzerJobGetter(platform, infrastructure, network, testNameSuffix string,
+	excludeJobNames, includeJobNames []string,
+	jobGCSPrefixes *[]jobGCSPrefix, ciDataClient jobrunaggregatorlib.CIDataClient) *testCaseAnalyzerJobGetter {
+	jobGetter := &testCaseAnalyzerJobGetter{
+		platform:       platform,
+		infrastructure: infrastructure,
+		network:        network,
+		testNameSuffix: testNameSuffix,
+		jobGCSPrefixes: jobGCSPrefixes,
+		ciDataClient:   ciDataClient,
+		jobNames:       sets.Set[string]{},
+	}
+	if jobGCSPrefixes != nil && len(*jobGCSPrefixes) > 0 {
+		for i := range *jobGCSPrefixes {
+			jobGCSPrefix := (*jobGCSPrefixes)[i]
+			jobGetter.jobNames.Insert(jobGCSPrefix.jobName)
+		}
+	}
+	if len(excludeJobNames) > 0 {
+		jobGetter.excludeJobNames = sets.Set[string]{}
+		jobGetter.excludeJobNames.Insert(excludeJobNames...)
+	}
+
+	if len(includeJobNames) > 0 {
+		jobGetter.includeJobNames = sets.Set[string]{}
+		jobGetter.includeJobNames.Insert(includeJobNames...)
+	}
+
+	return jobGetter
+}
+
 type testCaseAnalyzerJobGetter struct {
 	platform        string
 	infrastructure  string
@@ -50,6 +83,42 @@ type testCaseAnalyzerJobGetter struct {
 	testNameSuffix  string
 	jobGCSPrefixes  *[]jobGCSPrefix
 	ciDataClient    jobrunaggregatorlib.CIDataClient
+	jobNames        sets.Set[string]
+}
+
+func (s *testCaseAnalyzerJobGetter) shouldAggregateJob(prowJob *prowjobv1.ProwJob) bool {
+	jobName := prowJob.Annotations[jobrunaggregatorlib.ProwJobJobNameAnnotation]
+	// if PR payload, only find the exact jobs
+	if s.jobGCSPrefixes != nil && len(*s.jobGCSPrefixes) > 0 {
+		if !s.jobNames.Has(jobName) {
+			return false
+		}
+	} else {
+		if len(s.platform) != 0 && !strings.Contains(strings.ToLower(jobName), s.platform) {
+			return false
+		}
+		if len(s.network) != 0 {
+			network := "sdn"
+			if strings.Contains(strings.ToLower(jobName), "ovn") {
+				network = "ovn"
+			}
+			if s.network != network {
+				return false
+			}
+		}
+		if len(s.infrastructure) != 0 && s.infrastructure != getJobInfrastructure(jobName) {
+			return false
+		}
+
+		if !s.isJobNameIncluded(jobName) {
+			return false
+		}
+
+		if s.isJobNameExcluded(jobName) {
+			return false
+		}
+	}
+	return true
 }
 
 // GetJobs find all related jobs for the test case analyzer
@@ -64,12 +133,7 @@ func (s *testCaseAnalyzerJobGetter) GetJobs(ctx context.Context) ([]jobrunaggreg
 
 	// if PR payload, only find the exact jobs
 	if s.jobGCSPrefixes != nil && len(*s.jobGCSPrefixes) > 0 {
-		jobNames := sets.Set[string]{}
-		for i := range *s.jobGCSPrefixes {
-			jobGCSPrefix := (*s.jobGCSPrefixes)[i]
-			jobNames.Insert(jobGCSPrefix.jobName)
-		}
-		jobs = s.filterJobsByNames(jobNames, jobs)
+		jobs = s.filterJobsByNames(s.jobNames, jobs)
 	} else {
 		// Non PR payload, select by criteria
 		jobs = s.filterJobsForPayload(jobs)
@@ -340,6 +404,30 @@ type JobRunTestCaseAnalyzerOptions struct {
 	payloadInvocationID string
 	jobGCSPrefixes      *[]jobGCSPrefix
 	jobGetter           JobGetter
+	prowJobClient       *prowjobclientset.Clientset
+	jobStateQuerySource string
+	prowJobMatcherFunc  jobrunaggregatorlib.ProwJobMatcherFunc
+}
+
+func (o *JobRunTestCaseAnalyzerOptions) shouldAggregateJob(prowJob *prowjobv1.ProwJob) bool {
+	// first level of match only matches names
+	if !o.prowJobMatcherFunc(prowJob) {
+		return false
+	}
+	// second level of match deal with payload or invocation ID
+	var prowJobRunMatcherFunc jobrunaggregatorlib.ProwJobMatcherFunc
+	jobName := prowJob.Annotations[jobrunaggregatorlib.ProwJobJobNameAnnotation]
+	if len(o.payloadTag) > 0 {
+		prowJobRunMatcherFunc = jobrunaggregatorlib.NewProwJobMatcherFuncForReleaseController(jobName, o.payloadTag)
+	}
+	if len(o.payloadInvocationID) > 0 {
+		prowJobRunMatcherFunc = jobrunaggregatorlib.NewProwJobMatcherFuncForPR(jobName, o.payloadInvocationID, jobrunaggregatorlib.ProwJobPayloadInvocationIDLabel)
+	}
+
+	if prowJobRunMatcherFunc != nil {
+		return prowJobRunMatcherFunc(prowJob)
+	}
+	return true
 }
 
 func (o *JobRunTestCaseAnalyzerOptions) findJobRunsWithRetry(ctx context.Context,
@@ -397,7 +485,7 @@ func (o *JobRunTestCaseAnalyzerOptions) GetRelatedJobRuns(ctx context.Context) (
 			jobRunLocator = jobrunaggregatorlib.NewPayloadAnalysisJobLocatorForPR(
 				job.JobName,
 				o.payloadInvocationID,
-				jobrunaggregatorlib.PayloadInvocationIDLabel,
+				jobrunaggregatorlib.ProwJobPayloadInvocationIDLabel,
 				o.jobRunStartEstimate,
 				o.ciDataClient,
 				o.ciGCSClient,
@@ -489,7 +577,18 @@ func (o *JobRunTestCaseAnalyzerOptions) Run(ctx context.Context) error {
 		return err
 	}
 
-	finishedJobRuns, unfinishedJobRuns, _, _, err := jobrunaggregatorlib.WaitAndGetAllFinishedJobRuns(ctx, timeToStopWaiting, o, outputDir, o.testNameSuffix)
+	var jobRunWaiter jobrunaggregatorlib.JobRunWaiter
+	if o.jobStateQuerySource == jobrunaggregatorlib.JobStateQuerySourceBigQuery || o.prowJobClient == nil {
+		jobRunWaiter = &jobrunaggregatorlib.BigQueryJobRunWaiter{JobRunGetter: o, TimeToStopWaiting: timeToStopWaiting}
+	} else {
+		jobRunWaiter = &jobrunaggregatorlib.ClusterJobRunWaiter{
+			ProwJobClient:      o.prowJobClient,
+			TimeToStopWaiting:  timeToStopWaiting,
+			ProwJobMatcherFunc: o.shouldAggregateJob,
+		}
+	}
+
+	finishedJobRuns, unfinishedJobRuns, _, _, err := jobrunaggregatorlib.WaitAndGetAllFinishedJobRuns(ctx, o, jobRunWaiter, outputDir, o.testNameSuffix)
 	if err != nil {
 		return err
 	}

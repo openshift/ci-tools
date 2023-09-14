@@ -15,7 +15,7 @@ import (
 type CIGCSClient interface {
 	ReadJobRunFromGCS(ctx context.Context, jobGCSRootLocation, jobName, jobRunID string, logger logrus.FieldLogger) (jobrunaggregatorapi.JobRunInfo, error)
 	ReadRelatedJobRuns(ctx context.Context, jobName, gcsPrefix, startingJobRunID, endingJobRunID string,
-		matcherFunc prowJobMatcherFunc) ([]jobrunaggregatorapi.JobRunInfo, error)
+		matcherFunc ProwJobMatcherFunc) ([]jobrunaggregatorapi.JobRunInfo, error)
 }
 
 type ciGCSClient struct {
@@ -43,7 +43,7 @@ func (o *ciGCSClient) ReadJobRunFromGCS(ctx context.Context, jobGCSRootLocation,
 
 func (o *ciGCSClient) ReadRelatedJobRuns(ctx context.Context,
 	jobName, gcsPrefix, startingJobRunID, endingJobRunID string,
-	matcherFunc prowJobMatcherFunc) ([]jobrunaggregatorapi.JobRunInfo, error) {
+	matcherFunc ProwJobMatcherFunc) ([]jobrunaggregatorapi.JobRunInfo, error) {
 
 	logrus.Debugf("searching GCS for related job runs in %s between %s and %s", gcsPrefix, startingJobRunID, endingJobRunID)
 	query := &storage.Query{

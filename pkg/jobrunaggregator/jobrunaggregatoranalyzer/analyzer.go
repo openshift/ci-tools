@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 
+	prowjobclientset "k8s.io/test-infra/prow/client/clientset/versioned"
 	"k8s.io/utils/clock"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
@@ -40,6 +41,10 @@ type JobRunAggregatorAnalyzerOptions struct {
 	jobRunStartEstimate time.Time
 	clock               clock.Clock
 	timeout             time.Duration
+
+	prowJobClient       *prowjobclientset.Clientset
+	jobStateQuerySource string
+	prowJobMatcherFunc  jobrunaggregatorlib.ProwJobMatcherFunc
 }
 
 // GetRelatedJobRuns gets all related job runs for analysis
@@ -101,7 +106,18 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	finishedJobsToAggregate, _, finishedJobRunNames, unfinishedJobNames, err := jobrunaggregatorlib.WaitAndGetAllFinishedJobRuns(ctx, timeToStopWaiting, o, o.workingDir, "aggregated")
+
+	var jobRunWaiter jobrunaggregatorlib.JobRunWaiter
+	if o.jobStateQuerySource == jobrunaggregatorlib.JobStateQuerySourceBigQuery || o.prowJobClient == nil {
+		jobRunWaiter = &jobrunaggregatorlib.BigQueryJobRunWaiter{JobRunGetter: o, TimeToStopWaiting: timeToStopWaiting}
+	} else {
+		jobRunWaiter = &jobrunaggregatorlib.ClusterJobRunWaiter{
+			ProwJobClient:      o.prowJobClient,
+			TimeToStopWaiting:  timeToStopWaiting,
+			ProwJobMatcherFunc: o.prowJobMatcherFunc,
+		}
+	}
+	finishedJobsToAggregate, _, finishedJobRunNames, unfinishedJobNames, err := jobrunaggregatorlib.WaitAndGetAllFinishedJobRuns(ctx, o, jobRunWaiter, o.workingDir, "aggregated")
 	if err != nil {
 		return err
 	}

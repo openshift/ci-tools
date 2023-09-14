@@ -433,7 +433,7 @@ func TestDetermineClusterForJob(t *testing.T) {
 			name:   "Vsphere job on vsphere02",
 			config: &configWithBuildFarmWithJobs,
 			jobBase: config.JobBase{Agent: "kubernetes", Name: "yalayala-vsphere", Labels: map[string]string{
-				api.ClusterLabel: string(api.ClusterVSphere02),
+				api.CloudClusterProfileLabel: string(api.ClusterProfileVSphere8Vpn),
 			}},
 			expected: "vsphere02",
 		},

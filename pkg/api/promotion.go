@@ -87,9 +87,19 @@ func tagsInQuay(image string, tag ImageStreamTagReference, date string) ([]strin
 	}
 	digest := splits[1]
 	return []string{
-		fmt.Sprintf("%s:%s_sha256_%s", QuayOpenShiftCIRepo, date, digest),
-		fmt.Sprintf("%s:%s_%s_%s", QuayOpenShiftCIRepo, tag.Namespace, tag.Name, tag.Tag),
+		QuayImageFromDateAndDigest(date, digest),
+		QuayImage(tag),
 	}, nil
+}
+
+// QuayImage returns the image in quay.io for an image stream tag
+func QuayImage(tag ImageStreamTagReference) string {
+	return fmt.Sprintf("%s:%s_%s_%s", QuayOpenShiftCIRepo, tag.Namespace, tag.Name, tag.Tag)
+}
+
+// QuayImageFromDateAndDigest returns the image in quay.io for a date and an image digest
+func QuayImageFromDateAndDigest(date, digest string) string {
+	return fmt.Sprintf("%s:%s_sha256_%s", QuayOpenShiftCIRepo, date, digest)
 }
 
 var (

@@ -1215,6 +1215,7 @@ periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-cpu-partitioning
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-etcd-scaling
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-fips
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-fips-serial
+periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-ha-cert-rotation-suspend-30d
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-local-gateway
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-proxy
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-serial

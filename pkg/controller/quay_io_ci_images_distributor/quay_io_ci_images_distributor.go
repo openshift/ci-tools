@@ -2,9 +2,9 @@ package quay_io_ci_images_distributor
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -41,14 +41,29 @@ type registryResolver interface {
 func AddToManager(manager manager.Manager,
 	configAgent agents.ConfigAgent,
 	resolver registryResolver,
-	additionalImageStreamTags, additionalImageStreams, additionalImageStreamNamespaces sets.Set[string]) error {
+	additionalImageStreamTags, additionalImageStreams, additionalImageStreamNamespaces sets.Set[string],
+	mirrorStore MirrorStore,
+	registryConfig string) error {
 	log := logrus.WithField("controller", ControllerName)
 	log.WithField("additionalImageStreamNamespaces", additionalImageStreamNamespaces).Info("Received args")
 	client := imagestreamtagwrapper.MustNew(manager.GetClient(), manager.GetCache())
+	ocClientFactory := newClientFactory()
+	quayIOImageHelper, err := ocClientFactory.NewClient()
+	if err != nil {
+		return fmt.Errorf("failed to create QuayIOImageHelper: %w", err)
+	}
+	ocImageInfoOptions := OCImageInfoOptions{
+		RegistryConfig: registryConfig,
+		// TODO: multi-arch support
+		FilterByOS: "linux/amd64",
+	}
 	r := &reconciler{
 		log:                             log,
 		client:                          client,
 		additionalImageStreamNamespaces: additionalImageStreamNamespaces,
+		quayIOImageHelper:               quayIOImageHelper,
+		ocImageInfoOptions:              ocImageInfoOptions,
+		mirrorStore:                     mirrorStore,
 	}
 	c, err := controller.New(ControllerName, manager, controller.Options{
 		Reconciler: r,
@@ -97,6 +112,9 @@ type reconciler struct {
 	log                             *logrus.Entry
 	client                          ctrlruntimeclient.Client
 	additionalImageStreamNamespaces sets.Set[string]
+	quayIOImageHelper               QuayIOImageHelper
+	ocImageInfoOptions              OCImageInfoOptions
+	mirrorStore                     MirrorStore
 }
 
 func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
@@ -113,10 +131,50 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *logrus.Entry) error {
 	*log = *log.WithField("namespace", req.Namespace).WithField("name", req.Name)
 	log.Info("Starting reconciliation")
-	// This is to make the linter happy
-	// TODO (hongkliu): implement this logic with sense-making errors
-	if ctx == nil {
-		return errors.New("nil ctx")
+	colonSplit := strings.Split(req.Name, ":")
+	if n := len(colonSplit); n != 2 {
+		return fmt.Errorf("splitting %s by `:` didn't yield two but %d results", req.Name, n)
+	}
+	tagRef := cioperatorapi.ImageStreamTagReference{Namespace: req.Namespace, Name: colonSplit[0], Tag: colonSplit[1]}
+	quayImage := cioperatorapi.QuayImage(tagRef)
+	imageInfo, err := r.quayIOImageHelper.ImageInfo(quayImage, r.ocImageInfoOptions)
+	if err != nil {
+		return fmt.Errorf("failed to get digest for image stream tag %s/%s: %w", req.Namespace, req.Name, err)
+	}
+	sourceImageStreamTag := &imagev1.ImageStreamTag{}
+	if err := r.client.Get(ctx, req.NamespacedName, sourceImageStreamTag); err != nil {
+		if apierrors.IsNotFound(err) {
+			log.Debug("Source imageStreamTag not found")
+			return nil
+		}
+		return fmt.Errorf("failed to get imageStreamTag %s from registry cluster: %w", req.String(), err)
+	}
+	colonSplit = strings.Split(sourceImageStreamTag.Image.ObjectMeta.Name, ":")
+	if n := len(colonSplit); n != 2 {
+		return fmt.Errorf("splitting %s by `:` didn't yield two but %d results", sourceImageStreamTag.Image.ObjectMeta.Name, n)
+	}
+	if colonSplit[0] != "sha256" {
+		return fmt.Errorf("image name has no prefix `sha256:`: %s", sourceImageStreamTag.Image.ObjectMeta.Name)
+	}
+
+	if digest := colonSplit[1]; imageInfo.Digest != digest {
+		sourceImage := fmt.Sprintf("%s/%s/%s@%s", cioperatorapi.DomainForService(cioperatorapi.ServiceRegistry), tagRef.Namespace, tagRef.Name, sourceImageStreamTag.Image.ObjectMeta.Name)
+		targetImageWithDateAndDigest := cioperatorapi.QuayImageFromDateAndDigest(time.Now().Format("20060102"), digest)
+		r.log.WithField("currentQuayDigest", imageInfo.Digest).WithField("source", sourceImage).WithField("targetImageWithDateAndDigest", targetImageWithDateAndDigest).WithField("target", quayImage).Info("Mirroring")
+		if err := r.mirrorStore.Put(MirrorTask{
+			SourceTagRef:      tagRef,
+			Source:            sourceImage,
+			Destination:       quayImage,
+			CurrentQuayDigest: imageInfo.Digest,
+		},
+			MirrorTask{
+				SourceTagRef:      tagRef,
+				Source:            sourceImage,
+				Destination:       targetImageWithDateAndDigest,
+				CurrentQuayDigest: imageInfo.Digest,
+			}); err != nil {
+			return fmt.Errorf("failed to put the mirror into store: %w", err)
+		}
 	}
 	return nil
 }
@@ -257,4 +315,19 @@ func sourceForConfigChangeChannel(registryClient ctrlruntimeclient.Client, chang
 	}()
 
 	return channelSource
+}
+
+type ImageInfo struct {
+	Name   string `json:"name"`
+	Digest string `json:"digest"`
+	Config Config `json:"config"`
+}
+
+type Config struct {
+	Architecture string `json:"architecture"`
+}
+
+type QuayIOImageHelper interface {
+	ImageInfo(image string, options OCImageInfoOptions) (ImageInfo, error)
+	ImageMirror(src, dst string, options OCImageMirrorOptions) error
 }

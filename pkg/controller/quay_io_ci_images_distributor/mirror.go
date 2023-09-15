@@ -1,8 +1,11 @@
 package quay_io_ci_images_distributor
 
 import (
+	"fmt"
 	"sync"
 	"time"
+
+	"github.com/sirupsen/logrus"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 )
@@ -78,5 +81,50 @@ func (s *memoryMirrorStore) Summarize() (map[string]any, error) {
 func NewMirrorStore() MirrorStore {
 	return &memoryMirrorStore{
 		mirrors: map[string]MirrorTask{},
+	}
+}
+
+type MirrorConsumerController struct {
+	logger            *logrus.Entry
+	quayIOImageHelper QuayIOImageHelper
+	mirrorStore       MirrorStore
+	options           OCImageMirrorOptions
+}
+
+func (c *MirrorConsumerController) Run() error {
+	for {
+		mirrors, err := c.mirrorStore.Take(10)
+		if err != nil {
+			c.logger.WithError(err).Warn("Failed to take mirrors")
+			continue
+		}
+		if len(mirrors) == 0 {
+			c.logger.Debug("Waiting for mirror tasks ...")
+			time.Sleep(3 * time.Second)
+			continue
+		}
+		var pairs []string
+		for _, mirror := range mirrors {
+			pairs = append(pairs, fmt.Sprintf("%s=%s", mirror.Source, mirror.Destination))
+		}
+		// TODO use "--force" on long stale images
+		if err := c.quayIOImageHelper.ImageMirror(pairs, c.options); err != nil {
+			c.logger.WithError(err).Warn("Failed to mirror")
+		}
+	}
+}
+
+func NewMirrorConsumer(mirrorStore MirrorStore, quayIOImageHelper QuayIOImageHelper, registryConfig string, dryRun bool) *MirrorConsumerController {
+	return &MirrorConsumerController{
+		quayIOImageHelper: quayIOImageHelper,
+		mirrorStore:       mirrorStore,
+		options: OCImageMirrorOptions{
+			RegistryConfig:  registryConfig,
+			ContinueOnError: true,
+			MaxPerRegistry:  20,
+			BatchSize:       10,
+			DryRun:          dryRun,
+		},
+		logger: logrus.WithField("subComponent", "mirrorController"),
 	}
 }

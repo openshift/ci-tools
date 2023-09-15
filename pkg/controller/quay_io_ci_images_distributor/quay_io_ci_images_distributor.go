@@ -42,16 +42,12 @@ func AddToManager(manager manager.Manager,
 	configAgent agents.ConfigAgent,
 	resolver registryResolver,
 	additionalImageStreamTags, additionalImageStreams, additionalImageStreamNamespaces sets.Set[string],
+	quayIOImageHelper QuayIOImageHelper,
 	mirrorStore MirrorStore,
 	registryConfig string) error {
 	log := logrus.WithField("controller", ControllerName)
 	log.WithField("additionalImageStreamNamespaces", additionalImageStreamNamespaces).Info("Received args")
 	client := imagestreamtagwrapper.MustNew(manager.GetClient(), manager.GetCache())
-	ocClientFactory := newClientFactory()
-	quayIOImageHelper, err := ocClientFactory.NewClient()
-	if err != nil {
-		return fmt.Errorf("failed to create QuayIOImageHelper: %w", err)
-	}
 	ocImageInfoOptions := OCImageInfoOptions{
 		RegistryConfig: registryConfig,
 		// TODO: multi-arch support
@@ -325,9 +321,11 @@ type ImageInfo struct {
 
 type Config struct {
 	Architecture string `json:"architecture"`
+	// "created": "2023-09-14T15:13:32.640956126Z",
+	Created time.Time
 }
 
 type QuayIOImageHelper interface {
 	ImageInfo(image string, options OCImageInfoOptions) (ImageInfo, error)
-	ImageMirror(src, dst string, options OCImageMirrorOptions) error
+	ImageMirror(pairs []string, options OCImageMirrorOptions) error
 }

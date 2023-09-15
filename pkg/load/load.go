@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -231,4 +232,15 @@ func loadWorkflow(bytes []byte) (string, string, api.MultiStageTestConfiguration
 		return "", "", api.MultiStageTestConfiguration{}, errors.New("workflows cannot contain other workflows")
 	}
 	return workflow.Workflow.As, workflow.Workflow.Documentation, workflow.Workflow.Steps, nil
+}
+
+func ClusterProfilesConfig(configPath string, profiles *api.ClusterProfilesList) error {
+	configContents, err := os.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to read cluster profiles config: %w", err)
+	}
+	if err = yaml.Unmarshal(configContents, profiles); err != nil {
+		return fmt.Errorf("failed to unmarshall cluster profiles config: %w", err)
+	}
+	return nil
 }

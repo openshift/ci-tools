@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
@@ -54,7 +53,7 @@ func (o *options) parse() error {
 		return fmt.Errorf("failed to load registry: %w", err)
 	}
 
-	if err := o.loadProfilesConfig(profilesConfigPath); err != nil {
+	if err := load.ClusterProfilesConfig(profilesConfigPath, &o.clusterProfiles); err != nil {
 		return fmt.Errorf("failed to load cluster profile config: %w", err)
 	}
 
@@ -168,17 +167,6 @@ func validateTags(seen tagSet) []error {
 		dupes = append(dupes, fmt.Errorf("output tag %s is promoted from more than one place: %v", tag.ISTagName(), strings.Join(formatted, ", ")))
 	}
 	return dupes
-}
-
-func (o *options) loadProfilesConfig(configPath string) error {
-	configContents, err := os.ReadFile(configPath)
-	if err != nil {
-		return fmt.Errorf("failed to read cluster profiles config: %w", err)
-	}
-	if err = yaml.Unmarshal(configContents, &o.clusterProfiles); err != nil {
-		return fmt.Errorf("failed to unmarshall cluster profiles config: %w", err)
-	}
-	return nil
 }
 
 func main() {

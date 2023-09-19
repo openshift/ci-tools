@@ -22,6 +22,8 @@ for org in openshift; do
 
   echo >&2 "$(date --iso-8601=seconds) Executing ci-operator-prowgen"
   ci-operator-prowgen --from-dir "${clonedir}/ci-operator/config" --to-dir "${clonedir}/ci-operator/jobs"
+  sanitize-prow-jobs --prow-jobs-dir "${clonedir}/ci-operator/jobs" --config-path "${clonedir}/core-services/sanitize-prow-jobs/_config.yaml"
+
   out="$(git status --porcelain)"
   if [[ -n "$out" ]]; then
     echo "ERROR: Changes in $org/release:"

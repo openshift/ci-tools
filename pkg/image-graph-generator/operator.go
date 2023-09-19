@@ -80,12 +80,14 @@ func (o *Operator) callback(c *api.ReleaseBuildConfiguration, i *config.Info) er
 	}
 
 	var errs []error
-	excludedImages := sets.New[string](c.PromotionConfiguration.ExcludedImages...)
+	for _, target := range api.PromotionTargets(c.PromotionConfiguration) {
+		excludedImages := sets.New[string](target.ExcludedImages...)
 
-	for _, image := range c.Images {
-		if !excludedImages.Has(string(image.To)) {
-			if err := o.UpdateImage(image, c, branchID); err != nil {
-				errs = append(errs, err)
+		for _, image := range c.Images {
+			if !excludedImages.Has(string(image.To)) {
+				if err := o.UpdateImage(image, c.BaseImages, target, branchID); err != nil {
+					errs = append(errs, err)
+				}
 			}
 		}
 	}

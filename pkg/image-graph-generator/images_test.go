@@ -31,8 +31,10 @@ func TestOperator_UpdateImage(t *testing.T) {
 				},
 				c: &api.ReleaseBuildConfiguration{
 					PromotionConfiguration: &api.PromotionConfiguration{
-						Namespace: "test-ns",
-						Name:      "test-is",
+						Targets: []api.PromotionTarget{{
+							Namespace: "test-ns",
+							Name:      "test-is",
+						}},
 					},
 				},
 				branchID: "0x12345",
@@ -56,8 +58,10 @@ func TestOperator_UpdateImage(t *testing.T) {
 				},
 				c: &api.ReleaseBuildConfiguration{
 					PromotionConfiguration: &api.PromotionConfiguration{
-						Namespace: "test-ns",
-						Name:      "test-is",
+						Targets: []api.PromotionTarget{{
+							Namespace: "test-ns",
+							Name:      "test-is",
+						}},
 					},
 				},
 				branchID: "0x12345",
@@ -84,7 +88,7 @@ func TestOperator_UpdateImage(t *testing.T) {
 				c:      fc,
 				images: tt.images,
 			}
-			if err := o.UpdateImage(tt.args.image, tt.args.c, tt.args.branchID); (err != nil) != tt.wantErr {
+			if err := o.UpdateImage(tt.args.image, tt.args.c.BaseImages, tt.args.c.PromotionConfiguration.Targets[0], tt.args.branchID); (err != nil) != tt.wantErr {
 				t.Errorf("Operator.UpdateImage() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if diff := cmp.Diff(fc.images, tt.expected); diff != "" {

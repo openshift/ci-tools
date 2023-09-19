@@ -26,7 +26,9 @@ func TestPromotesOfficialImages(t *testing.T) {
 			name: "config explicitly promoting to ocp namespace produces official images",
 			configSpec: &ReleaseBuildConfiguration{
 				PromotionConfiguration: &PromotionConfiguration{
-					Namespace: "ocp",
+					Targets: []PromotionTarget{{
+						Namespace: "ocp",
+					}},
 				},
 			},
 			expected: true,
@@ -35,8 +37,10 @@ func TestPromotesOfficialImages(t *testing.T) {
 			name: "config with disabled explicit promotion to ocp namespace does not produce official images",
 			configSpec: &ReleaseBuildConfiguration{
 				PromotionConfiguration: &PromotionConfiguration{
-					Namespace: "ocp",
-					Disabled:  true,
+					Targets: []PromotionTarget{{
+						Namespace: "ocp",
+						Disabled:  true,
+					}},
 				},
 			},
 			expected: false,
@@ -45,7 +49,9 @@ func TestPromotesOfficialImages(t *testing.T) {
 			name: "config explicitly promoting to okd namespace produces official images",
 			configSpec: &ReleaseBuildConfiguration{
 				PromotionConfiguration: &PromotionConfiguration{
-					Namespace: "origin",
+					Targets: []PromotionTarget{{
+						Namespace: "origin",
+					}},
 				},
 			},
 			expected: true,
@@ -210,6 +216,45 @@ func TestPromotionTargets(t *testing.T) {
 				ExcludedImages:   []string{"*"},
 				AdditionalImages: map[string]string{"whatever": "else"},
 				Disabled:         true,
+			},
+			output: []PromotionTarget{{
+				Namespace:        "ns",
+				Name:             "name",
+				Tag:              "tag",
+				TagByCommit:      true,
+				ExcludedImages:   []string{"*"},
+				AdditionalImages: map[string]string{"whatever": "else"},
+				Disabled:         true,
+			}, {
+				Namespace:        "new-ns",
+				Name:             "new-name",
+				Tag:              "new-tag",
+				TagByCommit:      true,
+				ExcludedImages:   []string{"new-*"},
+				AdditionalImages: map[string]string{"new-whatever": "new-else"},
+				Disabled:         true,
+			}},
+		},
+		{
+			name: "only modern config",
+			input: &PromotionConfiguration{
+				Targets: []PromotionTarget{{
+					Namespace:        "ns",
+					Name:             "name",
+					Tag:              "tag",
+					TagByCommit:      true,
+					ExcludedImages:   []string{"*"},
+					AdditionalImages: map[string]string{"whatever": "else"},
+					Disabled:         true,
+				}, {
+					Namespace:        "new-ns",
+					Name:             "new-name",
+					Tag:              "new-tag",
+					TagByCommit:      true,
+					ExcludedImages:   []string{"new-*"},
+					AdditionalImages: map[string]string{"new-whatever": "new-else"},
+					Disabled:         true,
+				}},
 			},
 			output: []PromotionTarget{{
 				Namespace:        "ns",

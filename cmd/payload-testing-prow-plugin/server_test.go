@@ -842,7 +842,7 @@ func (r fakeCIOpConfigResolver) Config(m *api.Metadata) (*api.ReleaseBuildConfig
 	}
 	if m.Org == "openshift" {
 		return &api.ReleaseBuildConfiguration{
-			PromotionConfiguration: &api.PromotionConfiguration{Namespace: "ocp"},
+			PromotionConfiguration: &api.PromotionConfiguration{Targets: []api.PromotionTarget{{Namespace: "ocp"}}},
 		}, nil
 	}
 	return &api.ReleaseBuildConfiguration{}, nil

@@ -77,6 +77,26 @@ func main() {
 			return nil
 		}
 
+		if configuration.PromotionConfiguration != nil && configuration.PromotionConfiguration.Namespace != "" {
+			configuration.PromotionConfiguration.Targets = append([]api.PromotionTarget{{
+				Name:             configuration.PromotionConfiguration.Name,
+				Namespace:        configuration.PromotionConfiguration.Namespace,
+				Tag:              configuration.PromotionConfiguration.Tag,
+				TagByCommit:      configuration.PromotionConfiguration.TagByCommit,
+				ExcludedImages:   configuration.PromotionConfiguration.ExcludedImages,
+				AdditionalImages: configuration.PromotionConfiguration.AdditionalImages,
+				Disabled:         configuration.PromotionConfiguration.Disabled,
+			}}, configuration.PromotionConfiguration.Targets...)
+
+			configuration.PromotionConfiguration.Name = ""
+			configuration.PromotionConfiguration.Namespace = ""
+			configuration.PromotionConfiguration.Tag = ""
+			configuration.PromotionConfiguration.TagByCommit = false
+			configuration.PromotionConfiguration.ExcludedImages = nil
+			configuration.PromotionConfiguration.AdditionalImages = nil
+			configuration.PromotionConfiguration.Disabled = false
+		}
+
 		allowedBranches := o.templateMigrationAllowedBranches.StringSet()
 		allowedOrgs := o.templateMigrationAllowedOrgs.StringSet()
 		allowedClusterProfiles := o.templateMigrationAllowedClusterProfiles.StringSet()

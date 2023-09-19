@@ -14,9 +14,10 @@ build_root:
     namespace: ocp
     tag: base
 promotion:
-  disabled: true
-  name: "4.6"
-  namespace: ocp
+  to:
+  - disabled: true
+    name: "4.6"
+    namespace: ocp
 resources:
   '*':
     limits:

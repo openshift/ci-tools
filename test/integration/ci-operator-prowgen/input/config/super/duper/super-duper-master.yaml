@@ -19,8 +19,9 @@ operator:
     context_dir: manifests
     dockerfile_path: bundle.Dockerfile
 promotion:
-  name: other
-  namespace: ocp
+  to:
+  - name: other
+    namespace: ocp
 resources:
   '*':
     limits:

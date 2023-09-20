@@ -200,18 +200,18 @@ func TestPrivatePromotionConfiguration(t *testing.T) {
 	}{
 		{
 			id:        "promoted by name",
-			promotion: &api.PromotionConfiguration{Targets: []api.PromotionTarget{{Name: "4.x", Namespace: "ocp"}}},
-			expected:  &api.PromotionConfiguration{Targets: []api.PromotionTarget{{Name: "4.x-priv", Namespace: "ocp-private"}}},
+			promotion: &api.PromotionConfiguration{Name: "4.x", Namespace: "ocp"},
+			expected:  &api.PromotionConfiguration{Name: "4.x-priv", Namespace: "ocp-private"},
 		},
 		{
 			id:        "promoted by tag",
-			promotion: &api.PromotionConfiguration{Targets: []api.PromotionTarget{{Tag: "4.x", Namespace: "ocp"}}},
-			expected:  &api.PromotionConfiguration{Targets: []api.PromotionTarget{{Tag: "4.x-priv", Namespace: "ocp-private"}}},
+			promotion: &api.PromotionConfiguration{Tag: "4.x", Namespace: "ocp"},
+			expected:  &api.PromotionConfiguration{Tag: "4.x-priv", Namespace: "ocp-private"},
 		},
 		{
 			id:        "promoted by tag, includes tag_by_commit",
-			promotion: &api.PromotionConfiguration{Targets: []api.PromotionTarget{{Tag: "4.x", Namespace: "ocp", TagByCommit: true}}},
-			expected:  &api.PromotionConfiguration{Targets: []api.PromotionTarget{{Tag: "4.x-priv", Namespace: "ocp-private"}}},
+			promotion: &api.PromotionConfiguration{Tag: "4.x", Namespace: "ocp", TagByCommit: true},
+			expected:  &api.PromotionConfiguration{Tag: "4.x-priv", Namespace: "ocp-private"},
 		},
 	}
 	for _, tc := range testCases {

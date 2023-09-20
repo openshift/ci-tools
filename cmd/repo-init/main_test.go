@@ -216,10 +216,8 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 				TestBuildCommands:     "make tests",
 			},
 			originConfig: &api.PromotionConfiguration{
-				Targets: []api.PromotionTarget{{
-					Namespace: "promote",
-					Name:      "version",
-				}},
+				Namespace: "promote",
+				Name:      "version",
 			},
 			expected: ciopconfig.DataWithInfo{
 				Configuration: api.ReleaseBuildConfiguration{
@@ -266,10 +264,8 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 				Promotes:              true,
 			},
 			originConfig: &api.PromotionConfiguration{
-				Targets: []api.PromotionTarget{{
-					Namespace: "promote",
-					Name:      "version",
-				}},
+				Namespace: "promote",
+				Name:      "version",
 			},
 			expected: ciopconfig.DataWithInfo{
 				Configuration: api.ReleaseBuildConfiguration{
@@ -279,10 +275,8 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 						Branch: "branch",
 					},
 					PromotionConfiguration: &api.PromotionConfiguration{
-						Targets: []api.PromotionTarget{{
-							Namespace: "promote",
-							Name:      "version",
-						}},
+						Namespace: "promote",
+						Name:      "version",
 					},
 					InputConfiguration: api.InputConfiguration{
 						Releases: map[string]api.UnresolvedRelease{
@@ -336,10 +330,8 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 				PromotesWithOpenShift: true,
 			},
 			originConfig: &api.PromotionConfiguration{
-				Targets: []api.PromotionTarget{{
-					Namespace: "promote",
-					Name:      "version",
-				}},
+				Namespace: "promote",
+				Name:      "version",
 			},
 			expected: ciopconfig.DataWithInfo{
 				Configuration: api.ReleaseBuildConfiguration{
@@ -349,10 +341,8 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 						Branch: "branch",
 					},
 					PromotionConfiguration: &api.PromotionConfiguration{
-						Targets: []api.PromotionTarget{{
-							Namespace: "promote",
-							Name:      "version",
-						}},
+						Namespace: "promote",
+						Name:      "version",
 					},
 					InputConfiguration: api.InputConfiguration{
 						Releases: map[string]api.UnresolvedRelease{
@@ -412,10 +402,8 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 				NeedsBase:             true,
 			},
 			originConfig: &api.PromotionConfiguration{
-				Targets: []api.PromotionTarget{{
-					Namespace: "promote",
-					Name:      "version",
-				}},
+				Namespace: "promote",
+				Name:      "version",
 			},
 			expected: ciopconfig.DataWithInfo{
 				Configuration: api.ReleaseBuildConfiguration{
@@ -479,10 +467,8 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 				},
 			},
 			originConfig: &api.PromotionConfiguration{
-				Targets: []api.PromotionTarget{{
-					Namespace: "promote",
-					Name:      "version",
-				}},
+				Namespace: "promote",
+				Name:      "version",
 			},
 			expected: ciopconfig.DataWithInfo{
 				Configuration: api.ReleaseBuildConfiguration{
@@ -578,10 +564,8 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 				ReleaseVersion:        "4.5",
 			},
 			originConfig: &api.PromotionConfiguration{
-				Targets: []api.PromotionTarget{{
-					Namespace: "promote",
-					Name:      "version",
-				}},
+				Namespace: "promote",
+				Name:      "version",
 			},
 			expected: ciopconfig.DataWithInfo{
 				Configuration: api.ReleaseBuildConfiguration{
@@ -639,10 +623,8 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 				ReleaseVersion:        "4.5",
 			},
 			originConfig: &api.PromotionConfiguration{
-				Targets: []api.PromotionTarget{{
-					Namespace: "promote",
-					Name:      "version",
-				}},
+				Namespace: "promote",
+				Name:      "version",
 			},
 			expected: ciopconfig.DataWithInfo{
 				Configuration: api.ReleaseBuildConfiguration{

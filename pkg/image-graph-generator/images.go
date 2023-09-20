@@ -22,28 +22,28 @@ type ImageRef struct {
 	Children       []ImageRef  `graphql:"children"`
 }
 
-func (o *Operator) UpdateImage(image api.ProjectDirectoryImageBuildStepConfiguration, baseImages map[string]api.ImageStreamTagReference, c api.PromotionTarget, branchID string) error {
-	imageName := fmt.Sprintf("%s/%s:%s", c.Namespace, c.Name, string(image.To))
+func (o *Operator) UpdateImage(image api.ProjectDirectoryImageBuildStepConfiguration, c *api.ReleaseBuildConfiguration, branchID string) error {
+	imageName := fmt.Sprintf("%s/%s:%s", c.PromotionConfiguration.Namespace, c.PromotionConfiguration.Name, string(image.To))
 
-	if c.Name == "" {
-		if c.Tag == "" {
-			imageName = fmt.Sprintf("%s/%s:latest", c.Namespace, string(image.To))
+	if c.PromotionConfiguration.Name == "" {
+		if c.PromotionConfiguration.Tag == "" {
+			imageName = fmt.Sprintf("%s/%s:latest", c.PromotionConfiguration.Namespace, string(image.To))
 		} else {
-			imageName = fmt.Sprintf("%s/%s:%s", c.Namespace, c.Tag, string(image.To))
+			imageName = fmt.Sprintf("%s/%s:%s", c.PromotionConfiguration.Namespace, c.PromotionConfiguration.Tag, string(image.To))
 		}
 	}
 
 	imageRef := &ImageRef{
 		Name:           imageName,
-		Namespace:      c.Namespace,
-		ImageStreamRef: c.Name,
+		Namespace:      c.PromotionConfiguration.Namespace,
+		ImageStreamRef: c.PromotionConfiguration.Name,
 		Branches:       []BranchRef{{ID: branchID}},
 	}
 
 	if isInternalBaseImage(string(image.From)) {
 		imageRef.FromRoot = true
 	} else if string(image.From) != "" {
-		fromImage, ok := baseImages[string(image.From)]
+		fromImage, ok := c.BaseImages[string(image.From)]
 		if ok {
 			parent := ImageRef{
 				Name:           fromImage.ISTagName(),

@@ -13,9 +13,8 @@ images:
         source_path: /go/bin/blocking-issue-creator
   to: blocking-issue-creator
 promotion:
-  to:
-  - namespace: ci
-    tag: latest
+  namespace: ci
+  tag: latest
 resources:
   '*':
     limits:

@@ -12,9 +12,8 @@ images:
 - from: base
   to: test-image
 promotion:
-  to:
-  - name: "4.5"
-    namespace: ocp
+  name: "4.5"
+  namespace: ocp
 releases:
   initial:
     integration:

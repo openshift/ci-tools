@@ -441,11 +441,7 @@ func main() {
 			if _, ok := opts.explains[isTagRef]; ok {
 				opts.explains[isTagRef] = cfg.Metadata.AsString()
 			}
-			var taggedByCommit bool
-			for _, target := range api.PromotionTargets(cfg.PromotionConfiguration) {
-				taggedByCommit = taggedByCommit || target.TagByCommit
-			}
-			if taggedByCommit {
+			if cfg.PromotionConfiguration.TagByCommit {
 				ignoreRegex, err := regexp.Compile(fmt.Sprintf("%s/%s:[0-9a-f]{5,40}", isTagRef.Namespace, isTagRef.Name))
 				if err != nil {
 					return fmt.Errorf("could not create a regex for ignoring tagged-by-commit images for %s: %w", isTagRef.ISTagName(), err)

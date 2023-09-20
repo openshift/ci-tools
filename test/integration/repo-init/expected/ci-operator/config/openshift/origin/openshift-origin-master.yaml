@@ -12,13 +12,12 @@ images:
       - registry.svc.ci.openshift.org/ocp/builder:golang-1.12
   to: tests
 promotion:
-  to:
-  - additional_images:
-      artifacts: artifacts
-    excluded_images:
-    - machine-os-content
-    name: "4.3"
-    namespace: ocp
+  additional_images:
+    artifacts: artifacts
+  excluded_images:
+  - machine-os-content
+  name: "4.3"
+  namespace: ocp
 resources:
   '*':
     limits:

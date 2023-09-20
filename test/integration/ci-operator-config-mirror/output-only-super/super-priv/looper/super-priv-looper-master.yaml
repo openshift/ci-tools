@@ -13,9 +13,8 @@ images:
 - from: base
   to: test-image
 promotion:
-  to:
-  - namespace: ocp-private
-    tag: 4.14-priv
+  namespace: ocp-private
+  tag: 4.14-priv
 resources:
   '*':
     limits:

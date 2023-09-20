@@ -5,9 +5,8 @@ build_root:
     tag: golang-1.15
 canonical_go_repository: k8s.io/cool
 promotion:
-  to:
-  - name: "4.3"
-    namespace: ocp
+  name: "4.3"
+  namespace: ocp
 releases:
   initial:
     integration:

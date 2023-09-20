@@ -13,9 +13,8 @@ images:
 - from: base
   to: test-image
 promotion:
-  to:
-  - name: 4.5-priv
-    namespace: ocp-private
+  name: 4.5-priv
+  namespace: ocp-private
 releases:
   initial:
     integration:

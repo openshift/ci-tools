@@ -174,8 +174,8 @@ func getAllowList(data []byte) (map[string]string, error) {
 	for jobName, releaseType := range allowList {
 		if releaseType == "blocking" {
 			errs = append(errs, fmt.Errorf("release_type 'blocking' not permitted in the allow-list for %s, blocking jobs must be in the release controller configuration", jobName))
-		} else if releaseType != "informing" && releaseType != "broken" && releaseType != "generic-informing" && releaseType != "osde2e" {
-			errs = append(errs, fmt.Errorf("%s: release_type must be one of 'informing', 'broken' or 'generic-informing'", jobName))
+		} else if releaseType != "informing" && releaseType != "broken" && releaseType != "generic-informing" && releaseType != "osde2e" && releaseType != "olm" {
+			errs = append(errs, fmt.Errorf("%s: release_type must be one of 'informing', 'broken', 'generic-informing', 'osde2e' or 'olm'", jobName))
 		}
 	}
 	return allowList, utilerrors.NewAggregate(errs)
@@ -202,9 +202,9 @@ func addDashboardTab(p prowConfig.Periodic,
 	}
 
 	switch label {
-	case "informing", "blocking", "broken", "generic-informing", "osde2e":
+	case "informing", "blocking", "broken", "generic-informing", "osde2e", "olm":
 		dashboardType = label
-		if (label == "informing" || label == "osde2e") && (aggregateJobName != nil || configuredJobs[p.Name] == "blocking") {
+		if (label == "informing" || label == "osde2e" || label == "olm") && (aggregateJobName != nil || configuredJobs[p.Name] == "blocking") {
 			dashboardType = "blocking"
 		}
 	default:
@@ -240,6 +240,8 @@ func addDashboardTab(p prowConfig.Periodic,
 		current = genericDashboardFor("informing")
 	case "osde2e":
 		current = genericDashboardFor("osd")
+	case "olm":
+		current = genericDashboardFor("olm")
 	default:
 		var stream string
 		switch {

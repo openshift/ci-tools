@@ -33,15 +33,16 @@ import (
 // promotionStep will tag a full release suite
 // of images out to the configured namespace.
 type promotionStep struct {
-	name           string
-	configuration  *api.ReleaseBuildConfiguration
-	requiredImages sets.Set[string]
-	jobSpec        *api.JobSpec
-	client         kubernetes.PodClient
-	pushSecret     *coreapi.Secret
-	registry       string
-	mirrorFunc     func(source, target string, tag api.ImageStreamTagReference, date string, imageMirror map[string]string)
-	targetNameFunc func(string, api.PromotionTarget) string
+	name              string
+	configuration     *api.ReleaseBuildConfiguration
+	requiredImages    sets.Set[string]
+	jobSpec           *api.JobSpec
+	client            kubernetes.PodClient
+	pushSecret        *coreapi.Secret
+	registry          string
+	mirrorFunc        func(source, target string, tag api.ImageStreamTagReference, date string, imageMirror map[string]string)
+	targetNameFunc    func(string, api.PromotionTarget) string
+	nodeArchitectures []string
 }
 
 func (s *promotionStep) Inputs() (api.InputDefinition, error) {
@@ -102,7 +103,7 @@ func (s *promotionStep) run(ctx context.Context) error {
 		logger.WithError(err).Warn("Failed to ensure namespaces to promote to in central registry.")
 	}
 
-	if _, err := steps.RunPod(ctx, s.client, getPromotionPod(imageMirrorTarget, s.jobSpec.Namespace(), s.name)); err != nil {
+	if _, err := steps.RunPod(ctx, s.client, getPromotionPod(imageMirrorTarget, s.jobSpec.Namespace(), s.name, s.nodeArchitectures)); err != nil {
 		return fmt.Errorf("unable to run promotion pod: %w", err)
 	}
 	return nil
@@ -199,7 +200,7 @@ func getPublicImageReference(dockerImageReference, publicDockerImageRepository s
 	return strings.Replace(dockerImageReference, splits[0], publicHost, 1)
 }
 
-func getPromotionPod(imageMirrorTarget map[string]string, namespace string, name string) *coreapi.Pod {
+func getPromotionPod(imageMirrorTarget map[string]string, namespace string, name string, nodeArchitectures []string) *coreapi.Pod {
 	keys := make([]string, 0, len(imageMirrorTarget))
 	for k := range imageMirrorTarget {
 		keys = append(keys, k)
@@ -212,17 +213,28 @@ func getPromotionPod(imageMirrorTarget map[string]string, namespace string, name
 	}
 	command := []string{"/bin/sh", "-c"}
 	args := []string{fmt.Sprintf("oc image mirror --keep-manifest-list --registry-config=%s --continue-on-error=true --max-per-registry=20 %s", filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey), strings.Join(images, " "))}
+
+	image := fmt.Sprintf("%s/%s/4.12:cli", api.DomainForService(api.ServiceRegistry), "ocp")
+	nodeSelector := map[string]string{"kubernetes.io/arch": "amd64"}
+
+	archs := sets.New[string](nodeArchitectures...)
+	if !archs.Has("amd64") && archs.Has("arm64") {
+		image = fmt.Sprintf("%s/%s/4.12:cli", api.DomainForService(api.ServiceRegistry), "ocp-arm64")
+		nodeSelector = map[string]string{"kubernetes.io/arch": "arm64"}
+	}
+
 	return &coreapi.Pod{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
 		Spec: coreapi.PodSpec{
+			NodeSelector:  nodeSelector,
 			RestartPolicy: coreapi.RestartPolicyNever,
 			Containers: []coreapi.Container{
 				{
 					Name:    "promotion",
-					Image:   fmt.Sprintf("%s/%s/4.12:cli", api.DomainForService(api.ServiceRegistry), "ocp"),
+					Image:   image,
 					Command: command,
 					Args:    args,
 					VolumeMounts: []coreapi.VolumeMount{
@@ -424,16 +436,18 @@ func PromotionStep(
 	registry string,
 	mirrorFunc func(source, target string, tag api.ImageStreamTagReference, date string, imageMirror map[string]string),
 	targetNameFunc func(string, api.PromotionTarget) string,
+	nodeArchitectures []string,
 ) api.Step {
 	return &promotionStep{
-		name:           name,
-		configuration:  configuration,
-		requiredImages: requiredImages,
-		jobSpec:        jobSpec,
-		client:         client,
-		pushSecret:     pushSecret,
-		registry:       registry,
-		mirrorFunc:     mirrorFunc,
-		targetNameFunc: targetNameFunc,
+		name:              name,
+		configuration:     configuration,
+		requiredImages:    requiredImages,
+		jobSpec:           jobSpec,
+		client:            client,
+		pushSecret:        pushSecret,
+		registry:          registry,
+		mirrorFunc:        mirrorFunc,
+		targetNameFunc:    targetNameFunc,
+		nodeArchitectures: nodeArchitectures,
 	}
 }

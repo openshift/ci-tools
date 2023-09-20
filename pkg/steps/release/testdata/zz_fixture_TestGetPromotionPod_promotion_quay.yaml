@@ -20,6 +20,8 @@ spec:
     - mountPath: /etc/push-secret
       name: push-secret
       readOnly: true
+  nodeSelector:
+    kubernetes.io/arch: amd64
   restartPolicy: Never
   volumes:
   - name: push-secret

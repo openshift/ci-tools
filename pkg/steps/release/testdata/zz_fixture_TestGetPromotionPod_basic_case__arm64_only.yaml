@@ -11,7 +11,7 @@ spec:
     command:
     - /bin/sh
     - -c
-    image: registry.ci.openshift.org/ocp/4.12:cli
+    image: registry.ci.openshift.org/ocp-arm64/4.12:cli
     name: promotion
     resources: {}
     volumeMounts:
@@ -19,7 +19,7 @@ spec:
       name: push-secret
       readOnly: true
   nodeSelector:
-    kubernetes.io/arch: amd64
+    kubernetes.io/arch: arm64
   restartPolicy: Never
   volumes:
   - name: push-secret

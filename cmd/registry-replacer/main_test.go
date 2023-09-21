@@ -847,18 +847,14 @@ func TestPruneOCPBuilderReplacements(t *testing.T) {
 					}},
 				},
 				PromotionConfiguration: &api.PromotionConfiguration{
-					Targets: []api.PromotionTarget{{
-						Namespace: "ocp",
-						Tag:       "4.8",
-					}},
+					Namespace: "ocp",
+					Tag:       "4.8",
 				},
 			},
 			expected: &api.ReleaseBuildConfiguration{
 				PromotionConfiguration: &api.PromotionConfiguration{
-					Targets: []api.PromotionTarget{{
-						Namespace: "ocp",
-						Tag:       "4.8",
-					}},
+					Namespace: "ocp",
+					Tag:       "4.8",
 				},
 			},
 		},

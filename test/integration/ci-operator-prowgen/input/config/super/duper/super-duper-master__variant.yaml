@@ -13,9 +13,8 @@ images:
 - from: base
   to: test-image
 promotion:
-  to:
-  - name: other
-    namespace: ocp
+  name: other
+  namespace: ocp
 resources:
   '*':
     limits:

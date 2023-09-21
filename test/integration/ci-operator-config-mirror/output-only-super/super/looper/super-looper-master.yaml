@@ -12,10 +12,9 @@ images:
 - from: base
   to: test-image
 promotion:
-  to:
-  - namespace: ocp
-    tag: "4.14"
-    tag_by_commit: true
+  namespace: ocp
+  tag: "4.14"
+  tag_by_commit: true
 resources:
   '*':
     limits:

@@ -1363,11 +1363,9 @@ func TestFromConfig(t *testing.T) {
 		name: "promote",
 		config: api.ReleaseBuildConfiguration{
 			PromotionConfiguration: &api.PromotionConfiguration{
-				Targets: []api.PromotionTarget{{
-					Namespace: ns,
-					Name:      "name",
-					Tag:       "tag",
-				}},
+				Namespace: ns,
+				Name:      "name",
+				Tag:       "tag",
 			},
 		},
 		promote:       true,

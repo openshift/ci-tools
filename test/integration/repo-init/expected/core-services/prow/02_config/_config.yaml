@@ -3,12 +3,9 @@ deck:
   spyglass:
     gcs_browser_prefixes:
       '*': ""
-    gcs_browser_prefixes_by_bucket:
-      '*': ""
     size_limit: 100000000
   tide_update_period: 10s
 default_job_timeout: 24h0m0s
-gangway: {}
 gerrit:
   ratelimit: 5
   tick_interval: 1m0s
@@ -48,43 +45,43 @@ tide:
   max_goroutines: 20
   queries:
   - includedBranches:
-    - openshift-4.1
     - release-4.0
     - release-4.1
     - release-4.2
     - release-4.3
     - release-4.4
+    - openshift-4.1
     labels:
+    - lgtm
     - approved
     - bugzilla/valid-bug
     - cherry-pick-approved
-    - lgtm
     missingLabels:
-    - bugzilla/invalid-bug
+    - needs-rebase
     - do-not-merge/blocked-paths
     - do-not-merge/hold
-    - do-not-merge/invalid-owners-file
     - do-not-merge/work-in-progress
-    - needs-rebase
+    - do-not-merge/invalid-owners-file
+    - bugzilla/invalid-bug
     repos:
     - openshift/unsharded-b
   - excludedBranches:
-    - openshift-4.1
     - release-4.0
     - release-4.1
     - release-4.2
     - release-4.3
     - release-4.4
+    - openshift-4.1
     labels:
-    - approved
     - lgtm
+    - approved
     missingLabels:
-    - bugzilla/invalid-bug
+    - needs-rebase
     - do-not-merge/blocked-paths
     - do-not-merge/hold
-    - do-not-merge/invalid-owners-file
     - do-not-merge/work-in-progress
-    - needs-rebase
+    - do-not-merge/invalid-owners-file
+    - bugzilla/invalid-bug
     repos:
     - openshift/unsharded-a
     - openshift/unsharded-b

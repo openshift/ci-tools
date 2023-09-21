@@ -32,6 +32,7 @@ resolution.`,
 	ret.AddCommand(newCmdRegistryStep(o))
 	ret.AddCommand(newCmdRegistryChain(o))
 	ret.AddCommand(newCmdRegistryWorkflow(o))
+	ret.AddCommand(newCmdRegistryObserver(o))
 	return &ret
 }
 
@@ -42,6 +43,7 @@ func cmdRegistryListAll(o *options) error {
 	list(o.refs, "step ")
 	list(o.chains, "chain ")
 	list(o.workflows, "workflow ")
+	list(o.observers, "observers ")
 	return nil
 }
 
@@ -115,6 +117,20 @@ func newCmdRegistryCommon[R any, T any](
 	return cmd
 }
 
+func newCmdRegistryObserver(o *options) *cobra.Command {
+	return newCmdRegistryCommon(
+		o, "observer", (*map[string]api.Observer)(&o.observers),
+		&cobra.Command{Use: "observer", Short: "commands for observers"},
+		func(_ registry.Resolver, n string) (api.Observer, error) {
+			return o.observers[n], nil
+		},
+		ignoreName,
+		func(_ string, x any) error {
+			printObserverStep(x.(api.Observer).Name, 0)
+			return nil
+		})
+}
+
 func newCmdRegistryStep(o *options) *cobra.Command {
 	return newCmdRegistryCommon(
 		o, "step", (*map[string]api.LiteralTestStep)(&o.refs),
@@ -124,7 +140,8 @@ func newCmdRegistryStep(o *options) *cobra.Command {
 		},
 		ignoreName,
 		func(_ string, x any) error {
-			printTreeStep(x.(api.LiteralTestStep).As, 0)
+			step := x.(api.LiteralTestStep)
+			printTreeStep(&step, 0)
 			return nil
 		})
 }
@@ -179,20 +196,34 @@ func printTreeLevel(level uint, format string, args ...any) {
 	fmt.Printf(format, args...)
 }
 
+func printTreeWorkflowObservers(observers *api.Observers, level uint) {
+	if observers == nil {
+		return
+	}
+	for _, enable := range observers.Enable {
+		printTreeLevel(level, "enable: %s\n", enable)
+	}
+	for _, disable := range observers.Disable {
+		printTreeLevel(level, "disable: %s\n", disable)
+	}
+}
+
 func printTreeSteps(o *options, steps []api.TestStep, level uint) {
 	for _, s := range steps {
 		if s.Chain != nil {
 			printTreeChain(o, *s.Chain, level)
 		} else if s.Reference != nil {
-			printTreeStep(*s.Reference, level)
+			r := o.refs[*s.Reference]
+			printTreeStep(&r, level)
 		} else if s.LiteralTestStep != nil {
-			printTreeStep(s.LiteralTestStep.As, level)
+			printTreeStep(s.LiteralTestStep, level)
 		}
 	}
 }
 
-func printTreeStep(name string, level uint) {
-	printTreeLevel(level, "step: %s\n", name)
+func printTreeStep(s *api.LiteralTestStep, level uint) {
+	printTreeLevel(level, "step: %s\n", s.As)
+	printTreeStepObservers(s.Observers, level+1)
 }
 
 func printTreeChain(o *options, name string, level uint) {
@@ -209,4 +240,16 @@ func printTreeWorkflow(o *options, name string, w test, level uint) {
 	printTreeSteps(o, w.Test, level+1)
 	fmt.Println("post:")
 	printTreeSteps(o, w.Post, level+1)
+	fmt.Println("observers:")
+	printTreeWorkflowObservers(w.Observers, level+1)
+}
+
+func printTreeStepObservers(observers []string, level uint) {
+	for _, observer := range observers {
+		printTreeLevel(level, "observer: %s\n", observer)
+	}
+}
+
+func printObserverStep(name string, level uint) {
+	printTreeLevel(level, "observer: %s\n", name)
 }

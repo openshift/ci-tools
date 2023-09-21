@@ -20,6 +20,7 @@ type options struct {
 	chains    registry.ChainByName
 	workflows registry.WorkflowByName
 	resolver  registry.Resolver
+	observers registry.ObserverByName
 }
 
 func NewCommand() *cobra.Command {

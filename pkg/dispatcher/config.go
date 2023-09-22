@@ -117,9 +117,36 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 		cluster := api.ClusterVSphere
 		// once the vsphere build cluster is removed, this logic will also be removed and the vsphere02 cluster will be
 		// the only vsphere cluster used.
+		/*
+
+			ClusterProfileVSphere2              ClusterProfile = "vsphere-2"
+			ClusterProfileVSphere8Vpn           ClusterProfile = "vsphere-8-vpn"
+			ClusterProfileVSphereDis2           ClusterProfile = "vsphere-dis-2"
+			ClusterProfileVSphereClusterbot2    ClusterProfile = "vsphere-clusterbot-2"
+			ClusterProfileVSpherePlatformNone2  ClusterProfile = "vsphere-platform-none-2"
+			ClusterProfileVSphereMultizone2     ClusterProfile = "vsphere-multizone-2"
+			ClusterProfileVSphereConnected2     ClusterProfile = "vsphere-connected-2"
+
+			ClusterProfileVSphere               ClusterProfile = "vsphere"
+			ClusterProfileVSphere8              ClusterProfile = "vsphere-8"
+			ClusterProfileVSphereDis            ClusterProfile = "vsphere-dis"
+			ClusterProfileVSphereClusterbot     ClusterProfile = "vsphere-clusterbot"
+			ClusterProfileVSphereIBM7           ClusterProfile = "vsphere-ibm-7"
+			ClusterProfileVSpherePlatformNone   ClusterProfile = "vsphere-platform-none"
+			ClusterProfileVSphereMultizone      ClusterProfile = "vsphere-multizone"
+			ClusterProfileVSphereConnected      ClusterProfile = "vsphere-connected"
+		*/
+
 		if clusterProfile, ok := jobBase.Labels[api.CloudClusterProfileLabel]; ok {
 			switch clusterProfile {
-			case string(api.ClusterProfileVSphere8Vpn):
+			case string(api.ClusterProfileVSphere8Vpn),
+				string(api.ClusterProfileVSphere2),
+				string(api.ClusterProfileVSphereMultizone2),
+				string(api.ClusterProfileVSphereConnected2),
+				string(api.ClusterProfileVSphereClusterbot2),
+				string(api.ClusterProfileVSphereDis2),
+				string(api.ClusterProfileVSpherePlatformNone2):
+
 				cluster = api.ClusterVSphere02
 			}
 		}

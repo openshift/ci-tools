@@ -147,7 +147,6 @@ func (r *registry) resolveTest(
 	post, errs := r.process(config.Post, sets.New[string](), stack)
 	expandedFlow.Post = append(expandedFlow.Post, post...)
 	resolveErrors = append(resolveErrors, errs...)
-	resolveErrors = append(resolveErrors, stack.checkUnused(&stack.records[0], overridden, r)...)
 
 	observerNames := sets.New[string]()
 	for _, step := range append(pre, append(test, post...)...) {
@@ -156,15 +155,13 @@ func (r *registry) resolveTest(
 	if config.Observers != nil {
 		observerNames = observerNames.Union(sets.New[string](config.Observers.Enable...)).Delete(config.Observers.Disable...)
 	}
-	var observers []api.Observer
-	for _, name := range sets.List(observerNames) {
-		observer, exists := r.observersByName[name]
-		if !exists {
-			resolveErrors = append(resolveErrors, fmt.Errorf("observer %q is referenced but no such observer is configured", name))
-		}
-		observers = append(observers, observer)
-	}
+
+	observers, errs := r.processObservers(observerNames, stack)
+	resolveErrors = append(resolveErrors, errs...)
 	expandedFlow.Observers = observers
+
+	resolveErrors = append(resolveErrors, stack.checkUnused(&stack.records[0], overridden, r)...)
+
 	if resolveErrors != nil {
 		return api.MultiStageTestConfigurationLiteral{}, utilerrors.NewAggregate(resolveErrors)
 	}
@@ -327,6 +324,29 @@ func (r *registry) processStep(step *api.TestStep, seen sets.Set[string], stack 
 		ret.Dependencies = deps
 	}
 	return ret, errs
+}
+
+func (r *registry) processObservers(observerNames sets.Set[string], stack stack) (ret []api.Observer, errs []error) {
+	for _, name := range sets.List(observerNames) {
+		observer, exists := r.observersByName[name]
+		if !exists {
+			errs = append(errs, fmt.Errorf("observer %q is referenced but no such observer is configured", name))
+		}
+		if observer.Environment != nil {
+			env := make([]api.StepParameter, 0, len(observer.Environment))
+			for _, e := range observer.Environment {
+				if v := stack.resolve(e.Name); v != nil {
+					e.Default = v
+				} else if e.Default == nil && !stack.partial {
+					errs = append(errs, stack.errorf("observer/%s: unresolved parameter: %s", observer.Name, e.Name))
+				}
+				env = append(env, e)
+			}
+			observer.Environment = env
+		}
+		ret = append(ret, observer)
+	}
+	return
 }
 
 // iterateSteps calls a function for each leaf child of a step.

@@ -900,6 +900,8 @@ type Observer struct {
 	// GracePeriod is how long the we will wait after sending SIGINT to send
 	// SIGKILL when aborting this observer.
 	GracePeriod *prowv1.Duration `json:"grace_period,omitempty"`
+	// Environment has the values of parameters for the observer.
+	Environment []StepParameter `json:"env,omitempty"`
 }
 
 // Observers is a configuration for which observer pods should and should not

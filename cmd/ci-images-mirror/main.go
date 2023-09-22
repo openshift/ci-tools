@@ -67,7 +67,7 @@ func newOpts() *options {
 	fs.StringVar(&opts.leaderElectionNamespace, "leader-election-namespace", "ci", "The namespace to use for leader election")
 	fs.StringVar(&opts.leaderElectionSuffix, "leader-election-suffix", "", "Suffix for the leader election lock. Useful for local testing. If set, --dry-run must be set as well")
 	fs.Var(&opts.enabledControllers, "enable-controller", fmt.Sprintf("Enabled controllers. Available controllers are: %v. Can be specified multiple times. Defaults to %v", allControllers.UnsortedList(), opts.enabledControllers.Strings()))
-	fs.BoolVar(&opts.dryRun, "dry-run", false, "Whether to run the controller-manager with dry-run")
+	fs.BoolVar(&opts.dryRun, "dry-run", false, "Whether to run the controller-manager and the mirroring with dry-run")
 	fs.StringVar(&opts.releaseRepoGitSyncPath, "release-repo-git-sync-path", "", "Path to release repository dir")
 	fs.StringVar(&opts.registryConfig, "registry-config", "", "Path to the file of registry credentials")
 	fs.Var(&opts.quayIOCIImagesDistributorOptions.additionalImageStreamTagsRaw, "quayIOCIImagesDistributorOptions.additional-image-stream-tag", "An imagestreamtag that will be distributed even if no test explicitly references it. It must be in namespace/name:tag format (e.G `ci/clonerefs:latest`). Can be passed multiple times.")
@@ -107,6 +107,7 @@ func (o *options) validate() error {
 func main() {
 	logrusutil.ComponentInit()
 	controllerruntime.SetLogger(logrusr.New(logrus.StandardLogger()))
+	logrus.SetLevel(logrus.TraceLevel)
 	opts := newOpts()
 	if err := opts.validate(); err != nil {
 		logrus.WithError(err).Fatal("Failed to validate options")
@@ -178,6 +179,15 @@ func main() {
 	}
 	interrupts.ListenAndServe(server, opts.gracePeriod)
 
+	ocClientFactory := quayiociimagesdistributor.NewClientFactory()
+	quayIOImageHelper, err := ocClientFactory.NewClient()
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to create QuayIOImageHelper")
+	}
+
+	mirrorConsumerController := quayiociimagesdistributor.NewMirrorConsumer(mirrorStore, quayIOImageHelper, opts.registryConfig, opts.dryRun)
+	interrupts.Run(func(_ context.Context) { execute(mirrorConsumerController) })
+
 	if opts.enabledControllersSet.Has(quayiociimagesdistributor.ControllerName) {
 		if err := quayiociimagesdistributor.AddToManager(mgr,
 			ciOPConfigAgent,
@@ -185,6 +195,7 @@ func main() {
 			sets.New[string](opts.quayIOCIImagesDistributorOptions.additionalImageStreamTagsRaw.Strings()...),
 			sets.New[string](opts.quayIOCIImagesDistributorOptions.additionalImageStreamsRaw.Strings()...),
 			sets.New[string](opts.quayIOCIImagesDistributorOptions.additionalImageStreamNamespacesRaw.Strings()...),
+			quayIOImageHelper,
 			mirrorStore,
 			opts.registryConfig); err != nil {
 			logrus.WithField("name", quayiociimagesdistributor.ControllerName).WithError(err).Fatal("Failed to construct the controller")
@@ -265,5 +276,11 @@ func mirrors(action string, n int, ms quayiociimagesdistributor.MirrorStore) (an
 		return summarize, nil
 	default:
 		return nil, fmt.Errorf("invalid action: %s", action)
+	}
+}
+
+func execute(c *quayiociimagesdistributor.MirrorConsumerController) {
+	if err := c.Run(); err != nil {
+		logrus.WithError(err).Error("Error running")
 	}
 }

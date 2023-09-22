@@ -14,6 +14,8 @@ type OCImageMirrorOptions struct {
 	RegistryConfig  string
 	ContinueOnError bool
 	MaxPerRegistry  int
+	BatchSize       int
+	DryRun          bool
 }
 
 type OCImageInfoOptions struct {
@@ -68,7 +70,7 @@ func newOCExecutor(logger *logrus.Entry) (executor, error) {
 
 type OCClient interface {
 	ImageInfo(image string, options OCImageInfoOptions) (ImageInfo, error)
-	ImageMirror(src, dst string, options OCImageMirrorOptions) error
+	ImageMirror(pairs []string, options OCImageMirrorOptions) error
 }
 
 type clientFactory struct {
@@ -84,7 +86,8 @@ type ClientFactoryOpts struct {
 
 type ClientFactoryOpt func(*ClientFactoryOpts)
 
-func newClientFactory(opts ...ClientFactoryOpt) clientFactory {
+// NewClientFactory return a client factory for the images from quay.io
+func NewClientFactory(opts ...ClientFactoryOpt) clientFactory {
 	o := ClientFactoryOpts{}
 	for _, opt := range opts {
 		opt(&o)
@@ -96,6 +99,7 @@ func newClientFactory(opts ...ClientFactoryOpt) clientFactory {
 	}
 }
 
+// NewClient return a client for the images from quay.io
 func (c *clientFactory) NewClient() (OCClient, error) {
 	return c.bootstrapClients()
 }
@@ -114,7 +118,19 @@ func (c *clientFactory) bootstrapClients() (OCClient, error) {
 }
 
 // ImageMirror mirror images from one image repository to another.
-func (c *client) ImageMirror(src, dst string, options OCImageMirrorOptions) error {
+func (c *client) ImageMirror(pairs []string, options OCImageMirrorOptions) error {
+	if len(pairs) == 0 {
+		return nil
+	}
+	logger := c.logger.WithField("pairs", pairs)
+	logger.Info("Mirroring ...")
+	args := []string{"image", "mirror", "--keep-manifest-list", fmt.Sprintf("--registry-config=%s", options.RegistryConfig),
+		fmt.Sprintf("--continue-on-error=%t", options.ContinueOnError), fmt.Sprintf("--max-per-registry=%d", options.MaxPerRegistry),
+		fmt.Sprintf("--dry-run=%t", options.DryRun)}
+	if _, err := c.executor.Run(append(args, pairs...)...); err != nil {
+		return err
+	}
+	logger.Info("Mirrored successfully")
 	return nil
 }
 

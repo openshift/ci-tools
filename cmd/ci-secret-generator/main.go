@@ -13,10 +13,12 @@ import (
 	"github.com/sirupsen/logrus"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/logrusutil"
 
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
+	"github.com/openshift/ci-tools/pkg/prowconfigutils"
 	"github.com/openshift/ci-tools/pkg/secrets"
 )
 
@@ -44,6 +46,7 @@ type options struct {
 	validate            bool
 	validateOnly        bool
 	maxConcurrency      int
+	disabledClusters    sets.Set[string]
 
 	config          secretgenerator.Config
 	bootstrapConfig secretbootstrap.Config
@@ -104,6 +107,12 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
 		}
 	}
 
+	prowDisabledClustersList, err := prowconfigutils.ProwDisabledClusters(nil)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to get Prow disable clusters")
+	}
+	o.disabledClusters = sets.New[string](prowDisabledClustersList...)
+
 	return o.validateConfig()
 }
 
@@ -122,10 +131,17 @@ func (o *options) validateConfig() error {
 				return cmdEmptyErr(i, fieldIndex, "fields")
 			}
 		}
+		var hasCluster bool
 		for paramName, params := range item.Params {
 			if len(params) == 0 {
 				return fmt.Errorf("at least one argument required for param: %s, itemName: %s", paramName, item.ItemName)
 			}
+			if paramName == "cluster" {
+				hasCluster = true
+			}
+		}
+		if !hasCluster {
+			return fmt.Errorf("failed to find params['cluster'] in the %d item with name %q", i, item.ItemName)
 		}
 	}
 	return nil
@@ -177,7 +193,7 @@ func fmtExecCmdErr(action, cmd string, wrappedErr error, stdout, stderr []byte, 
 		stdout, stderrPreamble, stderr)
 }
 
-func updateSecrets(config secretgenerator.Config, client secrets.Client) error {
+func updateSecrets(config secretgenerator.Config, client secrets.Client, disabledClusters sets.Set[string]) error {
 	var errs []error
 	for _, item := range config {
 		logger := logrus.WithField("item", item.ItemName)
@@ -185,7 +201,12 @@ func updateSecrets(config secretgenerator.Config, client secrets.Client) error {
 			logger = logger.WithFields(logrus.Fields{
 				"field":   field.Name,
 				"command": field.Cmd,
+				"cluster": field.Cluster,
 			})
+			if disabledClusters.Has(field.Cluster) {
+				logger.Info("ignored field for disabled cluster")
+				continue
+			}
 			logger.Info("processing field")
 			out, err := executeCommand(field.Cmd)
 			if err != nil {
@@ -279,7 +300,7 @@ func generateSecrets(o options, censor *secrets.DynamicCensor) (errs []error) {
 		}
 	}
 
-	if err := updateSecrets(o.config, client); err != nil {
+	if err := updateSecrets(o.config, client, o.disabledClusters); err != nil {
 		errs = append(errs, fmt.Errorf("failed to update secrets: %w", err))
 	}
 

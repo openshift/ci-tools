@@ -117,9 +117,17 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 		cluster := api.ClusterVSphere
 		// once the vsphere build cluster is removed, this logic will also be removed and the vsphere02 cluster will be
 		// the only vsphere cluster used.
+
 		if clusterProfile, ok := jobBase.Labels[api.CloudClusterProfileLabel]; ok {
 			switch clusterProfile {
-			case string(api.ClusterProfileVSphere8Vpn):
+			case string(api.ClusterProfileVSphere8Vpn),
+				string(api.ClusterProfileVSphere2),
+				string(api.ClusterProfileVSphereMultizone2),
+				string(api.ClusterProfileVSphereConnected2),
+				string(api.ClusterProfileVSphereClusterbot2),
+				string(api.ClusterProfileVSphereDis2),
+				string(api.ClusterProfileVSpherePlatformNone2):
+
 				cluster = api.ClusterVSphere02
 			}
 		}

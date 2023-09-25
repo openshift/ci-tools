@@ -532,6 +532,14 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            observers:\n" +
 	"                - # Commands is the command(s) that will be run inside the image.\n" +
 	"                  commands: ' '\n" +
+	"                  # Environment has the values of parameters for the observer.\n" +
+	"                  env:\n" +
+	"                    - # Default if not set, optional, makes the parameter not required if set.\n" +
+	"                      default: \"\"\n" +
+	"                      # Documentation is a textual description of the parameter.\n" +
+	"                      documentation: ' '\n" +
+	"                      # Name of the environment variable.\n" +
+	"                      name: ' '\n" +
 	"                  # From is the container image that will be used for this observer.\n" +
 	"                  from: ' '\n" +
 	"                  # FromImage is a literal ImageStreamTag reference to use for this observer.\n" +
@@ -1309,6 +1317,14 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        observers:\n" +
 	"            - # Commands is the command(s) that will be run inside the image.\n" +
 	"              commands: ' '\n" +
+	"              # Environment has the values of parameters for the observer.\n" +
+	"              env:\n" +
+	"                - # Default if not set, optional, makes the parameter not required if set.\n" +
+	"                  default: \"\"\n" +
+	"                  # Documentation is a textual description of the parameter.\n" +
+	"                  documentation: ' '\n" +
+	"                  # Name of the environment variable.\n" +
+	"                  name: ' '\n" +
 	"              # From is the container image that will be used for this observer.\n" +
 	"              from: ' '\n" +
 	"              # FromImage is a literal ImageStreamTag reference to use for this observer.\n" +

@@ -42,6 +42,7 @@ func (s *multiStageTestStep) generateObservers(
 			Resources:   observer.Resources,
 			Timeout:     observer.Timeout,
 			GracePeriod: observer.GracePeriod,
+			Environment: observer.Environment,
 		})
 	}
 	pods, _, err := s.generatePods(adapted, nil, secretVolumes, secretVolumeMounts, genPodOpts)

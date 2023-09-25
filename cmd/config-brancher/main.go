@@ -133,9 +133,9 @@ func generateBranchedConfigs(currentRelease, bumpRelease string, futureReleases 
 
 		// the new config will point to the future release
 		updateRelease(&futureConfig, futureRelease)
-		// we cannot have two configs promoting to the same output, so
-		// we need to make sure the release branch config is disabled
-		futureConfig.PromotionConfiguration.Disabled = futureRelease == devRelease
+
+		updatePromotion(&currentConfig, &futureConfig, currentRelease, futureRelease, devRelease)
+
 		// users can reference the release streams via build roots or
 		// input images, so we need to update those, too
 		updateImages(&futureConfig, devRelease, futureRelease)
@@ -158,6 +158,31 @@ func removePeriodics(tests *[]api.TestStepConfiguration) {
 			*tests = append((*tests)[:i], (*tests)[i+1:]...)
 		}
 	}
+}
+
+func updatePromotion(currentConfig, futureConfig *api.ReleaseBuildConfiguration, currentRelease, futureRelease, devRelease string) {
+	if futureConfig.PromotionConfiguration == nil {
+		return
+	}
+
+	// we cannot have two configs promoting to the same output, so
+	// we need to make sure the release branch config is disabled
+	futureConfig.PromotionConfiguration.Disabled = futureRelease == devRelease
+
+	if currentConfig.PromotionConfiguration.Targets == nil {
+		return
+	}
+
+	// filter and upgrade .promotion.to[] releases that promote to the current release
+	newTargets := make([]api.PromotionTarget, 0, len(currentConfig.PromotionConfiguration.Targets))
+	for _, target := range currentConfig.PromotionConfiguration.Targets {
+		if target.Name == currentRelease {
+			target.Name = futureRelease
+			target.Disabled = futureRelease == devRelease
+			newTargets = append(newTargets, target)
+		}
+	}
+	futureConfig.PromotionConfiguration.Targets = newTargets
 }
 
 // updateRelease updates the release that is promoted to and that

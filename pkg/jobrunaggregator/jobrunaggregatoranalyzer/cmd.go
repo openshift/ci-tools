@@ -28,6 +28,9 @@ type JobRunsAnalyzerFlags struct {
 	Timeout                     time.Duration
 	EstimatedJobStartTimeString string
 	JobStateQuerySource         string
+
+	StaticRunInfoPath string
+	StaticRunInfoJSON string
 }
 
 func NewJobRunsAnalyzerFlags() *JobRunsAnalyzerFlags {
@@ -55,6 +58,11 @@ func (f *JobRunsAnalyzerFlags) BindFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&f.Timeout, "timeout", f.Timeout, "Time to wait for aggregation to complete.")
 	fs.StringVar(&f.EstimatedJobStartTimeString, "job-start-time", f.EstimatedJobStartTimeString, fmt.Sprintf("Start time in RFC822Z: %s", kubeTimeSerializationLayout))
 	fs.StringVar(&f.JobStateQuerySource, "query-source", jobrunaggregatorlib.JobStateQuerySourceBigQuery, "The source from which job states are found. It is either bigquery or cluster")
+
+	// optional for local use or potentially gangway results
+	fs.StringVar(&f.StaticRunInfoPath, "staticRunInfoPath", f.StaticRunInfoPath, "The optional path to a file containing JSON formatted JobRunInfo array used for aggregated analysis")
+	fs.StringVar(&f.StaticRunInfoJSON, "staticRunInfoJSON", f.StaticRunInfoJSON, "The optional JSON formatted string of JobRunInfo array used for aggregated analysis")
+
 }
 
 func NewJobRunsAnalyzerCommand() *cobra.Command {
@@ -147,6 +155,14 @@ func (f *JobRunsAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunAggregator
 		return nil, err
 	}
 
+	var staticJobRunInfo []JobRunInfo
+	if len(f.StaticRunInfoJSON) > 0 || len(f.StaticRunInfoPath) > 0 {
+		staticJobRunInfo, err = GetStaticJobRunInfo(f.StaticRunInfoJSON, f.StaticRunInfoPath)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	var jobRunLocator jobrunaggregatorlib.JobRunLocator
 	var prowJobMatcherFunc jobrunaggregatorlib.ProwJobMatcherFunc
 	if len(f.PayloadTag) > 0 {
@@ -195,5 +211,6 @@ func (f *JobRunsAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunAggregator
 		prowJobClient:       prowJobClient,
 		jobStateQuerySource: f.JobStateQuerySource,
 		prowJobMatcherFunc:  prowJobMatcherFunc,
+		staticJobRunInfo:    staticJobRunInfo,
 	}, nil
 }

@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowjobclientset "k8s.io/test-infra/prow/client/clientset/versioned"
 
+	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatoranalyzer"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 )
 
@@ -97,6 +98,9 @@ type JobRunsTestCaseAnalyzerFlags struct {
 	ExcludeJobNames             []string
 	IncludeJobNames             []string
 	JobStateQuerySource         string
+
+	StaticRunInfoPath string
+	StaticRunInfoJSON string
 }
 
 func NewJobRunsTestCaseAnalyzerFlags() *JobRunsTestCaseAnalyzerFlags {
@@ -134,6 +138,11 @@ func (f *JobRunsTestCaseAnalyzerFlags) BindFlags(fs *pflag.FlagSet) {
 	fs.StringArrayVar(&f.ExcludeJobNames, "exclude-job-names", f.ExcludeJobNames, "Applied only when --explicit-gcs-prefixes is not specified.  The flag can be specified multiple times to create a list of substrings used to filter JobNames from the analysis")
 	fs.StringArrayVar(&f.IncludeJobNames, "include-job-names", f.IncludeJobNames, "Applied only when --explicit-gcs-prefixes is not specified.  The flag can be specified multiple times to create a list of substrings to include in matching JobNames for analysis")
 	fs.StringVar(&f.JobStateQuerySource, "query-source", jobrunaggregatorlib.JobStateQuerySourceBigQuery, "The source from which job states are found. It is either bigquery or cluster")
+
+	// optional for local use or potentially gangway results
+	fs.StringVar(&f.StaticRunInfoPath, "staticRunInfoPath", f.StaticRunInfoPath, "The optional path to a file containing JSON formatted JobRunInfo array used for aggregated analysis")
+	fs.StringVar(&f.StaticRunInfoJSON, "staticRunInfoJSON", f.StaticRunInfoJSON, "The optional JSON formatted string of JobRunInfo array used for aggregated analysis")
+
 }
 
 func NewJobRunsTestCaseAnalyzerCommand() *cobra.Command {
@@ -325,6 +334,14 @@ func (f *JobRunsTestCaseAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunTe
 
 	jobGetter := NewTestCaseAnalyzerJobGetter(f.Platform, f.Infrastructure, f.Network, f.testNameSuffix(), f.ExcludeJobNames, f.IncludeJobNames, &f.JobGCSPrefixes, ciDataClient)
 
+	var staticJobRunInfo []jobrunaggregatoranalyzer.JobRunInfo
+	if len(f.StaticRunInfoJSON) > 0 || len(f.StaticRunInfoPath) > 0 {
+		staticJobRunInfo, err = jobrunaggregatoranalyzer.GetStaticJobRunInfo(f.StaticRunInfoJSON, f.StaticRunInfoPath)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	var testIdentifierOpt testIdentifier
 	switch f.TestGroup {
 	case installTestGroup:
@@ -358,5 +375,7 @@ func (f *JobRunsTestCaseAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunTe
 		prowJobClient:       prowJobClient,
 		jobStateQuerySource: f.JobStateQuerySource,
 		prowJobMatcherFunc:  jobGetter.shouldAggregateJob,
+
+		staticJobRunInfo: staticJobRunInfo,
 	}, nil
 }

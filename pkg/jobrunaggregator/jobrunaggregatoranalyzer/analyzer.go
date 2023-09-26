@@ -2,6 +2,7 @@ package jobrunaggregatoranalyzer
 
 import (
 	"context"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"os"
@@ -45,10 +46,56 @@ type JobRunAggregatorAnalyzerOptions struct {
 	prowJobClient       *prowjobclientset.Clientset
 	jobStateQuerySource string
 	prowJobMatcherFunc  jobrunaggregatorlib.ProwJobMatcherFunc
+
+	staticJobRunInfo []JobRunInfo
+}
+
+func GetStaticJobRunInfo(staticRunInfoJSON, staticRunInfoPath string) ([]JobRunInfo, error) {
+	var jsonBytes []byte
+	var jobRuns []JobRunInfo
+	var err error
+	if len(staticRunInfoJSON) == 0 {
+		jsonBytes, err = os.ReadFile(staticRunInfoPath)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		jsonBytes = []byte(staticRunInfoJSON)
+	}
+
+	if err = json.Unmarshal(jsonBytes, &jobRuns); err != nil {
+		return nil, err
+	}
+
+	return jobRuns, nil
+}
+
+func (o *JobRunAggregatorAnalyzerOptions) loadStaticJobRuns(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error) {
+	var jobRuns []jobrunaggregatorapi.JobRunInfo
+	for _, job := range o.staticJobRunInfo {
+		// in this context passing the job name is optional for the
+		// static job runs but if it is present then check to make sure it matches
+		if len(job.JobName) > 0 && strings.Compare(job.JobName, o.jobName) != 0 {
+			continue
+		}
+		jobRun, err := o.jobRunLocator.FindJob(ctx, job.JobRunID)
+		if err != nil {
+			return nil, err
+		}
+		if jobRun != nil {
+			jobRuns = append(jobRuns, jobRun)
+		}
+	}
+	return jobRuns, nil
 }
 
 // GetRelatedJobRuns gets all related job runs for analysis
 func (o *JobRunAggregatorAnalyzerOptions) GetRelatedJobRuns(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error) {
+	// allow for the list of ids to be passed in via JSON
+	if len(o.staticJobRunInfo) > 0 {
+		return o.loadStaticJobRuns(ctx)
+	}
+
 	errorsInARow := 0
 	for {
 		jobsToAggregate, err := o.jobRunLocator.FindRelatedJobs(ctx)

@@ -534,6 +534,7 @@ periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-azure-ovn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-azure-ovn-heterogeneous
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-compact-ovn-remote-libvirt-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-compact-ovn-remote-libvirt-s390x
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-gcp-ovn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-ibmcloud-ovn-multi-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-ibmcloud-ovn-multi-s390x
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-ovn-ppc64le-powervs

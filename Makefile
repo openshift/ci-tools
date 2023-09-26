@@ -459,10 +459,9 @@ $(TMPDIR)/.cluster-display-kubeconfig-dir:
 	rm -rf $(TMPDIR)/.cluster-display-kubeconfig-dir
 	mkdir -p $(TMPDIR)/.cluster-display-kubeconfig-dir
 	oc --context app.ci --namespace ci extract secret/cluster-display --confirm --to=$(TMPDIR)/.cluster-display-kubeconfig-dir
-	oc --context app.ci --namespace ci serviceaccounts create-kubeconfig cluster-display | sed 's/cluster-display/app.ci/g' > $(TMPDIR)/.cluster-display-kubeconfig-dir/sa.cluster-display.app.ci.config
 
 cluster-display: $(TMPDIR)/.cluster-display-kubeconfig-dir
-	@go run  ./cmd/cluster-display --kubeconfig-dir=$(TMPDIR)/.cluster-display-kubeconfig-dir
+	@go run  ./cmd/cluster-display --kubeconfig-dir=$(TMPDIR)/.cluster-display-kubeconfig-dir --kubeconfig-suffix=config
 .PHONY: cluster-display
 
 analyse-deps: cmd/vault-secret-collection-manager/index.js

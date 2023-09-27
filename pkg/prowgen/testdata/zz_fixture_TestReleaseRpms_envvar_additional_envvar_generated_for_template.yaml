@@ -32,6 +32,9 @@ containers:
   - mountPath: /usr/local/tgt
     name: job-definition
     subPath: template.yaml
+  - mountPath: /secrets/manifest-tool
+    name: manifest-tool-local-pusher
+    readOnly: true
   - mountPath: /etc/pull-secret
     name: pull-secret
     readOnly: true
@@ -46,6 +49,9 @@ volumes:
 - configMap:
     name: prow-job-template
   name: job-definition
+- name: manifest-tool-local-pusher
+  secret:
+    secretName: manifest-tool-local-pusher
 - name: pull-secret
   secret:
     secretName: registry-pull-credentials

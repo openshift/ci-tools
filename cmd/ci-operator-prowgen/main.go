@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	prowconfig "k8s.io/test-infra/prow/config"
+	"k8s.io/test-infra/prow/flagutil"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
@@ -20,7 +21,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/prowgen"
 	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/util"
-	"k8s.io/test-infra/prow/flagutil"
 )
 
 type options struct {

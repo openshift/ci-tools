@@ -5,11 +5,11 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
 
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
-	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 func newJobCommand(o *options) *cobra.Command {

@@ -234,13 +234,33 @@ func loadWorkflow(bytes []byte) (string, string, api.MultiStageTestConfiguration
 	return workflow.Workflow.As, workflow.Workflow.Documentation, workflow.Workflow.Steps, nil
 }
 
-func ClusterProfilesConfig(configPath string, profiles *api.ClusterProfilesList) error {
+func ClusterProfilesConfig(configPath string) (api.ClusterProfilesList, error) {
 	configContents, err := os.ReadFile(configPath)
 	if err != nil {
-		return fmt.Errorf("failed to read cluster profiles config: %w", err)
+		return nil, fmt.Errorf("failed to read cluster profiles config: %w", err)
 	}
-	if err = yaml.Unmarshal(configContents, profiles); err != nil {
-		return fmt.Errorf("failed to unmarshall cluster profiles config: %w", err)
+
+	var profileOwnersList api.ClusterProfilesList
+	if err = yaml.Unmarshal(configContents, &profileOwnersList); err != nil {
+		return nil, fmt.Errorf("failed to unmarshall cluster profiles config: %w", err)
 	}
-	return nil
+
+	// The following code can be erased once profiles are completely moved
+	// from code in ci-tools to the config file in openshift/release
+	profileOwnersMap := make(map[api.ClusterProfile]api.ClusterProfileDetails)
+	for _, p := range profileOwnersList {
+		profileOwnersMap[p.Profile] = p
+	}
+
+	var mergedList api.ClusterProfilesList
+	for _, profileName := range api.ClusterProfiles() {
+		profile, found := profileOwnersMap[profileName]
+		if found {
+			mergedList = append(mergedList, profile)
+		} else {
+			mergedList = append(mergedList, api.ClusterProfileDetails{Profile: profileName})
+		}
+	}
+
+	return mergedList, nil
 }

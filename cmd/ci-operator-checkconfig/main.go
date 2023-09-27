@@ -53,9 +53,11 @@ func (o *options) parse() error {
 		return fmt.Errorf("failed to load registry: %w", err)
 	}
 
-	if err := load.ClusterProfilesConfig(profilesConfigPath, &o.clusterProfiles); err != nil {
+	profiles, err := load.ClusterProfilesConfig(profilesConfigPath)
+	if err != nil {
 		return fmt.Errorf("failed to load cluster profile config: %w", err)
 	}
+	o.clusterProfiles = profiles
 
 	ciOPConfigAgent, err := agents.NewConfigAgent(o.ConfigDir, nil, agents.WithOrg(o.Org), agents.WithRepo(o.Repo))
 	if err != nil {

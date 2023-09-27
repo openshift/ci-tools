@@ -84,6 +84,21 @@ else
   echo "Running cluster-init in update mode in openshift/release does not result in changes, no followups needed"
 fi
 
+log "Executing config-brancher"
+if ! config-brancher \
+  --config-dir "${clonedir}/ci-operator/config" \
+  --current-release 4.15 \
+  --future-release 4.16 \
+  --skip-periodics \
+  --confirm
+then
+  echo "ERROR: Running config-brancher in $org/release results in a failure"
+  echo "ERROR: To avoid breaking $org/release for everyone you should review the changes here"
+  failure=1
+else
+  echo "Running config-brancher in $org/release does not result in a failure, no changes needed"
+fi
+
 popd
 
 exit $failure

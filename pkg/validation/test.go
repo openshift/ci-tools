@@ -416,9 +416,11 @@ func validateTestStepDependencies(config *api.ReleaseBuildConfiguration) []error
 }
 
 func (v *Validator) validateClusterProfile(fieldRoot string, p api.ClusterProfile, metadata *api.Metadata) []error {
-	//TODO: add the actual ownership check here using args p and metadata
 	if v.validClusterProfiles != nil {
 		if _, ok := v.validClusterProfiles[p]; ok {
+			if err := verifyClusterProfileOwnership(v.validClusterProfiles[p], metadata); err != nil {
+				return []error{err}
+			}
 			return nil
 		}
 	} else {
@@ -429,6 +431,35 @@ func (v *Validator) validateClusterProfile(fieldRoot string, p api.ClusterProfil
 		}
 	}
 	return []error{fmt.Errorf("%s: invalid cluster profile %q", fieldRoot, p)}
+}
+
+// verifyClusterProfileOwnership checks if metadata's org and repo match those in the profile,
+// verifying if it's one of the owners of the profile.
+func verifyClusterProfileOwnership(profile api.ClusterProfileDetails, m *api.Metadata) error {
+	if m == nil || m.Org == "" {
+		return fmt.Errorf("can't do ownership check, metadata not defined")
+	}
+	if profile.Owners == nil || len(profile.Owners) == 0 {
+		return nil
+	}
+	for _, owner := range profile.Owners {
+		if owner.Org != m.Org {
+			continue
+		}
+		if owner.Repos == nil || contains(owner.Repos, m.Repo) {
+			return nil
+		}
+	}
+	return fmt.Errorf("%s/%s is not an owner of the cluster profile: %q", m.Org, m.Repo, profile.Profile)
+}
+
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }
 
 func searchForTestDuplicates(tests []api.TestStepConfiguration) []error {

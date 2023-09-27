@@ -23,6 +23,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/util"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 type options struct {
@@ -97,7 +98,7 @@ func main() {
 	}
 
 	var foundFailures bool
-	if err := jobconfig.OperateOnJobConfigDir(path.Join(o.releaseRepoDir, config.JobConfigInRepoPath), func(jobConfig *prowconfig.JobConfig, info *jobconfig.Info) error {
+	if err := jobconfig.OperateOnJobConfigDir(path.Join(o.releaseRepoDir, config.JobConfigInRepoPath), make(sets.Set[string]), func(jobConfig *prowconfig.JobConfig, info *jobconfig.Info) error {
 		// we know the path is relative, but there is no API to declare that
 		relPath, _ := filepath.Rel(o.releaseRepoDir, info.Filename)
 		pathsToCheck = append(pathsToCheck, pathWithConfig{path: relPath, configMap: info.ConfigMapName()})

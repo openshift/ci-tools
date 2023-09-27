@@ -414,7 +414,7 @@ func TestOperateOnJobConfigSubdirPaths(t *testing.T) {
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			var ret []string
-			if err := tc.opt.OperateOnJobConfigSubdirPaths(dir, tc.sub, func(info *jc.Info) error {
+			if err := tc.opt.OperateOnJobConfigSubdirPaths(dir, tc.sub, make(sets.Set[string]), func(info *jc.Info) error {
 				ret = append(ret, strings.TrimPrefix(info.Filename, dir))
 				return nil
 			}); err != nil {

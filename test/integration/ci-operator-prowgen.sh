@@ -16,7 +16,7 @@ cp -a "${suite_dir}/input/jobs/." "${actual}"
 os::test::junit::declare_suite_start "integration/ci-operator-prowgen"
 # This test validates the ci-operator-prowgen tool
 
-os::cmd::expect_success "ci-operator-prowgen --registry ${suite_dir}/input/registry --from-dir ${suite_dir}/input/config --to-dir ${actual}"
+os::cmd::expect_success "ci-operator-prowgen --registry ${suite_dir}/input/registry --known-infra-file infra-periodics.yaml --from-dir ${suite_dir}/input/config --to-dir ${actual}"
 os::integration::compare "${actual}" "${suite_dir}/output/jobs"
 
 os::test::junit::declare_suite_end

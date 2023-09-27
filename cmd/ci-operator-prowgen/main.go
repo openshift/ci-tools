@@ -20,6 +20,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/prowgen"
 	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/util"
+	"k8s.io/test-infra/prow/flagutil"
 )
 
 type options struct {
@@ -33,6 +34,8 @@ type options struct {
 
 	registryPath string
 	resolver     registry.Resolver
+
+	knownInfraJobFiles flagutil.Strings
 
 	help bool
 }
@@ -49,6 +52,8 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.registryPath, "registry", "", "Path to the step registry directory")
 
 	flag.BoolVar(&opt.help, "h", false, "Show help for ci-operator-prowgen")
+
+	flag.Var(&opt.knownInfraJobFiles, "known-infra-file", "Name of a known infra-file that will not be acted on. Can be passed multiple times.")
 
 	opt.Options.Bind(flag)
 
@@ -123,7 +128,7 @@ func (o *options) generateJobsToDir(subDir string, prowConfig map[string]*config
 	if err := o.OperateOnCIOperatorConfigDir(filepath.Join(o.fromDir, subDir), genJobsFunc); err != nil {
 		return fmt.Errorf("failed to generate jobs: %w", err)
 	}
-	if err := o.OperateOnJobConfigSubdirPaths(o.toDir, subDir, func(info *jc.Info) error {
+	if err := o.OperateOnJobConfigSubdirPaths(o.toDir, subDir, o.knownInfraJobFiles.StringSet(), func(info *jc.Info) error {
 		key := fmt.Sprintf("%s/%s", info.Org, info.Repo)
 		if _, ok := generated[key]; !ok {
 			generated[key] = &prowconfig.JobConfig{}

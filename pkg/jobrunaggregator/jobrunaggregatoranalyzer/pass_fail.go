@@ -585,6 +585,11 @@ func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, jobName stri
 	if !didTestRun(testCaseDetails) {
 		return testCasePassed, "did not run", nil
 	}
+
+	if reason := testShouldNeverFail(testCaseDetails.Name); len(reason) > 0 && len(testCaseDetails.Failures) > 0 {
+		return testCaseFailed, reason, nil
+	}
+
 	numberOfAttempts := getAttempts(testCaseDetails)
 
 	// if most of the job runs skipped this test, then we probably intend to skip the test overall and the failure is actually
@@ -683,6 +688,16 @@ func init() {
 		testName:      "[sig-network] pods should successfully create sandboxes by other",
 		testSuiteName: "openshift-tests-upgrade",
 	}] = "Test has been failing for a longtime but went undetected"
+}
+
+// testShouldNeverFail returns a reason if a test should never fail, or empty string if we should proceed with
+// normal test analysis.
+func testShouldNeverFail(testName string) string {
+	if testName == "Undiagnosed panic detected in pod" {
+		return "Pods must not panic"
+	}
+
+	return ""
 }
 
 // testShouldAlwaysPass returns a reason if a test should be skipped and considered always passing, or empty

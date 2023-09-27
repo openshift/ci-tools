@@ -1225,6 +1225,7 @@ periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-shared-vpc-phz-tec
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-single-node
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-single-node-serial
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-single-node-workers
+periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-upgrade-rollback-oldest-supported
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-upi
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-workers-rhel8
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-sdn

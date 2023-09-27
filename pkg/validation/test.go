@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 // testStage is the point in a multi-stage test where a step is located.
@@ -446,20 +447,11 @@ func verifyClusterProfileOwnership(profile api.ClusterProfileDetails, m *api.Met
 		if owner.Org != m.Org {
 			continue
 		}
-		if owner.Repos == nil || contains(owner.Repos, m.Repo) {
+		if owner.Repos == nil || util.Contains(owner.Repos, m.Repo) {
 			return nil
 		}
 	}
 	return fmt.Errorf("%s/%s is not an owner of the cluster profile: %q", m.Org, m.Repo, profile.Profile)
-}
-
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
 }
 
 func searchForTestDuplicates(tests []api.TestStepConfiguration) []error {

@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -77,7 +78,8 @@ func addSchemes() error {
 	return nil
 }
 
-func getClusterPoolPage(ctx context.Context, hiveClient ctrlruntimeclient.Client) (*Page, error) {
+func getClusterPool(ctx context.Context, hiveClient ctrlruntimeclient.Client) ([]map[string]string, error) {
+	logrus.Debug("Calling getClusterPool ...")
 	clusterImageSetMap := map[string]string{}
 	clusterImageSets := &hivev1.ClusterImageSetList{}
 	if err := hiveClient.List(ctx, clusterImageSets); err != nil {
@@ -92,7 +94,7 @@ func getClusterPoolPage(ctx context.Context, hiveClient ctrlruntimeclient.Client
 		return nil, fmt.Errorf("failed to list cluster pools: %w", err)
 	}
 
-	page := Page{Data: []map[string]string{}}
+	data := make([]map[string]string, 0)
 	for _, p := range clusterPools.Items {
 		maxSize := "nil"
 		if p.Spec.MaxSize != nil {
@@ -100,22 +102,21 @@ func getClusterPoolPage(ctx context.Context, hiveClient ctrlruntimeclient.Client
 		}
 		releaseImage := clusterImageSetMap[p.Spec.ImageSetRef.Name]
 		owner := p.Labels["owner"]
-		page.Data = append(
-			page.Data, map[string]string{
-				"namespace":    p.Namespace,
-				"name":         p.Name,
-				"ready":        strconv.FormatInt(int64(p.Status.Ready), 10),
-				"size":         strconv.FormatInt(int64(p.Spec.Size), 10),
-				"maxSize":      maxSize,
-				"imageSet":     p.Spec.ImageSetRef.Name,
-				"labels":       labels.FormatLabels(p.Labels),
-				"releaseImage": releaseImage,
-				"owner":        owner,
-				"standby":      strconv.FormatInt(int64(p.Status.Standby), 10),
-			},
+		data = append(data, map[string]string{
+			"namespace":    p.Namespace,
+			"name":         p.Name,
+			"ready":        strconv.FormatInt(int64(p.Status.Ready), 10),
+			"size":         strconv.FormatInt(int64(p.Spec.Size), 10),
+			"maxSize":      maxSize,
+			"imageSet":     p.Spec.ImageSetRef.Name,
+			"labels":       labels.FormatLabels(p.Labels),
+			"releaseImage": releaseImage,
+			"owner":        owner,
+			"standby":      strconv.FormatInt(int64(p.Status.Standby), 10),
+		},
 		)
 	}
-	return &page, nil
+	return data, nil
 }
 
 type ClusterInfoGetter interface {
@@ -161,13 +162,69 @@ func (g *clusterInfoGetter) GetClusterDetails(ctx context.Context, cluster strin
 	}, nil
 }
 
-func getClusterPage(ctx context.Context, clients map[string]ctrlruntimeclient.Client, skipHive bool, getter ClusterInfoGetter) *Page {
+type memoryCache struct {
+	clusterDataMutex         sync.Mutex
+	clusterData              []map[string]string
+	clusterDataLastUpdatedAt time.Time
+
+	ClusterPoolDataMutex         sync.Mutex
+	ClusterPoolData              []map[string]string
+	ClusterPoolDataLastUpdatedAt time.Time
+
+	CacheDuration time.Duration
+}
+
+func (c *memoryCache) GetClusterPoolPage(ctx context.Context, client ctrlruntimeclient.Client) (*Page, error) {
+	c.ClusterPoolDataMutex.Lock()
+	defer c.ClusterPoolDataMutex.Unlock()
+	if c.ClusterPoolData == nil || time.Now().After(c.ClusterPoolDataLastUpdatedAt.Add(c.CacheDuration)) {
+		data, err := getClusterPool(ctx, client)
+		if err != nil {
+			if c.ClusterPoolData == nil {
+				return nil, err
+			} else {
+				logrus.WithError(err).Error("Failed to get cluster pool, using the expired cached data")
+			}
+		} else {
+			c.ClusterPoolDataLastUpdatedAt = time.Now()
+			c.ClusterPoolData = data
+		}
+	}
+	return &Page{Data: c.ClusterPoolData}, nil
+}
+
+func (c *memoryCache) GetClusterPage(ctx context.Context, clients map[string]ctrlruntimeclient.Client, skipHive bool, getter ClusterInfoGetter) *Page {
+	c.clusterDataMutex.Lock()
+	defer c.clusterDataMutex.Unlock()
+	if c.clusterData == nil || time.Now().After(c.clusterDataLastUpdatedAt.Add(c.CacheDuration)) {
+		data := getCluster(ctx, clients, getter)
+		c.clusterDataLastUpdatedAt = time.Now()
+		c.clusterData = data
+	}
+	if skipHive {
+		var skipHiveData []map[string]string
+		for _, d := range c.clusterData {
+			var hive bool
+			for k, v := range d {
+				if k == "cluster" && v == string(api.HiveCluster) {
+					hive = true
+					break
+				}
+			}
+			if !hive {
+				skipHiveData = append(skipHiveData, d)
+			}
+		}
+		return &Page{Data: skipHiveData}
+	}
+	return &Page{Data: c.clusterData}
+}
+
+func getCluster(ctx context.Context, clients map[string]ctrlruntimeclient.Client, getter ClusterInfoGetter) []map[string]string {
+	logrus.Debug("Calling getCluster ...")
 	var data []map[string]string
 
 	for cluster, client := range clients {
-		if skipHive && cluster == string(api.HiveCluster) {
-			continue
-		}
 		clusterInfo, err := getter.GetClusterDetails(ctx, cluster, client)
 		if err != nil {
 			logrus.WithError(err)
@@ -179,7 +236,7 @@ func getClusterPage(ctx context.Context, clients map[string]ctrlruntimeclient.Cl
 	sort.Slice(data, func(i, j int) bool {
 		return data[i]["cluster"] < data[j]["cluster"]
 	})
-	return &Page{Data: data}
+	return data
 }
 
 func resolveProduct(ctx context.Context, client ctrlruntimeclient.Client, version string) (string, error) {
@@ -199,6 +256,7 @@ func resolveProduct(ctx context.Context, client ctrlruntimeclient.Client, versio
 
 func getRouter(ctx context.Context, hiveClient ctrlruntimeclient.Client, clients map[string]ctrlruntimeclient.Client) *http.ServeMux {
 	handler := http.NewServeMux()
+	cache := memoryCache{CacheDuration: time.Hour}
 
 	handler.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -217,10 +275,10 @@ func getRouter(ctx context.Context, hiveClient ctrlruntimeclient.Client, clients
 		var err error
 		switch crd {
 		case "clusterpools":
-			page, err = getClusterPoolPage(ctx, hiveClient)
+			page, err = cache.GetClusterPoolPage(ctx, hiveClient)
 		case "clusters":
 			skipHive := r.URL.Query().Get("skipHive") == "true"
-			page = getClusterPage(ctx, allClients, skipHive, &clusterInfoGetter{})
+			page = cache.GetClusterPage(ctx, allClients, skipHive, &clusterInfoGetter{})
 		default:
 			http.Error(w, fmt.Sprintf("Unknown crd: %s", crd), http.StatusBadRequest)
 			return

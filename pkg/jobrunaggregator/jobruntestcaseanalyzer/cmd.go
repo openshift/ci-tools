@@ -99,8 +99,8 @@ type JobRunsTestCaseAnalyzerFlags struct {
 	IncludeJobNames             []string
 	JobStateQuerySource         string
 
-	StaticRunInfoPath string
-	StaticRunInfoJSON string
+	StaticJobRunIdentifierPath string
+	StaticJobRunIdentifierJSON string
 }
 
 func NewJobRunsTestCaseAnalyzerFlags() *JobRunsTestCaseAnalyzerFlags {
@@ -140,8 +140,8 @@ func (f *JobRunsTestCaseAnalyzerFlags) BindFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&f.JobStateQuerySource, "query-source", jobrunaggregatorlib.JobStateQuerySourceBigQuery, "The source from which job states are found. It is either bigquery or cluster")
 
 	// optional for local use or potentially gangway results
-	fs.StringVar(&f.StaticRunInfoPath, "staticRunInfoPath", f.StaticRunInfoPath, "The optional path to a file containing JSON formatted JobRunInfo array used for aggregated analysis")
-	fs.StringVar(&f.StaticRunInfoJSON, "staticRunInfoJSON", f.StaticRunInfoJSON, "The optional JSON formatted string of JobRunInfo array used for aggregated analysis")
+	fs.StringVar(&f.StaticJobRunIdentifierPath, "staticRunInfoPath", f.StaticJobRunIdentifierPath, "The optional path to a file containing JSON formatted JobRunIdentifier array used for aggregated analysis")
+	fs.StringVar(&f.StaticJobRunIdentifierJSON, "staticRunInfoJSON", f.StaticJobRunIdentifierJSON, "The optional JSON formatted string of JobRunIdentifier array used for aggregated analysis")
 
 }
 
@@ -334,9 +334,9 @@ func (f *JobRunsTestCaseAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunTe
 
 	jobGetter := NewTestCaseAnalyzerJobGetter(f.Platform, f.Infrastructure, f.Network, f.testNameSuffix(), f.ExcludeJobNames, f.IncludeJobNames, &f.JobGCSPrefixes, ciDataClient)
 
-	var staticJobRunInfo []jobrunaggregatoranalyzer.JobRunInfo
-	if len(f.StaticRunInfoJSON) > 0 || len(f.StaticRunInfoPath) > 0 {
-		staticJobRunInfo, err = jobrunaggregatoranalyzer.GetStaticJobRunInfo(f.StaticRunInfoJSON, f.StaticRunInfoPath)
+	var staticJobRunIdentifiers []jobrunaggregatorlib.JobRunIdentifier
+	if len(f.StaticJobRunIdentifierJSON) > 0 || len(f.StaticJobRunIdentifierPath) > 0 {
+		staticJobRunIdentifiers, err = jobrunaggregatoranalyzer.GetStaticJobRunInfo(f.StaticJobRunIdentifierJSON, f.StaticJobRunIdentifierPath)
 		if err != nil {
 			return nil, err
 		}
@@ -376,6 +376,6 @@ func (f *JobRunsTestCaseAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunTe
 		jobStateQuerySource: f.JobStateQuerySource,
 		prowJobMatcherFunc:  jobGetter.shouldAggregateJob,
 
-		staticJobRunInfo: staticJobRunInfo,
+		staticJobRunIdentifiers: staticJobRunIdentifiers,
 	}, nil
 }

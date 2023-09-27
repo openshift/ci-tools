@@ -47,12 +47,12 @@ type JobRunAggregatorAnalyzerOptions struct {
 	jobStateQuerySource string
 	prowJobMatcherFunc  jobrunaggregatorlib.ProwJobMatcherFunc
 
-	staticJobRunInfo []JobRunInfo
+	staticJobRunIdentifiers []jobrunaggregatorlib.JobRunIdentifier
 }
 
-func GetStaticJobRunInfo(staticRunInfoJSON, staticRunInfoPath string) ([]JobRunInfo, error) {
+func GetStaticJobRunInfo(staticRunInfoJSON, staticRunInfoPath string) ([]jobrunaggregatorlib.JobRunIdentifier, error) {
 	var jsonBytes []byte
-	var jobRuns []JobRunInfo
+	var jobRuns []jobrunaggregatorlib.JobRunIdentifier
 	var err error
 	if len(staticRunInfoJSON) == 0 {
 		jsonBytes, err = os.ReadFile(staticRunInfoPath)
@@ -72,7 +72,7 @@ func GetStaticJobRunInfo(staticRunInfoJSON, staticRunInfoPath string) ([]JobRunI
 
 func (o *JobRunAggregatorAnalyzerOptions) loadStaticJobRuns(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error) {
 	var jobRuns []jobrunaggregatorapi.JobRunInfo
-	for _, job := range o.staticJobRunInfo {
+	for _, job := range o.staticJobRunIdentifiers {
 		// in this context passing the job name is optional for the
 		// static job runs but if it is present then check to make sure it matches
 		if len(job.JobName) > 0 && strings.Compare(job.JobName, o.jobName) != 0 {
@@ -89,10 +89,14 @@ func (o *JobRunAggregatorAnalyzerOptions) loadStaticJobRuns(ctx context.Context)
 	return jobRuns, nil
 }
 
+func (o *JobRunAggregatorAnalyzerOptions) SetRelatedJobRuns(jobRunIdentifiers []jobrunaggregatorlib.JobRunIdentifier) {
+	o.staticJobRunIdentifiers = jobRunIdentifiers
+}
+
 // GetRelatedJobRuns gets all related job runs for analysis
 func (o *JobRunAggregatorAnalyzerOptions) GetRelatedJobRuns(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error) {
-	// allow for the list of ids to be passed in via JSON
-	if len(o.staticJobRunInfo) > 0 {
+	// allow for the list of ids to be passed in
+	if len(o.staticJobRunIdentifiers) > 0 {
 		return o.loadStaticJobRuns(ctx)
 	}
 

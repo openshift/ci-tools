@@ -29,8 +29,8 @@ type JobRunsAnalyzerFlags struct {
 	EstimatedJobStartTimeString string
 	JobStateQuerySource         string
 
-	StaticRunInfoPath string
-	StaticRunInfoJSON string
+	StaticJobRunIdentifierPath string
+	StaticJobRunIdentifierJSON string
 }
 
 func NewJobRunsAnalyzerFlags() *JobRunsAnalyzerFlags {
@@ -60,8 +60,8 @@ func (f *JobRunsAnalyzerFlags) BindFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&f.JobStateQuerySource, "query-source", jobrunaggregatorlib.JobStateQuerySourceBigQuery, "The source from which job states are found. It is either bigquery or cluster")
 
 	// optional for local use or potentially gangway results
-	fs.StringVar(&f.StaticRunInfoPath, "staticRunInfoPath", f.StaticRunInfoPath, "The optional path to a file containing JSON formatted JobRunInfo array used for aggregated analysis")
-	fs.StringVar(&f.StaticRunInfoJSON, "staticRunInfoJSON", f.StaticRunInfoJSON, "The optional JSON formatted string of JobRunInfo array used for aggregated analysis")
+	fs.StringVar(&f.StaticJobRunIdentifierPath, "staticRunInfoPath", f.StaticJobRunIdentifierPath, "The optional path to a file containing JSON formatted JobRunIdentifier array used for aggregated analysis")
+	fs.StringVar(&f.StaticJobRunIdentifierJSON, "staticRunInfoJSON", f.StaticJobRunIdentifierJSON, "The optional JSON formatted string of JobRunIdentifier array used for aggregated analysis")
 
 }
 
@@ -155,9 +155,9 @@ func (f *JobRunsAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunAggregator
 		return nil, err
 	}
 
-	var staticJobRunInfo []JobRunInfo
-	if len(f.StaticRunInfoJSON) > 0 || len(f.StaticRunInfoPath) > 0 {
-		staticJobRunInfo, err = GetStaticJobRunInfo(f.StaticRunInfoJSON, f.StaticRunInfoPath)
+	var staticJobRunIdentifiers []jobrunaggregatorlib.JobRunIdentifier
+	if len(f.StaticJobRunIdentifierJSON) > 0 || len(f.StaticJobRunIdentifierPath) > 0 {
+		staticJobRunIdentifiers, err = GetStaticJobRunInfo(f.StaticJobRunIdentifierJSON, f.StaticJobRunIdentifierPath)
 		if err != nil {
 			return nil, err
 		}
@@ -199,18 +199,18 @@ func (f *JobRunsAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunAggregator
 	}
 
 	return &JobRunAggregatorAnalyzerOptions{
-		explicitGCSPrefix:   f.ExplicitGCSPrefix,
-		jobRunLocator:       jobRunLocator,
-		passFailCalculator:  newWeeklyAverageFromTenDaysAgo(f.JobName, estimatedStartTime, 6, ciDataClient),
-		jobName:             f.JobName,
-		payloadTag:          f.PayloadTag,
-		workingDir:          f.WorkingDir,
-		jobRunStartEstimate: estimatedStartTime,
-		clock:               clock.RealClock{},
-		timeout:             f.Timeout,
-		prowJobClient:       prowJobClient,
-		jobStateQuerySource: f.JobStateQuerySource,
-		prowJobMatcherFunc:  prowJobMatcherFunc,
-		staticJobRunInfo:    staticJobRunInfo,
+		explicitGCSPrefix:       f.ExplicitGCSPrefix,
+		jobRunLocator:           jobRunLocator,
+		passFailCalculator:      newWeeklyAverageFromTenDaysAgo(f.JobName, estimatedStartTime, 6, ciDataClient),
+		jobName:                 f.JobName,
+		payloadTag:              f.PayloadTag,
+		workingDir:              f.WorkingDir,
+		jobRunStartEstimate:     estimatedStartTime,
+		clock:                   clock.RealClock{},
+		timeout:                 f.Timeout,
+		prowJobClient:           prowJobClient,
+		jobStateQuerySource:     f.JobStateQuerySource,
+		prowJobMatcherFunc:      prowJobMatcherFunc,
+		staticJobRunIdentifiers: staticJobRunIdentifiers,
 	}, nil
 }

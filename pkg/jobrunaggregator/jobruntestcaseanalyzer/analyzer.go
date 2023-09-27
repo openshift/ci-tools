@@ -16,7 +16,6 @@ import (
 	prowjobv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowjobclientset "k8s.io/test-infra/prow/client/clientset/versioned"
 
-	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatoranalyzer"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 	"github.com/openshift/ci-tools/pkg/junit"
@@ -409,7 +408,7 @@ type JobRunTestCaseAnalyzerOptions struct {
 	jobStateQuerySource string
 	prowJobMatcherFunc  jobrunaggregatorlib.ProwJobMatcherFunc
 
-	staticJobRunInfo []jobrunaggregatoranalyzer.JobRunInfo
+	staticJobRunIdentifiers []jobrunaggregatorlib.JobRunIdentifier
 }
 
 func (o *JobRunTestCaseAnalyzerOptions) shouldAggregateJob(prowJob *prowjobv1.ProwJob) bool {
@@ -436,8 +435,8 @@ func (o *JobRunTestCaseAnalyzerOptions) shouldAggregateJob(prowJob *prowjobv1.Pr
 func (o *JobRunTestCaseAnalyzerOptions) findJobRunsWithRetry(ctx context.Context,
 	jobName string, jobRunLocator jobrunaggregatorlib.JobRunLocator) ([]jobrunaggregatorapi.JobRunInfo, error) {
 
-	// allow for the list of ids to be passed in via JSON
-	if len(o.staticJobRunInfo) > 0 {
+	// allow for the list of ids to be passed in
+	if len(o.staticJobRunIdentifiers) > 0 {
 		return o.loadStaticJobRuns(ctx, jobName, jobRunLocator)
 	}
 
@@ -468,7 +467,7 @@ func (o *JobRunTestCaseAnalyzerOptions) findJobRunsWithRetry(ctx context.Context
 
 func (o *JobRunTestCaseAnalyzerOptions) loadStaticJobRuns(ctx context.Context, jobName string, jobRunLocator jobrunaggregatorlib.JobRunLocator) ([]jobrunaggregatorapi.JobRunInfo, error) {
 	var outputRuns []jobrunaggregatorapi.JobRunInfo
-	for _, jobRun := range o.staticJobRunInfo {
+	for _, jobRun := range o.staticJobRunIdentifiers {
 		if jobRun.JobName != jobName {
 			continue
 		}
@@ -488,7 +487,7 @@ func (o *JobRunTestCaseAnalyzerOptions) loadStaticJobs() []jobrunaggregatorapi.J
 	rows := make([]jobrunaggregatorapi.JobRow, 0)
 	uniqueNames := sets.Set[string]{}
 
-	for _, r := range o.staticJobRunInfo {
+	for _, r := range o.staticJobRunIdentifiers {
 		// only one row per unique job name
 		if !uniqueNames.Has(r.JobName) {
 			// we only care about returning JobName
@@ -500,14 +499,18 @@ func (o *JobRunTestCaseAnalyzerOptions) loadStaticJobs() []jobrunaggregatorapi.J
 	return rows
 }
 
+func (o *JobRunTestCaseAnalyzerOptions) SetRelatedJobRuns(jobRunIDs []jobrunaggregatorlib.JobRunIdentifier) {
+	o.staticJobRunIdentifiers = jobRunIDs
+}
+
 // GetRelatedJobRuns gets all related job runs for analysis
 func (o *JobRunTestCaseAnalyzerOptions) GetRelatedJobRuns(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error) {
 	var jobRunsToReturn []jobrunaggregatorapi.JobRunInfo
 	var jobs []jobrunaggregatorapi.JobRow
 	var err error
 
-	// allow for the list of ids to be passed in via JSON
-	if len(o.staticJobRunInfo) > 0 {
+	// allow for the list of ids to be passed in
+	if len(o.staticJobRunIdentifiers) > 0 {
 		jobs = o.loadStaticJobs()
 	} else {
 		jobs, err = o.jobGetter.GetJobs(ctx)

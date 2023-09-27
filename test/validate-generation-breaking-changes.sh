@@ -1,10 +1,13 @@
 #!/bin/bash
-
+# To execute from a local clone:
+#
+#     $ RELEASE=file:///path/to/release test/validate-generation-breaking-changes.sh
 set -o errexit
 set -o nounset
 set -o pipefail
 
 org=openshift
+RELEASE=${RELEASE-https://github.com/$org/release.git}
 workdir="$(mktemp -d)"
 trap 'rm -rf "${workdir}"' EXIT
 clonedir="${workdir}/release"
@@ -12,7 +15,7 @@ failure=0
 
 rm -rf "${clonedir}"
 echo >&2 "$(date --iso-8601=seconds) Cloning openshift/release"
-git clone "https://github.com/openshift/release.git" --depth 1 "${clonedir}"
+git clone "${RELEASE}" --depth 1 "${clonedir}"
 
 # We need to enter the git directory and run git commands from there, our git
 # is too old to know the `-C` option.

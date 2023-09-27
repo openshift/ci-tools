@@ -6,6 +6,10 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+log() {
+    echo >&2 "$(date --iso-8601=seconds)" "$@"
+}
+
 org=openshift
 RELEASE=${RELEASE-https://github.com/$org/release.git}
 workdir="$(mktemp -d)"
@@ -14,14 +18,14 @@ clonedir="${workdir}/release"
 failure=0
 
 rm -rf "${clonedir}"
-echo >&2 "$(date --iso-8601=seconds) Cloning openshift/release"
+log "Cloning openshift/release"
 git clone "${RELEASE}" --depth 1 "${clonedir}"
 
 # We need to enter the git directory and run git commands from there, our git
 # is too old to know the `-C` option.
 pushd "${clonedir}"
 
-echo >&2 "$(date --iso-8601=seconds) Executing ci-operator-prowgen"
+log "Executing ci-operator-prowgen"
 ci-operator-prowgen --from-dir "${clonedir}/ci-operator/config" --to-dir "${clonedir}/ci-operator/jobs"
 out="$(git status --porcelain)"
 if [[ -n "$out" ]]; then
@@ -35,7 +39,7 @@ else
   echo "Running Prowgen in openshift/release does not result in changes, no followups needed"
 fi
 
-echo >&2 "$(date --iso-8601=seconds) Executing sanitize-prow-jobs"
+log "Executing sanitize-prow-jobs"
 sanitize-prow-jobs --prow-jobs-dir ci-operator/jobs --config-path core-services/sanitize-prow-jobs/_config.yaml
 out="$(git status --porcelain)"
 if [[ -n "$out" ]]; then
@@ -51,7 +55,7 @@ fi
 
 CONFIG="${clonedir}/core-services/prow/02_config"
 if [[ -d "${CONFIG}" ]]; then
-  echo >&2 "$(date --iso-8601=seconds) Executing determinize-prow-config"
+  log "Executing determinize-prow-config"
   determinize-prow-config --prow-config-dir "${CONFIG}" --sharded-plugin-config-base-dir "${CONFIG}"
   out="$(git status --porcelain)"
   if [[ -n "$out" ]]; then
@@ -66,7 +70,7 @@ if [[ -d "${CONFIG}" ]]; then
   fi
 fi
 
-echo >&2 "$(date --iso-8601=seconds) Executing cluster-init update"
+log "Executing cluster-init update"
 cluster-init -release-repo="${clonedir}" -update=true -create-pr=false
 out="$(git status --porcelain)"
 if [[ -n "$out" ]]; then

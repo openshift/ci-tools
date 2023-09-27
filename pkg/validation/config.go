@@ -29,14 +29,19 @@ func NewValidator() Validator {
 	}
 }
 
-// NewCPValidator creates an object that  and optimizes bulk validations.
+// NewCPValidator creates an object that optimizes bulk validations and contains info about cluster profiles.
 func NewCPValidator(profiles api.ClusterProfilesList) Validator {
 	ret := Validator{
-		validClusterProfiles: make(clusterProfileSet, len(api.ClusterProfiles())), // TODO: replace with 'len(profiles)' once the config file exists
+		validClusterProfiles: make(clusterProfileSet, len(api.ClusterProfiles())),
 		hasTrapCache:         make(map[string]bool),
 	}
-	for _, p := range api.ClusterProfiles() { // TODO: replace with 'profiles' once the config file exists
-		ret.validClusterProfiles[p] = api.ClusterProfileDetails{} // TODO: initialize with owner info once the config file exists
+	for _, p := range profiles {
+		ret.validClusterProfiles[p.Profile] = p
+	}
+	for _, p := range api.ClusterProfiles() {
+		if _, ok := ret.validClusterProfiles[p]; !ok {
+			ret.validClusterProfiles[p] = api.ClusterProfileDetails{}
+		}
 	}
 	return ret
 }

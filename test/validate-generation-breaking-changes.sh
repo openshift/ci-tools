@@ -99,6 +99,18 @@ else
   echo "Running config-brancher in $org/release does not result in a failure, no changes needed"
 fi
 
+log "Executing ci-operator-checkconfig"
+if ! ci-operator-checkconfig \
+  --config-dir="${clonedir}/ci-operator/config" \
+  --registry="${clonedir}/ci-operator/step-registry"
+then
+  echo "ERROR: Running ci-operator-checkconfig in $org/release results in a failure"
+  echo "ERROR: To avoid breaking $org/release for everyone you should review the changes here"
+  failure=1
+else
+  echo "Running ci-operator-checkconfig in $org/release does not result in a failure, no changes needed"
+fi
+
 popd
 
 exit $failure

@@ -43,6 +43,9 @@ type ConfigOptions struct {
 	// Inrepoconfig related flags
 	InRepoConfigCacheSize    int
 	InRepoConfigCacheDirBase string
+	// Moonraker is the centralized Inrepconfig Caching Service. Using this flag
+	// overrides the use of the local InRepoConfigCache.
+	MoonrakerAddress string
 }
 
 func (o *ConfigOptions) AddFlags(fs *flag.FlagSet) {
@@ -57,8 +60,9 @@ func (o *ConfigOptions) AddFlags(fs *flag.FlagSet) {
 	fs.Var(&o.SupplementalProwConfigDirs, "supplemental-prow-config-dir", "An additional directory from which to load prow configs. Can be used for config sharding but only supports a subset of the config. The flag can be passed multiple times.")
 	fs.StringVar(&o.SupplementalProwConfigsFileNameSuffix, "supplemental-prow-configs-filename", "_prowconfig.yaml", "Suffix for additional prow configs. Only files with this name will be considered. Deprecated and mutually exclusive with --supplemental-prow-configs-filename-suffix")
 	fs.StringVar(&o.SupplementalProwConfigsFileNameSuffix, "supplemental-prow-configs-filename-suffix", "_prowconfig.yaml", "Suffix for additional prow configs. Only files with this name will be considered")
-	fs.IntVar(&o.InRepoConfigCacheSize, "in-repo-config-cache-size", 1000, "Cache size for ProwYAMLs read from in-repo configs. Each host receives its own cache.")
+	fs.IntVar(&o.InRepoConfigCacheSize, "in-repo-config-cache-size", 200, "Cache size for ProwYAMLs read from in-repo configs.")
 	fs.StringVar(&o.InRepoConfigCacheDirBase, "cache-dir-base", "", "Directory where the repo cache should be mounted.")
+	fs.StringVar(&o.MoonrakerAddress, "moonraker-address", "", "full HTTP address (domain and port) of moonraker service")
 }
 
 func (o *ConfigOptions) Validate(_ bool) error {

@@ -65,6 +65,12 @@ const (
 	// DefaultJobTimeout represents the default deadline for a prow job.
 	DefaultJobTimeout = 24 * time.Hour
 
+	// DefaultMoonrakerClientTimeout is the default timeout for all Moonraker
+	// clients. Note that this is a client-side timeout, and does not affect
+	// whether Moonraker itself will finish doing the Git fetch/parsing in the
+	// background (esp. for new repos that need the extra cloning time).
+	DefaultMoonrakerClientTimeout = 10 * time.Minute
+
 	ProwImplicitGitResource = "PROW_IMPLICIT_GIT_REF"
 
 	// ConfigVersionFileName is the name of a file that will be added to
@@ -80,7 +86,8 @@ const (
 )
 
 var (
-	DefaultDiffOpts []cmp.Option = []cmp.Option{cmpopts.IgnoreFields(TideBranchMergeType{}, "Regexpr")}
+	DefaultDiffOpts []cmp.Option = []cmp.Option{cmpopts.IgnoreFields(TideBranchMergeType{}, "Regexpr"),
+		cmpopts.IgnoreUnexported(Gerrit{})}
 )
 
 // Config is a read-only snapshot of the config.
@@ -150,6 +157,11 @@ type ProwConfig struct {
 	// Jobs they are authorized to trigger.
 	Gangway Gangway `json:"gangway,omitempty"`
 
+	// Moonraker contains configurations for Moonraker, such as the client
+	// timeout to use for all Prow services that need to send requests to
+	// Moonraker.
+	Moonraker Moonraker `json:"moonraker,omitempty"`
+
 	// TODO: Move this out of the main config.
 	JenkinsOperators []JenkinsOperator `json:"jenkins_operators,omitempty"`
 
@@ -210,6 +222,10 @@ type ProwConfig struct {
 	// match a job are used. Later matching entries override the fields of earlier
 	// matching entires.
 	ProwJobDefaultEntries []*ProwJobDefaultEntry `json:"prowjob_default_entries,omitempty"`
+
+	// DisabledClusters holds a list of disabled build cluster names. The same context names will be ignored while
+	// Prow components load the kubeconfig files.
+	DisabledClusters []string `json:"disabled_clusters,omitempty"`
 }
 
 type InRepoConfig struct {
@@ -912,7 +928,7 @@ func (p Plank) GetJobURLPrefix(pj *prowapi.ProwJob) string {
 
 // Gerrit is config for the gerrit controller.
 type Gerrit struct {
-	// TickInterval is how often we do a sync with binded gerrit instance.
+	// TickInterval is how often we do a sync with bound gerrit instance.
 	TickInterval *metav1.Duration `json:"tick_interval,omitempty"`
 	// RateLimit defines how many changes to query per gerrit API call
 	// default is 5.
@@ -921,6 +937,13 @@ type Gerrit struct {
 	// job runs for a given CL.
 	DeckURL        string                `json:"deck_url,omitempty"`
 	OrgReposConfig *GerritOrgRepoConfigs `json:"org_repos_config,omitempty"`
+	// AllowedPresubmitTriggerRe is used to match presubmit test related commands in comments
+	AllowedPresubmitTriggerRe          *CopyableRegexp `json:"-"`
+	AllowedPresubmitTriggerReRawString string          `json:"allowed_presubmit_trigger_re,omitempty"`
+}
+
+func (g *Gerrit) IsAllowedPresubmitTrigger(message string) bool {
+	return g.AllowedPresubmitTriggerRe.MatchString(message)
 }
 
 // GerritOrgRepoConfigs is config for repos.
@@ -2144,6 +2167,10 @@ func (c *Config) validateComponentConfig() error {
 		return err
 	}
 
+	if err := c.Moonraker.Validate(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -2429,6 +2456,12 @@ func parseProwConfig(c *Config) error {
 	if c.Gerrit.RateLimit == 0 {
 		c.Gerrit.RateLimit = 5
 	}
+
+	re, err := regexp.Compile(c.Gerrit.AllowedPresubmitTriggerReRawString)
+	if err != nil {
+		return fmt.Errorf("failed to compile regex for allowed presubmit triggers: %s", err.Error())
+	}
+	c.Gerrit.AllowedPresubmitTriggerRe = &CopyableRegexp{re}
 
 	if c.Tide.Gerrit != nil {
 		if c.Tide.Gerrit.RateLimit == 0 {
@@ -2716,6 +2749,12 @@ func parseProwConfig(c *Config) error {
 	// Ensure Policy.Include and Policy.Exclude are mutually exclusive.
 	if len(c.BranchProtection.Include) > 0 && len(c.BranchProtection.Exclude) > 0 {
 		return fmt.Errorf("Forbidden to set both Policy.Include and Policy.Exclude, Please use either Include or Exclude!")
+	}
+
+	// Avoid using a Moonraker client timeout of infinity (default behavior of
+	// https://pkg.go.dev/net/http#Client) by setting a default value.
+	if c.Moonraker.ClientTimeout == nil {
+		c.Moonraker.ClientTimeout = &metav1.Duration{Duration: DefaultMoonrakerClientTimeout}
 	}
 
 	return nil

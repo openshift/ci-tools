@@ -46,6 +46,7 @@ spec:
       value: 72532003f9e01e89f455187dd92c275204bc9781
     - name: PULL_REFS
       value: base-ref:base-sha,123:72532003f9e01e89f455187dd92c275204bc9781
+    - name: PULL_TITLE
     - name: REPO_NAME
       value: repo
     - name: REPO_OWNER

@@ -124,6 +124,8 @@ type Client struct {
 	// map of instance to gerrit account
 	accounts map[string]*gerrit.AccountInfo
 
+	httpClient http.Client
+
 	authentication func() (string, error)
 	previousToken  string
 	lock           sync.RWMutex
@@ -168,32 +170,25 @@ func (rt *roundTripperWithThrottleAndHeader) RoundTrip(r *http.Request) (*http.R
 
 // NewClient returns a new gerrit client
 func NewClient(instances map[string]map[string]*config.GerritQueryFilter, maxQPS, maxBurst int) (*Client, error) {
-	c := &Client{
-		handlers: map[string]*gerritInstanceHandler{},
-		accounts: map[string]*gerrit.AccountInfo{},
-	}
 	roundTripper := &roundTripperWithThrottleAndHeader{upstream: http.DefaultTransport}
 	roundTripper.Throttle(maxQPS*3600, maxBurst)
 
-	for instance := range instances {
-		httpClient := http.Client{
-			Transport: roundTripper,
-		}
+	c := &Client{
+		handlers: map[string]*gerritInstanceHandler{},
+		accounts: map[string]*gerrit.AccountInfo{},
 
-		gc, err := gerrit.NewClient(instance, &httpClient)
+		httpClient: http.Client{
+			Transport: roundTripper,
+		},
+	}
+
+	for instance := range instances {
+		handler, err := c.newInstanceHandler(instance, instances[instance])
 		if err != nil {
 			return nil, err
 		}
 
-		c.handlers[instance] = &gerritInstanceHandler{
-			instance:       instance,
-			projects:       instances[instance],
-			authService:    gc.Authentication,
-			accountService: gc.Accounts,
-			changeService:  gc.Changes,
-			projectService: gc.Projects,
-			log:            logrus.WithField("host", instance),
-		}
+		c.handlers[instance] = handler
 	}
 
 	return c, nil
@@ -320,6 +315,23 @@ func (c *Client) Authenticate(cookiefilePath, tokenPath string) {
 	}
 }
 
+func (c *Client) newInstanceHandler(instance string, projects map[string]*config.GerritQueryFilter) (*gerritInstanceHandler, error) {
+	gc, err := gerrit.NewClient(instance, &c.httpClient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gerrit client: %w", err)
+	}
+
+	return &gerritInstanceHandler{
+		instance:       instance,
+		projects:       projects,
+		authService:    gc.Authentication,
+		accountService: gc.Accounts,
+		changeService:  gc.Changes,
+		projectService: gc.Projects,
+		log:            logrus.WithField("host", instance),
+	}, nil
+}
+
 // UpdateClients update gerrit clients with new instances map
 func (c *Client) UpdateClients(instances map[string]map[string]*config.GerritQueryFilter) error {
 	// Recording in newHandlers, so that deleted instances can be handled.
@@ -335,22 +347,13 @@ func (c *Client) UpdateClients(instances map[string]map[string]*config.GerritQue
 			newHandlers[instance] = handler
 			continue
 		}
-		gc, err := gerrit.NewClient(instance, nil)
+		handler, err := c.newInstanceHandler(instance, instances[instance])
 		if err != nil {
-			logrus.WithField("instance", instance).WithError(err).Error("Creating gerrit client.")
+			logrus.WithField("host", instance).WithError(err).Error("Failed to create gerrit instance handler.")
 			errs = append(errs, err)
 			continue
 		}
-
-		newHandlers[instance] = &gerritInstanceHandler{
-			instance:       instance,
-			projects:       instances[instance],
-			authService:    gc.Authentication,
-			accountService: gc.Accounts,
-			changeService:  gc.Changes,
-			projectService: gc.Projects,
-			log:            logrus.WithField("host", instance),
-		}
+		newHandlers[instance] = handler
 	}
 	c.handlers = newHandlers
 
@@ -654,17 +657,43 @@ func (h *gerritInstanceHandler) QueryChangesForProject(log logrus.FieldLogger, p
 	return changes, err
 }
 
-func (h *gerritInstanceHandler) queryChangesForProjectWithoutMetrics(log logrus.FieldLogger, project string, lastUpdate time.Time, rateLimit int, additionalFilters ...string) ([]gerrit.ChangeInfo, error) {
-	var pending []gerrit.ChangeInfo
+type deduper struct {
+	result  []gerrit.ChangeInfo
+	seenPos map[int]int
+}
 
+// dedupeIntoResult dedupes items in a slice, but preserves their order. E.g.,
+// [1, 2, 3, 1] results in [2, 3, 1] (the "1" that came second (last seen) is
+// preserved over the original "1" that came first, but also its order is at the
+// end as well).
+func (d *deduper) dedupeIntoResult(ci gerrit.ChangeInfo) {
+	if pos, ok := d.seenPos[ci.Number]; ok {
+		for ; pos < len(d.result)-1; pos++ {
+			d.result[pos] = d.result[pos+1]
+			d.seenPos[d.result[pos].Number]--
+		}
+		d.result[pos] = ci
+		d.seenPos[ci.Number] = pos
+		return
+	}
+	d.seenPos[ci.Number] = len(d.result)
+	d.result = append(d.result, ci)
+}
+
+func (h *gerritInstanceHandler) queryChangesForProjectWithoutMetrics(log logrus.FieldLogger, project string, lastUpdate time.Time, rateLimit int, additionalFilters ...string) ([]gerrit.ChangeInfo, error) {
 	var opt gerrit.QueryChangeOptions
 	opt.Query = append(opt.Query, strings.Join(append(additionalFilters, "project:"+project), "+"))
 	opt.AdditionalFields = []string{"CURRENT_REVISION", "CURRENT_COMMIT", "CURRENT_FILES", "MESSAGES", "LABELS"}
 
 	log = log.WithFields(logrus.Fields{"query": opt.Query, "additional_fields": opt.AdditionalFields})
 	var start int
-	// change number -> count of times seen
-	seenCount := map[int]int{}
+
+	// Deduplicate changes repeated due to pagination, preserving order, and
+	// keeping the last seen.
+	deduper := &deduper{
+		result:  []gerrit.ChangeInfo{},
+		seenPos: make(map[int]int),
+	}
 
 	for {
 		opt.Limit = rateLimit
@@ -684,7 +713,7 @@ func (h *gerritInstanceHandler) queryChangesForProjectWithoutMetrics(log logrus.
 
 		if changes == nil || len(*changes) == 0 {
 			log.Info("No more changes")
-			break
+			return deduper.result, nil
 		}
 
 		log.WithField("changes", len(*changes)).Debug("Found gerrit changes from page.")
@@ -705,7 +734,7 @@ func (h *gerritInstanceHandler) queryChangesForProjectWithoutMetrics(log logrus.
 			// stop when we find a change last updated before lastUpdate
 			if !updated.After(lastUpdate) {
 				log.Debug("No more recently updated changes")
-				break
+				return deduper.result, nil
 			}
 
 			// process recently updated change
@@ -718,8 +747,7 @@ func (h *gerritInstanceHandler) queryChangesForProjectWithoutMetrics(log logrus.
 					continue
 				}
 				log.Debug("Found merged change")
-				seenCount[change.Number]++
-				pending = append(pending, change)
+				deduper.dedupeIntoResult(change)
 			case New:
 				// we need to make sure the change update is from a fresh commit change
 				rev, ok := change.Revisions[change.CurrentRevision]
@@ -758,26 +786,13 @@ func (h *gerritInstanceHandler) queryChangesForProjectWithoutMetrics(log logrus.
 				if !newMessages {
 					log.Debug("Found updated change")
 				}
-				seenCount[change.Number]++
-				pending = append(pending, change)
+				deduper.dedupeIntoResult(change)
 			default:
 				// change has been abandoned, do nothing
 				log.Debug("Ignored change")
 			}
 		}
 	}
-	// Remove any duplicate entries. Duplicates occur when entries move between pages while we are making a paginated query.
-	for number, count := range seenCount {
-		// We have count-1 duplicates to remove, keep the latest one we found.
-		for i := 0; count > 1 && i < len(pending); i++ {
-			if pending[i].Number == number {
-				pending = append(pending[:i], pending[i+1:]...)
-				i-- // process this index again since it has changed
-				count--
-			}
-		}
-	}
-	return pending, nil
 }
 
 // ChangedFilesProvider lists (in lexicographic order) the files changed as part of a Gerrit patchset.

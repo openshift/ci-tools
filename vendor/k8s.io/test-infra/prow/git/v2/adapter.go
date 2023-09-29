@@ -59,6 +59,12 @@ func (a *clientFactoryAdapter) ClientFor(org, repo string) (RepoClient, error) {
 	return &repoClientAdapter{Repo: r}, err
 }
 
+// v1 clients do not support customizing pre-repo options. This is a blocker for
+// using with inrepoconfig clones.
+func (a *clientFactoryAdapter) ClientForWithRepoOpts(org, repo string, repoOpts RepoOpts) (RepoClient, error) {
+	return nil, errors.New("no ClientForWithRepoOpts implementation exists in the v1 repo client")
+}
+
 type repoClientAdapter struct {
 	*git.Repo
 }
@@ -87,8 +93,8 @@ func (a *repoClientAdapter) PushToNamedFork(forkName, branch string, force bool)
 	return a.Repo.PushToNamedFork(forkName, branch, force)
 }
 
-func (a *repoClientAdapter) CommitExists(sha string) (bool, error) {
-	return false, errors.New("no CommitExists implementation exists in the v1 repo client")
+func (a *repoClientAdapter) ObjectExists(sha string) (bool, error) {
+	return false, errors.New("no ObjectExists implementation exists in the v1 repo client")
 }
 
 func (a *repoClientAdapter) PushToCentral(branch string, force bool) error {
@@ -109,6 +115,10 @@ func (a *repoClientAdapter) FetchFromRemote(resolver RemoteResolver, branch stri
 	return errors.New("no FetchFromRemote implementation exists in the v1 repo client")
 }
 
+func (a *repoClientAdapter) FetchCommits(noFetchTags bool, commitSHAs []string) error {
+	return errors.New("no FetchCommits implementation exists in the v1 repo client")
+}
+
 func (a *repoClientAdapter) RemoteUpdate() error {
 	return errors.New("no RemoteUpdate implementation exists in the v1 repo client")
 }
@@ -117,6 +127,6 @@ func (a *repoClientAdapter) FetchRef(refspec string) error {
 	return errors.New("no FetchRef implementation exists in the v1 repo client")
 }
 
-func (a *repoClientAdapter) Fsck() (bool, error) {
-	return false, errors.New("no Fsck implementation exists in the v1 repo client")
+func (a *repoClientAdapter) RevParseN(revs []string) (map[string]string, error) {
+	return nil, errors.New("no RevParseN implementation exists in the v1 repo client")
 }

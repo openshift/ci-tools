@@ -1609,3 +1609,126 @@ func TestValidateTestConfigurationType(t *testing.T) {
 		})
 	}
 }
+
+func TestVerifyClusterProfileOwnership(t *testing.T) {
+	cpList := api.ClusterProfilesList{
+		api.ClusterProfileDetails{
+			Profile: "profile-with-one-owner",
+			Owners: []api.ClusterProfileOwners{
+				{
+					Org: "org",
+				},
+			},
+		},
+		api.ClusterProfileDetails{
+			Profile: "profile-with-one-owner-w-multiple-repos",
+			Owners: []api.ClusterProfileOwners{
+				{
+					Org:   "org2",
+					Repos: []string{"repo21", "repo22"},
+				},
+			},
+		},
+		api.ClusterProfileDetails{
+			Profile: "profile-with-multiple-orgs-and-repos",
+			Owners: []api.ClusterProfileOwners{
+				{
+					Org:   "org1",
+					Repos: []string{"repo1"},
+				},
+				{
+					Org:   "org2",
+					Repos: []string{"repo21", "repo22"},
+				},
+				{
+					Org: "org3",
+				},
+			},
+		},
+		api.ClusterProfileDetails{
+			Profile: "profile-with-no-owners-specified",
+			Owners:  []api.ClusterProfileOwners{},
+		},
+	}
+	v := NewCPValidator(cpList)
+
+	for _, tc := range []struct {
+		name     string
+		profile  api.ClusterProfileDetails
+		metadata *api.Metadata
+		expected error
+	}{
+		{
+			name:    "ownership not restricted",
+			profile: v.validClusterProfiles["profile-with-no-owners-specified"],
+			metadata: &api.Metadata{
+				Org:  "any-org",
+				Repo: "any-repo",
+			},
+		},
+		{
+			name:    "not one of owners",
+			profile: v.validClusterProfiles["profile-with-one-owner"],
+			metadata: &api.Metadata{
+				Org:  "wrong-org",
+				Repo: "any-repo",
+			},
+			expected: fmt.Errorf("wrong-org/any-repo is not an owner of the cluster profile: \"profile-with-one-owner\""),
+		},
+		{
+			name:    "basic ok case",
+			profile: v.validClusterProfiles["profile-with-one-owner"],
+			metadata: &api.Metadata{
+				Org:  "org",
+				Repo: "any-repo",
+			},
+		},
+		{
+			name:    "complex case ok",
+			profile: v.validClusterProfiles["profile-with-multiple-orgs-and-repos"],
+			metadata: &api.Metadata{
+				Org:  "org2",
+				Repo: "repo22",
+			},
+		},
+		{
+			name:    "complex case ok - no repos",
+			profile: v.validClusterProfiles["profile-with-multiple-orgs-and-repos"],
+			metadata: &api.Metadata{
+				Org:  "org3",
+				Repo: "any-repo",
+			},
+		},
+		{
+			name:    "complex case nok",
+			profile: v.validClusterProfiles["profile-with-multiple-orgs-and-repos"],
+			metadata: &api.Metadata{
+				Org:  "org2",
+				Repo: "wrong-repo",
+			},
+			expected: fmt.Errorf("org2/wrong-repo is not an owner of the cluster profile: \"profile-with-multiple-orgs-and-repos\""),
+		},
+		{
+			name:    "missing metadata - empty",
+			profile: v.validClusterProfiles["profile-with-multiple-orgs-and-repos"],
+			metadata: &api.Metadata{
+				Org:  "",
+				Repo: "",
+			},
+			expected: fmt.Errorf("can't do ownership check, metadata not defined"),
+		},
+		{
+			name:     "missing metadata - nil",
+			profile:  v.validClusterProfiles["profile-with-multiple-orgs-and-repos"],
+			metadata: nil,
+			expected: fmt.Errorf("can't do ownership check, metadata not defined"),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := verifyClusterProfileOwnership(tc.profile, tc.metadata)
+			if d := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); d != "" {
+				t.Errorf("expected differs from actual: %s\n", d)
+			}
+		})
+	}
+}

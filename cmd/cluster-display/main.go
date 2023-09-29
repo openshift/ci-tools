@@ -19,6 +19,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/interrupts"
@@ -31,6 +32,7 @@ import (
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/prowconfigutils"
 )
 
 type Page struct {
@@ -227,8 +229,8 @@ func getCluster(ctx context.Context, clients map[string]ctrlruntimeclient.Client
 	for cluster, client := range clients {
 		clusterInfo, err := getter.GetClusterDetails(ctx, cluster, client)
 		if err != nil {
-			logrus.WithError(err)
-			clusterInfo = map[string]string{"cluster": cluster, "error": "cannot reach cluster"}
+			logrus.WithError(err).Warn("Failed to get cluster details")
+			clusterInfo = map[string]string{"cluster": cluster, "error": "an error occurred while retrieving cluster information"}
 		}
 		data = append(data, clusterInfo)
 	}
@@ -254,7 +256,7 @@ func resolveProduct(ctx context.Context, client ctrlruntimeclient.Client, versio
 	return "OSD", nil
 }
 
-func getRouter(ctx context.Context, hiveClient ctrlruntimeclient.Client, clients map[string]ctrlruntimeclient.Client) *http.ServeMux {
+func getRouter(ctx context.Context, hiveClient ctrlruntimeclient.Client, clients map[string]ctrlruntimeclient.Client, prowDisabledClusters []string) *http.ServeMux {
 	handler := http.NewServeMux()
 	cache := memoryCache{CacheDuration: time.Hour}
 
@@ -279,6 +281,11 @@ func getRouter(ctx context.Context, hiveClient ctrlruntimeclient.Client, clients
 		case "clusters":
 			skipHive := r.URL.Query().Get("skipHive") == "true"
 			page = cache.GetClusterPage(ctx, allClients, skipHive, &clusterInfoGetter{})
+			noDups := sets.New[string](prowDisabledClusters...).UnsortedList()
+			sort.Strings(noDups)
+			for _, cluster := range noDups {
+				page.Data = append(page.Data, map[string]string{"cluster": cluster, "error": "disabled cluster in Prow"})
+			}
 		default:
 			http.Error(w, fmt.Sprintf("Unknown crd: %s", crd), http.StatusBadRequest)
 			return
@@ -334,6 +341,12 @@ func main() {
 	if err := validateOptions(o); err != nil {
 		logrus.WithError(err).Fatal("invalid options")
 	}
+
+	prowDisabledClusters, err := prowconfigutils.ProwDisabledClusters(&o.kubernetesOptions)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to get Prow disable clusters")
+	}
+
 	level, _ := logrus.ParseLevel(o.logLevel)
 	logrus.SetLevel(level)
 
@@ -387,7 +400,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:    ":" + strconv.Itoa(o.port),
-		Handler: getRouter(interrupts.Context(), hiveClient, clients),
+		Handler: getRouter(interrupts.Context(), hiveClient, clients, prowDisabledClusters),
 	}
 	interrupts.ListenAndServe(server, o.gracePeriod)
 	interrupts.WaitForGracefulShutdown()

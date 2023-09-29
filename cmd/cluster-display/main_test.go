@@ -61,6 +61,7 @@ func TestGetRouter(t *testing.T) {
 		name                string
 		url                 string
 		hiveClient          ctrlruntimeclient.Client
+		disabledClusters    []string
 		expectedCode        int
 		expectedBody        string
 		expectedContentType string
@@ -114,7 +115,7 @@ func TestGetRouter(t *testing.T) {
 			}
 
 			rr := httptest.NewRecorder()
-			router := getRouter(context.TODO(), tc.hiveClient, nil)
+			router := getRouter(context.TODO(), tc.hiveClient, nil, tc.disabledClusters)
 			router.ServeHTTP(rr, req)
 
 			if diff := cmp.Diff(tc.expectedCode, rr.Code); diff != "" {
@@ -136,7 +137,7 @@ func (g *fakeClusterGetter) GetClusterDetails(ctx context.Context, cluster strin
 	if cluster == "badCluster" {
 		return map[string]string{
 			"cluster": cluster,
-			"error":   "cannot reach cluster",
+			"error":   "an error occurred while retrieving cluster information",
 		}, fmt.Errorf("an error occurred")
 	}
 	return map[string]string{
@@ -178,7 +179,7 @@ func TestGetCluster(t *testing.T) {
 			expected: []map[string]string{
 				{
 					"cluster": "badCluster",
-					"error":   "cannot reach cluster",
+					"error":   "an error occurred while retrieving cluster information",
 				},
 			},
 			getter: &clusterInfoGetter{},
@@ -192,7 +193,7 @@ func TestGetCluster(t *testing.T) {
 			expected: []map[string]string{
 				{
 					"cluster": "badCluster",
-					"error":   "cannot reach cluster",
+					"error":   "an error occurred while retrieving cluster information",
 				},
 				{
 					"cluster": "okCluster",

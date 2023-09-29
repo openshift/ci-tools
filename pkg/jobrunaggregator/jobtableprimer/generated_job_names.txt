@@ -604,6 +604,7 @@ periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-proxy
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-serial
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-single-node
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-single-node-serial
+periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-upgrade-rollback-oldest-supported
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-upi
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-sdn
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-sdn-cgroupsv2
@@ -875,6 +876,7 @@ periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-ovn-ppc64le-powervs
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-ovn-remote-libvirt-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-ovn-remote-libvirt-s390x
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-ovn-serial-aws-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-ovn-single-node-ppc64le-powervs
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-sdn-serial-aws-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-serial-aws-ovn-heterogeneous
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-serial-ovn-ppc64le-powervs
@@ -1636,6 +1638,7 @@ periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-shared-vpc-phz-tec
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-single-node
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-single-node-serial
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-single-node-workers
+periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-upgrade-rollback-oldest-supported
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-upi
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-workers-rhel8
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-sdn

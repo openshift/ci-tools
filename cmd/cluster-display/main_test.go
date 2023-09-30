@@ -145,7 +145,7 @@ func (g *fakeClusterGetter) GetClusterDetails(ctx context.Context, cluster strin
 	}, nil
 }
 
-func TestGetClusterPage(t *testing.T) {
+func TestGetCluster(t *testing.T) {
 	testCases := []struct {
 		name     string
 		clients  map[string]ctrlruntimeclient.Client
@@ -205,8 +205,8 @@ func TestGetClusterPage(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			page := getClusterPage(context.TODO(), tc.clients, true, tc.getter)
-			if diff := cmp.Diff(page.Data, tc.expected); diff != "" {
+			data := getCluster(context.TODO(), tc.clients, tc.getter)
+			if diff := cmp.Diff(data, tc.expected); diff != "" {
 				t.Errorf("result differs from expected output, diff:\n%s", diff)
 			}
 		})

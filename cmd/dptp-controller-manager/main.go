@@ -39,6 +39,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/controller/testimagestreamimportcleaner"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 	"github.com/openshift/ci-tools/pkg/load/agents"
+	"github.com/openshift/ci-tools/pkg/prowconfigutils"
 )
 
 const (
@@ -277,6 +278,11 @@ func main() {
 	if val := int(opts.blockProfileRate.Nanoseconds()); val != 0 {
 		logrus.WithField("rate", opts.blockProfileRate.String()).Info("Setting block profile rate")
 		runtime.SetBlockProfileRate(val)
+	}
+
+	_, err = prowconfigutils.ProwDisabledClusters(&opts.kubernetesOptions)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to get Prow disable clusters")
 	}
 
 	ctx := controllerruntime.SetupSignalHandler()

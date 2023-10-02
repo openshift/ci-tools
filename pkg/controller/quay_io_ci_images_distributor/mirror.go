@@ -15,7 +15,8 @@ type MirrorTask struct {
 	Source            string                                `json:"source"`
 	Destination       string                                `json:"destination"`
 	CurrentQuayDigest string                                `json:"current_quay_digest"`
-	createdAt         time.Time                             `json:"-"`
+	CreatedAt         time.Time                             `json:"created_at"`
+	Stale             bool                                  `json:"stale"`
 }
 
 type MirrorStore interface {
@@ -34,7 +35,7 @@ func (s *memoryMirrorStore) Put(tasks ...MirrorTask) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, t := range tasks {
-		t.createdAt = time.Now()
+		t.CreatedAt = time.Now()
 		s.mirrors[t.Destination] = t
 	}
 	return nil
@@ -107,7 +108,7 @@ func (c *MirrorConsumerController) Run() error {
 		for _, mirror := range mirrors {
 			pairs = append(pairs, fmt.Sprintf("%s=%s", mirror.Source, mirror.Destination))
 		}
-		// TODO use "--force" on long stale images
+		// TODO use "--force" on long stale images with errors
 		if err := c.quayIOImageHelper.ImageMirror(pairs, c.options); err != nil {
 			c.logger.WithError(err).Warn("Failed to mirror")
 		}

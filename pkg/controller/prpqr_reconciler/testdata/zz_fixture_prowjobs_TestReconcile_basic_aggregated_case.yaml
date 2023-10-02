@@ -21,7 +21,7 @@
     cluster: cluster-name-overwritten
     decoration_config:
       skip_cloning: true
-      timeout: 8h0m0s
+      timeout: 6h0m0s
     job: aggregator-periodic-ci-test-org-test-repo-test-branch-test-name
     pod_spec:
       containers:
@@ -120,7 +120,6 @@
     cluster: cluster-name-defaulted
     decoration_config:
       skip_cloning: true
-      timeout: 6h0m0s
     extra_refs:
     - base_ref: test-branch
       base_sha: "123456"
@@ -206,7 +205,6 @@
     cluster: cluster-name-defaulted
     decoration_config:
       skip_cloning: true
-      timeout: 6h0m0s
     extra_refs:
     - base_ref: test-branch
       base_sha: "123456"

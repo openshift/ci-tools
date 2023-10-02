@@ -1475,6 +1475,7 @@ periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ipi-serial-ovn-duals
 periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ipi-serial-ovn-ipv6
 periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ipi-upgrade-ovn-ipv6
 periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ovn-assisted
+periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ovn-single-node-hostname-change
 periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ovn-single-node-live-iso
 periodic-ci-openshift-release-master-nightly-4.13-e2e-metal-ovn-single-node-with-worker-live-iso
 periodic-ci-openshift-release-master-nightly-4.13-e2e-nutanix-ovn

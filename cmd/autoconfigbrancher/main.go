@@ -104,7 +104,7 @@ func runAndCommitIfNeeded(stdout, stderr io.Writer, author, cmd string, args []s
 	}
 
 	gitCmd := "git"
-	if err := bumper.Call(stdout, stderr, gitCmd, []string{"add", "."}...); err != nil {
+	if err := bumper.Call(stdout, stderr, gitCmd, "add", "."); err != nil {
 		return false, fmt.Errorf("failed to 'git add .': %w", err)
 	}
 
@@ -183,7 +183,7 @@ func main() {
 			arguments: func() []string {
 				args := []string{"--config-dir", "./ci-operator/config", "--current-release", o.CurrentRelease, "--skip-periodics"}
 				for _, fr := range o.FutureReleases.Strings() {
-					args = append(args, []string{"--future-release", fr}...)
+					args = append(args, "--future-release", fr)
 				}
 				args = append(args, "--confirm")
 				return args
@@ -194,7 +194,7 @@ func main() {
 			arguments: func() []string {
 				args := []string{"--config-dir", o.ConfigDir, "--to-org", "openshift-priv", "--only-org", "openshift"}
 				if o.whitelist != "" {
-					args = append(args, []string{"--whitelist-file", o.whitelist}...)
+					args = append(args, "--whitelist-file", o.whitelist)
 				}
 				return args
 
@@ -216,7 +216,7 @@ func main() {
 					"--github-endpoint", "http://ghproxy",
 					"--dry-run", "false"}
 				if o.whitelist != "" {
-					args = append(args, []string{"--whitelist-file", o.whitelist}...)
+					args = append(args, "--whitelist-file", o.whitelist)
 				}
 				return args
 			}(),

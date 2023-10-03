@@ -27,10 +27,12 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	buildapi "github.com/openshift/api/build/v1"
+	buildv1 "github.com/openshift/api/build/v1"
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
+	"github.com/openshift/ci-tools/pkg/manifestpusher"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
@@ -50,6 +52,9 @@ const (
 	oauthToken    = "/oauth-token"
 
 	OauthSecretKey = "oauth-token"
+
+	dockerCfgPathPush = "/secrets/manifest-tool/.dockerconfigjson"
+	localRegistryDNS  = "image-registry.openshift-image-registry.svc:5000"
 )
 
 type CloneAuthType string
@@ -430,6 +435,18 @@ func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubern
 		errs = append(errs, err)
 	}
 
+	if len(errs) == 0 {
+		buildsMap := make(map[string]*buildv1.Build)
+		for _, b := range builds {
+			buildsMap[b.Name] = &b
+		}
+
+		manifestPusher := manifestpusher.NewManifestPushfer(logrus.WithField("for-build", build.Name), localRegistryDNS, dockerCfgPathPush)
+		if err := manifestPusher.PushImageWithManifest(buildsMap, fmt.Sprintf("%s/%s", build.Spec.Output.To.Namespace, build.Spec.Output.To.Name)); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
 	return utilerrors.NewAggregate(errs)
 }
 
@@ -438,13 +455,17 @@ func constructMultiArchBuilds(build buildapi.Build, nodeArchitectures []string) 
 
 	for _, arch := range nodeArchitectures {
 		b := build
-
-		if arch != string(api.ReleaseArchitectureAMD64) {
-			b.Name = fmt.Sprintf("%s-%s", b.Name, arch)
-		}
-
+		b.Name = fmt.Sprintf("%s-%s", b.Name, arch)
 		b.Spec.NodeSelector = map[string]string{
 			corev1.LabelArchStable: arch,
+		}
+
+		b.Spec.Output = buildapi.BuildOutput{
+			To: &corev1.ObjectReference{
+				Kind:      "ImageStreamTag",
+				Namespace: b.Namespace,
+				Name:      fmt.Sprintf("%s:%s", api.PipelineImageStream, b.Name),
+			},
 		}
 		ret = append(ret, b)
 	}

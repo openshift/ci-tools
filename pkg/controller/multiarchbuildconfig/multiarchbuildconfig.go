@@ -1,10 +1,8 @@
 package multiarchbuildconfig
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -26,6 +24,7 @@ import (
 	v1 "github.com/openshift/ci-tools/pkg/api/multiarchbuildconfig/v1"
 	"github.com/openshift/ci-tools/pkg/controller/multiarchbuildconfig/buildsreconciler"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
+	"github.com/openshift/ci-tools/pkg/manifestpusher"
 )
 
 const (
@@ -34,10 +33,10 @@ const (
 
 	// TODO: Now we hardcode the URL for the heterogeneous cluster.
 	// TODO: We need to push it to the app.ci registry or quay.io.
-	registryURL = "registry.multi-build01.arm-build.devcluster.openshift.com"
+	registryURL = "image-registry.openshift-image-registry.svc:5000"
 )
 
-func AddToManager(mgr manager.Manager, architectures []string) error {
+func AddToManager(mgr manager.Manager, architectures []string, dockerCfgPath string) error {
 	if err := buildsreconciler.AddToManager(mgr); err != nil {
 		return fmt.Errorf("failed to construct builds reconciler: %w", err)
 	}
@@ -49,7 +48,7 @@ func AddToManager(mgr manager.Manager, architectures []string) error {
 			logger:         logger,
 			client:         mgr.GetClient(),
 			architectures:  architectures,
-			manifestPusher: manifestPusher{logger: logger},
+			manifestPusher: manifestpusher.NewManifestPushfer(logger, registryURL, dockerCfgPath),
 		},
 	})
 	if err != nil {
@@ -87,7 +86,7 @@ type reconciler struct {
 	logger         *logrus.Entry
 	client         ctrlruntimeclient.Client
 	architectures  []string
-	manifestPusher ManifestPusher
+	manifestPusher manifestpusher.ManifestPusher
 }
 
 func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
@@ -205,54 +204,4 @@ func checkAllBuildsFinished(builds map[string]*buildv1.Build) bool {
 		}
 	}
 	return true
-}
-
-type ManifestPusher interface {
-	PushImageWithManifest(builds map[string]*buildv1.Build, targetImageRef string) error
-}
-
-type manifestPusher struct {
-	logger *logrus.Entry
-}
-
-// pushOutputImageWithManifest constructs a manifest-tool command to create and push a new image with all images that we built
-// in the manifest list based on their architecture.
-//
-// Example command:
-// /usr/bin/manifest-tool push from-args \
-// --platforms linux/amd64 --template registry.multi-build01.arm-build.devcluster.openshift.com/ci/managed-clonerefs:latest-amd64 \
-// --platforms linux/arm64 --template registry.multi-build01.arm-build.devcluster.openshift.com/ci/managed-clonerefs:latest-arm64 \
-// --target registry.multi-build01.arm-build.devcluster.openshift.com/ci/managed-clonerefs:latest
-func (m manifestPusher) PushImageWithManifest(builds map[string]*buildv1.Build, targetImageRef string) error {
-	args := []string{"push", "from-args"}
-	for _, build := range builds {
-		args = append(args, []string{
-			"--platforms",
-			fmt.Sprintf("linux/%s", build.Spec.NodeSelector[nodeArchitectureLabel]),
-			"--template",
-			fmt.Sprintf("%s/%s/%s", registryURL, build.Spec.Output.To.Namespace, build.Spec.Output.To.Name),
-		}...)
-	}
-
-	args = append(args, []string{
-		"--target",
-		fmt.Sprintf("%s/%s", registryURL, targetImageRef),
-	}...)
-
-	cmd := exec.Command("manifest-tool", args...)
-
-	cmdOutput := &bytes.Buffer{}
-	cmdError := &bytes.Buffer{}
-	cmd.Stdout = cmdOutput
-	cmd.Stderr = cmdError
-
-	m.logger.Infof("Running command: %s", cmd.String())
-	err := cmd.Run()
-	if err != nil {
-		m.logger.WithError(err).WithField("output", cmdOutput.String()).WithField("error_output", cmdError.String()).Error("manifest-tool command failed")
-		return err
-	}
-
-	m.logger.WithField("output", cmdOutput.String()).Info("manifest-tool command succeeded")
-	return nil
 }

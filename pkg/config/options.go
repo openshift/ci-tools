@@ -128,8 +128,8 @@ func (o *Options) OperateOnCIOperatorConfigDir(configDir string, callback func(*
 
 // OperateOnJobConfigSubdirPaths filters the full set of configurations
 // down to those that were selected by the user with --{org|repo}
-func (o *Options) OperateOnJobConfigSubdirPaths(dir, subDir string, callback func(info *jc.Info) error) error {
-	return jc.OperateOnJobConfigSubdirPaths(dir, subDir, func(info *jc.Info) error {
+func (o *Options) OperateOnJobConfigSubdirPaths(dir, subDir string, knownInfraJobFiles sets.Set[string], callback func(info *jc.Info) error) error {
+	return jc.OperateOnJobConfigSubdirPaths(dir, subDir, knownInfraJobFiles, func(info *jc.Info) error {
 		if !o.matches(info.Org, info.Repo) {
 			return nil
 		}

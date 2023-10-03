@@ -1,0 +1,3 @@
+# This job should stay in this file.
+periodics:
+- name: some-infra-job

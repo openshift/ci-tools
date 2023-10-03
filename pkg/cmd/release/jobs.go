@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
 
 	"github.com/openshift/ci-tools/pkg/config"
@@ -37,7 +38,7 @@ func cmdJob(o *options, list bool, args []string) error {
 
 func cmdJobList(args []string) error {
 	for _, p := range args {
-		if err := jobconfig.OperateOnJobConfigSubdirPaths("", p, func(
+		if err := jobconfig.OperateOnJobConfigSubdirPaths("", p, make(sets.Set[string]), func(
 			info *jobconfig.Info,
 		) error {
 			fmt.Println(info.Filename)
@@ -51,7 +52,7 @@ func cmdJobList(args []string) error {
 
 func cmdJobPrint(args []string) error {
 	for _, p := range args {
-		if err := jobconfig.OperateOnJobConfigDir(p, func(
+		if err := jobconfig.OperateOnJobConfigDir(p, make(sets.Set[string]), func(
 			job *prowconfig.JobConfig,
 			_ *jobconfig.Info,
 		) error {

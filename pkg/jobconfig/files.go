@@ -132,15 +132,15 @@ func extractInfoFromPath(configFilePath string) (*Info, error) {
 	}, nil
 }
 
-func OperateOnJobConfigDir(configDir string, callback func(*prowconfig.JobConfig, *Info) error) error {
-	return OperateOnJobConfigSubdir(configDir, "", callback)
+func OperateOnJobConfigDir(configDir string, knownInfraJobFiles sets.Set[string], callback func(*prowconfig.JobConfig, *Info) error) error {
+	return OperateOnJobConfigSubdir(configDir, "", knownInfraJobFiles, callback)
 }
 
-func OperateOnJobConfigSubdir(configDir, subDir string, callback func(*prowconfig.JobConfig, *Info) error) error {
+func OperateOnJobConfigSubdir(configDir, subDir string, knownInfraJobFiles sets.Set[string], callback func(*prowconfig.JobConfig, *Info) error) error {
 	inputCh := make(chan *Info)
 	produce := func() error {
 		defer close(inputCh)
-		return OperateOnJobConfigSubdirPaths(configDir, subDir, func(info *Info) error {
+		return OperateOnJobConfigSubdirPaths(configDir, subDir, knownInfraJobFiles, func(info *Info) error {
 			inputCh <- info
 			return nil
 		})
@@ -174,15 +174,18 @@ func OperateOnJobConfigSubdir(configDir, subDir string, callback func(*prowconfi
 	return util.ProduceMapReduce(0, produce, map_, reduce, done, errCh)
 }
 
-func OperateOnJobConfigSubdirPaths(configDir, subDir string, callback func(*Info) error) error {
+func OperateOnJobConfigSubdirPaths(configDir, subDir string, knownInfraJobFiles sets.Set[string], callback func(*Info) error) error {
 	if err := filepath.WalkDir(filepath.Join(configDir, subDir), func(path string, info fs.DirEntry, err error) error {
 		logger := logrus.WithField("source-file", path)
 		if err != nil {
 			logger.WithError(err).Error("Failed to walk file/directory")
 			return nil
 		}
-
 		if !info.IsDir() && filepath.Ext(path) == ".yaml" {
+			if knownInfraJobFiles.Has(info.Name()) {
+				logger.Debugf("Skipping known infra file: %s", info.Name())
+				return nil
+			}
 			info, err := extractInfoFromPath(path)
 			if err != nil {
 				logger.WithError(err).Warn("Failed to determine info for prow job config")
@@ -204,7 +207,7 @@ func ReadFromDir(dir string) (*prowconfig.JobConfig, error) {
 		PostsubmitsStatic: map[string][]prowconfig.Postsubmit{},
 		Periodics:         []prowconfig.Periodic{},
 	}
-	if err := OperateOnJobConfigDir(dir, func(config *prowconfig.JobConfig, elements *Info) error {
+	if err := OperateOnJobConfigDir(dir, make(sets.Set[string]), func(config *prowconfig.JobConfig, elements *Info) error {
 		Append(jobConfig, config)
 		return nil
 	}); err != nil {
@@ -331,7 +334,7 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig, gener
 	if err := os.MkdirAll(jobDirForComponent, os.ModePerm); err != nil {
 		return err
 	}
-	if err := OperateOnJobConfigSubdir(jobDirForComponent, "", func(jobConfig *prowconfig.JobConfig, info *Info) error {
+	if err := OperateOnJobConfigSubdir(jobDirForComponent, "", make(sets.Set[string]), func(jobConfig *prowconfig.JobConfig, info *Info) error {
 		file := filepath.Base(info.Filename)
 		if generated, ok := files[file]; ok {
 			delete(files, file)

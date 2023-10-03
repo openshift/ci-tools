@@ -13,6 +13,7 @@ import (
 
 	"k8s.io/api/core/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
@@ -97,7 +98,7 @@ func main() {
 	}
 
 	var foundFailures bool
-	if err := jobconfig.OperateOnJobConfigDir(path.Join(o.releaseRepoDir, config.JobConfigInRepoPath), func(jobConfig *prowconfig.JobConfig, info *jobconfig.Info) error {
+	if err := jobconfig.OperateOnJobConfigDir(path.Join(o.releaseRepoDir, config.JobConfigInRepoPath), make(sets.Set[string]), func(jobConfig *prowconfig.JobConfig, info *jobconfig.Info) error {
 		// we know the path is relative, but there is no API to declare that
 		relPath, _ := filepath.Rel(o.releaseRepoDir, info.Filename)
 		pathsToCheck = append(pathsToCheck, pathWithConfig{path: relPath, configMap: info.ConfigMapName()})

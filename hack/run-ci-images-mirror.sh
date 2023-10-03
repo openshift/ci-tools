@@ -6,7 +6,7 @@ TMP_DIR="$(mktemp -d)"
 
 trap 'rm -rf ${TMP_DIR}' EXIT
 oc --context app.ci  -n ci extract secret/ci-images-mirror --to="${TMP_DIR}"
-oc --context build01 -n ci extract secret/registry-push-credentials-ci-central --to=- --keys .dockerconfigjson | jq > "${TMP_DIR}/a.c"
+oc --context app.ci -n ci extract secret/registry-push-credentials-ci-images-mirror --to=- --keys .dockerconfigjson | jq > "${TMP_DIR}/a.c"
 
 release="${RELEASE:-"$(go env GOPATH)/src/github.com/openshift/release"}"
 

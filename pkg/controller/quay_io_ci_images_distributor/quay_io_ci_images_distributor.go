@@ -145,32 +145,43 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 		}
 		return fmt.Errorf("failed to get imageStreamTag %s from registry cluster: %w", req.String(), err)
 	}
-	colonSplit = strings.Split(sourceImageStreamTag.Image.ObjectMeta.Name, ":")
+
+	imageName := sourceImageStreamTag.Image.ObjectMeta.Name
+	colonSplit = strings.Split(imageName, ":")
 	if n := len(colonSplit); n != 2 {
-		return fmt.Errorf("splitting %s by `:` didn't yield two but %d results", sourceImageStreamTag.Image.ObjectMeta.Name, n)
+		//should never happen
+		return fmt.Errorf("splitting %s by `:` didn't yield two but %d results", imageName, n)
 	}
 	if colonSplit[0] != "sha256" {
-		return fmt.Errorf("image name has no prefix `sha256:`: %s", sourceImageStreamTag.Image.ObjectMeta.Name)
+		//should never happen
+		return fmt.Errorf("image name has no prefix `sha256:`: %s", imageName)
 	}
 
-	if digest := colonSplit[1]; imageInfo.Digest != digest {
+	if imageInfo.Digest != imageName {
+		stale := imageInfo.Config.Created.Add(24 * time.Hour).Before(sourceImageStreamTag.Image.ObjectMeta.CreationTimestamp.Time)
+		// TODO Use stale to handle errors from mirroring
 		sourceImage := fmt.Sprintf("%s/%s/%s@%s", cioperatorapi.DomainForService(cioperatorapi.ServiceRegistry), tagRef.Namespace, tagRef.Name, sourceImageStreamTag.Image.ObjectMeta.Name)
-		targetImageWithDateAndDigest := cioperatorapi.QuayImageFromDateAndDigest(time.Now().Format("20060102"), digest)
-		r.log.WithField("currentQuayDigest", imageInfo.Digest).WithField("source", sourceImage).WithField("targetImageWithDateAndDigest", targetImageWithDateAndDigest).WithField("target", quayImage).Info("Mirroring")
+		targetImageWithDateAndDigest := cioperatorapi.QuayImageFromDateAndDigest(time.Now().Format("20060102"), colonSplit[1])
+		r.log.WithField("currentQuayDigest", imageInfo.Digest).WithField("stale", stale).WithField("source", sourceImage).WithField("targetImageWithDateAndDigest", targetImageWithDateAndDigest).WithField("target", quayImage).Info("Mirroring")
+
 		if err := r.mirrorStore.Put(MirrorTask{
 			SourceTagRef:      tagRef,
 			Source:            sourceImage,
 			Destination:       quayImage,
 			CurrentQuayDigest: imageInfo.Digest,
+			Stale:             stale,
 		},
 			MirrorTask{
 				SourceTagRef:      tagRef,
 				Source:            sourceImage,
 				Destination:       targetImageWithDateAndDigest,
 				CurrentQuayDigest: imageInfo.Digest,
+				Stale:             stale,
 			}); err != nil {
 			return fmt.Errorf("failed to put the mirror into store: %w", err)
 		}
+	} else {
+		r.log.WithField("currentQuayDigest", imageInfo.Digest).WithField("target", quayImage).Debug("Image is up to date")
 	}
 	return nil
 }
@@ -314,7 +325,8 @@ func sourceForConfigChangeChannel(registryClient ctrlruntimeclient.Client, chang
 }
 
 type ImageInfo struct {
-	Name   string `json:"name"`
+	Name string `json:"name"`
+	// Digest is the digest of the image, e.g., sha256:b24f782bee7dfddcc36b962f663aeabb16d6fa56a64a7cd0639ebfb1e5fa73f4
 	Digest string `json:"digest"`
 	Config Config `json:"config"`
 }
@@ -322,7 +334,7 @@ type ImageInfo struct {
 type Config struct {
 	Architecture string `json:"architecture"`
 	// "created": "2023-09-14T15:13:32.640956126Z",
-	Created time.Time
+	Created time.Time `json:"created"`
 }
 
 type QuayIOImageHelper interface {

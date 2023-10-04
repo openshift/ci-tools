@@ -460,12 +460,10 @@ func constructMultiArchBuilds(build buildapi.Build, nodeArchitectures []string) 
 			corev1.LabelArchStable: arch,
 		}
 
-		b.Spec.Output = buildapi.BuildOutput{
-			To: &corev1.ObjectReference{
-				Kind:      "ImageStreamTag",
-				Namespace: b.Namespace,
-				Name:      fmt.Sprintf("%s:%s", api.PipelineImageStream, b.Name),
-			},
+		b.Spec.Output.To = &corev1.ObjectReference{
+			Kind:      "ImageStreamTag",
+			Namespace: b.Namespace,
+			Name:      fmt.Sprintf("%s:%s", api.PipelineImageStream, b.Name),
 		}
 		ret = append(ret, b)
 	}

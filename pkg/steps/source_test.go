@@ -743,6 +743,17 @@ func Test_constructMultiArchBuilds(t *testing.T) {
 			nodeArchitectures: []string{"amd64"},
 			build: buildapi.Build{
 				ObjectMeta: meta.ObjectMeta{Name: "test-build"},
+				Spec: buildv1.BuildSpec{
+					CommonSpec: buildv1.CommonSpec{
+						Output: buildv1.BuildOutput{
+							ImageLabels: []buildapi.ImageLabel{
+								{Name: "io.openshift.build.namespace", Value: "namespace"},
+								{Name: "io.openshift.build.commit.id", Value: "commit-id"},
+								{Name: "io.openshift.build.commit.ref", Value: "commit-id"},
+							},
+						},
+					},
+				},
 			},
 			want: []buildapi.Build{
 				{
@@ -753,6 +764,11 @@ func Test_constructMultiArchBuilds(t *testing.T) {
 								"kubernetes.io/arch": "amd64",
 							},
 							Output: buildv1.BuildOutput{
+								ImageLabels: []buildapi.ImageLabel{
+									{Name: "io.openshift.build.namespace", Value: "namespace"},
+									{Name: "io.openshift.build.commit.id", Value: "commit-id"},
+									{Name: "io.openshift.build.commit.ref", Value: "commit-id"},
+								},
 								To: &coreapi.ObjectReference{Name: "pipeline:test-build-amd64"},
 							},
 						},
@@ -765,6 +781,17 @@ func Test_constructMultiArchBuilds(t *testing.T) {
 			nodeArchitectures: []string{"amd64", "arm64", "ppc64"},
 			build: buildapi.Build{
 				ObjectMeta: meta.ObjectMeta{Name: "test-build"},
+				Spec: buildv1.BuildSpec{
+					CommonSpec: buildv1.CommonSpec{
+						Output: buildv1.BuildOutput{
+							ImageLabels: []buildapi.ImageLabel{
+								{Name: "io.openshift.build.namespace", Value: "namespace"},
+								{Name: "io.openshift.build.commit.id", Value: "commit-id"},
+								{Name: "io.openshift.build.commit.ref", Value: "commit-id"},
+							},
+						},
+					},
+				},
 			},
 			want: []buildapi.Build{
 				{
@@ -775,6 +802,11 @@ func Test_constructMultiArchBuilds(t *testing.T) {
 								"kubernetes.io/arch": "amd64",
 							},
 							Output: buildv1.BuildOutput{
+								ImageLabels: []buildapi.ImageLabel{
+									{Name: "io.openshift.build.namespace", Value: "namespace"},
+									{Name: "io.openshift.build.commit.id", Value: "commit-id"},
+									{Name: "io.openshift.build.commit.ref", Value: "commit-id"},
+								},
 								To: &coreapi.ObjectReference{Name: "pipeline:test-build-amd64"},
 							},
 						},
@@ -788,6 +820,11 @@ func Test_constructMultiArchBuilds(t *testing.T) {
 								"kubernetes.io/arch": "arm64",
 							},
 							Output: buildv1.BuildOutput{
+								ImageLabels: []buildapi.ImageLabel{
+									{Name: "io.openshift.build.namespace", Value: "namespace"},
+									{Name: "io.openshift.build.commit.id", Value: "commit-id"},
+									{Name: "io.openshift.build.commit.ref", Value: "commit-id"},
+								},
 								To: &coreapi.ObjectReference{Name: "pipeline:test-build-arm64"},
 							},
 						},
@@ -801,6 +838,11 @@ func Test_constructMultiArchBuilds(t *testing.T) {
 								"kubernetes.io/arch": "ppc64",
 							},
 							Output: buildv1.BuildOutput{
+								ImageLabels: []buildapi.ImageLabel{
+									{Name: "io.openshift.build.namespace", Value: "namespace"},
+									{Name: "io.openshift.build.commit.id", Value: "commit-id"},
+									{Name: "io.openshift.build.commit.ref", Value: "commit-id"},
+								},
 								To: &coreapi.ObjectReference{Name: "pipeline:test-build-ppc64"},
 							},
 						},

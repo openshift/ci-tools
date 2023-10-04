@@ -210,12 +210,6 @@ func (w *ClusterJobRunWaiter) allProwJobsFinished(allItems []*prowv1.ProwJob) (b
 func (w *ClusterJobRunWaiter) checkMatchedJobsForCompletion(prowJobInformer v1.ProwJobInformer) (bool, map[string]*prowv1.ProwJob, error) {
 	allItems, err := prowJobInformer.Lister().List(labels.Everything())
 	if err != nil {
-		logrus.Infof("Error listing prow jobs: %v", err)
-		// this is a change from the prior code, confirm if that was intentional
-		// if err != nil {
-		//				logrus.Infof("Error listing prow jobs: %v", err)
-		//				return false, nil
-		//			}
 		return false, nil, err
 	}
 
@@ -252,6 +246,13 @@ func (w *ClusterJobRunWaiter) Wait(ctx context.Context) ([]JobRunIdentifier, err
 		true,
 		func(ctx context.Context) (bool, error) {
 			allDone, _, err := w.checkMatchedJobsForCompletion(prowJobInformer)
+
+			if err != nil {
+				// log and suppress the error
+				logrus.Infof("Error listing prow jobs: %v", err)
+				return false, nil
+			}
+
 			return allDone, err
 		},
 	)

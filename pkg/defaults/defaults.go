@@ -532,12 +532,14 @@ func rootImageResolver(client loggingclient.LoggingClient, ctx context.Context, 
 		// If the image contains a manifest list, the docker metadata are empty. Instead
 		// we need to grab the metadata from one of the images in manifest list.
 		if len(cacheTag.Image.DockerImageManifests) > 0 {
-			imgTag := &imagev1.ImageStreamTag{}
-			if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: cache.Namespace,
-				Name: cacheTag.Image.DockerImageManifests[0].Digest}, imgTag); err != nil {
-				return nil, fmt.Errorf("could not fetch source ImageStreamTag: %w", err)
+			imageDigest := cacheTag.Image.DockerImageManifests[0].Digest
+
+			img := &imagev1.Image{}
+			if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: imageDigest}, img); err != nil {
+				return nil, fmt.Errorf("could not fetch image %s: %w", imageDigest, err)
 			}
-			cacheTag = imgTag
+
+			cacheTag.Image = *img
 		}
 
 		logrus.Debugf("Resolved build cache %s to %s", cache.ISTagName(), cacheTag.Image.Name)

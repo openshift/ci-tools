@@ -533,7 +533,8 @@ func rootImageResolver(client loggingclient.LoggingClient, ctx context.Context, 
 		// we need to grab the metadata from one of the images in manifest list.
 		if len(cacheTag.Image.DockerImageManifests) > 0 {
 			imgTag := &imagev1.ImageStreamTag{}
-			if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: cacheTag.Image.DockerImageManifests[0].Digest}, imgTag); err != nil {
+			if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: cache.Namespace,
+				Name: cacheTag.Image.DockerImageManifests[0].Digest}, imgTag); err != nil {
 				return nil, fmt.Errorf("could not fetch source ImageStreamTag: %w", err)
 			}
 			cacheTag = imgTag

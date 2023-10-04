@@ -173,19 +173,21 @@ func generateSecretVolume(clusterName string) v1.Volume {
 func generateContainer(image, clusterName string, extraArgs []string, extraVolumeMounts []v1.VolumeMount, extraEnvVars []v1.EnvVar) v1.Container {
 	var env []v1.EnvVar
 	env = append(env, extraEnvVars...)
-	if clusterName == string(api.ClusterBuild01) || clusterName == string(api.ClusterBuild02) {
-		env = append(env, []v1.EnvVar{
-			{
-				Name: clusterName + "_id",
-				ValueFrom: &v1.EnvVarSource{
-					SecretKeyRef: &v1.SecretKeySelector{
-						Key: clusterName + "-id",
-						LocalObjectReference: v1.LocalObjectReference{
-							Name: clusterName + "-dex-oidc",
-						},
+	if clusterName == string(api.ClusterBuild01) || clusterName == string(api.ClusterBuild02) || clusterName == string(api.ClusterBuild09) {
+		env = append(env, v1.EnvVar{
+			Name: clusterName + "_id",
+			ValueFrom: &v1.EnvVarSource{
+				SecretKeyRef: &v1.SecretKeySelector{
+					Key: clusterName + "-id",
+					LocalObjectReference: v1.LocalObjectReference{
+						Name: clusterName + "-dex-oidc",
 					},
 				},
 			},
+		})
+	}
+	if clusterName == string(api.ClusterBuild01) || clusterName == string(api.ClusterBuild02) {
+		env = append(env, []v1.EnvVar{
 			{
 				Name: "slack_api_url",
 				ValueFrom: &v1.EnvVarSource{

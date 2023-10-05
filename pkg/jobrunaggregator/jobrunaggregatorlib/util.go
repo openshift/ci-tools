@@ -48,9 +48,9 @@ type JobRunGetter interface {
 	// GetRelatedJobRuns gets all related job runs for analysis
 	GetRelatedJobRuns(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error)
 
-	// SetRelatedJobRuns sets minimal information known about the jobs already so we can skip
+	// GetRelatedJobRunsFromIdentifiers passes along minimal information known about the jobs already so we can skip
 	// querying and go directly to fetching the full job details when GetRelatedJobRuns is called
-	SetRelatedJobRuns([]JobRunIdentifier)
+	GetRelatedJobRunsFromIdentifiers(ctx context.Context, jobRunIdentifiers []JobRunIdentifier) ([]jobrunaggregatorapi.JobRunInfo, error)
 }
 
 type JobRunWaiter interface {
@@ -288,6 +288,7 @@ func WaitAndGetAllFinishedJobRuns(ctx context.Context,
 	finishedJobRunNames := []string{}
 	unfinishedJobRunNames := []string{}
 
+	var err error
 	matchedJobs, err := waiter.Wait(ctx)
 	if err != nil {
 		logrus.Errorf("finished waiting with error %+v", err)
@@ -295,12 +296,13 @@ func WaitAndGetAllFinishedJobRuns(ctx context.Context,
 	}
 	logrus.Infof("finished waiting")
 
+	var relatedJobRuns []jobrunaggregatorapi.JobRunInfo
 	if len(matchedJobs) > 0 {
-		jobRunGetter.SetRelatedJobRuns(matchedJobs)
+		relatedJobRuns, err = jobRunGetter.GetRelatedJobRunsFromIdentifiers(ctx, matchedJobs)
+	} else {
+		// Refresh the job runs content one last time
+		relatedJobRuns, err = jobRunGetter.GetRelatedJobRuns(ctx)
 	}
-
-	// Refresh the job runs content one last time
-	relatedJobRuns, err := jobRunGetter.GetRelatedJobRuns(ctx)
 	if err != nil {
 		return finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames, err
 	}

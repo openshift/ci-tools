@@ -89,8 +89,9 @@ func (o *JobRunAggregatorAnalyzerOptions) loadStaticJobRuns(ctx context.Context)
 	return jobRuns, nil
 }
 
-func (o *JobRunAggregatorAnalyzerOptions) SetRelatedJobRuns(jobRunIdentifiers []jobrunaggregatorlib.JobRunIdentifier) {
+func (o *JobRunAggregatorAnalyzerOptions) GetRelatedJobRunsFromIdentifiers(ctx context.Context, jobRunIdentifiers []jobrunaggregatorlib.JobRunIdentifier) ([]jobrunaggregatorapi.JobRunInfo, error) {
 	o.staticJobRunIdentifiers = jobRunIdentifiers
+	return o.GetRelatedJobRuns(ctx)
 }
 
 // GetRelatedJobRuns gets all related job runs for analysis

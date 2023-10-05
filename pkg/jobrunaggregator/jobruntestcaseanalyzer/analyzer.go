@@ -499,8 +499,9 @@ func (o *JobRunTestCaseAnalyzerOptions) loadStaticJobs() []jobrunaggregatorapi.J
 	return rows
 }
 
-func (o *JobRunTestCaseAnalyzerOptions) SetRelatedJobRuns(jobRunIDs []jobrunaggregatorlib.JobRunIdentifier) {
-	o.staticJobRunIdentifiers = jobRunIDs
+func (o *JobRunTestCaseAnalyzerOptions) GetRelatedJobRunsFromIdentifiers(ctx context.Context, jobRunIdentifiers []jobrunaggregatorlib.JobRunIdentifier) ([]jobrunaggregatorapi.JobRunInfo, error) {
+	o.staticJobRunIdentifiers = jobRunIdentifiers
+	return o.GetRelatedJobRuns(ctx)
 }
 
 // GetRelatedJobRuns gets all related job runs for analysis

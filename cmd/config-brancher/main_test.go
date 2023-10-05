@@ -449,6 +449,63 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:           "remove additional targets that don't promote to the current release",
+			currentRelease: "current-release",
+			futureReleases: []string{"future-release"},
+			input: config.DataWithInfo{
+				Configuration: api.ReleaseBuildConfiguration{
+					PromotionConfiguration: &api.PromotionConfiguration{
+						Name:      "current-release",
+						Namespace: "ocp",
+						Targets: []api.PromotionTarget{
+							{
+								Tag:       "target-1-tag",
+								Namespace: "target-1-namespace",
+							},
+							{
+								Name:      "current-release",
+								Namespace: "target-2-namespace",
+							},
+						},
+					},
+					InputConfiguration: api.InputConfiguration{
+						ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
+							Name:      "current-release",
+							Namespace: "ocp",
+						},
+					},
+				},
+				Info: config.Info{
+					Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "master"},
+				},
+			},
+			output: []config.DataWithInfo{
+				{
+					Configuration: api.ReleaseBuildConfiguration{
+						PromotionConfiguration: &api.PromotionConfiguration{
+							Name:      "future-release",
+							Namespace: "ocp",
+							Targets: []api.PromotionTarget{
+								{
+									Name:      "future-release",
+									Namespace: "target-2-namespace",
+								},
+							},
+						},
+						InputConfiguration: api.InputConfiguration{
+							ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
+								Name:      "future-release",
+								Namespace: "ocp",
+							},
+						},
+					},
+					Info: config.Info{
+						Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "release-future-release"},
+					},
+				},
+			},
+		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {

@@ -133,9 +133,9 @@ func generateBranchedConfigs(currentRelease, bumpRelease string, futureReleases 
 
 		// the new config will point to the future release
 		updateRelease(&futureConfig, futureRelease)
-		// we cannot have two configs promoting to the same output, so
-		// we need to make sure the release branch config is disabled
-		futureConfig.PromotionConfiguration.Disabled = futureRelease == devRelease
+
+		updatePromotion(&currentConfig, &futureConfig, currentRelease, futureRelease, devRelease)
+
 		// users can reference the release streams via build roots or
 		// input images, so we need to update those, too
 		updateImages(&futureConfig, devRelease, futureRelease)
@@ -160,10 +160,40 @@ func removePeriodics(tests *[]api.TestStepConfiguration) {
 	}
 }
 
+func updatePromotion(currentConfig, futureConfig *api.ReleaseBuildConfiguration, currentRelease, futureRelease, devRelease string) {
+	if currentConfig.PromotionConfiguration == nil {
+		return
+	}
+
+	currentPromotion := currentConfig.PromotionConfiguration
+	futurePromotion := futureConfig.PromotionConfiguration
+
+	if currentPromotion.Name != "" || currentPromotion.Tag != "" {
+		// we cannot have two configs promoting to the same output, so
+		// we need to make sure the release branch config is disabled
+		futurePromotion.Disabled = futureRelease == devRelease
+	}
+
+	if currentPromotion.Targets == nil {
+		return
+	}
+
+	// filter and upgrade .promotion.to[] releases that promote to the current release
+	newTargets := make([]api.PromotionTarget, 0, len(currentPromotion.Targets))
+	for _, target := range currentPromotion.Targets {
+		if target.Name == currentRelease {
+			target.Name = futureRelease
+			target.Disabled = futureRelease == devRelease
+			newTargets = append(newTargets, target)
+		}
+	}
+	futurePromotion.Targets = newTargets
+}
+
 // updateRelease updates the release that is promoted to and that
 // which is used to source the release payload for testing
 func updateRelease(config *api.ReleaseBuildConfiguration, futureRelease string) {
-	if config.PromotionConfiguration != nil {
+	if config.PromotionConfiguration != nil && config.PromotionConfiguration.Name != "" {
 		config.PromotionConfiguration.Name = futureRelease
 	}
 	if config.ReleaseTagConfiguration != nil {

@@ -33,6 +33,17 @@ type MultiArchBuildConfig struct {
 
 type MultiArchBuildConfigSpec struct {
 	BuildSpec buildv1.BuildConfigSpec `json:"build_spec"`
+	// output describes the container image the MultiArchBuildConfig should produce.
+	//+kubebuilder:validation:Optional
+	Output MultiArchBuildConfigOutput `json:"output,omitempty"`
+}
+
+type MultiArchBuildConfigOutput struct {
+	// to defines a list of optional location to push the output of this build to.
+	// A location must be a full registry path, ex.: myregistry.com/myimage:latest.
+	//+kubebuilder:validation:MinItems=1
+	//+kubebuilder:validation:MaxItems=5
+	To []string `json:"to,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

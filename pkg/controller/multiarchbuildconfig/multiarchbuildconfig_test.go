@@ -213,10 +213,61 @@ func TestReconcile(t *testing.T) {
 					},
 					Conditions: []metav1.Condition{
 						{
-							Type:    "PushManifestError",
+							Type:    PushImageManifestDone,
 							Status:  metav1.ConditionFalse,
 							Reason:  "PushManifestError",
 							Message: "test error",
+						},
+					},
+				},
+			},
+		},
+		{
+			name:           "Condition added on manifest push success",
+			manifestPusher: &mockManifestPusher{},
+			inputMabc: &v1.MultiArchBuildConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-mabc",
+					Namespace: "test-ns",
+				},
+				Spec: v1.MultiArchBuildConfigSpec{
+					BuildSpec: buildv1.BuildConfigSpec{
+						CommonSpec: buildv1.CommonSpec{Output: buildv1.BuildOutput{To: &corev1.ObjectReference{Namespace: "test-ns", Name: "test-image"}}},
+					},
+				},
+				Status: v1.MultiArchBuildConfigStatus{
+					Builds: map[string]*buildv1.Build{
+						"test-build": {
+							Status: buildv1.BuildStatus{
+								Phase: buildv1.BuildPhaseComplete,
+							},
+						},
+					},
+				},
+			},
+			expectedMabc: &v1.MultiArchBuildConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-mabc",
+					Namespace: "test-ns",
+				},
+				Spec: v1.MultiArchBuildConfigSpec{
+					BuildSpec: buildv1.BuildConfigSpec{
+						CommonSpec: buildv1.CommonSpec{Output: buildv1.BuildOutput{To: &corev1.ObjectReference{Namespace: "test-ns", Name: "test-image"}}},
+					},
+				},
+				Status: v1.MultiArchBuildConfigStatus{
+					Builds: map[string]*buildv1.Build{
+						"test-build": {
+							Status: buildv1.BuildStatus{
+								Phase: buildv1.BuildPhaseComplete,
+							},
+						},
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:   PushImageManifestDone,
+							Status: metav1.ConditionTrue,
+							Reason: "PushManifestSuccess",
 						},
 					},
 				},

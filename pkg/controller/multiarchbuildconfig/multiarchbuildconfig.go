@@ -34,6 +34,9 @@ const (
 	// TODO: Now we hardcode the URL for the heterogeneous cluster.
 	// TODO: We need to push it to the app.ci registry or quay.io.
 	registryURL = "image-registry.openshift-image-registry.svc:5000"
+
+	// Conditions
+	PushImageManifestDone string = "PushManifestDone"
 )
 
 func AddToManager(mgr manager.Manager, architectures []string, dockerCfgPath string) error {
@@ -137,16 +140,9 @@ func (r *reconciler) handleMultiArchBuildConfig(ctx context.Context, mabc *v1.Mu
 
 	if !checkAllBuildsSuccessful(mabc.Status.Builds) {
 		mutateFn = func(mabcToMutate *v1.MultiArchBuildConfig) { mabcToMutate.Status.State = v1.FailureState }
-	} else if err := r.manifestPusher.PushImageWithManifest(mabc.Status.Builds, targetImageRef); err != nil {
-		mutateFn = func(mabcToMutate *v1.MultiArchBuildConfig) {
-			mabcToMutate.Status.Conditions = append(mabcToMutate.Status.Conditions, metav1.Condition{
-				Type:               "PushManifestError",
-				Status:             metav1.ConditionFalse,
-				LastTransitionTime: metav1.Time{Time: time.Now()},
-				Reason:             "PushManifestError",
-				Message:            err.Error(),
-			})
-			mabcToMutate.Status.State = v1.FailureState
+	} else {
+		if newMutateFn := r.handlePushImageWithManifest(mabc, targetImageRef); newMutateFn != nil {
+			mutateFn = newMutateFn
 		}
 	}
 
@@ -183,6 +179,34 @@ func (r *reconciler) createBuildsForArchitectures(ctx context.Context, mabc *v1.
 		}
 	}
 	return nil
+}
+
+func (r *reconciler) handlePushImageWithManifest(mabc *v1.MultiArchBuildConfig, targetImageRef string) func(mabcToMutate *v1.MultiArchBuildConfig) {
+	if getCondition(mabc, PushImageManifestDone) != nil {
+		return nil
+	}
+
+	if err := r.manifestPusher.PushImageWithManifest(mabc.Status.Builds, targetImageRef); err != nil {
+		return func(mabcToMutate *v1.MultiArchBuildConfig) {
+			mabcToMutate.Status.Conditions = append(mabcToMutate.Status.Conditions, metav1.Condition{
+				Type:               PushImageManifestDone,
+				Status:             metav1.ConditionFalse,
+				LastTransitionTime: metav1.Time{Time: time.Now()},
+				Reason:             "PushManifestError",
+				Message:            err.Error(),
+			})
+			mabcToMutate.Status.State = v1.FailureState
+		}
+	}
+
+	return func(mabcToMutate *v1.MultiArchBuildConfig) {
+		mabcToMutate.Status.Conditions = append(mabcToMutate.Status.Conditions, metav1.Condition{
+			Type:               PushImageManifestDone,
+			Status:             metav1.ConditionTrue,
+			LastTransitionTime: metav1.Time{Time: time.Now()},
+			Reason:             "PushManifestSuccess",
+		})
+	}
 }
 
 func checkAllBuildsSuccessful(builds map[string]*buildv1.Build) bool {

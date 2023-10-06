@@ -280,8 +280,17 @@ func getRouter(ctx context.Context, hiveClient ctrlruntimeclient.Client, clients
 			page, err = cache.GetClusterPoolPage(ctx, hiveClient)
 		case "clusters":
 			skipHive := r.URL.Query().Get("skipHive") == "true"
+			disabledClusters := sets.New[string](prowDisabledClusters...)
 			page = cache.GetClusterPage(ctx, allClients, skipHive, &clusterInfoGetter{})
-			noDups := sets.New[string](prowDisabledClusters...).UnsortedList()
+			var enabled []map[string]string
+			for _, d := range page.Data {
+				c, ok := d["cluster"]
+				if ok && !disabledClusters.Has(c) {
+					enabled = append(enabled, d)
+				}
+			}
+			page.Data = enabled
+			noDups := disabledClusters.UnsortedList()
 			sort.Strings(noDups)
 			for _, cluster := range noDups {
 				page.Data = append(page.Data, map[string]string{"cluster": cluster, "error": "disabled cluster in Prow"})

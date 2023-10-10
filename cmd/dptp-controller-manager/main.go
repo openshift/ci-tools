@@ -375,6 +375,7 @@ func main() {
 			syncPeriod := 24 * time.Hour
 			options.SyncPeriod = &syncPeriod
 		}
+		logrus.WithField("cluster", cluster).Info("Creating manager ...")
 		mgr, err := controllerruntime.NewManager(&cfg, options)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to construct manager for cluster %s: %w", cluster, err))

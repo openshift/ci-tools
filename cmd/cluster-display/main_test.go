@@ -14,12 +14,16 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	routev1 "github.com/openshift/api/route/v1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 )
 
 func init() {
 	if err := hivev1.AddToScheme(scheme.Scheme); err != nil {
 		panic(fmt.Sprintf("failed to add hivev1 to scheme: %v", err))
+	}
+	if err := routev1.Install(scheme.Scheme); err != nil {
+		panic(fmt.Errorf("failed to add routev1 to scheme: %w", err))
 	}
 }
 
@@ -61,6 +65,7 @@ func TestGetRouter(t *testing.T) {
 		name                string
 		url                 string
 		hiveClient          ctrlruntimeclient.Client
+		clients             map[string]ctrlruntimeclient.Client
 		disabledClusters    []string
 		expectedCode        int
 		expectedBody        string
@@ -106,6 +111,31 @@ func TestGetRouter(t *testing.T) {
 			expectedBody:        `jQuery35103321760038853385_1623880606193({"data":[]});`,
 			expectedContentType: "application/javascript",
 		},
+		{
+			name:       "no disabled clusters",
+			url:        "/api/v1/clusters",
+			hiveClient: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects().Build(),
+			clients: map[string]ctrlruntimeclient.Client{
+				"a": fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects().Build(),
+			},
+			expectedCode: 200,
+			expectedBody: `{"data":[{"cluster":"a","error":"an error occurred while retrieving cluster information"},{"cluster":"hive","error":"an error occurred while retrieving cluster information"}]}
+`,
+			expectedContentType: "application/json",
+		},
+		{
+			name:       "disabled clusters",
+			url:        "/api/v1/clusters",
+			hiveClient: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects().Build(),
+			clients: map[string]ctrlruntimeclient.Client{
+				"a": fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects().Build(),
+			},
+			disabledClusters: []string{"a"},
+			expectedCode:     200,
+			expectedBody: `{"data":[{"cluster":"hive","error":"an error occurred while retrieving cluster information"},{"cluster":"a","error":"disabled cluster in Prow"}]}
+`,
+			expectedContentType: "application/json",
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -115,7 +145,7 @@ func TestGetRouter(t *testing.T) {
 			}
 
 			rr := httptest.NewRecorder()
-			router := getRouter(context.TODO(), tc.hiveClient, nil, tc.disabledClusters)
+			router := getRouter(context.TODO(), tc.hiveClient, tc.clients, tc.disabledClusters)
 			router.ServeHTTP(rr, req)
 
 			if diff := cmp.Diff(tc.expectedCode, rr.Code); diff != "" {

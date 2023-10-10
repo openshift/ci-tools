@@ -157,7 +157,7 @@ func (f *JobRunsAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunAggregator
 
 	var staticJobRunIdentifiers []jobrunaggregatorlib.JobRunIdentifier
 	if len(f.StaticJobRunIdentifierJSON) > 0 || len(f.StaticJobRunIdentifierPath) > 0 {
-		staticJobRunIdentifiers, err = GetStaticJobRunInfo(f.StaticJobRunIdentifierJSON, f.StaticJobRunIdentifierPath)
+		staticJobRunIdentifiers, err = jobrunaggregatorlib.GetStaticJobRunInfo(f.StaticJobRunIdentifierJSON, f.StaticJobRunIdentifierPath)
 		if err != nil {
 			return nil, err
 		}

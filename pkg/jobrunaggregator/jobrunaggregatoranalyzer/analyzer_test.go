@@ -26,7 +26,7 @@ const (
 func TestParseStaticJobRunInfo(t *testing.T) {
 	// example json and validation we can unmarshal
 	staticJSON := `[{"JobName": "periodic-ci-openshift-release-master-ci-4.14-e2e-azure-ovn-upgrade","JobRunId":"1676762997483114496"},{"JobName": "periodic-ci-openshift-release-master-ci-4.14-e2e-azure-ovn-upgrade","JobRunId":"1676762998317780992"},{"JobName": "periodic-ci-openshift-release-master-ci-4.14-e2e-azure-ovn-upgrade","JobRunId":"1676762999165030400"},{"JobName": "periodic-ci-openshift-release-master-ci-4.14-e2e-azure-ovn-upgrade","JobRunId":"1676763000020668416"},{"JobName": "periodic-ci-openshift-release-master-ci-4.14-e2e-azure-ovn-upgrade","JobRunId":"1676763000834363392"},{"JobName": "periodic-ci-openshift-release-master-ci-4.14-e2e-azure-ovn-upgrade","JobRunId":"1676763001673224192"},{"JobName": "periodic-ci-openshift-release-master-ci-4.14-e2e-azure-ovn-upgrade","JobRunId":"1676763002516279296"},{"JobName": "periodic-ci-openshift-release-master-ci-4.14-e2e-azure-ovn-upgrade","JobRunId":"1676763003355140096"},{"JobName": "periodic-ci-openshift-release-master-ci-4.14-e2e-azure-ovn-upgrade","JobRunId":"1676763004194000896"},{"JobName": "periodic-ci-openshift-release-master-ci-4.14-e2e-azure-ovn-upgrade","JobRunId":"1676763005460680704"}]`
-	jobRunInfo, err := GetStaticJobRunInfo(staticJSON, "")
+	jobRunInfo, err := jobrunaggregatorlib.GetStaticJobRunInfo(staticJSON, "")
 	if err != nil {
 		t.Fatalf("Failed to parse static JobRunInfo json: %v", err)
 	}

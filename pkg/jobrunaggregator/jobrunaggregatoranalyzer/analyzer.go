@@ -2,7 +2,6 @@ package jobrunaggregatoranalyzer
 
 import (
 	"context"
-	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"os"
@@ -48,26 +47,6 @@ type JobRunAggregatorAnalyzerOptions struct {
 	prowJobMatcherFunc  jobrunaggregatorlib.ProwJobMatcherFunc
 
 	staticJobRunIdentifiers []jobrunaggregatorlib.JobRunIdentifier
-}
-
-func GetStaticJobRunInfo(staticRunInfoJSON, staticRunInfoPath string) ([]jobrunaggregatorlib.JobRunIdentifier, error) {
-	var jsonBytes []byte
-	var jobRuns []jobrunaggregatorlib.JobRunIdentifier
-	var err error
-	if len(staticRunInfoJSON) == 0 {
-		jsonBytes, err = os.ReadFile(staticRunInfoPath)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		jsonBytes = []byte(staticRunInfoJSON)
-	}
-
-	if err = json.Unmarshal(jsonBytes, &jobRuns); err != nil {
-		return nil, err
-	}
-
-	return jobRuns, nil
 }
 
 func (o *JobRunAggregatorAnalyzerOptions) loadStaticJobRuns(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error) {

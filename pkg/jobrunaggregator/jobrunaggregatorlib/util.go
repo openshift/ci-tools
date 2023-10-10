@@ -2,6 +2,7 @@ package jobrunaggregatorlib
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -44,11 +45,31 @@ type JobRunIdentifier struct {
 	JobRunID string
 }
 
+func GetStaticJobRunInfo(staticRunInfoJSON, staticRunInfoPath string) ([]JobRunIdentifier, error) {
+	var jsonBytes []byte
+	var jobRuns []JobRunIdentifier
+	var err error
+	if len(staticRunInfoJSON) == 0 {
+		jsonBytes, err = os.ReadFile(staticRunInfoPath)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		jsonBytes = []byte(staticRunInfoJSON)
+	}
+
+	if err = json.Unmarshal(jsonBytes, &jobRuns); err != nil {
+		return nil, err
+	}
+
+	return jobRuns, nil
+}
+
 type JobRunGetter interface {
 	// GetRelatedJobRuns gets all related job runs for analysis
 	GetRelatedJobRuns(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error)
 
-	// GetRelatedJobRunsFromIdentifiers passes along minimal information known about the jobs already so we can skip
+	// GetRelatedJobRunsFromIdentifiers passes along minimal information known about the jobs already so that we can skip
 	// querying and go directly to fetching the full job details when GetRelatedJobRuns is called
 	GetRelatedJobRunsFromIdentifiers(ctx context.Context, jobRunIdentifiers []JobRunIdentifier) ([]jobrunaggregatorapi.JobRunInfo, error)
 }

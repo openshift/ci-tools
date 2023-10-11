@@ -140,6 +140,10 @@ func (v *Validator) validateConfiguration(ctx *configContext, config *api.Releas
 	}
 	validationErrors = append(validationErrors, validateReleaseBuildConfiguration(config, org, repo)...)
 	validationErrors = append(validationErrors, validateBuildRootImageConfiguration(ctx.AddField("build_root"), config.InputConfiguration.BuildRootImage, len(config.Images) > 0)...)
+	//TODO: for now this is only to be set when merging configs in ci-operator-configresolver
+	if len(config.BuildRootImages) > 0 {
+		validationErrors = append(validationErrors, ctx.errorf("build_roots should not be set directly"))
+	}
 
 	if config.Operator != nil {
 		validationErrors = append(validationErrors, ValidateOperator(ctx.AddField("operator"), config)...)
@@ -478,6 +482,12 @@ func validateReleaseBuildConfiguration(input *api.ReleaseBuildConfiguration, org
 		if input.CanonicalGoRepository != nil && *input.CanonicalGoRepository == fmt.Sprintf("github.com/%s/%s", org, repo) {
 			validationErrors = append(validationErrors, errors.New("'canonical_go_repository' provides the default location, so is unnecessary"))
 		}
+	}
+
+	//TODO: this is only to be set by ci-operator-configresolver when merging configs (for now)
+	if len(input.BinaryBuildCommandsList) > 0 || len(input.TestBinaryBuildCommandsList) > 0 ||
+		len(input.RpmBuildCommandsList) > 0 || len(input.RpmBuildLocationList) > 0 {
+		validationErrors = append(validationErrors, errors.New("it is not permissible to directly set: ‘binary_build_commands_list’, ‘test_binary_build_commands_list’, ‘rpm_build_commands_list’, or ‘rpm_build_location_list’"))
 	}
 
 	validationErrors = append(validationErrors, validateResources("resources", input.Resources)...)

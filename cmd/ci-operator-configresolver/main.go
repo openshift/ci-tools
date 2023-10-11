@@ -221,6 +221,7 @@ func main() {
 	http.HandleFunc("/", handler(http.HandlerFunc(http.NotFound)).ServeHTTP)
 	http.HandleFunc("/config", handler(registryserver.ResolveConfig(configAgent, registryAgent, configresolverMetrics)).ServeHTTP)
 	http.HandleFunc("/configWithInjectedTest", handler(registryserver.ResolveConfigWithInjectedTest(configAgent, registryAgent, configresolverMetrics)).ServeHTTP)
+	http.HandleFunc("/mergeConfigsWithInjectedTest", handler(registryserver.ResolveAndMergeConfigsAndInjectTest(configAgent, registryAgent, configresolverMetrics)).ServeHTTP)
 	http.HandleFunc("/resolve", handler(registryserver.ResolveLiteralConfig(registryAgent, configresolverMetrics)).ServeHTTP)
 	http.HandleFunc("/configGeneration", handler(getConfigGeneration(configAgent)).ServeHTTP)
 	http.HandleFunc("/registryGeneration", handler(getRegistryGeneration(registryAgent)).ServeHTTP)

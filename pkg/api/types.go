@@ -40,20 +40,51 @@ type ReleaseBuildConfiguration struct {
 	// contains the output of this command. This allows reuse of binary artifacts
 	// across other steps. If empty, no "bin" image will be created.
 	BinaryBuildCommands string `json:"binary_build_commands,omitempty"`
+
+	// BinaryBuildCommandsList entries will create a "bin" image based on "src" that
+	// contains the output of this command. This allows reuse of binary artifacts
+	// across other steps. If empty, no "bin" image will be created.
+	// Mutually exclusive with BinaryBuildCommands
+	// DO NOT set this in the config
+	BinaryBuildCommandsList []RefCommands `json:"binary_build_commands_list,omitempty"`
+
 	// TestBinaryBuildCommands will create a "test-bin" image based on "src" that
 	// contains the output of this command. This allows reuse of binary artifacts
 	// across other steps. If empty, no "test-bin" image will be created.
 	TestBinaryBuildCommands string `json:"test_binary_build_commands,omitempty"`
+
+	// TestBinaryBuildCommandsList entries will create a "test-bin" image based on "src" that
+	// contains the output of this command. This allows reuse of binary artifacts
+	// across other steps. If empty, no "test-bin" image will be created.
+	// Mutually exclusive with TestBinaryBuildCommands
+	// DO NOT set this in the config
+	TestBinaryBuildCommandsList []RefCommands `json:"test_binary_build_commands_list,omitempty"`
 
 	// RpmBuildCommands will create an "rpms" image from "bin" (or "src", if no
 	// binary build commands were specified) that contains the output of this
 	// command. The created RPMs will then be served via HTTP to the "base" image
 	// via an injected rpm.repo in the standard location at /etc/yum.repos.d.
 	RpmBuildCommands string `json:"rpm_build_commands,omitempty"`
+
+	// RpmBuildCommandsList entries will create an "rpms" image from "bin" (or "src", if no
+	// binary build commands were specified) that contains the output of this
+	// command. The created RPMs will then be served via HTTP to the "base" image
+	// via an injected rpm.repo in the standard location at /etc/yum.repos.d.
+	// Mutually exclusive with RpmBuildCommands
+	// DO NOT set this in the config
+	RpmBuildCommandsList []RefCommands `json:"rpm_build_commands_list,omitempty"`
+
 	// RpmBuildLocation is where RPms are deposited after being built. If
 	// unset, this will default under the repository root to
 	// _output/local/releases/rpms/.
 	RpmBuildLocation string `json:"rpm_build_location,omitempty"`
+
+	// RpmBuildLocationList entries are where RPms are deposited after being built. If
+	// unset, this will default under the repository root to
+	// _output/local/releases/rpms/.
+	// Mutually exclusive with RpmBuildLocation
+	// DO NOT set this in the config
+	RpmBuildLocationList []RefLocation `json:"rpm_build_location_list,omitempty"`
 
 	// CanonicalGoRepository is a directory path that represents
 	// the desired location of the contents of this repository in
@@ -90,6 +121,18 @@ type ReleaseBuildConfiguration struct {
 	// input types. The special name '*' may be used to set default
 	// requests and limits.
 	Resources ResourceConfiguration `json:"resources,omitempty"`
+}
+
+// RefCommands pairs a ref (in org/repo format) with commands
+type RefCommands struct {
+	Ref      string `json:"ref"`
+	Commands string `json:"commands"`
+}
+
+// RefLocation pairs a ref (in org/repo format) with a location
+type RefLocation struct {
+	Ref      string `json:"ref"`
+	Location string `json:"location"`
 }
 
 // Metadata describes the source repo for which a config is written
@@ -210,6 +253,13 @@ type InputConfiguration struct {
 	// the pipeline will caches on. The one way is to take the reference
 	// from an image stream, and the other from a dockerfile.
 	BuildRootImage *BuildRootImageConfiguration `json:"build_root,omitempty"`
+
+	// BuildRootImages entries support two ways to get the image that
+	// the pipeline will caches on. The one way is to take the reference
+	// from an image stream, and the other from a dockerfile.
+	// Mutually exclusive with BuildRootImage
+	// DO NOT set this in the config
+	BuildRootImages map[string]BuildRootImageConfiguration `json:"build_roots,omitempty"`
 
 	// ReleaseTagConfiguration determines how the
 	// full release is assembled.

@@ -18,15 +18,15 @@ func stackForChain() stack {
 	return stack{partial: true}
 }
 
-func stackForWorkflow(name string, env api.TestEnvironment, deps api.TestDependencies) stack {
+func stackForWorkflow(name string, env api.TestEnvironment, deps api.TestDependencies, dnsConfig *api.StepDNSConfig) stack {
 	return stack{
-		records: []stackRecord{stackRecordForTest("workflow/"+name, env, deps)},
+		records: []stackRecord{stackRecordForTest("workflow/"+name, env, deps, dnsConfig)},
 		partial: true,
 	}
 }
 
-func stackForTest(name string, env api.TestEnvironment, deps api.TestDependencies) stack {
-	return stack{records: []stackRecord{stackRecordForTest("test/"+name, env, deps)}}
+func stackForTest(name string, env api.TestEnvironment, deps api.TestDependencies, dns *api.StepDNSConfig) stack {
+	return stack{records: []stackRecord{stackRecordForTest("test/"+name, env, deps, dns)}}
 }
 
 func (s *stack) push(r stackRecord) {
@@ -73,6 +73,17 @@ func (s *stack) resolveDep(env string) string {
 		}
 	}
 	return ""
+}
+
+// resolveDNS propagates a dns config down from the highest level object downward
+func (s *stack) resolveDNS(dns *api.StepDNSConfig) *api.StepDNSConfig {
+	for _, r := range s.records {
+		if r.dnsConfig != nil {
+			return r.dnsConfig
+		}
+	}
+	// If no overrides are found, return original
+	return dns
 }
 
 // checkUnused emits errors for each unused parameter/dependency in the record.
@@ -140,9 +151,10 @@ type stackRecord struct {
 	unusedEnv  sets.Set[string]
 	deps       []api.StepDependency
 	unusedDeps sets.Set[string]
+	dnsConfig  *api.StepDNSConfig
 }
 
-func stackRecordForStep(name string, env []api.StepParameter, deps []api.StepDependency) stackRecord {
+func stackRecordForStep(name string, env []api.StepParameter, deps []api.StepDependency, dns *api.StepDNSConfig) stackRecord {
 	unusedEnv := sets.New[string]()
 	for _, x := range env {
 		unusedEnv.Insert(x.Name)
@@ -151,10 +163,10 @@ func stackRecordForStep(name string, env []api.StepParameter, deps []api.StepDep
 	for _, x := range deps {
 		unusedDeps.Insert(x.Env)
 	}
-	return stackRecord{name: name, env: env, unusedEnv: unusedEnv, deps: deps, unusedDeps: unusedDeps}
+	return stackRecord{name: name, env: env, unusedEnv: unusedEnv, deps: deps, unusedDeps: unusedDeps, dnsConfig: dns}
 }
 
-func stackRecordForTest(name string, env api.TestEnvironment, deps api.TestDependencies) stackRecord {
+func stackRecordForTest(name string, env api.TestEnvironment, deps api.TestDependencies, dns *api.StepDNSConfig) stackRecord {
 	params := make([]api.StepParameter, 0, len(env))
 	for k, v := range env {
 		unique := v
@@ -164,5 +176,5 @@ func stackRecordForTest(name string, env api.TestEnvironment, deps api.TestDepen
 	for k, v := range deps {
 		dependencies = append(dependencies, api.StepDependency{Name: v, Env: k})
 	}
-	return stackRecordForStep(name, params, dependencies)
+	return stackRecordForStep(name, params, dependencies, dns)
 }

@@ -20,9 +20,10 @@ func ProwDisabledClusters(o *flagutil.KubernetesOptions) (ret []string, retErr e
 	ret, retErr = disabledClusters(fmt.Sprintf("%s/config?key=disabled-clusters", api.URLForService(api.ServiceProw)))
 	if retErr == nil && len(ret) > 0 {
 		prowDisabledClusters.Insert(ret...)
-		logrus.WithField("prowDisabledClusters", prowDisabledClusters.UnsortedList()).Warn("Some Prow clusters are disabled")
+		logrus.WithField("prowDisabledClusters", prowDisabledClusters.UnsortedList()).Warn("Some clusters are disabled in Prow's configuration")
 	}
-	if retErr != nil && o != nil {
+	if retErr == nil && o != nil {
+		logrus.WithField("prowDisabledClusters", prowDisabledClusters.UnsortedList()).Info("Setting disabled clusters on KubernetesOptions ...")
 		o.SetDisabledClusters(prowDisabledClusters)
 	}
 	return ret, retErr

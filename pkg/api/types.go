@@ -1226,6 +1226,7 @@ const (
 	ClusterProfileIBMCloudMultiS390x    ClusterProfile = "ibmcloud-multi-s390x"
 	ClusterProfilePOWERVS1              ClusterProfile = "powervs-1"
 	ClusterProfilePOWERVS2              ClusterProfile = "powervs-2"
+	ClusterProfilePOWERVS3              ClusterProfile = "powervs-3"
 	ClusterProfileLibvirtPpc64le        ClusterProfile = "libvirt-ppc64le"
 	ClusterProfileLibvirtS390x          ClusterProfile = "libvirt-s390x"
 	ClusterProfileNutanix               ClusterProfile = "nutanix"
@@ -1482,6 +1483,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "powervs-1"
 	case ClusterProfilePOWERVS2:
 		return "powervs-2"
+	case ClusterProfilePOWERVS3:
+		return "powervs-3"
 	case ClusterProfileLibvirtPpc64le:
 		return "libvirt-ppc64le"
 	case ClusterProfileLibvirtS390x:
@@ -1674,6 +1677,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "powervs-1-quota-slice"
 	case ClusterProfilePOWERVS2:
 		return "powervs-2-quota-slice"
+	case ClusterProfilePOWERVS3:
+		return "powervs-3-quota-slice"
 	case ClusterProfileLibvirtPpc64le:
 		return "libvirt-ppc64le-quota-slice"
 	case ClusterProfileLibvirtS390x:
@@ -1834,7 +1839,7 @@ func (p ClusterProfile) Secret() string {
 // LeaseTypeFromClusterType maps cluster types to lease types
 func LeaseTypeFromClusterType(t string) (string, error) {
 	switch t {
-	case "aws", "aws-arm64", "aws-c2s", "aws-china", "aws-usgov", "aws-sc2s", "aws-osd-msp", "aws-outpost", "aws-local-zones", "alibaba", "azure-2", "azure4", "azure-arc", "azure-arm64", "azurestack", "azuremag", "equinix-ocp-metal", "gcp", "gcp-arm64", "libvirt-ppc64le", "libvirt-s390x", "ibmcloud-multi-ppc64le", "ibmcloud-multi-s390x", "nutanix", "nutanix-qe", "nutanix-qe-dis", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet", "packet-edge", "powervs-1", "powervs-2", "kubevirt", "aws-cpaas", "osd-ephemeral", "gcp-virtualization", "aws-virtualization", "azure-virtualization", "hypershift-powervs", "hypershift-powervs-cb":
+	case "aws", "aws-arm64", "aws-c2s", "aws-china", "aws-usgov", "aws-sc2s", "aws-osd-msp", "aws-outpost", "aws-local-zones", "alibaba", "azure-2", "azure4", "azure-arc", "azure-arm64", "azurestack", "azuremag", "equinix-ocp-metal", "gcp", "gcp-arm64", "libvirt-ppc64le", "libvirt-s390x", "ibmcloud-multi-ppc64le", "ibmcloud-multi-s390x", "nutanix", "nutanix-qe", "nutanix-qe-dis", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet", "packet-edge", "powervs-1", "powervs-2", "powervs-3", "kubevirt", "aws-cpaas", "osd-ephemeral", "gcp-virtualization", "aws-virtualization", "azure-virtualization", "hypershift-powervs", "hypershift-powervs-cb":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

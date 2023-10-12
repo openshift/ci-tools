@@ -294,3 +294,79 @@ func TestEnsureGroups(t *testing.T) {
 		})
 	}
 }
+
+func TestGetUsersWithoutKerberosID(t *testing.T) {
+
+	u01 := &userv1.User{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "a",
+		},
+		Identities: []string{"a"},
+	}
+	u02 := &userv1.User{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "b",
+		},
+		Identities: []string{"b"},
+	}
+	u03 := &userv1.User{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "c",
+		},
+		Identities: []string{"c", "d"},
+	}
+
+	testCases := []struct {
+		name        string
+		client      ctrlruntimeclient.Client
+		kerberosIDs sets.Set[string]
+
+		ExpectedUsersWithoutKerberosID map[string][]string
+		expectedErr                    error
+	}{
+		{
+			name: "basic case",
+			client: fakeclient.NewClientBuilder().WithRuntimeObjects(
+				u01.DeepCopy(), u02.DeepCopy(), u03.DeepCopy()).Build(),
+			kerberosIDs:                    sets.New[string]("a", "b"),
+			ExpectedUsersWithoutKerberosID: map[string][]string{"c": {"c", "d"}},
+			expectedErr:                    nil,
+		},
+		{
+			name: "nothing to delete",
+			client: fakeclient.NewClientBuilder().WithRuntimeObjects(
+				u01.DeepCopy(), u02.DeepCopy(), u03.DeepCopy()).Build(),
+			kerberosIDs:                    sets.New[string]("a", "b", "c"),
+			ExpectedUsersWithoutKerberosID: map[string][]string{},
+			expectedErr:                    nil,
+		},
+		{
+			name: "delete everyone",
+			client: fakeclient.NewClientBuilder().WithRuntimeObjects(
+				u01.DeepCopy(), u02.DeepCopy(), u03.DeepCopy()).Build(),
+			kerberosIDs:                    sets.New[string]("d", "e", "f"),
+			ExpectedUsersWithoutKerberosID: map[string][]string{"a": {"a"}, "b": {"b"}, "c": {"c", "d"}},
+			expectedErr:                    nil,
+		},
+		{
+			name:                           "nothing from client",
+			client:                         fakeclient.NewClientBuilder().Build(),
+			kerberosIDs:                    sets.New[string]("d", "e", "f"),
+			ExpectedUsersWithoutKerberosID: map[string][]string{},
+			expectedErr:                    nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.TODO()
+			actualUsers, err := getUsersWithoutKerberosID(ctx, tc.client, "b01", tc.kerberosIDs)
+			if diff := cmp.Diff(tc.ExpectedUsersWithoutKerberosID, actualUsers, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
+			}
+			if diff := cmp.Diff(tc.expectedErr, err, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
+			}
+		})
+	}
+}

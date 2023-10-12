@@ -40,11 +40,12 @@ import (
 type options struct {
 	kubernetesOptions flagutil.KubernetesOptions
 
-	logLevel       string
-	dryRun         bool
-	groupsFile     string
-	configFile     string
-	maxConcurrency int
+	logLevel           string
+	dryRun             bool
+	deleteInvalidUsers bool
+	groupsFile         string
+	configFile         string
+	maxConcurrency     int
 
 	peribolosConfig        string
 	orgFromPeribolosConfig string
@@ -58,6 +59,7 @@ func parseOptions() *options {
 	opts.kubernetesOptions.AddFlags(fs)
 	fs.StringVar(&opts.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
 	fs.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
+	fs.BoolVar(&opts.deleteInvalidUsers, "delete-invalid-users", false, "If set, delete users that are not in Rover or have no links to GitHub there")
 	fs.StringVar(&opts.groupsFile, "groups-file", "", "The yaml file storing the groups")
 	fs.StringVar(&opts.configFile, "config-file", "", "The yaml file storing the config file for the groups")
 	fs.IntVar(&opts.maxConcurrency, "concurrency", 60, "Maximum number of concurrent in-flight goroutines to handle groups.")
@@ -243,6 +245,16 @@ func main() {
 		logrus.WithField("groupName", api.CIAdminsGroupName).WithField("len", l).Fatal("Require at least 3 members of ci-admins group")
 	}
 
+	kerberosIds := sets.New[string]()
+	for _, kerberosId := range mapping {
+		kerberosIds.Insert(kerberosId)
+	}
+	if opts.deleteInvalidUsers {
+		if err := deleteInvalidUsers(ctx, clients, kerberosIds, opts.dryRun); err != nil {
+			logrus.WithError(err).Fatal("Failed to delete users")
+		}
+	}
+
 	groups, err := makeGroups(openshiftPrivAdmins, opts.peribolosConfig, mapping, roverGroups, config, clusters)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to make groups")
@@ -289,6 +301,65 @@ type GroupClusters struct {
 }
 
 var githubRobotIds = sets.New[string]("RH-Cachito", "openshift-bot", "openshift-ci-robot", "openshift-merge-robot")
+
+func deleteInvalidUsers(ctx context.Context, clients map[string]ctrlruntimeclient.Client,
+	kerberosIDs sets.Set[string], dryRun bool) error {
+
+	var errs []error
+	for cluster, client := range clients {
+		usersToDelete, err := getUsersWithoutKerberosID(ctx, client, cluster, kerberosIDs)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to get users on cluster %s: %w", cluster, err))
+			continue
+		}
+		for user, identites := range usersToDelete {
+			logrus.WithField("cluster", cluster).WithField("user", user).Info("Deleting user...")
+			if !dryRun {
+				var err error
+				if err = client.Delete(ctx, &userv1.User{ObjectMeta: metav1.ObjectMeta{Name: user}}); err != nil && !errors.IsNotFound(err) {
+					errs = append(errs, fmt.Errorf("failed to delete user %s on cluster %s: %w", user, cluster, err))
+
+				}
+				if err == nil {
+					logrus.WithField("cluster", cluster).WithField("user", user).Info("Deleted successfully.")
+				}
+
+			}
+			for _, identity := range identites {
+				logrus.WithField("cluster", cluster).WithField("user", user).WithField("identity", identity).Info("Deleting identity...")
+				if dryRun {
+					continue
+				}
+				var err error
+				if err = client.Delete(ctx, &userv1.Identity{ObjectMeta: metav1.ObjectMeta{Name: identity}}); err != nil && !errors.IsNotFound(err) {
+					errs = append(errs, fmt.Errorf("failed to delete identity %s on cluster %s: %w", identity, cluster, err))
+				}
+				if err == nil {
+					logrus.WithField("cluster", cluster).WithField("user", user).WithField("identity", identity).Info("Deleted successfully.")
+				}
+			}
+		}
+		logrus.WithField("cluster", cluster).Info("Deleting invalid users and identites is finished!")
+	}
+	return kerrors.NewAggregate(errs)
+}
+
+// Returns users without kerberosID and their identities
+func getUsersWithoutKerberosID(ctx context.Context, client ctrlruntimeclient.Client,
+	cluster string, kerberosIDs sets.Set[string]) (map[string][]string, error) {
+
+	users := &userv1.UserList{}
+	if err := client.List(ctx, users); err != nil {
+		return nil, fmt.Errorf("failed to list users on cluster %s: %w", cluster, err)
+	}
+	usersWithoutKerberosID := make(map[string][]string)
+	for _, user := range users.Items {
+		if !kerberosIDs.Has(user.Name) {
+			usersWithoutKerberosID[user.Name] = user.Identities
+		}
+	}
+	return usersWithoutKerberosID, nil
+}
 
 func makeGroups(openshiftPrivAdmins sets.Set[string], peribolosConfig string, mapping map[string]string, roverGroups map[string][]string, config *group.Config, clusters sets.Set[string]) (map[string]GroupClusters, error) {
 	groups := map[string]GroupClusters{}

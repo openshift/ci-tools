@@ -243,7 +243,7 @@ func (r *Repo) CheckoutPullRequest(number int) error {
 func (r *Repo) Config(args ...string) error {
 	r.logger.WithField("args", args).Info("Running git config.")
 	if b, err := r.gitCommand(append([]string{"config"}, args...)...).CombinedOutput(); err != nil {
-		return fmt.Errorf("git config %w failed: %w. output: %s", args, err, string(b))
+		return fmt.Errorf("git config %v failed: %w. output: %s", args, err, string(b))
 	}
 	return nil
 }

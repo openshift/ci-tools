@@ -8,7 +8,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/openshift/ci-tools/pkg/git"
 	"github.com/sirupsen/logrus"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -28,6 +27,7 @@ import (
 
 	imagev1 "github.com/openshift/api/image/v1"
 
+	"github.com/openshift/ci-tools/pkg/git"
 	"github.com/openshift/ci-tools/pkg/rehearse"
 )
 

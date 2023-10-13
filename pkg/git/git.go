@@ -35,8 +35,6 @@ import (
 // Client can clone repos. It keeps a local cache, so successive clones of the
 // same repo should be quick. Create with NewClient. Be sure to clean it up.
 type Client struct {
-	// needed to generate the token.
-	tokenGenerator GitTokenGenerator
 
 	// dir is the location of the git cache.
 	dir string
@@ -261,7 +259,7 @@ func retryCmd(l *logrus.Entry, dir, cmd string, arg ...string) ([]byte, error) {
 		c.Dir = dir
 		b, err = c.CombinedOutput()
 		if err != nil {
-			err = fmt.Errorf("running %q %w returned error %w with output %q", cmd, arg, err, string(b))
+			err = fmt.Errorf("running %q %v returned error %w with output %q", cmd, arg, err, string(b))
 			l.WithField("count", i+1).WithError(err).Debug("Retrying, if this is not the 3rd try then this will be retried.")
 			time.Sleep(sleepyTime)
 			sleepyTime *= 2

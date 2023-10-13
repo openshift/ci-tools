@@ -67,6 +67,7 @@ presubmits:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
     name: pull-ci-super-duper-master-ci-index-my-bundle
+    optional: true
     rerun_command: /test ci-index-my-bundle
     spec:
       containers:

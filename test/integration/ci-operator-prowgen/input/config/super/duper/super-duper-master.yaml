@@ -18,6 +18,7 @@ operator:
   - as: my-bundle
     context_dir: manifests
     dockerfile_path: bundle.Dockerfile
+    optional: true
 promotion:
   name: other
   namespace: ocp

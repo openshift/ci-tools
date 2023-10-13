@@ -138,7 +138,9 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			} else {
 				jobBaseGen.PodSpec.Add(Targets(testName))
 			}
-			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, testName, info))
+			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, testName, info, func(options *generatePresubmitOptions) {
+				options.optional = bundle.Optional
+			}))
 		}
 		if containsUnnamedBundle {
 			name := string(api.PipelineImageStreamTagReferenceIndexImage)

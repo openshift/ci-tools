@@ -32,39 +32,14 @@ import (
 	"k8s.io/test-infra/prow/git/types"
 )
 
-const github = "github.com"
-
 // Client can clone repos. It keeps a local cache, so successive clones of the
 // same repo should be quick. Create with NewClient. Be sure to clean it up.
 type Client struct {
-	// logger will be used to log git operations and must be set.
-	logger *logrus.Entry
-
-	credLock sync.RWMutex
-	// user is used when pushing or pulling code if specified.
-	user string
-
 	// needed to generate the token.
 	tokenGenerator GitTokenGenerator
 
 	// dir is the location of the git cache.
 	dir string
-	// git is the path to the git binary.
-	git string
-	// base is the base path for git clone calls. For users it will be set to
-	// GitHub, but for tests set it to a directory with git repos.
-	base string
-	// host is the git host.
-	// TODO: use either base or host. the redundancy here is to help landing
-	// #14609 easier.
-	host string
-
-	// The mutex protects repoLocks which protect individual repos. This is
-	// necessary because Clone calls for the same repo are racy. Rather than
-	// one lock for all repos, use a lock per repo.
-	// Lock with Client.lockRepo, unlock with Client.unlockRepo.
-	rlm       sync.Mutex
-	repoLocks map[string]*sync.Mutex
 }
 
 // Clean removes the local repo cache. The Client is unusable after calling.
@@ -73,22 +48,6 @@ func (c *Client) Clean() error {
 }
 
 type GitTokenGenerator func(org string) (string, error)
-
-func (c *Client) lockRepo(repo string) {
-	c.rlm.Lock()
-	if _, ok := c.repoLocks[repo]; !ok {
-		c.repoLocks[repo] = &sync.Mutex{}
-	}
-	m := c.repoLocks[repo]
-	c.rlm.Unlock()
-	m.Lock()
-}
-
-func (c *Client) unlockRepo(repo string) {
-	c.rlm.Lock()
-	defer c.rlm.Unlock()
-	c.repoLocks[repo].Unlock()
-}
 
 // refreshRepoAuth updates Repo client token when current token is going to expire.
 // Git client authenticating with PAT(personal access token) doesn't have this problem as it's a single token.
@@ -172,7 +131,7 @@ func (r *Repo) RevParse(commitlike string) (string, error) {
 	r.logger.WithField("commitlike", commitlike).Info("RevParse.")
 	b, err := r.gitCommand("rev-parse", commitlike).CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("error rev-parsing %s: %v. output: %s", commitlike, err, string(b))
+		return "", fmt.Errorf("error rev-parsing %s: %w. output: %s", commitlike, err, string(b))
 	}
 	return string(b), nil
 }
@@ -203,7 +162,7 @@ func (r *Repo) mergeWithMergeStrategyMerge(commitlike string) (bool, error) {
 	r.logger.WithField("out", string(b)).WithError(err).Infof("Merge failed.")
 
 	if b, err := r.gitCommand("merge", "--abort").CombinedOutput(); err != nil {
-		return false, fmt.Errorf("error aborting merge for commitlike %s: %v. output: %s", commitlike, err, string(b))
+		return false, fmt.Errorf("error aborting merge for commitlike %s: %w. output: %s", commitlike, err, string(b))
 	}
 
 	return false, nil
@@ -216,7 +175,7 @@ func (r *Repo) mergeWithMergeStrategySquash(commitlike string) (bool, error) {
 	if err != nil {
 		r.logger.WithField("out", string(b)).WithError(err).Infof("Merge failed.")
 		if b, err := r.gitCommand("reset", "--hard", "HEAD").CombinedOutput(); err != nil {
-			return false, fmt.Errorf("error resetting after failed squash for commitlike %s: %v. output: %s", commitlike, err, string(b))
+			return false, fmt.Errorf("error resetting after failed squash for commitlike %s: %w. output: %s", commitlike, err, string(b))
 		}
 		return false, nil
 	}
@@ -247,7 +206,7 @@ func (r *Repo) mergeWithMergeStrategyRebase(commitlike string) (bool, error) {
 	if err != nil {
 		r.logger.WithField("out", string(b)).WithError(err).Infof("Rebase failed.")
 		if b, err := r.gitCommand("rebase", "--abort").CombinedOutput(); err != nil {
-			return false, fmt.Errorf("error aborting after failed rebase for commitlike %s: %v. output: %s", commitlike, err, string(b))
+			return false, fmt.Errorf("error aborting after failed rebase for commitlike %s: %w. output: %s", commitlike, err, string(b))
 		}
 		return false, nil
 	}
@@ -273,11 +232,11 @@ func (r *Repo) CheckoutPullRequest(number int) error {
 	r.logger.WithFields(logrus.Fields{"org": r.org, "repo": r.repo, "number": number}).Info("Fetching and checking out.")
 	remote := remoteFromBase(r.base, r.user, r.pass, r.host, r.org, r.repo)
 	if b, err := retryCmd(r.logger, r.dir, r.git, "fetch", remote, fmt.Sprintf("pull/%d/head:pull%d", number, number)); err != nil {
-		return fmt.Errorf("git fetch failed for PR %d: %v. output: %s", number, err, string(b))
+		return fmt.Errorf("git fetch failed for PR %d: %w. output: %s", number, err, string(b))
 	}
 	co := r.gitCommand("checkout", fmt.Sprintf("pull%d", number))
 	if b, err := co.CombinedOutput(); err != nil {
-		return fmt.Errorf("git checkout failed for PR %d: %v. output: %s", number, err, string(b))
+		return fmt.Errorf("git checkout failed for PR %d: %w. output: %s", number, err, string(b))
 	}
 	return nil
 }
@@ -286,7 +245,7 @@ func (r *Repo) CheckoutPullRequest(number int) error {
 func (r *Repo) Config(args ...string) error {
 	r.logger.WithField("args", args).Info("Running git config.")
 	if b, err := r.gitCommand(append([]string{"config"}, args...)...).CombinedOutput(); err != nil {
-		return fmt.Errorf("git config %v failed: %v. output: %s", args, err, string(b))
+		return fmt.Errorf("git config %w failed: %w. output: %s", args, err, string(b))
 	}
 	return nil
 }
@@ -302,7 +261,7 @@ func retryCmd(l *logrus.Entry, dir, cmd string, arg ...string) ([]byte, error) {
 		c.Dir = dir
 		b, err = c.CombinedOutput()
 		if err != nil {
-			err = fmt.Errorf("running %q %v returned error %w with output %q", cmd, arg, err, string(b))
+			err = fmt.Errorf("running %q %w returned error %w with output %q", cmd, arg, err, string(b))
 			l.WithField("count", i+1).WithError(err).Debug("Retrying, if this is not the 3rd try then this will be retried.")
 			time.Sleep(sleepyTime)
 			sleepyTime *= 2

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -194,17 +195,27 @@ func (r *reconciler) reportSuccessOnPR(ctx context.Context, pj *v1.ProwJob, pres
 		}
 	}
 
+	repoBaseRef := pj.Spec.Refs.Repo + "-" + pj.Spec.Refs.BaseRef
 	for _, presubmit := range presubmits.protected {
+		if !strings.Contains(presubmit, repoBaseRef) {
+			continue
+		}
 		if _, ok := latestBatch[presubmit]; ok {
 			return false, nil
 		}
 	}
 	for _, presubmit := range presubmits.alwaysRequired {
+		if !strings.Contains(presubmit, repoBaseRef) {
+			continue
+		}
 		if pjob, ok := latestBatch[presubmit]; !ok || (ok && pjob.Status.State != v1.SuccessState) {
 			return false, nil
 		}
 	}
 	for _, presubmit := range presubmits.conditionallyRequired {
+		if !strings.Contains(presubmit, repoBaseRef) {
+			continue
+		}
 		if pjob, ok := latestBatch[presubmit]; ok && pjob.Status.State != v1.SuccessState {
 			return false, nil
 		}

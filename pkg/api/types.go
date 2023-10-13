@@ -2025,6 +2025,8 @@ type Bundle struct {
 	// Skip building the index image for this bundle. Default to false.
 	// This field works only for named bundles, i.e., "as" is not empty.
 	SkipBuildingIndex bool `json:"skip_building_index,omitempty"`
+	// Optional indicates that the job's status context, that is generated from the corresponding test, should not be required for merge.
+	Optional bool `json:"optional,omitempty"`
 }
 
 // IndexGeneratorStepConfiguration describes a step that creates an index database and

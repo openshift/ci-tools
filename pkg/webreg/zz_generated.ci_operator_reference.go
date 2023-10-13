@@ -142,6 +142,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"          context_dir: ' '\n" +
 	"          # DockerfilePath defines where the dockerfile for build the bundle exists relative to the contextdir\n" +
 	"          dockerfile_path: ' '\n" +
+	"          # Optional indicates that the job's status context, that is generated from the corresponding test, should not be required for merge.\n" +
+	"          optional: true\n" +
 	"          # Skip building the index image for this bundle. Default to false.\n" +
 	"          # This field works only for named bundles, i.e., \"as\" is not empty.\n" +
 	"          skip_building_index: true\n" +

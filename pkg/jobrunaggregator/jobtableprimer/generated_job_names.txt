@@ -439,6 +439,7 @@ periodic-ci-openshift-release-master-ci-4.14-upgrade-from-stable-4.13-e2e-azure-
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-aws-ovn-heterogeneous
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-aws-ovn-heterogeneous-upgrade
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-azure-ovn-heterogeneous
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-gcp-ovn-heterogeneous
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-serial-aws-ovn-heterogeneous
 periodic-ci-openshift-multiarch-master-nightly-4.14-upgrade-from-stable-4.13-ocp-e2e-aws-ovn-heterogeneous-upgrade
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.14-multi.json
@@ -560,6 +561,7 @@ periodic-ci-openshift-release-master-ci-4.15-upgrade-from-stable-4.14-e2e-azure-
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-aws-ovn-heterogeneous
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-aws-ovn-heterogeneous-upgrade
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-azure-ovn-heterogeneous
+periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-gcp-ovn-heterogeneous
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-serial-aws-ovn-heterogeneous
 periodic-ci-openshift-multiarch-master-nightly-4.15-upgrade-from-stable-4.14-ocp-e2e-aws-ovn-heterogeneous-upgrade
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.15-multi.json
@@ -834,6 +836,7 @@ periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-azure-ovn-heterogene
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-compact-ovn-remote-libvirt-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-compact-ovn-remote-libvirt-s390x
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-gcp-ovn-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-gcp-ovn-heterogeneous
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-ibmcloud-ovn-multi-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-ibmcloud-ovn-multi-s390x
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-ovn-ppc64le-powervs
@@ -875,6 +878,7 @@ periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-azure-ovn-heterogene
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-compact-ovn-remote-libvirt-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-compact-ovn-remote-libvirt-s390x
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-gcp-ovn-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-gcp-ovn-heterogeneous
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-ibmcloud-ovn-multi-s390x
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-ovn-ppc64le-powervs
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-ovn-remote-libvirt-ppc64le

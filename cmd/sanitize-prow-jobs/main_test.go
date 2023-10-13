@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/config"
 
 	"github.com/openshift/ci-tools/pkg/dispatcher"
@@ -11,7 +12,7 @@ import (
 func TestDefaultJobConfig(t *testing.T) {
 	jc := &config.JobConfig{
 		PresubmitsStatic: map[string][]config.Presubmit{
-			"a": {{}, {}, {JobBase: config.JobBase{Agent: "kubernetes", Cluster: "default"}}},
+			"a": {{}, {}, {JobBase: config.JobBase{Agent: "kubernetes", Name: "pull-ci-openshift-release-master-build09-dry", Cluster: "default"}}},
 			"b": {{}, {}},
 		},
 		PostsubmitsStatic: map[string][]config.Postsubmit{
@@ -22,7 +23,7 @@ func TestDefaultJobConfig(t *testing.T) {
 	}
 
 	config := &dispatcher.Config{Default: "api.ci"}
-	if err := defaultJobConfig(jc, "", config); err != nil {
+	if err := defaultJobConfig(jc, "", config, sets.New[string]("pull-ci-openshift-release-master-build09-dry")); err != nil {
 		t.Errorf("failed default job config: %v", err)
 	}
 
@@ -30,6 +31,9 @@ func TestDefaultJobConfig(t *testing.T) {
 		for _, j := range jc.PresubmitsStatic[k] {
 			if j.Agent == "kubernetes" && j.Cluster != "api.ci" {
 				t.Errorf("expected cluster to be 'api.ci', was '%s'", j.Cluster)
+			}
+			if j.Name == "pull-ci-openshift-release-master-build09-dry" && !j.Optional {
+				t.Errorf("expected optional to be 'true', was 'false'")
 			}
 		}
 	}

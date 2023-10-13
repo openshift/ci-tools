@@ -12,6 +12,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
+	configflagutil "k8s.io/test-infra/prow/flagutil/config"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -28,6 +29,7 @@ const (
 type options struct {
 	prowJobConfigDir string
 	configPath       string
+	prowConfig       configflagutil.ConfigOptions
 
 	help bool
 }
@@ -37,12 +39,13 @@ func bindOptions(flag *flag.FlagSet) *options {
 
 	flag.StringVar(&opt.prowJobConfigDir, "prow-jobs-dir", "", "Path to a root of directory structure with Prow job config files (ci-operator/jobs in openshift/release)")
 	flag.StringVar(&opt.configPath, "config-path", "", "Path to the config file (core-services/sanitize-prow-jobs/_config.yaml in openshift/release)")
-	flag.BoolVar(&opt.help, "h", false, "Show help for ci-operator-prowgen")
+	opt.prowConfig.ConfigPathFlagName = "prow-config-path"
+	opt.prowConfig.AddFlags(flag)
 
 	return opt
 }
 
-func determinizeJobs(prowJobConfigDir string, config *dispatcher.Config) error {
+func determinizeJobs(prowJobConfigDir string, config *dispatcher.Config, optionalJobs sets.Set[string]) error {
 	ch := make(chan string)
 	errCh := make(chan error)
 	produce := func() error {
@@ -73,7 +76,7 @@ func determinizeJobs(prowJobConfigDir string, config *dispatcher.Config) error {
 				continue
 			}
 
-			if err := defaultJobConfig(jobConfig, path, config); err != nil {
+			if err := defaultJobConfig(jobConfig, path, config, optionalJobs); err != nil {
 				errCh <- fmt.Errorf("failed to default job config %q: %w", path, err)
 			}
 
@@ -96,7 +99,7 @@ func determinizeJobs(prowJobConfigDir string, config *dispatcher.Config) error {
 	return nil
 }
 
-func defaultJobConfig(jc *prowconfig.JobConfig, path string, config *dispatcher.Config) error {
+func defaultJobConfig(jc *prowconfig.JobConfig, path string, config *dispatcher.Config, optionalJobs sets.Set[string]) error {
 	for k := range jc.PresubmitsStatic {
 		for idx := range jc.PresubmitsStatic[k] {
 			cluster, err := config.GetClusterForJob(jc.PresubmitsStatic[k][idx].JobBase, path)
@@ -104,6 +107,10 @@ func defaultJobConfig(jc *prowconfig.JobConfig, path string, config *dispatcher.
 				return err
 			}
 			jc.PresubmitsStatic[k][idx].JobBase.Cluster = string(cluster)
+
+			if optionalJobs.Has(jc.PresubmitsStatic[k][idx].JobBase.Name) {
+				jc.PresubmitsStatic[k][idx].Optional = true
+			}
 
 			if string(cluster) == string(api.ClusterARM01) && isCIOperatorLatest(jc.PresubmitsStatic[k][idx].JobBase.Spec.Containers[0].Image) {
 				jc.PresubmitsStatic[k][idx].JobBase.Spec.Containers[0].Image = "ci-operator-arm64:latest"
@@ -170,6 +177,18 @@ func main() {
 		logrus.Fatal("mandatory argument --config-path wasn't set")
 	}
 
+	optionalJobs := sets.New[string]()
+	if opt.prowConfig.ConfigPath != "" {
+		configAgent, err := opt.prowConfig.ConfigAgent()
+		if err != nil {
+			logrus.WithError(err).Fatal("Error starting config agent.")
+		}
+		disabledClusters := sets.New[string](configAgent.Config().DisabledClusters...)
+		for _, c := range disabledClusters.UnsortedList() {
+			optionalJobs.Insert(fmt.Sprintf("pull-ci-openshift-release-master-%s-dry", c))
+		}
+	}
+
 	config, err := dispatcher.LoadConfig(opt.configPath)
 	if err != nil {
 		logrus.WithError(err).Fatalf("Failed to load config from %q", opt.configPath)
@@ -183,7 +202,7 @@ func main() {
 	}
 	for _, subDir := range args {
 		subDir = filepath.Join(opt.prowJobConfigDir, subDir)
-		if err := determinizeJobs(subDir, config); err != nil {
+		if err := determinizeJobs(subDir, config, optionalJobs); err != nil {
 			logrus.WithError(err).Fatal("Failed to determinize")
 		}
 	}

@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/openshift/ci-tools/pkg/git"
 	"github.com/sirupsen/logrus"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -56,7 +57,7 @@ type options struct {
 	webhookSecretFile        string
 	githubEventServerOptions githubeventserver.Options
 	github                   prowflagutil.GitHubOptions
-	git                      prowflagutil.GitOptions
+	git                      git.GitOptions
 	config                   configflagutil.ConfigOptions
 }
 

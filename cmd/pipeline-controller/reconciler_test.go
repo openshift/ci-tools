@@ -71,7 +71,8 @@ func composePresubmit(name string, state v1.ProwJobState, sha string) v1.ProwJob
 		Spec: v1.ProwJobSpec{
 			Type: v1.PresubmitJob,
 			Refs: &v1.Refs{
-				Repo: "repo",
+				BaseRef: "master",
+				Repo:    "repo",
 				Pulls: []v1.Pull{
 					{
 						Number: 123,
@@ -93,7 +94,7 @@ func Test_reconciler_reportSuccessOnPR(t *testing.T) {
 	var objs []runtime.Object
 	fakeClient := fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(objs...).Build()
 	baseSha := "sha"
-	dummyPJ := composePresubmit("ps1", v1.SuccessState, baseSha)
+	dummyPJ := composePresubmit("org-repo-master-ps1", v1.SuccessState, baseSha)
 	defaultGhClient := fakeGhClient{closed: sets.NewInt()}
 
 	type fields struct {
@@ -115,17 +116,17 @@ func Test_reconciler_reportSuccessOnPR(t *testing.T) {
 			name: "all tests are required and passed successfully, trigger protected",
 			fields: fields{
 				lister: FakeReader{pjs: v1.ProwJobList{Items: []v1.ProwJob{
-					composePresubmit("ps2", v1.SuccessState, baseSha),
-					composePresubmit("ps3", v1.SuccessState, baseSha),
+					composePresubmit("org-repo-master-ps2", v1.SuccessState, baseSha),
+					composePresubmit("org-repo-master-ps3", v1.SuccessState, baseSha),
 				}}},
 				ghc: defaultGhClient,
 			},
 			args: args{
 				ctx: context.Background(),
 				presubmits: presubmitTests{
-					protected:             []string{"ps1"},
-					alwaysRequired:        []string{"ps2"},
-					conditionallyRequired: []string{"ps3"},
+					protected:             []string{"org-repo-master-ps1"},
+					alwaysRequired:        []string{"org-repo-master-ps2", "org-repo-other-branch-ps2"},
+					conditionallyRequired: []string{"org-repo-master-ps3"},
 				},
 			},
 			want:    true,
@@ -135,17 +136,17 @@ func Test_reconciler_reportSuccessOnPR(t *testing.T) {
 			name: "all tests are required and passed successfully, do not trigger protected as PR is closed",
 			fields: fields{
 				lister: FakeReader{pjs: v1.ProwJobList{Items: []v1.ProwJob{
-					composePresubmit("ps2", v1.SuccessState, baseSha),
-					composePresubmit("ps3", v1.SuccessState, baseSha),
+					composePresubmit("org-repo-master-ps2", v1.SuccessState, baseSha),
+					composePresubmit("org-repo-master-ps3", v1.SuccessState, baseSha),
 				}}},
 				ghc: fakeGhClient{closed: sets.NewInt([]int{123}...)},
 			},
 			args: args{
 				ctx: context.Background(),
 				presubmits: presubmitTests{
-					protected:             []string{"ps1"},
-					alwaysRequired:        []string{"ps2"},
-					conditionallyRequired: []string{"ps3"},
+					protected:             []string{"org-repo-master-ps1"},
+					alwaysRequired:        []string{"org-repo-master-ps2"},
+					conditionallyRequired: []string{"org-repo-master-ps3"},
 				},
 			},
 			want:    false,
@@ -155,37 +156,57 @@ func Test_reconciler_reportSuccessOnPR(t *testing.T) {
 			name: "all required complete but conditionally required failed",
 			fields: fields{
 				lister: FakeReader{pjs: v1.ProwJobList{Items: []v1.ProwJob{
-					composePresubmit("ps2", v1.SuccessState, baseSha),
-					composePresubmit("ps3", v1.FailureState, baseSha),
+					composePresubmit("org-repo-master-ps2", v1.SuccessState, baseSha),
+					composePresubmit("org-repo-master-ps3", v1.FailureState, baseSha),
 				}}},
 				ghc: defaultGhClient,
 			},
 			args: args{
 				ctx: context.Background(),
 				presubmits: presubmitTests{
-					protected:             []string{"ps1"},
-					alwaysRequired:        []string{"ps2"},
-					conditionallyRequired: []string{"ps3"},
+					protected:             []string{"org-repo-master-ps1"},
+					alwaysRequired:        []string{"org-repo-master-ps2"},
+					conditionallyRequired: []string{"org-repo-master-ps3"},
 				},
 			},
 			want:    false,
 			wantErr: false,
 		},
 		{
-			name: "all required complete but always required is aborted",
+			name: "all required complete only some of cond required executed",
 			fields: fields{
 				lister: FakeReader{pjs: v1.ProwJobList{Items: []v1.ProwJob{
-					composePresubmit("ps2", v1.AbortedState, baseSha),
-					composePresubmit("ps3", v1.SuccessState, baseSha),
+					composePresubmit("org-repo-master-ps2", v1.SuccessState, baseSha),
+					composePresubmit("org-repo-master-ps3", v1.SuccessState, baseSha),
 				}}},
 				ghc: defaultGhClient,
 			},
 			args: args{
 				ctx: context.Background(),
 				presubmits: presubmitTests{
-					protected:             []string{"ps1"},
-					alwaysRequired:        []string{"ps2"},
-					conditionallyRequired: []string{"ps3"},
+					protected:             []string{"org-repo-master-ps1"},
+					alwaysRequired:        []string{"org-repo-master-ps2"},
+					conditionallyRequired: []string{"org-repo-master-ps3", "org-repo-master-ps4", "org-repo-master-ps5"},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "all required complete but always required is aborted",
+			fields: fields{
+				lister: FakeReader{pjs: v1.ProwJobList{Items: []v1.ProwJob{
+					composePresubmit("org-repo-master-ps2", v1.AbortedState, baseSha),
+					composePresubmit("org-repo-master-ps3", v1.SuccessState, baseSha),
+				}}},
+				ghc: defaultGhClient,
+			},
+			args: args{
+				ctx: context.Background(),
+				presubmits: presubmitTests{
+					protected:             []string{"org-repo-master-ps1"},
+					alwaysRequired:        []string{"org-repo-master-ps2"},
+					conditionallyRequired: []string{"org-repo-master-ps3"},
 				},
 			},
 			want:    false,
@@ -195,18 +216,18 @@ func Test_reconciler_reportSuccessOnPR(t *testing.T) {
 			name: "do not trigger as user is manually triggering",
 			fields: fields{
 				lister: FakeReader{pjs: v1.ProwJobList{Items: []v1.ProwJob{
-					composePresubmit("ps1", v1.SuccessState, baseSha),
-					composePresubmit("ps2", v1.SuccessState, baseSha),
-					composePresubmit("ps3", v1.SuccessState, baseSha),
+					composePresubmit("org-repo-master-ps1", v1.SuccessState, baseSha),
+					composePresubmit("org-repo-master-ps2", v1.SuccessState, baseSha),
+					composePresubmit("org-repo-master-ps3", v1.SuccessState, baseSha),
 				}}},
 				ghc: defaultGhClient,
 			},
 			args: args{
 				ctx: context.Background(),
 				presubmits: presubmitTests{
-					protected:             []string{"ps1", "ps4"},
-					alwaysRequired:        []string{"ps2"},
-					conditionallyRequired: []string{"ps3"},
+					protected:             []string{"org-repo-master-ps1", "org-repo-master-ps4"},
+					alwaysRequired:        []string{"org-repo-master-ps2"},
+					conditionallyRequired: []string{"org-repo-master-ps3"},
 				},
 			},
 			want:    false,
@@ -216,17 +237,17 @@ func Test_reconciler_reportSuccessOnPR(t *testing.T) {
 			name: "do not trigger as required are not complete",
 			fields: fields{
 				lister: FakeReader{pjs: v1.ProwJobList{Items: []v1.ProwJob{
-					composePresubmit("ps2", v1.PendingState, baseSha),
-					composePresubmit("ps3", v1.TriggeredState, baseSha),
+					composePresubmit("org-repo-master-ps2", v1.PendingState, baseSha),
+					composePresubmit("org-repo-master-ps3", v1.TriggeredState, baseSha),
 				}}},
 				ghc: defaultGhClient,
 			},
 			args: args{
 				ctx: context.Background(),
 				presubmits: presubmitTests{
-					protected:             []string{"ps1"},
-					alwaysRequired:        []string{"ps2"},
-					conditionallyRequired: []string{"ps3"},
+					protected:             []string{"org-repo-master-ps1"},
+					alwaysRequired:        []string{"org-repo-master-ps2"},
+					conditionallyRequired: []string{"org-repo-master-ps3"},
 				},
 			},
 			want:    false,
@@ -241,7 +262,7 @@ func Test_reconciler_reportSuccessOnPR(t *testing.T) {
 			args: args{
 				ctx: context.Background(),
 				presubmits: presubmitTests{
-					protected:             []string{"ps2"},
+					protected:             []string{"org-repo-master-ps2"},
 					alwaysRequired:        []string{},
 					conditionallyRequired: []string{},
 				},
@@ -253,17 +274,17 @@ func Test_reconciler_reportSuccessOnPR(t *testing.T) {
 			name: "batch with one sha is analyzed but different sha has already passed",
 			fields: fields{
 				lister: FakeReader{pjs: v1.ProwJobList{Items: []v1.ProwJob{
-					composePresubmit("ps2", v1.SuccessState, "other-sha"),
-					composePresubmit("ps3", v1.SuccessState, "other-sha"),
+					composePresubmit("org-repo-master-ps2", v1.SuccessState, "other-sha"),
+					composePresubmit("org-repo-master-ps3", v1.SuccessState, "other-sha"),
 				}}},
 				ghc: defaultGhClient,
 			},
 			args: args{
 				ctx: context.Background(),
 				presubmits: presubmitTests{
-					protected:             []string{"ps1"},
-					alwaysRequired:        []string{"ps2"},
-					conditionallyRequired: []string{"ps3"},
+					protected:             []string{"org-repo-master-ps1"},
+					alwaysRequired:        []string{"org-repo-master-ps2"},
+					conditionallyRequired: []string{"org-repo-master-ps3"},
 				},
 			},
 			want:    false,

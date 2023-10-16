@@ -27,7 +27,6 @@ import (
 
 	imagev1 "github.com/openshift/api/image/v1"
 
-	"github.com/openshift/ci-tools/pkg/git"
 	"github.com/openshift/ci-tools/pkg/rehearse"
 )
 
@@ -57,7 +56,7 @@ type options struct {
 	webhookSecretFile        string
 	githubEventServerOptions githubeventserver.Options
 	github                   prowflagutil.GitHubOptions
-	git                      git.GitOptions
+	git                      prowflagutil.GitOptions
 	config                   configflagutil.ConfigOptions
 }
 

@@ -674,6 +674,7 @@ periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-aws-ovn-mce-conforma
 periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-aws-ovn-proxy-conformance
 periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-ibmcloud-iks
 periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-ibmcloud-roks
+periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-kubevirt-csi-conformance
 periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-kubevirt-mce-baremetalds-conformance
 periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-kubevirt-mce-conformance
 periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-mce-ibmz-conformance
@@ -691,6 +692,7 @@ periodic-ci-openshift-hypershift-release-4.15-periodics-e2e-aws-ovn-proxy-confor
 periodic-ci-openshift-hypershift-release-4.15-periodics-e2e-ibmcloud-iks
 periodic-ci-openshift-hypershift-release-4.15-periodics-e2e-ibmcloud-roks
 periodic-ci-openshift-hypershift-release-4.15-periodics-e2e-kubevirt-conformance
+periodic-ci-openshift-hypershift-release-4.15-periodics-e2e-kubevirt-csi-conformance
 // end https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/hypershift/openshift-hypershift-release-4.15-periodics.yaml
 
 // begin https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/multiarch/openshift-multiarch-master-periodics.yaml
@@ -875,6 +877,7 @@ periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-gcp-ovn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-gcp-ovn-heterogeneous
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-ibmcloud-ovn-multi-s390x
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-ovn-ppc64le-powervs
+periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-ovn-ppc64le-powervs-per
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-ovn-remote-libvirt-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-ovn-remote-libvirt-s390x
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-ovn-serial-aws-arm64

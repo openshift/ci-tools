@@ -34,7 +34,6 @@ type baseline interface {
 	CheckDisruptionMeanWithinOneStandardDeviation(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend, masterNodesUpdated string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error)
 	CheckPercentileDisruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult,
 		backend string, percentile int, fixedGraceSeconds int, masterNodesUpdated string) (failureJobRunIDs []string, successJobRunIDs []string, status testCaseStatus, message string, err error)
-	CheckPercentileRankDisruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, maxDisruptionSeconds int, masterNodesUpdated string) (failureJobRunIDs []string, successJobRunIDs []string, status testCaseStatus, message string, err error)
 }
 
 func assignPassFail(ctx context.Context, jobName string, combined *junit.TestSuites, baselinePassFail baseline) error {
@@ -542,45 +541,6 @@ func (a *weeklyAverageFromTenDays) innerCheckPercentileDisruptionWithGrace(
 		successRuns, failureRuns,
 	)
 	return requiredNumberOfPasses, failureJobRunIDs, successJobRunIDs, testCasePassed, summary
-}
-
-// getPercentileRank returns the maximum percentile that is at or below the disruptionThresholdSeconds
-func getPercentileRank(historicalDisruption backendDisruptionStats, disruptionThresholdSeconds int) int {
-	for i := 1; i <= 99; i++ {
-		if historicalDisruption.percentileByIndex[i] > float64(disruptionThresholdSeconds) {
-			return i - 1
-		}
-	}
-	return 99
-}
-
-func (a *weeklyAverageFromTenDays) CheckPercentileRankDisruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string, maxDisruptionSeconds int, masterNodesUpdated string) ([]string, []string, testCaseStatus, string, error) {
-	historicalDisruption, fallBackJobName, err := a.getDisruptionByBackend(ctx, masterNodesUpdated)
-	if err != nil {
-		message := fmt.Sprintf("error getting historical disruption data, skipping: %v\n", err)
-		failureJobRunIDs := sets.StringKeySet(jobRunIDToAvailabilityResultForBackend).List()
-		return failureJobRunIDs, []string{}, testCaseSkipped, message, nil
-	}
-
-	messagePrefix := ""
-	if len(fallBackJobName) > 0 {
-		messagePrefix = fmt.Sprintf(fallBackMessagePrefix, fallBackJobName)
-	}
-
-	historicalDisruptionStatistic, ok := historicalDisruption[backend]
-
-	// if we have no data, then we won't have enough indexes, so we get an out of range.
-	// this happens when we add new disruption tests, so we just skip instead
-	if !ok {
-		message := "We have no historical data."
-		failureJobRunIDs := sets.StringKeySet(jobRunIDToAvailabilityResultForBackend).List()
-		return failureJobRunIDs, []string{}, testCaseSkipped, message, nil
-	}
-
-	thresholdPercentile := getPercentileRank(historicalDisruptionStatistic, maxDisruptionSeconds)
-
-	failureJobRunIDs, successJobRunIDs, testCasePassed, summary := a.checkPercentileDisruptionWithoutGrace(jobRunIDToAvailabilityResultForBackend, historicalDisruptionStatistic, thresholdPercentile)
-	return failureJobRunIDs, successJobRunIDs, testCasePassed, messagePrefix + summary, nil
 }
 
 func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, jobName string, suiteNames []string, testCaseDetails *jobrunaggregatorlib.TestCaseDetails) (testCaseStatus, string, error) {

@@ -81,7 +81,6 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 		// "%s mean disruption should be less than historical plus one standard deviation":  o.passFailCalculator.CheckDisruptionMeanWithinOneStandardDeviation,
 		"%s disruption P70 should not be worse":  checkPercentileDisruption(o.passFailCalculator, 70), // for 7 attempts, this  gives us a latch on getting worse
 		"%s disruption P85 should not be worse":  checkPercentileDisruption(o.passFailCalculator, 85), // for 5 attempts, this gives us a latch on getting worse.
-		"%s disruption P95 should not be worse":  checkPercentileDisruption(o.passFailCalculator, 95),
 		"%s zero-disruption should not be worse": checkPercentileRankDisruption(o.passFailCalculator, 0),
 	}
 

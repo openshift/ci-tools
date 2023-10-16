@@ -56,7 +56,6 @@ type options struct {
 	webhookSecretFile        string
 	githubEventServerOptions githubeventserver.Options
 	github                   prowflagutil.GitHubOptions
-	git                      prowflagutil.GitOptions
 	config                   configflagutil.ConfigOptions
 }
 

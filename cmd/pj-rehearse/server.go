@@ -11,7 +11,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	prowconfig "k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/git/v2"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/pluginhelp"
@@ -116,13 +115,12 @@ func (s *server) helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, e
 }
 
 func serverFromOptions(o options) (*server, error) {
-	githubTokenGenerator := secret.GetTokenGenerator(o.github.TokenPath)
 	ghc, err := o.github.GitHubClient(o.dryRun)
 	if err != nil {
 		return nil, fmt.Errorf("error creating GitHub client: %w", err)
 	}
 
-	gc, err := o.git.GitClient(ghc, githubTokenGenerator, secret.Censor, o.dryRun)
+	gc, err := o.github.GitClientFactory("", &o.config.InRepoConfigCacheDirBase, o.dryRun, false)
 	if err != nil {
 		return nil, fmt.Errorf("error creating git client: %w", err)
 	}

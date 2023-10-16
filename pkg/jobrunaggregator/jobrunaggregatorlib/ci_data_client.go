@@ -712,7 +712,7 @@ FROM
                 INNER JOIN
                     DATA_SET_LOCATION.BackendDisruption_JobRuns as JobRuns on JobRuns.Name = BackendDisruption.JobRunName
                 WHERE
-                    JobRuns.StartTime BETWEEN TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 10 DAY)
+                    JobRuns.StartTime BETWEEN TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 17 DAY)
                 AND
                     TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 3 DAY)
                 AND

@@ -6,10 +6,12 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	v1 "github.com/openshift/ci-tools/pkg/api/multiarchbuildconfig/v1"
 	"github.com/sirupsen/logrus"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	v1 "github.com/openshift/ci-tools/pkg/api/multiarchbuildconfig/v1"
 )
 
 func TestOCImageMirrorArgs(t *testing.T) {

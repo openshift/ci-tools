@@ -1,8 +1,9 @@
 package multiarchbuildconfig
 
 import (
-	v1 "github.com/openshift/ci-tools/pkg/api/multiarchbuildconfig/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	v1 "github.com/openshift/ci-tools/pkg/api/multiarchbuildconfig/v1"
 )
 
 func getCondition(mabc *v1.MultiArchBuildConfig, condType string) *metav1.Condition {

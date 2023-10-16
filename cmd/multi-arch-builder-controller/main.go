@@ -12,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
+	prowflagutil "k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/logrusutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 
@@ -19,7 +20,6 @@ import (
 
 	multiarchbuildconfigv1 "github.com/openshift/ci-tools/pkg/api/multiarchbuildconfig/v1"
 	"github.com/openshift/ci-tools/pkg/controller/multiarchbuildconfig"
-	prowflagutil "k8s.io/test-infra/prow/flagutil"
 )
 
 type options struct {

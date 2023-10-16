@@ -21,11 +21,13 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/logrusutil"
+	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 
 	templateapi "github.com/openshift/api/template/v1"
 	templatescheme "github.com/openshift/client-go/template/clientset/versioned/scheme"
 
 	"github.com/openshift/ci-tools/pkg/api/nsttl"
+	"github.com/openshift/ci-tools/pkg/prowconfigutils"
 	"github.com/openshift/ci-tools/pkg/secrets"
 )
 
@@ -571,6 +573,15 @@ func main() {
 	}
 	censor := secrets.NewDynamicCensor()
 	logrus.SetFormatter(logrusutil.NewFormatterWithCensor(logrus.StandardLogger().Formatter, &censor))
+
+	prowDisabledClusters, err := prowconfigutils.ProwDisabledClusters(nil)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to get Prow disable clusters")
+	} else if len(prowDisabledClusters) > 0 && targetClusterIsDisabled(sets.New[string](prowDisabledClusters...)) {
+		logrus.WithField("prowDisabledClusters", prowDisabledClusters).Info("Apply no manifests to Prow disabled clusters")
+		return
+	}
+
 	var hadErr bool
 	createdNamespaces := sets.New[string]()
 	for _, dir := range o.directories.Strings() {
@@ -587,4 +598,16 @@ func main() {
 	}
 
 	logrus.Infof("Success!")
+}
+
+func targetClusterIsDisabled(disabledClusters sets.Set[string]) bool {
+	jobName := os.Getenv(downwardapi.JobNameEnv)
+	if jobName != "" {
+		for _, c := range disabledClusters.UnsortedList() {
+			if strings.Contains(jobName, c) {
+				return true
+			}
+		}
+	}
+	return false
 }

@@ -24,6 +24,7 @@ func TestCheckPercentileDisruption(t *testing.T) {
 	tests := []struct {
 		name                 string
 		disruptions          []int
+		graceSeconds         int
 		thresholdPercentile  int
 		historicalDisruption float64
 		status               testCaseStatus
@@ -58,11 +59,12 @@ func TestCheckPercentileDisruption(t *testing.T) {
 		{
 			// Required Passes for 95th percentile is 6
 			// 5 Natural Passes
-			// graceSeconds = ((historicalDisruption / 5) + 1) / (6 - 5) = 2
+			// graceSeconds = 2
 			// The Disruption value that == 7 gets flipped to pass
 			name:                 "Test 95th Percentile Fuzzy Pass",
 			disruptions:          []int{5, 5, 5, 6, 6, 7, 9, 9, 9, 9},
 			thresholdPercentile:  95,
+			graceSeconds:         2,
 			historicalDisruption: 6,
 			status:               testCasePassed,
 			failedCount:          4,
@@ -72,11 +74,12 @@ func TestCheckPercentileDisruption(t *testing.T) {
 		{
 			// Required Passes for 95th percentile is 6
 			// 4 Natural Passes
-			// graceSeconds = ((historicalDisruption / 5) + 1) / (6 - 4) = 1
+			// graceSeconds = 1
 			// The Disruption values that == 7 get flipped to passes
 			name:                 "Test 95th Percentile Multi Fuzzy Pass",
 			disruptions:          []int{5, 5, 5, 6, 7, 7, 8, 8, 8, 86},
 			thresholdPercentile:  95,
+			graceSeconds:         1,
 			historicalDisruption: 6,
 			status:               testCasePassed,
 			failedCount:          4,
@@ -86,12 +89,13 @@ func TestCheckPercentileDisruption(t *testing.T) {
 		{
 			// Required Passes for 95th percentile is 6
 			// 4 Natural Passes
-			// graceSeconds = ((historicalDisruption / 5) + 1) / (6 - 4) = 1
+			// graceSeconds = 1
 			// The Disruption value that == 7 gets flipped to pass
 			// But the 8s and above do not, so we don't have enough passes
 			name:                 "Test 95th Percentile Multi Fuzzy Fail",
 			disruptions:          []int{5, 5, 5, 6, 7, 8, 8, 9, 9, 86},
 			thresholdPercentile:  95,
+			graceSeconds:         1,
 			historicalDisruption: 6,
 			status:               testCaseFailed,
 			failedCount:          5,
@@ -101,12 +105,13 @@ func TestCheckPercentileDisruption(t *testing.T) {
 		{
 			// Required Passes for 95th percentile is 6
 			// 4 Natural Passes
-			// graceSeconds = ((historicalDisruption / 5) + 1) / (6 - 4) = 10
+			// graceSeconds = 10
 			// The Disruption values that are < 113 get flipped to pass
 			// The 113 and above does not, but we have enough passes
 			name:                 "Test 95th Percentile Big Disruption Multi Fuzzy Pass",
 			disruptions:          []int{99, 105, 101, 102, 101, 108, 108, 112, 113, 186},
 			thresholdPercentile:  95,
+			graceSeconds:         10,
 			historicalDisruption: 102,
 			status:               testCasePassed,
 			failedCount:          2,
@@ -116,11 +121,12 @@ func TestCheckPercentileDisruption(t *testing.T) {
 		{
 			// Required Passes for 95th percentile is 6
 			// 4 Natural Passes
-			// graceSeconds = ((historicalDisruption / 5) + 1) / (6 - 4) = 10
+			// graceSeconds = 10
 			// The Disruption values that are < 113 get flipped to pass
 			// The 113 and above does not, so we don't have enough passes
 			name:                 "Test 95th Percentile Big Disruption Multi Fuzzy Failed",
 			disruptions:          []int{99, 105, 101, 102, 101, 147, 113, 113, 113, 186},
+			graceSeconds:         10,
 			thresholdPercentile:  95,
 			historicalDisruption: 102,
 			status:               testCaseFailed,
@@ -131,11 +137,12 @@ func TestCheckPercentileDisruption(t *testing.T) {
 		{
 			// Required Passes for 95th percentile is 6
 			// 4 Natural Passes
-			// graceSeconds = ((historicalDisruption / 5) + 1) / (6 - 2) = 5
+			// graceSeconds = 5
 			// The Disruption values that are < 108 get flipped to pass
 			// But the 108s and above do not, so we don't have enough passes
 			name:                 "Test 95th Percentile Big Disruption Multi Fuzzy High Multiplier Fail",
 			disruptions:          []int{99, 105, 101, 107, 107, 108, 108, 109, 109, 186},
+			graceSeconds:         5,
 			thresholdPercentile:  95,
 			historicalDisruption: 102,
 			status:               testCaseFailed,
@@ -155,6 +162,7 @@ func TestCheckPercentileDisruption(t *testing.T) {
 			name:                 "Test 85th Percentile Pass",
 			disruptions:          []int{1, 0, 0, 5, 5, 2, 2, 3, 4},
 			thresholdPercentile:  85,
+			graceSeconds:         1,
 			historicalDisruption: 1.30,
 			status:               testCasePassed,
 			failedCount:          4,
@@ -167,6 +175,7 @@ func TestCheckPercentileDisruption(t *testing.T) {
 			name:                 "Test 85th Percentile Fail no fuzzy matching",
 			disruptions:          []int{1, 0, 0, 5, 5, 2, 2, 3, 4},
 			thresholdPercentile:  85,
+			graceSeconds:         0,
 			historicalDisruption: 1.30,
 			status:               testCaseFailed,
 			failedCount:          6,
@@ -200,6 +209,7 @@ func TestCheckPercentileDisruption(t *testing.T) {
 			name:                 "Test 80th Percentile Pass",
 			disruptions:          []int{0, 0, 1, 1, 2, 2, 2, 2, 2, 2},
 			thresholdPercentile:  80,
+			graceSeconds:         0,
 			historicalDisruption: 1,
 			status:               testCasePassed,
 			failedCount:          6,
@@ -209,11 +219,12 @@ func TestCheckPercentileDisruption(t *testing.T) {
 		{
 			// Required Passes for 80th percentile is 4
 			// 3 Natural Passes
-			// graceSeconds = ((historicalDisruption / 5) + 1) / (4 - 3) = 1
+			// graceSeconds = 1
 			// The Disruption values that == 2 get flipped to passes
 			name:                 "Test 80th Percentile Xtra Fuzzy Pass",
 			disruptions:          []int{0, 0, 1, 2, 2, 6, 3, 4, 5, 8},
 			thresholdPercentile:  80,
+			graceSeconds:         1,
 			historicalDisruption: 1,
 			status:               testCasePassed,
 			failedCount:          5,
@@ -223,12 +234,13 @@ func TestCheckPercentileDisruption(t *testing.T) {
 		{
 			// Required Passes for 80th percentile is 4
 			// 2 Natural Passes
-			// graceSeconds = ((historicalDisruption / 5) + 1) / (4 - 2) = 0
+			// graceSeconds = 0
 			// There are no disruption values that get flipped since (2-1)*2 = 2 and our Fuzz Threshold is 1
 			// But the 8s and above do not so we don't have enough passes
 			name:                 "Test 80th Percentile Fuzzy Fail",
 			disruptions:          []int{0, 0, 2, 2, 2, 2, 2, 2, 2, 2},
 			thresholdPercentile:  80,
+			graceSeconds:         0,
 			historicalDisruption: 1,
 			status:               testCaseFailed,
 			failedCount:          8,
@@ -263,15 +275,18 @@ func TestCheckPercentileDisruption(t *testing.T) {
 			var status testCaseStatus
 			var summary string
 			if test.supportsFuzziness {
-				failureJobRunIDs, successJobRunIDs, status, summary = weeklyAverageFromTenDays.checkPercentileDisruptionWithGrace(jobRunIDToAvailabilityResultForBackend, historicalDisruptionStatistic, test.thresholdPercentile)
+				failureJobRunIDs, successJobRunIDs, status, summary = weeklyAverageFromTenDays.checkPercentileDisruptionWithGrace(
+					jobRunIDToAvailabilityResultForBackend, historicalDisruptionStatistic, test.thresholdPercentile, test.graceSeconds)
 			} else {
-				failureJobRunIDs, successJobRunIDs, status, summary = weeklyAverageFromTenDays.checkPercentileDisruptionWithoutGrace(jobRunIDToAvailabilityResultForBackend, historicalDisruptionStatistic, test.thresholdPercentile)
+				failureJobRunIDs, successJobRunIDs, status, summary = weeklyAverageFromTenDays.checkPercentileDisruptionWithoutGrace(
+					jobRunIDToAvailabilityResultForBackend, historicalDisruptionStatistic, test.thresholdPercentile)
 			}
 
 			assert.NotNil(t, summary, "Invalid summary for: %s", test.name)
-			assert.Equal(t, test.failedCount, len(failureJobRunIDs), "Invalid failed test cont for: %s", test.name)
-			assert.Equal(t, test.successCount, len(successJobRunIDs), "Invalid success test cont for: %s", test.name)
-			assert.Equal(t, test.status, status, "Invalid success test cont for: %s", test.name)
+			t.Logf("summary = %s", summary)
+			assert.Equal(t, test.failedCount, len(failureJobRunIDs), "Invalid failed test count for: %s", test.name)
+			assert.Equal(t, test.successCount, len(successJobRunIDs), "Invalid success test count for: %s", test.name)
+			assert.Equal(t, test.status, status, "Invalid success test count for: %s", test.name)
 		})
 	}
 }

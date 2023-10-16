@@ -79,8 +79,13 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 		"%s mean disruption should be less than historical plus five standard deviations": o.passFailCalculator.CheckDisruptionMeanWithinFiveStandardDeviations,
 		// TODO add a SKIP mechanism to disruptionJunitCheckFunc instead of the fail bool
 		// "%s mean disruption should be less than historical plus one standard deviation":  o.passFailCalculator.CheckDisruptionMeanWithinOneStandardDeviation,
-		"%s disruption P70 should not be worse":  checkPercentileDisruption(o.passFailCalculator, 70), // for 7 attempts, this  gives us a latch on getting worse
-		"%s disruption P85 should not be worse":  checkPercentileDisruption(o.passFailCalculator, 85), // for 5 attempts, this gives us a latch on getting worse.
+
+		// Fixed grace second values were determined by examining a months worth of false positive test failures
+		// and choosing a value that would eliminate 95% of them. We only hope to catch egregious regressions here, 10 runs is not
+		// enough to attempt subtle regression detection, for that we have grafana alerts.
+		"%s disruption P70 should not be worse": checkPercentileDisruption(o.passFailCalculator, 70, 3), // for 7 attempts, this  gives us a latch on getting worse
+		"%s disruption P85 should not be worse": checkPercentileDisruption(o.passFailCalculator, 85, 7), // for 5 attempts, this gives us a latch on getting worse.
+
 		"%s zero-disruption should not be worse": checkPercentileRankDisruption(o.passFailCalculator, 0),
 	}
 
@@ -115,9 +120,9 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 	return disruptionJunitSuite, nil
 }
 
-func checkPercentileDisruption(passFailCalculator baseline, percentile int) disruptionJunitCheckFunc {
+func checkPercentileDisruption(passFailCalculator baseline, percentile, graceSeconds int) disruptionJunitCheckFunc {
 	return func(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend, masterNodesUpdated string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error) {
-		return passFailCalculator.CheckPercentileDisruption(ctx, jobRunIDToAvailabilityResultForBackend, backend, percentile, masterNodesUpdated)
+		return passFailCalculator.CheckPercentileDisruption(ctx, jobRunIDToAvailabilityResultForBackend, backend, percentile, graceSeconds, masterNodesUpdated)
 	}
 }
 

@@ -9,7 +9,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -31,8 +30,6 @@ const (
 	controllerName        = "multiarchbuildconfig"
 	nodeArchitectureLabel = "kubernetes.io/arch"
 
-	// TODO: Now we hardcode the URL for the heterogeneous cluster.
-	// TODO: We need to push it to the app.ci registry or quay.io.
 	registryURL = "image-registry.openshift-image-registry.svc:5000"
 
 	// Conditions
@@ -48,10 +45,13 @@ func AddToManager(mgr manager.Manager, architectures []string, dockerCfgPath str
 	c, err := controller.New(controllerName, mgr, controller.Options{
 		MaxConcurrentReconciles: 1,
 		Reconciler: &reconciler{
-			logger:         logger,
-			client:         mgr.GetClient(),
-			architectures:  architectures,
-			manifestPusher: manifestpusher.NewManifestPushfer(logger, registryURL, dockerCfgPath),
+			logger:           logger,
+			client:           mgr.GetClient(),
+			architectures:    architectures,
+			dockerConfigPath: dockerCfgPath,
+			manifestPusher:   manifestpusher.NewManifestPushfer(logger, registryURL, dockerCfgPath),
+			timeNowFn:        time.Now,
+			mirrorImagesFn:   mirrorImages,
 		},
 	})
 	if err != nil {
@@ -64,32 +64,25 @@ func AddToManager(mgr manager.Manager, architectures []string, dockerCfgPath str
 		UpdateFunc:  func(event.UpdateEvent) bool { return true },
 		GenericFunc: func(event.GenericEvent) bool { return false },
 	}
-	if err := c.Watch(source.Kind(mgr.GetCache(), &v1.MultiArchBuildConfig{}), mabcHandler(), predicateFuncs); err != nil {
+
+	if err := c.Watch(source.Kind(mgr.GetCache(), &v1.MultiArchBuildConfig{}),
+		&handler.EnqueueRequestForObject{}, predicateFuncs); err != nil {
 		return fmt.Errorf("failed to create watch for MultiArchBuildConfig: %w", err)
 	}
 
 	return nil
 }
 
-func mabcHandler() handler.EventHandler {
-	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o ctrlruntimeclient.Object) []reconcile.Request {
-		mabc, ok := o.(*v1.MultiArchBuildConfig)
-		if !ok {
-			logrus.WithField("type", fmt.Sprintf("%T", o)).Error("Got object that was not a MultiArchBuildConfig")
-			return nil
-		}
-
-		return []reconcile.Request{
-			{NamespacedName: types.NamespacedName{Namespace: mabc.Namespace, Name: mabc.Name}},
-		}
-	})
-}
-
 type reconciler struct {
-	logger         *logrus.Entry
-	client         ctrlruntimeclient.Client
-	architectures  []string
-	manifestPusher manifestpusher.ManifestPusher
+	logger           *logrus.Entry
+	client           ctrlruntimeclient.Client
+	architectures    []string
+	manifestPusher   manifestpusher.ManifestPusher
+	dockerConfigPath string
+
+	// For testing purpose only
+	timeNowFn      func() time.Time
+	mirrorImagesFn func(log *logrus.Entry, registryConfig string, images []string) error
 }
 
 func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
@@ -136,15 +129,21 @@ func (r *reconciler) handleMultiArchBuildConfig(ctx context.Context, mabc *v1.Mu
 	}
 
 	targetImageRef := fmt.Sprintf("%s/%s", mabc.Spec.BuildSpec.CommonSpec.Output.To.Namespace, mabc.Spec.BuildSpec.CommonSpec.Output.To.Name)
-	mutateFn := func(mabcToMutate *v1.MultiArchBuildConfig) { mabcToMutate.Status.State = v1.SuccessState }
-
-	if !checkAllBuildsSuccessful(mabc.Status.Builds) {
-		mutateFn = func(mabcToMutate *v1.MultiArchBuildConfig) { mabcToMutate.Status.State = v1.FailureState }
-	} else {
-		if newMutateFn := r.handlePushImageWithManifest(mabc, targetImageRef); newMutateFn != nil {
-			mutateFn = newMutateFn
-		}
-	}
+	mutateFn := r.runPostBuildActions(
+		// Make sure the builds completed successfully
+		func() (func(mabcToMutate *v1.MultiArchBuildConfig), bool) {
+			return nil, checkAllBuildsSuccessful(mabc.Status.Builds)
+		},
+		// Assemble and push the manifest list
+		func() (func(mabcToMutate *v1.MultiArchBuildConfig), bool) {
+			return r.handlePushImageWithManifest(mabc, targetImageRef)
+		},
+		// Mirror to external registries
+		func() (func(mabcToMutate *v1.MultiArchBuildConfig), bool) {
+			srcImage := fmt.Sprintf("%s/%s", registryURL, targetImageRef)
+			return r.handleMirrorImage(srcImage, mabc)
+		},
+	)
 
 	if err := v1.UpdateMultiArchBuildConfig(ctx, r.logger, r.client, ctrlruntimeclient.ObjectKey{Namespace: mabc.Namespace, Name: mabc.Name}, mutateFn); err != nil {
 		return fmt.Errorf("failed to update the MultiArchBuildConfig %s/%s: %w", mabc.Namespace, mabc.Name, err)
@@ -181,9 +180,9 @@ func (r *reconciler) createBuildsForArchitectures(ctx context.Context, mabc *v1.
 	return nil
 }
 
-func (r *reconciler) handlePushImageWithManifest(mabc *v1.MultiArchBuildConfig, targetImageRef string) func(mabcToMutate *v1.MultiArchBuildConfig) {
+func (r *reconciler) handlePushImageWithManifest(mabc *v1.MultiArchBuildConfig, targetImageRef string) (func(mabcToMutate *v1.MultiArchBuildConfig), bool) {
 	if getCondition(mabc, PushImageManifestDone) != nil {
-		return nil
+		return nil, true
 	}
 
 	if err := r.manifestPusher.PushImageWithManifest(mabc.Status.Builds, targetImageRef); err != nil {
@@ -196,7 +195,7 @@ func (r *reconciler) handlePushImageWithManifest(mabc *v1.MultiArchBuildConfig, 
 				Message:            err.Error(),
 			})
 			mabcToMutate.Status.State = v1.FailureState
-		}
+		}, false
 	}
 
 	return func(mabcToMutate *v1.MultiArchBuildConfig) {
@@ -206,6 +205,44 @@ func (r *reconciler) handlePushImageWithManifest(mabc *v1.MultiArchBuildConfig, 
 			LastTransitionTime: metav1.Time{Time: time.Now()},
 			Reason:             "PushManifestSuccess",
 		})
+	}, true
+}
+
+// runPostBuildActions ensure some actions are performed after the builds have been spawned.
+// Actions are performed in order, one after the other. If at least one fails then the chain breaks
+// and the overall status is set to failed.
+func (r *reconciler) runPostBuildActions(actions ...func() (func(mabcToMutate *v1.MultiArchBuildConfig), bool)) func(mabcToMutate *v1.MultiArchBuildConfig) {
+	// Every action might produce a mutator, so this array might be at most len(actions)+1 in size.
+	// The last element (+1) is given by the mutator that set the overall status.
+	mutateFuncs := make([]func(mabcToMutate *v1.MultiArchBuildConfig), 0, len(actions)+1)
+
+	var atLeastOneFailed bool
+
+	for _, action := range actions {
+		mutateFunc, succeeded := action()
+		if mutateFunc != nil {
+			mutateFuncs = append(mutateFuncs, mutateFunc)
+		}
+		if !succeeded {
+			atLeastOneFailed = true
+			break
+		}
+	}
+
+	if atLeastOneFailed {
+		mutateFuncs = append(mutateFuncs, func(mabcToMutate *v1.MultiArchBuildConfig) {
+			mabcToMutate.Status.State = v1.FailureState
+		})
+	} else {
+		mutateFuncs = append(mutateFuncs, func(mabcToMutate *v1.MultiArchBuildConfig) {
+			mabcToMutate.Status.State = v1.SuccessState
+		})
+	}
+
+	return func(mabcToMutate *v1.MultiArchBuildConfig) {
+		for _, f := range mutateFuncs {
+			f(mabcToMutate)
+		}
 	}
 }
 

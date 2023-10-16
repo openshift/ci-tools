@@ -14,3 +14,14 @@ func getCondition(mabc *v1.MultiArchBuildConfig, condType string) *metav1.Condit
 	}
 	return nil
 }
+
+func setCondition(mabc *v1.MultiArchBuildConfig, cond *metav1.Condition) {
+	for i := range mabc.Status.Conditions {
+		current := &mabc.Status.Conditions[i]
+		if current.Type == cond.Type {
+			mabc.Status.Conditions[i] = *current
+			return
+		}
+	}
+	mabc.Status.Conditions = append(mabc.Status.Conditions, *cond)
+}

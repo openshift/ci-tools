@@ -1,5 +1,6 @@
 # Check GH Automation
-A tool to check that our bots (`openshift-merge-robot` and `openshift-ci-robot`) have access to repositories that have CI configured.
+A tool to check that our bots (`openshift-merge-robot`, `openshift-ci-robot`, and `openshift-cherrypic
+k-robot`) have access to repositories that have CI configured.
 It also checks that the app used to run it is installed in the repositories.
 This can be run in multiple modes:
 

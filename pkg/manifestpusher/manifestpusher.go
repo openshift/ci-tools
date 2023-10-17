@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
+	"time"
 
 	"github.com/sirupsen/logrus"
+
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	buildv1 "github.com/openshift/api/build/v1"
 )
@@ -41,41 +44,48 @@ type manifestPusher struct {
 // --platforms linux/arm64 --template registry.multi-build01.arm-build.devcluster.openshift.com/ci/managed-clonerefs:latest-arm64 \
 // --target registry.multi-build01.arm-build.devcluster.openshift.com/ci/managed-clonerefs:latest
 func (m manifestPusher) PushImageWithManifest(builds map[string]*buildv1.Build, targetImageRef string) error {
-	args := []string{
-		"--debug",
-		"--insecure",
-		"--docker-cfg", m.dockercfgPath,
-		"push", "from-args",
-	}
-	for _, build := range builds {
+	return wait.ExponentialBackoff(wait.Backoff{
+		Steps:    5,
+		Duration: 20 * time.Second,
+		Factor:   2.0,
+		Jitter:   0.1,
+	}, func() (bool, error) {
+		args := []string{
+			"--debug",
+			"--insecure",
+			"--docker-cfg", m.dockercfgPath,
+			"push", "from-args",
+		}
+		for _, build := range builds {
+			args = append(args, []string{
+				"--platforms",
+				fmt.Sprintf("linux/%s", build.Spec.NodeSelector[nodeArchitectureLabel]),
+				"--template",
+				fmt.Sprintf("%s/%s/%s", m.registryURL, build.Spec.Output.To.Namespace, build.Spec.Output.To.Name),
+			}...)
+		}
+
 		args = append(args, []string{
-			"--platforms",
-			fmt.Sprintf("linux/%s", build.Spec.NodeSelector[nodeArchitectureLabel]),
-			"--template",
-			fmt.Sprintf("%s/%s/%s", m.registryURL, build.Spec.Output.To.Namespace, build.Spec.Output.To.Name),
+			"--target",
+			fmt.Sprintf("%s/%s", m.registryURL, targetImageRef),
 		}...)
-	}
 
-	args = append(args, []string{
-		"--target",
-		fmt.Sprintf("%s/%s", m.registryURL, targetImageRef),
-	}...)
+		cmd := exec.Command("manifest-tool", args...)
 
-	cmd := exec.Command("manifest-tool", args...)
+		cmdOutput := &bytes.Buffer{}
+		cmdError := &bytes.Buffer{}
+		cmd.Stdout = cmdOutput
+		cmd.Stderr = cmdError
 
-	cmdOutput := &bytes.Buffer{}
-	cmdError := &bytes.Buffer{}
-	cmd.Stdout = cmdOutput
-	cmd.Stderr = cmdError
+		m.logger.Debugf("Running command: %s", cmd.String())
+		err := cmd.Run()
+		if err != nil {
+			m.logger.WithError(err).WithField("output", cmdOutput.String()).WithField("error_output", cmdError.String()).Error("manifest-tool command failed")
+			return false, err
+		}
+		m.logger.WithField("output", cmdOutput.String()).Debug("manifest-tool command succeeded")
 
-	m.logger.Debugf("Running command: %s", cmd.String())
-	err := cmd.Run()
-	if err != nil {
-		m.logger.WithError(err).WithField("output", cmdOutput.String()).WithField("error_output", cmdError.String()).Error("manifest-tool command failed")
-		return err
-	}
-	m.logger.WithField("output", cmdOutput.String()).Debug("manifest-tool command succeeded")
-
-	m.logger.Infof("Image %s created", targetImageRef)
-	return nil
+		m.logger.Infof("Image %s created", targetImageRef)
+		return true, nil
+	})
 }

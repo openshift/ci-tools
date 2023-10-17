@@ -193,7 +193,7 @@ func TestAllProwJobFinished(t *testing.T) {
 				TimeToStopWaiting:  time.Now(),
 				ProwJobMatcherFunc: tt.ProwJobMatcherFunc,
 			}
-			result := waiter.allProwJobsFinished(tt.allItems)
+			result, _ := waiter.allProwJobsFinished(tt.allItems)
 			assert.Equal(t, tt.result, result, "Test %s expecting %v, got %v", tt.name, tt.result, result)
 		})
 	}

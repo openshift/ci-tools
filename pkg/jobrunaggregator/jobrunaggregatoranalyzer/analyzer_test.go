@@ -23,6 +23,16 @@ const (
 	testPayloadtag = "4.14.0-0.ci-2023-06-18-131345"
 )
 
+func TestParseStaticJobRunInfo(t *testing.T) {
+	// example json and validation we can unmarshal
+	staticJSON := `[{"JobName": "periodic-ci-openshift-release-master-ci-4.14-e2e-azure-ovn-upgrade","JobRunId":"1676762997483114496"},{"JobName": "periodic-ci-openshift-release-master-ci-4.14-e2e-azure-ovn-upgrade","JobRunId":"1676762998317780992"},{"JobName": "periodic-ci-openshift-release-master-ci-4.14-e2e-azure-ovn-upgrade","JobRunId":"1676762999165030400"},{"JobName": "periodic-ci-openshift-release-master-ci-4.14-e2e-azure-ovn-upgrade","JobRunId":"1676763000020668416"},{"JobName": "periodic-ci-openshift-release-master-ci-4.14-e2e-azure-ovn-upgrade","JobRunId":"1676763000834363392"},{"JobName": "periodic-ci-openshift-release-master-ci-4.14-e2e-azure-ovn-upgrade","JobRunId":"1676763001673224192"},{"JobName": "periodic-ci-openshift-release-master-ci-4.14-e2e-azure-ovn-upgrade","JobRunId":"1676763002516279296"},{"JobName": "periodic-ci-openshift-release-master-ci-4.14-e2e-azure-ovn-upgrade","JobRunId":"1676763003355140096"},{"JobName": "periodic-ci-openshift-release-master-ci-4.14-e2e-azure-ovn-upgrade","JobRunId":"1676763004194000896"},{"JobName": "periodic-ci-openshift-release-master-ci-4.14-e2e-azure-ovn-upgrade","JobRunId":"1676763005460680704"}]`
+	jobRunInfo, err := jobrunaggregatorlib.GetStaticJobRunInfo(staticJSON, "")
+	if err != nil {
+		t.Fatalf("Failed to parse static JobRunInfo json: %v", err)
+	}
+	assert.Equal(t, 10, len(jobRunInfo), "Invalid JobRunInfo length")
+}
+
 func TestAnalyzer(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
@@ -64,8 +74,8 @@ func TestAnalyzer(t *testing.T) {
 			endPayloadJobRunWindow := payloadStartTime.Add(jobrunaggregatorlib.JobSearchWindowEndOffset)
 
 			mockDataClient := jobrunaggregatorlib.NewMockCIDataClient(mockCtrl)
-			mockDataClient.EXPECT().GetJobRunForJobNameBeforeTime(gomock.Any(), testJobName, startPayloadJobRunWindow).Return("1000", nil).Times(2)
-			mockDataClient.EXPECT().GetJobRunForJobNameAfterTime(gomock.Any(), testJobName, endPayloadJobRunWindow).Return("2000", nil).Times(2)
+			mockDataClient.EXPECT().GetJobRunForJobNameBeforeTime(gomock.Any(), testJobName, startPayloadJobRunWindow).Return("1000", nil).Times(1)
+			mockDataClient.EXPECT().GetJobRunForJobNameAfterTime(gomock.Any(), testJobName, endPayloadJobRunWindow).Return("2000", nil).Times(1)
 
 			mockGCSClient := jobrunaggregatorlib.NewMockCIGCSClient(mockCtrl)
 			mockGCSClient.EXPECT().ReadRelatedJobRuns(
@@ -74,7 +84,11 @@ func TestAnalyzer(t *testing.T) {
 				fmt.Sprintf("logs/%s", testJobName),
 				"1000",
 				"2000",
-				gomock.Any()).Return(tc.jobRunInfos, nil).Times(2)
+				gomock.Any()).Return(tc.jobRunInfos, nil).Times(1)
+
+			for _, ri := range tc.jobRunInfos {
+				mockGCSClient.EXPECT().ReadJobRunFromGCS(gomock.Any(), gomock.Any(), testJobName, ri.GetJobRunID(), gomock.Any()).Return(ri, nil)
+			}
 
 			analyzer := JobRunAggregatorAnalyzerOptions{
 				jobRunLocator: jobrunaggregatorlib.NewPayloadAnalysisJobLocatorForReleaseController(

@@ -157,6 +157,18 @@ func checkRepos(repos []string, bots []string, ignore sets.Set[string], client a
 			}
 		}
 
+		// Add a check for openshift-cherrypick-robot
+		isCherryPickRobotMember, err := client.IsMember(org, "openshift-cherrypick-robot")
+		if err != nil {
+			return nil, fmt.Errorf("unable to determine if openshift-cherrypick-robot is a member of %s: %w", org, err)
+		}
+		if !isCherryPickRobotMember {
+			failing.Insert(orgRepo)
+			repoLogger.Error("openshift-cherrypick-robot is not an org member")
+		} else {
+			repoLogger.Info("openshift-cherrypick-robot is an org member")
+		}
+
 		if len(missingBots) > 0 {
 			failing.Insert(orgRepo)
 			repoLogger.Errorf("bots that are not collaborators: %s", strings.Join(missingBots, ", "))

@@ -11,3 +11,4 @@ index.js
 /job-aggregator-working-dir
 # go built binary
 /job-run-aggregator
+.aider*

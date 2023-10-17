@@ -30,6 +30,22 @@ func wantsDisruptionData(job jobrunaggregatorapi.JobRow) bool {
 	return job.CollectDisruption
 }
 
+type JobRunUploaderRegistry struct {
+	JobRunUploaders map[string]uploader
+}
+
+func (j *JobRunUploaderRegistry) Register(name string, jobRunUploader uploader) {
+	if j.JobRunUploaders == nil {
+		j.JobRunUploaders = make(map[string]uploader)
+	}
+
+	j.JobRunUploaders[name] = jobRunUploader
+}
+
+func (j *JobRunUploaderRegistry) Deregister(name string) {
+	delete(j.JobRunUploaders, name)
+}
+
 type allJobsLoaderOptions struct {
 	ciDataClient jobrunaggregatorlib.JobLister
 	// GCSClient is used to read the prowjob data
@@ -38,7 +54,8 @@ type allJobsLoaderOptions struct {
 	jobRunInserter jobrunaggregatorlib.BigQueryInserter
 
 	shouldCollectedDataForJobFn shouldCollectDataForJobFunc
-	jobRunUploader              uploader
+	jobRunUploaderRegistry      JobRunUploaderRegistry
+	pendingUploadJobsLister     pendingUploadLister
 	logLevel                    string
 }
 
@@ -67,7 +84,7 @@ func (o *allJobsLoaderOptions) Run(ctx context.Context) error {
 
 	jobCount := len(jobs)
 
-	lastUploadedJobEndTime, err := o.jobRunUploader.getLastUploadedJobRunEndTime(ctx)
+	lastUploadedJobEndTime, err := o.pendingUploadJobsLister.getLastUploadedJobRunEndTime(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get last job run end time: %w", err)
 	}
@@ -81,14 +98,14 @@ func (o *allJobsLoaderOptions) Run(ctx context.Context) error {
 	}
 
 	// Subtract 30 min from our last upload, we're going to list all prow jobs ending this amount prior
-	// to our last import just incase jobs get inserted slightly out of order from their actual recorded end time.
+	// to our last import just in case jobs get inserted slightly out of order from their actual recorded end time.
 	listProwJobsSince := lastUploadedJobEndTime.Add(-30 * time.Minute)
 	logrus.WithField("since", listProwJobsSince).Info("listing prow jobs since")
 
 	// Lookup the known prow job IDs (already uploaded) that ended within this window. BigQuery does not
 	// prevent us from inserting duplicate rows, we have to do it ourselves. We'll compare
 	// each incoming prow job to make sure it's not in the list we've already inserted.
-	existingJobRunIDs, err := o.jobRunUploader.listUploadedJobRunIDsSince(ctx, &listProwJobsSince)
+	existingJobRunIDs, err := o.pendingUploadJobsLister.listUploadedJobRunIDsSince(ctx, &listProwJobsSince)
 	if err != nil {
 		return fmt.Errorf("error listing uploaded job run IDs: %w", err)
 	}
@@ -185,20 +202,32 @@ func (o *allJobsLoaderOptions) processJobRuns(ctx context.Context, jobsMap map[s
 
 func (o *allJobsLoaderOptions) newJobRunBigQueryLoaderOptions(jobName, jobRunID, jobRelease string, logger logrus.FieldLogger) *jobRunLoaderOptions {
 	return &jobRunLoaderOptions{
-		jobName:        jobName,
-		jobRunID:       jobRunID,
-		jobRelease:     jobRelease,
-		gcsClient:      o.gcsClient,
-		jobRunInserter: o.jobRunInserter,
-		jobRunUploader: o.jobRunUploader,
-		logger:         logger.WithField("jobRun", jobRunID),
+		jobName:                jobName,
+		jobRunID:               jobRunID,
+		jobRelease:             jobRelease,
+		gcsClient:              o.gcsClient,
+		jobRunInserter:         o.jobRunInserter,
+		jobRunUploaderRegistry: o.jobRunUploaderRegistry,
+		logger:                 logger.WithField("jobRun", jobRunID),
 	}
 }
 
 // uploader encapsulates the logic for lookups and uploads specific to each type of content we ingest. (disruption, alerting, test runs, etc)
 type uploader interface {
 	uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, release string, jobRunRow *jobrunaggregatorapi.JobRunRow, logger logrus.FieldLogger) error
+}
+
+// pendingUploadLister provides methods used to determine
+// when the beginning of the newly available jobs should start
+// and what jobs since the time specified are available.
+// the time from getLastUploadedJobRunEndTime may not be the exact
+// time provided to listUploadedJobRunIDsSince as overlap may be added
+// to ensure records are not missed
+type pendingUploadLister interface {
+	// getLastUploadedJobRunEndTime gets the last known job that was uploaded from the implementations back end
 	getLastUploadedJobRunEndTime(ctx context.Context) (*time.Time, error)
+
+	// listUploadedJobRunIDsSince lists jobs available since the time specified
 	listUploadedJobRunIDsSince(ctx context.Context, since *time.Time) (map[string]bool, error)
 }
 
@@ -216,8 +245,8 @@ type jobRunLoaderOptions struct {
 
 	jobRunInserter jobrunaggregatorlib.BigQueryInserter
 
-	jobRunUploader uploader
-	logger         logrus.FieldLogger
+	jobRunUploaderRegistry JobRunUploaderRegistry
+	logger                 logrus.FieldLogger
 }
 
 func (o *jobRunLoaderOptions) Run(ctx context.Context) error {
@@ -271,9 +300,10 @@ func (o *jobRunLoaderOptions) uploadJobRun(ctx context.Context, jobRun jobrunagg
 	}
 
 	o.logger.Infof("uploading content for jobrun")
-	if err := o.jobRunUploader.uploadContent(ctx, jobRun, o.jobRelease, jobRunRow, o.logger); err != nil {
-		o.logger.WithError(err).Error("error uploading content")
-		return err
+	for name, jobRunUploader := range o.jobRunUploaderRegistry.JobRunUploaders {
+		if err := jobRunUploader.uploadContent(ctx, jobRun, o.jobRelease, jobRunRow, o.logger); err != nil {
+			o.logger.WithError(err).Errorf("error uploading content for: %s", name)
+		}
 	}
 
 	return nil

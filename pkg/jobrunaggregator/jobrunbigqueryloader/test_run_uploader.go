@@ -17,6 +17,18 @@ type testRunUploader struct {
 	ciDataClient    jobrunaggregatorlib.CIDataClient
 }
 
+type testRunPendingUploadLister struct {
+	tableName    string
+	ciDataClient jobrunaggregatorlib.CIDataClient
+}
+
+func newTestRunPendingUploadLister(ciDataClient jobrunaggregatorlib.CIDataClient) pendingUploadLister {
+	return &testRunPendingUploadLister{
+		tableName:    jobrunaggregatorapi.LegacyJobRunTableName,
+		ciDataClient: ciDataClient,
+	}
+}
+
 func newTestRunUploader(testRunInserter jobrunaggregatorlib.BigQueryInserter,
 	ciDataClient jobrunaggregatorlib.CIDataClient) uploader {
 	return &testRunUploader{
@@ -25,12 +37,12 @@ func newTestRunUploader(testRunInserter jobrunaggregatorlib.BigQueryInserter,
 	}
 }
 
-func (o *testRunUploader) getLastUploadedJobRunEndTime(ctx context.Context) (*time.Time, error) {
-	return o.ciDataClient.GetLastJobRunEndTimeFromTable(ctx, jobrunaggregatorapi.LegacyJobRunTableName)
+func (o *testRunPendingUploadLister) getLastUploadedJobRunEndTime(ctx context.Context) (*time.Time, error) {
+	return o.ciDataClient.GetLastJobRunEndTimeFromTable(ctx, o.tableName)
 }
 
-func (o *testRunUploader) listUploadedJobRunIDsSince(ctx context.Context, since *time.Time) (map[string]bool, error) {
-	return o.ciDataClient.ListUploadedJobRunIDsSinceFromTable(ctx, jobrunaggregatorapi.LegacyJobRunTableName, since)
+func (o *testRunPendingUploadLister) listUploadedJobRunIDsSince(ctx context.Context, since *time.Time) (map[string]bool, error) {
+	return o.ciDataClient.ListUploadedJobRunIDsSinceFromTable(ctx, o.tableName, since)
 }
 
 func (o *testRunUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, jobRelease string,
@@ -55,7 +67,7 @@ func (o *testRunUploader) uploadTestSuites(ctx context.Context, jobRunRow *jobru
 	return nil
 }
 
-func (o *testRunUploader) uploadTestSuite(ctx context.Context, jobRunRow *jobrunaggregatorapi.JobRunRow, parentSuites []string, suite *junit.TestSuite) error { //nolint
+func (o *testRunUploader) uploadTestSuite(ctx context.Context, jobRunRow *jobrunaggregatorapi.JobRunRow, parentSuites []string, suite *junit.TestSuite) error { // nolint
 	currSuites := append(parentSuites, suite.Name)
 	for _, testSuite := range suite.Children {
 		if err := o.uploadTestSuite(ctx, jobRunRow, currSuites, testSuite); err != nil {

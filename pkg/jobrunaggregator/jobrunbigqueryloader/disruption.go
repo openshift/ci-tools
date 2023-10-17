@@ -3,7 +3,6 @@ package jobrunbigqueryloader
 import (
 	"context"
 	"os"
-	"time"
 
 	"cloud.google.com/go/bigquery"
 	"github.com/sirupsen/logrus"
@@ -115,13 +114,17 @@ func (f *BigQueryDisruptionUploadFlags) ToOptions(ctx context.Context) (*allJobs
 		backendDisruptionTableInserter = jobrunaggregatorlib.NewDryRunInserter(os.Stdout, jobrunaggregatorapi.BackendDisruptionTableName)
 	}
 
+	pendingUploadLister := newDisruptionPendingUploadLister(ciDataClient)
+	jobRunUploaderRegistry := JobRunUploaderRegistry{}
+	jobRunUploaderRegistry.Register("disruptionUploader", newDisruptionUploader(backendDisruptionTableInserter, ciDataClient))
 	return &allJobsLoaderOptions{
 		ciDataClient: ciDataClient,
 		gcsClient:    gcsClient,
 
 		jobRunInserter:              jobRunTableInserter,
 		shouldCollectedDataForJobFn: wantsDisruptionData,
-		jobRunUploader:              newDisruptionUploader(backendDisruptionTableInserter, ciDataClient),
+		jobRunUploaderRegistry:      jobRunUploaderRegistry,
+		pendingUploadJobsLister:     pendingUploadLister,
 		logLevel:                    f.LogLevel,
 	}, nil
 }
@@ -140,12 +143,11 @@ func newDisruptionUploader(backendDisruptionInserter jobrunaggregatorlib.BigQuer
 	}
 }
 
-func (o *disruptionUploader) getLastUploadedJobRunEndTime(ctx context.Context) (*time.Time, error) {
-	return o.ciDataClient.GetLastJobRunEndTimeFromTable(ctx, jobrunaggregatorapi.DisruptionJobRunTableName)
-}
-
-func (o *disruptionUploader) listUploadedJobRunIDsSince(ctx context.Context, since *time.Time) (map[string]bool, error) {
-	return o.ciDataClient.ListUploadedJobRunIDsSinceFromTable(ctx, jobrunaggregatorapi.DisruptionJobRunTableName, since)
+func newDisruptionPendingUploadLister(ciDataClient jobrunaggregatorlib.CIDataClient) pendingUploadLister {
+	return &testRunPendingUploadLister{
+		tableName:    jobrunaggregatorapi.DisruptionJobRunTableName,
+		ciDataClient: ciDataClient,
+	}
 }
 
 func (o *disruptionUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo,

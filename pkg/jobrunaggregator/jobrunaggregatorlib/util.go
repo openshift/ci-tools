@@ -2,7 +2,6 @@ package jobrunaggregatorlib
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,7 +18,6 @@ import (
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowjobclientset "k8s.io/test-infra/prow/client/clientset/versioned"
 	prowjobinformers "k8s.io/test-infra/prow/client/informers/externalversions"
-	v1 "k8s.io/test-infra/prow/client/informers/externalversions/prowjobs/v1"
 	"k8s.io/utils/clock"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
@@ -40,43 +38,14 @@ var (
 	KnownQuerySources = sets.Set[string]{JobStateQuerySourceBigQuery: sets.Empty{}, JobStateQuerySourceCluster: sets.Empty{}}
 )
 
-type JobRunIdentifier struct {
-	JobName  string
-	JobRunID string
-}
-
-func GetStaticJobRunInfo(staticRunInfoJSON, staticRunInfoPath string) ([]JobRunIdentifier, error) {
-	var jsonBytes []byte
-	var jobRuns []JobRunIdentifier
-	var err error
-	if len(staticRunInfoJSON) == 0 {
-		jsonBytes, err = os.ReadFile(staticRunInfoPath)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		jsonBytes = []byte(staticRunInfoJSON)
-	}
-
-	if err = json.Unmarshal(jsonBytes, &jobRuns); err != nil {
-		return nil, err
-	}
-
-	return jobRuns, nil
-}
-
 type JobRunGetter interface {
 	// GetRelatedJobRuns gets all related job runs for analysis
 	GetRelatedJobRuns(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error)
-
-	// GetRelatedJobRunsFromIdentifiers passes along minimal information known about the jobs already so that we can skip
-	// querying and go directly to fetching the full job details when GetRelatedJobRuns is called
-	GetRelatedJobRunsFromIdentifiers(ctx context.Context, jobRunIdentifiers []JobRunIdentifier) ([]jobrunaggregatorapi.JobRunInfo, error)
 }
 
 type JobRunWaiter interface {
 	// Wait waits until all job runs finish, or time out
-	Wait(ctx context.Context) ([]JobRunIdentifier, error)
+	Wait(ctx context.Context) error
 }
 
 // WaitUntilTime waits until readAt time has passed
@@ -141,20 +110,17 @@ type BigQueryJobRunWaiter struct {
 	TimeToStopWaiting time.Time
 }
 
-func (w *BigQueryJobRunWaiter) Wait(ctx context.Context) ([]JobRunIdentifier, error) {
+func (w *BigQueryJobRunWaiter) Wait(ctx context.Context) error {
 	clock := clock.RealClock{}
 	relatedJobRuns, err := w.JobRunGetter.GetRelatedJobRuns(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	var finishedJobRuns, unfinishedJobRuns []jobrunaggregatorapi.JobRunInfo
-	var unfinishedJobRunNames []string
 
 	for {
 		fmt.Println() // for prettier logs
 
-		finishedJobRuns, unfinishedJobRuns, _, unfinishedJobRunNames = getAllFinishedJobRuns(ctx, relatedJobRuns)
+		_, _, _, unfinishedJobRunNames := getAllFinishedJobRuns(ctx, relatedJobRuns)
 
 		// ready or not, it's time to check
 		if clock.Now().After(w.TimeToStopWaiting) {
@@ -168,26 +134,13 @@ func (w *BigQueryJobRunWaiter) Wait(ctx context.Context) ([]JobRunIdentifier, er
 			case <-time.After(10 * time.Minute):
 				continue
 			case <-ctx.Done():
-				return nil, ctx.Err()
+				return ctx.Err()
 			}
 		}
 
 		break
 	}
-
-	// Optional if we don't want to change the BigQuery path we can remove
-	// This will save us from making an additional lookup immediately
-	// after this call returns
-	jobRunIdentifiers := make([]JobRunIdentifier, 0)
-	for _, jobRunInfo := range finishedJobRuns {
-		jobRunIdentifiers = append(jobRunIdentifiers, JobRunIdentifier{JobRunID: jobRunInfo.GetJobRunID(), JobName: jobRunInfo.GetJobName()})
-	}
-
-	for _, jobRunInfo := range unfinishedJobRuns {
-		jobRunIdentifiers = append(jobRunIdentifiers, JobRunIdentifier{JobRunID: jobRunInfo.GetJobRunID(), JobName: jobRunInfo.GetJobName()})
-	}
-
-	return jobRunIdentifiers, nil
+	return nil
 }
 
 // ClusterJobRunWaiter implements a waiter that will wait for job completion based on live stats for prow jobs
@@ -204,43 +157,32 @@ type ClusterJobRunWaiter struct {
 	ProwJobMatcherFunc ProwJobMatcherFunc
 }
 
-func (w *ClusterJobRunWaiter) allProwJobsFinished(allItems []*prowv1.ProwJob) (bool, map[string]*prowv1.ProwJob) {
+func (w *ClusterJobRunWaiter) allProwJobsFinished(allItems []*prowv1.ProwJob) bool {
 	uncompletedJobMap := map[string]*prowv1.ProwJob{}
-	matchedJobMap := map[string]*prowv1.ProwJob{}
-
+	totalMatchedJobs := 0
 	for _, prowJob := range allItems {
 		if !w.ProwJobMatcherFunc(prowJob) {
 			continue
 		}
-		jobRunID := prowJob.Labels[prowJobJobRunIDLabel]
-		matchedJobMap[jobRunID] = prowJob
+		totalMatchedJobs++
 		if prowJob.Status.CompletionTime != nil {
 			continue
 		}
 
+		jobRunID := prowJob.Labels[prowJobJobRunIDLabel]
 		uncompletedJobMap[jobRunID] = prowJob
 	}
 	if len(uncompletedJobMap) == 0 {
 		logrus.Info("all jobs completed")
-		return true, matchedJobMap
+		return true
 	}
-	logrus.Infof("%d/%d jobs completed, waiting for: [%v]", len(matchedJobMap)-len(uncompletedJobMap), len(matchedJobMap), strings.Join(sets.StringKeySet(uncompletedJobMap).List(), ", "))
-	return false, matchedJobMap
+	logrus.Infof("%d/%d jobs completed, waiting for: [%v]", totalMatchedJobs-len(uncompletedJobMap), totalMatchedJobs, strings.Join(sets.StringKeySet(uncompletedJobMap).List(), ", "))
+	return false
 }
 
-func (w *ClusterJobRunWaiter) checkMatchedJobsForCompletion(prowJobInformer v1.ProwJobInformer) (bool, map[string]*prowv1.ProwJob, error) {
-	allItems, err := prowJobInformer.Lister().List(labels.Everything())
-	if err != nil {
-		return false, nil, err
-	}
-
-	allDone, matchedJobs := w.allProwJobsFinished(allItems)
-	return allDone, matchedJobs, nil
-}
-
-func (w *ClusterJobRunWaiter) Wait(ctx context.Context) ([]JobRunIdentifier, error) {
+func (w *ClusterJobRunWaiter) Wait(ctx context.Context) error {
 	if w.ProwJobClient == nil {
-		return nil, fmt.Errorf("prowjob client is missing")
+		return fmt.Errorf("prowjob client is missing")
 	}
 
 	prowJobInformerFactory := prowjobinformers.NewSharedInformerFactory(w.ProwJobClient, 24*time.Hour)
@@ -251,7 +193,7 @@ func (w *ClusterJobRunWaiter) Wait(ctx context.Context) ([]JobRunIdentifier, err
 	hasSynced := prowJobInformer.Informer().HasSynced
 	go prowJobInformerFactory.Start(ctx.Done())
 	if !cache.WaitForCacheSync(ctx.Done(), hasSynced) {
-		return nil, fmt.Errorf("prowjob informer sync error")
+		return fmt.Errorf("prowjob informer sync error")
 	}
 	timeout := time.Until(w.TimeToStopWaiting)
 	if timeout < 0 {
@@ -266,36 +208,22 @@ func (w *ClusterJobRunWaiter) Wait(ctx context.Context) ([]JobRunIdentifier, err
 		timeout,
 		true,
 		func(ctx context.Context) (bool, error) {
-			allDone, _, err := w.checkMatchedJobsForCompletion(prowJobInformer)
-
+			allItems, err := prowJobInformer.Lister().List(labels.Everything())
 			if err != nil {
-				// log and suppress the error
 				logrus.Infof("Error listing prow jobs: %v", err)
 				return false, nil
 			}
 
-			return allDone, err
+			if w.allProwJobsFinished(allItems) {
+				return true, nil
+			}
+			return false, nil
 		},
 	)
 	if err != nil && err != context.DeadlineExceeded {
-		return nil, fmt.Errorf("failed waiting for prowjobs to complete: %w", err)
+		return fmt.Errorf("failed waiting for prowjobs to complete: %w", err)
 	}
-
-	// one more time to get the matched jobs
-	_, matchedJobs, err := w.checkMatchedJobsForCompletion(prowJobInformer)
-
-	if err != nil && err != context.DeadlineExceeded {
-		return nil, fmt.Errorf("failed waiting for prowjobs to complete: %w", err)
-	}
-
-	jobRuns := make([]JobRunIdentifier, len(matchedJobs))
-	count := 0
-	for _, value := range matchedJobs {
-		jobRuns[count] = JobRunIdentifier{JobName: value.Spec.Job, JobRunID: value.Status.BuildID}
-		count += 1
-	}
-
-	return jobRuns, nil
+	return nil
 }
 
 // WaitAndGetAllFinishedJobRuns waits for all job runs to finish until timeToStopWaiting. It returns all finished and unfinished job runs
@@ -309,21 +237,15 @@ func WaitAndGetAllFinishedJobRuns(ctx context.Context,
 	finishedJobRunNames := []string{}
 	unfinishedJobRunNames := []string{}
 
-	var err error
-	matchedJobs, err := waiter.Wait(ctx)
+	err := waiter.Wait(ctx)
 	if err != nil {
 		logrus.Errorf("finished waiting with error %+v", err)
 		return finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames, err
 	}
 	logrus.Infof("finished waiting")
 
-	var relatedJobRuns []jobrunaggregatorapi.JobRunInfo
-	if len(matchedJobs) > 0 {
-		relatedJobRuns, err = jobRunGetter.GetRelatedJobRunsFromIdentifiers(ctx, matchedJobs)
-	} else {
-		// Refresh the job runs content one last time
-		relatedJobRuns, err = jobRunGetter.GetRelatedJobRuns(ctx)
-	}
+	// Refresh the job runs content one last time
+	relatedJobRuns, err := jobRunGetter.GetRelatedJobRuns(ctx)
 	if err != nil {
 		return finishedJobRuns, unfinishedJobRuns, finishedJobRunNames, unfinishedJobRunNames, err
 	}

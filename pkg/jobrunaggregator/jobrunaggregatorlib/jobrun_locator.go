@@ -4,8 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	prowjobv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
@@ -20,7 +18,6 @@ var (
 
 type JobRunLocator interface {
 	FindRelatedJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error)
-	FindJob(ctx context.Context, jobRunID string) (jobrunaggregatorapi.JobRunInfo, error)
 }
 
 // ProwJobMatcherFunc defines a function signature for matching prow jobs. The function is
@@ -83,8 +80,4 @@ func (a *analysisJobAggregator) FindRelatedJobs(ctx context.Context) ([]jobrunag
 	}
 
 	return a.ciGCSClient.ReadRelatedJobRuns(ctx, a.jobName, a.gcsPrefix, startingJobRunID, endingJobRunID, a.prowJobMatcher)
-}
-
-func (a *analysisJobAggregator) FindJob(ctx context.Context, jobRunID string) (jobrunaggregatorapi.JobRunInfo, error) {
-	return a.ciGCSClient.ReadJobRunFromGCS(ctx, a.gcsPrefix, a.jobName, jobRunID, logrus.New())
 }

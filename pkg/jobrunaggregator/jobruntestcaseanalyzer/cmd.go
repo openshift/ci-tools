@@ -97,9 +97,6 @@ type JobRunsTestCaseAnalyzerFlags struct {
 	ExcludeJobNames             []string
 	IncludeJobNames             []string
 	JobStateQuerySource         string
-
-	StaticJobRunIdentifierPath string
-	StaticJobRunIdentifierJSON string
 }
 
 func NewJobRunsTestCaseAnalyzerFlags() *JobRunsTestCaseAnalyzerFlags {
@@ -137,11 +134,6 @@ func (f *JobRunsTestCaseAnalyzerFlags) BindFlags(fs *pflag.FlagSet) {
 	fs.StringArrayVar(&f.ExcludeJobNames, "exclude-job-names", f.ExcludeJobNames, "Applied only when --explicit-gcs-prefixes is not specified.  The flag can be specified multiple times to create a list of substrings used to filter JobNames from the analysis")
 	fs.StringArrayVar(&f.IncludeJobNames, "include-job-names", f.IncludeJobNames, "Applied only when --explicit-gcs-prefixes is not specified.  The flag can be specified multiple times to create a list of substrings to include in matching JobNames for analysis")
 	fs.StringVar(&f.JobStateQuerySource, "query-source", jobrunaggregatorlib.JobStateQuerySourceBigQuery, "The source from which job states are found. It is either bigquery or cluster")
-
-	// optional for local use or potentially gangway results
-	fs.StringVar(&f.StaticJobRunIdentifierPath, "static-run-info-path", f.StaticJobRunIdentifierPath, "The optional path to a file containing JSON formatted JobRunIdentifier array used for aggregated analysis")
-	fs.StringVar(&f.StaticJobRunIdentifierJSON, "static-run-info-json", f.StaticJobRunIdentifierJSON, "The optional JSON formatted string of JobRunIdentifier array used for aggregated analysis")
-
 }
 
 func NewJobRunsTestCaseAnalyzerCommand() *cobra.Command {
@@ -333,14 +325,6 @@ func (f *JobRunsTestCaseAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunTe
 
 	jobGetter := NewTestCaseAnalyzerJobGetter(f.Platform, f.Infrastructure, f.Network, f.testNameSuffix(), f.ExcludeJobNames, f.IncludeJobNames, &f.JobGCSPrefixes, ciDataClient)
 
-	var staticJobRunIdentifiers []jobrunaggregatorlib.JobRunIdentifier
-	if len(f.StaticJobRunIdentifierJSON) > 0 || len(f.StaticJobRunIdentifierPath) > 0 {
-		staticJobRunIdentifiers, err = jobrunaggregatorlib.GetStaticJobRunInfo(f.StaticJobRunIdentifierJSON, f.StaticJobRunIdentifierPath)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	var testIdentifierOpt testIdentifier
 	switch f.TestGroup {
 	case installTestGroup:
@@ -374,7 +358,5 @@ func (f *JobRunsTestCaseAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunTe
 		prowJobClient:       prowJobClient,
 		jobStateQuerySource: f.JobStateQuerySource,
 		prowJobMatcherFunc:  jobGetter.shouldAggregateJob,
-
-		staticJobRunIdentifiers: staticJobRunIdentifiers,
 	}, nil
 }

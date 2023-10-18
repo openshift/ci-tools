@@ -107,7 +107,7 @@ func generateBranchedConfigs(currentRelease, bumpRelease string, futureReleases 
 	devRelease := currentRelease
 	if bumpRelease != "" && promotion.IsBumpable(input.Info.Branch, currentRelease) {
 		devRelease = bumpRelease
-		updateRelease(&currentConfig, bumpRelease)
+		updateRelease(&currentConfig, currentRelease, bumpRelease)
 		updateImages(&currentConfig, currentRelease, bumpRelease)
 		// this config will continue to run for the dev branch but will be bumped
 		output = append(output, config.DataWithInfo{Configuration: currentConfig, Info: input.Info})
@@ -132,7 +132,7 @@ func generateBranchedConfigs(currentRelease, bumpRelease string, futureReleases 
 		}
 
 		// the new config will point to the future release
-		updateRelease(&futureConfig, futureRelease)
+		updateRelease(&futureConfig, devRelease, futureRelease)
 
 		updatePromotion(&currentConfig, &futureConfig, currentRelease, futureRelease, devRelease)
 
@@ -192,9 +192,13 @@ func updatePromotion(currentConfig, futureConfig *api.ReleaseBuildConfiguration,
 
 // updateRelease updates the release that is promoted to and that
 // which is used to source the release payload for testing
-func updateRelease(config *api.ReleaseBuildConfiguration, futureRelease string) {
-	if config.PromotionConfiguration != nil && config.PromotionConfiguration.Name != "" {
-		config.PromotionConfiguration.Name = futureRelease
+func updateRelease(config *api.ReleaseBuildConfiguration, currentRelease, futureRelease string) {
+	if config.PromotionConfiguration != nil {
+		for i := range config.PromotionConfiguration.Targets {
+			if config.PromotionConfiguration.Targets[i].Name == currentRelease {
+				config.PromotionConfiguration.Targets[i].Name = futureRelease
+			}
+		}
 	}
 	if config.ReleaseTagConfiguration != nil {
 		config.ReleaseTagConfiguration.Name = futureRelease

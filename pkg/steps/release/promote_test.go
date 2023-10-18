@@ -162,8 +162,10 @@ func TestPromotedTags(t *testing.T) {
 					{To: api.PipelineImageStreamTagReference("foo")},
 				},
 				PromotionConfiguration: &api.PromotionConfiguration{
-					Namespace: "roger",
-					Name:      "fred",
+					Targets: []api.PromotionTarget{{
+						Namespace: "roger",
+						Name:      "fred",
+					}},
 				},
 			},
 			expected: []api.ImageStreamTagReference{
@@ -177,9 +179,11 @@ func TestPromotedTags(t *testing.T) {
 					{To: api.PipelineImageStreamTagReference("foo")},
 				},
 				PromotionConfiguration: &api.PromotionConfiguration{
-					Namespace: "roger",
-					Name:      "fred",
-					Disabled:  true,
+					Targets: []api.PromotionTarget{{
+						Namespace: "roger",
+						Name:      "fred",
+						Disabled:  true,
+					}},
 				},
 			},
 			expected: nil,
@@ -191,8 +195,10 @@ func TestPromotedTags(t *testing.T) {
 					{To: api.PipelineImageStreamTagReference("foo")},
 				},
 				PromotionConfiguration: &api.PromotionConfiguration{
-					Namespace: "roger",
-					Tag:       "fred",
+					Targets: []api.PromotionTarget{{
+						Namespace: "roger",
+						Tag:       "fred",
+					}},
 				},
 			},
 			expected: []api.ImageStreamTagReference{
@@ -206,11 +212,13 @@ func TestPromotedTags(t *testing.T) {
 					{To: api.PipelineImageStreamTagReference("foo")},
 				},
 				PromotionConfiguration: &api.PromotionConfiguration{
-					Namespace: "roger",
-					Tag:       "fred",
-					AdditionalImages: map[string]string{
-						"output": "src",
-					},
+					Targets: []api.PromotionTarget{{
+						Namespace: "roger",
+						Tag:       "fred",
+						AdditionalImages: map[string]string{
+							"output": "src",
+						},
+					}},
 				},
 			},
 			expected: []api.ImageStreamTagReference{
@@ -225,9 +233,11 @@ func TestPromotedTags(t *testing.T) {
 					{To: api.PipelineImageStreamTagReference("foo")},
 				},
 				PromotionConfiguration: &api.PromotionConfiguration{
-					Namespace:      "roger",
-					Tag:            "fred",
-					ExcludedImages: []string{"foo"},
+					Targets: []api.PromotionTarget{{
+						Namespace:      "roger",
+						Tag:            "fred",
+						ExcludedImages: []string{"foo"},
+					}},
 				},
 			},
 			expected: nil,
@@ -238,8 +248,10 @@ func TestPromotedTags(t *testing.T) {
 				Images:              []api.ProjectDirectoryImageBuildStepConfiguration{},
 				BinaryBuildCommands: "something",
 				PromotionConfiguration: &api.PromotionConfiguration{
-					Namespace: "roger",
-					Tag:       "fred",
+					Targets: []api.PromotionTarget{{
+						Namespace: "roger",
+						Tag:       "fred",
+					}},
 				},
 				Metadata: api.Metadata{
 					Org:    "org",
@@ -255,13 +267,15 @@ func TestPromotedTags(t *testing.T) {
 			name: "promotion with AdditionalImages: many to one",
 			input: &api.ReleaseBuildConfiguration{
 				PromotionConfiguration: &api.PromotionConfiguration{
-					Namespace: "ocp",
-					Name:      "4.6",
-					AdditionalImages: map[string]string{
-						"base":   "base-8",
-						"base-7": "base-7",
-						"base-8": "base-8",
-					},
+					Targets: []api.PromotionTarget{{
+						Namespace: "ocp",
+						Name:      "4.6",
+						AdditionalImages: map[string]string{
+							"base":   "base-8",
+							"base-7": "base-7",
+							"base-8": "base-8",
+						},
+					}},
 				},
 				Metadata: api.Metadata{
 					Org:    "openshift",
@@ -307,8 +321,10 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					{To: api.PipelineImageStreamTagReference("foo")},
 				},
 				PromotionConfiguration: &api.PromotionConfiguration{
-					Namespace: "roger",
-					Name:      "fred",
+					Targets: []api.PromotionTarget{{
+						Namespace: "roger",
+						Name:      "fred",
+					}},
 				},
 			},
 			expected: map[string][]api.ImageStreamTagReference{
@@ -326,8 +342,10 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					{To: api.PipelineImageStreamTagReference("bar"), Optional: true},
 				},
 				PromotionConfiguration: &api.PromotionConfiguration{
-					Namespace: "roger",
-					Name:      "fred",
+					Targets: []api.PromotionTarget{{
+						Namespace: "roger",
+						Name:      "fred",
+					}},
 				},
 			},
 			expected: map[string][]api.ImageStreamTagReference{
@@ -344,8 +362,10 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					{To: api.PipelineImageStreamTagReference("foo"), Optional: true},
 				},
 				PromotionConfiguration: &api.PromotionConfiguration{
-					Namespace: "roger",
-					Name:      "fred",
+					Targets: []api.PromotionTarget{{
+						Namespace: "roger",
+						Name:      "fred",
+					}},
 				},
 			},
 			options: []PromotedTagsOption{WithRequiredImages(sets.New[string]("foo"))},
@@ -363,9 +383,11 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					{To: api.PipelineImageStreamTagReference("foo")},
 				},
 				PromotionConfiguration: &api.PromotionConfiguration{
-					Namespace: "roger",
-					Name:      "fred",
-					Disabled:  true,
+					Targets: []api.PromotionTarget{{
+						Namespace: "roger",
+						Name:      "fred",
+						Disabled:  true,
+					}},
 				},
 			},
 			expected:               map[string][]api.ImageStreamTagReference{},
@@ -378,8 +400,10 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					{To: api.PipelineImageStreamTagReference("foo")},
 				},
 				PromotionConfiguration: &api.PromotionConfiguration{
-					Namespace: "roger",
-					Tag:       "fred",
+					Targets: []api.PromotionTarget{{
+						Namespace: "roger",
+						Tag:       "fred",
+					}},
 				},
 			},
 			expected: map[string][]api.ImageStreamTagReference{
@@ -396,9 +420,11 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					{To: api.PipelineImageStreamTagReference("foo")},
 				},
 				PromotionConfiguration: &api.PromotionConfiguration{
-					Namespace:   "roger",
-					Tag:         "fred",
-					TagByCommit: true,
+					Targets: []api.PromotionTarget{{
+						Namespace:   "roger",
+						Tag:         "fred",
+						TagByCommit: true,
+					}},
 				},
 			},
 			options: []PromotedTagsOption{WithCommitSha("sha")},
@@ -417,11 +443,13 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					{To: api.PipelineImageStreamTagReference("foo")},
 				},
 				PromotionConfiguration: &api.PromotionConfiguration{
-					Namespace: "roger",
-					Tag:       "fred",
-					AdditionalImages: map[string]string{
-						"output": "src",
-					},
+					Targets: []api.PromotionTarget{{
+						Namespace: "roger",
+						Tag:       "fred",
+						AdditionalImages: map[string]string{
+							"output": "src",
+						},
+					}},
 				},
 			},
 			expected: map[string][]api.ImageStreamTagReference{
@@ -441,9 +469,11 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 					{To: api.PipelineImageStreamTagReference("foo")},
 				},
 				PromotionConfiguration: &api.PromotionConfiguration{
-					Namespace:      "roger",
-					Tag:            "fred",
-					ExcludedImages: []string{"foo"},
+					Targets: []api.PromotionTarget{{
+						Namespace:      "roger",
+						Tag:            "fred",
+						ExcludedImages: []string{"foo"},
+					}},
 				},
 			},
 			expected:               map[string][]api.ImageStreamTagReference{},
@@ -455,8 +485,10 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 				Images:              []api.ProjectDirectoryImageBuildStepConfiguration{},
 				BinaryBuildCommands: "something",
 				PromotionConfiguration: &api.PromotionConfiguration{
-					Namespace: "roger",
-					Tag:       "fred",
+					Targets: []api.PromotionTarget{{
+						Namespace: "roger",
+						Tag:       "fred",
+					}},
 				},
 				Metadata: api.Metadata{
 					Org:    "org",
@@ -475,8 +507,10 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 				Images:              []api.ProjectDirectoryImageBuildStepConfiguration{},
 				BinaryBuildCommands: "something",
 				PromotionConfiguration: &api.PromotionConfiguration{
-					Namespace:         "roger",
-					Tag:               "fred",
+					Targets: []api.PromotionTarget{{
+						Namespace: "roger",
+						Tag:       "fred",
+					}},
 					DisableBuildCache: true,
 				},
 				Metadata: api.Metadata{
@@ -492,13 +526,15 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 			name: "promotion with AdditionalImages: many to one",
 			input: &api.ReleaseBuildConfiguration{
 				PromotionConfiguration: &api.PromotionConfiguration{
-					Namespace: "ocp",
-					Name:      "4.6",
-					AdditionalImages: map[string]string{
-						"base":   "base-8",
-						"base-7": "base-7",
-						"base-8": "base-8",
-					},
+					Targets: []api.PromotionTarget{{
+						Namespace: "ocp",
+						Name:      "4.6",
+						AdditionalImages: map[string]string{
+							"base":   "base-8",
+							"base-7": "base-7",
+							"base-8": "base-8",
+						},
+					}},
 				},
 				Metadata: api.Metadata{
 					Org:    "openshift",
@@ -522,6 +558,14 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 			input: &api.ReleaseBuildConfiguration{
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
+						Namespace: "ocp",
+						Name:      "4.6",
+						AdditionalImages: map[string]string{
+							"base":   "base-8",
+							"base-7": "base-7",
+							"base-8": "base-8",
+						},
+					}, {
 						ExcludedImages: []string{"*"},
 						AdditionalImages: map[string]string{
 							"other": "base",
@@ -529,13 +573,6 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 						Namespace: "extra",
 						Tag:       "latest",
 					}},
-					Namespace: "ocp",
-					Name:      "4.6",
-					AdditionalImages: map[string]string{
-						"base":   "base-8",
-						"base-7": "base-7",
-						"base-8": "base-8",
-					},
 				},
 				Metadata: api.Metadata{
 					Org:    "openshift",

@@ -81,7 +81,7 @@ func (m manifestPusher) PushImageWithManifest(builds map[string]*buildv1.Build, 
 		err := cmd.Run()
 		if err != nil {
 			m.logger.WithError(err).WithField("output", cmdOutput.String()).WithField("error_output", cmdError.String()).Error("manifest-tool command failed")
-			return false, err
+			return false, nil
 		}
 		m.logger.WithField("output", cmdOutput.String()).Debug("manifest-tool command succeeded")
 

@@ -423,6 +423,7 @@ func TestDeleteInvalidUsers(t *testing.T) {
 		name        string
 		clients     map[string]ctrlruntimeclient.Client
 		kerberosIDs sets.Set[string]
+		ciAdmins    sets.Set[string]
 		verifyFunc  func(ctx context.Context, clients map[string]ctrlruntimeclient.Client) error
 	}{
 		{
@@ -436,6 +437,7 @@ func TestDeleteInvalidUsers(t *testing.T) {
 					i01.DeepCopy(), i02.DeepCopy(), i03.DeepCopy(), i04.DeepCopy()).Build(),
 			},
 			kerberosIDs: sets.New[string]("a", "b"),
+			ciAdmins:    sets.New[string](),
 			verifyFunc: func(ctx context.Context, clients map[string]ctrlruntimeclient.Client) error {
 				for _, client := range clients {
 					assert.True(t, isUser(ctx, client, "a"))
@@ -460,6 +462,7 @@ func TestDeleteInvalidUsers(t *testing.T) {
 					i01.DeepCopy(), i02.DeepCopy(), i03.DeepCopy(), i04.DeepCopy()).Build(),
 			},
 			kerberosIDs: sets.New[string]("a", "b", "c"),
+			ciAdmins:    sets.New[string](),
 			verifyFunc: func(ctx context.Context, clients map[string]ctrlruntimeclient.Client) error {
 				for _, client := range clients {
 					assert.True(t, isUser(ctx, client, "a"))
@@ -480,6 +483,7 @@ func TestDeleteInvalidUsers(t *testing.T) {
 				"b02": fakeclient.NewClientBuilder().WithRuntimeObjects(u01.DeepCopy(), u02.DeepCopy(), u03.DeepCopy()).Build(),
 			},
 			kerberosIDs: sets.New[string]("d", "e", "f"),
+			ciAdmins:    sets.New[string](),
 			verifyFunc: func(ctx context.Context, clients map[string]ctrlruntimeclient.Client) error {
 				for _, client := range clients {
 					assert.False(t, isUser(ctx, client, "a"))
@@ -503,6 +507,7 @@ func TestDeleteInvalidUsers(t *testing.T) {
 					u03.DeepCopy(), i03.DeepCopy(), i04.DeepCopy()).Build(),
 			},
 			kerberosIDs: sets.New[string]("b", "c"),
+			ciAdmins:    sets.New[string](),
 			verifyFunc: func(ctx context.Context, clients map[string]ctrlruntimeclient.Client) error {
 				assert.False(t, isUser(ctx, clients["b01"], "a"))
 				assert.False(t, isIdentity(ctx, clients["b01"], "a"))
@@ -514,11 +519,36 @@ func TestDeleteInvalidUsers(t *testing.T) {
 				return nil
 			},
 		},
+		{
+			name: "attempt to delete ci-admin",
+			clients: map[string]ctrlruntimeclient.Client{
+				"b01": fakeclient.NewClientBuilder().WithRuntimeObjects(
+					u01.DeepCopy(), u02.DeepCopy(), u03.DeepCopy(),
+					i01.DeepCopy(), i02.DeepCopy(), i03.DeepCopy(), i04.DeepCopy()).Build(),
+				"b02": fakeclient.NewClientBuilder().WithRuntimeObjects(
+					u01.DeepCopy(), u02.DeepCopy(), u03.DeepCopy(),
+					i01.DeepCopy(), i02.DeepCopy(), i03.DeepCopy(), i04.DeepCopy()).Build(),
+			},
+			kerberosIDs: sets.New[string]("b"),
+			ciAdmins:    sets.New[string]("a"),
+			verifyFunc: func(ctx context.Context, clients map[string]ctrlruntimeclient.Client) error {
+				for _, client := range clients {
+					assert.True(t, isUser(ctx, client, "a"))
+					assert.True(t, isIdentity(ctx, client, "a"))
+					assert.True(t, isUser(ctx, client, "b"))
+					assert.True(t, isIdentity(ctx, client, "b"))
+					assert.False(t, isUser(ctx, client, "c"))
+					assert.False(t, isIdentity(ctx, client, "c"))
+					assert.False(t, isIdentity(ctx, client, "d"))
+				}
+				return nil
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.TODO()
-			err := deleteInvalidUsers(ctx, tc.clients, tc.kerberosIDs, false)
+			err := deleteInvalidUsers(ctx, tc.clients, tc.kerberosIDs, tc.ciAdmins, false)
 			if err != nil {
 				t.Errorf("%s: unexpected error occurred: %v", tc.name, err)
 			}

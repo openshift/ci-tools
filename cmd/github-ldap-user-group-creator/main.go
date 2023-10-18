@@ -238,8 +238,8 @@ func main() {
 	if err := yaml.Unmarshal(data, &roverGroups); err != nil {
 		logrus.WithError(err).Fatal("Failed to unmarshal groups")
 	}
-
-	if ciAdmins, ok := roverGroups[api.CIAdminsGroupName]; !ok {
+	ciAdmins, ok := roverGroups[api.CIAdminsGroupName]
+	if !ok {
 		logrus.WithField("groupName", api.CIAdminsGroupName).Fatal("Failed to find ci-admins group")
 	} else if l := len(ciAdmins); l < 3 {
 		logrus.WithField("groupName", api.CIAdminsGroupName).WithField("len", l).Fatal("Require at least 3 members of ci-admins group")
@@ -250,7 +250,7 @@ func main() {
 		kerberosIds.Insert(kerberosId)
 	}
 	if opts.deleteInvalidUsers {
-		if err := deleteInvalidUsers(ctx, clients, kerberosIds, opts.dryRun); err != nil {
+		if err := deleteInvalidUsers(ctx, clients, kerberosIds, sets.New[string](ciAdmins...), opts.dryRun); err != nil {
 			logrus.WithError(err).Fatal("Failed to delete users")
 		}
 	}
@@ -303,7 +303,7 @@ type GroupClusters struct {
 var githubRobotIds = sets.New[string]("RH-Cachito", "openshift-bot", "openshift-ci-robot", "openshift-merge-robot")
 
 func deleteInvalidUsers(ctx context.Context, clients map[string]ctrlruntimeclient.Client,
-	kerberosIDs sets.Set[string], dryRun bool) error {
+	kerberosIDs sets.Set[string], ciAdmins sets.Set[string], dryRun bool) error {
 
 	var errs []error
 	for cluster, client := range clients {
@@ -313,6 +313,11 @@ func deleteInvalidUsers(ctx context.Context, clients map[string]ctrlruntimeclien
 			continue
 		}
 		for user, identites := range usersToDelete {
+			if ciAdmins.Has(user) {
+				// should never happen
+				logrus.WithField("cluster", cluster).WithField("user", user).Info("Attempt to delete admin! Skipping...")
+				continue
+			}
 			logrus.WithField("cluster", cluster).WithField("user", user).Info("Deleting user...")
 			if !dryRun {
 				var err error

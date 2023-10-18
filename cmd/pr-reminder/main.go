@@ -313,6 +313,7 @@ func main() {
 				logrus.WithError(err).Fatal("failed to create github client")
 			}
 
+			var errs []error
 			for _, user := range findPrsForUsers(users, ghClient) {
 				logrus.Infof("%d PRs were found for user: %s", len(user.PrRequests), user.KerberosId)
 				if len(user.PrRequests) > 0 {
@@ -322,9 +323,13 @@ func main() {
 					})
 
 					if err = messageUser(user, slackClient); err != nil {
-						logrus.WithError(err).Fatal("failed to message users")
+						logrus.WithField("kerberosId", user.KerberosId).WithError(err).Error("failed to message user")
+						errs = append(errs, err)
 					}
 				}
+			}
+			if len(errs) > 0 {
+				logrus.WithError(kerrors.NewAggregate(errs)).Fatal("Failed to message users")
 			}
 		}
 	}
@@ -470,6 +475,7 @@ func messageUser(user user, slackClient slackClient) error {
 		slack.MsgOptionText("PR Review Reminders.", false),
 		slack.MsgOptionBlocks(message...))
 	if err != nil {
+		logrus.WithError(err).WithField("kerberosId", user.KerberosId).WithField("message", message).Debug("Failed to message user about PR review reminder")
 		errors = append(errors, fmt.Errorf("failed to message user: %s about PR review reminder: %w", user.KerberosId, err))
 	} else {
 		logrus.Infof("Posted PR review reminder for user: %s in channel: %s at: %s", user.KerberosId, responseChannel, responseTimestamp)

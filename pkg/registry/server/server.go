@@ -306,6 +306,15 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 					Location: config.RpmBuildLocation,
 				})
 			}
+			if config.Operator != nil {
+				if mergedConfig.Operator == nil {
+					mergedConfig.Operator = config.Operator
+				} else {
+					//TODO: when merging multiple configs with 'operator' defined we could have conflicts, we could handle these better, but it is unlikely to come up
+					mergedConfig.Operator.Bundles = append(mergedConfig.Operator.Bundles, config.Operator.Bundles...)
+					mergedConfig.Operator.Substitutions = append(mergedConfig.Operator.Substitutions, config.Operator.Substitutions...)
+				}
+			}
 		}
 		//TODO: If this is to be used for a general purpose outside of payload testing, we will need to merge tests and other elements
 

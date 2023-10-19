@@ -32,6 +32,8 @@ func TestTestInputImageStreamTagsFromResolvedConfigReturnsAllImageStreamTags(t *
 				// TestInputImageStreamTagsFromResolvedConfig assumes that the config is already
 				// resolved and will error if thats not the case (MultiStageTestConfiguration != nil && MultiStageTestConfigurationLiteral == nil)
 				func(_ **api.MultiStageTestConfiguration, _ fuzz.Continue) {},
+				// Don't set build_roots, that is mutually exclusive with build_root and only set by ci-operator-configresolver when merging configs
+				func(_ map[string]api.BuildRootImageConfiguration, _ fuzz.Continue) {},
 			).
 				// Using something else messes up the result, apparently the fuzzer sometimes overwrites the whole
 				// map/slice after inserting into it.

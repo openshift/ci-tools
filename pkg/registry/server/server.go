@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -95,7 +96,7 @@ func resolveAndRespond(resolver Resolver, config api.ReleaseBuildConfiguration, 
 	}
 }
 
-func injectTestFromQuery(w http.ResponseWriter, r *http.Request) (*api.MetadataWithTest, error) {
+func getInjectTestFromQuery(w http.ResponseWriter, r *http.Request) (*api.MetadataWithTest, error) {
 	var ret api.MetadataWithTest
 
 	if r.Method != "GET" {
@@ -151,33 +152,38 @@ func ResolveConfigWithInjectedTest(configs Getter, resolver Resolver, resolverMe
 			return
 		}
 
-		inject, err := injectTestFromQuery(w, r)
-		if err != nil {
-			// injectTestFromQuery deals with setting status code and writing response
-			// so we need to just log the error here
-			metrics.RecordError("invalid query", resolverMetrics.ErrorRate)
-			logrus.WithError(err).Warning("failed to read query from request")
-			return
-		}
-		injectFromConfig, err := configs.GetMatchingConfig(inject.Metadata)
-		if err != nil {
-			metrics.RecordError("config not found", resolverMetrics.ErrorRate)
-			w.WriteHeader(http.StatusNotFound)
-			fmt.Fprintf(w, "failed to get config to inject from: %v", err)
-			logger.WithError(err).Warning("failed to get config")
-			return
-		}
-		configWithInjectedTest, err := config.WithPresubmitFrom(&injectFromConfig, inject.Test)
-		if err != nil {
-			metrics.RecordError("test injection failed", resolverMetrics.ErrorRate)
-			w.WriteHeader(http.StatusInternalServerError) // TODO: Can be be 400 in some cases but meh
-			fmt.Fprintf(w, "failed to inject test into config: %v", err)
-			logger.WithError(err).Warning("failed to inject test into config")
-			return
-		}
-
+		configWithInjectedTest := injectTest(config, configs, resolverMetrics, w, r, logger)
 		resolveAndRespond(resolver, *configWithInjectedTest, w, logger, resolverMetrics)
 	}
+}
+
+func injectTest(injectTo api.ReleaseBuildConfiguration, configs Getter, resolverMetrics *metrics.Metrics, w http.ResponseWriter, r *http.Request, logger *logrus.Entry) *api.ReleaseBuildConfiguration {
+	inject, err := getInjectTestFromQuery(w, r)
+	if err != nil {
+		// getInjectTestFromQuery deals with setting status code and writing response
+		// so we need to just log the error here
+		metrics.RecordError("invalid query", resolverMetrics.ErrorRate)
+		logrus.WithError(err).Warning("failed to read query from request")
+		return nil
+	}
+	injectFromConfig, err := configs.GetMatchingConfig(inject.Metadata)
+	if err != nil {
+		metrics.RecordError("config not found", resolverMetrics.ErrorRate)
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprintf(w, "failed to get config to inject from: %v", err)
+		logger.WithError(err).Warning("failed to get config")
+		return nil
+	}
+	configWithInjectedTest, err := injectTo.WithPresubmitFrom(&injectFromConfig, inject.Test)
+	if err != nil {
+		metrics.RecordError("test injection failed", resolverMetrics.ErrorRate)
+		w.WriteHeader(http.StatusInternalServerError) // TODO: Can be be 400 in some cases but meh
+		fmt.Fprintf(w, "failed to inject test into config: %v", err)
+		logger.WithError(err).Warning("failed to inject test into config")
+		return nil
+	}
+
+	return configWithInjectedTest
 }
 
 func ResolveConfig(configs Getter, resolver Resolver, resolverMetrics *metrics.Metrics) http.HandlerFunc {
@@ -232,4 +238,135 @@ func ResolveLiteralConfig(resolver Resolver, resolverMetrics *metrics.Metrics) h
 		}
 		resolveAndRespond(resolver, unresolvedConfig, w, logger, resolverMetrics)
 	}
+}
+
+func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, resolverMetrics *metrics.Metrics) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			w.WriteHeader(http.StatusNotImplemented)
+			_, _ = w.Write([]byte(http.StatusText(http.StatusNotImplemented)))
+			return
+		}
+		metadataList, err := MetadataEntriesFromQuery(w, r)
+		if err != nil {
+			// MetadataFromQuery deals with setting status code and writing response
+			// so we need to just log the error here
+			metrics.RecordError("invalid query", resolverMetrics.ErrorRate)
+			logrus.WithError(err).Warning("failed to read query from request")
+			return
+		}
+		logger := logrus.WithField("merged", "true")
+
+		mergedConfig := api.ReleaseBuildConfiguration{
+			InputConfiguration: api.InputConfiguration{
+				BuildRootImages: make(map[string]api.BuildRootImageConfiguration, len(metadataList)),
+				BaseImages:      make(map[string]api.ImageStreamTagReference),
+			},
+		}
+		for _, metadata := range metadataList {
+			configLogger := logger.WithFields(api.LogFieldsFor(metadata))
+			configLogger.Info("requested metadata to be merged")
+			config, err := configs.GetMatchingConfig(metadata)
+			if err != nil {
+				metrics.RecordError("config not found", resolverMetrics.ErrorRate)
+				w.WriteHeader(http.StatusNotFound)
+				fmt.Fprintf(w, "failed to get config: %v", err)
+				configLogger.WithError(err).Warning("failed to get config")
+				return
+			}
+			ref := fmt.Sprintf("%s/%s", metadata.Org, metadata.Repo)
+
+			mergedConfig.BuildRootImages[ref] = *config.BuildRootImage
+
+			for key, image := range config.BaseImages {
+				imageRef := fmt.Sprintf("%s.%s", ref, key)
+				mergedConfig.BaseImages[imageRef] = image
+			}
+			if config.BinaryBuildCommands != "" {
+				mergedConfig.BinaryBuildCommandsList = append(mergedConfig.BinaryBuildCommandsList, api.RefCommands{
+					Ref:      ref,
+					Commands: config.BinaryBuildCommands,
+				})
+			}
+			if config.TestBinaryBuildCommands != "" {
+				mergedConfig.TestBinaryBuildCommandsList = append(mergedConfig.TestBinaryBuildCommandsList, api.RefCommands{
+					Ref:      ref,
+					Commands: config.TestBinaryBuildCommands,
+				})
+			}
+			if config.RpmBuildCommands != "" {
+				mergedConfig.RpmBuildCommandsList = append(mergedConfig.RpmBuildCommandsList, api.RefCommands{
+					Ref:      ref,
+					Commands: config.RpmBuildCommands,
+				})
+			}
+			if config.RpmBuildLocation != "" {
+				mergedConfig.RpmBuildLocationList = append(mergedConfig.RpmBuildLocationList, api.RefLocation{
+					Ref:      ref,
+					Location: config.RpmBuildLocation,
+				})
+			}
+			if config.Operator != nil {
+				if mergedConfig.Operator == nil {
+					mergedConfig.Operator = config.Operator
+				} else {
+					//TODO: when merging multiple configs with 'operator' defined we could have conflicts, we could handle these better, but it is unlikely to come up
+					mergedConfig.Operator.Bundles = append(mergedConfig.Operator.Bundles, config.Operator.Bundles...)
+					mergedConfig.Operator.Substitutions = append(mergedConfig.Operator.Substitutions, config.Operator.Substitutions...)
+				}
+			}
+		}
+		//TODO: If this is to be used for a general purpose outside of payload testing, we will need to merge tests and other elements
+
+		configWithInjectedTest := injectTest(mergedConfig, configs, resolverMetrics, w, r, logger)
+
+		resolveAndRespond(resolver, *configWithInjectedTest, w, logger, resolverMetrics)
+	}
+}
+
+func MetadataEntriesFromQuery(w http.ResponseWriter, r *http.Request) ([]api.Metadata, error) {
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusNotImplemented)
+		err := fmt.Errorf("expected GET, got %s", r.Method)
+		if _, errWrite := w.Write([]byte(http.StatusText(http.StatusNotImplemented))); errWrite != nil {
+			return []api.Metadata{}, fmt.Errorf("%s and writing the response body failed with %w", err.Error(), errWrite)
+		}
+		return []api.Metadata{}, err
+	}
+
+	orgs := strings.Split(r.URL.Query().Get(OrgQuery), ",")
+	repos := strings.Split(r.URL.Query().Get(RepoQuery), ",")
+	branches := strings.Split(r.URL.Query().Get(BranchQuery), ",")
+	variants := strings.Split(r.URL.Query().Get(VariantQuery), ",")
+	variantsExist := false
+	for _, variant := range variants {
+		if variant != "" {
+			variantsExist = true
+			break
+		}
+	}
+
+	if len(orgs) != len(repos) || len(orgs) != len(branches) {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "Passed: orgs (%d), repos (%d), and branches (%d) do not match", len(orgs), len(repos), len(branches))
+	}
+	if variantsExist && len(orgs) != len(variants) {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "If any variants are passed, there must be one for each ref. Blank variants are allowed.")
+	}
+
+	var metadata []api.Metadata
+	for i, org := range orgs {
+		element := api.Metadata{
+			Org:    org,
+			Repo:   repos[i],
+			Branch: branches[i],
+		}
+		if variantsExist {
+			element.Variant = variants[i]
+		}
+		metadata = append(metadata, element)
+	}
+
+	return metadata, nil
 }

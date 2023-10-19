@@ -25,6 +25,14 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"# contains the output of this command. This allows reuse of binary artifacts\n" +
 	"# across other steps. If empty, no \"bin\" image will be created.\n" +
 	"binary_build_commands: ' '\n" +
+	"# BinaryBuildCommandsList entries will create a \"bin\" image based on \"src\" that\n" +
+	"# contains the output of this command. This allows reuse of binary artifacts\n" +
+	"# across other steps. If empty, no \"bin\" image will be created.\n" +
+	"# Mutually exclusive with BinaryBuildCommands\n" +
+	"# DO NOT set this in the config\n" +
+	"binary_build_commands_list:\n" +
+	"    - commands: ' '\n" +
+	"      ref: ' '\n" +
 	"# BuildRootImage supports two ways to get the image that\n" +
 	"# the pipeline will caches on. The one way is to take the reference\n" +
 	"# from an image stream, and the other from a dockerfile.\n" +
@@ -78,6 +86,62 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"    # as a build cache, if the underlying build root has not changed since\n" +
 	"    # the previous cache was published.\n" +
 	"    use_build_cache: true\n" +
+	"# BuildRootImages entries support two ways to get the image that\n" +
+	"# the pipeline will caches on. The one way is to take the reference\n" +
+	"# from an image stream, and the other from a dockerfile.\n" +
+	"# Mutually exclusive with BuildRootImage\n" +
+	"# DO NOT set this in the config\n" +
+	"build_roots:\n" +
+	"    \"\":\n" +
+	"        # If the BuildRoot images pullspec should be read from a file in the repository (BuildRootImageFileName).\n" +
+	"        from_repository: true\n" +
+	"        image_stream_tag:\n" +
+	"            # As is an optional string to use as the intermediate name for this reference.\n" +
+	"            as: ' '\n" +
+	"            name: ' '\n" +
+	"            namespace: ' '\n" +
+	"            tag: ' '\n" +
+	"        project_image:\n" +
+	"            # BuildArgs contains build arguments that will be resolved in the Dockerfile.\n" +
+	"            # See https://docs.docker.com/engine/reference/builder/#/arg for more details.\n" +
+	"            build_args:\n" +
+	"                - # Name of the build arg.\n" +
+	"                  name: ' '\n" +
+	"                  # Value of the build arg.\n" +
+	"                  value: ' '\n" +
+	"            # ContextDir is the directory in the project\n" +
+	"            # from which this build should be run.\n" +
+	"            context_dir: ' '\n" +
+	"            # DockerfileLiteral can be used to provide an inline Dockerfile.\n" +
+	"            # Mutually exclusive with DockerfilePath.\n" +
+	"            dockerfile_literal: \"\"\n" +
+	"            # DockerfilePath is the path to a Dockerfile in the\n" +
+	"            # project to run relative to the context_dir.\n" +
+	"            dockerfile_path: ' '\n" +
+	"            # Inputs is a map of tag reference name to image input changes\n" +
+	"            # that will populate the build context for the Dockerfile or\n" +
+	"            # alter the input image for a multi-stage build.\n" +
+	"            inputs:\n" +
+	"                \"\":\n" +
+	"                    # As is a list of multi-stage step names or image names that will\n" +
+	"                    # be replaced by the image reference from this step. For instance,\n" +
+	"                    # if the Dockerfile defines FROM nginx:latest AS base, specifying\n" +
+	"                    # either \"nginx:latest\" or \"base\" in this array will replace that\n" +
+	"                    # image with the pipeline input.\n" +
+	"                    as:\n" +
+	"                        - \"\"\n" +
+	"                    # Paths is a list of paths to copy out of this image and into the\n" +
+	"                    # context directory.\n" +
+	"                    paths:\n" +
+	"                        - # DestinationDir is the directory in the destination image to copy\n" +
+	"                          # to.\n" +
+	"                          destination_dir: ' '\n" +
+	"                          # SourcePath is a file or directory in the source image to copy from.\n" +
+	"                          source_path: ' '\n" +
+	"        # UseBuildCache enables the import and use of the prior `bin` image\n" +
+	"        # as a build cache, if the underlying build root has not changed since\n" +
+	"        # the previous cache was published.\n" +
+	"        use_build_cache: true\n" +
 	"# CanonicalGoRepository is a directory path that represents\n" +
 	"# the desired location of the contents of this repository in\n" +
 	"# Go. If specified the location of the repository we are\n" +
@@ -1201,10 +1265,27 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"# command. The created RPMs will then be served via HTTP to the \"base\" image\n" +
 	"# via an injected rpm.repo in the standard location at /etc/yum.repos.d.\n" +
 	"rpm_build_commands: ' '\n" +
+	"# RpmBuildCommandsList entries will create an \"rpms\" image from \"bin\" (or \"src\", if no\n" +
+	"# binary build commands were specified) that contains the output of this\n" +
+	"# command. The created RPMs will then be served via HTTP to the \"base\" image\n" +
+	"# via an injected rpm.repo in the standard location at /etc/yum.repos.d.\n" +
+	"# Mutually exclusive with RpmBuildCommands\n" +
+	"# DO NOT set this in the config\n" +
+	"rpm_build_commands_list:\n" +
+	"    - commands: ' '\n" +
+	"      ref: ' '\n" +
 	"# RpmBuildLocation is where RPms are deposited after being built. If\n" +
 	"# unset, this will default under the repository root to\n" +
 	"# _output/local/releases/rpms/.\n" +
 	"rpm_build_location: ' '\n" +
+	"# RpmBuildLocationList entries are where RPms are deposited after being built. If\n" +
+	"# unset, this will default under the repository root to\n" +
+	"# _output/local/releases/rpms/.\n" +
+	"# Mutually exclusive with RpmBuildLocation\n" +
+	"# DO NOT set this in the config\n" +
+	"rpm_build_location_list:\n" +
+	"    - location: ' '\n" +
+	"      ref: ' '\n" +
 	"# ReleaseTagConfiguration determines how the\n" +
 	"# full release is assembled.\n" +
 	"tag_specification:\n" +
@@ -1222,6 +1303,14 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"# contains the output of this command. This allows reuse of binary artifacts\n" +
 	"# across other steps. If empty, no \"test-bin\" image will be created.\n" +
 	"test_binary_build_commands: ' '\n" +
+	"# TestBinaryBuildCommandsList entries will create a \"test-bin\" image based on \"src\" that\n" +
+	"# contains the output of this command. This allows reuse of binary artifacts\n" +
+	"# across other steps. If empty, no \"test-bin\" image will be created.\n" +
+	"# Mutually exclusive with TestBinaryBuildCommands\n" +
+	"# DO NOT set this in the config\n" +
+	"test_binary_build_commands_list:\n" +
+	"    - commands: ' '\n" +
+	"      ref: ' '\n" +
 	"# Tests describes the tests to run inside of built images.\n" +
 	"# The images launched as pods but have no explicit access to\n" +
 	"# the cluster they are running on.\n" +

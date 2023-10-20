@@ -27,12 +27,12 @@ func updateJobs(o options) error {
 	logrus.Infof("generating: presubmits, postsubmits, and periodics for %s", o.clusterName)
 	config := prowconfig.JobConfig{
 		PresubmitsStatic: map[string][]prowconfig.Presubmit{
-			"openshift/release": {generatePresubmit(o.clusterName)},
+			"openshift/release": {generatePresubmit(o)},
 		},
 		PostsubmitsStatic: map[string][]prowconfig.Postsubmit{
-			"openshift/release": {generatePostsubmit(o.clusterName)},
+			"openshift/release": {generatePostsubmit(o)},
 		},
-		Periodics: []prowconfig.Periodic{generatePeriodic(o.clusterName)},
+		Periodics: []prowconfig.Periodic{generatePeriodic(o)},
 	}
 	metadata := RepoMetadata()
 	jobsDir := filepath.Join(o.releaseRepo, "ci-operator", "jobs")
@@ -44,7 +44,9 @@ func updateJobs(o options) error {
 		map[string]string{jobconfig.LabelBuildFarm: o.clusterName})
 }
 
-func generatePeriodic(clusterName string) prowconfig.Periodic {
+func generatePeriodic(o options) prowconfig.Periodic {
+	clusterName := o.clusterName
+
 	return prowconfig.Periodic{
 		JobBase: prowconfig.JobBase{
 			Name:       RepoMetadata().SimpleJobName(jobconfig.PeriodicPrefix, clusterName+"-apply"),
@@ -55,7 +57,7 @@ func generatePeriodic(clusterName string) prowconfig.Periodic {
 				Volumes: []v1.Volume{generateSecretVolume(clusterName)},
 				Containers: []v1.Container{
 					generateContainer("applyconfig:latest",
-						clusterName,
+						o,
 						[]string{"--confirm=true"},
 						nil, nil)},
 				ServiceAccountName: configUpdater,
@@ -77,7 +79,9 @@ func generatePeriodic(clusterName string) prowconfig.Periodic {
 	}
 }
 
-func generatePostsubmit(clusterName string) prowconfig.Postsubmit {
+func generatePostsubmit(o options) prowconfig.Postsubmit {
+	clusterName := o.clusterName
+
 	return prowconfig.Postsubmit{
 		JobBase: prowconfig.JobBase{
 			Name:       RepoMetadata().JobName(jobconfig.PostsubmitPrefix, clusterName+"-apply"),
@@ -87,7 +91,7 @@ func generatePostsubmit(clusterName string) prowconfig.Postsubmit {
 			Spec: &v1.PodSpec{
 				Volumes: []v1.Volume{generateSecretVolume(clusterName)},
 				Containers: []v1.Container{
-					generateContainer(latestImage, clusterName, []string{"--confirm=true"}, nil, nil)},
+					generateContainer(latestImage, o, []string{"--confirm=true"}, nil, nil)},
 				ServiceAccountName: configUpdater,
 			},
 			UtilityConfig: prowconfig.UtilityConfig{
@@ -105,9 +109,11 @@ func generatePostsubmit(clusterName string) prowconfig.Postsubmit {
 	}
 }
 
-func generatePresubmit(clusterName string) prowconfig.Presubmit {
+func generatePresubmit(o options) prowconfig.Presubmit {
+	clusterName := o.clusterName
+
 	var optional bool
-	if clusterName == string(api.ClusterVSphere) {
+	if o.clusterName == string(api.ClusterVSphere) {
 		optional = true
 	}
 	return prowconfig.Presubmit{
@@ -126,7 +132,7 @@ func generatePresubmit(clusterName string) prowconfig.Presubmit {
 					}},
 				Containers: []v1.Container{
 					generateContainer(latestImage,
-						clusterName,
+						o,
 						nil,
 						[]v1.VolumeMount{{Name: "tmp", MountPath: "/tmp"}}, []v1.EnvVar{{Name: "HOME", Value: "/tmp"}})},
 				ServiceAccountName: configUpdater,
@@ -170,12 +176,14 @@ func generateSecretVolume(clusterName string) v1.Volume {
 	}
 }
 
-func generateContainer(image, clusterName string, extraArgs []string, extraVolumeMounts []v1.VolumeMount, extraEnvVars []v1.EnvVar) v1.Container {
+func generateContainer(image string, o options, extraArgs []string, extraVolumeMounts []v1.VolumeMount, extraEnvVars []v1.EnvVar) v1.Container {
+	clusterName := o.clusterName
+
 	var env []v1.EnvVar
 	env = append(env, extraEnvVars...)
-	if clusterName == string(api.ClusterBuild01) || clusterName == string(api.ClusterBuild02) || clusterName == string(api.ClusterBuild09) {
+	if o.managedAuth {
 		env = append(env, v1.EnvVar{
-			Name: clusterName + "_id",
+			Name: "OAUTH_CLIENT_ID",
 			ValueFrom: &v1.EnvVarSource{
 				SecretKeyRef: &v1.SecretKeySelector{
 					Key: clusterName + "-id",

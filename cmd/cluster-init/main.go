@@ -39,8 +39,10 @@ type options struct {
 
 	useTokenFileInKubeconfig bool
 
-	hosted    bool
-	unmanaged bool
+	hosted      bool
+	unmanaged   bool
+	baseDomain  string
+	managedAuth bool
 }
 
 func (o options) String() string {
@@ -59,6 +61,7 @@ func parseOptions() (options, error) {
 	fs.BoolVar(&o.useTokenFileInKubeconfig, "use-token-file-in-kubeconfig", true, "Set true if the token files are used in kubeconfigs. Set to true by default")
 	fs.BoolVar(&o.hosted, "hosted", false, "Set true if the cluster is hosted (i.e., HyperShift hosted cluster). Set to false by default")
 	fs.BoolVar(&o.unmanaged, "unmanaged", false, "Set true if the cluster is unmanaged (i.e., not managed by DPTP). Set to false by default")
+	fs.StringVar(&o.baseDomain, "base-domain", "", "The base domain of the cluster. Set to empty by default")
 
 	o.GitAuthorOptions.AddFlags(fs)
 	o.PRCreationOptions.AddFlags(fs)
@@ -124,6 +127,12 @@ func validateOptions(o options) []error {
 	}
 	if err := o.PRCreationOptions.Validate(true); err != nil {
 		errs = append(errs, err)
+	}
+	if !o.update && o.baseDomain == "" {
+		errs = append(errs, errors.New("--base-domain must be provided"))
+	}
+	if o.update && o.baseDomain != "" {
+		errs = append(errs, errors.New("--base-domain must not be provided in update mode"))
 	}
 	return errs
 }
@@ -192,6 +201,7 @@ func main() {
 			updateSanitizeProwJobs,
 			updateSyncRoverGroups,
 			updateProwPluginConfig,
+			func(o options) error { return updateDexConfig(o, buildClusters) },
 		}
 		if !o.update {
 			steps = append(steps, updateBuildClusters)
@@ -255,11 +265,16 @@ func updateClusterBuildFarmDir(o options, hostedClusters []string) error {
 	config_dirs := []string{
 		"common",
 		"common_except_app.ci",
+		"common_cert_manager",
 	}
 
 	hostedClustersSet := sets.New[string](hostedClusters...)
 	if !hostedClustersSet.Has(o.clusterName) {
 		config_dirs = append(config_dirs, "common_except_hosted")
+	}
+
+	if o.managedAuth {
+		config_dirs = append(config_dirs, "common_oauth")
 	}
 
 	for _, item := range config_dirs {

@@ -10,8 +10,14 @@ import (
 )
 
 type BuildClusters struct {
-	Managed []string `json:"managed,omitempty"`
-	Hosted  []string `json:"hosted,omitempty"`
+	Managed []string                       `json:"managed,omitempty"`
+	Hosted  []string                       `json:"hosted,omitempty"`
+	Config  map[string]BuildClusterConfigs `json:"config,omitempty"`
+}
+
+type BuildClusterConfigs struct {
+	BaseUrl     string `json:"baseUrl,omitempty"`
+	ManagedAuth bool   `json:"managedAuth,omitempty"`
 }
 
 func updateBuildClusters(o options) error {
@@ -28,6 +34,11 @@ func updateBuildClusters(o options) error {
 	buildClusters.Managed = append(buildClusters.Managed, o.clusterName)
 	if o.hosted {
 		buildClusters.Hosted = append(buildClusters.Hosted, o.clusterName)
+	}
+	if o.baseDomain != "" {
+		config := buildClusters.Config[o.clusterName]
+		config.BaseUrl = o.baseDomain
+		buildClusters.Config[o.clusterName] = config
 	}
 
 	rawYaml, err := yaml.Marshal(buildClusters)

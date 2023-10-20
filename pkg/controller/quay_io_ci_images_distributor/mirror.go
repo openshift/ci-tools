@@ -1,11 +1,14 @@
 package quay_io_ci_images_distributor
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
+
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 )
@@ -92,7 +95,7 @@ type MirrorConsumerController struct {
 	options           OCImageMirrorOptions
 }
 
-func (c *MirrorConsumerController) Run() error {
+func (c *MirrorConsumerController) Run(ctx context.Context) error {
 	for {
 		mirrors, err := c.mirrorStore.Take(10)
 		if err != nil {
@@ -108,9 +111,14 @@ func (c *MirrorConsumerController) Run() error {
 		for _, mirror := range mirrors {
 			pairs = append(pairs, fmt.Sprintf("%s=%s", mirror.Source, mirror.Destination))
 		}
-		// TODO use "--force" on long stale images with errors
-		if err := c.quayIOImageHelper.ImageMirror(pairs, c.options); err != nil {
-			c.logger.WithError(err).Warn("Failed to mirror")
+		if err := wait.PollUntilContextTimeout(ctx, 1*time.Second, 3*time.Minute, true, func(ctx context.Context) (done bool, err error) {
+			if errFromMirror := c.quayIOImageHelper.ImageMirror(pairs, c.options); errFromMirror != nil {
+				return false, nil
+			}
+			return true, nil
+		}); err != nil {
+			// TODO use "--force" on long stale images with errors even after retries, ideally, only for the failed ones
+			c.logger.WithError(err).Warn("Failed to mirror even with retries")
 		}
 	}
 }

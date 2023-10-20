@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -13,9 +14,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/watch"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowdapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -28,10 +29,65 @@ import (
 func TestRun(t *testing.T) {
 	yes := true
 	for _, tc := range []struct {
-		name     string
-		failures sets.Set[string]
-		expected []string
+		name      string
+		observers []api.Observer
+		failures  sets.Set[string]
+		// Remove these names from the expected ones. So far the sole use case is for the observers
+		// as they run asynchrounously so the ordering is not stable
+		removeNames sets.Set[string]
+		expected    []string
+		podPayload  map[string]testhelper_kube.PodPayload
 	}{
+		{
+			name:        "observer fails, no error",
+			observers:   []api.Observer{{Name: "obsrv0"}},
+			removeNames: sets.New[string]("test-obsrv0"),
+			expected: []string{
+				"test-pre0", "test-pre1",
+				"test-test0", "test-test1",
+				"test-post0",
+			},
+			podPayload: map[string]testhelper_kube.PodPayload{
+				"test-pre0": func(pod *v1.Pod, env *testhelper_kube.PodRunnerEnv, dispatch func(events ...watch.Event)) {
+					// Asynchronously wait for the observer which, by design, is not guaranteed to even start
+					// executing
+					go func() {
+						// Wait for the observer to complete the execution, then go ahead and succeed
+						<-env.ObserverDone
+
+						pod.Status.Phase = v1.PodSucceeded
+						terminated := v1.ContainerState{
+							Terminated: &v1.ContainerStateTerminated{},
+						}
+
+						for _, container := range pod.Spec.Containers {
+							pod.Status.ContainerStatuses = append(pod.Status.ContainerStatuses, v1.ContainerStatus{
+								Name:  container.Name,
+								State: terminated,
+							})
+						}
+
+						dispatch(watch.Event{Type: watch.Modified, Object: pod})
+					}()
+				},
+				"test-obsrv0": func(pod *v1.Pod, env *testhelper_kube.PodRunnerEnv, dispatch func(events ...watch.Event)) {
+					pod.Status.Phase = v1.PodFailed
+					terminated := v1.ContainerState{
+						Terminated: &v1.ContainerStateTerminated{ExitCode: 1},
+					}
+
+					for _, container := range pod.Spec.Containers {
+						pod.Status.ContainerStatuses = append(pod.Status.ContainerStatuses, v1.ContainerStatus{
+							Name:  container.Name,
+							State: terminated,
+						})
+					}
+
+					dispatch(watch.Event{Type: watch.Modified, Object: pod})
+					env.ObserverDone <- struct{}{}
+				},
+			},
+		},
 		{
 			name: "no step fails, no error",
 			expected: []string{
@@ -73,13 +129,21 @@ func TestRun(t *testing.T) {
 			}
 			name := "test"
 
+			podRunnerEnv := testhelper_kube.NewPodRunnerEnv()
+			podPayloadRunners := make(map[string]*testhelper_kube.PodPayloadRunner)
+			for pod, payload := range tc.podPayload {
+				podPayloadRunners[pod] = testhelper_kube.NewPodPayloadRunner(payload, *podRunnerEnv)
+			}
+
 			crclient := &testhelper_kube.FakePodExecutor{
+				Lock: sync.RWMutex{},
 				LoggingClient: loggingclient.New(
 					fakectrlruntimeclient.NewClientBuilder().
 						WithIndex(&v1.Pod{}, "metadata.name", fakePodNameIndexer).
 						WithObjects(sa).
 						Build()),
-				Failures: tc.failures,
+				Failures:          tc.failures,
+				PodPayloadRunners: podPayloadRunners,
 			}
 			jobSpec := api.JobSpec{
 				JobSpec: prowdapi.JobSpec{
@@ -108,6 +172,7 @@ func TestRun(t *testing.T) {
 					Pre:                []api.LiteralTestStep{{As: "pre0"}, {As: "pre1"}},
 					Test:               []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
 					Post:               []api.LiteralTestStep{{As: "post0"}, {As: "post1", OptionalOnSuccess: &yes}},
+					Observers:          tc.observers,
 					AllowSkipOnSuccess: &yes,
 				},
 			}, &api.ReleaseBuildConfiguration{}, nil, client, &jobSpec, nil, "node-name", "")
@@ -122,12 +187,22 @@ func TestRun(t *testing.T) {
 				t.Errorf("unexpected secrets: %#v", l)
 			}
 			var names []string
+			removeNames := tc.removeNames.Clone()
 			for _, pod := range crclient.CreatedPods {
 				if pod.Namespace != jobSpec.Namespace() {
 					t.Errorf("pod %s didn't have namespace %s set, had %q instead", pod.Name, jobSpec.Namespace(), pod.Namespace)
 				}
-				names = append(names, pod.Name)
+				if !removeNames.Has(pod.Name) {
+					names = append(names, pod.Name)
+				} else {
+					removeNames.Delete(pod.Name)
+				}
 			}
+
+			if removeNames.Len() > 0 {
+				t.Errorf("did not find the following pods to remove: %s", removeNames.UnsortedList())
+			}
+
 			if diff := cmp.Diff(names, tc.expected); diff != "" {
 				t.Errorf("did not execute correct pods: %s, actual: %v, expected: %v", diff, names, tc.expected)
 			}
@@ -195,6 +270,7 @@ func TestJUnit(t *testing.T) {
 			sa := &v1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-namespace", Labels: map[string]string{"ci.openshift.io/multi-stage-test": "test"}}}
 
 			crclient := &testhelper_kube.FakePodExecutor{
+				Lock: sync.RWMutex{},
 				LoggingClient: loggingclient.New(
 					fakectrlruntimeclient.NewClientBuilder().
 						WithIndex(&v1.Pod{}, "metadata.name", fakePodNameIndexer).
@@ -243,7 +319,7 @@ func TestJUnit(t *testing.T) {
 	}
 }
 
-func fakePodNameIndexer(object client.Object) []string {
+func fakePodNameIndexer(object ctrlruntimeclient.Object) []string {
 	p, ok := object.(*v1.Pod)
 	if !ok {
 		panic(fmt.Errorf("indexer function for type %T's metadata.name field received object of type %T", v1.Pod{}, object))

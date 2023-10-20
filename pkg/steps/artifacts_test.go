@@ -3,6 +3,7 @@ package steps
 import (
 	"os"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -499,24 +500,25 @@ func TestArtifactWorker(t *testing.T) {
 	}()
 	pod := "pod"
 	podClient := &testhelper_kube.FakePodClient{
-
-		FakePodExecutor: &testhelper_kube.FakePodExecutor{LoggingClient: loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
-			&coreapi.Pod{
-				ObjectMeta: meta.ObjectMeta{
-					Name:      pod,
-					Namespace: "namespace",
-				},
-				Status: coreapi.PodStatus{
-					ContainerStatuses: []coreapi.ContainerStatus{
-						{
-							Name: "artifacts",
-							State: coreapi.ContainerState{
-								Running: &coreapi.ContainerStateRunning{},
+		FakePodExecutor: &testhelper_kube.FakePodExecutor{
+			Lock: sync.RWMutex{},
+			LoggingClient: loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
+				&coreapi.Pod{
+					ObjectMeta: meta.ObjectMeta{
+						Name:      pod,
+						Namespace: "namespace",
+					},
+					Status: coreapi.PodStatus{
+						ContainerStatuses: []coreapi.ContainerStatus{
+							{
+								Name: "artifacts",
+								State: coreapi.ContainerState{
+									Running: &coreapi.ContainerStateRunning{},
+								},
 							},
 						},
 					},
-				},
-			}).Build()),
+				}).Build()),
 		},
 		Namespace: "namespace",
 		Name:      pod,

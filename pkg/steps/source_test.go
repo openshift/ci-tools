@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -589,6 +590,7 @@ Found 0 events for Pod some-build-build:`),
 		t.Run(testCase.name, func(t *testing.T) {
 			client := testhelper_kube.FakePodClient{
 				FakePodExecutor: &testhelper_kube.FakePodExecutor{
+					Lock:          sync.RWMutex{},
 					LoggingClient: testCase.buildClient,
 				},
 				PendingTimeout: testCase.timeout,
@@ -694,6 +696,7 @@ func TestCheckPending(t *testing.T) {
 			timeout := 30 * time.Minute
 			client := testhelper_kube.FakePodClient{
 				FakePodExecutor: &testhelper_kube.FakePodExecutor{
+					Lock:          sync.RWMutex{},
 					LoggingClient: loggingclient.New(fakectrlruntimeclient.NewClientBuilder().Build()),
 				},
 				PendingTimeout: timeout,

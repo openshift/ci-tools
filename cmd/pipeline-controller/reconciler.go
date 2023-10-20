@@ -45,6 +45,8 @@ func composePRIdentifier(refs *v1.Refs) string {
 	return fmt.Sprintf("%s/%s/%d", refs.Org, refs.Repo, refs.Pulls[0].Number)
 }
 
+// isPRClosed quieries either github or short-term cache to determine if PR is closed. Draft PRs are
+// also quialified as closed due to potential, unexpected side effects
 func (c *closedPRsCache) isPRClosed(refs *v1.Refs) (bool, error) {
 	id := composePRIdentifier(refs)
 	c.m.Lock()
@@ -58,8 +60,8 @@ func (c *closedPRsCache) isPRClosed(refs *v1.Refs) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("error getting pull request: %w", err)
 	}
-	c.prs[id] = pullRequest{closed: ghPr.State != github.PullRequestStateOpen, checkTime: time.Now()}
-	return ghPr.State != github.PullRequestStateOpen, nil
+	c.prs[id] = pullRequest{closed: ghPr.State != github.PullRequestStateOpen || ghPr.Draft, checkTime: time.Now()}
+	return ghPr.State != github.PullRequestStateOpen || ghPr.Draft, nil
 }
 
 func (c *closedPRsCache) clearCache() {

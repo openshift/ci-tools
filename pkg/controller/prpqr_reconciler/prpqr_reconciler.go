@@ -489,7 +489,7 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 		switch {
 		case strings.Contains(inject.Test, "vsphere"):
 			jobBaseGen.Cluster("vsphere02")
-		case strings.Contains(inject.Test, "metal") || strings.Contains(inject.Test, "telco5g"):
+		case strings.Contains(inject.Test, "metal") || strings.Contains(inject.Test, "telco5g") || strings.Contains(inject.Test, "e2e-agent"):
 			jobBaseGen.Cluster("build05")
 		default:
 			jobBaseGen.Cluster("build01")

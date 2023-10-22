@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -127,10 +128,14 @@ func (c *client) ImageMirror(pairs []string, options OCImageMirrorOptions) error
 	args := []string{"image", "mirror", "--keep-manifest-list", fmt.Sprintf("--registry-config=%s", options.RegistryConfig),
 		fmt.Sprintf("--continue-on-error=%t", options.ContinueOnError), fmt.Sprintf("--max-per-registry=%d", options.MaxPerRegistry),
 		fmt.Sprintf("--dry-run=%t", options.DryRun)}
-	if _, err := c.executor.Run(append(args, pairs...)...); err != nil {
+	t := time.Now()
+	_, err := c.executor.Run(append(args, pairs...)...)
+	d := time.Since(t)
+	if err != nil {
+		logger.WithError(err).WithField("duration", d).Warn("Failed to mirror")
 		return err
 	}
-	logger.Info("Mirrored successfully")
+	logger.WithField("duration", d).Info("Mirrored successfully")
 	return nil
 }
 

@@ -186,7 +186,7 @@ func main() {
 	}
 
 	mirrorConsumerController := quayiociimagesdistributor.NewMirrorConsumer(mirrorStore, quayIOImageHelper, opts.registryConfig, opts.dryRun)
-	interrupts.Run(func(_ context.Context) { execute(mirrorConsumerController) })
+	interrupts.Run(func(ctx context.Context) { execute(ctx, mirrorConsumerController) })
 
 	if opts.enabledControllersSet.Has(quayiociimagesdistributor.ControllerName) {
 		if err := quayiociimagesdistributor.AddToManager(mgr,
@@ -279,8 +279,8 @@ func mirrors(action string, n int, ms quayiociimagesdistributor.MirrorStore) (an
 	}
 }
 
-func execute(c *quayiociimagesdistributor.MirrorConsumerController) {
-	if err := c.Run(); err != nil {
+func execute(ctx context.Context, c *quayiociimagesdistributor.MirrorConsumerController) {
+	if err := c.Run(ctx); err != nil {
 		logrus.WithError(err).Error("Error running")
 	}
 }

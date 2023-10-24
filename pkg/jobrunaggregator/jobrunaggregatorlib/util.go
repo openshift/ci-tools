@@ -243,7 +243,7 @@ func (w *ClusterJobRunWaiter) Wait(ctx context.Context) ([]JobRunIdentifier, err
 		return nil, fmt.Errorf("prowjob client is missing")
 	}
 
-	prowJobInformerFactory := prowjobinformers.NewSharedInformerFactory(w.ProwJobClient, 24*time.Hour)
+	prowJobInformerFactory := prowjobinformers.NewSharedInformerFactoryWithOptions(w.ProwJobClient, 24*time.Hour, prowjobinformers.WithNamespace("ci"))
 	prowJobInformer := prowJobInformerFactory.Prow().V1().ProwJobs()
 
 	// done to be sure that the informer is shown as "active" so that start activates them

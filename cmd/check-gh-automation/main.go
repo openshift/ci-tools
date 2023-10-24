@@ -12,11 +12,16 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/flagutil"
 	configflagutil "k8s.io/test-infra/prow/flagutil/config"
+	prowpluginconfig "k8s.io/test-infra/prow/flagutil/plugins"
 	"k8s.io/test-infra/prow/logrusutil"
+	"k8s.io/test-infra/prow/plugins"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 
 	"github.com/openshift/ci-tools/pkg/config"
 )
+
+const cherrypickPlugin = "cherrypick"
+const cherrypickRobot = "openshift-cherrypick-robot"
 
 type options struct {
 	config          configflagutil.ConfigOptions
@@ -25,6 +30,7 @@ type options struct {
 	repos           flagutil.Strings
 	releaseRepoPath string
 	flagutil.GitHubOptions
+	pluginConfig prowpluginconfig.PluginOptions
 }
 
 func gatherOptions() options {
@@ -35,6 +41,7 @@ func gatherOptions() options {
 	fs.Var(&o.ignore, "ignore", "Ignore a repo or entire org. Formatted org or org/repo. Can be passed multiple times.")
 	fs.Var(&o.repos, "repo", "Specifically check only an org/repo. Can be passed multiple times.")
 	fs.StringVar(&o.releaseRepoPath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
+	o.pluginConfig.AddFlags(fs)
 
 	o.GitHubOptions.AddFlags(fs)
 	o.config.AddFlags(fs)
@@ -49,7 +56,6 @@ func (o *options) validate() error {
 	if len(o.bots.Strings()) < 1 {
 		return errors.New("at least one bot must be configured")
 	}
-
 	repos := o.repos.Strings()
 	if len(repos) == 0 {
 		// If we need to find repos, we either need the release repo path, or a proper prow config
@@ -86,13 +92,26 @@ func main() {
 		logger.Fatalf("validation error: %v", err)
 	}
 
+	var pluginAgent *plugins.ConfigAgent
+	if o.pluginConfig.PluginConfigPath != "" {
+		logger.Infof("Loading plugin configuration from: %s", o.pluginConfig.PluginConfigPath)
+		var err error
+		pluginAgent, err = o.pluginConfig.PluginAgent()
+		if err != nil {
+			logger.Fatalf("Error creating plugin agent: %v", err)
+		}
+		logger.Info("Plugin configuration loaded successfully.")
+	} else {
+		logger.Info("No plugin configuration provided, continuing without a plugin agent.")
+	}
+
 	client, err := o.GitHubOptions.GitHubClient(false)
 	if err != nil {
 		logger.Fatalf("error creating client: %v", err)
 	}
 
 	repos := determineRepos(o, logger)
-	failing, err := checkRepos(repos, o.bots.Strings(), o.ignore.StringSet(), client, logger)
+	failing, err := checkRepos(repos, o.bots.Strings(), o.ignore.StringSet(), client, logger, pluginAgent)
 	if err != nil {
 		logger.Fatalf("error checking repos: %v", err)
 	}
@@ -121,7 +140,7 @@ func determineRepos(o options, logger *logrus.Entry) []string {
 	return gatherModifiedRepos(o.releaseRepoPath, logger)
 }
 
-func checkRepos(repos []string, bots []string, ignore sets.Set[string], client automationClient, logger *logrus.Entry) ([]string, error) {
+func checkRepos(repos []string, bots []string, ignore sets.Set[string], client automationClient, logger *logrus.Entry, configAgent *plugins.ConfigAgent) ([]string, error) {
 	logger.Infof("checking %d repo(s): %s", len(repos), strings.Join(repos, ", "))
 	failing := sets.New[string]()
 	for _, orgRepo := range repos {
@@ -168,6 +187,25 @@ func checkRepos(repos []string, bots []string, ignore sets.Set[string], client a
 		if err != nil {
 			return nil, fmt.Errorf("unable to determine if openshift-ci app is installed on %s/%s: %w", org, repo, err)
 		}
+
+		if configAgent != nil {
+			externalPlugins := configAgent.Config().ExternalPlugins[orgRepo]
+			for _, plugin := range externalPlugins {
+				if plugin.Name == cherrypickPlugin {
+					isMember, err := client.IsMember(org, cherrypickRobot)
+					if err != nil {
+						return nil, fmt.Errorf("unable to determine if openshift-cherrypick-robot is a member of %s: %w", org, err)
+					}
+					if isMember {
+						repoLogger.Info("openshift-cherrypick-robot is an org member")
+					} else {
+						repoLogger.Info("openshift-cherrypick-robot is not an org member")
+						failing.Insert(orgRepo)
+					}
+				}
+			}
+		}
+
 		if !appInstalled {
 			failing.Insert(orgRepo)
 			repoLogger.Error("openshift-ci app is not installed for repo")

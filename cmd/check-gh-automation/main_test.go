@@ -9,6 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/test-infra/prow/plugins"
 
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
@@ -17,6 +18,22 @@ type fakeAutomationClient struct {
 	collaboratorsByRepo   map[string][]string
 	membersByOrg          map[string][]string
 	reposWithAppInstalled sets.Set[string]
+}
+
+func newFakeConfigAgent() *plugins.ConfigAgent {
+	// Create a fake Config
+	fakeConfig := &plugins.Configuration{
+		ExternalPlugins: map[string][]plugins.ExternalPlugin{
+			"org-1/repo-a": {
+				{Name: "cherrypick"},
+			},
+		},
+	}
+	// Create a fake ConfigAgent
+	fakeConfigAgent := &plugins.ConfigAgent{}
+	// Set the Config
+	fakeConfigAgent.Set(fakeConfig)
+	return fakeConfigAgent
 }
 
 func (c fakeAutomationClient) IsMember(org, user string) (bool, error) {
@@ -63,7 +80,7 @@ func TestCheckRepos(t *testing.T) {
 			"org-2/repo-z": {"c-bot", "some-user"},
 		},
 		membersByOrg: map[string][]string{
-			"org-1": {"a-user", "d-bot", "e-bot"},
+			"org-1": {"a-user", "d-bot", "e-bot", "openshift-cherrypick-robot"},
 			"org-2": {"some-user", "z-bot"},
 			"org-3": {"a-user"},
 		},
@@ -154,7 +171,7 @@ func TestCheckRepos(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			failing, err := checkRepos(tc.repos, tc.bots, tc.ignore, client, logrus.NewEntry(logrus.New()))
+			failing, err := checkRepos(tc.repos, tc.bots, tc.ignore, client, logrus.NewEntry(logrus.New()), newFakeConfigAgent())
 			if diff := cmp.Diff(tc.expectedErr, err, testhelper.EquateErrorMessage); diff != "" {
 				t.Fatalf("error doesn't match expected, diff: %s", diff)
 			}

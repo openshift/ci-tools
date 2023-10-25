@@ -441,6 +441,7 @@ periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-aws-ovn-heterogeneou
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-azure-ovn-heterogeneous
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-gcp-ovn-heterogeneous
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-serial-aws-ovn-heterogeneous
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-upgrade-azure-ovn-heterogeneous
 periodic-ci-openshift-multiarch-master-nightly-4.14-upgrade-from-stable-4.13-ocp-e2e-aws-ovn-heterogeneous-upgrade
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.14-multi.json
 
@@ -505,7 +506,7 @@ periodic-ci-openshift-release-master-nightly-4.14-e2e-gcp-sdn-serial
 periodic-ci-openshift-release-master-nightly-4.14-e2e-gcp-sdn-upgrade
 periodic-ci-openshift-release-master-nightly-4.14-e2e-metal-ipi-ovn-dualstack
 periodic-ci-openshift-release-master-nightly-4.14-e2e-metal-ipi-ovn-ipv6
-periodic-ci-openshift-release-master-nightly-4.14-e2e-metal-ipi-sdn
+periodic-ci-openshift-release-master-nightly-4.14-e2e-metal-ipi-sdn-bm
 periodic-ci-openshift-release-master-nightly-4.14-e2e-metal-ipi-sdn-bm-upgrade
 periodic-ci-openshift-release-master-nightly-4.14-e2e-metal-ipi-sdn-serial-ipv4
 periodic-ci-openshift-release-master-nightly-4.14-e2e-metal-ipi-sdn-serial-virtualmedia-bond
@@ -563,6 +564,7 @@ periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-aws-ovn-heterogeneou
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-azure-ovn-heterogeneous
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-gcp-ovn-heterogeneous
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-serial-aws-ovn-heterogeneous
+periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-upgrade-azure-ovn-heterogeneous
 periodic-ci-openshift-multiarch-master-nightly-4.15-upgrade-from-stable-4.14-ocp-e2e-aws-ovn-heterogeneous-upgrade
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.15-multi.json
 
@@ -1574,7 +1576,7 @@ periodic-ci-openshift-release-master-nightly-4.14-e2e-metal-ipi-ovn-dualstack
 periodic-ci-openshift-release-master-nightly-4.14-e2e-metal-ipi-ovn-dualstack-local-gateway
 periodic-ci-openshift-release-master-nightly-4.14-e2e-metal-ipi-ovn-ipv4
 periodic-ci-openshift-release-master-nightly-4.14-e2e-metal-ipi-ovn-ipv6
-periodic-ci-openshift-release-master-nightly-4.14-e2e-metal-ipi-sdn
+periodic-ci-openshift-release-master-nightly-4.14-e2e-metal-ipi-sdn-bm
 periodic-ci-openshift-release-master-nightly-4.14-e2e-metal-ipi-sdn-bm-upgrade
 periodic-ci-openshift-release-master-nightly-4.14-e2e-metal-ipi-sdn-serial-ipv4
 periodic-ci-openshift-release-master-nightly-4.14-e2e-metal-ipi-sdn-serial-virtualmedia-bond

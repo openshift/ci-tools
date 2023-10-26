@@ -135,7 +135,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 	quayImage := cioperatorapi.QuayImage(tagRef)
 	imageInfo, err := r.quayIOImageHelper.ImageInfo(quayImage, r.ocImageInfoOptions)
 	if err != nil {
-		return fmt.Errorf("failed to get digest for image stream tag %s/%s: %w", req.Namespace, req.Name, err)
+		return fmt.Errorf("failed to get digest for image stream tag %s/%s for target %s in quay.io: %w", req.Namespace, req.Name, quayImage, err)
 	}
 	sourceImageStreamTag := &imagev1.ImageStreamTag{}
 	if err := r.client.Get(ctx, req.NamespacedName, sourceImageStreamTag); err != nil {
@@ -157,12 +157,17 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 		return fmt.Errorf("image name has no prefix `sha256:`: %s", imageName)
 	}
 
-	if imageInfo.Digest != imageName {
+	sourceImage := fmt.Sprintf("%s/%s/%s@%s", cioperatorapi.DomainForService(cioperatorapi.ServiceRegistry), tagRef.Namespace, tagRef.Name, sourceImageStreamTag.Image.ObjectMeta.Name)
+	sourceImageInfo, err := r.quayIOImageHelper.ImageInfo(sourceImage, r.ocImageInfoOptions)
+	if err != nil {
+		return fmt.Errorf("failed to get digest for image stream tag %s/%s for source %s in app.ci: %w", req.Namespace, req.Name, sourceImage, err)
+	}
+
+	if imageInfo.Digest != sourceImageInfo.Digest {
 		stale := imageInfo.Config.Created.Add(24 * time.Hour).Before(sourceImageStreamTag.Image.ObjectMeta.CreationTimestamp.Time)
 		// TODO Use stale to handle errors from mirroring
-		sourceImage := fmt.Sprintf("%s/%s/%s@%s", cioperatorapi.DomainForService(cioperatorapi.ServiceRegistry), tagRef.Namespace, tagRef.Name, sourceImageStreamTag.Image.ObjectMeta.Name)
 		targetImageWithDateAndDigest := cioperatorapi.QuayImageFromDateAndDigest(time.Now().Format("20060102"), colonSplit[1])
-		log.WithField("currentQuayDigest", imageInfo.Digest).WithField("stale", stale).WithField("source", sourceImage).WithField("targetImageWithDateAndDigest", targetImageWithDateAndDigest).WithField("target", quayImage).Info("Mirroring")
+		log.WithField("currentQuayDigest", imageInfo.Digest).WithField("currentAppCIDigest", sourceImageInfo.Digest).WithField("stale", stale).WithField("source", sourceImage).WithField("targetImageWithDateAndDigest", targetImageWithDateAndDigest).WithField("target", quayImage).Info("Mirroring")
 
 		if err := r.mirrorStore.Put(MirrorTask{
 			SourceTagRef:      tagRef,

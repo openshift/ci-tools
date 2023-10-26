@@ -52,11 +52,6 @@ type JobRunAggregatorAnalyzerOptions struct {
 func (o *JobRunAggregatorAnalyzerOptions) loadStaticJobRuns(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error) {
 	var jobRuns []jobrunaggregatorapi.JobRunInfo
 	for _, job := range o.staticJobRunIdentifiers {
-		// in this context passing the job name is optional for the
-		// static job runs but if it is present then check to make sure it matches
-		if len(job.JobName) > 0 && strings.Compare(job.JobName, o.jobName) != 0 {
-			continue
-		}
 		jobRun, err := o.jobRunLocator.FindJob(ctx, job.JobRunID)
 		if err != nil {
 			return nil, err

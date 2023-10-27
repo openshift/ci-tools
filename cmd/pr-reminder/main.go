@@ -472,7 +472,7 @@ func messageUser(user user, slackClient slackClient) error {
 	}
 
 	responseChannel, responseTimestamp, err := slackClient.PostMessage(user.SlackId,
-		slack.MsgOptionText("PR Review Reminders.", false),
+		slack.MsgOptionText("PR Review Reminders.", true),
 		slack.MsgOptionBlocks(message...))
 	if err != nil {
 		logrus.WithError(err).WithField("kerberosId", user.KerberosId).WithField("message", message).Debug("Failed to message user about PR review reminder")

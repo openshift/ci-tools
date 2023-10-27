@@ -1848,6 +1848,7 @@ func (p ClusterProfile) ConfigMap() string {
 		ClusterProfileAzure,
 		ClusterProfileGCP,
 		ClusterProfileGCP2,
+		ClusterProfileGCP3,
 		ClusterProfileGCP40,
 		ClusterProfileGCPCRIO,
 		ClusterProfileGCPHA,

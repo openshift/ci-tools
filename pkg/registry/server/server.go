@@ -262,6 +262,7 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 				BuildRootImages: make(map[string]api.BuildRootImageConfiguration, len(metadataList)),
 				BaseImages:      make(map[string]api.ImageStreamTagReference),
 			},
+			Resources: make(api.ResourceConfiguration),
 		}
 		for _, metadata := range metadataList {
 			configLogger := logger.WithFields(api.LogFieldsFor(metadata))
@@ -306,6 +307,10 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 					Location: config.RpmBuildLocation,
 				})
 			}
+			for key, image := range config.BaseRPMImages {
+				imageRef := fmt.Sprintf("%s.%s", ref, key)
+				mergedConfig.BaseRPMImages[imageRef] = image
+			}
 			if config.Operator != nil {
 				if mergedConfig.Operator == nil {
 					mergedConfig.Operator = config.Operator
@@ -313,6 +318,20 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 					//TODO: when merging multiple configs with 'operator' defined we could have conflicts, we could handle these better, but it is unlikely to come up
 					mergedConfig.Operator.Bundles = append(mergedConfig.Operator.Bundles, config.Operator.Bundles...)
 					mergedConfig.Operator.Substitutions = append(mergedConfig.Operator.Substitutions, config.Operator.Substitutions...)
+				}
+			}
+			if config.CanonicalGoRepository != nil {
+				mergedConfig.CanonicalGoRepositoryList = append(mergedConfig.CanonicalGoRepositoryList, api.RefRepository{
+					Ref:        ref,
+					Repository: *config.CanonicalGoRepository,
+				})
+			}
+			for step, resources := range config.Resources {
+				if step == "*" { // * is special, and we will only pull from one config to merge, this is "last in wins" we may need to do better in the future
+					mergedConfig.Resources[step] = resources
+				} else {
+					stepWithRef := fmt.Sprintf("%s.%s", ref, step)
+					mergedConfig.Resources[stepWithRef] = resources
 				}
 			}
 		}

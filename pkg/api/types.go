@@ -92,6 +92,14 @@ type ReleaseBuildConfiguration struct {
 	// cloning from is ignored.
 	CanonicalGoRepository *string `json:"canonical_go_repository,omitempty"`
 
+	// CanonicalGoRepositoryList is a directory path that represents
+	// the desired location of the contents of this repository in
+	// Go. If specified the location of the repository we are
+	// cloning from is ignored.
+	// Mutually exclusive with CanonicalGoRepository
+	// DO NOT set this in the config
+	CanonicalGoRepositoryList []RefRepository `json:"canonical_go_repository_list,omitempty"`
+
 	// Images describes the images that are built
 	// baseImage the project as part of the release
 	// process. The name of each image is its "to" value
@@ -133,6 +141,12 @@ type RefCommands struct {
 type RefLocation struct {
 	Ref      string `json:"ref"`
 	Location string `json:"location"`
+}
+
+// RefRepository pairs a ref (in org/repo format) with a repository
+type RefRepository struct {
+	Ref        string `json:"ref"`
+	Repository string `json:"repository"`
 }
 
 // Metadata describes the source repo for which a config is written

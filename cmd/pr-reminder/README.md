@@ -13,6 +13,6 @@ Finally, a slack message will be sent to each of the `teamMember's` containing i
 
 ## Local Development
 A script, `hack/local-pr-reminder.sh`, exists for running the tool locally. This script takes no arguments, but the user must be logged into the `app.ci` cluster.
-You will want to run the script as `USR="my-kerberos-id" hack/pr-reminder-config.yaml` to include your own kerberos ID to receive the message in the testing space.
+You will want to run the script as `USR="my-kerberos-id" hack/local-pr-reminder.sh` to include your own kerberos ID to receive the message in the testing space.
 The cluster is utilized to obtain the production `github-users-file` file and the `slack-token` for the alpha slack instance.
 The script will run the tool, and message corresponding slack users in the `dptp-robot-testing` space.

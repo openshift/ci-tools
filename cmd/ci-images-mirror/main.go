@@ -48,6 +48,7 @@ type options struct {
 	quayIOCIImagesDistributorOptions quayIOCIImagesDistributorOptions
 	port                             int
 	gracePeriod                      time.Duration
+	onlyValidManifestV2Images        bool
 }
 
 func (o *options) addDefaults() {
@@ -75,6 +76,7 @@ func newOpts() *options {
 	fs.Var(&opts.quayIOCIImagesDistributorOptions.additionalImageStreamNamespacesRaw, "quayIOCIImagesDistributorOptions.additional-image-stream-namespace", "A namespace in which imagestreams will be distributed even if no test explicitly references them (e.G `ci`). Can be passed multiple times.")
 	fs.IntVar(&opts.port, "port", 8090, "Port to run the server on")
 	fs.DurationVar(&opts.gracePeriod, "gracePeriod", time.Second*10, "Grace period for server shutdown")
+	fs.BoolVar(&opts.onlyValidManifestV2Images, "only-valid-manifest-v2-images", true, "If set, source images with invalidate manifests of v2 will not be mirrored")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse args")
 	}
@@ -197,7 +199,8 @@ func main() {
 			sets.New[string](opts.quayIOCIImagesDistributorOptions.additionalImageStreamNamespacesRaw.Strings()...),
 			quayIOImageHelper,
 			mirrorStore,
-			opts.registryConfig); err != nil {
+			opts.registryConfig,
+			opts.onlyValidManifestV2Images); err != nil {
 			logrus.WithField("name", quayiociimagesdistributor.ControllerName).WithError(err).Fatal("Failed to construct the controller")
 		}
 	}

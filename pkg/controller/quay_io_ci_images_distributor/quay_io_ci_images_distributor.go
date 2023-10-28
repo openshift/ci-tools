@@ -44,7 +44,8 @@ func AddToManager(manager manager.Manager,
 	additionalImageStreamTags, additionalImageStreams, additionalImageStreamNamespaces sets.Set[string],
 	quayIOImageHelper QuayIOImageHelper,
 	mirrorStore MirrorStore,
-	registryConfig string) error {
+	registryConfig string,
+	onlyValidManifestV2Images bool) error {
 	log := logrus.WithField("controller", ControllerName)
 	log.WithField("additionalImageStreamNamespaces", additionalImageStreamNamespaces).Info("Received args")
 	client := imagestreamtagwrapper.MustNew(manager.GetClient(), manager.GetCache())
@@ -60,6 +61,7 @@ func AddToManager(manager manager.Manager,
 		quayIOImageHelper:               quayIOImageHelper,
 		ocImageInfoOptions:              ocImageInfoOptions,
 		mirrorStore:                     mirrorStore,
+		onlyValidManifestV2Images:       onlyValidManifestV2Images,
 	}
 	c, err := controller.New(ControllerName, manager, controller.Options{
 		Reconciler: r,
@@ -111,6 +113,7 @@ type reconciler struct {
 	quayIOImageHelper               QuayIOImageHelper
 	ocImageInfoOptions              OCImageInfoOptions
 	mirrorStore                     MirrorStore
+	onlyValidManifestV2Images       bool
 }
 
 func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
@@ -144,6 +147,11 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 			return nil
 		}
 		return fmt.Errorf("failed to get imageStreamTag %s from registry cluster: %w", req.String(), err)
+	}
+
+	if r.onlyValidManifestV2Images && invalidManifestV2(sourceImageStreamTag) {
+		log.Info("Skip mirroring image with invalid manifest v2")
+		return nil
 	}
 
 	imageName := sourceImageStreamTag.Image.ObjectMeta.Name
@@ -189,6 +197,24 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 		log.WithField("currentQuayDigest", imageInfo.Digest).WithField("target", quayImage).Debug("Image is up to date")
 	}
 	return nil
+}
+
+func invalidManifestV2(tag *imagev1.ImageStreamTag) bool {
+	if tag == nil {
+		return false
+	}
+	if !strings.HasSuffix(tag.Image.DockerImageManifestMediaType, "manifest.v2+json") {
+		return false
+	}
+	for _, layer := range tag.Image.DockerImageLayers {
+		if !strings.HasSuffix(layer.MediaType, ".gzip") {
+			logrus.WithField("namespace", tag.Namespace).WithField("name", tag.Name).
+				WithField("dockerImageManifestMediaType", tag.Image.DockerImageManifestMediaType).
+				WithField("mediaType", layer.MediaType).Debug("Found layers with MediaType")
+			return true
+		}
+	}
+	return false
 }
 
 type objectFilter func(types.NamespacedName) bool

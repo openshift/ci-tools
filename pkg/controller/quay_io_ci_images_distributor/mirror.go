@@ -45,31 +45,26 @@ func (s *memoryMirrorStore) Put(tasks ...MirrorTask) error {
 }
 
 func (s *memoryMirrorStore) Take(n int) ([]MirrorTask, error) {
-	var ret []MirrorTask
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	c := 0
-	for k, v := range s.mirrors {
-		if c < n {
-			ret = append(ret, v)
-			c = c + 1
-		} else {
-			delete(s.mirrors, k)
-		}
-	}
+	ret, _, nil := s.get(n, false)
 	return ret, nil
 }
 
 func (s *memoryMirrorStore) Show(n int) ([]MirrorTask, int, error) {
+	return s.get(n, false)
+}
+func (s *memoryMirrorStore) get(n int, del bool) ([]MirrorTask, int, error) {
 	var ret []MirrorTask
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	l := len(s.mirrors)
 	c := 0
-	for _, v := range s.mirrors {
+	for k, v := range s.mirrors {
 		if c < n {
 			ret = append(ret, v)
 			c = c + 1
+			if del {
+				delete(s.mirrors, k)
+			}
 		} else {
 			break
 		}

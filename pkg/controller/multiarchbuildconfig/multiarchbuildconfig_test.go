@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -271,12 +270,11 @@ func TestReconcile(t *testing.T) {
 							Reason: "PushManifestSuccess",
 						},
 					},
-					State: v1.SuccessState,
 				},
 			},
 		},
 		{
-			name: "Conditions added when both manifest push and image mirror succeeded",
+			name: "Conditions added when image mirror succeeded",
 			inputMabc: &v1.MultiArchBuildConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-mabc",
@@ -286,9 +284,7 @@ func TestReconcile(t *testing.T) {
 					BuildSpec: buildv1.BuildConfigSpec{
 						CommonSpec: buildv1.CommonSpec{Output: buildv1.BuildOutput{To: &corev1.ObjectReference{Namespace: "test-ns", Name: "test-image"}}},
 					},
-					Output: v1.MultiArchBuildConfigOutput{
-						To: []string{"foo-registry.com/foo/bar:latest"},
-					},
+					ExternalRegistries: []string{"foo-registry.com/foo/bar:latest"},
 				},
 				Status: v1.MultiArchBuildConfigStatus{
 					Builds: map[string]*buildv1.Build{
@@ -296,6 +292,13 @@ func TestReconcile(t *testing.T) {
 							Status: buildv1.BuildStatus{
 								Phase: buildv1.BuildPhaseComplete,
 							},
+						},
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:   PushImageManifestDone,
+							Status: metav1.ConditionTrue,
+							Reason: "PushManifestSuccess",
 						},
 					},
 				},
@@ -309,9 +312,7 @@ func TestReconcile(t *testing.T) {
 					BuildSpec: buildv1.BuildConfigSpec{
 						CommonSpec: buildv1.CommonSpec{Output: buildv1.BuildOutput{To: &corev1.ObjectReference{Namespace: "test-ns", Name: "test-image"}}},
 					},
-					Output: v1.MultiArchBuildConfigOutput{
-						To: []string{"foo-registry.com/foo/bar:latest"},
-					},
+					ExternalRegistries: []string{"foo-registry.com/foo/bar:latest"},
 				},
 				Status: v1.MultiArchBuildConfigStatus{
 					Builds: map[string]*buildv1.Build{
@@ -349,8 +350,7 @@ func TestReconcile(t *testing.T) {
 				client:         client,
 				architectures:  []string{"amd64", "arm64"},
 				manifestPusher: tt.manifestPusher,
-				mirrorImagesFn: func(log *logrus.Entry, registryConfig string, images []string) error { return nil },
-				timeNowFn:      func() time.Time { return time.Time{} },
+				imageMirrorer:  newFakeOCImage(func(images []string) error { return nil }),
 			}
 
 			if err := r.reconcile(context.Background(), reconcile.Request{NamespacedName: types.NamespacedName{Name: tt.inputMabc.Name, Namespace: tt.inputMabc.Namespace}}, r.logger); err != nil {

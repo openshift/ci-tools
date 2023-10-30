@@ -1,40 +1,53 @@
 package multiarchbuildconfig
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/sirupsen/logrus"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	v1 "github.com/openshift/ci-tools/pkg/api/multiarchbuildconfig/v1"
 )
 
+type fakeOCImage struct {
+	mirrorFn func(images []string) error
+}
+
+func (foci *fakeOCImage) mirror(images []string) error {
+	return foci.mirrorFn(images)
+}
+
+func newFakeOCImage(mirrorFn func(images []string) error) *fakeOCImage {
+	return &fakeOCImage{
+		mirrorFn: mirrorFn,
+	}
+}
+
 func TestOCImageMirrorArgs(t *testing.T) {
 	for _, testCase := range []struct {
 		name   string
 		src    string
-		output v1.MultiArchBuildConfigOutput
+		output []string
 		want   []string
 	}{
 		{
-			name: "Mirror to one destination",
-			src:  "src-registry.com/src-image:latest",
-			output: v1.MultiArchBuildConfigOutput{
-				To: []string{"dst-registry.com/dst-image:latest"},
-			},
-			want: []string{"src-registry.com/src-image:latest", "dst-registry.com/dst-image:latest"},
+			name:   "Mirror to one destination",
+			src:    "src-registry.com/src-image:latest",
+			output: []string{"dst-registry.com/dst-image:latest"},
+			want:   []string{"src-registry.com/src-image:latest", "dst-registry.com/dst-image:latest"},
 		},
 		{
-			name: "Mirror to multiple destinations",
-			src:  "src-registry.com/src-image:latest",
-			output: v1.MultiArchBuildConfigOutput{
-				To: []string{"dst-registry.com/dst-image-1:latest", "dst-registry.com/dst-image-2:latest"},
-			},
+			name:   "Mirror to multiple destinations",
+			src:    "src-registry.com/src-image:latest",
+			output: []string{"dst-registry.com/dst-image-1:latest", "dst-registry.com/dst-image-2:latest"},
 			want: []string{
 				"src-registry.com/src-image:latest",
 				"dst-registry.com/dst-image-1:latest",
@@ -44,12 +57,10 @@ func TestOCImageMirrorArgs(t *testing.T) {
 		{
 			name: "Deduplicate destinations",
 			src:  "src-registry.com/src-image:latest",
-			output: v1.MultiArchBuildConfigOutput{
-				To: []string{
-					"dst-registry.com/dst-image-1:latest",
-					"dst-registry.com/dst-image-2:latest",
-					"dst-registry.com/dst-image-2:latest",
-				},
+			output: []string{
+				"dst-registry.com/dst-image-1:latest",
+				"dst-registry.com/dst-image-2:latest",
+				"dst-registry.com/dst-image-2:latest",
 			},
 			want: []string{
 				"src-registry.com/src-image:latest",
@@ -61,7 +72,7 @@ func TestOCImageMirrorArgs(t *testing.T) {
 		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
-			args := ocImageMirrorArgs(testCase.src, &testCase.output)
+			args := ocImageMirrorArgs(testCase.src, testCase.output)
 			if diff := cmp.Diff(args, testCase.want); diff != "" {
 				t.Errorf("Unexpected diff:\n%s", diff)
 			}
@@ -74,8 +85,8 @@ func TestHandleMirrorImage(t *testing.T) {
 		Type:   PushImageManifestDone,
 		Status: metav1.ConditionTrue,
 	}
-	imageMirrorCmdFactory := func(err error) func(*logrus.Entry, string, []string) error {
-		return func(*logrus.Entry, string, []string) error { return err }
+	imageMirrorCmdFactory := func(err error) func([]string) error {
+		return func([]string) error { return err }
 	}
 
 	for _, testCase := range []struct {
@@ -83,28 +94,22 @@ func TestHandleMirrorImage(t *testing.T) {
 		mabc           v1.MultiArchBuildConfig
 		imageMirrorErr error
 		want           v1.MultiArchBuildConfigStatus
-		wantResult     bool
 	}{
 		{
 			name: "No output set, do nothing",
 			mabc: v1.MultiArchBuildConfig{
 				Spec: v1.MultiArchBuildConfigSpec{
-					Output: v1.MultiArchBuildConfigOutput{
-						To: []string{},
-					},
+					ExternalRegistries: []string{},
 				},
 				Status: v1.MultiArchBuildConfigStatus{State: ""},
 			},
-			want:       v1.MultiArchBuildConfigStatus{State: ""},
-			wantResult: true,
+			want: v1.MultiArchBuildConfigStatus{State: ""},
 		},
 		{
 			name: "Status shows image has been mirrored already, do nothing",
 			mabc: v1.MultiArchBuildConfig{
 				Spec: v1.MultiArchBuildConfigSpec{
-					Output: v1.MultiArchBuildConfigOutput{
-						To: []string{},
-					},
+					ExternalRegistries: []string{},
 				},
 				Status: v1.MultiArchBuildConfigStatus{
 					Conditions: []metav1.Condition{
@@ -129,7 +134,6 @@ func TestHandleMirrorImage(t *testing.T) {
 					},
 				},
 			},
-			wantResult: true,
 		},
 		{
 			name: "Mirror completed successfully, set status to success",
@@ -139,9 +143,7 @@ func TestHandleMirrorImage(t *testing.T) {
 					Namespace: "ns",
 				},
 				Spec: v1.MultiArchBuildConfigSpec{
-					Output: v1.MultiArchBuildConfigOutput{
-						To: []string{"dst-reg.com/dst-image:latest"},
-					},
+					ExternalRegistries: []string{"dst-reg.com/dst-image:latest"},
 				},
 				Status: v1.MultiArchBuildConfigStatus{
 					State: "",
@@ -160,8 +162,8 @@ func TestHandleMirrorImage(t *testing.T) {
 						Reason:             ImageMirrorSuccessReason,
 					},
 				},
+				State: v1.SuccessState,
 			},
-			wantResult: true,
 		},
 		{
 			name: "Mirror failed, set status to failed",
@@ -171,9 +173,7 @@ func TestHandleMirrorImage(t *testing.T) {
 					Namespace: "ns",
 				},
 				Spec: v1.MultiArchBuildConfigSpec{
-					Output: v1.MultiArchBuildConfigOutput{
-						To: []string{"dst-reg.com/dst-image:latest"},
-					},
+					ExternalRegistries: []string{"dst-reg.com/dst-image:latest"},
 				},
 				Status: v1.MultiArchBuildConfigStatus{
 					State: "",
@@ -194,28 +194,33 @@ func TestHandleMirrorImage(t *testing.T) {
 						Message:            "oc image mirror: an error",
 					},
 				},
+				State: v1.FailureState,
 			},
-			wantResult: false,
 		},
 	} {
 		testCase := testCase
 
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
+			client := fake.NewClientBuilder().WithObjects(&testCase.mabc).Build()
 			r := reconciler{
-				client:         fake.NewClientBuilder().Build(),
-				timeNowFn:      func() time.Time { return time.Time{} },
-				mirrorImagesFn: imageMirrorCmdFactory(testCase.imageMirrorErr),
+				logger:        logrus.NewEntry(logrus.StandardLogger()),
+				client:        client,
+				imageMirrorer: newFakeOCImage(imageMirrorCmdFactory(testCase.imageMirrorErr)),
 			}
 
-			mutateFn, succeeded := r.handleMirrorImage("fake-image", &testCase.mabc)
-			if mutateFn != nil {
-				mutateFn(&testCase.mabc)
+			if err := r.handleMirrorImage(context.TODO(), "fake-image", &testCase.mabc); err != nil {
+				t.Fatalf("Failed to mirror %v", err)
 			}
-			if testCase.wantResult != succeeded {
-				t.Errorf("expected mirror result to be %t but got %t instead", testCase.wantResult, succeeded)
+
+			actualMabc := &v1.MultiArchBuildConfig{}
+			if err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Name: testCase.mabc.Name, Namespace: testCase.mabc.Namespace}, actualMabc); err != nil {
+				t.Fatalf("Failed to retrieve MultiArchBuildConfig: %v", err)
 			}
-			if diff := cmp.Diff(testCase.want, testCase.mabc.Status); diff != "" {
+
+			if diff := cmp.Diff(testCase.want, actualMabc.Status,
+				cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime"),
+			); diff != "" {
 				t.Errorf("unexpected mabc:\n%s", diff)
 			}
 		})

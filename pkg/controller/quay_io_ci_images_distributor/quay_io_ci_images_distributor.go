@@ -149,6 +149,12 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 		return fmt.Errorf("failed to get imageStreamTag %s from registry cluster: %w", req.String(), err)
 	}
 
+	// sync only when the target image does not exist because "Digests are not preserved with schema version 1 images."
+	if strings.HasSuffix(sourceImageStreamTag.Image.DockerImageManifestMediaType, "manifest.v1+prettyjws") && imageInfo.Digest != "" {
+		log.WithField("currentQuayDigest", imageInfo.Digest).Info("Skip mirroring image with manifest v1")
+		return nil
+	}
+
 	if r.onlyValidManifestV2Images && invalidManifestV2(sourceImageStreamTag) {
 		log.Info("Skip mirroring image with invalid manifest v2")
 		return nil

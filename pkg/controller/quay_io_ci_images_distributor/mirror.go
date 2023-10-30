@@ -53,8 +53,9 @@ func (s *memoryMirrorStore) Take(n int) ([]MirrorTask, error) {
 		if c < n {
 			ret = append(ret, v)
 			c = c + 1
-		} else {
 			delete(s.mirrors, k)
+		} else {
+			break
 		}
 	}
 	return ret, nil

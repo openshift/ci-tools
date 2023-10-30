@@ -666,6 +666,7 @@ periodic-ci-openshift-hypershift-release-4.13-periodics-e2e-powervs
 // begin https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/hypershift/openshift-hypershift-release-4.14-periodics.yaml
 periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-agent-ovn-conformance
 periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-agent-ovn-mce-conformance
+periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-agent-ovn-mce-disconnected-conformance
 periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-aws-ovn
 periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-aws-ovn-conformance
 periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-aws-ovn-conformance-serial

@@ -2190,6 +2190,8 @@ type ProjectDirectoryImageBuildStepConfiguration struct {
 	// promoted unless explicitly targeted. Use for builds which
 	// are invoked only when testing certain parts of the repo.
 	Optional bool `json:"optional,omitempty"`
+
+	Ref string `json:"ref,omitempty"`
 }
 
 func (config ProjectDirectoryImageBuildStepConfiguration) TargetName() string {

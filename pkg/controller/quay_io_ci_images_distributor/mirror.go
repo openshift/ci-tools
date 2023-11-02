@@ -45,7 +45,7 @@ func (s *memoryMirrorStore) Put(tasks ...MirrorTask) error {
 }
 
 func (s *memoryMirrorStore) Take(n int) ([]MirrorTask, error) {
-	ret, _, nil := s.get(n, false)
+	ret, _, nil := s.get(n, true)
 	return ret, nil
 }
 

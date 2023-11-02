@@ -194,6 +194,9 @@ func main() {
 	interrupts.Run(func(ctx context.Context) { execute(ctx, mirrorConsumerController) })
 
 	if opts.enabledControllersSet.Has(quayiociimagesdistributor.ControllerName) {
+		if err := quayiociimagesdistributor.RegisterMetrics(); err != nil {
+			logrus.WithError(err).Fatal("failed to register metrics")
+		}
 		if err := quayiociimagesdistributor.AddToManager(mgr,
 			ciOPConfigAgent,
 			registryConfigAgent,

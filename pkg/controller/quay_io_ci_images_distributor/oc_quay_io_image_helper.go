@@ -130,12 +130,14 @@ func (c *client) ImageMirror(pairs []string, options OCImageMirrorOptions) error
 		fmt.Sprintf("--dry-run=%t", options.DryRun)}
 	t := time.Now()
 	_, err := c.executor.Run(append(args, pairs...)...)
-	d := time.Since(t)
+	d := time.Since(t) / time.Second
 	if err != nil {
 		logger.WithError(err).WithField("duration", d).Warn("Failed to mirror")
+		ObserveMirroringDuration("failure", float64(d))
 		return err
 	}
 	logger.WithField("duration", d).Info("Mirrored successfully")
+	ObserveMirroringDuration("success", float64(d))
 	return nil
 }
 

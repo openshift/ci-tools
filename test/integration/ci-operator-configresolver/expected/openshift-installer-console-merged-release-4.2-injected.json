@@ -5,12 +5,12 @@
     "branch": ""
   },
   "base_images": {
-    "openshift/console.base": {
+    "base-openshift.console": {
       "namespace": "ocp",
       "name": "4.2",
       "tag": "base"
     },
-    "openshift/installer.base": {
+    "base-openshift.installer": {
       "namespace": "ocp",
       "name": "4.2",
       "tag": "base"
@@ -22,14 +22,14 @@
     }
   },
   "build_roots": {
-    "openshift/console": {
+    "openshift.console": {
       "image_stream_tag": {
         "namespace": "openshift",
         "name": "release",
         "tag": "golang-1.20"
       }
     },
-    "openshift/installer": {
+    "openshift.installer": {
       "image_stream_tag": {
         "namespace": "openshift",
         "name": "release",
@@ -37,6 +37,18 @@
       }
     }
   },
+  "images": [
+    {
+      "from": "base-openshift.installer",
+      "to": "installer-openshift.installer",
+      "ref": "openshift.installer"
+    },
+    {
+      "from": "base-openshift.console",
+      "to": "console-openshift.console",
+      "ref": "openshift.console"
+    }
+  ],
   "tests": [
     {
       "as": "e2e",
@@ -131,5 +143,16 @@
         ]
       }
     }
-  ]
+  ],
+  "resources": {
+    "*": {
+      "requests": {
+        "cpu": "100m",
+        "memory": "200Mi"
+      },
+      "limits": {
+        "memory": "4Gi"
+      }
+    }
+  }
 }

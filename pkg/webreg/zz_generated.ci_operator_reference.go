@@ -82,6 +82,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      destination_dir: ' '\n" +
 	"                      # SourcePath is a file or directory in the source image to copy from.\n" +
 	"                      source_path: ' '\n" +
+	"        ref: ' '\n" +
 	"    # UseBuildCache enables the import and use of the prior `bin` image\n" +
 	"    # as a build cache, if the underlying build root has not changed since\n" +
 	"    # the previous cache was published.\n" +
@@ -138,6 +139,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                          destination_dir: ' '\n" +
 	"                          # SourcePath is a file or directory in the source image to copy from.\n" +
 	"                          source_path: ' '\n" +
+	"            ref: ' '\n" +
 	"        # UseBuildCache enables the import and use of the prior `bin` image\n" +
 	"        # as a build cache, if the underlying build root has not changed since\n" +
 	"        # the previous cache was published.\n" +
@@ -147,6 +149,15 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"# Go. If specified the location of the repository we are\n" +
 	"# cloning from is ignored.\n" +
 	"canonical_go_repository: \"\"\n" +
+	"# CanonicalGoRepositoryList is a directory path that represents\n" +
+	"# the desired location of the contents of this repository in\n" +
+	"# Go. If specified the location of the repository we are\n" +
+	"# cloning from is ignored.\n" +
+	"# Mutually exclusive with CanonicalGoRepository\n" +
+	"# DO NOT set this in the config\n" +
+	"canonical_go_repository_list:\n" +
+	"    - ref: ' '\n" +
+	"      repository: ' '\n" +
 	"# Images describes the images that are built\n" +
 	"# baseImage the project as part of the release\n" +
 	"# process. The name of each image is its \"to\" value\n" +
@@ -193,6 +204,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      # promoted unless explicitly targeted. Use for builds which\n" +
 	"      # are invoked only when testing certain parts of the repo.\n" +
 	"      optional: true\n" +
+	"      ref: ' '\n" +
 	"      to: ' '\n" +
 	"# Operator describes the operator bundle(s) that is built by the project\n" +
 	"operator:\n" +
@@ -336,6 +348,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            name: ' '\n" +
 	"            namespace: ' '\n" +
 	"            tag: ' '\n" +
+	"        ref: ' '\n" +
 	"        to: ' '\n" +
 	"      output_image_tag_step:\n" +
 	"        from: ' '\n" +
@@ -355,6 +368,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # content.\n" +
 	"        commands: ' '\n" +
 	"        from: ' '\n" +
+	"        ref: ' '\n" +
 	"        to: ' '\n" +
 	"      project_directory_image_build_inputs:\n" +
 	"        # BuildArgs contains build arguments that will be resolved in the Dockerfile.\n" +
@@ -393,6 +407,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      destination_dir: ' '\n" +
 	"                      # SourcePath is a file or directory in the source image to copy from.\n" +
 	"                      source_path: ' '\n" +
+	"        ref: ' '\n" +
 	"      project_directory_image_build_step:\n" +
 	"        # BuildArgs contains build arguments that will be resolved in the Dockerfile.\n" +
 	"        # See https://docs.docker.com/engine/reference/builder/#/arg for more details.\n" +
@@ -435,6 +450,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # promoted unless explicitly targeted. Use for builds which\n" +
 	"        # are invoked only when testing certain parts of the repo.\n" +
 	"        optional: true\n" +
+	"        ref: ' '\n" +
 	"        to: ' '\n" +
 	"      release_images_tag_step:\n" +
 	"        # IncludeBuiltImages determines if the release we assemble will include\n" +
@@ -491,6 +507,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        to: ' '\n" +
 	"      rpm_serve_step:\n" +
 	"        from: ' '\n" +
+	"        ref: ' '\n" +
 	"      source_step:\n" +
 	"        # ClonerefsImage is the image where we get the clonerefs tool\n" +
 	"        clonerefs_image:\n" +
@@ -503,6 +520,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # clonerefs tool is placed\n" +
 	"        clonerefs_path: ' '\n" +
 	"        from: ' '\n" +
+	"        ref: ' '\n" +
 	"        to: ' '\n" +
 	"      test_step:\n" +
 	"        # AlwaysRun can be set to false to disable running the job on every PR\n" +

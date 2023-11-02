@@ -658,6 +658,8 @@ func (config *InputImageTagStepConfiguration) AddSources(sources ...ImageStreamS
 type InputImage struct {
 	BaseImage ImageStreamTagReference         `json:"base_image"`
 	To        PipelineImageStreamTagReference `json:"to,omitempty"`
+
+	Ref string `json:"ref,omitempty"`
 }
 
 type ImageStreamSourceType string

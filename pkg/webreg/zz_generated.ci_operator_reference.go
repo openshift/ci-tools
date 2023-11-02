@@ -147,6 +147,15 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"# Go. If specified the location of the repository we are\n" +
 	"# cloning from is ignored.\n" +
 	"canonical_go_repository: \"\"\n" +
+	"# CanonicalGoRepositoryList is a directory path that represents\n" +
+	"# the desired location of the contents of this repository in\n" +
+	"# Go. If specified the location of the repository we are\n" +
+	"# cloning from is ignored.\n" +
+	"# Mutually exclusive with CanonicalGoRepository\n" +
+	"# DO NOT set this in the config\n" +
+	"canonical_go_repository_list:\n" +
+	"    - ref: ' '\n" +
+	"      repository: ' '\n" +
 	"# Images describes the images that are built\n" +
 	"# baseImage the project as part of the release\n" +
 	"# process. The name of each image is its \"to\" value\n" +
@@ -193,6 +202,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      # promoted unless explicitly targeted. Use for builds which\n" +
 	"      # are invoked only when testing certain parts of the repo.\n" +
 	"      optional: true\n" +
+	"      ref: ' '\n" +
 	"      to: ' '\n" +
 	"# Operator describes the operator bundle(s) that is built by the project\n" +
 	"operator:\n" +
@@ -336,6 +346,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            name: ' '\n" +
 	"            namespace: ' '\n" +
 	"            tag: ' '\n" +
+	"        ref: ' '\n" +
 	"        to: ' '\n" +
 	"      output_image_tag_step:\n" +
 	"        from: ' '\n" +
@@ -435,6 +446,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # promoted unless explicitly targeted. Use for builds which\n" +
 	"        # are invoked only when testing certain parts of the repo.\n" +
 	"        optional: true\n" +
+	"        ref: ' '\n" +
 	"        to: ' '\n" +
 	"      release_images_tag_step:\n" +
 	"        # IncludeBuiltImages determines if the release we assemble will include\n" +

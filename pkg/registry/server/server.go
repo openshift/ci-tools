@@ -261,7 +261,9 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 			InputConfiguration: api.InputConfiguration{
 				BuildRootImages: make(map[string]api.BuildRootImageConfiguration, len(metadataList)),
 				BaseImages:      make(map[string]api.ImageStreamTagReference),
+				BaseRPMImages:   make(map[string]api.ImageStreamTagReference),
 			},
+			Resources: make(api.ResourceConfiguration),
 		}
 		for _, metadata := range metadataList {
 			configLogger := logger.WithFields(api.LogFieldsFor(metadata))
@@ -274,12 +276,12 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 				configLogger.WithError(err).Warning("failed to get config")
 				return
 			}
-			ref := fmt.Sprintf("%s/%s", metadata.Org, metadata.Repo)
+			ref := fmt.Sprintf("%s.%s", metadata.Org, metadata.Repo)
 
 			mergedConfig.BuildRootImages[ref] = *config.BuildRootImage
 
 			for key, image := range config.BaseImages {
-				imageRef := fmt.Sprintf("%s.%s", ref, key)
+				imageRef := fmt.Sprintf("%s-%s", key, ref)
 				mergedConfig.BaseImages[imageRef] = image
 			}
 			if config.BinaryBuildCommands != "" {
@@ -306,6 +308,10 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 					Location: config.RpmBuildLocation,
 				})
 			}
+			for key, image := range config.BaseRPMImages {
+				imageRef := fmt.Sprintf("%s-%s", key, ref)
+				mergedConfig.BaseRPMImages[imageRef] = image
+			}
 			if config.Operator != nil {
 				if mergedConfig.Operator == nil {
 					mergedConfig.Operator = config.Operator
@@ -314,6 +320,39 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 					mergedConfig.Operator.Bundles = append(mergedConfig.Operator.Bundles, config.Operator.Bundles...)
 					mergedConfig.Operator.Substitutions = append(mergedConfig.Operator.Substitutions, config.Operator.Substitutions...)
 				}
+			}
+			if config.CanonicalGoRepository != nil {
+				mergedConfig.CanonicalGoRepositoryList = append(mergedConfig.CanonicalGoRepositoryList, api.RefRepository{
+					Ref:        ref,
+					Repository: *config.CanonicalGoRepository,
+				})
+			}
+			for step, resources := range config.Resources {
+				if step == "*" { // * is special, and we will only pull from one config to merge, this is "last in wins" we may need to do better in the future
+					mergedConfig.Resources[step] = resources
+				} else {
+					stepWithRef := fmt.Sprintf("%s-%s", step, ref)
+					mergedConfig.Resources[stepWithRef] = resources
+				}
+			}
+			if len(config.Releases) > 0 && len(mergedConfig.Releases) == 0 {
+				// Since the release configs "should" be identical, we can just use the first one we come across
+				mergedConfig.Releases = config.Releases
+			}
+
+			for i := range config.Images {
+				image := config.Images[i]
+				if image.From != "" {
+					image.From = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", image.From, ref))
+				}
+				inputs := make(map[string]api.ImageBuildInputs)
+				for name, input := range image.Inputs {
+					inputs[fmt.Sprintf("%s-%s", name, ref)] = input
+				}
+				image.Inputs = inputs
+				image.To = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", image.To, ref))
+				image.Ref = ref
+				mergedConfig.Images = append(mergedConfig.Images, image)
 			}
 		}
 		//TODO: If this is to be used for a general purpose outside of payload testing, we will need to merge tests and other elements

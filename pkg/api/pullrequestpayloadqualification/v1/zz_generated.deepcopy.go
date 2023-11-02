@@ -140,11 +140,6 @@ func (in *PullRequestPayloadQualificationRunList) DeepCopyObject() runtime.Objec
 func (in *PullRequestPayloadTestSpec) DeepCopyInto(out *PullRequestPayloadTestSpec) {
 	*out = *in
 	out.PullRequest = in.PullRequest
-	if in.PullRequests != nil {
-		in, out := &in.PullRequests, &out.PullRequests
-		*out = make([]PullRequestUnderTest, len(*in))
-		copy(*out, *in)
-	}
 	in.Jobs.DeepCopyInto(&out.Jobs)
 }
 

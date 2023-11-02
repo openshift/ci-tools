@@ -477,6 +477,9 @@ func addProfile(name string, profile api.ClusterProfile, pod *coreapi.Pod) {
 		MountPath: ClusterProfileMountPath,
 	})
 	container.Env = append(container.Env, []coreapi.EnvVar{{
+		Name:  "CLUSTER_PROFILE_NAME",
+		Value: profile.Name(),
+	}, {
 		Name:  "CLUSTER_TYPE",
 		Value: profile.ClusterType(),
 	}, {

@@ -1445,6 +1445,10 @@ func ClusterProfiles() []ClusterProfile {
 	}
 }
 
+func (p ClusterProfile) Name() string {
+	return string(p)
+}
+
 // ClusterType maps profiles to the type string used by tests.
 func (p ClusterProfile) ClusterType() string {
 	switch p {

@@ -1653,8 +1653,10 @@ periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-fips
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-fips-serial
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-ha-cert-rotation-suspend-30d
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-local-gateway
+periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-localzones
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-proxy
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-serial
+periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-shared-vpc-localzones
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-shared-vpc-phz-techpreview
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-single-node
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-single-node-serial

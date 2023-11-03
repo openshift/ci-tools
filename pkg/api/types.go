@@ -1290,10 +1290,10 @@ const (
 	ClusterProfileGCPLoggingCRIO        ClusterProfile = "gcp-logging-crio"
 	ClusterProfileGCP2                  ClusterProfile = "gcp-openshift-gce-devel-ci-2"
 	ClusterProfileIBMCloud              ClusterProfile = "ibmcloud"
+	ClusterProfileIBMCloudCSPIQE        ClusterProfile = "ibmcloud-cspi-qe"
 	ClusterProfileIBMCloudQE            ClusterProfile = "ibmcloud-qe"
 	ClusterProfileIBMCloudMultiPpc64le  ClusterProfile = "ibmcloud-multi-ppc64le"
 	ClusterProfileIBMCloudMultiS390x    ClusterProfile = "ibmcloud-multi-s390x"
-	ClusterProfileIBMCSPIQE             ClusterProfile = "ibm-cspi-qe"
 	ClusterProfilePOWERVS1              ClusterProfile = "powervs-1"
 	ClusterProfilePOWERVS2              ClusterProfile = "powervs-2"
 	ClusterProfilePOWERVS3              ClusterProfile = "powervs-3"
@@ -1412,10 +1412,10 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAzureVirtualization,
 		ClusterProfileHyperShift,
 		ClusterProfileIBMCloud,
+		ClusterProfileIBMCloudCSPIQE,
 		ClusterProfileIBMCloudQE,
 		ClusterProfileIBMCloudMultiPpc64le,
 		ClusterProfileIBMCloudMultiS390x,
-		ClusterProfileIBMCSPIQE
 		ClusterProfilePOWERVS1,
 		ClusterProfilePOWERVS2,
 		ClusterProfilePOWERVS3,
@@ -1552,8 +1552,8 @@ func (p ClusterProfile) ClusterType() string {
 		return string(CloudGCP)
 	case
 		ClusterProfileIBMCloud,
-		ClusterProfileIBMCloudQE,
-		ClusterProfileIBMCSPIQE,:
+		ClusterProfileIBMCloudCSPIQE,
+		ClusterProfileIBMCloudQE:
 		return "ibmcloud"
 	case ClusterProfileIBMCloudMultiPpc64le:
 		return "ibmcloud-multi-ppc64le"
@@ -1753,14 +1753,14 @@ func (p ClusterProfile) LeaseType() string {
 		return "gcp-virtualization-quota-slice"
 	case ClusterProfileIBMCloud:
 		return "ibmcloud-quota-slice"
+	case ClusterProfileIBMCloudCSPIQE:
+		return "ibmcloud-cspi-qe-quota-slice"
 	case ClusterProfileIBMCloudQE:
 		return "ibmcloud-qe-quota-slice"
 	case ClusterProfileIBMCloudMultiPpc64le:
 		return "ibmcloud-multi-ppc64le-quota-slice"
 	case ClusterProfileIBMCloudMultiS390x:
 		return "ibmcloud-multi-s390x-quota-slice"
-	case ClusterProfileIBMCSPIQE:
-		return "ibm-cspi-qe-quota-slice"
 	case ClusterProfilePOWERVS1:
 		return "powervs-1-quota-slice"
 	case ClusterProfilePOWERVS2:

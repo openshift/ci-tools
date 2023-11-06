@@ -197,7 +197,7 @@ func main() {
 	}
 	// "i just don't want spam"
 	klog.LogToStderr(false)
-	logrus.Infof("%s version %s, built on sgoeddel's laptop", version.Name, version.Version) //TODO: revert
+	logrus.Infof("%s version %s", version.Name, version.Version)
 	flagSet := flag.NewFlagSet("", flag.ExitOnError)
 	opt := bindOptions(flagSet)
 	opt.censor = censor
@@ -552,14 +552,11 @@ func (o *options) Complete() error {
 	} else {
 		config, err = o.loadConfig(info)
 	}
-	marshalledConfig, _ := yaml.Marshal(&config) //TODO: don't check this in
-	_ = api.SaveArtifact(o.censor, "resolved-ci-operator-config.yaml", marshalledConfig)
 
 	if err != nil {
 		return results.ForReason("loading_config").WithError(err).Errorf("failed to load configuration: %v", err)
 	}
 
-	//TODO: do I need to adapt this to the pluralized version somehow?
 	if len(o.gitRef) != 0 && config.CanonicalGoRepository != nil {
 		o.jobSpec.Refs.PathAlias = *config.CanonicalGoRepository
 	}
@@ -572,8 +569,6 @@ func (o *options) Complete() error {
 	if err := validation.IsValidGraphConfiguration(o.graphConfig.Steps); err != nil {
 		return results.ForReason("validating_config").ForError(err)
 	}
-	marshalledGraphConfig, _ := yaml.Marshal(o.graphConfig) //TODO: don't check this in
-	_ = api.SaveArtifact(o.censor, "graph-config.yaml", marshalledGraphConfig)
 
 	if o.verbose {
 		config, _ := yaml.Marshal(o.configSpec)

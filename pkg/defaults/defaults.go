@@ -160,8 +160,6 @@ func fromConfig(
 		return nil, nil, fmt.Errorf("failed to get steps from configuration: %w", err)
 	}
 	rawSteps = append(graphConf.Steps, rawSteps...)
-	marshalledSteps, _ := yaml.Marshal(rawSteps) //TODO: don't check this in
-	_ = api.SaveArtifact(censor, "raw-steps.yaml", marshalledSteps)
 
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
@@ -236,7 +234,6 @@ func fromConfig(
 		if rawStep.InputImageTagStepConfiguration != nil {
 			conf := *rawStep.InputImageTagStepConfiguration
 			if _, ok := inputImages[conf.InputImage]; ok {
-				logrus.Infof("continuing on step to: %s for ref: %s", conf.To, conf.Ref) //TODO: remove logging
 				continue
 			}
 
@@ -245,7 +242,6 @@ func fromConfig(
 		} else if rawStep.PipelineImageCacheStepConfiguration != nil {
 			step = steps.PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, config.Resources, buildClient, podClient, jobSpec, pullSecret)
 		} else if rawStep.SourceStepConfiguration != nil {
-			logrus.Infof("creating a sourceStep: %s", rawStep.SourceStepConfiguration.To)
 			step = steps.SourceStep(*rawStep.SourceStepConfiguration, config.Resources, buildClient, podClient, jobSpec, cloneAuthConfig, pullSecret)
 		} else if rawStep.BundleSourceStepConfiguration != nil {
 			step = steps.BundleSourceStep(*rawStep.BundleSourceStepConfiguration, config, config.Resources, buildClient, podClient, jobSpec, pullSecret)
@@ -589,20 +585,15 @@ func FromConfigStatic(config *api.ReleaseBuildConfiguration) api.GraphConfigurat
 		buildRoots = make(map[string]api.BuildRootImageConfiguration)
 	}
 	if target := config.InputConfiguration.BuildRootImage; target != nil { //This will only be the case when config.InputConfiguration.BuildRootImages is empty
-		logrus.Infof("build_root exists!") //TODO: don't check this in
 		buildRoots[""] = *target
 	}
 
-	logrus.Infof("there are a total of %d build_roots", len(buildRoots)) //TODO: don't check this in
-
 	for repo, target := range buildRoots {
-		logrus.Infof("creating an InputImageTagStep for: %s", repo)
 		root := string(api.PipelineImageStreamTagReferenceRoot)
 		if repo != "" {
 			root = fmt.Sprintf("%s-%s", root, repo)
 		}
 		if target.FromRepository {
-			logrus.Infof("using from_repository")
 			config := api.InputImageTagStepConfiguration{
 				InputImage: api.InputImage{
 					To:  api.PipelineImageStreamTagReference(root),
@@ -614,7 +605,6 @@ func FromConfigStatic(config *api.ReleaseBuildConfiguration) api.GraphConfigurat
 				InputImageTagStepConfiguration: &config,
 			})
 		} else if isTagRef := target.ImageStreamTagReference; isTagRef != nil {
-			logrus.Infof("using image_stream_tag ")
 			config := api.InputImageTagStepConfiguration{
 				InputImage: api.InputImage{
 					BaseImage: *isTagRef,
@@ -627,7 +617,6 @@ func FromConfigStatic(config *api.ReleaseBuildConfiguration) api.GraphConfigurat
 				InputImageTagStepConfiguration: &config,
 			})
 		} else if gitSourceRef := target.ProjectImageBuild; gitSourceRef != nil {
-			logrus.Infof("using project_image for %s", repo)
 			if repo != "" {
 				gitSourceRef.Ref = repo
 			}
@@ -642,7 +631,6 @@ func FromConfigStatic(config *api.ReleaseBuildConfiguration) api.GraphConfigurat
 		binaryBuildCommandsList = append(binaryBuildCommandsList, api.RefCommands{Commands: config.BinaryBuildCommands})
 	}
 	for _, binaryBuildCommand := range binaryBuildCommandsList {
-		logrus.Infof("adding pipeline image cache step from binaryBuildCommandMap: %s", binaryBuildCommand.Ref) //TODO: cleanup logging
 		bin := string(api.PipelineImageStreamTagReferenceBinaries)
 		src := string(api.PipelineImageStreamTagReferenceSource)
 		if binaryBuildCommand.Ref != "" {
@@ -662,7 +650,6 @@ func FromConfigStatic(config *api.ReleaseBuildConfiguration) api.GraphConfigurat
 		testBinaryBuildCommandsList = append(testBinaryBuildCommandsList, api.RefCommands{Commands: config.TestBinaryBuildCommands})
 	}
 	for _, testBinaryBuildCommands := range testBinaryBuildCommandsList {
-		logrus.Infof("adding pipeline image cache step  testbinarybuild: %s", testBinaryBuildCommands.Ref)
 		testBin := string(api.PipelineImageStreamTagReferenceTestBinaries)
 		src := string(api.PipelineImageStreamTagReferenceSource)
 		if testBinaryBuildCommands.Ref != "" {
@@ -737,7 +724,6 @@ func FromConfigStatic(config *api.ReleaseBuildConfiguration) api.GraphConfigurat
 			InputImage: api.InputImage{
 				BaseImage: defaultImageFromReleaseTag(alias, baseImage, config.ReleaseTagConfiguration),
 				To:        api.PipelineImageStreamTagReference(alias),
-				//Ref: //TODO: do we even need to worry about a ref here?
 			},
 			Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceBase, Name: alias}},
 		}
@@ -925,7 +911,6 @@ func runtimeStepConfigsForBuild(
 		if target != nil {
 			istTagRef := &target.InputImage.BaseImage
 			if root.FromRepository {
-				logrus.Infof("from_repository ist being generated")
 				var matchingRefs []prowapi.Refs
 				for _, r := range refs {
 					if ref == "" || ref == fmt.Sprintf("%s.%s", r.Org, r.Repo) {
@@ -934,7 +919,6 @@ func runtimeStepConfigsForBuild(
 				}
 				path := decorate.DetermineWorkDir(codeMountPath, matchingRefs)
 				var err error
-				logrus.Infof("path is: %s", path) //TODO: remove this
 				istTagRef, err = buildRootImageStreamFromRepository(path, readFile)
 				if err != nil {
 					return nil, fmt.Errorf("failed to read buildRootImageStream from repository: %w", err)
@@ -972,11 +956,18 @@ func runtimeStepConfigsForBuild(
 			target.InputImage.BaseImage = *istTagRef
 		}
 	}
-	for _, r := range refs {
+	//If there is a ref we only add a src step for that ref, otherwise do it for each extra_ref supplied
+	var sourceRefs []prowapi.Refs
+	if jobSpec.Refs != nil {
+		sourceRefs = []prowapi.Refs{*jobSpec.Refs}
+	} else {
+		sourceRefs = jobSpec.ExtraRefs
+	}
+	for _, r := range sourceRefs {
 		ref := ""
 		root := api.PipelineImageStreamTagReferenceRoot
 		source := api.PipelineImageStreamTagReferenceSource
-		if len(jobSpec.ExtraRefs) >= 2 { // We only care about these suffixes when building from multiple sources
+		if len(sourceRefs) >= 2 { // We only care about these suffixes when building from multiple sources
 			ref = fmt.Sprintf("%s.%s", r.Org, r.Repo)
 			root = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", api.PipelineImageStreamTagReferenceRoot, ref))
 			source = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", api.PipelineImageStreamTagReferenceSource, ref))

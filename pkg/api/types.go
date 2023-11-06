@@ -184,18 +184,16 @@ func (config ReleaseBuildConfiguration) IsBaseImage(name string) bool {
 }
 
 // IsPipelineImage checks if `name` will be a tag in the pipeline image stream.
-// TODO: this method will almost certainly need to be updated
 func (config ReleaseBuildConfiguration) IsPipelineImage(name string) bool {
 	if config.IsBaseImage(name) {
 		return true
 	}
-	switch name {
-	case string(PipelineImageStreamTagReferenceRoot),
-		string(PipelineImageStreamTagReferenceSource),
-		string(PipelineImageStreamTagReferenceBinaries),
-		string(PipelineImageStreamTagReferenceTestBinaries),
-		string(PipelineImageStreamTagReferenceRPMs),
-		string(PipelineImageStreamTagReferenceBundleSource):
+	if strings.HasPrefix(name, string(PipelineImageStreamTagReferenceRoot)) ||
+		strings.HasPrefix(name, string(PipelineImageStreamTagReferenceSource)) ||
+		strings.HasPrefix(name, string(PipelineImageStreamTagReferenceBinaries)) ||
+		strings.HasPrefix(name, string(PipelineImageStreamTagReferenceTestBinaries)) ||
+		strings.HasPrefix(name, string(PipelineImageStreamTagReferenceRPMs)) ||
+		strings.HasPrefix(name, string(PipelineImageStreamTagReferenceBundleSource)) {
 		return true
 	}
 	if IsIndexImage(name) {
@@ -660,6 +658,7 @@ type InputImage struct {
 	BaseImage ImageStreamTagReference         `json:"base_image"`
 	To        PipelineImageStreamTagReference `json:"to,omitempty"`
 
+	// Ref is an optional string linking to the extra_ref in "org.repo" format that this belongs to
 	Ref string `json:"ref,omitempty"`
 }
 
@@ -708,6 +707,7 @@ type PipelineImageCacheStepConfiguration struct {
 	// content.
 	Commands string `json:"commands"`
 
+	// Ref is an optional string linking to the extra_ref in "org.repo" format that this belongs to
 	Ref string `json:"ref,omitempty"`
 }
 
@@ -2078,7 +2078,7 @@ type SourceStepConfiguration struct {
 	// clonerefs tool is placed
 	ClonerefsPath string `json:"clonerefs_path"`
 
-	//TODO: documentation
+	// Ref is an optional string linking to the extra_ref in "org.repo" format that this belongs to
 	Ref string `json:"ref,omitempty"`
 }
 
@@ -2218,6 +2218,7 @@ type ProjectDirectoryImageBuildStepConfiguration struct {
 	// are invoked only when testing certain parts of the repo.
 	Optional bool `json:"optional,omitempty"`
 
+	// Ref is an optional string linking to the extra_ref in "org.repo" format that this belongs to
 	Ref string `json:"ref,omitempty"`
 }
 
@@ -2248,7 +2249,7 @@ type ProjectDirectoryImageBuildInputs struct {
 	// See https://docs.docker.com/engine/reference/builder/#/arg for more details.
 	BuildArgs []BuildArg `json:"build_args,omitempty"`
 
-	//TODO: documentation
+	// Ref is an optional string linking to the extra_ref in "org.repo" format that this belongs to
 	Ref string `json:"ref,omitempty"`
 }
 
@@ -2311,11 +2312,11 @@ func (config RPMImageInjectionStepConfiguration) TargetName() string {
 type RPMServeStepConfiguration struct {
 	From PipelineImageStreamTagReference `json:"from"`
 
+	// Ref is an optional string linking to the extra_ref in "org.repo" format that this belongs to
 	Ref string `json:"ref,omitempty"`
 }
 
 func (config RPMServeStepConfiguration) TargetName() string {
-	//TODO: is this okay to do?
 	if config.Ref != "" {
 		return fmt.Sprintf("[serve:rpms-%s]", config.Ref)
 	}

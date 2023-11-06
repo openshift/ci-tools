@@ -106,14 +106,14 @@ func (s *gitSourceStep) determineRefsWorkdir(refs *prowapi.Refs, extraRefs []pro
 	}
 
 	matchingRef := &totalRefs[0]
-	for _, ref := range totalRefs {
+	for i, ref := range totalRefs {
 		orgRepo := fmt.Sprintf("%s.%s", ref.Org, ref.Repo)
 		matches := s.config.Ref == orgRepo
 		if (s.config.Ref == "" || matches) && ref.WorkDir {
-			return &ref
+			return &totalRefs[i]
 		}
 		if matches {
-			matchingRef = &ref
+			matchingRef = &totalRefs[i]
 		}
 	}
 

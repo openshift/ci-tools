@@ -62,13 +62,13 @@ type configContext struct {
 	field fieldPath
 	// Shared reference to a map containing pipeline image tags seen so far.
 	// All derivative contexts will point to the same map.
-	pipelineImages map[string]string
+	pipelineImages map[api.PipelineImageStreamTagReference]string
 }
 
 // NewConfigContext creates a top-level, empty context.
 func NewConfigContext() *configContext {
 	return &configContext{
-		pipelineImages: make(map[string]string),
+		pipelineImages: make(map[api.PipelineImageStreamTagReference]string),
 	}
 }
 
@@ -98,10 +98,11 @@ func (c *configContext) addKey(k string) *configContext {
 // An error containing the name of the original field is returned if the tag has
 // already been seen in the same configuration.
 func (c *configContext) addPipelineImage(name api.PipelineImageStreamTagReference, ref string) error {
-	fullName := string(name)
+	nameWitRef := string(name)
 	if ref != "" {
-		fullName = fmt.Sprintf("%s-%s", fullName, ref)
+		nameWitRef = fmt.Sprintf("%s-%s", nameWitRef, ref)
 	}
+	fullName := api.PipelineImageStreamTagReference(nameWitRef)
 	previous, seen := c.pipelineImages[fullName]
 	if seen {
 		return c.errorf("duplicate image name '%s' (previously defined by field '%s')", fullName, previous)
@@ -135,24 +136,24 @@ func IsValidConfiguration(config *api.ReleaseBuildConfiguration, org, repo strin
 func (v *Validator) validateConfiguration(ctx *configContext, config *api.ReleaseBuildConfiguration, org, repo string, resolved bool) error {
 	var validationErrors []error
 	if config.BinaryBuildCommands != "" {
-		ctx.pipelineImages[string(api.PipelineImageStreamTagReferenceBinaries)] = "binary_build_commands"
+		ctx.pipelineImages[api.PipelineImageStreamTagReferenceBinaries] = "binary_build_commands"
 	} else {
 		for _, c := range config.BinaryBuildCommandsList {
-			ctx.pipelineImages[fmt.Sprintf("%s-%s", string(api.PipelineImageStreamTagReferenceBinaries), c.Ref)] = "binary_build_commands"
+			ctx.pipelineImages[api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", api.PipelineImageStreamTagReferenceBinaries, c.Ref))] = "binary_build_commands"
 		}
 	}
 	if config.TestBinaryBuildCommands != "" {
-		ctx.pipelineImages[string(api.PipelineImageStreamTagReferenceTestBinaries)] = "test_binary_build_commands"
+		ctx.pipelineImages[api.PipelineImageStreamTagReferenceTestBinaries] = "test_binary_build_commands"
 	} else {
 		for _, c := range config.TestBinaryBuildCommandsList {
-			ctx.pipelineImages[fmt.Sprintf("%s-%s", string(api.PipelineImageStreamTagReferenceTestBinaries), c.Ref)] = "test_binary_build_commands"
+			ctx.pipelineImages[api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", api.PipelineImageStreamTagReferenceTestBinaries, c.Ref))] = "test_binary_build_commands"
 		}
 	}
 	if config.RpmBuildCommands != "" {
-		ctx.pipelineImages[string(api.PipelineImageStreamTagReferenceRPMs)] = "rpm_build_commands"
+		ctx.pipelineImages[api.PipelineImageStreamTagReferenceRPMs] = "rpm_build_commands"
 	} else {
 		for _, c := range config.RpmBuildCommandsList {
-			ctx.pipelineImages[fmt.Sprintf("%s-%s", string(api.PipelineImageStreamTagReferenceRPMs), c.Ref)] = "rpm_build_commands"
+			ctx.pipelineImages[api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", api.PipelineImageStreamTagReferenceRPMs, c.Ref))] = "rpm_build_commands"
 		}
 	}
 	validationErrors = append(validationErrors, validateReleaseBuildConfiguration(config, org, repo)...)
@@ -297,7 +298,6 @@ func LinkForImage(image string, config *api.ReleaseBuildConfiguration) api.StepL
 	return api.LinkForImage(imageStream, name)
 }
 
-// TODO: eventually we will need to actually validate here once merged
 func validateOperator(ctx *configContext, input *api.OperatorStepConfiguration, linkForImage func(string) api.StepLink) []error {
 	var validationErrors []error
 	if err := ctx.addPipelineImage(api.PipelineImageStreamTagReferenceBundleSource, ""); err != nil {
@@ -361,7 +361,7 @@ func ValidateOperatorSubstitution(ctx *configContext, sub api.PullSpecSubstituti
 func ValidateBaseImages(ctx *configContext, images map[string]api.ImageStreamTagReference) []error {
 	ret := validateImageStreamTagReferenceMap("base_images", images)
 	for name := range images {
-		//TODO: do we need to extract the ref here?
+		// There is no need to supply the ref here, as it will already be part of the image name when applicable
 		if err := ctx.addKey(name).addPipelineImage(api.PipelineImageStreamTagReference(name), ""); err != nil {
 			ret = append(ret, err)
 		}
@@ -369,11 +369,11 @@ func ValidateBaseImages(ctx *configContext, images map[string]api.ImageStreamTag
 	return ret
 }
 
-// TODO: do we need to extract the ref here?
 func validateBaseRPMImages(ctx *configContext, images map[string]api.ImageStreamTagReference) []error {
 	ret := validateImageStreamTagReferenceMap("base_rpm_images", images)
 	for name := range images {
 		ctxN := ctx.addKey(name)
+		// There is no need to supply the ref here, as it will already be part of the image name when applicable
 		if err := ctxN.addPipelineImage(api.PipelineImageStreamTagReference(fmt.Sprintf("%s-without-rpms", name)), ""); err != nil {
 			ret = append(ret, err)
 		}
@@ -484,7 +484,6 @@ func validateReleaseTagConfiguration(fieldRoot string, input api.ReleaseTagConfi
 	return validationErrors
 }
 
-// TODO: actually validate all the new fields here
 func validateReleaseBuildConfiguration(input *api.ReleaseBuildConfiguration, org, repo string) []error {
 	var validationErrors []error
 
@@ -508,9 +507,6 @@ func validateReleaseBuildConfiguration(input *api.ReleaseBuildConfiguration, org
 		if input.CanonicalGoRepository != nil && *input.CanonicalGoRepository == fmt.Sprintf("github.com/%s/%s", org, repo) {
 			validationErrors = append(validationErrors, errors.New("'canonical_go_repository' provides the default location, so is unnecessary"))
 		}
-		// TODO: check this for each in the list. I will have to provide an org and repo for this method for each included...
-		//for i, cgr := range input.CanonicalGoRepositoryList {
-		//}
 	}
 
 	// This is only to be set by ci-operator-configresolver when merging configs (for now).

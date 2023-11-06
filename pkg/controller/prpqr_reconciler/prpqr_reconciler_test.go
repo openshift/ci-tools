@@ -269,7 +269,7 @@ func pruneProwjobsForTests(t *testing.T, items []prowv1.ProwJob) {
 
 type fakeResolverClient struct{}
 
-func (f *fakeResolverClient) ConfigWithTest(base *api.Metadata, testSource *api.MetadataWithTest) (*api.ReleaseBuildConfiguration, error) {
+func (f *fakeResolverClient) ConfigWithTest(base *api.Metadata, testSource *api.MetadataWithTest, multipleSources bool) (*api.ReleaseBuildConfiguration, error) {
 	return &api.ReleaseBuildConfiguration{
 		Metadata: *base,
 		Tests: []api.TestStepConfiguration{

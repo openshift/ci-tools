@@ -1290,6 +1290,7 @@ const (
 	ClusterProfileGCPLoggingCRIO        ClusterProfile = "gcp-logging-crio"
 	ClusterProfileGCP2                  ClusterProfile = "gcp-openshift-gce-devel-ci-2"
 	ClusterProfileIBMCloud              ClusterProfile = "ibmcloud"
+	ClusterProfileIBMCloudCSPIQE        ClusterProfile = "ibmcloud-cspi-qe"
 	ClusterProfileIBMCloudQE            ClusterProfile = "ibmcloud-qe"
 	ClusterProfileIBMCloudMultiPpc64le  ClusterProfile = "ibmcloud-multi-ppc64le"
 	ClusterProfileIBMCloudMultiS390x    ClusterProfile = "ibmcloud-multi-s390x"
@@ -1411,6 +1412,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAzureVirtualization,
 		ClusterProfileHyperShift,
 		ClusterProfileIBMCloud,
+		ClusterProfileIBMCloudCSPIQE,
 		ClusterProfileIBMCloudQE,
 		ClusterProfileIBMCloudMultiPpc64le,
 		ClusterProfileIBMCloudMultiS390x,
@@ -1550,6 +1552,7 @@ func (p ClusterProfile) ClusterType() string {
 		return string(CloudGCP)
 	case
 		ClusterProfileIBMCloud,
+		ClusterProfileIBMCloudCSPIQE,
 		ClusterProfileIBMCloudQE:
 		return "ibmcloud"
 	case ClusterProfileIBMCloudMultiPpc64le:
@@ -1750,6 +1753,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "gcp-virtualization-quota-slice"
 	case ClusterProfileIBMCloud:
 		return "ibmcloud-quota-slice"
+	case ClusterProfileIBMCloudCSPIQE:
+		return "ibmcloud-cspi-qe-quota-slice"
 	case ClusterProfileIBMCloudQE:
 		return "ibmcloud-qe-quota-slice"
 	case ClusterProfileIBMCloudMultiPpc64le:

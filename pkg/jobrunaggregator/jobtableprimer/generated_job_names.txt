@@ -49,7 +49,6 @@ periodic-ci-openshift-release-master-nightly-4.10-console-aws
 periodic-ci-openshift-release-master-nightly-4.10-e2e-alibaba
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-csi
-periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-driver-toolkit
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-fips
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-proxy
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial
@@ -1214,7 +1213,6 @@ periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-cgroupsv2
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-crun
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-csi
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-csi-migration
-periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-driver-toolkit
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-fips
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-fips-serial
 periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-ovn-local-gateway

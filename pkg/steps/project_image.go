@@ -46,7 +46,7 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	fromDigest, err := resolvePipelineImageStreamTagReference(ctx, s.client, sourceTag, s.jobSpec)
+	fromDigest, err := resolvePipelineImageStreamTagReference(ctx, s.client, api.PipelineImageStreamTagReference(sourceTag), s.jobSpec)
 	if err != nil {
 		return err
 	}
@@ -69,21 +69,24 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 type workingDir func(tag string) (string, error)
 type isBundleImage func(tag string) bool
 
-func imagesFor(config api.ProjectDirectoryImageBuildStepConfiguration, workingDir workingDir, isBundleImage isBundleImage) (api.PipelineImageStreamTagReference, []buildapi.ImageSource, error) {
+func imagesFor(config api.ProjectDirectoryImageBuildStepConfiguration, workingDir workingDir, isBundleImage isBundleImage) (string, []buildapi.ImageSource, error) {
 	images := buildInputsFromStep(config.Inputs)
-	var sourceTag api.PipelineImageStreamTagReference
+	var sourceTag string
 	var contextDir string
 	if isBundleImage(string(config.To)) {
 		// use the operator bundle source for bundle images
-		sourceTag = api.PipelineImageStreamTagReferenceBundleSource
+		sourceTag = string(api.PipelineImageStreamTagReferenceBundleSource)
 		contextDir = config.ContextDir
 	} else if api.IsIndexImage(string(config.To)) {
 		// use the index source for index images
-		sourceTag = api.IndexGeneratorName(config.To)
+		sourceTag = string(api.IndexGeneratorName(config.To))
 	} else {
 		// default to using the normal pipeline source image
-		sourceTag = api.PipelineImageStreamTagReferenceSource
+		sourceTag = string(api.PipelineImageStreamTagReferenceSource)
 		contextDir = config.ContextDir
+	}
+	if config.Ref != "" {
+		sourceTag = fmt.Sprintf("%s-%s", sourceTag, config.Ref)
 	}
 	if _, overwritten := config.Inputs[string(sourceTag)]; !overwritten {
 		// if the user has not overwritten the source, we need to make sure it's mounted in
@@ -134,14 +137,18 @@ func getWorkingDir(client ctrlruntimeclient.Client, source, namespace string) (s
 }
 
 func (s *projectDirectoryImageBuildStep) Requires() []api.StepLink {
+	source := string(api.PipelineImageStreamTagReferenceSource)
+	if s.config.Ref != "" {
+		source = fmt.Sprintf("%s-%s", source, s.config.Ref)
+	}
 	links := []api.StepLink{
-		api.InternalImageLink(api.PipelineImageStreamTagReferenceSource),
+		api.InternalImageLink(api.PipelineImageStreamTagReference(source)),
 	}
 	if len(s.config.From) > 0 {
 		links = append(links, api.InternalImageLink(s.config.From))
 	}
 	if s.releaseBuildConfig.IsBundleImage(string(s.config.To)) {
-		links = append(links, api.InternalImageLink(api.PipelineImageStreamTagReferenceBundleSource))
+		links = append(links, api.InternalImageLink(api.PipelineImageStreamTagReferenceBundleSource)) //TODO: probably need to deal with this too
 	}
 	if api.IsIndexImage(string(s.config.To)) {
 		links = append(links, api.InternalImageLink(api.IndexGeneratorName(s.config.To)))

@@ -52,7 +52,7 @@ const (
 )
 
 type injectingResolverClient interface {
-	ConfigWithTest(base *api.Metadata, testSource *api.MetadataWithTest) (*api.ReleaseBuildConfiguration, error)
+	ConfigWithTest(base *api.Metadata, testSource *api.MetadataWithTest, multipleSources bool) (*api.ReleaseBuildConfiguration, error)
 }
 
 type prowConfigGetter interface {
@@ -427,7 +427,7 @@ func jobNameHash(name string) string {
 }
 
 func resolveCiopConfig(rc injectingResolverClient, baseCiop *api.Metadata, inject *api.MetadataWithTest) (*api.ReleaseBuildConfiguration, error) {
-	ciopConfig, err := rc.ConfigWithTest(baseCiop, inject)
+	ciopConfig, err := rc.ConfigWithTest(baseCiop, inject, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get config from resolver: %w", err)
 	}

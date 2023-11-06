@@ -175,17 +175,23 @@ func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clone
 	var refs []prowv1.Refs
 	if jobSpec.Refs != nil {
 		r := *jobSpec.Refs
-		if cloneAuthConfig != nil {
-			r.CloneURI = cloneAuthConfig.getCloneURI(r.Org, r.Repo)
+		orgRepo := fmt.Sprintf("%s.%s", r.Org, r.Repo)
+		if config.Ref == "" || orgRepo == config.Ref {
+			if cloneAuthConfig != nil {
+				r.CloneURI = cloneAuthConfig.getCloneURI(r.Org, r.Repo)
+			}
+			refs = append(refs, r)
 		}
-		refs = append(refs, r)
 	}
 
 	for _, r := range jobSpec.ExtraRefs {
-		if cloneAuthConfig != nil {
-			r.CloneURI = cloneAuthConfig.getCloneURI(r.Org, r.Repo)
+		orgRepo := fmt.Sprintf("%s.%s", r.Org, r.Repo)
+		if config.Ref == "" || orgRepo == config.Ref {
+			if cloneAuthConfig != nil {
+				r.CloneURI = cloneAuthConfig.getCloneURI(r.Org, r.Repo)
+			}
+			refs = append(refs, r)
 		}
-		refs = append(refs, r)
 	}
 
 	dockerfile := sourceDockerfile(config.From, decorate.DetermineWorkDir(gopath, refs), cloneAuthConfig)

@@ -359,7 +359,11 @@ func waitForRouteReachable(ctx context.Context, client ctrlruntimeclient.Client,
 }
 
 func (s *rpmServerStep) Requires() []api.StepLink {
-	return []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReferenceRPMs)}
+	rpms := api.PipelineImageStreamTagReferenceRPMs
+	if s.config.Ref != "" {
+		rpms = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", rpms, s.config.Ref))
+	}
+	return []api.StepLink{api.InternalImageLink(rpms)}
 }
 
 func (s *rpmServerStep) Creates() []api.StepLink {
@@ -379,8 +383,11 @@ func (s *rpmServerStep) Provides() api.ParameterMap {
 	if s.jobSpec.Refs != nil {
 		refs = append(refs, s.jobSpec.Refs)
 	}
-	for i := range s.jobSpec.ExtraRefs {
-		refs = append(refs, &s.jobSpec.ExtraRefs[i])
+	for i, ref := range s.jobSpec.ExtraRefs {
+		orgRepo := fmt.Sprintf("%s.%s", ref.Org, ref.Repo)
+		if s.config.Ref == "" || s.config.Ref == orgRepo {
+			refs = append(refs, &s.jobSpec.ExtraRefs[i])
+		}
 	}
 	if len(refs) == 0 {
 		return nil

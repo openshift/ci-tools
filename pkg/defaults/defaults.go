@@ -20,6 +20,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
+	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	"k8s.io/test-infra/prow/pod-utils/decorate"
 	utilpointer "k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
@@ -158,6 +160,9 @@ func fromConfig(
 		return nil, nil, fmt.Errorf("failed to get steps from configuration: %w", err)
 	}
 	rawSteps = append(graphConf.Steps, rawSteps...)
+	marshalledSteps, _ := yaml.Marshal(rawSteps) //TODO: don't check this in
+	_ = api.SaveArtifact(censor, "raw-steps.yaml", marshalledSteps)
+
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
 			steps, err := stepForTest(config, params, podClient, leaseClient, templateClient, client, hiveClient, jobSpec, inputImages, testStep, &imageConfigs, pullSecret, censor, nodeName, targetAdditionalSuffix)
@@ -231,6 +236,7 @@ func fromConfig(
 		if rawStep.InputImageTagStepConfiguration != nil {
 			conf := *rawStep.InputImageTagStepConfiguration
 			if _, ok := inputImages[conf.InputImage]; ok {
+				logrus.Infof("continuing on step to: %s for ref: %s", conf.To, conf.Ref) //TODO: remove logging
 				continue
 			}
 
@@ -239,6 +245,7 @@ func fromConfig(
 		} else if rawStep.PipelineImageCacheStepConfiguration != nil {
 			step = steps.PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, config.Resources, buildClient, podClient, jobSpec, pullSecret)
 		} else if rawStep.SourceStepConfiguration != nil {
+			logrus.Infof("creating a sourceStep: %s", rawStep.SourceStepConfiguration.To)
 			step = steps.SourceStep(*rawStep.SourceStepConfiguration, config.Resources, buildClient, podClient, jobSpec, cloneAuthConfig, pullSecret)
 		} else if rawStep.BundleSourceStepConfiguration != nil {
 			step = steps.BundleSourceStep(*rawStep.BundleSourceStepConfiguration, config, config.Resources, buildClient, podClient, jobSpec, pullSecret)
@@ -576,73 +583,152 @@ type resolveRoot func(root, cache *api.ImageStreamTagReference) (*api.ImageStrea
 // final execution graph.  See also FromConfig.
 func FromConfigStatic(config *api.ReleaseBuildConfiguration) api.GraphConfiguration {
 	var buildSteps []api.StepConfiguration
-	if target := config.InputConfiguration.BuildRootImage; target != nil {
+
+	buildRoots := config.InputConfiguration.BuildRootImages
+	if buildRoots == nil {
+		buildRoots = make(map[string]api.BuildRootImageConfiguration)
+	}
+	if target := config.InputConfiguration.BuildRootImage; target != nil { //This will only be the case when config.InputConfiguration.BuildRootImages is empty
+		logrus.Infof("build_root exists!") //TODO: don't check this in
+		buildRoots[""] = *target
+	}
+
+	logrus.Infof("there are a total of %d build_roots", len(buildRoots)) //TODO: don't check this in
+
+	for repo, target := range buildRoots {
+		logrus.Infof("creating an InputImageTagStep for: %s", repo)
+		root := string(api.PipelineImageStreamTagReferenceRoot)
+		if repo != "" {
+			root = fmt.Sprintf("%s-%s", root, repo)
+		}
 		if target.FromRepository {
+			logrus.Infof("using from_repository")
 			config := api.InputImageTagStepConfiguration{
 				InputImage: api.InputImage{
-					To: api.PipelineImageStreamTagReferenceRoot,
+					To:  api.PipelineImageStreamTagReference(root),
+					Ref: repo,
 				},
-				Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceRoot}},
+				Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceType(root)}},
 			}
 			buildSteps = append(buildSteps, api.StepConfiguration{
 				InputImageTagStepConfiguration: &config,
 			})
 		} else if isTagRef := target.ImageStreamTagReference; isTagRef != nil {
+			logrus.Infof("using image_stream_tag ")
 			config := api.InputImageTagStepConfiguration{
 				InputImage: api.InputImage{
 					BaseImage: *isTagRef,
-					To:        api.PipelineImageStreamTagReferenceRoot,
+					To:        api.PipelineImageStreamTagReference(root),
+					Ref:       repo,
 				},
-				Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceRoot}},
+				Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceType(root)}},
 			}
 			buildSteps = append(buildSteps, api.StepConfiguration{
 				InputImageTagStepConfiguration: &config,
 			})
 		} else if gitSourceRef := target.ProjectImageBuild; gitSourceRef != nil {
+			logrus.Infof("using project_image for %s", repo)
+			if repo != "" {
+				gitSourceRef.Ref = repo
+			}
 			buildSteps = append(buildSteps, api.StepConfiguration{
 				ProjectDirectoryImageBuildInputs: gitSourceRef,
 			})
 		}
 	}
+
+	binaryBuildCommandsList := config.BinaryBuildCommandsList
 	if len(config.BinaryBuildCommands) > 0 {
+		binaryBuildCommandsList = append(binaryBuildCommandsList, api.RefCommands{Commands: config.BinaryBuildCommands})
+	}
+	for _, binaryBuildCommand := range binaryBuildCommandsList {
+		logrus.Infof("adding pipeline image cache step from binaryBuildCommandMap: %s", binaryBuildCommand.Ref) //TODO: cleanup logging
+		bin := string(api.PipelineImageStreamTagReferenceBinaries)
+		src := string(api.PipelineImageStreamTagReferenceSource)
+		if binaryBuildCommand.Ref != "" {
+			bin = fmt.Sprintf("%s-%s", bin, binaryBuildCommand.Ref)
+			src = fmt.Sprintf("%s-%s", src, binaryBuildCommand.Ref)
+		}
 		buildSteps = append(buildSteps, api.StepConfiguration{PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
-			From:     api.PipelineImageStreamTagReferenceSource,
-			To:       api.PipelineImageStreamTagReferenceBinaries,
-			Commands: config.BinaryBuildCommands,
+			From:     api.PipelineImageStreamTagReference(src),
+			To:       api.PipelineImageStreamTagReference(bin),
+			Commands: binaryBuildCommand.Commands,
+			Ref:      binaryBuildCommand.Ref,
 		}})
 	}
 
+	testBinaryBuildCommandsList := config.TestBinaryBuildCommandsList
 	if len(config.TestBinaryBuildCommands) > 0 {
+		testBinaryBuildCommandsList = append(testBinaryBuildCommandsList, api.RefCommands{Commands: config.TestBinaryBuildCommands})
+	}
+	for _, testBinaryBuildCommands := range testBinaryBuildCommandsList {
+		logrus.Infof("adding pipeline image cache step  testbinarybuild: %s", testBinaryBuildCommands.Ref)
+		testBin := string(api.PipelineImageStreamTagReferenceTestBinaries)
+		src := string(api.PipelineImageStreamTagReferenceSource)
+		if testBinaryBuildCommands.Ref != "" {
+			testBin = fmt.Sprintf("%s-%s", testBin, testBinaryBuildCommands.Ref)
+			src = fmt.Sprintf("%s-%s", src, testBinaryBuildCommands.Ref)
+		}
 		buildSteps = append(buildSteps, api.StepConfiguration{PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
-			From:     api.PipelineImageStreamTagReferenceSource,
-			To:       api.PipelineImageStreamTagReferenceTestBinaries,
-			Commands: config.TestBinaryBuildCommands,
+			From:     api.PipelineImageStreamTagReference(src),
+			To:       api.PipelineImageStreamTagReference(testBin),
+			Commands: testBinaryBuildCommands.Commands,
+			Ref:      testBinaryBuildCommands.Ref,
 		}})
 	}
 
+	rpmBuildCommandsList := config.RpmBuildCommandsList
 	if len(config.RpmBuildCommands) > 0 {
-		var from api.PipelineImageStreamTagReference
-		if len(config.BinaryBuildCommands) > 0 {
-			from = api.PipelineImageStreamTagReferenceBinaries
-		} else {
-			from = api.PipelineImageStreamTagReferenceSource
+		rpmBuildCommandsList = append(rpmBuildCommandsList, api.RefCommands{Commands: config.RpmBuildCommands})
+	}
+	rpmBuildLocationList := config.RpmBuildLocationList
+	if len(config.RpmBuildLocation) > 0 {
+		rpmBuildLocationList = append(rpmBuildLocationList, api.RefLocation{Location: config.RpmBuildLocation})
+	}
+
+	for _, rpmBuildCommands := range rpmBuildCommandsList {
+
+		var matchingBinaryBuildCommands string
+		for _, binaryBuildCommands := range binaryBuildCommandsList {
+			if rpmBuildCommands.Ref == binaryBuildCommands.Ref {
+				matchingBinaryBuildCommands = binaryBuildCommands.Commands
+			}
+		}
+		from := string(api.PipelineImageStreamTagReferenceSource)
+		if len(matchingBinaryBuildCommands) > 0 {
+			from = string(api.PipelineImageStreamTagReferenceBinaries)
+		}
+		if rpmBuildCommands.Ref != "" {
+			from = fmt.Sprintf("%s-%s", from, rpmBuildCommands.Ref)
 		}
 
+		var matchingRpmBuildLocation string
+		for _, rpmBuildLocation := range rpmBuildLocationList {
+			if rpmBuildCommands.Ref == rpmBuildLocation.Ref {
+				matchingRpmBuildLocation = rpmBuildLocation.Location
+			}
+		}
 		var out string
-		if config.RpmBuildLocation != "" {
-			out = config.RpmBuildLocation
+		if matchingRpmBuildLocation != "" {
+			out = matchingRpmBuildLocation
 		} else {
 			out = api.DefaultRPMLocation
 		}
+		rpms := string(api.PipelineImageStreamTagReferenceRPMs)
+		if rpmBuildCommands.Ref != "" {
+			rpms = fmt.Sprintf("%s-%s", rpms, rpmBuildCommands.Ref)
+		}
 
 		buildSteps = append(buildSteps, api.StepConfiguration{PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
-			From:     from,
-			To:       api.PipelineImageStreamTagReferenceRPMs,
-			Commands: fmt.Sprintf(`%s; ln -s $( pwd )/%s %s`, config.RpmBuildCommands, out, api.RPMServeLocation),
+			From:     api.PipelineImageStreamTagReference(from),
+			To:       api.PipelineImageStreamTagReference(rpms),
+			Commands: fmt.Sprintf(`%s; ln -s $( pwd )/%s %s`, rpmBuildCommands.Commands, out, api.RPMServeLocation),
+			Ref:      rpmBuildCommands.Ref,
 		}})
 
 		buildSteps = append(buildSteps, api.StepConfiguration{RPMServeStepConfiguration: &api.RPMServeStepConfiguration{
-			From: api.PipelineImageStreamTagReferenceRPMs,
+			From: api.PipelineImageStreamTagReference(rpms),
+			Ref:  rpmBuildCommands.Ref,
 		}})
 	}
 
@@ -651,6 +737,7 @@ func FromConfigStatic(config *api.ReleaseBuildConfiguration) api.GraphConfigurat
 			InputImage: api.InputImage{
 				BaseImage: defaultImageFromReleaseTag(alias, baseImage, config.ReleaseTagConfiguration),
 				To:        api.PipelineImageStreamTagReference(alias),
+				//Ref: //TODO: do we even need to worry about a ref here?
 			},
 			Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceBase, Name: alias}},
 		}
@@ -677,13 +764,17 @@ func FromConfigStatic(config *api.ReleaseBuildConfiguration) api.GraphConfigurat
 
 	for i := range config.Images {
 		image := &config.Images[i]
+		stableImageTag := string(image.To)
+		if image.Ref != "" {
+			stableImageTag = strings.TrimSuffix(stableImageTag, fmt.Sprintf("-%s", image.Ref))
+		}
 		buildSteps = append(buildSteps,
 			api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: image},
 			api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
 				From: image.To,
 				To: api.ImageStreamTagReference{
 					Name: api.StableImageStream,
-					Tag:  string(image.To),
+					Tag:  stableImageTag,
 				},
 				Optional: image.Optional,
 			}})
@@ -792,6 +883,8 @@ func FromConfigStatic(config *api.ReleaseBuildConfiguration) api.GraphConfigurat
 	return api.GraphConfiguration{Steps: buildSteps}
 }
 
+const codeMountPath = "/home/prow/go"
+
 func runtimeStepConfigsForBuild(
 	ctx context.Context,
 	client ctrlruntimeclient.Client,
@@ -803,12 +896,27 @@ func runtimeStepConfigsForBuild(
 	second time.Duration,
 	consoleHost string,
 ) ([]api.StepConfiguration, error) {
+	buildRoots := config.InputConfiguration.BuildRootImages
+	if buildRoots == nil {
+		buildRoots = make(map[string]api.BuildRootImageConfiguration)
+	}
+	if target := config.InputConfiguration.BuildRootImage; target != nil { //This will only be the case when config.InputConfiguration.BuildRootImages is empty
+		buildRoots[""] = *target
+	}
+	refs := jobSpec.ExtraRefs
+	if jobSpec.Refs != nil {
+		refs = append(refs, *jobSpec.Refs)
+	}
 	var buildSteps []api.StepConfiguration
-	if root := config.InputConfiguration.BuildRootImage; root != nil {
+	for ref, root := range buildRoots {
+		rootTag := string(api.PipelineImageStreamTagReferenceRoot)
+		if ref != "" {
+			rootTag = fmt.Sprintf("%s-%s", rootTag, ref)
+		}
 		var target *api.InputImageTagStepConfiguration
 		if root.FromRepository || root.UseBuildCache {
 			for i, s := range imageConfigs {
-				if to := s.InputImage.To; to == api.PipelineImageStreamTagReferenceRoot {
+				if s.InputImage.To == api.PipelineImageStreamTagReference(rootTag) {
 					target = imageConfigs[i]
 					break
 				}
@@ -817,14 +925,39 @@ func runtimeStepConfigsForBuild(
 		if target != nil {
 			istTagRef := &target.InputImage.BaseImage
 			if root.FromRepository {
+				logrus.Infof("from_repository ist being generated")
+				var matchingRefs []prowapi.Refs
+				for _, r := range refs {
+					if ref == "" || ref == fmt.Sprintf("%s.%s", r.Org, r.Repo) {
+						matchingRefs = append(matchingRefs, r)
+					}
+				}
+				path := decorate.DetermineWorkDir(codeMountPath, matchingRefs)
 				var err error
-				istTagRef, err = buildRootImageStreamFromRepository(readFile)
+				logrus.Infof("path is: %s", path) //TODO: remove this
+				istTagRef, err = buildRootImageStreamFromRepository(path, readFile)
 				if err != nil {
 					return nil, fmt.Errorf("failed to read buildRootImageStream from repository: %w", err)
 				}
 			}
 			if root.UseBuildCache {
-				cache := api.BuildCacheFor(config.Metadata)
+				metadata := config.Metadata
+				if ref != "" {
+					orgRepo := strings.Split(ref, ".")
+					org, repo, branch := orgRepo[0], orgRepo[1], ""
+					for _, jobSpecRef := range jobSpec.ExtraRefs {
+						if jobSpecRef.Org == org && jobSpecRef.Repo == repo {
+							branch = jobSpecRef.BaseRef
+							break
+						}
+					}
+					metadata = api.Metadata{
+						Org:    org,
+						Repo:   repo,
+						Branch: branch,
+					}
+				}
+				cache := api.BuildCacheFor(metadata)
 				root, err := resolveRoot(istTagRef, &cache)
 				if err != nil {
 					return nil, fmt.Errorf("could not resolve build root: %w", err)
@@ -839,16 +972,25 @@ func runtimeStepConfigsForBuild(
 			target.InputImage.BaseImage = *istTagRef
 		}
 	}
-	if jobSpec.Refs != nil || len(jobSpec.ExtraRefs) > 0 {
+	for _, r := range refs {
+		ref := ""
+		root := api.PipelineImageStreamTagReferenceRoot
+		source := api.PipelineImageStreamTagReferenceSource
+		if len(jobSpec.ExtraRefs) >= 2 { // We only care about these suffixes when building from multiple sources
+			ref = fmt.Sprintf("%s.%s", r.Org, r.Repo)
+			root = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", api.PipelineImageStreamTagReferenceRoot, ref))
+			source = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", api.PipelineImageStreamTagReferenceSource, ref))
+		}
 		step := api.StepConfiguration{SourceStepConfiguration: &api.SourceStepConfiguration{
-			From: api.PipelineImageStreamTagReferenceRoot,
-			To:   api.PipelineImageStreamTagReferenceSource,
+			From: root,
+			To:   source,
 			ClonerefsImage: api.ImageStreamTagReference{
 				Namespace: "ci",
 				Name:      "managed-clonerefs",
 				Tag:       "latest",
 			},
 			ClonerefsPath: "/clonerefs",
+			Ref:           ref,
 		}}
 		buildSteps = append(buildSteps, step)
 	}
@@ -901,8 +1043,9 @@ func validateCIOperatorInrepoConfig(inrepoConfig *api.CIOperatorInrepoConfig) er
 	return nil
 }
 
-func buildRootImageStreamFromRepository(readFile readFile) (*api.ImageStreamTagReference, error) {
-	data, err := readFile(api.CIOperatorInrepoConfigFileName)
+func buildRootImageStreamFromRepository(path string, readFile readFile) (*api.ImageStreamTagReference, error) {
+	filePath := fmt.Sprintf("%s/%s", path, api.CIOperatorInrepoConfigFileName)
+	data, err := readFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read %s file: %w", api.CIOperatorInrepoConfigFileName, err)
 	}

@@ -184,6 +184,7 @@ func (config ReleaseBuildConfiguration) IsBaseImage(name string) bool {
 }
 
 // IsPipelineImage checks if `name` will be a tag in the pipeline image stream.
+// TODO: this method will almost certainly need to be updated
 func (config ReleaseBuildConfiguration) IsPipelineImage(name string) bool {
 	if config.IsBaseImage(name) {
 		return true
@@ -706,6 +707,8 @@ type PipelineImageCacheStepConfiguration struct {
 	// the repository root to create the cached
 	// content.
 	Commands string `json:"commands"`
+
+	Ref string `json:"ref,omitempty"`
 }
 
 func (config PipelineImageCacheStepConfiguration) TargetName() string {
@@ -2074,6 +2077,9 @@ type SourceStepConfiguration struct {
 	// ClonerefsPath is the path in the above image where the
 	// clonerefs tool is placed
 	ClonerefsPath string `json:"clonerefs_path"`
+
+	//TODO: documentation
+	Ref string `json:"ref,omitempty"`
 }
 
 func (config SourceStepConfiguration) TargetName() string {
@@ -2241,6 +2247,9 @@ type ProjectDirectoryImageBuildInputs struct {
 	// BuildArgs contains build arguments that will be resolved in the Dockerfile.
 	// See https://docs.docker.com/engine/reference/builder/#/arg for more details.
 	BuildArgs []BuildArg `json:"build_args,omitempty"`
+
+	//TODO: documentation
+	Ref string `json:"ref,omitempty"`
 }
 
 type BuildArg struct {
@@ -2301,9 +2310,15 @@ func (config RPMImageInjectionStepConfiguration) TargetName() string {
 // a server from an image with RPMs and exposes it to the web.
 type RPMServeStepConfiguration struct {
 	From PipelineImageStreamTagReference `json:"from"`
+
+	Ref string `json:"ref,omitempty"`
 }
 
 func (config RPMServeStepConfiguration) TargetName() string {
+	//TODO: is this okay to do?
+	if config.Ref != "" {
+		return fmt.Sprintf("[serve:rpms-%s]", config.Ref)
+	}
 	return "[serve:rpms]"
 }
 

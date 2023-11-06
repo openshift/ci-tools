@@ -268,9 +268,9 @@ func TestGetResolverInfo(t *testing.T) {
 			},
 		},
 		expected: &api.Metadata{
-			Org:    "testOrganization",
-			Repo:   "testRepo",
-			Branch: "testBranch",
+			Org:    "testOrganization,anotherOrganization",
+			Repo:   "testRepo,anotherRepo",
+			Branch: "testBranch,anotherBranch",
 		},
 	}, {
 		name: "Incomplete refs not used",

@@ -143,7 +143,11 @@ func BuildCacheFor(metadata Metadata) ImageStreamTagReference {
 }
 
 func ImageVersionLabel(fromTag PipelineImageStreamTagReference) string {
-	return fmt.Sprintf("io.openshift.ci.from.%s", fromTag)
+	label := fmt.Sprintf("io.openshift.ci.from.%s", fromTag)
+	if len(label) > 63 { // The max length of a label is 63 chars
+		label = fmt.Sprintf("%s-cont", label[:58])
+	}
+	return label
 }
 
 var testPathRegex = regexp.MustCompile(`(?P<org>[^/]+)/(?P<repo>[^@]+)@(?P<branch>[^:]+):(?P<test>.+)`)

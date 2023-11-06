@@ -2255,6 +2255,13 @@ spec:
                 required:
                 - strategy
                 type: object
+              external_registries:
+                description: ExternalRegistries is a list of external registrie URLs
+                  the images are going to be pushed to. Private registries are allows
+                  as long as the mabc controller holds valid credentials.
+                items:
+                  type: string
+                type: array
             required:
             - build_spec
             type: object

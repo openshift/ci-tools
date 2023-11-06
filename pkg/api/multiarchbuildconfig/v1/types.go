@@ -33,6 +33,10 @@ type MultiArchBuildConfig struct {
 
 type MultiArchBuildConfigSpec struct {
 	BuildSpec buildv1.BuildConfigSpec `json:"build_spec"`
+	// ExternalRegistries is a list of external registrie URLs the images are
+	// going to be pushed to. Private registries are allows as long as the
+	// mabc controller holds valid credentials.
+	ExternalRegistries []string `json:"external_registries,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

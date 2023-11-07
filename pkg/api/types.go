@@ -1372,6 +1372,7 @@ const (
 	ClusterProfileQuayAWS               ClusterProfile = "quay-aws"
 	ClusterProfileAWSEdgeInfra          ClusterProfile = "aws-edge-infra"
 	ClusterProfileRosaAws               ClusterProfile = "rosa-aws"
+	ClusterProfileRHOpenShiftEcosystem  ClusterProfile = "rh-openshift-ecosystem"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -1501,6 +1502,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileDevSandboxCIAWS,
 		ClusterProfileQuayAWS,
 		ClusterProfileAWSEdgeInfra,
+		ClusterProfileRHOpenShiftEcosystem,
 	}
 }
 
@@ -1694,6 +1696,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "hypershift-powervs"
 	case ClusterProfileHypershiftPowerVSCB:
 		return "hypershift-powervs-cb"
+	case ClusterProfileRHOpenShiftEcosystem:
+		return "rh-openshift-ecosystem"
 	default:
 		return ""
 	}
@@ -1937,6 +1941,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-edge-infra-quota-slice"
 	case ClusterProfileRosaAws:
 		return "rosa-aws-quota-slice"
+	case ClusterProfileRHOpenShiftEcosystem:
+		return "rh-openshift-ecosystem-quota-slice"
 	default:
 		return ""
 	}

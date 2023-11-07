@@ -192,7 +192,7 @@ func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, regist
 		return nil, nil, nil, nil, nil, nil, err
 	}
 	// validate the integrity of each reference
-	v := validation.NewValidator()
+	v := validation.NewValidator(nil)
 	var validationErrors []error
 	for _, r := range references {
 		if err := v.IsValidReference(r); err != nil {

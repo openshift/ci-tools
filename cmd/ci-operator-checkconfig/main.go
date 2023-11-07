@@ -90,7 +90,7 @@ func (o *options) validate() (ret []error) {
 	outputCh := make(chan promotedTag)
 	errCh := make(chan error)
 	map_ := func() error {
-		validator := validation.NewCPValidator(o.clusterProfiles)
+		validator := validation.NewValidator(o.clusterProfiles)
 		for c := range inputCh {
 			if err := o.validateConfiguration(&validator, outputCh, c); err != nil {
 				errCh <- fmt.Errorf("failed to validate configuration %s: %w", c.Metadata.RelativePath(), err)

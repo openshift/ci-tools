@@ -1068,7 +1068,7 @@ func TestValidateTestSteps(t *testing.T) {
 			if tc.seen != nil {
 				context.namesSeen = tc.seen
 			}
-			v := NewValidator()
+			v := NewValidator(nil)
 			ret := v.validateTestSteps(context, testStageTest, tc.steps, &tc.clusterClaim)
 			if len(ret) > 0 && len(tc.errs) == 0 {
 				t.Fatalf("Unexpected error %v", ret)
@@ -1109,7 +1109,7 @@ func TestValidatePostSteps(t *testing.T) {
 			if tc.seen != nil {
 				context.namesSeen = tc.seen
 			}
-			v := NewValidator()
+			v := NewValidator(nil)
 			ret := v.validateTestSteps(context, testStagePost, tc.steps, nil)
 			if !errListMessagesEqual(ret, tc.errs) {
 				t.Fatal(diff.ObjectReflectDiff(ret, tc.errs))
@@ -1142,7 +1142,7 @@ func TestValidateParameters(t *testing.T) {
 		err:    []error{errors.New("test: unresolved parameter(s): [TEST1]")},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			v := NewValidator()
+			v := NewValidator(nil)
 			err := v.validateLiteralTestStep(newContext("test", tc.env, tc.releases, make(testInputImages)), testStageTest, api.LiteralTestStep{
 				As:       "as",
 				From:     "from",
@@ -1404,7 +1404,7 @@ func TestValidateLeases(t *testing.T) {
 			test := api.TestStepConfiguration{
 				MultiStageTestConfigurationLiteral: &tc.test,
 			}
-			v := NewValidator()
+			v := NewValidator(nil)
 			err := v.validateTestConfigurationType("tests[0]", test, nil, nil, nil, make(testInputImages), true)
 			if diff := diff.ObjectReflectDiff(tc.err, err); diff != "<no diffs>" {
 				t.Errorf("unexpected error: %s", diff)
@@ -1601,7 +1601,7 @@ func TestValidateTestConfigurationType(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			v := NewValidator()
+			v := NewValidator(nil)
 			actual := v.validateTestConfigurationType("test", tc.test, nil, nil, nil, make(testInputImages), false)
 			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("expected differs from actual: %s", diff)
@@ -1650,7 +1650,7 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 			Owners:  []api.ClusterProfileOwners{},
 		},
 	}
-	v := NewCPValidator(cpList)
+	v := NewValidator(cpList)
 
 	for _, tc := range []struct {
 		name     string

@@ -23,20 +23,15 @@ type Validator struct {
 }
 
 // NewValidator creates an object that optimizes bulk validations.
-func NewValidator() Validator {
-	return Validator{
+func NewValidator(profiles api.ClusterProfilesList) Validator {
+	ret := Validator{
 		hasTrapCache: make(map[string]bool),
 	}
-}
-
-// NewCPValidator creates an object that optimizes bulk validations and contains info about cluster profiles.
-func NewCPValidator(profiles api.ClusterProfilesList) Validator {
-	ret := Validator{
-		validClusterProfiles: make(clusterProfileMap, len(profiles)),
-		hasTrapCache:         make(map[string]bool),
-	}
-	for _, p := range profiles {
-		ret.validClusterProfiles[p.Profile] = p
+	if profiles != nil {
+		ret.validClusterProfiles = make(clusterProfileMap, len(profiles))
+		for _, p := range profiles {
+			ret.validClusterProfiles[p.Profile] = p
+		}
 	}
 	return ret
 }

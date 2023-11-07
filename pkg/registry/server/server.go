@@ -354,6 +354,36 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 				image.Ref = ref
 				mergedConfig.Images = append(mergedConfig.Images, image)
 			}
+
+			// Attempt to handle a few simple raw_step types on a best-effort basis
+			for i := range config.RawSteps {
+				rawStep := config.RawSteps[i]
+				modifiedStep := rawStep.DeepCopy()
+				if rawStep.RPMImageInjectionStepConfiguration != nil {
+					to := fmt.Sprintf("%s-%s", rawStep.RPMImageInjectionStepConfiguration.To, ref)
+					modifiedStep.RPMImageInjectionStepConfiguration.To = api.PipelineImageStreamTagReference(to)
+					from := fmt.Sprintf("%s-%s", rawStep.RPMImageInjectionStepConfiguration.From, ref)
+					modifiedStep.RPMImageInjectionStepConfiguration.From = api.PipelineImageStreamTagReference(from)
+				} else if rawStep.ProjectDirectoryImageBuildStepConfiguration != nil {
+					to := fmt.Sprintf("%s-%s", rawStep.ProjectDirectoryImageBuildStepConfiguration.To, ref)
+					modifiedStep.ProjectDirectoryImageBuildStepConfiguration.To = api.PipelineImageStreamTagReference(to)
+					from := fmt.Sprintf("%s-%s", rawStep.ProjectDirectoryImageBuildStepConfiguration.From, ref)
+					modifiedStep.ProjectDirectoryImageBuildStepConfiguration.From = api.PipelineImageStreamTagReference(from)
+					modifiedStep.ProjectDirectoryImageBuildStepConfiguration.Ref = ref
+				} else if rawStep.PipelineImageCacheStepConfiguration != nil {
+					to := fmt.Sprintf("%s-%s", rawStep.PipelineImageCacheStepConfiguration.To, ref)
+					modifiedStep.PipelineImageCacheStepConfiguration.To = api.PipelineImageStreamTagReference(to)
+					from := fmt.Sprintf("%s-%s", rawStep.PipelineImageCacheStepConfiguration.From, ref)
+					modifiedStep.PipelineImageCacheStepConfiguration.From = api.PipelineImageStreamTagReference(from)
+				} else if rawStep.OutputImageTagStepConfiguration != nil {
+					from := fmt.Sprintf("%s-%s", rawStep.OutputImageTagStepConfiguration.From, ref)
+					modifiedStep.OutputImageTagStepConfiguration.From = api.PipelineImageStreamTagReference(from)
+					//We don't want to change the 'to' here as it will likely land in stable and shouldn't be modified
+				} else {
+					configLogger.Warnf("raw_steps[%d] in config is of an unsupported type for multi-pr payload testing, this is not handled and may result in errors", i)
+				}
+				mergedConfig.RawSteps = append(mergedConfig.RawSteps, *modifiedStep)
+			}
 		}
 		//TODO: If this is to be used for a general purpose outside of payload testing, we will need to merge tests and other elements
 

@@ -360,16 +360,24 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 				rawStep := config.RawSteps[i]
 				modifiedStep := rawStep.DeepCopy()
 				if rawStep.RPMImageInjectionStepConfiguration != nil {
-					modifiedStep.RPMImageInjectionStepConfiguration.To = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", rawStep.RPMImageInjectionStepConfiguration.To, ref))
-					modifiedStep.RPMImageInjectionStepConfiguration.From = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", rawStep.RPMImageInjectionStepConfiguration.From, ref))
+					to := fmt.Sprintf("%s-%s", rawStep.RPMImageInjectionStepConfiguration.To, ref)
+					modifiedStep.RPMImageInjectionStepConfiguration.To = api.PipelineImageStreamTagReference(to)
+					from := fmt.Sprintf("%s-%s", rawStep.RPMImageInjectionStepConfiguration.From, ref)
+					modifiedStep.RPMImageInjectionStepConfiguration.From = api.PipelineImageStreamTagReference(from)
 				} else if rawStep.ProjectDirectoryImageBuildStepConfiguration != nil {
-					modifiedStep.ProjectDirectoryImageBuildStepConfiguration.To = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", rawStep.ProjectDirectoryImageBuildStepConfiguration.To, ref))
-					modifiedStep.ProjectDirectoryImageBuildStepConfiguration.From = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", rawStep.ProjectDirectoryImageBuildStepConfiguration.From, ref))
+					to := fmt.Sprintf("%s-%s", rawStep.ProjectDirectoryImageBuildStepConfiguration.To, ref)
+					modifiedStep.ProjectDirectoryImageBuildStepConfiguration.To = api.PipelineImageStreamTagReference(to)
+					from := fmt.Sprintf("%s-%s", rawStep.ProjectDirectoryImageBuildStepConfiguration.From, ref)
+					modifiedStep.ProjectDirectoryImageBuildStepConfiguration.From = api.PipelineImageStreamTagReference(from)
+					modifiedStep.ProjectDirectoryImageBuildStepConfiguration.Ref = ref
 				} else if rawStep.PipelineImageCacheStepConfiguration != nil {
-					modifiedStep.PipelineImageCacheStepConfiguration.To = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", rawStep.PipelineImageCacheStepConfiguration.To, ref))
-					modifiedStep.PipelineImageCacheStepConfiguration.From = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", rawStep.PipelineImageCacheStepConfiguration.From, ref))
+					to := fmt.Sprintf("%s-%s", rawStep.PipelineImageCacheStepConfiguration.To, ref)
+					modifiedStep.PipelineImageCacheStepConfiguration.To = api.PipelineImageStreamTagReference(to)
+					from := fmt.Sprintf("%s-%s", rawStep.PipelineImageCacheStepConfiguration.From, ref)
+					modifiedStep.PipelineImageCacheStepConfiguration.From = api.PipelineImageStreamTagReference(from)
 				} else if rawStep.OutputImageTagStepConfiguration != nil {
-					modifiedStep.OutputImageTagStepConfiguration.From = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", rawStep.OutputImageTagStepConfiguration.From, ref))
+					from := fmt.Sprintf("%s-%s", rawStep.OutputImageTagStepConfiguration.From, ref)
+					modifiedStep.OutputImageTagStepConfiguration.From = api.PipelineImageStreamTagReference(from)
 					//We don't want to change the 'to' here as it will likely land in stable and shouldn't be modified
 				} else {
 					configLogger.Warnf("raw_steps[%d] in config is of an unsupported type for multi-pr payload testing, this is not handled and may result in errors", i)

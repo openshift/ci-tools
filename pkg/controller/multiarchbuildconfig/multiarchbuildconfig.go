@@ -105,6 +105,11 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 		return fmt.Errorf("failed to get the MultiArchBuildConfig: %w", err)
 	}
 
+	// Deletion is being processed, do nothing
+	if mabc.ObjectMeta.DeletionTimestamp != nil {
+		return nil
+	}
+
 	if mabc.Status.State == v1.SuccessState || mabc.Status.State == v1.FailureState {
 		return nil
 	}

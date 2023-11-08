@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -335,6 +336,72 @@ func TestReconcile(t *testing.T) {
 						},
 					},
 					State: v1.SuccessState,
+				},
+			},
+			manifestPusher: &mockManifestPusher{},
+		},
+		{
+			name: "Deletion in place do nothing",
+			inputMabc: &v1.MultiArchBuildConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "test-mabc",
+					Namespace:         "test-ns",
+					DeletionTimestamp: &metav1.Time{Time: time.Date(2023, 11, 8, 9, 45, 0, 0, time.Local)},
+					Finalizers:        []string{"foo"},
+				},
+				Spec: v1.MultiArchBuildConfigSpec{
+					BuildSpec: buildv1.BuildConfigSpec{
+						CommonSpec: buildv1.CommonSpec{Output: buildv1.BuildOutput{To: &corev1.ObjectReference{Namespace: "test-ns", Name: "test-image"}}},
+					},
+					ExternalRegistries: []string{"foo-registry.com/foo/bar:latest"},
+				},
+				Status: v1.MultiArchBuildConfigStatus{
+					Builds: map[string]*buildv1.Build{
+						"test-build": {
+							Status: buildv1.BuildStatus{
+								Phase: buildv1.BuildPhaseComplete,
+							},
+						},
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:   PushImageManifestDone,
+							Status: metav1.ConditionTrue,
+							Reason: "PushManifestSuccess",
+						},
+					},
+					State: "doesntmatter",
+				},
+			},
+			expectedMabc: &v1.MultiArchBuildConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "test-mabc",
+					Namespace:         "test-ns",
+					DeletionTimestamp: &metav1.Time{Time: time.Date(2023, 11, 8, 9, 45, 0, 0, time.Local)},
+					Finalizers:        []string{"foo"},
+				},
+				Spec: v1.MultiArchBuildConfigSpec{
+					BuildSpec: buildv1.BuildConfigSpec{
+						CommonSpec: buildv1.CommonSpec{Output: buildv1.BuildOutput{To: &corev1.ObjectReference{Namespace: "test-ns", Name: "test-image"}}},
+					},
+					ExternalRegistries: []string{"foo-registry.com/foo/bar:latest"},
+				},
+				Status: v1.MultiArchBuildConfigStatus{
+					Builds: map[string]*buildv1.Build{
+						"test-build": {
+							Status: buildv1.BuildStatus{
+								Phase: buildv1.BuildPhaseComplete,
+							},
+						},
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:   PushImageManifestDone,
+							Status: metav1.ConditionTrue,
+							Reason: "PushManifestSuccess",
+						},
+					},
+					State: "doesntmatter",
 				},
 			},
 			manifestPusher: &mockManifestPusher{},

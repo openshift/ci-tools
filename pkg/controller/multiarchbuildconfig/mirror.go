@@ -2,9 +2,13 @@ package multiarchbuildconfig
 
 import (
 	"bytes"
+	"fmt"
 	"os/exec"
+	"sort"
 
 	"github.com/sirupsen/logrus"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 // imageMirrorer is the interface that wraps mirror.
@@ -55,20 +59,16 @@ func (oci *ocImage) mirror(images []string) error {
 
 // Prepare the arguments for the command `oc image mirror`. Mirror src to each location
 // specified in dst; duplicate locations will be removed.
-// Example: src dst[0] dst[1] ... dst[n]
-func ocImageMirrorArgs(src string, dst []string) []string {
-	if len(dst) == 0 {
-		return []string{}
+// Example:
+// image-registry.openshift-image-registry.svc:5000/ns/image:tag dst[0]/ns/image:tag dst[1]/ns/image:tag ... dst[n]/ns/image:tag
+func ocImageMirrorArgs(targetImageRef string, externalRegistries []string) []string {
+	destinations := sets.New[string]()
+	for _, externalRegistry := range externalRegistries {
+		destinations.Insert(fmt.Sprintf("%s/%s", externalRegistry, targetImageRef))
 	}
-	duplicates := make(map[string]struct{})
-	noDup := make([]string, 0, len(dst))
-	// Avoid searching for duplicates using a Set as it won't preserve the same
-	// order of dst
-	for _, d := range dst {
-		if _, exists := duplicates[d]; !exists {
-			duplicates[d] = struct{}{}
-			noDup = append(noDup, d)
-		}
-	}
-	return append([]string{src}, noDup...)
+
+	destinationsList := destinations.UnsortedList()
+	sort.Strings(destinationsList)
+
+	return append([]string{fmt.Sprintf("%s/%s", registryURL, targetImageRef)}, destinationsList...)
 }

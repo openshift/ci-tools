@@ -33,46 +33,46 @@ func newFakeOCImage(mirrorFn func(images []string) error) *fakeOCImage {
 
 func TestOCImageMirrorArgs(t *testing.T) {
 	for _, testCase := range []struct {
-		name   string
-		src    string
-		output []string
-		want   []string
+		name               string
+		targetImageRef     string
+		externalRegistries []string
+		want               []string
 	}{
 		{
-			name:   "Mirror to one destination",
-			src:    "src-registry.com/src-image:latest",
-			output: []string{"dst-registry.com/dst-image:latest"},
-			want:   []string{"src-registry.com/src-image:latest", "dst-registry.com/dst-image:latest"},
+			name:               "Mirror to one destination",
+			targetImageRef:     "ci/src-image:latest",
+			externalRegistries: []string{"dst-registry.com"},
+			want:               []string{"image-registry.openshift-image-registry.svc:5000/ci/src-image:latest", "dst-registry.com/ci/src-image:latest"},
 		},
 		{
-			name:   "Mirror to multiple destinations",
-			src:    "src-registry.com/src-image:latest",
-			output: []string{"dst-registry.com/dst-image-1:latest", "dst-registry.com/dst-image-2:latest"},
+			name:               "Mirror to multiple external registries",
+			targetImageRef:     "src-image:latest",
+			externalRegistries: []string{"dst-registry-1.com", "dst-registry-2.com"},
 			want: []string{
-				"src-registry.com/src-image:latest",
-				"dst-registry.com/dst-image-1:latest",
-				"dst-registry.com/dst-image-2:latest",
+				"image-registry.openshift-image-registry.svc:5000/src-image:latest",
+				"dst-registry-1.com/src-image:latest",
+				"dst-registry-2.com/src-image:latest",
 			},
 		},
 		{
-			name: "Deduplicate destinations",
-			src:  "src-registry.com/src-image:latest",
-			output: []string{
-				"dst-registry.com/dst-image-1:latest",
-				"dst-registry.com/dst-image-2:latest",
-				"dst-registry.com/dst-image-2:latest",
+			name:           "Deduplicate destinations",
+			targetImageRef: "src-image:latest",
+			externalRegistries: []string{
+				"dst-registry-1.com",
+				"dst-registry-1.com",
+				"dst-registry-3.com",
 			},
 			want: []string{
-				"src-registry.com/src-image:latest",
-				"dst-registry.com/dst-image-1:latest",
-				"dst-registry.com/dst-image-2:latest",
+				"image-registry.openshift-image-registry.svc:5000/src-image:latest",
+				"dst-registry-1.com/src-image:latest",
+				"dst-registry-3.com/src-image:latest",
 			},
 		},
 	} {
 		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
-			args := ocImageMirrorArgs(testCase.src, testCase.output)
+			args := ocImageMirrorArgs(testCase.targetImageRef, testCase.externalRegistries)
 			if diff := cmp.Diff(args, testCase.want); diff != "" {
 				t.Errorf("Unexpected diff:\n%s", diff)
 			}

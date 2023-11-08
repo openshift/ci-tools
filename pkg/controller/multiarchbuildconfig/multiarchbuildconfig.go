@@ -146,8 +146,7 @@ func (r *reconciler) handleMultiArchBuildConfig(ctx context.Context, mabc *v1.Mu
 	}
 
 	if isPushImageManifestDone(mabc) {
-		srcImage := fmt.Sprintf("%s/%s", registryURL, targetImageRef)
-		if err := r.handleMirrorImage(ctx, srcImage, mabc); err != nil {
+		if err := r.handleMirrorImage(ctx, targetImageRef, mabc); err != nil {
 			return fmt.Errorf("couldn't mirror the image: %w", err)
 		}
 	}
@@ -215,7 +214,7 @@ func (r *reconciler) handlePushImageWithManifest(ctx context.Context, mabc *v1.M
 
 // handleMirrorImage pushes an image to the locations specified in .spec.external_registries. The image
 // required has to exist on local registry.
-func (r *reconciler) handleMirrorImage(ctx context.Context, srcImage string, mabc *v1.MultiArchBuildConfig) error {
+func (r *reconciler) handleMirrorImage(ctx context.Context, targetImageRef string, mabc *v1.MultiArchBuildConfig) error {
 	if len(mabc.Spec.ExternalRegistries) == 0 {
 		return nil
 	}
@@ -230,7 +229,7 @@ func (r *reconciler) handleMirrorImage(ctx context.Context, srcImage string, mab
 		mabcToMutate.Status.State = v1.SuccessState
 	}
 
-	imageMirrorArgs := ocImageMirrorArgs(srcImage, mabc.Spec.ExternalRegistries)
+	imageMirrorArgs := ocImageMirrorArgs(targetImageRef, mabc.Spec.ExternalRegistries)
 	if err := r.imageMirrorer.mirror(imageMirrorArgs); err != nil {
 		mutateFn = func(mabcToMutate *v1.MultiArchBuildConfig) {
 			mabcToMutate.Status.Conditions = append(mabcToMutate.Status.Conditions, metav1.Condition{

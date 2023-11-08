@@ -74,6 +74,8 @@
         value: /var/run/secrets/ci.openshift.io/multi-stage/kubeconfig-minimal
       - name: KUBEADMIN_PASSWORD_FILE
         value: /var/run/secrets/ci.openshift.io/multi-stage/kubeadmin-password
+      - name: CLUSTER_PROFILE_NAME
+        value: aws
       - name: CLUSTER_TYPE
         value: aws
       - name: CLUSTER_PROFILE_DIR
@@ -226,6 +228,8 @@
         value: /var/run/secrets/ci.openshift.io/multi-stage/kubeconfig-minimal
       - name: KUBEADMIN_PASSWORD_FILE
         value: /var/run/secrets/ci.openshift.io/multi-stage/kubeadmin-password
+      - name: CLUSTER_PROFILE_NAME
+        value: aws
       - name: CLUSTER_TYPE
         value: aws
       - name: CLUSTER_PROFILE_DIR

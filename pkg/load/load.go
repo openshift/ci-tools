@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -191,7 +192,7 @@ func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, regist
 		return nil, nil, nil, nil, nil, nil, err
 	}
 	// validate the integrity of each reference
-	v := validation.NewValidator()
+	v := validation.NewValidator(nil)
 	var validationErrors []error
 	for _, r := range references {
 		if err := v.IsValidReference(r); err != nil {
@@ -231,4 +232,35 @@ func loadWorkflow(bytes []byte) (string, string, api.MultiStageTestConfiguration
 		return "", "", api.MultiStageTestConfiguration{}, errors.New("workflows cannot contain other workflows")
 	}
 	return workflow.Workflow.As, workflow.Workflow.Documentation, workflow.Workflow.Steps, nil
+}
+
+func ClusterProfilesConfig(configPath string) (api.ClusterProfilesList, error) {
+	configContents, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read cluster profiles config: %w", err)
+	}
+
+	var profileOwnersList api.ClusterProfilesList
+	if err = yaml.Unmarshal(configContents, &profileOwnersList); err != nil {
+		return nil, fmt.Errorf("failed to unmarshall cluster profiles config: %w", err)
+	}
+
+	// The following code can be erased once profiles are completely moved
+	// from code in ci-tools to the config file in openshift/release
+	profileOwnersMap := make(map[api.ClusterProfile]api.ClusterProfileDetails)
+	for _, p := range profileOwnersList {
+		profileOwnersMap[p.Profile] = p
+	}
+
+	var mergedList api.ClusterProfilesList
+	for _, profileName := range api.ClusterProfiles() {
+		profile, found := profileOwnersMap[profileName]
+		if found {
+			mergedList = append(mergedList, profile)
+		} else {
+			mergedList = append(mergedList, api.ClusterProfileDetails{Profile: profileName})
+		}
+	}
+
+	return mergedList, nil
 }

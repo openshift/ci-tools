@@ -684,7 +684,7 @@ func TestValidateTests(t *testing.T) {
 	} {
 		t.Run(tc.id, func(t *testing.T) {
 			v := newSingleUseValidator()
-			errs := v.validateTestStepConfiguration(NewConfigContext(), "tests", tc.tests, tc.release, tc.releases, sets.New[string](), tc.resolved)
+			errs := v.validateTestStepConfiguration(NewConfigContext(), "tests", tc.tests, tc.release, nil, tc.releases, sets.New[string](), tc.resolved)
 			if tc.expectedError == nil && len(errs) > 0 {
 				t.Errorf("expected to be valid, got: %v", errs)
 			}
@@ -1068,7 +1068,7 @@ func TestValidateTestSteps(t *testing.T) {
 			if tc.seen != nil {
 				context.namesSeen = tc.seen
 			}
-			v := NewValidator()
+			v := NewValidator(nil)
 			ret := v.validateTestSteps(context, testStageTest, tc.steps, &tc.clusterClaim)
 			if len(ret) > 0 && len(tc.errs) == 0 {
 				t.Fatalf("Unexpected error %v", ret)
@@ -1109,7 +1109,7 @@ func TestValidatePostSteps(t *testing.T) {
 			if tc.seen != nil {
 				context.namesSeen = tc.seen
 			}
-			v := NewValidator()
+			v := NewValidator(nil)
 			ret := v.validateTestSteps(context, testStagePost, tc.steps, nil)
 			if !errListMessagesEqual(ret, tc.errs) {
 				t.Fatal(diff.ObjectReflectDiff(ret, tc.errs))
@@ -1142,7 +1142,7 @@ func TestValidateParameters(t *testing.T) {
 		err:    []error{errors.New("test: unresolved parameter(s): [TEST1]")},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			v := NewValidator()
+			v := NewValidator(nil)
 			err := v.validateLiteralTestStep(newContext("test", tc.env, tc.releases, make(testInputImages)), testStageTest, api.LiteralTestStep{
 				As:       "as",
 				From:     "from",
@@ -1404,8 +1404,8 @@ func TestValidateLeases(t *testing.T) {
 			test := api.TestStepConfiguration{
 				MultiStageTestConfigurationLiteral: &tc.test,
 			}
-			v := NewValidator()
-			err := v.validateTestConfigurationType("tests[0]", test, nil, nil, make(testInputImages), true)
+			v := NewValidator(nil)
+			err := v.validateTestConfigurationType("tests[0]", test, nil, nil, nil, make(testInputImages), true)
 			if diff := diff.ObjectReflectDiff(tc.err, err); diff != "<no diffs>" {
 				t.Errorf("unexpected error: %s", diff)
 			}
@@ -1601,10 +1601,133 @@ func TestValidateTestConfigurationType(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			v := NewValidator()
-			actual := v.validateTestConfigurationType("test", tc.test, nil, nil, make(testInputImages), false)
+			v := NewValidator(nil)
+			actual := v.validateTestConfigurationType("test", tc.test, nil, nil, nil, make(testInputImages), false)
 			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("expected differs from actual: %s", diff)
+			}
+		})
+	}
+}
+
+func TestVerifyClusterProfileOwnership(t *testing.T) {
+	cpList := api.ClusterProfilesList{
+		api.ClusterProfileDetails{
+			Profile: "profile-with-one-owner",
+			Owners: []api.ClusterProfileOwners{
+				{
+					Org: "org",
+				},
+			},
+		},
+		api.ClusterProfileDetails{
+			Profile: "profile-with-one-owner-w-multiple-repos",
+			Owners: []api.ClusterProfileOwners{
+				{
+					Org:   "org2",
+					Repos: []string{"repo21", "repo22"},
+				},
+			},
+		},
+		api.ClusterProfileDetails{
+			Profile: "profile-with-multiple-orgs-and-repos",
+			Owners: []api.ClusterProfileOwners{
+				{
+					Org:   "org1",
+					Repos: []string{"repo1"},
+				},
+				{
+					Org:   "org2",
+					Repos: []string{"repo21", "repo22"},
+				},
+				{
+					Org: "org3",
+				},
+			},
+		},
+		api.ClusterProfileDetails{
+			Profile: "profile-with-no-owners-specified",
+			Owners:  []api.ClusterProfileOwners{},
+		},
+	}
+	v := NewValidator(cpList)
+
+	for _, tc := range []struct {
+		name     string
+		profile  api.ClusterProfileDetails
+		metadata *api.Metadata
+		expected error
+	}{
+		{
+			name:    "ownership not restricted",
+			profile: v.validClusterProfiles["profile-with-no-owners-specified"],
+			metadata: &api.Metadata{
+				Org:  "any-org",
+				Repo: "any-repo",
+			},
+		},
+		{
+			name:    "not one of owners",
+			profile: v.validClusterProfiles["profile-with-one-owner"],
+			metadata: &api.Metadata{
+				Org:  "wrong-org",
+				Repo: "any-repo",
+			},
+			expected: fmt.Errorf("wrong-org/any-repo is not an owner of the cluster profile: \"profile-with-one-owner\""),
+		},
+		{
+			name:    "basic ok case",
+			profile: v.validClusterProfiles["profile-with-one-owner"],
+			metadata: &api.Metadata{
+				Org:  "org",
+				Repo: "any-repo",
+			},
+		},
+		{
+			name:    "complex case ok",
+			profile: v.validClusterProfiles["profile-with-multiple-orgs-and-repos"],
+			metadata: &api.Metadata{
+				Org:  "org2",
+				Repo: "repo22",
+			},
+		},
+		{
+			name:    "complex case ok - no repos",
+			profile: v.validClusterProfiles["profile-with-multiple-orgs-and-repos"],
+			metadata: &api.Metadata{
+				Org:  "org3",
+				Repo: "any-repo",
+			},
+		},
+		{
+			name:    "complex case nok",
+			profile: v.validClusterProfiles["profile-with-multiple-orgs-and-repos"],
+			metadata: &api.Metadata{
+				Org:  "org2",
+				Repo: "wrong-repo",
+			},
+			expected: fmt.Errorf("org2/wrong-repo is not an owner of the cluster profile: \"profile-with-multiple-orgs-and-repos\""),
+		},
+		{
+			name:    "missing metadata - empty",
+			profile: v.validClusterProfiles["profile-with-multiple-orgs-and-repos"],
+			metadata: &api.Metadata{
+				Org:  "",
+				Repo: "",
+			},
+			expected: fmt.Errorf("can't do ownership check, metadata not defined"),
+		},
+		{
+			name:     "missing metadata - nil",
+			profile:  v.validClusterProfiles["profile-with-multiple-orgs-and-repos"],
+			metadata: nil,
+			expected: fmt.Errorf("can't do ownership check, metadata not defined"),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := verifyClusterProfileOwnership(tc.profile, tc.metadata)
+			if d := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); d != "" {
+				t.Errorf("expected differs from actual: %s\n", d)
 			}
 		})
 	}

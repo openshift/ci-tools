@@ -13,24 +13,25 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
-type clusterProfileSet map[api.ClusterProfile]struct{}
+type clusterProfileMap map[api.ClusterProfile]api.ClusterProfileDetails
 
 // Validator holds data used across validations.
 type Validator struct {
-	validClusterProfiles clusterProfileSet
+	validClusterProfiles clusterProfileMap
 	// hasTrapCache avoids redundant regexp searches on step commands.
 	hasTrapCache map[string]bool
 }
 
 // NewValidator creates an object that optimizes bulk validations.
-func NewValidator() Validator {
-	profiles := api.ClusterProfiles()
+func NewValidator(profiles api.ClusterProfilesList) Validator {
 	ret := Validator{
-		validClusterProfiles: make(clusterProfileSet, len(profiles)),
-		hasTrapCache:         make(map[string]bool),
+		hasTrapCache: make(map[string]bool),
 	}
-	for _, x := range profiles {
-		ret.validClusterProfiles[x] = struct{}{}
+	if profiles != nil {
+		ret.validClusterProfiles = make(clusterProfileMap, len(profiles))
+		for _, p := range profiles {
+			ret.validClusterProfiles[p.Profile] = p
+		}
 	}
 	return ret
 }
@@ -202,7 +203,7 @@ func (v *Validator) ValidateTestStepConfiguration(ctx *configContext, config *ap
 		for _, i := range config.Images {
 			images.Insert(string(i.To))
 		}
-		validationErrors = append(validationErrors, v.validateTestStepConfiguration(ctx, "tests", config.Tests, config.ReleaseTagConfiguration, releases, images, resolved)...)
+		validationErrors = append(validationErrors, v.validateTestStepConfiguration(ctx, "tests", config.Tests, config.ReleaseTagConfiguration, &config.Metadata, releases, images, resolved)...)
 	}
 	return validationErrors
 }

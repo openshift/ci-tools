@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -11,7 +12,9 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -101,6 +104,101 @@ func TestCheckAllBuildsSuccessful(t *testing.T) {
 				t.Fatal(diff)
 			}
 		})
+	}
+}
+
+func TestBuildOwnerReference(t *testing.T) {
+	mabc := &v1.MultiArchBuildConfig{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-mabc",
+			Namespace: "test-ns",
+		},
+		Spec: v1.MultiArchBuildConfigSpec{
+			BuildSpec: buildv1.BuildConfigSpec{
+				CommonSpec: buildv1.CommonSpec{
+					Output: buildv1.BuildOutput{
+						To: &corev1.ObjectReference{Namespace: "test-ns", Name: "test-image"},
+					},
+				},
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	sb := runtime.NewSchemeBuilder(v1.AddToScheme, buildv1.AddToScheme)
+	if err := sb.AddToScheme(scheme); err != nil {
+		t.Fatalf("Failed to add scheme: %v", err)
+	}
+	client := fake.NewClientBuilder().WithObjects(mabc).WithScheme(scheme).Build()
+	r := &reconciler{
+		logger:        logrus.NewEntry(logrus.StandardLogger()),
+		client:        client,
+		architectures: []string{"amd64", "arm64"},
+		scheme:        scheme,
+	}
+
+	nn := types.NamespacedName{Name: mabc.Name, Namespace: mabc.Namespace}
+	if err := r.reconcile(context.TODO(), reconcile.Request{NamespacedName: nn}, r.logger); err != nil {
+		t.Fatalf("Failed to reconcile: %v", err)
+	}
+
+	builds := buildv1.BuildList{}
+	if err := client.List(context.TODO(), &builds); err != nil {
+		t.Fatalf("Failed to get builds: %v", err)
+	}
+
+	wantBuilds := buildv1.BuildList{
+		Items: []buildv1.Build{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-mabc-amd64",
+					Namespace: "test-ns",
+					Labels: map[string]string{
+						"multiarchbuildconfigs.ci.openshift.io/arch": "amd64",
+						"multiarchbuildconfigs.ci.openshift.io/name": "test-mabc",
+					},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion:         "ci.openshift.io/v1",
+							Kind:               "MultiArchBuildConfig",
+							Name:               "test-mabc",
+							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: pointer.Bool(true),
+						},
+					},
+					ResourceVersion: "1",
+					Generation:      0,
+				},
+			},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-mabc-arm64",
+					Namespace: "test-ns",
+					Labels: map[string]string{
+						"multiarchbuildconfigs.ci.openshift.io/arch": "arm64",
+						"multiarchbuildconfigs.ci.openshift.io/name": "test-mabc",
+					},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion:         "ci.openshift.io/v1",
+							Kind:               "MultiArchBuildConfig",
+							Name:               "test-mabc",
+							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: pointer.Bool(true),
+						},
+					},
+					ResourceVersion: "1",
+					Generation:      0,
+				},
+			},
+		},
+	}
+
+	if diff := cmp.Diff(wantBuilds, builds,
+		cmpopts.IgnoreFields(buildv1.BuildList{}, "TypeMeta", "ListMeta"),
+		cmpopts.IgnoreFields(buildv1.Build{}, "Spec", "Kind"),
+	); diff != "" {
+		t.Error(diff)
 	}
 }
 
@@ -335,6 +433,72 @@ func TestReconcile(t *testing.T) {
 						},
 					},
 					State: v1.SuccessState,
+				},
+			},
+			manifestPusher: &mockManifestPusher{},
+		},
+		{
+			name: "Deletion in place do nothing",
+			inputMabc: &v1.MultiArchBuildConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "test-mabc",
+					Namespace:         "test-ns",
+					DeletionTimestamp: &metav1.Time{Time: time.Date(2023, 11, 8, 9, 45, 0, 0, time.Local)},
+					Finalizers:        []string{"foo"},
+				},
+				Spec: v1.MultiArchBuildConfigSpec{
+					BuildSpec: buildv1.BuildConfigSpec{
+						CommonSpec: buildv1.CommonSpec{Output: buildv1.BuildOutput{To: &corev1.ObjectReference{Namespace: "test-ns", Name: "test-image"}}},
+					},
+					ExternalRegistries: []string{"foo-registry.com/foo/bar:latest"},
+				},
+				Status: v1.MultiArchBuildConfigStatus{
+					Builds: map[string]*buildv1.Build{
+						"test-build": {
+							Status: buildv1.BuildStatus{
+								Phase: buildv1.BuildPhaseComplete,
+							},
+						},
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:   PushImageManifestDone,
+							Status: metav1.ConditionTrue,
+							Reason: "PushManifestSuccess",
+						},
+					},
+					State: "doesntmatter",
+				},
+			},
+			expectedMabc: &v1.MultiArchBuildConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "test-mabc",
+					Namespace:         "test-ns",
+					DeletionTimestamp: &metav1.Time{Time: time.Date(2023, 11, 8, 9, 45, 0, 0, time.Local)},
+					Finalizers:        []string{"foo"},
+				},
+				Spec: v1.MultiArchBuildConfigSpec{
+					BuildSpec: buildv1.BuildConfigSpec{
+						CommonSpec: buildv1.CommonSpec{Output: buildv1.BuildOutput{To: &corev1.ObjectReference{Namespace: "test-ns", Name: "test-image"}}},
+					},
+					ExternalRegistries: []string{"foo-registry.com/foo/bar:latest"},
+				},
+				Status: v1.MultiArchBuildConfigStatus{
+					Builds: map[string]*buildv1.Build{
+						"test-build": {
+							Status: buildv1.BuildStatus{
+								Phase: buildv1.BuildPhaseComplete,
+							},
+						},
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:   PushImageManifestDone,
+							Status: metav1.ConditionTrue,
+							Reason: "PushManifestSuccess",
+						},
+					},
+					State: "doesntmatter",
 				},
 			},
 			manifestPusher: &mockManifestPusher{},

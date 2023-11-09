@@ -9,8 +9,10 @@ import (
 	"github.com/sirupsen/logrus"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	ctrlruntimeutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -56,6 +58,7 @@ func AddToManager(mgr manager.Manager, architectures []string, dockerCfgPath str
 			architectures:  architectures,
 			manifestPusher: manifestpusher.NewManifestPushfer(logger, registryURL, dockerCfgPath),
 			imageMirrorer:  &ocImage{log: logger, registryConfig: dockerCfgPath},
+			scheme:         mgr.GetScheme(),
 		},
 	})
 	if err != nil {
@@ -83,6 +86,7 @@ type reconciler struct {
 	architectures  []string
 	manifestPusher manifestpusher.ManifestPusher
 	imageMirrorer  imageMirrorer
+	scheme         *runtime.Scheme
 }
 
 func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
@@ -103,6 +107,11 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 	mabc := &v1.MultiArchBuildConfig{}
 	if err := r.client.Get(ctx, req.NamespacedName, mabc); err != nil {
 		return fmt.Errorf("failed to get the MultiArchBuildConfig: %w", err)
+	}
+
+	// Deletion is being processed, do nothing
+	if mabc.ObjectMeta.DeletionTimestamp != nil {
+		return nil
 	}
 
 	if mabc.Status.State == v1.SuccessState || mabc.Status.State == v1.FailureState {
@@ -172,6 +181,10 @@ func (r *reconciler) createBuildsForArchitectures(ctx context.Context, mabc *v1.
 			Spec: buildv1.BuildSpec{
 				CommonSpec: *commonSpec,
 			},
+		}
+
+		if err := ctrlruntimeutil.SetControllerReference(mabc, build, r.scheme); err != nil {
+			return fmt.Errorf("couldn't set controller reference %w", err)
 		}
 
 		r.logger.WithField("build_namespace", build.Namespace).WithField("build_name", build.Name).Info("Creating build")

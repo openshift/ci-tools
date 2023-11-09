@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -10,6 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/flagutil"
 	configflagutil "k8s.io/test-infra/prow/flagutil/config"
 	prowpluginconfig "k8s.io/test-infra/prow/flagutil/plugins"
@@ -20,12 +20,20 @@ import (
 	"github.com/openshift/ci-tools/pkg/config"
 )
 
-const cherrypickPlugin = "cherrypick"
-const cherrypickRobot = "openshift-cherrypick-robot"
+const (
+	cherrypickPlugin = "cherrypick"
+	cherrypickRobot  = "openshift-cherrypick-robot"
+	standard         = appCheckMode("standard")
+	tide             = appCheckMode("tide")
+)
+
+type appCheckMode string
 
 type options struct {
 	config          configflagutil.ConfigOptions
 	bots            flagutil.Strings
+	appName         string
+	appCheckMode    string
 	ignore          flagutil.Strings
 	repos           flagutil.Strings
 	releaseRepoPath string
@@ -38,6 +46,8 @@ func gatherOptions() options {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 
 	fs.Var(&o.bots, "bot", "Check if this bot is a collaborator. Can be passed multiple times.")
+	fs.StringVar(&o.appName, "app", "openshift-ci", "The name of the app that is checking bot configuration, and for which installation will be checked")
+	fs.StringVar(&o.appCheckMode, "app-check-mode", "standard", "Which mode to check for app installation: 'standard' checks always, 'tide' only checks when tide is configured for the repo")
 	fs.Var(&o.ignore, "ignore", "Ignore a repo or entire org. Formatted org or org/repo. Can be passed multiple times.")
 	fs.Var(&o.repos, "repo", "Specifically check only an org/repo. Can be passed multiple times.")
 	fs.StringVar(&o.releaseRepoPath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
@@ -53,25 +63,12 @@ func gatherOptions() options {
 }
 
 func (o *options) validate() error {
-	if len(o.bots.Strings()) < 1 {
-		return errors.New("at least one bot must be configured")
+	if err := o.config.Validate(true); err != nil {
+		return fmt.Errorf("error when validating prow config: %w", err)
 	}
-	repos := o.repos.Strings()
-	if len(repos) == 0 {
-		// If we need to find repos, we either need the release repo path, or a proper prow config
-		if o.releaseRepoPath == "" {
-			if err := o.config.Validate(true); err != nil {
-				return fmt.Errorf("candidate-path not provided, and error when validating prow config: %w", err)
-			}
-		} else {
-			if o.config.ConfigPath != "" {
-				return errors.New("candidate-path and prow config provided, these are mutually exclusive")
-			}
-		}
-	} else {
-		if o.releaseRepoPath != "" || o.config.ConfigPath != "" {
-			return errors.New("repo and candidate-path or prow config provided, these are mutually exclusive")
-		}
+
+	if appCheckMode(o.appCheckMode) != standard && appCheckMode(o.appCheckMode) != tide {
+		return fmt.Errorf("app-check-mode of %s not recognized, must be: %s or %s", o.appCheckMode, standard, tide)
 	}
 
 	return o.GitHubOptions.Validate(true)
@@ -92,6 +89,12 @@ func main() {
 		logger.Fatalf("validation error: %v", err)
 	}
 
+	prowAgent, err := o.config.ConfigAgent()
+	if err != nil {
+		logger.Fatalf("error loading prow config: %v", err)
+	}
+	tideQueries := prowAgent.Config().Tide.Queries.QueryMap()
+
 	var pluginAgent *plugins.ConfigAgent
 	if o.pluginConfig.PluginConfigPath != "" {
 		logger.Infof("Loading plugin configuration from: %s", o.pluginConfig.PluginConfigPath)
@@ -110,8 +113,8 @@ func main() {
 		logger.Fatalf("error creating client: %v", err)
 	}
 
-	repos := determineRepos(o, logger)
-	failing, err := checkRepos(repos, o.bots.Strings(), o.ignore.StringSet(), client, logger, pluginAgent)
+	repos := determineRepos(o, prowAgent, logger)
+	failing, err := checkRepos(repos, o.bots.Strings(), o.appName, o.ignore.StringSet(), appCheckMode(o.appCheckMode), client, logger, pluginAgent, tideQueries)
 	if err != nil {
 		logger.Fatalf("error checking repos: %v", err)
 	}
@@ -123,24 +126,20 @@ func main() {
 	logger.Infof("All repos have github automation configured.")
 }
 
-func determineRepos(o options, logger *logrus.Entry) []string {
+func determineRepos(o options, prowAgent *prowconfig.Agent, logger *logrus.Entry) []string {
 	repos := o.repos.Strings()
 	if len(repos) > 0 {
 		return repos
 	}
 
-	if o.config.ConfigPath != "" {
-		configAgent, err := o.config.ConfigAgent()
-		if err != nil {
-			logger.Fatalf("error loading prow config: %v", err)
-		}
-		return sets.List(configAgent.Config().AllRepos)
+	if o.releaseRepoPath != "" {
+		return gatherModifiedRepos(o.releaseRepoPath, logger)
 	}
 
-	return gatherModifiedRepos(o.releaseRepoPath, logger)
+	return sets.List(prowAgent.Config().AllRepos)
 }
 
-func checkRepos(repos []string, bots []string, ignore sets.Set[string], client automationClient, logger *logrus.Entry, configAgent *plugins.ConfigAgent) ([]string, error) {
+func checkRepos(repos []string, bots []string, appName string, ignore sets.Set[string], mode appCheckMode, client automationClient, logger *logrus.Entry, pluginAgent *plugins.ConfigAgent, tideQueries *prowconfig.QueryMap) ([]string, error) {
 	logger.Infof("checking %d repo(s): %s", len(repos), strings.Join(repos, ", "))
 	failing := sets.New[string]()
 	for _, orgRepo := range repos {
@@ -157,41 +156,40 @@ func checkRepos(repos []string, bots []string, ignore sets.Set[string], client a
 		}
 
 		var missingBots []string
-		for _, bot := range bots {
-			isMember, err := client.IsMember(org, bot)
-			if err != nil {
-				return nil, fmt.Errorf("unable to determine if: %s is a member of %s: %w", bot, org, err)
-			}
-			if isMember {
-				repoLogger.WithField("bot", bot).Info("bot is an org member")
-				continue
+		if len(bots) > 0 {
+			for _, bot := range bots {
+				isMember, err := client.IsMember(org, bot)
+				if err != nil {
+					return nil, fmt.Errorf("unable to determine if: %s is a member of %s: %w", bot, org, err)
+				}
+				if isMember {
+					repoLogger.WithField("bot", bot).Info("bot is an org member")
+					continue
+				}
+
+				isCollaborator, err := client.IsCollaborator(org, repo, bot)
+				if err != nil {
+					return nil, fmt.Errorf("unable to determine if: %s is a collaborator on %s/%s: %w", bot, org, repo, err)
+				}
+				if !isCollaborator {
+					missingBots = append(missingBots, bot)
+				}
 			}
 
-			isCollaborator, err := client.IsCollaborator(org, repo, bot)
-			if err != nil {
-				return nil, fmt.Errorf("unable to determine if: %s is a collaborator on %s/%s: %w", bot, org, repo, err)
+			if len(missingBots) > 0 {
+				failing.Insert(orgRepo)
+				repoLogger.Errorf("bots that are not collaborators: %s", strings.Join(missingBots, ", "))
+			} else {
+				repoLogger.Info("all bots are org members or repo collaborators")
 			}
-			if !isCollaborator {
-				missingBots = append(missingBots, bot)
-			}
-		}
-
-		if len(missingBots) > 0 {
-			failing.Insert(orgRepo)
-			repoLogger.Errorf("bots that are not collaborators: %s", strings.Join(missingBots, ", "))
 		} else {
-			repoLogger.Info("all bots are org members or repo collaborators")
+			repoLogger.Info("no bots provided to check")
 		}
 
-		appInstalled, err := client.IsAppInstalled(org, repo)
-		if err != nil {
-			return nil, fmt.Errorf("unable to determine if openshift-ci app is installed on %s/%s: %w", org, repo, err)
-		}
-
-		if configAgent != nil {
-			externalPlugins := configAgent.Config().ExternalPlugins[orgRepo]
+		if pluginAgent != nil {
+			externalPlugins := pluginAgent.Config().ExternalPlugins[orgRepo]
 			if externalPlugins == nil {
-				externalPlugins = configAgent.Config().ExternalPlugins[org]
+				externalPlugins = pluginAgent.Config().ExternalPlugins[org]
 			}
 			for _, plugin := range externalPlugins {
 				if plugin.Name == cherrypickPlugin {
@@ -213,13 +211,28 @@ func checkRepos(repos []string, bots []string, ignore sets.Set[string], client a
 			}
 		}
 
-		if !appInstalled {
-			failing.Insert(orgRepo)
-			repoLogger.Error("openshift-ci app is not installed for repo")
-		} else {
-			repoLogger.Info("openshift-ci app is installed for repo")
+		checkAppInstall := true
+		if mode == tide {
+			queriesForRepo := tideQueries.ForRepo(prowconfig.OrgRepo{Org: org, Repo: repo})
+			if len(queriesForRepo) > 0 {
+				repoLogger.Infof("at least one tide query exists for repo, checking app install")
+			} else {
+				repoLogger.Infof("no tide query exists for repo, ignoring app install check")
+				checkAppInstall = false
+			}
 		}
-
+		if checkAppInstall {
+			appInstalled, err := client.IsAppInstalled(org, repo)
+			if err != nil {
+				return nil, fmt.Errorf("unable to determine if %s app is installed on %s/%s: %w", appName, org, repo, err)
+			}
+			if !appInstalled {
+				failing.Insert(orgRepo)
+				repoLogger.Errorf("%s app is not installed for repo", appName)
+			} else {
+				repoLogger.Infof("%s app is installed for repo", appName)
+			}
+		}
 	}
 
 	return sets.List(failing), nil

@@ -51,7 +51,6 @@ type MultiArchBuildConfigList struct {
 type MultiArchBuildConfigStatus struct {
 	Conditions []metav1.Condition        `json:"conditions,omitempty"`
 	State      MultiArchBuildConfigState `json:"state,omitempty"`
-	Builds     map[string]*buildv1.Build `json:"builds,omitempty"`
 }
 
 type MultiArchBuildConfigState string

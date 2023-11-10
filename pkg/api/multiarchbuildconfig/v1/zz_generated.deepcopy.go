@@ -6,7 +6,6 @@
 package v1
 
 import (
-	buildv1 "github.com/openshift/api/build/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -99,21 +98,6 @@ func (in *MultiArchBuildConfigStatus) DeepCopyInto(out *MultiArchBuildConfigStat
 		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
-	}
-	if in.Builds != nil {
-		in, out := &in.Builds, &out.Builds
-		*out = make(map[string]*buildv1.Build, len(*in))
-		for key, val := range *in {
-			var outVal *buildv1.Build
-			if val == nil {
-				(*out)[key] = nil
-			} else {
-				in, out := &val, &outVal
-				*out = new(buildv1.Build)
-				(*in).DeepCopyInto(*out)
-			}
-			(*out)[key] = outVal
 		}
 	}
 }

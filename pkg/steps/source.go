@@ -31,6 +31,7 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	apiutils "github.com/openshift/ci-tools/pkg/api/utils"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/manifestpusher"
 	"github.com/openshift/ci-tools/pkg/results"
@@ -135,7 +136,7 @@ func labelsFor(spec *api.JobSpec, base map[string]string) map[string]string {
 	base[LabelMetadataTarget] = spec.Target
 	base[CreatedByCILabel] = "true"
 	base[openshiftCIEnv] = "true"
-	return utils.SanitizeLabels(base)
+	return apiutils.SanitizeLabels(base)
 }
 
 type sourceStep struct {

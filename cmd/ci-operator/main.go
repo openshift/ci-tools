@@ -547,8 +547,7 @@ func (o *options) Complete() error {
 		if o.unresolvedConfigPath != "" || o.configSpecPath != "" {
 			return errors.New("cannot request injecting test into locally provided config")
 		}
-		multipleSources := len(jobSpec.ExtraRefs) > 1
-		config, err = o.resolverClient.ConfigWithTest(info, injectTest, multipleSources)
+		config, err = o.resolverClient.ConfigWithTest(info, injectTest, len(jobSpec.ExtraRefs) > 1)
 	} else {
 		config, err = o.loadConfig(info)
 	}

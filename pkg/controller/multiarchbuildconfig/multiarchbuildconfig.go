@@ -71,7 +71,7 @@ func AddToManager(mgr manager.Manager, architectures []string, dockerCfgPath str
 			logger:         logger,
 			client:         mgr.GetClient(),
 			architectures:  architectures,
-			manifestPusher: manifestpusher.NewManifestPushfer(logger, registryURL, dockerCfgPath),
+			manifestPusher: manifestpusher.NewManifestPusher(logger, registryURL, dockerCfgPath),
 			imageMirrorer:  &ocImage{log: logger, registryConfig: dockerCfgPath},
 			scheme:         mgr.GetScheme(),
 		}); err != nil {

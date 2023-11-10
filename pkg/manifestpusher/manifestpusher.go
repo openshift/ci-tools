@@ -21,7 +21,7 @@ type ManifestPusher interface {
 	PushImageWithManifest(builds []buildv1.Build, targetImageRef string) error
 }
 
-func NewManifestPushfer(logger *logrus.Entry, registryURL string, dockercfgPath string) ManifestPusher {
+func NewManifestPusher(logger *logrus.Entry, registryURL string, dockercfgPath string) ManifestPusher {
 	return &manifestPusher{
 		logger:        logger,
 		registryURL:   registryURL,

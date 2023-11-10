@@ -495,8 +495,8 @@ func validateReleaseBuildConfiguration(input *api.ReleaseBuildConfiguration, org
 	if len(input.RpmBuildLocation) != 0 && len(input.RpmBuildCommands) == 0 {
 		validationErrors = append(validationErrors, errors.New("'rpm_build_location' defined but no 'rpm_build_commands' found"))
 	}
-	if len(input.RpmBuildLocationList) != len(input.RpmBuildCommandsList) {
-		validationErrors = append(validationErrors, errors.New("'rpm_build_location_list' and 'rpm_build_commands_list' do not contain the same number of entries"))
+	if len(input.RpmBuildLocationList) != 0 && len(input.RpmBuildCommandsList) == 0 {
+		validationErrors = append(validationErrors, errors.New("'rpm_build_location_list' defined but no 'rpm_build_commands_list' found"))
 	}
 
 	if input.BaseRPMImages != nil && (len(input.RpmBuildCommands) == 0 && len(input.RpmBuildCommandsList) == 0) {

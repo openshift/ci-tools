@@ -190,17 +190,24 @@ func checkRepos(repos []string, bots []string, ignore sets.Set[string], client a
 
 		if configAgent != nil {
 			externalPlugins := configAgent.Config().ExternalPlugins[orgRepo]
+			if externalPlugins == nil {
+				externalPlugins = configAgent.Config().ExternalPlugins[org]
+			}
 			for _, plugin := range externalPlugins {
 				if plugin.Name == cherrypickPlugin {
 					isMember, err := client.IsMember(org, cherrypickRobot)
 					if err != nil {
 						return nil, fmt.Errorf("unable to determine if openshift-cherrypick-robot is a member of %s: %w", org, err)
 					}
-					if isMember {
-						repoLogger.Info("openshift-cherrypick-robot is an org member")
-					} else {
-						repoLogger.Info("openshift-cherrypick-robot is not an org member")
+					isCollaborator, err := client.IsCollaborator(org, repo, cherrypickRobot)
+					if err != nil {
+						return nil, fmt.Errorf("error checking collaborator status for openshift-cherrypick-robot on %s/%s: %w", org, repo, err)
+					}
+					if !isMember && !isCollaborator {
+						repoLogger.Infof("openshift-cherrypick-robot is not a collaborator or an org member on %s/%s", org, repo)
 						failing.Insert(orgRepo)
+					} else {
+						repoLogger.Infof("Confirmed: openshift-cherrypick-robot is either a collaborator or an org member on %s/%s", org, repo)
 					}
 				}
 			}

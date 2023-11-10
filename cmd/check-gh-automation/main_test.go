@@ -76,7 +76,7 @@ func (c fakeAutomationClient) IsAppInstalled(org, repo string) (bool, error) {
 func TestCheckRepos(t *testing.T) {
 	client := fakeAutomationClient{
 		collaboratorsByRepo: map[string][]string{
-			"org-1/repo-a": {"a-bot", "b-bot", "c-bot"},
+			"org-1/repo-a": {"a-bot", "b-bot", "openshift-cherrypick-robot"},
 			"org-2/repo-z": {"c-bot", "some-user"},
 		},
 		membersByOrg: map[string][]string{

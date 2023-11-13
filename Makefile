@@ -181,6 +181,7 @@ local-e2e: \
 	$(TMPDIR)/sa.hive.hive.token.txt \
 	$(TMPDIR)/local-secret/.dockerconfigjson \
 	$(TMPDIR)/remote-secret/.dockerconfigjson \
+	$(TMPDIR)/manifest-tool-secret/.dockerconfigjson \
 	$(TMPDIR)/gcs/service-account.json \
 	$(TMPDIR)/boskos \
 	$(TMPDIR)/prometheus \
@@ -190,6 +191,7 @@ local-e2e: \
 	$(eval export LOCAL_REGISTRY_SECRET_DIR=$(TMPDIR)/local-secret)
 	$(eval export REMOTE_REGISTRY_SECRET_DIR=$(TMPDIR)/remote-secret)
 	$(eval export GCS_CREDENTIALS_FILE=$(TMPDIR)/gcs/service-account.json)
+	$(eval export MANIFEST_TOOL_SECRET=$(TMPDIR)/manifest-tool-secret/.dockerconfigjson)
 	$(eval export PATH=${PATH}:$(TMPDIR))
 	@$(MAKE) e2e
 .PHONY: local-e2e

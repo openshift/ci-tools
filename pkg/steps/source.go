@@ -52,9 +52,6 @@ const (
 	oauthToken    = "/oauth-token"
 
 	OauthSecretKey = "oauth-token"
-
-	dockerCfgPathPush = "/secrets/manifest-tool/.dockerconfigjson"
-	localRegistryDNS  = "image-registry.openshift-image-registry.svc:5000"
 )
 
 type CloneAuthType string
@@ -441,7 +438,7 @@ func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubern
 			buildsMap[b.Name] = &b
 		}
 
-		manifestPusher := manifestpusher.NewManifestPushfer(logrus.WithField("for-build", build.Name), localRegistryDNS, dockerCfgPathPush)
+		manifestPusher := manifestpusher.NewManifestPushfer(logrus.WithField("for-build", build.Name), buildClient.LocalRegistryDNS(), buildClient.ManifestToolDockerCfg())
 		if err := manifestPusher.PushImageWithManifest(buildsMap, fmt.Sprintf("%s/%s", build.Spec.Output.To.Namespace, build.Spec.Output.To.Name)); err != nil {
 			errs = append(errs, err)
 		}

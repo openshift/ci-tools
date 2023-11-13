@@ -422,6 +422,8 @@ type options struct {
 	dependencyOverrides      stringSlice
 
 	targetAdditionalSuffix string
+	manifestToolDockerCfg  string
+	localRegistryDNS       string
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
@@ -491,6 +493,9 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.Var(&opt.dependencyOverrides, "dependency-override-param", "A repeatable option used to override dependencies with external pull specs. This parameter should be in the format ENVVARNAME=PULLSPEC, e.g. --dependency-override-param=OO_INDEX=registry.mydomain.com:5000/pushed/myimage. This would override the value for the OO_INDEX environment variable for any tests/steps that currently have that dependency configured.")
 
 	flag.StringVar(&opt.targetAdditionalSuffix, "target-additional-suffix", "", "Inject an additional suffix onto the targeted test's 'as' name. Used for adding an aggregate index")
+
+	flag.StringVar(&opt.manifestToolDockerCfg, "manifest-tool-dockercfg", "/secrets/manifest-tool/.dockerconfigjson", "The dockercfg file path to be used to push the manifest listed image after build. This is being used by the manifest-tool binary.")
+	flag.StringVar(&opt.localRegistryDNS, "local-registry-dns", "image-registry.openshift-image-registry.svc:5000", "Defines the target image registry.")
 
 	opt.resultsOptions.Bind(flag)
 	return opt
@@ -876,7 +881,9 @@ func (o *options) Run() []error {
 	}
 
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig, o.podPendingTimeout, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig, o.consoleHost, o.nodeName, nodeArchitectures, o.targetAdditionalSuffix)
+	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig,
+		o.podPendingTimeout, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig,
+		o.consoleHost, o.nodeName, nodeArchitectures, o.targetAdditionalSuffix, o.manifestToolDockerCfg, o.localRegistryDNS)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}

@@ -911,13 +911,16 @@ func runtimeStepConfigsForBuild(
 		if target != nil {
 			istTagRef := &target.InputImage.BaseImage
 			if root.FromRepository {
-				var matchingRefs []prowapi.Refs
-				for _, r := range refs {
-					if ref == "" || ref == fmt.Sprintf("%s.%s", r.Org, r.Repo) {
-						matchingRefs = append(matchingRefs, r)
+				path := "."    // By default, the path will be the working directory
+				if ref != "" { // If we are getting the build root image for a specific ref we must determine the absolute path
+					var matchingRefs []prowapi.Refs
+					for _, r := range refs {
+						if ref == fmt.Sprintf("%s.%s", r.Org, r.Repo) {
+							matchingRefs = append(matchingRefs, r)
+						}
 					}
+					path = decorate.DetermineWorkDir(codeMountPath, matchingRefs)
 				}
-				path := decorate.DetermineWorkDir(codeMountPath, matchingRefs)
 				var err error
 				istTagRef, err = buildRootImageStreamFromRepository(path, readFile)
 				if err != nil {

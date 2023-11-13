@@ -2,6 +2,7 @@ package multiarchbuildconfig
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -18,6 +19,7 @@ import (
 	"k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	buildv1 "github.com/openshift/api/build/v1"
@@ -29,6 +31,15 @@ import (
 var (
 	scheme *runtime.Scheme
 )
+
+func init() {
+	scheme = runtime.NewScheme()
+	sb := runtime.NewSchemeBuilder(v1.AddToScheme, buildv1.Install)
+	if err := sb.AddToScheme(scheme); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to add scheme: %v", err)
+		os.Exit(1)
+	}
+}
 
 type mockManifestPusher struct {
 	errToReturn error
@@ -80,16 +91,6 @@ func (bb *buildBuilder) Build() buildv1.Build {
 		},
 		Status: buildv1.BuildStatus{Phase: bb.phase},
 	}
-}
-
-func TestMain(m *testing.M) {
-	scheme = runtime.NewScheme()
-	sb := runtime.NewSchemeBuilder(v1.AddToScheme, buildv1.Install)
-	if err := sb.AddToScheme(scheme); err != nil {
-		fmt.Printf("Failed to add scheme: %v", err)
-		os.Exit(1)
-	}
-	os.Exit(m.Run())
 }
 
 func TestCheckAllBuildsFinished(t *testing.T) {
@@ -285,13 +286,23 @@ func TestReconcile(t *testing.T) {
 			},
 		}
 	}
+	createInterceptorFactory := func(failOnBuildCreate bool) func(ctx context.Context, client ctrlruntimeclient.WithWatch, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
+		return func(ctx context.Context, client ctrlruntimeclient.WithWatch, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
+			if _, ok := obj.(*buildv1.Build); ok && failOnBuildCreate {
+				return errors.New("planned failure")
+			}
+			return nil
+		}
+	}
 
 	tests := []struct {
-		name           string
-		inputMabc      *v1.MultiArchBuildConfig
-		builds         *buildv1.BuildList
-		expectedMabc   *v1.MultiArchBuildConfig
-		manifestPusher manifestpusher.ManifestPusher
+		name              string
+		failOnBuildCreate bool
+		inputMabc         *v1.MultiArchBuildConfig
+		builds            *buildv1.BuildList
+		expectedMabc      *v1.MultiArchBuildConfig
+		expectedErr       error
+		manifestPusher    manifestpusher.ManifestPusher
 	}{
 		{
 			name: "Early exit on SuccessState",
@@ -523,6 +534,35 @@ func TestReconcile(t *testing.T) {
 			},
 			manifestPusher: &mockManifestPusher{},
 		},
+		{
+			name:              "Fails it isn't able to spawn builds",
+			builds:            &buildv1.BuildList{},
+			failOnBuildCreate: true,
+			inputMabc: &v1.MultiArchBuildConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-mabc",
+					Namespace: "test-ns",
+				},
+				Spec: v1.MultiArchBuildConfigSpec{
+					BuildSpec: buildv1.BuildConfigSpec{
+						CommonSpec: buildv1.CommonSpec{Output: buildv1.BuildOutput{To: &corev1.ObjectReference{Namespace: "test-ns", Name: "test-image"}}},
+					},
+				},
+			},
+			expectedMabc: &v1.MultiArchBuildConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-mabc",
+					Namespace: "test-ns",
+				},
+				Spec: v1.MultiArchBuildConfigSpec{
+					BuildSpec: buildv1.BuildConfigSpec{
+						CommonSpec: buildv1.CommonSpec{Output: buildv1.BuildOutput{To: &corev1.ObjectReference{Namespace: "test-ns", Name: "test-image"}}},
+					},
+				},
+				Status: v1.MultiArchBuildConfigStatus{State: v1.FailureState},
+			},
+			expectedErr: errors.New("couldn't create builds for architectures: amd64,arm64: coudldn't create build test-ns/test-mabc-amd64: planned failure"),
+		},
 	}
 
 	for _, tt := range tests {
@@ -534,6 +574,7 @@ func TestReconcile(t *testing.T) {
 				WithObjects(tt.inputMabc).
 				WithScheme(scheme).
 				WithLists(tt.builds).
+				WithInterceptorFuncs(interceptor.Funcs{Create: createInterceptorFactory(tt.failOnBuildCreate)}).
 				Build()
 
 			r := &reconciler{
@@ -545,8 +586,17 @@ func TestReconcile(t *testing.T) {
 				scheme:         scheme,
 			}
 
-			if err := r.reconcile(context.Background(), reconcile.Request{NamespacedName: types.NamespacedName{Name: tt.inputMabc.Name, Namespace: tt.inputMabc.Namespace}}, r.logger); err != nil {
-				t.Fatalf("Failed to reconcile: %v", err)
+			err := r.reconcile(context.Background(), reconcile.Request{NamespacedName: types.NamespacedName{Name: tt.inputMabc.Name, Namespace: tt.inputMabc.Namespace}}, r.logger)
+			if err != nil && tt.expectedErr == nil {
+				t.Fatalf("want err nil but got: %v", err)
+			}
+			if err == nil && tt.expectedErr != nil {
+				t.Fatalf("want err %v but nil", tt.expectedErr)
+			}
+			if err != nil && tt.expectedErr != nil {
+				if diff := cmp.Diff(tt.expectedErr.Error(), err.Error()); diff != "" {
+					t.Fatalf("unexpected error: %s", diff)
+				}
 			}
 
 			actualMabc := &v1.MultiArchBuildConfig{}

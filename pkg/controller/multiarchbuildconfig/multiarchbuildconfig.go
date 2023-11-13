@@ -12,7 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
-	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -132,12 +131,14 @@ func (r *reconciler) handleMultiArchBuildConfig(ctx context.Context, mabc *v1.Mu
 		return fmt.Errorf("couldn't list builds: %w", err)
 	}
 
-	// Check what builds are missing and create them. createBuilds func may fails to create a build
-	// so we could end up having less builds than available architectures. The following code
-	// make sure the controller handle such a scenario.
-	if missingArchitectures := r.missingArchitectures(builds); missingArchitectures.Len() > 0 {
-		if err := r.createBuilds(ctx, mabc, missingArchitectures); err != nil {
-			return fmt.Errorf("couldn't create builds for architectures: %s: %w", strings.Join(missingArchitectures.UnsortedList(), ","), err)
+	if len(r.architectures) != len(builds.Items) {
+		if err := r.createBuilds(ctx, mabc); err != nil {
+			r.logger.Errorf("failed to create builds: %s", err)
+			mutateFn := func(mabcToMutate *v1.MultiArchBuildConfig) { mabcToMutate.Status.State = v1.FailureState }
+			if err := v1.UpdateMultiArchBuildConfig(ctx, r.logger, r.client, ctrlruntimeclient.ObjectKey{Namespace: mabc.Namespace, Name: mabc.Name}, mutateFn); err != nil {
+				return fmt.Errorf("failed to update the MultiArchBuildConfig %s/%s: %w", mabc.Namespace, mabc.Name, err)
+			}
+			return fmt.Errorf("couldn't create builds for architectures: %s: %w", strings.Join(r.architectures, ","), err)
 		}
 		return nil
 	}
@@ -172,8 +173,8 @@ func (r *reconciler) handleMultiArchBuildConfig(ctx context.Context, mabc *v1.Mu
 	return nil
 }
 
-func (r *reconciler) createBuilds(ctx context.Context, mabc *v1.MultiArchBuildConfig, missingArchitectures sets.Set[string]) error {
-	for _, arch := range missingArchitectures.UnsortedList() {
+func (r *reconciler) createBuilds(ctx context.Context, mabc *v1.MultiArchBuildConfig) error {
+	for _, arch := range r.architectures {
 		commonSpec := mabc.Spec.BuildSpec.CommonSpec.DeepCopy()
 		commonSpec.NodeSelector = map[string]string{nodeArchitectureLabel: arch}
 		commonSpec.Output.To.Name = fmt.Sprintf("%s-%s", commonSpec.Output.To.Name, arch)
@@ -283,18 +284,6 @@ func (r *reconciler) listBuilds(ctx context.Context, mabcName string) (*buildv1.
 		return nil, fmt.Errorf("failed to list builds: %w", err)
 	}
 	return &builds, nil
-}
-
-// missingArchitecture returns a set of architectures which no builds have been created for
-func (r *reconciler) missingArchitectures(builds *buildv1.BuildList) sets.Set[string] {
-	buildArchs := sets.New[string]()
-	for i := range builds.Items {
-		b := builds.Items[i]
-		if arch, exists := b.GetLabels()[v1.MultiArchBuildConfigArchLabel]; exists {
-			buildArchs.Insert(arch)
-		}
-	}
-	return sets.New[string](r.architectures...).Difference(buildArchs)
 }
 
 func checkAllBuildsSuccessful(builds *buildv1.BuildList) bool {

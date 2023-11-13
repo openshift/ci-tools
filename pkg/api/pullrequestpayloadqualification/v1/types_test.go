@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/openshift/ci-tools/pkg/steps/utils"
+	"github.com/openshift/ci-tools/pkg/api/utils"
 )
 
 func TestPullRequestPayloadQualificationRunLabel(t *testing.T) {

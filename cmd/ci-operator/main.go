@@ -547,7 +547,7 @@ func (o *options) Complete() error {
 		if o.unresolvedConfigPath != "" || o.configSpecPath != "" {
 			return errors.New("cannot request injecting test into locally provided config")
 		}
-		config, err = o.resolverClient.ConfigWithTest(info, injectTest)
+		config, err = o.resolverClient.ConfigWithTest(info, injectTest, len(jobSpec.ExtraRefs) > 1)
 	} else {
 		config, err = o.loadConfig(info)
 	}
@@ -568,6 +568,7 @@ func (o *options) Complete() error {
 	if err := validation.IsValidGraphConfiguration(o.graphConfig.Steps); err != nil {
 		return results.ForReason("validating_config").ForError(err)
 	}
+
 	if o.verbose {
 		config, _ := yaml.Marshal(o.configSpec)
 		logrus.WithField("config", string(config)).Trace("Resolved configuration.")
@@ -2013,12 +2014,14 @@ func (o *options) getResolverInfo(jobSpec *api.JobSpec) *api.Metadata {
 	// identify org, repo, and branch from refs object
 	for _, ref := range allRefs {
 		if ref.Org != "" && ref.Repo != "" && ref.BaseRef != "" {
-			info.Org = ref.Org
-			info.Repo = ref.Repo
-			info.Branch = ref.BaseRef
-			break
+			info.Org += fmt.Sprintf("%s,", ref.Org)
+			info.Repo += fmt.Sprintf("%s,", ref.Repo)
+			info.Branch += fmt.Sprintf("%s,", ref.BaseRef)
 		}
 	}
+	info.Org = strings.TrimSuffix(info.Org, ",")
+	info.Repo = strings.TrimSuffix(info.Repo, ",")
+	info.Branch = strings.TrimSuffix(info.Branch, ",")
 
 	// if flags set, override previous values
 	if o.org != "" {

@@ -36,7 +36,7 @@ func (s *gitSourceStep) Run(ctx context.Context) error {
 }
 
 func (s *gitSourceStep) run(ctx context.Context) error {
-	if refs := determineRefsWorkdir(s.jobSpec.Refs, s.jobSpec.ExtraRefs); refs != nil {
+	if refs := s.determineRefsWorkdir(s.jobSpec.Refs, s.jobSpec.ExtraRefs); refs != nil {
 		cloneURI := fmt.Sprintf("https://github.com/%s/%s.git", refs.Org, refs.Repo)
 		var secretName string
 		if s.cloneAuthConfig != nil {
@@ -44,7 +44,11 @@ func (s *gitSourceStep) run(ctx context.Context) error {
 			secretName = s.cloneAuthConfig.Secret.Name
 		}
 
-		return handleBuilds(ctx, s.buildClient, s.podClient, *buildFromSource(s.jobSpec, "", api.PipelineImageStreamTagReferenceRoot, buildapi.BuildSource{
+		root := string(api.PipelineImageStreamTagReferenceRoot)
+		if s.config.Ref != "" {
+			root = fmt.Sprintf("%s-%s", root, s.config.Ref)
+		}
+		return handleBuilds(ctx, s.buildClient, s.podClient, *buildFromSource(s.jobSpec, "", api.PipelineImageStreamTagReference(root), buildapi.BuildSource{
 			Type:         buildapi.BuildSourceGit,
 			Dockerfile:   s.config.DockerfileLiteral,
 			ContextDir:   s.config.ContextDir,
@@ -59,7 +63,13 @@ func (s *gitSourceStep) run(ctx context.Context) error {
 	return fmt.Errorf("nothing to build source image from, no refs")
 }
 
-func (s *gitSourceStep) Name() string { return string(api.PipelineImageStreamTagReferenceRoot) }
+func (s *gitSourceStep) Name() string {
+	root := string(api.PipelineImageStreamTagReferenceRoot)
+	if s.config.Ref != "" {
+		root = fmt.Sprintf("%s-%s", root, s.config.Ref)
+	}
+	return root
+}
 
 func (s *gitSourceStep) Description() string {
 	return fmt.Sprintf("Build git source code into an image and tag it as %s", api.PipelineImageStreamTagReferenceRoot)
@@ -68,7 +78,11 @@ func (s *gitSourceStep) Description() string {
 func (s *gitSourceStep) Requires() []api.StepLink { return nil }
 
 func (s *gitSourceStep) Creates() []api.StepLink {
-	return []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReferenceRoot)}
+	root := string(api.PipelineImageStreamTagReferenceRoot)
+	if s.config.Ref != "" {
+		root = fmt.Sprintf("%s-%s", root, s.config.Ref)
+	}
+	return []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReference(root))}
 }
 
 func (s *gitSourceStep) Provides() api.ParameterMap {
@@ -79,7 +93,7 @@ func (s *gitSourceStep) Objects() []ctrlruntimeclient.Object {
 	return s.buildClient.Objects()
 }
 
-func determineRefsWorkdir(refs *prowapi.Refs, extraRefs []prowapi.Refs) *prowapi.Refs {
+func (s *gitSourceStep) determineRefsWorkdir(refs *prowapi.Refs, extraRefs []prowapi.Refs) *prowapi.Refs {
 	var totalRefs []prowapi.Refs
 
 	if refs != nil {
@@ -91,13 +105,19 @@ func determineRefsWorkdir(refs *prowapi.Refs, extraRefs []prowapi.Refs) *prowapi
 		return nil
 	}
 
-	for _, ref := range totalRefs {
-		if ref.WorkDir {
-			return &ref
+	matchingRef := &totalRefs[0]
+	for i, ref := range totalRefs {
+		orgRepo := fmt.Sprintf("%s.%s", ref.Org, ref.Repo)
+		matches := s.config.Ref == orgRepo
+		if (s.config.Ref == "" || matches) && ref.WorkDir {
+			return &totalRefs[i]
+		}
+		if matches {
+			matchingRef = &totalRefs[i]
 		}
 	}
 
-	return &totalRefs[0]
+	return matchingRef
 }
 
 // GitSourceStep returns gitSourceStep that holds all the required information to create a build from a git source.

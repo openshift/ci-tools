@@ -20,6 +20,7 @@ func TestValidateBuildRoot(t *testing.T) {
 		name                 string
 		buildRootImageConfig *api.BuildRootImageConfiguration
 		hasImages            bool
+		ref                  string
 		expectedValid        bool
 	}{
 		{
@@ -77,9 +78,21 @@ func TestValidateBuildRoot(t *testing.T) {
 			hasImages:            true,
 			expectedValid:        false,
 		},
+		{
+			name: "image_stream_tag in build_root valid with ref",
+			buildRootImageConfig: &api.BuildRootImageConfiguration{
+				ImageStreamTagReference: &api.ImageStreamTagReference{
+					Namespace: "test_namespace",
+					Name:      "test_name",
+					Tag:       "test",
+				},
+			},
+			ref:           "org.repo",
+			expectedValid: true,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := validateBuildRootImageConfiguration(NewConfigContext().AddField("build_root"), tc.buildRootImageConfig, tc.hasImages); (err != nil) && tc.expectedValid {
+			if err := validateBuildRootImageConfiguration(NewConfigContext().AddField("build_root"), tc.buildRootImageConfig, tc.hasImages, tc.ref); (err != nil) && tc.expectedValid {
 				t.Errorf("expected to be valid, got: %v", err)
 			} else if !tc.expectedValid && err == nil {
 				t.Error("expected to be invalid, but returned valid")

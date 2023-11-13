@@ -186,7 +186,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 				},
 			}},
 			readFile: func(filename string) ([]byte, error) {
-				if filename != "/home/prow/go/src/github.com/org/repo/.ci-operator.yaml" {
+				if filename != "./.ci-operator.yaml" {
 					return nil, fmt.Errorf("expected '.ci-operator.yaml' as file for the build_root_image, got %s", filename)
 				}
 				return []byte(`build_root_image:
@@ -254,7 +254,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 				},
 			}},
 			readFile: func(filename string) ([]byte, error) {
-				if filename != "/home/prow/go/src/github.com/org/repo/.ci-operator.yaml" {
+				if filename != "./.ci-operator.yaml" {
 					return nil, fmt.Errorf("expected '.ci-operator.yaml' as file for the build_root_image, got %s", filename)
 				}
 				return []byte(`build_root_image:

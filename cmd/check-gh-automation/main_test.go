@@ -18,6 +18,7 @@ type fakeAutomationClient struct {
 	collaboratorsByRepo   map[string][]string
 	membersByOrg          map[string][]string
 	reposWithAppInstalled sets.Set[string]
+	permissionsByRepo     map[string]map[string][]string
 }
 
 func newFakeConfigAgent() *plugins.ConfigAgent {
@@ -34,6 +35,22 @@ func newFakeConfigAgent() *plugins.ConfigAgent {
 	// Set the Config
 	fakeConfigAgent.Set(fakeConfig)
 	return fakeConfigAgent
+}
+
+func (c fakeAutomationClient) HasPermission(org, repo, user string, roles ...string) (bool, error) {
+	orgRepo := fmt.Sprintf("%s/%s", org, repo)
+	userRoles, ok := c.permissionsByRepo[orgRepo][user]
+	if !ok {
+		return false, nil // User not found in permissions map
+	}
+	for _, role := range roles {
+		for _, userRole := range userRoles {
+			if role == userRole {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
 
 func (c fakeAutomationClient) IsMember(org, user string) (bool, error) {

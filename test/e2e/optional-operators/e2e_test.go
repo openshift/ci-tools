@@ -46,12 +46,12 @@ func TestOptionalOperators(t *testing.T) {
 			if err != nil {
 				t.Fatalf("explicit var: didn't expect an error from ci-operator: %v; output:\n%v", err, string(output))
 			}
-			cmd.VerboseOutputContains(t, testCase.name, "Build src-bundle succeeded after",
-				fmt.Sprintf("Build %s succeeded after", testCase.bundleName))
+			cmd.VerboseOutputContains(t, testCase.name, "Build src-bundle-amd64 succeeded after",
+				fmt.Sprintf("Build %s-amd64 succeeded after", testCase.bundleName))
 
 			fragments := []string{
-				fmt.Sprintf("Build %s-gen succeeded after", testCase.indexName),
-				fmt.Sprintf("Build %s succeeded after", testCase.indexName),
+				fmt.Sprintf("Build %s-gen-amd64 succeeded after", testCase.indexName),
+				fmt.Sprintf("Build %s-amd64 succeeded after", testCase.indexName),
 			}
 			if testCase.indexName != "" {
 				cmd.VerboseOutputContains(t, testCase.name, fragments...)

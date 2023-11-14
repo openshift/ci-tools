@@ -76,6 +76,8 @@ func FromConfig(
 	nodeName string,
 	nodeArchitectures []string,
 	targetAdditionalSuffix string,
+	manifestToolDockerCfg string,
+	localRegistryDNS string,
 ) ([]api.Step, []api.Step, error) {
 	crclient, err := ctrlruntimeclient.NewWithWatch(clusterConfig, ctrlruntimeclient.Options{})
 	crclient = secretrecordingclient.Wrap(crclient, censor)
@@ -87,7 +89,7 @@ func FromConfig(
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not get build client for cluster config: %w", err)
 	}
-	buildClient := steps.NewBuildClient(client, buildGetter.RESTClient(), nodeArchitectures)
+	buildClient := steps.NewBuildClient(client, buildGetter.RESTClient(), nodeArchitectures, manifestToolDockerCfg, localRegistryDNS)
 
 	templateGetter, err := templateclientset.NewForConfig(clusterConfig)
 	if err != nil {

@@ -28,8 +28,22 @@ func jobRelease(configSpec *cioperatorapi.ReleaseBuildConfiguration) string {
 	return ""
 }
 
+// If any included buildRoot uses from_repository we must not skip cloning
 func skipCloning(configSpec *cioperatorapi.ReleaseBuildConfiguration) bool {
-	return configSpec.BuildRootImage == nil || !configSpec.BuildRootImage.FromRepository
+	buildRoots := configSpec.BuildRootImages
+	if buildRoots == nil {
+		buildRoots = make(map[string]cioperatorapi.BuildRootImageConfiguration)
+	}
+	if configSpec.BuildRootImage != nil {
+		buildRoots[""] = *configSpec.BuildRootImage
+	}
+	for _, buildRoot := range buildRoots {
+		if buildRoot.FromRepository {
+			return false
+		}
+	}
+
+	return true
 }
 
 func hasNoBuilds(c *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo) bool {

@@ -81,6 +81,7 @@ type automationClient interface {
 	IsMember(org, user string) (bool, error)
 	IsCollaborator(org, repo, user string) (bool, error)
 	IsAppInstalled(org, repo string) (bool, error)
+	HasPermission(org, repo, user string, permissions ...string) (bool, error)
 }
 
 func main() {
@@ -197,17 +198,17 @@ func checkRepos(repos []string, bots []string, ignore sets.Set[string], client a
 				if plugin.Name == cherrypickPlugin {
 					isMember, err := client.IsMember(org, cherrypickRobot)
 					if err != nil {
-						return nil, fmt.Errorf("unable to determine if openshift-cherrypick-robot is a member of %s: %w", org, err)
+						return nil, fmt.Errorf("failed to determine membership status of 'openshift-cherrypick-robot' in '%s': %w", org, err)
 					}
-					isCollaborator, err := client.IsCollaborator(org, repo, cherrypickRobot)
+					hasAccess, err := client.HasPermission(org, repo, cherrypickRobot, "read", "write", "admin")
 					if err != nil {
-						return nil, fmt.Errorf("error checking collaborator status for openshift-cherrypick-robot on %s/%s: %w", org, repo, err)
+						return nil, fmt.Errorf("error checking access level (read/write/admin) for 'openshift-cherrypick-robot' in '%s/%s': %w", org, repo, err)
 					}
-					if !isMember && !isCollaborator {
-						repoLogger.Infof("openshift-cherrypick-robot is not a collaborator or an org member on %s/%s", org, repo)
+					if !isMember && !hasAccess {
+						repoLogger.Infof("'openshift-cherrypick-robot' lacks required permissions (read/write/admin) or org membership in '%s/%s'", org, repo)
 						failing.Insert(orgRepo)
 					} else {
-						repoLogger.Infof("Confirmed: openshift-cherrypick-robot is either a collaborator or an org member on %s/%s", org, repo)
+						repoLogger.Infof("'openshift-cherrypick-robot' has sufficient permissions (member or read/write/admin) in '%s/%s'", org, repo)
 					}
 				}
 			}

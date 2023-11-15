@@ -339,6 +339,10 @@ $(TMPDIR)/boskos:
 	chmod +x $(TMPDIR)/boskos
 	rm -rf $(TMPDIR)/image
 
+$(TMPDIR)/manifest-tool-secret/.dockerconfigjson:
+	mkdir -p $(TMPDIR)/manifest-tool-secret
+	oc --context $(CLUSTER) --as system:admin --namespace test-credentials get secret manifest-tool-local-pusher -o 'jsonpath={.data.\.dockerconfigjson}' | base64 --decode | jq > $(TMPDIR)/manifest-tool-secret/.dockerconfigjson
+
 local-pod-scaler: $(TMPDIR)/prometheus $(TMPDIR)/promtool cmd/pod-scaler/frontend/dist
 	$(eval export PATH=${PATH}:$(TMPDIR))
 	go run -tags e2e,e2e_framework ./test/e2e/pod-scaler/local/main.go

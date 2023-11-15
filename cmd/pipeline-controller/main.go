@@ -47,12 +47,12 @@ func (o *options) parseArgs(fs *flag.FlagSet, args []string) error {
 	o.client.AddFlags(fs)
 	o.githubEnablement.AddFlags(fs)
 
-	if o.configFile == "" {
-		return fmt.Errorf("--config-file is mandatory")
-	}
-
 	if err := fs.Parse(args); err != nil {
 		logrus.WithError(err).Fatal("Could not parse args.")
+	}
+
+	if o.configFile == "" {
+		return fmt.Errorf("--config-file is mandatory")
 	}
 
 	return o.validate()

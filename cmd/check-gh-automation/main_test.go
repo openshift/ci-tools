@@ -9,6 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/plugins"
 
 	"github.com/openshift/ci-tools/pkg/testhelper"
@@ -21,20 +22,38 @@ type fakeAutomationClient struct {
 	permissionsByRepo     map[string]map[string][]string
 }
 
-func newFakeConfigAgent() *plugins.ConfigAgent {
-	// Create a fake Config
-	fakeConfig := &plugins.Configuration{
+func newFakePluginConfigAgent() *plugins.ConfigAgent {
+	fakePluginConfig := &plugins.Configuration{
 		ExternalPlugins: map[string][]plugins.ExternalPlugin{
 			"org-1/repo-a": {
 				{Name: "cherrypick"},
 			},
 		},
 	}
-	// Create a fake ConfigAgent
-	fakeConfigAgent := &plugins.ConfigAgent{}
-	// Set the Config
-	fakeConfigAgent.Set(fakeConfig)
-	return fakeConfigAgent
+	fakePluginConfigAgent := &plugins.ConfigAgent{}
+	fakePluginConfigAgent.Set(fakePluginConfig)
+	return fakePluginConfigAgent
+}
+
+func newFakeProwConfigAgent() *prowconfig.Agent {
+	prowConfig := &prowconfig.Config{
+		JobConfig: prowconfig.JobConfig{},
+		ProwConfig: prowconfig.ProwConfig{
+			Tide: prowconfig.Tide{
+				TideGitHubConfig: prowconfig.TideGitHubConfig{
+					Queries: prowconfig.TideQueries{
+						{
+							Orgs:  []string{"org-1", "org-3"},
+							Repos: []string{"repo-a"},
+						},
+					},
+				},
+			},
+		},
+	}
+	configAgent := &prowconfig.Agent{}
+	configAgent.Set(prowConfig)
+	return configAgent
 }
 
 func (c fakeAutomationClient) HasPermission(org, repo, user string, roles ...string) (bool, error) {
@@ -105,9 +124,11 @@ func TestCheckRepos(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name        string
-		repos       []string
-		bots        []string
+		name  string
+		repos []string
+		bots  []string
+		mode  appCheckMode
+
 		ignore      sets.Set[string]
 		expected    []string
 		expectedErr error
@@ -116,41 +137,48 @@ func TestCheckRepos(t *testing.T) {
 			name:     "org has bots as members",
 			repos:    []string{"org-1/repo-a"},
 			bots:     []string{"d-bot", "e-bot"},
+			mode:     standard,
 			expected: []string{},
 		},
 		{
 			name:     "org has one bot as member, and one as collaborator",
 			repos:    []string{"org-1/repo-a"},
 			bots:     []string{"a-bot", "e-bot"},
+			mode:     standard,
 			expected: []string{},
 		},
 		{
 			name:     "repo has bots as collaborators",
 			repos:    []string{"org-1/repo-a"},
 			bots:     []string{"a-bot", "b-bot"},
+			mode:     standard,
 			expected: []string{},
 		},
 		{
 			name:     "org doesn't have bots as members, and repo doesn't have bots as collaborators",
 			repos:    []string{"org-2/repo-z"},
 			bots:     []string{"a-bot", "b-bot"},
+			mode:     standard,
 			expected: []string{"org-2/repo-z"},
 		},
 		{
 			name:     "multiple repos, some passing",
 			repos:    []string{"org-1/repo-a", "org-2/repo-z"},
 			bots:     []string{"a-bot", "b-bot"},
+			mode:     standard,
 			expected: []string{"org-2/repo-z"},
 		},
 		{
 			name:     "app installed, no bots",
 			repos:    []string{"org-1/repo-a"},
+			mode:     standard,
 			expected: []string{},
 		},
 		{
 			name:     "app not installed",
 			repos:    []string{"org-3/repo-y"},
 			bots:     []string{"a-bot", "b-bot"},
+			mode:     standard,
 			expected: []string{"org-3/repo-y"},
 		},
 		{
@@ -158,6 +186,7 @@ func TestCheckRepos(t *testing.T) {
 			repos:    []string{"org-2/repo-z"},
 			bots:     []string{"a-bot", "b-bot"},
 			ignore:   sets.New[string]("org-2/repo-z"),
+			mode:     standard,
 			expected: []string{},
 		},
 		{
@@ -165,30 +194,52 @@ func TestCheckRepos(t *testing.T) {
 			repos:    []string{"org-2/repo-z"},
 			bots:     []string{"a-bot", "b-bot"},
 			ignore:   sets.New[string]("org-2"),
+			mode:     standard,
 			expected: []string{},
 		},
 		{
 			name:        "org member check returns error",
 			repos:       []string{"fake/repo"},
 			bots:        []string{"a-bot"},
+			mode:        standard,
 			expectedErr: errors.New("unable to determine if: a-bot is a member of fake: intentional error"),
 		},
 		{
 			name:        "collaborator check returns error",
 			repos:       []string{"org-1/fake"},
 			bots:        []string{"a-bot"},
+			mode:        standard,
 			expectedErr: errors.New("unable to determine if: a-bot is a collaborator on org-1/fake: intentional error"),
 		},
 		{
 			name:        "app install check returns error",
 			repos:       []string{"org-1/error"},
 			bots:        []string{"a-bot"},
+			mode:        standard,
 			expectedErr: errors.New("unable to determine if openshift-ci app is installed on org-1/error: intentional error"),
+		},
+		{
+			name:     "app install check in tide mode successful when app installed and query exists",
+			repos:    []string{"org-1/repo-a"},
+			mode:     tide,
+			expected: []string{},
+		},
+		{
+			name:     "app install check in tide mode successful when query doesn't exist",
+			repos:    []string{"org-2/repo-z"},
+			mode:     tide,
+			expected: []string{},
+		},
+		{
+			name:     "app install check fails in tide mode when app not installed, and tide query configured",
+			repos:    []string{"org-3/repo-z"},
+			mode:     tide,
+			expected: []string{"org-3/repo-z"},
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			failing, err := checkRepos(tc.repos, tc.bots, tc.ignore, client, logrus.NewEntry(logrus.New()), newFakeConfigAgent())
+			failing, err := checkRepos(tc.repos, tc.bots, "openshift-ci", tc.ignore, tc.mode, client, logrus.NewEntry(logrus.New()), newFakePluginConfigAgent(), newFakeProwConfigAgent().Config().Tide.Queries.QueryMap())
 			if diff := cmp.Diff(tc.expectedErr, err, testhelper.EquateErrorMessage); diff != "" {
 				t.Fatalf("error doesn't match expected, diff: %s", diff)
 			}

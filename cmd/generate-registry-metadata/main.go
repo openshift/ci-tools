@@ -20,7 +20,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/load"
+	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
@@ -82,20 +82,20 @@ func generateMetadata(registryPath string) (api.RegistryMetadata, error) {
 		return nil
 	})
 	if err := utilerrors.NewAggregate(append(errs, err)); err != nil {
-		return api.RegistryMetadata{}, fmt.Errorf("Failed to update registry metadata: %w", err)
+		return api.RegistryMetadata{}, fmt.Errorf("failed to update registry metadata: %w", err)
 	}
 	return metadata, nil
 }
 
 func writeMetadata(registryPath string, metadata api.RegistryMetadata) error {
 	for filename, data := range metadata {
-		metadataPath := filepath.Join(registryPath, filepath.Dir(data.Path), fmt.Sprintf("%s%s", strings.TrimSuffix(filename, ".yaml"), load.MetadataSuffix))
+		metadataPath := filepath.Join(registryPath, filepath.Dir(data.Path), fmt.Sprintf("%s%s", strings.TrimSuffix(filename, ".yaml"), registry.MetadataSuffix))
 		output, err := json.MarshalIndent(data, "", "\t")
 		if err != nil {
-			return fmt.Errorf("Failed to marshal metadata file `%s`: %w", metadataPath, err)
+			return fmt.Errorf("failed to marshal metadata file `%s`: %w", metadataPath, err)
 		}
 		if err := os.WriteFile(metadataPath, output, 0644); err != nil {
-			return fmt.Errorf("Failed to write metadata file `%s`: %w", metadataPath, err)
+			return fmt.Errorf("failed to write metadata file `%s`: %w", metadataPath, err)
 		}
 	}
 	return nil

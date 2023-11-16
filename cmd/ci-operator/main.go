@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base32"
-	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -47,7 +46,6 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/logrusutil"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 	"k8s.io/test-infra/prow/version"
@@ -75,14 +73,11 @@ import (
 	"github.com/openshift/ci-tools/pkg/interrupt"
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/lease"
-	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/registry"
-	"github.com/openshift/ci-tools/pkg/registry/server"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/util"
-	"github.com/openshift/ci-tools/pkg/util/gzip"
 	"github.com/openshift/ci-tools/pkg/validation"
 )
 
@@ -168,17 +163,6 @@ to the image stream(s) identified by the "promotion" config. You may add
 additional images to promote and their target names via the "additional_images"
 map.
 `
-
-const (
-	leaseAcquireTimeout = 120 * time.Minute
-)
-
-var (
-	// leaseServerAddress is the default lease server in app.ci
-	leaseServerAddress = api.URLForService(api.ServiceBoskos)
-	// configResolverAddress is the default configresolver address in app.ci
-	configResolverAddress = api.URLForService(api.ServiceConfig)
-)
 
 // CustomProwMetadata the name of the custom prow metadata file that's expected to be found in the artifacts directory.
 const CustomProwMetadata = "custom-prow-metadata.json"
@@ -342,12 +326,10 @@ func (s *stringSlice) Set(value string) error {
 }
 
 type options struct {
-	configSpecPath       string
-	unresolvedConfigPath string
-	templatePaths        stringSlice
-	secretDirectories    stringSlice
-	sshKeyPath           string
-	oauthTokenPath       string
+	templatePaths     stringSlice
+	secretDirectories stringSlice
+	sshKeyPath        string
+	oauthTokenPath    string
 
 	targets stringSlice
 	promote bool
@@ -368,35 +350,20 @@ type options struct {
 	cleanupDuration        time.Duration
 	cleanupDurationSet     bool
 
-	inputHash                  string
-	secrets                    []*coreapi.Secret
-	templates                  []*templateapi.Template
-	graphConfig                api.GraphConfiguration
-	configSpec                 *api.ReleaseBuildConfiguration
-	jobSpec                    *api.JobSpec
-	clusterConfig              *rest.Config
-	podPendingTimeout          time.Duration
-	consoleHost                string
-	nodeName                   string
-	leaseServer                string
-	leaseServerCredentialsFile string
-	leaseAcquireTimeout        time.Duration
-	leaseClient                lease.Client
+	inputHash         string
+	secrets           []*coreapi.Secret
+	templates         []*templateapi.Template
+	graphConfig       api.GraphConfiguration
+	configSpec        *api.ReleaseBuildConfiguration
+	jobSpec           *api.JobSpec
+	clusterConfig     *rest.Config
+	podPendingTimeout time.Duration
+	consoleHost       string
+	nodeName          string
 
 	givePrAuthorAccessToNamespace bool
 	impersonateUser               string
 	authors                       []string
-
-	resolverAddress string
-	resolverClient  server.ResolverClient
-
-	registryPath string
-	org          string
-	repo         string
-	branch       string
-	variant      string
-
-	injectTest string
 
 	metadataRevision int
 
@@ -424,6 +391,9 @@ type options struct {
 	targetAdditionalSuffix string
 	manifestToolDockerCfg  string
 	localRegistryDNS       string
+
+	registryOptions *registry.Options
+	leaseOptions    *lease.Options
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
@@ -440,12 +410,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	// what we will run
 	flag.StringVar(&opt.nodeName, "node", "", "Restrict scheduling of pods to a single node in the cluster. Does not afffect indirectly created pods (e.g. builds).")
 	flag.DurationVar(&opt.podPendingTimeout, "pod-pending-timeout", 30*time.Minute, "Maximum amount of time created pods can spend before the running state. For test pods, this applies to each container. For builds, it applies to the build execution as a whole.")
-	flag.StringVar(&opt.leaseServer, "lease-server", leaseServerAddress, "Address of the server that manages leases. Required if any test is configured to acquire a lease.")
-	flag.StringVar(&opt.leaseServerCredentialsFile, "lease-server-credentials-file", "", "The path to credentials file used to access the lease server. The content is of the form <username>:<password>.")
-	flag.DurationVar(&opt.leaseAcquireTimeout, "lease-acquire-timeout", leaseAcquireTimeout, "Maximum amount of time to wait for lease acquisition")
-	flag.StringVar(&opt.registryPath, "registry", "", "Path to the step registry directory")
-	flag.StringVar(&opt.configSpecPath, "config", "", "The configuration file. If not specified the CONFIG_SPEC environment variable or the configresolver will be used.")
-	flag.StringVar(&opt.unresolvedConfigPath, "unresolved-config", "", "The configuration file, before resolution. If not specified the UNRESOLVED_CONFIG environment variable will be used, if set.")
+
 	flag.Var(&opt.targets, "target", "One or more targets in the configuration to build. Only steps that are required for this target will be run.")
 	flag.BoolVar(&opt.printGraph, "print-graph", opt.printGraph, "Print a directed graph of the build steps and exit. Intended for use with the golang digraph utility.")
 
@@ -474,15 +439,6 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.BoolVar(&opt.givePrAuthorAccessToNamespace, "give-pr-author-access-to-namespace", true, "Give view access to the temporarily created namespace to the PR author.")
 	flag.StringVar(&opt.impersonateUser, "as", "", "Username to impersonate")
 
-	// flags needed for the configresolver
-	flag.StringVar(&opt.resolverAddress, "resolver-address", configResolverAddress, "Address of configresolver")
-	flag.StringVar(&opt.org, "org", "", "Org of the project (used by configresolver)")
-	flag.StringVar(&opt.repo, "repo", "", "Repo of the project (used by configresolver)")
-	flag.StringVar(&opt.branch, "branch", "", "Branch of the project (used by configresolver)")
-	flag.StringVar(&opt.variant, "variant", "", "Variant of the project's ci-operator config (used by configresolver)")
-
-	flag.StringVar(&opt.injectTest, "with-test-from", "", "Inject a test from another ci-operator config, specified by ORG/REPO@BRANCH{__VARIANT}:TEST or JSON (used by configresolver)")
-
 	flag.StringVar(&opt.pullSecretPath, "image-import-pull-secret", "", "A set of dockercfg credentials used to import images for the tag_specification.")
 	flag.StringVar(&opt.pushSecretPath, "image-mirror-push-secret", "", "A set of dockercfg credentials used to mirror images for the promotion.")
 	flag.StringVar(&opt.uploadSecretPath, "gcs-upload-secret", "", "GCS credentials used to upload logs and artifacts.")
@@ -498,6 +454,8 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.localRegistryDNS, "local-registry-dns", "image-registry.openshift-image-registry.svc:5000", "Defines the target image registry.")
 
 	opt.resultsOptions.Bind(flag)
+	opt.registryOptions.Bind(flag)
+	opt.leaseOptions.Bind(flag)
 	return opt
 }
 
@@ -529,34 +487,7 @@ func (o *options) Complete() error {
 	o.jobSpec = jobSpec
 	o.jobSpec.Target = target
 
-	info := o.getResolverInfo(jobSpec)
-	o.resolverClient = server.NewResolverClient(o.resolverAddress)
-
-	if o.unresolvedConfigPath != "" && o.configSpecPath != "" {
-		return errors.New("cannot set --config and --unresolved-config at the same time")
-	}
-	if o.unresolvedConfigPath != "" && o.resolverAddress == "" {
-		return errors.New("cannot request resolved config with --unresolved-config unless providing --resolver-address")
-	}
-
-	injectTest, err := o.getInjectTest()
-	if err != nil {
-		return err
-	}
-
-	var config *api.ReleaseBuildConfiguration
-	if injectTest != nil {
-		if o.resolverAddress == "" {
-			return errors.New("cannot request config with injected test without providing --resolver-address")
-		}
-		if o.unresolvedConfigPath != "" || o.configSpecPath != "" {
-			return errors.New("cannot request injecting test into locally provided config")
-		}
-		config, err = o.resolverClient.ConfigWithTest(info, injectTest, len(jobSpec.ExtraRefs) > 1)
-	} else {
-		config, err = o.loadConfig(info)
-	}
-
+	config, err := o.registryOptions.ResolveConfigSpec(o.jobSpec)
 	if err != nil {
 		return results.ForReason("loading_config").WithError(err).Errorf("failed to load configuration: %v", err)
 	}
@@ -564,6 +495,7 @@ func (o *options) Complete() error {
 	if len(o.gitRef) != 0 && config.CanonicalGoRepository != nil {
 		o.jobSpec.Refs.PathAlias = *config.CanonicalGoRepository
 	}
+
 	o.configSpec = config
 	o.jobSpec.Metadata = config.Metadata
 	if err := validation.IsValidResolvedConfiguration(o.configSpec); err != nil {
@@ -864,10 +796,6 @@ func (o *options) Run() []error {
 		logrus.Infof("error: Process interrupted with signal %s, cancelling execution...", s)
 		cancel()
 	}
-	var leaseClient *lease.Client
-	if o.leaseServer != "" && o.leaseServerCredentialsFile != "" {
-		leaseClient = &o.leaseClient
-	}
 
 	o.resolveConsoleHost()
 
@@ -883,7 +811,7 @@ func (o *options) Run() []error {
 
 	// load the graph from the configuration
 	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig,
-		o.podPendingTimeout, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig,
+		o.podPendingTimeout, o.leaseOptions.LeaseClient(), o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig,
 		o.consoleHost, o.nodeName, nodeArchitectures, o.targetAdditionalSuffix, o.manifestToolDockerCfg, o.localRegistryDNS)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
@@ -935,11 +863,10 @@ func (o *options) Run() []error {
 	}
 
 	return interrupt.New(handler, o.saveNamespaceArtifacts).Run(func() []error {
-		if leaseClient != nil {
-			if err := o.initializeLeaseClient(); err != nil {
-				return []error{fmt.Errorf("failed to create the lease client: %w", err)}
-			}
+		if err := o.leaseOptions.InitializeLeaseClient(o.namespace, o.jobSpec.UniqueHash()); err != nil {
+			return []error{fmt.Errorf("failed to create the lease client: %w", err)}
 		}
+
 		go monitorNamespace(ctx, cancel, o.namespace, client.Namespaces())
 		authClient, err := authclientset.NewForConfig(o.clusterConfig)
 		if err != nil {
@@ -1701,47 +1628,6 @@ func (o *options) saveNamespaceArtifacts() {
 	}
 }
 
-func loadLeaseCredentials(leaseServerCredentialsFile string) (string, func() []byte, error) {
-	if err := secret.Add(leaseServerCredentialsFile); err != nil {
-		return "", nil, fmt.Errorf("failed to start secret agent on file %s: %s", leaseServerCredentialsFile, string(secret.Censor([]byte(err.Error()))))
-	}
-	splits := strings.Split(string(secret.GetSecret(leaseServerCredentialsFile)), ":")
-	if len(splits) != 2 {
-		return "", nil, fmt.Errorf("got invalid content of lease server credentials file which must be of the form '<username>:<passwrod>'")
-	}
-	username := splits[0]
-	passwordGetter := func() []byte {
-		return []byte(splits[1])
-	}
-	return username, passwordGetter, nil
-}
-
-func (o *options) initializeLeaseClient() error {
-	var err error
-	owner := o.namespace + "-" + o.jobSpec.UniqueHash()
-	username, passwordGetter, err := loadLeaseCredentials(o.leaseServerCredentialsFile)
-	if err != nil {
-		return fmt.Errorf("failed to load lease credentials: %w", err)
-	}
-	if o.leaseClient, err = lease.NewClient(owner, o.leaseServer, username, passwordGetter, 60, o.leaseAcquireTimeout); err != nil {
-		return fmt.Errorf("failed to create the lease client: %w", err)
-	}
-	t := time.NewTicker(30 * time.Second)
-	go func() {
-		for range t.C {
-			if err := o.leaseClient.Heartbeat(); err != nil {
-				logrus.WithError(err).Warn("Failed to update leases.")
-			}
-		}
-		if l, err := o.leaseClient.ReleaseAll(); err != nil {
-			logrus.WithError(err).Errorf("Failed to release leaked leases (%v)", l)
-		} else if len(l) != 0 {
-			logrus.Warnf("Would leak leases: %v", l)
-		}
-	}()
-	return nil
-}
-
 // eventJobDescription returns a string representing the pull requests and authors description, to be used in events.
 func eventJobDescription(jobSpec *api.JobSpec, namespace string) string {
 	var pulls []string
@@ -2007,117 +1893,6 @@ func resolveGCSCredentialsSecret(jobSpec *api.JobSpec) string {
 	}
 
 	return api.GCSUploadCredentialsSecret
-}
-
-func (o *options) getResolverInfo(jobSpec *api.JobSpec) *api.Metadata {
-	// address and variant can only be set via options
-	info := &api.Metadata{Variant: o.variant}
-
-	allRefs := jobSpec.ExtraRefs
-	if jobSpec.Refs != nil {
-		allRefs = append([]prowapi.Refs{*jobSpec.Refs}, allRefs...)
-	}
-
-	// identify org, repo, and branch from refs object
-	for _, ref := range allRefs {
-		if ref.Org != "" && ref.Repo != "" && ref.BaseRef != "" {
-			info.Org += fmt.Sprintf("%s,", ref.Org)
-			info.Repo += fmt.Sprintf("%s,", ref.Repo)
-			info.Branch += fmt.Sprintf("%s,", ref.BaseRef)
-		}
-	}
-	info.Org = strings.TrimSuffix(info.Org, ",")
-	info.Repo = strings.TrimSuffix(info.Repo, ",")
-	info.Branch = strings.TrimSuffix(info.Branch, ",")
-
-	// if flags set, override previous values
-	if o.org != "" {
-		info.Org = o.org
-	}
-	if o.repo != "" {
-		info.Repo = o.repo
-	}
-	if o.branch != "" {
-		info.Branch = o.branch
-	}
-	return info
-}
-
-func (o *options) getInjectTest() (*api.MetadataWithTest, error) {
-	if o.injectTest == "" {
-		return nil, nil
-	}
-	var ret api.MetadataWithTest
-	if err := json.Unmarshal([]byte(o.injectTest), &ret); err == nil {
-		return &ret, nil
-	}
-
-	return api.MetadataTestFromString(o.injectTest)
-}
-
-// loadConfig loads the standard configuration path, env, or configresolver (in that order of priority)
-func (o *options) loadConfig(info *api.Metadata) (*api.ReleaseBuildConfiguration, error) {
-	var raw string
-
-	configSpecEnv, configSpecSet := os.LookupEnv("CONFIG_SPEC")
-	unresolvedConfigEnv, unresolvedConfigSet := os.LookupEnv("UNRESOLVED_CONFIG")
-
-	switch {
-	case len(o.configSpecPath) > 0:
-		data, err := gzip.ReadFileMaybeGZIP(o.configSpecPath)
-		if err != nil {
-			return nil, fmt.Errorf("--config error: %w", err)
-		}
-		raw = string(data)
-	case configSpecSet:
-		if len(configSpecEnv) == 0 {
-			return nil, errors.New("CONFIG_SPEC environment variable cannot be set to an empty string")
-		}
-		// if being run by pj-rehearse, config spec may be base64 and gzipped
-		if decoded, err := base64.StdEncoding.DecodeString(configSpecEnv); err != nil {
-			raw = configSpecEnv
-		} else {
-			data, err := gzip.ReadBytesMaybeGZIP(decoded)
-			if err != nil {
-				return nil, fmt.Errorf("--config error: %w", err)
-			}
-			raw = string(data)
-		}
-	case len(o.unresolvedConfigPath) > 0:
-		data, err := gzip.ReadFileMaybeGZIP(o.unresolvedConfigPath)
-		if err != nil {
-			return nil, fmt.Errorf("--unresolved-config error: %w", err)
-		}
-		configSpec, err := o.resolverClient.Resolve(data)
-		err = results.ForReason("config_resolver_literal").ForError(err)
-		return configSpec, err
-	case unresolvedConfigSet:
-		configSpec, err := o.resolverClient.Resolve([]byte(unresolvedConfigEnv))
-		err = results.ForReason("config_resolver_literal").ForError(err)
-		return configSpec, err
-	default:
-		configSpec, err := o.resolverClient.Config(info)
-		err = results.ForReason("config_resolver").ForError(err)
-		return configSpec, err
-	}
-	configSpec := api.ReleaseBuildConfiguration{}
-	if err := yaml.UnmarshalStrict([]byte(raw), &configSpec); err != nil {
-		if len(o.configSpecPath) > 0 {
-			return nil, fmt.Errorf("invalid configuration in file %s: %w\nvalue:\n%s", o.configSpecPath, err, raw)
-		}
-		return nil, fmt.Errorf("invalid configuration: %w\nvalue:\n%s", err, raw)
-	}
-	if o.registryPath != "" {
-		refs, chains, workflows, _, _, observers, err := load.Registry(o.registryPath, load.RegistryFlag(0))
-		if err != nil {
-			return nil, fmt.Errorf("failed to load registry: %w", err)
-		}
-		configSpec, err = registry.ResolveConfig(registry.NewResolver(refs, chains, workflows, observers), configSpec)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve configuration: %w", err)
-		}
-	}
-	return &configSpec, nil
 }
 
 func resolveNodeArchitectures(ctx context.Context, client coreclientset.NodeInterface) ([]string, error) {

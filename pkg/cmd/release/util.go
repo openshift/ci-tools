@@ -7,7 +7,6 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/config"
-	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/registry"
 )
 
@@ -38,7 +37,7 @@ func (o options) argsWithPrefixes(def, path string, args []string) []string {
 func (o *options) loadRegistry() error {
 	path := o.argsWithPrefixes(config.RegistryPath, o.registryPath, nil)[0]
 	var err error
-	o.refs, o.chains, o.workflows, _, _, _, err = load.Registry(path, load.RegistryFlag(0))
+	o.refs, o.chains, o.workflows, _, _, _, err = registry.Load(path, registry.RegistryFlag(0))
 	if err != nil {
 		return fmt.Errorf("failed to load registry: %w", err)
 	}

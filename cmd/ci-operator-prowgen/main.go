@@ -17,7 +17,6 @@ import (
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
-	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/prowgen"
 	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/util"
@@ -92,7 +91,7 @@ func (o *options) process() error {
 		return fmt.Errorf("failed to complete config options: %w", err)
 	}
 	if o.registryPath != "" {
-		refs, chains, workflows, _, _, observers, err := load.Registry(o.registryPath, load.RegistryFlag(0))
+		refs, chains, workflows, _, _, observers, err := registry.Load(o.registryPath, registry.RegistryFlag(0))
 		if err != nil {
 			return fmt.Errorf("failed to load registry: %w", err)
 		}

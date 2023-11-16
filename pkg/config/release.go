@@ -15,7 +15,6 @@ import (
 	"k8s.io/test-infra/prow/plugins"
 	pjdwapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
 
-	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/registry"
 )
 
@@ -196,21 +195,21 @@ func loadRegistryStep(filename string, graph registry.NodeByName) (registry.Node
 	var node registry.Node
 	var ok bool
 	switch {
-	case strings.HasSuffix(filename, load.RefSuffix):
-		type_, name = "ref", strings.TrimSuffix(filename, load.RefSuffix)
+	case strings.HasSuffix(filename, registry.RefSuffix):
+		type_, name = "ref", strings.TrimSuffix(filename, registry.RefSuffix)
 		node, ok = graph.References[name]
-	case strings.HasSuffix(filename, load.ObserverSuffix):
-		type_, name = "observer", strings.TrimSuffix(filename, load.ObserverSuffix)
+	case strings.HasSuffix(filename, registry.ObserverSuffix):
+		type_, name = "observer", strings.TrimSuffix(filename, registry.ObserverSuffix)
 		node, ok = graph.Observers[name]
-	case strings.HasSuffix(filename, load.ChainSuffix):
-		type_, name = "chain", strings.TrimSuffix(filename, load.ChainSuffix)
+	case strings.HasSuffix(filename, registry.ChainSuffix):
+		type_, name = "chain", strings.TrimSuffix(filename, registry.ChainSuffix)
 		node, ok = graph.Chains[name]
-	case strings.HasSuffix(filename, load.WorkflowSuffix):
-		type_, name = "workflow", strings.TrimSuffix(filename, load.WorkflowSuffix)
+	case strings.HasSuffix(filename, registry.WorkflowSuffix):
+		type_, name = "workflow", strings.TrimSuffix(filename, registry.WorkflowSuffix)
 		node, ok = graph.Workflows[name]
-	case strings.Contains(filename, load.CommandsSuffix):
+	case strings.Contains(filename, registry.CommandsSuffix):
 		extension := filepath.Ext(filename)
-		type_, name = "ref", strings.TrimSuffix(filename[0:len(filename)-len(extension)], load.CommandsSuffix)
+		type_, name = "ref", strings.TrimSuffix(filename[0:len(filename)-len(extension)], registry.CommandsSuffix)
 		if node, ok = graph.References[name]; !ok {
 			node, ok = graph.Observers[name]
 		}
@@ -231,7 +230,7 @@ func GetChangedRegistrySteps(path, baseRev string, graph registry.NodeByName) ([
 		return changes, err
 	}
 	for _, c := range revChanges {
-		if filepath.Ext(c) == ".yaml" || strings.HasSuffix(c, fmt.Sprintf("%s%s", load.CommandsSuffix, filepath.Ext(c))) {
+		if filepath.Ext(c) == ".yaml" || strings.HasSuffix(c, fmt.Sprintf("%s%s", registry.CommandsSuffix, filepath.Ext(c))) {
 			node, err := loadRegistryStep(filepath.Base(c), graph)
 			if err != nil {
 				return changes, err

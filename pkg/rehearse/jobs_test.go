@@ -33,7 +33,6 @@ import (
 	apihelper "github.com/openshift/ci-tools/pkg/api/helper"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
-	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
@@ -287,7 +286,7 @@ func TestInlineCiopConfig(t *testing.T) {
 		},
 	}
 
-	references, chains, workflows, _, _, observers, err := load.Registry(testingRegistry, load.RegistryFlag(0))
+	references, chains, workflows, _, _, observers, err := registry.Load(testingRegistry, registry.RegistryFlag(0))
 	if err != nil {
 		t.Fatalf("Failed to read registry: %v", err)
 	}
@@ -553,7 +552,7 @@ func TestExecuteJobsErrors(t *testing.T) {
 		failToCreate: sets.New[string]("rehearse-123-job2"),
 	}}
 
-	references, chains, workflows, _, _, observers, err := load.Registry(testingRegistry, load.RegistryFlag(0))
+	references, chains, workflows, _, _, observers, err := registry.Load(testingRegistry, registry.RegistryFlag(0))
 	if err != nil {
 		t.Fatalf("Failed to read registry: %v", err)
 	}
@@ -623,7 +622,7 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 		},
 	}}
 
-	references, chains, workflows, _, _, observers, err := load.Registry(testingRegistry, load.RegistryFlag(0))
+	references, chains, workflows, _, _, observers, err := registry.Load(testingRegistry, registry.RegistryFlag(0))
 	if err != nil {
 		t.Fatalf("Failed to read registry: %v", err)
 	}
@@ -741,7 +740,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 		},
 	}
 
-	references, chains, workflows, _, _, observers, err := load.Registry(testingRegistry, load.RegistryFlag(0))
+	references, chains, workflows, _, _, observers, err := registry.Load(testingRegistry, registry.RegistryFlag(0))
 	if err != nil {
 		t.Fatalf("Failed to read registry: %v", err)
 	}

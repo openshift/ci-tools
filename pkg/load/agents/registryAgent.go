@@ -11,7 +11,6 @@ import (
 	utilpointer "k8s.io/utils/pointer"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/registry"
 )
 
@@ -30,7 +29,7 @@ type registryAgent struct {
 	registryPath  string
 	generation    int
 	errorMetrics  *prometheus.CounterVec
-	flags         load.RegistryFlag
+	flags         registry.RegistryFlag
 	references    registry.ReferenceByName
 	chains        registry.ChainByName
 	workflows     registry.WorkflowByName
@@ -87,9 +86,9 @@ func NewRegistryAgent(registryPath string, errCh chan error, opts ...RegistryAge
 	if opt.FlatRegistry == nil {
 		opt.FlatRegistry = utilpointer.Bool(true)
 	}
-	flags := load.RegistryMetadata | load.RegistryDocumentation
+	flags := registry.RegistryMetadata | registry.RegistryDocumentation
 	if *opt.FlatRegistry {
-		flags |= load.RegistryFlat
+		flags |= registry.RegistryFlat
 	}
 	a := &registryAgent{
 		registryPath: registryPath,
@@ -144,7 +143,7 @@ func (a *registryAgent) loadRegistry() error {
 		a.lock.Lock()
 		defer a.lock.Unlock()
 		startTime := time.Now()
-		references, chains, workflows, documentation, metadata, observers, err := load.Registry(a.registryPath, a.flags)
+		references, chains, workflows, documentation, metadata, observers, err := registry.Load(a.registryPath, a.flags)
 		if err != nil {
 			recordErrorForMetric(a.errorMetrics, "failed to load ci-operator registry")
 			return time.Duration(0), fmt.Errorf("failed to load ci-operator registry (%w)", err)

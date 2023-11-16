@@ -31,7 +31,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/api/ocpbuilddata"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/github"
-	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/steps/release"
 )
@@ -202,7 +201,7 @@ func loadResolver(path string) (registry.Resolver, error) {
 	if path == "" {
 		return nil, nil
 	}
-	refs, chains, workflows, _, _, observers, err := load.Registry(path, load.RegistryFlag(0))
+	refs, chains, workflows, _, _, observers, err := registry.Load(path, registry.RegistryFlag(0))
 	if err != nil {
 		return nil, err
 	}

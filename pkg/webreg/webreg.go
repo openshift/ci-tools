@@ -22,7 +22,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/html"
-	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/registry"
 	registryserver "github.com/openshift/ci-tools/pkg/registry/server"
@@ -1293,7 +1292,7 @@ func referenceHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *ht
 		writeErrorPage(w, fmt.Errorf("Could not find reference `%s`. If you reached this page via a link provided in the logs of a failed test, the failed step may be a literal defined step, which does not exist in the step registry. Please look at the job info page for the failed test instead.", name), http.StatusNotFound)
 		return
 	}
-	refMetadataName := fmt.Sprint(name, load.RefSuffix)
+	refMetadataName := fmt.Sprint(name, registry.RefSuffix)
 	if _, ok := metadata[refMetadataName]; !ok {
 		writeErrorPage(w, fmt.Errorf("Could not find metadata for file `%s`. Please contact the Developer Productivity Test Platform.", refMetadataName), http.StatusInternalServerError)
 		return
@@ -1349,7 +1348,7 @@ func chainHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *http.R
 		writeErrorPage(w, fmt.Errorf("Could not find chain %s", name), http.StatusNotFound)
 		return
 	}
-	chainMetadataName := fmt.Sprint(name, load.ChainSuffix)
+	chainMetadataName := fmt.Sprint(name, registry.ChainSuffix)
 	if _, ok := metadata[chainMetadataName]; !ok {
 		writeErrorPage(w, fmt.Errorf("Could not find metadata for file `%s`. Please contact the Developer Productivity Test Platform.", chainMetadataName), http.StatusInternalServerError)
 		return
@@ -1395,7 +1394,7 @@ func workflowHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *htt
 		writeErrorPage(w, fmt.Errorf("Could not find workflow %s", name), http.StatusNotFound)
 		return
 	}
-	workflowMetadataName := fmt.Sprint(name, load.WorkflowSuffix)
+	workflowMetadataName := fmt.Sprint(name, registry.WorkflowSuffix)
 	if _, ok := metadata[workflowMetadataName]; !ok {
 		writeErrorPage(w, fmt.Errorf("Could not find metadata for file `%s`. Please contact the Developer Productivity Test Platform.", workflowMetadataName), http.StatusInternalServerError)
 		return

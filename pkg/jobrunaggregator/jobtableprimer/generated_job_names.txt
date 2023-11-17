@@ -693,6 +693,7 @@ periodic-ci-openshift-hypershift-release-4.15-periodics-e2e-ibmcloud-iks
 periodic-ci-openshift-hypershift-release-4.15-periodics-e2e-ibmcloud-roks
 periodic-ci-openshift-hypershift-release-4.15-periodics-e2e-kubevirt-conformance
 periodic-ci-openshift-hypershift-release-4.15-periodics-e2e-kubevirt-csi-conformance
+periodic-ci-openshift-hypershift-release-4.15-periodics-e2e-powervs
 // end https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/hypershift/openshift-hypershift-release-4.15-periodics.yaml
 
 // begin https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/multiarch/openshift-multiarch-master-periodics.yaml
@@ -1658,6 +1659,7 @@ periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-single-node-serial
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-single-node-workers
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-upgrade-rollback-oldest-supported
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-upi
+periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-wavelengthzones
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-workers-rhel8
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-sdn
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-sdn-cgroupsv2

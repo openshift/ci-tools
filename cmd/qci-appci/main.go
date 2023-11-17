@@ -192,7 +192,7 @@ func (c *robotTokenMaintainer) isValid() (valid bool, ret error) {
 
 func (c *robotTokenMaintainer) renew() (ret error) {
 	c.mutex.Lock()
-	defer c.mutex.Lock()
+	defer c.mutex.Unlock()
 	c.logger.Info("Renewing token ...")
 	req, err := http.NewRequest("GET", "https://quay.io/v2/auth?service=quay.io", nil)
 	if err != nil {

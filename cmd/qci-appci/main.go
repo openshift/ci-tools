@@ -325,8 +325,8 @@ func getRouter(proxy *httputil.ReverseProxy, host string, clusterTokenService Cl
 		if path == "/healthz" {
 			if _, err := fmt.Fprintf(w, "OK"); err != nil {
 				l.WithError(err).Error("failed to write response")
-				return
 			}
+			return
 		}
 
 		if path == "/v2/auth" {

@@ -1,0 +1,93 @@
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
+      prow.k8s.io/context: ""
+      prow.k8s.io/job: test-org-test-repo-100-test-org-another-test-repo-101-test-name
+      releaseJobName: periodic-ci-test-org-test-repo-test-branch-test-name
+    creationTimestamp: null
+    labels:
+      created-by-prow: "true"
+      prow.k8s.io/context: ""
+      prow.k8s.io/job: test-org-test-repo-100-test-org-another-test-repo-101-test-name
+      prow.k8s.io/refs.base_ref: test-branch
+      prow.k8s.io/refs.org: test-org
+      prow.k8s.io/refs.pull: "100"
+      prow.k8s.io/refs.repo: test-repo
+      prow.k8s.io/type: periodic
+      pullrequestpayloadqualificationruns.ci.openshift.io: prpqr-test
+      releaseJobNameHash: ee3858eff62263cd7266320c00d1d38b
+    name: some-uuid
+    namespace: test-namespace
+    resourceVersion: "1"
+  spec:
+    agent: kubernetes
+    cluster: cluster-name-defaulted
+    decoration_config:
+      skip_cloning: true
+    extra_refs:
+    - base_ref: test-branch
+      base_sha: "123456"
+      org: test-org
+      pulls:
+      - author: test
+        number: 100
+        sha: "12345"
+        title: test-pr
+      repo: test-repo
+    - base_ref: test-branch
+      base_sha: "123456"
+      org: test-org
+      pulls:
+      - author: test
+        number: 101
+        sha: "123452"
+        title: test-pr
+      repo: another-test-repo
+    job: test-org-test-repo-100-test-org-another-test-repo-101-test-name
+    pod_spec:
+      containers:
+      - args:
+        - --gcs-upload-secret=/secrets/gcs/service-account.json
+        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+        - --input-hash=prpqr-test
+        - --report-credentials-file=/etc/report/credentials
+        - --target=test-name
+        - --with-test-from=test-org/test-repo@test-branch:test-name
+        command:
+        - ci-operator
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /secrets/gcs
+          name: gcs-credentials
+          readOnly: true
+        - mountPath: /secrets/manifest-tool
+          name: manifest-tool-local-pusher
+          readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
+        - mountPath: /etc/report
+          name: result-aggregator
+          readOnly: true
+      serviceAccountName: ci-operator
+      volumes:
+      - name: manifest-tool-local-pusher
+        secret:
+          secretName: manifest-tool-local-pusher
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
+      - name: result-aggregator
+        secret:
+          secretName: result-aggregator
+    report: true
+    type: periodic
+  status:
+    startTime: "1970-01-01T00:00:00Z"
+    state: triggered

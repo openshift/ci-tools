@@ -142,7 +142,10 @@ func execute(c *robotTokenMaintainer) {
 }
 
 func (c *robotTokenMaintainer) GetRobotToken() (string, error) {
-	if c.token == "" {
+	if valid, err := c.isValid(); !valid || err != nil {
+		if err != nil {
+			c.logger.WithError(err).Error("Failed to validate the robot's token")
+		}
 		if err := c.renew(); err != nil {
 			return "", fmt.Errorf("failed to renew token: %w", err)
 		}

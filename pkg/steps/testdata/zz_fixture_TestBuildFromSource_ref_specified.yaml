@@ -1,0 +1,52 @@
+metadata:
+  annotations:
+    ci.openshift.io/job-spec: ""
+  creationTimestamp: null
+  labels:
+    OPENSHIFT_CI: "true"
+    ci.openshift.io/metadata.branch: master
+    ci.openshift.io/metadata.org: org
+    ci.openshift.io/metadata.repo: other-repo
+    ci.openshift.io/metadata.target: ""
+    ci.openshift.io/metadata.variant: ""
+    created-by-ci: "true"
+    creates: ""
+  namespace: test-namespace
+spec:
+  nodeSelector: null
+  output:
+    imageLabels:
+    - name: io.openshift.build.commit.author
+    - name: io.openshift.build.commit.date
+    - name: io.openshift.build.commit.id
+    - name: io.openshift.build.commit.message
+    - name: io.openshift.build.commit.ref
+    - name: io.openshift.build.name
+    - name: io.openshift.build.namespace
+    - name: io.openshift.build.source-context-dir
+    - name: io.openshift.build.source-location
+    - name: vcs-ref
+    - name: vcs-type
+    - name: vcs-url
+    to:
+      kind: ImageStreamTag
+      name: 'pipeline:'
+      namespace: test-namespace
+  postCommit: {}
+  resources: {}
+  source: {}
+  strategy:
+    dockerStrategy:
+      buildArgs:
+      - name: TAGS
+        value: release
+      env:
+      - name: BUILD_LOGLEVEL
+        value: "0"
+      forcePull: true
+      imageOptimizationPolicy: SkipLayers
+      noCache: true
+    type: Docker
+status:
+  output: {}
+  phase: ""

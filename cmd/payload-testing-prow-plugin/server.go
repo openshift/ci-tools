@@ -463,7 +463,7 @@ func (b *prpqrBuilder) build(releaseJobSpecs []prpqv1.ReleaseJobSpec) *prpqv1.Pu
 					Specifier: string(b.spec.jobs),
 				},
 			},
-			PullRequest: prpqv1.PullRequestUnderTest{
+			PullRequests: []prpqv1.PullRequestUnderTest{{
 				Org:     b.org,
 				Repo:    b.repo,
 				BaseRef: b.pr.Base.Ref,
@@ -473,7 +473,7 @@ func (b *prpqrBuilder) build(releaseJobSpecs []prpqv1.ReleaseJobSpec) *prpqv1.Pu
 					Author: b.pr.User.Login,
 					SHA:    b.pr.Head.SHA,
 					Title:  b.pr.Title,
-				},
+				}},
 			},
 		},
 	}

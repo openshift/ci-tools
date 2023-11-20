@@ -18,6 +18,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	authenticationv1 "k8s.io/api/authentication/v1"
+	authorizationv1 "k8s.io/api/authorization/v1"
 	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/logrusutil"
@@ -307,8 +308,30 @@ func (s *SimpleClusterTokenService) Validate(token string) (bool, error) {
 	if err := s.client.Create(s.ctx, tr); err != nil {
 		return false, fmt.Errorf("failed to check token: %w", err)
 	}
-	// TODO SAR on certain resource
-	return tr.Status.Authenticated, nil
+
+	if !tr.Status.Authenticated {
+		return false, nil
+	}
+
+	sar := &authorizationv1.SubjectAccessReview{
+		Spec: authorizationv1.SubjectAccessReviewSpec{
+			User:   tr.Status.User.Username,
+			Groups: tr.Status.User.Groups,
+			ResourceAttributes: &authorizationv1.ResourceAttributes{
+				Group:       "image.openshift.io",
+				Version:     "v1",
+				Resource:    "imagestreams",
+				Subresource: "layers",
+				Verb:        "get",
+			},
+		},
+	}
+
+	if err := s.client.Create(s.ctx, sar); err != nil {
+		return false, fmt.Errorf("failed to create SubjectAccessReview for user %s: %w", tr.Status.User.Username, err)
+	}
+
+	return sar.Status.Allowed, nil
 }
 
 func getRouter(proxy *httputil.ReverseProxy, host string, clusterTokenService ClusterTokenService, secretGetter func(string) []byte, robotUsernameFile, robotPasswordFile string) *http.ServeMux {

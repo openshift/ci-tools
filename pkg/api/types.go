@@ -1869,7 +1869,7 @@ func (p ClusterProfile) LeaseType() string {
 	case ClusterProfileHypershiftPowerVSCB:
 		return "hypershift-powervs-cb-quota-slice"
 	case ClusterProfileServiceMesh:
-		return "ossm-quota-slice"
+		return "aws-ossm-dev-quota-slice"
 	default:
 		return ""
 	}

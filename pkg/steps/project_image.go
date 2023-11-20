@@ -62,6 +62,7 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 		s.resources,
 		s.pullSecret,
 		s.config.BuildArgs,
+		s.config.Ref,
 	)
 	return handleBuilds(ctx, s.client, s.podClient, *build)
 }

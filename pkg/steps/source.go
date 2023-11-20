@@ -122,14 +122,30 @@ const (
 	LabelMetadataStep    = "ci.openshift.io/metadata.step"
 )
 
-func labelsFor(spec *api.JobSpec, base map[string]string) map[string]string {
+func labelsFor(spec *api.JobSpec, base map[string]string, ref string) map[string]string {
 	if base == nil {
 		base = map[string]string{}
 	}
-	base[LabelMetadataOrg] = spec.Metadata.Org
-	base[LabelMetadataRepo] = spec.Metadata.Repo
-	base[LabelMetadataBranch] = spec.Metadata.Branch
-	base[LabelMetadataVariant] = spec.Metadata.Variant
+	org := spec.Metadata.Org
+	repo := spec.Metadata.Repo
+	branch := spec.Metadata.Branch
+	variant := spec.Metadata.Variant
+	if ref != "" { //When building for a specific ref, the metadata will be empty and need to be determined from that ref
+		for _, extraRef := range spec.ExtraRefs {
+			orgRepo := fmt.Sprintf("%s.%s", extraRef.Org, extraRef.Repo)
+			if orgRepo == ref {
+				org = extraRef.Org
+				repo = extraRef.Repo
+				branch = extraRef.BaseRef
+				//TODO(sgoeddel): If we care about variant in the future there will need to be logic to determine it
+			}
+		}
+	}
+
+	base[LabelMetadataOrg] = org
+	base[LabelMetadataRepo] = repo
+	base[LabelMetadataBranch] = branch
+	base[LabelMetadataVariant] = variant
 	base[LabelMetadataTarget] = spec.Target
 	base[CreatedByCILabel] = "true"
 	base[openshiftCIEnv] = "true"
@@ -250,7 +266,7 @@ func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clone
 		panic(fmt.Errorf("couldn't create JSON spec for clonerefs: %w", err))
 	}
 
-	build := buildFromSource(jobSpec, config.From, config.To, buildSource, fromDigest, "", resources, pullSecret, nil)
+	build := buildFromSource(jobSpec, config.From, config.To, buildSource, fromDigest, "", resources, pullSecret, nil, config.Ref)
 	build.Spec.CommonSpec.Strategy.DockerStrategy.Env = append(
 		build.Spec.CommonSpec.Strategy.DockerStrategy.Env,
 		corev1.EnvVar{Name: clonerefs.JSONConfigEnvVar, Value: optionsJSON},
@@ -267,7 +283,7 @@ func resolvePipelineImageStreamTagReference(ctx context.Context, client loggingc
 	return ist.Image.Name, nil
 }
 
-func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, fromTagDigest, dockerfilePath string, resources api.ResourceConfiguration, pullSecret *corev1.Secret, buildArgs []api.BuildArg) *buildapi.Build {
+func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, fromTagDigest, dockerfilePath string, resources api.ResourceConfiguration, pullSecret *corev1.Secret, buildArgs []api.BuildArg, ref string) *buildapi.Build {
 	logrus.Infof("Building %s", toTag)
 	buildResources, err := ResourcesFor(resources.RequirementsForStep(string(toTag)))
 	if err != nil {
@@ -283,7 +299,7 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 	}
 
 	layer := buildapi.ImageOptimizationSkipLayers
-	labels := labelsFor(jobSpec, map[string]string{CreatesLabel: string(toTag)})
+	labels := labelsFor(jobSpec, map[string]string{CreatesLabel: string(toTag)}, ref)
 	build := &buildapi.Build{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      string(toTag),
@@ -332,7 +348,17 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 		build.OwnerReferences = append(build.OwnerReferences, *owner)
 	}
 
-	addLabelsToBuild(jobSpec.Refs, build, source.ContextDir)
+	relevantRefs := jobSpec.Refs
+	if ref != "" {
+		for _, extraRef := range jobSpec.ExtraRefs {
+			orgRepo := fmt.Sprintf("%s.%s", extraRef.Org, extraRef.Repo)
+			if orgRepo == ref {
+				relevantRefs = &extraRef
+				break
+			}
+		}
+	}
+	addLabelsToBuild(relevantRefs, build, source.ContextDir)
 	return build
 }
 

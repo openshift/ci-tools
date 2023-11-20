@@ -76,6 +76,7 @@ func (s *bundleSourceStep) run(ctx context.Context) error {
 		s.resources,
 		s.pullSecret,
 		nil,
+		"",
 	)
 	return handleBuilds(ctx, s.client, s.podClient, *build)
 }

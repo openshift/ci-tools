@@ -147,11 +147,8 @@
   "resources": {
     "*": {
       "requests": {
-        "cpu": "100m",
-        "memory": "200Mi"
-      },
-      "limits": {
-        "memory": "4Gi"
+        "cpu": "110m",
+        "memory": "300Mi"
       }
     }
   }

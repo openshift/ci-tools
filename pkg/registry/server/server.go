@@ -9,6 +9,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/test-infra/prow/metrics"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -328,8 +329,31 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 				})
 			}
 			for step, resources := range config.Resources {
-				if step == "*" { // * is special, and we will only pull from one config to merge, this is "last in wins" we may need to do better in the future
-					mergedConfig.Resources[step] = resources
+				if step == "*" { // * is special, and the ref should not be appended, it will be merged to use the greatest value instead
+					if existing, ok := mergedConfig.Resources["*"]; ok {
+						replaceIfGreater := func(resourceType string) {
+							existingValue, err := resource.ParseQuantity(existing.Requests[resourceType])
+							if err != nil {
+								logger.WithError(err).Warnf("couldn't parse existing '%s' resource quantity", resourceType)
+								return
+							}
+							value, err := resource.ParseQuantity(resources.Requests[resourceType])
+							if err != nil {
+								logger.WithError(err).Warnf("couldn't parse '%s' resource quantity", resourceType)
+								return
+							}
+							if existingValue.Cmp(value) < 0 { // This value is higher than existing
+								mergedConfig.Resources["*"].Requests[resourceType] = resources.Requests[resourceType]
+							}
+						}
+						replaceIfGreater("memory")
+						replaceIfGreater("cpu")
+					} else {
+						mergedConfig.Resources["*"] = api.ResourceRequirements{
+							Requests: resources.Requests,
+							// We cannot set Limits for * because other configs may not be able to fall under them
+						}
+					}
 				} else {
 					stepWithRef := fmt.Sprintf("%s-%s", step, ref)
 					mergedConfig.Resources[stepWithRef] = resources

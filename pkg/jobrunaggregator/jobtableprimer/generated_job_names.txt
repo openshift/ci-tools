@@ -737,6 +737,8 @@ periodic-ci-openshift-multiarch-master-nightly-4.11-ocp-e2e-serial-aws-heterogen
 periodic-ci-openshift-multiarch-master-nightly-4.11-ocp-e2e-serial-remote-libvirt-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.11-ocp-e2e-serial-remote-libvirt-s390x
 periodic-ci-openshift-multiarch-master-nightly-4.11-ocp-e2e-upgrade-aws-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.11-ocp-heavy-build-ovn-remote-libvirt-ppc64le
+periodic-ci-openshift-multiarch-master-nightly-4.11-ocp-heavy-build-ovn-remote-libvirt-s390x
 periodic-ci-openshift-multiarch-master-nightly-4.11-ocp-image-ecosystem-aws-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.11-ocp-image-ecosystem-remote-libvirt-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.11-ocp-image-ecosystem-remote-libvirt-s390x
@@ -769,6 +771,8 @@ periodic-ci-openshift-multiarch-master-nightly-4.12-ocp-e2e-serial-ovn-remote-li
 periodic-ci-openshift-multiarch-master-nightly-4.12-ocp-e2e-upgrade-aws-ovn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.12-ocp-fips-ovn-remote-libvirt-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.12-ocp-fips-ovn-remote-libvirt-s390x
+periodic-ci-openshift-multiarch-master-nightly-4.12-ocp-heavy-build-ovn-remote-libvirt-ppc64le
+periodic-ci-openshift-multiarch-master-nightly-4.12-ocp-heavy-build-ovn-remote-libvirt-s390x
 periodic-ci-openshift-multiarch-master-nightly-4.12-ocp-image-ecosystem-aws-ovn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.12-ocp-image-ecosystem-ovn-remote-libvirt-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.12-ocp-image-ecosystem-ovn-remote-libvirt-s390x
@@ -807,6 +811,8 @@ periodic-ci-openshift-multiarch-master-nightly-4.13-ocp-e2e-upgrade-aws-ovn-arm6
 periodic-ci-openshift-multiarch-master-nightly-4.13-ocp-e2e-upgrade-azure-ovn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.13-ocp-fips-ovn-remote-libvirt-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.13-ocp-fips-ovn-remote-libvirt-s390x
+periodic-ci-openshift-multiarch-master-nightly-4.13-ocp-heavy-build-ovn-remote-libvirt-ppc64le
+periodic-ci-openshift-multiarch-master-nightly-4.13-ocp-heavy-build-ovn-remote-libvirt-s390x
 periodic-ci-openshift-multiarch-master-nightly-4.13-ocp-image-ecosystem-aws-ovn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.13-ocp-image-ecosystem-ovn-remote-libvirt-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.13-ocp-image-ecosystem-ovn-remote-libvirt-s390x
@@ -850,6 +856,8 @@ periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-upgrade-azure-ovn-ar
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-upgrade-azure-ovn-heterogeneous
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-fips-ovn-remote-libvirt-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-fips-ovn-remote-libvirt-s390x
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-heavy-build-ovn-remote-libvirt-ppc64le
+periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-heavy-build-ovn-remote-libvirt-s390x
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-image-ecosystem-aws-ovn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-image-ecosystem-ovn-remote-libvirt-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-image-ecosystem-ovn-remote-libvirt-s390x
@@ -893,6 +901,8 @@ periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-upgrade-azure-ovn-ar
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-upgrade-azure-ovn-heterogeneous
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-fips-ovn-remote-libvirt-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-fips-ovn-remote-libvirt-s390x
+periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-heavy-build-ovn-remote-libvirt-ppc64le
+periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-heavy-build-ovn-remote-libvirt-s390x
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-image-ecosystem-aws-ovn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-image-ecosystem-ovn-remote-libvirt-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-image-ecosystem-ovn-remote-libvirt-s390x

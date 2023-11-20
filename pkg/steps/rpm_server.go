@@ -60,7 +60,7 @@ func (s *rpmServerStep) run(ctx context.Context) error {
 		return fmt.Errorf("could not find source ImageStreamTag for RPM repo deployment: %w", err)
 	}
 
-	labelSet := labelsFor(s.jobSpec, map[string]string{AppLabel: RPMRepoName, TTLIgnoreLabel: "true"})
+	labelSet := labelsFor(s.jobSpec, map[string]string{AppLabel: RPMRepoName, TTLIgnoreLabel: "true"}, s.config.Ref)
 	selectorSet := map[string]string{
 		AppLabel: RPMRepoName,
 	}

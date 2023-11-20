@@ -120,6 +120,7 @@ func (s *indexGeneratorStep) run(ctx context.Context) error {
 		s.resources,
 		s.pullSecret,
 		nil,
+		"",
 	)
 	err = handleBuilds(ctx, s.client, s.podClient, *build)
 	if err != nil && strings.Contains(err.Error(), "error checking provided apis") {

@@ -57,7 +57,7 @@ func (s *gitSourceStep) run(ctx context.Context) error {
 				URI: cloneURI,
 				Ref: refs.BaseRef,
 			},
-		}, "", s.config.DockerfilePath, s.resources, s.pullSecret, nil))
+		}, "", s.config.DockerfilePath, s.resources, s.pullSecret, nil, s.config.Ref))
 	}
 
 	return fmt.Errorf("nothing to build source image from, no refs")

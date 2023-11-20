@@ -105,7 +105,7 @@ Created: {{ .ObjectMeta.CreationTimestamp }}
 <ul>
   {{ range $i, $pullRequest := .PullRequests }}
 	{{ prLink . }} by {{ authorLink .PullRequest.Author }}
-	<li>
+	<li style="list-style:none; padding:">
       <ul>
 		<li>Repository: {{ repoLink .Org .Repo }}</li>
 		<li>SHA: <tt>{{ shaLink . .PullRequest.SHA }}</tt></li>

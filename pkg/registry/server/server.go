@@ -335,10 +335,12 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 							existingValue, err := resource.ParseQuantity(existing.Requests[resourceType])
 							if err != nil {
 								logger.WithError(err).Warnf("couldn't parse existing '%s' resource quantity", resourceType)
+								return
 							}
 							value, err := resource.ParseQuantity(resources.Requests[resourceType])
 							if err != nil {
 								logger.WithError(err).Warnf("couldn't parse '%s' resource quantity", resourceType)
+								return
 							}
 							if existingValue.Cmp(value) < 0 { // This value is higher than existing
 								mergedConfig.Resources["*"].Requests[resourceType] = resources.Requests[resourceType]

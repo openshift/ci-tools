@@ -1347,7 +1347,7 @@ const (
 	ClusterProfileOCIAssisted           ClusterProfile = "oci-assisted"
 	ClusterProfileHypershiftPowerVS     ClusterProfile = "hypershift-powervs"
 	ClusterProfileHypershiftPowerVSCB   ClusterProfile = "hypershift-powervs-cb"
-	ClusterProfileServiceMesh           ClusterProfile = "aws-ossm-dev"
+	ClusterProfileOSSM                  ClusterProfile = "ossm-aws"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -1466,7 +1466,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileOCIAssisted,
 		ClusterProfileHypershiftPowerVS,
 		ClusterProfileHypershiftPowerVSCB,
-		ClusterProfileServiceMesh,
+		ClusterProfileOSSM,
 	}
 }
 
@@ -1504,7 +1504,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSTerraformQE,
 		ClusterProfileAWSRHTAPQE,
 		ClusterProfileAWSRHTAPPerformance,
-		ClusterProfileServiceMesh,
+		ClusterProfileOSSM,
 		ClusterProfileAWSOpendatahub:
 		return string(CloudAWS)
 	case
@@ -1868,8 +1868,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "hypershift-powervs-quota-slice"
 	case ClusterProfileHypershiftPowerVSCB:
 		return "hypershift-powervs-cb-quota-slice"
-	case ClusterProfileServiceMesh:
-		return "aws-ossm-dev-quota-slice"
+	case ClusterProfileOSSM:
+		return "ossm-aws-quota-slice"
 	default:
 		return ""
 	}

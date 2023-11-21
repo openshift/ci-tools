@@ -127,6 +127,8 @@ func getInjectTestFromQuery(w http.ResponseWriter, r *http.Request) (*api.Metada
 	return &ret, nil
 }
 
+// Deprecated, use ResolveAndMergeConfigsAndInjectTest instead
+// TODO(sgoeddel): this should be removed in the future once it is confirmed that it is no longer used
 func ResolveConfigWithInjectedTest(configs Getter, resolver Resolver, resolverMetrics *metrics.Metrics) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {

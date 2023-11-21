@@ -78,6 +78,7 @@ func FromConfig(
 	targetAdditionalSuffix string,
 	manifestToolDockerCfg string,
 	localRegistryDNS string,
+	mergedConfig bool,
 ) ([]api.Step, []api.Step, error) {
 	crclient, err := ctrlruntimeclient.NewWithWatch(clusterConfig, ctrlruntimeclient.Options{})
 	crclient = secretrecordingclient.Wrap(crclient, censor)
@@ -114,7 +115,7 @@ func FromConfig(
 	httpClient := retryablehttp.NewClient()
 	httpClient.Logger = nil
 
-	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, consoleHost, nodeName, targetAdditionalSuffix, nodeArchitectures)
+	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, consoleHost, nodeName, targetAdditionalSuffix, nodeArchitectures, mergedConfig)
 }
 
 func fromConfig(
@@ -141,6 +142,7 @@ func fromConfig(
 	nodeName string,
 	targetAdditionalSuffix string,
 	nodeArchitectures []string,
+	mergedConfig bool,
 ) ([]api.Step, []api.Step, error) {
 	requiredNames := sets.New[string]()
 	for _, target := range requiredTargets {
@@ -157,7 +159,7 @@ func fromConfig(
 	var hasReleaseStep bool
 	resolver := rootImageResolver(client, ctx, promote)
 	imageConfigs := graphConf.InputImages()
-	rawSteps, err := runtimeStepConfigsForBuild(ctx, client, config, jobSpec, os.ReadFile, resolver, imageConfigs, time.Second, consoleHost)
+	rawSteps, err := runtimeStepConfigsForBuild(ctx, client, config, jobSpec, os.ReadFile, resolver, imageConfigs, time.Second, consoleHost, mergedConfig)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get steps from configuration: %w", err)
 	}
@@ -883,6 +885,7 @@ func runtimeStepConfigsForBuild(
 	imageConfigs []*api.InputImageTagStepConfiguration,
 	second time.Duration,
 	consoleHost string,
+	mergedConfig bool,
 ) ([]api.StepConfiguration, error) {
 	buildRoots := config.InputConfiguration.BuildRootImages
 	if buildRoots == nil {
@@ -972,7 +975,7 @@ func runtimeStepConfigsForBuild(
 		ref := ""
 		root := api.PipelineImageStreamTagReferenceRoot
 		source := api.PipelineImageStreamTagReferenceSource
-		if len(sourceRefs) >= 2 { // We only care about these suffixes when building from multiple sources
+		if mergedConfig { // We only care about these suffixes when building from multiple sources
 			ref = fmt.Sprintf("%s.%s", r.Org, r.Repo)
 			root = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", api.PipelineImageStreamTagReferenceRoot, ref))
 			source = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", api.PipelineImageStreamTagReferenceSource, ref))

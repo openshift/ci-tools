@@ -19,7 +19,7 @@ import (
 
 type ResolverClient interface {
 	Config(*api.Metadata) (*api.ReleaseBuildConfiguration, error)
-	ConfigWithTest(base *api.Metadata, testSource *api.MetadataWithTest, multipleSources bool) (*api.ReleaseBuildConfiguration, error)
+	ConfigWithTest(base *api.Metadata, testSource *api.MetadataWithTest) (*api.ReleaseBuildConfiguration, error)
 	Resolve([]byte) (*api.ReleaseBuildConfiguration, error)
 }
 
@@ -48,12 +48,9 @@ func (r *resolverClient) Config(info *api.Metadata) (*api.ReleaseBuildConfigurat
 	return configFromResolverRequest(req)
 }
 
-func (r *resolverClient) ConfigWithTest(base *api.Metadata, testSource *api.MetadataWithTest, multipleSources bool) (*api.ReleaseBuildConfiguration, error) {
+func (r *resolverClient) ConfigWithTest(base *api.Metadata, testSource *api.MetadataWithTest) (*api.ReleaseBuildConfiguration, error) {
 	logrus.Infof("Loading configuration from %s for %s", r.Address, base.AsString())
-	endpoint := fmt.Sprintf("%s/configWithInjectedTest", r.Address)
-	if multipleSources {
-		endpoint = fmt.Sprintf("%s/mergeConfigsWithInjectedTest", r.Address)
-	}
+	endpoint := fmt.Sprintf("%s/mergeConfigsWithInjectedTest", r.Address)
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request for configresolver: %w", err)

@@ -55,7 +55,7 @@ const (
 )
 
 type injectingResolverClient interface {
-	ConfigWithTest(base *api.Metadata, testSource *api.MetadataWithTest, multipleSources bool) (*api.ReleaseBuildConfiguration, error)
+	ConfigWithTest(base *api.Metadata, testSource *api.MetadataWithTest) (*api.ReleaseBuildConfiguration, error)
 }
 
 type prowConfigGetter interface {
@@ -227,7 +227,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 			Test: jobSpec.Test,
 		}
 
-		ciopConfig, err := resolveCiopConfig(r.configResolverClient, baseMetadata, inject, len(prpqr.Spec.PullRequests) > 1)
+		ciopConfig, err := resolveCiopConfig(r.configResolverClient, baseMetadata, inject)
 		if err != nil {
 			logger.WithError(err).Error("Failed to resolve the ci-operator configuration")
 			statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
@@ -452,8 +452,8 @@ func jobNameHash(name string) string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-func resolveCiopConfig(rc injectingResolverClient, baseCiop *api.Metadata, inject *api.MetadataWithTest, multipleSources bool) (*api.ReleaseBuildConfiguration, error) {
-	ciopConfig, err := rc.ConfigWithTest(baseCiop, inject, multipleSources)
+func resolveCiopConfig(rc injectingResolverClient, baseCiop *api.Metadata, inject *api.MetadataWithTest) (*api.ReleaseBuildConfiguration, error) {
+	ciopConfig, err := rc.ConfigWithTest(baseCiop, inject)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get config from resolver: %w", err)
 	}

@@ -278,7 +278,12 @@ func modifyRequest(req *http.Request, clusterTokenService ClusterTokenService, q
 
 func modifyResponse(resp *http.Response) error {
 	// Only logging here for debugging, nothing is modified
-	logrus.WithField("status", resp.Status).Debug("Proxy responded")
+	statusCode := resp.StatusCode
+	l := logrus.WithField("statusCode", statusCode)
+	if statusCode == http.StatusUnauthorized {
+		l = logrus.WithField("authenticateHeader", resp.Header.Get("www-authenticate"))
+	}
+	l.Debug("Proxy responded")
 	return nil
 }
 

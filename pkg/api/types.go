@@ -1262,6 +1262,7 @@ const (
 	ClusterProfileAWSTerraformQE        ClusterProfile = "aws-terraform-qe"
 	ClusterProfileAWSRHTAPQE            ClusterProfile = "aws-rhtap-qe"
 	ClusterProfileAWSRHTAPPerformance   ClusterProfile = "aws-rhtap-performance"
+	ClusterProfileAWSTelco              ClusterProfile = "aws-telco"
 	ClusterProfileAWSOpendatahub        ClusterProfile = "aws-opendatahub"
 	ClusterProfileAWSDevfile            ClusterProfile = "aws-devfile"
 	ClusterProfileAlibabaCloud          ClusterProfile = "alibabacloud"
@@ -1294,6 +1295,7 @@ const (
 	ClusterProfileGCPLoggingCRIO        ClusterProfile = "gcp-logging-crio"
 	ClusterProfileGCP2                  ClusterProfile = "gcp-openshift-gce-devel-ci-2"
 	ClusterProfileGCPOpendatahub        ClusterProfile = "gcp-opendatahub"
+	ClusterProfileGCPTelco              ClusterProfile = "gcp-telco"
 	ClusterProfileIBMCloud              ClusterProfile = "ibmcloud"
 	ClusterProfileIBMCloudCSPIQE        ClusterProfile = "ibmcloud-cspi-qe"
 	ClusterProfileIBMCloudQE            ClusterProfile = "ibmcloud-qe"
@@ -1384,6 +1386,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSTerraformQE,
 		ClusterProfileAWSRHTAPQE,
 		ClusterProfileAWSRHTAPPerformance,
+		ClusterProfileAWSTelco,
 		ClusterProfileAWSOpendatahub,
 		ClusterProfileAWSDevfile,
 		ClusterProfileAlibabaCloud,
@@ -1416,6 +1419,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileGCPArm64,
 		ClusterProfileGCPVirtualization,
 		ClusterProfileGCPOpendatahub,
+		ClusterProfileGCPTelco,
 		ClusterProfileAWSVirtualization,
 		ClusterProfileAzureVirtualization,
 		ClusterProfileHyperShift,
@@ -1650,6 +1654,10 @@ func (p ClusterProfile) ClusterType() string {
 		return "hypershift-powervs"
 	case ClusterProfileHypershiftPowerVSCB:
 		return "hypershift-powervs-cb"
+	case ClusterProfileAWSTelco:
+		return "aws-telco"
+	case ClusterProfileGCPTelco:
+		return "gcp-telco"
 	default:
 		return ""
 	}
@@ -1709,6 +1717,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-rhtap-qe-quota-slice"
 	case ClusterProfileAWSRHTAPPerformance:
 		return "aws-rhtap-performance-quota-slice"
+	case ClusterProfileAWSTelco:
+		return "aws-telco-quota-slice"
 	case ClusterProfileAWSOpendatahub:
 		return "aws-opendatahub-quota-slice"
 	case ClusterProfileAWSDevfile:
@@ -1771,6 +1781,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "gcp-virtualization-quota-slice"
 	case ClusterProfileGCPOpendatahub:
 		return "gcp-opendatahub-quota-slice"
+	case ClusterProfileGCPTelco:
+		return "gcp-telco-quota-slice"
 	case ClusterProfileIBMCloud:
 		return "ibmcloud-quota-slice"
 	case ClusterProfileIBMCloudCSPIQE:

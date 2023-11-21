@@ -440,11 +440,9 @@ periodic-ci-openshift-multiarch-master-nightly-4.14-upgrade-from-stable-4.13-ocp
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.14-multi.json
 
 // begin https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.14-ppc64le.json
-periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-ovn-remote-libvirt-ppc64le
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.14-ppc64le.json
 
 // begin https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.14-s390x.json
-periodic-ci-openshift-multiarch-master-nightly-4.14-ocp-e2e-ovn-remote-libvirt-s390x
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.14-s390x.json
 
 // begin https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.14.json

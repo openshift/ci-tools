@@ -2,7 +2,9 @@ package multiarchbuildconfig
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -17,6 +19,7 @@ import (
 	"k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	buildv1 "github.com/openshift/api/build/v1"
@@ -25,41 +28,114 @@ import (
 	"github.com/openshift/ci-tools/pkg/manifestpusher"
 )
 
+var (
+	scheme *runtime.Scheme
+)
+
+func init() {
+	scheme = runtime.NewScheme()
+	sb := runtime.NewSchemeBuilder(v1.AddToScheme, buildv1.Install)
+	if err := sb.AddToScheme(scheme); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to add scheme: %v", err)
+		os.Exit(1)
+	}
+}
+
+type mockManifestPusher struct {
+	errToReturn error
+}
+
+func (m *mockManifestPusher) PushImageWithManifest(builds []buildv1.Build, targetImageRef string) error {
+	return m.errToReturn
+}
+
+type buildBuilder struct {
+	name     string
+	arch     string
+	phase    buildv1.BuildPhase
+	mabcName string
+}
+
+func NewBuildBuilder() *buildBuilder {
+	return &buildBuilder{mabcName: "foo"}
+}
+
+func (bb *buildBuilder) Name(name string) *buildBuilder {
+	bb.name = name
+	return bb
+}
+
+func (bb *buildBuilder) Arch(arch string) *buildBuilder {
+	bb.arch = arch
+	return bb
+}
+
+func (bb *buildBuilder) Phase(phase buildv1.BuildPhase) *buildBuilder {
+	bb.phase = phase
+	return bb
+}
+
+func (bb *buildBuilder) MABCName(mabcName string) *buildBuilder {
+	bb.mabcName = mabcName
+	return bb
+}
+
+func (bb *buildBuilder) Build() buildv1.Build {
+	return buildv1.Build{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: bb.name,
+			Labels: map[string]string{
+				v1.MultiArchBuildConfigNameLabel: bb.mabcName,
+				v1.MultiArchBuildConfigArchLabel: bb.arch,
+			},
+		},
+		Status: buildv1.BuildStatus{Phase: bb.phase},
+	}
+}
+
 func TestCheckAllBuildsFinished(t *testing.T) {
 	tests := []struct {
 		name     string
-		builds   map[string]*buildv1.Build
+		builds   *buildv1.BuildList
 		expected bool
 	}{
 		{
 			name: "AllBuildsComplete",
-			builds: map[string]*buildv1.Build{
-				"build1": {Status: buildv1.BuildStatus{Phase: buildv1.BuildPhaseComplete}},
-				"build2": {Status: buildv1.BuildStatus{Phase: buildv1.BuildPhaseComplete}},
+			builds: &buildv1.BuildList{
+				Items: []buildv1.Build{
+					NewBuildBuilder().Name("build0").Arch("amd64").Phase(buildv1.BuildPhaseComplete).Build(),
+					NewBuildBuilder().Name("build1").Arch("arm64").Phase(buildv1.BuildPhaseComplete).Build(),
+				},
 			},
 			expected: true,
 		},
 		{
 			name: "AllBuildsFailed",
-			builds: map[string]*buildv1.Build{
-				"build1": {Status: buildv1.BuildStatus{Phase: buildv1.BuildPhaseFailed}},
-				"build2": {Status: buildv1.BuildStatus{Phase: buildv1.BuildPhaseFailed}},
+			builds: &buildv1.BuildList{
+				Items: []buildv1.Build{
+					NewBuildBuilder().Name("build0").Arch("amd64").Phase(buildv1.BuildPhaseFailed).Build(),
+					NewBuildBuilder().Name("build1").Arch("arm64").Phase(buildv1.BuildPhaseFailed).Build(),
+				},
 			},
 			expected: true,
 		},
 		{
 			name: "MixOfAllowedStatuses",
-			builds: map[string]*buildv1.Build{
-				"build1": {Status: buildv1.BuildStatus{Phase: buildv1.BuildPhaseComplete}},
-				"build2": {Status: buildv1.BuildStatus{Phase: buildv1.BuildPhaseFailed}},
+			builds: &buildv1.BuildList{
+				Items: []buildv1.Build{
+					NewBuildBuilder().Name("build0").Arch("amd64").Phase(buildv1.BuildPhaseComplete).Build(),
+					NewBuildBuilder().Name("build1").Arch("arm64").Phase(buildv1.BuildPhaseFailed).Build(),
+				},
 			},
 			expected: true,
 		},
 		{
 			name: "WithOtherStatus",
-			builds: map[string]*buildv1.Build{
-				"build1": {Status: buildv1.BuildStatus{Phase: buildv1.BuildPhaseComplete}},
-				"build2": {Status: buildv1.BuildStatus{Phase: "OtherStatus"}},
+			builds: &buildv1.BuildList{
+				Items: []buildv1.Build{
+					NewBuildBuilder().Name("build0").Arch("amd64").Phase(buildv1.BuildPhaseComplete).Build(),
+					NewBuildBuilder().Name("build1").Arch("arm64").Phase(buildv1.BuildPhaseRunning).Build(),
+				},
 			},
 			expected: false,
 		},
@@ -77,22 +153,26 @@ func TestCheckAllBuildsFinished(t *testing.T) {
 func TestCheckAllBuildsSuccessful(t *testing.T) {
 	tests := []struct {
 		name     string
-		builds   map[string]*buildv1.Build
+		builds   *buildv1.BuildList
 		expected bool
 	}{
 		{
 			name: "AllBuildsComplete",
-			builds: map[string]*buildv1.Build{
-				"build1": {Status: buildv1.BuildStatus{Phase: buildv1.BuildPhaseComplete}},
-				"build2": {Status: buildv1.BuildStatus{Phase: buildv1.BuildPhaseComplete}},
+			builds: &buildv1.BuildList{
+				Items: []buildv1.Build{
+					NewBuildBuilder().Name("build0").Arch("amd64").Phase(buildv1.BuildPhaseComplete).Build(),
+					NewBuildBuilder().Name("build1").Arch("arm64").Phase(buildv1.BuildPhaseComplete).Build(),
+				},
 			},
 			expected: true,
 		},
 		{
 			name: "AtLeastOneBuildNotComplete",
-			builds: map[string]*buildv1.Build{
-				"build1": {Status: buildv1.BuildStatus{Phase: buildv1.BuildPhaseComplete}},
-				"build2": {Status: buildv1.BuildStatus{Phase: "SomeOtherPhase"}},
+			builds: &buildv1.BuildList{
+				Items: []buildv1.Build{
+					NewBuildBuilder().Name("build0").Arch("amd64").Phase(buildv1.BuildPhaseComplete).Build(),
+					NewBuildBuilder().Name("build1").Arch("arm64").Phase(buildv1.BuildPhasePending).Build(),
+				},
 			},
 			expected: false,
 		},
@@ -124,11 +204,6 @@ func TestBuildOwnerReference(t *testing.T) {
 		},
 	}
 
-	scheme := runtime.NewScheme()
-	sb := runtime.NewSchemeBuilder(v1.AddToScheme, buildv1.AddToScheme)
-	if err := sb.AddToScheme(scheme); err != nil {
-		t.Fatalf("Failed to add scheme: %v", err)
-	}
 	client := fake.NewClientBuilder().WithObjects(mabc).WithScheme(scheme).Build()
 	r := &reconciler{
 		logger:        logrus.NewEntry(logrus.StandardLogger()),
@@ -203,11 +278,31 @@ func TestBuildOwnerReference(t *testing.T) {
 }
 
 func TestReconcile(t *testing.T) {
+	makeBuilds := func(mabcName string) *buildv1.BuildList {
+		return &buildv1.BuildList{
+			Items: []buildv1.Build{
+				NewBuildBuilder().Name("build0").Arch("amd64").MABCName(mabcName).Phase(buildv1.BuildPhaseComplete).Build(),
+				NewBuildBuilder().Name("build1").Arch("arm64").MABCName(mabcName).Phase(buildv1.BuildPhaseComplete).Build(),
+			},
+		}
+	}
+	createInterceptorFactory := func(failOnBuildCreate bool) func(ctx context.Context, client ctrlruntimeclient.WithWatch, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
+		return func(ctx context.Context, client ctrlruntimeclient.WithWatch, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
+			if _, ok := obj.(*buildv1.Build); ok && failOnBuildCreate {
+				return errors.New("planned failure")
+			}
+			return nil
+		}
+	}
+
 	tests := []struct {
-		name           string
-		inputMabc      *v1.MultiArchBuildConfig
-		expectedMabc   *v1.MultiArchBuildConfig
-		manifestPusher manifestpusher.ManifestPusher
+		name              string
+		failOnBuildCreate bool
+		inputMabc         *v1.MultiArchBuildConfig
+		builds            *buildv1.BuildList
+		expectedMabc      *v1.MultiArchBuildConfig
+		expectedErr       error
+		manifestPusher    manifestpusher.ManifestPusher
 	}{
 		{
 			name: "Early exit on SuccessState",
@@ -246,10 +341,11 @@ func TestReconcile(t *testing.T) {
 						CommonSpec: buildv1.CommonSpec{Output: buildv1.BuildOutput{To: &corev1.ObjectReference{Namespace: "test-ns", Name: "test-image"}}},
 					},
 				},
-				Status: v1.MultiArchBuildConfigStatus{
-					Builds: map[string]*buildv1.Build{
-						"test-build": {Status: buildv1.BuildStatus{Phase: buildv1.BuildPhaseFailed}},
-					},
+			},
+			builds: &buildv1.BuildList{
+				Items: []buildv1.Build{
+					NewBuildBuilder().Name("build0").Arch("amd64").MABCName("test-mabc").Phase(buildv1.BuildPhaseFailed).Build(),
+					NewBuildBuilder().Name("build1").Arch("arm64").MABCName("test-mabc").Phase(buildv1.BuildPhaseComplete).Build(),
 				},
 			},
 			expectedMabc: &v1.MultiArchBuildConfig{
@@ -259,12 +355,7 @@ func TestReconcile(t *testing.T) {
 						CommonSpec: buildv1.CommonSpec{Output: buildv1.BuildOutput{To: &corev1.ObjectReference{Namespace: "test-ns", Name: "test-image"}}},
 					},
 				},
-				Status: v1.MultiArchBuildConfigStatus{
-					State: v1.FailureState,
-					Builds: map[string]*buildv1.Build{
-						"test-build": {Status: buildv1.BuildStatus{Phase: buildv1.BuildPhaseFailed}},
-					},
-				},
+				Status: v1.MultiArchBuildConfigStatus{State: v1.FailureState},
 			},
 		},
 		{
@@ -280,15 +371,6 @@ func TestReconcile(t *testing.T) {
 						CommonSpec: buildv1.CommonSpec{Output: buildv1.BuildOutput{To: &corev1.ObjectReference{Namespace: "test-ns", Name: "test-image"}}},
 					},
 				},
-				Status: v1.MultiArchBuildConfigStatus{
-					Builds: map[string]*buildv1.Build{
-						"test-build": {
-							Status: buildv1.BuildStatus{
-								Phase: buildv1.BuildPhaseComplete,
-							},
-						},
-					},
-				},
 			},
 			expectedMabc: &v1.MultiArchBuildConfig{
 				ObjectMeta: metav1.ObjectMeta{
@@ -302,13 +384,6 @@ func TestReconcile(t *testing.T) {
 				},
 				Status: v1.MultiArchBuildConfigStatus{
 					State: v1.FailureState,
-					Builds: map[string]*buildv1.Build{
-						"test-build": {
-							Status: buildv1.BuildStatus{
-								Phase: buildv1.BuildPhaseComplete,
-							},
-						},
-					},
 					Conditions: []metav1.Condition{
 						{
 							Type:    PushImageManifestDone,
@@ -333,15 +408,6 @@ func TestReconcile(t *testing.T) {
 						CommonSpec: buildv1.CommonSpec{Output: buildv1.BuildOutput{To: &corev1.ObjectReference{Namespace: "test-ns", Name: "test-image"}}},
 					},
 				},
-				Status: v1.MultiArchBuildConfigStatus{
-					Builds: map[string]*buildv1.Build{
-						"test-build": {
-							Status: buildv1.BuildStatus{
-								Phase: buildv1.BuildPhaseComplete,
-							},
-						},
-					},
-				},
 			},
 			expectedMabc: &v1.MultiArchBuildConfig{
 				ObjectMeta: metav1.ObjectMeta{
@@ -354,13 +420,6 @@ func TestReconcile(t *testing.T) {
 					},
 				},
 				Status: v1.MultiArchBuildConfigStatus{
-					Builds: map[string]*buildv1.Build{
-						"test-build": {
-							Status: buildv1.BuildStatus{
-								Phase: buildv1.BuildPhaseComplete,
-							},
-						},
-					},
 					Conditions: []metav1.Condition{
 						{
 							Type:   PushImageManifestDone,
@@ -385,13 +444,6 @@ func TestReconcile(t *testing.T) {
 					ExternalRegistries: []string{"foo-registry.com/foo/bar:latest"},
 				},
 				Status: v1.MultiArchBuildConfigStatus{
-					Builds: map[string]*buildv1.Build{
-						"test-build": {
-							Status: buildv1.BuildStatus{
-								Phase: buildv1.BuildPhaseComplete,
-							},
-						},
-					},
 					Conditions: []metav1.Condition{
 						{
 							Type:   PushImageManifestDone,
@@ -413,13 +465,6 @@ func TestReconcile(t *testing.T) {
 					ExternalRegistries: []string{"foo-registry.com/foo/bar:latest"},
 				},
 				Status: v1.MultiArchBuildConfigStatus{
-					Builds: map[string]*buildv1.Build{
-						"test-build": {
-							Status: buildv1.BuildStatus{
-								Phase: buildv1.BuildPhaseComplete,
-							},
-						},
-					},
 					Conditions: []metav1.Condition{
 						{
 							Type:   PushImageManifestDone,
@@ -453,13 +498,6 @@ func TestReconcile(t *testing.T) {
 					ExternalRegistries: []string{"foo-registry.com/foo/bar:latest"},
 				},
 				Status: v1.MultiArchBuildConfigStatus{
-					Builds: map[string]*buildv1.Build{
-						"test-build": {
-							Status: buildv1.BuildStatus{
-								Phase: buildv1.BuildPhaseComplete,
-							},
-						},
-					},
 					Conditions: []metav1.Condition{
 						{
 							Type:   PushImageManifestDone,
@@ -484,13 +522,6 @@ func TestReconcile(t *testing.T) {
 					ExternalRegistries: []string{"foo-registry.com/foo/bar:latest"},
 				},
 				Status: v1.MultiArchBuildConfigStatus{
-					Builds: map[string]*buildv1.Build{
-						"test-build": {
-							Status: buildv1.BuildStatus{
-								Phase: buildv1.BuildPhaseComplete,
-							},
-						},
-					},
 					Conditions: []metav1.Condition{
 						{
 							Type:   PushImageManifestDone,
@@ -503,11 +534,48 @@ func TestReconcile(t *testing.T) {
 			},
 			manifestPusher: &mockManifestPusher{},
 		},
+		{
+			name:              "Fails it isn't able to spawn builds",
+			builds:            &buildv1.BuildList{},
+			failOnBuildCreate: true,
+			inputMabc: &v1.MultiArchBuildConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-mabc",
+					Namespace: "test-ns",
+				},
+				Spec: v1.MultiArchBuildConfigSpec{
+					BuildSpec: buildv1.BuildConfigSpec{
+						CommonSpec: buildv1.CommonSpec{Output: buildv1.BuildOutput{To: &corev1.ObjectReference{Namespace: "test-ns", Name: "test-image"}}},
+					},
+				},
+			},
+			expectedMabc: &v1.MultiArchBuildConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-mabc",
+					Namespace: "test-ns",
+				},
+				Spec: v1.MultiArchBuildConfigSpec{
+					BuildSpec: buildv1.BuildConfigSpec{
+						CommonSpec: buildv1.CommonSpec{Output: buildv1.BuildOutput{To: &corev1.ObjectReference{Namespace: "test-ns", Name: "test-image"}}},
+					},
+				},
+				Status: v1.MultiArchBuildConfigStatus{State: v1.FailureState},
+			},
+			expectedErr: errors.New("couldn't create builds for architectures: amd64,arm64: coudldn't create build test-ns/test-mabc-amd64: planned failure"),
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := fake.NewClientBuilder().WithObjects(tt.inputMabc).Build()
+			if tt.builds == nil {
+				tt.builds = makeBuilds(tt.inputMabc.Name)
+			}
+			client := fake.NewClientBuilder().
+				WithObjects(tt.inputMabc).
+				WithScheme(scheme).
+				WithLists(tt.builds).
+				WithInterceptorFuncs(interceptor.Funcs{Create: createInterceptorFactory(tt.failOnBuildCreate)}).
+				Build()
 
 			r := &reconciler{
 				logger:         logrus.NewEntry(logrus.StandardLogger()),
@@ -515,10 +583,20 @@ func TestReconcile(t *testing.T) {
 				architectures:  []string{"amd64", "arm64"},
 				manifestPusher: tt.manifestPusher,
 				imageMirrorer:  newFakeOCImage(func(images []string) error { return nil }),
+				scheme:         scheme,
 			}
 
-			if err := r.reconcile(context.Background(), reconcile.Request{NamespacedName: types.NamespacedName{Name: tt.inputMabc.Name, Namespace: tt.inputMabc.Namespace}}, r.logger); err != nil {
-				t.Fatalf("Failed to reconcile: %v", err)
+			err := r.reconcile(context.Background(), reconcile.Request{NamespacedName: types.NamespacedName{Name: tt.inputMabc.Name, Namespace: tt.inputMabc.Namespace}}, r.logger)
+			if err != nil && tt.expectedErr == nil {
+				t.Fatalf("want err nil but got: %v", err)
+			}
+			if err == nil && tt.expectedErr != nil {
+				t.Fatalf("want err %v but nil", tt.expectedErr)
+			}
+			if err != nil && tt.expectedErr != nil {
+				if diff := cmp.Diff(tt.expectedErr.Error(), err.Error()); diff != "" {
+					t.Fatalf("unexpected error: %s", diff)
+				}
 			}
 
 			actualMabc := &v1.MultiArchBuildConfig{}
@@ -535,12 +613,4 @@ func TestReconcile(t *testing.T) {
 			}
 		})
 	}
-}
-
-type mockManifestPusher struct {
-	errToReturn error
-}
-
-func (m *mockManifestPusher) PushImageWithManifest(builds map[string]*buildv1.Build, targetImageRef string) error {
-	return m.errToReturn
 }

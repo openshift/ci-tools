@@ -27,7 +27,6 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	buildapi "github.com/openshift/api/build/v1"
-	buildv1 "github.com/openshift/api/build/v1"
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -466,13 +465,8 @@ func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubern
 	}
 
 	if len(errs) == 0 {
-		buildsMap := make(map[string]*buildv1.Build)
-		for _, b := range builds {
-			buildsMap[b.Name] = &b
-		}
-
-		manifestPusher := manifestpusher.NewManifestPushfer(logrus.WithField("for-build", build.Name), buildClient.LocalRegistryDNS(), buildClient.ManifestToolDockerCfg())
-		if err := manifestPusher.PushImageWithManifest(buildsMap, fmt.Sprintf("%s/%s", build.Spec.Output.To.Namespace, build.Spec.Output.To.Name)); err != nil {
+		manifestPusher := manifestpusher.NewManifestPusher(logrus.WithField("for-build", build.Name), buildClient.LocalRegistryDNS(), buildClient.ManifestToolDockerCfg())
+		if err := manifestPusher.PushImageWithManifest(builds, fmt.Sprintf("%s/%s", build.Spec.Output.To.Namespace, build.Spec.Output.To.Name)); err != nil {
 			errs = append(errs, err)
 		}
 	}

@@ -18,6 +18,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	authenticationv1 "k8s.io/api/authentication/v1"
+	authorizationv1 "k8s.io/api/authorization/v1"
 	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/logrusutil"
@@ -197,7 +198,7 @@ func (c *robotTokenMaintainer) renew() (ret error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	c.logger.Info("Renewing token ...")
-	req, err := http.NewRequest("GET", "https://quay.io/v2/auth?service=quay.io", nil)
+	req, err := http.NewRequest("GET", "https://quay.io/v2/auth?service=quay.io&scope=repository:openshift/ci:pull", nil)
 	if err != nil {
 		return fmt.Errorf("failed to create http request: %w", err)
 	}
@@ -277,7 +278,12 @@ func modifyRequest(req *http.Request, clusterTokenService ClusterTokenService, q
 
 func modifyResponse(resp *http.Response) error {
 	// Only logging here for debugging, nothing is modified
-	logrus.WithField("status", resp.Status).Debug("Proxy responded")
+	statusCode := resp.StatusCode
+	l := logrus.WithField("statusCode", statusCode)
+	if statusCode == http.StatusUnauthorized {
+		l = logrus.WithField("authenticateHeader", resp.Header.Get("www-authenticate"))
+	}
+	l.Debug("Proxy responded")
 	return nil
 }
 
@@ -307,8 +313,30 @@ func (s *SimpleClusterTokenService) Validate(token string) (bool, error) {
 	if err := s.client.Create(s.ctx, tr); err != nil {
 		return false, fmt.Errorf("failed to check token: %w", err)
 	}
-	// TODO SAR on certain resource
-	return tr.Status.Authenticated, nil
+
+	if !tr.Status.Authenticated {
+		return false, nil
+	}
+
+	sar := &authorizationv1.SubjectAccessReview{
+		Spec: authorizationv1.SubjectAccessReviewSpec{
+			User:   tr.Status.User.Username,
+			Groups: tr.Status.User.Groups,
+			ResourceAttributes: &authorizationv1.ResourceAttributes{
+				Group:       "image.openshift.io",
+				Version:     "v1",
+				Resource:    "imagestreams",
+				Subresource: "layers",
+				Verb:        "get",
+			},
+		},
+	}
+
+	if err := s.client.Create(s.ctx, sar); err != nil {
+		return false, fmt.Errorf("failed to create SubjectAccessReview for user %s: %w", tr.Status.User.Username, err)
+	}
+
+	return sar.Status.Allowed, nil
 }
 
 func getRouter(proxy *httputil.ReverseProxy, host string, clusterTokenService ClusterTokenService, secretGetter func(string) []byte, robotUsernameFile, robotPasswordFile string) *http.ServeMux {

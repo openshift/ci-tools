@@ -9,21 +9,22 @@ import (
 	"github.com/sirupsen/logrus"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/selection"
+	ctrlruntime "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	ctrlruntimeutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	buildv1 "github.com/openshift/api/build/v1"
 
 	v1 "github.com/openshift/ci-tools/pkg/api/multiarchbuildconfig/v1"
-	"github.com/openshift/ci-tools/pkg/controller/multiarchbuildconfig/buildsreconciler"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 	"github.com/openshift/ci-tools/pkg/manifestpusher"
 )
@@ -45,36 +46,35 @@ const (
 )
 
 func AddToManager(mgr manager.Manager, architectures []string, dockerCfgPath string) error {
-	if err := buildsreconciler.AddToManager(mgr); err != nil {
-		return fmt.Errorf("failed to construct builds reconciler: %w", err)
-	}
-
 	logger := logrus.WithField("controller", controllerName)
-	c, err := controller.New(controllerName, mgr, controller.Options{
-		MaxConcurrentReconciles: 1,
-		Reconciler: &reconciler{
-			logger:         logger,
-			client:         mgr.GetClient(),
-			architectures:  architectures,
-			manifestPusher: manifestpusher.NewManifestPushfer(logger, registryURL, dockerCfgPath),
-			imageMirrorer:  &ocImage{log: logger, registryConfig: dockerCfgPath},
-			scheme:         mgr.GetScheme(),
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("failed to construct controller: %w", err)
-	}
 
-	predicateFuncs := predicate.Funcs{
+	mabcPredicateFuncs := predicate.Funcs{
 		CreateFunc:  func(e event.CreateEvent) bool { return true },
 		DeleteFunc:  func(event.DeleteEvent) bool { return false },
 		UpdateFunc:  func(event.UpdateEvent) bool { return true },
 		GenericFunc: func(event.GenericEvent) bool { return false },
 	}
 
-	if err := c.Watch(source.Kind(mgr.GetCache(), &v1.MultiArchBuildConfig{}),
-		&handler.EnqueueRequestForObject{}, predicateFuncs); err != nil {
-		return fmt.Errorf("failed to create watch for MultiArchBuildConfig: %w", err)
+	buildPredicateFuncs := predicate.Funcs{
+		CreateFunc:  func(e event.CreateEvent) bool { return true },
+		DeleteFunc:  func(event.DeleteEvent) bool { return false },
+		UpdateFunc:  func(e event.UpdateEvent) bool { return true },
+		GenericFunc: func(event.GenericEvent) bool { return false },
+	}
+
+	if err := ctrlruntime.NewControllerManagedBy(mgr).
+		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
+		For(&v1.MultiArchBuildConfig{}, builder.WithPredicates(mabcPredicateFuncs)).
+		Owns(&buildv1.Build{}, builder.WithPredicates(buildPredicateFuncs)).
+		Complete(&reconciler{
+			logger:         logger,
+			client:         mgr.GetClient(),
+			architectures:  architectures,
+			manifestPusher: manifestpusher.NewManifestPusher(logger, registryURL, dockerCfgPath),
+			imageMirrorer:  &ocImage{log: logger, registryConfig: dockerCfgPath},
+			scheme:         mgr.GetScheme(),
+		}); err != nil {
+		return fmt.Errorf("failed to create controller: %w", err)
 	}
 
 	return nil
@@ -126,18 +126,28 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 }
 
 func (r *reconciler) handleMultiArchBuildConfig(ctx context.Context, mabc *v1.MultiArchBuildConfig) error {
-	if mabc.Status.Builds == nil {
-		if err := r.createBuildsForArchitectures(ctx, mabc); err != nil {
+	builds, err := r.listBuilds(ctx, mabc.Name)
+	if err != nil {
+		return fmt.Errorf("couldn't list builds: %w", err)
+	}
+
+	if len(r.architectures) != len(builds.Items) {
+		if err := r.createBuilds(ctx, mabc); err != nil {
+			r.logger.Errorf("failed to create builds: %s", err)
+			mutateFn := func(mabcToMutate *v1.MultiArchBuildConfig) { mabcToMutate.Status.State = v1.FailureState }
+			if err := v1.UpdateMultiArchBuildConfig(ctx, r.logger, r.client, ctrlruntimeclient.ObjectKey{Namespace: mabc.Namespace, Name: mabc.Name}, mutateFn); err != nil {
+				return fmt.Errorf("failed to update the MultiArchBuildConfig %s/%s: %w", mabc.Namespace, mabc.Name, err)
+			}
 			return fmt.Errorf("couldn't create builds for architectures: %s: %w", strings.Join(r.architectures, ","), err)
 		}
 		return nil
 	}
 
-	if !checkAllBuildsFinished(mabc.Status.Builds) {
+	if !checkAllBuildsFinished(builds) {
 		return nil
 	}
 
-	if !checkAllBuildsSuccessful(mabc.Status.Builds) {
+	if !checkAllBuildsSuccessful(builds) {
 		mutateFn := func(mabcToMutate *v1.MultiArchBuildConfig) { mabcToMutate.Status.State = v1.FailureState }
 		if err := v1.UpdateMultiArchBuildConfig(ctx, r.logger, r.client, ctrlruntimeclient.ObjectKey{Namespace: mabc.Namespace, Name: mabc.Name}, mutateFn); err != nil {
 			return fmt.Errorf("failed to update the MultiArchBuildConfig %s/%s: %w", mabc.Namespace, mabc.Name, err)
@@ -148,7 +158,7 @@ func (r *reconciler) handleMultiArchBuildConfig(ctx context.Context, mabc *v1.Mu
 	targetImageRef := fmt.Sprintf("%s/%s", mabc.Spec.BuildSpec.CommonSpec.Output.To.Namespace, mabc.Spec.BuildSpec.CommonSpec.Output.To.Name)
 	// First condition to be added is PushImageManifestDone
 	if len(mabc.Status.Conditions) == 0 {
-		if err := r.handlePushImageWithManifest(ctx, mabc, targetImageRef); err != nil {
+		if err := r.handlePushImageWithManifest(ctx, mabc, targetImageRef, builds); err != nil {
 			return fmt.Errorf("couldn't push the manifest: %w", err)
 		}
 		return nil
@@ -163,7 +173,7 @@ func (r *reconciler) handleMultiArchBuildConfig(ctx context.Context, mabc *v1.Mu
 	return nil
 }
 
-func (r *reconciler) createBuildsForArchitectures(ctx context.Context, mabc *v1.MultiArchBuildConfig) error {
+func (r *reconciler) createBuilds(ctx context.Context, mabc *v1.MultiArchBuildConfig) error {
 	for _, arch := range r.architectures {
 		commonSpec := mabc.Spec.BuildSpec.CommonSpec.DeepCopy()
 		commonSpec.NodeSelector = map[string]string{nodeArchitectureLabel: arch}
@@ -195,7 +205,7 @@ func (r *reconciler) createBuildsForArchitectures(ctx context.Context, mabc *v1.
 	return nil
 }
 
-func (r *reconciler) handlePushImageWithManifest(ctx context.Context, mabc *v1.MultiArchBuildConfig, targetImageRef string) error {
+func (r *reconciler) handlePushImageWithManifest(ctx context.Context, mabc *v1.MultiArchBuildConfig, targetImageRef string, builds *buildv1.BuildList) error {
 	mutateFn := func(mabcToMutate *v1.MultiArchBuildConfig) {
 		mabcToMutate.Status.Conditions = append(mabcToMutate.Status.Conditions, metav1.Condition{
 			Type:               PushImageManifestDone,
@@ -205,7 +215,7 @@ func (r *reconciler) handlePushImageWithManifest(ctx context.Context, mabc *v1.M
 		})
 	}
 
-	if err := r.manifestPusher.PushImageWithManifest(mabc.Status.Builds, targetImageRef); err != nil {
+	if err := r.manifestPusher.PushImageWithManifest(builds.Items, targetImageRef); err != nil {
 		mutateFn = func(mabcToMutate *v1.MultiArchBuildConfig) {
 			mabcToMutate.Status.Conditions = append(mabcToMutate.Status.Conditions, metav1.Condition{
 				Type:               PushImageManifestDone,
@@ -263,8 +273,21 @@ func (r *reconciler) handleMirrorImage(ctx context.Context, targetImageRef strin
 	return nil
 }
 
-func checkAllBuildsSuccessful(builds map[string]*buildv1.Build) bool {
-	for _, build := range builds {
+func (r *reconciler) listBuilds(ctx context.Context, mabcName string) (*buildv1.BuildList, error) {
+	builds := buildv1.BuildList{}
+	requirement, err := labels.NewRequirement(v1.MultiArchBuildConfigNameLabel, selection.Equals, []string{mabcName})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create requirement: %w", err)
+	}
+	listOpts := ctrlruntimeclient.ListOptions{LabelSelector: labels.NewSelector().Add(*requirement)}
+	if err := r.client.List(ctx, &builds, &listOpts); err != nil {
+		return nil, fmt.Errorf("failed to list builds: %w", err)
+	}
+	return &builds, nil
+}
+
+func checkAllBuildsSuccessful(builds *buildv1.BuildList) bool {
+	for _, build := range builds.Items {
 		if build.Status.Phase != buildv1.BuildPhaseComplete {
 			return false
 		}
@@ -272,8 +295,8 @@ func checkAllBuildsSuccessful(builds map[string]*buildv1.Build) bool {
 	return true
 }
 
-func checkAllBuildsFinished(builds map[string]*buildv1.Build) bool {
-	for _, build := range builds {
+func checkAllBuildsFinished(builds *buildv1.BuildList) bool {
+	for _, build := range builds.Items {
 		if build.Status.Phase != buildv1.BuildPhaseComplete &&
 			build.Status.Phase != buildv1.BuildPhaseFailed &&
 			build.Status.Phase != buildv1.BuildPhaseCancelled &&

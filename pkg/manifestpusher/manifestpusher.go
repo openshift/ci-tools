@@ -18,10 +18,10 @@ const (
 )
 
 type ManifestPusher interface {
-	PushImageWithManifest(builds map[string]*buildv1.Build, targetImageRef string) error
+	PushImageWithManifest(builds []buildv1.Build, targetImageRef string) error
 }
 
-func NewManifestPushfer(logger *logrus.Entry, registryURL string, dockercfgPath string) ManifestPusher {
+func NewManifestPusher(logger *logrus.Entry, registryURL string, dockercfgPath string) ManifestPusher {
 	return &manifestPusher{
 		logger:        logger,
 		registryURL:   registryURL,
@@ -43,7 +43,7 @@ type manifestPusher struct {
 // --platforms linux/amd64 --template registry.multi-build01.arm-build.devcluster.openshift.com/ci/managed-clonerefs:latest-amd64 \
 // --platforms linux/arm64 --template registry.multi-build01.arm-build.devcluster.openshift.com/ci/managed-clonerefs:latest-arm64 \
 // --target registry.multi-build01.arm-build.devcluster.openshift.com/ci/managed-clonerefs:latest
-func (m manifestPusher) PushImageWithManifest(builds map[string]*buildv1.Build, targetImageRef string) error {
+func (m manifestPusher) PushImageWithManifest(builds []buildv1.Build, targetImageRef string) error {
 	return wait.ExponentialBackoff(wait.Backoff{
 		Steps:    5,
 		Duration: 20 * time.Second,
@@ -56,7 +56,8 @@ func (m manifestPusher) PushImageWithManifest(builds map[string]*buildv1.Build, 
 			"--docker-cfg", m.dockercfgPath,
 			"push", "from-args",
 		}
-		for _, build := range builds {
+		for i := range builds {
+			build := &builds[i]
 			args = append(args, []string{
 				"--platforms",
 				fmt.Sprintf("linux/%s", build.Spec.NodeSelector[nodeArchitectureLabel]),

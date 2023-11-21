@@ -1718,6 +1718,7 @@ periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-proxy
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-serial
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-shared-vpc-localzones
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-shared-vpc-phz-techpreview
+periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-shared-vpc-wavelengthzones
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-single-node
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-single-node-serial
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-single-node-workers

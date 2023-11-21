@@ -198,7 +198,7 @@ func (c *robotTokenMaintainer) renew() (ret error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	c.logger.Info("Renewing token ...")
-	req, err := http.NewRequest("GET", "https://quay.io/v2/auth?service=quay.io", nil)
+	req, err := http.NewRequest("GET", "https://quay.io/v2/auth?service=quay.io&scope=repository:openshift/ci:pull", nil)
 	if err != nil {
 		return fmt.Errorf("failed to create http request: %w", err)
 	}

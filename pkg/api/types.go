@@ -1507,7 +1507,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSRHTAPQE,
 		ClusterProfileAWSRHTAPPerformance,
 		ClusterProfileOSSM,
-		ClusterProfileAWSOpendatahub:
+		ClusterProfileAWSOpendatahub,
 		ClusterProfileAWSDevfile:
 		return string(CloudAWS)
 	case

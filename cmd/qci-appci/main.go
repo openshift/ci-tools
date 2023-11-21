@@ -318,6 +318,12 @@ func (s *SimpleClusterTokenService) Validate(token string) (bool, error) {
 		return false, nil
 	}
 
+	username := tr.Status.User.Username
+	// SAR check only applies to human users
+	if strings.HasPrefix(username, "system:serviceaccount:") {
+		return true, nil
+	}
+
 	sar := &authorizationv1.SubjectAccessReview{
 		Spec: authorizationv1.SubjectAccessReviewSpec{
 			User:   tr.Status.User.Username,

@@ -51,6 +51,7 @@ const (
 
 	aggregationIDLabel          = "release.openshift.io/aggregation-id"
 	defaultAggregatorJobTimeout = 6 * time.Hour
+	defaultMultiRefJobTimeout   = 6 * time.Hour
 )
 
 type injectingResolverClient interface {
@@ -494,10 +495,18 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 	hashInput := prowgen.CustomHashInput(prpqrName)
 	var periodic *prowconfig.Periodic
 	for i := range ciopConfig.Tests {
-		if ciopConfig.Tests[i].As != inject.Test {
+		test := ciopConfig.Tests[i]
+		if test.As != inject.Test {
 			continue
 		}
-		jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, fakeProwgenInfo, prowgen.NewCiOperatorPodSpecGenerator(), ciopConfig.Tests[i])
+		if len(prs) > 1 {
+			if test.Timeout == nil {
+				test.Timeout = &prowv1.Duration{Duration: defaultMultiRefJobTimeout}
+			} else if test.Timeout.Duration < defaultMultiRefJobTimeout {
+				test.Timeout.Duration = defaultMultiRefJobTimeout
+			}
+		}
+		jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, fakeProwgenInfo, prowgen.NewCiOperatorPodSpecGenerator(), test)
 		jobBaseGen.PodSpec.Add(prowgen.InjectTestFrom(inject))
 		if aggregateIndex != nil {
 			jobBaseGen.PodSpec.Add(prowgen.TargetAdditionalSuffix(strconv.Itoa(*aggregateIndex)))

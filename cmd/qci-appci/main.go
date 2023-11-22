@@ -326,7 +326,7 @@ func (s *SimpleClusterTokenService) Validate(token string) (bool, error) {
 
 	sar := &authorizationv1.SubjectAccessReview{
 		Spec: authorizationv1.SubjectAccessReviewSpec{
-			User:   tr.Status.User.Username,
+			User:   username,
 			Groups: tr.Status.User.Groups,
 			ResourceAttributes: &authorizationv1.ResourceAttributes{
 				Group:       "image.openshift.io",
@@ -339,7 +339,7 @@ func (s *SimpleClusterTokenService) Validate(token string) (bool, error) {
 	}
 
 	if err := s.client.Create(s.ctx, sar); err != nil {
-		return false, fmt.Errorf("failed to create SubjectAccessReview for user %s: %w", tr.Status.User.Username, err)
+		return false, fmt.Errorf("failed to create SubjectAccessReview for user %s: %w", username, err)
 	}
 
 	return sar.Status.Allowed, nil

@@ -64,16 +64,17 @@ const (
 
 func UpdateMultiArchBuildConfig(ctx context.Context, logger *logrus.Entry, client ctrlruntimeclient.Client, namespacedName types.NamespacedName, mutateFn func(mabcToMutate *MultiArchBuildConfig)) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		multiArchBuildConfig := &MultiArchBuildConfig{}
-		if err := client.Get(ctx, namespacedName, multiArchBuildConfig); err != nil {
+		mabc := &MultiArchBuildConfig{}
+		if err := client.Get(ctx, namespacedName, mabc); err != nil {
 			return fmt.Errorf("failed to get the MultiArchBuildConfig: %w", err)
 		}
 
-		mutateFn(multiArchBuildConfig)
+		mabc = mabc.DeepCopy()
+		mutateFn(mabc)
 
 		logger.WithField("namespace", namespacedName.Namespace).WithField("name", namespacedName.Name).Info("Updating MultiArchBuildConfig...")
-		if err := client.Update(ctx, multiArchBuildConfig); err != nil {
-			return fmt.Errorf("failed to update MultiArchBuildConfig %s: %w", multiArchBuildConfig.Name, err)
+		if err := client.Update(ctx, mabc); err != nil {
+			return fmt.Errorf("failed to update MultiArchBuildConfig %s: %w", mabc.Name, err)
 		}
 		return nil
 	})

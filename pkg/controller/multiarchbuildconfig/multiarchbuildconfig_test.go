@@ -535,7 +535,7 @@ func TestReconcile(t *testing.T) {
 			manifestPusher: &mockManifestPusher{},
 		},
 		{
-			name:              "Fails it isn't able to spawn builds",
+			name:              "Fails if it isn't able to spawn builds",
 			builds:            &buildv1.BuildList{},
 			failOnBuildCreate: true,
 			inputMabc: &v1.MultiArchBuildConfig{
@@ -561,7 +561,7 @@ func TestReconcile(t *testing.T) {
 				},
 				Status: v1.MultiArchBuildConfigStatus{State: v1.FailureState},
 			},
-			expectedErr: errors.New("couldn't create builds for architectures: amd64,arm64: coudldn't create build test-ns/test-mabc-amd64: planned failure"),
+			expectedErr: errors.New("couldn't create builds for architectures: amd64,arm64: couldn't create build test-ns/test-mabc-amd64: planned failure"),
 		},
 	}
 

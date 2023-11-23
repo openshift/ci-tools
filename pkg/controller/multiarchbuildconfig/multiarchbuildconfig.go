@@ -146,6 +146,7 @@ func (r *reconciler) handleMultiArchBuildConfig(ctx context.Context, mabc *v1.Mu
 	}
 
 	if !checkAllBuildsFinished(builds) {
+		r.logger.Info("Waiting for the builds to finish")
 		return nil
 	}
 
@@ -201,7 +202,7 @@ func (r *reconciler) createBuilds(ctx context.Context, mabc *v1.MultiArchBuildCo
 
 		r.logger.WithField("build_namespace", build.Namespace).WithField("build_name", build.Name).Info("Creating build")
 		if err := r.client.Create(ctx, build); err != nil {
-			return fmt.Errorf("coudldn't create build %s/%s: %w", build.Namespace, build.Name, err)
+			return fmt.Errorf("couldn't create build %s/%s: %w", build.Namespace, build.Name, err)
 		}
 	}
 	return nil
@@ -268,6 +269,7 @@ func (r *reconciler) handleMirrorImage(ctx context.Context, targetImageRef strin
 		}
 	}
 
+	r.logger.WithField("registries", strings.Join(mabc.Spec.ExternalRegistries, ",")).Info("Mirroring image")
 	if err := v1.UpdateMultiArchBuildConfig(ctx, r.logger, r.client, ctrlruntimeclient.ObjectKey{Namespace: mabc.Namespace, Name: mabc.Name}, mutateFn); err != nil {
 		return fmt.Errorf("failed to update the MultiArchBuildConfig %s/%s: %w", mabc.Namespace, mabc.Name, err)
 	}

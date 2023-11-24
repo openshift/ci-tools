@@ -8,6 +8,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
@@ -139,6 +140,10 @@ func (v *Validator) validateConfiguration(ctx *configContext, config *api.Releas
 	}
 	validationErrors = append(validationErrors, validateReleaseBuildConfiguration(config, org, repo)...)
 	validationErrors = append(validationErrors, validateBuildRootImageConfiguration(ctx.AddField("build_root"), config.InputConfiguration.BuildRootImage, len(config.Images) > 0)...)
+	//TODO: for now this is only to be set when merging configs in ci-operator-configresolver
+	if len(config.BuildRootImages) > 0 {
+		validationErrors = append(validationErrors, ctx.errorf("build_roots should not be set directly"))
+	}
 
 	if config.Operator != nil {
 		validationErrors = append(validationErrors, ValidateOperator(ctx.AddField("operator"), config)...)
@@ -152,7 +157,13 @@ func (v *Validator) validateConfiguration(ctx *configContext, config *api.Releas
 
 	// Validate promotion
 	if config.PromotionConfiguration != nil {
-		validationErrors = append(validationErrors, validatePromotionConfiguration("promotion", *config.PromotionConfiguration)...)
+		validationErrors = append(validationErrors,
+			validatePromotionConfiguration("promotion",
+				*config.PromotionConfiguration,
+				api.PromotesOfficialImages(config, api.WithOKD),
+				len(api.ImageTargets(config)) > 0,
+				config.ReleaseTagConfiguration,
+				config.Releases)...)
 	}
 
 	validationErrors = append(validationErrors, validateReleases("releases", config.Releases, config.ReleaseTagConfiguration != nil)...)
@@ -181,13 +192,13 @@ func (v *Validator) validateConfiguration(ctx *configContext, config *api.Releas
 func (v *Validator) ValidateTestStepConfiguration(ctx *configContext, config *api.ReleaseBuildConfiguration, resolved bool) []error {
 	var validationErrors []error
 
-	releases := sets.NewString()
+	releases := sets.New[string]()
 	for name := range config.Releases {
 		releases.Insert(name)
 	}
 
 	if tests := config.Tests; len(tests) != 0 {
-		images := sets.NewString()
+		images := sets.New[string]()
 		for _, i := range config.Images {
 			images.Insert(string(i.To))
 		}
@@ -288,7 +299,10 @@ func validateOperator(ctx *configContext, input *api.OperatorStepConfiguration, 
 			validationErrors = append(validationErrors, err)
 		}
 		if bundle.As == "" && bundle.BaseIndex != "" {
-			validationErrors = append(validationErrors, ctxN.AddField("base_index").errorf("base_index requires as to be set"))
+			validationErrors = append(validationErrors, ctxN.AddField("base_index").errorf("base_index requires 'as' to be set"))
+		}
+		if bundle.As == "" && bundle.SkipBuildingIndex {
+			validationErrors = append(validationErrors, ctxN.AddField("skip_building_index").errorf("skip_building_index requires 'as' to be set"))
 		}
 		if bundle.UpdateGraph != "" {
 			if bundle.BaseIndex == "" {
@@ -381,26 +395,55 @@ func validateImageStreamTagReferenceMap(fieldRoot string, input map[string]api.I
 var (
 	openshiftWebhookForbiddingNamespaces = regexp.MustCompile("^kube|^openshift|^default$|^redhat")
 	// openshift is on every cluster we do not need to create
-	exceptions = sets.NewString("openshift")
+	exceptions = sets.New[string]("openshift")
 )
 
-func validatePromotionConfiguration(fieldRoot string, input api.PromotionConfiguration) []error {
+func validatePromotionConfiguration(fieldRoot string, input api.PromotionConfiguration, promotesOfficialImages, imageTargets bool, releaseTagConfiguration *api.ReleaseTagConfiguration, releases map[string]api.UnresolvedRelease) []error {
 	var validationErrors []error
 
-	if len(input.Namespace) == 0 {
-		validationErrors = append(validationErrors, fmt.Errorf("%s: no namespace defined", fieldRoot))
+	thisFieldRoot := func(i int) string {
+		if i == 0 {
+			return fieldRoot
+		}
+		return fmt.Sprintf("%s.to[%d]", fieldRoot, i-1)
 	}
+	targets := api.PromotionTargets(&input)
+	for i, target := range targets {
 
-	if openshiftWebhookForbiddingNamespaces.MatchString(input.Namespace) && !exceptions.Has(input.Namespace) {
-		validationErrors = append(validationErrors, fmt.Errorf("%s: cannot promote to namespace %s matching this regular expression: (^kube.*|^openshift.*|^default$|^redhat.*)", fieldRoot, input.Namespace))
-	}
+		if len(input.Namespace) == 0 {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: no namespace defined", thisFieldRoot(i)))
+		}
 
-	if len(input.Name) == 0 && len(input.Tag) == 0 {
-		validationErrors = append(validationErrors, fmt.Errorf("%s: no name or tag defined", fieldRoot))
-	}
+		if openshiftWebhookForbiddingNamespaces.MatchString(input.Namespace) && !exceptions.Has(input.Namespace) {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: cannot promote to namespace %s matching this regular expression: (^kube.*|^openshift.*|^default$|^redhat.*)", thisFieldRoot(i), input.Namespace))
+		}
 
-	if len(input.Name) != 0 && len(input.Tag) != 0 {
-		validationErrors = append(validationErrors, fmt.Errorf("%s: both name and tag defined", fieldRoot))
+		if len(input.Name) == 0 && len(input.Tag) == 0 {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: no name or tag defined", thisFieldRoot(i)))
+		}
+
+		if len(input.Name) != 0 && len(input.Tag) != 0 {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: both name and tag defined", thisFieldRoot(i)))
+		}
+
+		if promotesOfficialImages && imageTargets {
+			if _, ok := releases["latest"]; !ok && releaseTagConfiguration == nil {
+				validationErrors = append(validationErrors, fmt.Errorf("importing the release stream is required to ensure the promoted images to the namespace %s can be integrated properly. Although it can be achieved by tag_specification or releases[\"latest\"], adding an e2e test is strongly suggested", target.Namespace))
+			}
+		}
+
+		for j, other := range targets {
+			if i == j {
+				continue
+			}
+
+			if target.Namespace == other.Namespace {
+				if target.Tag == other.Tag && target.Name == other.Name {
+
+					validationErrors = append(validationErrors, fmt.Errorf("%s: promotes to the same target as %s", thisFieldRoot(i), thisFieldRoot(j)))
+				}
+			}
+		}
 	}
 	return validationErrors
 }
@@ -439,6 +482,12 @@ func validateReleaseBuildConfiguration(input *api.ReleaseBuildConfiguration, org
 		if input.CanonicalGoRepository != nil && *input.CanonicalGoRepository == fmt.Sprintf("github.com/%s/%s", org, repo) {
 			validationErrors = append(validationErrors, errors.New("'canonical_go_repository' provides the default location, so is unnecessary"))
 		}
+	}
+
+	//TODO: this is only to be set by ci-operator-configresolver when merging configs (for now)
+	if len(input.BinaryBuildCommandsList) > 0 || len(input.TestBinaryBuildCommandsList) > 0 ||
+		len(input.RpmBuildCommandsList) > 0 || len(input.RpmBuildLocationList) > 0 {
+		validationErrors = append(validationErrors, errors.New("it is not permissible to directly set: ‘binary_build_commands_list’, ‘test_binary_build_commands_list’, ‘rpm_build_commands_list’, or ‘rpm_build_location_list’"))
 	}
 
 	validationErrors = append(validationErrors, validateResources("resources", input.Resources)...)
@@ -510,4 +559,31 @@ func validateResourceList(fieldRoot string, list api.ResourceList) []error {
 	}
 
 	return validationErrors
+}
+
+func partOfImageStreamName(name string) error {
+	// https://issues.redhat.com/browse/DPTP-2858
+	if strings.Contains(name, ".") {
+		return fmt.Errorf("must not contain '.'")
+	}
+	return nil
+}
+
+func Observer(observer api.Observer) []error {
+	var errs []error
+	fieldRoot := fmt.Sprintf("observer %q: ", observer.Name)
+	if len(validation.IsDNS1123Subdomain(observer.Name)) != 0 {
+		errs = append(errs, fmt.Errorf("%s.name is not a valid Kubernetes object identifier", fieldRoot))
+	}
+	if observer.Commands == "" {
+		errs = append(errs, fmt.Errorf("%s.commands cannot be empty", fieldRoot))
+	}
+	errs = append(errs, validateResourceRequirements(fieldRoot+".resources", observer.Resources)...)
+	// we're validating unresolved configuration outside of a full test config, so
+	// we cannot know the releases that may or may not be contained in a config using
+	// this observer in the future. This technically disallows users from using `from:`
+	// to refer to an image from a release payload for an observer, but this should be
+	// not of any real issue and will at least be obvious to the user on presubmit.
+	errs = append(errs, validateFromAndFromImage(newContext("", nil, nil, nil), observer.From, observer.FromImage, nil, nil)...)
+	return errs
 }

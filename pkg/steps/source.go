@@ -7,16 +7,19 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/runtime"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/clonerefs"
@@ -24,12 +27,16 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	buildapi "github.com/openshift/api/build/v1"
+	buildv1 "github.com/openshift/api/build/v1"
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/kubernetes"
+	"github.com/openshift/ci-tools/pkg/manifestpusher"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 const (
@@ -46,7 +53,8 @@ const (
 
 	OauthSecretKey = "oauth-token"
 
-	PullSecretName = "registry-pull-credentials"
+	dockerCfgPathPush = "/secrets/manifest-tool/.dockerconfigjson"
+	localRegistryDNS  = "image-registry.openshift-image-registry.svc:5000"
 )
 
 type CloneAuthType string
@@ -134,6 +142,7 @@ type sourceStep struct {
 	config          api.SourceStepConfiguration
 	resources       api.ResourceConfiguration
 	client          BuildClient
+	podClient       kubernetes.PodClient
 	jobSpec         *api.JobSpec
 	cloneAuthConfig *CloneAuthConfig
 	pullSecret      *corev1.Secret
@@ -159,7 +168,7 @@ func (s *sourceStep) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return handleBuild(ctx, s.client, *createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret, fromDigest))
+	return handleBuilds(ctx, s.client, s.podClient, *createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret, fromDigest))
 }
 
 func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef corev1.ObjectReference, resources api.ResourceConfiguration, cloneAuthConfig *CloneAuthConfig, pullSecret *corev1.Secret, fromDigest string) *buildapi.Build {
@@ -313,7 +322,7 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 		})
 	}
 	if pullSecret != nil {
-		build.Spec.Strategy.DockerStrategy.PullSecret = getSourceSecretFromName(PullSecretName)
+		build.Spec.Strategy.DockerStrategy.PullSecret = getSourceSecretFromName(api.RegistryPullCredentialsSecret)
 	}
 	if owner := jobSpec.Owner(); owner != nil {
 		build.OwnerReferences = append(build.OwnerReferences, *owner)
@@ -359,6 +368,39 @@ func buildInputsFromStep(inputs map[string]api.ImageBuildInputs) []buildapi.Imag
 	return refs
 }
 
+func handleFailedBuild(ctx context.Context, client BuildClient, ns, name string, err error) error {
+	b := &buildapi.Build{}
+	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, b); err != nil {
+		return fmt.Errorf("could not get build %s: %w", name, err)
+	}
+
+	if !isBuildPhaseTerminated(b.Status.Phase) {
+		logrus.Debugf("Build %q (created at %v) still in phase %q", name, b.CreationTimestamp, b.Status.Phase)
+		return err
+	}
+
+	if !(isInfraReason(b.Status.Reason) || hintsAtInfraReason(b.Status.LogSnippet)) {
+		logrus.Debugf("Build %q (created at %v) classified as legitimate failure, will not be retried", name, b.CreationTimestamp)
+		return err
+	}
+
+	logrus.Infof("Build %s previously failed from an infrastructure error (%s), retrying...", name, b.Status.Reason)
+	zero := int64(0)
+	foreground := metav1.DeletePropagationForeground
+	opts := metav1.DeleteOptions{
+		GracePeriodSeconds: &zero,
+		Preconditions:      &metav1.Preconditions{UID: &b.UID},
+		PropagationPolicy:  &foreground,
+	}
+	if err := client.Delete(ctx, b, &ctrlruntimeclient.DeleteOptions{Raw: &opts}); err != nil && !kerrors.IsNotFound(err) && !kerrors.IsConflict(err) {
+		return fmt.Errorf("could not delete build %s: %w", name, err)
+	}
+	if err := waitForBuildDeletion(ctx, client, ns, name); err != nil {
+		return fmt.Errorf("could not wait for build %s to be deleted: %w", name, err)
+	}
+	return nil
+}
+
 func isBuildPhaseTerminated(phase buildapi.BuildPhase) bool {
 	switch phase {
 	case buildapi.BuildPhaseNew,
@@ -369,59 +411,94 @@ func isBuildPhaseTerminated(phase buildapi.BuildPhase) bool {
 	return true
 }
 
-func handleBuild(ctx context.Context, buildClient BuildClient, build buildapi.Build) error {
-	var buildErrs []error
-	attempts := 5
-	if boErr := wait.ExponentialBackoff(wait.Backoff{Duration: time.Minute, Factor: 1.5, Steps: attempts}, func() (bool, error) {
-		var buildAttempt buildapi.Build
-		build.DeepCopyInto(&buildAttempt)
-		if err := buildClient.Create(ctx, &buildAttempt); err != nil && !kerrors.IsAlreadyExists(err) {
-			return false, fmt.Errorf("could not create build %s: %w", buildAttempt.Name, err)
-		}
+func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubernetes.PodClient, build buildapi.Build) error {
+	var wg sync.WaitGroup
 
-		buildErr := waitForBuildOrTimeout(ctx, buildClient, buildAttempt.Namespace, buildAttempt.Name)
-		if buildErr == nil {
-			if err := gatherSuccessfulBuildLog(buildClient, buildAttempt.Namespace, buildAttempt.Name); err != nil {
-				// log error but do not fail successful build
-				logrus.WithError(err).Warnf("Failed gathering successful build %s logs into artifacts.", buildAttempt.Name)
+	builds := constructMultiArchBuilds(build, buildClient.NodeArchitectures())
+	errChan := make(chan error, len(builds))
+
+	wg.Add(len(builds))
+	for _, build := range builds {
+		go func(b buildapi.Build) {
+			defer wg.Done()
+			if err := handleBuild(ctx, buildClient, podClient, b); err != nil {
+				errChan <- fmt.Errorf("error occurred handling build %s: %w", b.Name, err)
 			}
-			return true, nil
-		}
-		buildErrs = append(buildErrs, buildErr)
+		}(build)
+	}
 
-		b := &buildapi.Build{}
-		if err := buildClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: buildAttempt.Namespace, Name: buildAttempt.Name}, b); err != nil {
-			return false, fmt.Errorf("could not get build %s: %w", buildAttempt.Name, err)
+	wg.Wait()
+	close(errChan)
+
+	var errs []error
+	for err := range errChan {
+		errs = append(errs, err)
+	}
+
+	if len(errs) == 0 {
+		buildsMap := make(map[string]*buildv1.Build)
+		for _, b := range builds {
+			buildsMap[b.Name] = &b
 		}
 
-		if !isBuildPhaseTerminated(b.Status.Phase) {
-			return false, buildErr
+		manifestPusher := manifestpusher.NewManifestPushfer(logrus.WithField("for-build", build.Name), localRegistryDNS, dockerCfgPathPush)
+		if err := manifestPusher.PushImageWithManifest(buildsMap, fmt.Sprintf("%s/%s", build.Spec.Output.To.Namespace, build.Spec.Output.To.Name)); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return utilerrors.NewAggregate(errs)
+}
+
+func constructMultiArchBuilds(build buildapi.Build, nodeArchitectures []string) []buildapi.Build {
+	var ret []buildapi.Build
+
+	for _, arch := range nodeArchitectures {
+		b := build
+		b.Name = fmt.Sprintf("%s-%s", b.Name, arch)
+		b.Spec.NodeSelector = map[string]string{
+			corev1.LabelArchStable: arch,
 		}
 
-		if !(isInfraReason(b.Status.Reason) || hintsAtInfraReason(b.Status.LogSnippet)) {
-			return false, buildErr
+		b.Spec.Output.To = &corev1.ObjectReference{
+			Kind:      "ImageStreamTag",
+			Namespace: b.Namespace,
+			Name:      fmt.Sprintf("%s:%s", api.PipelineImageStream, b.Name),
 		}
+		ret = append(ret, b)
+	}
 
-		logrus.Infof("Build %s previously failed from an infrastructure error (%s), retrying...", b.Name, b.Status.Reason)
-		zero := int64(0)
-		foreground := metav1.DeletePropagationForeground
-		opts := metav1.DeleteOptions{
-			GracePeriodSeconds: &zero,
-			Preconditions:      &metav1.Preconditions{UID: &b.UID},
-			PropagationPolicy:  &foreground,
+	return ret
+}
+
+func handleBuild(ctx context.Context, client BuildClient, podClient kubernetes.PodClient, build buildapi.Build) error {
+	const attempts = 5
+	ns, name := build.Namespace, build.Name
+	var errs []error
+	if err := wait.ExponentialBackoff(wait.Backoff{Duration: time.Minute, Factor: 1.5, Steps: attempts}, func() (bool, error) {
+		var attempt buildapi.Build
+		build.DeepCopyInto(&attempt)
+		if err := client.Create(ctx, &attempt); err == nil {
+			logrus.Infof("Created build %q", name)
+		} else if kerrors.IsAlreadyExists(err) {
+			logrus.Infof("Found existing build %q", name)
+		} else {
+			return false, fmt.Errorf("could not create build %s: %w", name, err)
 		}
-		if err := buildClient.Delete(ctx, &buildAttempt, &ctrlruntimeclient.DeleteOptions{Raw: &opts}); err != nil && !kerrors.IsNotFound(err) && !kerrors.IsConflict(err) {
-			return false, fmt.Errorf("could not delete build %s: %w", buildAttempt.Name, err)
+		if err := waitForBuildOrTimeout(ctx, client, podClient, ns, name); err != nil {
+			errs = append(errs, err)
+			return false, handleFailedBuild(ctx, client, ns, name, err)
 		}
-		if err := waitForBuildDeletion(ctx, buildClient, buildAttempt.Namespace, buildAttempt.Name); err != nil {
-			return false, fmt.Errorf("could not wait for build %s to be deleted: %w", buildAttempt.Name, err)
+		if err := gatherSuccessfulBuildLog(client, ns, name); err != nil {
+			// log error but do not fail successful build
+			logrus.WithError(err).Warnf("Failed gathering successful build %s logs into artifacts.", name)
 		}
-		return false, nil
-	}); boErr != nil {
-		if boErr == wait.ErrWaitTimeout {
-			return fmt.Errorf("build not successful after %d attempts: %w", attempts, errors.NewAggregate(buildErrs))
+		return true, nil
+	}); err != nil {
+		if err == wait.ErrWaitTimeout {
+			return fmt.Errorf("build not successful after %d attempts: %w", attempts, utilerrors.NewAggregate(errs))
 		}
-		return boErr
+		return err
 	}
 	return nil
 }
@@ -451,7 +528,7 @@ func waitForBuildDeletion(ctx context.Context, client ctrlruntimeclient.Client, 
 
 func isInfraReason(reason buildapi.StatusReason) bool {
 	infraReasons := []buildapi.StatusReason{
-		buildapi.StatusReason("BuildPodEvicted"), // vendoring to get this is so hard
+		buildapi.StatusReasonBuildPodEvicted,
 		buildapi.StatusReasonBuildPodDeleted,
 		buildapi.StatusReasonBuildPodExists,
 		buildapi.StatusReasonCannotCreateBuildPod,
@@ -484,62 +561,108 @@ func hintsAtInfraReason(logSnippet string) bool {
 		strings.Contains(logSnippet, "connection reset by peer")
 }
 
-func waitForBuildOrTimeout(ctx context.Context, buildClient BuildClient, namespace, name string) error {
-	isOK := func(b *buildapi.Build) bool {
-		return b.Status.Phase == buildapi.BuildPhaseComplete
-	}
-	isFailed := func(b *buildapi.Build) bool {
-		return b.Status.Phase == buildapi.BuildPhaseFailed ||
-			b.Status.Phase == buildapi.BuildPhaseCancelled ||
-			b.Status.Phase == buildapi.BuildPhaseError
-	}
-
-	build := &buildapi.Build{}
-	if err := buildClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, build); err != nil {
-		if kerrors.IsNotFound(err) {
-			return fmt.Errorf("could not find build %s", name)
-		}
-		return fmt.Errorf("could not get build: %w", err)
-	}
-	if isOK(build) {
-		logrus.Infof("Build %s already succeeded in %s", build.Name, buildDuration(build))
-		return nil
-	}
-	if isFailed(build) {
-		logrus.Infof("Build %s failed, printing logs:", build.Name)
-		printBuildLogs(buildClient, build.Namespace, build.Name)
-		return appendLogToError(fmt.Errorf("the build %s failed with reason %s: %s", build.Name, build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
-	}
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-			if err := buildClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, build); err != nil {
-				logrus.WithError(err).Warnf("Failed to get build %s.", name)
-				continue
-			}
-			if isOK(build) {
-				logrus.Infof("Build %s succeeded after %s", build.Name, buildDuration(build).Truncate(time.Second))
-				return nil
-			}
-			if isFailed(build) {
-				logrus.Infof("Build %s failed, printing logs:", build.Name)
-				printBuildLogs(buildClient, build.Namespace, build.Name)
-				return appendLogToError(fmt.Errorf("the build %s failed after %s with reason %s: %s", build.Name, buildDuration(build).Truncate(time.Second), build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
-			}
-		}
-	}
+func waitForBuildOrTimeout(
+	ctx context.Context,
+	buildClient BuildClient,
+	podClient kubernetes.PodClient,
+	namespace, name string,
+) error {
+	return waitForBuild(ctx, buildClient, podClient, namespace, name)
 }
 
-func appendLogToError(err error, log string) error {
-	log = strings.TrimSpace(log)
-	if len(log) == 0 {
-		return err
+// waitForBuild watches a build until it either succeeds or fails
+//
+// Several subtle aspects are involved in the implementation:
+//
+//   - The particular ci-operator instance executing this function may be the
+//     one that just created the build, but it may also be one that executes in
+//     parallel with the one that did, or even one that is being executed at a
+//     later point and simply reusing an existing build.  This means we may be
+//     watching a build at any point in its lifetime, including long after it
+//     has been created and/or after it has succeeded/failed.
+//   - Because builds cannot be completely validated a priori, there is a
+//     potential that the object in question will stay pending forever.  The
+//     timeout parameter (passed via the Pod client) is used to fail the
+//     execution early in that case.  A timeout must result in an immediate
+//     error.
+//   - Because of the volume of tests executing in a given build cluster (and,
+//     to a lesser extent, to avoid unnecessary delays), this function must use
+//     a watch instead of polling in order to not overwhelm the API server.
+//     Economizing API requests when possible is also helpful.
+func waitForBuild(
+	ctx context.Context,
+	buildClient BuildClient,
+	podClient kubernetes.PodClient,
+	namespace, name string,
+) error {
+	logrus.WithFields(logrus.Fields{
+		"namespace": namespace,
+		"name":      name,
+	}).Trace("Waiting for build to be complete.")
+	// ret contains the latest version of the object received from the watch
+	// It is always valid in the `pendingCheck` thread since it is only started
+	// after the first version is seen.
+	var ret atomic.Pointer[buildapi.Build]
+	var eg *errgroup.Group
+	eg, ctx = errgroup.WithContext(ctx)
+	pendingCtx, cancel := context.WithCancel(ctx)
+	pendingCheck := func() error {
+		timeout := podClient.GetPendingTimeout()
+		select {
+		case <-pendingCtx.Done():
+		case <-time.After(time.Until(ret.Load().CreationTimestamp.Add(timeout))):
+			// This second load happens much later and must look at the latest
+			// version of the object.
+			if err := checkPending(ctx, podClient, ret.Load(), timeout, time.Now()); err != nil {
+				logrus.Infof(err.Error())
+				return err
+			}
+		}
+		return nil
 	}
-	return fmt.Errorf("%s\n\n%s", err.Error(), log)
+	eg.Go(func() error {
+		defer cancel()
+		return kubernetes.WaitForConditionOnObject(ctx, buildClient, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, &buildapi.BuildList{}, &buildapi.Build{}, func(obj runtime.Object) (bool, error) {
+			build := obj.(*buildapi.Build)
+			// Is this the first time we've received an object?
+			// Also updates the shared pointer every time so that `pendingCheck`
+			// has access to the latest version
+			first := ret.Swap(build) == nil
+			switch build.Status.Phase {
+			case buildapi.BuildPhaseNew, buildapi.BuildPhasePending:
+				// Iff this is a (relatively) new build, we need to verify that
+				// it does not stay pending forever.
+				if first {
+					eg.Go(pendingCheck)
+				}
+			case buildapi.BuildPhaseComplete:
+				logrus.Infof("Build %s succeeded after %s", build.Name, buildDuration(build).Truncate(time.Second))
+				return true, nil
+			case buildapi.BuildPhaseFailed, buildapi.BuildPhaseCancelled, buildapi.BuildPhaseError:
+				logrus.Infof("Build %s failed, printing logs:", build.Name)
+				printBuildLogs(buildClient, build.Namespace, build.Name)
+				return true, util.AppendLogToError(fmt.Errorf("the build %s failed after %s with reason %s: %s", build.Name, buildDuration(build).Truncate(time.Second), build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
+			}
+			return false, nil
+		}, 0)
+	})
+	return eg.Wait()
+}
+
+func checkPending(
+	ctx context.Context,
+	podClient kubernetes.PodClient,
+	build *buildapi.Build,
+	timeout time.Duration,
+	now time.Time,
+) error {
+	switch build.Status.Phase {
+	case buildapi.BuildPhaseNew, buildapi.BuildPhasePending:
+		if build.CreationTimestamp.Add(timeout).Before(now) {
+			return util.PendingBuildError(ctx, podClient, build)
+		}
+	}
+	return nil
 }
 
 func buildDuration(build *buildapi.Build) time.Duration {
@@ -617,12 +740,20 @@ func (s *sourceStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient,
-	jobSpec *api.JobSpec, cloneAuthConfig *CloneAuthConfig, pullSecret *corev1.Secret) api.Step {
+func SourceStep(
+	config api.SourceStepConfiguration,
+	resources api.ResourceConfiguration,
+	buildClient BuildClient,
+	podClient kubernetes.PodClient,
+	jobSpec *api.JobSpec,
+	cloneAuthConfig *CloneAuthConfig,
+	pullSecret *corev1.Secret,
+) api.Step {
 	return &sourceStep{
 		config:          config,
 		resources:       resources,
 		client:          buildClient,
+		podClient:       podClient,
 		jobSpec:         jobSpec,
 		cloneAuthConfig: cloneAuthConfig,
 		pullSecret:      pullSecret,
@@ -634,53 +765,6 @@ func getSourceSecretFromName(secretName string) *corev1.LocalObjectReference {
 		return nil
 	}
 	return &corev1.LocalObjectReference{Name: secretName}
-}
-
-func getReasonsForUnreadyContainers(p *corev1.Pod) string {
-	builder := &strings.Builder{}
-	for _, c := range p.Status.ContainerStatuses {
-		if c.Ready {
-			continue
-		}
-		var reason, message string
-		switch {
-		case c.State.Waiting != nil:
-			reason = c.State.Waiting.Reason
-			message = c.State.Waiting.Message
-		case c.State.Running != nil:
-			reason = c.State.Waiting.Reason
-			message = c.State.Waiting.Message
-		case c.State.Terminated != nil:
-			reason = c.State.Terminated.Reason
-			message = c.State.Terminated.Message
-		default:
-			reason = "unknown"
-			message = "unknown"
-		}
-		if message != "" {
-			message = fmt.Sprintf(" and message %s", message)
-		}
-		_, _ = builder.WriteString(fmt.Sprintf("\n* Container %s is not ready with reason %s%s", c.Name, reason, message))
-	}
-	return builder.String()
-}
-
-func getEventsForPod(ctx context.Context, pod *corev1.Pod, client ctrlruntimeclient.Client) string {
-	events := &corev1.EventList{}
-	listOpts := &ctrlruntimeclient.ListOptions{
-		Namespace:     pod.Namespace,
-		FieldSelector: fields.OneTermEqualSelector("involvedObject.uid", string(pod.GetUID())),
-	}
-	if err := client.List(ctx, events, listOpts); err != nil {
-		logrus.WithError(err).Warn("Could not fetch events.")
-		return ""
-	}
-	builder := &strings.Builder{}
-	_, _ = builder.WriteString(fmt.Sprintf("Found %d events for Pod %s:", len(events.Items), pod.Name))
-	for _, event := range events.Items {
-		_, _ = builder.WriteString(fmt.Sprintf("\n* %dx %s: %s", event.Count, event.Source.Component, event.Message))
-	}
-	return builder.String()
 }
 
 func addLabelsToBuild(refs *prowv1.Refs, build *buildapi.Build, contextDir string) {

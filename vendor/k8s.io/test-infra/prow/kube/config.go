@@ -19,11 +19,12 @@ package kube
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -92,7 +93,7 @@ func LoadClusterConfigs(opts *Options) (map[string]rest.Config, error) {
 		candidates = append(candidates, opts.file)
 	}
 	if opts.dir != "" {
-		files, err := ioutil.ReadDir(opts.dir)
+		files, err := os.ReadDir(opts.dir)
 		if err != nil {
 			return nil, fmt.Errorf("kubecfg dir: %w", err)
 		}
@@ -104,6 +105,10 @@ func LoadClusterConfigs(opts *Options) (map[string]rest.Config, error) {
 			}
 			if strings.HasPrefix(filename, "..") {
 				logrus.WithField("filename", filename).Info("Ignored file starting with double dots")
+				continue
+			}
+			if !strings.HasSuffix(filename, opts.suffix) {
+				logrus.WithField("filename", filename).WithField("suffix", opts.suffix).Info("Ignored file without suffix")
 				continue
 			}
 			candidates = append(candidates, filepath.Join(opts.dir, filename))
@@ -124,7 +129,9 @@ func LoadClusterConfigs(opts *Options) (map[string]rest.Config, error) {
 			if err != nil {
 				return nil, fmt.Errorf("fail to load kubecfg from %q: %w", candidate, err)
 			}
-			currentContext = tempCurrentContext
+			if !opts.disabledClusters.Has(tempCurrentContext) {
+				currentContext = tempCurrentContext
+			}
 			for c, k := range kubeCfgs {
 				if _, ok := allKubeCfgs[c]; ok {
 					return nil, fmt.Errorf("context %s occurred more than once in kubeconfig dir %q", c, opts.dir)
@@ -132,6 +139,10 @@ func LoadClusterConfigs(opts *Options) (map[string]rest.Config, error) {
 				allKubeCfgs[c] = k
 			}
 		}
+	}
+
+	for _, disabledCluster := range opts.disabledClusters.UnsortedList() {
+		delete(allKubeCfgs, disabledCluster)
 	}
 
 	if opts.noInClusterConfig {
@@ -144,8 +155,10 @@ func LoadClusterConfigs(opts *Options) (map[string]rest.Config, error) {
 type Options struct {
 	file               string
 	dir                string
+	suffix             string
 	projectedTokenFile string
 	noInClusterConfig  bool
+	disabledClusters   sets.Set[string]
 }
 
 type ConfigOptions func(*Options)
@@ -157,6 +170,21 @@ func ConfigDir(dir string) ConfigOptions {
 	}
 }
 
+// DisabledClusters configures the set of disabled build cluster names.
+// They will be ignored as context names while loading kubeconfig files.
+func DisabledClusters(disabledClusters sets.Set[string]) ConfigOptions {
+	return func(kc *Options) {
+		kc.disabledClusters = disabledClusters
+	}
+}
+
+// ConfigSuffix configures the suffix of the file in directory containing kubeconfig files
+func ConfigSuffix(suffix string) ConfigOptions {
+	return func(kc *Options) {
+		kc.suffix = suffix
+	}
+}
+
 // ConfigFile configures the path to a kubeconfig file
 func ConfigFile(file string) ConfigOptions {
 	return func(kc *Options) {
@@ -164,14 +192,14 @@ func ConfigFile(file string) ConfigOptions {
 	}
 }
 
-// ConfigFile configures the path to a projectedToken file
+// ConfigProjectedTokenFile configures the path to a projectedToken file
 func ConfigProjectedTokenFile(projectedTokenFile string) ConfigOptions {
 	return func(kc *Options) {
 		kc.projectedTokenFile = projectedTokenFile
 	}
 }
 
-// noInClusterConfig indicates that there is no InCluster Config to load
+// NoInClusterConfig indicates that there is no InCluster Config to load
 func NoInClusterConfig(noInClusterConfig bool) ConfigOptions {
 	return func(kc *Options) {
 		kc.noInClusterConfig = noInClusterConfig

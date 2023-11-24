@@ -1,6 +1,7 @@
 package validation
 
 import (
+	"errors"
 	"fmt"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -18,8 +19,8 @@ type pipelineImageSet map[api.PipelineImageStreamTagReference]sets.Empty
 // logic that has already been applied.
 func IsValidGraphConfiguration(rawSteps []api.StepConfiguration) error {
 	var ret []error
-	var containerTests []*api.TestStepConfiguration
-	names := sets.NewString()
+	var containerTests, multiStageTests []*api.TestStepConfiguration
+	names := sets.New[string]()
 	pipelineImages := pipelineImageSet{
 		// `src` can only be validated at runtime
 		api.PipelineImageStreamTagReferenceSource: {},
@@ -68,6 +69,8 @@ func IsValidGraphConfiguration(rawSteps []api.StepConfiguration) error {
 			addName(c.TargetName())
 			if c.ContainerTestConfiguration != nil {
 				containerTests = append(containerTests, c)
+			} else if c.MultiStageTestConfigurationLiteral != nil {
+				multiStageTests = append(multiStageTests, c)
 			}
 		} else if c := s.ProjectDirectoryImageBuildInputs; c != nil {
 			addName(string(api.PipelineImageStreamTagReferenceRoot))
@@ -75,18 +78,60 @@ func IsValidGraphConfiguration(rawSteps []api.StepConfiguration) error {
 		}
 	}
 	for _, t := range containerTests {
-		ret = append(ret, validateTestStepConfiguration(pipelineImages, t)...)
+		ret = append(ret, validateContainerTest(pipelineImages, t)...)
+	}
+	for _, t := range multiStageTests {
+		ret = append(ret, validateMultiStageTest(pipelineImages, t)...)
 	}
 	return utilerrors.NewAggregate(ret)
 }
 
-func validateTestStepConfiguration(
+func validateContainerTest(
 	pipelineImages pipelineImageSet,
 	s *api.TestStepConfiguration,
 ) (ret []error) {
 	c := s.ContainerTestConfiguration
 	if _, ok := pipelineImages[c.From]; !ok {
-		ret = append(ret, fmt.Errorf("tests[%s].from: unknown image %q", s.As, c.From))
+		msg := fmt.Sprintf("tests[%s].from: unknown image %q", s.As, c.From)
+		if s := pipelineImageToConfigField[c.From]; s != "" {
+			msg = fmt.Sprintf("%s (configuration is missing `%s`)", msg, s)
+		}
+		ret = append(ret, errors.New(msg))
 	}
 	return
+}
+
+func validateMultiStageTest(
+	pipelineImages pipelineImageSet,
+	s *api.TestStepConfiguration,
+) (ret []error) {
+	f := func(phase string, i int, step api.LiteralTestStep) (ret []error) {
+		from := api.PipelineImageStreamTagReference(step.From)
+		if _, ok := pipelineImages[from]; !ok {
+			// `from` not being a pipeline image is not necessarily an error,
+			// but a reference to a known image not present in the graph is.
+			if msg := pipelineImageToConfigField[from]; msg != "" {
+				ret = append(ret, fmt.Errorf("tests[%s].steps.%s[%d].from: unknown image %q (configuration is missing `%s`)", s.As, phase, i, from, msg))
+			}
+		}
+		return
+	}
+	ms := s.MultiStageTestConfigurationLiteral
+	for i, step := range ms.Pre {
+		ret = append(ret, f("pre", i, step)...)
+	}
+	for i, step := range ms.Test {
+		ret = append(ret, f("test", i, step)...)
+	}
+	for i, step := range ms.Post {
+		ret = append(ret, f("post", i, step)...)
+	}
+	return
+}
+
+var pipelineImageToConfigField = map[api.PipelineImageStreamTagReference]string{
+	api.PipelineImageStreamTagReferenceRoot:         api.PipelineImageStreamTagSourceRoot,
+	api.PipelineImageStreamTagReferenceBinaries:     api.PipelineImageStreamTagSourceBinaries,
+	api.PipelineImageStreamTagReferenceTestBinaries: api.PipelineImageStreamTagSourceTestBinaries,
+	api.PipelineImageStreamTagReferenceRPMs:         api.PipelineImageStreamTagSourceRPMs,
 }

@@ -45,6 +45,11 @@ var defaultPodSpec = corev1.PodSpec{
 					MountPath: cioperatorapi.GCSUploadCredentialsSecretMountPath,
 					ReadOnly:  true,
 				},
+				{
+					Name:      "manifest-tool-local-pusher",
+					MountPath: cioperatorapi.ManifestToolLocalPusherSecretMountPath,
+					ReadOnly:  true,
+				},
 			},
 		},
 	},
@@ -52,13 +57,19 @@ var defaultPodSpec = corev1.PodSpec{
 		{
 			Name: "pull-secret",
 			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{SecretName: "registry-pull-credentials"},
+				Secret: &corev1.SecretVolumeSource{SecretName: cioperatorapi.RegistryPullCredentialsSecret},
 			},
 		},
 		{
 			Name: "result-aggregator",
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{SecretName: "result-aggregator"},
+			},
+		},
+		{
+			Name: "manifest-tool-local-pusher",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{SecretName: cioperatorapi.ManifestToolLocalPusherSecret},
 			},
 		},
 	},
@@ -563,6 +574,14 @@ func CustomHashInput(input string) PodSpecMutator {
 	}
 }
 
+func TargetAdditionalSuffix(suffix string) PodSpecMutator {
+	return func(spec *corev1.PodSpec) error {
+		container := &spec.Containers[0]
+		addUniqueParameter(container, fmt.Sprintf("--target-additional-suffix=%s", suffix))
+		return nil
+	}
+}
+
 // InjectTestFrom configures ci-operator to inject the specified test from the
 // specified ci-operator config into the base config and target it
 func InjectTestFrom(source *cioperatorapi.MetadataWithTest) PodSpecMutator {
@@ -635,7 +654,7 @@ func (c *ciOperatorPodSpecGenerator) MustBuild() *corev1.PodSpec {
 type fakePodSpecBuilder int
 
 func (f *fakePodSpecBuilder) Add(_ ...PodSpecMutator) CiOperatorPodSpecGenerator {
-	return nil
+	return f
 }
 func (f *fakePodSpecBuilder) Build() (*corev1.PodSpec, error) {
 	return nil, nil

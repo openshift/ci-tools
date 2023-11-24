@@ -18,7 +18,7 @@ ax = fig.add_subplot(111)
 significance = 0.05
 corpus_size = 250
 
-for test_size in [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]:
+for test_size in [12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]:
 	corpus_percentages = numpy.arange(0, 101, 1)
 	test_positive_counts = numpy.arange(0, test_size+1, 1)
 	min_positive_counts = []

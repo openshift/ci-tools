@@ -3,6 +3,7 @@ package prerelease
 import (
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -17,38 +18,57 @@ func TestEndpoint(t *testing.T) {
 	}{
 		{
 			input: api.Prerelease{
-				Product:      api.ReleaseProductOKD,
-				Architecture: api.ReleaseArchitectureAMD64,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOKD,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
 			},
 			output: "https://amd64.origin.releases.ci.openshift.org/api/v1/releasestream/4-stable/latest",
 		},
 		{
 			input: api.Prerelease{
-				Product:      api.ReleaseProductOCP,
-				Architecture: api.ReleaseArchitectureAMD64,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOCP,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
 			},
 			output: "https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable/latest",
 		},
 		{
 			input: api.Prerelease{
-				Product:      api.ReleaseProductOCP,
-				Architecture: api.ReleaseArchitecturePPC64le,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOCP,
+					Architecture: api.ReleaseArchitecturePPC64le,
+				},
 			},
 			output: "https://ppc64le.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable-ppc64le/latest",
 		},
 		{
 			input: api.Prerelease{
-				Product:      api.ReleaseProductOCP,
-				Architecture: api.ReleaseArchitectureS390x,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOCP,
+					Architecture: api.ReleaseArchitectureS390x,
+				},
 			},
 			output: "https://s390x.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable-s390x/latest",
 		},
 		{
 			input: api.Prerelease{
-				Product:      api.ReleaseProductOCP,
-				Architecture: api.ReleaseArchitectureARM64,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOCP,
+					Architecture: api.ReleaseArchitectureARM64,
+				},
 			},
 			output: "https://arm64.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable-arm64/latest",
+		},
+		{
+			input: api.Prerelease{
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOCP,
+					Architecture: api.ReleaseArchitectureMULTI,
+				},
+			},
+			output: "https://multi.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable-multi/latest",
 		},
 	}
 
@@ -68,16 +88,20 @@ func TestDefaultFields(t *testing.T) {
 		{
 			name: "nothing to do",
 			input: api.Prerelease{
-				Product:      api.ReleaseProductOKD,
-				Architecture: api.ReleaseArchitectureAMD64,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOKD,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
 				VersionBounds: api.VersionBounds{
 					Lower: "4.4.0",
 					Upper: "4.5.0-0",
 				},
 			},
 			output: api.Prerelease{
-				Product:      api.ReleaseProductOKD,
-				Architecture: api.ReleaseArchitectureAMD64,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOKD,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
 				VersionBounds: api.VersionBounds{
 					Lower: "4.4.0",
 					Upper: "4.5.0-0",
@@ -87,15 +111,19 @@ func TestDefaultFields(t *testing.T) {
 		{
 			name: "default architecture",
 			input: api.Prerelease{
-				Product: api.ReleaseProductOKD,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product: api.ReleaseProductOKD,
+				},
 				VersionBounds: api.VersionBounds{
 					Lower: "4.4.0",
 					Upper: "4.5.0-0",
 				},
 			},
 			output: api.Prerelease{
-				Product:      api.ReleaseProductOKD,
-				Architecture: api.ReleaseArchitectureAMD64,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOKD,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
 				VersionBounds: api.VersionBounds{
 					Lower: "4.4.0",
 					Upper: "4.5.0-0",
@@ -115,6 +143,7 @@ func TestDefaultFields(t *testing.T) {
 func TestResolvePullSpec(t *testing.T) {
 	var testCases = []struct {
 		name          string
+		relative      int
 		versionBounds api.VersionBounds
 		raw           []byte
 		expected      string
@@ -128,6 +157,17 @@ func TestResolvePullSpec(t *testing.T) {
 			},
 			raw:         []byte(`{"name": "4.3.0-0.ci-2020-05-22-121811","phase": "Accepted","pullSpec": "registry.svc.ci.openshift.org/ocp/release:4.3.0-0.ci-2020-05-22-121811","downloadURL": "https://openshift-release-artifacts.svc.ci.openshift.org/4.3.0-0.ci-2020-05-22-121811"}`),
 			expected:    "registry.svc.ci.openshift.org/ocp/release:4.3.0-0.ci-2020-05-22-121811",
+			expectedErr: false,
+		},
+		{
+			name:     "normal request with relative",
+			relative: 2,
+			versionBounds: api.VersionBounds{
+				Lower: "4.11.0-0",
+				Upper: "4.12.0-0",
+			},
+			raw:         []byte(`{"name": "4.11.15","phase": "Accepted","pullSpec": "quay.io/openshift-release-dev/ocp-release:4.11.15-x86_64","downloadURL": "https://openshift-release-artifacts.apps.ci.l2s4.p1.openshiftapps.com/4.11.15"}`),
+			expected:    "quay.io/openshift-release-dev/ocp-release:4.11.15-x86_64",
 			expectedErr: false,
 		},
 		{
@@ -150,6 +190,13 @@ func TestResolvePullSpec(t *testing.T) {
 					http.Error(w, "400 Bad Request", http.StatusBadRequest)
 					return
 				}
+				if testCase.relative != 0 {
+					if relString := r.URL.Query().Get("rel"); relString != strconv.Itoa(testCase.relative) {
+						t.Errorf("incorrect relative query param: %v", relString)
+						http.Error(w, "400 Bad Request", http.StatusBadRequest)
+						return
+					}
+				}
 				if bounds := r.URL.Query().Get("in"); bounds != testCase.versionBounds.Query() {
 					t.Errorf("incorrect version bounds param: %v", bounds)
 					http.Error(w, "400 Bad Request", http.StatusBadRequest)
@@ -160,7 +207,7 @@ func TestResolvePullSpec(t *testing.T) {
 				}
 			}))
 			defer testServer.Close()
-			actual, err := resolvePullSpec(&http.Client{}, testServer.URL, testCase.versionBounds)
+			actual, err := resolvePullSpec(&http.Client{}, testServer.URL, testCase.versionBounds, testCase.relative)
 			if err != nil && !testCase.expectedErr {
 				t.Errorf("%s: expected no error but got one: %v", testCase.name, err)
 			}

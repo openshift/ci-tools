@@ -9,15 +9,15 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/github"
+	"k8s.io/test-infra/prow/git/types"
 	"k8s.io/test-infra/prow/plugins"
 	prowplugins "k8s.io/test-infra/prow/plugins"
 	utilpointer "k8s.io/utils/pointer"
 )
 
 var orgRepos = orgReposWithOfficialImages{
-	"openshift": sets.NewString("testRepo1", "testRepo2"),
-	"testshift": sets.NewString("testRepo3", "testRepo4"),
+	"openshift": sets.New[string]("testRepo1", "testRepo2"),
+	"testshift": sets.New[string]("testRepo3", "testRepo4"),
 }
 
 func pBool(b bool) *bool {
@@ -221,39 +221,39 @@ func TestInjectPrivateReposTideQueries(t *testing.T) {
 func TestInjectPrivateMergeType(t *testing.T) {
 	testCases := []struct {
 		id             string
-		tideMergeTypes map[string]github.PullRequestMergeType
-		expected       map[string]github.PullRequestMergeType
+		tideMergeTypes map[string]prowconfig.TideOrgMergeType
+		expected       map[string]prowconfig.TideOrgMergeType
 	}{
 		{
 			id: "no changes expected",
-			tideMergeTypes: map[string]github.PullRequestMergeType{
-				"anotherOrg/Repo": github.MergeMerge,
-				"openshift/Repo2": github.MergeRebase,
-				"testshift/Repo3": github.MergeSquash,
+			tideMergeTypes: map[string]prowconfig.TideOrgMergeType{
+				"anotherOrg/Repo": {MergeType: types.MergeMerge},
+				"openshift/Repo2": {MergeType: types.MergeRebase},
+				"testshift/Repo3": {MergeType: types.MergeSquash},
 			},
-			expected: map[string]github.PullRequestMergeType{
-				"anotherOrg/Repo": github.MergeMerge,
-				"openshift/Repo2": github.MergeRebase,
-				"testshift/Repo3": github.MergeSquash,
+			expected: map[string]prowconfig.TideOrgMergeType{
+				"anotherOrg/Repo": {MergeType: types.MergeMerge},
+				"openshift/Repo2": {MergeType: types.MergeRebase},
+				"testshift/Repo3": {MergeType: types.MergeSquash},
 			},
 		},
 		{
 			id: "changes expected",
-			tideMergeTypes: map[string]github.PullRequestMergeType{
-				"anotherOrg/Repo":       github.MergeMerge,
-				"openshift/testRepo1":   github.MergeSquash,
-				"openshift/anotherRepo": github.MergeSquash,
-				"testshift/anotherRepo": github.MergeMerge,
-				"testshift/testRepo3":   github.MergeMerge,
+			tideMergeTypes: map[string]prowconfig.TideOrgMergeType{
+				"anotherOrg/Repo":       {MergeType: types.MergeMerge},
+				"openshift/testRepo1":   {MergeType: types.MergeSquash},
+				"openshift/anotherRepo": {MergeType: types.MergeSquash},
+				"testshift/anotherRepo": {MergeType: types.MergeMerge},
+				"testshift/testRepo3":   {MergeType: types.MergeMerge},
 			},
-			expected: map[string]github.PullRequestMergeType{
-				"anotherOrg/Repo":          github.MergeMerge,
-				"openshift/testRepo1":      github.MergeSquash,
-				"openshift/anotherRepo":    github.MergeSquash,
-				"testshift/anotherRepo":    github.MergeMerge,
-				"testshift/testRepo3":      github.MergeMerge,
-				"openshift-priv/testRepo1": github.MergeSquash,
-				"openshift-priv/testRepo3": github.MergeMerge,
+			expected: map[string]prowconfig.TideOrgMergeType{
+				"anotherOrg/Repo":          {MergeType: types.MergeMerge},
+				"openshift/testRepo1":      {MergeType: types.MergeSquash},
+				"openshift/anotherRepo":    {MergeType: types.MergeSquash},
+				"testshift/anotherRepo":    {MergeType: types.MergeMerge},
+				"testshift/testRepo3":      {MergeType: types.MergeMerge},
+				"openshift-priv/testRepo1": {MergeType: types.MergeSquash},
+				"openshift-priv/testRepo3": {MergeType: types.MergeMerge},
 			},
 		},
 	}
@@ -667,7 +667,7 @@ func TestGetCommonPlugins(t *testing.T) {
 		"openshift/arepo11": {"approve", "label", "hold", "lgtm", "milestone"},
 		"openshift/arepo12": {"approve", "label", "hold", "lgtm", "milestone"},
 	}
-	expected := sets.String{"approve": sets.Empty{}, "hold": sets.Empty{}, "label": sets.Empty{}}
+	expected := sets.Set[string]{"approve": sets.Empty{}, "hold": sets.Empty{}, "label": sets.Empty{}}
 
 	commonValues := getCommonPlugins(plugins)
 	if !reflect.DeepEqual(commonValues, expected) {

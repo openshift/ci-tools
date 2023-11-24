@@ -4,11 +4,13 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"html/template"
 	"net/http"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -17,6 +19,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/interrupts"
@@ -29,6 +32,7 @@ import (
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/prowconfigutils"
 )
 
 type Page struct {
@@ -76,7 +80,8 @@ func addSchemes() error {
 	return nil
 }
 
-func getClusterPoolPage(ctx context.Context, hiveClient ctrlruntimeclient.Client) (*Page, error) {
+func getClusterPool(ctx context.Context, hiveClient ctrlruntimeclient.Client) ([]map[string]string, error) {
+	logrus.Debug("Calling getClusterPool ...")
 	clusterImageSetMap := map[string]string{}
 	clusterImageSets := &hivev1.ClusterImageSetList{}
 	if err := hiveClient.List(ctx, clusterImageSets); err != nil {
@@ -91,7 +96,7 @@ func getClusterPoolPage(ctx context.Context, hiveClient ctrlruntimeclient.Client
 		return nil, fmt.Errorf("failed to list cluster pools: %w", err)
 	}
 
-	page := Page{Data: []map[string]string{}}
+	data := make([]map[string]string, 0)
 	for _, p := range clusterPools.Items {
 		maxSize := "nil"
 		if p.Spec.MaxSize != nil {
@@ -99,70 +104,141 @@ func getClusterPoolPage(ctx context.Context, hiveClient ctrlruntimeclient.Client
 		}
 		releaseImage := clusterImageSetMap[p.Spec.ImageSetRef.Name]
 		owner := p.Labels["owner"]
-		page.Data = append(
-			page.Data, map[string]string{
-				"namespace":    p.Namespace,
-				"name":         p.Name,
-				"ready":        strconv.FormatInt(int64(p.Status.Ready), 10),
-				"size":         strconv.FormatInt(int64(p.Spec.Size), 10),
-				"maxSize":      maxSize,
-				"imageSet":     p.Spec.ImageSetRef.Name,
-				"labels":       labels.FormatLabels(p.Labels),
-				"releaseImage": releaseImage,
-				"owner":        owner,
-			},
+		data = append(data, map[string]string{
+			"namespace":    p.Namespace,
+			"name":         p.Name,
+			"ready":        strconv.FormatInt(int64(p.Status.Ready), 10),
+			"size":         strconv.FormatInt(int64(p.Spec.Size), 10),
+			"maxSize":      maxSize,
+			"imageSet":     p.Spec.ImageSetRef.Name,
+			"labels":       labels.FormatLabels(p.Labels),
+			"releaseImage": releaseImage,
+			"owner":        owner,
+			"standby":      strconv.FormatInt(int64(p.Status.Standby), 10),
+		},
 		)
 	}
-	return &page, nil
+	return data, nil
 }
 
-func getClusterPage(ctx context.Context, clients map[string]ctrlruntimeclient.Client, skipHive bool) (*Page, error) {
+type ClusterInfoGetter interface {
+	GetClusterDetails(ctx context.Context, cluster string, client ctrlruntimeclient.Client) (map[string]string, error)
+}
+
+type clusterInfoGetter struct{}
+
+func (g *clusterInfoGetter) GetClusterDetails(ctx context.Context, cluster string, client ctrlruntimeclient.Client) (map[string]string, error) {
+	consoleHost, err := api.ResolveConsoleHost(ctx, client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve the console host for cluster %s: %w", cluster, err)
+	}
+	registryHost, err := api.ResolveImageRegistryHost(ctx, client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve the image registry host for cluster %s: %w", cluster, err)
+	}
+	cv := &configv1.ClusterVersion{}
+	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: "version"}, cv); err != nil {
+		return nil, fmt.Errorf("failed to get ClusterVersion for cluster %s: %w", cluster, err)
+	}
+	if len(cv.Status.History) == 0 {
+		return nil, fmt.Errorf("failed to get ClusterVersion for cluster %s: no history found", cluster)
+	}
+	infra := &configv1.Infrastructure{}
+	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: "cluster"}, infra); err != nil {
+		return nil, fmt.Errorf("failed to get Infrastructure for cluster %s: %w", cluster, err)
+	}
+	version := cv.Status.History[0].Version
+	product, err := resolveProduct(ctx, client, version)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve the product for cluster %s: %w", cluster, err)
+	}
+	cloud := string(infra.Status.PlatformStatus.Type)
+
+	return map[string]string{
+		"cluster":      cluster,
+		"consoleHost":  consoleHost,
+		"registryHost": registryHost,
+		"version":      version,
+		"product":      product,
+		"cloud":        cloud,
+	}, nil
+}
+
+type memoryCache struct {
+	clusterDataMutex         sync.Mutex
+	clusterData              []map[string]string
+	clusterDataLastUpdatedAt time.Time
+
+	ClusterPoolDataMutex         sync.Mutex
+	ClusterPoolData              []map[string]string
+	ClusterPoolDataLastUpdatedAt time.Time
+
+	CacheDuration time.Duration
+}
+
+func (c *memoryCache) GetClusterPoolPage(ctx context.Context, client ctrlruntimeclient.Client) (*Page, error) {
+	c.ClusterPoolDataMutex.Lock()
+	defer c.ClusterPoolDataMutex.Unlock()
+	if c.ClusterPoolData == nil || time.Now().After(c.ClusterPoolDataLastUpdatedAt.Add(c.CacheDuration)) {
+		data, err := getClusterPool(ctx, client)
+		if err != nil {
+			if c.ClusterPoolData == nil {
+				return nil, err
+			} else {
+				logrus.WithError(err).Error("Failed to get cluster pool, using the expired cached data")
+			}
+		} else {
+			c.ClusterPoolDataLastUpdatedAt = time.Now()
+			c.ClusterPoolData = data
+		}
+	}
+	return &Page{Data: c.ClusterPoolData}, nil
+}
+
+func (c *memoryCache) GetClusterPage(ctx context.Context, clients map[string]ctrlruntimeclient.Client, skipHive bool, getter ClusterInfoGetter) *Page {
+	c.clusterDataMutex.Lock()
+	defer c.clusterDataMutex.Unlock()
+	if c.clusterData == nil || time.Now().After(c.clusterDataLastUpdatedAt.Add(c.CacheDuration)) {
+		data := getCluster(ctx, clients, getter)
+		c.clusterDataLastUpdatedAt = time.Now()
+		c.clusterData = data
+	}
+	if skipHive {
+		var skipHiveData []map[string]string
+		for _, d := range c.clusterData {
+			var hive bool
+			for k, v := range d {
+				if k == "cluster" && v == string(api.HiveCluster) {
+					hive = true
+					break
+				}
+			}
+			if !hive {
+				skipHiveData = append(skipHiveData, d)
+			}
+		}
+		return &Page{Data: skipHiveData}
+	}
+	return &Page{Data: c.clusterData}
+}
+
+func getCluster(ctx context.Context, clients map[string]ctrlruntimeclient.Client, getter ClusterInfoGetter) []map[string]string {
+	logrus.Debug("Calling getCluster ...")
 	var data []map[string]string
+
 	for cluster, client := range clients {
-		if skipHive && cluster == string(api.HiveCluster) {
-			continue
-		}
-		consoleHost, err := api.ResolveConsoleHost(ctx, client)
+		clusterInfo, err := getter.GetClusterDetails(ctx, cluster, client)
 		if err != nil {
-			return nil, fmt.Errorf("failed to resolve the console host for cluster %s: %w", cluster, err)
+			logrus.WithError(err).Warn("Failed to get cluster details")
+			clusterInfo = map[string]string{"cluster": cluster, "error": "an error occurred while retrieving cluster information"}
 		}
-		registryHost, err := api.ResolveImageRegistryHost(ctx, client)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve the image registry host for cluster %s: %w", cluster, err)
-		}
-		cv := &configv1.ClusterVersion{}
-		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: "version"}, cv); err != nil {
-			return nil, fmt.Errorf("failed to get ClusterVersion for cluster %s: %w", cluster, err)
-		}
-		if len(cv.Status.History) == 0 {
-			return nil, fmt.Errorf("failed to get ClusterVersion for cluster %s: no history found", cluster)
-		}
-		infra := &configv1.Infrastructure{}
-		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: "cluster"}, infra); err != nil {
-			return nil, fmt.Errorf("failed to get Infrastructure for cluster %s: %w", cluster, err)
-		}
-		version := cv.Status.History[0].Version
-		product, err := resolveProduct(ctx, client, version)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve the product for cluster %s: %w", cluster, err)
-		}
-
-		cloud := string(infra.Status.PlatformStatus.Type)
-		data = append(data, map[string]string{
-			"cluster":      cluster,
-			"consoleHost":  consoleHost,
-			"registryHost": registryHost,
-			"version":      version,
-			"product":      product,
-			"cloud":        cloud,
-		})
-
+		data = append(data, clusterInfo)
 	}
 
 	sort.Slice(data, func(i, j int) bool {
 		return data[i]["cluster"] < data[j]["cluster"]
 	})
-	return &Page{Data: data}, nil
+	return data
 }
 
 func resolveProduct(ctx context.Context, client ctrlruntimeclient.Client, version string) (string, error) {
@@ -180,8 +256,9 @@ func resolveProduct(ctx context.Context, client ctrlruntimeclient.Client, versio
 	return "OSD", nil
 }
 
-func getRouter(ctx context.Context, hiveClient ctrlruntimeclient.Client, clients map[string]ctrlruntimeclient.Client) *http.ServeMux {
+func getRouter(ctx context.Context, hiveClient ctrlruntimeclient.Client, clients map[string]ctrlruntimeclient.Client, prowDisabledClusters []string) *http.ServeMux {
 	handler := http.NewServeMux()
+	cache := memoryCache{CacheDuration: time.Hour}
 
 	handler.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -200,16 +277,26 @@ func getRouter(ctx context.Context, hiveClient ctrlruntimeclient.Client, clients
 		var err error
 		switch crd {
 		case "clusterpools":
-			page, err = getClusterPoolPage(ctx, hiveClient)
+			page, err = cache.GetClusterPoolPage(ctx, hiveClient)
 		case "clusters":
 			skipHive := r.URL.Query().Get("skipHive") == "true"
-			page, err = getClusterPage(ctx, allClients, skipHive)
+			disabledClusters := sets.New[string](prowDisabledClusters...)
+			page = cache.GetClusterPage(ctx, allClients, skipHive, &clusterInfoGetter{})
+			var enabled []map[string]string
+			for _, d := range page.Data {
+				c, ok := d["cluster"]
+				if ok && !disabledClusters.Has(c) {
+					enabled = append(enabled, d)
+				}
+			}
+			page.Data = enabled
+			noDups := disabledClusters.UnsortedList()
+			sort.Strings(noDups)
+			for _, cluster := range noDups {
+				page.Data = append(page.Data, map[string]string{"cluster": cluster, "error": "disabled cluster in Prow"})
+			}
 		default:
 			http.Error(w, fmt.Sprintf("Unknown crd: %s", crd), http.StatusBadRequest)
-			return
-		}
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		if err != nil {
@@ -224,7 +311,8 @@ func getRouter(ctx context.Context, hiveClient ctrlruntimeclient.Client, clients
 			}
 			w.Header().Set("Content-Type", "application/javascript")
 			content := string(bytes)
-			if n, err := fmt.Fprintf(w, "%s(%s);", callbackName, content); err != nil {
+			template.JSEscape(w, []byte(callbackName))
+			if n, err := fmt.Fprintf(w, "(%s);", content); err != nil {
 				logrus.WithError(err).WithField("n", n).WithField("content", content).Error("failed to write content")
 			}
 			return
@@ -262,6 +350,12 @@ func main() {
 	if err := validateOptions(o); err != nil {
 		logrus.WithError(err).Fatal("invalid options")
 	}
+
+	prowDisabledClusters, err := prowconfigutils.ProwDisabledClusters(&o.kubernetesOptions)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to get Prow disable clusters")
+	}
+
 	level, _ := logrus.ParseLevel(o.logLevel)
 	logrus.SetLevel(level)
 
@@ -315,7 +409,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:    ":" + strconv.Itoa(o.port),
-		Handler: getRouter(interrupts.Context(), hiveClient, clients),
+		Handler: getRouter(interrupts.Context(), hiveClient, clients, prowDisabledClusters),
 	}
 	interrupts.ListenAndServe(server, o.gracePeriod)
 	interrupts.WaitForGracefulShutdown()

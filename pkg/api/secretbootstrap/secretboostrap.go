@@ -3,7 +3,7 @@ package secretbootstrap
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"reflect"
 	"strings"
 
@@ -76,7 +76,7 @@ func SaveConfigToFile(file string, config *Config) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(file, bytes, 0644)
+	return os.WriteFile(file, bytes, 0644)
 }
 
 // Config is what we version in our repository
@@ -238,4 +238,11 @@ func (c *Config) resolve() error {
 	}
 
 	return utilerrors.NewAggregate(errs)
+}
+
+const OSDGlobalPullSecretGroupName = "osd_global_pull_secret"
+
+// OSDGlobalPullSecretGroup returns the list of the OSD cluster names where we need to partially manage the global pull secret
+func (c *Config) OSDGlobalPullSecretGroup() []string {
+	return c.ClusterGroups[OSDGlobalPullSecretGroupName]
 }

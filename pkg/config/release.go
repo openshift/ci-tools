@@ -9,6 +9,7 @@ import (
 	"github.com/mattn/go-zglob"
 	"github.com/sirupsen/logrus"
 
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/plugins"
@@ -119,25 +120,26 @@ func NewLocalJobSpec(path string) (*pjdwapi.JobSpec, error) {
 }
 
 // GetAllConfigs loads all configuration from the working copy of the release repo (usually openshift/release).
-// When an error occurs during some config loading, the error is not propagated, but the returned struct field will
-// have a nil value in the appropriate field. The error is only logged.
-func GetAllConfigs(releaseRepoPath string, logger *logrus.Entry) *ReleaseRepoConfig {
+// When an error occurs during some config loading, the error will be propagated, however the returned struct field will
+// also have a nil value in the appropriate field.
+func GetAllConfigs(releaseRepoPath string) (*ReleaseRepoConfig, error) {
 	config := &ReleaseRepoConfig{}
+	var errs []error
 	var err error
 	ciopConfigPath := filepath.Join(releaseRepoPath, CiopConfigInRepoPath)
 	config.CiOperator, err = LoadDataByFilename(ciopConfigPath)
 	if err != nil {
-		logger.WithError(err).Warn("failed to load ci-operator configuration from release repo")
+		errs = append(errs, fmt.Errorf("failed to load ci-operator configuration from release repo: %w", err))
 	}
 
 	prowConfigPath := filepath.Join(releaseRepoPath, ConfigInRepoPath)
 	prowJobConfigPath := filepath.Join(releaseRepoPath, JobConfigInRepoPath)
 	config.Prow, err = prowconfig.Load(prowConfigPath, prowJobConfigPath, nil, "")
 	if err != nil {
-		logger.WithError(err).Warn("failed to load Prow configuration from release repo")
+		errs = append(errs, fmt.Errorf("failed to load Prow configuration from release repo: %w", err))
 	}
 
-	return config
+	return config, utilerrors.NewAggregate(errs)
 }
 
 // GetAllConfigsFromSHA loads all configuration from given SHA revision of the release repo (usually openshift/release).
@@ -145,7 +147,7 @@ func GetAllConfigs(releaseRepoPath string, logger *logrus.Entry) *ReleaseRepoCon
 // revision that was checked out in the working copy when this method was called. Errors occurred during these git
 // manipulations are propagated in the error return value. Errors occurred during the actual config loading are not
 // propagated, but the returned struct field will have a nil value in the appropriate field. The error is only logged.
-func GetAllConfigsFromSHA(releaseRepoPath, sha string, logger *logrus.Entry) (*ReleaseRepoConfig, error) {
+func GetAllConfigsFromSHA(releaseRepoPath, sha string) (*ReleaseRepoConfig, error) {
 	currentSHA, err := revParse(releaseRepoPath, "HEAD")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SHA of current HEAD: %w", err)
@@ -161,17 +163,21 @@ func GetAllConfigsFromSHA(releaseRepoPath, sha string, logger *logrus.Entry) (*R
 		return nil, fmt.Errorf("could not checkout worktree: %w", err)
 	}
 
-	config := GetAllConfigs(releaseRepoPath, logger)
-
-	if err := gitCheckout(releaseRepoPath, restoreRev); err != nil {
-		return config, fmt.Errorf("failed to check out tested revision back: %w", err)
+	var errs []error
+	config, err := GetAllConfigs(releaseRepoPath)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("failed to get all configs: %w", err))
 	}
 
-	return config, nil
+	if err = gitCheckout(releaseRepoPath, restoreRev); err != nil {
+		errs = append(errs, fmt.Errorf("failed to check out tested revision back: %w", err))
+	}
+
+	return config, utilerrors.NewAggregate(errs)
 }
 
 func GetChangedTemplates(path, baseRev string) ([]string, error) {
-	changes, err := getRevChanges(path, TemplatesPath, baseRev)
+	changes, err := getRevChanges(path, TemplatesPath, baseRev, false)
 	if err != nil {
 		return nil, err
 	}
@@ -186,31 +192,41 @@ func GetChangedTemplates(path, baseRev string) ([]string, error) {
 
 func loadRegistryStep(filename string, graph registry.NodeByName) (registry.Node, error) {
 	// if a commands script changed, mark reference as changed
+	var type_, name string
 	var node registry.Node
 	var ok bool
 	switch {
 	case strings.HasSuffix(filename, load.RefSuffix):
-		node, ok = graph.References[strings.TrimSuffix(filename, load.RefSuffix)]
+		type_, name = "ref", strings.TrimSuffix(filename, load.RefSuffix)
+		node, ok = graph.References[name]
+	case strings.HasSuffix(filename, load.ObserverSuffix):
+		type_, name = "observer", strings.TrimSuffix(filename, load.ObserverSuffix)
+		node, ok = graph.Observers[name]
 	case strings.HasSuffix(filename, load.ChainSuffix):
-		node, ok = graph.Chains[strings.TrimSuffix(filename, load.ChainSuffix)]
+		type_, name = "chain", strings.TrimSuffix(filename, load.ChainSuffix)
+		node, ok = graph.Chains[name]
 	case strings.HasSuffix(filename, load.WorkflowSuffix):
-		node, ok = graph.Workflows[strings.TrimSuffix(filename, load.WorkflowSuffix)]
+		type_, name = "workflow", strings.TrimSuffix(filename, load.WorkflowSuffix)
+		node, ok = graph.Workflows[name]
 	case strings.Contains(filename, load.CommandsSuffix):
 		extension := filepath.Ext(filename)
-		node, ok = graph.References[strings.TrimSuffix(filename[0:len(filename)-len(extension)], load.CommandsSuffix)]
+		type_, name = "ref", strings.TrimSuffix(filename[0:len(filename)-len(extension)], load.CommandsSuffix)
+		if node, ok = graph.References[name]; !ok {
+			node, ok = graph.Observers[name]
+		}
 	default:
-		return nil, fmt.Errorf("invalid step filename: %s", filename)
+		return nil, fmt.Errorf("invalid step registry filename: %s", filename)
 	}
 	if !ok {
-		return nil, fmt.Errorf("could not find registry component in registry graph: %s", filename)
+		return nil, fmt.Errorf("could not find registry component in registry graph: %s/%s", type_, name)
 	}
 	return node, nil
 }
 
-// GetChangedRegistrySteps identifies all registry components (refs, chains, and workflows) that changed.
+// GetChangedRegistrySteps identifies all registry components that changed.
 func GetChangedRegistrySteps(path, baseRev string, graph registry.NodeByName) ([]registry.Node, error) {
 	var changes []registry.Node
-	revChanges, err := getRevChanges(path, RegistryPath, baseRev)
+	revChanges, err := getRevChanges(path, RegistryPath, baseRev, false)
 	if err != nil {
 		return changes, err
 	}
@@ -227,16 +243,25 @@ func GetChangedRegistrySteps(path, baseRev string, graph registry.NodeByName) ([
 }
 
 func GetChangedClusterProfiles(path, baseRev string) ([]string, error) {
-	return getRevChanges(path, ClusterProfilesPath, baseRev)
+	return getRevChanges(path, ClusterProfilesPath, baseRev, false)
+}
+
+func GetAddedConfigs(path, baseRev string) ([]string, error) {
+	return getRevChanges(path, CiopConfigInRepoPath, baseRev, true)
 }
 
 // getRevChanges returns the name and a hash of the contents of files under
 // `path` that were added/modified since revision `base` in the repository at
 // `root`.  Paths are relative to `root`.
-func getRevChanges(root, path, base string) ([]string, error) {
+// If 'ignoreModified' is true it will only check for relevant added, moved, or copied files
+func getRevChanges(root, path, base string, ignoreModified bool) ([]string, error) {
 	// Sample output (with abbreviated hashes) from git-diff-tree(1):
 	// :100644 100644 bcd1234 0123456 M file0
-	cmd := []string{"diff-tree", "-r", "--diff-filter=ABCMRTUX", base + ":" + path, "HEAD:" + path}
+	filter := "--diff-filter=d"
+	if ignoreModified {
+		filter = "--diff-filter=ACR"
+	}
+	cmd := []string{"diff-tree", "-r", filter, base + ":" + path, "HEAD:" + path}
 	diff, err := git(root, cmd...)
 	if err != nil || diff == "" {
 		return nil, err

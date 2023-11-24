@@ -56,7 +56,8 @@ type RegistryAgentOptions struct {
 	ErrorMetric *prometheus.CounterVec
 	// FlatRegistry describes if the registry is flat, which means org/repo/branch info can not be inferred
 	// from the filepath. Defaults to true.
-	FlatRegistry *bool
+	FlatRegistry            *bool
+	UniversalSymlinkWatcher *UniversalSymlinkWatcher
 }
 
 type RegistryAgentOption func(*RegistryAgentOptions)
@@ -75,7 +76,7 @@ func WithRegistryFlat(v bool) RegistryAgentOption {
 
 // NewRegistryAgent returns a RegistryAgent interface that automatically reloads when
 // the registry is changed on disk.
-func NewRegistryAgent(registryPath string, opts ...RegistryAgentOption) (RegistryAgent, error) {
+func NewRegistryAgent(registryPath string, errCh chan error, opts ...RegistryAgentOption) (RegistryAgent, error) {
 	opt := &RegistryAgentOptions{}
 	for _, o := range opts {
 		o(opt)
@@ -84,7 +85,7 @@ func NewRegistryAgent(registryPath string, opts ...RegistryAgentOption) (Registr
 		opt.ErrorMetric = prometheus.NewCounterVec(prometheus.CounterOpts{Name: "registry_agent_errors_total"}, []string{"error"})
 	}
 	if opt.FlatRegistry == nil {
-		opt.FlatRegistry = utilpointer.BoolPtr(true)
+		opt.FlatRegistry = utilpointer.Bool(true)
 	}
 	flags := load.RegistryMetadata | load.RegistryDocumentation
 	if *opt.FlatRegistry {
@@ -101,12 +102,11 @@ func NewRegistryAgent(registryPath string, opts ...RegistryAgentOption) (Registr
 		return nil, fmt.Errorf("failed to load registry: %w", err)
 	}
 
-	return a, startWatchers(a.registryPath, a.loadRegistry, a.recordError)
-}
+	if opt.UniversalSymlinkWatcher != nil {
+		opt.UniversalSymlinkWatcher.RegistryEventFn = a.loadRegistry
+	}
 
-func (a *registryAgent) recordError(label string) {
-	labels := prometheus.Labels{"error": label}
-	a.errorMetrics.With(labels).Inc()
+	return a, startWatchers(registryPath, errCh, a.loadRegistry, a.errorMetrics, opt.UniversalSymlinkWatcher)
 }
 
 // ResolveConfig uses the registryAgent's resolver to resolve a provided ReleaseBuildConfiguration
@@ -114,6 +114,18 @@ func (a *registryAgent) ResolveConfig(config api.ReleaseBuildConfiguration) (api
 	a.lock.RLock()
 	defer a.lock.RUnlock()
 	return registry.ResolveConfig(a.resolver, config)
+}
+
+func (a *registryAgent) ResolveWorkflow(name string) (api.MultiStageTestConfigurationLiteral, error) {
+	a.lock.RLock()
+	defer a.lock.RUnlock()
+	return a.resolver.ResolveWorkflow(name)
+}
+
+func (a *registryAgent) ResolveChain(name string) (api.RegistryChain, error) {
+	a.lock.RLock()
+	defer a.lock.RUnlock()
+	return a.resolver.ResolveChain(name)
 }
 
 func (a *registryAgent) GetGeneration() int {
@@ -134,7 +146,7 @@ func (a *registryAgent) loadRegistry() error {
 		startTime := time.Now()
 		references, chains, workflows, documentation, metadata, observers, err := load.Registry(a.registryPath, a.flags)
 		if err != nil {
-			a.recordError("failed to load ci-operator registry")
+			recordErrorForMetric(a.errorMetrics, "failed to load ci-operator registry")
 			return time.Duration(0), fmt.Errorf("failed to load ci-operator registry (%w)", err)
 		}
 		a.references = references

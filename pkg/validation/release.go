@@ -13,11 +13,14 @@ import (
 func validateReleases(fieldRoot string, releases map[string]api.UnresolvedRelease, hasTagSpec bool) []error {
 	var validationErrors []error
 	// we need a deterministic iteration for testing
-	names := sets.NewString()
+	names := sets.New[string]()
 	for name := range releases {
 		names.Insert(name)
 	}
-	for _, name := range names.List() {
+	for _, name := range sets.List(names) {
+		if err := partOfImageStreamName(name); err != nil {
+			validationErrors = append(validationErrors, fmt.Errorf("%s[%s]: the release name is not valid: %w", fieldRoot, name, err))
+		}
 		release := releases[name]
 		if hasTagSpec {
 			for _, incompatibleName := range []string{api.LatestReleaseName, api.InitialReleaseName} {
@@ -87,12 +90,13 @@ func validateCandidate(fieldRoot string, candidate api.Candidate) []error {
 		}
 	}
 
-	streamsByProduct := map[api.ReleaseProduct]sets.String{
-		api.ReleaseProductOKD: sets.NewString("", string(api.ReleaseStreamOKD)), // we allow unset and will default it
-		api.ReleaseProductOCP: sets.NewString(string(api.ReleaseStreamCI), string(api.ReleaseStreamNightly)),
+	streamsByProduct := map[api.ReleaseProduct]sets.Set[string]{
+		api.ReleaseProductOKD: sets.New[string]("", string(api.ReleaseStreamOKD),
+			string(api.ReleaseStreamOKDScos)), // we allow unset and will default it
+		api.ReleaseProductOCP: sets.New[string](string(api.ReleaseStreamCI), string(api.ReleaseStreamNightly)),
 	}
 	if !streamsByProduct[candidate.Product].Has(string(candidate.Stream)) {
-		validationErrors = append(validationErrors, fmt.Errorf("%s.stream: must be one of %s", fieldRoot, strings.Join(streamsByProduct[candidate.Product].List(), ", ")))
+		validationErrors = append(validationErrors, fmt.Errorf("%s.stream: must be one of %s", fieldRoot, strings.Join(sets.List(streamsByProduct[candidate.Product]), ", ")))
 	}
 
 	if err := validateVersion(fmt.Sprintf("%s.version", fieldRoot), candidate.Version); err != nil {
@@ -107,17 +111,17 @@ func validateCandidate(fieldRoot string, candidate api.Candidate) []error {
 }
 
 func validateProduct(fieldRoot string, product api.ReleaseProduct) error {
-	products := sets.NewString(string(api.ReleaseProductOKD), string(api.ReleaseProductOCP))
+	products := sets.New[string](string(api.ReleaseProductOKD), string(api.ReleaseProductOCP))
 	if !products.Has(string(product)) {
-		return fmt.Errorf("%s: must be one of %s", fieldRoot, strings.Join(products.List(), ", "))
+		return fmt.Errorf("%s: must be one of %s", fieldRoot, strings.Join(sets.List(products), ", "))
 	}
 	return nil
 }
 
 func validateArchitecture(fieldRoot string, architecture api.ReleaseArchitecture) error {
-	architectures := sets.NewString(string(api.ReleaseArchitectureAMD64), string(api.ReleaseArchitecturePPC64le), string(api.ReleaseArchitectureS390x), string(api.ReleaseArchitectureARM64))
+	architectures := sets.New[string](string(api.ReleaseArchitectureAMD64), string(api.ReleaseArchitecturePPC64le), string(api.ReleaseArchitectureS390x), string(api.ReleaseArchitectureARM64), string(api.ReleaseArchitectureMULTI))
 	if !architectures.Has(string(architecture)) {
-		return fmt.Errorf("%s: must be one of %s", fieldRoot, strings.Join(architectures.List(), ", "))
+		return fmt.Errorf("%s: must be one of %s", fieldRoot, strings.Join(sets.List(architectures), ", "))
 	}
 	return nil
 }
@@ -138,9 +142,9 @@ func validateRelease(fieldRoot string, release api.Release) []error {
 		}
 	}
 
-	channels := sets.NewString(string(api.ReleaseChannelStable), string(api.ReleaseChannelFast), string(api.ReleaseChannelCandidate))
+	channels := sets.New[string](string(api.ReleaseChannelStable), string(api.ReleaseChannelFast), string(api.ReleaseChannelCandidate))
 	if !channels.Has(string(release.Channel)) {
-		validationErrors = append(validationErrors, fmt.Errorf("%s.channel: must be one of %s", fieldRoot, strings.Join(channels.List(), ", ")))
+		validationErrors = append(validationErrors, fmt.Errorf("%s.channel: must be one of %s", fieldRoot, strings.Join(sets.List(channels), ", ")))
 		return validationErrors
 	}
 

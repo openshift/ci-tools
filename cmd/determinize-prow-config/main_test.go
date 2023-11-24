@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,9 +12,10 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/spf13/afero"
 
+	prowjobv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/config"
 	configflagutil "k8s.io/test-infra/prow/flagutil/config"
-	"k8s.io/test-infra/prow/github"
+	"k8s.io/test-infra/prow/git/types"
 	utilpointer "k8s.io/utils/pointer"
 	"sigs.k8s.io/yaml"
 
@@ -36,9 +36,9 @@ func TestShardProwConfig(t *testing.T) {
 				BranchProtection: config.BranchProtection{
 					Orgs: map[string]config.Org{
 						"openshift": {
-							Policy: config.Policy{Protect: utilpointer.BoolPtr(false)},
+							Policy: config.Policy{Protect: utilpointer.Bool(false)},
 							Repos: map[string]config.Repo{
-								"release": {Policy: config.Policy{Protect: utilpointer.BoolPtr(false)}},
+								"release": {Policy: config.Policy{Protect: utilpointer.Bool(false)}},
 							},
 						},
 					},
@@ -71,7 +71,7 @@ func TestShardProwConfig(t *testing.T) {
 					Orgs: map[string]config.Org{
 						"openshift": {
 							Repos: map[string]config.Repo{
-								"release": {Policy: config.Policy{Protect: utilpointer.BoolPtr(false)}},
+								"release": {Policy: config.Policy{Protect: utilpointer.Bool(false)}},
 							},
 						},
 					},
@@ -94,10 +94,10 @@ func TestShardProwConfig(t *testing.T) {
 			name: "Org and repo mergemethod config gets written out",
 			in: &config.ProwConfig{
 				Tide: config.Tide{
-					MergeType: map[string]github.PullRequestMergeType{
-						"openshift":         github.MergeSquash,
-						"openshift/release": github.MergeRebase,
-					},
+					TideGitHubConfig: config.TideGitHubConfig{MergeType: map[string]config.TideOrgMergeType{
+						"openshift":         {MergeType: types.MergeSquash},
+						"openshift/release": {MergeType: types.MergeRebase},
+					}},
 				},
 			},
 
@@ -122,18 +122,18 @@ func TestShardProwConfig(t *testing.T) {
 				BranchProtection: config.BranchProtection{
 					Orgs: map[string]config.Org{
 						"openshift": {
-							Policy: config.Policy{Protect: utilpointer.BoolPtr(false)},
+							Policy: config.Policy{Protect: utilpointer.Bool(false)},
 							Repos: map[string]config.Repo{
-								"release": {Policy: config.Policy{Protect: utilpointer.BoolPtr(false)}},
+								"release": {Policy: config.Policy{Protect: utilpointer.Bool(false)}},
 							},
 						},
 					},
 				},
 				Tide: config.Tide{
-					MergeType: map[string]github.PullRequestMergeType{
-						"openshift":         github.MergeSquash,
-						"openshift/release": github.MergeRebase,
-					},
+					TideGitHubConfig: config.TideGitHubConfig{MergeType: map[string]config.TideOrgMergeType{
+						"openshift":         {MergeType: types.MergeSquash},
+						"openshift/release": {MergeType: types.MergeRebase},
+					}},
 				},
 			},
 
@@ -164,12 +164,12 @@ func TestShardProwConfig(t *testing.T) {
 		},
 		{
 			name: "Tide queries get sharded",
-			in: &config.ProwConfig{Tide: config.Tide{Queries: config.TideQueries{
+			in: &config.ProwConfig{Tide: config.Tide{TideGitHubConfig: config.TideGitHubConfig{Queries: config.TideQueries{
 				{Orgs: []string{"openshift", "openshift-priv"}, Repos: []string{"kube-reporting/ghostunnel", "kube-reporting/presto"}, Labels: []string{"lgtm", "approved", "bugzilla/valid-bug"}},
 				{Orgs: []string{"codeready-toolchain", "integr8ly"}, Repos: []string{"containers/buildah", "containers/common"}, Labels: []string{"lgtm", "approved"}},
 				{Orgs: []string{"integr8ly"}, Author: "openshift-bot"},
 				{Repos: []string{"openshift/release"}, Author: "openshift-bot"},
-			}}},
+			}}}},
 			expectedShardFiles: map[string]string{
 				"codeready-toolchain/_prowconfig.yaml": `tide:
   queries:
@@ -250,6 +250,68 @@ func TestShardProwConfig(t *testing.T) {
 `,
 			},
 		},
+		{
+			name: "Org and repo slack-reporter configs get written out",
+			in: &config.ProwConfig{
+				SlackReporterConfigs: map[string](config.SlackReporter){
+					"*": {
+						SlackReporterConfig: prowjobv1.SlackReporterConfig{
+							Channel:           "general-channel",
+							JobStatesToReport: []prowjobv1.ProwJobState{"error"},
+							ReportTemplate:    "Job {{.Spec.Job}} of type ended with an error",
+						},
+					},
+					"openshift": {
+						SlackReporterConfig: prowjobv1.SlackReporterConfig{
+							Channel:           "openshift-channel",
+							JobStatesToReport: []prowjobv1.ProwJobState{"error"},
+							ReportTemplate:    "Job {{.Spec.Job}} of type ended with an error",
+						},
+					},
+					"openshift/installer": {
+						SlackReporterConfig: prowjobv1.SlackReporterConfig{
+							Channel:           "installer-channel",
+							JobStatesToReport: []prowjobv1.ProwJobState{"failure", "error"},
+							ReportTemplate:    "Job {{.Spec.Job}} of type ended with state {{.Status.State}}",
+						},
+					},
+				},
+			},
+
+			expectedConfig: config.ProwConfig{
+				SlackReporterConfigs: map[string](config.SlackReporter){
+					"*": {
+						SlackReporterConfig: prowjobv1.SlackReporterConfig{
+							Channel:           "general-channel",
+							JobStatesToReport: []prowjobv1.ProwJobState{"error"},
+							ReportTemplate:    "Job {{.Spec.Job}} of type ended with an error",
+						},
+					},
+				},
+			},
+
+			expectedShardFiles: map[string]string{
+				"openshift/_prowconfig.yaml": strings.Join([]string{
+					"slack_reporter_configs:",
+					"  openshift:",
+					"    channel: openshift-channel",
+					"    job_states_to_report:",
+					"    - error",
+					"    report_template: Job {{.Spec.Job}} of type ended with an error",
+					"",
+				}, "\n"),
+				"openshift/installer/_prowconfig.yaml": strings.Join([]string{
+					"slack_reporter_configs:",
+					"  openshift/installer:",
+					"    channel: installer-channel",
+					"    job_states_to_report:",
+					"    - failure",
+					"    - error",
+					"    report_template: Job {{.Spec.Job}} of type ended with state {{.Status.State}}",
+					"",
+				}, "\n"),
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -296,7 +358,7 @@ func TestShardProwConfig(t *testing.T) {
 			// This is more of test for the merging, but an important safety check.
 			// We need to do the annoying dance to get two defaulted configs that are comparable.
 			tempDir := t.TempDir()
-			if err := ioutil.WriteFile(filepath.Join(tempDir, "_old_config.yaml"), serializedOriginalConfig, 0644); err != nil {
+			if err := os.WriteFile(filepath.Join(tempDir, "_old_config.yaml"), serializedOriginalConfig, 0644); err != nil {
 				t.Fatalf("failed to write old config: %v", err)
 			}
 			oldConfigDefaulted, err := config.Load(filepath.Join(tempDir, "_old_config.yaml"), "", nil, "")
@@ -312,7 +374,7 @@ func TestShardProwConfig(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to marshal the new config: %v", err)
 			}
-			if err := ioutil.WriteFile(filepath.Join(tempDir, "_config.yaml"), serializedNewConfig, 0644); err != nil {
+			if err := os.WriteFile(filepath.Join(tempDir, "_config.yaml"), serializedNewConfig, 0644); err != nil {
 				t.Fatalf("failed to write new config: %v", err)
 			}
 
@@ -321,7 +383,7 @@ func TestShardProwConfig(t *testing.T) {
 				if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 					t.Fatalf("failed to create directories for %s: %v", path, err)
 				}
-				if err := ioutil.WriteFile(path, []byte(content), 0644); err != nil {
+				if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 					t.Fatalf("failed to write file %s: %v", name, err)
 				}
 			}

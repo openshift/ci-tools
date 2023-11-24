@@ -140,6 +140,32 @@ func TestTargets(t *testing.T) {
 	}
 }
 
+func TestTargetAdditionalSuffix(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{
+			name:  "target additional suffix is added",
+			input: "1",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tc := tc
+			t.Parallel()
+			g := NewCiOperatorPodSpecGenerator()
+			g.Add(TargetAdditionalSuffix(tc.input))
+			podspec, err := g.Build()
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			testhelper.CompareWithFixture(t, podspec)
+		})
+	}
+}
+
 func TestCustomHashInput(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

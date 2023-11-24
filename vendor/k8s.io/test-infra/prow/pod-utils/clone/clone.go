@@ -42,6 +42,7 @@ type runnable interface {
 // Run clones the refs under the prescribed directory and optionally
 // configures the git username and email in the repository as well.
 func Run(refs prowapi.Refs, dir, gitUserName, gitUserEmail, cookiePath string, env []string, userGenerator github.UserGenerator, tokenGenerator github.TokenGenerator) Record {
+	startTime := time.Now()
 	record := Record{Refs: refs}
 
 	var (
@@ -65,8 +66,8 @@ func Run(refs prowapi.Refs, dir, gitUserName, gitUserEmail, cookiePath string, e
 	}
 
 	if token != "" {
-		logrus.SetFormatter(logrusutil.NewCensoringFormatter(logrus.StandardLogger().Formatter, func() sets.String {
-			return sets.NewString(token)
+		logrus.SetFormatter(logrusutil.NewCensoringFormatter(logrus.StandardLogger().Formatter, func() sets.Set[string] {
+			return sets.New[string](token)
 		}))
 	}
 	logrus.WithFields(logrus.Fields{"refs": refs}).Info("Cloning refs")
@@ -75,6 +76,7 @@ func Run(refs prowapi.Refs, dir, gitUserName, gitUserEmail, cookiePath string, e
 	// aborting early and returning if any command fails.
 	runCommands := func(commands []runnable) error {
 		for _, command := range commands {
+			startTime := time.Now()
 			formattedCommand, output, err := command.run()
 			log := logrus.WithFields(logrus.Fields{"command": formattedCommand, "output": output})
 			if err != nil {
@@ -87,9 +89,10 @@ func Run(refs prowapi.Refs, dir, gitUserName, gitUserEmail, cookiePath string, e
 				record.Failed = true
 			}
 			record.Commands = append(record.Commands, Command{
-				Command: censorToken(string(secret.Censor([]byte(formattedCommand))), token),
-				Output:  censorToken(string(secret.Censor([]byte(output))), token),
-				Error:   censorToken(string(secret.Censor([]byte(message))), token),
+				Command:  censorToken(string(secret.Censor([]byte(formattedCommand))), token),
+				Output:   censorToken(string(secret.Censor([]byte(output))), token),
+				Error:    censorToken(string(secret.Censor([]byte(message))), token),
+				Duration: time.Since(startTime),
 			})
 			if err != nil {
 				return err
@@ -117,6 +120,8 @@ func Run(refs prowapi.Refs, dir, gitUserName, gitUserEmail, cookiePath string, e
 	} else {
 		record.FinalSHA = finalSHA
 	}
+
+	record.Duration = time.Since(startTime)
 
 	return record
 }
@@ -171,15 +176,18 @@ func gitCtxForRefs(refs prowapi.Refs, baseDir string, env []string, user, token 
 	}
 
 	if token != "" {
-		u, _ := url.Parse(g.repositoryURI)
-		if user != "" {
-			u.User = url.UserPassword(user, token)
-		} else {
-			// GitHub requires that the personal access token is set as a username.
-			// e.g., https://<token>:x-oauth-basic@github.com/owner/repo.git
-			u.User = url.UserPassword(token, "x-oauth-basic")
+		u, err := url.Parse(g.repositoryURI)
+		// Ignore invalid URL from a CloneURI override (e.g. git@github.com:owner/repo)
+		if err == nil {
+			if user != "" {
+				u.User = url.UserPassword(user, token)
+			} else {
+				// GitHub requires that the personal access token is set as a username.
+				// e.g., https://<token>:x-oauth-basic@github.com/owner/repo.git
+				u.User = url.UserPassword(token, "x-oauth-basic")
+			}
+			g.repositoryURI = u.String()
 		}
-		g.repositoryURI = u.String()
 	}
 
 	return g
@@ -196,6 +204,10 @@ var (
 		400 * time.Millisecond,
 		800 * time.Millisecond,
 		2 * time.Second,
+		5 * time.Second,
+		10 * time.Second,
+		15 * time.Second,
+		30 * time.Second,
 	}
 )
 

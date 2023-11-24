@@ -92,11 +92,11 @@ func TestAppend(t *testing.T) {
 
 func TestMergeJobConfig(t *testing.T) {
 	tests := []struct {
-		allJobs                       sets.String
+		allJobs                       sets.Set[string]
 		destination, source, expected *prowconfig.JobConfig
 	}{
 		{
-			allJobs:     sets.String{},
+			allJobs:     sets.Set[string]{},
 			destination: &prowconfig.JobConfig{},
 			source: &prowconfig.JobConfig{
 				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {
@@ -109,7 +109,7 @@ func TestMergeJobConfig(t *testing.T) {
 				}},
 			},
 		}, {
-			allJobs: sets.String{},
+			allJobs: sets.Set[string]{},
 			destination: &prowconfig.JobConfig{
 				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {
 					{JobBase: prowconfig.JobBase{Name: "another-job"}, Reporter: prowconfig.Reporter{Context: "ci/prow/another"}},
@@ -127,7 +127,7 @@ func TestMergeJobConfig(t *testing.T) {
 				}},
 			},
 		}, {
-			allJobs: sets.String{},
+			allJobs: sets.Set[string]{},
 			destination: &prowconfig.JobConfig{
 				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {
 					{JobBase: prowconfig.JobBase{Name: "same-job"}, Reporter: prowconfig.Reporter{Context: "ci/prow/same"}},
@@ -144,7 +144,7 @@ func TestMergeJobConfig(t *testing.T) {
 				}},
 			},
 		}, {
-			allJobs:     sets.String{},
+			allJobs:     sets.Set[string]{},
 			destination: &prowconfig.JobConfig{},
 			source: &prowconfig.JobConfig{
 				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{"organization/repository": {
@@ -157,7 +157,7 @@ func TestMergeJobConfig(t *testing.T) {
 				}},
 			},
 		}, {
-			allJobs: sets.String{},
+			allJobs: sets.Set[string]{},
 			destination: &prowconfig.JobConfig{
 				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{"organization/repository": {
 					{JobBase: prowconfig.JobBase{Name: "another-job", Agent: "ci/prow/another"}},
@@ -175,7 +175,7 @@ func TestMergeJobConfig(t *testing.T) {
 				}},
 			},
 		}, {
-			allJobs: sets.String{},
+			allJobs: sets.Set[string]{},
 			destination: &prowconfig.JobConfig{
 				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{"organization/repository": {
 					{JobBase: prowconfig.JobBase{Name: "same-job", Agent: "ci/prow/same"}},
@@ -192,7 +192,7 @@ func TestMergeJobConfig(t *testing.T) {
 				}},
 			},
 		}, {
-			allJobs: sets.String{},
+			allJobs: sets.Set[string]{},
 			destination: &prowconfig.JobConfig{
 				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{"organization/repository": {
 					{JobBase: prowconfig.JobBase{Name: "same-job", Agent: "ci/prow/same"}},
@@ -209,7 +209,7 @@ func TestMergeJobConfig(t *testing.T) {
 				}},
 			},
 		}, {
-			allJobs: sets.NewString("other-job"),
+			allJobs: sets.New[string]("other-job"),
 			destination: &prowconfig.JobConfig{
 				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{"organization/repository": {
 					{JobBase: prowconfig.JobBase{Name: "same-job", Agent: "ci/prow/same"}},
@@ -730,10 +730,22 @@ func TestInfo_ConfigMapName(t *testing.T) {
 			expected: "job-config-master-presubmits",
 		},
 		{
+			name:     "main branch goes to main configmap",
+			branch:   "main",
+			jobType:  "presubmits",
+			expected: "job-config-main-presubmits",
+		},
+		{
 			name:     "master branch goes to master configmap",
 			branch:   "master",
 			jobType:  "postsubmits",
 			expected: "job-config-master-postsubmits",
+		},
+		{
+			name:     "main branch goes to master configmap",
+			branch:   "main",
+			jobType:  "postsubmits",
+			expected: "job-config-main-postsubmits",
 		},
 		{
 			name:     "periodic without relationship to a repo goes to misc",
@@ -746,6 +758,12 @@ func TestInfo_ConfigMapName(t *testing.T) {
 			branch:   "master",
 			jobType:  "periodics",
 			expected: "job-config-master-periodics",
+		},
+		{
+			name:     "periodic with relationship to a repo main branch goes to branch shard",
+			branch:   "main",
+			jobType:  "periodics",
+			expected: "job-config-main-periodics",
 		},
 		{
 			name:     "periodic with relationship to a repo branch goes to branch shard",
@@ -941,10 +959,10 @@ func TestPrune(t *testing.T) {
 			jobconfig: &prowconfig.JobConfig{
 				Periodics: []prowconfig.Periodic{{JobBase: prowconfig.JobBase{
 					Name:   "job",
-					Labels: map[string]string{LabelCluster: "existingCluster", LabelGenerator: "cluster-init"}}}},
+					Labels: map[string]string{LabelBuildFarm: "existingCluster", LabelGenerator: "cluster-init"}}}},
 			},
 			Generator:      "cluster-init",
-			pruneLabels:    map[string]string{LabelCluster: "existingCluster"},
+			pruneLabels:    map[string]string{LabelBuildFarm: "existingCluster"},
 			expectedConfig: &prowconfig.JobConfig{},
 		},
 		{
@@ -952,14 +970,14 @@ func TestPrune(t *testing.T) {
 			jobconfig: &prowconfig.JobConfig{
 				Periodics: []prowconfig.Periodic{{JobBase: prowconfig.JobBase{
 					Name:   "job",
-					Labels: map[string]string{LabelCluster: "existingCluster", LabelGenerator: "cluster-init"}}}},
+					Labels: map[string]string{LabelBuildFarm: "existingCluster", LabelGenerator: "cluster-init"}}}},
 			},
 			Generator:   "cluster-init",
-			pruneLabels: map[string]string{LabelCluster: "newCluster"},
+			pruneLabels: map[string]string{LabelBuildFarm: "newCluster"},
 			expectedConfig: &prowconfig.JobConfig{
 				Periodics: []prowconfig.Periodic{{JobBase: prowconfig.JobBase{
 					Name:   "job",
-					Labels: map[string]string{LabelCluster: "existingCluster", LabelGenerator: "cluster-init"}}}},
+					Labels: map[string]string{LabelBuildFarm: "existingCluster", LabelGenerator: "cluster-init"}}}},
 			},
 		},
 	}
@@ -1049,16 +1067,16 @@ func TestStaleSelectorFor(t *testing.T) {
 		},
 		{
 			description: "job with existing cluster label is not stale",
-			labels:      map[string]string{LabelGenerator: "cluster-init", LabelCluster: "existingCluster"},
+			labels:      map[string]string{LabelGenerator: "cluster-init", LabelBuildFarm: "existingCluster"},
 			generator:   "cluster-init",
-			pruneLabels: map[string]string{LabelCluster: "newCluster"},
+			pruneLabels: map[string]string{LabelBuildFarm: "newCluster"},
 			expected:    false,
 		},
 		{
 			description: "job with passed in cluster label is stale",
-			labels:      map[string]string{LabelGenerator: "cluster-init", LabelCluster: "newCluster"},
+			labels:      map[string]string{LabelGenerator: "cluster-init", LabelBuildFarm: "newCluster"},
 			generator:   "cluster-init",
-			pruneLabels: map[string]string{LabelCluster: "newCluster"},
+			pruneLabels: map[string]string{LabelBuildFarm: "newCluster"},
 			expected:    true,
 		},
 	}

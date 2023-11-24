@@ -178,6 +178,14 @@ func setGeography(v reflect.Value, x interface{}) error {
 	return nil
 }
 
+func setJSON(v reflect.Value, x interface{}) error {
+	if x == nil {
+		return errNoNulls
+	}
+	v.SetString(x.(string))
+	return nil
+}
+
 func setBytes(v reflect.Value, x interface{}) error {
 	if x == nil {
 		v.SetBytes(nil)
@@ -309,6 +317,18 @@ func determineSetFunc(ftype reflect.Type, stype FieldType) setFunc {
 			}
 		}
 
+	case JSONFieldType:
+		if ftype.Kind() == reflect.String {
+			return setJSON
+		}
+		if ftype == typeOfNullJSON {
+			return func(v reflect.Value, x interface{}) error {
+				return setNull(v, x, func() interface{} {
+					return NullJSON{JSONVal: x.(string), Valid: true}
+				})
+			}
+		}
+
 	case BytesFieldType:
 		if ftype == typeOfByteSlice {
 			return setBytes
@@ -407,6 +427,13 @@ func determineSetFunc(ftype reflect.Type, stype FieldType) setFunc {
 				return setNull(v, x, func() interface{} { return x.(*big.Rat) })
 			}
 		}
+
+	case BigNumericFieldType:
+		if ftype == typeOfRat {
+			return func(v reflect.Value, x interface{}) error {
+				return setNull(v, x, func() interface{} { return x.(*big.Rat) })
+			}
+		}
 	}
 	return nil
 }
@@ -428,6 +455,10 @@ func runOps(ops []structLoaderOp, vstruct reflect.Value, values []Value) error {
 			err = setRepeated(field, values[op.valueIndex].([]Value), op.setFunc)
 		} else {
 			err = op.setFunc(field, values[op.valueIndex])
+			if errors.Is(err, errNoNulls) {
+				f := vstruct.Type().FieldByIndex(op.fieldIndex)
+				err = fmt.Errorf("bigquery: NULL cannot be assigned to field `%s` of type %s", f.Name, f.Type.Name())
+			}
 		}
 		if err != nil {
 			return err
@@ -692,7 +723,7 @@ func structFieldToUploadValue(vfield reflect.Value, schemaField *FieldSchema) (i
 }
 
 func toUploadValue(val interface{}, fs *FieldSchema) interface{} {
-	if fs.Type == TimeFieldType || fs.Type == DateTimeFieldType || fs.Type == NumericFieldType {
+	if fs.Type == TimeFieldType || fs.Type == DateTimeFieldType || fs.Type == NumericFieldType || fs.Type == BigNumericFieldType {
 		return toUploadValueReflect(reflect.ValueOf(val), fs)
 	}
 	return val
@@ -720,6 +751,20 @@ func toUploadValueReflect(v reflect.Value, fs *FieldSchema) interface{} {
 		}
 		return formatUploadValue(v, fs, func(v reflect.Value) string {
 			return NumericString(v.Interface().(*big.Rat))
+		})
+	case BigNumericFieldType:
+		if r, ok := v.Interface().(*big.Rat); ok && r == nil {
+			return nil
+		}
+		return formatUploadValue(v, fs, func(v reflect.Value) string {
+			return BigNumericString(v.Interface().(*big.Rat))
+		})
+	case IntervalFieldType:
+		if r, ok := v.Interface().(*IntervalValue); ok && r == nil {
+			return nil
+		}
+		return formatUploadValue(v, fs, func(v reflect.Value) string {
+			return IntervalString(v.Interface().(*IntervalValue))
 		})
 	default:
 		if !fs.Repeated || v.Len() > 0 {
@@ -786,6 +831,12 @@ const (
 
 	// NumericScaleDigits is the maximum number of digits after the decimal point in a NUMERIC value.
 	NumericScaleDigits = 9
+
+	// BigNumericPrecisionDigits is the maximum number of full digits in a BIGNUMERIC value.
+	BigNumericPrecisionDigits = 76
+
+	// BigNumericScaleDigits is the maximum number of full digits in a BIGNUMERIC value.
+	BigNumericScaleDigits = 38
 )
 
 // NumericString returns a string representing a *big.Rat in a format compatible
@@ -793,6 +844,18 @@ const (
 // after the decimal point.
 func NumericString(r *big.Rat) string {
 	return r.FloatString(NumericScaleDigits)
+}
+
+// BigNumericString returns a string representing a *big.Rat in a format compatible with BigQuery
+// SQL.  It returns a floating point literal with 38 digits after the decimal point.
+func BigNumericString(r *big.Rat) string {
+	return r.FloatString(BigNumericScaleDigits)
+}
+
+// IntervalString returns a string  representing an *IntervalValue in a format compatible with
+// BigQuery SQL.  It returns an interval literal in canonical format.
+func IntervalString(iv *IntervalValue) string {
+	return iv.String()
 }
 
 // convertRows converts a series of TableRows into a series of Value slices.
@@ -913,8 +976,22 @@ func convertBasicType(val string, typ FieldType) (Value, error) {
 			return nil, fmt.Errorf("bigquery: invalid NUMERIC value %q", val)
 		}
 		return Value(r), nil
+	case BigNumericFieldType:
+		r, ok := (&big.Rat{}).SetString(val)
+		if !ok {
+			return nil, fmt.Errorf("bigquery: invalid BIGNUMERIC value %q", val)
+		}
+		return Value(r), nil
 	case GeographyFieldType:
 		return val, nil
+	case JSONFieldType:
+		return val, nil
+	case IntervalFieldType:
+		i, err := ParseInterval(val)
+		if err != nil {
+			return nil, fmt.Errorf("bigquery: invalid INTERVAL value %q", val)
+		}
+		return Value(i), nil
 	default:
 		return nil, fmt.Errorf("unrecognized type: %s", typ)
 	}

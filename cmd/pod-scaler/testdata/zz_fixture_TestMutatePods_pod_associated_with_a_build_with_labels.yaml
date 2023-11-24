@@ -21,13 +21,16 @@ Patches:
   path: /spec/containers/0/resources
   value:
     limits:
-      memory: 39062500Ki
+      memory: "40000"
     requests:
       cpu: "9"
-      memory: 19531250Ki
+      memory: "20000"
 - op: add
   path: /spec/containers/1/resources
   value: {}
+- op: add
+  path: /spec/priorityClassName
+  value: high-priority-nonpreempting
 allowed: true
 patchType: JSONPatch
 uid: ""

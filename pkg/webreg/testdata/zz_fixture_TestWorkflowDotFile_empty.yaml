@@ -1,0 +1,34 @@
+digraph Webreg {
+	compound=true;
+	color=blue;
+	fontname="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif,'Apple Color Emoji','Segoe UI Emoji','Segoe UI Symbol','Noto Color Emoji'";
+	node[shape=rectangle fontname="SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace"];
+	rankdir=TB;
+	label="Workflow &#34;empty&#34;";
+
+	0 [label="Intentionally left blank"];
+	1 [label="Intentionally left blank"];
+	2 [label="Intentionally left blank"];
+
+	0 -> 1 [ltail=cluster_0 lhead=cluster_1 minlen=2];
+	1 -> 2 [ltail=cluster_1 lhead=cluster_2 minlen=2];
+
+	subgraph cluster_0 {
+		label="Pre";
+		labeljust="l";
+		fontname="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif,'Apple Color Emoji','Segoe UI Emoji','Segoe UI Symbol','Noto Color Emoji'";
+		0;
+	}
+	subgraph cluster_1 {
+		label="Test";
+		labeljust="l";
+		fontname="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif,'Apple Color Emoji','Segoe UI Emoji','Segoe UI Symbol','Noto Color Emoji'";
+		1;
+	}
+	subgraph cluster_2 {
+		label="Post";
+		labeljust="l";
+		fontname="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif,'Apple Color Emoji','Segoe UI Emoji','Segoe UI Symbol','Noto Color Emoji'";
+		2;
+	}
+}

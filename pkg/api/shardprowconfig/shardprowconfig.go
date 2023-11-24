@@ -10,10 +10,11 @@ import (
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	prowconfig "k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/github"
+	"k8s.io/test-infra/prow/git/types"
 
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/prowconfigsharding"
+	"github.com/openshift/ci-tools/pkg/prowconfigutils"
 )
 
 type ShardProwConfigFunctors interface {
@@ -23,22 +24,23 @@ type ShardProwConfigFunctors interface {
 
 // prowConfigWithPointers mimics the upstream prowConfig but has pointer fields only
 // in order to avoid serializing empty structs.
-type prowConfigWithPointers struct {
-	BranchProtection *prowconfig.BranchProtection `json:"branch-protection,omitempty"`
-	Tide             *tideConfig                  `json:"tide,omitempty"`
+type ProwConfigWithPointers struct {
+	BranchProtection     *prowconfig.BranchProtection     `json:"branch-protection,omitempty"`
+	Tide                 *TideConfig                      `json:"tide,omitempty"`
+	SlackReporterConfigs *prowconfig.SlackReporterConfigs `json:"slack_reporter_configs,omitempty"`
 }
 
-type tideConfig struct {
-	MergeType map[string]github.PullRequestMergeType `json:"merge_method,omitempty"`
-	Queries   prowconfig.TideQueries                 `json:"queries,omitempty"`
+type TideConfig struct {
+	MergeType map[string]types.PullRequestMergeType `json:"merge_method,omitempty"`
+	Queries   prowconfig.TideQueries                `json:"queries,omitempty"`
 }
 
 func ShardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs, f ShardProwConfigFunctors) (*prowconfig.ProwConfig, error) {
-	configsByOrgRepo := map[prowconfig.OrgRepo]*prowConfigWithPointers{}
+	configsByOrgRepo := map[prowconfig.OrgRepo]*ProwConfigWithPointers{}
 	for org, orgConfig := range pc.BranchProtection.Orgs {
 		for repo, repoConfig := range orgConfig.Repos {
 			if configsByOrgRepo[prowconfig.OrgRepo{Org: org, Repo: repo}] == nil {
-				configsByOrgRepo[prowconfig.OrgRepo{Org: org, Repo: repo}] = &prowConfigWithPointers{}
+				configsByOrgRepo[prowconfig.OrgRepo{Org: org, Repo: repo}] = &ProwConfigWithPointers{}
 			}
 			configsByOrgRepo[prowconfig.OrgRepo{Org: org, Repo: repo}].BranchProtection = &prowconfig.BranchProtection{
 				Orgs: map[string]prowconfig.Org{org: {Repos: map[string]prowconfig.Repo{repo: repoConfig}}},
@@ -48,7 +50,7 @@ func ShardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs, f ShardProwConf
 
 		if isPolicySet(orgConfig.Policy) {
 			if configsByOrgRepo[prowconfig.OrgRepo{Org: org}] == nil {
-				configsByOrgRepo[prowconfig.OrgRepo{Org: org}] = &prowConfigWithPointers{}
+				configsByOrgRepo[prowconfig.OrgRepo{Org: org}] = &ProwConfigWithPointers{}
 			}
 			configsByOrgRepo[prowconfig.OrgRepo{Org: org}].BranchProtection = &prowconfig.BranchProtection{
 				Orgs: map[string]prowconfig.Org{org: orgConfig},
@@ -57,20 +59,39 @@ func ShardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs, f ShardProwConf
 		delete(pc.BranchProtection.Orgs, org)
 	}
 
-	for orgOrgRepoString, mergeMethod := range pc.Tide.MergeType {
-		var orgRepo prowconfig.OrgRepo
-		if idx := strings.Index(orgOrgRepoString, "/"); idx != -1 {
-			orgRepo.Org = orgOrgRepoString[:idx]
-			orgRepo.Repo = orgOrgRepoString[idx+1:]
-		} else {
-			orgRepo.Org = orgOrgRepoString
-		}
-
+	setOrgRepoOnConfigs := func(orgRepo prowconfig.OrgRepo, mergeType types.PullRequestMergeType) {
 		if configsByOrgRepo[orgRepo] == nil {
-			configsByOrgRepo[orgRepo] = &prowConfigWithPointers{}
+			configsByOrgRepo[orgRepo] = &ProwConfigWithPointers{}
 		}
-		configsByOrgRepo[orgRepo].Tide = &tideConfig{MergeType: map[string]github.PullRequestMergeType{orgOrgRepoString: mergeMethod}}
-		delete(pc.Tide.MergeType, orgOrgRepoString)
+		orgRepoString := orgRepo.Org
+		if orgRepo.Repo != "" {
+			orgRepoString = fmt.Sprintf("%s/%s", orgRepo.Org, orgRepo.Repo)
+		}
+		configsByOrgRepo[orgRepo].Tide = &TideConfig{MergeType: map[string]types.PullRequestMergeType{orgRepoString: mergeType}}
+	}
+
+	for orgRepoBranch, orgMergeConfig := range pc.Tide.MergeType {
+		org, repo, branch := prowconfigutils.ExtractOrgRepoBranch(orgRepoBranch)
+		orgRepo := prowconfig.OrgRepo{Org: org, Repo: repo}
+		switch {
+		// org/repo
+		case org != "" && repo != "" && branch == "":
+			setOrgRepoOnConfigs(orgRepo, orgMergeConfig.MergeType)
+		// org
+		case org != "" && repo == "" && branch == "":
+			if orgMergeConfig.MergeType != "" {
+				setOrgRepoOnConfigs(orgRepo, orgMergeConfig.MergeType)
+			} else {
+				for r, repoMergeConfig := range orgMergeConfig.Repos {
+					if r != prowconfigutils.TideRepoMergeTypeWildcard &&
+						repoMergeConfig.MergeType != "" {
+						orgRepo.Repo = r
+						setOrgRepoOnConfigs(orgRepo, repoMergeConfig.MergeType)
+					}
+				}
+			}
+		}
+		delete(pc.Tide.MergeType, orgRepoBranch)
 	}
 
 	f.GetDataFromProwConfig(pc)
@@ -78,10 +99,10 @@ func ShardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs, f ShardProwConf
 	for _, query := range pc.Tide.Queries {
 		for _, org := range query.Orgs {
 			if configsByOrgRepo[prowconfig.OrgRepo{Org: org}] == nil {
-				configsByOrgRepo[prowconfig.OrgRepo{Org: org}] = &prowConfigWithPointers{}
+				configsByOrgRepo[prowconfig.OrgRepo{Org: org}] = &ProwConfigWithPointers{}
 			}
 			if configsByOrgRepo[prowconfig.OrgRepo{Org: org}].Tide == nil {
-				configsByOrgRepo[prowconfig.OrgRepo{Org: org}].Tide = &tideConfig{}
+				configsByOrgRepo[prowconfig.OrgRepo{Org: org}].Tide = &TideConfig{}
 			}
 			queryCopy, err := deepCopyTideQuery(&query)
 			if err != nil {
@@ -98,15 +119,18 @@ func ShardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs, f ShardProwConf
 			}
 			orgRepo := prowconfig.OrgRepo{Org: slashSplit[0], Repo: slashSplit[1]}
 			if configsByOrgRepo[orgRepo] == nil {
-				configsByOrgRepo[orgRepo] = &prowConfigWithPointers{}
+				configsByOrgRepo[orgRepo] = &ProwConfigWithPointers{}
 			}
 			if configsByOrgRepo[orgRepo].Tide == nil {
-				configsByOrgRepo[orgRepo].Tide = &tideConfig{}
+				configsByOrgRepo[orgRepo].Tide = &TideConfig{}
 			}
 			queryCopy, err := deepCopyTideQuery(&query)
 			if err != nil {
 				return nil, fmt.Errorf("failed to deepcopy tide query %+v: %w", query, err)
 			}
+
+			queryCopy.Orgs = nil
+			queryCopy.Repos = []string{repo}
 
 			f.ModifyQuery(queryCopy, repo)
 
@@ -114,6 +138,23 @@ func ShardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs, f ShardProwConf
 		}
 	}
 	pc.Tide.Queries = nil
+
+	for orgOrRepo, slackReporter := range pc.SlackReporterConfigs {
+		if orgOrRepo == "*" {
+			// Value of "*" is for applying global configurations, so no need to shard it
+			continue
+		}
+		orgRepo := prowconfig.NewOrgRepo(orgOrRepo)
+		if configsByOrgRepo[*orgRepo] == nil {
+			configsByOrgRepo[*orgRepo] = &ProwConfigWithPointers{}
+		}
+
+		configsByOrgRepo[*orgRepo].SlackReporterConfigs = &prowconfig.SlackReporterConfigs{
+			orgOrRepo: slackReporter,
+		}
+
+		delete(pc.SlackReporterConfigs, orgOrRepo)
+	}
 
 	for orgOrRepo, cfg := range configsByOrgRepo {
 		if err := prowconfigsharding.MkdirAndWrite(target, filepath.Join(orgOrRepo.Org, orgOrRepo.Repo, config.SupplementalProwConfigFileName), cfg); err != nil {

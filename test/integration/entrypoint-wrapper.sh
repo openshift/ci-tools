@@ -8,6 +8,7 @@ function cleanup() {
 trap "cleanup" EXIT
 
 dir=${BASETMPDIR}
+export HOME=${dir}/home
 export SHARED_DIR=${dir}/shared
 export TMPDIR=${dir}/tmp
 export CLI_DIR="/cli-dir"
@@ -29,7 +30,7 @@ fail() {
 }
 
 setup_test() {
-    mkdir -p "${SHARED_DIR}"
+    mkdir --parents "${HOME}" "${SHARED_DIR}"
     echo test0 > "${SHARED_DIR}/test0.txt"
     printf %s > "${SECRET}" '{' \
         '"kind":"Secret",' \
@@ -61,9 +62,11 @@ test_mkdir() {
     [[ ! -e "${TMPDIR}" ]]
     if ! entrypoint-wrapper --dry-run true > /dev/null 2> "${ERR}"; then
         fail '[ERROR] entrypoint-wrapper failed'
+        return
     fi
     if ! [[ -e "${TMPDIR}" ]]; then
         fail '[ERROR] entrypoint-wrapper did not create the directory'
+        return
     fi
 }
 
@@ -73,6 +76,7 @@ test_shared_dir() {
         3>&1 > /dev/null 2> "${ERR}")
     then
         fail '[ERROR] entrypoint-wrapper failed'
+        return
     fi
     diff <(echo "$v") <(cd "${TMPDIR}"/secret && pwd)
 }
@@ -83,6 +87,7 @@ test_cli_dir() {
         3>&1 > /dev/null 2> "${ERR}")
     then
         fail '[ERROR] entrypoint-wrapper failed'
+        return
     fi
     diff <(echo "$v") <(echo "${PATH}:${CLI_DIR}")
 }
@@ -93,32 +98,58 @@ test_home_dir() {
         3>&1 > /dev/null 2> "${ERR}")
     then
         fail '[ERROR] entrypoint-wrapper failed'
+        return
     fi
-    diff <(echo "$v") <(echo "/alabama")
+    diff <(echo "$v") <(echo "/alabama") || return
 
     echo '[INFO] Verifying HOME is set correctly when original is not writeable'
     if ! v=$(HOME=nowhere entrypoint-wrapper --dry-run bash -c 'echo >&3 "${HOME}"' \
         3>&1 > /dev/null 2> "${ERR}")
     then
         fail '[ERROR] entrypoint-wrapper failed'
+        return
     fi
-    diff <(echo "$v") <(echo "/alabama")
+    diff <(echo "$v") <(echo "/alabama") || return
 
     echo '[INFO] Verifying that setting HOME does not change the rest of the env'
     if ! v=$(unset HOME; WHOA=yes entrypoint-wrapper --dry-run bash -c 'echo >&3 "${WHOA}"' \
         3>&1 > /dev/null 2> "${ERR}")
     then
         fail '[ERROR] entrypoint-wrapper failed'
+        return
     fi
-    diff <(echo "$v") <(echo "yes")
+    diff <(echo "$v") <(echo "yes") || return
 
     echo '[INFO] Verifying HOME is untouched when original is writeable'
     if ! v=$(HOME=/tmp entrypoint-wrapper --dry-run bash -c 'echo >&3 "${HOME}"' \
         3>&1 > /dev/null 2> "${ERR}")
     then
         fail '[ERROR] entrypoint-wrapper failed'
+        return
     fi
-    diff <(echo "$v") <(echo "/tmp")
+    diff <(echo "$v") <(echo "/tmp") || return
+}
+
+test_git_config() {
+    echo '[INFO] Verifying existing Git configuration is used'
+    local d=$dir/git_config/home
+    local f=$d/.gitconfig
+    mkdir --parents "$d"
+    printf '[safe]\n    directory = test\n' > "$f"
+    if ! GIT_CONFIG_COUNT=0 HOME=$d entrypoint-wrapper --dry-run > /dev/null \
+        bash -c '[[ "$(git config safe.directory)" == "test" ]]'
+    then
+        fail '[ERROR] entrypoint-wrapper failed'
+        return
+    fi
+    rm "$f"
+    echo '[INFO] Verifying Git configuration is created when not present'
+    if ! HOME=$d entrypoint-wrapper --dry-run > /dev/null \
+        bash -c '[[ "$(git config safe.directory)" == "*" ]]'
+    then
+        fail '[ERROR] entrypoint-wrapper failed'
+        return
+    fi
 }
 
 test_copy_kubeconfig() {
@@ -127,14 +158,16 @@ test_copy_kubeconfig() {
         3>&1 > /dev/null 2> "${ERR}")
     then
         fail '[ERROR] entrypoint-wrapper failed'
+        return
     fi
-    diff <(echo "$v") <(echo "")
+    diff <(echo "$v") <(echo "") || return
 
     echo '[INFO] Verifying KUBECONFIG is set correctly when original is set'
     if ! v=$(KUBECONFIG=a entrypoint-wrapper --dry-run bash -c 'echo >&3 "${KUBECONFIG}"' \
         3>&1 > /dev/null 2> "${ERR}")
     then
         fail '[ERROR] entrypoint-wrapper failed'
+        return
     fi
     if [[ "${v}" == "a" ]]; then
       echo "\$KUBECONFIG was not changed!"
@@ -146,22 +179,64 @@ test_copy_kubeconfig() {
         3>&1 > /dev/null 2> "${ERR}")
     then
         fail '[ERROR] entrypoint-wrapper failed'
+        return
     fi
-    diff <(echo "$v") <(echo "yes")
+    diff <(echo "$v") <(echo "yes") || return
 
     echo '[INFO] Verifying KUBECONFIG is populated when possible'
     echo "test" > "${dir}/kubeconfig.new"
     ( sleep 1 && mv "${dir}/kubeconfig.new" "${dir}/kubeconfig" ) &
     if ! v=$( \
         KUBECONFIG="${dir}/kubeconfig" \
-        entrypoint-wrapper --dry-run \
-            bash -c 'for i in {0..9}; do if [[ -f "${KUBECONFIG}" ]]; then cat "${KUBECONFIG}" >&3; break; fi; sleep 0.2; done' \
+            timeout 5s \
+            entrypoint-wrapper --dry-run \
+            bash -c 'until [[ -f "${KUBECONFIG}" ]]; do sleep 0.2; done; cat "${KUBECONFIG}" >&3' \
         3>&1 > /dev/null 2> "${ERR}")
     then
         fail '[ERROR] entrypoint-wrapper failed'
+        return
     fi
-    diff <(echo "$v") <(echo "test")
+    diff <(echo "$v") <(echo "test") || return
     wait
+}
+
+test_upload_on_interrupt() {
+    echo '[INFO] Verifying secret data is uploaded when created after interrupted'
+    local pid
+    entrypoint-wrapper \
+        --dry-run \
+        bash -c 'trap "echo cleanup > ${SHARED_DIR}/file" EXIT; sleep 30' \
+        > "${OUT}" 2> "${ERR}" &
+    pid=$!
+    sleep 1
+    kill -s SIGTERM "${pid}"
+    if wait "$pid"; then
+        fail "[ERROR] secret-wrapper did not fail as expected:"
+        return 1
+    fi
+    printf %s > "${SECRET}" '{' \
+        '"kind":"Secret",' \
+        '"apiVersion":"v1",' \
+        '"metadata":{' \
+            '"name":"test",' \
+            '"creationTimestamp":null,' \
+            '"labels":{' \
+                '"ci.openshift.io/skip-censoring":"true"' \
+            '}' \
+        '},' \
+        '"data":{' \
+            '"file":"Y2xlYW51cAo=",' \
+            '"test0.txt":"dGVzdDAK"' \
+        '},' \
+        '"type":"Opaque"' \
+    $'}\n'
+    if ! cmp --quiet "${OUT}" "${SECRET}"; then
+        echo '[ERROR] output:'
+        cat "${OUT}"
+        echo '[ERROR] error output:'
+        cat "${ERR}"
+        return 1
+    fi
 }
 
 test_copy_dir() {
@@ -175,13 +250,16 @@ test_copy_dir() {
     [[ ! -e "${TMPDIR}/secret/test.txt" ]]
     if ! entrypoint-wrapper --dry-run true > /dev/null 2> "${ERR}"; then
         fail '[ERROR] entrypoint-wrapper failed'
+        return
     fi
     echo test0 | diff "${TMPDIR}/secret/test0.txt" -
     if [[ -L "${TMPDIR}/secret/..data" ]]; then
         fail '[ERROR] symlinks should not be copied'
+        return
     fi
     if [[ -e "${TMPDIR}/secret/..2020_03_09_17_18_45.291041453" ]]; then
         fail '[ERROR] directories should not be copied'
+        return
     fi
 }
 
@@ -195,10 +273,12 @@ test_signal() {
     then
         kill "${pid}"
         fail '[ERROR] timeout while waiting for `sleep` to start:'
+        return
     fi
     kill -s "$1" "${pid}"
     if wait "$pid"; then
         fail "[ERROR] entrypoint-wrapper did not fail as expected:"
+        return
     elif ! cmp --quiet "${OUT}" "${SECRET}"; then
         echo '[ERROR] output:'
         cat "${OUT}"
@@ -207,13 +287,37 @@ test_signal() {
     fi
 }
 
+test_wait() {
+    local ret=0
+    local wait_file=${dir}/wait.txt
+    rm -f "${wait_file}"
+    timeout 5s \
+        entrypoint-wrapper \
+        --dry-run \
+        --wait-for-file "${wait_file}" \
+        --wait-timeout 5s \
+        bash -c '[[ -e "$1" ]]' bash "${wait_file}" \
+        > "${OUT}" 2> "${ERR}" &
+    local pid=$!
+    sleep 0.1
+    > "${wait_file}"
+    if ! wait "${pid}"; then
+        fail '[ERROR] failed to wait for file'
+        ret=1
+    fi
+    rm -f "${wait_file}"
+    return "${ret}"
+}
+
 os::test::junit::declare_suite_start "integration/entrypoint-wrapper"
 os::cmd::expect_success 'run_test test_mkdir'
 os::cmd::expect_success 'run_test test_shared_dir'
 os::cmd::expect_success 'run_test test_cli_dir'
 os::cmd::expect_success 'run_test test_copy_dir'
 os::cmd::expect_success 'run_test test_home_dir'
+os::cmd::expect_success 'run_test test_git_config'
 os::cmd::expect_success 'run_test test_copy_kubeconfig'
+os::cmd::expect_success 'run_test test_upload_on_interrupt'
 os::cmd::expect_success "run_test entrypoint-wrapper --dry-run true \> ${OUT}"
 os::integration::compare "${OUT}" "${SECRET}"
 os::cmd::expect_failure "run_test entrypoint-wrapper --dry-run false \> ${OUT}"
@@ -221,5 +325,7 @@ os::integration::compare "${OUT}" "${SECRET}"
 os::cmd::expect_success "run_test test_signal INT"
 os::integration::compare "${OUT}" "${SECRET}"
 os::cmd::expect_success "run_test test_signal TERM"
+os::integration::compare "${OUT}" "${SECRET}"
+os::cmd::expect_success 'run_test test_wait'
 os::integration::compare "${OUT}" "${SECRET}"
 os::test::junit::declare_suite_end

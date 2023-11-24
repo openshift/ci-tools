@@ -2,7 +2,7 @@ package github
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/hashicorp/go-retryablehttp"
@@ -56,7 +56,7 @@ func FileGetterFactory(org, repo, branch string, opts ...Opt) FileGetter {
 		if resp.StatusCode == http.StatusNotFound {
 			return nil, nil
 		}
-		body, err := ioutil.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read response body when getting %s: %w", url, err)
 		}

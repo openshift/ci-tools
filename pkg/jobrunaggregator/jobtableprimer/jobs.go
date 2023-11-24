@@ -16,6 +16,8 @@ const (
 	ovirt     = "ovirt"
 	openstack = "openstack"
 	libvirt   = "libvirt"
+	alibaba   = "alibaba"
+	ibmcloud  = "ibmcloud"
 
 	amd64   = "amd64"
 	arm64   = "arm64"
@@ -25,8 +27,9 @@ const (
 	sdn = "sdn"
 	ovn = "ovn"
 
-	ha     = "ha"
-	single = "single"
+	ha       = "ha"
+	single   = "single"
+	external = "external"
 
 	ipv4 = "ipv4"
 	//ipv6 = "ipv6"

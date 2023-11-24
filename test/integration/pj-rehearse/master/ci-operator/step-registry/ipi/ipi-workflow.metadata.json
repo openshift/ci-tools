@@ -1,0 +1,13 @@
+{
+	"path": "ipi/ipi-workflow.yaml",
+	"owners": {
+		"approvers": [
+			"AlexNPavel",
+			"stevekuznetsov"
+		],
+		"reviewers": [
+			"AlexNPavel",
+			"stevekuznetsov"
+		]
+	}
+}

@@ -71,13 +71,18 @@ func (s *resourceServer) digestMemory(data *pod_scaler.CachedQuery) {
 type toQuantity func(valueAtQuantile float64) (quantity *resource.Quantity)
 
 func (s *resourceServer) digestData(data *pod_scaler.CachedQuery, quantile float64, request corev1.ResourceName, quantity toQuantity) {
-	s.logger.Debugf("Digesting %d identifiers.", len(data.DataByMetaData))
+	logger := s.logger.WithField("resource", request)
+	logger.Debugf("Digesting %d identifiers.", len(data.DataByMetaData))
 	for meta, fingerprints := range data.DataByMetaData {
 		overall := circonusllhist.New()
+		metaLogger := logger.WithField("meta", meta)
+		metaLogger.Tracef("digesting %d fingerprints", len(fingerprints))
 		for _, fingerprint := range fingerprints {
 			overall.Merge(data.Data[fingerprint].Histogram())
 		}
+		metaLogger.Trace("merged all fingerprints")
 		valueAtQuantile := overall.ValueAtQuantile(quantile)
+		metaLogger.Trace("locking for value update")
 		s.lock.Lock()
 		if _, exists := s.byMetaData[meta]; !exists {
 			s.byMetaData[meta] = corev1.ResourceRequirements{
@@ -87,9 +92,10 @@ func (s *resourceServer) digestData(data *pod_scaler.CachedQuery, quantile float
 		}
 		q := quantity(valueAtQuantile)
 		s.byMetaData[meta].Requests[request] = *q
+		metaLogger.Trace("unlocking for meta")
 		s.lock.Unlock()
 	}
-	s.logger.Debug("Finished digesting new data.")
+	logger.Debug("Finished digesting new data.")
 }
 
 func (s *resourceServer) recommendedRequestFor(meta pod_scaler.FullMetadata) (corev1.ResourceRequirements, bool) {

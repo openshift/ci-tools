@@ -25,18 +25,18 @@ import (
 
 // allVolumeSourceFields is a list of all the volume source field paths that a
 // WorkspaceBinding may include.
-var allVolumeSourceFields []string = []string{
-	"workspace.persistentvolumeclaim",
-	"workspace.volumeclaimtemplate",
-	"workspace.emptydir",
-	"workspace.configmap",
-	"workspace.secret",
+var allVolumeSourceFields = []string{
+	"persistentvolumeclaim",
+	"volumeclaimtemplate",
+	"emptydir",
+	"configmap",
+	"secret",
 }
 
 // Validate looks at the Volume provided in wb and makes sure that it is valid.
 // This means that only one VolumeSource can be specified, and also that the
 // supported VolumeSource is itself valid.
-func (b *WorkspaceBinding) Validate(ctx context.Context) *apis.FieldError {
+func (b *WorkspaceBinding) Validate(ctx context.Context) (errs *apis.FieldError) {
 	if equality.Semantic.DeepEqual(b, &WorkspaceBinding{}) || b == nil {
 		return apis.ErrMissingField(apis.CurrentField)
 	}
@@ -53,17 +53,27 @@ func (b *WorkspaceBinding) Validate(ctx context.Context) *apis.FieldError {
 
 	// For a PersistentVolumeClaim to work, you must at least provide the name of the PVC to use.
 	if b.PersistentVolumeClaim != nil && b.PersistentVolumeClaim.ClaimName == "" {
-		return apis.ErrMissingField("workspace.persistentvolumeclaim.claimname")
+		return apis.ErrMissingField("persistentvolumeclaim.claimname")
 	}
 
 	// For a ConfigMap to work, you must provide the name of the ConfigMap to use.
 	if b.ConfigMap != nil && b.ConfigMap.LocalObjectReference.Name == "" {
-		return apis.ErrMissingField("workspace.configmap.name")
+		return apis.ErrMissingField("configmap.name")
 	}
 
 	// For a Secret to work, you must provide the name of the Secret to use.
 	if b.Secret != nil && b.Secret.SecretName == "" {
-		return apis.ErrMissingField("workspace.secret.secretName")
+		return apis.ErrMissingField("secret.secretName")
+	}
+
+	// For a Projected volume to work, you must provide at least one source.
+	if b.Projected != nil && len(b.Projected.Sources) == 0 {
+		return apis.ErrMissingField("projected.sources")
+	}
+
+	// For a CSI to work, you must provide and have installed the driver to use.
+	if b.CSI != nil && b.CSI.Driver == "" {
+		return apis.ErrMissingField("csi.driver")
 	}
 
 	return nil
@@ -86,6 +96,12 @@ func (b *WorkspaceBinding) numSources() int {
 		n++
 	}
 	if b.Secret != nil {
+		n++
+	}
+	if b.Projected != nil {
+		n++
+	}
+	if b.CSI != nil {
 		n++
 	}
 	return n

@@ -29,35 +29,38 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	pod_scaler "github.com/openshift/ci-tools/pkg/pod-scaler"
 	"github.com/openshift/ci-tools/pkg/rehearse"
+	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
 )
 
-func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool) {
+func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool, cpuCap int64, memoryCap string, cpuPriorityScheduling int64, reporter results.PodScalerReporter) {
 	logger := logrus.WithField("component", "pod-scaler admission")
-	logger.Info("Initializing admission webhook server.")
+	logger.Infof("Initializing admission webhook server with %d loaders.", len(loaders))
 	health := pjutil.NewHealthOnPort(healthPort)
 	resources := newResourceServer(loaders, health)
-	decoder, err := admission.NewDecoder(scheme.Scheme)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create decoder from scheme.")
-	}
-	server := webhook.Server{
+	decoder := admission.NewDecoder(scheme.Scheme)
+
+	server := webhook.NewServer(webhook.Options{
 		Port:    port,
 		CertDir: certDir,
-	}
-	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources, mutateResourceLimits: mutateResourceLimits}})
+	})
+	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources, mutateResourceLimits: mutateResourceLimits, cpuCap: cpuCap, memoryCap: memoryCap, cpuPriorityScheduling: cpuPriorityScheduling, reporter: reporter}})
 	logger.Info("Serving admission webhooks.")
-	if err := server.StartStandalone(interrupts.Context(), nil); err != nil {
+	if err := server.Start(interrupts.Context()); err != nil {
 		logrus.WithError(err).Fatal("Failed to serve webhooks.")
 	}
 }
 
 type podMutator struct {
-	logger               *logrus.Entry
-	client               buildclientv1.BuildV1Interface
-	resources            *resourceServer
-	mutateResourceLimits bool
-	decoder              *admission.Decoder
+	logger                *logrus.Entry
+	client                buildclientv1.BuildV1Interface
+	resources             *resourceServer
+	mutateResourceLimits  bool
+	decoder               *admission.Decoder
+	cpuCap                int64
+	memoryCap             string
+	cpuPriorityScheduling int64
+	reporter              results.PodScalerReporter
 }
 
 func (m *podMutator) Handle(ctx context.Context, req admission.Request) admission.Response {
@@ -94,7 +97,8 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 		logger.WithError(err).Error("Failed to handle rehearsal Pod.")
 		return admission.Allowed("Failed to handle rehearsal Pod, ignoring.")
 	}
-	mutatePodResources(pod, m.resources, m.mutateResourceLimits)
+	mutatePodResources(pod, m.resources, m.mutateResourceLimits, m.cpuCap, m.memoryCap, m.reporter, logger)
+	m.addPriorityClass(pod)
 
 	marshaledPod, err := json.Marshal(pod)
 	if err != nil {
@@ -193,7 +197,7 @@ func mutatePodLabels(pod *corev1.Pod, build *buildv1.Build) {
 }
 
 // useOursIfLarger updates fields in theirs when ours are larger
-func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements) {
+func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, workloadName, workloadType string, reporter results.PodScalerReporter, logger *logrus.Entry) {
 	for _, item := range []*corev1.ResourceRequirements{allOfOurs, allOfTheirs} {
 		if item.Requests == nil {
 			item.Requests = corev1.ResourceList{}
@@ -204,15 +208,33 @@ func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements) {
 	}
 	for _, pair := range []struct {
 		ours, theirs *corev1.ResourceList
+		resource     string
 	}{
-		{ours: &allOfOurs.Requests, theirs: &allOfTheirs.Requests},
-		{ours: &allOfOurs.Limits, theirs: &allOfTheirs.Limits},
+		{ours: &allOfOurs.Requests, theirs: &allOfTheirs.Requests, resource: "request"},
+		{ours: &allOfOurs.Limits, theirs: &allOfTheirs.Limits, resource: "limit"},
 	} {
 		for _, field := range []corev1.ResourceName{corev1.ResourceCPU, corev1.ResourceMemory} {
 			our := (*pair.ours)[field]
 			their := (*pair.theirs)[field]
-			if our.Cmp(their) == 1 {
+			fieldLogger := logger.WithFields(logrus.Fields{
+				"workloadName": workloadName,
+				"workloadType": workloadType,
+				"field":        field,
+				"resource":     pair.resource,
+				"determined":   our.String(),
+				"configured":   their.String(),
+			})
+			cmp := our.Cmp(their)
+			if cmp == 1 {
+				fieldLogger.Debug("determined amount larger than configured")
 				(*pair.theirs)[field] = our
+				if their.Value() > 0 && our.Value() > (their.Value()*10) {
+					reporter.ReportResourceConfigurationWarning(workloadName, workloadType, their.String(), our.String(), field.String())
+				}
+			} else if cmp < 0 {
+				fieldLogger.Debug("determined amount smaller than configured")
+			} else {
+				fieldLogger.Debug("determined amount equal to configured")
 			}
 		}
 	}
@@ -239,44 +261,96 @@ func reconcileLimits(resources *corev1.ResourceRequirements) {
 	}
 }
 
-func preventUnschedulable(resources *corev1.ResourceRequirements) {
+func preventUnschedulable(resources *corev1.ResourceRequirements, cpuCap int64, memoryCap string, logger *logrus.Entry) {
 	if resources.Requests == nil {
-		return
-	}
-	if _, ok := resources.Requests[corev1.ResourceCPU]; !ok {
+		logger.Debug("no requests, skipping")
 		return
 	}
 
-	// 10 CPU is a ballpark number. Current build farm nodes have 16 CPU so pods get unschedulable
-	// around 14 CPU
-	// TODO(DPTP-2525): Make configurable and perhaps cluster-specific?
-	cpuRequestCap := *resource.NewQuantity(10, resource.DecimalSI)
-	if resources.Requests.Cpu().Cmp(cpuRequestCap) == 1 {
-		resources.Requests[corev1.ResourceCPU] = cpuRequestCap
+	if _, ok := resources.Requests[corev1.ResourceCPU]; ok {
+		// TODO(DPTP-2525): Make cluster-specific?
+		cpuRequestCap := *resource.NewQuantity(cpuCap, resource.DecimalSI)
+		if resources.Requests.Cpu().Cmp(cpuRequestCap) == 1 {
+			logger.Debugf("setting original CPU request of: %s to cap", resources.Requests.Cpu())
+			resources.Requests[corev1.ResourceCPU] = cpuRequestCap
+		}
+	}
+
+	if _, ok := resources.Requests[corev1.ResourceMemory]; ok {
+		memoryRequestCap := resource.MustParse(memoryCap)
+		if resources.Requests.Memory().Cmp(memoryRequestCap) == 1 {
+			logger.Debugf("setting original memory request of: %s to cap", resources.Requests.Memory())
+			resources.Requests[corev1.ResourceMemory] = memoryRequestCap
+		}
 	}
 }
 
-func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool) {
-	for i := range pod.Spec.InitContainers {
-		meta := pod_scaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, pod.Spec.InitContainers[i].Name)
-		resources, recommendationExists := server.recommendedRequestFor(meta)
-		if recommendationExists {
-			useOursIfLarger(&resources, &pod.Spec.InitContainers[i].Resources)
-			if mutateResourceLimits {
-				reconcileLimits(&pod.Spec.InitContainers[i].Resources)
+func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool, cpuCap int64, memoryCap string, reporter results.PodScalerReporter, logger *logrus.Entry) {
+	mutateResources := func(containers []corev1.Container) {
+		for i := range containers {
+			meta := pod_scaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, containers[i].Name)
+			resources, recommendationExists := server.recommendedRequestFor(meta)
+			if recommendationExists {
+				logger.Debugf("recommendation exists for: %s", containers[i].Name)
+				workloadType := determineWorkloadType(pod.Annotations, pod.Labels)
+				workloadName := determineWorkloadName(pod.Name, containers[i].Name, workloadType, pod.Labels)
+				useOursIfLarger(&resources, &containers[i].Resources, workloadName, workloadType, reporter, logger)
+				if mutateResourceLimits {
+					reconcileLimits(&containers[i].Resources)
+				}
 			}
+			preventUnschedulable(&containers[i].Resources, cpuCap, memoryCap, logger)
 		}
-		preventUnschedulable(&pod.Spec.InitContainers[i].Resources)
 	}
-	for i := range pod.Spec.Containers {
-		meta := pod_scaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, pod.Spec.Containers[i].Name)
-		resources, recommendationExists := server.recommendedRequestFor(meta)
-		if recommendationExists {
-			useOursIfLarger(&resources, &pod.Spec.Containers[i].Resources)
-			if mutateResourceLimits {
-				reconcileLimits(&pod.Spec.Containers[i].Resources)
+	mutateResources(pod.Spec.InitContainers)
+	mutateResources(pod.Spec.Containers)
+}
+
+const (
+	WorkloadTypeProwjob   = "prowjob"
+	WorkloadTypeBuild     = "build"
+	WorkloadTypeStep      = "step"
+	WorkloadTypeUndefined = "undefined"
+)
+
+// determineWorkloadType returns the workload type to be used in metrics
+func determineWorkloadType(annotations, labels map[string]string) string {
+	if _, isBuildPod := annotations[buildv1.BuildLabel]; isBuildPod {
+		return WorkloadTypeBuild
+	}
+	if _, isProwjob := labels["prow.k8s.io/job"]; isProwjob {
+		return WorkloadTypeProwjob
+	}
+	if _, isStep := labels[steps.LabelMetadataStep]; isStep {
+		return WorkloadTypeStep
+	}
+	return WorkloadTypeUndefined
+}
+
+// determineWorkloadName returns the workload name we will see in the metrics
+func determineWorkloadName(podName, containerName, workloadType string, labels map[string]string) string {
+	if workloadType == WorkloadTypeProwjob {
+		return labels["prow.k8s.io/job"]
+	}
+	return fmt.Sprintf("%s-%s", podName, containerName)
+}
+
+const priorityClassName = "high-priority-nonpreempting"
+
+func (m *podMutator) addPriorityClass(pod *corev1.Pod) {
+	shouldAdd := func(containers []corev1.Container) bool {
+		for _, container := range containers {
+			quantityForPriorityScheduling := *resource.NewQuantity(m.cpuPriorityScheduling, resource.DecimalSI)
+			if container.Resources.Requests.Cpu().Cmp(quantityForPriorityScheduling) >= 0 {
+				return true
 			}
 		}
-		preventUnschedulable(&pod.Spec.Containers[i].Resources)
+		return false
+	}
+
+	if shouldAdd(pod.Spec.Containers) || shouldAdd(pod.Spec.InitContainers) {
+		pod.Spec.Priority = nil         // We cannot have Priority defined if we add the PriorityClassName
+		pod.Spec.PreemptionPolicy = nil // We cannot have PreemptionPolicy defined if we are using a priority class with preemption of "Never"
+		pod.Spec.PriorityClassName = priorityClassName
 	}
 }

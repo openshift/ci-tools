@@ -17,7 +17,7 @@ func TestMigrateOpenshiftInstallerCustomTestImageTemplates(t *testing.T) {
 	testCases := []struct {
 		name                                                string
 		configuration                                       *config.DataWithInfo
-		allowedBranches, allowedOrgs, allowedCloudproviders sets.String
+		allowedBranches, allowedOrgs, allowedCloudproviders sets.Set[string]
 		expectedConfig                                      *config.DataWithInfo
 		expectedMigrationCount                              int
 	}{
@@ -62,7 +62,7 @@ func TestMigrateOpenshiftInstallerCustomTestImageTemplates(t *testing.T) {
 					},
 				}},
 			}},
-			allowedBranches: sets.NewString("some-branch"),
+			allowedBranches: sets.New[string]("some-branch"),
 			expectedConfig: &config.DataWithInfo{Configuration: api.ReleaseBuildConfiguration{
 				Tests: []api.TestStepConfiguration{{
 					Commands: "echo hello world",
@@ -84,7 +84,7 @@ func TestMigrateOpenshiftInstallerCustomTestImageTemplates(t *testing.T) {
 					},
 				}},
 			}},
-			allowedOrgs: sets.NewString("some-org"),
+			allowedOrgs: sets.New[string]("some-org"),
 			expectedConfig: &config.DataWithInfo{Configuration: api.ReleaseBuildConfiguration{
 				Tests: []api.TestStepConfiguration{{
 					Commands: "echo hello world",
@@ -106,7 +106,7 @@ func TestMigrateOpenshiftInstallerCustomTestImageTemplates(t *testing.T) {
 					},
 				}},
 			}},
-			allowedCloudproviders: sets.NewString("gcp"),
+			allowedCloudproviders: sets.New[string]("gcp"),
 			expectedConfig: &config.DataWithInfo{Configuration: api.ReleaseBuildConfiguration{
 				Tests: []api.TestStepConfiguration{{
 					Commands: "echo hello world",
@@ -138,7 +138,7 @@ func TestMigrateOpenshiftOpenshiftInstallerUPIClusterTestConfiguration(t *testin
 	testCases := []struct {
 		name                                                string
 		configuration                                       *config.DataWithInfo
-		allowedBranches, allowedOrgs, allowedCloudproviders sets.String
+		allowedBranches, allowedOrgs, allowedCloudproviders sets.Set[string]
 		expectedConfig                                      *config.DataWithInfo
 		expectedMigrationCount                              int
 	}{
@@ -199,7 +199,7 @@ func TestMigrateOpenshiftOpenshiftInstallerUPIClusterTestConfiguration(t *testin
 					},
 				}},
 			}},
-			allowedBranches: sets.NewString("some-branch"),
+			allowedBranches: sets.New[string]("some-branch"),
 			expectedConfig: &config.DataWithInfo{Configuration: api.ReleaseBuildConfiguration{
 				Tests: []api.TestStepConfiguration{{
 					Commands: "TEST_SUITE=openshift/conformance/parallel run-tests",
@@ -219,7 +219,7 @@ func TestMigrateOpenshiftOpenshiftInstallerUPIClusterTestConfiguration(t *testin
 					},
 				}},
 			}},
-			allowedOrgs: sets.NewString("some-org"),
+			allowedOrgs: sets.New[string]("some-org"),
 			expectedConfig: &config.DataWithInfo{Configuration: api.ReleaseBuildConfiguration{
 				Tests: []api.TestStepConfiguration{{
 					Commands: "TEST_SUITE=openshift/conformance/parallel run-tests",
@@ -239,7 +239,7 @@ func TestMigrateOpenshiftOpenshiftInstallerUPIClusterTestConfiguration(t *testin
 					},
 				}},
 			}},
-			allowedCloudproviders: sets.NewString("gcp"),
+			allowedCloudproviders: sets.New[string]("gcp"),
 			expectedConfig: &config.DataWithInfo{Configuration: api.ReleaseBuildConfiguration{
 				Tests: []api.TestStepConfiguration{{
 					Commands: "TEST_SUITE=openshift/conformance/parallel run-tests",
@@ -270,7 +270,7 @@ func TestMigrateOpenshiftInstallerTemplates(t *testing.T) {
 	testCases := []struct {
 		name                                                string
 		configuration                                       *config.DataWithInfo
-		allowedBranches, allowedOrgs, allowedCloudproviders sets.String
+		allowedBranches, allowedOrgs, allowedCloudproviders sets.Set[string]
 		expectedConfig                                      *config.DataWithInfo
 		expectedMigrationCount                              int
 	}{
@@ -342,7 +342,7 @@ func TestMigrateOpenshiftInstallerTemplates(t *testing.T) {
 					},
 				}},
 			}},
-			allowedBranches: sets.NewString("some-branch"),
+			allowedBranches: sets.New[string]("some-branch"),
 			expectedConfig: &config.DataWithInfo{Configuration: api.ReleaseBuildConfiguration{
 				Tests: []api.TestStepConfiguration{{
 					OpenshiftInstallerClusterTestConfiguration: &api.OpenshiftInstallerClusterTestConfiguration{
@@ -362,7 +362,7 @@ func TestMigrateOpenshiftInstallerTemplates(t *testing.T) {
 					},
 				}},
 			}},
-			allowedOrgs: sets.NewString("some-org"),
+			allowedOrgs: sets.New[string]("some-org"),
 			expectedConfig: &config.DataWithInfo{Configuration: api.ReleaseBuildConfiguration{
 				Tests: []api.TestStepConfiguration{{
 					OpenshiftInstallerClusterTestConfiguration: &api.OpenshiftInstallerClusterTestConfiguration{
@@ -382,7 +382,7 @@ func TestMigrateOpenshiftInstallerTemplates(t *testing.T) {
 					},
 				}},
 			}},
-			allowedCloudproviders: sets.NewString("gcp"),
+			allowedCloudproviders: sets.New[string]("gcp"),
 			expectedConfig: &config.DataWithInfo{Configuration: api.ReleaseBuildConfiguration{
 				Tests: []api.TestStepConfiguration{{
 					OpenshiftInstallerClusterTestConfiguration: &api.OpenshiftInstallerClusterTestConfiguration{

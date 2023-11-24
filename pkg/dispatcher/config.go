@@ -2,7 +2,7 @@ package dispatcher
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -22,6 +22,9 @@ import (
 type Config struct {
 	// the job will be run on the same cloud as the one for the e2e test
 	DetermineE2EByJob bool `json:"determineE2EByJob,omitempty"`
+	// the job will be run on the target cloud if it otherwise runs on the source cloud.
+	// The field has effect only when DetermineE2EByJob is true.
+	CloudMapping map[api.Cloud]api.Cloud `json:"cloudMapping,omitempty"`
 	// the cluster cluster name if no other condition matches
 	Default api.Cluster `json:"default"`
 	// the cluster name for ssh bastion jobs
@@ -39,10 +42,8 @@ type Config struct {
 }
 
 type BuildFarmConfig struct {
-	FilenamesRaw []string    `json:"filenames,omitempty"`
-	Filenames    sets.String `json:"-"`
-
-	Disabled bool `json:"disabled,omitempty"`
+	FilenamesRaw []string         `json:"filenames,omitempty"`
+	Filenames    sets.Set[string] `json:"-"`
 }
 
 // JobGroups maps a group of jobs to a cluster
@@ -77,7 +78,7 @@ func isApplyConfigJob(jobBase prowconfig.JobBase) bool {
 }
 
 var (
-	knownCloudProviders = sets.NewString(string(api.CloudAWS), string(api.CloudGCP))
+	knownCloudProviders = sets.New[string](string(api.CloudAWS), string(api.CloudGCP))
 )
 
 // DetermineCloud determines which cloud this job should run.
@@ -113,7 +114,24 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 		return "", false, nil
 	}
 	if strings.Contains(jobBase.Name, "vsphere") && !isApplyConfigJob(jobBase) {
-		return api.ClusterVSphere, false, nil
+		cluster := api.ClusterVSphere
+		// once the vsphere build cluster is removed, this logic will also be removed and the vsphere02 cluster will be
+		// the only vsphere cluster used.
+
+		if clusterProfile, ok := jobBase.Labels[api.CloudClusterProfileLabel]; ok {
+			switch clusterProfile {
+			case string(api.ClusterProfileVSphere8Vpn),
+				string(api.ClusterProfileVSphere2),
+				string(api.ClusterProfileVSphereMultizone2),
+				string(api.ClusterProfileVSphereConnected2),
+				string(api.ClusterProfileVSphereClusterbot2),
+				string(api.ClusterProfileVSphereDis2),
+				string(api.ClusterProfileVSpherePlatformNone2):
+
+				cluster = api.ClusterVSphere02
+			}
+		}
+		return cluster, false, nil
 	}
 	if isSSHBastionJob(jobBase) && config.SSHBastion != "" {
 		return config.SSHBastion, false, nil
@@ -130,9 +148,11 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 	}
 
 	if config.DetermineE2EByJob {
-		if cloud := DetermineCloud(jobBase); cloud != "" {
+		if cloud := config.DetermineCloudMapping(jobBase); cloud != "" {
 			if clusters, ok := config.BuildFarmCloud[api.Cloud(cloud)]; ok {
-				return api.Cluster(clusters[len(filepath.Base(path))%len(clusters)]), false, nil
+				if len(clusters) > 0 {
+					return api.Cluster(clusters[len(filepath.Base(path))%len(clusters)]), false, nil
+				}
 			}
 		}
 	}
@@ -196,6 +216,15 @@ func isSSHBastionJob(base prowconfig.JobBase) bool {
 	return false
 }
 
+// DetermineCloudMapping determines if for a given cloud there is a replacement to map, eg for cost saving reasons
+func (config *Config) DetermineCloudMapping(jobBase prowconfig.JobBase) string {
+	cloud := DetermineCloud(jobBase)
+	if mapping, ok := config.CloudMapping[api.Cloud(cloud)]; ok {
+		cloud = string(mapping)
+	}
+	return cloud
+}
+
 // IsInBuildFarm returns the cloudProvider if the cluster is in the build farm; empty string otherwise.
 func (config *Config) IsInBuildFarm(clusterName api.Cluster) api.Cloud {
 	for cloudProvider, v := range config.BuildFarm {
@@ -251,16 +280,16 @@ func LoadConfig(configPath string) (*Config, error) {
 		if config.BuildFarmCloud == nil {
 			config.BuildFarmCloud = map[api.Cloud][]string{}
 		}
-		clusters := sets.NewString()
+		clusters := sets.New[string]()
 		for cluster, filenames := range config.BuildFarm[cloudProvider] {
 			clusters.Insert(string(cluster))
-			filenames.Filenames = sets.NewString()
+			filenames.Filenames = sets.New[string]()
 			for _, f := range filenames.FilenamesRaw {
 				filenames.Filenames.Insert(f)
 			}
 			config.BuildFarm[cloudProvider][cluster] = filenames
 		}
-		config.BuildFarmCloud[cloudProvider] = clusters.List()
+		config.BuildFarmCloud[cloudProvider] = sets.List(clusters)
 	}
 
 	if len(errs) > 0 {
@@ -300,7 +329,7 @@ func SaveConfig(config *Config, configPath string) error {
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(configPath, bytes, 0644)
+	err = os.WriteFile(configPath, bytes, 0644)
 	if err != nil {
 		return err
 	}

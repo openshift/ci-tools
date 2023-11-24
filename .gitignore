@@ -4,6 +4,8 @@
 /_output
 index.js
 
+# vscode
+.vscode/
 
 # default working dir
 /job-aggregator-working-dir

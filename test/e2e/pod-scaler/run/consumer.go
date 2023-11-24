@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"net/http"
+	"os"
 	"path"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -44,14 +45,23 @@ func Admission(t testhelper.TestingTInterface, dataDir, kubeconfig string, paren
 		t.Fatalf("Failed to ensure client cert and key for admission: %v", err)
 	}
 
+	// create mock report credentials
+	credFile := path.Join(t.TempDir(), "credentials")
+	var content string = "<username>:<password>"
+	err = os.WriteFile(credFile, []byte(content), 0400)
+	if err != nil {
+		t.Fatalf("Failed to create a mock file for report-credentials: %v", err)
+	}
+
 	podScalerFlags := []string{
-		"--loglevel=info",
+		"--loglevel=trace",
 		"--log-style=text",
 		"--cache-dir", dataDir,
 		"--mode=consumer.admission",
 		"--mutate-resource-limits",
 		"--serving-cert-dir=" + authDir,
 		"--metrics-port=9092",
+		"--report-credentials-file=" + credFile,
 	}
 	podScaler := testhelper.NewAccessory("pod-scaler", podScalerFlags, func(port, healthPort string) []string {
 		t.Logf("pod-scaler admission starting on port %s", port)
@@ -62,7 +72,9 @@ func Admission(t testhelper.TestingTInterface, dataDir, kubeconfig string, paren
 	podScaler.RunFromFrameworkRunner(t, parent, stream)
 	podScalerHost := "https://" + serverHostname + ":" + podScaler.ClientFlags()[0]
 	t.Logf("pod-scaler admission is running at %s", podScalerHost)
-	podScaler.Ready(t)
+	podScaler.Ready(t, func(options *testhelper.ReadyOptions) {
+		options.WaitFor = 300
+	})
 
 	var certs []tls.Certificate
 	for _, cert := range clientTLSConfig.Certs {
@@ -88,7 +100,7 @@ func Admission(t testhelper.TestingTInterface, dataDir, kubeconfig string, paren
 func UI(t testhelper.TestingTInterface, dataDir string, parent context.Context, stream bool) string {
 	serverHostname := "127.0.0.1"
 	podScalerFlags := []string{
-		"--loglevel=info",
+		"--loglevel=trace",
 		"--log-style=text",
 		"--cache-dir", dataDir,
 		"--mode=consumer.ui",

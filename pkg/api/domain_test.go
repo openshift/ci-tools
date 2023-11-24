@@ -35,6 +35,10 @@ func TestDomainForService(t *testing.T) {
 			service:  ServiceConfig,
 			expected: "config.ci.openshift.org",
 		},
+		{
+			service:  ServiceGCSStorage,
+			expected: "storage.googleapis.com",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -63,6 +67,16 @@ func TestRegistryDomainForClusterName(t *testing.T) {
 			name:        "vsphere",
 			clusterName: "vsphere",
 			expected:    "registry.apps.build01-us-west-2.vmc.ci.openshift.org",
+		},
+		{
+			name:        "arm01",
+			clusterName: "arm01",
+			expected:    "registry.arm-build01.arm-build.devcluster.openshift.com",
+		},
+		{
+			name:        "multi01",
+			clusterName: "multi01",
+			expected:    "registry.multi-build01.arm-build.devcluster.openshift.com",
 		},
 		{
 			name:        "build01",

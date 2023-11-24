@@ -2,7 +2,7 @@ base_images:
   os:
     name: centos
     namespace: openshift
-    tag: '7'
+    tag: 'stream9'
   alpine:
     name: alpine
     namespace: ci
@@ -125,7 +125,15 @@ tests:
               ci-operator.openshift.io/shm: 2G
             limits:
               ci-operator.openshift.io/shm: 2G
-
+  - as: pending
+    steps:
+      test:
+        - as: pending
+          commands: "true"
+          from: "404"
+          resources:
+            limits:
+              cpu: "1"
 zz_generated_metadata:
   branch: master
   org: test

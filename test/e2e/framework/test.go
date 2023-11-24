@@ -25,15 +25,16 @@ type TestFunc func(t *T, cmd *CiOperatorCommand)
 
 // Run mimics the testing.T.Run function while providing a nice set of concurrency
 // guarantees for the processes that we create and manage for test cases. We ensure:
-// - the ci-operator process is interrupted (SIGINT) before the test times out, so
-//   that it has time to clean up and create artifacts before the test exits
-// - any accessory processes that are started will only be exposed to the ci-operator
-//   command once they have signalled that they are healthy and ready
-// - any accessory processes will have their lifetime bound to the lifetime of the
-//   individual test case - they will be killed (SIGKILL) when the test finishes
-// - any errors in running an accessory process (other than it being killed by the
-//   above mechanism) will be fatal to the test execution and will preempt the other
-//   test routines
+//   - the ci-operator process is interrupted (SIGINT) before the test times out, so
+//     that it has time to clean up and create artifacts before the test exits
+//   - any accessory processes that are started will only be exposed to the ci-operator
+//     command once they have signalled that they are healthy and ready
+//   - any accessory processes will have their lifetime bound to the lifetime of the
+//     individual test case - they will be killed (SIGKILL) when the test finishes
+//   - any errors in running an accessory process (other than it being killed by the
+//     above mechanism) will be fatal to the test execution and will preempt the other
+//     test routines
+//
 // This is a generally non-standard use of the testing.T construct; the two largest
 // reasons we built this abstraction are that we need to manage a fairly complex and
 // fragile set of concurrency and lifetime guarantees for the processes that are

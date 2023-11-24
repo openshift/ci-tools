@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	jiraapi "github.com/andygrunwald/go-jira"
 	"github.com/google/go-cmp/cmp"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,7 +40,7 @@ func TestUpgradeBuild02(t *testing.T) {
 	}{
 		{
 			name: "to 4.9.6",
-			b01Client: fakectrlruntimeclient.NewFakeClient(
+			b01Client: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 				&configv1.ClusterVersion{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "version",
@@ -57,8 +58,8 @@ func TestUpgradeBuild02(t *testing.T) {
 						},
 					},
 				},
-			),
-			b02Client: fakectrlruntimeclient.NewFakeClient(
+			).Build(),
+			b02Client: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 				&configv1.ClusterVersion{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "version",
@@ -73,7 +74,7 @@ func TestUpgradeBuild02(t *testing.T) {
 						},
 					},
 				},
-			),
+			).Build(),
 			expected: &versionInfo{
 				version:        "4.9.6",
 				stableDuration: "1 day",
@@ -82,7 +83,7 @@ func TestUpgradeBuild02(t *testing.T) {
 		},
 		{
 			name: "build02 is up2date",
-			b01Client: fakectrlruntimeclient.NewFakeClient(
+			b01Client: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 				&configv1.ClusterVersion{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "version",
@@ -100,8 +101,8 @@ func TestUpgradeBuild02(t *testing.T) {
 						},
 					},
 				},
-			),
-			b02Client: fakectrlruntimeclient.NewFakeClient(
+			).Build(),
+			b02Client: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 				&configv1.ClusterVersion{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "version",
@@ -115,11 +116,11 @@ func TestUpgradeBuild02(t *testing.T) {
 						},
 					},
 				},
-			),
+			).Build(),
 		},
 		{
 			name: "build01 is soaking after z-stream upgrade",
-			b01Client: fakectrlruntimeclient.NewFakeClient(
+			b01Client: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 				&configv1.ClusterVersion{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "version",
@@ -137,12 +138,12 @@ func TestUpgradeBuild02(t *testing.T) {
 						},
 					},
 				},
-			),
-			b02Client: fakectrlruntimeclient.NewFakeClient(),
+			).Build(),
+			b02Client: fakectrlruntimeclient.NewClientBuilder().Build(),
 		},
 		{
 			name: "build01 is soaking after y-stream upgrade",
-			b01Client: fakectrlruntimeclient.NewFakeClient(
+			b01Client: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 				&configv1.ClusterVersion{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "version",
@@ -160,12 +161,12 @@ func TestUpgradeBuild02(t *testing.T) {
 						},
 					},
 				},
-			),
-			b02Client: fakectrlruntimeclient.NewFakeClient(),
+			).Build(),
+			b02Client: fakectrlruntimeclient.NewClientBuilder().Build(),
 		},
 		{
 			name: "build02 is upgraded after build01's y-stream upgrade",
-			b01Client: fakectrlruntimeclient.NewFakeClient(
+			b01Client: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 				&configv1.ClusterVersion{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "version",
@@ -183,8 +184,8 @@ func TestUpgradeBuild02(t *testing.T) {
 						},
 					},
 				},
-			),
-			b02Client: fakectrlruntimeclient.NewFakeClient(
+			).Build(),
+			b02Client: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 				&configv1.ClusterVersion{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "version",
@@ -199,7 +200,7 @@ func TestUpgradeBuild02(t *testing.T) {
 						},
 					},
 				},
-			),
+			).Build(),
 			expected: &versionInfo{
 				version:        "4.9.5",
 				stableDuration: "7 days",
@@ -208,7 +209,7 @@ func TestUpgradeBuild02(t *testing.T) {
 		},
 		{
 			name: "build02 is newer than build01",
-			b01Client: fakectrlruntimeclient.NewFakeClient(
+			b01Client: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 				&configv1.ClusterVersion{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "version",
@@ -226,8 +227,8 @@ func TestUpgradeBuild02(t *testing.T) {
 						},
 					},
 				},
-			),
-			b02Client: fakectrlruntimeclient.NewFakeClient(
+			).Build(),
+			b02Client: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 				&configv1.ClusterVersion{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "version",
@@ -241,12 +242,11 @@ func TestUpgradeBuild02(t *testing.T) {
 						},
 					},
 				},
-			),
-			expectedErr: fmt.Errorf("version of build02 4.9.17 is newer than build01 4.9.6"),
+			).Build(),
 		},
 		{
 			name: "upgrade of build02 is still ongoing",
-			b01Client: fakectrlruntimeclient.NewFakeClient(
+			b01Client: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 				&configv1.ClusterVersion{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "version",
@@ -264,8 +264,8 @@ func TestUpgradeBuild02(t *testing.T) {
 						},
 					},
 				},
-			),
-			b02Client: fakectrlruntimeclient.NewFakeClient(
+			).Build(),
+			b02Client: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 				&configv1.ClusterVersion{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "version",
@@ -279,7 +279,7 @@ func TestUpgradeBuild02(t *testing.T) {
 						},
 					},
 				},
-			),
+			).Build(),
 		},
 	}
 	for _, tc := range testCases {
@@ -294,6 +294,72 @@ func TestUpgradeBuild02(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expectedErr, actualErr, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("%s differs from expected:\n%s", tc.name, diff)
+			}
+		})
+	}
+}
+
+func TestCardIsReady(t *testing.T) {
+	intakeEmail := "intake@mail.com"
+
+	var testCases = []struct {
+		name     string
+		comments []*jiraapi.Comment
+		expected bool
+	}{
+		{
+			name:     "no comments",
+			comments: []*jiraapi.Comment{},
+			expected: true,
+		},
+		{
+			name: "single comment, IS by intake",
+			comments: []*jiraapi.Comment{
+				{
+					Author: jiraapi.User{EmailAddress: intakeEmail},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "single comment, NOT by intake",
+			comments: []*jiraapi.Comment{
+				{
+					Author: jiraapi.User{EmailAddress: "someone@else.com"},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "multiple comments, last comment NOT by intake",
+			comments: []*jiraapi.Comment{
+				{
+					Author: jiraapi.User{EmailAddress: intakeEmail},
+				},
+				{
+					Author: jiraapi.User{EmailAddress: "someone@else.com"},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "multiple comments, last comment IS by intake",
+			comments: []*jiraapi.Comment{
+				{
+					Author: jiraapi.User{EmailAddress: "someone@else.com"},
+				},
+				{
+					Author: jiraapi.User{EmailAddress: intakeEmail},
+				},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if diff := cmp.Diff(cardIsReady(tc.comments, intakeEmail), tc.expected); diff != "" {
+				t.Errorf("result differs from expected, diff:\n%s", diff)
 			}
 		})
 	}

@@ -7,6 +7,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -30,7 +31,7 @@ type client struct {
 	censor   *secrets.DynamicCensor
 }
 
-func (c *client) Get(ctx context.Context, key ctrlruntimeclient.ObjectKey, obj ctrlruntimeclient.Object) error {
+func (c *client) Get(ctx context.Context, key ctrlruntimeclient.ObjectKey, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.GetOption) error {
 	if err := c.upstream.Get(ctx, key, obj); err != nil {
 		return err
 	}
@@ -149,4 +150,16 @@ func (c *client) Scheme() *runtime.Scheme {
 
 func (c *client) RESTMapper() meta.RESTMapper {
 	return c.upstream.RESTMapper()
+}
+
+func (c *client) GroupVersionKindFor(obj runtime.Object) (schema.GroupVersionKind, error) {
+	return c.upstream.GroupVersionKindFor(obj)
+}
+
+func (c *client) IsObjectNamespaced(obj runtime.Object) (bool, error) {
+	return c.upstream.IsObjectNamespaced(obj)
+}
+
+func (c *client) SubResource(subResource string) ctrlruntimeclient.SubResourceClient {
+	return c.upstream.SubResource(subResource)
 }

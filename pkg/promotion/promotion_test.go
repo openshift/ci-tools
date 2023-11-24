@@ -14,63 +14,12 @@ import (
 	"github.com/openshift/ci-tools/pkg/config"
 )
 
-func TestPromotesOfficialImages(t *testing.T) {
-	var testCases = []struct {
-		name       string
-		configSpec *cioperatorapi.ReleaseBuildConfiguration
-		expected   bool
-	}{
-		{
-			name: "config without promotion doesn't produce official images",
-			configSpec: &cioperatorapi.ReleaseBuildConfiguration{
-				PromotionConfiguration: nil,
-			},
-			expected: false,
-		},
-		{
-			name: "config explicitly promoting to ocp namespace produces official images",
-			configSpec: &cioperatorapi.ReleaseBuildConfiguration{
-				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
-					Namespace: "ocp",
-				},
-			},
-			expected: true,
-		},
-		{
-			name: "config with disabled explicit promotion to ocp namespace does not produce official images",
-			configSpec: &cioperatorapi.ReleaseBuildConfiguration{
-				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
-					Namespace: "ocp",
-					Disabled:  true,
-				},
-			},
-			expected: false,
-		},
-		{
-			name: "config explicitly promoting to okd namespace produces official images",
-			configSpec: &cioperatorapi.ReleaseBuildConfiguration{
-				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
-					Namespace: "origin",
-				},
-			},
-			expected: true,
-		},
-	}
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			if actual, expected := PromotesOfficialImages(testCase.configSpec, WithOKD), testCase.expected; actual != expected {
-				t.Errorf("%s: did not identify official promotion correctly, expected %v got %v", testCase.name, expected, actual)
-			}
-		})
-	}
-}
-
 func TestAllPromotionImageStreamTags(t *testing.T) {
 	t.Parallel()
 	testCases := []struct {
 		name     string
 		config   *cioperatorapi.ReleaseBuildConfiguration
-		expected sets.String
+		expected sets.Set[string]
 	}{
 		{
 			name:   "nil promotionconfig",
@@ -114,7 +63,7 @@ func TestAllPromotionImageStreamTags(t *testing.T) {
 				},
 				Images: []cioperatorapi.ProjectDirectoryImageBuildStepConfiguration{{To: cioperatorapi.PipelineImageStreamTagReferenceSource}},
 			},
-			expected: sets.NewString("some-namespace/some-stream:src"),
+			expected: sets.New[string]("some-namespace/some-stream:src"),
 		},
 		{
 			name: "additinal image",
@@ -125,7 +74,7 @@ func TestAllPromotionImageStreamTags(t *testing.T) {
 					AdditionalImages: map[string]string{"expected": ""},
 				},
 			},
-			expected: sets.NewString("some-namespace/some-stream:expected"),
+			expected: sets.New[string]("some-namespace/some-stream:expected"),
 		},
 		{
 			name: "image and additional image",
@@ -137,7 +86,7 @@ func TestAllPromotionImageStreamTags(t *testing.T) {
 				},
 				Images: []cioperatorapi.ProjectDirectoryImageBuildStepConfiguration{{To: cioperatorapi.PipelineImageStreamTagReferenceSource}},
 			},
-			expected: sets.NewString("some-namespace/some-stream:expected", "some-namespace/some-stream:src"),
+			expected: sets.New[string]("some-namespace/some-stream:expected", "some-namespace/some-stream:src"),
 		},
 	}
 
@@ -433,7 +382,7 @@ func TestOptionsMatche(t *testing.T) {
 		if err := fs.Parse(testCase.input); err != nil {
 			t.Fatalf("%s: cannot parse args: %v", testCase.name, err)
 		}
-		if actual, expected := o.matches(testCase.configSpec, WithOKD), testCase.expected; actual != expected {
+		if actual, expected := o.matches(testCase.configSpec, cioperatorapi.WithOKD), testCase.expected; actual != expected {
 			t.Errorf("expected matches, but failed, input_args=%v, promation_config=%v.", testCase.input, testCase.configSpec)
 		}
 	}

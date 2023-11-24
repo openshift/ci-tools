@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
@@ -19,14 +19,14 @@ const (
 	clusterWildcard        = "$(cluster)"
 )
 
-//SecretGenConfig is used here as using secretgenerator.Config results in 'special' unmarshalling
-//where '$(*)' wildcards from the yaml are expanded in the output. Doing so for this purpose results in
-//incorrect re-serialization
+// SecretGenConfig is used here as using secretgenerator.Config results in 'special' unmarshalling
+// where '$(*)' wildcards from the yaml are expanded in the output. Doing so for this purpose results in
+// incorrect re-serialization
 type SecretGenConfig []secretgenerator.SecretItem
 
 func updateSecretGenerator(o options) error {
 	filename := filepath.Join(o.releaseRepo, "core-services", "ci-secret-generator", "_config.yaml")
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return err
 	}
@@ -41,7 +41,7 @@ func updateSecretGenerator(o options) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(filename, rawYaml, 0644)
+	return os.WriteFile(filename, rawYaml, 0644)
 }
 
 func updateSecretGeneratorConfig(o options, c *SecretGenConfig) error {
@@ -55,7 +55,12 @@ func updateSecretGeneratorConfig(o options, c *SecretGenConfig) error {
 	if err := appendToSecretItem("ci-chat-bot", serviceAccountConfigPath, o, c); err != nil {
 		return err
 	}
-	return appendToSecretItem(podScaler, serviceAccountConfigPath, o, c)
+	if !o.unmanaged {
+		if err := appendToSecretItem(podScaler, serviceAccountConfigPath, o, c); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func appendToSecretItem(itemName string, name string, o options, c *SecretGenConfig) error {
@@ -64,7 +69,7 @@ func appendToSecretItem(itemName string, name string, o options, c *SecretGenCon
 		return err
 	}
 	logrus.Infof("Appending to secret item: {itemName: %s, name: %s, likeCluster: %s}", itemName, name, string(api.ClusterBuild01))
-	si.Params["cluster"] = sets.NewString(si.Params["cluster"]...).Insert(o.clusterName).List()
+	si.Params["cluster"] = sets.List(sets.New[string](si.Params["cluster"]...).Insert(o.clusterName))
 	return nil
 }
 

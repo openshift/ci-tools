@@ -23,12 +23,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/mattn/go-zglob"
 	"github.com/sirupsen/logrus"
@@ -43,6 +43,10 @@ import (
 const defaultBufferSize = 10 * 1024 * 1024
 
 func (o Options) censor() error {
+	logrus.Info("Starting to censor data")
+	startTime := time.Now()
+	defer func() { logrus.WithField("duration", time.Since(startTime).String()).Info("Finished censoring data") }()
+
 	var concurrency int64
 	if o.CensoringOptions.CensoringConcurrency == nil {
 		concurrency = int64(10)
@@ -211,7 +215,7 @@ func determineContentType(path string) (string, error) {
 // handleArchive unravels the archive in order to censor data in the files that were added to it.
 // This is mostly stolen from build/internal/untar/untar.go
 func handleArchive(archivePath string, censor func(wg *sync.WaitGroup, file string)) error {
-	outputDir, err := ioutil.TempDir("", "tmp-unpack")
+	outputDir, err := os.MkdirTemp("", "tmp-unpack")
 	if err != nil {
 		return fmt.Errorf("could not create temporary dir for unpacking: %w", err)
 	}
@@ -315,7 +319,7 @@ func validRelPath(p string) bool {
 func archive(srcDir, destArchive string) error {
 	// we want the temporary file we use for output to be in the same directory as the real destination, so
 	// we can be certain that our final os.Rename() call will not have to operate across a device boundary
-	output, err := ioutil.TempFile(filepath.Dir(destArchive), "tmp-archive")
+	output, err := os.CreateTemp(filepath.Dir(destArchive), "tmp-archive")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary file for archive: %w", err)
 	}
@@ -407,7 +411,7 @@ func handleFile(path string, censorer secretutil.Censorer, bufferSize int) error
 
 	// we want the temporary file we use for output to be in the same directory as the real destination, so
 	// we can be certain that our final os.Rename() call will not have to operate across a device boundary
-	output, err := ioutil.TempFile(filepath.Dir(path), "tmp-censor")
+	output, err := os.CreateTemp(filepath.Dir(path), "tmp-censor")
 	if err != nil {
 		return fmt.Errorf("could not create temporary file for censoring: %w", err)
 	}
@@ -492,7 +496,7 @@ func loadSecrets(paths, iniFilenames []string) ([][]byte, error) {
 			if info.IsDir() {
 				return nil
 			}
-			raw, err := ioutil.ReadFile(path)
+			raw, err := os.ReadFile(path)
 			if err != nil {
 				return err
 			}

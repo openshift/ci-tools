@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -55,7 +54,7 @@ func (f *GoogleAuthenticationFlags) NewBigQueryClient(ctx context.Context, proje
 		)
 	}
 
-	b, err := ioutil.ReadFile(f.GoogleOAuthClientCredentialFile)
+	b, err := os.ReadFile(f.GoogleOAuthClientCredentialFile)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +79,7 @@ func (f *GoogleAuthenticationFlags) NewGCSClient(ctx context.Context) (*storage.
 		)
 	}
 
-	b, err := ioutil.ReadFile(f.GoogleOAuthClientCredentialFile)
+	b, err := os.ReadFile(f.GoogleOAuthClientCredentialFile)
 	if err != nil {
 		return nil, err
 	}

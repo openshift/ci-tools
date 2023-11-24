@@ -72,7 +72,7 @@ func preparePodStep(namespace string) (*podStep, stepExpectation) {
 	}
 	jobSpec.SetNamespace(namespace)
 
-	client := kubernetes.NewPodClient(loggingclient.New(fakectrlruntimeclient.NewFakeClient()), nil, nil)
+	client := kubernetes.NewPodClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().Build()), nil, nil, 0)
 	ps := PodStep(stepName, config, resources, client, jobSpec, nil)
 
 	specification := stepExpectation{
@@ -126,7 +126,7 @@ func TestPodStepExecution(t *testing.T) {
 		t.Run(tc.purpose, func(t *testing.T) {
 			ps, _ := preparePodStep(namespace)
 			ps.config.Clone = tc.clone
-			ps.client = kubernetes.NewPodClient(loggingclient.New(&podStatusChangingClient{WithWatch: fakectrlruntimeclient.NewFakeClient(), dest: tc.podStatus}), nil, nil)
+			ps.client = kubernetes.NewPodClient(loggingclient.New(&podStatusChangingClient{WithWatch: fakectrlruntimeclient.NewClientBuilder().Build(), dest: tc.podStatus}), nil, nil, 0)
 
 			executionExpectation := executionExpectation{
 				prerun: doneExpectation{
@@ -307,14 +307,14 @@ func TestTestStepAndRequires(t *testing.T) {
 			name: "step without claim",
 			config: api.TestStepConfiguration{
 				As:                         "some",
-				ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "cli", Clone: utilpointer.BoolPtr(false)},
+				ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "cli", Clone: utilpointer.Bool(false)},
 			},
 			expected: []api.StepLink{api.InternalImageLink("cli")},
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := TestStep(tc.config, nil, nil, nil).Requires()
+			actual := TestStep(tc.config, nil, nil, nil, "").Requires()
 			if len(actual) == len(tc.expected) {
 				matches := true
 				for i := range actual {

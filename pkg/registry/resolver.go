@@ -7,10 +7,13 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/validation"
 )
 
 type Resolver interface {
 	Resolve(name string, config api.MultiStageTestConfiguration) (api.MultiStageTestConfigurationLiteral, error)
+	ResolveWorkflow(name string) (api.MultiStageTestConfigurationLiteral, error)
+	ResolveChain(name string) (api.RegistryChain, error)
 }
 
 type ReferenceByName map[string]api.LiteralTestStep
@@ -25,18 +28,21 @@ func Validate(stepsByName ReferenceByName, chainsByName ChainByName, workflowsBy
 	reg := registry{stepsByName, chainsByName, workflowsByName, observersByName}
 	var ret []error
 	for k := range chainsByName {
-		if _, err := reg.process([]api.TestStep{{Chain: &k}}, sets.NewString(), stackForChain()); err != nil {
+		if _, err := reg.process([]api.TestStep{{Chain: &k}}, sets.New[string](), stackForChain()); err != nil {
 			ret = append(ret, err...)
 		}
 	}
 	for k, v := range workflowsByName {
 		stack := stackForWorkflow(k, v.Environment, v.Dependencies)
 		for _, s := range [][]api.TestStep{v.Pre, v.Test, v.Post} {
-			if _, err := reg.process(s, sets.NewString(), stack); err != nil {
+			if _, err := reg.process(s, sets.New[string](), stack); err != nil {
 				ret = append(ret, err...)
 			}
 		}
 		ret = append(ret, stack.checkUnused(&stack.records[0], nil, &reg)...)
+	}
+	for _, v := range observersByName {
+		ret = append(ret, validation.Observer(v)...)
 	}
 	return utilerrors.NewAggregate(ret)
 }
@@ -61,46 +67,65 @@ func NewResolver(stepsByName ReferenceByName, chainsByName ChainByName, workflow
 }
 
 func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) (api.MultiStageTestConfigurationLiteral, error) {
-	var resolveErrors []error
 	var overridden [][]api.TestStep
 	if config.Workflow != nil {
-		workflow, ok := r.workflowsByName[*config.Workflow]
-		if !ok {
-			return api.MultiStageTestConfigurationLiteral{}, fmt.Errorf("no workflow named %s", *config.Workflow)
-		}
-		if config.ClusterProfile == "" {
-			config.ClusterProfile = workflow.ClusterProfile
-		}
-		if config.Pre == nil {
-			config.Pre = workflow.Pre
-		} else {
-			overridden = append(overridden, workflow.Pre)
-		}
-		if config.Test == nil {
-			config.Test = workflow.Test
-		} else {
-			overridden = append(overridden, workflow.Test)
-		}
-		if config.Post == nil {
-			config.Post = workflow.Post
-		} else {
-			overridden = append(overridden, workflow.Post)
-		}
-		config.Environment = mergeEnvironments(workflow.Environment, config.Environment)
-		config.Dependencies = mergeDependencies(workflow.Dependencies, config.Dependencies)
-		config.DependencyOverrides = mergeDependencyOverrides(workflow.DependencyOverrides, config.DependencyOverrides)
-		if l, err := mergeLeases(workflow.Leases, config.Leases); err != nil {
-			resolveErrors = append(resolveErrors, err)
-		} else {
-			config.Leases = l
-		}
-		if config.AllowSkipOnSuccess == nil {
-			config.AllowSkipOnSuccess = workflow.AllowSkipOnSuccess
-		}
-		if config.AllowBestEffortPostSteps == nil {
-			config.AllowBestEffortPostSteps = workflow.AllowBestEffortPostSteps
+		var errs []error
+		overridden, errs = r.mergeWorkflow(&config)
+		if errs != nil {
+			return api.MultiStageTestConfigurationLiteral{}, utilerrors.NewAggregate(errs)
 		}
 	}
+	return r.resolveTest(config, stackForTest(name, config.Environment, config.Dependencies), overridden)
+}
+
+func (r *registry) mergeWorkflow(config *api.MultiStageTestConfiguration) ([][]api.TestStep, []error) {
+	var overridden [][]api.TestStep
+	workflow, ok := r.workflowsByName[*config.Workflow]
+	if !ok {
+		return nil, []error{fmt.Errorf("no workflow named %s", *config.Workflow)}
+	}
+	var errs []error
+	if config.ClusterProfile == "" {
+		config.ClusterProfile = workflow.ClusterProfile
+	}
+	if config.Pre == nil {
+		config.Pre = workflow.Pre
+	} else {
+		overridden = append(overridden, workflow.Pre)
+	}
+	if config.Test == nil {
+		config.Test = workflow.Test
+	} else {
+		overridden = append(overridden, workflow.Test)
+	}
+	if config.Post == nil {
+		config.Post = workflow.Post
+	} else {
+		overridden = append(overridden, workflow.Post)
+	}
+	config.Environment = mergeEnvironments(workflow.Environment, config.Environment)
+	config.Dependencies = mergeDependencies(workflow.Dependencies, config.Dependencies)
+	config.DependencyOverrides = mergeDependencyOverrides(workflow.DependencyOverrides, config.DependencyOverrides)
+	if l, err := mergeLeases(workflow.Leases, config.Leases); err != nil {
+		errs = append(errs, err)
+	} else {
+		config.Leases = l
+	}
+	if config.AllowSkipOnSuccess == nil {
+		config.AllowSkipOnSuccess = workflow.AllowSkipOnSuccess
+	}
+	if config.AllowBestEffortPostSteps == nil {
+		config.AllowBestEffortPostSteps = workflow.AllowBestEffortPostSteps
+	}
+	return overridden, errs
+}
+
+func (r *registry) resolveTest(
+	config api.MultiStageTestConfiguration,
+	stack stack,
+	overridden [][]api.TestStep,
+) (api.MultiStageTestConfigurationLiteral, error) {
+	var resolveErrors []error
 	expandedFlow := api.MultiStageTestConfigurationLiteral{
 		ClusterProfile:           config.ClusterProfile,
 		AllowSkipOnSuccess:       config.AllowSkipOnSuccess,
@@ -108,43 +133,62 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 		Leases:                   config.Leases,
 		DependencyOverrides:      config.DependencyOverrides,
 	}
-	stack := stackForTest(name, config.Environment, config.Dependencies)
 	if config.Workflow != nil {
 		stack.push(stackRecordForTest("workflow/"+*config.Workflow, nil, nil))
 	}
-	pre, errs := r.process(config.Pre, sets.NewString(), stack)
+	pre, errs := r.process(config.Pre, sets.New[string](), stack)
 	expandedFlow.Pre = append(expandedFlow.Pre, pre...)
 	resolveErrors = append(resolveErrors, errs...)
 
-	test, errs := r.process(config.Test, sets.NewString(), stack)
+	test, errs := r.process(config.Test, sets.New[string](), stack)
 	expandedFlow.Test = append(expandedFlow.Test, test...)
 	resolveErrors = append(resolveErrors, errs...)
 
-	post, errs := r.process(config.Post, sets.NewString(), stack)
+	post, errs := r.process(config.Post, sets.New[string](), stack)
 	expandedFlow.Post = append(expandedFlow.Post, post...)
 	resolveErrors = append(resolveErrors, errs...)
-	resolveErrors = append(resolveErrors, stack.checkUnused(&stack.records[0], overridden, r)...)
 
-	observerNames := sets.NewString()
+	observerNames := sets.New[string]()
 	for _, step := range append(pre, append(test, post...)...) {
-		observerNames = observerNames.Union(sets.NewString(step.Observers...))
+		observerNames = observerNames.Union(sets.New[string](step.Observers...))
 	}
 	if config.Observers != nil {
-		observerNames = observerNames.Union(sets.NewString(config.Observers.Enable...)).Delete(config.Observers.Disable...)
+		observerNames = observerNames.Union(sets.New[string](config.Observers.Enable...)).Delete(config.Observers.Disable...)
 	}
-	var observers []api.Observer
-	for _, name := range observerNames.List() {
-		observer, exists := r.observersByName[name]
-		if !exists {
-			resolveErrors = append(resolveErrors, fmt.Errorf("observer %q is referenced but no such observer is configured", name))
-		}
-		observers = append(observers, observer)
-	}
+
+	observers, errs := r.processObservers(observerNames, stack)
+	resolveErrors = append(resolveErrors, errs...)
 	expandedFlow.Observers = observers
+
+	resolveErrors = append(resolveErrors, stack.checkUnused(&stack.records[0], overridden, r)...)
+
 	if resolveErrors != nil {
 		return api.MultiStageTestConfigurationLiteral{}, utilerrors.NewAggregate(resolveErrors)
 	}
 	return expandedFlow, nil
+}
+
+func (r *registry) ResolveWorkflow(name string) (api.MultiStageTestConfigurationLiteral, error) {
+	workflow, ok := r.workflowsByName[name]
+	if !ok {
+		return api.MultiStageTestConfigurationLiteral{}, fmt.Errorf("no workflow named %s", name)
+	}
+	stack := stackForWorkflow(name, workflow.Environment, workflow.Dependencies)
+	ret, err := r.resolveTest(workflow, stack, nil)
+	return ret, err
+}
+
+func (r *registry) ResolveChain(name string) (api.RegistryChain, error) {
+	steps, err := r.processChain(name, sets.New[string](), stack{})
+	if err != nil {
+		return api.RegistryChain{}, utilerrors.NewAggregate(err)
+	}
+	ret := api.RegistryChain{}
+	for _, x := range steps {
+		unique := x
+		ret.Steps = append(ret.Steps, api.TestStep{LiteralTestStep: &unique})
+	}
+	return ret, nil
 }
 
 // mergeEnvironments joins two environment maps.
@@ -207,10 +251,10 @@ func mergeLeases(dst, src []api.StepLease) ([]api.StepLease, error) {
 	return ret, nil
 }
 
-func (r *registry) process(steps []api.TestStep, seen sets.String, stack stack) (ret []api.LiteralTestStep, errs []error) {
+func (r *registry) process(steps []api.TestStep, seen sets.Set[string], stack stack) (ret []api.LiteralTestStep, errs []error) {
 	for _, step := range steps {
 		if step.Chain != nil {
-			steps, err := r.processChain(&step, seen, stack)
+			steps, err := r.processChain(*step.Chain, seen, stack)
 			errs = append(errs, err...)
 			ret = append(ret, steps...)
 		} else {
@@ -224,8 +268,7 @@ func (r *registry) process(steps []api.TestStep, seen sets.String, stack stack) 
 	return
 }
 
-func (r *registry) processChain(step *api.TestStep, seen sets.String, stack stack) ([]api.LiteralTestStep, []error) {
-	name := *step.Chain
+func (r *registry) processChain(name string, seen sets.Set[string], stack stack) ([]api.LiteralTestStep, []error) {
 	chain, ok := r.chainsByName[name]
 	if !ok {
 		return nil, []error{stack.errorf("unknown step chain: %s", name)}
@@ -238,7 +281,7 @@ func (r *registry) processChain(step *api.TestStep, seen sets.String, stack stac
 	return ret, err
 }
 
-func (r *registry) processStep(step *api.TestStep, seen sets.String, stack stack) (ret api.LiteralTestStep, err []error) {
+func (r *registry) processStep(step *api.TestStep, seen sets.Set[string], stack stack) (ret api.LiteralTestStep, err []error) {
 	if ref := step.Reference; ref != nil {
 		var ok bool
 		ret, ok = r.stepsByName[*ref]
@@ -281,6 +324,29 @@ func (r *registry) processStep(step *api.TestStep, seen sets.String, stack stack
 		ret.Dependencies = deps
 	}
 	return ret, errs
+}
+
+func (r *registry) processObservers(observerNames sets.Set[string], stack stack) (ret []api.Observer, errs []error) {
+	for _, name := range sets.List(observerNames) {
+		observer, exists := r.observersByName[name]
+		if !exists {
+			errs = append(errs, fmt.Errorf("observer %q is referenced but no such observer is configured", name))
+		}
+		if observer.Environment != nil {
+			env := make([]api.StepParameter, 0, len(observer.Environment))
+			for _, e := range observer.Environment {
+				if v := stack.resolve(e.Name); v != nil {
+					e.Default = v
+				} else if e.Default == nil && !stack.partial {
+					errs = append(errs, stack.errorf("observer/%s: unresolved parameter: %s", observer.Name, e.Name))
+				}
+				env = append(env, e)
+			}
+			observer.Environment = env
+		}
+		ret = append(ret, observer)
+	}
+	return
 }
 
 // iterateSteps calls a function for each leaf child of a step.

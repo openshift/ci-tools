@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
@@ -24,11 +26,21 @@ func NewRetryingCIDataClient(delegate CIDataClient) CIDataClient {
 	}
 }
 
-func (c *retryingCIDataClient) GetBackendDisruptionStatisticsByJob(ctx context.Context, jobName string) ([]jobrunaggregatorapi.BackendDisruptionStatisticsRow, error) {
+func (c *retryingCIDataClient) GetBackendDisruptionRowCountByJob(ctx context.Context, jobName, masterNodesUpdated string) (uint64, error) {
+	var ret uint64
+	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
+		var innerErr error
+		ret, innerErr = c.delegate.GetBackendDisruptionRowCountByJob(ctx, jobName, masterNodesUpdated)
+		return innerErr
+	})
+	return ret, err
+}
+
+func (c *retryingCIDataClient) GetBackendDisruptionStatisticsByJob(ctx context.Context, jobName, masterNodesUpdated string) ([]jobrunaggregatorapi.BackendDisruptionStatisticsRow, error) {
 	var ret []jobrunaggregatorapi.BackendDisruptionStatisticsRow
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
 		var innerErr error
-		ret, innerErr = c.delegate.GetBackendDisruptionStatisticsByJob(ctx, jobName)
+		ret, innerErr = c.delegate.GetBackendDisruptionStatisticsByJob(ctx, jobName, masterNodesUpdated)
 		return innerErr
 	})
 	return ret, err
@@ -44,31 +56,31 @@ func (c *retryingCIDataClient) ListAllJobs(ctx context.Context) ([]jobrunaggrega
 	return ret, err
 }
 
-func (c *retryingCIDataClient) GetLastJobRunWithTestRunDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
-	var ret *jobrunaggregatorapi.JobRunRow
+func (c *retryingCIDataClient) ListProwJobRunsSince(ctx context.Context, since *time.Time) ([]*jobrunaggregatorapi.TestPlatformProwJobRow, error) {
+	var ret []*jobrunaggregatorapi.TestPlatformProwJobRow
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
 		var innerErr error
-		ret, innerErr = c.delegate.GetLastJobRunWithTestRunDataForJobName(ctx, jobName)
+		ret, innerErr = c.delegate.ListProwJobRunsSince(ctx, since)
 		return innerErr
 	})
 	return ret, err
 }
 
-func (c *retryingCIDataClient) GetLastJobRunWithDisruptionDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
-	var ret *jobrunaggregatorapi.JobRunRow
+func (c *retryingCIDataClient) GetLastJobRunEndTimeFromTable(ctx context.Context, tableName string) (*time.Time, error) {
+	var ret *time.Time
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
 		var innerErr error
-		ret, innerErr = c.delegate.GetLastJobRunWithDisruptionDataForJobName(ctx, jobName)
+		ret, innerErr = c.delegate.GetLastJobRunEndTimeFromTable(ctx, tableName)
 		return innerErr
 	})
 	return ret, err
 }
 
-func (c *retryingCIDataClient) GetLastJobRunWithAlertDataForJobName(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRunRow, error) {
-	var ret *jobrunaggregatorapi.JobRunRow
+func (c *retryingCIDataClient) ListUploadedJobRunIDsSinceFromTable(ctx context.Context, table string, since *time.Time) (map[string]bool, error) {
+	var ret map[string]bool
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
 		var innerErr error
-		ret, innerErr = c.delegate.GetLastJobRunWithAlertDataForJobName(ctx, jobName)
+		ret, innerErr = c.delegate.ListUploadedJobRunIDsSinceFromTable(ctx, table, since)
 		return innerErr
 	})
 	return ret, err
@@ -94,8 +106,8 @@ func (c *retryingCIDataClient) ListUnifiedTestRunsForJobAfterDay(ctx context.Con
 	return ret, err
 }
 
-func (c *retryingCIDataClient) ListReleaseTags(ctx context.Context) (sets.String, error) {
-	var ret sets.String
+func (c *retryingCIDataClient) ListReleaseTags(ctx context.Context) (sets.Set[string], error) {
+	var ret sets.Set[string]
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
 		var innerErr error
 		ret, innerErr = c.delegate.ListReleaseTags(ctx)
@@ -104,8 +116,8 @@ func (c *retryingCIDataClient) ListReleaseTags(ctx context.Context) (sets.String
 	return ret, err
 }
 
-func (c *retryingCIDataClient) GetJobRunForJobNameBeforeTime(ctx context.Context, jobName string, targetTime time.Time) (*jobrunaggregatorapi.JobRunRow, error) {
-	var ret *jobrunaggregatorapi.JobRunRow
+func (c *retryingCIDataClient) GetJobRunForJobNameBeforeTime(ctx context.Context, jobName string, targetTime time.Time) (string, error) {
+	var ret string
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
 		var innerErr error
 		ret, innerErr = c.delegate.GetJobRunForJobNameBeforeTime(ctx, jobName, targetTime)
@@ -114,8 +126,8 @@ func (c *retryingCIDataClient) GetJobRunForJobNameBeforeTime(ctx context.Context
 	return ret, err
 }
 
-func (c *retryingCIDataClient) GetJobRunForJobNameAfterTime(ctx context.Context, jobName string, targetTime time.Time) (*jobrunaggregatorapi.JobRunRow, error) {
-	var ret *jobrunaggregatorapi.JobRunRow
+func (c *retryingCIDataClient) GetJobRunForJobNameAfterTime(ctx context.Context, jobName string, targetTime time.Time) (string, error) {
+	var ret string
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
 		var innerErr error
 		ret, innerErr = c.delegate.GetJobRunForJobNameAfterTime(ctx, jobName, targetTime)
@@ -134,6 +146,36 @@ func (c *retryingCIDataClient) ListAggregatedTestRunsForJob(ctx context.Context,
 	return ret, err
 }
 
+func (c *retryingCIDataClient) ListDisruptionHistoricalData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalData, error) {
+	var ret []jobrunaggregatorapi.HistoricalData
+	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
+		var innerErr error
+		ret, innerErr = c.delegate.ListDisruptionHistoricalData(ctx)
+		return innerErr
+	})
+	return ret, err
+}
+
+func (c *retryingCIDataClient) ListAlertHistoricalData(ctx context.Context) ([]*jobrunaggregatorapi.AlertHistoricalDataRow, error) {
+	var ret []*jobrunaggregatorapi.AlertHistoricalDataRow
+	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
+		var innerErr error
+		ret, innerErr = c.delegate.ListAlertHistoricalData(ctx)
+		return innerErr
+	})
+	return ret, err
+}
+
+func (c *retryingCIDataClient) ListAllKnownAlerts(ctx context.Context) ([]*jobrunaggregatorapi.KnownAlertRow, error) {
+	var ret []*jobrunaggregatorapi.KnownAlertRow
+	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
+		var innerErr error
+		ret, innerErr = c.delegate.ListAllKnownAlerts(ctx)
+		return innerErr
+	})
+	return ret, err
+}
+
 var slowBackoff = wait.Backoff{
 	Steps:    4,
 	Duration: 10 * time.Second,
@@ -147,6 +189,7 @@ func isReadQuotaError(err error) bool {
 		return false
 	}
 	if strings.Contains(err.Error(), "exceeded quota for concurrent queries") {
+		logrus.WithError(err).Warn("hit a read quota error")
 		return true
 	}
 	return false

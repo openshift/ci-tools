@@ -1,8 +1,8 @@
 package main
 
 import (
+	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,10 +10,13 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func TestValidator(t *testing.T) {
-	dir, err := ioutil.TempDir("", "test")
+	dir, err := os.MkdirTemp("", "test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,14 +27,14 @@ func TestValidator(t *testing.T) {
 	}()
 
 	passwdFileRaw := filepath.Join(dir, "passwdFile")
-	if err := ioutil.WriteFile(passwdFileRaw, []byte(`a:b
+	if err := os.WriteFile(passwdFileRaw, []byte(`a:b
 c:d
 :`), 0644); err != nil {
 		t.Fatal(err)
 	}
 
 	passwdFileRawAbnormalContent := filepath.Join(dir, "passwdFileRawAbnormalContent")
-	if err := ioutil.WriteFile(passwdFileRawAbnormalContent, []byte("some"), 0644); err != nil {
+	if err := os.WriteFile(passwdFileRawAbnormalContent, []byte("some"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -146,5 +149,88 @@ func TestLoginHandler(t *testing.T) {
 		if diff := cmp.Diff(tc.expectedBody, responseRecorder.Body.String()); diff != "" {
 			t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 		}
+	}
+}
+
+func TestValidatePodScalerRequest(t *testing.T) {
+	var testCases = []struct {
+		name     string
+		request  *results.PodScalerRequest
+		expected error
+	}{
+		{
+			name: "everything ok",
+			request: &results.PodScalerRequest{
+				WorkloadName:     "name",
+				WorkloadType:     "build",
+				ConfiguredAmount: "100",
+				DeterminedAmount: "400",
+				ResourceType:     "memory",
+			},
+			expected: nil,
+		},
+		{
+			name: "empty workload name",
+			request: &results.PodScalerRequest{
+				WorkloadName:     "",
+				ConfiguredAmount: "100",
+				DeterminedAmount: "400",
+				ResourceType:     "cpu",
+			},
+			expected: fmt.Errorf("workload_name field in request is empty"),
+		},
+		{
+			name: "empty configured memory",
+			request: &results.PodScalerRequest{
+				WorkloadName:     "name",
+				WorkloadType:     "build",
+				ConfiguredAmount: "",
+				DeterminedAmount: "400",
+				ResourceType:     "memory",
+			},
+			expected: fmt.Errorf("configured_amount field in request is empty"),
+		},
+		{
+			name: "empty determined memory",
+			request: &results.PodScalerRequest{
+				WorkloadName:     "name",
+				WorkloadType:     "build",
+				ConfiguredAmount: "100",
+				DeterminedAmount: "",
+				ResourceType:     "memory",
+			},
+			expected: fmt.Errorf("determined_amount field in request is empty"),
+		},
+		{
+			name: "empty workload type",
+			request: &results.PodScalerRequest{
+				WorkloadName:     "name",
+				WorkloadType:     "",
+				ConfiguredAmount: "100",
+				DeterminedAmount: "200",
+				ResourceType:     "cpu",
+			},
+			expected: fmt.Errorf("workload_type field in request is empty"),
+		},
+		{
+			name: "empty resource type",
+			request: &results.PodScalerRequest{
+				WorkloadName:     "name",
+				WorkloadType:     "step",
+				ConfiguredAmount: "100",
+				DeterminedAmount: "200",
+				ResourceType:     "",
+			},
+			expected: fmt.Errorf("resource_type field in request is empty"),
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			actual := validatePodScalerRequest(testCase.request)
+			if diff := cmp.Diff(testCase.expected, actual, testhelper.EquateErrorMessage); diff != "" {
+				t.Fatalf("actual error doesn't match expected error, diff: %v", diff)
+			}
+		})
 	}
 }

@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"path"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
@@ -18,6 +21,38 @@ import (
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
+)
+
+// stepFlag controls the behavior of a test throughout its execution.
+type stepFlag uint8
+
+// vpnConf is the format of the VPN configuration file in the cluster profile.
+// The presence of this file triggers the addition of a VPN client to each step
+// pod according to information in this configuration.
+type vpnConf struct {
+	// image is the pull spec of the image used for the container.
+	Image string `json:"image"`
+	// commands is the entry point of the container, executed as a bash script.
+	// Initially refers to the key in the Secret, later replaced by the actual
+	// script.
+	Commands string `json:"commands"`
+	// waitTimeout is how long to wait for the connection before failing.
+	WaitTimeout *string `json:"wait_timeout"`
+	// Runtime data for the step, not present in the configuration.
+	namespaceUID int64
+}
+
+const (
+	// A test failure should terminate the current phase.
+	// Set for `pre` and `test`, unset for `post`.
+	shortCircuit = stepFlag(1) << iota
+	// There was a failure in any of the previous steps.
+	// Used in the implementation of best-effort steps.
+	hasPrevErrs
+	// The test was configured to allow "skip on success" steps.
+	allowSkipOnSuccess
+	// The test was configured to allow best-effort steps.
+	allowBestEffortPostSteps
 )
 
 const (
@@ -38,6 +73,8 @@ const (
 	// CommandScriptMountPath is where we mount the command script
 	CommandScriptMountPath = "/var/run/configmaps/ci.openshift.io/multi-stage"
 	homeVolumeName         = "home"
+	// vpnConfPath is the path of the configuration file in the cluster profile.
+	vpnConfPath = "vpn.yaml"
 )
 
 var envForProfile = []string{
@@ -46,21 +83,25 @@ var envForProfile = []string{
 }
 
 type multiStageTestStep struct {
-	name    string
-	profile api.ClusterProfile
-	config  *api.ReleaseBuildConfiguration
+	name             string
+	additionalSuffix string
+	nodeName         string
+	profile          api.ClusterProfile
+	config           *api.ReleaseBuildConfiguration
 	// params exposes getters for variables created by other steps
-	params                   api.Parameters
-	env                      api.TestEnvironment
-	client                   kubernetes.PodClient
-	jobSpec                  *api.JobSpec
-	pre, test, post          []api.LiteralTestStep
-	subTests                 []*junit.TestCase
-	subSteps                 []api.CIOperatorStepDetailInfo
-	allowSkipOnSuccess       *bool
-	allowBestEffortPostSteps *bool
-	leases                   []api.StepLease
-	clusterClaim             *api.ClusterClaim
+	params          api.Parameters
+	env             api.TestEnvironment
+	client          kubernetes.PodClient
+	jobSpec         *api.JobSpec
+	observers       []api.Observer
+	pre, test, post []api.LiteralTestStep
+	subLock         *sync.Mutex
+	subTests        []*junit.TestCase
+	subSteps        []api.CIOperatorStepDetailInfo
+	flags           stepFlag
+	leases          []api.StepLease
+	clusterClaim    *api.ClusterClaim
+	vpnConf         *vpnConf
 }
 
 func MultiStageTestStep(
@@ -70,8 +111,10 @@ func MultiStageTestStep(
 	client kubernetes.PodClient,
 	jobSpec *api.JobSpec,
 	leases []api.StepLease,
+	nodeName string,
+	targetAdditionalSuffix string,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, params, client, jobSpec, leases)
+	return newMultiStageTestStep(testConfig, config, params, client, jobSpec, leases, nodeName, targetAdditionalSuffix)
 }
 
 func newMultiStageTestStep(
@@ -81,28 +124,44 @@ func newMultiStageTestStep(
 	client kubernetes.PodClient,
 	jobSpec *api.JobSpec,
 	leases []api.StepLease,
+	nodeName string,
+	targetAdditionalSuffix string,
 ) *multiStageTestStep {
 	ms := testConfig.MultiStageTestConfigurationLiteral
+	var flags stepFlag
+	if p := ms.AllowSkipOnSuccess; p != nil && *p {
+		flags |= allowSkipOnSuccess
+	}
+	if p := ms.AllowBestEffortPostSteps; p != nil && *p {
+		flags |= allowBestEffortPostSteps
+	}
 	return &multiStageTestStep{
-		name:                     testConfig.As,
-		profile:                  ms.ClusterProfile,
-		config:                   config,
-		params:                   params,
-		env:                      ms.Environment,
-		client:                   client,
-		jobSpec:                  jobSpec,
-		pre:                      ms.Pre,
-		test:                     ms.Test,
-		post:                     ms.Post,
-		allowSkipOnSuccess:       ms.AllowSkipOnSuccess,
-		allowBestEffortPostSteps: ms.AllowBestEffortPostSteps,
-		leases:                   leases,
-		clusterClaim:             testConfig.ClusterClaim,
+		name:             testConfig.As,
+		additionalSuffix: targetAdditionalSuffix,
+		nodeName:         nodeName,
+		profile:          ms.ClusterProfile,
+		config:           config,
+		params:           params,
+		env:              ms.Environment,
+		client:           client,
+		jobSpec:          jobSpec,
+		observers:        ms.Observers,
+		pre:              ms.Pre,
+		test:             ms.Test,
+		post:             ms.Post,
+		flags:            flags,
+		leases:           leases,
+		clusterClaim:     testConfig.ClusterClaim,
+		subLock:          &sync.Mutex{},
 	}
 }
 
 func (s *multiStageTestStep) profileSecretName() string {
-	return s.name + "-cluster-profile"
+	name := s.name
+	if s.additionalSuffix != "" {
+		name = strings.TrimSuffix(name, fmt.Sprintf("-%s", s.additionalSuffix))
+	}
+	return name + "-cluster-profile"
 }
 
 func (s *multiStageTestStep) Inputs() (api.InputDefinition, error) {
@@ -117,7 +176,12 @@ func (s *multiStageTestStep) Run(ctx context.Context) error {
 
 func (s *multiStageTestStep) run(ctx context.Context) error {
 	logrus.Infof("Running multi-stage test %s", s.name)
-	env, err := s.environment(ctx)
+	if s.profile != "" {
+		if err := s.getProfileData(ctx); err != nil {
+			return err
+		}
+	}
+	env, err := s.environment()
 	if err != nil {
 		return err
 	}
@@ -133,19 +197,38 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 	if err := s.setupRBAC(ctx); err != nil {
 		return fmt.Errorf("failed to create RBAC objects: %w", err)
 	}
+	if s.vpnConf != nil {
+		if s.vpnConf.namespaceUID, err = getNamespaceUID(ctx, s.jobSpec.Namespace(), s.client); err != nil {
+			return fmt.Errorf("failed to determine namespace UID range: %w", err)
+		}
+	}
 	secretVolumes, secretVolumeMounts, err := secretsForCensoring(s.client, s.jobSpec.Namespace(), ctx)
 	if err != nil {
 		return err
 	}
 	var errs []error
-	if err := s.runSteps(ctx, "pre", s.pre, env, true, false, secretVolumes, secretVolumeMounts); err != nil {
+	generateObserverOpt := defaultGeneratePodOptions()
+	generateObserverOpt.IsObserver = true
+	observers, err := s.generateObservers(s.observers, secretVolumes, secretVolumeMounts, generateObserverOpt)
+	if err != nil {
+		// if we can't even generate the Pods there's no reason to run the job
+		return err
+	}
+	observerContext, cancel := context.WithCancel(ctx)
+	observerDone := make(chan struct{})
+	go s.runObservers(observerContext, ctx, observers, observerDone)
+	s.flags |= shortCircuit
+	if err := s.runSteps(ctx, "pre", s.pre, env, secretVolumes, secretVolumeMounts); err != nil {
 		errs = append(errs, fmt.Errorf("%q pre steps failed: %w", s.name, err))
-	} else if err := s.runSteps(ctx, "test", s.test, env, true, len(errs) != 0, secretVolumes, secretVolumeMounts); err != nil {
+	} else if err := s.runSteps(ctx, "test", s.test, env, secretVolumes, secretVolumeMounts); err != nil {
 		errs = append(errs, fmt.Errorf("%q test steps failed: %w", s.name, err))
 	}
-	if err := s.runSteps(context.Background(), "post", s.post, env, false, len(errs) != 0, secretVolumes, secretVolumeMounts); err != nil {
+	cancel() // signal to observers that we're tearing down
+	s.flags &= ^shortCircuit
+	if err := s.runSteps(context.Background(), "post", s.post, env, secretVolumes, secretVolumeMounts); err != nil {
 		errs = append(errs, fmt.Errorf("%q post steps failed: %w", s.name, err))
 	}
+	<-observerDone // wait for the observers to finish so we get their jUnit
 	return utilerrors.NewAggregate(errs)
 }
 
@@ -226,7 +309,52 @@ func (s *multiStageTestStep) Provides() api.ParameterMap {
 }
 func (s *multiStageTestStep) SubTests() []*junit.TestCase { return s.subTests }
 
-func (s *multiStageTestStep) environment(ctx context.Context) ([]coreapi.EnvVar, error) {
+// getProfileData fetches the content of the cluster profile secret.
+// This is done both to guarantee it has been correctly imported into the test
+// namespace and to gather information used when generating the test pods.
+func (s *multiStageTestStep) getProfileData(ctx context.Context) error {
+	var secret coreapi.Secret
+	name := s.profileSecretName()
+	if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: name}, &secret); err != nil {
+		return fmt.Errorf("could not get cluster profile secret %q: %w", name, err)
+	}
+	if err := s.readVPNData(&secret); err != nil {
+		return fmt.Errorf("failed to read VPN configuration from cluster profile: %w", err)
+	}
+	return nil
+}
+
+func (s *multiStageTestStep) readVPNData(secret *coreapi.Secret) error {
+	bytes, ok := secret.Data[vpnConfPath]
+	if !ok {
+		return nil
+	}
+	var c vpnConf
+	if err := yaml.UnmarshalStrict(bytes, &c); err != nil {
+		return fmt.Errorf("failed to read VPN configuration file: %w", err)
+	}
+	if c.Image == "" {
+		return fmt.Errorf("VPN image missing in configuration file")
+	}
+	if c.Commands == "" {
+		return fmt.Errorf("VPN script missing in configuration file")
+	}
+	cmd, ok := secret.Data[c.Commands]
+	if !ok {
+		return fmt.Errorf(`invalid "commands" value %q, not found`, c.Commands)
+	}
+	c.Commands = string(cmd)
+	if w := c.WaitTimeout; w != nil {
+		var err error
+		if _, err = time.ParseDuration(*w); err != nil {
+			return fmt.Errorf("invalid VPN wait timeout %q: %w", *w, err)
+		}
+	}
+	s.vpnConf = &c
+	return nil
+}
+
+func (s *multiStageTestStep) environment() ([]coreapi.EnvVar, error) {
 	var ret []coreapi.EnvVar
 	for _, l := range s.leases {
 		val, err := s.params.Get(l.Env)
@@ -237,10 +365,6 @@ func (s *multiStageTestStep) environment(ctx context.Context) ([]coreapi.EnvVar,
 	}
 
 	if s.profile != "" {
-		secret := s.profileSecretName()
-		if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: secret}, &coreapi.Secret{}); err != nil {
-			return nil, fmt.Errorf("could not find secret %q: %w", secret, err)
-		}
 		for _, e := range envForProfile {
 			val, err := s.params.Get(e)
 			if err != nil {

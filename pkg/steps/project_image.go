@@ -14,6 +14,7 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
@@ -23,6 +24,7 @@ type projectDirectoryImageBuildStep struct {
 	releaseBuildConfig *api.ReleaseBuildConfiguration
 	resources          api.ResourceConfiguration
 	client             BuildClient
+	podClient          kubernetes.PodClient
 	jobSpec            *api.JobSpec
 	pullSecret         *coreapi.Secret
 }
@@ -61,7 +63,7 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 		s.pullSecret,
 		s.config.BuildArgs,
 	)
-	return handleBuild(ctx, s.client, *build)
+	return handleBuilds(ctx, s.client, s.podClient, *build)
 }
 
 type workingDir func(tag string) (string, error)
@@ -109,11 +111,23 @@ func getWorkingDir(client ctrlruntimeclient.Client, source, namespace string) (s
 	if err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: source}, ist); err != nil {
 		return "", fmt.Errorf("could not fetch source ImageStreamTag: %w", err)
 	}
+	image := ist.Image
+
+	// If the image contains a manifest list, the docker metadata are empty. Instead
+	// we need to grab the metadata from one of the images in manifest list.
+	if len(ist.Image.DockerImageManifests) > 0 {
+		img := &imagev1.Image{}
+		if err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Name: ist.Image.DockerImageManifests[0].Digest}, img); err != nil {
+			return "", fmt.Errorf("could not fetch source ImageStreamTag: %w", err)
+		}
+		image = *img
+	}
+
 	metadata := &docker10.DockerImage{}
-	if len(ist.Image.DockerImageMetadata.Raw) == 0 {
+	if len(image.DockerImageMetadata.Raw) == 0 {
 		return "", fmt.Errorf("could not fetch Docker image metadata for ImageStreamTag %s", source)
 	}
-	if err := json.Unmarshal(ist.Image.DockerImageMetadata.Raw, metadata); err != nil {
+	if err := json.Unmarshal(image.DockerImageMetadata.Raw, metadata); err != nil {
 		return "", fmt.Errorf("malformed Docker image metadata on ImageStreamTag: %w", err)
 	}
 	return metadata.Config.WorkingDir, nil
@@ -161,12 +175,21 @@ func (s *projectDirectoryImageBuildStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, releaseBuildConfig *api.ReleaseBuildConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
+func ProjectDirectoryImageBuildStep(
+	config api.ProjectDirectoryImageBuildStepConfiguration,
+	releaseBuildConfig *api.ReleaseBuildConfiguration,
+	resources api.ResourceConfiguration,
+	buildClient BuildClient,
+	podClient kubernetes.PodClient,
+	jobSpec *api.JobSpec,
+	pullSecret *coreapi.Secret,
+) api.Step {
 	return &projectDirectoryImageBuildStep{
 		config:             config,
 		releaseBuildConfig: releaseBuildConfig,
 		resources:          resources,
 		client:             buildClient,
+		podClient:          podClient,
 		jobSpec:            jobSpec,
 		pullSecret:         pullSecret,
 	}

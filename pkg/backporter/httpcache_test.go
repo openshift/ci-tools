@@ -3,7 +3,7 @@ package backporter
 import (
 	"bytes"
 	"errors"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httputil"
 	"sync"
@@ -12,7 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-//bugzillaCache tests
+// bugzillaCache tests
 func TestBugzillaCacheSet(t *testing.T) {
 	testcases := []struct {
 		name         string
@@ -106,7 +106,7 @@ func TestRoundTrip(t *testing.T) {
 	resp := &http.Response{
 		Status:     http.StatusText(http.StatusOK),
 		StatusCode: http.StatusOK,
-		Body:       ioutil.NopCloser(bytes.NewBuffer([]byte(bodyText))),
+		Body:       io.NopCloser(bytes.NewBuffer([]byte(bodyText))),
 	}
 	body, err := httputil.DumpResponse(resp, true)
 	if err != nil {
@@ -178,7 +178,7 @@ func TestRoundTrip(t *testing.T) {
 				t.Errorf("incorrect status code - expected %v, got %v", tc.fake.response.StatusCode, resp.StatusCode)
 			}
 			defer resp.Body.Close()
-			body, err := ioutil.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
 			if err != nil {
 				t.Fatalf("failed to parse response body: %v", err)
 			}

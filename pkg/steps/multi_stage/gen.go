@@ -19,17 +19,59 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
-const containerName = "test"
+const (
+	containerName     = "test"
+	profileVolumeName = "cluster-profile"
+	vpnContainerName  = "vpn-client"
+)
 
-func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []coreapi.EnvVar,
-	hasPrevErrs bool, secretVolumes []coreapi.Volume, secretVolumeMounts []coreapi.VolumeMount) ([]coreapi.Pod, func(string) bool, error) {
-	bestEffort := sets.NewString()
-	isBestEffort := func(podName string) bool {
-		if s.allowBestEffortPostSteps == nil || !*s.allowBestEffortPostSteps {
-			// the user has not requested best-effort steps or they've explicitly disabled them
-			return false
-		}
-		return bestEffort.Has(podName)
+func (s *multiStageTestStep) generateObservers(
+	observers []api.Observer,
+	secretVolumes []coreapi.Volume,
+	secretVolumeMounts []coreapi.VolumeMount,
+	genPodOpts *generatePodOptions,
+) ([]coreapi.Pod, error) {
+	var adapted []api.LiteralTestStep
+	for _, observer := range observers {
+		// observers are just like steps, so we can adapt one to the other
+		adapted = append(adapted, api.LiteralTestStep{
+			As:          observer.Name,
+			From:        observer.From,
+			FromImage:   observer.FromImage,
+			Commands:    observer.Commands,
+			Resources:   observer.Resources,
+			Timeout:     observer.Timeout,
+			GracePeriod: observer.GracePeriod,
+			Environment: observer.Environment,
+		})
+	}
+	pods, _, err := s.generatePods(adapted, nil, secretVolumes, secretVolumeMounts, genPodOpts)
+	return pods, err
+}
+
+type generatePodOptions struct {
+	IsObserver bool
+}
+
+func defaultGeneratePodOptions() *generatePodOptions {
+	return &generatePodOptions{
+		IsObserver: false,
+	}
+}
+
+func (s *multiStageTestStep) generatePods(
+	steps []api.LiteralTestStep,
+	env []coreapi.EnvVar,
+	secretVolumes []coreapi.Volume,
+	secretVolumeMounts []coreapi.VolumeMount,
+	genPodOpts *generatePodOptions,
+) ([]coreapi.Pod, sets.Set[string], error) {
+	if genPodOpts == nil {
+		genPodOpts = defaultGeneratePodOptions()
+	}
+	var bestEffortSteps sets.Set[string]
+	if s.flags&allowBestEffortPostSteps != 0 {
+		bestEffortSteps = sets.New[string]()
 	}
 	var ret []coreapi.Pod
 	var errs []error
@@ -39,9 +81,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 	}
 	for _, step := range steps {
 		name := fmt.Sprintf("%s-%s", s.name, step.As)
-		if s.allowSkipOnSuccess != nil && *s.allowSkipOnSuccess &&
-			step.OptionalOnSuccess != nil && *step.OptionalOnSuccess &&
-			!hasPrevErrs {
+		if o := step.OptionalOnSuccess; o != nil && *o && s.flags&allowSkipOnSuccess != 0 && s.flags&hasPrevErrs == 0 {
 			logrus.Infof(fmt.Sprintf("Skipping optional step %s", name))
 			continue
 		}
@@ -66,8 +106,8 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			delete(resources.Requests, api.ShmResource)
 			delete(resources.Limits, api.ShmResource)
 		}
-		if step.BestEffort != nil && *step.BestEffort {
-			bestEffort.Insert(name)
+		if bestEffortSteps != nil && step.BestEffort != nil && *step.BestEffort {
+			bestEffortSteps.Insert(name)
 		}
 		p := func(i int64) *int64 {
 			return &i
@@ -94,7 +134,9 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			commands = []string{"/bin/bash", "-c", CommandPrefix + step.Commands}
 		}
 		labels := map[string]string{base_steps.LabelMetadataStep: step.As}
-		pod, err := base_steps.GenerateBasePod(s.jobSpec, labels, name, containerName, commands, image, resources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(), secretVolumeMounts, false)
+		pod, err := base_steps.GenerateBasePod(s.jobSpec, labels, name, s.nodeName,
+			containerName, commands, image, resources, artifactDir, s.jobSpec.DecorationConfig,
+			s.jobSpec.RawSpec(), secretVolumeMounts, &base_steps.GeneratePodOptions{PropagateExitCode: genPodOpts.IsObserver})
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -102,7 +144,14 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		delete(pod.Labels, base_steps.ProwJobIdLabel)
 		pod.Annotations[base_steps.AnnotationSaveContainerLogs] = "true"
 		pod.Labels[MultiStageTestLabel] = s.name
-		pod.Spec.ServiceAccountName = s.name
+		needsKubeConfig := isKubeconfigNeeded(&step, genPodOpts)
+		if needsKubeConfig {
+			pod.Spec.ServiceAccountName = s.name
+		} else {
+			pod.Spec.ServiceAccountName = ""
+			no := false
+			pod.Spec.AutomountServiceAccountToken = &no
+		}
 		pod.Spec.TerminationGracePeriodSeconds = terminationGracePeriodSeconds
 		if step.DNSConfig != nil {
 			if pod.Spec.DNSConfig == nil {
@@ -117,18 +166,25 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{Name: homeVolumeName, VolumeSource: coreapi.VolumeSource{EmptyDir: &coreapi.EmptyDirVolumeSource{}}})
 		pod.Spec.Volumes = append(pod.Spec.Volumes, secretVolumes...)
 		for idx := range pod.Spec.Containers {
-			if pod.Spec.Containers[idx].Name != containerName {
-				continue
+			if c := &pod.Spec.Containers[idx]; c.Name == containerName {
+				c.VolumeMounts = append(c.VolumeMounts, coreapi.VolumeMount{
+					Name:      homeVolumeName,
+					MountPath: "/alabama",
+				})
+				break
 			}
-			pod.Spec.Containers[idx].VolumeMounts = append(pod.Spec.Containers[idx].VolumeMounts, coreapi.VolumeMount{Name: homeVolumeName, MountPath: "/alabama"})
 		}
 
-		addSecretWrapper(pod)
+		addSecretWrapper(pod, s.vpnConf, !needsKubeConfig, genPodOpts)
+		if s.vpnConf != nil {
+			s.addVPNClient(pod)
+		}
 		container := &pod.Spec.Containers[0]
 		container.Env = append(container.Env, []coreapi.EnvVar{
 			{Name: "NAMESPACE", Value: s.jobSpec.Namespace()},
 			{Name: "JOB_NAME_SAFE", Value: strings.Replace(s.name, "_", "-", -1)},
 			{Name: "JOB_NAME_HASH", Value: s.jobSpec.JobNameHash()},
+			{Name: "UNIQUE_HASH", Value: s.jobSpec.UniqueHash()},
 		}...)
 		container.Env = append(container.Env, env...)
 		container.Env = append(container.Env, s.generateParams(step.Environment)...)
@@ -155,9 +211,10 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 				// We mount them here to the test container.
 				container.VolumeMounts = append(container.VolumeMounts, clusterClaimMount...)
 			}
-		} else {
+		} else if needsKubeConfig {
 			container.Env = append(container.Env, []coreapi.EnvVar{
 				{Name: "KUBECONFIG", Value: filepath.Join(SecretMountPath, "kubeconfig")},
+				{Name: "KUBECONFIGMINIMAL", Value: filepath.Join(SecretMountPath, "kubeconfig-minimal")},
 				{Name: "KUBEADMIN_PASSWORD_FILE", Value: filepath.Join(SecretMountPath, "kubeadmin-password")},
 			}...)
 		}
@@ -178,12 +235,34 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		if step.RunAsScript != nil && *step.RunAsScript {
 			addCommandScript(commandConfigMapForTest(s.name), pod)
 		}
+		if s.vpnConf != nil {
+			caps := coreapi.Capabilities{
+				Add:  []coreapi.Capability{"NET_ADMIN"},
+				Drop: []coreapi.Capability{"ALL"},
+			}
+			seLinuxOpts := coreapi.SELinuxOptions{
+				User: "system_u",
+				Role: "system_r",
+				// TODO create a more restricted SELinux context
+				// This one happens to be in every cluster and have the
+				// permission to use /dev/net/tun and configure networking, but
+				// has *many* more permissions than are required here.
+				Type:  "container_runtime_t",
+				Level: "s0",
+			}
+			setSecurityContexts(pod, vpnContainerName, s.vpnConf.namespaceUID, &caps, &seLinuxOpts)
+		}
 		ret = append(ret, *pod)
 	}
-	return ret, isBestEffort, utilerrors.NewAggregate(errs)
+	return ret, bestEffortSteps, utilerrors.NewAggregate(errs)
 }
 
-func addSecretWrapper(pod *coreapi.Pod) {
+func isKubeconfigNeeded(step *api.LiteralTestStep, opts *generatePodOptions) bool {
+	needsKubeconfig := step.NoKubeconfig == nil || !*step.NoKubeconfig
+	return needsKubeconfig || opts.IsObserver
+}
+
+func addSecretWrapper(pod *coreapi.Pod, vpnConf *vpnConf, skipKubeconfig bool, genPodOpts *generatePodOptions) {
 	volume := "entrypoint-wrapper"
 	dir := "/tmp/entrypoint-wrapper"
 	bin := filepath.Join(dir, "entrypoint-wrapper")
@@ -195,7 +274,7 @@ func addSecretWrapper(pod *coreapi.Pod) {
 	})
 	mount := coreapi.VolumeMount{Name: volume, MountPath: dir}
 	pod.Spec.InitContainers = append(pod.Spec.InitContainers, coreapi.Container{
-		Image:                    fmt.Sprintf("%s/ci/entrypoint-wrapper:latest", api.DomainForService(api.ServiceRegistry)),
+		Image:                    fmt.Sprintf("%s/%s/entrypoint-wrapper:latest", api.DomainForService(api.ServiceRegistry), "ci"),
 		Name:                     "cp-entrypoint-wrapper",
 		Command:                  []string{"cp"},
 		Args:                     []string{"/bin/entrypoint-wrapper", bin},
@@ -203,9 +282,92 @@ func addSecretWrapper(pod *coreapi.Pod) {
 		TerminationMessagePolicy: coreapi.TerminationMessageFallbackToLogsOnError,
 	})
 	container := &pod.Spec.Containers[0]
-	container.Args = append([]string{}, append(container.Command, container.Args...)...)
+	args := container.Args
+	container.Args = make([]string, 0)
+	if c := vpnConf; c != nil && c.WaitTimeout != nil {
+		container.Args = append(container.Args,
+			"--wait-for-file", "/tmp/vpn/up",
+			"--wait-timeout", *c.WaitTimeout)
+	}
+	if skipKubeconfig {
+		container.Args = append(container.Args, "--mode=skip-kubeconfig")
+	}
+	if genPodOpts.IsObserver {
+		container.Args = append(container.Args, "--mode=observer")
+	}
+	container.Args = append(container.Args, container.Command...)
+	container.Args = append(container.Args, args...)
 	container.Command = []string{bin}
 	container.VolumeMounts = append(container.VolumeMounts, mount)
+}
+
+func (s *multiStageTestStep) addVPNClient(pod *coreapi.Pod) {
+	profileMount := "/tmp/profile"
+	vpnVolMount := coreapi.VolumeMount{Name: "vpn", MountPath: "/tmp/vpn"}
+	container := coreapi.Container{
+		Name:       vpnContainerName,
+		Image:      s.vpnConf.Image,
+		Command:    []string{"bash", "-c", s.vpnConf.Commands},
+		WorkingDir: profileMount,
+		VolumeMounts: []coreapi.VolumeMount{
+			{Name: "tun", MountPath: "/dev/net/tun"},
+			vpnVolMount,
+			{Name: "logs", MountPath: "/logs"},
+			{Name: profileVolumeName, MountPath: profileMount},
+		},
+	}
+	pod.Spec.Containers = append(pod.Spec.Containers, container)
+	charDev := coreapi.HostPathCharDev
+	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
+		Name: "vpn",
+		VolumeSource: coreapi.VolumeSource{
+			EmptyDir: &coreapi.EmptyDirVolumeSource{},
+		},
+	})
+	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
+		Name: "tun",
+		VolumeSource: coreapi.VolumeSource{
+			HostPath: &coreapi.HostPathVolumeSource{
+				Path: "/dev/net/tun",
+				Type: &charDev,
+			},
+		},
+	})
+	pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, vpnVolMount)
+}
+
+// setSecurityContexts configures the context of all containers in a pod
+// `root` specifies a container (or init container) which should be run as UID 0
+// and with `capabilities` and `seLinuxOpts`.  All others are explicitly set to
+// run as non-root with `uid`.  The latter is necessary since the SCC defaults
+// apply to all containers.
+func setSecurityContexts(
+	pod *coreapi.Pod,
+	root string,
+	uid int64,
+	capabilities *coreapi.Capabilities,
+	seLinuxOpts *coreapi.SELinuxOptions,
+) {
+	f := func(l []coreapi.Container) {
+		for i := range l {
+			if l[i].Name == root {
+				var uid int64
+				l[i].SecurityContext = &coreapi.SecurityContext{
+					RunAsUser:      &uid,
+					Capabilities:   capabilities,
+					SELinuxOptions: seLinuxOpts,
+				}
+			} else {
+				nonRoot := true
+				l[i].SecurityContext = &coreapi.SecurityContext{
+					RunAsNonRoot: &nonRoot,
+					RunAsUser:    &uid,
+				}
+			}
+		}
+	}
+	f(pod.Spec.InitContainers)
+	f(pod.Spec.Containers)
 }
 
 func (s *multiStageTestStep) generateParams(env []api.StepParameter) []coreapi.EnvVar {
@@ -301,9 +463,8 @@ func addDshmVolume(shmSize *resource.Quantity, pod *coreapi.Pod, container *core
 }
 
 func addProfile(name string, profile api.ClusterProfile, pod *coreapi.Pod) {
-	volumeName := "cluster-profile"
 	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
-		Name: volumeName,
+		Name: profileVolumeName,
 		VolumeSource: coreapi.VolumeSource{
 			Secret: &coreapi.SecretVolumeSource{
 				SecretName: name,
@@ -312,7 +473,7 @@ func addProfile(name string, profile api.ClusterProfile, pod *coreapi.Pod) {
 	})
 	container := &pod.Spec.Containers[0]
 	container.VolumeMounts = append(container.VolumeMounts, coreapi.VolumeMount{
-		Name:      volumeName,
+		Name:      profileVolumeName,
 		MountPath: ClusterProfileMountPath,
 	})
 	container.Env = append(container.Env, []coreapi.EnvVar{{
@@ -393,8 +554,7 @@ func commandConfigMapForTest(testName string) string {
 
 func addCommandScript(name string, pod *coreapi.Pod) {
 	volumeName := "commands-script"
-	// 0777 in decimal is 511
-	mode := int32(511)
+	mode := int32(0o777)
 	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
 		Name: volumeName,
 		VolumeSource: coreapi.VolumeSource{

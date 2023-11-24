@@ -15,6 +15,9 @@ const (
 	GCSUploadCredentialsSecret          = "gce-sa-credentials-gcs-publisher"
 	GCSUploadCredentialsSecretMountPath = "/secrets/gcs"
 
+	ManifestToolLocalPusherSecret          = "manifest-tool-local-pusher"
+	ManifestToolLocalPusherSecretMountPath = "/secrets/manifest-tool"
+
 	ReleaseAnnotationSoftDelete = "release.openshift.io/soft-delete"
 
 	// DPTPRequesterLabel is the label on a Kubernates CR whose value indicates the automated tool that requests the CR
@@ -51,6 +54,10 @@ const (
 
 	APPCIKubeAPIURL = "https://api.ci.l2s4.p1.openshiftapps.com:6443"
 
+	// ReasonPending is the error reason for pods not scheduled in time.
+	// It is generated when pods are for whatever reason not scheduled before
+	// `podStartTimeout`.
+	ReasonPending = "pod_pending"
 	// CliEnv if the env we use to expose the path to the cli
 	CliEnv          = "CLI_DIR"
 	DefaultLeaseEnv = "LEASED_RESOURCE"
@@ -66,8 +73,9 @@ const (
 )
 
 var (
-	clusterNames = sets.NewString(
+	clusterNames = sets.New[string](
 		string(ClusterAPPCI),
+		string(ClusterARM01),
 		string(ClusterBuild01),
 		string(ClusterBuild02),
 		string(ClusterBuild03),

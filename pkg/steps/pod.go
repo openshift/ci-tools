@@ -21,6 +21,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 const (
@@ -42,18 +43,21 @@ var CleanupCtx = context.Background()
 // directory structure, and input image format. More sophisticated reuse of launching
 // pods should use RunPod which is more limited.
 type PodStepConfiguration struct {
-	// SkipLogs instructs the step to omit informational logs, such as when the pod is
-	// part of a larger step like release creation where displaying pod specific info
-	// is confusing to an end user. Failure logs are still printed.
-	SkipLogs           bool
+	WaitFlags          util.WaitForPodFlag
 	As                 string
 	From               api.ImageStreamTagReference
 	Commands           string
 	Labels             map[string]string
+	NodeName           string
 	ServiceAccountName string
 	Secrets            []*api.Secret
 	MemoryBackedVolume *api.MemoryBackedVolume
 	Clone              bool
+}
+
+type GeneratePodOptions struct {
+	Clone             bool
+	PropagateExitCode bool
 }
 
 type podStep struct {
@@ -79,7 +83,7 @@ func (s *podStep) Run(ctx context.Context) error {
 }
 
 func (s *podStep) run(ctx context.Context) error {
-	if !s.config.SkipLogs {
+	if !util.IsBitSet(s.config.WaitFlags, util.SkipLogs) {
 		logrus.Infof("Executing %s %s", s.name, s.config.As)
 	}
 	containerResources, err := ResourcesFor(s.resources.RequirementsForStep(s.config.As))
@@ -96,7 +100,7 @@ func (s *podStep) run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("pod step was invalid: %w", err)
 	}
-	testCaseNotifier := NewTestCaseNotifier(NopNotifier)
+	testCaseNotifier := NewTestCaseNotifier(util.NopNotifier)
 
 	if owner := s.jobSpec.Owner(); owner != nil {
 		pod.OwnerReferences = append(pod.OwnerReferences, *owner)
@@ -110,7 +114,7 @@ func (s *podStep) run(ctx context.Context) error {
 		}
 	}()
 
-	pod, err = CreateOrRestartPod(ctx, s.client, pod)
+	pod, err = util.CreateOrRestartPod(ctx, s.client, pod)
 	if err != nil {
 		return fmt.Errorf("failed to create or restart %s pod: %w", s.name, err)
 	}
@@ -118,8 +122,7 @@ func (s *podStep) run(ctx context.Context) error {
 	defer func() {
 		s.subTests = testCaseNotifier.SubTests(s.Description() + " - ")
 	}()
-
-	if _, err := WaitForPodCompletion(ctx, s.client, pod.Namespace, pod.Name, testCaseNotifier, s.config.SkipLogs); err != nil {
+	if _, err := util.WaitForPodCompletion(ctx, s.client, pod.Namespace, pod.Name, testCaseNotifier, s.config.WaitFlags); err != nil {
 		return fmt.Errorf("%s %q failed: %w", s.name, pod.Name, err)
 	}
 	return nil
@@ -156,13 +159,14 @@ func (s *podStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, client kubernetes.PodClient, jobSpec *api.JobSpec) api.Step {
+func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, client kubernetes.PodClient, jobSpec *api.JobSpec, nodeName string) api.Step {
 	return PodStep(
 		"test",
 		PodStepConfiguration{
 			As:                 config.As,
 			From:               api.ImageStreamTagReference{Name: api.PipelineImageStream, Tag: string(config.ContainerTestConfiguration.From)},
 			Commands:           config.Commands,
+			NodeName:           nodeName,
 			Secrets:            config.Secrets,
 			MemoryBackedVolume: config.ContainerTestConfiguration.MemoryBackedVolume,
 			Clone:              *config.ContainerTestConfiguration.Clone,
@@ -189,6 +193,7 @@ func GenerateBasePod(
 	jobSpec *api.JobSpec,
 	baseLabels map[string]string,
 	name string,
+	nodeName string,
 	containerName string,
 	command []string,
 	image string,
@@ -197,7 +202,7 @@ func GenerateBasePod(
 	decorationConfig *v1.DecorationConfig,
 	rawJobSpec string,
 	secretsToCensor []coreapi.VolumeMount,
-	clone bool,
+	generatePodOptions *GeneratePodOptions,
 ) (*coreapi.Pod, error) {
 	envMap, err := downwardapi.EnvForSpec(jobSpec.JobSpec)
 	envMap[openshiftCIEnv] = "true"
@@ -215,6 +220,7 @@ func GenerateBasePod(
 			},
 		},
 		Spec: coreapi.PodSpec{
+			NodeName:      nodeName,
 			RestartPolicy: coreapi.RestartPolicyNever,
 			Containers: []coreapi.Container{
 				{
@@ -228,8 +234,16 @@ func GenerateBasePod(
 			},
 		},
 	}
+
+	// FIXME: Fix this workaround upstream and the delete this code as soon as possible
+	pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env, []coreapi.EnvVar{
+		{Name: "GIT_CONFIG_COUNT", Value: "1"},
+		{Name: "GIT_CONFIG_KEY_0", Value: "safe.directory"},
+		{Name: "GIT_CONFIG_VALUE_0", Value: "*"},
+	}...)
+
 	artifactDir = fmt.Sprintf("artifacts/%s", artifactDir)
-	if err := addPodUtils(pod, artifactDir, decorationConfig, rawJobSpec, secretsToCensor, clone, jobSpec); err != nil {
+	if err := addPodUtils(pod, artifactDir, decorationConfig, rawJobSpec, secretsToCensor, generatePodOptions, jobSpec); err != nil {
 		return nil, fmt.Errorf("failed to decorate pod: %w", err)
 	}
 	return pod, nil
@@ -276,7 +290,10 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 	}
 
 	artifactDir := s.name
-	pod, err := GenerateBasePod(s.jobSpec, s.config.Labels, s.config.As, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands}, image, containerResources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(), secretVolumeMounts, clone)
+	pod, err := GenerateBasePod(s.jobSpec, s.config.Labels, s.config.As,
+		s.config.NodeName, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands},
+		image, containerResources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(),
+		secretVolumeMounts, &GeneratePodOptions{Clone: clone, PropagateExitCode: false})
 	if err != nil {
 		return nil, err
 	}
@@ -361,9 +378,9 @@ func getSecretVolumeMountFromSecret(secretMountPath string, secretIndex int) []c
 // This pod will not be able to gather artifacts, nor will it report log messages
 // unless it fails.
 func RunPod(ctx context.Context, podClient kubernetes.PodClient, pod *coreapi.Pod) (*coreapi.Pod, error) {
-	pod, err := CreateOrRestartPod(ctx, podClient, pod)
+	pod, err := util.CreateOrRestartPod(ctx, podClient, pod)
 	if err != nil {
 		return pod, err
 	}
-	return WaitForPodCompletion(ctx, podClient, pod.Namespace, pod.Name, nil, true)
+	return util.WaitForPodCompletion(ctx, podClient, pod.Namespace, pod.Name, nil, util.SkipLogs)
 }

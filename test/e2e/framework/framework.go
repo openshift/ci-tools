@@ -5,7 +5,6 @@ package framework
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -39,7 +38,7 @@ func CompareWithFixtureDir(t *T, golden, output string) {
 // CompareWithFixture will compare output files with a test fixture and allows to automatically update them
 // by setting the UPDATE env var. The output and golden paths are relative to the test's directory.
 func CompareWithFixture(t *T, golden, output string) {
-	actual, err := ioutil.ReadFile(output)
+	actual, err := os.ReadFile(output)
 	if err != nil {
 		t.Fatalf("failed to read testdata file: %v", err)
 	}
@@ -47,11 +46,11 @@ func CompareWithFixture(t *T, golden, output string) {
 		if err := os.MkdirAll(filepath.Dir(golden), 0755); err != nil {
 			t.Fatalf("failed to create fixture directory: %v", err)
 		}
-		if err := ioutil.WriteFile(golden, actual, 0644); err != nil {
+		if err := os.WriteFile(golden, actual, 0644); err != nil {
 			t.Fatalf("failed to write updated fixture: %v", err)
 		}
 	}
-	expected, err := ioutil.ReadFile(golden)
+	expected, err := os.ReadFile(golden)
 	if err != nil {
 		t.Fatalf("failed to read testdata file: %v", err)
 	}

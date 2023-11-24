@@ -41,11 +41,11 @@ func AddToManager(mgr manager.Manager,
 	buildClusterManagers map[string]manager.Manager,
 	configAgent agents.ConfigAgent,
 	resolver agents.RegistryAgent,
-	additionalImageStreamTags sets.String,
-	additionalImageStreams sets.String,
-	additionalImageStreamNamespaces sets.String,
-	forbiddenRegistries sets.String,
-	ignoreClusterNames sets.String,
+	additionalImageStreamTags sets.Set[string],
+	additionalImageStreams sets.Set[string],
+	additionalImageStreamNamespaces sets.Set[string],
+	forbiddenRegistries sets.Set[string],
+	ignoreClusterNames sets.Set[string],
 ) error {
 	log := logrus.WithField("controller", ControllerName)
 
@@ -68,7 +68,7 @@ func AddToManager(mgr manager.Manager,
 		return fmt.Errorf("failed to construct controller: %w", err)
 	}
 
-	buildClusters := sets.String{}
+	buildClusters := sets.Set[string]{}
 	for buildClusterName, buildClusterManager := range buildClusterManagers {
 		if buildClusterName == "api.ci" {
 			log.Debug("distribution to api.ci is disabled")
@@ -88,7 +88,7 @@ func AddToManager(mgr manager.Manager,
 			continue
 		}
 		if err := c.Watch(
-			source.NewKindWithCache(&testimagestreamtagimportv1.TestImageStreamTagImport{}, buildClusterManager.GetCache()),
+			source.Kind(buildClusterManager.GetCache(), &testimagestreamtagimportv1.TestImageStreamTagImport{}),
 			testImageStreamTagImportHandlerForNamedCluster(buildClusterName),
 		); err != nil {
 			return fmt.Errorf("failed to watch testimagestreamtagimports in cluster %s: %w", buildClusterName, err)
@@ -97,7 +97,7 @@ func AddToManager(mgr manager.Manager,
 
 	// TODO: Watch buildCluster ImageStreams as well. For now we assume no one will tamper with them.
 	if err := c.Watch(
-		source.NewKindWithCache(&testimagestreamtagimportv1.TestImageStreamTagImport{}, mgr.GetCache()),
+		source.Kind(mgr.GetCache(), &testimagestreamtagimportv1.TestImageStreamTagImport{}),
 		testImageStreamTagImportHandler(log, ignoreClusterNames),
 	); err != nil {
 		return fmt.Errorf("failed to create watch for testimagestreamtagimports: %w", err)
@@ -117,7 +117,7 @@ func AddToManager(mgr manager.Manager,
 		return fmt.Errorf("failed to get filter for ImageStreamTags: %w", err)
 	}
 	if err := c.Watch(
-		source.NewKindWithCache(&imagev1.ImageStream{}, registryManager.GetCache()),
+		source.Kind(registryManager.GetCache(), &imagev1.ImageStream{}),
 		registryClusterHandlerFactory(buildClusters, objectFilter),
 	); err != nil {
 		return fmt.Errorf("failed to create watch for ImageStreams: %w", err)
@@ -135,7 +135,7 @@ func AddToManager(mgr manager.Manager,
 	return nil
 }
 
-func sourceForConfigChangeChannel(buildClusterNames sets.String, registryClient ctrlruntimeclient.Client, changes <-chan agents.IndexDelta) *source.Channel {
+func sourceForConfigChangeChannel(buildClusterNames sets.Set[string], registryClient ctrlruntimeclient.Client, changes <-chan agents.IndexDelta) *source.Channel {
 	sourceChannel := make(chan event.GenericEvent)
 	channelSource := &source.Channel{Source: sourceChannel}
 
@@ -173,7 +173,7 @@ func sourceForConfigChangeChannel(buildClusterNames sets.String, registryClient 
 			} else {
 				result = []types.NamespacedName{{Namespace: namespace, Name: name}}
 			}
-			for _, buildClusterName := range buildClusterNames.List() {
+			for _, buildClusterName := range sets.List(buildClusterNames) {
 				for _, result := range result {
 					sourceChannel <- event.GenericEvent{Object: &testimagestreamtagimportv1.TestImageStreamTagImport{ObjectMeta: metav1.ObjectMeta{
 						Namespace: buildClusterName + clusterAndNamespaceDelimiter + result.Namespace,
@@ -188,7 +188,7 @@ func sourceForConfigChangeChannel(buildClusterNames sets.String, registryClient 
 }
 
 func testImageStreamTagImportHandlerForNamedCluster(clusterName string) handler.EventHandler {
-	return handler.EnqueueRequestsFromMapFunc(func(o ctrlruntimeclient.Object) []reconcile.Request {
+	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o ctrlruntimeclient.Object) []reconcile.Request {
 		testimagestreamtagimport, ok := o.(*testimagestreamtagimportv1.TestImageStreamTagImport)
 		if !ok {
 			logrus.WithField("type", fmt.Sprintf("%T", o)).Error("Got object that was not a TestImageStreamTagImport")
@@ -201,8 +201,8 @@ func testImageStreamTagImportHandlerForNamedCluster(clusterName string) handler.
 	})
 }
 
-func testImageStreamTagImportHandler(l *logrus.Entry, ignoreClusterNames sets.String) handler.EventHandler {
-	return handler.EnqueueRequestsFromMapFunc(func(o ctrlruntimeclient.Object) []reconcile.Request {
+func testImageStreamTagImportHandler(l *logrus.Entry, ignoreClusterNames sets.Set[string]) handler.EventHandler {
+	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o ctrlruntimeclient.Object) []reconcile.Request {
 		testimagestreamtagimport, ok := o.(*testimagestreamtagimportv1.TestImageStreamTagImport)
 		if !ok {
 			logrus.WithField("type", fmt.Sprintf("%T", o)).Error("Got object that was not an ImageStream")
@@ -231,7 +231,7 @@ type objectFilter func(types.NamespacedName) bool
 // * Filters out the ones that are not in use
 // Note: We can not use a predicate because that is directly applied on the source and the source yields ImageStreams, not ImageStreamTags
 // * Creates a reconcile.Request per cluster and ImageStreamTag
-func registryClusterHandlerFactory(buildClusters sets.String, filter objectFilter) handler.EventHandler {
+func registryClusterHandlerFactory(buildClusters sets.Set[string], filter objectFilter) handler.EventHandler {
 	return imagestreamtagmapper.New(func(in reconcile.Request) []reconcile.Request {
 		if !filter(in.NamespacedName) {
 			return nil
@@ -241,7 +241,7 @@ func registryClusterHandlerFactory(buildClusters sets.String, filter objectFilte
 		// We have to squeeze both the target cluster name and the imageStreamTag name into a reconcile.Request
 		// Internally, this gets put onto the workqueue as a single string in namespace/name notation and split
 		// later on. This means that we can not use a slash as delimiter for the cluster and the namespace.
-		for _, buildCluster := range buildClusters.List() {
+		for _, buildCluster := range sets.List(buildClusters) {
 			name := types.NamespacedName{
 				Namespace: buildCluster + clusterAndNamespaceDelimiter + in.Namespace,
 				Name:      in.Name,
@@ -267,7 +267,7 @@ type reconciler struct {
 	registryClusterName string
 	registryClient      ctrlruntimeclient.Client
 	buildClusterClients map[string]ctrlruntimeclient.Client
-	forbiddenRegistries sets.String
+	forbiddenRegistries sets.Set[string]
 }
 
 func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
@@ -373,6 +373,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 		Spec: imagev1.ImageStreamImportSpec{
 			Import: true,
 			Images: []imagev1.ImageImportSpec{{
+				ImportPolicy: imagev1.TagImportPolicy{ImportMode: imagev1.ImportModePreserveOriginal},
 				From: corev1.ObjectReference{
 					Kind: "DockerImage",
 					Name: pullSpec,
@@ -522,7 +523,7 @@ func testInputImageStreamTagFilterFactory(
 	resolver registryResolver,
 	additionalImageStreamTags,
 	additionalImageStreams,
-	additionalImageStreamNamespaces sets.String,
+	additionalImageStreamNamespaces sets.Set[string],
 	buildClusterClients map[string]ctrlruntimeclient.Client,
 ) (objectFilter, error) {
 	if err := ca.AddIndex(indexName, indexConfigsByTestInputImageStreamTag(resolver)); err != nil {
@@ -637,8 +638,8 @@ func upsertObject(ctx context.Context, c ctrlruntimeclient.Client, obj ctrlrunti
 	return err
 }
 
-func isImportForbidden(pullSpec string, forbiddenRegistries sets.String) bool {
-	for _, reg := range forbiddenRegistries.List() {
+func isImportForbidden(pullSpec string, forbiddenRegistries sets.Set[string]) bool {
+	for _, reg := range sets.List(forbiddenRegistries) {
 		if strings.HasPrefix(pullSpec, reg) {
 			return true
 		}

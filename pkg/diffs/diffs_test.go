@@ -65,7 +65,7 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 		name                 string
 		configGenerator      func(*testing.T) (before, after config.DataByFilename)
 		expected             func() config.DataByFilename
-		expectedAffectedJobs map[string]sets.String
+		expectedAffectedJobs map[string]sets.Set[string]
 	}{{
 		name: "no changes",
 		configGenerator: func(t *testing.T) (config.DataByFilename, config.DataByFilename) {
@@ -74,7 +74,7 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 			return before, after
 		},
 		expected:             func() config.DataByFilename { return config.DataByFilename{} },
-		expectedAffectedJobs: map[string]sets.String{},
+		expectedAffectedJobs: map[string]sets.Set[string]{},
 	}, {
 		name: "new config",
 		configGenerator: func(t *testing.T) (config.DataByFilename, config.DataByFilename) {
@@ -88,7 +88,7 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 		expected: func() config.DataByFilename {
 			return config.DataByFilename{"org-repo-another-branch.yaml": baseCiopConfig}
 		},
-		expectedAffectedJobs: map[string]sets.String{},
+		expectedAffectedJobs: map[string]sets.Set[string]{},
 	}, {
 		name: "changed config",
 		configGenerator: func(t *testing.T) (config.DataByFilename, config.DataByFilename) {
@@ -109,7 +109,7 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 			expected.Configuration.InputConfiguration.ReleaseTagConfiguration.Name = "another-name"
 			return config.DataByFilename{"org-repo-branch.yaml": expected}
 		},
-		expectedAffectedJobs: map[string]sets.String{},
+		expectedAffectedJobs: map[string]sets.Set[string]{},
 	},
 		{
 			name: "changed tests",
@@ -131,7 +131,7 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 				expected.Configuration.Tests[0].Commands = "changed commands"
 				return config.DataByFilename{"org-repo-branch.yaml": expected}
 			},
-			expectedAffectedJobs: map[string]sets.String{"org-repo-branch.yaml": {"unit": sets.Empty{}}},
+			expectedAffectedJobs: map[string]sets.Set[string]{"org-repo-branch.yaml": {"unit": sets.Empty{}}},
 		},
 		{
 			name: "changed multiple tests",
@@ -155,7 +155,7 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 				expected.Configuration.Tests[1].Commands = "changed commands"
 				return config.DataByFilename{"org-repo-branch.yaml": expected}
 			},
-			expectedAffectedJobs: map[string]sets.String{
+			expectedAffectedJobs: map[string]sets.Set[string]{
 				"org-repo-branch.yaml": {
 					"unit": sets.Empty{},
 					"e2e":  sets.Empty{},
@@ -413,7 +413,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 		Filename: "org-repo-branch.yaml",
 	}
 
-	affectedJobs := map[string]sets.String{
+	affectedJobs := map[string]sets.Set[string]{
 		"org-repo-branch.yaml": {
 			"testjob": sets.Empty{},
 		},
@@ -702,12 +702,12 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 	for _, tc := range []struct {
 		id       string
 		cfg      *prowconfig.Config
-		profiles sets.String
+		profiles sets.Set[string]
 		expected []string
 	}{{
 		id:       "empty",
 		cfg:      &prowconfig.Config{},
-		profiles: sets.NewString("test-profile"),
+		profiles: sets.New[string]("test-profile"),
 	}, {
 		id: "not a kubernetes job",
 		cfg: &prowconfig.Config{
@@ -719,7 +719,7 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 				},
 			},
 		},
-		profiles: sets.NewString("test-profile"),
+		profiles: sets.New[string]("test-profile"),
 	}, {
 		id: "job doesn't use cluster profiles",
 		cfg: &prowconfig.Config{
@@ -731,7 +731,7 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 				},
 			},
 		},
-		profiles: sets.NewString("test-profile"),
+		profiles: sets.New[string]("test-profile"),
 	}, {
 		id: "job doesn't use the cluster profile",
 		cfg: &prowconfig.Config{
@@ -743,7 +743,7 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 				},
 			},
 		},
-		profiles: sets.NewString("test-profile"),
+		profiles: sets.New[string]("test-profile"),
 	}, {
 		id: "multiple jobs, one uses cluster the profile",
 		cfg: &prowconfig.Config{
@@ -759,7 +759,7 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 				},
 			},
 		},
-		profiles: sets.NewString("test-profile"),
+		profiles: sets.New[string]("test-profile"),
 		expected: []string{"uses-cluster-profile"},
 	}} {
 		t.Run(tc.id, func(t *testing.T) {

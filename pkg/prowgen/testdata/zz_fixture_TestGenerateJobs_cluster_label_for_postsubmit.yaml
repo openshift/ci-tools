@@ -1,6 +1,7 @@
 postsubmits:
   organization/repository:
   - always_run: true
+    cluster: build01
     labels:
       ci-operator.openshift.io/cluster: build01
     max_concurrency: 1

@@ -129,7 +129,7 @@
     labels:
       ci.openshift.org/rehearse-pull: "1234"
       created-by-pj-rehearse: "true"
-    name: rehearse-1234-0-template-prow-job-test-template
+    name: rehearse-1234-4de8ab7c20656998264a2593116288f5eb070b32-template-prow-job-test-template
     namespace: test-namespace
 - data:
     vars-origin.yaml: |
@@ -141,7 +141,7 @@
     labels:
       ci.openshift.org/rehearse-pull: "1234"
       created-by-pj-rehearse: "true"
-    name: rehearse-1234-0-cluster-profile-cluster-profile-test-profile
+    name: rehearse-1234-4de8ab7c20656998264a2593116288f5eb070b32-cluster-profile-cluster-profile-test-profile
     namespace: test-namespace
 - apiVersion: prow.k8s.io/v1
   kind: ProwJob
@@ -242,12 +242,12 @@
       base_sha: test_sha
       org: openshift
       pulls:
-      - author: petr-muller
+      - author: username
         number: 1234
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse periodic-ci-super-duper-e2e
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -322,12 +322,12 @@
       base_sha: test_sha
       org: openshift
       pulls:
-      - author: petr-muller
+      - author: username
         number: 1234
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse periodic-ci-super-duper-no-ciop
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -405,12 +405,12 @@
       base_sha: test_sha
       org: openshift
       pulls:
-      - author: petr-muller
+      - author: username
         number: 1234
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse periodic-ci-super-duper-periodic-with-unresolved-config
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -487,12 +487,12 @@
       base_sha: test_sha
       org: openshift
       pulls:
-      - author: petr-muller
+      - author: username
         number: 1234
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse periodic-ci-super-duper-periodic-with-unresolved-config-no-target
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -505,7 +505,6 @@
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-trooper-master-changed-and-uses-changed-workflow
     creationTimestamp: null
     labels:
-      ci-operator.openshift.io/prowgen-controlled: "true"
       ci.openshift.io/rehearse: "1234"
       ci.openshift.io/rehearse.context: periodic-ci-super-trooper-master-changed-and-uses-changed-woxxx
       created-by-prow: "true"
@@ -551,16 +550,16 @@
     pod_spec:
       containers:
       - args:
+        - --CHANGED-CI-OPERATOR-PARAMS
         - --gcs-upload-secret=/secrets/gcs/service-account.json
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
         - --report-credentials-file=/etc/report/credentials
         - --target=changed-and-uses-changed-workflow
-        - --CHANGED-CI-OPERATOR-PARAMS
         command:
         - ci-operator
         env:
         - name: CONFIG_SPEC
-          value: H4sIAAAAAAAC/8SUTWvcQAyG7/4VIpeFwgQntBefmkPaU6CkuRvFlmeHzFclOcuG/vgy/lh207ClUNKTPa800jPvMHpEodYFtCRNBVCW5QsQMVADiZ110Tx/vKwPqmTsSihTlK0bdAoo2mbaXT2Ozvctp6Sl0FS6FWXC0Jako+JMnsqOPxe2yWO05uryqq5WWAMDp7A0BdDUgJKomeIVk6SRu/lUmw+bua93wanM/wBdHhv4VNd3bhKYfowkr8JXJapoW8nUucF1qC7FkvKWQW+eQueiBlAa6LYYLfUGY29GITGrsEv8NPi0qwA6TrGBzec9Ifv9pircSoy+FaW88HV+FCVuM6fBeWrg4mLScxKdM+aGLjvTU+b07MSlaMIoaizqlng9ZwoBYy8N/FwUgJOE2WcXRdH7g3ri8CqdOnjkYl2HIzFQSLxv4PqrO4N69H8G9WC0WSyBnkQ57d+NPjO9dnxpZ/gRuzPsQjrmKclc/wezV8rl+1cmL3vAmEi7Lx7tkkvxeSUy0NOAo9f5ZUJGxkDzDU36ofz8lh5uvz+0327ub+5uH27v382PwnZ8f3RNvzkR8InARSXL0wA4gQv7Zej8W7aXl9ZSJEalvg2k2KPiNKQZY7ctUOUmKoDEtgEZ87RgymUUckpl/SsAAP//TjbJeuAFAAA=
+          value: H4sIAAAAAAAC/4SQQWr0MAyF9zmFdgM/ZMjA343v0DMYjUfxCGLLlZQu5vTFTltKGegqefqkJz9d0ShywUwWJoAu+xegYqEAopy5zu//z8t31RqmjhpVu/PqAzjmMKan687bLaqId6NhHc2VsMTe9MNcaaM+8bdxlg1rni/nyzJ9PXaGVaV8LgVwCeBkPg8+KZnsmo5Up3+nY+/Ghd2Of4DU9gAvy/LKo6D0tpP9wpdOHXO0RolXTugstbc8O9DTFI9HzFRJ0ekWCzne0HEcW7Gme4CC5qQTgGgOYHsbQqn1SCrS9UcAAAD//wzMfwOoAQAA
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -592,12 +591,12 @@
       base_sha: test_sha
       org: openshift
       pulls:
-      - author: petr-muller
+      - author: username
         number: 1234
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse periodic-ci-super-trooper-master-changed-and-uses-changed-workflow
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -610,7 +609,7 @@
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-trooper-master-changed-periodic
     creationTimestamp: null
     labels:
-      ci-operator.openshift.io/prowgen-controlled: "true"
+      ci.openshift.io/generator: prowgen
       ci.openshift.io/rehearse: "1234"
       ci.openshift.io/rehearse.context: periodic-ci-super-trooper-master-changed-periodic
       created-by-prow: "true"
@@ -675,6 +674,9 @@
         - mountPath: /secrets/gcs
           name: gcs-credentials
           readOnly: true
+        - mountPath: /secrets/manifest-tool
+          name: manifest-tool-local-pusher
+          readOnly: true
         - mountPath: /etc/pull-secret
           name: pull-secret
           readOnly: true
@@ -683,6 +685,9 @@
           readOnly: true
       serviceAccountName: ci-operator
       volumes:
+      - name: manifest-tool-local-pusher
+        secret:
+          secretName: manifest-tool-local-pusher
       - name: pull-secret
         secret:
           secretName: registry-pull-credentials
@@ -696,12 +701,12 @@
       base_sha: test_sha
       org: openshift
       pulls:
-      - author: petr-muller
+      - author: username
         number: 1234
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse periodic-ci-super-trooper-master-changed-periodic
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -786,12 +791,12 @@
       base_sha: test_sha
       org: openshift
       pulls:
-      - author: petr-muller
+      - author: username
         number: 1234
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse pull-ci-super-duper-ciop-cfg-change-custom
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -804,7 +809,7 @@
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-ciop-cfg-change-images
     creationTimestamp: null
     labels:
-      ci-operator.openshift.io/prowgen-controlled: "true"
+      ci.openshift.io/generator: prowgen
       ci.openshift.io/rehearse: "1234"
       ci.openshift.io/rehearse.context: images
       created-by-prow: "true"
@@ -869,6 +874,9 @@
         - mountPath: /secrets/gcs
           name: gcs-credentials
           readOnly: true
+        - mountPath: /secrets/manifest-tool
+          name: manifest-tool-local-pusher
+          readOnly: true
         - mountPath: /etc/pull-secret
           name: pull-secret
           readOnly: true
@@ -877,6 +885,9 @@
           readOnly: true
       serviceAccountName: ci-operator
       volumes:
+      - name: manifest-tool-local-pusher
+        secret:
+          secretName: manifest-tool-local-pusher
       - name: pull-secret
         secret:
           secretName: registry-pull-credentials
@@ -890,12 +901,12 @@
       base_sha: test_sha
       org: openshift
       pulls:
-      - author: petr-muller
+      - author: username
         number: 1234
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse pull-ci-super-duper-ciop-cfg-change-images
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -988,7 +999,7 @@
           - secret:
               name: cluster-secrets-test-profile
           - configMap:
-              name: rehearse-1234-0-cluster-profile-cluster-profile-test-profile
+              name: rehearse-1234-4de8ab7c20656998264a2593116288f5eb070b32-cluster-profile-cluster-profile-test-profile
       - configMap:
           name: prow-job-cluster-launch-src
         name: job-definition
@@ -999,12 +1010,12 @@
       base_sha: test_sha
       org: openshift
       pulls:
-      - author: petr-muller
+      - author: username
         number: 1234
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse pull-ci-super-duper-cluster-profile-test-profile
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -1085,12 +1096,12 @@
       base_sha: test_sha
       org: openshift
       pulls:
-      - author: petr-muller
+      - author: username
         number: 1234
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse pull-ci-super-duper-master-cmd
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -1194,12 +1205,12 @@
       base_sha: test_sha
       org: openshift
       pulls:
-      - author: petr-muller
+      - author: username
         number: 1234
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse pull-ci-super-duper-master-e2e-aws
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -1303,12 +1314,12 @@
       base_sha: test_sha
       org: openshift
       pulls:
-      - author: petr-muller
+      - author: username
         number: 1234
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse pull-ci-super-trooper-master-e2e-aws
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -1321,7 +1332,7 @@
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage
     creationTimestamp: null
     labels:
-      ci-operator.openshift.io/prowgen-controlled: "true"
+      ci.openshift.io/generator: prowgen
       ci.openshift.io/rehearse: "1234"
       ci.openshift.io/rehearse.context: multistage
       created-by-prow: "true"
@@ -1386,6 +1397,9 @@
         - mountPath: /secrets/gcs
           name: gcs-credentials
           readOnly: true
+        - mountPath: /secrets/manifest-tool
+          name: manifest-tool-local-pusher
+          readOnly: true
         - mountPath: /etc/pull-secret
           name: pull-secret
           readOnly: true
@@ -1394,6 +1408,9 @@
           readOnly: true
       serviceAccountName: ci-operator
       volumes:
+      - name: manifest-tool-local-pusher
+        secret:
+          secretName: manifest-tool-local-pusher
       - name: pull-secret
         secret:
           secretName: registry-pull-credentials
@@ -1407,12 +1424,250 @@
       base_sha: test_sha
       org: openshift
       pulls:
-      - author: petr-muller
+      - author: username
         number: 1234
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse pull-ci-super-trooper-master-multistage
+    type: presubmit
+  status:
+    startTime: 2020-06-22T22:25:00Z
+    state: triggered
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
+      prow.k8s.io/context: ci/rehearse/super/trooper/master/multistage2
+      prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage2
+    creationTimestamp: null
+    labels:
+      ci.openshift.io/generator: prowgen
+      ci.openshift.io/rehearse: "1234"
+      ci.openshift.io/rehearse.context: multistage2
+      created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedRegistryContent
+      prow.k8s.io/context: multistage2
+      prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage2
+      prow.k8s.io/refs.base_ref: master
+      prow.k8s.io/refs.org: openshift
+      prow.k8s.io/refs.pull: "1234"
+      prow.k8s.io/refs.repo: release
+      prow.k8s.io/type: presubmit
+    name: test-prowjob
+    namespace: test-namespace
+    resourceVersion: "1"
+  spec:
+    agent: kubernetes
+    cluster: default
+    context: ci/rehearse/super/trooper/master/multistage2
+    decoration_config:
+      gcs_configuration:
+        bucket: origin-ci-test
+        default_org: openshift
+        default_repo: origin
+        job_url_prefix: https://openshift-gce-devel.appspot.com/build/
+        path_strategy: single
+      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
+      grace_period: 15s
+      skip_cloning: true
+      timeout: 4h0m0s
+      utility_images:
+        clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
+        entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
+        initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
+        sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: master
+      org: super
+      repo: trooper
+      workdir: true
+    job: rehearse-1234-pull-ci-super-trooper-master-multistage2
+    namespace: test-namespace
+    pod_spec:
+      containers:
+      - args:
+        - --gcs-upload-secret=/secrets/gcs/service-account.json
+        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+        - --report-credentials-file=/etc/report/credentials
+        - --target=multistage2
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          value: H4sIAAAAAAAC/8SUT2sbPRDG7/sphlwCLyhszNvL3nJIewqU1PdlvDuWRfWvM7MuDv3wRdq1sdPgUijpSdIzo5mfHiFtUKh3AS1J1wCUZRkBIgbqILGzLpr9/3ftSZWMQwllirJzW60BRdvV3c1mcn7sOSUthWrpXpQJQ1+SzoozeSo7fl/YJo/Rmvu7+7Y5whrYcgpLUwBNHSiJmhpvmCRNPMynuv3vdu7rXXAq8xxgyFMHH9r2yVWB6dtE8ip8X6KKtpdMg9u6AdWlWFLeMujNU+hc1ABKB2Hy6kTR0qopPEqMvhelvPQd/CRK3GdOW+epg5ubquckOmfMhVx2ZqTMae/EpWjCJGos6o74yJ9CwDhKBz8WBeAiYfbPRVH0/qReOHeULp05c6dtw5kYKCQ+dLD65K6gns2voJ4MNIslMJIop8O70Wem144v7QxvcLjCLqRTrklm9Q/MPlIu4x+ZvOwBYyJ9/+jRLrkU90ciAyNtcfI6vzjIyBhovqGqn8rPb2T9+GXdf354fnh6XD8+v5sfhe38/mhFvzgR8CuBi0qW68O+gAuH5TP5u2wvL72lSIxKYx9IcUTF+vkyxmFXoMpNNACJbQcy5bpgyuWL45TK+mcAAAD///ilu7C4BQAA
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /secrets/gcs
+          name: gcs-credentials
+          readOnly: true
+        - mountPath: /secrets/manifest-tool
+          name: manifest-tool-local-pusher
+          readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
+        - mountPath: /etc/report
+          name: result-aggregator
+          readOnly: true
+      serviceAccountName: ci-operator
+      volumes:
+      - name: manifest-tool-local-pusher
+        secret:
+          secretName: manifest-tool-local-pusher
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
+      - name: result-aggregator
+        secret:
+          secretName: result-aggregator
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
+    refs:
+      base_ref: master
+      base_sha: test_sha
+      org: openshift
+      pulls:
+      - author: username
+        number: 1234
+        sha: test_sha
+      repo: release
+    report: true
+    rerun_command: /pj-rehearse pull-ci-super-trooper-master-multistage2
+    type: presubmit
+  status:
+    startTime: 2020-06-22T22:25:00Z
+    state: triggered
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
+      prow.k8s.io/context: ci/rehearse/super/trooper/master/multistage3
+      prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage3
+    creationTimestamp: null
+    labels:
+      ci-operator.openshift.io/cloud: azure4
+      ci-operator.openshift.io/cloud-cluster-profile: azure4
+      ci.openshift.io/generator: prowgen
+      ci.openshift.io/rehearse: "1234"
+      ci.openshift.io/rehearse.context: multistage3
+      created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedRegistryContent
+      prow.k8s.io/context: multistage3
+      prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage3
+      prow.k8s.io/refs.base_ref: master
+      prow.k8s.io/refs.org: openshift
+      prow.k8s.io/refs.pull: "1234"
+      prow.k8s.io/refs.repo: release
+      prow.k8s.io/type: presubmit
+    name: test-prowjob
+    namespace: test-namespace
+    resourceVersion: "1"
+  spec:
+    agent: kubernetes
+    cluster: default
+    context: ci/rehearse/super/trooper/master/multistage3
+    decoration_config:
+      gcs_configuration:
+        bucket: origin-ci-test
+        default_org: openshift
+        default_repo: origin
+        job_url_prefix: https://openshift-gce-devel.appspot.com/build/
+        path_strategy: single
+      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
+      grace_period: 15s
+      skip_cloning: true
+      timeout: 4h0m0s
+      utility_images:
+        clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
+        entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
+        initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
+        sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: master
+      org: super
+      repo: trooper
+      workdir: true
+    job: rehearse-1234-pull-ci-super-trooper-master-multistage3
+    namespace: test-namespace
+    pod_spec:
+      containers:
+      - args:
+        - --gcs-upload-secret=/secrets/gcs/service-account.json
+        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+        - --lease-server-credentials-file=/etc/boskos/credentials
+        - --report-credentials-file=/etc/report/credentials
+        - --secret-dir=/usr/local/multistage3-cluster-profile
+        - --target=multistage3
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          value: H4sIAAAAAAAC/8RUTWsbMRC976+YW6CgsHbTy95ycHsKlNT3Zbw7lkX11ZlZF5v++KLdtbHT4FIoyUnSm6c3T09IGxRqXUBL0lQAZVlGgIiBGkjsrItm/3Bfn1HJ2JVSpig7t9WxoGibcXe1GZzvW05Ji9Ao3YoyYWgL6UKcyVPZ8XdhmzxGaxb3i7o6mTWw5RTmpgCaGlASNWO9YpI0cDed6u7D3dTXu+BUpjlAl4cGPtX1kxsBph8DyYvyolQVbSuZOrd1HapLsVBeC+jVU+gkagClgTB4daJo6WNV/Cgx+laU8ty384MocZs5bZ2nBvA4MD2MtZxEJ9Yk5rIzPWVOeycuRRMGUWNRd8SnM6QQMPbSwK8ZAbgiTBm6KIren9Gr9E7QdToXCdV1uAADhcSHBpZf3A2rF/MbVs8hmjkW6EmU0+HN3Geml4nP7QxvsLvhXUiHPJLM8h3CPrmcx38Ked4DxkT6+dmjnbkU9ydHBnra4uB1enWQkTHQdEMjfpaf3sl69W3dfn18fnxarVfPb5ZH8XZ5f7SkP5II+J3ARSXL4+O+MhcO84fyf70dj62lSIxKfRtIsUfF8QNmjN2umCo3UQEktg3IkMcFUy7fHKdU1r8DAAD//6N08j28BQAA
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /etc/boskos
+          name: boskos
+          readOnly: true
+        - mountPath: /usr/local/multistage3-cluster-profile
+          name: cluster-profile
+        - mountPath: /secrets/gcs
+          name: gcs-credentials
+          readOnly: true
+        - mountPath: /secrets/manifest-tool
+          name: manifest-tool-local-pusher
+          readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
+        - mountPath: /etc/report
+          name: result-aggregator
+          readOnly: true
+      serviceAccountName: ci-operator
+      volumes:
+      - name: boskos
+        secret:
+          items:
+          - key: credentials
+            path: credentials
+          secretName: boskos-credentials
+      - name: cluster-profile
+        secret:
+          secretName: cluster-secrets-azure4
+      - name: manifest-tool-local-pusher
+        secret:
+          secretName: manifest-tool-local-pusher
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
+      - name: result-aggregator
+        secret:
+          secretName: result-aggregator
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
+    refs:
+      base_ref: master
+      base_sha: test_sha
+      org: openshift
+      pulls:
+      - author: username
+        number: 1234
+        sha: test_sha
+      repo: release
+    report: true
+    rerun_command: /pj-rehearse pull-ci-super-trooper-master-multistage3
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -1425,7 +1680,7 @@
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage5
     creationTimestamp: null
     labels:
-      ci-operator.openshift.io/prowgen-controlled: "true"
+      ci.openshift.io/generator: prowgen
       ci.openshift.io/rehearse: "1234"
       ci.openshift.io/rehearse.context: multistage5
       created-by-prow: "true"
@@ -1490,6 +1745,9 @@
         - mountPath: /secrets/gcs
           name: gcs-credentials
           readOnly: true
+        - mountPath: /secrets/manifest-tool
+          name: manifest-tool-local-pusher
+          readOnly: true
         - mountPath: /etc/pull-secret
           name: pull-secret
           readOnly: true
@@ -1498,6 +1756,9 @@
           readOnly: true
       serviceAccountName: ci-operator
       volumes:
+      - name: manifest-tool-local-pusher
+        secret:
+          secretName: manifest-tool-local-pusher
       - name: pull-secret
         secret:
           secretName: registry-pull-credentials
@@ -1511,12 +1772,12 @@
       base_sha: test_sha
       org: openshift
       pulls:
-      - author: petr-muller
+      - author: username
         number: 1234
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse pull-ci-super-trooper-master-multistage5
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z
@@ -1529,7 +1790,7 @@
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-unit
     creationTimestamp: null
     labels:
-      ci-operator.openshift.io/prowgen-controlled: "true"
+      ci.openshift.io/generator: prowgen
       ci.openshift.io/rehearse: "1234"
       ci.openshift.io/rehearse.context: unit
       created-by-prow: "true"
@@ -1594,6 +1855,9 @@
         - mountPath: /secrets/gcs
           name: gcs-credentials
           readOnly: true
+        - mountPath: /secrets/manifest-tool
+          name: manifest-tool-local-pusher
+          readOnly: true
         - mountPath: /etc/pull-secret
           name: pull-secret
           readOnly: true
@@ -1602,6 +1866,9 @@
           readOnly: true
       serviceAccountName: ci-operator
       volumes:
+      - name: manifest-tool-local-pusher
+        secret:
+          secretName: manifest-tool-local-pusher
       - name: pull-secret
         secret:
           secretName: registry-pull-credentials
@@ -1615,12 +1882,342 @@
       base_sha: test_sha
       org: openshift
       pulls:
-      - author: petr-muller
+      - author: username
         number: 1234
         sha: test_sha
       repo: release
     report: true
-    rerun_command: /test pj-rehearse
+    rerun_command: /pj-rehearse pull-ci-super-trooper-master-unit
+    type: presubmit
+  status:
+    startTime: 2020-06-22T22:25:00Z
+    state: triggered
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
+      prow.k8s.io/context: ci/rehearse/uses/observer/master/test-with-changed-observer
+      prow.k8s.io/job: rehearse-1234-pull-ci-uses-observer-master-test-with-changed-observer
+    creationTimestamp: null
+    labels:
+      ci.openshift.io/generator: prowgen
+      ci.openshift.io/rehearse: "1234"
+      ci.openshift.io/rehearse.context: test-with-changed-observer
+      created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedRegistryContent
+      prow.k8s.io/context: test-with-changed-observer
+      prow.k8s.io/job: rehearse-1234-pull-ci-uses-observer-master-test-with-changed-ob
+      prow.k8s.io/refs.base_ref: master
+      prow.k8s.io/refs.org: openshift
+      prow.k8s.io/refs.pull: "1234"
+      prow.k8s.io/refs.repo: release
+      prow.k8s.io/type: presubmit
+    name: test-prowjob
+    namespace: test-namespace
+    resourceVersion: "1"
+  spec:
+    agent: kubernetes
+    cluster: default
+    context: ci/rehearse/uses/observer/master/test-with-changed-observer
+    decoration_config:
+      gcs_configuration:
+        bucket: origin-ci-test
+        default_org: openshift
+        default_repo: origin
+        job_url_prefix: https://openshift-gce-devel.appspot.com/build/
+        path_strategy: single
+      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
+      grace_period: 15s
+      skip_cloning: true
+      timeout: 4h0m0s
+      utility_images:
+        clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
+        entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
+        initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
+        sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: master
+      org: uses
+      repo: observer
+      workdir: true
+    job: rehearse-1234-pull-ci-uses-observer-master-test-with-changed-observer
+    namespace: test-namespace
+    pod_spec:
+      containers:
+      - args:
+        - --gcs-upload-secret=/secrets/gcs/service-account.json
+        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+        - --report-credentials-file=/etc/report/credentials
+        - --target=test-with-changed-observer
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          value: H4sIAAAAAAAC/1SPwW7DIBBE7/6KkS+RKnHolZ+xNnhiWzLg7kIrRf34ioYk8gntYxnmKS1XDTQ/AJePSzsA5VelFXtMQDiqx/g5DuVBHcQ82uB+trK6sEpaOLt8Neo3dQD2rVBln6zw6Dlhr1ao06H5tu30GMd//nzV1xxCjlHSbB6/vQBerIOb5ujR/+0sSaR/pbnz5Un0ic6WJ9P7fVqYqFI4T5FFZinSNq8qKaweUZrMAGRdPKqxVVMe+V1h+AsAAP//A9TIeF4BAAA=
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /secrets/gcs
+          name: gcs-credentials
+          readOnly: true
+        - mountPath: /secrets/manifest-tool
+          name: manifest-tool-local-pusher
+          readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
+        - mountPath: /etc/report
+          name: result-aggregator
+          readOnly: true
+      serviceAccountName: ci-operator
+      volumes:
+      - name: manifest-tool-local-pusher
+        secret:
+          secretName: manifest-tool-local-pusher
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
+      - name: result-aggregator
+        secret:
+          secretName: result-aggregator
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
+    refs:
+      base_ref: master
+      base_sha: test_sha
+      org: openshift
+      pulls:
+      - author: username
+        number: 1234
+        sha: test_sha
+      repo: release
+    report: true
+    rerun_command: /pj-rehearse pull-ci-uses-observer-master-test-with-changed-observer
+    type: presubmit
+  status:
+    startTime: 2020-06-22T22:25:00Z
+    state: triggered
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
+      prow.k8s.io/context: ci/rehearse/uses/observer/master/test-with-changed-observer-commands
+      prow.k8s.io/job: rehearse-1234-pull-ci-uses-observer-master-test-with-changed-observer-commands
+    creationTimestamp: null
+    labels:
+      ci.openshift.io/generator: prowgen
+      ci.openshift.io/rehearse: "1234"
+      ci.openshift.io/rehearse.context: test-with-changed-observer-commands
+      created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedRegistryContent
+      prow.k8s.io/context: test-with-changed-observer-com
+      prow.k8s.io/job: rehearse-1234-pull-ci-uses-observer-master-test-with-changed-ob
+      prow.k8s.io/refs.base_ref: master
+      prow.k8s.io/refs.org: openshift
+      prow.k8s.io/refs.pull: "1234"
+      prow.k8s.io/refs.repo: release
+      prow.k8s.io/type: presubmit
+    name: test-prowjob
+    namespace: test-namespace
+    resourceVersion: "1"
+  spec:
+    agent: kubernetes
+    cluster: default
+    context: ci/rehearse/uses/observer/master/test-with-changed-observer-commands
+    decoration_config:
+      gcs_configuration:
+        bucket: origin-ci-test
+        default_org: openshift
+        default_repo: origin
+        job_url_prefix: https://openshift-gce-devel.appspot.com/build/
+        path_strategy: single
+      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
+      grace_period: 15s
+      skip_cloning: true
+      timeout: 4h0m0s
+      utility_images:
+        clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
+        entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
+        initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
+        sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: master
+      org: uses
+      repo: observer
+      workdir: true
+    job: rehearse-1234-pull-ci-uses-observer-master-test-with-changed-observer-commands
+    namespace: test-namespace
+    pod_spec:
+      containers:
+      - args:
+        - --gcs-upload-secret=/secrets/gcs/service-account.json
+        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+        - --report-credentials-file=/etc/report/credentials
+        - --target=test-with-changed-observer-commands
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          value: H4sIAAAAAAAC/1SPQYrDMAxF9z7FJ5vCgBez9WWC6qhJILYzkjwDZQ5f3Di03ST8jyy9J6ylSmQNDrh8XdoPEP6prKZHAuJeA4bvwdnRepAGtOD/Vlt8XCjPPPlyVZZfFh9LSpQndcC2GgttoxrvfWHcqhrLuEu5rRsHDMOzP5/3MY9zTcB/JwH6rZ5vUlJ4fnuRKXHAC6STvQEdgm/aZ/Xp/OF9v48zZxYynsbERhMZtcmrUI5LQKJm5IAic0BVbpeE9/JicY8AAAD//+Q4OnZsAQAA
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /secrets/gcs
+          name: gcs-credentials
+          readOnly: true
+        - mountPath: /secrets/manifest-tool
+          name: manifest-tool-local-pusher
+          readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
+        - mountPath: /etc/report
+          name: result-aggregator
+          readOnly: true
+      serviceAccountName: ci-operator
+      volumes:
+      - name: manifest-tool-local-pusher
+        secret:
+          secretName: manifest-tool-local-pusher
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
+      - name: result-aggregator
+        secret:
+          secretName: result-aggregator
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
+    refs:
+      base_ref: master
+      base_sha: test_sha
+      org: openshift
+      pulls:
+      - author: username
+        number: 1234
+        sha: test_sha
+      repo: release
+    report: true
+    rerun_command: /pj-rehearse pull-ci-uses-observer-master-test-with-changed-observer-commands
+    type: presubmit
+  status:
+    startTime: 2020-06-22T22:25:00Z
+    state: triggered
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
+      prow.k8s.io/context: ci/rehearse/uses/observer/master/test-with-changed-observer-workflow
+      prow.k8s.io/job: rehearse-1234-pull-ci-uses-observer-master-test-with-changed-observer-workflow
+    creationTimestamp: null
+    labels:
+      ci.openshift.io/generator: prowgen
+      ci.openshift.io/rehearse: "1234"
+      ci.openshift.io/rehearse.context: test-with-changed-observer-workflow
+      created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedRegistryContent
+      prow.k8s.io/context: test-with-changed-observer-wor
+      prow.k8s.io/job: rehearse-1234-pull-ci-uses-observer-master-test-with-changed-ob
+      prow.k8s.io/refs.base_ref: master
+      prow.k8s.io/refs.org: openshift
+      prow.k8s.io/refs.pull: "1234"
+      prow.k8s.io/refs.repo: release
+      prow.k8s.io/type: presubmit
+    name: test-prowjob
+    namespace: test-namespace
+    resourceVersion: "1"
+  spec:
+    agent: kubernetes
+    cluster: default
+    context: ci/rehearse/uses/observer/master/test-with-changed-observer-workflow
+    decoration_config:
+      gcs_configuration:
+        bucket: origin-ci-test
+        default_org: openshift
+        default_repo: origin
+        job_url_prefix: https://openshift-gce-devel.appspot.com/build/
+        path_strategy: single
+      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
+      grace_period: 15s
+      skip_cloning: true
+      timeout: 4h0m0s
+      utility_images:
+        clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
+        entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
+        initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
+        sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: master
+      org: uses
+      repo: observer
+      workdir: true
+    job: rehearse-1234-pull-ci-uses-observer-master-test-with-changed-observer-workflow
+    namespace: test-namespace
+    pod_spec:
+      containers:
+      - args:
+        - --gcs-upload-secret=/secrets/gcs/service-account.json
+        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+        - --report-credentials-file=/etc/report/credentials
+        - --target=test-with-changed-observer-workflow
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          value: H4sIAAAAAAAC/zSOTWrDMBCF9zrFw5tAQYtudRkxkV9sU8VSZ0Y15PRFpF0N3/D+lNaGFloKwO3jNg+g/B40tzcBpY+E5XMJ/v5GiCVMiNfheyy7nBvX2O5G/aHGq+nXo7YrAPVwqtRszv4XWOowp+au7XFUJixLeL3yxpMqzjU/6bKKy5TfVc6yJzxlegLQdEsYRgtzaG8J/7XhNwAA//+s3YR+zgAAAA==
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /secrets/gcs
+          name: gcs-credentials
+          readOnly: true
+        - mountPath: /secrets/manifest-tool
+          name: manifest-tool-local-pusher
+          readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
+        - mountPath: /etc/report
+          name: result-aggregator
+          readOnly: true
+      serviceAccountName: ci-operator
+      volumes:
+      - name: manifest-tool-local-pusher
+        secret:
+          secretName: manifest-tool-local-pusher
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
+      - name: result-aggregator
+        secret:
+          secretName: result-aggregator
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
+    refs:
+      base_ref: master
+      base_sha: test_sha
+      org: openshift
+      pulls:
+      - author: username
+        number: 1234
+        sha: test_sha
+      repo: release
+    report: true
+    rerun_command: /pj-rehearse pull-ci-uses-observer-master-test-with-changed-observer-workflow
     type: presubmit
   status:
     startTime: 2020-06-22T22:25:00Z

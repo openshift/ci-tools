@@ -98,6 +98,7 @@ func TestMakeOcApply(t *testing.T) {
 		path       string
 		user       string
 		dry        dryRunMethod
+		apply      applyMethod
 
 		expected []string
 	}{
@@ -156,7 +157,7 @@ func TestMakeOcApply(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cmd := makeOcApply(tc.kubeConfig, tc.context, tc.path, tc.user, tc.dry)
+			cmd := makeOcApply(tc.kubeConfig, tc.context, tc.path, tc.user, tc.dry, tc.apply)
 			if diff := cmp.Diff(tc.expected, cmd.Args); diff != "" {
 				t.Errorf("Command differs from expected:\n%s", diff)
 			}
@@ -168,19 +169,19 @@ func TestInferMissingNamespaces(t *testing.T) {
 	testcases := []struct {
 		description   string
 		ocApplyOutput []byte
-		expected      sets.String
+		expected      sets.Set[string]
 	}{
 		{
 			description:   "single line of interest",
 			ocApplyOutput: []byte(`Error from server (NotFound): namespaces "this-is-missing" not found`),
-			expected:      sets.NewString("this-is-missing"),
+			expected:      sets.New[string]("this-is-missing"),
 		},
 		{
 			description: "single line of interest between some clutter",
 			ocApplyOutput: []byte(`a line of clutter
 Error from server (NotFound): namespaces "this-is-missing" not found
 another line of clutter`),
-			expected: sets.NewString("this-is-missing"),
+			expected: sets.New[string]("this-is-missing"),
 		},
 		{
 			description: "multiple lines of interest in clutter",
@@ -189,12 +190,12 @@ Error from server (NotFound): namespaces "this-is-missing" not found
 another line of clutter
 Error from server (NotFound): namespaces "this-is-missing-too" not found
 `),
-			expected: sets.NewString("this-is-missing", "this-is-missing-too"),
+			expected: sets.New[string]("this-is-missing", "this-is-missing-too"),
 		},
 		{
 			description:   "Message with multiple error levels",
 			ocApplyOutput: []byte(`Error from server (NotFound): error when creating "clusters/app.ci/prometheus-access/managed-services/admin_rbac.yaml": namespaces "managed-services" not found`),
-			expected:      sets.NewString("managed-services"),
+			expected:      sets.New[string]("managed-services"),
 		},
 	}
 	for _, tc := range testcases {
@@ -278,7 +279,7 @@ func TestAsGenericManifest(t *testing.T) {
 			applier:            &configApplier{path: "path", dry: dryServer},
 			executions:         []response{{output: []byte("namespace/to-be-created"), err: nil}}, // expect a single successful call
 			expectedCalls:      [][]string{{"oc", "apply", "-f", "path", "-o", "name", "--dry-run=server", "--validate=true"}},
-			expectedNamespaces: namespaceActions{Created: sets.NewString("to-be-created")},
+			expectedNamespaces: namespaceActions{Created: sets.New[string]("to-be-created")},
 		},
 		{
 			description: "success: server-side dry recovers missing namespaces by creating them",
@@ -293,7 +294,7 @@ func TestAsGenericManifest(t *testing.T) {
 				{"oc", "apply", "-f", "-", "-o", "name"},
 				{"oc", "apply", "-f", "path", "-o", "name", "--dry-run=server", "--validate=true"},
 			},
-			expectedNamespaces: namespaceActions{Assumed: sets.NewString("this-is-missing")},
+			expectedNamespaces: namespaceActions{Assumed: sets.New[string]("this-is-missing")},
 		},
 		{
 			description: "success: server-side dry recovers multiple missing namespaces by creating them",
@@ -320,7 +321,7 @@ func TestAsGenericManifest(t *testing.T) {
 				{"oc", "apply", "-f", "-", "-o", "name"},                                           // Create third namespace
 				{"oc", "apply", "-f", "path", "-o", "name", "--dry-run=server", "--validate=true"}, // Succeeds
 			},
-			expectedNamespaces: namespaceActions{Assumed: sets.NewString("missing-1", "missing-2", "missing-3")},
+			expectedNamespaces: namespaceActions{Assumed: sets.New[string]("missing-1", "missing-2", "missing-3")},
 		},
 		{
 			description: "failure: server-side dry does not try to recover from unrelated failures",
@@ -347,8 +348,32 @@ func TestAsGenericManifest(t *testing.T) {
 				{"oc", "apply", "-f", "path", "-o", "name", "--dry-run=server", "--validate=true"},
 			},
 			expectedNamespaces: namespaceActions{
-				Created: sets.NewString("this-is-missing"),
-				Assumed: sets.NewString("this-is-missing"),
+				Created: sets.New[string]("this-is-missing"),
+				Assumed: sets.New[string]("this-is-missing"),
+			},
+		},
+		{
+			description: "success: file with name starts with '_SS' is applied with --server-side",
+			applier:     &configApplier{path: "SS_path", dry: dryNone},
+			executions:  []response{{err: nil}},
+			expectedCalls: [][]string{
+				{"oc", "apply", "-f", "SS_path", "-o", "name", "--server-side=true"},
+			},
+		},
+		{
+			description: "success: enable server-side apply",
+			applier:     &configApplier{path: "path", dry: dryNone, apply: applyServer},
+			executions:  []response{{err: nil}},
+			expectedCalls: [][]string{
+				{"oc", "apply", "-f", "path", "-o", "name", "--server-side=true"},
+			},
+		},
+		{
+			description: "success: no duplicated --server-side flag",
+			applier:     &configApplier{path: "_SS_path", dry: dryNone, apply: applyServer},
+			executions:  []response{{err: nil}},
+			expectedCalls: [][]string{
+				{"oc", "apply", "-f", "_SS_path", "-o", "name", "--server-side=true"},
 			},
 		},
 	}
@@ -676,21 +701,21 @@ func TestExtractNamespaces(t *testing.T) {
 	testcases := []struct {
 		description string
 		applyOutput []byte
-		expected    sets.String
+		expected    sets.Set[string]
 	}{
 		{
 			description: "empty input",
-			expected:    sets.String{},
+			expected:    sets.Set[string]{},
 		},
 		{
 			description: "single line",
 			applyOutput: []byte("namespace/ns-name"),
-			expected:    sets.NewString("ns-name"),
+			expected:    sets.New[string]("ns-name"),
 		},
 		{
 			description: "multiple lines separated by clutter",
 			applyOutput: []byte("namespace/ns-name\n\n\ncluttter\nmorecluttter\nevenmorecluttern\nnamespaceclutter\nnamespace/another-ns-name"),
-			expected:    sets.NewString("ns-name", "another-ns-name"),
+			expected:    sets.New[string]("ns-name", "another-ns-name"),
 		},
 	}
 	for _, tc := range testcases {

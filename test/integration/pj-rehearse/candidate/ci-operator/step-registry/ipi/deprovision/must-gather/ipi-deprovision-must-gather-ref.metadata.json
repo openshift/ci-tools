@@ -1,0 +1,13 @@
+{
+	"path": "ipi/deprovision/must-gather/ipi-deprovision-must-gather-ref.yaml",
+	"owners": {
+		"approvers": [
+			"petr-muller",
+			"droslean"
+		],
+		"reviewers": [
+			"petr-muller",
+			"droslean"
+		]
+	}
+}

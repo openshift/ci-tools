@@ -49,13 +49,16 @@ func TestRunSteps(t *testing.T) {
 			if err := os.Chdir(tempDir); err != nil {
 				t.Fatalf("failed to chdir into tempdir: %v", err)
 			}
-			if out, err := exec.Command("git", "init").CombinedOutput(); err != nil {
-				t.Fatalf("failed to git init: %v, out: %s", err, string(out))
+			for _, cmd := range [][]string{
+				{"init"},
+				{"config", "user.name", "test"},
+				{"config", "user.email", "test@example.com"},
+				{"commit", "--allow-empty", "--message", "init"},
+			} {
+				if out, err := exec.Command("git", cmd...).CombinedOutput(); err != nil {
+					t.Fatalf("git command %q failed: %v, out: %s", cmd, err, string(out))
+				}
 			}
-			if out, err := exec.Command("git", "commit", "--allow-empty", "-m", "init").CombinedOutput(); err != nil {
-				t.Fatalf("failed to create initial commit: %v, out: %s", err, string(out))
-			}
-
 			var steps []step
 			for _, command := range tc.commands {
 				steps = append(steps, step{command: command[0], arguments: command[1:]})

@@ -23,7 +23,7 @@ func newReloader(name string, cache cache) *cacheReloader {
 		}),
 		lock: &sync.RWMutex{},
 	}
-	interrupts.TickLiteral(reloader.reload, 10*time.Minute)
+	interrupts.TickLiteral(reloader.reload, time.Hour)
 	return reloader
 }
 
@@ -72,9 +72,13 @@ func (c *cacheReloader) reload() {
 		return
 	}
 	c.lock.Lock()
-	c.lastUpdated = lastUpdated
-	for _, subscriber := range c.subscribers {
-		subscriber <- data
+	if len(c.subscribers) > 0 {
+		c.lastUpdated = lastUpdated
+		for _, subscriber := range c.subscribers {
+			subscriber <- data
+		}
+	} else {
+		logger.Warn("no subscribers yet, won't mark as loaded")
 	}
 	c.lock.Unlock()
 	logger.Debug("Newer update loaded.")
@@ -84,10 +88,22 @@ func digestAll(data map[string][]*cacheReloader, digesters map[string]digester, 
 	var infos []digestInfo
 	for id, d := range digesters {
 		for _, item := range data[id] {
-			infos = append(infos, digestInfo{name: item.name, data: item, digest: d})
+			s := make(chan *pod_scaler.CachedQuery, 1)
+			item.subscribe(s)
+			infos = append(infos, digestInfo{
+				name:         item.name,
+				data:         item,
+				digest:       d,
+				subscription: s,
+			})
 		}
 	}
+	logger.Debugf("digesting %d infos.", len(infos))
 	loadDone := digest(logger, infos...)
+	// Now that the initial subscriptions are completed, lets make sure they are updated
+	for _, info := range infos {
+		info.data.reload()
+	}
 	interrupts.Run(func(ctx context.Context) {
 		select {
 		case <-ctx.Done():
@@ -103,9 +119,10 @@ func digestAll(data map[string][]*cacheReloader, digesters map[string]digester, 
 type digester func(query *pod_scaler.CachedQuery)
 
 type digestInfo struct {
-	name   string
-	data   *cacheReloader
-	digest digester
+	name         string
+	data         *cacheReloader
+	digest       digester
+	subscription chan *pod_scaler.CachedQuery
 }
 
 func digest(logger *logrus.Entry, infos ...digestInfo) <-chan interface{} {
@@ -117,7 +134,9 @@ func digest(logger *logrus.Entry, infos ...digestInfo) <-chan interface{} {
 		defer loadLock.Unlock()
 		if loaded != len(infos)-1 {
 			loaded += 1
+			logger.Debugf("Now loaded %d info(s) out of %d", loaded, len(infos))
 		} else {
+			logger.Debugf("Now loaded all %d info(s)", len(infos))
 			loadDone <- struct{}{}
 		}
 	}
@@ -126,15 +145,13 @@ func digest(logger *logrus.Entry, infos ...digestInfo) <-chan interface{} {
 		thisOnce := &sync.Once{}
 		interrupts.Run(func(ctx context.Context) {
 			subLogger := logger.WithField("subscription", info.name)
-			subscription := make(chan *pod_scaler.CachedQuery, 1)
-			info.data.subscribe(subscription)
 			subLogger.Debug("Starting subscription.")
 			for {
 				select {
 				case <-ctx.Done():
 					subLogger.Debug("Subscription cancelled.")
 					return
-				case data := <-subscription:
+				case data := <-info.subscription:
 					subLogger.Debug("Digesting new data from subscription.")
 					info.digest(data)
 					thisOnce.Do(update)

@@ -2,7 +2,7 @@ package main
 
 import (
 	"io/fs"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -109,6 +109,7 @@ zz_generated_metadata:
 			if err != nil {
 				t.Fatalf("failed to create localgit: %v", err)
 			}
+			localgit.InitialBranch = "master"
 			defer func() {
 				if err := localgit.Clean(); err != nil {
 					t.Errorf("localgit cleanup failed: %v", err)
@@ -157,7 +158,7 @@ zz_generated_metadata:
 				if targetBranch != input.metadata.Branch {
 					t.Errorf("expected branch to be %s, was %s", input.metadata.Branch, targetBranch)
 				}
-				raw, err := ioutil.ReadFile(localSourceDir + "/" + cioperatorapi.CIOperatorInrepoConfigFileName)
+				raw, err := os.ReadFile(localSourceDir + "/" + cioperatorapi.CIOperatorInrepoConfigFileName)
 				if err != nil {
 					t.Fatalf("failed to read .ci-operator.yaml: %v", err)
 				}

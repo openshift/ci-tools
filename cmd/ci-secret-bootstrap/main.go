@@ -9,7 +9,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"sort"
 	"strings"
@@ -123,10 +122,10 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor, kubeConfigs map
 	}
 
 	if vals := o.secretNamesRaw.Strings(); len(vals) > 0 {
-		secretNames := sets.NewString(vals...)
-		logrus.WithField("secretNames", secretNames.List()).Info("pruning irrelevant configuration ...")
+		secretNames := sets.New[string](vals...)
+		logrus.WithField("secretNames", sets.List(secretNames)).Info("pruning irrelevant configuration ...")
 		pruneIrrelevantConfiguration(&o.config, secretNames)
-		logrus.WithField("secretNames", secretNames.List()).WithField("o.config.Secrets", o.config.Secrets).Info("pruned irrelevant configuration")
+		logrus.WithField("secretNames", sets.List(secretNames)).WithField("o.config.Secrets", o.config.Secrets).Info("pruned irrelevant configuration")
 	}
 
 	if o.generatorConfigPath != "" {
@@ -183,7 +182,7 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor, kubeConfigs map
 	return o.validateCompletedOptions()
 }
 
-func pruneIrrelevantConfiguration(c *secretbootstrap.Config, secretNames sets.String) {
+func pruneIrrelevantConfiguration(c *secretbootstrap.Config, secretNames sets.Set[string]) {
 	var secretConfigs []secretbootstrap.SecretConfig
 	for _, secretConfig := range c.Secrets {
 		for _, secretContext := range secretConfig.To {
@@ -397,10 +396,14 @@ func constructSecrets(config secretbootstrap.Config, client secrets.ReadOnlyClie
 	}
 
 	var err error
+	statBefore := generateSecretStats(secretsByClusterAndName)
+	logrus.WithField("count", statBefore.count).WithField("median", statBefore.median).Info("Secret stats before fetching user secrets")
 	secretsByClusterAndName, err = fetchUserSecrets(secretsByClusterAndName, client, config.UserSecretsTargetClusters)
 	if err != nil {
 		errs = append(errs, err)
 	}
+	statAfter := generateSecretStats(secretsByClusterAndName)
+	logrus.WithField("count", statAfter.count).WithField("median", statAfter.median).Info("Secret stats after fetching user secrets")
 
 	result := map[string][]*coreapi.Secret{}
 	for cluster, secretMap := range secretsByClusterAndName {
@@ -477,7 +480,7 @@ type Getter interface {
 	coreclientset.NamespacesGetter
 }
 
-func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.Secret, force bool, confirm bool) error {
+func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.Secret, force bool, confirm bool, osdGlobalPullSecretGroup sets.Set[string]) error {
 	var errs []error
 
 	var dryRunOptions []string
@@ -489,25 +492,50 @@ func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.S
 	for cluster, secrets := range secretsMap {
 		logger := logrus.WithField("cluster", cluster)
 		logger.Debug("Syncing secrets for cluster")
+		existingNamespaces := sets.New[string]()
 		for _, secret := range secrets {
 			logger := logger.WithFields(logrus.Fields{"namespace": secret.Namespace, "name": secret.Name, "type": secret.Type})
 			logger.Debug("handling secret")
 
-			nsClient := getters[cluster].Namespaces()
-			if _, err := nsClient.Get(context.TODO(), secret.Namespace, metav1.GetOptions{}); err != nil {
-				if !kerrors.IsNotFound(err) {
-					errs = append(errs, fmt.Errorf("failed to check if namespace %s exists: %w", secret.Namespace, err))
-					continue
+			if !existingNamespaces.Has(secret.Namespace) {
+				nsClient := getters[cluster].Namespaces()
+				if _, err := nsClient.Get(context.TODO(), secret.Namespace, metav1.GetOptions{}); err != nil {
+					if !kerrors.IsNotFound(err) {
+						errs = append(errs, fmt.Errorf("failed to check if namespace %s exists on cluster %s: %w", secret.Namespace, cluster, err))
+						continue
+					}
+					if _, err := nsClient.Create(context.TODO(), &coreapi.Namespace{ObjectMeta: metav1.ObjectMeta{
+						Name:   secret.Namespace,
+						Labels: map[string]string{api.DPTPRequesterLabel: "ci-secret-bootstrap"},
+					}}, metav1.CreateOptions{DryRun: dryRunOptions}); err != nil && !kerrors.IsAlreadyExists(err) {
+						errs = append(errs, fmt.Errorf("failed to create namespace %s: %w", secret.Namespace, err))
+						continue
+					}
 				}
-				if _, err := nsClient.Create(context.TODO(), &coreapi.Namespace{ObjectMeta: metav1.ObjectMeta{Name: secret.Namespace}}, metav1.CreateOptions{DryRun: dryRunOptions}); err != nil && !kerrors.IsAlreadyExists(err) {
-					errs = append(errs, fmt.Errorf("failed to create namespace %s: %w", secret.Namespace, err))
-					continue
-				}
+				existingNamespaces.Insert(secret.Namespace)
 			}
 
 			secretClient := getters[cluster].Secrets(secret.Namespace)
 
 			existingSecret, err := secretClient.Get(context.TODO(), secret.Name, metav1.GetOptions{})
+
+			if secret.Namespace == "openshift-config" && secret.Name == "pull-secret" && osdGlobalPullSecretGroup.Has(cluster) {
+				logger.Debug("handling the global pull secret on an OSD cluster")
+				if mutated, err := mutateGlobalPullSecret(existingSecret, secret); err != nil {
+					errs = append(errs, fmt.Errorf("failed to mutate secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
+				} else {
+					if mutated {
+						if _, err := secretClient.Update(context.TODO(), existingSecret, metav1.UpdateOptions{DryRun: dryRunOptions}); err != nil {
+							errs = append(errs, fmt.Errorf("error updating global pull secret %s:%s/%s: %w", cluster, existingSecret.Namespace, existingSecret.Name, err))
+						}
+						logger.Debug("global pull secret updated")
+					} else {
+						logger.Debug("global pull secret skipped")
+					}
+				}
+				continue
+			}
+
 			if err != nil && !kerrors.IsNotFound(err) {
 				errs = append(errs, fmt.Errorf("error reading secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
 				continue
@@ -537,16 +565,21 @@ func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.S
 				}
 
 				if !shouldCreate {
-					if !force && !equality.Semantic.DeepEqual(secret.Data, existingSecret.Data) {
+					differentData := !equality.Semantic.DeepEqual(secret.Data, existingSecret.Data)
+					if !force && differentData {
 						logger.Errorf("actual secret data differs the expected")
 						errs = append(errs, fmt.Errorf("secret %s:%s/%s needs updating in place, use --force to do so", cluster, secret.Namespace, secret.Name))
 						continue
 					}
-					if _, err := secretClient.Update(context.TODO(), secret, metav1.UpdateOptions{DryRun: dryRunOptions}); err != nil {
-						errs = append(errs, fmt.Errorf("error updating secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
-						continue
+					if existingSecret.Labels == nil || existingSecret.Labels[api.DPTPRequesterLabel] != "ci-secret-bootstrap" || differentData {
+						if _, err := secretClient.Update(context.TODO(), secret, metav1.UpdateOptions{DryRun: dryRunOptions}); err != nil {
+							errs = append(errs, fmt.Errorf("error updating secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
+							continue
+						}
+						logger.Debug("secret updated")
+					} else {
+						logger.Debug("secret skipped")
 					}
-					logger.Debug("secret updated")
 				}
 			}
 
@@ -562,6 +595,53 @@ func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.S
 	return utilerrors.NewAggregate(errs)
 }
 
+// mutateGlobalPullSecret mutates the original secret based on the refreshed value stored in another secret.
+func mutateGlobalPullSecret(original, secret *coreapi.Secret) (bool, error) {
+	dockerConfig, err := dockerConfigJSON(secret)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse the constructed secret: %w", err)
+	}
+	registryDomain := api.DomainForService(api.ServiceRegistry)
+	if dockerConfig.Auths == nil || dockerConfig.Auths[api.DomainForService(api.ServiceRegistry)].Auth == "" {
+		return false, fmt.Errorf("failed to get token for %s", registryDomain)
+	}
+	token := dockerConfig.Auths[api.DomainForService(api.ServiceRegistry)].Auth
+	dockerConfig, err = dockerConfigJSON(original)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse the original secret: %w", err)
+	}
+	if dockerConfig.Auths[api.DomainForService(api.ServiceRegistry)].Auth == token {
+		return false, nil
+	}
+	dockerConfig.Auths[api.DomainForService(api.ServiceRegistry)] = secretbootstrap.DockerAuth{
+		Auth: token,
+	}
+	data, err := json.Marshal(dockerConfig)
+	if err != nil {
+		return false, fmt.Errorf("failed to marshal the docker config: %w", err)
+	}
+	original.Data[coreapi.DockerConfigJsonKey] = data
+	return true, nil
+}
+
+func dockerConfigJSON(secret *coreapi.Secret) (*secretbootstrap.DockerConfigJSON, error) {
+	if secret == nil {
+		return nil, fmt.Errorf("failed to get content from nil secret")
+	}
+	if secret.Data == nil {
+		return nil, fmt.Errorf("failed to get content from an secret with no data")
+	}
+	bytes, ok := secret.Data[coreapi.DockerConfigJsonKey]
+	if !ok {
+		return nil, fmt.Errorf("there is no key in the secret: %s", coreapi.DockerConfigJsonKey)
+	}
+	var ret secretbootstrap.DockerConfigJSON
+	if err := json.Unmarshal(bytes, &ret); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal the docker config: %w", err)
+	}
+	return &ret, nil
+}
+
 func writeSecrets(secretsMap map[string][]*coreapi.Secret) error {
 	var tmpFiles []*os.File
 	defer func() {
@@ -571,7 +651,7 @@ func writeSecrets(secretsMap map[string][]*coreapi.Secret) error {
 	}()
 
 	for cluster, secrets := range secretsMap {
-		tmpFile, err := ioutil.TempFile("", fmt.Sprintf("%s_*.yaml", cluster))
+		tmpFile, err := os.CreateTemp("", fmt.Sprintf("%s_*.yaml", cluster))
 		if err != nil {
 			return fmt.Errorf("failed to create tempfile: %w", err)
 		}
@@ -599,19 +679,19 @@ func writeSecretsToFile(secrets []*coreapi.Secret, w io.Writer) error {
 }
 
 type comparable struct {
-	fields            sets.String
-	superfluousFields sets.String
+	fields            sets.Set[string]
+	superfluousFields sets.Set[string]
 }
 
 func (c *comparable) string() string {
 	var ret string
 
 	if c.fields.Len() > 0 {
-		ret += fmt.Sprintf("Fields: '%s'", strings.Join(c.fields.List(), ", "))
+		ret += fmt.Sprintf("Fields: '%s'", strings.Join(sets.List(c.fields), ", "))
 	}
 
 	if len(c.superfluousFields) > 0 {
-		ret += fmt.Sprintf(" SuperfluousFields: %v", c.superfluousFields.List())
+		ret += fmt.Sprintf(" SuperfluousFields: %v", sets.List(c.superfluousFields))
 	}
 	return ret
 }
@@ -625,7 +705,7 @@ func constructConfigItemsByName(config secretbootstrap.Config) map[string]*compa
 				item, ok := cfgComparableItemsByName[itemContext.Item]
 				if !ok {
 					item = &comparable{
-						fields: sets.NewString(),
+						fields: sets.New[string](),
 					}
 				}
 				item.fields = insertIfNotEmpty(item.fields, itemContext.Field)
@@ -637,7 +717,7 @@ func constructConfigItemsByName(config secretbootstrap.Config) map[string]*compa
 					item, ok := cfgComparableItemsByName[context.Item]
 					if !ok {
 						item = &comparable{
-							fields: sets.NewString(),
+							fields: sets.New[string](),
 						}
 					}
 
@@ -652,7 +732,7 @@ func constructConfigItemsByName(config secretbootstrap.Config) map[string]*compa
 	return cfgComparableItemsByName
 }
 
-func insertIfNotEmpty(s sets.String, items ...string) sets.String {
+func insertIfNotEmpty(s sets.Set[string], items ...string) sets.Set[string] {
 	for _, item := range items {
 		if item != "" {
 			s.Insert(item)
@@ -661,7 +741,7 @@ func insertIfNotEmpty(s sets.String, items ...string) sets.String {
 	return s
 }
 
-func getUnusedItems(config secretbootstrap.Config, client secrets.ReadOnlyClient, allowUnused sets.String, allowUnusedAfter time.Time) error {
+func getUnusedItems(config secretbootstrap.Config, client secrets.ReadOnlyClient, allowUnused sets.Set[string], allowUnusedAfter time.Time) error {
 	allSecretStoreItems, err := client.GetInUseInformationForAllItems(config.VaultDPTPPrefix)
 	if err != nil {
 		return fmt.Errorf("failed to get in-use information from secret store: %w", err)
@@ -693,7 +773,7 @@ func getUnusedItems(config secretbootstrap.Config, client secrets.ReadOnlyClient
 		diffFields := item.UnusedFields(cfgComparableItemsByName[itemName].fields)
 		if diffFields.Len() > 0 {
 			if allowUnused.Has(itemName) {
-				l.WithField("fields", strings.Join(diffFields.List(), ",")).Info("Unused fields from item are allowed by arguments")
+				l.WithField("fields", strings.Join(sets.List(diffFields), ",")).Info("Unused fields from item are allowed by arguments")
 				continue
 			}
 
@@ -865,7 +945,7 @@ func reconcileSecrets(o options, client secrets.ReadOnlyClient) (errs []error) {
 			errs = append(errs, fmt.Errorf("failed to write secrets on dry run: %w", err))
 		}
 	} else {
-		if err := updateSecrets(o.secretsGetters, secretsMap, o.force, o.confirm); err != nil {
+		if err := updateSecrets(o.secretsGetters, secretsMap, o.force, o.confirm, sets.New[string](o.config.OSDGlobalPullSecretGroup()...)); err != nil {
 			errs = append(errs, fmt.Errorf("failed to update secrets: %w", err))
 		}
 		logrus.Info("Updated secrets.")

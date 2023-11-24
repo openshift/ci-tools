@@ -3,7 +3,7 @@ package official
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"regexp"
 	"sort"
@@ -16,7 +16,17 @@ import (
 	"github.com/openshift/ci-tools/pkg/release"
 )
 
-const cincinnatiAddress = "https://api.openshift.com/api/upgrades_info/v1/graph"
+const (
+	cincinnatiAddressProd        = "https://api.openshift.com/api/upgrades_info/graph"
+	cincinnatiAddressStage       = "https://api.stage.openshift.com/api/upgrades_info/graph"
+	cincinnatiAddressIntegration = "https://api.integration.openshift.com/api/upgrades_info/graph"
+)
+
+var cincinnatis = map[string]string{
+	"prod":        cincinnatiAddressProd,
+	"stage":       cincinnatiAddressStage,
+	"integration": cincinnatiAddressIntegration,
+}
 
 // majorMinorRegExp allows for parsing major and minor versions from SemVer values.
 var majorMinorRegExp = regexp.MustCompile(`^(?P<majorMinor>(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*))\.?.*`)
@@ -30,7 +40,15 @@ func defaultFields(release api.Release) api.Release {
 
 // ResolvePullSpecAndVersion determines the pull spec and version for the official release
 func ResolvePullSpecAndVersion(client release.HTTPClient, release api.Release) (string, string, error) {
-	return resolvePullSpec(client, cincinnatiAddress, defaultFields(release))
+	for _, cincinnati := range []string{"integration", "stage"} {
+		endpoint := cincinnatis[cincinnati]
+		pullSpec, version, err := resolvePullSpec(client, endpoint, defaultFields(release))
+		if err == nil {
+			return pullSpec, version, nil
+		}
+		logrus.WithError(err).WithField("endpoint", endpoint).Debugf("Failed to resolve pull spec from %s OSUS, trying next instance", cincinnati)
+	}
+	return resolvePullSpec(client, cincinnatiAddressProd, defaultFields(release))
 }
 
 func resolvePullSpec(client release.HTTPClient, endpoint string, release api.Release) (string, string, error) {
@@ -51,7 +69,7 @@ func resolvePullSpec(client release.HTTPClient, endpoint string, release api.Rel
 	query.Add("channel", channel)
 	query.Add("arch", string(release.Architecture))
 	req.URL.RawQuery = query.Encode()
-	logrus.Debugf("Requesting %s from %s", targetName, req.URL.String())
+	logrus.Infof("Requesting %s from %s", targetName, req.URL.String())
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to request %s: %w", targetName, err)
@@ -60,7 +78,7 @@ func resolvePullSpec(client release.HTTPClient, endpoint string, release api.Rel
 		return "", "", fmt.Errorf("failed to request %s: got a nil response", targetName)
 	}
 	defer resp.Body.Close()
-	data, readErr := ioutil.ReadAll(resp.Body)
+	data, readErr := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		return "", "", fmt.Errorf("failed to request %s: server responded with %d: %s", targetName, resp.StatusCode, data)
 	}
@@ -102,10 +120,10 @@ func latestPullSpecAndVersion(options []Release) (string, string) {
 // processVersionChannel takes the configured version and channel and
 // returns:
 //
-// * Whether the version is explicit (e.g. 4.7.0) or just a
-//   major.minor (e.g. 4.7).
-// * The appropriate channel for a Cincinnati request, e.g. stable-4.7.
-// * Any errors that turn up while processing.
+//   - Whether the version is explicit (e.g. 4.7.0) or just a
+//     major.minor (e.g. 4.7).
+//   - The appropriate channel for a Cincinnati request, e.g. stable-4.7.
+//   - Any errors that turn up while processing.
 func processVersionChannel(version string, channel api.ReleaseChannel) (explicitVersion bool, cincinnatiChannel string, err error) {
 	explicitVersion, majorMinor, err := extractMajorMinor(version)
 	if err != nil {

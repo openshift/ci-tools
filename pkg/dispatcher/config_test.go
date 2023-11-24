@@ -115,7 +115,7 @@ var (
 					FilenamesRaw: []string{
 						"some-build-farm-presubmits.yaml",
 					},
-					Filenames: sets.NewString("some-build-farm-presubmits.yaml"),
+					Filenames: sets.New[string]("some-build-farm-presubmits.yaml"),
 				},
 			},
 			api.CloudGCP: {
@@ -168,7 +168,7 @@ var (
 					FilenamesRaw: []string{
 						"some-build-farm-presubmits.yaml",
 					},
-					Filenames: sets.NewString("some-build-farm-presubmits.yaml"),
+					Filenames: sets.New[string]("some-build-farm-presubmits.yaml"),
 				},
 			},
 			api.CloudGCP: {
@@ -430,6 +430,14 @@ func TestDetermineClusterForJob(t *testing.T) {
 			expected: "vsphere",
 		},
 		{
+			name:   "Vsphere job on vsphere02",
+			config: &configWithBuildFarmWithJobs,
+			jobBase: config.JobBase{Agent: "kubernetes", Name: "yalayala-vsphere", Labels: map[string]string{
+				api.CloudClusterProfileLabel: string(api.ClusterProfileVSphere8Vpn),
+			}},
+			expected: "vsphere02",
+		},
+		{
 			name:   "applyconfig job for vsphere",
 			config: &configWithBuildFarmWithJobs,
 			jobBase: config.JobBase{Agent: "kubernetes", Name: "pull-ci-openshift-release-master-vsphere-dry", Spec: &v1.PodSpec{
@@ -660,6 +668,50 @@ func TestValidate(t *testing.T) {
 			actual := tc.config.Validate()
 			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
+			}
+		})
+	}
+}
+
+func TestConfigDetermineCloudMapping(t *testing.T) {
+	configWithMapping := configWithBuildFarmWithJobsAndDetermineE2EByJob
+	configWithMapping.CloudMapping = map[api.Cloud]api.Cloud{
+		"openstack-vexxhost": "aws",
+	}
+	tests := []struct {
+		name    string
+		config  Config
+		jobBase prowconfig.JobBase
+		want    string
+	}{
+		{
+			name:   "Override cloud mapping when DetermineE2EByJob true and mapping provided",
+			config: configWithMapping,
+			jobBase: prowconfig.JobBase{
+				Name: "some-job",
+				Labels: map[string]string{
+					"ci-operator.openshift.io/cloud": "openstack-vexxhost",
+				},
+			},
+			want: "aws",
+		},
+		{
+			name:   "Override cloud mapping when DetermineE2EByJob true and mapping not provided",
+			config: configWithBuildFarmWithJobsAndDetermineE2EByJob,
+			jobBase: prowconfig.JobBase{
+				Name: "some-job",
+				Labels: map[string]string{
+					"ci-operator.openshift.io/cloud": "openstack-vexxhost",
+				},
+			},
+			want: "openstack-vexxhost",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &tc.config
+			if got := cfg.DetermineCloudMapping(tc.jobBase); got != tc.want {
+				t.Errorf("Config.DetermineCloudMapping() = %v, want %v", got, tc.want)
 			}
 		})
 	}

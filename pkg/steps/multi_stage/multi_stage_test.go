@@ -80,7 +80,7 @@ func TestRequires(t *testing.T) {
 				As:                                 "some-e2e",
 				ClusterClaim:                       tc.clusterClaim,
 				MultiStageTestConfigurationLiteral: &tc.steps,
-			}, &tc.config, api.NewDeferredParameters(nil), nil, nil, nil)
+			}, &tc.config, api.NewDeferredParameters(nil), nil, nil, nil, "node-name", "")
 			ret := step.Requires()
 			if len(ret) == len(tc.req) {
 				matches := true
@@ -102,7 +102,7 @@ func TestRequires(t *testing.T) {
 func TestSecretsForCensoring(t *testing.T) {
 	// this ends up returning based on alphanumeric sort of names, so name things accordingly
 	client := loggingclient.New(
-		fakectrlruntimeclient.NewFakeClient(
+		fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 			&coreapi.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "target-namespace",
@@ -135,7 +135,7 @@ func TestSecretsForCensoring(t *testing.T) {
 					Annotations: map[string]string{"kubernetes.io/service-account.name": "foo"},
 				},
 			},
-		),
+		).Build(),
 	)
 
 	volumes, mounts, err := secretsForCensoring(client, "target-namespace", context.Background())
@@ -236,7 +236,7 @@ func TestEnvironment(t *testing.T) {
 				params: tc.params,
 				leases: tc.leases,
 			}
-			got, err := s.environment(context.TODO())
+			got, err := s.environment()
 			if (err != nil) != tc.expectErr {
 				t.Errorf("environment() error = %v, wantErr %v", err, tc.expectErr)
 				return
@@ -249,6 +249,37 @@ func TestEnvironment(t *testing.T) {
 			})
 			if diff := cmp.Diff(tc.expected, got); diff != "" {
 				t.Errorf("%s: result differs from expected:\n %s", tc.name, diff)
+			}
+		})
+	}
+}
+
+func TestProfileSecretName(t *testing.T) {
+	t.Parallel()
+	testCases := []struct {
+		name             string
+		stepName         string
+		additionalSuffix string
+		expected         string
+	}{
+		{
+			name:     "no additional suffix",
+			stepName: "step",
+			expected: "step-cluster-profile",
+		},
+		{
+			name:             "additional suffix",
+			stepName:         "step-0",
+			additionalSuffix: "0",
+			expected:         "step-cluster-profile",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			step := multiStageTestStep{name: tc.stepName, additionalSuffix: tc.additionalSuffix}
+			result := step.profileSecretName()
+			if diff := cmp.Diff(tc.expected, result); diff != "" {
+				t.Fatalf("result does not match expected, diff: %s", diff)
 			}
 		})
 	}

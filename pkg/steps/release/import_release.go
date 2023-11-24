@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blang/semver"
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
@@ -50,10 +51,10 @@ import (
 // branches of those releases.
 type importReleaseStep struct {
 	// name is the name of the release we're importing, like 'latest'
-	name   string
-	target string
-	// pullSpec is the fully-resolved pull spec of the release payload image we are importing
-	pullSpec string
+	name     string
+	nodeName string
+	target   string
+	source   ReleaseSource
 	// append determines if we wait for other processes to create images first
 	append     bool
 	resources  api.ResourceConfiguration
@@ -65,7 +66,8 @@ type importReleaseStep struct {
 }
 
 func (s *importReleaseStep) Inputs() (api.InputDefinition, error) {
-	return api.InputDefinition{s.pullSpec}, nil
+	input, err := s.source.Input(context.Background())
+	return api.InputDefinition{input}, err
 }
 
 func (*importReleaseStep) Validate() error { return nil }
@@ -101,8 +103,10 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 	}
 
 	// tag the release image in and let it import
-	var pullSpec string
-
+	pullSpec, err := s.source.PullSpec(ctx)
+	if err != nil {
+		return err
+	}
 	// retry importing the image a few times because we might race against establishing credentials/roles
 	// and be unable to import images on the same cluster
 	streamImport := &imagev1.ImageStreamImport{
@@ -119,7 +123,10 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 					},
 					From: coreapi.ObjectReference{
 						Kind: "DockerImage",
-						Name: s.pullSpec,
+						Name: pullSpec,
+					},
+					ImportPolicy: imagev1.TagImportPolicy{
+						ImportMode: imagev1.ImportModePreserveOriginal,
 					},
 					ReferencePolicy: imagev1.TagReferencePolicy{
 						Type: imagev1.LocalTagReferencePolicy,
@@ -170,11 +177,12 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 	commands := fmt.Sprintf(`
 set -euo pipefail
 export HOME=/tmp
-mkdir -p $HOME/.docker
+export XDG_RUNTIME_DIR=/tmp/run
+mkdir -p $HOME/.docker "${XDG_RUNTIME_DIR}"
 if [[ -d /pull ]]; then
 	cp /pull/.dockerconfigjson $HOME/.docker/config.json
 fi
-oc registry login
+oc registry login --to $HOME/.docker/config.json
 oc adm release extract --from=%q --file=image-references > ${ARTIFACT_DIR}/%s
 # while release creation may happen more than once in the lifetime of a test
 # namespace, only one release creation Pod will ever run at once. Therefore,
@@ -190,10 +198,11 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 
 	// run adm release extract and grab the raw image-references from the payload
 	podConfig := steps.PodStepConfiguration{
-		SkipLogs:           true,
+		WaitFlags:          util.SkipLogs,
 		As:                 target,
 		From:               *cliImage,
 		Labels:             map[string]string{Label: s.name},
+		NodeName:           s.nodeName,
 		ServiceAccountName: "ci-operator",
 		Secrets:            secrets,
 		Commands:           commands,
@@ -233,6 +242,14 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 		return fmt.Errorf("unexpected image stream contents: %w", err)
 	}
 
+	var prefix string
+	version, err := semver.Parse(releaseIS.ObjectMeta.Name)
+	if err != nil {
+		logrus.WithError(err).Errorf("Failed to parse release %s ImageStream name %s as a semantic version.", pullSpec, releaseIS.ObjectMeta.Name)
+	} else {
+		prefix = fmt.Sprintf("%d.%d.%d-0", version.Major, version.Minor, version.Patch)
+	}
+
 	// update the stable image stream to have all of the tags from the payload
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		stable := &imagev1.ImageStream{}
@@ -240,11 +257,21 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 			return fmt.Errorf("could not resolve imagestream %s: %w", streamName, err)
 		}
 
-		existing := sets.NewString()
+		if prefix != "" {
+			if stable.ObjectMeta.Annotations == nil {
+				stable.ObjectMeta.Annotations = make(map[string]string, 1)
+			}
+			if _, ok := stable.ObjectMeta.Annotations[releaseConfigAnnotation]; !ok {
+				stable.ObjectMeta.Annotations[releaseConfigAnnotation] = fmt.Sprintf(`{"name": "%s"}`, prefix)
+			}
+		}
+
+		existing := sets.New[string]()
 		tags := make([]imagev1.TagReference, 0, len(releaseIS.Spec.Tags)+len(stable.Spec.Tags))
 		for _, tag := range releaseIS.Spec.Tags {
 			existing.Insert(tag.Name)
 			tag.ReferencePolicy.Type = imagev1.LocalTagReferencePolicy
+			tag.ImportPolicy.ImportMode = imagev1.ImportModePreserveOriginal
 			tags = append(tags, tag)
 		}
 		for _, tag := range stable.Spec.Tags {
@@ -253,6 +280,7 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 			}
 			existing.Insert(tag.Name)
 			tag.ReferencePolicy.Type = imagev1.LocalTagReferencePolicy
+			tag.ImportPolicy.ImportMode = imagev1.ImportModePreserveOriginal
 			tags = append(tags, tag)
 		}
 		stable.Spec.Tags = tags
@@ -388,8 +416,8 @@ func (s *importReleaseStep) Objects() []ctrlruntimeclient.Object {
 
 // ImportReleaseStep imports an existing update payload image
 func ImportReleaseStep(
-	name, target string,
-	pullSpec string,
+	name, nodeName, target string,
+	source ReleaseSource,
 	append bool,
 	resources api.ResourceConfiguration,
 	client kubernetes.PodClient,
@@ -398,8 +426,9 @@ func ImportReleaseStep(
 	overrideCLIReleaseExtractImage *coreapi.ObjectReference) api.Step {
 	return &importReleaseStep{
 		name:                           name,
+		nodeName:                       nodeName,
 		target:                         target,
-		pullSpec:                       pullSpec,
+		source:                         source,
 		append:                         append,
 		resources:                      resources,
 		client:                         client,

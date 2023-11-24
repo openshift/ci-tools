@@ -5,7 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"time"
@@ -32,10 +32,17 @@ var (
 		},
 		[]string{"job_name", "type", "state", "reason", "cluster"},
 	)
+	podScalerHighResourceCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "pod_scaler_admission_high_determined_resource",
+			Help: "number of times pod-scaler determined higher resource amount than what was configured, sorted by label/type",
+		},
+		[]string{"workload_name", "workload_type", "configured_amount", "determined_amount", "resource_type"},
+	)
 )
 
 func init() {
-	prometheus.MustRegister(errorRate)
+	prometheus.MustRegister(errorRate, podScalerHighResourceCounter)
 }
 
 type options struct {
@@ -88,6 +95,25 @@ func validateRequest(request *results.Request) error {
 	return nil
 }
 
+func validatePodScalerRequest(request *results.PodScalerRequest) error {
+	if request.WorkloadName == "" {
+		return fmt.Errorf("workload_name field in request is empty")
+	}
+	if request.WorkloadType == "" {
+		return fmt.Errorf("workload_type field in request is empty")
+	}
+	if request.ConfiguredAmount == "" {
+		return fmt.Errorf("configured_amount field in request is empty")
+	}
+	if request.DeterminedAmount == "" {
+		return fmt.Errorf("determined_amount field in request is empty")
+	}
+	if request.ResourceType == "" {
+		return fmt.Errorf("resource_type field in request is empty")
+	}
+	return nil
+}
+
 func handleError(w http.ResponseWriter, err error) {
 	w.WriteHeader(http.StatusBadRequest)
 	fmt.Fprint(w, err)
@@ -102,6 +128,17 @@ func withErrorRate(request *results.Request) {
 		"cluster":  request.Cluster,
 	}
 	errorRate.With(labels).Inc()
+}
+
+func recordHighResource(request *results.PodScalerRequest) {
+	labels := prometheus.Labels{
+		"workload_name":     request.WorkloadName,
+		"workload_type":     request.WorkloadType,
+		"configured_amount": request.ConfiguredAmount,
+		"determined_amount": request.DeterminedAmount,
+		"resource_type":     request.ResourceType,
+	}
+	podScalerHighResourceCounter.With(labels).Inc()
 }
 
 type validator interface {
@@ -123,7 +160,7 @@ func handleCIOperatorResult() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
-		bytes, err := ioutil.ReadAll(r.Body)
+		bytes, err := io.ReadAll(r.Body)
 		if err != nil {
 			handleError(w, fmt.Errorf("unable to ready request body: %w", err))
 			return
@@ -148,6 +185,32 @@ func handleCIOperatorResult() http.HandlerFunc {
 	}
 }
 
+func handlePodScalerResult() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		bytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			handleError(w, fmt.Errorf("unable to read pod-scaler request body: %w", err))
+			return
+		}
+
+		request := &results.PodScalerRequest{}
+		if err = json.Unmarshal(bytes, request); err != nil {
+			handleError(w, fmt.Errorf("unable to decode pod-scaler request body: %w", err))
+			return
+		}
+
+		if err := validatePodScalerRequest(request); err != nil {
+			handleError(w, err)
+			return
+		}
+
+		recordHighResource(request)
+		w.WriteHeader(http.StatusOK)
+		log.WithFields(log.Fields{"request": request, "duration": time.Since(start).String()}).Info("Pod-scaler request processed")
+	}
+}
+
 func main() {
 	o, err := gatherOptions()
 	if err != nil {
@@ -167,6 +230,8 @@ func main() {
 	validator := &multi{delegates: []validator{&passwdFile{file: o.passwdFile}}}
 
 	http.Handle("/result", loginHandler(validator, handleCIOperatorResult()))
+	http.Handle("/pod-scaler", loginHandler(validator, handlePodScalerResult()))
+
 	metrics.ExposeMetrics("result-aggregator", prowConfig.PushGateway{}, flagutil.DefaultMetricsPort)
 
 	interrupts.ListenAndServe(&http.Server{Addr: o.address}, o.gracePeriod)

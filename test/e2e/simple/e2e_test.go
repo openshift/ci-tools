@@ -6,7 +6,7 @@ package simple
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -111,7 +111,7 @@ func TestCompressed(t *testing.T) {
 		},
 	}
 
-	configFile, err := ioutil.ReadFile("compressedConfig.txt")
+	configFile, err := os.ReadFile("compressedConfig.txt")
 	if err != nil {
 		t.Fatalf("Failed to read compressed config file: %v", err)
 	}
@@ -139,7 +139,7 @@ func TestTemplate(t *testing.T) {
 		if err := os.MkdirAll(clusterProfileDir, 0755); err != nil {
 			t.Fatalf("failed to create dummy secret dir: %v", err)
 		}
-		if err := ioutil.WriteFile(filepath.Join(clusterProfileDir, "data"), []byte("nothing"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(clusterProfileDir, "data"), []byte("nothing"), 0644); err != nil {
 			t.Fatalf("failed to create dummy secret data: %v", err)
 		}
 		cmd.AddArgs(
@@ -159,11 +159,11 @@ func TestTemplate(t *testing.T) {
 		}
 		framework.CompareWithFixtureDir(t, "artifacts/template", filepath.Join(cmd.ArtifactDir(), "template"))
 		outputjUnit := filepath.Join(cmd.ArtifactDir(), "junit_operator.xml")
-		raw, err := ioutil.ReadFile(outputjUnit)
+		raw, err := os.ReadFile(outputjUnit)
 		if err != nil {
 			t.Fatalf("could not read jUnit artifact: %v", err)
 		}
-		if err := ioutil.WriteFile(outputjUnit, timeRegex.ReplaceAll(raw, []byte(`time="whatever"`)), 0755); err != nil {
+		if err := os.WriteFile(outputjUnit, timeRegex.ReplaceAll(raw, []byte(`time="whatever"`)), 0755); err != nil {
 			t.Fatalf("could not munge jUnit artifact: %v", err)
 		}
 		framework.CompareWithFixture(t, "artifacts/junit_operator.xml", filepath.Join(cmd.ArtifactDir(), "junit_operator.xml"))
@@ -266,7 +266,7 @@ func do(url string, t *framework.T) []byte {
 			t.Errorf("could not close response body: %v", err)
 		}
 	}()
-	raw, err := ioutil.ReadAll(resp.Body)
+	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("could not read release from Cincinnati: %v", err)
 	}

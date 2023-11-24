@@ -1,27 +1,25 @@
 package main
 
 import (
-	"context"
 	"flag"
+	"fmt"
 	"os"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/test-infra/pkg/flagutil"
+	prowConfig "k8s.io/test-infra/prow/config"
 	prowflagutil "k8s.io/test-infra/prow/flagutil"
 	configflagutil "k8s.io/test-infra/prow/flagutil/config"
 	"k8s.io/test-infra/prow/git/v2"
-	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/interrupts"
-)
+	"k8s.io/test-infra/prow/metrics"
 
-type githubClient interface {
-	GetCombinedStatus(org, repo, ref string) (*github.CombinedStatus, error)
-	GetRef(string, string, string) (string, error)
-	QueryWithGitHubAppsSupport(ctx context.Context, q interface{}, vars map[string]interface{}, org string) error
-	CreateComment(owner, repo string, number int, comment string) error
-}
+	"github.com/openshift/ci-tools/pkg/retester"
+)
 
 type options struct {
 	config configflagutil.ConfigOptions
@@ -30,12 +28,16 @@ type options struct {
 	runOnce bool
 	dryRun  bool
 
+	intervalRaw       string
+	cacheRecordAgeRaw string
+
 	interval time.Duration
 
 	cacheFile      string
+	cacheFileOnS3  bool
 	cacheRecordAge time.Duration
 
-	enableOnRepos prowflagutil.Strings
+	configFile string
 }
 
 func (o *options) Validate() error {
@@ -44,6 +46,25 @@ func (o *options) Validate() error {
 			return err
 		}
 	}
+	if o.configFile == "" {
+		return fmt.Errorf("--config-file is required")
+	}
+	if o.cacheFileOnS3 && o.cacheFile == "" {
+		return fmt.Errorf("--cache-file is required if --cache-file-on-s3 is set to true")
+	}
+	return nil
+}
+
+func (o *options) complete() error {
+	var err error
+	o.interval, err = time.ParseDuration(o.intervalRaw)
+	if err != nil {
+		return fmt.Errorf("invalid --interval: %w", err)
+	}
+	o.cacheRecordAge, err = time.ParseDuration(o.cacheRecordAgeRaw)
+	if err != nil {
+		return fmt.Errorf("invalid --cache-record-age: %w", err)
+	}
 	return nil
 }
 
@@ -51,15 +72,13 @@ func gatherOptions() options {
 	o := options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 
-	var intervalRaw string
-	var cacheRecordAgeRaw string
-
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Dry run for testing. Uses API tokens but does not mutate.")
 	fs.BoolVar(&o.runOnce, "run-once", false, "If true, run only once then quit.")
-	fs.StringVar(&intervalRaw, "interval", "1h", "Parseable duration string that specifies the sync period")
+	fs.BoolVar(&o.cacheFileOnS3, "cache-file-on-s3", false, "If true, use aws s3 bucket to store the cache file.")
+	fs.StringVar(&o.intervalRaw, "interval", "1h", "Parseable duration string that specifies the sync period")
 	fs.StringVar(&o.cacheFile, "cache-file", "", "File to persist cache. No persistence of cache if not set")
-	fs.StringVar(&cacheRecordAgeRaw, "cache-record-age", "168h", "Parseable duration string that specifies how long a cache record lives in cache after the last time it was considered")
-	fs.Var(&o.enableOnRepos, "enable-on-repo", "Repository is saved in list. It can be used more than once, the result is a list of repositories where we start commenting instead of logging")
+	fs.StringVar(&o.cacheRecordAgeRaw, "cache-record-age", "168h", "Parseable duration string that specifies how long a cache record lives in cache after the last time it was considered")
+	fs.StringVar(&o.configFile, "config-file", "", "Path to the configure file of the retest.")
 
 	for _, group := range []flagutil.OptionGroup{&o.github, &o.config} {
 		group.AddFlags(fs)
@@ -69,23 +88,16 @@ func gatherOptions() options {
 		logrus.WithError(err).Fatal("could not parse input")
 	}
 
-	var err error
-	o.interval, err = time.ParseDuration(intervalRaw)
-	if err != nil {
-		logrus.WithError(err).Fatal("could not parse interval")
-	}
-	o.cacheRecordAge, err = time.ParseDuration(cacheRecordAgeRaw)
-	if err != nil {
-		logrus.WithError(err).Fatal("could not parse cache record age")
-	}
-
 	return o
 }
 
 func main() {
 	o := gatherOptions()
+	if err := o.complete(); err != nil {
+		logrus.WithError(err).Fatal("failed to complete options")
+	}
 	if err := o.Validate(); err != nil {
-		logrus.Fatalf("Invalid options: %v", err)
+		logrus.WithError(err).Fatal("failed to validate options")
 	}
 
 	gc, err := o.github.GitHubClient(o.dryRun)
@@ -103,7 +115,26 @@ func main() {
 		logrus.WithError(err).Fatal("Error starting config agent.")
 	}
 
-	c := newController(gc, configAgent.Config, git.ClientFactoryFrom(gitClient), o.github.AppPrivateKeyPath != "", o.cacheFile, o.cacheRecordAge, o.enableOnRepos)
+	config, err := retester.LoadConfig(o.configFile)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to load config from file")
+	}
+
+	var awsSession *session.Session
+	if o.cacheFileOnS3 {
+		awsSession, err = session.NewSession(&aws.Config{Region: aws.String("us-east-1")})
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to create AWS session.")
+		}
+		_, err = awsSession.Config.Credentials.Get()
+		if err != nil {
+			logrus.WithError(err).Fatal("Error getting AWS credentials.")
+		}
+	}
+
+	c := retester.NewController(gc, configAgent.Config, git.ClientFactoryFrom(gitClient), o.github.AppPrivateKeyPath != "", o.cacheFile, o.cacheRecordAge, config, awsSession)
+
+	metrics.ExposeMetrics("retester", prowConfig.PushGateway{}, prowflagutil.DefaultMetricsPort)
 
 	interrupts.OnInterrupt(func() {
 		if err := gitClient.Clean(); err != nil {
@@ -127,8 +158,8 @@ func main() {
 	interrupts.WaitForGracefulShutdown()
 }
 
-func execute(c *retestController) {
-	if err := c.sync(); err != nil {
-		logrus.WithError(err).Error("Error syncing")
+func execute(c *retester.RetestController) {
+	if err := c.Run(); err != nil {
+		logrus.WithError(err).Error("Error running")
 	}
 }

@@ -22,6 +22,11 @@ git_commit="$( git describe --tags --always --dirty )"
 build_date="$( date -u '+%Y%m%d' )"
 version="v${build_date}-${git_commit}"
 
+if [[ ${2:-} == "remove-dummy" ]]; then
+  rm -f cmd/pod-scaler/frontend/dist/dummy # we keep this file in git to keep the thing compiling without static assets
+  rm -f cmd/repo-init/frontend/dist/dummy
+fi
+
 for dir in $( find ./cmd/ -mindepth 1 -maxdepth 1 -type d -not \( -name '*ipi-deprovison*' \) ); do
     command="$( basename "${dir}" )"
     go install -v $RACE_FLAG -ldflags "-X 'k8s.io/test-infra/prow/version.Name=${command}' -X 'k8s.io/test-infra/prow/version.Version=${version}'" "./cmd/${command}/..."

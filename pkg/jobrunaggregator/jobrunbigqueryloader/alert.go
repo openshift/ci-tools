@@ -3,18 +3,17 @@ package jobrunbigqueryloader
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"math"
 	"os"
 	"sort"
 	"strings"
 
+	"cloud.google.com/go/bigquery"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
@@ -24,7 +23,8 @@ type BigQueryAlertUploadFlags struct {
 	DataCoordinates *jobrunaggregatorlib.BigQueryDataCoordinates
 	Authentication  *jobrunaggregatorlib.GoogleAuthenticationFlags
 
-	DryRun bool
+	DryRun   bool
+	LogLevel string
 }
 
 func NewBigQueryAlertUploadFlags() *BigQueryAlertUploadFlags {
@@ -39,6 +39,7 @@ func (f *BigQueryAlertUploadFlags) BindFlags(fs *pflag.FlagSet) {
 	f.Authentication.BindFlags(fs)
 
 	fs.BoolVar(&f.DryRun, "dry-run", f.DryRun, "Run the command, but don't mutate data.")
+	fs.StringVar(&f.LogLevel, "log-level", "info", "Log level (trace,debug,info,warn,error) (default: info)")
 }
 
 func NewBigQueryAlertUploadFlagsCommand() *cobra.Command {
@@ -116,7 +117,14 @@ func (f *BigQueryAlertUploadFlags) ToOptions(ctx context.Context) (*allJobsLoade
 		jobRunTableInserter = jobrunaggregatorlib.NewDryRunInserter(os.Stdout, jobrunaggregatorapi.AlertJobRunTableName)
 		backendAlertTableInserter = jobrunaggregatorlib.NewDryRunInserter(os.Stdout, jobrunaggregatorapi.AlertsTableName)
 	}
+	pendingUploadLister := newAlertPendingUploadLister(ciDataClient)
+	alertUploader, err := newAlertUploader(backendAlertTableInserter, ciDataClient)
+	if err != nil {
+		return nil, err
+	}
 
+	jobRunUploaderRegistry := JobRunUploaderRegistry{}
+	jobRunUploaderRegistry.Register("alertUploader", alertUploader)
 	return &allJobsLoaderOptions{
 		ciDataClient: ciDataClient,
 		gcsClient:    gcsClient,
@@ -125,35 +133,137 @@ func (f *BigQueryAlertUploadFlags) ToOptions(ctx context.Context) (*allJobsLoade
 		shouldCollectedDataForJobFn: func(job jobrunaggregatorapi.JobRow) bool {
 			return true
 		},
-		getLastJobRunWithDataFn: ciDataClient.GetLastJobRunWithAlertDataForJobName,
-		jobRunUploader:          newAlertUploader(backendAlertTableInserter),
+		jobRunUploaderRegistry:  jobRunUploaderRegistry,
+		pendingUploadJobsLister: pendingUploadLister,
+		logLevel:                f.LogLevel,
 	}, nil
 }
 
 type alertUploader struct {
-	alertInserter jobrunaggregatorlib.BigQueryInserter
+	alertInserter    jobrunaggregatorlib.BigQueryInserter
+	ciDataClient     jobrunaggregatorlib.CIDataClient
+	knownAlertsCache *KnownAlertsCache
 }
 
-func newAlertUploader(alertInserter jobrunaggregatorlib.BigQueryInserter) uploader {
+func newAlertUploader(alertInserter jobrunaggregatorlib.BigQueryInserter,
+	ciDataClient jobrunaggregatorlib.CIDataClient) (uploader, error) {
+
+	// Query the cache of all known alerts once before we start processing results:
+	allKnownAlerts, err := ciDataClient.ListAllKnownAlerts(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	logrus.WithField("knownAlerts", len(allKnownAlerts)).Info("loaded cache of known alerts across all releases")
+	knownAlertsCache := newKnownAlertsCache(allKnownAlerts)
+
 	return &alertUploader{
-		alertInserter: alertInserter,
+		alertInserter:    alertInserter,
+		ciDataClient:     ciDataClient,
+		knownAlertsCache: knownAlertsCache,
+	}, nil
+}
+
+func newAlertPendingUploadLister(ciDataClient jobrunaggregatorlib.CIDataClient) pendingUploadLister {
+	return &testRunPendingUploadLister{
+		tableName:    jobrunaggregatorapi.AlertJobRunTableName,
+		ciDataClient: ciDataClient,
 	}
 }
 
-func (o *alertUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob) error {
-	fmt.Printf("  uploading alert results: %q/%q\n", jobRun.GetJobName(), jobRun.GetJobRunID())
+func (o *alertUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo,
+	jobRelease string, jobRunRow *jobrunaggregatorapi.JobRunRow, logger logrus.FieldLogger) error {
+	logger.Info("uploading alert results")
 	alertData, err := jobRun.GetOpenShiftTestsFilesWithPrefix(ctx, "alert")
 	if err != nil {
 		return err
 	}
+	logger.Debug("got test files with prefix")
 	if len(alertData) > 0 {
-		alertsToPersist := getAlertsFromPerJobRunData(alertData, jobRun.GetJobRunID())
-		if err := o.alertInserter.Put(ctx, alertsToPersist); err != nil {
+		alertRows := getAlertsFromPerJobRunData(alertData, jobRunRow)
+
+		// pass cache of known alerts in.
+		alertRows = populateZeros(jobRunRow, o.knownAlertsCache, alertRows, jobRelease, logger)
+
+		if err := o.alertInserter.Put(ctx, alertRows); err != nil {
 			return err
 		}
+		logger.Debug("insert complete")
+	} else {
+		logger.Debug("no alert data found, skipping insert")
 	}
 
 	return nil
+}
+
+// populateZeros adds in 0 entries for observed alerts we know exist, but did not observe in this run.
+// This is critical for properly calculating the percentiles as we do not have a fixed set of possible
+// alerts.
+// For details on calculating the list of all known alerts, see ListAllKnownAlerts in the data client,
+// but TL;DR, it's every alert/namespace combo we've ever observed for a given release.
+func populateZeros(jobRunRow *jobrunaggregatorapi.JobRunRow,
+	knownAlertsCache *KnownAlertsCache,
+	observedAlertRows []jobrunaggregatorapi.AlertRow,
+	release string, logger logrus.FieldLogger) []jobrunaggregatorapi.AlertRow {
+
+	origCount := len(observedAlertRows)
+	injectedCtr := 0
+	for _, known := range knownAlertsCache.ListAllKnownAlertsForRelease(release) {
+		var found bool
+		for _, observed := range observedAlertRows {
+			if observed.Name == known.AlertName &&
+				observed.Namespace == known.AlertNamespace &&
+				observed.Level == known.AlertLevel {
+				found = true
+				break
+			}
+		}
+		if !found {
+			// If we did not observe an Alert+Namespace+Level combo we know exists in this release,
+			// we need to inject a 0 for the value so our percentile calculations work. (as origin does
+			// not know the list of all possible alerts, only what it observed)
+			logger.WithFields(logrus.Fields{
+				"AlertName":      known.AlertName,
+				"AlertNamespace": known.AlertNamespace,
+				"AlertLevel":     known.AlertLevel,
+			}).Debug("injecting 0s for a known but not observed alert on this run")
+			observedAlertRows = append(observedAlertRows, jobrunaggregatorapi.AlertRow{
+				Name:         known.AlertName,
+				Namespace:    known.AlertNamespace,
+				Level:        known.AlertLevel,
+				AlertSeconds: 0,
+				JobName: bigquery.NullString{
+					StringVal: jobRunRow.JobName,
+					Valid:     true,
+				},
+				JobRunName: jobRunRow.Name,
+				JobRunStartTime: bigquery.NullTimestamp{
+					Timestamp: jobRunRow.StartTime,
+					Valid:     true,
+				},
+				JobRunEndTime: bigquery.NullTimestamp{
+					Timestamp: jobRunRow.EndTime,
+					Valid:     true,
+				},
+				Cluster: bigquery.NullString{
+					StringVal: jobRunRow.Cluster,
+					Valid:     true,
+				},
+				ReleaseTag: bigquery.NullString{
+					StringVal: jobRunRow.ReleaseTag,
+					Valid:     true,
+				},
+				JobRunStatus: bigquery.NullString{
+					StringVal: jobRunRow.Status,
+					Valid:     true,
+				},
+				MasterNodesUpdated: jobRunRow.MasterNodesUpdated,
+			})
+			injectedCtr++
+		}
+	}
+	logger.Infof("job observed %d alerts, injected additional %d 0s entries for remaining known alerts",
+		origCount, injectedCtr)
+	return observedAlertRows
 }
 
 type AlertList struct {
@@ -199,7 +309,7 @@ type Alert struct {
 	Duration metav1.Duration
 }
 
-func getAlertsFromPerJobRunData(alertData map[string]string, jobRunID string) []jobrunaggregatorapi.AlertRow {
+func getAlertsFromPerJobRunData(alertData map[string]string, jobRunRow *jobrunaggregatorapi.JobRunRow) []jobrunaggregatorapi.AlertRow {
 	alertMap := map[AlertKey]*Alert{}
 
 	for _, alertJSON := range alertData {
@@ -224,7 +334,7 @@ func getAlertsFromPerJobRunData(alertData map[string]string, jobRunID string) []
 		}
 	}
 
-	// sort for stable output for testing and stuch.
+	// sort for stable output for testing and such.
 	alertList := []Alert{}
 	for _, alert := range alertMap {
 		alertList = append(alertList, *alert)
@@ -234,13 +344,60 @@ func getAlertsFromPerJobRunData(alertData map[string]string, jobRunID string) []
 	ret := []jobrunaggregatorapi.AlertRow{}
 	for _, alert := range alertList {
 		ret = append(ret, jobrunaggregatorapi.AlertRow{
-			JobRunName:   jobRunID,
 			Name:         alert.Name,
 			Namespace:    alert.Namespace,
 			Level:        string(alert.Level),
 			AlertSeconds: int(math.Ceil(alert.Duration.Seconds())),
+			JobName: bigquery.NullString{
+				StringVal: jobRunRow.JobName,
+				Valid:     true,
+			},
+			JobRunName: jobRunRow.Name,
+			JobRunStartTime: bigquery.NullTimestamp{
+				Timestamp: jobRunRow.StartTime,
+				Valid:     true,
+			},
+			JobRunEndTime: bigquery.NullTimestamp{
+				Timestamp: jobRunRow.EndTime,
+				Valid:     true,
+			},
+			Cluster: bigquery.NullString{
+				StringVal: jobRunRow.Cluster,
+				Valid:     true,
+			},
+			ReleaseTag: bigquery.NullString{
+				StringVal: jobRunRow.ReleaseTag,
+				Valid:     true,
+			},
+			JobRunStatus: bigquery.NullString{
+				StringVal: jobRunRow.Status,
+				Valid:     true,
+			},
+			MasterNodesUpdated: jobRunRow.MasterNodesUpdated,
 		})
 	}
 
 	return ret
+}
+
+func newKnownAlertsCache(allKnownAlerts []*jobrunaggregatorapi.KnownAlertRow) *KnownAlertsCache {
+	knownAlertsByRelease := map[string][]*jobrunaggregatorapi.KnownAlertRow{}
+	for _, ka := range allKnownAlerts {
+		if _, haveReleaseAlready := knownAlertsByRelease[ka.Release]; !haveReleaseAlready {
+			knownAlertsByRelease[ka.Release] = []*jobrunaggregatorapi.KnownAlertRow{}
+		}
+		knownAlertsByRelease[ka.Release] = append(knownAlertsByRelease[ka.Release], ka)
+
+	}
+	return &KnownAlertsCache{
+		knownAlertsByRelease: knownAlertsByRelease,
+	}
+}
+
+type KnownAlertsCache struct {
+	knownAlertsByRelease map[string][]*jobrunaggregatorapi.KnownAlertRow
+}
+
+func (k *KnownAlertsCache) ListAllKnownAlertsForRelease(release string) []*jobrunaggregatorapi.KnownAlertRow {
+	return k.knownAlertsByRelease[release]
 }

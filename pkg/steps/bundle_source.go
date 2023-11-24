@@ -13,6 +13,7 @@ import (
 	buildapi "github.com/openshift/api/build/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
@@ -22,6 +23,7 @@ type bundleSourceStep struct {
 	releaseBuildConfig *api.ReleaseBuildConfiguration
 	resources          api.ResourceConfiguration
 	client             BuildClient
+	podClient          kubernetes.PodClient
 	jobSpec            *api.JobSpec
 	pullSecret         *coreapi.Secret
 }
@@ -75,7 +77,7 @@ func (s *bundleSourceStep) run(ctx context.Context) error {
 		s.pullSecret,
 		nil,
 	)
-	return handleBuild(ctx, s.client, *build)
+	return handleBuilds(ctx, s.client, s.podClient, *build)
 }
 
 func replaceCommand(pullSpec, with string) string {
@@ -129,12 +131,21 @@ func (s *bundleSourceStep) Description() string {
 	return fmt.Sprintf("Build image %s from the repository", api.PipelineImageStreamTagReferenceBundleSource)
 }
 
-func BundleSourceStep(config api.BundleSourceStepConfiguration, releaseBuildConfig *api.ReleaseBuildConfiguration, resources api.ResourceConfiguration, client BuildClient, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
+func BundleSourceStep(
+	config api.BundleSourceStepConfiguration,
+	releaseBuildConfig *api.ReleaseBuildConfiguration,
+	resources api.ResourceConfiguration,
+	client BuildClient,
+	podClient kubernetes.PodClient,
+	jobSpec *api.JobSpec,
+	pullSecret *coreapi.Secret,
+) api.Step {
 	return &bundleSourceStep{
 		config:             config,
 		releaseBuildConfig: releaseBuildConfig,
 		resources:          resources,
 		client:             client,
+		podClient:          podClient,
 		jobSpec:            jobSpec,
 		pullSecret:         pullSecret,
 	}

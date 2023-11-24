@@ -30,6 +30,6 @@ tests:
   container:
     from: src
 zz_generated_metadata:
-  branch: ""
+  branch: official
   org: super-priv
-  repo: ""
+  repo: barry-white

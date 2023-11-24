@@ -5,21 +5,15 @@ base_images:
     tag: base
 build_root:
   image_stream_tag:
-    namespace: openshift
     name: release
+    namespace: openshift
     tag: golang-1.10
 images:
 - from: base
   to: test-image
 promotion:
-  name: 4.5
+  name: "4.5"
   namespace: ocp
-resources:
-  '*':
-    limits:
-      cpu: 500Mi
-    requests:
-      cpu: 10Mi
 releases:
   initial:
     integration:
@@ -27,11 +21,22 @@ releases:
       namespace: ocp
   latest:
     integration:
+      include_built_images: true
       name: origin-v4.0
       namespace: ocp
-      include_built_images: true
+resources:
+  '*':
+    limits:
+      cpu: 500Mi
+    requests:
+      cpu: 10Mi
 tests:
 - as: unit
   commands: make test-unit
   container:
     from: src
+zz_generated_metadata:
+  branch: official
+  org: foo
+  repo: barry-white
+  variant: releases

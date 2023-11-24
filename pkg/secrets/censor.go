@@ -1,7 +1,6 @@
 package secrets
 
 import (
-	"io/ioutil"
 	"os"
 	"strings"
 	"sync"
@@ -17,13 +16,13 @@ import (
 type DynamicCensor struct {
 	sync.RWMutex
 	*secretutil.ReloadingCensorer
-	secrets sets.String
+	secrets sets.Set[string]
 }
 
 func NewDynamicCensor() DynamicCensor {
 	return DynamicCensor{
 		ReloadingCensorer: secretutil.NewCensorer(),
-		secrets:           sets.NewString(),
+		secrets:           sets.New[string](),
 	}
 }
 
@@ -32,7 +31,7 @@ func (c *DynamicCensor) AddSecrets(s ...string) {
 	c.Lock()
 	defer c.Unlock()
 	c.secrets.Insert(s...)
-	c.ReloadingCensorer.Refresh(c.secrets.List()...)
+	c.ReloadingCensorer.Refresh(sets.List(c.secrets)...)
 }
 
 // ReadFromEnv loads an environment variable and adds it to the censor list.
@@ -46,7 +45,7 @@ func ReadFromEnv(name string, censor *DynamicCensor) string {
 
 // ReadFromFile loads content from a file and adds it to the censor list.
 func ReadFromFile(path string, censor *DynamicCensor) (string, error) {
-	bytes, err := ioutil.ReadFile(path)
+	bytes, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}

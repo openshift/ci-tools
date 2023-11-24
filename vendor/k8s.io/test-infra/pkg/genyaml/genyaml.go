@@ -19,6 +19,7 @@ limitations under the License.
 // from the AST of a given file.
 //
 // Example:
+//
 //	cm, err := NewCommentMap("example_config.go")
 //
 //	yamlSnippet, err := cm.GenYaml(&plugins.Configuration{
@@ -40,8 +41,7 @@ limitations under the License.
 //
 // yamlSnippet, err := cm.GenYaml(PopulateStruct(&plugins.Configuration{}))
 //
-//
-// 	yamlSnippet will be assigned a string containing the following YAML:
+//	yamlSnippet will be assigned a string containing the following YAML:
 //
 //	# Approve is the configuration for the Approve plugin.
 //	approve:
@@ -61,7 +61,6 @@ limitations under the License.
 //
 //		# IgnoreReviewState causes the approve plugin to ignore the GitHub review state. Otherwise: * an APPROVE github review is equivalent to leaving an \"/approve\" message. * A REQUEST_CHANGES github review is equivalent to leaving an /approve cancel\" message.
 //		ignore_review_state: false
-//
 package genyaml
 
 import (
@@ -95,20 +94,40 @@ type CommentMap struct {
 	sync.RWMutex
 }
 
-// NewCommentMap is the constructor for CommentMap accepting a variadic number of paths.
-func NewCommentMap(paths ...string) (*CommentMap, error) {
+// NewCommentMap is the constructor for CommentMap accepting a variadic number
+// of path and raw files contents.
+func NewCommentMap(rawFiles map[string][]byte, paths ...string) (*CommentMap, error) {
 	cm := &CommentMap{
 		comments: make(map[string]map[string]Comment),
 	}
 
-	packageFiles := map[string][]string{}
+	// Group files in dir assuming they are from the same package, this
+	// technically doesn't hold true all the time, but is the best effort to
+	// ensure that generated yamls are from the same package.
+	type group struct {
+		paths       []string
+		rawContents map[string][]byte
+	}
+
+	packageFiles := map[string]*group{}
 	for _, path := range paths {
 		dir := filepath.Dir(path)
-		packageFiles[dir] = append(packageFiles[dir], path)
+		if _, ok := packageFiles[dir]; !ok {
+			packageFiles[dir] = &group{}
+		}
+		packageFiles[dir].paths = append(packageFiles[dir].paths, path)
+	}
+
+	for path, content := range rawFiles {
+		dir := filepath.Dir(path)
+		if _, ok := packageFiles[dir]; !ok {
+			packageFiles[dir] = &group{}
+		}
+		packageFiles[dir].rawContents = map[string][]byte{path: content}
 	}
 
 	for pkg, files := range packageFiles {
-		if err := cm.addPackage(files); err != nil {
+		if err := cm.addPackage(files.paths, files.rawContents); err != nil {
 			return nil, fmt.Errorf("failed to add files in %s: %w", pkg, err)
 		}
 	}
@@ -159,8 +178,9 @@ func jsonToYaml(j []byte) ([]byte, error) {
 	return yaml3.Marshal(jsonObj)
 }
 
-// astFrom takes a path to a Go file and returns the abstract syntax tree (AST) for that file.
-func astFrom(paths []string) (*doc.Package, error) {
+// astFrom takes paths of Go files, or the content of Go files,
+// returns the abstract syntax tree (AST) for that file.
+func astFrom(paths []string, rawFiles map[string][]byte) (*doc.Package, error) {
 	fset := token.NewFileSet()
 	m := make(map[string]*ast.File)
 
@@ -170,6 +190,13 @@ func astFrom(paths []string) (*doc.Package, error) {
 			return nil, fmt.Errorf("unable to parse file to AST from path %s: %w", file, err)
 		}
 		m[file] = f
+	}
+	for fn, content := range rawFiles {
+		f, err := parser.ParseFile(fset, fn, content, parser.ParseComments)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse file to AST from raw content %s: %w", fn, err)
+		}
+		m[fn] = f
 	}
 
 	// Copied from the go doc command: https://github.com/golang/go/blob/fc116b69e2004c159d0f2563c6e91ac75a79f872/src/go/doc/doc.go#L203
@@ -287,8 +314,8 @@ func getType(typ interface{}) string {
 }
 
 // genDocMap extracts the name of the field as it should appear in YAML format and returns the resultant string.
-func (cm *CommentMap) genDocMap(packageFiles []string) error {
-	pkg, err := astFrom(packageFiles)
+func (cm *CommentMap) genDocMap(packageFiles []string, rawFiles map[string][]byte) error {
+	pkg, err := astFrom(packageFiles, rawFiles)
 	if err != nil {
 		return fmt.Errorf("unable to generate AST documentation map: %w", err)
 	}
@@ -412,11 +439,11 @@ func (cm *CommentMap) PrintComments() {
 }
 
 // addPackage allow for adding to the CommentMap via a list of paths to go files in the same package
-func (cm *CommentMap) addPackage(paths []string) error {
+func (cm *CommentMap) addPackage(paths []string, rawFiles map[string][]byte) error {
 	cm.Lock()
 	defer cm.Unlock()
 
-	err := cm.genDocMap(paths)
+	err := cm.genDocMap(paths, rawFiles)
 	if err != nil {
 		return err
 	}

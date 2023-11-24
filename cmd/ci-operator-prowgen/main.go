@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"go/build"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	prowconfig "k8s.io/test-infra/prow/config"
+	"k8s.io/test-infra/prow/flagutil"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
@@ -35,6 +35,8 @@ type options struct {
 	registryPath string
 	resolver     registry.Resolver
 
+	knownInfraJobFiles flagutil.Strings
+
 	help bool
 }
 
@@ -50,6 +52,8 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.registryPath, "registry", "", "Path to the step registry directory")
 
 	flag.BoolVar(&opt.help, "h", false, "Show help for ci-operator-prowgen")
+
+	flag.Var(&opt.knownInfraJobFiles, "known-infra-file", "Name of a known infra-file that will not be acted on. Can be passed multiple times.")
 
 	opt.Options.Bind(flag)
 
@@ -99,7 +103,7 @@ func (o *options) process() error {
 
 func readProwgenConfig(path string) (*config.Prowgen, error) {
 	var pConfig *config.Prowgen
-	b, err := ioutil.ReadFile(path)
+	b, err := os.ReadFile(path)
 	if err != nil && !os.IsNotExist(err) {
 		return nil, fmt.Errorf("prowgen config found in path %s but couldn't read the file: %w", path, err)
 	}
@@ -107,6 +111,9 @@ func readProwgenConfig(path string) (*config.Prowgen, error) {
 	if err == nil {
 		if err := yaml.Unmarshal(b, &pConfig); err != nil {
 			return nil, fmt.Errorf("prowgen config found in path %sbut couldn't unmarshal it: %w", path, err)
+		}
+		if err := pConfig.Validate(); err != nil {
+			return nil, fmt.Errorf("prowgen config found in path %s is not valid: %w", path, err)
 		}
 	}
 
@@ -121,7 +128,7 @@ func (o *options) generateJobsToDir(subDir string, prowConfig map[string]*config
 	if err := o.OperateOnCIOperatorConfigDir(filepath.Join(o.fromDir, subDir), genJobsFunc); err != nil {
 		return fmt.Errorf("failed to generate jobs: %w", err)
 	}
-	if err := o.OperateOnJobConfigSubdirPaths(o.toDir, subDir, func(info *jc.Info) error {
+	if err := o.OperateOnJobConfigSubdirPaths(o.toDir, subDir, o.knownInfraJobFiles.StringSet(), func(info *jc.Info) error {
 		key := fmt.Sprintf("%s/%s", info.Org, info.Repo)
 		if _, ok := generated[key]; !ok {
 			generated[key] = &prowconfig.JobConfig{}
@@ -158,6 +165,9 @@ func generateJobs(resolver registry.Resolver, cache map[string]*config.Prowgen, 
 		switch {
 		case orgConfig != nil:
 			pInfo.Config = *orgConfig
+			if repoConfig != nil {
+				pInfo.Config.MergeDefaults(repoConfig)
+			}
 		case repoConfig != nil:
 			pInfo.Config = *repoConfig
 		}
@@ -168,7 +178,10 @@ func generateJobs(resolver registry.Resolver, cache map[string]*config.Prowgen, 
 			}
 			configSpec = &resolved
 		}
-		generated := prowgen.GenerateJobs(configSpec, pInfo)
+		generated, err := prowgen.GenerateJobs(configSpec, pInfo)
+		if err != nil {
+			return err
+		}
 		if o, ok := output[orgRepo]; ok {
 			jc.Append(o, generated)
 		} else {

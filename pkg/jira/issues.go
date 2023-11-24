@@ -93,7 +93,7 @@ func (f *filer) FileIssue(issueType, title, description, reporter string, logger
 		Description: description,
 	}}
 	issue, response, err := f.jiraClient.CreateIssue(toCreate)
-	return issue, jirautil.JiraError(response, err)
+	return issue, jirautil.HandleJiraError(response, err)
 }
 
 // resolveRequester attempts to get more information about the Slack
@@ -104,16 +104,16 @@ func (f *filer) resolveRequester(reporter string, logger *logrus.Entry) (string,
 	slackUser, err := f.slackClient.GetUserInfo(reporter)
 	if err != nil {
 		logger.WithError(err).Warn("could not search Slack for requester")
-		suffix = fmt.Sprintf("[a Slack user|%s/team/%s]", slackutil.CoreOSURL, reporter)
+		suffix = fmt.Sprintf("[a Slack user|%s/team/%s]", slackutil.RedHatInternalURL, reporter)
 	} else {
 		jiraUsers, response, err := f.jiraClient.FindUser(slackUser.RealName)
-		if err := jirautil.JiraError(response, err); err != nil {
+		if err := jirautil.HandleJiraError(response, err); err != nil {
 			logger.WithError(err).Warn("could not search Jira for requester")
 		}
 		if len(jiraUsers) != 0 {
 			requester = &jiraUsers[0]
 		}
-		suffix = fmt.Sprintf("Slack user [%s|%s/team/%s]", slackUser.RealName, slackutil.CoreOSURL, slackUser.ID)
+		suffix = fmt.Sprintf("Slack user [%s|%s/team/%s]", slackUser.RealName, slackutil.RedHatInternalURL, slackUser.ID)
 	}
 
 	if requester == nil {
@@ -131,7 +131,7 @@ func NewIssueFiler(slackClient *slack.Client, jiraClient *jira.Client) (IssueFil
 	}
 
 	project, response, err := jiraClient.Project.Get(ProjectDPTP)
-	if err := jirautil.JiraError(response, err); err != nil {
+	if err := jirautil.HandleJiraError(response, err); err != nil {
 		return nil, fmt.Errorf("could not find Jira project %s: %w", ProjectDPTP, err)
 	}
 	filer.project = *project
@@ -145,7 +145,7 @@ func NewIssueFiler(slackClient *slack.Client, jiraClient *jira.Client) (IssueFil
 	}
 
 	botUser, response, err := jiraClient.User.GetSelf()
-	if err := jirautil.JiraError(response, err); err != nil {
+	if err := jirautil.HandleJiraError(response, err); err != nil {
 		return nil, fmt.Errorf("could not resolve Jira bot user: %w", err)
 	}
 	filer.botUser = botUser

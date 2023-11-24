@@ -2,7 +2,7 @@ base_images:
   os:
     name: centos
     namespace: openshift
-    tag: '7'
+    tag: 'stream9'
 build_root:
   image_stream_tag:
     name: release
@@ -14,12 +14,12 @@ resources:
       cpu: 10m
 tag_specification:
   namespace: ocp
-  name: "4.5"
+  name: "4.13"
 releases:
   custom:
     candidate:
       product: okd
-      version: "4.3"
+      version: "4.13"
 tests:
   - as: with-dependencies
     steps:

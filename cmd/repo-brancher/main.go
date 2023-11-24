@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"net/url"
 	"os"
@@ -86,7 +85,7 @@ func main() {
 
 	gitDir := o.gitDir
 	if gitDir == "" {
-		tempDir, err := ioutil.TempDir("", "")
+		tempDir, err := os.MkdirTemp("", "")
 		if err != nil {
 			logrus.WithError(err).Fatal("Could not create temp dir for git operations")
 		}
@@ -100,7 +99,7 @@ func main() {
 
 	var token string
 	if o.Confirm {
-		if rawToken, err := ioutil.ReadFile(o.tokenPath); err != nil {
+		if rawToken, err := os.ReadFile(o.tokenPath); err != nil {
 			logrus.WithError(err).Fatal("Could not read token.")
 		} else {
 			token = strings.TrimSpace(string(rawToken))
@@ -109,7 +108,7 @@ func main() {
 	}
 
 	failed := false
-	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, promotion.WithoutOKD, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
+	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, api.WithoutOKD, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
 		logger := config.LoggerForInfo(*repoInfo)
 
 		repoDir := path.Join(gitDir, repoInfo.Org, repoInfo.Repo)

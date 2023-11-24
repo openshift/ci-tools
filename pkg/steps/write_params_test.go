@@ -1,7 +1,6 @@
 package steps
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -14,7 +13,7 @@ func TestWriteParamsStep(t *testing.T) {
 	params := api.NewDeferredParameters(nil)
 	params.Add("K1", func() (string, error) { return "V1", nil })
 	params.Add("K2", func() (string, error) { return "V:2", nil })
-	paramFile, err := ioutil.TempFile("", "")
+	paramFile, err := os.CreateTemp("", "")
 	if err != nil {
 		t.Errorf("Failed to create temporary file: %v", err)
 	}
@@ -51,7 +50,7 @@ func TestWriteParamsStep(t *testing.T) {
 	executeStep(t, wps, execSpecification)
 
 	expectedWrittenParams := "K1=V1\nK2='V:2'\n"
-	written, err := ioutil.ReadFile(paramFile.Name())
+	written, err := os.ReadFile(paramFile.Name())
 	if err != nil {
 		t.Errorf("Failed to read temporary file '%s' after it was supposed to be written into: %v", paramFile.Name(), err)
 	}

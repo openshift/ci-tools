@@ -6,12 +6,15 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
 
-	"github.com/bombsimon/logrusr"
+	"github.com/bombsimon/logrusr/v3"
 	"github.com/sirupsen/logrus"
+	"gopkg.in/fsnotify.v1"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -19,29 +22,31 @@ import (
 	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/flagutil"
 	configflagutil "k8s.io/test-infra/prow/flagutil/config"
+	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/kube"
 	"k8s.io/test-infra/prow/logrusutil"
 	"k8s.io/test-infra/prow/pjutil/pprof"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
-	ctrlruntimelog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler"
 	serviceaccountsecretrefresher "github.com/openshift/ci-tools/pkg/controller/serviceaccount_secret_refresher"
 	testimagesdistributor "github.com/openshift/ci-tools/pkg/controller/test-images-distributor"
 	"github.com/openshift/ci-tools/pkg/controller/testimagestreamimportcleaner"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 	"github.com/openshift/ci-tools/pkg/load/agents"
+	"github.com/openshift/ci-tools/pkg/prowconfigutils"
 )
 
 const (
 	appCIContextName = "app.ci"
 )
 
-var allControllers = sets.NewString(
+var allControllers = sets.New[string](
 	promotionreconciler.ControllerName,
 	testimagesdistributor.ControllerName,
 	serviceaccountsecretrefresher.ControllerName,
@@ -56,14 +61,16 @@ type options struct {
 	kubernetesOptions                    flagutil.KubernetesOptions
 	leaderElectionSuffix                 string
 	enabledControllers                   flagutil.Strings
-	enabledControllersSet                sets.String
+	enabledControllersSet                sets.Set[string]
 	registryClusterName                  string
 	dryRun                               bool
 	blockProfileRate                     time.Duration
 	testImagesDistributorOptions         testImagesDistributorOptions
 	serviceAccountSecretRefresherOptions serviceAccountSecretRefresherOptions
 	imagePusherOptions                   imagePusherOptions
+	promotionReconcilerOptions           promotionReconcilerOptions
 	*flagutil.GitHubOptions
+	releaseRepoGitSyncPath string
 }
 
 func (o *options) addDefaults() {
@@ -72,25 +79,31 @@ func (o *options) addDefaults() {
 
 type testImagesDistributorOptions struct {
 	additionalImageStreamTagsRaw       flagutil.Strings
-	additionalImageStreamTags          sets.String
+	additionalImageStreamTags          sets.Set[string]
 	additionalImageStreamsRaw          flagutil.Strings
-	additionalImageStreams             sets.String
+	additionalImageStreams             sets.Set[string]
 	additionalImageStreamNamespacesRaw flagutil.Strings
-	additionalImageStreamNamespaces    sets.String
+	additionalImageStreamNamespaces    sets.Set[string]
 	forbiddenRegistriesRaw             flagutil.Strings
-	forbiddenRegistries                sets.String
+	forbiddenRegistries                sets.Set[string]
 	ignoreClusterNamesRaw              flagutil.Strings
-	ignoreClusterNames                 sets.String
+	ignoreClusterNames                 sets.Set[string]
+}
+
+type promotionReconcilerOptions struct {
+	ignoreImageStreamsRaw flagutil.Strings
+	ignoreImageStreams    []*regexp.Regexp
 }
 
 type imagePusherOptions struct {
 	imageStreamsRaw flagutil.Strings
-	imageStreams    sets.String
+	imageStreams    sets.Set[string]
 }
 
 type serviceAccountSecretRefresherOptions struct {
-	enabledNamespaces flagutil.Strings
-	removeOldSecrets  bool
+	enabledNamespaces     flagutil.Strings
+	removeOldSecrets      bool
+	ignoreServiceAccounts flagutil.Strings
 }
 
 func newOpts() (*options, error) {
@@ -105,7 +118,7 @@ func newOpts() (*options, error) {
 	fs.StringVar(&opts.ciOperatorconfigPath, "ci-operator-config-path", "", "Path to the ci operator config")
 	fs.StringVar(&opts.stepConfigPath, "step-config-path", "", "Path to the registries step configuration")
 	fs.StringVar(&opts.leaderElectionSuffix, "leader-election-suffix", "", "Suffix for the leader election lock. Useful for local testing. If set, --dry-run must be set as well")
-	fs.Var(&opts.enabledControllers, "enable-controller", fmt.Sprintf("Enabled controllers. Available controllers are: %v. Can be specified multiple times. Defaults to %v", allControllers.List(), opts.enabledControllers.Strings()))
+	fs.Var(&opts.enabledControllers, "enable-controller", fmt.Sprintf("Enabled controllers. Available controllers are: %v. Can be specified multiple times. Defaults to %v", sets.List(allControllers), opts.enabledControllers.Strings()))
 	fs.Var(&opts.testImagesDistributorOptions.additionalImageStreamTagsRaw, "testImagesDistributorOptions.additional-image-stream-tag", "An imagestreamtag that will be distributed even if no test explicitly references it. It must be in namespace/name:tag format (e.G `ci/clonerefs:latest`). Can be passed multiple times.")
 	fs.Var(&opts.testImagesDistributorOptions.additionalImageStreamsRaw, "testImagesDistributorOptions.additional-image-stream", "An imagestream that will be distributed even if no test explicitly references it. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
 	fs.Var(&opts.testImagesDistributorOptions.additionalImageStreamNamespacesRaw, "testImagesDistributorOptions.additional-image-stream-namespace", "A namespace in which imagestreams will be distributed even if no test explicitly references them (e.G `ci`). Can be passed multiple times.")
@@ -115,13 +128,37 @@ func newOpts() (*options, error) {
 	fs.StringVar(&opts.registryClusterName, "registry-cluster-name", "app.ci", "the cluster name on which the CI central registry is running")
 	fs.Var(&opts.serviceAccountSecretRefresherOptions.enabledNamespaces, "serviceAccountRefresherOptions.enabled-namespace", "A namespace for which the serviceaccount_secret_refresher should be enabled. Can be passed multiple times.")
 	fs.BoolVar(&opts.serviceAccountSecretRefresherOptions.removeOldSecrets, "serviceAccountRefresherOptions.remove-old-secrets", false, "whether the serviceaccountsecretrefresher should delete secrets older than 30 days")
+	fs.Var(&opts.serviceAccountSecretRefresherOptions.ignoreServiceAccounts, "serviceAccountRefresherOptions.ignore-service-account", "The service account to ignore. It must be in namespace/name format (e.G `ci/sync-rover-groups-updater`). Can be passed multiple times.")
 	fs.Var(&opts.imagePusherOptions.imageStreamsRaw, "imagePusherOptions.image-stream", "An imagestream that will be synced. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
+	fs.Var(&opts.promotionReconcilerOptions.ignoreImageStreamsRaw, "promotionReconcilerOptions.ignore-image-stream", "The image stream to ignore. It is an regular expression (e.G ^openshift-priv/.+). Can be passed multiple times.")
 	fs.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
+	fs.StringVar(&opts.releaseRepoGitSyncPath, "release-repo-git-sync-path", "", "Path to release repository dir")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse args")
 	}
 
 	var errs []error
+	if opts.releaseRepoGitSyncPath != "" {
+		if opts.ciOperatorconfigPath != "" || opts.stepConfigPath != "" || opts.prowconfig.JobConfigPath != "" || opts.prowconfig.SupplementalProwConfigDirs.String() != "" {
+			errs = append(errs, fmt.Errorf("--release-repo-path is mutually exclusive with --ci-operator-config-path and --step-config-path and --%s and --supplemental-prow-config-dir", opts.prowconfig.JobConfigPathFlagName))
+		} else {
+			if _, err := os.Stat(opts.releaseRepoGitSyncPath); err != nil {
+				if os.IsNotExist(err) {
+					errs = append(errs, fmt.Errorf("--release-repo-path points to a nonexistent directory: %w", err))
+				}
+				errs = append(errs, fmt.Errorf("error getting stat info for --release-repo-path directory: %w", err))
+			}
+
+			opts.ciOperatorconfigPath = filepath.Join(opts.releaseRepoGitSyncPath, config.CiopConfigInRepoPath)
+			opts.stepConfigPath = filepath.Join(opts.releaseRepoGitSyncPath, config.RegistryPath)
+			opts.prowconfig.JobConfigPath = filepath.Join(opts.releaseRepoGitSyncPath, config.JobConfigInRepoPath)
+			opts.prowconfig.ConfigPath = filepath.Join(opts.releaseRepoGitSyncPath, config.ConfigInRepoPath)
+			if err := opts.prowconfig.SupplementalProwConfigDirs.Set(filepath.Dir(filepath.Join(opts.releaseRepoGitSyncPath, config.ConfigInRepoPath))); err != nil {
+				errs = append(errs, fmt.Errorf("could not set supplemental prow config dirs: %w", err))
+			}
+
+		}
+	}
 	if opts.leaderElectionNamespace == "" {
 		errs = append(errs, errors.New("--leader-election-namespace must be set"))
 	}
@@ -132,9 +169,9 @@ func newOpts() (*options, error) {
 		errs = append(errs, err)
 	}
 	if vals := opts.enabledControllers.Strings(); len(vals) > 0 {
-		opts.enabledControllersSet = sets.NewString(vals...)
-		if diff := opts.enabledControllersSet.Difference(allControllers); len(diff.UnsortedList()) > 0 {
-			errs = append(errs, fmt.Errorf("the following controllers are unknown but were disabled via --disable-controller: %v", diff.List()))
+		opts.enabledControllersSet = sets.New[string](vals...)
+		if diff := opts.enabledControllersSet.Difference(allControllers); len(sets.List(diff)) > 0 {
+			errs = append(errs, fmt.Errorf("the following controllers are unknown but were disabled via --disable-controller: %v", sets.List(diff)))
 		}
 	}
 
@@ -153,6 +190,17 @@ func newOpts() (*options, error) {
 	imagePusherImageStreams, isErrors := completeImageStream("uniRegistrySyncerOptions.image-stream", opts.imagePusherOptions.imageStreamsRaw)
 	errs = append(errs, isErrors...)
 	opts.imagePusherOptions.imageStreams = imagePusherImageStreams
+
+	if raws := opts.promotionReconcilerOptions.ignoreImageStreamsRaw.Strings(); len(raws) > 0 {
+		for _, raw := range raws {
+			re, err := regexp.Compile(raw)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("failed to compile regex from %q: %w", raw, err))
+				continue
+			}
+			opts.promotionReconcilerOptions.ignoreImageStreams = append(opts.promotionReconcilerOptions.ignoreImageStreams, re)
+		}
+	}
 
 	if opts.enabledControllersSet.Has(testimagesdistributor.ControllerName) && opts.stepConfigPath == "" {
 		errs = append(errs, fmt.Errorf("--step-config-path is required when the %s controller is enabled", testimagesdistributor.ControllerName))
@@ -173,8 +221,8 @@ func newOpts() (*options, error) {
 	return opts, utilerrors.NewAggregate(errs)
 }
 
-func completeImageStreamTags(name string, raw flagutil.Strings) (sets.String, []error) {
-	isTags := sets.String{}
+func completeImageStreamTags(name string, raw flagutil.Strings) (sets.Set[string], []error) {
+	isTags := sets.Set[string]{}
 	var errs []error
 	if vals := raw.Strings(); len(vals) > 0 {
 		for _, val := range vals {
@@ -193,8 +241,8 @@ func completeImageStreamTags(name string, raw flagutil.Strings) (sets.String, []
 	return isTags, errs
 }
 
-func completeImageStream(name string, raw flagutil.Strings) (sets.String, []error) {
-	imageStreams := sets.String{}
+func completeImageStream(name string, raw flagutil.Strings) (sets.Set[string], []error) {
+	imageStreams := sets.Set[string]{}
 	var errs []error
 	if vals := raw.Strings(); len(vals) > 0 {
 		for _, val := range vals {
@@ -209,8 +257,8 @@ func completeImageStream(name string, raw flagutil.Strings) (sets.String, []erro
 	return imageStreams, errs
 }
 
-func completeSet(raw flagutil.Strings) sets.String {
-	result := sets.String{}
+func completeSet(raw flagutil.Strings) sets.Set[string] {
+	result := sets.Set[string]{}
 	if vals := raw.Strings(); len(vals) > 0 {
 		for _, val := range vals {
 			result.Insert(val)
@@ -221,7 +269,7 @@ func completeSet(raw flagutil.Strings) sets.String {
 
 func main() {
 	logrusutil.ComponentInit()
-	controllerruntime.SetLogger(logrusr.NewLogger(logrus.StandardLogger()))
+	controllerruntime.SetLogger(logrusr.New(logrus.StandardLogger()))
 
 	opts, err := newOpts()
 	if err != nil {
@@ -230,6 +278,11 @@ func main() {
 	if val := int(opts.blockProfileRate.Nanoseconds()); val != 0 {
 		logrus.WithField("rate", opts.blockProfileRate.String()).Info("Setting block profile rate")
 		runtime.SetBlockProfileRate(val)
+	}
+
+	_, err = prowconfigutils.ProwDisabledClusters(&opts.kubernetesOptions)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to get Prow disable clusters")
 	}
 
 	ctx := controllerruntime.SetupSignalHandler()
@@ -260,11 +313,37 @@ func main() {
 	if _, hasRegistryCluster := kubeconfigs[opts.registryClusterName]; !hasRegistryCluster {
 		logrus.Fatalf("--kubeconfig must include a context named `%s`", opts.registryClusterName)
 	}
+	configAgentOption := func(*agents.ConfigAgentOptions) {}
+	registryAgentOption := func(*agents.RegistryAgentOptions) {}
+	if opts.releaseRepoGitSyncPath != "" {
+		eventCh := make(chan fsnotify.Event)
+		errCh := make(chan error)
 
-	ciOPConfigAgent, err := agents.NewConfigAgent(opts.ciOperatorconfigPath)
+		universalSymlinkWatcher := &agents.UniversalSymlinkWatcher{
+			EventCh:   eventCh,
+			ErrCh:     errCh,
+			WatchPath: opts.releaseRepoGitSyncPath,
+		}
+
+		configAgentOption = func(opt *agents.ConfigAgentOptions) {
+			opt.UniversalSymlinkWatcher = universalSymlinkWatcher
+		}
+		registryAgentOption = func(opt *agents.RegistryAgentOptions) {
+			opt.UniversalSymlinkWatcher = universalSymlinkWatcher
+		}
+
+		watcher, err := universalSymlinkWatcher.GetWatcher()
+		if err != nil {
+			logrus.Fatalf("Failed to get the universal symlink watcher: %v", err)
+		}
+		interrupts.Run(watcher)
+	}
+	configErrCh := make(chan error)
+	ciOPConfigAgent, err := agents.NewConfigAgent(opts.ciOperatorconfigPath, configErrCh, configAgentOption)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct ci-operator config agent")
 	}
+	go func() { logrus.Fatal(<-configErrCh) }()
 	configAgent, err := opts.prowconfig.ConfigAgent()
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to start config agent")
@@ -283,7 +362,6 @@ func main() {
 
 		options := controllerruntime.Options{
 			DryRunClient: opts.dryRun,
-			Logger:       ctrlruntimelog.NullLogger{},
 		}
 		if cluster == appCIContextName {
 			options.LeaderElection = true
@@ -297,6 +375,7 @@ func main() {
 			syncPeriod := 24 * time.Hour
 			options.SyncPeriod = &syncPeriod
 		}
+		logrus.WithField("cluster", cluster).Info("Creating manager ...")
 		mgr, err := controllerruntime.NewManager(&cfg, options)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to construct manager for cluster %s: %w", cluster, err))
@@ -364,6 +443,7 @@ func main() {
 			ConfigGetter:          configAgent.Config,
 			GitHubClient:          gitHubClient,
 			RegistryManager:       registryMgr,
+			IgnoredImageStreams:   opts.promotionReconcilerOptions.ignoreImageStreams,
 		}
 		if err := promotionreconciler.AddToManager(mgr, promotionreconcilerOptions); err != nil {
 			logrus.WithError(err).Fatal("Failed to add imagestreamtagreconciler")
@@ -377,12 +457,14 @@ func main() {
 	}
 
 	if opts.enabledControllersSet.Has(testimagesdistributor.ControllerName) {
-		registryConfigAgent, err := agents.NewRegistryAgent(opts.stepConfigPath)
+		registryErrCh := make(chan error)
+		registryConfigAgent, err := agents.NewRegistryAgent(opts.stepConfigPath, registryErrCh, registryAgentOption)
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to construct registryAgent")
 		}
+		go func() { logrus.Fatal(<-registryErrCh) }()
 
-		registriesExceptAppCI := sets.NewString()
+		registriesExceptAppCI := sets.New[string]()
 		for cluster := range allClustersExceptRegistryCluster {
 			domain, err := api.RegistryDomainForClusterName(cluster)
 			if err != nil {
@@ -390,7 +472,7 @@ func main() {
 			}
 			registriesExceptAppCI.Insert(domain)
 		}
-		logrus.WithField("registriesExceptAppCI", registriesExceptAppCI.List()).Info("forbidden registries from build-farm clusters")
+		logrus.WithField("registriesExceptAppCI", sets.List(registriesExceptAppCI)).Info("forbidden registries from build-farm clusters")
 		opts.testImagesDistributorOptions.forbiddenRegistries = opts.testImagesDistributorOptions.forbiddenRegistries.Union(registriesExceptAppCI)
 
 		if err := testimagesdistributor.AddToManager(
@@ -412,7 +494,7 @@ func main() {
 
 	if opts.enabledControllersSet.Has(serviceaccountsecretrefresher.ControllerName) {
 		for clusterName, clusterMgr := range allManagers {
-			if err := serviceaccountsecretrefresher.AddToManager(clusterName, clusterMgr, opts.serviceAccountSecretRefresherOptions.enabledNamespaces.StringSet(), opts.serviceAccountSecretRefresherOptions.removeOldSecrets); err != nil {
+			if err := serviceaccountsecretrefresher.AddToManager(clusterName, clusterMgr, opts.serviceAccountSecretRefresherOptions.enabledNamespaces.StringSet(), opts.serviceAccountSecretRefresherOptions.ignoreServiceAccounts.StringSet(), opts.serviceAccountSecretRefresherOptions.removeOldSecrets); err != nil {
 				logrus.WithError(err).Fatalf("Failed to add the %s controller to the %s cluster", serviceaccountsecretrefresher.ControllerName, clusterName)
 			}
 		}

@@ -1,6 +1,7 @@
 package imagestreamtagmapper
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 
@@ -30,11 +31,11 @@ type imagestreamtagmapper struct {
 	upstream func(reconcile.Request) []reconcile.Request
 }
 
-func (m *imagestreamtagmapper) Create(e event.CreateEvent, q workqueue.RateLimitingInterface) {
+func (m *imagestreamtagmapper) Create(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
 	m.generic(e.Object, q)
 }
 
-func (m *imagestreamtagmapper) Update(e event.UpdateEvent, q workqueue.RateLimitingInterface) {
+func (m *imagestreamtagmapper) Update(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
 	oldStream, oldOK := e.ObjectOld.(*imagev1.ImageStream)
 	newStream, newOK := e.ObjectNew.(*imagev1.ImageStream)
 	if !oldOK || !newOK {
@@ -45,7 +46,7 @@ func (m *imagestreamtagmapper) Update(e event.UpdateEvent, q workqueue.RateLimit
 		return
 	}
 
-	deletedISTags := sets.NewString()
+	deletedISTags := sets.New[string]()
 	for _, tag := range newStream.Spec.Tags {
 		if tag.Annotations == nil {
 			continue
@@ -80,11 +81,11 @@ func namedTagEventListHasElement(slice []imagev1.NamedTagEventList, element imag
 	return false
 }
 
-func (m *imagestreamtagmapper) Delete(e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+func (m *imagestreamtagmapper) Delete(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
 	m.generic(e.Object, q)
 }
 
-func (m *imagestreamtagmapper) Generic(e event.GenericEvent, q workqueue.RateLimitingInterface) {
+func (m *imagestreamtagmapper) Generic(ctx context.Context, e event.GenericEvent, q workqueue.RateLimitingInterface) {
 	m.generic(e.Object, q)
 }
 

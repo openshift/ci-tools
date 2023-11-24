@@ -3,7 +3,6 @@ package testhelper
 import (
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -20,7 +19,7 @@ func TmpDir(t *testing.T, files map[string]fstest.MapFile) (string, error) {
 		if err := os.MkdirAll(dir, fs.ModePerm); err != nil {
 			return "", fmt.Errorf("failed to create directory: %w", err)
 		}
-		if err := ioutil.WriteFile(filepath.Join(ret, k), v.Data, v.Mode); err != nil {
+		if err := os.WriteFile(filepath.Join(ret, k), v.Data, v.Mode); err != nil {
 			return "", fmt.Errorf("failed to create file: %w", err)
 		}
 	}

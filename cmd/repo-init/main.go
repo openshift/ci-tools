@@ -11,7 +11,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -259,7 +258,7 @@ Now, let's configure how the repository is compiled...`)
 
 		fmt.Println(`
 Now, let's configure test jobs for the repository...`)
-		names := sets.NewString()
+		names := sets.New[string]()
 		var tests []test
 		for {
 			more := ""
@@ -358,8 +357,8 @@ A test named %s already exists. Please choose a different name.\n`, test.As)
 
 		config.CustomE2E = e2eTests
 		if len(config.CustomE2E) > 0 && !config.Promotes {
-			valid := sets.NewString("nightly", "published")
-			validFormatted := strings.Join(valid.List(), ", ")
+			valid := sets.New[string]("nightly", "published")
+			validFormatted := strings.Join(sets.List(valid), ", ")
 			releaseType := fetchWithPrompt(fmt.Sprintf("What type of OpenShift release do the end-to-end tests run on top of? [%s]", validFormatted))
 			for {
 				if !valid.Has(releaseType) {
@@ -545,7 +544,7 @@ No additional "tide" queries will be added.
 	if err := os.MkdirAll(path.Dir(p), 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
-	return ioutil.WriteFile(p, data, 0644)
+	return os.WriteFile(p, data, 0644)
 }
 
 func updatePluginConfig(config initConfig, releaseRepo string) error {
@@ -571,7 +570,7 @@ Updating Prow plugin configuration ...`)
 		return fmt.Errorf("could not marshal Prow plugin configuration: %w", err)
 	}
 
-	return ioutil.WriteFile(configPath, data, 0644)
+	return os.WriteFile(configPath, data, 0644)
 }
 
 func editPluginConfig(pluginConfig *plugins.Configuration, config initConfig) {
@@ -586,8 +585,23 @@ No prior Prow plugin configuration was found for this organization or repository
 Ensure that webhooks are set up for Prow to watch GitHub state.`)
 		pluginConfig.Plugins[orgRepo] = plugins.OrgPlugins{Plugins: append(pluginConfig.Plugins["openshift"].Plugins, pluginConfig.Plugins["openshift/origin"].Plugins...)}
 	case orgRegistered && !repoRegistered:
-		// we just need the repo-specific bits
-		pluginConfig.Plugins[orgRepo] = plugins.OrgPlugins{Plugins: pluginConfig.Plugins["openshift/origin"].Plugins}
+		// we just need the repo-specific bits that are not already added to the org
+		originPlugins := pluginConfig.Plugins["openshift/origin"].Plugins
+		orgPlugins := pluginConfig.Plugins[config.Org].Plugins
+		var missingPlugins []string
+		for _, originPlugin := range originPlugins {
+			found := false
+			for _, orgPlugin := range orgPlugins {
+				if originPlugin == orgPlugin {
+					found = true
+					break
+				}
+			}
+			if !found {
+				missingPlugins = append(missingPlugins, originPlugin)
+			}
+		}
+		pluginConfig.Plugins[orgRepo] = plugins.OrgPlugins{Plugins: missingPlugins}
 	}
 
 	_, orgRegisteredExternal := pluginConfig.ExternalPlugins[config.Org]
@@ -800,10 +814,12 @@ func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConf
 		switch config.ReleaseType {
 		case "nightly":
 			release.Candidate = &api.Candidate{
-				Product:      api.ReleaseProductOCP,
-				Architecture: api.ReleaseArchitectureAMD64,
-				Stream:       api.ReleaseStreamNightly,
-				Version:      config.ReleaseVersion,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOCP,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
+				Stream:  api.ReleaseStreamNightly,
+				Version: config.ReleaseVersion,
 			}
 		case "published":
 			release.Release = &api.Release{

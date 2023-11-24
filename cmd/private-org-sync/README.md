@@ -18,6 +18,13 @@ When a threshold is hit, the shallow branch tip is fully fetched with
 Currently the tool does not fail when the destination repository does not exist
 at all: this should allow running against full openshift/release while
 repository mirrors are created in the private org.
+
+Errors resulting from merge conflicts are also ignored (see [DPTP-1426][]) so
+they do not cause the job to fail and an alert to be fired when there is a
+divergence between the repositories during the process of handling a CVE.  Note
+that this causes repositories to silently diverge in other cases, such as when
+there is a force-push to the source repository.
+
 ## Example
 
 ```console
@@ -71,3 +78,32 @@ INFO[0005] Branches are already in sync                  branch=release-4.4 (mor
 INFO[0005] Syncing content between locations             branch=release-4.5 (more fields...)
 INFO[0006] Branches are already in sync                  branch=release-4.5 (more fields...)
 ```
+
+## Testing
+
+The `--prefix` argument can be used for local tests.  Its default value points
+all operations to GitHub, but another host or a local directory can be used
+instead:
+
+```console
+$ mkdir --parents config/src/repo src tmp
+$ cat > config/src/repo/src-repo-master.yaml <<EOF
+promotion: {"namespace":"ocp","name":4.13}
+resources: {"*":{"requests":{"cpu":1}}}
+tests: [{"as":"test","commands":"commands","container":{"from":"src"}}]
+EOF
+$ git init --quiet src/repo
+$ git init --quiet dst/repo
+$ git -C src/repo commit --allow-empty --message initial
+$ git -C dst/repo commit --allow-empty --message initial
+$ private-org-sync \
+    --prefix $PWD --token-path /dev/null --config-dir config --target-org dst \
+    --git-name test --git-email test --git-dir tmp
+INFO[0000] Syncing content between locations             branch=master destination=dst/repo@master local-repo=tmp/src/repo org=src repo=repo source=src/repo@master source-file=src-repo-master.yaml variant=
+INFO[0000] Fetching from source (--depth=2)              branch=master destination=dst/repo@master local-repo=tmp/src/repo org=src repo=repo source=src/repo@master source-file=src-repo-master.yaml variant=
+INFO[0000] Pushing to destination (dry-run)              branch=master destination=dst/repo@master local-repo=tmp/src/repo org=src repo=repo source=src/repo@master source-file=src-repo-master.yaml variant=
+INFO[0000] Trying to fetch source and destination full history and perform a merge  branch=master destination=dst/repo@master local-repo=tmp/src/repo org=src repo=repo source=src/repo@master source-file=src-repo-master.yaml variant=
+WARN[0000] error occurred while fetching remote and merge  branch=master destination=dst/repo@master error="[failed to merge src-repo/master: failed with 128 exit-code: fatal: refusing to merge unrelated histories\n, failed to perform merge --abort: failed with 128 exit-code: fatal: There is no merge to abort (MERGE_HEAD missing).\n]" local-repo=tmp/src/repo org=src repo=repo source=src/repo@master source-file=src-repo-master.yaml variant=
+```
+
+[DPTP-1426]: https://issues.redhat.com/browse/DPTP-1426

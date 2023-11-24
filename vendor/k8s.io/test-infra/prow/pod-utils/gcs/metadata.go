@@ -20,26 +20,16 @@ import (
 	"mime"
 	"strings"
 
-	"github.com/GoogleCloudPlatform/testgrid/metadata"
-
 	"k8s.io/test-infra/prow/io"
 	utilpointer "k8s.io/utils/pointer"
 )
-
-// TODO(fejta): migrate usage off type alias.
-
-// Started holds started.json data
-type Started = metadata.Started
-
-// Finished holds finished.json data
-type Finished = metadata.Finished
 
 // WriterOptionsFromFileName guesses file attributes from the filename
 // and returns the writerOptions and a simplified filename.  For example,
 // build-log.txt.gz would be:
 //
-//   Content-Type: text/plain; charset=utf-8
-//   Content-Encoding: gzip
+//	Content-Type: text/plain; charset=utf-8
+//	Content-Encoding: gzip
 //
 // and the simplified filename would be build-log.txt (excluding the
 // content encoding extension).
@@ -52,7 +42,7 @@ func WriterOptionsFromFileName(filename string) (string, io.WriterOptions) {
 	// https://www.iana.org/assignments/http-parameters/http-parameters.xhtml#content-coding
 	switch segment {
 	case "gz", "gzip":
-		attrs.ContentEncoding = utilpointer.StringPtr("gzip")
+		attrs.ContentEncoding = utilpointer.String("gzip")
 	}
 
 	if attrs.ContentEncoding != nil {
@@ -68,12 +58,12 @@ func WriterOptionsFromFileName(filename string) (string, io.WriterOptions) {
 	if segment != "" {
 		mediaType := mime.TypeByExtension("." + segment)
 		if mediaType != "" {
-			attrs.ContentType = utilpointer.StringPtr(mediaType)
+			attrs.ContentType = utilpointer.String(mediaType)
 		}
 	}
 
 	if attrs.ContentType == nil && attrs.ContentEncoding != nil && *attrs.ContentEncoding == "gzip" {
-		attrs.ContentType = utilpointer.StringPtr("application/gzip")
+		attrs.ContentType = utilpointer.String("application/gzip")
 		attrs.ContentEncoding = nil
 	}
 

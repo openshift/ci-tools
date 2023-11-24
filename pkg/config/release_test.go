@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +13,8 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/test-infra/prow/plugins"
+
+	"github.com/openshift/ci-tools/pkg/registry"
 )
 
 func compareChanges(
@@ -25,7 +26,7 @@ func compareChanges(
 	expected []string,
 ) {
 	t.Helper()
-	tmp, err := ioutil.TempDir("", "")
+	tmp, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +37,7 @@ func compareChanges(
 		if err := os.MkdirAll(filepath.Dir(n), 0775); err != nil {
 			t.Fatal(err)
 		}
-		if err := ioutil.WriteFile(n, []byte(f+"content"), 0664); err != nil {
+		if err := os.WriteFile(n, []byte(f+"content"), 0664); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -107,6 +108,110 @@ git mv renameme/file renamed/file
 		filepath.Join(ClusterProfilesPath, "renamed", "file"),
 	}
 	compareChanges(t, ClusterProfilesPath, files, cmd, GetChangedClusterProfiles, expected)
+}
+
+type testNode struct {
+	string
+}
+
+func (t testNode) Name() string {
+	return t.string
+}
+
+func (t testNode) Type() registry.Type          { return 0 }
+func (t testNode) Ancestors() []registry.Node   { return nil }
+func (t testNode) Descendants() []registry.Node { return nil }
+func (t testNode) Parents() []registry.Node     { return nil }
+func (t testNode) Children() []registry.Node    { return nil }
+
+var _ registry.Node = &testNode{}
+
+func TestGetChangedRegistrySteps(t *testing.T) {
+	files := []string{
+		"ipi/conf/aws/ipi-conf-aws-chain.yaml",
+		"ipi/conf/aws/ipi-conf-aws-ref.yaml",
+		"ipi/conf/aws/ipi-conf-aws-commands.sh",
+		"ipi/conf/aws/ipi-conf-gcp-chain.yaml",
+		"ipi/conf/aws/ipi-conf-gcp-ref.yaml",
+		"ipi/conf/aws/ipi-conf-gcp-commands.sh",
+		"observer/test/observer-test-observer.yaml",
+		"observer/test/observer-test-commands.sh",
+		"openshift/e2e/test/openshift-e2e-test-ref.yaml",
+		"openshift/e2e/test/openshift-e2e-test-commands.sh",
+		"upi/aws/upi-aws-workflow.yaml",
+		"upi/gcp/upi-gcp-workflow.yaml",
+	}
+	cmd := `
+> ipi/conf/aws/ipi-conf-aws-chain.yaml
+> observer/test/observer-test-observer.yaml
+> observer/test/observer-test-commands.sh
+> openshift/e2e/test/openshift-e2e-test-ref.yaml
+> openshift/e2e/test/openshift-e2e-test-commands.sh
+> upi/aws/upi-aws-workflow.yaml
+git add \
+    ipi/conf/aws/ipi-conf-aws-chain.yaml \
+    observer/test/observer-test-observer.yaml \
+    observer/test/observer-test-commands.sh \
+    openshift/e2e/test/openshift-e2e-test-ref.yaml \
+    openshift/e2e/test/openshift-e2e-test-commands.sh \
+    upi/aws/upi-aws-workflow.yaml
+`
+	graph := registry.NodeByName{
+		Chains: map[string]registry.Node{
+			"ipi-conf-aws": &testNode{"chain/ipi-conf-aws"},
+			"ipi-conf-gcp": &testNode{"chain/ipi-conf-gcp"},
+		},
+		Observers: map[string]registry.Node{
+			"observer-test": &testNode{"observer/test"},
+		},
+		References: map[string]registry.Node{
+			"ipi-conf-aws":       &testNode{"ref/ipi-conf-aws"},
+			"ipi-conf-gcp":       &testNode{"ref/ipi-conf-gcp"},
+			"openshift-e2e-test": &testNode{"ref/openshift-e2e-test"},
+		},
+		Workflows: map[string]registry.Node{
+			"upi-aws": &testNode{"workflow/upi-aws"},
+			"upi-gcp": &testNode{"workflow/upi-gcp"},
+		},
+	}
+	f := func(path string, baseRev string) (ret []string, _ error) {
+		nodes, err := GetChangedRegistrySteps(path, baseRev, graph)
+		for _, x := range nodes {
+			ret = append(ret, x.Name())
+		}
+		return ret, err
+	}
+	compareChanges(t, RegistryPath, files, cmd, f, []string{
+		"chain/ipi-conf-aws",
+		"observer/test",
+		"observer/test",
+		"ref/openshift-e2e-test",
+		"ref/openshift-e2e-test",
+		"workflow/upi-aws",
+	})
+}
+
+func TestGetAddedConfigs(t *testing.T) {
+	files := []string{
+		"nochanges/file", "changeme/file", "removeme/file", "moveme/file",
+		"renameme/file", "dir/dir/file",
+	}
+	cmd := `
+> changeme/file
+git rm --quiet removeme/file
+mkdir new/ renamed/
+> new/file
+git add new/file
+git mv moveme/file moveme/moved
+git mv renameme/file renamed/file
+> dir/dir/file
+`
+	expected := []string{
+		filepath.Join(CiopConfigInRepoPath, "moveme", "moved"),
+		filepath.Join(CiopConfigInRepoPath, "new", "file"),
+		filepath.Join(CiopConfigInRepoPath, "renamed", "file"),
+	}
+	compareChanges(t, CiopConfigInRepoPath, files, cmd, GetAddedConfigs, expected)
 }
 
 func TestConfigMapName(t *testing.T) {

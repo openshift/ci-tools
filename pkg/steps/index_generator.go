@@ -5,12 +5,17 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sirupsen/logrus"
+
 	coreapi "k8s.io/api/core/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	buildapi "github.com/openshift/api/build/v1"
+	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/api/helper"
+	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
@@ -20,6 +25,7 @@ type indexGeneratorStep struct {
 	releaseBuildConfig *api.ReleaseBuildConfiguration
 	resources          api.ResourceConfiguration
 	client             BuildClient
+	podClient          kubernetes.PodClient
 	jobSpec            *api.JobSpec
 	pullSecret         *coreapi.Secret
 }
@@ -33,15 +39,47 @@ func (s *indexGeneratorStep) Inputs() (api.InputDefinition, error) {
 
 func (*indexGeneratorStep) Validate() error { return nil }
 
+func databaseIndex(client ctrlruntimeclient.Client, name, namespace string) (bool, error) {
+	ist := &imagev1.ImageStreamTag{}
+	ctx := context.TODO()
+	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, ist); err != nil {
+		return false, fmt.Errorf("could not fetch source ImageStreamTag: %w", err)
+	}
+	// At the moment, we support only amd64
+	labels, err := helper.LabelsOnISTagImage(ctx, client, ist, api.ReleaseArchitectureAMD64)
+	if err != nil {
+		return false, fmt.Errorf("failed to get value of the image label: %w", err)
+	}
+	if labels == nil {
+		return false, nil
+	}
+	_, ok := labels["operators.operatorframework.io.index.database.v1"]
+	return ok, nil
+}
+
 func (s *indexGeneratorStep) Run(ctx context.Context) error {
 	return results.ForReason("building_index_generator").ForError(s.run(ctx))
 }
 
 func (s *indexGeneratorStep) run(ctx context.Context) error {
+	logrus.Warn("DEPRECATION WARNING: Building index images is deprecated and will be removed from ci-operator soon. See https://docs.ci.openshift.org/docs/how-tos/testing-operator-sdk-operators/#moving-to-file-based-catalog for details.")
 	source := fmt.Sprintf("%s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceSource)
 	workingDir, err := getWorkingDir(s.client, source, s.jobSpec.Namespace())
 	if err != nil {
 		return fmt.Errorf("failed to get workingDir: %w", err)
+	}
+	if s.config.BaseIndex != "" {
+		source := fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.BaseIndex)
+		ok, err := databaseIndex(s.client, source, s.jobSpec.Namespace())
+		if err != nil {
+			return fmt.Errorf("failed to determine if the image %s/%s is sqlite based index: %w", s.jobSpec.Namespace(), source, err)
+		}
+		if !ok {
+			logrus.Warn("Skipped building the index image: opm index commands, which are used by the ci-operator, interact only with a database index, but the base index is not one. Please refer to the FBC docs here: https://olm.operatorframework.io/docs/reference/file-based-catalogs/.")
+			return nil
+		} else {
+			logrus.Debug("The base index image is sqlite based")
+		}
 	}
 	dockerfile, err := s.indexGenDockerfile()
 	if err != nil {
@@ -51,6 +89,12 @@ func (s *indexGeneratorStep) run(ctx context.Context) error {
 	fromDigest, err := resolvePipelineImageStreamTagReference(ctx, s.client, fromTag, s.jobSpec)
 	if err != nil {
 		return err
+	}
+	var secrets []buildapi.SecretBuildSource
+	if s.pullSecret != nil {
+		secrets = append(secrets, buildapi.SecretBuildSource{
+			Secret: coreapi.LocalObjectReference{Name: s.pullSecret.Name},
+		})
 	}
 	build := buildFromSource(
 		s.jobSpec, fromTag, s.config.To,
@@ -69,9 +113,7 @@ func (s *indexGeneratorStep) run(ctx context.Context) error {
 					}},
 				},
 			},
-			Secrets: []buildapi.SecretBuildSource{{
-				Secret: coreapi.LocalObjectReference{Name: s.pullSecret.Name},
-			}},
+			Secrets: secrets,
 		},
 		fromDigest,
 		"",
@@ -79,7 +121,7 @@ func (s *indexGeneratorStep) run(ctx context.Context) error {
 		s.pullSecret,
 		nil,
 	)
-	err = handleBuild(ctx, s.client, *build)
+	err = handleBuilds(ctx, s.client, s.podClient, *build)
 	if err != nil && strings.Contains(err.Error(), "error checking provided apis") {
 		return results.ForReason("generating_index").WithError(err).Errorf("failed to generate operator index due to invalid bundle info: %v", err)
 	}
@@ -89,9 +131,10 @@ func (s *indexGeneratorStep) run(ctx context.Context) error {
 func (s *indexGeneratorStep) indexGenDockerfile() (string, error) {
 	var dockerCommands []string
 	dockerCommands = append(dockerCommands, "FROM quay.io/operator-framework/upstream-opm-builder AS builder")
-	// pull secret is needed for opm command
-	dockerCommands = append(dockerCommands, "COPY .dockerconfigjson .")
-	dockerCommands = append(dockerCommands, "RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json")
+	if s.pullSecret != nil {
+		dockerCommands = append(dockerCommands, "COPY .dockerconfigjson .")
+		dockerCommands = append(dockerCommands, "RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json")
+	}
 	var bundles []string
 	for _, bundleName := range s.config.OperatorIndex {
 		fullSpec, err := utils.ImageDigestFor(s.client, s.jobSpec.Namespace, api.PipelineImageStream, bundleName)()
@@ -152,12 +195,21 @@ func (s *indexGeneratorStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func IndexGeneratorStep(config api.IndexGeneratorStepConfiguration, releaseBuildConfig *api.ReleaseBuildConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
+func IndexGeneratorStep(
+	config api.IndexGeneratorStepConfiguration,
+	releaseBuildConfig *api.ReleaseBuildConfiguration,
+	resources api.ResourceConfiguration,
+	buildClient BuildClient,
+	podClient kubernetes.PodClient,
+	jobSpec *api.JobSpec,
+	pullSecret *coreapi.Secret,
+) api.Step {
 	return &indexGeneratorStep{
 		config:             config,
 		releaseBuildConfig: releaseBuildConfig,
 		resources:          resources,
 		client:             buildClient,
+		podClient:          podClient,
 		jobSpec:            jobSpec,
 		pullSecret:         pullSecret,
 	}

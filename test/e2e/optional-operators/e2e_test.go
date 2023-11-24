@@ -26,6 +26,10 @@ func TestOptionalOperators(t *testing.T) {
 		indexName:  "ci-index-named-bundle",
 		bundleName: "named-bundle",
 		target:     "verify-db-named",
+	}, {
+		name:       "ci-index-named-skip-index-bundle",
+		bundleName: "named-skip-index-bundle",
+		target:     "named-skip-index-bundle",
 	}}
 	for _, testCase := range testCases {
 		testCase := testCase
@@ -43,9 +47,18 @@ func TestOptionalOperators(t *testing.T) {
 				t.Fatalf("explicit var: didn't expect an error from ci-operator: %v; output:\n%v", err, string(output))
 			}
 			cmd.VerboseOutputContains(t, testCase.name, "Build src-bundle succeeded after",
-				fmt.Sprintf("Build %s succeeded after", testCase.bundleName),
+				fmt.Sprintf("Build %s succeeded after", testCase.bundleName))
+
+			fragments := []string{
 				fmt.Sprintf("Build %s-gen succeeded after", testCase.indexName),
-				fmt.Sprintf("Build %s succeeded after", testCase.indexName))
+				fmt.Sprintf("Build %s succeeded after", testCase.indexName),
+			}
+			if testCase.indexName != "" {
+				cmd.VerboseOutputContains(t, testCase.name, fragments...)
+			} else {
+				cmd.VerboseOutputDoesNotContain(t, testCase.name, fragments...)
+			}
+
 		})
 	}
 }

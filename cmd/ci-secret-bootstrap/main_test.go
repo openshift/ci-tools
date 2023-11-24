@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -286,7 +285,7 @@ var (
 )
 
 func TestCompleteOptions(t *testing.T) {
-	dir, err := ioutil.TempDir("", "test")
+	dir, err := os.MkdirTemp("", "test")
 	if err != nil {
 		t.Errorf("Failed to create temp dir")
 	}
@@ -311,7 +310,7 @@ func TestCompleteOptions(t *testing.T) {
 	}
 
 	for k, v := range fileMap {
-		if err := ioutil.WriteFile(k, v, 0755); err != nil {
+		if err := os.WriteFile(k, v, 0755); err != nil {
 			t.Errorf("Failed to remove temp dir")
 		}
 	}
@@ -1404,10 +1403,9 @@ func TestUpdateSecrets(t *testing.T) {
 			existSecretsOnDefault: []runtime.Object{
 				&coreapi.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:              "prod-secret-1",
-						Namespace:         "namespace-1",
-						Labels:            map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
-						CreationTimestamp: metav1.NewTime(time.Now()),
+						Name:      "prod-secret-1",
+						Namespace: "namespace-1",
+						Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
 					},
 					Data: map[string][]byte{
 						"key-name-1": []byte("abc"),
@@ -1576,7 +1574,7 @@ func TestUpdateSecrets(t *testing.T) {
 				"build01": fkcBuild01.CoreV1(),
 			}
 
-			actual := updateSecrets(clients, tc.secretsMap, tc.force, true)
+			actual := updateSecrets(clients, tc.secretsMap, tc.force, true, nil)
 			equalError(t, tc.expected, actual)
 
 			actualSecretsOnDefault, err := fkcDefault.CoreV1().Secrets("").List(context.TODO(), metav1.ListOptions{})
@@ -1830,12 +1828,12 @@ func TestGetUnusedItems(t *testing.T) {
 		id            string
 		config        secretbootstrap.Config
 		items         map[string]vaultclient.KVData
-		allowItems    sets.String
+		allowItems    sets.Set[string]
 		expectedError string
 	}{
 		{
 			id:         "all used, no unused items expected",
-			allowItems: sets.NewString(),
+			allowItems: sets.New[string](),
 			items: map[string]vaultclient.KVData{
 				"item-name-1": {
 					Data: map[string]string{
@@ -1865,7 +1863,7 @@ func TestGetUnusedItems(t *testing.T) {
 		},
 		{
 			id:         "partly used, unused items expected",
-			allowItems: sets.NewString(),
+			allowItems: sets.New[string](),
 			items: map[string]vaultclient.KVData{
 				"item-name-1": {
 					Data: map[string]string{
@@ -1894,7 +1892,7 @@ func TestGetUnusedItems(t *testing.T) {
 		},
 		{
 			id:         "partly used with docker json config, unused items expected",
-			allowItems: sets.NewString(),
+			allowItems: sets.New[string](),
 			items: map[string]vaultclient.KVData{
 				"item-name-1": {
 					Data: map[string]string{
@@ -1930,7 +1928,7 @@ func TestGetUnusedItems(t *testing.T) {
 		},
 		{
 			id:         "partly used with an allow list, no unused items expected",
-			allowItems: sets.NewString([]string{"item-name-2"}...),
+			allowItems: sets.New[string]([]string{"item-name-2"}...),
 			items: map[string]vaultclient.KVData{
 				"item-name-1": {
 					Data: map[string]string{
@@ -2913,8 +2911,218 @@ func TestPruneIrrelevantConfiguration(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			pruneIrrelevantConfiguration(tc.given, sets.NewString("config-updater"))
+			pruneIrrelevantConfiguration(tc.given, sets.New[string]("config-updater"))
 			if diff := cmp.Diff(tc.given, tc.expected); diff != "" {
+				t.Errorf("%s: actual differs from expected: %s", tc.name, diff)
+			}
+		})
+	}
+}
+
+func TestMutateGlobalPullSecret(t *testing.T) {
+	testCases := []struct {
+		name          string
+		original      *coreapi.Secret
+		secret        *coreapi.Secret
+		mutatedSecret *coreapi.Secret
+		expected      bool
+		expectedErr   error
+	}{
+		{
+			name:        "error on nil secret",
+			expectedErr: fmt.Errorf("failed to parse the constructed secret: failed to get content from nil secret"),
+		},
+		{
+			name:        "error on secret with empty data",
+			secret:      &coreapi.Secret{},
+			expectedErr: fmt.Errorf("failed to parse the constructed secret: failed to get content from an secret with no data"),
+		},
+		{
+			name: "error on secret with bad data",
+			secret: &coreapi.Secret{
+				Data: map[string][]byte{
+					"key": []byte("value"),
+				},
+			},
+			expectedErr: fmt.Errorf("failed to parse the constructed secret: there is no key in the secret: .dockerconfigjson"),
+		},
+		{
+			name: "error on secret with non-json data",
+			secret: &coreapi.Secret{
+				Data: map[string][]byte{
+					".dockerconfigjson": []byte("value"),
+				},
+			},
+			expectedErr: fmt.Errorf("failed to parse the constructed secret: failed to unmarshal the docker config: invalid character 'v' looking for beginning of value"),
+		},
+		{
+			name: "error on secret with bad json data",
+			secret: &coreapi.Secret{
+				Data: map[string][]byte{
+					".dockerconfigjson": []byte(`{"key":"value"}`),
+				},
+			},
+			expectedErr: fmt.Errorf("failed to get token for registry.ci.openshift.org"),
+		},
+		{
+			name: "bad original",
+			secret: &coreapi.Secret{
+				Data: map[string][]byte{
+					".dockerconfigjson": []byte(`{
+	"auths": {
+		"a": {
+			"auth": "foo",
+			"email": "e"
+		},
+		"registry.ci.openshift.org": {
+			"auth": "cool"
+		},
+		"c": {
+			"auth": "bar",
+			"email": "g"
+		}
+	}
+}`),
+				},
+			},
+			expectedErr: fmt.Errorf("failed to parse the original secret: failed to get content from nil secret"),
+		},
+		{
+			name: "basic case: expired auth is replaced",
+			secret: &coreapi.Secret{
+				Data: map[string][]byte{
+					".dockerconfigjson": []byte(`{
+	"auths": {
+		"a": {
+			"auth": "foo",
+			"email": "e"
+		},
+		"registry.ci.openshift.org": {
+			"auth": "cool"
+		},
+		"c": {
+			"auth": "bar",
+			"email": "g"
+		}
+	}
+}`),
+				},
+			},
+			original: &coreapi.Secret{
+				Data: map[string][]byte{
+					".dockerconfigjson": []byte(`{
+	"auths": {
+		"osd": {
+			"auth": "foo",
+			"email": "e"
+		},
+		"registry.ci.openshift.org": {
+			"auth": "expired"
+		}
+	}
+}`),
+				},
+				Type: coreapi.SecretTypeDockerConfigJson,
+			},
+			expected: true,
+			mutatedSecret: &coreapi.Secret{
+				Data: map[string][]byte{
+					".dockerconfigjson": []byte("{\"auths\":{\"osd\":{\"auth\":\"foo\",\"email\":\"e\"},\"registry.ci.openshift.org\":{\"auth\":\"cool\"}}}"),
+				},
+				Type: coreapi.SecretTypeDockerConfigJson,
+			},
+		},
+		{
+			name: "not mutated if the auth is still valid",
+			secret: &coreapi.Secret{
+				Data: map[string][]byte{
+					".dockerconfigjson": []byte(`{
+	"auths": {
+		"a": {
+			"auth": "foo",
+			"email": "e"
+		},
+		"registry.ci.openshift.org": {
+			"auth": "cool"
+		},
+		"c": {
+			"auth": "bar",
+			"email": "g"
+		}
+	}
+}`),
+				},
+			},
+			original: &coreapi.Secret{
+				Data: map[string][]byte{
+					".dockerconfigjson": []byte(`{
+	"auths": {
+		"osd": {
+			"auth": "foo",
+			"email": "e"
+		},
+		"registry.ci.openshift.org": {
+			"auth": "cool"
+		}
+	}
+}`),
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "the auth for app.ci's registry is appended",
+			secret: &coreapi.Secret{
+				Data: map[string][]byte{
+					".dockerconfigjson": []byte(`{
+	"auths": {
+		"a": {
+			"auth": "foo",
+			"email": "e"
+		},
+		"registry.ci.openshift.org": {
+			"auth": "cool"
+		},
+		"c": {
+			"auth": "bar",
+			"email": "g"
+		}
+	}
+}`),
+				},
+			},
+			original: &coreapi.Secret{
+				Data: map[string][]byte{
+					".dockerconfigjson": []byte(`{
+	"auths": {
+		"osd": {
+			"auth": "foo",
+			"email": "e"
+		}
+	}
+}`),
+				},
+				Type: coreapi.SecretTypeDockerConfigJson,
+			},
+			expected: true,
+			mutatedSecret: &coreapi.Secret{
+				Data: map[string][]byte{
+					".dockerconfigjson": []byte("{\"auths\":{\"osd\":{\"auth\":\"foo\",\"email\":\"e\"},\"registry.ci.openshift.org\":{\"auth\":\"cool\"}}}"),
+				},
+				Type: coreapi.SecretTypeDockerConfigJson,
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, actualErr := mutateGlobalPullSecret(tc.original, tc.secret)
+			if diff := cmp.Diff(actualErr, tc.expectedErr, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("%s: actualErr differs from expectedErr: %s", tc.name, diff)
+			}
+			if diff := cmp.Diff(actual, tc.expected); diff != "" && actualErr == nil {
+				t.Errorf("%s: actual differs from expected: %s", tc.name, diff)
+			}
+			if diff := cmp.Diff(tc.original, tc.mutatedSecret, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" && actual && actualErr == nil {
 				t.Errorf("%s: actual differs from expected: %s", tc.name, diff)
 			}
 		})

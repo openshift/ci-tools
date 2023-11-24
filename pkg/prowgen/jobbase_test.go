@@ -279,6 +279,22 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 			},
 		},
 		{
+			name: "simple container-based test with timeout and no decoration",
+			cfg: &ciop.ReleaseBuildConfiguration{
+				InputConfiguration: ciop.InputConfiguration{
+					BuildRootImage: &ciop.BuildRootImageConfiguration{
+						FromRepository: true,
+					},
+				},
+			},
+			test: ciop.TestStepConfiguration{
+				As:                         "simple",
+				Commands:                   "make",
+				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
+				Timeout:                    &v1.Duration{Duration: time.Second},
+			},
+		},
+		{
 			name: "simple container-based test with secret",
 			test: ciop.TestStepConfiguration{
 				As:                         "simple",
@@ -329,7 +345,15 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 			name: "multi-stage test with releases",
 			cfg: &ciop.ReleaseBuildConfiguration{
 				InputConfiguration: ciop.InputConfiguration{
-					Releases: map[string]ciop.UnresolvedRelease{"latest": {Candidate: &ciop.Candidate{Product: "ocp"}}}},
+					Releases: map[string]ciop.UnresolvedRelease{
+						"latest": {
+							Candidate: &ciop.Candidate{
+								ReleaseDescriptor: ciop.ReleaseDescriptor{
+									Product: "ocp",
+								},
+							},
+						},
+					}},
 			},
 			test: ciop.TestStepConfiguration{
 				As: "simple",
@@ -409,6 +433,15 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 				As:                         "simple",
 				Commands:                   "make",
 				Cluster:                    "build01",
+				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
+			},
+		},
+		{
+			name: "simple container-based test with arm01 cluster",
+			test: ciop.TestStepConfiguration{
+				As:                         "simple",
+				Commands:                   "make",
+				Cluster:                    "arm01",
 				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
 			},
 		},

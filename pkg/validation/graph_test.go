@@ -197,11 +197,35 @@ func TestIsValidGraph_ContainerTestFrom(t *testing.T) {
 		config   api.ReleaseBuildConfiguration
 		expected error
 	}{{
-		name: "invalid",
+		name: "invalid image",
 		config: api.ReleaseBuildConfiguration{
 			Tests: tests("invalid"),
 		},
 		expected: errs(`tests[test-invalid].from: unknown image "invalid"`),
+	}, {
+		name: "missing `root` image",
+		config: api.ReleaseBuildConfiguration{
+			Tests: tests("root"),
+		},
+		expected: errs("tests[test-root].from: unknown image \"root\" (configuration is missing `build_root`)"),
+	}, {
+		name: "missing `bin` image",
+		config: api.ReleaseBuildConfiguration{
+			Tests: tests("bin"),
+		},
+		expected: errs("tests[test-bin].from: unknown image \"bin\" (configuration is missing `binary_build_commands`)"),
+	}, {
+		name: "missing `test-bin` image",
+		config: api.ReleaseBuildConfiguration{
+			Tests: tests("test-bin"),
+		},
+		expected: errs("tests[test-test-bin].from: unknown image \"test-bin\" (configuration is missing `test_binary_build_commands`)"),
+	}, {
+		name: "missing `rpms` image",
+		config: api.ReleaseBuildConfiguration{
+			Tests: tests("rpms"),
+		},
+		expected: errs("tests[test-rpms].from: unknown image \"rpms\" (configuration is missing `rpm_build_commands`)"),
 	}, {
 		name:   "from src",
 		config: api.ReleaseBuildConfiguration{Tests: tests("src")},
@@ -285,6 +309,67 @@ func TestIsValidGraph_ContainerTestFrom(t *testing.T) {
 			},
 			Tests: tests("root"),
 		},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			graphConf := defaults.FromConfigStatic(&tc.config)
+			err := IsValidGraphConfiguration(graphConf.Steps)
+			testhelper.Diff(t, "error", err, tc.expected, testhelper.EquateErrorMessage)
+		})
+	}
+}
+
+func TestIsValidGraph_MultiStageTestFrom(t *testing.T) {
+	tests := func(from string) []api.TestStepConfiguration {
+		return []api.TestStepConfiguration{{
+			As: "test-" + from,
+			MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+				Test: []api.LiteralTestStep{{
+					As:   fmt.Sprintf("test-%s-step", from),
+					From: from,
+				}},
+			},
+		}}
+	}
+	errs := func(msgs ...string) error {
+		var ret []error
+		for _, m := range msgs {
+			ret = append(ret, errors.New(m))
+		}
+		return utilerrors.NewAggregate(ret)
+	}
+	for _, tc := range []struct {
+		name     string
+		config   api.ReleaseBuildConfiguration
+		expected error
+	}{{
+		name: "unknown image",
+		config: api.ReleaseBuildConfiguration{
+			Tests: tests("unknown"),
+		},
+	}, {
+		name: "missing `root` image",
+		config: api.ReleaseBuildConfiguration{
+			Tests: tests("root"),
+		},
+		expected: errs("tests[test-root].steps.test[0].from: unknown image \"root\" (configuration is missing `build_root`)"),
+	}, {
+		name: "missing `bin` image",
+		config: api.ReleaseBuildConfiguration{
+			Tests: tests("bin"),
+		},
+		expected: errs("tests[test-bin].steps.test[0].from: unknown image \"bin\" (configuration is missing `binary_build_commands`)"),
+	}, {
+		name: "missing `test-bin` image",
+		config: api.ReleaseBuildConfiguration{
+			Tests: tests("test-bin"),
+		},
+		expected: errs("tests[test-test-bin].steps.test[0].from: unknown image \"test-bin\" (configuration is missing `test_binary_build_commands`)"),
+	}, {
+		name: "missing `rpms` image",
+		config: api.ReleaseBuildConfiguration{
+			Tests: tests("rpms"),
+		},
+		expected: errs("tests[test-rpms].steps.test[0].from: unknown image \"rpms\" (configuration is missing `rpm_build_commands`)"),
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			graphConf := defaults.FromConfigStatic(&tc.config)

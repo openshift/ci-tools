@@ -25,9 +25,11 @@ func (r *releaseControllerJobResolver) resolve(ocp string, releaseType api.Relea
 		return nil, fmt.Errorf("job type is not supported: %s", jobType)
 	}
 	return config.ResolveJobs(r.httpClient, api.Candidate{
-		Product:      api.ReleaseProductOCP,
-		Architecture: api.ReleaseArchitectureAMD64,
-		Stream:       releaseType,
-		Version:      ocp,
+		ReleaseDescriptor: api.ReleaseDescriptor{
+			Product:      api.ReleaseProductOCP,
+			Architecture: api.ReleaseArchitectureAMD64,
+		},
+		Stream:  releaseType,
+		Version: ocp,
 	}, jobType)
 }

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -244,7 +243,11 @@ func (c *Client) NewRequest(method, urlStr string, body interface{}) (*http.Requ
 	// Request compact JSON
 	// See https://gerrit-review.googlesource.com/Documentation/rest-api.html#output
 	req.Header.Add("Accept", "application/json")
-	req.Header.Add("Content-Type", "application/json")
+
+	// No need to send the content type if there is no content
+	if body != nil {
+		req.Header.Add("Content-Type", "application/json")
+	}
 
 	// TODO: Add gzip encoding
 	// Accept-Encoding request header is set to gzip
@@ -368,7 +371,7 @@ func (c *Client) Do(req *http.Request, v interface{}) (*Response, error) {
 			}
 		} else {
 			var body []byte
-			body, err = ioutil.ReadAll(resp.Body)
+			body, err = io.ReadAll(resp.Body)
 			if err != nil {
 				// even though there was an error, we still return the response
 				// in case the caller wants to inspect it further
@@ -426,8 +429,8 @@ func (c *Client) addAuthentication(req *http.Request) error {
 		// When the function exits discard the rest of the
 		// body and close it.  This should cause go to
 		// reuse the connection.
-		defer io.Copy(ioutil.Discard, response.Body) // nolint: errcheck
-		defer response.Body.Close()                  // nolint: errcheck
+		defer io.Copy(io.Discard, response.Body) // nolint: errcheck
+		defer response.Body.Close()              // nolint: errcheck
 
 		if response.StatusCode == http.StatusUnauthorized {
 			authorization, err := c.Authentication.digestAuthHeader(response)

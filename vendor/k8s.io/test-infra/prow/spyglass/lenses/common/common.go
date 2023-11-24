@@ -22,7 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
@@ -56,7 +56,7 @@ func NewLensServer(
 
 	mux := http.NewServeMux()
 
-	seenLens := sets.String{}
+	seenLens := sets.Set[string]{}
 	for _, lens := range lenses {
 		if seenLens.Has(lens.Config.LensName) {
 			return nil, fmt.Errorf("duplicate lens named %q", lens.Config.LensName)
@@ -97,7 +97,7 @@ type lensHandlerOpts struct {
 
 func newLensHandler(lens api.Lens, opts lensHandlerOpts) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		body, err := ioutil.ReadAll(r.Body)
+		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			writeHTTPError(w, fmt.Errorf("failed to read request body: %w", err), http.StatusInternalServerError)
 			return

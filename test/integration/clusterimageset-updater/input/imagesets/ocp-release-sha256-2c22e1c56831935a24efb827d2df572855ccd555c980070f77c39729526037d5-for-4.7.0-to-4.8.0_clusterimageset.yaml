@@ -1,0 +1,11 @@
+apiVersion: hive.openshift.io/v1
+kind: ClusterImageSet
+metadata:
+  annotations:
+    version_lower: '4.7.0'
+    version_upper: '4.8.0'
+  creationTimestamp: null
+  name: ocp-release-sha256-2c22e1c56831935a24efb827d2df572855ccd555c980070f77c39729526037d5-for-4.7.0-to-4.8.0
+spec:
+  releaseImage: quay.io/openshift-release-dev/ocp-release@sha256:2c22e1c56831935a24efb827d2df572855ccd555c980070f77c39729526037d5
+status: {}

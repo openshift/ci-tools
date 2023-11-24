@@ -2,6 +2,7 @@ package validation
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -26,10 +27,12 @@ func TestValidateReleases(t *testing.T) {
 			input: map[string]api.UnresolvedRelease{
 				"first": {
 					Candidate: &api.Candidate{
-						Product:      api.ReleaseProductOKD,
-						Architecture: api.ReleaseArchitectureAMD64,
-						Stream:       api.ReleaseStreamOKD,
-						Version:      "4.4",
+						ReleaseDescriptor: api.ReleaseDescriptor{
+							Product:      api.ReleaseProductOKD,
+							Architecture: api.ReleaseArchitectureAMD64,
+						},
+						Stream:  api.ReleaseStreamOKD,
+						Version: "4.4",
 					},
 				},
 				"second": {
@@ -41,8 +44,10 @@ func TestValidateReleases(t *testing.T) {
 				},
 				"third": {
 					Prerelease: &api.Prerelease{
-						Product:      api.ReleaseProductOCP,
-						Architecture: api.ReleaseArchitectureS390x,
+						ReleaseDescriptor: api.ReleaseDescriptor{
+							Product:      api.ReleaseProductOCP,
+							Architecture: api.ReleaseArchitectureS390x,
+						},
 						VersionBounds: api.VersionBounds{
 							Lower: "4.1.0",
 							Upper: "4.2.0",
@@ -56,10 +61,12 @@ func TestValidateReleases(t *testing.T) {
 			input: map[string]api.UnresolvedRelease{
 				"latest": {
 					Candidate: &api.Candidate{
-						Product:      api.ReleaseProductOKD,
-						Architecture: api.ReleaseArchitectureAMD64,
-						Stream:       api.ReleaseStreamOKD,
-						Version:      "4.4",
+						ReleaseDescriptor: api.ReleaseDescriptor{
+							Product:      api.ReleaseProductOKD,
+							Architecture: api.ReleaseArchitectureAMD64,
+						},
+						Stream:  api.ReleaseStreamOKD,
+						Version: "4.4",
 					},
 				},
 			},
@@ -73,10 +80,12 @@ func TestValidateReleases(t *testing.T) {
 			input: map[string]api.UnresolvedRelease{
 				"initial": {
 					Candidate: &api.Candidate{
-						Product:      api.ReleaseProductOKD,
-						Architecture: api.ReleaseArchitectureAMD64,
-						Stream:       api.ReleaseStreamOKD,
-						Version:      "4.4",
+						ReleaseDescriptor: api.ReleaseDescriptor{
+							Product:      api.ReleaseProductOKD,
+							Architecture: api.ReleaseArchitectureAMD64,
+						},
+						Stream:  api.ReleaseStreamOKD,
+						Version: "4.4",
 					},
 				},
 			},
@@ -124,10 +133,12 @@ func TestValidateReleases(t *testing.T) {
 			input: map[string]api.UnresolvedRelease{
 				"first": {
 					Candidate: &api.Candidate{
-						Product:      "bad",
-						Architecture: api.ReleaseArchitectureAMD64,
-						Stream:       api.ReleaseStreamOKD,
-						Version:      "4.4",
+						ReleaseDescriptor: api.ReleaseDescriptor{
+							Product:      "bad",
+							Architecture: api.ReleaseArchitectureAMD64,
+						},
+						Stream:  api.ReleaseStreamOKD,
+						Version: "4.4",
 					},
 				},
 				"second": {
@@ -139,8 +150,10 @@ func TestValidateReleases(t *testing.T) {
 				},
 				"third": {
 					Prerelease: &api.Prerelease{
-						Product:      api.ReleaseProductOCP,
-						Architecture: api.ReleaseArchitectureS390x,
+						ReleaseDescriptor: api.ReleaseDescriptor{
+							Product:      api.ReleaseProductOCP,
+							Architecture: api.ReleaseArchitectureS390x,
+						},
 						VersionBounds: api.VersionBounds{
 							Lower: "4.1.0",
 						},
@@ -152,6 +165,36 @@ func TestValidateReleases(t *testing.T) {
 				errors.New("root.first.product: must be one of ocp, okd"),
 				errors.New("root.second.channel: must be one of candidate, fast, stable"),
 				errors.New("root.third.version_bounds.upper: must be set"),
+			},
+		},
+		{
+			name: "invalid release name",
+			input: map[string]api.UnresolvedRelease{
+				"ocp-4.11": {
+					Integration: &api.Integration{
+						Name:      "4.11",
+						Namespace: "ocp",
+					},
+				},
+				"ocp-4-11": {
+					Integration: &api.Integration{
+						Name:      "4.11",
+						Namespace: "ocp",
+					},
+				},
+				"e2e-hub-4.9": {
+					Candidate: &api.Candidate{
+						ReleaseDescriptor: api.ReleaseDescriptor{
+							Product: api.ReleaseProductOCP,
+						},
+						Stream:  api.ReleaseStreamNightly,
+						Version: "4.8",
+					},
+				},
+			},
+			output: []error{
+				fmt.Errorf("root[e2e-hub-4.9]: the release name is not valid: %w", fmt.Errorf("must not contain '.'")),
+				fmt.Errorf("root[ocp-4.11]: the release name is not valid: %w", fmt.Errorf("must not contain '.'")),
 			},
 		},
 	}
@@ -176,26 +219,32 @@ func TestValidateCandidate(t *testing.T) {
 		{
 			name: "valid candidate",
 			input: api.Candidate{
-				Product:      api.ReleaseProductOKD,
-				Architecture: api.ReleaseArchitectureAMD64,
-				Stream:       api.ReleaseStreamOKD,
-				Version:      "4.4",
-				Relative:     10,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOKD,
+					Architecture: api.ReleaseArchitectureAMD64,
+					Relative:     10,
+				},
+				Stream:  api.ReleaseStreamOKD,
+				Version: "4.4",
 			},
 		},
 		{
 			name: "valid candidate for ocp",
 			input: api.Candidate{
-				Product:      api.ReleaseProductOCP,
-				Architecture: api.ReleaseArchitectureS390x,
-				Stream:       api.ReleaseStreamNightly,
-				Version:      "4.5",
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOCP,
+					Architecture: api.ReleaseArchitectureS390x,
+				},
+				Stream:  api.ReleaseStreamNightly,
+				Version: "4.5",
 			},
 		},
 		{
 			name: "valid candidate with defaulted arch",
 			input: api.Candidate{
-				Product: api.ReleaseProductOKD,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product: api.ReleaseProductOKD,
+				},
 				Stream:  api.ReleaseStreamOKD,
 				Version: "4.4",
 			},
@@ -203,29 +252,35 @@ func TestValidateCandidate(t *testing.T) {
 		{
 			name: "valid candidate with defaulted arch and okd stream",
 			input: api.Candidate{
-				Product: api.ReleaseProductOKD,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product: api.ReleaseProductOKD,
+				},
 				Version: "4.4",
 			},
 		},
 		{
 			name: "invalid candidate from arch",
 			input: api.Candidate{
-				Product:      api.ReleaseProductOKD,
-				Architecture: "oops",
-				Stream:       api.ReleaseStreamOKD,
-				Version:      "4.4",
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOKD,
+					Architecture: "oops",
+				},
+				Stream:  api.ReleaseStreamOKD,
+				Version: "4.4",
 			},
 			output: []error{
-				errors.New("root.architecture: must be one of amd64, arm64, ppc64le, s390x"),
+				errors.New("root.architecture: must be one of amd64, arm64, multi, ppc64le, s390x"),
 			},
 		},
 		{
 			name: "invalid candidate from product",
 			input: api.Candidate{
-				Product:      "whoa",
-				Architecture: api.ReleaseArchitectureAMD64,
-				Stream:       api.ReleaseStreamOKD,
-				Version:      "4.4",
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      "whoa",
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
+				Stream:  api.ReleaseStreamOKD,
+				Version: "4.4",
 			},
 			output: []error{
 				errors.New("root.product: must be one of ocp, okd"),
@@ -234,22 +289,26 @@ func TestValidateCandidate(t *testing.T) {
 		{
 			name: "invalid candidate from stream",
 			input: api.Candidate{
-				Product:      api.ReleaseProductOKD,
-				Architecture: api.ReleaseArchitectureAMD64,
-				Stream:       api.ReleaseStreamCI,
-				Version:      "4.4",
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOKD,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
+				Stream:  api.ReleaseStreamCI,
+				Version: "4.4",
 			},
 			output: []error{
-				errors.New("root.stream: must be one of , okd"),
+				errors.New("root.stream: must be one of , okd, okd-scos"),
 			},
 		},
 		{
 			name: "invalid candidate from version",
 			input: api.Candidate{
-				Product:      api.ReleaseProductOKD,
-				Architecture: api.ReleaseArchitectureAMD64,
-				Stream:       api.ReleaseStreamOKD,
-				Version:      "4",
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOKD,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
+				Stream:  api.ReleaseStreamOKD,
+				Version: "4",
 			},
 			output: []error{
 				errors.New(`root.version: must be a minor version in the form [0-9]\.[0-9]+`),
@@ -258,10 +317,12 @@ func TestValidateCandidate(t *testing.T) {
 		{
 			name: "invalid candidate from ocp stream",
 			input: api.Candidate{
-				Product:      api.ReleaseProductOCP,
-				Architecture: api.ReleaseArchitectureAMD64,
-				Stream:       api.ReleaseStreamOKD,
-				Version:      "4.4",
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOCP,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
+				Stream:  api.ReleaseStreamOKD,
+				Version: "4.4",
 			},
 			output: []error{
 				errors.New("root.stream: must be one of ci, nightly"),
@@ -270,11 +331,13 @@ func TestValidateCandidate(t *testing.T) {
 		{
 			name: "invalid relative",
 			input: api.Candidate{
-				Product:      api.ReleaseProductOCP,
-				Architecture: api.ReleaseArchitectureAMD64,
-				Stream:       api.ReleaseStreamCI,
-				Version:      "4.4",
-				Relative:     -1,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOCP,
+					Architecture: api.ReleaseArchitectureAMD64,
+					Relative:     -1,
+				},
+				Stream:  api.ReleaseStreamCI,
+				Version: "4.4",
 			},
 			output: []error{
 				errors.New("root.relative: must be a positive integer"),
@@ -322,7 +385,7 @@ func TestValidateRelease(t *testing.T) {
 				Version:      "4.4",
 			},
 			output: []error{
-				errors.New("root.architecture: must be one of amd64, arm64, ppc64le, s390x"),
+				errors.New("root.architecture: must be one of amd64, arm64, multi, ppc64le, s390x"),
 			},
 		},
 		{
@@ -370,8 +433,10 @@ func TestValidatePrerelease(t *testing.T) {
 		{
 			name: "valid prerelease",
 			input: api.Prerelease{
-				Product:      api.ReleaseProductOKD,
-				Architecture: api.ReleaseArchitectureAMD64,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOKD,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
 				VersionBounds: api.VersionBounds{
 					Lower: "4.1.0",
 					Upper: "4.2.0",
@@ -381,8 +446,10 @@ func TestValidatePrerelease(t *testing.T) {
 		{
 			name: "valid prerelease for ocp",
 			input: api.Prerelease{
-				Product:      api.ReleaseProductOCP,
-				Architecture: api.ReleaseArchitectureS390x,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOCP,
+					Architecture: api.ReleaseArchitectureS390x,
+				},
 				VersionBounds: api.VersionBounds{
 					Lower: "4.1.0",
 					Upper: "4.2.0",
@@ -392,7 +459,9 @@ func TestValidatePrerelease(t *testing.T) {
 		{
 			name: "valid prerelease with defaulted arch",
 			input: api.Prerelease{
-				Product: api.ReleaseProductOKD,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product: api.ReleaseProductOKD,
+				},
 				VersionBounds: api.VersionBounds{
 					Lower: "4.1.0",
 					Upper: "4.2.0",
@@ -402,22 +471,26 @@ func TestValidatePrerelease(t *testing.T) {
 		{
 			name: "invalid prerelease from arch",
 			input: api.Prerelease{
-				Product:      api.ReleaseProductOKD,
-				Architecture: "oops",
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOKD,
+					Architecture: "oops",
+				},
 				VersionBounds: api.VersionBounds{
 					Lower: "4.1.0",
 					Upper: "4.2.0",
 				},
 			},
 			output: []error{
-				errors.New("root.architecture: must be one of amd64, arm64, ppc64le, s390x"),
+				errors.New("root.architecture: must be one of amd64, arm64, multi, ppc64le, s390x"),
 			},
 		},
 		{
 			name: "invalid prerelease from product",
 			input: api.Prerelease{
-				Product:      "whoa",
-				Architecture: api.ReleaseArchitectureAMD64,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      "whoa",
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
 				VersionBounds: api.VersionBounds{
 					Lower: "4.1.0",
 					Upper: "4.2.0",
@@ -430,8 +503,10 @@ func TestValidatePrerelease(t *testing.T) {
 		{
 			name: "invalid prerelease from missing version bounds",
 			input: api.Prerelease{
-				Product:       api.ReleaseProductOCP,
-				Architecture:  api.ReleaseArchitectureAMD64,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOCP,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
 				VersionBounds: api.VersionBounds{},
 			},
 			output: []error{

@@ -321,9 +321,9 @@ func coalesceOnce(input []TimeRange) []TimeRange {
 func (q *CachedQuery) Prune() {
 	for meta, values := range q.DataByMetaData {
 		var toRemove []model.Fingerprint
-		if numFingerprints := len(values); numFingerprints > 50 {
-			toRemove = append(toRemove, values[0:numFingerprints-50]...)
-			q.DataByMetaData[meta] = values[numFingerprints-50:]
+		if numFingerprints := len(values); numFingerprints > 25 {
+			toRemove = append(toRemove, values[0:numFingerprints-25]...)
+			q.DataByMetaData[meta] = values[numFingerprints-25:]
 		}
 		if len(toRemove) == 0 {
 			continue

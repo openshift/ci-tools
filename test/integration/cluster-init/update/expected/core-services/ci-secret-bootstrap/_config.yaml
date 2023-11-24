@@ -13,6 +13,8 @@ cluster_groups:
   - arm01
   non_osd_x86:
   - build01
+  osd_global_pull_secret:
+  - existingCluster
 secret_configs:
 - from:
     app.ci.config:
@@ -23,6 +25,9 @@ secret_configs:
       item: pod-scaler
     existingCluster.config:
       field: sa.pod-scaler.existingCluster.config
+      item: pod-scaler
+    sa.pod-scaler.existingCluster.token.txt:
+      field: sa.pod-scaler.existingCluster.token.txt
       item: pod-scaler
   to:
   - cluster: app.ci
@@ -49,6 +54,9 @@ secret_configs:
     sa.crier.existingCluster.config:
       field: sa.crier.existingCluster.config
       item: build_farm
+    sa.crier.existingCluster.token.txt:
+      field: sa.crier.existingCluster.token.txt
+      item: build_farm
   to:
   - cluster: app.ci
     name: crier
@@ -65,7 +73,7 @@ secret_configs:
       item: build_farm
     sa.config-updater.existingCluster.config:
       field: sa.config-updater.existingCluster.config
-      item: build_farm
+      item: config-updater
   to:
   - cluster: app.ci
     name: config-updater
@@ -86,6 +94,9 @@ secret_configs:
     sa.deck.existingCluster.config:
       field: sa.deck.existingCluster.config
       item: build_farm
+    sa.deck.existingCluster.token.txt:
+      field: sa.deck.existingCluster.token.txt
+      item: build_farm
   to:
   - cluster: app.ci
     name: deck
@@ -102,6 +113,9 @@ secret_configs:
       item: build_farm
     sa.hook.existingCluster.config:
       field: sa.hook.existingCluster.config
+      item: build_farm
+    sa.hook.existingCluster.token.txt:
+      field: sa.hook.existingCluster.token.txt
       item: build_farm
   to:
   - cluster: app.ci
@@ -120,6 +134,9 @@ secret_configs:
     sa.prow-controller-manager.existingCluster.config:
       field: sa.prow-controller-manager.existingCluster.config
       item: build_farm
+    sa.prow-controller-manager.existingCluster.token.txt:
+      field: sa.prow-controller-manager.existingCluster.token.txt
+      item: build_farm
   to:
   - cluster: app.ci
     name: prow-controller-manager
@@ -137,6 +154,9 @@ secret_configs:
     sa.sinker.existingCluster.config:
       field: sa.sinker.existingCluster.config
       item: build_farm
+    sa.sinker.existingCluster.token.txt:
+      field: sa.sinker.existingCluster.token.txt
+      item: build_farm
   to:
   - cluster: app.ci
     name: sinker
@@ -147,6 +167,9 @@ secret_configs:
       item: build_farm
     sa.dptp-controller-manager.existingCluster.config:
       field: sa.dptp-controller-manager.existingCluster.config
+      item: build_farm
+    sa.dptp-controller-manager.existingCluster.token.txt:
+      field: sa.dptp-controller-manager.existingCluster.token.txt
       item: build_farm
   to:
   - cluster: app.ci
@@ -161,6 +184,9 @@ secret_configs:
       item: build_farm
     sa.ci-operator.existingCluster.config:
       field: sa.ci-operator.existingCluster.config
+      item: build_farm
+    sa.ci-operator.existingCluster.token.txt:
+      field: sa.ci-operator.existingCluster.token.txt
       item: build_farm
     sa.pj-rehearse.app.ci.config:
       field: sa.pj-rehearse.app.ci.config
@@ -180,6 +206,9 @@ secret_configs:
     sa.github-ldap-user-group-creator.existingCluster.config:
       field: sa.github-ldap-user-group-creator.existingCluster.config
       item: build_farm
+    sa.github-ldap-user-group-creator.existingCluster.token.txt:
+      field: sa.github-ldap-user-group-creator.existingCluster.token.txt
+      item: build_farm
   to:
   - cluster: app.ci
     name: github-ldap-user-group-creator
@@ -191,6 +220,9 @@ secret_configs:
     sa.promoted-image-governor.existingCluster.config:
       field: sa.promoted-image-governor.existingCluster.config
       item: build_farm
+    sa.promoted-image-governor.existingCluster.token.txt:
+      field: sa.promoted-image-governor.existingCluster.token.txt
+      item: build_farm
   to:
   - cluster: app.ci
     name: promoted-image-governor
@@ -201,6 +233,9 @@ secret_configs:
       item: build_farm
     sa.cluster-display.existingCluster.config:
       field: sa.cluster-display.existingCluster.config
+      item: build_farm
+    sa.cluster-display.existingCluster.token.txt:
+      field: sa.cluster-display.existingCluster.token.txt
       item: build_farm
   to:
   - cluster: app.ci
@@ -216,68 +251,21 @@ secret_configs:
     sa.ci-chat-bot.existingCluster.config:
       field: sa.ci-chat-bot.existingCluster.config
       item: ci-chat-bot
+    sa.ci-chat-bot.existingCluster.token.txt:
+      field: sa.ci-chat-bot.existingCluster.token.txt
+      item: ci-chat-bot
   to:
   - cluster: app.ci
     name: ci-chat-bot-kubeconfigs
     namespace: ci
 - from: null
   to:
-  - cluster: app.ci
-    name: registry-pull-credentials-all
-    namespace: ci
-    type: kubernetes.io/dockerconfigjson
-  - cluster: app.ci
-    name: registry-pull-credentials-all
-    namespace: test-credentials
-    type: kubernetes.io/dockerconfigjson
-- from: null
-  to:
   - cluster: newCluster
     name: registry-pull-credentials
     namespace: ci
     type: kubernetes.io/dockerconfigjson
   - cluster: newCluster
     name: registry-pull-credentials
-    namespace: test-credentials
-    type: kubernetes.io/dockerconfigjson
-- from:
-    .dockerconfigjson:
-      dockerconfigJSON:
-      - auth_field: token_image-puller_existingCluster_reg_auth_value.txt
-        item: build_farm
-        registry_url: image-registry.openshift-image-registry.svc.cluster.local:5000
-      - auth_field: token_image-puller_existingCluster_reg_auth_value.txt
-        item: build_farm
-        registry_url: image-registry.openshift-image-registry.svc:5000
-      - auth_field: token_image-puller_existingCluster_reg_auth_value.txt
-        item: build_farm
-        registry_url: registry.existingCluster.ci.openshift.org
-      - auth_field: auth
-        email_field: email
-        item: cloud.openshift.com-pull-secret
-        registry_url: cloud.openshift.com
-      - auth_field: auth
-        email_field: email
-        item: quay.io-pull-secret
-        registry_url: quay.io
-      - auth_field: auth
-        email_field: email
-        item: registry.connect.redhat.com-pull-secret
-        registry_url: registry.connect.redhat.com
-      - auth_field: auth
-        email_field: email
-        item: registry.redhat.io-pull-secret
-        registry_url: registry.redhat.io
-      - auth_field: token_image-puller_arm01_reg_auth_value.txt
-        item: build_farm
-        registry_url: registry.arm-build01.arm-build.devcluster.openshift.com
-  to:
-  - cluster: existingCluster
-    name: registry-pull-credentials-all
-    namespace: ci
-    type: kubernetes.io/dockerconfigjson
-  - cluster: existingCluster
-    name: registry-pull-credentials-all
     namespace: test-credentials
     type: kubernetes.io/dockerconfigjson
 - from:
@@ -295,6 +283,9 @@ secret_configs:
       - auth_field: token_image-pusher_app.ci_reg_auth_value.txt
         item: build_farm
         registry_url: registry.ci.openshift.org
+      - auth_field: auth
+        item: quay-io-push-credentials
+        registry_url: quay.io/openshift/ci
   to:
   - cluster: existingCluster
     name: registry-push-credentials-ci-central
@@ -319,6 +310,10 @@ secret_configs:
       - auth_field: token_image-puller_app.ci_reg_auth_value.txt
         item: build_farm
         registry_url: registry.ci.openshift.org
+      - auth_field: auth
+        email_field: email
+        item: quay.io-pull-secret
+        registry_url: quay.io
   to:
   - cluster: existingCluster
     name: registry-pull-credentials
@@ -331,6 +326,9 @@ secret_configs:
 - from:
     kubeconfig:
       field: sa.ci-operator.existingCluster.config
+      item: build_farm
+    sa.ci-operator.existingCluster.token.txt:
+      field: sa.ci-operator.existingCluster.token.txt
       item: build_farm
   to:
   - cluster: existingCluster

@@ -56,6 +56,14 @@ func TestExtractInfo(t *testing.T) {
 			link:     "https://github.com/openshift/release/pull/13221",
 			expected: nil,
 		},
+		{
+			link:     "https://storage.googleapis.com/origin-ci-test/pr-logs/pull/25585/pull-ci-openshift-origin-master-e2e-aws-disruptive/1319310480841379840/build-log.txt",
+			expected: &jobInfo{Name: "pull-ci-openshift-origin-master-e2e-aws-disruptive", Id: "1319310480841379840"},
+		},
+		{
+			link:     "https://storage.googleapis.com/origin-ci-test/pr-logs/pull/25585/pull-ci-openshift-origin-master-e2e-aws-disruptive/1319310480841379840/artifacts/123/123123/123/12/312/3/1",
+			expected: &jobInfo{Name: "pull-ci-openshift-origin-master-e2e-aws-disruptive", Id: "1319310480841379840"},
+		},
 	}
 
 	for _, testCase := range testCases {

@@ -3,9 +3,10 @@ package util
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
+
+	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -20,12 +21,13 @@ func SecretFromDir(path string) (*coreapi.Secret, error) {
 		Type: coreapi.SecretTypeOpaque,
 		Data: make(map[string][]byte),
 	}
-	files, err := ioutil.ReadDir(path)
+	files, err := os.ReadDir(path)
 	if err != nil {
 		return nil, fmt.Errorf("could not read dir %s: %w", path, err)
 	}
 	for _, f := range files {
 		if f.IsDir() {
+			logrus.Warningf("skipped directory %q when creating secret from directory %q", f.Name(), path)
 			continue
 		}
 		path := filepath.Join(path, f.Name())
@@ -33,7 +35,7 @@ func SecretFromDir(path string) (*coreapi.Secret, error) {
 		if fi, err := os.Stat(path); err != nil || fi.IsDir() {
 			continue
 		}
-		ret.Data[f.Name()], err = ioutil.ReadFile(path)
+		ret.Data[f.Name()], err = os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("could not read file %s: %w", path, err)
 		}
@@ -45,7 +47,7 @@ func SecretFromDir(path string) (*coreapi.Secret, error) {
 // New values are added, existing values are overwritten. The secret will be
 // created if it doesn't already exist. Updating an existing secret happens by re-creating it.
 func UpsertImmutableSecret(ctx context.Context, client ctrlruntimeclient.Client, secret *coreapi.Secret) (created bool, err error) {
-	secret.Immutable = utilpointer.BoolPtr(true)
+	secret.Immutable = utilpointer.Bool(true)
 	err = client.Create(ctx, secret.DeepCopy())
 	if err == nil {
 		return true, nil

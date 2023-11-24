@@ -3,7 +3,6 @@ package secrets
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -113,7 +112,7 @@ func TestValidateOptions(t *testing.T) {
 }
 
 func TestCompleteOptions(t *testing.T) {
-	dir, err := ioutil.TempDir("", "test")
+	dir, err := os.MkdirTemp("", "test")
 	if err != nil {
 		t.Errorf("Failed to create temp dir")
 	}
@@ -124,7 +123,7 @@ func TestCompleteOptions(t *testing.T) {
 	}()
 
 	vaultPasswordPath := filepath.Join(dir, "vaultPasswordPath")
-	if err := ioutil.WriteFile(vaultPasswordPath, []byte("topSecret"), 0755); err != nil {
+	if err := os.WriteFile(vaultPasswordPath, []byte("topSecret"), 0755); err != nil {
 		t.Errorf("Failed to remove temp dir")
 	}
 	testCases := []struct {

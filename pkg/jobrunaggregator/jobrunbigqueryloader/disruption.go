@@ -2,28 +2,25 @@ package jobrunbigqueryloader
 
 import (
 	"context"
-	"fmt"
 	"os"
-	"strings"
-	"time"
 
+	"cloud.google.com/go/bigquery"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
 	"k8s.io/apimachinery/pkg/util/sets"
-	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
-	"github.com/openshift/ci-tools/pkg/junit"
 )
 
 type BigQueryDisruptionUploadFlags struct {
 	DataCoordinates *jobrunaggregatorlib.BigQueryDataCoordinates
 	Authentication  *jobrunaggregatorlib.GoogleAuthenticationFlags
 
-	DryRun bool
+	DryRun   bool
+	LogLevel string
 }
 
 func NewBigQueryDisruptionUploadFlags() *BigQueryDisruptionUploadFlags {
@@ -38,6 +35,7 @@ func (f *BigQueryDisruptionUploadFlags) BindFlags(fs *pflag.FlagSet) {
 	f.Authentication.BindFlags(fs)
 
 	fs.BoolVar(&f.DryRun, "dry-run", f.DryRun, "Run the command, but don't mutate data.")
+	fs.StringVar(&f.LogLevel, "log-level", "info", "Log level (trace,debug,info,warn,error) (default: info)")
 }
 
 func NewBigQueryDisruptionUploadFlagsCommand() *cobra.Command {
@@ -116,90 +114,114 @@ func (f *BigQueryDisruptionUploadFlags) ToOptions(ctx context.Context) (*allJobs
 		backendDisruptionTableInserter = jobrunaggregatorlib.NewDryRunInserter(os.Stdout, jobrunaggregatorapi.BackendDisruptionTableName)
 	}
 
+	pendingUploadLister := newDisruptionPendingUploadLister(ciDataClient)
+	jobRunUploaderRegistry := JobRunUploaderRegistry{}
+	jobRunUploaderRegistry.Register("disruptionUploader", newDisruptionUploader(backendDisruptionTableInserter, ciDataClient))
 	return &allJobsLoaderOptions{
 		ciDataClient: ciDataClient,
 		gcsClient:    gcsClient,
 
 		jobRunInserter:              jobRunTableInserter,
 		shouldCollectedDataForJobFn: wantsDisruptionData,
-		getLastJobRunWithDataFn:     ciDataClient.GetLastJobRunWithDisruptionDataForJobName,
-		jobRunUploader:              newDisruptionUploader(backendDisruptionTableInserter),
+		jobRunUploaderRegistry:      jobRunUploaderRegistry,
+		pendingUploadJobsLister:     pendingUploadLister,
+		logLevel:                    f.LogLevel,
 	}, nil
 }
 
 type disruptionUploader struct {
 	backendDisruptionInserter jobrunaggregatorlib.BigQueryInserter
+	ciDataClient              jobrunaggregatorlib.CIDataClient
 }
 
-func newDisruptionUploader(backendDisruptionInserter jobrunaggregatorlib.BigQueryInserter) uploader {
+func newDisruptionUploader(backendDisruptionInserter jobrunaggregatorlib.BigQueryInserter,
+	ciDataClient jobrunaggregatorlib.CIDataClient) uploader {
+
 	return &disruptionUploader{
 		backendDisruptionInserter: backendDisruptionInserter,
+		ciDataClient:              ciDataClient,
 	}
 }
 
-func (o *disruptionUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo, prowJob *prowv1.ProwJob) error {
-	fmt.Printf("  uploading backend disruption results: %q/%q\n", jobRun.GetJobName(), jobRun.GetJobRunID())
+func newDisruptionPendingUploadLister(ciDataClient jobrunaggregatorlib.CIDataClient) pendingUploadLister {
+	return &testRunPendingUploadLister{
+		tableName:    jobrunaggregatorapi.DisruptionJobRunTableName,
+		ciDataClient: ciDataClient,
+	}
+}
+
+func (o *disruptionUploader) uploadContent(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo,
+	jobRelease string, jobRunRow *jobrunaggregatorapi.JobRunRow, logger logrus.FieldLogger) error {
+
+	logger.Info("uploading backend disruption results")
 	backendDisruptionData, err := jobRun.GetOpenShiftTestsFilesWithPrefix(ctx, "backend-disruption")
 	if err != nil {
+		logger.WithError(err).Error("error in GetOpenShiftTestsFilesWithPrefix")
 		return err
 	}
-	if len(backendDisruptionData) > 0 {
-		return o.uploadBackendDisruptionFromDirectData(ctx, jobRun.GetJobRunID(), backendDisruptionData)
-	}
-
-	dateWeStartedTrackingDirectDisruptionData, err := time.Parse(time.RFC3339, "2021-11-24T00:00:00Z")
-	if err != nil {
-		return err
-	}
-	// TODO fix better before we hit 4.20
-	releaseHasDisruptionData := strings.Contains(jobRun.GetJobName(), "4.10") ||
-		strings.Contains(jobRun.GetJobName(), "4.11") ||
-		strings.Contains(jobRun.GetJobName(), "4.12") ||
-		strings.Contains(jobRun.GetJobName(), "4.13") ||
-		strings.Contains(jobRun.GetJobName(), "4.14") ||
-		strings.Contains(jobRun.GetJobName(), "4.15") ||
-		strings.Contains(jobRun.GetJobName(), "4.16") ||
-		strings.Contains(jobRun.GetJobName(), "4.17") ||
-		strings.Contains(jobRun.GetJobName(), "4.17") ||
-		strings.Contains(jobRun.GetJobName(), "4.19")
-	if releaseHasDisruptionData && prowJob.CreationTimestamp.After(dateWeStartedTrackingDirectDisruptionData) {
-		fmt.Printf("  No disruption data found, returning: %v/%v\n", jobRun.GetJobName(), jobRun.GetJobRunID())
-		// we  have no data, just return
+	logger.Debug("got test files with prefix")
+	if len(backendDisruptionData) == 0 {
+		logger.Info("no backend disruption results found for")
 		return nil
 	}
 
-	fmt.Printf("  missing direct backend disruption results, trying to read from junit: %v/%v\n", jobRun.GetJobName(), jobRun.GetJobRunID())
-	// if we don't have
-	combinedJunitContent, err := jobRun.GetCombinedJUnitTestSuites(ctx)
-	if err != nil {
-		return err
-	}
-
-	return o.uploadBackendDisruptionFromJunit(ctx, jobRun.GetJobRunID(), combinedJunitContent)
+	return o.uploadBackendDisruptionFromDirectData(ctx, jobRunRow, backendDisruptionData, logger)
 }
 
-func (o *disruptionUploader) uploadBackendDisruptionFromJunit(ctx context.Context, jobRunName string, suites *junit.TestSuites) error {
-	serverAvailabilityResults := getServerAvailabilityResultsFromJunit(suites)
-	return o.uploadBackendDisruption(ctx, jobRunName, serverAvailabilityResults)
-}
+func (o *disruptionUploader) uploadBackendDisruptionFromDirectData(
+	ctx context.Context,
+	jobRunRow *jobrunaggregatorapi.JobRunRow,
+	backendDisruptionData map[string]string,
+	logger logrus.FieldLogger) error {
 
-func (o *disruptionUploader) uploadBackendDisruptionFromDirectData(ctx context.Context, jobRunName string, backendDisruptionData map[string]string) error {
 	serverAvailabilityResults := jobrunaggregatorlib.GetServerAvailabilityResultsFromDirectData(backendDisruptionData)
-	return o.uploadBackendDisruption(ctx, jobRunName, serverAvailabilityResults)
+	return o.uploadBackendDisruption(ctx, jobRunRow, serverAvailabilityResults, logger)
 }
-func (o *disruptionUploader) uploadBackendDisruption(ctx context.Context, jobRunName string, serverAvailabilityResults map[string]jobrunaggregatorlib.AvailabilityResult) error {
+
+func (o *disruptionUploader) uploadBackendDisruption(ctx context.Context, jobRunRow *jobrunaggregatorapi.JobRunRow,
+	serverAvailabilityResults map[string]jobrunaggregatorlib.AvailabilityResult,
+	logger logrus.FieldLogger) error {
+
+	logger.Debug("inserting backend disruption rows")
 	rows := []*jobrunaggregatorapi.BackendDisruptionRow{}
 	for _, backendName := range sets.StringKeySet(serverAvailabilityResults).List() {
 		unavailability := serverAvailabilityResults[backendName]
 		row := &jobrunaggregatorapi.BackendDisruptionRow{
 			BackendName:       backendName,
-			JobRunName:        jobRunName,
 			DisruptionSeconds: unavailability.SecondsUnavailable,
+			JobName: bigquery.NullString{
+				StringVal: jobRunRow.JobName,
+				Valid:     true,
+			},
+			JobRunName: jobRunRow.Name,
+			JobRunStartTime: bigquery.NullTimestamp{
+				Timestamp: jobRunRow.StartTime,
+				Valid:     true,
+			},
+			JobRunEndTime: bigquery.NullTimestamp{
+				Timestamp: jobRunRow.EndTime,
+				Valid:     true,
+			},
+			Cluster: bigquery.NullString{
+				StringVal: jobRunRow.Cluster,
+				Valid:     true,
+			},
+			ReleaseTag: bigquery.NullString{
+				StringVal: jobRunRow.ReleaseTag,
+				Valid:     true,
+			},
+			JobRunStatus: bigquery.NullString{
+				StringVal: jobRunRow.Status,
+				Valid:     true,
+			},
+			MasterNodesUpdated: jobRunRow.MasterNodesUpdated,
 		}
 		rows = append(rows, row)
 	}
 	if err := o.backendDisruptionInserter.Put(ctx, rows); err != nil {
+		logger.WithError(err).Error("error inserting backend disruption")
 		return err
 	}
+	logger.Debug("insert complete")
 	return nil
 }

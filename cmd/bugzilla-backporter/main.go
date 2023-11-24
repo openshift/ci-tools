@@ -70,7 +70,7 @@ func getAllTargetVersions(configFile string) ([]string, error) {
 	if err := np.Validate(); err != nil {
 		return nil, fmt.Errorf("failed to validate file %s : %w", configFile, err)
 	}
-	allTargetVersionsSet := sets.NewString()
+	allTargetVersionsSet := sets.New[string]()
 	// Hardcoding with just the "openshift" org here
 	// Could be extended to be configurable in the future to support multiple products
 	// In which case this would have to be moved to the CreateClones function.
@@ -80,7 +80,7 @@ func getAllTargetVersions(configFile string) ([]string, error) {
 			allTargetVersionsSet.Insert(*val.TargetRelease)
 		}
 	}
-	allTargetVersions := allTargetVersionsSet.List()
+	allTargetVersions := sets.List(allTargetVersionsSet)
 	err = backporter.SortTargetReleases(allTargetVersions, true)
 	if err != nil {
 		return nil, fmt.Errorf("unable to sort discovered target_releases %v: %w", allTargetVersions, err)

@@ -29,6 +29,10 @@ func newJob(name string) *jobRowBuilder {
 		platform = openstack
 	case strings.Contains(name, "libvirt"):
 		platform = libvirt
+	case strings.Contains(name, "alibaba"):
+		platform = alibaba
+	case strings.Contains(name, "ibmcloud"):
+		platform = ibmcloud
 	}
 
 	architecture := ""
@@ -53,9 +57,14 @@ func newJob(name string) *jobRowBuilder {
 		network = ovn
 	}
 
-	topology := ha
-	if strings.Contains(name, "single") {
+	topology := ""
+	switch {
+	case strings.Contains(name, "single"):
 		topology = single
+	case strings.Contains(name, "hypershift"):
+		topology = external
+	default:
+		topology = ha
 	}
 
 	// figure out some way to do the ip mode
@@ -74,11 +83,8 @@ func newJob(name string) *jobRowBuilder {
 
 	fromRelease := ""
 	if runsUpgrade {
-		switch {
-		case len(versions) == 1:
-			fromRelease = versions[0]
-		case len(versions) >= 2:
-			fromRelease = versions[1]
+		if len(versions) > 0 {
+			fromRelease = versions[len(versions)-1]
 		}
 	}
 

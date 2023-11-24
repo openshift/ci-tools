@@ -46,7 +46,7 @@ type kvUpdateTransport struct {
 
 	privilegedVaultClient *vaultclient.VaultClient
 	// existingSecretKeysByNamespaceName is used in the key validation.
-	existingSecretKeysByNamespaceName     map[types.NamespacedName]sets.String
+	existingSecretKeysByNamespaceName     map[types.NamespacedName]sets.Set[string]
 	existingSecretKeysByNamespaceNameLock sync.RWMutex
 	// existingSecretKeysByVaultSecretName is used as an index for updating
 	// the key cache (existingSecretKeysByNamespaceName) when Vault entries
@@ -137,7 +137,7 @@ func (k *kvUpdateTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	keyConflictValidationErrs, err := k.validateKeysDontConflict(r.Context(), r.URL.Path, body.Data)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to validate keys don't conflict")
-		errs = append(errs, "secret key validation check failed, please contact @dptp-helpdesk in #forum-testplatform")
+		errs = append(errs, "secret key validation check failed, please contact @dptp-helpdesk in #forum-ocp-testplatform")
 	}
 	errs = append(errs, keyConflictValidationErrs...)
 
@@ -199,7 +199,7 @@ func (k *kvUpdateTransport) updateKeyCacheForSecret(path string, item map[string
 
 		// Create new entries
 		if k.existingSecretKeysByNamespaceName[name] == nil {
-			k.existingSecretKeysByNamespaceName[name] = sets.String{}
+			k.existingSecretKeysByNamespaceName[name] = sets.Set[string]{}
 		}
 		for key := range item {
 			if key == vault.SecretSyncTargetNamepaceKey || key == vault.SecretSyncTargetNameKey {
@@ -255,7 +255,7 @@ func (k *kvUpdateTransport) populateKeyCache(ctx context.Context) (err error) {
 		return nil
 	}
 
-	k.existingSecretKeysByNamespaceName = map[types.NamespacedName]sets.String{}
+	k.existingSecretKeysByNamespaceName = map[types.NamespacedName]sets.Set[string]{}
 	k.existingSecretKeysByVaultSecretName = map[string][]namespacedNameKey{}
 	// Clear up the map if we had an error, to avoid caching an incomplete result
 	defer func() {
@@ -311,7 +311,7 @@ func (k *kvUpdateTransport) populateKeyCache(ctx context.Context) (err error) {
 				delete(item.Data, vault.SecretSyncTargetNameKey)
 
 				if k.existingSecretKeysByNamespaceName[name] == nil {
-					k.existingSecretKeysByNamespaceName[name] = make(sets.String, len(item.Data))
+					k.existingSecretKeysByNamespaceName[name] = make(sets.Set[string], len(item.Data))
 				}
 				for key := range item.Data {
 					k.existingSecretKeysByNamespaceName[name].Insert(key)

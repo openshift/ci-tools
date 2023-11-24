@@ -18,6 +18,7 @@ type pluginsConfigWithPointers struct {
 	Approve         []*plugins.Approve                  `json:"approve,omitempty"`
 	Lgtm            []plugins.Lgtm                      `json:"lgtm,omitempty"`
 	Triggers        []plugins.Trigger                   `json:"triggers,omitempty"`
+	Welcome         []plugins.Welcome                   `json:"welcome,omitempty"`
 	ExternalPlugins map[string][]plugins.ExternalPlugin `json:"external_plugins,omitempty"`
 	Label           *plugins.Label                      `json:"label,omitempty"`
 }
@@ -128,6 +129,19 @@ func WriteShardedPluginConfig(pc *plugins.Configuration, target afero.Fs) (*plug
 		}
 	}
 	pc.Triggers = nil
+
+	for _, welcome := range pc.Welcome {
+		for _, orgOrRepo := range welcome.Repos {
+			path := filepath.Join(orgOrRepo, config.SupplementalPluginConfigFileName)
+			if _, ok := fileList[path]; !ok {
+				fileList[path] = &pluginsConfigWithPointers{}
+			}
+			welcomeCopy := welcome
+			welcomeCopy.Repos = []string{orgOrRepo}
+			fileList[path].Welcome = []plugins.Welcome{welcomeCopy}
+		}
+	}
+	pc.Welcome = nil
 
 	for orgOrRepo, externalPlugins := range pc.ExternalPlugins {
 		path := filepath.Join(orgOrRepo, config.SupplementalPluginConfigFileName)

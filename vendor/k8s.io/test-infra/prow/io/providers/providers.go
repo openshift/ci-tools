@@ -29,11 +29,16 @@ import (
 	"gocloud.dev/blob"
 	_ "gocloud.dev/blob/memblob"
 	"gocloud.dev/blob/s3blob"
+
+	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 )
 
 const (
 	S3 = "s3"
 	GS = "gs"
+	// TODO(danilo-gemoli): complete the implementation since at this time only opener.Writer()
+	// is supported
+	File = "file"
 )
 
 // GetBucket opens and returns a gocloud blob.Bucket based on credentials and a path.
@@ -45,21 +50,21 @@ const (
 //
 // If we specify credentials and an 3:// path is used, credentials must be given in one of the
 // following formats:
-// * AWS S3 (s3://):
-//    {
-//      "region": "us-east-1",
-//      "s3_force_path_style": true,
-//      "access_key": "access_key",
-//      "secret_key": "secret_key"
-//    }
-// * S3-compatible service, e.g. self-hosted Minio (s3://):
-//    {
-//      "region": "minio",
-//      "endpoint": "https://minio-hl-svc.minio-operator-ns:9000",
-//      "s3_force_path_style": true,
-//      "access_key": "access_key",
-//      "secret_key": "secret_key"
-//    }
+//   - AWS S3 (s3://):
+//     {
+//     "region": "us-east-1",
+//     "s3_force_path_style": true,
+//     "access_key": "access_key",
+//     "secret_key": "secret_key"
+//     }
+//   - S3-compatible service, e.g. self-hosted Minio (s3://):
+//     {
+//     "region": "minio",
+//     "endpoint": "https://minio-hl-svc.minio-operator-ns:9000",
+//     "s3_force_path_style": true,
+//     "access_key": "access_key",
+//     "secret_key": "secret_key"
+//     }
 func GetBucket(ctx context.Context, s3Credentials []byte, path string) (*blob.Bucket, error) {
 	storageProvider, bucket, _, err := ParseStoragePath(path)
 	if err != nil {
@@ -158,4 +163,13 @@ func ParseStoragePath(storagePath string) (storageProvider, bucket, relativePath
 		return "", "", "", fmt.Errorf("could not find bucket in storagePath %q", storagePath)
 	}
 	return storageProvider, bucket, relativePath, nil
+}
+
+// StoragePath is the reverse of ParseStoragePath.
+func StoragePath(bucket, path string) (string, error) {
+	pp, err := prowv1.ParsePath(bucket)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s://%s/%s", pp.StorageProvider(), pp.Bucket(), path), nil
 }

@@ -120,11 +120,11 @@ func TestClusterClaimStepAcquireCluster(t *testing.T) {
 					Job:       "pull-ci-openshift-console-master-images",
 				},
 			},
-			hiveClient: bcc(fakectrlruntimeclient.NewFakeClient(aClusterPool()), func(client *clusterClaimStatusSettingClient) {
+			hiveClient: bcc(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(aClusterPool()).Build(), func(client *clusterClaimStatusSettingClient) {
 				client.namespace = "ci-ocp-4.7.0-amd64-aws-us-east-1-ccx23"
 				client.conditionStatus = corev1.ConditionTrue
 			}),
-			client: loggingclient.New(fakectrlruntimeclient.NewFakeClient()),
+			client: loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects().Build()),
 			waitForClaim: func(client ctrlruntimeclient.WithWatch, ns, name string, claim *hivev1.ClusterClaim, timeout time.Duration) error {
 				return client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, claim)
 			},
@@ -203,8 +203,8 @@ func TestClusterClaimStepAcquireCluster(t *testing.T) {
 				Owner:        "dpp",
 				Timeout:      &prowv1.Duration{Duration: time.Hour},
 			},
-			hiveClient:    bcc(fakectrlruntimeclient.NewFakeClient(aClusterPool())),
-			client:        loggingclient.New(fakectrlruntimeclient.NewFakeClient()),
+			hiveClient:    bcc(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(aClusterPool()).Build()),
+			client:        loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects().Build()),
 			jobSpec:       &api.JobSpec{},
 			expectedError: fmt.Errorf("failed to find a cluster pool providing the cluster: map[architecture:amd64 cloud:aws owner:dpp product:ocp version:4.6.0]"),
 			verifyFunc: func(client ctrlruntimeclient.Client) error {
@@ -229,11 +229,11 @@ func TestClusterClaimStepAcquireCluster(t *testing.T) {
 				Owner:        "dpp",
 				Timeout:      &prowv1.Duration{Duration: time.Second},
 			},
-			hiveClient: bcc(fakectrlruntimeclient.NewFakeClient(aClusterPool()), func(client *clusterClaimStatusSettingClient) {
+			hiveClient: bcc(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(aClusterPool()).Build(), func(client *clusterClaimStatusSettingClient) {
 				client.namespace = "ci-ocp-4.7.0-amd64-aws-us-east-1-ccx23"
 				client.conditionStatus = corev1.ConditionFalse
 			}),
-			client: loggingclient.New(fakectrlruntimeclient.NewFakeClient()),
+			client: loggingclient.New(fakectrlruntimeclient.NewClientBuilder().Build()),
 			jobSpec: &api.JobSpec{
 				JobSpec: downwardapi.JobSpec{
 					ProwJobID: "c2a971b7-947b-11eb-9747-0a580a820213",

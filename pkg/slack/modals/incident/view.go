@@ -155,17 +155,17 @@ func slackEntityFormatFuncs(client infoGetter) template.FuncMap {
 			user, err := client.GetUserInfo(input)
 			if err != nil {
 				logrus.WithError(err).Warn("Could not look up user-provided Slack user ID for pretty printing.")
-				return fmt.Sprintf("[user profile|https://coreos.slack.com/team/%s]", input)
+				return fmt.Sprintf("[user profile|https://redhat-internal.slack.com/team/%s]", input)
 			}
-			return fmt.Sprintf("[%s|https://coreos.slack.com/team/%s]", user.RealName, user.ID)
+			return fmt.Sprintf("[%s|https://redhat-internal.slack.com/team/%s]", user.RealName, user.ID)
 		},
 		"slackChannelLink": func(input string) string {
 			channel, err := client.GetConversationInfo(input, false)
 			if err != nil {
 				logrus.WithError(err).Warn("Could not look up user-provided Slack channel ID for pretty printing.")
-				return fmt.Sprintf("[channel|https://coreos.slack.com/archives/%s]", input)
+				return fmt.Sprintf("[channel|https://redhat-internal.slack.com/archives/%s]", input)
 			}
-			return fmt.Sprintf("[#%s|https://coreos.slack.com/archives/%s]", channel.Name, channel.ID)
+			return fmt.Sprintf("[#%s|https://redhat-internal.slack.com/archives/%s]", channel.Name, channel.ID)
 		},
 	}
 }

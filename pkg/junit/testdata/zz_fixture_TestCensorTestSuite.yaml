@@ -2,18 +2,18 @@ Children:
 - Children:
   - Children: null
     Duration: 0
-    Name: some very nested ******
+    Name: some very nested XXXXXX
     NumFailed: 0
     NumSkipped: 0
     NumTests: 0
     Properties:
-    - Name: very nested ****** things
-      Value: very nested ****** values
+    - Name: very nested XXXXXX things
+      Value: very nested XXXXXX values
       XMLName:
         Local: ""
         Space: ""
-    - Name: also very nested ****** things
-      Value: really very nested ****** values
+    - Name: also very nested XXXXXX things
+      Value: really very nested XXXXXX values
       XMLName:
         Local: ""
         Space: ""
@@ -21,38 +21,38 @@ Children:
     - Classname: ""
       Duration: 0
       FailureOutput:
-        Message: failed due to very nested ******
-        Output: very nested ****** failure output
+        Message: failed due to very nested XXXXXX
+        Output: very nested XXXXXX failure output
         XMLName:
           Local: ""
           Space: ""
-      Name: somehow very nested ******
+      Name: somehow very nested XXXXXX
       SkipMessage:
-        Message: skipped due to very nested ******
+        Message: skipped due to very nested XXXXXX
         XMLName:
           Local: ""
           Space: ""
-      SystemErr: error containing very nested ******
-      SystemOut: output containing very nested ******
+      SystemErr: error containing very nested XXXXXX
+      SystemOut: output containing very nested XXXXXX
       XMLName:
         Local: ""
         Space: ""
     - Classname: ""
       Duration: 0
       FailureOutput:
-        Message: also failed due to very nested ******
-        Output: also very nested ****** failure output
+        Message: also failed due to very nested XXXXXX
+        Output: also very nested XXXXXX failure output
         XMLName:
           Local: ""
           Space: ""
-      Name: somehow also very nested ******
+      Name: somehow also very nested XXXXXX
       SkipMessage:
-        Message: also skipped due to very nested ******
+        Message: also skipped due to very nested XXXXXX
         XMLName:
           Local: ""
           Space: ""
-      SystemErr: also error containing very nested ******
-      SystemOut: also output containing very nested ******
+      SystemErr: also error containing very nested XXXXXX
+      SystemOut: also output containing very nested XXXXXX
       XMLName:
         Local: ""
         Space: ""
@@ -60,18 +60,18 @@ Children:
       Local: ""
       Space: ""
   Duration: 0
-  Name: some nested ******
+  Name: some nested XXXXXX
   NumFailed: 0
   NumSkipped: 0
   NumTests: 0
   Properties:
-  - Name: nested ****** things
-    Value: nested ****** values
+  - Name: nested XXXXXX things
+    Value: nested XXXXXX values
     XMLName:
       Local: ""
       Space: ""
-  - Name: also nested ****** things
-    Value: really nested ****** values
+  - Name: also nested XXXXXX things
+    Value: really nested XXXXXX values
     XMLName:
       Local: ""
       Space: ""
@@ -79,38 +79,38 @@ Children:
   - Classname: ""
     Duration: 0
     FailureOutput:
-      Message: failed due to nested ******
-      Output: nested ****** failure output
+      Message: failed due to nested XXXXXX
+      Output: nested XXXXXX failure output
       XMLName:
         Local: ""
         Space: ""
-    Name: somehow nested ******
+    Name: somehow nested XXXXXX
     SkipMessage:
-      Message: skipped due to nested ******
+      Message: skipped due to nested XXXXXX
       XMLName:
         Local: ""
         Space: ""
-    SystemErr: error containing nested ******
-    SystemOut: output containing nested ******
+    SystemErr: error containing nested XXXXXX
+    SystemOut: output containing nested XXXXXX
     XMLName:
       Local: ""
       Space: ""
   - Classname: ""
     Duration: 0
     FailureOutput:
-      Message: also failed due to nested ******
-      Output: also nested ****** failure output
+      Message: also failed due to nested XXXXXX
+      Output: also nested XXXXXX failure output
       XMLName:
         Local: ""
         Space: ""
-    Name: somehow also nested ******
+    Name: somehow also nested XXXXXX
     SkipMessage:
-      Message: also skipped due to nested ******
+      Message: also skipped due to nested XXXXXX
       XMLName:
         Local: ""
         Space: ""
-    SystemErr: also error containing nested ******
-    SystemOut: also output containing nested ******
+    SystemErr: also error containing nested XXXXXX
+    SystemOut: also output containing nested XXXXXX
     XMLName:
       Local: ""
       Space: ""
@@ -118,18 +118,18 @@ Children:
     Local: ""
     Space: ""
 Duration: 0
-Name: some ******
+Name: some XXXXXX
 NumFailed: 0
 NumSkipped: 0
 NumTests: 0
 Properties:
-- Name: '****** things'
-  Value: '****** values'
+- Name: XXXXXX things
+  Value: XXXXXX values
   XMLName:
     Local: ""
     Space: ""
-- Name: also ****** things
-  Value: really ****** values
+- Name: also XXXXXX things
+  Value: really XXXXXX values
   XMLName:
     Local: ""
     Space: ""
@@ -137,38 +137,38 @@ TestCases:
 - Classname: ""
   Duration: 0
   FailureOutput:
-    Message: failed due to ******
-    Output: '****** failure output'
+    Message: failed due to XXXXXX
+    Output: XXXXXX failure output
     XMLName:
       Local: ""
       Space: ""
-  Name: somehow ******
+  Name: somehow XXXXXX
   SkipMessage:
-    Message: skipped due to ******
+    Message: skipped due to XXXXXX
     XMLName:
       Local: ""
       Space: ""
-  SystemErr: error containing ******
-  SystemOut: output containing ******
+  SystemErr: error containing XXXXXX
+  SystemOut: output containing XXXXXX
   XMLName:
     Local: ""
     Space: ""
 - Classname: ""
   Duration: 0
   FailureOutput:
-    Message: also failed due to ******
-    Output: also ****** failure output
+    Message: also failed due to XXXXXX
+    Output: also XXXXXX failure output
     XMLName:
       Local: ""
       Space: ""
-  Name: somehow also ******
+  Name: somehow also XXXXXX
   SkipMessage:
-    Message: also skipped due to ******
+    Message: also skipped due to XXXXXX
     XMLName:
       Local: ""
       Space: ""
-  SystemErr: also error containing ******
-  SystemOut: also output containing ******
+  SystemErr: also error containing XXXXXX
+  SystemOut: also output containing XXXXXX
   XMLName:
     Local: ""
     Space: ""

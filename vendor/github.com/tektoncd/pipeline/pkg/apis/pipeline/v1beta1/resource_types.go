@@ -17,53 +17,67 @@ limitations under the License.
 package v1beta1
 
 import (
-	"fmt"
-
-	"github.com/google/go-cmp/cmp"
 	resource "github.com/tektoncd/pipeline/pkg/apis/resource/v1alpha1"
+	"github.com/tektoncd/pipeline/pkg/result"
 	v1 "k8s.io/api/core/v1"
 )
+
+// RunResult is used to write key/value pairs to TaskRun pod termination messages.
+// It has been migrated to the result package and kept for backward compatibility
+type RunResult = result.RunResult
+
+// PipelineResourceResult has been deprecated with the migration of PipelineResources
+// Deprecated: Use RunResult instead
+type PipelineResourceResult = result.RunResult
+
+// ResultType of PipelineResourceResult has been deprecated with the migration of PipelineResources
+// Deprecated: v1beta1.ResultType is only kept for backward compatibility
+type ResultType = result.ResultType
+
+// ResourceParam declares a string value to use for the parameter called Name, and is used in
+// the specific context of PipelineResources.
+//
+// Deprecated: Unused, preserved only for backwards compatibility
+type ResourceParam = resource.ResourceParam
 
 // PipelineResourceType represents the type of endpoint the pipelineResource is, so that the
 // controller will know this pipelineResource should be fetched and optionally what
 // additional metatdata should be provided for it.
+//
+// Deprecated: Unused, preserved only for backwards compatibility
 type PipelineResourceType = resource.PipelineResourceType
 
-var (
-	AllowedOutputResources = resource.AllowedOutputResources
-)
-
-const (
-	// PipelineResourceTypeGit indicates that this source is a GitHub repo.
-	PipelineResourceTypeGit PipelineResourceType = resource.PipelineResourceTypeGit
-
-	// PipelineResourceTypeStorage indicates that this source is a storage blob resource.
-	PipelineResourceTypeStorage PipelineResourceType = resource.PipelineResourceTypeStorage
-
-	// PipelineResourceTypeImage indicates that this source is a docker Image.
-	PipelineResourceTypeImage PipelineResourceType = resource.PipelineResourceTypeImage
-
-	// PipelineResourceTypeCluster indicates that this source is a k8s cluster Image.
-	PipelineResourceTypeCluster PipelineResourceType = resource.PipelineResourceTypeCluster
-
-	// PipelineResourceTypePullRequest indicates that this source is a SCM Pull Request.
-	PipelineResourceTypePullRequest PipelineResourceType = resource.PipelineResourceTypePullRequest
-
-	// PipelineResourceTypeCloudEvent indicates that this source is a cloud event URI
-	PipelineResourceTypeCloudEvent PipelineResourceType = resource.PipelineResourceTypeCloudEvent
-)
-
-// AllResourceTypes can be used for validation to check if a provided Resource type is one of the known types.
-var AllResourceTypes = resource.AllResourceTypes
+// PipelineDeclaredResource is used by a Pipeline to declare the types of the
+// PipelineResources that it will required to run and names which can be used to
+// refer to these PipelineResources in PipelineTaskResourceBindings.
+//
+// Deprecated: Unused, preserved only for backwards compatibility
+type PipelineDeclaredResource struct {
+	// Name is the name that will be used by the Pipeline to refer to this resource.
+	// It does not directly correspond to the name of any PipelineResources Task
+	// inputs or outputs, and it does not correspond to the actual names of the
+	// PipelineResources that will be bound in the PipelineRun.
+	Name string `json:"name"`
+	// Type is the type of the PipelineResource.
+	Type PipelineResourceType `json:"type"`
+	// Optional declares the resource as optional.
+	// optional: true - the resource is considered optional
+	// optional: false - the resource is considered required (default/equivalent of not specifying it)
+	Optional bool `json:"optional,omitempty"`
+}
 
 // TaskResources allows a Pipeline to declare how its DeclaredPipelineResources
 // should be provided to a Task as its inputs and outputs.
+//
+// Deprecated: Unused, preserved only for backwards compatibility
 type TaskResources struct {
 	// Inputs holds the mapping from the PipelineResources declared in
 	// DeclaredPipelineResources to the input PipelineResources required by the Task.
+	// +listType=atomic
 	Inputs []TaskResource `json:"inputs,omitempty"`
 	// Outputs holds the mapping from the PipelineResources declared in
 	// DeclaredPipelineResources to the input PipelineResources required by the Task.
+	// +listType=atomic
 	Outputs []TaskResource `json:"outputs,omitempty"`
 }
 
@@ -72,26 +86,35 @@ type TaskResources struct {
 // the Task definition, and when provided as an Input, the Name will be the
 // path to the volume mounted containing this Resource as an input (e.g.
 // an input Resource named `workspace` will be mounted at `/workspace`).
+//
+// Deprecated: Unused, preserved only for backwards compatibility
 type TaskResource struct {
 	ResourceDeclaration `json:",inline"`
 }
 
 // TaskRunResources allows a TaskRun to declare inputs and outputs TaskResourceBinding
+//
+// Deprecated: Unused, preserved only for backwards compatibility
 type TaskRunResources struct {
 	// Inputs holds the inputs resources this task was invoked with
+	// +listType=atomic
 	Inputs []TaskResourceBinding `json:"inputs,omitempty"`
 	// Outputs holds the inputs resources this task was invoked with
+	// +listType=atomic
 	Outputs []TaskResourceBinding `json:"outputs,omitempty"`
 }
 
 // TaskResourceBinding points to the PipelineResource that
 // will be used for the Task input or output called Name.
+//
+// Deprecated: Unused, preserved only for backwards compatibility
 type TaskResourceBinding struct {
 	PipelineResourceBinding `json:",inline"`
 	// Paths will probably be removed in #1284, and then PipelineResourceBinding can be used instead.
 	// The optional Path field corresponds to a path on disk at which the Resource can be found
 	// (used when providing the resource via mounted volume, overriding the default logic to fetch the Resource).
 	// +optional
+	// +listType=atomic
 	Paths []string `json:"paths,omitempty"`
 }
 
@@ -100,10 +123,14 @@ type TaskResourceBinding struct {
 // PipelineResources within the type's definition, and when provided as an Input, the Name will be the
 // path to the volume mounted containing this PipelineResource as an input (e.g.
 // an input Resource named `workspace` will be mounted at `/workspace`).
+//
+// Deprecated: Unused, preserved only for backwards compatibility
 type ResourceDeclaration = resource.ResourceDeclaration
 
 // PipelineResourceBinding connects a reference to an instance of a PipelineResource
 // with a PipelineResource dependency that the Pipeline has declared
+//
+// Deprecated: Unused, preserved only for backwards compatibility
 type PipelineResourceBinding struct {
 	// Name is the name of the PipelineResource in the Pipeline's declaration
 	Name string `json:"name,omitempty"`
@@ -118,21 +145,74 @@ type PipelineResourceBinding struct {
 	ResourceSpec *resource.PipelineResourceSpec `json:"resourceSpec,omitempty"`
 }
 
-// PipelineResourceResult used to export the image name and digest as json
-type PipelineResourceResult struct {
-	Key          string `json:"key"`
-	Value        string `json:"value"`
-	ResourceName string `json:"resourceName,omitempty"`
-	// This field should be deprecated and removed in the next API version.
-	// See https://github.com/tektoncd/pipeline/issues/2694 for more information.
-	ResourceRef PipelineResourceRef `json:"resourceRef,omitempty"`
-	ResultType  ResultType          `json:"type,omitempty"`
+// PipelineTaskResources allows a Pipeline to declare how its DeclaredPipelineResources
+// should be provided to a Task as its inputs and outputs.
+//
+// Deprecated: Unused, preserved only for backwards compatibility
+type PipelineTaskResources struct {
+	// Inputs holds the mapping from the PipelineResources declared in
+	// DeclaredPipelineResources to the input PipelineResources required by the Task.
+	// +listType=atomic
+	Inputs []PipelineTaskInputResource `json:"inputs,omitempty"`
+	// Outputs holds the mapping from the PipelineResources declared in
+	// DeclaredPipelineResources to the input PipelineResources required by the Task.
+	// +listType=atomic
+	Outputs []PipelineTaskOutputResource `json:"outputs,omitempty"`
 }
 
-// ResultType used to find out whether a PipelineResourceResult is from a task result or not
-type ResultType string
+// PipelineTaskInputResource maps the name of a declared PipelineResource input
+// dependency in a Task to the resource in the Pipeline's DeclaredPipelineResources
+// that should be used. This input may come from a previous task.
+//
+// Deprecated: Unused, preserved only for backwards compatibility
+type PipelineTaskInputResource struct {
+	// Name is the name of the PipelineResource as declared by the Task.
+	Name string `json:"name"`
+	// Resource is the name of the DeclaredPipelineResource to use.
+	Resource string `json:"resource"`
+	// From is the list of PipelineTask names that the resource has to come from.
+	// (Implies an ordering in the execution graph.)
+	// +optional
+	// +listType=atomic
+	From []string `json:"from,omitempty"`
+}
+
+// PipelineTaskOutputResource maps the name of a declared PipelineResource output
+// dependency in a Task to the resource in the Pipeline's DeclaredPipelineResources
+// that should be used.
+//
+// Deprecated: Unused, preserved only for backwards compatibility
+type PipelineTaskOutputResource struct {
+	// Name is the name of the PipelineResource as declared by the Task.
+	Name string `json:"name"`
+	// Resource is the name of the DeclaredPipelineResource to use.
+	Resource string `json:"resource"`
+}
+
+// TaskRunInputs holds the input values that this task was invoked with.
+//
+// Deprecated: Unused, preserved only for backwards compatibility
+type TaskRunInputs struct {
+	// +optional
+	// +listType=atomic
+	Resources []TaskResourceBinding `json:"resources,omitempty"`
+	// +optional
+	// +listType=atomic
+	Params []Param `json:"params,omitempty"`
+}
+
+// TaskRunOutputs holds the output values that this task was invoked with.
+//
+// Deprecated: Unused, preserved only for backwards compatibility
+type TaskRunOutputs struct {
+	// +optional
+	// +listType=atomic
+	Resources []TaskResourceBinding `json:"resources,omitempty"`
+}
 
 // PipelineResourceRef can be used to refer to a specific instance of a Resource
+//
+// Deprecated: Unused, preserved only for backwards compatibility
 type PipelineResourceRef struct {
 	// Name of the referent; More info: http://kubernetes.io/docs/user-guide/identifiers#names
 	Name string `json:"name,omitempty"`
@@ -142,6 +222,8 @@ type PipelineResourceRef struct {
 }
 
 // PipelineResourceInterface interface to be implemented by different PipelineResource types
+//
+// Deprecated: Unused, preserved only for backwards compatibility
 type PipelineResourceInterface interface {
 	// GetName returns the name of this PipelineResource instance.
 	GetName() string
@@ -159,6 +241,8 @@ type PipelineResourceInterface interface {
 }
 
 // TaskModifier is an interface to be implemented by different PipelineResources
+//
+// Deprecated: Unused, preserved only for backwards compatibility
 type TaskModifier interface {
 	GetStepsToPrepend() []Step
 	GetStepsToAppend() []Step
@@ -166,74 +250,13 @@ type TaskModifier interface {
 }
 
 // InternalTaskModifier implements TaskModifier for resources that are built-in to Tekton Pipelines.
+//
+// Deprecated: Unused, preserved only for backwards compatibility
 type InternalTaskModifier struct {
-	StepsToPrepend []Step
-	StepsToAppend  []Step
-	Volumes        []v1.Volume
-}
-
-// GetStepsToPrepend returns a set of Steps to prepend to the Task.
-func (tm *InternalTaskModifier) GetStepsToPrepend() []Step {
-	return tm.StepsToPrepend
-}
-
-// GetStepsToAppend returns a set of Steps to append to the Task.
-func (tm *InternalTaskModifier) GetStepsToAppend() []Step {
-	return tm.StepsToAppend
-}
-
-// GetVolumes returns a set of Volumes to prepend to the Task pod.
-func (tm *InternalTaskModifier) GetVolumes() []v1.Volume {
-	return tm.Volumes
-}
-
-// ApplyTaskModifier applies a modifier to the task by appending and prepending steps and volumes.
-// If steps with the same name exist in ts an error will be returned. If identical Volumes have
-// been added, they will not be added again. If Volumes with the same name but different contents
-// have been added, an error will be returned.
-func ApplyTaskModifier(ts *TaskSpec, tm TaskModifier) error {
-	steps := tm.GetStepsToPrepend()
-	for _, step := range steps {
-		if err := checkStepNotAlreadyAdded(step, ts.Steps); err != nil {
-			return err
-		}
-	}
-	ts.Steps = append(steps, ts.Steps...)
-
-	steps = tm.GetStepsToAppend()
-	for _, step := range steps {
-		if err := checkStepNotAlreadyAdded(step, ts.Steps); err != nil {
-			return err
-		}
-	}
-	ts.Steps = append(ts.Steps, steps...)
-
-	volumes := tm.GetVolumes()
-	for _, volume := range volumes {
-		var alreadyAdded bool
-		for _, v := range ts.Volumes {
-			if volume.Name == v.Name {
-				// If a Volume with the same name but different contents has already been added, we can't add both
-				if d := cmp.Diff(volume, v); d != "" {
-					return fmt.Errorf("tried to add volume %s already added but with different contents", volume.Name)
-				}
-				// If an identical Volume has already been added, don't add it again
-				alreadyAdded = true
-			}
-		}
-		if !alreadyAdded {
-			ts.Volumes = append(ts.Volumes, volume)
-		}
-	}
-
-	return nil
-}
-
-func checkStepNotAlreadyAdded(s Step, steps []Step) error {
-	for _, step := range steps {
-		if s.Name == step.Name {
-			return fmt.Errorf("Step %s cannot be added again", step.Name)
-		}
-	}
-	return nil
+	// +listType=atomic
+	StepsToPrepend []Step `json:"stepsToPrepend"`
+	// +listType=atomic
+	StepsToAppend []Step `json:"stepsToAppend"`
+	// +listType=atomic
+	Volumes []v1.Volume `json:"volumes"`
 }

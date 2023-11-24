@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 	"sync"
 	"testing"
@@ -25,8 +26,20 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	pod_scaler "github.com/openshift/ci-tools/pkg/pod-scaler"
 	"github.com/openshift/ci-tools/pkg/rehearse"
+	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
+
+type mockReporter struct {
+	client *http.Client
+	called bool
+}
+
+func (r *mockReporter) ReportResourceConfigurationWarning(string, string, string, string, string) {
+	r.called = true
+}
+
+var defaultReporter = mockReporter{client: &http.Client{}}
 
 func TestMutatePods(t *testing.T) {
 	client := fakebuildv1client.NewSimpleClientset(
@@ -59,10 +72,7 @@ func TestMutatePods(t *testing.T) {
 			},
 		},
 	)
-	decoder, err := admission.NewDecoder(scheme.Scheme)
-	if err != nil {
-		t.Fatalf("failed to create decoder from scheme: %v", err)
-	}
+	decoder := admission.NewDecoder(scheme.Scheme)
 	logger := logrus.WithField("test", t.Name())
 	resources := &resourceServer{
 		logger: logger,
@@ -80,17 +90,22 @@ func TestMutatePods(t *testing.T) {
 			}: {
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    *resource.NewQuantity(9, resource.DecimalSI),
-					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+					corev1.ResourceMemory: *resource.NewQuantity(2e4, resource.BinarySI),
 				},
 			},
 		},
 	}
+
 	mutator := podMutator{
-		logger:               logger,
-		client:               client.BuildV1(),
-		decoder:              decoder,
-		resources:            resources,
-		mutateResourceLimits: true,
+		logger:                logger,
+		client:                client.BuildV1(),
+		resources:             resources,
+		mutateResourceLimits:  true,
+		decoder:               decoder,
+		cpuCap:                10,
+		memoryCap:             "20Gi",
+		cpuPriorityScheduling: 8,
+		reporter:              &defaultReporter,
 	}
 
 	var testCases = []struct {
@@ -371,25 +386,25 @@ func TestMutatePodResources(t *testing.T) {
 					baseWithContainer(&metaBase, "large"): {
 						Requests: corev1.ResourceList{
 							corev1.ResourceCPU:    *resource.NewQuantity(5, resource.DecimalSI),
-							corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+							corev1.ResourceMemory: *resource.NewQuantity(2e8, resource.BinarySI),
 						},
 					},
 					baseWithContainer(&metaBase, "medium"): {
 						Requests: corev1.ResourceList{
 							corev1.ResourceCPU:    *resource.NewQuantity(5, resource.DecimalSI),
-							corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+							corev1.ResourceMemory: *resource.NewQuantity(2e8, resource.BinarySI),
 						},
 					},
 					baseWithContainer(&metaBase, "small"): {
 						Requests: corev1.ResourceList{
 							corev1.ResourceCPU:    *resource.NewQuantity(5, resource.DecimalSI),
-							corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+							corev1.ResourceMemory: *resource.NewQuantity(2e8, resource.BinarySI),
 						},
 					},
 					baseWithContainer(&metaBase, "overcap"): {
 						Requests: corev1.ResourceList{
 							corev1.ResourceCPU:    *resource.NewQuantity(20, resource.DecimalSI),
-							corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+							corev1.ResourceMemory: *resource.NewQuantity(2e8, resource.BinarySI),
 						},
 					},
 				},
@@ -414,11 +429,11 @@ func TestMutatePodResources(t *testing.T) {
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
 									corev1.ResourceCPU:    *resource.NewQuantity(8, resource.DecimalSI),
-									corev1.ResourceMemory: *resource.NewQuantity(3e10, resource.BinarySI),
+									corev1.ResourceMemory: *resource.NewQuantity(3e8, resource.BinarySI),
 								},
 								Limits: corev1.ResourceList{
 									corev1.ResourceCPU:    *resource.NewQuantity(16, resource.DecimalSI),
-									corev1.ResourceMemory: *resource.NewQuantity(4e10, resource.BinarySI),
+									corev1.ResourceMemory: *resource.NewQuantity(4e8, resource.BinarySI),
 								},
 							},
 						},
@@ -427,7 +442,7 @@ func TestMutatePodResources(t *testing.T) {
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
 									corev1.ResourceCPU:    *resource.NewQuantity(8, resource.DecimalSI),
-									corev1.ResourceMemory: *resource.NewQuantity(1e10, resource.BinarySI),
+									corev1.ResourceMemory: *resource.NewQuantity(1e8, resource.BinarySI),
 								},
 								Limits: corev1.ResourceList{},
 							},
@@ -539,7 +554,7 @@ func TestMutatePodResources(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			original := testCase.pod.DeepCopy()
-			mutatePodResources(testCase.pod, testCase.server, testCase.mutateResourceLimits)
+			mutatePodResources(testCase.pod, testCase.server, testCase.mutateResourceLimits, 10, "20Gi", &defaultReporter, logrus.WithField("test", testCase.name))
 			diff := cmp.Diff(original, testCase.pod)
 			// In some cases, cmp.Diff decides to use non-breaking spaces, and it's not
 			// particularly deterministic about this. We don't care.
@@ -714,9 +729,95 @@ func TestUseOursIfLarger(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			useOursIfLarger(&testCase.ours, &testCase.theirs)
+			useOursIfLarger(&testCase.ours, &testCase.theirs, "test", "build", &defaultReporter, logrus.WithField("test", testCase.name))
 			if diff := cmp.Diff(testCase.theirs, testCase.expected); diff != "" {
 				t.Errorf("%s: got incorrect resources after mutation: %v", testCase.name, diff)
+			}
+		})
+	}
+}
+
+// TestUseOursIsLarger_ReporterReports tests the behaviour of useOursIsLarger
+// when our determined resources are 10 times larger than the memory request.
+func TestUseOursIsLarger_ReporterReports(t *testing.T) {
+	var testCases = []struct {
+		name         string
+		ours, theirs corev1.ResourceRequirements
+		reporter     mockReporter
+		expected     bool
+	}{
+		{
+			name: "ours is 10 times larger than theirs",
+			ours: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(3e10, resource.BinarySI),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(1e1, resource.BinarySI),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(1, resource.BinarySI),
+				},
+			},
+			reporter: mockReporter{client: &http.Client{}},
+			expected: true,
+		},
+		{
+			name: "ours is not 10 times larger than theirs",
+			ours: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(3e10, resource.BinarySI),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(3e10, resource.BinarySI),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+				},
+			},
+			reporter: mockReporter{client: &http.Client{}},
+			expected: false,
+		},
+		{
+			//pod-scaler admission should not report the warning when their configured memory is 0
+			name: "ours is 10x larger, their memory is 0",
+			ours: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(3e10, resource.BinarySI),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(3e10, resource.BinarySI),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(0, resource.BinarySI),
+				},
+			},
+			reporter: mockReporter{client: &http.Client{}},
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			useOursIfLarger(&tc.ours, &tc.theirs, "test", "build", &tc.reporter, logrus.WithField("test", tc.name))
+
+			if diff := cmp.Diff(tc.reporter.called, tc.expected); diff != "" {
+				t.Errorf("actual and expected reporter states don't match, : %v", diff)
 			}
 		})
 	}
@@ -820,5 +921,260 @@ func TestRehearsalMetadata(t *testing.T) {
 	}
 	if diff := cmp.Diff(pod_scaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, "test"), meta); diff != "" {
 		t.Errorf("rehearsal job: got incorrect metadata: %v", diff)
+	}
+}
+
+func TestPreventUnschedulable(t *testing.T) {
+	cpuCap := int64(10)
+	memoryCap := "20Gi"
+	testCases := []struct {
+		name      string
+		resources *corev1.ResourceRequirements
+		expected  *corev1.ResourceRequirements
+	}{
+		{
+			name: "valid CPU and memory",
+			resources: &corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    *resource.NewQuantity(9, resource.DecimalSI),
+					corev1.ResourceMemory: resource.MustParse("4Gi"),
+				},
+			},
+			expected: &corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    *resource.NewQuantity(9, resource.DecimalSI),
+					corev1.ResourceMemory: resource.MustParse("4Gi"),
+				},
+			},
+		},
+		{
+			name: "too much CPU",
+			resources: &corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU: *resource.NewQuantity(100, resource.DecimalSI),
+				},
+			},
+			expected: &corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU: *resource.NewQuantity(cpuCap, resource.DecimalSI),
+				},
+			},
+		},
+		{
+			name: "too much memory",
+			resources: &corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: resource.MustParse("25Gi"),
+				},
+			},
+			expected: &corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: resource.MustParse(memoryCap),
+				},
+			},
+		},
+		{
+			name: "too much CPU and memory",
+			resources: &corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    *resource.NewQuantity(100, resource.DecimalSI),
+					corev1.ResourceMemory: resource.MustParse("25Gi"),
+				},
+			},
+			expected: &corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    *resource.NewQuantity(cpuCap, resource.DecimalSI),
+					corev1.ResourceMemory: resource.MustParse(memoryCap),
+				},
+			},
+		},
+		{
+			name:      "no requests",
+			resources: &corev1.ResourceRequirements{},
+			expected:  &corev1.ResourceRequirements{},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			preventUnschedulable(tc.resources, cpuCap, memoryCap, logrus.WithField("test", tc.name))
+			if diff := cmp.Diff(tc.expected, tc.resources); diff != "" {
+				t.Fatalf("result doesn't match expected, diff: %s", diff)
+			}
+		})
+	}
+}
+
+func TestDetermineWorkloadType(t *testing.T) {
+	testCases := []struct {
+		name        string
+		annotations map[string]string
+		labels      map[string]string
+		expected    string
+	}{
+		{
+			name:        "no labels or annotations",
+			annotations: map[string]string{},
+			labels:      map[string]string{},
+			expected:    WorkloadTypeUndefined,
+		},
+		{
+			name:        "build pod",
+			annotations: map[string]string{buildv1.BuildLabel: "buildName"},
+			expected:    WorkloadTypeBuild,
+		},
+		{
+			name:     "prowjob",
+			labels:   map[string]string{"prow.k8s.io/job": "jobName"},
+			expected: WorkloadTypeProwjob,
+		},
+		{
+			name:     "step",
+			labels:   map[string]string{steps.LabelMetadataStep: "e2e"},
+			expected: WorkloadTypeStep,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if diff := cmp.Diff(determineWorkloadType(tc.annotations, tc.labels), tc.expected); diff != "" {
+				t.Errorf("result differs from expected output, diff:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestDetermineWorkloadName(t *testing.T) {
+	testCases := []struct {
+		name         string
+		workloadType string
+		labels       map[string]string
+		expected     string
+	}{
+		{
+			name:         "workload is prowjob",
+			workloadType: WorkloadTypeProwjob,
+			labels:       map[string]string{"prow.k8s.io/job": "prowjobName"},
+			expected:     "prowjobName",
+		},
+		{
+			name:         "workload is a step",
+			workloadType: WorkloadTypeStep,
+			labels:       nil,
+			expected:     "pod-container",
+		},
+		{
+			name:         "workload is a build",
+			workloadType: WorkloadTypeBuild,
+			labels:       nil,
+			expected:     "pod-container",
+		},
+		{
+			name:         "workload type is undefined",
+			workloadType: WorkloadTypeUndefined,
+			labels:       nil,
+			expected:     "pod-container",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if diff := cmp.Diff(determineWorkloadName("pod", "container", tc.workloadType, tc.labels), tc.expected); diff != "" {
+				t.Errorf("result differs from expected output, diff:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestAddPriorityClass(t *testing.T) {
+	priority := new(int32)
+	*priority = 10
+	preemptionPolicy := corev1.PreemptLowerPriority
+
+	testCases := []struct {
+		name     string
+		pod      *corev1.Pod
+		expected *corev1.Pod
+	}{
+		{
+			name: "cpu under configured amount for priority scheduling",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("1")}}},
+				},
+			}},
+			expected: &corev1.Pod{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("1")}}},
+				},
+			}},
+		},
+		{
+			name: "cpu of exactly configured amount for priority scheduling",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("8")}}},
+				},
+			}},
+			expected: &corev1.Pod{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("8")}}},
+				},
+				PriorityClassName: priorityClassName,
+			}},
+		},
+		{
+			name: "cpu above configured amount for priority scheduling",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("9")}}},
+				},
+			}},
+			expected: &corev1.Pod{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("9")}}},
+				},
+				PriorityClassName: priorityClassName,
+			}},
+		},
+		{
+			name: "cpu above configured amount for priority scheduling with priority and preemption policy defined",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("9")}}},
+				},
+				Priority:         priority,
+				PreemptionPolicy: &preemptionPolicy,
+			}},
+			expected: &corev1.Pod{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("9")}}},
+				},
+				PriorityClassName: priorityClassName,
+			}},
+		},
+		{
+			name: "cpu of initContainer above configured amount for priority scheduling",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				InitContainers: []corev1.Container{
+					{Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("9")}}},
+				},
+			}},
+			expected: &corev1.Pod{Spec: corev1.PodSpec{
+				InitContainers: []corev1.Container{
+					{Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("9")}}},
+				},
+				PriorityClassName: priorityClassName,
+			}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := podMutator{cpuPriorityScheduling: 8}
+			m.addPriorityClass(tc.pod)
+			if diff := cmp.Diff(tc.pod, tc.expected); diff != "" {
+				t.Fatalf("expected pod doesn't match actual, diff: %s", diff)
+			}
+		})
 	}
 }

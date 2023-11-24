@@ -19,5 +19,5 @@ const (
 
 // TargetsCluster determines if the given cluster is targeted by the given user secret
 func TargetsCluster(clusterName string, data map[string]string) bool {
-	return data["secretsync/target-clusters"] == "" || sets.NewString(strings.Split(data["secretsync/target-clusters"], ",")...).Has(clusterName)
+	return data["secretsync/target-clusters"] == "" || sets.New[string](strings.Split(data["secretsync/target-clusters"], ",")...).Has(clusterName)
 }

@@ -1,0 +1,35 @@
+base_images:
+  base:
+    name: origin-v4.0
+    namespace: openshift
+    tag: base
+build_root:
+  image_stream_tag:
+    name: release
+    namespace: openshift
+    tag: golang-1.10
+canonical_go_repository: github.com/super/looper
+images:
+- from: base
+  to: test-image
+promotion:
+  namespace: ocp-private
+  tag: 4.14-priv
+resources:
+  '*':
+    limits:
+      cpu: 500Mi
+    requests:
+      cpu: 10Mi
+tag_specification:
+  name: origin-v4.0
+  namespace: openshift
+tests:
+- as: unit
+  commands: make test-unit
+  container:
+    from: src
+zz_generated_metadata:
+  branch: master
+  org: super-priv
+  repo: looper

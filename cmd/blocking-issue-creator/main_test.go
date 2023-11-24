@@ -31,14 +31,14 @@ func (f fakeGithubClient) FindIssues(query, sortVerb string, asc bool) ([]github
 func TestManageIssues(t *testing.T) {
 	testCases := []struct {
 		id             string
-		branches       sets.String
+		branches       sets.Set[string]
 		issues         map[int]*github.Issue
 		repoInfo       *config.Info
 		expectedIssues []github.Issue
 	}{
 		{
 			id:       "all up to date case",
-			branches: sets.NewString([]string{"release-4.9"}...),
+			branches: sets.New[string]([]string{"release-4.9"}...),
 			repoInfo: &config.Info{
 				Metadata: cioperatorapi.Metadata{
 					Org:    "testOrg",
@@ -50,7 +50,7 @@ func TestManageIssues(t *testing.T) {
 				1: {
 					ID:     1,
 					Title:  "Future Release Branches Frozen For Merging | branch:release-4.9",
-					Body:   "The following branches are being fast-forwarded from the current development branch (testBranch) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n - `release-4.9`\n\nContact the [Test Platform](https://coreos.slack.com/messages/CBN38N3MW) or [Automated Release](https://coreos.slack.com/messages/CB95J6R4N) teams for more information.",
+					Body:   "The following branches are being fast-forwarded from the current development branch (testBranch) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n - `release-4.9`\n\nFor more information, see the [branching documentation](https://docs.ci.openshift.org/docs/architecture/branching/).",
 					Labels: []github.Label{{Name: "tide/merge-blocker"}},
 				},
 			},
@@ -58,14 +58,14 @@ func TestManageIssues(t *testing.T) {
 				{
 					ID:     1,
 					Title:  "Future Release Branches Frozen For Merging | branch:release-4.9",
-					Body:   "The following branches are being fast-forwarded from the current development branch (testBranch) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n - `release-4.9`\n\nContact the [Test Platform](https://coreos.slack.com/messages/CBN38N3MW) or [Automated Release](https://coreos.slack.com/messages/CB95J6R4N) teams for more information.",
+					Body:   "The following branches are being fast-forwarded from the current development branch (testBranch) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n - `release-4.9`\n\nFor more information, see the [branching documentation](https://docs.ci.openshift.org/docs/architecture/branching/).",
 					Labels: []github.Label{{Name: "tide/merge-blocker"}},
 				},
 			},
 		},
 		{
 			id:       "create case",
-			branches: sets.NewString([]string{"release-4.9"}...),
+			branches: sets.New[string]([]string{"release-4.9"}...),
 			repoInfo: &config.Info{
 				Metadata: cioperatorapi.Metadata{
 					Org:    "testOrg",
@@ -78,14 +78,14 @@ func TestManageIssues(t *testing.T) {
 				{
 					ID:     1,
 					Title:  "Future Release Branches Frozen For Merging | branch:release-4.9",
-					Body:   "The following branches are being fast-forwarded from the current development branch (testBranch) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n - `release-4.9`\n\nContact the [Test Platform](https://coreos.slack.com/messages/CBN38N3MW) or [Automated Release](https://coreos.slack.com/messages/CB95J6R4N) teams for more information.",
+					Body:   "The following branches are being fast-forwarded from the current development branch (testBranch) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n - `release-4.9`\n\nFor more information, see the [branching documentation](https://docs.ci.openshift.org/docs/architecture/branching/).",
 					Labels: []github.Label{{Name: "tide/merge-blocker"}},
 				},
 			},
 		},
 		{
 			id:       "update case",
-			branches: sets.NewString([]string{"release-4.9"}...),
+			branches: sets.New[string]([]string{"release-4.9"}...),
 			repoInfo: &config.Info{Metadata: cioperatorapi.Metadata{
 				Org:    "testOrg",
 				Repo:   "testRepo",
@@ -104,14 +104,14 @@ func TestManageIssues(t *testing.T) {
 				{
 					Number: 1,
 					Title:  "Future Release Branches Frozen For Merging | branch:release-4.9",
-					Body:   "The following branches are being fast-forwarded from the current development branch (testBranch) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n - `release-4.9`\n\nContact the [Test Platform](https://coreos.slack.com/messages/CBN38N3MW) or [Automated Release](https://coreos.slack.com/messages/CB95J6R4N) teams for more information.",
+					Body:   "The following branches are being fast-forwarded from the current development branch (testBranch) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n - `release-4.9`\n\nFor more information, see the [branching documentation](https://docs.ci.openshift.org/docs/architecture/branching/).",
 					Labels: []github.Label{{Name: "tide/merge-blocker"}},
 				},
 			},
 		},
 		{
 			id:       "close multiple case",
-			branches: sets.NewString([]string{"release-4.9"}...),
+			branches: sets.New[string]([]string{"release-4.9"}...),
 			repoInfo: &config.Info{Metadata: cioperatorapi.Metadata{
 				Org:    "testOrg",
 				Repo:   "testRepo",
@@ -146,30 +146,32 @@ func TestManageIssues(t *testing.T) {
 					ID:     1,
 					Number: 1,
 					Title:  "Future Release Branches Frozen For Merging | branch:release-4.9",
-					Body:   "The following branches are being fast-forwarded from the current development branch (testBranch) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n - `release-4.9`\n\nContact the [Test Platform](https://coreos.slack.com/messages/CBN38N3MW) or [Automated Release](https://coreos.slack.com/messages/CB95J6R4N) teams for more information.",
+					Body:   "The following branches are being fast-forwarded from the current development branch (testBranch) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n - `release-4.9`\n\nFor more information, see the [branching documentation](https://docs.ci.openshift.org/docs/architecture/branching/).",
 					Labels: []github.Label{{Name: "tide/merge-blocker"}},
 				},
 				{
-					ID:     2,
-					Number: 2,
-					Title:  "Old Title",
-					Body:   "Old Body",
-					Labels: []github.Label{{Name: "tide/merge-blocker"}},
-					State:  "closed",
+					ID:          2,
+					Number:      2,
+					Title:       "Old Title",
+					Body:        "Old Body",
+					Labels:      []github.Label{{Name: "tide/merge-blocker"}},
+					State:       "closed",
+					StateReason: "completed",
 				},
 				{
-					ID:     3,
-					Number: 3,
-					Title:  "Old Title",
-					Body:   "Old Body",
-					Labels: []github.Label{{Name: "tide/merge-blocker"}},
-					State:  "closed",
+					ID:          3,
+					Number:      3,
+					Title:       "Old Title",
+					Body:        "Old Body",
+					Labels:      []github.Label{{Name: "tide/merge-blocker"}},
+					State:       "closed",
+					StateReason: "completed",
 				},
 			},
 		},
 		{
 			id:       "close abandoned cases, branch list empty",
-			branches: sets.NewString(),
+			branches: sets.New[string](),
 			repoInfo: &config.Info{Metadata: cioperatorapi.Metadata{
 				Org:    "testOrg",
 				Repo:   "testRepo",
@@ -194,20 +196,22 @@ func TestManageIssues(t *testing.T) {
 			},
 			expectedIssues: []github.Issue{
 				{
-					ID:     1,
-					Number: 1,
-					Title:  "Old Title",
-					Body:   "Old Body",
-					Labels: []github.Label{{Name: "tide/merge-blocker"}},
-					State:  "closed",
+					ID:          1,
+					Number:      1,
+					Title:       "Old Title",
+					Body:        "Old Body",
+					Labels:      []github.Label{{Name: "tide/merge-blocker"}},
+					State:       "closed",
+					StateReason: "completed",
 				},
 				{
-					ID:     2,
-					Number: 2,
-					Title:  "Old Title",
-					Body:   "Old Body",
-					Labels: []github.Label{{Name: "tide/merge-blocker"}},
-					State:  "closed",
+					ID:          2,
+					Number:      2,
+					Title:       "Old Title",
+					Body:        "Old Body",
+					Labels:      []github.Label{{Name: "tide/merge-blocker"}},
+					State:       "closed",
+					StateReason: "completed",
 				},
 			},
 		},

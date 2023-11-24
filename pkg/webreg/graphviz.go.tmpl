@@ -1,0 +1,17 @@
+digraph Webreg {
+	compound=true;
+	color=blue;
+	{{ .bootstrap413fonts }};
+	node[shape=rectangle {{ .bootstrap413monospace }}];
+	rankdir=TB;
+	label="{{ .label }}";
+
+{{ range $i, $n := .nodes -}}
+	{{ "\t" }}{{ $i }} [{{- /* indentation */ -}}
+		label="{{ label $n }}"
+		{{- if linkable $n }} href="/reference/{{ label $n }}"{{ end -}}
+	];
+{{ end }}
+{{ range $i, $e := .edges -}}
+	{{ "\t" }}{{ srcNode $e }} -> {{ dstNode $e }} {{ attrs $e }};
+{{ end }}

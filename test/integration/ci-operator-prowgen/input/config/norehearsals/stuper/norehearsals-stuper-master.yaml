@@ -1,0 +1,37 @@
+base_images:
+  base:
+    name: origin-v4.0
+    namespace: openshift
+    tag: base
+build_root:
+  image_stream_tag:
+    name: release
+    namespace: openshift
+    tag: golang-1.10
+resources:
+  '*':
+    limits:
+      cpu: 500Mi
+    requests:
+      cpu: 10Mi
+tag_specification:
+  name: origin-v4.0
+  namespace: openshift
+tests:
+- as: unit
+  commands: make test-unit
+  container:
+    from: src
+- as: upload-results
+  commands: make upload-results
+  container:
+    from: src
+  postsubmit: true
+- as: lint
+  commands: make test-lint
+  container:
+    from: src
+zz_generated_metadata:
+  branch: master
+  org: norehearsals
+  repo: stuper

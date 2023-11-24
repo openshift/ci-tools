@@ -17,13 +17,13 @@ func TestDynamicCensor(t *testing.T) {
 	censored = input
 	censor.AddSecrets("secret")
 	censor.Censor(&censored)
-	if diff := cmp.Diff(censored, []byte("****** terces ******** dGVyY2Vz")); diff != "" {
+	if diff := cmp.Diff(censored, []byte("XXXXXX terces XXXXXXXX dGVyY2Vz")); diff != "" {
 		t.Errorf("unexpected result: %s", diff)
 	}
 	censored = input
 	censor.AddSecrets("terces")
 	censor.Censor(&censored)
-	if diff := cmp.Diff(censored, []byte("****** ****** ******** ********")); diff != "" {
+	if diff := cmp.Diff(censored, []byte("XXXXXX XXXXXX XXXXXXXX XXXXXXXX")); diff != "" {
 		t.Errorf("unexpected result: %s", diff)
 	}
 }

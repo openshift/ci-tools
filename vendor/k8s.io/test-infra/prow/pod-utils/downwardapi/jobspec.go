@@ -20,16 +20,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"strconv"
+	"time"
 
+	"github.com/GoogleCloudPlatform/testgrid/metadata"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	"k8s.io/test-infra/prow/pod-utils/clone"
 )
 
 // JobSpec is the full downward API that we expose to
 // jobs that realize a ProwJob. We will provide this
 // data to jobs with environment variables in two ways:
-//  - the full spec, in serialized JSON in one variable
-//  - individual fields of the spec in their own variables
+//   - the full spec, in serialized JSON in one variable
+//   - individual fields of the spec in their own variables
 type JobSpec struct {
 	Type      prowapi.ProwJobType `json:"type,omitempty"`
 	Job       string              `json:"job,omitempty"`
@@ -80,43 +84,45 @@ func ResolveSpecFromEnv() (*JobSpec, error) {
 
 const (
 	// ci represents whether the current environment is a CI environment
-	ci = "CI"
+	CI = "CI"
 
 	// JobSpecEnv is the name that contains JobSpec marshaled into a string.
 	JobSpecEnv = "JOB_SPEC"
 
-	jobNameEnv   = "JOB_NAME"
-	jobTypeEnv   = "JOB_TYPE"
-	prowJobIDEnv = "PROW_JOB_ID"
+	JobNameEnv   = "JOB_NAME"
+	JobTypeEnv   = "JOB_TYPE"
+	ProwJobIDEnv = "PROW_JOB_ID"
 
-	buildIDEnv     = "BUILD_ID"
-	prowBuildIDEnv = "BUILD_NUMBER" // Deprecated, will be removed in the future.
+	BuildIDEnv     = "BUILD_ID"
+	ProwBuildIDEnv = "BUILD_NUMBER" // Deprecated, will be removed in the future.
 
-	repoOwnerEnv   = "REPO_OWNER"
-	repoNameEnv    = "REPO_NAME"
-	pullBaseRefEnv = "PULL_BASE_REF"
-	pullBaseShaEnv = "PULL_BASE_SHA"
-	pullRefsEnv    = "PULL_REFS"
-	pullNumberEnv  = "PULL_NUMBER"
-	pullPullShaEnv = "PULL_PULL_SHA"
+	RepoOwnerEnv   = "REPO_OWNER"
+	RepoNameEnv    = "REPO_NAME"
+	PullBaseRefEnv = "PULL_BASE_REF"
+	PullBaseShaEnv = "PULL_BASE_SHA"
+	PullRefsEnv    = "PULL_REFS"
+	PullNumberEnv  = "PULL_NUMBER"
+	PullPullShaEnv = "PULL_PULL_SHA"
+	PullHeadRefEnv = "PULL_HEAD_REF"
+	PullTitleEnv   = "PULL_TITLE"
 )
 
 // EnvForSpec returns a mapping of environment variables
 // to their values that should be available for a job spec
 func EnvForSpec(spec JobSpec) (map[string]string, error) {
 	env := map[string]string{
-		ci:           "true",
-		jobNameEnv:   spec.Job,
-		buildIDEnv:   spec.BuildID,
-		prowJobIDEnv: spec.ProwJobID,
-		jobTypeEnv:   string(spec.Type),
+		CI:           "true",
+		JobNameEnv:   spec.Job,
+		BuildIDEnv:   spec.BuildID,
+		ProwJobIDEnv: spec.ProwJobID,
+		JobTypeEnv:   string(spec.Type),
 	}
 
 	// for backwards compatibility, we provide the build ID
 	// in both $BUILD_ID and $BUILD_NUMBER for Prow agents
 	// and in both $buildId and $BUILD_NUMBER for Jenkins
 	if spec.agent == prowapi.KubernetesAgent {
-		env[prowBuildIDEnv] = spec.BuildID
+		env[ProwBuildIDEnv] = spec.BuildID
 	}
 
 	raw, err := json.Marshal(spec)
@@ -129,26 +135,29 @@ func EnvForSpec(spec JobSpec) (map[string]string, error) {
 		return env, nil
 	}
 
-	env[repoOwnerEnv] = spec.Refs.Org
-	env[repoNameEnv] = spec.Refs.Repo
-	env[pullBaseRefEnv] = spec.Refs.BaseRef
-	env[pullBaseShaEnv] = spec.Refs.BaseSHA
-	env[pullRefsEnv] = spec.Refs.String()
+	env[RepoOwnerEnv] = spec.Refs.Org
+	env[RepoNameEnv] = spec.Refs.Repo
+	env[PullBaseRefEnv] = spec.Refs.BaseRef
+	env[PullBaseShaEnv] = spec.Refs.BaseSHA
+	env[PullRefsEnv] = spec.Refs.String()
 
 	if spec.Type == prowapi.PostsubmitJob || spec.Type == prowapi.BatchJob {
 		return env, nil
 	}
 
-	env[pullNumberEnv] = strconv.Itoa(spec.Refs.Pulls[0].Number)
-	env[pullPullShaEnv] = spec.Refs.Pulls[0].SHA
+	env[PullNumberEnv] = strconv.Itoa(spec.Refs.Pulls[0].Number)
+	env[PullPullShaEnv] = spec.Refs.Pulls[0].SHA
+	env[PullHeadRefEnv] = spec.Refs.Pulls[0].HeadRef
+	env[PullTitleEnv] = spec.Refs.Pulls[0].Title
+
 	return env, nil
 }
 
 // EnvForType returns the slice of environment variables to export for jobType
 func EnvForType(jobType prowapi.ProwJobType) []string {
-	baseEnv := []string{ci, jobNameEnv, JobSpecEnv, jobTypeEnv, prowJobIDEnv, buildIDEnv, prowBuildIDEnv}
-	refsEnv := []string{repoOwnerEnv, repoNameEnv, pullBaseRefEnv, pullBaseShaEnv, pullRefsEnv}
-	pullEnv := []string{pullNumberEnv, pullPullShaEnv}
+	baseEnv := []string{CI, JobNameEnv, JobSpecEnv, JobTypeEnv, ProwJobIDEnv, BuildIDEnv, ProwBuildIDEnv}
+	refsEnv := []string{RepoOwnerEnv, RepoNameEnv, PullBaseRefEnv, PullBaseShaEnv, PullRefsEnv}
+	pullEnv := []string{PullNumberEnv, PullPullShaEnv, PullHeadRefEnv, PullTitleEnv}
 
 	switch jobType {
 	case prowapi.PeriodicJob:
@@ -164,6 +173,9 @@ func EnvForType(jobType prowapi.ProwJobType) []string {
 
 // getRevisionFromRef returns a ref or sha from a refs object
 func getRevisionFromRef(refs *prowapi.Refs) string {
+	if refs == nil {
+		return ""
+	}
 	if len(refs.Pulls) > 0 {
 		return refs.Pulls[0].SHA
 	}
@@ -176,22 +188,79 @@ func getRevisionFromRef(refs *prowapi.Refs) string {
 }
 
 // GetRevisionFromSpec returns a main ref or sha from a spec object
-func GetRevisionFromSpec(spec *JobSpec) string {
-	if spec.Refs != nil {
-		return getRevisionFromRef(spec.Refs)
-	} else if len(spec.ExtraRefs) > 0 {
-		return getRevisionFromRef(&spec.ExtraRefs[0])
+func GetRevisionFromSpec(jobSpec *JobSpec) string {
+	return GetRevisionFromRefs(jobSpec.Refs, jobSpec.ExtraRefs)
+}
+
+func GetRevisionFromRefs(refs *prowapi.Refs, extra []prowapi.Refs) string {
+	return getRevisionFromRef(mainRefs(refs, extra))
+}
+
+func mainRefs(refs *prowapi.Refs, extra []prowapi.Refs) *prowapi.Refs {
+	if refs != nil {
+		return refs
+	}
+	if len(extra) > 0 {
+		return &extra[0]
+	}
+	return nil
+}
+
+func PjToStarted(pj *prowapi.ProwJob, cloneRecords []clone.Record) metadata.Started {
+	return refsToStarted(pj.Spec.Refs, pj.Spec.ExtraRefs, cloneRecords, pj.Status.StartTime.Unix())
+}
+
+func SpecToStarted(spec *JobSpec, cloneRecords []clone.Record) metadata.Started {
+	return refsToStarted(spec.Refs, spec.ExtraRefs, cloneRecords, time.Now().Unix())
+}
+
+// refsToStarted translate refs into a Started struct
+// optionally overwrite RepoVersion with provided cloneRecords
+func refsToStarted(refs *prowapi.Refs, extraRefs []prowapi.Refs, cloneRecords []clone.Record, startTime int64) metadata.Started {
+	var version string
+
+	started := metadata.Started{
+		Timestamp: startTime,
+	}
+
+	if mainRefs := mainRefs(refs, extraRefs); mainRefs != nil {
+		version = shaForRefs(*mainRefs, cloneRecords)
+	}
+
+	if version == "" {
+		version = GetRevisionFromRefs(refs, extraRefs)
+	}
+
+	started.DeprecatedRepoVersion = version
+	started.RepoCommit = version
+
+	if refs != nil && len(refs.Pulls) > 0 {
+		started.Pull = strconv.Itoa(refs.Pulls[0].Number)
+	}
+
+	started.Repos = map[string]string{}
+
+	if refs != nil {
+		started.Repos[refs.Org+"/"+refs.Repo] = refs.String()
+	}
+	for _, ref := range extraRefs {
+		started.Repos[ref.Org+"/"+ref.Repo] = ref.String()
+	}
+
+	return started
+}
+
+// shaForRefs finds the resolved SHA after cloning and merging for the given refs
+func shaForRefs(refs prowapi.Refs, cloneRecords []clone.Record) string {
+	for _, record := range cloneRecords {
+		if reflect.DeepEqual(refs, record.Refs) {
+			return record.FinalSHA
+		}
 	}
 	return ""
 }
 
-// MainRefs determines the main refs under test, if there are any
-func (s *JobSpec) MainRefs() *prowapi.Refs {
-	if s.Refs != nil {
-		return s.Refs
-	}
-	if len(s.ExtraRefs) > 0 {
-		return &s.ExtraRefs[0]
-	}
-	return nil
+// InCI returns true if the CI environment variable is not empty
+func InCI() bool {
+	return os.Getenv(CI) != ""
 }

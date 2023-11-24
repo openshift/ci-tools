@@ -19,6 +19,7 @@ package pjutil
 import (
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -40,22 +41,22 @@ var OkToTestRe = regexp.MustCompile(`(?m)^/ok-to-test\s*$`)
 // 1. presubmits that can be run with '/test all' command.
 // 2. optional presubmits commands that can be run with their trigger, e.g. '/test job'
 // 3. required presubmits commands that can be run with their trigger, e.g. '/test job'
-func AvailablePresubmits(changes config.ChangedFilesProvider, org, repo, branch string,
-	presubmits []config.Presubmit, logger *logrus.Entry) (sets.String, sets.String, sets.String, error) {
-	runWithTestAllNames := sets.NewString()
-	optionalJobTriggerCommands := sets.NewString()
-	requiredJobsTriggerCommands := sets.NewString()
+func AvailablePresubmits(changes config.ChangedFilesProvider, branch string,
+	presubmits []config.Presubmit, logger *logrus.Entry) (sets.Set[string], sets.Set[string], sets.Set[string], error) {
+	runWithTestAllNames := sets.New[string]()
+	optionalJobTriggerCommands := sets.New[string]()
+	requiredJobsTriggerCommands := sets.New[string]()
 
-	runWithTestAll, err := FilterPresubmits(TestAllFilter(), changes, branch, presubmits, logger)
+	runWithTestAll, err := FilterPresubmits(NewTestAllFilter(), changes, branch, presubmits, logger)
 	if err != nil {
 		return runWithTestAllNames, optionalJobTriggerCommands, requiredJobsTriggerCommands, err
 	}
 
 	var triggerFilters []Filter
 	for _, ps := range presubmits {
-		triggerFilters = append(triggerFilters, CommandFilter(ps.RerunCommand))
+		triggerFilters = append(triggerFilters, NewCommandFilter(ps.RerunCommand))
 	}
-	runWithTrigger, err := FilterPresubmits(AggregateFilter(triggerFilters), changes, branch, presubmits, logger)
+	runWithTrigger, err := FilterPresubmits(NewAggregateFilter(triggerFilters), changes, branch, presubmits, logger)
 	if err != nil {
 		return runWithTestAllNames, optionalJobTriggerCommands, requiredJobsTriggerCommands, err
 	}
@@ -76,39 +77,103 @@ func AvailablePresubmits(changes config.ChangedFilesProvider, org, repo, branch 
 }
 
 // Filter digests a presubmit config to determine if:
-//  - the presubmit matched the filter
-//  - we know that the presubmit is forced to run
-//  - what the default behavior should be if the presubmit
-//    runs conditionally and does not match trigger conditions
-type Filter func(p config.Presubmit) (shouldRun bool, forcedToRun bool, defaultBehavior bool)
+//   - the presubmit matched the filter
+//   - we know that the presubmit is forced to run
+//   - what the default behavior should be if the presubmit
+//     runs conditionally and does not match trigger conditions
+type Filter interface {
+	ShouldRun(p config.Presubmit) (shouldRun bool, forcedToRun bool, defaultBehavior bool)
+	Name() string
+}
+
+// ArbitraryFilter is a lazy filter that can be used ad hoc when consumer
+// doesn't want to declare a new struct. One of the usage is in unit test.
+type ArbitraryFilter struct {
+	override func(p config.Presubmit) (shouldRun bool, forcedToRun bool, defaultBehavior bool)
+	name     string
+}
+
+func NewArbitraryFilter(override func(p config.Presubmit) (shouldRun bool, forcedToRun bool, defaultBehavior bool), name string) *ArbitraryFilter {
+	return &ArbitraryFilter{override: override, name: name}
+}
+
+func (af *ArbitraryFilter) ShouldRun(p config.Presubmit) (shouldRun bool, forcedToRun bool, defaultBehavior bool) {
+	return af.override(p)
+}
+
+func (af *ArbitraryFilter) Name() string {
+	return af.name
+}
 
 // CommandFilter builds a filter for `/test foo`
-func CommandFilter(body string) Filter {
-	return func(p config.Presubmit) (bool, bool, bool) {
-		return p.TriggerMatches(body), p.TriggerMatches(body), true
+type CommandFilter struct {
+	body string
+	// half is used by `.Name`. For large body only the first and last "half"
+	// chars are part of `.Name`. The default is 70, define here for easier unit
+	// test purpose.
+	half int
+}
+
+func NewCommandFilter(body string) *CommandFilter {
+	return &CommandFilter{body: body, half: 70}
+}
+
+func (cf *CommandFilter) ShouldRun(p config.Presubmit) (bool, bool, bool) {
+	return p.TriggerMatches(cf.body), p.TriggerMatches(cf.body), true
+}
+
+func (cf *CommandFilter) Name() string {
+	var body string
+	if len(cf.body) <= cf.half*2 {
+		body = cf.body
+	} else {
+		body = cf.body[:cf.half] + "\n...\n" + cf.body[len(cf.body)-cf.half:]
 	}
+	return "command-filter: " + body
 }
 
 // TestAllFilter builds a filter for the automatic behavior of `/test all`.
 // Jobs that explicitly match `/test all` in their trigger regex will be
 // handled by a commandFilter for the comment in question.
-func TestAllFilter() Filter {
-	return func(p config.Presubmit) (bool, bool, bool) {
-		return !p.NeedsExplicitTrigger(), false, false
-	}
+type TestAllFilter struct{}
+
+func NewTestAllFilter() *TestAllFilter {
+	return &TestAllFilter{}
+}
+
+func (tf *TestAllFilter) ShouldRun(p config.Presubmit) (bool, bool, bool) {
+	return !p.NeedsExplicitTrigger(), false, false
+}
+
+func (tf *TestAllFilter) Name() string {
+	return "test-all-filter"
 }
 
 // AggregateFilter builds a filter that evaluates the child filters in order
 // and returns the first match
-func AggregateFilter(filters []Filter) Filter {
-	return func(presubmit config.Presubmit) (bool, bool, bool) {
-		for _, filter := range filters {
-			if shouldRun, forced, defaults := filter(presubmit); shouldRun {
-				return shouldRun, forced, defaults
-			}
+type AggregateFilter struct {
+	filters []Filter
+}
+
+func NewAggregateFilter(filters []Filter) *AggregateFilter {
+	return &AggregateFilter{filters: filters}
+}
+
+func (nf *AggregateFilter) ShouldRun(p config.Presubmit) (bool, bool, bool) {
+	for _, filter := range nf.filters {
+		if shouldRun, forced, defaults := filter.ShouldRun(p); shouldRun {
+			return shouldRun, forced, defaults
 		}
-		return false, false, false
 	}
+	return false, false, false
+}
+
+func (nf *AggregateFilter) Name() string {
+	var names []string
+	for _, filter := range nf.filters {
+		names = append(names, filter.Name())
+	}
+	return strings.Join(names, "::")
 }
 
 // FilterPresubmits determines which presubmits should run by evaluating the user-provided filter.
@@ -118,7 +183,7 @@ func FilterPresubmits(filter Filter, changes config.ChangedFilesProvider, branch
 	var namesToTrigger []string
 	var noMatch, shouldnotRun int
 	for _, presubmit := range presubmits {
-		matches, forced, defaults := filter(presubmit)
+		matches, forced, defaults := filter.ShouldRun(presubmit)
 		if !matches {
 			noMatch++
 			continue
@@ -131,6 +196,13 @@ func FilterPresubmits(filter Filter, changes config.ChangedFilesProvider, branch
 			shouldnotRun++
 			continue
 		}
+		// Add a trace log for debugging an internal bug.
+		// (TODO: chaodaiG) Remove this once root cause is discovered.
+		logger.WithFields(logrus.Fields{
+			"pj":      presubmit.Name,
+			"trigger": presubmit.Trigger,
+			"filters": filter.Name(),
+		}).Trace("Job should be triggered.")
 		toTrigger = append(toTrigger, presubmit)
 		namesToTrigger = append(namesToTrigger, presubmit.Name)
 	}
@@ -140,28 +212,55 @@ func FilterPresubmits(filter Filter, changes config.ChangedFilesProvider, branch
 		"total-count":          len(presubmits),
 		"to-trigger-count":     len(toTrigger),
 		"no-match-count":       noMatch,
-		"should-not-run-count": shouldnotRun}).Debug("Filtered complete.")
+		"should-not-run-count": shouldnotRun,
+		"filters":              filter.Name()}).Debug("Filtered complete.")
 	return toTrigger, nil
 }
 
 // RetestFilter builds a filter for `/retest`
-func RetestFilter(failedContexts, allContexts sets.String) Filter {
-	return func(p config.Presubmit) (bool, bool, bool) {
-		failed := failedContexts.Has(p.Context)
-		return failed || (!p.NeedsExplicitTrigger() && !allContexts.Has(p.Context)), false, failed
+type RetestFilter struct {
+	failedContexts, allContexts sets.Set[string]
+}
+
+func NewRetestFilter(failedContexts, allContexts sets.Set[string]) *RetestFilter {
+	return &RetestFilter{
+		failedContexts: failedContexts,
+		allContexts:    allContexts,
 	}
 }
 
-func RetestRequiredFilter(failedContext, allContexts sets.String) Filter {
-	return func(ps config.Presubmit) (bool, bool, bool) {
-		if ps.Optional {
-			return false, false, false
-		}
-		return RetestFilter(failedContext, allContexts)(ps)
+func (rf *RetestFilter) ShouldRun(p config.Presubmit) (bool, bool, bool) {
+	failed := rf.failedContexts.Has(p.Context)
+	return failed || (!p.NeedsExplicitTrigger() && !rf.allContexts.Has(p.Context)), false, failed
+}
+
+func (rf *RetestFilter) Name() string {
+	return "retest-filter"
+}
+
+type RetestRequiredFilter struct {
+	failedContexts, allContexts sets.Set[string]
+}
+
+func NewRetestRequiredFilter(failedContexts, allContexts sets.Set[string]) *RetestRequiredFilter {
+	return &RetestRequiredFilter{
+		failedContexts: failedContexts,
+		allContexts:    allContexts,
 	}
 }
 
-type contextGetter func() (sets.String, sets.String, error)
+func (rrf *RetestRequiredFilter) ShouldRun(ps config.Presubmit) (bool, bool, bool) {
+	if ps.Optional {
+		return false, false, false
+	}
+	return NewRetestFilter(rrf.failedContexts, rrf.allContexts).ShouldRun(ps)
+}
+
+func (rrf *RetestRequiredFilter) Name() string {
+	return "retest-required-filter"
+}
+
+type contextGetter func() (sets.Set[string], sets.Set[string], error)
 
 // PresubmitFilter creates a filter for presubmits
 func PresubmitFilter(honorOkToTest bool, contextGetter contextGetter, body string, logger logrus.FieldLogger) (Filter, error) {
@@ -172,14 +271,14 @@ func PresubmitFilter(honorOkToTest bool, contextGetter contextGetter, body strin
 	// as they have precedence -- filters that override the false default should
 	// match before others. We order filters by amount of specificity.
 	var filters []Filter
-	filters = append(filters, CommandFilter(body))
+	filters = append(filters, NewCommandFilter(body))
 	if RetestRe.MatchString(body) {
 		logger.Info("Using retest filter.")
 		failedContexts, allContexts, err := contextGetter()
 		if err != nil {
 			return nil, err
 		}
-		filters = append(filters, RetestFilter(failedContexts, allContexts))
+		filters = append(filters, NewRetestFilter(failedContexts, allContexts))
 	}
 	if RetestRequiredRe.MatchString(body) {
 		logger.Info("Using retest-required filter")
@@ -187,11 +286,11 @@ func PresubmitFilter(honorOkToTest bool, contextGetter contextGetter, body strin
 		if err != nil {
 			return nil, err
 		}
-		filters = append(filters, RetestRequiredFilter(failedContexts, allContexts))
+		filters = append(filters, NewRetestRequiredFilter(failedContexts, allContexts))
 	}
 	if (honorOkToTest && OkToTestRe.MatchString(body)) || TestAllRe.MatchString(body) {
 		logger.Debug("Using test-all filter.")
-		filters = append(filters, TestAllFilter())
+		filters = append(filters, NewTestAllFilter())
 	}
-	return AggregateFilter(filters), nil
+	return NewAggregateFilter(filters), nil
 }

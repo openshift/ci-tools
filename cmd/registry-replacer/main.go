@@ -6,7 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -27,7 +26,6 @@ import (
 
 	"github.com/openshift/builder/pkg/build/builder/util/dockerfile"
 	"github.com/openshift/imagebuilder"
-	dockercmd "github.com/openshift/imagebuilder/dockerfile/command"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/ocpbuilddata"
@@ -159,14 +157,14 @@ func main() {
 				if err := replacer(
 					github.FileGetterFactory,
 					func(data []byte) error {
-						return ioutil.WriteFile(filename, data, 0644)
+						return os.WriteFile(filename, data, 0644)
 					},
 					opts.pruneUnusedReplacements,
 					opts.pruneOCPBuilderReplacements,
 					opts.pruneUnusedBaseImages,
 					opts.applyReplacements,
 					opts.ensureCorrectPromotionDockerfile,
-					sets.NewString(opts.ensureCorrectPromotionDockerfileIngoredRepos.Strings()...),
+					sets.New[string](opts.ensureCorrectPromotionDockerfileIngoredRepos.Strings()...),
 					promotionTargetToDockerfileMapping,
 					opts.currentRelease,
 					credentials,
@@ -227,7 +225,7 @@ func replacer(
 	pruneUnusedBaseImagesEnabled bool,
 	applyReplacements bool,
 	ensureCorrectPromotionDockerfile bool,
-	ensureCorrectPromotionDockerfileIgnoredrepos sets.String,
+	ensureCorrectPromotionDockerfileIgnoredrepos sets.Set[string],
 	promotionTargetToDockerfileMapping map[string]dockerfileLocation,
 	majorMinor ocpbuilddata.MajorMinor,
 	credentials *usernameToken,
@@ -255,7 +253,7 @@ func replacer(
 		} else {
 			getter = githubFileGetterFactory(info.Org, info.Repo, info.Branch, github.WithAuthentication(credentials.username, credentials.token))
 		}
-		allReplacementCandidates := sets.String{}
+		allReplacementCandidates := sets.Set[string]{}
 
 		if applyReplacements {
 			// We have to skip pruning if we only get empty dockerfiles because it might mean
@@ -396,7 +394,7 @@ func ensureReplacement(image *api.ProjectDirectoryImageBuildStepConfiguration, d
 			image.Inputs = map[string]api.ImageBuildInputs{}
 		}
 		inputs := image.Inputs[orgRepoTag.String()]
-		inputs.As = sets.NewString(inputs.As...).Insert(toReplace).List()
+		inputs.As = sets.List(sets.New[string](inputs.As...).Insert(toReplace))
 		image.Inputs[orgRepoTag.String()] = inputs
 
 		result = append(result, orgRepoTag)
@@ -407,7 +405,7 @@ func ensureReplacement(image *api.ProjectDirectoryImageBuildStepConfiguration, d
 
 func hasReplacementFor(image *api.ProjectDirectoryImageBuildStepConfiguration, target string) bool {
 	for _, input := range image.Inputs {
-		if sets.NewString(input.As...).Has(target) {
+		if sets.New[string](input.As...).Has(target) {
 			return true
 		}
 	}
@@ -535,8 +533,8 @@ func applyReplacementsToDockerfile(in []byte, image *api.ProjectDirectoryImageBu
 	return dockerfile.Write(node), nil
 }
 
-func extractReplacementCandidatesFromDockerfile(dockerfile []byte) (sets.String, error) {
-	replacementCandidates := sets.String{}
+func extractReplacementCandidatesFromDockerfile(dockerfile []byte) (sets.Set[string], error) {
+	replacementCandidates := sets.Set[string]{}
 	node, err := imagebuilder.ParseDockerfile(bytes.NewBuffer(dockerfile))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse Dockerfile: %w", err)
@@ -552,11 +550,11 @@ func extractReplacementCandidatesFromDockerfile(dockerfile []byte) (sets.String,
 	for _, stage := range stages {
 		for _, child := range stage.Node.Children {
 			switch {
-			case child.Value == dockercmd.From && child.Next != nil:
+			case child.Value == "from" && child.Next != nil:
 				image := child.Next.Value
 				replacementCandidates.Insert(image)
 				names[stage.Name] = image
-			case child.Value == dockercmd.Copy:
+			case child.Value == "copy":
 				if ref, ok := nodeHasFromRef(child); ok {
 					if len(ref) > 0 {
 						if _, ok := names[ref]; !ok {
@@ -571,7 +569,7 @@ func extractReplacementCandidatesFromDockerfile(dockerfile []byte) (sets.String,
 	return replacementCandidates, nil
 }
 
-func pruneUnusedReplacements(config *api.ReleaseBuildConfiguration, replacementCandidates sets.String) error {
+func pruneUnusedReplacements(config *api.ReleaseBuildConfiguration, replacementCandidates sets.Set[string]) error {
 	return pruneReplacements(config, func(asDirective string, _ string) (bool, error) {
 		return replacementCandidates.Has(asDirective), nil
 	})
@@ -655,7 +653,7 @@ func pruneReplacements(config *api.ReleaseBuildConfiguration, filter asDirective
 // pruneUnusedBaseImages uses the fully-resolved config to make sure an image is not used directly in  the config, or within any of the tests.
 // If it is not, then we prune it.
 func pruneUnusedBaseImages(config *api.ReleaseBuildConfiguration, resolvedConfig *api.ReleaseBuildConfiguration) error {
-	usedBaseImages := sets.NewString()
+	usedBaseImages := sets.New[string]()
 
 	getOperatorImages(config, usedBaseImages)
 	for _, step := range resolvedConfig.RawSteps {
@@ -735,7 +733,7 @@ func pruneUnusedBaseImages(config *api.ReleaseBuildConfiguration, resolvedConfig
 	return nil
 }
 
-func getOperatorImages(config *api.ReleaseBuildConfiguration, usedBaseImages sets.String) {
+func getOperatorImages(config *api.ReleaseBuildConfiguration, usedBaseImages sets.Set[string]) {
 	if config.Operator != nil {
 		for _, substitution := range config.Operator.Substitutions {
 			_, name, _ := config.DependencyParts(api.StepDependency{Name: substitution.With}, nil)
@@ -748,21 +746,21 @@ func getOperatorImages(config *api.ReleaseBuildConfiguration, usedBaseImages set
 	}
 }
 
-func getBundleSourceImages(config *api.ReleaseBuildConfiguration, images *sets.String, step *api.BundleSourceStepConfiguration) {
+func getBundleSourceImages(config *api.ReleaseBuildConfiguration, images *sets.Set[string], step *api.BundleSourceStepConfiguration) {
 	for _, substitution := range step.Substitutions {
 		_, name, _ := config.DependencyParts(api.StepDependency{Name: substitution.With}, nil)
 		images.Insert(name)
 	}
 }
 
-func getImageBuildInputImages(config *api.ReleaseBuildConfiguration, inputs map[string]api.ImageBuildInputs, images *sets.String) {
+func getImageBuildInputImages(config *api.ReleaseBuildConfiguration, inputs map[string]api.ImageBuildInputs, images *sets.Set[string]) {
 	for input := range inputs {
 		_, name, _ := config.DependencyParts(api.StepDependency{Name: input}, nil)
 		images.Insert(name)
 	}
 }
 
-func getTestStepImages(config *api.ReleaseBuildConfiguration, images *sets.String, step *api.TestStepConfiguration) {
+func getTestStepImages(config *api.ReleaseBuildConfiguration, images *sets.Set[string], step *api.TestStepConfiguration) {
 	if step.MultiStageTestConfigurationLiteral != nil {
 		getTestImages(config, images, step.MultiStageTestConfigurationLiteral.Pre)
 		getTestImages(config, images, step.MultiStageTestConfigurationLiteral.Test)
@@ -772,7 +770,7 @@ func getTestStepImages(config *api.ReleaseBuildConfiguration, images *sets.Strin
 	}
 }
 
-func getTestImages(config *api.ReleaseBuildConfiguration, images *sets.String, steps []api.LiteralTestStep) {
+func getTestImages(config *api.ReleaseBuildConfiguration, images *sets.Set[string], steps []api.LiteralTestStep) {
 	for _, step := range steps {
 		if step.From != "" {
 			_, name, _ := config.DependencyParts(api.StepDependency{Name: step.From}, nil)
@@ -816,7 +814,7 @@ func updateDockerfilesToMatchOCPBuildData(
 	config *api.ReleaseBuildConfiguration,
 	promotionTargetToDockerfileMapping map[string]dockerfileLocation,
 	majorMinorVersion string,
-	ignoredRepos sets.String,
+	ignoredRepos sets.Set[string],
 ) {
 
 	// The tool only works for the current release

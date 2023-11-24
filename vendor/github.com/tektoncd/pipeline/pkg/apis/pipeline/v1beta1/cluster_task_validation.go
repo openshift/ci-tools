@@ -25,9 +25,14 @@ import (
 
 var _ apis.Validatable = (*ClusterTask)(nil)
 
+// Validate performs validation of the metadata and spec of this ClusterTask.
 func (t *ClusterTask) Validate(ctx context.Context) *apis.FieldError {
-	if err := validate.ObjectMetadata(t.GetObjectMeta()); err != nil {
-		return err.ViaField("metadata")
+	if apis.IsInDelete(ctx) {
+		return nil
 	}
-	return t.Spec.Validate(ctx)
+	errs := validate.ObjectMetadata(t.GetObjectMeta()).ViaField("metadata")
+	errs = errs.Also(t.Spec.Validate(apis.WithinSpec(ctx)).ViaField("spec"))
+	// We do not support propagated parameters in ClusterTasks.
+	// Validate that all params the ClusterTask uses are declared.
+	return errs.Also(ValidateUsageOfDeclaredParameters(ctx, t.Spec.Steps, t.Spec.Params))
 }

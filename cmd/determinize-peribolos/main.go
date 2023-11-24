@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"flag"
-	"io/ioutil"
 	"os"
 
 	"github.com/sirupsen/logrus"
@@ -58,7 +57,7 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to marshal output.")
 	}
 
-	if err := ioutil.WriteFile(o.config, out, 0666); err != nil {
+	if err := os.WriteFile(o.config, out, 0666); err != nil {
 		logrus.WithError(err).Fatal("Failed to write output.")
 	}
 

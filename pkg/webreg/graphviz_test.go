@@ -3,114 +3,158 @@ package webreg
 import (
 	"testing"
 
-	"k8s.io/apimachinery/pkg/util/diff"
-
-	"github.com/openshift/ci-tools/pkg/load"
+	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/registry"
+	"github.com/openshift/ci-tools/pkg/testhelper"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
-const ipiWorkflow = `digraph Webreg {
-	compound=true;
-	color=blue;
-	fontname="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif,'Apple Color Emoji','Segoe UI Emoji','Segoe UI Symbol','Noto Color Emoji'";
-	node[shape=rectangle fontname="SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace"];
-	rankdir=TB;
-	label="Workflow &#34;ipi&#34;";
-
-	0 [label="ipi-install-rbac" href="/reference/ipi-install-rbac"];
-	1 [label="ipi-install-install" href="/reference/ipi-install-install"];
-	2 [label="Intentionally left blank"];
-	3 [label="ipi-deprovision-must-gather" href="/reference/ipi-deprovision-must-gather"];
-	4 [label="ipi-deprovision-deprovision" href="/reference/ipi-deprovision-deprovision"];
-
-	0 -> 1 ;
-	3 -> 4 ;
-	1 -> 2 [ltail=cluster_1 lhead=cluster_2 minlen=2];
-	2 -> 3 [ltail=cluster_2 lhead=cluster_4 minlen=2];
-
-	subgraph cluster_1 {
-		label="Pre";
-		labeljust="l";
-		fontname="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif,'Apple Color Emoji','Segoe UI Emoji','Segoe UI Symbol','Noto Color Emoji'";
-		subgraph cluster_0 {
-			label="ipi-install";
-			labeljust="l";
-			href="/chain/ipi-install";
-			fontname="SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace";
-			0;
-			1;
-		}
-	}
-	subgraph cluster_2 {
-		label="Test";
-		labeljust="l";
-		fontname="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif,'Apple Color Emoji','Segoe UI Emoji','Segoe UI Symbol','Noto Color Emoji'";
-		2;
-	}
-	subgraph cluster_4 {
-		label="Post";
-		labeljust="l";
-		fontname="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif,'Apple Color Emoji','Segoe UI Emoji','Segoe UI Symbol','Noto Color Emoji'";
-		subgraph cluster_3 {
-			label="ipi-deprovision";
-			labeljust="l";
-			href="/chain/ipi-deprovision";
-			fontname="SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace";
-			3;
-			4;
-		}
-	}
-}`
-const installChain = `digraph Webreg {
-	compound=true;
-	color=blue;
-	fontname="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif,'Apple Color Emoji','Segoe UI Emoji','Segoe UI Symbol','Noto Color Emoji'";
-	node[shape=rectangle fontname="SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace"];
-	rankdir=TB;
-	label="Chain &#34;ipi-install&#34;";
-
-	0 [label="ipi-install-rbac" href="/reference/ipi-install-rbac"];
-	1 [label="ipi-install-install" href="/reference/ipi-install-install"];
-
-	0 -> 1 ;
-
-}`
-const deprovisionChain = `digraph Webreg {
-	compound=true;
-	color=blue;
-	fontname="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif,'Apple Color Emoji','Segoe UI Emoji','Segoe UI Symbol','Noto Color Emoji'";
-	node[shape=rectangle fontname="SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace"];
-	rankdir=TB;
-	label="Chain &#34;ipi-deprovision&#34;";
-
-	0 [label="ipi-deprovision-must-gather" href="/reference/ipi-deprovision-must-gather"];
-	1 [label="ipi-deprovision-deprovision" href="/reference/ipi-deprovision-deprovision"];
-
-	0 -> 1 ;
-
-}`
-
 func TestChainDotFile(t *testing.T) {
-	_, chains, _, _, _, _, err := load.Registry("../../test/multistage-registry/registry", load.RegistryFlag(0))
-	if err != nil {
-		t.Fatalf("Failed to load registry: %v", err)
+	rbac := "ipi-install-rbac"
+	install := "ipi-install-install"
+	gather := "ipi-deprovision-must-gather"
+	deprovision := "ipi-deprovision-deprovision"
+	installChain := "ipi-install"
+	deprovisionChain := "ipi-deprovision"
+	chainOfChains := "chain-of-chains"
+	chains := registry.ChainByName{
+		installChain: api.RegistryChain{
+			As: installChain,
+			Steps: []api.TestStep{
+				{Reference: &rbac},
+				{Reference: &install},
+			},
+		},
+		deprovisionChain: api.RegistryChain{
+			As: deprovisionChain,
+			Steps: []api.TestStep{
+				{Reference: &gather},
+				{Reference: &deprovision},
+			},
+		},
 	}
-	ipiInstall := chainDotFile("ipi-install", chains)
-	if ipiInstall != installChain {
-		t.Errorf("Generated dot file for ipi-install differs from expected: %s", diff.StringDiff(installChain, ipiInstall))
-	}
-	ipiDeprovision := chainDotFile("ipi-deprovision", chains)
-	if ipiDeprovision != deprovisionChain {
-		t.Errorf("Generated dot file for ipi-deprovision differs from expected: %s", diff.StringDiff(deprovisionChain, ipiDeprovision))
+	for _, tc := range []struct {
+		name  string
+		chain api.RegistryChain
+	}{{
+		name:  "empty",
+		chain: api.RegistryChain{As: "empty"},
+	}, {
+		name:  installChain,
+		chain: chains[installChain],
+	}, {
+		name:  deprovisionChain,
+		chain: chains[deprovisionChain],
+	}, {
+		name: chainOfChains,
+		chain: api.RegistryChain{
+			As: chainOfChains,
+			Steps: []api.TestStep{
+				{Chain: &installChain},
+				{Chain: &deprovisionChain},
+			},
+		},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := util.CopyMap(chains)
+			c[tc.chain.As] = tc.chain
+			actual := chainDotFile(tc.chain.As, c)
+			testhelper.CompareWithFixture(t, actual)
+		})
 	}
 }
 
 func TestWorkflowDotFile(t *testing.T) {
-	_, chains, workflows, _, _, _, err := load.Registry("../../test/multistage-registry/registry", load.RegistryFlag(0))
-	if err != nil {
-		t.Fatalf("Failed to load registry: %v", err)
+	empty := "empty"
+	installChain := "ipi-install"
+	deprovisionChain := "ipi-deprovision"
+	rbac := "ipi-install-rbac"
+	install := "ipi-install-install"
+	gather := "ipi-deprovision-must-gather"
+	deprovision := "ipi-deprovision-deprovision"
+	chainOfChains := "chain-of-chains"
+	chains := registry.ChainByName{
+		"empty": {},
+		installChain: {
+			Steps: []api.TestStep{
+				{Reference: &rbac},
+				{Reference: &install},
+			},
+		},
+		deprovisionChain: {
+			Steps: []api.TestStep{
+				{Reference: &gather},
+				{Reference: &deprovision},
+			},
+		},
+		chainOfChains: {
+			Steps: []api.TestStep{
+				{Chain: &installChain},
+				{Chain: &deprovisionChain},
+			},
+		},
 	}
-	ipi := workflowDotFile("ipi", workflows, chains, workflowType)
-	if ipi != ipiWorkflow {
-		t.Errorf("Generated dot file for ipi differs from expected: %s", diff.StringDiff(ipiWorkflow, ipi))
+	for _, tc := range []struct {
+		name     string
+		workflow api.MultiStageTestConfiguration
+	}{{
+		name:     "empty",
+		workflow: api.MultiStageTestConfiguration{},
+	}, {
+		name: "ipi",
+		workflow: api.MultiStageTestConfiguration{
+			Pre:  []api.TestStep{{Chain: &installChain}},
+			Post: []api.TestStep{{Chain: &deprovisionChain}},
+		},
+	}, {
+		name: "empty-phase",
+		workflow: api.MultiStageTestConfiguration{
+			Pre: []api.TestStep{{
+				LiteralTestStep: &api.LiteralTestStep{As: "pre"},
+			}},
+			Post: []api.TestStep{{
+				LiteralTestStep: &api.LiteralTestStep{As: "post"},
+			}},
+		},
+	}, {
+		name: "empty-chain",
+		workflow: api.MultiStageTestConfiguration{
+			Pre: []api.TestStep{{
+				LiteralTestStep: &api.LiteralTestStep{As: "pre"},
+			}},
+			Test: []api.TestStep{{Chain: &empty}},
+			Post: []api.TestStep{{
+				LiteralTestStep: &api.LiteralTestStep{As: "post"},
+			}},
+		},
+	}, {
+		name: "step-to-chain",
+		workflow: api.MultiStageTestConfiguration{
+			Pre: []api.TestStep{
+				{Reference: &deprovision},
+				{Chain: &installChain},
+			},
+		},
+	}, {
+		name: "chain-to-step",
+		workflow: api.MultiStageTestConfiguration{
+			Pre: []api.TestStep{
+				{Chain: &installChain},
+				{Reference: &deprovision},
+			},
+		},
+	}, {
+		name: "chain-of-chains",
+		workflow: api.MultiStageTestConfiguration{
+			Pre: []api.TestStep{
+				{Chain: &chainOfChains},
+			},
+		},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			workflows := registry.WorkflowByName{tc.name: tc.workflow}
+			actual := workflowDotFile(tc.name, workflows, chains, workflowType)
+			testhelper.CompareWithFixture(t, actual)
+		})
 	}
 }

@@ -30,13 +30,13 @@ const (
 
 // GetChangedCiopConfigs identifies CI Operator configurations that are new or have changed and
 // determines for each which jobs are impacted if job-specific changes were made
-func GetChangedCiopConfigs(masterConfig, prConfig config.DataByFilename, logger *logrus.Entry) (config.DataByFilename, map[string]sets.String) {
+func GetChangedCiopConfigs(masterConfig, prConfig config.DataByFilename, logger *logrus.Entry) (config.DataByFilename, map[string]sets.Set[string]) {
 	ret := config.DataByFilename{}
-	affectedJobs := map[string]sets.String{}
+	affectedJobs := map[string]sets.Set[string]{}
 
 	for filename, newConfig := range prConfig {
 		oldConfig, ok := masterConfig[filename]
-		jobs := sets.NewString()
+		jobs := sets.New[string]()
 
 		// new ciop config
 		if !ok {
@@ -161,7 +161,7 @@ func GetImagesPostsubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfi
 	return ret
 }
 
-func GetJobsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs config.DataByFilename, affectedJobs map[string]sets.String, logger *logrus.Entry) (config.Presubmits, config.Periodics) {
+func GetJobsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs config.DataByFilename, affectedJobs map[string]sets.Set[string], logger *logrus.Entry) (config.Presubmits, config.Periodics) {
 	presubmits := config.Presubmits{}
 	periodics := config.Periodics{}
 
@@ -219,7 +219,7 @@ func getTestsByName(tests []cioperatorapi.TestStepConfiguration) map[string]ciop
 
 // GetPresubmitsForClusterProfiles returns a filtered list of jobs from the
 // Prow configuration, with only presubmits that use certain cluster profiles.
-func GetPresubmitsForClusterProfiles(prowConfig *prowconfig.Config, profiles sets.String, logger *logrus.Entry) config.Presubmits {
+func GetPresubmitsForClusterProfiles(prowConfig *prowconfig.Config, profiles sets.Set[string], logger *logrus.Entry) config.Presubmits {
 	matches := func(job *prowconfig.Presubmit) bool {
 		if job.Agent != string(pjapi.KubernetesAgent) {
 			return false

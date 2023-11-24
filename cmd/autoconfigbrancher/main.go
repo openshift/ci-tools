@@ -18,6 +18,7 @@ import (
 	"k8s.io/test-infra/prow/labels"
 
 	"github.com/openshift/ci-tools/pkg/promotion"
+	"github.com/openshift/ci-tools/pkg/rehearse"
 )
 
 const (
@@ -103,7 +104,7 @@ func runAndCommitIfNeeded(stdout, stderr io.Writer, author, cmd string, args []s
 	}
 
 	gitCmd := "git"
-	if err := bumper.Call(stdout, stderr, gitCmd, []string{"add", "."}...); err != nil {
+	if err := bumper.Call(stdout, stderr, gitCmd, "add", "."); err != nil {
 		return false, fmt.Errorf("failed to 'git add .': %w", err)
 	}
 
@@ -124,6 +125,11 @@ func main() {
 	o := parseOptions()
 	if err := validateOptions(o); err != nil {
 		logrus.WithError(err).Fatal("Invalid arguments.")
+	}
+
+	versionSplit := strings.Split(o.CurrentRelease, ".")
+	if len(versionSplit) != 2 {
+		logrus.WithError(fmt.Errorf("version %s split by dot doesn't have two elements", o.CurrentRelease)).Fatal("Failed to parse the current version")
 	}
 
 	if err := secret.Add(o.GitHubOptions.TokenPath); err != nil {
@@ -166,17 +172,18 @@ func main() {
 				"--prune-ocp-builder-replacements",
 				"--prune-unused-base-images",
 				"--ensure-correct-promotion-dockerfile",
-				"--current-release-minor=8",
+				"--current-release-minor=" + versionSplit[1],
 				"--ensure-correct-promotion-dockerfile-ignored-repos", "openshift/origin-aggregated-logging",
 				"--ensure-correct-promotion-dockerfile-ignored-repos", "openshift/console",
+				"--ensure-correct-promotion-dockerfile-ignored-repos", "openshift/linuxptp-daemon",
 			},
 		},
 		{
 			command: "/usr/bin/config-brancher",
 			arguments: func() []string {
-				args := []string{"--config-dir", "./ci-operator/config", "--current-release", o.CurrentRelease}
+				args := []string{"--config-dir", "./ci-operator/config", "--current-release", o.CurrentRelease, "--skip-periodics"}
 				for _, fr := range o.FutureReleases.Strings() {
-					args = append(args, []string{"--future-release", fr}...)
+					args = append(args, "--future-release", fr)
 				}
 				args = append(args, "--confirm")
 				return args
@@ -187,7 +194,7 @@ func main() {
 			arguments: func() []string {
 				args := []string{"--config-dir", o.ConfigDir, "--to-org", "openshift-priv", "--only-org", "openshift"}
 				if o.whitelist != "" {
-					args = append(args, []string{"--whitelist-file", o.whitelist}...)
+					args = append(args, "--whitelist-file", o.whitelist)
 				}
 				return args
 
@@ -204,9 +211,12 @@ func main() {
 		{
 			command: "/usr/bin/private-prow-configs-mirror",
 			arguments: func() []string {
-				args := []string{"--release-repo-path", "."}
+				args := []string{"--release-repo-path", ".",
+					"--github-token-path", "/etc/github/oauth",
+					"--github-endpoint", "http://ghproxy",
+					"--dry-run", "false"}
 				if o.whitelist != "" {
-					args = append(args, []string{"--whitelist-file", o.whitelist}...)
+					args = append(args, "--whitelist-file", o.whitelist)
 				}
 				return args
 			}(),
@@ -240,6 +250,16 @@ func main() {
 				"--imagesets", "./clusters/hive/pools",
 			},
 		},
+		{
+			command: "/usr/bin/promoted-image-governor",
+			arguments: []string{
+				"--ci-operator-config-path", "./ci-operator/config",
+				"--release-controller-mirror-config-dir", "./core-services/release-controller/_releases",
+				"--openshift-mapping-dir", "./core-services/image-mirroring/openshift",
+				"--openshift-mapping-config", "./core-services/image-mirroring/openshift/_config.yaml",
+				"--dry-run=true",
+			},
+		},
 	}
 
 	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: secret.Censor}
@@ -258,7 +278,10 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to push changes.")
 	}
 
-	var labelsToAdd []string
+	labelsToAdd := []string{
+		"tide/merge-method-merge",
+		rehearse.RehearsalsAckLabel,
+	}
 	if o.selfApprove {
 		logrus.Infof("Self-approving PR by adding the %q and %q labels", labels.Approved, labels.LGTM)
 		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)

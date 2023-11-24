@@ -104,9 +104,13 @@ func helpProvider(config *plugins.Configuration, enabledRepos []config.OrgRepo) 
 		logrus.WithError(err).Warnf("cannot generate comments for %s plugin", PluginName)
 	}
 	pluginHelp := &pluginhelp.PluginHelp{
-		Description: `The trigger plugin starts tests in reaction to commands and pull request events. It is responsible for ensuring that test jobs are only run on trusted PRs. A PR is considered trusted if the author is a member of the 'trusted organization' for the repository or if such a member has left an '/ok-to-test' command on the PR.
-<br>Trigger starts jobs automatically when a new trusted PR is created or when an untrusted PR becomes trusted, but it can also be used to start jobs manually via the '/test' command.
-<br>The '/retest' command can be used to rerun jobs that have reported failure.`,
+		Description: `The trigger plugin starts jobs in reaction to various events.
+<br>Presubmit jobs are run automatically on pull requests that are trusted and not in a draft state with file changes matching the file filters and targeting a branch matching the branch filters.
+<br>A pull request is considered trusted if the author is a member of the 'trusted organization' for the repository or if such a member has left an '/ok-to-test' command on the PR.
+<br>Trigger will not automatically start jobs for a PR in draft state, and if a PR is changed to draft it cancels pending jobs.
+<br>If jobs are not run automatically for a PR because it is not trusted or is in draft state, a trusted user can still start jobs manually via the '/test' command.
+<br>The '/retest' command can be used to rerun jobs that have reported failure.
+<br>Trigger starts postsubmit jobs when commits are pushed if the filters on the job match files and branches affected by that push.`,
 		Config:  configInfo,
 		Snippet: yamlSnippet,
 	}
@@ -289,15 +293,15 @@ func TrustedUser(ghc trustedUserClient, onlyOrgMembers bool, trustedApps []strin
 
 // validateContextOverlap ensures that there will be no overlap in contexts between a set of jobs running and a set to skip
 func validateContextOverlap(toRun, toSkip []config.Presubmit) error {
-	requestedContexts := sets.NewString()
+	requestedContexts := sets.New[string]()
 	for _, job := range toRun {
 		requestedContexts.Insert(job.Context)
 	}
-	skippedContexts := sets.NewString()
+	skippedContexts := sets.New[string]()
 	for _, job := range toSkip {
 		skippedContexts.Insert(job.Context)
 	}
-	if overlap := requestedContexts.Intersection(skippedContexts).List(); len(overlap) > 0 {
+	if overlap := sets.List(requestedContexts.Intersection(skippedContexts)); len(overlap) > 0 {
 		return fmt.Errorf("the following contexts are both triggered and skipped: %s", strings.Join(overlap, ", "))
 	}
 
@@ -316,6 +320,13 @@ func RunRequestedWithLabels(c Client, pr *github.PullRequest, baseSHA string, re
 
 func runRequested(c Client, pr *github.PullRequest, baseSHA string, requestedJobs []config.Presubmit, eventGUID string, labels map[string]string, millisecondOverride ...time.Duration) error {
 	var errors []error
+
+	// If the PR is not mergeable (e.g. due to merge conflicts),we will not trigger any jobs,
+	// to reduce the load on resources and reduce spam comments which will lead to a better review experience.
+	if pr.Mergable != nil && !*pr.Mergable {
+		return nil
+	}
+
 	for _, job := range requestedJobs {
 		c.Logger.Infof("Starting %s build.", job.Name)
 		pj := pjutil.NewPresubmit(*pr, baseSHA, job, eventGUID, labels)
@@ -334,7 +345,7 @@ func getPresubmits(log *logrus.Entry, gc git.ClientFactory, cfg *config.Config, 
 		// Fall back to static presubmits to avoid deadlocking when a presubmit is used to verify
 		// inrepoconfig. Tide will still respect errors here and not merge.
 		log.WithError(err).Debug("Failed to get presubmits")
-		presubmits = cfg.PresubmitsStatic[orgRepo]
+		presubmits = cfg.GetPresubmitsStatic(orgRepo)
 	}
 	return presubmits
 }
@@ -344,7 +355,7 @@ func getPostsubmits(log *logrus.Entry, gc git.ClientFactory, cfg *config.Config,
 	if err != nil {
 		// Fall back to static postsubmits, loading inrepoconfig returned an error.
 		log.WithError(err).Error("Failed to get postsubmits")
-		postsubmits = cfg.PostsubmitsStatic[orgRepo]
+		postsubmits = cfg.GetPostsubmitsStatic(orgRepo)
 	}
 	return postsubmits
 }

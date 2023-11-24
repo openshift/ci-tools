@@ -5,7 +5,23 @@
   		Volumes:        nil,
   		InitContainers: nil,
   		Containers: []v1.Container{
-  			{Name: "large", Resources: {Limits: {s"cpu": {i: {value: 16}, Format: "DecimalSI"}, s"memory": {i: {value: 40000000000}, Format: "BinarySI"}}, Requests: {s"cpu": {i: {value: 8}, Format: "DecimalSI"}, s"memory": {i: {value: 30000000000}, Format: "BinarySI"}}}},
+  			{
+  				... // 6 identical fields
+  				EnvFrom: nil,
+  				Env:     nil,
+  				Resources: v1.ResourceRequirements{
+  					Limits: {s"cpu": {i: {value: 16}, Format: "DecimalSI"}, s"memory": {i: {value: 40000000000}, Format: "BinarySI"}},
+  					Requests: v1.ResourceList{
+  						s"cpu":    {i: {value: 8}, Format: "DecimalSI"},
+- 						s"memory": {i: resource.int64Amount{value: 30000000000}, Format: "BinarySI"},
++ 						s"memory": {i: resource.int64Amount{value: 21474836480}, s: "20Gi", Format: "BinarySI"},
+  					},
+  					Claims: nil,
+  				},
+  				ResizePolicy: nil,
+  				VolumeMounts: nil,
+  				... // 12 identical fields
+  			},
   			{
   				... // 6 identical fields
   				EnvFrom: nil,
@@ -15,12 +31,13 @@
   					Requests: v1.ResourceList{
   						s"cpu":    {i: {value: 8}, Format: "DecimalSI"},
 - 						s"memory": {i: resource.int64Amount{value: 10000000000}, Format: "BinarySI"},
-+ 						s"memory": {i: resource.int64Amount{value: 20000000000}, Format: "BinarySI"},
++ 						s"memory": {i: resource.int64Amount{value: 20000000000}, s: "19531250Ki", Format: "BinarySI"},
   					},
+  					Claims: nil,
   				},
-  				VolumeMounts:  nil,
-  				VolumeDevices: nil,
-  				... // 11 identical fields
+  				ResizePolicy: nil,
+  				VolumeMounts: nil,
+  				... // 12 identical fields
   			},
   			{
   				... // 6 identical fields
@@ -30,19 +47,20 @@
   					Limits: {},
   					Requests: v1.ResourceList{
 - 						s"cpu":    {i: resource.int64Amount{value: 2}, Format: "DecimalSI"},
-+ 						s"cpu":    {i: resource.int64Amount{value: 5}, Format: "DecimalSI"},
++ 						s"cpu":    {i: resource.int64Amount{value: 5}, s: "5", Format: "DecimalSI"},
 - 						s"memory": {i: resource.int64Amount{value: 100}, Format: "BinarySI"},
-+ 						s"memory": {i: resource.int64Amount{value: 20000000000}, Format: "BinarySI"},
++ 						s"memory": {i: resource.int64Amount{value: 20000000000}, s: "19531250Ki", Format: "BinarySI"},
   					},
+  					Claims: nil,
   				},
-  				VolumeMounts:  nil,
-  				VolumeDevices: nil,
-  				... // 11 identical fields
+  				ResizePolicy: nil,
+  				VolumeMounts: nil,
+  				... // 12 identical fields
   			},
   		},
   		EphemeralContainers: nil,
   		RestartPolicy:       "",
-  		... // 30 identical fields
+  		... // 34 identical fields
   	},
   	Status: {},
   }

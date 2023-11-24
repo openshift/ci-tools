@@ -1,0 +1,9 @@
+- text:
+    text: ':wave: You have reached the Test Platform Help Desk. An assigned engineer
+      will respond in several hours during their working hours.'
+    type: mrkdwn
+  type: section
+- text:
+    text: 'Your PR will be reviewed based on: age, priority, and capacity.'
+    type: mrkdwn
+  type: section

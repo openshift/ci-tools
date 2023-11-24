@@ -2,7 +2,7 @@ base_images:
   os:
     name: centos
     namespace: openshift
-    tag: '7'
+    tag: 'stream9'
   operator-index-46:
     name: redhat-operator-index
     namespace: ci
@@ -24,6 +24,10 @@ operator:
     base_index: operator-index-46
   - context_dir: "test/manifests"
     dockerfile_path: "bundle.Dockerfile"
+  - as: named-skip-index-bundle
+    context_dir: "test/manifests"
+    dockerfile_path: "bundle.Dockerfile"
+    skip_building_index: true
   substitutions:
   - pullspec: quay.io/openshift/origin-metering-reporting-operator:4.6
     with: metering-reporting-operator # another `images:` list item
@@ -39,11 +43,11 @@ tests:
   literal_steps:
     test:
     - as: verify
-      from: pipeline:ci-index
+      from: ci-index
       run_as_script: true
       grace_period: 10s
       commands: |
-        #!/bin/sh
+        #!/busybox/sh
         set -o nounset
         set -o errexit
         set -o pipefail
@@ -69,11 +73,11 @@ tests:
   literal_steps:
     test:
     - as: verify
-      from: pipeline:ci-index-named-bundle
+      from: ci-index-named-bundle
       run_as_script: true
       grace_period: 10s
       commands: |
-        #!/bin/sh
+        #!/busybox/sh
         set -o nounset
         set -o errexit
         set -o pipefail
@@ -97,9 +101,9 @@ tests:
       - as: success
         commands: exit 0
         from_image:
-          namespace: origin
+          namespace: openshift
           name: centos
-          tag: '8'
+          tag: 'stream9'
         resources:
           requests:
             cpu: 100m

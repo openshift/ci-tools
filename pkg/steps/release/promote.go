@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -17,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
+	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	imagev1 "github.com/openshift/api/image/v1"
@@ -31,18 +33,16 @@ import (
 // promotionStep will tag a full release suite
 // of images out to the configured namespace.
 type promotionStep struct {
-	configuration  *api.ReleaseBuildConfiguration
-	requiredImages sets.String
-	jobSpec        *api.JobSpec
-	client         kubernetes.PodClient
-	pushSecret     *coreapi.Secret
-}
-
-func targetName(config api.PromotionConfiguration) string {
-	if len(config.Name) > 0 {
-		return fmt.Sprintf("%s/%s:${component}", config.Namespace, config.Name)
-	}
-	return fmt.Sprintf("%s/${component}:%s", config.Namespace, config.Tag)
+	name              string
+	configuration     *api.ReleaseBuildConfiguration
+	requiredImages    sets.Set[string]
+	jobSpec           *api.JobSpec
+	client            kubernetes.PodClient
+	pushSecret        *coreapi.Secret
+	registry          string
+	mirrorFunc        func(source, target string, tag api.ImageStreamTagReference, date string, imageMirror map[string]string)
+	targetNameFunc    func(string, api.PromotionTarget) string
+	nodeArchitectures []string
 }
 
 func (s *promotionStep) Inputs() (api.InputDefinition, error) {
@@ -55,14 +55,33 @@ func (s *promotionStep) Run(ctx context.Context) error {
 	return results.ForReason("promoting_images").ForError(s.run(ctx))
 }
 
+func mainRefs(refs *prowapi.Refs, extra []prowapi.Refs) *prowapi.Refs {
+	if refs != nil {
+		return refs
+	}
+	if len(extra) > 0 {
+		return &extra[0]
+	}
+	return nil
+}
+
 func (s *promotionStep) run(ctx context.Context) error {
-	tags, names := PromotedTagsWithRequiredImages(s.configuration, s.requiredImages)
+	opts := []PromotedTagsOption{
+		WithRequiredImages(s.requiredImages),
+	}
+	logger := logrus.WithField("name", s.name)
+
+	if refs := mainRefs(s.jobSpec.Refs, s.jobSpec.ExtraRefs); refs != nil {
+		opts = append(opts, WithCommitSha(refs.BaseSHA))
+	}
+
+	tags, names := PromotedTagsWithRequiredImages(s.configuration, opts...)
 	if len(names) == 0 {
-		logrus.Info("Nothing to promote, skipping...")
+		logger.Info("Nothing to promote, skipping...")
 		return nil
 	}
 
-	logrus.Infof("Promoting tags to %s: %s", targetName(*s.configuration.PromotionConfiguration), strings.Join(names.List(), ", "))
+	logger.Infof("Promoting tags to %s: %s", s.targets(), strings.Join(sets.List(names), ", "))
 	pipeline := &imagev1.ImageStream{}
 	if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{
 		Namespace: s.jobSpec.Namespace(),
@@ -71,25 +90,29 @@ func (s *promotionStep) run(ctx context.Context) error {
 		return fmt.Errorf("could not resolve pipeline imagestream: %w", err)
 	}
 
-	imageMirrorTarget, namespaces := getImageMirrorTarget(tags, pipeline, registryDomain(s.configuration.PromotionConfiguration))
+	date := time.Now().Format("20060102")
+	imageMirrorTarget, namespaces := getImageMirrorTarget(tags, pipeline, s.registry, date, s.mirrorFunc)
 	if len(imageMirrorTarget) == 0 {
-		logrus.Info("Nothing to promote, skipping...")
+		logger.Info("Nothing to promote, skipping...")
 		return nil
 	}
 
 	// in some cases like when we are called by the ci-chat-bot we may need to create namespaces
 	// in general, we do not expect to be able to do this, so we only do it best-effort
 	if err := s.ensureNamespaces(ctx, namespaces); err != nil {
-		logrus.WithError(err).Warn("Failed to ensure namespaces to promote to in central registry.")
+		logger.WithError(err).Warn("Failed to ensure namespaces to promote to in central registry.")
 	}
 
-	if _, err := steps.RunPod(ctx, s.client, getPromotionPod(imageMirrorTarget, s.jobSpec.Namespace())); err != nil {
+	if _, err := steps.RunPod(ctx, s.client, getPromotionPod(imageMirrorTarget, s.jobSpec.Namespace(), s.name, s.nodeArchitectures)); err != nil {
 		return fmt.Errorf("unable to run promotion pod: %w", err)
 	}
 	return nil
 }
 
-func (s *promotionStep) ensureNamespaces(ctx context.Context, namespaces sets.String) error {
+func (s *promotionStep) ensureNamespaces(ctx context.Context, namespaces sets.Set[string]) error {
+	if len(namespaces) == 0 {
+		return nil
+	}
 	// Used primarily (only?) by the chatbot and we likely do not have the permission to create
 	// namespaces (nor are we expected to).
 	if s.configuration.PromotionConfiguration.RegistryOverride != "" {
@@ -130,22 +153,13 @@ func (s *promotionStep) ensureNamespaces(ctx context.Context, namespaces sets.St
 	return nil
 }
 
-// registryDomain determines the domain of the registry we promote to
-func registryDomain(configuration *api.PromotionConfiguration) string {
-	registry := api.DomainForService(api.ServiceRegistry)
-	if configuration.RegistryOverride != "" {
-		registry = configuration.RegistryOverride
-	}
-	return registry
-}
-
-func getImageMirrorTarget(tags map[string][]api.ImageStreamTagReference, pipeline *imagev1.ImageStream, registry string) (srcTargetMap map[string]string, namespaces sets.String) {
+func getImageMirrorTarget(tags map[string][]api.ImageStreamTagReference, pipeline *imagev1.ImageStream, registry string, date string, mirrorFunc func(source, target string, tag api.ImageStreamTagReference, date string, imageMirror map[string]string)) (map[string]string, sets.Set[string]) {
 	if pipeline == nil {
 		return nil, nil
 	}
 	imageMirror := map[string]string{}
 	// Will this ever include more than one?
-	namespaces = sets.String{}
+	namespaces := sets.Set[string]{}
 	for src, dsts := range tags {
 		dockerImageReference := findDockerImageReference(pipeline, src)
 		if dockerImageReference == "" {
@@ -153,12 +167,15 @@ func getImageMirrorTarget(tags map[string][]api.ImageStreamTagReference, pipelin
 		}
 		dockerImageReference = getPublicImageReference(dockerImageReference, pipeline.Status.PublicDockerImageRepository)
 		for _, dst := range dsts {
-			imageMirror[fmt.Sprintf("%s/%s", registry, dst.ISTagName())] = dockerImageReference
+			mirrorFunc(dockerImageReference, fmt.Sprintf("%s/%s", registry, dst.ISTagName()), dst, date, imageMirror)
 			namespaces.Insert(dst.Namespace)
 		}
 	}
 	if len(imageMirror) == 0 {
 		return nil, nil
+	}
+	if registry == api.QuayOpenShiftCIRepo {
+		namespaces = nil
 	}
 	return imageMirror, namespaces
 }
@@ -183,7 +200,7 @@ func getPublicImageReference(dockerImageReference, publicDockerImageRepository s
 	return strings.Replace(dockerImageReference, splits[0], publicHost, 1)
 }
 
-func getPromotionPod(imageMirrorTarget map[string]string, namespace string) *coreapi.Pod {
+func getPromotionPod(imageMirrorTarget map[string]string, namespace string, name string, nodeArchitectures []string) *coreapi.Pod {
 	keys := make([]string, 0, len(imageMirrorTarget))
 	for k := range imageMirrorTarget {
 		keys = append(keys, k)
@@ -195,18 +212,29 @@ func getPromotionPod(imageMirrorTarget map[string]string, namespace string) *cor
 		images = append(images, fmt.Sprintf("%s=%s", imageMirrorTarget[k], k))
 	}
 	command := []string{"/bin/sh", "-c"}
-	args := []string{fmt.Sprintf("oc image mirror --registry-config=%s --continue-on-error=true --max-per-registry=20 %s", filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey), strings.Join(images, " "))}
+	args := []string{fmt.Sprintf("oc image mirror --keep-manifest-list --registry-config=%s --continue-on-error=true --max-per-registry=20 %s", filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey), strings.Join(images, " "))}
+
+	image := fmt.Sprintf("%s/%s/4.12:cli", api.DomainForService(api.ServiceRegistry), "ocp")
+	nodeSelector := map[string]string{"kubernetes.io/arch": "amd64"}
+
+	archs := sets.New[string](nodeArchitectures...)
+	if !archs.Has("amd64") && archs.Has("arm64") {
+		image = fmt.Sprintf("%s/%s/4.12:cli", api.DomainForService(api.ServiceRegistry), "ocp-arm64")
+		nodeSelector = map[string]string{"kubernetes.io/arch": "arm64"}
+	}
+
 	return &coreapi.Pod{
 		ObjectMeta: meta.ObjectMeta{
-			Name:      "promotion",
+			Name:      name,
 			Namespace: namespace,
 		},
 		Spec: coreapi.PodSpec{
+			NodeSelector:  nodeSelector,
 			RestartPolicy: coreapi.RestartPolicyNever,
 			Containers: []coreapi.Container{
 				{
 					Name:    "promotion",
-					Image:   fmt.Sprintf("%s/ocp/4.8:cli", api.DomainForService(api.ServiceRegistry)),
+					Image:   image,
 					Command: command,
 					Args:    args,
 					VolumeMounts: []coreapi.VolumeMount{
@@ -246,9 +274,9 @@ func findDockerImageReference(is *imagev1.ImageStream, tag string) string {
 }
 
 // toPromote determines the mapping of local tag to external tag which should be promoted
-func toPromote(config api.PromotionConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.String) (map[string]string, sets.String) {
+func toPromote(config api.PromotionTarget, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.Set[string]) (map[string]string, sets.Set[string]) {
 	tagsByDst := map[string]string{}
-	names := sets.NewString()
+	names := sets.New[string]()
 
 	if config.Disabled {
 		return tagsByDst, names
@@ -277,7 +305,7 @@ func toPromote(config api.PromotionConfiguration, images []api.ProjectDirectoryI
 // PromotedTags returns the tags that are being promoted for the given ReleaseBuildConfiguration
 func PromotedTags(configuration *api.ReleaseBuildConfiguration) []api.ImageStreamTagReference {
 	var tags []api.ImageStreamTagReference
-	mapping, _ := PromotedTagsWithRequiredImages(configuration, sets.NewString())
+	mapping, _ := PromotedTagsWithRequiredImages(configuration)
 	for _, dest := range mapping {
 		tags = append(tags, dest...)
 	}
@@ -287,31 +315,72 @@ func PromotedTags(configuration *api.ReleaseBuildConfiguration) []api.ImageStrea
 	return tags
 }
 
+type PromotedTagsOptions struct {
+	requiredImages sets.Set[string]
+	commitSha      string
+}
+
+type PromotedTagsOption func(options *PromotedTagsOptions)
+
+// WithRequiredImages ensures that the images are promoted, even if they would otherwise be skipped.
+func WithRequiredImages(images sets.Set[string]) PromotedTagsOption {
+	return func(options *PromotedTagsOptions) {
+		options.requiredImages = images
+	}
+}
+
+// WithCommitSha ensures that images are tagged by the commit SHA as well as any other options in the configuration.
+func WithCommitSha(commitSha string) PromotedTagsOption {
+	return func(options *PromotedTagsOptions) {
+		options.commitSha = commitSha
+	}
+}
+
 // PromotedTagsWithRequiredImages returns the tags that are being promoted for the given ReleaseBuildConfiguration
 // accounting for the list of required images. Promoted tags are mapped by the source tag in the pipeline ImageStream
 // we will promote to the output.
-func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration, requiredImages sets.String) (map[string][]api.ImageStreamTagReference, sets.String) {
-	if configuration == nil || configuration.PromotionConfiguration == nil || configuration.PromotionConfiguration.Disabled {
-		return nil, nil
+func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration, options ...PromotedTagsOption) (map[string][]api.ImageStreamTagReference, sets.Set[string]) {
+	opts := &PromotedTagsOptions{
+		requiredImages: sets.New[string](),
 	}
-	tags, names := toPromote(*configuration.PromotionConfiguration, configuration.Images, requiredImages)
+	for _, opt := range options {
+		opt(opts)
+	}
+
 	promotedTags := map[string][]api.ImageStreamTagReference{}
-	for dst, src := range tags {
-		var tag api.ImageStreamTagReference
-		if configuration.PromotionConfiguration.Name != "" {
-			tag = api.ImageStreamTagReference{
-				Namespace: configuration.PromotionConfiguration.Namespace,
-				Name:      configuration.PromotionConfiguration.Name,
-				Tag:       dst,
+	requiredImages := sets.Set[string]{}
+
+	if configuration == nil || configuration.PromotionConfiguration == nil {
+		return promotedTags, requiredImages
+	}
+
+	for _, target := range api.PromotionTargets(configuration.PromotionConfiguration) {
+		tags, names := toPromote(target, configuration.Images, opts.requiredImages)
+		requiredImages.Insert(names.UnsortedList()...)
+		for dst, src := range tags {
+			var tag api.ImageStreamTagReference
+			if target.Name != "" {
+				tag = api.ImageStreamTagReference{
+					Namespace: target.Namespace,
+					Name:      target.Name,
+					Tag:       dst,
+				}
+			} else { // promotion.Tag must be set
+				tag = api.ImageStreamTagReference{
+					Namespace: target.Namespace,
+					Name:      dst,
+					Tag:       target.Tag,
+				}
 			}
-		} else { // promotion.Tag must be set
-			tag = api.ImageStreamTagReference{
-				Namespace: configuration.PromotionConfiguration.Namespace,
-				Name:      dst,
-				Tag:       configuration.PromotionConfiguration.Tag,
+			promotedTags[src] = append(promotedTags[src], tag)
+			if target.TagByCommit && opts.commitSha != "" {
+				promotedTags[src] = append(promotedTags[src], api.ImageStreamTagReference{
+					Namespace: target.Namespace,
+					Name:      dst,
+					Tag:       opts.commitSha,
+				})
 			}
 		}
-		promotedTags[src] = append(promotedTags[src], tag)
 	}
 	// promote the binary build if one exists and this isn't disabled
 	if configuration.BinaryBuildCommands != "" && !configuration.PromotionConfiguration.DisableBuildCache {
@@ -322,7 +391,7 @@ func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration
 			return tags[i].ISTagName() < tags[j].ISTagName()
 		})
 	}
-	return promotedTags, names
+	return promotedTags, requiredImages
 }
 
 func (s *promotionStep) Requires() []api.StepLink {
@@ -337,10 +406,18 @@ func (s *promotionStep) Provides() api.ParameterMap {
 	return nil
 }
 
-func (s *promotionStep) Name() string { return "[promotion]" }
+func (s *promotionStep) Name() string { return fmt.Sprintf("[%s]", s.name) }
+
+func (s *promotionStep) targets() string {
+	var targets []string
+	for _, target := range api.PromotionTargets(s.configuration.PromotionConfiguration) {
+		targets = append(targets, s.targetNameFunc(s.registry, target))
+	}
+	return strings.Join(targets, ", ")
+}
 
 func (s *promotionStep) Description() string {
-	return fmt.Sprintf("Promote built images into the release image stream %s", targetName(*s.configuration.PromotionConfiguration))
+	return fmt.Sprintf("Promote built images into the release image streams: %s", s.targets())
 }
 
 func (s *promotionStep) Objects() []ctrlruntimeclient.Object {
@@ -349,12 +426,28 @@ func (s *promotionStep) Objects() []ctrlruntimeclient.Object {
 
 // PromotionStep copies tags from the pipeline image stream to the destination defined in the promotion config.
 // If the source tag does not exist it is silently skipped.
-func PromotionStep(configuration *api.ReleaseBuildConfiguration, requiredImages sets.String, jobSpec *api.JobSpec, client kubernetes.PodClient, pushSecret *coreapi.Secret) api.Step {
+func PromotionStep(
+	name string,
+	configuration *api.ReleaseBuildConfiguration,
+	requiredImages sets.Set[string],
+	jobSpec *api.JobSpec,
+	client kubernetes.PodClient,
+	pushSecret *coreapi.Secret,
+	registry string,
+	mirrorFunc func(source, target string, tag api.ImageStreamTagReference, date string, imageMirror map[string]string),
+	targetNameFunc func(string, api.PromotionTarget) string,
+	nodeArchitectures []string,
+) api.Step {
 	return &promotionStep{
-		configuration:  configuration,
-		requiredImages: requiredImages,
-		jobSpec:        jobSpec,
-		client:         client,
-		pushSecret:     pushSecret,
+		name:              name,
+		configuration:     configuration,
+		requiredImages:    requiredImages,
+		jobSpec:           jobSpec,
+		client:            client,
+		pushSecret:        pushSecret,
+		registry:          registry,
+		mirrorFunc:        mirrorFunc,
+		targetNameFunc:    targetNameFunc,
+		nodeArchitectures: nodeArchitectures,
 	}
 }

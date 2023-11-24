@@ -12,14 +12,15 @@
   				Resources: v1.ResourceRequirements{
   					Limits: v1.ResourceList{
 - 						s"cpu":    {i: resource.int64Amount{value: 16}, Format: "DecimalSI"},
-- 						s"memory": {i: resource.int64Amount{value: 40000000000}, Format: "BinarySI"},
-+ 						s"memory": {i: resource.int64Amount{value: 60000000000}, Format: "BinarySI"},
+- 						s"memory": {i: resource.int64Amount{value: 400000000}, Format: "BinarySI"},
++ 						s"memory": {i: resource.int64Amount{value: 600000000}, Format: "BinarySI"},
   					},
-  					Requests: {s"cpu": {i: {value: 8}, Format: "DecimalSI"}, s"memory": {i: {value: 30000000000}, Format: "BinarySI"}},
+  					Requests: {s"cpu": {i: {value: 8}, Format: "DecimalSI"}, s"memory": {i: {value: 300000000}, Format: "BinarySI"}},
+  					Claims:   nil,
   				},
-  				VolumeMounts:  nil,
-  				VolumeDevices: nil,
-  				... // 11 identical fields
+  				ResizePolicy: nil,
+  				VolumeMounts: nil,
+  				... // 12 identical fields
   			},
   			{
   				... // 6 identical fields
@@ -27,16 +28,17 @@
   				Env:     nil,
   				Resources: v1.ResourceRequirements{
 - 					Limits: v1.ResourceList{},
-+ 					Limits: v1.ResourceList{s"memory": {i: resource.int64Amount{value: 40000000000}, Format: "BinarySI"}},
++ 					Limits: v1.ResourceList{s"memory": {i: resource.int64Amount{value: 400000000}, Format: "BinarySI"}},
   					Requests: v1.ResourceList{
   						s"cpu":    {i: {value: 8}, Format: "DecimalSI"},
-- 						s"memory": {i: resource.int64Amount{value: 10000000000}, Format: "BinarySI"},
-+ 						s"memory": {i: resource.int64Amount{value: 20000000000}, Format: "BinarySI"},
+- 						s"memory": {i: resource.int64Amount{value: 100000000}, Format: "BinarySI"},
++ 						s"memory": {i: resource.int64Amount{value: 200000000}, s: "200000000", Format: "BinarySI"},
   					},
+  					Claims: nil,
   				},
-  				VolumeMounts:  nil,
-  				VolumeDevices: nil,
-  				... // 11 identical fields
+  				ResizePolicy: nil,
+  				VolumeMounts: nil,
+  				... // 12 identical fields
   			},
   			{
   				... // 6 identical fields
@@ -44,17 +46,18 @@
   				Env:     nil,
   				Resources: v1.ResourceRequirements{
 - 					Limits: v1.ResourceList{},
-+ 					Limits: v1.ResourceList{s"memory": {i: resource.int64Amount{value: 40000000000}, Format: "BinarySI"}},
++ 					Limits: v1.ResourceList{s"memory": {i: resource.int64Amount{value: 400000000}, Format: "BinarySI"}},
   					Requests: v1.ResourceList{
 - 						s"cpu":    {i: resource.int64Amount{value: 2}, Format: "DecimalSI"},
-+ 						s"cpu":    {i: resource.int64Amount{value: 5}, Format: "DecimalSI"},
++ 						s"cpu":    {i: resource.int64Amount{value: 5}, s: "5", Format: "DecimalSI"},
 - 						s"memory": {i: resource.int64Amount{value: 100}, Format: "BinarySI"},
-+ 						s"memory": {i: resource.int64Amount{value: 20000000000}, Format: "BinarySI"},
++ 						s"memory": {i: resource.int64Amount{value: 200000000}, s: "200000000", Format: "BinarySI"},
   					},
+  					Claims: nil,
   				},
-  				VolumeMounts:  nil,
-  				VolumeDevices: nil,
-  				... // 11 identical fields
+  				ResizePolicy: nil,
+  				VolumeMounts: nil,
+  				... // 12 identical fields
   			},
   			{
   				... // 6 identical fields
@@ -62,21 +65,22 @@
   				Env:     nil,
   				Resources: v1.ResourceRequirements{
 - 					Limits: v1.ResourceList{},
-+ 					Limits: v1.ResourceList{s"memory": {i: resource.int64Amount{value: 40000000000}, Format: "BinarySI"}},
++ 					Limits: v1.ResourceList{s"memory": {i: resource.int64Amount{value: 400000000}, Format: "BinarySI"}},
   					Requests: v1.ResourceList{
   						s"cpu":    {i: {value: 10}, Format: "DecimalSI"},
 - 						s"memory": {i: resource.int64Amount{value: 100}, Format: "BinarySI"},
-+ 						s"memory": {i: resource.int64Amount{value: 20000000000}, Format: "BinarySI"},
++ 						s"memory": {i: resource.int64Amount{value: 200000000}, s: "200000000", Format: "BinarySI"},
   					},
+  					Claims: nil,
   				},
-  				VolumeMounts:  nil,
-  				VolumeDevices: nil,
-  				... // 11 identical fields
+  				ResizePolicy: nil,
+  				VolumeMounts: nil,
+  				... // 12 identical fields
   			},
   		},
   		EphemeralContainers: nil,
   		RestartPolicy:       "",
-  		... // 30 identical fields
+  		... // 34 identical fields
   	},
   	Status: {},
   }

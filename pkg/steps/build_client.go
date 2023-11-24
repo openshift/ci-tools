@@ -15,17 +15,20 @@ import (
 type BuildClient interface {
 	loggingclient.LoggingClient
 	Logs(namespace, name string, options *buildapi.BuildLogOptions) (io.ReadCloser, error)
+	NodeArchitectures() []string
 }
 
 type buildClient struct {
 	loggingclient.LoggingClient
-	client rest.Interface
+	client            rest.Interface
+	nodeArchitectures []string
 }
 
-func NewBuildClient(client loggingclient.LoggingClient, restClient rest.Interface) BuildClient {
+func NewBuildClient(client loggingclient.LoggingClient, restClient rest.Interface, nodeArchitectures []string) BuildClient {
 	return &buildClient{
-		LoggingClient: client,
-		client:        restClient,
+		LoggingClient:     client,
+		client:            restClient,
+		nodeArchitectures: nodeArchitectures,
 	}
 }
 
@@ -37,4 +40,8 @@ func (c *buildClient) Logs(namespace, name string, options *buildapi.BuildLogOpt
 		SubResource("log").
 		VersionedParams(options, scheme.ParameterCodec).
 		Stream(context.TODO())
+}
+
+func (c *buildClient) NodeArchitectures() []string {
+	return c.nodeArchitectures
 }

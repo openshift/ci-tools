@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/bombsimon/logrusr"
+	"github.com/bombsimon/logrusr/v3"
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/client-go/rest"
@@ -13,7 +13,6 @@ import (
 	prowconfigflagutil "k8s.io/test-infra/prow/flagutil/config"
 	"k8s.io/test-infra/prow/logrusutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
-	ctrlruntimelog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	prpqv1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
@@ -52,7 +51,7 @@ func (o *options) Validate() error {
 
 func main() {
 	logrusutil.ComponentInit()
-	controllerruntime.SetLogger(logrusr.NewLogger(logrus.StandardLogger()))
+	controllerruntime.SetLogger(logrusr.New(logrus.StandardLogger()))
 
 	o, err := gatherOptions()
 	if err != nil {
@@ -77,7 +76,6 @@ func main() {
 
 	mgr, err := controllerruntime.NewManager(cfg, controllerruntime.Options{
 		DryRunClient: o.dryRun,
-		Logger:       ctrlruntimelog.NullLogger{},
 	})
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to construct manager")

@@ -266,13 +266,13 @@ func TestOperateOnCIOperatorConfigDir(t *testing.T) {
 	testCases := []struct {
 		id, path               string
 		options                Options
-		expectedProcessedFiles sets.String
+		expectedProcessedFiles sets.Set[string]
 	}{
 		{
 			id:      "no options, expect to process all files",
 			path:    treeDir,
 			options: Options{},
-			expectedProcessedFiles: sets.NewString([]string{
+			expectedProcessedFiles: sets.New[string]([]string{
 				"foo-bar-master.yaml",
 				"foo-bar-release-4.9.yaml",
 				"super-duper-master.yaml",
@@ -283,7 +283,7 @@ func TestOperateOnCIOperatorConfigDir(t *testing.T) {
 			id:      "specify org, expect to process only files that belong to that org",
 			path:    treeDir,
 			options: Options{Org: "foo"},
-			expectedProcessedFiles: sets.NewString([]string{
+			expectedProcessedFiles: sets.New[string]([]string{
 				"foo-bar-master.yaml",
 				"foo-bar-release-4.9.yaml",
 			}...),
@@ -292,7 +292,7 @@ func TestOperateOnCIOperatorConfigDir(t *testing.T) {
 			id:      "specify org and repo, expect to process only files that belong to that org/repo",
 			path:    treeDir,
 			options: Options{Org: "foo", Repo: "bar"},
-			expectedProcessedFiles: sets.NewString([]string{
+			expectedProcessedFiles: sets.New[string]([]string{
 				"foo-bar-master.yaml",
 				"foo-bar-release-4.9.yaml",
 			}...),
@@ -302,11 +302,11 @@ func TestOperateOnCIOperatorConfigDir(t *testing.T) {
 			path: treeDir,
 			options: Options{
 				onlyProcessChanges: true,
-				modifiedFiles: sets.NewString(
+				modifiedFiles: sets.New[string](
 					filepath.Join(treeDir, "foo/bar/foo-bar-master.yaml"),
 				),
 			},
-			expectedProcessedFiles: sets.NewString([]string{
+			expectedProcessedFiles: sets.New[string]([]string{
 				"foo-bar-master.yaml",
 			}...),
 		},
@@ -315,12 +315,12 @@ func TestOperateOnCIOperatorConfigDir(t *testing.T) {
 			path: treeDir,
 			options: Options{
 				onlyProcessChanges: true,
-				modifiedFiles: sets.NewString(
+				modifiedFiles: sets.New[string](
 					filepath.Join(treeDir, "foo/bar/foo-bar-master.yaml"),
 					filepath.Join(treeDir, "super/duper/super-duper-release-4.9.yaml"),
 				),
 			},
-			expectedProcessedFiles: sets.NewString([]string{
+			expectedProcessedFiles: sets.New[string]([]string{
 				"foo-bar-master.yaml",
 				"super-duper-release-4.9.yaml",
 			}...),
@@ -328,7 +328,7 @@ func TestOperateOnCIOperatorConfigDir(t *testing.T) {
 		{
 			id:   "load from a ConfigMap mount",
 			path: cmDir,
-			expectedProcessedFiles: sets.NewString(
+			expectedProcessedFiles: sets.New[string](
 				"foo-bar-master.yaml",
 				"foo-bar-release-4.9.yaml",
 				"super-duper-master.yaml",
@@ -339,7 +339,7 @@ func TestOperateOnCIOperatorConfigDir(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.id, func(t *testing.T) {
-			processed := sets.NewString()
+			processed := sets.New[string]()
 
 			if err := tc.options.OperateOnCIOperatorConfigDir(tc.path, func(configuration *cioperatorapi.ReleaseBuildConfiguration, info *Info) error {
 				filename := filepath.Base(info.Filename)
@@ -414,7 +414,7 @@ func TestOperateOnJobConfigSubdirPaths(t *testing.T) {
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			var ret []string
-			if err := tc.opt.OperateOnJobConfigSubdirPaths(dir, tc.sub, func(info *jc.Info) error {
+			if err := tc.opt.OperateOnJobConfigSubdirPaths(dir, tc.sub, make(sets.Set[string]), func(info *jc.Info) error {
 				ret = append(ret, strings.TrimPrefix(info.Filename, dir))
 				return nil
 			}); err != nil {

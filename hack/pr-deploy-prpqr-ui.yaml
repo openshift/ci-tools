@@ -103,7 +103,7 @@ objects:
         name: "output:binaries"
     source:
       dockerfile: |
-        FROM registry.ci.openshift.org/openshift/release:golang-1.17
+        FROM registry.ci.openshift.org/openshift/release:golang-1.21
 
         COPY . .
         RUN go install ./cmd/payload-testing-ui/...

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -17,7 +17,7 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to resolve filepath")
 	}
-	commentMap, err := genyaml.NewCommentMap(files...)
+	commentMap, err := genyaml.NewCommentMap(map[string][]byte{}, files...)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct commentMap")
 	}
@@ -31,7 +31,7 @@ func main() {
 	referenceLines := strings.Split(reference, "\n")
 	reference = "package webreg\n\nconst ciOperatorReferenceYaml = \"" + strings.Join(referenceLines, "\\n\" +\n\"") + `"`
 
-	if err := ioutil.WriteFile("./pkg/webreg/zz_generated.ci_operator_reference.go", []byte(reference), 0644); err != nil {
+	if err := os.WriteFile("./pkg/webreg/zz_generated.ci_operator_reference.go", []byte(reference), 0644); err != nil {
 		logrus.WithError(err).Fatalf("Failed to write generated file: %v", err)
 	}
 }

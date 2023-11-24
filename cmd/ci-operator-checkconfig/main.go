@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"runtime"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -14,24 +13,25 @@ import (
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/defaults"
 	"github.com/openshift/ci-tools/pkg/load"
+	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/steps/release"
 	"github.com/openshift/ci-tools/pkg/util"
 	"github.com/openshift/ci-tools/pkg/validation"
 )
 
-type tagSet map[api.ImageStreamTagReference][]*config.Info
+type tagSet map[api.ImageStreamTagReference][]*api.Metadata
 
 type promotedTag struct {
 	tag      api.ImageStreamTagReference
-	repoInfo *config.Info
+	metadata *api.Metadata
 }
 
 type options struct {
 	config.Options
-	maxConcurrency uint
 
-	resolver registry.Resolver
+	resolver        registry.Resolver
+	ciOPConfigAgent agents.ConfigAgent
 }
 
 func (o *options) parse() error {
@@ -40,8 +40,6 @@ func (o *options) parse() error {
 	fs := flag.NewFlagSet("", flag.ExitOnError)
 
 	fs.StringVar(&registryDir, "registry", "", "Path to the step registry directory")
-	fs.UintVar(&o.maxConcurrency, "concurrency", uint(runtime.GOMAXPROCS(0)), "Maximum number of concurrent in-flight goroutines.")
-
 	o.Options.Bind(fs)
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -51,6 +49,12 @@ func (o *options) parse() error {
 	if err := o.loadResolver(registryDir); err != nil {
 		return fmt.Errorf("failed to load registry: %w", err)
 	}
+	ciOPConfigAgent, err := agents.NewConfigAgent(o.ConfigDir, nil, agents.WithOrg(o.Org), agents.WithRepo(o.Repo))
+	if err != nil {
+		return fmt.Errorf("failed to create CI Op config agent: %w", err)
+	}
+	o.ciOPConfigAgent = ciOPConfigAgent
+
 	if err := o.Options.Validate(); err != nil {
 		return fmt.Errorf("failed to validate config options: %w", err)
 	}
@@ -61,18 +65,15 @@ func (o *options) parse() error {
 }
 
 func (o *options) validate() (ret []error) {
-	type workItem struct {
-		configuration *api.ReleaseBuildConfiguration
-		repoInfo      *config.Info
-	}
-	inputCh := make(chan workItem)
+	inputCh := make(chan api.ReleaseBuildConfiguration)
 	produce := func() error {
 		defer close(inputCh)
-		if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
-			inputCh <- workItem{configuration, repoInfo}
-			return nil
-		}); err != nil {
-			return fmt.Errorf("error reading configuration files: %w", err)
+		for _, v := range o.ciOPConfigAgent.GetAll() {
+			for _, configs := range v {
+				for _, c := range configs {
+					inputCh <- c
+				}
+			}
 		}
 		return nil
 	}
@@ -80,9 +81,9 @@ func (o *options) validate() (ret []error) {
 	errCh := make(chan error)
 	map_ := func() error {
 		validator := validation.NewValidator()
-		for item := range inputCh {
-			if err := o.validateConfiguration(&validator, outputCh, item.configuration, item.repoInfo); err != nil {
-				errCh <- fmt.Errorf("failed to validate configuration %s: %w", item.repoInfo.Filename, err)
+		for c := range inputCh {
+			if err := o.validateConfiguration(&validator, outputCh, c); err != nil {
+				errCh <- fmt.Errorf("failed to validate configuration %s: %w", c.Metadata.RelativePath(), err)
 			}
 		}
 		return nil
@@ -90,7 +91,7 @@ func (o *options) validate() (ret []error) {
 	seen := tagSet{}
 	reduce := func() error {
 		for i := range outputCh {
-			seen[i.tag] = append(seen[i.tag], i.repoInfo)
+			seen[i.tag] = append(seen[i.tag], i.metadata)
 		}
 		return nil
 	}
@@ -116,22 +117,24 @@ func (o *options) loadResolver(path string) error {
 func (o *options) validateConfiguration(
 	validator *validation.Validator,
 	seenCh chan<- promotedTag,
-	configuration *api.ReleaseBuildConfiguration,
-	repoInfo *config.Info,
+	configuration api.ReleaseBuildConfiguration,
 ) error {
 	if o.resolver != nil {
-		if c, err := registry.ResolveConfig(o.resolver, *configuration); err != nil {
+		if c, err := registry.ResolveConfig(o.resolver, configuration); err != nil {
 			return err
 		} else if err := validator.IsValidResolvedConfiguration(&c); err != nil {
 			return err
 		}
 	}
-	graphConf := defaults.FromConfigStatic(configuration)
+	if _, err := o.ciOPConfigAgent.GetMatchingConfig(configuration.Metadata); err != nil {
+		return err
+	}
+	graphConf := defaults.FromConfigStatic(&configuration)
 	if err := validation.IsValidGraphConfiguration(graphConf.Steps); err != nil {
 		return err
 	}
-	for _, tag := range release.PromotedTags(configuration) {
-		seenCh <- promotedTag{tag, repoInfo}
+	for _, tag := range release.PromotedTags(&configuration) {
+		seenCh <- promotedTag{tag, &configuration.Metadata}
 	}
 	if configuration.PromotionConfiguration != nil && configuration.PromotionConfiguration.RegistryOverride != "" {
 		return errors.New("setting promotion.registry_override is not allowed")

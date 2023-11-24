@@ -80,8 +80,9 @@ func (c Config) IsFieldGenerated(name, component string) bool {
 }
 
 type FieldGenerator struct {
-	Name string `json:"name,omitempty"`
-	Cmd  string `json:"cmd,omitempty"`
+	Name    string `json:"name,omitempty"`
+	Cmd     string `json:"cmd,omitempty"`
+	Cluster string `json:"-"`
 }
 
 type SecretItem struct {
@@ -113,6 +114,9 @@ func (si SecretItem) generateItemsFromParams() ([]SecretItem, error) {
 				for i, field := range argItem.Fields {
 					argItem.Fields[i].Name = replaceParameter(paramName, param, field.Name)
 					argItem.Fields[i].Cmd = replaceParameter(paramName, param, field.Cmd)
+					if paramName == "cluster" {
+						argItem.Fields[i].Cluster = param
+					}
 				}
 				argItem.Notes = replaceParameter(paramName, param, argItem.Notes)
 				itemsProcessed = append(itemsProcessed, argItem)

@@ -22,7 +22,24 @@ const (
 	aggregatorPrefix = "aggregator-"
 
 	runsURL   = "/runs/"
+	docURL    = "https://docs.ci.openshift.org/docs/release-oversight/payload-testing/"
 	bodyStart = `
+<nav class="navbar navbar-expand-lg navbar-light bg-light">
+<a class="navbar-brand" href=` + runsURL + `>Pull Request Payload Qualification Runs</a>
+<button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+	<span class="navbar-toggler-icon"></span>
+</button>
+<div class="collapse navbar-collapse" id="navbarSupportedContent">
+	<ul class="navbar-nav mr-auto">
+	<li class="nav-item">
+		<a class="nav-link" href=` + docURL + ` target="_blank">Documentation</a>
+	</li>
+	<li class="nav-item">
+	<a class="nav-link" href=` + runsURL + `>Runs</a>
+	</li>
+	</ul>
+</div>
+</nav>
 <div class="container">`
 	pageEnd = `
   <p class="small">Source code for this page located on <a href="https://github.com/openshift/ci-tools">GitHub</a></p>
@@ -31,36 +48,55 @@ const (
 	runsListTemplate = `
 <h1>Pull Request Payload Qualification Runs</h1>
 {{ len .Items }} run(s)
-<ul>
-{{ range .Items }}
-  <li>
-    {{ with .ObjectMeta }}
-      {{ with $url := printf "%s/%s" .Namespace .Name }}
-        <a href="` + runsURL + `{{ $url }}">{{ $url }}</a>
-      {{ end }}
-    {{ end }}
-  </li>
-{{ end }}
-</ul>
+<table class="table">
+	<thead>
+		<tr>
+			<th title="The name of the Pull Request Payload Qualification Run" class="info">Name</th>
+			<th title="The repository of pull request" class="info">Repository</th>
+			<th title="The number and name of the pull request" class="info">Pull Request</th>
+		</tr>
+	</thead>
+	<tbody>
+		{{ range .Items }}
+		<tr>
+			<td>
+			{{ with .ObjectMeta }}
+				{{ with $url := printf "%s/%s" .Namespace .Name }}
+				<a class="text-nowrap" href="` + runsURL + `{{ $url }}">{{ $url }}</a>
+				{{ end }}
+			{{ end }}
+			</td>
+			<td>
+			{{ with .Spec.PullRequest }}
+				<p>{{ repoLink .Org .Repo }}</p>
+			</td>
+			<td>
+				<p>{{ prLink . }} by {{ authorLink .PullRequest.Author }}</p>
+			{{ end }}
+			</td>
+		</tr>
+		{{ end }}
+	</tbody>
+</table>
 `
 	runTitle    = "Pull Request Payload Qualification Run - %s"
 	runTemplate = `
 <h1>{{ .ObjectMeta.Namespace }}/{{ .ObjectMeta.Name }}</h1>
 
-Created: {{ .ObjectMeta.CreationTimestamp }}
+Created: {{ .ObjectMeta.CreationTimestamp }} 
 
 {{ with .Spec }}
 
 <h2>Pull request</h2>
 
 {{ with .PullRequest }}
-{{ prLink . }}
+{{ prLink . }} by {{ authorLink .PullRequest.Author }}
 <ul>
-    <li>Author: {{ authorLink .PullRequest.Author }}</li>
+	<li>Repository: {{ repoLink .Org .Repo }}</li>
     <li>SHA: <tt>{{ shaLink . .PullRequest.SHA }}</tt></li>
-  <li>
-    Base: <tt>{{ refLink . .BaseRef }}</tt> (<tt>{{ shaLink . .BaseSHA }}</tt>)
-  </li>
+	<li>
+		Base: <tt>{{ refLink . .BaseRef }}</tt> (<tt>{{ shaLink . .BaseSHA }}</tt>)
+	</li>
 </ul>
 {{ end }}{{/* with .PullRequest */}}
 
@@ -73,8 +109,9 @@ Created: {{ .ObjectMeta.CreationTimestamp }}
   <li>Release: {{ .Release }}</li>
   <li>Specifier: {{ .Specifier }}</li>
   {{ with .Revision }}<li>Revision: {{ . }}</li>{{ end }}
-{{ end }}
 </ul>
+{{ configLink . }}
+{{ end }}
 
 <h2>Jobs</h2>
 <ul>
@@ -123,8 +160,36 @@ type server struct {
 	runsListTemplate *template.Template
 }
 
+func prLink(pr *prpqv1.PullRequestUnderTest) template.HTML {
+	org := template.HTMLEscapeString(pr.Org)
+	repo := template.HTMLEscapeString(pr.Repo)
+	title := template.HTMLEscapeString(pr.PullRequest.Title)
+	n := pr.PullRequest.Number
+	ret := fmt.Sprintf(`<a href="http://github.com/%s/%s/pull/%d">#%d: %s</a>`,
+		org, repo, n, n, title)
+	return template.HTML(ret)
+}
+
+func authorLink(a string) template.HTML {
+	a = template.HTMLEscapeString(a)
+	ret := fmt.Sprintf(`<a href="https://github.com/%s">%s</a>`, a, a)
+	return template.HTML(ret)
+}
+
+func repoLink(org string, repo string) template.HTML {
+	org = template.HTMLEscapeString(org)
+	repo = template.HTMLEscapeString(repo)
+	ret := fmt.Sprintf(`<a href="https://github.com/%s/%s">%s/%s</a>`, org, repo, org, repo)
+	return template.HTML(ret)
+}
+
 func newServer(client ctrlruntimeclient.Client, ctx context.Context, namespace string) (server, error) {
-	runsListTemplate, err := template.New("runsListTemplate").Parse(runsListTemplate)
+	runsListTemplate, err := template.New("runsListTemplate").Funcs(template.FuncMap{
+		"prLink":     prLink,
+		"authorLink": authorLink,
+		"repoLink":   repoLink,
+	}).Parse(runsListTemplate)
+
 	if err != nil {
 		return server{}, err
 	}
@@ -193,19 +258,9 @@ func (s *server) runDetails(w http.ResponseWriter, r *http.Request) {
 	}
 	tmpl := template.New("runTemplate")
 	tmpl.Funcs(template.FuncMap{
-		"prLink": func(pr *prpqv1.PullRequestUnderTest) template.HTML {
-			org := template.HTMLEscapeString(pr.Org)
-			repo := template.HTMLEscapeString(pr.Repo)
-			title := template.HTMLEscapeString(pr.PullRequest.Title)
-			n := pr.PullRequest.Number
-			ret := fmt.Sprintf(`<a href="http://github.com/%s/%s/pull/%d">%s</a>`, org, repo, n, title)
-			return template.HTML(ret)
-		},
-		"authorLink": func(a string) template.HTML {
-			a = template.HTMLEscapeString(a)
-			ret := fmt.Sprintf(`<a href="https://github.com/%s">%s</a>`, a, a)
-			return template.HTML(ret)
-		},
+		"prLink":     prLink,
+		"authorLink": authorLink,
+		"repoLink":   repoLink,
 		"refLink": func(pr *prpqv1.PullRequestUnderTest, r string) template.HTML {
 			r = template.HTMLEscapeString(r)
 			org := template.HTMLEscapeString(pr.Org)
@@ -218,6 +273,21 @@ func (s *server) runDetails(w http.ResponseWriter, r *http.Request) {
 			org := template.HTMLEscapeString(pr.Org)
 			repo := template.HTMLEscapeString(pr.Repo)
 			ret := fmt.Sprintf(`<a href="https://github.com/%s/%s/commit/%s">%s</a>`, org, repo, h, h)
+			return template.HTML(ret)
+		},
+		"configLink": func(config *prpqv1.ReleaseControllerConfig) template.HTML {
+			ocp := template.HTMLEscapeString(config.OCP)
+			release := template.HTMLEscapeString(config.Release)
+			suffix := ""
+			if release == "ci" {
+				suffix = "-ci"
+			}
+			ret := fmt.Sprintf(`
+			<h2>Release controller</h2>
+			<ul>
+				<li><a href="https://amd64.ocp.releases.ci.openshift.org/#%s.0-0.%s">Release status</a></li>
+				<li><a href="https://github.com/openshift/release/blob/master/core-services/release-controller/_releases/release-ocp-%s%s.json">Configuration</a></li>
+			</ul>`, ocp, release, ocp, suffix)
 			return template.HTML(ret)
 		},
 		"jobStatus": func(i int) *prpqv1.PullRequestPayloadJobStatus {

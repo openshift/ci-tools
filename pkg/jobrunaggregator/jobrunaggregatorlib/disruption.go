@@ -3,6 +3,9 @@ package jobrunaggregatorlib
 import (
 	"encoding/json"
 	"math"
+	"strings"
+
+	"github.com/sirupsen/logrus"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -48,6 +51,48 @@ type BackendDisruption struct {
 	DisruptionMessages []string
 }
 
+// ClusterData is defined in origin/platformidentification/types.go
+// it is duplicated in a minimized form here
+type ClusterData struct {
+	MasterNodesUpdated string
+}
+
+// GetMasterNodesUpdatedStatusFromClusterData takes multiple file contents as a copy of the ClusterData
+// file is created for multiple test phases (upgrade / conformance) in the same manor that multiple disruption
+// files are created for the multiple phases
+func GetMasterNodesUpdatedStatusFromClusterData(clusterData map[string]string) string {
+	// default is unknown
+	masterNodesUpdated := ""
+
+	// there can be multiple files (upgrade / conformance) if any of them indicate the master nodes updated
+	// we indicate that for the entire run
+	for _, clusterdataResults := range clusterData {
+		if len(clusterdataResults) == 0 {
+			continue
+		}
+
+		cd := &ClusterData{}
+		if err := json.Unmarshal([]byte(clusterdataResults), cd); err != nil {
+			logrus.WithError(err).Error("error unmarshalling clusterdataJson")
+			continue
+		}
+
+		// if the value is y then return it
+		// as it supersedes all other values
+		if strings.ToUpper(cd.MasterNodesUpdated) == "Y" {
+			return cd.MasterNodesUpdated
+		}
+
+		// if we don't have a value yet use whatever value we have coming in
+		if len(masterNodesUpdated) == 0 {
+			masterNodesUpdated = cd.MasterNodesUpdated
+			continue
+		}
+	}
+
+	return masterNodesUpdated
+}
+
 func GetServerAvailabilityResultsFromDirectData(backendDisruptionData map[string]string) map[string]AvailabilityResult {
 	availabilityResultsByName := map[string]AvailabilityResult{}
 
@@ -57,6 +102,7 @@ func GetServerAvailabilityResultsFromDirectData(backendDisruptionData map[string
 		}
 		allDisruptions := &BackendDisruptionList{}
 		if err := json.Unmarshal([]byte(disruptionJSON), allDisruptions); err != nil {
+			logrus.WithError(err).Error("error unmarshalling disruptionJson")
 			continue
 		}
 

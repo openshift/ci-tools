@@ -4,19 +4,22 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"sort"
 	"sync"
+	"time"
 
+	"cloud.google.com/go/bigquery"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
+	"google.golang.org/api/option"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/test-infra/prow/config/org"
 	"k8s.io/test-infra/prow/flagutil"
@@ -30,21 +33,24 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/group"
+	"github.com/openshift/ci-tools/pkg/rover"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 type options struct {
 	kubernetesOptions flagutil.KubernetesOptions
 
-	mappingFile    string
-	logLevel       string
-	dryRun         bool
-	groupsFile     string
-	configFile     string
-	maxConcurrency int
+	logLevel           string
+	dryRun             bool
+	deleteInvalidUsers bool
+	groupsFile         string
+	configFile         string
+	maxConcurrency     int
 
 	peribolosConfig        string
 	orgFromPeribolosConfig string
+	githubUsersFile        string
+	gcpCredentialsFile     string
 }
 
 func parseOptions() *options {
@@ -53,12 +59,14 @@ func parseOptions() *options {
 	opts.kubernetesOptions.AddFlags(fs)
 	fs.StringVar(&opts.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
 	fs.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
-	fs.StringVar(&opts.mappingFile, "mapping-file", "", "File to the mapping results of m(github_login)=kerberos_id.")
+	fs.BoolVar(&opts.deleteInvalidUsers, "delete-invalid-users", false, "If set, delete users that are not in Rover or have no links to GitHub there")
 	fs.StringVar(&opts.groupsFile, "groups-file", "", "The yaml file storing the groups")
 	fs.StringVar(&opts.configFile, "config-file", "", "The yaml file storing the config file for the groups")
 	fs.IntVar(&opts.maxConcurrency, "concurrency", 60, "Maximum number of concurrent in-flight goroutines to handle groups.")
 	fs.StringVar(&opts.peribolosConfig, "peribolos-config", "", "Peribolos configuration file")
 	fs.StringVar(&opts.orgFromPeribolosConfig, "org-from-peribolos-config", "openshift-priv", "Org from peribolos configuration")
+	fs.StringVar(&opts.githubUsersFile, "github-users-file", "", "File used to store GitHub users.")
+	fs.StringVar(&opts.gcpCredentialsFile, "gcp-credentials-file", "", "The json file storing the gcp credentials.")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse args")
 	}
@@ -72,8 +80,11 @@ func (o *options) validate() error {
 	}
 	logrus.SetLevel(level)
 
-	if o.mappingFile == "" {
-		return fmt.Errorf("--mapping-file must not be empty")
+	if o.githubUsersFile == "" {
+		return fmt.Errorf("--github-users-file must not be empty")
+	}
+	if o.gcpCredentialsFile == "" {
+		return fmt.Errorf("--gcp-credentials-file must not be empty")
 	}
 	if o.groupsFile == "" {
 		return fmt.Errorf("--groups-file must not be empty")
@@ -108,7 +119,7 @@ func main() {
 		logrus.WithError(err).Fatal("failed to validate the option")
 	}
 
-	var openshiftPrivAdmins sets.String
+	var openshiftPrivAdmins sets.Set[string]
 	if opts.peribolosConfig != "" {
 		admins, err := getOpenshiftPrivAdmins(opts.peribolosConfig, opts.orgFromPeribolosConfig)
 		if err != nil {
@@ -157,7 +168,7 @@ func main() {
 	}
 
 	clients := map[string]ctrlruntimeclient.Client{}
-	clusters := sets.NewString()
+	clusters := sets.New[string]()
 	for cluster, config := range kubeconfigs {
 		clusters.Insert(cluster)
 		cluster, config := cluster, config
@@ -175,23 +186,51 @@ func main() {
 
 	ctx := interrupts.Context()
 
-	mapping, err := func(path string) (map[string]string, error) {
-		logrus.WithField("path", path).Debug("Loading the mapping file ...")
-		bytes, err := ioutil.ReadFile(path)
+	users, err := func(path string) ([]rover.User, error) {
+		logrus.WithField("path", path).Debug("Loading the GitHub users file ...")
+		bytes, err := os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read file %s: %w", path, err)
 		}
-		var mapping map[string]string
-		if err := yaml.Unmarshal(bytes, &mapping); err != nil {
+		var users []rover.User
+		if err := yaml.Unmarshal(bytes, &users); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal: %w", err)
 		}
-		return mapping, nil
-	}(opts.mappingFile)
+		return users, nil
+	}(opts.githubUsersFile)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to load the mapping")
+		logrus.WithError(err).Fatal("Failed to load the GitHub users")
 	}
 
-	data, err := ioutil.ReadFile(opts.groupsFile)
+	gcpClient, err := bigquery.NewClient(ctx, "openshift-gce-devel", option.WithCredentialsFile(opts.gcpCredentialsFile))
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create the GCP client")
+	}
+	defer func() {
+		if err := gcpClient.Close(); err != nil {
+			logrus.WithError(err).Fatal("Failed to close the GCP client")
+		}
+	}()
+
+	var userItems []*rover.UserItem
+	now := time.Now()
+	for _, user := range users {
+		userItems = append(userItems, &rover.UserItem{
+			Created: now,
+			User: rover.User{
+				UID:            user.UID,
+				GitHubUsername: user.GitHubUsername,
+				CostCenter:     user.CostCenter,
+			},
+		})
+	}
+	if err := insertRows(ctx, gcpClient, userItems); err != nil {
+		logrus.WithError(err).Fatal("Failed to insert users to bigquery")
+	}
+
+	mapping := rover.MapGithubToKerberos(users)
+
+	data, err := os.ReadFile(opts.groupsFile)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to read the group file")
 	}
@@ -199,11 +238,21 @@ func main() {
 	if err := yaml.Unmarshal(data, &roverGroups); err != nil {
 		logrus.WithError(err).Fatal("Failed to unmarshal groups")
 	}
-
-	if ciAdmins, ok := roverGroups[api.CIAdminsGroupName]; !ok {
+	ciAdmins, ok := roverGroups[api.CIAdminsGroupName]
+	if !ok {
 		logrus.WithField("groupName", api.CIAdminsGroupName).Fatal("Failed to find ci-admins group")
 	} else if l := len(ciAdmins); l < 3 {
 		logrus.WithField("groupName", api.CIAdminsGroupName).WithField("len", l).Fatal("Require at least 3 members of ci-admins group")
+	}
+
+	kerberosIds := sets.New[string]()
+	for _, kerberosId := range mapping {
+		kerberosIds.Insert(kerberosId)
+	}
+	if opts.deleteInvalidUsers {
+		if err := deleteInvalidUsers(ctx, clients, kerberosIds, sets.New[string](ciAdmins...), opts.dryRun); err != nil {
+			logrus.WithError(err).Fatal("Failed to delete users")
+		}
 	}
 
 	groups, err := makeGroups(openshiftPrivAdmins, opts.peribolosConfig, mapping, roverGroups, config, clusters)
@@ -216,7 +265,15 @@ func main() {
 	}
 }
 
-func getOpenshiftPrivAdmins(peribolosConfig, orgFromPeribolosConfig string) (sets.String, error) {
+func insertRows(ctx context.Context, client *bigquery.Client, users []*rover.UserItem) error {
+	inserter := client.Dataset("ci_analysis_us").Table("users").Inserter()
+	if err := inserter.Put(ctx, users); err != nil {
+		return err
+	}
+	return nil
+}
+
+func getOpenshiftPrivAdmins(peribolosConfig, orgFromPeribolosConfig string) (sets.Set[string], error) {
 	b, err := gzip.ReadFileMaybeGZIP(peribolosConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read peribolos configuration file: %w", err)
@@ -227,7 +284,7 @@ func getOpenshiftPrivAdmins(peribolosConfig, orgFromPeribolosConfig string) (set
 		return nil, fmt.Errorf("failed to unmarshal peribolos config: %w", err)
 	}
 
-	members := sets.NewString()
+	members := sets.New[string]()
 	orgConfig, ok := config.Orgs[orgFromPeribolosConfig]
 	if !ok {
 		return nil, fmt.Errorf("failed to find org %s in peribolos config", orgFromPeribolosConfig)
@@ -239,39 +296,107 @@ func getOpenshiftPrivAdmins(peribolosConfig, orgFromPeribolosConfig string) (set
 }
 
 type GroupClusters struct {
-	Clusters sets.String
+	Clusters sets.Set[string]
 	Group    *userv1.Group
 }
 
-func makeGroups(openshiftPrivAdmins sets.String, peribolosConfig string, mapping map[string]string, roverGroups map[string][]string, config *group.Config, clusters sets.String) (map[string]GroupClusters, error) {
+var githubRobotIds = sets.New[string]("RH-Cachito", "openshift-bot", "openshift-ci-robot", "openshift-merge-robot")
+
+func deleteInvalidUsers(ctx context.Context, clients map[string]ctrlruntimeclient.Client,
+	kerberosIDs sets.Set[string], ciAdmins sets.Set[string], dryRun bool) error {
+
+	var errs []error
+	for cluster, client := range clients {
+		usersToDelete, err := getUsersWithoutKerberosID(ctx, client, cluster, kerberosIDs)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to get users on cluster %s: %w", cluster, err))
+			continue
+		}
+		for user, identites := range usersToDelete {
+			if ciAdmins.Has(user) {
+				// should never happen
+				logrus.WithField("cluster", cluster).WithField("user", user).Info("Attempt to delete admin! Skipping...")
+				continue
+			}
+			logrus.WithField("cluster", cluster).WithField("user", user).Info("Deleting user...")
+			if !dryRun {
+				var err error
+				if err = client.Delete(ctx, &userv1.User{ObjectMeta: metav1.ObjectMeta{Name: user}}); err != nil && !errors.IsNotFound(err) {
+					errs = append(errs, fmt.Errorf("failed to delete user %s on cluster %s: %w", user, cluster, err))
+
+				}
+				if err == nil {
+					logrus.WithField("cluster", cluster).WithField("user", user).Info("Deleted successfully.")
+				}
+
+			}
+			for _, identity := range identites {
+				logrus.WithField("cluster", cluster).WithField("user", user).WithField("identity", identity).Info("Deleting identity...")
+				if dryRun {
+					continue
+				}
+				var err error
+				if err = client.Delete(ctx, &userv1.Identity{ObjectMeta: metav1.ObjectMeta{Name: identity}}); err != nil && !errors.IsNotFound(err) {
+					errs = append(errs, fmt.Errorf("failed to delete identity %s on cluster %s: %w", identity, cluster, err))
+				}
+				if err == nil {
+					logrus.WithField("cluster", cluster).WithField("user", user).WithField("identity", identity).Info("Deleted successfully.")
+				}
+			}
+		}
+		logrus.WithField("cluster", cluster).Info("Deleting invalid users and identites is finished!")
+	}
+	return kerrors.NewAggregate(errs)
+}
+
+// Returns users without kerberosID and their identities
+func getUsersWithoutKerberosID(ctx context.Context, client ctrlruntimeclient.Client,
+	cluster string, kerberosIDs sets.Set[string]) (map[string][]string, error) {
+
+	users := &userv1.UserList{}
+	if err := client.List(ctx, users); err != nil {
+		return nil, fmt.Errorf("failed to list users on cluster %s: %w", cluster, err)
+	}
+	usersWithoutKerberosID := make(map[string][]string)
+	for _, user := range users.Items {
+		if !kerberosIDs.Has(user.Name) {
+			usersWithoutKerberosID[user.Name] = user.Identities
+		}
+	}
+	return usersWithoutKerberosID, nil
+}
+
+func makeGroups(openshiftPrivAdmins sets.Set[string], peribolosConfig string, mapping map[string]string, roverGroups map[string][]string, config *group.Config, clusters sets.Set[string]) (map[string]GroupClusters, error) {
 	groups := map[string]GroupClusters{}
 	var errs []error
 
-	ignoredOpenshiftPrivAdminNames := sets.NewString()
+	ignoredOpenshiftPrivAdminNames := sets.New[string]()
 	if peribolosConfig != "" {
-		kerberosIDs := sets.NewString()
-		for _, admin := range openshiftPrivAdmins.List() {
+		kerberosIDs := sets.New[string]()
+		for _, admin := range sets.List(openshiftPrivAdmins) {
 			kerberosID, ok := mapping[admin]
 			if !ok {
-				ignoredOpenshiftPrivAdminNames.Insert(admin)
+				if !githubRobotIds.Has(admin) {
+					ignoredOpenshiftPrivAdminNames.Insert(admin)
+				}
 				continue
 			}
 			kerberosIDs.Insert(kerberosID)
 		}
 		groups[group.OpenshiftPrivAdminsGroup] = GroupClusters{
-			Clusters: sets.NewString(string(api.ClusterAPPCI)),
+			Clusters: sets.New[string](string(api.ClusterAPPCI)),
 			Group: &userv1.Group{
 				ObjectMeta: metav1.ObjectMeta{Name: group.OpenshiftPrivAdminsGroup, Labels: map[string]string{api.DPTPRequesterLabel: toolName}},
-				Users:      kerberosIDs.List(),
+				Users:      sets.List(kerberosIDs),
 			},
 		}
 	}
 	if ignoredOpenshiftPrivAdminNames.Len() > 0 {
-		logrus.WithField("ignoredOpenshiftPrivAdminNames", ignoredOpenshiftPrivAdminNames.List()).
-			Warn("These logins are members of openshift-priv but have no mapping to RH login.")
+		logrus.WithField("ignoredOpenshiftPrivAdminNames", sets.List(ignoredOpenshiftPrivAdminNames)).
+			Error("These logins are members of openshift-priv but have no mapping to RH login.")
 	}
 
-	clustersExceptHive := clusters.Difference(sets.NewString(string(api.HiveCluster)))
+	clustersExceptHive := clusters.Difference(sets.New[string](string(api.HiveCluster)))
 	for githubLogin, kerberosId := range mapping {
 		groupName := api.GitHubUserGroup(githubLogin)
 		groups[groupName] = GroupClusters{
@@ -292,7 +417,7 @@ func makeGroups(openshiftPrivAdmins sets.String, peribolosConfig string, mapping
 			if v, ok := config.Groups[k]; ok {
 				resolved := v.ResolveClusters(config.ClusterGroups)
 				if resolved.Len() > 0 {
-					logrus.WithField("groupName", groupName).WithField("clusters", resolved.List()).
+					logrus.WithField("groupName", groupName).WithField("clusters", sets.List(resolved)).
 						Info("Group does not exists on all clusters")
 					clustersForRoverGroup = resolved
 				}
@@ -311,7 +436,7 @@ func makeGroups(openshiftPrivAdmins sets.String, peribolosConfig string, mapping
 			Clusters: clustersForRoverGroup,
 			Group: &userv1.Group{
 				ObjectMeta: metav1.ObjectMeta{Name: groupName, Labels: labels},
-				Users:      sets.NewString(v...).Delete("").List(),
+				Users:      sets.List(sets.New[string](v...).Delete("")),
 			},
 		}
 	}
@@ -368,12 +493,8 @@ func ensureGroups(ctx context.Context, clients map[string]ctrlruntimeclient.Clie
 		if dryRun {
 			return nil
 		}
-		if modified, err := upsertGroup(ctx, client, group); err != nil {
-			return fmt.Errorf("failed to upsert group %s on cluster %s: %w", group.Name, cluster, err)
-		} else if modified {
-			logger.Info("Upserted group (created or modified on the cluster")
-		} else {
-			logger.Info("Group with expected members already present in the cluster")
+		if err := upsertGroupWithRetry(ctx, client, cluster, group, logger); err != nil {
+			return fmt.Errorf("failed to upsert group %s on cluster %s after retrying: %w", group.Name, cluster, err)
 		}
 
 		return nil
@@ -383,7 +504,7 @@ func ensureGroups(ctx context.Context, clients map[string]ctrlruntimeclient.Clie
 	errLock := &sync.Mutex{}
 	sem := semaphore.NewWeighted(int64(maxConcurrency))
 	for _, groupClusters := range groupsToCreate {
-		for _, cluster := range groupClusters.Clusters.List() {
+		for _, cluster := range sets.List(groupClusters.Clusters) {
 			group := groupClusters.Group.DeepCopy()
 			if err := sem.Acquire(ctx, 1); err != nil {
 				return fmt.Errorf("failed to acquire semaphore: %w", err)
@@ -421,7 +542,7 @@ func validate(group *userv1.Group) error {
 	if group.Name == "" {
 		return fmt.Errorf("group name cannot be empty")
 	}
-	members := sets.NewString()
+	members := sets.New[string]()
 	for _, m := range group.Users {
 		if m == "" {
 			return fmt.Errorf("member name in group cannot be empty")
@@ -430,6 +551,25 @@ func validate(group *userv1.Group) error {
 			return fmt.Errorf("duplicate member: %s", m)
 		}
 		members.Insert(m)
+	}
+	return nil
+}
+
+func upsertGroupWithRetry(ctx context.Context, client ctrlruntimeclient.Client, cluster string, group *userv1.Group, logger *logrus.Entry) error {
+	if err := wait.ExponentialBackoff(wait.Backoff{Steps: 4, Factor: 2, Duration: time.Second}, func() (bool, error) {
+		modified, err := upsertGroup(ctx, client, group)
+		if err != nil {
+			logger.WithError(err).WithField("cluster", cluster).WithField("group", group.Name).Warn("Failed to upsert group")
+			return false, nil
+		}
+		if modified {
+			logger.Info("Upserted group (created or modified on the cluster")
+			return true, nil
+		}
+		logger.Info("Group with expected members already present in the cluster")
+		return true, nil
+	}); err != nil {
+		return fmt.Errorf("failed to upsert group %s on cluster %s: %w", group.Name, cluster, err)
 	}
 	return nil
 }

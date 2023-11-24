@@ -40,6 +40,8 @@ type options struct {
 
 	slackTokenPath string
 	weekStart      bool
+
+	enableBuild02UpgradeNotification bool
 }
 
 func (o *options) Validate() error {
@@ -71,6 +73,7 @@ func gatherOptions(fs *flag.FlagSet, args ...string) options {
 
 	fs.StringVar(&o.slackTokenPath, "slack-token-path", "", "Path to the file containing the Slack token to use.")
 	fs.BoolVar(&o.weekStart, "week-start", false, "If set to true run in 'Monday' mode: performing, additional, Monday only activities")
+	fs.BoolVar(&o.enableBuild02UpgradeNotification, "enable-build02-upgrade-notification", false, "If set to true send notification when build02 needs an upgrade")
 
 	if err := fs.Parse(args); err != nil {
 		logrus.WithError(err).Fatal("Could not parse args.")
@@ -135,6 +138,9 @@ func main() {
 		if err := sendNextWeeksRoleDigest(pagerDutyClient, slackClient); err != nil {
 			logrus.WithError(err).Fatal("Could not post next week's role digest to Slack.")
 		}
+		if err := notifyTriageOfHandover(slackClient, userIdsByRole[roleTriagePrimary].slackId); err != nil {
+			logrus.WithError(err).Fatal("Could not notify triage engineer of handover doc via Slack.")
+		}
 	}
 
 	if err := addSchemes(); err != nil {
@@ -159,32 +165,35 @@ func main() {
 		clients[cluster] = client
 	}
 
-	versionInfo, err := upgradeBuild02(context.TODO(), clients[api.ClusterBuild01], clients[api.ClusterBuild02])
-	if err != nil {
-		logrus.WithError(err).Fatal("could not determine if build02 needs to upgraded")
-	}
-	if versionInfo != nil {
-		logrus.WithField("toVersion", versionInfo.version).Info("Posting @dptp-triage about upgrading build02 to Slack")
-		if err := sendTriageBuild02Upgrade(slackClient, versionInfo.version, versionInfo.stableDuration); err != nil {
-			logrus.WithError(err).Fatal("Could not post @dptp-triage about upgrading build02 to Slack.")
+	if o.enableBuild02UpgradeNotification {
+		versionInfo, err := upgradeBuild02(context.TODO(), clients[api.ClusterBuild01], clients[api.ClusterBuild02])
+		if err != nil {
+			logrus.WithError(err).Fatal("could not determine if build02 needs to upgraded")
 		}
+		if versionInfo != nil {
+			logrus.WithField("toVersion", versionInfo.version).Info("Posting @dptp-triage about upgrading build02 to Slack")
+			if err := sendTriageBuild02Upgrade(slackClient, versionInfo.version, versionInfo.stableDuration); err != nil {
+				logrus.WithError(err).Fatal("Could not post @dptp-triage about upgrading build02 to Slack.")
+			}
+		}
+	} else {
+		logrus.WithField("enableBuild02UpgradeNotification", o.enableBuild02UpgradeNotification).
+			Info("Skipped checking if build02 needs an upgrade")
 	}
 }
 
 const (
-	primaryOnCallQuery     = "DPTP Primary On-Call"
-	secondaryUSOnCallQuery = "DPTP Secondary On-Call (US)"
-	secondaryEUOnCallQuery = "DPTP Secondary On-Call (EU)"
-	helpdeskQuery          = "DPTP Help Desk"
-	intakeQuery            = "DPTP Intake"
-	roleTriagePrimary      = "@dptp-triage Primary"
-	roleTriageSecondaryUS  = "@dptp-triage Secondary (US)"
-	roleTriageSecondaryEU  = "@dptp-triage Secondary (EU)"
-	roleHelpdesk           = "@dptp-helpdesk"
-	roleIntake             = "@dptp-intake"
+	primaryOnCallQuery                = "DPTP Primary On-Call"
+	helpdeskQuery                     = "DPTP Help Desk"
+	intakeQuery                       = "DPTP Intake"
+	roleTriagePrimary                 = "@dptp-triage Primary"
+	roleHelpdesk                      = "@dptp-helpdesk"
+	roleIntake                        = "@dptp-intake"
+	jiraUnassignedAssigneeDisplayName = "<Unassigned>"
+	jiraUnassignedAssigneeAvatarUrl   = "https://issues.redhat.com/secure/useravatar?size=mm&avatarId=10283"
 )
 
-func sendTeamDigest(userIdsByRole map[string]string, jiraClient *jiraapi.Client, slackClient *slack.Client) error {
+func sendTeamDigest(userIdsByRole map[string]user, jiraClient *jiraapi.Client, slackClient *slack.Client) error {
 	blocks := getPagerDutyBlocks(userIdsByRole)
 
 	if approvalBlocks, err := getIssuesNeedingApproval(jiraClient); err != nil {
@@ -196,15 +205,15 @@ func sendTeamDigest(userIdsByRole map[string]string, jiraClient *jiraapi.Client,
 	return postBlocks(slackClient, blocks)
 }
 
-func getPagerDutyBlocks(userIdsByRole map[string]string) []slack.Block {
+func getPagerDutyBlocks(userIdsByRole map[string]user) []slack.Block {
 	var fields []*slack.TextBlockObject
-	for _, role := range []string{roleTriagePrimary, roleTriageSecondaryUS, roleTriageSecondaryEU, roleHelpdesk, roleIntake} {
+	for _, role := range []string{roleTriagePrimary, roleHelpdesk, roleIntake} {
 		fields = append(fields, &slack.TextBlockObject{
 			Type: slack.PlainTextType,
 			Text: role,
 		}, &slack.TextBlockObject{
 			Type: slack.MarkdownType,
-			Text: fmt.Sprintf("<@%s>", userIdsByRole[role]),
+			Text: fmt.Sprintf("<@%s>", userIdsByRole[role].slackId),
 		})
 	}
 
@@ -224,14 +233,14 @@ func getPagerDutyBlocks(userIdsByRole map[string]string) []slack.Block {
 			Type: slack.MBTSection,
 			Text: &slack.TextBlockObject{
 				Type: slack.MarkdownType,
-				Text: "Role manuals for: <https://docs.google.com/document/d/1eM2H_q9wMHfaJOqT08tO0fYxhAx3hxZp9_Fj1KsmJhA|triage>, <https://docs.google.com/document/d/1CYRzqE2Y4L-SRdp2DB1hXGnpk0tCd5Tm1SjgBI0ihnY|help-desk>, and <https://docs.google.com/document/d/1-zJGyiXiVqUvFWRQ5IYDwxSYmLQPD_cfJeEFXhfjDLA|intake>.",
+				Text: "Role manuals for: <https://docs.google.com/document/d/1x2C0CISvCxr7IWz6dCHj7lYqxo6GG7CpxohinxllUnE|triage>, <https://docs.google.com/document/d/1cgNYGgyXQsi9YpHNPbxE7lVDff-74uVCzAd4o1xcwGo|help-desk>, and <https://docs.google.com/document/d/1Wmy9F8-SBEG4Cd_he9aiZUS8c66DUE0XmRTmu04uW6U|intake>.",
 			},
 		},
 		&slack.SectionBlock{
 			Type: slack.MBTSection,
 			Text: &slack.TextBlockObject{
 				Type: slack.MarkdownType,
-				Text: "Team definitions for: <https://docs.google.com/document/d/19TRTNxaA3-qC4CM-stBxGTC8RqHs86Qb6mjITBsRpG4|ready>, <https://docs.google.com/document/d/1Qd4qcRHUxk5-eiFIjQm2TTH1TaGQ-zhbphLNXxyvr00|done>.",
+				Text: "Team definitions for: <https://docs.google.com/document/d/1pvTfPovr1zGmt-CKTQEfJ2Y6UYanbGO8-3RvujE-rpw|ready>, <https://docs.google.com/document/d/1f2zJHg9evsrY2BArfmhuhavFbdghPD4jzW1pxRUL35o|done>.",
 			},
 		},
 	}
@@ -239,15 +248,20 @@ func getPagerDutyBlocks(userIdsByRole map[string]string) []slack.Block {
 	return blocks
 }
 
-func users(client *pagerduty.Client, slackClient *slack.Client) (map[string]string, error) {
+type user struct {
+	slackId string
+	email   string
+}
+
+func users(client *pagerduty.Client, slackClient *slack.Client) (map[string]user, error) {
 	now := time.Now()
 	userIdsByRole, errors := usersOnCallAtTime(client, slackClient, now.Year(), now.Month(), now.Day())
 	return userIdsByRole, kerrors.NewAggregate(errors)
 }
 
-func usersOnCallAtTime(client *pagerduty.Client, slackClient *slack.Client, year int, month time.Month, day int) (map[string]string, []error) {
+func usersOnCallAtTime(client *pagerduty.Client, slackClient *slack.Client, year int, month time.Month, day int) (map[string]user, []error) {
 	var errors []error
-	userIdsByRole := map[string]string{}
+	userIdsByRole := map[string]user{}
 
 	for _, item := range []struct {
 		role  string
@@ -256,14 +270,6 @@ func usersOnCallAtTime(client *pagerduty.Client, slackClient *slack.Client, year
 		{
 			role:  roleTriagePrimary,
 			query: primaryOnCallQuery,
-		},
-		{
-			role:  roleTriageSecondaryUS,
-			query: secondaryUSOnCallQuery,
-		},
-		{
-			role:  roleTriageSecondaryEU,
-			query: secondaryEUOnCallQuery,
 		},
 		{
 			role:  roleHelpdesk,
@@ -287,7 +293,7 @@ func usersOnCallAtTime(client *pagerduty.Client, slackClient *slack.Client, year
 			errors = append(errors, fmt.Errorf("could not get slack user for %s: %w", pagerDutyUser.Name, err))
 			continue
 		}
-		userIdsByRole[item.role] = slackUser.ID
+		userIdsByRole[item.role] = user{slackId: slackUser.ID, email: pagerDutyUser.Email}
 	}
 	return userIdsByRole, errors
 }
@@ -353,7 +359,8 @@ func sendNextWeeksRoleDigest(client *pagerduty.Client, slackClient *slack.Client
 
 	// Invert to group all roles for each userId as a user can be in multiple roles
 	rolesByUserId := make(map[string][]string)
-	for role, userId := range userIdsByRole {
+	for role, u := range userIdsByRole {
+		userId := u.slackId
 		if roles, ok := rolesByUserId[userId]; ok {
 			rolesByUserId[userId] = append(roles, role)
 		} else {
@@ -408,8 +415,8 @@ func sendNextWeeksRoleDigest(client *pagerduty.Client, slackClient *slack.Client
 }
 
 func getIssuesNeedingApproval(jiraClient *jiraapi.Client) ([]slack.Block, error) {
-	issues, response, err := jiraClient.Issue.Search(fmt.Sprintf(`project=%s AND status="Review"`, jira.ProjectDPTP), nil)
-	if err := jirautil.JiraError(response, err); err != nil {
+	issues, response, err := jiraClient.Issue.Search(fmt.Sprintf(`project=%s AND status=Review AND issuetype!=Sub-task`, jira.ProjectDPTP), nil)
+	if err := jirautil.HandleJiraError(response, err); err != nil {
 		return nil, fmt.Errorf("could not query for Jira issues: %w", err)
 	}
 
@@ -436,25 +443,31 @@ func getIssuesNeedingApproval(jiraClient *jiraapi.Client) ([]slack.Block, error)
 	idByUser := map[string]slack.Block{}
 	blocksByUser := map[string][]slack.Block{}
 	for _, issue := range issues {
-		if _, recorded := idByUser[issue.Fields.Assignee.DisplayName]; !recorded {
-			idByUser[issue.Fields.Assignee.DisplayName] = &slack.ContextBlock{
+		assigneeDisplayName := jiraUnassignedAssigneeDisplayName
+		assigneeAvatarUrl := jiraUnassignedAssigneeAvatarUrl
+		if issue.Fields.Assignee != nil {
+			assigneeDisplayName = issue.Fields.Assignee.DisplayName
+			assigneeAvatarUrl = issue.Fields.Assignee.AvatarUrls.Four8X48
+		}
+		if _, recorded := idByUser[assigneeDisplayName]; !recorded {
+			idByUser[assigneeDisplayName] = &slack.ContextBlock{
 				Type: slack.MBTContext,
 				ContextElements: slack.ContextElements{
 					Elements: []slack.MixedElement{
 						&slack.ImageBlockElement{
 							Type:     slack.METImage,
-							ImageURL: issue.Fields.Assignee.AvatarUrls.Four8X48,
-							AltText:  issue.Fields.Assignee.DisplayName,
+							ImageURL: assigneeAvatarUrl,
+							AltText:  assigneeDisplayName,
 						},
 						&slack.TextBlockObject{
 							Type: slack.MarkdownType,
-							Text: issue.Fields.Assignee.DisplayName,
+							Text: assigneeDisplayName,
 						},
 					},
 				},
 			}
 		}
-		blocksByUser[issue.Fields.Assignee.DisplayName] = append(blocksByUser[issue.Fields.Assignee.DisplayName], blockForIssue(issue))
+		blocksByUser[assigneeDisplayName] = append(blocksByUser[assigneeDisplayName], blockForIssue(issue))
 	}
 
 	for user, id := range idByUser {
@@ -468,8 +481,8 @@ func getIssuesNeedingApproval(jiraClient *jiraapi.Client) ([]slack.Block, error)
 }
 
 const (
-	dptpTeamChannel = "team-dp-testplatform"
-	dptpOpsChannel  = "ops-testplatform"
+	dptpTeamChannel       = "team-dp-testplatform"
+	dptpBuildFarmsChannel = "alerts-testplatform-build-farms"
 
 	privateChannelType = "private_channel"
 	publicChannelType  = "public_channel"
@@ -502,7 +515,7 @@ func channelID(slackClient *slack.Client, channel, t string) (string, error) {
 func postBlocks(slackClient *slack.Client, blocks []slack.Block) error {
 	channelID, err := channelID(slackClient, dptpTeamChannel, privateChannelType)
 	if err != nil {
-		return fmt.Errorf("failed for get channel ID for %s", dptpTeamChannel)
+		return fmt.Errorf("failed to get channel ID for %s: %w", dptpTeamChannel, err)
 	}
 	responseChannel, responseTimestamp, err := slackClient.PostMessage(channelID, slack.MsgOptionText("Jira card digest.", false), slack.MsgOptionBlocks(blocks...))
 	if err != nil {
@@ -513,13 +526,15 @@ func postBlocks(slackClient *slack.Client, blocks []slack.Block) error {
 	return nil
 }
 
-func sendIntakeDigest(slackClient *slack.Client, jiraClient *jiraapi.Client, userId string) error {
-	issues, response, err := jiraClient.Issue.Search(fmt.Sprintf(`project=%s AND (labels is EMPTY OR NOT (labels=ready OR labels=no-intake)) AND created >= -30d AND status = "To Do" AND issuetype != Sub-task`, jira.ProjectDPTP), nil)
-	if err := jirautil.JiraError(response, err); err != nil {
+func sendIntakeDigest(slackClient *slack.Client, jiraClient *jiraapi.Client, user user) error {
+	opts := jiraapi.SearchOptions{Fields: []string{"*navigable", "comment"}}
+	issues, response, err := jiraClient.Issue.Search(fmt.Sprintf(`project=%s AND (labels is EMPTY OR NOT (labels=ready OR labels=no-intake)) AND created >= -30d AND status = "To Do" AND issuetype != Sub-task`, jira.ProjectDPTP), &opts)
+	if err := jirautil.HandleJiraError(response, err); err != nil {
 		return fmt.Errorf("could not query for Jira issues: %w", err)
 	}
 
 	if len(issues) == 0 {
+		logrus.Debug("No issues have been found for intake")
 		return nil
 	}
 
@@ -540,15 +555,27 @@ func sendIntakeDigest(slackClient *slack.Client, jiraClient *jiraapi.Client, use
 		},
 	}
 	for _, issue := range issues {
-		blocks = append(blocks, blockForIssue(issue))
+		if cardIsReady(issue.Fields.Comments.Comments, user.email) {
+			blocks = append(blocks, blockForIssue(issue))
+		}
 	}
-	responseChannel, responseTimestamp, err := slackClient.PostMessage(userId, slack.MsgOptionText("Jira card digest.", false), slack.MsgOptionBlocks(blocks...))
+	responseChannel, responseTimestamp, err := slackClient.PostMessage(user.slackId, slack.MsgOptionText("Jira card digest.", false), slack.MsgOptionBlocks(blocks...))
 	if err != nil {
 		return fmt.Errorf("failed to message @dptp-intake: %w", err)
 	}
 
 	logrus.Infof("Posted intake digest in channel %s at %s", responseChannel, responseTimestamp)
 	return nil
+}
+
+// cardIsReady returns false if the last comment left on a card is by the person
+// that is currently on Intake (in which case, we can assume the card is not ready),
+// otherwise returns true.
+func cardIsReady(comments []*jiraapi.Comment, intakeEmail string) bool {
+	if len(comments) > 0 {
+		return comments[len(comments)-1].Author.EmailAddress != intakeEmail
+	}
+	return true
 }
 
 type versionInfo struct {
@@ -621,13 +648,9 @@ func upgradeBuild02(ctx context.Context, build01Client, build02Client ctrlruntim
 		logrus.WithField("state", build02VI.state).Info("The previous upgrade of build02 has not been completed")
 		return nil, nil
 	}
-	if build02VI.semanticVersion.Equals(build01VI.semanticVersion) {
-		logrus.WithField("version", build01VI.version).Info("build01 and build02 have the same version and hence no need to upgrade build02")
+	if build02VI.semanticVersion.GE(build01VI.semanticVersion) {
+		logrus.WithField("build01VI.version", build01VI.version).WithField("build02VI.version", build02VI.version).Info("no need to upgrade build02")
 		return nil, nil
-	}
-
-	if build02VI.semanticVersion.GT(build01VI.semanticVersion) {
-		return nil, fmt.Errorf("version of build02 %s is newer than build01 %s", build02VI.version, build01VI.version)
 	}
 	return build01VI, nil
 }
@@ -653,9 +676,9 @@ func sendTriageBuild02Upgrade(slackClient *slack.Client, version, stableDuration
 		},
 	}
 
-	channelID, err := channelID(slackClient, dptpOpsChannel, publicChannelType)
+	channelID, err := channelID(slackClient, dptpBuildFarmsChannel, publicChannelType)
 	if err != nil {
-		return fmt.Errorf("failed for get channel ID for %s", dptpOpsChannel)
+		return fmt.Errorf("failed for get channel ID for %s", dptpBuildFarmsChannel)
 	}
 	responseChannel, responseTimestamp, err := slackClient.PostMessage(channelID, slack.MsgOptionBlocks(blocks...))
 	if err != nil {
@@ -699,7 +722,7 @@ const (
 	userGroupHelpdesk = "dptp-helpdesk"
 )
 
-func ensureGroupMembership(client *slack.Client, userIdsByRole map[string]string) error {
+func ensureGroupMembership(client *slack.Client, userIdsByRole map[string]user) error {
 	groups, err := client.GetUserGroups(slack.GetUserGroupsOptionIncludeUsers(true))
 	if err != nil {
 		return fmt.Errorf("could not query Slack for groups: %w", err)
@@ -717,11 +740,40 @@ func ensureGroupMembership(client *slack.Client, userIdsByRole map[string]string
 			return fmt.Errorf("could not find user group %s", handle)
 		}
 
-		if expected, actual := sets.NewString(userIdsByRole[role]), sets.NewString(group.Users...); !expected.Equal(actual) {
-			if _, err := client.UpdateUserGroupMembers(group.ID, strings.Join(expected.List(), ",")); err != nil {
+		if expected, actual := sets.New[string](userIdsByRole[role].slackId), sets.New[string](group.Users...); !expected.Equal(actual) {
+			if _, err := client.UpdateUserGroupMembers(group.ID, strings.Join(sets.List(expected), ",")); err != nil {
 				return fmt.Errorf("failed to update group %s: %w", handle, err)
 			}
 		}
 	}
+	return nil
+}
+
+const handoverDocLocation = "https://docs.google.com/document/d/1l2ewqieLYjIUA7nsJiPoD4vscsyxgcGXWlTgjqcTzzk"
+
+func notifyTriageOfHandover(client *slack.Client, triageId string) error {
+	blocks := []slack.Block{
+		&slack.HeaderBlock{
+			Type: slack.MBTHeader,
+			Text: &slack.TextBlockObject{
+				Type: slack.PlainTextType,
+				Text: "Triage Handover",
+			},
+		},
+		&slack.SectionBlock{
+			Type: slack.MBTSection,
+			Text: &slack.TextBlockObject{
+				Type: slack.MarkdownType,
+				Text: fmt.Sprintf("Please review the <%s|*Triage Handover Document*> to view any ongoing incidents. Remember to add any relevant information to it during your time in the Triage role.", handoverDocLocation),
+			},
+		},
+	}
+
+	responseChannel, responseTimestamp, err := client.PostMessage(triageId, slack.MsgOptionText("Triage Handover", false), slack.MsgOptionBlocks(blocks...))
+	if err != nil {
+		return fmt.Errorf("failed to message @dptp-triage: %w", err)
+	}
+
+	logrus.Infof("Posted Triage Handover reminder in channel %s at %s", responseChannel, responseTimestamp)
 	return nil
 }

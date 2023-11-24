@@ -29,29 +29,29 @@ func TestReconcile(t *testing.T) {
 	}{
 		{
 			name:   "Not found is swallowed",
-			client: fakectrlruntimeclient.NewFakeClient(),
+			client: fakectrlruntimeclient.NewClientBuilder().Build(),
 		},
 		{
 			name: "ReconcileAfter is returned for item younger seven days",
-			client: fakectrlruntimeclient.NewFakeClient(&testimagestreamtagimportv1.TestImageStreamTagImport{
+			client: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(&testimagestreamtagimportv1.TestImageStreamTagImport{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "name",
 					Namespace:         "namespace",
 					CreationTimestamp: metav1.Time{Time: now.Add(-6 * 24 * time.Hour)},
 				},
-			}),
+			}).Build(),
 			expectReconcileResult: reconcile.Result{RequeueAfter: 24 * time.Hour},
 			expectImport:          true,
 		},
 		{
 			name: "Item older seven days gets deleted",
-			client: fakectrlruntimeclient.NewFakeClient(&testimagestreamtagimportv1.TestImageStreamTagImport{
+			client: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(&testimagestreamtagimportv1.TestImageStreamTagImport{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "name",
 					Namespace:         "namespace",
 					CreationTimestamp: metav1.Time{},
 				},
-			}),
+			}).Build(),
 		},
 	}
 

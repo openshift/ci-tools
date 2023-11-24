@@ -1,7 +1,7 @@
 package main
 
 import (
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -15,7 +15,7 @@ import (
 )
 
 func TestRun(t *testing.T) {
-	files, err := ioutil.ReadDir("./testdata")
+	files, err := os.ReadDir("./testdata")
 	if err != nil {
 		t.Fatalf("failed to list testdata dir files: %v", err)
 	}
@@ -28,7 +28,7 @@ func TestRun(t *testing.T) {
 			t.Parallel()
 
 			path := filepath.Join("testdata", file.Name())
-			lifecycleConfigRaw, err := ioutil.ReadFile(path)
+			lifecycleConfigRaw, err := os.ReadFile(path)
 			if err != nil {
 				t.Fatalf("failed to read %s: %v", path, err)
 			}

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -97,7 +98,7 @@ func AddToManager(mgr manager.Manager, ns string, rc injectingResolverClient, pr
 		UpdateFunc:  func(event.UpdateEvent) bool { return false },
 		GenericFunc: func(event.GenericEvent) bool { return false },
 	}
-	if err := c.Watch(source.NewKindWithCache(&v1.PullRequestPayloadQualificationRun{}, mgr.GetCache()), prpqrHandler(), predicateFuncs); err != nil {
+	if err := c.Watch(source.Kind(mgr.GetCache(), &v1.PullRequestPayloadQualificationRun{}), prpqrHandler(), predicateFuncs); err != nil {
 		return fmt.Errorf("failed to create watch for PullRequestPayloadQualificationRun: %w", err)
 	}
 
@@ -105,7 +106,7 @@ func AddToManager(mgr manager.Manager, ns string, rc injectingResolverClient, pr
 }
 
 func prpqrHandler() handler.EventHandler {
-	return handler.EnqueueRequestsFromMapFunc(func(o ctrlruntimeclient.Object) []reconcile.Request {
+	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o ctrlruntimeclient.Object) []reconcile.Request {
 		prpqr, ok := o.(*v1.PullRequestPayloadQualificationRun)
 		if !ok {
 			logrus.WithField("type", fmt.Sprintf("%T", o)).Error("Got object that was not a PullRequestPayloadQualificationRun")
@@ -443,14 +444,15 @@ type aggregatedOptions struct {
 func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter periodicDefaulter, baseCiop *api.Metadata, prpqrName, prpqrNamespace string, pr *v1.PullRequestUnderTest, mimickedJob string, inject *api.MetadataWithTest, aggregatedOptions *aggregatedOptions) (*prowv1.ProwJob, error) {
 	fakeProwgenInfo := &prowgen.ProwgenInfo{Metadata: *baseCiop}
 
-	var annotations map[string]string
+	annotations := map[string]string{
+		releaseJobNameAnnotation: mimickedJob,
+	}
 	labels := map[string]string{
 		releaseJobNameLabel: jobNameHash(mimickedJob),
 	}
 
-	hashInput := prowgen.CustomHashInput(prpqrName)
+	var aggregateIndex *int
 	if aggregatedOptions != nil {
-		hashInput = prowgen.CustomHashInput(fmt.Sprintf("%s-%d", prpqrName, aggregatedOptions.aggregatedIndex))
 		if aggregatedOptions.labels != nil {
 			for k, v := range aggregatedOptions.labels {
 				labels[k] = v
@@ -459,13 +461,12 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 		annotations = map[string]string{
 			releaseJobNameAnnotation: aggregatedOptions.releaseJobName,
 		}
+		aggregateIndex = &aggregatedOptions.aggregatedIndex
 	} else {
 		labels[v1.PullRequestPayloadQualificationRunLabel] = prpqrName
-		annotations = map[string]string{
-			releaseJobNameAnnotation: mimickedJob,
-		}
 	}
 
+	hashInput := prowgen.CustomHashInput(prpqrName)
 	var periodic *prowconfig.Periodic
 	for i := range ciopConfig.Tests {
 		if ciopConfig.Tests[i].As != inject.Test {
@@ -473,6 +474,9 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 		}
 		jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, fakeProwgenInfo, prowgen.NewCiOperatorPodSpecGenerator(), ciopConfig.Tests[i])
 		jobBaseGen.PodSpec.Add(prowgen.InjectTestFrom(inject))
+		if aggregateIndex != nil {
+			jobBaseGen.PodSpec.Add(prowgen.TargetAdditionalSuffix(strconv.Itoa(*aggregateIndex)))
+		}
 
 		// Avoid sharing when we run the same job multiple times.
 		// PRPQR name should be safe to use as a discriminating input, because
@@ -482,13 +486,18 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 
 		// TODO(muller): Solve cluster assignment.
 		// The proper solution is to wire DetermineClusterForJob here but it is a more invasive change
-		if strings.Contains(inject.Test, "vsphere") {
-			jobBaseGen.Cluster("vsphere")
-		} else {
+		switch {
+		case strings.Contains(inject.Test, "vsphere"):
+			jobBaseGen.Cluster("vsphere02")
+		case strings.Contains(inject.Test, "metal") || strings.Contains(inject.Test, "telco5g") || strings.Contains(inject.Test, "e2e-agent"):
+			jobBaseGen.Cluster("build05")
+		default:
 			jobBaseGen.Cluster("build01")
 		}
 
-		periodic = prowgen.GeneratePeriodicForTest(jobBaseGen, fakeProwgenInfo, "@yearly", "", false, ciopConfig.CanonicalGoRepository)
+		periodic = prowgen.GeneratePeriodicForTest(jobBaseGen, fakeProwgenInfo, prowgen.FromConfigSpec(ciopConfig), func(options *prowgen.GeneratePeriodicOptions) {
+			options.Cron = "@yearly"
+		})
 		periodic.Name = generateJobNameToSubmit(baseCiop, inject, pr)
 		break
 	}
@@ -595,7 +604,9 @@ func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobNa
 
 	jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, &prowgen.ProwgenInfo{}, prowgen.NewCiOperatorPodSpecGenerator(), ciopConfig.Tests[0])
 
-	periodic := prowgen.GeneratePeriodicForTest(jobBaseGen, &prowgen.ProwgenInfo{}, "@yearly", "", false, ciopConfig.CanonicalGoRepository)
+	periodic := prowgen.GeneratePeriodicForTest(jobBaseGen, &prowgen.ProwgenInfo{}, prowgen.FromConfigSpec(ciopConfig), func(options *prowgen.GeneratePeriodicOptions) {
+		options.Cron = "@yearly"
+	})
 	periodic.Name = aggregatorJobName
 
 	// Aggregator jobs need more time to finish than the jobs they are aggregating. The default job timeout in CI is set to 4h

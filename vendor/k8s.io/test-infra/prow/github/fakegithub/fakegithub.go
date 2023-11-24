@@ -70,6 +70,8 @@ type FakeClient struct {
 
 	// org/repo#number:body
 	IssueCommentsAdded []string
+	// org/repo#issuecommentid:body
+	IssueCommentsEdited []string
 	// org/repo#issuecommentid
 	IssueCommentsDeleted []string
 
@@ -154,7 +156,7 @@ type FakeClient struct {
 
 type TeamWithMembers struct {
 	Team    github.Team
-	Members sets.String
+	Members sets.Set[string]
 }
 
 func (f *FakeClient) BotUser() (*github.UserData, error) {
@@ -286,12 +288,22 @@ func (f *FakeClient) CreateCommentWithContext(_ context.Context, owner, repo str
 	return nil
 }
 
-// EditComment edits a comment. Its a stub that does nothing.
+// EditComment edits a comment.
 func (f *FakeClient) EditComment(org, repo string, ID int, comment string) error {
 	return f.EditCommentWithContext(context.Background(), org, repo, ID, comment)
 }
 
 func (f *FakeClient) EditCommentWithContext(_ context.Context, org, repo string, ID int, comment string) error {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+	f.IssueCommentsEdited = append(f.IssueCommentsEdited, fmt.Sprintf("%s/%s#%d:%s", org, repo, ID, comment))
+	for _, ics := range f.IssueComments {
+		for _, ic := range ics {
+			if ic.ID == ID {
+				ic.Body = comment
+			}
+		}
+	}
 	return nil
 }
 
@@ -346,6 +358,11 @@ func (f *FakeClient) DeleteCommentWithContext(_ context.Context, owner, repo str
 
 // DeleteStaleComments deletes comments flagged by isStale.
 func (f *FakeClient) DeleteStaleComments(org, repo string, number int, comments []github.IssueComment, isStale func(github.IssueComment) bool) error {
+	return f.DeleteStaleCommentsWithContext(context.Background(), org, repo, number, comments, isStale)
+}
+
+// DeleteStaleCommentsWithContext deletes comments flagged by isStale with a provided context.
+func (f *FakeClient) DeleteStaleCommentsWithContext(ctx context.Context, org, repo string, number int, comments []github.IssueComment, isStale func(github.IssueComment) bool) error {
 	if comments == nil {
 		comments, _ = f.ListIssueComments(org, repo, number)
 	}
@@ -441,6 +458,22 @@ func (f *FakeClient) CloseIssue(org, repo string, number int) error {
 	}
 
 	f.Issues[number].State = "closed"
+	f.Issues[number].StateReason = "completed"
+
+	return nil
+}
+
+func (f *FakeClient) CloseIssueAsNotPlanned(org, repo string, number int) error {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	if _, ok := f.Issues[number]; !ok {
+		return fmt.Errorf("issue number %d does not exist", number)
+	}
+
+	f.Issues[number].State = "closed"
+	f.Issues[number].StateReason = "not_planned"
+
 	return nil
 }
 
@@ -543,10 +576,10 @@ func (f *FakeClient) GetIssueLabels(owner, repo string, number int) ([]github.La
 	defer f.lock.RUnlock()
 	re := regexp.MustCompile(fmt.Sprintf(`^%s/%s#%d:(.*)$`, owner, repo, number))
 	la := []github.Label{}
-	allLabels := sets.NewString(f.IssueLabelsExisting...)
+	allLabels := sets.New[string](f.IssueLabelsExisting...)
 	allLabels.Insert(f.IssueLabelsAdded...)
 	allLabels.Delete(f.IssueLabelsRemoved...)
-	for _, l := range allLabels.List() {
+	for _, l := range sets.List(allLabels) {
 		groups := re.FindStringSubmatch(l)
 		if groups != nil {
 			la = append(la, github.Label{Name: groups[1]})
@@ -557,16 +590,26 @@ func (f *FakeClient) GetIssueLabels(owner, repo string, number int) ([]github.La
 
 // AddLabel adds a label
 func (f *FakeClient) AddLabel(owner, repo string, number int, label string) error {
-	return f.AddLabels(owner, repo, number, label)
+	return f.AddLabelsWithContext(context.Background(), owner, repo, number, label)
+}
+
+// AddLabelWithContext adds a label with a provided context
+func (f *FakeClient) AddLabelWithContext(ctx context.Context, owner, repo string, number int, label string) error {
+	return f.AddLabelsWithContext(context.Background(), owner, repo, number, label)
 }
 
 // AddLabels adds a list of labels
 func (f *FakeClient) AddLabels(owner, repo string, number int, labels ...string) error {
+	return f.AddLabelsWithContext(context.Background(), owner, repo, number, labels...)
+}
+
+// AddLabelsWithContext adds a list of labels with a provided context
+func (f *FakeClient) AddLabelsWithContext(ctx context.Context, owner, repo string, number int, labels ...string) error {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 	for _, label := range labels {
 		labelString := fmt.Sprintf("%s/%s#%d:%s", owner, repo, number, label)
-		if sets.NewString(f.IssueLabelsAdded...).Has(labelString) {
+		if sets.New[string](f.IssueLabelsAdded...).Has(labelString) {
 			return fmt.Errorf("cannot add %v to %s/%s/#%d", label, owner, repo, number)
 		}
 		if f.RepoLabelsExisting == nil {
@@ -591,6 +634,11 @@ func (f *FakeClient) AddLabels(owner, repo string, number int, labels ...string)
 
 // RemoveLabel removes a label
 func (f *FakeClient) RemoveLabel(owner, repo string, number int, label string) error {
+	return f.RemoveLabelWithContext(context.Background(), owner, repo, number, label)
+}
+
+// RemoveLabelWithContext removes a label with a provided context
+func (f *FakeClient) RemoveLabelWithContext(ctx context.Context, owner, repo string, number int, label string) error {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 	labelString := fmt.Sprintf("%s/%s#%d:%s", owner, repo, number, label)
@@ -601,8 +649,13 @@ func (f *FakeClient) RemoveLabel(owner, repo string, number int, label string) e
 	return fmt.Errorf("cannot remove %v from %s/%s/#%d", label, owner, repo, number)
 }
 
-// FindIssues returns f.Issues
+// FindIssues returns the same results as FindIssuesWithOrg
 func (f *FakeClient) FindIssues(query, sort string, asc bool) ([]github.Issue, error) {
+	return f.FindIssuesWithOrg("", query, sort, asc)
+}
+
+// FindIssuesWithOrg returns f.Issues
+func (f *FakeClient) FindIssuesWithOrg(org, query, sort string, asc bool) ([]github.Issue, error) {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 	var issues []github.Issue
@@ -666,10 +719,12 @@ func (f *FakeClient) ListTeams(org string) ([]github.Team, error) {
 	return []github.Team{
 		{
 			ID:   0,
+			Slug: "admins",
 			Name: "Admins",
 		},
 		{
 			ID:   42,
+			Slug: "leads",
 			Name: "Leads",
 		},
 	}, nil
@@ -687,6 +742,24 @@ func (f *FakeClient) ListTeamMembers(org string, teamID int, role string) ([]git
 		42: {{Login: "sig-lead"}},
 	}
 	members, ok := teams[teamID]
+	if !ok {
+		return []github.TeamMember{}, nil
+	}
+	return members, nil
+}
+
+// ListTeamMembers return a fake team with a single "sig-lead" GitHub teammember
+func (f *FakeClient) ListTeamMembersBySlug(org, teamSlug, role string) ([]github.TeamMember, error) {
+	f.lock.RLock()
+	defer f.lock.RUnlock()
+	if role != github.RoleAll {
+		return nil, fmt.Errorf("unsupported role %v (only all supported)", role)
+	}
+	teams := map[string][]github.TeamMember{
+		"admins": {{Login: "default-sig-lead"}},
+		"leads":  {{Login: "sig-lead"}},
+	}
+	members, ok := teams[teamSlug]
 	if !ok {
 		return []github.TeamMember{}, nil
 	}
@@ -749,7 +822,7 @@ func (f *FakeClient) ListMilestones(org, repo string) ([]github.Milestone, error
 	defer f.lock.RUnlock()
 	milestones := []github.Milestone{}
 	for k, v := range f.MilestoneMap {
-		milestones = append(milestones, github.Milestone{Title: k, Number: v})
+		milestones = append(milestones, github.Milestone{Title: k, Number: v, State: "open"})
 	}
 	return milestones, nil
 }

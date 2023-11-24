@@ -22,7 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	stdio "io"
 	"net/http"
 	"sort"
 	"sync"
@@ -92,7 +92,7 @@ func NewJobAgent(ctx context.Context, pjLister PJListingClient, hiddenOnly, show
 		kc: &filteringProwJobLister{
 			ctx:         ctx,
 			client:      pjLister,
-			hiddenRepos: func() sets.String { return sets.NewString(cfg().Deck.HiddenRepos...) },
+			hiddenRepos: func() sets.Set[string] { return sets.New[string](cfg().Deck.HiddenRepos...) },
 			hiddenOnly:  hiddenOnly,
 			showHidden:  showHidden,
 			tenantIDs:   tenantIDs,
@@ -107,7 +107,7 @@ type filteringProwJobLister struct {
 	ctx         context.Context
 	client      PJListingClient
 	cfg         config.Getter
-	hiddenRepos func() sets.String
+	hiddenRepos func() sets.Set[string]
 	hiddenOnly  bool
 	showHidden  bool
 	tenantIDs   []string
@@ -265,7 +265,7 @@ func (ja *JobAgent) GetJobLog(job, id string, container string) ([]byte, error) 
 			return nil, err
 		}
 		defer resp.Body.Close()
-		return ioutil.ReadAll(resp.Body)
+		return stdio.ReadAll(resp.Body)
 
 	}
 	return nil, fmt.Errorf("cannot get logs for prowjob %q with agent %q: the agent is missing from the prow config file", j.ObjectMeta.Name, j.Spec.Agent)
@@ -282,7 +282,12 @@ type byPJStartTime []prowapi.ProwJob
 func (a byPJStartTime) Len() int      { return len(a) }
 func (a byPJStartTime) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a byPJStartTime) Less(i, j int) bool {
-	return a[i].Status.StartTime.Time.After(a[j].Status.StartTime.Time)
+	if a[i].Status.StartTime.Time != a[j].Status.StartTime.Time {
+		return a[i].Status.StartTime.Time.After(a[j].Status.StartTime.Time)
+	}
+	// Start time only has second granularity and we often start many jobs in the
+	// same second. Use the name as tie breaker.
+	return a[i].Spec.Job < a[j].Spec.Job
 }
 
 func (ja *JobAgent) update() error {

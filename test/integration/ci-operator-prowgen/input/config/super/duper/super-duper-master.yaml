@@ -13,11 +13,12 @@ images:
   to: test-image
 operator:
   bundles:
-  - dockerfile_path: bundle.Dockerfile
-    context_dir: manifests
-  - as: my-bundle
+  - context_dir: manifests
     dockerfile_path: bundle.Dockerfile
+  - as: my-bundle
     context_dir: manifests
+    dockerfile_path: bundle.Dockerfile
+    optional: true
 promotion:
   name: other
   namespace: ocp
@@ -60,19 +61,19 @@ tests:
     cluster_profile: aws
 - as: e2e-aws-nightly-interval
   commands: make e2e
-  interval: '24h'
+  interval: 24h
   openshift_ansible:
     cluster_profile: aws
 - as: steps
   steps:
     test:
-      - as: do-nothing
-        commands: exit 0
-        from: base
-        resources:
-          requests:
-            cpu: 100m
-            memory: 200Mi
+    - as: do-nothing
+      commands: exit 0
+      from: base
+      resources:
+        requests:
+          cpu: 100m
+          memory: 200Mi
 - as: registry
   steps:
     workflow: workflow

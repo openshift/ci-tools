@@ -114,7 +114,7 @@ func generateTestConfigFiles() config.DataByFilename {
 	}
 }
 
-var ignoreUnexported = cmpopts.IgnoreUnexported(prowconfig.Presubmit{}, prowconfig.Brancher{}, prowconfig.RegexpChangeMatcher{})
+var ignoreUnexported = cmpopts.IgnoreUnexported(prowconfig.Presubmit{}, prowconfig.Brancher{}, prowconfig.RegexpChangeMatcher{}, prowconfig.Periodic{})
 
 func TestInlineCiopConfig(t *testing.T) {
 	unresolvedConfig := api.ReleaseBuildConfiguration{
@@ -294,7 +294,7 @@ func TestInlineCiopConfig(t *testing.T) {
 	resolver := registry.NewResolver(references, chains, workflows, observers)
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			testLoggers := Loggers{logrus.New(), logrus.New()}
+			logger := logrus.NewEntry(logrus.New())
 			if tc.command == "" {
 				tc.command = "ci-operator"
 			}
@@ -305,7 +305,7 @@ func TestInlineCiopConfig(t *testing.T) {
 			job := makePresubmit(tc.command, tc.sourceEnv, args)
 			expectedJob := makePresubmit(tc.command, tc.expectedEnv, args)
 
-			imageStreamTags, err := inlineCiOpConfig(&job.Spec.Containers[0], configs, resolver, tc.metadata, tc.testname, testLoggers)
+			imageStreamTags, err := inlineCiOpConfig(&job.Spec.Containers[0], configs, resolver, tc.metadata, tc.testname, logger)
 
 			if tc.expectedError && err == nil {
 				t.Fatalf("Expected inlineCiopConfig() to return an error, none returned")
@@ -341,7 +341,7 @@ func makeTestingPresubmit(name, context, branch string) *prowconfig.Presubmit {
 				}},
 			},
 		},
-		RerunCommand: "/test pj-rehearse",
+		RerunCommand: fmt.Sprintf("/pj-rehearse %s", name),
 		Reporter:     prowconfig.Reporter{Context: context},
 		Brancher: prowconfig.Brancher{Branches: []string{
 			fmt.Sprintf("^%s$", branch),
@@ -456,7 +456,7 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 	}
 }
 
-func makeTestingProwJob(namespace, jobName, context string, refs *pjapi.Refs, org, repo, branch, configSpec, jobURLPrefix string) *pjapi.ProwJob {
+func makeTestingProwJob(namespace, rehearseJobName, context, testName string, refs *pjapi.Refs, org, repo, branch, configSpec, jobURLPrefix string) *pjapi.ProwJob {
 	return &pjapi.ProwJob{
 		TypeMeta: metav1.TypeMeta{Kind: "ProwJob", APIVersion: "prow.k8s.io/v1"},
 		ObjectMeta: metav1.ObjectMeta{
@@ -464,23 +464,23 @@ func makeTestingProwJob(namespace, jobName, context string, refs *pjapi.Refs, or
 			Namespace: namespace,
 			Labels: map[string]string{
 				"created-by-prow":       "true",
-				"prow.k8s.io/job":       jobName,
+				"prow.k8s.io/job":       rehearseJobName,
 				"prow.k8s.io/refs.org":  refs.Org,
 				"prow.k8s.io/refs.repo": refs.Repo,
 				"prow.k8s.io/type":      "presubmit",
 				"prow.k8s.io/refs.pull": strconv.Itoa(refs.Pulls[0].Number),
 				Label:                   strconv.Itoa(refs.Pulls[0].Number),
 			},
-			Annotations: map[string]string{"prow.k8s.io/job": jobName},
+			Annotations: map[string]string{"prow.k8s.io/job": rehearseJobName},
 		},
 		Spec: pjapi.ProwJobSpec{
 			Agent:        "kubernetes",
 			Type:         pjapi.PresubmitJob,
-			Job:          jobName,
+			Job:          rehearseJobName,
 			Refs:         refs,
 			Report:       true,
 			Context:      context,
-			RerunCommand: "/test pj-rehearse",
+			RerunCommand: fmt.Sprintf("/pj-rehearse %s", testName),
 			ExtraRefs: []pjapi.Refs{
 				{
 					Org:     org,
@@ -537,20 +537,20 @@ func TestExecuteJobsErrors(t *testing.T) {
 	testCases := []struct {
 		description  string
 		jobs         map[string][]prowconfig.Presubmit
-		failToCreate sets.String
+		failToCreate sets.Set[string]
 	}{{
 		description: "fail to Create a prowjob",
 		jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
 			*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
 		}},
-		failToCreate: sets.NewString("rehearse-123-job1"),
+		failToCreate: sets.New[string]("rehearse-123-job1"),
 	}, {
 		description: "fail to Create one of two prowjobs",
 		jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
 			*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
 			*makeTestingPresubmit("job2", "ci/prow/job2", "master"),
 		}},
-		failToCreate: sets.NewString("rehearse-123-job2"),
+		failToCreate: sets.New[string]("rehearse-123-job2"),
 	}}
 
 	references, chains, workflows, _, _, observers, err := load.Registry(testingRegistry, load.RegistryFlag(0))
@@ -560,7 +560,7 @@ func TestExecuteJobsErrors(t *testing.T) {
 	resolver := registry.NewResolver(references, chains, workflows, observers)
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			testLoggers := Loggers{logrus.New(), logrus.New()}
+			logger := logrus.NewEntry(logrus.New())
 			client := newTC()
 			client.createReactors = append(client.createReactors,
 				func(in runtime.Object) error {
@@ -573,13 +573,13 @@ func TestExecuteJobsErrors(t *testing.T) {
 				setSuccessCreateReactor,
 			)
 
-			jc := NewJobConfigurer(testCiopConfigs, &prowconfig.Config{}, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
+			jc := NewJobConfigurer(testCiopConfigs, &prowconfig.Config{}, resolver, testPrNumber, logger, nil, nil, makeBaseRefs())
 
 			_, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
 			}
-			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, testLoggers, client, testNamespace)
+			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, logger, client, testNamespace)
 			executor.pollFunc = threetimesTryingPoller
 			_, err = executor.ExecuteJobs()
 
@@ -630,7 +630,7 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 	resolver := registry.NewResolver(references, chains, workflows, observers)
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			testLoggers := Loggers{logrus.New(), logrus.New()}
+			logger := logrus.NewEntry(logrus.New())
 			client := newTC()
 			client.createReactors = append(client.createReactors,
 				func(in runtime.Object) error {
@@ -640,12 +640,12 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 				},
 			)
 
-			jc := NewJobConfigurer(testCiopConfigs, &prowconfig.Config{}, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
+			jc := NewJobConfigurer(testCiopConfigs, &prowconfig.Config{}, resolver, testPrNumber, logger, nil, nil, makeBaseRefs())
 			_, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
 			}
-			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, false, testLoggers, client, testNamespace)
+			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, false, logger, client, testNamespace)
 			executor.pollFunc = threetimesTryingPoller
 			success, _ := executor.ExecuteJobs()
 
@@ -692,11 +692,11 @@ func TestExecuteJobsPositive(t *testing.T) {
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job1",
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job1"),
-					testRefs, targetOrg, targetRepo, "master", job1Cfg, targetOrgRepoPrefix).Spec,
+					"job1", testRefs, targetOrg, targetRepo, "master", job1Cfg, targetOrgRepoPrefix).Spec,
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job2",
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job2"),
-					testRefs, targetOrg, targetRepo, "master", job2Cfg, targetOrgRepoPrefix).Spec,
+					"job2", testRefs, targetOrg, targetRepo, "master", job2Cfg, targetOrgRepoPrefix).Spec,
 			},
 			expectedImageStreamTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
 		}, {
@@ -709,11 +709,11 @@ func TestExecuteJobsPositive(t *testing.T) {
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job1",
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job1"),
-					testRefs, targetOrg, targetRepo, "master", job1Cfg, targetOrgRepoPrefix).Spec,
+					"job1", testRefs, targetOrg, targetRepo, "master", job1Cfg, targetOrgRepoPrefix).Spec,
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job2",
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "not-master", "job2"),
-					testRefs, targetOrg, targetRepo, "not-master", job2Cfg, targetOrgRepoPrefix).Spec,
+					"job2", testRefs, targetOrg, targetRepo, "not-master", job2Cfg, targetOrgRepoPrefix).Spec,
 			},
 			expectedImageStreamTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
 		},
@@ -727,11 +727,11 @@ func TestExecuteJobsPositive(t *testing.T) {
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job1",
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job1"),
-					testRefs, targetOrg, targetRepo, "master", job1Cfg, targetOrgRepoPrefix).Spec,
+					"job1", testRefs, targetOrg, targetRepo, "master", job1Cfg, targetOrgRepoPrefix).Spec,
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job2",
 					fmt.Sprintf(rehearseJobContextTemplate, anotherTargetOrgRepo, "master", "job2"),
-					testRefs, anotherTargetOrg, anotherTargetRepo, "master", job2Cfg, "https://star.com/").Spec,
+					"job2", testRefs, anotherTargetOrg, anotherTargetRepo, "master", job2Cfg, "https://star.com/").Spec,
 			},
 			expectedImageStreamTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
 		}, {
@@ -748,7 +748,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 	resolver := registry.NewResolver(references, chains, workflows, observers)
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			testLoggers := Loggers{logrus.New(), logrus.New()}
+			logger := logrus.NewEntry(logrus.New())
 			client := newTC()
 			client.createReactors = append(client.createReactors, setSuccessCreateReactor)
 
@@ -761,7 +761,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 							targetOrgRepo: targetOrgRepoPrefix,
 						}},
 				}}
-			jc := NewJobConfigurer(testCiopConfigs, &pc, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
+			jc := NewJobConfigurer(testCiopConfigs, &pc, resolver, testPrNumber, logger, nil, nil, makeBaseRefs())
 			imageStreamTags, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
@@ -769,7 +769,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 			if diff := cmp.Diff(imageStreamTags, tc.expectedImageStreamTagMap, cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("returned imageStreamTags do not match expected: %s", diff)
 			}
-			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, testLoggers, client, testNamespace)
+			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, logger, client, testNamespace)
 			success, err := executor.ExecuteJobs()
 
 			if err != nil {
@@ -803,7 +803,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 }
 
 func TestWaitForJobs(t *testing.T) {
-	loggers := Loggers{logrus.New(), logrus.New()}
+	logger := logrus.NewEntry(logrus.New())
 	pjSuccess0 := pjapi.ProwJob{
 		ObjectMeta: metav1.ObjectMeta{Name: "success0"},
 		Status:     pjapi.ProwJobStatus{State: pjapi.SuccessState},
@@ -834,7 +834,7 @@ func TestWaitForJobs(t *testing.T) {
 	}
 	testCases := []struct {
 		id      string
-		pjs     sets.String
+		pjs     sets.Set[string]
 		events  []runtime.Object
 		success bool
 		err     error
@@ -844,11 +844,11 @@ func TestWaitForJobs(t *testing.T) {
 	}, {
 		id:      "one successful job",
 		success: true,
-		pjs:     sets.NewString("success0"),
+		pjs:     sets.New[string]("success0"),
 		events:  []runtime.Object{&pjSuccess0},
 	}, {
 		id:  "mixed states",
-		pjs: sets.NewString("failure", "success0", "aborted", "error"),
+		pjs: sets.New[string]("failure", "success0", "aborted", "error"),
 		events: []runtime.Object{
 			&pjFailure, &pjPending, &pjSuccess0,
 			&pjTriggered, &pjAborted, &pjError,
@@ -856,16 +856,16 @@ func TestWaitForJobs(t *testing.T) {
 	}, {
 		id:      "ignored states",
 		success: true,
-		pjs:     sets.NewString("success0"),
+		pjs:     sets.New[string]("success0"),
 		events:  []runtime.Object{&pjPending, &pjSuccess0, &pjTriggered},
 	}, {
 		id:      "not watched",
 		success: true,
-		pjs:     sets.NewString("success1"),
+		pjs:     sets.New[string]("success1"),
 		events:  []runtime.Object{&pjSuccess0, &pjFailure, &pjSuccess1},
 	}, {
 		id:     "not watched failure",
-		pjs:    sets.NewString("failure"),
+		pjs:    sets.New[string]("failure"),
 		events: []runtime.Object{&pjSuccess0, &pjFailure},
 	}}
 	for idx := range testCases {
@@ -873,7 +873,7 @@ func TestWaitForJobs(t *testing.T) {
 		t.Run(tc.id, func(t *testing.T) {
 			client := newTC(tc.events...)
 
-			executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, loggers, client, "")
+			executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, logger, client, "")
 			executor.pollFunc = threetimesTryingPoller
 			success, err := executor.waitForJobs(tc.pjs, &ctrlruntimeclient.ListOptions{})
 			if err != tc.err {
@@ -902,9 +902,9 @@ func TestWaitForJobsRetries(t *testing.T) {
 		return nil
 	})
 
-	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, Loggers{logrus.New(), logrus.New()}, client, "")
+	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, logrus.NewEntry(logrus.New()), client, "")
 	executor.pollFunc = threetimesTryingPoller
-	success, err := executor.waitForJobs(sets.String{"j": {}}, &ctrlruntimeclient.ListOptions{})
+	success, err := executor.waitForJobs(sets.Set[string]{"j": {}}, &ctrlruntimeclient.ListOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -914,22 +914,19 @@ func TestWaitForJobsRetries(t *testing.T) {
 }
 
 func TestWaitForJobsLog(t *testing.T) {
-	jobLogger, jobHook := logrustest.NewNullLogger()
-	dbgLogger, dbgHook := logrustest.NewNullLogger()
-	dbgLogger.SetLevel(logrus.DebugLevel)
-	client := fakectrlruntimeclient.NewFakeClient(
+	logger, hook := logrustest.NewNullLogger()
+	client := fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 		&pjapi.ProwJob{
 			ObjectMeta: metav1.ObjectMeta{Name: "success"},
 			Status:     pjapi.ProwJobStatus{State: pjapi.SuccessState}},
 		&pjapi.ProwJob{
 			ObjectMeta: metav1.ObjectMeta{Name: "failure"},
 			Status:     pjapi.ProwJobStatus{State: pjapi.FailureState}},
-	)
-	loggers := Loggers{jobLogger, dbgLogger}
+	).Build()
 
-	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, loggers, client, "")
+	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, logger.WithFields(nil), client, "")
 	executor.pollFunc = threetimesTryingPoller
-	_, err := executor.waitForJobs(sets.NewString("success", "failure"), &ctrlruntimeclient.ListOptions{})
+	_, err := executor.waitForJobs(sets.New[string]("success", "failure"), &ctrlruntimeclient.ListOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -946,84 +943,155 @@ func TestWaitForJobsLog(t *testing.T) {
 		}
 	}
 	successState, failureState := pjapi.SuccessState, pjapi.FailureState
-	check(jobHook, "success", logrus.InfoLevel, &successState)
-	check(jobHook, "failure", logrus.ErrorLevel, &failureState)
-	check(dbgHook, "success", logrus.DebugLevel, nil)
-	check(dbgHook, "failure", logrus.DebugLevel, nil)
+	check(hook, "success", logrus.InfoLevel, &successState)
+	check(hook, "failure", logrus.InfoLevel, &failureState)
 }
 
 func TestFilterPresubmits(t *testing.T) {
-	labels := map[string]string{"pj-rehearse.openshift.io/can-be-rehearsed": "true"}
+	canBeRehearsed := map[string]string{"pj-rehearse.openshift.io/can-be-rehearsed": "true"}
 
 	testCases := []struct {
 		description string
-		crippleFunc func(*prowconfig.Presubmit) map[string][]prowconfig.Presubmit
-		expected    func(*prowconfig.Presubmit) config.Presubmits
+		presubmits  config.Presubmits
+		expected    config.Presubmits
 	}{
 		{
 			description: "basic presubmit job, allowed",
-			crippleFunc: func(j *prowconfig.Presubmit) map[string][]prowconfig.Presubmit {
-				j.Spec.Volumes = []v1.Volume{{Name: "volume"}}
-				j.Labels = labels
-				return map[string][]prowconfig.Presubmit{"org/repo": {*j}}
-			},
-			expected: func(j *prowconfig.Presubmit) config.Presubmits {
-				j.Spec.Volumes = []v1.Volume{{Name: "volume"}}
-				return config.Presubmits{"org/repo": {*j}}
-			},
+			presubmits:  config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test")}},
+			expected:    config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test")}},
 		},
 		{
 			description: "job with no rehearse label, not allowed",
-			crippleFunc: func(j *prowconfig.Presubmit) map[string][]prowconfig.Presubmit {
-				return map[string][]prowconfig.Presubmit{"org/repo": {*j}}
-			},
-			expected: func(j *prowconfig.Presubmit) config.Presubmits {
-				return config.Presubmits{}
-			},
+			presubmits:  config.Presubmits{"org/repo": {*makePresubmit(map[string]string{}, false, "pull-ci-organization-repo-master-test")}},
+			expected:    config.Presubmits{},
 		},
 		{
 			description: "hidden job, not allowed",
-			crippleFunc: func(j *prowconfig.Presubmit) map[string][]prowconfig.Presubmit {
-				j.Labels = labels
-				j.Hidden = true
-				return map[string][]prowconfig.Presubmit{"org/repo": {*j}}
+			presubmits:  config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, true, "pull-ci-organization-repo-master-test")}},
+			expected:    config.Presubmits{},
+		},
+		{
+			description: "multiple jobs, some allowed",
+			presubmits: config.Presubmits{"org/repo": {
+				*makePresubmit(canBeRehearsed, true, "pull-ci-organization-repo-master-test-0"),
+				*makePresubmit(map[string]string{}, false, "pull-ci-organization-repo-master-test-1"),
+				*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test-2"),
+				*makePresubmit(map[string]string{}, false, "pull-ci-organization-repo-master-test-3"),
+				*makePresubmit(canBeRehearsed, true, "pull-ci-organization-repo-master-test-4"),
+				*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test-5")},
 			},
-			expected: func(j *prowconfig.Presubmit) config.Presubmits {
-				return config.Presubmits{}
+			expected: config.Presubmits{"org/repo": {
+				*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test-2"),
+				*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test-5")},
 			},
+		},
+		{
+			description: "multiple repos, some jobs allowed",
+			presubmits: config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test"), *makePresubmit(map[string]string{}, false, "pull-ci-organization-repo-master-test")},
+				"org/different": {*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test")}},
+			expected: config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test")},
+				"org/different": {*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test")}},
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			basePresubmit := makeBasePresubmit()
-			tc.crippleFunc(basePresubmit)
-			p := filterPresubmits(map[string][]prowconfig.Presubmit{"org/repo": {*basePresubmit}}, logrus.New())
-
-			expected := tc.expected(basePresubmit)
-			if !equality.Semantic.DeepEqual(expected, p) {
-				t.Fatalf("Found: %#v\nExpected: %#v", p, expected)
+			presubmits := filterPresubmits(tc.presubmits, logrus.New())
+			if diff := cmp.Diff(tc.expected, presubmits, cmp.AllowUnexported(prowconfig.Brancher{}, prowconfig.RegexpChangeMatcher{}, prowconfig.Presubmit{})); diff != "" {
+				t.Fatalf("filtered didn't match expected, diff: %s", diff)
 			}
 		})
 
 	}
 }
 
-func makeBasePresubmit() *prowconfig.Presubmit {
+func makePresubmit(extraLabels map[string]string, hidden bool, name string) *prowconfig.Presubmit {
+	labels := make(map[string]string)
+	if len(extraLabels) > 0 {
+		labels = extraLabels
+	}
+	labels["ci.openshift.org/rehearse"] = "123"
+
 	return &prowconfig.Presubmit{
 		JobBase: prowconfig.JobBase{
 			Agent:  "kubernetes",
-			Name:   "pull-ci-organization-repo-master-test",
-			Labels: map[string]string{"ci.openshift.org/rehearse": "123"},
+			Name:   name,
+			Labels: labels,
 			Spec: &v1.PodSpec{
 				Containers: []v1.Container{{
 					Command: []string{"ci-operator"},
 					Args:    []string{"arg"},
 				}},
 			},
+			Hidden: hidden,
 		},
-		RerunCommand: "/test pj-rehearse",
+		RerunCommand: fmt.Sprintf("/pj-rehearse %s", name),
 		Reporter:     prowconfig.Reporter{Context: "ci/prow/test"},
 		Brancher:     prowconfig.Brancher{Branches: []string{"^master$"}},
+	}
+}
+
+func TestFilterPeriodics(t *testing.T) {
+	canBeRehearsed := map[string]string{"pj-rehearse.openshift.io/can-be-rehearsed": "true"}
+
+	testCases := []struct {
+		description string
+		periodics   config.Periodics
+		expected    config.Periodics
+	}{
+		{
+			description: "basic periodic job, allowed",
+			periodics:   config.Periodics{"periodic-test": *makePeriodic(canBeRehearsed, false)},
+			expected:    config.Periodics{"periodic-test": *makePeriodic(canBeRehearsed, false)},
+		},
+		{
+			description: "job with no rehearse label, not allowed",
+			periodics:   config.Periodics{"periodic-test": *makePeriodic(map[string]string{}, false)},
+			expected:    config.Periodics{},
+		},
+		{
+			description: "hidden job, not allowed",
+			periodics:   config.Periodics{"periodic-test": *makePeriodic(canBeRehearsed, true)},
+			expected:    config.Periodics{},
+		},
+		{
+			description: "multiple repos, some jobs allowed",
+			periodics: config.Periodics{"periodic-test": *makePeriodic(canBeRehearsed, false),
+				"other-test": *makePeriodic(map[string]string{}, false)},
+			expected: config.Periodics{"periodic-test": *makePeriodic(canBeRehearsed, false)},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			periodics := filterPeriodics(tc.periodics, logrus.New())
+			if diff := cmp.Diff(tc.expected, periodics, cmp.AllowUnexported(prowconfig.Brancher{}, prowconfig.RegexpChangeMatcher{}, prowconfig.Periodic{})); diff != "" {
+				t.Fatalf("filtered didn't match expected, diff: %s", diff)
+			}
+		})
+
+	}
+}
+
+func makePeriodic(extraLabels map[string]string, hidden bool) *prowconfig.Periodic {
+	labels := make(map[string]string)
+	if len(extraLabels) > 0 {
+		labels = extraLabels
+	}
+	labels["ci.openshift.org/rehearse"] = "123"
+
+	return &prowconfig.Periodic{
+		JobBase: prowconfig.JobBase{
+			Agent:  "kubernetes",
+			Name:   "periodic-test",
+			Labels: labels,
+			Spec: &v1.PodSpec{
+				Containers: []v1.Container{{
+					Command: []string{"ci-operator"},
+					Args:    []string{"arg"},
+				}},
+			},
+			Hidden: hidden,
+		},
+		Cron: "0 * * * *",
 	}
 }
 
@@ -1290,7 +1358,7 @@ func TestVariantFromLabels(t *testing.T) {
 }
 
 func newTC(initObjs ...runtime.Object) *tc {
-	return &tc{Client: fakectrlruntimeclient.NewFakeClient(initObjs...)}
+	return &tc{Client: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(initObjs...).Build()}
 }
 
 type tc struct {

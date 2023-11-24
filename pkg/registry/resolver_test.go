@@ -16,6 +16,7 @@ import (
 )
 
 func TestResolve(t *testing.T) {
+	strPtr := func(s string) *string { return &s }
 	reference1 := "generic-unit-test"
 	teardownRef := "teardown"
 	fipsPreChain := "install-fips"
@@ -131,9 +132,33 @@ func TestResolve(t *testing.T) {
 			},
 		},
 		observerMap: map[string]api.Observer{
-			"yes":   {Name: "yes"},
-			"no":    {Name: "no"},
-			"other": {Name: "other"},
+			"yes": {
+				Name:     "yes",
+				From:     "src",
+				Commands: "exit",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			},
+			"no": {
+				Name:     "no",
+				From:     "src",
+				Commands: "exit",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			},
+			"other": {
+				Name:     "other",
+				From:     "src",
+				Commands: "exit",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{
 			ClusterProfile: api.ClusterProfileAWS,
@@ -147,7 +172,90 @@ func TestResolve(t *testing.T) {
 				},
 				Observers: []string{"no", "other"},
 			}},
-			Observers: []api.Observer{{Name: "other"}, {Name: "yes"}},
+			Observers: []api.Observer{
+				{
+					Name:     "other",
+					From:     "src",
+					Commands: "exit",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					},
+				}, {
+					Name:     "yes",
+					From:     "src",
+					Commands: "exit",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					},
+				},
+			},
+		},
+	}, {
+		name: "Resolve observers envs from workflow",
+		config: api.MultiStageTestConfiguration{
+			ClusterProfile: api.ClusterProfileAWS,
+			Test: []api.TestStep{{
+				Reference: &reference1,
+			}},
+			Observers: &api.Observers{
+				Enable: []string{"obsrv"},
+			},
+			Environment: api.TestEnvironment{
+				"env1": "val1",
+			},
+		},
+		stepMap: ReferenceByName{
+			reference1: {
+				As:       "generic-unit-test",
+				From:     "my-image",
+				Commands: "make test/unit",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			},
+		},
+		observerMap: map[string]api.Observer{
+			"obsrv": {
+				Name:     "obsrv",
+				From:     "src",
+				Commands: "exit",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+				Environment: []api.StepParameter{
+					{Name: "env1"},
+				},
+			},
+		},
+		expectedRes: api.MultiStageTestConfigurationLiteral{
+			ClusterProfile: api.ClusterProfileAWS,
+			Test: []api.LiteralTestStep{{
+				As:       "generic-unit-test",
+				From:     "my-image",
+				Commands: "make test/unit",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			}},
+			Observers: []api.Observer{
+				{
+					Name:     "obsrv",
+					From:     "src",
+					Commands: "exit",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					},
+					Environment: []api.StepParameter{
+						{Name: "env1", Default: strPtr("val1")},
+					},
+				},
+			},
 		},
 	}, {
 		name: "Test with broken observer",

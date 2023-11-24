@@ -13,16 +13,22 @@ import (
 
 type options struct {
 	prcreation.PRCreationOptions
-	prTitle      string
-	organization string
-	repo         string
-	branch       string
+	prTitle          string
+	prMessage        string
+	gitCommitMessage string
+	prAssignee       string
+	organization     string
+	repo             string
+	branch           string
 }
 
 func gatherOptions() (*options, error) {
 	opts := options{}
 	opts.PRCreationOptions.AddFlags(flag.CommandLine)
 	flag.StringVar(&opts.prTitle, "pr-title", "", "The title of the PR to create")
+	flag.StringVar(&opts.prMessage, "pr-message", "", "The message of the PR to create")
+	flag.StringVar(&opts.gitCommitMessage, "git-message", "", "The git commit message of the PR to create. If not set, then its value will be composed of other flags")
+	flag.StringVar(&opts.prAssignee, "pr-assignee", "", "The assignee of the PR to create")
 	flag.StringVar(&opts.organization, "organization", "openshift", "The GitHub organization in which the PR should be created")
 	flag.StringVar(&opts.repo, "repo", "release", "The name of the repo in which the PR should be created")
 	flag.StringVar(&opts.branch, "branch", "master", "The branch for which the PR should be created")
@@ -55,7 +61,15 @@ func main() {
 		logrus.WithError(err).Fatal("failed to gather options")
 	}
 
-	if err := opts.PRCreationOptions.UpsertPR(".", opts.organization, opts.repo, opts.branch, opts.prTitle); err != nil {
+	if err := opts.PRCreationOptions.UpsertPR(".",
+		opts.organization,
+		opts.repo,
+		opts.branch,
+		opts.prTitle,
+		prcreation.PrBody(opts.prMessage),
+		prcreation.PrAssignee(opts.prAssignee),
+		prcreation.GitCommitMessage(opts.gitCommitMessage),
+	); err != nil {
 		logrus.WithError(err).Fatal("failed to upsert PR")
 	}
 }

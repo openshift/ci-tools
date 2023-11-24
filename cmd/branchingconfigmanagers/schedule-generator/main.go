@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -137,7 +136,7 @@ func readSchedules(scheduleDir string) (*ocplifecycle.Config, error) {
 		if filepath.Ext(info.Name()) != ".yaml" {
 			return nil
 		}
-		raw, err := ioutil.ReadFile(path)
+		raw, err := os.ReadFile(path)
 		if err != nil {
 			return fmt.Errorf("could not read file: %w", err)
 		}

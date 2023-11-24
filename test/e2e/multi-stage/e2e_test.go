@@ -4,7 +4,7 @@
 package multi_stage
 
 import (
-	"io/ioutil"
+	"os"
 	"strings"
 	"testing"
 
@@ -19,7 +19,7 @@ const (
 )
 
 func TestMultiStage(t *testing.T) {
-	rawConfig, err := ioutil.ReadFile("config.yaml")
+	rawConfig, err := os.ReadFile("config.yaml")
 	if err != nil {
 		t.Fatalf("failed to read config file: %v", err)
 	}
@@ -37,6 +37,13 @@ func TestMultiStage(t *testing.T) {
 			env:     []string{defaultJobSpec},
 			success: true,
 			output:  []string{"Container test in pod success completed successfully"},
+		},
+		{
+			name:    "target-additional-suffix set",
+			args:    []string{"--target=success", "--target-additional-suffix=1"},
+			env:     []string{defaultJobSpec},
+			success: true,
+			output:  []string{"Container test in pod success-1 completed successfully"},
 		},
 		{
 			name:    "without references",
@@ -137,23 +144,26 @@ func TestMultiStage(t *testing.T) {
 		{
 			name:     "e2e-claim",
 			args:     []string{"--unresolved-config=cluster-claim.yaml", "--target=e2e-claim"},
+			env:      []string{defaultJobSpec},
 			needHive: true,
 			success:  true,
-			output:   []string{`Imported release 4.7.`, `to tag release:latest-e2e-claim`, `e2e-claim-claim-step succeeded`},
+			output:   []string{`Imported release 4.11.`, `to tag release:latest-e2e-claim`, `e2e-claim-claim-step succeeded`},
 		},
 		{
 			name:     "e2e-claim-as-custom",
 			args:     []string{"--unresolved-config=cluster-claim.yaml", "--target=e2e-claim-as-custom"},
+			env:      []string{defaultJobSpec},
 			needHive: true,
 			success:  true,
-			output:   []string{`Imported release 4.7.`, `to tag release:custom-e2e-claim-as-custom`, `e2e-claim-as-custom-claim-step succeeded`},
+			output:   []string{`Imported release 4.11.`, `to tag release:custom-e2e-claim-as-custom`, `e2e-claim-as-custom-claim-step succeeded`},
 		},
 		{
 			name:     "e2e-claim depends on release image",
 			args:     []string{"--unresolved-config=cluster-claim.yaml", "--target=e2e-claim-depend-on-release-image"},
+			env:      []string{defaultJobSpec},
 			needHive: true,
 			success:  true,
-			output:   []string{`Imported release 4.7.`, `to tag release:latest-e2e-claim-depend-on-release-image`, `e2e-claim-depend-on-release-image-claim-step succeeded`},
+			output:   []string{`Imported release 4.11.`, `to tag release:latest-e2e-claim-depend-on-release-image`, `e2e-claim-depend-on-release-image-claim-step succeeded`},
 		},
 		{
 			name:    "assembled releases function",
@@ -161,8 +171,8 @@ func TestMultiStage(t *testing.T) {
 			env:     []string{defaultJobSpec},
 			success: true,
 			output: []string{
-				`Imported release 4.5.`, `images to tag release:initial`,
-				`Snapshot integration stream into release 4.7.`, `-latest to tag release:latest`,
+				`Imported release 4.9.`, `images to tag release:initial`,
+				`Snapshot integration stream into release 4.11.`, `-latest to tag release:latest`,
 				`verify-releases-initial succeeded`, `verify-releases-initial-cli succeeded`,
 				`verify-releases-latest succeeded`, `verify-releases-latest-cli succeeded`,
 			},
@@ -173,7 +183,7 @@ func TestMultiStage(t *testing.T) {
 			env:     []string{defaultJobSpec},
 			success: true,
 			output: []string{
-				`Snapshot integration stream into release 4.7.`, `-latest to tag release:latest`,
+				`Snapshot integration stream into release 4.13.`, `-latest to tag release:latest`,
 				`verify-releases-latest-cli succeeded`,
 			},
 		},
@@ -183,7 +193,7 @@ func TestMultiStage(t *testing.T) {
 			env:     []string{defaultJobSpec},
 			success: true,
 			output: []string{
-				`Snapshot integration stream into release 4.7.`, `-latest to tag release:latest`,
+				`Snapshot integration stream into release 4.13.`, `-latest to tag release:latest`,
 				`verify-releases-latest-cli succeeded`,
 			},
 		},
@@ -196,6 +206,16 @@ func TestMultiStage(t *testing.T) {
 				`Adding Dshm Volume to pod: shm-increase-step-with-increased-shm`,
 				`Container test in pod shm-increase-step-with-increased-shm completed successfully`,
 			},
+		},
+		{
+			name: "pending timeout",
+			args: []string{
+				"--pod-pending-timeout", "30s",
+				"--unresolved-config", "config.yaml",
+				"--target", "pending",
+			},
+			env:    []string{defaultJobSpec},
+			output: []string{`pod pending for more than 30s:`},
 		},
 	}
 

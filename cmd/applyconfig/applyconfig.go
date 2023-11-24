@@ -21,16 +21,19 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/logrusutil"
+	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 
 	templateapi "github.com/openshift/api/template/v1"
 	templatescheme "github.com/openshift/client-go/template/clientset/versioned/scheme"
 
 	"github.com/openshift/ci-tools/pkg/api/nsttl"
+	"github.com/openshift/ci-tools/pkg/prowconfigutils"
 	"github.com/openshift/ci-tools/pkg/secrets"
 )
 
 type command string
 type dryRunMethod string
+type applyMethod string
 
 type options struct {
 	user        *nullableStringFlag
@@ -39,6 +42,7 @@ type options struct {
 	context     string
 	kubeConfig  string
 	dryRun      dryRunMethod
+	apply       applyMethod
 }
 
 const (
@@ -50,6 +54,9 @@ const (
 	dryAuto   dryRunMethod = "auto"
 	dryServer dryRunMethod = "server"
 	dryClient dryRunMethod = "client"
+
+	applyServer applyMethod = "server"
+	applyClient applyMethod = "client"
 )
 
 const defaultAdminUser = "system:admin"
@@ -73,7 +80,7 @@ func (n *nullableStringFlag) Set(val string) error {
 
 func gatherOptions() *options {
 	// nonempty dryRun is a safe default (empty means not a dry run)
-	opt := &options{user: &nullableStringFlag{}, dryRun: dryAuto}
+	opt := &options{user: &nullableStringFlag{}, dryRun: dryAuto, apply: applyClient}
 
 	var confirm bool
 	flag.BoolVar(&confirm, "confirm", false, "Set to true to make applyconfig commit the config to the cluster")
@@ -86,6 +93,11 @@ func gatherOptions() *options {
 	var dryMethod string
 	dryRunMethods := strings.Join(validDryRunMethods, ",")
 	flag.StringVar(&dryMethod, "dry-run-method", string(opt.dryRun), fmt.Sprintf("Method to use when running when --confirm is not set to true (valid values: %s)", dryRunMethods))
+
+	var applyMethod string
+	applyMethods := strings.Join([]string{string(applyServer), string(applyClient)}, ",")
+	flag.StringVar(&applyMethod, "apply-method", string(opt.apply), fmt.Sprintf("Method to use when applying the config (valid values: %s). Server-side apply is always enabled for file with names start with '_SS'.", applyMethods))
+
 	flag.Parse()
 
 	if len(opt.directories.Strings()) < 1 || opt.directories.Strings()[0] == "" {
@@ -162,10 +174,11 @@ type configApplier struct {
 	path       string
 	user       string
 	dry        dryRunMethod
+	apply      applyMethod
 	censor     *secrets.DynamicCensor
 }
 
-func makeOcApply(kubeConfig, context, path, user string, dry dryRunMethod) *exec.Cmd {
+func makeOcApply(kubeConfig, context, path, user string, dry dryRunMethod, apply applyMethod) *exec.Cmd {
 	cmd := makeOcCommand(ocApply, kubeConfig, context, path, user, "-o", "name")
 	switch dry {
 	case dryAuto:
@@ -180,18 +193,31 @@ func makeOcApply(kubeConfig, context, path, user string, dry dryRunMethod) *exec
 	case dryNone:
 		// No additional args needed
 	}
+
+	fileName := filepath.Base(path)
+	if strings.HasPrefix(fileName, "SS_") {
+		logrus.Info("Use server-side apply for ", fileName)
+		cmd.Args = append(cmd.Args, "--server-side=true")
+	}
+
+	switch apply {
+	case applyServer:
+		cmd.Args = append(cmd.Args, "--server-side=true")
+	case applyClient:
+		// No additional args needed
+	}
 	return cmd
 }
 
 var namespaceNotFound = regexp.MustCompile(`Error from server \(NotFound\):.*namespaces "(.*)" not found.*`)
 
-func inferMissingNamespaces(applyOutput []byte) sets.String {
-	var ret sets.String
+func inferMissingNamespaces(applyOutput []byte) sets.Set[string] {
+	var ret sets.Set[string]
 	for _, line := range strings.Split(string(applyOutput), "\n") {
 		line := strings.TrimSpace(line)
 		if matches := namespaceNotFound.FindStringSubmatch(line); len(matches) == 2 {
 			if ret == nil {
-				ret = sets.NewString()
+				ret = sets.New[string]()
 			}
 			ret.Insert(matches[1])
 		}
@@ -200,17 +226,17 @@ func inferMissingNamespaces(applyOutput []byte) sets.String {
 }
 
 type namespaceActions struct {
-	Created sets.String
-	Assumed sets.String
+	Created sets.Set[string]
+	Assumed sets.Set[string]
 }
 
-func extractNamespaces(applyOutput []byte) sets.String {
-	var namespaces sets.String
+func extractNamespaces(applyOutput []byte) sets.Set[string] {
+	var namespaces sets.Set[string]
 	for _, line := range strings.Split(string(applyOutput), "\n") {
 		line := strings.TrimSpace(line)
 		if strings.HasPrefix(line, "namespace/") {
 			if namespaces == nil {
-				namespaces = sets.NewString()
+				namespaces = sets.New[string]()
 			}
 			namespaces.Insert(strings.TrimPrefix(line, "namespace/"))
 		}
@@ -260,14 +286,14 @@ func (c *configApplier) doWithRetry(do func() ([]byte, error)) (namespaceActions
 			// via oc create / oc annotate. Otherwise, the TTL annotations would not be
 			// cleaned up when the manifests are actually applied post-merge to the
 			// cluster and NS TTL controller would reap the production namespace.
-			ocApplyCmd := makeOcApply(c.kubeConfig, c.context, "-", c.user, dryNone)
+			ocApplyCmd := makeOcApply(c.kubeConfig, c.context, "-", c.user, dryNone, c.apply)
 			ocApplyCmd.Stdin = bytes.NewBuffer(rawNs)
 			if out, err := c.runAndCheck(ocApplyCmd, "apply"); err != nil {
 				logrus.WithField("missing-namespace", ns).WithField("output", out).WithError(err).Errorf("Failed to create provisional namespace")
 				return false
 			}
 			if namespaces.Assumed == nil {
-				namespaces.Assumed = sets.NewString()
+				namespaces.Assumed = sets.New[string]()
 			}
 			namespaces.Assumed.Insert(ns)
 		}
@@ -284,7 +310,7 @@ func (c *configApplier) doWithRetry(do func() ([]byte, error)) (namespaceActions
 	}
 
 	if namespaces.Created == nil {
-		namespaces.Created = sets.NewString()
+		namespaces.Created = sets.New[string]()
 	}
 
 	namespaces.Created = namespaces.Created.Union(extractNamespaces(out))
@@ -293,7 +319,7 @@ func (c *configApplier) doWithRetry(do func() ([]byte, error)) (namespaceActions
 
 func (c *configApplier) asGenericManifest() (namespaceActions, error) {
 	do := func() ([]byte, error) {
-		cmd := makeOcApply(c.kubeConfig, c.context, c.path, c.user, c.dry)
+		cmd := makeOcApply(c.kubeConfig, c.context, c.path, c.user, c.dry, c.apply)
 		out, err := c.runAndCheck(cmd, "apply")
 		return out, err
 	}
@@ -322,7 +348,7 @@ func (c configApplier) asTemplate(params []templateapi.Parameter) (namespaceActi
 	}
 
 	do := func() ([]byte, error) {
-		ocApplyCmd := makeOcApply(c.kubeConfig, c.context, "-", c.user, c.dry)
+		ocApplyCmd := makeOcApply(c.kubeConfig, c.context, "-", c.user, c.dry, c.apply)
 		ocApplyCmd.Stdin = bytes.NewBuffer(processed)
 		out, err := c.runAndCheck(ocApplyCmd, "apply")
 		return out, err
@@ -352,13 +378,14 @@ func isTemplate(input io.Reader) ([]templateapi.Parameter, bool) {
 	return nil, false
 }
 
-func apply(kubeConfig, context, path, user string, dry dryRunMethod, censor *secrets.DynamicCensor) (namespaceActions, error) {
+func apply(kubeConfig, context, path, user string, dry dryRunMethod, apply applyMethod, censor *secrets.DynamicCensor) (namespaceActions, error) {
 	do := configApplier{
 		kubeConfig: kubeConfig,
 		context:    context,
 		path:       path,
 		user:       user,
 		dry:        dry,
+		apply:      apply,
 		executor:   &commandExecutor{},
 		censor:     censor,
 	}
@@ -376,7 +403,7 @@ func apply(kubeConfig, context, path, user string, dry dryRunMethod, censor *sec
 	return do.asGenericManifest()
 }
 
-func applyConfig(rootDir string, o *options, createdNamespaces sets.String, censor *secrets.DynamicCensor) (sets.String, error) {
+func applyConfig(rootDir string, o *options, createdNamespaces sets.Set[string], censor *secrets.DynamicCensor) (sets.Set[string], error) {
 	failures := false
 	if err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -409,7 +436,7 @@ func applyConfig(rootDir string, o *options, createdNamespaces sets.String, cens
 			return err
 		}
 
-		namespaces, err := apply(o.kubeConfig, o.context, path, o.user.val, o.dryRun, censor)
+		namespaces, err := apply(o.kubeConfig, o.context, path, o.user.val, o.dryRun, o.apply, censor)
 		if err != nil {
 			failures = true
 			return nil
@@ -546,8 +573,17 @@ func main() {
 	}
 	censor := secrets.NewDynamicCensor()
 	logrus.SetFormatter(logrusutil.NewFormatterWithCensor(logrus.StandardLogger().Formatter, &censor))
+
+	prowDisabledClusters, err := prowconfigutils.ProwDisabledClusters(nil)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to get Prow disable clusters")
+	} else if len(prowDisabledClusters) > 0 && targetClusterIsDisabled(sets.New[string](prowDisabledClusters...)) {
+		logrus.WithField("prowDisabledClusters", prowDisabledClusters).Info("Apply no manifests to Prow disabled clusters")
+		return
+	}
+
 	var hadErr bool
-	createdNamespaces := sets.NewString()
+	createdNamespaces := sets.New[string]()
 	for _, dir := range o.directories.Strings() {
 		namespaces, err := applyConfig(dir, o, createdNamespaces, &censor)
 		if err != nil {
@@ -562,4 +598,16 @@ func main() {
 	}
 
 	logrus.Infof("Success!")
+}
+
+func targetClusterIsDisabled(disabledClusters sets.Set[string]) bool {
+	jobName := os.Getenv(downwardapi.JobNameEnv)
+	if jobName != "" {
+		for _, c := range disabledClusters.UnsortedList() {
+			if strings.Contains(jobName, c) {
+				return true
+			}
+		}
+	}
+	return false
 }

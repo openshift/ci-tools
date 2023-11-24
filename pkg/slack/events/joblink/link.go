@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/url"
 	"strconv"
 	"strings"
@@ -263,7 +263,7 @@ func contextFor(logger *logrus.Entry, infos []jobInfo, config JobGetter, gcsClie
 					logger.WithError(err).Warn("Could not open alias for read.")
 					continue
 				}
-				symlink, err := ioutil.ReadAll(reader)
+				symlink, err := io.ReadAll(reader)
 				if err != nil {
 					logger.WithError(err).Warn("Could not read alias.")
 					continue
@@ -359,7 +359,7 @@ func infoFromUrl(url *url.URL) *jobInfo {
 		case "view":
 			return infoForJobView(url)
 		}
-	case api.DomainForService(api.ServiceGCSWeb):
+	case api.DomainForService(api.ServiceGCSWeb), api.DomainForService(api.ServiceGCSStorage):
 		return infoForArtifact(url)
 	}
 	return nil
@@ -409,6 +409,7 @@ func infoForJobView(url *url.URL) *jobInfo {
 
 // infoForArtifact handles URLs like:
 // https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/pr-logs/pull/25585/pull-ci-openshift-origin-master-e2e-aws-disruptive/1319310480841379840/build-log.txt
+// https://storage.googleapis.com/origin-ci-test/pr-logs/pull/openshift_cluster-ingress-operator/836/pull-ci-openshift-cluster-ingress-operator-master-e2e-aws-operator/1583384716713660416/build-log.txt
 func infoForArtifact(url *url.URL) *jobInfo {
 	parts := strings.Split(url.Path, "/")
 	// the last fully numeric path part before user-provided

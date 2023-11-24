@@ -14,9 +14,9 @@ import (
 
 // ForEvents returns a Handler that appropriately routes
 // event callbacks for the handlers we know about
-func ForEvents(client *slack.Client, config config.Getter, gcsClient *storage.Client) events.Handler {
+func ForEvents(client *slack.Client, config config.Getter, gcsClient *storage.Client, keywordsConfig helpdesk.KeywordsConfig, helpdeskAlias, forumChannelId string, requireWorkflowsInForum bool) events.Handler {
 	return events.MultiHandler(
-		helpdesk.Handler(client),
+		helpdesk.Handler(client, keywordsConfig, helpdeskAlias, forumChannelId, requireWorkflowsInForum),
 		mention.Handler(client),
 		joblink.Handler(client, joblink.NewJobGetter(config), gcsClient),
 	)

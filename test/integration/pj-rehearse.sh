@@ -7,7 +7,6 @@ function cleanup() {
 }
 trap "cleanup" EXIT
 
-registry="${OS_ROOT}/test/multistage-registry/"
 suite_dir="${OS_ROOT}/test/integration/pj-rehearse/"
 workdir="${BASETMPDIR}/pj-rehearse"
 repo="${workdir}/release"
@@ -26,23 +25,30 @@ git init --quiet
 git config --local user.name test
 git config --local user.email test
 cp -R "${suite_dir}/master"/* .
-cp -R "${registry}/registry"/ ./ci-operator/step-registry
 git add ci-operator core-services cluster
 git commit -m "Master version of openshift/release" --quiet
 base_sha="$(git rev-parse HEAD)"
-cp -R "${suite_dir}/candidate"/* .
 rm -rf ./ci-operator/step-registry
-cp -R "${registry}/registry2"/ ./ci-operator/step-registry
+cp -R "${suite_dir}/candidate"/* .
 git add ci-operator core-services cluster
 git commit -m "Candidate version of openshift/release" --quiet
 candidate_sha="$(git rev-parse HEAD)"
 popd >/dev/null
 
-export JOB_SPEC='{"type":"presubmit","job":"pull-ci-openshift-release-master-rehearse","buildid":"0","prowjobid":"uuid","refs":{"org":"openshift","repo":"release","base_ref":"master","base_sha":"'${base_sha}'","pulls":[{"number":1234,"author":"petr-muller","sha":"'${candidate_sha}'"}]}}'
+os::cmd::expect_success "ci-operator-checkconfig --config-dir ${suite_dir}/master/ci-operator/config --registry ${suite_dir}/master/ci-operator/step-registry"
+os::cmd::expect_success "ci-operator-checkconfig --config-dir ${suite_dir}/candidate/ci-operator/config --registry ${suite_dir}/candidate/ci-operator/step-registry"
+os::cmd::expect_success "ci-operator-prowgen --from-dir ${suite_dir}/master/ci-operator/config --to-dir ${suite_dir}/master/ci-operator/jobs --registry ${suite_dir}/master/ci-operator/step-registry"
+os::cmd::expect_success '[[ -z "$(git -C '"${suite_dir}"'/master status --short -- .)" ]]'
+os::cmd::expect_success "ci-operator-prowgen --from-dir ${suite_dir}/candidate/ci-operator/config --to-dir ${suite_dir}/candidate/ci-operator/jobs --registry ${suite_dir}/candidate/ci-operator/step-registry"
+os::cmd::expect_success '[[ -z "$(git -C '"${suite_dir}"'/candidate status --short -- .)" ]]'
+
+export PR='{"number": 1234, "user": {"login": "username"},  "base": {"sha": "'${base_sha}'", "ref": "master", "repo": {"name": "release", "owner": {"login": "openshift"}}}, "head": {"sha": "'${candidate_sha}'"}}'
 
 actual="${workdir}/rehearsals.yaml"
-os::cmd::expect_success "pj-rehearse --dry-run=true --candidate-path ${repo} --rehearsal-limit 20 > ${actual}"
+os::cmd::expect_success "pj-rehearse --dry-run=true --dry-run-path ${repo} --pull-request-var PR > ${actual}"
 os::integration::sanitize_prowjob_yaml ${actual}
-os::integration::compare "${actual}" "${suite_dir}/expected.yaml"
+# Substitute the SHA in the job names to a known SHA for comparison
+sed -i -E -e "s/-${candidate_sha}-/-4de8ab7c20656998264a2593116288f5eb070b32-/g" ${actual}
 
+os::integration::compare "${actual}" "${suite_dir}/expected.yaml"
 os::test::junit::declare_suite_end

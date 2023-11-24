@@ -2,7 +2,7 @@ base_images:
   os:
     name: centos
     namespace: openshift
-    tag: '7'
+    tag: 'stream9'
 releases:
   latest:
     release:

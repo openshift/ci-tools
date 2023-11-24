@@ -1,8 +1,10 @@
 package prowgen
 
 import (
+	"fmt"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	utilpointer "k8s.io/utils/pointer"
@@ -56,13 +58,13 @@ func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, 
 			Agent:  string(prowv1.KubernetesAgent),
 			Labels: map[string]string{},
 			UtilityConfig: prowconfig.UtilityConfig{
-				Decorate: utilpointer.BoolPtr(true),
+				Decorate: utilpointer.Bool(true),
 			},
 		},
 	}
 
 	if skipCloning(configSpec) {
-		b.base.UtilityConfig.DecorationConfig = &prowv1.DecorationConfig{SkipCloning: utilpointer.BoolPtr(true)}
+		b.base.UtilityConfig.DecorationConfig = &prowv1.DecorationConfig{SkipCloning: utilpointer.Bool(true)}
 	} else if info.Config.Private {
 		b.base.UtilityConfig.DecorationConfig = &prowv1.DecorationConfig{OauthTokenSecret: &prowv1.OauthTokenSecret{Key: cioperatorapi.OauthTokenSecretKey, Name: cioperatorapi.OauthTokenSecretName}}
 	}
@@ -102,11 +104,18 @@ func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, 
 // one built by NewProwJobBaseBuilder, with additional fields set for test
 func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo, podSpecGenerator CiOperatorPodSpecGenerator, test cioperatorapi.TestStepConfiguration) *prowJobBaseBuilder {
 	p := NewProwJobBaseBuilder(configSpec, info, podSpecGenerator)
+	if test.Cluster != "" {
+		p = p.Cluster(test.Cluster)
+	}
 	p.testName = test.As
 
 	maxCustomDuration := time.Hour * 8
 	if test.Timeout != nil && test.Timeout.Duration <= maxCustomDuration {
-		p.base.UtilityConfig.DecorationConfig.Timeout = test.Timeout
+		u := &p.base.UtilityConfig
+		if u.DecorationConfig == nil {
+			u.DecorationConfig = &prowv1.DecorationConfig{}
+		}
+		u.DecorationConfig.Timeout = test.Timeout
 	}
 
 	p.PodSpec.Add(Secrets(test.Secret), Secrets(test.Secrets...))
@@ -217,6 +226,15 @@ func (p *prowJobBaseBuilder) WithLabel(key, value string) *prowJobBaseBuilder {
 // Build builds and returns the final JobBase instance
 func (p *prowJobBaseBuilder) Build(namePrefix string) prowconfig.JobBase {
 	p.base.Name = p.info.JobName(namePrefix, p.testName)
+	switch p.base.Cluster {
+	case string(cioperatorapi.ClusterARM01):
+		p.PodSpec = p.PodSpec.Add(
+			func(spec *corev1.PodSpec) error {
+				spec.Containers[0].Image = fmt.Sprintf("%s/ci/ci-operator-arm64:latest", cioperatorapi.ServiceDomainArm01Registry)
+				return nil
+			},
+		)
+	}
 	p.base.Spec = p.PodSpec.MustBuild()
 	return p.base
 }

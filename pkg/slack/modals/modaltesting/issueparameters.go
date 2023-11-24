@@ -17,8 +17,8 @@ import (
 
 // ValidateBlockIds ensures that all the fields are present as block identifiers in the view
 func ValidateBlockIds(t *testing.T, view slack.ModalViewRequest, fields ...string) {
-	expected := sets.NewString(fields...)
-	actual := sets.NewString()
+	expected := sets.New[string](fields...)
+	actual := sets.New[string]()
 	for _, block := range view.Blocks.BlockSet {
 		// Slack's dynamic marshalling makes this really hard to extract
 		blockId := reflect.ValueOf(block).Elem().FieldByName("BlockID").String()
@@ -27,10 +27,10 @@ func ValidateBlockIds(t *testing.T, view slack.ModalViewRequest, fields ...strin
 		}
 	}
 	if !expected.Equal(actual) {
-		if missing := expected.Difference(actual).List(); len(missing) > 0 {
+		if missing := sets.List(expected.Difference(actual)); len(missing) > 0 {
 			t.Errorf("view is missing block IDs: %v", missing)
 		}
-		if extra := actual.Difference(expected).List(); len(extra) > 0 {
+		if extra := sets.List(actual.Difference(expected)); len(extra) > 0 {
 			t.Errorf("view has extra block IDs: %v", extra)
 		}
 	}

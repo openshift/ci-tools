@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -24,11 +23,11 @@ func init() {
 
 // CiOperatorCommand exposes a ci-operator invocation to a test and
 // ensures the following semantics:
-//  - the command will get SIGINT 1 minutes before the test deadline
-//  - the command will get SIGKILL 10 seconds before the test deadline
-//  - unique hashes ensure unique test namespaces for concurrent runs
-//  - artifacts will be persisted and jUnit will be mangled to not
-//    pollute the owning test's jUnit output
+//   - the command will get SIGINT 1 minutes before the test deadline
+//   - the command will get SIGKILL 10 seconds before the test deadline
+//   - unique hashes ensure unique test namespaces for concurrent runs
+//   - artifacts will be persisted and jUnit will be mangled to not
+//     pollute the owning test's jUnit output
 type CiOperatorCommand struct {
 	cmd         *exec.Cmd
 	artifactDir string
@@ -90,6 +89,7 @@ func newCiOperatorCommand(t *T) CiOperatorCommand {
 		GCSPushCredentialsFlag(t),
 	)
 	cmd.Env = append(cmd.Env, KubernetesClientEnv(t)...)
+	cmd.Env = append(cmd.Env, "PATH=$PATH:/usr/bin")
 	cmd.Env = append(cmd.Env, fmt.Sprintf("ARTIFACTS=%s", artifactDir))
 	return CiOperatorCommand{
 		cmd:         cmd,
@@ -148,7 +148,7 @@ func (c *CiOperatorCommand) Run() ([]byte, error) {
 }
 
 func (c *CiOperatorCommand) VerboseOutputContains(t *T, name string, fragments ...string) {
-	verboseOutput, err := ioutil.ReadFile(filepath.Join(c.artifactDir, "ci-operator.log"))
+	verboseOutput, err := os.ReadFile(filepath.Join(c.artifactDir, "ci-operator.log"))
 	if err != nil {
 		t.Errorf("could not open ci-operator log for checking output: %v", err)
 		return
@@ -156,6 +156,19 @@ func (c *CiOperatorCommand) VerboseOutputContains(t *T, name string, fragments .
 	for _, item := range fragments {
 		if !bytes.Contains(verboseOutput, []byte(item)) {
 			t.Errorf("%s: could not find line in output\nline: %s\noutput:\n%v", name, item, string(verboseOutput))
+		}
+	}
+}
+
+func (c *CiOperatorCommand) VerboseOutputDoesNotContain(t *T, name string, fragments ...string) {
+	verboseOutput, err := os.ReadFile(filepath.Join(c.artifactDir, "ci-operator.log"))
+	if err != nil {
+		t.Errorf("could not open ci-operator log for checking output: %v", err)
+		return
+	}
+	for _, item := range fragments {
+		if bytes.Contains(verboseOutput, []byte(item)) {
+			t.Errorf("%s: found line in output\nline: %s\noutput:\n%v", name, item, string(verboseOutput))
 		}
 	}
 }

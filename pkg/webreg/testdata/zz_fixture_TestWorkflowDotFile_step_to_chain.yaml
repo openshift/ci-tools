@@ -1,0 +1,46 @@
+digraph Webreg {
+	compound=true;
+	color=blue;
+	fontname="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif,'Apple Color Emoji','Segoe UI Emoji','Segoe UI Symbol','Noto Color Emoji'";
+	node[shape=rectangle fontname="SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace"];
+	rankdir=TB;
+	label="Workflow &#34;step-to-chain&#34;";
+
+	0 [label="ipi-deprovision-deprovision" href="/reference/ipi-deprovision-deprovision"];
+	1 [label="ipi-install-rbac" href="/reference/ipi-install-rbac"];
+	2 [label="ipi-install-install" href="/reference/ipi-install-install"];
+	3 [label="Intentionally left blank"];
+	4 [label="Intentionally left blank"];
+
+	0 -> 1 [lhead=cluster_0 minlen=2];
+	1 -> 2 ;
+	2 -> 3 [ltail=cluster_1 lhead=cluster_2 minlen=2];
+	3 -> 4 [ltail=cluster_2 lhead=cluster_3 minlen=2];
+
+	subgraph cluster_1 {
+		label="Pre";
+		labeljust="l";
+		fontname="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif,'Apple Color Emoji','Segoe UI Emoji','Segoe UI Symbol','Noto Color Emoji'";
+		0;
+		subgraph cluster_0 {
+			label="ipi-install";
+			labeljust="l";
+			href="/chain/ipi-install";
+			fontname="SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace";
+			1;
+			2;
+		}
+	}
+	subgraph cluster_2 {
+		label="Test";
+		labeljust="l";
+		fontname="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif,'Apple Color Emoji','Segoe UI Emoji','Segoe UI Symbol','Noto Color Emoji'";
+		3;
+	}
+	subgraph cluster_3 {
+		label="Post";
+		labeljust="l";
+		fontname="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif,'Apple Color Emoji','Segoe UI Emoji','Segoe UI Symbol','Noto Color Emoji'";
+		4;
+	}
+}

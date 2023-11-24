@@ -8,12 +8,13 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/bombsimon/logrusr"
+	"github.com/bombsimon/logrusr/v3"
 	prometheusclient "github.com/prometheus/client_golang/api"
 	prometheusapi "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/api/option"
 
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/transport"
 	prowConfig "k8s.io/test-infra/prow/config"
@@ -28,6 +29,7 @@ import (
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 
+	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/util"
 )
 
@@ -44,6 +46,8 @@ type options struct {
 	cacheDir           string
 	cacheBucket        string
 	gcsCredentialsFile string
+
+	resultsOptions results.Options
 }
 
 type producerOptions struct {
@@ -56,9 +60,12 @@ type consumerOptions struct {
 	port   int
 	uiPort int
 
-	dataDir              string
-	certDir              string
-	mutateResourceLimits bool
+	dataDir               string
+	certDir               string
+	mutateResourceLimits  bool
+	cpuCap                int64
+	memoryCap             string
+	cpuPriorityScheduling int64
 }
 
 func bindOptions(fs *flag.FlagSet) *options {
@@ -78,6 +85,10 @@ func bindOptions(fs *flag.FlagSet) *options {
 	fs.StringVar(&o.dataDir, "data-dir", "", "Local directory to cache UI data into.")
 	fs.StringVar(&o.cacheBucket, "cache-bucket", "", "GCS bucket name holding cached Prometheus data.")
 	fs.StringVar(&o.gcsCredentialsFile, "gcs-credentials-file", "", "File where GCS credentials are stored.")
+	fs.Int64Var(&o.cpuCap, "cpu-cap", 10, "The maximum CPU request value, ex: 10")
+	fs.StringVar(&o.memoryCap, "memory-cap", "20Gi", "The maximum memory request value, ex: '20Gi'")
+	fs.Int64Var(&o.cpuPriorityScheduling, "cpu-priority-scheduling", 8, "Pods with CPU requests at, or above, this value will be admitted with priority scheduling")
+	o.resultsOptions.Bind(fs)
 	return &o
 }
 
@@ -104,6 +115,16 @@ func (o *options) validate() error {
 		if o.certDir == "" {
 			return errors.New("--serving-cert-dir is required")
 		}
+		if cpuCap := resource.NewQuantity(o.cpuCap, resource.DecimalSI); cpuCap.Sign() <= 0 {
+			return errors.New("--cpu-cap must be greater than 0")
+		}
+		if memoryCap := resource.MustParse(o.memoryCap); memoryCap.Sign() <= 0 {
+			return errors.New("--memory-cap must be greater than 0")
+		}
+		if err := o.resultsOptions.Validate(); err != nil {
+			return err
+		}
+
 	default:
 		return errors.New("--mode must be either \"producer\", \"consumer.ui\", or \"consumer.admission\"")
 	}
@@ -223,7 +244,7 @@ func mainUI(opts *options, cache cache) {
 }
 
 func mainAdmission(opts *options, cache cache) {
-	controllerruntime.SetLogger(logrusr.NewLogger(logrus.StandardLogger()))
+	controllerruntime.SetLogger(logrusr.New(logrus.StandardLogger()))
 
 	restConfig, err := util.LoadClusterConfig()
 	if err != nil {
@@ -233,8 +254,12 @@ func mainAdmission(opts *options, cache cache) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct client.")
 	}
+	reporter, err := opts.resultsOptions.PodScalerReporter()
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create pod-scaler reporter.")
+	}
 
-	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, loaders(cache), opts.mutateResourceLimits)
+	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, reporter)
 }
 
 func loaders(cache cache) map[string][]*cacheReloader {

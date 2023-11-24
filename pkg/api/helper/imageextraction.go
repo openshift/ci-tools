@@ -3,6 +3,7 @@ package helper
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -13,6 +14,16 @@ import (
 // ImageStreamTagMap is a map [types.NamespacedName.String()]types.NamespacedName of
 // ImagestreamTags
 type ImageStreamTagMap map[string]types.NamespacedName
+
+func (istm ImageStreamTagMap) String() string {
+	var ret []string
+
+	for fullTag := range istm {
+		ret = append(ret, fullTag)
+	}
+
+	return strings.Join(ret, ", ")
+}
 
 // MergeImageStramTagMaps merges multiple ImageStreamTagMaps together
 func MergeImageStreamTagMaps(target ImageStreamTagMap, toMerge ...ImageStreamTagMap) {
@@ -109,7 +120,9 @@ func insertTagReferencesFromSteps(config api.MultiStageTestConfigurationLiteral,
 		}
 	}
 	for _, observer := range config.Observers {
-		insert(*observer.FromImage, m)
+		if observer.FromImage != nil {
+			insert(*observer.FromImage, m)
+		}
 	}
 }
 

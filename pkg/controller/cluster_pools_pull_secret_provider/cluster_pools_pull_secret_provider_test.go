@@ -111,7 +111,7 @@ func TestReconcile(t *testing.T) {
 		{
 			name:   "the target secret is created",
 			nn:     types.NamespacedName{Namespace: "ns", Name: "pool"},
-			client: fakeclient.NewFakeClient(srcSecret.DeepCopy(), pool.DeepCopy()),
+			client: fakeclient.NewClientBuilder().WithRuntimeObjects(srcSecret.DeepCopy(), pool.DeepCopy()).Build(),
 			verify: func(client ctrlruntimeclient.Client) error {
 				actual := &corev1.Secret{}
 				if err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: "ns", Name: "pull-secret"}, actual); err != nil {
@@ -136,7 +136,7 @@ func TestReconcile(t *testing.T) {
 		{
 			name:   "the pool doesn't exist",
 			nn:     types.NamespacedName{Namespace: "ns", Name: "pool"},
-			client: fakeclient.NewFakeClient(srcSecret.DeepCopy()),
+			client: fakeclient.NewClientBuilder().WithRuntimeObjects(srcSecret.DeepCopy()).Build(),
 			verify: func(client ctrlruntimeclient.Client) error {
 				if err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: "ns", Name: "pull-secret"}, &corev1.Secret{}); !kerrors.IsNotFound(err) {
 					return fmt.Errorf("expected not found error did not occur")
@@ -147,7 +147,7 @@ func TestReconcile(t *testing.T) {
 		{
 			name:          "the src secret is not there",
 			nn:            types.NamespacedName{Namespace: "ns", Name: "pool"},
-			client:        fakeclient.NewFakeClient(pool.DeepCopy()),
+			client:        fakeclient.NewClientBuilder().WithRuntimeObjects(pool.DeepCopy()).Build(),
 			expectedError: fmt.Errorf("failed to get the secret pull-secret in namespace ci-cluster-pool: %w", fmt.Errorf("secrets \"pull-secret\" not found")),
 			verify: func(client ctrlruntimeclient.Client) error {
 				if err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: "ns", Name: "pull-secret"}, &corev1.Secret{}); !kerrors.IsNotFound(err) {
@@ -159,7 +159,7 @@ func TestReconcile(t *testing.T) {
 		{
 			name:   "the pool does not use the pull secret",
 			nn:     types.NamespacedName{Namespace: "ns", Name: "pool"},
-			client: fakeclient.NewFakeClient(srcSecret.DeepCopy(), poolWithAnotherSecret.DeepCopy()),
+			client: fakeclient.NewClientBuilder().WithRuntimeObjects(srcSecret.DeepCopy(), poolWithAnotherSecret.DeepCopy()).Build(),
 			verify: func(client ctrlruntimeclient.Client) error {
 				if err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: "ns", Name: "pull-secret"}, &corev1.Secret{}); !kerrors.IsNotFound(err) {
 					return fmt.Errorf("expected not found error did not occur")
@@ -208,7 +208,7 @@ func TestRequestsFactoryForSecretEvent(t *testing.T) {
 	}{
 		{
 			name:   "empty namespace",
-			client: fakeclient.NewFakeClient(pool.DeepCopy(), anotherPool.DeepCopy(), anotherPoolInAnotherNS.DeepCopy(), poolWithoutPullSecret.DeepCopy()),
+			client: fakeclient.NewClientBuilder().WithRuntimeObjects(pool.DeepCopy(), anotherPool.DeepCopy(), anotherPoolInAnotherNS.DeepCopy(), poolWithoutPullSecret.DeepCopy()).Build(),
 			expected: []reconcile.Request{
 				{NamespacedName: types.NamespacedName{
 					Namespace: "another-ns",
@@ -231,7 +231,7 @@ func TestRequestsFactoryForSecretEvent(t *testing.T) {
 		{
 			name:      "some namespace",
 			namespace: "another-ns",
-			client:    fakeclient.NewFakeClient(pool.DeepCopy(), anotherPool.DeepCopy(), anotherPoolInAnotherNS.DeepCopy()),
+			client:    fakeclient.NewClientBuilder().WithRuntimeObjects(pool.DeepCopy(), anotherPool.DeepCopy(), anotherPoolInAnotherNS.DeepCopy()).Build(),
 			expected: []reconcile.Request{
 				{NamespacedName: types.NamespacedName{
 					Namespace: "another-ns",

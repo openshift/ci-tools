@@ -15,7 +15,15 @@ linters:
     - ineffassign
     - misspell
     - bodyclose
+    - errorlint
   disable-all: true
+
+linters-settings:
+  errorlint:
+    errorf: true
+    errorf-multi: false
+    asserts: false
+    comparison: false
 
 issues:
   exclude-rules:

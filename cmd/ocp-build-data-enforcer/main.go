@@ -5,7 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -288,7 +288,7 @@ func (dp *diffProcessor) process() error {
 			if err := gitClient.Checkout(d.branch); err != nil {
 				return fmt.Errorf("failed to checkout %s branch: %w", d.branch, err)
 			}
-			if err := ioutil.WriteFile(filepath.Join(gitClient.Directory(), d.path), d.newContent, 0644); err != nil {
+			if err := os.WriteFile(filepath.Join(gitClient.Directory(), d.path), d.newContent, 0644); err != nil {
 				return fmt.Errorf("failed to write updated Dockerfile into repo: %w", err)
 			}
 			if err := dp.prCreationOpts.UpsertPR(

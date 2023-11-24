@@ -1,0 +1,7 @@
+chain:
+  as: ipi-deprovision
+  steps:
+  - ref: ipi-deprovision-must-gather
+  - ref: ipi-deprovision-deprovision
+  documentation: |-
+    The IPI install step chain contains all the individual steps necessary to teardown an OpenShift cluster.

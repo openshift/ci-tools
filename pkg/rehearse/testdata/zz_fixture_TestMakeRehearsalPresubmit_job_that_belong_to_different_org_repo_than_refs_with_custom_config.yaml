@@ -19,7 +19,7 @@ labels:
   ci.openshift.io/rehearse.context: test
 name: rehearse-123-pull-ci-org-repo-branch-test
 optional: true
-rerun_command: /test pj-rehearse
+rerun_command: /pj-rehearse pull-ci-org-repo-branch-test
 skip_fetch_head: true
 spec:
   containers:
@@ -30,4 +30,4 @@ spec:
     - ci-operator
     name: ""
     resources: {}
-trigger: '(?m)^/test (?:.*? )?pj-rehearse(?: .*?)?$'
+trigger: /pj-rehearse pull-ci-org-repo-branch-test

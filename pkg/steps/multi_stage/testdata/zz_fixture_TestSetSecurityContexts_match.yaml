@@ -1,0 +1,27 @@
+metadata:
+  creationTimestamp: null
+spec:
+  containers:
+  - name: c0
+    resources: {}
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1007160000
+  - name: c1
+    resources: {}
+    securityContext:
+      capabilities: {}
+      runAsUser: 0
+      seLinuxOptions: {}
+  initContainers:
+  - name: i0
+    resources: {}
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1007160000
+  - name: i1
+    resources: {}
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1007160000
+status: {}

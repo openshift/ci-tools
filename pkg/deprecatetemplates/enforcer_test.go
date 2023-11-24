@@ -16,7 +16,7 @@ func TestLoadTemplates(t *testing.T) {
 	testcases := []struct {
 		description string
 		updaterCfg  plugins.ConfigUpdater
-		expected    sets.String
+		expected    sets.Set[string]
 	}{
 		{
 			description: "template is detected",
@@ -25,7 +25,7 @@ func TestLoadTemplates(t *testing.T) {
 					"ci-operator/templates/this-is-a-template.yaml": {Name: "template"},
 				},
 			},
-			expected: sets.NewString("template"),
+			expected: sets.New[string]("template"),
 		},
 		{
 			description: "not a template is ignored",
@@ -34,7 +34,7 @@ func TestLoadTemplates(t *testing.T) {
 					"ci-operator/config/this/is-not/a-template.yaml": {Name: "not-a-template"},
 				},
 			},
-			expected: sets.NewString(),
+			expected: sets.New[string](),
 		},
 	}
 
@@ -50,13 +50,13 @@ func TestLoadTemplates(t *testing.T) {
 }
 
 type mockAllowlist struct {
-	jobs         map[string]sets.String
+	jobs         map[string]sets.Set[string]
 	getTemplates map[string]*deprecatedTemplate
 }
 
 func (m *mockAllowlist) Insert(job config.JobBase, template string) error {
 	if _, ok := m.jobs[template]; !ok {
-		m.jobs[template] = sets.NewString()
+		m.jobs[template] = sets.New[string]()
 	}
 	m.jobs[template].Insert(job.Name)
 	return nil
@@ -124,34 +124,34 @@ func TestProcessJobs(t *testing.T) {
 		postsubmits []config.Postsubmit
 		periodics   []config.Periodic
 
-		inserted sets.String
+		inserted sets.Set[string]
 	}{
 		{
 			description: "presubmit using template is added",
 			presubmits:  []config.Presubmit{{JobBase: jobWithTemplate}},
-			inserted:    sets.NewString("job-with-template"),
+			inserted:    sets.New[string]("job-with-template"),
 		},
 		{
 			description: "postsubmit using template is added",
 			postsubmits: []config.Postsubmit{{JobBase: jobWithTemplate}},
-			inserted:    sets.NewString("job-with-template"),
+			inserted:    sets.New[string]("job-with-template"),
 		},
 		{
 			description: "periodics using template is added",
 			periodics:   []config.Periodic{{JobBase: jobWithTemplate}},
-			inserted:    sets.NewString("job-with-template"),
+			inserted:    sets.New[string]("job-with-template"),
 		},
 		{
 			description: "jobs not using template are ignored",
 			presubmits:  []config.Presubmit{{JobBase: jobWithTemplate}, {JobBase: jobWithoutTemplate}},
 			postsubmits: []config.Postsubmit{{JobBase: jobWithoutTemplate}},
 			periodics:   []config.Periodic{{JobBase: jobWithoutTemplate}},
-			inserted:    sets.NewString("job-with-template"),
+			inserted:    sets.New[string]("job-with-template"),
 		},
 	}
 
 	for _, tc := range testcases {
-		mock := mockAllowlist{jobs: map[string]sets.String{}}
+		mock := mockAllowlist{jobs: map[string]sets.Set[string]{}}
 		mockJobs := &mockJobConfig{
 			presubmits:  tc.presubmits,
 			postsubmits: tc.postsubmits,
@@ -159,7 +159,7 @@ func TestProcessJobs(t *testing.T) {
 		}
 		t.Run(tc.description, func(t *testing.T) {
 			enforcer := Enforcer{
-				existingTemplates: sets.NewString(template),
+				existingTemplates: sets.New[string](template),
 				allowlist:         &mock,
 			}
 			if err := enforcer.ProcessJobs(mockJobs); err != nil {
@@ -239,13 +239,13 @@ func TestEnforcerStats(t *testing.T) {
 func TestEnforcer_Validate(t *testing.T) {
 	testCases := []struct {
 		description        string
-		templates          sets.String
+		templates          sets.Set[string]
 		allowlistTemplates map[string]*deprecatedTemplate
 		expected           []string
 	}{
 		{
 			description:        "unused template",
-			templates:          sets.NewString("unused", "used"),
+			templates:          sets.New[string]("unused", "used"),
 			allowlistTemplates: map[string]*deprecatedTemplate{"used": {Name: "used"}},
 			expected: []string{`The following templates are not used by any job. Please remove their
 config-updater config from core-services/prow/02_config/_plugins.yaml)

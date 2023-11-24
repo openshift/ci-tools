@@ -9,7 +9,6 @@ periodics:
     org: super
     repo: trooper
   labels:
-    ci-operator.openshift.io/prowgen-controlled: "true"
     pj-rehearse.openshift.io/can-be-rehearsed: "true"
   name: periodic-ci-super-trooper-master-changed-and-uses-changed-workflow
   spec:
@@ -55,7 +54,7 @@ periodics:
     org: super
     repo: trooper
   labels:
-    ci-operator.openshift.io/prowgen-controlled: "true"
+    ci.openshift.io/generator: prowgen
     pj-rehearse.openshift.io/can-be-rehearsed: "true"
   name: periodic-ci-super-trooper-master-changed-periodic
   spec:
@@ -77,6 +76,9 @@ periodics:
       - mountPath: /secrets/gcs
         name: gcs-credentials
         readOnly: true
+      - mountPath: /secrets/manifest-tool
+        name: manifest-tool-local-pusher
+        readOnly: true
       - mountPath: /etc/pull-secret
         name: pull-secret
         readOnly: true
@@ -85,6 +87,9 @@ periodics:
         readOnly: true
     serviceAccountName: ci-operator
     volumes:
+    - name: manifest-tool-local-pusher
+      secret:
+        secretName: manifest-tool-local-pusher
     - name: pull-secret
       secret:
         secretName: registry-pull-credentials

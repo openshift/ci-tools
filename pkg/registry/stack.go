@@ -83,7 +83,7 @@ func (s *stack) checkUnused(r *stackRecord, overridden [][]api.TestStep, registr
 	if len(r.unusedEnv) == 0 && len(r.unusedDeps) == 0 {
 		return nil
 	}
-	params, deps := sets.NewString(), sets.NewString()
+	params, deps := sets.New[string](), sets.New[string]()
 	for ; len(overridden) != 0; overridden = overridden[1:] {
 		for _, s := range overridden[0] {
 			if err := registry.iterateSteps(s, func(s *api.LiteralTestStep) {
@@ -137,17 +137,17 @@ func (s *stack) checkUnused(r *stackRecord, overridden [][]api.TestStep, registr
 type stackRecord struct {
 	name       string
 	env        []api.StepParameter
-	unusedEnv  sets.String
+	unusedEnv  sets.Set[string]
 	deps       []api.StepDependency
-	unusedDeps sets.String
+	unusedDeps sets.Set[string]
 }
 
 func stackRecordForStep(name string, env []api.StepParameter, deps []api.StepDependency) stackRecord {
-	unusedEnv := sets.NewString()
+	unusedEnv := sets.New[string]()
 	for _, x := range env {
 		unusedEnv.Insert(x.Name)
 	}
-	unusedDeps := sets.NewString()
+	unusedDeps := sets.New[string]()
 	for _, x := range deps {
 		unusedDeps.Insert(x.Env)
 	}

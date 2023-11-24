@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"math"
 	"os"
 	"path"
@@ -27,6 +26,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
 	releaseconfig "github.com/openshift/ci-tools/pkg/release/config"
+	"github.com/openshift/ci-tools/pkg/util"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
@@ -77,7 +77,7 @@ func gatherOptions() options {
 type dashboard struct {
 	*config.Dashboard
 	testGroups []*config.TestGroup
-	existing   sets.String
+	existing   sets.Set[string]
 }
 
 func genericDashboardFor(role string) *dashboard {
@@ -87,7 +87,7 @@ func genericDashboardFor(role string) *dashboard {
 			DashboardTab: []*config.DashboardTab{},
 		},
 		testGroups: []*config.TestGroup{},
-		existing:   sets.NewString(),
+		existing:   sets.New[string](),
 	}
 }
 
@@ -98,7 +98,7 @@ func dashboardFor(stream, version, role string) *dashboard {
 			DashboardTab: []*config.DashboardTab{},
 		},
 		testGroups: []*config.TestGroup{},
-		existing:   sets.NewString(),
+		existing:   sets.New[string](),
 	}
 }
 
@@ -174,8 +174,8 @@ func getAllowList(data []byte) (map[string]string, error) {
 	for jobName, releaseType := range allowList {
 		if releaseType == "blocking" {
 			errs = append(errs, fmt.Errorf("release_type 'blocking' not permitted in the allow-list for %s, blocking jobs must be in the release controller configuration", jobName))
-		} else if releaseType != "informing" && releaseType != "broken" && releaseType != "generic-informing" {
-			errs = append(errs, fmt.Errorf("%s: release_type must be one of 'informing', 'broken' or 'generic-informing'", jobName))
+		} else if releaseType != "informing" && releaseType != "broken" && releaseType != "generic-informing" && releaseType != "osde2e" && releaseType != "olm" {
+			errs = append(errs, fmt.Errorf("%s: release_type must be one of 'informing', 'broken', 'generic-informing', 'osde2e' or 'olm'", jobName))
 		}
 	}
 	return allowList, utilerrors.NewAggregate(errs)
@@ -202,9 +202,9 @@ func addDashboardTab(p prowConfig.Periodic,
 	}
 
 	switch label {
-	case "informing", "blocking", "broken", "generic-informing":
+	case "informing", "blocking", "broken", "generic-informing", "osde2e", "olm":
 		dashboardType = label
-		if label == "informing" && (aggregateJobName != nil || configuredJobs[p.Name] == "blocking") {
+		if (label == "informing" || label == "osde2e" || label == "olm") && (aggregateJobName != nil || configuredJobs[p.Name] == "blocking") {
 			dashboardType = "blocking"
 		}
 	default:
@@ -216,14 +216,17 @@ func addDashboardTab(p prowConfig.Periodic,
 			break
 		}
 		switch {
-		case strings.HasPrefix(prowName, "release-openshift-"),
-			strings.HasPrefix(prowName, "promote-release-openshift-"),
-			strings.HasPrefix(prowName, "periodic-ci-openshift-multiarch"),
-			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-ci-"),
-			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-okd-"),
-			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-nightly-"),
-			strings.HasPrefix(prowName, "periodic-ci-shiftstack-shiftstack-ci-main-periodic-"):
+		case util.IsSpecialInformingJobOnTestGrid(prowName):
 			// the standard release periodics should always appear in testgrid
+			dashboardType = "informing"
+		case strings.Contains(prowName, "-lp-interop"):
+			// OpenShift layered product interop testing
+			dashboardType = "informing"
+		case strings.Contains(prowName, "-lp-rosa-hypershift"):
+			// OpenShift layered product rosa hypershift interop testing
+			dashboardType = "informing"
+		case strings.Contains(prowName, "CSPI-QE-MSI"):
+			// Managed Services Integration (MSI) testing
 			dashboardType = "informing"
 		default:
 			// unknown labels or non standard jobs do not appear in testgrid
@@ -235,6 +238,10 @@ func addDashboardTab(p prowConfig.Periodic,
 	switch dashboardType {
 	case "generic-informing":
 		current = genericDashboardFor("informing")
+	case "osde2e":
+		current = genericDashboardFor("osd")
+	case "olm":
+		current = genericDashboardFor("olm")
 	default:
 		var stream string
 		switch {
@@ -243,17 +250,29 @@ func addDashboardTab(p prowConfig.Periodic,
 			strings.Contains(prowName, "-ocp-"),
 			strings.Contains(prowName, "-origin-"),
 			// these prefixes control whether a job is ocp or okd going forward
+			strings.HasPrefix(prowName, "periodic-ci-openshift-hypershift-main-periodics-"),
 			strings.HasPrefix(prowName, "periodic-ci-openshift-multiarch"),
+			strings.HasPrefix(prowName, "periodic-ci-openshift-openshift-tests-"),
 			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-ci-"),
 			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-nightly-"),
 			strings.HasPrefix(prowName, "periodic-ci-openshift-verification-tests-master-"),
-			strings.HasPrefix(prowName, "periodic-ci-shiftstack-shiftstack-ci-main-periodic-"):
+			strings.HasPrefix(prowName, "periodic-ci-shiftstack-shiftstack-ci-main-periodic-"),
+			strings.HasPrefix(prowName, "periodic-ci-openshift-osde2e-main-nightly-"):
 			stream = "ocp"
 		case strings.Contains(prowName, "-okd-"):
 			stream = "okd"
 		case strings.HasPrefix(prowName, "promote-release-openshift-"):
 			// TODO fix these jobs to have a consistent name
 			stream = "ocp"
+		case strings.Contains(prowName, "-lp-interop"):
+			// OpenShift layered product interop testing
+			stream = "lp-interop"
+		case strings.Contains(prowName, "-lp-rosa-hypershift"):
+			// OpenShift layered product rosa hypershift interop testing
+			stream = "lp-rosa-hypershift"
+		case strings.Contains(prowName, "CSPI-QE-MSI"):
+			// Managed Services Integration (MSI) testing
+			stream = "CSPI-QE-MSI"
 		default:
 			logrus.Warningf("unrecognized release type in job: %s", prowName)
 			return
@@ -270,12 +289,6 @@ func addDashboardTab(p prowConfig.Periodic,
 			version = m[1]
 		}
 		current = dashboardFor(stream, version, dashboardType)
-	}
-
-	if existing, ok := dashboards[current.Name]; ok {
-		current = existing
-	} else {
-		dashboards[current.Name] = current
 	}
 
 	daysOfResults := int32(0)
@@ -295,7 +308,14 @@ func addDashboardTab(p prowConfig.Periodic,
 		}
 	}
 
+	if existing, ok := dashboards[current.Name]; ok {
+		current = existing
+	} else {
+		dashboards[current.Name] = current
+	}
+
 	current.add(jobName, p.Annotations["description"], daysOfResults)
+
 }
 
 // This tool is intended to make the process of maintaining TestGrid dashboards for
@@ -411,7 +431,7 @@ func main() {
 	}
 
 	// first, update the overall list of dashboards that exist for the redhat group
-	dashboardNames := sets.NewString()
+	dashboardNames := sets.New[string]()
 	for _, dash := range dashboards {
 		if len(dash.testGroups) == 0 {
 			continue
@@ -430,18 +450,18 @@ func main() {
 		logrus.WithError(err).Fatal("Could not unmarshal TestGrid group config")
 	}
 
-	toRemove := sets.NewString()
+	toRemove := sets.New[string]()
 	for _, dashGroup := range groups.DashboardGroups {
 		if dashGroup.Name == "redhat" {
-			for _, name := range sets.NewString(dashGroup.DashboardNames...).Difference(dashboardNames).List() {
+			for _, name := range sets.List(sets.New[string](dashGroup.DashboardNames...).Difference(dashboardNames)) {
 				if strings.HasPrefix(name, "redhat-openshift-") && strings.Contains(name, "-release-") {
 					// this is a good-enough heuristic to identify a board that was generated by this tool in the past,
 					// but is no longer generated and should be pruned.
 					toRemove.Insert(name)
 				}
 			}
-			dashboardNames.Insert(dashGroup.DashboardNames...).Delete(toRemove.List()...)
-			dashGroup.DashboardNames = dashboardNames.List() // sorted implicitly
+			dashboardNames.Insert(dashGroup.DashboardNames...).Delete(sets.List(toRemove)...)
+			dashGroup.DashboardNames = sets.List(dashboardNames) // sorted implicitly
 		}
 	}
 
@@ -450,7 +470,7 @@ func main() {
 		logrus.WithError(err).Fatal("Could not marshal TestGrid group config")
 	}
 
-	if err := ioutil.WriteFile(groupFile, data, 0664); err != nil {
+	if err := os.WriteFile(groupFile, data, 0664); err != nil {
 		logrus.WithError(err).Fatal("Could not write TestGrid group config")
 	}
 
@@ -479,13 +499,13 @@ func main() {
 			logrus.WithError(err).Fatalf("Could not marshal TestGrid config for %s", dash.Name)
 		}
 
-		if err := ioutil.WriteFile(path.Join(o.testGridConfigDir, fmt.Sprintf("%s.yaml", dash.Name)), data, 0664); err != nil {
+		if err := os.WriteFile(path.Join(o.testGridConfigDir, fmt.Sprintf("%s.yaml", dash.Name)), data, 0664); err != nil {
 			logrus.WithError(err).Fatalf("Could not write TestGrid config for %s", dash.Name)
 		}
 	}
 
 	// remove any configs we used to generate but no longer do
-	for _, name := range toRemove.List() {
+	for _, name := range sets.List(toRemove) {
 		if err := os.Remove(path.Join(o.testGridConfigDir, fmt.Sprintf("%s.yaml", name))); err != nil {
 			logrus.WithError(err).Fatalf("Could not remove stale TestGrid config for %s", name)
 		}

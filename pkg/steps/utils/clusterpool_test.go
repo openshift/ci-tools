@@ -26,7 +26,7 @@ type fakePoolClient struct {
 	returns []hivev1.ClusterPool
 }
 
-func (f fakePoolClient) Get(_ context.Context, _ client.ObjectKey, _ client.Object) error {
+func (f fakePoolClient) Get(_ context.Context, _ client.ObjectKey, _ client.Object, opts ...client.GetOption) error {
 	panic("implement me")
 }
 

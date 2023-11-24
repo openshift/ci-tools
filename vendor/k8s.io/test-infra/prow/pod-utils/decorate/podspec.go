@@ -68,8 +68,8 @@ func Labels() []string {
 }
 
 // VolumeMounts returns a string set with *MountName consts in it.
-func VolumeMounts(dc *prowapi.DecorationConfig) sets.String {
-	ret := sets.NewString(logMountName, codeMountName, toolsMountName, gcsCredentialsMountName, s3CredentialsMountName)
+func VolumeMounts(dc *prowapi.DecorationConfig) sets.Set[string] {
+	ret := sets.New[string](logMountName, codeMountName, toolsMountName, gcsCredentialsMountName, s3CredentialsMountName)
 	if dc == nil {
 		return ret
 	}
@@ -84,18 +84,18 @@ func VolumeMounts(dc *prowapi.DecorationConfig) sets.String {
 }
 
 // VolumeMountsOnTestContainer returns a string set with *MountName consts in it which are applied to the test container.
-func VolumeMountsOnTestContainer() sets.String {
-	return sets.NewString(logMountName, codeMountName, toolsMountName)
+func VolumeMountsOnTestContainer() sets.Set[string] {
+	return sets.New[string](logMountName, codeMountName, toolsMountName)
 }
 
 // VolumeMountPathsOnTestContainer returns a string set with *MountPath consts in it which are applied to the test container.
-func VolumeMountPathsOnTestContainer() sets.String {
-	return sets.NewString(logMountPath, codeMountPath, toolsMountPath)
+func VolumeMountPathsOnTestContainer() sets.Set[string] {
+	return sets.New[string](logMountPath, codeMountPath, toolsMountPath)
 }
 
 // PodUtilsContainerNames returns a string set with pod utility container name consts in it.
-func PodUtilsContainerNames() sets.String {
-	return sets.NewString(cloneRefsName, initUploadName, entrypointName, sidecarName)
+func PodUtilsContainerNames() sets.Set[string] {
+	return sets.New[string](cloneRefsName, initUploadName, entrypointName, sidecarName)
 }
 
 // LabelsAndAnnotationsForSpec returns a minimal set of labels to add to prowjobs or its owned resources.
@@ -539,7 +539,7 @@ func entrypointLocation(tools coreapi.VolumeMount) string {
 }
 
 // InjectEntrypoint will make the entrypoint binary in the tools volume the container's entrypoint, which will output to the log volume.
-func InjectEntrypoint(c *coreapi.Container, timeout, gracePeriod time.Duration, prefix, previousMarker string, exitZero bool, log, tools coreapi.VolumeMount) (*wrapper.Options, error) {
+func InjectEntrypoint(c *coreapi.Container, timeout, gracePeriod time.Duration, prefix, previousMarker string, propagateErrorCode bool, exitZero bool, log, tools coreapi.VolumeMount) (*wrapper.Options, error) {
 	wrapperOptions := &wrapper.Options{
 		Args:          append(c.Command, c.Args...),
 		ContainerName: c.Name,
@@ -549,12 +549,13 @@ func InjectEntrypoint(c *coreapi.Container, timeout, gracePeriod time.Duration, 
 	}
 	// TODO(fejta): use flags
 	entrypointConfigEnv, err := entrypoint.Encode(entrypoint.Options{
-		ArtifactDir:    artifactsDir(log),
-		GracePeriod:    gracePeriod,
-		Options:        wrapperOptions,
-		Timeout:        timeout,
-		AlwaysZero:     exitZero,
-		PreviousMarker: previousMarker,
+		ArtifactDir:        artifactsDir(log),
+		GracePeriod:        gracePeriod,
+		Options:            wrapperOptions,
+		Timeout:            timeout,
+		PropagateErrorCode: propagateErrorCode,
+		AlwaysZero:         exitZero,
+		PreviousMarker:     previousMarker,
 	})
 	if err != nil {
 		return nil, err
@@ -757,7 +758,7 @@ func decorate(spec *coreapi.PodSpec, pj *prowapi.ProwJob, rawEnv map[string]stri
 		spec.Containers[i].Env = append(container.Env, KubeEnv(rawEnv)...)
 	}
 
-	secretVolumes := sets.NewString()
+	secretVolumes := sets.New[string]()
 	for _, volume := range spec.Volumes {
 		if volume.VolumeSource.Secret != nil {
 			secretVolumes.Insert(volume.Name)
@@ -771,8 +772,9 @@ func decorate(spec *coreapi.PodSpec, pj *prowapi.ProwJob, rawEnv map[string]stri
 	}
 
 	const (
-		previous = ""
-		exitZero = false
+		previous           = ""
+		exitZero           = false
+		propagateErrorCode = false
 	)
 	var secretVolumeMounts []coreapi.VolumeMount
 	var wrappers []wrapper.Options
@@ -782,7 +784,7 @@ func decorate(spec *coreapi.PodSpec, pj *prowapi.ProwJob, rawEnv map[string]stri
 		if len(spec.Containers) == 1 {
 			prefix = ""
 		}
-		wrapperOptions, err := InjectEntrypoint(&spec.Containers[i], pj.Spec.DecorationConfig.Timeout.Get(), pj.Spec.DecorationConfig.GracePeriod.Get(), prefix, previous, exitZero, logMount, toolsMount)
+		wrapperOptions, err := InjectEntrypoint(&spec.Containers[i], pj.Spec.DecorationConfig.Timeout.Get(), pj.Spec.DecorationConfig.GracePeriod.Get(), prefix, previous, propagateErrorCode, exitZero, logMount, toolsMount)
 		if err != nil {
 			return fmt.Errorf("wrap container: %w", err)
 		}
@@ -813,6 +815,49 @@ func decorate(spec *coreapi.PodSpec, pj *prowapi.ProwJob, rawEnv map[string]stri
 			spec.Containers[i].VolumeMounts = append(container.VolumeMounts, codeMount)
 		}
 		spec.Volumes = append(spec.Volumes, append(cloneVolumes, codeVolume)...)
+	}
+
+	if pj.Spec.DecorationConfig != nil && pj.Spec.DecorationConfig.DefaultMemoryRequest != nil {
+		for i, container := range spec.Containers {
+			if container.Resources.Requests != nil {
+				if _, ok := container.Resources.Requests[coreapi.ResourceMemory]; ok {
+					continue // Memory request already defined, no need to default
+				}
+			}
+			if spec.Containers[i].Resources.Requests == nil {
+				spec.Containers[i].Resources.Requests = make(coreapi.ResourceList)
+			}
+			spec.Containers[i].Resources.Requests[coreapi.ResourceMemory] = *pj.Spec.DecorationConfig.DefaultMemoryRequest
+		}
+	}
+
+	if pj.Spec.DecorationConfig != nil {
+		if spec.SecurityContext == nil {
+			spec.SecurityContext = new(coreapi.PodSecurityContext)
+		}
+		if pj.Spec.DecorationConfig.RunAsUser != nil && spec.SecurityContext.RunAsUser == nil {
+			spec.SecurityContext.RunAsUser = pj.Spec.DecorationConfig.RunAsUser
+		}
+		if pj.Spec.DecorationConfig.RunAsGroup != nil && spec.SecurityContext.RunAsGroup == nil {
+			spec.SecurityContext.RunAsGroup = pj.Spec.DecorationConfig.RunAsGroup
+		}
+		if pj.Spec.DecorationConfig.FsGroup != nil && spec.SecurityContext.FSGroup == nil {
+			spec.SecurityContext.FSGroup = pj.Spec.DecorationConfig.FsGroup
+		}
+	}
+
+	if pj.Spec.DecorationConfig != nil && pj.Spec.DecorationConfig.SetLimitEqualsMemoryRequest != nil && *pj.Spec.DecorationConfig.SetLimitEqualsMemoryRequest {
+		for i, container := range spec.Containers {
+			if container.Resources.Requests == nil {
+				continue
+			}
+			if val, ok := container.Resources.Requests[coreapi.ResourceMemory]; ok {
+				if spec.Containers[i].Resources.Limits == nil {
+					spec.Containers[i].Resources.Limits = make(coreapi.ResourceList)
+				}
+				spec.Containers[i].Resources.Limits[coreapi.ResourceMemory] = val
+			}
+		}
 	}
 
 	spec.Containers = append(spec.Containers, *sidecar)
@@ -889,7 +934,8 @@ func Sidecar(config *prowapi.DecorationConfig, gcsOptions gcsupload.Options, blo
 			sidecar.JSONConfigEnvVar: sidecarConfigEnv,
 			downwardapi.JobSpecEnv:   encodedJobSpec, // TODO: shouldn't need this?
 		}),
-		VolumeMounts: mounts,
+		VolumeMounts:             mounts,
+		TerminationMessagePolicy: coreapi.TerminationMessageFallbackToLogsOnError,
 	}
 	if config.Resources != nil && config.Resources.Sidecar != nil {
 		container.Resources = *config.Resources.Sidecar

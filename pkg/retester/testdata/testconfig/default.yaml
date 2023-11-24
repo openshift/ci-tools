@@ -1,0 +1,3 @@
+retester:
+  max_retests_for_sha_and_base: 3
+  max_retests_for_sha: 9

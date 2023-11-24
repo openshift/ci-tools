@@ -29,7 +29,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
@@ -42,10 +41,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
+	"github.com/cjwagner/httpcache"
+	"github.com/cjwagner/httpcache/diskcache"
+	rediscache "github.com/cjwagner/httpcache/redis"
 	"github.com/gomodule/redigo/redis"
-	"github.com/gregjones/httpcache"
-	"github.com/gregjones/httpcache/diskcache"
-	rediscache "github.com/gregjones/httpcache/redis"
 	"github.com/peterbourgon/diskv"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
@@ -87,12 +86,16 @@ const (
 
 // RequestThrottlingTimes keeps the information about throttling times per API and request methods
 type RequestThrottlingTimes struct {
-	// ThrottlingTime is applied for all non-GET request methods for apiV3 and apiV4
+	// throttlingTime is applied for all non-GET request methods for apiV3 and apiV4
 	throttlingTime uint
-	// ThrottlingTimeV4 if different then 0, it's applied for non-GET request methods for apiV4, instead of ThrottlingTime
+	// throttlingTimeV4 if different than 0, it's applied for non-GET request methods for apiV4, instead of ThrottlingTime
 	throttlingTimeV4 uint
-	// ThrottlingTimeForGET is applied for all GET request methods for apiV3 and apiV4
+	// throttlingTimeForGET is applied for all GET request methods for apiV3 and apiV4
 	throttlingTimeForGET uint
+	// maxDelayTime is applied when formed queue is too large, it allows to temporarily set max delay time provided by user instead of calculated value
+	maxDelayTime uint
+	// maxDelayTimeV4 is maxDelayTime for APIv4
+	maxDelayTimeV4 uint
 }
 
 func (rtt *RequestThrottlingTimes) isEnabled() bool {
@@ -107,11 +110,13 @@ func (rtt *RequestThrottlingTimes) getThrottlingTimeV4() uint {
 }
 
 // NewRequestThrottlingTimes creates a new RequestThrottlingTimes and returns it
-func NewRequestThrottlingTimes(requestThrottlingTime, requestThrottlingTimeV4, requestThrottlingTimeForGET uint) RequestThrottlingTimes {
+func NewRequestThrottlingTimes(requestThrottlingTime, requestThrottlingTimeV4, requestThrottlingTimeForGET, requestThrottlingMaxDelayTime, requestThrottlingMaxDelayTimeV4 uint) RequestThrottlingTimes {
 	return RequestThrottlingTimes{
 		throttlingTime:       requestThrottlingTime,
 		throttlingTimeV4:     requestThrottlingTimeV4,
 		throttlingTimeForGET: requestThrottlingTimeForGET,
+		maxDelayTime:         requestThrottlingMaxDelayTime,
+		maxDelayTimeV4:       requestThrottlingMaxDelayTimeV4,
 	}
 }
 
@@ -147,7 +152,7 @@ var pendingOutboundConnectionsGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 var cachePartitionsCounter = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
 		Name: "ghcache_cache_parititions",
-		Help: "Which cache partitions exist",
+		Help: "Which cache partitions exist.",
 	},
 	[]string{"token_hash"},
 )
@@ -178,17 +183,18 @@ func newThrottlingTransport(maxConcurrency int, roundTripper http.RoundTripper, 
 		roundTripper:          roundTripper,
 		timeThrottlingEnabled: throttlingTimes.isEnabled(),
 		hasher:                hasher,
-		registryApiV3:         newTokensRegistry(throttlingTimes.throttlingTime, throttlingTimes.throttlingTimeForGET),
-		registryApiV4:         newTokensRegistry(throttlingTimes.getThrottlingTimeV4(), throttlingTimes.throttlingTimeForGET),
+		registryApiV3:         newTokensRegistry(throttlingTimes.throttlingTime, throttlingTimes.throttlingTimeForGET, throttlingTimes.maxDelayTime),
+		registryApiV4:         newTokensRegistry(throttlingTimes.getThrottlingTimeV4(), throttlingTimes.throttlingTimeForGET, throttlingTimes.maxDelayTimeV4),
 	}
 }
 
-func newTokensRegistry(requestThrottlingTime, requestThrottlingTimeForGET uint) tokensRegistry {
+func newTokensRegistry(requestThrottlingTime, requestThrottlingTimeForGET, maxDelayTime uint) tokensRegistry {
 	return tokensRegistry{
 		lock:                 sync.Mutex{},
 		tokens:               map[string]tokenInfo{},
 		throttlingTime:       time.Millisecond * time.Duration(requestThrottlingTime),
 		throttlingTimeForGET: time.Millisecond * time.Duration(requestThrottlingTimeForGET),
+		maxDelayTime:         time.Second * time.Duration(maxDelayTime),
 	}
 }
 
@@ -204,6 +210,7 @@ type tokensRegistry struct {
 	tokens               map[string]tokenInfo
 	throttlingTime       time.Duration
 	throttlingTimeForGET time.Duration
+	maxDelayTime         time.Duration
 }
 
 func (tr *tokensRegistry) getRequestWaitDuration(tokenBudgetName string, getReq bool) time.Duration {
@@ -234,6 +241,12 @@ func (tr *tokensRegistry) calculateRequestWaitDuration(lastRequest tokenInfo, to
 		}
 		future := lastRequest.timestamp.Add(difference)
 		duration = future.Sub(toQueue)
+
+		// Do not exceed max wait time to avoid creating a huge request backlog if the GitHub api has performance issues
+		if duration >= tr.maxDelayTime {
+			duration = tr.maxDelayTime
+			future = toQueue.Add(tr.maxDelayTime)
+		}
 		toQueue = future
 	} else if duration >= throttlingTime || (getReq && duration >= tr.throttlingTimeForGET) {
 		// There was no request for some time, no need to wait.
@@ -304,11 +317,15 @@ func (c *throttlingTransport) RoundTrip(req *http.Request) (*http.Response, erro
 // reach the cache layer in order to force the caching policy we require.
 //
 // By default github responds to PR requests with:
-//    Cache-Control: private, max-age=60, s-maxage=60
+//
+//	Cache-Control: private, max-age=60, s-maxage=60
+//
 // Which means the httpcache would not consider anything stale for 60 seconds.
 // However, we want to always revalidate cache entries using ETags and last
 // modified times so this RoundTripper overrides response headers to:
-//    Cache-Control: no-cache
+//
+//	Cache-Control: no-cache
+//
 // This instructs the cache to store the response, but always consider it stale.
 type upstreamTransport struct {
 	roundTripper http.RoundTripper
@@ -427,7 +444,7 @@ func Prune(baseDir string, now func() time.Time) {
 			metadataPath := path.Join(base, cachePartitionCandidate.Name(), cachePartitionMetadataFileName)
 
 			// Read optimistically and just ignore errors
-			raw, err := ioutil.ReadFile(metadataPath)
+			raw, err := os.ReadFile(metadataPath)
 			if err != nil {
 				continue
 			}
@@ -465,7 +482,7 @@ func writecachePartitionMetadata(basePath, tempDir string, expiresAt *time.Time)
 			errs = append(errs, fmt.Errorf("failed to create dir %s: %w", destBase, err))
 		}
 		dest := path.Join(destBase, cachePartitionMetadataFileName)
-		if err := ioutil.WriteFile(dest, serialized, 0644); err != nil {
+		if err := os.WriteFile(dest, serialized, 0644); err != nil {
 			errs = append(errs, fmt.Errorf("failed to write %s: %w", dest, err))
 		}
 	}

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -56,10 +55,6 @@ func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, regist
 	}
 	err := filepath.WalkDir(root, func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
-			// file may not exist due to race condition between the reload and k8s removing deleted/moved symlinks in a confimap directory; ignore it
-			if os.IsNotExist(err) {
-				return nil
-			}
 			return err
 		}
 		if strings.HasPrefix(info.Name(), "..") {
@@ -188,7 +183,7 @@ func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, regist
 		return nil, nil, nil, nil, nil, nil, err
 	}
 	// create graph to verify that there are no cycles
-	if _, err = registry.NewGraph(references, chains, workflows); err != nil {
+	if _, err = registry.NewGraph(references, chains, workflows, observers); err != nil {
 		return nil, nil, nil, nil, nil, nil, err
 	}
 	err = registry.Validate(references, chains, workflows, observers)

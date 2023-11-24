@@ -3,11 +3,11 @@ package helper
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strconv"
 	"testing"
 
-	"github.com/google/gofuzz"
+	fuzz "github.com/google/gofuzz"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
@@ -32,6 +32,8 @@ func TestTestInputImageStreamTagsFromResolvedConfigReturnsAllImageStreamTags(t *
 				// TestInputImageStreamTagsFromResolvedConfig assumes that the config is already
 				// resolved and will error if thats not the case (MultiStageTestConfiguration != nil && MultiStageTestConfigurationLiteral == nil)
 				func(_ **api.MultiStageTestConfiguration, _ fuzz.Continue) {},
+				// Don't set build_roots, that is mutually exclusive with build_root and only set by ci-operator-configresolver when merging configs
+				func(_ map[string]api.BuildRootImageConfiguration, _ fuzz.Continue) {},
 			).
 				// Using something else messes up the result, apparently the fuzzer sometimes overwrites the whole
 				// map/slice after inserting into it.
@@ -56,10 +58,10 @@ func TestTestInputImageStreamTagsFromResolvedConfigReturnsAllImageStreamTags(t *
 			}
 			if n := len(res); n != numberInsertedElements {
 				serialized, _ := json.Marshal(cfg)
-				tmpFile, err := ioutil.TempFile("", "imagestream-extration-fuzzing")
+				tmpFile, err := os.CreateTemp("", "imagestream-extration-fuzzing")
 				if err != nil {
 					t.Errorf("failed to create tmpfile: %v", err)
-				} else if err := ioutil.WriteFile(tmpFile.Name(), serialized, 0644); err != nil {
+				} else if err := os.WriteFile(tmpFile.Name(), serialized, 0644); err != nil {
 					t.Errorf("failed to write config to disk: %v", err)
 				}
 				// Do _not_ print the cfg. You have been warned.

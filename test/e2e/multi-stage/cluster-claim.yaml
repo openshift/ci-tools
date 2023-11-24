@@ -2,16 +2,16 @@ base_images:
   os:
     name: centos
     namespace: openshift
-    tag: '7'
+    tag: 'stream9'
 releases:
   latest:   # include `latest` as a release to verify that `latest` is automatically overridden when using claims
     release:
       channel: stable
-      version: "4.6"
+      version: "4.10"
   custom:   # include `custom` to make sure named claim imports are properly overridden
     release:
       channel: stable
-      version: "4.5"
+      version: "4.9"
 resources:
   '*':
     requests:
@@ -35,13 +35,13 @@ tests:
       owner: fake
       product: ocp
       timeout: 3m # a claim from a fake pool should become ready very soon
-      version: "4.7"
+      version: "4.11"
     steps:
       test:
         - as: claim-step
           commands: |
             set -x
-            cmp "${KUBECONFIG}" /secrets/e2e-claim-hive-admin-kubeconfig/kubeconfig
+            [[ "$(< ${KUBECONFIG})" == "$(< /secrets/e2e-claim-hive-admin-kubeconfig/kubeconfig)" ]]
             oc config view
           from: cli
           resources:
@@ -56,13 +56,13 @@ tests:
       owner: fake
       product: ocp
       timeout: 3m # a claim from a fake pool should become ready very soon
-      version: "4.7"
+      version: "4.11"
     steps:
       test:
         - as: claim-step
           commands: |
             set -x
-            cmp "${KUBECONFIG}" /secrets/e2e-claim-as-custom-hive-admin-kubeconfig/kubeconfig
+            [[ "$(< ${KUBECONFIG})" == "$(< /secrets/e2e-claim-as-custom-hive-admin-kubeconfig/kubeconfig)" ]]
             oc config view
           from: stable-custom:cli
           resources:
@@ -76,13 +76,13 @@ tests:
       owner: fake
       product: ocp
       timeout: 3m # a claim from a fake pool should become ready very soon
-      version: "4.7"
+      version: "4.11"
     steps:
       test:
         - as: claim-step
           commands: |
             set -x
-            cmp "${KUBECONFIG}" /secrets/e2e-claim-depend-on-release-image-hive-admin-kubeconfig/kubeconfig
+            [[ "$(< ${KUBECONFIG})" == "$(< /secrets/e2e-claim-depend-on-release-image-hive-admin-kubeconfig/kubeconfig)" ]]
             echo "$(RELEASE_IMAGE_LATEST)"
           from: os
           resources:

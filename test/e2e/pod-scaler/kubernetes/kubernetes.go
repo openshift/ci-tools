@@ -5,15 +5,14 @@ package kubernetes
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http"
-	"time"
+	"os"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
-	"k8s.io/test-infra/prow/interrupts"
 
 	buildv1 "github.com/openshift/api/build/v1"
 
@@ -77,7 +76,10 @@ func Builds(labelsByNamespacedName map[string]map[string]map[string]string) Opti
 
 // Fake serves fake data as if it were a k8s apiserver
 func Fake(t testhelper.TestingTInterface, tmpDir string, options ...Option) string {
-	o := Options{Patterns: map[string]http.HandlerFunc{}}
+	readyPath := "/healthz/ready"
+	o := Options{Patterns: map[string]http.HandlerFunc{
+		readyPath: func(w http.ResponseWriter, _ *http.Request) {},
+	}}
 	for _, option := range options {
 		option(&o)
 	}
@@ -91,7 +93,17 @@ func Fake(t testhelper.TestingTInterface, tmpDir string, options ...Option) stri
 		Addr:    k8sAddr,
 		Handler: mux,
 	}
-	interrupts.ListenAndServe(server, 10*time.Second)
+
+	go func() {
+		if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+			t.Fatalf("kubernetes server failed to listen: %v", err)
+		}
+	}()
+	t.Cleanup(func() {
+		if err := server.Close(); err != nil {
+			t.Errorf("failed to close kubernetes server: %v", err)
+		}
+	})
 
 	kubeconfig := clientcmdapi.Config{
 		Clusters: map[string]*clientcmdapi.Cluster{
@@ -115,7 +127,7 @@ func Fake(t testhelper.TestingTInterface, tmpDir string, options ...Option) stri
 		},
 	}
 
-	kubeconfigFile, err := ioutil.TempFile(tmpDir, "kubeconfig")
+	kubeconfigFile, err := os.CreateTemp(tmpDir, "kubeconfig")
 	if err != nil {
 		t.Fatalf("Failed to create temporary kubeconfig file: %v", err)
 	}
@@ -130,5 +142,6 @@ func Fake(t testhelper.TestingTInterface, tmpDir string, options ...Option) stri
 	}, kubeconfig, false); err != nil {
 		t.Fatalf("Failed to write temporary kubeconfig file: %v", err)
 	}
+	testhelper.WaitForHTTP200(fmt.Sprintf("http://127.0.0.1:%s%s", k8sPort, readyPath), "kubernetes server", 90, t)
 	return kubeconfigFile.Name()
 }

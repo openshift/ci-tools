@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"sort"
 
@@ -16,7 +16,7 @@ import (
 )
 
 func endpoint(c api.Candidate) string {
-	return fmt.Sprintf("%s/%s.0-0.%s%s/config", candidate.ServiceHost(c.Product, c.Architecture), c.Version, c.Stream, candidate.Architecture(c.Architecture))
+	return candidate.Endpoint(c.ReleaseDescriptor, c.Version+".0-0.", string(c.Stream), "/config")
 }
 
 type JobType string
@@ -42,7 +42,7 @@ func resolveJobs(client release.HTTPClient, endpoint string, jobType JobType) ([
 	q.Add("jobType", string(jobType))
 	req.URL.RawQuery = q.Encode()
 
-	logrus.Debugf("Requesting a release controller's jobs in config from %s", req.URL.String())
+	logrus.Infof("Requesting a release controller's jobs in config from %s", req.URL.String())
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to request release controller's jobs in config: %w", err)
@@ -51,7 +51,7 @@ func resolveJobs(client release.HTTPClient, endpoint string, jobType JobType) ([
 		return nil, errors.New("failed to request latest release: got a nil response")
 	}
 	defer resp.Body.Close()
-	data, readErr := ioutil.ReadAll(resp.Body)
+	data, readErr := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to request latest release: server responded with %d: %s", resp.StatusCode, data)
 	}

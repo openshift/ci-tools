@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"net/url"
 	"path"
+
+	gerritsource "k8s.io/test-infra/prow/gerrit/source"
 )
 
 // RemoteResolverFactory knows how to construct remote resolvers for
@@ -74,6 +76,8 @@ func (f *sshRemoteResolverFactory) PublishRemote(_, repo string) RemoteResolver 
 }
 
 type httpResolverFactory struct {
+	// Whether to use HTTP.
+	http bool
 	host string
 	// Optional, either both or none must be set
 	username LoginGetter
@@ -84,7 +88,11 @@ type httpResolverFactory struct {
 // for the repository.
 func (f *httpResolverFactory) CentralRemote(org, repo string) RemoteResolver {
 	return HttpResolver(func() (*url.URL, error) {
-		return &url.URL{Scheme: "https", Host: f.host, Path: fmt.Sprintf("%s/%s", org, repo)}, nil
+		scheme := "https"
+		if f.http {
+			scheme = "http"
+		}
+		return &url.URL{Scheme: scheme, Host: f.host, Path: fmt.Sprintf("%s/%s", org, repo)}, nil
 	}, f.username, f.token)
 }
 
@@ -92,6 +100,10 @@ func (f *httpResolverFactory) CentralRemote(org, repo string) RemoteResolver {
 // for the repository that can be published to.
 func (f *httpResolverFactory) PublishRemote(_, repo string) RemoteResolver {
 	return HttpResolver(func() (*url.URL, error) {
+		scheme := "https"
+		if f.http {
+			scheme = "http"
+		}
 		if f.username == nil {
 			return nil, errors.New("username not configured, no publish repo available")
 		}
@@ -99,7 +111,7 @@ func (f *httpResolverFactory) PublishRemote(_, repo string) RemoteResolver {
 		if err != nil {
 			return nil, err
 		}
-		return &url.URL{Scheme: "https", Host: f.host, Path: fmt.Sprintf("%s/%s", o, repo)}, nil
+		return &url.URL{Scheme: scheme, Host: f.host, Path: fmt.Sprintf("%s/%s", o, repo)}, nil
 	}, f.username, f.token)
 }
 
@@ -145,20 +157,20 @@ func (f *pathResolverFactory) PublishRemote(org, repo string) RemoteResolver {
 	}
 }
 
-// Publish Remote will not be used by Gerrit, but cloneURIResolverFactory can be used
-// by github when CentralRemote == PublishRemote == CloneURI so both methods will return CloneURI
-type cloneURIResolverFactory struct {
-	cloneURI string
-}
+// gerritResolverFactory is meant to be used by Gerrit only. It's so different
+// from GitHub that there is no way any of the remotes logic can be shared
+// between these two providers. The resulting CentralRemote and PublishRemote
+// are both the clone URI.
+type gerritResolverFactory struct{}
 
-func (f *cloneURIResolverFactory) CentralRemote(_, _ string) RemoteResolver {
+func (f *gerritResolverFactory) CentralRemote(org, repo string) RemoteResolver {
 	return func() (string, error) {
-		return f.cloneURI, nil
+		return gerritsource.CloneURIFromOrgRepo(org, repo), nil
 	}
 }
 
-func (f *cloneURIResolverFactory) PublishRemote(_, _ string) RemoteResolver {
+func (f *gerritResolverFactory) PublishRemote(org, repo string) RemoteResolver {
 	return func() (string, error) {
-		return f.cloneURI, nil
+		return gerritsource.CloneURIFromOrgRepo(org, repo), nil
 	}
 }

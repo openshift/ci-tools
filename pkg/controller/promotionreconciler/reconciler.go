@@ -2,9 +2,9 @@ package promotionreconciler
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -12,16 +12,16 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/github"
-	"sigs.k8s.io/controller-runtime"
+	controllerruntime "sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	"github.com/openshift/api/image/docker10"
 	imagev1 "github.com/openshift/api/image/v1"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/api/helper"
 	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler/prowjobreconciler"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 	"github.com/openshift/ci-tools/pkg/load/agents"
@@ -40,6 +40,8 @@ type Options struct {
 	// that contains our imageRegistry. This cluster is
 	// most likely not the one the normal manager talks to.
 	RegistryManager controllerruntime.Manager
+
+	IgnoredImageStreams []*regexp.Regexp
 }
 
 const ControllerName = "promotionreconciler"
@@ -82,14 +84,30 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 	}
 
 	if err := c.Watch(
-		&source.Kind{Type: &imagev1.ImageStream{}},
-		imagestreamtagmapper.New(func(r reconcile.Request) []reconcile.Request { return []reconcile.Request{r} }),
+		source.Kind(mgr.GetCache(), &imagev1.ImageStream{}),
+		imagestreamtagmapper.New(func(r reconcile.Request) []reconcile.Request {
+			if ignored(r, opts.IgnoredImageStreams) {
+				return nil
+			}
+			return []reconcile.Request{r}
+		}),
 	); err != nil {
 		return fmt.Errorf("failed to create watch for ImageStreams: %w", err)
 	}
 	r.log.Info("Successfully added reconciler to manager")
 
 	return nil
+}
+
+func ignored(r reconcile.Request, ignoredImageStreams []*regexp.Regexp) bool {
+	is := fmt.Sprintf("%s/%s", r.Namespace, r.Name)
+	for _, re := range ignoredImageStreams {
+		if re.MatchString(is) {
+			logrus.WithField("is", is).Info("Ignored image stream")
+			return true
+		}
+	}
+	return false
 }
 
 // ciOperatorConfigGetter is needed to for testing. In non-test scenarios it is implemented
@@ -150,7 +168,7 @@ func (r *reconciler) reconcile(ctx context.Context, req controllerruntime.Reques
 	}
 	log = log.WithField("org", ciOPConfig.Metadata.Org).WithField("repo", ciOPConfig.Metadata.Repo).WithField("branch", ciOPConfig.Metadata.Branch)
 
-	istCommit, err := commitForIST(ist)
+	istCommit, err := commitForIST(ist, r.client)
 	if err != nil {
 		return controllerutil.TerminalError(fmt.Errorf("failed to get commit for imageStreamTag: %w", err))
 	}
@@ -195,13 +213,15 @@ func (r *reconciler) promotionConfig(ist *imagev1.ImageStreamTag) (*cioperatorap
 	}
 }
 
-func commitForIST(ist *imagev1.ImageStreamTag) (string, error) {
-	metadata := &docker10.DockerImage{}
-	if err := json.Unmarshal(ist.Image.DockerImageMetadata.Raw, metadata); err != nil {
-		return "", fmt.Errorf("failed to unmarshal imagestream.image.dockerImageMetadata: %w", err)
+func commitForIST(ist *imagev1.ImageStreamTag, client ctrlruntimeclient.Client) (string, error) {
+	labels, err := helper.LabelsOnISTagImage(context.TODO(), client, ist, cioperatorapi.ReleaseArchitectureAMD64)
+	if err != nil {
+		return "", controllerutil.TerminalError(fmt.Errorf("failed to get value of the image label: %w", err))
 	}
-
-	commit := metadata.Config.Labels["io.openshift.build.commit.id"]
+	if labels == nil {
+		return "", controllerutil.TerminalError(errors.New("ImageStreamTag has no labels, can't find out source commit"))
+	}
+	commit := labels["io.openshift.build.commit.id"]
 	if commit == "" {
 		return "", controllerutil.TerminalError(errors.New("ImageStreamTag has no `io.openshift.build.commit.id` label, can't find out source commit"))
 	}

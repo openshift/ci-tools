@@ -15,10 +15,10 @@ type fileTestResolver struct {
 func (r *fileTestResolver) resolve(job string) (api.MetadataWithTest, error) {
 	byOrgRepo := r.configAgent.GetAll()
 	if v, ok := byOrgRepo["openshift"]; ok {
-		if configurations, configOK := v["release"]; configOK {
+		for _, configurations := range v {
 			for _, configuration := range configurations {
 				for _, element := range configuration.Tests {
-					if element.Cron != nil || element.Interval != nil || element.ReleaseController {
+					if element.IsPeriodic() {
 						jobName := configuration.Metadata.JobName(jc.PeriodicPrefix, element.As)
 						if jobName == job {
 							return api.MetadataWithTest{

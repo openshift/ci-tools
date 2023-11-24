@@ -1,17 +1,33 @@
 package steps
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"strings"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	coreapi "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/scheme"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	buildapi "github.com/openshift/api/build/v1"
+	buildv1 "github.com/openshift/api/build/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/testhelper"
+	testhelper_kube "github.com/openshift/ci-tools/pkg/testhelper/kubernetes"
 )
 
 func TestCreateBuild(t *testing.T) {
@@ -123,7 +139,7 @@ func TestCreateBuild(t *testing.T) {
 			resources:    map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}},
 			pullSecret: &coreapi.Secret{
 				Data:       map[string][]byte{coreapi.DockerConfigJsonKey: []byte("secret")},
-				ObjectMeta: meta.ObjectMeta{Name: PullSecretName},
+				ObjectMeta: meta.ObjectMeta{Name: api.RegistryPullCredentialsSecret},
 				Type:       coreapi.SecretTypeDockerConfigJson,
 			},
 		},
@@ -367,4 +383,491 @@ func TestBuildFromSource(t *testing.T) {
 			testhelper.CompareWithFixture(t, actual)
 		})
 	}
+}
+
+func init() {
+	if err := buildapi.AddToScheme(scheme.Scheme); err != nil {
+		panic(fmt.Sprintf("failed to add buildapi to scheme: %v", err))
+	}
+}
+
+func TestWaitForBuild(t *testing.T) {
+	ns := "ns"
+	now := meta.Time{Time: time.Now()}
+	start, end := meta.Time{Time: now.Time.Add(-3 * time.Second)}, now
+	var testCases = []struct {
+		name        string
+		buildClient BuildClient
+		timeout     time.Duration
+		expected    error
+	}{
+		{
+			name: "timeout",
+			buildClient: NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().
+				WithIndex(&coreapi.Event{}, "involvedObject.uid", fakeInvolvedObjectUIDEventIndex).
+				WithRuntimeObjects(
+					&buildapi.Build{
+						ObjectMeta: meta.ObjectMeta{
+							Name:              "some-build",
+							Namespace:         ns,
+							CreationTimestamp: start,
+							Annotations: map[string]string{
+								buildapi.BuildPodNameAnnotation: "some-build-build",
+							},
+						},
+						Status: buildapi.BuildStatus{
+							Phase:               buildapi.BuildPhasePending,
+							StartTimestamp:      &start,
+							CompletionTimestamp: &end,
+						},
+					},
+				).Build()), nil, nil),
+			expected: fmt.Errorf("build didn't start running within 0s (phase: Pending)"),
+		},
+		{
+			name: "timeout with pod",
+			buildClient: NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().
+				WithIndex(&coreapi.Event{}, "involvedObject.uid", fakeInvolvedObjectUIDEventIndex).
+				WithRuntimeObjects(
+					&buildapi.Build{
+						ObjectMeta: meta.ObjectMeta{
+							Name:              "some-build",
+							Namespace:         ns,
+							CreationTimestamp: start,
+							Annotations: map[string]string{
+								buildapi.BuildPodNameAnnotation: "some-build-build",
+							},
+						},
+						Status: buildapi.BuildStatus{
+							Phase:               buildapi.BuildPhasePending,
+							StartTimestamp:      &start,
+							CompletionTimestamp: &end,
+						},
+					},
+					&coreapi.Pod{
+						ObjectMeta: meta.ObjectMeta{
+							Name:      "some-build-build",
+							Namespace: ns,
+						},
+					},
+				).Build()), nil, nil),
+			expected: fmt.Errorf("build didn't start running within 0s (phase: Pending):\nFound 0 events for Pod some-build-build:"),
+		},
+		{
+			name: "timeout with pod and events",
+			buildClient: NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().
+				WithIndex(&coreapi.Event{}, "involvedObject.uid", fakeInvolvedObjectUIDEventIndex).
+				WithRuntimeObjects(
+					&buildapi.Build{
+						ObjectMeta: meta.ObjectMeta{
+							Name:              "some-build",
+							Namespace:         ns,
+							CreationTimestamp: start,
+							Annotations: map[string]string{
+								buildapi.BuildPodNameAnnotation: "some-build-build",
+							},
+						},
+						Status: buildapi.BuildStatus{
+							Phase:               buildapi.BuildPhasePending,
+							StartTimestamp:      &start,
+							CompletionTimestamp: &end,
+						},
+					},
+					&coreapi.Pod{
+						ObjectMeta: meta.ObjectMeta{
+							Name:      "some-build-build",
+							Namespace: ns,
+							UID:       "UID",
+						},
+						Status: coreapi.PodStatus{
+							ContainerStatuses: []coreapi.ContainerStatus{{
+								Name: "the-container",
+								State: coreapi.ContainerState{
+									Waiting: &coreapi.ContainerStateWaiting{
+										Reason:  "the_reason",
+										Message: "the_message",
+									},
+								},
+							}},
+						},
+					},
+				).Build()), nil, nil),
+			expected: fmt.Errorf(`build didn't start running within 0s (phase: Pending):
+* Container the-container is not ready with reason the_reason and message the_message
+Found 0 events for Pod some-build-build:`),
+		},
+		{
+			name: "build succeeded",
+			buildClient: NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithIndex(&coreapi.Event{}, "involvedObject.uid", fakeInvolvedObjectUIDEventIndex).WithRuntimeObjects(
+				&buildapi.Build{
+					ObjectMeta: meta.ObjectMeta{
+						Name:              "some-build",
+						Namespace:         ns,
+						CreationTimestamp: start,
+					},
+					Status: buildapi.BuildStatus{
+						Phase:               buildapi.BuildPhaseComplete,
+						StartTimestamp:      &start,
+						CompletionTimestamp: &end,
+					},
+				}).Build()), nil, nil),
+			timeout: 30 * time.Minute,
+		},
+		{
+			name: "build failed",
+			buildClient: NewFakeBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithIndex(&coreapi.Event{}, "involvedObject.uid", fakeInvolvedObjectUIDEventIndex).WithRuntimeObjects(
+				&buildapi.Build{
+					ObjectMeta: meta.ObjectMeta{
+						Name:              "some-build",
+						Namespace:         ns,
+						CreationTimestamp: start,
+					},
+					Status: buildapi.BuildStatus{
+						Phase:               buildapi.BuildPhaseCancelled,
+						Reason:              "reason",
+						Message:             "msg",
+						LogSnippet:          "snippet",
+						StartTimestamp:      &start,
+						CompletionTimestamp: &end,
+					},
+				}).Build()), "abc\n"), // the line break is for gotestsum https://github.com/gotestyourself/gotestsum/issues/141#issuecomment-1209146526
+			timeout:  30 * time.Minute,
+			expected: fmt.Errorf("%s\n\n%s", "the build some-build failed after 3s with reason reason: msg", "snippet"),
+		},
+		{
+			name: "build already succeeded",
+			buildClient: NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
+				&buildapi.Build{
+					ObjectMeta: meta.ObjectMeta{
+						Name:      "some-build",
+						Namespace: ns,
+						CreationTimestamp: meta.Time{
+							Time: now.Add(-60 * time.Minute),
+						},
+					},
+					Status: buildapi.BuildStatus{
+						Phase: buildapi.BuildPhaseComplete,
+						StartTimestamp: &meta.Time{
+							Time: now.Add(-60 * time.Minute),
+						},
+						CompletionTimestamp: &meta.Time{
+							Time: now.Add(-59 * time.Minute),
+						},
+					},
+				}).Build()), nil, nil),
+			timeout: 30 * time.Minute,
+		},
+		{
+			name: "build already failed",
+			buildClient: NewFakeBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
+				&buildapi.Build{
+					ObjectMeta: meta.ObjectMeta{
+						Name:      "some-build",
+						Namespace: ns,
+						CreationTimestamp: meta.Time{
+							Time: now.Add(-60 * time.Minute),
+						},
+					},
+					Status: buildapi.BuildStatus{
+						Phase:      buildapi.BuildPhaseCancelled,
+						Reason:     "reason",
+						Message:    "msg",
+						LogSnippet: "snippet",
+						StartTimestamp: &meta.Time{
+							Time: now.Add(-60 * time.Minute),
+						},
+						CompletionTimestamp: &meta.Time{
+							Time: now.Add(-59 * time.Minute),
+						},
+					},
+				}).Build()), "abc\n"),
+			timeout:  30 * time.Minute,
+			expected: fmt.Errorf("%s\n\n%s", "the build some-build failed after 1m0s with reason reason: msg", "snippet"),
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := testhelper_kube.FakePodClient{
+				FakePodExecutor: &testhelper_kube.FakePodExecutor{
+					Lock:          sync.RWMutex{},
+					LoggingClient: testCase.buildClient,
+				},
+				PendingTimeout: testCase.timeout,
+			}
+			actual := waitForBuild(context.TODO(), testCase.buildClient, &client, ns, "some-build")
+			if diff := cmp.Diff(testCase.expected, actual, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("%s: mismatch (-expected +actual), diff: %s", testCase.name, diff)
+			}
+		})
+	}
+}
+
+func TestCheckPending(t *testing.T) {
+	now := meta.Time{Time: time.Now()}
+	for _, tc := range []struct {
+		name     string
+		build    buildapi.Build
+		expected error
+	}{{
+		name: "build completed",
+		build: buildapi.Build{
+			ObjectMeta: meta.ObjectMeta{
+				Name:      "some-build",
+				Namespace: "ns",
+				CreationTimestamp: meta.Time{
+					Time: now.Add(-60 * time.Minute),
+				},
+			},
+			Status: buildapi.BuildStatus{Phase: buildapi.BuildPhaseComplete},
+		},
+	}, {
+		name: "build cancelled",
+		build: buildapi.Build{
+			ObjectMeta: meta.ObjectMeta{
+				Name:      "some-build",
+				Namespace: "ns",
+				CreationTimestamp: meta.Time{
+					Time: now.Add(-60 * time.Minute),
+				},
+			},
+			Status: buildapi.BuildStatus{Phase: buildapi.BuildPhaseCancelled},
+		},
+	}, {
+		name: "build running",
+		build: buildapi.Build{
+			ObjectMeta: meta.ObjectMeta{
+				Name:      "some-build",
+				Namespace: "ns",
+				CreationTimestamp: meta.Time{
+					Time: now.Add(-60 * time.Minute),
+				},
+			},
+			Status: buildapi.BuildStatus{Phase: buildapi.BuildPhaseRunning},
+		},
+	}, {
+		name: "new build within timeout period",
+		build: buildapi.Build{
+			ObjectMeta: meta.ObjectMeta{
+				Name:              "some-build",
+				Namespace:         "ns",
+				CreationTimestamp: now,
+			},
+			Status: buildapi.BuildStatus{Phase: buildapi.BuildPhaseNew},
+		},
+	}, {
+		name: "new build outside timeout period",
+		build: buildapi.Build{
+			ObjectMeta: meta.ObjectMeta{
+				Name:      "some-build",
+				Namespace: "ns",
+				CreationTimestamp: meta.Time{
+					Time: now.Add(-60 * time.Minute),
+				},
+			},
+			Status: buildapi.BuildStatus{Phase: buildapi.BuildPhaseNew},
+		},
+		expected: errors.New("build didn't start running within 30m0s (phase: New)"),
+	}, {
+		name: "build pending within timeout period",
+		build: buildapi.Build{
+			ObjectMeta: meta.ObjectMeta{
+				Name:              "some-build",
+				Namespace:         "ns",
+				CreationTimestamp: now,
+			},
+			Status: buildapi.BuildStatus{Phase: buildapi.BuildPhasePending},
+		},
+	}, {
+		name: "build pending outside timeout period",
+		build: buildapi.Build{
+			ObjectMeta: meta.ObjectMeta{
+				Name:      "some-build",
+				Namespace: "ns",
+				CreationTimestamp: meta.Time{
+					Time: now.Add(-60 * time.Minute),
+				},
+			},
+			Status: buildapi.BuildStatus{Phase: buildapi.BuildPhasePending},
+		},
+		expected: errors.New("build didn't start running within 30m0s (phase: Pending)"),
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			timeout := 30 * time.Minute
+			client := testhelper_kube.FakePodClient{
+				FakePodExecutor: &testhelper_kube.FakePodExecutor{
+					Lock:          sync.RWMutex{},
+					LoggingClient: loggingclient.New(fakectrlruntimeclient.NewClientBuilder().Build()),
+				},
+				PendingTimeout: timeout,
+			}
+			actual := checkPending(context.Background(), &client, &tc.build, timeout, now.Time)
+			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("%s: mismatch (-expected +actual), diff: %s", tc.name, diff)
+			}
+		})
+	}
+}
+
+type fakeBuildClient struct {
+	loggingclient.LoggingClient
+	logContent        string
+	nodeArchitectures []string
+	dockerCfgPath     string
+}
+
+func NewFakeBuildClient(client loggingclient.LoggingClient, logContent string) BuildClient {
+	return &fakeBuildClient{
+		LoggingClient: client,
+		logContent:    logContent,
+	}
+}
+
+func (c *fakeBuildClient) Logs(namespace, name string, options *buildapi.BuildLogOptions) (io.ReadCloser, error) {
+	return io.NopCloser(strings.NewReader(c.logContent)), nil
+}
+
+func (c *fakeBuildClient) NodeArchitectures() []string {
+	return c.nodeArchitectures
+}
+func (c *fakeBuildClient) DockerCfgPath() string {
+	return c.dockerCfgPath
+}
+
+func Test_constructMultiArchBuilds(t *testing.T) {
+	tests := []struct {
+		name              string
+		build             buildapi.Build
+		nodeArchitectures []string
+		want              []buildapi.Build
+	}{
+		{
+			name:              "basic case - only amd64",
+			nodeArchitectures: []string{"amd64"},
+			build: buildapi.Build{
+				ObjectMeta: meta.ObjectMeta{Name: "test-build"},
+				Spec: buildv1.BuildSpec{
+					CommonSpec: buildv1.CommonSpec{
+						Output: buildv1.BuildOutput{
+							ImageLabels: []buildapi.ImageLabel{
+								{Name: "io.openshift.build.namespace", Value: "namespace"},
+								{Name: "io.openshift.build.commit.id", Value: "commit-id"},
+								{Name: "io.openshift.build.commit.ref", Value: "commit-id"},
+							},
+						},
+					},
+				},
+			},
+			want: []buildapi.Build{
+				{
+					ObjectMeta: meta.ObjectMeta{Name: "test-build-amd64"},
+					Spec: buildapi.BuildSpec{
+						CommonSpec: buildapi.CommonSpec{
+							NodeSelector: map[string]string{
+								"kubernetes.io/arch": "amd64",
+							},
+							Output: buildv1.BuildOutput{
+								ImageLabels: []buildapi.ImageLabel{
+									{Name: "io.openshift.build.namespace", Value: "namespace"},
+									{Name: "io.openshift.build.commit.id", Value: "commit-id"},
+									{Name: "io.openshift.build.commit.ref", Value: "commit-id"},
+								},
+								To: &coreapi.ObjectReference{Name: "pipeline:test-build-amd64"},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:              "basic case - multi architectures",
+			nodeArchitectures: []string{"amd64", "arm64", "ppc64"},
+			build: buildapi.Build{
+				ObjectMeta: meta.ObjectMeta{Name: "test-build"},
+				Spec: buildv1.BuildSpec{
+					CommonSpec: buildv1.CommonSpec{
+						Output: buildv1.BuildOutput{
+							ImageLabels: []buildapi.ImageLabel{
+								{Name: "io.openshift.build.namespace", Value: "namespace"},
+								{Name: "io.openshift.build.commit.id", Value: "commit-id"},
+								{Name: "io.openshift.build.commit.ref", Value: "commit-id"},
+							},
+						},
+					},
+				},
+			},
+			want: []buildapi.Build{
+				{
+					ObjectMeta: meta.ObjectMeta{Name: "test-build-amd64"},
+					Spec: buildapi.BuildSpec{
+						CommonSpec: buildapi.CommonSpec{
+							NodeSelector: map[string]string{
+								"kubernetes.io/arch": "amd64",
+							},
+							Output: buildv1.BuildOutput{
+								ImageLabels: []buildapi.ImageLabel{
+									{Name: "io.openshift.build.namespace", Value: "namespace"},
+									{Name: "io.openshift.build.commit.id", Value: "commit-id"},
+									{Name: "io.openshift.build.commit.ref", Value: "commit-id"},
+								},
+								To: &coreapi.ObjectReference{Name: "pipeline:test-build-amd64"},
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: meta.ObjectMeta{Name: "test-build-arm64"},
+					Spec: buildapi.BuildSpec{
+						CommonSpec: buildapi.CommonSpec{
+							NodeSelector: map[string]string{
+								"kubernetes.io/arch": "arm64",
+							},
+							Output: buildv1.BuildOutput{
+								ImageLabels: []buildapi.ImageLabel{
+									{Name: "io.openshift.build.namespace", Value: "namespace"},
+									{Name: "io.openshift.build.commit.id", Value: "commit-id"},
+									{Name: "io.openshift.build.commit.ref", Value: "commit-id"},
+								},
+								To: &coreapi.ObjectReference{Name: "pipeline:test-build-arm64"},
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: meta.ObjectMeta{Name: "test-build-ppc64"},
+					Spec: buildapi.BuildSpec{
+						CommonSpec: buildapi.CommonSpec{
+							NodeSelector: map[string]string{
+								"kubernetes.io/arch": "ppc64",
+							},
+							Output: buildv1.BuildOutput{
+								ImageLabels: []buildapi.ImageLabel{
+									{Name: "io.openshift.build.namespace", Value: "namespace"},
+									{Name: "io.openshift.build.commit.id", Value: "commit-id"},
+									{Name: "io.openshift.build.commit.ref", Value: "commit-id"},
+								},
+								To: &coreapi.ObjectReference{Name: "pipeline:test-build-ppc64"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if diff := cmp.Diff(constructMultiArchBuilds(tt.build, tt.nodeArchitectures), tt.want, cmpopts.IgnoreFields(coreapi.ObjectReference{}, "Kind")); diff != "" {
+				t.Fatal(diff)
+			}
+		})
+	}
+}
+
+func fakeInvolvedObjectUIDEventIndex(object client.Object) []string {
+	p, ok := object.(*coreapi.Event)
+	if !ok {
+		panic(fmt.Errorf("indexer function for type %T's involvedObject.uid field received object of type %T", coreapi.Event{}, object))
+	}
+	return []string{string(p.InvolvedObject.UID)}
 }

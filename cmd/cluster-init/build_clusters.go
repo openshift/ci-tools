@@ -1,7 +1,7 @@
 package main
 
 import (
-	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
@@ -11,9 +11,14 @@ import (
 
 type BuildClusters struct {
 	Managed []string `json:"managed,omitempty"`
+	Hosted  []string `json:"hosted,omitempty"`
 }
 
 func updateBuildClusters(o options) error {
+	if o.unmanaged {
+		logrus.Infof("skipping build clusters config update for unmanaged cluster: %s", o.clusterName)
+		return nil
+	}
 	logrus.Infof("updating build clusters config to add: %s", o.clusterName)
 	buildClusters, err := loadBuildClusters(o)
 	if err != nil {
@@ -21,17 +26,20 @@ func updateBuildClusters(o options) error {
 	}
 
 	buildClusters.Managed = append(buildClusters.Managed, o.clusterName)
+	if o.hosted {
+		buildClusters.Hosted = append(buildClusters.Hosted, o.clusterName)
+	}
 
 	rawYaml, err := yaml.Marshal(buildClusters)
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(buildClustersFile(o), rawYaml, 0644)
+	return os.WriteFile(buildClustersFile(o), rawYaml, 0644)
 }
 
 func loadBuildClusters(o options) (*BuildClusters, error) {
 	filename := buildClustersFile(o)
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -108,9 +107,9 @@ func TestProwMetadata(t *testing.T) {
 }
 
 func verifyMetadata(jobSpec *api.JobSpec, namespace string, customMetadata map[string]string) error {
-	tempDir, err := ioutil.TempDir("", "")
+	tempDir, err := os.MkdirTemp("", "")
 	if err != nil {
-		return fmt.Errorf("Unable to create temporary directory: %v", err)
+		return fmt.Errorf("unable to create temporary directory: %w", err)
 	}
 	defer os.RemoveAll(tempDir)
 	if err := os.Setenv("ARTIFACTS", tempDir); err != nil {
@@ -128,17 +127,17 @@ func verifyMetadata(jobSpec *api.JobSpec, namespace string, customMetadata map[s
 	}
 
 	if err := o.writeMetadataJSON(); err != nil {
-		return fmt.Errorf("error while writing metadata JSON: %v", err)
+		return fmt.Errorf("error while writing metadata JSON: %w", err)
 	}
 
-	metadataFileContents, err := ioutil.ReadFile(metadataFile)
+	metadataFileContents, err := os.ReadFile(metadataFile)
 	if err != nil {
-		return fmt.Errorf("error reading metadata file: %v", err)
+		return fmt.Errorf("error reading metadata file: %w", err)
 	}
 
 	var writtenMetadata prowResultMetadata
 	if err := json.Unmarshal(metadataFileContents, &writtenMetadata); err != nil {
-		return fmt.Errorf("error parsing prow metadata: %v", err)
+		return fmt.Errorf("error parsing prow metadata: %w", err)
 	}
 
 	expectedMetadata := prowResultMetadata{
@@ -165,35 +164,35 @@ func verifyMetadata(jobSpec *api.JobSpec, namespace string, customMetadata map[s
 	if len(customMetadata) > 0 {
 		testJSON, err := json.MarshalIndent(customMetadata, "", "")
 		if err != nil {
-			return fmt.Errorf("error marshalling custom metadata: %v", err)
+			return fmt.Errorf("error marshalling custom metadata: %w", err)
 		}
-		err = ioutil.WriteFile(filepath.Join(testArtifactDirectory, "custom-prow-metadata.json"), testJSON, os.FileMode(0644))
+		err = os.WriteFile(filepath.Join(testArtifactDirectory, "custom-prow-metadata.json"), testJSON, os.FileMode(0644))
 		if err != nil {
-			return fmt.Errorf("unable to create custom metadata file: %v", err)
+			return fmt.Errorf("unable to create custom metadata file: %w", err)
 		}
 	}
 
 	// Write a bunch of empty files that should be ignored
 	var errs []error
-	errs = append(errs, ioutil.WriteFile(filepath.Join(testArtifactDirectory, "a-ignore1.txt"), []byte(``), os.FileMode(0644)))
-	errs = append(errs, ioutil.WriteFile(filepath.Join(testArtifactDirectory, "b-ignore1.txt"), []byte(`{"invalid-field1": "invalid-value1"}`), os.FileMode(0644)))
-	errs = append(errs, ioutil.WriteFile(filepath.Join(testArtifactDirectory, "d-ignore1.txt"), []byte(``), os.FileMode(0644)))
-	errs = append(errs, ioutil.WriteFile(filepath.Join(testArtifactDirectory, "e-ignore1.txt"), []byte(`{"invalid-field2": "invalid-value2"}`), os.FileMode(0644)))
+	errs = append(errs, os.WriteFile(filepath.Join(testArtifactDirectory, "a-ignore1.txt"), []byte(``), os.FileMode(0644)))
+	errs = append(errs, os.WriteFile(filepath.Join(testArtifactDirectory, "b-ignore1.txt"), []byte(`{"invalid-field1": "invalid-value1"}`), os.FileMode(0644)))
+	errs = append(errs, os.WriteFile(filepath.Join(testArtifactDirectory, "d-ignore1.txt"), []byte(``), os.FileMode(0644)))
+	errs = append(errs, os.WriteFile(filepath.Join(testArtifactDirectory, "e-ignore1.txt"), []byte(`{"invalid-field2": "invalid-value2"}`), os.FileMode(0644)))
 	if err := utilerrors.NewAggregate(errs); err != nil {
-		return fmt.Errorf("one or more of the empty *ignore files failed to write: %v", err)
+		return fmt.Errorf("one or more of the empty *ignore files failed to write: %w", err)
 	}
 
 	if err := o.writeMetadataJSON(); err != nil {
-		return fmt.Errorf("error while writing metadata JSON: %v", err)
+		return fmt.Errorf("error while writing metadata JSON: %w", err)
 	}
 
-	metadataFileContents, err = ioutil.ReadFile(metadataFile)
+	metadataFileContents, err = os.ReadFile(metadataFile)
 	if err != nil {
-		return fmt.Errorf("error reading metadata file (second revision): %v", err)
+		return fmt.Errorf("error reading metadata file (second revision): %w", err)
 	}
 
 	if err = json.Unmarshal(metadataFileContents, &writtenMetadata); err != nil {
-		return fmt.Errorf("error parsing prow metadata (second revision): %v", err)
+		return fmt.Errorf("error parsing prow metadata (second revision): %w", err)
 	}
 
 	revision := "1"
@@ -913,7 +912,7 @@ func TestConfig(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			var path string
 			if testCase.asFile {
-				temp, err := ioutil.TempFile("", "")
+				temp, err := os.CreateTemp("", "")
 				if err != nil {
 					t.Fatalf("%s: failed to create temp config file: %v", testCase.name, err)
 				}
@@ -931,7 +930,7 @@ func TestConfig(t *testing.T) {
 					}
 					w.Close()
 				} else {
-					if err := ioutil.WriteFile(path, []byte(testCase.config), 0664); err != nil {
+					if err := os.WriteFile(path, []byte(testCase.config), 0664); err != nil {
 						t.Fatalf("%s: failed to populate temp config file: %v", testCase.name, err)
 					}
 				}
@@ -989,10 +988,10 @@ func TestBuildPartialGraph(t *testing.T) {
 			input: []api.Step{
 				steps.InputImageTagStep(
 					&api.InputImageTagStepConfiguration{InputImage: api.InputImage{To: api.PipelineImageStreamTagReferenceRoot}},
-					loggingclient.New(fakectrlruntimeclient.NewFakeClient(&imagev1.ImageStreamTag{ObjectMeta: metav1.ObjectMeta{Name: ":"}})),
+					loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(&imagev1.ImageStreamTag{ObjectMeta: metav1.ObjectMeta{Name: ":"}}).Build()),
 					nil,
 				),
-				steps.SourceStep(api.SourceStepConfiguration{From: api.PipelineImageStreamTagReferenceRoot, To: api.PipelineImageStreamTagReferenceSource}, api.ResourceConfiguration{}, nil, &api.JobSpec{}, nil, nil),
+				steps.SourceStep(api.SourceStepConfiguration{From: api.PipelineImageStreamTagReferenceRoot, To: api.PipelineImageStreamTagReferenceSource}, api.ResourceConfiguration{}, nil, nil, &api.JobSpec{}, nil, nil),
 				steps.ProjectDirectoryImageBuildStep(
 					api.ProjectDirectoryImageBuildStepConfiguration{
 						From: api.PipelineImageStreamTagReferenceSource,
@@ -1001,7 +1000,7 @@ func TestBuildPartialGraph(t *testing.T) {
 						},
 						To: api.PipelineImageStreamTagReference("oc-bin-image"),
 					},
-					&api.ReleaseBuildConfiguration{}, api.ResourceConfiguration{}, nil, nil, nil,
+					&api.ReleaseBuildConfiguration{}, api.ResourceConfiguration{}, nil, nil, nil, nil,
 				),
 				steps.OutputImageTagStep(api.OutputImageTagStepConfiguration{From: api.PipelineImageStreamTagReference("oc-bin-image")}, nil, nil),
 				steps.ImagesReadyStep(steps.OutputImageTagStep(api.OutputImageTagStepConfiguration{From: api.PipelineImageStreamTagReference("oc-bin-image")}, nil, nil).Creates()),
@@ -1098,19 +1097,19 @@ func TestValidateSteps(t *testing.T) {
 }
 
 func TestLoadLeaseCredentials(t *testing.T) {
-	dir, err := ioutil.TempDir("", "test")
+	dir, err := os.MkdirTemp("", "test")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
 
 	leaseServerCredentialsFile := filepath.Join(dir, "leaseServerCredentialsFile")
-	if err := ioutil.WriteFile(leaseServerCredentialsFile, []byte("ci-new:secret-new"), 0644); err != nil {
+	if err := os.WriteFile(leaseServerCredentialsFile, []byte("ci-new:secret-new"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
 	leaseServerCredentialsInvalidFile := filepath.Join(dir, "leaseServerCredentialsInvalidFile")
-	if err := ioutil.WriteFile(leaseServerCredentialsInvalidFile, []byte("no-colon"), 0644); err != nil {
+	if err := os.WriteFile(leaseServerCredentialsInvalidFile, []byte("no-colon"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1253,9 +1252,9 @@ func TestMultiStageParams(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.id, func(t *testing.T) {
 			t.Parallel()
-
 			configSpec := api.ReleaseBuildConfiguration{
 				Tests: tc.testConfig,
 			}
@@ -1539,6 +1538,73 @@ func TestGenerateAuthorAccessRoleBinding(t *testing.T) {
 			actual := generateAuthorAccessRoleBinding("ci-op-xxxx", tc.authors)
 			if diff := cmp.Diff(tc.expected, actual, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
 				t.Fatal(diff)
+			}
+		})
+	}
+}
+
+func TestHandleTargetAdditionalSuffix(t *testing.T) {
+	testCases := []struct {
+		name                   string
+		targetAdditionalSuffix string
+		targets                stringSlice
+		expectedTargets        stringSlice
+		tests                  []api.TestStepConfiguration
+		expectedTests          []api.TestStepConfiguration
+		jobSpec                api.JobSpec
+		expectedJobSpec        api.JobSpec
+	}{
+		{
+			name:            "no target-additional-suffix set",
+			targets:         stringSlice{[]string{"e2e"}},
+			expectedTargets: stringSlice{[]string{"e2e"}},
+			tests:           []api.TestStepConfiguration{{As: "e2e"}},
+			expectedTests:   []api.TestStepConfiguration{{As: "e2e"}},
+			jobSpec:         api.JobSpec{Target: "e2e"},
+			expectedJobSpec: api.JobSpec{Target: "e2e"},
+		},
+		{
+			name:                   "basic target-additional-suffix set",
+			targetAdditionalSuffix: "1",
+			targets:                stringSlice{[]string{"e2e"}},
+			expectedTargets:        stringSlice{[]string{"e2e-1"}},
+			tests:                  []api.TestStepConfiguration{{As: "e2e"}},
+			expectedTests:          []api.TestStepConfiguration{{As: "e2e-1"}},
+			jobSpec:                api.JobSpec{Target: "e2e"},
+			expectedJobSpec:        api.JobSpec{Target: "e2e-1", TargetAdditionalSuffix: "1"},
+		},
+		{
+			name:                   "target-additional-suffix set with multiple targets",
+			targetAdditionalSuffix: "1",
+			targets:                stringSlice{[]string{"e2e", "unit"}},
+			expectedTargets:        stringSlice{[]string{"e2e-1", "unit-1"}},
+			tests:                  []api.TestStepConfiguration{{As: "e2e"}, {As: "unit"}},
+			expectedTests:          []api.TestStepConfiguration{{As: "e2e-1"}, {As: "unit-1"}},
+			jobSpec:                api.JobSpec{Target: "e2e"},
+			expectedJobSpec:        api.JobSpec{Target: "e2e-1", TargetAdditionalSuffix: "1"},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			o := &options{
+				targetAdditionalSuffix: tc.targetAdditionalSuffix,
+				configSpec: &api.ReleaseBuildConfiguration{
+					Tests: tc.tests,
+				},
+				jobSpec: &tc.jobSpec,
+				targets: tc.targets,
+			}
+
+			handleTargetAdditionalSuffix(o)
+
+			if diff := cmp.Diff(tc.expectedTargets.values, o.targets.values); diff != "" {
+				t.Fatalf("expectedTargets differ from actual, diff: %s", diff)
+			}
+			if diff := cmp.Diff(tc.expectedTests, o.configSpec.Tests); diff != "" {
+				t.Fatalf("expectedTests differ from actual, diff: %s", diff)
+			}
+			if diff := cmp.Diff(tc.expectedJobSpec.Target, o.jobSpec.Target); diff != "" {
+				t.Fatalf("expectedJobSpec Target differs from actual, diff: %s", diff)
 			}
 		})
 	}

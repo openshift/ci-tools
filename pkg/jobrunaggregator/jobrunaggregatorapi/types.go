@@ -117,3 +117,14 @@ type BackendDisruptionStatisticsRow struct {
 	P98               float64
 	P99               float64
 }
+
+// KnownAlertRow is used for results from the Alerts_AllKnown view.
+type KnownAlertRow struct {
+	AlertName      string
+	AlertNamespace string
+	AlertLevel     string
+	Release        string
+	FirstObserved  time.Time
+	LastObserved   time.Time
+	Results        int
+}

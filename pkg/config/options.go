@@ -26,7 +26,7 @@ type Options struct {
 	LogLevel string
 
 	onlyProcessChanges bool
-	modifiedFiles      sets.String
+	modifiedFiles      sets.Set[string]
 }
 
 func (o *Options) Validate() error {
@@ -73,7 +73,7 @@ func (o *Options) Complete() error {
 	// M       path/of/modified/file.yaml
 	// D       path/of/deleted/file.yaml
 	// R100    path/of/renamed/old-name.yaml   path/of/renamed/new-name.yaml
-	o.modifiedFiles = sets.NewString()
+	o.modifiedFiles = sets.New[string]()
 	for _, f := range changedFilesWithStatus {
 		statusAndFile := strings.Fields(f)
 		if len(statusAndFile) > 1 && statusAndFile[0] == "M" {
@@ -94,7 +94,7 @@ func (o *Options) Bind(fs *flag.FlagSet) {
 	fs.StringVar(&o.ConfigDir, "config-dir", "", "Path to CI Operator configuration directory.")
 	fs.StringVar(&o.LogLevel, "log-level", "info", "Level at which to log output.")
 	fs.StringVar(&o.Org, "org", "", "Limit repos affected to those in this org.")
-	fs.StringVar(&o.Repo, "repo", "", "Limit repos affected to this repo.")
+	fs.StringVar(&o.Repo, "repo", "", "Limit branches affected to this repo.")
 
 	fs.BoolVar(&o.onlyProcessChanges, "only-process-changes", false, "If true, compare changes with the main branch")
 }
@@ -128,8 +128,8 @@ func (o *Options) OperateOnCIOperatorConfigDir(configDir string, callback func(*
 
 // OperateOnJobConfigSubdirPaths filters the full set of configurations
 // down to those that were selected by the user with --{org|repo}
-func (o *Options) OperateOnJobConfigSubdirPaths(dir, subDir string, callback func(info *jc.Info) error) error {
-	return jc.OperateOnJobConfigSubdirPaths(dir, subDir, func(info *jc.Info) error {
+func (o *Options) OperateOnJobConfigSubdirPaths(dir, subDir string, knownInfraJobFiles sets.Set[string], callback func(info *jc.Info) error) error {
+	return jc.OperateOnJobConfigSubdirPaths(dir, subDir, knownInfraJobFiles, func(info *jc.Info) error {
 		if !o.matches(info.Org, info.Repo) {
 			return nil
 		}

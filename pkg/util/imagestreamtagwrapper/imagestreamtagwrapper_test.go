@@ -2,7 +2,7 @@ package imagestreamtagwrapper
 
 import (
 	"context"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/pmezard/go-difflib/difflib"
@@ -16,7 +16,7 @@ import (
 )
 
 func TestGetImageStreamTag(t *testing.T) {
-	rawImageStream, err := ioutil.ReadFile("testdata/imagestream.yaml")
+	rawImageStream, err := os.ReadFile("testdata/imagestream.yaml")
 	if err != nil {
 		t.Fatalf("failed to read imagestream from disk: %v", err)
 	}
@@ -24,7 +24,7 @@ func TestGetImageStreamTag(t *testing.T) {
 	if err := yaml.Unmarshal(rawImageStream, imageStream); err != nil {
 		t.Fatalf("failed to unmarshal imagestream: %v", err)
 	}
-	rawImages, err := ioutil.ReadFile("testdata/images.yaml")
+	rawImages, err := os.ReadFile("testdata/images.yaml")
 	if err != nil {
 		t.Fatalf("failed to read images from disk: %v", err)
 	}
@@ -32,7 +32,7 @@ func TestGetImageStreamTag(t *testing.T) {
 	if err := yaml.Unmarshal(rawImages, images); err != nil {
 		t.Fatalf("failed to unmarshal images: %v", err)
 	}
-	rawImageStreamTags, err := ioutil.ReadFile("testdata/imagestreamtags.yaml")
+	rawImageStreamTags, err := os.ReadFile("testdata/imagestreamtags.yaml")
 	if err != nil {
 		t.Fatalf("failed to read imagestreamtags from disk: %v", err)
 	}
@@ -47,7 +47,7 @@ func TestGetImageStreamTag(t *testing.T) {
 	}
 
 	client := &imagestreamtagwrapper{
-		Client: fakectrlruntimeclient.NewFakeClientWithScheme(scheme, imageStream, images),
+		Client: fakectrlruntimeclient.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(imageStream, images).Build(),
 	}
 	ctx := context.Background()
 

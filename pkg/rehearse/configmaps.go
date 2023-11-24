@@ -34,22 +34,22 @@ const (
 // ConfigMaps holds the data about the ConfigMaps affected by a rehearse run
 type ConfigMaps struct {
 	// Paths is a set of repo paths that changed content and belong to some ConfigMap
-	Paths sets.String
+	Paths sets.Set[string]
 	// Names is a mapping from production ConfigMap names to rehearse-specific ones
 	Names map[string]string
 	// ProductionNames is a set of production ConfigMap names
-	ProductionNames sets.String
+	ProductionNames sets.Set[string]
 	// Patterns is the set of config-updater patterns that cover at least one changed file
-	Patterns sets.String
+	Patterns sets.Set[string]
 }
 
 // NewConfigMaps populates a ConfigMaps instance
-func NewConfigMaps(paths []string, purpose, buildId string, prNumber int, configUpdaterCfg prowplugins.ConfigUpdater) (ConfigMaps, error) {
+func NewConfigMaps(paths []string, purpose, SHA string, prNumber int, configUpdaterCfg prowplugins.ConfigUpdater) (ConfigMaps, error) {
 	cms := ConfigMaps{
-		Paths:           sets.NewString(paths...),
+		Paths:           sets.New[string](paths...),
 		Names:           nil,
-		ProductionNames: sets.NewString(),
-		Patterns:        sets.NewString(),
+		ProductionNames: sets.New[string](),
+		Patterns:        sets.New[string](),
 	}
 
 	var errs []error
@@ -62,7 +62,7 @@ func NewConfigMaps(paths []string, purpose, buildId string, prNumber int, config
 		if cms.Names == nil {
 			cms.Names = make(map[string]string)
 		}
-		cms.Names[cmName] = tempConfigMapName(purpose, cmName, buildId, prNumber)
+		cms.Names[cmName] = tempConfigMapName(purpose, cmName, SHA, prNumber)
 		cms.ProductionNames.Insert(cmName)
 		cms.Patterns.Insert(pattern)
 	}
@@ -70,15 +70,15 @@ func NewConfigMaps(paths []string, purpose, buildId string, prNumber int, config
 	return cms, kutilerrors.NewAggregate(errs)
 }
 
-func tempConfigMapName(purpose, source, buildId string, prNumber int) string {
+func tempConfigMapName(purpose, source, SHA string, prNumber int) string {
 	// Object names can't be too long so we truncate the hash. This increases
 	// chances of collision but we can tolerate it as our input space is tiny.
 	pr := strconv.Itoa(prNumber)
-	maxLen := 253 - len("rehearse----") - len(purpose) - len(pr) - len(buildId)
+	maxLen := 253 - len("rehearse----") - len(purpose) - len(pr) - len(SHA)
 	if len(source) > maxLen {
 		source = source[:maxLen]
 	}
-	return fmt.Sprintf("rehearse-%s-%s-%s-%s", pr, buildId, purpose, source)
+	return fmt.Sprintf("rehearse-%s-%s-%s-%s", pr, SHA, purpose, source)
 }
 
 // CMManager manages temporary ConfigMaps created on build clusters to be
@@ -141,7 +141,7 @@ func (c *CMManager) createCM(name string, data []updateconfig.ConfigMapUpdate) e
 	return nil
 }
 
-func genChanges(root string, patterns sets.String) ([]prowgithub.PullRequestChange, error) {
+func genChanges(root string, patterns sets.Set[string]) ([]prowgithub.PullRequestChange, error) {
 	var ret []prowgithub.PullRequestChange
 	err := filepath.WalkDir(root, func(path string, info fs.DirEntry, err error) error {
 		if err != nil || info.IsDir() {
@@ -175,7 +175,7 @@ func replaceSpecNames(cluster, namespace string, cfg prowplugins.ConfigUpdater, 
 	ret = cfg
 	ret.Maps = make(map[string]prowplugins.ConfigMapSpec, len(cfg.Maps))
 	for k, v := range cfg.Maps {
-		if namespaces, configured := v.Clusters[cluster]; !configured || !sets.NewString(namespaces...).Has(namespace) {
+		if namespaces, configured := v.Clusters[cluster]; !configured || !sets.New[string](namespaces...).Has(namespace) {
 			continue
 		}
 		if name, ok := mapping[v.Name]; ok {
@@ -192,7 +192,7 @@ func (c *CMManager) Create(cms ConfigMaps) error {
 		return err
 	}
 	var errs []error
-	for cm, data := range updateconfig.FilterChanges(replaceSpecNames(c.cluster, c.namespace, c.configUpdaterCfg, cms.Names), changes, c.namespace, c.logger) {
+	for cm, data := range updateconfig.FilterChanges(replaceSpecNames(c.cluster, c.namespace, c.configUpdaterCfg, cms.Names), changes, c.namespace, false, c.logger) {
 		c.logger.WithFields(logrus.Fields{"cm-name": cm.Name}).Info("creating rehearsal configMap")
 		if err := c.createCM(cm.Name, data); err != nil {
 			errs = append(errs, err)

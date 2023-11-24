@@ -3,7 +3,7 @@ package steps
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"regexp"
 	"sort"
 	"strings"
@@ -52,7 +52,7 @@ func (s *writeParametersStep) run() error {
 	sort.Strings(params)
 
 	params = append(params, "")
-	return ioutil.WriteFile(s.paramFile, []byte(strings.Join(params, "\n")), 0640)
+	return os.WriteFile(s.paramFile, []byte(strings.Join(params, "\n")), 0640)
 }
 
 func (s *writeParametersStep) Requires() []api.StepLink {

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,19 +32,19 @@ func init() {
 func TestMakeGroups(t *testing.T) {
 	testCases := []struct {
 		name                string
-		openshiftPrivAdmins sets.String
+		openshiftPrivAdmins sets.Set[string]
 		peribolosConfig     string
 		mapping             map[string]string
 		roverGroups         map[string][]string
 		config              *group.Config
-		clusters            sets.String
+		clusters            sets.Set[string]
 		expected            map[string]GroupClusters
 		expectedErr         error
 	}{
 		{
 			name:                "basic case",
 			peribolosConfig:     "bar",
-			openshiftPrivAdmins: sets.NewString("a"),
+			openshiftPrivAdmins: sets.New[string]("a", "RH-Cachito"),
 			mapping:             map[string]string{"a": "b", "c": "c"},
 			roverGroups:         map[string][]string{"old-group-name": {"b", "c"}, "x": {"y", "y"}},
 			config: &group.Config{
@@ -55,10 +56,10 @@ func TestMakeGroups(t *testing.T) {
 					},
 				},
 			},
-			clusters: sets.NewString("app.ci", "build01", "build02", "hive"),
+			clusters: sets.New[string]("app.ci", "build01", "build02", "hive"),
 			expected: map[string]GroupClusters{
 				"openshift-priv-admins": {
-					Clusters: sets.NewString("app.ci"),
+					Clusters: sets.New[string]("app.ci"),
 					Group: &userv1.Group{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:   "openshift-priv-admins",
@@ -68,7 +69,7 @@ func TestMakeGroups(t *testing.T) {
 					},
 				},
 				"a-group": {
-					Clusters: sets.NewString("app.ci", "build01", "build02"),
+					Clusters: sets.New[string]("app.ci", "build01", "build02"),
 					Group: &userv1.Group{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:   "a-group",
@@ -78,7 +79,7 @@ func TestMakeGroups(t *testing.T) {
 					},
 				},
 				"c-group": {
-					Clusters: sets.NewString("app.ci", "build01", "build02"),
+					Clusters: sets.New[string]("app.ci", "build01", "build02"),
 					Group: &userv1.Group{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:   "c-group",
@@ -88,7 +89,7 @@ func TestMakeGroups(t *testing.T) {
 					},
 				},
 				"new-group-name": {
-					Clusters: sets.NewString("build01", "build02"),
+					Clusters: sets.New[string]("build01", "build02"),
 					Group: &userv1.Group{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:   "new-group-name",
@@ -98,7 +99,7 @@ func TestMakeGroups(t *testing.T) {
 					},
 				},
 				"x": {
-					Clusters: sets.NewString("app.ci", "build01", "build02", "hive"),
+					Clusters: sets.New[string]("app.ci", "build01", "build02", "hive"),
 					Group: &userv1.Group{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:   "x",
@@ -154,12 +155,12 @@ func TestEnsureGroups(t *testing.T) {
 		{
 			name: "basic case",
 			clients: map[string]ctrlruntimeclient.Client{
-				"b01": fakeclient.NewFakeClient(g01.DeepCopy()),
-				"b02": fakeclient.NewFakeClient(g03.DeepCopy()),
+				"b01": fakeclient.NewClientBuilder().WithRuntimeObjects(g01.DeepCopy()).Build(),
+				"b02": fakeclient.NewClientBuilder().WithRuntimeObjects(g03.DeepCopy()).Build(),
 			},
 			groups: map[string]GroupClusters{
 				"gh01-group": {
-					Clusters: sets.NewString("b01", "b02"),
+					Clusters: sets.New[string]("b01", "b02"),
 					Group: &userv1.Group{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:   "gh01-group",
@@ -169,7 +170,7 @@ func TestEnsureGroups(t *testing.T) {
 					},
 				},
 				"gh02-group": {
-					Clusters: sets.NewString("b01", "b02"),
+					Clusters: sets.New[string]("b01", "b02"),
 					Group: &userv1.Group{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:   "gh02-group",
@@ -207,12 +208,12 @@ func TestEnsureGroups(t *testing.T) {
 		{
 			name: "basic case: dryRun=true",
 			clients: map[string]ctrlruntimeclient.Client{
-				"b01": fakeclient.NewFakeClient(g01.DeepCopy()),
-				"b02": fakeclient.NewFakeClient(g03.DeepCopy()),
+				"b01": fakeclient.NewClientBuilder().WithRuntimeObjects(g01.DeepCopy()).Build(),
+				"b02": fakeclient.NewClientBuilder().WithRuntimeObjects(g03.DeepCopy()).Build(),
 			},
 			groups: map[string]GroupClusters{
 				"gh01-group": {
-					Clusters: sets.NewString("b01", "b02"),
+					Clusters: sets.New[string]("b01", "b02"),
 					Group: &userv1.Group{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:   "gh01-group",
@@ -222,7 +223,7 @@ func TestEnsureGroups(t *testing.T) {
 					},
 				},
 				"gh02-group": {
-					Clusters: sets.NewString("b01", "b02"),
+					Clusters: sets.New[string]("b01", "b02"),
 					Group: &userv1.Group{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:   "gh02-group",
@@ -259,11 +260,11 @@ func TestEnsureGroups(t *testing.T) {
 		{
 			name: "invalid group: duplicate members",
 			clients: map[string]ctrlruntimeclient.Client{
-				"b01": fakeclient.NewFakeClient(),
+				"b01": fakeclient.NewClientBuilder().Build(),
 			},
 			groups: map[string]GroupClusters{
 				"gh01-group": {
-					Clusters: sets.NewString("b01", "b02"),
+					Clusters: sets.New[string]("b01", "b02"),
 					Group: &userv1.Group{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:   "gh01-group",
@@ -293,4 +294,279 @@ func TestEnsureGroups(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetUsersWithoutKerberosID(t *testing.T) {
+
+	u01 := &userv1.User{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "a",
+		},
+		Identities: []string{"a"},
+	}
+	u02 := &userv1.User{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "b",
+		},
+		Identities: []string{"b"},
+	}
+	u03 := &userv1.User{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "c",
+		},
+		Identities: []string{"c", "d"},
+	}
+
+	testCases := []struct {
+		name        string
+		client      ctrlruntimeclient.Client
+		kerberosIDs sets.Set[string]
+
+		ExpectedUsersWithoutKerberosID map[string][]string
+		expectedErr                    error
+	}{
+		{
+			name: "basic case",
+			client: fakeclient.NewClientBuilder().WithRuntimeObjects(
+				u01.DeepCopy(), u02.DeepCopy(), u03.DeepCopy()).Build(),
+			kerberosIDs:                    sets.New[string]("a", "b"),
+			ExpectedUsersWithoutKerberosID: map[string][]string{"c": {"c", "d"}},
+			expectedErr:                    nil,
+		},
+		{
+			name: "nothing to delete",
+			client: fakeclient.NewClientBuilder().WithRuntimeObjects(
+				u01.DeepCopy(), u02.DeepCopy(), u03.DeepCopy()).Build(),
+			kerberosIDs:                    sets.New[string]("a", "b", "c"),
+			ExpectedUsersWithoutKerberosID: map[string][]string{},
+			expectedErr:                    nil,
+		},
+		{
+			name: "delete everyone",
+			client: fakeclient.NewClientBuilder().WithRuntimeObjects(
+				u01.DeepCopy(), u02.DeepCopy(), u03.DeepCopy()).Build(),
+			kerberosIDs:                    sets.New[string]("d", "e", "f"),
+			ExpectedUsersWithoutKerberosID: map[string][]string{"a": {"a"}, "b": {"b"}, "c": {"c", "d"}},
+			expectedErr:                    nil,
+		},
+		{
+			name:                           "nothing from client",
+			client:                         fakeclient.NewClientBuilder().Build(),
+			kerberosIDs:                    sets.New[string]("d", "e", "f"),
+			ExpectedUsersWithoutKerberosID: map[string][]string{},
+			expectedErr:                    nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.TODO()
+			actualUsers, err := getUsersWithoutKerberosID(ctx, tc.client, "b01", tc.kerberosIDs)
+			if diff := cmp.Diff(tc.ExpectedUsersWithoutKerberosID, actualUsers, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
+			}
+			if diff := cmp.Diff(tc.expectedErr, err, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
+			}
+		})
+	}
+}
+
+func TestDeleteInvalidUsers(t *testing.T) {
+	u01 := &userv1.User{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "a",
+		},
+		Identities: []string{"a"},
+	}
+	i01 := &userv1.Identity{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "a",
+		},
+		ProviderName:     "redhat.com",
+		ProviderUserName: "a",
+	}
+	u02 := &userv1.User{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "b",
+		},
+		Identities: []string{"b"},
+	}
+	i02 := &userv1.Identity{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "b",
+		},
+		ProviderName:     "redhat.com",
+		ProviderUserName: "b",
+	}
+	u03 := &userv1.User{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "c",
+		},
+		Identities: []string{"c", "d"},
+	}
+	i03 := &userv1.Identity{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "c",
+		},
+		ProviderName:     "redhat.com",
+		ProviderUserName: "c",
+	}
+	i04 := &userv1.Identity{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "d",
+		},
+		ProviderName:     "redhat.com",
+		ProviderUserName: "d",
+	}
+	testCases := []struct {
+		name        string
+		clients     map[string]ctrlruntimeclient.Client
+		kerberosIDs sets.Set[string]
+		ciAdmins    sets.Set[string]
+		verifyFunc  func(ctx context.Context, clients map[string]ctrlruntimeclient.Client) error
+	}{
+		{
+			name: "basic case",
+			clients: map[string]ctrlruntimeclient.Client{
+				"b01": fakeclient.NewClientBuilder().WithRuntimeObjects(
+					u01.DeepCopy(), u02.DeepCopy(), u03.DeepCopy(),
+					i01.DeepCopy(), i02.DeepCopy(), i03.DeepCopy(), i04.DeepCopy()).Build(),
+				"b02": fakeclient.NewClientBuilder().WithRuntimeObjects(
+					u01.DeepCopy(), u02.DeepCopy(), u03.DeepCopy(),
+					i01.DeepCopy(), i02.DeepCopy(), i03.DeepCopy(), i04.DeepCopy()).Build(),
+			},
+			kerberosIDs: sets.New[string]("a", "b"),
+			ciAdmins:    sets.New[string](),
+			verifyFunc: func(ctx context.Context, clients map[string]ctrlruntimeclient.Client) error {
+				for _, client := range clients {
+					assert.True(t, isUser(ctx, client, "a"))
+					assert.True(t, isIdentity(ctx, client, "a"))
+					assert.True(t, isUser(ctx, client, "b"))
+					assert.True(t, isIdentity(ctx, client, "b"))
+					assert.False(t, isUser(ctx, client, "c"))
+					assert.False(t, isIdentity(ctx, client, "c"))
+					assert.False(t, isIdentity(ctx, client, "d"))
+				}
+				return nil
+			},
+		},
+		{
+			name: "nothing to delete",
+			clients: map[string]ctrlruntimeclient.Client{
+				"b01": fakeclient.NewClientBuilder().WithRuntimeObjects(
+					u01.DeepCopy(), u02.DeepCopy(), u03.DeepCopy(),
+					i01.DeepCopy(), i02.DeepCopy(), i03.DeepCopy(), i04.DeepCopy()).Build(),
+				"b02": fakeclient.NewClientBuilder().WithRuntimeObjects(
+					u01.DeepCopy(), u02.DeepCopy(), u03.DeepCopy(),
+					i01.DeepCopy(), i02.DeepCopy(), i03.DeepCopy(), i04.DeepCopy()).Build(),
+			},
+			kerberosIDs: sets.New[string]("a", "b", "c"),
+			ciAdmins:    sets.New[string](),
+			verifyFunc: func(ctx context.Context, clients map[string]ctrlruntimeclient.Client) error {
+				for _, client := range clients {
+					assert.True(t, isUser(ctx, client, "a"))
+					assert.True(t, isIdentity(ctx, client, "a"))
+					assert.True(t, isUser(ctx, client, "b"))
+					assert.True(t, isIdentity(ctx, client, "b"))
+					assert.True(t, isUser(ctx, client, "c"))
+					assert.True(t, isIdentity(ctx, client, "c"))
+					assert.True(t, isIdentity(ctx, client, "d"))
+				}
+				return nil
+			},
+		},
+		{
+			name: "delete everyone",
+			clients: map[string]ctrlruntimeclient.Client{
+				"b01": fakeclient.NewClientBuilder().WithRuntimeObjects(u01.DeepCopy(), u02.DeepCopy(), u03.DeepCopy()).Build(),
+				"b02": fakeclient.NewClientBuilder().WithRuntimeObjects(u01.DeepCopy(), u02.DeepCopy(), u03.DeepCopy()).Build(),
+			},
+			kerberosIDs: sets.New[string]("d", "e", "f"),
+			ciAdmins:    sets.New[string](),
+			verifyFunc: func(ctx context.Context, clients map[string]ctrlruntimeclient.Client) error {
+				for _, client := range clients {
+					assert.False(t, isUser(ctx, client, "a"))
+					assert.False(t, isIdentity(ctx, client, "a"))
+					assert.False(t, isUser(ctx, client, "b"))
+					assert.False(t, isIdentity(ctx, client, "b"))
+					assert.False(t, isUser(ctx, client, "c"))
+					assert.False(t, isIdentity(ctx, client, "c"))
+					assert.False(t, isIdentity(ctx, client, "d"))
+				}
+				return nil
+			},
+		},
+		{
+			name: "different users on each clusters",
+			clients: map[string]ctrlruntimeclient.Client{
+				"b01": fakeclient.NewClientBuilder().WithRuntimeObjects(
+					u01.DeepCopy(), u02.DeepCopy(),
+					i01.DeepCopy(), i02.DeepCopy()).Build(),
+				"b02": fakeclient.NewClientBuilder().WithRuntimeObjects(
+					u03.DeepCopy(), i03.DeepCopy(), i04.DeepCopy()).Build(),
+			},
+			kerberosIDs: sets.New[string]("b", "c"),
+			ciAdmins:    sets.New[string](),
+			verifyFunc: func(ctx context.Context, clients map[string]ctrlruntimeclient.Client) error {
+				assert.False(t, isUser(ctx, clients["b01"], "a"))
+				assert.False(t, isIdentity(ctx, clients["b01"], "a"))
+				assert.True(t, isUser(ctx, clients["b01"], "b"))
+				assert.True(t, isIdentity(ctx, clients["b01"], "b"))
+				assert.True(t, isUser(ctx, clients["b02"], "c"))
+				assert.True(t, isIdentity(ctx, clients["b02"], "c"))
+				assert.True(t, isIdentity(ctx, clients["b02"], "d"))
+				return nil
+			},
+		},
+		{
+			name: "attempt to delete ci-admin",
+			clients: map[string]ctrlruntimeclient.Client{
+				"b01": fakeclient.NewClientBuilder().WithRuntimeObjects(
+					u01.DeepCopy(), u02.DeepCopy(), u03.DeepCopy(),
+					i01.DeepCopy(), i02.DeepCopy(), i03.DeepCopy(), i04.DeepCopy()).Build(),
+				"b02": fakeclient.NewClientBuilder().WithRuntimeObjects(
+					u01.DeepCopy(), u02.DeepCopy(), u03.DeepCopy(),
+					i01.DeepCopy(), i02.DeepCopy(), i03.DeepCopy(), i04.DeepCopy()).Build(),
+			},
+			kerberosIDs: sets.New[string]("b"),
+			ciAdmins:    sets.New[string]("a"),
+			verifyFunc: func(ctx context.Context, clients map[string]ctrlruntimeclient.Client) error {
+				for _, client := range clients {
+					assert.True(t, isUser(ctx, client, "a"))
+					assert.True(t, isIdentity(ctx, client, "a"))
+					assert.True(t, isUser(ctx, client, "b"))
+					assert.True(t, isIdentity(ctx, client, "b"))
+					assert.False(t, isUser(ctx, client, "c"))
+					assert.False(t, isIdentity(ctx, client, "c"))
+					assert.False(t, isIdentity(ctx, client, "d"))
+				}
+				return nil
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.TODO()
+			err := deleteInvalidUsers(ctx, tc.clients, tc.kerberosIDs, tc.ciAdmins, false)
+			if err != nil {
+				t.Errorf("%s: unexpected error occurred: %v", tc.name, err)
+			}
+			if err == nil && tc.verifyFunc != nil {
+				if err := tc.verifyFunc(ctx, tc.clients); err != nil {
+					t.Errorf("%s: unexpected error occurred: %v", tc.name, err)
+				}
+			}
+		})
+	}
+}
+
+func isUser(ctx context.Context, client ctrlruntimeclient.Client, user string) bool {
+	err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: user}, &userv1.User{})
+	return err == nil
+}
+
+func isIdentity(ctx context.Context, client ctrlruntimeclient.Client, user string) bool {
+	err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: user}, &userv1.Identity{})
+	return err == nil
 }

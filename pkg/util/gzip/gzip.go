@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/base64"
-	"io/ioutil"
+	"io"
+	"os"
 )
 
 // ReadFileMaybeGZIP wraps util.ReadBytesMaybeGZIP, returning the decompressed contents
 // if the file is gzipped, or otherwise the raw contents
 func ReadFileMaybeGZIP(path string) ([]byte, error) {
-	b, err := ioutil.ReadFile(path)
+	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -28,7 +29,7 @@ func ReadBytesMaybeGZIP(data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ioutil.ReadAll(gzipReader)
+	return io.ReadAll(gzipReader)
 }
 
 func CompressStringAndBase64(data string) (string, error) {

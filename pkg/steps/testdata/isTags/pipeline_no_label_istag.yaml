@@ -1,0 +1,26 @@
+apiVersion: image.openshift.io/v1
+image:
+  dockerImageMetadata:
+    Architecture: amd64
+    Config:
+      Cmd:
+        - registry
+        - serve
+        - --database
+        - /database/index.db
+      Entrypoint:
+        - /bin/opm
+      Env:
+        - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+        - container=oci
+      Labels:
+        operators.operatorframafework.io.index.database.v1: /database/index.db
+        vendor: Red Hat, Inc.
+        version: v4.10.0
+      WorkingDir: /registry
+kind: ImageStreamTag
+lookupPolicy:
+  local: false
+metadata:
+  name: pipeline:v4.10
+  namespace: ns

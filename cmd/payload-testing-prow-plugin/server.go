@@ -11,6 +11,9 @@ import (
 	"github.com/sirupsen/logrus"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
+	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/kube"
@@ -20,7 +23,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	prpqv1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
-	"github.com/openshift/ci-tools/pkg/promotion"
 	"github.com/openshift/ci-tools/pkg/release/config"
 )
 
@@ -33,7 +35,12 @@ type githubClient interface {
 	GetPullRequest(org, repo string, number int) (*github.PullRequest, error)
 }
 
-var ocpPayloadTestsPattern = regexp.MustCompile(`(?mi)^/payload\s+(?P<ocp>4\.\d+)\s+(?P<release>\w+)\s+(?P<jobs>\w+)\s*$`)
+var (
+	ocpPayloadTestsPattern              = regexp.MustCompile(`(?mi)^/payload\s+(?P<ocp>4\.\d+)\s+(?P<release>\w+)\s+(?P<jobs>\w+)\s*$`)
+	ocpPayloadJobTestsPattern           = regexp.MustCompile(`(?mi)^/payload-job\s+((?:[-\w.]+\s*?)+)\s*$`)
+	ocpPayloadAggregatedJobTestsPattern = regexp.MustCompile(`(?mi)^/payload-aggregate\s+(?P<job>[-\w.]+)\s+(?P<aggregate>\d+)\s*$`)
+	ocpPayloadAbortPattern              = regexp.MustCompile(`(?mi)^/payload-abort$`)
+)
 
 func helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, error) {
 	// TODO(DPTP-2540): Better descriptions, better help
@@ -47,6 +54,12 @@ func helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, error) {
 		Description: "The payload-testing plugin triggers a run of specified release qualification jobs against PR code",
 		WhoCanUse:   "Members of the trusted organization for the repo.",
 		Examples:    []string{"/payload 4.10 nightly informing", "/payload 4.8 ci all"},
+	})
+	pluginHelp.AddCommand(pluginhelp.Command{
+		Usage:       "/payload-abort",
+		Description: "The payload-testing plugin aborts all active payload jobs for the PR",
+		WhoCanUse:   "Members of the trusted organization for the repo.",
+		Examples:    []string{"/payload-abort"},
 	})
 	return pluginHelp, nil
 }
@@ -112,6 +125,38 @@ func specsFromComment(comment string) []jobSetSpecification {
 	return specs
 }
 
+func jobsFromComment(comment string) []config.Job {
+	var ret []config.Job
+	for _, match := range ocpPayloadJobTestsPattern.FindAllStringSubmatch(comment, -1) {
+		if len(match) < 2 {
+			// This should never happen
+			logrus.WithField("match", match).WithField("comment", comment).Error("failed to parse the comment because len(match)<2")
+			continue
+		}
+		for _, jobName := range strings.Fields(match[1]) {
+			ret = append(ret, config.Job{
+				Name: jobName,
+			})
+		}
+	}
+	for _, match := range ocpPayloadAggregatedJobTestsPattern.FindAllStringSubmatch(comment, -1) {
+		jobIndex := ocpPayloadAggregatedJobTestsPattern.SubexpIndex("job")
+		aggregateIndex := ocpPayloadAggregatedJobTestsPattern.SubexpIndex("aggregate")
+		aggregatedCount, err := strconv.Atoi(match[aggregateIndex])
+		if err != nil {
+			// This should never happen
+			logrus.WithField("match", match).WithField("comment", comment).WithError(err).Error("failed to parse the aggregated job")
+			continue
+		}
+		ret = append(ret, config.Job{
+			Name:            match[jobIndex],
+			AggregatedCount: aggregatedCount,
+		})
+
+	}
+	return ret
+}
+
 const (
 	pluginName = "payload-testing"
 )
@@ -144,9 +189,22 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 	}
 
 	logger.WithField("ic.Comment.Body", ic.Comment.Body).Trace("received a comment")
+
 	specs := specsFromComment(ic.Comment.Body)
+	jobsFromComment := jobsFromComment(ic.Comment.Body)
 	if len(specs) == 0 {
-		logger.Trace("found no specs from comments")
+		logger.Trace("found no specs from comment")
+	}
+
+	if len(jobsFromComment) == 0 {
+		logger.Trace("found no job names from comment")
+	} else {
+		logger.WithField("jobsFromComment", jobsFromComment).Trace("found job names from comment")
+		specs = append(specs, jobSetSpecification{})
+	}
+
+	abortRequested := ocpPayloadAbortPattern.MatchString(strings.TrimSpace(ic.Comment.Body))
+	if len(specs) == 0 && !abortRequested {
 		return ""
 	}
 
@@ -162,6 +220,10 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 		return fmt.Sprintf("user %s is not trusted for pull request %s/%s#%d", ic.Comment.User.Login, org, repo, prNumber)
 	}
 
+	if abortRequested {
+		return s.abortAll(logger, ic)
+	}
+
 	startGetPullRequest := time.Now()
 	pr, err := s.ghc.GetPullRequest(org, repo, prNumber)
 	logger.WithField("duration", time.Since(startGetPullRequest)).Debug("GetPullRequest completed")
@@ -175,7 +237,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 		logger.WithError(err).Error("could not resolve ci-operator's config")
 		return formatError(fmt.Errorf("could not resolve ci-operator's config for %s/%s/%s: %w", org, repo, pr.Base.Ref, err))
 	}
-	if !promotion.PromotesOfficialImages(ciOpConfig, promotion.WithOKD) {
+	if !api.PromotesOfficialImages(ciOpConfig, api.WithOKD) {
 		logger.Info("the repo does not contribute to the OpenShift official images")
 		return fmt.Sprintf("the repo %s/%s does not contribute to the OpenShift official images", org, repo)
 	}
@@ -190,6 +252,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 		counter:   0,
 		pr:        pr,
 	}
+
 	for _, spec := range specs {
 		specLogger := logger.WithFields(logrus.Fields{
 			"ocp":         spec.ocp,
@@ -198,19 +261,27 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 		})
 		builder.spec = spec
 		var jobNames []string
-		specLogger.Debug("resolving jobs ...")
-		startResolveJobs := time.Now()
-		jobs, err := s.jobResolver.resolve(spec.ocp, spec.releaseType, spec.jobs)
-		specLogger.WithField("duration", time.Since(startResolveJobs)).WithField("len(jobs)", len(jobs)).
-			Debug("resolving jobs completed")
-		if err != nil {
-			specLogger.WithError(err).Error("could not resolve jobs")
-			return formatError(fmt.Errorf("could not resolve jobs for %s %s %s: %w", spec.ocp, spec.releaseType, spec.jobs, err))
+		var releaseJobSpecs []prpqv1.ReleaseJobSpec
+
+		var jobs []config.Job
+		if spec.ocp == "" {
+			jobs = jobsFromComment
+		} else {
+			specLogger.Debug("resolving jobs ...")
+			startResolveJobs := time.Now()
+			resolvedJobs, err := s.jobResolver.resolve(spec.ocp, spec.releaseType, spec.jobs)
+			specLogger.WithField("duration", time.Since(startResolveJobs)).WithField("len(jobs)", len(jobs)).
+				Debug("resolving jobs completed")
+			if err != nil {
+				specLogger.WithError(err).Error("could not resolve jobs")
+				return formatError(fmt.Errorf("could not resolve jobs for %s %s %s: %w", spec.ocp, spec.releaseType, spec.jobs, err))
+			}
+			jobs = resolvedJobs
 		}
+
 		specLogger.Debug("resolving tests ...")
 		startResolveTests := time.Now()
 
-		var releaseJobSpecs []prpqv1.ReleaseJobSpec
 		for _, job := range jobs {
 			if job.Test != "" {
 				jobNames = append(jobNames, job.Name)
@@ -269,6 +340,95 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 	return strings.Join(messages, "\n")
 }
 
+func (s *server) abortAll(logger *logrus.Entry, ic github.IssueCommentEvent) string {
+	org := ic.Repo.Owner.Login
+	repo := ic.Repo.Name
+	prNumber := ic.Issue.Number
+
+	jobs, err := s.getPayloadJobsForPR(org, repo, prNumber, logger)
+	if err != nil {
+		return formatError(err)
+	}
+	if len(jobs) == 0 {
+		return fmt.Sprintf("no active payload jobs found to abort for pull request %s/%s#%d", org, repo, prNumber)
+	}
+
+	var erroredJobs []string
+	for _, jobName := range jobs {
+		jobLogger := logger.WithField("jobName", jobName)
+		job := &prowapi.ProwJob{}
+		if err := s.kubeClient.Get(s.ctx, ctrlruntimeclient.ObjectKey{Name: jobName, Namespace: s.namespace}, job); err != nil {
+			jobLogger.WithError(err).Error("failed to get prowjob")
+			erroredJobs = append(erroredJobs, jobName)
+			continue
+		}
+		// Do not abort jobs that already completed
+		if job.Complete() {
+			continue
+		}
+		jobLogger.Debugf("aborting prowjob")
+		job.Status.State = prowapi.AbortedState
+		// We use Update and not Patch here, because we are not the authority of the .Status.State field
+		// and must not overwrite changes made to it in the interim by the responsible agent.
+		// The accepted trade-off for now is that this leads to failure if unrelated fields where changed
+		// by another different actor.
+		if err = s.kubeClient.Update(s.ctx, job); err != nil {
+			jobLogger.WithError(err).Errorf("failed to abort prowjob")
+			erroredJobs = append(erroredJobs, jobName)
+		} else {
+			jobLogger.Debugf("aborted prowjob")
+		}
+	}
+
+	if len(erroredJobs) > 0 {
+		return fmt.Sprintf("Failed to abort %d payload jobs out of %d. Failed jobs: %s", len(erroredJobs), len(jobs), strings.Join(erroredJobs, ", "))
+	}
+
+	return fmt.Sprintf("aborted active payload jobs for pull request %s/%s#%d", org, repo, prNumber)
+}
+
+func (s *server) getPayloadJobsForPR(org, repo string, prNumber int, logger *logrus.Entry) ([]string, error) {
+	var l prpqv1.PullRequestPayloadQualificationRunList
+	labelSelector, err := labelSelectorForPayloadPRPQRs(org, repo, prNumber)
+	if err != nil {
+		return nil, fmt.Errorf("could not create label selector for prpqrs generated for pull request %s/%s#%d: %w", org, repo, prNumber, err)
+	}
+	opt := ctrlruntimeclient.ListOptions{Namespace: s.namespace, LabelSelector: labelSelector}
+	if err := s.kubeClient.List(s.ctx, &l, &opt); err != nil {
+		logger.WithError(err).Error("failed to list runs")
+		return nil, fmt.Errorf("failed to gather payload job runs for pull request %s/%s#%d in order to abort", org, repo, prNumber)
+	}
+
+	var jobs []string
+	for _, item := range l.Items {
+		for _, job := range item.Status.Jobs {
+			state := job.Status.State
+			if state == prowapi.TriggeredState || state == prowapi.PendingState {
+				jobs = append(jobs, job.ProwJob)
+			}
+		}
+	}
+
+	return jobs, nil
+}
+
+func labelSelectorForPayloadPRPQRs(org, repo string, prNumber int) (labels.Selector, error) {
+	orgRequirement, err := labels.NewRequirement(kube.OrgLabel, selection.Equals, []string{org})
+	if err != nil {
+		return nil, err
+	}
+	repoRequirement, err := labels.NewRequirement(kube.RepoLabel, selection.Equals, []string{repo})
+	if err != nil {
+		return nil, err
+	}
+	pullRequirement, err := labels.NewRequirement(kube.PullLabel, selection.Equals, []string{strconv.Itoa(prNumber)})
+	if err != nil {
+		return nil, err
+	}
+
+	return labels.NewSelector().Add(*orgRequirement, *repoRequirement, *pullRequirement), nil
+}
+
 type prpqrBuilder struct {
 	namespace string
 	org       string
@@ -323,7 +483,11 @@ func (b *prpqrBuilder) build(releaseJobSpecs []prpqv1.ReleaseJobSpec) *prpqv1.Pu
 
 func message(spec jobSetSpecification, tests []string) string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("trigger %d jobs of type %s for the %s release of OCP %s\n", len(tests), spec.jobs, spec.releaseType, spec.ocp))
+	if spec.ocp == "" {
+		b.WriteString(fmt.Sprintf("trigger %d job(s) for the /payload-(job|aggregate) command\n", len(tests)))
+	} else {
+		b.WriteString(fmt.Sprintf("trigger %d job(s) of type %s for the %s release of OCP %s\n", len(tests), spec.jobs, spec.releaseType, spec.ocp))
+	}
 	for _, test := range tests {
 		b.WriteString(fmt.Sprintf("- %s\n", test))
 	}

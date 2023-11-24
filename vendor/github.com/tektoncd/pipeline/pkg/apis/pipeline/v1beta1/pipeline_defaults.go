@@ -19,37 +19,45 @@ package v1beta1
 import (
 	"context"
 
+	"github.com/tektoncd/pipeline/pkg/apis/config"
 	"knative.dev/pkg/apis"
 )
 
 var _ apis.Defaultable = (*Pipeline)(nil)
 
+// SetDefaults sets default values on the Pipeline's Spec
 func (p *Pipeline) SetDefaults(ctx context.Context) {
 	p.Spec.SetDefaults(ctx)
 }
 
+// SetDefaults sets default values for the PipelineSpec's Params, Tasks, and Finally
 func (ps *PipelineSpec) SetDefaults(ctx context.Context) {
-	for _, pt := range ps.Tasks {
-		if pt.TaskRef != nil {
-			if pt.TaskRef.Kind == "" {
-				pt.TaskRef.Kind = NamespacedTaskKind
-			}
-		}
-		if pt.TaskSpec != nil {
-			pt.TaskSpec.SetDefaults(ctx)
-		}
-	}
 	for i := range ps.Params {
 		ps.Params[i].SetDefaults(ctx)
 	}
+
+	for _, pt := range ps.Tasks {
+		pt.SetDefaults(ctx)
+	}
+
 	for _, ft := range ps.Finally {
-		if ft.TaskRef != nil {
-			if ft.TaskRef.Kind == "" {
-				ft.TaskRef.Kind = NamespacedTaskKind
-			}
+		ctx := ctx // Ensure local scoping per Task
+		ft.SetDefaults(ctx)
+	}
+}
+
+// SetDefaults sets default values for a PipelineTask
+func (pt *PipelineTask) SetDefaults(ctx context.Context) {
+	cfg := config.FromContextOrDefaults(ctx)
+	if pt.TaskRef != nil {
+		if pt.TaskRef.Kind == "" {
+			pt.TaskRef.Kind = NamespacedTaskKind
 		}
-		if ft.TaskSpec != nil {
-			ft.TaskSpec.SetDefaults(ctx)
+		if pt.TaskRef.Name == "" && pt.TaskRef.Resolver == "" {
+			pt.TaskRef.Resolver = ResolverName(cfg.Defaults.DefaultResolverType)
 		}
+	}
+	if pt.TaskSpec != nil {
+		pt.TaskSpec.SetDefaults(ctx)
 	}
 }

@@ -3,7 +3,6 @@ package rehearse
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -14,7 +13,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -35,7 +34,7 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 	testTemplatePath := filepath.Join(config.TemplatesPath, "subdir/test-template.yaml")
 	cluster := "cluster"
 	ns := "test-namespace"
-	contents, err := ioutil.ReadFile(filepath.Join(testRepoPath, testTemplatePath))
+	contents, err := os.ReadFile(filepath.Join(testRepoPath, testTemplatePath))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,9 +76,9 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 	})
 	client := cs.CoreV1().ConfigMaps(ns)
 	pr := 1234
-	buildId := "1234567890"
+	SHA := "SOMESHA"
 	cmManager := NewCMManager(cluster, ns, client, configUpdaterCfg, pr, testRepoPath, logrus.NewEntry(logrus.New()))
-	ciTemplates, err := NewConfigMaps([]string{testTemplatePath}, "template", buildId, pr, configUpdaterCfg)
+	ciTemplates, err := NewConfigMaps([]string{testTemplatePath}, "template", SHA, pr, configUpdaterCfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +92,7 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 	}
 	expected := []v1.ConfigMap{{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rehearse-1234-1234567890-template-prow-job-test-template",
+			Name:      "rehearse-1234-SOMESHA-template-prow-job-test-template",
 			Namespace: ns,
 			Labels: map[string]string{
 				createByRehearse:  "true",
@@ -113,7 +112,7 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 }
 
 func TestCreateClusterProfiles(t *testing.T) {
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +128,7 @@ func TestCreateClusterProfiles(t *testing.T) {
 			t.Fatal(err)
 		}
 		content := []byte(p + " content")
-		if err := ioutil.WriteFile(path, content, 0664); err != nil {
+		if err := os.WriteFile(path, content, 0664); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -137,7 +136,7 @@ func TestCreateClusterProfiles(t *testing.T) {
 	cluster := "cluster"
 	ns := "test"
 	pr := 1234
-	buildId := "1234567890"
+	SHA := "SOMESHA"
 	configUpdaterCfg := prowplugins.ConfigUpdater{
 		Maps: map[string]prowplugins.ConfigMapSpec{
 			filepath.Join(config.ClusterProfilesPath, "profile0", "file"): {
@@ -158,7 +157,7 @@ func TestCreateClusterProfiles(t *testing.T) {
 	cs := fake.NewSimpleClientset()
 	client := cs.CoreV1().ConfigMaps(ns)
 	m := NewCMManager(cluster, ns, client, configUpdaterCfg, pr, dir, logrus.NewEntry(logrus.New()))
-	ciProfiles, err := NewConfigMaps(profiles, "cluster-profile", buildId, pr, configUpdaterCfg)
+	ciProfiles, err := NewConfigMaps(profiles, "cluster-profile", SHA, pr, configUpdaterCfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +173,7 @@ func TestCreateClusterProfiles(t *testing.T) {
 	})
 	expected := []v1.ConfigMap{{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rehearse-1234-1234567890-cluster-profile-profile0",
+			Name:      "rehearse-1234-SOMESHA-cluster-profile-profile0",
 			Namespace: ns,
 			Labels: map[string]string{
 				createByRehearse:  "true",
@@ -184,7 +183,7 @@ func TestCreateClusterProfiles(t *testing.T) {
 		Data: map[string]string{"file": "cluster/test-deploy/profile0/file content"},
 	}, {
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rehearse-1234-1234567890-cluster-profile-profile1",
+			Name:      "rehearse-1234-SOMESHA-cluster-profile-profile1",
 			Namespace: ns,
 			Labels: map[string]string{
 				createByRehearse:  "true",
@@ -233,10 +232,10 @@ func TestNewConfigMaps(t *testing.T) {
 				"path/to/a/template.yaml",
 			},
 			expectCMS: ConfigMaps{
-				Paths:           sets.NewString("path/to/a/template.yaml"),
-				Names:           map[string]string{"a-template-configmap": "rehearse-1234-buildid-test-a-template-configmap"},
-				ProductionNames: sets.NewString("a-template-configmap"),
-				Patterns:        sets.NewString("path/to/a/template.yaml"),
+				Paths:           sets.New[string]("path/to/a/template.yaml"),
+				Names:           map[string]string{"a-template-configmap": "rehearse-1234-SOMESHA-test-a-template-configmap"},
+				ProductionNames: sets.New[string]("a-template-configmap"),
+				Patterns:        sets.New[string]("path/to/a/template.yaml"),
 			},
 		},
 		{
@@ -246,10 +245,10 @@ func TestNewConfigMaps(t *testing.T) {
 				"path/to/a/cluster-profile/vars-origin.yaml",
 			},
 			expectCMS: ConfigMaps{
-				Paths:           sets.NewString("path/to/a/cluster-profile/vars.yaml", "path/to/a/cluster-profile/vars-origin.yaml"),
-				Names:           map[string]string{"a-cluster-profile-configmap": "rehearse-1234-buildid-test-a-cluster-profile-configmap"},
-				ProductionNames: sets.NewString("a-cluster-profile-configmap"),
-				Patterns:        sets.NewString("path/to/a/cluster-profile/*.yaml"),
+				Paths:           sets.New[string]("path/to/a/cluster-profile/vars.yaml", "path/to/a/cluster-profile/vars-origin.yaml"),
+				Names:           map[string]string{"a-cluster-profile-configmap": "rehearse-1234-SOMESHA-test-a-cluster-profile-configmap"},
+				ProductionNames: sets.New[string]("a-cluster-profile-configmap"),
+				Patterns:        sets.New[string]("path/to/a/cluster-profile/*.yaml"),
 			},
 		},
 		{
@@ -260,24 +259,24 @@ func TestNewConfigMaps(t *testing.T) {
 				"path/to/a/template.yaml",
 			},
 			expectCMS: ConfigMaps{
-				Paths: sets.NewString(
+				Paths: sets.New[string](
 					"path/to/a/cluster-profile/vars.yaml",
 					"path/to/a/cluster-profile/vars-origin.yaml",
 					"path/to/a/template.yaml",
 				),
 				Names: map[string]string{
-					"a-cluster-profile-configmap": "rehearse-1234-buildid-test-a-cluster-profile-configmap",
-					"a-template-configmap":        "rehearse-1234-buildid-test-a-template-configmap",
+					"a-cluster-profile-configmap": "rehearse-1234-SOMESHA-test-a-cluster-profile-configmap",
+					"a-template-configmap":        "rehearse-1234-SOMESHA-test-a-template-configmap",
 				},
-				ProductionNames: sets.NewString("a-cluster-profile-configmap", "a-template-configmap"),
-				Patterns:        sets.NewString("path/to/a/cluster-profile/*.yaml", "path/to/a/template.yaml"),
+				ProductionNames: sets.New[string]("a-cluster-profile-configmap", "a-template-configmap"),
+				Patterns:        sets.New[string]("path/to/a/cluster-profile/*.yaml", "path/to/a/template.yaml"),
 			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(*testing.T) {
-			cms, err := NewConfigMaps(tc.paths, "test", "buildid", 1234, cuCfg)
+			cms, err := NewConfigMaps(tc.paths, "test", "SOMESHA", 1234, cuCfg)
 
 			if (tc.expectError == nil) != (err == nil) {
 				t.Fatalf("Did not return error as expected:\n%s", cmp.Diff(tc.expectError, err))

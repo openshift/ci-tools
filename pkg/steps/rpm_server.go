@@ -71,7 +71,7 @@ func (s *rpmServerStep) run(ctx context.Context) error {
 	}
 
 	probe := &coreapi.Probe{
-		Handler: coreapi.Handler{
+		ProbeHandler: coreapi.ProbeHandler{
 			HTTPGet: &coreapi.HTTPGetAction{
 				Path:   "/",
 				Port:   intstr.FromInt(8080),
@@ -83,12 +83,14 @@ func (s *rpmServerStep) run(ctx context.Context) error {
 		SuccessThreshold:    1,
 		TimeoutSeconds:      1,
 	}
-	one := int64(1)
-	two := int32(2)
+	oneI64 := int64(1)
+	oneI32 := int32(1)
+	progressDeadline := int32(3600) // If a build farm is scaling up, provide plenty of time for pods to schedule
 	deployment := &appsapi.Deployment{
 		ObjectMeta: commonMeta,
 		Spec: appsapi.DeploymentSpec{
-			Replicas: &two,
+			ProgressDeadlineSeconds: &progressDeadline,
+			Replicas:                &oneI32,
 			Selector: &meta.LabelSelector{
 				MatchLabels: labelSet,
 			},
@@ -185,7 +187,7 @@ fi
 							},
 						},
 					}},
-					TerminationGracePeriodSeconds: &one,
+					TerminationGracePeriodSeconds: &oneI64,
 				},
 			},
 		},
@@ -373,19 +375,22 @@ func (s *rpmServerStep) rpmRepoURL() (string, error) {
 }
 
 func (s *rpmServerStep) Provides() api.ParameterMap {
-	var refs *v1.Refs
+	var refs []*v1.Refs
 	if s.jobSpec.Refs != nil {
-		refs = s.jobSpec.Refs
-	} else if len(s.jobSpec.ExtraRefs) > 0 {
-		refs = &s.jobSpec.ExtraRefs[0]
+		refs = append(refs, s.jobSpec.Refs)
 	}
-	if refs != nil {
-		rpmByOrgAndRepo := strings.Replace(fmt.Sprintf("RPM_REPO_%s_%s", strings.ToUpper(refs.Org), strings.ToUpper(refs.Repo)), "-", "_", -1)
-		return api.ParameterMap{
-			rpmByOrgAndRepo: s.rpmRepoURL,
-		}
+	for i := range s.jobSpec.ExtraRefs {
+		refs = append(refs, &s.jobSpec.ExtraRefs[i])
 	}
-	return nil
+	if len(refs) == 0 {
+		return nil
+	}
+	ret := make(api.ParameterMap)
+	for _, ref := range refs {
+		rpmByOrgAndRepo := strings.Replace(fmt.Sprintf("RPM_REPO_%s_%s", strings.ToUpper(ref.Org), strings.ToUpper(ref.Repo)), "-", "_", -1)
+		ret[rpmByOrgAndRepo] = s.rpmRepoURL
+	}
+	return ret
 }
 
 func (s *rpmServerStep) Name() string { return s.config.TargetName() }

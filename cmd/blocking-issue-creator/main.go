@@ -83,10 +83,10 @@ func main() {
 		logrus.WithError(err).Fatal("failed to throttle")
 	}
 
-	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, promotion.WithoutOKD, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
+	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, api.WithoutOKD, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
 		logger := config.LoggerForInfo(*repoInfo)
 
-		branches := sets.NewString()
+		branches := sets.New[string]()
 		for _, futureRelease := range o.FutureReleases.Strings() {
 			futureBranch, err := promotion.DetermineReleaseBranch(o.CurrentRelease, futureRelease, repoInfo.Branch)
 			if err != nil {
@@ -114,14 +114,14 @@ func main() {
 	}
 }
 
-func manageIssues(client githubClient, githubLogin string, repoInfo *config.Info, branches sets.String, logger *logrus.Entry) error {
+func manageIssues(client githubClient, githubLogin string, repoInfo *config.Info, branches sets.Set[string], logger *logrus.Entry) error {
 	var branchTokens []string
 	body := fmt.Sprintf("The following branches are being fast-forwarded from the current development branch (%s) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n", repoInfo.Branch)
-	for _, branch := range branches.List() {
+	for _, branch := range sets.List(branches) {
 		body += fmt.Sprintf(" - `%s`\n", branch)
 		branchTokens = append(branchTokens, fmt.Sprintf("branch:%s", branch))
 	}
-	body += "\nContact the [Test Platform](https://coreos.slack.com/messages/CBN38N3MW) or [Automated Release](https://coreos.slack.com/messages/CB95J6R4N) teams for more information."
+	body += "\nFor more information, see the [branching documentation](https://docs.ci.openshift.org/docs/architecture/branching/)."
 	title := fmt.Sprintf("Future Release Branches Frozen For Merging | %s", strings.Join(branchTokens, " "))
 
 	query := fmt.Sprintf("is:issue state:open label:\"tide/merge-blocker\" repo:%s/%s author:%s", repoInfo.Org, repoInfo.Repo, githubLogin)

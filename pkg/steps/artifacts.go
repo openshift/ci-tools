@@ -19,15 +19,10 @@ import (
 	coreapi "k8s.io/api/core/v1"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/remotecommand"
-	toolswatch "k8s.io/client-go/tools/watch"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/decorate"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -37,6 +32,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 const (
@@ -53,32 +49,6 @@ const (
 	artifactEnv = "ARTIFACT_DIR"
 )
 
-// ContainerNotifier receives updates about the status of a poll action on a pod. The caller
-// is required to define what notifications are made.
-type ContainerNotifier interface {
-	// Notify indicates that the provided container name has transitioned to an appropriate state and
-	// any per container actions should be taken.
-	Notify(pod *coreapi.Pod, containerName string)
-	// Complete indicates the specified pod has completed execution, been deleted, or that no further
-	// Notify() calls can be made.
-	Complete(podName string)
-	// Done returns a channel that can be used to wait for the specified pod name to complete the work it has pending.
-	Done(podName string) <-chan struct{}
-}
-
-// NopNotifier takes no action when notified.
-var NopNotifier = nopNotifier{}
-
-type nopNotifier struct{}
-
-func (nopNotifier) Notify(_ *coreapi.Pod, _ string) {}
-func (nopNotifier) Complete(_ string)               {}
-func (nopNotifier) Done(string) <-chan struct{} {
-	ret := make(chan struct{})
-	close(ret)
-	return ret
-}
-
 // TestCaseNotifier allows a caller to generate per container JUnit test
 // reports that provide better granularity for debugging problems when
 // running tests in multi-container pods. It intercepts notifications and
@@ -86,14 +56,14 @@ func (nopNotifier) Done(string) <-chan struct{} {
 //
 // TestCaseNotifier must be called from a single thread.
 type TestCaseNotifier struct {
-	nested  ContainerNotifier
-	lastPod *coreapi.Pod
+	nested  util.ContainerNotifier
+	lastPod *corev1.Pod
 }
 
 // NewTestCaseNotifier wraps the provided ContainerNotifier and will
 // create JUnit TestCase records for each container in the most recent
 // pod to have completed.
-func NewTestCaseNotifier(nested ContainerNotifier) *TestCaseNotifier {
+func NewTestCaseNotifier(nested util.ContainerNotifier) *TestCaseNotifier {
 	return &TestCaseNotifier{nested: nested}
 }
 
@@ -116,7 +86,7 @@ func (n *TestCaseNotifier) SubTests(prefix string) []*junit.TestCase {
 	pod := n.lastPod
 	n.lastPod = nil
 
-	names := sets.NewString(strings.Split(pod.Annotations[annotationContainersForSubTestResults], ",")...)
+	names := sets.New[string](strings.Split(pod.Annotations[annotationContainersForSubTestResults], ",")...)
 	names.Delete("")
 	if len(names) == 0 {
 		return nil
@@ -165,55 +135,6 @@ func (n *TestCaseNotifier) SubTests(prefix string) []*junit.TestCase {
 	return tests
 }
 
-type evaluator func(obj runtime.Object) (bool, error)
-
-// waitForConditionOnObject uses a watch to wait for a condition to be true on an object.
-// When the condition is satisfied or the timeout expires, the object is returned along
-// with any errors encountered.
-func waitForConditionOnObject(ctx context.Context, client ctrlruntimeclient.WithWatch, identifier ctrlruntimeclient.ObjectKey, list ctrlruntimeclient.ObjectList, into ctrlruntimeclient.Object, evaluate evaluator, timeout time.Duration) error {
-	lw := &cache.ListWatch{
-		ListFunc: func(options metav1.ListOptions) (object runtime.Object, e error) {
-			options.FieldSelector = fields.OneTermEqualSelector("metadata.name", identifier.Name).String()
-			res := list
-			return res, client.List(ctx, res, &ctrlruntimeclient.ListOptions{Namespace: identifier.Namespace, Raw: &options})
-		},
-		WatchFunc: func(options metav1.ListOptions) (i watch.Interface, e error) {
-			opts := &ctrlruntimeclient.ListOptions{
-				Namespace:     identifier.Namespace,
-				FieldSelector: fields.OneTermEqualSelector("metadata.name", identifier.Name),
-				Raw:           &options,
-			}
-			res := list
-			return client.Watch(ctx, res, opts)
-		},
-	}
-
-	// objects in this call here are always expected to exist in advance
-	var existsPrecondition toolswatch.PreconditionFunc
-
-	waitForObjectStatus := func(event watch.Event) (bool, error) {
-		if event.Type == watch.Deleted {
-			return false, fmt.Errorf("%s was deleted", identifier.String())
-		}
-		// the outer library will handle errors, we have no pod data to review in this case
-		if event.Type != watch.Added && event.Type != watch.Modified {
-			return false, nil
-		}
-		return evaluate(event.Object)
-	}
-
-	waitTimeout, cancel := toolswatch.ContextWithOptionalTimeout(ctx, timeout)
-	defer cancel()
-	_, syncErr := toolswatch.UntilWithSync(waitTimeout, lw, into, existsPrecondition, waitForObjectStatus)
-
-	// Hack to make sure this ends up in the logging client
-	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: identifier.Namespace, Name: identifier.Name}, into); err != nil {
-		logrus.WithError(err).Warn("failed to get object after finishing watch")
-	}
-
-	return syncErr
-}
-
 func waitForContainer(podClient kubernetes.PodClient, ns, name, containerName string) error {
 	logrus.WithFields(logrus.Fields{
 		"namespace": ns,
@@ -240,7 +161,7 @@ func waitForContainer(podClient kubernetes.PodClient, ns, name, containerName st
 		return false, nil
 	}
 
-	return waitForConditionOnObject(ctx, podClient, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, &corev1.PodList{}, &corev1.Pod{}, evaluatorFunc, 300*5*time.Second)
+	return kubernetes.WaitForConditionOnObject(ctx, podClient, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, &corev1.PodList{}, &corev1.Pod{}, evaluatorFunc, 300*5*time.Second)
 }
 
 func copyArtifacts(podClient kubernetes.PodClient, into, ns, name, containerName string, paths []string) error {
@@ -350,14 +271,24 @@ func removeFile(podClient kubernetes.PodClient, ns, name, containerName string, 
 	return nil
 }
 
-func addPodUtils(pod *coreapi.Pod, artifactDir string, decorationConfig *prowv1.DecorationConfig, rawJobSpec string, secretsToCensor []coreapi.VolumeMount, clone bool, jobSpec *api.JobSpec) error {
+func addPodUtils(
+	pod *coreapi.Pod,
+	artifactDir string,
+	decorationConfig *prowv1.DecorationConfig,
+	rawJobSpec string,
+	secretsToCensor []coreapi.VolumeMount,
+	generatePodOptions *GeneratePodOptions,
+	jobSpec *api.JobSpec,
+) error {
 	logMount, logVolume := decorate.LogMountAndVolume()
 	toolsMount, toolsVolume := decorate.ToolsMountAndVolume()
 	blobStorageVolumes, blobStorageMounts, blobStorageOptions := decorate.BlobStorageOptions(*decorationConfig, false)
 	blobStorageOptions.SubDir = artifactDir
 	pod.Spec.InitContainers = append(pod.Spec.InitContainers, decorate.PlaceEntrypoint(decorationConfig, toolsMount))
 
-	wrapperOptions, err := decorate.InjectEntrypoint(&pod.Spec.Containers[0], decorationConfig.Timeout.Get(), decorationConfig.GracePeriod.Get(), "", "", false, logMount, toolsMount)
+	wrapperOptions, err := decorate.InjectEntrypoint(&pod.Spec.Containers[0],
+		decorationConfig.Timeout.Get(), decorationConfig.GracePeriod.Get(), "", "",
+		generatePodOptions.PropagateExitCode, false, logMount, toolsMount)
 	if err != nil {
 		return fmt.Errorf("could not inject entrypoint: %w", err)
 	}
@@ -372,7 +303,7 @@ func addPodUtils(pod *coreapi.Pod, artifactDir string, decorationConfig *prowv1.
 	pod.Spec.Volumes = append(pod.Spec.Volumes, logVolume, toolsVolume)
 	pod.Spec.Volumes = append(pod.Spec.Volumes, blobStorageVolumes...)
 
-	if clone {
+	if generatePodOptions.Clone {
 		// Unless build_root.from_repository: true is set, the decorationConfig the ci-operator pod gets has cloning
 		// disabled.
 		decorationConfig := *decorationConfig
@@ -433,10 +364,10 @@ done
 }
 
 type podWaitRecord map[string]struct {
-	containers sets.String
+	containers sets.Set[string]
 	done       chan struct{}
 }
-type podContainersMap map[string]sets.String
+type podContainersMap map[string]sets.Set[string]
 
 // ArtifactWorker tracks pods that have completed and have an 'artifacts' container
 // in them and will extract files from the container to a local directory. It also
@@ -455,7 +386,7 @@ type ArtifactWorker struct {
 	lock         sync.Mutex
 	remaining    podWaitRecord
 	required     podContainersMap
-	hasArtifacts sets.String
+	hasArtifacts sets.Set[string]
 }
 
 func NewArtifactWorker(podClient kubernetes.PodClient, artifactDir, namespace string) *ArtifactWorker {
@@ -467,7 +398,7 @@ func NewArtifactWorker(podClient kubernetes.PodClient, artifactDir, namespace st
 
 		remaining:    make(podWaitRecord),
 		required:     make(podContainersMap),
-		hasArtifacts: sets.NewString(),
+		hasArtifacts: sets.New[string](),
 
 		podsToDownload: make(chan string, 4),
 	}
@@ -542,14 +473,14 @@ func (w *ArtifactWorker) CollectFromPod(podName string, hasArtifacts []string, w
 
 	m, ok := w.remaining[podName]
 	if !ok {
-		m.containers = sets.NewString()
+		m.containers = sets.New[string]()
 		m.done = make(chan struct{})
 		w.remaining[podName] = m
 	}
 
 	r := w.required[podName]
 	if r == nil {
-		r = sets.NewString()
+		r = sets.New[string]()
 		w.required[podName] = r
 	}
 

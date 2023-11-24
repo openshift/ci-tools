@@ -311,7 +311,7 @@ func handleError(w http.ResponseWriter, err error, shortErrorMessage string, sta
 		_, fprintfErr = fmt.Fprintf(w, "failed while building error page")
 	}
 	metrics.RecordError(shortErrorMessage, m.ErrorRate)
-	logrus.WithFields(logFieldsFor(endpoint, bugID)).WithError(fmt.Errorf("%s: %v", shortErrorMessage, utilerrors.NewAggregate([]error{err, wpErr, fprintfErr})))
+	logrus.WithFields(logFieldsFor(endpoint, bugID)).WithError(fmt.Errorf("%s: %w", shortErrorMessage, utilerrors.NewAggregate([]error{err, wpErr, fprintfErr}))).Error("an error occurred")
 }
 
 // HandlerFuncWithErrorReturn allows returning errors to be logged
@@ -532,7 +532,7 @@ func getClonesTemplateData(bugID int, client bugzilla.Client, allTargetVersions 
 	}
 	root := clones[0]
 	// Target versions would be used to populate the CreateClone dropdown
-	targetVersions := sets.NewString(allTargetVersions...)
+	targetVersions := sets.New[string](allTargetVersions...)
 	// Remove target versions of the original bug
 	targetVersions.Delete(bug.TargetRelease...)
 	g := new(errgroup.Group)
@@ -542,7 +542,7 @@ func getClonesTemplateData(bugID int, client bugzilla.Client, allTargetVersions 
 		prs, err = client.GetExternalBugPRsOnBug(bugID)
 		return err
 	})
-	clonedReleases := sets.NewString()
+	clonedReleases := sets.New[string]()
 	for _, clone := range clones {
 		clone := clone
 		if isTargetReleaseSet(clone) {
@@ -624,7 +624,7 @@ func getClonesTemplateData(bugID int, client bugzilla.Client, allTargetVersions 
 			targetVersions.Delete(allTargetVersions[i])
 		}
 	}
-	sortedTargetVersions := targetVersions.List()
+	sortedTargetVersions := sets.List(targetVersions)
 	err = SortTargetReleases(sortedTargetVersions, false)
 	if err != nil {
 		return nil, http.StatusInternalServerError, fmt.Errorf("error building dependence tree: %w", err)
@@ -667,7 +667,7 @@ func GetClonesHandler(client bugzilla.Client, allTargetVersions []string, m *met
 
 		wrpr, statusCode, err := getClonesTemplateData(bugID, client, allTargetVersions)
 		if err != nil {
-			handleError(w, err, "unable to get get bug details", statusCode, req.URL.Path, bugID, m)
+			handleError(w, err, "unable to get bug details", statusCode, req.URL.Path, bugID, m)
 			return
 		}
 		err = writePage(w, "Clones", clonesTemplate, wrpr)
@@ -710,9 +710,9 @@ func CreateCloneHandler(client bugzilla.Client, sortedTargetReleases []string, m
 			handleError(w, err, fmt.Sprintf("unable to fetch bug details- Bug#%d", bugID), http.StatusNotFound, endpoint, bugID, m)
 			return
 		}
-		allTargetVersions := sets.NewString(sortedTargetReleases...)
+		allTargetVersions := sets.New[string](sortedTargetReleases...)
 		if !allTargetVersions.Has(req.FormValue("release")) {
-			absentReleaseErrMsg := fmt.Sprintf("invalid argument - %s is not a valid TargetRelease, must be one of %v", req.FormValue("release"), allTargetVersions.List())
+			absentReleaseErrMsg := fmt.Sprintf("invalid argument - %s is not a valid TargetRelease, must be one of %v", req.FormValue("release"), sets.List(allTargetVersions))
 			handleError(w, fmt.Errorf(absentReleaseErrMsg), absentReleaseErrMsg, http.StatusBadRequest, endpoint, bugID, m)
 			return
 		}
@@ -816,7 +816,7 @@ func CreateCloneHandler(client bugzilla.Client, sortedTargetReleases []string, m
 		// Repopulate the fields of the page with the right data
 		data, statusCode, err := getClonesTemplateData(bugID, client, sortedTargetReleases)
 		if err != nil {
-			handleError(w, err, "unable to get get bug details", statusCode, endpoint, bugID, m)
+			handleError(w, err, "unable to get bug details", statusCode, endpoint, bugID, m)
 			return
 		}
 		// Populating the NewCloneId which is used to show the success info banner

@@ -25,7 +25,7 @@ func TestValidateTests(t *testing.T) {
 	for _, tc := range []struct {
 		id            string
 		release       *api.ReleaseTagConfiguration
-		releases      sets.String
+		releases      sets.Set[string]
 		tests         []api.TestStepConfiguration
 		resolved      bool
 		expectedError error
@@ -222,7 +222,7 @@ func TestValidateTests(t *testing.T) {
 					},
 				},
 			},
-			releases: sets.NewString(api.InitialReleaseName, api.LatestReleaseName),
+			releases: sets.New[string](api.InitialReleaseName, api.LatestReleaseName),
 		},
 		{
 			id: "release must be origin",
@@ -406,6 +406,19 @@ func TestValidateTests(t *testing.T) {
 			expectedError: errors.New("tests[0]: `cron` and `postsubmit` are mututally exclusive"),
 		},
 		{
+			id: "minimum_interval and postsubmit together are invalid",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					MinimumInterval:            &intervalString,
+					Postsubmit:                 true,
+				},
+			},
+			expectedError: errors.New("tests[0]: `minimum_interval` and `postsubmit` are mututally exclusive"),
+		},
+		{
 			id: "valid cron",
 			tests: []api.TestStepConfiguration{
 				{
@@ -428,6 +441,17 @@ func TestValidateTests(t *testing.T) {
 			},
 		},
 		{
+			id: "valid minimum_interval",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					MinimumInterval:            &intervalString,
+				},
+			},
+		},
+		{
 			id: "cron and interval together are invalid",
 			tests: []api.TestStepConfiguration{
 				{
@@ -439,6 +463,32 @@ func TestValidateTests(t *testing.T) {
 				},
 			},
 			expectedError: errors.New("tests[0]: `interval` and `cron` cannot both be set"),
+		},
+		{
+			id: "cron and minimum_interval together are invalid",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Cron:                       &cronString,
+					MinimumInterval:            &intervalString,
+				},
+			},
+			expectedError: errors.New("tests[0]: `cron` and `minimum_interval` cannot both be set"),
+		},
+		{
+			id: "interval and minimum_interval together are invalid",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Interval:                   &intervalString,
+					MinimumInterval:            &intervalString,
+				},
+			},
+			expectedError: errors.New("tests[0]: `interval` and `minimum_interval` cannot both be set"),
 		},
 		{
 			id: "cron and releaseInforming together are invalid",
@@ -465,6 +515,19 @@ func TestValidateTests(t *testing.T) {
 				},
 			},
 			expectedError: errors.New("tests[0]: `interval` cannot be set for release controller jobs"),
+		},
+		{
+			id: "minimum_interval and releaseInforming together are invalid",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					ReleaseController:          true,
+					MinimumInterval:            &intervalString,
+				},
+			},
+			expectedError: errors.New("tests[0]: `minimum_interval` cannot be set for release controller jobs"),
 		},
 		{
 			id: "invalid cron",
@@ -498,7 +561,7 @@ func TestValidateTests(t *testing.T) {
 				Cron:         &cronString,
 				RunIfChanged: "^README.md$",
 			}},
-			expectedError: errors.New("tests[0]: `cron` and `interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`"),
+			expectedError: errors.New("tests[0]: `cron`/`interval`/`minimum_interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`"),
 		},
 		{
 			id: "interval is mutually exclusive with run_if_changed",
@@ -508,7 +571,17 @@ func TestValidateTests(t *testing.T) {
 				Interval:     &intervalString,
 				RunIfChanged: "^README.md$",
 			}},
-			expectedError: errors.New("tests[0]: `cron` and `interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`"),
+			expectedError: errors.New("tests[0]: `cron`/`interval`/`minimum_interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`"),
+		},
+		{
+			id: "minimum_interval is mutually exclusive with run_if_changed",
+			tests: []api.TestStepConfiguration{{
+				As:              "unit",
+				Commands:        "commands",
+				MinimumInterval: &intervalString,
+				RunIfChanged:    "^README.md$",
+			}},
+			expectedError: errors.New("tests[0]: `cron`/`interval`/`minimum_interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`"),
 		},
 		{
 			id: "Run if changed and skip_if_only_changed are mutually exclusive",
@@ -547,7 +620,7 @@ func TestValidateTests(t *testing.T) {
 				Cron:     &cronString,
 				Optional: true,
 			}},
-			expectedError: errors.New("tests[0]: `cron` and `interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`"),
+			expectedError: errors.New("tests[0]: `cron`/`interval`/`minimum_interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`"),
 		},
 		{
 			id: "interval is mutually exclusive with optional",
@@ -557,7 +630,17 @@ func TestValidateTests(t *testing.T) {
 				Interval: &intervalString,
 				Optional: true,
 			}},
-			expectedError: errors.New("tests[0]: `cron` and `interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`"),
+			expectedError: errors.New("tests[0]: `cron`/`interval`/`minimum_interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`"),
+		},
+		{
+			id: "minimum_interval is mutually exclusive with optional",
+			tests: []api.TestStepConfiguration{{
+				As:              "unit",
+				Commands:        "commands",
+				MinimumInterval: &intervalString,
+				Optional:        true,
+			}},
+			expectedError: errors.New("tests[0]: `cron`/`interval`/`minimum_interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`"),
 		},
 		{
 			id: "postsubmit job is mutually exclusive with optional",
@@ -601,7 +684,7 @@ func TestValidateTests(t *testing.T) {
 	} {
 		t.Run(tc.id, func(t *testing.T) {
 			v := newSingleUseValidator()
-			errs := v.validateTestStepConfiguration(NewConfigContext(), "tests", tc.tests, tc.release, tc.releases, sets.NewString(), tc.resolved)
+			errs := v.validateTestStepConfiguration(NewConfigContext(), "tests", tc.tests, tc.release, tc.releases, sets.New[string](), tc.resolved)
 			if tc.expectedError == nil && len(errs) > 0 {
 				t.Errorf("expected to be valid, got: %v", errs)
 			}
@@ -634,9 +717,9 @@ func TestValidateTestSteps(t *testing.T) {
 	for _, tc := range []struct {
 		name         string
 		steps        []api.TestStep
-		seen         sets.String
+		seen         sets.Set[string]
 		errs         []error
-		releases     sets.String
+		releases     sets.Set[string]
 		clusterClaim api.ClaimRelease
 	}{{
 		name: "valid step",
@@ -693,7 +776,7 @@ func TestValidateTestSteps(t *testing.T) {
 		errs: []error{errors.New(`test[2]: duplicated name "s0"`)},
 	}, {
 		name: "duplicated name from other stage",
-		seen: sets.NewString("s0"),
+		seen: sets.New[string]("s0"),
 		steps: []api.TestStep{{
 			LiteralTestStep: &api.LiteralTestStep{
 				As:        "s0",
@@ -815,7 +898,7 @@ func TestValidateTestSteps(t *testing.T) {
 				Commands:  "commands",
 				Resources: resources},
 		}},
-		releases: sets.NewString("previous"),
+		releases: sets.New[string]("previous"),
 	}, {
 		name: "invalid image 4",
 		steps: []api.TestStep{{
@@ -825,7 +908,7 @@ func TestValidateTestSteps(t *testing.T) {
 				Commands:  "commands",
 				Resources: resources},
 		}},
-		releases: sets.NewString("previous"),
+		releases: sets.New[string]("previous"),
 		errs:     []error{errors.New("test[0].from: unknown imagestream 'stable-nonexistent'")},
 	}, {
 		name: "no commands",
@@ -1006,9 +1089,9 @@ func TestValidatePostSteps(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		steps    []api.TestStep
-		seen     sets.String
+		seen     sets.Set[string]
 		errs     []error
-		releases sets.String
+		releases sets.Set[string]
 	}{{
 		name: "Valid Post steps",
 
@@ -1042,7 +1125,7 @@ func TestValidateParameters(t *testing.T) {
 		params   []api.StepParameter
 		env      api.TestEnvironment
 		err      []error
-		releases sets.String
+		releases sets.Set[string]
 	}{{
 		name: "no parameters",
 	}, {

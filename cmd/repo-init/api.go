@@ -4,7 +4,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -133,7 +133,7 @@ func serveAPI(port, healthPort, numRepos int, ghOptions flagutil.GitHubOptions, 
 
 func (s *server) loadServerConfig(configPath string) error {
 	s.serverConfig = make(map[serverConfigType]string)
-	fs, err := ioutil.ReadDir(configPath)
+	fs, err := os.ReadDir(configPath)
 	if err != nil {
 		return fmt.Errorf("error while loading server configs: %w", err)
 	}
@@ -143,7 +143,7 @@ func (s *server) loadServerConfig(configPath string) error {
 			if f.Name() == string(configKey) {
 				filePath := filepath.Join(configPath, f.Name())
 
-				fileContent, err := ioutil.ReadFile(filePath)
+				fileContent, err := os.ReadFile(filePath)
 				if err != nil {
 					return err
 				}
@@ -166,7 +166,7 @@ func (s *server) authHandler() http.HandlerFunc {
 			return
 		}
 
-		code, err := ioutil.ReadAll(r.Body)
+		code, err := io.ReadAll(r.Body)
 		if err != nil {
 			logger.WithError(err).Error("unable to read request body")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -216,7 +216,12 @@ func (s *server) authHandler() http.HandlerFunc {
 		s.censor.AddSecrets(accessToken)
 
 		// get the user information
-		ghClient := s.githubOptions.GitHubClientWithAccessToken(accessToken)
+		ghClient, err := s.githubOptions.GitHubClientWithAccessToken(accessToken)
+		if err != nil {
+			logger.WithError(err).Error("unable to create github client")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 		user, err := ghClient.BotUser()
 		if err != nil {
 			logger.WithError(err).Error("unable to retrieve user")
@@ -429,7 +434,7 @@ func unmarshalValidationRequest(data []byte) (validationType, interface{}, error
 
 func (s server) validateConfig(w http.ResponseWriter, r *http.Request) {
 	logger := s.logger.WithField("handler", "configValidationHandler")
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		logger.WithError(err).Error("Error while reading request body")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -556,7 +561,7 @@ func getConfigPath(org, repo, releaseRepo string) string {
 // generateConfig is responsible for taking the initConfig and converting it into an api.ReleaseBuildConfiguration. Optionally
 // this function may also push this config to GitHub and create a pull request for the o/release repo.
 func (s server) generateConfig(w http.ResponseWriter, r *http.Request) {
-	bodyBytes, err := ioutil.ReadAll(r.Body)
+	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		s.logger.WithError(err).Error("Unable to read request body")

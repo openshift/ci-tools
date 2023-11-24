@@ -1,16 +1,36 @@
 package jobrunaggregatorlib
 
 import (
-	"fmt"
 	"time"
 
-	"cloud.google.com/go/storage"
+	"github.com/sirupsen/logrus"
 
 	prowjobv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 )
 
+const (
+	// ProwJobPayloadTagAnnotation is the name of the annotation for the payload tag in prow job
+	ProwJobPayloadTagAnnotation = "release.openshift.io/tag"
+)
+
+// GetPayloadTagFromProwJob gets the payload tag from prow jobs.
 func GetPayloadTagFromProwJob(prowJob *prowjobv1.ProwJob) string {
-	return prowJob.Labels["release.openshift.io/analysis"]
+	return prowJob.Annotations[ProwJobPayloadTagAnnotation]
+}
+
+func NewProwJobMatcherFuncForReleaseController(matchJobName, matchPayloadTag string) ProwJobMatcherFunc {
+	return func(prowJob *prowjobv1.ProwJob) bool {
+		payloadTag := GetPayloadTagFromProwJob(prowJob)
+		jobName := prowJob.Annotations[ProwJobJobNameAnnotation]
+		jobRunId := prowJob.Labels[prowJobJobRunIDLabel]
+		if jobName != matchJobName {
+			return false
+		}
+		logrus.Infof("checking %v/%v for payloadtag match: looking for %q found %q", jobName, jobRunId, matchPayloadTag, payloadTag)
+		payloadTagMatches := len(matchPayloadTag) > 0 && payloadTag == matchPayloadTag
+
+		return payloadTagMatches
+	}
 }
 
 func NewPayloadAnalysisJobLocatorForReleaseController(
@@ -18,33 +38,15 @@ func NewPayloadAnalysisJobLocatorForReleaseController(
 	startTime time.Time,
 	ciDataClient AggregationJobClient,
 	ciGCSClient CIGCSClient,
-	gcsClient *storage.Client,
 	gcsBucketName string) JobRunLocator {
 
 	return NewPayloadAnalysisJobLocator(
 		jobName,
-		releaseControllerProwJobMatcher{
-			payloadTag: payloadTag,
-		}.shouldAggregateReleaseControllerJob,
+		NewProwJobMatcherFuncForReleaseController(jobName, payloadTag),
 		startTime,
 		ciDataClient,
 		ciGCSClient,
-		gcsClient,
 		gcsBucketName,
 		"logs/"+jobName,
 	)
-}
-
-type releaseControllerProwJobMatcher struct {
-	payloadTag string
-}
-
-func (a releaseControllerProwJobMatcher) shouldAggregateReleaseControllerJob(prowJob *prowjobv1.ProwJob) bool {
-	payloadTag := GetPayloadTagFromProwJob(prowJob)
-	jobName := prowJob.Labels["prow.k8s.io/job"]
-	jobRunId := prowJob.Labels["prow.k8s.io/build-id"]
-	fmt.Printf("  checking %v/%v for payloadtag match: looking for %q found %q.\n", jobName, jobRunId, a.payloadTag, payloadTag)
-	payloadTagMatches := len(a.payloadTag) > 0 && payloadTag == a.payloadTag
-
-	return payloadTagMatches
 }

@@ -71,7 +71,7 @@ presubmits:
     context: ci/build-farm/newCluster-dry
     decorate: true
     labels:
-      ci.openshift.io/cluster: newCluster
+      ci.openshift.io/build-farm: newCluster
       ci.openshift.io/generator: cluster-init
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
     name: pull-ci-openshift-release-master-newCluster-dry

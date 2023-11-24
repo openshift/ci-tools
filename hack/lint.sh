@@ -9,19 +9,26 @@ if [[ $HOME = '/' ]]; then
   export HOME=/tmp
 fi
 
-# We embedd this so it must exist for compilation to succeed, but it's not checked in
+# We embed this so it must exist for compilation to succeed, but it's not checked in
 if [[ -n ${CI:-} ]]; then touch cmd/vault-secret-collection-manager/index.js; fi
 
-# The thing has a -skip-{dirs,files} directive which is ignored by half the linters. Why is life so hard.
-targets="$(find . -maxdepth 1 -type d|egrep -v 'git|_output|hack|vendor|^\.$'|sed -E 's/(.*)/\1\/\.\.\./g'|tr '\n' ' ')"
-golangci-lint run --build-tags e2e,e2e_framework,optional_operators
+GOLANGCI_LINT_ARGS="--build-tags=e2e,e2e_framework,optional_operators"
 
-cd $(dirname $0)/..
+if [[ -n ${CI:-} ]];
+then
+  golangci-lint run "$GOLANGCI_LINT_ARGS"
+else
+  DOCKER=${DOCKER:-podman}
 
-# Make sure the failing linter doesn't make the command fail and hence the script pass because we don't enter
-# the condition.
-set +o pipefail
-if go run ./vendor/github.com/polyfloyd/go-errorlint -errorf ./... 2>&1 \
-  |grep 'non-wrapping format verb for fmt.Errorf'; then
-  exit 1
+  if ! which "$DOCKER" > /dev/null 2>&1;
+  then
+    echo "$DOCKER not found, please install."
+    exit 1
+  fi
+
+  $DOCKER run --rm \
+    --volume "${PWD}:/go/src/github.com/openshift/ci-tools:z" \
+    --workdir /go/src/github.com/openshift/ci-tools \
+    docker.io/golangci/golangci-lint:v1.48.0 \
+    golangci-lint run "$GOLANGCI_LINT_ARGS"
 fi

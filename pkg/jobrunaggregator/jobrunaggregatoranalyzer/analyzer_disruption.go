@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
 
 	"gopkg.in/yaml.v2"
 
@@ -16,7 +17,32 @@ import (
 	"github.com/openshift/ci-tools/pkg/junit"
 )
 
-func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx context.Context, jobGCSBucketRoot string, finishedJobsToAggregate []jobrunaggregatorapi.JobRunInfo) (*junit.TestSuite, error) {
+// isExcludedDisruptionBackend returns true of any of the given backends are in the
+// disruption backend name.  Essentially, we want to skip testing of these disruption
+// backends for now as they run and gather more data.
+func isExcludedDisruptionBackend(name string) bool {
+	excludedNames := []string{
+		"ci-cluster-network-liveness",
+		"kube-api-http1-external-lb",
+		"kube-api-http2-external-lb",
+		"openshift-api-http2-external-lb",
+		"host-to-service",
+		"host-to-host",
+		"host-to-pod",
+		"pod-to-host",
+		"pod-to-pod",
+		"pod-to-service",
+	}
+
+	for _, excludedName := range excludedNames {
+		if strings.Contains(name, excludedName) {
+			return true
+		}
+	}
+	return false
+}
+
+func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx context.Context, jobGCSBucketRoot string, finishedJobsToAggregate []jobrunaggregatorapi.JobRunInfo, masterNodesUpdated string) (*junit.TestSuite, error) {
 	disruptionJunitSuite := &junit.TestSuite{
 		Name:      "BackendDisruption",
 		TestCases: []*junit.TestCase{},
@@ -50,22 +76,27 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 	}
 
 	testCaseNamePatternToDisruptionCheckFn := map[string]disruptionJunitCheckFunc{
-		"%s mean disruption should be less than historical plus two standard deviations": o.passFailCalculator.CheckDisruptionMeanWithinTwoStandardDeviations,
+		"%s mean disruption should be less than historical plus five standard deviations": o.passFailCalculator.CheckDisruptionMeanWithinFiveStandardDeviations,
 		// TODO add a SKIP mechanism to disruptionJunitCheckFunc instead of the fail bool
-		//"%s mean disruption should be less than historical plus one standard deviation":  o.passFailCalculator.CheckDisruptionMeanWithinOneStandardDeviation,
-		"%s disruption P70 should not be worse":  checkPercentileDisruption(o.passFailCalculator, 70), // for 7 attempts, this  gives us a latch on getting worse
-		"%s disruption P85 should not be worse":  checkPercentileDisruption(o.passFailCalculator, 85), // for 5 attempts, this gives us a latch on getting worse.
-		"%s disruption P95 should not be worse":  checkPercentileDisruption(o.passFailCalculator, 95),
-		"%s zero-disruption should not be worse": checkPercentileRankDisruption(o.passFailCalculator, 0),
+		// "%s mean disruption should be less than historical plus one standard deviation":  o.passFailCalculator.CheckDisruptionMeanWithinOneStandardDeviation,
+
+		// Fixed grace second values were determined by examining a months worth of false positive test failures
+		// and choosing a value that would eliminate 95% of them. We only hope to catch egregious regressions here, 10 runs is not
+		// enough to attempt subtle regression detection, for that we have grafana alerts.
+		"%s disruption P70 should not be worse": checkPercentileDisruption(o.passFailCalculator, 70, 3), // for 7 attempts, this  gives us a latch on getting worse
+		"%s disruption P85 should not be worse": checkPercentileDisruption(o.passFailCalculator, 85, 7), // for 5 attempts, this gives us a latch on getting worse.
 	}
 
 	for _, testCaseNamePattern := range sets.StringKeySet(testCaseNamePatternToDisruptionCheckFn).List() {
 		disruptionCheckFn := testCaseNamePatternToDisruptionCheckFn[testCaseNamePattern]
 
 		allBackends := getAllDisruptionBackendNames(jobRunIDToBackendNameToAvailabilityResult)
-		for _, backendName := range allBackends.List() {
+		for _, backendName := range sets.List(allBackends) {
+			if isExcludedDisruptionBackend(backendName) {
+				continue
+			}
 			jobRunIDToAvailabilityResultForBackend := getDisruptionForBackend(jobRunIDToBackendNameToAvailabilityResult, backendName)
-			failedJobRunIDs, successfulJobRunIDs, status, message, err := disruptionCheckFn(ctx, jobRunIDToAvailabilityResultForBackend, backendName)
+			failedJobRunIDs, successfulJobRunIDs, status, message, err := disruptionCheckFn(ctx, jobRunIDToAvailabilityResultForBackend, backendName, masterNodesUpdated)
 			if err != nil {
 				return nil, err
 			}
@@ -87,26 +118,20 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 	return disruptionJunitSuite, nil
 }
 
-func checkPercentileDisruption(passFailCalculator baseline, percentile int) disruptionJunitCheckFunc {
-	return func(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error) {
-		return passFailCalculator.CheckPercentileDisruption(ctx, jobRunIDToAvailabilityResultForBackend, backend, percentile)
+func checkPercentileDisruption(passFailCalculator baseline, percentile, graceSeconds int) disruptionJunitCheckFunc {
+	return func(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend, masterNodesUpdated string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error) {
+		return passFailCalculator.CheckPercentileDisruption(ctx, jobRunIDToAvailabilityResultForBackend, backend, percentile, graceSeconds, masterNodesUpdated)
 	}
 }
 
-func checkPercentileRankDisruption(passFailCalculator baseline, maxDisruptionSeconds int) disruptionJunitCheckFunc {
-	return func(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error) {
-		return passFailCalculator.CheckPercentileRankDisruption(ctx, jobRunIDToAvailabilityResultForBackend, backend, maxDisruptionSeconds)
-	}
-}
-
-type disruptionJunitCheckFunc func(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error)
+type disruptionJunitCheckFunc func(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend, masterNodesUpdated string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error)
 
 func disruptionToJUnitTestCase(testCaseName, testSuiteName, jobGCSBucketRoot string, failedJobRunIDs, successfulJobRunIDs []string, status testCaseStatus, message string) (*junit.TestCase, error) {
 	junitTestCase := &junit.TestCase{
 		Name: testCaseName,
 	}
 
-	currDetails := TestCaseDetails{
+	currDetails := jobrunaggregatorlib.TestCaseDetails{
 		Name:          junitTestCase.Name,
 		TestSuiteName: testSuiteName,
 		Summary:       message,
@@ -114,7 +139,7 @@ func disruptionToJUnitTestCase(testCaseName, testSuiteName, jobGCSBucketRoot str
 	for _, jobRunID := range failedJobRunIDs {
 		humanURL := jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, jobRunID))
 		gcsArtifactURL := jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, jobRunID))
-		currDetails.Failures = append(currDetails.Failures, TestCaseFailure{
+		currDetails.Failures = append(currDetails.Failures, jobrunaggregatorlib.TestCaseFailure{
 			JobRunID:       jobRunID,
 			HumanURL:       humanURL,
 			GCSArtifactURL: gcsArtifactURL,
@@ -123,7 +148,7 @@ func disruptionToJUnitTestCase(testCaseName, testSuiteName, jobGCSBucketRoot str
 	for _, jobRunID := range successfulJobRunIDs {
 		humanURL := jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, jobRunID))
 		gcsArtifactURL := jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, jobRunID))
-		currDetails.Passes = append(currDetails.Passes, TestCasePass{
+		currDetails.Passes = append(currDetails.Passes, jobrunaggregatorlib.TestCasePass{
 			JobRunID:       jobRunID,
 			HumanURL:       humanURL,
 			GCSArtifactURL: gcsArtifactURL,
@@ -195,8 +220,8 @@ func getDisruptionForBackend(jobRunIDToBackendNameToAvailabilityResult map[strin
 	return jobRunIDToAvailabilityResultForBackend
 }
 
-func getAllDisruptionBackendNames(jobRunIDToBackendNameToAvailabilityResult map[string]map[string]jobrunaggregatorlib.AvailabilityResult) sets.String {
-	ret := sets.String{}
+func getAllDisruptionBackendNames(jobRunIDToBackendNameToAvailabilityResult map[string]map[string]jobrunaggregatorlib.AvailabilityResult) sets.Set[string] {
+	ret := sets.Set[string]{}
 	ret.Insert(jobrunaggregatorlib.RequiredDisruptionTests().List()...)
 	for _, curr := range jobRunIDToBackendNameToAvailabilityResult {
 		ret.Insert(sets.StringKeySet(curr).List()...)

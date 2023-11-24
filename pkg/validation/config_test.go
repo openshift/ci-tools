@@ -2,6 +2,7 @@ package validation
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -272,40 +273,100 @@ func TestValidateResources(t *testing.T) {
 
 func TestValidatePromotion(t *testing.T) {
 	var testCases = []struct {
-		name     string
-		input    api.PromotionConfiguration
-		expected []error
+		name                    string
+		input                   api.PromotionConfiguration
+		promotesOfficialImages  bool
+		imageTargets            bool
+		releaseTagConfiguration *api.ReleaseTagConfiguration
+		releases                map[string]api.UnresolvedRelease
+		expected                []error
 	}{
 		{
-			name:     "normal config by name is valid",
-			input:    api.PromotionConfiguration{Namespace: "foo", Name: "bar"},
-			expected: nil,
+			name:         "normal config by name is valid",
+			input:        api.PromotionConfiguration{Namespace: "foo", Name: "bar"},
+			imageTargets: true,
+			expected:     nil,
 		},
 		{
-			name:     "normal config by tag is valid",
-			input:    api.PromotionConfiguration{Namespace: "foo", Tag: "bar"},
-			expected: nil,
+			name:         "normal config by tag is valid",
+			input:        api.PromotionConfiguration{Namespace: "foo", Tag: "bar"},
+			imageTargets: true,
+			expected:     nil,
 		},
 		{
-			name:     "config missing fields yields errors",
-			input:    api.PromotionConfiguration{},
-			expected: []error{errors.New("promotion: no namespace defined"), errors.New("promotion: no name or tag defined")},
+			name:         "config missing fields yields errors",
+			input:        api.PromotionConfiguration{},
+			imageTargets: true,
+			expected:     []error{errors.New("promotion: no namespace defined"), errors.New("promotion: no name or tag defined")},
 		},
 		{
-			name:     "config with extra fields yields errors",
-			input:    api.PromotionConfiguration{Namespace: "foo", Name: "bar", Tag: "baz"},
-			expected: []error{errors.New("promotion: both name and tag defined")},
+			name:         "config with extra fields yields errors",
+			input:        api.PromotionConfiguration{Namespace: "foo", Name: "bar", Tag: "baz"},
+			imageTargets: true,
+			expected:     []error{errors.New("promotion: both name and tag defined")},
 		},
 		{
-			name:     "cannot promote to namespace openshift-some",
-			input:    api.PromotionConfiguration{Namespace: "openshift-some", Tag: "bar"},
-			expected: []error{errors.New("promotion: cannot promote to namespace openshift-some matching this regular expression: (^kube.*|^openshift.*|^default$|^redhat.*)")},
+			name:         "cannot promote to namespace openshift-some",
+			input:        api.PromotionConfiguration{Namespace: "openshift-some", Tag: "bar"},
+			imageTargets: true,
+			expected:     []error{errors.New("promotion: cannot promote to namespace openshift-some matching this regular expression: (^kube.*|^openshift.*|^default$|^redhat.*)")},
+		},
+		{
+			name:         "cannot have overlapping targets by tag",
+			input:        api.PromotionConfiguration{Namespace: "foo", Tag: "bar", Targets: []api.PromotionTarget{{Namespace: "foo", Tag: "bar"}}},
+			imageTargets: true,
+			expected:     []error{errors.New("promotion: promotes to the same target as promotion.to[0]"), errors.New("promotion.to[0]: promotes to the same target as promotion")},
+		},
+		{
+			name:         "cannot have overlapping targets by name",
+			input:        api.PromotionConfiguration{Namespace: "foo", Name: "bar", Targets: []api.PromotionTarget{{Namespace: "foo", Name: "bar"}}},
+			imageTargets: true,
+			expected:     []error{errors.New("promotion: promotes to the same target as promotion.to[0]"), errors.New("promotion.to[0]: promotes to the same target as promotion")},
+		},
+		{
+			name:                   "[release:latest] is not fulfilled",
+			input:                  api.PromotionConfiguration{Namespace: "foo", Tag: "bar"},
+			promotesOfficialImages: true,
+			imageTargets:           true,
+			expected:               []error{fmt.Errorf("importing the release stream is required to ensure the promoted images to the namespace foo can be integrated properly. Although it can be achieved by tag_specification or releases[\"latest\"], adding an e2e test is strongly suggested")},
+		},
+		{
+			name:                   "[release:latest] is not fulfilled because the release name is not correct",
+			input:                  api.PromotionConfiguration{Namespace: "foo", Tag: "bar"},
+			promotesOfficialImages: true,
+			imageTargets:           true,
+			releases: map[string]api.UnresolvedRelease{
+				"initial": {},
+			},
+			expected: []error{fmt.Errorf("importing the release stream is required to ensure the promoted images to the namespace foo can be integrated properly. Although it can be achieved by tag_specification or releases[\"latest\"], adding an e2e test is strongly suggested")},
+		},
+		{
+			name:  "[release:latest] is fulfilled by release[latest]",
+			input: api.PromotionConfiguration{Namespace: "foo", Tag: "bar"},
+			releases: map[string]api.UnresolvedRelease{
+				"latest": {},
+			},
+			promotesOfficialImages: true,
+			imageTargets:           true,
+		},
+		{
+			name:                    "[release:latest] is fulfilled by tag_specification",
+			input:                   api.PromotionConfiguration{Namespace: "foo", Tag: "bar"},
+			releaseTagConfiguration: &api.ReleaseTagConfiguration{},
+			promotesOfficialImages:  true,
+			imageTargets:            true,
+		},
+		{
+			name:                   "[release:latest] is not fulfilled but there are no image targets",
+			input:                  api.PromotionConfiguration{Namespace: "foo", Tag: "bar"},
+			promotesOfficialImages: true,
 		},
 	}
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
-			if actual, expected := validatePromotionConfiguration("promotion", test.input), test.expected; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: got incorrect errors: %v", test.name, diff.ObjectDiff(actual, expected))
+			actual, expected := validatePromotionConfiguration("promotion", test.input, test.promotesOfficialImages, test.imageTargets, test.releaseTagConfiguration, test.releases), test.expected
+			if diff := cmp.Diff(actual, expected, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("%s: got incorrect errors: %v", test.name, diff)
 			}
 		})
 	}
@@ -487,7 +548,7 @@ func TestValidateOperator(t *testing.T) {
 			},
 			withResolvesTo: goodStepLink,
 			output: []error{
-				errors.New("operator.bundles[0].base_index: base_index requires as to be set"),
+				errors.New("operator.bundles[0].base_index: base_index requires 'as' to be set"),
 			},
 		},
 		{
@@ -502,6 +563,46 @@ func TestValidateOperator(t *testing.T) {
 			withResolvesTo: goodStepLink,
 			output: []error{
 				errors.New("operator.bundles[0].update_graph: update_graph must be semver, semver-skippatch, or replaces"),
+			},
+		},
+		{
+			name: "SkipBuildingIndex can be set",
+			input: &api.OperatorStepConfiguration{
+				Bundles: []api.Bundle{{
+					As:                "my-bundle",
+					DockerfilePath:    "./dockerfile",
+					ContextDir:        ".",
+					BaseIndex:         "an-index",
+					UpdateGraph:       "replaces",
+					SkipBuildingIndex: true,
+				}},
+				Substitutions: []api.PullSpecSubstitution{
+					{
+						PullSpec: "original",
+						With:     "substitute",
+					},
+				},
+			},
+			withResolvesTo: goodStepLink,
+		},
+		{
+			name: "SkipBuildingIndex cannot be set on an unnamed bundle",
+			input: &api.OperatorStepConfiguration{
+				Bundles: []api.Bundle{{
+					DockerfilePath:    "./dockerfile",
+					ContextDir:        ".",
+					SkipBuildingIndex: true,
+				}},
+				Substitutions: []api.PullSpecSubstitution{
+					{
+						PullSpec: "original",
+						With:     "substitute",
+					},
+				},
+			},
+			withResolvesTo: goodStepLink,
+			output: []error{
+				errors.New("operator.bundles[0].skip_building_index: skip_building_index requires 'as' to be set"),
 			},
 		},
 	}

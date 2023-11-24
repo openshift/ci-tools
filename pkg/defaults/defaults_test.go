@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"sort"
 	"testing"
@@ -896,7 +896,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			client := fakectrlruntimeclient.NewFakeClient()
+			client := fakectrlruntimeclient.NewClientBuilder().Build()
 			graphConf := FromConfigStatic(testCase.input)
 			runtimeSteps, actualError := runtimeStepConfigsForBuild(context.Background(), client, testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, graphConf.InputImages(), time.Nanosecond, testCase.consoleHost)
 			graphConf.Steps = append(graphConf.Steps, runtimeSteps...)
@@ -961,10 +961,10 @@ func TestFromConfig(t *testing.T) {
 		content := `{"nodes": [{"version": "4.1.0", "payload": "payload"}]}`
 		return &http.Response{
 			StatusCode: http.StatusOK,
-			Body:       ioutil.NopCloser(bytes.NewBuffer([]byte(content))),
+			Body:       io.NopCloser(bytes.NewBuffer([]byte(content))),
 		}, nil
 	})
-	client := loggingclient.New(fakectrlruntimeclient.NewFakeClient())
+	client := loggingclient.New(fakectrlruntimeclient.NewClientBuilder().Build())
 	if err := imageapi.AddToScheme(scheme.Scheme); err != nil {
 		t.Fatal(err)
 	}
@@ -1005,9 +1005,9 @@ func TestFromConfig(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	buildClient := steps.NewBuildClient(client, nil)
+	buildClient := steps.NewBuildClient(client, nil, nil)
 	var templateClient steps.TemplateClient
-	podClient := kubernetes.NewPodClient(client, nil, nil)
+	podClient := kubernetes.NewPodClient(client, nil, nil, 0)
 
 	clusterPool := hivev1.ClusterPool{
 		ObjectMeta: meta.ObjectMeta{
@@ -1303,7 +1303,12 @@ func TestFromConfig(t *testing.T) {
 				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{},
 			}},
 		},
-		expectedSteps: []string{"[release:latest-fast-as-heck-aws]", "fast-as-heck-aws", "[images]"},
+		expectedSteps: []string{
+			"[release:latest-fast-as-heck-aws]",
+			"fast-as-heck-aws",
+			"[output-images]",
+			"[images]",
+		},
 	}, {
 		name: "container test with a claim",
 		config: api.ReleaseBuildConfiguration{
@@ -1365,7 +1370,7 @@ func TestFromConfig(t *testing.T) {
 		},
 		promote:       true,
 		expectedSteps: []string{"[output-images]", "[images]"},
-		expectedPost:  []string{"[promotion]"},
+		expectedPost:  []string{"[promotion]", "[promotion-quay]"},
 	}, {
 		name: "duplicate input images",
 		config: api.ReleaseBuildConfiguration{
@@ -1439,6 +1444,7 @@ func TestFromConfig(t *testing.T) {
 					Job:  "job_name",
 					Refs: tc.refs,
 				},
+				TargetAdditionalSuffix: "1",
 			}
 			jobSpec.SetNamespace(ns)
 			params := api.NewDeferredParameters(tc.env)
@@ -1446,7 +1452,7 @@ func TestFromConfig(t *testing.T) {
 				params.Add(k, func() (string, error) { return v, nil })
 			}
 			graphConf := FromConfigStatic(&tc.config)
-			configSteps, post, err := fromConfig(context.Background(), &tc.config, &graphConf, &jobSpec, tc.templates, tc.paramFiles, tc.promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params, &secrets.DynamicCensor{}, "")
+			configSteps, post, err := fromConfig(context.Background(), &tc.config, &graphConf, &jobSpec, tc.templates, tc.paramFiles, tc.promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params, &secrets.DynamicCensor{}, "", "", "", nil)
 			if diff := cmp.Diff(tc.expectedErr, err); diff != "" {
 				t.Errorf("unexpected error: %v", diff)
 			}
@@ -1469,6 +1475,7 @@ func TestFromConfig(t *testing.T) {
 				"JOB_NAME":      "job_name",
 				"JOB_NAME_HASH": jobSpec.JobNameHash(),
 				"JOB_NAME_SAFE": "job-name",
+				"UNIQUE_HASH":   jobSpec.UniqueHash(),
 				"NAMESPACE":     ns,
 			} {
 				tc.expectedParams[k] = v
@@ -1482,6 +1489,32 @@ func TestFromConfig(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expectedPost, postNames); diff != "" {
 				t.Errorf("unexpected post steps: %v", diff)
+			}
+		})
+	}
+}
+
+func TestRegistryDomain(t *testing.T) {
+	var testCases = []struct {
+		name     string
+		config   *api.PromotionConfiguration
+		expected string
+	}{
+		{
+			name:     "default",
+			config:   &api.PromotionConfiguration{},
+			expected: "registry.ci.openshift.org",
+		},
+		{
+			name:     "override",
+			config:   &api.PromotionConfiguration{RegistryOverride: "whoa.com.biz"},
+			expected: "whoa.com.biz",
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if diff := cmp.Diff(testCase.expected, registryDomain(testCase.config)); diff != "" {
+				t.Errorf("%s: got incorrect registry domain: %v", testCase.name, diff)
 			}
 		})
 	}

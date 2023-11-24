@@ -1,0 +1,10 @@
+agent: kubernetes
+cron: '@yearly'
+decorate: true
+decoration_config:
+  skip_cloning: true
+extra_refs:
+- base_ref: branch
+  org: org
+  repo: repo
+name: periodic-ci-org-repo-branch-testname

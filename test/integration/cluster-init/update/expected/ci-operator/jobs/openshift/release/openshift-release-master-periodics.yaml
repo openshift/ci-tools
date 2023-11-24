@@ -47,7 +47,7 @@ periodics:
     repo: release
   interval: 12h
   labels:
-    ci.openshift.io/cluster: existingCluster
+    ci.openshift.io/build-farm: existingCluster
     ci.openshift.io/generator: cluster-init
     ci.openshift.io/role: infra
   name: periodic-openshift-release-master-existingCluster-apply

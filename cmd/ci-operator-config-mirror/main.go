@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,7 +14,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
-	"github.com/openshift/ci-tools/pkg/promotion"
 )
 
 const (
@@ -66,7 +64,7 @@ func (o *options) validate() error {
 type configsByRepo map[string][]config.DataWithInfo
 
 func (d configsByRepo) cleanDestinationSubdirs(destinationOrgPath string) error {
-	contents, err := ioutil.ReadDir(destinationOrgPath)
+	contents, err := os.ReadDir(destinationOrgPath)
 	if err != nil {
 		return fmt.Errorf("failed to read directory %s: %w", destinationOrgPath, err)
 	}
@@ -110,7 +108,6 @@ func main() {
 	}()
 
 	configsByRepo := make(configsByRepo)
-
 	callback := func(rbc *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
 		logger := logrus.WithFields(logrus.Fields{"org": repoInfo.Org, "repo": repoInfo.Repo, "branch": repoInfo.Branch})
 
@@ -119,11 +116,14 @@ func main() {
 		}
 
 		if len(o.onlyOrg) > 0 && repoInfo.Org != o.onlyOrg {
-			logger.Warnf("Skipping... This repo doesn't belong in %s organization", o.onlyOrg)
-			return nil
+			if !o.WhitelistConfig.IsWhitelisted(repoInfo) {
+				logger.Warnf("Skipping... This repo doesn't belong to %s organization", o.onlyOrg)
+				return nil
+			}
+			logger.Warnf("Repository %s doesn't belong to the %s organization but it is whitelisted", repoInfo.Repo, o.onlyOrg)
 		}
 
-		if !promotion.BuildsOfficialImages(rbc, promotion.WithoutOKD) && !o.WhitelistConfig.IsWhitelisted(repoInfo) {
+		if !api.BuildsAnyOfficialImages(rbc, api.WithoutOKD) && !o.WhitelistConfig.IsWhitelisted(repoInfo) {
 			logger.Warn("Skipping...")
 			return nil
 		}
@@ -159,7 +159,7 @@ func main() {
 		}
 
 		if rbc.PromotionConfiguration != nil {
-			if !promotion.BuildsOfficialImages(rbc, promotion.WithoutOKD) && o.WhitelistConfig.IsWhitelisted(repoInfo) {
+			if !api.BuildsAnyOfficialImages(rbc, api.WithoutOKD) && o.WhitelistConfig.IsWhitelisted(repoInfo) {
 				logger.Warn("Repo is whitelisted. Disable promotion...")
 				rbc.PromotionConfiguration.Disabled = true
 			}
@@ -168,7 +168,7 @@ func main() {
 		// don't copy periodics and postsubmits
 		var tests []api.TestStepConfiguration
 		for _, test := range rbc.Tests {
-			if test.Cron == nil && test.Interval == nil && !test.Postsubmit {
+			if !test.IsPeriodic() && !test.Postsubmit {
 				tests = append(tests, test)
 			}
 		}
@@ -236,7 +236,12 @@ func privateBaseImages(baseImages map[string]api.ImageStreamTagReference) {
 
 func privatePromotionConfiguration(promotion *api.PromotionConfiguration) {
 	if promotion.Namespace == ocpNamespace {
-		promotion.Name = fmt.Sprintf("%s-priv", promotion.Name)
+		if promotion.Name != "" {
+			promotion.Name = fmt.Sprintf("%s-priv", promotion.Name)
+		} else { // promotion.Tag must be set
+			promotion.Tag = fmt.Sprintf("%s-priv", promotion.Tag)
+		}
+		promotion.TagByCommit = false // Never use tag_by_commit for mirrored repos
 		promotion.Namespace = privatePromotionNamespace
 	}
 }

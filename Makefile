@@ -73,7 +73,7 @@ format: frontend-format gofmt
 # Example:
 #   make gofmt
 gofmt: cmd/vault-secret-collection-manager/index.js
-	gofmt -s -w $(shell go list -f '{{ .Dir }}' ./... )
+	gofmt -s -w $(shell go list --tags e2e,e2e_framework -f '{{ .Dir }}' ./... )
 .PHONY: gofmt
 
 # Update vendored code and manifests to ensure formatting.
@@ -89,7 +89,7 @@ update-vendor:
 		-e GO111MODULE=on \
 		-e GOPROXY=https://proxy.golang.org \
 		-e GOCACHE=/tmp/go-build-cache \
-		golang:1.17 \
+		registry.ci.openshift.org/openshift/release:golang-1.21 \
 		/bin/bash -c "go mod tidy && go mod vendor"
 .PHONY: update-vendor
 
@@ -125,9 +125,7 @@ cmd/vault-secret-collection-manager/index.js: cmd/vault-secret-collection-manage
 # Example:
 #   make production-install
 production-install: cmd/vault-secret-collection-manager/index.js cmd/pod-scaler/frontend/dist cmd/repo-init/frontend/dist
-	rm -f cmd/pod-scaler/frontend/dist/dummy # we keep this file in git to keep the thing compiling without static assets
-	rm -f cmd/repo-init/frontend/dist/dummy
-	hack/install.sh
+	hack/install.sh no-race remove-dummy
 .PHONY: production-install
 
 # Install Go binaries with enabled race detector to $GOPATH/bin.
@@ -136,7 +134,7 @@ production-install: cmd/vault-secret-collection-manager/index.js cmd/pod-scaler/
 # Example:
 #   make production-install
 race-install: cmd/vault-secret-collection-manager/index.js cmd/pod-scaler/frontend/dist cmd/repo-init/frontend/dist
-	hack/install.sh race
+	hack/install.sh race keep-dummy
 
 # Run integration tests.
 #
@@ -165,6 +163,8 @@ PACKAGES ?= ./test/e2e/...
 # Example:
 #   make e2e
 #   make e2e PACKAGES=test/e2e/pod-scaler
+#   make e2e PACKAGES=test/e2e/pod-scaler TESTFLAGS='--run TestProduce'
+#   make e2e PACKAGES=test/e2e/pod-scaler TESTFLAGS='--count 1'
 e2e: $(TMPDIR)/.boskos-credentials
 	BOSKOS_CREDENTIALS_FILE="$(TMPDIR)/.boskos-credentials" PACKAGES="$(PACKAGES)" TESTFLAGS="$(TESTFLAGS) -tags $(TAGS) -timeout 70m -parallel 100" hack/test-go.sh
 .PHONY: e2e
@@ -178,6 +178,7 @@ CLUSTER ?= build01
 local-e2e: \
 	$(TMPDIR)/.ci-operator-kubeconfig \
 	$(TMPDIR)/hive-kubeconfig \
+	$(TMPDIR)/sa.hive.hive.token.txt \
 	$(TMPDIR)/local-secret/.dockerconfigjson \
 	$(TMPDIR)/remote-secret/.dockerconfigjson \
 	$(TMPDIR)/gcs/service-account.json \
@@ -199,6 +200,20 @@ local-e2e: \
 #   make update-integration
 #   make update-integration SUITE=multi-stage
 update-integration:
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/ci-operator-config-mirror/input --confirm
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/ci-operator-config-mirror/input-to-clean --confirm
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/ci-operator-config-mirror/output --confirm
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/ci-operator-config-mirror/output-only-super --confirm
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/ci-operator-prowgen/input/config --confirm
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/config-brancher/expected --confirm
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/config-brancher/input --confirm
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/pj-rehearse/candidate/ci-operator/config --confirm
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/pj-rehearse/master/ci-operator/config --confirm
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/release-job-migrator/expected2/ci-operator --confirm
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/release-job-migrator/expected/ci-operator --confirm
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/release-job-migrator/input/ci-operator --confirm
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/repo-init/expected/ci-operator/config --confirm
+	go run ./cmd/determinize-ci-operator --config-dir test/integration/repo-init/input/ci-operator/config --confirm
 	go run ./cmd/determinize-prow-config -prow-config-dir test/integration/repo-init/expected/core-services/prow/02_config -sharded-plugin-config-base-dir test/integration/repo-init/expected/core-services/prow/02_config
 	UPDATE=true make integration
 .PHONY: update-integration
@@ -209,7 +224,6 @@ pr-deploy-configresolver:
 	$(eval USER=$(shell curl --fail -Ss https://api.github.com/repos/openshift/ci-tools/pulls/$(PULL_REQUEST)|jq -r .head.user.login))
 	$(eval BRANCH=$(shell curl --fail -Ss https://api.github.com/repos/openshift/ci-tools/pulls/$(PULL_REQUEST)|jq -r .head.ref))
 	oc --context app.ci --as system:admin process -p USER=$(USER) -p BRANCH=$(BRANCH) -p PULL_REQUEST=$(PULL_REQUEST) -f hack/pr-deploy.yaml | oc  --context app.ci --as system:admin apply -f -
-	for cm in ci-operator-master-configs step-registry config; do oc  --context app.ci --as system:admin get configmap $${cm} -n ci -o json | eval $(kubeExport)|oc  --context app.ci --as system:admin create -f - -n ci-tools-$(PULL_REQUEST); done
 	echo "server is at https://$$( oc  --context app.ci --as system:admin get route server -n ci-tools-$(PULL_REQUEST) -o jsonpath={.spec.host} )"
 .PHONY: pr-deploy
 
@@ -279,6 +293,11 @@ update-unit:
 	UPDATE=true go test ./...
 .PHONY: update-unit
 
+# requires github.com/golang/mock/mockgen
+update-mocks:
+	hack/update-mocks.sh
+.PHONY: update-mocks
+
 validate-registry-metadata:
 	generate-registry-metadata -registry test/multistage-registry/registry
 	git status -s ./test/multistage-registry/registry
@@ -290,10 +309,14 @@ validate-checkconfig:
 .PHONY: validate-checkconfig
 
 $(TMPDIR)/.ci-operator-kubeconfig:
-	oc --context $(CLUSTER) --as system:admin --namespace ci serviceaccounts create-kubeconfig ci-operator > $(TMPDIR)/.ci-operator-kubeconfig
+	oc --context $(CLUSTER) -n test-credentials extract secret/ci-operator --keys kubeconfig --keys sa.ci-operator.$(CLUSTER).token.txt --to $(TMPDIR)
+	mv $(TMPDIR)/kubeconfig "$@"
 
 $(TMPDIR)/hive-kubeconfig:
 	oc --context $(CLUSTER) --as system:admin --namespace test-credentials get secret hive-hive-credentials -o 'jsonpath={.data.kubeconfig}' | base64 --decode > "$@"
+
+$(TMPDIR)/sa.hive.hive.token.txt:
+	oc --context $(CLUSTER) --namespace test-credentials extract secret/hive-hive-credentials --keys sa.hive.hive.token.txt --to $(TMPDIR)
 
 $(TMPDIR)/local-secret/.dockerconfigjson:
 	mkdir -p $(TMPDIR)/local-secret
@@ -326,7 +349,7 @@ cmd/pod-scaler/frontend/dist: cmd/pod-scaler/frontend/node_modules
 
 local-pod-scaler-ui: cmd/pod-scaler/frontend/node_modules $(HOME)/.cache/pod-scaler/steps/container_memory_working_set_bytes.json
 	go run -tags e2e,e2e_framework ./test/e2e/pod-scaler/local/main.go --cache-dir $(HOME)/.cache/pod-scaler --serve-dev-ui
-.PHONY: local-pod-scaler
+.PHONY: local-pod-scaler-ui
 
 $(HOME)/.cache/pod-scaler/steps/container_memory_working_set_bytes.json:
 	mkdir -p $(HOME)/.cache/pod-scaler
@@ -429,15 +452,30 @@ github-ldap-user-group-creator: $(TMPDIR)/.github-ldap-user-group-creator-kubeco
 .PHONY: github-ldap-user-group-creator
 
 sync-rover-groups:
-	go run  ./cmd/sync-rover-groups --manifest-dir=$(release_folder)/clusters --config-file=$(release_folder)/core-services/sync-rover-groups/_config.yaml --mapping-file=/tmp/mapping.yaml --log-level=debug
+	go run  ./cmd/sync-rover-groups --manifest-dir=$(release_folder)/clusters --config-file=$(release_folder)/core-services/sync-rover-groups/_config.yaml --mapping-file=/tmp/mapping.yaml --github-users-file=/tmp/users.yaml --log-level=debug
 .PHONY: sync-rover-groups
 
 $(TMPDIR)/.cluster-display-kubeconfig-dir:
 	rm -rf $(TMPDIR)/.cluster-display-kubeconfig-dir
 	mkdir -p $(TMPDIR)/.cluster-display-kubeconfig-dir
 	oc --context app.ci --namespace ci extract secret/cluster-display --confirm --to=$(TMPDIR)/.cluster-display-kubeconfig-dir
-	oc --context app.ci --namespace ci serviceaccounts create-kubeconfig cluster-display | sed 's/cluster-display/app.ci/g' > $(TMPDIR)/.cluster-display-kubeconfig-dir/sa.cluster-display.app.ci.config
 
 cluster-display: $(TMPDIR)/.cluster-display-kubeconfig-dir
-	@go run  ./cmd/cluster-display --kubeconfig-dir=$(TMPDIR)/.cluster-display-kubeconfig-dir
+	@go run  ./cmd/cluster-display --kubeconfig-dir=$(TMPDIR)/.cluster-display-kubeconfig-dir --kubeconfig-suffix=config
 .PHONY: cluster-display
+
+analyse-deps: cmd/vault-secret-collection-manager/index.js
+	@snyk test --project-name=ci-tools --org=red-hat-org
+.PHONY: analyse-deps
+
+ARTIFACTS ?= "."
+
+analyse-code:
+	@snyk code test --project-name=ci-tools --org=red-hat-org --sarif --sarif-file-output=${ARTIFACTS}/snyk.sarif.json > /dev/null || true
+
+	@echo The following vulnerabilities fingerprints are found:
+	@jq -r '.runs[].results[].fingerprints[]' ${ARTIFACTS}/snyk.sarif.json | awk 'NR==FNR { b[$$0] = 1; next } !b[$$0]' .snyk-ignore -
+
+	@echo Full vulnerabilities report is available at ${ARTIFACTS}/snyk.sarif.json
+
+.PHONY: analyse-code

@@ -121,10 +121,10 @@ func main() {
 		userV1Client = client
 	}
 
-	users := sets.NewString()
+	users := sets.New[string]()
 	users.Insert(peribolosConfig.Orgs[o.org].Admins...)
 	users.Insert(peribolosConfig.Orgs[o.org].Members...)
-	logger.WithField("users", fmt.Sprintf("%s", users.List())).Info("Users found")
+	logger.WithField("users", fmt.Sprintf("%s", sets.List(users))).Info("Users found")
 
 	var action func(*v1.Group) (*v1.Group, error)
 	group := &v1.Group{
@@ -161,7 +161,7 @@ func main() {
 		}
 	}
 
-	group.Users = users.List()
+	group.Users = sets.List(users)
 
 	logger.Info("Processing group")
 	if _, err := action(group); err != nil {

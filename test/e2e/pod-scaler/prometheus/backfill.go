@@ -5,9 +5,9 @@ package prometheus
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math"
 	"math/rand"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -27,7 +27,7 @@ import (
 
 const (
 	// numSeries is the number of individual series of data generated for a given label set
-	numSeries = 10
+	numSeries = 5
 	// numSamples is the number of samples in an individual series
 	numSamples = 250
 	// samplingDuration is the duration between samples in a series
@@ -82,11 +82,11 @@ func Backfill(t testhelper.TestingTInterface, prometheusDir string, retentionPer
 	t.Logf("Generated Prometheus data in %s.", time.Since(generateStart))
 
 	writeStart := time.Now()
-	prometheusBackfillFile, err := ioutil.TempFile(prometheusDir, "backfill")
+	prometheusBackfillFile, err := os.CreateTemp(prometheusDir, "backfill")
 	if err != nil {
 		t.Fatalf("Could not create temporary file for Prometheus backfill: %v", err)
 	}
-	encoder := expfmt.NewEncoder(prometheusBackfillFile, expfmt.FmtOpenMetrics)
+	encoder := expfmt.NewEncoder(prometheusBackfillFile, expfmt.FmtOpenMetrics_0_0_1)
 	for _, family := range families {
 		if err := encoder.Encode(family); err != nil {
 			t.Fatalf("Failed to write Prometheus backfill data: %v", err)
@@ -135,7 +135,7 @@ func generateData(t testhelper.TestingTInterface, retentionPeriod time.Duration,
 			Metric: []*prometheus_client.Metric{},
 		}
 		for _, item := range series() {
-			mean := float64(r.Int31())
+			mean := float64(r.Int31()) / 10
 			stddev := r.Float64() * mean / 20.0
 			for _, offset := range offsets(retentionPeriod) {
 				for j := 0; j < numSeries; j++ {

@@ -4,7 +4,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -79,7 +79,7 @@ func TestReporter_Report(t *testing.T) {
 					return
 				}
 
-				raw, err := ioutil.ReadAll(r.Body)
+				raw, err := io.ReadAll(r.Body)
 				if err != nil {
 					t.Errorf("failed to read update body: %v", err)
 				}
@@ -118,7 +118,7 @@ func TestOptions_Reporter(t *testing.T) {
 }
 
 func TestGetUsernameAndPassword(t *testing.T) {
-	dir, err := ioutil.TempDir("", "test")
+	dir, err := os.MkdirTemp("", "test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,18 +129,18 @@ func TestGetUsernameAndPassword(t *testing.T) {
 	}()
 
 	password := filepath.Join(dir, "password")
-	if err := ioutil.WriteFile(password, []byte(`secret`), 0644); err != nil {
+	if err := os.WriteFile(password, []byte(`secret`), 0644); err != nil {
 		t.Fatal(err)
 	}
 
 	credentials := filepath.Join(dir, "credentials")
-	if err := ioutil.WriteFile(credentials, []byte(` a :b
+	if err := os.WriteFile(credentials, []byte(` a :b
 `), 0644); err != nil {
 		t.Fatal(err)
 	}
 
 	credentialsWrongFormat := filepath.Join(dir, "credentialsWrongFormat")
-	if err := ioutil.WriteFile(credentialsWrongFormat, []byte(`some
+	if err := os.WriteFile(credentialsWrongFormat, []byte(`some
 `), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -180,5 +180,127 @@ func TestGetUsernameAndPassword(t *testing.T) {
 		if diff := cmp.Diff(tc.expectedError, actualError, testhelper.EquateErrorMessage); diff != "" {
 			t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 		}
+	}
+}
+
+func TestReportMemoryConfigurationWarning(t *testing.T) {
+	testCases := []struct {
+		name             string
+		workloadName     string
+		workloadType     string
+		configuredMemory string
+		determinedMemory string
+		resourceType     string
+		expected         string
+	}{
+		{
+			name:             "valid request",
+			workloadName:     "name",
+			workloadType:     "build",
+			configuredMemory: "100",
+			determinedMemory: "200",
+			resourceType:     "memory",
+			expected:         `{"WorkloadName":"name","WorkloadType":"build","ConfiguredAmount":"100","DeterminedAmount":"200","ResourceType":"memory"}`,
+		},
+		{
+			name:             "empty workload name",
+			workloadName:     "",
+			workloadType:     "build",
+			configuredMemory: "100",
+			determinedMemory: "200",
+			resourceType:     "memory",
+			expected:         `{"WorkloadName":"","WorkloadType":"build","ConfiguredAmount":"100","DeterminedAmount":"200","ResourceType":"memory"}`,
+		},
+		{
+			name:             "empty workload type",
+			workloadName:     "name",
+			workloadType:     "",
+			configuredMemory: "100",
+			determinedMemory: "200",
+			resourceType:     "memory",
+			expected:         `{"WorkloadName":"name","WorkloadType":"","ConfiguredAmount":"100","DeterminedAmount":"200","ResourceType":"memory"}`,
+		},
+		{
+			name:             "empty resource type",
+			workloadName:     "name",
+			workloadType:     "step",
+			configuredMemory: "100",
+			determinedMemory: "200",
+			resourceType:     "",
+			expected:         `{"WorkloadName":"name","WorkloadType":"step","ConfiguredAmount":"100","DeterminedAmount":"200","ResourceType":""}`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			testServer := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				if request.Header.Get("Content-Type") != "application/json" {
+					t.Errorf("incorrectly sent content-type header for JSON")
+					return
+				}
+
+				if request.Method != http.MethodPost {
+					t.Errorf("incorrect method: %s", request.Method)
+					return
+				}
+
+				if !strings.HasSuffix(request.URL.Path, "/pod-scaler") {
+					t.Errorf("incorrect path: %s", request.URL.Path)
+					return
+				}
+
+				requestBody, err := io.ReadAll(request.Body)
+				if err != nil {
+					t.Errorf("failed to read request body: %v", err)
+				}
+
+				if diff := cmp.Diff(tc.expected, string(requestBody)); diff != "" {
+					t.Errorf("actual and expected response don't match, diff: %v", diff)
+				}
+			}))
+			defer testServer.Close()
+
+			podScalerReporter := podScalerReporter{
+				client: &http.Client{
+					Transport: &http.Transport{
+						TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+					},
+				},
+				address: testServer.URL,
+			}
+			podScalerReporter.ReportResourceConfigurationWarning(tc.workloadName, tc.workloadType, tc.configuredMemory, tc.determinedMemory, tc.resourceType)
+		})
+	}
+}
+
+func TestOptions_Validate(t *testing.T) {
+	testCases := []struct {
+		name     string
+		options  *Options
+		expected error
+	}{
+		{
+			name:     "valid options",
+			options:  &Options{address: "foo.com", credentials: "<username>:<password>"},
+			expected: nil,
+		},
+		{
+			name:     "empty address",
+			options:  &Options{address: "", credentials: "<username>:<password>"},
+			expected: errors.New("report-address is required"),
+		},
+		{
+			name:     "empty credentials",
+			options:  &Options{address: "foo.com", credentials: ""},
+			expected: errors.New("report-credentials-file is required"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if diff := cmp.Diff(tc.options.Validate(), tc.expected, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("actual and expected result don't match, diff: %v", diff)
+			}
+		})
 	}
 }

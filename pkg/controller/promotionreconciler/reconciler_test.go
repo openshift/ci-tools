@@ -4,7 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
+	"regexp"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -55,7 +56,7 @@ func TestCommitForIST(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			rawImageStreamTag, err := ioutil.ReadFile(tc.srcFile)
+			rawImageStreamTag, err := os.ReadFile(tc.srcFile)
 			if err != nil {
 				t.Fatalf("failed to read imagestreamtag fixture: %v", err)
 			}
@@ -63,7 +64,7 @@ func TestCommitForIST(t *testing.T) {
 			if err := yaml.Unmarshal(rawImageStreamTag, ist); err != nil {
 				t.Fatalf("failed to unmarshal imagestreamTag: %v", err)
 			}
-			commit, err := commitForIST(ist)
+			commit, err := commitForIST(ist, fakectrlruntimeclient.NewClientBuilder().Build())
 			if err != nil {
 				t.Fatalf("failed to get ref for ist: %v", err)
 			}
@@ -101,7 +102,7 @@ func TestReconcile(t *testing.T) {
 			githubClient: func(_, _, _ string) (string, error) { return "", fmt.Errorf("wrapped: %w", github.NewNotFound()) },
 			verify: func(e error, _ *prowjobreconciler.OrgRepoBranchCommit) error {
 				if !controllerutil.IsTerminal(e) {
-					return fmt.Errorf("expected to get terminal error, got %v", e)
+					return fmt.Errorf("expected to get terminal error, got %w", e)
 				}
 				return nil
 			},
@@ -113,7 +114,7 @@ func TestReconcile(t *testing.T) {
 			},
 			verify: func(e error, _ *prowjobreconciler.OrgRepoBranchCommit) error {
 				if !controllerutil.IsTerminal(e) {
-					return fmt.Errorf("expected to get terminal error, got %v", e)
+					return fmt.Errorf("expected to get terminal error, got %w", e)
 				}
 				return nil
 			},
@@ -291,7 +292,7 @@ func TestReconcile(t *testing.T) {
 
 			r := &reconciler{
 				log:    logrus.NewEntry(logrus.New()),
-				client: fakectrlruntimeclient.NewFakeClient(imageStreamTag),
+				client: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(imageStreamTag).Build(),
 				releaseBuildConfigs: func(_ string) ([]*cioperatorapi.ReleaseBuildConfiguration, error) {
 					return []*cioperatorapi.ReleaseBuildConfiguration{{
 						Metadata: cioperatorapi.Metadata{
@@ -319,6 +320,46 @@ func TestReconcile(t *testing.T) {
 
 			if err := tc.verify(err, req); err != nil {
 				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestIgnored(t *testing.T) {
+	testCases := []struct {
+		name                string
+		ignoredImageStreams []*regexp.Regexp
+		request             reconcile.Request
+		expected            bool
+	}{
+		{
+			name:                "not ignored",
+			ignoredImageStreams: []*regexp.Regexp{regexp.MustCompile(`^openshift-priv/.+`)},
+			request: reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: "ns",
+					Name:      "name",
+				},
+			},
+		},
+		{
+			name:                "ignored",
+			ignoredImageStreams: []*regexp.Regexp{regexp.MustCompile(`^openshift-priv/.+`)},
+			request: reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: "openshift-priv",
+					Name:      "name",
+				},
+			},
+			expected: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := ignored(tc.request, tc.ignoredImageStreams)
+			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}
 		})
 	}

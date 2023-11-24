@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -280,8 +280,12 @@ func replaceStream(streamName string, streamMap StreamMap) (string, error) {
 	if replacement.UpstreamImage == "" {
 		return "", fmt.Errorf("stream.yml.%s.upstream_image is an empty string", streamName)
 	}
-	if replacement.Mirror == nil || !*replacement.Mirror {
-		return "", fmt.Errorf("stream.yaml.%s.mirror is set to false, can not dereference", streamName)
+	//TODO: this is a temporary workaround until https://github.com/openshift-eng/ocp-build-data/commit/155694be74cb2f020f6fafeaf6e4b3fba89646a2 is reverted/changed
+	// We need to allow the: 'golang', 'rhel-9-golang', and 'etcd_golang' streams through in the meantime
+	if streamName != "golang" && streamName != "golang-1.19" && streamName != "rhel-9-golang" && streamName != "etcd_golang" && streamName != "etcd_golang-1.19" && streamName != "rhel-9-golang-1.19" && streamName != "etcd_rhel9_golang" {
+		if replacement.Mirror == nil || !*replacement.Mirror {
+			return "", fmt.Errorf("stream.yaml.%s.mirror is set to false, can not dereference", streamName)
+		}
 	}
 	return replacement.UpstreamImage, nil
 }
@@ -367,7 +371,7 @@ func gatherAllOCPImageConfigs(ocpBuildDataDir string, majorMinor MajorMinor) (ma
 }
 
 func readYAML(path string, unmarshalTarget interface{}, majorMinor MajorMinor) error {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("failed to read %s: %w", path, err)
 	}

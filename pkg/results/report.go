@@ -3,10 +3,12 @@ package results
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -32,8 +34,19 @@ func (o *Options) Bind(flag *flag.FlagSet) {
 	flag.StringVar(&o.credentials, "report-credentials-file", "", "File holding the <username>:<password> for the aggregate reporting server.")
 }
 
+// Validate checks if the Options elements are empty
+func (o *Options) Validate() error {
+	if o.address == "" {
+		return errors.New("report-address is required")
+	}
+	if o.credentials == "" {
+		return errors.New("report-credentials-file is required")
+	}
+	return nil
+}
+
 func getUsernameAndPassword(credentials string) (string, string, error) {
-	raw, err := ioutil.ReadFile(credentials)
+	raw, err := os.ReadFile(credentials)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to read credentials file %q: %w", credentials, err)
 	}
@@ -81,6 +94,15 @@ type Request struct {
 	State string `json:"state"`
 	// Reason is a colon-delimited list of reasons for failure
 	Reason string `json:"reason"`
+}
+
+// PodScalerRequest holds the data from pod-scaler used to report a result to an aggregation server
+type PodScalerRequest struct {
+	WorkloadName     string
+	WorkloadType     string
+	ConfiguredAmount string
+	DeterminedAmount string
+	ResourceType     string
 }
 
 const (
@@ -146,9 +168,63 @@ func (r *reporter) report(request Request) {
 		logrus.Tracef("could not create report request: %v", err)
 		return
 	}
+	sendRequest(req, r.client, r.username, r.password)
+}
+
+type PodScalerReporter interface {
+	ReportResourceConfigurationWarning(workloadName, workloadType, configuredAmount, determinedAmount, resourceType string)
+}
+
+type podScalerReporter struct {
+	client             *http.Client
+	username, password string
+	address            string
+}
+
+func (o *Options) PodScalerReporter() (PodScalerReporter, error) {
+	username, password, err := getUsernameAndPassword(o.credentials)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get username and password: %w", err)
+	}
+
+	return &podScalerReporter{
+		client:   &http.Client{},
+		username: username,
+		password: password,
+		address:  o.address,
+	}, nil
+}
+
+// ReportResourceConfigurationWarning is used to send the information about resource configuration
+// from pod-scaler-admission to result-aggregator.
+func (r *podScalerReporter) ReportResourceConfigurationWarning(workloadName, workloadType, configuredAmount, determinedAmount, resourceType string) {
+	request := PodScalerRequest{
+		WorkloadName:     workloadName,
+		WorkloadType:     workloadType,
+		ConfiguredAmount: configuredAmount,
+		DeterminedAmount: determinedAmount,
+		ResourceType:     resourceType,
+	}
+
+	data, err := json.Marshal(request)
+	if err != nil {
+		logrus.Tracef("could not marshal pod-scaler request: %v", err)
+		return
+	}
+
+	httpRequest, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/pod-scaler", r.address), bytes.NewReader(data))
+	if err != nil {
+		logrus.Tracef("could not create pod-scaler request: %v", err)
+		return
+	}
+
+	sendRequest(httpRequest, r.client, r.username, r.password)
+}
+
+func sendRequest(req *http.Request, client *http.Client, username, password string) {
 	req.Header.Set("Content-Type", "application/json")
-	req.SetBasicAuth(r.username, r.password)
-	resp, err := r.client.Do(req)
+	req.SetBasicAuth(username, password)
+	resp, err := client.Do(req)
 	if err != nil {
 		logrus.Tracef("could not send report request: %v", err)
 		return
@@ -159,7 +235,7 @@ func (r *reporter) report(request Request) {
 		}
 	}()
 	if resp != nil && resp.StatusCode != http.StatusOK {
-		body, _ := ioutil.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body)
 		logrus.Tracef("response for report was not 200: %v", string(body))
 	}
 }

@@ -106,7 +106,11 @@ func (s *leaseStep) Run(ctx context.Context) error {
 }
 
 func (s *leaseStep) run(ctx context.Context) error {
-	logrus.Infof("Acquiring leases for test %s", s.Name())
+	var types []string
+	for i := range s.leases {
+		types = append(types, s.leases[i].ResourceType)
+	}
+	logrus.Infof("Acquiring leases for test %s: %v", s.Name(), types)
 	client := *s.client
 	ctx, cancel := context.WithCancel(ctx)
 	if err := acquireLeases(client, ctx, cancel, s.leases); err != nil {

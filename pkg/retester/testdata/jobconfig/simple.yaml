@@ -1,0 +1,6 @@
+presubmits:
+  openshift/ci-tools:
+  - name: test-presubmit
+    spec:
+      containers:
+      - serviceAccountName: test

@@ -1,0 +1,12 @@
+agent: kubernetes
+always_run: true
+branches:
+- ^branch$
+- ^branch-
+context: ci/prow/testname
+decorate: true
+decoration_config:
+  skip_cloning: true
+name: pull-ci-org-repo-branch-testname
+rerun_command: /test testname
+trigger: (?m)^/test( | .* )testname,?($|\s.*)

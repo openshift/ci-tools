@@ -20,16 +20,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
-	"sync"
+	"strings"
+	"time"
 
 	gitignore "github.com/denormal/go-gitignore"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
+	gerritsource "k8s.io/test-infra/prow/gerrit/source"
 
+	"k8s.io/test-infra/prow/git/types"
 	"k8s.io/test-infra/prow/git/v2"
 	"sigs.k8s.io/yaml"
 )
@@ -38,6 +42,52 @@ const (
 	inRepoConfigFileName = ".prow.yaml"
 	inRepoConfigDirName  = ".prow"
 )
+
+var inrepoconfigRepoOpts = git.RepoOpts{
+	// Technically we only need inRepoConfigDirName (".prow") because the
+	// default "cone mode" of sparse checkouts already include files at the
+	// toplevel (which would include ".prow.yaml").
+	//
+	// TODO (listx): The version of git shipped in kubekins-e2e (itself
+	// derived from the bootstrap image) uses git version 2.30.2, which does
+	// not populate files at the toplevel. So we have to also set a sparse
+	// checkout of ".prow.yaml". Later when that image is updated, we can
+	// remove the use of inRepoConfigFileName (".prow.yaml"), so that the
+	// unit tests in CI can pass. As for the Prow components themselves,
+	// they use a different version of Git based on alpine (see .ko.yaml in
+	// the root).
+	SparseCheckoutDirs: []string{inRepoConfigDirName, inRepoConfigFileName},
+	// The sparse checkout would avoid creating another copy of Git objects
+	// from the mirror clone into the secondary clone.
+	ShareObjectsWithPrimaryClone: true,
+}
+
+var inrepoconfigMetrics = struct {
+	gitCloneDuration *prometheus.HistogramVec
+	gitOtherDuration *prometheus.HistogramVec
+}{
+	gitCloneDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "inrepoconfig_git_client_acquisition_duration",
+		Help:    "Seconds taken for acquiring a git client (may include an initial clone operation).",
+		Buckets: []float64{0.5, 1, 2, 5, 10, 20, 30, 45, 60, 90, 120, 180, 300, 600, 1200},
+	}, []string{
+		"org",
+		"repo",
+	}),
+	gitOtherDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "inrepoconfig_git_other_duration",
+		Help:    "Seconds taken after acquiring a git client and performing all other git operations (to read the ProwYAML of the repo).",
+		Buckets: []float64{0.1, 0.5, 1, 2, 5, 10, 20, 30, 45, 60, 90, 120, 180, 300, 600},
+	}, []string{
+		"org",
+		"repo",
+	}),
+}
+
+func init() {
+	prometheus.MustRegister(inrepoconfigMetrics.gitCloneDuration)
+	prometheus.MustRegister(inrepoconfigMetrics.gitOtherDuration)
+}
 
 // +k8s:deepcopy-gen=true
 
@@ -61,6 +111,19 @@ type ProwYAMLGetter func(c *Config, gc git.ClientFactory, identifier, baseSHA st
 // ProwYAMLGetter.
 var _ ProwYAMLGetter = prowYAMLGetterWithDefaults
 var _ ProwYAMLGetter = prowYAMLGetter
+
+// InRepoConfigGetter defines a common interface that both the Moonraker client
+// and raw InRepoConfigCache can implement. This way, Prow components like Sub
+// and Gerrit can choose either one (based on runtime flags), but regardless of
+// the choice the surrounding code can still just call this GetProwYAML()
+// interface method (without being aware whether the underlying implementation
+// is going over the network to Moonraker or is done locally with the local
+// InRepoConfigCache (LRU cache)).
+type InRepoConfigGetter interface {
+	GetInRepoConfig(identifier string, baseSHAGetter RefGetter, headSHAGetters ...RefGetter) (*ProwYAML, error)
+	GetPresubmits(identifier string, baseSHAGetter RefGetter, headSHAGetters ...RefGetter) ([]Presubmit, error)
+	GetPostsubmits(identifier string, baseSHAGetter RefGetter, headSHAGetters ...RefGetter) ([]Postsubmit, error)
+}
 
 // prowYAMLGetter is like prowYAMLGetterWithDefaults, but without default values
 // (it does not call DefaultAndValidateProwYAML()). Its sole purpose is to allow
@@ -86,14 +149,24 @@ func prowYAMLGetter(
 	if orgRepo.Repo == "" {
 		return nil, fmt.Errorf("didn't get two results when splitting repo identifier %q", identifier)
 	}
-	repo, err := gc.ClientFor(orgRepo.Org, orgRepo.Repo)
+
+	timeBeforeClone := time.Now()
+	repoOpts := inrepoconfigRepoOpts
+	// For Gerrit, the baseSHA could appear as a headSHA for postsubmits if the
+	// change was a fast-forward merge. So we need to dedupe it with sets.
+	repoOpts.NeededCommits = sets.New(baseSHA)
+	repoOpts.NeededCommits.Insert(headSHAs...)
+	repo, err := gc.ClientForWithRepoOpts(orgRepo.Org, orgRepo.Repo, repoOpts)
+	inrepoconfigMetrics.gitCloneDuration.WithLabelValues(orgRepo.Org, orgRepo.Repo).Observe((float64(time.Since(timeBeforeClone).Seconds())))
 	if err != nil {
 		return nil, fmt.Errorf("failed to clone repo for %q: %w", identifier, err)
 	}
+	timeAfterClone := time.Now()
 	defer func() {
 		if err := repo.Clean(); err != nil {
 			log.WithError(err).Error("Failed to clean up repo.")
 		}
+		inrepoconfigMetrics.gitOtherDuration.WithLabelValues(orgRepo.Org, orgRepo.Repo).Observe((float64(time.Since(timeAfterClone).Seconds())))
 	}()
 
 	if err := repo.Config("user.name", "prow"); err != nil {
@@ -106,25 +179,21 @@ func prowYAMLGetter(
 		return nil, err
 	}
 
-	mergeMethod := c.Tide.MergeMethod(orgRepo)
-	log.Debugf("Using merge strategy %q.", mergeMethod)
-	if err := ensureHeadCommits(repo, headSHAs...); err != nil {
-		return nil, fmt.Errorf("failed to fetch headSHAs: %v", err)
+	// TODO(mpherman): This is to hopefully mittigate issue with gerrit merges. Need to come up with a solution that checks
+	// each CLs merge strategy as they can differ. ifNecessary is just the gerrit default
+	var mergeMethod types.PullRequestMergeType
+	if gerritsource.IsGerritOrg(identifier) {
+		mergeMethod = types.MergeIfNecessary
+	} else {
+		mergeMethod = c.Tide.MergeMethod(orgRepo)
 	}
+
+	log.WithField("merge-strategy", mergeMethod).Debug("Using merge strategy.")
 	if err := repo.MergeAndCheckout(baseSHA, string(mergeMethod), headSHAs...); err != nil {
 		return nil, fmt.Errorf("failed to merge: %w", err)
 	}
 
 	return ReadProwYAML(log, repo.Directory(), false)
-}
-
-func ensureHeadCommits(repo git.RepoClient, headSHAs ...string) error {
-	for _, sha := range headSHAs {
-		if err := repo.Fetch(sha); err != nil {
-			return fmt.Errorf("failed to fetch headSHA: %s: %v", sha, err)
-		}
-	}
-	return nil
 }
 
 // ReadProwYAML parses the .prow.yaml file or .prow directory, no commit checkout or defaulting is included.
@@ -161,7 +230,7 @@ func ReadProwYAML(log *logrus.Entry, dir string, strict bool) (*ProwYAML, error)
 					return nil
 				}
 				log.Debugf("Reading YAML file %q", p)
-				bytes, err := ioutil.ReadFile(p)
+				bytes, err := os.ReadFile(p)
 				if err != nil {
 					return err
 				}
@@ -183,7 +252,7 @@ func ReadProwYAML(log *logrus.Entry, dir string, strict bool) (*ProwYAML, error)
 		log.WithField("file", inRepoConfigFileName).Debug("Attempting to get inreconfigfile")
 		prowYAMLFilePath := path.Join(dir, inRepoConfigFileName)
 		if _, err := os.Stat(prowYAMLFilePath); err == nil {
-			bytes, err := ioutil.ReadFile(prowYAMLFilePath)
+			bytes, err := os.ReadFile(prowYAMLFilePath)
 			if err != nil {
 				return nil, fmt.Errorf("failed to read %q: %w", prowYAMLDirPath, err)
 			}
@@ -228,10 +297,10 @@ func DefaultAndValidateProwYAML(c *Config, p *ProwYAML, identifier string) error
 	if err := defaultPostsubmits(p.Postsubmits, p.Presets, c, identifier); err != nil {
 		return err
 	}
-	if err := validatePresubmits(append(p.Presubmits, c.PresubmitsStatic[identifier]...), c.PodNamespace); err != nil {
+	if err := c.validatePresubmits(append(p.Presubmits, c.GetPresubmitsStatic(identifier)...)); err != nil {
 		return err
 	}
-	if err := validatePostsubmits(append(p.Postsubmits, c.PostsubmitsStatic[identifier]...), c.PodNamespace); err != nil {
+	if err := c.validatePostsubmits(append(p.Postsubmits, c.GetPostsubmitsStatic(identifier)...)); err != nil {
 		return err
 	}
 
@@ -255,101 +324,20 @@ func DefaultAndValidateProwYAML(c *Config, p *ProwYAML, identifier string) error
 	return utilerrors.NewAggregate(errs)
 }
 
-// InRepoConfigGitCache is a wrapper around a git.ClientFactory that allows for
-// threadsafe reuse of git.RepoClients when one already exists for the specified repo.
-type InRepoConfigGitCache struct {
-	git.ClientFactory
-	cache map[string]*skipCleanRepoClient
-	sync.RWMutex
-}
-
-func NewInRepoConfigGitCache(factory git.ClientFactory) git.ClientFactory {
-	if factory == nil {
-		// Don't wrap a nil git factory, keep it nil so that errors are handled properly.
-		return nil
-	}
-	return &InRepoConfigGitCache{
-		ClientFactory: factory,
-		cache:         map[string]*skipCleanRepoClient{},
-	}
-}
-
-func (c *InRepoConfigGitCache) ClientFor(org, repo string) (git.RepoClient, error) {
-	key := fmt.Sprintf("%s/%s", org, repo)
-	getCache := func(threadSafe bool) (git.RepoClient, error) {
-		if client, ok := c.cache[key]; ok {
-			client.Lock()
-			// if repo is dirty, perform git reset --hard instead of deleting entire repo
-			if isDirty, err := client.RepoClient.IsDirty(); err != nil || isDirty {
-				if err := client.ResetHard("HEAD"); err != nil {
-					if threadSafe {
-						// Called within client `Lock`, safe to delete from map,
-						// return with nil so that a fresh clone will be performed
-						delete(c.cache, key)
-						client.Clean() // best effort clean, to avoid jam up disk
-					}
-					// Called with client `RLock`, not safe to delete from map,
-					// also return because fetch doesn't make much sense any more
-					client.Unlock()
-					return nil, nil
-				}
-			}
-			// Don't unlock the client unless we get an error or the consumer
-			// indicates they are done by Clean()ing.
-			// This fetch operation is repeated executed in the clone repo,
-			// which fails if there is a commit being deleted from remote. This
-			// is a corner case, but when it happens it would be really
-			// annoying, adding `--prune` tag here for mitigation.
-			if err := client.Fetch("--prune"); err != nil {
-				client.Unlock()
-				return nil, err
-			}
-			return client, nil
+// ContainsInRepoConfigPath indicates whether the specified list of changed
+// files (repo relative paths) includes a file that might be an inrepo config file.
+//
+// This function could report a false positive as it doesn't consider .prowignore files.
+// It is designed to be used to help short circuit when we know a change doesn't touch
+// the inrepo config.
+func ContainsInRepoConfigPath(files []string) bool {
+	for _, file := range files {
+		if file == inRepoConfigFileName {
+			return true
 		}
-		return nil, nil
+		if strings.HasPrefix(file, inRepoConfigDirName+"/") {
+			return true
+		}
 	}
-	c.RLock()
-	cached, err := getCache(false)
-	c.RUnlock()
-	if cached != nil || err != nil {
-		return cached, err
-	}
-
-	// The repo client was not cached, create a new one.
-	c.Lock()
-	defer c.Unlock()
-	// On cold start, all threads pass RLock and wait here, we need to do one more
-	// check here to avoid more than one cloning.
-	// (It would be nice if we could upgrade from `RLock` to `Lock`)
-	cached, err = getCache(true)
-	if cached != nil || err != nil {
-		return cached, err
-	}
-	coreClient, err := c.ClientFactory.ClientFor(org, repo)
-	if err != nil {
-		return nil, err
-	}
-	// This is the easiest way we can find for fetching all pull heads
-	if err := coreClient.Config("--add", "remote.origin.fetch", "+refs/pull/*/head:refs/remotes/origin/pr/*"); err != nil {
-		return nil, err
-	}
-	client := &skipCleanRepoClient{
-		RepoClient: coreClient,
-	}
-	client.Lock()
-	c.cache[key] = client
-	return client, nil
-}
-
-var _ git.RepoClient = &skipCleanRepoClient{}
-
-type skipCleanRepoClient struct {
-	git.RepoClient
-	sync.Mutex
-}
-
-func (rc *skipCleanRepoClient) Clean() error {
-	// Skip cleaning and unlock to allow reuse as a cached entry.
-	rc.Mutex.Unlock()
-	return nil
+	return false
 }

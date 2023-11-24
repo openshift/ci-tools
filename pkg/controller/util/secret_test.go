@@ -50,7 +50,7 @@ func TestEnsureImagePullSecret(t *testing.T) {
 	}{
 		{
 			name:      "basic case: create",
-			client:    fakeclient.NewFakeClient(secret.DeepCopy()),
+			client:    fakeclient.NewClientBuilder().WithRuntimeObjects(secret.DeepCopy()).Build(),
 			namespace: "some-ns",
 			verify: func(client ctrlruntimeclient.Client) error {
 				actualSecret := &corev1.Secret{}
@@ -75,7 +75,7 @@ func TestEnsureImagePullSecret(t *testing.T) {
 		},
 		{
 			name:      "basic case: update",
-			client:    fakeclient.NewFakeClient(secret.DeepCopy(), targetSecret.DeepCopy()),
+			client:    fakeclient.NewClientBuilder().WithRuntimeObjects(secret.DeepCopy(), targetSecret.DeepCopy()).Build(),
 			namespace: "some-ns",
 			verify: func(client ctrlruntimeclient.Client) error {
 				actualSecret := &corev1.Secret{}
@@ -100,7 +100,7 @@ func TestEnsureImagePullSecret(t *testing.T) {
 		},
 		{
 			name:      "attempt to copy to ci",
-			client:    fakeclient.NewFakeClient(),
+			client:    fakeclient.NewClientBuilder().Build(),
 			namespace: "ci",
 			verify: func(client ctrlruntimeclient.Client) error {
 				actualSecret := &corev1.Secret{}

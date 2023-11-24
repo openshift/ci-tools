@@ -191,7 +191,7 @@ func TestGetClonesHandler(t *testing.T) {
 				"ID": 1000,
 			},
 			statusCode:        http.StatusNotFound,
-			data:              "unable to get get bug details",
+			data:              "unable to get bug details",
 			tmplt:             errorTemplate,
 			allTargetVersions: []string{"4.4.z", "4.5.z", "4.6.0"},
 		},

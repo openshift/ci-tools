@@ -1,5 +1,7 @@
+FROM mplatform/manifest-tool as builder
 FROM quay.io/centos/centos:stream8
-LABEL maintainer="skuznets@redhat.com"
+
+COPY --from=builder /manifest-tool /usr/bin/manifest-tool
 
 RUN yum install -y git python2
 RUN alternatives --set python /usr/bin/python2

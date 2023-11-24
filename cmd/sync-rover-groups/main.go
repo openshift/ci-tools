@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	ldapv3 "github.com/go-ldap/ldap/v3"
@@ -22,18 +21,19 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/group"
+	"github.com/openshift/ci-tools/pkg/rover"
 )
 
 type options struct {
 	logLevelRaw      string
 	logLevel         logrus.Level
 	manifestDirRaw   flagutil.Strings
-	manifestDirs     sets.String
+	manifestDirs     sets.Set[string]
 	ldapServer       string
 	validateSubjects bool
 	groupsFile       string
 	configFile       string
-	mappingFile      string
+	githubUsersFile  string
 }
 
 func parseOptions() *options {
@@ -45,7 +45,7 @@ func parseOptions() *options {
 	fs.StringVar(&opts.ldapServer, "ldap-server", "ldap.corp.redhat.com", "LDAP server")
 	fs.StringVar(&opts.groupsFile, "groups-file", "/tmp/groups.yaml", "The file to store the groups in yaml format")
 	fs.StringVar(&opts.configFile, "config-file", "", "The yaml file storing the config file for the groups")
-	fs.StringVar(&opts.mappingFile, "mapping-file", "", "File used to store the mapping results of m(github_login)=kerberos_id.")
+	fs.StringVar(&opts.githubUsersFile, "github-users-file", "", "File used to store GitHub users.")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse args")
 	}
@@ -63,8 +63,8 @@ func (o *options) validate() error {
 	if len(values) == 0 {
 		return fmt.Errorf("--manifest-dir must be set")
 	}
-	if o.validateSubjects && o.mappingFile != "" {
-		return fmt.Errorf("--mapping-file cannot be set when --validate-subjects is true")
+	if o.validateSubjects && o.githubUsersFile != "" {
+		return fmt.Errorf("--github-users-file cannot be set when --validate-subjects is true")
 	}
 	return nil
 }
@@ -91,7 +91,7 @@ func main() {
 		logrus.WithError(err).Fatal("failed to validate the option")
 	}
 	logrus.SetLevel(opts.logLevel)
-	opts.manifestDirs = sets.NewString(opts.manifestDirRaw.Strings()...)
+	opts.manifestDirs = sets.New[string](opts.manifestDirRaw.Strings()...)
 
 	var config *group.Config
 	if opts.configFile != "" {
@@ -120,20 +120,18 @@ func main() {
 	groupCollector := newYamlGroupCollector(opts.validateSubjects)
 	groupResolver := &ldapGroupResolver{conn: conn}
 
-	if opts.mappingFile != "" {
-		mapping, err := groupResolver.getGitHubUserKerberosIDMapping()
+	if opts.githubUsersFile != "" {
+		users, err := groupResolver.collectGitHubUsers()
 		if err != nil {
-			logrus.WithError(err).Fatal("failed to get GitHub User and KerberosID mapping")
+			logrus.WithError(err).Fatal("failed to collect GitHub users")
 		}
-		bytes, err := yaml.Marshal(mapping)
+		data, err := yaml.Marshal(users)
 		if err != nil {
-			logrus.WithError(err).Fatal("failed to marshal GitHub User and KerberosID mapping")
+			logrus.WithError(err).Fatal("failed to marshal users")
 		}
-		if err := ioutil.WriteFile(opts.mappingFile, bytes, 0644); err != nil {
-			logrus.WithField("path", opts.mappingFile).WithError(err).
-				Fatal("failed to write GitHub User and KerberosID mapping to file")
+		if err := os.WriteFile(opts.githubUsersFile, data, 0644); err != nil {
+			logrus.WithError(err).WithField("file", opts.githubUsersFile).Fatal("failed to write file")
 		}
-		logrus.WithField("path", opts.mappingFile).Info("Saved the mapping")
 	}
 
 	groups, err := roverGroups(opts.manifestDirs, config, opts.validateSubjects, groupCollector, groupResolver)
@@ -144,7 +142,7 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to marshal groups")
 	}
-	if err := ioutil.WriteFile(opts.groupsFile, data, 0644); err != nil {
+	if err := os.WriteFile(opts.groupsFile, data, 0644); err != nil {
 		logrus.WithError(err).WithField("file", opts.groupsFile).Fatal("failed to write file")
 	}
 }
@@ -156,24 +154,24 @@ type Group struct {
 
 type groupResolver interface {
 	resolve(name string) (*Group, error)
-	getGitHubUserKerberosIDMapping() (map[string]string, error)
+	collectGitHubUsers() ([]rover.User, error)
 }
 
 type groupCollector interface {
-	collect(dir string) (sets.String, error)
+	collect(dir string) (sets.Set[string], error)
 }
 
-func roverGroups(manifestDirs sets.String, config *group.Config, validateSubjects bool, groupCollector groupCollector, groupResolver groupResolver) (map[string][]string, error) {
+func roverGroups(manifestDirs sets.Set[string], config *group.Config, validateSubjects bool, groupCollector groupCollector, groupResolver groupResolver) (map[string][]string, error) {
 	var errs []error
 
-	groupNames := sets.NewString()
-	for _, d := range manifestDirs.List() {
+	groupNames := sets.New[string]()
+	for _, d := range sets.List(manifestDirs) {
 		names, err := groupCollector.collect(d)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to collect groups for %s: %w", d, err))
 			continue
 		}
-		groupNames.Insert(names.List()...)
+		groupNames.Insert(sets.List(names)...)
 	}
 
 	groupNames.Insert(api.CIAdminsGroupName)
@@ -190,7 +188,7 @@ func roverGroups(manifestDirs sets.String, config *group.Config, validateSubject
 
 	groups := map[string][]string{}
 	if !validateSubjects {
-		for _, name := range groupNames.List() {
+		for _, name := range sets.List(groupNames) {
 			logrus.WithField("group", name).Debug("resolving group ...")
 			g, err := groupResolver.resolve(name)
 			if err != nil {

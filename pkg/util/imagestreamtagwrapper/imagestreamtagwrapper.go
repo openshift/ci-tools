@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	cache "sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	imagegroup "github.com/openshift/api/image"
@@ -53,7 +54,7 @@ type imagestreamtagwrapper struct {
 	ctrlruntimeclient.Client
 }
 
-func (istw *imagestreamtagwrapper) Get(ctx context.Context, key ctrlruntimeclient.ObjectKey, obj ctrlruntimeclient.Object) error {
+func (istw *imagestreamtagwrapper) Get(ctx context.Context, key ctrlruntimeclient.ObjectKey, obj ctrlruntimeclient.Object, opts ...client.GetOption) error {
 	if imageStreamTag, isImageStreamTag := obj.(*imagev1.ImageStreamTag); isImageStreamTag {
 		return istw.assembleImageStreamTag(ctx, key, imageStreamTag)
 	}
@@ -316,7 +317,7 @@ func internalImageWithMetadata(image *imagev1.Image) error {
 		return fmt.Errorf("unrecognized container image manifest schema %d for %q (%s)", manifest.SchemaVersion, image.Name, image.DockerImageReference)
 	}
 
-	layerSet := sets.NewString()
+	layerSet := sets.New[string]()
 	if manifest.SchemaVersion == 2 {
 		layerSet.Insert(manifest.Config.Digest)
 		imageDockerImageMetadata.Size = int64(len(image.DockerImageConfig))

@@ -25,6 +25,14 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"# contains the output of this command. This allows reuse of binary artifacts\n" +
 	"# across other steps. If empty, no \"bin\" image will be created.\n" +
 	"binary_build_commands: ' '\n" +
+	"# BinaryBuildCommandsList entries will create a \"bin\" image based on \"src\" that\n" +
+	"# contains the output of this command. This allows reuse of binary artifacts\n" +
+	"# across other steps. If empty, no \"bin\" image will be created.\n" +
+	"# Mutually exclusive with BinaryBuildCommands\n" +
+	"# DO NOT set this in the config\n" +
+	"binary_build_commands_list:\n" +
+	"    - commands: ' '\n" +
+	"      ref: ' '\n" +
 	"# BuildRootImage supports two ways to get the image that\n" +
 	"# the pipeline will caches on. The one way is to take the reference\n" +
 	"# from an image stream, and the other from a dockerfile.\n" +
@@ -78,6 +86,62 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"    # as a build cache, if the underlying build root has not changed since\n" +
 	"    # the previous cache was published.\n" +
 	"    use_build_cache: true\n" +
+	"# BuildRootImages entries support two ways to get the image that\n" +
+	"# the pipeline will caches on. The one way is to take the reference\n" +
+	"# from an image stream, and the other from a dockerfile.\n" +
+	"# Mutually exclusive with BuildRootImage\n" +
+	"# DO NOT set this in the config\n" +
+	"build_roots:\n" +
+	"    \"\":\n" +
+	"        # If the BuildRoot images pullspec should be read from a file in the repository (BuildRootImageFileName).\n" +
+	"        from_repository: true\n" +
+	"        image_stream_tag:\n" +
+	"            # As is an optional string to use as the intermediate name for this reference.\n" +
+	"            as: ' '\n" +
+	"            name: ' '\n" +
+	"            namespace: ' '\n" +
+	"            tag: ' '\n" +
+	"        project_image:\n" +
+	"            # BuildArgs contains build arguments that will be resolved in the Dockerfile.\n" +
+	"            # See https://docs.docker.com/engine/reference/builder/#/arg for more details.\n" +
+	"            build_args:\n" +
+	"                - # Name of the build arg.\n" +
+	"                  name: ' '\n" +
+	"                  # Value of the build arg.\n" +
+	"                  value: ' '\n" +
+	"            # ContextDir is the directory in the project\n" +
+	"            # from which this build should be run.\n" +
+	"            context_dir: ' '\n" +
+	"            # DockerfileLiteral can be used to provide an inline Dockerfile.\n" +
+	"            # Mutually exclusive with DockerfilePath.\n" +
+	"            dockerfile_literal: \"\"\n" +
+	"            # DockerfilePath is the path to a Dockerfile in the\n" +
+	"            # project to run relative to the context_dir.\n" +
+	"            dockerfile_path: ' '\n" +
+	"            # Inputs is a map of tag reference name to image input changes\n" +
+	"            # that will populate the build context for the Dockerfile or\n" +
+	"            # alter the input image for a multi-stage build.\n" +
+	"            inputs:\n" +
+	"                \"\":\n" +
+	"                    # As is a list of multi-stage step names or image names that will\n" +
+	"                    # be replaced by the image reference from this step. For instance,\n" +
+	"                    # if the Dockerfile defines FROM nginx:latest AS base, specifying\n" +
+	"                    # either \"nginx:latest\" or \"base\" in this array will replace that\n" +
+	"                    # image with the pipeline input.\n" +
+	"                    as:\n" +
+	"                        - \"\"\n" +
+	"                    # Paths is a list of paths to copy out of this image and into the\n" +
+	"                    # context directory.\n" +
+	"                    paths:\n" +
+	"                        - # DestinationDir is the directory in the destination image to copy\n" +
+	"                          # to.\n" +
+	"                          destination_dir: ' '\n" +
+	"                          # SourcePath is a file or directory in the source image to copy from.\n" +
+	"                          source_path: ' '\n" +
+	"        # UseBuildCache enables the import and use of the prior `bin` image\n" +
+	"        # as a build cache, if the underlying build root has not changed since\n" +
+	"        # the previous cache was published.\n" +
+	"        use_build_cache: true\n" +
 	"# CanonicalGoRepository is a directory path that represents\n" +
 	"# the desired location of the contents of this repository in\n" +
 	"# Go. If specified the location of the repository we are\n" +
@@ -142,6 +206,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"          context_dir: ' '\n" +
 	"          # DockerfilePath defines where the dockerfile for build the bundle exists relative to the contextdir\n" +
 	"          dockerfile_path: ' '\n" +
+	"          # Optional indicates that the job's status context, that is generated from the corresponding test, should not be required for merge.\n" +
+	"          optional: true\n" +
+	"          # Skip building the index image for this bundle. Default to false.\n" +
+	"          # This field works only for named bundles, i.e., \"as\" is not empty.\n" +
+	"          skip_building_index: true\n" +
 	"          # UpdateGraph defines the update mode to use when adding the bundle to the base index.\n" +
 	"          # Can be: semver (default), semver-skippatch, or replaces\n" +
 	"          update_graph: ' '\n" +
@@ -197,6 +266,48 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"    # Tag is the ImageStreamTag tagged in for each\n" +
 	"    # build image's ImageStream.\n" +
 	"    tag: ' '\n" +
+	"    # TagByCommit determines if an image should be tagged by the\n" +
+	"    # git commit that was used to build it. If Tag is also set,\n" +
+	"    # this will cause both a floating tag and commit-specific tags\n" +
+	"    # to be promoted.\n" +
+	"    tag_by_commit: true\n" +
+	"    # Targets configure a set of images to be pushed to\n" +
+	"    # a registry.\n" +
+	"    to:\n" +
+	"        - # AdditionalImages is a mapping of images to promote. The\n" +
+	"          # images will be taken from the pipeline image stream. The\n" +
+	"          # key is the name to promote as and the value is the source\n" +
+	"          # name. If you specify a tag that does not exist as the source\n" +
+	"          # the destination tag will not be created.\n" +
+	"          additional_images:\n" +
+	"            \"\": \"\"\n" +
+	"          # Disabled will no-op succeed instead of running the actual\n" +
+	"          # promotion step. This is useful when two branches need to\n" +
+	"          # promote to the same output imagestream on a cut-over but\n" +
+	"          # never concurrently, and you want to have promotion config\n" +
+	"          # in the ci-operator configuration files all the time.\n" +
+	"          disabled: true\n" +
+	"          # ExcludedImages are image names that will not be promoted.\n" +
+	"          # Exclusions are made before additional_images are included.\n" +
+	"          # Use exclusions when you want to build images for testing\n" +
+	"          # but not promote them afterwards.\n" +
+	"          excluded_images:\n" +
+	"            - \"\"\n" +
+	"          # Name is an optional image stream name to use that\n" +
+	"          # contains all component tags. If specified, tag is\n" +
+	"          # ignored.\n" +
+	"          name: ' '\n" +
+	"          # Namespace identifies the namespace to which the built\n" +
+	"          # artifacts will be published to.\n" +
+	"          namespace: ' '\n" +
+	"          # Tag is the ImageStreamTag tagged in for each\n" +
+	"          # build image's ImageStream.\n" +
+	"          tag: ' '\n" +
+	"          # TagByCommit determines if an image should be tagged by the\n" +
+	"          # git commit that was used to build it. If Tag is also set,\n" +
+	"          # this will cause both a floating tag and commit-specific tags\n" +
+	"          # to be promoted.\n" +
+	"          tag_by_commit: true\n" +
 	"# RawSteps are literal Steps that should be\n" +
 	"# included in the final pipeline.\n" +
 	"raw_steps:\n" +
@@ -339,10 +450,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      resolved_release_images_step:\n" +
 	"        # Candidate describes a candidate release payload\n" +
 	"        candidate:\n" +
-	"            # Architecture is the architecture for the product.\n" +
-	"            # Defaults to amd64.\n" +
 	"            architecture: ' '\n" +
-	"            # Product is the name of the product being released\n" +
 	"            product: ' '\n" +
 	"            # ReleaseStream is the stream from which we pick the latest candidate\n" +
 	"            stream: ' '\n" +
@@ -360,14 +468,14 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        name: ' '\n" +
 	"        # Prerelease describes a yet-to-be released payload\n" +
 	"        prerelease:\n" +
-	"            # Architecture is the architecture for the product.\n" +
-	"            # Defaults to amd64.\n" +
 	"            architecture: ' '\n" +
-	"            # Product is the name of the product being released\n" +
 	"            product: ' '\n" +
 	"            # VersionBounds describe the allowable version bounds to search in\n" +
 	"            version_bounds:\n" +
 	"                lower: ' '\n" +
+	"                # Stream dictates which stream to search for a version within the specified bounds\n" +
+	"                # defaults to 4-stable.\n" +
+	"                stream: ' '\n" +
 	"                upper: ' '\n" +
 	"        # Release describes a released payload\n" +
 	"        release:\n" +
@@ -397,6 +505,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        from: ' '\n" +
 	"        to: ' '\n" +
 	"      test_step:\n" +
+	"        # AlwaysRun can be set to false to disable running the job on every PR\n" +
+	"        always_run: false\n" +
 	"        # As is the name of the test.\n" +
 	"        as: ' '\n" +
 	"        # Cluster specifies the name of the cluster where the test runs.\n" +
@@ -488,6 +598,14 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            observers:\n" +
 	"                - # Commands is the command(s) that will be run inside the image.\n" +
 	"                  commands: ' '\n" +
+	"                  # Environment has the values of parameters for the observer.\n" +
+	"                  env:\n" +
+	"                    - # Default if not set, optional, makes the parameter not required if set.\n" +
+	"                      default: \"\"\n" +
+	"                      # Documentation is a textual description of the parameter.\n" +
+	"                      documentation: ' '\n" +
+	"                      # Name of the environment variable.\n" +
+	"                      name: ' '\n" +
 	"                  # From is the container image that will be used for this observer.\n" +
 	"                  from: ' '\n" +
 	"                  # FromImage is a literal ImageStreamTag reference to use for this observer.\n" +
@@ -497,8 +615,23 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
+	"                  # GracePeriod is how long the we will wait after sending SIGINT to send\n" +
+	"                  # SIGKILL when aborting this observer.\n" +
+	"                  grace_period: 0s\n" +
 	"                  # Name is the name of this observer\n" +
 	"                  name: ' '\n" +
+	"                  # Resources defines the resource requirements for the step.\n" +
+	"                  resources:\n" +
+	"                    # Limits are resource limits applied to an individual step in the job.\n" +
+	"                    # These are directly used in creating the Pods that execute the Job.\n" +
+	"                    limits:\n" +
+	"                        \"\": \"\"\n" +
+	"                    # Requests are resource requests applied to an individual step in the job.\n" +
+	"                    # These are directly used in creating the Pods that execute the Job.\n" +
+	"                    requests:\n" +
+	"                        \"\": \"\"\n" +
+	"                  # Timeout is how long the we will wait before aborting a job with SIGINT.\n" +
+	"                  timeout: 0s\n" +
 	"            # Post is the array of test steps run after the tests finish and teardown/deprovision resources.\n" +
 	"            # Post steps always run, even if previous steps fail.\n" +
 	"            post:\n" +
@@ -563,6 +696,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      env: ' '\n" +
 	"                      # ResourceType is the type of resource that will be leased.\n" +
 	"                      resource_type: ' '\n" +
+	"                  # NoKubeconfig determines that no $KUBECONFIG will exist in $SHARED_DIR,\n" +
+	"                  # so no local copy of it will be created for the step and if the step\n" +
+	"                  # creates one, it will not be propagated.\n" +
+	"                  no_kubeconfig: false\n" +
 	"                  # Observers are the observers that should be running\n" +
 	"                  observers:\n" +
 	"                    - \"\"\n" +
@@ -649,6 +786,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      env: ' '\n" +
 	"                      # ResourceType is the type of resource that will be leased.\n" +
 	"                      resource_type: ' '\n" +
+	"                  # NoKubeconfig determines that no $KUBECONFIG will exist in $SHARED_DIR,\n" +
+	"                  # so no local copy of it will be created for the step and if the step\n" +
+	"                  # creates one, it will not be propagated.\n" +
+	"                  no_kubeconfig: false\n" +
 	"                  # Observers are the observers that should be running\n" +
 	"                  observers:\n" +
 	"                    - \"\"\n" +
@@ -735,6 +876,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      env: ' '\n" +
 	"                      # ResourceType is the type of resource that will be leased.\n" +
 	"                      resource_type: ' '\n" +
+	"                  # NoKubeconfig determines that no $KUBECONFIG will exist in $SHARED_DIR,\n" +
+	"                  # so no local copy of it will be created for the step and if the step\n" +
+	"                  # creates one, it will not be propagated.\n" +
+	"                  no_kubeconfig: false\n" +
 	"                  # Observers are the observers that should be running\n" +
 	"                  observers:\n" +
 	"                    - \"\"\n" +
@@ -760,6 +905,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  timeout: 0s\n" +
 	"            # Override job timeout\n" +
 	"            timeout: 0s\n" +
+	"        # MinimumInterval to wait between two runs of the job. Consecutive\n" +
+	"        # jobs are run at `minimum_interval` + `duration of previous job`\n" +
+	"        # apart. Setting this field will create a periodic job instead of a\n" +
+	"        # presubmit\n" +
+	"        minimum_interval: \"\"\n" +
 	"        openshift_ansible:\n" +
 	"            cluster_profile: ' '\n" +
 	"        openshift_ansible_custom:\n" +
@@ -784,6 +934,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            cluster_profile: ' '\n" +
 	"        # Optional indicates that the job's status context, that is generated from the corresponding test, should not be required for merge.\n" +
 	"        optional: true\n" +
+	"        # Portable allows to port periodic tests to current and future release despite the demand to skip periodics\n" +
+	"        portable: true\n" +
 	"        # Postsubmit configures prowgen to generate the job as a postsubmit rather than a presubmit\n" +
 	"        postsubmit: true\n" +
 	"        # ReleaseController configures prowgen to create a periodic that\n" +
@@ -905,6 +1057,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - env: ' '\n" +
 	"                      resource_type: ' '\n" +
+	"                  no_kubeconfig: false\n" +
 	"                  observers:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - \"\"\n" +
@@ -967,6 +1120,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - env: ' '\n" +
 	"                      resource_type: ' '\n" +
+	"                  no_kubeconfig: false\n" +
 	"                  observers:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - \"\"\n" +
@@ -1029,6 +1183,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - env: ' '\n" +
 	"                      resource_type: ' '\n" +
+	"                  no_kubeconfig: false\n" +
 	"                  observers:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - \"\"\n" +
@@ -1061,10 +1216,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"    \"\":\n" +
 	"        # Candidate describes a candidate release payload\n" +
 	"        candidate:\n" +
-	"            # Architecture is the architecture for the product.\n" +
-	"            # Defaults to amd64.\n" +
 	"            architecture: ' '\n" +
-	"            # Product is the name of the product being released\n" +
 	"            product: ' '\n" +
 	"            # ReleaseStream is the stream from which we pick the latest candidate\n" +
 	"            stream: ' '\n" +
@@ -1081,14 +1233,14 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            namespace: ' '\n" +
 	"        # Prerelease describes a yet-to-be released payload\n" +
 	"        prerelease:\n" +
-	"            # Architecture is the architecture for the product.\n" +
-	"            # Defaults to amd64.\n" +
 	"            architecture: ' '\n" +
-	"            # Product is the name of the product being released\n" +
 	"            product: ' '\n" +
 	"            # VersionBounds describe the allowable version bounds to search in\n" +
 	"            version_bounds:\n" +
 	"                lower: ' '\n" +
+	"                # Stream dictates which stream to search for a version within the specified bounds\n" +
+	"                # defaults to 4-stable.\n" +
+	"                stream: ' '\n" +
 	"                upper: ' '\n" +
 	"        # Release describes a released payload\n" +
 	"        release:\n" +
@@ -1113,10 +1265,27 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"# command. The created RPMs will then be served via HTTP to the \"base\" image\n" +
 	"# via an injected rpm.repo in the standard location at /etc/yum.repos.d.\n" +
 	"rpm_build_commands: ' '\n" +
+	"# RpmBuildCommandsList entries will create an \"rpms\" image from \"bin\" (or \"src\", if no\n" +
+	"# binary build commands were specified) that contains the output of this\n" +
+	"# command. The created RPMs will then be served via HTTP to the \"base\" image\n" +
+	"# via an injected rpm.repo in the standard location at /etc/yum.repos.d.\n" +
+	"# Mutually exclusive with RpmBuildCommands\n" +
+	"# DO NOT set this in the config\n" +
+	"rpm_build_commands_list:\n" +
+	"    - commands: ' '\n" +
+	"      ref: ' '\n" +
 	"# RpmBuildLocation is where RPms are deposited after being built. If\n" +
 	"# unset, this will default under the repository root to\n" +
 	"# _output/local/releases/rpms/.\n" +
 	"rpm_build_location: ' '\n" +
+	"# RpmBuildLocationList entries are where RPms are deposited after being built. If\n" +
+	"# unset, this will default under the repository root to\n" +
+	"# _output/local/releases/rpms/.\n" +
+	"# Mutually exclusive with RpmBuildLocation\n" +
+	"# DO NOT set this in the config\n" +
+	"rpm_build_location_list:\n" +
+	"    - location: ' '\n" +
+	"      ref: ' '\n" +
 	"# ReleaseTagConfiguration determines how the\n" +
 	"# full release is assembled.\n" +
 	"tag_specification:\n" +
@@ -1134,11 +1303,21 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"# contains the output of this command. This allows reuse of binary artifacts\n" +
 	"# across other steps. If empty, no \"test-bin\" image will be created.\n" +
 	"test_binary_build_commands: ' '\n" +
+	"# TestBinaryBuildCommandsList entries will create a \"test-bin\" image based on \"src\" that\n" +
+	"# contains the output of this command. This allows reuse of binary artifacts\n" +
+	"# across other steps. If empty, no \"test-bin\" image will be created.\n" +
+	"# Mutually exclusive with TestBinaryBuildCommands\n" +
+	"# DO NOT set this in the config\n" +
+	"test_binary_build_commands_list:\n" +
+	"    - commands: ' '\n" +
+	"      ref: ' '\n" +
 	"# Tests describes the tests to run inside of built images.\n" +
 	"# The images launched as pods but have no explicit access to\n" +
 	"# the cluster they are running on.\n" +
 	"tests:\n" +
-	"    - # As is the name of the test.\n" +
+	"    - # AlwaysRun can be set to false to disable running the job on every PR\n" +
+	"      always_run: false\n" +
+	"      # As is the name of the test.\n" +
 	"      as: ' '\n" +
 	"      # Cluster specifies the name of the cluster where the test runs.\n" +
 	"      cluster: ' '\n" +
@@ -1229,6 +1408,14 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        observers:\n" +
 	"            - # Commands is the command(s) that will be run inside the image.\n" +
 	"              commands: ' '\n" +
+	"              # Environment has the values of parameters for the observer.\n" +
+	"              env:\n" +
+	"                - # Default if not set, optional, makes the parameter not required if set.\n" +
+	"                  default: \"\"\n" +
+	"                  # Documentation is a textual description of the parameter.\n" +
+	"                  documentation: ' '\n" +
+	"                  # Name of the environment variable.\n" +
+	"                  name: ' '\n" +
 	"              # From is the container image that will be used for this observer.\n" +
 	"              from: ' '\n" +
 	"              # FromImage is a literal ImageStreamTag reference to use for this observer.\n" +
@@ -1238,8 +1425,23 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
+	"              # GracePeriod is how long the we will wait after sending SIGINT to send\n" +
+	"              # SIGKILL when aborting this observer.\n" +
+	"              grace_period: 0s\n" +
 	"              # Name is the name of this observer\n" +
 	"              name: ' '\n" +
+	"              # Resources defines the resource requirements for the step.\n" +
+	"              resources:\n" +
+	"                # Limits are resource limits applied to an individual step in the job.\n" +
+	"                # These are directly used in creating the Pods that execute the Job.\n" +
+	"                limits:\n" +
+	"                    \"\": \"\"\n" +
+	"                # Requests are resource requests applied to an individual step in the job.\n" +
+	"                # These are directly used in creating the Pods that execute the Job.\n" +
+	"                requests:\n" +
+	"                    \"\": \"\"\n" +
+	"              # Timeout is how long the we will wait before aborting a job with SIGINT.\n" +
+	"              timeout: 0s\n" +
 	"        # Post is the array of test steps run after the tests finish and teardown/deprovision resources.\n" +
 	"        # Post steps always run, even if previous steps fail.\n" +
 	"        post:\n" +
@@ -1304,6 +1506,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  env: ' '\n" +
 	"                  # ResourceType is the type of resource that will be leased.\n" +
 	"                  resource_type: ' '\n" +
+	"              # NoKubeconfig determines that no $KUBECONFIG will exist in $SHARED_DIR,\n" +
+	"              # so no local copy of it will be created for the step and if the step\n" +
+	"              # creates one, it will not be propagated.\n" +
+	"              no_kubeconfig: false\n" +
 	"              # Observers are the observers that should be running\n" +
 	"              observers:\n" +
 	"                - \"\"\n" +
@@ -1390,6 +1596,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  env: ' '\n" +
 	"                  # ResourceType is the type of resource that will be leased.\n" +
 	"                  resource_type: ' '\n" +
+	"              # NoKubeconfig determines that no $KUBECONFIG will exist in $SHARED_DIR,\n" +
+	"              # so no local copy of it will be created for the step and if the step\n" +
+	"              # creates one, it will not be propagated.\n" +
+	"              no_kubeconfig: false\n" +
 	"              # Observers are the observers that should be running\n" +
 	"              observers:\n" +
 	"                - \"\"\n" +
@@ -1476,6 +1686,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  env: ' '\n" +
 	"                  # ResourceType is the type of resource that will be leased.\n" +
 	"                  resource_type: ' '\n" +
+	"              # NoKubeconfig determines that no $KUBECONFIG will exist in $SHARED_DIR,\n" +
+	"              # so no local copy of it will be created for the step and if the step\n" +
+	"              # creates one, it will not be propagated.\n" +
+	"              no_kubeconfig: false\n" +
 	"              # Observers are the observers that should be running\n" +
 	"              observers:\n" +
 	"                - \"\"\n" +
@@ -1501,6 +1715,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              timeout: 0s\n" +
 	"        # Override job timeout\n" +
 	"        timeout: 0s\n" +
+	"      # MinimumInterval to wait between two runs of the job. Consecutive\n" +
+	"      # jobs are run at `minimum_interval` + `duration of previous job`\n" +
+	"      # apart. Setting this field will create a periodic job instead of a\n" +
+	"      # presubmit\n" +
+	"      minimum_interval: \"\"\n" +
 	"      openshift_ansible:\n" +
 	"        cluster_profile: ' '\n" +
 	"      openshift_ansible_custom:\n" +
@@ -1525,6 +1744,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        cluster_profile: ' '\n" +
 	"      # Optional indicates that the job's status context, that is generated from the corresponding test, should not be required for merge.\n" +
 	"      optional: true\n" +
+	"      # Portable allows to port periodic tests to current and future release despite the demand to skip periodics\n" +
+	"      portable: true\n" +
 	"      # Postsubmit configures prowgen to generate the job as a postsubmit rather than a presubmit\n" +
 	"      postsubmit: true\n" +
 	"      # ReleaseController configures prowgen to create a periodic that\n" +
@@ -1646,6 +1867,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - env: ' '\n" +
 	"                  resource_type: ' '\n" +
+	"              no_kubeconfig: false\n" +
 	"              observers:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - \"\"\n" +
@@ -1708,6 +1930,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - env: ' '\n" +
 	"                  resource_type: ' '\n" +
+	"              no_kubeconfig: false\n" +
 	"              observers:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - \"\"\n" +
@@ -1770,6 +1993,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - env: ' '\n" +
 	"                  resource_type: ' '\n" +
+	"              no_kubeconfig: false\n" +
 	"              observers:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - \"\"\n" +

@@ -33,25 +33,26 @@ func TestResolve(t *testing.T) {
 	}{
 		{
 			name: "base case",
-			r: &ldapGroupResolver{&fakeLDAPConn{
-				searchResult: &ldapv3.SearchResult{
-					Entries: []*ldapv3.Entry{
-						{
-							DN: "cn=test-platform-ci-admins,ou=adhoc,ou=managedGroups,dc=redhat,dc=com",
-							Attributes: []*ldapv3.EntryAttribute{
-								{
-									Name: "uniqueMember",
-									Values: []string{
-										"uid=tom,ou=users,dc=redhat,dc=com",
-										"uid=jerry,ou=users,dc=redhat,dc=com",
+			r: &ldapGroupResolver{users: nil,
+				conn: &fakeLDAPConn{
+					searchResult: &ldapv3.SearchResult{
+						Entries: []*ldapv3.Entry{
+							{
+								DN: "cn=test-platform-ci-admins,ou=adhoc,ou=managedGroups,dc=redhat,dc=com",
+								Attributes: []*ldapv3.EntryAttribute{
+									{
+										Name: "uniqueMember",
+										Values: []string{
+											"uid=tom,ou=users,dc=redhat,dc=com",
+											"uid=jerry,ou=users,dc=redhat,dc=com",
+										},
 									},
 								},
 							},
 						},
 					},
+					err: nil,
 				},
-				err: nil,
-			},
 			},
 			group: "some-group",
 			expected: &Group{

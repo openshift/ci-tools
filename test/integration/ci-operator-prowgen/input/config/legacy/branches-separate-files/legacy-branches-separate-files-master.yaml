@@ -1,10 +1,13 @@
-# Generated job to make `prowgen` act on this org/repo.
 resources:
-  "*":
+  '*':
     requests:
-      cpu: 1
+      cpu: "1"
 tests:
 - as: generated
   commands: commands
   container:
     from: root
+zz_generated_metadata:
+  branch: master
+  org: legacy
+  repo: branches-separate-files

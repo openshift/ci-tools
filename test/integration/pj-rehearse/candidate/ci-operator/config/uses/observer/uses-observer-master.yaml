@@ -1,0 +1,34 @@
+resources:
+  '*':
+    requests:
+      cpu: "1"
+tests:
+- as: should-not-be-rehearsed
+  commands: should-not-be-rehearsed
+  container:
+    from: src
+- as: test-with-unchanged-observer
+  steps:
+    observers:
+      enable:
+      - observer-unchanged
+- as: test-with-changed-observer
+  steps:
+    observers:
+      enable:
+      - observer-changed
+- as: test-with-changed-observer-commands
+  steps:
+    observers:
+      enable:
+      - observer-changed-commands
+- as: test-with-changed-observer-workflow
+  steps:
+    workflow: uses-changed-observer
+- as: test-with-unchanged-observer-workflow
+  steps:
+    workflow: uses-unchanged-observer
+zz_generated_metadata:
+  branch: master
+  org: uses
+  repo: observer

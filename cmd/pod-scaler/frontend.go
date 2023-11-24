@@ -7,8 +7,8 @@ import (
 	"encoding/base32"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -242,7 +242,7 @@ func serveUI(port, healthPort int, dataDir string, loaders map[string][]*cacheRe
 	if err != nil {
 		logger.WithError(err).Fatal("Could not find index.html in static content.")
 	}
-	indexBytes, err := ioutil.ReadAll(index)
+	indexBytes, err := io.ReadAll(index)
 	if err != nil {
 		logger.WithError(err).Fatal("Could not read index.html.")
 	}
@@ -429,7 +429,7 @@ func (s *frontendServer) getDatum(meta pod_scaler.FullMetadata) (map[corev1.Reso
 		if extension != ".json" {
 			return nil
 		}
-		raw, err := ioutil.ReadFile(path)
+		raw, err := os.ReadFile(path)
 		if err != nil {
 			return fmt.Errorf("could not read file: %w", err)
 		}
@@ -458,7 +458,7 @@ func (s *frontendServer) setDatum(meta pod_scaler.FullMetadata, resource corev1.
 	if err := os.MkdirAll(subDir, 0777); err != nil {
 		return fmt.Errorf("could not create directory: %w", err)
 	}
-	return ioutil.WriteFile(filepath.Join(subDir, fmt.Sprintf("%s.json", string(resource))), raw, 0777)
+	return os.WriteFile(filepath.Join(subDir, fmt.Sprintf("%s.json", string(resource))), raw, 0777)
 }
 
 func (s *frontendServer) digestCPU(data *pod_scaler.CachedQuery) {

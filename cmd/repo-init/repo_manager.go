@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"sync"
@@ -50,7 +49,7 @@ func (rm *repoManager) init() {
 }
 
 func initRepo(stdout, stderr bumper.HideSecretsWriter) *repo {
-	path, err := ioutil.TempDir("", "repo-manager-release")
+	path, err := os.MkdirTemp("", "repo-manager-release")
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to make dir.")
 	}
@@ -155,7 +154,10 @@ func pushChanges(gitRepo *repo, githubOptions flagutil.GitHubOptions, org, repo,
 	}
 
 	if createPR {
-		ghClient := githubOptions.GitHubClientWithAccessToken(githubToken)
+		ghClient, err := githubOptions.GitHubClientWithAccessToken(githubToken)
+		if err != nil {
+			return "", fmt.Errorf("failed to create github client: %w", err)
+		}
 
 		if err := bumper.UpdatePullRequestWithLabels(
 			ghClient,

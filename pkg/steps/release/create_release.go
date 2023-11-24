@@ -49,6 +49,7 @@ import (
 type assembleReleaseStep struct {
 	config    *api.ReleaseTagConfiguration
 	name      string
+	nodeName  string
 	resources api.ResourceConfiguration
 	client    kubernetes.PodClient
 	jobSpec   *api.JobSpec
@@ -69,6 +70,11 @@ func setupReleaseImageStream(ctx context.Context, namespace string, client ctrlr
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "ci-operator",
 			Namespace: namespace,
+		},
+		ImagePullSecrets: []coreapi.LocalObjectReference{
+			{
+				Name: api.RegistryPullCredentialsSecret,
+			},
 		},
 	}
 
@@ -194,17 +200,20 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 	destination := fmt.Sprintf("%s:%s", releaseImageStreamRepo, s.name)
 	logrus.Infof("Creating release image %s.", destination)
 	podConfig := steps.PodStepConfiguration{
-		SkipLogs: true,
-		As:       fmt.Sprintf("release-%s", s.name),
+		WaitFlags: util.SkipLogs,
+		As:        fmt.Sprintf("release-%s", s.name),
 		From: api.ImageStreamTagReference{
 			Name: streamName,
 			Tag:  "cli",
 		},
 		Labels:             map[string]string{Label: s.name},
+		NodeName:           s.nodeName,
 		ServiceAccountName: "ci-operator",
 		Commands: fmt.Sprintf(`
 set -xeuo pipefail
 export HOME=/tmp
+export XDG_RUNTIME_DIR=/tmp/run
+mkdir -p "${XDG_RUNTIME_DIR}"
 oc registry login
 oc adm release new --max-per-registry=32 -n %q --from-image-stream %q --to-image-base %q --to-image %q --name %q
 oc adm release extract --from=%q --to=${ARTIFACT_DIR}/release-payload-%s
@@ -260,11 +269,12 @@ func (s *assembleReleaseStep) Objects() []ctrlruntimeclient.Object {
 
 // AssembleReleaseStep builds a new update payload image based on the cluster version operator
 // and the operators defined in the release configuration.
-func AssembleReleaseStep(name string, config *api.ReleaseTagConfiguration, resources api.ResourceConfiguration,
+func AssembleReleaseStep(name, nodeName string, config *api.ReleaseTagConfiguration, resources api.ResourceConfiguration,
 	client kubernetes.PodClient, jobSpec *api.JobSpec) api.Step {
 	return &assembleReleaseStep{
 		config:    config,
 		name:      name,
+		nodeName:  nodeName,
 		resources: resources,
 		client:    client,
 		jobSpec:   jobSpec,

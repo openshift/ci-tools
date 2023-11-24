@@ -91,8 +91,11 @@ func main() {
 		}
 	}
 
-	prConfig := config.GetAllConfigs(o.releaseRepoPath, logger)
-	masterConfig, err := config.GetAllConfigsFromSHA(o.releaseRepoPath, fmt.Sprintf("%s^1", jobSpec.Refs.BaseSHA), logger)
+	prConfig, err := config.GetAllConfigs(o.releaseRepoPath)
+	if err != nil {
+		logger.WithError(err).Warn("could not load all configuration from candidate revision of release repo")
+	}
+	masterConfig, err := config.GetAllConfigsFromSHA(o.releaseRepoPath, fmt.Sprintf("%s^1", jobSpec.Refs.BaseSHA))
 	if err != nil {
 		logger.WithError(err).Fatal("could not load configuration from base revision of release repo")
 	}
@@ -108,7 +111,7 @@ func main() {
 
 	var pjclient ctrlruntimeclient.Client
 	if o.dryRun {
-		pjclient = fakectrlruntimeclient.NewFakeClient()
+		pjclient = fakectrlruntimeclient.NewClientBuilder().Build()
 	} else {
 		pjclient, err = ctrlruntimeclient.New(clusterConfig, ctrlruntimeclient.Options{})
 	}

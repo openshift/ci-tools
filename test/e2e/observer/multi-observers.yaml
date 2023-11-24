@@ -1,0 +1,62 @@
+base_images:
+  os:
+    name: centos
+    namespace: openshift
+    tag: 'stream9'
+resources:
+  '*':
+    requests:
+      cpu: 100m
+      memory: 8M
+tests:
+  - as: multi-observers
+    steps:
+      pre:
+        - as: inject-observer
+          commands: |
+            echo "this exists only to inject an observer"
+          from: os
+          resources:
+            requests:
+              cpu: 10m
+              memory: 10Mi
+          observers:
+            - failing-observer
+      test:
+        - as: create-kubeconfig
+          commands: |
+            echo "writing the kubeconfig into shared_dir: ${SHARED_DIR}"
+            printf 'kubeconfig' >"${SHARED_DIR}/kubeconfig"
+            echo 'give some time to observer to get the kubeconfig'
+            sleep 120
+            echo "done"
+          from: os
+          resources:
+            requests:
+              cpu: 10m
+              memory: 10Mi
+      post:
+        - as: check-shared-dir
+          commands: |
+            if test ! -f "${SHARED_DIR}/kubeconfig"; then
+              echo "kubeconfig does not exist"
+              exit 1
+            fi
+
+            how_many=$(ls "$SHARED_DIR"|wc -l)
+            if test ! $how_many -eq 1; then
+              echo "observer modified \$SHARED_DIR content"
+              exit 1
+            fi
+          from: os
+          resources:
+            requests:
+              cpu: 10m
+              memory: 10Mi
+      observers:
+        enable:
+          - observer
+zz_generated_metadata:
+  branch: master
+  org: test
+  repo: test

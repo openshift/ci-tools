@@ -9,7 +9,7 @@ spec:
     - /tools/entrypoint
     env:
     - name: ENTRYPOINT_OPTIONS
-      value: '{"timeout":14400000000000,"grace_period":1800000000000,"artifact_dir":"/logs/artifacts","args":["cmd","arg1","arg2"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}'
+      value: '{"timeout":14400000000000,"grace_period":1800000000000,"artifact_dir":"/logs/artifacts","propagate_error_code":true,"args":["cmd","arg1","arg2"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}'
     - name: ARTIFACT_DIR
       value: /logs/artifacts
     name: test
@@ -27,6 +27,7 @@ spec:
     image: sidecar
     name: sidecar
     resources: {}
+    terminationMessagePolicy: FallbackToLogsOnError
     volumeMounts:
     - mountPath: /logs
       name: logs

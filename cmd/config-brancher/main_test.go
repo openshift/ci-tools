@@ -14,12 +14,15 @@ import (
 )
 
 func TestGenerateBranchedConfigs(t *testing.T) {
+	interval := "72h"
+	cron := "@weekly"
 	var testCases = []struct {
 		name           string
 		currentRelease string
 		bumpRelease    string
 		futureReleases []string
 		input          config.DataWithInfo
+		skipPeriodics  bool
 		output         []config.DataWithInfo
 	}{
 		{
@@ -178,11 +181,17 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 			output: []config.DataWithInfo{},
 		},
 		{
-			name:           "config that promotes to the current release from master gets a branched config for the every future release",
+			name:           "config with tests that promotes to the current release from master gets a branched config for the every future release without skipped tests",
 			currentRelease: "current-release",
 			futureReleases: []string{"current-release", "future-release-1", "future-release-2"},
+			skipPeriodics:  true,
 			input: config.DataWithInfo{
 				Configuration: api.ReleaseBuildConfiguration{
+					Tests: []api.TestStepConfiguration{
+						{As: "periodic-interval", Interval: &interval},
+						{As: "periodic-cron", Cron: &cron},
+						{As: "periodic-cron-portable", Cron: &cron, Portable: true},
+					},
 					PromotionConfiguration: &api.PromotionConfiguration{
 						Name:      "current-release",
 						Namespace: "ocp",
@@ -222,6 +231,9 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 			output: []config.DataWithInfo{
 				{
 					Configuration: api.ReleaseBuildConfiguration{
+						Tests: []api.TestStepConfiguration{
+							{As: "periodic-cron-portable", Cron: &cron, Portable: true},
+						},
 						PromotionConfiguration: &api.PromotionConfiguration{
 							Name:      "current-release",
 							Namespace: "ocp",
@@ -261,6 +273,9 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 				},
 				{
 					Configuration: api.ReleaseBuildConfiguration{
+						Tests: []api.TestStepConfiguration{
+							{As: "periodic-cron-portable", Cron: &cron, Portable: true},
+						},
 						PromotionConfiguration: &api.PromotionConfiguration{
 							Name:      "future-release-1",
 							Namespace: "ocp",
@@ -299,6 +314,9 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 				},
 				{
 					Configuration: api.ReleaseBuildConfiguration{
+						Tests: []api.TestStepConfiguration{
+							{As: "periodic-cron-portable", Cron: &cron, Portable: true},
+						},
 						PromotionConfiguration: &api.PromotionConfiguration{
 							Name:      "future-release-2",
 							Namespace: "ocp",
@@ -431,10 +449,67 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:           "remove additional targets that don't promote to the current release",
+			currentRelease: "current-release",
+			futureReleases: []string{"future-release"},
+			input: config.DataWithInfo{
+				Configuration: api.ReleaseBuildConfiguration{
+					PromotionConfiguration: &api.PromotionConfiguration{
+						Name:      "current-release",
+						Namespace: "ocp",
+						Targets: []api.PromotionTarget{
+							{
+								Tag:       "target-1-tag",
+								Namespace: "target-1-namespace",
+							},
+							{
+								Name:      "current-release",
+								Namespace: "target-2-namespace",
+							},
+						},
+					},
+					InputConfiguration: api.InputConfiguration{
+						ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
+							Name:      "current-release",
+							Namespace: "ocp",
+						},
+					},
+				},
+				Info: config.Info{
+					Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "master"},
+				},
+			},
+			output: []config.DataWithInfo{
+				{
+					Configuration: api.ReleaseBuildConfiguration{
+						PromotionConfiguration: &api.PromotionConfiguration{
+							Name:      "future-release",
+							Namespace: "ocp",
+							Targets: []api.PromotionTarget{
+								{
+									Name:      "future-release",
+									Namespace: "target-2-namespace",
+								},
+							},
+						},
+						InputConfiguration: api.InputConfiguration{
+							ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
+								Name:      "future-release",
+								Namespace: "ocp",
+							},
+						},
+					},
+					Info: config.Info{
+						Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "release-future-release"},
+					},
+				},
+			},
+		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			actual, expected := generateBranchedConfigs(testCase.currentRelease, testCase.bumpRelease, testCase.futureReleases, testCase.input), testCase.output
+			actual, expected := generateBranchedConfigs(testCase.currentRelease, testCase.bumpRelease, testCase.futureReleases, testCase.input, testCase.skipPeriodics), testCase.output
 			if len(actual) != len(expected) {
 				t.Fatalf("%s: did not generate correct amount of output configs, needed %d got %d", testCase.name, len(expected), len(actual))
 			}
@@ -447,6 +522,9 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 				}
 				if !reflect.DeepEqual(actual[i].Configuration.ReleaseTagConfiguration, expected[i].Configuration.ReleaseTagConfiguration) {
 					t.Errorf("%s: [%d] got incorrect release input config: %v", testCase.name, i, diff.ObjectReflectDiff(actual[i].Configuration.ReleaseTagConfiguration, expected[i].Configuration.ReleaseTagConfiguration))
+				}
+				if !reflect.DeepEqual(actual[i].Configuration.Tests, expected[i].Configuration.Tests) {
+					t.Errorf("%s: [%d] got incorrect test listing: %v", testCase.name, i, diff.ObjectReflectDiff(actual[i].Configuration.Tests, expected[i].Configuration.Tests))
 				}
 			}
 		})

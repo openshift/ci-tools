@@ -1,0 +1,31 @@
+type Organization  {
+	id: ID!
+	name: String
+	repositories: [Repository] @hasInverse(field:organization)
+}
+
+type Repository  {
+	id: ID!
+	name: String
+	branches: [Branch] @hasInverse(field:repository)
+	organization: Organization! @hasInverse(field:repositories)
+}
+
+type Branch  {
+	id: ID!
+	name: String
+	images: [Image!] @hasInverse(field:branches)
+	repository: Repository! @hasInverse(field:branches)
+}
+
+type Image  {
+	id: ID!
+	name: String! @search(by:[exact])
+	namespace: String!
+	imageStreamRef: String!
+	parents: [Image] @hasInverse(field:children)
+	children: [Image] @hasInverse(field:parents)
+	fromRoot: Boolean
+	branches: [Branch] @hasInverse(field:images)
+	source: String
+}

@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -25,13 +24,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bombsimon/logrusr"
+	"github.com/bombsimon/logrusr/v3"
+	"github.com/go-logr/logr"
 	"github.com/sirupsen/logrus"
 
 	appsv1 "k8s.io/api/apps/v1"
 	authapi "k8s.io/api/authorization/v1"
 	coreapi "k8s.io/api/core/v1"
-	policyv1beta1 "k8s.io/api/policy/v1beta1"
+	policyv1 "k8s.io/api/policy/v1"
 	rbacapi "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -55,6 +55,7 @@ import (
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	crcontrollerutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	ctrlruntimelog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/yaml"
 
 	buildv1 "github.com/openshift/api/build/v1"
@@ -140,7 +141,10 @@ of dynamic parameters that are inferred from previous steps. These parameters ar
     The job name in a form safe for use as a Kubernetes resource name.
 
   JOB_NAME_HASH
-    A short hash of the job name for making tasks unique.
+    A short hash of the job name for making tasks unique. This will not account for the target-additional-suffix.
+
+  UNIQUE_HASH
+	A hash for making tasks unique, even when the job name may be the same due to using the target-additional-suffix.
 
   RPM_REPO_<org>_<repo>
     If the job creates RPMs this will be the public URL that can be used as the
@@ -200,6 +204,8 @@ func main() {
 	if err := flagSet.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("failed to parse flags")
 	}
+
+	ctrlruntimelog.SetLogger(logr.New(ctrlruntimelog.NullLogSink{}))
 	if opt.verbose {
 		fs := flag.NewFlagSet("", flag.ExitOnError)
 		klog.InitFlags(fs)
@@ -216,7 +222,7 @@ func main() {
 		logrus.SetLevel(logrus.TraceLevel)
 		logrus.SetFormatter(&logrus.JSONFormatter{})
 		logrus.SetReportCaller(true)
-		controllerruntime.SetLogger(logrusr.NewLogger(logrus.StandardLogger()))
+		controllerruntime.SetLogger(logrusr.New(logrus.StandardLogger()))
 	}
 	if opt.help {
 		fmt.Print(usage)
@@ -267,7 +273,7 @@ func setupLogger() (*secrets.DynamicCensor, io.Closer, error) {
 	logrus.SetLevel(logrus.TraceLevel)
 	censor := secrets.NewDynamicCensor()
 	logrus.SetFormatter(logrusutil.NewFormatterWithCensor(logrus.StandardLogger().Formatter, &censor))
-	logrus.SetOutput(ioutil.Discard)
+	logrus.SetOutput(io.Discard)
 	logrus.AddHook(&formattingHook{
 		formatter: logrusutil.NewFormatterWithCensor(&logrus.TextFormatter{
 			ForceColors:     true,
@@ -346,9 +352,9 @@ type options struct {
 	targets stringSlice
 	promote bool
 
-	verbose bool
-	help    bool
-	print   bool
+	verbose    bool
+	help       bool
+	printGraph bool
 
 	writeParams string
 	artifactDir string
@@ -369,7 +375,9 @@ type options struct {
 	configSpec                 *api.ReleaseBuildConfiguration
 	jobSpec                    *api.JobSpec
 	clusterConfig              *rest.Config
+	podPendingTimeout          time.Duration
 	consoleHost                string
+	nodeName                   string
 	leaseServer                string
 	leaseServerCredentialsFile string
 	leaseAcquireTimeout        time.Duration
@@ -412,12 +420,14 @@ type options struct {
 
 	multiStageParamOverrides stringSlice
 	dependencyOverrides      stringSlice
+
+	targetAdditionalSuffix string
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
 	opt := &options{
 		idleCleanupDuration: 1 * time.Hour,
-		cleanupDuration:     12 * time.Hour,
+		cleanupDuration:     24 * time.Hour,
 	}
 
 	// command specific options
@@ -426,6 +436,8 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.BoolVar(&opt.verbose, "v", false, "Show verbose output.")
 
 	// what we will run
+	flag.StringVar(&opt.nodeName, "node", "", "Restrict scheduling of pods to a single node in the cluster. Does not afffect indirectly created pods (e.g. builds).")
+	flag.DurationVar(&opt.podPendingTimeout, "pod-pending-timeout", 30*time.Minute, "Maximum amount of time created pods can spend before the running state. For test pods, this applies to each container. For builds, it applies to the build execution as a whole.")
 	flag.StringVar(&opt.leaseServer, "lease-server", leaseServerAddress, "Address of the server that manages leases. Required if any test is configured to acquire a lease.")
 	flag.StringVar(&opt.leaseServerCredentialsFile, "lease-server-credentials-file", "", "The path to credentials file used to access the lease server. The content is of the form <username>:<password>.")
 	flag.DurationVar(&opt.leaseAcquireTimeout, "lease-acquire-timeout", leaseAcquireTimeout, "Maximum amount of time to wait for lease acquisition")
@@ -433,7 +445,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.configSpecPath, "config", "", "The configuration file. If not specified the CONFIG_SPEC environment variable or the configresolver will be used.")
 	flag.StringVar(&opt.unresolvedConfigPath, "unresolved-config", "", "The configuration file, before resolution. If not specified the UNRESOLVED_CONFIG environment variable will be used, if set.")
 	flag.Var(&opt.targets, "target", "One or more targets in the configuration to build. Only steps that are required for this target will be run.")
-	flag.BoolVar(&opt.print, "print-graph", opt.print, "Print a directed graph of the build steps and exit. Intended for use with the golang digraph utility.")
+	flag.BoolVar(&opt.printGraph, "print-graph", opt.printGraph, "Print a directed graph of the build steps and exit. Intended for use with the golang digraph utility.")
 
 	// add to the graph of things we run or create
 	flag.Var(&opt.templatePaths, "template", "A set of paths to optional templates to add as stages to this job. Each template is expected to contain at least one restart=Never pod. Parameters are filled from environment or from the automatic parameters generated by the operator.")
@@ -477,6 +489,8 @@ func bindOptions(flag *flag.FlagSet) *options {
 
 	flag.Var(&opt.multiStageParamOverrides, "multi-stage-param", "A repeatable option where one or more environment parameters can be passed down to the multi-stage steps. This parameter should be in the format NAME=VAL. e.g --multi-stage-param PARAM1=VAL1 --multi-stage-param PARAM2=VAL2.")
 	flag.Var(&opt.dependencyOverrides, "dependency-override-param", "A repeatable option used to override dependencies with external pull specs. This parameter should be in the format ENVVARNAME=PULLSPEC, e.g. --dependency-override-param=OO_INDEX=registry.mydomain.com:5000/pushed/myimage. This would override the value for the OO_INDEX environment variable for any tests/steps that currently have that dependency configured.")
+
+	flag.StringVar(&opt.targetAdditionalSuffix, "target-additional-suffix", "", "Inject an additional suffix onto the targeted test's 'as' name. Used for adding an aggregate index")
 
 	opt.resultsOptions.Bind(flag)
 	return opt
@@ -621,7 +635,7 @@ func (o *options) Complete() error {
 	}
 
 	for _, path := range o.templatePaths.values {
-		contents, err := ioutil.ReadFile(path)
+		contents, err := os.ReadFile(path)
 		if err != nil {
 			return fmt.Errorf("could not read dir %s for template: %w", path, err)
 		}
@@ -657,8 +671,8 @@ func (o *options) Complete() error {
 	o.clusterConfig = clusterConfig
 
 	if o.pullSecretPath != "" {
-		if o.pullSecret, err = getDockerConfigSecret(steps.PullSecretName, o.pullSecretPath); err != nil {
-			return fmt.Errorf("could not get pull secret %s from path %s: %w", steps.PullSecretName, o.pullSecretPath, err)
+		if o.pullSecret, err = getDockerConfigSecret(api.RegistryPullCredentialsSecret, o.pullSecretPath); err != nil {
+			return fmt.Errorf("could not get pull secret %s from path %s: %w", api.RegistryPullCredentialsSecret, o.pullSecretPath, err)
 		}
 	}
 	if o.pushSecretPath != "" {
@@ -686,6 +700,8 @@ func (o *options) Complete() error {
 		return err
 	}
 
+	handleTargetAdditionalSuffix(o)
+
 	return overrideTestStepDependencyParams(o)
 }
 
@@ -706,6 +722,27 @@ func parseKeyValParams(input []string, paramType string) (map[string]string, err
 	}
 
 	return params, nil
+}
+
+func handleTargetAdditionalSuffix(o *options) {
+	if o.targetAdditionalSuffix == "" {
+		return
+	}
+	o.jobSpec.TargetAdditionalSuffix = o.targetAdditionalSuffix
+	for i, test := range o.configSpec.Tests {
+		for j, target := range o.targets.values {
+			if test.As == target {
+				targetWithSuffix := fmt.Sprintf("%s-%s", test.As, o.targetAdditionalSuffix)
+				o.configSpec.Tests[i].As = targetWithSuffix
+				if j == 0 { //only set if it is the first target
+					o.jobSpec.Target = targetWithSuffix
+				}
+				o.targets.values[j] = targetWithSuffix
+				logrus.Debugf("added suffix to target, now: %s", test.As)
+				break
+			}
+		}
+	}
 }
 
 func overrideMultiStageParams(o *options) error {
@@ -828,8 +865,18 @@ func (o *options) Run() []error {
 
 	o.resolveConsoleHost()
 
+	client, err := coreclientset.NewForConfig(o.clusterConfig)
+	if err != nil {
+		return []error{fmt.Errorf("could not get core client for cluster config: %w", err)}
+	}
+
+	nodeArchitectures, err := resolveNodeArchitectures(ctx, client.Nodes())
+	if err != nil {
+		return []error{fmt.Errorf("could not resolve the node architectures: %w", err)}
+	}
+
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig, o.consoleHost)
+	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig, o.podPendingTimeout, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig, o.consoleHost, o.nodeName, nodeArchitectures, o.targetAdditionalSuffix)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}
@@ -844,13 +891,6 @@ func (o *options) Run() []error {
 	if err := o.writeMetadataJSON(); err != nil {
 		return []error{fmt.Errorf("unable to write metadata.json for build: %w", err)}
 	}
-	if o.print {
-		if err := printDigraph(os.Stdout, buildSteps); err != nil {
-			return []error{fmt.Errorf("could not print graph: %w", err)}
-		}
-		return nil
-	}
-
 	// convert the full graph into the subset we must run
 	nodes, err := api.BuildPartialGraph(buildSteps, o.targets.values)
 	if err != nil {
@@ -858,9 +898,15 @@ func (o *options) Run() []error {
 	}
 	stepList, errs := nodes.TopologicalSort()
 	if errs != nil {
-		return append([]error{errors.New("could not sort nodes")}, errs...)
+		return append([]error{results.ForReason("building_graph").ForError(errors.New("could not sort nodes"))}, errs...)
 	}
 	logrus.Infof("Running %s", strings.Join(nodeNames(stepList), ", "))
+	if o.printGraph {
+		if err := printDigraph(os.Stdout, stepList); err != nil {
+			return []error{fmt.Errorf("could not print graph: %w", err)}
+		}
+		return nil
+	}
 	graph, errs := calculateGraph(stepList)
 	if errs != nil {
 		return errs
@@ -885,10 +931,6 @@ func (o *options) Run() []error {
 			if err := o.initializeLeaseClient(); err != nil {
 				return []error{fmt.Errorf("failed to create the lease client: %w", err)}
 			}
-		}
-		client, err := coreclientset.NewForConfig(o.clusterConfig)
-		if err != nil {
-			return []error{fmt.Errorf("could not get core client for cluster config: %w", err)}
 		}
 		go monitorNamespace(ctx, cancel, o.namespace, client.Namespaces())
 		authClient, err := authclientset.NewForConfig(o.clusterConfig)
@@ -953,9 +995,12 @@ func runStep(ctx context.Context, step api.Step) (api.CIOperatorStepDetails, err
 			StepName:    step.Name(),
 			Description: step.Description(),
 			StartedAt:   &start,
-			FinishedAt:  func() *time.Time { start.Add(duration); return &start }(),
-			Duration:    &duration,
-			Failed:      &failed,
+			FinishedAt: func() *time.Time {
+				ret := start.Add(duration)
+				return &ret
+			}(),
+			Duration: &duration,
+			Failed:   &failed,
 		},
 		Substeps: subSteps,
 	}, err
@@ -985,7 +1030,23 @@ func (o *options) resolveInputs(steps []api.Step) error {
 	}
 
 	// a change in the config for the build changes the output
-	configSpec, err := yaml.Marshal(o.configSpec)
+	cs := o.configSpec
+	// The targetAdditionalSuffix should be trimmed for the input purposes as the intent is to have the different suffix resolve the same
+	targetAdditionalSuffix := o.targetAdditionalSuffix
+	if targetAdditionalSuffix != "" {
+		cs = o.configSpec.DeepCopy()
+		for i, test := range cs.Tests {
+			for _, target := range o.targets.values {
+				if test.As == target {
+					suffix := fmt.Sprintf("-%s", targetAdditionalSuffix)
+					logrus.Debugf("Trimming suffix: %s from: %s for input resolution", suffix, target)
+					cs.Tests[i].As = strings.TrimSuffix(test.As, suffix)
+					break
+				}
+			}
+		}
+	}
+	configSpec, err := yaml.Marshal(cs)
 	if err != nil {
 		panic(err)
 	}
@@ -1047,7 +1108,8 @@ func (o *options) initializeNamespace() error {
 	for {
 		project, err := projectGetter.ProjectV1().ProjectRequests().Create(context.TODO(), &projectapi.ProjectRequest{
 			ObjectMeta: meta.ObjectMeta{
-				Name: o.namespace,
+				Name:   o.namespace,
+				Labels: map[string]string{api.DPTPRequesterLabel: "ci-operator"},
 			},
 			DisplayName: fmt.Sprintf("%s - %s", o.namespace, o.jobSpec.Job),
 			Description: jobDescription(o.jobSpec),
@@ -1195,7 +1257,7 @@ func (o *options) initializeNamespace() error {
 	if o.givePrAuthorAccessToNamespace && len(o.authors) > 0 {
 		roleBinding := generateAuthorAccessRoleBinding(o.namespace, o.authors)
 		// Generate rolebinding for all the PR Authors.
-		logrus.Debugf("Creating ci-op-author-access rolebinding in namespace %s", o.namespace)
+		logrus.WithField("authors", o.authors).Debugf("Creating ci-op-author-access rolebinding in namespace %s", o.namespace)
 		if err := client.Create(ctx, roleBinding); err != nil && !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not create role binding for: %w", err)
 		}
@@ -1204,7 +1266,7 @@ func (o *options) initializeNamespace() error {
 
 	for _, secret := range []*coreapi.Secret{o.pullSecret, o.pushSecret, o.uploadSecret} {
 		if secret != nil {
-			secret.Immutable = utilpointer.BoolPtr(true)
+			secret.Immutable = utilpointer.Bool(true)
 			if err := client.Create(ctx, secret); err != nil && !kerrors.IsAlreadyExists(err) {
 				return fmt.Errorf("couldn't create secret %s: %w", secret.Name, err)
 			}
@@ -1257,17 +1319,15 @@ func (o *options) initializeNamespace() error {
 			return fmt.Errorf("failed to get pipeline imagestream: %w", err)
 		}
 	}
-	if is != nil {
-		o.jobSpec.SetOwner(&meta.OwnerReference{
-			APIVersion: "image.openshift.io/v1",
-			Kind:       "ImageStream",
-			Name:       api.PipelineImageStream,
-			UID:        is.UID,
-		})
-	}
+	o.jobSpec.SetOwner(&meta.OwnerReference{
+		APIVersion: "image.openshift.io/v1",
+		Kind:       "ImageStream",
+		Name:       api.PipelineImageStream,
+		UID:        is.UID,
+	})
 
 	if o.cloneAuthConfig != nil && o.cloneAuthConfig.Secret != nil {
-		o.cloneAuthConfig.Secret.Immutable = utilpointer.BoolPtr(true)
+		o.cloneAuthConfig.Secret.Immutable = utilpointer.Bool(true)
 		if err := client.Create(ctx, o.cloneAuthConfig.Secret); err != nil && !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("couldn't create secret %s for %s authentication: %w", o.cloneAuthConfig.Secret.Name, o.cloneAuthConfig.Type, err)
 		}
@@ -1284,22 +1344,18 @@ func (o *options) initializeNamespace() error {
 			logrus.Debugf("Updated secret %s", secret.Name)
 		}
 	}
-
-	for _, pdbLabelKey := range []string{buildv1.BuildLabel, steps.CreatedByCILabel} {
-		pdb, mutateFn := pdb(pdbLabelKey, o.namespace)
-		if _, err := crcontrollerutil.CreateOrUpdate(ctx, client, pdb, mutateFn); err != nil && !kerrors.IsAlreadyExists(err) {
-			return fmt.Errorf("failed to create pdb for label key %s: %w", pdbLabelKey, err)
-		}
-		logrus.Debugf("Created PDB for pods with %s label", pdbLabelKey)
+	pdb, mutateFn := pdb(steps.CreatedByCILabel, o.namespace)
+	if _, err := crcontrollerutil.CreateOrUpdate(ctx, client, pdb, mutateFn); err != nil && !kerrors.IsAlreadyExists(err) {
+		return fmt.Errorf("failed to create pdb for label key %s: %w", steps.CreatedByCILabel, err)
 	}
-
+	logrus.Debugf("Created PDB for pods with %s label", steps.CreatedByCILabel)
 	return nil
 }
 
 func generateAuthorAccessRoleBinding(namespace string, authors []string) *rbacapi.RoleBinding {
 	var subjects []rbacapi.Subject
-	authorSet := sets.NewString(authors...)
-	for _, author := range authorSet.List() {
+	authorSet := sets.New[string](authors...)
+	for _, author := range sets.List(authorSet) {
 		subjects = append(subjects, rbacapi.Subject{Kind: "Group", Name: api.GitHubUserGroup(author)})
 	}
 	return &rbacapi.RoleBinding{
@@ -1315,8 +1371,8 @@ func generateAuthorAccessRoleBinding(namespace string, authors []string) *rbacap
 	}
 }
 
-func pdb(labelKey, namespace string) (*policyv1beta1.PodDisruptionBudget, crcontrollerutil.MutateFn) {
-	pdb := &policyv1beta1.PodDisruptionBudget{
+func pdb(labelKey, namespace string) (*policyv1.PodDisruptionBudget, crcontrollerutil.MutateFn) {
+	pdb := &policyv1.PodDisruptionBudget{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      fmt.Sprintf("ci-operator-%s", strings.ReplaceAll(labelKey, "/", "-")),
 			Namespace: namespace,
@@ -1343,20 +1399,19 @@ func pdb(labelKey, namespace string) (*policyv1beta1.PodDisruptionBudget, crcont
 //
 // Example from k8s:
 //
-// "metadata": {
-// 	"repo-commit": "253f03e0055b6649f8b25e84122748d39a284141",
-// 	"node_os_image": "cos-stable-65-10323-64-0",
-// 	"repos": {
-// 		"k8s.io/kubernetes": "master:1c04caa04325e1f64d9a15714ad61acdd2a81013,71936:353a0b391d6cb0c26e1c0c6b180b300f64039e0e",
-// 		"k8s.io/release": "master"
-// 	},
-// 	"infra-commit": "de7741746",
-// 	"repo": "k8s.io/kubernetes",
-// 	"master_os_image": "cos-stable-65-10323-64-0",
-// 	"job-version": "v1.14.0-alpha.0.1012+253f03e0055b66",
-// 	"pod": "dd8d320f-ff64-11e8-b091-0a580a6c02ef"
-// }
-//
+//	"metadata": {
+//		"repo-commit": "253f03e0055b6649f8b25e84122748d39a284141",
+//		"node_os_image": "cos-stable-65-10323-64-0",
+//		"repos": {
+//			"k8s.io/kubernetes": "master:1c04caa04325e1f64d9a15714ad61acdd2a81013,71936:353a0b391d6cb0c26e1c0c6b180b300f64039e0e",
+//			"k8s.io/release": "master"
+//		},
+//		"infra-commit": "de7741746",
+//		"repo": "k8s.io/kubernetes",
+//		"master_os_image": "cos-stable-65-10323-64-0",
+//		"job-version": "v1.14.0-alpha.0.1012+253f03e0055b66",
+//		"pod": "dd8d320f-ff64-11e8-b091-0a580a6c02ef"
+//	}
 type prowResultMetadata struct {
 	Revision      string            `json:"revision"`
 	RepoCommit    string            `json:"repo-commit"`
@@ -1470,7 +1525,7 @@ func (o *options) generateProwMetadata() (m prowResultMetadata) {
 func (o *options) parseCustomMetadata(customProwMetadataFile string) (customMetadata map[string]string, err error) {
 	logrus.Info("Found custom prow metadata.")
 
-	if customJSONFile, readingError := ioutil.ReadFile(customProwMetadataFile); readingError != nil {
+	if customJSONFile, readingError := os.ReadFile(customProwMetadataFile); readingError != nil {
 		logrus.WithError(readingError).Error("Failed to read custom prow metadata.")
 	} else {
 		err = json.Unmarshal(customJSONFile, &customMetadata)
@@ -1655,7 +1710,7 @@ func loadLeaseCredentials(leaseServerCredentialsFile string) (string, func() []b
 
 func (o *options) initializeLeaseClient() error {
 	var err error
-	owner := o.namespace + "-" + o.jobSpec.JobNameHash()
+	owner := o.namespace + "-" + o.jobSpec.UniqueHash()
 	username, passwordGetter, err := loadLeaseCredentials(o.leaseServerCredentialsFile)
 	if err != nil {
 		return fmt.Errorf("failed to load lease credentials: %w", err)
@@ -1769,14 +1824,14 @@ func nodeNames(nodes []*api.StepNode) []string {
 	return names
 }
 
-func printDigraph(w io.Writer, steps []api.Step) error {
-	for _, step := range steps {
-		for _, other := range steps {
-			if step == other {
-				continue
-			}
-			if api.HasAnyLinks(step.Requires(), other.Creates()) {
-				if _, err := fmt.Fprintf(w, "%s %s\n", step.Name(), other.Name()); err != nil {
+func printDigraph(w io.Writer, steps api.OrderedStepList) error {
+	for i, step := range steps {
+		req := step.Step.Requires()
+		// Only the first `i` elements can fulfill the requirements since
+		// `OrderedStepList` is a topological order.
+		for _, other := range steps[:i] {
+			if api.HasAnyLinks(req, other.Step.Creates()) {
+				if _, err := fmt.Fprintf(w, "%s %s\n", step.Step.Name(), other.Step.Name()); err != nil {
 					return err
 				}
 			}
@@ -1872,7 +1927,7 @@ func eventRecorder(kubeClient *coreclientset.CoreV1Client, authClient *authclien
 
 func getCloneSecretFromPath(cloneAuthType steps.CloneAuthType, secretPath string) (*coreapi.Secret, error) {
 	secret := &coreapi.Secret{Data: make(map[string][]byte)}
-	data, err := ioutil.ReadFile(secretPath)
+	data, err := os.ReadFile(secretPath)
 	if err != nil {
 		return nil, fmt.Errorf("could not read file %s for secret: %w", secretPath, err)
 	}
@@ -1907,7 +1962,7 @@ func getHashFromBytes(b []byte) string {
 }
 
 func getDockerConfigSecret(name, filename string) (*coreapi.Secret, error) {
-	src, err := ioutil.ReadFile(filename)
+	src, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("could not read file %s for secret %s: %w", filename, name, err)
 	}
@@ -1923,7 +1978,7 @@ func getDockerConfigSecret(name, filename string) (*coreapi.Secret, error) {
 }
 
 func getSecret(name, filename string) (*coreapi.Secret, error) {
-	src, err := ioutil.ReadFile(filename)
+	src, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("could not read file %s for secret %s: %w", filename, name, err)
 	}
@@ -2053,6 +2108,20 @@ func (o *options) loadConfig(info *api.Metadata) (*api.ReleaseBuildConfiguration
 		}
 	}
 	return &configSpec, nil
+}
+
+func resolveNodeArchitectures(ctx context.Context, client coreclientset.NodeInterface) ([]string, error) {
+	ret := sets.New[string]()
+	nodeList, err := client.List(ctx, meta.ListOptions{})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine the node architectures: %w", err)
+	}
+
+	for _, node := range nodeList.Items {
+		ret.Insert(node.Status.NodeInfo.Architecture)
+	}
+	return sets.List(ret), nil
 }
 
 func monitorNamespace(ctx context.Context, cancel func(), namespace string, client coreclientset.NamespaceInterface) {

@@ -13,41 +13,55 @@ import (
 
 func TestServiceHost(t *testing.T) {
 	var testCases = []struct {
-		product      api.ReleaseProduct
-		architecture api.ReleaseArchitecture
-		output       string
+		desc   api.ReleaseDescriptor
+		output string
 	}{
 		{
-			product:      api.ReleaseProductOKD,
-			architecture: api.ReleaseArchitectureAMD64,
-			output:       "https://amd64.origin.releases.ci.openshift.org/api/v1/releasestream",
+			desc: api.ReleaseDescriptor{
+				Product:      api.ReleaseProductOKD,
+				Architecture: api.ReleaseArchitectureAMD64,
+			},
+			output: "https://amd64.origin.releases.ci.openshift.org/api/v1/releasestream",
 		},
 		{
-
-			product:      api.ReleaseProductOCP,
-			architecture: api.ReleaseArchitectureAMD64,
-			output:       "https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream",
+			desc: api.ReleaseDescriptor{
+				Product:      api.ReleaseProductOCP,
+				Architecture: api.ReleaseArchitectureAMD64,
+			},
+			output: "https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream",
 		},
 		{
-			product:      api.ReleaseProductOCP,
-			architecture: api.ReleaseArchitecturePPC64le,
-			output:       "https://ppc64le.ocp.releases.ci.openshift.org/api/v1/releasestream",
+			desc: api.ReleaseDescriptor{
+				Product:      api.ReleaseProductOCP,
+				Architecture: api.ReleaseArchitecturePPC64le,
+			},
+			output: "https://ppc64le.ocp.releases.ci.openshift.org/api/v1/releasestream",
 		},
 		{
-
-			product:      api.ReleaseProductOCP,
-			architecture: api.ReleaseArchitectureS390x,
-			output:       "https://s390x.ocp.releases.ci.openshift.org/api/v1/releasestream",
+			desc: api.ReleaseDescriptor{
+				Product:      api.ReleaseProductOCP,
+				Architecture: api.ReleaseArchitectureS390x,
+			},
+			output: "https://s390x.ocp.releases.ci.openshift.org/api/v1/releasestream",
 		},
 		{
-			product:      api.ReleaseProductOCP,
-			architecture: api.ReleaseArchitectureARM64,
-			output:       "https://arm64.ocp.releases.ci.openshift.org/api/v1/releasestream",
+			desc: api.ReleaseDescriptor{
+				Product:      api.ReleaseProductOCP,
+				Architecture: api.ReleaseArchitectureARM64,
+			},
+			output: "https://arm64.ocp.releases.ci.openshift.org/api/v1/releasestream",
+		},
+		{
+			desc: api.ReleaseDescriptor{
+				Product:      api.ReleaseProductOCP,
+				Architecture: api.ReleaseArchitectureMULTI,
+			},
+			output: "https://multi.ocp.releases.ci.openshift.org/api/v1/releasestream",
 		},
 	}
 
 	for _, testCase := range testCases {
-		if actual, expected := ServiceHost(testCase.product, testCase.architecture), testCase.output; actual != expected {
+		if actual, expected := ServiceHost(testCase.desc), testCase.output; actual != expected {
 			t.Errorf("got incorrect service host: %v", cmp.Diff(actual, expected))
 		}
 	}
@@ -60,46 +74,56 @@ func TestEndpoint(t *testing.T) {
 	}{
 		{
 			input: api.Candidate{
-				Product:      api.ReleaseProductOKD,
-				Architecture: api.ReleaseArchitectureAMD64,
-				Stream:       api.ReleaseStreamOKD,
-				Version:      "4.4",
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOKD,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
+				Stream:  api.ReleaseStreamOKD,
+				Version: "4.4",
 			},
 			output: "https://amd64.origin.releases.ci.openshift.org/api/v1/releasestream/4.4.0-0.okd/latest",
 		},
 		{
 			input: api.Candidate{
-				Product:      api.ReleaseProductOCP,
-				Architecture: api.ReleaseArchitectureAMD64,
-				Stream:       api.ReleaseStreamCI,
-				Version:      "4.5",
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOCP,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
+				Stream:  api.ReleaseStreamCI,
+				Version: "4.5",
 			},
 			output: "https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4.5.0-0.ci/latest",
 		},
 		{
 			input: api.Candidate{
-				Product:      api.ReleaseProductOCP,
-				Architecture: api.ReleaseArchitectureAMD64,
-				Stream:       api.ReleaseStreamNightly,
-				Version:      "4.6",
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOCP,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
+				Stream:  api.ReleaseStreamNightly,
+				Version: "4.6",
 			},
 			output: "https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4.6.0-0.nightly/latest",
 		},
 		{
 			input: api.Candidate{
-				Product:      api.ReleaseProductOCP,
-				Architecture: api.ReleaseArchitecturePPC64le,
-				Stream:       api.ReleaseStreamCI,
-				Version:      "4.7",
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOCP,
+					Architecture: api.ReleaseArchitecturePPC64le,
+				},
+				Stream:  api.ReleaseStreamCI,
+				Version: "4.7",
 			},
 			output: "https://ppc64le.ocp.releases.ci.openshift.org/api/v1/releasestream/4.7.0-0.ci-ppc64le/latest",
 		},
 		{
 			input: api.Candidate{
-				Product:      api.ReleaseProductOCP,
-				Architecture: api.ReleaseArchitectureS390x,
-				Stream:       api.ReleaseStreamNightly,
-				Version:      "4.8",
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOCP,
+					Architecture: api.ReleaseArchitectureS390x,
+				},
+				Stream:  api.ReleaseStreamNightly,
+				Version: "4.8",
 			},
 			output: "https://s390x.ocp.releases.ci.openshift.org/api/v1/releasestream/4.8.0-0.nightly-s390x/latest",
 		},
@@ -121,44 +145,56 @@ func TestDefaultFields(t *testing.T) {
 		{
 			name: "nothing to do",
 			input: api.Candidate{
-				Product:      api.ReleaseProductOKD,
-				Architecture: api.ReleaseArchitectureAMD64,
-				Stream:       api.ReleaseStreamOKD,
-				Version:      "4.4",
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOKD,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
+				Stream:  api.ReleaseStreamOKD,
+				Version: "4.4",
 			},
 			output: api.Candidate{
-				Product:      api.ReleaseProductOKD,
-				Architecture: api.ReleaseArchitectureAMD64,
-				Stream:       api.ReleaseStreamOKD,
-				Version:      "4.4",
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOKD,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
+				Stream:  api.ReleaseStreamOKD,
+				Version: "4.4",
 			},
 		},
 		{
 			name: "default release stream for okd",
 			input: api.Candidate{
-				Product:      api.ReleaseProductOKD,
-				Architecture: api.ReleaseArchitectureAMD64,
-				Version:      "4.4",
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOKD,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
+				Version: "4.4",
 			},
 			output: api.Candidate{
-				Product:      api.ReleaseProductOKD,
-				Architecture: api.ReleaseArchitectureAMD64,
-				Stream:       api.ReleaseStreamOKD,
-				Version:      "4.4",
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOKD,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
+				Stream:  api.ReleaseStreamOKD,
+				Version: "4.4",
 			},
 		},
 		{
 			name: "default architecture",
 			input: api.Candidate{
-				Product: api.ReleaseProductOKD,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product: api.ReleaseProductOKD,
+				},
 				Stream:  api.ReleaseStreamOKD,
 				Version: "4.4",
 			},
 			output: api.Candidate{
-				Product:      api.ReleaseProductOKD,
-				Architecture: api.ReleaseArchitectureAMD64,
-				Stream:       api.ReleaseStreamOKD,
-				Version:      "4.4",
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOKD,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
+				Stream:  api.ReleaseStreamOKD,
+				Version: "4.4",
 			},
 		},
 	}
@@ -224,7 +260,7 @@ func TestResolvePullSpec(t *testing.T) {
 				}
 			}))
 			defer testServer.Close()
-			actual, err := resolvePullSpec(&http.Client{}, testServer.URL, testCase.relative)
+			actual, err := ResolvePullSpecCommon(&http.Client{}, testServer.URL, nil, testCase.relative)
 			if err != nil && !testCase.expectedErr {
 				t.Errorf("%s: expected no error but got one: %v", testCase.name, err)
 			}

@@ -19,7 +19,6 @@ package config
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
@@ -49,7 +48,7 @@ type Agent struct {
 
 // IsConfigMapMount determines whether the provided directory is a configmap mounted directory
 func IsConfigMapMount(path string) (bool, error) {
-	files, err := ioutil.ReadDir(path)
+	files, err := os.ReadDir(path)
 	if err != nil {
 		return false, fmt.Errorf("Could not read provided directory %s: %w", path, err)
 	}
@@ -64,18 +63,21 @@ func IsConfigMapMount(path string) (bool, error) {
 // GetCMMountWatcher returns a function that watches a configmap mounted directory and runs the provided "eventFunc" every time
 // the directory gets updated and the provided "errFunc" every time it encounters an error.
 // Example of a possible eventFunc:
-// func() error {
-//		value, err := RunUpdate()
-//		if err != nil {
-//			return err
-//		}
-//		globalValue = value
-//		return nil
-// }
+//
+//	func() error {
+//			value, err := RunUpdate()
+//			if err != nil {
+//				return err
+//			}
+//			globalValue = value
+//			return nil
+//	}
+//
 // Example of errFunc:
-// func(err error, msg string) {
-//		logrus.WithError(err).Error(msg)
-// }
+//
+//	func(err error, msg string) {
+//			logrus.WithError(err).Error(msg)
+//	}
 func GetCMMountWatcher(eventFunc func() error, errFunc func(error, string), path string) (func(ctx context.Context), error) {
 	isCMMount, err := IsConfigMapMount(path)
 	if err != nil {
@@ -119,24 +121,27 @@ func GetCMMountWatcher(eventFunc func() error, errFunc func(error, string), path
 // and the "errFunc" whenever an error is encountered. In this function, the eventFunc has access to the watcher, allowing the eventFunc
 // to add new files/directories to be watched as needed.
 // Example of a possible eventFunc:
-// func(w *fsnotify.Watcher) error {
-//		value, err := RunUpdate()
-//		if err != nil {
-//			return err
-//		}
-//		globalValue = value
-//      newFiles := getNewFiles()
-//      for _, file := range newFiles {
-//			if err := w.Add(file); err != nil {
+//
+//	func(w *fsnotify.Watcher) error {
+//			value, err := RunUpdate()
+//			if err != nil {
 //				return err
 //			}
-// 		}
-//		return nil
-// }
+//			globalValue = value
+//	     newFiles := getNewFiles()
+//	     for _, file := range newFiles {
+//				if err := w.Add(file); err != nil {
+//					return err
+//				}
+//			}
+//			return nil
+//	}
+//
 // Example of errFunc:
-// func(err error, msg string) {
-//		logrus.WithError(err).Error(msg)
-// }
+//
+//	func(err error, msg string) {
+//			logrus.WithError(err).Error(msg)
+//	}
 func GetFileWatcher(eventFunc func(*fsnotify.Watcher) error, errFunc func(error, string), files ...string) (func(ctx context.Context), error) {
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -172,9 +177,9 @@ func GetFileWatcher(eventFunc func(*fsnotify.Watcher) error, errFunc func(error,
 // ListCMsAndDirs returns a 2 sets of strings containing the paths of configmapped directories and standard
 // directories respectively starting from the provided path. This can be used to watch a large number of
 // files, some of which may be populated via configmaps
-func ListCMsAndDirs(path string) (cms sets.String, dirs sets.String, err error) {
-	cms = sets.NewString()
-	dirs = sets.NewString()
+func ListCMsAndDirs(path string) (cms sets.Set[string], dirs sets.Set[string], err error) {
+	cms = sets.New[string]()
+	dirs = sets.New[string]()
 	err = filepath.Walk(path, func(path string, info os.FileInfo, _ error) error {
 		// We only need to watch directories as creation, deletion, and writes
 		// for files in a directory trigger events for the directory
@@ -236,8 +241,8 @@ func watchConfigs(ca *Agent, prowConfig, jobConfig string, supplementalProwConfi
 			WithField("jobConfig", jobConfig).
 			WithError(err).Error(msg)
 	}
-	cms := sets.NewString()
-	dirs := sets.NewString()
+	cms := sets.New[string]()
+	dirs := sets.New[string]()
 	// TODO(AlexNPavel): allow empty jobConfig till fully migrate config to subdirs
 	if jobConfig != "" {
 		stat, err := os.Stat(jobConfig)
@@ -416,4 +421,17 @@ func (ca *Agent) Set(c *Config) {
 			}
 		}(subscription)
 	}
+}
+
+// SetWithoutBroadcast sets the config, but does not broadcast the event to
+// those listening for config reload changes. This is useful if you want to
+// modify the Config in the Agent, from the point of view of the subscriber to
+// the new one that was detected from the DeltaChan; if you just used Set()
+// instead of this in such a situation, you would end up clogging the DeltaChan
+// because you would be acting as both the consumer and producer of the
+// DeltaChan.
+func (ca *Agent) SetWithoutBroadcast(c *Config) {
+	ca.mut.Lock()
+	defer ca.mut.Unlock()
+	ca.c = c
 }

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -21,7 +20,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
-	"github.com/openshift/ci-tools/pkg/promotion"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
@@ -126,12 +124,12 @@ func main() {
 		logrus.WithError(err).Fatalf("%s failed to marshal output.", o.peribolosConfig)
 	}
 
-	if err := ioutil.WriteFile(o.peribolosConfig, out, 0666); err != nil {
+	if err := os.WriteFile(o.peribolosConfig, out, 0666); err != nil {
 		logrus.WithError(err).Fatal("Failed to write output.")
 	}
 }
 
-func generateRepositories(gc gitHubClient, orgRepos map[string]sets.String, logger *logrus.Entry) map[string]org.Repo {
+func generateRepositories(gc gitHubClient, orgRepos map[string]sets.Set[string], logger *logrus.Entry) map[string]org.Repo {
 	peribolosRepos := make(map[string]org.Repo)
 	yes := true
 
@@ -165,8 +163,8 @@ func generateRepositories(gc gitHubClient, orgRepos map[string]sets.String, logg
 
 // getReposForPrivateOrg iterates through the release repository directory and creates a map of
 // repository sets by organization that promote official images.
-func getReposForPrivateOrg(releaseRepoPath string, whitelist map[string][]string, onlyOrg string) (map[string]sets.String, error) {
-	ret := make(map[string]sets.String)
+func getReposForPrivateOrg(releaseRepoPath string, whitelist map[string][]string, onlyOrg string) (map[string]sets.Set[string], error) {
+	ret := make(map[string]sets.Set[string])
 
 	for org, repos := range whitelist {
 		if onlyOrg != "" && onlyOrg != org {
@@ -174,7 +172,7 @@ func getReposForPrivateOrg(releaseRepoPath string, whitelist map[string][]string
 		}
 		for _, repo := range repos {
 			if _, ok := ret[org]; !ok {
-				ret[org] = sets.NewString(repo)
+				ret[org] = sets.New[string](repo)
 			} else {
 				ret[org].Insert(repo)
 			}
@@ -182,7 +180,7 @@ func getReposForPrivateOrg(releaseRepoPath string, whitelist map[string][]string
 	}
 
 	callback := func(c *api.ReleaseBuildConfiguration, i *config.Info) error {
-		if !promotion.BuildsOfficialImages(c, promotion.WithoutOKD) {
+		if !api.BuildsAnyOfficialImages(c, api.WithoutOKD) {
 			return nil
 		}
 
@@ -192,7 +190,7 @@ func getReposForPrivateOrg(releaseRepoPath string, whitelist map[string][]string
 
 		repos, exist := ret[i.Org]
 		if !exist {
-			repos = sets.NewString()
+			repos = sets.New[string]()
 		}
 		ret[i.Org] = repos.Insert(i.Repo)
 

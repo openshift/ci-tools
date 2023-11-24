@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"net/url"
 	"os"
@@ -22,7 +21,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
-	"github.com/openshift/ci-tools/pkg/promotion"
 )
 
 type options struct {
@@ -33,8 +31,9 @@ type options struct {
 	tokenPath string
 	targetOrg string
 
-	org  string
-	repo string
+	prefix string
+	org    string
+	repo   string
 
 	gitName  string
 	gitEmail string
@@ -44,6 +43,8 @@ type options struct {
 	failOnNonexistentDst bool
 	debug                bool
 }
+
+const defaultPrefix = "https://github.com"
 
 func (o *options) validate() []error {
 	var errs []error
@@ -107,6 +108,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.configDir, "config-path", "", "Path to directory containing ci-operator configurations")
 	fs.StringVar(&o.targetOrg, "target-org", "", "Name of the org holding repos into which the git content should be mirrored")
 
+	fs.StringVar(&o.prefix, "prefix", defaultPrefix, "Prefix used for all git URLs")
 	fs.StringVar(&o.org, "only-org", "", "Mirror only repos that belong to this org")
 	fs.StringVar(&o.repo, "only-repo", "", "Mirror only a single repo")
 	fs.StringVar(&o.gitDir, "git-dir", "", "Path to directory in which to perform Git operations")
@@ -204,6 +206,9 @@ func getRemoteBranchHeads(logger *logrus.Entry, git gitFunc, repoDir, remote str
 // gitSyncer contains all code necessary to synchronize content from one GitHub
 // location (org, repo, branch) to another
 type gitSyncer struct {
+	// Prefix used for all URLs.
+	// Points to GitHub by default, but can be used to point somewhere else.
+	prefix string
 	// GitHub token
 	// Needs permissions to read the source and write to the destination
 	token string
@@ -257,6 +262,7 @@ func maybeTooShallow(pushOutput string) bool {
 		"shallow update not allowed",
 		"Updates were rejected because the remote contains work that you do",
 		"Updates were rejected because a pushed branch tip is behind its remote",
+		"remote unpack failed: index-pack failed",
 	}
 	for _, item := range patterns {
 		if strings.Contains(pushOutput, item) {
@@ -302,13 +308,15 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 	// We ls-remote destination first thing because when it does not exist
 	// we do not need to do any of the remaining operations.
 	logger.Debug("Determining HEAD of destination branch")
-	destUrlRaw := fmt.Sprintf("https://github.com/%s/%s", dst.org, dst.repo)
+	destUrlRaw := fmt.Sprintf("%s/%s/%s", g.prefix, dst.org, dst.repo)
 	destUrl, err := url.Parse(destUrlRaw)
 	if err != nil {
 		logger.WithField("remote-url", destUrlRaw).WithError(err).Error("Failed to construct URL for the destination remote")
 		return fmt.Errorf("failed to construct URL for the destination remote")
 	}
-	destUrl.User = url.User(g.token)
+	if g.token != "" {
+		destUrl.User = url.User(g.token)
+	}
 
 	dstHeads, err := getRemoteBranchHeads(logger, g.git, repoDir, destUrl.String())
 	if err != nil {
@@ -340,7 +348,7 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 	}
 
 	if exitCode != 0 {
-		if err := addGitRemote(logger, g.git, g.token, src.org, src.repo, repoDir, srcRemote); err != nil {
+		if err := addGitRemote(logger, g.git, g.prefix, g.token, src.org, src.repo, repoDir, srcRemote); err != nil {
 			return err
 		}
 	}
@@ -442,11 +450,11 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 	return nil
 }
 
-func addGitRemote(logger *logrus.Entry, git gitFunc, token, org, repo, repoDir, remoteName string) error {
+func addGitRemote(logger *logrus.Entry, git gitFunc, prefix, token, org, repo, repoDir, remoteName string) error {
 	remoteSetupLogger := logger.WithField("remote-name", remoteName)
 	remoteSetupLogger.Debug("Remote does not exist, setting up")
 
-	srcURL, err := url.Parse(fmt.Sprintf("https://github.com/%s/%s", org, repo))
+	srcURL, err := url.Parse(fmt.Sprintf("%s/%s/%s", prefix, org, repo))
 	if err != nil {
 		remoteSetupLogger.WithError(err).Error("Failed to construct URL for the source remote")
 		return fmt.Errorf("failed to construct URL for the source remote")
@@ -526,7 +534,7 @@ func (o *options) makeFilter(callback func(*api.ReleaseBuildConfiguration, *conf
 		if o.repo != "" && o.repo != fmt.Sprintf("%s/%s", i.Org, i.Repo) {
 			return nil
 		}
-		if !promotion.BuildsOfficialImages(c, promotion.WithoutOKD) {
+		if !api.BuildsAnyOfficialImages(c, api.WithoutOKD) {
 			return nil
 		}
 		return callback(c, i)
@@ -552,19 +560,19 @@ func main() {
 	}()
 
 	var token string
-	if rawToken, err := ioutil.ReadFile(o.tokenPath); err != nil {
+	if rawToken, err := os.ReadFile(o.tokenPath); err != nil {
 		logrus.WithError(err).Fatal("Failed to read GitHub token")
 	} else {
 		token = strings.TrimSpace(string(rawToken))
-		getter := func() sets.String {
-			return sets.NewString(token)
+		getter := func() sets.Set[string] {
+			return sets.New[string](token)
 		}
 		logrus.SetFormatter(logrusutil.NewCensoringFormatter(logrus.StandardLogger().Formatter, getter))
 	}
 
 	if o.gitDir == "" {
 		var err error
-		if o.gitDir, err = ioutil.TempDir("", ""); err != nil {
+		if o.gitDir, err = os.MkdirTemp("", ""); err != nil {
 			logrus.WithError(err).Fatal("Failed to create temporary directory for git operations")
 		}
 		defer func() {
@@ -575,6 +583,7 @@ func main() {
 	}
 
 	syncer := gitSyncer{
+		prefix:               o.prefix,
 		token:                token,
 		root:                 o.gitDir,
 		confirm:              o.confirm,
@@ -586,7 +595,7 @@ func main() {
 
 	var errs []error
 
-	locations, whitelistErrors := getWhitelistedLocations(o.WhitelistOptions.WhitelistConfig.Whitelist, syncer.git, token)
+	locations, whitelistErrors := getWhitelistedLocations(o.WhitelistOptions.WhitelistConfig.Whitelist, syncer.git, o.prefix, token)
 	errs = append(errs, whitelistErrors...)
 
 	callback := func(_ *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
@@ -630,13 +639,13 @@ func main() {
 	}
 }
 
-func getWhitelistedLocations(whitelist map[string][]string, git gitFunc, token string) (map[location]struct{}, []error) {
+func getWhitelistedLocations(whitelist map[string][]string, git gitFunc, prefix, token string) (map[location]struct{}, []error) {
 	var errs []error
 	locations := make(map[location]struct{})
 
 	for org, repos := range whitelist {
 		for _, repo := range repos {
-			remoteURL, err := url.Parse(fmt.Sprintf("https://github.com/%s/%s", org, repo))
+			remoteURL, err := url.Parse(fmt.Sprintf("%s/%s/%s", prefix, org, repo))
 			if err != nil {
 				logrus.WithError(err).Error("Failed to construct URL for the remote")
 				if err != nil {

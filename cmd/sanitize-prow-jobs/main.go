@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,10 +14,15 @@ import (
 	prowconfig "k8s.io/test-infra/prow/config"
 	"sigs.k8s.io/yaml"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/dispatcher"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/util"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
+)
+
+const (
+	cioperatorLatestImage = "ci-operator:latest"
 )
 
 type options struct {
@@ -79,7 +83,7 @@ func determinizeJobs(prowJobConfigDir string, config *dispatcher.Config) error {
 				continue
 			}
 
-			if err := ioutil.WriteFile(path, serialized, 0644); err != nil {
+			if err := os.WriteFile(path, serialized, 0644); err != nil {
 				errCh <- fmt.Errorf("failed to write file %q: %w", path, err)
 				continue
 			}
@@ -101,15 +105,19 @@ func defaultJobConfig(jc *prowconfig.JobConfig, path string, config *dispatcher.
 			}
 			jc.PresubmitsStatic[k][idx].JobBase.Cluster = string(cluster)
 
+			if string(cluster) == string(api.ClusterARM01) && isCIOperatorLatest(jc.PresubmitsStatic[k][idx].JobBase.Spec.Containers[0].Image) {
+				jc.PresubmitsStatic[k][idx].JobBase.Spec.Containers[0].Image = "ci-operator-arm64:latest"
+			}
+
 			// Enforce that even hand-crafted jobs have explicit branch regexes
 			// Presubmits are generally expected to hit also on "feature branches",
 			// so we generate regexes for both exact match and feature branch patterns
-			featureBranches := sets.NewString()
+			featureBranches := sets.New[string]()
 			for _, branch := range jc.PresubmitsStatic[k][idx].Branches {
 				featureBranches.Insert(jobconfig.FeatureBranch(branch))
 				featureBranches.Insert(jobconfig.ExactlyBranch(branch))
 			}
-			jc.PresubmitsStatic[k][idx].Branches = featureBranches.List()
+			jc.PresubmitsStatic[k][idx].Branches = sets.List(featureBranches)
 		}
 	}
 	for k := range jc.PostsubmitsStatic {
@@ -119,6 +127,10 @@ func defaultJobConfig(jc *prowconfig.JobConfig, path string, config *dispatcher.
 				return err
 			}
 			jc.PostsubmitsStatic[k][idx].JobBase.Cluster = string(cluster)
+
+			if string(cluster) == string(api.ClusterARM01) && isCIOperatorLatest(jc.PostsubmitsStatic[k][idx].JobBase.Spec.Containers[0].Image) {
+				jc.PostsubmitsStatic[k][idx].JobBase.Spec.Containers[0].Image = "ci-operator-arm64:latest"
+			}
 
 			// Enforce that even hand-crafted jobs have explicit branch regexes
 			// Postsubmits are generally expected to only hit on exact match branches
@@ -165,7 +177,21 @@ func main() {
 	if err := config.Validate(); err != nil {
 		logrus.WithError(err).Fatal("Failed to validate the config")
 	}
-	if err := determinizeJobs(opt.prowJobConfigDir, config); err != nil {
-		logrus.WithError(err).Fatal("Failed to determinize")
+	args := flagSet.Args()
+	if len(args) == 0 {
+		args = append(args, "")
 	}
+	for _, subDir := range args {
+		subDir = filepath.Join(opt.prowJobConfigDir, subDir)
+		if err := determinizeJobs(subDir, config); err != nil {
+			logrus.WithError(err).Fatal("Failed to determinize")
+		}
+	}
+}
+
+func isCIOperatorLatest(image string) bool {
+	parts := strings.Split(image, "/")
+	lastPart := parts[len(parts)-1]
+
+	return lastPart == cioperatorLatestImage
 }

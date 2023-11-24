@@ -37,6 +37,8 @@ type ClusterDeprovisionStatus struct {
 // ClusterDeprovisionPlatform contains platform-specific configuration for the
 // deprovision
 type ClusterDeprovisionPlatform struct {
+	// AlibabaCloud contains Alibaba Cloud specific deprovision settings
+	AlibabaCloud *AlibabaCloudClusterDeprovision `json:"alibabacloud,omitempty"`
 	// AWS contains AWS-specific deprovision settings
 	AWS *AWSClusterDeprovision `json:"aws,omitempty"`
 	// Azure contains Azure-specific deprovision settings
@@ -51,6 +53,16 @@ type ClusterDeprovisionPlatform struct {
 	Ovirt *OvirtClusterDeprovision `json:"ovirt,omitempty"`
 	// IBMCloud contains IBM Cloud specific deprovision settings
 	IBMCloud *IBMClusterDeprovision `json:"ibmcloud,omitempty"`
+}
+
+// AlibabaCloudClusterDeprovision contains AlibabaCloud-specific configuration for a ClusterDeprovision
+type AlibabaCloudClusterDeprovision struct {
+	// Region is the Alibaba region for this deprovision
+	Region string `json:"region"`
+	// BaseDomain is the DNS base domain
+	BaseDomain string `json:"baseDomain"`
+	// CredentialsSecretRef is the Alibaba account credentials to use for deprovisioning the cluster
+	CredentialsSecretRef corev1.LocalObjectReference `json:"credentialsSecretRef"`
 }
 
 // AWSClusterDeprovision contains AWS-specific configuration for a ClusterDeprovision
@@ -77,6 +89,10 @@ type AzureClusterDeprovision struct {
 	// If empty, the value is equal to "AzurePublicCloud".
 	// +optional
 	CloudName *azure.CloudEnvironment `json:"cloudName,omitempty"`
+	// ResourceGroupName is the name of the resource group where the cluster was installed.
+	// Required for new deprovisions (schema notwithstanding).
+	// +optional
+	ResourceGroupName *string `json:"resourceGroupName,omitempty"`
 }
 
 // GCPClusterDeprovision contains GCP-specific configuration for a ClusterDeprovision
@@ -174,6 +190,16 @@ type ClusterDeprovisionCondition struct {
 
 // ClusterDeprovisionConditionType is a valid value for ClusterDeprovisionCondition.Type
 type ClusterDeprovisionConditionType string
+
+// ConditionType satisfies the conditions.Condition interface
+func (c ClusterDeprovisionCondition) ConditionType() ConditionType {
+	return c.Type
+}
+
+// String satisfies the conditions.ConditionType interface
+func (t ClusterDeprovisionConditionType) String() string {
+	return string(t)
+}
 
 const (
 	// AuthenticationFailureClusterDeprovisionCondition is true when credentials cannot be used because of authentication failure

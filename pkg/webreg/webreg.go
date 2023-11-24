@@ -14,6 +14,7 @@ import (
 	htmlformatter "github.com/alecthomas/chroma/formatters/html"
 	"github.com/alecthomas/chroma/lexers"
 	"github.com/alecthomas/chroma/styles"
+	"github.com/russross/blackfriday/v2"
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -352,7 +353,7 @@ const templateDefinitions = `
      <td style="font-family:monospace">{{ $env.Name }}</td>
      <td>Parameter<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#parameters">?</a>]</sup></td>
      <td>
-       {{ $env.Documentation }}
+       {{ $env.Documentation | markdown}}
        {{ if $env.Default }}
        {{ if gt (len $env.Default) 0 }}
          (default: <span style="font-family:monospace">{{ $env.Default }}</span>)
@@ -682,7 +683,7 @@ func getBaseTemplate() (*template.Template, error) {
 			"ownersBlock": ownersBlock,
 		},
 	)
-	return base.Parse(templateDefinitions)
+	return base.Funcs(template.FuncMap{"markdown": markDowner}).Parse(templateDefinitions)
 }
 
 type stepNameAndType struct {
@@ -824,7 +825,7 @@ func getEnvironmentDataItems(worklist []api.TestStep, registryRefs registry.Refe
 		data[name] = line
 	}
 
-	seenChains := sets.NewString()
+	seenChains := sets.New[string]()
 
 	for len(worklist) != 0 {
 		step := worklist[0]
@@ -866,7 +867,8 @@ type dependencyLine struct {
 type dependencyVars map[string]dependencyLine
 
 // release:latest --> ENV_VAR_1 -> { override=false steps=step1,step2 }
-//                \-> ENV_VAR_2 -> { override=true steps=step3 }
+//
+//	\-> ENV_VAR_2 -> { override=true steps=step3 }
 type dependencyData struct {
 	Items map[string]dependencyVars
 	Type  string
@@ -895,7 +897,7 @@ func getDependencyDataItems(worklist []api.TestStep, registryRefs registry.Refer
 		data[image][variable] = line
 	}
 
-	seenChains := sets.NewString()
+	seenChains := sets.New[string]()
 	for len(worklist) != 0 {
 		step := worklist[0]
 		worklist = worklist[1:]
@@ -1650,4 +1652,9 @@ func ciOpConfigRefHandler(w http.ResponseWriter) {
 	if _, err := w.Write(ciOperatorRefRendered); err != nil {
 		logrus.WithError(err).Error("Failed to write ci-operator config")
 	}
+}
+
+func markDowner(args ...interface{}) template.HTML {
+	s := blackfriday.Run([]byte(fmt.Sprintf("%s", args...)))
+	return template.HTML(s)
 }

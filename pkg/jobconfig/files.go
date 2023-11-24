@@ -3,7 +3,6 @@ package jobconfig
 import (
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -33,7 +32,7 @@ const (
 	SSHBastionLabel              = "dptp.openshift.io/ssh-bastion"
 	ProwJobLabelVariant          = "ci-operator.openshift.io/variant"
 	ReleaseControllerLabel       = "ci-operator.openshift.io/release-controller"
-	LabelCluster                 = "ci.openshift.io/cluster"
+	LabelBuildFarm               = "ci.openshift.io/build-farm"
 	LabelGenerator               = "ci.openshift.io/generator"
 	ReleaseControllerValue       = "true"
 	JobReleaseKey                = "job-release"
@@ -75,7 +74,7 @@ func (i *Info) ConfigMapName() string {
 		return fmt.Sprintf("job-config-%s", cioperatorapi.FlavorForBranch(""))
 	}
 	flavor := cioperatorapi.FlavorForBranch(i.Branch)
-	if flavor == "master" {
+	if flavor == "master" || flavor == "main" {
 		return fmt.Sprintf("job-config-%s-%s", flavor, i.Type)
 	}
 
@@ -133,15 +132,15 @@ func extractInfoFromPath(configFilePath string) (*Info, error) {
 	}, nil
 }
 
-func OperateOnJobConfigDir(configDir string, callback func(*prowconfig.JobConfig, *Info) error) error {
-	return OperateOnJobConfigSubdir(configDir, "", callback)
+func OperateOnJobConfigDir(configDir string, knownInfraJobFiles sets.Set[string], callback func(*prowconfig.JobConfig, *Info) error) error {
+	return OperateOnJobConfigSubdir(configDir, "", knownInfraJobFiles, callback)
 }
 
-func OperateOnJobConfigSubdir(configDir, subDir string, callback func(*prowconfig.JobConfig, *Info) error) error {
+func OperateOnJobConfigSubdir(configDir, subDir string, knownInfraJobFiles sets.Set[string], callback func(*prowconfig.JobConfig, *Info) error) error {
 	inputCh := make(chan *Info)
 	produce := func() error {
 		defer close(inputCh)
-		return OperateOnJobConfigSubdirPaths(configDir, subDir, func(info *Info) error {
+		return OperateOnJobConfigSubdirPaths(configDir, subDir, knownInfraJobFiles, func(info *Info) error {
 			inputCh <- info
 			return nil
 		})
@@ -175,15 +174,18 @@ func OperateOnJobConfigSubdir(configDir, subDir string, callback func(*prowconfi
 	return util.ProduceMapReduce(0, produce, map_, reduce, done, errCh)
 }
 
-func OperateOnJobConfigSubdirPaths(configDir, subDir string, callback func(*Info) error) error {
+func OperateOnJobConfigSubdirPaths(configDir, subDir string, knownInfraJobFiles sets.Set[string], callback func(*Info) error) error {
 	if err := filepath.WalkDir(filepath.Join(configDir, subDir), func(path string, info fs.DirEntry, err error) error {
 		logger := logrus.WithField("source-file", path)
 		if err != nil {
 			logger.WithError(err).Error("Failed to walk file/directory")
 			return nil
 		}
-
 		if !info.IsDir() && filepath.Ext(path) == ".yaml" {
+			if knownInfraJobFiles.Has(info.Name()) {
+				logger.Debugf("Skipping known infra file: %s", info.Name())
+				return nil
+			}
 			info, err := extractInfoFromPath(path)
 			if err != nil {
 				logger.WithError(err).Warn("Failed to determine info for prow job config")
@@ -205,7 +207,7 @@ func ReadFromDir(dir string) (*prowconfig.JobConfig, error) {
 		PostsubmitsStatic: map[string][]prowconfig.Postsubmit{},
 		Periodics:         []prowconfig.Periodic{},
 	}
-	if err := OperateOnJobConfigDir(dir, func(config *prowconfig.JobConfig, elements *Info) error {
+	if err := OperateOnJobConfigDir(dir, make(sets.Set[string]), func(config *prowconfig.JobConfig, elements *Info) error {
 		Append(jobConfig, config)
 		return nil
 	}); err != nil {
@@ -268,7 +270,7 @@ func readFromFile(path string) (*prowconfig.JobConfig, error) {
 // target files already exist and contain Prow job configuration, the jobs will
 // be merged. Jobs will be pruned based on the provided Generator that match the matchLabels set
 func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig, generator Generator, matchLabels labels.Set) error {
-	allJobs := sets.String{}
+	allJobs := sets.Set[string]{}
 	files := map[string]*prowconfig.JobConfig{}
 	key := fmt.Sprintf("%s/%s", org, repo)
 	for _, job := range jobConfig.PresubmitsStatic[key] {
@@ -332,7 +334,7 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig, gener
 	if err := os.MkdirAll(jobDirForComponent, os.ModePerm); err != nil {
 		return err
 	}
-	if err := OperateOnJobConfigSubdir(jobDirForComponent, "", func(jobConfig *prowconfig.JobConfig, info *Info) error {
+	if err := OperateOnJobConfigSubdir(jobDirForComponent, "", make(sets.Set[string]), func(jobConfig *prowconfig.JobConfig, info *Info) error {
 		file := filepath.Base(info.Filename)
 		if generated, ok := files[file]; ok {
 			delete(files, file)
@@ -367,7 +369,7 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig, gener
 // `destination` - if there were jobs with the same name in `destination`, they
 // will be updated. All jobs in `destination` that are not overwritten this
 // way and are not otherwise in the set of all jobs being written stay untouched.
-func mergeJobConfig(destination, source *prowconfig.JobConfig, allJobs sets.String) {
+func mergeJobConfig(destination, source *prowconfig.JobConfig, allJobs sets.Set[string]) {
 	// We do the same thing for all jobs
 	if source.PresubmitsStatic != nil {
 		if destination.PresubmitsStatic == nil {
@@ -602,7 +604,7 @@ func WriteToFile(path string, jobConfig *prowconfig.JobConfig) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal the job config (%w)", err)
 	}
-	if err := ioutil.WriteFile(path, jobConfigAsYaml, 0664); err != nil {
+	if err := os.WriteFile(path, jobConfigAsYaml, 0664); err != nil {
 		return err
 	}
 

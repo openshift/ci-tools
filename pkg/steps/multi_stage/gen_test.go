@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/util/diff"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowdapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
 
@@ -28,6 +29,8 @@ func TestGeneratePods(t *testing.T) {
 				ClusterProfile: api.ClusterProfileAWS,
 				Test: []api.LiteralTestStep{{
 					As: "step0", From: "src", Commands: "command0",
+					Timeout:     &prowapi.Duration{Duration: time.Hour},
+					GracePeriod: &prowapi.Duration{Duration: 20 * time.Second},
 				}, {
 					As:       "step1",
 					From:     "image1",
@@ -74,7 +77,7 @@ func TestGeneratePods(t *testing.T) {
 		},
 	}
 	jobSpec.SetNamespace("namespace")
-	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil)
+	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil, "node-name", "")
 	step.test[0].Resources = api.ResourceRequirements{
 		Requests: api.ResourceList{api.ShmResource: "2G"},
 		Limits:   api.ResourceList{api.ShmResource: "2G"}}
@@ -91,10 +94,73 @@ func TestGeneratePods(t *testing.T) {
 		Name:      "secret",
 		MountPath: "/secret",
 	}}
-	ret, _, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Test, env, false, secretVolumes, secretVolumeMounts)
+	ret, _, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Test, env, secretVolumes, secretVolumeMounts, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	testhelper.CompareWithFixture(t, ret)
+}
+
+func TestGenerateObservers(t *testing.T) {
+	config := api.ReleaseBuildConfiguration{
+		Tests: []api.TestStepConfiguration{{
+			As: "test",
+			MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+				ClusterProfile: api.ClusterProfileAWS,
+				Test: []api.LiteralTestStep{{
+					As: "step0", From: "src", Commands: "command0",
+				}},
+			}},
+		},
+	}
+
+	observers := []api.Observer{{
+		Name:        "observer0",
+		From:        "src",
+		Commands:    "command0",
+		Timeout:     &prowapi.Duration{Duration: 2 * time.Minute},
+		GracePeriod: &prowapi.Duration{Duration: 4 * time.Second},
+	}, {
+		Name:     "observer1",
+		From:     "src",
+		Commands: "command1",
+	}}
+	jobSpec := api.JobSpec{
+		Metadata: api.Metadata{
+			Org:     "org",
+			Repo:    "repo",
+			Branch:  "base ref",
+			Variant: "variant",
+		},
+		Target: "target",
+		JobSpec: prowdapi.JobSpec{
+			Job:       "job",
+			BuildID:   "build id",
+			ProwJobID: "prow job id",
+			Refs: &prowapi.Refs{
+				Org:     "org",
+				Repo:    "repo",
+				BaseRef: "base ref",
+				BaseSHA: "base sha",
+			},
+			Type: "postsubmit",
+			DecorationConfig: &prowapi.DecorationConfig{
+				Timeout:     &prowapi.Duration{Duration: time.Minute},
+				GracePeriod: &prowapi.Duration{Duration: time.Second},
+				UtilityImages: &prowapi.UtilityImages{
+					Sidecar:    "sidecar",
+					Entrypoint: "entrypoint",
+				},
+			},
+		},
+	}
+	jobSpec.SetNamespace("namespace")
+	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil, "node-name", "")
+	ret, err := step.generateObservers(observers, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	testhelper.CompareWithFixture(t, ret)
 }
 
@@ -163,8 +229,8 @@ func TestGeneratePodsEnvironment(t *testing.T) {
 					Test:        test,
 					Environment: tc.env,
 				},
-			}, &api.ReleaseBuildConfiguration{}, nil, nil, &jobSpec, nil)
-			pods, _, err := step.(*multiStageTestStep).generatePods(test, nil, false, nil, nil)
+			}, &api.ReleaseBuildConfiguration{}, nil, nil, &jobSpec, nil, "node-name", "")
+			pods, _, err := step.(*multiStageTestStep).generatePods(test, nil, nil, nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -231,8 +297,8 @@ func TestGeneratePodBestEffort(t *testing.T) {
 		},
 	}
 	jobSpec.SetNamespace("namespace")
-	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil)
-	_, isBestEffort, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Post, nil, false, nil, nil)
+	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil, "node-name", "")
+	_, bestEffortSteps, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Post, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +307,7 @@ func TestGeneratePodBestEffort(t *testing.T) {
 		"test-step1": true,
 		"test-step2": false,
 	} {
-		if actual, expected := isBestEffort(pod), bestEffort; actual != expected {
+		if actual, expected := bestEffortSteps.Has(pod), bestEffort; actual != expected {
 			t.Errorf("didn't check best-effort status of Pod %s correctly, expected %v", pod, bestEffort)
 		}
 	}
@@ -376,6 +442,42 @@ func TestGetClusterClaimPodParams(t *testing.T) {
 			if diff := cmp.Diff(tc.expectedError, actualError, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}
+		})
+	}
+}
+
+func TestSetSecurityContexts(t *testing.T) {
+	for _, tc := range []struct {
+		name, root string
+		pod        coreapi.Pod
+		expected   sets.Set[string]
+	}{{
+		name: "empty",
+	}, {
+		name: "no match",
+		pod: coreapi.Pod{
+			Spec: coreapi.PodSpec{
+				InitContainers: []coreapi.Container{{Name: "i0"}, {Name: "i1"}},
+				Containers:     []coreapi.Container{{Name: "c0"}, {Name: "c1"}},
+			},
+		},
+	}, {
+		name: "match",
+		pod: coreapi.Pod{
+			Spec: coreapi.PodSpec{
+				InitContainers: []coreapi.Container{{Name: "i0"}, {Name: "i1"}},
+				Containers:     []coreapi.Container{{Name: "c0"}, {Name: "c1"}},
+			},
+		},
+		root: "c1",
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			const uid = 1007160000
+			var capabilities coreapi.Capabilities
+			var seLinuxOpts coreapi.SELinuxOptions
+			pod := &tc.pod
+			setSecurityContexts(pod, tc.root, uid, &capabilities, &seLinuxOpts)
+			testhelper.CompareWithFixture(t, pod)
 		})
 	}
 }

@@ -156,12 +156,13 @@ func TestGetDependencyDataItems(t *testing.T) {
 
 	t.Parallel()
 
-	for i := range testCases {
-		t.Run(testCases[i].description, func(t *testing.T) {
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.description, func(t *testing.T) {
 			t.Parallel()
-			data := getDependencyDataItems(testCases[i].inputSteps, registrySteps, registryChains, testCases[i].overrides)
-			if diff := cmp.Diff(testCases[i].expected, data); diff != "" {
-				t.Errorf("%s: data differs from expected:\n%s", testCases[i].description, diff)
+			data := getDependencyDataItems(tc.inputSteps, registrySteps, registryChains, tc.overrides)
+			if diff := cmp.Diff(tc.expected, data); diff != "" {
+				t.Errorf("%s: data differs from expected:\n%s", tc.description, diff)
 			}
 		})
 	}
@@ -304,12 +305,13 @@ func TestGetEnvironmentDataItems(t *testing.T) {
 
 	t.Parallel()
 
-	for i := range testCases {
-		t.Run(testCases[i].description, func(t *testing.T) {
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.description, func(t *testing.T) {
 			t.Parallel()
-			data := getEnvironmentDataItems(testCases[i].inputSteps, registrySteps, registryChains)
-			if diff := cmp.Diff(testCases[i].expected, data); diff != "" {
-				t.Errorf("%s: data differs from expected:\n%s", testCases[i].description, diff)
+			data := getEnvironmentDataItems(tc.inputSteps, registrySteps, registryChains)
+			if diff := cmp.Diff(tc.expected, data); diff != "" {
+				t.Errorf("%s: data differs from expected:\n%s", tc.description, diff)
 			}
 		})
 	}

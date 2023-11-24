@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -21,7 +20,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
-	"github.com/openshift/ci-tools/pkg/promotion"
 )
 
 const (
@@ -135,7 +133,7 @@ func main() {
 	if err := os.MkdirAll(path.Dir(o.publicizeConfig), os.ModePerm); err != nil && !os.IsExist(err) {
 		logrus.WithError(err).Fatal("failed to ensure directory existed for new publicize configuration")
 	}
-	if err := ioutil.WriteFile(o.publicizeConfig, b, 0664); err != nil {
+	if err := os.WriteFile(o.publicizeConfig, b, 0664); err != nil {
 		logrus.WithError(err).Fatal("failed to write new publicize configuration")
 	}
 
@@ -175,13 +173,13 @@ func main() {
 	}
 }
 
-func getReposForPrivateOrg(releaseRepoPath string, allowlist map[string][]string) (map[string]sets.String, error) {
-	ret := make(map[string]sets.String)
+func getReposForPrivateOrg(releaseRepoPath string, allowlist map[string][]string) (map[string]sets.Set[string], error) {
+	ret := make(map[string]sets.Set[string])
 
 	for org, repos := range allowlist {
 		for _, repo := range repos {
 			if _, ok := ret[org]; !ok {
-				ret[org] = sets.NewString(repo)
+				ret[org] = sets.New[string](repo)
 			} else {
 				ret[org].Insert(repo)
 			}
@@ -189,7 +187,7 @@ func getReposForPrivateOrg(releaseRepoPath string, allowlist map[string][]string
 	}
 
 	callback := func(c *api.ReleaseBuildConfiguration, i *config.Info) error {
-		if !promotion.BuildsOfficialImages(c, promotion.WithoutOKD) {
+		if !api.BuildsAnyOfficialImages(c, api.WithoutOKD) {
 			return nil
 		}
 
@@ -200,7 +198,7 @@ func getReposForPrivateOrg(releaseRepoPath string, allowlist map[string][]string
 
 		repos, exist := ret[i.Org]
 		if !exist {
-			repos = sets.NewString()
+			repos = sets.New[string]()
 		}
 		ret[i.Org] = repos.Insert(i.Repo)
 

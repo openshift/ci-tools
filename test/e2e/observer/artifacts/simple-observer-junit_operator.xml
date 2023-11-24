@@ -1,0 +1,18 @@
+<testsuites>
+  <testsuite name="step graph" tests="7" skipped="0" failures="0" time="whatever">
+    <properties></properties>
+    <testcase name="Find the input image os and tag it into the pipeline" time="whatever"></testcase>
+    <testcase name="Run multi-stage test post phase" time="whatever">
+      <system-out>The collected steps of multi-stage phase post.</system-out>
+    </testcase>
+    <testcase name="Run multi-stage test pre phase" time="whatever">
+      <system-out>The collected steps of multi-stage phase pre.</system-out>
+    </testcase>
+    <testcase name="Run multi-stage test test phase" time="whatever">
+      <system-out>The collected steps of multi-stage phase test.</system-out>
+    </testcase>
+    <testcase name="Run multi-stage test with-observer - with-observer-check-shared-dir container test" time="whatever"></testcase>
+    <testcase name="Run multi-stage test with-observer - with-observer-create-kubeconfig container test" time="whatever"></testcase>
+    <testcase name="Run multi-stage test with-observer - with-observer-observer container test" time="whatever"></testcase>
+  </testsuite>
+</testsuites>

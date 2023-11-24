@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"reflect"
 	"testing"
@@ -285,8 +284,8 @@ func TestSecretCollectionManager(t *testing.T) {
 			}
 
 			for _, scenario := range tc.permCheckScenarios {
-				permCheckScenario := scenario
-				t.Run(fmt.Sprintf("path: %s, user: %s, expectSuccess: %t", permCheckScenario.path, permCheckScenario.user, permCheckScenario.expectSuccess), func(t *testing.T) {
+				scenario := scenario
+				t.Run(fmt.Sprintf("path: %s, user: %s, expectSuccess: %t", scenario.path, scenario.user, scenario.expectSuccess), func(t *testing.T) {
 					t.Parallel()
 					client, err := vaultclient.NewFromUserPass("http://"+vaultAddr, scenario.user, "password")
 					if err != nil {
@@ -294,8 +293,14 @@ func TestSecretCollectionManager(t *testing.T) {
 					}
 					initialResult, err := client.ListKV(scenario.path)
 					checkIs403(err, "initial list", scenario.expectSuccess, t)
-					if err == nil && len(initialResult) != 0 {
-						t.Errorf("initial list returned more than zero results: %v", initialResult)
+					if err == nil {
+						var expected []string
+						if scenario.expectSuccess {
+							expected = []string{"index"}
+						}
+						if diff := cmp.Diff(initialResult, expected); diff != "" {
+							t.Errorf("unexpected initial listing: %s", diff)
+						}
 					}
 					data := map[string]string{"foo": "bar"}
 					checkIs403(client.UpsertKV(scenario.path+"/my-secret", data), "upsert secret", scenario.expectSuccess, t)
@@ -334,7 +339,7 @@ func TestSecretCollectionManager(t *testing.T) {
 				var respBody []byte
 				if err == nil {
 					var readErr error
-					respBody, readErr = ioutil.ReadAll(resp.Body)
+					respBody, readErr = io.ReadAll(resp.Body)
 					if err != nil {
 						t.Errorf("failed to read response body after policy creation failed: %v", readErr)
 					}

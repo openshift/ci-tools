@@ -1,0 +1,13 @@
+{{ $subPrefix := printf "%s\t" .prefix -}}
+{{ .prefix }}subgraph cluster_{{ .sg }} {
+{{ $subPrefix }}label="{{ label .g .sg }}";
+{{ $subPrefix }}labeljust="l";
+{{ if .linkable -}}
+	{{ $subPrefix }}href="/chain/{{ label .g .sg }}";{{ "\n" -}}
+	{{ $subPrefix }}{{ .bootstrap413monospace }};
+{{ else -}}
+	{{ $subPrefix }}{{ .bootstrap413fonts }};
+{{ end -}}
+{{- range nodes .g .sg -}}
+	{{ $subPrefix }}{{ . }};
+{{ end -}}

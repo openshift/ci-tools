@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -285,7 +284,9 @@ func newDataWithInfoFromFilename(filename string) configlib.DataWithInfo {
 				Releases: map[string]api.UnresolvedRelease{
 					"latest": {
 						Candidate: &api.Candidate{
-							Product: product,
+							ReleaseDescriptor: api.ReleaseDescriptor{
+								Product: product,
+							},
 							Stream:  stream,
 							Version: version,
 						},
@@ -315,10 +316,12 @@ func newDataWithInfoFromFilename(filename string) configlib.DataWithInfo {
 	if fromVersion == "" {
 		data.Configuration.InputConfiguration.Releases["initial"] = api.UnresolvedRelease{
 			Candidate: &api.Candidate{
-				Product:  product,
-				Stream:   stream,
-				Version:  version,
-				Relative: 1,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:  product,
+					Relative: 1,
+				},
+				Stream:  stream,
+				Version: version,
 			},
 		}
 	} else if fromStream == "stable" || fromStream == "" {
@@ -326,7 +329,9 @@ func newDataWithInfoFromFilename(filename string) configlib.DataWithInfo {
 		minorVer, _ := strconv.Atoi(strings.Split(fromVersion, ".")[1])
 		data.Configuration.InputConfiguration.Releases["initial"] = api.UnresolvedRelease{
 			Prerelease: &api.Prerelease{
-				Product: product,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product: product,
+				},
 				VersionBounds: api.VersionBounds{
 					Lower: fmt.Sprintf("4.%d.0-0", minorVer),
 					Upper: fmt.Sprintf("4.%d.0-0", minorVer+1),
@@ -343,7 +348,9 @@ func newDataWithInfoFromFilename(filename string) configlib.DataWithInfo {
 		}
 		data.Configuration.InputConfiguration.Releases["initial"] = api.UnresolvedRelease{
 			Candidate: &api.Candidate{
-				Product: product,
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product: product,
+				},
 				Stream:  fromReleaseStream,
 				Version: fromVersion,
 			},
@@ -421,7 +428,7 @@ func run(o options) error {
 	// key: old jobname, value: new (generated jobname)
 	replacedJobs := make(map[string]string)
 	// list of test names for detected release jobs with no configuration
-	configlessTests := sets.NewString()
+	configlessTests := sets.New[string]()
 	for _, jobConfig := range jobs {
 		for _, periodic := range jobConfig.Periodics {
 			info, isReleaseJob := getJobInfo(periodic.Name)
@@ -511,7 +518,7 @@ func run(o options) error {
 					return err
 				}
 			}
-			var cron, interval *string
+			var cron, interval, minimumInterval *string
 			if periodic.Cron != "" {
 				// yaml.Marshal doesn't properly see &periodic.Cron, but does see &cronCopy...
 				cronCopy := periodic.Cron
@@ -521,6 +528,10 @@ func run(o options) error {
 				// yaml.Marshal doesn't properly see &periodic.Interval, but does see &intervalCopy...
 				intervalCopy := periodic.Interval
 				interval = &intervalCopy
+			}
+			if periodic.MinimumInterval != "" {
+				minimumIntervalCopy := periodic.MinimumInterval
+				minimumInterval = &minimumIntervalCopy
 			}
 			// check that test does not already exist in config
 			combinedTests := append(replacements[filename].tests, ciopConfigs[filename].Configuration.Tests...)
@@ -535,6 +546,7 @@ func run(o options) error {
 				MultiStageTestConfiguration: conf.Steps,
 				Cron:                        cron,
 				Interval:                    interval,
+				MinimumInterval:             minimumInterval,
 			})
 			replacements[filename] = testsAndImages
 			replacedJobs[periodic.Name] = metadata.JobName(jobconfig.PeriodicPrefix, info.As)
@@ -561,7 +573,7 @@ func run(o options) error {
 		if err != nil {
 			return fmt.Errorf("failed to marshal updated config for file %s: %w", filename, err)
 		}
-		if err := ioutil.WriteFile(filepath.Join(o.ciopConfigDir, filename), raw, 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(o.ciopConfigDir, filename), raw, 0644); err != nil {
 			return fmt.Errorf("failed to write updated config file %s: %w", filename, err)
 		}
 	}
@@ -579,7 +591,7 @@ func run(o options) error {
 		if err != nil {
 			return fmt.Errorf("failed to marshal updated jobconfig for file %s: %w", filename, err)
 		}
-		if err := ioutil.WriteFile(filepath.Join(o.jobDir, filename), raw, 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(o.jobDir, filename), raw, 0644); err != nil {
 			return fmt.Errorf("failed to write updated jobconfig file %s: %w", filename, err)
 		}
 	}
@@ -604,7 +616,7 @@ func run(o options) error {
 			newJob := fmt.Sprintf("\"name\":\"%s\"", newName)
 			raw = bytes.ReplaceAll(raw, []byte(oldJob), []byte(newJob))
 		}
-		if err := ioutil.WriteFile(path, raw, 0644); err != nil {
+		if err := os.WriteFile(path, raw, 0644); err != nil {
 			return fmt.Errorf("failed to write updated release-controller config file %s: %w", filepath.Base(path), err)
 		}
 		return nil
@@ -626,7 +638,7 @@ func run(o options) error {
 		newJob := fmt.Sprintf("%s:", newName)
 		raw = bytes.ReplaceAll(raw, []byte(oldJob), []byte(newJob))
 	}
-	if err := ioutil.WriteFile(o.testgrid, raw, 0644); err != nil {
+	if err := os.WriteFile(o.testgrid, raw, 0644); err != nil {
 		return fmt.Errorf("failed to write updated testgrid allowlist file %s: %w", o.testgrid, err)
 	}
 
@@ -646,7 +658,7 @@ func run(o options) error {
 	}
 
 	if len(configlessTests) > 0 {
-		fmt.Printf("\nThe following tests do not have entries in the generator config:\n%v\n", configlessTests.List())
+		fmt.Printf("\nThe following tests do not have entries in the generator config:\n%v\n", sets.List(configlessTests))
 	}
 
 	// keep this message at the end to make sure it is seen by whoever is running the command

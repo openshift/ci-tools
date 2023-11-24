@@ -22,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/test-infra/prow/config"
@@ -36,27 +35,23 @@ const (
 	PluginName                  = "testfreeze"
 	defaultKubernetesBranch     = "master"
 	defaultKubernetesRepoAndOrg = "kubernetes"
-	templateString              = `{{ if .InTestFreeze -}}
-Please note that we're already in [Test Freeze](https://github.com/kubernetes/sig-release/blob/master/releases/release_phases.md#test-freeze) for the ` + "`{{ .Branch }}`" + ` branch. This means every merged PR has to be cherry-picked into the release branch to be part of the upcoming {{ .Tag }} release.
-{{ end }}`
+	templateString              = `Please note that we're already in [Test Freeze](https://github.com/kubernetes/sig-release/blob/master/releases/release_phases.md#test-freeze) for the ` + "`{{ .Branch }}`" + ` branch. This means every merged PR will be automatically fast-forwarded via the periodic [ci-fast-forward](https://testgrid.k8s.io/sig-release-releng-blocking#git-repo-kubernetes-fast-forward) job to the release branch of the upcoming {{ .Tag }} release.
+
+Fast forwards are scheduled to happen every 6 hours, whereas the most recent run was: {{ .LastFastForward }}.
+`
 )
 
 func init() {
 	plugins.RegisterPullRequestHandler(PluginName, handlePullRequestEvent, helpProvider)
 }
 
-func helpProvider(config *plugins.Configuration, enabledRepos []config.OrgRepo) (*pluginhelp.PluginHelp, error) {
-	pluginHelp := &pluginhelp.PluginHelp{
+func helpProvider(*plugins.Configuration, []config.OrgRepo) (*pluginhelp.PluginHelp, error) {
+	return &pluginhelp.PluginHelp{
 		Description: fmt.Sprintf(
 			"The %s plugin adds additional documentation about cherry-picks during the Test Freeze period.",
 			PluginName,
 		),
-	}
-	pluginHelp.AddCommand(pluginhelp.Command{
-		Featured:  false,
-		WhoCanUse: "Anyone",
-	})
-	return pluginHelp, nil
+	}, nil
 }
 
 func handlePullRequestEvent(p plugins.Agent, e github.PullRequestEvent) error {
@@ -136,7 +131,7 @@ func (h *handler) handle(
 
 	result, err := h.verifier.CheckInTestFreeze(log)
 	if err != nil {
-		return errors.Wrap(err, "get test freeze result")
+		return fmt.Errorf("get test freeze result: %w", err)
 	}
 
 	if !result.InTestFreeze {
@@ -147,18 +142,16 @@ func (h *handler) handle(
 	comment := &strings.Builder{}
 	tpl, err := template.New(PluginName).Parse(templateString)
 	if err != nil {
-		return errors.Wrap(err, "parse template")
+		return fmt.Errorf("parse template: %w", err)
 	}
 	if err := tpl.Execute(comment, result); err != nil {
-		return errors.Wrap(err, "execute template")
+		return fmt.Errorf("execute template: %w", err)
 	}
 
 	if err := h.verifier.CreateComment(
 		client, org, repo, number, comment.String(),
 	); err != nil {
-		return errors.Wrapf(err,
-			"create comment on %s/%s#%d: %q", org, repo, number, comment,
-		)
+		return fmt.Errorf("create comment on %s/%s#%d: %q: %w", org, repo, number, comment, err)
 	}
 
 	return nil

@@ -45,10 +45,12 @@ func (o *PRCreationOptions) Finalize() error {
 
 // PrOptions allows optional parameters to upsertPR
 type PrOptions struct {
-	prBody         string
-	matchTitle     string
-	prAssignee     string
-	skipPRCreation bool
+	prBody           string
+	matchTitle       string
+	additionalLabels []string
+	prAssignee       string
+	gitCommitMessage string
+	skipPRCreation   bool
 }
 
 // PrOption is the type for Optional Parameters
@@ -61,10 +63,24 @@ func PrBody(prBody string) PrOption {
 	}
 }
 
+// GitCommitMessage is the wrapper to pass in PrCommitMessage that's different from the PrBody
+// This is useful when you wish to provide large markdown information for the PR, but wish to keep the commit simple.
+func GitCommitMessage(gitCommitMessage string) PrOption {
+	return func(args *PrOptions) {
+		args.gitCommitMessage = gitCommitMessage
+	}
+}
+
 // MatchTitle is the wrapper to pass in MatchTitle as a parameter
 func MatchTitle(matchTitle string) PrOption {
 	return func(args *PrOptions) {
 		args.matchTitle = matchTitle
+	}
+}
+
+func AdditionalLabels(additionalLabels []string) PrOption {
+	return func(args *PrOptions) {
+		args.additionalLabels = additionalLabels
 	}
 }
 
@@ -147,12 +163,17 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 		return fmt.Errorf("failed to configure disabling gpg signing: %w", err)
 	}
 
+	commitMessage := prArgs.prBody
+	if prArgs.gitCommitMessage != "" {
+		commitMessage = prArgs.gitCommitMessage
+	}
+
 	if err := bumper.GitCommitAndPush(
 		fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", username, string(token), username, repo),
 		sourceBranchName,
 		username,
 		fmt.Sprintf("%s@users.noreply.github.com", username),
-		prTitle+"\n\n"+prArgs.prBody,
+		prTitle+"\n\n"+commitMessage,
 		stdout,
 		stderr,
 		false,
@@ -166,7 +187,7 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 		return nil
 	}
 
-	var labelsToAdd []string
+	labelsToAdd := prArgs.additionalLabels
 	if o.SelfApprove {
 		l.Infof("Self-aproving PR by adding the %q and %q labels", labels.Approved, labels.LGTM)
 		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)

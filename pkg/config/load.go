@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -11,6 +10,8 @@ import (
 
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
+
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/util"
@@ -31,6 +32,56 @@ type Prowgen struct {
 	// are private.
 	// This field has no effect if private is not set.
 	Expose bool `json:"expose,omitempty"`
+	// Rehearsals declares any disabled rehearsals for jobs
+	Rehearsals Rehearsals `json:"rehearsals,omitempty"`
+	// Set which architecture should the images be promoted from
+	AdditionalArchitectures []cioperatorapi.ReleaseArchitecture `json:"additional_architectures"`
+	// If true build images targeting multiple architectures
+	MultiArch bool `json:"multi_arch"`
+}
+
+func (p *Prowgen) Validate() error {
+	errs := make([]error, 0)
+	invalidArchs := make([]string, 0, len(p.AdditionalArchitectures))
+	for _, arch := range p.AdditionalArchitectures {
+		if !arch.IsValid() {
+			invalidArchs = append(invalidArchs, string(arch))
+		}
+	}
+	if len(invalidArchs) > 0 {
+		e := fmt.Errorf("architectures %s are not valid, available ones are: %s",
+			strings.Join(invalidArchs, ", "), strings.Join(cioperatorapi.GetAvailableArchitectures(), ", "))
+		errs = append(errs, e)
+	}
+	return utilerrors.NewAggregate(errs)
+}
+
+func (p *Prowgen) MergeDefaults(defaults *Prowgen) {
+	if defaults.Private {
+		p.Private = true
+	}
+	if defaults.Expose {
+		p.Expose = true
+	}
+	if defaults.Rehearsals.DisableAll {
+		p.Rehearsals.DisableAll = true
+	}
+	if defaults.AdditionalArchitectures != nil {
+		p.AdditionalArchitectures = defaults.AdditionalArchitectures
+	}
+	if defaults.MultiArch {
+		p.MultiArch = true
+	}
+	p.Rehearsals.DisabledRehearsals = append(p.Rehearsals.DisabledRehearsals, defaults.Rehearsals.DisabledRehearsals...)
+}
+
+type Rehearsals struct {
+	// DisableAll indicates that all jobs will not have their "can-be-rehearsed" label set
+	// and therefore will not be picked up for rehearsals.
+	DisableAll bool `json:"disable_all,omitempty"`
+	// DisabledRehearsals contains a list of jobs that will not have their "can-be-rehearsed" label set
+	// and therefore will not be picked up for rehearsals.
+	DisabledRehearsals []string `json:"disabled_rehearsals,omitempty"`
 }
 
 func readCiOperatorConfig(configFilePath string, info Info) (*cioperatorapi.ReleaseBuildConfiguration, error) {
@@ -62,6 +113,9 @@ type Info struct {
 	// RepoPath is the full path to the directory containing config for the repo
 	RepoPath string
 }
+
+type InfoIterFunc func(string, *Info) error
+type ConfigIterFunc func(*cioperatorapi.ReleaseBuildConfiguration, *Info) error
 
 // We use the directory/file naming convention to encode useful information
 // about component repository information.
@@ -120,13 +174,13 @@ func isConfigFile(info fs.DirEntry) bool {
 // isMountSpecialFile identifies special files in Kubernetes mounts
 // The general structure of a mount is:
 //
-//     config
-//     ├── ..2019_11_15_19_57_20.547184898
-//     │   ├── foo-bar-master.yaml
-//     │   └── super-duper-master.yaml
-//     ├── ..data -> ..2019_11_15_19_57_20.547184898
-//     ├── foo-bar-master.yaml -> ..data/foo-bar-master.yaml
-//     └── super-duper-master.yaml -> ..data/super-duper-master.yaml
+//	config
+//	├── ..2019_11_15_19_57_20.547184898
+//	│   ├── foo-bar-master.yaml
+//	│   └── super-duper-master.yaml
+//	├── ..data -> ..2019_11_15_19_57_20.547184898
+//	├── foo-bar-master.yaml -> ..data/foo-bar-master.yaml
+//	└── super-duper-master.yaml -> ..data/super-duper-master.yaml
 //
 // In a recursive directory traversal, paths starting with `..` are skipped so
 // files are not processed twice.
@@ -136,7 +190,7 @@ func isMountSpecialFile(path string) bool {
 
 // OperateOnCIOperatorConfig runs the callback on the parsed data from
 // the CI Operator configuration file provided
-func OperateOnCIOperatorConfig(path string, callback func(*cioperatorapi.ReleaseBuildConfiguration, *Info) error) error {
+func OperateOnCIOperatorConfig(path string, callback ConfigIterFunc) error {
 	info, err := InfoFromPath(path)
 	if err != nil {
 		logrus.WithField("source-file", path).WithError(err).Error("Failed to resolve info from CI Operator configuration path")
@@ -156,11 +210,11 @@ func OperateOnCIOperatorConfig(path string, callback func(*cioperatorapi.Release
 
 // OperateOnCIOperatorConfigDir runs the callback on all CI Operator
 // configuration files found while walking the directory provided
-func OperateOnCIOperatorConfigDir(configDir string, callback func(*cioperatorapi.ReleaseBuildConfiguration, *Info) error) error {
+func OperateOnCIOperatorConfigDir(configDir string, callback ConfigIterFunc) error {
 	return OperateOnCIOperatorConfigSubdir(configDir, "", callback)
 }
 
-func OperateOnCIOperatorConfigSubdir(configDir, subDir string, callback func(*cioperatorapi.ReleaseBuildConfiguration, *Info) error) error {
+func OperateOnCIOperatorConfigSubdir(configDir, subDir string, callback ConfigIterFunc) error {
 	type item struct {
 		config *cioperatorapi.ReleaseBuildConfiguration
 		info   *Info
@@ -171,10 +225,6 @@ func OperateOnCIOperatorConfigSubdir(configDir, subDir string, callback func(*ci
 		return filepath.WalkDir(filepath.Join(configDir, subDir), func(path string, info fs.DirEntry, err error) error {
 			if err != nil {
 				logrus.WithField("source-file", path).WithError(err).Error("Failed to walk CI Operator configuration dir")
-				// file may not exist due to race condition between the reload and k8s removing deleted/moved symlinks in a confimap directory; ignore it
-				if os.IsNotExist(err) {
-					return nil
-				}
 				return err
 			}
 			if isMountSpecialFile(info.Name()) {
@@ -225,6 +275,24 @@ func OperateOnCIOperatorConfigSubdir(configDir, subDir string, callback func(*ci
 	return util.ProduceMapReduce(0, produce, map_, reduce, done, errCh)
 }
 
+func OperateOnCIOperatorConfigPaths(path string, callback InfoIterFunc) error {
+	return filepath.WalkDir(path, func(path string, fsInfo fs.DirEntry, err error) error {
+		if err != nil {
+			logrus.WithField("source-file", path).WithError(err).Error("Failed to walk CI Operator configuration dir")
+			return err
+		}
+		if !isConfigFile(fsInfo) {
+			return nil
+		}
+		info, err := InfoFromPath(path)
+		if err != nil {
+			logrus.WithField("source-file", path).WithError(err).Error("Failed to resolve info from CI Operator configuration path")
+			return err
+		}
+		return callback(path, info)
+	})
+}
+
 func LoggerForInfo(info Info) *logrus.Entry {
 	return logrus.WithFields(info.LogFields())
 }
@@ -250,7 +318,7 @@ func (i *DataWithInfo) CommitTo(dir string) error {
 		i.Logger().WithError(err).Error("failed to ensure directory existed for new CI Operator configuration")
 		return err
 	}
-	if err := ioutil.WriteFile(outputFile, raw, 0664); err != nil {
+	if err := os.WriteFile(outputFile, raw, 0664); err != nil {
 		i.Logger().WithError(err).Error("failed to write new CI Operator configuration")
 		return err
 	}

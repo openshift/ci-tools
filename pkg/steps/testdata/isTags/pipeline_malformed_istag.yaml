@@ -1,0 +1,9 @@
+apiVersion: image.openshift.io/v1
+image:
+  dockerImageMetadata: malformed-json
+kind: ImageStreamTag
+lookupPolicy:
+  local: false
+metadata:
+  name: pipeline:v4.10
+  namespace: ns

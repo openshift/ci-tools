@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -24,6 +23,8 @@ import (
 	"k8s.io/test-infra/prow/plugins"
 	"k8s.io/test-infra/prow/plugins/ownersconfig"
 	"k8s.io/test-infra/prow/repoowners"
+
+	"github.com/openshift/ci-tools/pkg/rehearse"
 )
 
 const (
@@ -66,7 +67,7 @@ func loadRepos(configRootDir string, blocked blocklist, configSubDirs, extraDirs
 	}
 
 	for _, subdirectory := range append(configSubDirectories, extraDirs...) {
-		orgDirs, err := ioutil.ReadDir(subdirectory)
+		orgDirs, err := os.ReadDir(subdirectory)
 		if err != nil {
 			return nil, err
 		}
@@ -80,7 +81,7 @@ func loadRepos(configRootDir string, blocked blocklist, configSubDirs, extraDirs
 				logrus.WithField("org", org).Info("org is on organization blocklist, skipping")
 				continue
 			}
-			repoDirs, err := ioutil.ReadDir(filepath.Join(subdirectory, orgDir.Name()))
+			repoDirs, err := os.ReadDir(filepath.Join(subdirectory, orgDir.Name()))
 			if err != nil {
 				return nil, err
 			}
@@ -123,7 +124,7 @@ func loadRepos(configRootDir string, blocked blocklist, configSubDirs, extraDirs
 
 	var result []orgRepo
 	for _, orgRepo := range orgRepos {
-		orgRepo.Directories = sets.NewString(orgRepo.Directories...).List()
+		orgRepo.Directories = sets.List(sets.New[string](orgRepo.Directories...))
 		result = append(result, *orgRepo)
 	}
 	return result, nil
@@ -141,10 +142,10 @@ func (r httpResult) resolveOwnerAliases(cleaner ownersCleaner) interface{} {
 	if !r.simpleConfig.Empty() {
 		sc := SimpleConfig{
 			Config: repoowners.Config{
-				Approvers:         cleaner(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.Approvers)).List()),
-				Reviewers:         cleaner(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.Reviewers)).List()),
-				RequiredReviewers: cleaner(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.RequiredReviewers)).List()),
-				Labels:            sets.NewString(r.simpleConfig.Labels...).List(),
+				Approvers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.Approvers)))),
+				Reviewers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.Reviewers)))),
+				RequiredReviewers: cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.RequiredReviewers)))),
+				Labels:            sets.List(sets.New[string](r.simpleConfig.Labels...)),
 			},
 			Options: r.simpleConfig.Options,
 		}
@@ -159,10 +160,10 @@ func (r httpResult) resolveOwnerAliases(cleaner ownersCleaner) interface{} {
 		}
 		for k, v := range r.fullConfig.Filters {
 			cfg := repoowners.Config{
-				Approvers:         cleaner(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.Approvers)).List()),
-				Reviewers:         cleaner(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.Reviewers)).List()),
-				RequiredReviewers: cleaner(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.RequiredReviewers)).List()),
-				Labels:            sets.NewString(v.Labels...).List(),
+				Approvers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.Approvers)))),
+				Reviewers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.Reviewers)))),
+				RequiredReviewers: cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.RequiredReviewers)))),
+				Labels:            sets.List(sets.New[string](v.Labels...)),
 			}
 			if len(cfg.Reviewers) == 0 {
 				cfg.Reviewers = cfg.Approvers
@@ -225,11 +226,11 @@ func getOwnersHTTP(fg FileGetter, orgRepo orgRepo, filenames ownersconfig.Filena
 }
 
 func addHeader(path string, header string) error {
-	content, err := ioutil.ReadFile(path)
+	content, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(path, append([]byte(header), content...), 0644)
+	return os.WriteFile(path, append([]byte(header), content...), 0644)
 }
 
 func writeOwners(orgRepo orgRepo, httpResult httpResult, cleaner ownersCleaner, header string) error {
@@ -436,8 +437,8 @@ func listUpdatedDirectoriesFromGitStatusOutput(s string) ([]string, error) {
 }
 
 type blocklist struct {
-	directories sets.String
-	orgs        sets.String
+	directories sets.Set[string]
+	orgs        sets.Set[string]
 }
 
 func main() {
@@ -477,8 +478,8 @@ func main() {
 	}
 	configRootDirectory := filepath.Join(o.targetDir, o.targetSubDirectory)
 	var blocked blocklist
-	blocked.directories = sets.NewString(o.blockedRepos.Strings()...)
-	blocked.orgs = sets.NewString(o.blockedOrgs.Strings()...)
+	blocked.directories = sets.New[string](o.blockedRepos.Strings()...)
+	blocked.orgs = sets.New[string](o.blockedOrgs.Strings()...)
 	if err := pullOwners(gc, configRootDirectory, blocked, configSubDirectories, o.extraDirs.Strings(), o.githubOrg, o.githubRepo, pc); err != nil {
 		logrus.WithError(err).Fatal("Error occurred when walking through the target dir.")
 	}
@@ -504,7 +505,9 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to push changes.")
 	}
 
-	var labelsToAdd []string
+	labelsToAdd := []string{
+		rehearse.RehearsalsAckLabel,
+	}
 	if o.selfApprove {
 		logrus.Infof("Self-aproving PR by adding the %q and %q labels", labels.Approved, labels.LGTM)
 		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)
@@ -527,7 +530,7 @@ func ownersCleanerFactory(githubOrg string, ghc githubOrgMemberLister) (ownersCl
 		return nil, fmt.Errorf("listOrgMembers failed: %w", err)
 	}
 
-	membersSet := sets.String{}
+	membersSet := sets.Set[string]{}
 	for _, member := range members {
 		membersSet.Insert(strings.ToLower(member.Login))
 	}

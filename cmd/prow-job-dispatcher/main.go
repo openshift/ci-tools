@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,6 +31,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/dispatcher"
 	"github.com/openshift/ci-tools/pkg/github/prcreation"
+	"github.com/openshift/ci-tools/pkg/rehearse"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
@@ -135,8 +139,8 @@ func (o *options) validate() error {
 }
 
 // getCloudProvidersForE2ETests returns a set of cloud providers where a cluster is hosted for an e2e test defined in the given Prow job config.
-func getCloudProvidersForE2ETests(jc *prowconfig.JobConfig) sets.String {
-	cloudProviders := sets.NewString()
+func getCloudProvidersForE2ETests(jc *prowconfig.JobConfig) sets.Set[string] {
+	cloudProviders := sets.New[string]()
 	for k := range jc.PresubmitsStatic {
 		for _, job := range jc.PresubmitsStatic[k] {
 			if cloud := dispatcher.DetermineCloud(job.JobBase); cloud != "" {
@@ -163,7 +167,7 @@ type clusterVolume struct {
 	// [cloudProvider][cluster]volume
 	clusterVolumeMap map[string]map[string]float64
 	// only needed for stable tests: traverse the above map by sorted key list
-	cloudProviders sets.String
+	cloudProviders sets.Set[string]
 	mutex          sync.Mutex
 }
 
@@ -178,7 +182,7 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 	var cluster, rCloudProvider string
 	min := float64(-1)
 	cv.mutex.Lock()
-	for _, cp := range cv.cloudProviders.List() {
+	for _, cp := range sets.List(cv.cloudProviders) {
 		m := cv.clusterVolumeMap[cp]
 		for c, v := range m {
 			if cloudProvider == "" || cloudProvider == cp {
@@ -253,29 +257,18 @@ type configResult struct {
 // dispatchJobs loads the Prow jobs and chooses a cluster in the build farm if possible.
 // The current implementation walks through the Prow Job config files.
 // For each file, it tries to assign all jobs in it to a cluster in the build farm.
-//  - When all the e2e tests are targeting the same cloud provider, we run the test pod on the that cloud provider too.
-//  - When the e2e tests are targeting different cloud providers, or there is no e2e tests at all, we can run the tests
-//    on any cluster in the build farm. Those jobs are used to load balance the workload of clusters in the build farm.
+//   - When all the e2e tests are targeting the same cloud provider, we run the test pod on the that cloud provider too.
+//   - When the e2e tests are targeting different cloud providers, or there is no e2e tests at all, we can run the tests
+//     on any cluster in the build farm. Those jobs are used to load balance the workload of clusters in the build farm.
 func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency int, config *dispatcher.Config, jobVolumes map[string]float64) error {
 	if config == nil {
 		return fmt.Errorf("config is nil")
 	}
 
-	disabledClusters := map[api.Cloud][]api.Cluster{}
-
 	// cv stores the volume for each cluster in the build farm
-	cv := &clusterVolume{clusterVolumeMap: map[string]map[string]float64{}, cloudProviders: sets.NewString()}
+	cv := &clusterVolume{clusterVolumeMap: map[string]map[string]float64{}, cloudProviders: sets.New[string]()}
 	for cloudProvider, v := range config.BuildFarm {
-		for cluster, cfg := range v {
-			if cfg.Disabled {
-				if cluster == config.Default {
-					return fmt.Errorf("Default cluster %s is disabled", cluster)
-				}
-				disabledClusters[cloudProvider] = append(disabledClusters[cloudProvider], cluster)
-				delete(config.BuildFarm[cloudProvider], cluster)
-				continue
-			}
-
+		for cluster := range v {
 			cloudProviderString := string(cloudProvider)
 			if _, ok := cv.clusterVolumeMap[cloudProviderString]; !ok {
 				cv.clusterVolumeMap[cloudProviderString] = map[string]float64{}
@@ -374,13 +367,84 @@ func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency i
 		}
 	}
 
-	for provider, clusters := range disabledClusters {
-		for _, cluster := range clusters {
-			config.BuildFarm[provider][cluster] = &dispatcher.BuildFarmConfig{Disabled: true}
+	return utilerrors.NewAggregate(errs)
+}
+
+// getClusterProvider gets information using get request what is the current cloud provider for the given cluster
+func getClusterProvider(cluster string) (api.Cloud, error) {
+	type pageData struct {
+		Data []map[string]string `json:"data"`
+	}
+	resp, err := http.Get("https://cluster-display.ci.openshift.org/api/v1/clusters")
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	var page pageData
+	if err := json.Unmarshal(body, &page); err != nil {
+		return "", err
+	}
+	for _, data := range page.Data {
+		if errMsg, exists := data["error"]; exists && errMsg == "cannot reach cluster" {
+			continue
+		}
+		if c, exists := data["cluster"]; exists && c == cluster {
+			if provider, exists := data["cloud"]; exists {
+				return api.Cloud(strings.ToLower(provider)), nil
+			}
 		}
 	}
+	return "", fmt.Errorf("Have not found provider for cluster %s", cluster)
+}
 
-	return utilerrors.NewAggregate(errs)
+// removeDisabledClusters removes disabled clusters from BuildFarm and BuildFarmConfig
+func removeDisabledClusters(config *dispatcher.Config, disabled sets.Set[string]) {
+	for provider := range config.BuildFarm {
+		for cluster := range config.BuildFarm[provider] {
+			if disabled.Has(string(cluster)) {
+				delete(config.BuildFarm[provider], cluster)
+				if clusters, ok := config.BuildFarmCloud[provider]; ok {
+					c := sets.New[string](clusters...)
+					c = c.Delete(string(cluster))
+					config.BuildFarmCloud[provider] = sets.List(c)
+				}
+			}
+		}
+	}
+}
+
+type clusterProviderGetter func(cluster string) (api.Cloud, error)
+
+// addEnabledClusters adds enabled clusters to the BuildFarm and BuildFarmConfig
+func addEnabledClusters(config *dispatcher.Config, enabled sets.Set[string], getter clusterProviderGetter) {
+	if len(enabled) > 0 && config.BuildFarm == nil {
+		config.BuildFarm = make(map[api.Cloud]map[api.Cluster]*dispatcher.BuildFarmConfig)
+	}
+	for cluster := range enabled {
+		provider, err := getter(cluster)
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to get cluster cloud provider information")
+		}
+		if _, exists := config.BuildFarm[provider][api.Cluster(cluster)]; !exists {
+			if config.BuildFarm[provider] == nil {
+				config.BuildFarm[provider] = make(map[api.Cluster]*dispatcher.BuildFarmConfig)
+			}
+			config.BuildFarm[provider][api.Cluster(cluster)] = &dispatcher.BuildFarmConfig{FilenamesRaw: []string{}, Filenames: sets.New[string]()}
+		}
+		if clusters, ok := config.BuildFarmCloud[provider]; ok {
+			clusters = append(clusters, cluster)
+			config.BuildFarmCloud[provider] = clusters
+		} else {
+			if config.BuildFarmCloud == nil {
+				config.BuildFarmCloud = make(map[api.Cloud][]string)
+			}
+			config.BuildFarmCloud[provider] = []string{cluster}
+		}
+	}
 }
 
 func main() {
@@ -397,6 +461,12 @@ func main() {
 
 	if o.PrometheusOptions.PrometheusPasswordPath != "" {
 		if err := secret.Add(o.PrometheusOptions.PrometheusPasswordPath); err != nil {
+			logrus.WithError(err).Fatal("Failed to start secrets agent")
+		}
+	}
+
+	if o.PrometheusOptions.PrometheusBearerTokenPath != "" {
+		if err := secret.Add(o.PrometheusOptions.PrometheusBearerTokenPath); err != nil {
 			logrus.WithError(err).Fatal("Failed to start secrets agent")
 		}
 	}
@@ -430,18 +500,10 @@ func main() {
 
 	enabled := o.enableClusters.StringSet()
 	disabled := o.disableClusters.StringSet()
-	if len(enabled) > 0 || len(disabled) > 0 {
-		for provider := range config.BuildFarm {
-			for cluster := range config.BuildFarm[provider] {
-				if enabled.Has(string(cluster)) {
-					config.BuildFarm[provider][cluster].Disabled = false
-				}
-				if disabled.Has(string(cluster)) {
-					config.BuildFarm[provider][cluster].Disabled = true
-				}
-			}
-		}
+	if len(disabled) > 0 {
+		removeDisabledClusters(config, disabled)
 	}
+	addEnabledClusters(config, enabled, getClusterProvider)
 
 	logrus.Info("Dispatching ...")
 	if err := dispatchJobs(context.TODO(), o.prowJobConfigDir, o.maxConcurrency, config, jobVolumes); err != nil {
@@ -472,7 +534,7 @@ func main() {
 	}
 
 	title := fmt.Sprintf("%s at %s", matchTitle, time.Now().Format(time.RFC1123))
-	if err := o.PRCreationOptions.UpsertPR(o.targetDir, githubOrg, githubRepo, upstreamBranch, title, prcreation.PrAssignee(o.assign), prcreation.MatchTitle(matchTitle)); err != nil {
+	if err := o.PRCreationOptions.UpsertPR(o.targetDir, githubOrg, githubRepo, upstreamBranch, title, prcreation.PrAssignee(o.assign), prcreation.MatchTitle(matchTitle), prcreation.AdditionalLabels([]string{rehearse.RehearsalsAckLabel})); err != nil {
 		logrus.WithError(err).Fatalf("failed to upsert PR")
 	}
 }

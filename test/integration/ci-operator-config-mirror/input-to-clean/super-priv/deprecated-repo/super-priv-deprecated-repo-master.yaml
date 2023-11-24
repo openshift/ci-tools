@@ -36,4 +36,4 @@ tests:
 zz_generated_metadata:
   branch: master
   org: super-priv
-  repo: duper
+  repo: deprecated-repo

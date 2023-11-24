@@ -8,10 +8,13 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	"github.com/openshift/ci-tools/pkg/rover"
 )
 
 type ldapGroupResolver struct {
-	conn ldapConn
+	conn  ldapConn
+	users []rover.User
 }
 
 type ldapConn interface {
@@ -57,7 +60,7 @@ func (r *ldapGroupResolver) resolve(name string) (*Group, error) {
 		return nil, fmt.Errorf("found %d group with the name: %s", l, name)
 	}
 
-	members := sets.NewString()
+	members := sets.New[string]()
 	entry := result.Entries[0]
 	for _, attribute := range entry.Attributes {
 		for _, value := range attribute.Values {
@@ -75,17 +78,21 @@ func (r *ldapGroupResolver) resolve(name string) (*Group, error) {
 	}
 	return &Group{
 		Name:    name,
-		Members: members.List(),
+		Members: sets.List(members),
 	}, nil
 }
 
-func (r *ldapGroupResolver) getGitHubUserKerberosIDMapping() (map[string]string, error) {
+func (r *ldapGroupResolver) collectGitHubUsers() ([]rover.User, error) {
 	if r.conn == nil {
 		return nil, fmt.Errorf("ldapGroupResolver's connection is nil")
 	}
 
+	if r.users != nil {
+		return r.users, nil
+	}
+
 	searchReq := ldapv3.NewSearchRequest("ou=users,dc=redhat,dc=com", ldapv3.ScopeWholeSubtree, 0, 0, 0,
-		false, "(rhatSocialURL=GitHub*)", []string{"uid", "rhatSocialURL"}, []ldapv3.Control{})
+		false, "(rhatSocialURL=GitHub*)", []string{"uid", "rhatSocialURL", "rhatCostCenter"}, []ldapv3.Control{})
 
 	result, err := r.conn.Search(searchReq)
 	if err != nil {
@@ -97,7 +104,7 @@ func (r *ldapGroupResolver) getGitHubUserKerberosIDMapping() (map[string]string,
 		return nil, nil
 	}
 
-	ret := map[string]string{}
+	var ret []rover.User
 
 	for _, entry := range result.Entries {
 		kerberosID := entry.GetAttributeValue("uid")
@@ -115,7 +122,7 @@ func (r *ldapGroupResolver) getGitHubUserKerberosIDMapping() (map[string]string,
 			logrus.WithField("kerberosID", kerberosID).WithField("entry", entry).Warn("failed to parse GitHub ID")
 			continue
 		}
-		ret[gitHubID] = kerberosID
+		ret = append(ret, rover.User{UID: kerberosID, GitHubUsername: gitHubID, CostCenter: entry.GetAttributeValue("rhatCostCenter")})
 	}
 
 	return ret, nil

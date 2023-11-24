@@ -36,6 +36,9 @@ type WorkspaceDeclaration struct {
 	// ReadOnly dictates whether a mounted volume is writable. By default this
 	// field is false and so mounted volumes are writable.
 	ReadOnly bool `json:"readOnly,omitempty"`
+	// Optional marks a Workspace as not being required in TaskRuns. By default
+	// this field is false and so declared workspaces are required.
+	Optional bool `json:"optional,omitempty"`
 }
 
 // GetMountPath returns the mountPath for w which is the MountPath if provided or the
@@ -74,10 +77,17 @@ type WorkspaceBinding struct {
 	// Secret represents a secret that should populate this workspace.
 	// +optional
 	Secret *corev1.SecretVolumeSource `json:"secret,omitempty"`
+	// Projected represents a projected volume that should populate this workspace.
+	// +optional
+	Projected *corev1.ProjectedVolumeSource `json:"projected,omitempty"`
+	// CSI (Container Storage Interface) represents ephemeral storage that is handled by certain external CSI drivers.
+	// +optional
+	CSI *corev1.CSIVolumeSource `json:"csi,omitempty"`
 }
 
 // WorkspacePipelineDeclaration creates a named slot in a Pipeline that a PipelineRun
 // is expected to populate with a workspace binding.
+//
 // Deprecated: use PipelineWorkspaceDeclaration type instead
 type WorkspacePipelineDeclaration = PipelineWorkspaceDeclaration
 
@@ -91,6 +101,9 @@ type PipelineWorkspaceDeclaration struct {
 	// tasks are intended to have access to the data on the workspace.
 	// +optional
 	Description string `json:"description,omitempty"`
+	// Optional marks a Workspace as not being required in PipelineRuns. By default
+	// this field is false and so declared workspaces are required.
+	Optional bool `json:"optional,omitempty"`
 }
 
 // WorkspacePipelineTaskBinding describes how a workspace passed into the pipeline should be
@@ -99,9 +112,20 @@ type WorkspacePipelineTaskBinding struct {
 	// Name is the name of the workspace as declared by the task
 	Name string `json:"name"`
 	// Workspace is the name of the workspace declared by the pipeline
-	Workspace string `json:"workspace"`
+	// +optional
+	Workspace string `json:"workspace,omitempty"`
 	// SubPath is optionally a directory on the volume which should be used
 	// for this binding (i.e. the volume will be mounted at this sub directory).
 	// +optional
 	SubPath string `json:"subPath,omitempty"`
+}
+
+// WorkspaceUsage is used by a Step or Sidecar to declare that it wants isolated access
+// to a Workspace defined in a Task.
+type WorkspaceUsage struct {
+	// Name is the name of the workspace this Step or Sidecar wants access to.
+	Name string `json:"name"`
+	// MountPath is the path that the workspace should be mounted to inside the Step or Sidecar,
+	// overriding any MountPath specified in the Task's WorkspaceDeclaration.
+	MountPath string `json:"mountPath"`
 }

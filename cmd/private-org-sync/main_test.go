@@ -10,7 +10,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
-	"github.com/openshift/ci-tools/pkg/promotion"
 )
 
 func TestOptionsValidate(t *testing.T) {
@@ -104,10 +103,10 @@ func TestOptionsMakeFilter(t *testing.T) {
 		},
 	}
 	// Check that our assumptions about what is an official image still holds
-	if !promotion.BuildsOfficialImages(official, promotion.WithoutOKD) {
+	if !api.BuildsAnyOfficialImages(official, api.WithoutOKD) {
 		t.Fatal("Test data assumed to be official images are not official images")
 	}
-	if promotion.BuildsOfficialImages(notOfficial, promotion.WithoutOKD) {
+	if api.BuildsAnyOfficialImages(notOfficial, api.WithoutOKD) {
 		t.Fatal("Test data assumed to be non-official images are official images")
 	}
 	testcases := []struct {
@@ -216,18 +215,17 @@ type mockGit struct {
 	next     int
 	expected []mockGitCall
 
-	tc string
-	t  *testing.T
+	t *testing.T
 }
 
 func (m *mockGit) exec(_ *logrus.Entry, _ string, command ...string) (string, int, error) {
 	cmd := strings.Join(command, " ")
 	if m.next >= len(m.expected) {
-		m.t.Fatalf("%s:\nunexpected git call: %s", m.tc, cmd)
+		m.t.Fatalf("unexpected git call: %s", cmd)
 		return "", 0, nil
 	}
 	if m.expected[m.next].call != cmd {
-		m.t.Fatalf("%s:\nunexpected git call:\n  expected: %s\n  called:   %s", m.tc, m.expected[m.next].call, cmd)
+		m.t.Fatalf("unexpected git call:\n  expected: %s\n  called:   %s", m.expected[m.next].call, cmd)
 		return "", 0, nil
 	}
 
@@ -618,16 +616,41 @@ func TestMirror(t *testing.T) {
 				{call: "merge --abort"},
 			},
 		},
+		{
+			description: "conflicting histories after a force-push result in an error",
+			src:         location{org: org, repo: repo, branch: branch},
+			dst:         location{org: destOrg, repo: repo, branch: branch},
+			expectedGitCalls: []mockGitCall{
+				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo"},
+				{call: "init"},
+				{call: "remote get-url org-repo"},
+				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
+				{call: "fetch --tags org-repo branch"},
+				{
+					call: "push --tags --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch",
+					output: `To https://TOKEN@github.com/dest/repo
+ ! [rejected]        branch -> branch (non-fast-forward)
+error: failed to push some refs to 'https://TOKEN@github.com/dest/repo'
+hint: Updates were rejected because the tip of your current branch is behind
+hint: its remote counterpart. Integrate the remote changes (e.g.
+hint: 'git pull ...') before pushing again.
+hint: See the 'Note about fast-forwards' in 'git push --help' for details.
+`,
+					exitCode: 1,
+				},
+			},
+			expectError: true,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			git := mockGit{
 				expected: tc.expectedGitCalls,
-				tc:       tc.description,
 				t:        t,
 			}
 			m := gitSyncer{
 				logger:               logrus.WithField("test", tc.description),
+				prefix:               defaultPrefix,
 				token:                token,
 				confirm:              tc.confirm,
 				root:                 "git-dir",
@@ -638,13 +661,13 @@ func TestMirror(t *testing.T) {
 			}
 			err := m.mirror("repo-dir", tc.src, tc.dst)
 			if err == nil && tc.expectError {
-				t.Errorf("%s:\nexpected error, got nil", tc.description)
+				t.Error("expected error, got nil")
 			}
 			if err != nil && !tc.expectError {
-				t.Errorf("%s:\nunexpected error: %v", tc.description, err)
+				t.Errorf("unexpected error: %v", err)
 			}
 			if err = git.check(); err != nil {
-				t.Errorf("%s:\nbad git operation: %v", tc.description, err)
+				t.Errorf("bad git operation: %v", err)
 			}
 		})
 	}

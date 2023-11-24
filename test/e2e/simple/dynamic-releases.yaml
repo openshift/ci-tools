@@ -2,38 +2,38 @@ base_images:
   os:
     name: centos
     namespace: openshift
-    tag: '7'
+    tag: 'stream9'
 releases:
   initial:
     candidate:
       product: okd
-      version: "4.3"
+      version: "4.10"
   latest:
     release:
       channel: stable
-      version: "4.4"
+      version: "4.11"
   custom:
     candidate:
       product: ocp
       architecture: amd64
       stream: nightly
-      version: "4.10"
+      version: "4.11"
       relative: 1
   pre:
     prerelease:
       product: ocp
       version_bounds:
-        lower: "4.4.0"
-        upper: "4.10.0-0"
+        lower: "4.10.0"
+        upper: "4.11.0-0"
   mainframe:
     release:
-      version: "4.7"
+      version: "4.11"
       channel: stable
       architecture: s390x
   assembled:
     integration:
       namespace: ocp
-      name: "4.7"
+      name: "4.11"
 resources:
   '*':
     requests:

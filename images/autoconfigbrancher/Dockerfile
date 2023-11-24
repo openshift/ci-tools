@@ -12,6 +12,7 @@ ADD template-deprecator /usr/bin/template-deprecator
 ADD registry-replacer /usr/bin/registry-replacer
 ADD ci-operator-yaml-creator /usr/bin/ci-operator-yaml-creator
 ADD clusterimageset-updater /usr/bin/clusterimageset-updater
+ADD promoted-image-governor /usr/bin/promoted-image-governor
 
 RUN dnf install -y git && \
     dnf clean all && \

@@ -64,27 +64,27 @@ type context struct {
 	// env is used to validate that all step parameters are set.
 	env api.TestEnvironment
 	// namesSeen is used to validate that step names are unique.
-	namesSeen sets.String
+	namesSeen sets.Set[string]
 	// leasesSeen is used to validate that lease variable names are unique.
-	leasesSeen sets.String
+	leasesSeen sets.Set[string]
 	// inputImagesSeen is used to accumulate input images across tests.
 	inputImagesSeen testInputImages
 	// releases is used to validate references to release images .
-	releases sets.String
+	releases sets.Set[string]
 }
 
 // newContext creates a top-level context.
 func newContext(
 	field fieldPath,
 	env api.TestEnvironment,
-	releases sets.String,
+	releases sets.Set[string],
 	inputImagesSeen testInputImages,
 ) *context {
 	return &context{
 		field:           field,
 		env:             env,
-		namesSeen:       sets.NewString(),
-		leasesSeen:      sets.NewString(),
+		namesSeen:       sets.New[string](),
+		leasesSeen:      sets.New[string](),
 		inputImagesSeen: inputImagesSeen,
 		releases:        releases,
 	}
@@ -119,7 +119,7 @@ func (v *Validator) validateTestStepConfiguration(
 	fieldRoot string,
 	input []api.TestStepConfiguration,
 	release *api.ReleaseTagConfiguration,
-	releases, images sets.String,
+	releases, images sets.Set[string],
 	resolved bool,
 ) []error {
 	var validationErrors []error
@@ -156,6 +156,9 @@ func (v *Validator) validateTestStepConfiguration(
 		if test.Postsubmit && test.Interval != nil {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `interval` and `postsubmit` are mututally exclusive", fieldRootN))
 		}
+		if test.Postsubmit && test.MinimumInterval != nil {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `minimum_interval` and `postsubmit` are mututally exclusive", fieldRootN))
+		}
 		if test.Postsubmit && test.Optional {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `optional` and `postsubmit` are mututally exclusive", fieldRootN))
 		}
@@ -163,14 +166,23 @@ func (v *Validator) validateTestStepConfiguration(
 		if test.Cron != nil && test.Interval != nil {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `interval` and `cron` cannot both be set", fieldRootN))
 		}
+		if test.Cron != nil && test.MinimumInterval != nil {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `cron` and `minimum_interval` cannot both be set", fieldRootN))
+		}
+		if test.MinimumInterval != nil && test.Interval != nil {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `interval` and `minimum_interval` cannot both be set", fieldRootN))
+		}
 		if test.Cron != nil && test.ReleaseController {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `cron` cannot be set for release controller jobs", fieldRootN))
 		}
 		if test.Interval != nil && test.ReleaseController {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `interval` cannot be set for release controller jobs", fieldRootN))
 		}
-		if (test.Cron != nil || test.Interval != nil) && (test.RunIfChanged != "" || test.SkipIfOnlyChanged != "" || test.Optional) {
-			validationErrors = append(validationErrors, fmt.Errorf("%s: `cron` and `interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`", fieldRootN))
+		if test.MinimumInterval != nil && test.ReleaseController {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `minimum_interval` cannot be set for release controller jobs", fieldRootN))
+		}
+		if (test.Cron != nil || test.Interval != nil || test.MinimumInterval != nil) && (test.RunIfChanged != "" || test.SkipIfOnlyChanged != "" || test.Optional) {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `cron`/`interval`/`minimum_interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`", fieldRootN))
 		}
 		if test.RunIfChanged != "" && test.SkipIfOnlyChanged != "" {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `run_if_changed` and `skip_if_only_changed` are mutually exclusive", fieldRootN))
@@ -181,7 +193,11 @@ func (v *Validator) validateTestStepConfiguration(
 				validationErrors = append(validationErrors, fmt.Errorf("%s: cannot parse interval: %w", fieldRootN, err))
 			}
 		}
-
+		if test.MinimumInterval != nil {
+			if _, err := time.ParseDuration(*test.MinimumInterval); err != nil {
+				validationErrors = append(validationErrors, fmt.Errorf("%s: cannot parse minimum_interval: %w", fieldRootN, err))
+			}
+		}
 		if test.Cron != nil {
 			if _, err := cron.Parse(*test.Cron); err != nil {
 				validationErrors = append(validationErrors, fmt.Errorf("%s: cannot parse cron: %w", fieldRootN, err))
@@ -206,7 +222,7 @@ func (v *Validator) validateTestStepConfiguration(
 			validationErrors = append(validationErrors, fmt.Errorf("%s: secret/secrets can be only used with container-based tests (use credentials in multi-stage tests)", fieldRootN))
 		}
 
-		seen := sets.NewString()
+		seen := sets.New[string]()
 		for _, secret := range test.Secrets {
 			// K8s object names must be valid DNS 1123 subdomains.
 			if len(validation.IsDNS1123Subdomain(secret.Name)) != 0 {
@@ -435,7 +451,7 @@ func (v *Validator) validateTestConfigurationType(
 	fieldRoot string,
 	test api.TestStepConfiguration,
 	release *api.ReleaseTagConfiguration,
-	releases sets.String,
+	releases sets.Set[string],
 	inputImagesSeen testInputImages,
 	resolved bool,
 ) []error {
@@ -614,48 +630,11 @@ func (v *Validator) validateLiteralTestStep(context *context, stage testStage, s
 			context.namesSeen.Insert(step.As)
 		}
 	}
-	if len(step.From) == 0 && step.FromImage == nil {
-		ret = append(ret, context.errorf("`from` or `from_image` is required"))
-	} else if len(step.From) != 0 && step.FromImage != nil {
-		ret = append(ret, context.errorf("`from` and `from_image` cannot be set together"))
-	} else if step.FromImage != nil {
-		imgCtx := context.addField("from_image")
-		if step.FromImage.Namespace == "" {
-			ret = append(ret, imgCtx.errorf("`namespace` is required"))
-		}
-		if step.FromImage.Name == "" {
-			ret = append(ret, imgCtx.errorf("`name` is required"))
-		}
-		if step.FromImage.Tag == "" {
-			ret = append(ret, imgCtx.errorf("`tag` is required"))
-		}
-		if context.inputImagesSeen != nil {
-			if tag, ok := step.FromImageTag(); ok {
-				if _, ok := context.inputImagesSeen[tag]; !ok {
-					context.inputImagesSeen[tag] = imgCtx.field
-				}
-			}
-		}
-	} else {
-		imageParts := strings.Split(step.From, ":")
-		if len(imageParts) > 2 {
-			ret = append(ret, context.addField("from").errorf("'%s' is not a valid imagestream reference", step.From))
-		}
-		for i, obj := range imageParts {
-			if len(validation.IsDNS1123Subdomain(obj)) != 0 {
-				ret = append(ret, context.addField("from").errorf("'%s' is not a valid Kubernetes object name", obj))
-			} else if i == 0 && len(imageParts) == 2 {
-				switch obj {
-				case api.PipelineImageStream, api.ReleaseStreamFor(api.LatestReleaseName), api.ReleaseStreamFor(api.InitialReleaseName), api.ReleaseImageStream:
-				default:
-					releaseName := api.ReleaseNameFrom(obj)
-					if !context.releases.Has(releaseName) && (claimRelease == nil || releaseName != claimRelease.OverrideName) {
-						ret = append(ret, context.addField("from").errorf("unknown imagestream '%s'", imageParts[0]))
-					}
-				}
-			}
-		}
+	var fromImageTag *api.PipelineImageStreamTagReference
+	if t, ok := step.FromImageTag(); ok {
+		fromImageTag = &t
 	}
+	ret = append(ret, validateFromAndFromImage(context, step.From, step.FromImage, fromImageTag, claimRelease)...)
 	if len(step.Commands) == 0 {
 		ret = append(ret, context.errorf("`commands` is required"))
 	} else {
@@ -681,7 +660,58 @@ func (v *Validator) validateLiteralTestStep(context *context, stage testStage, s
 			ret = append(ret, context.errorf("`optional_on_success` is only allowed for Post steps"))
 		}
 	}
-	return
+	return ret
+}
+
+func validateFromAndFromImage(
+	context *context,
+	from string,
+	fromImage *api.ImageStreamTagReference,
+	fromImageTag *api.PipelineImageStreamTagReference,
+	claimRelease *api.ClaimRelease,
+) []error {
+	var ret []error
+	if len(from) == 0 && fromImage == nil {
+		ret = append(ret, context.errorf("`from` or `from_image` is required"))
+	} else if len(from) != 0 && fromImage != nil {
+		ret = append(ret, context.errorf("`from` and `from_image` cannot be set together"))
+	} else if fromImage != nil {
+		imgCtx := context.addField("from_image")
+		if fromImage.Namespace == "" {
+			ret = append(ret, imgCtx.errorf("`namespace` is required"))
+		}
+		if fromImage.Name == "" {
+			ret = append(ret, imgCtx.errorf("`name` is required"))
+		}
+		if fromImage.Tag == "" {
+			ret = append(ret, imgCtx.errorf("`tag` is required"))
+		}
+		if context.inputImagesSeen != nil && fromImageTag != nil {
+			if _, ok := context.inputImagesSeen[*fromImageTag]; !ok {
+				context.inputImagesSeen[*fromImageTag] = imgCtx.field
+			}
+		}
+	} else {
+		imageParts := strings.Split(from, ":")
+		if len(imageParts) > 2 {
+			ret = append(ret, context.addField("from").errorf("'%s' is not a valid imagestream reference", from))
+		}
+		for i, obj := range imageParts {
+			if len(validation.IsDNS1123Subdomain(obj)) != 0 {
+				ret = append(ret, context.addField("from").errorf("'%s' is not a valid Kubernetes object name", obj))
+			} else if i == 0 && len(imageParts) == 2 {
+				switch obj {
+				case api.PipelineImageStream, api.ReleaseStreamFor(api.LatestReleaseName), api.ReleaseStreamFor(api.InitialReleaseName), api.ReleaseImageStream:
+				default:
+					releaseName := api.ReleaseNameFrom(obj)
+					if !context.releases.Has(releaseName) && (claimRelease == nil || releaseName != claimRelease.OverrideName) {
+						ret = append(ret, context.addField("from").errorf("unknown imagestream '%s'", imageParts[0]))
+					}
+				}
+			}
+		}
+	}
+	return ret
 }
 
 func (v *Validator) validateCommands(test api.LiteralTestStep) []error {
@@ -768,7 +798,7 @@ func validateParameters(context *context, params []api.StepParameter) error {
 
 func validateDependencies(fieldRoot string, dependencies []api.StepDependency) []error {
 	var errs []error
-	env := sets.NewString()
+	env := sets.New[string]()
 	for i, dependency := range dependencies {
 		if dependency.Name == "" {
 			errs = append(errs, fmt.Errorf("%s.dependencies[%d].name must be set", fieldRoot, i))

@@ -18,13 +18,14 @@ import (
 type options struct {
 	promotion.FutureOptions
 
-	BumpRelease string
+	BumpRelease   string
+	skipPeriodics bool
 }
 
 func (o *options) Validate() error {
-	futureReleases := sets.NewString(o.FutureReleases.Strings()...)
+	futureReleases := sets.New[string](o.FutureReleases.Strings()...)
 	if o.BumpRelease != "" && !futureReleases.Has(o.BumpRelease) {
-		return fmt.Errorf("future releases %v do not contain bump release %v", futureReleases.List(), o.BumpRelease)
+		return fmt.Errorf("future releases %v do not contain bump release %v", sets.List(futureReleases), o.BumpRelease)
 	}
 
 	return o.FutureOptions.Validate()
@@ -38,6 +39,7 @@ func (o *options) Bind(fs *flag.FlagSet) {
 func gatherOptions() options {
 	o := options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	fs.BoolVar(&o.skipPeriodics, "skip-periodics", false, "Do not duplicate periodics configuration for the current and future releases.")
 	o.Bind(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse input")
@@ -53,15 +55,15 @@ func gatherOptions() options {
 // repos that actively promote to this release are considered to be our dev branches.
 //
 // Once we've chosen a set of configurations to operate on, we can do one of two actions:
-//  - mirror configuration out, copying the development branch config to all branches for
-//    the provided `--future-release` values, not changing the configuration for the dev
-//    branch and making sure that the release branch for the version that matches that in
-//    the dev branch has a disabled promotion stanza to ensure only one branch feeds a
-//    release ImageStream
-//  - bump configuration files, moving the development branch to promote to the version in
-//    the `--bump` flag, enabling the promotion in the release branch that used to match
-//    the dev branch version and disabling promotion in the release branch that now matches
-//    the dev branch version.
+//   - mirror configuration out, copying the development branch config to all branches for
+//     the provided `--future-release` values, not changing the configuration for the dev
+//     branch and making sure that the release branch for the version that matches that in
+//     the dev branch has a disabled promotion stanza to ensure only one branch feeds a
+//     release ImageStream
+//   - bump configuration files, moving the development branch to promote to the version in
+//     the `--bump` flag, enabling the promotion in the release branch that used to match
+//     the dev branch version and disabling promotion in the release branch that now matches
+//     the dev branch version.
 func main() {
 	o := gatherOptions()
 	if err := o.Validate(); err != nil {
@@ -69,8 +71,8 @@ func main() {
 	}
 
 	var toCommit []config.DataWithInfo
-	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, promotion.WithOKD, func(configuration *api.ReleaseBuildConfiguration, info *config.Info) error {
-		for _, output := range generateBranchedConfigs(o.CurrentRelease, o.BumpRelease, o.FutureReleases.Strings(), config.DataWithInfo{Configuration: *configuration, Info: *info}) {
+	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, api.WithOKD, func(configuration *api.ReleaseBuildConfiguration, info *config.Info) error {
+		for _, output := range generateBranchedConfigs(o.CurrentRelease, o.BumpRelease, o.FutureReleases.Strings(), config.DataWithInfo{Configuration: *configuration, Info: *info}, o.skipPeriodics) {
 			if !o.Confirm {
 				output.Logger().Info("Would commit new file.")
 				continue
@@ -96,7 +98,7 @@ func main() {
 	}
 }
 
-func generateBranchedConfigs(currentRelease, bumpRelease string, futureReleases []string, input config.DataWithInfo) []config.DataWithInfo {
+func generateBranchedConfigs(currentRelease, bumpRelease string, futureReleases []string, input config.DataWithInfo, skipPeriodics bool) []config.DataWithInfo {
 	var output []config.DataWithInfo
 	input.Logger().Info("Branching configuration.")
 	currentConfig := input.Configuration
@@ -131,14 +133,17 @@ func generateBranchedConfigs(currentRelease, bumpRelease string, futureReleases 
 
 		// the new config will point to the future release
 		updateRelease(&futureConfig, futureRelease)
-		// we cannot have two configs promoting to the same output, so
-		// we need to make sure the release branch config is disabled
-		futureConfig.PromotionConfiguration.Disabled = futureRelease == devRelease
+
+		updatePromotion(&currentConfig, &futureConfig, currentRelease, futureRelease, devRelease)
+
 		// users can reference the release streams via build roots or
 		// input images, so we need to update those, too
 		updateImages(&futureConfig, devRelease, futureRelease)
 		// we need to make sure this relates to the right branch
 		futureConfig.Metadata.Branch = futureBranch
+		if skipPeriodics {
+			removePeriodics(&futureConfig.Tests)
+		}
 
 		// this config will promote to the new location on the release branch
 		output = append(output, config.DataWithInfo{Configuration: futureConfig, Info: copyInfoSwappingBranches(input.Info, futureBranch)})
@@ -146,10 +151,49 @@ func generateBranchedConfigs(currentRelease, bumpRelease string, futureReleases 
 	return output
 }
 
+// removePeriodics removes periodic tests from the configuration
+func removePeriodics(tests *[]api.TestStepConfiguration) {
+	for i := len(*tests) - 1; i >= 0; i-- {
+		if !(*tests)[i].Portable && (*tests)[i].IsPeriodic() {
+			*tests = append((*tests)[:i], (*tests)[i+1:]...)
+		}
+	}
+}
+
+func updatePromotion(currentConfig, futureConfig *api.ReleaseBuildConfiguration, currentRelease, futureRelease, devRelease string) {
+	if currentConfig.PromotionConfiguration == nil {
+		return
+	}
+
+	currentPromotion := currentConfig.PromotionConfiguration
+	futurePromotion := futureConfig.PromotionConfiguration
+
+	if currentPromotion.Name != "" || currentPromotion.Tag != "" {
+		// we cannot have two configs promoting to the same output, so
+		// we need to make sure the release branch config is disabled
+		futurePromotion.Disabled = futureRelease == devRelease
+	}
+
+	if currentPromotion.Targets == nil {
+		return
+	}
+
+	// filter and upgrade .promotion.to[] releases that promote to the current release
+	newTargets := make([]api.PromotionTarget, 0, len(currentPromotion.Targets))
+	for _, target := range currentPromotion.Targets {
+		if target.Name == currentRelease {
+			target.Name = futureRelease
+			target.Disabled = futureRelease == devRelease
+			newTargets = append(newTargets, target)
+		}
+	}
+	futurePromotion.Targets = newTargets
+}
+
 // updateRelease updates the release that is promoted to and that
 // which is used to source the release payload for testing
 func updateRelease(config *api.ReleaseBuildConfiguration, futureRelease string) {
-	if config.PromotionConfiguration != nil {
+	if config.PromotionConfiguration != nil && config.PromotionConfiguration.Name != "" {
 		config.PromotionConfiguration.Name = futureRelease
 	}
 	if config.ReleaseTagConfiguration != nil {
@@ -169,7 +213,7 @@ func updateRelease(config *api.ReleaseBuildConfiguration, futureRelease string) 
 func updateImages(config *api.ReleaseBuildConfiguration, currentRelease, futureRelease string) {
 	for name := range config.InputConfiguration.BaseImages {
 		image := config.InputConfiguration.BaseImages[name]
-		if promotion.RefersToOfficialImage(image.Namespace, promotion.WithOKD) && image.Name == currentRelease {
+		if api.RefersToOfficialImage(image.Namespace, api.WithOKD) && image.Name == currentRelease {
 			image.Name = futureRelease
 		}
 		config.InputConfiguration.BaseImages[name] = image
@@ -177,7 +221,7 @@ func updateImages(config *api.ReleaseBuildConfiguration, currentRelease, futureR
 
 	for i := range config.InputConfiguration.BaseRPMImages {
 		image := config.InputConfiguration.BaseRPMImages[i]
-		if promotion.RefersToOfficialImage(image.Namespace, promotion.WithOKD) && image.Name == currentRelease {
+		if api.RefersToOfficialImage(image.Namespace, api.WithOKD) && image.Name == currentRelease {
 			image.Name = futureRelease
 		}
 		config.InputConfiguration.BaseRPMImages[i] = image
@@ -185,7 +229,7 @@ func updateImages(config *api.ReleaseBuildConfiguration, currentRelease, futureR
 
 	if config.InputConfiguration.BuildRootImage != nil {
 		image := config.InputConfiguration.BuildRootImage.ImageStreamTagReference
-		if image != nil && promotion.RefersToOfficialImage(image.Namespace, promotion.WithOKD) && image.Name == currentRelease {
+		if image != nil && api.RefersToOfficialImage(image.Namespace, api.WithOKD) && image.Name == currentRelease {
 			image.Name = futureRelease
 		}
 		config.InputConfiguration.BuildRootImage.ImageStreamTagReference = image

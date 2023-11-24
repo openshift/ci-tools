@@ -1,0 +1,8 @@
+apiVersion: image.openshift.io/v1
+image:
+kind: ImageStreamTag
+lookupPolicy:
+  local: false
+metadata:
+  name: pipeline:v4.10
+  namespace: ns

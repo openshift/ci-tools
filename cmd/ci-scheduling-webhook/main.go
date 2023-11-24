@@ -4,11 +4,19 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
+	"log"
+	"math/big"
+	"net/http"
+	"os"
+	"time"
+
 	"github.com/spf13/cobra"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/dynamic"
@@ -16,15 +24,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
-	"log"
-	"math/big"
-	"os"
-	"time"
-)
-
-import (
-	"crypto/tls"
-	"net/http"
 )
 
 const (
@@ -50,7 +49,7 @@ var (
 func generateTestCertificate() (*tls.Certificate, error) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
-		return nil, fmt.Errorf("test private key cannot be created: %v", err.Error())
+		return nil, fmt.Errorf("test private key cannot be created: %w", err)
 	}
 
 	// Generate a pem block with the private key
@@ -73,7 +72,7 @@ func generateTestCertificate() (*tls.Certificate, error) {
 	}
 	cert, err := x509.CreateCertificate(rand.Reader, &tml, &tml, &key.PublicKey, key)
 	if err != nil {
-		return nil, fmt.Errorf("test certificate key cannot be created: %v", err.Error())
+		return nil, fmt.Errorf("test certificate key cannot be created: %w", err)
 	}
 
 	// Generate a pem block with the certificate
@@ -84,7 +83,7 @@ func generateTestCertificate() (*tls.Certificate, error) {
 
 	tlsCert, err := tls.X509KeyPair(certPem, keyPem)
 	if err != nil {
-		return nil, fmt.Errorf("test certificate could not be loaded: %v", err.Error())
+		return nil, fmt.Errorf("test certificate could not be loaded: %w", err)
 	}
 
 	return &tlsCert, nil
@@ -142,10 +141,14 @@ func Run(_ *cobra.Command, _ []string) {
 	}
 
 	dynamicClient, err := dynamic.NewForConfig(config)
+	if err != nil {
+		klog.Errorf("Error initializing dynamic client: %v", err)
+		os.Exit(1)
+	}
 
 	prioritization = Prioritization{
-		context:      ctx,
-		k8sClientSet: clientSet,
+		context:       ctx,
+		k8sClientSet:  clientSet,
 		dynamicClient: dynamicClient,
 	}
 	err = prioritization.initializePrioritization()

@@ -4,15 +4,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/http"
+	"strings"
+	"time"
+
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
-	"net/http"
-	"strings"
-	"time"
 )
 
 const (
@@ -69,20 +70,20 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(statusCode)
 		_, err = w.Write([]byte(msg))
 		if err != nil {
-			klog.Errorf("Unable to return http error response to caller: %v", err)
+			klog.Errorf("Unable to return http error response to caller: %w", err)
 		}
 	}
 
 	// Parse the AdmissionReview from the http request.
 	admissionReviewRequest, err := admissionReviewFromRequest(r, deserializer)
 	if err != nil {
-		writeHttpError(400, fmt.Errorf("error getting admission review from request: %v", err))
+		writeHttpError(400, fmt.Errorf("error getting admission review from request: %w", err))
 		return
 	}
 
 	nodeResource := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "nodes"}
 	if admissionReviewRequest.Request == nil || admissionReviewRequest.Request.Resource == nodeResource {
-		mutateNode(admissionReviewRequest, w, r)
+		mutateNode(admissionReviewRequest, w)
 		return
 	}
 
@@ -99,7 +100,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 	rawRequest := admissionReviewRequest.Request.Object.Raw
 	pod := corev1.Pod{}
 	if _, _, err := deserializer.Decode(rawRequest, nil, &pod); err != nil {
-		writeHttpError(500, fmt.Errorf("error decoding raw pod: %v", err))
+		writeHttpError(500, fmt.Errorf("error decoding raw pod: %w", err))
 		return
 	}
 
@@ -263,7 +264,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		nodeSelector[CiWorkloadLabelName] = string(podClass)
 		addPatchEntry("add", "/spec/nodeSelector", nodeSelector)
 
-		precludedHostnames, err := prioritization.findHostnamesToPreclude(podClass)
+		precludedHostnames := prioritization.findHostnamesToPreclude(podClass)
 
 		affinity := corev1.Affinity{
 			NodeAffinity: &corev1.NodeAffinity{},
@@ -321,7 +322,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		if affinityChanged {
 			unstructuredAffinity, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&affinity)
 			if err != nil {
-				writeHttpError(500, fmt.Errorf("error decoding affinity to unstructured data: %v", err))
+				writeHttpError(500, fmt.Errorf("error decoding affinity to unstructured data: %w", err))
 				return
 			}
 
@@ -377,7 +378,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 			}
 			unstructedInitContainersMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&initContainersMap)
 			if err != nil {
-				writeHttpError(500, fmt.Errorf("error decoding initContainers to unstructured data: %v", err))
+				writeHttpError(500, fmt.Errorf("error decoding initContainers to unstructured data: %w", err))
 				return
 			}
 
@@ -398,7 +399,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		marshalled, err := json.Marshal(patchEntries)
 		if err != nil {
 			klog.Errorf("Error marshalling JSON patch (%v) from: %v", patchEntries)
-			writeHttpError(500, fmt.Errorf("error marshalling jsonpatch: %v", err))
+			writeHttpError(500, fmt.Errorf("error marshalling jsonpatch: %w", err))
 			return
 		}
 		patch = marshalled
@@ -419,7 +420,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := json.Marshal(admissionReviewResponse)
 	if err != nil {
-		writeHttpError(500, fmt.Errorf("error marshalling admission review reponse: %v", err))
+		writeHttpError(500, fmt.Errorf("error marshalling admission review response: %w", err))
 		return
 	}
 	profile("ready to write response")
@@ -431,7 +432,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func mutateNode(admissionReviewRequest *admissionv1.AdmissionReview, w http.ResponseWriter, r *http.Request) {
+func mutateNode(admissionReviewRequest *admissionv1.AdmissionReview, w http.ResponseWriter) {
 	start := time.Now()
 	lastProfileTime := &start
 
@@ -460,7 +461,7 @@ func mutateNode(admissionReviewRequest *admissionv1.AdmissionReview, w http.Resp
 	rawRequest := admissionReviewRequest.Request.Object.Raw
 	node := corev1.Node{}
 	if _, _, err := deserializer.Decode(rawRequest, nil, &node); err != nil {
-		writeHttpError(500, fmt.Errorf("error decoding raw node: %v", err))
+		writeHttpError(500, fmt.Errorf("error decoding raw node: %w", err))
 		return
 	}
 
@@ -517,7 +518,7 @@ func mutateNode(admissionReviewRequest *admissionv1.AdmissionReview, w http.Resp
 		marshalled, err := json.Marshal(patchEntries)
 		if err != nil {
 			klog.Errorf("Error marshalling JSON patch (%v) from: %v", patchEntries)
-			writeHttpError(500, fmt.Errorf("error marshalling jsonpatch: %v", err))
+			writeHttpError(500, fmt.Errorf("error marshalling jsonpatch: %w", err))
 			return
 		}
 		patch = marshalled
@@ -525,7 +526,7 @@ func mutateNode(admissionReviewRequest *admissionv1.AdmissionReview, w http.Resp
 
 	admissionResponse.Allowed = true
 	if len(patch) > 0 {
-		klog.InfoS("Incoming node to be modified", "podClass", podClass, "node", fmt.Sprintf(nodeName))
+		klog.Info("Incoming node to be modified", "podClass", podClass, "node", nodeName)
 		admissionResponse.PatchType = &patchType
 		admissionResponse.Patch = patch
 	}
@@ -538,7 +539,7 @@ func mutateNode(admissionReviewRequest *admissionv1.AdmissionReview, w http.Resp
 
 	resp, err := json.Marshal(admissionReviewResponse)
 	if err != nil {
-		writeHttpError(500, fmt.Errorf("error marshalling admission review reponse: %v", err))
+		writeHttpError(500, fmt.Errorf("error marshalling admission review response: %w", err))
 		return
 	}
 	profile("ready to write response")

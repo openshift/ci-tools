@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -35,13 +36,13 @@ type manifestPusher struct {
 	dockercfgPath string
 }
 
-// pushOutputImageWithManifest constructs a manifest-tool command to create and push a new image with all images that we built
+// PushImageWithManifest constructs a manifest-tool command to create and push a new image with all images that we built
 // in the manifest list based on their architecture.
 //
 // Example command:
 // /usr/bin/manifest-tool push from-args \
-// --platforms linux/amd64 --template registry.multi-build01.arm-build.devcluster.openshift.com/ci/managed-clonerefs:latest-amd64 \
-// --platforms linux/arm64 --template registry.multi-build01.arm-build.devcluster.openshift.com/ci/managed-clonerefs:latest-arm64 \
+// --platforms linux/amd64,linux/arm64 \
+// --template registry.multi-build01.arm-build.devcluster.openshift.com/ci/managed-clonerefs:latest-ARCH \
 // --target registry.multi-build01.arm-build.devcluster.openshift.com/ci/managed-clonerefs:latest
 func (m manifestPusher) PushImageWithManifest(builds []buildv1.Build, targetImageRef string) error {
 	return wait.ExponentialBackoff(wait.Backoff{
@@ -50,27 +51,7 @@ func (m manifestPusher) PushImageWithManifest(builds []buildv1.Build, targetImag
 		Factor:   2.0,
 		Jitter:   0.1,
 	}, func() (bool, error) {
-		args := []string{
-			"--debug",
-			"--insecure",
-			"--docker-cfg", m.dockercfgPath,
-			"push", "from-args",
-		}
-		for i := range builds {
-			build := &builds[i]
-			args = append(args, []string{
-				"--platforms",
-				fmt.Sprintf("linux/%s", build.Spec.NodeSelector[nodeArchitectureLabel]),
-				"--template",
-				fmt.Sprintf("%s/%s/%s", m.registryURL, build.Spec.Output.To.Namespace, build.Spec.Output.To.Name),
-			}...)
-		}
-
-		args = append(args, []string{
-			"--target",
-			fmt.Sprintf("%s/%s", m.registryURL, targetImageRef),
-		}...)
-
+		args := m.args(builds, targetImageRef)
 		cmd := exec.Command("manifest-tool", args...)
 
 		cmdOutput := &bytes.Buffer{}
@@ -89,4 +70,27 @@ func (m manifestPusher) PushImageWithManifest(builds []buildv1.Build, targetImag
 		m.logger.Infof("Image %s created", targetImageRef)
 		return true, nil
 	})
+}
+
+func (m manifestPusher) args(builds []buildv1.Build, targetImageRef string) []string {
+	var template string
+	platforms := make([]string, 0, len(builds))
+	args := []string{
+		"--debug",
+		"--insecure",
+		"--docker-cfg", m.dockercfgPath,
+		"push", "from-args",
+	}
+
+	for i := range builds {
+		build := &builds[i]
+		arch := build.Spec.NodeSelector[nodeArchitectureLabel]
+		platforms = append(platforms, fmt.Sprintf("linux/%s", arch))
+		nameWithPlaceholder := strings.Replace(build.Spec.Output.To.Name, arch, "ARCH", 1)
+		template = fmt.Sprintf("%s/%s/%s", m.registryURL, build.Spec.Output.To.Namespace, nameWithPlaceholder)
+	}
+
+	args = append(args, "--platforms", strings.Join(platforms, ","))
+	args = append(args, "--template", template)
+	return append(args, "--target", fmt.Sprintf("%s/%s", m.registryURL, targetImageRef))
 }

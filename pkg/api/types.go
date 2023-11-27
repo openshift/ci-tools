@@ -1321,20 +1321,10 @@ const (
 	ClusterProfilePacket                ClusterProfile = "packet"
 	ClusterProfilePacketAssisted        ClusterProfile = "packet-assisted"
 	ClusterProfilePacketSNO             ClusterProfile = "packet-sno"
-	ClusterProfileVSphere               ClusterProfile = "vsphere"
 	ClusterProfileVSphere2              ClusterProfile = "vsphere-2"
-	ClusterProfileVSphere8              ClusterProfile = "vsphere-8"
 	ClusterProfileVSphere8Vpn           ClusterProfile = "vsphere-8-vpn"
-	ClusterProfileVSphereDis            ClusterProfile = "vsphere-dis"
 	ClusterProfileVSphereDis2           ClusterProfile = "vsphere-dis-2"
-	ClusterProfileVSphereClusterbot     ClusterProfile = "vsphere-clusterbot"
-	ClusterProfileVSphereClusterbot2    ClusterProfile = "vsphere-clusterbot-2"
-	ClusterProfileVSphereIBM7           ClusterProfile = "vsphere-ibm-7"
-	ClusterProfileVSpherePlatformNone   ClusterProfile = "vsphere-platform-none"
-	ClusterProfileVSpherePlatformNone2  ClusterProfile = "vsphere-platform-none-2"
-	ClusterProfileVSphereMultizone      ClusterProfile = "vsphere-multizone"
 	ClusterProfileVSphereMultizone2     ClusterProfile = "vsphere-multizone-2"
-	ClusterProfileVSphereConnected      ClusterProfile = "vsphere-connected"
 	ClusterProfileVSphereConnected2     ClusterProfile = "vsphere-connected-2"
 	ClusterProfileKubevirt              ClusterProfile = "kubevirt"
 	ClusterProfileAWSCPaaS              ClusterProfile = "aws-cpaas"
@@ -1450,21 +1440,11 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfilePacketSNO,
 
 		ClusterProfileVSphere2,
-		ClusterProfileVSphereClusterbot2,
 		ClusterProfileVSphere8Vpn,
 		ClusterProfileVSphereDis2,
 		ClusterProfileVSphereMultizone2,
 		ClusterProfileVSphereConnected2,
-		ClusterProfileVSpherePlatformNone2,
 
-		ClusterProfileVSphere,
-		ClusterProfileVSphere8,
-		ClusterProfileVSphereClusterbot,
-		ClusterProfileVSphereDis,
-		ClusterProfileVSphereIBM7,
-		ClusterProfileVSphereMultizone,
-		ClusterProfileVSphereConnected,
-		ClusterProfileVSpherePlatformNone,
 		ClusterProfileOCIAssisted,
 		ClusterProfileHypershiftPowerVS,
 		ClusterProfileHypershiftPowerVSCB,
@@ -1615,19 +1595,9 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileVSphere2,
 		ClusterProfileVSphereMultizone2,
 		ClusterProfileVSphereDis2,
-		ClusterProfileVSphereClusterbot2,
 		ClusterProfileVSphere8Vpn,
-		ClusterProfileVSpherePlatformNone2,
-		ClusterProfileVSphereConnected2,
+		ClusterProfileVSphereConnected2:
 
-		ClusterProfileVSphere,
-		ClusterProfileVSphere8,
-		ClusterProfileVSphereDis,
-		ClusterProfileVSphereClusterbot,
-		ClusterProfileVSphereIBM7,
-		ClusterProfileVSpherePlatformNone,
-		ClusterProfileVSphereConnected,
-		ClusterProfileVSphereMultizone:
 		return "vsphere"
 	case ClusterProfileOvirt:
 		return "ovirt"
@@ -1825,32 +1795,12 @@ func (p ClusterProfile) LeaseType() string {
 		ClusterProfilePacketAssisted,
 		ClusterProfilePacketSNO:
 		return "packet-edge-quota-slice"
-	case ClusterProfileVSphere:
-		return "vsphere-quota-slice"
-	case ClusterProfileVSphereIBM7:
-		return "vsphere-ibm-7-quota-slice"
-	case ClusterProfileVSphere8:
-		return "vsphere-8-quota-slice"
 	case ClusterProfileVSphere8Vpn:
 		return "vsphere-8-vpn-quota-slice"
-	case ClusterProfileVSphereDis:
-		return "vsphere-dis-quota-slice"
-	case ClusterProfileVSphereClusterbot:
-		return "vsphere-clusterbot-quota-slice"
-	case ClusterProfileVSpherePlatformNone:
-		return "vsphere-platform-none-quota-slice"
-	case ClusterProfileVSphereMultizone:
-		return "vsphere-multizone-quota-slice"
-	case ClusterProfileVSphereConnected:
-		return "vsphere-connected-quota-slice"
 	case ClusterProfileVSphere2:
 		return "vsphere-2-quota-slice"
 	case ClusterProfileVSphereDis2:
 		return "vsphere-dis-2-quota-slice"
-	case ClusterProfileVSphereClusterbot2:
-		return "vsphere-clusterbot-2-quota-slice"
-	case ClusterProfileVSpherePlatformNone2:
-		return "vsphere-platform-none-2-quota-slice"
 	case ClusterProfileVSphereMultizone2:
 		return "vsphere-multizone-2-quota-slice"
 	case ClusterProfileVSphereConnected2:
@@ -1926,19 +1876,10 @@ func (p ClusterProfile) Secret() string {
 		ClusterProfileGCPLoggingJSONFile,
 		ClusterProfileGCPLoggingJournald,
 		ClusterProfileVSphere2,
-		ClusterProfileVSpherePlatformNone2,
 		ClusterProfileVSphereDis2,
 		ClusterProfileVSphereMultizone2,
 		ClusterProfileVSphereConnected2,
-		ClusterProfileVSphereClusterbot2,
-		ClusterProfileVSphere8Vpn,
-		ClusterProfileVSphere8,
-		ClusterProfileVSphereClusterbot,
-		ClusterProfileVSphereDis,
-		ClusterProfileVSphereConnected,
-		ClusterProfileVSphereIBM7,
-		ClusterProfileVSphereMultizone,
-		ClusterProfileVSpherePlatformNone:
+		ClusterProfileVSphere8Vpn:
 
 		name = p.ClusterType()
 	default:

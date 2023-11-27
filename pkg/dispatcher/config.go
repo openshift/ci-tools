@@ -124,9 +124,7 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 				string(api.ClusterProfileVSphere2),
 				string(api.ClusterProfileVSphereMultizone2),
 				string(api.ClusterProfileVSphereConnected2),
-				string(api.ClusterProfileVSphereClusterbot2),
-				string(api.ClusterProfileVSphereDis2),
-				string(api.ClusterProfileVSpherePlatformNone2):
+				string(api.ClusterProfileVSphereDis2):
 
 				cluster = api.ClusterVSphere02
 			}

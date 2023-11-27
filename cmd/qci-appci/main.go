@@ -109,12 +109,13 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create oc client")
 	}
-	server, err := createProxyServer(opts.listenAddr, opts.exposedHost, newTokenService(ctx, ocClient), secret.GetSecret, opts.robotUsernameFile, opts.robotPasswordFile, tokenMaintainer)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create server")
-	}
 
-	interrupts.ListenAndServeTLS(server, opts.tlsCertFile, opts.tlsKeyFile, opts.gracePeriod)
+	proxyHandler, err := proxyHandler("https://quay.io", newTokenService(ctx, ocClient), tokenMaintainer)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create proxy handler")
+	}
+	handler := getRouter(proxyHandler, opts.exposedHost, newTokenService(ctx, ocClient), secret.GetSecret, opts.robotUsernameFile, opts.robotPasswordFile)
+	interrupts.ListenAndServeTLS(&http.Server{Addr: opts.listenAddr, Handler: handler}, opts.tlsCertFile, opts.tlsKeyFile, opts.gracePeriod)
 	interrupts.WaitForGracefulShutdown()
 }
 
@@ -232,8 +233,8 @@ type TokenResponse struct {
 	Token string `json:"token"`
 }
 
-func createProxyServer(listenAddr string, host string, clusterTokenService ClusterTokenService, secretGetter func(string) []byte, robotUsernameFile, robotPasswordFile string, quayService QuayService) (*http.Server, error) {
-	repoURL, err := url.Parse("https://quay.io")
+func proxyHandler(target string, clusterTokenService ClusterTokenService, quayService QuayService) (http.Handler, error) {
+	repoURL, err := url.Parse(target)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse qci-appci's url: %w", err)
 	}
@@ -244,10 +245,7 @@ func createProxyServer(listenAddr string, host string, clusterTokenService Clust
 		modifyRequest(req, clusterTokenService, quayService)
 	}
 	proxy.ModifyResponse = modifyResponse
-	return &http.Server{
-		Addr:    listenAddr,
-		Handler: getRouter(proxy, host, clusterTokenService, secretGetter, robotUsernameFile, robotPasswordFile),
-	}, nil
+	return proxy, nil
 }
 
 func modifyRequest(req *http.Request, clusterTokenService ClusterTokenService, quayService QuayService) {
@@ -345,7 +343,7 @@ func (s *SimpleClusterTokenService) Validate(token string) (bool, error) {
 	return sar.Status.Allowed, nil
 }
 
-func getRouter(proxy *httputil.ReverseProxy, host string, clusterTokenService ClusterTokenService, secretGetter func(string) []byte, robotUsernameFile, robotPasswordFile string) *http.ServeMux {
+func getRouter(proxy http.Handler, host string, clusterTokenService ClusterTokenService, secretGetter func(string) []byte, robotUsernameFile, robotPasswordFile string) http.Handler {
 	handler := http.NewServeMux()
 	handler.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
@@ -360,7 +358,7 @@ func getRouter(proxy *httputil.ReverseProxy, host string, clusterTokenService Cl
 		l.Debug("Received request")
 
 		if path == "/healthz" {
-			if _, err := fmt.Fprintf(w, "OK"); err != nil {
+			if _, err := fmt.Fprintln(w, http.StatusText(http.StatusOK)); err != nil {
 				l.WithError(err).Error("failed to write response")
 			}
 			return

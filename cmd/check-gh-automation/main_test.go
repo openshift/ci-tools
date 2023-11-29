@@ -114,20 +114,40 @@ func TestCheckRepos(t *testing.T) {
 		collaboratorsByRepo: map[string][]string{
 			"org-1/repo-a": {"a-bot", "b-bot", "openshift-cherrypick-robot"},
 			"org-2/repo-z": {"c-bot", "some-user"},
+			"org-5/repo-e": {"openshift-merge-robot"},
 		},
 		membersByOrg: map[string][]string{
 			"org-1": {"a-user", "d-bot", "e-bot", "openshift-cherrypick-robot"},
 			"org-2": {"some-user", "z-bot"},
 			"org-3": {"a-user"},
+			"org-5": {"openshift-merge-robot"},
 		},
-		reposWithAppInstalled: sets.New[string]("org-1/repo-a", "org-2/repo-z"),
+		reposWithAppInstalled: sets.New[string]("org-1/repo-a", "org-2/repo-z", "org-5/repo-e"),
+		permissionsByRepo: map[string]map[string][]string{
+			"org-1/repo-a": {
+				"a-bot":                      []string{"write"},
+				"b-bot":                      []string{"write"},
+				"openshift-cherrypick-robot": []string{"write"},
+			},
+			"org-2/repo-z": {
+				"c-bot":     []string{"write"},
+				"some-user": []string{"write"},
+			},
+			"org-5/repo-e": {
+				"openshift-merge-robot": []string{"admin"},
+			},
+			"org-5/repo-f": {
+				"openshift-merge-robot": []string{"read"},
+			},
+		},
 	}
 
 	testCases := []struct {
-		name  string
-		repos []string
-		bots  []string
-		mode  appCheckMode
+		name      string
+		repos     []string
+		bots      []string
+		adminBots []string
+		mode      appCheckMode
 
 		ignore      sets.Set[string]
 		expected    []string
@@ -236,10 +256,27 @@ func TestCheckRepos(t *testing.T) {
 			mode:     tide,
 			expected: []string{"org-3/repo-z"},
 		},
+		{
+			name:      "openshift-merge-robot with admin access and branch protection",
+			repos:     []string{"org-5/repo-e"},
+			bots:      []string{"openshift-merge-robot"},
+			adminBots: []string{"openshift-merge-robot"},
+			mode:      standard,
+			expected:  []string{},
+		},
+		{
+			name:      "openshift-merge-robot without admin access and branch protection",
+			repos:     []string{"org-5/repo-f"},
+			bots:      []string{"openshift-merge-robot"},
+			adminBots: []string{},
+			mode:      standard,
+			expected:  []string{"org-5/repo-f"},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			failing, err := checkRepos(tc.repos, tc.bots, "openshift-ci", tc.ignore, tc.mode, client, logrus.NewEntry(logrus.New()), newFakePluginConfigAgent(), newFakeProwConfigAgent().Config().Tide.Queries.QueryMap())
+			logrus.Infof("Testing %s", tc.name)
+			failing, err := checkRepos(tc.repos, tc.bots, "openshift-ci", tc.ignore, tc.mode, client, logrus.NewEntry(logrus.New()), newFakePluginConfigAgent(), newFakeProwConfigAgent().Config().Tide.Queries.QueryMap(), newFakeProwConfigAgent())
 			if diff := cmp.Diff(tc.expectedErr, err, testhelper.EquateErrorMessage); diff != "" {
 				t.Fatalf("error doesn't match expected, diff: %s", diff)
 			}

@@ -1756,6 +1756,10 @@ periodic-ci-openshift-release-master-nightly-4.15-e2e-alibaba-ovn
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-crun-wasm
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-csi
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-driver-toolkit
+periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-overlay-mtu-ovn-5000
+periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-overlay-mtu-ovn-edge-1100
+periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-overlay-mtu-sdn-5000
+periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-overlay-mtu-sdn-edge-1100
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-cgroupsv1
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-cpu-partitioning
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-etcd-scaling

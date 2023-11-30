@@ -724,7 +724,6 @@ const (
 	ClusterBuild02   Cluster = "build02"
 	ClusterBuild03   Cluster = "build03"
 	ClusterBuild09   Cluster = "build09"
-	ClusterVSphere   Cluster = "vsphere"
 	ClusterVSphere02 Cluster = "vsphere02"
 	ClusterARM01     Cluster = "arm01"
 	ClusterHive      Cluster = "hive"

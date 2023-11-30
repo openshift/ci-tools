@@ -79,7 +79,7 @@ var (
 		string(ClusterBuild01),
 		string(ClusterBuild02),
 		string(ClusterBuild03),
-		string(ClusterVSphere),
+		string(ClusterVSphere02),
 	)
 )
 

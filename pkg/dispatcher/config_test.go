@@ -424,13 +424,13 @@ func TestDetermineClusterForJob(t *testing.T) {
 			expectedCanBeRelocated: true,
 		},
 		{
-			name:     "Vsphere job",
+			name:     "Vsphere job on vsphere02",
 			config:   &configWithBuildFarmWithJobs,
 			jobBase:  config.JobBase{Agent: "kubernetes", Name: "yalayala-vsphere"},
-			expected: "vsphere",
+			expected: "vsphere02",
 		},
 		{
-			name:   "Vsphere job on vsphere02",
+			name:   "Vsphere job on vsphere02 with profile",
 			config: &configWithBuildFarmWithJobs,
 			jobBase: config.JobBase{Agent: "kubernetes", Name: "yalayala-vsphere", Labels: map[string]string{
 				api.CloudClusterProfileLabel: string(api.ClusterProfileVSphere8Vpn),

@@ -343,8 +343,8 @@ func updateSecretItemContext(c *secretbootstrap.Config, name, cluster, key strin
 
 func registryUrlFor(cluster string) string {
 	switch cluster {
-	case string(api.ClusterVSphere):
-		return "registry.apps.build01-us-west-2.vmc.ci.openshift.org"
+	case string(api.ClusterVSphere02):
+		return "registry.apps.build02.vmc.ci.openshift.org"
 	case string(api.ClusterAPPCI):
 		return api.ServiceDomainAPPCIRegistry
 	case string(api.ClusterARM01):
@@ -355,7 +355,7 @@ func registryUrlFor(cluster string) string {
 }
 
 func updateBuildFarmSecrets(c *secretbootstrap.Config, o options) error {
-	if o.clusterName == string(api.ClusterVSphere) {
+	if o.clusterName == string(api.ClusterVSphere02) {
 		_, buildFarmCredentials, err := findSecretConfig(fmt.Sprintf("%s-%s", buildFarm, credentials), string(api.ClusterAPPCI), c.Secrets)
 		if err != nil {
 			return err

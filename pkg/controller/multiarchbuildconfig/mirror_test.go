@@ -136,7 +136,7 @@ func TestHandleMirrorImage(t *testing.T) {
 			},
 		},
 		{
-			name: "Mirror completed successfully, set status to success",
+			name: "Mirror completed successfully, add condition",
 			mabc: v1.MultiArchBuildConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "mabc-1",
@@ -162,7 +162,6 @@ func TestHandleMirrorImage(t *testing.T) {
 						Reason:             ImageMirrorSuccessReason,
 					},
 				},
-				State: v1.SuccessState,
 			},
 		},
 		{

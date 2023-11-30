@@ -173,6 +173,12 @@ func (r *reconciler) handleMultiArchBuildConfig(ctx context.Context, mabc *v1.Mu
 		}
 	}
 
+	// So far everything went well, the mabc status can be set to success
+	mutateFn := func(mabcToMutate *v1.MultiArchBuildConfig) { mabcToMutate.Status.State = v1.SuccessState }
+	if err := v1.UpdateMultiArchBuildConfig(ctx, r.logger, r.client, ctrlruntimeclient.ObjectKey{Namespace: mabc.Namespace, Name: mabc.Name}, mutateFn); err != nil {
+		return fmt.Errorf("failed to update the MultiArchBuildConfig %s/%s: %w", mabc.Namespace, mabc.Name, err)
+	}
+
 	return nil
 }
 
@@ -252,7 +258,6 @@ func (r *reconciler) handleMirrorImage(ctx context.Context, targetImageRef strin
 			LastTransitionTime: metav1.Time{Time: time.Now()},
 			Reason:             ImageMirrorSuccessReason,
 		})
-		mabcToMutate.Status.State = v1.SuccessState
 	}
 
 	imageMirrorArgs := ocImageMirrorArgs(targetImageRef, mabc.Spec.ExternalRegistries)

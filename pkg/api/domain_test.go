@@ -65,8 +65,8 @@ func TestRegistryDomainForClusterName(t *testing.T) {
 		},
 		{
 			name:        "vsphere",
-			clusterName: "vsphere",
-			expected:    "registry.apps.build01-us-west-2.vmc.ci.openshift.org",
+			clusterName: "vsphere02",
+			expected:    "registry.apps.build02.vmc.ci.openshift.org",
 		},
 		{
 			name:        "arm01",

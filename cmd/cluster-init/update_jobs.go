@@ -107,7 +107,7 @@ func generatePostsubmit(clusterName string) prowconfig.Postsubmit {
 
 func generatePresubmit(clusterName string) prowconfig.Presubmit {
 	var optional bool
-	if clusterName == string(api.ClusterVSphere) {
+	if clusterName == string(api.ClusterVSphere02) {
 		optional = true
 	}
 	return prowconfig.Presubmit{
@@ -201,7 +201,7 @@ func generateContainer(image, clusterName string, extraArgs []string, extraVolum
 			},
 		}...)
 	}
-	if clusterName == string(api.ClusterVSphere) {
+	if clusterName == string(api.ClusterVSphere02) {
 		env = append(env, v1.EnvVar{
 			Name: "github_client_id",
 			ValueFrom: &v1.EnvVarSource{

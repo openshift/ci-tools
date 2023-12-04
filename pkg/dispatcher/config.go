@@ -114,22 +114,7 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 		return "", false, nil
 	}
 	if strings.Contains(jobBase.Name, "vsphere") && !isApplyConfigJob(jobBase) {
-		cluster := api.ClusterVSphere
-		// once the vsphere build cluster is removed, this logic will also be removed and the vsphere02 cluster will be
-		// the only vsphere cluster used.
-
-		if clusterProfile, ok := jobBase.Labels[api.CloudClusterProfileLabel]; ok {
-			switch clusterProfile {
-			case string(api.ClusterProfileVSphere8Vpn),
-				string(api.ClusterProfileVSphere2),
-				string(api.ClusterProfileVSphereMultizone2),
-				string(api.ClusterProfileVSphereConnected2),
-				string(api.ClusterProfileVSphereDis2):
-
-				cluster = api.ClusterVSphere02
-			}
-		}
-		return cluster, false, nil
+		return api.ClusterVSphere02, false, nil
 	}
 	if isSSHBastionJob(jobBase) && config.SSHBastion != "" {
 		return config.SSHBastion, false, nil

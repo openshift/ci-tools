@@ -2,14 +2,20 @@
 
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
+PROJECT_DIR="$(dirname "$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )")"
 
 tmpdir="$(mktemp -d )"
 trap 'rm -rf $tmpdir' EXIT
 echo "Extracting kubeconfigs for the controller..."
 oc --context app.ci --namespace ci extract secret/dptp-controller-manager --to "${tmpdir}"
-oc --context app.ci --namespace ci serviceaccounts create-kubeconfig dptp-controller-manager | sed 's/dptp-controller-manager/app.ci/g' > "${tmpdir}/app-ci-kubeconfig"
-rm -rf "${tmpdir}/api-ci-kubeconfig"
+if oc --kubeconfig ${tmpdir}/sa.dptp-controller-manager.app.ci.config whoami ; then
+  echo "Use the existing app.ci kubeconfig"
+else
+  echo "Creating the app.ci kubeconfig ..."
+  mkdir "${tmpdir}/config-updater"
+  oc --context app.ci extract secret/config-updater -n ci --to="${tmpdir}/config-updater" --keys sa.config-updater.app.ci.config --confirm
+  "${PROJECT_DIR}/images/ci-secret-generator/oc_sa_create_kubeconfig.sh" "${tmpdir}/config-updater" app.ci dptp-controller-manager ci > "${tmpdir}/sa.dptp-controller-manager.app.ci.config"
+fi
 unset KUBECONFIG
 
 # TODO: we could also just make the SA access all leases and CMs in ci
@@ -75,14 +81,12 @@ EOF
 
 release="${RELEASE:-"$(go env GOPATH)/src/github.com/openshift/release"}"
 
-go build  -v -o /tmp/dptp-cm ./cmd/dptp-controller-manager
 set -x
-KUBECONFIG="$(kubeconfigs=("${tmpdir}/"*); IFS=":"; echo "${kubeconfigs[*]}")" /tmp/dptp-cm \
+go run ./cmd/dptp-controller-manager \
   --leader-election-namespace=dptp-controller-manager-testing \
   --leader-election-suffix="-$USER" \
-  --config-path="${release}/core-services/prow/02_config/_config.yaml" \
-  --job-config-path="${release}/ci-operator/jobs" \
-  --ci-operator-config-path="${release}/ci-operator/config" \
-  --step-config-path="${release}/ci-operator/step-registry" \
+  --release-repo-git-sync-path="${release}" \
   --enable-controller=test_images_distributor \
+  --kubeconfig-dir="${tmpdir}" \
+  --kubeconfig-suffix=config \
   --dry-run=true

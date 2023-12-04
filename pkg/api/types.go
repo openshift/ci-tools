@@ -1492,7 +1492,8 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSRHTAPPerformance,
 		ClusterProfileOSSM,
 		ClusterProfileAWSOpendatahub,
-		ClusterProfileAWSDevfile:
+		ClusterProfileAWSDevfile,
+		ClusterProfileAWSTelco:
 		return string(CloudAWS)
 	case
 		ClusterProfileAlibabaCloud,
@@ -1548,7 +1549,8 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileGCPLoggingCRIO,
 		ClusterProfileGCP2,
 		ClusterProfileGCPVirtualization,
-		ClusterProfileGCPOpendatahub:
+		ClusterProfileGCPOpendatahub,
+		ClusterProfileGCPTelco:
 		return string(CloudGCP)
 	case
 		ClusterProfileIBMCloud,
@@ -1624,10 +1626,6 @@ func (p ClusterProfile) ClusterType() string {
 		return "hypershift-powervs"
 	case ClusterProfileHypershiftPowerVSCB:
 		return "hypershift-powervs-cb"
-	case ClusterProfileAWSTelco:
-		return "aws-telco"
-	case ClusterProfileGCPTelco:
-		return "gcp-telco"
 	default:
 		return ""
 	}

@@ -20,7 +20,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/flagutil"
@@ -101,8 +100,8 @@ func RehearsalCandidateFromPullRequest(pullRequest *github.PullRequest, baseSHA 
 	}
 }
 
-func (rc RehearsalCandidate) createRefs() *pjapi.Refs {
-	return &pjapi.Refs{
+func (rc RehearsalCandidate) createRefs() *prowapi.Refs {
+	return &prowapi.Refs{
 		Org:     rc.org,
 		Repo:    rc.repo,
 		BaseRef: rc.base.ref,
@@ -192,7 +191,7 @@ func (r RehearsalConfig) DetermineAffectedJobs(candidate RehearsalCandidate, can
 	return filterPresubmits(presubmits, logger), filterPeriodics(periodics, logger), changedTemplates, changedClusterProfiles, nil
 }
 
-func (r RehearsalConfig) SetupJobs(candidate RehearsalCandidate, candidatePath string, presubmits config.Presubmits, periodics config.Periodics, rehearsalTemplates, rehearsalClusterProfiles *ConfigMaps, limit int, logger *logrus.Entry) (*config.ReleaseRepoConfig, *pjapi.Refs, apihelper.ImageStreamTagMap, []*prowconfig.Presubmit, error) {
+func (r RehearsalConfig) SetupJobs(candidate RehearsalCandidate, candidatePath string, presubmits config.Presubmits, periodics config.Periodics, rehearsalTemplates, rehearsalClusterProfiles *ConfigMaps, limit int, logger *logrus.Entry) (*config.ReleaseRepoConfig, *prowapi.Refs, apihelper.ImageStreamTagMap, []*prowconfig.Presubmit, error) {
 	resolver, err := r.createResolver(candidatePath)
 	if err != nil {
 		return nil, nil, nil, nil, err
@@ -270,7 +269,7 @@ func (r RehearsalConfig) AbortAllRehearsalJobs(org, repo string, number int, log
 	}
 
 	selector := labelSelectorForRehearsalJobs(org, repo, number)
-	jobs := &pjapi.ProwJobList{}
+	jobs := &prowapi.ProwJobList{}
 	err = pjclient.List(context.TODO(), jobs, selector, ctrlruntimeclient.InNamespace(r.ProwjobNamespace))
 	if err != nil {
 		logger.WithError(err).Error("failed to list prowjobs for pr")
@@ -308,7 +307,7 @@ func labelSelectorForRehearsalJobs(org, repo string, prNumber int) ctrlruntimecl
 }
 
 // RehearseJobs returns true if the jobs were triggered and succeed
-func (r RehearsalConfig) RehearseJobs(candidate RehearsalCandidate, candidatePath string, prRefs *pjapi.Refs, imageStreamTags apihelper.ImageStreamTagMap, presubmitsToRehearse []*prowconfig.Presubmit, rehearsalTemplates, rehearsalClusterProfiles *ConfigMaps, logger *logrus.Entry) (bool, error) {
+func (r RehearsalConfig) RehearseJobs(candidate RehearsalCandidate, candidatePath string, prRefs *prowapi.Refs, imageStreamTags apihelper.ImageStreamTagMap, presubmitsToRehearse []*prowconfig.Presubmit, rehearsalTemplates, rehearsalClusterProfiles *ConfigMaps, logger *logrus.Entry) (bool, error) {
 	buildClusterConfigs, prowJobConfig := r.getBuildClusterAndProwJobConfigs(logger)
 	pjclient, err := NewProwJobClient(prowJobConfig, r.DryRun)
 	if err != nil {

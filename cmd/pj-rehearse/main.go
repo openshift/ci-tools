@@ -14,7 +14,6 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	prowConfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/config/secret"
-	"k8s.io/test-infra/prow/flagutil"
 	prowflagutil "k8s.io/test-infra/prow/flagutil"
 	configflagutil "k8s.io/test-infra/prow/flagutil/config"
 	"k8s.io/test-infra/prow/github"
@@ -35,7 +34,7 @@ type options struct {
 	instrumentationOptions prowflagutil.InstrumentationOptions
 
 	prowjobKubeconfig string
-	kubernetesOptions flagutil.KubernetesOptions
+	kubernetesOptions prowflagutil.KubernetesOptions
 	noTemplates       bool
 	noRegistry        bool
 	noClusterProfiles bool
@@ -51,7 +50,7 @@ type options struct {
 	dryRun        bool
 	dryRunOptions dryRunOptions
 
-	stickyLabelAuthors flagutil.Strings
+	stickyLabelAuthors prowflagutil.Strings
 
 	webhookSecretFile        string
 	githubEventServerOptions githubeventserver.Options
@@ -60,7 +59,7 @@ type options struct {
 }
 
 func gatherOptions() (options, error) {
-	o := options{kubernetesOptions: flagutil.KubernetesOptions{NOInClusterConfigDefault: true}}
+	o := options{kubernetesOptions: prowflagutil.KubernetesOptions{NOInClusterConfigDefault: true}}
 	fs := flag.CommandLine
 
 	fs.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))

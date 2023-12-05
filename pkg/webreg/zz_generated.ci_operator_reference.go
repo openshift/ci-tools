@@ -961,6 +961,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            cluster_profile: ' '\n" +
 	"        # Optional indicates that the job's status context, that is generated from the corresponding test, should not be required for merge.\n" +
 	"        optional: true\n" +
+	"        # PipelineRunIfChanged is a regex that will result in the test only running in second\n" +
+	"        # stage of the pipeline run if something that matches it was changed.\n" +
+	"        pipeline_run_if_changed: ' '\n" +
 	"        # Portable allows to port periodic tests to current and future release despite the demand to skip periodics\n" +
 	"        portable: true\n" +
 	"        # Postsubmit configures prowgen to generate the job as a postsubmit rather than a presubmit\n" +
@@ -1771,6 +1774,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        cluster_profile: ' '\n" +
 	"      # Optional indicates that the job's status context, that is generated from the corresponding test, should not be required for merge.\n" +
 	"      optional: true\n" +
+	"      # PipelineRunIfChanged is a regex that will result in the test only running in second\n" +
+	"      # stage of the pipeline run if something that matches it was changed.\n" +
+	"      pipeline_run_if_changed: ' '\n" +
 	"      # Portable allows to port periodic tests to current and future release despite the demand to skip periodics\n" +
 	"      portable: true\n" +
 	"      # Postsubmit configures prowgen to generate the job as a postsubmit rather than a presubmit\n" +

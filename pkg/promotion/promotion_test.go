@@ -394,6 +394,58 @@ func TestOptionsMatche(t *testing.T) {
 			},
 			expected: true,
 		},
+		{
+			name: "at least one target matching",
+			input: []string{
+				"--current-release=release-1",
+				"--current-promotion-namespace=ns-1",
+			},
+			configSpec: &cioperatorapi.ReleaseBuildConfiguration{
+				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
+					Targets: []cioperatorapi.PromotionTarget{
+						{
+							Name:      "release-0",
+							Namespace: "ns-0",
+						},
+						{
+							Name:      "release-1",
+							Namespace: "ns-1",
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "fallback to official origin namespace if it's not set",
+			input: []string{
+				"--current-release=one",
+			},
+			configSpec: &cioperatorapi.ReleaseBuildConfiguration{
+				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
+					Targets: []cioperatorapi.PromotionTarget{{
+						Name:      "one",
+						Namespace: "origin",
+					}},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "fallback to official ocp namespace if it's not set",
+			input: []string{
+				"--current-release=one",
+			},
+			configSpec: &cioperatorapi.ReleaseBuildConfiguration{
+				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
+					Targets: []cioperatorapi.PromotionTarget{{
+						Name:      "one",
+						Namespace: "ocp",
+					}},
+				},
+			},
+			expected: true,
+		},
 	}
 	for _, testCase := range testCases {
 		var o Options

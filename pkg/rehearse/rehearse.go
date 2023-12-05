@@ -618,7 +618,7 @@ func ensureImageStreamTags(ctx context.Context, client ctrlruntimeclient.Client,
 			if err := istImportClient.Create(ctx, istImport); err != nil && !apierrors.IsAlreadyExists(err) {
 				return fmt.Errorf("failed to create imagestreamtag %s: %w", requiredImageStreamTag, err)
 			}
-			if err := wait.Poll(5*second, 60*second, func() (bool, error) {
+			if err := wait.PollUntilContextTimeout(ctx, 5*second, 60*second, false, func(ctx context.Context) (bool, error) {
 				if err := client.Get(ctx, requiredImageStreamTag, &imagev1.ImageStreamTag{}); err != nil {
 					if apierrors.IsNotFound(err) {
 						return false, nil

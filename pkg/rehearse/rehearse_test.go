@@ -88,7 +88,7 @@ func TestEnsureImageStreamTags(t *testing.T) {
 		},
 		{
 			name:          "app.ci cluster imports are skipped",
-			targetCluster: utilpointer.StringPtr("app.ci"),
+			targetCluster: utilpointer.String("app.ci"),
 		},
 	}
 
@@ -103,7 +103,7 @@ func TestEnsureImageStreamTags(t *testing.T) {
 				tc.istImportClient = fakectrlruntimeclient.NewClientBuilder().Build()
 			}
 			if tc.targetCluster == nil {
-				tc.targetCluster = utilpointer.StringPtr(clusterName)
+				tc.targetCluster = utilpointer.String(clusterName)
 			}
 			tc.istImportClient = &creatingClientWithCallBack{
 				Client: tc.istImportClient,

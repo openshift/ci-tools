@@ -865,7 +865,7 @@ type Executor struct {
 	pjclient   ctrlruntimeclient.Client
 	namespace  string
 	// Allow faking this in tests
-	pollFunc func(interval, timeout time.Duration, condition wait.ConditionFunc) error
+	pollFunc func(ctx context.Context, interval, timeout time.Duration, immediate bool, condition wait.ConditionWithContextFunc) error
 }
 
 // NewExecutor creates an executor. It also configures the rehearsal jobs as a list of presubmits.
@@ -880,7 +880,7 @@ func NewExecutor(presubmits []*prowconfig.Presubmit, prNumber int, prRepo string
 		logger:     logger,
 		pjclient:   pjclient,
 		namespace:  namespace,
-		pollFunc:   wait.Poll,
+		pollFunc:   wait.PollUntilContextTimeout,
 	}
 }
 
@@ -936,10 +936,10 @@ func (e *Executor) waitForJobs(jobs sets.Set[string], selector ctrlruntimeclient
 	}
 	success := true
 	var listErrors []error
-	if err := e.pollFunc(10*time.Second, 4*time.Hour, func() (bool, error) {
+	if err := e.pollFunc(context.Background(), 10*time.Second, 4*time.Hour, false, func(ctx context.Context) (bool, error) {
 		result := &pjapi.ProwJobList{}
 		// Don't bail out just because one LIST failed
-		if err := e.pjclient.List(context.Background(), result, selector, ctrlruntimeclient.InNamespace(e.namespace)); err != nil {
+		if err := e.pjclient.List(ctx, result, selector, ctrlruntimeclient.InNamespace(e.namespace)); err != nil {
 			if len(listErrors) > 2 {
 				return false, utilerrors.NewAggregate(append(listErrors, err, errors.New("encountered three subsequent errors trying to list")))
 			}

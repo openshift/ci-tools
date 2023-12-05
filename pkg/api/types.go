@@ -790,6 +790,10 @@ type TestStepConfiguration struct {
 	// RunIfChanged is a regex that will result in the test only running if something that matches it was changed.
 	RunIfChanged string `json:"run_if_changed,omitempty"`
 
+	// PipelineRunIfChanged is a regex that will result in the test only running in second
+	// stage of the pipeline run if something that matches it was changed.
+	PipelineRunIfChanged string `json:"pipeline_run_if_changed,omitempty"`
+
 	// Optional indicates that the job's status context, that is generated from the corresponding test, should not be required for merge.
 	Optional bool `json:"optional,omitempty"`
 

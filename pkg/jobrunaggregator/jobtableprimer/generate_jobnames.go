@@ -34,10 +34,12 @@ func newGenerateJobNamesFlags() *generateJobNamesFlags {
 			"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-release-4.13-periodics.yaml",
 			"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-release-4.14-periodics.yaml",
 			"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-release-4.15-periodics.yaml",
+			"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-release-4.16-periodics.yaml",
 
 			"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/hypershift/openshift-hypershift-release-4.13-periodics.yaml",
 			"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/hypershift/openshift-hypershift-release-4.14-periodics.yaml",
 			"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/hypershift/openshift-hypershift-release-4.15-periodics.yaml",
+			"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/hypershift/openshift-hypershift-release-4.16-periodics.yaml",
 		},
 		releaseConfigURLs: []string{
 			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.10-arm64.json",
@@ -81,6 +83,13 @@ func newGenerateJobNamesFlags() *generateJobNamesFlags {
 			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.15-ppc64le.json",
 			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.15-s390x.json",
 			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.15.json",
+
+			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.16-arm64.json",
+			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.16-ci.json",
+			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.16-multi.json",
+			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.16-ppc64le.json",
+			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.16-s390x.json",
+			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.16.json",
 		},
 	}
 }

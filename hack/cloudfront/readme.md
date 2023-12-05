@@ -71,13 +71,19 @@ the next best option. For a client in us-east-2, the next best option is to read
 # 10 Foot View
 Each AWS build farm has its own CloudFront distribution in front of its S3 registry bucket. Our serverless function is configured
 to execute as a behavior for these CloudFront distributions as well, but it behaves slightly differently than when it is running on an app.ci (registry.ci.openshift.org)
-request. The build farm registries are not replicated in every region. So, when a request comes in, the serverless function
-will first check to see if the client is in the us-east-1 region (this is where all build farms reside). If the client is 
-from us-east-1, then the client is redirected to read from the build farm registry's S3 bucket in us-east-1.
-If the client is not in us-east-1, the serverless function will check to see if the app.ci registry S3 replica 
-in the client's region has the requested blob. If it does, the client will be redirected
-to read from the app.ci replica in its region. If the file does not exist, then the serverless function will allow
-CloudFront to service the request (this will read from the build farm's S3 bucket and stream through CloudFront). 
+request. The build farm registries are not replicated in every region because the overhead of creating & replicating regional buckets
+for every build farm is likely not worth the cost savings of transferring individual build farm images constructed solely for
+specific CI builds. So, when a request comes in, the serverless function will first check to see if the client is in the us-east-1 
+region (this is where all build farms reside). If the client is from us-east-1, then the client is redirected to read from the build 
+farm registry's S3 bucket in us-east-1. If the client is not in us-east-1, the serverless function will check to see if the app.ci 
+registry S3 replica in the client's region has the requested blob. app.ci will have a copy of this image more often than not
+because MOST images for the payload are promoted to app.ci. The only images that will not be on app.ci are those that are built
+on the build farms to service individual CI tests (e.g. the build of a specific component for a presubmit test.)
+
+If the image does exist on app.ci, the client will be redirected to read from the app.ci replica in its region (exploiting low cost intra-regional transfer). 
+If the file does not exist (because it was built directly on the build farm -- e.g. as part of a presubmit test -- or the 
+15 minute replication has not happened for the image yet), then the serverless function will allow CloudFront to service the request 
+(this will read from the build farm's S3 bucket and stream through CloudFront). 
 
 # 0 Foot View
 Final notes.

@@ -7,7 +7,9 @@ from typing import List, Dict, Tuple
 
 # Outputs a dict of region-name to array[[ip_start, ip_stop], [ip_start, ip_stop], ...] for
 # all EC2 CIDR ranges in the US. This is used to inform our CloudFront
-# function and should be pasted directly into its code.
+# function and should be pasted directly into its code. Run this script to generate
+# ip address mappings and copy the result into
+# AWS_EC2_REGION_IP_RANGES in the lambda_function.py CloudFront function.
 
 # In short, we want:
 # 1. all us-east-1 AWS based registry access to use VPC gateway endpoints  (free)

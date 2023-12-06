@@ -86,7 +86,10 @@ go run ./cmd/dptp-controller-manager \
   --leader-election-namespace=dptp-controller-manager-testing \
   --leader-election-suffix="-$USER" \
   --release-repo-git-sync-path="${release}" \
-  --enable-controller=test_images_distributor \
+  --enable-controller=promotionreconciler \
+  --promotionReconcilerOptions.since=360h \
   --kubeconfig-dir="${tmpdir}" \
   --kubeconfig-suffix=config \
+  --github-hourly-tokens=4000 \
+  --github-allowed-burst=2000 \
   --dry-run=true

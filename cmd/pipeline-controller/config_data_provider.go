@@ -8,9 +8,10 @@ import (
 )
 
 type presubmitTests struct {
-	protected             []string
-	alwaysRequired        []string
-	conditionallyRequired []string
+	protected                     []string
+	alwaysRequired                []string
+	conditionallyRequired         []string
+	pipelineConditionallyRequired []config.Presubmit
 }
 
 type ConfigDataProvider struct {
@@ -60,30 +61,42 @@ func (c *ConfigDataProvider) gatherData() {
 	for _, orgRepo := range orgRepos {
 		presubmits := cfg.GetPresubmitsStatic(orgRepo)
 		for _, p := range presubmits {
-			if !p.AlwaysRun && !p.Optional && p.RunIfChanged == "" && p.SkipIfOnlyChanged == "" {
-				if pre, ok := updatedPresubmits[orgRepo]; !ok {
-					updatedPresubmits[orgRepo] = presubmitTests{protected: []string{p.Name}}
-				} else {
-					pre.protected = append(pre.protected, p.Name)
-					updatedPresubmits[orgRepo] = pre
+			if !p.Optional {
+				if !p.AlwaysRun && p.RunIfChanged == "" && p.SkipIfOnlyChanged == "" {
+					if val, ok := p.Annotations["pipeline_run_if_changed"]; ok && val != "" {
+						if pre, ok := updatedPresubmits[orgRepo]; !ok {
+							updatedPresubmits[orgRepo] = presubmitTests{pipelineConditionallyRequired: []config.Presubmit{p}}
+						} else {
+							pre.pipelineConditionallyRequired = append(pre.pipelineConditionallyRequired, p)
+							updatedPresubmits[orgRepo] = pre
+						}
+						continue
+					}
+					if pre, ok := updatedPresubmits[orgRepo]; !ok {
+						updatedPresubmits[orgRepo] = presubmitTests{protected: []string{p.Name}}
+					} else {
+						pre.protected = append(pre.protected, p.Name)
+						updatedPresubmits[orgRepo] = pre
+					}
+					continue
 				}
-				continue
-			}
-			if !p.Optional && p.AlwaysRun {
-				if pre, ok := updatedPresubmits[orgRepo]; !ok {
-					updatedPresubmits[orgRepo] = presubmitTests{alwaysRequired: []string{p.Name}}
-				} else {
-					pre.alwaysRequired = append(pre.alwaysRequired, p.Name)
-					updatedPresubmits[orgRepo] = pre
+				if p.AlwaysRun {
+					if pre, ok := updatedPresubmits[orgRepo]; !ok {
+						updatedPresubmits[orgRepo] = presubmitTests{alwaysRequired: []string{p.Name}}
+					} else {
+						pre.alwaysRequired = append(pre.alwaysRequired, p.Name)
+						updatedPresubmits[orgRepo] = pre
+					}
+					continue
 				}
-				continue
-			}
-			if !p.Optional && (p.RunIfChanged != "" || p.SkipIfOnlyChanged != "") {
-				if pre, ok := updatedPresubmits[orgRepo]; !ok {
-					updatedPresubmits[orgRepo] = presubmitTests{conditionallyRequired: []string{p.Name}}
-				} else {
-					pre.conditionallyRequired = append(pre.conditionallyRequired, p.Name)
-					updatedPresubmits[orgRepo] = pre
+				if p.RunIfChanged != "" || p.SkipIfOnlyChanged != "" {
+					if pre, ok := updatedPresubmits[orgRepo]; !ok {
+						updatedPresubmits[orgRepo] = presubmitTests{conditionallyRequired: []string{p.Name}}
+					} else {
+						pre.conditionallyRequired = append(pre.conditionallyRequired, p.Name)
+						updatedPresubmits[orgRepo] = pre
+					}
+					continue
 				}
 			}
 		}

@@ -76,6 +76,14 @@ func composeCondRequiredPresubmit(name string) config.Presubmit {
 	}
 }
 
+func composePipelineCondRequiredPresubmit(name string) config.Presubmit {
+	return config.Presubmit{
+		AlwaysRun: false,
+		Optional:  false,
+		JobBase:   config.JobBase{Name: name, Annotations: map[string]string{"pipeline_run_if_changed": ".*"}},
+	}
+}
+
 func TestConfigDataProviderGatherData(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -91,13 +99,18 @@ func TestConfigDataProviderGatherData(t *testing.T) {
 							composeProtectedPresubmit("ps1"),
 							composeRequiredPresubmit("ps2"),
 							composeCondRequiredPresubmit("ps3"),
+							composePipelineCondRequiredPresubmit("ps4"),
 						},
 					}},
 					ProwConfig: decorateWithOrgPolicy(composeBPConfig()),
 				}
 				return &cfs
 			},
-			expected: presubmitTests{protected: []string{"ps1"}, alwaysRequired: []string{"ps2"}, conditionallyRequired: []string{"ps3"}},
+			expected: presubmitTests{
+				protected:                     []string{"ps1"},
+				alwaysRequired:                []string{"ps2"},
+				conditionallyRequired:         []string{"ps3"},
+				pipelineConditionallyRequired: []config.Presubmit{composePipelineCondRequiredPresubmit("ps4")}},
 		},
 		{
 			name: "Org policy and repo require manual trigger",

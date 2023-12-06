@@ -11,6 +11,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/kube"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -27,6 +28,7 @@ const (
 type minimalGhClient interface {
 	GetPullRequest(org, repo string, number int) (*github.PullRequest, error)
 	CreateComment(org, repo string, number int, comment string) error
+	GetPullRequestChanges(org string, repo string, number int) ([]github.PullRequestChange, error)
 }
 
 type pullRequest struct {
@@ -162,7 +164,8 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request) error
 	}
 
 	presubmits := r.configDataProvider.GetPresubmits(pj.Spec.Refs.Org + "/" + pj.Spec.Refs.Repo)
-	if len(presubmits.protected) == 0 && len(presubmits.alwaysRequired) == 0 && len(presubmits.conditionallyRequired) == 0 {
+	if len(presubmits.protected) == 0 && len(presubmits.alwaysRequired) == 0 &&
+		len(presubmits.conditionallyRequired) == 0 && len(presubmits.pipelineConditionallyRequired) == 0 {
 		return nil
 	}
 
@@ -172,19 +175,33 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request) error
 		return nil
 	}
 
-	if status, err := r.reportSuccessOnPR(ctx, &pj, presubmits); err != nil || !status {
+	status, pipelineCondPresubmits, err := r.reportSuccessOnPR(ctx, &pj, presubmits)
+	if err != nil || !status {
 		return err
 	}
-	if err := r.ghc.CreateComment(pj.Spec.Refs.Org, pj.Spec.Refs.Repo, pj.Spec.Refs.Pulls[0].Number, "/test remaining-required"); err != nil {
+
+	commentAmendment := ""
+	if len(pipelineCondPresubmits) > 0 {
+		var builder strings.Builder
+		builder.WriteString("\n")
+		for i, rerun := range pipelineCondPresubmits {
+			builder.WriteString(rerun)
+			if i != len(pipelineCondPresubmits)-1 {
+				builder.WriteString("\n")
+			}
+		}
+		commentAmendment = builder.String()
+	}
+	if err := r.ghc.CreateComment(pj.Spec.Refs.Org, pj.Spec.Refs.Repo, pj.Spec.Refs.Pulls[0].Number, "/test remaining-required"+commentAmendment); err != nil {
 		r.ids.Delete(composeKey(pj.Spec.Refs))
 		return err
 	}
 	return nil
 }
 
-func (r *reconciler) reportSuccessOnPR(ctx context.Context, pj *v1.ProwJob, presubmits presubmitTests) (bool, error) {
+func (r *reconciler) reportSuccessOnPR(ctx context.Context, pj *v1.ProwJob, presubmits presubmitTests) (bool, []string, error) {
 	if pj == nil || pj.Spec.Refs == nil || len(pj.Spec.Refs.Pulls) != 1 {
-		return false, nil
+		return false, []string{}, nil
 	}
 	selector := map[string]string{}
 	for _, l := range []string{kube.OrgLabel, kube.RepoLabel, kube.PullLabel, kube.BaseRefLabel} {
@@ -192,7 +209,7 @@ func (r *reconciler) reportSuccessOnPR(ctx context.Context, pj *v1.ProwJob, pres
 	}
 	var pjs v1.ProwJobList
 	if err := r.lister.List(ctx, &pjs, ctrlruntimeclient.MatchingLabels(selector)); err != nil {
-		return false, fmt.Errorf("cannot list prowjob using selector %v", selector)
+		return false, []string{}, fmt.Errorf("cannot list prowjob using selector %v", selector)
 	}
 
 	latestBatch := make(map[string]v1.ProwJob)
@@ -212,7 +229,7 @@ func (r *reconciler) reportSuccessOnPR(ctx context.Context, pj *v1.ProwJob, pres
 			continue
 		}
 		if _, ok := latestBatch[presubmit]; ok {
-			return false, nil
+			return false, []string{}, nil
 		}
 	}
 	for _, presubmit := range presubmits.alwaysRequired {
@@ -220,7 +237,7 @@ func (r *reconciler) reportSuccessOnPR(ctx context.Context, pj *v1.ProwJob, pres
 			continue
 		}
 		if pjob, ok := latestBatch[presubmit]; !ok || (ok && pjob.Status.State != v1.SuccessState) {
-			return false, nil
+			return false, []string{}, nil
 		}
 	}
 	for _, presubmit := range presubmits.conditionallyRequired {
@@ -228,15 +245,34 @@ func (r *reconciler) reportSuccessOnPR(ctx context.Context, pj *v1.ProwJob, pres
 			continue
 		}
 		if pjob, ok := latestBatch[presubmit]; ok && pjob.Status.State != v1.SuccessState {
-			return false, nil
+			return false, []string{}, nil
+		}
+	}
+	pipelineCondPresubmits := []string{}
+	if len(presubmits.pipelineConditionallyRequired) != 0 {
+		cfp := config.NewGitHubDeferredChangedFilesProvider(r.ghc, pj.Spec.Refs.Org, pj.Spec.Refs.Repo, pj.Spec.Refs.Pulls[0].Number)
+		for _, presubmit := range presubmits.pipelineConditionallyRequired {
+			if !strings.Contains(presubmit.Name, repoBaseRef) {
+				continue
+			}
+			if run, ok := presubmit.Annotations["pipeline_run_if_changed"]; ok && run != "" {
+				regExpMatcher := config.RegexpChangeMatcher{RunIfChanged: run}
+				_, shouldRun, err := regExpMatcher.ShouldRun(cfp)
+				if err != nil {
+					return false, []string{}, nil
+				}
+				if shouldRun {
+					pipelineCondPresubmits = append(pipelineCondPresubmits, presubmit.RerunCommand)
+				}
+			}
 		}
 	}
 	if closed, err := r.closedPRsCache.isPRClosed(pj.Spec.Refs); err != nil || closed {
-		return false, err
+		return false, []string{}, err
 	}
 
 	if _, loaded := r.ids.LoadOrStore(composeKey(pj.Spec.Refs), time.Now()); loaded {
-		return false, nil
+		return false, []string{}, nil
 	}
-	return true, nil
+	return true, pipelineCondPresubmits, nil
 }

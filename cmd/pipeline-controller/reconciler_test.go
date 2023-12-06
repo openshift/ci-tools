@@ -33,6 +33,10 @@ func (c fakeGhClient) CreateComment(owner, repo string, number int, comment stri
 	return nil
 }
 
+func (c fakeGhClient) GetPullRequestChanges(org string, repo string, number int) ([]github.PullRequestChange, error) {
+	return []github.PullRequestChange{}, nil
+}
+
 type FakeReader struct {
 	pjs v1.ProwJobList
 }
@@ -301,7 +305,7 @@ func Test_reconciler_reportSuccessOnPR(t *testing.T) {
 				ids:                sync.Map{},
 				closedPRsCache:     closedPRsCache{prs: map[string]pullRequest{}, m: sync.Mutex{}, ghc: tc.fields.ghc, clearTime: time.Now()},
 			}
-			got, err := r.reportSuccessOnPR(tc.args.ctx, &dummyPJ, tc.args.presubmits)
+			got, _, err := r.reportSuccessOnPR(tc.args.ctx, &dummyPJ, tc.args.presubmits)
 			if (err != nil) != tc.wantErr {
 				t.Errorf("reconciler.reportSuccessOnPR() error = %v, wantErr %v", err, tc.wantErr)
 				return

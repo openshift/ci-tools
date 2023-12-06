@@ -1,21 +1,42 @@
 #!/bin/bash
 NOW=$(date +%s)
 echo Cleanning up resources older than $(date -u -d @$NOW +%Y-%m-%dT%H:%M:%SZ)
-AWS_CRED_PATH=${AWS_CRED_PATH:-/token/.awscred}
-echo Using AWS_CRED_PATH=${AWS_CRED_PATH}
+
+# in this script we are assuming that the credentials are mounted according to their cluster-profile
+# e.g. cluster-profile=aws, AWS_CONFIG_FILE=/cluster-profiles/aws/.awscred
+# e.g. cluster-profile=aws-2, AWS_CONFIG_FILE=/cluster-profiles/aws-2/.awscred
+updateCredentialsEnv() {
+    cluster_profile=`echo $1 | jq -r '.annotations."cluster-profile"'`
+    cluster_name=`echo $1 | jq -r '.name'`
+    AWS_CONFIG_FILE="/cluster-profiles/$cluster_profile/.awscred"
+    if [ $cluster_profile == null ]; then 
+        echo "error: No cluster profile found for $cluster_name."
+        echo "trying default aws-2 cluster profile"
+        AWS_CONFIG_FILE="/cluster-profiles/aws-2/.awscred"
+        cluster_profile="aws-2"
+    fi
+    if ! [ -f "/cluster-profiles/$cluster_profile/.awscred" ]; then
+        echo "error: Cluster profile secret: $cluster_profile not present."
+        return 1
+    fi
+    return 0
+}
 
 echo 'Deleting broken HostedClusters...'
 # Get json output from oc command
-oc -n clusters get hostedclusters -o json | jq -r '.items[] | select(.metadata.annotations.broken == "true" and .spec.dns.baseDomain == "hypershift.aws-2.ci.openshift.org" ) | "\(.metadata.namespace) \(.metadata.name)"' | while read cluster; do
-    echo 'Deleting' $cluster
-    echo $cluster | awk -v AWS_CRED_PATH="$AWS_CRED_PATH" '{ print "timeout 5m hypershift destroy cluster aws --name " $2 " --aws-creds " AWS_CRED_PATH " --destroy-cloud-resources " }' | bash
+clusters_json=$(oc -n clusters get hostedclusters -o json)
+echo "${clusters_json}" | jq -r '.items[] | select(.metadata.annotations.broken == "true") | " \(.metadata)"' | while read cluster; do
+    cluster_name=$(echo "${cluster}" | jq -r ".name")
+    echo "Deleting ${cluster_name}"
+    if updateCredentialsEnv $cluster; then
+        timeout 5m hypershift destroy cluster aws --name " $cluster_name " --aws-creds " $AWS_CONFIG_FILE " --destroy-cloud-resources
+    fi
+    exit 0
 done
 
 echo 'Deleting expired HostedClusters...'
-# Get json output from oc command
-clusters_json=$(oc -n clusters get hostedclusters -o json | jq '[.items[] | select( .spec.dns.baseDomain == "hypershift.aws-2.ci.openshift.org" ) | .metadata]')
 # Process each cluster
-echo "${clusters_json}" | jq -c '.[]' | while read cluster; do
+echo "${clusters_json}" | jq '[.items[].metadata]' | jq -c '.[]' | while read cluster; do
     # Extract creationTimestamp and cluster name
     creation_time_str=$(echo "${cluster}" | jq -r ".creationTimestamp")
     cluster_name=$(echo "${cluster}" | jq -r ".name")
@@ -29,10 +50,13 @@ echo "${clusters_json}" | jq -c '.[]' | while read cluster; do
     # If creationTimestamp is older than 12 hours, delete the cluster
     if (( time_diff_hr > 12 )); then
         echo "Deleting cluster ${cluster_name} created at ${creation_time_str}..."
-        timeout 5m hypershift destroy cluster aws --name "${cluster_name}" --aws-creds ${AWS_CRED_PATH} --destroy-cloud-resources
+        if updateCredentialsEnv $cluster; then
+            timeout 5m hypershift destroy cluster aws --name " $cluster_name " --aws-creds " $AWS_CONFIG_FILE " --destroy-cloud-resources
+        fi
     fi
 done
 
+AWS_CONFIG_FILE="/cluster-profiles/aws-2/.awscred"
 # echo 'Patching clusters stuck at deleting'
 # oc get hc -A -o json --as system:admin | jq -r '.items[] | select(.metadata.finalizers == ["openshift.io/destroy-cluster"]) | "\(.metadata.namespace) \(.metadata.name)"' | awk '{ print "oc patch -n " $1 " hostedclusters/" $2 " -p '\''{\"metadata\":{\"finalizers\":[]}, \"status\":{\"version\":{\"availableUpdates\":[]}}}'\'' --type=merge --as=system:admin"  }' | bash
 

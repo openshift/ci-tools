@@ -422,6 +422,8 @@ type options struct {
 	dependencyOverrides      stringSlice
 
 	targetAdditionalSuffix string
+	manifestToolDockerCfg  string
+	localRegistryDNS       string
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
@@ -492,6 +494,9 @@ func bindOptions(flag *flag.FlagSet) *options {
 
 	flag.StringVar(&opt.targetAdditionalSuffix, "target-additional-suffix", "", "Inject an additional suffix onto the targeted test's 'as' name. Used for adding an aggregate index")
 
+	flag.StringVar(&opt.manifestToolDockerCfg, "manifest-tool-dockercfg", "/secrets/manifest-tool/.dockerconfigjson", "The dockercfg file path to be used to push the manifest listed image after build. This is being used by the manifest-tool binary.")
+	flag.StringVar(&opt.localRegistryDNS, "local-registry-dns", "image-registry.openshift-image-registry.svc:5000", "Defines the target image registry.")
+
 	opt.resultsOptions.Bind(flag)
 	return opt
 }
@@ -547,7 +552,7 @@ func (o *options) Complete() error {
 		if o.unresolvedConfigPath != "" || o.configSpecPath != "" {
 			return errors.New("cannot request injecting test into locally provided config")
 		}
-		config, err = o.resolverClient.ConfigWithTest(info, injectTest)
+		config, err = o.resolverClient.ConfigWithTest(info, injectTest, len(jobSpec.ExtraRefs) > 1)
 	} else {
 		config, err = o.loadConfig(info)
 	}
@@ -568,6 +573,7 @@ func (o *options) Complete() error {
 	if err := validation.IsValidGraphConfiguration(o.graphConfig.Steps); err != nil {
 		return results.ForReason("validating_config").ForError(err)
 	}
+
 	if o.verbose {
 		config, _ := yaml.Marshal(o.configSpec)
 		logrus.WithField("config", string(config)).Trace("Resolved configuration.")
@@ -876,7 +882,9 @@ func (o *options) Run() []error {
 	}
 
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig, o.podPendingTimeout, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig, o.consoleHost, o.nodeName, nodeArchitectures, o.targetAdditionalSuffix)
+	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig,
+		o.podPendingTimeout, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig,
+		o.consoleHost, o.nodeName, nodeArchitectures, o.targetAdditionalSuffix, o.manifestToolDockerCfg, o.localRegistryDNS)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}
@@ -2013,12 +2021,14 @@ func (o *options) getResolverInfo(jobSpec *api.JobSpec) *api.Metadata {
 	// identify org, repo, and branch from refs object
 	for _, ref := range allRefs {
 		if ref.Org != "" && ref.Repo != "" && ref.BaseRef != "" {
-			info.Org = ref.Org
-			info.Repo = ref.Repo
-			info.Branch = ref.BaseRef
-			break
+			info.Org += fmt.Sprintf("%s,", ref.Org)
+			info.Repo += fmt.Sprintf("%s,", ref.Repo)
+			info.Branch += fmt.Sprintf("%s,", ref.BaseRef)
 		}
 	}
+	info.Org = strings.TrimSuffix(info.Org, ",")
+	info.Repo = strings.TrimSuffix(info.Repo, ",")
+	info.Branch = strings.TrimSuffix(info.Branch, ",")
 
 	// if flags set, override previous values
 	if o.org != "" {

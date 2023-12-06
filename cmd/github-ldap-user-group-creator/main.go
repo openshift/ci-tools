@@ -313,6 +313,10 @@ func deleteInvalidUsers(ctx context.Context, clients map[string]ctrlruntimeclien
 			continue
 		}
 		for user, identites := range usersToDelete {
+			if user == "backplane-cluster-admin" {
+				logrus.WithField("cluster", cluster).Info("Skip deleting user backplane-cluster-admin")
+				continue
+			}
 			if ciAdmins.Has(user) {
 				// should never happen
 				logrus.WithField("cluster", cluster).WithField("user", user).Info("Attempt to delete admin! Skipping...")

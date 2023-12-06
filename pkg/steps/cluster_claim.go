@@ -23,6 +23,7 @@ import (
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	apiutils "github.com/openshift/ci-tools/pkg/api/utils"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/secrets"
@@ -134,7 +135,7 @@ func (s *clusterClaimStep) acquireCluster(ctx context.Context, waitForClaim func
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      claimName,
 			Namespace: claimNamespace,
-			Labels: utils.SanitizeLabels(map[string]string{
+			Labels: apiutils.SanitizeLabels(map[string]string{
 				kube.ProwJobAnnotation: s.jobSpec.Job,
 				kube.ProwBuildIDLabel:  s.jobSpec.BuildID,
 			}),
@@ -184,7 +185,7 @@ func (s *clusterClaimStep) acquireCluster(ctx context.Context, waitForClaim func
 }
 
 func NamePerTest(name, testName string) string {
-	return strings.ReplaceAll(utils.Trim63(fmt.Sprintf("%s-%s", testName, name)), ".", "-")
+	return strings.ReplaceAll(apiutils.Trim63(fmt.Sprintf("%s-%s", testName, name)), ".", "-")
 }
 
 func getHiveSecret(src *corev1.Secret, name, namespace, testName string) (*corev1.Secret, error) {

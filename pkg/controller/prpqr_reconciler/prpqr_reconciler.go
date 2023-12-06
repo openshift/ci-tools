@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -17,6 +18,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -47,12 +49,14 @@ const (
 	conditionAllJobsTriggered = "AllJobsTriggered"
 	conditionWithErrors       = "WithErrors"
 
-	aggregationIDLabel          = "release.openshift.io/aggregation-id"
-	defaultAggregatorJobTimeout = 6 * time.Hour
+	aggregationIDLabel = "release.openshift.io/aggregation-id"
+	// TODO: Bumping this to 8 hours to hopefully allow more time for the k8s bump.  Will revert once the bump is complete.
+	defaultAggregatorJobTimeout = 8 * time.Hour
+	defaultMultiRefJobTimeout   = 8 * time.Hour
 )
 
 type injectingResolverClient interface {
-	ConfigWithTest(base *api.Metadata, testSource *api.MetadataWithTest) (*api.ReleaseBuildConfiguration, error)
+	ConfigWithTest(base *api.Metadata, testSource *api.MetadataWithTest, multipleSources bool) (*api.ReleaseBuildConfiguration, error)
 }
 
 type prowConfigGetter interface {
@@ -164,7 +168,30 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 		statusByJobName[jobName] = &prpqr.Status.Jobs[i]
 	}
 
-	baseMetadata := metadataFromPullRequestUnderTest(prpqr.Spec.PullRequest)
+	var pullRequests []v1.PullRequestUnderTest
+	if len(prpqr.Spec.PullRequests) > 0 {
+		logger.Debugf("There are %d pullRequests supplied", len(prpqr.Spec.PullRequests))
+		pullRequests = prpqr.Spec.PullRequests
+	} else {
+		//TODO(sgoeddel): this logic will only apply during the transitional period
+		pullRequests = []v1.PullRequestUnderTest{prpqr.Spec.PullRequest}
+	}
+
+	if len(pullRequests) == 0 { //TODO(sgoeddel): this only applies during the transitional period, eventually the pullRequests will be required in the spec and this validation can be removed
+		return errors.New("no pull requests supplied for this PullRequestPayloadQualifiactionRun. must supply either a single pullRequest or an entry in the pullRequests list")
+	}
+
+	//TODO(sgoeddel): phase 3 will support this
+	reposSeen := sets.Set[string]{}
+	for _, pullRequest := range pullRequests {
+		orgRepo := fmt.Sprintf("%s/%s", pullRequest.Org, pullRequest.Repo)
+		if reposSeen.Has(orgRepo) {
+			return fmt.Errorf("multiple pullRequests reference the %s repo. this is not currently supported", orgRepo)
+		}
+		reposSeen.Insert(orgRepo)
+	}
+
+	baseMetadata := metadataFromPullRequestsUnderTest(pullRequests)
 	for _, jobSpec := range prpqr.Spec.Jobs.Jobs {
 		var prowjobsToCreate []*prowv1.ProwJob
 		mimickedJob := jobSpec.JobName(jobconfig.PeriodicPrefix)
@@ -201,7 +228,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 			Test: jobSpec.Test,
 		}
 
-		ciopConfig, err := resolveCiopConfig(r.configResolverClient, baseMetadata, inject)
+		ciopConfig, err := resolveCiopConfig(r.configResolverClient, baseMetadata, inject, len(prpqr.Spec.PullRequests) > 1)
 		if err != nil {
 			logger.WithError(err).Error("Failed to resolve the ci-operator configuration")
 			statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
@@ -216,7 +243,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 
 		if jobSpec.AggregatedCount > 0 {
 			uid := jobNameHash(req.Name + mimickedJob)
-			aggregatedProwjobs, err := generateAggregatedProwjobs(uid, ciopConfig, r.prowConfigGetter.Config(), baseMetadata, req.Name, req.Namespace, &jobSpec, &prpqr.Spec.PullRequest, inject)
+			aggregatedProwjobs, err := generateAggregatedProwjobs(uid, ciopConfig, r.prowConfigGetter.Config(), baseMetadata, req.Name, req.Namespace, &jobSpec, pullRequests, inject)
 			if err != nil {
 				logger.WithError(err).Error("Failed to generate the aggregated prowjobs")
 				statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
@@ -230,7 +257,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 			}
 			prowjobsToCreate = append(prowjobsToCreate, aggregatedProwjobs...)
 
-			submitted := generateJobNameToSubmit(baseMetadata, inject, &prpqr.Spec.PullRequest)
+			submitted := generateJobNameToSubmit(inject, pullRequests)
 			aggregatorJob, err := generateAggregatorJob(baseMetadata, uid, mimickedJob, jobSpec.JobName(jobconfig.PeriodicPrefix), req.Name, req.Namespace, r.prowConfigGetter.Config(), time.Now(), submitted)
 			if err != nil {
 				logger.WithError(err).Error("Failed to generate an aggregator prowjob")
@@ -251,7 +278,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 			prowjobsToCreate = append(prowjobsToCreate, aggregatorJob)
 
 		} else {
-			prowjob, err := generateProwjob(ciopConfig, r.prowConfigGetter.Config(), baseMetadata, req.Name, req.Namespace, &prpqr.Spec.PullRequest, mimickedJob, inject, nil)
+			prowjob, err := generateProwjob(ciopConfig, r.prowConfigGetter.Config(), baseMetadata, req.Name, req.Namespace, pullRequests, mimickedJob, inject, nil)
 			if err != nil {
 				logger.WithError(err).Error("Failed to generate prowjob")
 				statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
@@ -426,8 +453,8 @@ func jobNameHash(name string) string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-func resolveCiopConfig(rc injectingResolverClient, baseCiop *api.Metadata, inject *api.MetadataWithTest) (*api.ReleaseBuildConfiguration, error) {
-	ciopConfig, err := rc.ConfigWithTest(baseCiop, inject)
+func resolveCiopConfig(rc injectingResolverClient, baseCiop *api.Metadata, inject *api.MetadataWithTest, multipleSources bool) (*api.ReleaseBuildConfiguration, error) {
+	ciopConfig, err := rc.ConfigWithTest(baseCiop, inject, multipleSources)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get config from resolver: %w", err)
 	}
@@ -441,7 +468,7 @@ type aggregatedOptions struct {
 	releaseJobName  string
 }
 
-func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter periodicDefaulter, baseCiop *api.Metadata, prpqrName, prpqrNamespace string, pr *v1.PullRequestUnderTest, mimickedJob string, inject *api.MetadataWithTest, aggregatedOptions *aggregatedOptions) (*prowv1.ProwJob, error) {
+func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter periodicDefaulter, baseCiop *api.Metadata, prpqrName, prpqrNamespace string, prs []v1.PullRequestUnderTest, mimickedJob string, inject *api.MetadataWithTest, aggregatedOptions *aggregatedOptions) (*prowv1.ProwJob, error) {
 	fakeProwgenInfo := &prowgen.ProwgenInfo{Metadata: *baseCiop}
 
 	annotations := map[string]string{
@@ -469,10 +496,18 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 	hashInput := prowgen.CustomHashInput(prpqrName)
 	var periodic *prowconfig.Periodic
 	for i := range ciopConfig.Tests {
-		if ciopConfig.Tests[i].As != inject.Test {
+		test := ciopConfig.Tests[i]
+		if test.As != inject.Test {
 			continue
 		}
-		jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, fakeProwgenInfo, prowgen.NewCiOperatorPodSpecGenerator(), ciopConfig.Tests[i])
+		if len(prs) > 1 {
+			if test.Timeout == nil {
+				test.Timeout = &prowv1.Duration{Duration: defaultMultiRefJobTimeout}
+			} else if test.Timeout.Duration < defaultMultiRefJobTimeout {
+				test.Timeout.Duration = defaultMultiRefJobTimeout
+			}
+		}
+		jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, fakeProwgenInfo, prowgen.NewCiOperatorPodSpecGenerator(), test)
 		jobBaseGen.PodSpec.Add(prowgen.InjectTestFrom(inject))
 		if aggregateIndex != nil {
 			jobBaseGen.PodSpec.Add(prowgen.TargetAdditionalSuffix(strconv.Itoa(*aggregateIndex)))
@@ -498,7 +533,12 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 		periodic = prowgen.GeneratePeriodicForTest(jobBaseGen, fakeProwgenInfo, prowgen.FromConfigSpec(ciopConfig), func(options *prowgen.GeneratePeriodicOptions) {
 			options.Cron = "@yearly"
 		})
-		periodic.Name = generateJobNameToSubmit(baseCiop, inject, pr)
+		periodic.Name = generateJobNameToSubmit(inject, prs)
+		// TODO: Temporarily bumping the timeout to 6 hours to allow extra time for the Kube rebase.  We'll remove this once the rebase lands...
+		if periodic.DecorationConfig == nil {
+			periodic.DecorationConfig = &prowv1.DecorationConfig{}
+		}
+		periodic.DecorationConfig.Timeout = &prowv1.Duration{Duration: 6 * time.Hour}
 		break
 	}
 	// We did not find the injected test: this is a bug
@@ -506,18 +546,19 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 		return nil, fmt.Errorf("BUG: test '%s' not found in injected config", inject.Test)
 	}
 
-	extraRefs := prowv1.Refs{
-		Org:  baseCiop.Org,
-		Repo: baseCiop.Repo,
-		// TODO(muller): All these commented-out fields need to be propagated via the PRPQR spec
-		// We do not need them now but we should eventually wire them through
-		// RepoLink:  pr.Base.Repo.HTMLURL,
-		BaseRef: pr.BaseRef,
-		BaseSHA: pr.BaseSHA,
-		// BaseLink:  fmt.Sprintf("%s/commit/%s", pr.Base.Repo.HTMLURL, pr.BaseSHA),
-		PathAlias: periodic.ExtraRefs[0].PathAlias,
-		Pulls: []prowv1.Pull{
-			{
+	var refs []prowv1.Refs
+	for _, pr := range prs {
+		refs = append(refs, prowv1.Refs{
+			Org:  pr.Org,
+			Repo: pr.Repo,
+			// TODO(muller): All these commented-out fields need to be propagated via the PRPQR spec
+			// We do not need them now but we should eventually wire them through
+			// RepoLink:  pr.Base.Repo.HTMLURL,
+			BaseRef: pr.BaseRef,
+			BaseSHA: pr.BaseSHA,
+			// BaseLink:  fmt.Sprintf("%s/commit/%s", pr.Base.Repo.HTMLURL, pr.BaseSHA),
+			PathAlias: determinePathAlias(ciopConfig, pr),
+			Pulls: []prowv1.Pull{{
 				Number: pr.PullRequest.Number,
 				Author: pr.PullRequest.Author,
 				SHA:    pr.PullRequest.SHA,
@@ -525,10 +566,10 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 				// Link:       pr.HTMLURL,
 				// AuthorLink: pr.User.HTMLURL,
 				// CommitLink: fmt.Sprintf("%s/pull/%d/commits/%s", pr.Base.Repo.HTMLURL, pr.Number, pr.Head.SHA),
-			},
-		},
+			}},
+		})
 	}
-	periodic.ExtraRefs = []prowv1.Refs{extraRefs}
+	periodic.ExtraRefs = refs
 
 	if err := defaulter.DefaultPeriodic(periodic); err != nil {
 		return nil, fmt.Errorf("failed to default the ProwJob: %w", err)
@@ -540,11 +581,35 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 	return &pj, nil
 }
 
-func metadataFromPullRequestUnderTest(pr v1.PullRequestUnderTest) *api.Metadata {
-	return &api.Metadata{Org: pr.Org, Repo: pr.Repo, Branch: pr.BaseRef}
+func determinePathAlias(ciopConfig *api.ReleaseBuildConfiguration, pr v1.PullRequestUnderTest) string {
+	if ciopConfig.CanonicalGoRepository != nil {
+		return *ciopConfig.CanonicalGoRepository
+	}
+
+	orgRepo := fmt.Sprintf("%s.%s", pr.Org, pr.Repo)
+	for _, cgr := range ciopConfig.CanonicalGoRepositoryList {
+		if cgr.Ref == orgRepo {
+			return cgr.Repository
+		}
+	}
+	return ""
 }
 
-func generateAggregatedProwjobs(uid string, ciopConfig *api.ReleaseBuildConfiguration, defaulter periodicDefaulter, baseCiop *api.Metadata, prpqrName, prpqrNamespace string, spec *v1.ReleaseJobSpec, pr *v1.PullRequestUnderTest, inject *api.MetadataWithTest) ([]*prowv1.ProwJob, error) {
+func metadataFromPullRequestsUnderTest(prs []v1.PullRequestUnderTest) *api.Metadata {
+	var orgs, repos, branches []string
+	for _, pr := range prs {
+		orgs = append(orgs, pr.Org)
+		repos = append(repos, pr.Repo)
+		branches = append(branches, pr.BaseRef)
+	}
+	return &api.Metadata{
+		Org:    strings.Join(orgs, ","),
+		Repo:   strings.Join(repos, ","),
+		Branch: strings.Join(branches, ","),
+	}
+}
+
+func generateAggregatedProwjobs(uid string, ciopConfig *api.ReleaseBuildConfiguration, defaulter periodicDefaulter, baseCiop *api.Metadata, prpqrName, prpqrNamespace string, spec *v1.ReleaseJobSpec, prs []v1.PullRequestUnderTest, inject *api.MetadataWithTest) ([]*prowv1.ProwJob, error) {
 	var ret []*prowv1.ProwJob
 
 	for i := 0; i < spec.AggregatedCount; i++ {
@@ -555,7 +620,7 @@ func generateAggregatedProwjobs(uid string, ciopConfig *api.ReleaseBuildConfigur
 		}
 		jobName := fmt.Sprintf("%s-%d", spec.JobName(jobconfig.PeriodicPrefix), i)
 
-		pj, err := generateProwjob(ciopConfig, defaulter, baseCiop, prpqrName, prpqrNamespace, pr, jobName, inject, opts)
+		pj, err := generateProwjob(ciopConfig, defaulter, baseCiop, prpqrName, prpqrNamespace, prs, jobName, inject, opts)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create prowjob: %w", err)
 		}
@@ -630,10 +695,19 @@ func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobNa
 	return &pj, nil
 }
 
-func generateJobNameToSubmit(baseCiop *api.Metadata, inject *api.MetadataWithTest, pr *v1.PullRequestUnderTest) string {
+func generateJobNameToSubmit(inject *api.MetadataWithTest, prs []v1.PullRequestUnderTest) string {
+	var refs string
+	for i, pr := range prs {
+		if i > 0 {
+			refs += "-"
+		}
+		refs += fmt.Sprintf("%s-%s-%d", pr.Org, pr.Repo, pr.PullRequest.Number)
+	}
+
 	var variant string
 	if inject.Variant != "" {
 		variant = fmt.Sprintf("-%s", inject.Variant)
 	}
-	return fmt.Sprintf("%s-%s-%d%s-%s", baseCiop.Org, baseCiop.Repo, pr.PullRequest.Number, variant, inject.Test)
+
+	return fmt.Sprintf("%s%s-%s", refs, variant, inject.Test)
 }

@@ -80,6 +80,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			postsubmits[orgrepo] = append(postsubmits[orgrepo], *postsubmit)
 		} else {
 			presubmit := generatePresubmitForTest(g, element.As, info, func(options *generatePresubmitOptions) {
+				options.pipelineRunIfChanged = element.PipelineRunIfChanged
 				options.runIfChanged = element.RunIfChanged
 				options.skipIfOnlyChanged = element.SkipIfOnlyChanged
 				options.defaultDisable = element.AlwaysRun != nil && !*element.AlwaysRun
@@ -178,11 +179,12 @@ func testContainsLease(test *cioperatorapi.TestStepConfiguration) bool {
 }
 
 type generatePresubmitOptions struct {
-	runIfChanged      string
-	skipIfOnlyChanged string
-	defaultDisable    bool
-	optional          bool
-	disableRehearsal  bool
+	pipelineRunIfChanged string
+	runIfChanged         string
+	skipIfOnlyChanged    string
+	defaultDisable       bool
+	optional             bool
+	disableRehearsal     bool
 }
 
 type generatePresubmitOption func(options *generatePresubmitOptions)
@@ -195,13 +197,21 @@ func generatePresubmitForTest(jobBaseBuilder *prowJobBaseBuilder, name string, i
 
 	shortName := info.TestName(name)
 	base := jobBaseBuilder.Rehearsable(!opts.disableRehearsal).Build(jc.PresubmitPrefix)
+	pipelineOpt := false
+	if opts.pipelineRunIfChanged != "" {
+		if base.Annotations == nil {
+			base.Annotations = make(map[string]string)
+		}
+		base.Annotations["pipeline_run_if_changed"] = opts.pipelineRunIfChanged
+		pipelineOpt = true
+	}
 	triggerCommand := prowconfig.DefaultTriggerFor(shortName)
-	if opts.defaultDisable && opts.runIfChanged == "" && opts.skipIfOnlyChanged == "" && !opts.optional {
+	if opts.defaultDisable && opts.runIfChanged == "" && opts.skipIfOnlyChanged == "" && !opts.optional && !pipelineOpt {
 		triggerCommand = fmt.Sprintf(`(?m)^/test( | .* )(%s|%s),?($|\s.*)`, shortName, "remaining-required")
 	}
 	return &prowconfig.Presubmit{
 		JobBase:   base,
-		AlwaysRun: opts.runIfChanged == "" && opts.skipIfOnlyChanged == "" && !opts.defaultDisable,
+		AlwaysRun: opts.runIfChanged == "" && opts.skipIfOnlyChanged == "" && !opts.defaultDisable && opts.pipelineRunIfChanged == "",
 		Brancher:  prowconfig.Brancher{Branches: sets.List(sets.New[string](jc.ExactlyBranch(info.Branch), jc.FeatureBranch(info.Branch)))},
 		Reporter: prowconfig.Reporter{
 			Context: fmt.Sprintf("ci/prow/%s", shortName),

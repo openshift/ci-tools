@@ -31,7 +31,7 @@ Endpoints:
 ## Get the members of a collection's group
 
 * Login to Vault and click the `Access` tab.
-* On the `Groups` tab, `Lookup by name` and input "secret-collection-manager-managed-<collection-name>"
+* On the `Groups` tab, `Lookup by name` and input "secret-collection-manager-managed-\<collection-name\>"
 * Click `Edit` in the returned group and find the list of "Member Identity IDs"
 * On the `Entities` tab, `Lookup by id` will return the entity.
 

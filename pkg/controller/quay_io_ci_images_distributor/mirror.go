@@ -41,11 +41,12 @@ func (s *memoryMirrorStore) Put(tasks ...MirrorTask) error {
 		t.CreatedAt = time.Now()
 		s.mirrors[t.Destination] = t
 	}
+	SetMirrorQueueDepth(float64(len(s.mirrors)))
 	return nil
 }
 
 func (s *memoryMirrorStore) Take(n int) ([]MirrorTask, error) {
-	ret, _, nil := s.get(n, false)
+	ret, _, nil := s.get(n, true)
 	return ret, nil
 }
 
@@ -69,6 +70,7 @@ func (s *memoryMirrorStore) get(n int, del bool) ([]MirrorTask, int, error) {
 			break
 		}
 	}
+	SetMirrorQueueDepth(float64(len(s.mirrors)))
 	return ret, l, nil
 }
 

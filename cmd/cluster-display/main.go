@@ -127,6 +127,10 @@ type ClusterInfoGetter interface {
 
 type clusterInfoGetter struct{}
 
+type hypershiftSupportedVersions struct {
+	Versions []string `json:"versions"`
+}
+
 func (g *clusterInfoGetter) GetClusterDetails(ctx context.Context, cluster string, client ctrlruntimeclient.Client) (map[string]string, error) {
 	consoleHost, err := api.ResolveConsoleHost(ctx, client)
 	if err != nil {
@@ -154,14 +158,36 @@ func (g *clusterInfoGetter) GetClusterDetails(ctx context.Context, cluster strin
 	}
 	cloud := string(infra.Status.PlatformStatus.Type)
 
-	return map[string]string{
+	ret := map[string]string{
 		"cluster":      cluster,
 		"consoleHost":  consoleHost,
 		"registryHost": registryHost,
 		"version":      version,
 		"product":      product,
 		"cloud":        cloud,
-	}, nil
+	}
+	if cluster == "hive" {
+		hypershiftCM := &corev1.ConfigMap{}
+		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: "hypershift", Name: "supported-versions"}, hypershiftCM); err != nil {
+			return nil, fmt.Errorf("failed to get ConfigMap supported-versions in hypershift for cluster hive: %w", err)
+		}
+		versions, ok := hypershiftCM.Data["supported-versions"]
+		if !ok {
+			return nil, fmt.Errorf("failed to get supported-versions from ConfigMap supported-versions in hypershift for cluster hive: %w", err)
+		}
+
+		sVersions := &hypershiftSupportedVersions{}
+		if err := json.Unmarshal([]byte(versions), sVersions); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal hive's supported versions: %w", err)
+		}
+		d, err := json.Marshal(sVersions.Versions)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal hive's supported versions: %w", err)
+		}
+		ret["hypershiftSupportedVersions"] = string(d)
+	}
+
+	return ret, nil
 }
 
 type memoryCache struct {

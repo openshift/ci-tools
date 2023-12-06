@@ -27,10 +27,10 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	buildapi "github.com/openshift/api/build/v1"
-	buildv1 "github.com/openshift/api/build/v1"
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	apiutils "github.com/openshift/ci-tools/pkg/api/utils"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/manifestpusher"
 	"github.com/openshift/ci-tools/pkg/results"
@@ -52,9 +52,6 @@ const (
 	oauthToken    = "/oauth-token"
 
 	OauthSecretKey = "oauth-token"
-
-	dockerCfgPathPush = "/secrets/manifest-tool/.dockerconfigjson"
-	localRegistryDNS  = "image-registry.openshift-image-registry.svc:5000"
 )
 
 type CloneAuthType string
@@ -124,18 +121,34 @@ const (
 	LabelMetadataStep    = "ci.openshift.io/metadata.step"
 )
 
-func labelsFor(spec *api.JobSpec, base map[string]string) map[string]string {
+func labelsFor(spec *api.JobSpec, base map[string]string, ref string) map[string]string {
 	if base == nil {
 		base = map[string]string{}
 	}
-	base[LabelMetadataOrg] = spec.Metadata.Org
-	base[LabelMetadataRepo] = spec.Metadata.Repo
-	base[LabelMetadataBranch] = spec.Metadata.Branch
-	base[LabelMetadataVariant] = spec.Metadata.Variant
+	org := spec.Metadata.Org
+	repo := spec.Metadata.Repo
+	branch := spec.Metadata.Branch
+	variant := spec.Metadata.Variant
+	if ref != "" { //When building for a specific ref, the metadata will be empty and need to be determined from that ref
+		for _, extraRef := range spec.ExtraRefs {
+			orgRepo := fmt.Sprintf("%s.%s", extraRef.Org, extraRef.Repo)
+			if orgRepo == ref {
+				org = extraRef.Org
+				repo = extraRef.Repo
+				branch = extraRef.BaseRef
+				//TODO(sgoeddel): If we care about variant in the future there will need to be logic to determine it
+			}
+		}
+	}
+
+	base[LabelMetadataOrg] = org
+	base[LabelMetadataRepo] = repo
+	base[LabelMetadataBranch] = branch
+	base[LabelMetadataVariant] = variant
 	base[LabelMetadataTarget] = spec.Target
 	base[CreatedByCILabel] = "true"
 	base[openshiftCIEnv] = "true"
-	return utils.SanitizeLabels(base)
+	return apiutils.SanitizeLabels(base)
 }
 
 type sourceStep struct {
@@ -175,17 +188,23 @@ func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clone
 	var refs []prowv1.Refs
 	if jobSpec.Refs != nil {
 		r := *jobSpec.Refs
-		if cloneAuthConfig != nil {
-			r.CloneURI = cloneAuthConfig.getCloneURI(r.Org, r.Repo)
+		orgRepo := fmt.Sprintf("%s.%s", r.Org, r.Repo)
+		if config.Ref == "" || orgRepo == config.Ref {
+			if cloneAuthConfig != nil {
+				r.CloneURI = cloneAuthConfig.getCloneURI(r.Org, r.Repo)
+			}
+			refs = append(refs, r)
 		}
-		refs = append(refs, r)
 	}
 
 	for _, r := range jobSpec.ExtraRefs {
-		if cloneAuthConfig != nil {
-			r.CloneURI = cloneAuthConfig.getCloneURI(r.Org, r.Repo)
+		orgRepo := fmt.Sprintf("%s.%s", r.Org, r.Repo)
+		if config.Ref == "" || orgRepo == config.Ref {
+			if cloneAuthConfig != nil {
+				r.CloneURI = cloneAuthConfig.getCloneURI(r.Org, r.Repo)
+			}
+			refs = append(refs, r)
 		}
-		refs = append(refs, r)
 	}
 
 	dockerfile := sourceDockerfile(config.From, decorate.DetermineWorkDir(gopath, refs), cloneAuthConfig)
@@ -246,7 +265,7 @@ func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clone
 		panic(fmt.Errorf("couldn't create JSON spec for clonerefs: %w", err))
 	}
 
-	build := buildFromSource(jobSpec, config.From, config.To, buildSource, fromDigest, "", resources, pullSecret, nil)
+	build := buildFromSource(jobSpec, config.From, config.To, buildSource, fromDigest, "", resources, pullSecret, nil, config.Ref)
 	build.Spec.CommonSpec.Strategy.DockerStrategy.Env = append(
 		build.Spec.CommonSpec.Strategy.DockerStrategy.Env,
 		corev1.EnvVar{Name: clonerefs.JSONConfigEnvVar, Value: optionsJSON},
@@ -263,7 +282,7 @@ func resolvePipelineImageStreamTagReference(ctx context.Context, client loggingc
 	return ist.Image.Name, nil
 }
 
-func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, fromTagDigest, dockerfilePath string, resources api.ResourceConfiguration, pullSecret *corev1.Secret, buildArgs []api.BuildArg) *buildapi.Build {
+func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, fromTagDigest, dockerfilePath string, resources api.ResourceConfiguration, pullSecret *corev1.Secret, buildArgs []api.BuildArg, ref string) *buildapi.Build {
 	logrus.Infof("Building %s", toTag)
 	buildResources, err := ResourcesFor(resources.RequirementsForStep(string(toTag)))
 	if err != nil {
@@ -279,7 +298,7 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 	}
 
 	layer := buildapi.ImageOptimizationSkipLayers
-	labels := labelsFor(jobSpec, map[string]string{CreatesLabel: string(toTag)})
+	labels := labelsFor(jobSpec, map[string]string{CreatesLabel: string(toTag)}, ref)
 	build := &buildapi.Build{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      string(toTag),
@@ -328,7 +347,17 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 		build.OwnerReferences = append(build.OwnerReferences, *owner)
 	}
 
-	addLabelsToBuild(jobSpec.Refs, build, source.ContextDir)
+	relevantRefs := jobSpec.Refs
+	if ref != "" {
+		for _, extraRef := range jobSpec.ExtraRefs {
+			orgRepo := fmt.Sprintf("%s.%s", extraRef.Org, extraRef.Repo)
+			if orgRepo == ref {
+				relevantRefs = &extraRef
+				break
+			}
+		}
+	}
+	addLabelsToBuild(relevantRefs, build, source.ContextDir)
 	return build
 }
 
@@ -436,13 +465,8 @@ func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubern
 	}
 
 	if len(errs) == 0 {
-		buildsMap := make(map[string]*buildv1.Build)
-		for _, b := range builds {
-			buildsMap[b.Name] = &b
-		}
-
-		manifestPusher := manifestpusher.NewManifestPushfer(logrus.WithField("for-build", build.Name), localRegistryDNS, dockerCfgPathPush)
-		if err := manifestPusher.PushImageWithManifest(buildsMap, fmt.Sprintf("%s/%s", build.Spec.Output.To.Namespace, build.Spec.Output.To.Name)); err != nil {
+		manifestPusher := manifestpusher.NewManifestPusher(logrus.WithField("for-build", build.Name), buildClient.LocalRegistryDNS(), buildClient.ManifestToolDockerCfg())
+		if err := manifestPusher.PushImageWithManifest(builds, fmt.Sprintf("%s/%s", build.Spec.Output.To.Namespace, build.Spec.Output.To.Name)); err != nil {
 			errs = append(errs, err)
 		}
 	}

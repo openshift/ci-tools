@@ -268,9 +268,9 @@ func TestGetResolverInfo(t *testing.T) {
 			},
 		},
 		expected: &api.Metadata{
-			Org:    "testOrganization",
-			Repo:   "testRepo",
-			Branch: "testBranch",
+			Org:    "testOrganization,anotherOrganization",
+			Repo:   "testRepo,anotherRepo",
+			Branch: "testBranch,anotherBranch",
 		},
 	}, {
 		name: "Incomplete refs not used",
@@ -597,7 +597,7 @@ tests:
 - as: e2e-upi-src-vsphere
   commands: make tests
   openshift_installer_upi_src:
-    cluster_profile: vsphere
+    cluster_profile: vsphere-2
 `
 
 var parsedConfig = &api.ReleaseBuildConfiguration{
@@ -837,7 +837,7 @@ var parsedConfig = &api.ReleaseBuildConfiguration{
 		As:       "e2e-upi-src-vsphere",
 		Commands: `make tests`,
 		OpenshiftInstallerUPISrcClusterTestConfiguration: &api.OpenshiftInstallerUPISrcClusterTestConfiguration{
-			ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: "vsphere"},
+			ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: "vsphere-2"},
 		},
 	}},
 }

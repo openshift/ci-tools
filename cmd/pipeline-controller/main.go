@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"time"
 
@@ -23,6 +24,7 @@ type options struct {
 	github           prowflagutil.GitHubOptions
 	githubEnablement prowflagutil.GitHubEnablementOptions
 	config           configflagutil.ConfigOptions
+	configFile       string
 	dryrun           bool
 }
 
@@ -37,7 +39,8 @@ func (o *options) validate() error {
 }
 
 func (o *options) parseArgs(fs *flag.FlagSet, args []string) error {
-	fs.BoolVar(&o.dryrun, "dry-run", false, "Run in dry-run mode")
+	fs.BoolVar(&o.dryrun, "dry-run", false, "Run in dry-run mode.")
+	fs.StringVar(&o.configFile, "config-file", "", "Config file with list of enabled orgs and repos.")
 
 	o.config.AddFlags(fs)
 	o.github.AddFlags(fs)
@@ -46,6 +49,10 @@ func (o *options) parseArgs(fs *flag.FlagSet, args []string) error {
 
 	if err := fs.Parse(args); err != nil {
 		logrus.WithError(err).Fatal("Could not parse args.")
+	}
+
+	if o.configFile == "" {
+		return fmt.Errorf("--config-file is mandatory")
 	}
 
 	return o.validate()
@@ -104,10 +111,13 @@ func main() {
 		logger.WithError(err).Fatal("error getting GitHub client")
 	}
 
+	watcher := newWatcher(o.configFile, logger)
+	go watcher.watch()
+
 	configDataProvider := NewConfigDataProvider(cfg)
 	go configDataProvider.Run()
 
-	reconciler, err := NewReconciler(mgr, configDataProvider, githubClient, logger)
+	reconciler, err := NewReconciler(mgr, configDataProvider, githubClient, logger, watcher)
 	if err != nil {
 		logger.WithError(err).Fatal("failed to construct github reporter controller")
 	}

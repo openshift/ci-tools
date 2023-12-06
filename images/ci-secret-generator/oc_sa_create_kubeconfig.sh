@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-# E.g., images/ci-secret-generator/oc_sa_create_kubeconfig.sh /tmp build01 default
+# oc --context app.ci extract secret/config-updater -n ci --to=/tmp --confirm
+# E.g., images/ci-secret-generator/oc_sa_create_kubeconfig.sh /tmp build01 default ci
 
 set -euo pipefail
 

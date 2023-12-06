@@ -358,11 +358,11 @@ func TestBuild(t *testing.T) {
 					},
 				},
 				Spec: prpqv1.PullRequestPayloadTestSpec{
-					PullRequest: prpqv1.PullRequestUnderTest{Org: "org",
+					PullRequests: []prpqv1.PullRequestUnderTest{{Org: "org",
 						Repo:        "repo",
 						BaseRef:     "ref",
 						BaseSHA:     "sha",
-						PullRequest: prpqv1.PullRequest{Number: 123, Author: "login", SHA: "head-sha", Title: "title"}},
+						PullRequest: prpqv1.PullRequest{Number: 123, Author: "login", SHA: "head-sha", Title: "title"}}},
 					Jobs: prpqv1.PullRequestPayloadJobSpec{
 						ReleaseControllerConfig: prpqv1.ReleaseControllerConfig{OCP: "4.10", Release: "nightly", Specifier: "ci"},
 						Jobs: []prpqv1.ReleaseJobSpec{
@@ -418,11 +418,11 @@ func TestBuild(t *testing.T) {
 					},
 				},
 				Spec: prpqv1.PullRequestPayloadTestSpec{
-					PullRequest: prpqv1.PullRequestUnderTest{Org: "org",
+					PullRequests: []prpqv1.PullRequestUnderTest{{Org: "org",
 						Repo:        "repo",
 						BaseRef:     "ref",
 						BaseSHA:     "sha",
-						PullRequest: prpqv1.PullRequest{Number: 123, Author: "login", SHA: "head-sha", Title: "title"}},
+						PullRequest: prpqv1.PullRequest{Number: 123, Author: "login", SHA: "head-sha", Title: "title"}}},
 					Jobs: prpqv1.PullRequestPayloadJobSpec{
 						Jobs: []prpqv1.ReleaseJobSpec{
 							{

@@ -186,7 +186,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 				},
 			}},
 			readFile: func(filename string) ([]byte, error) {
-				if filename != ".ci-operator.yaml" {
+				if filename != "./.ci-operator.yaml" {
 					return nil, fmt.Errorf("expected '.ci-operator.yaml' as file for the build_root_image, got %s", filename)
 				}
 				return []byte(`build_root_image:
@@ -254,7 +254,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 				},
 			}},
 			readFile: func(filename string) ([]byte, error) {
-				if filename != ".ci-operator.yaml" {
+				if filename != "./.ci-operator.yaml" {
 					return nil, fmt.Errorf("expected '.ci-operator.yaml' as file for the build_root_image, got %s", filename)
 				}
 				return []byte(`build_root_image:
@@ -892,6 +892,171 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}},
 			expectedError: fmt.Errorf("failed to read buildRootImageStream from repository: %w", fmt.Errorf("failed to read .ci-operator.yaml file: %w", fmt.Errorf("fail to read file: reason"))),
 		},
+		{
+			name: "from multiple repo references",
+			input: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BuildRootImages: map[string]api.BuildRootImageConfiguration{
+						"org.repo": {
+							ImageStreamTagReference: &api.ImageStreamTagReference{
+								Namespace: "root-ns",
+								Name:      "root-name",
+								Tag:       "manual",
+							},
+						},
+						"org.other-repo": {
+							ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
+							UseBuildCache:           true,
+						},
+					},
+				},
+				BinaryBuildCommandsList: []api.RefCommands{
+					{
+						Commands: "binbuild",
+						Ref:      "org.repo",
+					},
+					{
+						Commands: "build",
+						Ref:      "org.other-repo",
+					},
+				},
+				TestBinaryBuildCommandsList: []api.RefCommands{
+					{
+						Commands: "build test-bin",
+						Ref:      "org.repo",
+					},
+					{
+						Commands: "build tb",
+						Ref:      "org.other-repo",
+					},
+				},
+				RpmBuildCommandsList: []api.RefCommands{
+					{
+						Commands: "build rpm",
+						Ref:      "org.repo",
+					},
+					{
+						Commands: "build this-rpm",
+						Ref:      "org.other-repo",
+					},
+				},
+				RpmBuildLocationList: []api.RefLocation{
+					{
+						Location: "here",
+						Ref:      "org.repo",
+					},
+					{
+						Location: "there",
+						Ref:      "org.other-repo",
+					},
+				},
+			},
+			jobSpec: &api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					ExtraRefs: []prowapi.Refs{
+						{
+							Org:  "org",
+							Repo: "repo",
+						},
+						{
+							Org:  "org",
+							Repo: "other-repo",
+						},
+					},
+				},
+			},
+			resolver: noopResolver,
+			output: []api.StepConfiguration{
+				{
+					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
+						From: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.repo", api.PipelineImageStreamTagReferenceRoot)),
+						To:   api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.repo", api.PipelineImageStreamTagReferenceSource)),
+						Ref:  "org.repo",
+					}),
+				}, {
+					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
+						From: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceRoot)),
+						To:   api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceSource)),
+						Ref:  "org.other-repo",
+					}),
+				}, {
+					InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+						InputImage: api.InputImage{
+							BaseImage: api.ImageStreamTagReference{
+								Namespace: "root-ns",
+								Name:      "root-name",
+								Tag:       "manual",
+							},
+							To:  api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.repo", api.PipelineImageStreamTagReferenceRoot)),
+							Ref: "org.repo",
+						},
+						Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceType(fmt.Sprintf("%s-org.repo", api.ImageStreamSourceRoot))}},
+					},
+				}, {
+					InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+						InputImage: api.InputImage{
+							BaseImage: api.ImageStreamTagReference{
+								Tag: "manual",
+							},
+							To:  api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceRoot)),
+							Ref: "org.other-repo",
+						},
+						Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceType(fmt.Sprintf("%s-org.other-repo", api.ImageStreamSourceRoot))}},
+					},
+				}, {
+					PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
+						From:     api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.repo", api.PipelineImageStreamTagReferenceSource)),
+						To:       api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.repo", api.PipelineImageStreamTagReferenceBinaries)),
+						Commands: "binbuild",
+						Ref:      "org.repo",
+					},
+				}, {
+					PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
+						From:     api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceSource)),
+						To:       api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceBinaries)),
+						Commands: "build",
+						Ref:      "org.other-repo",
+					},
+				}, {
+					PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
+						From:     api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.repo", api.PipelineImageStreamTagReferenceSource)),
+						To:       api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.repo", api.PipelineImageStreamTagReferenceTestBinaries)),
+						Commands: "build test-bin",
+						Ref:      "org.repo",
+					},
+				}, {
+					PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
+						From:     api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceSource)),
+						To:       api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceTestBinaries)),
+						Commands: "build tb",
+						Ref:      "org.other-repo",
+					},
+				}, {
+					PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
+						From:     api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.repo", api.PipelineImageStreamTagReferenceBinaries)),
+						To:       api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.repo", api.PipelineImageStreamTagReferenceRPMs)),
+						Commands: "build rpm; ln -s $( pwd )/here /srv/repo",
+						Ref:      "org.repo",
+					},
+				}, {
+					PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
+						From:     api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceBinaries)),
+						To:       api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceRPMs)),
+						Commands: "build this-rpm; ln -s $( pwd )/there /srv/repo",
+						Ref:      "org.other-repo",
+					},
+				}, {
+					RPMServeStepConfiguration: &api.RPMServeStepConfiguration{
+						From: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.repo", api.PipelineImageStreamTagReferenceRPMs)),
+						Ref:  "org.repo",
+					},
+				}, {
+					RPMServeStepConfiguration: &api.RPMServeStepConfiguration{
+						From: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceRPMs)),
+						Ref:  "org.other-repo",
+					},
+				}},
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -975,6 +1140,8 @@ func TestFromConfig(t *testing.T) {
 		name: "pipeline",
 		tags: []string{
 			"base_image", "base_rpm_image-without-rpms", "rpms",
+			"base_rpm_image-org.repo1-without-rpms", "base_rpm_image-org.repo2-without-rpms",
+			"rpms-org.repo1", "rpms-org.repo2",
 			"src", "bin", "to",
 			"ci-bundle0", "ci-index",
 		},
@@ -1005,7 +1172,7 @@ func TestFromConfig(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	buildClient := steps.NewBuildClient(client, nil, nil)
+	buildClient := steps.NewBuildClient(client, nil, nil, "", "")
 	var templateClient steps.TemplateClient
 	podClient := kubernetes.NewPodClient(client, nil, nil, 0)
 
@@ -1137,6 +1304,24 @@ func TestFromConfig(t *testing.T) {
 		},
 		expectedSteps: []string{"root", "[output-images]", "[images]"},
 	}, {
+		name: "multiple build roots",
+		config: api.ReleaseBuildConfiguration{
+			InputConfiguration: api.InputConfiguration{
+				BuildRootImages: map[string]api.BuildRootImageConfiguration{
+					"org.repo1": {
+						ProjectImageBuild: &api.ProjectDirectoryImageBuildInputs{
+							ContextDir:     "context_dir",
+							DockerfilePath: "dockerfile_path",
+						}},
+					"org.repo2": {ProjectImageBuild: &api.ProjectDirectoryImageBuildInputs{
+						ContextDir:     "context_dir",
+						DockerfilePath: "dockerfile_path",
+					}},
+				},
+			},
+		},
+		expectedSteps: []string{"root-org.repo1", "root-org.repo2", "[output-images]", "[images]"},
+	}, {
 		name: "base RPM images",
 		config: api.ReleaseBuildConfiguration{
 			InputConfiguration: api.InputConfiguration{
@@ -1159,6 +1344,36 @@ func TestFromConfig(t *testing.T) {
 			"LOCAL_IMAGE_BASE_RPM_IMAGE_WITHOUT_RPMS": "public_docker_image_repository:base_rpm_image-without-rpms",
 		},
 	}, {
+		name: "multiple base RPM images",
+		config: api.ReleaseBuildConfiguration{
+			InputConfiguration: api.InputConfiguration{
+				BaseRPMImages: map[string]api.ImageStreamTagReference{
+					"base_rpm_image-org.repo1": {
+						Name:      "base_rpm_image",
+						Namespace: ns,
+						Tag:       "tag",
+					},
+					"base_rpm_image-org.repo2": {
+						Name:      "base_rpm_image",
+						Namespace: ns,
+						Tag:       "tag",
+					},
+				},
+			},
+		},
+		expectedSteps: []string{
+			"[input:base_rpm_image-org.repo1-without-rpms]",
+			"base_rpm_image-org.repo1",
+			"[input:base_rpm_image-org.repo2-without-rpms]",
+			"base_rpm_image-org.repo2",
+			"[output-images]",
+			"[images]",
+		},
+		expectedParams: map[string]string{
+			"LOCAL_IMAGE_BASE_RPM_IMAGE_ORG.REPO1_WITHOUT_RPMS": "public_docker_image_repository:base_rpm_image-org.repo1-without-rpms",
+			"LOCAL_IMAGE_BASE_RPM_IMAGE_ORG.REPO2_WITHOUT_RPMS": "public_docker_image_repository:base_rpm_image-org.repo2-without-rpms",
+		},
+	}, {
 		name: "RPM build",
 		config: api.ReleaseBuildConfiguration{
 			RpmBuildCommands: "make rpm",
@@ -1171,6 +1386,32 @@ func TestFromConfig(t *testing.T) {
 		},
 		expectedParams: map[string]string{
 			"LOCAL_IMAGE_RPMS": "public_docker_image_repository:rpms",
+		},
+	}, {
+		name: "multiple RPM builds",
+		config: api.ReleaseBuildConfiguration{
+			RpmBuildCommandsList: []api.RefCommands{
+				{
+					Ref:      "org.repo1",
+					Commands: "make rpm",
+				},
+				{
+					Ref:      "org.repo2",
+					Commands: "make other-rpm",
+				},
+			},
+		},
+		expectedSteps: []string{
+			"rpms-org.repo1",
+			"[serve:rpms-org.repo1]",
+			"rpms-org.repo2",
+			"[serve:rpms-org.repo2]",
+			"[output-images]",
+			"[images]",
+		},
+		expectedParams: map[string]string{
+			"LOCAL_IMAGE_RPMS_ORG.REPO1": "public_docker_image_repository:rpms-org.repo1",
+			"LOCAL_IMAGE_RPMS_ORG.REPO2": "public_docker_image_repository:rpms-org.repo2",
 		},
 	}, {
 		name: "tag specification",
@@ -1484,6 +1725,9 @@ func TestFromConfig(t *testing.T) {
 			if diff := cmp.Diff(tc.expectedParams, paramMap); diff != "" {
 				t.Errorf("unexpected parameters: %v", diff)
 			}
+			// When using multiples, there are steps where the ordering will not be deterministic so we must sort
+			sort.Strings(stepNames)
+			sort.Strings(tc.expectedSteps)
 			if diff := cmp.Diff(tc.expectedSteps, stepNames); diff != "" {
 				t.Errorf("unexpected steps: %v", diff)
 			}

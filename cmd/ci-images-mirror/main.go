@@ -59,6 +59,8 @@ type quayIOCIImagesDistributorOptions struct {
 	additionalImageStreamTagsRaw       flagutil.Strings
 	additionalImageStreamsRaw          flagutil.Strings
 	additionalImageStreamNamespacesRaw flagutil.Strings
+
+	ignoreImageStreamTagsRaw flagutil.Strings
 }
 
 func newOpts() *options {
@@ -74,6 +76,7 @@ func newOpts() *options {
 	fs.Var(&opts.quayIOCIImagesDistributorOptions.additionalImageStreamTagsRaw, "quayIOCIImagesDistributorOptions.additional-image-stream-tag", "An imagestreamtag that will be distributed even if no test explicitly references it. It must be in namespace/name:tag format (e.G `ci/clonerefs:latest`). Can be passed multiple times.")
 	fs.Var(&opts.quayIOCIImagesDistributorOptions.additionalImageStreamsRaw, "quayIOCIImagesDistributorOptions.additional-image-stream", "An imagestream that will be distributed even if no test explicitly references it. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
 	fs.Var(&opts.quayIOCIImagesDistributorOptions.additionalImageStreamNamespacesRaw, "quayIOCIImagesDistributorOptions.additional-image-stream-namespace", "A namespace in which imagestreams will be distributed even if no test explicitly references them (e.G `ci`). Can be passed multiple times.")
+	fs.Var(&opts.quayIOCIImagesDistributorOptions.ignoreImageStreamTagsRaw, "quayIOCIImagesDistributorOptions.ignore-image-stream-tag", "An imagestreamtag that will be ignored to mirror. It overrides --addition-* flags. It must be in namespace/name:tag format (e.G `ci/clonerefs:latest`). Can be passed multiple times.")
 	fs.IntVar(&opts.port, "port", 8090, "Port to run the server on")
 	fs.DurationVar(&opts.gracePeriod, "gracePeriod", time.Second*10, "Grace period for server shutdown")
 	fs.BoolVar(&opts.onlyValidManifestV2Images, "only-valid-manifest-v2-images", true, "If set, source images with invalidate manifests of v2 will not be mirrored")
@@ -191,12 +194,16 @@ func main() {
 	interrupts.Run(func(ctx context.Context) { execute(ctx, mirrorConsumerController) })
 
 	if opts.enabledControllersSet.Has(quayiociimagesdistributor.ControllerName) {
+		if err := quayiociimagesdistributor.RegisterMetrics(); err != nil {
+			logrus.WithError(err).Fatal("failed to register metrics")
+		}
 		if err := quayiociimagesdistributor.AddToManager(mgr,
 			ciOPConfigAgent,
 			registryConfigAgent,
 			sets.New[string](opts.quayIOCIImagesDistributorOptions.additionalImageStreamTagsRaw.Strings()...),
 			sets.New[string](opts.quayIOCIImagesDistributorOptions.additionalImageStreamsRaw.Strings()...),
 			sets.New[string](opts.quayIOCIImagesDistributorOptions.additionalImageStreamNamespacesRaw.Strings()...),
+			sets.New[string](opts.quayIOCIImagesDistributorOptions.ignoreImageStreamTagsRaw.Strings()...),
 			quayIOImageHelper,
 			mirrorStore,
 			opts.registryConfig,

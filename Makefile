@@ -181,6 +181,7 @@ local-e2e: \
 	$(TMPDIR)/sa.hive.hive.token.txt \
 	$(TMPDIR)/local-secret/.dockerconfigjson \
 	$(TMPDIR)/remote-secret/.dockerconfigjson \
+	$(TMPDIR)/manifest-tool-secret/.dockerconfigjson \
 	$(TMPDIR)/gcs/service-account.json \
 	$(TMPDIR)/boskos \
 	$(TMPDIR)/prometheus \
@@ -190,6 +191,8 @@ local-e2e: \
 	$(eval export LOCAL_REGISTRY_SECRET_DIR=$(TMPDIR)/local-secret)
 	$(eval export REMOTE_REGISTRY_SECRET_DIR=$(TMPDIR)/remote-secret)
 	$(eval export GCS_CREDENTIALS_FILE=$(TMPDIR)/gcs/service-account.json)
+	$(eval export MANIFEST_TOOL_SECRET=$(TMPDIR)/manifest-tool-secret/.dockerconfigjson)
+	$(eval export LOCAL_REGISTRY_DNS=$(oc get route -n openshift-image-registry -o jsonpath='{.items[0].spec.host}')) 
 	$(eval export PATH=${PATH}:$(TMPDIR))
 	@$(MAKE) e2e
 .PHONY: local-e2e
@@ -336,6 +339,10 @@ $(TMPDIR)/boskos:
 	mv $(TMPDIR)/image/app $(TMPDIR)/boskos
 	chmod +x $(TMPDIR)/boskos
 	rm -rf $(TMPDIR)/image
+
+$(TMPDIR)/manifest-tool-secret/.dockerconfigjson:
+	mkdir -p $(TMPDIR)/manifest-tool-secret
+	oc --context $(CLUSTER) --as system:admin --namespace test-credentials get secret manifest-tool-local-pusher -o 'jsonpath={.data.\.dockerconfigjson}' | base64 --decode | jq > $(TMPDIR)/manifest-tool-secret/.dockerconfigjson
 
 local-pod-scaler: $(TMPDIR)/prometheus $(TMPDIR)/promtool cmd/pod-scaler/frontend/dist
 	$(eval export PATH=${PATH}:$(TMPDIR))

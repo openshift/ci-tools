@@ -114,6 +114,26 @@ func GCSPushCredentialsFlag(t *T) string {
 	return flag("gcs-upload-secret", value)
 }
 
+// ManifestToolCredentialsFlag formats a flag to provide access to push the manifest listed image
+// to the target registry for ci-operator, failing if the required env is not present to supply it.
+func ManifestToolCredentialsFlag(t *T) string {
+	value, set := os.LookupEnv("MANIFEST_TOOL_SECRET")
+	if !set {
+		t.Fatal("required environment MANIFEST_TOOL_SECRET is not set")
+	}
+	return flag("manifest-tool-dockercfg", value)
+}
+
+// LocalRegistryDNSFlag formats a flag for the targeted image registry DNS for ci-operator,
+// failing if the required env is not present to supply it.
+func LocalRegistryDNSFlag(t *T) string {
+	value, set := os.LookupEnv("LOCAL_REGISTRY_DNS")
+	if !set {
+		t.Fatal("required environment LOCAL_REGISTRY_DNS is not set")
+	}
+	return flag("local-registry-dns", value)
+}
+
 // KubernetesClientEnv returns a list of formatted environment variables for
 // use in providing to a exec.Command to allow it to talk to a k8s cluster.
 func KubernetesClientEnv(t *T) []string {

@@ -33,6 +33,10 @@ type MultiArchBuildConfig struct {
 
 type MultiArchBuildConfigSpec struct {
 	BuildSpec buildv1.BuildConfigSpec `json:"build_spec"`
+	// ExternalRegistries is a list of external registrie URLs the images are
+	// going to be pushed to. Private registries are allows as long as the
+	// mabc controller holds valid credentials.
+	ExternalRegistries []string `json:"external_registries,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -47,7 +51,6 @@ type MultiArchBuildConfigList struct {
 type MultiArchBuildConfigStatus struct {
 	Conditions []metav1.Condition        `json:"conditions,omitempty"`
 	State      MultiArchBuildConfigState `json:"state,omitempty"`
-	Builds     map[string]*buildv1.Build `json:"builds,omitempty"`
 }
 
 type MultiArchBuildConfigState string
@@ -61,16 +64,17 @@ const (
 
 func UpdateMultiArchBuildConfig(ctx context.Context, logger *logrus.Entry, client ctrlruntimeclient.Client, namespacedName types.NamespacedName, mutateFn func(mabcToMutate *MultiArchBuildConfig)) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		multiArchBuildConfig := &MultiArchBuildConfig{}
-		if err := client.Get(ctx, namespacedName, multiArchBuildConfig); err != nil {
+		mabc := &MultiArchBuildConfig{}
+		if err := client.Get(ctx, namespacedName, mabc); err != nil {
 			return fmt.Errorf("failed to get the MultiArchBuildConfig: %w", err)
 		}
 
-		mutateFn(multiArchBuildConfig)
+		mabc = mabc.DeepCopy()
+		mutateFn(mabc)
 
 		logger.WithField("namespace", namespacedName.Namespace).WithField("name", namespacedName.Name).Info("Updating MultiArchBuildConfig...")
-		if err := client.Update(ctx, multiArchBuildConfig); err != nil {
-			return fmt.Errorf("failed to update MultiArchBuildConfig %s: %w", multiArchBuildConfig.Name, err)
+		if err := client.Update(ctx, mabc); err != nil {
+			return fmt.Errorf("failed to update MultiArchBuildConfig %s: %w", mabc.Name, err)
 		}
 		return nil
 	})

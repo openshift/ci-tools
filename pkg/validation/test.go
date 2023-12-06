@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 // testStage is the point in a multi-stage test where a step is located.
@@ -119,6 +120,7 @@ func (v *Validator) validateTestStepConfiguration(
 	fieldRoot string,
 	input []api.TestStepConfiguration,
 	release *api.ReleaseTagConfiguration,
+	metadata *api.Metadata,
 	releases, images sets.Set[string],
 	resolved bool,
 ) []error {
@@ -242,10 +244,10 @@ func (v *Validator) validateTestStepConfiguration(
 			}
 		}
 
-		validationErrors = append(validationErrors, v.validateTestConfigurationType(fieldRootN, test, release, releases, inputImagesSeen, resolved)...)
+		validationErrors = append(validationErrors, v.validateTestConfigurationType(fieldRootN, test, metadata, release, releases, inputImagesSeen, resolved)...)
 	}
 	for tag, field := range inputImagesSeen {
-		if err := configCtx.AddField(string(field)).addPipelineImage(tag); err != nil {
+		if err := configCtx.AddField(string(field)).addPipelineImage(tag, ""); err != nil {
 			validationErrors = append(validationErrors, err)
 		}
 	}
@@ -414,9 +416,12 @@ func validateTestStepDependencies(config *api.ReleaseBuildConfiguration) []error
 	return errs
 }
 
-func (v *Validator) validateClusterProfile(fieldRoot string, p api.ClusterProfile) []error {
+func (v *Validator) validateClusterProfile(fieldRoot string, p api.ClusterProfile, metadata *api.Metadata) []error {
 	if v.validClusterProfiles != nil {
 		if _, ok := v.validClusterProfiles[p]; ok {
+			if err := verifyClusterProfileOwnership(v.validClusterProfiles[p], metadata); err != nil {
+				return []error{err}
+			}
 			return nil
 		}
 	} else {
@@ -427,6 +432,26 @@ func (v *Validator) validateClusterProfile(fieldRoot string, p api.ClusterProfil
 		}
 	}
 	return []error{fmt.Errorf("%s: invalid cluster profile %q", fieldRoot, p)}
+}
+
+// verifyClusterProfileOwnership checks if metadata's org and repo match those in the profile,
+// verifying if it's one of the owners of the profile.
+func verifyClusterProfileOwnership(profile api.ClusterProfileDetails, m *api.Metadata) error {
+	if m == nil || m.Org == "" {
+		return fmt.Errorf("can't do ownership check, metadata not defined")
+	}
+	if profile.Owners == nil || len(profile.Owners) == 0 {
+		return nil
+	}
+	for _, owner := range profile.Owners {
+		if owner.Org != m.Org {
+			continue
+		}
+		if owner.Repos == nil || util.Contains(owner.Repos, m.Repo) {
+			return nil
+		}
+	}
+	return fmt.Errorf("%s/%s is not an owner of the cluster profile: %q", m.Org, m.Repo, profile.Profile)
 }
 
 func searchForTestDuplicates(tests []api.TestStepConfiguration) []error {
@@ -450,6 +475,7 @@ func searchForTestDuplicates(tests []api.TestStepConfiguration) []error {
 func (v *Validator) validateTestConfigurationType(
 	fieldRoot string,
 	test api.TestStepConfiguration,
+	metadata *api.Metadata,
 	release *api.ReleaseTagConfiguration,
 	releases sets.Set[string],
 	inputImagesSeen testInputImages,
@@ -496,33 +522,33 @@ func (v *Validator) validateTestConfigurationType(
 	if testConfig := test.OpenshiftAnsibleClusterTestConfiguration; testConfig != nil {
 		typeCount++
 		needsReleaseRpms = true
-		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
+		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile, metadata)...)
 	}
 	if testConfig := test.OpenshiftAnsibleSrcClusterTestConfiguration; testConfig != nil {
 		typeCount++
 		needsReleaseRpms = true
-		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
+		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile, metadata)...)
 	}
 	if testConfig := test.OpenshiftAnsibleCustomClusterTestConfiguration; testConfig != nil {
 		typeCount++
 		needsReleaseRpms = true
-		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
+		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile, metadata)...)
 	}
 	if testConfig := test.OpenshiftInstallerClusterTestConfiguration; testConfig != nil {
 		typeCount++
-		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
+		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile, metadata)...)
 	}
 	if testConfig := test.OpenshiftInstallerUPIClusterTestConfiguration; testConfig != nil {
 		typeCount++
-		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
+		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile, metadata)...)
 	}
 	if testConfig := test.OpenshiftInstallerUPISrcClusterTestConfiguration; testConfig != nil {
 		typeCount++
-		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
+		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile, metadata)...)
 	}
 	if testConfig := test.OpenshiftInstallerCustomTestImageClusterTestConfiguration; testConfig != nil {
 		typeCount++
-		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
+		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile, metadata)...)
 	}
 	var claimRelease *api.ClaimRelease
 	if test.ClusterClaim != nil {
@@ -535,7 +561,7 @@ func (v *Validator) validateTestConfigurationType(
 		typeCount++
 		if testConfig.ClusterProfile != "" {
 			clusterCount++
-			validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
+			validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile, metadata)...)
 		}
 		context := newContext(fieldPath(fieldRoot), testConfig.Environment, releases, inputImagesSeen)
 		validationErrors = append(validationErrors, validateLeases(context.addField("leases"), testConfig.Leases)...)
@@ -548,7 +574,7 @@ func (v *Validator) validateTestConfigurationType(
 		context := newContext(fieldPath(fieldRoot).addField("steps"), testConfig.Environment, releases, inputImagesSeen)
 		if testConfig.ClusterProfile != "" {
 			clusterCount++
-			validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
+			validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile, metadata)...)
 		}
 		validationErrors = append(validationErrors, validateLeases(context.addField("leases"), testConfig.Leases)...)
 		for i, s := range testConfig.Pre {

@@ -8,7 +8,7 @@ This manager attempts to automatize step (1.) of "[Few weeks before branching da
 
 ### Example
 ```sh
-    $ ./generated-release-gating-jobs \
+    $ ./rpm-deps-mirroring-services \
         --current-release "4.12" \
         --release-repo "/full/path/to/openshift/release/repo"
 ```

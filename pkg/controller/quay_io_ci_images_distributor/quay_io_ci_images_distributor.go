@@ -41,7 +41,7 @@ type registryResolver interface {
 func AddToManager(manager manager.Manager,
 	configAgent agents.ConfigAgent,
 	resolver registryResolver,
-	additionalImageStreamTags, additionalImageStreams, additionalImageStreamNamespaces sets.Set[string],
+	additionalImageStreamTags, additionalImageStreams, additionalImageStreamNamespaces, ignoreImageStreamTags sets.Set[string],
 	quayIOImageHelper QuayIOImageHelper,
 	mirrorStore MirrorStore,
 	registryConfig string,
@@ -75,7 +75,7 @@ func AddToManager(manager manager.Manager,
 		return fmt.Errorf("failed to construct controller: %w", err)
 	}
 
-	objectFilter, err := testInputImageStreamTagFilterFactory(log, configAgent, resolver, additionalImageStreamTags, additionalImageStreams, additionalImageStreamNamespaces)
+	objectFilter, err := testInputImageStreamTagFilterFactory(log, configAgent, resolver, additionalImageStreamTags, additionalImageStreams, additionalImageStreamNamespaces, ignoreImageStreamTags)
 	if err != nil {
 		return fmt.Errorf("failed to get filter for ImageStreamTags: %w", err)
 	}
@@ -233,13 +233,17 @@ func testInputImageStreamTagFilterFactory(
 	resolver registryResolver,
 	additionalImageStreamTags,
 	additionalImageStreams,
-	additionalImageStreamNamespaces sets.Set[string],
+	additionalImageStreamNamespaces,
+	ignoreImageStreamTags sets.Set[string],
 ) (objectFilter, error) {
 	if err := ca.AddIndex(configIndexName, indexConfigsByTestInputImageStreamTag(resolver)); err != nil {
 		return nil, fmt.Errorf("failed to add %s index to configAgent: %w", configIndexName, err)
 	}
 	l = logrus.WithField("subcomponent", "test-input-image-stream-tag-filter")
 	return func(nn types.NamespacedName) bool {
+		if ignoreImageStreamTags.Has(nn.String()) {
+			return false
+		}
 		if additionalImageStreamTags.Has(nn.String()) {
 			return true
 		}

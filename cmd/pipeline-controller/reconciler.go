@@ -88,6 +88,7 @@ type reconciler struct {
 	closedPRsCache     closedPRsCache
 	ids                sync.Map
 	logger             *logrus.Entry
+	watcher            *watcher
 }
 
 func NewReconciler(
@@ -95,6 +96,7 @@ func NewReconciler(
 	configDataProvider *ConfigDataProvider,
 	ghc github.Client,
 	logger *logrus.Entry,
+	w *watcher,
 ) (*reconciler, error) {
 	reconciler := &reconciler{
 		pjclientset:        mgr.GetClient(),
@@ -103,6 +105,7 @@ func NewReconciler(
 		ghc:                ghc,
 		ids:                sync.Map{},
 		logger:             logger,
+		watcher:            w,
 		closedPRsCache: closedPRsCache{
 			prs:       map[string]pullRequest{},
 			m:         sync.Mutex{},
@@ -160,6 +163,12 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request) error
 
 	presubmits := r.configDataProvider.GetPresubmits(pj.Spec.Refs.Org + "/" + pj.Spec.Refs.Repo)
 	if len(presubmits.protected) == 0 && len(presubmits.alwaysRequired) == 0 && len(presubmits.conditionallyRequired) == 0 {
+		return nil
+	}
+
+	currentCfg := r.watcher.getConfig()
+	repos, ok := currentCfg[pj.Spec.Refs.Org]
+	if !ok || !(repos.Len() == 0 || repos.Has(pj.Spec.Refs.Repo)) {
 		return nil
 	}
 

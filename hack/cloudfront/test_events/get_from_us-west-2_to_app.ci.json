@@ -1,0 +1,40 @@
+{
+  "Records": [
+    {
+      "cf": {
+        "config": {
+          "distributionDomainName": "d1wgmlmph9kt2c.cloudfront.net",
+          "distributionId": "E2KP8SMSY4XB67",
+          "eventType": "viewer-request",
+          "requestId": "4TyzHTaYWb1GX1qTfsHhEqV6HUDd_BzoBZnwfnvQc_1oF26ClkoUSEQ=="
+        },
+        "request": {
+          "clientIp": "52.22.255.189",
+          "headers": {
+            "host": [
+              {
+                "key": "Host",
+                "value": "d1wgmlmph9kt2c.cloudfront.net"
+              }
+            ],
+            "user-agent": [
+              {
+                "key": "User-Agent",
+                "value": "debug/us-west-2"
+              }
+            ],
+            "accept": [
+              {
+                "key": "accept",
+                "value": "*/*"
+              }
+            ]
+          },
+          "method": "GET",
+          "querystring": "",
+          "uri": "/docker/registry/v2/blobs/sha256/00/00003041a8f11a5099193d97821acbc53644ac4704cd7be7ad763f670e4f2dfa/data"
+        }
+      }
+    }
+  ]
+}

@@ -29,7 +29,11 @@ type PullRequestPayloadQualificationRun struct {
 // and the list of individual jobs that should be executed.
 type PullRequestPayloadTestSpec struct {
 	// PullRequest specifies the code to be tested. Immutable and required.
-	PullRequest PullRequestUnderTest `json:"pullRequest"`
+	// Deprecated: use PullRequests instead.
+	//TODO(sgoeddel): this is only here during the transitional period
+	PullRequest PullRequestUnderTest `json:"pullRequest,omitempty"`
+	// PullRequests specifies the code to be tested. Immutable and required.
+	PullRequests []PullRequestUnderTest `json:"pullRequests,omitempty"`
 	// Jobs specifies the jobs to be executed. Immutable.
 	Jobs PullRequestPayloadJobSpec `json:"jobs"`
 }

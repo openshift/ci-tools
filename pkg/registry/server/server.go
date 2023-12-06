@@ -9,6 +9,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/test-infra/prow/metrics"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -261,7 +262,9 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 			InputConfiguration: api.InputConfiguration{
 				BuildRootImages: make(map[string]api.BuildRootImageConfiguration, len(metadataList)),
 				BaseImages:      make(map[string]api.ImageStreamTagReference),
+				BaseRPMImages:   make(map[string]api.ImageStreamTagReference),
 			},
+			Resources: make(api.ResourceConfiguration),
 		}
 		for _, metadata := range metadataList {
 			configLogger := logger.WithFields(api.LogFieldsFor(metadata))
@@ -274,12 +277,12 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 				configLogger.WithError(err).Warning("failed to get config")
 				return
 			}
-			ref := fmt.Sprintf("%s/%s", metadata.Org, metadata.Repo)
+			ref := fmt.Sprintf("%s.%s", metadata.Org, metadata.Repo)
 
 			mergedConfig.BuildRootImages[ref] = *config.BuildRootImage
 
 			for key, image := range config.BaseImages {
-				imageRef := fmt.Sprintf("%s.%s", ref, key)
+				imageRef := fmt.Sprintf("%s-%s", key, ref)
 				mergedConfig.BaseImages[imageRef] = image
 			}
 			if config.BinaryBuildCommands != "" {
@@ -306,6 +309,10 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 					Location: config.RpmBuildLocation,
 				})
 			}
+			for key, image := range config.BaseRPMImages {
+				imageRef := fmt.Sprintf("%s-%s", key, ref)
+				mergedConfig.BaseRPMImages[imageRef] = image
+			}
 			if config.Operator != nil {
 				if mergedConfig.Operator == nil {
 					mergedConfig.Operator = config.Operator
@@ -314,6 +321,92 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 					mergedConfig.Operator.Bundles = append(mergedConfig.Operator.Bundles, config.Operator.Bundles...)
 					mergedConfig.Operator.Substitutions = append(mergedConfig.Operator.Substitutions, config.Operator.Substitutions...)
 				}
+			}
+			if config.CanonicalGoRepository != nil {
+				mergedConfig.CanonicalGoRepositoryList = append(mergedConfig.CanonicalGoRepositoryList, api.RefRepository{
+					Ref:        ref,
+					Repository: *config.CanonicalGoRepository,
+				})
+			}
+			for step, resources := range config.Resources {
+				if step == "*" { // * is special, and the ref should not be appended, it will be merged to use the greatest value instead
+					if existing, ok := mergedConfig.Resources["*"]; ok {
+						replaceIfGreater := func(resourceType string) {
+							existingValue, err := resource.ParseQuantity(existing.Requests[resourceType])
+							if err != nil {
+								logger.WithError(err).Warnf("couldn't parse existing '%s' resource quantity", resourceType)
+								return
+							}
+							value, err := resource.ParseQuantity(resources.Requests[resourceType])
+							if err != nil {
+								logger.WithError(err).Warnf("couldn't parse '%s' resource quantity", resourceType)
+								return
+							}
+							if existingValue.Cmp(value) < 0 { // This value is higher than existing
+								mergedConfig.Resources["*"].Requests[resourceType] = resources.Requests[resourceType]
+							}
+						}
+						replaceIfGreater("memory")
+						replaceIfGreater("cpu")
+					} else {
+						mergedConfig.Resources["*"] = api.ResourceRequirements{
+							Requests: resources.Requests,
+							// We cannot set Limits for * because other configs may not be able to fall under them
+						}
+					}
+				} else {
+					stepWithRef := fmt.Sprintf("%s-%s", step, ref)
+					mergedConfig.Resources[stepWithRef] = resources
+				}
+			}
+			if len(config.Releases) > 0 && len(mergedConfig.Releases) == 0 {
+				// Since the release configs "should" be identical, we can just use the first one we come across
+				mergedConfig.Releases = config.Releases
+			}
+
+			for i := range config.Images {
+				image := config.Images[i]
+				if image.From != "" {
+					image.From = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", image.From, ref))
+				}
+				inputs := make(map[string]api.ImageBuildInputs)
+				for name, input := range image.Inputs {
+					inputs[fmt.Sprintf("%s-%s", name, ref)] = input
+				}
+				image.Inputs = inputs
+				image.To = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", image.To, ref))
+				image.Ref = ref
+				mergedConfig.Images = append(mergedConfig.Images, image)
+			}
+
+			// Attempt to handle a few simple raw_step types on a best-effort basis
+			for i := range config.RawSteps {
+				rawStep := config.RawSteps[i]
+				modifiedStep := rawStep.DeepCopy()
+				if rawStep.RPMImageInjectionStepConfiguration != nil {
+					to := fmt.Sprintf("%s-%s", rawStep.RPMImageInjectionStepConfiguration.To, ref)
+					modifiedStep.RPMImageInjectionStepConfiguration.To = api.PipelineImageStreamTagReference(to)
+					from := fmt.Sprintf("%s-%s", rawStep.RPMImageInjectionStepConfiguration.From, ref)
+					modifiedStep.RPMImageInjectionStepConfiguration.From = api.PipelineImageStreamTagReference(from)
+				} else if rawStep.ProjectDirectoryImageBuildStepConfiguration != nil {
+					to := fmt.Sprintf("%s-%s", rawStep.ProjectDirectoryImageBuildStepConfiguration.To, ref)
+					modifiedStep.ProjectDirectoryImageBuildStepConfiguration.To = api.PipelineImageStreamTagReference(to)
+					from := fmt.Sprintf("%s-%s", rawStep.ProjectDirectoryImageBuildStepConfiguration.From, ref)
+					modifiedStep.ProjectDirectoryImageBuildStepConfiguration.From = api.PipelineImageStreamTagReference(from)
+					modifiedStep.ProjectDirectoryImageBuildStepConfiguration.Ref = ref
+				} else if rawStep.PipelineImageCacheStepConfiguration != nil {
+					to := fmt.Sprintf("%s-%s", rawStep.PipelineImageCacheStepConfiguration.To, ref)
+					modifiedStep.PipelineImageCacheStepConfiguration.To = api.PipelineImageStreamTagReference(to)
+					from := fmt.Sprintf("%s-%s", rawStep.PipelineImageCacheStepConfiguration.From, ref)
+					modifiedStep.PipelineImageCacheStepConfiguration.From = api.PipelineImageStreamTagReference(from)
+				} else if rawStep.OutputImageTagStepConfiguration != nil {
+					from := fmt.Sprintf("%s-%s", rawStep.OutputImageTagStepConfiguration.From, ref)
+					modifiedStep.OutputImageTagStepConfiguration.From = api.PipelineImageStreamTagReference(from)
+					//We don't want to change the 'to' here as it will likely land in stable and shouldn't be modified
+				} else {
+					configLogger.Warnf("raw_steps[%d] in config is of an unsupported type for multi-pr payload testing, this is not handled and may result in errors", i)
+				}
+				mergedConfig.RawSteps = append(mergedConfig.RawSteps, *modifiedStep)
 			}
 		}
 		//TODO: If this is to be used for a general purpose outside of payload testing, we will need to merge tests and other elements

@@ -87,6 +87,7 @@ Created: {{ .ObjectMeta.CreationTimestamp }}
 
 {{ with .Spec }}
 
+{{ if .PullRequest.Org }}
 <h2>Pull request</h2>
 
 {{ with .PullRequest }}
@@ -99,6 +100,23 @@ Created: {{ .ObjectMeta.CreationTimestamp }}
 	</li>
 </ul>
 {{ end }}{{/* with .PullRequest */}}
+{{ else }}
+<h2>Pull requests</h2>
+<ul>
+  {{ range $i, $pullRequest := .PullRequests }}
+	{{ prLink . }} by {{ authorLink .PullRequest.Author }}
+	<li style="list-style:none; padding:">
+      <ul>
+		<li>Repository: {{ repoLink .Org .Repo }}</li>
+		<li>SHA: <tt>{{ shaLink . .PullRequest.SHA }}</tt></li>
+		<li>
+			Base: <tt>{{ refLink . .BaseRef }}</tt> (<tt>{{ shaLink . .BaseSHA }}</tt>)
+		</li>
+	  </ul>
+    </li>
+  {{ end }}
+</ul>
+{{ end }}{{/* if .PullRequest.Org */}}
 
 {{ with .Jobs }}
 

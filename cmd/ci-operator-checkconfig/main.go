@@ -32,14 +32,17 @@ type options struct {
 
 	resolver        registry.Resolver
 	ciOPConfigAgent agents.ConfigAgent
+	clusterProfiles api.ClusterProfilesList
 }
 
 func (o *options) parse() error {
 	var registryDir string
+	var profilesConfigPath string
 
 	fs := flag.NewFlagSet("", flag.ExitOnError)
 
 	fs.StringVar(&registryDir, "registry", "", "Path to the step registry directory")
+	fs.StringVar(&profilesConfigPath, "cluster-profiles-config", "", "Path to the cluster profile config file")
 	o.Options.Bind(fs)
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -49,6 +52,13 @@ func (o *options) parse() error {
 	if err := o.loadResolver(registryDir); err != nil {
 		return fmt.Errorf("failed to load registry: %w", err)
 	}
+
+	profiles, err := load.ClusterProfilesConfig(profilesConfigPath)
+	if err != nil {
+		return fmt.Errorf("failed to load cluster profile config: %w", err)
+	}
+	o.clusterProfiles = profiles
+
 	ciOPConfigAgent, err := agents.NewConfigAgent(o.ConfigDir, nil, agents.WithOrg(o.Org), agents.WithRepo(o.Repo))
 	if err != nil {
 		return fmt.Errorf("failed to create CI Op config agent: %w", err)
@@ -80,7 +90,7 @@ func (o *options) validate() (ret []error) {
 	outputCh := make(chan promotedTag)
 	errCh := make(chan error)
 	map_ := func() error {
-		validator := validation.NewValidator()
+		validator := validation.NewValidator(o.clusterProfiles)
 		for c := range inputCh {
 			if err := o.validateConfiguration(&validator, outputCh, c); err != nil {
 				errCh <- fmt.Errorf("failed to validate configuration %s: %w", c.Metadata.RelativePath(), err)

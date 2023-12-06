@@ -87,9 +87,11 @@ func newCiOperatorCommand(t *T) CiOperatorCommand {
 	cmd := exec.CommandContext(ctx, "ci-operator",
 		"--input-hash="+strconv.Itoa(rand.Int()), // we need unique namespaces
 		GCSPushCredentialsFlag(t),
+		ManifestToolCredentialsFlag(t),
+		LocalRegistryDNSFlag(t),
 	)
 	cmd.Env = append(cmd.Env, KubernetesClientEnv(t)...)
-	cmd.Env = append(cmd.Env, "PATH=$PATH:/usr/bin")
+	cmd.Env = append(cmd.Env, "PATH=$PATH:/usr/bin:/usr/local/bin")
 	cmd.Env = append(cmd.Env, fmt.Sprintf("ARTIFACTS=%s", artifactDir))
 	return CiOperatorCommand{
 		cmd:         cmd,

@@ -20,8 +20,8 @@ resources:
     limits:
       memory: 4Gi
     requests:
-      cpu: 100m
-      memory: 200Mi
+      cpu: 110m
+      memory: 300Mi
 tests:
 - as: unit
   commands: go test ./pkg/...

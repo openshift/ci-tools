@@ -12,7 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/client-go/rest"
+	prowflagutil "k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/logrusutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 
@@ -25,6 +25,7 @@ import (
 type options struct {
 	dryRun        bool
 	dockerCfgPath string
+	kubernetes    prowflagutil.KubernetesOptions
 }
 
 func gatherOptions() (*options, error) {
@@ -33,6 +34,8 @@ func gatherOptions() (*options, error) {
 
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
 	fs.StringVar(&o.dockerCfgPath, "docker-cfg", "/.docker/config.json", "Path of the registry credentials configuration file")
+
+	o.kubernetes.AddFlags(fs)
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return o, fmt.Errorf("failed to parse flags: %w", err)
@@ -51,7 +54,7 @@ func main() {
 
 	ctx := controllerruntime.SetupSignalHandler()
 
-	cfg, err := rest.InClusterConfig()
+	cfg, err := o.kubernetes.InfrastructureClusterConfig(o.dryRun)
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to load in-cluster config")
 	}

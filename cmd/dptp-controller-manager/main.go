@@ -430,13 +430,6 @@ func main() {
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to get gitHubClient")
 		}
-		// Use a very low limit, reconciling promotions slow is not much of a problem, running out of tokens is.
-		// Also we have to keep in mind that we might end up multiple budgets per period, because the client-side
-		// reset is not synchronized with the github reset and we may get upgraded in which case we lose the bucket
-		// state.
-		if err := gitHubClient.Throttle(600, 300); err != nil {
-			logrus.WithError(err).Fatal("Failed to throttle")
-		}
 		promotionreconcilerOptions := promotionreconciler.Options{
 			DryRun:                opts.dryRun,
 			CIOperatorConfigAgent: ciOPConfigAgent,

@@ -305,7 +305,7 @@ func Test_reconciler_reportSuccessOnPR(t *testing.T) {
 				ids:                sync.Map{},
 				closedPRsCache:     closedPRsCache{prs: map[string]pullRequest{}, m: sync.Mutex{}, ghc: tc.fields.ghc, clearTime: time.Now()},
 			}
-			got, _, err := r.reportSuccessOnPR(tc.args.ctx, &dummyPJ, tc.args.presubmits)
+			got, err := r.reportSuccessOnPR(tc.args.ctx, &dummyPJ, tc.args.presubmits)
 			if (err != nil) != tc.wantErr {
 				t.Errorf("reconciler.reportSuccessOnPR() error = %v, wantErr %v", err, tc.wantErr)
 				return

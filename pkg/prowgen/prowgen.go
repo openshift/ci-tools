@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"hash/fnv"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
@@ -163,6 +164,14 @@ func NewProwJobBaseBuilderForPromotion(configSpec *cioperatorapi.ReleaseBuildCon
 	return func() *prowJobBaseBuilder {
 		builder := NewProwJobBaseBuilder(configSpec, info, podSpecGenerator)
 		if info.Config.MultiArch {
+			podSpecGenerator.Add(func(spec *corev1.PodSpec) error {
+				if spec.NodeSelector == nil {
+					spec.NodeSelector = make(map[string]string)
+				}
+				// TODO(danilo-gemoli): remove as soon as ci-operator gets built on arm64 too
+				spec.NodeSelector[corev1.LabelArchStable] = "amd64"
+				return nil
+			})
 			builder.Cluster(api.ClusterMulti01).WithLabel(api.ClusterLabel, string(api.ClusterMulti01))
 		}
 		return builder

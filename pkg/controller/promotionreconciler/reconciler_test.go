@@ -7,6 +7,7 @@ import (
 	"os"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
@@ -108,6 +109,16 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			name:         "404 does not happen on an old tag",
+			githubClient: func(_, _, _ string) (string, error) { return "", fmt.Errorf("wrapped: %w", github.NewNotFound()) },
+			verify: func(e error, _ *prowjobreconciler.OrgRepoBranchCommit) error {
+				if e != nil {
+					return fmt.Errorf("unexpected error: %w", e)
+				}
+				return nil
+			},
+		},
+		{
 			name: "ErrTooManyRefs getting commit for IST returns terminal error",
 			githubClient: func(_, _, _ string) (string, error) {
 				return "", fmt.Errorf("wrapped: %w", github.GetRefTooManyResultsError{})
@@ -174,8 +185,9 @@ func TestReconcile(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			imageStreamTag := &imagev1.ImageStreamTag{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace: "namespace",
-					Name:      "name:tag",
+					Namespace:         "namespace",
+					Name:              "name:tag",
+					CreationTimestamp: metav1.NewTime(time.Now()),
 				},
 				Image: imagev1.Image{
 					DockerImageMetadata: runtime.RawExtension{
@@ -290,9 +302,20 @@ func TestReconcile(t *testing.T) {
 
 			var req *prowjobreconciler.OrgRepoBranchCommit
 
+			client := fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(imageStreamTag).Build()
+			since := 180 * 24 * time.Hour
+			if tc.name == "404 does not happen on an old tag" {
+				client = fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(&imagev1.ImageStreamTag{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:         "namespace",
+						Name:              "name:tag",
+						CreationTimestamp: metav1.NewTime(time.Now().Add(-(since + time.Hour))),
+					},
+				}).Build()
+			}
 			r := &reconciler{
 				log:    logrus.NewEntry(logrus.New()),
-				client: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(imageStreamTag).Build(),
+				client: client,
 				releaseBuildConfigs: func(_ string) ([]*cioperatorapi.ReleaseBuildConfiguration, error) {
 					return []*cioperatorapi.ReleaseBuildConfiguration{{
 						Metadata: cioperatorapi.Metadata{
@@ -311,6 +334,7 @@ func TestReconcile(t *testing.T) {
 				},
 				gitHubClient: fakeGithubClient{getGef: tc.githubClient},
 				enqueueJob:   func(orbc prowjobreconciler.OrgRepoBranchCommit) { req = &orbc },
+				since:        since,
 			}
 
 			err := r.reconcile(context.Background(), reconcile.Request{NamespacedName: types.NamespacedName{

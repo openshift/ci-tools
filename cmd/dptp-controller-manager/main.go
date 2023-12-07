@@ -93,6 +93,8 @@ type testImagesDistributorOptions struct {
 type promotionReconcilerOptions struct {
 	ignoreImageStreamsRaw flagutil.Strings
 	ignoreImageStreams    []*regexp.Regexp
+	sinceRaw              string
+	since                 time.Duration
 }
 
 type imagePusherOptions struct {
@@ -131,6 +133,7 @@ func newOpts() (*options, error) {
 	fs.Var(&opts.serviceAccountSecretRefresherOptions.ignoreServiceAccounts, "serviceAccountRefresherOptions.ignore-service-account", "The service account to ignore. It must be in namespace/name format (e.G `ci/sync-rover-groups-updater`). Can be passed multiple times.")
 	fs.Var(&opts.imagePusherOptions.imageStreamsRaw, "imagePusherOptions.image-stream", "An imagestream that will be synced. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
 	fs.Var(&opts.promotionReconcilerOptions.ignoreImageStreamsRaw, "promotionReconcilerOptions.ignore-image-stream", "The image stream to ignore. It is an regular expression (e.G ^openshift-priv/.+). Can be passed multiple times.")
+	fs.StringVar(&opts.promotionReconcilerOptions.sinceRaw, "promotionReconcilerOptions.since", "360h", "The image stream tags to reconcile if it is younger than a relative duration like 5s, 2m, or 3h. Defaults to 360h, i.e., 15 days")
 	fs.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
 	fs.StringVar(&opts.releaseRepoGitSyncPath, "release-repo-git-sync-path", "", "Path to release repository dir")
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -199,6 +202,13 @@ func newOpts() (*options, error) {
 				continue
 			}
 			opts.promotionReconcilerOptions.ignoreImageStreams = append(opts.promotionReconcilerOptions.ignoreImageStreams, re)
+		}
+	}
+	if opts.promotionReconcilerOptions.sinceRaw != "" {
+		if since, err := time.ParseDuration(opts.promotionReconcilerOptions.sinceRaw); err != nil {
+			errs = append(errs, fmt.Errorf("--promotionReconcilerOptions.since is invalid: %w", err))
+		} else {
+			opts.promotionReconcilerOptions.since = since
 		}
 	}
 
@@ -437,6 +447,7 @@ func main() {
 			GitHubClient:          gitHubClient,
 			RegistryManager:       registryMgr,
 			IgnoredImageStreams:   opts.promotionReconcilerOptions.ignoreImageStreams,
+			Since:                 opts.promotionReconcilerOptions.since,
 		}
 		if err := promotionreconciler.AddToManager(mgr, promotionreconcilerOptions); err != nil {
 			logrus.WithError(err).Fatal("Failed to add imagestreamtagreconciler")

@@ -42,6 +42,7 @@ type Options struct {
 	RegistryManager controllerruntime.Manager
 
 	IgnoredImageStreams []*regexp.Regexp
+	Since               time.Duration
 }
 
 const ControllerName = "promotionreconciler"
@@ -72,6 +73,7 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 		},
 		gitHubClient: opts.GitHubClient,
 		enqueueJob:   prowJobEnqueuer,
+		since:        opts.Since,
 	}
 	c, err := controller.New(ControllerName, opts.RegistryManager, controller.Options{
 		Reconciler: r,
@@ -124,6 +126,7 @@ type reconciler struct {
 	releaseBuildConfigs ciOperatorConfigGetter
 	gitHubClient        githubClient
 	enqueueJob          prowjobreconciler.Enqueuer
+	since               time.Duration
 }
 
 func (r *reconciler) Reconcile(ctx context.Context, req controllerruntime.Request) (controllerruntime.Result, error) {
@@ -155,6 +158,11 @@ func (r *reconciler) reconcile(ctx context.Context, req controllerruntime.Reques
 			return nil
 		}
 		return fmt.Errorf("failed to get object: %w", err)
+	}
+
+	if !ist.CreationTimestamp.After(time.Now().Add(-r.since)) {
+		log.WithField("creationTimestamp", ist.CreationTimestamp).Trace("Ignored old imageStreamTag")
+		return nil
 	}
 
 	ciOPConfig, err := r.promotionConfig(ist)

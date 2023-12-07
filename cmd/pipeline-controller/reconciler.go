@@ -256,8 +256,12 @@ func (r *reconciler) reportSuccessOnPR(ctx context.Context, pj *v1.ProwJob, pres
 				continue
 			}
 			if run, ok := presubmit.Annotations["pipeline_run_if_changed"]; ok && run != "" {
-				regExpMatcher := config.RegexpChangeMatcher{RunIfChanged: run}
-				_, shouldRun, err := regExpMatcher.ShouldRun(cfp)
+				psList := []config.Presubmit{presubmit}
+				psList[0].RegexpChangeMatcher = config.RegexpChangeMatcher{RunIfChanged: run}
+				if err := config.SetPresubmitRegexes(psList); err != nil {
+					return false, []string{}, nil
+				}
+				_, shouldRun, err := psList[0].RegexpChangeMatcher.ShouldRun(cfp)
 				if err != nil {
 					return false, []string{}, nil
 				}

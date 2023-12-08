@@ -187,10 +187,10 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request) error
 		return err
 	}
 	if testContexts != "" {
-		comment += "\nScheduling the execution of all matched `pipeline_run_if_changed` tests:" + testContexts
+		comment += "\n\nScheduling tests matching the `pipeline_run_if_changed` parameter:" + testContexts
 	}
 	if overrideContexts != "" {
-		comment += "\nOverriding unmatched contexts:\n" + "\\override " + overrideContexts
+		comment += "\n\nOverriding unmatched contexts:\n" + "/override " + overrideContexts
 	}
 	if err := r.ghc.CreateComment(pj.Spec.Refs.Org, pj.Spec.Refs.Repo, pj.Spec.Refs.Pulls[0].Number, comment); err != nil {
 		r.ids.Delete(composeKey(pj.Spec.Refs))

@@ -119,7 +119,7 @@ func NewReconciler(
 		ControllerManagedBy(mgr).
 		Named("pipeline-controller").
 		For(&v1.ProwJob{}).
-		WithOptions(controller.Options{MaxConcurrentReconciles: 5}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: 3}).
 		Complete(reconciler); err != nil {
 		return nil, fmt.Errorf("failed to construct controller: %w", err)
 	}
@@ -175,33 +175,66 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request) error
 		return nil
 	}
 
-	status, pipelineCondPresubmits, err := r.reportSuccessOnPR(ctx, &pj, presubmits)
+	status, err := r.reportSuccessOnPR(ctx, &pj, presubmits)
 	if err != nil || !status {
 		return err
 	}
 
-	commentAmendment := ""
-	if len(pipelineCondPresubmits) > 0 {
-		var builder strings.Builder
-		builder.WriteString("\n")
-		for i, rerun := range pipelineCondPresubmits {
-			builder.WriteString(rerun)
-			if i != len(pipelineCondPresubmits)-1 {
-				builder.WriteString("\n")
-			}
-		}
-		commentAmendment = builder.String()
+	comment := "/test remaining-required"
+	testContexts, overrideContexts, err := r.acquireConditionalContexts(&pj, presubmits.pipelineConditionallyRequired)
+	if err != nil {
+		r.ids.Delete(composeKey(pj.Spec.Refs))
+		return err
 	}
-	if err := r.ghc.CreateComment(pj.Spec.Refs.Org, pj.Spec.Refs.Repo, pj.Spec.Refs.Pulls[0].Number, "/test remaining-required"+commentAmendment); err != nil {
+	if testContexts != "" {
+		comment += "\nScheduling the execution of all matched `pipeline_run_if_changed` tests:" + testContexts
+	}
+	if overrideContexts != "" {
+		comment += "\nOverriding unmatched contexts:\n" + "\\override " + overrideContexts
+	}
+	if err := r.ghc.CreateComment(pj.Spec.Refs.Org, pj.Spec.Refs.Repo, pj.Spec.Refs.Pulls[0].Number, comment); err != nil {
 		r.ids.Delete(composeKey(pj.Spec.Refs))
 		return err
 	}
 	return nil
 }
 
-func (r *reconciler) reportSuccessOnPR(ctx context.Context, pj *v1.ProwJob, presubmits presubmitTests) (bool, []string, error) {
+func (r *reconciler) acquireConditionalContexts(pj *v1.ProwJob, pipelineConditionallyRequired []config.Presubmit) (string, string, error) {
+	repoBaseRef := pj.Spec.Refs.Repo + "-" + pj.Spec.Refs.BaseRef
+	var overrideCommands string
+	var testCommands string
+	if len(pipelineConditionallyRequired) != 0 {
+		cfp := config.NewGitHubDeferredChangedFilesProvider(r.ghc, pj.Spec.Refs.Org, pj.Spec.Refs.Repo, pj.Spec.Refs.Pulls[0].Number)
+		for _, presubmit := range pipelineConditionallyRequired {
+			if !strings.Contains(presubmit.Name, repoBaseRef) {
+				continue
+			}
+			if run, ok := presubmit.Annotations["pipeline_run_if_changed"]; ok && run != "" {
+				psList := []config.Presubmit{presubmit}
+				psList[0].RegexpChangeMatcher = config.RegexpChangeMatcher{RunIfChanged: run}
+				if err := config.SetPresubmitRegexes(psList); err != nil {
+					r.ids.Delete(composeKey(pj.Spec.Refs))
+					return "", "", err
+				}
+				_, shouldRun, err := psList[0].RegexpChangeMatcher.ShouldRun(cfp)
+				if err != nil {
+					r.ids.Delete(composeKey(pj.Spec.Refs))
+					return "", "", err
+				}
+				if shouldRun {
+					testCommands += "\n" + presubmit.RerunCommand
+					continue
+				}
+				overrideCommands += " " + presubmit.Context
+			}
+		}
+	}
+	return testCommands, overrideCommands, nil
+}
+
+func (r *reconciler) reportSuccessOnPR(ctx context.Context, pj *v1.ProwJob, presubmits presubmitTests) (bool, error) {
 	if pj == nil || pj.Spec.Refs == nil || len(pj.Spec.Refs.Pulls) != 1 {
-		return false, []string{}, nil
+		return false, nil
 	}
 	selector := map[string]string{}
 	for _, l := range []string{kube.OrgLabel, kube.RepoLabel, kube.PullLabel, kube.BaseRefLabel} {
@@ -209,7 +242,7 @@ func (r *reconciler) reportSuccessOnPR(ctx context.Context, pj *v1.ProwJob, pres
 	}
 	var pjs v1.ProwJobList
 	if err := r.lister.List(ctx, &pjs, ctrlruntimeclient.MatchingLabels(selector)); err != nil {
-		return false, []string{}, fmt.Errorf("cannot list prowjob using selector %v", selector)
+		return false, fmt.Errorf("cannot list prowjob using selector %v", selector)
 	}
 
 	latestBatch := make(map[string]v1.ProwJob)
@@ -229,7 +262,7 @@ func (r *reconciler) reportSuccessOnPR(ctx context.Context, pj *v1.ProwJob, pres
 			continue
 		}
 		if _, ok := latestBatch[presubmit]; ok {
-			return false, []string{}, nil
+			return false, nil
 		}
 	}
 	for _, presubmit := range presubmits.alwaysRequired {
@@ -237,7 +270,7 @@ func (r *reconciler) reportSuccessOnPR(ctx context.Context, pj *v1.ProwJob, pres
 			continue
 		}
 		if pjob, ok := latestBatch[presubmit]; !ok || (ok && pjob.Status.State != v1.SuccessState) {
-			return false, []string{}, nil
+			return false, nil
 		}
 	}
 	for _, presubmit := range presubmits.conditionallyRequired {
@@ -245,38 +278,15 @@ func (r *reconciler) reportSuccessOnPR(ctx context.Context, pj *v1.ProwJob, pres
 			continue
 		}
 		if pjob, ok := latestBatch[presubmit]; ok && pjob.Status.State != v1.SuccessState {
-			return false, []string{}, nil
-		}
-	}
-	pipelineCondPresubmits := []string{}
-	if len(presubmits.pipelineConditionallyRequired) != 0 {
-		cfp := config.NewGitHubDeferredChangedFilesProvider(r.ghc, pj.Spec.Refs.Org, pj.Spec.Refs.Repo, pj.Spec.Refs.Pulls[0].Number)
-		for _, presubmit := range presubmits.pipelineConditionallyRequired {
-			if !strings.Contains(presubmit.Name, repoBaseRef) {
-				continue
-			}
-			if run, ok := presubmit.Annotations["pipeline_run_if_changed"]; ok && run != "" {
-				psList := []config.Presubmit{presubmit}
-				psList[0].RegexpChangeMatcher = config.RegexpChangeMatcher{RunIfChanged: run}
-				if err := config.SetPresubmitRegexes(psList); err != nil {
-					return false, []string{}, nil
-				}
-				_, shouldRun, err := psList[0].RegexpChangeMatcher.ShouldRun(cfp)
-				if err != nil {
-					return false, []string{}, nil
-				}
-				if shouldRun {
-					pipelineCondPresubmits = append(pipelineCondPresubmits, presubmit.RerunCommand)
-				}
-			}
+			return false, nil
 		}
 	}
 	if closed, err := r.closedPRsCache.isPRClosed(pj.Spec.Refs); err != nil || closed {
-		return false, []string{}, err
+		return false, err
 	}
 
 	if _, loaded := r.ids.LoadOrStore(composeKey(pj.Spec.Refs), time.Now()); loaded {
-		return false, []string{}, nil
+		return false, nil
 	}
-	return true, pipelineCondPresubmits, nil
+	return true, nil
 }

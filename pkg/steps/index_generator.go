@@ -45,7 +45,7 @@ func databaseIndex(client ctrlruntimeclient.Client, name, namespace string) (boo
 	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, ist); err != nil {
 		return false, fmt.Errorf("could not fetch source ImageStreamTag: %w", err)
 	}
-	// At the moment, we support only amd64 not arm
+	// At the moment, we support only amd64
 	labels, err := helper.LabelsOnISTagImage(ctx, client, ist, api.ReleaseArchitectureAMD64)
 	if err != nil {
 		return false, fmt.Errorf("failed to get value of the image label: %w", err)

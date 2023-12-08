@@ -5,11 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/github"
 	controllerruntime "sigs.k8s.io/controller-runtime"
@@ -58,22 +61,32 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 	if err := opts.CIOperatorConfigAgent.AddIndex(configIndexName, configIndexFn); err != nil {
 		return fmt.Errorf("failed to add indexer to config-agent: %w", err)
 	}
-
+	configChangeChannel, err := opts.CIOperatorConfigAgent.SubscribeToIndexChanges(configIndexName)
+	if err != nil {
+		return fmt.Errorf("failed to subscribe to index changes for index %s: %w", configIndexName, err)
+	}
 	prowJobEnqueuer, err := prowjobreconciler.AddToManager(mgr, opts.ConfigGetter, opts.DryRun)
 	if err != nil {
 		return fmt.Errorf("failed to construct prowjobreconciler: %w", err)
 	}
-
+	releaseBuildConfigs := func(identifier string) ([]*cioperatorapi.ReleaseBuildConfiguration, error) {
+		return opts.CIOperatorConfigAgent.GetFromIndex(configIndexName, identifier)
+	}
 	log := logrus.WithField("controller", ControllerName)
+	go func() {
+		for delta := range configChangeChannel {
+			if err := handleCIOpConfigChange(opts.RegistryManager.GetClient(), releaseBuildConfigs, prowJobEnqueuer, opts.GitHubClient, delta, log); err != nil {
+				log.WithError(err).Error("Failed to handle CI Operator config change")
+			}
+		}
+	}()
 	r := &reconciler{
-		log:    log,
-		client: imagestreamtagwrapper.MustNew(opts.RegistryManager.GetClient(), opts.RegistryManager.GetCache()),
-		releaseBuildConfigs: func(identifier string) ([]*cioperatorapi.ReleaseBuildConfiguration, error) {
-			return opts.CIOperatorConfigAgent.GetFromIndex(configIndexName, identifier)
-		},
-		gitHubClient: opts.GitHubClient,
-		enqueueJob:   prowJobEnqueuer,
-		since:        opts.Since,
+		log:                 log,
+		client:              imagestreamtagwrapper.MustNew(opts.RegistryManager.GetClient(), opts.RegistryManager.GetCache()),
+		releaseBuildConfigs: releaseBuildConfigs,
+		gitHubClient:        opts.GitHubClient,
+		enqueueJob:          prowJobEnqueuer,
+		since:               opts.Since,
 	}
 	c, err := controller.New(ControllerName, opts.RegistryManager, controller.Options{
 		Reconciler: r,
@@ -195,7 +208,7 @@ func (r *reconciler) reconcile(ctx context.Context, req controllerruntime.Reques
 	}
 	log = log.WithField("currentHEAD", currentHEAD)
 
-	log.Info("Requesting prowjob creation")
+	log.Info("Requesting prowjob creation for a stale imagestreamtag")
 	r.enqueueJob(prowjobreconciler.OrgRepoBranchCommit{
 		Org:    ciOPConfig.Metadata.Org,
 		Repo:   ciOPConfig.Metadata.Repo,
@@ -205,8 +218,8 @@ func (r *reconciler) reconcile(ctx context.Context, req controllerruntime.Reques
 	return nil
 }
 
-func (r *reconciler) promotionConfig(ist *imagev1.ImageStreamTag) (*cioperatorapi.ReleaseBuildConfiguration, error) {
-	results, err := r.releaseBuildConfigs(configIndexKeyForIST(ist))
+func promotionConfig(releaseBuildConfigs ciOperatorConfigGetter, ist *imagev1.ImageStreamTag) (*cioperatorapi.ReleaseBuildConfiguration, error) {
+	results, err := releaseBuildConfigs(configIndexKeyForIST(ist))
 	if err != nil {
 		return nil, fmt.Errorf("query index: %w", err)
 	}
@@ -219,6 +232,10 @@ func (r *reconciler) promotionConfig(ist *imagev1.ImageStreamTag) (*cioperatorap
 		// Config might get updated, so do not make this a nonRetriableError
 		return nil, fmt.Errorf("found multiple promotion configs for ImageStreamTag. This is likely a configuration error")
 	}
+}
+
+func (r *reconciler) promotionConfig(ist *imagev1.ImageStreamTag) (*cioperatorapi.ReleaseBuildConfiguration, error) {
+	return promotionConfig(r.releaseBuildConfigs, ist)
 }
 
 func commitForIST(ist *imagev1.ImageStreamTag, client ctrlruntimeclient.Client) (string, error) {
@@ -237,10 +254,10 @@ func commitForIST(ist *imagev1.ImageStreamTag, client ctrlruntimeclient.Client) 
 	return commit, nil
 }
 
-func (r *reconciler) currentHEADForBranch(metadata cioperatorapi.Metadata, log *logrus.Entry) (string, bool, error) {
+func currentHEADForBranch(githubClient githubClient, metadata cioperatorapi.Metadata, log *logrus.Entry) (string, bool, error) {
 	// We attempted for some time to use the gitClient for this, but we do so many reconciliations that
 	// it results in a massive performance issues that can easely kill the developers laptop.
-	ref, err := r.gitHubClient.GetRef(metadata.Org, metadata.Repo, "heads/"+metadata.Branch)
+	ref, err := githubClient.GetRef(metadata.Org, metadata.Repo, "heads/"+metadata.Branch)
 	if err != nil {
 		if github.IsNotFound(err) {
 			return "", false, nil
@@ -252,6 +269,10 @@ func (r *reconciler) currentHEADForBranch(metadata cioperatorapi.Metadata, log *
 		return "", false, fmt.Errorf("failed to get sha for ref %s/%s/heads/%s from github: %w", metadata.Org, metadata.Repo, metadata.Branch, err)
 	}
 	return ref, true, nil
+}
+
+func (r *reconciler) currentHEADForBranch(metadata cioperatorapi.Metadata, log *logrus.Entry) (string, bool, error) {
+	return currentHEADForBranch(r.gitHubClient, metadata, log)
 }
 
 const configIndexName = "release-build-config-by-image-stream-tag"
@@ -266,4 +287,60 @@ func configIndexFn(in cioperatorapi.ReleaseBuildConfiguration) []string {
 
 func configIndexKeyForIST(ist *imagev1.ImageStreamTag) string {
 	return ist.Namespace + "/" + ist.Name
+}
+
+func handleCIOpConfigChange(registryClient ctrlruntimeclient.Client,
+	ciOperatorConfigGetter ciOperatorConfigGetter,
+	prowJobEnqueuer prowjobreconciler.Enqueuer,
+	githubClient githubClient,
+	delta agents.IndexDelta,
+	log *logrus.Entry) error {
+	log = log.WithField("indexKey", delta.IndexKey)
+	log.Debug("Handling CIOpConfig change")
+	// We only care about new additions
+	if len(delta.Added) == 0 {
+		return nil
+	}
+	slashSplit := strings.Split(delta.IndexKey, "/")
+	if len(slashSplit) != 2 {
+		return fmt.Errorf("got an index delta event with a key that is not a valid namespace/name identifier: %s", delta.IndexKey)
+	}
+	namespace, name := slashSplit[0], slashSplit[1]
+	var ist imagev1.ImageStreamTag
+	if err := registryClient.Get(context.Background(), types.NamespacedName{Namespace: namespace, Name: name}, &ist); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to get imagestreamtag %s/%s: %w", namespace, name, err)
+		}
+		ist = imagev1.ImageStreamTag{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+			},
+		}
+		ciOPConfig, err := promotionConfig(ciOperatorConfigGetter, &ist)
+		if err != nil {
+			return fmt.Errorf("failed to get promotionConfig for imagestreamtag %s/%s: %w", namespace, name, err)
+		}
+		if ciOPConfig == nil {
+			return fmt.Errorf("get nil from promotionConfig for imagestreamtag %s/%s", namespace, name)
+		}
+		currentHEAD, found, err := currentHEADForBranch(githubClient, ciOPConfig.Metadata, log)
+		if err != nil {
+			return fmt.Errorf("failed to get current git head for %s/%s/%s and imageStreamTag %s/%s: %w",
+				ciOPConfig.Metadata.Org, ciOPConfig.Metadata.Repo, ciOPConfig.Metadata.Branch, namespace, name, err)
+		}
+		if !found {
+			return fmt.Errorf("got 404 from github for %s/%s/%s and imageStreamTag %s/%s, this likely means the repo or branch got deleted or we are not allowed to access it",
+				ciOPConfig.Metadata.Org, ciOPConfig.Metadata.Repo, ciOPConfig.Metadata.Branch, namespace, name)
+		}
+		log.WithField("name", ist.Name).WithField("namespace", ist.Namespace).Info("Requesting prowjob creation for a missing the imagestreamtag")
+		prowJobEnqueuer(prowjobreconciler.OrgRepoBranchCommit{
+			Org:    ciOPConfig.Metadata.Org,
+			Repo:   ciOPConfig.Metadata.Repo,
+			Branch: ciOPConfig.Metadata.Branch,
+			Commit: currentHEAD,
+		})
+	}
+	log.Debug("Handled CIOpConfig change")
+	return nil
 }

@@ -131,8 +131,7 @@ func (o *Options) Bind(fs *flag.FlagSet) {
 
 func (o *Options) matches(configuration *cioperatorapi.ReleaseBuildConfiguration, includeOKD cioperatorapi.OKDInclusion) bool {
 	if o.CurrentPromotionNamespace == "" {
-		return cioperatorapi.PromotesOfficialImages(configuration, includeOKD) &&
-			PromotesImagesInto(configuration, "", o.CurrentRelease)
+		return cioperatorapi.PromotesOfficialImage(configuration, includeOKD, o.CurrentRelease)
 	}
 	return PromotesImagesInto(configuration, o.CurrentPromotionNamespace, o.CurrentRelease)
 }

@@ -72,6 +72,17 @@ func PromotesOfficialImages(configSpec *ReleaseBuildConfiguration, includeOKD OK
 	return false
 }
 
+// PromotesOfficialImage determines if a configuration will promote promotionName
+// and if it belongs to any official stream.
+func PromotesOfficialImage(configSpec *ReleaseBuildConfiguration, includeOKD OKDInclusion, promotionName string) bool {
+	for _, target := range PromotionTargets(configSpec.PromotionConfiguration) {
+		if !target.Disabled && BuildsOfficialImages(target, includeOKD) && target.Name == promotionName {
+			return true
+		}
+	}
+	return false
+}
+
 // BuildsOfficialImages determines if a configuration will result in official images
 // being built.
 func BuildsOfficialImages(configSpec PromotionTarget, includeOKD OKDInclusion) bool {

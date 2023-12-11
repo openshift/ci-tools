@@ -217,11 +217,16 @@ func getMajor(in string) (int, error) {
 }
 
 func getMinor(in string) (int, error) {
-	minor, err := strconv.ParseInt(strings.Split(in, ".")[1], 10, 32)
-	if err != nil {
-		return 0, err
+	parts := strings.Split(in, ".")
+	if len(parts) >= 2 {
+		minor, err := strconv.ParseInt(strings.Split(in, ".")[1], 10, 32)
+		if err != nil {
+			return 0, err
+		}
+		return int(minor), err
 	}
-	return int(minor), err
+
+	return 0, fmt.Errorf("unable to get minor from version %s", in)
 }
 
 func normalizeJobName(jobName, fromRelease, toRelease string) string {

@@ -724,6 +724,8 @@ periodic-ci-openshift-release-master-ci-4.16-e2e-gcp-sdn-techpreview-serial
 periodic-ci-openshift-release-master-ci-4.16-upgrade-from-stable-4.15-e2e-gcp-ovn-rt-upgrade
 periodic-ci-openshift-release-master-ci-4.16-upgrade-from-stable-4.15-e2e-gcp-ovn-upgrade
 periodic-ci-openshift-release-master-ci-4.16-upgrade-from-stable-4.15-e2e-gcp-sdn-upgrade
+periodic-ci-openshift-release-master-cnv-nightly-4.16-e2e-azure-deploy-cnv
+periodic-ci-openshift-release-master-cnv-nightly-4.16-e2e-azure-upgrade-cnv
 periodic-ci-openshift-release-master-nightly-4.16-console-aws
 periodic-ci-openshift-release-master-nightly-4.16-e2e-agent-compact-ipv4
 periodic-ci-openshift-release-master-nightly-4.16-e2e-agent-ha-dualstack
@@ -742,9 +744,7 @@ periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-sdn-cgroupsv2
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-sdn-upgrade
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-sdn-upgrade
 periodic-ci-openshift-release-master-nightly-4.16-e2e-azure-csi
-periodic-ci-openshift-release-master-nightly-4.16-e2e-azure-deploy-cnv
 periodic-ci-openshift-release-master-nightly-4.16-e2e-azure-sdn
-periodic-ci-openshift-release-master-nightly-4.16-e2e-azure-upgrade-cnv
 periodic-ci-openshift-release-master-nightly-4.16-e2e-gcp-ovn-csi
 periodic-ci-openshift-release-master-nightly-4.16-e2e-gcp-ovn-rt
 periodic-ci-openshift-release-master-nightly-4.16-e2e-gcp-sdn
@@ -1465,6 +1465,8 @@ periodic-ci-openshift-release-master-ci-4.16-upgrade-from-stable-4.15-e2e-ovirt-
 periodic-ci-openshift-release-master-ci-4.16-upgrade-from-stable-4.15-e2e-vsphere-ovn-upgrade
 periodic-ci-openshift-release-master-ci-4.16-upgrade-from-stable-4.15-e2e-vsphere-ovn-upgrade-storage-data
 periodic-ci-openshift-release-master-ci-4.16-upgrade-from-stable-4.15-from-stable-4.14-e2e-aws-sdn-upgrade
+periodic-ci-openshift-release-master-cnv-nightly-4.16-e2e-azure-deploy-cnv
+periodic-ci-openshift-release-master-cnv-nightly-4.16-e2e-azure-upgrade-cnv
 periodic-ci-openshift-release-master-hypershift-4.15-periodic-ci-openshift-hypershift-hosted
 periodic-ci-openshift-release-master-nightly-4.10-console-aws
 periodic-ci-openshift-release-master-nightly-4.10-credentials-request-freeze
@@ -2055,13 +2057,11 @@ periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-sdn-crun
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-sdn-serial
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-sdn-upgrade
 periodic-ci-openshift-release-master-nightly-4.16-e2e-azure-csi
-periodic-ci-openshift-release-master-nightly-4.16-e2e-azure-deploy-cnv
 periodic-ci-openshift-release-master-nightly-4.16-e2e-azure-ovn-etcd-scaling
 periodic-ci-openshift-release-master-nightly-4.16-e2e-azure-ovn-upi
 periodic-ci-openshift-release-master-nightly-4.16-e2e-azure-sdn
 periodic-ci-openshift-release-master-nightly-4.16-e2e-azure-sdn-fips
 periodic-ci-openshift-release-master-nightly-4.16-e2e-azure-sdn-fips-serial
-periodic-ci-openshift-release-master-nightly-4.16-e2e-azure-upgrade-cnv
 periodic-ci-openshift-release-master-nightly-4.16-e2e-azurestack-csi
 periodic-ci-openshift-release-master-nightly-4.16-e2e-azurestack-ovn-upi
 periodic-ci-openshift-release-master-nightly-4.16-e2e-gcp-graceful-shutdown

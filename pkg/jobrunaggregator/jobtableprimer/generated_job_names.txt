@@ -878,8 +878,6 @@ periodic-ci-openshift-multiarch-master-nightly-4.11-ocp-e2e-serial-aws-heterogen
 periodic-ci-openshift-multiarch-master-nightly-4.11-ocp-e2e-serial-remote-libvirt-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.11-ocp-e2e-serial-remote-libvirt-s390x
 periodic-ci-openshift-multiarch-master-nightly-4.11-ocp-e2e-upgrade-aws-arm64
-periodic-ci-openshift-multiarch-master-nightly-4.11-ocp-heavy-build-ovn-remote-libvirt-ppc64le
-periodic-ci-openshift-multiarch-master-nightly-4.11-ocp-heavy-build-ovn-remote-libvirt-s390x
 periodic-ci-openshift-multiarch-master-nightly-4.11-ocp-image-ecosystem-aws-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.11-ocp-image-ecosystem-remote-libvirt-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.11-ocp-image-ecosystem-remote-libvirt-s390x

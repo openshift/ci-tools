@@ -187,7 +187,7 @@ require (
 	k8s.io/apiextensions-apiserver v0.27.2 // indirect
 	k8s.io/component-base v0.27.2 // indirect
 	k8s.io/kube-openapi v0.0.0-20230525220651-2546d827e515 // indirect
-	k8s.io/kubernetes v1.15.0-alpha.0 // indirect
+	k8s.io/kubernetes v1.15.0-alpha.0
 	knative.dev/pkg v0.0.0-20230221145627-8efb3485adcf // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 )

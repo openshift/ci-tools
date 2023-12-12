@@ -409,6 +409,7 @@ type JobRunTestCaseAnalyzerOptions struct {
 	prowJobMatcherFunc  jobrunaggregatorlib.ProwJobMatcherFunc
 
 	staticJobRunIdentifiers []jobrunaggregatorlib.JobRunIdentifier
+	gcsBucket               string
 }
 
 func (o *JobRunTestCaseAnalyzerOptions) shouldAggregateJob(prowJob *prowjobv1.ProwJob) bool {
@@ -534,7 +535,7 @@ func (o *JobRunTestCaseAnalyzerOptions) GetRelatedJobRuns(ctx context.Context) (
 				o.jobRunStartEstimate,
 				o.ciDataClient,
 				o.ciGCSClient,
-				"origin-ci-test",
+				o.gcsBucket,
 			)
 		}
 		if len(o.payloadInvocationID) > 0 {
@@ -545,7 +546,7 @@ func (o *JobRunTestCaseAnalyzerOptions) GetRelatedJobRuns(ctx context.Context) (
 				o.jobRunStartEstimate,
 				o.ciDataClient,
 				o.ciGCSClient,
-				"origin-ci-test",
+				o.gcsBucket,
 				(*o.jobGCSPrefixes)[i].gcsPrefix,
 			)
 		}

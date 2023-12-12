@@ -101,7 +101,6 @@ func newJob(name string) *jobRowBuilder {
 	return &jobRowBuilder{
 		job: &jobrunaggregatorapi.JobRow{
 			JobName:                     name,
-			GCSBucketName:               "origin-ci-test",
 			GCSJobHistoryLocationPrefix: "logs/" + name,
 			Platform:                    platform,
 			Architecture:                architecture,

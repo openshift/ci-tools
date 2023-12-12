@@ -16,7 +16,8 @@ type primeJobTableFlags struct {
 	DataCoordinates *jobrunaggregatorlib.BigQueryDataCoordinates
 	Authentication  *jobrunaggregatorlib.GoogleAuthenticationFlags
 
-	DryRun bool
+	DryRun    bool
+	GCSBucket string
 }
 
 func newPrimeJobTableFlags() *primeJobTableFlags {
@@ -31,6 +32,7 @@ func (f *primeJobTableFlags) BindFlags(fs *pflag.FlagSet) {
 	f.Authentication.BindFlags(fs)
 
 	fs.BoolVar(&f.DryRun, "dry-run", f.DryRun, "Run the command, but don't mutate data.")
+	fs.StringVar(&f.GCSBucket, "google-storage-bucket", "origin-ci-test", "The optional GCS Bucket holding test artifacts")
 }
 
 func NewPrimeJobTableCommand() *cobra.Command {
@@ -102,5 +104,6 @@ func (f *primeJobTableFlags) ToOptions(ctx context.Context) (*CreateJobsOptions,
 		),
 
 		jobInserter: jobTableInserter,
+		gcsBucket:   f.GCSBucket,
 	}, nil
 }

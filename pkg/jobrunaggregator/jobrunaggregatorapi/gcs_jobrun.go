@@ -33,14 +33,17 @@ type gcsJobRun struct {
 	gcsFileNames        []string
 
 	pathToContent map[string][]byte
+
+	jobRunGCSBucket string
 }
 
-func NewGCSJobRun(bkt *storage.BucketHandle, jobGCSBucketRoot string, jobName, jobRunID string) JobRunInfo {
+func NewGCSJobRun(bkt *storage.BucketHandle, jobGCSBucketRoot string, jobName, jobRunID string, jobRunGCSBucket string) JobRunInfo {
 	return &gcsJobRun{
 		bkt:                 bkt,
 		jobRunGCSBucketRoot: path.Join(jobGCSBucketRoot, jobRunID),
 		jobName:             jobName,
 		jobRunID:            jobRunID,
+		jobRunGCSBucket:     jobRunGCSBucket,
 	}
 }
 
@@ -384,11 +387,11 @@ func (j *gcsJobRun) ClearAllContent() {
 }
 
 func (j *gcsJobRun) GetHumanURL() string {
-	return GetHumanURLForLocation(j.jobRunGCSBucketRoot)
+	return GetHumanURLForLocation(j.jobRunGCSBucketRoot, j.jobRunGCSBucket)
 }
 
 func (j *gcsJobRun) GetGCSArtifactURL() string {
-	return GetGCSArtifactURLForLocation(j.jobRunGCSBucketRoot)
+	return GetGCSArtifactURLForLocation(j.jobRunGCSBucketRoot, j.jobRunGCSBucket)
 }
 
 func (j *gcsJobRun) IsFinished(ctx context.Context) bool {
@@ -403,12 +406,12 @@ func (j *gcsJobRun) IsFinished(ctx context.Context) bool {
 	return true
 }
 
-func GetHumanURLForLocation(jobRunGCSBucketRoot string) string {
+func GetHumanURLForLocation(jobRunGCSBucketRoot, jobRunGCSBucket string) string {
 	// https://prow.ci.openshift.org/view/gs/origin-ci-test/logs/periodic-ci-openshift-release-master-ci-4.8-e2e-gcp-upgrade/1429691282619371520
-	return fmt.Sprintf("https://prow.ci.openshift.org/view/gs/origin-ci-test/%s", jobRunGCSBucketRoot)
+	return fmt.Sprintf("https://prow.ci.openshift.org/view/gs/%s/%s", jobRunGCSBucket, jobRunGCSBucketRoot)
 }
 
-func GetGCSArtifactURLForLocation(jobRunGCSBucketRoot string) string {
+func GetGCSArtifactURLForLocation(jobRunGCSBucketRoot, jobRunGCSBucket string) string {
 	// https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/logs/periodic-ci-openshift-release-master-ci-4.9-e2e-gcp-upgrade/1420676206029705216/artifacts/e2e-gcp-upgrade/
-	return fmt.Sprintf("https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/%s/artifacts", jobRunGCSBucketRoot)
+	return fmt.Sprintf("https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/%s/%s/artifacts", jobRunGCSBucket, jobRunGCSBucketRoot)
 }

@@ -30,7 +30,7 @@ func (o *ciGCSClient) ReadJobRunFromGCS(ctx context.Context, jobGCSRootLocation,
 	prowJobPath := fmt.Sprintf("%s/%s/prowjob.json", jobGCSRootLocation, jobRunID)
 	jobRunId := filepath.Base(filepath.Dir(prowJobPath))
 
-	jobRun := jobrunaggregatorapi.NewGCSJobRun(bkt, jobGCSRootLocation, jobName, jobRunId)
+	jobRun := jobrunaggregatorapi.NewGCSJobRun(bkt, jobGCSRootLocation, jobName, jobRunId, o.gcsBucketName)
 	jobRun.SetGCSProwJobPath(prowJobPath)
 	_, err := jobRun.GetProwJob(ctx)
 	if err != nil {
@@ -99,7 +99,7 @@ func (o *ciGCSClient) ReadRelatedJobRuns(ctx context.Context,
 		prowJobPath := fmt.Sprintf("%s%s", attrs.Prefix, "prowjob.json")
 		logrus.Debugf("found %s", attrs.Name)
 		jobRunId := filepath.Base(filepath.Dir(prowJobPath))
-		jobRun := jobrunaggregatorapi.NewGCSJobRun(bkt, gcsPrefix, jobName, jobRunId)
+		jobRun := jobrunaggregatorapi.NewGCSJobRun(bkt, gcsPrefix, jobName, jobRunId, o.gcsBucketName)
 		jobRun.SetGCSProwJobPath(prowJobPath)
 
 		prowJob, err := jobRun.GetProwJob(ctx)

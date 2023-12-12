@@ -23,8 +23,9 @@ type BigQueryAlertUploadFlags struct {
 	DataCoordinates *jobrunaggregatorlib.BigQueryDataCoordinates
 	Authentication  *jobrunaggregatorlib.GoogleAuthenticationFlags
 
-	DryRun   bool
-	LogLevel string
+	DryRun    bool
+	LogLevel  string
+	GCSBucket string
 }
 
 func NewBigQueryAlertUploadFlags() *BigQueryAlertUploadFlags {
@@ -40,6 +41,7 @@ func (f *BigQueryAlertUploadFlags) BindFlags(fs *pflag.FlagSet) {
 
 	fs.BoolVar(&f.DryRun, "dry-run", f.DryRun, "Run the command, but don't mutate data.")
 	fs.StringVar(&f.LogLevel, "log-level", "info", "Log level (trace,debug,info,warn,error) (default: info)")
+	fs.StringVar(&f.GCSBucket, "google-storage-bucket", "origin-ci-test", "The optional GCS Bucket holding test artifacts")
 }
 
 func NewBigQueryAlertUploadFlagsCommand() *cobra.Command {
@@ -92,7 +94,7 @@ func (f *BigQueryAlertUploadFlags) Validate() error {
 // Expect to see unit tests on the options, but not on the flags which are simply value mappings.
 func (f *BigQueryAlertUploadFlags) ToOptions(ctx context.Context) (*allJobsLoaderOptions, error) {
 	// Create a new GCS Client
-	gcsClient, err := f.Authentication.NewCIGCSClient(ctx, "origin-ci-test")
+	gcsClient, err := f.Authentication.NewCIGCSClient(ctx, f.GCSBucket)
 	if err != nil {
 		return nil, err
 	}

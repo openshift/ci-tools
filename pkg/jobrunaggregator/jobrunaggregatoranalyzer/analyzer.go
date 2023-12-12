@@ -47,6 +47,7 @@ type JobRunAggregatorAnalyzerOptions struct {
 	prowJobMatcherFunc  jobrunaggregatorlib.ProwJobMatcherFunc
 
 	staticJobRunIdentifiers []jobrunaggregatorlib.JobRunIdentifier
+	gcsBucket               string
 }
 
 func (o *JobRunAggregatorAnalyzerOptions) loadStaticJobRuns(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error) {
@@ -168,8 +169,8 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 			JobRunInfo{
 				JobName:      o.jobName,
 				JobRunID:     jobRunName,
-				HumanURL:     jobrunaggregatorapi.GetHumanURLForLocation(jobRunGCSBucketRoot),
-				GCSBucketURL: jobrunaggregatorapi.GetGCSArtifactURLForLocation(jobRunGCSBucketRoot),
+				HumanURL:     jobrunaggregatorapi.GetHumanURLForLocation(jobRunGCSBucketRoot, o.gcsBucket),
+				GCSBucketURL: jobrunaggregatorapi.GetGCSArtifactURLForLocation(jobRunGCSBucketRoot, o.gcsBucket),
 				Status:       "unknown",
 			},
 		)

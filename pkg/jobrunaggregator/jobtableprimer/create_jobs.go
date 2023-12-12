@@ -13,6 +13,7 @@ type CreateJobsOptions struct {
 	jobsToCreate []jobrunaggregatorapi.JobRow
 
 	jobInserter jobrunaggregatorlib.BigQueryInserter
+	gcsBucket   string
 }
 
 func (o *CreateJobsOptions) Run(ctx context.Context) error {
@@ -37,6 +38,7 @@ func (o *CreateJobsOptions) Run(ctx context.Context) error {
 			continue
 		}
 
+		jobToCreate.GCSBucketName = o.gcsBucket
 		missingJobs = append(missingJobs, jobToCreate)
 	}
 

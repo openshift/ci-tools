@@ -31,6 +31,7 @@ type JobRunsAnalyzerFlags struct {
 
 	StaticJobRunIdentifierPath string
 	StaticJobRunIdentifierJSON string
+	GCSBucket                  string
 }
 
 func NewJobRunsAnalyzerFlags() *JobRunsAnalyzerFlags {
@@ -63,6 +64,7 @@ func (f *JobRunsAnalyzerFlags) BindFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&f.StaticJobRunIdentifierPath, "static-run-info-path", f.StaticJobRunIdentifierPath, "The optional path to a file containing JSON formatted JobRunIdentifier array used for aggregated analysis")
 	fs.StringVar(&f.StaticJobRunIdentifierJSON, "static-run-info-json", f.StaticJobRunIdentifierJSON, "The optional JSON formatted string of JobRunIdentifier array used for aggregated analysis")
 
+	fs.StringVar(&f.GCSBucket, "google-storage-bucket", "origin-ci-test", "The optional GCS Bucket holding test artifacts")
 }
 
 func NewJobRunsAnalyzerCommand() *cobra.Command {
@@ -150,7 +152,7 @@ func (f *JobRunsAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunAggregator
 		jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, bigQueryClient),
 	)
 
-	ciGCSClient, err := f.Authentication.NewCIGCSClient(ctx, "origin-ci-test")
+	ciGCSClient, err := f.Authentication.NewCIGCSClient(ctx, f.GCSBucket)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +174,7 @@ func (f *JobRunsAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunAggregator
 			estimatedStartTime,
 			ciDataClient,
 			ciGCSClient,
-			"origin-ci-test",
+			f.GCSBucket,
 		)
 		prowJobMatcherFunc = jobrunaggregatorlib.NewProwJobMatcherFuncForReleaseController(f.JobName, f.PayloadTag)
 	}
@@ -184,7 +186,7 @@ func (f *JobRunsAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunAggregator
 			estimatedStartTime,
 			ciDataClient,
 			ciGCSClient,
-			"origin-ci-test",
+			f.GCSBucket,
 			f.ExplicitGCSPrefix,
 		)
 		prowJobMatcherFunc = jobrunaggregatorlib.NewProwJobMatcherFuncForPR(f.JobName, f.AggregationID, jobrunaggregatorlib.ProwJobAggregationIDLabel)
@@ -212,5 +214,6 @@ func (f *JobRunsAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunAggregator
 		jobStateQuerySource:     f.JobStateQuerySource,
 		prowJobMatcherFunc:      prowJobMatcherFunc,
 		staticJobRunIdentifiers: staticJobRunIdentifiers,
+		gcsBucket:               f.GCSBucket,
 	}, nil
 }

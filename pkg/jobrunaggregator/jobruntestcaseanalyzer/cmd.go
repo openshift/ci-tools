@@ -100,6 +100,7 @@ type JobRunsTestCaseAnalyzerFlags struct {
 
 	StaticJobRunIdentifierPath string
 	StaticJobRunIdentifierJSON string
+	GCSBucket                  string
 }
 
 func NewJobRunsTestCaseAnalyzerFlags() *JobRunsTestCaseAnalyzerFlags {
@@ -141,6 +142,8 @@ func (f *JobRunsTestCaseAnalyzerFlags) BindFlags(fs *pflag.FlagSet) {
 	// optional for local use or potentially gangway results
 	fs.StringVar(&f.StaticJobRunIdentifierPath, "static-run-info-path", f.StaticJobRunIdentifierPath, "The optional path to a file containing JSON formatted JobRunIdentifier array used for aggregated analysis")
 	fs.StringVar(&f.StaticJobRunIdentifierJSON, "static-run-info-json", f.StaticJobRunIdentifierJSON, "The optional JSON formatted string of JobRunIdentifier array used for aggregated analysis")
+
+	fs.StringVar(&f.GCSBucket, "google-storage-bucket", "origin-ci-test", "The optional GCS Bucket holding test artifacts")
 
 }
 
@@ -326,7 +329,7 @@ func (f *JobRunsTestCaseAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunTe
 		jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, bigQueryClient),
 	)
 
-	ciGCSClient, err := f.Authentication.NewCIGCSClient(ctx, "origin-ci-test")
+	ciGCSClient, err := f.Authentication.NewCIGCSClient(ctx, f.GCSBucket)
 	if err != nil {
 		return nil, err
 	}
@@ -376,5 +379,6 @@ func (f *JobRunsTestCaseAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunTe
 		prowJobMatcherFunc:  jobGetter.shouldAggregateJob,
 
 		staticJobRunIdentifiers: staticJobRunIdentifiers,
+		gcsBucket:               f.GCSBucket,
 	}, nil
 }

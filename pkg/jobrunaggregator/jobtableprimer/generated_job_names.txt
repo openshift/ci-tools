@@ -2028,8 +2028,6 @@ periodic-ci-openshift-release-master-nightly-4.16-console-aws
 periodic-ci-openshift-release-master-nightly-4.16-e2e-agent-compact-ipv4
 periodic-ci-openshift-release-master-nightly-4.16-e2e-agent-ha-dualstack
 periodic-ci-openshift-release-master-nightly-4.16-e2e-agent-sno-ipv6
-periodic-ci-openshift-release-master-nightly-4.16-e2e-alibaba-csi
-periodic-ci-openshift-release-master-nightly-4.16-e2e-alibaba-ovn
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-crun-wasm
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-csi
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-driver-toolkit

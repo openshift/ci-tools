@@ -793,7 +793,6 @@ periodic-ci-openshift-hypershift-release-4.13-periodics-e2e-powervs
 
 // begin https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/hypershift/openshift-hypershift-release-4.14-periodics.yaml
 periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-agent-ovn-conformance
-periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-agent-ovn-mce-conformance
 periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-agent-ovn-mce-disconnected-conformance
 periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-aws-ovn
 periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-aws-ovn-conformance
@@ -804,6 +803,8 @@ periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-ibmcloud-iks
 periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-ibmcloud-roks
 periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-kubevirt-csi-conformance
 periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-kubevirt-mce-baremetalds-conformance
+periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-mce-agent-connected-dualstack-conformance
+periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-mce-agent-connected-ipv4-conformance
 periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-mce-ibmz-conformance
 periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-mce-power-conformance
 periodic-ci-openshift-hypershift-release-4.14-periodics-e2e-powervs

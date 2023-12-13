@@ -153,8 +153,9 @@ func ResolveConfigWithInjectedTest(configs Getter, resolver Resolver, resolverMe
 			return
 		}
 
-		configWithInjectedTest := injectTest(config, configs, resolverMetrics, w, r, logger)
-		resolveAndRespond(resolver, *configWithInjectedTest, w, logger, resolverMetrics)
+		if configWithInjectedTest := injectTest(config, configs, resolverMetrics, w, r, logger); configWithInjectedTest != nil {
+			resolveAndRespond(resolver, *configWithInjectedTest, w, logger, resolverMetrics)
+		}
 	}
 }
 
@@ -411,9 +412,9 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 		}
 		//TODO: If this is to be used for a general purpose outside of payload testing, we will need to merge tests and other elements
 
-		configWithInjectedTest := injectTest(mergedConfig, configs, resolverMetrics, w, r, logger)
-
-		resolveAndRespond(resolver, *configWithInjectedTest, w, logger, resolverMetrics)
+		if configWithInjectedTest := injectTest(mergedConfig, configs, resolverMetrics, w, r, logger); configWithInjectedTest != nil {
+			resolveAndRespond(resolver, *configWithInjectedTest, w, logger, resolverMetrics)
+		}
 	}
 }
 

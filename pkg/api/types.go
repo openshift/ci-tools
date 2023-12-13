@@ -1302,6 +1302,7 @@ const (
 	ClusterProfileIBMCloud              ClusterProfile = "ibmcloud"
 	ClusterProfileIBMCloudCSPIQE        ClusterProfile = "ibmcloud-cspi-qe"
 	ClusterProfileIBMCloudQE            ClusterProfile = "ibmcloud-qe"
+	ClusterProfileIBMCloudQE2           ClusterProfile = "ibmcloud-qe-2"
 	ClusterProfileIBMCloudMultiPpc64le  ClusterProfile = "ibmcloud-multi-ppc64le"
 	ClusterProfileIBMCloudMultiS390x    ClusterProfile = "ibmcloud-multi-s390x"
 	ClusterProfilePOWERVS1              ClusterProfile = "powervs-1"
@@ -1419,6 +1420,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileIBMCloud,
 		ClusterProfileIBMCloudCSPIQE,
 		ClusterProfileIBMCloudQE,
+		ClusterProfileIBMCloudQE2,
 		ClusterProfileIBMCloudMultiPpc64le,
 		ClusterProfileIBMCloudMultiS390x,
 		ClusterProfilePOWERVS1,
@@ -1558,7 +1560,8 @@ func (p ClusterProfile) ClusterType() string {
 	case
 		ClusterProfileIBMCloud,
 		ClusterProfileIBMCloudCSPIQE,
-		ClusterProfileIBMCloudQE:
+		ClusterProfileIBMCloudQE,
+		ClusterProfileIBMCloudQE2:
 		return "ibmcloud"
 	case ClusterProfileIBMCloudMultiPpc64le:
 		return "ibmcloud-multi-ppc64le"
@@ -1574,12 +1577,11 @@ func (p ClusterProfile) ClusterType() string {
 		return "libvirt-ppc64le"
 	case ClusterProfileLibvirtS390x:
 		return "libvirt-s390x"
-	case ClusterProfileNutanix:
+	case
+		ClusterProfileNutanix,
+		ClusterProfileNutanixQE,
+		ClusterProfileNutanixQEDis:
 		return "nutanix"
-	case ClusterProfileNutanixQE:
-		return "nutanix-qe"
-	case ClusterProfileNutanixQEDis:
-		return "nutanix-qe-dis"
 	case ClusterProfileOpenStack:
 		return "openstack"
 	case ClusterProfileOpenStackHwoffload:
@@ -1760,6 +1762,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "ibmcloud-cspi-qe-quota-slice"
 	case ClusterProfileIBMCloudQE:
 		return "ibmcloud-qe-quota-slice"
+	case ClusterProfileIBMCloudQE2:
+		return "ibmcloud-qe-2-quota-slice"
 	case ClusterProfileIBMCloudMultiPpc64le:
 		return "ibmcloud-multi-ppc64le-quota-slice"
 	case ClusterProfileIBMCloudMultiS390x:

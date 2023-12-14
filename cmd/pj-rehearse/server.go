@@ -17,6 +17,7 @@ import (
 	"k8s.io/test-infra/prow/pod-utils/gcs"
 
 	"github.com/openshift/ci-tools/pkg/config"
+	quayiociimagesdistributor "github.com/openshift/ci-tools/pkg/controller/quay_io_ci_images_distributor"
 	"github.com/openshift/ci-tools/pkg/rehearse"
 )
 
@@ -134,6 +135,19 @@ func serverFromOptions(o options) (*server, error) {
 	rehearsalConfig := rehearsalConfigFromOptions(o)
 	rehearsalConfig.ProwjobNamespace = c.ProwJobNamespace
 	rehearsalConfig.PodNamespace = c.PodNamespace
+	rehearsalConfig.MirrorOptions = quayiociimagesdistributor.OCImageMirrorOptions{
+		RegistryConfig:  o.registryConfig,
+		ContinueOnError: true,
+		MaxPerRegistry:  20,
+		BatchSize:       10,
+		DryRun:          false,
+	}
+	ocClientFactory := quayiociimagesdistributor.NewClientFactory()
+	quayIOImageHelper, err := ocClientFactory.NewClient()
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to create QuayIOImageHelper")
+	}
+	rehearsalConfig.QuayIOImageHelper = quayIOImageHelper
 
 	return &server{
 		ghc:             ghc,
@@ -377,7 +391,7 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 						continue
 					}
 
-					success, err := rc.RehearseJobs(candidate, candidatePath, prRefs, imageStreamTags, presubmitsToRehearse, changedTemplates, changedClusterProfiles, logger)
+					success, err := rc.RehearseJobs(candidate, candidatePath, prRefs, imageStreamTags, s.rehearsalConfig.MirrorOptions, s.rehearsalConfig.QuayIOImageHelper, presubmitsToRehearse, changedTemplates, changedClusterProfiles, logger)
 					if err != nil {
 						logger.WithError(err).Error("couldn't rehearse jobs")
 						s.reportFailure("failed to create rehearsal jobs", err, org, repo, user, number, true, false, logger)

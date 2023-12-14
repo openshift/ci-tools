@@ -15,6 +15,7 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -34,6 +35,7 @@ import (
 	apihelper "github.com/openshift/ci-tools/pkg/api/helper"
 	testimagestreamtagimportv1 "github.com/openshift/ci-tools/pkg/api/testimagestreamtagimport/v1"
 	"github.com/openshift/ci-tools/pkg/config"
+	quayiociimagesdistributor "github.com/openshift/ci-tools/pkg/controller/quay_io_ci_images_distributor"
 	"github.com/openshift/ci-tools/pkg/diffs"
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/registry"
@@ -59,6 +61,9 @@ type RehearsalConfig struct {
 	NormalLimit int
 	MoreLimit   int
 	MaxLimit    int
+
+	MirrorOptions     quayiociimagesdistributor.OCImageMirrorOptions
+	QuayIOImageHelper quayiociimagesdistributor.OCClient
 
 	StickyLabelAuthors sets.Set[string]
 
@@ -307,7 +312,18 @@ func labelSelectorForRehearsalJobs(org, repo string, prNumber int) ctrlruntimecl
 }
 
 // RehearseJobs returns true if the jobs were triggered and succeed
-func (r RehearsalConfig) RehearseJobs(candidate RehearsalCandidate, candidatePath string, prRefs *prowapi.Refs, imageStreamTags apihelper.ImageStreamTagMap, presubmitsToRehearse []*prowconfig.Presubmit, rehearsalTemplates, rehearsalClusterProfiles *ConfigMaps, logger *logrus.Entry) (bool, error) {
+func (r RehearsalConfig) RehearseJobs(
+	candidate RehearsalCandidate,
+	candidatePath string,
+	prRefs *prowapi.Refs,
+	imageStreamTags apihelper.ImageStreamTagMap,
+	mirrorOptions quayiociimagesdistributor.OCImageMirrorOptions,
+	quayIOImageHelper quayiociimagesdistributor.OCClient,
+	presubmitsToRehearse []*prowconfig.Presubmit,
+	rehearsalTemplates,
+	rehearsalClusterProfiles *ConfigMaps,
+	logger *logrus.Entry,
+) (bool, error) {
 	buildClusterConfigs, prowJobConfig := r.getBuildClusterAndProwJobConfigs(logger)
 	pjclient, err := NewProwJobClient(prowJobConfig, r.DryRun)
 	if err != nil {
@@ -324,6 +340,8 @@ func (r RehearsalConfig) RehearseJobs(candidate RehearsalCandidate, candidatePat
 		presubmitsToRehearse,
 		candidate.prNumber,
 		buildClusterConfigs,
+		mirrorOptions,
+		quayIOImageHelper,
 		logger,
 		r.ProwjobNamespace,
 		pjclient,
@@ -497,6 +515,8 @@ func setupDependencies(
 	jobs []*prowconfig.Presubmit,
 	prNumber int,
 	configs map[string]rest.Config,
+	mirrorOptions quayiociimagesdistributor.OCImageMirrorOptions,
+	quayIOImageHelper quayiociimagesdistributor.OCClient,
 	log *logrus.Entry,
 	prowJobNamespace string,
 	prowJobClient ctrlruntimeclient.Client,
@@ -569,6 +589,9 @@ func setupDependencies(
 			if err := ensureImageStreamTags(ctx, client, requiredImageStreamTags, buildCluster, prowJobNamespace, prowJobClient, log); err != nil {
 				return fmt.Errorf("failed to ensure imagestreamtags in cluster %s: %w", buildCluster, err)
 			}
+			if err := ensureISTSInQCI(ctx, client, requiredImageStreamTags, mirrorOptions, quayIOImageHelper, log); err != nil {
+				log.WithError(err).Errorf("failed to ensure imagestreamtags %s in QCI", requiredImageStreamTags)
+			}
 
 			return nil
 		})
@@ -635,6 +658,66 @@ func ensureImageStreamTags(ctx context.Context, client ctrlruntimeclient.Client,
 	}
 
 	return g.Wait()
+}
+
+func ensureISTSInQCI(ctx context.Context, client ctrlruntimeclient.Client, ists apihelper.ImageStreamTagMap, mirrorOptions quayiociimagesdistributor.OCImageMirrorOptions, quayIOImageHelper quayiociimagesdistributor.OCClient, log *logrus.Entry) error {
+	var errs []error
+	var pairs []string
+	for _, ist := range ists {
+		istPairs, err := createPairs(ctx, ist, client, time.Now(), log)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		pairs = append(pairs, istPairs...)
+	}
+	if len(pairs) == 0 {
+		return utilerrors.NewAggregate(errs)
+	}
+	if err := wait.PollUntilContextTimeout(ctx, 1*time.Second, 3*time.Minute, true, func(ctx context.Context) (done bool, err error) {
+		if errFromMirror := quayIOImageHelper.ImageMirror(pairs, mirrorOptions); errFromMirror != nil {
+			return false, nil
+		}
+		return true, nil
+	}); err != nil {
+		errs = append(errs, err)
+	}
+	return utilerrors.NewAggregate(errs)
+}
+
+func createPairs(ctx context.Context, ist types.NamespacedName, client ctrlruntimeclient.Client, time time.Time, log *logrus.Entry) ([]string, error) {
+	colonSplit := strings.Split(ist.Name, ":")
+	if n := len(colonSplit); n != 2 {
+		return []string{}, fmt.Errorf("splitting %s by `:` didn't yield two but %d results", ist.Name, n)
+	}
+	tagRef := api.ImageStreamTagReference{Namespace: ist.Namespace, Name: colonSplit[0], Tag: colonSplit[1]}
+	quayImage := api.QuayImage(tagRef)
+	sourceImageStreamTag := &imagev1.ImageStreamTag{}
+	if err := client.Get(ctx, ist, sourceImageStreamTag); err != nil {
+		if apierrors.IsNotFound(err) {
+			log.Debug("Source imageStreamTag not found")
+			return []string{}, nil
+		}
+		return []string{}, fmt.Errorf("failed to get imageStreamTag %s from registry cluster: %w", ist.String(), err)
+	}
+
+	imageName := sourceImageStreamTag.Image.ObjectMeta.Name
+	colonSplit = strings.Split(imageName, ":")
+	if n := len(colonSplit); n != 2 {
+		//should never happen
+		return []string{}, fmt.Errorf("splitting %s by `:` didn't yield two but %d results", imageName, n)
+	}
+	if colonSplit[0] != "sha256" {
+		//should never happen
+		return []string{}, fmt.Errorf("image name has no prefix `sha256:`: %s", imageName)
+	}
+
+	sourceImage := fmt.Sprintf("%s/%s/%s@%s", api.DomainForService(api.ServiceRegistry), tagRef.Namespace, tagRef.Name, sourceImageStreamTag.Image.ObjectMeta.Name)
+	// time is factored out because of testing
+	targetImageWithDateAndDigest := api.QuayImageFromDateAndDigest(time.Format("20060102"), colonSplit[1])
+
+	pairs := []string{sourceImage + "=" + quayImage, sourceImage + "=" + targetImageWithDateAndDigest}
+	return pairs, nil
 }
 
 func pjKubeconfig(path string, defaultKubeconfig *rest.Config) (*rest.Config, error) {

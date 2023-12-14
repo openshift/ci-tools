@@ -1346,6 +1346,7 @@ const (
 	ClusterProfileHypershiftPowerVS     ClusterProfile = "hypershift-powervs"
 	ClusterProfileHypershiftPowerVSCB   ClusterProfile = "hypershift-powervs-cb"
 	ClusterProfileOSSM                  ClusterProfile = "ossm-aws"
+	ClusterProfileMedik8sAWS            ClusterProfile = "medik8s-aws"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -1460,6 +1461,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileHypershiftPowerVS,
 		ClusterProfileHypershiftPowerVSCB,
 		ClusterProfileOSSM,
+		ClusterProfileMedik8sAWS,
 	}
 }
 
@@ -1500,7 +1502,8 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileOSSM,
 		ClusterProfileAWSOpendatahub,
 		ClusterProfileAWSDevfile,
-		ClusterProfileAWSTelco:
+		ClusterProfileAWSTelco,
+		ClusterProfileMedik8sAWS:
 		return string(CloudAWS)
 	case
 		ClusterProfileAlibabaCloud,
@@ -1848,6 +1851,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "hypershift-powervs-cb-quota-slice"
 	case ClusterProfileOSSM:
 		return "ossm-aws-quota-slice"
+	case ClusterProfileMedik8sAWS:
+		return "medik8s-aws-quota-slice"
 	default:
 		return ""
 	}

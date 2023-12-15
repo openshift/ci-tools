@@ -161,11 +161,7 @@ func main() {
 		if rbc.PromotionConfiguration != nil {
 			if !api.BuildsAnyOfficialImages(rbc, api.WithoutOKD) && o.WhitelistConfig.IsWhitelisted(repoInfo) {
 				logger.Warn("Repo is whitelisted. Disable promotion...")
-				for i := range rbc.PromotionConfiguration.Targets {
-					if !api.BuildsOfficialImages(rbc.PromotionConfiguration.Targets[i], api.WithoutOKD) {
-						rbc.PromotionConfiguration.Targets[i].Disabled = true
-					}
-				}
+				rbc.PromotionConfiguration.Disabled = true
 			}
 			privatePromotionConfiguration(rbc.PromotionConfiguration)
 		}
@@ -247,21 +243,6 @@ func privatePromotionConfiguration(promotion *api.PromotionConfiguration) {
 		}
 		promotion.TagByCommit = false // Never use tag_by_commit for mirrored repos
 		promotion.Namespace = privatePromotionNamespace
-	}
-	privatePromotionTargets(promotion)
-}
-
-func privatePromotionTargets(promotion *api.PromotionConfiguration) {
-	for i := range promotion.Targets {
-		if promotion.Targets[i].Namespace == ocpNamespace {
-			if promotion.Targets[i].Name != "" {
-				promotion.Targets[i].Name = fmt.Sprintf("%s-priv", promotion.Targets[i].Name)
-			} else { // promotion.Targets[i].Tag must be set
-				promotion.Targets[i].Tag = fmt.Sprintf("%s-priv", promotion.Targets[i].Tag)
-			}
-			promotion.Targets[i].TagByCommit = false // Never use tag_by_commit for mirrored repos
-			promotion.Targets[i].Namespace = privatePromotionNamespace
-		}
 	}
 }
 

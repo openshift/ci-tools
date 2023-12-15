@@ -20,9 +20,8 @@ operator:
     dockerfile_path: bundle.Dockerfile
     optional: true
 promotion:
-  to:
-  - name: other
-    namespace: ocp
+  name: other
+  namespace: ocp
 resources:
   '*':
     limits:

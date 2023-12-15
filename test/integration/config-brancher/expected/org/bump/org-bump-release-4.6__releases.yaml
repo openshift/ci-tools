@@ -14,10 +14,9 @@ build_root:
     namespace: ocp
     tag: base
 promotion:
-  to:
-  - disabled: true
-    name: "4.6"
-    namespace: ocp
+  disabled: true
+  name: "4.6"
+  namespace: ocp
 releases:
   initial:
     integration:

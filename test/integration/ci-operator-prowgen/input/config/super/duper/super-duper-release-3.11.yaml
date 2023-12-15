@@ -12,11 +12,10 @@ images:
 - from: base
   to: test-image
 promotion:
-  to:
-  - additional_images:
-      super-duper-src: src
-    name: other
-    namespace: openshift
+  additional_images:
+    super-duper-src: src
+  name: other
+  namespace: openshift
 resources:
   '*':
     limits:

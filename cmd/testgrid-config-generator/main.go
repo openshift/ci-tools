@@ -37,6 +37,8 @@ type options struct {
 
 	validationOnlyRun bool
 	jobsAllowListFile string
+
+	gcsBucket string
 }
 
 const defaultAggregateProwJobName = "release-openshift-release-analysis-aggregator"
@@ -67,6 +69,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.testGridConfigDir, "testgrid-config", "", "Path to TestGrid configuration directory.")
 	fs.StringVar(&o.jobsAllowListFile, "allow-list", "", "Path to file containing jobs to be overridden to informing jobs")
 	fs.BoolVar(&o.validationOnlyRun, "validate", false, "Validate entries in file specified by allow-list (if allow_list is not specified validation would succeed)")
+	fs.StringVar(&o.gcsBucket, "google-storage-bucket", "origin-ci-test", "The optional GCS Bucket holding test artifacts")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse input")
 	}
@@ -146,21 +149,21 @@ func dashboardTabFor(name, description string) *config.DashboardTab {
 	}
 }
 
-func testGroupFor(name string, daysOfResults int32) *config.TestGroup {
+func testGroupFor(bucket, name string, daysOfResults int32) *config.TestGroup {
 	return &config.TestGroup{
 		Name:          name,
-		GcsPrefix:     fmt.Sprintf("origin-ci-test/logs/%s", name),
+		GcsPrefix:     fmt.Sprintf("%s/logs/%s", bucket, name),
 		DaysOfResults: daysOfResults,
 	}
 }
 
-func (d *dashboard) add(name string, description string, daysOfResults int32) {
+func (d *dashboard) add(bucket, name string, description string, daysOfResults int32) {
 	if d.existing.Has(name) {
 		return
 	}
 	d.existing.Insert(name)
 	d.Dashboard.DashboardTab = append(d.Dashboard.DashboardTab, dashboardTabFor(name, description))
-	d.testGroups = append(d.testGroups, testGroupFor(name, daysOfResults))
+	d.testGroups = append(d.testGroups, testGroupFor(bucket, name, daysOfResults))
 }
 
 func getAllowList(data []byte) (map[string]string, error) {
@@ -187,7 +190,7 @@ func addDashboardTab(p prowConfig.Periodic,
 	dashboards map[string]*dashboard,
 	configuredJobs map[string]string,
 	allowList map[string]string,
-	aggregateJobName *string) {
+	aggregateJobName *string, bucket string) {
 	prowName := p.Name
 	jobName := p.Name
 	var dashboardType string
@@ -314,7 +317,7 @@ func addDashboardTab(p prowConfig.Periodic,
 		dashboards[current.Name] = current
 	}
 
-	current.add(jobName, p.Annotations["description"], daysOfResults)
+	current.add(bucket, jobName, p.Annotations["description"], daysOfResults)
 
 }
 
@@ -422,10 +425,10 @@ func main() {
 	}
 
 	for _, p := range jobConfig.Periodics {
-		addDashboardTab(p, dashboards, configuredJobs, allowList, nil)
+		addDashboardTab(p, dashboards, configuredJobs, allowList, nil, o.gcsBucket)
 		if aggregateJobs, ok := aggregateJobsMap[p.Name]; ok {
 			for _, aggregateJob := range aggregateJobs {
-				addDashboardTab(p, dashboards, configuredJobs, allowList, &aggregateJob)
+				addDashboardTab(p, dashboards, configuredJobs, allowList, &aggregateJob, o.gcsBucket)
 			}
 		}
 	}

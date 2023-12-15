@@ -365,12 +365,13 @@ const rawConfig = `tag_specification:
   name: '4.0'
   namespace: ocp
 promotion:
-  name: '4.0'
-  namespace: ocp
-  additional_images:
-    artifacts: artifacts
-  excluded_images:
-  - machine-os-content
+  to:
+  - name: '4.0'
+    namespace: ocp
+    additional_images:
+      artifacts: artifacts
+    excluded_images:
+    - machine-os-content
 base_images:
   base:
     name: '4.0'
@@ -740,10 +741,12 @@ var parsedConfig = &api.ReleaseBuildConfiguration{
 		},
 	}},
 	PromotionConfiguration: &api.PromotionConfiguration{
-		Namespace:        "ocp",
-		Name:             "4.0",
-		AdditionalImages: map[string]string{"artifacts": "artifacts"},
-		ExcludedImages:   []string{"machine-os-content"},
+		Targets: []api.PromotionTarget{{
+			Namespace:        "ocp",
+			Name:             "4.0",
+			AdditionalImages: map[string]string{"artifacts": "artifacts"},
+			ExcludedImages:   []string{"machine-os-content"},
+		}},
 	},
 	Resources: map[string]api.ResourceRequirements{
 		"*":           {Limits: map[string]string{"memory": "6Gi"}, Requests: map[string]string{"cpu": "100m", "memory": "200Mi"}},

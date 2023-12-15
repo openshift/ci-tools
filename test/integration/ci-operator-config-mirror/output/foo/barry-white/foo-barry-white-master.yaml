@@ -12,9 +12,8 @@ images:
 - from: base
   to: test-image
 promotion:
-  to:
-  - name: satin-soul
-    namespace: non-ocp
+  name: satin-soul
+  namespace: non-ocp
 resources:
   '*':
     limits:

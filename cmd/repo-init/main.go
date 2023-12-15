@@ -680,29 +680,22 @@ func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConf
 		generated.Configuration.CanonicalGoRepository = &config.CanonicalGoRepository
 	}
 
-	basePromotionTargets := api.PromotionTargets(originConfig)
-	var basePromotionTarget api.PromotionTarget
-	if len(basePromotionTargets) > 0 {
-		basePromotionTarget = api.PromotionTargets(originConfig)[0]
-	}
 	if config.Promotes {
 		generated.Configuration.PromotionConfiguration = &api.PromotionConfiguration{
-			Targets: []api.PromotionTarget{{
-				Namespace: basePromotionTarget.Namespace,
-				Name:      basePromotionTarget.Name,
-			}},
+			Namespace: originConfig.Namespace,
+			Name:      originConfig.Name,
 		}
 		generated.Configuration.Releases = map[string]api.UnresolvedRelease{
 			api.InitialReleaseName: {
 				Integration: &api.Integration{
-					Namespace: basePromotionTarget.Namespace,
-					Name:      basePromotionTarget.Name,
+					Namespace: originConfig.Namespace,
+					Name:      originConfig.Name,
 				},
 			},
 			api.LatestReleaseName: {
 				Integration: &api.Integration{
-					Namespace:          basePromotionTarget.Namespace,
-					Name:               basePromotionTarget.Name,
+					Namespace:          originConfig.Namespace,
+					Name:               originConfig.Name,
 					IncludeBuiltImages: true,
 				},
 			},
@@ -727,8 +720,8 @@ func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConf
 
 	if config.NeedsBase {
 		generated.Configuration.BaseImages["base"] = api.ImageStreamTagReference{
-			Namespace: basePromotionTarget.Namespace,
-			Name:      basePromotionTarget.Name,
+			Namespace: originConfig.Namespace,
+			Name:      originConfig.Name,
 			Tag:       "base",
 		}
 	}

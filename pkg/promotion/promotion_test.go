@@ -29,11 +29,9 @@ func TestAllPromotionImageStreamTags(t *testing.T) {
 			name: "disabled",
 			config: &cioperatorapi.ReleaseBuildConfiguration{
 				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
-					Targets: []cioperatorapi.PromotionTarget{{
-						Disabled:  true,
-						Namespace: "ns",
-						Name:      "name",
-					}},
+					Disabled:  true,
+					Namespace: "ns",
+					Name:      "name",
 				},
 				Images: []cioperatorapi.ProjectDirectoryImageBuildStepConfiguration{{To: cioperatorapi.PipelineImageStreamTagReferenceSource}},
 			},
@@ -42,9 +40,7 @@ func TestAllPromotionImageStreamTags(t *testing.T) {
 			name: "empty namespace",
 			config: &cioperatorapi.ReleaseBuildConfiguration{
 				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
-					Targets: []cioperatorapi.PromotionTarget{{
-						Name: "some-stream",
-					}},
+					Name: "some-stream",
 				},
 				Images: []cioperatorapi.ProjectDirectoryImageBuildStepConfiguration{{To: cioperatorapi.PipelineImageStreamTagReferenceSource}},
 			},
@@ -53,9 +49,7 @@ func TestAllPromotionImageStreamTags(t *testing.T) {
 			name: "empty name",
 			config: &cioperatorapi.ReleaseBuildConfiguration{
 				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
-					Targets: []cioperatorapi.PromotionTarget{{
-						Namespace: "some-stream",
-					}},
+					Namespace: "some-stream",
 				},
 				Images: []cioperatorapi.ProjectDirectoryImageBuildStepConfiguration{{To: cioperatorapi.PipelineImageStreamTagReferenceSource}},
 			},
@@ -64,10 +58,8 @@ func TestAllPromotionImageStreamTags(t *testing.T) {
 			name: "images",
 			config: &cioperatorapi.ReleaseBuildConfiguration{
 				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
-					Targets: []cioperatorapi.PromotionTarget{{
-						Namespace: "some-namespace",
-						Name:      "some-stream",
-					}},
+					Namespace: "some-namespace",
+					Name:      "some-stream",
 				},
 				Images: []cioperatorapi.ProjectDirectoryImageBuildStepConfiguration{{To: cioperatorapi.PipelineImageStreamTagReferenceSource}},
 			},
@@ -77,11 +69,9 @@ func TestAllPromotionImageStreamTags(t *testing.T) {
 			name: "additinal image",
 			config: &cioperatorapi.ReleaseBuildConfiguration{
 				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
-					Targets: []cioperatorapi.PromotionTarget{{
-						Namespace:        "some-namespace",
-						Name:             "some-stream",
-						AdditionalImages: map[string]string{"expected": ""},
-					}},
+					Namespace:        "some-namespace",
+					Name:             "some-stream",
+					AdditionalImages: map[string]string{"expected": ""},
 				},
 			},
 			expected: sets.New[string]("some-namespace/some-stream:expected"),
@@ -90,11 +80,9 @@ func TestAllPromotionImageStreamTags(t *testing.T) {
 			name: "image and additional image",
 			config: &cioperatorapi.ReleaseBuildConfiguration{
 				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
-					Targets: []cioperatorapi.PromotionTarget{{
-						Namespace:        "some-namespace",
-						Name:             "some-stream",
-						AdditionalImages: map[string]string{"expected": ""},
-					}},
+					Namespace:        "some-namespace",
+					Name:             "some-stream",
+					AdditionalImages: map[string]string{"expected": ""},
 				},
 				Images: []cioperatorapi.ProjectDirectoryImageBuildStepConfiguration{{To: cioperatorapi.PipelineImageStreamTagReferenceSource}},
 			},
@@ -339,11 +327,9 @@ func TestOptionsMatche(t *testing.T) {
 			},
 			configSpec: &cioperatorapi.ReleaseBuildConfiguration{
 				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
-					Targets: []cioperatorapi.PromotionTarget{{
-						Disabled:  true,
-						Name:      "4.6",
-						Namespace: "ocp",
-					}},
+					Disabled:  true,
+					Name:      "4.6",
+					Namespace: "ocp",
 				},
 			},
 			expected: false,
@@ -355,10 +341,8 @@ func TestOptionsMatche(t *testing.T) {
 			},
 			configSpec: &cioperatorapi.ReleaseBuildConfiguration{
 				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
-					Targets: []cioperatorapi.PromotionTarget{{
-						Name:      "one",
-						Namespace: "ocp",
-					}},
+					Name:      "one",
+					Namespace: "ocp",
 				},
 			},
 			expected: true,
@@ -370,10 +354,8 @@ func TestOptionsMatche(t *testing.T) {
 			},
 			configSpec: &cioperatorapi.ReleaseBuildConfiguration{
 				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
-					Targets: []cioperatorapi.PromotionTarget{{
-						Name:      "4.8",
-						Namespace: "origin",
-					}},
+					Name:      "4.8",
+					Namespace: "origin",
 				},
 			},
 			expected: true,
@@ -386,62 +368,8 @@ func TestOptionsMatche(t *testing.T) {
 			},
 			configSpec: &cioperatorapi.ReleaseBuildConfiguration{
 				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
-					Targets: []cioperatorapi.PromotionTarget{{
-						Name:      "one",
-						Namespace: "promotionns",
-					}},
-				},
-			},
-			expected: true,
-		},
-		{
-			name: "at least one target matching",
-			input: []string{
-				"--current-release=release-1",
-				"--current-promotion-namespace=ns-1",
-			},
-			configSpec: &cioperatorapi.ReleaseBuildConfiguration{
-				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
-					Targets: []cioperatorapi.PromotionTarget{
-						{
-							Name:      "release-0",
-							Namespace: "ns-0",
-						},
-						{
-							Name:      "release-1",
-							Namespace: "ns-1",
-						},
-					},
-				},
-			},
-			expected: true,
-		},
-		{
-			name: "fallback to official origin namespace if it's not set",
-			input: []string{
-				"--current-release=one",
-			},
-			configSpec: &cioperatorapi.ReleaseBuildConfiguration{
-				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
-					Targets: []cioperatorapi.PromotionTarget{{
-						Name:      "one",
-						Namespace: "origin",
-					}},
-				},
-			},
-			expected: true,
-		},
-		{
-			name: "fallback to official ocp namespace if it's not set",
-			input: []string{
-				"--current-release=one",
-			},
-			configSpec: &cioperatorapi.ReleaseBuildConfiguration{
-				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
-					Targets: []cioperatorapi.PromotionTarget{{
-						Name:      "one",
-						Namespace: "ocp",
-					}},
+					Name:      "one",
+					Namespace: "promotionns",
 				},
 			},
 			expected: true,

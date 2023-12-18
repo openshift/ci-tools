@@ -800,11 +800,12 @@ func TestValidateCompletedOptions(t *testing.T) {
 
 func TestConstructSecrets(t *testing.T) {
 	testCases := []struct {
-		name          string
-		config        secretbootstrap.Config
-		items         map[string]vaultclient.KVData
-		expected      map[string][]*coreapi.Secret
-		expectedError string
+		name             string
+		config           secretbootstrap.Config
+		items            map[string]vaultclient.KVData
+		disabledClusters sets.Set[string]
+		expected         map[string][]*coreapi.Secret
+		expectedError    string
 	}{
 		{
 			name:   "basic case",
@@ -888,6 +889,73 @@ func TestConstructSecrets(t *testing.T) {
 							"key-name-7": []byte("value2"),
 						},
 						Type: "Opaque",
+					},
+				},
+			},
+		},
+		{
+			name:   "disabled clusters",
+			config: defaultConfig,
+			items: map[string]vaultclient.KVData{
+				"item-name-1": {
+					Data: map[string]string{
+						"field-name-1": "value1",
+						"field-name-2": "value2",
+						"field-name-3": "value3",
+						"field-name-4": "value4",
+					},
+				},
+				"item-name-2": {
+					Data: map[string]string{
+						"field-name-1": "value1",
+						"field-name-2": "value2",
+						"field-name-3": "value3",
+						"field-name-4": "value4",
+					},
+				},
+				"item-name-3": {
+					Data: map[string]string{
+						"field-name-1": "value1",
+					},
+				},
+				"quay.io": {
+					Data: map[string]string{
+						"pull-credentials": "pullToken",
+					},
+				},
+			},
+			disabledClusters: sets.New[string]("build01"),
+			expected: map[string][]*coreapi.Secret{
+				"default": {
+					{
+						TypeMeta: metav1.TypeMeta{Kind: "Secret", APIVersion: "v1"},
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "prod-secret-1",
+							Namespace: "namespace-1",
+							Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
+						},
+						Data: map[string][]byte{
+							"key-name-1": []byte("value1"),
+							"key-name-2": []byte("value2"),
+							"key-name-3": []byte("value3"),
+							"key-name-4": []byte("value1"),
+							"key-name-5": []byte("value2"),
+							"key-name-6": []byte("value1"),
+							"key-name-7": []byte("value2"),
+						},
+						Type: "Opaque",
+					},
+					{
+						TypeMeta: metav1.TypeMeta{Kind: "Secret", APIVersion: "v1"},
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "ci-pull-credentials",
+							Namespace: "ci",
+							Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
+						},
+						Data: map[string][]byte{
+							".dockerconfigjson": []byte("pullToken"),
+						},
+						Type: "kubernetes.io/dockerconfigjson",
 					},
 				},
 			},
@@ -1204,7 +1272,7 @@ Code: 404. Errors:
 				client := vaultClientFromTestItems(tc.items)
 
 				var actualErrorMsg string
-				actual, actualError := constructSecrets(tc.config, client)
+				actual, actualError := constructSecrets(tc.config, client, tc.disabledClusters)
 				if actualError != nil {
 					actualErrorMsg = actualError.Error()
 				}
@@ -2137,15 +2205,16 @@ func (f *fakeVaultClient) UpsertKV(_ string, _ map[string]string) error {
 
 func TestIntegration(t *testing.T) {
 	testCases := []struct {
-		id              string
-		initialData     map[string][]coreapi.Secret
-		force           bool
-		config          secretbootstrap.Config
-		secretGetters   map[string]Getter
-		vaultData       map[string]map[string][]byte
-		expectedSecrets map[string][]coreapi.Secret
-		expectedErrors  bool
-		expectedError   error
+		id               string
+		initialData      map[string][]coreapi.Secret
+		force            bool
+		config           secretbootstrap.Config
+		secretGetters    map[string]Getter
+		vaultData        map[string]map[string][]byte
+		disabledClusters sets.Set[string]
+		expectedSecrets  map[string][]coreapi.Secret
+		expectedErrors   bool
+		expectedError    error
 	}{
 		{
 			id:    "Successfully create secret from config",
@@ -2223,6 +2292,49 @@ func TestIntegration(t *testing.T) {
 						Type:       coreapi.SecretTypeOpaque,
 					},
 				},
+				"cluster-2": {
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "prod-secret-1", Namespace: "namespace-1", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+						Data:       map[string][]byte{"key-name-1": []byte("secret-data")},
+						Type:       coreapi.SecretTypeOpaque,
+					},
+				},
+			},
+		},
+		{
+			id:    "disabled clusters are recognized",
+			force: true,
+			config: secretbootstrap.Config{
+				Secrets: []secretbootstrap.SecretConfig{
+					{
+						From: map[string]secretbootstrap.ItemContext{
+							"key-name-1": {
+								Item:  "item-name-1",
+								Field: "field-name-1",
+							},
+						},
+						To: []secretbootstrap.SecretContext{
+							{
+								Cluster:   "cluster-1",
+								Namespace: "namespace-1",
+								Name:      "prod-secret-1",
+							},
+							{
+								Cluster:   "cluster-2",
+								Namespace: "namespace-1",
+								Name:      "prod-secret-1",
+							},
+						},
+					},
+				},
+			},
+			secretGetters: map[string]Getter{
+				"cluster-1": fake.NewSimpleClientset().CoreV1(),
+				"cluster-2": fake.NewSimpleClientset().CoreV1(),
+			},
+			vaultData:        map[string]map[string][]byte{"item-name-1": {"field-name-1": []byte("secret-data")}},
+			disabledClusters: sets.New[string]("cluster-1"),
+			expectedSecrets: map[string][]coreapi.Secret{
 				"cluster-2": {
 					{
 						ObjectMeta: metav1.ObjectMeta{Name: "prod-secret-1", Namespace: "namespace-1", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
@@ -2789,7 +2901,7 @@ func TestIntegration(t *testing.T) {
 			actualSecretsByCluster := make(map[string][]coreapi.Secret)
 
 			// Create Case
-			errs := reconcileSecrets(o, readOnlyClient)
+			errs := reconcileSecrets(o, readOnlyClient, tc.disabledClusters)
 			if tc.expectedError != nil {
 				if len(errs) == 0 {
 					t.Fatal("expected errors but got nothing")
@@ -2830,7 +2942,7 @@ func TestIntegration(t *testing.T) {
 				}
 			}
 
-			errs = reconcileSecrets(o, readOnlyClient)
+			errs = reconcileSecrets(o, readOnlyClient, tc.disabledClusters)
 			if tc.expectedError != nil {
 				if len(errs) == 0 {
 					t.Fatal("expected errors but got nothing")

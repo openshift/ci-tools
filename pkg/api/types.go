@@ -1272,6 +1272,7 @@ const (
 	ClusterProfileAWSTerraformQE        ClusterProfile = "aws-terraform-qe"
 	ClusterProfileAWSRHTAPQE            ClusterProfile = "aws-rhtap-qe"
 	ClusterProfileAWSRHTAPPerformance   ClusterProfile = "aws-rhtap-performance"
+	ClusterProfileAWSRHDHPerf           ClusterProfile = "aws-rhdh-performance"
 	ClusterProfileAWSTelco              ClusterProfile = "aws-telco"
 	ClusterProfileAWSOpendatahub        ClusterProfile = "aws-opendatahub"
 	ClusterProfileAWSDevfile            ClusterProfile = "aws-devfile"
@@ -1389,6 +1390,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSTerraformQE,
 		ClusterProfileAWSRHTAPQE,
 		ClusterProfileAWSRHTAPPerformance,
+		ClusterProfileAWSRHDHPerf,
 		ClusterProfileAWSTelco,
 		ClusterProfileAWSOpendatahub,
 		ClusterProfileAWSDevfile,
@@ -1506,6 +1508,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSTerraformQE,
 		ClusterProfileAWSRHTAPQE,
 		ClusterProfileAWSRHTAPPerformance,
+		ClusterProfileAWSRHDHPerf,
 		ClusterProfileOSSM,
 		ClusterProfileAWSOpendatahub,
 		ClusterProfileAWSDevfile,
@@ -1704,6 +1707,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-rhtap-qe-quota-slice"
 	case ClusterProfileAWSRHTAPPerformance:
 		return "aws-rhtap-performance-quota-slice"
+	case ClusterProfileAWSRHDHPerf:
+		return "aws-rhdh-performance-quota-slice"
 	case ClusterProfileAWSTelco:
 		return "aws-telco-quota-slice"
 	case ClusterProfileAWSOpendatahub:

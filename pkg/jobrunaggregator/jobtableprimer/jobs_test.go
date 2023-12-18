@@ -24,6 +24,7 @@ func TestJobVersions(t *testing.T) {
 		jobName     string
 		fromVersion string
 		toVersion   string
+		shouldPanic bool
 	}{
 		{
 			name:        "multi-version-upgrade",
@@ -60,17 +61,24 @@ func TestJobVersions(t *testing.T) {
 			jobName:     "release-openshift-origin-installer-e2e-aws-upgrade-ci",
 			fromVersion: "",
 			toVersion:   "unknown",
+			shouldPanic: true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			j := newJob(tc.jobName)
+			if tc.shouldPanic {
+				assert.Panics(t, func() {
+					newJob(tc.jobName)
+				}, "Expected panic for unknown release")
+			} else {
+				j := newJob(tc.jobName)
 
-			assert.NotNil(t, j, "Unexpected nil builder")
-			assert.NotNil(t, j.job, "Unexpected nil job")
-			assert.Equal(t, tc.toVersion, j.job.Release, "Invalid toVersion")
-			assert.Equal(t, tc.fromVersion, j.job.FromRelease, "Invalid fromVersion")
+				assert.NotNil(t, j, "Unexpected nil builder")
+				assert.NotNil(t, j.job, "Unexpected nil job")
+				assert.Equal(t, tc.toVersion, j.job.Release, "Invalid toVersion")
+				assert.Equal(t, tc.fromVersion, j.job.FromRelease, "Invalid fromVersion")
+			}
 		})
 	}
 

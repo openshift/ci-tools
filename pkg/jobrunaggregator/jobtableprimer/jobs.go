@@ -43,11 +43,13 @@ const (
 	v413 = "4.13"
 	v414 = "4.14"
 	v415 = "4.15"
+	v416 = "4.16"
 )
 
 var (
+	// Update this for every new release of Openshift.
 	reverseOrderedVersions = []string{
-		v415, v414, v413, v412, v411, v410, v409, v408,
+		v416, v415, v414, v413, v412, v411, v410, v409, v408,
 	}
 )
 

@@ -1,6 +1,7 @@
 package jobtableprimer
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
@@ -79,8 +80,10 @@ func newJob(name string) *jobRowBuilder {
 	currRelease := "unknown"
 	if len(versions) >= 1 {
 		currRelease = versions[0]
+	} else {
+		// If this job doesn't have one of the known releases, panic to avoid silently missing data for it.
+		panic(fmt.Sprintf("Unable to determine the release from job %s, please update the release list: %v", name, reverseOrderedVersions))
 	}
-
 	fromRelease := ""
 	if runsUpgrade {
 		if len(versions) > 0 {

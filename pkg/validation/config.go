@@ -424,27 +424,30 @@ func validatePromotionConfiguration(fieldRoot string, input api.PromotionConfigu
 	var validationErrors []error
 
 	thisFieldRoot := func(i int) string {
-		if i == 0 {
-			return fieldRoot
+		if input.Namespace != "" {
+			if i == 0 {
+				return fieldRoot
+			}
+			return fmt.Sprintf("%s.to[%d]", fieldRoot, i-1)
 		}
-		return fmt.Sprintf("%s.to[%d]", fieldRoot, i-1)
+		return fmt.Sprintf("%s.to[%d]", fieldRoot, i)
 	}
 	targets := api.PromotionTargets(&input)
 	for i, target := range targets {
 
-		if len(input.Namespace) == 0 {
+		if len(target.Namespace) == 0 {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: no namespace defined", thisFieldRoot(i)))
 		}
 
-		if openshiftWebhookForbiddingNamespaces.MatchString(input.Namespace) && !exceptions.Has(input.Namespace) {
-			validationErrors = append(validationErrors, fmt.Errorf("%s: cannot promote to namespace %s matching this regular expression: (^kube.*|^openshift.*|^default$|^redhat.*)", thisFieldRoot(i), input.Namespace))
+		if openshiftWebhookForbiddingNamespaces.MatchString(target.Namespace) && !exceptions.Has(target.Namespace) {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: cannot promote to namespace %s matching this regular expression: (^kube.*|^openshift.*|^default$|^redhat.*)", thisFieldRoot(i), target.Namespace))
 		}
 
-		if len(input.Name) == 0 && len(input.Tag) == 0 {
+		if len(target.Name) == 0 && len(target.Tag) == 0 {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: no name or tag defined", thisFieldRoot(i)))
 		}
 
-		if len(input.Name) != 0 && len(input.Tag) != 0 {
+		if len(target.Name) != 0 && len(target.Tag) != 0 {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: both name and tag defined", thisFieldRoot(i)))
 		}
 
@@ -488,7 +491,7 @@ func validateReleaseBuildConfiguration(input *api.ReleaseBuildConfiguration, org
 	var validationErrors []error
 
 	// Third conjunct is a corner case, the config can e.g. promote its `src`
-	if len(input.Tests) == 0 && len(input.Images) == 0 && (input.PromotionConfiguration == nil || len(input.PromotionConfiguration.AdditionalImages) == 0) {
+	if len(input.Tests) == 0 && len(input.Images) == 0 && (input.PromotionConfiguration == nil || len(input.PromotionConfiguration.Targets) == 0) {
 		validationErrors = append(validationErrors, errors.New("you must define at least one test or image build in 'tests' or 'images'"))
 	}
 

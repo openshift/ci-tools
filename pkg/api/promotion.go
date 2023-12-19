@@ -29,15 +29,18 @@ func PromotionTargets(c *PromotionConfiguration) []PromotionTarget {
 		return nil
 	}
 
-	targets := []PromotionTarget{{
-		Name:             c.Name,
-		Namespace:        c.Namespace,
-		Tag:              c.Tag,
-		TagByCommit:      c.TagByCommit,
-		ExcludedImages:   c.ExcludedImages,
-		AdditionalImages: c.AdditionalImages,
-		Disabled:         c.Disabled,
-	}}
+	var targets []PromotionTarget
+	if c.Namespace != "" {
+		targets = append(targets, PromotionTarget{
+			Name:             c.Name,
+			Namespace:        c.Namespace,
+			Tag:              c.Tag,
+			TagByCommit:      c.TagByCommit,
+			ExcludedImages:   c.ExcludedImages,
+			AdditionalImages: c.AdditionalImages,
+			Disabled:         c.Disabled,
+		})
+	}
 	targets = append(targets, c.Targets...)
 	return targets
 }
@@ -63,6 +66,17 @@ func ImageTargets(c *ReleaseBuildConfiguration) sets.Set[string] {
 func PromotesOfficialImages(configSpec *ReleaseBuildConfiguration, includeOKD OKDInclusion) bool {
 	for _, target := range PromotionTargets(configSpec.PromotionConfiguration) {
 		if !target.Disabled && BuildsOfficialImages(target, includeOKD) {
+			return true
+		}
+	}
+	return false
+}
+
+// PromotesOfficialImage determines if a configuration will promote promotionName
+// and if it belongs to any official stream.
+func PromotesOfficialImage(configSpec *ReleaseBuildConfiguration, includeOKD OKDInclusion, promotionName string) bool {
+	for _, target := range PromotionTargets(configSpec.PromotionConfiguration) {
+		if !target.Disabled && BuildsOfficialImages(target, includeOKD) && target.Name == promotionName {
 			return true
 		}
 	}

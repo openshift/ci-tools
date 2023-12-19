@@ -13,12 +13,13 @@ import (
 )
 
 // PromotesImagesInto determines if a configuration will result in images being promoted.
-func PromotesImagesInto(configSpec *cioperatorapi.ReleaseBuildConfiguration, promotionNamespace string) bool {
-	if promotionNamespace == "" {
-		return false
-	}
+func PromotesImagesInto(configSpec *cioperatorapi.ReleaseBuildConfiguration, promotionNamespace, promotionName string) bool {
 	for _, target := range cioperatorapi.PromotionTargets(configSpec.PromotionConfiguration) {
-		if !target.Disabled && promotionNamespace == target.Namespace {
+		if promotionNamespace != "" {
+			if !target.Disabled && promotionNamespace == target.Namespace && promotionName == target.Name {
+				return true
+			}
+		} else if !target.Disabled && promotionName == target.Name {
 			return true
 		}
 	}
@@ -48,7 +49,7 @@ func AllPromotionImageStreamTags(configSpec *cioperatorapi.ReleaseBuildConfigura
 			delete(result, image)
 		}
 
-		for additionalTagToPromote := range configSpec.PromotionConfiguration.AdditionalImages {
+		for additionalTagToPromote := range target.AdditionalImages {
 			result.Insert(fmt.Sprintf("%s/%s:%s", target.Namespace, target.Name, additionalTagToPromote))
 		}
 	}
@@ -129,13 +130,10 @@ func (o *Options) Bind(fs *flag.FlagSet) {
 }
 
 func (o *Options) matches(configuration *cioperatorapi.ReleaseBuildConfiguration, includeOKD cioperatorapi.OKDInclusion) bool {
-	var imagesMatch bool
 	if o.CurrentPromotionNamespace == "" {
-		imagesMatch = cioperatorapi.PromotesOfficialImages(configuration, includeOKD)
-	} else {
-		imagesMatch = PromotesImagesInto(configuration, o.CurrentPromotionNamespace)
+		return cioperatorapi.PromotesOfficialImage(configuration, includeOKD, o.CurrentRelease)
 	}
-	return imagesMatch && configuration.PromotionConfiguration.Name == o.CurrentRelease
+	return PromotesImagesInto(configuration, o.CurrentPromotionNamespace, o.CurrentRelease)
 }
 
 // OperateOnCIOperatorConfigDir filters the full set of configurations

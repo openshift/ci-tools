@@ -159,6 +159,13 @@ func main() {
 		}
 
 		if rbc.PromotionConfiguration != nil {
+			rbc.PromotionConfiguration = &api.PromotionConfiguration{
+				Targets:           api.PromotionTargets(rbc.PromotionConfiguration),
+				RegistryOverride:  rbc.PromotionConfiguration.RegistryOverride,
+				DisableBuildCache: rbc.PromotionConfiguration.DisableBuildCache,
+				// All other fields are left out intentionally as they would
+				// be already there in Targets
+			}
 			if !api.BuildsAnyOfficialImages(rbc, api.WithoutOKD) && o.WhitelistConfig.IsWhitelisted(repoInfo) {
 				logger.Warn("Repo is whitelisted. Disable promotion...")
 				for i := range rbc.PromotionConfiguration.Targets {

@@ -280,7 +280,7 @@ func TestGeneratePostSubmitForPromotion(t *testing.T) {
 	ciopConfig := ciop.ReleaseBuildConfiguration{
 		Tests:                  []ciop.TestStepConfiguration{},
 		Images:                 []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
-		PromotionConfiguration: &ciop.PromotionConfiguration{Namespace: "ci"},
+		PromotionConfiguration: &ciop.PromotionConfiguration{Targets: []ciop.PromotionTarget{{Namespace: "ci"}}},
 	}
 	generateOption := func(options *generatePostsubmitOptions) {}
 
@@ -405,7 +405,7 @@ func TestGenerateJobs(t *testing.T) {
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests:                  []ciop.TestStepConfiguration{},
 				Images:                 []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
-				PromotionConfiguration: &ciop.PromotionConfiguration{Namespace: "ci"},
+				PromotionConfiguration: &ciop.PromotionConfiguration{Targets: []api.PromotionTarget{{Namespace: "ci"}}},
 			},
 			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
 				Org:    "organization",
@@ -422,10 +422,12 @@ func TestGenerateJobs(t *testing.T) {
 					{To: "out-2", From: "base"},
 				},
 				PromotionConfiguration: &ciop.PromotionConfiguration{
-					Namespace: "ci",
-					AdditionalImages: map[string]string{
-						"out": "out-1",
-					},
+					Targets: []api.PromotionTarget{{
+						Namespace: "ci",
+						AdditionalImages: map[string]string{
+							"out": "out-1",
+						},
+					}},
 				},
 			},
 			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{

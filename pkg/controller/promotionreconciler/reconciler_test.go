@@ -324,10 +324,12 @@ func TestReconcile(t *testing.T) {
 							Branch: ciOpBranch,
 						},
 						PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
-							Namespace:        "namespace",
-							Name:             "name",
-							AdditionalImages: map[string]string{"tag": ""},
-							Disabled:         tc.promotionDisabled,
+							Targets: []cioperatorapi.PromotionTarget{{
+								Namespace:        "namespace",
+								Name:             "name",
+								AdditionalImages: map[string]string{"tag": ""},
+								Disabled:         tc.promotionDisabled,
+							}},
 						},
 					},
 					}, nil

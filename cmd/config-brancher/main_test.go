@@ -46,8 +46,10 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 			input: config.DataWithInfo{
 				Configuration: api.ReleaseBuildConfiguration{
 					PromotionConfiguration: &api.PromotionConfiguration{
-						Name:      "custom",
-						Namespace: "custom",
+						Targets: []api.PromotionTarget{{
+							Name:      "custom",
+							Namespace: "custom",
+						}},
 					},
 				},
 				Info: config.Info{
@@ -63,8 +65,10 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 			input: config.DataWithInfo{
 				Configuration: api.ReleaseBuildConfiguration{
 					PromotionConfiguration: &api.PromotionConfiguration{
-						Name:      "4.123",
-						Namespace: "ocp",
+						Targets: []api.PromotionTarget{{
+							Name:      "4.123",
+							Namespace: "ocp",
+						}},
 					},
 				},
 				Info: config.Info{
@@ -80,8 +84,10 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 			input: config.DataWithInfo{
 				Configuration: api.ReleaseBuildConfiguration{
 					PromotionConfiguration: &api.PromotionConfiguration{
-						Name:      "current-release",
-						Namespace: "ocp",
+						Targets: []api.PromotionTarget{{
+							Name:      "current-release",
+							Namespace: "ocp",
+						}},
 					},
 					InputConfiguration: api.InputConfiguration{
 						ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
@@ -119,9 +125,11 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 				{
 					Configuration: api.ReleaseBuildConfiguration{
 						PromotionConfiguration: &api.PromotionConfiguration{
-							Name:      "current-release",
-							Namespace: "ocp",
-							Disabled:  true,
+							Targets: []api.PromotionTarget{{
+								Name:      "current-release",
+								Namespace: "ocp",
+								Disabled:  true,
+							}},
 						},
 						InputConfiguration: api.InputConfiguration{
 							ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
@@ -164,8 +172,10 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 			input: config.DataWithInfo{
 				Configuration: api.ReleaseBuildConfiguration{
 					PromotionConfiguration: &api.PromotionConfiguration{
-						Name:      "current-release",
-						Namespace: "ocp",
+						Targets: []api.PromotionTarget{{
+							Name:      "current-release",
+							Namespace: "ocp",
+						}},
 					},
 					InputConfiguration: api.InputConfiguration{
 						ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
@@ -193,8 +203,10 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 						{As: "periodic-cron-portable", Cron: &cron, Portable: true},
 					},
 					PromotionConfiguration: &api.PromotionConfiguration{
-						Name:      "current-release",
-						Namespace: "ocp",
+						Targets: []api.PromotionTarget{{
+							Name:      "current-release",
+							Namespace: "ocp",
+						}},
 					},
 					InputConfiguration: api.InputConfiguration{
 						ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
@@ -235,9 +247,11 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 							{As: "periodic-cron-portable", Cron: &cron, Portable: true},
 						},
 						PromotionConfiguration: &api.PromotionConfiguration{
-							Name:      "current-release",
-							Namespace: "ocp",
-							Disabled:  true,
+							Targets: []api.PromotionTarget{{
+								Name:      "current-release",
+								Namespace: "ocp",
+								Disabled:  true,
+							}},
 						},
 						InputConfiguration: api.InputConfiguration{
 							ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
@@ -277,8 +291,10 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 							{As: "periodic-cron-portable", Cron: &cron, Portable: true},
 						},
 						PromotionConfiguration: &api.PromotionConfiguration{
-							Name:      "future-release-1",
-							Namespace: "ocp",
+							Targets: []api.PromotionTarget{{
+								Name:      "future-release-1",
+								Namespace: "ocp",
+							}},
 						},
 						InputConfiguration: api.InputConfiguration{
 							ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
@@ -318,8 +334,10 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 							{As: "periodic-cron-portable", Cron: &cron, Portable: true},
 						},
 						PromotionConfiguration: &api.PromotionConfiguration{
-							Name:      "future-release-2",
-							Namespace: "ocp",
+							Targets: []api.PromotionTarget{{
+								Name:      "future-release-2",
+								Namespace: "ocp",
+							}},
 						},
 						InputConfiguration: api.InputConfiguration{
 							ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
@@ -363,8 +381,10 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 			input: config.DataWithInfo{
 				Configuration: api.ReleaseBuildConfiguration{
 					PromotionConfiguration: &api.PromotionConfiguration{
-						Name:      "current-release",
-						Namespace: "ocp",
+						Targets: []api.PromotionTarget{{
+							Name:      "current-release",
+							Namespace: "ocp",
+						}},
 					},
 					InputConfiguration: api.InputConfiguration{
 						ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
@@ -381,8 +401,10 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 				{
 					Configuration: api.ReleaseBuildConfiguration{
 						PromotionConfiguration: &api.PromotionConfiguration{
-							Name:      "future-release-1",
-							Namespace: "ocp",
+							Targets: []api.PromotionTarget{{
+								Name:      "future-release-1",
+								Namespace: "ocp",
+							}},
 						},
 						InputConfiguration: api.InputConfiguration{
 							ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
@@ -398,8 +420,10 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 				{
 					Configuration: api.ReleaseBuildConfiguration{
 						PromotionConfiguration: &api.PromotionConfiguration{
-							Name:      "current-release",
-							Namespace: "ocp",
+							Targets: []api.PromotionTarget{{
+								Name:      "current-release",
+								Namespace: "ocp",
+							}},
 						},
 						InputConfiguration: api.InputConfiguration{
 							ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
@@ -415,9 +439,11 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 				{
 					Configuration: api.ReleaseBuildConfiguration{
 						PromotionConfiguration: &api.PromotionConfiguration{
-							Name:      "future-release-1",
-							Namespace: "ocp",
-							Disabled:  true,
+							Targets: []api.PromotionTarget{{
+								Name:      "future-release-1",
+								Namespace: "ocp",
+								Disabled:  true,
+							}},
 						},
 						InputConfiguration: api.InputConfiguration{
 							ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
@@ -433,8 +459,10 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 				{
 					Configuration: api.ReleaseBuildConfiguration{
 						PromotionConfiguration: &api.PromotionConfiguration{
-							Name:      "future-release-2",
-							Namespace: "ocp",
+							Targets: []api.PromotionTarget{{
+								Name:      "future-release-2",
+								Namespace: "ocp",
+							}},
 						},
 						InputConfiguration: api.InputConfiguration{
 							ReleaseTagConfiguration: &api.ReleaseTagConfiguration{

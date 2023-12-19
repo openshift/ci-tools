@@ -36,6 +36,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
 	vaultapi "github.com/openshift/ci-tools/pkg/api/vault"
 	"github.com/openshift/ci-tools/pkg/kubernetes/pkg/credentialprovider"
+	"github.com/openshift/ci-tools/pkg/prowconfigutils"
 	"github.com/openshift/ci-tools/pkg/secrets"
 )
 
@@ -298,7 +299,7 @@ func constructDockerConfigJSON(client secrets.ReadOnlyClient, dockerConfigJSONDa
 	return b, nil
 }
 
-func constructSecrets(config secretbootstrap.Config, client secrets.ReadOnlyClient) (map[string][]*coreapi.Secret, error) {
+func constructSecrets(config secretbootstrap.Config, client secrets.ReadOnlyClient, prowDisabledClusters sets.Set[string]) (map[string][]*coreapi.Secret, error) {
 	secretsByClusterAndName := map[string]map[types.NamespacedName]coreapi.Secret{}
 	secretsMapLock := &sync.Mutex{}
 
@@ -363,6 +364,10 @@ func constructSecrets(config secretbootstrap.Config, client secrets.ReadOnlyClie
 			keyWg.Wait()
 
 			for _, secretContext := range cfg.To {
+				if prowDisabledClusters.Has(secretContext.Cluster) {
+					logrus.WithField("cluster", secretContext.Cluster).Info("Skipped constructing of secrets on a Prow disabled cluster")
+					continue
+				}
 				if secretContext.Type == "" {
 					secretContext.Type = coreapi.SecretTypeOpaque
 				}
@@ -890,6 +895,10 @@ func main() {
 	if err := o.validateOptions(); err != nil {
 		logrus.WithError(err).Fatal("Invalid arguments.")
 	}
+	prowDisabledClusters, err := prowconfigutils.ProwDisabledClusters(&o.kubernetesOptions)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to get Prow disable clusters")
+	}
 	kubeconfigs, err := o.kubernetesOptions.LoadClusterConfigs()
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to load cluster configs.")
@@ -902,12 +911,12 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to create client.")
 	}
 
-	if errs := reconcileSecrets(o, client); len(errs) > 0 {
+	if errs := reconcileSecrets(o, client, sets.New[string](prowDisabledClusters...)); len(errs) > 0 {
 		logrus.WithError(utilerrors.NewAggregate(errs)).Fatalf("errors while updating secrets")
 	}
 }
 
-func reconcileSecrets(o options, client secrets.ReadOnlyClient) (errs []error) {
+func reconcileSecrets(o options, client secrets.ReadOnlyClient, prowDisabledClusters sets.Set[string]) (errs []error) {
 	if o.validateOnly {
 		var config secretbootstrap.Config
 		if err := secretbootstrap.LoadConfigFromFile(o.configPath, &config); err != nil {
@@ -926,7 +935,7 @@ func reconcileSecrets(o options, client secrets.ReadOnlyClient) (errs []error) {
 	}
 
 	// errors returned by constructSecrets will be handled once the rest of the secrets have been uploaded
-	secretsMap, err := constructSecrets(o.config, client)
+	secretsMap, err := constructSecrets(o.config, client, prowDisabledClusters)
 	if err != nil {
 		errs = append(errs, err)
 	}

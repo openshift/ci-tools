@@ -1653,7 +1653,7 @@ func TestUpdateSecrets(t *testing.T) {
 				"build01": fkcBuild01.CoreV1(),
 			}
 
-			actual := updateSecrets(clients, tc.secretsMap, tc.force, true, nil)
+			actual := updateSecrets(clients, tc.secretsMap, tc.force, true, nil, nil)
 			equalError(t, tc.expected, actual)
 
 			actualSecretsOnDefault, err := fkcDefault.CoreV1().Secrets("").List(context.TODO(), metav1.ListOptions{})

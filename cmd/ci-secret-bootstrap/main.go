@@ -368,10 +368,6 @@ func constructSecrets(config secretbootstrap.Config, client secrets.ReadOnlyClie
 			keyWg.Wait()
 
 			for _, secretContext := range cfg.To {
-				if prowDisabledClusters.Has(secretContext.Cluster) {
-					logrus.WithField("cluster", secretContext.Cluster).Info("Skipped constructing of secrets on a Prow disabled cluster")
-					continue
-				}
 				if secretContext.Type == "" {
 					secretContext.Type = coreapi.SecretTypeOpaque
 				}
@@ -416,6 +412,10 @@ func constructSecrets(config secretbootstrap.Config, client secrets.ReadOnlyClie
 
 	result := map[string][]*coreapi.Secret{}
 	for cluster, secretMap := range secretsByClusterAndName {
+		if prowDisabledClusters.Has(cluster) {
+			logrus.WithField("cluster", cluster).Info("Skipped secrets on a Prow disabled cluster")
+			continue
+		}
 		for _, secret := range secretMap {
 			result[cluster] = append(result[cluster], secret.DeepCopy())
 		}
@@ -489,7 +489,7 @@ type Getter interface {
 	coreclientset.NamespacesGetter
 }
 
-func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.Secret, force bool, confirm bool, osdGlobalPullSecretGroup sets.Set[string]) error {
+func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.Secret, force bool, confirm bool, osdGlobalPullSecretGroup, prowDisabledClusters sets.Set[string]) error {
 	var errs []error
 
 	var dryRunOptions []string
@@ -505,7 +505,11 @@ func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.S
 		for _, secret := range secrets {
 			logger := logger.WithFields(logrus.Fields{"namespace": secret.Namespace, "name": secret.Name, "type": secret.Type})
 			logger.Debug("handling secret")
-
+			// This should never happen if constructSecrets() is implemented correctly
+			if prowDisabledClusters.Has(cluster) {
+				errs = append(errs, fmt.Errorf("attempted to update a secret %s in namespace %s on a Prow disabled cluster %s", secret.Name, secret.Namespace, cluster))
+				continue
+			}
 			if !existingNamespaces.Has(secret.Namespace) {
 				nsClient := getters[cluster].Namespaces()
 				if _, err := nsClient.Get(context.TODO(), secret.Namespace, metav1.GetOptions{}); err != nil {
@@ -959,7 +963,7 @@ func reconcileSecrets(o options, client secrets.ReadOnlyClient, prowDisabledClus
 			errs = append(errs, fmt.Errorf("failed to write secrets on dry run: %w", err))
 		}
 	} else {
-		if err := updateSecrets(o.secretsGetters, secretsMap, o.force, o.confirm, sets.New[string](o.config.OSDGlobalPullSecretGroup()...)); err != nil {
+		if err := updateSecrets(o.secretsGetters, secretsMap, o.force, o.confirm, sets.New[string](o.config.OSDGlobalPullSecretGroup()...), prowDisabledClusters); err != nil {
 			errs = append(errs, fmt.Errorf("failed to update secrets: %w", err))
 		}
 		logrus.Info("Updated secrets.")

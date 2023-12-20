@@ -323,6 +323,7 @@ func TestCompleteOptions(t *testing.T) {
 	testCases := []struct {
 		name             string
 		given            options
+		disabledClusters sets.Set[string]
 		expectedError    error
 		expectedConfig   secretbootstrap.Config
 		expectedClusters []string
@@ -335,6 +336,16 @@ func TestCompleteOptions(t *testing.T) {
 			},
 			expectedConfig:   defaultConfig,
 			expectedClusters: []string{"build01", "default"},
+		},
+		{
+			name: "disabled clusters",
+			given: options{
+				logLevel:   "info",
+				configPath: configPath,
+			},
+			disabledClusters: sets.New[string]("default"),
+			expectedConfig:   defaultConfigWithoutDefaultCluster,
+			expectedClusters: []string{"build01"},
 		},
 		{
 			name: "missing context in kubeconfig",
@@ -374,7 +385,7 @@ func TestCompleteOptions(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			censor := secrets.NewDynamicCensor()
-			actualError := tc.given.completeOptions(&censor, kubeconfigs)
+			actualError := tc.given.completeOptions(&censor, kubeconfigs, tc.disabledClusters)
 			equalError(t, tc.expectedError, actualError)
 			if tc.expectedError == nil {
 				equal(t, "config", tc.expectedConfig, tc.given.config)

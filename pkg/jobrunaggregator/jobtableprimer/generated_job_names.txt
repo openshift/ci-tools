@@ -582,6 +582,8 @@ periodic-ci-openshift-cluster-control-plane-machine-set-operator-release-4.15-pe
 periodic-ci-openshift-cluster-control-plane-machine-set-operator-release-4.15-periodics-e2e-azure
 periodic-ci-openshift-cluster-control-plane-machine-set-operator-release-4.15-periodics-e2e-gcp
 periodic-ci-openshift-hypershift-release-4.15-periodics-e2e-aws-ovn-conformance
+periodic-ci-openshift-microshift-release-4.15-ocp-conformance-rhel-eus-nightly
+periodic-ci-openshift-microshift-release-4.15-ocp-metal-nightly
 periodic-ci-openshift-osde2e-main-nightly-4.15-osd-aws
 periodic-ci-openshift-osde2e-main-nightly-4.15-osd-gcp
 periodic-ci-openshift-osde2e-main-nightly-4.15-rosa-classic-sts

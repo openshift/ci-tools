@@ -113,7 +113,7 @@ func (o *options) validateOptions() error {
 	return utilerrors.NewAggregate(errs)
 }
 
-func (o *options) completeOptions(censor *secrets.DynamicCensor, kubeConfigs map[string]rest.Config) error {
+func (o *options) completeOptions(censor *secrets.DynamicCensor, kubeConfigs map[string]rest.Config, disabledClusters sets.Set[string]) error {
 	if err := o.secrets.Complete(censor); err != nil {
 		return err
 	}
@@ -152,8 +152,12 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor, kubeConfigs map
 		var to []secretbootstrap.SecretContext
 
 		for j, secretContext := range secretConfig.To {
+			if disabledClusters.Has(secretContext.Cluster) {
+				logrus.WithFields(logrus.Fields{"target-cluster": o.cluster, "secret-cluster": secretContext.Cluster}).Debug("Skipping provisioning of secrets for a cluster that is disabled by Prow")
+				continue
+			}
 			if o.cluster != "" && o.cluster != secretContext.Cluster {
-				logrus.WithFields(logrus.Fields{"target-cluster": o.cluster, "secret-cluster": secretContext.Cluster}).Debug("Skipping provisioniong of secret for cluster that does not match the one configured via --cluster")
+				logrus.WithFields(logrus.Fields{"target-cluster": o.cluster, "secret-cluster": secretContext.Cluster}).Debug("Skipping provisioning of secrets for a cluster that does not match the one configured via --cluster")
 				continue
 			}
 			to = append(to, secretContext)
@@ -903,7 +907,8 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to load cluster configs.")
 	}
-	if err := o.completeOptions(&censor, kubeconfigs); err != nil {
+	disabledClusters := sets.New[string](prowDisabledClusters...)
+	if err := o.completeOptions(&censor, kubeconfigs, disabledClusters); err != nil {
 		logrus.WithError(err).Error("Failed to complete options.")
 	}
 	client, err := o.secrets.NewReadOnlyClient(&censor)
@@ -911,7 +916,7 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to create client.")
 	}
 
-	if errs := reconcileSecrets(o, client, sets.New[string](prowDisabledClusters...)); len(errs) > 0 {
+	if errs := reconcileSecrets(o, client, disabledClusters); len(errs) > 0 {
 		logrus.WithError(utilerrors.NewAggregate(errs)).Fatalf("errors while updating secrets")
 	}
 }

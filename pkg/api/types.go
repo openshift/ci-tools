@@ -1476,7 +1476,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileHypershiftPowerVSCB,
 		ClusterProfileOSSM,
 		ClusterProfileMedik8sAWS,
-		ClusterProfileGitOpsAWS
+		ClusterProfileGitOpsAWS,
 	}
 }
 
@@ -1520,7 +1520,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSOpendatahub,
 		ClusterProfileAWSDevfile,
 		ClusterProfileAWSTelco,
-		ClusterProfileMedik8sAWS:
+		ClusterProfileMedik8sAWS,
 		ClusterProfileGitOpsAWS:
 		return string(CloudAWS)
 	case

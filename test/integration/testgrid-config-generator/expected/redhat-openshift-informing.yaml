@@ -83,11 +83,11 @@ dashboards:
     test_group_name: release-openshift-origin-job-without-release-label
   name: redhat-openshift-informing
 test_groups:
-- gcs_prefix: origin-ci-test/logs/release-openshift-origin-installer-e2e-aws-upgrade
+- gcs_prefix: test-platform-results/logs/release-openshift-origin-installer-e2e-aws-upgrade
   name: release-openshift-origin-installer-e2e-aws-upgrade
 - days_of_results: 50
-  gcs_prefix: origin-ci-test/logs/release-openshift-origin-job-without-informing
+  gcs_prefix: test-platform-results/logs/release-openshift-origin-job-without-informing
   name: release-openshift-origin-job-without-informing
 - days_of_results: 50
-  gcs_prefix: origin-ci-test/logs/release-openshift-origin-job-without-release-label
+  gcs_prefix: test-platform-results/logs/release-openshift-origin-job-without-release-label
   name: release-openshift-origin-job-without-release-label

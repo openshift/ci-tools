@@ -41,7 +41,7 @@ func (f *BigQueryAlertUploadFlags) BindFlags(fs *pflag.FlagSet) {
 
 	fs.BoolVar(&f.DryRun, "dry-run", f.DryRun, "Run the command, but don't mutate data.")
 	fs.StringVar(&f.LogLevel, "log-level", "info", "Log level (trace,debug,info,warn,error) (default: info)")
-	fs.StringVar(&f.GCSBucket, "google-storage-bucket", "origin-ci-test", "The optional GCS Bucket holding test artifacts")
+	fs.StringVar(&f.GCSBucket, "google-storage-bucket", "test-platform-results", "The optional GCS Bucket holding test artifacts")
 }
 
 func NewBigQueryAlertUploadFlagsCommand() *cobra.Command {

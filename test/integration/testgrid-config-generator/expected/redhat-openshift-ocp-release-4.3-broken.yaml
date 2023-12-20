@@ -30,5 +30,5 @@ dashboards:
   name: redhat-openshift-ocp-release-4.3-broken
 test_groups:
 - days_of_results: 50
-  gcs_prefix: origin-ci-test/logs/release-openshift-origin-job-without-release-label-broken
+  gcs_prefix: test-platform-results/logs/release-openshift-origin-job-without-release-label-broken
   name: release-openshift-origin-job-without-release-label-broken

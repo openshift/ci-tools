@@ -30,5 +30,5 @@ dashboards:
   name: redhat-openshift-ocp-release-4.1-informing
 test_groups:
 - days_of_results: 50
-  gcs_prefix: origin-ci-test/logs/release-openshift-origin-installer-e2e-aws-optional-4.1
+  gcs_prefix: test-platform-results/logs/release-openshift-origin-installer-e2e-aws-optional-4.1
   name: release-openshift-origin-installer-e2e-aws-optional-4.1

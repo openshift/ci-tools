@@ -82,9 +82,9 @@ func gatherOptions() (options, error) {
 	fs.Var(&o.stickyLabelAuthors, "sticky-label-author", "PR Author for which the 'rehearsals-ack' label will not be removed upon a new push. Can be passed multiple times.")
 	fs.StringVar(&o.webhookSecretFile, "hmac-secret-file", "/etc/webhook/hmac", "Path to the file containing the GitHub HMAC secret.")
 
-	fs.StringVar(&o.gcsBucket, "gcs-bucket", "origin-ci-test", "GCS Bucket to upload affected jobs list")
+	fs.StringVar(&o.gcsBucket, "gcs-bucket", "test-platform-results", "GCS Bucket to upload affected jobs list")
 	fs.StringVar(&o.gcsCredentialsFile, "gcs-credentials-file", "/etc/gcs/service-account.json", "GCS Credentials file to upload affected jobs list")
-	fs.StringVar(&o.gcsBrowserPrefix, "gcs-browser-prefix", "https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/", "Prefix for the GCS Browser for viewing the affected jobs list")
+	fs.StringVar(&o.gcsBrowserPrefix, "gcs-browser-prefix", "https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/test-platform-results/", "Prefix for the GCS Browser for viewing the affected jobs list")
 
 	o.github.AddFlags(fs)
 	o.githubEventServerOptions.Bind(fs)

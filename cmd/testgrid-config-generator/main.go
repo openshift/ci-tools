@@ -69,7 +69,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.testGridConfigDir, "testgrid-config", "", "Path to TestGrid configuration directory.")
 	fs.StringVar(&o.jobsAllowListFile, "allow-list", "", "Path to file containing jobs to be overridden to informing jobs")
 	fs.BoolVar(&o.validationOnlyRun, "validate", false, "Validate entries in file specified by allow-list (if allow_list is not specified validation would succeed)")
-	fs.StringVar(&o.gcsBucket, "google-storage-bucket", "origin-ci-test", "The optional GCS Bucket holding test artifacts")
+	fs.StringVar(&o.gcsBucket, "google-storage-bucket", "test-platform-results", "The optional GCS Bucket holding test artifacts")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse input")
 	}

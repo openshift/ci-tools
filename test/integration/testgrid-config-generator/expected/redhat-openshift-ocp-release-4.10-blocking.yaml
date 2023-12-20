@@ -57,8 +57,8 @@ dashboards:
   name: redhat-openshift-ocp-release-4.10-blocking
 test_groups:
 - days_of_results: 50
-  gcs_prefix: origin-ci-test/logs/aggregated-aws-ovn-upgrade-4.10-micro-release-openshift-release-analysis-aggregator
+  gcs_prefix: test-platform-results/logs/aggregated-aws-ovn-upgrade-4.10-micro-release-openshift-release-analysis-aggregator
   name: aggregated-aws-ovn-upgrade-4.10-micro-release-openshift-release-analysis-aggregator
 - days_of_results: 50
-  gcs_prefix: origin-ci-test/logs/aggregated-aws-ovn-upgrade-4.10-minor-release-openshift-release-analysis-aggregator
+  gcs_prefix: test-platform-results/logs/aggregated-aws-ovn-upgrade-4.10-minor-release-openshift-release-analysis-aggregator
   name: aggregated-aws-ovn-upgrade-4.10-minor-release-openshift-release-analysis-aggregator

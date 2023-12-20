@@ -19,7 +19,7 @@ spec:
   cluster: default
   decoration_config:
     gcs_configuration:
-      bucket: origin-ci-test
+      bucket: test-platform-results
       default_org: openshift
       default_repo: origin
       path_strategy: single

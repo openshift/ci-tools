@@ -33,4 +33,4 @@ ci-operator-checkconfig \
 
 [openshift_release]: https://github.com/openshift/release.git
 [pkg_validation]: https://github.com/openshift/ci-tools/tree/master/pkg/validation
-[presubmit_job]: https://prow.ci.openshift.org/job-history/gs/origin-ci-test/pr-logs/directory/pull-ci-openshift-release-master-ci-operator-config
+[presubmit_job]: https://prow.ci.openshift.org/job-history/gs/test-platform-results/pr-logs/directory/pull-ci-openshift-release-master-ci-operator-config

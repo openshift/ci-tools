@@ -366,7 +366,7 @@ func infoFromUrl(url *url.URL) *jobInfo {
 }
 
 // infoForJobHistory handles URLs like:
-// https://prow.ci.openshift.org/job-history/gs/origin-ci-test/logs/release-openshift-origin-installer-e2e-gcp-upgrade-4.7?buildId=1234123123
+// https://prow.ci.openshift.org/job-history/gs/test-platform-results/logs/release-openshift-origin-installer-e2e-gcp-upgrade-4.7?buildId=1234123123
 func infoForJobHistory(url *url.URL) *jobInfo {
 	parts := strings.Split(url.Path, "/")
 	if len(parts) < 1 {
@@ -388,7 +388,7 @@ func infoForJobLog(url *url.URL) *jobInfo {
 }
 
 // infoForJobView handles URLs like:
-// https://prow.ci.openshift.org/view/gs/origin-ci-test/pr-logs/pull/openshift_release/12371/rehearse-12371-periodic-ci-kubevirt-kubevirt-master-e2e-nested-virt/1318930182802771968
+// https://prow.ci.openshift.org/view/gs/test-platform-results/pr-logs/pull/openshift_release/12371/rehearse-12371-periodic-ci-kubevirt-kubevirt-master-e2e-nested-virt/1318930182802771968
 func infoForJobView(url *url.URL) *jobInfo {
 	parts := strings.Split(url.Path, "/")
 	if len(parts) < 2 {
@@ -408,8 +408,8 @@ func infoForJobView(url *url.URL) *jobInfo {
 }
 
 // infoForArtifact handles URLs like:
-// https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/pr-logs/pull/25585/pull-ci-openshift-origin-master-e2e-aws-disruptive/1319310480841379840/build-log.txt
-// https://storage.googleapis.com/origin-ci-test/pr-logs/pull/openshift_cluster-ingress-operator/836/pull-ci-openshift-cluster-ingress-operator-master-e2e-aws-operator/1583384716713660416/build-log.txt
+// https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/test-platform-results/pr-logs/pull/25585/pull-ci-openshift-origin-master-e2e-aws-disruptive/1319310480841379840/build-log.txt
+// https://storage.googleapis.com/test-platform-results/pr-logs/pull/openshift_cluster-ingress-operator/836/pull-ci-openshift-cluster-ingress-operator-master-e2e-aws-operator/1583384716713660416/build-log.txt
 func infoForArtifact(url *url.URL) *jobInfo {
 	parts := strings.Split(url.Path, "/")
 	// the last fully numeric path part before user-provided

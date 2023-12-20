@@ -48,7 +48,7 @@ func (o *ciGCSClient) ReadRelatedJobRuns(ctx context.Context,
 	logrus.Debugf("searching GCS for related job runs in %s between %s and %s", gcsPrefix, startingJobRunID, endingJobRunID)
 	query := &storage.Query{
 		// This ends up being the equivalent of:
-		// https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/logs/periodic-ci-openshift-release-master-nightly-4.9-upgrade-from-stable-4.8-e2e-metal-ipi-upgrade/
+		// https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/test-platform-results/logs/periodic-ci-openshift-release-master-nightly-4.9-upgrade-from-stable-4.8-e2e-metal-ipi-upgrade/
 		Prefix: fmt.Sprintf("%s/", gcsPrefix),
 
 		// TODO this field is apparently missing from this level of go/storage

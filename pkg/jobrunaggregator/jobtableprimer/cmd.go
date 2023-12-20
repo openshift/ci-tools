@@ -32,7 +32,7 @@ func (f *primeJobTableFlags) BindFlags(fs *pflag.FlagSet) {
 	f.Authentication.BindFlags(fs)
 
 	fs.BoolVar(&f.DryRun, "dry-run", f.DryRun, "Run the command, but don't mutate data.")
-	fs.StringVar(&f.GCSBucket, "google-storage-bucket", "origin-ci-test", "The optional GCS Bucket holding test artifacts")
+	fs.StringVar(&f.GCSBucket, "google-storage-bucket", "test-platform-results", "The optional GCS Bucket holding test artifacts")
 }
 
 func NewPrimeJobTableCommand() *cobra.Command {

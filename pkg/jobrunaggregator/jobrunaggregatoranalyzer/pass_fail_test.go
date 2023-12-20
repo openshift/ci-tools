@@ -151,7 +151,7 @@ func TestCheckPercentileDisruption(t *testing.T) {
 			supportsFuzziness:    true,
 		},
 
-		// https://prow.ci.openshift.org/view/gs/origin-ci-test/logs/aggregated-azure-ovn-upgrade-4.14-micro-release-openshift-release-analysis-aggregator/1671560866929053696
+		// https://prow.ci.openshift.org/view/gs/test-platform-results/logs/aggregated-azure-ovn-upgrade-4.14-micro-release-openshift-release-analysis-aggregator/1671560866929053696
 		//		{Failed: Passed 3 times, failed 6 times.  (P85=1.30s requiredPasses=4
 		//		successes=[1671334508823056384=1s 1671334507992584192=0s 1671334507128557568=0s]
 		//		failures=[1671334503768920064=5s 1671334504733609984=5s 1671334506289696768=2s

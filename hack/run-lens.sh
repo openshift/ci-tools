@@ -55,5 +55,5 @@ deck -spyglass --config-path="$deck_config" \
  --spyglass-files-location=/tmp/deck/lenses &
 
 echo "After the lensserver started, you can reach deck on localhost:8080"
-echo "A sample url for a job is http://localhost:8080/view/gs/origin-ci-test/pr-logs/pull/openshift_ci-tools/1501/pull-ci-openshift-ci-tools-master-format/1336382299314327552"
+echo "A sample url for a job is http://localhost:8080/view/gs/test-platform-results/pr-logs/pull/openshift_ci-tools/1501/pull-ci-openshift-ci-tools-master-format/1336382299314327552"
 go run ./cmd/lensserver --config-path="$deck_config"

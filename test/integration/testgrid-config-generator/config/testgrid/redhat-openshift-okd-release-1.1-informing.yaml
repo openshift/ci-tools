@@ -29,5 +29,5 @@ dashboards:
     test_group_name: release-openshift-origin-installer-e2e-aws-optional-1.1
   name: redhat-openshift-okd-release-1.1-informing
 test_groups:
-- gcs_prefix: origin-ci-test/logs/release-openshift-origin-installer-e2e-aws-optional-1.1
+- gcs_prefix: test-platform-results/logs/release-openshift-origin-installer-e2e-aws-optional-1.1
   name: release-openshift-origin-installer-e2e-aws-optional-1.1

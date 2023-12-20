@@ -150,7 +150,7 @@ func (j *gcsJobRun) writeCache(ctx context.Context, parentDir string) error {
 func (j *gcsJobRun) GetJobRunFromGCS(ctx context.Context) error {
 	query := &storage.Query{
 		// This ends up being the equivalent of:
-		// https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/logs/periodic-ci-openshift-release-master-nightly-4.9-upgrade-from-stable-4.8-e2e-metal-ipi-upgrade/1671747590984568832
+		// https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/test-platform-results/logs/periodic-ci-openshift-release-master-nightly-4.9-upgrade-from-stable-4.8-e2e-metal-ipi-upgrade/1671747590984568832
 		// the next directory step is based on some bit of metadata I don't recognize
 		Prefix: j.jobRunGCSBucketRoot,
 
@@ -405,11 +405,11 @@ func (j *gcsJobRun) IsFinished(ctx context.Context) bool {
 }
 
 func GetHumanURLForLocation(jobRunGCSBucketRoot, jobRunGCSBucket string) string {
-	// https://prow.ci.openshift.org/view/gs/origin-ci-test/logs/periodic-ci-openshift-release-master-ci-4.8-e2e-gcp-upgrade/1429691282619371520
+	// https://prow.ci.openshift.org/view/gs/test-platform-results/logs/periodic-ci-openshift-release-master-ci-4.8-e2e-gcp-upgrade/1429691282619371520
 	return fmt.Sprintf("https://prow.ci.openshift.org/view/gs/%s/%s", jobRunGCSBucket, jobRunGCSBucketRoot)
 }
 
 func GetGCSArtifactURLForLocation(jobRunGCSBucketRoot, jobRunGCSBucket string) string {
-	// https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/origin-ci-test/logs/periodic-ci-openshift-release-master-ci-4.9-e2e-gcp-upgrade/1420676206029705216/artifacts/e2e-gcp-upgrade/
+	// https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/test-platform-results/logs/periodic-ci-openshift-release-master-ci-4.9-e2e-gcp-upgrade/1420676206029705216/artifacts/e2e-gcp-upgrade/
 	return fmt.Sprintf("https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/%s/%s/artifacts", jobRunGCSBucket, jobRunGCSBucketRoot)
 }

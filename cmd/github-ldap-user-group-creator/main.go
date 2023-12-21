@@ -33,6 +33,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/group"
+	"github.com/openshift/ci-tools/pkg/prowconfigutils"
 	"github.com/openshift/ci-tools/pkg/rover"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
@@ -142,6 +143,11 @@ func main() {
 
 	if err := addSchemes(); err != nil {
 		logrus.WithError(err).Fatal("failed to add schemes")
+	}
+
+	_, err := prowconfigutils.ProwDisabledClusters(&opts.kubernetesOptions)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to get Prow disable clusters")
 	}
 
 	kubeconfigs, err := opts.kubernetesOptions.LoadClusterConfigs()

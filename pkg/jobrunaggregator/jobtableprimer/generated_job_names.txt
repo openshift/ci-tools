@@ -713,13 +713,17 @@ periodic-ci-openshift-osde2e-main-nightly-4.16-osd-gcp
 periodic-ci-openshift-osde2e-main-nightly-4.16-rosa-classic-sts
 periodic-ci-openshift-release-master-ci-4.16-e2e-aws-ovn
 periodic-ci-openshift-release-master-ci-4.16-e2e-aws-ovn-upgrade
+periodic-ci-openshift-release-master-ci-4.16-e2e-aws-ovn-upgrade-out-of-change
 periodic-ci-openshift-release-master-ci-4.16-e2e-aws-sdn-techpreview
 periodic-ci-openshift-release-master-ci-4.16-e2e-aws-sdn-techpreview-serial
+periodic-ci-openshift-release-master-ci-4.16-e2e-aws-sdn-upgrade-out-of-change
 periodic-ci-openshift-release-master-ci-4.16-e2e-azure-ovn
 periodic-ci-openshift-release-master-ci-4.16-e2e-azure-ovn-upgrade
+periodic-ci-openshift-release-master-ci-4.16-e2e-azure-ovn-upgrade-out-of-change
 periodic-ci-openshift-release-master-ci-4.16-e2e-azure-sdn-techpreview
 periodic-ci-openshift-release-master-ci-4.16-e2e-azure-sdn-techpreview-serial
 periodic-ci-openshift-release-master-ci-4.16-e2e-azure-sdn-upgrade
+periodic-ci-openshift-release-master-ci-4.16-e2e-azure-sdn-upgrade-out-of-change
 periodic-ci-openshift-release-master-ci-4.16-e2e-gcp-ovn
 periodic-ci-openshift-release-master-ci-4.16-e2e-gcp-sdn-techpreview
 periodic-ci-openshift-release-master-ci-4.16-e2e-gcp-sdn-techpreview-serial

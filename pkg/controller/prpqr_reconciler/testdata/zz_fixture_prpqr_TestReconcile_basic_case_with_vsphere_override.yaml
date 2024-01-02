@@ -17,8 +17,8 @@
           org: test-org
           repo: test-repo
         test: test-name-vsphere
-    pullRequest:
-      baseRef: test-branch
+    pullRequests:
+    - baseRef: test-branch
       baseSHA: "123456"
       org: test-org
       pr:

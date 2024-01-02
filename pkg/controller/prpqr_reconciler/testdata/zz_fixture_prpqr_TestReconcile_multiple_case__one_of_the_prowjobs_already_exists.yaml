@@ -22,8 +22,8 @@
           org: test-org
           repo: test-repo
         test: test-name-2
-    pullRequest:
-      baseRef: test-branch
+    pullRequests:
+    - baseRef: test-branch
       baseSHA: "123456"
       org: test-org
       pr:

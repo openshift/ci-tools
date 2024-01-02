@@ -134,7 +134,7 @@ func TestOutputImageStep(t *testing.T) {
 			oits := OutputImageTagStep(config, client, jobspec)
 
 			examineStep(t, oits, stepSpec)
-			if err := oits.Run(ctx); err != nil != tt.execSpecification.runError {
+			if err := oits.Run(ctx, &api.RunOptions{}); err != nil != tt.execSpecification.runError {
 				t.Fatalf("expected error: %t, got error: %v", tt.execSpecification.runError, err)
 			}
 

@@ -51,7 +51,7 @@ func (s *promotionStep) Inputs() (api.InputDefinition, error) {
 
 func (*promotionStep) Validate() error { return nil }
 
-func (s *promotionStep) Run(ctx context.Context) error {
+func (s *promotionStep) Run(ctx context.Context, o *api.RunOptions) error {
 	return results.ForReason("promoting_images").ForError(s.run(ctx))
 }
 

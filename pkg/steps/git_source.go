@@ -31,7 +31,10 @@ func (s *gitSourceStep) Inputs() (api.InputDefinition, error) {
 
 func (*gitSourceStep) Validate() error { return nil }
 
-func (s *gitSourceStep) Run(ctx context.Context) error {
+func (s *gitSourceStep) Run(ctx context.Context, o *api.RunOptions) error {
+	if o.DryRun {
+		return nil
+	}
 	return results.ForReason("building_image_from_source").ForError(s.run(ctx))
 }
 

@@ -355,6 +355,7 @@ type options struct {
 	verbose    bool
 	help       bool
 	printGraph bool
+	dryRun     bool
 
 	writeParams string
 	artifactDir string
@@ -424,6 +425,9 @@ type options struct {
 	targetAdditionalSuffix string
 	manifestToolDockerCfg  string
 	localRegistryDNS       string
+
+	useJob           bool
+	jobMaxRetryCount int
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
@@ -436,6 +440,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.BoolVar(&opt.help, "h", false, "short for --help")
 	flag.BoolVar(&opt.help, "help", false, "See help for this command.")
 	flag.BoolVar(&opt.verbose, "v", false, "Show verbose output.")
+	flag.BoolVar(&opt.dryRun, "dry-run", false, "Do not actually create any resources on cluster.")
 
 	// what we will run
 	flag.StringVar(&opt.nodeName, "node", "", "Restrict scheduling of pods to a single node in the cluster. Does not afffect indirectly created pods (e.g. builds).")
@@ -473,6 +478,8 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.gitRef, "git-ref", "", "Populate the job spec from this local Git reference. If JOB_SPEC is set, the refs field will be overwritten.")
 	flag.BoolVar(&opt.givePrAuthorAccessToNamespace, "give-pr-author-access-to-namespace", true, "Give view access to the temporarily created namespace to the PR author.")
 	flag.StringVar(&opt.impersonateUser, "as", "", "Username to impersonate")
+	flag.BoolVar(&opt.useJob, "use-job", false, "Use a job instead of a pod to run the build steps.")
+	flag.IntVar(&opt.jobMaxRetryCount, "job-max-retry-count", 0, "The maximum number of times a job will be retried. If set to 0, the job will not be retried.")
 
 	// flags needed for the configresolver
 	flag.StringVar(&opt.resolverAddress, "resolver-address", configResolverAddress, "Address of configresolver")
@@ -930,8 +937,10 @@ func (o *options) Run() []error {
 	}()
 	// initialize the namespace if necessary and create any resources that must
 	// exist prior to execution
-	if err := o.initializeNamespace(); err != nil {
-		return []error{results.ForReason("initializing_namespace").WithError(err).Errorf("could not initialize namespace: %v", err)}
+	if !o.dryRun {
+		if err := o.initializeNamespace(); err != nil {
+			return []error{results.ForReason("initializing_namespace").WithError(err).Errorf("could not initialize namespace: %v", err)}
+		}
 	}
 
 	return interrupt.New(handler, o.saveNamespaceArtifacts).Run(func() []error {
@@ -952,7 +961,10 @@ func (o *options) Run() []error {
 		runtimeObject := &coreapi.ObjectReference{Namespace: o.namespace}
 		eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobStarted", eventJobDescription(o.jobSpec, o.namespace))
 		// execute the graph
-		suites, graphDetails, errs := steps.Run(ctx, nodes)
+		runOptions := api.RunOptions{
+			DryRun: o.dryRun,
+		}
+		suites, graphDetails, errs := steps.Run(ctx, nodes, &runOptions)
 		if err := o.writeJUnit(suites, "operator"); err != nil {
 			logrus.WithError(err).Warn("Unable to write JUnit result.")
 		}
@@ -971,7 +983,7 @@ func (o *options) Run() []error {
 		}
 
 		for _, step := range postSteps {
-			details, err := runStep(ctx, step)
+			details, err := runStep(ctx, step, &runOptions)
 			graph.MergeFrom(details)
 			if err != nil {
 				eventRecorder.Event(runtimeObject, coreapi.EventTypeWarning, "PostStepFailed",
@@ -987,9 +999,9 @@ func (o *options) Run() []error {
 
 // runStep mostly duplicates steps.runStep. The latter uses an *api.StepNode though and we only have an api.Step for the PostSteps
 // so we can not re-use it.
-func runStep(ctx context.Context, step api.Step) (api.CIOperatorStepDetails, error) {
+func runStep(ctx context.Context, step api.Step, o *api.RunOptions) (api.CIOperatorStepDetails, error) {
 	start := time.Now()
-	err := step.Run(ctx)
+	err := step.Run(ctx, o)
 	duration := time.Since(start)
 	failed := err != nil
 

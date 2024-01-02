@@ -121,15 +121,15 @@ func (s *e2eTestStep) Inputs() (api.InputDefinition, error) {
 
 func (*e2eTestStep) Validate() error { return nil }
 
-func (s *e2eTestStep) Run(ctx context.Context) error {
-	return results.ForReason("installing_cluster").ForError(s.run(ctx))
+func (s *e2eTestStep) Run(ctx context.Context, o *api.RunOptions) error {
+	return results.ForReason("installing_cluster").ForError(s.run(ctx, o))
 }
 
-func (s *e2eTestStep) run(ctx context.Context) error {
+func (s *e2eTestStep) run(ctx context.Context, o *api.RunOptions) error {
 	if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: fmt.Sprintf("%s-cluster-profile", s.testConfig.As)}, &corev1.Secret{}); err != nil {
 		return results.ForReason("missing_cluster_profile").WithError(err).Errorf("could not find required secret: %v", err)
 	}
-	return s.step.Run(ctx)
+	return s.step.Run(ctx, o)
 }
 
 func (s *e2eTestStep) Requires() []api.StepLink {

@@ -61,8 +61,8 @@ func (s *assembleReleaseStep) Inputs() (api.InputDefinition, error) {
 
 func (*assembleReleaseStep) Validate() error { return nil }
 
-func (s *assembleReleaseStep) Run(ctx context.Context) error {
-	return results.ForReason("assembling_release").ForError(s.run(ctx))
+func (s *assembleReleaseStep) Run(ctx context.Context, o *api.RunOptions) error {
+	return results.ForReason("assembling_release").ForError(s.run(ctx, o))
 }
 
 func setupReleaseImageStream(ctx context.Context, namespace string, client ctrlruntimeclient.Client) (string, error) {
@@ -140,7 +140,7 @@ func setupReleaseImageStream(ctx context.Context, namespace string, client ctrlr
 	return release.Status.PublicDockerImageRepository, nil
 }
 
-func (s *assembleReleaseStep) run(ctx context.Context) error {
+func (s *assembleReleaseStep) run(ctx context.Context, o *api.RunOptions) error {
 	releaseImageStreamRepo, err := setupReleaseImageStream(ctx, s.jobSpec.Namespace(), s.client)
 	if err != nil {
 		return err
@@ -233,7 +233,7 @@ oc adm release extract --from=%q --to=${ARTIFACT_DIR}/release-payload-%s
 	}
 
 	step := steps.PodStep("release", podConfig, resources, s.client, s.jobSpec, nil)
-	if err := step.Run(ctx); err != nil {
+	if err := step.Run(ctx, o); err != nil {
 		return results.ForReason("creating_release").ForError(err)
 	}
 	logrus.Infof("Snapshot integration stream into release %s to tag %s:%s ", version, api.ReleaseImageStream, s.name)

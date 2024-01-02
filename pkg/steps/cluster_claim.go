@@ -62,11 +62,11 @@ func (s *clusterClaimStep) Creates() []api.StepLink             { return s.wrapp
 func (s *clusterClaimStep) Objects() []ctrlruntimeclient.Object { return s.wrapped.Objects() }
 func (s *clusterClaimStep) Provides() api.ParameterMap          { return s.wrapped.Provides() }
 
-func (s *clusterClaimStep) Run(ctx context.Context) error {
-	return results.ForReason("utilizing_cluster_claim").ForError(s.run(ctx))
+func (s *clusterClaimStep) Run(ctx context.Context, o *api.RunOptions) error {
+	return results.ForReason("utilizing_cluster_claim").ForError(s.run(ctx, o))
 }
 
-func (s *clusterClaimStep) run(ctx context.Context) error {
+func (s *clusterClaimStep) run(ctx context.Context, o *api.RunOptions) error {
 	if s.clusterClaim == nil {
 		// should never happen
 		return fmt.Errorf("cannot claim a nil cluster")
@@ -116,7 +116,7 @@ func (s *clusterClaimStep) run(ctx context.Context) error {
 		return aggregateWrappedErrorAndReleaseError(acquireErr, releaseErr)
 	}
 
-	wrappedErr := results.ForReason("executing_test").ForError(s.wrapped.Run(ctx))
+	wrappedErr := results.ForReason("executing_test").ForError(s.wrapped.Run(ctx, o))
 	releaseErr := results.ForReason("releasing_cluster_claim").ForError(s.releaseCluster(CleanupCtx, clusterClaim, false))
 
 	return aggregateWrappedErrorAndReleaseError(wrappedErr, releaseErr)

@@ -38,7 +38,10 @@ func StableImagesTagStep(client loggingclient.LoggingClient, jobSpec *api.JobSpe
 	}
 }
 
-func (s *stableImagesTagStep) Run(ctx context.Context) error {
+func (s *stableImagesTagStep) Run(ctx context.Context, o *api.RunOptions) error {
+	if o.DryRun {
+		return nil
+	}
 	return results.ForReason("creating_stable_images").ForError(s.run(ctx))
 }
 
@@ -108,7 +111,7 @@ func sourceName(config api.ReleaseTagConfiguration) string {
 	return fmt.Sprintf("%s/%s:%s", config.Namespace, config.Name, api.ComponentFormatReplacement)
 }
 
-func (s *releaseImagesTagStep) Run(ctx context.Context) error {
+func (s *releaseImagesTagStep) Run(ctx context.Context, o *api.RunOptions) error {
 	return results.ForReason("creating_release_images").ForError(s.run(ctx))
 }
 

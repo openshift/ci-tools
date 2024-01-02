@@ -35,7 +35,7 @@ func (s *rpmImageInjectionStep) Inputs() (api.InputDefinition, error) {
 
 func (*rpmImageInjectionStep) Validate() error { return nil }
 
-func (s *rpmImageInjectionStep) Run(ctx context.Context) error {
+func (s *rpmImageInjectionStep) Run(ctx context.Context, o *api.RunOptions) error {
 	return results.ForReason("injecting_rpms").ForError(s.run(ctx))
 }
 

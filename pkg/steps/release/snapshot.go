@@ -32,7 +32,7 @@ func (r *releaseSnapshotStep) Validate() error {
 	return nil
 }
 
-func (r *releaseSnapshotStep) Run(ctx context.Context) error {
+func (r *releaseSnapshotStep) Run(ctx context.Context, o *api.RunOptions) error {
 	return results.ForReason("creating_release_images").ForError(r.run(ctx))
 }
 

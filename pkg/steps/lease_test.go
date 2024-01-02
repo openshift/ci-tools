@@ -25,7 +25,7 @@ func (stepNeedsLease) Inputs() (api.InputDefinition, error) {
 	return api.InputDefinition{"step", "inputs"}, nil
 }
 func (stepNeedsLease) Validate() error { return nil }
-func (s *stepNeedsLease) Run(ctx context.Context) error {
+func (s *stepNeedsLease) Run(ctx context.Context, o *api.RunOptions) error {
 	s.ran = true
 	if s.fail {
 		return errors.New("injected failure")
@@ -209,7 +209,7 @@ func TestError(t *testing.T) {
 			var calls []string
 			client := lease.NewFakeClient("owner", "url", 0, tc.failures, &calls)
 			s := stepNeedsLease{fail: tc.runFails}
-			err := LeaseStep(&client, leases, &s, func() string { return "" }).Run(ctx)
+			err := LeaseStep(&client, leases, &s, func() string { return "" }).Run(ctx, &api.RunOptions{})
 			if err == nil {
 				t.Fatalf("unexpected success, calls: %#v", calls)
 			}
@@ -230,7 +230,7 @@ func TestAcquireRelease(t *testing.T) {
 	}
 	step := stepNeedsLease{}
 	withLease := LeaseStep(&client, leases, &step, func() string { return "" })
-	if err := withLease.Run(context.Background()); err != nil {
+	if err := withLease.Run(context.Background(), &api.RunOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if !step.ran {

@@ -78,7 +78,7 @@ func (s *podStep) Inputs() (api.InputDefinition, error) {
 
 func (*podStep) Validate() error { return nil }
 
-func (s *podStep) Run(ctx context.Context) error {
+func (s *podStep) Run(ctx context.Context, o *api.RunOptions) error {
 	return results.ForReason("running_pod").ForError(s.run(ctx))
 }
 

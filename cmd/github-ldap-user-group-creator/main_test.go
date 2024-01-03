@@ -145,12 +145,13 @@ func TestEnsureGroups(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name       string
-		clients    map[string]ctrlruntimeclient.Client
-		groups     map[string]GroupClusters
-		dryRun     bool
-		expected   error
-		verifyFunc func(ctx context.Context, clients map[string]ctrlruntimeclient.Client) error
+		name             string
+		clients          map[string]ctrlruntimeclient.Client
+		groups           map[string]GroupClusters
+		dryRun           bool
+		disabledClusters sets.Set[string]
+		expected         error
+		verifyFunc       func(ctx context.Context, clients map[string]ctrlruntimeclient.Client) error
 	}{
 		{
 			name: "basic case",
@@ -258,6 +259,58 @@ func TestEnsureGroups(t *testing.T) {
 			},
 		},
 		{
+			name: "basic case: b01 is disabled",
+			clients: map[string]ctrlruntimeclient.Client{
+				"b02": fakeclient.NewClientBuilder().WithRuntimeObjects(g03.DeepCopy()).Build(),
+			},
+			groups: map[string]GroupClusters{
+				"gh01-group": {
+					Clusters: sets.New[string]("b01", "b02"),
+					Group: &userv1.Group{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:   "gh01-group",
+							Labels: map[string]string{api.DPTPRequesterLabel: toolName},
+						},
+						Users: userv1.OptionalNames{"gh01", "k01"},
+					},
+				},
+				"gh02-group": {
+					Clusters: sets.New[string]("b01", "b02"),
+					Group: &userv1.Group{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:   "gh02-group",
+							Labels: map[string]string{api.DPTPRequesterLabel: toolName},
+						},
+						Users: userv1.OptionalNames{"gh02", "k02"},
+					},
+				},
+			},
+			disabledClusters: sets.New[string]("b01"),
+			verifyFunc: func(ctx context.Context, clients map[string]ctrlruntimeclient.Client) error {
+				client := clients["b02"]
+				for i := 1; i <= 2; i++ {
+					actual := &userv1.Group{}
+					if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: fmt.Sprintf("gh0%d-group", i)}, actual); err != nil {
+						return err
+					}
+					expected := &userv1.Group{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:   fmt.Sprintf("gh0%d-group", i),
+							Labels: map[string]string{api.DPTPRequesterLabel: toolName},
+						},
+						Users: userv1.OptionalNames{fmt.Sprintf("gh0%d", i), fmt.Sprintf("k0%d", i)},
+					}
+					if diff := cmp.Diff(expected, actual, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
+						return fmt.Errorf("%s: actual does not match expected, diff: %s", "b02", diff)
+					}
+					if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: "gh03-group"}, &userv1.Group{}); !errors.IsNotFound(err) {
+						return fmt.Errorf("gh03-group is not deleted")
+					}
+				}
+				return nil
+			},
+		},
+		{
 			name: "invalid group: duplicate members",
 			clients: map[string]ctrlruntimeclient.Client{
 				"b01": fakeclient.NewClientBuilder().Build(),
@@ -283,7 +336,7 @@ func TestEnsureGroups(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.TODO()
-			actual := ensureGroups(ctx, tc.clients, tc.groups, 60, tc.dryRun)
+			actual := ensureGroups(ctx, tc.clients, tc.groups, 60, tc.dryRun, tc.disabledClusters)
 			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}

@@ -145,7 +145,7 @@ func main() {
 		logrus.WithError(err).Fatal("failed to add schemes")
 	}
 
-	_, err := prowconfigutils.ProwDisabledClusters(&opts.kubernetesOptions)
+	prowDisabledClusters, err := prowconfigutils.ProwDisabledClusters(&opts.kubernetesOptions)
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to get Prow disable clusters")
 	}
@@ -266,7 +266,7 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to make groups")
 	}
 
-	if err := ensureGroups(ctx, clients, groups, opts.maxConcurrency, opts.dryRun); err != nil {
+	if err := ensureGroups(ctx, clients, groups, opts.maxConcurrency, opts.dryRun, sets.New[string](prowDisabledClusters...)); err != nil {
 		logrus.WithError(err).Fatal("could not ensure groups")
 	}
 }
@@ -453,7 +453,7 @@ func makeGroups(openshiftPrivAdmins sets.Set[string], peribolosConfig string, ma
 	return groups, kerrors.NewAggregate(errs)
 }
 
-func ensureGroups(ctx context.Context, clients map[string]ctrlruntimeclient.Client, groupsToCreate map[string]GroupClusters, maxConcurrency int, dryRun bool) error {
+func ensureGroups(ctx context.Context, clients map[string]ctrlruntimeclient.Client, groupsToCreate map[string]GroupClusters, maxConcurrency int, dryRun bool, disabledClusters sets.Set[string]) error {
 	var errs []error
 
 	for cluster, client := range clients {
@@ -515,6 +515,11 @@ func ensureGroups(ctx context.Context, clients map[string]ctrlruntimeclient.Clie
 	sem := semaphore.NewWeighted(int64(maxConcurrency))
 	for _, groupClusters := range groupsToCreate {
 		for _, cluster := range sets.List(groupClusters.Clusters) {
+			if disabledClusters.Has(cluster) {
+				logrus.WithFields(logrus.Fields{"cluster": cluster, "group": groupClusters.Group.Name, "disabledClusters": disabledClusters}).
+					Debug("Skipping handling groups for a cluster that is disabled by Prow")
+				continue
+			}
 			group := groupClusters.Group.DeepCopy()
 			if err := sem.Acquire(ctx, 1); err != nil {
 				return fmt.Errorf("failed to acquire semaphore: %w", err)

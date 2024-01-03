@@ -306,7 +306,7 @@ type GroupClusters struct {
 	Group    *userv1.Group
 }
 
-var githubRobotIds = sets.New[string]("RH-Cachito", "openshift-bot", "openshift-ci-robot", "openshift-merge-robot")
+var githubRobotIds = sets.New[string]("RH-Cachito", "openshift-bot", "openshift-ci-robot", "openshift-merge-robot", "openshift-cherrypick-robot")
 
 func deleteInvalidUsers(ctx context.Context, clients map[string]ctrlruntimeclient.Client,
 	kerberosIDs sets.Set[string], ciAdmins sets.Set[string], dryRun bool) error {

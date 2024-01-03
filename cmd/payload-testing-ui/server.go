@@ -52,8 +52,8 @@ const (
 	<thead>
 		<tr>
 			<th title="The name of the Pull Request Payload Qualification Run" class="info">Name</th>
-			<th title="The repository of pull request" class="info">Repository</th>
-			<th title="The number and name of the pull request" class="info">Pull Request</th>
+			<th title="The repository of each pull request" class="info">Repositories</th>
+			<th title="The number and name of each pull request" class="info">Pull Requests</th>
 		</tr>
 	</thead>
 	<tbody>
@@ -67,12 +67,16 @@ const (
 			{{ end }}
 			</td>
 			<td>
-			{{ with .Spec.PullRequest }}
-				<p>{{ repoLink .Org .Repo }}</p>
+				<ul>
+			{{ range $i, $pullRequest := .Spec.PullRequests }}
+				<li style="list-style:none; padding:">{{ repoLink $pullRequest.Org $pullRequest.Repo }}</li>
+			{{ end }}
+				</ul>
 			</td>
 			<td>
-				<p>{{ prLink . }} by {{ authorLink .PullRequest.Author }}</p>
-			{{ end }}
+				{{ range $i, $pullRequest := .Spec.PullRequests }}
+					<li style="list-style:none; padding:">{{ prLink . }} by {{ authorLink $pullRequest.PullRequest.Author }}</li>
+				{{ end }}
 			</td>
 		</tr>
 		{{ end }}
@@ -87,20 +91,6 @@ Created: {{ .ObjectMeta.CreationTimestamp }}
 
 {{ with .Spec }}
 
-{{ if .PullRequest.Org }}
-<h2>Pull request</h2>
-
-{{ with .PullRequest }}
-{{ prLink . }} by {{ authorLink .PullRequest.Author }}
-<ul>
-	<li>Repository: {{ repoLink .Org .Repo }}</li>
-    <li>SHA: <tt>{{ shaLink . .PullRequest.SHA }}</tt></li>
-	<li>
-		Base: <tt>{{ refLink . .BaseRef }}</tt> (<tt>{{ shaLink . .BaseSHA }}</tt>)
-	</li>
-</ul>
-{{ end }}{{/* with .PullRequest */}}
-{{ else }}
 <h2>Pull requests</h2>
 <ul>
   {{ range $i, $pullRequest := .PullRequests }}
@@ -116,7 +106,6 @@ Created: {{ .ObjectMeta.CreationTimestamp }}
     </li>
   {{ end }}
 </ul>
-{{ end }}{{/* if .PullRequest.Org */}}
 
 {{ with .Jobs }}
 

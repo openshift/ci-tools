@@ -18,8 +18,8 @@
           repo: test-repo
           variant: test-variant
         test: test-name
-    pullRequest:
-      baseRef: test-branch
+    pullRequests:
+    - baseRef: test-branch
       baseSHA: "123456"
       org: test-org
       pr:

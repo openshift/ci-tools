@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -168,18 +167,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 		statusByJobName[jobName] = &prpqr.Status.Jobs[i]
 	}
 
-	var pullRequests []v1.PullRequestUnderTest
-	if len(prpqr.Spec.PullRequests) > 0 {
-		logger.Debugf("There are %d pullRequests supplied", len(prpqr.Spec.PullRequests))
-		pullRequests = prpqr.Spec.PullRequests
-	} else {
-		//TODO(sgoeddel): this logic will only apply during the transitional period
-		pullRequests = []v1.PullRequestUnderTest{prpqr.Spec.PullRequest}
-	}
-
-	if len(pullRequests) == 0 { //TODO(sgoeddel): this only applies during the transitional period, eventually the pullRequests will be required in the spec and this validation can be removed
-		return errors.New("no pull requests supplied for this PullRequestPayloadQualifiactionRun. must supply either a single pullRequest or an entry in the pullRequests list")
-	}
+	pullRequests := prpqr.Spec.PullRequests
 
 	//TODO(sgoeddel): phase 3 will support this
 	reposSeen := sets.Set[string]{}

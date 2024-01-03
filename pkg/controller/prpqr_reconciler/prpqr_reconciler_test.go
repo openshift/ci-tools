@@ -30,14 +30,13 @@ func TestReconcile(t *testing.T) {
 		prowJobs []ctrlruntimeclient.Object
 		prpqr    []ctrlruntimeclient.Object
 	}{
-		//TODO(sgoeddel): Once the transitional period is over, all of these cases will be updated to use the PullRequests slice rather than the singular PullRequest
 		{
 			name: "basic case",
 			prpqr: []ctrlruntimeclient.Object{
 				&v1.PullRequestPayloadQualificationRun{
 					ObjectMeta: metav1.ObjectMeta{Name: "prpqr-test", Namespace: "test-namespace"},
 					Spec: v1.PullRequestPayloadTestSpec{
-						PullRequest: v1.PullRequestUnderTest{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}},
+						PullRequests: []v1.PullRequestUnderTest{{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}}},
 						Jobs: v1.PullRequestPayloadJobSpec{
 							ReleaseControllerConfig: v1.ReleaseControllerConfig{OCP: "4.9", Release: "ci", Specifier: "informing"},
 							Jobs:                    []v1.ReleaseJobSpec{{CIOperatorConfig: v1.CIOperatorMetadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"}, Test: "test-name"}},
@@ -52,7 +51,7 @@ func TestReconcile(t *testing.T) {
 				&v1.PullRequestPayloadQualificationRun{
 					ObjectMeta: metav1.ObjectMeta{Name: "prpqr-test", Namespace: "test-namespace"},
 					Spec: v1.PullRequestPayloadTestSpec{
-						PullRequest: v1.PullRequestUnderTest{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}},
+						PullRequests: []v1.PullRequestUnderTest{{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}}},
 						Jobs: v1.PullRequestPayloadJobSpec{
 							ReleaseControllerConfig: v1.ReleaseControllerConfig{OCP: "4.9", Release: "ci", Specifier: "informing"},
 							Jobs:                    []v1.ReleaseJobSpec{{CIOperatorConfig: v1.CIOperatorMetadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"}, Test: "test-name-vsphere"}},
@@ -67,7 +66,7 @@ func TestReconcile(t *testing.T) {
 				&v1.PullRequestPayloadQualificationRun{
 					ObjectMeta: metav1.ObjectMeta{Name: "prpqr-test", Namespace: "test-namespace"},
 					Spec: v1.PullRequestPayloadTestSpec{
-						PullRequest: v1.PullRequestUnderTest{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}},
+						PullRequests: []v1.PullRequestUnderTest{{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}}},
 						Jobs: v1.PullRequestPayloadJobSpec{
 							ReleaseControllerConfig: v1.ReleaseControllerConfig{OCP: "4.9", Release: "ci", Specifier: "informing"},
 							Jobs:                    []v1.ReleaseJobSpec{{CIOperatorConfig: v1.CIOperatorMetadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"}, Test: "test-name-metal"}},
@@ -82,7 +81,7 @@ func TestReconcile(t *testing.T) {
 				&v1.PullRequestPayloadQualificationRun{
 					ObjectMeta: metav1.ObjectMeta{Name: "prpqr-test", Namespace: "test-namespace"},
 					Spec: v1.PullRequestPayloadTestSpec{
-						PullRequest: v1.PullRequestUnderTest{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}},
+						PullRequests: []v1.PullRequestUnderTest{{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}}},
 						Jobs: v1.PullRequestPayloadJobSpec{
 							ReleaseControllerConfig: v1.ReleaseControllerConfig{OCP: "4.9", Release: "ci", Specifier: "informing"},
 							Jobs:                    []v1.ReleaseJobSpec{{CIOperatorConfig: v1.CIOperatorMetadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch", Variant: "test-variant"}, Test: "test-name"}},
@@ -97,7 +96,7 @@ func TestReconcile(t *testing.T) {
 				&v1.PullRequestPayloadQualificationRun{
 					ObjectMeta: metav1.ObjectMeta{Name: "prpqr-test", Namespace: "test-namespace"},
 					Spec: v1.PullRequestPayloadTestSpec{
-						PullRequest: v1.PullRequestUnderTest{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}},
+						PullRequests: []v1.PullRequestUnderTest{{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}}},
 						Jobs: v1.PullRequestPayloadJobSpec{
 							ReleaseControllerConfig: v1.ReleaseControllerConfig{OCP: "4.9", Release: "ci", Specifier: "informing"},
 							Jobs:                    []v1.ReleaseJobSpec{{CIOperatorConfig: v1.CIOperatorMetadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"}, Test: "test-name"}}},
@@ -154,7 +153,7 @@ func TestReconcile(t *testing.T) {
 				&v1.PullRequestPayloadQualificationRun{
 					ObjectMeta: metav1.ObjectMeta{Name: "prpqr-test", Namespace: "test-namespace"},
 					Spec: v1.PullRequestPayloadTestSpec{
-						PullRequest: v1.PullRequestUnderTest{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}},
+						PullRequests: []v1.PullRequestUnderTest{{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}}},
 						Jobs: v1.PullRequestPayloadJobSpec{
 							ReleaseControllerConfig: v1.ReleaseControllerConfig{OCP: "4.9", Release: "ci", Specifier: "informing"},
 							Jobs: []v1.ReleaseJobSpec{
@@ -195,7 +194,7 @@ func TestReconcile(t *testing.T) {
 				&v1.PullRequestPayloadQualificationRun{
 					ObjectMeta: metav1.ObjectMeta{Name: "prpqr-test", Namespace: "test-namespace"},
 					Spec: v1.PullRequestPayloadTestSpec{
-						PullRequest: v1.PullRequestUnderTest{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}},
+						PullRequests: []v1.PullRequestUnderTest{{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}}},
 						Jobs: v1.PullRequestPayloadJobSpec{
 							ReleaseControllerConfig: v1.ReleaseControllerConfig{OCP: "4.9", Release: "ci", Specifier: "informing"},
 							Jobs:                    []v1.ReleaseJobSpec{{CIOperatorConfig: v1.CIOperatorMetadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"}, Test: "test-name", AggregatedCount: 2}},

@@ -17,16 +17,6 @@
           org: test-org
           repo: test-repo
         test: test-name
-    pullRequest:
-      baseRef: ""
-      baseSHA: ""
-      org: ""
-      pr:
-        author: ""
-        number: 0
-        sha: ""
-        title: ""
-      repo: ""
     pullRequests:
     - baseRef: test-branch
       baseSHA: "123456"

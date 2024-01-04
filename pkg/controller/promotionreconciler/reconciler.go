@@ -333,7 +333,7 @@ func handleCIOpConfigChange(registryClient ctrlruntimeclient.Client,
 			return fmt.Errorf("got 404 from github for %s/%s/%s and imageStreamTag %s/%s, this likely means the repo or branch got deleted or we are not allowed to access it",
 				ciOPConfig.Metadata.Org, ciOPConfig.Metadata.Repo, ciOPConfig.Metadata.Branch, namespace, name)
 		}
-		log.WithField("name", ist.Name).WithField("namespace", ist.Namespace).Info("Requesting prowjob creation for a missing the imagestreamtag")
+		log.WithField("name", ist.Name).WithField("namespace", ist.Namespace).Info("Requesting prowjob creation for a missing imagestreamtag")
 		prowJobEnqueuer(prowjobreconciler.OrgRepoBranchCommit{
 			Org:    ciOPConfig.Metadata.Org,
 			Repo:   ciOPConfig.Metadata.Repo,

@@ -322,7 +322,7 @@ func handleCIOpConfigChange(registryClient ctrlruntimeclient.Client,
 			return fmt.Errorf("failed to get promotionConfig for imagestreamtag %s/%s: %w", namespace, name, err)
 		}
 		if ciOPConfig == nil {
-			return fmt.Errorf("get nil from promotionConfig for imagestreamtag %s/%s", namespace, name)
+			return fmt.Errorf("nil promotionConfig for imagestreamtag %s/%s", namespace, name)
 		}
 		currentHEAD, found, err := currentHEADForBranch(githubClient, ciOPConfig.Metadata, log)
 		if err != nil {

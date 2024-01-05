@@ -87,9 +87,10 @@ func (s *server) handleIssueComment(l *logrus.Entry, ic github.IssueCommentEvent
 	destOrg := strings.Split(destOrgRepo, "/")[0]
 	destRepo := strings.Split(destOrgRepo, "/")[1]
 
-	sourceRemoteResolver := git.HttpResolver(func() (*url.URL, error) {
-		return &url.URL{Scheme: "https", Host: s.githubHost, Path: fmt.Sprintf("%s/%s", org, repo)}, nil
-	}, func() (login string, err error) { return s.githubLogin, nil }, s.githubTokenGenerator)
+	sourceRemoteResolver := func() (string, error) {
+		remote := &url.URL{Scheme: "https", Host: s.githubHost, Path: fmt.Sprintf("%s/%s", org, repo)}
+		return remote.String(), nil
+	}
 
 	logger.Infof("Trying to merge the PR to destination: %s/%s@%s", destOrg, destRepo, baseBranch)
 	headCommitRef, err := s.mergeAndPushToRemote(org, repo, destOrg, destRepo, sourceRemoteResolver, baseBranch, s.dry)

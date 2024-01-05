@@ -14,7 +14,6 @@ import (
 	prowConfig "k8s.io/test-infra/prow/config"
 	prowflagutil "k8s.io/test-infra/prow/flagutil"
 	configflagutil "k8s.io/test-infra/prow/flagutil/config"
-	"k8s.io/test-infra/prow/git/v2"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/metrics"
 
@@ -105,7 +104,7 @@ func main() {
 		logrus.WithError(err).Fatal("Error creating github client")
 	}
 
-	gitClient, err := o.github.GitClient(o.dryRun)
+	gitClient, err := o.github.GitClientFactory("", nil, o.dryRun, false)
 	if err != nil {
 		logrus.WithError(err).Fatal("Error getting Git client.")
 	}
@@ -132,7 +131,7 @@ func main() {
 		}
 	}
 
-	c := retester.NewController(gc, configAgent.Config, git.ClientFactoryFrom(gitClient), o.github.AppPrivateKeyPath != "", o.cacheFile, o.cacheRecordAge, config, awsSession)
+	c := retester.NewController(gc, configAgent.Config, gitClient, o.github.AppPrivateKeyPath != "", o.cacheFile, o.cacheRecordAge, config, awsSession)
 
 	metrics.ExposeMetrics("retester", prowConfig.PushGateway{}, prowflagutil.DefaultMetricsPort)
 

@@ -153,13 +153,16 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 	}
 
 	// Even when --author is passed on committing, a committer is needed, and that one can not be passed as flag.
-	if err := bumper.Call(stdout, stderr, "git", "config", "--local", "user.email", fmt.Sprintf("%s@users.noreply.github.com", username)); err != nil {
+	emailArgs := []string{"config", "--local", "user.email", fmt.Sprintf("%s@users.noreply.github.com", username)}
+	if err := bumper.Call(stdout, stderr, "git", emailArgs); err != nil {
 		return fmt.Errorf("failed to configure email address: %w", err)
 	}
-	if err := bumper.Call(stdout, stderr, "git", "config", "--local", "user.name", username); err != nil {
+	userArgs := []string{"config", "--local", "user.name", username}
+	if err := bumper.Call(stdout, stderr, "git", userArgs); err != nil {
 		return fmt.Errorf("failed to configure email address: %w", err)
 	}
-	if err := bumper.Call(stdout, stderr, "git", "config", "--local", "commit.gpgsign", "false"); err != nil {
+	gpgArgs := []string{"config", "--local", "commit.gpgsign", "false"}
+	if err := bumper.Call(stdout, stderr, "git", gpgArgs); err != nil {
 		return fmt.Errorf("failed to configure disabling gpg signing: %w", err)
 	}
 

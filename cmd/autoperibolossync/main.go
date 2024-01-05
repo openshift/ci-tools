@@ -118,7 +118,7 @@ func main() {
 	fullCommand := fmt.Sprintf("%s %s", filepath.Base(cmd), strings.Join(args, " "))
 
 	logrus.Infof("Running: %s", fullCommand)
-	if err := bumper.Call(stdout, stderr, cmd, args...); err != nil {
+	if err := bumper.Call(stdout, stderr, cmd, args); err != nil {
 		logrus.WithError(err).Fatalf("failed to run %s", fullCommand)
 	}
 

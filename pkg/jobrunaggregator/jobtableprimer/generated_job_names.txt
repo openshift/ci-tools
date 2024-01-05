@@ -602,6 +602,7 @@ periodic-ci-openshift-release-master-ci-4.15-e2e-gcp-sdn-techpreview-serial
 periodic-ci-openshift-release-master-ci-4.15-upgrade-from-stable-4.14-e2e-gcp-ovn-rt-upgrade
 periodic-ci-openshift-release-master-ci-4.15-upgrade-from-stable-4.14-e2e-gcp-ovn-upgrade
 periodic-ci-openshift-release-master-ci-4.15-upgrade-from-stable-4.14-e2e-gcp-sdn-upgrade
+periodic-ci-openshift-release-master-nightly-4.15-aws-ovn-upgrade-rollback-oldest-supported
 periodic-ci-openshift-release-master-nightly-4.15-console-aws
 periodic-ci-openshift-release-master-nightly-4.15-e2e-agent-compact-ipv4
 periodic-ci-openshift-release-master-nightly-4.15-e2e-agent-ha-dualstack
@@ -613,7 +614,6 @@ periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-proxy
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-serial
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-single-node
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-single-node-serial
-periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-upgrade-rollback-oldest-supported
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-upi
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-sdn
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-sdn-cgroupsv2
@@ -1907,6 +1907,7 @@ periodic-ci-openshift-release-master-nightly-4.14-upgrade-from-stable-4.13-e2e-m
 periodic-ci-openshift-release-master-nightly-4.14-upgrade-from-stable-4.13-e2e-vsphere-ovn-upgrade
 periodic-ci-openshift-release-master-nightly-4.14-upgrade-from-stable-4.13-e2e-vsphere-upgrade
 periodic-ci-openshift-release-master-nightly-4.14-upgrade-from-stable-4.13-e2e-vsphere-zones-upgrade
+periodic-ci-openshift-release-master-nightly-4.15-aws-ovn-upgrade-rollback-oldest-supported
 periodic-ci-openshift-release-master-nightly-4.15-console-aws
 periodic-ci-openshift-release-master-nightly-4.15-e2e-agent-compact-ipv4
 periodic-ci-openshift-release-master-nightly-4.15-e2e-agent-ha-dualstack
@@ -1934,7 +1935,6 @@ periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-shared-vpc-wavelen
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-single-node
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-single-node-serial
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-single-node-workers
-periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-upgrade-rollback-oldest-supported
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-upi
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-wavelengthzones
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-workers-rhel8

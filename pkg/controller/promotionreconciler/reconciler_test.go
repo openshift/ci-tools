@@ -389,7 +389,7 @@ func TestHandleCIOpConfigChange(t *testing.T) {
 			ciOperatorConfigGetter: func(identifier string) ([]*cioperatorapi.ReleaseBuildConfiguration, error) {
 				return nil, nil
 			},
-			expected: fmt.Errorf("get nil from promotionConfig for imagestreamtag ns/is:tag"),
+			expected: fmt.Errorf("nil promotionConfig for imagestreamtag ns/is:tag"),
 		},
 		{
 			name:           "failed to get current git head",

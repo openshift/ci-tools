@@ -27,7 +27,7 @@ type fakeClient struct {
 	labels map[orgrepopr][]string
 }
 
-func (c *fakeClient) ListPRCommits(org, repo string, number int) ([]github.RepositoryCommit, error) {
+func (c *fakeClient) ListPullRequestCommits(org, repo string, number int) ([]github.RepositoryCommit, error) {
 	orp := orgrepopr{org: org, repo: repo, pr: number}
 	if err, exist := c.commitErrors[orp]; exist && err != nil {
 		return nil, err

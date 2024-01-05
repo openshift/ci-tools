@@ -15,7 +15,7 @@ import (
 )
 
 type githubClient interface {
-	ListPRCommits(org, repo string, number int) ([]github.RepositoryCommit, error)
+	ListPullRequestCommits(org, repo string, number int) ([]github.RepositoryCommit, error)
 	GetPullRequest(org, repo string, number int) (*github.PullRequest, error)
 
 	CreateComment(owner, repo string, number int, comment string) error
@@ -90,7 +90,7 @@ func (s *server) handle(l *logrus.Entry, org, repo, user string, num int, reques
 	parts := strings.Split(upstream, "/")
 	upstreamOrg, upstreamRepo := parts[0], parts[1]
 
-	commits, err := s.ghc.ListPRCommits(org, repo, num)
+	commits, err := s.ghc.ListPullRequestCommits(org, repo, num)
 	if err != nil {
 		if commentErr := s.ghc.CreateComment(org, repo, num, fmt.Sprintf(`@%s: could not list commits in this pull request. Please try again with /validate-backports.
 

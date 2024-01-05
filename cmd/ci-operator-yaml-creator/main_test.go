@@ -105,7 +105,7 @@ zz_generated_metadata:
 				tc.inputModify(&input)
 			}
 
-			localgit, clients, err := localgit.New()
+			localgit, clients, err := localgit.NewV2()
 			if err != nil {
 				t.Fatalf("failed to create localgit: %v", err)
 			}
@@ -168,7 +168,7 @@ zz_generated_metadata:
 				return nil
 			}
 
-			if err := process(input.filter, repoFileGetter, writeFile, clients.ClientFor, 99, createPr)(input.cfg, input.metadata); err != nil {
+			if err := process(input.filter, repoFileGetter, writeFile, clients, 99, createPr)(input.cfg, input.metadata); err != nil {
 				t.Fatalf("process failed: %v", err)
 			}
 

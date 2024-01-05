@@ -413,7 +413,7 @@ func (w *OutputWriter) Write(content []byte) (n int, err error) {
 func listUpdatedDirectories() ([]string, error) {
 	w := &OutputWriter{}
 	e := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: secret.Censor}
-	if err := bumper.Call(w, e, "git", []string{"status", "--porcelain"}...); err != nil {
+	if err := bumper.Call(w, e, "git", []string{"status", "--porcelain"}); err != nil {
 		return nil, err
 	}
 	return listUpdatedDirectoriesFromGitStatusOutput(string(w.output))

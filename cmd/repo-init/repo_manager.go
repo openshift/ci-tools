@@ -57,7 +57,7 @@ func initRepo(stdout, stderr bumper.HideSecretsWriter) *repo {
 		path: path,
 	}
 
-	err = bumper.Call(stdout, stderr, "git", []string{"clone", "https://github.com/openshift/release.git", thisRepo.path}...)
+	err = bumper.Call(stdout, stderr, "git", []string{"clone", "https://github.com/openshift/release.git", thisRepo.path})
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to clone repo.")
 	}
@@ -117,9 +117,7 @@ func updateRepo(repo *repo) error {
 	if err := bumper.Call(os.Stdout,
 		os.Stderr,
 		"git",
-		"pull",
-		"origin",
-		"master"); err != nil {
+		[]string{"pull", "origin", "master"}); err != nil {
 		return fmt.Errorf("failed to pull latest changes: %w", err)
 	}
 
@@ -181,17 +179,14 @@ func pushChanges(gitRepo *repo, githubOptions flagutil.GitHubOptions, org, repo,
 	if err := bumper.Call(os.Stdout,
 		os.Stderr,
 		"git",
-		"reset",
-		"--hard",
-		"origin/master"); err != nil {
+		[]string{"reset", "--hard", "origin/master"}); err != nil {
 		return "", fmt.Errorf("failed to reset local: %w", err)
 	}
 
 	if err := bumper.Call(os.Stdout,
 		os.Stderr,
 		"git",
-		"clean",
-		"-df"); err != nil {
+		[]string{"clean", "-df"}); err != nil {
 		return "", fmt.Errorf("failed to clean local: %w", err)
 	}
 
@@ -199,24 +194,24 @@ func pushChanges(gitRepo *repo, githubOptions flagutil.GitHubOptions, org, repo,
 }
 
 func commitChanges(message, email, name string) error {
-	if err := bumper.Call(os.Stdout, os.Stderr, "git", "add", "-A"); err != nil {
+	if err := bumper.Call(os.Stdout, os.Stderr, "git", []string{"add", "-A"}); err != nil {
 		return fmt.Errorf("git add: %w", err)
 	}
 
-	if err := bumper.Call(os.Stdout, os.Stderr, "git", "config", "--local", "user.email", email); err != nil {
+	if err := bumper.Call(os.Stdout, os.Stderr, "git", []string{"config", "--local", "user.email", email}); err != nil {
 		return fmt.Errorf("failed to configure email address: %w", err)
 	}
-	if err := bumper.Call(os.Stdout, os.Stderr, "git", "config", "--local", "user.name", name); err != nil {
+	if err := bumper.Call(os.Stdout, os.Stderr, "git", []string{"config", "--local", "user.name", name}); err != nil {
 		return fmt.Errorf("failed to configure email address: %w", err)
 	}
-	if err := bumper.Call(os.Stdout, os.Stderr, "git", "config", "--local", "commit.gpgsign", "false"); err != nil {
+	if err := bumper.Call(os.Stdout, os.Stderr, "git", []string{"config", "--local", "commit.gpgsign", "false"}); err != nil {
 		return fmt.Errorf("failed to configure disabling gpg signing: %w", err)
 	}
 
 	author := fmt.Sprintf("%s <%s>", name, email)
 	commitArgs := []string{"commit", "-m", message, "--author", author}
 
-	if err := bumper.Call(os.Stdout, os.Stderr, "git", commitArgs...); err != nil {
+	if err := bumper.Call(os.Stdout, os.Stderr, "git", commitArgs); err != nil {
 		return fmt.Errorf("git commit: %w", err)
 	}
 	return nil

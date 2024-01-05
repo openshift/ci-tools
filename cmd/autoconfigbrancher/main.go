@@ -89,7 +89,7 @@ func runAndCommitIfNeeded(stdout, stderr io.Writer, author, cmd string, args []s
 	fullCommand := fmt.Sprintf("%s %s", filepath.Base(cmd), strings.Join(args, " "))
 
 	logrus.Infof("Running: %s", fullCommand)
-	if err := bumper.Call(stdout, stderr, cmd, args...); err != nil {
+	if err := bumper.Call(stdout, stderr, cmd, args); err != nil {
 		return false, fmt.Errorf("failed to run %s: %w", fullCommand, err)
 	}
 
@@ -104,12 +104,13 @@ func runAndCommitIfNeeded(stdout, stderr io.Writer, author, cmd string, args []s
 	}
 
 	gitCmd := "git"
-	if err := bumper.Call(stdout, stderr, gitCmd, "add", "."); err != nil {
+	addArgs := []string{"add", "."}
+	if err := bumper.Call(stdout, stderr, gitCmd, addArgs); err != nil {
 		return false, fmt.Errorf("failed to 'git add .': %w", err)
 	}
 
 	commitArgs := []string{"commit", "-m", fullCommand, "--author", author}
-	if err := bumper.Call(stdout, stderr, gitCmd, commitArgs...); err != nil {
+	if err := bumper.Call(stdout, stderr, gitCmd, commitArgs); err != nil {
 		return false, fmt.Errorf("fail to %s %s: %w", gitCmd, strings.Join(commitArgs, " "), err)
 	}
 

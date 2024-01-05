@@ -58,7 +58,6 @@ type options struct {
 
 	githubEventServerOptions githubeventserver.Options
 	github                   prowflagutil.GitHubOptions
-	git                      prowflagutil.GitOptions
 
 	dryRun bool
 }
@@ -182,7 +181,7 @@ func main() {
 		logger.WithError(err).Fatal("Error getting GitHub client.")
 	}
 
-	gitClient, err := o.git.GitClient(githubClient, githubTokenGenerator, secret.Censor, o.dryRun)
+	gitClient, err := o.github.GitClientFactory("", nil, o.dryRun, false)
 	if err != nil {
 		logger.WithError(err).Fatal("Error getting Git client.")
 	}

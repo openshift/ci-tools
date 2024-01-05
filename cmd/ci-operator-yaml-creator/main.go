@@ -68,9 +68,9 @@ func main() {
 	if err := o.PRCreationOptions.Finalize(); err != nil {
 		logrus.WithError(err).Fatal("failed to set up pr creation options")
 	}
-	gc, err := o.GitHubOptions.GitClient(false)
+	gc, err := o.GitHubOptions.GitClientFactory("", nil, false, false)
 	if err != nil {
-		logrus.WithError(err).Fatal("failed to construct git client")
+		logrus.WithError(err).Fatal("failed to construct git client factory")
 	}
 	defer func() {
 		if err := gc.Clean(); err != nil {
@@ -103,7 +103,7 @@ channel in the CoreOS Slack.`))
 		filter,
 		github.FileGetterFactory,
 		os.WriteFile,
-		git.ClientFactoryFrom(gc).ClientFor,
+		gc,
 		o.pushCeiling,
 		func(localSourceDir, org, repo, targetBranch string) error {
 			return o.PRCreationOptions.UpsertPR(localSourceDir, org, repo, targetBranch, "Updating .ci-operator.yaml `build_root_image` from openshift/release", prCreationOps...)
@@ -139,7 +139,7 @@ func process(
 	filter func(*config.Info) bool,
 	repoFileGetter func(org, repo, branch string, _ ...github.Opt) github.FileGetter,
 	writeFile func(filename string, data []byte, perm fs.FileMode) error,
-	clone func(org, repo string) (git.RepoClient, error),
+	gcf git.ClientFactory,
 	pushCeiling int,
 	createPr func(localSourceDir, org, repo, targetBranch string) error,
 ) func(cfg *cioperatorapi.ReleaseBuildConfiguration, metadata *config.Info) error {
@@ -203,32 +203,21 @@ func process(
 		}
 		clonesDone++
 		mutex.Unlock()
-
-		repo, err := clone(metadata.Org, metadata.Repo)
+		repoClient, err := gcf.ClientFor(metadata.Org, metadata.Repo)
 		if err != nil {
-			return fmt.Errorf("failed to clone %s/%s: %w", metadata.Org, metadata.Repo, err)
+			return fmt.Errorf("failed to create repoClient for %s/%s", metadata.Org, metadata.Repo)
 		}
-		defer func() {
-			// Creating a PR changes the working dir, if we don't chdir to a valid dir
-			// first, the next clone will fail with a "shell-init: error retrieving current directory: getcwd: cannot access parent directories: No such file or directory"
-			if err := os.Chdir("/"); err != nil {
-				l.WithError(err).Error("failed to chdir to /")
-			}
-			if err := repo.Clean(); err != nil {
-				l.WithError(err).Error("failed to clean local repo")
-			}
-		}()
-		if err := repo.Checkout(metadata.Branch); err != nil {
+		if err := repoClient.Checkout(metadata.Branch); err != nil {
 			return fmt.Errorf("failed to checkout %s in %s/%s: %w", metadata.Branch, metadata.Org, metadata.Repo, err)
 		}
 
-		path := filepath.Join(repo.Directory(), cioperatorapi.CIOperatorInrepoConfigFileName)
+		path := filepath.Join(repoClient.Directory(), cioperatorapi.CIOperatorInrepoConfigFileName)
 		if err := os.WriteFile(path, expectedSerialized, 0644); err != nil {
 			return fmt.Errorf("falled to write %s for %s/%s: %w", path, metadata.Org, metadata.Repo, err)
 		}
 		l.WithField("path", path).Info("Wrote .ci-operator.yaml")
 
-		return createPr(repo.Directory(), metadata.Org, metadata.Repo, metadata.Branch)
+		return createPr(repoClient.Directory(), metadata.Org, metadata.Repo, metadata.Branch)
 	}
 }
 

@@ -34,4 +34,4 @@ go run ./cmd/check-gh-automation --repo="$1" \
   --bot=openshift-merge-robot --bot=openshift-ci-robot \
   --github-app-id="$app_id" --github-app-private-key-path="${data}/cert" \
   --config-path="${data}/prow/config.yaml" --supplemental-prow-config-dir="${data}/prow" \
-  --plugin-config="${data}/plugins/plugins.yaml" --supplemental-plugin-config-dir="${data}/plugins"
+  --plugin-config="${data}/plugins/plugins.yaml" --supplemental-plugin-config-dir="${data}/plugins" \

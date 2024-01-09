@@ -1468,7 +1468,6 @@ periodic-ci-openshift-release-master-ci-4.16-upgrade-from-stable-4.15-e2e-azure-
 periodic-ci-openshift-release-master-ci-4.16-upgrade-from-stable-4.15-e2e-gcp-ovn-rt-upgrade
 periodic-ci-openshift-release-master-ci-4.16-upgrade-from-stable-4.15-e2e-gcp-ovn-upgrade
 periodic-ci-openshift-release-master-ci-4.16-upgrade-from-stable-4.15-e2e-gcp-sdn-upgrade
-periodic-ci-openshift-release-master-ci-4.16-upgrade-from-stable-4.15-e2e-ovirt-sdn-upgrade
 periodic-ci-openshift-release-master-ci-4.16-upgrade-from-stable-4.15-e2e-vsphere-ovn-upgrade
 periodic-ci-openshift-release-master-ci-4.16-upgrade-from-stable-4.15-e2e-vsphere-ovn-upgrade-storage-data
 periodic-ci-openshift-release-master-ci-4.16-upgrade-from-stable-4.15-from-stable-4.14-e2e-aws-sdn-upgrade

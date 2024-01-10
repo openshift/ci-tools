@@ -741,20 +741,25 @@ func (p *Prioritization) evaluateNodeClassScaleDown(podClass PodClass) {
 			}
 
 			avoidanceNodes = append(avoidanceNodes, node)
-
 			activeAvoidanceEffect := p.getNodeAvoidanceState(node)
+
 			if len(pods) == 0 {
-				// This is a ready / schedulable node with no pods. Set it up for scale down on the
-				// next call of this method.
-				err := p.setNodeAvoidanceState(node, podClass, corev1.TaintEffectNoSchedule)
-				if err != nil {
-					klog.Errorf("Unable to turn on NoSchedule avoidance for node %v: %#v", node.Name, err)
-				} else {
-					activeAvoidanceEffect = corev1.TaintEffectNoSchedule
+				// Only set NoSchedule if the instance is NOT spot.io. spot.io will handle all scale down
+				// for its nodes, so we don't taint them to encourage our own scale down logic.
+				if _, ok := node.Labels["spot-io"]; !ok {
+					// This is a ready / schedulable / non-spotio node with no pods. Set it up for scale down on the
+					// next call of this method.
+					err := p.setNodeAvoidanceState(node, podClass, corev1.TaintEffectNoSchedule)
+					if err != nil {
+						klog.Errorf("Unable to turn on NoSchedule avoidance for node %v: %#v", node.Name, err)
+					} else {
+						activeAvoidanceEffect = corev1.TaintEffectNoSchedule
+					}
 				}
 			} else {
 				// The node is the in top 25% of nodes close to being able to scale down. Encourage pods
-				// not to land on it unless necessary.
+				// not to land on it unless necessary. We do this even for spot.io nodes to make it easier
+				// for the service to find empty scale down candidates.
 				err := p.setNodeAvoidanceState(node, podClass, corev1.TaintEffectPreferNoSchedule)
 				if err != nil {
 					klog.Errorf("Unable to turn on PreferNoSchedule avoidance for node %v: %#v", node.Name, err)

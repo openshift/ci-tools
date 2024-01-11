@@ -134,6 +134,17 @@ func getRegistryGeneration(agent agents.RegistryAgent) http.HandlerFunc {
 	}
 }
 
+func getClusterProfilesConfig(agent agents.RegistryAgent) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			w.WriteHeader(http.StatusNotImplemented)
+			_, _ = w.Write([]byte(http.StatusText(http.StatusNotImplemented)))
+			return
+		}
+		//TODO serve cluster profiles using agent.GetClusterProfilesConfig()
+	}
+}
+
 // l and v keep the tree legible
 func l(fragment string, children ...simplifypath.Node) simplifypath.Node {
 	return simplifypath.L(fragment, children...)
@@ -222,6 +233,7 @@ func main() {
 	http.HandleFunc("/config", handler(registryserver.ResolveConfig(configAgent, registryAgent, configresolverMetrics)).ServeHTTP)
 	http.HandleFunc("/mergeConfigsWithInjectedTest", handler(registryserver.ResolveAndMergeConfigsAndInjectTest(configAgent, registryAgent, configresolverMetrics)).ServeHTTP)
 	http.HandleFunc("/resolve", handler(registryserver.ResolveLiteralConfig(registryAgent, configresolverMetrics)).ServeHTTP)
+	http.HandleFunc("/clusterProfilesConfig", handler(getClusterProfilesConfig(registryAgent)).ServeHTTP)
 	http.HandleFunc("/configGeneration", handler(getConfigGeneration(configAgent)).ServeHTTP)
 	http.HandleFunc("/registryGeneration", handler(getRegistryGeneration(registryAgent)).ServeHTTP)
 	http.HandleFunc("/readyz", func(_ http.ResponseWriter, _ *http.Request) {})

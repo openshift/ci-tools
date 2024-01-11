@@ -60,6 +60,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 		output          []api.StepConfiguration
 		readFile        readFile
 		resolver        resolveRoot
+		mergedConfig    bool
 		expectedError   error
 		expectedImports []testimagestreamtagimportv1.TestImageStreamTagImport
 	}{
@@ -965,7 +966,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
-			resolver: noopResolver,
+			resolver:     noopResolver,
+			mergedConfig: true,
 			output: []api.StepConfiguration{
 				{
 					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
@@ -1063,7 +1065,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			client := fakectrlruntimeclient.NewClientBuilder().Build()
 			graphConf := FromConfigStatic(testCase.input)
-			runtimeSteps, actualError := runtimeStepConfigsForBuild(context.Background(), client, testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, graphConf.InputImages(), time.Nanosecond, testCase.consoleHost)
+			runtimeSteps, actualError := runtimeStepConfigsForBuild(context.Background(), client, testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, graphConf.InputImages(), time.Nanosecond, testCase.consoleHost, testCase.mergedConfig)
 			graphConf.Steps = append(graphConf.Steps, runtimeSteps...)
 			if diff := cmp.Diff(testCase.expectedError, actualError, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("actualError does not match expectedError, diff: %s", diff)
@@ -1221,6 +1223,7 @@ func TestFromConfig(t *testing.T) {
 		templates      []*templateapi.Template
 		env            api.Parameters
 		params         map[string]string
+		mergedConfig   bool
 		expectedSteps  []string
 		expectedPost   []string
 		expectedParams map[string]string
@@ -1320,6 +1323,7 @@ func TestFromConfig(t *testing.T) {
 				},
 			},
 		},
+		mergedConfig:  true,
 		expectedSteps: []string{"root-org.repo1", "root-org.repo2", "[output-images]", "[images]"},
 	}, {
 		name: "base RPM images",
@@ -1361,6 +1365,7 @@ func TestFromConfig(t *testing.T) {
 				},
 			},
 		},
+		mergedConfig: true,
 		expectedSteps: []string{
 			"[input:base_rpm_image-org.repo1-without-rpms]",
 			"base_rpm_image-org.repo1",
@@ -1401,6 +1406,7 @@ func TestFromConfig(t *testing.T) {
 				},
 			},
 		},
+		mergedConfig: true,
 		expectedSteps: []string{
 			"rpms-org.repo1",
 			"[serve:rpms-org.repo1]",
@@ -1695,7 +1701,7 @@ func TestFromConfig(t *testing.T) {
 				params.Add(k, func() (string, error) { return v, nil })
 			}
 			graphConf := FromConfigStatic(&tc.config)
-			configSteps, post, err := fromConfig(context.Background(), &tc.config, &graphConf, &jobSpec, tc.templates, tc.paramFiles, tc.promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params, &secrets.DynamicCensor{}, "", "", "", nil)
+			configSteps, post, err := fromConfig(context.Background(), &tc.config, &graphConf, &jobSpec, tc.templates, tc.paramFiles, tc.promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params, &secrets.DynamicCensor{}, "", "", "", nil, tc.mergedConfig)
 			if diff := cmp.Diff(tc.expectedErr, err); diff != "" {
 				t.Errorf("unexpected error: %v", diff)
 			}

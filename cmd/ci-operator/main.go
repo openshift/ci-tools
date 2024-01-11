@@ -552,7 +552,7 @@ func (o *options) Complete() error {
 		if o.unresolvedConfigPath != "" || o.configSpecPath != "" {
 			return errors.New("cannot request injecting test into locally provided config")
 		}
-		config, err = o.resolverClient.ConfigWithTest(info, injectTest, len(jobSpec.ExtraRefs) > 1)
+		config, err = o.resolverClient.ConfigWithTest(info, injectTest)
 	} else {
 		config, err = o.loadConfig(info)
 	}
@@ -881,10 +881,11 @@ func (o *options) Run() []error {
 		return []error{fmt.Errorf("could not resolve the node architectures: %w", err)}
 	}
 
+	mergedConfig := o.injectTest != "" || len(o.jobSpec.ExtraRefs) > 1
 	// load the graph from the configuration
 	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig,
 		o.podPendingTimeout, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig,
-		o.consoleHost, o.nodeName, nodeArchitectures, o.targetAdditionalSuffix, o.manifestToolDockerCfg, o.localRegistryDNS)
+		o.consoleHost, o.nodeName, nodeArchitectures, o.targetAdditionalSuffix, o.manifestToolDockerCfg, o.localRegistryDNS, mergedConfig)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}

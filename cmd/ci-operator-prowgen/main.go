@@ -91,7 +91,7 @@ func (o *options) process() error {
 		return fmt.Errorf("failed to complete config options: %w", err)
 	}
 	if o.registryPath != "" {
-		refs, chains, workflows, _, _, observers, err := load.Registry(o.registryPath, load.RegistryFlag(0))
+		refs, chains, workflows, _, _, _, observers, err := load.Registry(o.registryPath, load.RegistryFlag(0))
 		if err != nil {
 			return fmt.Errorf("failed to load registry: %w", err)
 		}

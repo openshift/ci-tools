@@ -833,6 +833,9 @@ func TestResolveParameters(t *testing.T) {
 	notChanged := "not changed"
 	changed := "changed"
 	mergeRef := "merge ref"
+	dnsRef := "dns-ref"
+	dnsTest := "dns-test"
+	dnsWorkflow := "dns-workflow"
 	defaultGrandGrand := "grand grand parent"
 	defaultGrand := "grand parent"
 	defaultParent := "parent"
@@ -847,6 +850,10 @@ func TestResolveParameters(t *testing.T) {
 			Test:         []api.TestStep{{Chain: &grandGrandParent}},
 			Environment:  api.TestEnvironment{"CHANGED": "workflow"},
 			Dependencies: api.TestDependencies{"CHANGED": "workflow"},
+			DNSConfig: &api.StepDNSConfig{
+				Nameservers: []string{"nameserver-" + dnsWorkflow},
+				Searches:    []string{"my.dns." + dnsWorkflow},
+			},
 		},
 		testMergeWorkflow: api.MultiStageTestConfiguration{
 			Test: []api.TestStep{
@@ -863,6 +870,10 @@ func TestResolveParameters(t *testing.T) {
 			},
 			DependencyOverrides: api.DependencyOverrides{
 				"FROM_WORKFLOW": defaultWorkflow,
+			},
+			DNSConfig: &api.StepDNSConfig{
+				Nameservers: []string{"nameserver-" + dnsWorkflow},
+				Searches:    []string{"my.dns." + dnsWorkflow},
 			},
 		},
 	}
@@ -904,6 +915,10 @@ func TestResolveParameters(t *testing.T) {
 			Dependencies: []api.StepDependency{
 				{Env: "NOT_CHANGED", Name: defaultNotChanged},
 			},
+			DNSConfig: &api.StepDNSConfig{
+				Nameservers: []string{"nameserver-" + dnsRef},
+				Searches:    []string{"my.dns." + dnsRef},
+			},
 		},
 		changed: api.LiteralTestStep{
 			As:          changed,
@@ -911,6 +926,7 @@ func TestResolveParameters(t *testing.T) {
 			Dependencies: []api.StepDependency{
 				{Env: "CHANGED", Name: defaultNotChanged},
 			},
+			DNSConfig: &api.StepDNSConfig{},
 		},
 		mergeRef: api.LiteralTestStep{
 			As:          mergeRef,
@@ -927,14 +943,16 @@ func TestResolveParameters(t *testing.T) {
 		expectedParams       [][]api.StepParameter
 		expectedDeps         [][]api.StepDependency
 		expectedDepOverrides api.DependencyOverrides
+		expectedDNSConfigs   []*api.StepDNSConfig
 		err                  error
 	}{{
 		name: "leaf, no parameters",
 		test: api.MultiStageTestConfiguration{
 			Test: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{}}},
 		},
-		expectedParams: [][]api.StepParameter{nil},
-		expectedDeps:   [][]api.StepDependency{nil},
+		expectedParams:     [][]api.StepParameter{nil},
+		expectedDeps:       [][]api.StepDependency{nil},
+		expectedDNSConfigs: []*api.StepDNSConfig{nil},
 	}, {
 		name: "leaf, empty default",
 		test: api.MultiStageTestConfiguration{
@@ -943,13 +961,15 @@ func TestResolveParameters(t *testing.T) {
 					Environment: []api.StepParameter{
 						{Name: "TEST", Default: &defaultEmpty},
 					},
+					DNSConfig: &api.StepDNSConfig{},
 				},
 			}},
 		},
 		expectedParams: [][]api.StepParameter{{{
 			Name: "TEST", Default: &defaultEmpty,
 		}}},
-		expectedDeps: [][]api.StepDependency{nil},
+		expectedDeps:       [][]api.StepDependency{nil},
+		expectedDNSConfigs: []*api.StepDNSConfig{{}},
 	}, {
 		name: "leaf, parameters, deps",
 		test: api.MultiStageTestConfiguration{
@@ -961,6 +981,10 @@ func TestResolveParameters(t *testing.T) {
 					Dependencies: []api.StepDependency{
 						{Name: "test", Env: "WHOA"},
 					},
+					DNSConfig: &api.StepDNSConfig{
+						Nameservers: []string{"nameserver-" + dnsRef},
+						Searches:    []string{"my.dns." + dnsRef},
+					},
 				},
 			}},
 		},
@@ -970,6 +994,10 @@ func TestResolveParameters(t *testing.T) {
 		expectedDeps: [][]api.StepDependency{{{
 			Name: "test", Env: "WHOA",
 		}}},
+		expectedDNSConfigs: []*api.StepDNSConfig{{
+			Nameservers: []string{"nameserver-" + dnsRef},
+			Searches:    []string{"my.dns." + dnsRef},
+		}},
 	}, {
 		name: "chain propagates to sub-steps",
 		test: api.MultiStageTestConfiguration{
@@ -982,6 +1010,10 @@ func TestResolveParameters(t *testing.T) {
 		expectedDeps: [][]api.StepDependency{
 			{{Env: "NOT_CHANGED", Name: defaultNotChanged}},
 			{{Env: "CHANGED", Name: defaultNotChanged}},
+		},
+		expectedDNSConfigs: []*api.StepDNSConfig{
+			{Nameservers: []string{"nameserver-" + dnsRef}, Searches: []string{"my.dns." + dnsRef}},
+			{},
 		},
 	}, {
 		name: "change propagates to sub-chains",
@@ -996,6 +1028,10 @@ func TestResolveParameters(t *testing.T) {
 			{{Env: "NOT_CHANGED", Name: defaultNotChanged}},
 			{{Env: "CHANGED", Name: defaultNotChanged}},
 		},
+		expectedDNSConfigs: []*api.StepDNSConfig{
+			{Nameservers: []string{"nameserver-" + dnsRef}, Searches: []string{"my.dns." + dnsRef}},
+			{},
+		},
 	}, {
 		name: "workflow parameter and dep",
 		test: api.MultiStageTestConfiguration{Workflow: &workflow},
@@ -1007,12 +1043,17 @@ func TestResolveParameters(t *testing.T) {
 			{{Env: "NOT_CHANGED", Name: defaultNotChanged}},
 			{{Env: "CHANGED", Name: defaultWorkflow}},
 		},
+		expectedDNSConfigs: []*api.StepDNSConfig{
+			{Nameservers: []string{"nameserver-" + dnsWorkflow}, Searches: []string{"my.dns." + dnsWorkflow}},
+			{Nameservers: []string{"nameserver-" + dnsWorkflow}, Searches: []string{"my.dns." + dnsWorkflow}},
+		},
 	}, {
 		name: "test parameter and dep",
 		test: api.MultiStageTestConfiguration{
 			Test:         []api.TestStep{{Chain: &grandGrandParent}},
 			Environment:  api.TestEnvironment{"CHANGED": "test"},
 			Dependencies: api.TestDependencies{"CHANGED": "test"},
+			DNSConfig:    &api.StepDNSConfig{Nameservers: []string{"nameserver-" + dnsTest}, Searches: []string{"my.dns." + dnsTest}},
 		},
 		expectedParams: [][]api.StepParameter{
 			{{Name: "NOT_CHANGED", Default: &defaultNotChanged}},
@@ -1022,6 +1063,10 @@ func TestResolveParameters(t *testing.T) {
 			{{Env: "NOT_CHANGED", Name: defaultNotChanged}},
 			{{Env: "CHANGED", Name: defaultTest}},
 		},
+		expectedDNSConfigs: []*api.StepDNSConfig{
+			{Nameservers: []string{"nameserver-" + dnsTest}, Searches: []string{"my.dns." + dnsTest}},
+			{Nameservers: []string{"nameserver-" + dnsTest}, Searches: []string{"my.dns." + dnsTest}},
+		},
 	}, {
 		name: "test and workflow are merged",
 		test: api.MultiStageTestConfiguration{
@@ -1029,6 +1074,7 @@ func TestResolveParameters(t *testing.T) {
 			Environment:         api.TestEnvironment{"FROM_TEST": defaultTest},
 			Dependencies:        api.TestDependencies{"FROM_TEST": defaultTest},
 			DependencyOverrides: api.DependencyOverrides{"ADDED": defaultTest},
+			DNSConfig:           &api.StepDNSConfig{Nameservers: []string{"nameserver-" + dnsTest}, Searches: []string{"my.dns." + dnsTest}},
 		},
 		expectedParams: [][]api.StepParameter{
 			{{Name: "NOT_CHANGED", Default: &defaultNotChanged}},
@@ -1043,6 +1089,15 @@ func TestResolveParameters(t *testing.T) {
 		expectedDepOverrides: api.DependencyOverrides{
 			"FROM_WORKFLOW": defaultWorkflow,
 			"ADDED":         defaultTest,
+		},
+		// Since both are set, the test should override the workflow when a step literals have unset DNSConfig
+		// This the DNSConfig merge strategy is to overwrite if set in LiteralTestStep
+		// However, only LiteralTestSteps that have the variable declared can inherit it
+		// (This is to mirror how env and dependencies work)
+		expectedDNSConfigs: []*api.StepDNSConfig{
+			{Nameservers: []string{"nameserver-" + dnsTest}, Searches: []string{"my.dns." + dnsTest}},
+			{Nameservers: []string{"nameserver-" + dnsTest}, Searches: []string{"my.dns." + dnsTest}},
+			nil,
 		},
 	}, {
 		name: "invalid chain parameter",
@@ -1083,23 +1138,27 @@ func TestResolveParameters(t *testing.T) {
 				LiteralTestStep: &api.LiteralTestStep{As: "step"},
 			}},
 		},
-		expectedParams: [][]api.StepParameter{nil},
-		expectedDeps:   [][]api.StepDependency{nil},
+		expectedParams:     [][]api.StepParameter{nil},
+		expectedDeps:       [][]api.StepDependency{nil},
+		expectedDNSConfigs: []*api.StepDNSConfig{nil},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			ret, err := NewResolver(refs, chains, workflows, observers).Resolve("test", tc.test)
 			var params [][]api.StepParameter
 			var deps [][]api.StepDependency
+			var dnsConfigs []*api.StepDNSConfig
 			for _, l := range [][]api.LiteralTestStep{ret.Pre, ret.Test, ret.Post} {
 				for _, s := range l {
 					params = append(params, s.Environment)
 					deps = append(deps, s.Dependencies)
+					dnsConfigs = append(dnsConfigs, s.DNSConfig)
 				}
 			}
 			testhelper.Diff(t, "error", err, tc.err, testhelper.EquateErrorMessage)
 			testhelper.Diff(t, "parameters", params, tc.expectedParams)
 			testhelper.Diff(t, "dependencies", deps, tc.expectedDeps)
 			testhelper.Diff(t, "dependency overrides", ret.DependencyOverrides, tc.expectedDepOverrides)
+			testhelper.Diff(t, "dns config", dnsConfigs, tc.expectedDNSConfigs)
 		})
 	}
 }

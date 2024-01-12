@@ -48,10 +48,9 @@ const (
 	conditionAllJobsTriggered = "AllJobsTriggered"
 	conditionWithErrors       = "WithErrors"
 
-	aggregationIDLabel = "release.openshift.io/aggregation-id"
-	// TODO: Bumping this to 8 hours to hopefully allow more time for the k8s bump.  Will revert once the bump is complete.
-	defaultAggregatorJobTimeout = 8 * time.Hour
-	defaultMultiRefJobTimeout   = 8 * time.Hour
+	aggregationIDLabel          = "release.openshift.io/aggregation-id"
+	defaultAggregatorJobTimeout = 6 * time.Hour
+	defaultMultiRefJobTimeout   = 6 * time.Hour
 )
 
 type injectingResolverClient interface {
@@ -522,11 +521,6 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 			options.Cron = "@yearly"
 		})
 		periodic.Name = generateJobNameToSubmit(inject, prs)
-		// TODO: Temporarily bumping the timeout to 6 hours to allow extra time for the Kube rebase.  We'll remove this once the rebase lands...
-		if periodic.DecorationConfig == nil {
-			periodic.DecorationConfig = &prowv1.DecorationConfig{}
-		}
-		periodic.DecorationConfig.Timeout = &prowv1.Duration{Duration: 6 * time.Hour}
 		break
 	}
 	// We did not find the injected test: this is a bug

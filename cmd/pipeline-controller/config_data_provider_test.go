@@ -76,11 +76,11 @@ func composeCondRequiredPresubmit(name string) config.Presubmit {
 	}
 }
 
-func composePipelineCondRequiredPresubmit(name string) config.Presubmit {
+func composePipelineCondRequiredPresubmit(name string, optional bool, annotations map[string]string) config.Presubmit {
 	return config.Presubmit{
 		AlwaysRun: false,
-		Optional:  false,
-		JobBase:   config.JobBase{Name: name, Annotations: map[string]string{"pipeline_run_if_changed": ".*"}},
+		Optional:  optional,
+		JobBase:   config.JobBase{Name: name, Annotations: annotations},
 	}
 }
 
@@ -99,7 +99,9 @@ func TestConfigDataProviderGatherData(t *testing.T) {
 							composeProtectedPresubmit("ps1"),
 							composeRequiredPresubmit("ps2"),
 							composeCondRequiredPresubmit("ps3"),
-							composePipelineCondRequiredPresubmit("ps4"),
+							composePipelineCondRequiredPresubmit("ps4", false, map[string]string{"pipeline_run_if_changed": ".*"}),
+							composePipelineCondRequiredPresubmit("ps5", true, map[string]string{"pipeline_run_if_changed": ".*"}),
+							composePipelineCondRequiredPresubmit("ps6", true, map[string]string{}),
 						},
 					}},
 					ProwConfig: decorateWithOrgPolicy(composeBPConfig()),
@@ -107,10 +109,13 @@ func TestConfigDataProviderGatherData(t *testing.T) {
 				return &cfs
 			},
 			expected: presubmitTests{
-				protected:                     []string{"ps1"},
-				alwaysRequired:                []string{"ps2"},
-				conditionallyRequired:         []string{"ps3"},
-				pipelineConditionallyRequired: []config.Presubmit{composePipelineCondRequiredPresubmit("ps4")}},
+				protected:             []string{"ps1"},
+				alwaysRequired:        []string{"ps2"},
+				conditionallyRequired: []string{"ps3"},
+				pipelineConditionallyRequired: []config.Presubmit{
+					composePipelineCondRequiredPresubmit("ps4", false, map[string]string{"pipeline_run_if_changed": ".*"}),
+					composePipelineCondRequiredPresubmit("ps5", true, map[string]string{"pipeline_run_if_changed": ".*"}),
+				}},
 		},
 		{
 			name: "Org policy and repo require manual trigger",

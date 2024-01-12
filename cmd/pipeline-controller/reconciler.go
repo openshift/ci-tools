@@ -225,7 +225,9 @@ func (r *reconciler) acquireConditionalContexts(pj *v1.ProwJob, pipelineConditio
 					testCommands += "\n" + presubmit.RerunCommand
 					continue
 				}
-				overrideCommands += " " + presubmit.Context
+				if !presubmit.Optional {
+					overrideCommands += " " + presubmit.Context
+				}
 			}
 		}
 	}

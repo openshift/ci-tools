@@ -3,6 +3,7 @@ package jobrunaggregatorlib
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
@@ -46,7 +47,7 @@ body {
 				html += fmt.Sprintf(" unable to get prowjob: %v\n", err)
 			}
 			if prowJob != nil {
-				html += fmt.Sprintf(" did not finish since %v\n", prowJob.CreationTimestamp)
+				html += fmt.Sprintf("%v did not finish since %v\n", prowJob.Spec.Cluster, prowJob.CreationTimestamp)
 			}
 			html += "</li>\n"
 		}
@@ -73,7 +74,11 @@ body {
 				if prowJob.Status.CompletionTime != nil {
 					duration = prowJob.Status.CompletionTime.Sub(prowJob.Status.StartTime.Time)
 				}
-				html += fmt.Sprintf(" %v after %v\n", prowJob.Status.State, duration)
+				// Create a string of asterisks proportional to the number of seconds (scaled down by 1000)
+				// so we can visually ascertain relative job time.
+				scaleSeconds := int(duration.Seconds() / 1000.0)
+				stars := strings.Repeat("*", scaleSeconds)
+				html += fmt.Sprintf(" %v %v after %v %v\n", prowJob.Spec.Cluster, prowJob.Status.State, duration, stars)
 			}
 			html += "</li>\n"
 		}

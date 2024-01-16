@@ -196,12 +196,18 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)
 	}
 
+	assignees := strings.Split(prArgs.prAssignee, ",")
+	for i, assignee := range assignees {
+		assignees[i] = "@" + assignee
+	}
+	assigneeList := strings.Join(assignees, ", ")
+
 	if err := bumper.UpdatePullRequestWithLabels(
 		o.GithubClient,
 		org,
 		repo,
 		prTitle,
-		prArgs.prBody+"\n/cc @"+prArgs.prAssignee,
+		prArgs.prBody+"\n/cc "+assigneeList,
 		username+":"+sourceBranchName,
 		branch,
 		sourceBranchName,

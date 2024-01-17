@@ -27,9 +27,10 @@ import (
 func TestRun(t *testing.T) {
 	yes := true
 	for _, tc := range []struct {
-		name     string
-		failures sets.Set[string]
-		expected []string
+		name      string
+		failures  sets.Set[string]
+		observers []api.Observer
+		expected  []string
 	}{
 		{
 			name: "no step fails, no error",
@@ -64,6 +65,16 @@ func TestRun(t *testing.T) {
 				"test-post0",
 			},
 		},
+		{
+			name:      "observer fails, no error",
+			observers: []api.Observer{{Name: "obsrv0"}},
+			failures:  sets.New[string]("test-obsrv0"),
+			expected: []string{
+				"test-pre0", "test-pre1",
+				"test-test0", "test-test1",
+				"test-post0",
+			},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sa := &v1.ServiceAccount{
@@ -71,6 +82,10 @@ func TestRun(t *testing.T) {
 				ImagePullSecrets: []v1.LocalObjectReference{{Name: "ci-operator-dockercfg-12345"}},
 			}
 			name := "test"
+			observerPodNames := sets.New[string]()
+			for _, observerPod := range tc.observers {
+				observerPodNames.Insert(fmt.Sprintf("%s-%s", name, observerPod.Name))
+			}
 
 			crclient := &testhelper_kube.FakePodExecutor{
 				LoggingClient: loggingclient.New(
@@ -107,11 +122,17 @@ func TestRun(t *testing.T) {
 					Pre:                []api.LiteralTestStep{{As: "pre0"}, {As: "pre1"}},
 					Test:               []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
 					Post:               []api.LiteralTestStep{{As: "post0"}, {As: "post1", OptionalOnSuccess: &yes}},
+					Observers:          tc.observers,
 					AllowSkipOnSuccess: &yes,
 				},
-			}, &api.ReleaseBuildConfiguration{}, nil, client, &jobSpec, nil, "node-name", "")
-			if err := step.Run(context.Background()); (err != nil) != (tc.failures != nil) {
-				t.Errorf("expected error: %t, got error: %v", (tc.failures != nil), err)
+			}, &api.ReleaseBuildConfiguration{}, nil, client, &jobSpec, nil, "node-name", "", func(cf context.CancelFunc) {})
+
+			// An Observer pod failure doesn't make the test fail
+			failures := tc.failures.Delete(observerPodNames.UnsortedList()...)
+			hasFailures := failures != nil && failures.Len() > 0
+
+			if err := step.Run(context.Background()); (err != nil) != hasFailures {
+				t.Errorf("expected error: %t, got error: %v", hasFailures, err)
 			}
 			secrets := &v1.SecretList{}
 			if err := crclient.List(context.TODO(), secrets, ctrlruntimeclient.InNamespace(jobSpec.Namespace())); err != nil {
@@ -121,12 +142,26 @@ func TestRun(t *testing.T) {
 				t.Errorf("unexpected secrets: %#v", l)
 			}
 			var names []string
+
+			// An observer pod can be executed at any time, therefore making unstable the output
+			// of the pods the client has created. Do not take into account them.
+			observerPodsToRemove := observerPodNames.Clone()
+
 			for _, pod := range crclient.CreatedPods {
 				if pod.Namespace != jobSpec.Namespace() {
 					t.Errorf("pod %s didn't have namespace %s set, had %q instead", pod.Name, jobSpec.Namespace(), pod.Namespace)
 				}
-				names = append(names, pod.Name)
+				if !observerPodsToRemove.Has(pod.Name) {
+					names = append(names, pod.Name)
+				} else {
+					observerPodsToRemove.Delete(pod.Name)
+				}
 			}
+
+			if observerPodsToRemove.Len() > 0 {
+				t.Errorf("did not find the following pods to remove: %s", observerPodsToRemove.UnsortedList())
+			}
+
 			if diff := cmp.Diff(names, tc.expected); diff != "" {
 				t.Errorf("did not execute correct pods: %s, actual: %v, expected: %v", diff, names, tc.expected)
 			}
@@ -226,7 +261,7 @@ func TestJUnit(t *testing.T) {
 					Test: []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
 					Post: []api.LiteralTestStep{{As: "post0"}, {As: "post1"}},
 				},
-			}, &api.ReleaseBuildConfiguration{}, nil, client, &jobSpec, nil, "node-name", "")
+			}, &api.ReleaseBuildConfiguration{}, nil, client, &jobSpec, nil, "node-name", "", nil)
 			if err := step.Run(context.Background()); tc.failures == nil && err != nil {
 				t.Error(err)
 				return

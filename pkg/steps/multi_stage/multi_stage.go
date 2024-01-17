@@ -102,6 +102,7 @@ type multiStageTestStep struct {
 	leases          []api.StepLease
 	clusterClaim    *api.ClusterClaim
 	vpnConf         *vpnConf
+	cancelObservers func(context.CancelFunc)
 }
 
 func MultiStageTestStep(
@@ -113,8 +114,9 @@ func MultiStageTestStep(
 	leases []api.StepLease,
 	nodeName string,
 	targetAdditionalSuffix string,
+	cancelObservers func(context.CancelFunc),
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, params, client, jobSpec, leases, nodeName, targetAdditionalSuffix)
+	return newMultiStageTestStep(testConfig, config, params, client, jobSpec, leases, nodeName, targetAdditionalSuffix, cancelObservers)
 }
 
 func newMultiStageTestStep(
@@ -126,6 +128,7 @@ func newMultiStageTestStep(
 	leases []api.StepLease,
 	nodeName string,
 	targetAdditionalSuffix string,
+	cancelObservers func(context.CancelFunc),
 ) *multiStageTestStep {
 	ms := testConfig.MultiStageTestConfigurationLiteral
 	var flags stepFlag
@@ -153,6 +156,7 @@ func newMultiStageTestStep(
 		leases:           leases,
 		clusterClaim:     testConfig.ClusterClaim,
 		subLock:          &sync.Mutex{},
+		cancelObservers:  cancelObservers,
 	}
 }
 
@@ -223,7 +227,7 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 	} else if err := s.runSteps(ctx, "test", s.test, env, secretVolumes, secretVolumeMounts); err != nil {
 		errs = append(errs, fmt.Errorf("%q test steps failed: %w", s.name, err))
 	}
-	cancel() // signal to observers that we're tearing down
+	s.cancelObserversContext(cancel) // signal to observers that we're tearing down
 	s.flags &= ^shortCircuit
 	if err := s.runSteps(context.Background(), "post", s.post, env, secretVolumes, secretVolumeMounts); err != nil {
 		errs = append(errs, fmt.Errorf("%q post steps failed: %w", s.name, err))
@@ -374,6 +378,14 @@ func (s *multiStageTestStep) environment() ([]coreapi.EnvVar, error) {
 		}
 	}
 	return ret, nil
+}
+
+func (s *multiStageTestStep) cancelObserversContext(cancel context.CancelFunc) {
+	if s.cancelObservers != nil {
+		s.cancelObservers(cancel)
+	} else {
+		cancel()
+	}
 }
 
 // secretsForCensoring returns the secret volumes and mounts that will allow sidecar to censor

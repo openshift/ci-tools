@@ -407,7 +407,7 @@ func stepForTest(
 			params = api.NewDeferredParameters(params)
 		}
 		var ret []api.Step
-		step := multi_stage.MultiStageTestStep(*c, config, params, podClient, jobSpec, leases, nodeName, targetAdditionalSuffix)
+		step := multi_stage.MultiStageTestStep(*c, config, params, podClient, jobSpec, leases, nodeName, targetAdditionalSuffix, nil)
 		if len(leases) != 0 {
 			step = steps.LeaseStep(leaseClient, leases, step, jobSpec.Namespace)
 		}

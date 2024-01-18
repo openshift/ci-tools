@@ -28,7 +28,7 @@ func gatherOptions() (*options, error) {
 	flag.StringVar(&opts.prTitle, "pr-title", "", "The title of the PR to create")
 	flag.StringVar(&opts.prMessage, "pr-message", "", "The message of the PR to create")
 	flag.StringVar(&opts.gitCommitMessage, "git-message", "", "The git commit message of the PR to create. If not set, then its value will be composed of other flags")
-	flag.StringVar(&opts.prAssignee, "pr-assignee", "", "The assignee of the PR to create")
+	flag.StringVar(&opts.prAssignee, "pr-assignee", "", "Comma separated list of assignees for the PR to create")
 	flag.StringVar(&opts.organization, "organization", "openshift", "The GitHub organization in which the PR should be created")
 	flag.StringVar(&opts.repo, "repo", "release", "The name of the repo in which the PR should be created")
 	flag.StringVar(&opts.branch, "branch", "master", "The branch for which the PR should be created")

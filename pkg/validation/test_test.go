@@ -1611,8 +1611,8 @@ func TestValidateTestConfigurationType(t *testing.T) {
 }
 
 func TestVerifyClusterProfileOwnership(t *testing.T) {
-	cpList := api.ClusterProfilesList{
-		api.ClusterProfileDetails{
+	cpMap := api.ClusterProfilesMap{
+		"profile-with-one-owner": api.ClusterProfileDetails{
 			Profile: "profile-with-one-owner",
 			Owners: []api.ClusterProfileOwners{
 				{
@@ -1620,7 +1620,7 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 				},
 			},
 		},
-		api.ClusterProfileDetails{
+		"profile-with-one-owner-w-multiple-repos": api.ClusterProfileDetails{
 			Profile: "profile-with-one-owner-w-multiple-repos",
 			Owners: []api.ClusterProfileOwners{
 				{
@@ -1629,7 +1629,7 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 				},
 			},
 		},
-		api.ClusterProfileDetails{
+		"profile-with-multiple-orgs-and-repos": api.ClusterProfileDetails{
 			Profile: "profile-with-multiple-orgs-and-repos",
 			Owners: []api.ClusterProfileOwners{
 				{
@@ -1645,12 +1645,12 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 				},
 			},
 		},
-		api.ClusterProfileDetails{
+		"profile-with-no-owners-specified": api.ClusterProfileDetails{
 			Profile: "profile-with-no-owners-specified",
 			Owners:  []api.ClusterProfileOwners{},
 		},
 	}
-	v := NewValidator(cpList)
+	v := NewValidator(cpMap)
 
 	for _, tc := range []struct {
 		name     string

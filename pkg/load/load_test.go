@@ -258,35 +258,35 @@ func TestRegistry(t *testing.T) {
 }
 
 func TestClusterProfilesConfig(t *testing.T) {
-	var existingProfiles api.ClusterProfilesList
+	existingProfiles := make(api.ClusterProfilesMap)
 	for _, profileName := range api.ClusterProfiles() {
-		existingProfiles = append(existingProfiles, api.ClusterProfileDetails{
+		existingProfiles[profileName] = api.ClusterProfileDetails{
 			Profile: profileName,
-		})
+		}
 	}
 
-	var profilesWithOwners api.ClusterProfilesList
+	profilesWithOwners := make(api.ClusterProfilesMap)
 	for _, profileName := range api.ClusterProfiles() {
 		if profileName == "aws" {
-			profilesWithOwners = append(profilesWithOwners, api.ClusterProfileDetails{
+			profilesWithOwners[profileName] = api.ClusterProfileDetails{
 				Profile: profileName,
 				Owners:  []api.ClusterProfileOwners{{Org: "org1"}},
-			})
+			}
 		} else if profileName == "aws-2" {
-			profilesWithOwners = append(profilesWithOwners, api.ClusterProfileDetails{
+			profilesWithOwners[profileName] = api.ClusterProfileDetails{
 				Profile: profileName,
 				Owners:  []api.ClusterProfileOwners{{Org: "org2", Repos: []string{"repo1", "repo2"}}},
-			})
+			}
 		} else {
-			profilesWithOwners = append(profilesWithOwners, api.ClusterProfileDetails{
+			profilesWithOwners[profileName] = api.ClusterProfileDetails{
 				Profile: profileName,
-			})
+			}
 		}
 	}
 
 	var testCases = []struct {
 		name     string
-		expected api.ClusterProfilesList
+		expected api.ClusterProfilesMap
 		testYaml string
 	}{
 		{

@@ -32,7 +32,7 @@ type options struct {
 
 	resolver        registry.Resolver
 	ciOPConfigAgent agents.ConfigAgent
-	clusterProfiles api.ClusterProfilesList
+	clusterProfiles api.ClusterProfilesMap
 }
 
 func (o *options) parse() error {

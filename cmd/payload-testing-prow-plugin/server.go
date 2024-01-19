@@ -321,7 +321,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 					BaseSHA: pullRequest.Base.SHA,
 					PullRequest: prpqv1.PullRequest{
 						Number: number,
-						Author: pullRequest.AuthorAssociation,
+						Author: pullRequest.User.Login,
 						SHA:    pullRequest.Head.SHA,
 						Title:  pullRequest.Title,
 					},

@@ -91,6 +91,16 @@ func TestJobNamesFromComment(t *testing.T) {
 			expected: []config.Job{{Name: "periodic-ci-openshift-release-some-job"}, {Name: "periodic-ci-openshift-release-another-job"}, {Name: "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial"}},
 		},
 		{
+			name:     "job with additional PR",
+			comment:  "/payload-job-with-prs periodic-ci-openshift-release-some-job openshift/installer#123",
+			expected: []config.Job{{Name: "periodic-ci-openshift-release-some-job", WithPRs: []config.AdditionalPR{"openshift/installer#123"}}},
+		},
+		{
+			name:     "job with multiple additional PRs",
+			comment:  "/payload-job-with-prs periodic-ci-openshift-release-some-job openshift/installer#123 openshift/kubernetes#1234",
+			expected: []config.Job{{Name: "periodic-ci-openshift-release-some-job", WithPRs: []config.AdditionalPR{"openshift/installer#123", "openshift/kubernetes#1234"}}},
+		},
+		{
 			name:     "/payload-aggregate periodic-ci-openshift-release-some-job   10  ",
 			comment:  "/payload-aggregate periodic-ci-openshift-release-some-job   10  ",
 			expected: []config.Job{{Name: "periodic-ci-openshift-release-some-job", AggregatedCount: 10}},
@@ -310,10 +320,11 @@ func init() {
 
 func TestBuild(t *testing.T) {
 	testCases := []struct {
-		name      string
-		spec      jobSetSpecification
-		jobTuples []prpqv1.ReleaseJobSpec
-		expected  *prpqv1.PullRequestPayloadQualificationRun
+		name          string
+		spec          jobSetSpecification
+		jobTuples     []prpqv1.ReleaseJobSpec
+		additionalPRs []prpqv1.PullRequestUnderTest
+		expected      *prpqv1.PullRequestPayloadQualificationRun
 	}{
 		{
 			name: "basic case",
@@ -438,6 +449,97 @@ func TestBuild(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "additional PRs",
+			spec: jobSetSpecification{
+				ocp:         "4.10",
+				releaseType: "nightly",
+				jobs:        "ci",
+			},
+			jobTuples: []prpqv1.ReleaseJobSpec{
+				{
+					CIOperatorConfig: prpqv1.CIOperatorMetadata{
+						Org:     "openshift",
+						Repo:    "release",
+						Branch:  "master",
+						Variant: "nightly-4.10",
+					},
+					Test:            "e2e-aws-serial",
+					AggregatedCount: 5,
+				},
+				{
+					CIOperatorConfig: prpqv1.CIOperatorMetadata{
+						Org:     "openshift",
+						Repo:    "release",
+						Branch:  "master",
+						Variant: "nightly-4.10",
+					},
+					Test:            "e2e-metal-ipi",
+					AggregatedCount: 10,
+				},
+			},
+			additionalPRs: []prpqv1.PullRequestUnderTest{
+				{
+					Org:     "org",
+					Repo:    "other-repo",
+					BaseRef: "base",
+					BaseSHA: "BASE",
+					PullRequest: prpqv1.PullRequest{
+						Number: 1234,
+						Author: "a-developer",
+						SHA:    "HEAD",
+						Title:  "some PR",
+					},
+				},
+			},
+			expected: &prpqv1.PullRequestPayloadQualificationRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "some-guid-0",
+					Namespace: "ci",
+					Labels: map[string]string{
+						"dptp.openshift.io/requester": "payload-testing",
+						"event-GUID":                  "some-guid",
+						"prow.k8s.io/refs.org":        "org",
+						"prow.k8s.io/refs.pull":       "123",
+						"prow.k8s.io/refs.repo":       "repo",
+						"prow.k8s.io/refs.base_ref":   "ref",
+					},
+				},
+				Spec: prpqv1.PullRequestPayloadTestSpec{
+					PullRequests: []prpqv1.PullRequestUnderTest{
+						{
+							Org:         "org",
+							Repo:        "other-repo",
+							BaseRef:     "base",
+							BaseSHA:     "BASE",
+							PullRequest: prpqv1.PullRequest{Number: 1234, Author: "a-developer", SHA: "HEAD", Title: "some PR"},
+						},
+						{
+							Org:         "org",
+							Repo:        "repo",
+							BaseRef:     "ref",
+							BaseSHA:     "sha",
+							PullRequest: prpqv1.PullRequest{Number: 123, Author: "login", SHA: "head-sha", Title: "title"},
+						},
+					},
+					Jobs: prpqv1.PullRequestPayloadJobSpec{
+						ReleaseControllerConfig: prpqv1.ReleaseControllerConfig{OCP: "4.10", Release: "nightly", Specifier: "ci"},
+						Jobs: []prpqv1.ReleaseJobSpec{
+							{
+								CIOperatorConfig: prpqv1.CIOperatorMetadata{Org: "openshift", Repo: "release", Branch: "master", Variant: "nightly-4.10"},
+								Test:             "e2e-aws-serial",
+								AggregatedCount:  5,
+							},
+							{
+								CIOperatorConfig: prpqv1.CIOperatorMetadata{Org: "openshift", Repo: "release", Branch: "master", Variant: "nightly-4.10"},
+								Test:             "e2e-metal-ipi",
+								AggregatedCount:  10,
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -462,7 +564,7 @@ func TestBuild(t *testing.T) {
 				},
 				spec: tc.spec,
 			}
-			actual := builder.build(tc.jobTuples)
+			actual := builder.build(tc.jobTuples, tc.additionalPRs)
 			if diff := cmp.Diff(tc.expected, actual, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
 				t.Errorf("%s differs from expected:\n%s", tc.name, diff)
 			}
@@ -483,7 +585,10 @@ func (c *fakeTrustedChecker) trustedUser(author, _, _ string, _ int) (bool, erro
 func TestHandle(t *testing.T) {
 	ghc := fakegithub.NewFakeClient()
 	pr123 := github.PullRequest{}
-	ghc.PullRequests = map[int]*github.PullRequest{123: &pr123}
+	ghc.PullRequests = map[int]*github.PullRequest{
+		123: &pr123,
+		999: {},
+	}
 
 	testCases := []struct {
 		name     string
@@ -546,7 +651,7 @@ See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
 					Body: "/payload-job periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial periodic-ci-openshift-release-another-job",
 				},
 			},
-			expected: `trigger 1 job(s) for the /payload-(job|aggregate) command
+			expected: `trigger 1 job(s) for the /payload-(job|aggregate|job-with-prs) command
 - periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial
 
 See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
@@ -575,9 +680,37 @@ See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
 /payload-aggregate periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi 10`,
 				},
 			},
-			expected: `trigger 2 job(s) for the /payload-(job|aggregate) command
+			expected: `trigger 2 job(s) for the /payload-(job|aggregate|job-with-prs) command
 - periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial
 - periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi
+
+See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
+`,
+		},
+		{
+			name: "payload-job-with-prs",
+			s: &server{
+				ghc:                ghc,
+				ctx:                context.TODO(),
+				kubeClient:         fakeclient.NewClientBuilder().Build(),
+				namespace:          "ci",
+				testResolver:       newFakeTestResolver(),
+				trustedChecker:     &fakeTrustedChecker{},
+				ciOpConfigResolver: &fakeCIOpConfigResolver{},
+			},
+			ic: github.IssueCommentEvent{
+				GUID: "guid",
+				Repo: github.Repo{Owner: github.User{Login: "openshift"}},
+				Issue: github.Issue{
+					Number:      123,
+					PullRequest: &struct{}{},
+				},
+				Comment: github.IssueComment{
+					Body: "/payload-job-with-prs periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial openshift/kubernetes#999",
+				},
+			},
+			expected: `trigger 1 job(s) for the /payload-(job|aggregate|job-with-prs) command
+- periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial
 
 See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
 `,

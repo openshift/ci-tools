@@ -38,6 +38,7 @@ type githubClient interface {
 var (
 	ocpPayloadTestsPattern              = regexp.MustCompile(`(?mi)^/payload\s+(?P<ocp>4\.\d+)\s+(?P<release>\w+)\s+(?P<jobs>\w+)\s*$`)
 	ocpPayloadJobTestsPattern           = regexp.MustCompile(`(?mi)^/payload-job\s+((?:[-\w.]+\s*?)+)\s*$`)
+	ocpPayloadJobTestsWithPRsPattern    = regexp.MustCompile(`(?mi)^/payload-job-with-prs\s+(?P<job>[-\w.]+)\s+(?P<prs>(?:[-\w./#]+\s*)+)\s*$`)
 	ocpPayloadAggregatedJobTestsPattern = regexp.MustCompile(`(?mi)^/payload-aggregate\s+(?P<job>[-\w.]+)\s+(?P<aggregate>\d+)\s*$`)
 	ocpPayloadAbortPattern              = regexp.MustCompile(`(?mi)^/payload-abort$`)
 )
@@ -54,6 +55,12 @@ func helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, error) {
 		Description: "The payload-testing plugin triggers a run of specified release qualification jobs against PR code",
 		WhoCanUse:   "Members of the trusted organization for the repo.",
 		Examples:    []string{"/payload 4.10 nightly informing", "/payload 4.8 ci all"},
+	})
+	pluginHelp.AddCommand(pluginhelp.Command{
+		Usage:       "/payload-job-with-prs",
+		Description: "The payload-testing plugin triggers a run of specified job including the other mentioned PRs in the built payload",
+		WhoCanUse:   "Members of the trusted organization for the repo.",
+		Examples:    []string{"/payload-job-with-prs periodic-release-4.14-aws openshift/kubernetes#1234 openshift/installer#999"},
 	})
 	pluginHelp.AddCommand(pluginhelp.Command{
 		Usage:       "/payload-abort",
@@ -153,6 +160,19 @@ func jobsFromComment(comment string) []config.Job {
 			AggregatedCount: aggregatedCount,
 		})
 
+	}
+	for _, match := range ocpPayloadJobTestsWithPRsPattern.FindAllStringSubmatch(comment, -1) {
+		jobIndex := ocpPayloadJobTestsWithPRsPattern.SubexpIndex("job")
+		prsIndex := ocpPayloadJobTestsWithPRsPattern.SubexpIndex("prs")
+		rawPRs := strings.Fields(match[prsIndex])
+		var additionalPRs []config.AdditionalPR
+		for _, pr := range rawPRs {
+			additionalPRs = append(additionalPRs, config.AdditionalPR(pr))
+		}
+		ret = append(ret, config.Job{
+			Name:    match[jobIndex],
+			WithPRs: additionalPRs,
+		})
 	}
 	return ret
 }
@@ -281,8 +301,32 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 
 		specLogger.Debug("resolving tests ...")
 		startResolveTests := time.Now()
-
+		var additionalPRs []prpqv1.PullRequestUnderTest
 		for _, job := range jobs {
+			for _, prRef := range job.WithPRs {
+				prOrg, prRepo, number, err := prRef.GetOrgRepoAndNumber()
+				if err != nil {
+					specLogger.WithError(err).Errorf("unable to get additional pr info from string: %s", prRef)
+					return formatError(fmt.Errorf("unable to get additional pr info from string: %s: %w", prRef, err))
+				}
+				pullRequest, err := s.ghc.GetPullRequest(prOrg, prRepo, number)
+				if err != nil {
+					specLogger.WithError(err).Errorf("unable to get pr from github for: %s", prRef)
+					return formatError(fmt.Errorf("unable to get pr from github for: %s: %w", prRef, err))
+				}
+				additionalPRs = append(additionalPRs, prpqv1.PullRequestUnderTest{
+					Org:     prOrg,
+					Repo:    prRepo,
+					BaseRef: pullRequest.Base.Ref,
+					BaseSHA: pullRequest.Base.SHA,
+					PullRequest: prpqv1.PullRequest{
+						Number: number,
+						Author: pullRequest.AuthorAssociation,
+						SHA:    pullRequest.Head.SHA,
+						Title:  pullRequest.Title,
+					},
+				})
+			}
 			if job.Test != "" {
 				jobNames = append(jobNames, job.Name)
 				releaseJobSpecs = append(releaseJobSpecs, prpqv1.ReleaseJobSpec{
@@ -321,7 +365,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 		if len(releaseJobSpecs) > 0 {
 			specLogger.Debug("creating PullRequestPayloadQualificationRuns ...")
 			startCreateRuns := time.Now()
-			run := builder.build(releaseJobSpecs)
+			run := builder.build(releaseJobSpecs, additionalPRs)
 			if err := s.kubeClient.Create(s.ctx, run); err != nil {
 				specLogger.WithError(err).Error("could not create PullRequestPayloadQualificationRun")
 				return formatError(fmt.Errorf("could not create PullRequestPayloadQualificationRun: %w", err))
@@ -440,7 +484,8 @@ type prpqrBuilder struct {
 	spec      jobSetSpecification
 }
 
-func (b *prpqrBuilder) build(releaseJobSpecs []prpqv1.ReleaseJobSpec) *prpqv1.PullRequestPayloadQualificationRun {
+func (b *prpqrBuilder) build(releaseJobSpecs []prpqv1.ReleaseJobSpec, additionalPRs []prpqv1.PullRequestUnderTest) *prpqv1.PullRequestPayloadQualificationRun {
+
 	run := &prpqv1.PullRequestPayloadQualificationRun{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-%d", b.guid, b.counter),
@@ -463,7 +508,7 @@ func (b *prpqrBuilder) build(releaseJobSpecs []prpqv1.ReleaseJobSpec) *prpqv1.Pu
 					Specifier: string(b.spec.jobs),
 				},
 			},
-			PullRequests: []prpqv1.PullRequestUnderTest{{
+			PullRequests: append(additionalPRs, prpqv1.PullRequestUnderTest{
 				Org:     b.org,
 				Repo:    b.repo,
 				BaseRef: b.pr.Base.Ref,
@@ -473,8 +518,8 @@ func (b *prpqrBuilder) build(releaseJobSpecs []prpqv1.ReleaseJobSpec) *prpqv1.Pu
 					Author: b.pr.User.Login,
 					SHA:    b.pr.Head.SHA,
 					Title:  b.pr.Title,
-				}},
-			},
+				},
+			}),
 		},
 	}
 	b.counter++
@@ -484,7 +529,7 @@ func (b *prpqrBuilder) build(releaseJobSpecs []prpqv1.ReleaseJobSpec) *prpqv1.Pu
 func message(spec jobSetSpecification, tests []string) string {
 	var b strings.Builder
 	if spec.ocp == "" {
-		b.WriteString(fmt.Sprintf("trigger %d job(s) for the /payload-(job|aggregate) command\n", len(tests)))
+		b.WriteString(fmt.Sprintf("trigger %d job(s) for the /payload-(job|aggregate|job-with-prs) command\n", len(tests)))
 	} else {
 		b.WriteString(fmt.Sprintf("trigger %d job(s) of type %s for the %s release of OCP %s\n", len(tests), spec.jobs, spec.releaseType, spec.ocp))
 	}

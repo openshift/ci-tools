@@ -1365,6 +1365,7 @@ const (
 	ClusterProfileOSLGCP                ClusterProfile = "osl-gcp"
 	ClusterProfileDevSandboxCIAWS       ClusterProfile = "devsandboxci-aws"
 	ClusterProfileQuayAWS               ClusterProfile = "quay-aws"
+	ClusterProfileAWSEdgeInfra          ClusterProfile = "aws-edge-infra"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -1491,6 +1492,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileOSLGCP,
 		ClusterProfileDevSandboxCIAWS,
 		ClusterProfileQuayAWS,
+		ClusterProfileAWSEdgeInfra,
 	}
 }
 
@@ -1539,7 +1541,8 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileGitOpsAWS,
 		ClusterProfileCheAWS,
 		ClusterProfileDevSandboxCIAWS,
-		ClusterProfileQuayAWS:
+		ClusterProfileQuayAWS,
+		ClusterProfileAWSEdgeInfra:
 		return string(CloudAWS)
 	case
 		ClusterProfileAlibabaCloud,
@@ -1917,6 +1920,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "devsandboxci-aws-quota-slice"
 	case ClusterProfileQuayAWS:
 		return "quay-aws-quota-slice"
+	case ClusterProfileAWSEdgeInfra:
+		return "aws-edge-infra-quota-slice"
 	default:
 		return ""
 	}

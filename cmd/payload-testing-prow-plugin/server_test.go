@@ -591,10 +591,11 @@ func TestHandle(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name     string
-		s        *server
-		ic       github.IssueCommentEvent
-		expected string
+		name                  string
+		s                     *server
+		ic                    github.IssueCommentEvent
+		expectedMessage       string
+		expectedAdditionalPRs []config.AdditionalPR
 	}{
 		{
 			name: "basic case",
@@ -622,7 +623,7 @@ func TestHandle(t *testing.T) {
 					Body: "/payload 4.10 nightly informing",
 				},
 			},
-			expected: `trigger 2 job(s) of type informing for the nightly release of OCP 4.10
+			expectedMessage: `trigger 2 job(s) of type informing for the nightly release of OCP 4.10
 - periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial
 - periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi
 
@@ -651,7 +652,7 @@ See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
 					Body: "/payload-job periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial periodic-ci-openshift-release-another-job",
 				},
 			},
-			expected: `trigger 1 job(s) for the /payload-(job|aggregate|job-with-prs) command
+			expectedMessage: `trigger 1 job(s) for the /payload-(job|aggregate|job-with-prs) command
 - periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial
 
 See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
@@ -680,7 +681,7 @@ See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
 /payload-aggregate periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi 10`,
 				},
 			},
-			expected: `trigger 2 job(s) for the /payload-(job|aggregate|job-with-prs) command
+			expectedMessage: `trigger 2 job(s) for the /payload-(job|aggregate|job-with-prs) command
 - periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial
 - periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi
 
@@ -709,11 +710,12 @@ See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
 					Body: "/payload-job-with-prs periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial openshift/kubernetes#999",
 				},
 			},
-			expected: `trigger 1 job(s) for the /payload-(job|aggregate|job-with-prs) command
+			expectedMessage: `trigger 1 job(s) for the /payload-(job|aggregate|job-with-prs) command
 - periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial
 
 See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
 `,
+			expectedAdditionalPRs: []config.AdditionalPR{"openshift/kubernetes#999"},
 		},
 		{
 			name: "non-prowgen jobs",
@@ -744,7 +746,7 @@ See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
 					Body: "/payload 4.10 nightly informing\n/payload 4.8 ci all",
 				},
 			},
-			expected: `trigger 2 job(s) of type informing for the nightly release of OCP 4.10
+			expectedMessage: `trigger 2 job(s) of type informing for the nightly release of OCP 4.10
 - periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial
 - periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi
 
@@ -778,7 +780,7 @@ trigger 0 job(s) of type all for the ci release of OCP 4.8
 					Body: "/payload 4.10 nightly informing",
 				},
 			},
-			expected: `user not-trusted is not trusted for pull request org/repo#123`,
+			expectedMessage: `user not-trusted is not trusted for pull request org/repo#123`,
 		},
 		{
 			name: "not contribute to official images",
@@ -806,7 +808,7 @@ trigger 0 job(s) of type all for the ci release of OCP 4.8
 					Body: "/payload 4.10 nightly informing",
 				},
 			},
-			expected: `the repo org/repo does not contribute to the OpenShift official images`,
+			expectedMessage: `the repo org/repo does not contribute to the OpenShift official images`,
 		},
 		{
 			name: "abort all jobs",
@@ -855,14 +857,17 @@ trigger 0 job(s) of type all for the ci release of OCP 4.8
 					Body: "/payload-abort",
 				},
 			},
-			expected: `aborted active payload jobs for pull request org/repo#123`,
+			expectedMessage: `aborted active payload jobs for pull request org/repo#123`,
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := tc.s.handle(logrus.WithField("tc.name", tc.name), tc.ic)
-			if diff := cmp.Diff(tc.expected, actual); diff != "" {
-				t.Errorf("%s differs from expected:\n%s", tc.name, diff)
+			actualMessage, actualAddtionalPRs := tc.s.handle(logrus.WithField("tc.name", tc.name), tc.ic)
+			if diff := cmp.Diff(tc.expectedMessage, actualMessage); diff != "" {
+				t.Errorf("%s differs from expectedMessage:\n%s", tc.name, diff)
+			}
+			if diff := cmp.Diff(tc.expectedAdditionalPRs, actualAddtionalPRs); diff != "" {
+				t.Errorf("%s differs from expectedAdditionalPRs:\n%s", tc.name, diff)
 			}
 		})
 	}

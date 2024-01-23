@@ -208,7 +208,7 @@ func TestHandleMirrorImage(t *testing.T) {
 				imageMirrorer: newFakeOCImage(imageMirrorCmdFactory(testCase.imageMirrorErr)),
 			}
 
-			if err := r.handleMirrorImage(context.TODO(), "fake-image", &testCase.mabc); err != nil {
+			if _, err := r.handleMirrorImage(context.TODO(), logrus.NewEntry(logrus.StandardLogger()), "fake-image", &testCase.mabc); err != nil {
 				t.Fatalf("Failed to mirror %v", err)
 			}
 

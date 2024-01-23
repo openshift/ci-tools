@@ -66,13 +66,13 @@ func UpdateMultiArchBuildConfig(ctx context.Context, logger *logrus.Entry, clien
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		mabc := &MultiArchBuildConfig{}
 		if err := client.Get(ctx, namespacedName, mabc); err != nil {
-			return fmt.Errorf("failed to get the MultiArchBuildConfig: %w", err)
+			return fmt.Errorf("failed to get the MultiArchBuildConfig during update: %w", err)
 		}
 
 		mabc = mabc.DeepCopy()
 		mutateFn(mabc)
 
-		logger.WithField("namespace", namespacedName.Namespace).WithField("name", namespacedName.Name).Info("Updating MultiArchBuildConfig...")
+		logger.Info("Updating MultiArchBuildConfig...")
 		if err := client.Update(ctx, mabc); err != nil {
 			return fmt.Errorf("failed to update MultiArchBuildConfig %s: %w", mabc.Name, err)
 		}

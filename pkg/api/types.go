@@ -1448,6 +1448,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileIBMCloudQE,
 		ClusterProfileIBMCloudQE2,
 		ClusterProfileIBMCloudMultiPpc64le,
+		ClusterProfilePOWERVSMulti1,
 		ClusterProfileIBMCloudMultiS390x,
 		ClusterProfilePOWERVS1,
 		ClusterProfilePOWERVS2,

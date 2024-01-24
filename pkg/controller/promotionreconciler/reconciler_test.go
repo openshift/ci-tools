@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/test-infra/prow/github"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/yaml"
@@ -26,6 +27,8 @@ import (
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler/prowjobreconciler"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
+	"github.com/openshift/ci-tools/pkg/load/agents"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func init() {
@@ -346,6 +349,139 @@ func TestReconcile(t *testing.T) {
 
 			if err := tc.verify(err, req); err != nil {
 				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestHandleCIOpConfigChange(t *testing.T) {
+	var queue []prowjobreconciler.OrgRepoBranchCommit
+	testCases := []struct {
+		name                   string
+		registryClient         ctrlruntimeclient.Client
+		ciOperatorConfigGetter ciOperatorConfigGetter
+		prowJobEnqueuer        prowjobreconciler.Enqueuer
+		githubClient           githubClient
+		delta                  agents.IndexDelta
+		log                    *logrus.Entry
+		expected               error
+		expectedQue            []prowjobreconciler.OrgRepoBranchCommit
+	}{
+		{
+			name: "empty delta",
+		},
+		{
+			name:     "invalid identifier",
+			delta:    agents.IndexDelta{Added: []*cioperatorapi.ReleaseBuildConfiguration{{}}},
+			expected: fmt.Errorf("got an index delta event with a key that is not a valid namespace/name identifier: "),
+		},
+		{
+			name:           "failed to get promotionConfig",
+			delta:          agents.IndexDelta{IndexKey: "ns/is:tag", Added: []*cioperatorapi.ReleaseBuildConfiguration{{}}},
+			registryClient: fakectrlruntimeclient.NewClientBuilder().Build(),
+			ciOperatorConfigGetter: func(identifier string) ([]*cioperatorapi.ReleaseBuildConfiguration, error) {
+				return nil, fmt.Errorf("some error")
+			},
+			expected: fmt.Errorf("failed to get promotionConfig for imagestreamtag ns/is:tag: query index: some error"),
+		},
+		{
+			name:           "nil promotionConfig",
+			delta:          agents.IndexDelta{IndexKey: "ns/is:tag", Added: []*cioperatorapi.ReleaseBuildConfiguration{{}}},
+			registryClient: fakectrlruntimeclient.NewClientBuilder().Build(),
+			ciOperatorConfigGetter: func(identifier string) ([]*cioperatorapi.ReleaseBuildConfiguration, error) {
+				return nil, nil
+			},
+			expected: fmt.Errorf("nil promotionConfig for imagestreamtag ns/is:tag"),
+		},
+		{
+			name:           "failed to get current git head",
+			delta:          agents.IndexDelta{IndexKey: "ns/is:tag", Added: []*cioperatorapi.ReleaseBuildConfiguration{{}}},
+			registryClient: fakectrlruntimeclient.NewClientBuilder().Build(),
+			ciOperatorConfigGetter: func(identifier string) ([]*cioperatorapi.ReleaseBuildConfiguration, error) {
+				return []*cioperatorapi.ReleaseBuildConfiguration{
+					{Metadata: cioperatorapi.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "branch",
+					}},
+				}, nil
+			},
+			githubClient: fakeGithubClient{getGef: func(string, string, string) (string, error) { return "", fmt.Errorf("some error") }},
+			expected:     fmt.Errorf("failed to get current git head for org/repo/branch and imageStreamTag ns/is:tag: failed to get sha for ref org/repo/heads/branch from github: some error"),
+		},
+		{
+			name:           "got 404 from github",
+			delta:          agents.IndexDelta{IndexKey: "ns/is:tag", Added: []*cioperatorapi.ReleaseBuildConfiguration{{}}},
+			registryClient: fakectrlruntimeclient.NewClientBuilder().Build(),
+			ciOperatorConfigGetter: func(identifier string) ([]*cioperatorapi.ReleaseBuildConfiguration, error) {
+				return []*cioperatorapi.ReleaseBuildConfiguration{
+					{Metadata: cioperatorapi.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "branch",
+					}},
+				}, nil
+			},
+			githubClient: fakeGithubClient{getGef: func(string, string, string) (string, error) { return "", github.GetRefTooManyResultsError{} }},
+			expected:     fmt.Errorf("got 404 from github for org/repo/branch and imageStreamTag ns/is:tag, this likely means the repo or branch got deleted or we are not allowed to access it"),
+		},
+		{
+			name:           "basic case",
+			delta:          agents.IndexDelta{IndexKey: "ns/is:tag", Added: []*cioperatorapi.ReleaseBuildConfiguration{{}}},
+			registryClient: fakectrlruntimeclient.NewClientBuilder().Build(),
+			ciOperatorConfigGetter: func(identifier string) ([]*cioperatorapi.ReleaseBuildConfiguration, error) {
+				return []*cioperatorapi.ReleaseBuildConfiguration{
+					{Metadata: cioperatorapi.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "branch",
+					}},
+				}, nil
+			},
+			githubClient: fakeGithubClient{getGef: func(string, string, string) (string, error) { return "ref", nil }},
+			prowJobEnqueuer: func(input prowjobreconciler.OrgRepoBranchCommit) {
+				queue = append(queue, input)
+			},
+			expectedQue: []prowjobreconciler.OrgRepoBranchCommit{{Org: "org", Repo: "repo", Branch: "branch", Commit: "ref"}},
+		},
+		{
+			name:  "istag exists",
+			delta: agents.IndexDelta{IndexKey: "ns/is:tag", Added: []*cioperatorapi.ReleaseBuildConfiguration{{}}},
+			registryClient: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
+				&imagev1.ImageStreamTag{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "ns",
+						Name:      "is:tag",
+					},
+				},
+			).Build(),
+			ciOperatorConfigGetter: func(identifier string) ([]*cioperatorapi.ReleaseBuildConfiguration, error) {
+				return []*cioperatorapi.ReleaseBuildConfiguration{
+					{Metadata: cioperatorapi.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "branch",
+					}},
+				}, nil
+			},
+			githubClient: fakeGithubClient{getGef: func(string, string, string) (string, error) { return "ref", nil }},
+			prowJobEnqueuer: func(input prowjobreconciler.OrgRepoBranchCommit) {
+				queue = append(queue, input)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			queue = nil
+			actual := handleCIOpConfigChange(tc.registryClient, tc.ciOperatorConfigGetter, tc.prowJobEnqueuer, tc.githubClient, tc.delta, logrus.WithField("tc.name", tc.name))
+			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("actual import differs from expected: %s", diff)
+			}
+			if actual == nil {
+				if diff := cmp.Diff(tc.expectedQue, queue); diff != "" {
+					t.Errorf("actual import differs from expected: %s", diff)
+				}
 			}
 		})
 	}

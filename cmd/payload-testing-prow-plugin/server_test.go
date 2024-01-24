@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/sirupsen/logrus"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,23 +35,33 @@ func TestSpecsFromComment(t *testing.T) {
 		expected []jobSetSpecification
 	}{
 		{
-			name:     "/payload 4.10 nightly informing",
+			name:     "single job type",
 			comment:  "/payload 4.10 nightly informing",
 			expected: []jobSetSpecification{{ocp: "4.10", releaseType: "nightly", jobs: "informing"}},
 		},
 		{
-			name:     "/payload 4.8 ci all",
+			name:     "all",
 			comment:  "/payload 4.8 ci all",
 			expected: []jobSetSpecification{{ocp: "4.8", releaseType: "ci", jobs: "all"}},
 		},
 		{
-			name:    "/cmd 4.8 ci all",
+			name:    "unknown command",
 			comment: "/cmd 4.8 ci all",
 		},
 		{
 			name:     "multiple match",
 			comment:  "/payload 4.10 nightly informing\n/payload 4.8 ci all",
 			expected: []jobSetSpecification{{ocp: "4.10", releaseType: "nightly", jobs: "informing"}, {ocp: "4.8", releaseType: "ci", jobs: "all"}},
+		},
+		{
+			name:     "includes additional PR",
+			comment:  "/payload-with-prs 4.10 nightly informing openshift/kubernetes#1234",
+			expected: []jobSetSpecification{{ocp: "4.10", releaseType: "nightly", jobs: "informing", additionalPRs: []config.AdditionalPR{"openshift/kubernetes#1234"}}},
+		},
+		{
+			name:     "all includes multiple PRs",
+			comment:  "/payload-with-prs 4.10 ci all openshift/kubernetes#1234 openshift/installer#999",
+			expected: []jobSetSpecification{{ocp: "4.10", releaseType: "ci", jobs: "all", additionalPRs: []config.AdditionalPR{"openshift/kubernetes#1234", "openshift/installer#999"}}},
 		},
 	}
 	for _, tc := range testCases {
@@ -631,6 +642,40 @@ See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
 `,
 		},
 		{
+			name: "payload with prs",
+			s: &server{
+				ghc:        ghc,
+				ctx:        context.TODO(),
+				kubeClient: fakeclient.NewClientBuilder().Build(),
+				namespace:  "ci",
+				jobResolver: newFakeJobResolver(map[string][]config.Job{"4.10": {
+					{Name: "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial"},
+					{Name: "periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi"},
+				}}),
+				testResolver:       newFakeTestResolver(),
+				trustedChecker:     &fakeTrustedChecker{},
+				ciOpConfigResolver: &fakeCIOpConfigResolver{},
+			},
+			ic: github.IssueCommentEvent{
+				GUID: "guid",
+				Repo: github.Repo{Owner: github.User{Login: "openshift"}},
+				Issue: github.Issue{
+					Number:      123,
+					PullRequest: &struct{}{},
+				},
+				Comment: github.IssueComment{
+					Body: "/payload-with-prs 4.10 nightly informing openshift/kubernetes#999",
+				},
+			},
+			expectedMessage: `trigger 2 job(s) of type informing for the nightly release of OCP 4.10
+- periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial
+- periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi
+
+See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
+`,
+			expectedAdditionalPRs: []config.AdditionalPR{"openshift/kubernetes#999"},
+		},
+		{
 			name: "payload-job",
 			s: &server{
 				ghc:                ghc,
@@ -866,7 +911,7 @@ trigger 0 job(s) of type all for the ci release of OCP 4.8
 			if diff := cmp.Diff(tc.expectedMessage, actualMessage); diff != "" {
 				t.Errorf("%s differs from expectedMessage:\n%s", tc.name, diff)
 			}
-			if diff := cmp.Diff(tc.expectedAdditionalPRs, actualAddtionalPRs); diff != "" {
+			if diff := cmp.Diff(tc.expectedAdditionalPRs, actualAddtionalPRs, cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("%s differs from expectedAdditionalPRs:\n%s", tc.name, diff)
 			}
 		})

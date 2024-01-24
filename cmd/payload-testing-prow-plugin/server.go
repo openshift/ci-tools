@@ -182,12 +182,28 @@ const (
 )
 
 func (s *server) handleIssueComment(l *logrus.Entry, ic github.IssueCommentEvent) {
-	if comment := s.handle(l, ic); comment != "" {
-		s.createComment(ic, comment, l)
+	if comment, additionalPRs := s.handle(l, ic); comment != "" {
+		org := ic.Repo.Owner.Login
+		repo := ic.Repo.Name
+		number := ic.Issue.Number
+		user := ic.Comment.User.Name
+		s.createComment(org, repo, number, comment, user, l)
+		originalPRRef := fmt.Sprintf("%s/%s#%d", org, repo, number)
+		for _, pr := range additionalPRs {
+			o, r, n, err := pr.GetOrgRepoAndNumber()
+			if err != nil {
+				l.WithError(err).Errorf("unable to determine PR from string: %s", pr)
+				continue
+			}
+			additionalComment := fmt.Sprintf("This PR was included in a payload test run from %s\n%s", originalPRRef, comment)
+			s.createComment(o, r, n, additionalComment, user, l)
+		}
 	}
 }
 
-func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
+// handle determines what commands, if any, are relevant to this plugin and executes them.
+// it returns a message about what was done including relevant links, and a slice of AdditionalPRs that were included
+func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) (string, []config.AdditionalPR) {
 	start := time.Now()
 	org := ic.Repo.Owner.Login
 	repo := ic.Repo.Name
@@ -205,7 +221,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 	// only reacts on comments on PRs
 	if !ic.Issue.IsPullRequest() {
 		logger.Trace("not a pull request")
-		return ""
+		return "", nil
 	}
 
 	logger.WithField("ic.Comment.Body", ic.Comment.Body).Trace("received a comment")
@@ -225,7 +241,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 
 	abortRequested := ocpPayloadAbortPattern.MatchString(strings.TrimSpace(ic.Comment.Body))
 	if len(specs) == 0 && !abortRequested {
-		return ""
+		return "", nil
 	}
 
 	startTrustedUser := time.Now()
@@ -233,15 +249,15 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 	logger.WithField("duration", time.Since(startTrustedUser)).Debug("trustedUser completed")
 	if err != nil {
 		logger.WithError(err).WithField("user", ic.Comment.User.Login).Error("could not check if the user is trusted")
-		return formatError(fmt.Errorf("could not check if the user %s is trusted for pull request %s/%s#%d: %w", ic.Comment.User.Login, org, repo, prNumber, err))
+		return formatError(fmt.Errorf("could not check if the user %s is trusted for pull request %s/%s#%d: %w", ic.Comment.User.Login, org, repo, prNumber, err)), nil
 	}
 	if !trusted {
 		logger.WithField("user", ic.Comment.User.Login).Error("the user is not trusted")
-		return fmt.Sprintf("user %s is not trusted for pull request %s/%s#%d", ic.Comment.User.Login, org, repo, prNumber)
+		return fmt.Sprintf("user %s is not trusted for pull request %s/%s#%d", ic.Comment.User.Login, org, repo, prNumber), nil
 	}
 
 	if abortRequested {
-		return s.abortAll(logger, ic)
+		return s.abortAll(logger, ic), nil
 	}
 
 	startGetPullRequest := time.Now()
@@ -249,17 +265,17 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 	logger.WithField("duration", time.Since(startGetPullRequest)).Debug("GetPullRequest completed")
 	if err != nil {
 		logger.WithError(err).Error("could not get pull request")
-		return formatError(fmt.Errorf("could not get pull request https://github.com/%s/%s/pull/%d: %w", org, repo, prNumber, err))
+		return formatError(fmt.Errorf("could not get pull request https://github.com/%s/%s/pull/%d: %w", org, repo, prNumber, err)), nil
 	}
 
 	ciOpConfig, err := s.ciOpConfigResolver.Config(&api.Metadata{Org: org, Repo: repo, Branch: pr.Base.Ref})
 	if err != nil {
 		logger.WithError(err).Error("could not resolve ci-operator's config")
-		return formatError(fmt.Errorf("could not resolve ci-operator's config for %s/%s/%s: %w", org, repo, pr.Base.Ref, err))
+		return formatError(fmt.Errorf("could not resolve ci-operator's config for %s/%s/%s: %w", org, repo, pr.Base.Ref, err)), nil
 	}
 	if !api.PromotesOfficialImages(ciOpConfig, api.WithOKD) {
 		logger.Info("the repo does not contribute to the OpenShift official images")
-		return fmt.Sprintf("the repo %s/%s does not contribute to the OpenShift official images", org, repo)
+		return fmt.Sprintf("the repo %s/%s does not contribute to the OpenShift official images", org, repo), nil
 	}
 
 	var messages []string
@@ -273,6 +289,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 		pr:        pr,
 	}
 
+	var includedAdditionalPRs []config.AdditionalPR
 	for _, spec := range specs {
 		specLogger := logger.WithFields(logrus.Fields{
 			"ocp":         spec.ocp,
@@ -294,7 +311,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 				Debug("resolving jobs completed")
 			if err != nil {
 				specLogger.WithError(err).Error("could not resolve jobs")
-				return formatError(fmt.Errorf("could not resolve jobs for %s %s %s: %w", spec.ocp, spec.releaseType, spec.jobs, err))
+				return formatError(fmt.Errorf("could not resolve jobs for %s %s %s: %w", spec.ocp, spec.releaseType, spec.jobs, err)), nil
 			}
 			jobs = resolvedJobs
 		}
@@ -304,15 +321,16 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 		var additionalPRs []prpqv1.PullRequestUnderTest
 		for _, job := range jobs {
 			for _, prRef := range job.WithPRs {
+				includedAdditionalPRs = append(includedAdditionalPRs, prRef)
 				prOrg, prRepo, number, err := prRef.GetOrgRepoAndNumber()
 				if err != nil {
 					specLogger.WithError(err).Errorf("unable to get additional pr info from string: %s", prRef)
-					return formatError(fmt.Errorf("unable to get additional pr info from string: %s: %w", prRef, err))
+					return formatError(fmt.Errorf("unable to get additional pr info from string: %s: %w", prRef, err)), nil
 				}
 				pullRequest, err := s.ghc.GetPullRequest(prOrg, prRepo, number)
 				if err != nil {
 					specLogger.WithError(err).Errorf("unable to get pr from github for: %s", prRef)
-					return formatError(fmt.Errorf("unable to get pr from github for: %s: %w", prRef, err))
+					return formatError(fmt.Errorf("unable to get pr from github for: %s: %w", prRef, err)), nil
 				}
 				additionalPRs = append(additionalPRs, prpqv1.PullRequestUnderTest{
 					Org:     prOrg,
@@ -368,7 +386,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 			run := builder.build(releaseJobSpecs, additionalPRs)
 			if err := s.kubeClient.Create(s.ctx, run); err != nil {
 				specLogger.WithError(err).Error("could not create PullRequestPayloadQualificationRun")
-				return formatError(fmt.Errorf("could not create PullRequestPayloadQualificationRun: %w", err))
+				return formatError(fmt.Errorf("could not create PullRequestPayloadQualificationRun: %w", err)), nil
 			}
 			messages = append(messages, message(spec, jobNames))
 			messages = append(messages, fmt.Sprintf("See details on %s/%s/%s\n", prPayloadTestsUIURL, builder.namespace, run.Name))
@@ -381,7 +399,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) string {
 		}
 	}
 	logger.WithField("duration", time.Since(start)).Debug("handle completed")
-	return strings.Join(messages, "\n")
+	return strings.Join(messages, "\n"), includedAdditionalPRs
 }
 
 func (s *server) abortAll(logger *logrus.Entry, ic github.IssueCommentEvent) string {
@@ -539,8 +557,8 @@ func message(spec jobSetSpecification, tests []string) string {
 	return b.String()
 }
 
-func (s *server) createComment(ic github.IssueCommentEvent, message string, logger *logrus.Entry) {
-	if err := s.ghc.CreateComment(ic.Repo.Owner.Login, ic.Repo.Name, ic.Issue.Number, fmt.Sprintf("@%s: %s", ic.Comment.User.Login, message)); err != nil {
+func (s *server) createComment(org, repo string, number int, message, user string, logger *logrus.Entry) {
+	if err := s.ghc.CreateComment(org, repo, number, fmt.Sprintf("@%s: %s", user, message)); err != nil {
 		logger.WithError(err).Error("failed to create a comment")
 	}
 }

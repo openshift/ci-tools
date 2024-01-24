@@ -203,7 +203,7 @@ func (s *server) handleIssueComment(l *logrus.Entry, ic github.IssueCommentEvent
 		org := ic.Repo.Owner.Login
 		repo := ic.Repo.Name
 		number := ic.Issue.Number
-		user := ic.Comment.User.Name
+		user := ic.Comment.User.Login
 		s.createComment(org, repo, number, comment, user, l)
 		originalPRRef := fmt.Sprintf("%s/%s#%d", org, repo, number)
 		for _, pr := range additionalPRs {

@@ -193,6 +193,7 @@ func (s *server) handleIssueComment(l *logrus.Entry, ic github.IssueCommentEvent
 			o, r, n, err := pr.GetOrgRepoAndNumber()
 			if err != nil {
 				l.WithError(err).Errorf("unable to determine PR from string: %s", pr)
+				continue
 			}
 			additionalComment := fmt.Sprintf("This PR was included in a payload test run from %s\n%s", originalPRRef, comment)
 			s.createComment(o, r, n, additionalComment, user, l)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -180,7 +182,7 @@ func TestCheckAllBuildsSuccessful(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if diff := cmp.Diff(checkAllBuildsSuccessful(tt.builds), tt.expected); diff != "" {
+			if diff := cmp.Diff(checkAllBuildsSuccessful(logrus.NewEntry(logrus.StandardLogger()), tt.builds), tt.expected); diff != "" {
 				t.Fatal(diff)
 			}
 		})
@@ -213,7 +215,7 @@ func TestBuildOwnerReference(t *testing.T) {
 	}
 
 	nn := types.NamespacedName{Name: mabc.Name, Namespace: mabc.Namespace}
-	if err := r.reconcile(context.TODO(), reconcile.Request{NamespacedName: nn}, r.logger); err != nil {
+	if err := r.reconcile(context.TODO(), r.logger, reconcile.Request{NamespacedName: nn}); err != nil {
 		t.Fatalf("Failed to reconcile: %v", err)
 	}
 
@@ -286,23 +288,32 @@ func TestReconcile(t *testing.T) {
 			},
 		}
 	}
-	createInterceptorFactory := func(failOnBuildCreate bool) func(ctx context.Context, client ctrlruntimeclient.WithWatch, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
+	createInterceptor := func(failOnBuildCreate bool) func(ctx context.Context, client ctrlruntimeclient.WithWatch, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
 		return func(ctx context.Context, client ctrlruntimeclient.WithWatch, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
 			if _, ok := obj.(*buildv1.Build); ok && failOnBuildCreate {
 				return errors.New("planned failure")
 			}
-			return nil
+			return client.Create(ctx, obj, opts...)
+		}
+	}
+	updateInterceptor := func(failOnMABCUpdate bool) func(ctx context.Context, client client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+		return func(ctx context.Context, client client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+			if _, ok := obj.(*v1.MultiArchBuildConfig); ok && failOnMABCUpdate {
+				return errors.New("planned failure")
+			}
+			return client.Update(ctx, obj, opts...)
 		}
 	}
 
 	tests := []struct {
 		name              string
 		failOnBuildCreate bool
+		failOnMABCUpdate  bool
 		inputMabc         *v1.MultiArchBuildConfig
 		builds            *buildv1.BuildList
-		expectedMabc      *v1.MultiArchBuildConfig
-		expectedErr       error
 		manifestPusher    manifestpusher.ManifestPusher
+		wantMabc          *v1.MultiArchBuildConfig
+		wantErr           error
 	}{
 		{
 			name: "Early exit on SuccessState",
@@ -320,7 +331,7 @@ func TestReconcile(t *testing.T) {
 					State: v1.SuccessState,
 				},
 			},
-			expectedMabc: &v1.MultiArchBuildConfig{
+			wantMabc: &v1.MultiArchBuildConfig{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-mabc", Namespace: "test-ns"},
 				Spec: v1.MultiArchBuildConfigSpec{
 					BuildSpec: buildv1.BuildConfigSpec{
@@ -348,7 +359,7 @@ func TestReconcile(t *testing.T) {
 					NewBuildBuilder().Name("build1").Arch("arm64").MABCName("test-mabc").Phase(buildv1.BuildPhaseComplete).Build(),
 				},
 			},
-			expectedMabc: &v1.MultiArchBuildConfig{
+			wantMabc: &v1.MultiArchBuildConfig{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-mabc", Namespace: "test-ns"},
 				Spec: v1.MultiArchBuildConfigSpec{
 					BuildSpec: buildv1.BuildConfigSpec{
@@ -372,7 +383,7 @@ func TestReconcile(t *testing.T) {
 					},
 				},
 			},
-			expectedMabc: &v1.MultiArchBuildConfig{
+			wantMabc: &v1.MultiArchBuildConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-mabc",
 					Namespace: "test-ns",
@@ -409,7 +420,7 @@ func TestReconcile(t *testing.T) {
 					},
 				},
 			},
-			expectedMabc: &v1.MultiArchBuildConfig{
+			wantMabc: &v1.MultiArchBuildConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-mabc",
 					Namespace: "test-ns",
@@ -453,7 +464,7 @@ func TestReconcile(t *testing.T) {
 					},
 				},
 			},
-			expectedMabc: &v1.MultiArchBuildConfig{
+			wantMabc: &v1.MultiArchBuildConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-mabc",
 					Namespace: "test-ns",
@@ -477,10 +488,8 @@ func TestReconcile(t *testing.T) {
 							Reason: ImageMirrorSuccessReason,
 						},
 					},
-					State: v1.SuccessState,
 				},
 			},
-			manifestPusher: &mockManifestPusher{},
 		},
 		{
 			name: "Deletion in place do nothing",
@@ -508,7 +517,7 @@ func TestReconcile(t *testing.T) {
 					State: "doesntmatter",
 				},
 			},
-			expectedMabc: &v1.MultiArchBuildConfig{
+			wantMabc: &v1.MultiArchBuildConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "test-mabc",
 					Namespace:         "test-ns",
@@ -532,10 +541,9 @@ func TestReconcile(t *testing.T) {
 					State: "doesntmatter",
 				},
 			},
-			manifestPusher: &mockManifestPusher{},
 		},
 		{
-			name:              "Fails if it isn't able to spawn builds",
+			name:              "Fail if it isn't able to spawn builds",
 			builds:            &buildv1.BuildList{},
 			failOnBuildCreate: true,
 			inputMabc: &v1.MultiArchBuildConfig{
@@ -549,7 +557,7 @@ func TestReconcile(t *testing.T) {
 					},
 				},
 			},
-			expectedMabc: &v1.MultiArchBuildConfig{
+			wantMabc: &v1.MultiArchBuildConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-mabc",
 					Namespace: "test-ns",
@@ -561,7 +569,7 @@ func TestReconcile(t *testing.T) {
 				},
 				Status: v1.MultiArchBuildConfigStatus{State: v1.FailureState},
 			},
-			expectedErr: errors.New("couldn't create builds for architectures: amd64,arm64: couldn't create build test-ns/test-mabc-amd64: planned failure"),
+			wantErr: errors.New("couldn't create builds for architectures: amd64,arm64: couldn't create build test-ns/test-mabc-amd64: planned failure"),
 		},
 		{
 			name: "Push and mirror done, set status to success",
@@ -591,7 +599,7 @@ func TestReconcile(t *testing.T) {
 					},
 				},
 			},
-			expectedMabc: &v1.MultiArchBuildConfig{
+			wantMabc: &v1.MultiArchBuildConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-mabc",
 					Namespace: "test-ns",
@@ -641,7 +649,7 @@ func TestReconcile(t *testing.T) {
 					},
 				},
 			},
-			expectedMabc: &v1.MultiArchBuildConfig{
+			wantMabc: &v1.MultiArchBuildConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-mabc",
 					Namespace: "test-ns",
@@ -663,6 +671,31 @@ func TestReconcile(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Fail to update MABC",
+			inputMabc: &v1.MultiArchBuildConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-mabc",
+					Namespace: "test-ns",
+				},
+				Spec: v1.MultiArchBuildConfigSpec{
+					BuildSpec: buildv1.BuildConfigSpec{
+						CommonSpec: buildv1.CommonSpec{Output: buildv1.BuildOutput{To: &corev1.ObjectReference{Namespace: "test-ns", Name: "test-image"}}},
+					},
+				},
+				Status: v1.MultiArchBuildConfigStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   PushImageManifestDone,
+							Status: metav1.ConditionTrue,
+							Reason: PushManifestSuccessReason,
+						},
+					},
+				},
+			},
+			failOnMABCUpdate: true,
+			wantErr:          errors.New("failed to update MultiArchBuildConfig test-mabc: planned failure"),
+		},
 	}
 
 	for _, tt := range tests {
@@ -670,15 +703,21 @@ func TestReconcile(t *testing.T) {
 			if tt.builds == nil {
 				tt.builds = makeBuilds(tt.inputMabc.Name)
 			}
+
 			client := fake.NewClientBuilder().
 				WithObjects(tt.inputMabc).
 				WithScheme(scheme).
 				WithLists(tt.builds).
-				WithInterceptorFuncs(interceptor.Funcs{Create: createInterceptorFactory(tt.failOnBuildCreate)}).
+				WithInterceptorFuncs(interceptor.Funcs{
+					Create: createInterceptor(tt.failOnBuildCreate),
+					Update: updateInterceptor(tt.failOnMABCUpdate),
+				}).
 				Build()
 
+			logger := logrus.StandardLogger()
+			logger.Out = &strings.Builder{}
 			r := &reconciler{
-				logger:         logrus.NewEntry(logrus.StandardLogger()),
+				logger:         logrus.NewEntry(logger),
 				client:         client,
 				architectures:  []string{"amd64", "arm64"},
 				manifestPusher: tt.manifestPusher,
@@ -686,25 +725,26 @@ func TestReconcile(t *testing.T) {
 				scheme:         scheme,
 			}
 
-			err := r.reconcile(context.Background(), reconcile.Request{NamespacedName: types.NamespacedName{Name: tt.inputMabc.Name, Namespace: tt.inputMabc.Namespace}}, r.logger)
-			if err != nil && tt.expectedErr == nil {
+			_, err := r.Reconcile(context.Background(), reconcile.Request{NamespacedName: types.NamespacedName{Name: tt.inputMabc.Name, Namespace: tt.inputMabc.Namespace}})
+			if err != nil && tt.wantErr == nil {
 				t.Fatalf("want err nil but got: %v", err)
 			}
-			if err == nil && tt.expectedErr != nil {
-				t.Fatalf("want err %v but nil", tt.expectedErr)
+			if err == nil && tt.wantErr != nil {
+				t.Fatalf("want err %v but nil", tt.wantErr)
 			}
-			if err != nil && tt.expectedErr != nil {
-				if diff := cmp.Diff(tt.expectedErr.Error(), err.Error()); diff != "" {
+			if err != nil && tt.wantErr != nil {
+				if diff := cmp.Diff(tt.wantErr.Error(), err.Error()); diff != "" {
 					t.Fatalf("unexpected error: %s", diff)
 				}
+				return
 			}
 
-			actualMabc := &v1.MultiArchBuildConfig{}
-			if err := client.Get(context.Background(), ctrlruntimeclient.ObjectKey{Name: tt.inputMabc.Name, Namespace: tt.inputMabc.Namespace}, actualMabc); err != nil {
+			mabc := &v1.MultiArchBuildConfig{}
+			if err := client.Get(context.Background(), ctrlruntimeclient.ObjectKey{Name: tt.inputMabc.Name, Namespace: tt.inputMabc.Namespace}, mabc); err != nil {
 				t.Fatalf("Failed to retrieve MultiArchBuildConfig: %v", err)
 			}
 
-			if diff := cmp.Diff(tt.expectedMabc, actualMabc,
+			if diff := cmp.Diff(tt.wantMabc, mabc,
 				cmpopts.IgnoreFields(metav1.TypeMeta{}, "APIVersion", "Kind"),
 				cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"),
 				cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime"),

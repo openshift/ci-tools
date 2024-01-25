@@ -43,6 +43,13 @@ const (
 	MirrorImageManifestDone  = "ImageMirrorDone"
 	ImageMirrorSuccessReason = "ImageMirrorSuccess"
 	ImageMirrorErrorReason   = "ImageMirrorError"
+
+	MABCNameLogField          = "multiarchbuildconfig_name"
+	PushTargetImageLogField   = "target_image"
+	MirrorTargetImageLogField = "target_image"
+	MirrorRegistriesLogField  = "registries"
+	BuildNameLogField         = "build_name"
+	BuildNamespaceLogField    = "build_namespace"
 )
 
 func AddToManager(mgr manager.Manager, architectures []string, dockerCfgPath string) error {
@@ -91,7 +98,7 @@ type reconciler struct {
 
 func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	logger := r.logger.WithField("request", req.String())
-	err := r.reconcile(ctx, req, logger)
+	err := r.reconcile(ctx, logger, req)
 	if err != nil {
 		logger.WithError(err).Error("Reconciliation failed")
 	} else {
@@ -100,8 +107,8 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	return reconcile.Result{}, controllerutil.SwallowIfTerminal(err)
 }
 
-func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logger *logrus.Entry) error {
-	logger = logger.WithField("multiarchbuildconfig_name", req.Name)
+func (r *reconciler) reconcile(ctx context.Context, logger *logrus.Entry, req reconcile.Request) error {
+	logger = logger.WithField(MABCNameLogField, req.Name)
 	logger.Info("Starting reconciliation")
 
 	mabc := &v1.MultiArchBuildConfig{}
@@ -113,76 +120,84 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 
 	// Deletion is being processed, do nothing
 	if mabc.ObjectMeta.DeletionTimestamp != nil {
+		logger.Info("Ongoing deletion, skip")
 		return nil
 	}
 
 	if mabc.Status.State == v1.SuccessState || mabc.Status.State == v1.FailureState {
+		logger.Infof("State %q, skip", mabc.Status.State)
 		return nil
 	}
 
-	if err := r.handleMultiArchBuildConfig(ctx, mabc); err != nil {
+	if err := r.handleMultiArchBuildConfig(ctx, logger, mabc); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (r *reconciler) handleMultiArchBuildConfig(ctx context.Context, mabc *v1.MultiArchBuildConfig) error {
+func (r *reconciler) handleMultiArchBuildConfig(ctx context.Context, logger *logrus.Entry, mabc *v1.MultiArchBuildConfig) error {
 	builds, err := r.listBuilds(ctx, mabc.Name)
 	if err != nil {
 		return fmt.Errorf("couldn't list builds: %w", err)
 	}
 
 	if len(r.architectures) != len(builds.Items) {
-		if err := r.createBuilds(ctx, mabc); err != nil {
-			r.logger.Errorf("failed to create builds: %s", err)
+		if createBuildErr := r.createBuilds(ctx, logger, mabc); createBuildErr != nil {
 			mutateFn := func(mabcToMutate *v1.MultiArchBuildConfig) { mabcToMutate.Status.State = v1.FailureState }
-			if err := v1.UpdateMultiArchBuildConfig(ctx, r.logger, r.client, ctrlruntimeclient.ObjectKey{Namespace: mabc.Namespace, Name: mabc.Name}, mutateFn); err != nil {
-				return fmt.Errorf("failed to update the MultiArchBuildConfig %s/%s: %w", mabc.Namespace, mabc.Name, err)
+			if err := v1.UpdateMultiArchBuildConfig(ctx, logger, r.client, ctrlruntimeclient.ObjectKey{Namespace: mabc.Namespace, Name: mabc.Name}, mutateFn); err != nil {
+				return fmt.Errorf("%s: %w", err.Error(), createBuildErr)
 			}
-			return fmt.Errorf("couldn't create builds for architectures: %s: %w", strings.Join(r.architectures, ","), err)
+			return fmt.Errorf("couldn't create builds for architectures: %s: %w", strings.Join(r.architectures, ","), createBuildErr)
 		}
 		return nil
 	}
 
 	if !checkAllBuildsFinished(builds) {
-		r.logger.Info("Waiting for the builds to finish")
+		logger.Info("Waiting for the builds to complete")
 		return nil
 	}
 
-	if !checkAllBuildsSuccessful(builds) {
+	if !checkAllBuildsSuccessful(logger, builds) {
 		mutateFn := func(mabcToMutate *v1.MultiArchBuildConfig) { mabcToMutate.Status.State = v1.FailureState }
-		if err := v1.UpdateMultiArchBuildConfig(ctx, r.logger, r.client, ctrlruntimeclient.ObjectKey{Namespace: mabc.Namespace, Name: mabc.Name}, mutateFn); err != nil {
-			return fmt.Errorf("failed to update the MultiArchBuildConfig %s/%s: %w", mabc.Namespace, mabc.Name, err)
+		if err := v1.UpdateMultiArchBuildConfig(ctx, logger, r.client, ctrlruntimeclient.ObjectKey{Namespace: mabc.Namespace, Name: mabc.Name}, mutateFn); err != nil {
+			return err
 		}
 		return nil
 	}
 
 	targetImageRef := fmt.Sprintf("%s/%s", mabc.Spec.BuildSpec.CommonSpec.Output.To.Namespace, mabc.Spec.BuildSpec.CommonSpec.Output.To.Name)
-	// First condition to be added is PushImageManifestDone
-	if len(mabc.Status.Conditions) == 0 {
-		if err := r.handlePushImageWithManifest(ctx, mabc, targetImageRef, builds); err != nil {
+
+	if !isPushImageManifestDone(mabc) {
+		if err := r.handlePushImageWithManifest(ctx, logger, mabc, targetImageRef, builds); err != nil {
 			return fmt.Errorf("couldn't push the manifest: %w", err)
 		}
 		return nil
 	}
 
-	if isPushImageManifestDone(mabc) {
-		if err := r.handleMirrorImage(ctx, targetImageRef, mabc); err != nil {
+	if !isImageMirrorDone(mabc) {
+		done, err := r.handleMirrorImage(ctx, logger, targetImageRef, mabc)
+		if err != nil {
 			return fmt.Errorf("couldn't mirror the image: %w", err)
+		}
+		// Image mirroring is an optional step, therefore wait for the next reconcile
+		// to set the whole status to success if it has been done successfully,
+		// otherwise go ahead and update the mabc right away
+		if done {
+			return nil
 		}
 	}
 
 	// So far everything went well, the mabc status can be set to success
 	mutateFn := func(mabcToMutate *v1.MultiArchBuildConfig) { mabcToMutate.Status.State = v1.SuccessState }
-	if err := v1.UpdateMultiArchBuildConfig(ctx, r.logger, r.client, ctrlruntimeclient.ObjectKey{Namespace: mabc.Namespace, Name: mabc.Name}, mutateFn); err != nil {
-		return fmt.Errorf("failed to update the MultiArchBuildConfig %s/%s: %w", mabc.Namespace, mabc.Name, err)
+	if err := v1.UpdateMultiArchBuildConfig(ctx, logger, r.client, ctrlruntimeclient.ObjectKey{Namespace: mabc.Namespace, Name: mabc.Name}, mutateFn); err != nil {
+		return err
 	}
 
 	return nil
 }
 
-func (r *reconciler) createBuilds(ctx context.Context, mabc *v1.MultiArchBuildConfig) error {
+func (r *reconciler) createBuilds(ctx context.Context, logger *logrus.Entry, mabc *v1.MultiArchBuildConfig) error {
 	for _, arch := range r.architectures {
 		commonSpec := mabc.Spec.BuildSpec.CommonSpec.DeepCopy()
 		commonSpec.NodeSelector = map[string]string{nodeArchitectureLabel: arch}
@@ -202,11 +217,13 @@ func (r *reconciler) createBuilds(ctx context.Context, mabc *v1.MultiArchBuildCo
 			},
 		}
 
+		logger = logger.WithField(BuildNamespaceLogField, build.Namespace).WithField(BuildNameLogField, build.Name)
+		logger.Info("Creating build")
+
 		if err := ctrlruntimeutil.SetControllerReference(mabc, build, r.scheme); err != nil {
 			return fmt.Errorf("couldn't set controller reference %w", err)
 		}
 
-		r.logger.WithField("build_namespace", build.Namespace).WithField("build_name", build.Name).Info("Creating build")
 		if err := r.client.Create(ctx, build); err != nil {
 			return fmt.Errorf("couldn't create build %s/%s: %w", build.Namespace, build.Name, err)
 		}
@@ -214,7 +231,11 @@ func (r *reconciler) createBuilds(ctx context.Context, mabc *v1.MultiArchBuildCo
 	return nil
 }
 
-func (r *reconciler) handlePushImageWithManifest(ctx context.Context, mabc *v1.MultiArchBuildConfig, targetImageRef string, builds *buildv1.BuildList) error {
+func (r *reconciler) handlePushImageWithManifest(ctx context.Context, logger *logrus.Entry, mabc *v1.MultiArchBuildConfig, targetImageRef string, builds *buildv1.BuildList) error {
+	logger = logger.WithField(PushTargetImageLogField, targetImageRef)
+
+	logger.Info("Pushing manifest")
+
 	mutateFn := func(mabcToMutate *v1.MultiArchBuildConfig) {
 		mabcToMutate.Status.Conditions = append(mabcToMutate.Status.Conditions, metav1.Condition{
 			Type:               PushImageManifestDone,
@@ -225,6 +246,7 @@ func (r *reconciler) handlePushImageWithManifest(ctx context.Context, mabc *v1.M
 	}
 
 	if err := r.manifestPusher.PushImageWithManifest(builds.Items, targetImageRef); err != nil {
+		logger.Errorf("Failed to push manifest: %s", err)
 		mutateFn = func(mabcToMutate *v1.MultiArchBuildConfig) {
 			mabcToMutate.Status.Conditions = append(mabcToMutate.Status.Conditions, metav1.Condition{
 				Type:               PushImageManifestDone,
@@ -235,10 +257,12 @@ func (r *reconciler) handlePushImageWithManifest(ctx context.Context, mabc *v1.M
 			})
 			mabcToMutate.Status.State = v1.FailureState
 		}
+	} else {
+		logger.Info("Manifest pushed")
 	}
 
-	if err := v1.UpdateMultiArchBuildConfig(ctx, r.logger, r.client, ctrlruntimeclient.ObjectKey{Namespace: mabc.Namespace, Name: mabc.Name}, mutateFn); err != nil {
-		return fmt.Errorf("failed to update the MultiArchBuildConfig %s/%s: %w", mabc.Namespace, mabc.Name, err)
+	if err := v1.UpdateMultiArchBuildConfig(ctx, logger, r.client, ctrlruntimeclient.ObjectKey{Namespace: mabc.Namespace, Name: mabc.Name}, mutateFn); err != nil {
+		return err
 	}
 
 	return nil
@@ -246,9 +270,12 @@ func (r *reconciler) handlePushImageWithManifest(ctx context.Context, mabc *v1.M
 
 // handleMirrorImage pushes an image to the locations specified in .spec.external_registries. The image
 // required has to exist on local registry.
-func (r *reconciler) handleMirrorImage(ctx context.Context, targetImageRef string, mabc *v1.MultiArchBuildConfig) error {
+func (r *reconciler) handleMirrorImage(ctx context.Context, logger *logrus.Entry, targetImageRef string, mabc *v1.MultiArchBuildConfig) (bool, error) {
+	logger = logger.WithField(MirrorTargetImageLogField, targetImageRef)
+
 	if len(mabc.Spec.ExternalRegistries) == 0 {
-		return nil
+		logger.Info("No registries set, skip mirroring")
+		return false, nil
 	}
 
 	mutateFn := func(mabcToMutate *v1.MultiArchBuildConfig) {
@@ -260,8 +287,12 @@ func (r *reconciler) handleMirrorImage(ctx context.Context, targetImageRef strin
 		})
 	}
 
+	logger = logger.WithField(MirrorRegistriesLogField, strings.Join(mabc.Spec.ExternalRegistries, ","))
+	logger.Info("Mirroring image")
+
 	imageMirrorArgs := ocImageMirrorArgs(targetImageRef, mabc.Spec.ExternalRegistries)
 	if err := r.imageMirrorer.mirror(imageMirrorArgs); err != nil {
+		logger.Errorf("Failed to mirror image: %s", err)
 		mutateFn = func(mabcToMutate *v1.MultiArchBuildConfig) {
 			mabcToMutate.Status.Conditions = append(mabcToMutate.Status.Conditions, metav1.Condition{
 				Type:               MirrorImageManifestDone,
@@ -272,14 +303,15 @@ func (r *reconciler) handleMirrorImage(ctx context.Context, targetImageRef strin
 			})
 			mabcToMutate.Status.State = v1.FailureState
 		}
+	} else {
+		logger.Info("Image mirrored")
 	}
 
-	r.logger.WithField("registries", strings.Join(mabc.Spec.ExternalRegistries, ",")).Info("Mirroring image")
-	if err := v1.UpdateMultiArchBuildConfig(ctx, r.logger, r.client, ctrlruntimeclient.ObjectKey{Namespace: mabc.Namespace, Name: mabc.Name}, mutateFn); err != nil {
-		return fmt.Errorf("failed to update the MultiArchBuildConfig %s/%s: %w", mabc.Namespace, mabc.Name, err)
+	if err := v1.UpdateMultiArchBuildConfig(ctx, logger, r.client, ctrlruntimeclient.ObjectKey{Namespace: mabc.Namespace, Name: mabc.Name}, mutateFn); err != nil {
+		return false, err
 	}
 
-	return nil
+	return true, nil
 }
 
 func (r *reconciler) listBuilds(ctx context.Context, mabcName string) (*buildv1.BuildList, error) {
@@ -295,9 +327,10 @@ func (r *reconciler) listBuilds(ctx context.Context, mabcName string) (*buildv1.
 	return &builds, nil
 }
 
-func checkAllBuildsSuccessful(builds *buildv1.BuildList) bool {
+func checkAllBuildsSuccessful(logger *logrus.Entry, builds *buildv1.BuildList) bool {
 	for _, build := range builds.Items {
 		if build.Status.Phase != buildv1.BuildPhaseComplete {
+			logger.Warnf("Build %s didn't complete successfully", build.Name)
 			return false
 		}
 	}
@@ -317,6 +350,19 @@ func checkAllBuildsFinished(builds *buildv1.BuildList) bool {
 }
 
 func isPushImageManifestDone(mabc *v1.MultiArchBuildConfig) bool {
-	c := mabc.Status.Conditions[len(mabc.Status.Conditions)-1]
-	return c.Type == PushImageManifestDone && c.Reason == PushManifestSuccessReason && c.Status == metav1.ConditionTrue
+	return getCondition(mabc, PushImageManifestDone, PushManifestSuccessReason, metav1.ConditionTrue) != nil
+}
+
+func isImageMirrorDone(mabc *v1.MultiArchBuildConfig) bool {
+	return getCondition(mabc, MirrorImageManifestDone, ImageMirrorSuccessReason, metav1.ConditionTrue) != nil
+}
+
+func getCondition(mabc *v1.MultiArchBuildConfig, condType, reason string, status metav1.ConditionStatus) *metav1.Condition {
+	for i := range mabc.Status.Conditions {
+		c := &mabc.Status.Conditions[i]
+		if c.Type == condType && c.Reason == reason && c.Status == status {
+			return c
+		}
+	}
+	return nil
 }

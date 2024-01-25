@@ -13,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/apimachinery/pkg/util/sets"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/github"
@@ -37,6 +38,7 @@ type githubClient interface {
 
 var (
 	ocpPayloadTestsPattern              = regexp.MustCompile(`(?mi)^/payload\s+(?P<ocp>4\.\d+)\s+(?P<release>\w+)\s+(?P<jobs>\w+)\s*$`)
+	ocpPayloadWithPRsTestsPattern       = regexp.MustCompile(`(?mi)^/payload-with-prs\s+(?P<ocp>4\.\d+)\s+(?P<release>\w+)\s+(?P<jobs>\w+)\s+(?P<prs>(?:[-\w./#]+\s*)+)\s*$`)
 	ocpPayloadJobTestsPattern           = regexp.MustCompile(`(?mi)^/payload-job\s+((?:[-\w.]+\s*?)+)\s*$`)
 	ocpPayloadJobTestsWithPRsPattern    = regexp.MustCompile(`(?mi)^/payload-job-with-prs\s+(?P<job>[-\w.]+)\s+(?P<prs>(?:[-\w./#]+\s*)+)\s*$`)
 	ocpPayloadAggregatedJobTestsPattern = regexp.MustCompile(`(?mi)^/payload-aggregate\s+(?P<job>[-\w.]+)\s+(?P<aggregate>\d+)\s*$`)
@@ -99,9 +101,10 @@ type server struct {
 }
 
 type jobSetSpecification struct {
-	ocp         string
-	releaseType api.ReleaseStream
-	jobs        config.JobType
+	ocp           string
+	releaseType   api.ReleaseStream
+	jobs          config.JobType
+	additionalPRs []config.AdditionalPR
 }
 
 type jobResolver interface {
@@ -113,20 +116,34 @@ type testResolver interface {
 }
 
 func specsFromComment(comment string) []jobSetSpecification {
-	matches := ocpPayloadTestsPattern.FindAllStringSubmatch(comment, -1)
+	pattern := ocpPayloadTestsPattern
+	matches := pattern.FindAllStringSubmatch(comment, -1)
 	if len(matches) == 0 {
-		return nil
+		pattern = ocpPayloadWithPRsTestsPattern
+		matches = pattern.FindAllStringSubmatch(comment, -1)
+		if len(matches) == 0 {
+			return nil
+		}
 	}
+
 	var specs []jobSetSpecification
-	ocpIdx := ocpPayloadTestsPattern.SubexpIndex("ocp")
-	releaseIdx := ocpPayloadTestsPattern.SubexpIndex("release")
-	jobsIdx := ocpPayloadTestsPattern.SubexpIndex("jobs")
+	ocpIdx := pattern.SubexpIndex("ocp")
+	releaseIdx := pattern.SubexpIndex("release")
+	jobsIdx := pattern.SubexpIndex("jobs")
+	prsIdx := pattern.SubexpIndex("prs")
 
 	for i := range matches {
+		var additionalPRs []config.AdditionalPR
+		if prsIdx >= 0 {
+			for _, pr := range strings.Fields(matches[i][prsIdx]) {
+				additionalPRs = append(additionalPRs, config.AdditionalPR(pr))
+			}
+		}
 		specs = append(specs, jobSetSpecification{
-			ocp:         matches[i][ocpIdx],
-			releaseType: api.ReleaseStream(matches[i][releaseIdx]),
-			jobs:        config.JobType(matches[i][jobsIdx]),
+			ocp:           matches[i][ocpIdx],
+			releaseType:   api.ReleaseStream(matches[i][releaseIdx]),
+			jobs:          config.JobType(matches[i][jobsIdx]),
+			additionalPRs: additionalPRs,
 		})
 	}
 	return specs
@@ -186,7 +203,7 @@ func (s *server) handleIssueComment(l *logrus.Entry, ic github.IssueCommentEvent
 		org := ic.Repo.Owner.Login
 		repo := ic.Repo.Name
 		number := ic.Issue.Number
-		user := ic.Comment.User.Name
+		user := ic.Comment.User.Login
 		s.createComment(org, repo, number, comment, user, l)
 		originalPRRef := fmt.Sprintf("%s/%s#%d", org, repo, number)
 		for _, pr := range additionalPRs {
@@ -289,12 +306,13 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) (string, [
 		pr:        pr,
 	}
 
-	var includedAdditionalPRs []config.AdditionalPR
+	includedAdditionalPRs := sets.New[config.AdditionalPR]()
 	for _, spec := range specs {
 		specLogger := logger.WithFields(logrus.Fields{
-			"ocp":         spec.ocp,
-			"releaseType": spec.releaseType,
-			"jobs":        spec.jobs,
+			"ocp":           spec.ocp,
+			"releaseType":   spec.releaseType,
+			"jobs":          spec.jobs,
+			"additionalPRs": spec.additionalPRs,
 		})
 		builder.spec = spec
 		var jobNames []string
@@ -313,7 +331,10 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) (string, [
 				specLogger.WithError(err).Error("could not resolve jobs")
 				return formatError(fmt.Errorf("could not resolve jobs for %s %s %s: %w", spec.ocp, spec.releaseType, spec.jobs, err)), nil
 			}
-			jobs = resolvedJobs
+			for _, job := range resolvedJobs {
+				job.WithPRs = spec.additionalPRs
+				jobs = append(jobs, job)
+			}
 		}
 
 		specLogger.Debug("resolving tests ...")
@@ -321,7 +342,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) (string, [
 		var additionalPRs []prpqv1.PullRequestUnderTest
 		for _, job := range jobs {
 			for _, prRef := range job.WithPRs {
-				includedAdditionalPRs = append(includedAdditionalPRs, prRef)
+				includedAdditionalPRs.Insert(prRef)
 				prOrg, prRepo, number, err := prRef.GetOrgRepoAndNumber()
 				if err != nil {
 					specLogger.WithError(err).Errorf("unable to get additional pr info from string: %s", prRef)
@@ -399,7 +420,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) (string, [
 		}
 	}
 	logger.WithField("duration", time.Since(start)).Debug("handle completed")
-	return strings.Join(messages, "\n"), includedAdditionalPRs
+	return strings.Join(messages, "\n"), includedAdditionalPRs.UnsortedList()
 }
 
 func (s *server) abortAll(logger *logrus.Entry, ic github.IssueCommentEvent) string {

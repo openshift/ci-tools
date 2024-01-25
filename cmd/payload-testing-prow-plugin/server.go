@@ -350,32 +350,9 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) (string, [
 
 		specLogger.Debug("resolving tests ...")
 		startResolveTests := time.Now()
-		var additionalPRs []prpqv1.PullRequestUnderTest
 		for _, job := range jobs {
 			for _, prRef := range job.WithPRs {
 				includedAdditionalPRs.Insert(prRef)
-				prOrg, prRepo, number, err := prRef.GetOrgRepoAndNumber()
-				if err != nil {
-					specLogger.WithError(err).Errorf("unable to get additional pr info from string: %s", prRef)
-					return formatError(fmt.Errorf("unable to get additional pr info from string: %s: %w", prRef, err)), nil
-				}
-				pullRequest, err := s.ghc.GetPullRequest(prOrg, prRepo, number)
-				if err != nil {
-					specLogger.WithError(err).Errorf("unable to get pr from github for: %s", prRef)
-					return formatError(fmt.Errorf("unable to get pr from github for: %s: %w", prRef, err)), nil
-				}
-				additionalPRs = append(additionalPRs, prpqv1.PullRequestUnderTest{
-					Org:     prOrg,
-					Repo:    prRepo,
-					BaseRef: pullRequest.Base.Ref,
-					BaseSHA: pullRequest.Base.SHA,
-					PullRequest: prpqv1.PullRequest{
-						Number: number,
-						Author: pullRequest.User.Login,
-						SHA:    pullRequest.Head.SHA,
-						Title:  pullRequest.Title,
-					},
-				})
 			}
 			if job.Test != "" {
 				jobNames = append(jobNames, job.Name)
@@ -408,6 +385,32 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) (string, [
 					AggregatedCount: job.AggregatedCount,
 				})
 			}
+		}
+
+		var additionalPRs []prpqv1.PullRequestUnderTest
+		for prRef := range includedAdditionalPRs {
+			prOrg, prRepo, number, err := prRef.GetOrgRepoAndNumber()
+			if err != nil {
+				specLogger.WithError(err).Errorf("unable to get additional pr info from string: %s", prRef)
+				return formatError(fmt.Errorf("unable to get additional pr info from string: %s: %w", prRef, err)), nil
+			}
+			pullRequest, err := s.ghc.GetPullRequest(prOrg, prRepo, number)
+			if err != nil {
+				specLogger.WithError(err).Errorf("unable to get pr from github for: %s", prRef)
+				return formatError(fmt.Errorf("unable to get pr from github for: %s: %w", prRef, err)), nil
+			}
+			additionalPRs = append(additionalPRs, prpqv1.PullRequestUnderTest{
+				Org:     prOrg,
+				Repo:    prRepo,
+				BaseRef: pullRequest.Base.Ref,
+				BaseSHA: pullRequest.Base.SHA,
+				PullRequest: prpqv1.PullRequest{
+					Number: number,
+					Author: pullRequest.User.Login,
+					SHA:    pullRequest.Head.SHA,
+					Title:  pullRequest.Title,
+				},
+			})
 		}
 
 		specLogger.WithField("duration", time.Since(startResolveTests)).WithField("len(jobNames)", len(jobNames)).

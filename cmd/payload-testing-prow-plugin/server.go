@@ -46,7 +46,6 @@ var (
 )
 
 func helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, error) {
-	// TODO(DPTP-2540): Better descriptions, better help
 	pluginHelp := &pluginhelp.PluginHelp{
 		Description: `The payload-testing plugin triggers a run of specified release qualification jobs against PR code`,
 	}
@@ -57,6 +56,18 @@ func helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, error) {
 		Description: "The payload-testing plugin triggers a run of specified release qualification jobs against PR code",
 		WhoCanUse:   "Members of the trusted organization for the repo.",
 		Examples:    []string{"/payload 4.10 nightly informing", "/payload 4.8 ci all"},
+	})
+	pluginHelp.AddCommand(pluginhelp.Command{
+		Usage:       "/payload-job",
+		Description: "The payload-testing plugin triggers a run of specified job or jobs delimited by spaces",
+		WhoCanUse:   "Members of the trusted organization for the repo.",
+		Examples:    []string{"/payload-job periodic-release-4.14-aws", "/payload-job periodic-release-4.14-aws periodic-ci-openshift-release-master-ci-4.13-e2e-aws-sdn-serial"},
+	})
+	pluginHelp.AddCommand(pluginhelp.Command{
+		Usage:       "/payload-aggregate",
+		Description: "The payload-testing plugin triggers the specified number of runs of the specified job. A special \"aggregator\" job is triggered to aggregate the results",
+		WhoCanUse:   "Members of the trusted organization for the repo.",
+		Examples:    []string{"/payload-aggregate periodic-release-4.14-aws 10"},
 	})
 	pluginHelp.AddCommand(pluginhelp.Command{
 		Usage:       "/payload-job-with-prs",

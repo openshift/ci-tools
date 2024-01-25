@@ -58,6 +58,12 @@ func helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, error) {
 		Examples:    []string{"/payload 4.10 nightly informing", "/payload 4.8 ci all"},
 	})
 	pluginHelp.AddCommand(pluginhelp.Command{
+		Usage:       "/payload-with-prs",
+		Description: "The payload-testing plugin triggers a run of specified release qualification jobs against a payload also including the other mentioned PRs",
+		WhoCanUse:   "Members of the trusted organization for the repo.",
+		Examples:    []string{"/payload 4.10 nightly informing openshift/kubernetes#1234 openshift/installer#999", "/payload 4.8 ci all openshift/kubernetes#1234"},
+	})
+	pluginHelp.AddCommand(pluginhelp.Command{
 		Usage:       "/payload-job",
 		Description: "The payload-testing plugin triggers a run of specified job or jobs delimited by spaces",
 		WhoCanUse:   "Members of the trusted organization for the repo.",

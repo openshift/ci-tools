@@ -426,6 +426,21 @@ func TestHandleCIOpConfigChange(t *testing.T) {
 			expected:     fmt.Errorf("got 404 from github for org/repo/branch and imageStreamTag ns/is:tag, this likely means the repo or branch got deleted or we are not allowed to access it"),
 		},
 		{
+			name:           "ignore istags from ns/build-cache",
+			delta:          agents.IndexDelta{IndexKey: "build-cache/is:tag", Added: []*cioperatorapi.ReleaseBuildConfiguration{{}}},
+			registryClient: fakectrlruntimeclient.NewClientBuilder().Build(),
+			ciOperatorConfigGetter: func(identifier string) ([]*cioperatorapi.ReleaseBuildConfiguration, error) {
+				return []*cioperatorapi.ReleaseBuildConfiguration{
+					{Metadata: cioperatorapi.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "branch",
+					}},
+				}, nil
+			},
+			githubClient: fakeGithubClient{getGef: func(string, string, string) (string, error) { return "", github.GetRefTooManyResultsError{} }},
+		},
+		{
 			name:           "basic case",
 			delta:          agents.IndexDelta{IndexKey: "ns/is:tag", Added: []*cioperatorapi.ReleaseBuildConfiguration{{}}},
 			registryClient: fakectrlruntimeclient.NewClientBuilder().Build(),

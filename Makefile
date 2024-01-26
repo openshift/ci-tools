@@ -435,7 +435,9 @@ $(TMPDIR)/.promoted-image-governor-kubeconfig-dir:
 	rm -rf $(TMPDIR)/.promoted-image-governor-kubeconfig-dir
 	mkdir -p $(TMPDIR)/.promoted-image-governor-kubeconfig-dir
 	oc --context app.ci --namespace ci extract secret/promoted-image-governor --confirm --to=$(TMPDIR)/.promoted-image-governor-kubeconfig-dir
-	oc --context app.ci --namespace ci serviceaccounts create-kubeconfig promoted-image-governor | sed 's/promoted-image-governor/app.ci/g' > $(TMPDIR)/.promoted-image-governor-kubeconfig-dir/sa.promoted-image-governor.app.ci.config
+	mkdir -p $(TMPDIR)/.config-updater-kubeconfig-dir
+	oc --context app.ci extract secret/config-updater -n ci --to=$(TMPDIR)/.config-updater-kubeconfig-dir --confirm
+	images/ci-secret-generator/oc_sa_create_kubeconfig.sh $(TMPDIR)/.config-updater-kubeconfig-dir app.ci promoted-image-governor ci > $(TMPDIR)/.promoted-image-governor-kubeconfig-dir/sa.promoted-image-governor.app.ci.config
 
 release_folder := $$PWD/../release
 
@@ -445,7 +447,7 @@ promoted-image-governor: $(TMPDIR)/.promoted-image-governor-kubeconfig-dir
 
 explain: $(TMPDIR)/.promoted-image-governor-kubeconfig-dir
 	@[[ $$istag ]] || (echo "ERROR: \$$istag must be set"; exit 1)
-	@go run  ./cmd/promoted-image-governor --kubeconfig-dir=$(TMPDIR)/.promoted-image-governor-kubeconfig-dir --ci-operator-config-path=$(release_folder)/ci-operator/config --release-controller-mirror-config-dir=$(release_folder)/core-services/release-controller/_releases --explain $(istag) --dry-run=true --log-level=fatal
+	@go run  ./cmd/promoted-image-governor --kubeconfig-dir=$(TMPDIR)/.promoted-image-governor-kubeconfig-dir --kubeconfig-suffix=config --ci-operator-config-path=$(release_folder)/ci-operator/config --release-controller-mirror-config-dir=$(release_folder)/core-services/release-controller/_releases --explain $(istag) --dry-run=true --log-level=fatal
 .PHONY: explain
 
 

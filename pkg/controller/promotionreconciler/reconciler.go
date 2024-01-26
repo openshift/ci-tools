@@ -306,6 +306,10 @@ func handleCIOpConfigChange(registryClient ctrlruntimeclient.Client,
 		return fmt.Errorf("got an index delta event with a key that is not a valid namespace/name identifier: %s", delta.IndexKey)
 	}
 	namespace, name := slashSplit[0], slashSplit[1]
+	if namespace == "build-cache" {
+		log.Debug("Ignore tags from namespace/build-cache")
+		return nil
+	}
 	var ist imagev1.ImageStreamTag
 	if err := registryClient.Get(context.Background(), types.NamespacedName{Namespace: namespace, Name: name}, &ist); err != nil {
 		if !apierrors.IsNotFound(err) {

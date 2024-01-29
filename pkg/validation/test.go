@@ -152,6 +152,10 @@ func (v *Validator) validateTestStepConfiguration(
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `commands`, `steps`, and `literal_steps` are mutually exclusive", fieldRootN))
 		}
 
+		if test.Presubmit && !test.IsPeriodic() {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `presubmit` can be used only for periodics", fieldRootN))
+		}
+
 		if test.Postsubmit && test.Cron != nil {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `cron` and `postsubmit` are mututally exclusive", fieldRootN))
 		}

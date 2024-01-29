@@ -767,6 +767,10 @@ type TestStepConfiguration struct {
 	// create a periodic job instead of a presubmit
 	Cron *string `json:"cron,omitempty"`
 
+	// Presubmit configures prowgen to generate a presubmit job in additional to the periodic job.
+	// It can be used only when the test itself is a periodic job.
+	Presubmit bool `json:"presubmit,omitempty"`
+
 	// Interval is how frequently the test should be run based
 	// on the last time the test ran. Setting this field will
 	// create a periodic job instead of a presubmit

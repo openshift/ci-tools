@@ -87,12 +87,12 @@ func TestJobNamesFromComment(t *testing.T) {
 			comment: "/payload-job",
 		},
 		{
-			name:     "/payload-job periodic-ci-openshift-release-some-job",
+			name:     "single job",
 			comment:  "/payload-job periodic-ci-openshift-release-some-job",
 			expected: []config.Job{{Name: "periodic-ci-openshift-release-some-job"}},
 		},
 		{
-			name:     "multiple job",
+			name:     "multiple jobs",
 			comment:  "/payload-job periodic-ci-openshift-release-some-job periodic-ci-openshift-release-another-job",
 			expected: []config.Job{{Name: "periodic-ci-openshift-release-some-job"}, {Name: "periodic-ci-openshift-release-another-job"}},
 		},
@@ -115,6 +115,16 @@ func TestJobNamesFromComment(t *testing.T) {
 			name:     "/payload-aggregate periodic-ci-openshift-release-some-job   10  ",
 			comment:  "/payload-aggregate periodic-ci-openshift-release-some-job   10  ",
 			expected: []config.Job{{Name: "periodic-ci-openshift-release-some-job", AggregatedCount: 10}},
+		},
+		{
+			name:     "payload aggregate with additional PR",
+			comment:  "/payload-aggregate-with-prs periodic-ci-openshift-release-some-job 10 openshift/installer#123",
+			expected: []config.Job{{Name: "periodic-ci-openshift-release-some-job", AggregatedCount: 10, WithPRs: []config.AdditionalPR{"openshift/installer#123"}}},
+		},
+		{
+			name:     "payload aggregate with multiple additional PRs",
+			comment:  "/payload-aggregate-with-prs periodic-ci-openshift-release-some-job 10 openshift/installer#123 openshift/kubernetes#1234",
+			expected: []config.Job{{Name: "periodic-ci-openshift-release-some-job", AggregatedCount: 10, WithPRs: []config.AdditionalPR{"openshift/installer#123", "openshift/kubernetes#1234"}}},
 		},
 	}
 	for _, tc := range testCases {
@@ -697,7 +707,7 @@ See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
 					Body: "/payload-job periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial periodic-ci-openshift-release-another-job",
 				},
 			},
-			expectedMessage: `trigger 1 job(s) for the /payload-(job|aggregate|job-with-prs) command
+			expectedMessage: `trigger 1 job(s) for the /payload-(with-prs|job|aggregate|job-with-prs|aggregate-with-prs) command
 - periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial
 
 See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
@@ -726,12 +736,41 @@ See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
 /payload-aggregate periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi 10`,
 				},
 			},
-			expectedMessage: `trigger 2 job(s) for the /payload-(job|aggregate|job-with-prs) command
+			expectedMessage: `trigger 2 job(s) for the /payload-(with-prs|job|aggregate|job-with-prs|aggregate-with-prs) command
 - periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial
 - periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi
 
 See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
 `,
+		},
+		{
+			name: "payload-aggregate-with-prs",
+			s: &server{
+				ghc:                ghc,
+				ctx:                context.TODO(),
+				kubeClient:         fakeclient.NewClientBuilder().Build(),
+				namespace:          "ci",
+				testResolver:       newFakeTestResolver(),
+				trustedChecker:     &fakeTrustedChecker{},
+				ciOpConfigResolver: &fakeCIOpConfigResolver{},
+			},
+			ic: github.IssueCommentEvent{
+				GUID: "guid",
+				Repo: github.Repo{Owner: github.User{Login: "openshift"}},
+				Issue: github.Issue{
+					Number:      123,
+					PullRequest: &struct{}{},
+				},
+				Comment: github.IssueComment{
+					Body: `/payload-aggregate-with-prs periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial 10 openshift/kubernetes#999`,
+				},
+			},
+			expectedMessage: `trigger 1 job(s) for the /payload-(with-prs|job|aggregate|job-with-prs|aggregate-with-prs) command
+- periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial
+
+See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
+`,
+			expectedAdditionalPRs: []config.AdditionalPR{"openshift/kubernetes#999"},
 		},
 		{
 			name: "payload-job-with-prs",
@@ -755,7 +794,7 @@ See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
 					Body: "/payload-job-with-prs periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial openshift/kubernetes#999",
 				},
 			},
-			expectedMessage: `trigger 1 job(s) for the /payload-(job|aggregate|job-with-prs) command
+			expectedMessage: `trigger 1 job(s) for the /payload-(with-prs|job|aggregate|job-with-prs|aggregate-with-prs) command
 - periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial
 
 See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0

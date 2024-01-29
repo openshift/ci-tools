@@ -37,12 +37,13 @@ type githubClient interface {
 }
 
 var (
-	ocpPayloadTestsPattern              = regexp.MustCompile(`(?mi)^/payload\s+(?P<ocp>4\.\d+)\s+(?P<release>\w+)\s+(?P<jobs>\w+)\s*$`)
-	ocpPayloadWithPRsTestsPattern       = regexp.MustCompile(`(?mi)^/payload-with-prs\s+(?P<ocp>4\.\d+)\s+(?P<release>\w+)\s+(?P<jobs>\w+)\s+(?P<prs>(?:[-\w./#]+\s*)+)\s*$`)
-	ocpPayloadJobTestsPattern           = regexp.MustCompile(`(?mi)^/payload-job\s+((?:[-\w.]+\s*?)+)\s*$`)
-	ocpPayloadJobTestsWithPRsPattern    = regexp.MustCompile(`(?mi)^/payload-job-with-prs\s+(?P<job>[-\w.]+)\s+(?P<prs>(?:[-\w./#]+\s*)+)\s*$`)
-	ocpPayloadAggregatedJobTestsPattern = regexp.MustCompile(`(?mi)^/payload-aggregate\s+(?P<job>[-\w.]+)\s+(?P<aggregate>\d+)\s*$`)
-	ocpPayloadAbortPattern              = regexp.MustCompile(`(?mi)^/payload-abort$`)
+	ocpPayloadTestsPattern                     = regexp.MustCompile(`(?mi)^/payload\s+(?P<ocp>4\.\d+)\s+(?P<release>\w+)\s+(?P<jobs>\w+)\s*$`)
+	ocpPayloadWithPRsTestsPattern              = regexp.MustCompile(`(?mi)^/payload-with-prs\s+(?P<ocp>4\.\d+)\s+(?P<release>\w+)\s+(?P<jobs>\w+)\s+(?P<prs>(?:[-\w./#]+\s*)+)\s*$`)
+	ocpPayloadJobTestsPattern                  = regexp.MustCompile(`(?mi)^/payload-job\s+((?:[-\w.]+\s*?)+)\s*$`)
+	ocpPayloadJobTestsWithPRsPattern           = regexp.MustCompile(`(?mi)^/payload-job-with-prs\s+(?P<job>[-\w.]+)\s+(?P<prs>(?:[-\w./#]+\s*)+)\s*$`)
+	ocpPayloadAggregatedJobTestsPattern        = regexp.MustCompile(`(?mi)^/payload-aggregate\s+(?P<job>[-\w.]+)\s+(?P<aggregate>\d+)\s*$`)
+	ocpPayloadAggregatedWithPRsJobTestsPattern = regexp.MustCompile(`(?mi)^/payload-aggregate-with-prs\s+(?P<job>[-\w.]+)\s+(?P<aggregate>\d+)\s+(?P<prs>(?:[-\w./#]+\s*)+)\s*$`)
+	ocpPayloadAbortPattern                     = regexp.MustCompile(`(?mi)^/payload-abort$`)
 )
 
 func helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, error) {
@@ -70,16 +71,22 @@ func helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, error) {
 		Examples:    []string{"/payload-job periodic-release-4.14-aws", "/payload-job periodic-release-4.14-aws periodic-ci-openshift-release-master-ci-4.13-e2e-aws-sdn-serial"},
 	})
 	pluginHelp.AddCommand(pluginhelp.Command{
+		Usage:       "/payload-job-with-prs",
+		Description: "The payload-testing plugin triggers a run of specified job including the other mentioned PRs in the built payload",
+		WhoCanUse:   "Members of the trusted organization for the repo.",
+		Examples:    []string{"/payload-job-with-prs periodic-release-4.14-aws openshift/kubernetes#1234 openshift/installer#999"},
+	})
+	pluginHelp.AddCommand(pluginhelp.Command{
 		Usage:       "/payload-aggregate",
 		Description: "The payload-testing plugin triggers the specified number of runs of the specified job. A special \"aggregator\" job is triggered to aggregate the results",
 		WhoCanUse:   "Members of the trusted organization for the repo.",
 		Examples:    []string{"/payload-aggregate periodic-release-4.14-aws 10"},
 	})
 	pluginHelp.AddCommand(pluginhelp.Command{
-		Usage:       "/payload-job-with-prs",
-		Description: "The payload-testing plugin triggers a run of specified job including the other mentioned PRs in the built payload",
+		Usage:       "/payload-aggregate-with-prs",
+		Description: "The payload-testing plugin triggers the specified number of runs of the specified job against a payload including the additionally supplied PRs. A special \"aggregator\" job is triggered to aggregate the results",
 		WhoCanUse:   "Members of the trusted organization for the repo.",
-		Examples:    []string{"/payload-job-with-prs periodic-release-4.14-aws openshift/kubernetes#1234 openshift/installer#999"},
+		Examples:    []string{"/payload-aggregate-with-prs periodic-release-4.14-aws 10 openshift/installer#999", "/payload-aggregate-with-prs periodic-release-4.14-aws 5 openshift/kubernetes#123 openshift/installer#999"},
 	})
 	pluginHelp.AddCommand(pluginhelp.Command{
 		Usage:       "/payload-abort",
@@ -180,34 +187,42 @@ func jobsFromComment(comment string) []config.Job {
 			})
 		}
 	}
-	for _, match := range ocpPayloadAggregatedJobTestsPattern.FindAllStringSubmatch(comment, -1) {
-		jobIndex := ocpPayloadAggregatedJobTestsPattern.SubexpIndex("job")
-		aggregateIndex := ocpPayloadAggregatedJobTestsPattern.SubexpIndex("aggregate")
-		aggregatedCount, err := strconv.Atoi(match[aggregateIndex])
-		if err != nil {
-			// This should never happen
-			logrus.WithField("match", match).WithField("comment", comment).WithError(err).Error("failed to parse the aggregated job")
-			continue
-		}
-		ret = append(ret, config.Job{
-			Name:            match[jobIndex],
-			AggregatedCount: aggregatedCount,
-		})
 
-	}
-	for _, match := range ocpPayloadJobTestsWithPRsPattern.FindAllStringSubmatch(comment, -1) {
-		jobIndex := ocpPayloadJobTestsWithPRsPattern.SubexpIndex("job")
-		prsIndex := ocpPayloadJobTestsWithPRsPattern.SubexpIndex("prs")
-		rawPRs := strings.Fields(match[prsIndex])
-		var additionalPRs []config.AdditionalPR
-		for _, pr := range rawPRs {
-			additionalPRs = append(additionalPRs, config.AdditionalPR(pr))
+	jobsForPattern := func(pattern *regexp.Regexp, comment string) []config.Job {
+		var jobs []config.Job
+		for _, match := range pattern.FindAllStringSubmatch(comment, -1) {
+			jobIndex := pattern.SubexpIndex("job")
+			aggregateIndex := pattern.SubexpIndex("aggregate")
+			var aggregatedCount int
+			if aggregateIndex >= 0 {
+				var err error
+				aggregatedCount, err = strconv.Atoi(match[aggregateIndex])
+				if err != nil {
+					// This should never happen
+					logrus.WithField("match", match).WithField("comment", comment).WithError(err).Error("failed to parse the aggregated job")
+					continue
+				}
+			}
+			prsIndex := pattern.SubexpIndex("prs")
+			var additionalPRs []config.AdditionalPR
+			if prsIndex >= 0 {
+				rawPRs := strings.Fields(match[prsIndex])
+				for _, pr := range rawPRs {
+					additionalPRs = append(additionalPRs, config.AdditionalPR(pr))
+				}
+			}
+			jobs = append(jobs, config.Job{
+				Name:            match[jobIndex],
+				AggregatedCount: aggregatedCount,
+				WithPRs:         additionalPRs,
+			})
 		}
-		ret = append(ret, config.Job{
-			Name:    match[jobIndex],
-			WithPRs: additionalPRs,
-		})
+		return jobs
 	}
+
+	ret = append(ret, jobsForPattern(ocpPayloadAggregatedJobTestsPattern, comment)...)
+	ret = append(ret, jobsForPattern(ocpPayloadJobTestsWithPRsPattern, comment)...)
+	ret = append(ret, jobsForPattern(ocpPayloadAggregatedWithPRsJobTestsPattern, comment)...)
 	return ret
 }
 
@@ -588,7 +603,7 @@ func (b *prpqrBuilder) build(releaseJobSpecs []prpqv1.ReleaseJobSpec, additional
 func message(spec jobSetSpecification, tests []string) string {
 	var b strings.Builder
 	if spec.ocp == "" {
-		b.WriteString(fmt.Sprintf("trigger %d job(s) for the /payload-(job|aggregate|job-with-prs) command\n", len(tests)))
+		b.WriteString(fmt.Sprintf("trigger %d job(s) for the /payload-(with-prs|job|aggregate|job-with-prs|aggregate-with-prs) command\n", len(tests)))
 	} else {
 		b.WriteString(fmt.Sprintf("trigger %d job(s) of type %s for the %s release of OCP %s\n", len(tests), spec.jobs, spec.releaseType, spec.ocp))
 	}

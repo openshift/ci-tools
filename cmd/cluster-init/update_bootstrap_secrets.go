@@ -47,8 +47,8 @@ func updateCiSecretBootstrapConfig(o options, c *secretbootstrap.Config) error {
 	for _, groupName := range []string{buildUFarm, "non_app_ci"} {
 		c.ClusterGroups[groupName] = sets.List(sets.New[string](c.ClusterGroups[groupName]...).Insert(o.clusterName))
 	}
-	// build02 and build02 are not OSD clusters and thus they should never be in the group
-	if o.clusterName != string(api.ClusterBuild01) && o.clusterName != string(api.ClusterBuild02) && !o.unmanaged {
+	// build01, build02, build09 and multi01 are not OSD clusters and thus they should never be in the group
+	if o.clusterName != string(api.ClusterBuild01) && o.clusterName != string(api.ClusterBuild02) && o.clusterName != string(api.ClusterBuild09) && o.clusterName != string(api.ClusterMulti01) && !o.unmanaged {
 		groupName := secretbootstrap.OSDGlobalPullSecretGroupName
 		c.ClusterGroups[groupName] = sets.List(sets.New[string](append(c.ClusterGroups[groupName], o.clusterName)...))
 	}

@@ -2,9 +2,12 @@ package jobrunaggregatorapi
 
 import (
 	"time"
+
+	"cloud.google.com/go/bigquery"
+	"cloud.google.com/go/civil"
 )
 
-type ReleaseRow struct {
+type ReleaseTagRow struct {
 	// Phase contains the overall status of a payload: e.g. Ready, Accepted,
 	// Rejected. We do not store Ready payloads in bigquery, as we only want
 	// the release after it's "fully baked."
@@ -48,6 +51,29 @@ type ReleaseRow struct {
 
 	// OSDiffURL is a link to the release page diffing the two OS versions.
 	OSDiffURL string `bigquery:"osDiffURL"`
+}
+
+type ReleaseRow struct {
+	// Release contains the X.Y version of the payload, e.g. 4.8
+	Release string `bigquery:"release"`
+
+	// Major contains the major part of the release, e.g. 4
+	Major int `bigquery:"Major"`
+
+	// Minor contains the minor part of the release, e.g. 8
+	Minor int `bigquery:"Minor"`
+
+	// GADate contains GA date for the release, i.e. the -YYYY-MM-DD
+	GADate bigquery.NullDate `bigquery:"GADate"`
+
+	// DevelStartDate contains start date of development of the release, i.e. the -YYYY-MM-DD
+	DevelStartDate civil.Date `bigquery:"DevelStartDate"`
+
+	// Product contains the product for the release, e.g. OCP
+	Product bigquery.NullString `bigquery:"Product"`
+
+	// Patch contains the patch version number of the release, e.g. 1
+	Patch bigquery.NullInt64 `bigquery:"Patch"`
 }
 
 // ReleaseRepositoryRow represents a repository whose contents was updated in the referenced

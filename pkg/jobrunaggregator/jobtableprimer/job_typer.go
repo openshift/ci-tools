@@ -11,7 +11,7 @@ type jobRowBuilder struct {
 	job *jobrunaggregatorapi.JobRow
 }
 
-func newJob(name string) *jobRowBuilder {
+func newJob(name string, reverseOrderedVersions []string) *jobRowBuilder {
 	platform := ""
 	switch {
 	case strings.Contains(name, "gcp"):

@@ -193,6 +193,7 @@ require (
 )
 
 require (
+	cloud.google.com/go v0.110.0
 	github.com/openshift/builder v0.0.0-20200325182657-6a52122d21e0
 	github.com/openshift/client-go v0.0.0-20230120202327-72f107311084
 	github.com/openshift/hive/apis v0.0.0-20230525214126-ab571664f899
@@ -204,7 +205,6 @@ require (
 
 require (
 	bitbucket.org/creachadair/stringset v0.0.9 // indirect
-	cloud.google.com/go v0.110.0 // indirect
 	cloud.google.com/go/compute v1.19.1 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	cloud.google.com/go/iam v0.13.0 // indirect

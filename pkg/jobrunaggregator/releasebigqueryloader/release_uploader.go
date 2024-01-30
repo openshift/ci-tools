@@ -198,8 +198,8 @@ func (r *allReleaseUploaderOptions) findTable(ctx context.Context, tableName str
 	return nil
 }
 
-func releaseDetailsToBigQuery(architecture string, tag ReleaseTag, details ReleaseDetails) (*jobrunaggregatorapi.ReleaseRow, []jobrunaggregatorapi.ReleaseRepositoryRow, []jobrunaggregatorapi.ReleasePullRequestRow) {
-	release := jobrunaggregatorapi.ReleaseRow{
+func releaseDetailsToBigQuery(architecture string, tag ReleaseTag, details ReleaseDetails) (*jobrunaggregatorapi.ReleaseTagRow, []jobrunaggregatorapi.ReleaseRepositoryRow, []jobrunaggregatorapi.ReleasePullRequestRow) {
+	release := jobrunaggregatorapi.ReleaseTagRow{
 		Architecture: architecture,
 		ReleaseTag:   details.Name,
 		Phase:        tag.Phase,

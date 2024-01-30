@@ -98,7 +98,6 @@ func (f *primeJobTableFlags) ToOptions(ctx context.Context) (*CreateJobsOptions,
 	}
 
 	return &CreateJobsOptions{
-		jobsToCreate: jobsToAnalyze,
 		ciDataClient: jobrunaggregatorlib.NewRetryingCIDataClient(
 			jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, bigQueryClient),
 		),

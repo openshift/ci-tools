@@ -681,6 +681,43 @@ func TestValidateTests(t *testing.T) {
 			},
 			expectedError: errors.New("tests[0].as: 49 characters long, maximum length is 42 for tests with claims"),
 		},
+		{
+			id: `presbumit cannot be true in a presubmit`,
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Presubmit:                  true,
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+				},
+			},
+			expectedError: errors.New("tests[0]: `presubmit` can be used only for periodics"),
+		},
+		{
+			id: `presbumit cannot be true in a postsubmit`,
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Presubmit:                  true,
+					Postsubmit:                 true,
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+				},
+			},
+			expectedError: errors.New("tests[0]: `presubmit` can be used only for periodics"),
+		},
+		{
+			id: `presbumit can be true in a periodic`,
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Cron:                       &cronString,
+					Presubmit:                  true,
+				},
+			},
+		},
 	} {
 		t.Run(tc.id, func(t *testing.T) {
 			v := newSingleUseValidator()

@@ -72,6 +72,9 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 				options.DisableRehearsal = disableRehearsal
 			})
 			periodics = append(periodics, *periodic)
+			if element.Presubmit {
+				handlePresubmit(g, element, info, disableRehearsal, configSpec.Resources.RequirementsForStep(element.As).Requests, presubmits, orgrepo)
+			}
 		} else if element.Postsubmit {
 			postsubmit := generatePostsubmitForTest(g, info, func(options *generatePostsubmitOptions) {
 				options.runIfChanged = element.RunIfChanged
@@ -80,19 +83,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			postsubmit.MaxConcurrency = 1
 			postsubmits[orgrepo] = append(postsubmits[orgrepo], *postsubmit)
 		} else {
-			presubmit := generatePresubmitForTest(g, element.As, info, func(options *generatePresubmitOptions) {
-				options.pipelineRunIfChanged = element.PipelineRunIfChanged
-				options.runIfChanged = element.RunIfChanged
-				options.skipIfOnlyChanged = element.SkipIfOnlyChanged
-				options.defaultDisable = element.AlwaysRun != nil && !*element.AlwaysRun
-				options.optional = element.Optional
-				options.disableRehearsal = disableRehearsal
-			})
-			v, requestingKVM := configSpec.Resources.RequirementsForStep(element.As).Requests[cioperatorapi.KVMDeviceLabel]
-			if requestingKVM {
-				presubmit.Labels[cioperatorapi.KVMDeviceLabel] = v
-			}
-			presubmits[orgrepo] = append(presubmits[orgrepo], *presubmit)
+			handlePresubmit(g, element, info, disableRehearsal, configSpec.Resources.RequirementsForStep(element.As).Requests, presubmits, orgrepo)
 		}
 	}
 
@@ -157,6 +148,22 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		PostsubmitsStatic: postsubmits,
 		Periodics:         periodics,
 	}, nil
+}
+
+func handlePresubmit(g *prowJobBaseBuilder, element api.TestStepConfiguration, info *ProwgenInfo, disableRehearsal bool, requests api.ResourceList, presubmits map[string][]prowconfig.Presubmit, orgrepo string) {
+	presubmit := generatePresubmitForTest(g, element.As, info, func(options *generatePresubmitOptions) {
+		options.pipelineRunIfChanged = element.PipelineRunIfChanged
+		options.runIfChanged = element.RunIfChanged
+		options.skipIfOnlyChanged = element.SkipIfOnlyChanged
+		options.defaultDisable = element.AlwaysRun != nil && !*element.AlwaysRun
+		options.optional = element.Optional
+		options.disableRehearsal = disableRehearsal
+	})
+	v, requestingKVM := requests[cioperatorapi.KVMDeviceLabel]
+	if requestingKVM {
+		presubmit.Labels[cioperatorapi.KVMDeviceLabel] = v
+	}
+	presubmits[orgrepo] = append(presubmits[orgrepo], *presubmit)
 }
 
 func NewProwJobBaseBuilderForPromotion(configSpec *cioperatorapi.ReleaseBuildConfiguration,

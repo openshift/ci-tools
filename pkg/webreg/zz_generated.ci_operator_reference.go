@@ -975,6 +975,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        portable: true\n" +
 	"        # Postsubmit configures prowgen to generate the job as a postsubmit rather than a presubmit\n" +
 	"        postsubmit: true\n" +
+	"        # Presubmit configures prowgen to generate a presubmit job in additional to the periodic job.\n" +
+	"        # It can be used only when the test itself is a periodic job.\n" +
+	"        presubmit: true\n" +
 	"        # ReleaseController configures prowgen to create a periodic that\n" +
 	"        # does not get run by prow and instead is run by release-controller.\n" +
 	"        # The job must be configured as a verification or periodic job in a\n" +
@@ -1788,6 +1791,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      portable: true\n" +
 	"      # Postsubmit configures prowgen to generate the job as a postsubmit rather than a presubmit\n" +
 	"      postsubmit: true\n" +
+	"      # Presubmit configures prowgen to generate a presubmit job in additional to the periodic job.\n" +
+	"      # It can be used only when the test itself is a periodic job.\n" +
+	"      presubmit: true\n" +
 	"      # ReleaseController configures prowgen to create a periodic that\n" +
 	"      # does not get run by prow and instead is run by release-controller.\n" +
 	"      # The job must be configured as a verification or periodic job in a\n" +

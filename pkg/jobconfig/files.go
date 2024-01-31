@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/getlantern/deepcopy"
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 
@@ -683,15 +684,22 @@ func Prune(jobConfig *prowconfig.JobConfig, generator Generator, pruneLabels lab
 			if isStale(job.JobBase) {
 				continue
 			}
-			if isGenerated(job.JobBase) {
-				delete(job.Labels, string(generator))
+			// The job base might be shared with other job objects.
+			// We make a copy here to avoid the intervention in some corner cases identified for DPTP-3845.
+			// A better solution is to not share in the input but fix on the caller here is simpler.
+			var copy prowconfig.Presubmit
+			if err := deepcopy.Copy(&copy, &job); err != nil {
+				return nil, fmt.Errorf("failed to deepcopy: %w", err)
+			}
+			if isGenerated(copy.JobBase) {
+				delete(copy.Labels, string(generator))
 			}
 
 			if pruned.PresubmitsStatic == nil {
 				pruned.PresubmitsStatic = map[string][]prowconfig.Presubmit{}
 			}
 
-			pruned.PresubmitsStatic[repo] = append(pruned.PresubmitsStatic[repo], job)
+			pruned.PresubmitsStatic[repo] = append(pruned.PresubmitsStatic[repo], copy)
 		}
 	}
 
@@ -715,22 +723,15 @@ func Prune(jobConfig *prowconfig.JobConfig, generator Generator, pruneLabels lab
 		if isStale(job.JobBase) {
 			continue
 		}
-		// The job base might be shared with other job objects.
-		// We make a copy here to avoid the intervention in some corner cases identified for DPTP-3845.
-		// A better solution is to not sharing in the input but fix on the caller here is simpler.
-		newJobBase := job.JobBase.DeepCopy()
-		newPeriodic := prowconfig.Periodic{
-			JobBase:         *newJobBase,
-			Interval:        job.Interval,
-			MinimumInterval: job.MinimumInterval,
-			Cron:            job.Cron,
-			Tags:            job.Tags,
+		var copy prowconfig.Periodic
+		if err := deepcopy.Copy(&copy, &job); err != nil {
+			return nil, fmt.Errorf("failed to deepcopy: %w", err)
 		}
-		if isGenerated(newPeriodic.JobBase) {
-			delete(newPeriodic.Labels, string(generator))
+		if isGenerated(copy.JobBase) {
+			delete(copy.Labels, string(generator))
 		}
 
-		pruned.Periodics = append(pruned.Periodics, newPeriodic)
+		pruned.Periodics = append(pruned.Periodics, copy)
 	}
 
 	return &pruned, nil

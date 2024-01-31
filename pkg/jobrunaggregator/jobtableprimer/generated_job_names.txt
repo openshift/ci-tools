@@ -586,6 +586,7 @@ periodic-ci-openshift-microshift-release-4.15-ocp-metal-nightly
 periodic-ci-openshift-osde2e-main-nightly-4.15-osd-aws
 periodic-ci-openshift-osde2e-main-nightly-4.15-osd-gcp
 periodic-ci-openshift-osde2e-main-nightly-4.15-rosa-classic-sts
+periodic-ci-openshift-qe-ocp-qe-perfscale-ci-main-aws-4.15-nightly-x86-payload-control-plane-6nodes
 periodic-ci-openshift-release-master-ci-4.15-e2e-aws-ovn
 periodic-ci-openshift-release-master-ci-4.15-e2e-aws-ovn-upgrade
 periodic-ci-openshift-release-master-ci-4.15-e2e-aws-sdn-techpreview
@@ -710,6 +711,7 @@ periodic-ci-openshift-hypershift-release-4.16-periodics-e2e-aws-ovn-conformance
 periodic-ci-openshift-osde2e-main-nightly-4.16-osd-aws
 periodic-ci-openshift-osde2e-main-nightly-4.16-osd-gcp
 periodic-ci-openshift-osde2e-main-nightly-4.16-rosa-classic-sts
+periodic-ci-openshift-qe-ocp-qe-perfscale-ci-main-aws-4.16-nightly-x86-payload-control-plane-6nodes
 periodic-ci-openshift-release-master-ci-4.16-e2e-aws-ovn
 periodic-ci-openshift-release-master-ci-4.16-e2e-aws-ovn-upgrade
 periodic-ci-openshift-release-master-ci-4.16-e2e-aws-ovn-upgrade-out-of-change

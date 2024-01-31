@@ -715,11 +715,22 @@ func Prune(jobConfig *prowconfig.JobConfig, generator Generator, pruneLabels lab
 		if isStale(job.JobBase) {
 			continue
 		}
-		if isGenerated(job.JobBase) {
-			delete(job.Labels, string(generator))
+		// The job base might be shared with other job objects.
+		// We make a copy here to avoid the intervention in some corner cases identified for DPTP-3845.
+		// A better solution is to not sharing in the input but fix on the caller here is simpler.
+		newJobBase := job.JobBase.DeepCopy()
+		newPeriodic := prowconfig.Periodic{
+			JobBase:         *newJobBase,
+			Interval:        job.Interval,
+			MinimumInterval: job.MinimumInterval,
+			Cron:            job.Cron,
+			Tags:            job.Tags,
+		}
+		if isGenerated(newPeriodic.JobBase) {
+			delete(newPeriodic.Labels, string(generator))
 		}
 
-		pruned.Periodics = append(pruned.Periodics, job)
+		pruned.Periodics = append(pruned.Periodics, newPeriodic)
 	}
 
 	return &pruned, nil

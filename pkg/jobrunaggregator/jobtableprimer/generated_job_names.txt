@@ -604,8 +604,8 @@ periodic-ci-openshift-release-master-ci-4.15-upgrade-from-stable-4.14-e2e-gcp-ov
 periodic-ci-openshift-release-master-ci-4.15-upgrade-from-stable-4.14-e2e-gcp-sdn-upgrade
 periodic-ci-openshift-release-master-nightly-4.15-aws-ovn-upgrade-rollback-oldest-supported
 periodic-ci-openshift-release-master-nightly-4.15-console-aws
-periodic-ci-openshift-release-master-nightly-4.15-e2e-agent-compact-ipv4
-periodic-ci-openshift-release-master-nightly-4.15-e2e-agent-ha-dualstack
+periodic-ci-openshift-release-master-nightly-4.15-e2e-agent-compact-ipv4-conformance
+periodic-ci-openshift-release-master-nightly-4.15-e2e-agent-ha-dualstack-conformance
 periodic-ci-openshift-release-master-nightly-4.15-e2e-agent-sno-ipv6
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-csi
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-driver-toolkit
@@ -734,8 +734,8 @@ periodic-ci-openshift-release-master-ci-4.16-upgrade-from-stable-4.15-e2e-gcp-sd
 periodic-ci-openshift-release-master-cnv-nightly-4.16-e2e-azure-deploy-cnv
 periodic-ci-openshift-release-master-cnv-nightly-4.16-e2e-azure-upgrade-cnv
 periodic-ci-openshift-release-master-nightly-4.16-console-aws
-periodic-ci-openshift-release-master-nightly-4.16-e2e-agent-compact-ipv4
-periodic-ci-openshift-release-master-nightly-4.16-e2e-agent-ha-dualstack
+periodic-ci-openshift-release-master-nightly-4.16-e2e-agent-compact-ipv4-conformance
+periodic-ci-openshift-release-master-nightly-4.16-e2e-agent-ha-dualstack-conformance
 periodic-ci-openshift-release-master-nightly-4.16-e2e-agent-sno-ipv6
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-csi
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-driver-toolkit
@@ -1913,8 +1913,8 @@ periodic-ci-openshift-release-master-nightly-4.14-upgrade-from-stable-4.13-e2e-v
 periodic-ci-openshift-release-master-nightly-4.14-upgrade-from-stable-4.13-e2e-vsphere-zones-upgrade
 periodic-ci-openshift-release-master-nightly-4.15-aws-ovn-upgrade-rollback-oldest-supported
 periodic-ci-openshift-release-master-nightly-4.15-console-aws
-periodic-ci-openshift-release-master-nightly-4.15-e2e-agent-compact-ipv4
-periodic-ci-openshift-release-master-nightly-4.15-e2e-agent-ha-dualstack
+periodic-ci-openshift-release-master-nightly-4.15-e2e-agent-compact-ipv4-conformance
+periodic-ci-openshift-release-master-nightly-4.15-e2e-agent-ha-dualstack-conformance
 periodic-ci-openshift-release-master-nightly-4.15-e2e-agent-sno-ipv6
 periodic-ci-openshift-release-master-nightly-4.15-e2e-alibaba-csi
 periodic-ci-openshift-release-master-nightly-4.15-e2e-alibaba-ovn
@@ -2033,8 +2033,8 @@ periodic-ci-openshift-release-master-nightly-4.15-upgrade-from-stable-4.14-e2e-m
 periodic-ci-openshift-release-master-nightly-4.15-upgrade-from-stable-4.14-e2e-vsphere-upgrade
 periodic-ci-openshift-release-master-nightly-4.15-upgrade-from-stable-4.14-e2e-vsphere-zones-upgrade
 periodic-ci-openshift-release-master-nightly-4.16-console-aws
-periodic-ci-openshift-release-master-nightly-4.16-e2e-agent-compact-ipv4
-periodic-ci-openshift-release-master-nightly-4.16-e2e-agent-ha-dualstack
+periodic-ci-openshift-release-master-nightly-4.16-e2e-agent-compact-ipv4-conformance
+periodic-ci-openshift-release-master-nightly-4.16-e2e-agent-ha-dualstack-conformance
 periodic-ci-openshift-release-master-nightly-4.16-e2e-agent-sno-ipv6
 periodic-ci-openshift-release-master-nightly-4.16-e2e-alibaba-csi
 periodic-ci-openshift-release-master-nightly-4.16-e2e-alibaba-ovn

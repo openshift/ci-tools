@@ -214,12 +214,12 @@ func getPromotionPod(imageMirrorTarget map[string]string, namespace string, name
 	command := []string{"/bin/sh", "-c"}
 	args := []string{fmt.Sprintf("oc image mirror --keep-manifest-list --registry-config=%s --continue-on-error=true --max-per-registry=20 %s", filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey), strings.Join(images, " "))}
 
-	image := fmt.Sprintf("%s/%s/4.12:cli", api.DomainForService(api.ServiceRegistry), "ocp")
+	image := fmt.Sprintf("%s/%s/4.14:cli", api.DomainForService(api.ServiceRegistry), "ocp")
 	nodeSelector := map[string]string{"kubernetes.io/arch": "amd64"}
 
 	archs := sets.New[string](nodeArchitectures...)
 	if !archs.Has("amd64") && archs.Has("arm64") {
-		image = fmt.Sprintf("%s/%s/4.12:cli", api.DomainForService(api.ServiceRegistry), "ocp-arm64")
+		image = fmt.Sprintf("%s/%s/4.14:cli", api.DomainForService(api.ServiceRegistry), "ocp-arm64")
 		nodeSelector = map[string]string{"kubernetes.io/arch": "arm64"}
 	}
 

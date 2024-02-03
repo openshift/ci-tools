@@ -13,7 +13,7 @@ spec:
     command:
     - /bin/sh
     - -c
-    image: registry.ci.openshift.org/ocp/4.12:cli
+    image: registry.ci.openshift.org/ocp/4.14:cli
     name: promotion
     resources: {}
     volumeMounts:

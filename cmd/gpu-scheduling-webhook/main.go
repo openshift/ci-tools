@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/bombsimon/logrusr/v3"
 	"github.com/go-logr/logr"
@@ -45,6 +46,7 @@ $ gpu-scheduling-webhook --cert-dir=<cert-dir> --port=443`,
 
 func init() {
 	rootCmd.Flags().StringVar(&opts.certDir, "cert-dir", "", "A folder holding the server private key and and certicate for TLS")
+	rootCmd.Flags().StringVar(&opts.healthProbeAddr, "health-probe-addr", ":8081", "Health probe binding address <addr>:<port>. Default to :8081")
 	rootCmd.Flags().IntVar(&opts.port, "port", 0, "Port the server will listen on")
 }
 
@@ -56,8 +58,9 @@ func setupLogger() logr.Logger {
 }
 
 type options struct {
-	certDir string
-	port    int
+	certDir         string
+	port            int
+	healthProbeAddr string
 }
 
 type gpuTolerator struct{}
@@ -126,6 +129,7 @@ func needNvidiaGPU(requirement corev1.ResourceRequirements) bool {
 func startWebhookServer(ctx context.Context, logger *logr.Logger, o *options, cfg *rest.Config) error {
 	logger.Info("Setting up manager")
 	mgr, err := manager.New(cfg, manager.Options{
+		HealthProbeBindAddress: o.healthProbeAddr,
 		WebhookServer: webhook.NewServer(webhook.Options{
 			CertDir: o.certDir,
 			Port:    o.port,
@@ -135,6 +139,18 @@ func startWebhookServer(ctx context.Context, logger *logr.Logger, o *options, cf
 		logger.Error(err, "Unable to set up manager")
 		return err
 	}
+
+	if err := mgr.AddHealthzCheck("healthz", func(req *http.Request) error { return nil }); err != nil {
+		logger.Error(err, "Unable to set up healthz endpoint")
+		return err
+	}
+
+	if err := mgr.AddReadyzCheck("readyz", func(req *http.Request) error { return nil }); err != nil {
+		logger.Error(err, "Unable to set up readyz endpoint")
+		return err
+	}
+
+	logger.WithValues("Addr", o.healthProbeAddr).Info("Serving healthiness probes")
 
 	if err := builder.WebhookManagedBy(mgr).
 		For(&corev1.Pod{}).
@@ -155,6 +171,7 @@ func startWebhookServer(ctx context.Context, logger *logr.Logger, o *options, cf
 
 func RunE(cmd *cobra.Command, args []string) error {
 	logger := setupLogger().WithName("gpu-scheduling")
+	logger.Info("Starting the webhook")
 
 	cfg, err := config.GetConfig()
 	if err != nil {

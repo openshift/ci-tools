@@ -13,25 +13,20 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
-type clusterProfileMap map[api.ClusterProfile]api.ClusterProfileDetails
-
 // Validator holds data used across validations.
 type Validator struct {
-	validClusterProfiles clusterProfileMap
+	validClusterProfiles api.ClusterProfilesMap
 	// hasTrapCache avoids redundant regexp searches on step commands.
 	hasTrapCache map[string]bool
 }
 
 // NewValidator creates an object that optimizes bulk validations.
-func NewValidator(profiles api.ClusterProfilesList) Validator {
+func NewValidator(profiles api.ClusterProfilesMap) Validator {
 	ret := Validator{
 		hasTrapCache: make(map[string]bool),
 	}
 	if profiles != nil {
-		ret.validClusterProfiles = make(clusterProfileMap, len(profiles))
-		for _, p := range profiles {
-			ret.validClusterProfiles[p.Profile] = p
-		}
+		ret.validClusterProfiles = profiles
 	}
 	return ret
 }

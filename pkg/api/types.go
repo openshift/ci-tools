@@ -2456,6 +2456,7 @@ func GetAvailableArchitectures() []string {
 }
 
 type ClusterProfilesList []ClusterProfileDetails
+type ClusterProfilesMap map[ClusterProfile]ClusterProfileDetails
 
 type ClusterProfileDetails struct {
 	Profile     ClusterProfile         `yaml:"profile"`

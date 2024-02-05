@@ -647,6 +647,7 @@ periodic-ci-openshift-release-master-nightly-4.15-e2e-vsphere-ovn-techpreview-se
 periodic-ci-openshift-release-master-nightly-4.15-e2e-vsphere-ovn-upi
 periodic-ci-openshift-release-master-nightly-4.15-e2e-vsphere-ovn-upi-serial
 periodic-ci-openshift-release-master-nightly-4.15-e2e-vsphere-sdn
+periodic-ci-openshift-release-master-nightly-4.15-e2e-vsphere-static-ovn
 periodic-ci-openshift-release-master-nightly-4.15-install-analysis-all
 periodic-ci-openshift-release-master-nightly-4.15-overall-analysis-all
 periodic-ci-openshift-release-master-nightly-4.15-upgrade-from-stable-4.14-e2e-aws-sdn-upgrade
@@ -776,6 +777,7 @@ periodic-ci-openshift-release-master-nightly-4.16-e2e-vsphere-ovn-techpreview-se
 periodic-ci-openshift-release-master-nightly-4.16-e2e-vsphere-ovn-upi
 periodic-ci-openshift-release-master-nightly-4.16-e2e-vsphere-ovn-upi-serial
 periodic-ci-openshift-release-master-nightly-4.16-e2e-vsphere-sdn
+periodic-ci-openshift-release-master-nightly-4.16-e2e-vsphere-static-ovn
 periodic-ci-openshift-release-master-nightly-4.16-install-analysis-all
 periodic-ci-openshift-release-master-nightly-4.16-overall-analysis-all
 periodic-ci-openshift-release-master-nightly-4.16-upgrade-from-stable-4.15-e2e-aws-sdn-upgrade
@@ -2020,6 +2022,7 @@ periodic-ci-openshift-release-master-nightly-4.15-e2e-vsphere-ovn-techpreview-se
 periodic-ci-openshift-release-master-nightly-4.15-e2e-vsphere-ovn-upi
 periodic-ci-openshift-release-master-nightly-4.15-e2e-vsphere-ovn-upi-serial
 periodic-ci-openshift-release-master-nightly-4.15-e2e-vsphere-sdn
+periodic-ci-openshift-release-master-nightly-4.15-e2e-vsphere-static-ovn
 periodic-ci-openshift-release-master-nightly-4.15-e2e-vsphere-upi-zones
 periodic-ci-openshift-release-master-nightly-4.15-e2e-vsphere-zones
 periodic-ci-openshift-release-master-nightly-4.15-install-analysis-all
@@ -2136,6 +2139,7 @@ periodic-ci-openshift-release-master-nightly-4.16-e2e-vsphere-ovn-techpreview-se
 periodic-ci-openshift-release-master-nightly-4.16-e2e-vsphere-ovn-upi
 periodic-ci-openshift-release-master-nightly-4.16-e2e-vsphere-ovn-upi-serial
 periodic-ci-openshift-release-master-nightly-4.16-e2e-vsphere-sdn
+periodic-ci-openshift-release-master-nightly-4.16-e2e-vsphere-static-ovn
 periodic-ci-openshift-release-master-nightly-4.16-e2e-vsphere-upi-zones
 periodic-ci-openshift-release-master-nightly-4.16-e2e-vsphere-zones
 periodic-ci-openshift-release-master-nightly-4.16-install-analysis-all

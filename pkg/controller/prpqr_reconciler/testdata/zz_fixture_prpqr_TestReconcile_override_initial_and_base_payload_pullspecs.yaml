@@ -6,6 +6,7 @@
     namespace: test-namespace
     resourceVersion: "1000"
   spec:
+    initial: quay.io/openshift-release-dev/ocp-release:4.15.12-x86_64
     jobs:
       releaseControllerConfig:
         ocp: "4.9"
@@ -17,7 +18,8 @@
           org: test-org
           repo: test-repo
         test: test-name
-    payload: {}
+    payload:
+      base: quay.io/openshift-release-dev/ocp-release:4.16.0-ec.1-x86_64
     pullRequests:
     - baseRef: test-branch
       baseSHA: "123456"
@@ -28,15 +30,6 @@
         sha: "12345"
         title: test-pr
       repo: test-repo
-    - baseRef: test-branch
-      baseSHA: "123456"
-      org: test-org
-      pr:
-        author: test
-        number: 101
-        sha: "123452"
-        title: test-pr
-      repo: another-test-repo
   status:
     conditions:
     - lastTransitionTime: "1970-01-01T00:00:00Z"

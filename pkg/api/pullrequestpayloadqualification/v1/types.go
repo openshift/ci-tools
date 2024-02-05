@@ -32,6 +32,17 @@ type PullRequestPayloadTestSpec struct {
 	PullRequests []PullRequestUnderTest `json:"pullRequests"`
 	// Jobs specifies the jobs to be executed. Immutable.
 	Jobs PullRequestPayloadJobSpec `json:"jobs"`
+	// InitialPayloadBase specifies the base payload pullspec for the "initial" release payload
+	InitialPayloadBase string `json:"initial,omitempty"`
+	// PayloadOverrides specifies overrides to the base payload.
+	PayloadOverrides PayloadOverrides `json:"payload,omitempty"`
+}
+
+// PayloadOverrides allows overrides to the base payload.
+type PayloadOverrides struct {
+	// BasePullSpec specifies the base payload pullspec for the "latest" release payload
+	// (alternate from the default of the 4.x CI payload) to layer changes on top of.
+	BasePullSpec string `json:"base,omitempty"`
 }
 
 // PullRequestUnderTest describes the state of the repo that will be under test

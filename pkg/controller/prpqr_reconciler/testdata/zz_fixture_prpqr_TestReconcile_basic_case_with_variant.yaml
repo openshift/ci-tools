@@ -18,6 +18,7 @@
           repo: test-repo
           variant: test-variant
         test: test-name
+    payload: {}
     pullRequests:
     - baseRef: test-branch
       baseSHA: "123456"

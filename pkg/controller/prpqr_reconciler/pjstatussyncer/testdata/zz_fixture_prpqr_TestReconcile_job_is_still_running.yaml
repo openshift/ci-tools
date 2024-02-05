@@ -11,6 +11,7 @@
         release: ""
         specifier: ""
       releaseJobSpec: null
+    payload: {}
     pullRequests: null
   status:
     conditions:

@@ -40,6 +40,8 @@ type options struct {
 	help bool
 }
 
+// TEST LINE DO NOT MERGE
+
 func bindOptions(flag *flag.FlagSet) *options {
 	opt := &options{}
 

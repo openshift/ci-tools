@@ -234,6 +234,41 @@ func ReleaseRpms(version string, meta cioperatorapi.Metadata) PodSpecMutator {
 	}
 }
 
+const (
+	releaseImageLatest  = "RELEASE_IMAGE_LATEST"
+	releaseImageInitial = "RELEASE_IMAGE_INITIAL"
+)
+
+// ReleaseLatest sets the "RELEASE_IMAGE_LATEST" env var in order to override the "latest" pullspec
+func ReleaseLatest(pullspec string) PodSpecMutator {
+	return func(spec *corev1.PodSpec) error {
+		if pullspec == "" {
+			return nil
+		}
+		container := &spec.Containers[0]
+
+		return addEnvVar(container, corev1.EnvVar{
+			Name:  releaseImageLatest,
+			Value: pullspec,
+		})
+	}
+}
+
+// ReleaseInitial sets the "RELEASE_IMAGE_INITIAL" env var in order to override the "initial" pullspec
+func ReleaseInitial(pullspec string) PodSpecMutator {
+	return func(spec *corev1.PodSpec) error {
+		if pullspec == "" {
+			return nil
+		}
+		container := &spec.Containers[0]
+
+		return addEnvVar(container, corev1.EnvVar{
+			Name:  releaseImageInitial,
+			Value: pullspec,
+		})
+	}
+}
+
 // CIPullSecret exposes a shared CI pull secret via a mounted volume and a `--secret-dir`
 // option passed to ci-operator
 func CIPullSecret() PodSpecMutator {

@@ -22,6 +22,7 @@
           org: test-org
           repo: test-repo
         test: test-name-2
+    payload: {}
     pullRequests:
     - baseRef: test-branch
       baseSHA: "123456"

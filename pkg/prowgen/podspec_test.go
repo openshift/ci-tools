@@ -112,6 +112,66 @@ func TestReleaseRpms(t *testing.T) {
 	}
 }
 
+func TestReleaseLatest(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name          string
+		generator     CiOperatorPodSpecGenerator
+		expectedError error
+	}{
+		{
+			name: "add release latest",
+			generator: NewCiOperatorPodSpecGenerator().Add(
+				Targets("tgt"),
+				ReleaseLatest("quay.io/openshift-release-dev/ocp-release:4.15.12-x86_64"),
+			),
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			podspec, err := tc.generator.Build()
+			if diff := cmp.Diff(tc.expectedError, err, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("Error differs from expected:\n%s", diff)
+			}
+			if tc.expectedError == nil {
+				testhelper.CompareWithFixture(t, podspec)
+			}
+		})
+	}
+}
+
+func TestReleaseInitial(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name          string
+		generator     CiOperatorPodSpecGenerator
+		expectedError error
+	}{
+		{
+			name: "add release initial",
+			generator: NewCiOperatorPodSpecGenerator().Add(
+				Targets("tgt"),
+				ReleaseInitial("quay.io/openshift-release-dev/ocp-release:4.15.12-x86_64"),
+			),
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			podspec, err := tc.generator.Build()
+			if diff := cmp.Diff(tc.expectedError, err, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("Error differs from expected:\n%s", diff)
+			}
+			if tc.expectedError == nil {
+				testhelper.CompareWithFixture(t, podspec)
+			}
+		})
+	}
+}
+
 func TestTargets(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

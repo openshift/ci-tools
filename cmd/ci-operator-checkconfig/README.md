@@ -28,6 +28,7 @@ To validate a local copy of `openshift/release`, simply execute:
 ci-operator-checkconfig \
     --config-dir path/to/release/ci-operator/config \
     --registry path/to/release/ci-operator/step-registry \
+    --cluster-profiles-config path/to/release/core-services/cluster-profiles/_config.yaml 
     …
 ```
 

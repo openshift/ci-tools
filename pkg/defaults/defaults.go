@@ -164,7 +164,7 @@ func fromConfig(
 		return nil, nil, fmt.Errorf("failed to get steps from configuration: %w", err)
 	}
 	rawSteps = append(graphConf.Steps, rawSteps...)
-	rawSteps = append(rawSteps, stepsForImageOverrides()...)
+	rawSteps = append(rawSteps, stepsForImageOverrides(utils.GetOverriddenImages())...)
 
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
@@ -372,9 +372,9 @@ func fromConfig(
 	return append(overridableSteps, buildSteps...), postSteps, nil
 }
 
-func stepsForImageOverrides() []api.StepConfiguration {
+func stepsForImageOverrides(overriddenImages map[string]string) []api.StepConfiguration {
 	var overrideSteps []api.StepConfiguration
-	for tag, value := range utils.GetOverriddenImages() {
+	for tag, value := range overriddenImages {
 		inputStep := api.StepConfiguration{InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 			InputImage: api.InputImage{
 				BaseImage: api.ImageStreamTagReference{

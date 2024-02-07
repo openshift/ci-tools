@@ -1146,6 +1146,7 @@ func TestFromConfig(t *testing.T) {
 			"rpms-org.repo1", "rpms-org.repo2",
 			"src", "bin", "to",
 			"ci-bundle0", "ci-index",
+			"machine-os-content",
 		},
 	}, {
 		name: "release",
@@ -1215,19 +1216,20 @@ func TestFromConfig(t *testing.T) {
 	var cloneAuthConfig *steps.CloneAuthConfig
 	pullSecret, pushSecret := &coreapi.Secret{}, &coreapi.Secret{}
 	for _, tc := range []struct {
-		name           string
-		config         api.ReleaseBuildConfiguration
-		refs           *prowapi.Refs
-		paramFiles     string
-		promote        bool
-		templates      []*templateapi.Template
-		env            api.Parameters
-		params         map[string]string
-		mergedConfig   bool
-		expectedSteps  []string
-		expectedPost   []string
-		expectedParams map[string]string
-		expectedErr    error
+		name                string
+		config              api.ReleaseBuildConfiguration
+		refs                *prowapi.Refs
+		paramFiles          string
+		promote             bool
+		templates           []*templateapi.Template
+		env                 api.Parameters
+		params              map[string]string
+		overriddenImagesEnv map[string]string
+		mergedConfig        bool
+		expectedSteps       []string
+		expectedPost        []string
+		expectedParams      map[string]string
+		expectedErr         error
 	}{{
 		name:          "no steps",
 		expectedSteps: []string{"[output-images]", "[images]"},
@@ -1649,6 +1651,20 @@ func TestFromConfig(t *testing.T) {
 			"[images]",
 		},
 	}, {
+		name: "override image",
+		overriddenImagesEnv: map[string]string{
+			"OVERRIDE_IMAGE_MACHINE_OS_CONTENT": "4.16.2",
+		},
+		expectedSteps: []string{
+			"[images]",
+			"[input:machine-os-content]",
+			"[output-images]",
+			"[output:stable:machine-os-content]",
+		},
+		expectedParams: map[string]string{
+			"LOCAL_IMAGE_MACHINE_OS_CONTENT": "public_docker_image_repository:machine-os-content",
+		},
+	}, {
 		name: "test step sources",
 		config: api.ReleaseBuildConfiguration{
 			Tests: []api.TestStepConfiguration{{
@@ -1696,6 +1712,9 @@ func TestFromConfig(t *testing.T) {
 				TargetAdditionalSuffix: "1",
 			}
 			jobSpec.SetNamespace(ns)
+			for k, v := range tc.overriddenImagesEnv {
+				t.Setenv(k, v)
+			}
 			params := api.NewDeferredParameters(tc.env)
 			for k, v := range tc.params {
 				params.Add(k, func() (string, error) { return v, nil })

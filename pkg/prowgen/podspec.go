@@ -274,7 +274,7 @@ func ReleaseInitial(pullspec string) PodSpecMutator {
 func OverrideImage(name, tag string) PodSpecMutator {
 	return func(spec *corev1.PodSpec) error {
 		if name == "" || tag == "" {
-			return nil
+			return fmt.Errorf("empty name('%s') or tag('%s') passed", name, tag)
 		}
 		container := &spec.Containers[0]
 

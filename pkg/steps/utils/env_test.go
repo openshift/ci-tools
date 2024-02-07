@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
@@ -158,5 +159,48 @@ func TestEnvVarFor(t *testing.T) {
 				t.Errorf("failed to round-trip: %q -> %q -> %q", testCase.input, actual, reverted)
 			}
 		}
+	}
+}
+
+func TestGetOverriddenImages(t *testing.T) {
+	testCases := []struct {
+		name     string
+		env      map[string]string
+		expected map[string]string
+	}{
+		{
+			name: "image overridden",
+			env: map[string]string{
+				OverrideImageEnv("machine-os-content"): "some-name",
+			},
+			expected: map[string]string{
+				"machine-os-content": "some-name",
+			},
+		},
+		{
+			name: "no overrides configured",
+		},
+		{
+			name: "multiple images overridden",
+			env: map[string]string{
+				OverrideImageEnv("machine-os-content"): "some-name",
+				OverrideImageEnv("telemeter"):          "some-other-name",
+			},
+			expected: map[string]string{
+				"machine-os-content": "some-name",
+				"telemeter":          "some-other-name",
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			for k, v := range tc.env {
+				t.Setenv(k, v)
+			}
+			images := GetOverriddenImages()
+			if diff := cmp.Diff(images, tc.expected, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("returned images do not match expected, diff: %s", diff)
+			}
+		})
 	}
 }

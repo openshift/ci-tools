@@ -164,6 +164,7 @@ func fromConfig(
 		return nil, nil, fmt.Errorf("failed to get steps from configuration: %w", err)
 	}
 	rawSteps = append(graphConf.Steps, rawSteps...)
+	rawSteps = append(rawSteps, stepsForImageOverrides(utils.GetOverriddenImages())...)
 
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
@@ -369,6 +370,32 @@ func fromConfig(
 	}
 
 	return append(overridableSteps, buildSteps...), postSteps, nil
+}
+
+func stepsForImageOverrides(overriddenImages map[string]string) []api.StepConfiguration {
+	var overrideSteps []api.StepConfiguration
+	for tag, value := range overriddenImages {
+		inputStep := api.StepConfiguration{InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+			InputImage: api.InputImage{
+				BaseImage: api.ImageStreamTagReference{
+					Namespace: "ocp",
+					Name:      value,
+					Tag:       tag,
+				},
+				To: api.PipelineImageStreamTagReference(tag),
+			},
+		}}
+		overrideSteps = append(overrideSteps, inputStep)
+		outputStep := api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
+			From: api.PipelineImageStreamTagReference(tag),
+			To: api.ImageStreamTagReference{
+				Name: api.StableImageStream,
+				Tag:  tag,
+			},
+		}}
+		overrideSteps = append(overrideSteps, outputStep)
+	}
+	return overrideSteps
 }
 
 // registryDomain determines the domain of the registry we promote to

@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -15,6 +16,8 @@ const (
 
 	// ImageFormatEnv is the environment we use to hold the base pull spec
 	ImageFormatEnv = "IMAGE_FORMAT"
+
+	OverrideImageEnvPrefix = "OVERRIDE_IMAGE_"
 )
 
 var knownPrefixes = map[string]string{
@@ -153,4 +156,24 @@ func ReleaseNameFrom(envVar string) string {
 	// we know that we will be able to unfurl
 	name, _ := imageFromEnv(api.ReleaseImageStream, envVar)
 	return name
+}
+
+// GetOverriddenImages finds all occurrences of OVERRIDE_IMAGE_* in env vars,
+// unescapes the tag name and maps it to its value
+func GetOverriddenImages() map[string]string {
+	images := make(map[string]string)
+	for _, env := range os.Environ() {
+		if strings.HasPrefix(env, OverrideImageEnvPrefix) {
+			split := strings.Split(env, "=")
+			key, value := split[0], split[1]
+			tag := unescapedImageName(strings.TrimPrefix(key, OverrideImageEnvPrefix))
+			images[tag] = value
+		}
+	}
+	return images
+}
+
+// OverrideImageEnv generates the proper env var name for an image override
+func OverrideImageEnv(name string) string {
+	return fmt.Sprintf("%s%s", OverrideImageEnvPrefix, escapedImageName(name))
 }

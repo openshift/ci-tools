@@ -43,6 +43,16 @@ type PayloadOverrides struct {
 	// BasePullSpec specifies the base payload pullspec for the "latest" release payload
 	// (alternate from the default of the 4.x CI payload) to layer changes on top of.
 	BasePullSpec string `json:"base,omitempty"`
+	// ImageTagOverrides allow specific image tags to be overridden
+	ImageTagOverrides []ImageTagOverride `json:"tags,omitempty"`
+}
+
+// ImageTagOverride describes a specific image name that should be overridden with the provided tag
+type ImageTagOverride struct {
+	// Name is the name of the image like "machine-os-content"
+	Name string `json:"name"`
+	// Tag is the tag to override the image with like "4.16-art-latest-2024-02-05-071231"
+	Tag string `json:"tag"`
 }
 
 // PullRequestUnderTest describes the state of the repo that will be under test

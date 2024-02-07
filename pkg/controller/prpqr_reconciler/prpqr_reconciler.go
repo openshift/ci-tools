@@ -268,7 +268,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 			initialPullSpecOverride := prpqr.Spec.InitialPayloadBase
 			// "base" is always treated as "latest" as that is what we are layering changes on top of, additional logic will apply if this changes in the future
 			basePullSpecOverride := prpqr.Spec.PayloadOverrides.BasePullSpec
-			prowjob, err := generateProwjob(ciopConfig, r.prowConfigGetter.Config(), baseMetadata, req.Name, req.Namespace, pullRequests, mimickedJob, inject, nil, initialPullSpecOverride, basePullSpecOverride)
+			prowjob, err := generateProwjob(ciopConfig, r.prowConfigGetter.Config(), baseMetadata, req.Name, req.Namespace, pullRequests, mimickedJob, inject, nil, initialPullSpecOverride, basePullSpecOverride, prpqr.Spec.PayloadOverrides.ImageTagOverrides)
 			if err != nil {
 				logger.WithError(err).Error("Failed to generate prowjob")
 				statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
@@ -458,7 +458,17 @@ type aggregatedOptions struct {
 	releaseJobName  string
 }
 
-func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter periodicDefaulter, baseCiop *api.Metadata, prpqrName, prpqrNamespace string, prs []v1.PullRequestUnderTest, mimickedJob string, inject *api.MetadataWithTest, aggregatedOptions *aggregatedOptions, initialPayloadPullspec, latestPayloadPullspec string) (*prowv1.ProwJob, error) {
+func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
+	defaulter periodicDefaulter,
+	baseCiop *api.Metadata,
+	prpqrName, prpqrNamespace string,
+	prs []v1.PullRequestUnderTest,
+	mimickedJob string,
+	inject *api.MetadataWithTest,
+	aggregatedOptions *aggregatedOptions,
+	initialPayloadPullspec, latestPayloadPullspec string,
+	imageTagOverrides []v1.ImageTagOverride,
+) (*prowv1.ProwJob, error) {
 	fakeProwgenInfo := &prowgen.ProwgenInfo{Metadata: *baseCiop}
 
 	annotations := map[string]string{
@@ -504,6 +514,9 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration, defaulter period
 		}
 		if initialPayloadPullspec != "" {
 			jobBaseGen.PodSpec.Add(prowgen.ReleaseInitial(initialPayloadPullspec))
+		}
+		for _, ito := range imageTagOverrides {
+			jobBaseGen.PodSpec.Add(prowgen.OverrideImage(ito.Name, ito.Tag))
 		}
 		if aggregateIndex != nil {
 			jobBaseGen.PodSpec.Add(prowgen.TargetAdditionalSuffix(strconv.Itoa(*aggregateIndex)))
@@ -611,7 +624,7 @@ func generateAggregatedProwjobs(uid string, ciopConfig *api.ReleaseBuildConfigur
 		}
 		jobName := fmt.Sprintf("%s-%d", spec.JobName(jobconfig.PeriodicPrefix), i)
 
-		pj, err := generateProwjob(ciopConfig, defaulter, baseCiop, prpqrName, prpqrNamespace, prs, jobName, inject, opts, "", "")
+		pj, err := generateProwjob(ciopConfig, defaulter, baseCiop, prpqrName, prpqrNamespace, prs, jobName, inject, opts, "", "", nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create prowjob: %w", err)
 		}

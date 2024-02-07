@@ -12,6 +12,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
 var defaultPodSpec = corev1.PodSpec{
@@ -265,6 +266,21 @@ func ReleaseInitial(pullspec string) PodSpecMutator {
 		return addEnvVar(container, corev1.EnvVar{
 			Name:  releaseImageInitial,
 			Value: pullspec,
+		})
+	}
+}
+
+// OverrideImage sets the "OVERRIDE_IMAGE_*" env var in order to override the respective image with the provided tag
+func OverrideImage(name, tag string) PodSpecMutator {
+	return func(spec *corev1.PodSpec) error {
+		if name == "" || tag == "" {
+			return fmt.Errorf("empty name('%s') or tag('%s') passed", name, tag)
+		}
+		container := &spec.Containers[0]
+
+		return addEnvVar(container, corev1.EnvVar{
+			Name:  utils.OverrideImageEnv(name),
+			Value: tag,
 		})
 	}
 }

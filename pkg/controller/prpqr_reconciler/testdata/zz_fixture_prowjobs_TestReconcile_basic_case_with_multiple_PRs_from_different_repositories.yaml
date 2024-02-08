@@ -22,7 +22,7 @@
     resourceVersion: "1"
   spec:
     agent: kubernetes
-    cluster: cluster-name-defaulted
+    cluster: cluster-name-overwritten
     decoration_config:
       skip_cloning: true
       timeout: 6h0m0s

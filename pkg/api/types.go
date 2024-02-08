@@ -1371,7 +1371,6 @@ const (
 	ClusterProfileDevSandboxCIAWS       ClusterProfile = "devsandboxci-aws"
 	ClusterProfileQuayAWS               ClusterProfile = "quay-aws"
 	ClusterProfileAWSEdgeInfra          ClusterProfile = "aws-edge-infra"
-	ClusterProfileRosaAws               ClusterProfile = "rosa-aws"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -1482,7 +1481,6 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfilePacket,
 		ClusterProfilePacketAssisted,
 		ClusterProfilePacketSNO,
-		ClusterProfileRosaAws,
 
 		ClusterProfileVSphere2,
 		ClusterProfileVSphere8Vpn,
@@ -1550,7 +1548,6 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileCheAWS,
 		ClusterProfileDevSandboxCIAWS,
 		ClusterProfileQuayAWS,
-		ClusterProfileRosaAws,
 		ClusterProfileAWSEdgeInfra:
 		return string(CloudAWS)
 	case
@@ -1935,8 +1932,6 @@ func (p ClusterProfile) LeaseType() string {
 		return "quay-aws-quota-slice"
 	case ClusterProfileAWSEdgeInfra:
 		return "aws-edge-infra-quota-slice"
-	case ClusterProfileRosaAws:
-		return "rosa-aws-quota-slice"
 	default:
 		return ""
 	}

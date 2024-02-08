@@ -536,7 +536,7 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 		case strings.Contains(inject.Test, "metal") || strings.Contains(inject.Test, "telco5g") || strings.Contains(inject.Test, "e2e-agent"):
 			jobBaseGen.Cluster("build05")
 		default:
-			jobBaseGen.Cluster("build01")
+			jobBaseGen.Cluster("build03")
 		}
 
 		periodic = prowgen.GeneratePeriodicForTest(jobBaseGen, fakeProwgenInfo, prowgen.FromConfigSpec(ciopConfig), func(options *prowgen.GeneratePeriodicOptions) {

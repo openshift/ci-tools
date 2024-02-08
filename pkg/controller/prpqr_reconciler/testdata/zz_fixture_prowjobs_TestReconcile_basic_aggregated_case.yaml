@@ -117,7 +117,7 @@
     resourceVersion: "1"
   spec:
     agent: kubernetes
-    cluster: cluster-name-defaulted
+    cluster: cluster-name-overwritten
     decoration_config:
       skip_cloning: true
     extra_refs:
@@ -202,7 +202,7 @@
     resourceVersion: "1"
   spec:
     agent: kubernetes
-    cluster: cluster-name-defaulted
+    cluster: cluster-name-overwritten
     decoration_config:
       skip_cloning: true
     extra_refs:

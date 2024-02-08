@@ -1,6 +1,7 @@
 promotion:
-  namespace: ocp
-  tag: "4.8"
+  to:
+  - namespace: ocp
+    tag: "4.8"
 zz_generated_metadata:
   branch: ""
   org: ""

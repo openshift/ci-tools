@@ -50,8 +50,9 @@ tag_specification:
   name: origin-v3.11
   namespace: openshift
 promotion:
-  namespace: ci
-  name: other
+  to:
+  - namespace: ci
+    name: other
 tests:
 - as: unit
   commands: make test-unit
@@ -88,8 +89,9 @@ tag_specification:
   name: origin-v3.11
   namespace: openshift
 promotion:
-  name: test
-  namespace: ci
+  to:
+  - name: test
+    namespace: ci
 tests:
 - as: unit
   commands: make test-unit
@@ -143,8 +145,9 @@ tag_specification:
   name: origin-v3.11
   namespace: openshift
 promotion:
-  name: test
-  namespace: ci
+  to:
+  - name: test
+    namespace: ci
 build_root:
   image_stream_tag:
     namespace: openshift
@@ -202,8 +205,9 @@ tag_specification:
   name: origin-v3.11
   namespace: openshift
 promotion:
-  name: test
-  namespace: ci
+  to:
+  - name: test
+    namespace: ci
 build_root:
   image_stream_tag:
     namespace: openshift

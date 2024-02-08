@@ -484,8 +484,6 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 			input: config.DataWithInfo{
 				Configuration: api.ReleaseBuildConfiguration{
 					PromotionConfiguration: &api.PromotionConfiguration{
-						Name:      "current-release",
-						Namespace: "ocp",
 						Targets: []api.PromotionTarget{
 							{
 								Tag:       "target-1-tag",
@@ -512,8 +510,6 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 				{
 					Configuration: api.ReleaseBuildConfiguration{
 						PromotionConfiguration: &api.PromotionConfiguration{
-							Name:      "future-release",
-							Namespace: "ocp",
 							Targets: []api.PromotionTarget{
 								{
 									Name:      "future-release",

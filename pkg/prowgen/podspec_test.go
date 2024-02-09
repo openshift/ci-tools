@@ -390,7 +390,6 @@ func TestClusterProfile(t *testing.T) {
 	tests := []api.ClusterProfile{
 		api.ClusterProfileAWS,
 		api.ClusterProfileGCP,
-		api.ClusterProfileOpenStack,
 		api.ClusterProfileAWSCPaaS,
 	}
 	for _, tc := range tests {

@@ -1287,7 +1287,6 @@ const (
 	ClusterProfileNutanixQE             ClusterProfile = "nutanix-qe"
 	ClusterProfileNutanixQEDis          ClusterProfile = "nutanix-qe-dis"
 	ClusterProfileNutanixQEZone         ClusterProfile = "nutanix-qe-zone"
-	ClusterProfileOpenStack             ClusterProfile = "openstack"
 	ClusterProfileOpenStackHwoffload    ClusterProfile = "openstack-hwoffload"
 	ClusterProfileOpenStackIBMOSP       ClusterProfile = "openstack-ibm-osp"
 	ClusterProfileOpenStackNFV          ClusterProfile = "openstack-nfv"
@@ -1426,7 +1425,6 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileNutanixQEDis,
 		ClusterProfileNutanixQEZone,
 		ClusterProfileOSDEphemeral,
-		ClusterProfileOpenStack,
 		ClusterProfileOpenStackHwoffload,
 		ClusterProfileOpenStackIBMOSP,
 		ClusterProfileOpenStackMechaAz0,
@@ -1606,8 +1604,6 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileNutanixQEDis,
 		ClusterProfileNutanixQEZone:
 		return "nutanix"
-	case ClusterProfileOpenStack:
-		return "openstack"
 	case ClusterProfileOpenStackHwoffload:
 		return "openstack-hwoffload"
 	case ClusterProfileOpenStackIBMOSP:
@@ -1830,8 +1826,6 @@ func (p ClusterProfile) LeaseType() string {
 		return "nutanix-qe-dis-quota-slice"
 	case ClusterProfileNutanixQEZone:
 		return "nutanix-qe-zone-quota-slice"
-	case ClusterProfileOpenStack:
-		return "openstack-quota-slice"
 	case ClusterProfileOpenStackHwoffload:
 		return "openstack-hwoffload-quota-slice"
 	case ClusterProfileOpenStackIBMOSP:

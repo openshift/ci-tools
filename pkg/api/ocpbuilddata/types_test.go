@@ -312,3 +312,46 @@ func TestDereferenceConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveStreamAliases(t *testing.T) {
+	testCases := []struct {
+		name      string
+		streamMap StreamMap
+		expected  StreamMap
+	}{
+		{
+			name:      "no aliases",
+			streamMap: StreamMap{"golang": {UpstreamImage: "openshift/golang-builder:rhel_8_golang_1.14"}},
+			expected:  StreamMap{"golang": {UpstreamImage: "openshift/golang-builder:rhel_8_golang_1.14"}},
+		},
+		{
+			name:      "alias",
+			streamMap: StreamMap{"golang": {Aliases: []string{"golang-{LATEST}"}, UpstreamImage: "openshift/golang-builder:rhel_8_golang_1.14"}},
+			expected: StreamMap{
+				"golang":          {Aliases: []string{"golang-{LATEST}"}, UpstreamImage: "openshift/golang-builder:rhel_8_golang_1.14"},
+				"golang-{LATEST}": {Aliases: []string{"golang-{LATEST}"}, UpstreamImage: "openshift/golang-builder:rhel_8_golang_1.14"},
+			},
+		},
+		{
+			name: "multiple aliases",
+			streamMap: StreamMap{
+				"golang": {Aliases: []string{"golang-{LATEST}"}, UpstreamImage: "openshift/golang-builder:rhel_8_golang_1.14"},
+				"rhel-9": {Aliases: []string{"rhel-{NEW_VERSION}"}, UpstreamImage: "openshift/rhel-builder:rhel_9"},
+			},
+			expected: StreamMap{
+				"golang":             {Aliases: []string{"golang-{LATEST}"}, UpstreamImage: "openshift/golang-builder:rhel_8_golang_1.14"},
+				"golang-{LATEST}":    {Aliases: []string{"golang-{LATEST}"}, UpstreamImage: "openshift/golang-builder:rhel_8_golang_1.14"},
+				"rhel-9":             {Aliases: []string{"rhel-{NEW_VERSION}"}, UpstreamImage: "openshift/rhel-builder:rhel_9"},
+				"rhel-{NEW_VERSION}": {Aliases: []string{"rhel-{NEW_VERSION}"}, UpstreamImage: "openshift/rhel-builder:rhel_9"},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := resolveStreamAliases(tc.streamMap)
+			if diff := cmp.Diff(result, tc.expected); diff != "" {
+				t.Errorf("result differs from expected: %s", diff)
+			}
+		})
+	}
+}

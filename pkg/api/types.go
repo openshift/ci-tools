@@ -497,52 +497,6 @@ type PromotionConfiguration struct {
 	// a registry.
 	Targets []PromotionTarget `json:"to,omitempty"`
 
-	// Namespace identifies the namespace to which the built
-	// artifacts will be published to.
-	// Deprecated, prefer to set promotion.targets[0].namespace
-	Namespace string `json:"namespace,omitempty"`
-
-	// Name is an optional image stream name to use that
-	// contains all component tags. If specified, tag is
-	// ignored.
-	// Deprecated, prefer to set promotion.targets[0].name
-	Name string `json:"name,omitempty"`
-
-	// Tag is the ImageStreamTag tagged in for each
-	// build image's ImageStream.
-	// Deprecated, prefer to set promotion.targets[0].tag
-	Tag string `json:"tag,omitempty"`
-
-	// TagByCommit determines if an image should be tagged by the
-	// git commit that was used to build it. If Tag is also set,
-	// this will cause both a floating tag and commit-specific tags
-	// to be promoted.
-	// Deprecated, prefer to set promotion.targets[0].tag_by_commit
-	TagByCommit bool `json:"tag_by_commit,omitempty"`
-
-	// ExcludedImages are image names that will not be promoted.
-	// Exclusions are made before additional_images are included.
-	// Use exclusions when you want to build images for testing
-	// but not promote them afterwards.
-	// Deprecated, prefer to set promotion.targets[0].excluded_images
-	ExcludedImages []string `json:"excluded_images,omitempty"`
-
-	// AdditionalImages is a mapping of images to promote. The
-	// images will be taken from the pipeline image stream. The
-	// key is the name to promote as and the value is the source
-	// name. If you specify a tag that does not exist as the source
-	// the destination tag will not be created.
-	// Deprecated, prefer to set promotion.targets[0].additional_images
-	AdditionalImages map[string]string `json:"additional_images,omitempty"`
-
-	// Disabled will no-op succeed instead of running the actual
-	// promotion step. This is useful when two branches need to
-	// promote to the same output imagestream on a cut-over but
-	// never concurrently, and you want to have promotion config
-	// in the ci-operator configuration files all the time.
-	// Deprecated, prefer to set promotion.targets[0].disabled
-	Disabled bool `json:"disabled,omitempty"`
-
 	// RegistryOverride is an override for the registry domain to
 	// which we will mirror images. This is an advanced option and
 	// should *not* be used in common test workflows. The CI chat

@@ -419,12 +419,6 @@ func validatePromotionConfiguration(fieldRoot string, input api.PromotionConfigu
 	var validationErrors []error
 
 	thisFieldRoot := func(i int) string {
-		if input.Namespace != "" {
-			if i == 0 {
-				return fieldRoot
-			}
-			return fmt.Sprintf("%s.to[%d]", fieldRoot, i-1)
-		}
 		return fmt.Sprintf("%s.to[%d]", fieldRoot, i)
 	}
 	targets := api.PromotionTargets(&input)

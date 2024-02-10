@@ -20,9 +20,10 @@ type ImageRef struct {
 	Branches       []BranchRef `graphql:"branches"`
 	Parents        []ImageRef  `graphql:"parents"`
 	Children       []ImageRef  `graphql:"children"`
+	MultiArch      bool        `graphql:"multiArch"`
 }
 
-func (o *Operator) UpdateImage(image api.ProjectDirectoryImageBuildStepConfiguration, baseImages map[string]api.ImageStreamTagReference, c api.PromotionTarget, branchID string) error {
+func (o *Operator) UpdateImage(image api.ProjectDirectoryImageBuildStepConfiguration, baseImages map[string]api.ImageStreamTagReference, c api.PromotionTarget, branchID string, multiArch bool) error {
 	imageName := fmt.Sprintf("%s/%s:%s", c.Namespace, c.Name, string(image.To))
 
 	if c.Name == "" {
@@ -38,6 +39,7 @@ func (o *Operator) UpdateImage(image api.ProjectDirectoryImageBuildStepConfigura
 		Namespace:      c.Namespace,
 		ImageStreamRef: c.Name,
 		Branches:       []BranchRef{{ID: branchID}},
+		MultiArch:      multiArch,
 	}
 
 	if isInternalBaseImage(string(image.From)) {
@@ -103,6 +105,7 @@ func (o *Operator) addImageRef(image *ImageRef) error {
 		"namespace":      image.Namespace,
 		"imageStreamRef": image.ImageStreamRef,
 		"fromRoot":       image.FromRoot,
+		"multiArch":      image.MultiArch,
 	}
 
 	if image.Source != "" {
@@ -167,6 +170,7 @@ func (o *Operator) updateImageRef(newImage *ImageRef, id string) error {
 		"imageStreamRef": newImage.ImageStreamRef,
 		"namespace":      newImage.Namespace,
 		"fromRoot":       newImage.FromRoot,
+		"multiArch":      newImage.MultiArch,
 	}
 
 	if newImage.Source != "" {

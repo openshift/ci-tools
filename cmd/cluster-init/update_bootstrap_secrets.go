@@ -28,7 +28,7 @@ const (
 	push pushPull = "pusher"
 )
 
-func updateCiSecretBootstrap(o options) error {
+func updateCiSecretBootstrap(o options, osdClusters []string) error {
 	secretBootstrapDir := filepath.Join(o.releaseRepo, "core-services", "ci-secret-bootstrap")
 	secretBootstrapConfigFile := filepath.Join(secretBootstrapDir, "_config.yaml")
 	logrus.Infof("Updating ci-secret-bootstrap: %s", secretBootstrapConfigFile)
@@ -37,19 +37,26 @@ func updateCiSecretBootstrap(o options) error {
 	if err := secretbootstrap.LoadConfigFromFile(secretBootstrapConfigFile, &c); err != nil {
 		return err
 	}
-	if err := updateCiSecretBootstrapConfig(o, &c); err != nil {
+	osdClustersSet := sets.New[string](osdClusters...)
+	if err := updateCiSecretBootstrapConfig(o, &c, osdClustersSet.Has(o.clusterName)); err != nil {
 		return err
 	}
 	return secretbootstrap.SaveConfigToFile(secretBootstrapConfigFile, &c)
 }
 
-func updateCiSecretBootstrapConfig(o options, c *secretbootstrap.Config) error {
+func updateCiSecretBootstrapConfig(o options, c *secretbootstrap.Config, osd bool) error {
 	for _, groupName := range []string{buildUFarm, "non_app_ci"} {
 		c.ClusterGroups[groupName] = sets.List(sets.New[string](c.ClusterGroups[groupName]...).Insert(o.clusterName))
 	}
-	// build01, build02, build09 and multi01 are not OSD clusters and thus they should never be in the group
-	if o.clusterName != string(api.ClusterBuild01) && o.clusterName != string(api.ClusterBuild02) && o.clusterName != string(api.ClusterBuild09) && o.clusterName != string(api.ClusterMulti01) && !o.unmanaged {
-		groupName := secretbootstrap.OSDGlobalPullSecretGroupName
+	// non-OSD clusters should never be in the group
+	var groupName string = ""
+	if osd && !o.unmanaged {
+		groupName = secretbootstrap.OSDGlobalPullSecretGroupName
+	}
+	if !osd {
+		groupName = secretbootstrap.OpenShiftConfigPullSecretGroupName
+	}
+	if groupName != "" {
 		c.ClusterGroups[groupName] = sets.List(sets.New[string](append(c.ClusterGroups[groupName], o.clusterName)...))
 	}
 	c.UserSecretsTargetClusters = sets.List(sets.New[string](c.UserSecretsTargetClusters...).Insert(o.clusterName))

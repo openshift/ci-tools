@@ -3,3 +3,5 @@ hosted:
 managed:
 - existingCluster
 - newCluster
+osd:
+- newCluster

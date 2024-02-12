@@ -41,6 +41,7 @@ type options struct {
 
 	hosted    bool
 	unmanaged bool
+	osd       bool
 }
 
 func (o options) String() string {
@@ -59,6 +60,7 @@ func parseOptions() (options, error) {
 	fs.BoolVar(&o.useTokenFileInKubeconfig, "use-token-file-in-kubeconfig", true, "Set true if the token files are used in kubeconfigs. Set to true by default")
 	fs.BoolVar(&o.hosted, "hosted", false, "Set true if the cluster is hosted (i.e., HyperShift hosted cluster). Set to false by default")
 	fs.BoolVar(&o.unmanaged, "unmanaged", false, "Set true if the cluster is unmanaged (i.e., not managed by DPTP). Set to false by default")
+	fs.BoolVar(&o.osd, "osd", true, "Set true if the cluster is an OSD cluster. Set to true by default")
 
 	o.GitAuthorOptions.AddFlags(fs)
 	o.PRCreationOptions.AddFlags(fs)
@@ -166,6 +168,7 @@ func main() {
 	errorCount := 0
 	var clusters []string
 	var hostedClusters []string
+	var osdClusters []string
 
 	buildClusters, err := loadBuildClusters(o)
 	if err != nil {
@@ -176,10 +179,14 @@ func main() {
 		// Updating ALL cluster-init managed clusters
 		clusters = buildClusters.Managed
 		hostedClusters = buildClusters.Hosted
+		osdClusters = buildClusters.Osd
 	} else {
 		clusters = []string{o.clusterName}
 		if o.hosted {
 			hostedClusters = append(buildClusters.Hosted, o.clusterName)
+		}
+		if o.osd {
+			osdClusters = append(buildClusters.Osd, o.clusterName)
 		}
 	}
 	for _, cluster := range clusters {
@@ -187,7 +194,7 @@ func main() {
 		steps := []func(options) error{
 			updateJobs,
 			func(o options) error { return updateClusterBuildFarmDir(o, hostedClusters) },
-			updateCiSecretBootstrap,
+			func(o options) error { return updateCiSecretBootstrap(o, osdClusters) },
 			updateSecretGenerator,
 			updateSanitizeProwJobs,
 			updateSyncRoverGroups,

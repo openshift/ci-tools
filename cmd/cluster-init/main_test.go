@@ -114,6 +114,22 @@ func TestValidateOptions(t *testing.T) {
 				unmanaged:   true,
 			},
 		},
+		{
+			name: "valid with osd true",
+			options: options{
+				clusterName: "newOSDCluster",
+				releaseRepo: testdata,
+				osd:         true,
+			},
+		},
+		{
+			name: "valid with osd false",
+			options: options{
+				clusterName: "newOCPCluster",
+				releaseRepo: testdata,
+				osd:         false,
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

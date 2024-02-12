@@ -353,6 +353,10 @@ func gatherAllOCPImageConfigs(ocpBuildDataDir string, majorMinor MajorMinor) (ma
 		if info.IsDir() {
 			return nil
 		}
+		// We only want to operate on "yaml" ("yml") files, so we don't load disabled configs
+		if !strings.HasSuffix(info.Name(), "yaml") && !strings.HasSuffix(info.Name(), "yml") {
+			return nil
+		}
 		errGroup.Go(func() error {
 			config := OCPImageConfig{}
 			if err := readYAML(path, &config, majorMinor); err != nil {

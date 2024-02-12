@@ -130,7 +130,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
-			name: "basic case with multiple PRs from different repositories",
+			name: "multiple PRs from different repositories",
 			prpqr: []ctrlruntimeclient.Object{
 				&v1.PullRequestPayloadQualificationRun{
 					ObjectMeta: metav1.ObjectMeta{Name: "prpqr-test", Namespace: "test-namespace"},
@@ -148,7 +148,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
-			name: "basic case with multiple PRs from the same repository",
+			name: "multiple PRs from the same repository",
 			prpqr: []ctrlruntimeclient.Object{
 				&v1.PullRequestPayloadQualificationRun{
 					ObjectMeta: metav1.ObjectMeta{Name: "prpqr-test", Namespace: "test-namespace"},

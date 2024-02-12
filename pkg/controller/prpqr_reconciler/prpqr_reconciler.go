@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -544,8 +545,17 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 		orgRepo := fmt.Sprintf("%s/%s", pr.Org, pr.Repo)
 		prsByRepo[orgRepo] = append(prsByRepo[orgRepo], pr)
 	}
+	// We need to iterate through the prsByRepo map in a deterministic order for testing purposes
+	var orgRepos []string
+	for orgRepo := range prsByRepo {
+		orgRepos = append(orgRepos, orgRepo)
+	}
+	sort.Slice(orgRepos, func(i, j int) bool {
+		return orgRepos[i] < orgRepos[j]
+	})
 	var refs []prowv1.Refs
-	for _, prsForRepo := range prsByRepo {
+	for _, orgRepo := range orgRepos {
+		prsForRepo := prsByRepo[orgRepo]
 		primaryPR := prsForRepo[0] // Common info can be obtained from the first pr in the list
 		ref := prowv1.Refs{
 			Org:  primaryPR.Org,

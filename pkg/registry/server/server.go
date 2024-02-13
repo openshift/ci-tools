@@ -127,40 +127,6 @@ func getInjectTestFromQuery(w http.ResponseWriter, r *http.Request) (*api.Metada
 	return &ret, nil
 }
 
-// Deprecated, use ResolveAndMergeConfigsAndInjectTest instead
-// TODO(sgoeddel): this should be removed in the future once it is confirmed that it is no longer used
-func ResolveConfigWithInjectedTest(configs Getter, resolver Resolver, resolverMetrics *metrics.Metrics) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			w.WriteHeader(http.StatusNotImplemented)
-			_, _ = w.Write([]byte(http.StatusText(http.StatusNotImplemented)))
-			return
-		}
-		metadata, err := MetadataFromQuery(w, r)
-		if err != nil {
-			// MetadataFromQuery deals with setting status code and writing response
-			// so we need to just log the error here
-			metrics.RecordError("invalid query", resolverMetrics.ErrorRate)
-			logrus.WithError(err).Warning("failed to read query from request")
-			return
-		}
-		logger := logrus.WithFields(api.LogFieldsFor(metadata))
-
-		config, err := configs.GetMatchingConfig(metadata)
-		if err != nil {
-			metrics.RecordError("config not found", resolverMetrics.ErrorRate)
-			w.WriteHeader(http.StatusNotFound)
-			fmt.Fprintf(w, "failed to get config: %v", err)
-			logger.WithError(err).Warning("failed to get config")
-			return
-		}
-
-		if configWithInjectedTest := injectTest(config, configs, resolverMetrics, w, r, logger); configWithInjectedTest != nil {
-			resolveAndRespond(resolver, *configWithInjectedTest, w, logger, resolverMetrics)
-		}
-	}
-}
-
 func injectTest(injectTo api.ReleaseBuildConfiguration, configs Getter, resolverMetrics *metrics.Metrics, w http.ResponseWriter, r *http.Request, logger *logrus.Entry) *api.ReleaseBuildConfiguration {
 	inject, err := getInjectTestFromQuery(w, r)
 	if err != nil {

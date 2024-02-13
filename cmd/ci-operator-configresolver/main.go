@@ -220,8 +220,6 @@ func main() {
 	// add handler func for incorrect paths as well; can help with identifying errors/404s caused by incorrect paths
 	http.HandleFunc("/", handler(http.HandlerFunc(http.NotFound)).ServeHTTP)
 	http.HandleFunc("/config", handler(registryserver.ResolveConfig(configAgent, registryAgent, configresolverMetrics)).ServeHTTP)
-	//TODO(sgoeddel): this is deprecated, mergeConfigsWithInjectedTest should be used instead
-	http.HandleFunc("/configWithInjectedTest", handler(registryserver.ResolveConfigWithInjectedTest(configAgent, registryAgent, configresolverMetrics)).ServeHTTP)
 	http.HandleFunc("/mergeConfigsWithInjectedTest", handler(registryserver.ResolveAndMergeConfigsAndInjectTest(configAgent, registryAgent, configresolverMetrics)).ServeHTTP)
 	http.HandleFunc("/resolve", handler(registryserver.ResolveLiteralConfig(registryAgent, configresolverMetrics)).ServeHTTP)
 	http.HandleFunc("/configGeneration", handler(getConfigGeneration(configAgent)).ServeHTTP)

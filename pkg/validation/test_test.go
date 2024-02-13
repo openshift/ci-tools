@@ -564,6 +564,39 @@ func TestValidateTests(t *testing.T) {
 			expectedError: errors.New("tests[0]: `cron`/`interval`/`minimum_interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`"),
 		},
 		{
+			id: "cron can be with run_if_changed if presubmit is true",
+			tests: []api.TestStepConfiguration{{
+				As:                         "unit",
+				Commands:                   "commands",
+				Cron:                       &cronString,
+				RunIfChanged:               "^(Containerfile.*|pyproject.toml|Makefile|ols/.*|scripts/.*|tests/.*|*.py)$",
+				Presubmit:                  true,
+				ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+			}},
+		},
+		{
+			id: "cron is mutually exclusive with skip_if_only_changed",
+			tests: []api.TestStepConfiguration{{
+				As:                         "unit",
+				Commands:                   "commands",
+				Cron:                       &cronString,
+				SkipIfOnlyChanged:          "^README.md$",
+				ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+			}},
+			expectedError: errors.New("tests[0]: `cron`/`interval`/`minimum_interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`"),
+		},
+		{
+			id: "cron can be with skip_if_not_changed if presubmit is true",
+			tests: []api.TestStepConfiguration{{
+				As:                         "unit",
+				Commands:                   "commands",
+				Cron:                       &cronString,
+				SkipIfOnlyChanged:          "^README.md$",
+				Presubmit:                  true,
+				ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+			}},
+		},
+		{
 			id: "interval is mutually exclusive with run_if_changed",
 			tests: []api.TestStepConfiguration{{
 				As:           "unit",

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -465,5 +466,20 @@ func MetadataEntriesFromQuery(w http.ResponseWriter, r *http.Request) ([]api.Met
 		metadata.Insert(element)
 	}
 
-	return metadata.UnsortedList(), nil
+	result := metadata.UnsortedList()
+	sort.SliceStable(result, func(i, j int) bool {
+		one := result[i]
+		two := result[j]
+		if one.Org != two.Org {
+			return one.Org < two.Org
+		}
+		if one.Repo != two.Repo {
+			return one.Repo < two.Repo
+		}
+		if one.Branch != two.Branch {
+			return one.Branch < two.Branch
+		}
+		return one.Variant < two.Variant
+	})
+	return result, nil
 }

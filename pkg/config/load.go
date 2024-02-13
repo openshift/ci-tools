@@ -75,6 +75,26 @@ func (p *Prowgen) MergeDefaults(defaults *Prowgen) {
 	p.Rehearsals.DisabledRehearsals = append(p.Rehearsals.DisabledRehearsals, defaults.Rehearsals.DisabledRehearsals...)
 }
 
+func LoadProwgenConfig(folder string) (*Prowgen, error) {
+	var pConfig *Prowgen
+	path := filepath.Join(folder, ProwgenFile)
+	b, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("prowgen config found in path %s but couldn't read the file: %w", path, err)
+	}
+
+	if err == nil {
+		if err := yaml.Unmarshal(b, &pConfig); err != nil {
+			return nil, fmt.Errorf("prowgen config found in path %sbut couldn't unmarshal it: %w", path, err)
+		}
+		if err := pConfig.Validate(); err != nil {
+			return nil, fmt.Errorf("prowgen config found in path %s is not valid: %w", path, err)
+		}
+	}
+
+	return pConfig, nil
+}
+
 type Rehearsals struct {
 	// DisableAll indicates that all jobs will not have their "can-be-rehearsed" label set
 	// and therefore will not be picked up for rehearsals.

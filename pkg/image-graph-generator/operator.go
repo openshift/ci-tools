@@ -79,13 +79,32 @@ func (o *Operator) callback(c *api.ReleaseBuildConfiguration, i *config.Info) er
 		return nil
 	}
 
+	configProwgen := &config.Prowgen{}
+	orgProwgenConfig, err := config.LoadProwgenConfig(i.OrgPath)
+	if err != nil {
+		return err
+	}
+
+	repoProwgenConfig, err := config.LoadProwgenConfig(i.RepoPath)
+	if err != nil {
+		return err
+	}
+
+	if repoProwgenConfig != nil {
+		configProwgen = repoProwgenConfig
+	}
+
+	if orgProwgenConfig != nil {
+		configProwgen.MergeDefaults(orgProwgenConfig)
+	}
+
 	var errs []error
 	for _, target := range api.PromotionTargets(c.PromotionConfiguration) {
 		excludedImages := sets.New[string](target.ExcludedImages...)
 
 		for _, image := range c.Images {
 			if !excludedImages.Has(string(image.To)) {
-				if err := o.UpdateImage(image, c.BaseImages, target, branchID); err != nil {
+				if err := o.UpdateImage(image, c.BaseImages, target, branchID, configProwgen.MultiArch); err != nil {
 					errs = append(errs, err)
 				}
 			}

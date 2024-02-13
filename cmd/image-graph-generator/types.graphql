@@ -28,4 +28,5 @@ type Image  {
 	fromRoot: Boolean
 	branches: [Branch] @hasInverse(field:images)
 	source: String
+	multiArch: Boolean
 }

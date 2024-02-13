@@ -943,6 +943,27 @@ trigger 0 job(s) of type all for the ci release of OCP 4.8
 			},
 			expectedMessage: `aborted active payload jobs for pull request org/repo#123`,
 		},
+		{
+			name: "incorrectly formatted command",
+			s: &server{
+				ghc:            ghc,
+				ctx:            context.TODO(),
+				namespace:      "ci",
+				trustedChecker: &fakeTrustedChecker{},
+			},
+			ic: github.IssueCommentEvent{
+				GUID: "guid",
+				Repo: github.Repo{Owner: github.User{Login: "org"}, Name: "repo"},
+				Issue: github.Issue{
+					Number:      123,
+					PullRequest: &struct{}{},
+				},
+				Comment: github.IssueComment{
+					Body: "/payload-something-that-doesnt-exist 4.10 nightly informing",
+				},
+			},
+			expectedMessage: `it appears that you have attempted to use some version of the payload command, but your comment was incorrectly formatted and cannot be acted upon. See the [docs](https://docs.ci.openshift.org/docs/release-oversight/payload-testing/#usage) for usage info.`,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

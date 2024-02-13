@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sync"
 	"time"
 
 	coreapi "k8s.io/api/core/v1"
@@ -25,6 +26,7 @@ type FakePodExecutor struct {
 	loggingclient.LoggingClient
 	Failures    sets.Set[string]
 	CreatedPods []*coreapi.Pod
+	lock        sync.Mutex
 }
 
 func (f *FakePodExecutor) Create(ctx context.Context, o ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
@@ -32,7 +34,11 @@ func (f *FakePodExecutor) Create(ctx context.Context, o ctrlruntimeclient.Object
 		if pod.Namespace == "" {
 			return errors.New("pod had no namespace set")
 		}
-		f.CreatedPods = append(f.CreatedPods, pod.DeepCopy())
+		func() {
+			f.lock.Lock()
+			defer f.lock.Unlock()
+			f.CreatedPods = append(f.CreatedPods, pod.DeepCopy())
+		}()
 		pod.Status.Phase = coreapi.PodPending
 	}
 	return f.LoggingClient.Create(ctx, o, opts...)

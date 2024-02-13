@@ -165,6 +165,11 @@ func generateRegistryPullCredentialsSecret(o options) secretbootstrap.SecretConf
 					Item:        "quay.io-pull-secret",
 					RegistryURL: "quay.io",
 				},
+				{
+					AuthField:   "auth",
+					Item:        "quayio-ci-read-only-robot",
+					RegistryURL: "quay-proxy.ci.openshift.org",
+				},
 			}),
 		},
 		To: []secretbootstrap.SecretContext{

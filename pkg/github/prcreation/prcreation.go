@@ -135,6 +135,8 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: secret.Censor}
 
 	sourceBranchName := strings.ReplaceAll(strings.ToLower(prArgs.matchTitle), " ", "-")
+	// Fix for NO-ISSUE: title
+	sourceBranchName = strings.ReplaceAll(strings.ToLower(sourceBranchName), ":", "-")
 	o.GithubClient.SetMax404Retries(0)
 	if _, err := o.GithubClient.GetRepo(username, repo); err != nil {
 		// Somehow github.IsNotFound doesn't recognize this?

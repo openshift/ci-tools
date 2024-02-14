@@ -8,6 +8,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/util/sets"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	utilpointer "k8s.io/utils/pointer"
@@ -23,16 +24,17 @@ const (
 	generator    jobconfig.Generator = "cluster-init"
 )
 
-func updateJobs(o options) error {
+func updateJobs(o options, osdClusters []string) error {
 	logrus.Infof("generating: presubmits, postsubmits, and periodics for %s", o.clusterName)
+	osdClustersSet := sets.NewString(osdClusters...)
 	config := prowconfig.JobConfig{
 		PresubmitsStatic: map[string][]prowconfig.Presubmit{
-			"openshift/release": {generatePresubmit(o.clusterName)},
+			"openshift/release": {generatePresubmit(o.clusterName, osdClustersSet.Has(o.clusterName), o.unmanaged)},
 		},
 		PostsubmitsStatic: map[string][]prowconfig.Postsubmit{
-			"openshift/release": {generatePostsubmit(o.clusterName)},
+			"openshift/release": {generatePostsubmit(o.clusterName, osdClustersSet.Has(o.clusterName), o.unmanaged)},
 		},
-		Periodics: []prowconfig.Periodic{generatePeriodic(o.clusterName)},
+		Periodics: []prowconfig.Periodic{generatePeriodic(o.clusterName, osdClustersSet.Has(o.clusterName), o.unmanaged)},
 	}
 	metadata := RepoMetadata()
 	jobsDir := filepath.Join(o.releaseRepo, "ci-operator", "jobs")
@@ -44,7 +46,7 @@ func updateJobs(o options) error {
 		map[string]string{jobconfig.LabelBuildFarm: o.clusterName})
 }
 
-func generatePeriodic(clusterName string) prowconfig.Periodic {
+func generatePeriodic(clusterName string, osd bool, unmanaged bool) prowconfig.Periodic {
 	return prowconfig.Periodic{
 		JobBase: prowconfig.JobBase{
 			Name:       RepoMetadata().SimpleJobName(jobconfig.PeriodicPrefix, clusterName+"-apply"),
@@ -56,6 +58,7 @@ func generatePeriodic(clusterName string) prowconfig.Periodic {
 				Containers: []v1.Container{
 					generateContainer("applyconfig:latest",
 						clusterName,
+						osd, unmanaged,
 						[]string{"--confirm=true"},
 						nil, nil)},
 				ServiceAccountName: configUpdater,
@@ -77,7 +80,7 @@ func generatePeriodic(clusterName string) prowconfig.Periodic {
 	}
 }
 
-func generatePostsubmit(clusterName string) prowconfig.Postsubmit {
+func generatePostsubmit(clusterName string, osd bool, unmanaged bool) prowconfig.Postsubmit {
 	return prowconfig.Postsubmit{
 		JobBase: prowconfig.JobBase{
 			Name:       RepoMetadata().JobName(jobconfig.PostsubmitPrefix, clusterName+"-apply"),
@@ -87,7 +90,7 @@ func generatePostsubmit(clusterName string) prowconfig.Postsubmit {
 			Spec: &v1.PodSpec{
 				Volumes: []v1.Volume{generateSecretVolume(clusterName)},
 				Containers: []v1.Container{
-					generateContainer(latestImage, clusterName, []string{"--confirm=true"}, nil, nil)},
+					generateContainer(latestImage, clusterName, osd, unmanaged, []string{"--confirm=true"}, nil, nil)},
 				ServiceAccountName: configUpdater,
 			},
 			UtilityConfig: prowconfig.UtilityConfig{
@@ -105,7 +108,7 @@ func generatePostsubmit(clusterName string) prowconfig.Postsubmit {
 	}
 }
 
-func generatePresubmit(clusterName string) prowconfig.Presubmit {
+func generatePresubmit(clusterName string, osd bool, unmanaged bool) prowconfig.Presubmit {
 	var optional bool
 	if clusterName == string(api.ClusterVSphere02) {
 		optional = true
@@ -127,6 +130,7 @@ func generatePresubmit(clusterName string) prowconfig.Presubmit {
 				Containers: []v1.Container{
 					generateContainer(latestImage,
 						clusterName,
+						osd, unmanaged,
 						nil,
 						[]v1.VolumeMount{{Name: "tmp", MountPath: "/tmp"}}, []v1.EnvVar{{Name: "HOME", Value: "/tmp"}})},
 				ServiceAccountName: configUpdater,
@@ -170,10 +174,11 @@ func generateSecretVolume(clusterName string) v1.Volume {
 	}
 }
 
-func generateContainer(image, clusterName string, extraArgs []string, extraVolumeMounts []v1.VolumeMount, extraEnvVars []v1.EnvVar) v1.Container {
+func generateContainer(image, clusterName string, osd bool, unmanaged bool, extraArgs []string, extraVolumeMounts []v1.VolumeMount, extraEnvVars []v1.EnvVar) v1.Container {
 	var env []v1.EnvVar
 	env = append(env, extraEnvVars...)
-	if clusterName == string(api.ClusterBuild01) || clusterName == string(api.ClusterBuild02) || clusterName == string(api.ClusterBuild09) {
+	// remove the `multi01` check once multi01 is decommissioned
+	if !osd && !unmanaged && clusterName != string(api.ClusterMulti01) {
 		env = append(env, v1.EnvVar{
 			Name: clusterName + "_id",
 			ValueFrom: &v1.EnvVarSource{

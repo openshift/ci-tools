@@ -192,7 +192,7 @@ func main() {
 	for _, cluster := range clusters {
 		o.clusterName = cluster
 		steps := []func(options) error{
-			updateJobs,
+			func(o options) error { return updateJobs(o, osdClusters) },
 			func(o options) error { return updateClusterBuildFarmDir(o, hostedClusters) },
 			func(o options) error { return updateCiSecretBootstrap(o, osdClusters) },
 			updateSecretGenerator,

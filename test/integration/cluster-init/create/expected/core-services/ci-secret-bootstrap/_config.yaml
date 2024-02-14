@@ -304,6 +304,9 @@ secret_configs:
         email_field: email
         item: quay.io-pull-secret
         registry_url: quay.io
+      - auth_field: auth
+        item: quayio-ci-read-only-robot
+        registry_url: quay-proxy.ci.openshift.org
   to:
   - cluster: newCluster
     name: registry-pull-credentials

@@ -1296,6 +1296,7 @@ const (
 	ClusterProfileOpenStackVexxhost     ClusterProfile = "openstack-vexxhost"
 	ClusterProfileOpenStackPpc64le      ClusterProfile = "openstack-ppc64le"
 	ClusterProfileOpenStackOpVexxhost   ClusterProfile = "openstack-operators-vexxhost"
+	ClusterProfileOpenStackNercDev      ClusterProfile = "openstack-nerc-dev"
 	ClusterProfileOvirt                 ClusterProfile = "ovirt"
 	ClusterProfilePacket                ClusterProfile = "packet"
 	ClusterProfilePacketAssisted        ClusterProfile = "packet-assisted"
@@ -1434,6 +1435,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileOpenStackPpc64le,
 		ClusterProfileOpenStackVexxhost,
 		ClusterProfileOpenStackOpVexxhost,
+		ClusterProfileOpenStackNercDev,
 		ClusterProfileOvirt,
 		ClusterProfilePacket,
 		ClusterProfilePacketAssisted,
@@ -1624,6 +1626,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "openstack-ppc64le"
 	case ClusterProfileOpenStackOpVexxhost:
 		return "openstack-operators-vexxhost"
+	case ClusterProfileOpenStackNercDev:
+		return "openstack-nerc-dev"
 	case
 		ClusterProfileVSphere2,
 		ClusterProfileVSphereMultizone2,
@@ -1836,6 +1840,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "openstack-vh-mecha-central-quota-slice"
 	case ClusterProfileOpenStackMechaAz0:
 		return "openstack-vh-mecha-az0-quota-slice"
+	case ClusterProfileOpenStackNercDev:
+		return "openstack-nerc-dev"
 	case ClusterProfileOpenStackOsuosl:
 		return "openstack-osuosl-quota-slice"
 	case ClusterProfileOpenStackVexxhost:
@@ -1968,7 +1974,7 @@ func (p ClusterProfile) Secret() string {
 // LeaseTypeFromClusterType maps cluster types to lease types
 func LeaseTypeFromClusterType(t string) (string, error) {
 	switch t {
-	case "aws", "aws-arm64", "aws-c2s", "aws-china", "aws-usgov", "aws-sc2s", "aws-osd-msp", "aws-outpost", "aws-local-zones", "aws-opendatahub", "alibaba", "azure-2", "azure4", "azure-arc", "azure-arm64", "azurestack", "azuremag", "equinix-ocp-metal", "gcp", "gcp-arm64", "gcp-opendatahub", "libvirt-ppc64le", "libvirt-s390x", "libvirt-s390x-amd64", "ibmcloud-multi-ppc64le", "ibmcloud-multi-s390x", "nutanix", "nutanix-qe", "nutanix-qe-dis", "nutanix-qe-zone", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet", "packet-edge", "powervs-multi-1", "powervs-1", "powervs-2", "powervs-3", "powervs-4", "kubevirt", "aws-cpaas", "osd-ephemeral", "gcp-virtualization", "aws-virtualization", "azure-virtualization", "hypershift-powervs", "hypershift-powervs-cb":
+	case "aws", "aws-arm64", "aws-c2s", "aws-china", "aws-usgov", "aws-sc2s", "aws-osd-msp", "aws-outpost", "aws-local-zones", "aws-opendatahub", "alibaba", "azure-2", "azure4", "azure-arc", "azure-arm64", "azurestack", "azuremag", "equinix-ocp-metal", "gcp", "gcp-arm64", "gcp-opendatahub", "libvirt-ppc64le", "libvirt-s390x", "libvirt-s390x-amd64", "ibmcloud-multi-ppc64le", "ibmcloud-multi-s390x", "nutanix", "nutanix-qe", "nutanix-qe-dis", "nutanix-qe-zone", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "openstack-nerc-dev", "vsphere", "ovirt", "packet", "packet-edge", "powervs-multi-1", "powervs-1", "powervs-2", "powervs-3", "powervs-4", "kubevirt", "aws-cpaas", "osd-ephemeral", "gcp-virtualization", "aws-virtualization", "azure-virtualization", "hypershift-powervs", "hypershift-powervs-cb":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

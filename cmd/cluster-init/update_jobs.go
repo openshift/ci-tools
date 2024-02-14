@@ -45,6 +45,10 @@ func updateJobs(o options) error {
 }
 
 func generatePeriodic(clusterName string) prowconfig.Periodic {
+	extraParams := []string{"--confirm=true"}
+	if clusterName == string(api.ClusterBuild09) {
+		extraParams = append(extraParams, "--server-side=true")
+	}
 	return prowconfig.Periodic{
 		JobBase: prowconfig.JobBase{
 			Name:       RepoMetadata().SimpleJobName(jobconfig.PeriodicPrefix, clusterName+"-apply"),
@@ -56,7 +60,7 @@ func generatePeriodic(clusterName string) prowconfig.Periodic {
 				Containers: []v1.Container{
 					generateContainer("applyconfig:latest",
 						clusterName,
-						[]string{"--confirm=true"},
+						extraParams,
 						nil, nil)},
 				ServiceAccountName: configUpdater,
 			},

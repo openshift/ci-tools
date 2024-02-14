@@ -39,14 +39,14 @@
   },
   "images": [
     {
-      "from": "base-openshift.installer",
-      "to": "installer-openshift.installer",
-      "ref": "openshift.installer"
-    },
-    {
       "from": "base-openshift.console",
       "to": "console-openshift.console",
       "ref": "openshift.console"
+    },
+    {
+      "from": "base-openshift.installer",
+      "to": "installer-openshift.installer",
+      "ref": "openshift.installer"
     }
   ],
   "tests": [

@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/metrics"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -451,7 +453,7 @@ func MetadataEntriesFromQuery(w http.ResponseWriter, r *http.Request) ([]api.Met
 		fmt.Fprint(w, "If any variants are passed, there must be one for each ref. Blank variants are allowed.")
 	}
 
-	var metadata []api.Metadata
+	metadata := make(sets.Set[api.Metadata])
 	for i, org := range orgs {
 		element := api.Metadata{
 			Org:    org,
@@ -461,8 +463,23 @@ func MetadataEntriesFromQuery(w http.ResponseWriter, r *http.Request) ([]api.Met
 		if variantsExist {
 			element.Variant = variants[i]
 		}
-		metadata = append(metadata, element)
+		metadata.Insert(element)
 	}
 
-	return metadata, nil
+	result := metadata.UnsortedList()
+	sort.SliceStable(result, func(i, j int) bool {
+		one := result[i]
+		two := result[j]
+		if one.Org != two.Org {
+			return one.Org < two.Org
+		}
+		if one.Repo != two.Repo {
+			return one.Repo < two.Repo
+		}
+		if one.Branch != two.Branch {
+			return one.Branch < two.Branch
+		}
+		return one.Variant < two.Variant
+	})
+	return result, nil
 }

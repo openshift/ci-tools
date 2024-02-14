@@ -262,7 +262,6 @@ func updateClusterBuildFarmDir(o options, hostedClusters []string) error {
 	config_dirs := []string{
 		"common",
 		"common_except_app.ci",
-		"common_cert_manager",
 	}
 
 	hostedClustersSet := sets.New[string](hostedClusters...)

@@ -1841,7 +1841,7 @@ func (p ClusterProfile) LeaseType() string {
 	case ClusterProfileOpenStackMechaAz0:
 		return "openstack-vh-mecha-az0-quota-slice"
 	case ClusterProfileOpenStackNercDev:
-		return "openstack-nerc-dev"
+		return "openstack-nerc-dev-quota-slice"
 	case ClusterProfileOpenStackOsuosl:
 		return "openstack-osuosl-quota-slice"
 	case ClusterProfileOpenStackVexxhost:

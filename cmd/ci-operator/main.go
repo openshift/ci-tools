@@ -439,7 +439,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 
 	// what we will run
 	flag.StringVar(&opt.nodeName, "node", "", "Restrict scheduling of pods to a single node in the cluster. Does not afffect indirectly created pods (e.g. builds).")
-	flag.DurationVar(&opt.podPendingTimeout, "pod-pending-timeout", 30*time.Minute, "Maximum amount of time created pods can spend before the running state. For test pods, this applies to each container. For builds, it applies to the build execution as a whole.")
+	flag.DurationVar(&opt.podPendingTimeout, "pod-pending-timeout", 60*time.Minute, "Maximum amount of time created pods can spend before the running state. For test pods, this applies to each container. For builds, it applies to the build execution as a whole.")
 	flag.StringVar(&opt.leaseServer, "lease-server", leaseServerAddress, "Address of the server that manages leases. Required if any test is configured to acquire a lease.")
 	flag.StringVar(&opt.leaseServerCredentialsFile, "lease-server-credentials-file", "", "The path to credentials file used to access the lease server. The content is of the form <username>:<password>.")
 	flag.DurationVar(&opt.leaseAcquireTimeout, "lease-acquire-timeout", leaseAcquireTimeout, "Maximum amount of time to wait for lease acquisition")

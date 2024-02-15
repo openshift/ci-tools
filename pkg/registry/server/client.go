@@ -21,6 +21,7 @@ type ResolverClient interface {
 	Config(*api.Metadata) (*api.ReleaseBuildConfiguration, error)
 	ConfigWithTest(base *api.Metadata, testSource *api.MetadataWithTest) (*api.ReleaseBuildConfiguration, error)
 	Resolve([]byte) (*api.ReleaseBuildConfiguration, error)
+	ClusterProfile(profileName string) (*api.ClusterProfileDetails, error)
 }
 
 func NewResolverClient(address string) ResolverClient {
@@ -127,6 +128,20 @@ func (a adapter) Warn(s string, i ...interface{}) {
 var _ retryablehttp.LeveledLogger = adapter{}
 
 func configFromResolverRequest(req *http.Request) (*api.ReleaseBuildConfiguration, error) {
+	data, err := doRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	configSpecHTTP := &api.ReleaseBuildConfiguration{}
+	err = json.Unmarshal(data, configSpecHTTP)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config from configresolver: invalid configuration: %w\nvalue:\n%s", err, string(data))
+	}
+	return configSpecHTTP, nil
+}
+
+// doRequest makes a request to config resolver and returns the response body
+func doRequest(req *http.Request) ([]byte, error) {
 	retryClient := retryablehttp.NewClient()
 	retryClient.RetryMax = 5
 	retryClient.Logger = adapter{}
@@ -146,14 +161,29 @@ func configFromResolverRequest(req *http.Request) (*api.ReleaseBuildConfiguratio
 		}
 		return nil, fmt.Errorf("got unexpected http %d status code from configresolver: %s", resp.StatusCode, responseBody)
 	}
-	data, err := io.ReadAll(resp.Body)
+	return io.ReadAll(resp.Body)
+}
+
+// ClusterProfile gets the info about a desired cluster profile by creating a request
+// to config resolver
+func (r *resolverClient) ClusterProfile(profileName string) (*api.ClusterProfileDetails, error) {
+	logrus.Infof("Loading information from %s for cluster profile %s", r.Address, profileName)
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/clusterProfile", r.Address), nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read configresolver response body: %w", err)
+		return nil, fmt.Errorf("failed to create request for configresolver: %w", err)
 	}
-	configSpecHTTP := &api.ReleaseBuildConfiguration{}
-	err = json.Unmarshal(data, configSpecHTTP)
+	query := req.URL.Query()
+	query.Add(NameQuery, profileName)
+	req.URL.RawQuery = query.Encode()
+
+	data, err := doRequest(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal config from configresolver: invalid configuration: %w\nvalue:\n%s", err, string(data))
+		return nil, err
 	}
-	return configSpecHTTP, nil
+
+	cp := &api.ClusterProfileDetails{}
+	if err = json.Unmarshal(data, cp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal %s cluster profile information from configresolver: %w\nvalue:\n%s", profileName, err, string(data))
+	}
+	return cp, nil
 }

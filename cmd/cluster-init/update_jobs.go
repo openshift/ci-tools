@@ -177,8 +177,7 @@ func generateSecretVolume(clusterName string) v1.Volume {
 func generateContainer(image, clusterName string, osd bool, unmanaged bool, extraArgs []string, extraVolumeMounts []v1.VolumeMount, extraEnvVars []v1.EnvVar) v1.Container {
 	var env []v1.EnvVar
 	env = append(env, extraEnvVars...)
-	// remove the `multi01` check once multi01 is decommissioned
-	if !osd && !unmanaged && clusterName != string(api.ClusterMulti01) {
+	if !osd && !unmanaged {
 		env = append(env, v1.EnvVar{
 			Name: clusterName + "_id",
 			ValueFrom: &v1.EnvVarSource{

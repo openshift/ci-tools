@@ -394,7 +394,7 @@ func TestBuild(t *testing.T) {
 						Repo:        "repo",
 						BaseRef:     "ref",
 						BaseSHA:     "sha",
-						PullRequest: prpqv1.PullRequest{Number: 123, Author: "login", SHA: "head-sha", Title: "title"}}},
+						PullRequest: &prpqv1.PullRequest{Number: 123, Author: "login", SHA: "head-sha", Title: "title"}}},
 					Jobs: prpqv1.PullRequestPayloadJobSpec{
 						ReleaseControllerConfig: prpqv1.ReleaseControllerConfig{OCP: "4.10", Release: "nightly", Specifier: "ci"},
 						Jobs: []prpqv1.ReleaseJobSpec{
@@ -454,7 +454,7 @@ func TestBuild(t *testing.T) {
 						Repo:        "repo",
 						BaseRef:     "ref",
 						BaseSHA:     "sha",
-						PullRequest: prpqv1.PullRequest{Number: 123, Author: "login", SHA: "head-sha", Title: "title"}}},
+						PullRequest: &prpqv1.PullRequest{Number: 123, Author: "login", SHA: "head-sha", Title: "title"}}},
 					Jobs: prpqv1.PullRequestPayloadJobSpec{
 						Jobs: []prpqv1.ReleaseJobSpec{
 							{
@@ -505,7 +505,7 @@ func TestBuild(t *testing.T) {
 					Repo:    "other-repo",
 					BaseRef: "base",
 					BaseSHA: "BASE",
-					PullRequest: prpqv1.PullRequest{
+					PullRequest: &prpqv1.PullRequest{
 						Number: 1234,
 						Author: "a-developer",
 						SHA:    "HEAD",
@@ -533,14 +533,14 @@ func TestBuild(t *testing.T) {
 							Repo:        "other-repo",
 							BaseRef:     "base",
 							BaseSHA:     "BASE",
-							PullRequest: prpqv1.PullRequest{Number: 1234, Author: "a-developer", SHA: "HEAD", Title: "some PR"},
+							PullRequest: &prpqv1.PullRequest{Number: 1234, Author: "a-developer", SHA: "HEAD", Title: "some PR"},
 						},
 						{
 							Org:         "org",
 							Repo:        "repo",
 							BaseRef:     "ref",
 							BaseSHA:     "sha",
-							PullRequest: prpqv1.PullRequest{Number: 123, Author: "login", SHA: "head-sha", Title: "title"},
+							PullRequest: &prpqv1.PullRequest{Number: 123, Author: "login", SHA: "head-sha", Title: "title"},
 						},
 					},
 					Jobs: prpqv1.PullRequestPayloadJobSpec{

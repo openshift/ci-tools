@@ -571,15 +571,17 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 
 		var pulls []prowv1.Pull
 		for _, pr := range prsForRepo {
-			pulls = append(pulls, prowv1.Pull{
-				Number: pr.PullRequest.Number,
-				Author: pr.PullRequest.Author,
-				SHA:    pr.PullRequest.SHA,
-				Title:  pr.PullRequest.Title,
-				// Link:       pr.HTMLURL,
-				// AuthorLink: pr.User.HTMLURL,
-				// CommitLink: fmt.Sprintf("%s/pull/%d/commits/%s", pr.Base.Repo.HTMLURL, pr.Number, pr.Head.SHA),
-			})
+			if pr.PullRequest != nil {
+				pulls = append(pulls, prowv1.Pull{
+					Number: pr.PullRequest.Number,
+					Author: pr.PullRequest.Author,
+					SHA:    pr.PullRequest.SHA,
+					Title:  pr.PullRequest.Title,
+					// Link:       pr.HTMLURL,
+					// AuthorLink: pr.User.HTMLURL,
+					// CommitLink: fmt.Sprintf("%s/pull/%d/commits/%s", pr.Base.Repo.HTMLURL, pr.Number, pr.Head.SHA),
+				})
+			}
 		}
 		ref.Pulls = pulls
 
@@ -717,7 +719,10 @@ func generateJobNameToSubmit(inject *api.MetadataWithTest, prs []v1.PullRequestU
 		if i > 0 {
 			refs += "-"
 		}
-		refs += fmt.Sprintf("%s-%s-%d", pr.Org, pr.Repo, pr.PullRequest.Number)
+		refs += fmt.Sprintf("%s-%s", pr.Org, pr.Repo)
+		if pr.PullRequest != nil {
+			refs += fmt.Sprintf("-%d", pr.PullRequest.Number)
+		}
 	}
 
 	var variant string

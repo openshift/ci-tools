@@ -70,7 +70,7 @@ type PullRequestUnderTest struct {
 	BaseSHA string `json:"baseSHA"`
 
 	// PullRequest identifies a pull request, omit to only utilize the repo at the BaseRef and BaseSHA
-	PullRequest PullRequest `json:"pr,omitempty"`
+	PullRequest *PullRequest `json:"pr,omitempty"`
 }
 
 // PullRequest identifies a pull request in a repository

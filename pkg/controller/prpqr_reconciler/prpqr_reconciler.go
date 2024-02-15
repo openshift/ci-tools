@@ -51,6 +51,8 @@ const (
 	aggregationIDLabel          = "release.openshift.io/aggregation-id"
 	defaultAggregatorJobTimeout = 6 * time.Hour
 	defaultMultiRefJobTimeout   = 6 * time.Hour
+
+	dependantsProwJobsFinalizer = "pullrequestpayloadqualificationruns.ci.openshift.io/dependant-prowjobs"
 )
 
 type injectingResolverClient interface {
@@ -363,6 +365,7 @@ func reconcileStatus(theirs *v1.PullRequestPayloadQualificationRun, ourStatuses 
 		statusByJobName[jobName] = &theirs.Status.Jobs[i]
 	}
 
+	var atLeastOneActive bool
 	theirs.Status.Jobs = []v1.PullRequestPayloadJobStatus{}
 	for _, spec := range theirs.Spec.Jobs.Jobs {
 		jobName := spec.JobName(jobconfig.PeriodicPrefix)
@@ -372,7 +375,13 @@ func reconcileStatus(theirs *v1.PullRequestPayloadQualificationRun, ourStatuses 
 
 		our := ourStatuses[jobName]
 		their := statusByJobName[jobName]
-		theirs.Status.Jobs = append(theirs.Status.Jobs, reconcileJobStatus(jobName, their, our))
+		reconciled := reconcileJobStatus(jobName, their, our)
+		theirs.Status.Jobs = append(theirs.Status.Jobs, reconciled)
+		atLeastOneActive = reconciled.Status.State == prowv1.PendingState || reconciled.Status.State == prowv1.TriggeredState
+	}
+
+	if atLeastOneActive {
+		addDependantProwJobsFinalizer(&theirs.ObjectMeta)
 	}
 }
 
@@ -731,4 +740,13 @@ func generateJobNameToSubmit(inject *api.MetadataWithTest, prs []v1.PullRequestU
 	}
 
 	return fmt.Sprintf("%s%s-%s", refs, variant, inject.Test)
+}
+
+func addDependantProwJobsFinalizer(objMeta *metav1.ObjectMeta) {
+	for _, f := range objMeta.Finalizers {
+		if f == dependantsProwJobsFinalizer {
+			return
+		}
+	}
+	objMeta.Finalizers = append(objMeta.Finalizers, dependantsProwJobsFinalizer)
 }

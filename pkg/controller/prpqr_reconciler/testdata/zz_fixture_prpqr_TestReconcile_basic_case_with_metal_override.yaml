@@ -2,6 +2,8 @@
   kind: PullRequestPayloadQualificationRun
   metadata:
     creationTimestamp: null
+    finalizers:
+    - pullrequestpayloadqualificationruns.ci.openshift.io/dependant-prowjobs
     name: prpqr-test
     namespace: test-namespace
     resourceVersion: "1000"

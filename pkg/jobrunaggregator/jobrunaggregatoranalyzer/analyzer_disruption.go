@@ -22,7 +22,7 @@ import (
 // backends for now as they run and gather more data.
 func isExcludedDisruptionBackend(name string) bool {
 	excludedNames := []string{
-		"ci-cluster-network-liveness",
+		"-network-liveness",
 		"kube-api-http1-external-lb",
 		"kube-api-http2-external-lb",
 		"openshift-api-http2-external-lb",

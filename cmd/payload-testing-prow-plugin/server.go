@@ -28,7 +28,8 @@ import (
 )
 
 const (
-	prPayloadTestsUIURL = "https://pr-payload-tests.ci.openshift.org/runs"
+	prPayloadTestsUIURL    = "https://pr-payload-tests.ci.openshift.org/runs"
+	unknownCommandResponse = "it appears that you have attempted to use some version of the payload command, but your comment was incorrectly formatted and cannot be acted upon. See the [docs](https://docs.ci.openshift.org/docs/release-oversight/payload-testing/#usage) for usage info."
 )
 
 type githubClient interface {
@@ -290,6 +291,10 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) (string, [
 
 	abortRequested := ocpPayloadAbortPattern.MatchString(strings.TrimSpace(ic.Comment.Body))
 	if len(specs) == 0 && !abortRequested {
+		if strings.HasPrefix(ic.Comment.Body, "/payload") {
+			// Someone was probably attempting to use the command, but due to a formatting error, nothing was picked up
+			return unknownCommandResponse, nil
+		}
 		return "", nil
 	}
 

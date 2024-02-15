@@ -143,9 +143,10 @@ func (oic *OCPImageConfig) setPublicOrgRepo(mappings []PublicPrivateMapping) {
 type StreamMap map[string]StreamElement
 
 type StreamElement struct {
-	Image         string `json:"image"`
-	UpstreamImage string `json:"upstream_image"`
-	Mirror        *bool  `json:"mirror"`
+	Image         string   `json:"image"`
+	UpstreamImage string   `json:"upstream_image"`
+	Mirror        *bool    `json:"mirror"`
+	Aliases       []string `json:"aliases,omitempty"`
 }
 
 type GroupYAML struct {
@@ -189,6 +190,7 @@ func LoadImageConfigs(ocpBuildDataDir string, majorMinor MajorMinor) ([]OCPImage
 	if err != nil {
 		return nil, fmt.Errorf("failed to read streams file: %w", err)
 	}
+	streamMap = resolveStreamAliases(streamMap)
 
 	groupYAML, err := readGroupYAML(ocpBuildDataDir, majorMinor)
 	if err != nil {
@@ -311,6 +313,19 @@ func readStreamMap(ocpBuildDataDir string, majorMinor MajorMinor) (StreamMap, er
 	return streamMap, readYAML(filepath.Join(ocpBuildDataDir, "streams.yml"), &streamMap, majorMinor)
 }
 
+// resolveStreamAliases duplicates the stream for each alias configured
+// so that the stream can be directly found from the map using the alias
+func resolveStreamAliases(streamMap StreamMap) StreamMap {
+	result := make(StreamMap)
+	for name, stream := range streamMap {
+		result[name] = stream
+		for _, alias := range stream.Aliases {
+			result[alias] = stream
+		}
+	}
+	return result
+}
+
 func readGroupYAML(ocpBuildDataDir string, majorMinor MajorMinor) (GroupYAML, error) {
 	groupYAML := GroupYAML{}
 	return groupYAML, readYAML(filepath.Join(ocpBuildDataDir, "group.yml"), &groupYAML, majorMinor)
@@ -336,6 +351,10 @@ func gatherAllOCPImageConfigs(ocpBuildDataDir string, majorMinor MajorMinor) (ma
 			return err
 		}
 		if info.IsDir() {
+			return nil
+		}
+		// We only want to operate on "yaml" ("yml") files, so we don't load disabled configs
+		if !strings.HasSuffix(info.Name(), "yaml") && !strings.HasSuffix(info.Name(), "yml") {
 			return nil
 		}
 		errGroup.Go(func() error {

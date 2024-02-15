@@ -497,52 +497,6 @@ type PromotionConfiguration struct {
 	// a registry.
 	Targets []PromotionTarget `json:"to,omitempty"`
 
-	// Namespace identifies the namespace to which the built
-	// artifacts will be published to.
-	// Deprecated, prefer to set promotion.targets[0].namespace
-	Namespace string `json:"namespace,omitempty"`
-
-	// Name is an optional image stream name to use that
-	// contains all component tags. If specified, tag is
-	// ignored.
-	// Deprecated, prefer to set promotion.targets[0].name
-	Name string `json:"name,omitempty"`
-
-	// Tag is the ImageStreamTag tagged in for each
-	// build image's ImageStream.
-	// Deprecated, prefer to set promotion.targets[0].tag
-	Tag string `json:"tag,omitempty"`
-
-	// TagByCommit determines if an image should be tagged by the
-	// git commit that was used to build it. If Tag is also set,
-	// this will cause both a floating tag and commit-specific tags
-	// to be promoted.
-	// Deprecated, prefer to set promotion.targets[0].tag_by_commit
-	TagByCommit bool `json:"tag_by_commit,omitempty"`
-
-	// ExcludedImages are image names that will not be promoted.
-	// Exclusions are made before additional_images are included.
-	// Use exclusions when you want to build images for testing
-	// but not promote them afterwards.
-	// Deprecated, prefer to set promotion.targets[0].excluded_images
-	ExcludedImages []string `json:"excluded_images,omitempty"`
-
-	// AdditionalImages is a mapping of images to promote. The
-	// images will be taken from the pipeline image stream. The
-	// key is the name to promote as and the value is the source
-	// name. If you specify a tag that does not exist as the source
-	// the destination tag will not be created.
-	// Deprecated, prefer to set promotion.targets[0].additional_images
-	AdditionalImages map[string]string `json:"additional_images,omitempty"`
-
-	// Disabled will no-op succeed instead of running the actual
-	// promotion step. This is useful when two branches need to
-	// promote to the same output imagestream on a cut-over but
-	// never concurrently, and you want to have promotion config
-	// in the ci-operator configuration files all the time.
-	// Deprecated, prefer to set promotion.targets[0].disabled
-	Disabled bool `json:"disabled,omitempty"`
-
 	// RegistryOverride is an override for the registry domain to
 	// which we will mirror images. This is an advanced option and
 	// should *not* be used in common test workflows. The CI chat
@@ -731,10 +685,10 @@ const (
 	ClusterBuild02   Cluster = "build02"
 	ClusterBuild03   Cluster = "build03"
 	ClusterBuild09   Cluster = "build09"
+	ClusterBuild10   Cluster = "build10"
 	ClusterVSphere02 Cluster = "vsphere02"
 	ClusterARM01     Cluster = "arm01"
 	ClusterHive      Cluster = "hive"
-	ClusterMulti01   Cluster = "multi01"
 )
 
 // TestStepConfiguration describes a step that runs a
@@ -1342,6 +1296,7 @@ const (
 	ClusterProfileOpenStackVexxhost     ClusterProfile = "openstack-vexxhost"
 	ClusterProfileOpenStackPpc64le      ClusterProfile = "openstack-ppc64le"
 	ClusterProfileOpenStackOpVexxhost   ClusterProfile = "openstack-operators-vexxhost"
+	ClusterProfileOpenStackNercDev      ClusterProfile = "openstack-nerc-dev"
 	ClusterProfileOvirt                 ClusterProfile = "ovirt"
 	ClusterProfilePacket                ClusterProfile = "packet"
 	ClusterProfilePacketAssisted        ClusterProfile = "packet-assisted"
@@ -1371,6 +1326,8 @@ const (
 	ClusterProfileDevSandboxCIAWS       ClusterProfile = "devsandboxci-aws"
 	ClusterProfileQuayAWS               ClusterProfile = "quay-aws"
 	ClusterProfileAWSEdgeInfra          ClusterProfile = "aws-edge-infra"
+	ClusterProfileRHOpenShiftEcosystem  ClusterProfile = "rh-openshift-ecosystem"
+	ClusterProfileODFAWS                ClusterProfile = "odf-aws"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -1477,6 +1434,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileOpenStackPpc64le,
 		ClusterProfileOpenStackVexxhost,
 		ClusterProfileOpenStackOpVexxhost,
+		ClusterProfileOpenStackNercDev,
 		ClusterProfileOvirt,
 		ClusterProfilePacket,
 		ClusterProfilePacketAssisted,
@@ -1499,6 +1457,8 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileDevSandboxCIAWS,
 		ClusterProfileQuayAWS,
 		ClusterProfileAWSEdgeInfra,
+		ClusterProfileRHOpenShiftEcosystem,
+		ClusterProfileODFAWS,
 	}
 }
 
@@ -1548,7 +1508,8 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileCheAWS,
 		ClusterProfileDevSandboxCIAWS,
 		ClusterProfileQuayAWS,
-		ClusterProfileAWSEdgeInfra:
+		ClusterProfileAWSEdgeInfra,
+		ClusterProfileODFAWS:
 		return string(CloudAWS)
 	case
 		ClusterProfileAlibabaCloud,
@@ -1662,6 +1623,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "openstack-ppc64le"
 	case ClusterProfileOpenStackOpVexxhost:
 		return "openstack-operators-vexxhost"
+	case ClusterProfileOpenStackNercDev:
+		return "openstack-nerc-dev"
 	case
 		ClusterProfileVSphere2,
 		ClusterProfileVSphereMultizone2,
@@ -1691,6 +1654,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "hypershift-powervs"
 	case ClusterProfileHypershiftPowerVSCB:
 		return "hypershift-powervs-cb"
+	case ClusterProfileRHOpenShiftEcosystem:
+		return "rh-openshift-ecosystem"
 	default:
 		return ""
 	}
@@ -1872,6 +1837,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "openstack-vh-mecha-central-quota-slice"
 	case ClusterProfileOpenStackMechaAz0:
 		return "openstack-vh-mecha-az0-quota-slice"
+	case ClusterProfileOpenStackNercDev:
+		return "openstack-nerc-dev"
 	case ClusterProfileOpenStackOsuosl:
 		return "openstack-osuosl-quota-slice"
 	case ClusterProfileOpenStackVexxhost:
@@ -1932,6 +1899,10 @@ func (p ClusterProfile) LeaseType() string {
 		return "quay-aws-quota-slice"
 	case ClusterProfileAWSEdgeInfra:
 		return "aws-edge-infra-quota-slice"
+	case ClusterProfileRHOpenShiftEcosystem:
+		return "rh-openshift-ecosystem-quota-slice"
+	case ClusterProfileODFAWS:
+		return "odf-aws-quota-slice"
 	default:
 		return ""
 	}
@@ -1998,7 +1969,7 @@ func (p ClusterProfile) Secret() string {
 // LeaseTypeFromClusterType maps cluster types to lease types
 func LeaseTypeFromClusterType(t string) (string, error) {
 	switch t {
-	case "aws", "aws-arm64", "aws-c2s", "aws-china", "aws-usgov", "aws-sc2s", "aws-osd-msp", "aws-outpost", "aws-local-zones", "aws-opendatahub", "alibaba", "azure-2", "azure4", "azure-arc", "azure-arm64", "azurestack", "azuremag", "equinix-ocp-metal", "gcp", "gcp-arm64", "gcp-opendatahub", "libvirt-ppc64le", "libvirt-s390x", "libvirt-s390x-amd64", "ibmcloud-multi-ppc64le", "ibmcloud-multi-s390x", "nutanix", "nutanix-qe", "nutanix-qe-dis", "nutanix-qe-zone", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet", "packet-edge", "powervs-multi-1", "powervs-1", "powervs-2", "powervs-3", "powervs-4", "kubevirt", "aws-cpaas", "osd-ephemeral", "gcp-virtualization", "aws-virtualization", "azure-virtualization", "hypershift-powervs", "hypershift-powervs-cb":
+	case "aws", "aws-arm64", "aws-c2s", "aws-china", "aws-usgov", "aws-sc2s", "aws-osd-msp", "aws-outpost", "aws-local-zones", "aws-opendatahub", "alibaba", "azure-2", "azure4", "azure-arc", "azure-arm64", "azurestack", "azuremag", "equinix-ocp-metal", "gcp", "gcp-arm64", "gcp-opendatahub", "libvirt-ppc64le", "libvirt-s390x", "libvirt-s390x-amd64", "ibmcloud-multi-ppc64le", "ibmcloud-multi-s390x", "nutanix", "nutanix-qe", "nutanix-qe-dis", "nutanix-qe-zone", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "openstack-nerc-dev", "vsphere", "ovirt", "packet", "packet-edge", "powervs-multi-1", "powervs-1", "powervs-2", "powervs-3", "powervs-4", "kubevirt", "aws-cpaas", "osd-ephemeral", "gcp-virtualization", "aws-virtualization", "azure-virtualization", "hypershift-powervs", "hypershift-powervs-cb":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

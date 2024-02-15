@@ -74,11 +74,6 @@ func TestRegistryDomainForClusterName(t *testing.T) {
 			expected:    "registry.arm-build01.arm-build.devcluster.openshift.com",
 		},
 		{
-			name:        "multi01",
-			clusterName: "multi01",
-			expected:    "registry.multi-build01.arm-build.devcluster.openshift.com",
-		},
-		{
 			name:        "build01",
 			clusterName: "build01",
 			expected:    "registry.build01.ci.openshift.org",

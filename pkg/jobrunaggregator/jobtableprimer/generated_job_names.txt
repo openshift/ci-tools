@@ -1096,7 +1096,6 @@ periodic-ci-openshift-multiarch-master-nightly-4.16-ocp-e2e-gcp-ovn-heterogeneou
 periodic-ci-openshift-multiarch-master-nightly-4.16-ocp-e2e-ibmcloud-ovn-multi-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.16-ocp-e2e-ibmcloud-ovn-multi-s390x
 periodic-ci-openshift-multiarch-master-nightly-4.16-ocp-e2e-ovn-ppc64le-powervs-original
-periodic-ci-openshift-multiarch-master-nightly-4.16-ocp-e2e-ovn-ppc64le-powervs-siguid
 periodic-ci-openshift-multiarch-master-nightly-4.16-ocp-e2e-ovn-remote-libvirt-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.16-ocp-e2e-ovn-remote-libvirt-s390x
 periodic-ci-openshift-multiarch-master-nightly-4.16-ocp-e2e-ovn-serial-aws-arm64
@@ -2044,7 +2043,6 @@ periodic-ci-openshift-release-master-nightly-4.16-console-aws
 periodic-ci-openshift-release-master-nightly-4.16-e2e-agent-compact-ipv4-conformance
 periodic-ci-openshift-release-master-nightly-4.16-e2e-agent-ha-dualstack-conformance
 periodic-ci-openshift-release-master-nightly-4.16-e2e-agent-sno-ipv6
-periodic-ci-openshift-release-master-nightly-4.16-e2e-alibaba-csi
 periodic-ci-openshift-release-master-nightly-4.16-e2e-alibaba-ovn
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-crun-wasm
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-csi

@@ -242,57 +242,16 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"# have been completed so that tests can be run prior to promotion.\n" +
 	"# If no promotion is defined, it is defaulted from the ReleaseTagConfiguration.\n" +
 	"promotion:\n" +
-	"    # AdditionalImages is a mapping of images to promote. The\n" +
-	"    # images will be taken from the pipeline image stream. The\n" +
-	"    # key is the name to promote as and the value is the source\n" +
-	"    # name. If you specify a tag that does not exist as the source\n" +
-	"    # the destination tag will not be created.\n" +
-	"    # Deprecated, prefer to set promotion.targets[0].additional_images\n" +
-	"    additional_images:\n" +
-	"        \"\": \"\"\n" +
 	"    # DisableBuildCache stops us from uploading the build cache.\n" +
 	"    # This is useful (only) for CI chat bot invocations where\n" +
 	"    # promotion does not imply output artifacts are being created\n" +
 	"    # for posterity.\n" +
 	"    disable_build_cache: true\n" +
-	"    # Disabled will no-op succeed instead of running the actual\n" +
-	"    # promotion step. This is useful when two branches need to\n" +
-	"    # promote to the same output imagestream on a cut-over but\n" +
-	"    # never concurrently, and you want to have promotion config\n" +
-	"    # in the ci-operator configuration files all the time.\n" +
-	"    # Deprecated, prefer to set promotion.targets[0].disabled\n" +
-	"    disabled: true\n" +
-	"    # ExcludedImages are image names that will not be promoted.\n" +
-	"    # Exclusions are made before additional_images are included.\n" +
-	"    # Use exclusions when you want to build images for testing\n" +
-	"    # but not promote them afterwards.\n" +
-	"    # Deprecated, prefer to set promotion.targets[0].excluded_images\n" +
-	"    excluded_images:\n" +
-	"        - \"\"\n" +
-	"    # Name is an optional image stream name to use that\n" +
-	"    # contains all component tags. If specified, tag is\n" +
-	"    # ignored.\n" +
-	"    # Deprecated, prefer to set promotion.targets[0].name\n" +
-	"    name: ' '\n" +
-	"    # Namespace identifies the namespace to which the built\n" +
-	"    # artifacts will be published to.\n" +
-	"    # Deprecated, prefer to set promotion.targets[0].namespace\n" +
-	"    namespace: ' '\n" +
 	"    # RegistryOverride is an override for the registry domain to\n" +
 	"    # which we will mirror images. This is an advanced option and\n" +
 	"    # should *not* be used in common test workflows. The CI chat\n" +
 	"    # bot uses this option to facilitate image sharing.\n" +
 	"    registry_override: ' '\n" +
-	"    # Tag is the ImageStreamTag tagged in for each\n" +
-	"    # build image's ImageStream.\n" +
-	"    # Deprecated, prefer to set promotion.targets[0].tag\n" +
-	"    tag: ' '\n" +
-	"    # TagByCommit determines if an image should be tagged by the\n" +
-	"    # git commit that was used to build it. If Tag is also set,\n" +
-	"    # this will cause both a floating tag and commit-specific tags\n" +
-	"    # to be promoted.\n" +
-	"    # Deprecated, prefer to set promotion.targets[0].tag_by_commit\n" +
-	"    tag_by_commit: true\n" +
 	"    # Targets configure a set of images to be pushed to\n" +
 	"    # a registry.\n" +
 	"    to:\n" +

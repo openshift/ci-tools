@@ -290,7 +290,7 @@ func TestGeneratePostSubmitForPromotion(t *testing.T) {
 		jobRelease string
 	}{
 		{
-			name: "spawn on multi01 cluster",
+			name: "spawn on build10 cluster",
 			repoInfo: &ProwgenInfo{
 				Metadata: ciop.Metadata{
 					Org:    "organization",
@@ -299,22 +299,6 @@ func TestGeneratePostSubmitForPromotion(t *testing.T) {
 				},
 				Config: config.Prowgen{
 					MultiArch: true,
-				},
-			},
-		},
-		{
-			name: "spawn on multi01 and arm01",
-			repoInfo: &ProwgenInfo{
-				Metadata: ciop.Metadata{
-					Org:    "organization",
-					Repo:   "repository",
-					Branch: "branch",
-				},
-				Config: config.Prowgen{
-					MultiArch: true,
-					AdditionalArchitectures: []ciop.ReleaseArchitecture{
-						api.ReleaseArchitectureARM64,
-					},
 				},
 			},
 		},

@@ -21,7 +21,7 @@ func (r *allReleaseTableCreatorOptions) Run(ctx context.Context) error {
 	releaseTable := r.ciDataSet.Table(jobrunaggregatorlib.ReleaseTableName)
 	_, err := releaseTable.Metadata(ctx)
 	if err != nil {
-		schema, err := bigquery.InferSchema(jobrunaggregatorapi.ReleaseRow{})
+		schema, err := bigquery.InferSchema(jobrunaggregatorapi.ReleaseTagRow{})
 		if err != nil {
 			return err
 		}

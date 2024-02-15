@@ -168,12 +168,6 @@ func updatePromotion(currentConfig, futureConfig *api.ReleaseBuildConfiguration,
 	currentPromotion := currentConfig.PromotionConfiguration
 	futurePromotion := futureConfig.PromotionConfiguration
 
-	if currentPromotion.Name != "" || currentPromotion.Tag != "" {
-		// we cannot have two configs promoting to the same output, so
-		// we need to make sure the release branch config is disabled
-		futurePromotion.Disabled = futureRelease == devRelease
-	}
-
 	if currentPromotion.Targets == nil {
 		return
 	}
@@ -199,9 +193,6 @@ func updateRelease(config *api.ReleaseBuildConfiguration, currentRelease, future
 				config.PromotionConfiguration.Targets[i].Name = futureRelease
 			}
 		}
-	}
-	if config.PromotionConfiguration != nil && config.PromotionConfiguration.Name != "" {
-		config.PromotionConfiguration.Name = futureRelease
 	}
 	if config.ReleaseTagConfiguration != nil {
 		config.ReleaseTagConfiguration.Name = futureRelease

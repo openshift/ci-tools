@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/metrics"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -125,40 +127,6 @@ func getInjectTestFromQuery(w http.ResponseWriter, r *http.Request) (*api.Metada
 	ret.Variant = r.URL.Query().Get(InjectFromVariantQuery)
 
 	return &ret, nil
-}
-
-// Deprecated, use ResolveAndMergeConfigsAndInjectTest instead
-// TODO(sgoeddel): this should be removed in the future once it is confirmed that it is no longer used
-func ResolveConfigWithInjectedTest(configs Getter, resolver Resolver, resolverMetrics *metrics.Metrics) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			w.WriteHeader(http.StatusNotImplemented)
-			_, _ = w.Write([]byte(http.StatusText(http.StatusNotImplemented)))
-			return
-		}
-		metadata, err := MetadataFromQuery(w, r)
-		if err != nil {
-			// MetadataFromQuery deals with setting status code and writing response
-			// so we need to just log the error here
-			metrics.RecordError("invalid query", resolverMetrics.ErrorRate)
-			logrus.WithError(err).Warning("failed to read query from request")
-			return
-		}
-		logger := logrus.WithFields(api.LogFieldsFor(metadata))
-
-		config, err := configs.GetMatchingConfig(metadata)
-		if err != nil {
-			metrics.RecordError("config not found", resolverMetrics.ErrorRate)
-			w.WriteHeader(http.StatusNotFound)
-			fmt.Fprintf(w, "failed to get config: %v", err)
-			logger.WithError(err).Warning("failed to get config")
-			return
-		}
-
-		if configWithInjectedTest := injectTest(config, configs, resolverMetrics, w, r, logger); configWithInjectedTest != nil {
-			resolveAndRespond(resolver, *configWithInjectedTest, w, logger, resolverMetrics)
-		}
-	}
 }
 
 func injectTest(injectTo api.ReleaseBuildConfiguration, configs Getter, resolverMetrics *metrics.Metrics, w http.ResponseWriter, r *http.Request, logger *logrus.Entry) *api.ReleaseBuildConfiguration {
@@ -451,7 +419,7 @@ func MetadataEntriesFromQuery(w http.ResponseWriter, r *http.Request) ([]api.Met
 		fmt.Fprint(w, "If any variants are passed, there must be one for each ref. Blank variants are allowed.")
 	}
 
-	var metadata []api.Metadata
+	metadata := make(sets.Set[api.Metadata])
 	for i, org := range orgs {
 		element := api.Metadata{
 			Org:    org,
@@ -461,8 +429,23 @@ func MetadataEntriesFromQuery(w http.ResponseWriter, r *http.Request) ([]api.Met
 		if variantsExist {
 			element.Variant = variants[i]
 		}
-		metadata = append(metadata, element)
+		metadata.Insert(element)
 	}
 
-	return metadata, nil
+	result := metadata.UnsortedList()
+	sort.SliceStable(result, func(i, j int) bool {
+		one := result[i]
+		two := result[j]
+		if one.Org != two.Org {
+			return one.Org < two.Org
+		}
+		if one.Repo != two.Repo {
+			return one.Repo < two.Repo
+		}
+		if one.Branch != two.Branch {
+			return one.Branch < two.Branch
+		}
+		return one.Variant < two.Variant
+	})
+	return result, nil
 }

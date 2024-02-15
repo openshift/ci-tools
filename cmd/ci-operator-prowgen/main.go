@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 
 	prowconfig "k8s.io/test-infra/prow/config"
@@ -101,25 +100,6 @@ func (o *options) process() error {
 	return nil
 }
 
-func readProwgenConfig(path string) (*config.Prowgen, error) {
-	var pConfig *config.Prowgen
-	b, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("prowgen config found in path %s but couldn't read the file: %w", path, err)
-	}
-
-	if err == nil {
-		if err := yaml.Unmarshal(b, &pConfig); err != nil {
-			return nil, fmt.Errorf("prowgen config found in path %sbut couldn't unmarshal it: %w", path, err)
-		}
-		if err := pConfig.Validate(); err != nil {
-			return nil, fmt.Errorf("prowgen config found in path %s is not valid: %w", path, err)
-		}
-	}
-
-	return pConfig, nil
-}
-
 // generateJobsToDir generates prow job configuration into the dir provided by
 // consuming ci-operator configuration.
 func (o *options) generateJobsToDir(subDir string, prowConfig map[string]*config.Prowgen) error {
@@ -149,14 +129,14 @@ func generateJobs(resolver registry.Resolver, cache map[string]*config.Prowgen, 
 		var orgConfig, repoConfig *config.Prowgen
 
 		if orgConfig, ok = cache[info.Org]; !ok {
-			if cache[info.Org], err = readProwgenConfig(filepath.Join(info.OrgPath, config.ProwgenFile)); err != nil {
+			if cache[info.Org], err = config.LoadProwgenConfig(info.OrgPath); err != nil {
 				return err
 			}
 			orgConfig = cache[info.Org]
 		}
 
 		if repoConfig, ok = cache[orgRepo]; !ok {
-			if cache[orgRepo], err = readProwgenConfig(filepath.Join(info.RepoPath, config.ProwgenFile)); err != nil {
+			if cache[orgRepo], err = config.LoadProwgenConfig(info.RepoPath); err != nil {
 				return err
 			}
 			repoConfig = cache[orgRepo]

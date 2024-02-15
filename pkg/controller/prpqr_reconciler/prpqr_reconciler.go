@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -17,7 +18,6 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -167,16 +167,6 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 	}
 
 	pullRequests := prpqr.Spec.PullRequests
-
-	//TODO(sgoeddel): phase 3 will support this
-	reposSeen := sets.Set[string]{}
-	for _, pullRequest := range pullRequests {
-		orgRepo := fmt.Sprintf("%s/%s", pullRequest.Org, pullRequest.Repo)
-		if reposSeen.Has(orgRepo) {
-			return fmt.Errorf("multiple pullRequests reference the %s repo. this is not currently supported", orgRepo)
-		}
-		reposSeen.Insert(orgRepo)
-	}
 
 	baseMetadata := metadataFromPullRequestsUnderTest(pullRequests)
 	for _, jobSpec := range prpqr.Spec.Jobs.Jobs {
@@ -536,7 +526,7 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 		case strings.Contains(inject.Test, "metal") || strings.Contains(inject.Test, "telco5g") || strings.Contains(inject.Test, "e2e-agent"):
 			jobBaseGen.Cluster("build05")
 		default:
-			jobBaseGen.Cluster("build01")
+			jobBaseGen.Cluster("build03")
 		}
 
 		periodic = prowgen.GeneratePeriodicForTest(jobBaseGen, fakeProwgenInfo, prowgen.FromConfigSpec(ciopConfig), func(options *prowgen.GeneratePeriodicOptions) {
@@ -550,19 +540,38 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 		return nil, fmt.Errorf("BUG: test '%s' not found in injected config", inject.Test)
 	}
 
-	var refs []prowv1.Refs
+	prsByRepo := make(map[string][]v1.PullRequestUnderTest)
 	for _, pr := range prs {
-		refs = append(refs, prowv1.Refs{
-			Org:  pr.Org,
-			Repo: pr.Repo,
+		orgRepo := fmt.Sprintf("%s/%s", pr.Org, pr.Repo)
+		prsByRepo[orgRepo] = append(prsByRepo[orgRepo], pr)
+	}
+	// We need to iterate through the prsByRepo map in a deterministic order for testing purposes
+	var orgRepos []string
+	for orgRepo := range prsByRepo {
+		orgRepos = append(orgRepos, orgRepo)
+	}
+	sort.Slice(orgRepos, func(i, j int) bool {
+		return orgRepos[i] < orgRepos[j]
+	})
+	var refs []prowv1.Refs
+	for _, orgRepo := range orgRepos {
+		prsForRepo := prsByRepo[orgRepo]
+		primaryPR := prsForRepo[0] // Common info can be obtained from the first pr in the list
+		ref := prowv1.Refs{
+			Org:  primaryPR.Org,
+			Repo: primaryPR.Repo,
 			// TODO(muller): All these commented-out fields need to be propagated via the PRPQR spec
 			// We do not need them now but we should eventually wire them through
 			// RepoLink:  pr.Base.Repo.HTMLURL,
-			BaseRef: pr.BaseRef,
-			BaseSHA: pr.BaseSHA,
+			BaseRef: primaryPR.BaseRef,
+			BaseSHA: primaryPR.BaseSHA,
 			// BaseLink:  fmt.Sprintf("%s/commit/%s", pr.Base.Repo.HTMLURL, pr.BaseSHA),
-			PathAlias: determinePathAlias(ciopConfig, pr),
-			Pulls: []prowv1.Pull{{
+			PathAlias: determinePathAlias(ciopConfig, primaryPR),
+		}
+
+		var pulls []prowv1.Pull
+		for _, pr := range prsForRepo {
+			pulls = append(pulls, prowv1.Pull{
 				Number: pr.PullRequest.Number,
 				Author: pr.PullRequest.Author,
 				SHA:    pr.PullRequest.SHA,
@@ -570,8 +579,11 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 				// Link:       pr.HTMLURL,
 				// AuthorLink: pr.User.HTMLURL,
 				// CommitLink: fmt.Sprintf("%s/pull/%d/commits/%s", pr.Base.Repo.HTMLURL, pr.Number, pr.Head.SHA),
-			}},
-		})
+			})
+		}
+		ref.Pulls = pulls
+
+		refs = append(refs, ref)
 	}
 	periodic.ExtraRefs = refs
 

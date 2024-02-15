@@ -234,6 +234,21 @@ func (mr *MockCIDataClientMockRecorder) ListReleaseTags(arg0 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListReleaseTags", reflect.TypeOf((*MockCIDataClient)(nil).ListReleaseTags), arg0)
 }
 
+// ListReleases mocks base method.
+func (m *MockCIDataClient) ListReleases(arg0 context.Context) ([]jobrunaggregatorapi.ReleaseRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListReleases", arg0)
+	ret0, _ := ret[0].([]jobrunaggregatorapi.ReleaseRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListReleases indicates an expected call of ListReleases.
+func (mr *MockCIDataClientMockRecorder) ListReleases(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListReleases", reflect.TypeOf((*MockCIDataClient)(nil).ListReleases), arg0)
+}
+
 // ListUnifiedTestRunsForJobAfterDay mocks base method.
 func (m *MockCIDataClient) ListUnifiedTestRunsForJobAfterDay(arg0 context.Context, arg1 string, arg2 time.Time) (*UnifiedTestRunRowIterator, error) {
 	m.ctrl.T.Helper()

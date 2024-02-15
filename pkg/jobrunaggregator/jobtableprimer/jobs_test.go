@@ -4,19 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"k8s.io/apimachinery/pkg/util/sets"
 )
-
-func TestForDuplicates(t *testing.T) {
-	seen := sets.New[string]()
-	for _, curr := range jobsToAnalyze {
-		if seen.Has(curr.JobName) {
-			t.Error(curr.JobName)
-		}
-		seen.Insert(curr.JobName)
-	}
-}
 
 func TestJobVersions(t *testing.T) {
 	var testCases = []struct {
@@ -65,14 +53,18 @@ func TestJobVersions(t *testing.T) {
 		},
 	}
 
+	reverseOrderedVersions := []string{
+		v416, v415, v414, v413, v412, v411, v410, v409, v408,
+	}
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.shouldPanic {
 				assert.Panics(t, func() {
-					newJob(tc.jobName)
+					newJob(tc.jobName, reverseOrderedVersions)
 				}, "Expected panic for unknown release")
 			} else {
-				j := newJob(tc.jobName)
+				j := newJob(tc.jobName, reverseOrderedVersions)
 
 				assert.NotNil(t, j, "Unexpected nil builder")
 				assert.NotNil(t, j.job, "Unexpected nil job")

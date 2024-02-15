@@ -70,6 +70,9 @@ type CIDataClient interface {
 	ListUploadedJobRunIDsSinceFromTable(ctx context.Context, table string, since *time.Time) (map[string]bool, error)
 
 	ListAllKnownAlerts(ctx context.Context) ([]*jobrunaggregatorapi.KnownAlertRow, error)
+
+	// ListReleases lists all releases from the new release table
+	ListReleases(ctx context.Context) ([]jobrunaggregatorapi.ReleaseRow, error)
 }
 
 type ciDataClient struct {
@@ -844,7 +847,7 @@ func (c *ciDataClient) ListReleaseTags(ctx context.Context) (sets.Set[string], e
 		return nil, err
 	}
 	for {
-		row := jobrunaggregatorapi.ReleaseRow{}
+		row := jobrunaggregatorapi.ReleaseTagRow{}
 		err := it.Next(&row)
 		if err == iterator.Done {
 			break
@@ -857,6 +860,29 @@ func (c *ciDataClient) ListReleaseTags(ctx context.Context) (sets.Set[string], e
 	}
 
 	return set, nil
+}
+
+func (c *ciDataClient) ListReleases(ctx context.Context) ([]jobrunaggregatorapi.ReleaseRow, error) {
+	releases := []jobrunaggregatorapi.ReleaseRow{}
+	queryString := c.dataCoordinates.SubstituteDataSetLocation(`SELECT * FROM DATA_SET_LOCATION.Releases ORDER BY DevelStartDate DESC`)
+	query := c.client.Query(queryString)
+	it, err := query.Read(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for {
+		row := jobrunaggregatorapi.ReleaseRow{}
+		err := it.Next(&row)
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		releases = append(releases, row)
+	}
+
+	return releases, nil
 }
 
 type UnifiedTestRunRowIterator struct {

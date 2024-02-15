@@ -3,13 +3,13 @@
   metadata:
     annotations:
       prow.k8s.io/context: ""
-      prow.k8s.io/job: test-org-test-repo-100-test-org-another-test-repo-101-test-name
+      prow.k8s.io/job: test-org-test-repo-100-test-org-test-repo-101-test-name
       releaseJobName: periodic-ci-test-org-test-repo-test-branch-test-name
     creationTimestamp: null
     labels:
       created-by-prow: "true"
       prow.k8s.io/context: ""
-      prow.k8s.io/job: test-org-test-repo-100-test-org-another-test-repo-101-test-name
+      prow.k8s.io/job: test-org-test-repo-100-test-org-test-repo-101-test-name
       prow.k8s.io/refs.base_ref: test-branch
       prow.k8s.io/refs.org: test-org
       prow.k8s.io/refs.pull: "100"
@@ -22,7 +22,7 @@
     resourceVersion: "1"
   spec:
     agent: kubernetes
-    cluster: cluster-name-defaulted
+    cluster: cluster-name-overwritten
     decoration_config:
       skip_cloning: true
       timeout: 6h0m0s
@@ -35,17 +35,12 @@
         number: 100
         sha: "12345"
         title: test-pr
-      repo: test-repo
-    - base_ref: test-branch
-      base_sha: "123456"
-      org: test-org
-      pulls:
       - author: test
         number: 101
         sha: "123452"
         title: test-pr
-      repo: another-test-repo
-    job: test-org-test-repo-100-test-org-another-test-repo-101-test-name
+      repo: test-repo
+    job: test-org-test-repo-100-test-org-test-repo-101-test-name
     pod_spec:
       containers:
       - args:

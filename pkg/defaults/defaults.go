@@ -164,7 +164,7 @@ func fromConfig(
 		return nil, nil, fmt.Errorf("failed to get steps from configuration: %w", err)
 	}
 	rawSteps = append(graphConf.Steps, rawSteps...)
-	rawSteps = append(rawSteps, stepsForImageOverrides(utils.GetOverriddenImages())...)
+	rawSteps = append(rawSteps, stepsForImageOverrides(ctx, utils.GetOverriddenImages(), consoleHost, client, time.Second)...)
 
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
@@ -372,20 +372,27 @@ func fromConfig(
 	return append(overridableSteps, buildSteps...), postSteps, nil
 }
 
-func stepsForImageOverrides(overriddenImages map[string]string) []api.StepConfiguration {
+func stepsForImageOverrides(ctx context.Context, overriddenImages map[string]string, consoleHost string, client ctrlruntimeclient.Client, second time.Duration) []api.StepConfiguration {
 	var overrideSteps []api.StepConfiguration
 	for tag, value := range overriddenImages {
+		istRef := api.ImageStreamTagReference{
+			Namespace: "ocp",
+			Name:      value,
+			Tag:       tag,
+		}
 		inputStep := api.StepConfiguration{InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 			InputImage: api.InputImage{
-				BaseImage: api.ImageStreamTagReference{
-					Namespace: "ocp",
-					Name:      value,
-					Tag:       tag,
-				},
-				To: api.PipelineImageStreamTagReference(tag),
+				BaseImage: istRef,
+				To:        api.PipelineImageStreamTagReference(tag),
 			},
 		}}
 		overrideSteps = append(overrideSteps, inputStep)
+
+		// If we are not running on app.ci we will need to make sure the ImageStreamTag is available
+		if !strings.HasSuffix(consoleHost, api.ServiceDomainAPPCI) {
+			ensureImageStreamTag(ctx, client, &istRef, second)
+		}
+
 		outputStep := api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
 			From: api.PipelineImageStreamTagReference(tag),
 			To: api.ImageStreamTagReference{

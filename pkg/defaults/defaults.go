@@ -1095,6 +1095,7 @@ func ensureImageStreamTag(ctx context.Context, client ctrlruntimeclient.Client, 
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      isTagRef.Name + "-" + isTagRef.Tag,
 			Namespace: "ci",
+			Labels:    map[string]string{api.DPTPRequesterLabel: "ci-operator"},
 		},
 		Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
 			Namespace: isTagRef.Namespace,

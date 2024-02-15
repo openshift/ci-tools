@@ -111,9 +111,8 @@ func TestInputImageTagStep(t *testing.T) {
 		TypeMeta: metav1.TypeMeta{Kind: "ImageStreamTag", APIVersion: "image.openshift.io/v1"},
 		Tag: &imagev1.TagReference{
 			From: &corev1.ObjectReference{
-				Kind:      "ImageStreamImage",
-				Namespace: baseImage.Namespace,
-				Name:      "BASE@ddc0de",
+				Kind: "DockerImage",
+				Name: "quay-proxy.ci.openshift.org/openshift/ci:source-namespace_BASE_BASETAG",
 			},
 			ImportPolicy: imagev1.TagImportPolicy{
 				ImportMode: imagev1.ImportModePreserveOriginal,

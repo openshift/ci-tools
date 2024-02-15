@@ -79,9 +79,8 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 				Type: imagev1.LocalTagReferencePolicy,
 			},
 			From: &coreapi.ObjectReference{
-				Kind:      "ImageStreamImage",
-				Name:      fmt.Sprintf("%s@%s", s.config.BaseImage.Name, s.imageName),
-				Namespace: s.config.BaseImage.Namespace,
+				Kind: "DockerImage",
+				Name: api.QCIAPPCIImage(s.config.BaseImage),
 			},
 			ImportPolicy: imagev1.TagImportPolicy{
 				ImportMode: imagev1.ImportModePreserveOriginal,

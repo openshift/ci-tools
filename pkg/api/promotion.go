@@ -110,6 +110,11 @@ func QuayImage(tag ImageStreamTagReference) string {
 	return fmt.Sprintf("%s:%s_%s_%s", QuayOpenShiftCIRepo, tag.Namespace, tag.Name, tag.Tag)
 }
 
+// QCIAPPCIImage returns the image in quay.io for an image stream tag
+func QCIAPPCIImage(tag ImageStreamTagReference) string {
+	return strings.Replace(fmt.Sprintf("%s:%s_%s_%s", QuayOpenShiftCIRepo, tag.Namespace, tag.Name, tag.Tag), "quay.io", QCIAPPCIDomain, 1)
+}
+
 // QuayImageFromDateAndDigest returns the image in quay.io for a date and an image digest
 func QuayImageFromDateAndDigest(date, digest string) string {
 	return fmt.Sprintf("%s:%s_sha256_%s", QuayOpenShiftCIRepo, date, digest)

@@ -361,8 +361,6 @@ func registryUrlFor(cluster string) string {
 		return api.ServiceDomainAPPCIRegistry
 	case string(api.ClusterARM01):
 		return "registry.arm-build01.arm-build.devcluster.openshift.com"
-	case string(api.ClusterMulti01):
-		return "registry.multi-build01.arm-build.devcluster.openshift.com"
 	default:
 		return fmt.Sprintf("registry.%s.ci.openshift.org", cluster)
 	}

@@ -179,7 +179,7 @@ func NewProwJobBaseBuilderForPromotion(configSpec *cioperatorapi.ReleaseBuildCon
 				spec.NodeSelector[corev1.LabelArchStable] = "amd64"
 				return nil
 			})
-			builder.Cluster(api.ClusterMulti01).WithLabel(api.ClusterLabel, string(api.ClusterMulti01))
+			builder.Cluster(api.ClusterBuild10).WithLabel(api.ClusterLabel, string(api.ClusterBuild10))
 		}
 		return builder
 	}

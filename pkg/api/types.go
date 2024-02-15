@@ -685,10 +685,10 @@ const (
 	ClusterBuild02   Cluster = "build02"
 	ClusterBuild03   Cluster = "build03"
 	ClusterBuild09   Cluster = "build09"
+	ClusterBuild10   Cluster = "build10"
 	ClusterVSphere02 Cluster = "vsphere02"
 	ClusterARM01     Cluster = "arm01"
 	ClusterHive      Cluster = "hive"
-	ClusterMulti01   Cluster = "multi01"
 )
 
 // TestStepConfiguration describes a step that runs a

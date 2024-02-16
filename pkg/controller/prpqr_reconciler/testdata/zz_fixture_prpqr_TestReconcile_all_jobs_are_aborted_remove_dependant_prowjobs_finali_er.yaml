@@ -2,8 +2,6 @@
   kind: PullRequestPayloadQualificationRun
   metadata:
     creationTimestamp: null
-    finalizers:
-    - pullrequestpayloadqualificationruns.ci.openshift.io/dependent-prowjobs
     name: prpqr-test
     namespace: test-namespace
     resourceVersion: "1000"
@@ -42,4 +40,4 @@
       prowJob: some-uuid
       status:
         startTime: "1970-01-01T00:00:00Z"
-        state: triggered
+        state: aborted

@@ -1,0 +1,25 @@
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
+      prow.k8s.io/context: ""
+      prow.k8s.io/job: ""
+      releaseJobName: periodic-ci-test-org-test-repo-test-branch-test-name
+    creationTimestamp: null
+    labels:
+      created-by-prow: "true"
+      prow.k8s.io/context: ""
+      prow.k8s.io/job: ""
+      prow.k8s.io/refs.base_ref: test-branch
+      prow.k8s.io/refs.org: test-org
+      prow.k8s.io/refs.repo: test-repo
+      prow.k8s.io/type: periodic
+      pullrequestpayloadqualificationruns.ci.openshift.io: prpqr-test
+      releaseJobNameHash: ee3858eff62263cd7266320c00d1d38b
+    name: some-uuid
+    namespace: test-namespace
+    resourceVersion: "999"
+  spec: {}
+  status:
+    startTime: "1970-01-01T00:00:00Z"
+    state: aborted

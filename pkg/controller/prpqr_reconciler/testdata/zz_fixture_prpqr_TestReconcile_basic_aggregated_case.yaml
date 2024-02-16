@@ -3,7 +3,7 @@
   metadata:
     creationTimestamp: null
     finalizers:
-    - pullrequestpayloadqualificationruns.ci.openshift.io/dependant-prowjobs
+    - pullrequestpayloadqualificationruns.ci.openshift.io/dependent-prowjobs
     name: prpqr-test
     namespace: test-namespace
     resourceVersion: "1000"

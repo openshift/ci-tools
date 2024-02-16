@@ -430,7 +430,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) (string, [
 				Repo:    prRepo,
 				BaseRef: pullRequest.Base.Ref,
 				BaseSHA: pullRequest.Base.SHA,
-				PullRequest: prpqv1.PullRequest{
+				PullRequest: &prpqv1.PullRequest{
 					Number: number,
 					Author: pullRequest.User.Login,
 					SHA:    pullRequest.Head.SHA,
@@ -592,7 +592,7 @@ func (b *prpqrBuilder) build(releaseJobSpecs []prpqv1.ReleaseJobSpec, additional
 				Repo:    b.repo,
 				BaseRef: b.pr.Base.Ref,
 				BaseSHA: b.pr.Base.SHA,
-				PullRequest: prpqv1.PullRequest{
+				PullRequest: &prpqv1.PullRequest{
 					Number: b.prNumber,
 					Author: b.pr.User.Login,
 					SHA:    b.pr.Head.SHA,

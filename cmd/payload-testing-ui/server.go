@@ -75,7 +75,11 @@ const (
 			</td>
 			<td>
 				{{ range $i, $pullRequest := .Spec.PullRequests }}
-					<li style="list-style:none; padding:">{{ prLink . }} by {{ authorLink $pullRequest.PullRequest.Author }}</li>
+					{{ if .PullRequest }}
+						<li style="list-style:none; padding:">{{ prLink . }} by {{ authorLink $pullRequest.PullRequest.Author }}</li>
+					{{ else }}
+						<li style="list-style:none; padding:">{{ refLink . .BaseRef }} ({{ shaLink . .BaseSHA }})</li>
+					{{ end }}
 				{{ end }}
 			</td>
 		</tr>
@@ -202,11 +206,29 @@ func repoLink(org string, repo string) template.HTML {
 	return template.HTML(ret)
 }
 
+func refLink(pr *prpqv1.PullRequestUnderTest, r string) template.HTML {
+	r = template.HTMLEscapeString(r)
+	org := template.HTMLEscapeString(pr.Org)
+	repo := template.HTMLEscapeString(pr.Repo)
+	ret := fmt.Sprintf(`<a href="https://github.com/%s/%s/tree/%s">%s</a>`, org, repo, r, r)
+	return template.HTML(ret)
+}
+
+func shaLink(pr *prpqv1.PullRequestUnderTest, h string) template.HTML {
+	h = template.HTMLEscapeString(h)
+	org := template.HTMLEscapeString(pr.Org)
+	repo := template.HTMLEscapeString(pr.Repo)
+	ret := fmt.Sprintf(`<a href="https://github.com/%s/%s/commit/%s">%s</a>`, org, repo, h, h)
+	return template.HTML(ret)
+}
+
 func newServer(client ctrlruntimeclient.Client, ctx context.Context, namespace string) (server, error) {
 	runsListTemplate, err := template.New("runsListTemplate").Funcs(template.FuncMap{
 		"prLink":     prLink,
 		"authorLink": authorLink,
 		"repoLink":   repoLink,
+		"refLink":    refLink,
+		"shaLink":    shaLink,
 	}).Parse(runsListTemplate)
 
 	if err != nil {
@@ -280,20 +302,8 @@ func (s *server) runDetails(w http.ResponseWriter, r *http.Request) {
 		"prLink":     prLink,
 		"authorLink": authorLink,
 		"repoLink":   repoLink,
-		"refLink": func(pr *prpqv1.PullRequestUnderTest, r string) template.HTML {
-			r = template.HTMLEscapeString(r)
-			org := template.HTMLEscapeString(pr.Org)
-			repo := template.HTMLEscapeString(pr.Repo)
-			ret := fmt.Sprintf(`<a href="https://github.com/%s/%s/tree/%s">%s</a>`, org, repo, r, r)
-			return template.HTML(ret)
-		},
-		"shaLink": func(pr *prpqv1.PullRequestUnderTest, h string) template.HTML {
-			h = template.HTMLEscapeString(h)
-			org := template.HTMLEscapeString(pr.Org)
-			repo := template.HTMLEscapeString(pr.Repo)
-			ret := fmt.Sprintf(`<a href="https://github.com/%s/%s/commit/%s">%s</a>`, org, repo, h, h)
-			return template.HTML(ret)
-		},
+		"refLink":    refLink,
+		"shaLink":    shaLink,
 		"configLink": func(config *prpqv1.ReleaseControllerConfig) template.HTML {
 			ocp := template.HTMLEscapeString(config.OCP)
 			release := template.HTMLEscapeString(config.Release)

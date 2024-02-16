@@ -200,8 +200,9 @@ func TestStepConfigsForBuild(t *testing.T) {
 					Namespace: "ci",
 					Name:      "stream-name-stream-tag",
 					Labels: map[string]string{
-						"imagestreamtag-namespace": "stream-namespace",
-						"imagestreamtag-name":      "stream-name_stream-tag",
+						"dptp.openshift.io/requester": "ci-operator",
+						"imagestreamtag-namespace":    "stream-namespace",
+						"imagestreamtag-name":         "stream-name_stream-tag",
 					},
 				},
 				Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
@@ -268,8 +269,9 @@ func TestStepConfigsForBuild(t *testing.T) {
 					Namespace: "ci",
 					Name:      "org-repo-branch",
 					Labels: map[string]string{
-						"imagestreamtag-namespace": "build-cache",
-						"imagestreamtag-name":      "org-repo_branch",
+						"dptp.openshift.io/requester": "ci-operator",
+						"imagestreamtag-namespace":    "build-cache",
+						"imagestreamtag-name":         "org-repo_branch",
 					},
 				},
 				Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{

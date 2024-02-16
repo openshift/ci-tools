@@ -606,7 +606,7 @@ func ensureImageStreamTags(ctx context.Context, client ctrlruntimeclient.Client,
 				return fmt.Errorf("failed to check if imagestreamtag %s exists: %w", requiredImageStreamTag, err)
 			}
 			istImport := &testimagestreamtagimportv1.TestImageStreamTagImport{
-				ObjectMeta: metav1.ObjectMeta{Namespace: namespace},
+				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Labels: map[string]string{api.DPTPRequesterLabel: "pj-rehearse"}},
 				Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
 					ClusterName: clusterName,
 					Namespace:   requiredImageStreamTag.Namespace,

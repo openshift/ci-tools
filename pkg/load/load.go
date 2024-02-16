@@ -243,7 +243,7 @@ func ClusterProfilesConfig(configPath string) (api.ClusterProfilesMap, error) {
 
 	var profileOwnersList api.ClusterProfilesList
 	if err = yaml.Unmarshal(configContents, &profileOwnersList); err != nil {
-		return nil, fmt.Errorf("failed to unmarshall cluster profiles config: %w", err)
+		return nil, fmt.Errorf("failed to unmarshall file %v. Please check that the formatting in the file is correct. Full error: %w", configPath, err)
 	}
 
 	// TODO: The following code can be erased once profiles are completely moved

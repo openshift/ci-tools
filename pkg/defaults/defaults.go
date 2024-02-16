@@ -213,7 +213,7 @@ func fromConfig(
 				case resolveConfig.Integration != nil:
 					logrus.Infof("Building release %s from a snapshot of %s/%s", resolveConfig.Name, resolveConfig.Integration.Namespace, resolveConfig.Integration.Name)
 					// this is the one case where we're not importing a payload, we need to get the images and build one
-					snapshot := releasesteps.ReleaseSnapshotStep(resolveConfig.Name, *resolveConfig.Integration, podClient, jobSpec)
+					snapshot := releasesteps.ReleaseSnapshotStep(resolveConfig.Name, *resolveConfig.Integration, config.Images, podClient, jobSpec)
 					assemble := releasesteps.AssembleReleaseStep(resolveConfig.Name, nodeName, &api.ReleaseTagConfiguration{
 						Namespace:          resolveConfig.Integration.Namespace,
 						Name:               resolveConfig.Integration.Name,
@@ -269,7 +269,7 @@ func fromConfig(
 		} else if rawStep.ReleaseImagesTagStepConfiguration != nil {
 			// if the user has specified a tag_specification we always
 			// will import those images to the stable stream
-			step = releasesteps.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, client, params, jobSpec)
+			step = releasesteps.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, config.Images, client, params, jobSpec)
 			stepLinks = append(stepLinks, step.Creates()...)
 
 			hasReleaseStep = true

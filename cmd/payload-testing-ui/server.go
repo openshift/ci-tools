@@ -91,19 +91,31 @@ Created: {{ .ObjectMeta.CreationTimestamp }}
 
 {{ with .Spec }}
 
-<h2>Pull requests</h2>
+<h2>Sources</h2>
 <ul>
   {{ range $i, $pullRequest := .PullRequests }}
-	{{ prLink . }} by {{ authorLink .PullRequest.Author }}
-	<li style="list-style:none; padding:">
-      <ul>
-		<li>Repository: {{ repoLink .Org .Repo }}</li>
-		<li>SHA: <tt>{{ shaLink . .PullRequest.SHA }}</tt></li>
-		<li>
-			Base: <tt>{{ refLink . .BaseRef }}</tt> (<tt>{{ shaLink . .BaseSHA }}</tt>)
+    {{ if .PullRequest }}
+		{{ prLink . }} by {{ authorLink .PullRequest.Author }}
+		<li style="list-style:none; padding:">
+		  <ul>
+			<li>Repository: {{ repoLink .Org .Repo }}</li>
+			<li>SHA: <tt>{{ shaLink . .PullRequest.SHA }}</tt></li>
+			<li>
+				Base: <tt>{{ refLink . .BaseRef }}</tt> (<tt>{{ shaLink . .BaseSHA }}</tt>)
+			</li>
+		  </ul>
 		</li>
-	  </ul>
-    </li>
+    {{ else }}
+		Sourced From:
+		<li style="list-style:none; padding:">
+		  <ul>
+			<li>Repository: {{ repoLink .Org .Repo }}</li>
+			<li>
+				Base: <tt>{{ refLink . .BaseRef }}</tt> (<tt>{{ shaLink . .BaseSHA }}</tt>)
+			</li>
+		  </ul>
+		</li>
+    {{ end }}
   {{ end }}
 </ul>
 

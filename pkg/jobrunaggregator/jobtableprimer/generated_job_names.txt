@@ -1934,6 +1934,7 @@ periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-overlay-mtu-ovn-edge-1
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-cgroupsv1
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-cpu-partitioning
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-edge-zones
+periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-edge-zones-manifest-validation
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-etcd-scaling
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-fips
 periodic-ci-openshift-release-master-nightly-4.15-e2e-aws-ovn-fips-serial
@@ -2053,6 +2054,7 @@ periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-overlay-mtu-ovn-5000
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-overlay-mtu-ovn-edge-1100
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-ovn-cpu-partitioning
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-ovn-edge-zones
+periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-ovn-edge-zones-manifest-validation
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-ovn-etcd-scaling
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-ovn-fips
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-ovn-fips-serial

@@ -3,11 +3,15 @@ package release
 import (
 	"context"
 	"fmt"
+	"time"
+
+	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	imagev1 "github.com/openshift/api/image/v1"
@@ -15,6 +19,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 // releaseSnapshotStep snapshots the state of an integration ImageStream
@@ -89,6 +94,27 @@ func snapshotStream(ctx context.Context, client loggingclient.LoggingClient, sou
 	if err := client.Create(ctx, created); err != nil && !kerrors.IsAlreadyExists(err) {
 		return nil, nil, fmt.Errorf("could not create snapshot imagestream %s/%s for release %s: %w", sourceNamespace, sourceName, targetRelease, err)
 	}
+	begin := time.Now()
+	logrus.Infof("Waiting to import tags on imagestream %s/%s ...", created.Namespace, created.Name)
+	for i, tag := range created.Spec.Tags {
+		stable := &imagev1.ImageStream{}
+		if err := wait.PollUntilContextTimeout(ctx, 10*time.Second, 30*time.Minute, true, func(ctx context.Context) (bool, error) {
+			if time.Now().After(begin.Add(35 * time.Minute)) {
+				return false, fmt.Errorf("timed out importing tags[%d] %s on imagestream %s/%s", i, tag.Name, created.Namespace, created.Name)
+			}
+			if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: created.Namespace, Name: created.Name}, stable); err != nil {
+				return false, err
+			}
+			_, exist := util.ResolvePullSpec(stable, tag.Name, true)
+			if !exist {
+				logrus.Debugf("Waiting to import tags on imagestream %s/%s:%s ...", created.Namespace, created.Name, tag.Name)
+			}
+			return exist, nil
+		}); err != nil {
+			return nil, nil, fmt.Errorf("failed to import tags on imagestream %s/%s: %w", created.Namespace, created.Name, err)
+		}
+	}
+	logrus.Infof("Imported tags on imagestream %s/%s", created.Namespace, created.Name)
 	return source, snapshot, nil
 }
 

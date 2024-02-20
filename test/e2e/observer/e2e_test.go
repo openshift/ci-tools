@@ -76,6 +76,7 @@ func TestObservers(t *testing.T) {
 	for _, testCase := range testCases {
 		testCase := testCase
 		framework.Run(t, testCase.name, func(t *framework.T, cmd *framework.CiOperatorCommand) {
+			cmd.AddArgs(framework.LocalPullSecretFlag(t), framework.RemotePullSecretFlag(t))
 			cmd.AddArgs(testCase.args...)
 			cmd.AddEnv(testCase.env...)
 			output, err := cmd.Run()

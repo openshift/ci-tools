@@ -24,6 +24,7 @@ import (
 
 	testimagestreamtagimportv1 "github.com/openshift/ci-tools/pkg/api/testimagestreamtagimport/v1"
 	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func init() {
@@ -401,6 +402,94 @@ func TestFilterJobsByRequested(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expectedUnaffectedJobs, unaffectedJobs); diff != "" {
 				t.Fatalf("unaffectedJobs don't match expected, diff: %s", diff)
+			}
+		})
+	}
+}
+
+func TestCreatePairs(t *testing.T) {
+	testCases := []struct {
+		name           string
+		expected       []string
+		expectedErr    error
+		namespacedName types.NamespacedName
+		fakeClient     ctrlruntimeclient.Client
+	}{
+		{
+			name:        "no pairs",
+			expected:    []string{},
+			expectedErr: nil,
+			namespacedName: types.NamespacedName{
+				Namespace: "ci",
+				Name:      "ci-operator:latest",
+			},
+			fakeClient: fakectrlruntimeclient.NewClientBuilder().Build(),
+		},
+		{
+			name: "happy path",
+			expected: []string{
+				"registry.ci.openshift.org/ci/ci-operator@sha256:th15i5ah45h=quay.io/openshift/ci:ci_ci-operator_latest",
+				"registry.ci.openshift.org/ci/ci-operator@sha256:th15i5ah45h=quay.io/openshift/ci:20000101_sha256_th15i5ah45h",
+			},
+			expectedErr: nil,
+			namespacedName: types.NamespacedName{
+				Namespace: "ci",
+				Name:      "ci-operator:latest",
+			},
+			fakeClient: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
+				&imagev1.ImageStreamTag{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "ci",
+						Name:      "ci-operator:latest",
+					},
+					Image: imagev1.Image{ObjectMeta: metav1.ObjectMeta{
+						Namespace: "ci",
+						Name:      "sha256:th15i5ah45h",
+					},
+					}},
+			).Build(),
+		},
+		{
+			name:        "wrong imagestreamtag",
+			expected:    []string{},
+			expectedErr: fmt.Errorf("splitting ci-operator by `:` didn't yield two but 1 results"),
+			namespacedName: types.NamespacedName{
+				Namespace: "ci",
+				Name:      "ci-operator",
+			},
+			fakeClient: fakectrlruntimeclient.NewClientBuilder().Build(),
+		},
+		{
+			name:        "imagestreamtag not found",
+			expected:    []string{},
+			expectedErr: nil,
+			namespacedName: types.NamespacedName{
+				Namespace: "ci",
+				Name:      "ci-operator:latest",
+			},
+			fakeClient: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
+				&imagev1.ImageStreamTag{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "ci",
+						Name:      "pj-rehearse:latest",
+					},
+					Image: imagev1.Image{ObjectMeta: metav1.ObjectMeta{
+						Namespace: "ci",
+						Name:      "sha256:th15i5ad1ff3r3nth45h",
+					},
+					}},
+			).Build(),
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			timeForTest := time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
+			actual, err := createPairs(context.TODO(), tc.namespacedName, tc.fakeClient, timeForTest, logrus.NewEntry(logrus.StandardLogger()))
+			if diff := cmp.Diff(err, tc.expectedErr, testhelper.EquateErrorMessage); diff != "" {
+				t.Fatalf("expectedErr differs from actual: %s", diff)
+			}
+			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+				t.Fatalf("pairs don't match expected, diff: %s", diff)
 			}
 		})
 	}

@@ -51,6 +51,8 @@ const (
 	aggregationIDLabel          = "release.openshift.io/aggregation-id"
 	defaultAggregatorJobTimeout = 6 * time.Hour
 	defaultMultiRefJobTimeout   = 6 * time.Hour
+
+	dependentProwJobsFinalizer = "pullrequestpayloadqualificationruns.ci.openshift.io/dependent-prowjobs"
 )
 
 type injectingResolverClient interface {
@@ -91,13 +93,14 @@ func AddToManager(mgr manager.Manager, ns string, rc injectingResolverClient, pr
 		return fmt.Errorf("failed to construct controller: %w", err)
 	}
 
-	// Watch only on Create events
 	predicateFuncs := predicate.Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {
 			return e.Object.GetNamespace() == ns
 		},
-		DeleteFunc:  func(event.DeleteEvent) bool { return false },
-		UpdateFunc:  func(event.UpdateEvent) bool { return false },
+		DeleteFunc: func(event.DeleteEvent) bool { return false },
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			return e.ObjectNew.GetNamespace() == ns
+		},
 		GenericFunc: func(event.GenericEvent) bool { return false },
 	}
 	if err := c.Watch(source.Kind(mgr.GetCache(), &v1.PullRequestPayloadQualificationRun{}), prpqrHandler(), predicateFuncs); err != nil {
@@ -155,6 +158,46 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 	if err := r.client.List(ctx, existingProwjobs, ctrlruntimeclient.MatchingLabels{v1.PullRequestPayloadQualificationRunLabel: prpqr.Name}); err != nil {
 		return fmt.Errorf("failed to get ProwJobs for this PullRequestPayloadQualifiactionRun: %w", err)
 	}
+
+	if !prpqr.GetDeletionTimestamp().IsZero() {
+		r.abortJobs(ctx, logger, prpqr, existingProwjobs, statuses)
+	} else {
+		r.triggerJobs(ctx, logger, req, prpqr, existingProwjobs, statuses)
+	}
+
+	allJobsTriggeredCondition := constructCondition(statuses)
+
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		prpqr := &v1.PullRequestPayloadQualificationRun{}
+		if err := r.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: req.Namespace, Name: req.Name}, prpqr); err != nil {
+			return fmt.Errorf("failed to get the PullRequestPayloadQualificationRun: %w", err)
+		}
+
+		oldStatus := prpqr.Status.DeepCopy()
+		reconcileStatus(prpqr, statuses, allJobsTriggeredCondition)
+		if reflect.DeepEqual(*oldStatus, prpqr.Status) {
+			logger.Info("PullRequestPayloadQualificationRun status is up to date, no updates necessary")
+			return nil
+		}
+
+		logger.Info("Updating PullRequestPayloadQualificationRun...")
+		if err := r.client.Update(ctx, prpqr); err != nil {
+			return fmt.Errorf("failed to update PullRequestPayloadQualificationRun %s: %w", prpqr.Name, err)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *reconciler) triggerJobs(ctx context.Context,
+	logger *logrus.Entry,
+	req reconcile.Request,
+	prpqr *v1.PullRequestPayloadQualificationRun,
+	existingProwjobs *prowv1.ProwJobList,
+	statuses map[string]*v1.PullRequestPayloadJobStatus,
+) {
 	existingProwjobsByNameHash := map[string]*prowv1.ProwJob{}
 	for i, pj := range existingProwjobs.Items {
 		existingProwjobsByNameHash[pj.Labels[releaseJobNameLabel]] = &existingProwjobs.Items[i]
@@ -167,8 +210,8 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 	}
 
 	pullRequests := prpqr.Spec.PullRequests
-
 	baseMetadata := metadataFromPullRequestsUnderTest(pullRequests)
+
 	for _, jobSpec := range prpqr.Spec.Jobs.Jobs {
 		var prowjobsToCreate []*prowv1.ProwJob
 		mimickedJob := jobSpec.JobName(jobconfig.PeriodicPrefix)
@@ -315,31 +358,77 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 			}
 		}
 	}
+}
 
-	allJobsTriggeredCondition := constructCondition(statuses)
-
-	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		prpqr := &v1.PullRequestPayloadQualificationRun{}
-		if err := r.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: req.Namespace, Name: req.Name}, prpqr); err != nil {
-			return fmt.Errorf("failed to get the PullRequestPayloadQualificationRun: %w", err)
-		}
-
-		oldStatus := prpqr.Status.DeepCopy()
-		reconcileStatus(prpqr, statuses, allJobsTriggeredCondition)
-		if reflect.DeepEqual(*oldStatus, prpqr.Status) {
-			logger.Info("PullRequestPayloadQualificationRun status is up to date, no updates necessary")
-			return nil
-		}
-
-		logger.Info("Updating PullRequestPayloadQualificationRun...")
-		if err := r.client.Update(ctx, prpqr); err != nil {
-			return fmt.Errorf("failed to update PullRequestPayloadQualificationRun %s: %w", prpqr.Name, err)
-		}
-		return nil
-	}); err != nil {
-		return err
+func (r *reconciler) abortJobs(ctx context.Context,
+	logger *logrus.Entry,
+	prpqr *v1.PullRequestPayloadQualificationRun,
+	existingProwjobs *prowv1.ProwJobList,
+	statuses map[string]*v1.PullRequestPayloadJobStatus,
+) {
+	if !hasDependantProwJobsFinalizer(&prpqr.ObjectMeta) {
+		return
 	}
-	return nil
+
+	isAggregator := func(job *prowv1.ProwJob) (string, bool) {
+		labels := job.Labels
+		if labels == nil {
+			return "", false
+		}
+		label, exists := labels[aggregationIDLabel]
+		return label, exists
+	}
+
+	abort := func(ctx context.Context, logger *logrus.Entry, job *prowv1.ProwJob) {
+		if job.Complete() || (job.Status.State != prowv1.TriggeredState && job.Status.State != prowv1.PendingState) {
+			return
+		}
+
+		logger.Info("Aborting prowjob...")
+		job.Status.State = prowv1.AbortedState
+		if err := r.client.Update(ctx, job); err != nil {
+			logger.WithError(err).Error("Failed to abort")
+		}
+	}
+
+	prowJobsByName := make(map[string]*prowv1.ProwJob)
+	for i := range existingProwjobs.Items {
+		pj := &existingProwjobs.Items[i]
+		prowJobsByName[pj.Name] = pj
+	}
+
+	for i := range prpqr.Status.Jobs {
+		jobStatus := &prpqr.Status.Jobs[i]
+		// Fill statuses so that reconcilition can proberly be executed
+		statuses[jobStatus.ReleaseJobName] = jobStatus
+
+		logger = logger.WithField("prowjob", jobStatus.ProwJob)
+		job, exists := prowJobsByName[jobStatus.ProwJob]
+		if !exists {
+			logger.Warn("Job not found")
+			continue
+		}
+
+		job = job.DeepCopy()
+		logger = logger.WithField("job", job.Spec.Job)
+		abort(ctx, logger, job)
+
+		if aggregationId, ok := isAggregator(job); ok {
+			logger.Info("Aborting aggregated prowjobs...")
+
+			var aggregatedProwjobs prowv1.ProwJobList
+			if err := r.client.List(ctx, &aggregatedProwjobs, ctrlruntimeclient.MatchingLabels{aggregationIDLabel: aggregationId}); err != nil {
+				logger.WithError(err).Error("Failed to list aggregated jobs")
+				continue
+			}
+
+			for j := range aggregatedProwjobs.Items {
+				job = (&aggregatedProwjobs.Items[j]).DeepCopy()
+				logger = logger.WithFields(logrus.Fields{"aggregated-prowjob": job.Name, "aggregated-job": job.Spec.Job})
+				abort(ctx, logger, job)
+			}
+		}
+	}
 }
 
 func reconcileStatus(theirs *v1.PullRequestPayloadQualificationRun, ourStatuses map[string]*v1.PullRequestPayloadJobStatus, ourCondition metav1.Condition) {
@@ -363,6 +452,7 @@ func reconcileStatus(theirs *v1.PullRequestPayloadQualificationRun, ourStatuses 
 		statusByJobName[jobName] = &theirs.Status.Jobs[i]
 	}
 
+	var atLeastOneActive bool
 	theirs.Status.Jobs = []v1.PullRequestPayloadJobStatus{}
 	for _, spec := range theirs.Spec.Jobs.Jobs {
 		jobName := spec.JobName(jobconfig.PeriodicPrefix)
@@ -372,8 +462,12 @@ func reconcileStatus(theirs *v1.PullRequestPayloadQualificationRun, ourStatuses 
 
 		our := ourStatuses[jobName]
 		their := statusByJobName[jobName]
-		theirs.Status.Jobs = append(theirs.Status.Jobs, reconcileJobStatus(jobName, their, our))
+		reconciled := reconcileJobStatus(jobName, their, our)
+		theirs.Status.Jobs = append(theirs.Status.Jobs, reconciled)
+		atLeastOneActive = reconciled.Status.State == prowv1.PendingState || reconciled.Status.State == prowv1.TriggeredState
 	}
+
+	manageDependentProwJobsFinalizer(atLeastOneActive, &theirs.ObjectMeta)
 }
 
 func reconcileJobStatus(name string, their, our *v1.PullRequestPayloadJobStatus) v1.PullRequestPayloadJobStatus {
@@ -731,4 +825,30 @@ func generateJobNameToSubmit(inject *api.MetadataWithTest, prs []v1.PullRequestU
 	}
 
 	return fmt.Sprintf("%s%s-%s", refs, variant, inject.Test)
+}
+
+// manageDependentProwJobsFinalizer adds a finalizer if the prpqr has at least one running job,
+// remove otherwise.
+func manageDependentProwJobsFinalizer(atLeastOneJobRunning bool, objMeta *metav1.ObjectMeta) {
+	hasFinalizer := hasDependantProwJobsFinalizer(objMeta)
+	if !atLeastOneJobRunning && hasFinalizer {
+		newFinalizers := make([]string, len(objMeta.Finalizers)-1)
+		for _, f := range objMeta.Finalizers {
+			if f != dependentProwJobsFinalizer {
+				newFinalizers = append(newFinalizers, f)
+			}
+		}
+		objMeta.Finalizers = newFinalizers
+	} else if atLeastOneJobRunning && !hasFinalizer {
+		objMeta.Finalizers = append(objMeta.Finalizers, dependentProwJobsFinalizer)
+	}
+}
+
+func hasDependantProwJobsFinalizer(objMeta *metav1.ObjectMeta) bool {
+	for _, f := range objMeta.Finalizers {
+		if f == dependentProwJobsFinalizer {
+			return true
+		}
+	}
+	return false
 }

@@ -24,6 +24,7 @@ import (
 )
 
 func TestReconcile(t *testing.T) {
+
 	logrus.SetLevel(logrus.DebugLevel)
 	testCases := []struct {
 		name     string
@@ -250,6 +251,134 @@ func TestReconcile(t *testing.T) {
 						InitialPayloadBase: "quay.io/openshift-release-dev/ocp-release:4.15.12-x86_64",
 						PayloadOverrides:   v1.PayloadOverrides{BasePullSpec: "quay.io/openshift-release-dev/ocp-release:4.16.0-ec.1-x86_64"},
 					},
+				},
+			},
+		},
+		{
+			name: "all jobs are aborted remove dependant prowjobs finalizer",
+			prpqr: []ctrlruntimeclient.Object{
+				&v1.PullRequestPayloadQualificationRun{
+					ObjectMeta: metav1.ObjectMeta{Name: "prpqr-test", Namespace: "test-namespace", Finalizers: []string{dependentProwJobsFinalizer}},
+					Spec: v1.PullRequestPayloadTestSpec{
+						PullRequests: []v1.PullRequestUnderTest{{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: &v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}}},
+						Jobs: v1.PullRequestPayloadJobSpec{
+							ReleaseControllerConfig: v1.ReleaseControllerConfig{OCP: "4.9", Release: "ci", Specifier: "informing"},
+							Jobs:                    []v1.ReleaseJobSpec{{CIOperatorConfig: v1.CIOperatorMetadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"}, Test: "test-name"}},
+						},
+					},
+				},
+			},
+			prowJobs: []ctrlruntimeclient.Object{
+				&prowv1.ProwJob{
+					TypeMeta: metav1.TypeMeta{Kind: "ProwJob", APIVersion: "prow.k8s.io/v1"},
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "test-namespace",
+						Annotations: map[string]string{
+							"prow.k8s.io/context": "",
+							"prow.k8s.io/job":     "",
+							"releaseJobName":      "periodic-ci-test-org-test-repo-test-branch-test-name",
+						},
+						Labels: map[string]string{
+							"created-by-prow":           "true",
+							"prow.k8s.io/context":       "",
+							"prow.k8s.io/job":           "",
+							"prow.k8s.io/refs.base_ref": "test-branch",
+							"prow.k8s.io/refs.org":      "test-org",
+							"prow.k8s.io/refs.repo":     "test-repo",
+							"prow.k8s.io/type":          "periodic",
+							"pullrequestpayloadqualificationruns.ci.openshift.io": "prpqr-test",
+							"releaseJobNameHash": "ee3858eff62263cd7266320c00d1d38b",
+						},
+					},
+					Status: prowv1.ProwJobStatus{State: "aborted"},
+				},
+			},
+		},
+		{
+			name: "delete when all jobs are done",
+			prpqr: []ctrlruntimeclient.Object{
+				&v1.PullRequestPayloadQualificationRun{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "prpqr-test",
+						Namespace:         "test-namespace",
+						DeletionTimestamp: &zeroTime,
+						Finalizers:        []string{dependentProwJobsFinalizer},
+					},
+					Spec: v1.PullRequestPayloadTestSpec{
+						PullRequests: []v1.PullRequestUnderTest{{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: &v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}}},
+						Jobs: v1.PullRequestPayloadJobSpec{
+							ReleaseControllerConfig: v1.ReleaseControllerConfig{OCP: "4.9", Release: "ci", Specifier: "informing"},
+							Jobs: []v1.ReleaseJobSpec{
+								{CIOperatorConfig: v1.CIOperatorMetadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"}, Test: "test-name-1"},
+								{CIOperatorConfig: v1.CIOperatorMetadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"}, Test: "test-name-2"},
+							},
+						},
+					},
+
+					Status: v1.PullRequestPayloadTestStatus{
+						Jobs: []v1.PullRequestPayloadJobStatus{
+							{
+								ReleaseJobName: "periodic-ci-test-org-test-repo-test-branch-test-name-1",
+								ProwJob:        "uuid-1",
+								Status:         prowv1.ProwJobStatus{StartTime: zeroTime, State: prowv1.AbortedState},
+							},
+							{
+								ReleaseJobName: "periodic-ci-test-org-test-repo-test-branch-test-name-2",
+								ProwJob:        "uuid-2",
+								Status:         prowv1.ProwJobStatus{StartTime: zeroTime, State: prowv1.SuccessState},
+							},
+						},
+					},
+				},
+			},
+			prowJobs: []ctrlruntimeclient.Object{
+				&prowv1.ProwJob{
+					TypeMeta: metav1.TypeMeta{Kind: "ProwJob", APIVersion: "prow.k8s.io/v1"},
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "test-namespace",
+						Name:      "uuid-1",
+						Annotations: map[string]string{
+							"prow.k8s.io/context": "",
+							"prow.k8s.io/job":     "",
+							"releaseJobName":      "periodic-ci-test-org-test-repo-test-branch-test-name-1",
+						},
+						Labels: map[string]string{
+							"created-by-prow":           "true",
+							"prow.k8s.io/context":       "",
+							"prow.k8s.io/job":           "",
+							"prow.k8s.io/refs.base_ref": "test-branch",
+							"prow.k8s.io/refs.org":      "test-org",
+							"prow.k8s.io/refs.repo":     "test-repo",
+							"prow.k8s.io/type":          "periodic",
+							"pullrequestpayloadqualificationruns.ci.openshift.io": "prpqr-test",
+							"releaseJobNameHash": "283d99c0dcbd80070e6816420ac68caa",
+						},
+					},
+					Status: prowv1.ProwJobStatus{State: prowv1.AbortedState},
+				},
+				&prowv1.ProwJob{
+					TypeMeta: metav1.TypeMeta{Kind: "ProwJob", APIVersion: "prow.k8s.io/v1"},
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "test-namespace",
+						Name:      "uuid-2",
+						Annotations: map[string]string{
+							"prow.k8s.io/context": "",
+							"prow.k8s.io/job":     "",
+							"releaseJobName":      "periodic-ci-test-org-test-repo-test-branch-test-name-2",
+						},
+						Labels: map[string]string{
+							"created-by-prow":           "true",
+							"prow.k8s.io/context":       "",
+							"prow.k8s.io/job":           "",
+							"prow.k8s.io/refs.base_ref": "test-branch",
+							"prow.k8s.io/refs.org":      "test-org",
+							"prow.k8s.io/refs.repo":     "test-repo",
+							"prow.k8s.io/type":          "periodic",
+							"pullrequestpayloadqualificationruns.ci.openshift.io": "prpqr-test",
+							"releaseJobNameHash": "428af2aff595f9d8074f2f6bfba1aec1",
+						},
+					},
+					Status: prowv1.ProwJobStatus{State: prowv1.SuccessState},
 				},
 			},
 		},

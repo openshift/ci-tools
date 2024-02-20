@@ -136,7 +136,7 @@ func (s *releaseImagesTagStep) run(ctx context.Context) error {
 	}
 
 	for _, tag := range is.Spec.Tags {
-		spec, ok := util.ResolvePullSpec(is, tag.Name, false)
+		spec, ok, _ := util.ResolvePullSpec(is, tag.Name, false)
 		if !ok {
 			continue
 		}

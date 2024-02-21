@@ -250,7 +250,7 @@ func (s *server) handleNewPush(l *logrus.Entry, event github.PullRequestEvent) {
 			jobTableLines = append(jobTableLines, fmt.Sprintf("A full list of affected jobs can be found [here](%s%s)", s.rehearsalConfig.GCSBrowserPrefix, fileLocation))
 		}
 		jobTableLines = append(jobTableLines, s.getUsageDetailsLines()...)
-		if err = s.ghc.CreateComment(org, repo, number, strings.Join(jobTableLines, "\n")); err != nil {
+		if err := s.ghc.CreateComment(org, repo, number, strings.Join(jobTableLines, "\n")); err != nil {
 			logger.WithError(err).Error("failed to create comment")
 		}
 	}
@@ -289,7 +289,10 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 		// We shouldn't allow rehearsals to run (or be ack'd) on untrusted PRs
 		for _, label := range pullRequest.Labels {
 			if needsOkToTestLabel == label.Name {
-				logger.Infof("%s label found, no rehearsals will be ran", needsOkToTestLabel)
+				message := fmt.Sprintf("@%s: %s label found, no rehearsals will be run", user, needsOkToTestLabel)
+				if err := s.ghc.CreateComment(org, repo, number, message); err != nil {
+					logger.WithError(err).Error("failed to create comment")
+				}
 				return
 			}
 		}
@@ -309,7 +312,10 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 				s.rehearsalConfig.AbortAllRehearsalJobs(org, repo, number, logger)
 			default:
 				if rehearsalsTriggered {
-					// We don't want to trigger rehearsals more than once per comment
+					message := fmt.Sprintf("@%s: requesting more than one rehearsal in one comment is not supported. If you would like to rehearse multiple specific jobs, please separate the job names by a space in a single command.", user)
+					if err := s.ghc.CreateComment(org, repo, number, message); err != nil {
+						logger.WithError(err).Error("failed to create comment")
+					}
 					continue
 				}
 				rehearsalsTriggered = true
@@ -349,7 +355,7 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 					presubmits, periodics, unaffected = rehearse.FilterJobsByRequested(requestedJobs, presubmits, periodics, logger)
 					if len(unaffected) > 0 {
 						message := fmt.Sprintf("@%s: job(s): %s either don't exist or were not found to be affected, and cannot be rehearsed", user, strings.Join(unaffected, ", "))
-						if err = s.ghc.CreateComment(org, repo, number, message); err != nil {
+						if err := s.ghc.CreateComment(org, repo, number, message); err != nil {
 							logger.WithError(err).Error("failed to create comment")
 						}
 					}
@@ -390,7 +396,7 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 					}
 				} else if !requestedOnly {
 					s.acknowledgeRehearsals(org, repo, number, logger)
-					if err = s.ghc.CreateComment(org, repo, number, fmt.Sprintf("@%s: no rehearsable tests are affected by this change", user)); err != nil {
+					if err := s.ghc.CreateComment(org, repo, number, fmt.Sprintf("@%s: no rehearsable tests are affected by this change", user)); err != nil {
 						logger.WithError(err).Error("failed to create comment")
 					}
 				}

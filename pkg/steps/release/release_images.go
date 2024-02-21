@@ -9,7 +9,6 @@ import (
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	imagev1 "github.com/openshift/api/image/v1"
@@ -94,7 +93,6 @@ func (s *stableImagesTagStep) Objects() []ctrlruntimeclient.Object {
 // a later point, selectively
 type releaseImagesTagStep struct {
 	config  api.ReleaseTagConfiguration
-	images  []api.ProjectDirectoryImageBuildStepConfiguration
 	client  loggingclient.LoggingClient
 	params  *api.DeferredParameters
 	jobSpec *api.JobSpec
@@ -120,13 +118,8 @@ func (s *releaseImagesTagStep) run(ctx context.Context) error {
 	} else {
 		logrus.Infof("Tagged shared images from %s", sourceName(s.config))
 	}
-	builtImages := sets.New[string]()
-	if s.config.IncludeBuiltImages {
-		for _, image := range s.images {
-			builtImages.Insert(string(image.To))
-		}
-	}
-	is, newIS, err := snapshotStream(ctx, s.client, s.config.Namespace, s.config.Name, s.jobSpec.Namespace, api.LatestReleaseName, builtImages)
+
+	is, newIS, err := snapshotStream(ctx, s.client, s.config.Namespace, s.config.Name, s.jobSpec.Namespace, api.LatestReleaseName)
 	if err != nil {
 		return err
 	}
@@ -204,10 +197,9 @@ func (s *releaseImagesTagStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, client loggingclient.LoggingClient, params *api.DeferredParameters, jobSpec *api.JobSpec) api.Step {
+func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, client loggingclient.LoggingClient, params *api.DeferredParameters, jobSpec *api.JobSpec) api.Step {
 	return &releaseImagesTagStep{
 		config:  config,
-		images:  images,
 		client:  client,
 		params:  params,
 		jobSpec: jobSpec,

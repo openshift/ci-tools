@@ -1102,6 +1102,7 @@ periodic-ci-openshift-multiarch-master-nightly-4.16-ocp-e2e-ovn-ppc64le-powervs-
 periodic-ci-openshift-multiarch-master-nightly-4.16-ocp-e2e-ovn-remote-libvirt-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.16-ocp-e2e-ovn-remote-libvirt-s390x
 periodic-ci-openshift-multiarch-master-nightly-4.16-ocp-e2e-ovn-serial-aws-arm64
+periodic-ci-openshift-multiarch-master-nightly-4.16-ocp-e2e-powervs-ovn-multi-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.16-ocp-e2e-serial-aws-ovn-heterogeneous
 periodic-ci-openshift-multiarch-master-nightly-4.16-ocp-e2e-serial-ovn-remote-libvirt-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.16-ocp-e2e-serial-ovn-remote-libvirt-s390x

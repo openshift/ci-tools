@@ -153,7 +153,7 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 	cliExists := false
 	// waiting for importing the images
 	// 2~3 mins: build01 on aws imports images from api.ci on gcp
-	importCtx, cancel := context.WithTimeout(ctx, 30*time.Minute)
+	importCtx, cancel := context.WithTimeout(ctx, 15*time.Minute)
 	defer cancel()
 	if err := wait.PollImmediateUntil(10*time.Second, func() (bool, error) {
 		if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: streamName}, stable); err != nil {

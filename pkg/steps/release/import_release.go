@@ -294,7 +294,7 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 	// tag fails
 	var waiting map[string]int64
 	stable := &imagev1.ImageStream{}
-	if err := wait.Poll(3*time.Second, 30*time.Minute, func() (bool, error) {
+	if err := wait.Poll(3*time.Second, 15*time.Minute, func() (bool, error) {
 		if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: streamName}, stable); err != nil {
 			return false, fmt.Errorf("could not resolve imagestream %s: %w", streamName, err)
 		}

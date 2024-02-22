@@ -30,7 +30,7 @@ for org in openshift; do
 
   if ! ci-operator-checkconfig \
     --config-dir ci-operator/config \
-    --cluster-profiles-config core-services/cluster-profiles/_config.yaml \
+    --cluster-profiles-config ci-operator/step-registry/cluster-profiles/cluster-profiles-config.yaml \
     --cluster-claim-owners-config core-services/cluster-pools/_config.yaml \
     --registry "${registry}"
   then

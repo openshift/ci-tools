@@ -278,16 +278,6 @@ func modifyResponse(resp *http.Response) error {
 	// Only logging here for debugging, nothing is modified
 	statusCode := resp.StatusCode
 	l := logrus.WithField("statusCode", statusCode)
-	if url, err := resp.Location(); err != nil {
-		if url != nil {
-			l = l.WithField("host", url.Host).WithField("path", url.Path)
-		} else {
-			// should never happen
-			l.Warn("got nil from response without any error")
-		}
-	} else {
-		l.WithError(err).Warn("failed to get location from response")
-	}
 	if statusCode == http.StatusUnauthorized {
 		l = logrus.WithField("authenticateHeader", resp.Header.Get("www-authenticate"))
 	}

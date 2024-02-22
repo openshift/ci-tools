@@ -20,6 +20,10 @@ func TestGenerateMetadata(t *testing.T) {
 		Approvers: []string{"petr-muller", "droslean"},
 		Reviewers: []string{"petr-muller", "droslean"},
 	}
+	owners3 := repoowners.Config{
+		Approvers: []string{"psalajova", "jmguzik"},
+		Reviewers: []string{"psalajova", "jmguzik"},
+	}
 	testCases := []struct {
 		name             string
 		regPath          string
@@ -72,6 +76,10 @@ func TestGenerateMetadata(t *testing.T) {
 			"resourcewatcher-observer.yaml": {
 				Path:   "resourcewatcher/resourcewatcher-observer.yaml",
 				Owners: owners1,
+			},
+			"cluster-profiles-config.yaml": {
+				Path:   "cluster-profiles/cluster-profiles-config.yaml",
+				Owners: owners3,
 			},
 		},
 	}}

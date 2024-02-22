@@ -68,7 +68,7 @@ func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, regist
 		}
 		// find the cluster profiles config file
 		if info.IsDir() && info.Name() == "cluster-profiles" {
-			configPath := filepath.Join(path, "_config.yaml")
+			configPath := filepath.Join(path, "cluster-profiles-config.yaml")
 			if _, err := os.Stat(configPath); err == nil {
 				clusterProfilesConfigPath = configPath
 			}

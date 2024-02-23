@@ -194,6 +194,7 @@ require (
 
 require (
 	cloud.google.com/go v0.110.0
+	github.com/felixge/httpsnoop v1.0.4
 	github.com/openshift/builder v0.0.0-20200325182657-6a52122d21e0
 	github.com/openshift/client-go v0.0.0-20230120202327-72f107311084
 	github.com/openshift/hive/apis v0.0.0-20230525214126-ab571664f899
@@ -245,6 +246,7 @@ require (
 	github.com/google/go-containerregistry v0.15.2 // indirect
 	github.com/google/s2a-go v0.1.3 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.2.3 // indirect
+	github.com/gorilla/handlers v1.5.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.11.3 // indirect
 	github.com/hashicorp/go-secure-stdlib/parseutil v0.1.7 // indirect
 	github.com/hashicorp/go-secure-stdlib/strutil v0.1.2 // indirect

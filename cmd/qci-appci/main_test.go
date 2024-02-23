@@ -46,8 +46,8 @@ func TestProxyHandler(t *testing.T) {
 			value = v
 		}
 		w.Header().Set("service-param", value)
-		_, _ = fmt.Fprintln(w, "OK")
 		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprintln(w, "OK")
 	})
 	fakeQuayServer := httptest.NewServer(fakeQuayMux)
 	defer fakeQuayServer.Close()

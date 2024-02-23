@@ -3,6 +3,7 @@ package release
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -75,6 +76,7 @@ func snapshotStream(ctx context.Context, client loggingclient.LoggingClient, sou
 				Kind: "DockerImage",
 				Name: api.QCIAPPCIImage(api.ImageStreamTagReference{Namespace: sourceNamespace, Name: sourceName, Tag: tag.Tag}),
 			},
+			ImportPolicy:    imagev1.TagImportPolicy{ImportMode: imagev1.ImportModePreserveOriginal},
 			ReferencePolicy: imagev1.TagReferencePolicy{Type: imagev1.LocalTagReferencePolicy},
 		})
 
@@ -95,9 +97,59 @@ func snapshotStream(ctx context.Context, client loggingclient.LoggingClient, sou
 			if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: created.Namespace, Name: created.Name}, stable); err != nil {
 				return false, err
 			}
-			_, exist := util.ResolvePullSpec(stable, tag.Name, true)
+			_, exist, condition := util.ResolvePullSpec(stable, tag.Name, true)
 			if !exist {
-				logrus.Debugf("Waiting to import tags on imagestream %s/%s:%s ...", created.Namespace, created.Name, tag.Name)
+				logrus.WithField("conditionMessage", condition.Message).Debugf("Waiting to import tags on imagestream %s/%s:%s ...", created.Namespace, created.Name, tag.Name)
+				if strings.Contains(condition.Message, "Internal error occurred") {
+					streamImport := &imagev1.ImageStreamImport{
+						ObjectMeta: meta.ObjectMeta{
+							Namespace: created.Namespace,
+							Name:      created.Name,
+						},
+						Spec: imagev1.ImageStreamImportSpec{
+							Import: true,
+							Images: []imagev1.ImageImportSpec{
+								{
+									To: &coreapi.LocalObjectReference{
+										Name: tag.Name,
+									},
+									From: coreapi.ObjectReference{
+										Kind: "DockerImage",
+										Name: api.QCIAPPCIImage(api.ImageStreamTagReference{Namespace: sourceNamespace, Name: sourceName, Tag: tag.Name}),
+									},
+									ImportPolicy:    imagev1.TagImportPolicy{ImportMode: imagev1.ImportModePreserveOriginal},
+									ReferencePolicy: imagev1.TagReferencePolicy{Type: imagev1.LocalTagReferencePolicy},
+								},
+							},
+						},
+					}
+					if err := wait.ExponentialBackoff(wait.Backoff{Steps: 3, Duration: 1 * time.Second, Factor: 2}, func() (bool, error) {
+						logrus.Debugf("Retrying importing tag %s/%s@%s because %s", created.Namespace, created.Name, tag.Name, condition.Message)
+						if err := client.Create(ctx, streamImport); err != nil {
+							if kerrors.IsConflict(err) {
+								return false, nil
+							}
+							if kerrors.IsForbidden(err) {
+								// the ci-operator expects to have POST /imagestreamimports in the namespace of the job
+								logrus.Warnf("Unable to lock %s/%s@%s to an image digest pull spec, you don't have permission to access the necessary API.",
+									created.Namespace, created.Name, tag.Name)
+								return false, nil
+							}
+							return false, err
+						}
+						if len(streamImport.Status.Images) == 0 {
+							return false, nil
+						}
+						image := streamImport.Status.Images[0]
+						if image.Image == nil {
+							return false, nil
+						}
+						logrus.Debugf("Imported tag %s/%s@%s", created.Namespace, created.Name, tag.Name)
+						return true, nil
+					}); err != nil {
+						return false, fmt.Errorf("unable to import tag %s/%s@%s: %w even with retries", created.Namespace, created.Name, tag.Name, err)
+					}
+				}
 			}
 			return exist, nil
 		}); err != nil {

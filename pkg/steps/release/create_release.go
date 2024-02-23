@@ -159,8 +159,8 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 		if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: streamName}, stable); err != nil {
 			return false, err
 		}
-		cvo, cvoExists = util.ResolvePullSpec(stable, "cluster-version-operator", true)
-		_, cliExists = util.ResolvePullSpec(stable, "cli", true)
+		cvo, cvoExists, _ = util.ResolvePullSpec(stable, "cluster-version-operator", true)
+		_, cliExists, _ = util.ResolvePullSpec(stable, "cli", true)
 		ret := cvoExists && cliExists
 		if !ret {
 			logrus.Infof("Waiting to import cluster-version-operator and cli ...")

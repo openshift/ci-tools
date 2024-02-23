@@ -25,7 +25,8 @@ func ParseImageStreamTagReference(s string) (api.ImageStreamTagReference, error)
 }
 
 // ResolvePullSpec if a tag of an imagestream is resolved
-func ResolvePullSpec(is *imageapi.ImageStream, tag string, requireExact bool) (string, bool) {
+func ResolvePullSpec(is *imageapi.ImageStream, tag string, requireExact bool) (string, bool, imageapi.TagEventCondition) {
+	var condition imageapi.TagEventCondition
 	for _, tags := range is.Status.Tags {
 		if tags.Tag != tag {
 			continue
@@ -33,24 +34,27 @@ func ResolvePullSpec(is *imageapi.ImageStream, tag string, requireExact bool) (s
 		if len(tags.Items) == 0 {
 			break
 		}
+		if conditions := tags.Conditions; len(conditions) > 0 {
+			condition = conditions[0]
+		}
 		if image := tags.Items[0].Image; len(image) > 0 {
 			if len(is.Status.PublicDockerImageRepository) > 0 {
-				return fmt.Sprintf("%s@%s", is.Status.PublicDockerImageRepository, image), true
+				return fmt.Sprintf("%s@%s", is.Status.PublicDockerImageRepository, image), true, condition
 			}
 			if len(is.Status.DockerImageRepository) > 0 {
-				return fmt.Sprintf("%s@%s", is.Status.DockerImageRepository, image), true
+				return fmt.Sprintf("%s@%s", is.Status.DockerImageRepository, image), true, condition
 			}
 		}
 		break
 	}
 	if requireExact {
-		return "", false
+		return "", false, condition
 	}
 	if len(is.Status.PublicDockerImageRepository) > 0 {
-		return fmt.Sprintf("%s:%s", is.Status.PublicDockerImageRepository, tag), true
+		return fmt.Sprintf("%s:%s", is.Status.PublicDockerImageRepository, tag), true, condition
 	}
 	if len(is.Status.DockerImageRepository) > 0 {
-		return fmt.Sprintf("%s:%s", is.Status.DockerImageRepository, tag), true
+		return fmt.Sprintf("%s:%s", is.Status.DockerImageRepository, tag), true, condition
 	}
-	return "", false
+	return "", false, condition
 }

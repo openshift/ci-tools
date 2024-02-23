@@ -550,8 +550,9 @@ func setupDependencies(
 	}
 
 	g, ctx := errgroup.WithContext(context.Background())
-	for _, cluster := range buildClusters.UnsortedList() {
+	for i, cluster := range buildClusters.UnsortedList() {
 		buildCluster := cluster
+		index := i
 		g.Go(func() error {
 			log := log.WithField("buildCluster", buildCluster)
 			clusterConfig := configs[buildCluster]
@@ -581,7 +582,7 @@ func setupDependencies(
 				return nil
 			}
 			config := configs[buildCluster]
-			client, err := ctrlruntimeclient.New(&config, ctrlruntimeclient.Options{})
+			client, err := ctrlruntimeclient.New(&config, ctrlruntimeclient.Options{DryRun: &dryRun})
 			if err != nil {
 				return fmt.Errorf("failed to construct client for cluster %s: %w", buildCluster, err)
 			}
@@ -589,8 +590,15 @@ func setupDependencies(
 			if err := ensureImageStreamTags(ctx, client, requiredImageStreamTags, buildCluster, prowJobNamespace, prowJobClient, log); err != nil {
 				return fmt.Errorf("failed to ensure imagestreamtags in cluster %s: %w", buildCluster, err)
 			}
-			if err := ensureISTSInQCI(ctx, client, requiredImageStreamTags, mirrorOptions, quayIOImageHelper, log); err != nil {
-				log.WithError(err).Errorf("failed to ensure imagestreamtags %s in QCI", requiredImageStreamTags)
+			// TODO: Disable the mirroring when migration to QCI is complete after which no image mirror is needed
+			// as QCI will the new authoritative CI registry.
+			// We only need to do it once.
+			if index == 0 {
+				mirrorOptions.DryRun = dryRun
+				if err := ensureISTSInQCI(ctx, client, requiredImageStreamTags, mirrorOptions, quayIOImageHelper, log); err != nil {
+					// best effort as the required image might be there (just stale) on QCI already and rehearsal can still run with it
+					log.WithError(err).Errorf("failed to ensure imagestreamtags %s in QCI", requiredImageStreamTags)
+				}
 			}
 
 			return nil
@@ -666,21 +674,22 @@ func ensureISTSInQCI(ctx context.Context, client ctrlruntimeclient.Client, ists 
 	for _, ist := range ists {
 		istPairs, err := createPairs(ctx, ist, client, time.Now(), log)
 		if err != nil {
-			errs = append(errs, err)
+			errs = append(errs, fmt.Errorf("failed to create pairs for %s to mirror: %w", ist.String(), err))
 			continue
 		}
 		pairs = append(pairs, istPairs...)
 	}
-	if len(pairs) == 0 {
+	if len(errs) > 0 {
 		return utilerrors.NewAggregate(errs)
 	}
 	if err := wait.PollUntilContextTimeout(ctx, 1*time.Second, 3*time.Minute, true, func(ctx context.Context) (done bool, err error) {
 		if errFromMirror := quayIOImageHelper.ImageMirror(pairs, mirrorOptions); errFromMirror != nil {
+			log.WithError(errFromMirror).Warn("Failed to mirror image, retrying ...")
 			return false, nil
 		}
 		return true, nil
 	}); err != nil {
-		errs = append(errs, err)
+		errs = append(errs, fmt.Errorf("failed to mirror image even with retries: %w", err))
 	}
 	return utilerrors.NewAggregate(errs)
 }

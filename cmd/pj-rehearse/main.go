@@ -14,7 +14,6 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	prowConfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/config/secret"
-	"k8s.io/test-infra/prow/flagutil"
 	prowflagutil "k8s.io/test-infra/prow/flagutil"
 	configflagutil "k8s.io/test-infra/prow/flagutil/config"
 	"k8s.io/test-infra/prow/github"
@@ -27,6 +26,7 @@ import (
 
 	imagev1 "github.com/openshift/api/image/v1"
 
+	quayiociimagesdistributor "github.com/openshift/ci-tools/pkg/controller/quay_io_ci_images_distributor"
 	"github.com/openshift/ci-tools/pkg/rehearse"
 )
 
@@ -35,7 +35,7 @@ type options struct {
 	instrumentationOptions prowflagutil.InstrumentationOptions
 
 	prowjobKubeconfig string
-	kubernetesOptions flagutil.KubernetesOptions
+	kubernetesOptions prowflagutil.KubernetesOptions
 	noTemplates       bool
 	noRegistry        bool
 	noClusterProfiles bool
@@ -51,16 +51,17 @@ type options struct {
 	dryRun        bool
 	dryRunOptions dryRunOptions
 
-	stickyLabelAuthors flagutil.Strings
+	stickyLabelAuthors prowflagutil.Strings
 
 	webhookSecretFile        string
+	registryConfig           string
 	githubEventServerOptions githubeventserver.Options
 	github                   prowflagutil.GitHubOptions
 	config                   configflagutil.ConfigOptions
 }
 
 func gatherOptions() (options, error) {
-	o := options{kubernetesOptions: flagutil.KubernetesOptions{NOInClusterConfigDefault: true}}
+	o := options{kubernetesOptions: prowflagutil.KubernetesOptions{NOInClusterConfigDefault: true}}
 	fs := flag.CommandLine
 
 	fs.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
@@ -81,6 +82,7 @@ func gatherOptions() (options, error) {
 
 	fs.Var(&o.stickyLabelAuthors, "sticky-label-author", "PR Author for which the 'rehearsals-ack' label will not be removed upon a new push. Can be passed multiple times.")
 	fs.StringVar(&o.webhookSecretFile, "hmac-secret-file", "/etc/webhook/hmac", "Path to the file containing the GitHub HMAC secret.")
+	fs.StringVar(&o.registryConfig, "registry-config", "", "Path to the file of registry credentials")
 
 	fs.StringVar(&o.gcsBucket, "gcs-bucket", "test-platform-results", "GCS Bucket to upload affected jobs list")
 	fs.StringVar(&o.gcsCredentialsFile, "gcs-credentials-file", "/etc/gcs/service-account.json", "GCS Credentials file to upload affected jobs list")
@@ -188,7 +190,7 @@ func dryRun(o options, logger *logrus.Entry) error {
 			return fmt.Errorf("%s: %w", "ERROR: pj-rehearse: failed to validate rehearsal jobs", err)
 		}
 
-		_, err := rc.RehearseJobs(candidate, candidatePath, prRefs, imageStreamTags, presubmitsToRehearse, changedTemplates, changedClusterProfiles, logger)
+		_, err := rc.RehearseJobs(candidate, candidatePath, prRefs, imageStreamTags, quayiociimagesdistributor.OCImageMirrorOptions{}, nil, presubmitsToRehearse, changedTemplates, changedClusterProfiles, logger)
 		return err
 	}
 

@@ -1389,9 +1389,9 @@ func (tc *tc) List(ctx context.Context, obj ctrlruntimeclient.ObjectList, opts .
 	return nil
 }
 
-func threetimesTryingPoller(_, _ time.Duration, cf wait.ConditionFunc) error {
+func threetimesTryingPoller(ctx context.Context, _, _ time.Duration, immediate bool, cf wait.ConditionWithContextFunc) error {
 	for i := 0; i < 3; i++ {
-		success, err := cf()
+		success, err := cf(ctx)
 		if err != nil {
 			return err
 		}
@@ -1399,7 +1399,7 @@ func threetimesTryingPoller(_, _ time.Duration, cf wait.ConditionFunc) error {
 			return nil
 		}
 	}
-	return wait.ErrWaitTimeout
+	return wait.ErrorInterrupted(fmt.Errorf("polling failed"))
 }
 
 func TestUsesConfigMap(t *testing.T) {

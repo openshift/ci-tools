@@ -192,7 +192,7 @@ func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, regist
 		return nil, nil, nil, nil, nil, nil, err
 	}
 	// validate the integrity of each reference
-	v := validation.NewValidator(nil)
+	v := validation.NewValidator(nil, nil)
 	var validationErrors []error
 	for _, r := range references {
 		if err := v.IsValidReference(r); err != nil {
@@ -264,4 +264,22 @@ func ClusterProfilesConfig(configPath string) (api.ClusterProfilesMap, error) {
 	}
 
 	return mergedMap, nil
+}
+
+// ClusterClaimsOwnersConfig loads cluster claim owners information from its config in the release repository
+func ClusterClaimOwnersConfig(configPath string) (api.ClusterClaimOwnersMap, error) {
+	configContents, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read cluster claim config: %w", err)
+	}
+
+	var clusterClaimList []api.ClusterClaimDetails
+	if err = yaml.Unmarshal(configContents, &clusterClaimList); err != nil {
+		return nil, fmt.Errorf("failed to unmarshall cluster claim config: %w", err)
+	}
+	clusterClaimOwnersMap := make(api.ClusterClaimOwnersMap)
+	for _, c := range clusterClaimList {
+		clusterClaimOwnersMap[c.Claim] = c
+	}
+	return clusterClaimOwnersMap, nil
 }

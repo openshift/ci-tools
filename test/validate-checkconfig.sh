@@ -31,6 +31,7 @@ for org in openshift; do
   if ! ci-operator-checkconfig \
     --config-dir ci-operator/config \
     --cluster-profiles-config core-services/cluster-profiles/_config.yaml \
+    --cluster-claim-owners-config core-services/cluster-pools/_config.yaml \
     --registry "${registry}"
   then
     echo "ERROR: Errors in $org/release"

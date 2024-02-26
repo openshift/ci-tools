@@ -458,6 +458,24 @@ func verifyClusterProfileOwnership(profile api.ClusterProfileDetails, m *api.Met
 	return fmt.Errorf("%s/%s is not an owner of the cluster profile: %q", m.Org, m.Repo, profile.Profile)
 }
 
+func verifyClusterClaimOwnership(claim api.ClusterClaimDetails, m *api.Metadata) error {
+	if m == nil || m.Org == "" {
+		return fmt.Errorf("can't do ownership check, metadata not defined")
+	}
+	if claim.Owners == nil || len(claim.Owners) == 0 {
+		return nil
+	}
+	for _, owner := range claim.Owners {
+		if owner.Org != m.Org {
+			continue
+		}
+		if owner.Repos == nil || util.Contains(owner.Repos, m.Repo) {
+			return nil
+		}
+	}
+	return fmt.Errorf("%s/%s is not an owner of the cluster claim: %q", m.Org, m.Repo, claim.Claim)
+}
+
 func searchForTestDuplicates(tests []api.TestStepConfiguration) []error {
 	duplicates := make(map[string]bool, len(tests))
 	var testNames []string
@@ -502,6 +520,10 @@ func (v *Validator) validateTestConfigurationType(
 		}
 		if claim.Owner == "" {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.cluster_claim.owner cannot be empty when cluster_claim is not nil", fieldRoot))
+		} else if details, ok := v.validClusterClaimOwners[claim.Owner]; ok {
+			if err := verifyClusterClaimOwnership(details, metadata); err != nil {
+				validationErrors = append(validationErrors, err)
+			}
 		}
 		if test.MultiStageTestConfigurationLiteral == nil && test.MultiStageTestConfiguration == nil {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.cluster_claim cannot be set on a test which is not a multi-stage test", fieldRoot))

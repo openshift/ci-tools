@@ -7,18 +7,21 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httputil"
-	"net/url"
+	url "net/url"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/felixge/httpsnoop"
 	"github.com/sirupsen/logrus"
 
 	authenticationv1 "k8s.io/api/authentication/v1"
 	authorizationv1 "k8s.io/api/authorization/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/logrusutil"
@@ -99,7 +102,7 @@ func main() {
 
 	ctx := interrupts.Context()
 	tokenMaintainer := newRobotTokenMaintainer(opts.robotUsernameFile, opts.robotPasswordFile, secret.GetSecret)
-	interrupts.Tick(func() { execute(tokenMaintainer) }, func() time.Duration { return opts.interval })
+	interrupts.Tick(func() { execute(ctx, tokenMaintainer) }, func() time.Duration { return opts.interval })
 
 	inClusterConfig, err := util.LoadClusterConfig()
 	if err != nil {
@@ -137,9 +140,16 @@ func newRobotTokenMaintainer(usernameFile string, passwordFile string, secretGet
 	}
 }
 
-func execute(c *robotTokenMaintainer) {
-	if err := c.Run(); err != nil {
-		logrus.WithError(err).Error("Error running")
+func execute(ctx context.Context, c *robotTokenMaintainer) {
+	if err := wait.ExponentialBackoffWithContext(ctx, wait.Backoff{Duration: 2 * time.Second, Factor: 2, Steps: 3}, func(ctx context.Context) (done bool, err error) {
+		if err := c.Run(); err != nil {
+			logrus.WithError(err).Error("Failed to run robot token maintainer")
+			return false, nil
+		}
+		logrus.Info("Succeeded running robot token maintainer")
+		return true, nil
+	}); err != nil {
+		logrus.WithError(err).Error("Failed on running robot token maintainer even with retires")
 	}
 }
 
@@ -190,7 +200,11 @@ func (c *robotTokenMaintainer) isValid() (valid bool, ret error) {
 		return false, nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		return false, fmt.Errorf("got unexpected status code form quay.io: %d", resp.StatusCode)
+		if bodyBytes, err := io.ReadAll(resp.Body); err == nil {
+			return false, fmt.Errorf("got unexpected status code %d from quay.io with response's body: %s", resp.StatusCode, string(bodyBytes))
+		} else {
+			return false, fmt.Errorf("got unexpected status code %d from quay.io and failed to read its body: %w", resp.StatusCode, err)
+		}
 	}
 	return true, nil
 }
@@ -249,6 +263,8 @@ func proxyHandler(target string, clusterTokenService ClusterTokenService, quaySe
 }
 
 func modifyRequest(req *http.Request, clusterTokenService ClusterTokenService, quayService QuayService) {
+	l := logrus.WithFields(logrus.Fields{"path": req.URL.Path})
+	l.Debug("Proxy received request")
 	if path := req.URL.Path; path == "/v2/auth" {
 		key := "service"
 		value := "quay.io"
@@ -278,16 +294,6 @@ func modifyResponse(resp *http.Response) error {
 	// Only logging here for debugging, nothing is modified
 	statusCode := resp.StatusCode
 	l := logrus.WithField("statusCode", statusCode)
-	if url, err := resp.Location(); err != nil {
-		if url != nil {
-			l = l.WithField("host", url.Host).WithField("path", url.Path)
-		} else {
-			// should never happen
-			l.Warn("got nil from response without any error")
-		}
-	} else {
-		l.WithError(err).Warn("failed to get location from response")
-	}
 	if statusCode == http.StatusUnauthorized {
 		l = logrus.WithField("authenticateHeader", resp.Header.Get("www-authenticate"))
 	}
@@ -353,63 +359,95 @@ func (s *SimpleClusterTokenService) Validate(token string) (bool, error) {
 	return sar.Status.Allowed, nil
 }
 
+type appHandler struct {
+	proxy               http.Handler
+	host                string
+	clusterTokenService ClusterTokenService
+	secretGetter        func(string) []byte
+	robotUsernameFile   string
+	robotPasswordFile   string
+}
+
+func (h *appHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	l := logrus.WithFields(logrus.Fields{"path": path})
+
+	if path == "/healthz" {
+		if _, err := fmt.Fprintln(w, http.StatusText(http.StatusOK)); err != nil {
+			l.WithError(err).Error("failed to write response")
+		}
+		return
+	}
+
+	if path == "/v2/auth" {
+		username, password, ok := r.BasicAuth()
+		if !ok {
+			w.Header().Add("Www-Authenticate", fmt.Sprintf("Bearer realm=\"https://%s/v2/auth\",service=\"%s\"", h.host, h.host))
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			l.WithField("basic", ok).Debug("Failed to get basic auth")
+			return
+		}
+		if username != string(h.secretGetter(h.robotUsernameFile)) || password != string(h.secretGetter(h.robotPasswordFile)) {
+			valid, err := h.clusterTokenService.Validate(password)
+			if err != nil || !valid {
+				w.Header().Add("Www-Authenticate", fmt.Sprintf("Bearer realm=\"https://%s/v2/auth\",service=\"%s\"", h.host, h.host))
+				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+				l.WithField("username", username).WithError(err).WithField("valid", valid).Debug("Failed to validate the user")
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			body := map[string]string{"token": password}
+			if err := json.NewEncoder(w).Encode(body); err != nil {
+				l.WithError(err).Error("failed to encode body")
+				return
+			}
+			l.WithField("username", username).Debug("Returned password as token")
+			return
+		}
+		l.WithField("username", username).Debug("Provide token for the robot user with proxy")
+	}
+
+	v := r.Header.Get("Authorization")
+	hasToken := strings.HasPrefix(v, "Bearer ") && strings.TrimPrefix(v, "Bearer ") != ""
+	if !hasToken && path != "/v2/auth" {
+		w.Header().Add("Www-Authenticate", fmt.Sprintf("Bearer realm=\"https://%s/v2/auth\",service=\"%s\"", h.host, h.host))
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		l.Debug("Found no token")
+		return
+	}
+
+	h.proxy.ServeHTTP(w, r)
+}
+
 func getRouter(proxy http.Handler, host string, clusterTokenService ClusterTokenService, secretGetter func(string) []byte, robotUsernameFile, robotPasswordFile string) http.Handler {
-	handler := http.NewServeMux()
-	handler.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
+	serveMux := http.NewServeMux()
+	appHandler := &appHandler{proxy: proxy, host: host, clusterTokenService: clusterTokenService, secretGetter: secretGetter, robotUsernameFile: robotUsernameFile, robotPasswordFile: robotPasswordFile}
+	logHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		m := httpsnoop.CaptureMetrics(appHandler, w, r)
+		h, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			host = r.RemoteAddr
+		}
+		uri := r.RequestURI
+		if r.ProtoMajor == 2 && r.Method == "CONNECT" {
+			uri = r.Host
+		}
+		if uri == "" {
+			uri = r.URL.RequestURI()
+		}
 		v := r.Header.Get("Authorization")
 		hasToken := strings.HasPrefix(v, "Bearer ") && strings.TrimPrefix(v, "Bearer ") != ""
-
-		l := logrus.WithFields(logrus.Fields{
-			"method":   r.Method,
-			"path":     path,
-			"hasToken": hasToken,
-		})
-		l.Debug("Received request")
-
-		if path == "/healthz" {
-			if _, err := fmt.Fprintln(w, http.StatusText(http.StatusOK)); err != nil {
-				l.WithError(err).Error("failed to write response")
-			}
-			return
-		}
-
-		if path == "/v2/auth" {
-			username, password, ok := r.BasicAuth()
-			if !ok {
-				w.Header().Add("Www-Authenticate", fmt.Sprintf("Bearer realm=\"https://%s/v2/auth\",service=\"%s\"", host, host))
-				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-				l.WithField("basic", ok).Debug("Failed to get basic auth")
-				return
-			}
-			if username != string(secretGetter(robotUsernameFile)) || password != string(secretGetter(robotPasswordFile)) {
-				valid, err := clusterTokenService.Validate(password)
-				if err != nil || !valid {
-					w.Header().Add("Www-Authenticate", fmt.Sprintf("Bearer realm=\"https://%s/v2/auth\",service=\"%s\"", host, host))
-					http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-					l.WithField("username", username).WithError(err).WithField("valid", valid).Debug("Failed to validate the user")
-					return
-				}
-				w.Header().Set("Content-Type", "application/json")
-				body := map[string]string{"token": password}
-				if err := json.NewEncoder(w).Encode(body); err != nil {
-					l.WithError(err).Error("failed to encode body")
-					return
-				}
-				l.WithField("username", username).Debug("Returned password as token")
-				return
-			}
-			l.WithField("username", username).Debug("Provide token for the robot user with proxy")
-		}
-
-		if !hasToken && path != "/v2/auth" {
-			w.Header().Add("Www-Authenticate", fmt.Sprintf("Bearer realm=\"https://%s/v2/auth\",service=\"%s\"", host, host))
-			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-			l.Debug("Found no token")
-			return
-		}
-
-		proxy.ServeHTTP(w, r)
+		logrus.WithFields(
+			logrus.Fields{
+				"method":   r.Method,
+				"uri":      uri,
+				"code":     m.Code,
+				"size":     m.Written,
+				"duration": m.Duration,
+				"token":    hasToken,
+				"host":     h,
+			}).Debug("Access log")
 	})
-	return handler
+	serveMux.Handle("/", logHandler)
+	return serveMux
 }

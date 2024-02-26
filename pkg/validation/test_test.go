@@ -1138,7 +1138,7 @@ func TestValidateTestSteps(t *testing.T) {
 			if tc.seen != nil {
 				context.namesSeen = tc.seen
 			}
-			v := NewValidator(nil)
+			v := NewValidator(nil, nil)
 			ret := v.validateTestSteps(context, testStageTest, tc.steps, &tc.clusterClaim)
 			if len(ret) > 0 && len(tc.errs) == 0 {
 				t.Fatalf("Unexpected error %v", ret)
@@ -1179,7 +1179,7 @@ func TestValidatePostSteps(t *testing.T) {
 			if tc.seen != nil {
 				context.namesSeen = tc.seen
 			}
-			v := NewValidator(nil)
+			v := NewValidator(nil, nil)
 			ret := v.validateTestSteps(context, testStagePost, tc.steps, nil)
 			if !errListMessagesEqual(ret, tc.errs) {
 				t.Fatal(diff.ObjectReflectDiff(ret, tc.errs))
@@ -1212,7 +1212,7 @@ func TestValidateParameters(t *testing.T) {
 		err:    []error{errors.New("test: unresolved parameter(s): [TEST1]")},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			v := NewValidator(nil)
+			v := NewValidator(nil, nil)
 			err := v.validateLiteralTestStep(newContext("test", tc.env, tc.releases, make(testInputImages)), testStageTest, api.LiteralTestStep{
 				As:       "as",
 				From:     "from",
@@ -1474,7 +1474,7 @@ func TestValidateLeases(t *testing.T) {
 			test := api.TestStepConfiguration{
 				MultiStageTestConfigurationLiteral: &tc.test,
 			}
-			v := NewValidator(nil)
+			v := NewValidator(nil, nil)
 			err := v.validateTestConfigurationType("tests[0]", test, nil, nil, nil, make(testInputImages), true)
 			if diff := diff.ObjectReflectDiff(tc.err, err); diff != "<no diffs>" {
 				t.Errorf("unexpected error: %s", diff)
@@ -1671,7 +1671,7 @@ func TestValidateTestConfigurationType(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			v := NewValidator(nil)
+			v := NewValidator(nil, nil)
 			actual := v.validateTestConfigurationType("test", tc.test, nil, nil, nil, make(testInputImages), false)
 			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("expected differs from actual: %s", diff)
@@ -1720,7 +1720,7 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 			Owners:  []api.ClusterProfileOwners{},
 		},
 	}
-	v := NewValidator(cpMap)
+	v := NewValidator(cpMap, nil)
 
 	for _, tc := range []struct {
 		name     string
@@ -1796,6 +1796,129 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			actual := verifyClusterProfileOwnership(tc.profile, tc.metadata)
+			if d := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); d != "" {
+				t.Errorf("expected differs from actual: %s\n", d)
+			}
+		})
+	}
+}
+
+func TestVerifyClusterClaimOwnership(t *testing.T) {
+	clusterClaim := api.ClusterClaimOwnersMap{
+		"claim-with-one-owner": api.ClusterClaimDetails{
+			Claim: "claim-with-one-owner",
+			Owners: []api.ClusterClaimOwnerDetails{
+				{
+					Org: "org",
+				},
+			},
+		},
+		"claim-with-one-owner-w-multiple-repos": api.ClusterClaimDetails{
+			Claim: "claim-with-one-owner-w-multiple-repos",
+			Owners: []api.ClusterClaimOwnerDetails{
+				{
+					Org:   "org2",
+					Repos: []string{"repo21", "repo22"},
+				},
+			},
+		},
+		"claim-with-multiple-orgs-and-repos": api.ClusterClaimDetails{
+			Claim: "claim-with-multiple-orgs-and-repos",
+			Owners: []api.ClusterClaimOwnerDetails{
+				{
+					Org:   "org1",
+					Repos: []string{"repo1"},
+				},
+				{
+					Org:   "org2",
+					Repos: []string{"repo21", "repo22"},
+				},
+				{
+					Org: "org3",
+				},
+			},
+		},
+		"claim-with-no-owners-specified": api.ClusterClaimDetails{
+			Claim:  "claim-with-no-owners-specified",
+			Owners: []api.ClusterClaimOwnerDetails{},
+		},
+	}
+	v := NewValidator(nil, clusterClaim)
+
+	for _, tc := range []struct {
+		name     string
+		claim    api.ClusterClaimDetails
+		metadata *api.Metadata
+		expected error
+	}{
+		{
+			name:  "ownership not restricted",
+			claim: v.validClusterClaimOwners["claim-with-no-owners-specified"],
+			metadata: &api.Metadata{
+				Org:  "any-org",
+				Repo: "any-repo",
+			},
+		},
+		{
+			name:  "not one of owners",
+			claim: v.validClusterClaimOwners["claim-with-one-owner"],
+			metadata: &api.Metadata{
+				Org:  "wrong-org",
+				Repo: "any-repo",
+			},
+			expected: fmt.Errorf("wrong-org/any-repo is not an owner of the cluster claim: \"claim-with-one-owner\""),
+		},
+		{
+			name:  "basic ok case",
+			claim: v.validClusterClaimOwners["claim-with-one-owner"],
+			metadata: &api.Metadata{
+				Org:  "org",
+				Repo: "any-repo",
+			},
+		},
+		{
+			name:  "complex case ok",
+			claim: v.validClusterClaimOwners["claim-with-multiple-orgs-and-repos"],
+			metadata: &api.Metadata{
+				Org:  "org2",
+				Repo: "repo22",
+			},
+		},
+		{
+			name:  "complex case ok - no repos",
+			claim: v.validClusterClaimOwners["claim-with-multiple-orgs-and-repos"],
+			metadata: &api.Metadata{
+				Org:  "org3",
+				Repo: "any-repo",
+			},
+		},
+		{
+			name:  "complex case nok",
+			claim: v.validClusterClaimOwners["claim-with-multiple-orgs-and-repos"],
+			metadata: &api.Metadata{
+				Org:  "org2",
+				Repo: "wrong-repo",
+			},
+			expected: fmt.Errorf("org2/wrong-repo is not an owner of the cluster claim: \"claim-with-multiple-orgs-and-repos\""),
+		},
+		{
+			name:  "missing metadata - empty",
+			claim: v.validClusterClaimOwners["claim-with-multiple-orgs-and-repos"],
+			metadata: &api.Metadata{
+				Org:  "",
+				Repo: "",
+			},
+			expected: fmt.Errorf("can't do ownership check, metadata not defined"),
+		},
+		{
+			name:     "missing metadata - nil",
+			claim:    v.validClusterClaimOwners["claim-with-multiple-orgs-and-repos"],
+			metadata: nil,
+			expected: fmt.Errorf("can't do ownership check, metadata not defined"),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := verifyClusterClaimOwnership(tc.claim, tc.metadata)
 			if d := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); d != "" {
 				t.Errorf("expected differs from actual: %s\n", d)
 			}

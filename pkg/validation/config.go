@@ -15,18 +15,22 @@ import (
 
 // Validator holds data used across validations.
 type Validator struct {
-	validClusterProfiles api.ClusterProfilesMap
+	validClusterProfiles    api.ClusterProfilesMap
+	validClusterClaimOwners api.ClusterClaimOwnersMap
 	// hasTrapCache avoids redundant regexp searches on step commands.
 	hasTrapCache map[string]bool
 }
 
 // NewValidator creates an object that optimizes bulk validations.
-func NewValidator(profiles api.ClusterProfilesMap) Validator {
+func NewValidator(profiles api.ClusterProfilesMap, clusterClaimOwners api.ClusterClaimOwnersMap) Validator {
 	ret := Validator{
 		hasTrapCache: make(map[string]bool),
 	}
 	if profiles != nil {
 		ret.validClusterProfiles = profiles
+	}
+	if clusterClaimOwners != nil {
+		ret.validClusterClaimOwners = clusterClaimOwners
 	}
 	return ret
 }

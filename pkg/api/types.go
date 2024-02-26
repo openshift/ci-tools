@@ -2441,3 +2441,15 @@ type ClusterProfileOwners struct {
 	Org   string   `yaml:"org"`
 	Repos []string `yaml:"repos,omitempty"`
 }
+
+type ClusterClaimOwnersMap map[string]ClusterClaimDetails
+
+type ClusterClaimDetails struct {
+	Claim  string                     `yaml:"claim"`
+	Owners []ClusterClaimOwnerDetails `yaml:"owners,omitempty"`
+}
+
+type ClusterClaimOwnerDetails struct {
+	Org   string   `yaml:"org"`
+	Repos []string `yaml:"repos,omitempty"`
+}

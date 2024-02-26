@@ -344,3 +344,62 @@ func TestClusterProfilesConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestClusterClaimOwnersConfig(t *testing.T) {
+	claims := make(api.ClusterClaimOwnersMap)
+	claims["claim"] = api.ClusterClaimDetails{
+		Claim:  "claim",
+		Owners: []api.ClusterClaimOwnerDetails{{Org: "org1"}},
+	}
+	claims["claim-2"] = api.ClusterClaimDetails{
+		Claim:  "claim-2",
+		Owners: []api.ClusterClaimOwnerDetails{{Org: "org2", Repos: []string{"repo1", "repo2"}}},
+	}
+
+	var testCases = []struct {
+		name     string
+		expected api.ClusterClaimOwnersMap
+		testYaml string
+	}{
+		{
+			name: "claims with assigned owners",
+			testYaml: `
+        - claim: claim
+          owners:
+            - org: org1
+        - claim: claim-2
+          owners:
+            - org: org2
+              repos:
+                - repo1
+                - repo2
+    `,
+			expected: claims,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tmpFile, err := os.CreateTemp("", "test-config-*.yaml")
+			if err != nil {
+				t.Errorf("Error creating temporary file: %v", err)
+			}
+			defer func(name string) {
+				if err := os.Remove(name); err != nil {
+					t.Fatalf("Failed to remove tmp file: %v", err)
+				}
+			}(tmpFile.Name())
+			if _, err = tmpFile.WriteString(tc.testYaml); err != nil {
+				t.Errorf("Error writing to temporary file: %v", err)
+			}
+			if err = tmpFile.Close(); err != nil {
+				t.Fatalf("Failed to close tmp file: %v", err)
+			}
+
+			actual, _ := ClusterClaimOwnersConfig(tmpFile.Name())
+			if !reflect.DeepEqual(tc.expected, actual) {
+				t.Errorf("\nExpected: %v, \nActual: %v", tc.expected, actual)
+			}
+		})
+	}
+}

@@ -8,6 +8,11 @@ import (
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 )
 
+const (
+	minMajor = 4
+	minMinor = 15
+)
+
 type CreateJobsOptions struct {
 	ciDataClient jobrunaggregatorlib.CIDataClient
 
@@ -15,8 +20,25 @@ type CreateJobsOptions struct {
 	gcsBucket   string
 }
 
-func (o *CreateJobsOptions) createJobRowsFromReleases(ctx context.Context, ciDataClient jobrunaggregatorlib.CIDataClient) ([]jobrunaggregatorapi.JobRow, error) {
+// getNewReleases get a list of releases defined in the Releases table in BigQuery. It then filters
+// out older releases whose jobs we do not care about importing.
+func (o *CreateJobsOptions) getNewReleases(ctx context.Context, ciDataClient jobrunaggregatorlib.CIDataClient) ([]jobrunaggregatorapi.ReleaseRow, error) {
+	newReleases := []jobrunaggregatorapi.ReleaseRow{}
 	releases, err := ciDataClient.ListReleases(ctx)
+	if err != nil {
+		return newReleases, err
+	}
+	for _, release := range releases {
+		if release.Major > minMajor ||
+			(release.Major == minMajor && release.Minor >= minMinor) {
+			newReleases = append(newReleases, release)
+		}
+	}
+	return newReleases, nil
+}
+
+func (o *CreateJobsOptions) createJobRowsFromReleases(ctx context.Context, ciDataClient jobrunaggregatorlib.CIDataClient) ([]jobrunaggregatorapi.JobRow, error) {
+	releases, err := o.getNewReleases(ctx, ciDataClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get releases: %w", err)
 	}

@@ -577,7 +577,7 @@ func (s *server) dumpAffectedJobsToGCS(pullRequest *github.PullRequest, presubmi
 			return io.NopCloser(strings.NewReader(strings.Join(fileContent, "\n"))), nil
 		}),
 	}
-	if err := gcs.Upload(context.Background(), s.rehearsalConfig.GCSBucket, s.rehearsalConfig.GCSCredentialsFile, "", uploadTargets); err != nil {
+	if err := gcs.Upload(context.Background(), s.rehearsalConfig.GCSBucket, s.rehearsalConfig.GCSCredentialsFile, "", []string{"*"}, uploadTargets); err != nil {
 		logger.WithError(err).Error("couldn't upload affected job data to GCS")
 	}
 	return fileLocation

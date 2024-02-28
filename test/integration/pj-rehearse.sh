@@ -35,7 +35,7 @@ git commit -m "Candidate version of openshift/release" --quiet
 candidate_sha="$(git rev-parse HEAD)"
 popd >/dev/null
 
-os::cmd::expect_success "ci-operator-checkconfig --config-dir ${suite_dir}/master/ci-operator/config --registry ${suite_dir}/master/ci-operator/step-registry --cluster-profiles-config ${suite_dir}/master/core-services/cluster-profiles/_config.yaml --cluster-claim-owners-config ${suite_dir}/candidate/core-services/cluster-pools/_config.yaml"
+os::cmd::expect_success "ci-operator-checkconfig --config-dir ${suite_dir}/master/ci-operator/config --registry ${suite_dir}/master/ci-operator/step-registry --cluster-profiles-config ${suite_dir}/master/core-services/cluster-profiles/_config.yaml --cluster-claim-owners-config ${suite_dir}/master/core-services/cluster-pools/_config.yaml"
 os::cmd::expect_success "ci-operator-checkconfig --config-dir ${suite_dir}/candidate/ci-operator/config --registry ${suite_dir}/candidate/ci-operator/step-registry --cluster-profiles-config ${suite_dir}/candidate/core-services/cluster-profiles/_config.yaml --cluster-claim-owners-config ${suite_dir}/candidate/core-services/cluster-pools/_config.yaml"
 os::cmd::expect_success "ci-operator-prowgen --from-dir ${suite_dir}/master/ci-operator/config --to-dir ${suite_dir}/master/ci-operator/jobs --registry ${suite_dir}/master/ci-operator/step-registry"
 os::cmd::expect_success '[[ -z "$(git -C '"${suite_dir}"'/master status --short -- .)" ]]'

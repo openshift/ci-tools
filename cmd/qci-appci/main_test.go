@@ -155,11 +155,10 @@ func TestGetRouter(t *testing.T) {
 		},
 		{
 			name:               "http.StatusOK on auth with correct robot's basic auth header",
-			url:                "/v2/auth",
+			url:                "/v2/auth?a=b&c=d",
 			requestHeaders:     map[string]string{"Authorization": fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("u:p")))},
-			expectedStatusCode: http.StatusOK,
-			expectedBody:       "OK\n",
-			expectedHeaders:    map[string]string{"Server": "fake-quay-server"},
+			expectedStatusCode: http.StatusMovedPermanently,
+			expectedBody:       "<a href=\"/v2/auth?a=b&amp;c=d\">Moved Permanently</a>.\n\n",
 		},
 		{
 			name:               "http.StatusUnauthorized on auth with wrong basic auth header",

@@ -405,6 +405,9 @@ func (h *appHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		l.WithField("username", username).Debug("Provide token for the robot user with proxy")
+		r.URL.Host = "quay.io"
+		http.Redirect(w, r, r.URL.RequestURI(), http.StatusMovedPermanently)
+		return
 	}
 
 	v := r.Header.Get("Authorization")

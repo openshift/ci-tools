@@ -652,24 +652,22 @@ func gatherContainerLogsOutput(podClient kubernetes.PodClient, artifactDir, name
 		logger.Trace("Processing container.")
 		if status.State.Terminated != nil {
 			logger.Trace("Container is terminated.")
-			file, err := os.Create(fmt.Sprintf("%s/%s.log.gz", artifactDir, status.Name))
+			file, err := os.Create(fmt.Sprintf("%s/%s.log", artifactDir, status.Name))
 			if err != nil {
 				validationErrors = append(validationErrors, fmt.Errorf("cannot create file: %w", err))
 				continue
 			}
 			defer file.Close()
 
-			w := gzip.NewWriter(file)
 			logger.Trace("Fetching container logs.")
 			if s, err := podClient.GetLogs(namespace, podName, &coreapi.PodLogOptions{Container: status.Name}).Stream(context.TODO()); err == nil {
-				if _, err := io.Copy(w, s); err != nil {
+				if _, err := io.Copy(file, s); err != nil {
 					validationErrors = append(validationErrors, fmt.Errorf("error: Unable to copy log output from pod container %s: %w", status.Name, err))
 				}
 				s.Close()
 			} else {
 				validationErrors = append(validationErrors, fmt.Errorf("error: Unable to retrieve logs from pod container %s: %w", status.Name, err))
 			}
-			w.Close()
 		}
 	}
 	return utilerrors.NewAggregate(validationErrors)
@@ -690,16 +688,14 @@ func gatherSuccessfulBuildLog(buildClient BuildClient, namespace, buildName stri
 	if err := os.MkdirAll(dir, 0750); err != nil {
 		return fmt.Errorf("unable to create directory %s: %w", dir, err)
 	}
-	file, err := os.Create(fmt.Sprintf("%s/%s.log.gz", dir, buildName))
+	file, err := os.Create(fmt.Sprintf("%s/%s.log", dir, buildName))
 	if err != nil {
 		return fmt.Errorf("cannot create file: %w", err)
 	}
 	defer file.Close()
-	w := gzip.NewWriter(file)
-	defer w.Close()
 	if rc, err := buildClient.Logs(namespace, buildName, &buildapi.BuildLogOptions{Timestamps: true}); err == nil {
 		defer rc.Close()
-		if _, err := io.Copy(w, rc); err != nil {
+		if _, err := io.Copy(file, rc); err != nil {
 			return fmt.Errorf("error: Unable to copy log output from pod container %s: %w", buildName, err)
 		}
 	} else {

@@ -530,11 +530,9 @@ periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-aws-ovn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-aws-ovn-arm64-single-node
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-aws-ovn-arm64-techpreview
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-aws-ovn-arm64-techpreview-serial
-periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-aws-sdn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-azure-ovn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-gcp-ovn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-ovn-serial-aws-arm64
-periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-sdn-serial-aws-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-upgrade-aws-ovn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-upgrade-azure-ovn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-upgrade-gcp-ovn-arm64
@@ -668,7 +666,6 @@ periodic-ci-openshift-multiarch-master-nightly-4.16-ocp-e2e-ovn-serial-aws-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.16-ocp-e2e-upgrade-aws-ovn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.16-ocp-e2e-upgrade-azure-ovn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.16-ocp-e2e-upgrade-gcp-ovn-arm64
-periodic-ci-openshift-multiarch-master-nightly-4.16-upgrade-from-stable-4.15-ocp-e2e-aws-sdn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.16-upgrade-from-stable-4.15-ocp-e2e-upgrade-azure-ovn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.16-upgrade-from-stable-4.15-ocp-e2e-upgrade-gcp-ovn-arm64
 // end https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.16-arm64.json
@@ -849,7 +846,7 @@ periodic-ci-openshift-hypershift-release-4.16-periodics-e2e-aws-ovn-mce-conforma
 periodic-ci-openshift-hypershift-release-4.16-periodics-e2e-aws-ovn-proxy-conformance
 periodic-ci-openshift-hypershift-release-4.16-periodics-e2e-ibmcloud-iks
 periodic-ci-openshift-hypershift-release-4.16-periodics-e2e-ibmcloud-roks
-periodic-ci-openshift-hypershift-release-4.16-periodics-e2e-kubevirt-conformance
+periodic-ci-openshift-hypershift-release-4.16-periodics-e2e-kubevirt-baremetalds-conformance
 periodic-ci-openshift-hypershift-release-4.16-periodics-e2e-kubevirt-csi-conformance
 periodic-ci-openshift-hypershift-release-4.16-periodics-e2e-powervs
 // end https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/hypershift/openshift-hypershift-release-4.16-periodics.yaml
@@ -1036,7 +1033,6 @@ periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-aws-ovn-arm64-techpr
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-aws-ovn-arm64-techpreview-serial
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-aws-ovn-heterogeneous
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-aws-ovn-heterogeneous-upgrade
-periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-aws-sdn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-aws-upi-ovn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-azure-ovn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-azure-ovn-heterogeneous
@@ -1052,7 +1048,6 @@ periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-ovn-remote-libvirt-s
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-ovn-remote-libvirt-s390x-heterogeneous
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-ovn-serial-aws-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-powervs-ovn-multi-ppc64le
-periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-sdn-serial-aws-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-serial-aws-ovn-heterogeneous
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-serial-ovn-remote-libvirt-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.15-ocp-e2e-serial-ovn-remote-libvirt-s390x
@@ -1126,7 +1121,6 @@ periodic-ci-openshift-multiarch-master-nightly-4.16-ocp-jenkins-e2e-aws-ovn-arm6
 periodic-ci-openshift-multiarch-master-nightly-4.16-ocp-jenkins-e2e-ovn-remote-libvirt-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.16-ocp-jenkins-e2e-ovn-remote-libvirt-s390x
 periodic-ci-openshift-multiarch-master-nightly-4.16-upgrade-from-nightly-4.15-ocp-e2e-aws-ovn-heterogeneous-upgrade
-periodic-ci-openshift-multiarch-master-nightly-4.16-upgrade-from-nightly-4.15-ocp-e2e-aws-sdn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.16-upgrade-from-nightly-4.15-ocp-e2e-upgrade-azure-ovn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.16-upgrade-from-nightly-4.15-ocp-e2e-upgrade-azure-ovn-heterogeneous
 periodic-ci-openshift-multiarch-master-nightly-4.16-upgrade-from-nightly-4.15-ocp-e2e-upgrade-gcp-ovn-arm64
@@ -1134,7 +1128,6 @@ periodic-ci-openshift-multiarch-master-nightly-4.16-upgrade-from-nightly-4.15-oc
 periodic-ci-openshift-multiarch-master-nightly-4.16-upgrade-from-nightly-4.15-ocp-ovn-remote-libvirt-ppc64le
 periodic-ci-openshift-multiarch-master-nightly-4.16-upgrade-from-nightly-4.15-ocp-ovn-remote-libvirt-s390x
 periodic-ci-openshift-multiarch-master-nightly-4.16-upgrade-from-stable-4.15-ocp-e2e-aws-ovn-heterogeneous-upgrade
-periodic-ci-openshift-multiarch-master-nightly-4.16-upgrade-from-stable-4.15-ocp-e2e-aws-sdn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.16-upgrade-from-stable-4.15-ocp-e2e-upgrade-azure-ovn-arm64
 periodic-ci-openshift-multiarch-master-nightly-4.16-upgrade-from-stable-4.15-ocp-e2e-upgrade-azure-ovn-heterogeneous
 periodic-ci-openshift-multiarch-master-nightly-4.16-upgrade-from-stable-4.15-ocp-e2e-upgrade-gcp-ovn-arm64

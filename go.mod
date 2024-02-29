@@ -195,6 +195,7 @@ require (
 require (
 	cloud.google.com/go v0.110.0
 	github.com/felixge/httpsnoop v1.0.4
+	github.com/golang-jwt/jwt v3.2.1+incompatible
 	github.com/openshift/builder v0.0.0-20200325182657-6a52122d21e0
 	github.com/openshift/client-go v0.0.0-20230120202327-72f107311084
 	github.com/openshift/hive/apis v0.0.0-20230525214126-ab571664f899
@@ -240,7 +241,6 @@ require (
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
 	github.com/go-openapi/swag v0.22.3 // indirect
 	github.com/goccy/go-json v0.9.11 // indirect
-	github.com/golang-jwt/jwt v3.2.1+incompatible // indirect
 	github.com/google/flatbuffers v2.0.8+incompatible // indirect
 	github.com/google/gnostic v0.6.9 // indirect
 	github.com/google/go-containerregistry v0.15.2 // indirect

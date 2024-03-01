@@ -498,9 +498,13 @@ func addCliInjector(imagestream string, pod *coreapi.Pod) {
 	})
 	pod.Spec.InitContainers = append(pod.Spec.InitContainers, coreapi.Container{
 		Name:    "inject-cli",
-		Image:   fmt.Sprintf("%s:cli", imagestream),
+		Image:   fmt.Sprintf("%s:cli-artifacts", imagestream),
 		Command: []string{"/bin/cp"},
-		Args:    []string{"/usr/bin/oc", CliMountPath},
+		// to allow the oc team to freely upgrade RHEL version shipped in the realese
+		// we will explicitly request rhel8 version used in CI
+		// if we decide to update to newer rhel in CI, you'll need to update
+		// this line to pick appropriate oc version
+		Args: []string{"/usr/share/openshift/linux_amd64/oc.rhel8", filepath.Join(CliMountPath, "oc")},
 		VolumeMounts: []coreapi.VolumeMount{{
 			Name:      volumeName,
 			MountPath: CliMountPath,

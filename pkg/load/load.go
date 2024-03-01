@@ -64,6 +64,10 @@ func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, regist
 			}
 			return nil
 		}
+		// skip the cluster profiles dir
+		if info.IsDir() && info.Name() == "cluster-profiles" {
+			return filepath.SkipDir
+		}
 		if info.IsDir() {
 			return nil
 		}

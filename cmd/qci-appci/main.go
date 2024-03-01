@@ -9,8 +9,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/http/httputil"
-	url "net/url"
 	"os"
 	"strings"
 	"sync"
@@ -113,11 +111,8 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to create oc client")
 	}
 
-	proxyHandler, err := proxyHandler("https://quay.io", newTokenService(ctx, ocClient), tokenMaintainer)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create proxy handler")
-	}
-	handler := getRouter(proxyHandler, opts.exposedHost, newTokenService(ctx, ocClient), secret.GetSecret, opts.robotUsernameFile, opts.robotPasswordFile)
+	tokenService := newTokenService(ctx, ocClient)
+	handler := getRouter(opts.exposedHost, tokenService, tokenMaintainer, secret.GetSecret, opts.robotUsernameFile, opts.robotPasswordFile)
 	interrupts.ListenAndServeTLS(&http.Server{Addr: opts.listenAddr, Handler: handler}, opts.tlsCertFile, opts.tlsKeyFile, opts.gracePeriod)
 	interrupts.WaitForGracefulShutdown()
 }
@@ -247,64 +242,6 @@ type TokenResponse struct {
 	Token string `json:"token"`
 }
 
-func proxyHandler(target string, clusterTokenService ClusterTokenService, quayService QuayService) (http.Handler, error) {
-	repoURL, err := url.Parse(target)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse qci-appci's url: %w", err)
-	}
-	proxy := httputil.NewSingleHostReverseProxy(repoURL)
-	originalDirector := proxy.Director
-	proxy.Director = func(req *http.Request) {
-		originalDirector(req)
-		modifyRequest(req, clusterTokenService, quayService)
-	}
-	proxy.ModifyResponse = modifyResponse
-	return proxy, nil
-}
-
-func modifyRequest(req *http.Request, clusterTokenService ClusterTokenService, quayService QuayService) {
-	l := logrus.WithFields(logrus.Fields{"path": req.URL.Path})
-	l.Debug("Proxy received request")
-	if path := req.URL.Path; path == "/v2/auth" {
-		key := "service"
-		value := "quay.io"
-		logrus.WithField("path", path).WithField("key", key).WithField("value", value).Debug("Replacing params ...")
-		values := req.URL.Query()
-		values.Set(key, value)
-		req.URL.RawQuery = values.Encode()
-	} else {
-		value := req.Header.Get("Authorization")
-		if strings.HasPrefix(value, "Bearer ") {
-			clusterToken := strings.TrimPrefix(value, "Bearer ")
-			if valid, err := clusterTokenService.Validate(clusterToken); err != nil {
-				logrus.WithError(err).Error("Failed to validate token")
-			} else if valid {
-				if quayToken, err := quayService.GetRobotToken(); err != nil {
-					logrus.WithError(err).Error("Failed to get robot token")
-				} else {
-					logrus.Debug("Replacing bearer token ...")
-					req.Header.Set("Authorization", strings.ReplaceAll(value, clusterToken, quayToken))
-				}
-			}
-		}
-	}
-}
-
-func modifyResponse(resp *http.Response) error {
-	// Only logging here for debugging, nothing is modified
-	statusCode := resp.StatusCode
-	l := logrus.WithField("statusCode", statusCode)
-	if statusCode == http.StatusUnauthorized {
-		l = logrus.WithField("authenticateHeader", resp.Header.Get("www-authenticate"))
-	}
-	l.Debug("Proxy responded")
-	return nil
-}
-
-type QuayService interface {
-	GetRobotToken() (string, error)
-}
-
 type ClusterTokenService interface {
 	Validate(token string) (bool, error)
 }
@@ -360,8 +297,8 @@ func (s *SimpleClusterTokenService) Validate(token string) (bool, error) {
 }
 
 type appHandler struct {
-	proxy               http.Handler
 	host                string
+	tokenMaintainer     *robotTokenMaintainer
 	clusterTokenService ClusterTokenService
 	secretGetter        func(string) []byte
 	robotUsernameFile   string
@@ -387,41 +324,66 @@ func (h *appHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			l.WithField("basic", ok).Debug("Failed to get basic auth")
 			return
 		}
-		if username != string(h.secretGetter(h.robotUsernameFile)) || password != string(h.secretGetter(h.robotPasswordFile)) {
-			valid, err := h.clusterTokenService.Validate(password)
-			if err != nil || !valid {
-				w.Header().Add("Www-Authenticate", fmt.Sprintf("Bearer realm=\"https://%s/v2/auth\",service=\"%s\"", h.host, h.host))
-				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-				l.WithField("username", username).WithError(err).WithField("valid", valid).Debug("Failed to validate the user")
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			body := map[string]string{"token": password}
-			if err := json.NewEncoder(w).Encode(body); err != nil {
-				l.WithError(err).Error("failed to encode body")
-				return
-			}
-			l.WithField("username", username).Debug("Returned password as token")
+		l := logrus.WithFields(logrus.Fields{"username": username})
+		ok, err := robotOrValidHuman(username, password, string(h.secretGetter(h.robotUsernameFile)), string(h.secretGetter(h.robotPasswordFile)), h.clusterTokenService)
+		if err != nil {
+			w.Header().Add("Www-Authenticate", fmt.Sprintf("Bearer realm=\"https://%s/v2/auth\",service=\"%s\"", h.host, h.host))
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			l.WithError(err).Debug("Failed to determine user")
 			return
 		}
-		l.WithField("username", username).Debug("Provide token for the robot user with proxy")
+		if !ok {
+			w.Header().Add("Www-Authenticate", fmt.Sprintf("Bearer realm=\"https://%s/v2/auth\",service=\"%s\"", h.host, h.host))
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			l.Debug("Failed to authenticate")
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		token, err := h.tokenMaintainer.GetRobotToken()
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			l.Debug("Failed to get robot token")
+			return
+		}
+		body := map[string]string{"token": token}
+		if err := json.NewEncoder(w).Encode(body); err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			l.WithError(err).Error("Failed to encode body")
+			return
+		}
+		l.Debug("Provided token")
+		return
 	}
 
 	v := r.Header.Get("Authorization")
 	hasToken := strings.HasPrefix(v, "Bearer ") && strings.TrimPrefix(v, "Bearer ") != ""
-	if !hasToken && path != "/v2/auth" {
+	if !hasToken {
 		w.Header().Add("Www-Authenticate", fmt.Sprintf("Bearer realm=\"https://%s/v2/auth\",service=\"%s\"", h.host, h.host))
 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		l.Debug("Found no token")
 		return
 	}
 
-	h.proxy.ServeHTTP(w, r)
+	if path == "/v2/" {
+		return
+	}
+
+	r.URL.Scheme = "https"
+	r.URL.Host = "quay.io"
+	http.Redirect(w, r, r.URL.String(), http.StatusMovedPermanently)
 }
 
-func getRouter(proxy http.Handler, host string, clusterTokenService ClusterTokenService, secretGetter func(string) []byte, robotUsernameFile, robotPasswordFile string) http.Handler {
+func robotOrValidHuman(username string, password string, robotUsername string, robotPassword string, service ClusterTokenService) (bool, error) {
+
+	if username == robotUsername && password == robotPassword {
+		return true, nil
+	}
+	return service.Validate(password)
+}
+
+func getRouter(host string, clusterTokenService ClusterTokenService, tokenMaintainer *robotTokenMaintainer, secretGetter func(string) []byte, robotUsernameFile, robotPasswordFile string) http.Handler {
 	serveMux := http.NewServeMux()
-	appHandler := &appHandler{proxy: proxy, host: host, clusterTokenService: clusterTokenService, secretGetter: secretGetter, robotUsernameFile: robotUsernameFile, robotPasswordFile: robotPasswordFile}
+	appHandler := &appHandler{host: host, clusterTokenService: clusterTokenService, tokenMaintainer: tokenMaintainer, secretGetter: secretGetter, robotUsernameFile: robotUsernameFile, robotPasswordFile: robotPasswordFile}
 	logHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		m := httpsnoop.CaptureMetrics(appHandler, w, r)
 		h, _, err := net.SplitHostPort(r.RemoteAddr)

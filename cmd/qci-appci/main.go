@@ -379,13 +379,16 @@ type ClusterTokenService interface {
 type SimpleClusterTokenService struct {
 	ctx    context.Context
 	client ctrlruntimeclient.Client
+	logger *logrus.Entry
 }
 
 func newTokenService(ctx context.Context, client ctrlruntimeclient.Client) ClusterTokenService {
-	return &SimpleClusterTokenService{ctx: ctx, client: client}
+	return &SimpleClusterTokenService{ctx: ctx, client: client, logger: logrus.WithField("subComponent", "simpleClusterTokenService")}
 }
 
 func (s *SimpleClusterTokenService) Validate(token string) (bool, error) {
+	t := time.Now()
+	s.logger.Debug("Validating token ...")
 	tr := &authenticationv1.TokenReview{
 		Spec: authenticationv1.TokenReviewSpec{
 			Token: token,
@@ -422,7 +425,7 @@ func (s *SimpleClusterTokenService) Validate(token string) (bool, error) {
 	if err := s.client.Create(s.ctx, sar); err != nil {
 		return false, fmt.Errorf("failed to create SubjectAccessReview for user %s: %w", username, err)
 	}
-
+	s.logger.WithField("duration", time.Since(t)).Debug("Validated token")
 	return sar.Status.Allowed, nil
 }
 

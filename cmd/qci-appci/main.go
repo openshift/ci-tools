@@ -10,13 +10,14 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
-	url "net/url"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/felixge/httpsnoop"
+	"github.com/golang-jwt/jwt"
 	"github.com/sirupsen/logrus"
 
 	authenticationv1 "k8s.io/api/authentication/v1"
@@ -36,6 +37,9 @@ type options struct {
 	gracePeriod       time.Duration
 	robotUsernameFile string
 	robotPasswordFile string
+	tokenSecretFile   string
+	tokenValidityRaw  string
+	tokenValidity     time.Duration
 	tlsCertFile       string
 	tlsKeyFile        string
 	intervalRaw       string
@@ -50,6 +54,8 @@ func gatherOptions() (*options, error) {
 	fs.DurationVar(&o.gracePeriod, "gracePeriod", time.Second*10, "Grace period for server shutdown")
 	fs.StringVar(&o.robotUsernameFile, "robot-username-file", "", "Path to a robot username file. Must not be empty.")
 	fs.StringVar(&o.robotPasswordFile, "robot-password-file", "", "Path to a robot password file. Must not be empty.")
+	fs.StringVar(&o.tokenSecretFile, "token-secret-file", "", "Path to the token secret file. Must not be empty.")
+	fs.StringVar(&o.tokenValidityRaw, "token-validity", "21600s", "Parseable duration string that specifies the validity of tokens")
 	fs.StringVar(&o.tlsCertFile, "tls-cert-file", "", "Path to a tls cert file. Must not be empty.")
 	fs.StringVar(&o.tlsKeyFile, "tls-key-file", "", "Path to a tls key file. Must not be empty.")
 	fs.StringVar(&o.intervalRaw, "interval", "30s", "Parseable duration string that specifies the period to refresh robot's quay.io bearer token")
@@ -69,6 +75,9 @@ func (o *options) validate() error {
 	if o.robotPasswordFile == "" {
 		return errors.New("--robot-password-file must not be empty")
 	}
+	if o.tokenSecretFile == "" {
+		return errors.New("--token-secret-file must not be empty")
+	}
 	if o.tlsCertFile == "" {
 		return errors.New("--tls-cert-file must not be empty")
 	}
@@ -80,6 +89,11 @@ func (o *options) validate() error {
 		return fmt.Errorf("failed to parse interal: %w", err)
 	}
 	o.interval = interval
+	tokenValidity, err := time.ParseDuration(o.tokenValidityRaw)
+	if err != nil {
+		return fmt.Errorf("failed to parse token validity: %w", err)
+	}
+	o.tokenValidity = tokenValidity
 	return nil
 }
 
@@ -94,7 +108,7 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to complete opts")
 	}
 
-	for _, file := range []string{opts.robotUsernameFile, opts.robotPasswordFile} {
+	for _, file := range []string{opts.robotUsernameFile, opts.robotPasswordFile, opts.tokenSecretFile} {
 		if err := secret.Add(file); err != nil {
 			logrus.WithError(err).WithField("file", file).Fatal("Failed to add secret file")
 		}
@@ -113,11 +127,12 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to create oc client")
 	}
 
-	proxyHandler, err := proxyHandler("https://quay.io", newTokenService(ctx, ocClient), tokenMaintainer)
+	appTokenService := newAppTokenService(secret.GetSecret, opts.tokenSecretFile, opts.tokenValidity)
+	proxyHandler, err := proxyHandler("https://quay.io", tokenMaintainer, appTokenService)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create proxy handler")
 	}
-	handler := getRouter(proxyHandler, opts.exposedHost, newTokenService(ctx, ocClient), secret.GetSecret, opts.robotUsernameFile, opts.robotPasswordFile)
+	handler := getRouter(proxyHandler, opts.exposedHost, newTokenService(ctx, ocClient), appTokenService, secret.GetSecret, opts.robotUsernameFile, opts.robotPasswordFile)
 	interrupts.ListenAndServeTLS(&http.Server{Addr: opts.listenAddr, Handler: handler}, opts.tlsCertFile, opts.tlsKeyFile, opts.gracePeriod)
 	interrupts.WaitForGracefulShutdown()
 }
@@ -247,7 +262,7 @@ type TokenResponse struct {
 	Token string `json:"token"`
 }
 
-func proxyHandler(target string, clusterTokenService ClusterTokenService, quayService QuayService) (http.Handler, error) {
+func proxyHandler(target string, quayService QuayService, appTokenService AppTokenService) (http.Handler, error) {
 	repoURL, err := url.Parse(target)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse qci-appci's url: %w", err)
@@ -256,13 +271,13 @@ func proxyHandler(target string, clusterTokenService ClusterTokenService, quaySe
 	originalDirector := proxy.Director
 	proxy.Director = func(req *http.Request) {
 		originalDirector(req)
-		modifyRequest(req, clusterTokenService, quayService)
+		modifyRequest(req, quayService, appTokenService)
 	}
 	proxy.ModifyResponse = modifyResponse
 	return proxy, nil
 }
 
-func modifyRequest(req *http.Request, clusterTokenService ClusterTokenService, quayService QuayService) {
+func modifyRequest(req *http.Request, quayService QuayService, appTokenService AppTokenService) {
 	l := logrus.WithFields(logrus.Fields{"path": req.URL.Path})
 	l.Debug("Proxy received request")
 	if path := req.URL.Path; path == "/v2/auth" {
@@ -276,7 +291,7 @@ func modifyRequest(req *http.Request, clusterTokenService ClusterTokenService, q
 		value := req.Header.Get("Authorization")
 		if strings.HasPrefix(value, "Bearer ") {
 			clusterToken := strings.TrimPrefix(value, "Bearer ")
-			if valid, err := clusterTokenService.Validate(clusterToken); err != nil {
+			if valid, err := appTokenService.Validate(clusterToken); err != nil {
 				logrus.WithError(err).Error("Failed to validate token")
 			} else if valid {
 				if quayToken, err := quayService.GetRobotToken(); err != nil {
@@ -299,6 +314,58 @@ func modifyResponse(resp *http.Response) error {
 	}
 	l.Debug("Proxy responded")
 	return nil
+}
+
+type AppTokenService interface {
+	Validate(string) (bool, error)
+	Generate(string) (string, error)
+}
+
+type JWTTokenService struct {
+	secretGetter    func(string) []byte
+	tokenSecretFile string
+	validity        time.Duration
+}
+
+func newAppTokenService(secretGetter func(string) []byte, tokenSecretFile string, validity time.Duration) AppTokenService {
+	return &JWTTokenService{secretGetter: secretGetter, tokenSecretFile: tokenSecretFile, validity: validity}
+}
+
+func (s *JWTTokenService) hmacSampleSecret() []byte {
+	return s.secretGetter(s.tokenSecretFile)
+}
+
+func (s *JWTTokenService) Validate(tokenString string) (bool, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return s.hmacSampleSecret(), nil
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to parse the token string: %w", err)
+	}
+	if claims, ok := token.Claims.(jwt.MapClaims); ok {
+		if err := claims.Valid(); err != nil {
+			return false, fmt.Errorf("failed to validate jwt claims for id %q: %w", claims["kid"], err)
+		}
+		return true, nil
+	}
+	return false, fmt.Errorf("failed to find jwt claims")
+}
+
+func (s *JWTTokenService) Generate(id string) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"kid": id,
+		"nbf": time.Now().Unix(),
+		"exp": time.Now().Add(s.validity).Unix(),
+		"iat": time.Now().Unix(),
+	})
+	tokenString, err := token.SignedString(s.hmacSampleSecret())
+	if err != nil {
+		return "", fmt.Errorf("failed to get signed token: %w", err)
+	}
+	return tokenString, nil
 }
 
 type QuayService interface {
@@ -363,6 +430,7 @@ type appHandler struct {
 	proxy               http.Handler
 	host                string
 	clusterTokenService ClusterTokenService
+	appTokenService     AppTokenService
 	secretGetter        func(string) []byte
 	robotUsernameFile   string
 	robotPasswordFile   string
@@ -395,21 +463,28 @@ func (h *appHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				l.WithField("username", username).WithError(err).WithField("valid", valid).Debug("Failed to validate the user")
 				return
 			}
-			w.Header().Set("Content-Type", "application/json")
-			body := map[string]string{"token": password}
-			if err := json.NewEncoder(w).Encode(body); err != nil {
-				l.WithError(err).Error("failed to encode body")
+			l.WithField("username", username).Debug("Provide token for user")
+			if err := token(w, h.appTokenService, username); err != nil {
+				logrus.WithField("username", username).WithError(err).Error("Failed to set up token.")
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				return
 			}
-			l.WithField("username", username).Debug("Returned password as token")
+			l.WithField("username", username).Debug("Provided token for user")
 			return
 		}
-		l.WithField("username", username).Debug("Provide token for the robot user with proxy")
+		l.WithField("username", username).Debug("Providing token for the CI robot user")
+		if err := token(w, h.appTokenService, username); err != nil {
+			logrus.WithField("username", username).WithError(err).Error("Failed to set up token.")
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+		l.WithField("username", username).Debug("Provided token for the CI robot user")
+		return
 	}
 
 	v := r.Header.Get("Authorization")
 	hasToken := strings.HasPrefix(v, "Bearer ") && strings.TrimPrefix(v, "Bearer ") != ""
-	if !hasToken && path != "/v2/auth" {
+	if !hasToken {
 		w.Header().Add("Www-Authenticate", fmt.Sprintf("Bearer realm=\"https://%s/v2/auth\",service=\"%s\"", h.host, h.host))
 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		l.Debug("Found no token")
@@ -419,9 +494,22 @@ func (h *appHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.proxy.ServeHTTP(w, r)
 }
 
-func getRouter(proxy http.Handler, host string, clusterTokenService ClusterTokenService, secretGetter func(string) []byte, robotUsernameFile, robotPasswordFile string) http.Handler {
+func token(w http.ResponseWriter, appTokenService AppTokenService, username string) error {
+	w.Header().Set("Content-Type", "application/json")
+	token, err := appTokenService.Generate(username)
+	if err != nil {
+		return fmt.Errorf("failed to generate the token for %s: %w", username, err)
+	}
+	body := map[string]string{"token": token}
+	if err := json.NewEncoder(w).Encode(body); err != nil {
+		return fmt.Errorf("failed to encode body for %s: %w", username, err)
+	}
+	return nil
+}
+
+func getRouter(proxy http.Handler, host string, clusterTokenService ClusterTokenService, appTokenService AppTokenService, secretGetter func(string) []byte, robotUsernameFile, robotPasswordFile string) http.Handler {
 	serveMux := http.NewServeMux()
-	appHandler := &appHandler{proxy: proxy, host: host, clusterTokenService: clusterTokenService, secretGetter: secretGetter, robotUsernameFile: robotUsernameFile, robotPasswordFile: robotPasswordFile}
+	appHandler := &appHandler{proxy: proxy, host: host, clusterTokenService: clusterTokenService, appTokenService: appTokenService, secretGetter: secretGetter, robotUsernameFile: robotUsernameFile, robotPasswordFile: robotPasswordFile}
 	logHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		m := httpsnoop.CaptureMetrics(appHandler, w, r)
 		h, _, err := net.SplitHostPort(r.RemoteAddr)

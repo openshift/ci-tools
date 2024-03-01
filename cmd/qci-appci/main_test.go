@@ -7,9 +7,12 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
+
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 type fakeClusterTokenService struct {
@@ -27,6 +30,26 @@ type fakeQuayService struct {
 
 func (s *fakeQuayService) GetRobotToken() (string, error) {
 	return "fake-token", nil
+}
+
+type fakeAppTokenService struct {
+}
+
+func (s *fakeAppTokenService) Validate(tokenString string) (bool, error) {
+	if tokenString == "invalid" {
+		return false, nil
+	}
+	if tokenString == "err" {
+		return false, fmt.Errorf("some err")
+	}
+	return true, nil
+}
+
+func (s *fakeAppTokenService) Generate(id string) (string, error) {
+	if id == "err" {
+		return "", fmt.Errorf("err")
+	}
+	return "app-token", nil
 }
 
 func init() {
@@ -72,6 +95,18 @@ func TestProxyHandler(t *testing.T) {
 			expectedHeaders: map[string]string{"bearer-token": "fake-token", "service-param": "empty"},
 		},
 		{
+			name:            "invalid token only",
+			url:             "/some-url",
+			requestHeaders:  map[string]string{"Authorization": "Bearer invalid"},
+			expectedHeaders: map[string]string{"bearer-token": "invalid", "service-param": "empty"},
+		},
+		{
+			name:            "err token only",
+			url:             "/some-url",
+			requestHeaders:  map[string]string{"Authorization": "Bearer err"},
+			expectedHeaders: map[string]string{"bearer-token": "err", "service-param": "empty"},
+		},
+		{
 			name:            "param only",
 			url:             "/v2/auth",
 			expectedHeaders: map[string]string{"bearer-token": "empty", "service-param": "quay.io"},
@@ -81,6 +116,18 @@ func TestProxyHandler(t *testing.T) {
 			url:             "/v2/auth",
 			requestHeaders:  map[string]string{"Authorization": "Bearer some"},
 			expectedHeaders: map[string]string{"bearer-token": "some", "service-param": "quay.io"},
+		},
+		{
+			name:            "both invalid token and param",
+			url:             "/v2/auth",
+			requestHeaders:  map[string]string{"Authorization": "Bearer invalid"},
+			expectedHeaders: map[string]string{"bearer-token": "invalid", "service-param": "quay.io"},
+		},
+		{
+			name:            "both err token and param",
+			url:             "/v2/auth",
+			requestHeaders:  map[string]string{"Authorization": "Bearer err"},
+			expectedHeaders: map[string]string{"bearer-token": "err", "service-param": "quay.io"},
 		},
 	}
 	for _, tc := range testCases {
@@ -92,7 +139,7 @@ func TestProxyHandler(t *testing.T) {
 			for k, v := range tc.requestHeaders {
 				req.Header.Set(k, v)
 			}
-			handler, err := proxyHandler(fakeQuayServer.URL, &fakeClusterTokenService{}, &fakeQuayService{})
+			handler, err := proxyHandler(fakeQuayServer.URL, &fakeQuayService{}, &fakeAppTokenService{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -158,8 +205,7 @@ func TestGetRouter(t *testing.T) {
 			url:                "/v2/auth",
 			requestHeaders:     map[string]string{"Authorization": fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("u:p")))},
 			expectedStatusCode: http.StatusOK,
-			expectedBody:       "OK\n",
-			expectedHeaders:    map[string]string{"Server": "fake-quay-server"},
+			expectedBody:       "{\"token\":\"app-token\"}\n",
 		},
 		{
 			name:               "http.StatusUnauthorized on auth with wrong basic auth header",
@@ -174,7 +220,15 @@ func TestGetRouter(t *testing.T) {
 			url:                "/v2/auth",
 			requestHeaders:     map[string]string{"Authorization": fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("a:p")))},
 			expectedStatusCode: http.StatusOK,
-			expectedBody:       "{\"token\":\"p\"}\n",
+			expectedBody:       "{\"token\":\"app-token\"}\n",
+			expectedHeaders:    map[string]string{"Server": ""},
+		},
+		{
+			name:               "http.StatusOK on auth with correct basic auth header with an error when generating a token",
+			url:                "/v2/auth",
+			requestHeaders:     map[string]string{"Authorization": fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("err:p")))},
+			expectedStatusCode: http.StatusInternalServerError,
+			expectedBody:       "Internal Server Error\n",
 			expectedHeaders:    map[string]string{"Server": ""},
 		},
 		{
@@ -195,7 +249,7 @@ func TestGetRouter(t *testing.T) {
 			for k, v := range tc.requestHeaders {
 				req.Header.Set(k, v)
 			}
-			handler := getRouter(fakeProxy, "host:12321", &fakeClusterTokenService{}, func(s string) []byte { return []byte(s) }, "u", "p")
+			handler := getRouter(fakeProxy, "host:12321", &fakeClusterTokenService{}, &fakeAppTokenService{}, func(s string) []byte { return []byte(s) }, "u", "p")
 			rr := httptest.NewRecorder()
 			handler.ServeHTTP(rr, req)
 
@@ -210,6 +264,51 @@ func TestGetRouter(t *testing.T) {
 			for k, v := range tc.expectedHeaders {
 				if diff := cmp.Diff(v, rr.Header().Get(k)); diff != "" {
 					t.Errorf("%s header %s value differs from expected:\n%s", tc.name, k, diff)
+				}
+			}
+		})
+	}
+}
+
+func TestJWTTokenService(t *testing.T) {
+	testCases := []struct {
+		name                string
+		hmacSampleSecret    []byte
+		validity            time.Duration
+		id                  string
+		expected            string
+		expectedErr         error
+		expectedValidate    bool
+		expectedValidateErr error
+	}{
+		{
+			name:             "valid token",
+			hmacSampleSecret: []byte("ci"),
+			validity:         time.Second * 6,
+			id:               "id",
+			expectedValidate: true,
+		},
+		{
+			name:             "expired token",
+			hmacSampleSecret: []byte("ci"),
+			validity:         -time.Second,
+			id:               "id",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			unitUnderTest := &JWTTokenService{secretGetter: func(s string) []byte { return tc.hmacSampleSecret }, validity: tc.validity}
+			token, actualErr := unitUnderTest.Generate("u")
+			if diff := cmp.Diff(tc.expectedErr, actualErr, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("%s error differs from expected:\n%s", tc.name, diff)
+			}
+			if actualErr == nil {
+				actualValidate, actualValidateErr := unitUnderTest.Validate(token)
+				if diff := cmp.Diff(tc.expectedValidate, actualValidate); diff != "" {
+					t.Errorf("%s actualValidate differs from expected:\n%s", tc.name, diff)
+				}
+				if diff := cmp.Diff(actualValidateErr, actualValidateErr, testhelper.EquateErrorMessage); diff != "" {
+					t.Errorf("%s actualValidateErr differs from expected:\n%s", tc.name, diff)
 				}
 			}
 		})

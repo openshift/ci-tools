@@ -4,7 +4,7 @@ base_images:
     namespace: openshift
     tag: 'stream9'
   cli:
-    name: "4.15"
+    name: "4.13"
     namespace: ocp
     tag: cli
 raw_steps:
@@ -17,7 +17,7 @@ releases:
   latest:
     integration:
       namespace: ocp
-      name: "4.15"
+      name: "4.13"
       include_built_images: true
 resources:
   '*':

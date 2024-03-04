@@ -17,7 +17,7 @@ Validation is performed after loading information from `openshift/release` and
 is based on the resolved contents of the configuration files (meaning
 multi-stage tests are fully expanded), so the same checks done just prior to the
 actual execution of the test can also be done here.  Since all configuration
-files are loaded, cross-configuration validation can also be performed.
+files are loaded, cross-configuration validation can also be performed. 
 
 Testing locally
 ---------------

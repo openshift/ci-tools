@@ -498,9 +498,16 @@ func addCliInjector(imagestream string, pod *coreapi.Pod) {
 	})
 	pod.Spec.InitContainers = append(pod.Spec.InitContainers, coreapi.Container{
 		Name:    "inject-cli",
-		Image:   fmt.Sprintf("%s:cli", imagestream),
-		Command: []string{"/bin/cp"},
-		Args:    []string{"/usr/bin/oc", CliMountPath},
+		Image:   fmt.Sprintf("%s:cli-artifacts", imagestream),
+		Command: []string{"/bin/sh"},
+		// to allow the oc team to freely upgrade RHEL version shipped in the release,
+		// We will explicitly request rhel8 version used in CI and
+		// if we decide to update to newer rhel in CI, you'll need to update
+		// this line to pick appropriate oc version (i.e. oc.rhel9).
+		// Additionally, we need to check the existence of path because releases < 4.15 does not have oc.rhel8,
+		// and we fall back to old path due to backwards compatibility.
+		// In order to support multi arch oc, just change the arch path (i.e. /usr/share/openshift/linux_arm64/oc.rhel8).
+		Args: []string{"-c", fmt.Sprintf("if [[ -e /usr/share/openshift/linux_amd64/oc.rhel8 ]]; then /bin/cp /usr/share/openshift/linux_amd64/oc.rhel8 %s ; echo \"oc.rhel8 is used\"; else /bin/cp /usr/bin/oc %s; echo \"default oc is used\"; fi", filepath.Join(CliMountPath, "oc"), CliMountPath)},
 		VolumeMounts: []coreapi.VolumeMount{{
 			Name:      volumeName,
 			MountPath: CliMountPath,

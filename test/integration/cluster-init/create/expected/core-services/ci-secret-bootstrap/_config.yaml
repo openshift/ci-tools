@@ -307,6 +307,9 @@ secret_configs:
       - auth_field: auth
         item: quayio-ci-read-only-robot
         registry_url: quay-proxy.ci.openshift.org
+      - auth_field: auth
+        item: quayio-ci-read-only-robot
+        registry_url: quay.io/openshift/ci
   to:
   - cluster: newCluster
     name: registry-pull-credentials

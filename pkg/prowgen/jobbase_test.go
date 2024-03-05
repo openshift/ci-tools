@@ -436,15 +436,6 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
 			},
 		},
-		{
-			name: "simple container-based test with arm01 cluster",
-			test: ciop.TestStepConfiguration{
-				As:                         "simple",
-				Commands:                   "make",
-				Cluster:                    "arm01",
-				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
-			},
-		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -685,7 +685,6 @@ const (
 	ClusterBuild02   Cluster = "build02"
 	ClusterBuild03   Cluster = "build03"
 	ClusterBuild09   Cluster = "build09"
-	ClusterBuild10   Cluster = "build10"
 	ClusterVSphere02 Cluster = "vsphere02"
 	ClusterARM01     Cluster = "arm01"
 	ClusterHive      Cluster = "hive"
@@ -2399,30 +2398,6 @@ type MetadataWithTest struct {
 
 func (m *MetadataWithTest) JobName(prefix string) string {
 	return m.Metadata.JobName(prefix, m.Test)
-}
-
-var archToCluster = map[ReleaseArchitecture]Cluster{
-	ReleaseArchitectureARM64: ClusterARM01,
-}
-
-func (a ReleaseArchitecture) IsValid() bool {
-	return a.GetMappedCluster() != ""
-}
-
-func (a ReleaseArchitecture) GetMappedCluster() Cluster {
-	c, found := archToCluster[a]
-	if !found {
-		return ""
-	}
-	return c
-}
-
-func GetAvailableArchitectures() []string {
-	architectures := make([]string, 0, len(archToCluster))
-	for arch := range archToCluster {
-		architectures = append(architectures, string(arch))
-	}
-	return architectures
 }
 
 type ClusterProfilesList []ClusterProfileDetails

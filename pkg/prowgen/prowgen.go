@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"hash/fnv"
 
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
@@ -90,7 +89,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 	newJobBaseBuilder := func() *prowJobBaseBuilder {
 		return NewProwJobBaseBuilder(configSpec, info, NewCiOperatorPodSpecGenerator())
 	}
-	newJobBaseBuilderForPromotion := NewProwJobBaseBuilderForPromotion(configSpec, info, NewCiOperatorPodSpecGenerator())
+
 	imageTargets := api.ImageTargets(configSpec)
 
 	if len(imageTargets) > 0 {
@@ -100,17 +99,25 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			presubmitTargets = append(presubmitTargets, "[release:latest]")
 		}
 		jobBaseGen := newJobBaseBuilder().TestName("images")
+		if info.Config.MultiArch {
+			jobBaseGen.Cluster(api.ClusterBuild09).WithLabel(api.ClusterLabel, string(api.ClusterBuild09))
+		}
 		jobBaseGen.PodSpec.Add(Targets(presubmitTargets...))
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, "images", info))
 
 		if configSpec.PromotionConfiguration != nil {
-			postsubmitsForPromotion, err := generatePostsubmitsForPromotion(newJobBaseBuilderForPromotion, info, func(options *generatePostsubmitOptions) {
-				options.imageTargets = imageTargets
-			})
-			if err != nil {
-				return nil, fmt.Errorf("error generating postsubmits for promotion: %w", err)
+			jobBaseGen = newJobBaseBuilder().TestName("images")
+			if info.Config.MultiArch {
+				jobBaseGen.Cluster(api.ClusterBuild09).WithLabel(api.ClusterLabel, string(api.ClusterBuild09))
 			}
-			postsubmits[orgrepo] = append(postsubmits[orgrepo], postsubmitsForPromotion...)
+			jobBaseGen.PodSpec.Add(Promotion(), Targets(imageTargets.UnsortedList()...))
+			postsubmit := generatePostsubmitForTest(jobBaseGen, info)
+			postsubmit.MaxConcurrency = 1
+			if postsubmit.Labels == nil {
+				postsubmit.Labels = map[string]string{}
+			}
+			postsubmit.Labels[cioperatorapi.PromotionJobLabelKey] = "true"
+			postsubmits[orgrepo] = append(postsubmits[orgrepo], *postsubmit)
 		}
 	}
 
@@ -164,25 +171,6 @@ func handlePresubmit(g *prowJobBaseBuilder, element api.TestStepConfiguration, i
 		presubmit.Labels[cioperatorapi.KVMDeviceLabel] = v
 	}
 	presubmits[orgrepo] = append(presubmits[orgrepo], *presubmit)
-}
-
-func NewProwJobBaseBuilderForPromotion(configSpec *cioperatorapi.ReleaseBuildConfiguration,
-	info *ProwgenInfo, podSpecGenerator CiOperatorPodSpecGenerator) func() *prowJobBaseBuilder {
-	return func() *prowJobBaseBuilder {
-		builder := NewProwJobBaseBuilder(configSpec, info, podSpecGenerator)
-		if info.Config.MultiArch {
-			podSpecGenerator.Add(func(spec *corev1.PodSpec) error {
-				if spec.NodeSelector == nil {
-					spec.NodeSelector = make(map[string]string)
-				}
-				// TODO(danilo-gemoli): remove as soon as ci-operator gets built on arm64 too
-				spec.NodeSelector[corev1.LabelArchStable] = "amd64"
-				return nil
-			})
-			builder.Cluster(api.ClusterBuild10).WithLabel(api.ClusterLabel, string(api.ClusterBuild10))
-		}
-		return builder
-	}
 }
 
 func testContainsLease(test *cioperatorapi.TestStepConfiguration) bool {
@@ -245,7 +233,6 @@ func generatePresubmitForTest(jobBaseBuilder *prowJobBaseBuilder, name string, i
 type generatePostsubmitOptions struct {
 	runIfChanged      string
 	skipIfOnlyChanged string
-	imageTargets      sets.Set[string]
 }
 
 type generatePostsubmitOption func(options *generatePostsubmitOptions)
@@ -267,42 +254,6 @@ func generatePostsubmitForTest(jobBaseBuilder *prowJobBaseBuilder, info *Prowgen
 		},
 		Brancher: prowconfig.Brancher{Branches: []string{jc.ExactlyBranch(info.Branch)}},
 	}
-}
-
-func generatePostsubmitsForPromotion(jobBaseBuilderFactory func() *prowJobBaseBuilder, info *ProwgenInfo, options ...generatePostsubmitOption) ([]prowconfig.Postsubmit, error) {
-	opts := &generatePostsubmitOptions{}
-	for _, opt := range options {
-		opt(opts)
-	}
-	architectures := append([]api.ReleaseArchitecture{api.ReleaseArchitectureAMD64}, info.Config.AdditionalArchitectures...)
-	postsubmits := make([]prowconfig.Postsubmit, 0, len(architectures))
-	for _, arch := range architectures {
-		jobBaseBuilder := jobBaseBuilderFactory()
-		var jobBaseGen *prowJobBaseBuilder
-		if arch != api.ReleaseArchitectureAMD64 {
-			testName := fmt.Sprintf("images-%s", string(arch))
-			cluster := arch.GetMappedCluster()
-			if cluster == "" {
-				return nil, fmt.Errorf("no cluster found for arch %s", string(arch))
-			}
-			jobBaseGen = jobBaseBuilder.Cluster(cluster).TestName(testName).WithLabel(api.ClusterLabel, string(cluster))
-		} else {
-			jobBaseGen = jobBaseBuilder.TestName("images")
-		}
-
-		jobBaseGen.PodSpec.Add(Promotion(), Targets(sets.List(opts.imageTargets)...))
-		postsubmit := generatePostsubmitForTest(jobBaseGen, info)
-
-		postsubmit.MaxConcurrency = 1
-		if postsubmit.Labels == nil {
-			postsubmit.Labels = map[string]string{}
-		}
-		postsubmit.Labels[cioperatorapi.PromotionJobLabelKey] = "true"
-
-		postsubmits = append(postsubmits, *postsubmit)
-	}
-
-	return postsubmits, nil
 }
 
 // hashDailyCron returns a cron pattern derived from a hash of the job name that

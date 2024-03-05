@@ -1654,7 +1654,7 @@ func (p ClusterProfile) ClusterType() string {
 	case ClusterProfileHypershiftPowerVSCB:
 		return "hypershift-powervs-cb"
 	case ClusterProfileRHOpenShiftEcosystem:
-		return "rh-openshift-ecosystem"
+		return string(CloudAWS)
 	default:
 		return ""
 	}

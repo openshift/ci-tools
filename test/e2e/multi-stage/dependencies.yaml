@@ -43,7 +43,7 @@ tests:
             if [[ -z $COMMAND ]]; then
               echo "ERROR: COMMAND unset!"
               exit 1
-            elif [[ ! $COMMAND =~ /${NAMESPACE}/stable-initial@sha256: ]]; then
+            elif [[ ! $COMMAND =~ /${NAMESPACE}/stable-initial@sha256: ]] && [[ $COMMAND != */${NAMESPACE}/stable-initial:cli ]]; then
               echo "ERROR: COMMAND set to something unexpected: $COMMAND!"
               exit 1
             fi

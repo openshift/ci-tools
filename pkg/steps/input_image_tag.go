@@ -79,9 +79,8 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 				Type: imagev1.LocalTagReferencePolicy,
 			},
 			From: &coreapi.ObjectReference{
-				Kind:      "ImageStreamImage",
-				Name:      fmt.Sprintf("%s@%s", s.config.BaseImage.Name, s.imageName),
-				Namespace: s.config.BaseImage.Namespace,
+				Kind: "DockerImage",
+				Name: api.QuayImageReference(s.config.BaseImage),
 			},
 			ImportPolicy: imagev1.TagImportPolicy{
 				ImportMode: imagev1.ImportModePreserveOriginal,
@@ -101,7 +100,7 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 		if err := s.client.Get(importCtx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: api.PipelineImageStream}, pipeline); err != nil {
 			return false, err
 		}
-		_, exists := util.ResolvePullSpec(pipeline, string(s.config.To), true)
+		_, exists, _ := util.ResolvePullSpec(pipeline, string(s.config.To), true)
 		if !exists {
 			logrus.Debugf("Waiting to import %s ...", ist.ObjectMeta.Name)
 		}

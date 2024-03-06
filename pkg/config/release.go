@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/mattn/go-zglob"
 	"github.com/sirupsen/logrus"
@@ -87,7 +88,16 @@ func revParse(repoPath string, args ...string) (string, error) {
 func gitCheckout(candidatePath, baseSHA string) error {
 	cmd := exec.Command("git", "checkout", baseSHA)
 	cmd.Dir = candidatePath
-	stdoutStderr, err := cmd.CombinedOutput()
+	var err error
+	var stdoutStderr []byte
+	// In practice, this command sometimes fails due to seemingly transient issues, we should retry it up to 4 times
+	for i := 0; i < 4; i++ {
+		stdoutStderr, err = cmd.CombinedOutput()
+		if err == nil { // when there is no error the command has succeeded, no need to retry
+			break
+		}
+		time.Sleep(10 * time.Second)
+	}
 	if err != nil {
 		return fmt.Errorf("'%s' failed with out: %s and error %w", cmd.Args, stdoutStderr, err)
 	}

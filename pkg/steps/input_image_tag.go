@@ -80,7 +80,7 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 			},
 			From: &coreapi.ObjectReference{
 				Kind: "DockerImage",
-				Name: api.QCIAPPCIImage(s.config.BaseImage),
+				Name: api.QuayImageReference(s.config.BaseImage),
 			},
 			ImportPolicy: imagev1.TagImportPolicy{
 				ImportMode: imagev1.ImportModePreserveOriginal,

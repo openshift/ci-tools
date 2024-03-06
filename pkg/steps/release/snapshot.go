@@ -74,7 +74,7 @@ func snapshotStream(ctx context.Context, client loggingclient.LoggingClient, sou
 			Name: tag.Tag,
 			From: &coreapi.ObjectReference{
 				Kind: "DockerImage",
-				Name: api.QCIAPPCIImage(api.ImageStreamTagReference{Namespace: sourceNamespace, Name: sourceName, Tag: tag.Tag}),
+				Name: api.QuayImageReference(api.ImageStreamTagReference{Namespace: sourceNamespace, Name: sourceName, Tag: tag.Tag}),
 			},
 			ImportPolicy:    imagev1.TagImportPolicy{ImportMode: imagev1.ImportModePreserveOriginal},
 			ReferencePolicy: imagev1.TagReferencePolicy{Type: imagev1.LocalTagReferencePolicy},
@@ -114,7 +114,7 @@ func snapshotStream(ctx context.Context, client loggingclient.LoggingClient, sou
 									},
 									From: coreapi.ObjectReference{
 										Kind: "DockerImage",
-										Name: api.QCIAPPCIImage(api.ImageStreamTagReference{Namespace: sourceNamespace, Name: sourceName, Tag: tag.Name}),
+										Name: api.QuayImageReference(api.ImageStreamTagReference{Namespace: sourceNamespace, Name: sourceName, Tag: tag.Name}),
 									},
 									ImportPolicy:    imagev1.TagImportPolicy{ImportMode: imagev1.ImportModePreserveOriginal},
 									ReferencePolicy: imagev1.TagReferencePolicy{Type: imagev1.LocalTagReferencePolicy},

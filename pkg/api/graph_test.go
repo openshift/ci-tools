@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/gofuzz"
+	fuzz "github.com/google/gofuzz"
 
 	corev1 "k8s.io/api/core/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -118,9 +118,9 @@ type fakeStep struct {
 	name     string
 }
 
-func (f *fakeStep) Inputs() (InputDefinition, error) { return nil, nil }
-func (f *fakeStep) Validate() error                  { return nil }
-func (f *fakeStep) Run(ctx context.Context) error    { return nil }
+func (f *fakeStep) Inputs() (InputDefinition, error)             { return nil, nil }
+func (f *fakeStep) Validate() error                              { return nil }
+func (f *fakeStep) Run(ctx context.Context, o *RunOptions) error { return nil }
 
 func (f *fakeStep) Requires() []StepLink                { return f.requires }
 func (f *fakeStep) Creates() []StepLink                 { return f.creates }
@@ -252,13 +252,13 @@ type fakeSortStep struct {
 	requires []string
 }
 
-func (*fakeSortStep) Inputs() (InputDefinition, error)    { return nil, nil }
-func (*fakeSortStep) Run(ctx context.Context) error       { return nil }
-func (f *fakeSortStep) Name() string                      { return f.name }
-func (*fakeSortStep) Description() string                 { return "" }
-func (*fakeSortStep) Provides() ParameterMap              { return nil }
-func (f *fakeSortStep) Validate() error                   { return f.err }
-func (*fakeSortStep) Objects() []ctrlruntimeclient.Object { return nil }
+func (*fakeSortStep) Inputs() (InputDefinition, error)             { return nil, nil }
+func (*fakeSortStep) Run(ctx context.Context, o *RunOptions) error { return nil }
+func (f *fakeSortStep) Name() string                               { return f.name }
+func (*fakeSortStep) Description() string                          { return "" }
+func (*fakeSortStep) Provides() ParameterMap                       { return nil }
+func (f *fakeSortStep) Validate() error                            { return f.err }
+func (*fakeSortStep) Objects() []ctrlruntimeclient.Object          { return nil }
 
 func (f *fakeSortStep) Creates() []StepLink {
 	return []StepLink{fakeSortLink{name: f.name}}

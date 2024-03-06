@@ -39,7 +39,7 @@ func (s *inputEnvironmentStep) Inputs() (api.InputDefinition, error) {
 
 func (*inputEnvironmentStep) Validate() error { return nil }
 
-func (s *inputEnvironmentStep) Run(ctx context.Context) error {
+func (s *inputEnvironmentStep) Run(ctx context.Context, o *api.RunOptions) error {
 	return nil
 }
 

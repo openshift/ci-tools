@@ -1036,15 +1036,15 @@ type fakeValidationStep struct {
 	err  error
 }
 
-func (*fakeValidationStep) Inputs() (api.InputDefinition, error) { return nil, nil }
-func (*fakeValidationStep) Run(ctx context.Context) error        { return nil }
-func (*fakeValidationStep) Requires() []api.StepLink             { return nil }
-func (*fakeValidationStep) Creates() []api.StepLink              { return nil }
-func (f *fakeValidationStep) Name() string                       { return f.name }
-func (*fakeValidationStep) Description() string                  { return "" }
-func (*fakeValidationStep) Provides() api.ParameterMap           { return nil }
-func (f *fakeValidationStep) Validate() error                    { return f.err }
-func (*fakeValidationStep) Objects() []ctrlruntimeclient.Object  { return nil }
+func (*fakeValidationStep) Inputs() (api.InputDefinition, error)             { return nil, nil }
+func (*fakeValidationStep) Run(ctx context.Context, o *api.RunOptions) error { return nil }
+func (*fakeValidationStep) Requires() []api.StepLink                         { return nil }
+func (*fakeValidationStep) Creates() []api.StepLink                          { return nil }
+func (f *fakeValidationStep) Name() string                                   { return f.name }
+func (*fakeValidationStep) Description() string                              { return "" }
+func (*fakeValidationStep) Provides() api.ParameterMap                       { return nil }
+func (f *fakeValidationStep) Validate() error                                { return f.err }
+func (*fakeValidationStep) Objects() []ctrlruntimeclient.Object              { return nil }
 
 func TestValidateSteps(t *testing.T) {
 	valid0 := fakeValidationStep{name: "valid0"}

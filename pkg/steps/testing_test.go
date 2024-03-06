@@ -99,5 +99,5 @@ func examineStep(t *testing.T, step api.Step, expected stepExpectation) {
 
 func executeStep(t *testing.T, step api.Step, expected executionExpectation) {
 	t.Helper()
-	errorCheck(t, "step.Run()", expected.runError, step.Run(context.Background()))
+	errorCheck(t, "step.Run()", expected.runError, step.Run(context.Background(), &api.RunOptions{}))
 }

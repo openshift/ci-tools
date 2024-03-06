@@ -19,7 +19,7 @@ type message struct {
 	stepDetails     api.CIOperatorStepDetails
 }
 
-func Run(ctx context.Context, graph api.StepGraph) (*junit.TestSuites, []api.CIOperatorStepDetails, []error) {
+func Run(ctx context.Context, graph api.StepGraph, o *api.RunOptions) (*junit.TestSuites, []api.CIOperatorStepDetails, []error) {
 	var seen []api.StepLink
 	executionResults := make(chan message)
 	done := make(chan bool)
@@ -34,7 +34,7 @@ func Run(ctx context.Context, graph api.StepGraph) (*junit.TestSuites, []api.CIO
 
 	start := time.Now()
 	for _, root := range graph {
-		go runStep(ctx, root, executionResults)
+		go runStep(ctx, root, o, executionResults)
 	}
 
 	suites := &junit.TestSuites{
@@ -70,7 +70,7 @@ func Run(ctx context.Context, graph api.StepGraph) (*junit.TestSuites, []api.CIO
 						// when the last of its parents finishes.
 						if api.HasAllLinks(child.Step.Requires(), seen) {
 							wg.Add(1)
-							go runStep(ctx, child, executionResults)
+							go runStep(ctx, child, o, executionResults)
 						}
 					}
 				}
@@ -116,9 +116,9 @@ type SubStepReporter interface {
 	SubSteps() []api.CIOperatorStepDetailInfo
 }
 
-func runStep(ctx context.Context, node *api.StepNode, out chan<- message) {
+func runStep(ctx context.Context, node *api.StepNode, o *api.RunOptions, out chan<- message) {
 	start := time.Now()
-	err := node.Step.Run(ctx)
+	err := node.Step.Run(ctx, o)
 	var additionalTests []*junit.TestCase
 	if reporter, ok := node.Step.(SubtestReporter); ok {
 		additionalTests = reporter.SubTests()

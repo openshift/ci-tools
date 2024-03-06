@@ -101,11 +101,11 @@ func (s *leaseStep) SubTests() []*junit.TestCase {
 	return nil
 }
 
-func (s *leaseStep) Run(ctx context.Context) error {
-	return results.ForReason("utilizing_lease").ForError(s.run(ctx))
+func (s *leaseStep) Run(ctx context.Context, o *api.RunOptions) error {
+	return results.ForReason("utilizing_lease").ForError(s.run(ctx, o))
 }
 
-func (s *leaseStep) run(ctx context.Context) error {
+func (s *leaseStep) run(ctx context.Context, o *api.RunOptions) error {
 	var types []string
 	for i := range s.leases {
 		types = append(types, s.leases[i].ResourceType)
@@ -116,7 +116,7 @@ func (s *leaseStep) run(ctx context.Context) error {
 	if err := acquireLeases(client, ctx, cancel, s.leases); err != nil {
 		return err
 	}
-	wrappedErr := results.ForReason("executing_test").ForError(s.wrapped.Run(ctx))
+	wrappedErr := results.ForReason("executing_test").ForError(s.wrapped.Run(ctx, o))
 	logrus.Infof("Releasing leases for test %s", s.Name())
 	releaseErr := results.ForReason("releasing_lease").ForError(releaseLeases(client, s.leases))
 

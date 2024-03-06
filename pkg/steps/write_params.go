@@ -29,7 +29,7 @@ func (s *writeParametersStep) Inputs() (api.InputDefinition, error) {
 
 func (*writeParametersStep) Validate() error { return nil }
 
-func (s *writeParametersStep) Run(_ context.Context) error {
+func (s *writeParametersStep) Run(_ context.Context, o *api.RunOptions) error {
 	return results.ForReason("writing_parameters").ForError(s.run())
 }
 

@@ -72,11 +72,11 @@ func (s *importReleaseStep) Inputs() (api.InputDefinition, error) {
 
 func (*importReleaseStep) Validate() error { return nil }
 
-func (s *importReleaseStep) Run(ctx context.Context) error {
-	return results.ForReason("importing_release").ForError(s.run(ctx))
+func (s *importReleaseStep) Run(ctx context.Context, o *api.RunOptions) error {
+	return results.ForReason("importing_release").ForError(s.run(ctx, o))
 }
 
-func (s *importReleaseStep) run(ctx context.Context) error {
+func (s *importReleaseStep) run(ctx context.Context, o *api.RunOptions) error {
 	_, err := setupReleaseImageStream(ctx, s.jobSpec.Namespace(), s.client)
 	if err != nil {
 		return err
@@ -220,7 +220,7 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 		resources = copied
 	}
 	step := steps.PodStep("release", podConfig, resources, s.client, s.jobSpec, nil)
-	if err := step.Run(ctx); err != nil {
+	if err := step.Run(ctx, o); err != nil {
 		return err
 	}
 

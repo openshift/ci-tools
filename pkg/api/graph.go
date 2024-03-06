@@ -15,6 +15,10 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+type RunOptions struct {
+	DryRun bool
+}
+
 // Step is a self-contained bit of work that the
 // build pipeline needs to do.
 // +k8s:deepcopy-gen=false
@@ -22,7 +26,7 @@ type Step interface {
 	Inputs() (InputDefinition, error)
 	// Validate checks inputs of steps that are part of the execution graph.
 	Validate() error
-	Run(ctx context.Context) error
+	Run(ctx context.Context, o *RunOptions) error
 
 	// Name is the name of the stage, used to target it.
 	// If this is the empty string the stage cannot be targeted.

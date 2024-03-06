@@ -31,7 +31,7 @@ type fakeStep struct {
 func (*fakeStep) Inputs() (api.InputDefinition, error) { return nil, nil }
 func (*fakeStep) Validate() error                      { return nil }
 
-func (f *fakeStep) Run(ctx context.Context) error {
+func (f *fakeStep) Run(ctx context.Context, o *api.RunOptions) error {
 	defer f.lock.Unlock()
 	f.lock.Lock()
 	f.numRuns = f.numRuns + 1
@@ -291,7 +291,7 @@ func TestStepsRun(t *testing.T) {
 			if tc.cancelled {
 				cancel()
 			}
-			suites, _, errs := Run(ctx, api.BuildGraph(steps))
+			suites, _, errs := Run(ctx, api.BuildGraph(steps), &api.RunOptions{})
 			if errs == nil && len(tc.errExpected) > 0 {
 				t.Error("got no error but expected one")
 			}

@@ -34,7 +34,7 @@ func (s *bundleSourceStep) Inputs() (api.InputDefinition, error) {
 
 func (*bundleSourceStep) Validate() error { return nil }
 
-func (s *bundleSourceStep) Run(ctx context.Context) error {
+func (s *bundleSourceStep) Run(ctx context.Context, o *api.RunOptions) error {
 	return results.ForReason("building_bundle_source").ForError(s.run(ctx))
 }
 

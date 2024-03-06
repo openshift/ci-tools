@@ -18,7 +18,7 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/test-infra/prow/apis/prowjobs/v1"
+	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	imagev1 "github.com/openshift/api/image/v1"
@@ -47,7 +47,7 @@ func (s *rpmServerStep) Inputs() (api.InputDefinition, error) {
 
 func (*rpmServerStep) Validate() error { return nil }
 
-func (s *rpmServerStep) Run(ctx context.Context) error {
+func (s *rpmServerStep) Run(ctx context.Context, o *api.RunOptions) error {
 	return results.ForReason("serving_rpms").ForError(s.run(ctx))
 }
 

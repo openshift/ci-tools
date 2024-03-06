@@ -57,7 +57,7 @@ func databaseIndex(client ctrlruntimeclient.Client, name, namespace string) (boo
 	return ok, nil
 }
 
-func (s *indexGeneratorStep) Run(ctx context.Context) error {
+func (s *indexGeneratorStep) Run(ctx context.Context, o *api.RunOptions) error {
 	return results.ForReason("building_index_generator").ForError(s.run(ctx))
 }
 

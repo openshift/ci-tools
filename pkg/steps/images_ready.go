@@ -18,7 +18,7 @@ func (s *imagesReadyStep) Inputs() (api.InputDefinition, error) {
 
 func (*imagesReadyStep) Validate() error { return nil }
 
-func (s *imagesReadyStep) Run(ctx context.Context) error {
+func (s *imagesReadyStep) Run(ctx context.Context, o *api.RunOptions) error {
 	return nil
 }
 

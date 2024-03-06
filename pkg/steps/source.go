@@ -167,7 +167,10 @@ func (s *sourceStep) Inputs() (api.InputDefinition, error) {
 
 func (*sourceStep) Validate() error { return nil }
 
-func (s *sourceStep) Run(ctx context.Context) error {
+func (s *sourceStep) Run(ctx context.Context, o *api.RunOptions) error {
+	if o.DryRun {
+		return nil
+	}
 	return results.ForReason("cloning_source").ForError(s.run(ctx))
 }
 

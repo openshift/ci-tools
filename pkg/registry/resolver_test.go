@@ -1090,14 +1090,13 @@ func TestResolveParameters(t *testing.T) {
 			"FROM_WORKFLOW": defaultWorkflow,
 			"ADDED":         defaultTest,
 		},
-		// Since both are set, the test should override the workflow when a step literals have unset DNSConfig
-		// This the DNSConfig merge strategy is to overwrite if set in LiteralTestStep
-		// However, only LiteralTestSteps that have the variable declared can inherit it
-		// (This is to mirror how env and dependencies work)
+		// Since both are set, the test should override the workflow and descendent steps
+		// This the DNSConfig merge strategy is to always overwrite from the highest
+		// order object (job > workflow > step).
 		expectedDNSConfigs: []*api.StepDNSConfig{
 			{Nameservers: []string{"nameserver-" + dnsTest}, Searches: []string{"my.dns." + dnsTest}},
 			{Nameservers: []string{"nameserver-" + dnsTest}, Searches: []string{"my.dns." + dnsTest}},
-			nil,
+			{Nameservers: []string{"nameserver-" + dnsTest}, Searches: []string{"my.dns." + dnsTest}},
 		},
 	}, {
 		name: "invalid chain parameter",
@@ -1138,9 +1137,11 @@ func TestResolveParameters(t *testing.T) {
 				LiteralTestStep: &api.LiteralTestStep{As: "step"},
 			}},
 		},
-		expectedParams:     [][]api.StepParameter{nil},
-		expectedDeps:       [][]api.StepDependency{nil},
-		expectedDNSConfigs: []*api.StepDNSConfig{nil},
+		expectedParams: [][]api.StepParameter{nil},
+		expectedDeps:   [][]api.StepDependency{nil},
+		expectedDNSConfigs: []*api.StepDNSConfig{
+			{Nameservers: []string{"nameserver-" + dnsWorkflow}, Searches: []string{"my.dns." + dnsWorkflow}},
+		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			ret, err := NewResolver(refs, chains, workflows, observers).Resolve("test", tc.test)

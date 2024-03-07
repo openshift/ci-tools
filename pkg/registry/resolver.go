@@ -334,9 +334,11 @@ func (r *registry) processStep(step *api.TestStep, seen sets.Set[string], stack 
 		ret.Dependencies = deps
 	}
 
-	if ret.DNSConfig != nil {
-		ret.DNSConfig = stack.resolveDNS(ret.DNSConfig)
-	}
+	// We always resolve dnsConfig to the highest-level object (job > workflow > step)
+	// This pushes the responsibility of handling steps that need custom dnsConfigs to workflow
+	// and job authors. This implementation allows for steps to be shared between teams.
+	ret.DNSConfig = stack.resolveDNS(ret.DNSConfig)
+
 	return ret, errs
 }
 

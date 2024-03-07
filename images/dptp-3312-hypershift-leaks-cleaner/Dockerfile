@@ -1,9 +1,10 @@
-FROM registry.ci.openshift.org/ocp/4.17:hypershift-cli
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 LABEL maintainer="bechen@redhat.com"
 
-RUN yum install -y unzip jq
+RUN microdnf install -y unzip jq
 
 COPY oc /usr/bin/oc
+COPY hypershift /usr/bin/hypershift
 
 RUN cd /tmp && \
     curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "awscliv2.zip" && \

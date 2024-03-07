@@ -52,6 +52,21 @@ func newFakeProwConfigAgent() *prowconfig.Agent {
 			},
 			BranchProtection: prowconfig.BranchProtection{
 				Orgs: map[string]prowconfig.Org{
+					"org-1": {
+						Policy: prowconfig.Policy{
+							Unmanaged: &t,
+						},
+					},
+					"org-2": {
+						Policy: prowconfig.Policy{
+							Unmanaged: &t,
+						},
+					},
+					"org-3": {
+						Policy: prowconfig.Policy{
+							Unmanaged: &t,
+						},
+					},
 					"org-5": {
 						Repos: map[string]prowconfig.Repo{
 							"repo-a": {
@@ -65,6 +80,11 @@ func newFakeProwConfigAgent() *prowconfig.Agent {
 							"repo-c": {
 								Policy: prowconfig.Policy{},
 							},
+						},
+					},
+					"org-6": {
+						Policy: prowconfig.Policy{
+							Unmanaged: &t,
 						},
 					},
 				},
@@ -141,8 +161,9 @@ func TestCheckRepos(t *testing.T) {
 			"org-2": {"some-user", "z-bot"},
 			"org-3": {"a-user"},
 			"org-5": {"openshift-merge-robot"},
+			"org-6": {"openshift-merge-robot"},
 		},
-		reposWithAppInstalled: sets.New[string]("org-1/repo-a", "org-2/repo-z", "org-5/repo-a", "org-5/repo-b"),
+		reposWithAppInstalled: sets.New[string]("org-1/repo-a", "org-2/repo-z", "org-5/repo-a", "org-5/repo-b", "org-6/repo-a"),
 		permissionsByRepo: map[string]map[string][]string{
 			"org-1/repo-a": {
 				"a-bot":                      []string{"write"},
@@ -299,6 +320,14 @@ func TestCheckRepos(t *testing.T) {
 			adminBots: []string{},
 			mode:      standard,
 			expected:  []string{"org-5/repo-c"},
+		},
+		{
+			name:      "openshift-merge-robot without admin access and branch protection set to unmanaged at org level",
+			repos:     []string{"org-6/repo-a"},
+			bots:      []string{"openshift-merge-robot"},
+			adminBots: []string{},
+			mode:      standard,
+			expected:  []string{},
 		},
 	}
 	for _, tc := range testCases {

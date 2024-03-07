@@ -191,10 +191,13 @@ func checkRepos(repos []string, bots []string, appName string, ignore sets.Set[s
 		orgConfig := prowAgent.Config().BranchProtection.GetOrg(org)
 		branchProtectionEnabled := true // By default, it is turned on in absence of configuration stating otherwise
 		if orgConfig != nil {
-			branchProtection, exists := orgConfig.Repos[repo]
+			unmanagedOrgLevel := orgConfig.Policy.Unmanaged
+			branchProtectionEnabled = unmanagedOrgLevel == nil || !*unmanagedOrgLevel
+
+			repoLevel, exists := orgConfig.Repos[repo]
 			if exists {
 				// if "unmanaged" is set to "true" it is disabled. If it is "nil" or "false" we consider it enabled
-				branchProtectionEnabled = branchProtection.Unmanaged == nil || !*branchProtection.Unmanaged
+				branchProtectionEnabled = repoLevel.Unmanaged == nil || !*repoLevel.Unmanaged
 			}
 		}
 

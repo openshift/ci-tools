@@ -36,6 +36,7 @@ func newFakePluginConfigAgent() *plugins.ConfigAgent {
 }
 
 func newFakeProwConfigAgent() *prowconfig.Agent {
+	t := true
 	prowConfig := &prowconfig.Config{
 		JobConfig: prowconfig.JobConfig{},
 		ProwConfig: prowconfig.ProwConfig{
@@ -45,6 +46,25 @@ func newFakeProwConfigAgent() *prowconfig.Agent {
 						{
 							Orgs:  []string{"org-1", "org-3"},
 							Repos: []string{"repo-a"},
+						},
+					},
+				},
+			},
+			BranchProtection: prowconfig.BranchProtection{
+				Orgs: map[string]prowconfig.Org{
+					"org-5": {
+						Repos: map[string]prowconfig.Repo{
+							"repo-a": {
+								Policy: prowconfig.Policy{},
+							},
+							"repo-b": {
+								Policy: prowconfig.Policy{
+									Unmanaged: &t,
+								},
+							},
+							"repo-c": {
+								Policy: prowconfig.Policy{},
+							},
 						},
 					},
 				},
@@ -122,7 +142,7 @@ func TestCheckRepos(t *testing.T) {
 			"org-3": {"a-user"},
 			"org-5": {"openshift-merge-robot"},
 		},
-		reposWithAppInstalled: sets.New[string]("org-1/repo-a", "org-2/repo-z", "org-5/repo-e"),
+		reposWithAppInstalled: sets.New[string]("org-1/repo-a", "org-2/repo-z", "org-5/repo-a", "org-5/repo-b"),
 		permissionsByRepo: map[string]map[string][]string{
 			"org-1/repo-a": {
 				"a-bot":                      []string{"write"},
@@ -133,10 +153,10 @@ func TestCheckRepos(t *testing.T) {
 				"c-bot":     []string{"write"},
 				"some-user": []string{"write"},
 			},
-			"org-5/repo-e": {
+			"org-5/repo-a": {
 				"openshift-merge-robot": []string{"admin"},
 			},
-			"org-5/repo-f": {
+			"org-5/repo-c": {
 				"openshift-merge-robot": []string{"read"},
 			},
 		},
@@ -257,20 +277,28 @@ func TestCheckRepos(t *testing.T) {
 			expected: []string{"org-3/repo-z"},
 		},
 		{
-			name:      "openshift-merge-robot with admin access and branch protection",
-			repos:     []string{"org-5/repo-e"},
+			name:      "openshift-merge-robot with admin access and branch protection enabled",
+			repos:     []string{"org-5/repo-a"},
 			bots:      []string{"openshift-merge-robot"},
 			adminBots: []string{"openshift-merge-robot"},
 			mode:      standard,
 			expected:  []string{},
 		},
 		{
-			name:      "openshift-merge-robot without admin access and branch protection",
-			repos:     []string{"org-5/repo-f"},
+			name:      "openshift-merge-robot without admin access and branch protection set to unmanaged",
+			repos:     []string{"org-5/repo-b"},
 			bots:      []string{"openshift-merge-robot"},
 			adminBots: []string{},
 			mode:      standard,
-			expected:  []string{"org-5/repo-f"},
+			expected:  []string{},
+		},
+		{
+			name:      "openshift-merge-robot without admin access and branch protection enabled",
+			repos:     []string{"org-5/repo-c"},
+			bots:      []string{"openshift-merge-robot"},
+			adminBots: []string{},
+			mode:      standard,
+			expected:  []string{"org-5/repo-c"},
 		},
 	}
 	for _, tc := range testCases {

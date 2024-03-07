@@ -191,7 +191,11 @@ func checkRepos(repos []string, bots []string, appName string, ignore sets.Set[s
 		orgConfig := prowAgent.Config().BranchProtection.GetOrg(org)
 		var branchProtectionEnabled bool
 		if orgConfig != nil {
-			_, branchProtectionEnabled = orgConfig.Repos[repo]
+			branchProtection, exists := orgConfig.Repos[repo]
+			if exists {
+				// if "unmanaged" is set to "true" we don't care. If it is "nil" or "false" we consider it enabled
+				branchProtectionEnabled = branchProtection.Unmanaged == nil || !*branchProtection.Unmanaged
+			}
 		}
 
 		// If branch protection is configured, verify admin access for the hardcoded admin bot

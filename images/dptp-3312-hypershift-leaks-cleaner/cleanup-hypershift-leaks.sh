@@ -9,10 +9,12 @@ updateCredentialsEnv() {
     cluster_profile=`echo $1 | jq -r '.annotations."cluster-profile"'`
     cluster_name=`echo $1 | jq -r '.name'`
     AWS_CONFIG_FILE="/cluster-profiles/$cluster_profile/.awscred"
+    AWS_SHARED_CREDENTIALS_FILE="/cluster-profiles/$cluster_profile/.awscred"
     if [ $cluster_profile == null ]; then 
         echo "error: No cluster profile found for $cluster_name."
         echo "trying default aws-2 cluster profile"
         AWS_CONFIG_FILE="/cluster-profiles/aws-2/.awscred"
+        AWS_SHARED_CREDENTIALS_FILE="/cluster-profiles/aws-2/.awscred"
         cluster_profile="aws-2"
     fi
     if ! [ -f "/cluster-profiles/$cluster_profile/.awscred" ]; then

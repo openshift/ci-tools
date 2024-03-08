@@ -71,11 +71,11 @@ func snapshotStream(ctx context.Context, client loggingclient.LoggingClient, sou
 		snapshot.ObjectMeta.Annotations[releaseConfigAnnotation] = raw
 	}
 	for _, tag := range source.Status.Tags {
-		// a special case for cluster-bot
 		from := &coreapi.ObjectReference{
 			Kind: "DockerImage",
 			Name: api.QuayImageReference(api.ImageStreamTagReference{Namespace: sourceNamespace, Name: sourceName, Tag: tag.Tag}),
 		}
+		// a special case for cluster-bot
 		if strings.HasPrefix(sourceNamespace, "ci-ln-") {
 			if valid, _ := utils.FindStatusTag(source, tag.Tag); valid != nil {
 				from = valid

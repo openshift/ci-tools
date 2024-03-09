@@ -19,6 +19,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
+	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"github.com/openshift/ci-tools/pkg/util"
 )
 
@@ -70,15 +71,25 @@ func snapshotStream(ctx context.Context, client loggingclient.LoggingClient, sou
 		snapshot.ObjectMeta.Annotations[releaseConfigAnnotation] = raw
 	}
 	for _, tag := range source.Status.Tags {
-		snapshot.Spec.Tags = append(snapshot.Spec.Tags, imagev1.TagReference{
-			Name: tag.Tag,
-			From: &coreapi.ObjectReference{
-				Kind: "DockerImage",
-				Name: api.QuayImageReference(api.ImageStreamTagReference{Namespace: sourceNamespace, Name: sourceName, Tag: tag.Tag}),
-			},
+		from := &coreapi.ObjectReference{
+			Kind: "DockerImage",
+			Name: api.QuayImageReference(api.ImageStreamTagReference{Namespace: sourceNamespace, Name: sourceName, Tag: tag.Tag}),
+		}
+		// a special case for cluster-bot
+		if strings.HasPrefix(sourceNamespace, "ci-ln-") {
+			if valid, _ := utils.FindStatusTag(source, tag.Tag); valid != nil {
+				from = valid
+			} else {
+				continue
+			}
+		}
+		tagReference := imagev1.TagReference{
+			Name:            tag.Tag,
+			From:            from,
 			ImportPolicy:    imagev1.TagImportPolicy{ImportMode: imagev1.ImportModePreserveOriginal},
 			ReferencePolicy: imagev1.TagReferencePolicy{Type: imagev1.LocalTagReferencePolicy},
-		})
+		}
+		snapshot.Spec.Tags = append(snapshot.Spec.Tags, tagReference)
 	}
 	// the Create call mutates the input object, so we need to copy it before returning
 	created := snapshot.DeepCopy()

@@ -277,7 +277,7 @@ func getResolvedConfigForTest(ciopConfig config.DataWithInfo, resolver registry.
 		return "", nil, fmt.Errorf("failed to marshal ci-operator config file: %w", err)
 	}
 
-	imageStreamTags, err := apihelper.TestInputImageStreamTagsFromResolvedConfig(ciopConfigResolved)
+	imageStreamTags, err := apihelper.TestInputImageStreamTagsFromResolvedConfig(ciopConfigResolved, nil)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to resolve test imagestreamtags: %w", err)
 	}

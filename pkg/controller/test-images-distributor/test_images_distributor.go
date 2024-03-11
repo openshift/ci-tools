@@ -605,7 +605,7 @@ func indexConfigsByTestInputImageStreamTag(resolver registryResolver) agents.Ind
 			log.WithError(err).Error("Failed to resolve MultiStageTestConfiguration")
 			return nil
 		}
-		m, err := apihelper.TestInputImageStreamTagsFromResolvedConfig(cfg)
+		m, err := apihelper.TestInputImageStreamTagsFromResolvedConfig(cfg, nil)
 		if err != nil {
 			// Should never happen as we set it to nil above
 			log.WithError(err).Error("Got error from TestInputImageStreamTagsFromResolvedConfig. This is a software bug.")

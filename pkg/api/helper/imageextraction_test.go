@@ -10,6 +10,7 @@ import (
 	fuzz "github.com/google/gofuzz"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/github"
 )
 
 func TestTestInputImageStreamTagsFromResolvedConfigReturnsAllImageStreamTags(t *testing.T) {
@@ -52,7 +53,7 @@ func TestTestInputImageStreamTagsFromResolvedConfigReturnsAllImageStreamTags(t *
 				numberInsertedElements++
 			}
 
-			res, err := TestInputImageStreamTagsFromResolvedConfig(cfg)
+			res, err := TestInputImageStreamTagsFromResolvedConfig(cfg, nil)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -71,26 +72,42 @@ func TestTestInputImageStreamTagsFromResolvedConfigReturnsAllImageStreamTags(t *
 	}
 }
 
+func fakeRepoFileGetter(org, repo, branch string, _ ...github.Opt) github.FileGetter {
+	return func(path string) ([]byte, error) {
+		return []byte(`build_root_image:
+  name: boilerplate
+  namespace: openshift
+  tag: image-v3.0.2`), nil
+	}
+}
+
 func TestTestInputImageStreamTagsFromConfigParsing(t *testing.T) {
 	t.Parallel()
 	testCases := []struct {
 		name           string
-		istr           api.ImageStreamTagReference
+		config         api.ReleaseBuildConfiguration
 		expectedResult string
 	}{
 		{
-			name:           "happy path",
-			istr:           api.ImageStreamTagReference{Namespace: "foo", Name: "Baz", Tag: "Bar"},
+			name: "happy path",
+			config: api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{BaseImages: map[string]api.ImageStreamTagReference{"": {Namespace: "foo", Name: "Baz", Tag: "Bar"}}},
+			},
 			expectedResult: "foo/Baz:Bar",
+		},
+		{
+			name: "root image from repo",
+			config: api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BuildRootImage: &api.BuildRootImageConfiguration{FromRepository: true}},
+			},
+			expectedResult: "openshift/boilerplate:image-v3.0.2",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			config := api.ReleaseBuildConfiguration{
-				InputConfiguration: api.InputConfiguration{BaseImages: map[string]api.ImageStreamTagReference{"": tc.istr}},
-			}
-			result, err := TestInputImageStreamTagsFromResolvedConfig(config)
+			result, err := TestInputImageStreamTagsFromResolvedConfig(tc.config, fakeRepoFileGetter)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -131,7 +148,7 @@ func TestTestInputImageStreamTagsFromResolvedConfigErrorsOnUnresolvedConfig(t *t
 		t.Run(tc.name, func(t *testing.T) {
 
 			var errStr string
-			_, err := TestInputImageStreamTagsFromResolvedConfig(tc.config)
+			_, err := TestInputImageStreamTagsFromResolvedConfig(tc.config, nil)
 			if err != nil {
 				errStr = err.Error()
 			}

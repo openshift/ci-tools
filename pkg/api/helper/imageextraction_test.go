@@ -96,7 +96,7 @@ func TestTestInputImageStreamTagsFromConfigParsing(t *testing.T) {
 			expectedResult: "foo/Baz:Bar",
 		},
 		{
-			name: "boot image from repo",
+			name: "root image from repo",
 			config: api.ReleaseBuildConfiguration{
 				InputConfiguration: api.InputConfiguration{
 					BuildRootImage: &api.BuildRootImageConfiguration{FromRepository: true}},

@@ -213,6 +213,7 @@ func checkRepos(repos []string, bots []string, appName string, ignore sets.Set[s
 			}
 			if !hasAdminAccess {
 				logger.Errorf("Bot %s does not have admin access in %s/%s with branch protection enabled", bot, org, repo)
+				failing.Insert(orgRepo)
 			} else {
 				logger.Infof("Bot %s has admin access in %s/%s", bot, org, repo)
 			}

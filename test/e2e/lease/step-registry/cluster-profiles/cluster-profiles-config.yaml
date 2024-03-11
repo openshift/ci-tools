@@ -1,0 +1,6 @@
+- profile: aws-test-profile
+  owners:
+    - org: openshift
+  cluster_type: aws
+  lease_type: aws-quota-slice
+  secret: cluster-secrets-aws

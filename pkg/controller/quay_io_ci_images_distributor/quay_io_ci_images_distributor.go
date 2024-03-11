@@ -25,6 +25,7 @@ import (
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	apihelper "github.com/openshift/ci-tools/pkg/api/helper"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
+	"github.com/openshift/ci-tools/pkg/github"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/util/imagestreamtagmapper"
 	"github.com/openshift/ci-tools/pkg/util/imagestreamtagwrapper"
@@ -295,7 +296,7 @@ func indexConfigsByTestInputImageStreamTag(resolver registryResolver) agents.Ind
 			log.WithError(err).Error("Failed to resolve MultiStageTestConfiguration")
 			return nil
 		}
-		m, err := apihelper.TestInputImageStreamTagsFromResolvedConfig(cfg)
+		m, err := apihelper.TestInputImageStreamTagsFromResolvedConfig(cfg, github.FileGetterFactory)
 		if err != nil {
 			// Should never happen as we set it to nil above
 			log.WithError(err).Error("Got error from TestInputImageStreamTagsFromResolvedConfig. This is a software bug.")

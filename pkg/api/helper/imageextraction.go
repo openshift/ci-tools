@@ -7,8 +7,10 @@ import (
 
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/github"
 )
 
 // ImageStreamTagMap is a map [types.NamespacedName.String()]types.NamespacedName of
@@ -59,11 +61,12 @@ func TestInputImageStreamsFromResolvedConfig(cfg api.ReleaseBuildConfiguration) 
 // The key is in namespace/name format.
 // It assumes that the config is already resolved, i.E. that MultiStageTestConfiguration is always nil
 // and MultiStageTestConfigurationLiteral gets set instead
-func TestInputImageStreamTagsFromResolvedConfig(cfg api.ReleaseBuildConfiguration) (ImageStreamTagMap, error) {
+func TestInputImageStreamTagsFromResolvedConfig(cfg api.ReleaseBuildConfiguration, repoFileGetter func(org, repo, branch string, _ ...github.Opt) github.FileGetter) (ImageStreamTagMap, error) {
 	result := map[string]types.NamespacedName{}
 
 	imageStreamTagReferenceMapIntoMap(cfg.BaseImages, result)
 	imageStreamTagReferenceMapIntoMap(cfg.BaseRPMImages, result)
+	var errs []error
 	if cfg.BuildRootImage != nil {
 		if cfg.BuildRootImage.ImageStreamTagReference != nil {
 			insert(*cfg.BuildRootImage.ImageStreamTagReference, result)
@@ -71,9 +74,21 @@ func TestInputImageStreamTagsFromResolvedConfig(cfg api.ReleaseBuildConfiguratio
 		if cfg.BuildRootImage.UseBuildCache {
 			insert(api.BuildCacheFor(cfg.Metadata), result)
 		}
+		if cfg.BuildRootImage.FromRepository && repoFileGetter != nil {
+			metadata := cfg.Metadata
+			data, err := repoFileGetter(metadata.Org, metadata.Repo, metadata.Branch)(api.CIOperatorInrepoConfigFileName)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("failed to get %s/%s#%s:%s: %w", metadata.Org, metadata.Repo, metadata.Branch, api.CIOperatorInrepoConfigFileName, err))
+			}
+
+			var inrepoconfig api.CIOperatorInrepoConfig
+			if err := yaml.Unmarshal(data, &inrepoconfig); err != nil {
+				errs = append(errs, fmt.Errorf("failed to unmarshal %s/%s#%s:%s: %w", metadata.Org, metadata.Repo, metadata.Branch, api.CIOperatorInrepoConfigFileName, err))
+			}
+			insert(inrepoconfig.BuildRootImage, result)
+		}
 	}
 
-	var errs []error
 	for _, testStep := range cfg.Tests {
 		if testStep.MultiStageTestConfigurationLiteral != nil {
 			insertTagReferencesFromSteps(*testStep.MultiStageTestConfigurationLiteral, result)

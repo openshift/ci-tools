@@ -99,7 +99,7 @@ func AddToManager(manager manager.Manager,
 	}
 	// besides the events created by the cluster
 	// events can be generated from the changes on the ci-op's config on the disk
-	if err := c.Watch(sourceForConfigChangeChannel(client, configChangeChannel), &handler.EnqueueRequestForObject{}); err != nil {
+	if err := c.Watch(sourceForConfigChangeChannel(client, configChangeChannel, ignoreImageStreamTags), &handler.EnqueueRequestForObject{}); err != nil {
 		return fmt.Errorf("failed to subscribe for config change changes: %w", err)
 	}
 
@@ -243,6 +243,7 @@ func testInputImageStreamTagFilterFactory(
 	l = logrus.WithField("subcomponent", "test-input-image-stream-tag-filter")
 	return func(nn types.NamespacedName) bool {
 		if ignoreImageStreamTags.Has(nn.String()) {
+			logrus.WithField("tag", nn.String()).Debug("Ignored events of image stream tag")
 			return false
 		}
 		if additionalImageStreamTags.Has(nn.String()) {
@@ -316,7 +317,7 @@ func indexKeyForImageStream(namespace, name string) string {
 	return "imagestream_" + namespace + "/" + name
 }
 
-func sourceForConfigChangeChannel(registryClient ctrlruntimeclient.Client, changes <-chan agents.IndexDelta) *source.Channel {
+func sourceForConfigChangeChannel(registryClient ctrlruntimeclient.Client, changes <-chan agents.IndexDelta, ignoreImageStreamTags sets.Set[string]) *source.Channel {
 	sourceChannel := make(chan event.GenericEvent)
 	channelSource := &source.Channel{Source: sourceChannel}
 
@@ -354,10 +355,14 @@ func sourceForConfigChangeChannel(registryClient ctrlruntimeclient.Client, chang
 			} else {
 				result = []types.NamespacedName{{Namespace: namespace, Name: name}}
 			}
-			for _, result := range result {
+			for _, item := range result {
+				if ignoreImageStreamTags.Has(item.String()) {
+					logrus.WithField("tag", item.String()).Debug("Ignored tag for config change")
+					continue
+				}
 				sourceChannel <- event.GenericEvent{Object: &imagev1.ImageStreamTag{ObjectMeta: metav1.ObjectMeta{
-					Namespace: result.Namespace,
-					Name:      result.Name,
+					Namespace: item.Namespace,
+					Name:      item.Name,
 				}}}
 			}
 		}

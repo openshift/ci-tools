@@ -2,15 +2,20 @@ package helper
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	fuzz "github.com/google/gofuzz"
+
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/github"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func TestTestInputImageStreamTagsFromResolvedConfigReturnsAllImageStreamTags(t *testing.T) {
@@ -74,6 +79,15 @@ func TestTestInputImageStreamTagsFromResolvedConfigReturnsAllImageStreamTags(t *
 
 func fakeRepoFileGetter(org, repo, branch string, _ ...github.Opt) github.FileGetter {
 	return func(path string) ([]byte, error) {
+		if repo == "nil-nil" {
+			return nil, nil
+		}
+		if repo == "nil-error" {
+			return nil, errors.New("some error")
+		}
+		if repo == "invalid-yaml" {
+			return []byte(`invalid-yaml.txt{}`), nil
+		}
 		return []byte(`build_root_image:
   name: boilerplate
   namespace: openshift
@@ -84,16 +98,17 @@ func fakeRepoFileGetter(org, repo, branch string, _ ...github.Opt) github.FileGe
 func TestTestInputImageStreamTagsFromConfigParsing(t *testing.T) {
 	t.Parallel()
 	testCases := []struct {
-		name           string
-		config         api.ReleaseBuildConfiguration
-		expectedResult string
+		name        string
+		config      api.ReleaseBuildConfiguration
+		expected    ImageStreamTagMap
+		expectedErr error
 	}{
 		{
 			name: "happy path",
 			config: api.ReleaseBuildConfiguration{
 				InputConfiguration: api.InputConfiguration{BaseImages: map[string]api.ImageStreamTagReference{"": {Namespace: "foo", Name: "Baz", Tag: "Bar"}}},
 			},
-			expectedResult: "foo/Baz:Bar",
+			expected: map[string]types.NamespacedName{"foo/Baz:Bar": {Namespace: "foo", Name: "Baz:Bar"}},
 		},
 		{
 			name: "root image from repo",
@@ -101,22 +116,46 @@ func TestTestInputImageStreamTagsFromConfigParsing(t *testing.T) {
 				InputConfiguration: api.InputConfiguration{
 					BuildRootImage: &api.BuildRootImageConfiguration{FromRepository: true}},
 			},
-			expectedResult: "openshift/boilerplate:image-v3.0.2",
+			expected: map[string]types.NamespacedName{"openshift/boilerplate:image-v3.0.2": {Namespace: "openshift", Name: "boilerplate:image-v3.0.2"}},
+		},
+		{
+			name: "boot image from repo with nil data and nil error",
+			config: api.ReleaseBuildConfiguration{
+				Metadata: api.Metadata{Repo: "nil-nil"},
+				InputConfiguration: api.InputConfiguration{
+					BuildRootImage: &api.BuildRootImageConfiguration{FromRepository: true}},
+			},
+			expected: map[string]types.NamespacedName{},
+		},
+		{
+			name: "boot image from repo with en error",
+			config: api.ReleaseBuildConfiguration{
+				Metadata: api.Metadata{Repo: "nil-error"},
+				InputConfiguration: api.InputConfiguration{
+					BuildRootImage: &api.BuildRootImageConfiguration{FromRepository: true}},
+			},
+			expected: map[string]types.NamespacedName{},
+		},
+		{
+			name: "boot image from repo with in invalid yaml",
+			config: api.ReleaseBuildConfiguration{
+				Metadata: api.Metadata{Repo: "invalid-yaml"},
+				InputConfiguration: api.InputConfiguration{
+					BuildRootImage: &api.BuildRootImageConfiguration{FromRepository: true}},
+			},
+			expected: map[string]types.NamespacedName{},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := TestInputImageStreamTagsFromResolvedConfig(tc.config, fakeRepoFileGetter)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
+			actual, actualErr := TestInputImageStreamTagsFromResolvedConfig(tc.config, fakeRepoFileGetter)
+			if diff := cmp.Diff(tc.expectedErr, actualErr, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("%s differs from expected:\n%s", tc.name, diff)
 			}
-			if n := len(result); n != 1 {
-				t.Fatalf("expected one result, got %d", n)
-			}
-			for _, item := range result {
-				if item.String() != tc.expectedResult {
-					t.Errorf("expected result %s, got result %s", tc.expectedResult, item.String())
+			if actualErr == nil {
+				if diff := cmp.Diff(tc.expected, actual); diff != "" {
+					t.Errorf("%s differs from expected:\n%s", tc.name, diff)
 				}
 			}
 		})

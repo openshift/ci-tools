@@ -287,6 +287,15 @@ func imageStreamNameFromImageStreamTagName(nn types.NamespacedName) (types.Names
 	return types.NamespacedName{Namespace: nn.Namespace, Name: colonSplit[0]}, nil
 }
 
+func repoFileGetterWithIgnore(metadata cioperatorapi.Metadata) func(_, _, _ string, _ ...github.Opt) github.FileGetter {
+	// We ignore openshift-priv because it is a private org and thus would lead to 404 without providing authentication information
+	// Moreover, the .ci-operator.yaml file there is a duplication of the one from the public repo
+	if metadata.Org == "openshift-priv" {
+		return nil
+	}
+	return github.FileGetterFactory
+}
+
 func indexConfigsByTestInputImageStreamTag(resolver registryResolver) agents.IndexFn {
 	return func(cfg cioperatorapi.ReleaseBuildConfiguration) []string {
 
@@ -296,7 +305,7 @@ func indexConfigsByTestInputImageStreamTag(resolver registryResolver) agents.Ind
 			log.WithError(err).Error("Failed to resolve MultiStageTestConfiguration")
 			return nil
 		}
-		m, err := apihelper.TestInputImageStreamTagsFromResolvedConfig(cfg, github.FileGetterFactory)
+		m, err := apihelper.TestInputImageStreamTagsFromResolvedConfig(cfg, repoFileGetterWithIgnore(cfg.Metadata))
 		if err != nil {
 			// Should never happen as we set it to nil above
 			log.WithError(err).Error("Got error from TestInputImageStreamTagsFromResolvedConfig. This is a software bug.")

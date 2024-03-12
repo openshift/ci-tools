@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sirupsen/logrus"
+
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"sigs.k8s.io/yaml"
@@ -66,7 +68,6 @@ func TestInputImageStreamTagsFromResolvedConfig(cfg api.ReleaseBuildConfiguratio
 
 	imageStreamTagReferenceMapIntoMap(cfg.BaseImages, result)
 	imageStreamTagReferenceMapIntoMap(cfg.BaseRPMImages, result)
-	var errs []error
 	if cfg.BuildRootImage != nil {
 		if cfg.BuildRootImage.ImageStreamTagReference != nil {
 			insert(*cfg.BuildRootImage.ImageStreamTagReference, result)
@@ -75,20 +76,22 @@ func TestInputImageStreamTagsFromResolvedConfig(cfg api.ReleaseBuildConfiguratio
 			insert(api.BuildCacheFor(cfg.Metadata), result)
 		}
 		if cfg.BuildRootImage.FromRepository && repoFileGetter != nil {
-			metadata := cfg.Metadata
-			data, err := repoFileGetter(metadata.Org, metadata.Repo, metadata.Branch)(api.CIOperatorInrepoConfigFileName)
+			tagRef, err := tagReferenceInRepoConfigFile(cfg.Metadata, repoFileGetter)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("failed to get %s/%s#%s:%s: %w", metadata.Org, metadata.Repo, metadata.Branch, api.CIOperatorInrepoConfigFileName, err))
+				logrus.WithError(err).WithField("metadata", fmt.Errorf("%s/%s#%s", cfg.Metadata.Org, cfg.Metadata.Repo, cfg.Metadata.Branch)).
+					Warn("Failed to get tag reference from the in-repo config file")
+			} else {
+				if tagRef.Namespace != "" && tagRef.Name != "" && tagRef.Tag != "" {
+					insert(tagRef, result)
+				} else {
+					logrus.WithField("tagRef", tagRef.ISTagName()).WithField("metadata", fmt.Errorf("%s/%s#%s", cfg.Metadata.Org, cfg.Metadata.Repo, cfg.Metadata.Branch)).
+						Debug("Got invalid tag reference from the in-repo config file")
+				}
 			}
-
-			var inrepoconfig api.CIOperatorInrepoConfig
-			if err := yaml.Unmarshal(data, &inrepoconfig); err != nil {
-				errs = append(errs, fmt.Errorf("failed to unmarshal %s/%s#%s:%s: %w", metadata.Org, metadata.Repo, metadata.Branch, api.CIOperatorInrepoConfigFileName, err))
-			}
-			insert(inrepoconfig.BuildRootImage, result)
 		}
 	}
 
+	var errs []error
 	for _, testStep := range cfg.Tests {
 		if testStep.MultiStageTestConfigurationLiteral != nil {
 			insertTagReferencesFromSteps(*testStep.MultiStageTestConfigurationLiteral, result)
@@ -116,6 +119,23 @@ func TestInputImageStreamTagsFromResolvedConfig(cfg api.ReleaseBuildConfiguratio
 	}
 
 	return ImageStreamTagMap(result), utilerrors.NewAggregate(errs)
+}
+
+func tagReferenceInRepoConfigFile(metadata api.Metadata, repoFileGetter func(org, repo, branch string, _ ...github.Opt) github.FileGetter) (api.ImageStreamTagReference, error) {
+	var zero api.ImageStreamTagReference
+	data, err := repoFileGetter(metadata.Org, metadata.Repo, metadata.Branch)(api.CIOperatorInrepoConfigFileName)
+	if err != nil {
+		return zero, fmt.Errorf("failed to get %s/%s#%s:%s: %w", metadata.Org, metadata.Repo, metadata.Branch, api.CIOperatorInrepoConfigFileName, err)
+	}
+	if data == nil {
+		return zero, nil
+	}
+	var inrepoconfig api.CIOperatorInrepoConfig
+	if err := yaml.Unmarshal(data, &inrepoconfig); err != nil {
+		return zero, fmt.Errorf("failed to unmarshal %s/%s#%s:%s: %w", metadata.Org, metadata.Repo, metadata.Branch, api.CIOperatorInrepoConfigFileName, err)
+	}
+	return inrepoconfig.BuildRootImage, nil
+
 }
 
 func imageStreamTagReferenceMapIntoMap(i map[string]api.ImageStreamTagReference, m map[string]types.NamespacedName) {

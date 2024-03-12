@@ -190,6 +190,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 			Destination:       quayImage,
 			CurrentQuayDigest: imageInfo.Digest,
 			Stale:             stale,
+			Owner:             ControllerName,
 		},
 			MirrorTask{
 				SourceTagRef:      tagRef,
@@ -197,6 +198,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 				Destination:       targetImageWithDateAndDigest,
 				CurrentQuayDigest: imageInfo.Digest,
 				Stale:             stale,
+				Owner:             ControllerName,
 			}); err != nil {
 			return fmt.Errorf("failed to put the mirror into store: %w", err)
 		}
@@ -243,7 +245,7 @@ func testInputImageStreamTagFilterFactory(
 	l = logrus.WithField("subcomponent", "test-input-image-stream-tag-filter")
 	return func(nn types.NamespacedName) bool {
 		if ignoreImageStreamTags.Has(nn.String()) {
-			logrus.WithField("tag", nn.String()).Debug("Ignored events of image stream tag")
+			logrus.WithField("tag", nn.String()).Fatal("Ignored events of image stream tag")
 			return false
 		}
 		if additionalImageStreamTags.Has(nn.String()) {

@@ -472,6 +472,7 @@ periodic-ci-openshift-release-master-ci-4.14-e2e-gcp-sdn-techpreview-serial
 periodic-ci-openshift-release-master-ci-4.14-upgrade-from-stable-4.13-e2e-gcp-ovn-rt-upgrade
 periodic-ci-openshift-release-master-ci-4.14-upgrade-from-stable-4.13-e2e-gcp-ovn-upgrade
 periodic-ci-openshift-release-master-ci-4.14-upgrade-from-stable-4.13-e2e-gcp-sdn-upgrade
+periodic-ci-openshift-release-master-nightly-4.14-aws-ovn-upgrade-rollback-oldest-supported
 periodic-ci-openshift-release-master-nightly-4.14-console-aws
 periodic-ci-openshift-release-master-nightly-4.14-e2e-agent-compact-ipv4
 periodic-ci-openshift-release-master-nightly-4.14-e2e-agent-ha-dualstack
@@ -483,7 +484,6 @@ periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-proxy
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-serial
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-single-node
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-single-node-serial
-periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-upgrade-rollback-oldest-supported
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-upi
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-sdn
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-sdn-cgroupsv2
@@ -734,6 +734,7 @@ periodic-ci-openshift-release-master-ci-4.16-upgrade-from-stable-4.15-e2e-gcp-ov
 periodic-ci-openshift-release-master-ci-4.16-upgrade-from-stable-4.15-e2e-gcp-sdn-upgrade
 periodic-ci-openshift-release-master-cnv-nightly-4.16-e2e-azure-deploy-cnv
 periodic-ci-openshift-release-master-cnv-nightly-4.16-e2e-azure-upgrade-cnv
+periodic-ci-openshift-release-master-nightly-4.16-aws-ovn-upgrade-rollback-oldest-supported
 periodic-ci-openshift-release-master-nightly-4.16-console-aws
 periodic-ci-openshift-release-master-nightly-4.16-e2e-agent-compact-ipv4-conformance
 periodic-ci-openshift-release-master-nightly-4.16-e2e-agent-ha-dualstack-conformance
@@ -745,7 +746,6 @@ periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-ovn-proxy
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-ovn-serial
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-ovn-single-node
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-ovn-single-node-serial
-periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-ovn-upgrade-rollback-oldest-supported
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-ovn-upi
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-sdn
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-sdn-cgroupsv2
@@ -1796,6 +1796,7 @@ periodic-ci-openshift-release-master-nightly-4.13-upgrade-from-stable-4.12-e2e-a
 periodic-ci-openshift-release-master-nightly-4.13-upgrade-from-stable-4.12-e2e-metal-ipi-sdn-bm-upgrade
 periodic-ci-openshift-release-master-nightly-4.13-upgrade-from-stable-4.12-e2e-metal-ipi-upgrade-ovn-ipv6
 periodic-ci-openshift-release-master-nightly-4.13-upgrade-from-stable-4.12-e2e-vsphere-upgrade
+periodic-ci-openshift-release-master-nightly-4.14-aws-ovn-upgrade-rollback-oldest-supported
 periodic-ci-openshift-release-master-nightly-4.14-console-aws
 periodic-ci-openshift-release-master-nightly-4.14-e2e-agent-compact-ipv4
 periodic-ci-openshift-release-master-nightly-4.14-e2e-agent-ha-dualstack
@@ -1820,7 +1821,6 @@ periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-shared-vpc-phz-tec
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-single-node
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-single-node-serial
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-single-node-workers
-periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-upgrade-rollback-oldest-supported
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-upi
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-ovn-workers-rhel8
 periodic-ci-openshift-release-master-nightly-4.14-e2e-aws-sdn
@@ -2037,6 +2037,7 @@ periodic-ci-openshift-release-master-nightly-4.15-upgrade-from-stable-4.14-e2e-m
 periodic-ci-openshift-release-master-nightly-4.15-upgrade-from-stable-4.14-e2e-metal-ipi-upgrade-ovn-ipv6
 periodic-ci-openshift-release-master-nightly-4.15-upgrade-from-stable-4.14-e2e-vsphere-upgrade
 periodic-ci-openshift-release-master-nightly-4.15-upgrade-from-stable-4.14-e2e-vsphere-zones-upgrade
+periodic-ci-openshift-release-master-nightly-4.16-aws-ovn-upgrade-rollback-oldest-supported
 periodic-ci-openshift-release-master-nightly-4.16-console-aws
 periodic-ci-openshift-release-master-nightly-4.16-e2e-agent-compact-ipv4-conformance
 periodic-ci-openshift-release-master-nightly-4.16-e2e-agent-ha-dualstack-conformance
@@ -2062,7 +2063,6 @@ periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-ovn-shared-vpc-phz-tec
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-ovn-single-node
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-ovn-single-node-serial
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-ovn-single-node-workers
-periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-ovn-upgrade-rollback-oldest-supported
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-ovn-upi
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-ovn-workers-rhel8
 periodic-ci-openshift-release-master-nightly-4.16-e2e-aws-sdn

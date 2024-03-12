@@ -1,5 +1,4 @@
 approvers:
-- bbguimaraes
 - droslean
 - hongkailiu
 - smg247
@@ -8,8 +7,8 @@ approvers:
 - bear-redhat
 - psalajova
 - deepsm007
+- Prucek
 reviewers:
-- bbguimaraes
 - droslean
 - hongkailiu
 - smg247
@@ -18,3 +17,4 @@ reviewers:
 - bear-redhat
 - psalajova
 - deepsm007
+- Prucek

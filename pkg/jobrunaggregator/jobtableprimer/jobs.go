@@ -36,23 +36,6 @@ const (
 	ipv4 = "ipv4"
 	//ipv6 = "ipv6"
 	//dual = "dual"
-
-	v408 = "4.8"
-	v409 = "4.9"
-	v410 = "4.10"
-	v411 = "4.11"
-	v412 = "4.12"
-	v413 = "4.13"
-	v414 = "4.14"
-	v415 = "4.15"
-	v416 = "4.16"
-)
-
-var (
-	// defaultReverseOrderedVersions lists the default releases in reverse order
-	defaultReverseOrderedVersions = []string{
-		v416, v415, v414, v413, v412, v411, v410, v409, v408,
-	}
 )
 
 // jobRowListBuilder builds the list of job rows used to prime the job table
@@ -67,21 +50,10 @@ func newJobRowListBuilder(releases []jobrunaggregatorapi.ReleaseRow) *jobRowList
 }
 
 func (j *jobRowListBuilder) getReverseOrderedVersions(releases []jobrunaggregatorapi.ReleaseRow) []string {
-	reverseOrderedVersions := defaultReverseOrderedVersions
-	newReleases := []string{}
+	reverseOrderedVersions := []string{}
 	for _, release := range releases {
-		found := false
-		for _, version := range reverseOrderedVersions {
-			if strings.Contains(version, release.Release) {
-				found = true
-				break
-			}
-		}
-		if !found {
-			newReleases = append(newReleases, release.Release)
-		}
+		reverseOrderedVersions = append(reverseOrderedVersions, release.Release)
 	}
-	reverseOrderedVersions = append(reverseOrderedVersions, newReleases...)
 	sort.Slice(reverseOrderedVersions, func(i, j int) bool {
 		iVersionStrs := strings.Split(reverseOrderedVersions[i], ".")
 		if len(iVersionStrs) < 2 {
@@ -115,23 +87,7 @@ func (j *jobRowListBuilder) getReverseOrderedVersions(releases []jobrunaggregato
 
 func (j *jobRowListBuilder) CreateAllJobRows(jobNames []string) []jobrunaggregatorapi.JobRow {
 	reverseOrderedVersions := j.getReverseOrderedVersions(j.releases)
-	// Start with a default set of jobs
-	jobsRowToCreate := []jobrunaggregatorapi.JobRow{
-		// 4.9
-		newJob("periodic-ci-openshift-release-master-ci-4.9-e2e-gcp-upgrade-build02", reverseOrderedVersions).WithE2EParallel().ToJob(),
-		newJob("periodic-ci-openshift-release-master-ci-4.9-e2e-gcp-upgrade", reverseOrderedVersions).ToJob(),
-		newJob("periodic-ci-openshift-release-master-ci-4.9-upgrade-from-stable-4.8-e2e-aws-upgrade", reverseOrderedVersions).WithE2EParallel().ToJob(),
-		newJob("periodic-ci-openshift-release-master-ci-4.9-upgrade-from-stable-4.8-e2e-aws-ovn-upgrade", reverseOrderedVersions).WithE2EParallel().ToJob(),
-		newJob("periodic-ci-openshift-release-master-ci-4.9-e2e-azure-upgrade-single-node", reverseOrderedVersions).WithoutDisruption().ToJob(),
-		newJob("periodic-ci-openshift-release-master-nightly-4.9-e2e-metal-ipi-upgrade", reverseOrderedVersions).WithE2EParallel().ToJob(),
-		newJob("periodic-ci-openshift-release-master-nightly-4.9-upgrade-from-stable-4.8-e2e-metal-ipi-upgrade", reverseOrderedVersions).WithE2EParallel().ToJob(),
-		newJob("periodic-ci-openshift-release-master-nightly-4.9-e2e-aws-upgrade", reverseOrderedVersions).WithE2EParallel().ToJob(),
-		newJob("periodic-ci-openshift-release-master-nightly-4.9-upgrade-from-stable-4.8-e2e-aws-upgrade", reverseOrderedVersions).WithE2EParallel().ToJob(),
-		newJob("periodic-ci-openshift-release-master-ci-4.9-e2e-aws-serial", reverseOrderedVersions).ToJob(),
-		newJob("periodic-ci-openshift-release-master-ci-4.9-e2e-gcp", reverseOrderedVersions).ToJob(),
-		newJob("periodic-ci-openshift-release-master-nightly-4.9-e2e-aws", reverseOrderedVersions).ToJob(),
-		newJob("periodic-ci-openshift-release-master-nightly-4.9-e2e-aws-serial", reverseOrderedVersions).ToJob(),
-	}
+	jobsRowToCreate := []jobrunaggregatorapi.JobRow{}
 
 	for _, jobName := range jobNames {
 		// skip comments

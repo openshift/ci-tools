@@ -6,6 +6,18 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const (
+	v408 = "4.8"
+	v409 = "4.9"
+	v410 = "4.10"
+	v411 = "4.11"
+	v412 = "4.12"
+	v413 = "4.13"
+	v414 = "4.14"
+	v415 = "4.15"
+	v416 = "4.16"
+)
+
 func TestJobVersions(t *testing.T) {
 	var testCases = []struct {
 		name        string

@@ -45,7 +45,7 @@ func (o *CreateJobsOptions) createJobRowsFromReleases(ctx context.Context, ciDat
 
 	// Update source URLs including periodic and release-controller URLs
 	jobNameGenerator := newJobNameGenerator()
-	jobNameGenerator.UpdateURLsForNewReleases(releases)
+	jobNameGenerator.UpdateURLsForAllReleases(releases)
 	jobNames, err := jobNameGenerator.GenerateJobNames()
 	if err != nil {
 		return nil, err

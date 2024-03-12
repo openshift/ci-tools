@@ -58,7 +58,7 @@ echo "${clusters_json}" | jq '[.items[].metadata]' | jq -c '.[]' | while read cl
     fi
 done
 
-AWS_CONFIG_FILE="/cluster-profiles/aws-2/.awscred"
+export AWS_SHARED_CREDENTIALS_FILE="/cluster-profiles/aws-2/.awscred"
 # echo 'Patching clusters stuck at deleting'
 # oc get hc -A -o json --as system:admin | jq -r '.items[] | select(.metadata.finalizers == ["openshift.io/destroy-cluster"]) | "\(.metadata.namespace) \(.metadata.name)"' | awk '{ print "oc patch -n " $1 " hostedclusters/" $2 " -p '\''{\"metadata\":{\"finalizers\":[]}, \"status\":{\"version\":{\"availableUpdates\":[]}}}'\'' --type=merge --as=system:admin"  }' | bash
 

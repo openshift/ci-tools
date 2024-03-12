@@ -29,7 +29,7 @@ echo "${clusters_json}" | jq -r '.items[] | select(.metadata.annotations.broken 
     cluster_name=$(echo "${cluster}" | jq -r ".name")
     echo "Deleting ${cluster_name}"
     if updateCredentialsEnv $cluster; then
-        timeout 5m hypershift destroy cluster aws --name " $cluster_name " --aws-creds " $AWS_CONFIG_FILE " --destroy-cloud-resources
+        timeout 5m hypershift destroy cluster aws --name "$cluster_name" --aws-creds "$AWS_CONFIG_FILE" --destroy-cloud-resources
     fi
     exit 0
 done
@@ -51,7 +51,7 @@ echo "${clusters_json}" | jq '[.items[].metadata]' | jq -c '.[]' | while read cl
     if (( time_diff_hr > 12 )); then
         echo "Deleting cluster ${cluster_name} created at ${creation_time_str}..."
         if updateCredentialsEnv $cluster; then
-            timeout 5m hypershift destroy cluster aws --name " $cluster_name " --aws-creds " $AWS_CONFIG_FILE " --destroy-cloud-resources
+            timeout 5m hypershift destroy cluster aws --name "$cluster_name" --aws-creds "$AWS_CONFIG_FILE" --destroy-cloud-resources
         fi
     fi
 done

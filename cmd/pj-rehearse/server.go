@@ -397,7 +397,7 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 						continue
 					}
 
-					success, err := rc.RehearseJobs(candidate, candidatePath, prRefs, imageStreamTags, s.rehearsalConfig.MirrorOptions, s.rehearsalConfig.QuayIOImageHelper, presubmitsToRehearse, changedTemplates, changedClusterProfiles, logger)
+					success, err := rc.RehearseJobs(candidate, candidatePath, prRefs, imageStreamTags, s.rehearsalConfig.MirrorOptions, s.rehearsalConfig.QuayIOImageHelper, presubmitsToRehearse, changedTemplates, changedClusterProfiles, prConfig.Prow, logger)
 					if err != nil {
 						logger.WithError(err).Error("couldn't rehearse jobs")
 						s.reportFailure("failed to create rehearsal jobs", err, org, repo, user, number, true, false, logger)

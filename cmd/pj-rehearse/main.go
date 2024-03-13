@@ -190,7 +190,7 @@ func dryRun(o options, logger *logrus.Entry) error {
 			return fmt.Errorf("%s: %w", "ERROR: pj-rehearse: failed to validate rehearsal jobs", err)
 		}
 
-		_, err := rc.RehearseJobs(candidate, candidatePath, prRefs, imageStreamTags, quayiociimagesdistributor.OCImageMirrorOptions{}, nil, presubmitsToRehearse, changedTemplates, changedClusterProfiles, logger)
+		_, err := rc.RehearseJobs(candidate, candidatePath, prRefs, imageStreamTags, quayiociimagesdistributor.OCImageMirrorOptions{}, nil, presubmitsToRehearse, changedTemplates, changedClusterProfiles, prConfig.Prow, logger)
 		return err
 	}
 

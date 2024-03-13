@@ -322,6 +322,7 @@ func (r RehearsalConfig) RehearseJobs(
 	presubmitsToRehearse []*prowconfig.Presubmit,
 	rehearsalTemplates,
 	rehearsalClusterProfiles *ConfigMaps,
+	prowCfg *prowconfig.Config,
 	logger *logrus.Entry,
 ) (bool, error) {
 	buildClusterConfigs, prowJobConfig := r.getBuildClusterAndProwJobConfigs(logger)
@@ -360,7 +361,7 @@ func (r RehearsalConfig) RehearseJobs(
 		defer cleanup()
 	}
 
-	executor := NewExecutor(presubmitsToRehearse, candidate.prNumber, candidatePath, prRefs, r.DryRun, logger, pjclient, r.ProwjobNamespace)
+	executor := NewExecutor(presubmitsToRehearse, candidate.prNumber, candidatePath, prRefs, r.DryRun, logger, pjclient, r.ProwjobNamespace, prowCfg)
 	success, err := executor.ExecuteJobs()
 	if err != nil {
 		logger.WithError(err).Error("Failed to rehearse jobs")

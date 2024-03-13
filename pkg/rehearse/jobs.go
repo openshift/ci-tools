@@ -866,11 +866,13 @@ type Executor struct {
 	namespace  string
 	// Allow faking this in tests
 	pollFunc func(ctx context.Context, interval, timeout time.Duration, immediate bool, condition wait.ConditionWithContextFunc) error
+	prowCfg  *prowconfig.Config
 }
 
 // NewExecutor creates an executor. It also configures the rehearsal jobs as a list of presubmits.
 func NewExecutor(presubmits []*prowconfig.Presubmit, prNumber int, prRepo string, refs *pjapi.Refs,
-	dryRun bool, logger *logrus.Entry, pjclient ctrlruntimeclient.Client, namespace string) *Executor {
+	dryRun bool, logger *logrus.Entry, pjclient ctrlruntimeclient.Client, namespace string,
+	prowCfg *prowconfig.Config) *Executor {
 	return &Executor{
 		dryRun:     dryRun,
 		presubmits: presubmits,
@@ -881,6 +883,7 @@ func NewExecutor(presubmits []*prowconfig.Presubmit, prNumber int, prRepo string
 		pjclient:   pjclient,
 		namespace:  namespace,
 		pollFunc:   wait.PollUntilContextTimeout,
+		prowCfg:    prowCfg,
 	}
 }
 
@@ -1057,7 +1060,7 @@ func (e *Executor) submitRehearsals() ([]*pjapi.ProwJob, error) {
 }
 
 func (e *Executor) submitPresubmit(job *prowconfig.Presubmit) (*pjapi.ProwJob, error) {
-	prowJob := pjutil.NewProwJob(pjutil.PresubmitSpec(*job, *e.refs), job.Labels, job.Annotations)
+	prowJob := pjutil.NewProwJob(pjutil.PresubmitSpec(*job, *e.refs), job.Labels, job.Annotations, pjutil.RequireScheduling(e.prowCfg.Scheduler.Enabled))
 	prowJob.Namespace = e.namespace
 	e.logger.WithFields(pjutil.ProwJobFields(&prowJob)).Info("Submitting a new prowjob.")
 	return &prowJob, e.pjclient.Create(context.Background(), &prowJob)

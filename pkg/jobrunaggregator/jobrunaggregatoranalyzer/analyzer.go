@@ -55,7 +55,9 @@ func (o *JobRunAggregatorAnalyzerOptions) loadStaticJobRuns(ctx context.Context)
 	for _, job := range o.staticJobRunIdentifiers {
 		jobRun, err := o.jobRunLocator.FindJob(ctx, job.JobRunID)
 		if err != nil {
-			return nil, err
+			// Do not fail when one job fetch fails
+			logrus.WithError(err).Errorf("error finding job %s", job.JobRunID)
+			continue
 		}
 		if jobRun != nil {
 			jobRuns = append(jobRuns, jobRun)

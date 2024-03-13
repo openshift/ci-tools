@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -468,14 +469,16 @@ func (o *JobRunTestCaseAnalyzerOptions) findJobRunsWithRetry(ctx context.Context
 
 func (o *JobRunTestCaseAnalyzerOptions) loadStaticJobRuns(ctx context.Context, jobName string, jobRunLocator jobrunaggregatorlib.JobRunLocator) ([]jobrunaggregatorapi.JobRunInfo, error) {
 	var outputRuns []jobrunaggregatorapi.JobRunInfo
-	for _, jobRun := range o.staticJobRunIdentifiers {
-		if jobRun.JobName != jobName {
+	for _, jobRunIdentifier := range o.staticJobRunIdentifiers {
+		if jobRunIdentifier.JobName != jobName {
 			continue
 		}
 
-		jobRun, err := jobRunLocator.FindJob(ctx, jobRun.JobRunID)
+		jobRun, err := jobRunLocator.FindJob(ctx, jobRunIdentifier.JobRunID)
 		if err != nil {
-			return nil, err
+			// Do not fail when one job fetch fails
+			logrus.WithError(err).Errorf("error finding job %s", jobRunIdentifier.JobRunID)
+			continue
 		}
 		if jobRun != nil {
 			outputRuns = append(outputRuns, jobRun)

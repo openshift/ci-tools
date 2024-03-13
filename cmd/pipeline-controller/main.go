@@ -60,6 +60,9 @@ func (o *options) parseArgs(fs *flag.FlagSet, args []string) error {
 	if o.configFile == "" {
 		return fmt.Errorf("--config-file is mandatory")
 	}
+	if err := o.githubEventServerOptions.DefaultAndValidate(); err != nil {
+		return err
+	}
 
 	return o.validate()
 }

@@ -11,6 +11,7 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/rest"
 	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/flagutil"
 	prowgithub "k8s.io/test-infra/prow/github"
@@ -119,7 +120,7 @@ func main() {
 		logger.WithError(err).Fatal("could not create a ProwJob client")
 	}
 
-	jobs, errs := jobsFor(changedImagesPostsubmits, githubClient)
+	jobs, errs := jobsFor(changedImagesPostsubmits, githubClient, prConfig.Prow)
 	if len(jobs) > o.limit {
 		logger.Infof("Truncating %d changed jobs to a limit of %d.", len(jobs), o.limit)
 		jobs = jobs[:o.limit]
@@ -143,7 +144,7 @@ type refGetter interface {
 	GetRef(org, repo, ref string) (string, error)
 }
 
-func jobsFor(changedImagesPostsubmits []diffs.PostsubmitInContext, getter refGetter) ([]v1.ProwJob, []error) {
+func jobsFor(changedImagesPostsubmits []diffs.PostsubmitInContext, getter refGetter, prowConfig *prowconfig.Config) ([]v1.ProwJob, []error) {
 	var jobs []v1.ProwJob
 	var errs []error
 	for _, data := range changedImagesPostsubmits {
@@ -158,7 +159,7 @@ func jobsFor(changedImagesPostsubmits []diffs.PostsubmitInContext, getter refGet
 			BaseRef: data.Metadata.Branch,
 			BaseSHA: sha,
 		}
-		jobs = append(jobs, pjutil.NewProwJob(pjutil.PostsubmitSpec(data.Job, refs), data.Job.Labels, data.Job.Annotations))
+		jobs = append(jobs, pjutil.NewProwJob(pjutil.PostsubmitSpec(data.Job, refs), data.Job.Labels, data.Job.Annotations, pjutil.RequireScheduling(prowConfig.Scheduler.Enabled)))
 	}
 	return jobs, errs
 }

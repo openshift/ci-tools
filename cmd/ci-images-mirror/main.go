@@ -216,12 +216,6 @@ func main() {
 	if err := opts.validate(); err != nil {
 		logrus.WithError(err).Fatal("Failed to validate options")
 	}
-	if opts.config != nil {
-		for k := range opts.config.SupplementalCIImages {
-			logrus.WithField("target", k).Debug("Ignore target of supplemental CI images on mirroring")
-			opts.quayIOCIImagesDistributorOptions.ignoreImageStreamTagsRaw.Add(k)
-		}
-	}
 
 	ctx := controllerruntime.SetupSignalHandler()
 	inClusterConfig, err := util.LoadClusterConfig()
@@ -280,12 +274,14 @@ func main() {
 	}
 
 	mirrorStore := quayiociimagesdistributor.NewMirrorStore()
-	supplementalCIImagesService := newSupplementalCIImagesServiceWithMirrorStore(mirrorStore, logrus.WithField("subcomponent", "supplementalCIImagesService"))
-	interrupts.TickLiteral(func() {
-		if err := supplementalCIImagesService.Mirror(opts.config.SupplementalCIImages); err != nil {
-			logrus.WithError(err).Error("Failed to mirror supplemental CI images")
-		}
-	}, time.Hour)
+	if opts.config != nil {
+		supplementalCIImagesService := newSupplementalCIImagesServiceWithMirrorStore(mirrorStore, logrus.WithField("subcomponent", "supplementalCIImagesService"))
+		interrupts.TickLiteral(func() {
+			if err := supplementalCIImagesService.Mirror(opts.config.SupplementalCIImages); err != nil {
+				logrus.WithError(err).Error("Failed to mirror supplemental CI images")
+			}
+		}, time.Hour)
+	}
 
 	server := &http.Server{
 		Addr:    ":" + strconv.Itoa(opts.port),
@@ -306,13 +302,21 @@ func main() {
 		if err := quayiociimagesdistributor.RegisterMetrics(); err != nil {
 			logrus.WithError(err).Fatal("failed to register metrics")
 		}
+		ignoreImageStreamTags := sets.New[string](opts.quayIOCIImagesDistributorOptions.ignoreImageStreamTagsRaw.Strings()...)
+		if opts.config != nil {
+			for k := range opts.config.SupplementalCIImages {
+				logrus.WithField("target", k).Debug("Ignore target of supplemental CI images on mirroring")
+				ignoreImageStreamTags.Insert(k)
+			}
+		}
+		logrus.WithField("tags", ignoreImageStreamTags.UnsortedList()).Infof("%s will ignore mirroring those tags", quayiociimagesdistributor.ControllerName)
 		if err := quayiociimagesdistributor.AddToManager(mgr,
 			ciOPConfigAgent,
 			registryConfigAgent,
 			sets.New[string](opts.quayIOCIImagesDistributorOptions.additionalImageStreamTagsRaw.Strings()...),
 			sets.New[string](opts.quayIOCIImagesDistributorOptions.additionalImageStreamsRaw.Strings()...),
 			sets.New[string](opts.quayIOCIImagesDistributorOptions.additionalImageStreamNamespacesRaw.Strings()...),
-			sets.New[string](opts.quayIOCIImagesDistributorOptions.ignoreImageStreamTagsRaw.Strings()...),
+			ignoreImageStreamTags,
 			quayIOImageHelper,
 			mirrorStore,
 			opts.registryConfig,

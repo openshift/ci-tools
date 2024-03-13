@@ -27,9 +27,10 @@ func TestReconcile(t *testing.T) {
 
 	logrus.SetLevel(logrus.DebugLevel)
 	testCases := []struct {
-		name     string
-		prowJobs []ctrlruntimeclient.Object
-		prpqr    []ctrlruntimeclient.Object
+		name       string
+		prowJobs   []ctrlruntimeclient.Object
+		prpqr      []ctrlruntimeclient.Object
+		prowConfig prowconfig.Config
 	}{
 		{
 			name: "basic case",
@@ -45,6 +46,22 @@ func TestReconcile(t *testing.T) {
 					},
 				},
 			},
+		},
+		{
+			name: "basic case with scheduling",
+			prpqr: []ctrlruntimeclient.Object{
+				&v1.PullRequestPayloadQualificationRun{
+					ObjectMeta: metav1.ObjectMeta{Name: "prpqr-test", Namespace: "test-namespace"},
+					Spec: v1.PullRequestPayloadTestSpec{
+						PullRequests: []v1.PullRequestUnderTest{{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: &v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}}},
+						Jobs: v1.PullRequestPayloadJobSpec{
+							ReleaseControllerConfig: v1.ReleaseControllerConfig{OCP: "4.9", Release: "ci", Specifier: "informing"},
+							Jobs:                    []v1.ReleaseJobSpec{{CIOperatorConfig: v1.CIOperatorMetadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"}, Test: "test-name"}},
+						},
+					},
+				},
+			},
+			prowConfig: prowconfig.Config{ProwConfig: prowconfig.ProwConfig{Scheduler: prowconfig.Scheduler{Enabled: true}}},
 		},
 		{
 			name: "basic case without PR; testing specified base",
@@ -238,6 +255,22 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			name: "basic aggregated case with scheduling",
+			prpqr: []ctrlruntimeclient.Object{
+				&v1.PullRequestPayloadQualificationRun{
+					ObjectMeta: metav1.ObjectMeta{Name: "prpqr-test", Namespace: "test-namespace"},
+					Spec: v1.PullRequestPayloadTestSpec{
+						PullRequests: []v1.PullRequestUnderTest{{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: &v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}}},
+						Jobs: v1.PullRequestPayloadJobSpec{
+							ReleaseControllerConfig: v1.ReleaseControllerConfig{OCP: "4.9", Release: "ci", Specifier: "informing"},
+							Jobs:                    []v1.ReleaseJobSpec{{CIOperatorConfig: v1.CIOperatorMetadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"}, Test: "test-name", AggregatedCount: 2}},
+						},
+					},
+				},
+			},
+			prowConfig: prowconfig.Config{ProwConfig: prowconfig.ProwConfig{Scheduler: prowconfig.Scheduler{Enabled: true}}},
+		},
+		{
 			name: "override initial and base payload pullspecs",
 			prpqr: []ctrlruntimeclient.Object{
 				&v1.PullRequestPayloadQualificationRun{
@@ -390,7 +423,7 @@ func TestReconcile(t *testing.T) {
 				logger:               logrus.WithField("test-name", tc.name),
 				client:               fakectrlruntimeclient.NewClientBuilder().WithObjects(append(tc.prpqr, tc.prowJobs...)...).Build(),
 				configResolverClient: &fakeResolverClient{},
-				prowConfigGetter:     &fakeProwConfigGetter{},
+				prowConfigGetter:     &fakeProwConfigGetter{cfg: &tc.prowConfig},
 			}
 			req := reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "test-namespace", Name: "prpqr-test"}}
 			if err := r.reconcile(context.Background(), req, r.logger); err != nil {
@@ -477,10 +510,16 @@ func (f *fakeResolverClient) ConfigWithTest(base *api.Metadata, testSource *api.
 	}, nil
 }
 
-type fakeProwConfigGetter struct{}
+type fakeProwConfigGetter struct {
+	cfg *prowconfig.Config
+}
 
-func (f *fakeProwConfigGetter) Config() periodicDefaulter {
+func (f *fakeProwConfigGetter) Defaulter() periodicDefaulter {
 	return &fakePeriodicDefaulter{}
+}
+
+func (f *fakeProwConfigGetter) Config() *prowconfig.Config {
+	return f.cfg
 }
 
 type fakePeriodicDefaulter struct{}

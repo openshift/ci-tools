@@ -60,14 +60,19 @@ type injectingResolverClient interface {
 }
 
 type prowConfigGetter interface {
-	Config() periodicDefaulter
+	Defaulter() periodicDefaulter
+	Config() *prowconfig.Config
 }
 
 type wrappedProwConfigAgent struct {
 	pc *prowconfig.Agent
 }
 
-func (w *wrappedProwConfigAgent) Config() periodicDefaulter {
+func (w *wrappedProwConfigAgent) Defaulter() periodicDefaulter {
+	return w.pc.Config()
+}
+
+func (w *wrappedProwConfigAgent) Config() *prowconfig.Config {
 	return w.pc.Config()
 }
 
@@ -263,7 +268,7 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 
 		if jobSpec.AggregatedCount > 0 {
 			uid := jobNameHash(req.Name + mimickedJob)
-			aggregatedProwjobs, err := generateAggregatedProwjobs(uid, ciopConfig, r.prowConfigGetter.Config(), baseMetadata, req.Name, req.Namespace, &jobSpec, pullRequests, inject)
+			aggregatedProwjobs, err := generateAggregatedProwjobs(uid, ciopConfig, r.prowConfigGetter, baseMetadata, req.Name, req.Namespace, &jobSpec, pullRequests, inject)
 			if err != nil {
 				logger.WithError(err).Error("Failed to generate the aggregated prowjobs")
 				statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
@@ -278,7 +283,7 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 			prowjobsToCreate = append(prowjobsToCreate, aggregatedProwjobs...)
 
 			submitted := generateJobNameToSubmit(inject, pullRequests)
-			aggregatorJob, err := generateAggregatorJob(baseMetadata, uid, mimickedJob, jobSpec.JobName(jobconfig.PeriodicPrefix), req.Name, req.Namespace, r.prowConfigGetter.Config(), time.Now(), submitted)
+			aggregatorJob, err := generateAggregatorJob(baseMetadata, uid, mimickedJob, jobSpec.JobName(jobconfig.PeriodicPrefix), req.Name, req.Namespace, r.prowConfigGetter, time.Now(), submitted)
 			if err != nil {
 				logger.WithError(err).Error("Failed to generate an aggregator prowjob")
 				statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
@@ -301,7 +306,7 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 			initialPullSpecOverride := prpqr.Spec.InitialPayloadBase
 			// "base" is always treated as "latest" as that is what we are layering changes on top of, additional logic will apply if this changes in the future
 			basePullSpecOverride := prpqr.Spec.PayloadOverrides.BasePullSpec
-			prowjob, err := generateProwjob(ciopConfig, r.prowConfigGetter.Config(), baseMetadata, req.Name, req.Namespace, pullRequests, mimickedJob, inject, nil, initialPullSpecOverride, basePullSpecOverride, prpqr.Spec.PayloadOverrides.ImageTagOverrides)
+			prowjob, err := generateProwjob(ciopConfig, r.prowConfigGetter, baseMetadata, req.Name, req.Namespace, pullRequests, mimickedJob, inject, nil, initialPullSpecOverride, basePullSpecOverride, prpqr.Spec.PayloadOverrides.ImageTagOverrides)
 			if err != nil {
 				logger.WithError(err).Error("Failed to generate prowjob")
 				statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
@@ -543,7 +548,7 @@ type aggregatedOptions struct {
 }
 
 func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
-	defaulter periodicDefaulter,
+	getCfg prowConfigGetter,
 	baseCiop *api.Metadata,
 	prpqrName, prpqrNamespace string,
 	prs []v1.PullRequestUnderTest,
@@ -683,11 +688,11 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 	}
 	periodic.ExtraRefs = refs
 
-	if err := defaulter.DefaultPeriodic(periodic); err != nil {
+	if err := getCfg.Defaulter().DefaultPeriodic(periodic); err != nil {
 		return nil, fmt.Errorf("failed to default the ProwJob: %w", err)
 	}
 
-	pj := pjutil.NewProwJob(pjutil.PeriodicSpec(*periodic), labels, annotations)
+	pj := pjutil.NewProwJob(pjutil.PeriodicSpec(*periodic), labels, annotations, pjutil.RequireScheduling(getCfg.Config().Scheduler.Enabled))
 	pj.Namespace = prpqrNamespace
 
 	return &pj, nil
@@ -721,7 +726,7 @@ func metadataFromPullRequestsUnderTest(prs []v1.PullRequestUnderTest) *api.Metad
 	}
 }
 
-func generateAggregatedProwjobs(uid string, ciopConfig *api.ReleaseBuildConfiguration, defaulter periodicDefaulter, baseCiop *api.Metadata, prpqrName, prpqrNamespace string, spec *v1.ReleaseJobSpec, prs []v1.PullRequestUnderTest, inject *api.MetadataWithTest) ([]*prowv1.ProwJob, error) {
+func generateAggregatedProwjobs(uid string, ciopConfig *api.ReleaseBuildConfiguration, getCfg prowConfigGetter, baseCiop *api.Metadata, prpqrName, prpqrNamespace string, spec *v1.ReleaseJobSpec, prs []v1.PullRequestUnderTest, inject *api.MetadataWithTest) ([]*prowv1.ProwJob, error) {
 	var ret []*prowv1.ProwJob
 
 	for i := 0; i < spec.AggregatedCount; i++ {
@@ -732,7 +737,7 @@ func generateAggregatedProwjobs(uid string, ciopConfig *api.ReleaseBuildConfigur
 		}
 		jobName := fmt.Sprintf("%s-%d", spec.JobName(jobconfig.PeriodicPrefix), i)
 
-		pj, err := generateProwjob(ciopConfig, defaulter, baseCiop, prpqrName, prpqrNamespace, prs, jobName, inject, opts, "", "", nil)
+		pj, err := generateProwjob(ciopConfig, getCfg, baseCiop, prpqrName, prpqrNamespace, prs, jobName, inject, opts, "", "", nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create prowjob: %w", err)
 		}
@@ -743,7 +748,7 @@ func generateAggregatedProwjobs(uid string, ciopConfig *api.ReleaseBuildConfigur
 	return ret, nil
 }
 
-func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobName, prpqrName, prpqrNamespace string, defaulter periodicDefaulter, startTime time.Time, submitted string) (*prowv1.ProwJob, error) {
+func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobName, prpqrName, prpqrNamespace string, getCfg prowConfigGetter, startTime time.Time, submitted string) (*prowv1.ProwJob, error) {
 	ciopConfig := &api.ReleaseBuildConfiguration{
 		Metadata: *baseCiop,
 		Tests: []api.TestStepConfiguration{
@@ -794,14 +799,15 @@ func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobNa
 
 	periodic.Spec.Containers[0].Env = append(periodic.Spec.Containers[0].Env, corev1.EnvVar{Name: "UNRESOLVED_CONFIG", Value: string(unresolvedConfigRaw)})
 
-	if err := defaulter.DefaultPeriodic(periodic); err != nil {
+	if err := getCfg.Defaulter().DefaultPeriodic(periodic); err != nil {
 		return nil, fmt.Errorf("failed to default the ProwJob: %w", err)
 	}
 
 	labels := map[string]string{aggregationIDLabel: uid, v1.PullRequestPayloadQualificationRunLabel: prpqrName}
 	annotations := map[string]string{releaseJobNameAnnotation: jobNameHash(aggregatorJobName)}
 
-	pj := pjutil.NewProwJob(pjutil.PeriodicSpec(*periodic), labels, annotations)
+	cfg := getCfg.Config()
+	pj := pjutil.NewProwJob(pjutil.PeriodicSpec(*periodic), labels, annotations, pjutil.RequireScheduling(cfg.Scheduler.Enabled))
 	pj.Namespace = prpqrNamespace
 
 	return &pj, nil

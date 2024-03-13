@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/bombsimon/logrusr/v3"
@@ -24,13 +25,16 @@ import (
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	"sigs.k8s.io/yaml"
 
 	imagev1 "github.com/openshift/api/image/v1"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	quayiociimagesdistributor "github.com/openshift/ci-tools/pkg/controller/quay_io_ci_images_distributor"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/util"
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 var allControllers = sets.New[string](
@@ -49,6 +53,8 @@ type options struct {
 	port                             int
 	gracePeriod                      time.Duration
 	onlyValidManifestV2Images        bool
+	configFile                       string
+	config                           *Config
 }
 
 func (o *options) addDefaults() {
@@ -72,6 +78,7 @@ func newOpts() *options {
 	fs.Var(&opts.enabledControllers, "enable-controller", fmt.Sprintf("Enabled controllers. Available controllers are: %v. Can be specified multiple times. Defaults to %v", allControllers.UnsortedList(), opts.enabledControllers.Strings()))
 	fs.BoolVar(&opts.dryRun, "dry-run", false, "Whether to run the controller-manager and the mirroring with dry-run")
 	fs.StringVar(&opts.releaseRepoGitSyncPath, "release-repo-git-sync-path", "", "Path to release repository dir")
+	fs.StringVar(&opts.configFile, "config", "", "Path to the config file")
 	fs.StringVar(&opts.registryConfig, "registry-config", "", "Path to the file of registry credentials")
 	fs.Var(&opts.quayIOCIImagesDistributorOptions.additionalImageStreamTagsRaw, "quayIOCIImagesDistributorOptions.additional-image-stream-tag", "An imagestreamtag that will be distributed even if no test explicitly references it. It must be in namespace/name:tag format (e.G `ci/clonerefs:latest`). Can be passed multiple times.")
 	fs.Var(&opts.quayIOCIImagesDistributorOptions.additionalImageStreamsRaw, "quayIOCIImagesDistributorOptions.additional-image-stream", "An imagestream that will be distributed even if no test explicitly references it. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
@@ -106,7 +113,99 @@ func (o *options) validate() error {
 	if o.registryConfig == "" {
 		errs = append(errs, errors.New("--registry-config must be set"))
 	}
+	if _, err := os.Stat(o.registryConfig); errors.Is(err, os.ErrNotExist) {
+		errs = append(errs, fmt.Errorf("file %s does not exist", o.registryConfig))
+	}
+	if o.configFile != "" {
+		if c, err := loadConfig(o.configFile); err != nil {
+			errs = append(errs, fmt.Errorf("failed to load config file %s: %w", o.configFile, err))
+		} else {
+			o.config = c
+		}
+	}
 	return utilerrors.NewAggregate(errs)
+}
+
+func loadConfig(file string) (*Config, error) {
+	bytes, err := gzip.ReadFileMaybeGZIP(file)
+	if err != nil {
+		return nil, err
+	}
+	c := &Config{}
+	if err := yaml.UnmarshalStrict(bytes, c); err != nil {
+		return nil, err
+	}
+	var errs []error
+	for k, v := range c.SupplementalCIImages {
+		splits := strings.Split(k, "/")
+		if len(splits) != 2 || splits[0] == "" || splits[1] == "" {
+			errs = append(errs, fmt.Errorf("invalid target: %s", k))
+		} else {
+			splits = strings.Split(splits[1], ":")
+			if len(splits) != 2 || splits[0] == "" || splits[1] == "" {
+				errs = append(errs, fmt.Errorf("invalid target: %s", k))
+			}
+		}
+		if v.As != "" {
+			errs = append(errs, errors.New("as cannot be set"))
+		}
+		if v.Image == "" {
+			if v.Namespace == "" {
+				errs = append(errs, errors.New("namespace for the source must be set"))
+			}
+			if v.Name == "" {
+				errs = append(errs, errors.New("name for the source must be set"))
+			}
+			if v.Tag == "" {
+				errs = append(errs, errors.New("tag for the source must be set"))
+			}
+		}
+	}
+	if len(errs) > 0 {
+		return nil, utilerrors.NewAggregate(errs)
+	}
+	return c, nil
+}
+
+type Config struct {
+	SupplementalCIImages map[string]Source `json:"supplementalCIImages"`
+}
+
+type Source struct {
+	api.ImageStreamTagReference `json:",inline"`
+	// Image is an image that can be pulled in either form of tag or digest.
+	// When image is set, Tag will be ignored.
+	Image string `json:"image"`
+}
+
+type supplementalCIImagesService interface {
+	Mirror(m map[string]Source) error
+}
+
+type supplementalCIImagesServiceWithMirrorStore struct {
+	mirrorStore quayiociimagesdistributor.MirrorStore
+	logger      *logrus.Entry
+}
+
+func (s *supplementalCIImagesServiceWithMirrorStore) Mirror(m map[string]Source) error {
+	for k, v := range m {
+		source := v.Image
+		if source == "" {
+			source = fmt.Sprintf("%s/%s", api.ServiceDomainAPPCIRegistry, v.ImageStreamTagReference.ISTagName())
+		}
+		if err := s.mirrorStore.Put(quayiociimagesdistributor.MirrorTask{
+			Source:      source,
+			Destination: fmt.Sprintf("%s:%s", api.QuayOpenShiftCIRepo, strings.Replace(strings.Replace(k, "/", "_", 1), ":", "_", 1)),
+			Owner:       "supplementalCIImagesService",
+		}); err != nil {
+			return fmt.Errorf("failed to put mirror task: %w", err)
+		}
+	}
+	return nil
+}
+
+func newSupplementalCIImagesServiceWithMirrorStore(mirrorStore quayiociimagesdistributor.MirrorStore, logger *logrus.Entry) supplementalCIImagesService {
+	return &supplementalCIImagesServiceWithMirrorStore{mirrorStore: mirrorStore, logger: logger}
 }
 
 func main() {
@@ -117,8 +216,11 @@ func main() {
 	if err := opts.validate(); err != nil {
 		logrus.WithError(err).Fatal("Failed to validate options")
 	}
-	if _, err := os.Stat(opts.registryConfig); errors.Is(err, os.ErrNotExist) {
-		logrus.WithField("file", opts.registryConfig).Fatal("File does not exist")
+	if opts.config != nil {
+		for k := range opts.config.SupplementalCIImages {
+			logrus.WithField("target", k).Debug("Ignore target of supplemental CI images on mirroring")
+			opts.quayIOCIImagesDistributorOptions.ignoreImageStreamTagsRaw.Add(k)
+		}
 	}
 
 	ctx := controllerruntime.SetupSignalHandler()
@@ -178,6 +280,13 @@ func main() {
 	}
 
 	mirrorStore := quayiociimagesdistributor.NewMirrorStore()
+	supplementalCIImagesService := newSupplementalCIImagesServiceWithMirrorStore(mirrorStore, logrus.WithField("subcomponent", "supplementalCIImagesService"))
+	interrupts.TickLiteral(func() {
+		if err := supplementalCIImagesService.Mirror(opts.config.SupplementalCIImages); err != nil {
+			logrus.WithError(err).Error("Failed to mirror supplemental CI images")
+		}
+	}, time.Hour)
+
 	server := &http.Server{
 		Addr:    ":" + strconv.Itoa(opts.port),
 		Handler: getRouter(interrupts.Context(), mirrorStore),

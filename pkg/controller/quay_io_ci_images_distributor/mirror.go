@@ -20,6 +20,7 @@ type MirrorTask struct {
 	CurrentQuayDigest string                                `json:"current_quay_digest"`
 	CreatedAt         time.Time                             `json:"created_at"`
 	Stale             bool                                  `json:"stale"`
+	Owner             string                                `json:"owner"`
 }
 
 type MirrorStore interface {
@@ -38,6 +39,10 @@ func (s *memoryMirrorStore) Put(tasks ...MirrorTask) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, t := range tasks {
+		if t.Source == "" || t.Destination == "" {
+			logrus.WithField("source", t.Source).WithField("destination", t.Destination).Warn("Skipped an invalid mirror task: both source and destination must be set")
+			continue
+		}
 		t.CreatedAt = time.Now()
 		s.mirrors[t.Destination] = t
 	}

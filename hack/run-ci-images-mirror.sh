@@ -16,5 +16,6 @@ KUBECONFIG="${TMP_DIR}/sa.ci-images-mirror.app.ci.config" go run  ./cmd/ci-image
   --leader-election-namespace=ci \
   --leader-election-suffix="-${USER}" \
   --release-repo-git-sync-path="${release}"  \
+  --config="${release}/core-services/image-mirroring/supplemental-ci-images/_config.yaml" \
   --quayIOCIImagesDistributorOptions.additional-image-stream-namespace=ci \
   --dry-run=true

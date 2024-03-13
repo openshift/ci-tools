@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
 
@@ -67,8 +68,40 @@ func Test_getProwjob(t *testing.T) {
 			want: &pjapi.ProwJob{
 				TypeMeta:   v1.TypeMeta{Kind: "ProwJob prow.k8s.io", APIVersion: "v1"},
 				ObjectMeta: v1.ObjectMeta{},
-				Spec:       pjapi.ProwJobSpec{},
-				Status:     pjapi.ProwJobStatus{},
+				Spec: pjapi.ProwJobSpec{
+					Type:   pjapi.PeriodicJob,
+					Report: true,
+					Job:    "foo",
+				},
+				Status: pjapi.ProwJobStatus{State: pjapi.TriggeredState},
+			},
+			wantErr: false,
+		},
+		{
+			name: "returns prowjob in scheduling state",
+			args: args{
+				jobName: "foo",
+				config: &prowconfig.Config{
+					JobConfig: config.JobConfig{
+						Presets:           nil,
+						PresubmitsStatic:  nil,
+						PostsubmitsStatic: nil,
+						Periodics:         []prowconfig.Periodic{periodic},
+						AllRepos:          nil,
+						ProwYAMLGetter:    nil,
+					},
+					ProwConfig: prowconfig.ProwConfig{Scheduler: prowconfig.Scheduler{Enabled: true}},
+				},
+			},
+			want: &pjapi.ProwJob{
+				TypeMeta:   v1.TypeMeta{Kind: "ProwJob prow.k8s.io", APIVersion: "v1"},
+				ObjectMeta: v1.ObjectMeta{},
+				Spec: pjapi.ProwJobSpec{
+					Type:   pjapi.PeriodicJob,
+					Report: true,
+					Job:    "foo",
+				},
+				Status: pjapi.ProwJobStatus{State: pjapi.SchedulingState},
 			},
 			wantErr: false,
 		},
@@ -99,8 +132,9 @@ func Test_getProwjob(t *testing.T) {
 				t.Errorf("getPeriodicJob() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(reflect.TypeOf(got), reflect.TypeOf(tt.want)) {
-				t.Errorf("getPeriodicJob() got = %v, want %v", reflect.TypeOf(got), reflect.TypeOf(tt.want))
+			// Do not compare generated fields
+			if diff := cmp.Diff(got, tt.want, cmpopts.IgnoreTypes(v1.TypeMeta{}, v1.ObjectMeta{}, v1.Time{})); diff != "" {
+				t.Errorf("Unexpected ProwJob: %s", diff)
 			}
 		})
 	}

@@ -13,6 +13,23 @@ import (
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 )
 
+type FakeReleaseConfig struct {
+	Verify map[string]FakeReleaseConfigVerify
+}
+type FakeReleaseConfigVerify struct {
+	ProwJob FakeProwJob
+}
+type FakeProwJob struct {
+	Name string
+}
+
+type FakePeriodicConfig struct {
+	Periodics []FakePeriodic `yaml:"periodics"`
+}
+type FakePeriodic struct {
+	Name string `yaml:"name"`
+}
+
 type jobNameGenerator struct {
 	periodicURLs      []string
 	releaseConfigURLs []string
@@ -39,73 +56,10 @@ func newJobNameGenerator() *jobNameGenerator {
 		periodicURLs: []string{
 			"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-master-periodics.yaml",
 			"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/multiarch/openshift-multiarch-master-periodics.yaml",
-
-			"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-release-4.10-periodics.yaml",
-			"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-release-4.11-periodics.yaml",
-			"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-release-4.12-periodics.yaml",
-			"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-release-4.13-periodics.yaml",
-			"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-release-4.14-periodics.yaml",
-			"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-release-4.15-periodics.yaml",
-			"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-release-4.16-periodics.yaml",
-
-			"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/hypershift/openshift-hypershift-release-4.13-periodics.yaml",
-			"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/hypershift/openshift-hypershift-release-4.14-periodics.yaml",
-			"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/hypershift/openshift-hypershift-release-4.15-periodics.yaml",
-			"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/hypershift/openshift-hypershift-release-4.16-periodics.yaml",
 		},
-		releaseConfigURLs: []string{
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.10-arm64.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.10-ci.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.10-multi.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.10-ppc64le.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.10-s390x.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.10.json",
-
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.11-arm64.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.11-ci.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.11-multi.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.11-ppc64le.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.11-s390x.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.11.json",
-
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.12-arm64.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.12-ci.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.12-multi.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.12-ppc64le.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.12-s390x.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.12.json",
-
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.13-arm64.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.13-ci.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.13-multi.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.13-ppc64le.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.13-s390x.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.13.json",
-
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.14-arm64.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.14-ci.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.14-multi.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.14-ppc64le.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.14-s390x.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.14.json",
-
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.15-arm64.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.15-ci.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.15-multi.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.15-ppc64le.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.15-s390x.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.15.json",
-
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.16-arm64.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.16-ci.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.16-multi.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.16-ppc64le.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.16-s390x.json",
-			"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-4.16.json",
-		},
+		releaseConfigURLs: []string{},
 	}
 	sort.Strings(generator.periodicURLs)
-	sort.Strings(generator.releaseConfigURLs)
 	return generator
 }
 
@@ -122,29 +76,10 @@ func (s *jobNameGenerator) addReleaseURLs(release string) {
 	sort.Strings(s.releaseConfigURLs)
 }
 
-func (s *jobNameGenerator) UpdateURLsForNewReleases(releases []jobrunaggregatorapi.ReleaseRow) {
+func (s *jobNameGenerator) UpdateURLsForAllReleases(releases []jobrunaggregatorapi.ReleaseRow) {
 	s.releases = releases
-	newReleases := []string{}
 	for _, release := range s.releases {
-		found := false
-		for _, periodicURL := range s.periodicURLs {
-			if strings.Contains(periodicURL, release.Release) {
-				found = true
-				break
-			}
-		}
-		for _, releaseConfigURL := range s.releaseConfigURLs {
-			if strings.Contains(releaseConfigURL, release.Release) {
-				found = true
-				break
-			}
-		}
-		if !found {
-			newReleases = append(newReleases, release.Release)
-		}
-	}
-	for _, release := range newReleases {
-		s.addReleaseURLs(release)
+		s.addReleaseURLs(release.Release)
 	}
 }
 
@@ -208,30 +143,16 @@ func (s *jobNameGenerator) GenerateJobNames() ([]string, error) {
 			// TODO: the single file for say "master" actually contains every release, but we only want jobs 4.10+
 			// where we started disruption monitoring. Adding a bunch of future rows to buy us time but this could
 			// stand some logic.
-			if len(s.releases) > 0 {
-				foundRelease := false
-				for _, release := range s.releases {
-					if release.Major > 4 || (release.Major == 4 && release.Minor > 9) {
-						if strings.Contains(curr.Name, "-"+release.Release) {
-							foundRelease = true
-							break
-						}
+			foundRelease := false
+			for _, release := range s.releases {
+				if release.Major > 4 || (release.Major == 4 && release.Minor > 9) {
+					if strings.Contains(curr.Name, "-"+release.Release) {
+						foundRelease = true
+						break
 					}
 				}
-				if !foundRelease {
-					continue
-				}
-			} else if !strings.Contains(curr.Name, "-4.10") &&
-				!strings.Contains(curr.Name, "-4.11") &&
-				!strings.Contains(curr.Name, "-4.12") &&
-				!strings.Contains(curr.Name, "-4.13") &&
-				!strings.Contains(curr.Name, "-4.14") &&
-				!strings.Contains(curr.Name, "-4.15") &&
-				!strings.Contains(curr.Name, "-4.16") &&
-				!strings.Contains(curr.Name, "-4.17") &&
-				!strings.Contains(curr.Name, "-4.18") &&
-				!strings.Contains(curr.Name, "-4.19") &&
-				!strings.Contains(curr.Name, "-4.20") {
+			}
+			if !foundRelease {
 				continue
 			}
 

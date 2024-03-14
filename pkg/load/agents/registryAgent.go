@@ -21,21 +21,24 @@ type RegistryAgent interface {
 	ResolveConfig(config api.ReleaseBuildConfiguration) (api.ReleaseBuildConfiguration, error)
 	GetRegistryComponents() (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, map[string]string, api.RegistryMetadata)
 	GetGeneration() int
+	GetClusterProfiles() api.ClusterProfilesMap
+	GetClusterProfileDetails(profileName string) (*api.ClusterProfileDetails, error)
 	registry.Resolver
 }
 
 type registryAgent struct {
-	lock          *sync.RWMutex
-	resolver      registry.Resolver
-	registryPath  string
-	generation    int
-	errorMetrics  *prometheus.CounterVec
-	flags         load.RegistryFlag
-	references    registry.ReferenceByName
-	chains        registry.ChainByName
-	workflows     registry.WorkflowByName
-	documentation map[string]string
-	metadata      api.RegistryMetadata
+	lock            *sync.RWMutex
+	resolver        registry.Resolver
+	registryPath    string
+	generation      int
+	errorMetrics    *prometheus.CounterVec
+	flags           load.RegistryFlag
+	references      registry.ReferenceByName
+	chains          registry.ChainByName
+	workflows       registry.WorkflowByName
+	clusterProfiles api.ClusterProfilesMap
+	documentation   map[string]string
+	metadata        api.RegistryMetadata
 }
 
 var registryReloadTimeMetric = prometheus.NewHistogram(
@@ -138,13 +141,27 @@ func (a *registryAgent) GetRegistryComponents() (registry.ReferenceByName, regis
 	return a.references, a.chains, a.workflows, a.documentation, a.metadata
 }
 
+// GetClusterProfiles returns a map containing all existing cluster profiles
+func (a *registryAgent) GetClusterProfiles() api.ClusterProfilesMap {
+	return a.clusterProfiles
+}
+
+// GetClusterProfileDetails returns a struct with all details for a cluster profile
+func (a *registryAgent) GetClusterProfileDetails(profileName string) (*api.ClusterProfileDetails, error) {
+	profileDetails, found := a.GetClusterProfiles()[api.ClusterProfile(profileName)]
+	if found {
+		return &profileDetails, nil
+	}
+	return nil, fmt.Errorf("cluster profile %s not found", profileName)
+}
+
 func (a *registryAgent) loadRegistry() error {
 	logrus.Debug("Reloading registry")
 	duration, err := func() (time.Duration, error) {
 		a.lock.Lock()
 		defer a.lock.Unlock()
 		startTime := time.Now()
-		references, chains, workflows, documentation, metadata, observers, err := load.Registry(a.registryPath, a.flags)
+		references, chains, workflows, clusterProfiles, documentation, metadata, observers, err := load.Registry(a.registryPath, a.flags)
 		if err != nil {
 			recordErrorForMetric(a.errorMetrics, "failed to load ci-operator registry")
 			return time.Duration(0), fmt.Errorf("failed to load ci-operator registry (%w)", err)
@@ -154,6 +171,7 @@ func (a *registryAgent) loadRegistry() error {
 		a.workflows = workflows
 		a.documentation = documentation
 		a.metadata = metadata
+		a.clusterProfiles = clusterProfiles
 		a.resolver = registry.NewResolver(references, chains, workflows, observers)
 		a.generation++
 		return time.Since(startTime), nil

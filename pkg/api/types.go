@@ -2428,18 +2428,18 @@ type ClusterProfilesList []ClusterProfileDetails
 type ClusterProfilesMap map[ClusterProfile]ClusterProfileDetails
 
 type ClusterProfileDetails struct {
-	Profile     ClusterProfile         `yaml:"profile"`
-	Owners      []ClusterProfileOwners `yaml:"owners,omitempty"`
-	ClusterType string                 `yaml:"cluster_type,omitempty"`
-	LeaseType   string                 `yaml:"lease_type,omitempty"`
-	Secret      string                 `yaml:"secret,omitempty"`
+	Profile     ClusterProfile         `yaml:"profile" json:"profile"`
+	Owners      []ClusterProfileOwners `yaml:"owners,omitempty" json:"owners,omitempty"`
+	ClusterType string                 `yaml:"cluster_type,omitempty" json:"cluster_type,omitempty"`
+	LeaseType   string                 `yaml:"lease_type,omitempty" json:"lease_type,omitempty"`
+	Secret      string                 `yaml:"secret,omitempty" json:"secret,omitempty"`
+	ConfigMap   string                 `yaml:"config_map,omitempty" json:"config_map,omitempty"`
 }
 
 type ClusterProfileOwners struct {
-	Org   string   `yaml:"org"`
-	Repos []string `yaml:"repos,omitempty"`
+	Org   string   `yaml:"org" json:"org"`
+	Repos []string `yaml:"repos,omitempty" json:"repos,omitempty"`
 }
-
 type ClusterClaimOwnersMap map[string]ClusterClaimDetails
 
 type ClusterClaimDetails struct {

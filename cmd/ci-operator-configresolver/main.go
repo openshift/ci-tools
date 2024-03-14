@@ -203,6 +203,7 @@ func main() {
 	simplifier := simplifypath.NewSimplifier(l("", // shadow element mimicing the root
 		l("config"),
 		l("resolve"),
+		l("clusterProfile"),
 		l("configGeneration"),
 		l("registryGeneration"),
 	))
@@ -222,6 +223,7 @@ func main() {
 	http.HandleFunc("/config", handler(registryserver.ResolveConfig(configAgent, registryAgent, configresolverMetrics)).ServeHTTP)
 	http.HandleFunc("/mergeConfigsWithInjectedTest", handler(registryserver.ResolveAndMergeConfigsAndInjectTest(configAgent, registryAgent, configresolverMetrics)).ServeHTTP)
 	http.HandleFunc("/resolve", handler(registryserver.ResolveLiteralConfig(registryAgent, configresolverMetrics)).ServeHTTP)
+	http.HandleFunc("/clusterProfile", handler(registryserver.ResolveClusterProfile(registryAgent, configresolverMetrics)).ServeHTTP)
 	http.HandleFunc("/configGeneration", handler(getConfigGeneration(configAgent)).ServeHTTP)
 	http.HandleFunc("/registryGeneration", handler(getRegistryGeneration(registryAgent)).ServeHTTP)
 	http.HandleFunc("/readyz", func(_ http.ResponseWriter, _ *http.Request) {})

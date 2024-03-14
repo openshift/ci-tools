@@ -257,7 +257,7 @@ func (r RehearsalConfig) createResolver(candidatePath string) (registry.Resolver
 	var observers registry.ObserverByName
 	if !r.NoRegistry {
 		var err error
-		registryRefs, chains, workflows, _, _, observers, err = load.Registry(filepath.Join(candidatePath, config.RegistryPath), load.RegistryFlag(0))
+		registryRefs, chains, workflows, _, _, _, observers, err = load.Registry(filepath.Join(candidatePath, config.RegistryPath), load.RegistryFlag(0))
 		if err != nil {
 			return nil, fmt.Errorf("could not load step registry: %w", err)
 		}
@@ -413,7 +413,7 @@ func determineChangedTemplates(candidate, baseSHA, headSHA string, prNumber int,
 
 func determineChangedRegistrySteps(candidate, baseSHA string, logger *logrus.Entry) ([]registry.Node, error) {
 	var changedRegistrySteps []registry.Node
-	refs, chains, workflows, _, _, observers, err := load.Registry(filepath.Join(candidate, config.RegistryPath), load.RegistryFlag(0))
+	refs, chains, workflows, _, _, _, observers, err := load.Registry(filepath.Join(candidate, config.RegistryPath), load.RegistryFlag(0))
 	if err != nil {
 		return nil, fmt.Errorf("could not load step registry: %w", err)
 	}

@@ -205,7 +205,7 @@ func TestRegistry(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			references, chains, workflows, _, _, observers, err := Registry(testCase.registryDir, testCase.flags)
+			references, chains, workflows, _, _, _, observers, err := Registry(testCase.registryDir, testCase.flags)
 			if err == nil && testCase.expectedError == true {
 				t.Error("got no error when error was expected")
 			}
@@ -251,7 +251,7 @@ func TestRegistry(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(path, deprovisionGatherRef), fileData, 0664); err != nil {
 		t.Fatalf("failed to populate temp reference file: %v", err)
 	}
-	_, _, _, _, _, _, err = Registry(temp, RegistryFlag(0))
+	_, _, _, _, _, _, _, err = Registry(temp, RegistryFlag(0))
 	if err == nil {
 		t.Error("got no error when expecting error on incorrect reference name")
 	}

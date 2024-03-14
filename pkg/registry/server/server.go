@@ -15,6 +15,7 @@ import (
 	"k8s.io/test-infra/prow/metrics"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/load/agents"
 )
 
 const (
@@ -28,6 +29,11 @@ const (
 	InjectFromBranchQuery  = "injectTestFromBranch"
 	InjectFromVariantQuery = "injectTestFromVariant"
 	InjectTestQuery        = "injectTest"
+)
+
+// NameQuery is used for fetching cluster profile details by its name
+const (
+	NameQuery = "name"
 )
 
 type Resolver interface {
@@ -448,4 +454,52 @@ func MetadataEntriesFromQuery(w http.ResponseWriter, r *http.Request) ([]api.Met
 		return one.Variant < two.Variant
 	})
 	return result, nil
+}
+
+// ResolveClusterProfile extracts the cluster profile name from request query
+// and in the response provides all details about the cluster profile
+func ResolveClusterProfile(agent agents.RegistryAgent, resolverMetrics *metrics.Metrics) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			w.WriteHeader(http.StatusNotImplemented)
+			_, _ = w.Write([]byte(http.StatusText(http.StatusNotImplemented)))
+			return
+		}
+		profileNameFromQuery, err := ProfileNameFromQuery(w, r)
+		if err != nil {
+			metrics.RecordError("invalid cluster profiles query", resolverMetrics.ErrorRate)
+			logrus.WithError(err).Warning("failed to read query from request")
+			return
+		}
+		profileDetails, err := agent.GetClusterProfileDetails(profileNameFromQuery)
+		if err != nil {
+			metrics.RecordError("cluster profile not found", resolverMetrics.ErrorRate)
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(w, "could not find cluster profile %s: %v", profileNameFromQuery, err)
+			logrus.WithError(err).Warning(fmt.Sprintf("cluster profile %s not found", profileNameFromQuery))
+			return
+		}
+		jsonContent, err := json.MarshalIndent(profileDetails, "", "  ")
+		if err != nil {
+			metrics.RecordError("failed to marshal cluster profile to JSON", resolverMetrics.ErrorRate)
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "failed to marshall cluster profile %s to JSON: %v", profileNameFromQuery, err)
+			logrus.WithError(err).Errorf("failed to marshal cluster profile %s to JSON: %v", profileNameFromQuery, err)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write(jsonContent); err != nil {
+			logrus.WithError(err).Errorf("Failed to write response: %v", err)
+		}
+	}
+}
+
+// ProfileNameFromQuery gets the cluster profile name from the request query
+func ProfileNameFromQuery(w http.ResponseWriter, r *http.Request) (string, error) {
+	profileName := r.URL.Query().Get(NameQuery)
+	if profileName == "" {
+		MissingQuery(w, NameQuery)
+		return "", fmt.Errorf("missing query %s", NameQuery)
+	}
+	return profileName, nil
 }

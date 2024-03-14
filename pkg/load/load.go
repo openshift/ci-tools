@@ -40,12 +40,14 @@ const (
 
 // Registry takes the path to a registry config directory and returns the full set of references, chains,
 // and workflows that the registry's Resolver needs to resolve a user's MultiStageTestConfiguration
-func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, map[string]string, api.RegistryMetadata, registry.ObserverByName, error) {
+func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, api.ClusterProfilesMap, map[string]string, api.RegistryMetadata, registry.ObserverByName, error) {
 	flat := flags&RegistryFlat != 0
 	references := registry.ReferenceByName{}
 	chains := registry.ChainByName{}
 	workflows := registry.WorkflowByName{}
 	observers := registry.ObserverByName{}
+	var profiles api.ClusterProfilesMap
+	var clusterProfilesConfigPath string
 	var documentation map[string]string
 	var metadata api.RegistryMetadata
 	if flags&RegistryDocumentation != 0 {
@@ -64,8 +66,12 @@ func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, regist
 			}
 			return nil
 		}
-		// skip the cluster profiles dir
+		// find the cluster profiles config file
 		if info.IsDir() && info.Name() == "cluster-profiles" {
+			configPath := filepath.Join(path, "cluster-profiles-config.yaml")
+			if _, err := os.Stat(configPath); err == nil {
+				clusterProfilesConfigPath = configPath
+			}
 			return filepath.SkipDir
 		}
 		if info.IsDir() {
@@ -185,15 +191,19 @@ func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, regist
 		return nil
 	})
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, err
 	}
 	// create graph to verify that there are no cycles
 	if _, err = registry.NewGraph(references, chains, workflows, observers); err != nil {
-		return nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, err
 	}
 	err = registry.Validate(references, chains, workflows, observers)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, err
+	}
+	profiles, err = ClusterProfilesConfig(clusterProfilesConfigPath)
+	if err != nil {
+		return nil, nil, nil, nil, nil, nil, nil, err
 	}
 	// validate the integrity of each reference
 	v := validation.NewValidator(nil, nil)
@@ -204,9 +214,9 @@ func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, regist
 		}
 	}
 	if len(validationErrors) > 0 {
-		return nil, nil, nil, nil, nil, nil, utilerrors.NewAggregate(validationErrors)
+		return nil, nil, nil, nil, nil, nil, nil, utilerrors.NewAggregate(validationErrors)
 	}
-	return references, chains, workflows, documentation, metadata, observers, nil
+	return references, chains, workflows, profiles, documentation, metadata, observers, nil
 }
 
 func loadReference(bytes []byte, baseDir, prefix string, flat bool) (string, string, api.LiteralTestStep, error) {

@@ -1,0 +1,10 @@
+- profile: aws-testing-complete
+  owners:
+    - org: org
+      repos:
+        - repo1
+        - repo2
+  cluster_type: aws
+  lease_type: aws-lease
+  secret: aws-secret
+  config_map: aws-config-map

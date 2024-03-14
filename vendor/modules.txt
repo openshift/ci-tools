@@ -1792,7 +1792,7 @@ k8s.io/kube-openapi/pkg/validation/spec
 k8s.io/kubernetes/pkg/apis/core
 k8s.io/kubernetes/pkg/apis/core/helper
 k8s.io/kubernetes/pkg/util/taints
-# k8s.io/test-infra v0.0.0-20240228183513-e297b9ca05f2
+# k8s.io/test-infra v0.0.0-20240314024253-449bac00dc77
 ## explicit; go 1.21
 k8s.io/test-infra/ghproxy/ghcache
 k8s.io/test-infra/ghproxy/ghmetrics
@@ -1812,6 +1812,7 @@ k8s.io/test-infra/prow/client/informers/externalversions/prowjobs/v1
 k8s.io/test-infra/prow/client/listers/prowjobs/v1
 k8s.io/test-infra/prow/clonerefs
 k8s.io/test-infra/prow/cmd/generic-autobumper/bumper
+k8s.io/test-infra/prow/cmd/generic-autobumper/updater
 k8s.io/test-infra/prow/commentpruner
 k8s.io/test-infra/prow/config
 k8s.io/test-infra/prow/config/org
@@ -1930,7 +1931,6 @@ k8s.io/test-infra/prow/tide
 k8s.io/test-infra/prow/tide/blockers
 k8s.io/test-infra/prow/tide/history
 k8s.io/test-infra/prow/version
-k8s.io/test-infra/robots/pr-creator/updater
 # k8s.io/utils v0.0.0-20230505201702-9f6742963106
 ## explicit; go 1.18
 k8s.io/utils/buffer

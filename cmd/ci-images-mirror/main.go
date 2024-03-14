@@ -188,6 +188,7 @@ type supplementalCIImagesServiceWithMirrorStore struct {
 }
 
 func (s *supplementalCIImagesServiceWithMirrorStore) Mirror(m map[string]Source) error {
+	s.logger.Info("Mirroring supplemental CI images ...")
 	for k, v := range m {
 		source := v.Image
 		if source == "" {

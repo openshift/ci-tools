@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package updater handles creation and updates of GitHub PullRequests.
 package updater
 
 import (
@@ -41,14 +42,6 @@ type ensureClient interface {
 	AddLabel(org, repo string, number int, label string) error
 	CreatePullRequest(org, repo, title, body, head, base string, canModify bool) (int, error)
 	GetIssue(org, repo string, number int) (*github.Issue, error)
-}
-
-func UpdatePR(org, repo, title, body, headBranch string, gc updateClient) (*int, error) {
-	return updatePRWithQueryTokens(org, repo, title, body, "head:"+headBranch, gc)
-}
-
-func EnsurePR(org, repo, title, body, source, branch, headBranch string, allowMods bool, gc ensureClient) (*int, error) {
-	return EnsurePRWithLabels(org, repo, title, body, source, branch, headBranch, allowMods, gc, nil)
 }
 
 func EnsurePRWithQueryTokens(org, repo, title, body, source, baseBranch, queryTokensString string, allowMods bool, gc ensureClient) (*int, error) {

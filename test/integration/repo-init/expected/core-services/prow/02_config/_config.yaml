@@ -37,6 +37,7 @@ prowjob_namespace: default
 push_gateway:
   interval: 1m0s
   serve_metrics: false
+scheduler: {}
 sinker:
   max_pod_age: 24h0m0s
   max_prowjob_age: 168h0m0s

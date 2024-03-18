@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	questionReaction = "raised_hands"     //TODO: this will change
-	answerReaction   = "white_check_mark" //TODO: this will change
+	questionReaction = "channel_faq"
+	answerReaction   = "faq_answer"
 	faqConfigMap     = "helpdesk-faq"
 	ci               = "ci"
 )
@@ -35,7 +35,8 @@ type FaqItem struct {
 	Answers   []Answer `json:"answers"`
 }
 
-//TODO: probably need a "contributing info" emoji and section as well for when the question isn't entirely summaraized in one prompt
+//TODO(sgoeddel): We probably need a "contributing info" emoji and section as well for when the question isn't entirely summarized in one prompt
+//TODO(sgoeddel): It would also be good to link to the original full thread for additional context
 
 type Answer struct {
 	Author    string `json:"author"`

@@ -29,6 +29,47 @@ const (
 	ci               = "ci"
 )
 
+type faqItemClient interface {
+	GetFAQItems() ([]string, error)
+}
+
+type configMapClient struct {
+	kubeClient  kubernetes.Interface
+	cachedItems []string
+	lastReload  time.Time
+}
+
+func (c *configMapClient) GetFAQItems() ([]string, error) {
+	fifteenMinutesFromLastCacheReload := c.lastReload.Add(time.Minute * 15)
+	if len(c.cachedItems) > 0 && time.Now().Before(fifteenMinutesFromLastCacheReload) {
+		logrus.Debugf("returning faq items from cache")
+		return c.cachedItems, nil
+	}
+	logrus.Debugf("reloading faq items from configmap")
+	configMap, err := c.getConfigMap()
+	if err != nil {
+		return nil, err
+	}
+	if configMap.Data == nil {
+		return nil, nil
+	}
+	var items []string
+	for _, item := range configMap.Data {
+		items = append(items, item)
+	}
+	c.cachedItems = items
+	c.lastReload = time.Now()
+	return items, nil
+}
+
+func (c *configMapClient) getConfigMap() (*v1.ConfigMap, error) {
+	configMap, err := c.kubeClient.CoreV1().ConfigMaps(ci).Get(context.TODO(), faqConfigMap, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get configMap %s: %w", faqConfigMap, err)
+	}
+	return configMap, nil
+}
+
 type options struct {
 	logLevel          string
 	port              int
@@ -75,7 +116,7 @@ func validateOptions(o options) error {
 	return o.kubernetesOptions.Validate(false)
 }
 
-func router(kubeClient kubernetes.Interface) *http.ServeMux {
+func router(client faqItemClient) *http.ServeMux {
 	handler := http.NewServeMux()
 
 	handler.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
@@ -89,15 +130,15 @@ func router(kubeClient kubernetes.Interface) *http.ServeMux {
 	handler.HandleFunc("/api/v1/faq-items", func(w http.ResponseWriter, r *http.Request) {
 		logrus.WithField("path", "/api/v1/faq-items").Info("serving")
 
-		configMap, err := getConfigMap(kubeClient)
+		items, err := client.GetFAQItems()
 		if err != nil {
-			logrus.WithError(err).Fatal("unable to get helpdesk-faq config map")
+			logrus.WithError(err).Fatal("unable to get helpdesk-faq items")
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 		page := Page{}
-		for _, item := range configMap.Data {
+		for _, item := range items {
 			faqItem := &FaqItem{}
 			if err := json.Unmarshal([]byte(item), faqItem); err != nil {
 				logrus.WithError(err).Fatal("unable to unmarshall faq item")
@@ -129,19 +170,6 @@ func router(kubeClient kubernetes.Interface) *http.ServeMux {
 	return handler
 }
 
-func getConfigMap(kubeClient kubernetes.Interface) (*v1.ConfigMap, error) {
-	configMap, err := kubeClient.CoreV1().ConfigMaps(ci).Get(context.TODO(), faqConfigMap, metav1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	if configMap.Data == nil {
-		configMap.Data = make(map[string]string)
-	}
-
-	return configMap, nil
-}
-
 func main() {
 	logrusutil.ComponentInit()
 	o, err := gatherOptions()
@@ -158,10 +186,10 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("could not load kube config")
 	}
-
+	client := configMapClient{kubeClient: kubeClient}
 	server := &http.Server{
 		Addr:    ":" + strconv.Itoa(o.port),
-		Handler: router(kubeClient),
+		Handler: router(&client),
 	}
 	interrupts.ListenAndServe(server, o.gracePeriod)
 	logrus.Debug("Server ready.")

@@ -579,7 +579,7 @@ func TestExecuteJobsErrors(t *testing.T) {
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
 			}
-			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, logger, client, testNamespace)
+			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, logger, client, testNamespace, &prowconfig.Config{})
 			executor.pollFunc = threetimesTryingPoller
 			_, err = executor.ExecuteJobs()
 
@@ -645,7 +645,7 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
 			}
-			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, false, logger, client, testNamespace)
+			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, false, logger, client, testNamespace, &prowconfig.Config{})
 			executor.pollFunc = threetimesTryingPoller
 			success, _ := executor.ExecuteJobs()
 
@@ -769,7 +769,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 			if diff := cmp.Diff(imageStreamTags, tc.expectedImageStreamTagMap, cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("returned imageStreamTags do not match expected: %s", diff)
 			}
-			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, logger, client, testNamespace)
+			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, logger, client, testNamespace, &prowconfig.Config{})
 			success, err := executor.ExecuteJobs()
 
 			if err != nil {
@@ -873,7 +873,7 @@ func TestWaitForJobs(t *testing.T) {
 		t.Run(tc.id, func(t *testing.T) {
 			client := newTC(tc.events...)
 
-			executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, logger, client, "")
+			executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, logger, client, "", &prowconfig.Config{})
 			executor.pollFunc = threetimesTryingPoller
 			success, err := executor.waitForJobs(tc.pjs, &ctrlruntimeclient.ListOptions{})
 			if err != tc.err {
@@ -902,7 +902,7 @@ func TestWaitForJobsRetries(t *testing.T) {
 		return nil
 	})
 
-	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, logrus.NewEntry(logrus.New()), client, "")
+	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, logrus.NewEntry(logrus.New()), client, "", &prowconfig.Config{})
 	executor.pollFunc = threetimesTryingPoller
 	success, err := executor.waitForJobs(sets.Set[string]{"j": {}}, &ctrlruntimeclient.ListOptions{})
 	if err != nil {
@@ -924,7 +924,7 @@ func TestWaitForJobsLog(t *testing.T) {
 			Status:     pjapi.ProwJobStatus{State: pjapi.FailureState}},
 	).Build()
 
-	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, logger.WithFields(nil), client, "")
+	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, logger.WithFields(nil), client, "", &prowconfig.Config{})
 	executor.pollFunc = threetimesTryingPoller
 	_, err := executor.waitForJobs(sets.New[string]("success", "failure"), &ctrlruntimeclient.ListOptions{})
 	if err != nil {
@@ -1684,6 +1684,90 @@ func TestMoreRelevant(t *testing.T) {
 					not = ""
 				}
 				t.Fatalf("expected config one to %sbe more relevant than config two, diff: %s", not, diff)
+			}
+		})
+	}
+}
+
+func TestSubmitPresubmit(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		presubmit  prowconfig.Presubmit
+		prowConfig prowconfig.Config
+		namespace  string
+		refs       pjapi.Refs
+		wantJob    pjapi.ProwJob
+	}{
+		{
+			name:       "Spawn a presubmit",
+			presubmit:  *makePresubmit(nil, false, "foo"),
+			prowConfig: prowconfig.Config{},
+			namespace:  "foo-ns",
+			refs:       *makeBaseRefs(),
+			wantJob: pjapi.ProwJob{
+				Spec: pjapi.ProwJobSpec{
+					Agent:        "kubernetes",
+					Type:         pjapi.PresubmitJob,
+					Job:          "foo",
+					Refs:         makeBaseRefs(),
+					Report:       true,
+					Context:      "ci/prow/test",
+					RerunCommand: "/pj-rehearse foo",
+					PodSpec: &v1.PodSpec{
+						Containers: []v1.Container{{
+							Command: []string{"ci-operator"},
+							Args:    []string{"arg"},
+						}},
+					},
+				},
+				Status: pjapi.ProwJobStatus{
+					State: pjapi.TriggeredState,
+				},
+			},
+		},
+		{
+			name:       "Spawn a presubmit in scheduling state",
+			presubmit:  *makePresubmit(nil, false, "foo"),
+			prowConfig: prowconfig.Config{ProwConfig: prowconfig.ProwConfig{Scheduler: prowconfig.Scheduler{Enabled: true}}},
+			namespace:  "foo-ns",
+			refs:       *makeBaseRefs(),
+			wantJob: pjapi.ProwJob{
+				Spec: pjapi.ProwJobSpec{
+					Agent:        "kubernetes",
+					Type:         pjapi.PresubmitJob,
+					Job:          "foo",
+					Refs:         makeBaseRefs(),
+					Report:       true,
+					Context:      "ci/prow/test",
+					RerunCommand: "/pj-rehearse foo",
+					PodSpec: &v1.PodSpec{
+						Containers: []v1.Container{{
+							Command: []string{"ci-operator"},
+							Args:    []string{"arg"},
+						}},
+					},
+				},
+				Status: pjapi.ProwJobStatus{
+					State: pjapi.SchedulingState,
+				},
+			},
+		},
+	} {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			client := newTC()
+			logger := logrus.NewEntry(logrus.New())
+			extor := NewExecutor([]*prowconfig.Presubmit{}, 0, "", &tc.refs, false, logger, client, tc.namespace, &tc.prowConfig)
+			actualJob, err := extor.submitPresubmit(&tc.presubmit)
+
+			if err != nil {
+				t.Errorf("Enexpected error: %s", err)
+				return
+			}
+
+			if diff := cmp.Diff(&tc.wantJob, actualJob, cmpopts.IgnoreTypes(metav1.TypeMeta{}, metav1.ObjectMeta{}, metav1.Time{})); diff != "" {
+				t.Errorf("Enexpected job: %s", diff)
 			}
 		})
 	}

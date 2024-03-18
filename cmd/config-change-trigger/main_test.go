@@ -8,7 +8,7 @@ import (
 	"github.com/pkg/errors"
 
 	"k8s.io/apimachinery/pkg/util/diff"
-	"k8s.io/test-infra/prow/apis/prowjobs/v1"
+	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -37,10 +37,14 @@ func (g *fakeGetter) GetRef(org, repo, ref string) (string, error) {
 
 func TestJobsFor(t *testing.T) {
 	var testCases = []struct {
-		name        string
-		getter      fakeGetter
-		changed     []diffs.PostsubmitInContext
-		expected    []v1.ProwJobSpec // the other fields are dynamic and not interesting
+		name       string
+		getter     fakeGetter
+		changed    []diffs.PostsubmitInContext
+		prowConfig prowconfig.Config
+		expected   []struct {
+			Spec  v1.ProwJobSpec
+			State v1.ProwJobState
+		} // the other fields are dynamic and not interesting
 		expectedErr bool
 	}{
 		{
@@ -70,12 +74,48 @@ func TestJobsFor(t *testing.T) {
 					},
 				},
 			}},
-			expected: []v1.ProwJobSpec{{
-				Type:   v1.PostsubmitJob,
-				Agent:  v1.KubernetesAgent,
-				Job:    "my-images",
-				Refs:   &v1.Refs{Org: "org", Repo: "repo", BaseRef: "master", BaseSHA: "sha123"},
-				Report: true,
+			expected: []struct {
+				Spec  v1.ProwJobSpec
+				State v1.ProwJobState
+			}{{
+				v1.ProwJobSpec{
+					Type:   v1.PostsubmitJob,
+					Agent:  v1.KubernetesAgent,
+					Job:    "my-images",
+					Refs:   &v1.Refs{Org: "org", Repo: "repo", BaseRef: "master", BaseSHA: "sha123"},
+					Report: true,
+				},
+				v1.TriggeredState,
+			}},
+		},
+		{
+			name: "happy case creates a job in scheduling state",
+			getter: fakeGetter{
+				data: map[refId]string{{org: "org", repo: "repo", ref: "heads/master"}: "sha123"},
+				errs: map[refId]error{},
+			},
+			changed: []diffs.PostsubmitInContext{{
+				Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "master"},
+				Job: prowconfig.Postsubmit{
+					JobBase: prowconfig.JobBase{
+						Name:  "my-images",
+						Agent: "kubernetes",
+					},
+				},
+			}},
+			prowConfig: prowconfig.Config{ProwConfig: prowconfig.ProwConfig{Scheduler: prowconfig.Scheduler{Enabled: true}}},
+			expected: []struct {
+				Spec  v1.ProwJobSpec
+				State v1.ProwJobState
+			}{{
+				v1.ProwJobSpec{
+					Type:   v1.PostsubmitJob,
+					Agent:  v1.KubernetesAgent,
+					Job:    "my-images",
+					Refs:   &v1.Refs{Org: "org", Repo: "repo", BaseRef: "master", BaseSHA: "sha123"},
+					Report: true,
+				},
+				v1.SchedulingState,
 			}},
 		},
 		{
@@ -95,12 +135,18 @@ func TestJobsFor(t *testing.T) {
 			}, {
 				Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "release-1.13"},
 			}},
-			expected: []v1.ProwJobSpec{{
-				Type:   v1.PostsubmitJob,
-				Agent:  v1.KubernetesAgent,
-				Job:    "my-images",
-				Refs:   &v1.Refs{Org: "org", Repo: "repo", BaseRef: "master", BaseSHA: "sha123"},
-				Report: true,
+			expected: []struct {
+				Spec  v1.ProwJobSpec
+				State v1.ProwJobState
+			}{{
+				v1.ProwJobSpec{
+					Type:   v1.PostsubmitJob,
+					Agent:  v1.KubernetesAgent,
+					Job:    "my-images",
+					Refs:   &v1.Refs{Org: "org", Repo: "repo", BaseRef: "master", BaseSHA: "sha123"},
+					Report: true,
+				},
+				v1.TriggeredState,
 			}},
 			expectedErr: true,
 		},
@@ -108,7 +154,7 @@ func TestJobsFor(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			actualJobs, actualErr := jobsFor(testCase.changed, &testCase.getter)
+			actualJobs, actualErr := jobsFor(testCase.changed, &testCase.getter, &testCase.prowConfig)
 			if testCase.expectedErr && len(actualErr) == 0 {
 				t.Errorf("%s: expected errors but got none", testCase.name)
 			}
@@ -116,13 +162,19 @@ func TestJobsFor(t *testing.T) {
 				t.Errorf("%s: expected no errors but got some: %v", testCase.name, actualErr)
 			}
 
-			var actualSpecs []v1.ProwJobSpec
+			var actualSpecsNStates []struct {
+				Spec  v1.ProwJobSpec
+				State v1.ProwJobState
+			}
 			for _, job := range actualJobs {
-				actualSpecs = append(actualSpecs, job.Spec)
+				actualSpecsNStates = append(actualSpecsNStates, struct {
+					Spec  v1.ProwJobSpec
+					State v1.ProwJobState
+				}{job.Spec, job.Status.State})
 			}
 
-			if !reflect.DeepEqual(actualSpecs, testCase.expected) {
-				t.Errorf("%s: did not get correct job specs: %v", testCase.name, diff.ObjectReflectDiff(actualSpecs, testCase.expected))
+			if !reflect.DeepEqual(actualSpecsNStates, testCase.expected) {
+				t.Errorf("%s: did not get correct job specs: %v", testCase.name, diff.ObjectReflectDiff(actualSpecsNStates, testCase.expected))
 			}
 		})
 	}

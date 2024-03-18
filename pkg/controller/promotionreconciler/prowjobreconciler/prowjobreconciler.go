@@ -17,7 +17,7 @@ import (
 	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/kube"
 	"k8s.io/test-infra/prow/pjutil"
-	"sigs.k8s.io/controller-runtime"
+	controllerruntime "sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -215,7 +215,8 @@ func (r *reconciler) isJobAlreadyRunning(ctx context.Context, pj *prowv1.ProwJob
 }
 
 func (r *reconciler) getPromotionJob(orbc *OrgRepoBranchCommit) *prowv1.ProwJob {
-	for _, postsubmit := range r.config().PostsubmitsStatic[orbc.Org+"/"+orbc.Repo] {
+	cfg := r.config()
+	for _, postsubmit := range cfg.PostsubmitsStatic[orbc.Org+"/"+orbc.Repo] {
 		if !postsubmit.Brancher.ShouldRun(orbc.Branch) {
 			continue
 		}
@@ -228,8 +229,8 @@ func (r *reconciler) getPromotionJob(orbc *OrgRepoBranchCommit) *prowv1.ProwJob 
 			BaseRef: orbc.Branch,
 			BaseSHA: orbc.Commit,
 		}
-		pj := pjutil.NewProwJob(pjutil.PostsubmitSpec(postsubmit, refs), r.createdProwJobLabels, nil)
-		pj.Namespace = r.config().ProwJobNamespace
+		pj := pjutil.NewProwJob(pjutil.PostsubmitSpec(postsubmit, refs), r.createdProwJobLabels, nil, pjutil.RequireScheduling(cfg.Scheduler.Enabled))
+		pj.Namespace = cfg.ProwJobNamespace
 		return &pj
 	}
 

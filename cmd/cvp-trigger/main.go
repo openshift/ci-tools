@@ -190,7 +190,7 @@ func getPeriodicJob(jobName string, config *prowconfig.Config) (*pjapi.ProwJob, 
 		return nil, fmt.Errorf("failed to find the job: %s", jobName)
 	}
 
-	prowjob := pjutil.NewProwJob(pjutil.PeriodicSpec(*selectedJob), nil, nil)
+	prowjob := pjutil.NewProwJob(pjutil.PeriodicSpec(*selectedJob), nil, nil, pjutil.RequireScheduling(config.Scheduler.Enabled))
 	return &prowjob, nil
 }
 

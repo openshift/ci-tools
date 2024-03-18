@@ -107,7 +107,6 @@ func gatherOptions(fs *flag.FlagSet, args ...string) options {
 	fs.BoolVar(&o.requireWorkflowsInForum, "require-workflows-in-forum", true, "Require the use of workflows in the designated forum channel")
 
 	o.kubernetesOptions.AddFlags(fs)
-	//TODO: may need to add some schemes, not sure yet
 
 	if err := fs.Parse(args); err != nil {
 		logrus.WithError(err).Fatal("Could not parse args.")

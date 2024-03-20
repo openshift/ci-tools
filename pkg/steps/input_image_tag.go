@@ -3,6 +3,7 @@ package steps
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -68,7 +69,17 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 	if _, err := s.Inputs(); err != nil {
 		return fmt.Errorf("could not resolve inputs for image tag step: %w", err)
 	}
-
+	from := &coreapi.ObjectReference{
+		Kind: "DockerImage",
+		Name: api.QuayImageReference(s.config.BaseImage),
+	}
+	if strings.HasPrefix(s.config.BaseImage.Namespace, "ci-ln-") {
+		from = &coreapi.ObjectReference{
+			Kind:      "ImageStreamImage",
+			Name:      fmt.Sprintf("%s@%s", s.config.BaseImage.Name, s.imageName),
+			Namespace: s.config.BaseImage.Namespace,
+		}
+	}
 	ist := &imagev1.ImageStreamTag{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.To),
@@ -78,10 +89,7 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 			ReferencePolicy: imagev1.TagReferencePolicy{
 				Type: imagev1.LocalTagReferencePolicy,
 			},
-			From: &coreapi.ObjectReference{
-				Kind: "DockerImage",
-				Name: api.QuayImageReference(s.config.BaseImage),
-			},
+			From: from,
 			ImportPolicy: imagev1.TagImportPolicy{
 				ImportMode: imagev1.ImportModePreserveOriginal,
 			},

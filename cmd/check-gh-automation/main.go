@@ -21,22 +21,24 @@ import (
 )
 
 const (
-	cherrypickPlugin = "cherrypick"
-	cherrypickRobot  = "openshift-cherrypick-robot"
-	standard         = appCheckMode("standard")
-	tide             = appCheckMode("tide")
+	cherrypickPlugin      = "cherrypick"
+	cherrypickRobot       = "openshift-cherrypick-robot"
+	branchProtectionRobot = "openshift-merge-robot"
+	standard              = appCheckMode("standard")
+	tide                  = appCheckMode("tide")
 )
 
 type appCheckMode string
 
 type options struct {
-	config          configflagutil.ConfigOptions
-	bots            flagutil.Strings
-	appName         string
-	appCheckMode    string
-	ignore          flagutil.Strings
-	repos           flagutil.Strings
-	releaseRepoPath string
+	config                configflagutil.ConfigOptions
+	bots                  flagutil.Strings
+	appName               string
+	appCheckMode          string
+	checkBranchProtection bool
+	ignore                flagutil.Strings
+	repos                 flagutil.Strings
+	releaseRepoPath       string
 	flagutil.GitHubOptions
 	pluginConfig prowpluginconfig.PluginOptions
 }
@@ -48,6 +50,7 @@ func gatherOptions() options {
 	fs.Var(&o.bots, "bot", "Check if this bot is a collaborator. Can be passed multiple times.")
 	fs.StringVar(&o.appName, "app", "openshift-ci", "The name of the app that is checking bot configuration, and for which installation will be checked")
 	fs.StringVar(&o.appCheckMode, "app-check-mode", "standard", "Which mode to check for app installation: 'standard' checks always, 'tide' only checks when tide is configured for the repo")
+	fs.BoolVar(&o.checkBranchProtection, "check-branch-protection", true, fmt.Sprintf("Check branch protection configs in order to verify %s has admin access if necessary. Enabled by default.", branchProtectionRobot))
 	fs.Var(&o.ignore, "ignore", "Ignore a repo or entire org. Formatted org or org/repo. Can be passed multiple times.")
 	fs.Var(&o.repos, "repo", "Specifically check only an org/repo. Can be passed multiple times.")
 	fs.StringVar(&o.releaseRepoPath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
@@ -116,7 +119,7 @@ func main() {
 	}
 
 	repos := determineRepos(o, prowAgent, logger)
-	failing, err := checkRepos(repos, o.bots.Strings(), o.appName, o.ignore.StringSet(), appCheckMode(o.appCheckMode), client, logger, pluginAgent, tideQueries, prowAgent)
+	failing, err := checkRepos(repos, o.bots.Strings(), o.appName, o.ignore.StringSet(), appCheckMode(o.appCheckMode), o.checkBranchProtection, client, logger, pluginAgent, tideQueries, prowAgent)
 	if err != nil {
 		logger.Fatalf("error checking repos: %v", err)
 	}
@@ -141,7 +144,7 @@ func determineRepos(o options, prowAgent *prowconfig.Agent, logger *logrus.Entry
 	return sets.List(prowAgent.Config().AllRepos)
 }
 
-func checkRepos(repos []string, bots []string, appName string, ignore sets.Set[string], mode appCheckMode, client automationClient, logger *logrus.Entry, pluginAgent *plugins.ConfigAgent, tideQueries *prowconfig.QueryMap, prowAgent *prowconfig.Agent) ([]string, error) {
+func checkRepos(repos []string, bots []string, appName string, ignore sets.Set[string], mode appCheckMode, checkBranchProtection bool, client automationClient, logger *logrus.Entry, pluginAgent *plugins.ConfigAgent, tideQueries *prowconfig.QueryMap, prowAgent *prowconfig.Agent) ([]string, error) {
 	logger.Infof("checking %d repo(s): %s", len(repos), strings.Join(repos, ", "))
 	failing := sets.New[string]()
 	for _, orgRepo := range repos {
@@ -188,37 +191,38 @@ func checkRepos(repos []string, bots []string, appName string, ignore sets.Set[s
 			repoLogger.Info("no bots provided to check")
 		}
 
-		orgConfig := prowAgent.Config().BranchProtection.GetOrg(org)
-		branchProtectionEnabled := true // By default, it is turned on in absence of configuration stating otherwise
-		if orgConfig != nil {
-			unmanagedOrgLevel := orgConfig.Policy.Unmanaged
-			branchProtectionEnabled = unmanagedOrgLevel == nil || !*unmanagedOrgLevel
+		if checkBranchProtection {
+			orgConfig := prowAgent.Config().BranchProtection.GetOrg(org)
+			branchProtectionEnabled := true // By default, it is turned on in absence of configuration stating otherwise
+			if orgConfig != nil {
+				unmanagedOrgLevel := orgConfig.Policy.Unmanaged
+				branchProtectionEnabled = unmanagedOrgLevel == nil || !*unmanagedOrgLevel
 
-			repoLevel, exists := orgConfig.Repos[repo]
-			if exists {
-				// if "unmanaged" is set to "true" it is disabled. If it is "nil" or "false" we consider it enabled
-				branchProtectionEnabled = repoLevel.Unmanaged == nil || !*repoLevel.Unmanaged
+				repoLevel, exists := orgConfig.Repos[repo]
+				if exists {
+					// if "unmanaged" is set to "true" it is disabled. If it is "nil" or "false" we consider it enabled
+					branchProtectionEnabled = repoLevel.Unmanaged == nil || !*repoLevel.Unmanaged
+				}
 			}
-		}
 
-		// If branch protection is configured, verify admin access for the hardcoded admin bot
-		if branchProtectionEnabled {
-			logger.Infof("Branch protection is enabled for %s/%s", org, repo)
-			// Hardcoded merge robot
-			bot := "openshift-merge-robot"
-			hasAdminAccess, err := client.HasPermission(org, repo, bot, "admin")
-			if err != nil {
-				logger.Errorf("Error checking admin access for bot %s in %s/%s: %v", bot, org, repo, err)
-				return nil, fmt.Errorf("error checking admin access for bot %s in %s/%s: %w", bot, org, repo, err)
-			}
-			if !hasAdminAccess {
-				logger.Errorf("Bot %s does not have admin access in %s/%s with branch protection enabled", bot, org, repo)
-				failing.Insert(orgRepo)
+			// If branch protection is configured, verify admin access for the hardcoded admin bot
+			if branchProtectionEnabled {
+				logger.Infof("Branch protection is enabled for %s/%s", org, repo)
+				// Hardcoded merge robot
+				hasAdminAccess, err := client.HasPermission(org, repo, branchProtectionRobot, "admin")
+				if err != nil {
+					logger.Errorf("Error checking admin access for bot %s in %s/%s: %v", branchProtectionRobot, org, repo, err)
+					return nil, fmt.Errorf("error checking admin access for bot %s in %s/%s: %w", branchProtectionRobot, org, repo, err)
+				}
+				if !hasAdminAccess {
+					logger.Errorf("Bot %s does not have admin access in %s/%s with branch protection enabled", branchProtectionRobot, org, repo)
+					failing.Insert(orgRepo)
+				} else {
+					logger.Infof("Bot %s has admin access in %s/%s", branchProtectionRobot, org, repo)
+				}
 			} else {
-				logger.Infof("Bot %s has admin access in %s/%s", bot, org, repo)
+				logger.Infof("Branch protection is not enabled for %s/%s", org, repo)
 			}
-		} else {
-			logger.Infof("Branch protection is not enabled for %s/%s", org, repo)
 		}
 
 		if pluginAgent != nil {

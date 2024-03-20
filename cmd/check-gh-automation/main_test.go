@@ -333,7 +333,7 @@ func TestCheckRepos(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			logrus.Infof("Testing %s", tc.name)
-			failing, err := checkRepos(tc.repos, tc.bots, "openshift-ci", tc.ignore, tc.mode, client, logrus.NewEntry(logrus.New()), newFakePluginConfigAgent(), newFakeProwConfigAgent().Config().Tide.Queries.QueryMap(), newFakeProwConfigAgent())
+			failing, err := checkRepos(tc.repos, tc.bots, "openshift-ci", tc.ignore, tc.mode, true, client, logrus.NewEntry(logrus.New()), newFakePluginConfigAgent(), newFakeProwConfigAgent().Config().Tide.Queries.QueryMap(), newFakeProwConfigAgent())
 			if diff := cmp.Diff(tc.expectedErr, err, testhelper.EquateErrorMessage); diff != "" {
 				t.Fatalf("error doesn't match expected, diff: %s", diff)
 			}

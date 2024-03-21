@@ -328,6 +328,8 @@ func (c *ciDataClient) ListProwJobRunsSince(ctx context.Context, since *time.Tim
 		"FROM `openshift-gce-devel.ci_analysis_us.jobs` " +
 		`WHERE TIMESTAMP(prowjob_completion) > @Since 
            AND prowjob_url IS NOT NULL 
+           AND prowjob_start is NOT NULL
+           AND prowjob_completion is NOT NULL
            ORDER BY prowjob_completion_ts`
 	query := c.client.Query(queryString)
 	query.QueryConfig.Parameters = []bigquery.QueryParameter{

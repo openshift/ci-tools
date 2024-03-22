@@ -120,7 +120,7 @@ func (o *allJobsLoaderOptions) Run(ctx context.Context) error {
 
 	// Populate a channel with all the job runs we want to import, worker threads will pull
 	// from here until there's nothing left.
-	jobRunsToImportCh := make(chan *jobrunaggregatorapi.TestPlatformProwJobRow, jobCount)
+	jobRunsToImportCh := make(chan *jobrunaggregatorapi.TestPlatformProwJobRow, len(jobRunsToImport))
 	for i := range jobRunsToImport {
 		jr := jobRunsToImport[i]
 

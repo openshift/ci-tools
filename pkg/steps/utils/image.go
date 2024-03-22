@@ -5,9 +5,11 @@ import (
 	"fmt"
 
 	coreapi "k8s.io/api/core/v1"
+	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	imagev1 "github.com/openshift/api/image/v1"
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 func ImageDigestFor(client ctrlruntimeclient.Client, namespace func() string, name, tag string) func() (string, error) {
@@ -68,4 +70,18 @@ func FindStatusTag(is *imagev1.ImageStream, tag string) (*coreapi.ObjectReferenc
 		}, t.Items[0].Image
 	}
 	return nil, ""
+}
+
+func ImageForRef(ref v1.Refs, baseTag string) string {
+	return fmt.Sprintf("%s-%s.%s", baseTag, ref.Org, ref.Repo)
+}
+
+func ExtraRefForMetadata(refs []v1.Refs, metadata api.Metadata) v1.Refs {
+	for _, extraRef := range refs {
+		if extraRef.Repo == metadata.Repo && extraRef.Org == metadata.Org {
+			return extraRef
+		}
+	}
+	// in case no refs match the repo based on metadata, we need a fallback
+	return refs[0]
 }

@@ -1011,8 +1011,8 @@ func runtimeStepConfigsForBuild(
 		source := api.PipelineImageStreamTagReferenceSource
 		if mergedConfig { // We only care about these suffixes when building from multiple sources
 			ref = fmt.Sprintf("%s.%s", r.Org, r.Repo)
-			root = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", api.PipelineImageStreamTagReferenceRoot, ref))
-			source = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", api.PipelineImageStreamTagReferenceSource, ref))
+			root = api.PipelineImageStreamTagReference(utils.ImageForRef(r, string(api.PipelineImageStreamTagReferenceRoot)))
+			source = api.PipelineImageStreamTagReference(utils.ImageForRef(r, string(api.PipelineImageStreamTagReferenceSource)))
 		}
 		step := api.StepConfiguration{SourceStepConfiguration: &api.SourceStepConfiguration{
 			From: root,

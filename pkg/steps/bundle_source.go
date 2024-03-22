@@ -39,7 +39,7 @@ func (s *bundleSourceStep) Run(ctx context.Context) error {
 }
 
 func (s *bundleSourceStep) run(ctx context.Context) error {
-	source := fmt.Sprintf("%s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceSource)
+	source := fmt.Sprintf("%s:%s", api.PipelineImageStream, s.fromTag())
 	workingDir, err := getWorkingDir(s.client, source, s.jobSpec.Namespace())
 	if err != nil {
 		return fmt.Errorf("failed to get workingDir: %w", err)
@@ -48,13 +48,12 @@ func (s *bundleSourceStep) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	fromTag := api.PipelineImageStreamTagReferenceSource
-	fromDigest, err := resolvePipelineImageStreamTagReference(ctx, s.client, fromTag, s.jobSpec)
+	fromDigest, err := resolvePipelineImageStreamTagReference(ctx, s.client, s.fromTag(), s.jobSpec)
 	if err != nil {
 		return err
 	}
 	build := buildFromSource(
-		s.jobSpec, fromTag, api.PipelineImageStreamTagReferenceBundleSource,
+		s.jobSpec, s.fromTag(), api.PipelineImageStreamTagReferenceBundleSource,
 		buildapi.BuildSource{
 			Type:       buildapi.BuildSourceDockerfile,
 			Dockerfile: &dockerfile,
@@ -86,9 +85,18 @@ func replaceCommand(pullSpec, with string) string {
 	return fmt.Sprintf(`find . -type f -regex ".*\.\(yaml\|yml\)" -exec sed -i %s {} +`, sedSub)
 }
 
+func (s *bundleSourceStep) fromTag() api.PipelineImageStreamTagReference {
+	fromTag := api.PipelineImageStreamTagReferenceSource
+	if len(s.jobSpec.ExtraRefs) > 1 {
+		fromTag = api.PipelineImageStreamTagReference(utils.ImageForRef(
+			utils.ExtraRefForMetadata(s.jobSpec.ExtraRefs, s.releaseBuildConfig.Metadata), string(api.PipelineImageStreamTagReferenceSource)))
+	}
+	return fromTag
+}
+
 func (s *bundleSourceStep) bundleSourceDockerfile() (string, error) {
 	var dockerCommands []string
-	dockerCommands = append(dockerCommands, fmt.Sprintf("FROM %s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceSource))
+	dockerCommands = append(dockerCommands, fmt.Sprintf("FROM %s:%s", api.PipelineImageStream, s.fromTag()))
 	for _, sub := range s.config.Substitutions {
 		streamName, tagName, _ := s.releaseBuildConfig.DependencyParts(api.StepDependency{Name: sub.With}, nil)
 		replaceSpec, err := utils.ImageDigestFor(s.client, s.jobSpec.Namespace, streamName, tagName)()
@@ -101,7 +109,7 @@ func (s *bundleSourceStep) bundleSourceDockerfile() (string, error) {
 }
 
 func (s *bundleSourceStep) Requires() []api.StepLink {
-	links := []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReferenceSource)}
+	links := []api.StepLink{api.InternalImageLink(s.fromTag())}
 	for _, sub := range s.config.Substitutions {
 		imageStream, name, _ := s.releaseBuildConfig.DependencyParts(api.StepDependency{Name: sub.With}, nil)
 		if link := api.LinkForImage(imageStream, name); link != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -26,6 +27,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/kubernetes/pkg/credentialprovider"
+	"github.com/openshift/ci-tools/pkg/release/prerelease"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
 )
@@ -103,7 +105,13 @@ func (s *promotionStep) run(ctx context.Context) error {
 		logger.WithError(err).Warn("Failed to ensure namespaces to promote to in central registry.")
 	}
 
-	if _, err := steps.RunPod(ctx, s.client, getPromotionPod(imageMirrorTarget, s.jobSpec.Namespace(), s.name, s.nodeArchitectures)); err != nil {
+	version, err := prerelease.Stable4LatestMajorMinor(&http.Client{})
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to determine the sable release version, using 4.14 instead")
+		version = "4.14"
+	}
+
+	if _, err := steps.RunPod(ctx, s.client, getPromotionPod(imageMirrorTarget, s.jobSpec.Namespace(), s.name, version, s.nodeArchitectures)); err != nil {
 		return fmt.Errorf("unable to run promotion pod: %w", err)
 	}
 	return nil
@@ -200,7 +208,7 @@ func getPublicImageReference(dockerImageReference, publicDockerImageRepository s
 	return strings.Replace(dockerImageReference, splits[0], publicHost, 1)
 }
 
-func getPromotionPod(imageMirrorTarget map[string]string, namespace string, name string, nodeArchitectures []string) *coreapi.Pod {
+func getPromotionPod(imageMirrorTarget map[string]string, namespace string, name string, cliVersion string, nodeArchitectures []string) *coreapi.Pod {
 	keys := make([]string, 0, len(imageMirrorTarget))
 	for k := range imageMirrorTarget {
 		keys = append(keys, k)
@@ -214,7 +222,7 @@ func getPromotionPod(imageMirrorTarget map[string]string, namespace string, name
 	command := []string{"/bin/sh", "-c"}
 	args := []string{fmt.Sprintf("oc image mirror --keep-manifest-list --registry-config=%s --continue-on-error=true --max-per-registry=20 %s", filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey), strings.Join(images, " "))}
 
-	image := fmt.Sprintf("%s/%s/4.14:cli", api.DomainForService(api.ServiceRegistry), "ocp")
+	image := fmt.Sprintf("%s/%s/%s:cli", api.DomainForService(api.ServiceRegistry), "ocp", cliVersion)
 	nodeSelector := map[string]string{"kubernetes.io/arch": "amd64"}
 
 	archs := sets.New[string](nodeArchitectures...)

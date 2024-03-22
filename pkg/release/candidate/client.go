@@ -66,9 +66,15 @@ func ResolvePullSpec(client release.HTTPClient, candidate api.Candidate) (string
 }
 
 func ResolvePullSpecCommon(client release.HTTPClient, endpoint string, bounds *api.VersionBounds, relative int) (string, error) {
+	rel, err := ResolveReleaseCommon(client, endpoint, bounds, relative)
+	return rel.PullSpec, err
+}
+
+func ResolveReleaseCommon(client release.HTTPClient, endpoint string, bounds *api.VersionBounds, relative int) (Release, error) {
+	ret := Release{}
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
-		return "", err
+		return ret, err
 	}
 	req.Header.Set("Accept", "application/json")
 	q := req.URL.Query()
@@ -84,23 +90,22 @@ func ResolvePullSpecCommon(client release.HTTPClient, endpoint string, bounds *a
 	logrus.Infof("Requesting a release from %s", req.URL.String())
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to request latest release: %w", err)
+		return ret, fmt.Errorf("failed to request latest release: %w", err)
 	}
 	if resp == nil {
-		return "", errors.New("failed to request latest release: got a nil response")
+		return ret, errors.New("failed to request latest release: got a nil response")
 	}
 	defer resp.Body.Close()
 	data, readErr := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("failed to request latest release: server responded with %d: %s", resp.StatusCode, data)
+		return ret, fmt.Errorf("failed to request latest release: server responded with %d: %s", resp.StatusCode, data)
 	}
 	if readErr != nil {
-		return "", fmt.Errorf("failed to read response body: %w", readErr)
+		return ret, fmt.Errorf("failed to read response body: %w", readErr)
 	}
-	release := Release{}
-	err = json.Unmarshal(data, &release)
+	err = json.Unmarshal(data, &ret)
 	if err != nil {
-		return "", fmt.Errorf("failed to unmarshal release: %w (%s)", err, data)
+		return ret, fmt.Errorf("failed to unmarshal release: %w (%s)", err, data)
 	}
-	return release.PullSpec, nil
+	return ret, nil
 }

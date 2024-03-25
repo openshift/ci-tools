@@ -27,9 +27,9 @@ type KeywordsListItem struct {
 
 const reviewRequestWorkflow = "B03KCKGCBC7"
 
-// Handler returns a handler that knows how to respond to new messages
+// MessageHandler returns a handler that knows how to respond to new messages
 // in forum-ocp-testplatform channel that mention @dptp-helpdesk.
-func Handler(client messagePoster, keywordsConfig KeywordsConfig, helpdeskAlias, forumChannelId string, requireWorkflowsInForum bool) events.PartialHandler {
+func MessageHandler(client messagePoster, keywordsConfig KeywordsConfig, helpdeskAlias, forumChannelId string, requireWorkflowsInForum bool) events.PartialHandler {
 	return events.PartialHandlerFunc("helpdesk",
 		func(callback *slackevents.EventsAPIEvent, logger *logrus.Entry) (handled bool, err error) {
 			log := logger.WithField("handler", "helpdesk-message")

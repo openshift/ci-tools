@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
@@ -38,6 +39,10 @@ import (
 	interactionrouter "github.com/openshift/ci-tools/pkg/slack/interactions/router"
 )
 
+const (
+	appCIContextName = string(api.ClusterAPPCI)
+)
+
 type options struct {
 	port int
 
@@ -45,6 +50,7 @@ type options struct {
 	gracePeriod            time.Duration
 	instrumentationOptions prowflagutil.InstrumentationOptions
 	jiraOptions            prowflagutil.JiraOptions
+	kubernetesOptions      prowflagutil.KubernetesOptions
 
 	prowconfig configflagutil.ConfigOptions
 
@@ -77,7 +83,7 @@ func (o *options) Validate() error {
 		}
 	}
 
-	return nil
+	return o.kubernetesOptions.Validate(false)
 }
 
 func gatherOptions(fs *flag.FlagSet, args ...string) options {
@@ -99,6 +105,8 @@ func gatherOptions(fs *flag.FlagSet, args ...string) options {
 	fs.StringVar(&o.helpdeskAlias, "helpdesk-alias", "@dptp-helpdesk", "Alias for helpdesk user(s) beginning with '@'")
 	fs.StringVar(&o.forumChannelId, "forum-channel-id", "CBN38N3MW", "Channel ID for #forum-ocp-testplatform")
 	fs.BoolVar(&o.requireWorkflowsInForum, "require-workflows-in-forum", true, "Require the use of workflows in the designated forum channel")
+
+	o.kubernetesOptions.AddFlags(fs)
 
 	if err := fs.Parse(args); err != nil {
 		logrus.WithError(err).Fatal("Could not parse args.")
@@ -128,6 +136,11 @@ func main() {
 	configAgent, err := o.prowconfig.ConfigAgent()
 	if err != nil {
 		logrus.WithError(err).Fatal("Error starting Prow config agent.")
+	}
+
+	kubeClient, err := o.kubernetesOptions.ClusterClientForContext(appCIContextName, false)
+	if err != nil {
+		logrus.WithError(err).Fatal("could not load kube config")
 	}
 
 	if err := secret.Add(o.slackTokenPath, o.slackSigningSecretPath); err != nil {
@@ -174,11 +187,12 @@ func main() {
 	// handle the root to allow for a simple uptime probe
 	mux.Handle("/", handler(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) { writer.WriteHeader(http.StatusOK) })))
 	mux.Handle("/slack/interactive-endpoint", handler(handleInteraction(secret.GetTokenGenerator(o.slackSigningSecretPath), interactionrouter.ForModals(issueFiler, slackClient))))
-	mux.Handle("/slack/events-endpoint", handler(handleEvent(secret.GetTokenGenerator(o.slackSigningSecretPath), eventrouter.ForEvents(slackClient, configAgent.Config, gcsClient, keywordsConfig, o.helpdeskAlias, o.forumChannelId, o.requireWorkflowsInForum))))
+	mux.Handle("/slack/events-endpoint", handler(handleEvent(secret.GetTokenGenerator(o.slackSigningSecretPath), eventrouter.ForEvents(slackClient, kubeClient, configAgent.Config, gcsClient, keywordsConfig, o.helpdeskAlias, o.forumChannelId, o.requireWorkflowsInForum))))
 	server := &http.Server{Addr: ":" + strconv.Itoa(o.port), Handler: mux}
 
 	health.ServeReady()
 
+	logrus.Debug("Server ready.")
 	interrupts.ListenAndServe(server, o.gracePeriod)
 	interrupts.WaitForGracefulShutdown()
 }

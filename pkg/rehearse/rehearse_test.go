@@ -14,6 +14,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
 	prowconfig "k8s.io/test-infra/prow/config"
 	utilpointer "k8s.io/utils/pointer"
@@ -414,6 +415,7 @@ func TestCreatePairs(t *testing.T) {
 		expectedErr    error
 		namespacedName types.NamespacedName
 		fakeClient     ctrlruntimeclient.Client
+		ignoredTargets sets.Set[string]
 	}{
 		{
 			name:        "no pairs",
@@ -480,11 +482,58 @@ func TestCreatePairs(t *testing.T) {
 					}},
 			).Build(),
 		},
+		{
+			name:        "image in ignoredTargets",
+			expected:    nil,
+			expectedErr: nil,
+			namespacedName: types.NamespacedName{
+				Namespace: "ci",
+				Name:      "ci-operator:latest",
+			},
+			fakeClient: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
+				&imagev1.ImageStreamTag{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "ci",
+						Name:      "ci-operator:latest",
+					},
+					Image: imagev1.Image{ObjectMeta: metav1.ObjectMeta{
+						Namespace: "ci",
+						Name:      "sha256:th15i5ah45h",
+					},
+					}},
+			).Build(),
+			ignoredTargets: sets.New("ci/ci-operator:latest"),
+		},
+		{
+			name: "image not in ignoredTargets",
+			expected: []string{
+				"registry.ci.openshift.org/ci/ci-operator@sha256:th15i5ah45h=quay.io/openshift/ci:ci_ci-operator_latest",
+				"registry.ci.openshift.org/ci/ci-operator@sha256:th15i5ah45h=quay.io/openshift/ci:20000101_sha256_th15i5ah45h",
+			},
+			expectedErr: nil,
+			namespacedName: types.NamespacedName{
+				Namespace: "ci",
+				Name:      "ci-operator:latest",
+			},
+			fakeClient: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
+				&imagev1.ImageStreamTag{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "ci",
+						Name:      "ci-operator:latest",
+					},
+					Image: imagev1.Image{ObjectMeta: metav1.ObjectMeta{
+						Namespace: "ci",
+						Name:      "sha256:th15i5ah45h",
+					},
+					}},
+			).Build(),
+			ignoredTargets: sets.New("ci/ci-operator:random"),
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			timeForTest := time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
-			actual, err := createPairs(context.TODO(), tc.namespacedName, tc.fakeClient, timeForTest, logrus.NewEntry(logrus.StandardLogger()))
+			actual, err := createPairs(context.TODO(), tc.namespacedName, tc.ignoredTargets, tc.fakeClient, timeForTest, logrus.NewEntry(logrus.StandardLogger()))
 			if diff := cmp.Diff(err, tc.expectedErr, testhelper.EquateErrorMessage); diff != "" {
 				t.Fatalf("expectedErr differs from actual: %s", diff)
 			}

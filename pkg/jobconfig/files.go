@@ -476,9 +476,15 @@ func mergePresubmits(old, new *prowconfig.Presubmit) prowconfig.Presubmit {
 	merged.SkipIfOnlyChanged = old.SkipIfOnlyChanged
 	merged.MaxConcurrency = old.MaxConcurrency
 	merged.SkipReport = old.SkipReport
-	if old.Cluster != "" {
-		merged.Cluster = old.Cluster
-	}
+	merged.Cluster = func() string {
+		if val, exists := new.Labels[cioperatorapi.ClusterLabel]; exists {
+			return val
+		} else if old.Cluster != "" {
+			return old.Cluster
+		}
+		return ""
+	}()
+
 	if new.RunIfChanged != "" || new.SkipIfOnlyChanged != "" || new.Annotations["pipeline_run_if_changed"] != "" {
 		merged.RunIfChanged = new.RunIfChanged
 		merged.SkipIfOnlyChanged = new.SkipIfOnlyChanged

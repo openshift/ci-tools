@@ -274,60 +274,6 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 	}
 }
 
-func TestGeneratePostSubmitForPromotion(t *testing.T) {
-	// The following configuration are fixed so far. Move them into a test case
-	// whenever they need to change.
-	ciopConfig := ciop.ReleaseBuildConfiguration{
-		Tests:                  []ciop.TestStepConfiguration{},
-		Images:                 []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
-		PromotionConfiguration: &ciop.PromotionConfiguration{Targets: []ciop.PromotionTarget{{Namespace: "ci"}}},
-	}
-	generateOption := func(options *generatePostsubmitOptions) {}
-
-	tests := []struct {
-		name       string
-		repoInfo   *ProwgenInfo
-		jobRelease string
-	}{
-		{
-			name: "spawn on build10 cluster",
-			repoInfo: &ProwgenInfo{
-				Metadata: ciop.Metadata{
-					Org:    "organization",
-					Repo:   "repository",
-					Branch: "branch",
-				},
-				Config: config.Prowgen{
-					MultiArch: true,
-				},
-			},
-		},
-		{
-			name: "default cluster only",
-			repoInfo: &ProwgenInfo{
-				Metadata: ciop.Metadata{
-					Org:    "organization",
-					Repo:   "repository",
-					Branch: "branch",
-				},
-				Config: config.Prowgen{},
-			},
-		},
-	}
-	for _, tc := range tests {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			newJobBaseBuilder := NewProwJobBaseBuilderForPromotion(&ciopConfig, tc.repoInfo, newFakePodSpecBuilder())
-			postsubmit, err := generatePostsubmitsForPromotion(newJobBaseBuilder, tc.repoInfo, generateOption)
-			if err != nil {
-				t.Fatalf("generate promotion postsubmit: %s", err.Error())
-			} else {
-				testhelper.CompareWithFixture(t, postsubmit)
-			}
-		})
-	}
-}
-
 const (
 	cron = "0 0 * * *"
 )
@@ -612,11 +558,7 @@ func TestGenerateJobs(t *testing.T) {
 				PromotionConfiguration: &ciop.PromotionConfiguration{},
 			},
 			repoInfo: &ProwgenInfo{
-				Config: config.Prowgen{
-					AdditionalArchitectures: []ciop.ReleaseArchitecture{
-						api.ReleaseArchitectureARM64,
-					},
-				},
+				Config: config.Prowgen{MultiArch: true},
 				Metadata: ciop.Metadata{
 					Org:    "organization",
 					Repo:   "repository",

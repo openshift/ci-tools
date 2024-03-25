@@ -1,10 +1,8 @@
 package prowgen
 
 import (
-	"fmt"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	utilpointer "k8s.io/utils/pointer"
@@ -67,7 +65,6 @@ func hasNoBuilds(c *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo) 
 func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo, podSpecGenerator CiOperatorPodSpecGenerator) *prowJobBaseBuilder {
 	b := &prowJobBaseBuilder{
 		PodSpec: podSpecGenerator,
-
 		base: prowconfig.JobBase{
 			Agent:  string(prowv1.KubernetesAgent),
 			Labels: map[string]string{},
@@ -119,7 +116,8 @@ func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, 
 func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo, podSpecGenerator CiOperatorPodSpecGenerator, test cioperatorapi.TestStepConfiguration) *prowJobBaseBuilder {
 	p := NewProwJobBaseBuilder(configSpec, info, podSpecGenerator)
 	if test.Cluster != "" {
-		p = p.Cluster(test.Cluster)
+		p.Cluster(test.Cluster)
+		p.WithLabel(cioperatorapi.ClusterLabel, string(test.Cluster))
 	}
 	p.testName = test.As
 
@@ -134,10 +132,6 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 
 	p.PodSpec.Add(Secrets(test.Secret), Secrets(test.Secrets...))
 	p.PodSpec.Add(Targets(test.As))
-
-	if test.Cluster != "" {
-		p.WithLabel(cioperatorapi.ClusterLabel, string(test.Cluster))
-	}
 
 	if test.ClusterClaim != nil {
 		p.PodSpec.Add(Claims())
@@ -240,15 +234,6 @@ func (p *prowJobBaseBuilder) WithLabel(key, value string) *prowJobBaseBuilder {
 // Build builds and returns the final JobBase instance
 func (p *prowJobBaseBuilder) Build(namePrefix string) prowconfig.JobBase {
 	p.base.Name = p.info.JobName(namePrefix, p.testName)
-	switch p.base.Cluster {
-	case string(cioperatorapi.ClusterARM01):
-		p.PodSpec = p.PodSpec.Add(
-			func(spec *corev1.PodSpec) error {
-				spec.Containers[0].Image = fmt.Sprintf("%s/ci/ci-operator-arm64:latest", cioperatorapi.ServiceDomainArm01Registry)
-				return nil
-			},
-		)
-	}
 	p.base.Spec = p.PodSpec.MustBuild()
 	return p.base
 }

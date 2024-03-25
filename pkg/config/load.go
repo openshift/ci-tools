@@ -11,8 +11,6 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/util"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
@@ -34,26 +32,8 @@ type Prowgen struct {
 	Expose bool `json:"expose,omitempty"`
 	// Rehearsals declares any disabled rehearsals for jobs
 	Rehearsals Rehearsals `json:"rehearsals,omitempty"`
-	// Set which architecture should the images be promoted from
-	AdditionalArchitectures []cioperatorapi.ReleaseArchitecture `json:"additional_architectures"`
 	// If true build images targeting multiple architectures
 	MultiArch bool `json:"multi_arch"`
-}
-
-func (p *Prowgen) Validate() error {
-	errs := make([]error, 0)
-	invalidArchs := make([]string, 0, len(p.AdditionalArchitectures))
-	for _, arch := range p.AdditionalArchitectures {
-		if !arch.IsValid() {
-			invalidArchs = append(invalidArchs, string(arch))
-		}
-	}
-	if len(invalidArchs) > 0 {
-		e := fmt.Errorf("architectures %s are not valid, available ones are: %s",
-			strings.Join(invalidArchs, ", "), strings.Join(cioperatorapi.GetAvailableArchitectures(), ", "))
-		errs = append(errs, e)
-	}
-	return utilerrors.NewAggregate(errs)
 }
 
 func (p *Prowgen) MergeDefaults(defaults *Prowgen) {
@@ -65,9 +45,6 @@ func (p *Prowgen) MergeDefaults(defaults *Prowgen) {
 	}
 	if defaults.Rehearsals.DisableAll {
 		p.Rehearsals.DisableAll = true
-	}
-	if defaults.AdditionalArchitectures != nil {
-		p.AdditionalArchitectures = defaults.AdditionalArchitectures
 	}
 	if defaults.MultiArch {
 		p.MultiArch = true
@@ -86,9 +63,6 @@ func LoadProwgenConfig(folder string) (*Prowgen, error) {
 	if err == nil {
 		if err := yaml.Unmarshal(b, &pConfig); err != nil {
 			return nil, fmt.Errorf("prowgen config found in path %sbut couldn't unmarshal it: %w", path, err)
-		}
-		if err := pConfig.Validate(); err != nil {
-			return nil, fmt.Errorf("prowgen config found in path %s is not valid: %w", path, err)
 		}
 	}
 

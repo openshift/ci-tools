@@ -10,6 +10,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/git/v2"
 	"k8s.io/test-infra/prow/github"
@@ -148,6 +149,18 @@ func serverFromOptions(o options) (*server, error) {
 		logrus.WithError(err).Fatal("failed to create QuayIOImageHelper")
 	}
 	rehearsalConfig.QuayIOImageHelper = quayIOImageHelper
+
+	if o.ciImagesMirrorConfigPath != "" {
+		if c, err := quayiociimagesdistributor.LoadConfig(o.ciImagesMirrorConfigPath); err != nil {
+			return nil, fmt.Errorf("failed to load config file %s: %w", o.ciImagesMirrorConfigPath, err)
+		} else {
+			s := sets.New[string]()
+			for k := range c.SupplementalCIImages {
+				s.Insert(k)
+			}
+			rehearsalConfig.IgnoredTargets = s
+		}
+	}
 
 	return &server{
 		ghc:             ghc,
@@ -397,7 +410,7 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 						continue
 					}
 
-					success, err := rc.RehearseJobs(candidate, candidatePath, prRefs, imageStreamTags, s.rehearsalConfig.MirrorOptions, s.rehearsalConfig.QuayIOImageHelper, presubmitsToRehearse, changedTemplates, changedClusterProfiles, prConfig.Prow, logger)
+					success, err := rc.RehearseJobs(candidate, candidatePath, prRefs, imageStreamTags, s.rehearsalConfig.MirrorOptions, s.rehearsalConfig.QuayIOImageHelper, s.rehearsalConfig.IgnoredTargets, presubmitsToRehearse, changedTemplates, changedClusterProfiles, prConfig.Prow, logger)
 					if err != nil {
 						logger.WithError(err).Error("couldn't rehearse jobs")
 						s.reportFailure("failed to create rehearsal jobs", err, org, repo, user, number, true, false, logger)

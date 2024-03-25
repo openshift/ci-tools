@@ -55,6 +55,7 @@ type options struct {
 
 	webhookSecretFile        string
 	registryConfig           string
+	ciImagesMirrorConfigPath string
 	githubEventServerOptions githubeventserver.Options
 	github                   prowflagutil.GitHubOptions
 	config                   configflagutil.ConfigOptions
@@ -83,6 +84,7 @@ func gatherOptions() (options, error) {
 	fs.Var(&o.stickyLabelAuthors, "sticky-label-author", "PR Author for which the 'rehearsals-ack' label will not be removed upon a new push. Can be passed multiple times.")
 	fs.StringVar(&o.webhookSecretFile, "hmac-secret-file", "/etc/webhook/hmac", "Path to the file containing the GitHub HMAC secret.")
 	fs.StringVar(&o.registryConfig, "registry-config", "", "Path to the file of registry credentials")
+	fs.StringVar(&o.ciImagesMirrorConfigPath, "ci-images-mirror-config-path", "", "Path to ci-image-mirror config path file")
 
 	fs.StringVar(&o.gcsBucket, "gcs-bucket", "test-platform-results", "GCS Bucket to upload affected jobs list")
 	fs.StringVar(&o.gcsCredentialsFile, "gcs-credentials-file", "/etc/gcs/service-account.json", "GCS Credentials file to upload affected jobs list")
@@ -190,7 +192,7 @@ func dryRun(o options, logger *logrus.Entry) error {
 			return fmt.Errorf("%s: %w", "ERROR: pj-rehearse: failed to validate rehearsal jobs", err)
 		}
 
-		_, err := rc.RehearseJobs(candidate, candidatePath, prRefs, imageStreamTags, quayiociimagesdistributor.OCImageMirrorOptions{}, nil, presubmitsToRehearse, changedTemplates, changedClusterProfiles, prConfig.Prow, logger)
+		_, err := rc.RehearseJobs(candidate, candidatePath, prRefs, imageStreamTags, quayiociimagesdistributor.OCImageMirrorOptions{}, nil, nil, presubmitsToRehearse, changedTemplates, changedClusterProfiles, prConfig.Prow, logger)
 		return err
 	}
 

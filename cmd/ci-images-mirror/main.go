@@ -25,7 +25,6 @@ import (
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
-	"sigs.k8s.io/yaml"
 
 	imagev1 "github.com/openshift/api/image/v1"
 
@@ -34,7 +33,6 @@ import (
 	quayiociimagesdistributor "github.com/openshift/ci-tools/pkg/controller/quay_io_ci_images_distributor"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/util"
-	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 var allControllers = sets.New[string](
@@ -54,7 +52,7 @@ type options struct {
 	gracePeriod                      time.Duration
 	onlyValidManifestV2Images        bool
 	configFile                       string
-	config                           *Config
+	config                           *quayiociimagesdistributor.CIImagesMirrorConfig
 }
 
 func (o *options) addDefaults() {
@@ -117,7 +115,7 @@ func (o *options) validate() error {
 		errs = append(errs, fmt.Errorf("file %s does not exist", o.registryConfig))
 	}
 	if o.configFile != "" {
-		if c, err := loadConfig(o.configFile); err != nil {
+		if c, err := quayiociimagesdistributor.LoadConfig(o.configFile); err != nil {
 			errs = append(errs, fmt.Errorf("failed to load config file %s: %w", o.configFile, err))
 		} else {
 			o.config = c
@@ -126,60 +124,8 @@ func (o *options) validate() error {
 	return utilerrors.NewAggregate(errs)
 }
 
-func loadConfig(file string) (*Config, error) {
-	bytes, err := gzip.ReadFileMaybeGZIP(file)
-	if err != nil {
-		return nil, err
-	}
-	c := &Config{}
-	if err := yaml.UnmarshalStrict(bytes, c); err != nil {
-		return nil, err
-	}
-	var errs []error
-	for k, v := range c.SupplementalCIImages {
-		splits := strings.Split(k, "/")
-		if len(splits) != 2 || splits[0] == "" || splits[1] == "" {
-			errs = append(errs, fmt.Errorf("invalid target: %s", k))
-		} else {
-			splits = strings.Split(splits[1], ":")
-			if len(splits) != 2 || splits[0] == "" || splits[1] == "" {
-				errs = append(errs, fmt.Errorf("invalid target: %s", k))
-			}
-		}
-		if v.As != "" {
-			errs = append(errs, errors.New("as cannot be set"))
-		}
-		if v.Image == "" {
-			if v.Namespace == "" {
-				errs = append(errs, errors.New("namespace for the source must be set"))
-			}
-			if v.Name == "" {
-				errs = append(errs, errors.New("name for the source must be set"))
-			}
-			if v.Tag == "" {
-				errs = append(errs, errors.New("tag for the source must be set"))
-			}
-		}
-	}
-	if len(errs) > 0 {
-		return nil, utilerrors.NewAggregate(errs)
-	}
-	return c, nil
-}
-
-type Config struct {
-	SupplementalCIImages map[string]Source `json:"supplementalCIImages"`
-}
-
-type Source struct {
-	api.ImageStreamTagReference `json:",inline"`
-	// Image is an image that can be pulled in either form of tag or digest.
-	// When image is set, Tag will be ignored.
-	Image string `json:"image"`
-}
-
 type supplementalCIImagesService interface {
-	Mirror(m map[string]Source) error
+	Mirror(m map[string]quayiociimagesdistributor.Source) error
 }
 
 type supplementalCIImagesServiceWithMirrorStore struct {
@@ -187,7 +133,7 @@ type supplementalCIImagesServiceWithMirrorStore struct {
 	logger      *logrus.Entry
 }
 
-func (s *supplementalCIImagesServiceWithMirrorStore) Mirror(m map[string]Source) error {
+func (s *supplementalCIImagesServiceWithMirrorStore) Mirror(m map[string]quayiociimagesdistributor.Source) error {
 	s.logger.Info("Mirroring supplemental CI images ...")
 	for k, v := range m {
 		source := v.Image

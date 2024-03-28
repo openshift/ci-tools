@@ -4,14 +4,13 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	imagev1 "github.com/openshift/api/image/v1"
@@ -20,7 +19,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
-	"github.com/openshift/ci-tools/pkg/util"
 )
 
 // inputImageTagStep will ensure that a tag exists
@@ -100,23 +98,11 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 		return fmt.Errorf("failed to create imagestreamtag for input image: %w", err)
 	}
 
-	// Wait image is ready
-	importCtx, cancel := context.WithTimeout(ctx, 35*time.Minute)
-	defer cancel()
-	if err := wait.PollImmediateUntil(10*time.Second, func() (bool, error) {
-		pipeline := &imagev1.ImageStream{}
-		if err := s.client.Get(importCtx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: api.PipelineImageStream}, pipeline); err != nil {
-			return false, err
-		}
-		_, exists, _ := util.ResolvePullSpec(pipeline, string(s.config.To), true)
-		if !exists {
-			logrus.Debugf("Waiting to import %s ...", ist.ObjectMeta.Name)
-		}
-		return exists, nil
-	}, importCtx.Done()); err != nil {
-		logrus.WithError(err).Errorf("Could not resolve tag %s in imagestream %s.", s.config.To, api.PipelineImageStream)
-		return err
+	logrus.Debugf("Waiting to import tags on imagestream (after creating pipeline) %s/%s ...", s.jobSpec.Namespace(), api.PipelineImageStream)
+	if err := utils.WaitForImportingISTag(ctx, s.client, s.jobSpec.Namespace(), api.PipelineImageStream, nil, sets.New[string](), utils.DefaultImageImportTimeout); err != nil {
+		return fmt.Errorf("failed to wait for importing imagestreamtags on %s/%s: %w", s.jobSpec.Namespace(), api.PipelineImageStream, err)
 	}
+	logrus.Debugf("Imported tags on imagestream (after creating pipeline) %s/%s", s.jobSpec.Namespace(), api.PipelineImageStream)
 	return nil
 }
 

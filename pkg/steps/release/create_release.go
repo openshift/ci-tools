@@ -12,7 +12,7 @@ import (
 	rbacapi "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	imageapi "github.com/openshift/api/image/v1"
@@ -148,38 +148,15 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 
 	streamName := api.ReleaseStreamFor(s.name)
 	stable := &imageapi.ImageStream{}
-	var cvo string
-	cvoExists := false
-	cliExists := false
-	// waiting for importing the images
-	// 2~3 mins: build01 on aws imports images from api.ci on gcp
-	importCtx, cancel := context.WithTimeout(ctx, 15*time.Minute)
-	defer cancel()
-	if err := wait.PollImmediateUntil(10*time.Second, func() (bool, error) {
-		if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: streamName}, stable); err != nil {
-			return false, err
-		}
-		cvo, cvoExists, _ = util.ResolvePullSpec(stable, "cluster-version-operator", true)
-		_, cliExists, _ = util.ResolvePullSpec(stable, "cli", true)
-		ret := cvoExists && cliExists
-		if !ret {
-			logrus.Infof("Waiting to import cluster-version-operator and cli ...")
-		}
-		return ret, nil
-	}, importCtx.Done()); err != nil {
-		if wait.ErrWaitTimeout == err {
-			if !cliExists {
-				return results.ForReason("missing_cli").WithError(err).Errorf("no 'cli' image was tagged into the %s stream, that image is required for building a release", streamName)
-			}
-			logrus.Infof("No %s release image necessary, %s image stream does not include a cluster-version-operator image", s.name, streamName)
-			return nil
-		} else if kerrors.IsNotFound(err) {
-			// if a user sets IMAGE_FORMAT=... we skip importing the image stream contents, which prevents us from
-			// generating a release image.
-			logrus.Infof("No %s release image can be generated when the %s image stream was skipped", s.name, streamName)
-			return nil
-		}
-		return results.ForReason("missing_release").WithError(err).Errorf("could not resolve imagestream %s: %v", streamName, err)
+	logrus.Debugf("Waiting to import tags on imagestream (before creating release) %s/%s ...", s.jobSpec.Namespace(), streamName)
+	if err := utils.WaitForImportingISTag(ctx, s.client, s.jobSpec.Namespace(), streamName, stable, sets.New("cluster-version-operator", "cli"), utils.DefaultImageImportTimeout); err != nil {
+		return fmt.Errorf("failed to wait for importing imagestreamtags on %s/%s: %w", s.jobSpec.Namespace(), streamName, err)
+	}
+	logrus.Debugf("Imported tags on imagestream (before creating release) %s/%s", s.jobSpec.Namespace(), streamName)
+	cvo, _, _ := util.ResolvePullSpec(stable, "cluster-version-operator", true)
+	if cvo == "" {
+		// should never happen
+		return fmt.Errorf("failed to resolve for importing imagestreamtags on %s/%s: %w", s.jobSpec.Namespace(), streamName, err)
 	}
 
 	// we want to expose the release payload as a CI version that looks just like

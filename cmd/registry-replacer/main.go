@@ -6,11 +6,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
@@ -22,6 +24,7 @@ import (
 	"k8s.io/test-infra/prow/flagutil"
 	pgithub "k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/labels"
+	"k8s.io/test-infra/prow/pod-utils/gcs"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/builder/pkg/build/builder/util/dockerfile"
@@ -187,6 +190,29 @@ func main() {
 	}
 	if err := utilerrors.NewAggregate(errs); err != nil {
 		logrus.WithError(err).Fatal("Encountered errors")
+	}
+
+	if opts.createPR {
+		var (
+			pruneUnusedReplacements          = opts.pruneUnusedReplacements
+			ensureCorrectPromotionDockerfile = opts.ensureCorrectPromotionDockerfile
+			applyReplacementsToDockerfile    = opts.applyReplacements
+			pruneOCPBuilderReplacements      = opts.pruneOCPBuilderReplacements
+			pruneUnusedBaseImages            = opts.pruneUnusedBaseImages
+		)
+
+		gcsFileLocation := uploadRegistryReplacerChangesToGCS(
+			pruneUnusedReplacements,
+			ensureCorrectPromotionDockerfile,
+			applyReplacementsToDockerfile,
+			pruneOCPBuilderReplacements,
+			pruneUnusedBaseImages,
+			"Your-GCS-Bucket-Name-Here",
+			"Path/To/Your/Credentials.json",
+			"Your-GCS-Path-Prefix-Here",
+			logrus.WithField("component", "registry-replacer"),
+		)
+		logrus.Infof("Uploaded changes summary to GCS at: %s", gcsFileLocation)
 	}
 
 	if !opts.createPR {
@@ -611,6 +637,60 @@ func pruneOCPBuilderReplacements(config *api.ReleaseBuildConfiguration) error {
 
 		return false, nil
 	})
+}
+
+func uploadRegistryReplacerChangesToGCS(
+	pruneUnusedReplacements bool,
+	ensureCorrectPromotionDockerfile bool,
+	applyReplacementsToDockerfile bool,
+	pruneOCPBuilderReplacements bool,
+	pruneUnusedBaseImages bool,
+	bucketName string,
+	credentialsFilePath string,
+	gcsPathPrefix string,
+	logger *logrus.Entry,
+) string {
+	var changesSummary strings.Builder
+	changesSummary.WriteString("Registry-Replacer made the following changes:")
+
+	if applyReplacementsToDockerfile {
+		changesSummary.WriteString("\n* Applied replacements to Dockerfiles for various reasons such as optimizing image sources and ensuring compliance with best practices.")
+	}
+
+	if pruneUnusedReplacements {
+		changesSummary.WriteString("\n* Pruned existing replacements that do not match any FROM directive in the Dockerfile.")
+	}
+	if ensureCorrectPromotionDockerfile {
+		changesSummary.WriteString("\n* Ensured Dockerfiles used for promotion match those configured in the OCP build data repository.")
+	}
+
+	if pruneOCPBuilderReplacements {
+		changesSummary.WriteString("\n* Removed all replacements that target the ocp/builder imagestream.")
+	}
+	if pruneUnusedBaseImages {
+		changesSummary.WriteString("\n* Pruned unused base images from the configuration.")
+	}
+
+	// Define the file location on GCS with a timestamp to ensure uniqueness
+	fileLocation := fmt.Sprintf("%s/registry-replacer-changes-%s.txt", gcsPathPrefix, time.Now().Format("20060102-150405"))
+
+	// Prepare the content for upload
+	uploadTargets := map[string]gcs.UploadFunc{
+		fileLocation: gcs.DataUpload(func() (io.ReadCloser, error) {
+			return io.NopCloser(strings.NewReader(changesSummary.String())), nil
+		}),
+	}
+
+	// Specify an empty slice for options as we don't have specific options to pass.
+	var uploadOptions []string
+
+	// Attempt the upload to GCS, including the empty slice for options
+	if err := gcs.Upload(context.Background(), bucketName, credentialsFilePath, "", uploadOptions, uploadTargets); err != nil {
+		logger.WithError(err).Error("Failed to upload registry-replacer changes summary to GCS")
+		return ""
+	}
+
+	return fileLocation
 }
 
 type asDirectiveFilter func(asDirectiveValue string, inputKey string) (keep bool, err error)

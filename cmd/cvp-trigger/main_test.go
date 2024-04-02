@@ -180,6 +180,7 @@ func Test_options_validate(t *testing.T) {
 		packageName             string
 		prowConfigPath          string
 		customScorecardTestcase string
+		enableHybridOverlay     string
 		dryRun                  bool
 	}
 	tests := []struct {
@@ -200,6 +201,7 @@ func Test_options_validate(t *testing.T) {
 				packageName:             "foo",
 				channel:                 "bar",
 				customScorecardTestcase: "somescorecard",
+				enableHybridOverlay:     "true",
 				dryRun:                  false,
 			},
 			wantErr: false,
@@ -419,6 +421,7 @@ func Test_options_validate(t *testing.T) {
 				operatorPackageName:     tt.fields.packageName,
 				outputPath:              tt.fields.outputPath,
 				customScorecardTestcase: tt.fields.customScorecardTestcase,
+				enableHybridOverlay:     tt.fields.enableHybridOverlay,
 				dryRun:                  tt.fields.dryRun,
 			}
 			if err := o.validateOptions(); (err != nil) != tt.wantErr {

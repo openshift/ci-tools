@@ -61,6 +61,7 @@ CVP Trigger must load the configuration for the
   where the ephemeral cluster will be created.
 - `RELEASE_IMAGE_LATEST`: Optional. A full pullspec of a release payload image
   which will be used when provisioning the ephemeral testing cluster.
+- `ENABLE_HYBRID_OVERLAY`: Optional. Enables the hybrid overlay feature on a running cluster.
 
 #### Parameters specifying optional operator to be installed on OCP cluster
 

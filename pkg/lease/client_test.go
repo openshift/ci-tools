@@ -2,11 +2,11 @@ package lease
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/util/diff"
-	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 func TestAcquire(t *testing.T) {
@@ -16,7 +16,7 @@ func TestAcquire(t *testing.T) {
 	if _, err := client.Acquire("rtype", 1, ctx, nil); err != nil {
 		t.Fatal(err)
 	}
-	expected := []string{"acquire owner rtype free leased random"}
+	expected := []string{"acquireWaitWithPriority owner rtype free leased random"}
 	if !reflect.DeepEqual(calls, expected) {
 		t.Fatalf("wrong calls to the boskos client: %v", diff.ObjectDiff(calls, expected))
 	}
@@ -24,7 +24,7 @@ func TestAcquire(t *testing.T) {
 		t.Fatal(err)
 	}
 	expected = []string{
-		"acquire owner rtype free leased random",
+		"acquireWaitWithPriority owner rtype free leased random",
 		"updateone owner rtype_0 leased 0",
 	}
 	if !reflect.DeepEqual(calls, expected) {
@@ -43,7 +43,7 @@ func TestAcquire(t *testing.T) {
 func TestHeartbeatCancel(t *testing.T) {
 	ctx := context.Background()
 	var calls []string
-	client := NewFakeClient("owner", "url", 0, sets.New[string]("updateone owner rtype_0 leased 0"), &calls)
+	client := NewFakeClient("owner", "url", 0, map[string]error{"updateone owner rtype_0 leased 0": errors.New("injected error")}, &calls)
 	var called bool
 	if _, err := client.Acquire("rtype", 1, ctx, func() { called = true }); err != nil {
 		t.Fatal(err)
@@ -61,48 +61,48 @@ func TestHeartbeatRetries(t *testing.T) {
 		name     string
 		success  bool
 		requests int
-		failures []string
+		failures map[string]error
 	}{{
 		name:     "requests == retries, should succeed",
 		requests: 3,
 		success:  true,
-		failures: []string{
-			"updateone owner rtype_0 leased 0",
-			"updateone owner rtype_0 leased 1",
+		failures: map[string]error{
+			"updateone owner rtype_0 leased 0": errors.New("injected error"),
+			"updateone owner rtype_0 leased 1": errors.New("injected error"),
 		},
 	}, {
 		name:     "requests < retries, should fail",
 		requests: 3,
-		failures: []string{
-			"updateone owner rtype_0 leased 0",
-			"updateone owner rtype_0 leased 1",
-			"updateone owner rtype_0 leased 2",
+		failures: map[string]error{
+			"updateone owner rtype_0 leased 0": errors.New("injected error"),
+			"updateone owner rtype_0 leased 1": errors.New("injected error"),
+			"updateone owner rtype_0 leased 2": errors.New("injected error"),
 		},
 	}, {
 		name:     "requests > retries with intermittent failures, should succeed",
 		success:  true,
 		requests: 6,
-		failures: []string{
-			"updateone owner rtype_0 leased 0",
-			"updateone owner rtype_0 leased 1",
-			"updateone owner rtype_0 leased 3",
-			"updateone owner rtype_0 leased 4",
+		failures: map[string]error{
+			"updateone owner rtype_0 leased 0": errors.New("injected error"),
+			"updateone owner rtype_0 leased 1": errors.New("injected error"),
+			"updateone owner rtype_0 leased 3": errors.New("injected error"),
+			"updateone owner rtype_0 leased 4": errors.New("injected error"),
 		},
 	}, {
 		name:     "requests <= retries with intermittent failures, should fail",
 		requests: 6,
-		failures: []string{
-			"updateone owner rtype_0 leased 0",
-			"updateone owner rtype_0 leased 1",
-			"updateone owner rtype_0 leased 3",
-			"updateone owner rtype_0 leased 4",
-			"updateone owner rtype_0 leased 5",
+		failures: map[string]error{
+			"updateone owner rtype_0 leased 0": errors.New("injected error"),
+			"updateone owner rtype_0 leased 1": errors.New("injected error"),
+			"updateone owner rtype_0 leased 3": errors.New("injected error"),
+			"updateone owner rtype_0 leased 4": errors.New("injected error"),
+			"updateone owner rtype_0 leased 5": errors.New("injected error"),
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 			var calls []string
-			client := NewFakeClient("owner", "url", 2, sets.New[string](tc.failures...), &calls)
+			client := NewFakeClient("owner", "url", 2, tc.failures, &calls)
 			var called bool
 			if _, err := client.Acquire("rtype", 1, ctx, func() { called = true }); err != nil {
 				t.Fatal(err)

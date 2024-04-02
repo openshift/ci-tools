@@ -1905,6 +1905,15 @@ func (p ClusterProfile) LeaseType() string {
 	}
 }
 
+func (p ClusterProfile) IPPoolLeaseType() string {
+	switch p {
+	case ClusterProfileAWS:
+		return "aws-ip-pools"
+	default:
+		return ""
+	}
+}
+
 // ConfigMap maps profiles to the ConfigMap they require (if applicable).
 func (p ClusterProfile) ConfigMap() string {
 	switch p {

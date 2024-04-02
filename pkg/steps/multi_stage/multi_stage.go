@@ -376,6 +376,13 @@ func (s *multiStageTestStep) environment() ([]coreapi.EnvVar, error) {
 			}
 			ret = append(ret, coreapi.EnvVar{Name: e, Value: val})
 		}
+		if s.profile == "aws" { //TODO(sgoeddel): only enabled for aws for now, later this will be configurable
+			val, err := s.params.Get(api.DefaultIPPoolLeaseEnv)
+			if err != nil {
+				return nil, err
+			}
+			ret = append(ret, coreapi.EnvVar{Name: api.DefaultIPPoolLeaseEnv, Value: val})
+		}
 	}
 	return ret, nil
 }

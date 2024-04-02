@@ -437,11 +437,15 @@ func stepForTest(
 ) ([]api.Step, error) {
 	if test := c.MultiStageTestConfigurationLiteral; test != nil {
 		leases := api.LeasesForTest(test)
-		if len(leases) != 0 {
+		ipPoolLease := api.IPPoolLeaseForTest(test)
+		if len(leases) != 0 || ipPoolLease.ResourceType != "" {
 			params = api.NewDeferredParameters(params)
 		}
 		var ret []api.Step
 		step := multi_stage.MultiStageTestStep(*c, config, params, podClient, jobSpec, leases, nodeName, targetAdditionalSuffix, nil)
+		if ipPoolLease.ResourceType != "" {
+			step = steps.IPPoolStep(leaseClient, ipPoolLease, step, params, jobSpec.Namespace)
+		}
 		if len(leases) != 0 {
 			step = steps.LeaseStep(leaseClient, leases, step, jobSpec.Namespace)
 		}

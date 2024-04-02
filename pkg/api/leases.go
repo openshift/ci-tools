@@ -17,3 +17,14 @@ func LeasesForTest(s *MultiStageTestConfigurationLiteral) (ret []StepLease) {
 	ret = append(ret, s.Leases...)
 	return
 }
+
+func IPPoolLeaseForTest(s *MultiStageTestConfigurationLiteral) (ret StepLease) {
+	if p := s.ClusterProfile; p == "aws" { //TODO(sgoeddel): Hardcoded to only work on aws, eventually this will be available as a configuration
+		ret = StepLease{
+			ResourceType: p.IPPoolLeaseType(),
+			Env:          DefaultIPPoolLeaseEnv,
+			Count:        13,
+		}
+	}
+	return
+}

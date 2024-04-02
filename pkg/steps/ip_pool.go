@@ -63,6 +63,8 @@ func (s *ipPoolStep) Provides() api.ParameterMap {
 		parameters = api.ParameterMap{}
 	}
 	l := &s.ipPoolLease
+	// Disable unparam lint as we need to confirm to this interface, but there will never be an error
+	//nolint:unparam
 	parameters[l.Env] = func() (string, error) {
 		return strconv.Itoa(len(l.resources)), nil
 	}

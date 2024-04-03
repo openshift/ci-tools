@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sirupsen/logrus"
+
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"sigs.k8s.io/yaml"
 
@@ -32,29 +34,68 @@ func LoadConfig(file string) (*CIImagesMirrorConfig, error) {
 				errs = append(errs, fmt.Errorf("invalid target: %s", k))
 			}
 		}
-		if v.As != "" {
-			errs = append(errs, errors.New("as cannot be set"))
+		if err := validateSource(v); err != nil {
+			errs = append(errs, err)
 		}
-		if v.Image == "" {
-			if v.Namespace == "" {
-				errs = append(errs, errors.New("namespace for the source must be set"))
-			}
-			if v.Name == "" {
-				errs = append(errs, errors.New("name for the source must be set"))
-			}
-			if v.Tag == "" {
-				errs = append(errs, errors.New("tag for the source must be set"))
-			}
+	}
+
+	for _, ignoredSource := range c.IgnoredSources {
+		if err := validateSource(ignoredSource.Source); err != nil {
+			errs = append(errs, err)
 		}
 	}
 	if len(errs) > 0 {
 		return nil, utilerrors.NewAggregate(errs)
 	}
+	remained := map[string]Source{}
+	for k, v := range c.SupplementalCIImages {
+		var ignored bool
+		for _, ignoredSource := range c.IgnoredSources {
+			if ignoredSource.Image == v.Image {
+				logrus.WithField("image", v.Image).WithField("reason", ignoredSource.Reason).Info("Removed ignored source from supplemental CI images")
+				ignored = true
+				break
+			}
+			if ignoredSource.Namespace != "" && ignoredSource.ISTagName() == v.ISTagName() {
+				logrus.WithField("ISTagName", ignoredSource.ISTagName()).WithField("reason", ignoredSource.Reason).Info("Removed ignored source from supplemental CI images")
+				ignored = true
+				break
+			}
+		}
+		if !ignored {
+			remained[k] = v
+		}
+	}
+	c.SupplementalCIImages = remained
 	return c, nil
+}
+
+func validateSource(v Source) error {
+	if v.As != "" {
+		return errors.New("as cannot be set")
+	}
+	if v.Image == "" {
+		if v.Namespace == "" {
+			return errors.New("namespace for the source must be set")
+		}
+		if v.Name == "" {
+			return errors.New("name for the source must be set")
+		}
+		if v.Tag == "" {
+			return errors.New("tag for the source must be set")
+		}
+	}
+	return nil
 }
 
 type CIImagesMirrorConfig struct {
 	SupplementalCIImages map[string]Source `json:"supplementalCIImages"`
+	IgnoredSources       []IgnoredSource   `json:"ignoredSources"`
+}
+
+type IgnoredSource struct {
+	Source `json:",inline"`
+	Reason string `json:"reason"`
 }
 
 type Source struct {

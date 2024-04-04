@@ -6,11 +6,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
@@ -22,6 +24,7 @@ import (
 	"k8s.io/test-infra/prow/flagutil"
 	pgithub "k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/labels"
+	"k8s.io/test-infra/prow/pod-utils/gcs"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/builder/pkg/build/builder/util/dockerfile"
@@ -51,6 +54,7 @@ type options struct {
 	applyReplacements                            bool
 	ensureCorrectPromotionDockerfileIngoredRepos *flagutil.Strings
 	registryPath                                 string
+	gcsFileURL                                   string
 	flagutil.GitHubOptions
 }
 
@@ -71,6 +75,8 @@ func gatherOptions() (*options, error) {
 	flag.BoolVar(&o.applyReplacements, "apply-replacements", true, "If we should apply Dockerfile image replacements. You will probably always leave this as the default, and it's mostly used by tests that validate that base image pruning doesn't botch things. Note: If not applying replacements we will also skip unused replacement pruning.")
 	flag.BoolVar(&o.pruneOCPBuilderReplacements, "prune-ocp-builder-replacements", false, "If all replacements that target the ocp/builder imagestream should be removed")
 	flag.StringVar(&o.registryPath, "registry", "", "Path to the step registry directory")
+	flag.StringVar(&o.gcsFileURL, "gcs-file-url", "", "The GCS file URL to include in the PR description")
+
 	flag.Parse()
 
 	var errs []error
@@ -96,6 +102,18 @@ func gatherOptions() (*options, error) {
 	}
 
 	return o, utilerrors.NewAggregate(errs)
+}
+
+type GCSConfig struct {
+	BucketName string
+	PathPrefix string
+}
+
+func NewGCSConfig(bucketName, pathPrefix string) *GCSConfig {
+	return &GCSConfig{
+		BucketName: bucketName,
+		PathPrefix: pathPrefix,
+	}
 }
 
 func main() {
@@ -189,11 +207,24 @@ func main() {
 		logrus.WithError(err).Fatal("Encountered errors")
 	}
 
+	if opts.createPR {
+		gcsConfig := NewGCSConfig("Your-GCS-Bucket-Name", "Your-GCS-Path-Prefix")
+
+		changesSummary := "Generated summary of the changes."
+		gcsFileURL := uploadRegistryReplacerChangesToGCS(changesSummary, gcsConfig, logrus.WithField("component", "registry-replacer"))
+
+		if gcsFileURL != "" {
+			if err := upsertPR(githubClient, opts.configDir, opts.githubUserName, secret.GetSecret(opts.TokenPath), opts.selfApprove, opts.pruneUnusedReplacements, opts.ensureCorrectPromotionDockerfile, gcsFileURL); err != nil {
+				logrus.WithError(err).Fatal("Failed to create or update PR with GCS link")
+			}
+		}
+	}
+
 	if !opts.createPR {
 		return
 	}
 
-	if err := upsertPR(githubClient, opts.configDir, opts.githubUserName, secret.GetSecret(opts.TokenPath), opts.selfApprove, opts.pruneUnusedReplacements, opts.ensureCorrectPromotionDockerfile); err != nil {
+	if err := upsertPR(githubClient, opts.configDir, opts.githubUserName, secret.GetSecret(opts.TokenPath), opts.selfApprove, opts.pruneUnusedReplacements, opts.ensureCorrectPromotionDockerfile, opts.gcsFileURL); err != nil {
 		logrus.WithError(err).Fatal("Failed to create PR")
 	}
 }
@@ -437,7 +468,7 @@ func orgRepoTagFromPullString(pullString string) (orgRepoTag, error) {
 	return res, nil
 }
 
-func upsertPR(gc pgithub.Client, dir, githubUsername string, token []byte, selfApprove, pruneUnusedReplacements, ensureCorrectPromotionDockerfile bool) error {
+func upsertPR(gc pgithub.Client, dir, githubUsername string, token []byte, selfApprove, pruneUnusedReplacements, ensureCorrectPromotionDockerfile bool, gcsFileURL string) error {
 	if err := os.Chdir(dir); err != nil {
 		return fmt.Errorf("failed to chdir into %s: %w", dir, err)
 	}
@@ -500,6 +531,10 @@ func upsertPR(gc pgithub.Client, dir, githubUsername string, token []byte, selfA
 		false,
 	); err != nil {
 		return fmt.Errorf("failed to create PR: %w", err)
+	}
+
+	if gcsFileURL != "" {
+		prBody += "\n\nView detailed changes: " + gcsFileURL
 	}
 
 	return nil
@@ -611,6 +646,56 @@ func pruneOCPBuilderReplacements(config *api.ReleaseBuildConfiguration) error {
 
 		return false, nil
 	})
+}
+
+func uploadRegistryReplacerChangesToGCS(
+	pruneUnusedReplacements bool,
+	ensureCorrectPromotionDockerfile bool,
+	applyReplacementsToDockerfile bool,
+	pruneOCPBuilderReplacements bool,
+	pruneUnusedBaseImages bool,
+	bucketName string,
+	gcsPathPrefix string,
+	logger *logrus.Entry,
+) string {
+	var changesSummary strings.Builder
+	changesSummary.WriteString("Registry-Replacer made the following changes:")
+
+	if applyReplacementsToDockerfile {
+		changesSummary.WriteString("\n* Applied replacements to Dockerfiles for various reasons such as optimizing image sources and ensuring compliance with best practices.")
+	}
+	if pruneUnusedReplacements {
+		changesSummary.WriteString("\n* Pruned existing replacements that do not match any FROM directive in the Dockerfile.")
+	}
+	if ensureCorrectPromotionDockerfile {
+		changesSummary.WriteString("\n* Ensured Dockerfiles used for promotion match those configured in the OCP build data repository.")
+	}
+	if pruneOCPBuilderReplacements {
+		changesSummary.WriteString("\n* Removed all replacements that target the ocp/builder imagestream.")
+	}
+	if pruneUnusedBaseImages {
+		changesSummary.WriteString("\n* Pruned unused base images from the configuration.")
+	}
+
+	// Generate a unique serial number based on the current timestamp
+	serialNumber := time.Now().Format("20060102150405") // This format ensures a unique serial number
+	fileLocation := fmt.Sprintf("%s/changes-summary-%s.txt", gcsPathPrefix, serialNumber)
+
+	// Prepare the content for upload
+	uploadTargets := map[string]gcs.UploadFunc{
+		fileLocation: gcs.DataUpload(func() (io.ReadCloser, error) {
+			return io.NopCloser(strings.NewReader(changesSummary.String())), nil
+		}),
+	}
+
+	if err := gcs.Upload(context.Background(), bucketName, "", "", []string{}, uploadTargets); err != nil {
+		logger.WithError(err).Error("Failed to upload registry-replacer changes summary to GCS")
+		return ""
+	}
+
+	// Generate and return the GCS file URL
+	gcsFileURL := fmt.Sprintf("https://storage.googleapis.com/%s/%s", bucketName, fileLocation)
+	return gcsFileURL
 }
 
 type asDirectiveFilter func(asDirectiveValue string, inputKey string) (keep bool, err error)

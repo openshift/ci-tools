@@ -300,6 +300,11 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 		repo := pullRequest.Base.Repo.Name
 		number := pullRequest.Number
 
+		// Sometimes, hooks or requests are dropped causing confusion to the command issuer. We can acknowledge that the request has been received
+		if err := s.ghc.CreateComment(org, repo, number, fmt.Sprintf("@%s: now processing your pj-rehearse request. Please allow up to 10 minutes for jobs to trigger or cancel.", user)); err != nil {
+			logger.WithError(err).Error("failed to create acknowledgement comment")
+		}
+
 		// We shouldn't allow rehearsals to run (or be ack'd) on untrusted PRs
 		for _, label := range pullRequest.Labels {
 			if needsOkToTestLabel == label.Name {

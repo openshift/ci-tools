@@ -1279,6 +1279,7 @@ const (
 	ClusterProfilePOWERVS2              ClusterProfile = "powervs-2"
 	ClusterProfilePOWERVS3              ClusterProfile = "powervs-3"
 	ClusterProfilePOWERVS4              ClusterProfile = "powervs-4"
+	ClusterProfilePOWERVS5              ClusterProfile = "powervs-5"
 	ClusterProfileLibvirtPpc64le        ClusterProfile = "libvirt-ppc64le"
 	ClusterProfileLibvirtS390x          ClusterProfile = "libvirt-s390x"
 	ClusterProfileLibvirtS390xAmd64     ClusterProfile = "libvirt-s390x-amd64"
@@ -1305,6 +1306,7 @@ const (
 	ClusterProfileVSphereDis2           ClusterProfile = "vsphere-dis-2"
 	ClusterProfileVSphereMultizone2     ClusterProfile = "vsphere-multizone-2"
 	ClusterProfileVSphereConnected2     ClusterProfile = "vsphere-connected-2"
+	ClusterProfileVSphereMultiVCenter   ClusterProfile = "vsphere-multi-vcenter"
 	ClusterProfileKubevirt              ClusterProfile = "kubevirt"
 	ClusterProfileAWSCPaaS              ClusterProfile = "aws-cpaas"
 	ClusterProfileOSDEphemeral          ClusterProfile = "osd-ephemeral"
@@ -1327,6 +1329,7 @@ const (
 	ClusterProfileAWSEdgeInfra          ClusterProfile = "aws-edge-infra"
 	ClusterProfileRHOpenShiftEcosystem  ClusterProfile = "rh-openshift-ecosystem"
 	ClusterProfileODFAWS                ClusterProfile = "odf-aws"
+	ClusterProfileKonfluxWorkspacesAWS  ClusterProfile = "konfluxworkspaces-aws"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -1415,6 +1418,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfilePOWERVS2,
 		ClusterProfilePOWERVS3,
 		ClusterProfilePOWERVS4,
+		ClusterProfilePOWERVS5,
 		ClusterProfileKubevirt,
 		ClusterProfileLibvirtPpc64le,
 		ClusterProfileLibvirtS390x,
@@ -1444,6 +1448,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileVSphereDis2,
 		ClusterProfileVSphereMultizone2,
 		ClusterProfileVSphereConnected2,
+		ClusterProfileVSphereMultiVCenter,
 
 		ClusterProfileOCIAssisted,
 		ClusterProfileHypershiftPowerVS,
@@ -1458,6 +1463,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSEdgeInfra,
 		ClusterProfileRHOpenShiftEcosystem,
 		ClusterProfileODFAWS,
+		ClusterProfileKonfluxWorkspacesAWS,
 	}
 }
 
@@ -1510,7 +1516,8 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileDevSandboxCIAWS,
 		ClusterProfileQuayAWS,
 		ClusterProfileAWSEdgeInfra,
-		ClusterProfileODFAWS:
+		ClusterProfileODFAWS,
+		ClusterProfileKonfluxWorkspacesAWS:
 		return string(CloudAWS)
 	case
 		ClusterProfileAlibabaCloud,
@@ -1590,6 +1597,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "powervs-3"
 	case ClusterProfilePOWERVS4:
 		return "powervs-4"
+	case ClusterProfilePOWERVS5:
+		return "powervs-5"
 	case ClusterProfileLibvirtPpc64le:
 		return "libvirt-ppc64le"
 	case ClusterProfileLibvirtS390x:
@@ -1627,6 +1636,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileVSphereMultizone2,
 		ClusterProfileVSphereDis2,
 		ClusterProfileVSphere8Vpn,
+		ClusterProfileVSphereMultiVCenter,
 		ClusterProfileVSphereConnected2:
 
 		return "vsphere"
@@ -1810,6 +1820,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "powervs-3-quota-slice"
 	case ClusterProfilePOWERVS4:
 		return "powervs-4-quota-slice"
+	case ClusterProfilePOWERVS5:
+		return "powervs-5-quota-slice"
 	case ClusterProfileLibvirtPpc64le:
 		return "libvirt-ppc64le-quota-slice"
 	case ClusterProfileLibvirtS390x:
@@ -1862,6 +1874,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "vsphere-multizone-2-quota-slice"
 	case ClusterProfileVSphereConnected2:
 		return "vsphere-connected-2-quota-slice"
+	case ClusterProfileVSphereMultiVCenter:
+		return "vsphere-multi-vcenter-quota-slice"
 	case ClusterProfileKubevirt:
 		return "kubevirt-quota-slice"
 	case ClusterProfileAWSCPaaS:
@@ -1900,6 +1914,17 @@ func (p ClusterProfile) LeaseType() string {
 		return "rh-openshift-ecosystem-quota-slice"
 	case ClusterProfileODFAWS:
 		return "odf-aws-quota-slice"
+	case ClusterProfileKonfluxWorkspacesAWS:
+		return "konfluxworkspaces-aws-quota-slice"
+	default:
+		return ""
+	}
+}
+
+func (p ClusterProfile) IPPoolLeaseType() string {
+	switch p {
+	case ClusterProfileAWS:
+		return "aws-ip-pools"
 	default:
 		return ""
 	}
@@ -1954,6 +1979,7 @@ func (p ClusterProfile) Secret() string {
 		ClusterProfileVSphereDis2,
 		ClusterProfileVSphereMultizone2,
 		ClusterProfileVSphereConnected2,
+		ClusterProfileVSphereMultiVCenter,
 		ClusterProfileVSphere8Vpn:
 
 		name = p.ClusterType()
@@ -1966,7 +1992,7 @@ func (p ClusterProfile) Secret() string {
 // LeaseTypeFromClusterType maps cluster types to lease types
 func LeaseTypeFromClusterType(t string) (string, error) {
 	switch t {
-	case "aws", "aws-c2s", "aws-china", "aws-usgov", "aws-sc2s", "aws-osd-msp", "aws-outpost", "aws-local-zones", "aws-opendatahub", "alibaba", "azure-2", "azure4", "azure-arc", "azure-arm64", "azurestack", "azuremag", "equinix-ocp-metal", "gcp", "gcp-arm64", "gcp-opendatahub", "libvirt-ppc64le", "libvirt-s390x", "libvirt-s390x-amd64", "ibmcloud-multi-ppc64le", "ibmcloud-multi-s390x", "nutanix", "nutanix-qe", "nutanix-qe-dis", "nutanix-qe-zone", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "openstack-nerc-dev", "vsphere", "ovirt", "packet", "packet-edge", "powervs-multi-1", "powervs-1", "powervs-2", "powervs-3", "powervs-4", "kubevirt", "aws-cpaas", "osd-ephemeral", "gcp-virtualization", "aws-virtualization", "azure-virtualization", "hypershift-powervs", "hypershift-powervs-cb":
+	case "aws", "aws-c2s", "aws-china", "aws-usgov", "aws-sc2s", "aws-osd-msp", "aws-outpost", "aws-local-zones", "aws-opendatahub", "alibaba", "azure-2", "azure4", "azure-arc", "azure-arm64", "azurestack", "azuremag", "equinix-ocp-metal", "gcp", "gcp-arm64", "gcp-opendatahub", "libvirt-ppc64le", "libvirt-s390x", "libvirt-s390x-amd64", "ibmcloud-multi-ppc64le", "ibmcloud-multi-s390x", "nutanix", "nutanix-qe", "nutanix-qe-dis", "nutanix-qe-zone", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "openstack-nerc-dev", "vsphere", "ovirt", "packet", "packet-edge", "powervs-multi-1", "powervs-1", "powervs-2", "powervs-3", "powervs-4", "powervs-5", "kubevirt", "aws-cpaas", "osd-ephemeral", "gcp-virtualization", "aws-virtualization", "azure-virtualization", "hypershift-powervs", "hypershift-powervs-cb":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

@@ -118,7 +118,7 @@ func (s *leaseStep) run(ctx context.Context) error {
 	}
 	wrappedErr := results.ForReason("executing_test").ForError(s.wrapped.Run(ctx))
 	logrus.Infof("Releasing leases for test %s", s.Name())
-	releaseErr := results.ForReason("releasing_lease").ForError(releaseLeases(client, s.leases))
+	releaseErr := results.ForReason("releasing_lease").ForError(releaseLeases(client, s.leases...))
 
 	return aggregateWrappedErrorAndReleaseError(wrappedErr, releaseErr)
 }
@@ -164,14 +164,14 @@ func acquireLeases(
 		l.resources = names
 	}
 	if errs != nil {
-		if err := releaseLeases(client, leases); err != nil {
+		if err := releaseLeases(client, leases...); err != nil {
 			errs = append(errs, fmt.Errorf("failed to release leases after acquisition failure: %w", err))
 		}
 	}
 	return utilerrors.NewAggregate(errs)
 }
 
-func releaseLeases(client lease.Client, leases []stepLease) error {
+func releaseLeases(client lease.Client, leases ...stepLease) error {
 	var errs []error
 	for _, l := range leases {
 		for _, r := range l.resources {

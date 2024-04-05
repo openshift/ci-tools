@@ -64,6 +64,7 @@ type RehearsalConfig struct {
 
 	MirrorOptions     quayiociimagesdistributor.OCImageMirrorOptions
 	QuayIOImageHelper quayiociimagesdistributor.OCClient
+	IgnoredTargets    sets.Set[string]
 
 	StickyLabelAuthors sets.Set[string]
 
@@ -319,6 +320,7 @@ func (r RehearsalConfig) RehearseJobs(
 	imageStreamTags apihelper.ImageStreamTagMap,
 	mirrorOptions quayiociimagesdistributor.OCImageMirrorOptions,
 	quayIOImageHelper quayiociimagesdistributor.OCClient,
+	ignoredTargets sets.Set[string],
 	presubmitsToRehearse []*prowconfig.Presubmit,
 	rehearsalTemplates,
 	rehearsalClusterProfiles *ConfigMaps,
@@ -343,6 +345,7 @@ func (r RehearsalConfig) RehearseJobs(
 		buildClusterConfigs,
 		mirrorOptions,
 		quayIOImageHelper,
+		ignoredTargets,
 		logger,
 		r.ProwjobNamespace,
 		pjclient,
@@ -518,6 +521,7 @@ func setupDependencies(
 	configs map[string]rest.Config,
 	mirrorOptions quayiociimagesdistributor.OCImageMirrorOptions,
 	quayIOImageHelper quayiociimagesdistributor.OCClient,
+	ignoredTargets sets.Set[string],
 	log *logrus.Entry,
 	prowJobNamespace string,
 	prowJobClient ctrlruntimeclient.Client,
@@ -596,7 +600,7 @@ func setupDependencies(
 			// We only need to do it once.
 			if index == 0 {
 				mirrorOptions.DryRun = dryRun
-				if err := ensureISTSInQCI(ctx, client, requiredImageStreamTags, mirrorOptions, quayIOImageHelper, log); err != nil {
+				if err := ensureISTSInQCI(ctx, client, requiredImageStreamTags, mirrorOptions, quayIOImageHelper, ignoredTargets, log); err != nil {
 					// best effort as the required image might be there (just stale) on QCI already and rehearsal can still run with it
 					log.WithError(err).Errorf("failed to ensure imagestreamtags %s in QCI", requiredImageStreamTags)
 				}
@@ -669,11 +673,11 @@ func ensureImageStreamTags(ctx context.Context, client ctrlruntimeclient.Client,
 	return g.Wait()
 }
 
-func ensureISTSInQCI(ctx context.Context, client ctrlruntimeclient.Client, ists apihelper.ImageStreamTagMap, mirrorOptions quayiociimagesdistributor.OCImageMirrorOptions, quayIOImageHelper quayiociimagesdistributor.OCClient, log *logrus.Entry) error {
+func ensureISTSInQCI(ctx context.Context, client ctrlruntimeclient.Client, ists apihelper.ImageStreamTagMap, mirrorOptions quayiociimagesdistributor.OCImageMirrorOptions, quayIOImageHelper quayiociimagesdistributor.OCClient, ignoredTargets sets.Set[string], log *logrus.Entry) error {
 	var errs []error
 	var pairs []string
 	for _, ist := range ists {
-		istPairs, err := createPairs(ctx, ist, client, time.Now(), log)
+		istPairs, err := createPairs(ctx, ist, ignoredTargets, client, time.Now(), log)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to create pairs for %s to mirror: %w", ist.String(), err))
 			continue
@@ -695,12 +699,19 @@ func ensureISTSInQCI(ctx context.Context, client ctrlruntimeclient.Client, ists 
 	return utilerrors.NewAggregate(errs)
 }
 
-func createPairs(ctx context.Context, ist types.NamespacedName, client ctrlruntimeclient.Client, time time.Time, log *logrus.Entry) ([]string, error) {
+func createPairs(ctx context.Context, ist types.NamespacedName, ignoredTargets sets.Set[string], client ctrlruntimeclient.Client, time time.Time, log *logrus.Entry) ([]string, error) {
 	colonSplit := strings.Split(ist.Name, ":")
 	if n := len(colonSplit); n != 2 {
 		return []string{}, fmt.Errorf("splitting %s by `:` didn't yield two but %d results", ist.Name, n)
 	}
 	tagRef := api.ImageStreamTagReference{Namespace: ist.Namespace, Name: colonSplit[0], Tag: colonSplit[1]}
+
+	for name := range ignoredTargets {
+		if name == tagRef.ISTagName() {
+			log.WithField("tagRef", tagRef.ISTagName()).Info("Skipping an ignored image")
+			return nil, nil
+		}
+	}
 	quayImage := api.QuayImage(tagRef)
 	sourceImageStreamTag := &imagev1.ImageStreamTag{}
 	if err := client.Get(ctx, ist, sourceImageStreamTag); err != nil {

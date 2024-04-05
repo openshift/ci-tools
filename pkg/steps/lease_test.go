@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"k8s.io/apimachinery/pkg/util/diff"
-	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -143,40 +142,48 @@ func TestError(t *testing.T) {
 	for _, tc := range []struct {
 		name            string
 		runFails        bool
-		failures        sets.Set[string]
+		failures        map[string]error
 		expectedReasons []string
 		expected        []string
 	}{{
-		name:            "first acquire fails",
-		failures:        sets.New[string]("acquire owner rtype0 free leased random"),
+		name: "first acquire fails",
+		failures: map[string]error{
+			"acquireWaitWithPriority owner rtype0 free leased random": errors.New("injected failure"),
+		},
 		expectedReasons: []string{"utilizing_lease:acquiring_lease"},
-		expected:        []string{"acquire owner rtype0 free leased random"},
+		expected:        []string{"acquireWaitWithPriority owner rtype0 free leased random"},
 	}, {
-		name:            "second acquire fails",
-		failures:        sets.New[string]("acquire owner rtype1 free leased random"),
+		name: "second acquire fails",
+		failures: map[string]error{
+			"acquireWaitWithPriority owner rtype1 free leased random": errors.New("injected failure"),
+		},
 		expectedReasons: []string{"utilizing_lease:acquiring_lease"},
 		expected: []string{
-			"acquire owner rtype0 free leased random",
-			"acquire owner rtype1 free leased random",
+			"acquireWaitWithPriority owner rtype0 free leased random",
+			"acquireWaitWithPriority owner rtype1 free leased random",
 			"releaseone owner rtype0_0 free",
 		},
 	}, {
-		name:            "first release fails",
-		failures:        sets.New[string]("releaseone owner rtype0_0 free"),
+		name: "first release fails",
+		failures: map[string]error{
+			"releaseone owner rtype0_0 free": errors.New("injected failure"),
+		},
 		expectedReasons: []string{"utilizing_lease:releasing_lease"},
 		expected: []string{
-			"acquire owner rtype0 free leased random",
-			"acquire owner rtype1 free leased random",
+			"acquireWaitWithPriority owner rtype0 free leased random",
+			"acquireWaitWithPriority owner rtype1 free leased random",
 			"releaseone owner rtype0_0 free",
 			"releaseone owner rtype1_1 free",
 		},
 	}, {
-		name:            "second release fails",
-		failures:        sets.New[string]("releaseone owner rtype1_1 free"),
+		name: "second release fails",
+		failures: map[string]error{
+			"releaseone owner rtype1_1 free": errors.New("injected failure"),
+		},
 		expectedReasons: []string{"utilizing_lease:releasing_lease"},
 		expected: []string{
-			"acquire owner rtype0 free leased random",
-			"acquire owner rtype1 free leased random",
+			"acquireWaitWithPriority owner rtype0 free leased random",
+			"acquireWaitWithPriority owner rtype1 free leased random",
 			"releaseone owner rtype0_0 free",
 			"releaseone owner rtype1_1 free",
 		},
@@ -185,22 +192,24 @@ func TestError(t *testing.T) {
 		runFails:        true,
 		expectedReasons: []string{"utilizing_lease:executing_test"},
 		expected: []string{
-			"acquire owner rtype0 free leased random",
-			"acquire owner rtype1 free leased random",
+			"acquireWaitWithPriority owner rtype0 free leased random",
+			"acquireWaitWithPriority owner rtype1 free leased random",
 			"releaseone owner rtype0_0 free",
 			"releaseone owner rtype1_1 free",
 		},
 	}, {
 		name:     "run and release fail",
 		runFails: true,
-		failures: sets.New[string]("releaseone owner rtype1_1 free"),
+		failures: map[string]error{
+			"releaseone owner rtype1_1 free": errors.New("injected failure"),
+		},
 		expectedReasons: []string{
 			"utilizing_lease:executing_test",
 			"utilizing_lease:releasing_lease",
 		},
 		expected: []string{
-			"acquire owner rtype0 free leased random",
-			"acquire owner rtype1 free leased random",
+			"acquireWaitWithPriority owner rtype0 free leased random",
+			"acquireWaitWithPriority owner rtype1 free leased random",
 			"releaseone owner rtype0_0 free",
 			"releaseone owner rtype1_1 free",
 		},
@@ -237,9 +246,9 @@ func TestAcquireRelease(t *testing.T) {
 		t.Fatal("step was not executed")
 	}
 	expected := []string{
-		"acquire owner rtype0 free leased random",
-		"acquire owner rtype0 free leased random",
-		"acquire owner rtype1 free leased random",
+		"acquireWaitWithPriority owner rtype0 free leased random",
+		"acquireWaitWithPriority owner rtype0 free leased random",
+		"acquireWaitWithPriority owner rtype1 free leased random",
 		"releaseone owner rtype1_2 free",
 		"releaseone owner rtype0_0 free",
 		"releaseone owner rtype0_1 free",

@@ -3,7 +3,7 @@ package api
 import (
 	"testing"
 
-	"k8s.io/utils/diff"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestLeasesForTest(t *testing.T) {
@@ -41,8 +41,38 @@ func TestLeasesForTest(t *testing.T) {
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			ret := LeasesForTest(&tc.tests)
-			if diff := diff.ObjectReflectDiff(tc.expected, ret); diff != "<no diffs>" {
-				t.Errorf("incorrect leases: %s", diff)
+			if diff := cmp.Diff(tc.expected, ret); diff != "" {
+				t.Errorf("incorrect leases, diff: %s", diff)
+			}
+		})
+	}
+}
+
+func TestIPPoolLeaseForTest(t *testing.T) {
+	testCases := []struct {
+		name     string
+		tests    MultiStageTestConfigurationLiteral
+		expected StepLease
+	}{
+		{
+			name:  "aws",
+			tests: MultiStageTestConfigurationLiteral{ClusterProfile: ClusterProfileAWS},
+			expected: StepLease{
+				ResourceType: "aws-ip-pools",
+				Env:          DefaultIPPoolLeaseEnv,
+				Count:        13,
+			},
+		},
+		{
+			name:  "other cluster profile",
+			tests: MultiStageTestConfigurationLiteral{ClusterProfile: ClusterProfileAWS2},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ret := IPPoolLeaseForTest(&tc.tests)
+			if diff := cmp.Diff(tc.expected, ret); diff != "" {
+				t.Errorf("incorrect lease returned, diff: %s", diff)
 			}
 		})
 	}

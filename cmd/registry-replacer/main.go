@@ -208,7 +208,7 @@ func main() {
 	}
 
 	if opts.createPR {
-		gcsConfig := NewGCSConfig("Your-GCS-Bucket-Name", "Your-GCS-Path-Prefix")
+		gcsConfig := NewGCSConfig("GCS-Bucket-Name", "GCS-Path-Prefix")
 
 		changesSummary := "Generated summary of the changes."
 		gcsFileURL := uploadRegistryReplacerChangesToGCS(changesSummary, gcsConfig, logrus.WithField("component", "registry-replacer"))
@@ -678,7 +678,7 @@ func uploadRegistryReplacerChangesToGCS(
 	}
 
 	// Generate a unique serial number based on the current timestamp
-	serialNumber := time.Now().Format("20060102150405") // This format ensures a unique serial number
+	serialNumber := time.Now().Format("20060102150405")
 	fileLocation := fmt.Sprintf("%s/changes-summary-%s.txt", gcsPathPrefix, serialNumber)
 
 	// Prepare the content for upload

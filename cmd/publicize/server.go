@@ -89,6 +89,7 @@ func (s *server) handleIssueComment(l *logrus.Entry, ic github.IssueCommentEvent
 
 	sourceRemoteResolver := func() (string, error) {
 		remote := &url.URL{Scheme: "https", Host: s.githubHost, Path: fmt.Sprintf("%s/%s", org, repo)}
+		remote.User = url.UserPassword(s.githubLogin, string(s.githubTokenGenerator()))
 		return remote.String(), nil
 	}
 

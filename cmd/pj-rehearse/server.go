@@ -415,14 +415,13 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 						continue
 					}
 
-					success, err := rc.RehearseJobs(candidate, candidatePath, prRefs, imageStreamTags, s.rehearsalConfig.MirrorOptions, s.rehearsalConfig.QuayIOImageHelper, s.rehearsalConfig.IgnoredTargets, presubmitsToRehearse, changedTemplates, changedClusterProfiles, prConfig.Prow, logger)
+					autoAckMode := rehearseAutoAck == command
+					success, err := rc.RehearseJobs(candidate, candidatePath, prRefs, imageStreamTags, s.rehearsalConfig.MirrorOptions, s.rehearsalConfig.QuayIOImageHelper, s.rehearsalConfig.IgnoredTargets, presubmitsToRehearse, changedTemplates, changedClusterProfiles, prConfig.Prow, autoAckMode, logger)
 					if err != nil {
 						logger.WithError(err).Error("couldn't rehearse jobs")
 						s.reportFailure("failed to create rehearsal jobs", err, org, repo, user, number, true, false, logger)
 						continue
 					}
-
-					autoAckMode := rehearseAutoAck == command
 					if autoAckMode && success {
 						s.acknowledgeRehearsals(org, repo, number, logger)
 					}

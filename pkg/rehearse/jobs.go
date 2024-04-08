@@ -865,25 +865,27 @@ type Executor struct {
 	pjclient   ctrlruntimeclient.Client
 	namespace  string
 	// Allow faking this in tests
-	pollFunc func(ctx context.Context, interval, timeout time.Duration, immediate bool, condition wait.ConditionWithContextFunc) error
-	prowCfg  *prowconfig.Config
+	pollFunc          func(ctx context.Context, interval, timeout time.Duration, immediate bool, condition wait.ConditionWithContextFunc) error
+	prowCfg           *prowconfig.Config
+	waitForCompletion bool
 }
 
 // NewExecutor creates an executor. It also configures the rehearsal jobs as a list of presubmits.
 func NewExecutor(presubmits []*prowconfig.Presubmit, prNumber int, prRepo string, refs *pjapi.Refs,
 	dryRun bool, logger *logrus.Entry, pjclient ctrlruntimeclient.Client, namespace string,
-	prowCfg *prowconfig.Config) *Executor {
+	prowCfg *prowconfig.Config, waitForCompletion bool) *Executor {
 	return &Executor{
-		dryRun:     dryRun,
-		presubmits: presubmits,
-		prNumber:   prNumber,
-		prRepo:     prRepo,
-		refs:       refs,
-		logger:     logger,
-		pjclient:   pjclient,
-		namespace:  namespace,
-		pollFunc:   wait.PollUntilContextTimeout,
-		prowCfg:    prowCfg,
+		dryRun:            dryRun,
+		presubmits:        presubmits,
+		prNumber:          prNumber,
+		prRepo:            prRepo,
+		refs:              refs,
+		logger:            logger,
+		pjclient:          pjclient,
+		namespace:         namespace,
+		pollFunc:          wait.PollUntilContextTimeout,
+		prowCfg:           prowCfg,
+		waitForCompletion: waitForCompletion,
 	}
 }
 
@@ -926,7 +928,10 @@ func (e *Executor) ExecuteJobs() (bool, error) {
 	for _, job := range pjs {
 		names.Insert(job.Name)
 	}
-	waitSuccess, err := e.waitForJobs(names, selector)
+	waitSuccess := true //default to true as we don't assume failure if not waiting for completion
+	if e.waitForCompletion {
+		waitSuccess, err = e.waitForJobs(names, selector)
+	}
 	if !submitSuccess {
 		return waitSuccess, fmt.Errorf("failed to submit all rehearsal jobs")
 	}

@@ -1,5 +1,3 @@
 release-openshift-origin-job-from-allow-list: informing
 release-openshift-origin-job: informing
 release-openshift-origin-job-without-release-label-broken: broken
-release-openshift-ocp-job: informing
-aggregated-aws-ovn-upgrade-4.10-minor-release-openshift-release-analysis-aggregator: informing

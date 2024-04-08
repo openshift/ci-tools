@@ -97,7 +97,7 @@ func getEvaluator(ctx context.Context, client ctrlruntimeclient.Client, ns, name
 				if !exist {
 					logrus.WithField("conditionMessage", condition.Message).Debugf("Waiting to import tag[%d] on imagestream %s/%s:%s ...", i, stream.Namespace, stream.Name, tag.Name)
 					if strings.Contains(condition.Message, "Internal error occurred") {
-						if err := reimportTag(ctx, client, ns, name, tag.Name); err != nil {
+						if _, err := ImportTagWithRetries(ctx, client, ns, name, tag.Name, ""); err != nil {
 							return false, fmt.Errorf("failed to reimport the tag %s/%s@%s: %w", stream.Namespace, stream.Name, tag.Name, err)
 						}
 					}
@@ -120,14 +120,20 @@ func WaitForImportingISTag(ctx context.Context, client ctrlruntimeclient.WithWat
 	return kubernetes.WaitForConditionOnObject(ctx, client, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, &imagev1.ImageStreamList{}, obj, getEvaluator(ctx, client, ns, name, tags), timeout)
 }
 
-func reimportTag(ctx context.Context, client ctrlruntimeclient.Client, ns, name, tag string) error {
+// ImportTagWithRetries imports image with retries
+func ImportTagWithRetries(ctx context.Context, client ctrlruntimeclient.Client, ns, name, tag, sourcePullSpec string) (string, error) {
+	var pullSpec string
 	step := 0
+	objectReferenceName := api.QuayImageReference(api.ImageStreamTagReference{Namespace: ns, Name: name, Tag: tag})
+	if sourcePullSpec != "" {
+		objectReferenceName = sourcePullSpec
+	}
 	if err := wait.ExponentialBackoff(wait.Backoff{Steps: 3, Duration: 1 * time.Second, Factor: 2}, func() (bool, error) {
-		logrus.Debugf("Retrying (%d) importing tag %s/%s@%s", step, ns, name, tag)
+		logrus.Debugf("Retrying (%d) importing tag %s/%s:%s", step, ns, name, tag)
 		streamImport := &imagev1.ImageStreamImport{
 			ObjectMeta: meta.ObjectMeta{
 				Namespace: ns,
-				Name:      fmt.Sprintf("%s-%s-%d", name, tag, step),
+				Name:      name,
 			},
 			Spec: imagev1.ImageStreamImportSpec{
 				Import: true,
@@ -138,7 +144,7 @@ func reimportTag(ctx context.Context, client ctrlruntimeclient.Client, ns, name,
 						},
 						From: coreapi.ObjectReference{
 							Kind: "DockerImage",
-							Name: api.QuayImageReference(api.ImageStreamTagReference{Namespace: ns, Name: name, Tag: tag}),
+							Name: objectReferenceName,
 						},
 						ImportPolicy:    imagev1.TagImportPolicy{ImportMode: imagev1.ImportModePreserveOriginal},
 						ReferencePolicy: imagev1.TagReferencePolicy{Type: imagev1.LocalTagReferencePolicy},
@@ -165,13 +171,14 @@ func reimportTag(ctx context.Context, client ctrlruntimeclient.Client, ns, name,
 		if image.Image == nil {
 			return false, nil
 		}
-		logrus.Debugf("Imported tag %s/%s@%s", ns, name, tag)
+		pullSpec = image.Image.DockerImageReference
+		logrus.Debugf("Imported tag %s/%s:%s", ns, name, tag)
 		return true, nil
 	}); err != nil {
 		if err == wait.ErrorInterrupted(err) {
-			return fmt.Errorf("unable to import tag %s/%s@%s even with (%d) imports: %w", ns, name, tag, step, err)
+			return "", fmt.Errorf("unable to import tag %s/%s@%s even with (%d) imports: %w", ns, name, tag, step, err)
 		}
-		return fmt.Errorf("unable to import tag %s/%s@%s at import (%d): %w", ns, name, tag, step-1, err)
+		return "", fmt.Errorf("unable to import tag %s/%s@%s at import (%d): %w", ns, name, tag, step-1, err)
 	}
-	return nil
+	return pullSpec, nil
 }

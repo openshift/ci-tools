@@ -28,19 +28,22 @@ func init() {
 
 func TestReimportTag(t *testing.T) {
 	var testCases = []struct {
-		name          string
-		client        ctrlruntimeclient.Client
-		ns, is, tag   string
-		expected      error
-		expectedCount int
+		name                        string
+		client                      ctrlruntimeclient.Client
+		ns, is, tag, sourcePullSpec string
+		expect                      string
+		expectedErr                 error
+		expectedCount               int
 	}{
 		{
-			name:          "happy path",
-			client:        bcc(fakectrlruntimeclient.NewClientBuilder().Build()),
-			ns:            "imported",
-			is:            "is",
-			tag:           "tag",
-			expectedCount: 1,
+			name:           "happy path",
+			client:         bcc(fakectrlruntimeclient.NewClientBuilder().Build()),
+			ns:             "imported",
+			is:             "is",
+			tag:            "tag",
+			sourcePullSpec: "sourcePullSpec",
+			expect:         "dockerImageReference",
+			expectedCount:  1,
 		},
 		{
 			name:          "imported on the 2nd try",
@@ -56,14 +59,17 @@ func TestReimportTag(t *testing.T) {
 			ns:            "timeout",
 			is:            "is",
 			tag:           "tag",
-			expected:      fmt.Errorf("unable to import tag timeout/is@tag even with (3) imports: timed out waiting for the condition"),
+			expectedErr:   fmt.Errorf("unable to import tag timeout/is@tag even with (3) imports: timed out waiting for the condition"),
 			expectedCount: 3,
 		},
 	}
 
 	for _, testCase := range testCases {
-		actual := reimportTag(context.Background(), testCase.client, testCase.ns, testCase.is, testCase.tag)
-		if diff := cmp.Diff(testCase.expected, actual, testhelper.EquateErrorMessage); diff != "" {
+		actual, actualErr := ImportTagWithRetries(context.Background(), testCase.client, testCase.ns, testCase.is, testCase.tag, testCase.sourcePullSpec)
+		if diff := cmp.Diff(testCase.expectedErr, actualErr, testhelper.EquateErrorMessage); diff != "" {
+			t.Errorf("%s: actualErr does not match expectedErr, diff: %s", testCase.name, diff)
+		}
+		if diff := cmp.Diff(testCase.expect, actual); diff != "" {
 			t.Errorf("%s: actual does not match expected, diff: %s", testCase.name, diff)
 		}
 		if c, match := testCase.client.(*imageStreamImportStatusSettingClient); match {
@@ -109,7 +115,9 @@ func (client *imageStreamImportStatusSettingClient) Create(ctx context.Context, 
 			asserted.Status = imagev1.ImageStreamImportStatus{
 				Images: []imagev1.ImageImportStatus{
 					{
-						Image: &imagev1.Image{},
+						Image: &imagev1.Image{
+							DockerImageReference: "dockerImageReference",
+						},
 					},
 				},
 			}

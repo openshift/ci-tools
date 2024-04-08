@@ -260,7 +260,10 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		addPatchEntry("add", "/spec/runtimeClassName", "ci-scheduler-runtime-"+podClass)
 
 		// Set a nodeSelector to ensure this finds our desired machineset nodes
-		nodeSelector := make(map[string]string)
+		nodeSelector := pod.Spec.NodeSelector
+		if nodeSelector == nil {
+			nodeSelector = make(map[string]string)
+		}
 		nodeSelector[CiWorkloadLabelName] = string(podClass)
 		addPatchEntry("add", "/spec/nodeSelector", nodeSelector)
 

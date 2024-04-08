@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io/fs"
 	"math"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/GoogleCloudPlatform/testgrid/pb/config"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/pflag"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -35,8 +35,8 @@ type options struct {
 	testGridConfigDir string
 	prowJobConfigDir  string
 
-	validationOnlyRun bool
-	jobsAllowListFile string
+	validationOnlyRun  bool
+	jobsAllowListFiles []string
 
 	gcsBucket string
 }
@@ -54,7 +54,7 @@ func (o *options) Validate() error {
 		return errors.New("--testgrid-config is required")
 	}
 
-	if o.jobsAllowListFile == "" {
+	if len(o.jobsAllowListFiles) == 0 {
 		return errors.New("--allow-list is required")
 	}
 
@@ -63,11 +63,11 @@ func (o *options) Validate() error {
 
 func gatherOptions() options {
 	o := options{}
-	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	fs := pflag.NewFlagSet(os.Args[0], pflag.ExitOnError)
 	fs.StringVar(&o.prowJobConfigDir, "prow-jobs-dir", "", "Path to a root of directory structure with Prow job config files (ci-operator/jobs in openshift/release)")
 	fs.StringVar(&o.releaseConfigDir, "release-config", "", "Path to Release Controller configuration directory.")
 	fs.StringVar(&o.testGridConfigDir, "testgrid-config", "", "Path to TestGrid configuration directory.")
-	fs.StringVar(&o.jobsAllowListFile, "allow-list", "", "Path to file containing jobs to be overridden to informing jobs")
+	fs.StringArrayVar(&o.jobsAllowListFiles, "allow-list", []string{}, "Paths to file containing jobs to be overridden to informing jobs")
 	fs.BoolVar(&o.validationOnlyRun, "validate", false, "Validate entries in file specified by allow-list (if allow_list is not specified validation would succeed)")
 	fs.StringVar(&o.gcsBucket, "google-storage-bucket", "test-platform-results", "The optional GCS Bucket holding test artifacts")
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -395,27 +395,29 @@ func main() {
 
 	// read the list of jobs from the allow list along with its release-type
 	var allowList map[string]string
-	if o.jobsAllowListFile != "" {
-		data, err := gzip.ReadFileMaybeGZIP(o.jobsAllowListFile)
-		if err != nil {
-			logrus.WithError(err).Fatalf("could not read allow-list at %s", o.jobsAllowListFile)
-		}
-		allowList, err = getAllowList(data)
-		if err != nil {
-			logrus.WithError(err).Fatalf("failed to build allow-list dictionary")
-		}
-		var disallowed []string
-		for job := range allowList {
-			if value, configured := configuredJobs[job]; configured && value == "blocking" {
-				disallowed = append(disallowed, job)
+	for _, jobsAllowListFile := range o.jobsAllowListFiles {
+		if jobsAllowListFile != "" {
+			data, err := gzip.ReadFileMaybeGZIP(jobsAllowListFile)
+			if err != nil {
+				logrus.WithError(err).Fatalf("could not read allow-list at %s", jobsAllowListFile)
+			}
+			allowList, err = getAllowList(data)
+			if err != nil {
+				logrus.WithError(err).Fatalf("failed to build allow-list dictionary")
+			}
+			var disallowed []string
+			for job := range allowList {
+				if value, configured := configuredJobs[job]; configured && value == "blocking" {
+					disallowed = append(disallowed, job)
+				}
+			}
+			if len(disallowed) != 0 {
+				logrus.Fatalf("The following jobs are blocking by virtue of being in the release-controller configuration, but are also in the allow-list. Their entries in the allow-list are disallowed and should be removed: %v", strings.Join(disallowed, ", "))
 			}
 		}
-		if len(disallowed) != 0 {
-			logrus.Fatalf("The following jobs are blocking by virtue of being in the release-controller configuration, but are also in the allow-list. Their entries in the allow-list are disallowed and should be removed: %v", strings.Join(disallowed, ", "))
-		}
-		if o.validationOnlyRun {
-			os.Exit(0)
-		}
+	}
+	if o.validationOnlyRun {
+		os.Exit(0)
 	}
 
 	// find and assign all jobs to the dashboards

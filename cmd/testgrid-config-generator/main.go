@@ -177,8 +177,8 @@ func getAllowList(data []byte) (map[string]string, error) {
 	for jobName, releaseType := range allowList {
 		if releaseType == "blocking" {
 			errs = append(errs, fmt.Errorf("release_type 'blocking' not permitted in the allow-list for %s, blocking jobs must be in the release controller configuration", jobName))
-		} else if releaseType != "informing" && releaseType != "broken" && releaseType != "generic-informing" && releaseType != "osde2e" && releaseType != "olm" {
-			errs = append(errs, fmt.Errorf("%s: release_type must be one of 'informing', 'broken', 'generic-informing', 'osde2e' or 'olm'", jobName))
+		} else if releaseType == "" {
+			errs = append(errs, fmt.Errorf("%s: release_type must be non-empty", jobName))
 		}
 	}
 	return allowList, utilerrors.NewAggregate(errs)
@@ -199,7 +199,7 @@ func addDashboardTab(p prowConfig.Periodic,
 		jobName = *aggregateJobName
 	}
 	label, ok := allowList[jobName]
-	if len(label) == 0 && ok {
+	if !ok || len(label) == 0 {
 		// if the allow list has an empty label for the type, exclude it from dashboards
 		return
 	}
@@ -232,8 +232,7 @@ func addDashboardTab(p prowConfig.Periodic,
 			// Managed Services Integration (MSI) testing
 			dashboardType = "informing"
 		default:
-			// unknown labels or non standard jobs do not appear in testgrid
-			return
+			dashboardType = "informing"
 		}
 	}
 
@@ -277,21 +276,23 @@ func addDashboardTab(p prowConfig.Periodic,
 			// Managed Services Integration (MSI) testing
 			stream = "CSPI-QE-MSI"
 		default:
-			logrus.Warningf("unrecognized release type in job: %s", prowName)
-			return
+			logrus.Infof("unrecognized release type in job: %s, falling back to generic dashboard", prowName)
+			current = genericDashboardFor(label)
 		}
 
-		version := p.Labels["job-release"]
-		if len(version) == 0 {
-			m := reVersion.FindStringSubmatch(prowName)
-			if len(m) == 0 {
-				logrus.Warningf("release is not in -X.Y- form and will go into the generic informing dashboard: %s", prowName)
-				current = genericDashboardFor("informing")
-				break
+		if current == nil {
+			version := p.Labels["job-release"]
+			if len(version) == 0 {
+				m := reVersion.FindStringSubmatch(prowName)
+				if len(m) == 0 {
+					logrus.Warningf("release is not in -X.Y- form and will go into the generic informing dashboard: %s", prowName)
+					current = genericDashboardFor("informing")
+					break
+				}
+				version = m[1]
 			}
-			version = m[1]
+			current = dashboardFor(stream, version, dashboardType)
 		}
-		current = dashboardFor(stream, version, dashboardType)
 	}
 
 	daysOfResults := int32(0)

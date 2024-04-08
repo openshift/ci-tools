@@ -44,7 +44,7 @@ key2: informing
 key1: 
 key2: informing
 `,
-			expectedError: fmt.Errorf("key1: release_type must be one of 'informing', 'broken', 'generic-informing', 'osde2e' or 'olm'"),
+			expectedError: fmt.Errorf("key1: release_type must be non-empty"),
 			expectedOut: map[string]string{
 				"key1": "",
 				"key2": "informing",

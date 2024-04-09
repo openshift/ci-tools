@@ -548,7 +548,17 @@ func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName 
 			}
 			return false, err
 		}
-		return streamTag.Tag != nil && streamTag.Tag.Generation != nil && *streamTag.Tag.Generation == streamTag.Generation, nil
+		populated := streamTag.Tag != nil && streamTag.Tag.Generation != nil && *streamTag.Tag.Generation == streamTag.Generation
+		if streamTag.Tag == nil {
+			logrus.Debug("The 'cli' image in the stable stream is not populated: streamTag.Tag is nil")
+			return false, nil
+		}
+		if !populated {
+			logrus.WithField("streamTag.Tag.Generation", streamTag.Tag.Generation).
+				WithField("streamTag.Generation", streamTag.Generation).
+				Debug("The 'cli' image in the stable stream is not populated")
+		}
+		return populated, nil
 	}); err != nil {
 		duration := time.Since(startedWaiting)
 		return nil, fmt.Errorf("unable to wait for the 'cli' image in the stable stream to populate (waited for %s): %w", duration, err)

@@ -579,7 +579,7 @@ func TestExecuteJobsErrors(t *testing.T) {
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
 			}
-			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, logger, client, testNamespace, &prowconfig.Config{})
+			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, logger, client, testNamespace, &prowconfig.Config{}, true)
 			executor.pollFunc = threetimesTryingPoller
 			_, err = executor.ExecuteJobs()
 
@@ -645,7 +645,7 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
 			}
-			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, false, logger, client, testNamespace, &prowconfig.Config{})
+			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, false, logger, client, testNamespace, &prowconfig.Config{}, true)
 			executor.pollFunc = threetimesTryingPoller
 			success, _ := executor.ExecuteJobs()
 
@@ -769,7 +769,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 			if diff := cmp.Diff(imageStreamTags, tc.expectedImageStreamTagMap, cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("returned imageStreamTags do not match expected: %s", diff)
 			}
-			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, logger, client, testNamespace, &prowconfig.Config{})
+			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, logger, client, testNamespace, &prowconfig.Config{}, true)
 			success, err := executor.ExecuteJobs()
 
 			if err != nil {
@@ -873,7 +873,7 @@ func TestWaitForJobs(t *testing.T) {
 		t.Run(tc.id, func(t *testing.T) {
 			client := newTC(tc.events...)
 
-			executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, logger, client, "", &prowconfig.Config{})
+			executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, logger, client, "", &prowconfig.Config{}, true)
 			executor.pollFunc = threetimesTryingPoller
 			success, err := executor.waitForJobs(tc.pjs, &ctrlruntimeclient.ListOptions{})
 			if err != tc.err {
@@ -902,7 +902,7 @@ func TestWaitForJobsRetries(t *testing.T) {
 		return nil
 	})
 
-	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, logrus.NewEntry(logrus.New()), client, "", &prowconfig.Config{})
+	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, logrus.NewEntry(logrus.New()), client, "", &prowconfig.Config{}, true)
 	executor.pollFunc = threetimesTryingPoller
 	success, err := executor.waitForJobs(sets.Set[string]{"j": {}}, &ctrlruntimeclient.ListOptions{})
 	if err != nil {
@@ -924,7 +924,7 @@ func TestWaitForJobsLog(t *testing.T) {
 			Status:     pjapi.ProwJobStatus{State: pjapi.FailureState}},
 	).Build()
 
-	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, logger.WithFields(nil), client, "", &prowconfig.Config{})
+	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, logger.WithFields(nil), client, "", &prowconfig.Config{}, true)
 	executor.pollFunc = threetimesTryingPoller
 	_, err := executor.waitForJobs(sets.New[string]("success", "failure"), &ctrlruntimeclient.ListOptions{})
 	if err != nil {
@@ -1758,7 +1758,7 @@ func TestSubmitPresubmit(t *testing.T) {
 			t.Parallel()
 			client := newTC()
 			logger := logrus.NewEntry(logrus.New())
-			extor := NewExecutor([]*prowconfig.Presubmit{}, 0, "", &tc.refs, false, logger, client, tc.namespace, &tc.prowConfig)
+			extor := NewExecutor([]*prowconfig.Presubmit{}, 0, "", &tc.refs, false, logger, client, tc.namespace, &tc.prowConfig, true)
 			actualJob, err := extor.submitPresubmit(&tc.presubmit)
 
 			if err != nil {

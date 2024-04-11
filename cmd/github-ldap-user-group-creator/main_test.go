@@ -56,7 +56,7 @@ func TestMakeGroups(t *testing.T) {
 					},
 				},
 			},
-			clusters: sets.New[string]("app.ci", "build01", "build02", "hive"),
+			clusters: sets.New[string]("app.ci", "build01", "build02", "hosted-mgmt"),
 			expected: map[string]GroupClusters{
 				"openshift-priv-admins": {
 					Clusters: sets.New[string]("app.ci"),
@@ -99,7 +99,7 @@ func TestMakeGroups(t *testing.T) {
 					},
 				},
 				"x": {
-					Clusters: sets.New[string]("app.ci", "build01", "build02", "hive"),
+					Clusters: sets.New[string]("app.ci", "build01", "build02", "hosted-mgmt"),
 					Group: &userv1.Group{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:   "x",

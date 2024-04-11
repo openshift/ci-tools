@@ -119,7 +119,7 @@ func TestGetRouter(t *testing.T) {
 				"a": fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects().Build(),
 			},
 			expectedCode: 200,
-			expectedBody: `{"data":[{"cluster":"a","error":"an error occurred while retrieving cluster information"},{"cluster":"hive","error":"an error occurred while retrieving cluster information"}]}
+			expectedBody: `{"data":[{"cluster":"a","error":"an error occurred while retrieving cluster information"},{"cluster":"hosted-mgmt","error":"an error occurred while retrieving cluster information"}]}
 `,
 			expectedContentType: "application/json",
 		},
@@ -132,7 +132,7 @@ func TestGetRouter(t *testing.T) {
 			},
 			disabledClusters: []string{"a"},
 			expectedCode:     200,
-			expectedBody: `{"data":[{"cluster":"hive","error":"an error occurred while retrieving cluster information"},{"cluster":"a","error":"disabled cluster in Prow"}]}
+			expectedBody: `{"data":[{"cluster":"hosted-mgmt","error":"an error occurred while retrieving cluster information"},{"cluster":"a","error":"disabled cluster in Prow"}]}
 `,
 			expectedContentType: "application/json",
 		},

@@ -166,7 +166,7 @@ func (g *clusterInfoGetter) GetClusterDetails(ctx context.Context, cluster strin
 		"product":      product,
 		"cloud":        cloud,
 	}
-	if cluster == "hive" {
+	if cluster == string(api.ClusterHive) {
 		hypershiftCM := &corev1.ConfigMap{}
 		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: "hypershift", Name: "supported-versions"}, hypershiftCM); err != nil {
 			return nil, fmt.Errorf("failed to get ConfigMap supported-versions in hypershift for cluster hive: %w", err)

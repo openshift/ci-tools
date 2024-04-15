@@ -8,6 +8,7 @@ func IsSpecialInformingJobOnTestGrid(jobName string) bool {
 		"periodic-ci-openshift-cluster-control-plane-machine-set-operator-",
 		"periodic-ci-openshift-cluster-etcd-operator-",
 		"periodic-ci-openshift-hypershift-main-periodics-",
+		"periodic-ci-openshift-installer-master-altinfra-periodics-",
 		"periodic-ci-openshift-multiarch",
 		"periodic-ci-openshift-release-master-ci-",
 		"periodic-ci-openshift-release-master-nightly-",

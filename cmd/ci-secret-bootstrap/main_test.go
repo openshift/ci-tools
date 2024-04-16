@@ -1643,6 +1643,22 @@ func TestUpdateSecrets(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "return an error when cluster is not found",
+			secretsMap: map[string][]*coreapi.Secret{
+				"forgotten-one": {
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "foo",
+							Namespace: "bar",
+							Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
+						},
+						Data: map[string][]byte{"super": []byte("super")},
+					},
+				},
+			},
+			expected: errors.New("failed to get client getter for cluster forgotten-one"),
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -566,6 +566,46 @@ func TestGenerateJobs(t *testing.T) {
 				},
 			},
 		},
+		{
+			id: "multiarch branch filtered, cluster change",
+			config: &ciop.ReleaseBuildConfiguration{
+				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{
+					{
+						From: "os",
+						To:   "ci-tools",
+					},
+				},
+				PromotionConfiguration: &ciop.PromotionConfiguration{},
+			},
+			repoInfo: &ProwgenInfo{
+				Config: config.Prowgen{MultiArch: true, MultiArchBranchFilter: []string{"branch"}},
+				Metadata: ciop.Metadata{
+					Org:    "organization",
+					Repo:   "repository",
+					Branch: "branch",
+				},
+			},
+		},
+		{
+			id: "multiarch branch filtered, no cluster change",
+			config: &ciop.ReleaseBuildConfiguration{
+				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{
+					{
+						From: "os",
+						To:   "ci-tools",
+					},
+				},
+				PromotionConfiguration: &ciop.PromotionConfiguration{},
+			},
+			repoInfo: &ProwgenInfo{
+				Config: config.Prowgen{MultiArch: true, MultiArchBranchFilter: []string{"another-branch"}},
+				Metadata: ciop.Metadata{
+					Org:    "organization",
+					Repo:   "repository",
+					Branch: "branch",
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {

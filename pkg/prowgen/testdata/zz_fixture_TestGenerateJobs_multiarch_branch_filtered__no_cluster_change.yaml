@@ -1,0 +1,13 @@
+postsubmits:
+  organization/repository:
+  - always_run: true
+    labels:
+      ci-operator.openshift.io/is-promotion: "true"
+    max_concurrency: 1
+    name: branch-ci-organization-repository-branch-images
+presubmits:
+  organization/repository:
+  - always_run: false
+    labels:
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+    name: pull-ci-organization-repository-branch-images

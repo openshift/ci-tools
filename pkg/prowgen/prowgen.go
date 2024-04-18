@@ -99,7 +99,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			presubmitTargets = append(presubmitTargets, "[release:latest]")
 		}
 		jobBaseGen := newJobBaseBuilder().TestName("images")
-		if info.Config.MultiArch {
+		if info.Config.MultiArch && info.Config.HasMultiArchBranchFilter(info.Branch) {
 			jobBaseGen.Cluster(api.ClusterBuild10).WithLabel(api.ClusterLabel, string(api.ClusterBuild10))
 		}
 		jobBaseGen.PodSpec.Add(Targets(presubmitTargets...))
@@ -107,7 +107,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 
 		if configSpec.PromotionConfiguration != nil {
 			jobBaseGen = newJobBaseBuilder().TestName("images")
-			if info.Config.MultiArch {
+			if info.Config.MultiArch && info.Config.HasMultiArchBranchFilter(info.Branch) {
 				jobBaseGen.Cluster(api.ClusterBuild10).WithLabel(api.ClusterLabel, string(api.ClusterBuild10))
 			}
 			jobBaseGen.PodSpec.Add(Promotion(), Targets(imageTargets.UnsortedList()...))

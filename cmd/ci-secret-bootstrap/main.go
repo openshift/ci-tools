@@ -510,8 +510,15 @@ func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.S
 				errs = append(errs, fmt.Errorf("attempted to update a secret %s in namespace %s on a Prow disabled cluster %s", secret.Name, secret.Namespace, cluster))
 				continue
 			}
+
+			clientGetter, ok := getters[cluster]
+			if !ok {
+				errs = append(errs, fmt.Errorf("failed to get client getter for cluster %s", cluster))
+				continue
+			}
+
 			if !existingNamespaces.Has(secret.Namespace) {
-				nsClient := getters[cluster].Namespaces()
+				nsClient := clientGetter.Namespaces()
 				if _, err := nsClient.Get(context.TODO(), secret.Namespace, metav1.GetOptions{}); err != nil {
 					if !kerrors.IsNotFound(err) {
 						errs = append(errs, fmt.Errorf("failed to check if namespace %s exists on cluster %s: %w", secret.Namespace, cluster, err))
@@ -528,7 +535,7 @@ func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.S
 				existingNamespaces.Insert(secret.Namespace)
 			}
 
-			secretClient := getters[cluster].Secrets(secret.Namespace)
+			secretClient := clientGetter.Secrets(secret.Namespace)
 
 			existingSecret, err := secretClient.Get(context.TODO(), secret.Name, metav1.GetOptions{})
 

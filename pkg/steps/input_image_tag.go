@@ -3,7 +3,6 @@ package steps
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -36,23 +35,31 @@ func (s *inputImageTagStep) Inputs() (api.InputDefinition, error) {
 	if len(s.imageName) > 0 {
 		return api.InputDefinition{s.imageName}, nil
 	}
-	from := imagev1.ImageStreamTag{}
-	namespace := s.config.BaseImage.Namespace
-	name := fmt.Sprintf("%s:%s", s.config.BaseImage.Name, s.config.BaseImage.Tag)
-	if err := s.client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{
-		Namespace: namespace,
-		Name:      name,
-	}, &from); err != nil {
-		return nil, fmt.Errorf("could not resolve base image from %s/%s: %w", namespace, name, err)
+
+	if api.IsCreatedForClusterBotJob(s.config.BaseImage.Namespace) {
+		from := imagev1.ImageStreamTag{}
+		namespace := s.config.BaseImage.Namespace
+		name := fmt.Sprintf("%s:%s", s.config.BaseImage.Name, s.config.BaseImage.Tag)
+		if err := s.client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{
+			Namespace: namespace,
+			Name:      name,
+		}, &from); err != nil {
+			return nil, fmt.Errorf("could not resolve base image from %s/%s: %w", namespace, name, err)
+		}
+
+		if len(s.config.Sources) > 0 {
+			logrus.Debugf("Resolved %s (%s) to %s.", s.config.BaseImage.ISTagName(), s.config.FormattedSources(), from.Image.Name)
+		} else {
+			logrus.Debugf("Resolved %s to %s.", s.config.BaseImage.ISTagName(), from.Image.Name)
+		}
+		s.imageName = from.Image.Name
+	} else {
+		imageName := api.QuayImage(s.config.BaseImage)
+		logrus.Debugf("Resolved %s to %s.", s.config.BaseImage.ISTagName(), imageName)
+		s.imageName = imageName
 	}
 
-	if len(s.config.Sources) > 0 {
-		logrus.Debugf("Resolved %s (%s) to %s.", s.config.BaseImage.ISTagName(), s.config.FormattedSources(), from.Image.Name)
-	} else {
-		logrus.Debugf("Resolved %s to %s.", s.config.BaseImage.ISTagName(), from.Image.Name)
-	}
-	s.imageName = from.Image.Name
-	return api.InputDefinition{from.Image.Name}, nil
+	return api.InputDefinition{s.imageName}, nil
 }
 
 func (*inputImageTagStep) Validate() error { return nil }
@@ -71,7 +78,7 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 		Kind: "DockerImage",
 		Name: api.QuayImageReference(s.config.BaseImage),
 	}
-	if strings.HasPrefix(s.config.BaseImage.Namespace, "ci-ln-") {
+	if api.IsCreatedForClusterBotJob(s.config.BaseImage.Namespace) {
 		from = &coreapi.ObjectReference{
 			Kind:      "ImageStreamImage",
 			Name:      fmt.Sprintf("%s@%s", s.config.BaseImage.Name, s.imageName),

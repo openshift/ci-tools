@@ -79,7 +79,7 @@ func TestInputImageTagStep(t *testing.T) {
 			params: nil,
 		},
 		inputs: inputsExpectation{
-			values: api.InputDefinition{"ddc0de"},
+			values: api.InputDefinition{"quay.io/openshift/ci:source-namespace_BASE_BASETAG"},
 			err:    false,
 		},
 	}

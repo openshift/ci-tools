@@ -136,9 +136,14 @@ func (g *clusterInfoGetter) GetClusterDetails(ctx context.Context, cluster strin
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve the console host for cluster %s: %w", cluster, err)
 	}
-	registryHost, err := api.ResolveImageRegistryHost(ctx, client)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve the image registry host for cluster %s: %w", cluster, err)
+	registryHost := "unset"
+	if cluster != string(api.ClusterHive) {
+		host, err := api.ResolveImageRegistryHost(ctx, client)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve the image registry host for cluster %s: %w", cluster, err)
+		} else {
+			registryHost = host
+		}
 	}
 	cv := &configv1.ClusterVersion{}
 	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: "version"}, cv); err != nil {

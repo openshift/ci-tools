@@ -153,6 +153,9 @@ func (s *outputImageTagStep) imageStreamTag(fromImage string) *imagev1.ImageStre
 			ReferencePolicy: imagev1.TagReferencePolicy{
 				Type: imagev1.LocalTagReferencePolicy,
 			},
+			ImportPolicy: imagev1.TagImportPolicy{
+				ImportMode: imagev1.ImportModePreserveOriginal,
+			},
 			From: &coreapi.ObjectReference{
 				Kind:      "ImageStreamImage",
 				Name:      fmt.Sprintf("%s@%s", api.PipelineImageStream, fromImage),

@@ -83,6 +83,9 @@ func TestOutputImageStep(t *testing.T) {
 				Namespace: "job-namespace",
 				Name:      "pipeline@fromImageName",
 			},
+			ImportPolicy: imagev1.TagImportPolicy{
+				ImportMode: imagev1.ImportModePreserveOriginal,
+			},
 			ReferencePolicy: imagev1.TagReferencePolicy{Type: imagev1.LocalTagReferencePolicy},
 		},
 	}

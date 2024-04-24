@@ -478,11 +478,6 @@ func (r *reconciler) ensureCIOperatorRoleBinding(ctx context.Context, namespace 
 	return upsertObject(ctx, client, roleBinding, mutateFn, log)
 }
 
-// ci-operator uses the release controller configuration to determine
-// the version of OpenShift we create from the ImageStream, so we need
-// to copy the annotation if it exists
-const releaseConfigAnnotation = "release.openshift.io/config"
-
 func imagestream(imageStream *imagev1.ImageStream) (*imagev1.ImageStream, crcontrollerutil.MutateFn) {
 	stream := &imagev1.ImageStream{
 		ObjectMeta: metav1.ObjectMeta{
@@ -491,11 +486,11 @@ func imagestream(imageStream *imagev1.ImageStream) (*imagev1.ImageStream, crcont
 		},
 	}
 	return stream, func() error {
-		if config, set := imageStream.Annotations[releaseConfigAnnotation]; set {
+		if config, set := imageStream.Annotations[api.ReleaseConfigAnnotation]; set {
 			if stream.Annotations == nil {
 				stream.Annotations = map[string]string{}
 			}
-			stream.Annotations[releaseConfigAnnotation] = config
+			stream.Annotations[api.ReleaseConfigAnnotation] = config
 		}
 		stream.Spec.LookupPolicy.Local = true
 		for i := range stream.Spec.Tags {

@@ -261,8 +261,8 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 			if stable.ObjectMeta.Annotations == nil {
 				stable.ObjectMeta.Annotations = make(map[string]string, 1)
 			}
-			if _, ok := stable.ObjectMeta.Annotations[releaseConfigAnnotation]; !ok {
-				stable.ObjectMeta.Annotations[releaseConfigAnnotation] = fmt.Sprintf(`{"name": "%s"}`, prefix)
+			if _, ok := stable.ObjectMeta.Annotations[api.ReleaseConfigAnnotation]; !ok {
+				stable.ObjectMeta.Annotations[api.ReleaseConfigAnnotation] = fmt.Sprintf(`{"name": "%s"}`, prefix)
 			}
 		}
 

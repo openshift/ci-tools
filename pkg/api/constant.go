@@ -71,6 +71,12 @@ const (
 	CIAdminsGroupName = "test-platform-ci-admins"
 
 	ShmResource = "ci-operator.openshift.io/shm"
+
+	// ReleaseConfigAnnotation is the name of annotation created by the release controller.
+	// ci-operator uses the release controller configuration to determine
+	// the version of OpenShift we create from the ImageStream, so we need
+	// to copy the annotation if it exists
+	ReleaseConfigAnnotation = "release.openshift.io/config"
 )
 
 var (

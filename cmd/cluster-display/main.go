@@ -81,7 +81,7 @@ func addSchemes() error {
 }
 
 func getClusterPool(ctx context.Context, hiveClient ctrlruntimeclient.Client) ([]map[string]string, error) {
-	logrus.Debug("Calling getClusterPool ...")
+	logrus.Info("Calling getClusterPool ...")
 	clusterImageSetMap := map[string]string{}
 	clusterImageSets := &hivev1.ClusterImageSetList{}
 	if err := hiveClient.List(ctx, clusterImageSets); err != nil {
@@ -204,13 +204,14 @@ type memoryCache struct {
 	ClusterPoolData              []map[string]string
 	ClusterPoolDataLastUpdatedAt time.Time
 
-	CacheDuration time.Duration
+	CacheDuration             time.Duration
+	ClusterPoolsCacheDuration time.Duration
 }
 
 func (c *memoryCache) GetClusterPoolPage(ctx context.Context, client ctrlruntimeclient.Client) (*Page, error) {
 	c.ClusterPoolDataMutex.Lock()
 	defer c.ClusterPoolDataMutex.Unlock()
-	if c.ClusterPoolData == nil || time.Now().After(c.ClusterPoolDataLastUpdatedAt.Add(c.CacheDuration)) {
+	if c.ClusterPoolData == nil || time.Now().After(c.ClusterPoolDataLastUpdatedAt.Add(c.ClusterPoolsCacheDuration)) {
 		data, err := getClusterPool(ctx, client)
 		if err != nil {
 			if c.ClusterPoolData == nil {
@@ -254,7 +255,7 @@ func (c *memoryCache) GetClusterPage(ctx context.Context, clients map[string]ctr
 }
 
 func getCluster(ctx context.Context, clients map[string]ctrlruntimeclient.Client, getter ClusterInfoGetter) []map[string]string {
-	logrus.Debug("Calling getCluster ...")
+	logrus.Infof("Calling getCluster ...")
 	var data []map[string]string
 
 	for cluster, client := range clients {
@@ -289,7 +290,7 @@ func resolveProduct(ctx context.Context, client ctrlruntimeclient.Client, versio
 
 func getRouter(ctx context.Context, hiveClient ctrlruntimeclient.Client, clients map[string]ctrlruntimeclient.Client, prowDisabledClusters []string) *http.ServeMux {
 	handler := http.NewServeMux()
-	cache := memoryCache{CacheDuration: time.Hour}
+	cache := memoryCache{CacheDuration: time.Hour, ClusterPoolsCacheDuration: time.Minute}
 
 	handler.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

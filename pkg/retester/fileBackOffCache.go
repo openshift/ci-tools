@@ -22,6 +22,7 @@ type fileBackoffCache struct {
 }
 
 func (b *fileBackoffCache) load() error {
+	b.logger.WithField("backOffCache", "fileBackoffCache").Info("Loading the cache file ...")
 	return b.loadFromDiskNow(time.Now())
 }
 

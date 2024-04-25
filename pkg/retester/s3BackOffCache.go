@@ -34,6 +34,7 @@ type s3BackOffCache struct {
 }
 
 func (b *s3BackOffCache) load() error {
+	b.logger.WithField("backOffCache", "s3BackOffCache").Info("Loading the cache file ...")
 	return b.loadFromAwsNow(time.Now())
 }
 

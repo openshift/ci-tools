@@ -49,6 +49,7 @@ const (
 	releaseImageRefOption         = "release-image-ref"
 	targetNamespacesOption        = "target-namespaces"
 	customScorecardTestcaseOption = "custom-scorecard-testcase"
+	enableHybridOverlayOption     = "enable-hybrid-overlay"
 
 	BundleImage             = "BUNDLE_IMAGE"
 	Channel                 = "OO_CHANNEL"
@@ -58,6 +59,7 @@ const (
 	TargetNamespaces        = "OO_TARGET_NAMESPACES"
 	CustomScorecardTestcase = "CUSTOM_SCORECARD_TESTCASE"
 	PyxisUrl                = "PYXIS_URL"
+	EnableHybridOverlay     = "ENABLE_HYBRID_OVERLAY"
 )
 
 type options struct {
@@ -74,6 +76,7 @@ type options struct {
 	targetNamespaces        string
 	pyxisUrl                string
 	customScorecardTestcase string
+	enableHybridOverlay     string
 	dryRun                  bool
 }
 
@@ -114,6 +117,7 @@ func (o *options) gatherOptions() {
 	fs.StringVar(&o.targetNamespaces, targetNamespacesOption, "", "A comma-separated list of namespaces the operator will target. If empty, all namespaces are targeted")
 	fs.StringVar(&o.pyxisUrl, PyxisUrl, "", "URL that contains specific cvp product package name for specific ISV with unique pid")
 	fs.StringVar(&o.customScorecardTestcase, customScorecardTestcaseOption, "", "Name of custom scorecard testcase that needs to be executed")
+	fs.StringVar(&o.enableHybridOverlay, enableHybridOverlayOption, "false", "Enables the hybrid overlay feature on a running cluster")
 	fs.BoolVar(&o.dryRun, "dry-run", false, "Executes a dry-run, displaying the job YAML without submitting the job to Prow")
 }
 
@@ -238,6 +242,9 @@ func main() {
 	}
 	if o.customScorecardTestcase != "" {
 		params[CustomScorecardTestcase] = o.customScorecardTestcase
+	}
+	if o.enableHybridOverlay != "false" {
+		params[EnableHybridOverlay] = o.enableHybridOverlay
 	}
 
 	depOverrides := map[string]string{

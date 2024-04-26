@@ -162,7 +162,7 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 	// we want to expose the release payload as a CI version that looks just like
 	// the release versions for nightlies and CI release candidates
 	prefix := "0.0.1-0"
-	if raw, ok := stable.ObjectMeta.Annotations[releaseConfigAnnotation]; ok {
+	if raw, ok := stable.ObjectMeta.Annotations[api.ReleaseConfigAnnotation]; ok {
 		var releaseConfig struct {
 			Name string `json:"name"`
 		}

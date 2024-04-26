@@ -64,8 +64,8 @@ func snapshotStream(ctx context.Context, client loggingclient.LoggingClient, sou
 			},
 		},
 	}
-	if raw, ok := source.ObjectMeta.Annotations[releaseConfigAnnotation]; ok {
-		snapshot.ObjectMeta.Annotations[releaseConfigAnnotation] = raw
+	if raw, ok := source.ObjectMeta.Annotations[api.ReleaseConfigAnnotation]; ok {
+		snapshot.ObjectMeta.Annotations[api.ReleaseConfigAnnotation] = raw
 	}
 	for _, tag := range source.Status.Tags {
 		from := &coreapi.ObjectReference{

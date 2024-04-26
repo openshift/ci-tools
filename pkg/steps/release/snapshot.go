@@ -3,7 +3,6 @@ package release
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -74,7 +73,7 @@ func snapshotStream(ctx context.Context, client loggingclient.LoggingClient, sou
 			Name: api.QuayImageReference(api.ImageStreamTagReference{Namespace: sourceNamespace, Name: sourceName, Tag: tag.Tag}),
 		}
 		// a special case for cluster-bot
-		if strings.HasPrefix(sourceNamespace, "ci-ln-") {
+		if api.IsCreatedForClusterBotJob(sourceNamespace) {
 			if valid, _ := utils.FindStatusTag(source, tag.Tag); valid != nil {
 				from = valid
 			} else {

@@ -23,10 +23,10 @@ const (
 
 type shouldCollectDataForJobFunc func(job jobrunaggregatorapi.JobRowWithVariants) bool
 
-func wantsTestRunData(job jobrunaggregatorapi.JobRow) bool {
+func wantsTestRunData(job jobrunaggregatorapi.JobRowWithVariants) bool {
 	return job.CollectTestRuns
 }
-func wantsDisruptionData(job jobrunaggregatorapi.JobRow) bool {
+func wantsDisruptionData(job jobrunaggregatorapi.JobRowWithVariants) bool {
 	return job.CollectDisruption
 }
 

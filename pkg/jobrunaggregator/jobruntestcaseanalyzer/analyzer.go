@@ -41,7 +41,7 @@ var (
 
 // JobGetter gets related jobs for further analysis
 type JobGetter interface {
-	GetJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRow, error)
+	GetJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRowWithVariants, error)
 }
 
 func NewTestCaseAnalyzerJobGetter(platform, infrastructure, network, testNameSuffix string,
@@ -487,15 +487,15 @@ func (o *JobRunTestCaseAnalyzerOptions) loadStaticJobRuns(ctx context.Context, j
 	return outputRuns, nil
 }
 
-func (o *JobRunTestCaseAnalyzerOptions) loadStaticJobs() []jobrunaggregatorapi.JobRow {
-	rows := make([]jobrunaggregatorapi.JobRow, 0)
+func (o *JobRunTestCaseAnalyzerOptions) loadStaticJobs() []jobrunaggregatorapi.JobRowWithVariants {
+	rows := make([]jobrunaggregatorapi.JobRowWithVariants, 0)
 	uniqueNames := sets.Set[string]{}
 
 	for _, r := range o.staticJobRunIdentifiers {
 		// only one row per unique job name
 		if !uniqueNames.Has(r.JobName) {
 			// we only care about returning JobName
-			rows = append(rows, jobrunaggregatorapi.JobRow{JobName: r.JobName})
+			rows = append(rows, jobrunaggregatorapi.JobRowWithVariants{JobName: r.JobName})
 			uniqueNames.Insert(r.JobName)
 		}
 	}
@@ -511,7 +511,7 @@ func (o *JobRunTestCaseAnalyzerOptions) GetRelatedJobRunsFromIdentifiers(ctx con
 // GetRelatedJobRuns gets all related job runs for analysis
 func (o *JobRunTestCaseAnalyzerOptions) GetRelatedJobRuns(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error) {
 	var jobRunsToReturn []jobrunaggregatorapi.JobRunInfo
-	var jobs []jobrunaggregatorapi.JobRow
+	var jobs []jobrunaggregatorapi.JobRowWithVariants
 	var err error
 
 	// allow for the list of ids to be passed in

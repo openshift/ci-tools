@@ -63,26 +63,6 @@ const (
   }
 ]
 `
-
-	// used for TestRuns_Unified_AllJobRuns
-	testRunsUnifiedJobRunsSchema = `
-SELECT 
-  JobRuns.name as JobRunName,
-  Jobs.Jobname as JobName,
-  JobRuns.StartTime as JobRunStartTime,
-  JobRuns.ReleaseTag as ReleaseTag,
-  JobRuns.Cluster as Cluster,
-  Jobs.Platform as Platform,
-  Jobs.Architecture as Architecture,
-  Jobs.Network as Network,
-  Jobs.IPMode as IPMode,
-  Jobs.Topology as Topology,
-  Jobs.Release as Release,
-  Jobs.FromRelease as FromRelease,
-  if(Jobs.FromRelease="",false,true) as IsUpgrade,
-FROM openshift-ci-data-analysis.ci_data.JobRuns
-INNER JOIN openshift-ci-data-analysis.ci_data.Jobs on JobRuns.JobName = Jobs.JobName
-`
 )
 
 type JobRunRow struct {

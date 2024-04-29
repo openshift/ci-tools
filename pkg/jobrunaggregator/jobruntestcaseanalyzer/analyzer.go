@@ -126,7 +126,7 @@ func (s *testCaseAnalyzerJobGetter) shouldAggregateJob(prowJob *prowjobv1.ProwJo
 // For PR payload, this contains jobs correspond to the list of jobGCSPreix passed
 // For release-controller generated payload, this contains all jobs meeting selection criteria
 // from command args.
-func (s *testCaseAnalyzerJobGetter) GetJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRow, error) {
+func (s *testCaseAnalyzerJobGetter) GetJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRowWithVariants, error) {
 	jobs, err := s.ciDataClient.ListAllJobs(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list all jobs: %w", err)
@@ -149,8 +149,8 @@ func getJobInfrastructure(name string) string {
 	return "ipi"
 }
 
-func (s *testCaseAnalyzerJobGetter) filterJobsForPayload(allJobs []jobrunaggregatorapi.JobRow) []jobrunaggregatorapi.JobRow {
-	jobs := []jobrunaggregatorapi.JobRow{}
+func (s *testCaseAnalyzerJobGetter) filterJobsForPayload(allJobs []jobrunaggregatorapi.JobRowWithVariants) []jobrunaggregatorapi.JobRowWithVariants {
+	jobs := []jobrunaggregatorapi.JobRowWithVariants{}
 	for i := range allJobs {
 		job := allJobs[i]
 		if (len(s.platform) != 0 && job.Platform != s.platform) ||
@@ -203,8 +203,8 @@ func (s *testCaseAnalyzerJobGetter) isJobNameExcluded(jobName string) bool {
 	return false
 }
 
-func (s *testCaseAnalyzerJobGetter) filterJobsByNames(jobNames sets.Set[string], allJobs []jobrunaggregatorapi.JobRow) []jobrunaggregatorapi.JobRow {
-	ret := []jobrunaggregatorapi.JobRow{}
+func (s *testCaseAnalyzerJobGetter) filterJobsByNames(jobNames sets.Set[string], allJobs []jobrunaggregatorapi.JobRowWithVariants) []jobrunaggregatorapi.JobRowWithVariants {
+	ret := []jobrunaggregatorapi.JobRowWithVariants{}
 	for i := range allJobs {
 		curr := allJobs[i]
 		if jobNames.Has(curr.JobName) {

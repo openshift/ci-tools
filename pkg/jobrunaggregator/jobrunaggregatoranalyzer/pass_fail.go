@@ -240,7 +240,7 @@ func (a *weeklyAverageFromTenDays) getNormalizedFallBackJobName(ctx context.Cont
 		return jobName, err
 	}
 	var targetFromRelease, targetToRelease string
-	var job *jobrunaggregatorapi.JobRow
+	var job *jobrunaggregatorapi.JobRowWithVariants
 	for _, j := range allJobs {
 		if j.JobName == jobName {
 			job = &j

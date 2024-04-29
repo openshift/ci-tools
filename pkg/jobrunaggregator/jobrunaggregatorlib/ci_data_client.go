@@ -42,7 +42,7 @@ type TestRunSummarizerClient interface {
 }
 
 type JobLister interface {
-	ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRow, error)
+	ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRowWithVariants, error)
 
 	// ListProwJobRunsSince lists from the testplatform BigQuery dataset in a separate project from
 	// where we normally operate. Job runs are inserted here just after their GCS artifacts are uploaded.
@@ -217,14 +217,14 @@ func (c *ciDataClient) ListAlertHistoricalData(ctx context.Context) ([]*jobrunag
 	return alertDataSet, nil
 }
 
-func (c *ciDataClient) ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRow, error) {
+func (c *ciDataClient) ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRowWithVariants, error) {
 	// For Debugging, you can set "LIMIT X" where X is small
 	// so that you can process only a small subset of jobs while
 	// you debug.
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(
 		`SELECT *  
-FROM DATA_SET_LOCATION.Jobs
-ORDER BY Jobs.JobName ASC
+FROM DATA_SET_LOCATION.JobsWithVariants
+ORDER BY JobName ASC
 `)
 
 	query := c.client.Query(queryString)
@@ -232,9 +232,9 @@ ORDER BY Jobs.JobName ASC
 	if err != nil {
 		return nil, fmt.Errorf("failed to query job table with %q: %w", queryString, err)
 	}
-	jobs := []jobrunaggregatorapi.JobRow{}
+	jobs := []jobrunaggregatorapi.JobRowWithVariants{}
 	for {
-		job := &jobrunaggregatorapi.JobRow{}
+		job := &jobrunaggregatorapi.JobRowWithVariants{}
 		err = jobRows.Next(job)
 		if err == iterator.Done {
 			break

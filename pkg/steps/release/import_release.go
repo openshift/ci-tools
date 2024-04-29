@@ -109,52 +109,12 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 	}
 	// retry importing the image a few times because we might race against establishing credentials/roles
 	// and be unable to import images on the same cluster
-	streamImport := &imagev1.ImageStreamImport{
-		ObjectMeta: meta.ObjectMeta{
-			Namespace: s.jobSpec.Namespace(),
-			Name:      "release",
-		},
-		Spec: imagev1.ImageStreamImportSpec{
-			Import: true,
-			Images: []imagev1.ImageImportSpec{
-				{
-					To: &coreapi.LocalObjectReference{
-						Name: s.name,
-					},
-					From: coreapi.ObjectReference{
-						Kind: "DockerImage",
-						Name: pullSpec,
-					},
-					ImportPolicy: imagev1.TagImportPolicy{
-						ImportMode: imagev1.ImportModePreserveOriginal,
-					},
-					ReferencePolicy: imagev1.TagReferencePolicy{
-						Type: imagev1.LocalTagReferencePolicy,
-					},
-				},
-			},
-		},
-	}
-	if err := wait.ExponentialBackoff(wait.Backoff{Steps: 4, Duration: 1 * time.Second, Factor: 2}, func() (bool, error) {
-		if err := s.client.Create(ctx, streamImport); err != nil {
-			if kerrors.IsConflict(err) {
-				return false, nil
-			}
-			if kerrors.IsForbidden(err) {
-				// the ci-operator expects to have POST /imagestreamimports in the namespace of the job
-				logrus.Warnf("Unable to lock %s to an image digest pull spec, you don't have permission to access the necessary API.", utils.ReleaseImageEnv(s.name))
-				return false, nil
-			}
-			return false, err
-		}
-		image := streamImport.Status.Images[0]
-		if image.Image == nil {
-			return false, nil
-		}
-		pullSpec = streamImport.Status.Images[0].Image.DockerImageReference
-		return true, nil
-	}); err != nil {
+	if newPullSpec, err := utils.ImportTagWithRetries(ctx, s.client, s.jobSpec.Namespace(), "release", s.name, pullSpec); err != nil {
 		return fmt.Errorf("unable to import %s release image: %w", s.name, err)
+	} else {
+		logrus.WithField("pullSpec", pullSpec).WithField("newPullSpec", newPullSpec).WithField("name", s.name).
+			Debugf("Got the pull spec for release image")
+		pullSpec = newPullSpec
 	}
 
 	// override anything in stable with the contents of the release image

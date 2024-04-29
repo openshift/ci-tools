@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -8,12 +10,14 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"gopkg.in/fsnotify.v1"
 
+	"k8s.io/client-go/kubernetes/scheme"
 	prowConfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/interrupts"
@@ -21,11 +25,16 @@ import (
 	"k8s.io/test-infra/prow/metrics"
 	"k8s.io/test-infra/prow/pjutil"
 	"k8s.io/test-infra/prow/simplifypath"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	imagev1 "github.com/openshift/api/image/v1"
+
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/html"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	registryserver "github.com/openshift/ci-tools/pkg/registry/server"
+	"github.com/openshift/ci-tools/pkg/util"
 	"github.com/openshift/ci-tools/pkg/webreg"
 )
 
@@ -134,9 +143,87 @@ func getRegistryGeneration(agent agents.RegistryAgent) http.HandlerFunc {
 	}
 }
 
+func getIntegratedStream(ctx context.Context, client ctrlruntimeclient.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		ns := q.Get("namespace")
+		name := q.Get("name")
+		if err := validateStream(ns, name); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		stream, err := integratedStream(ctx, client, ns, name)
+		if err != nil {
+			logrus.WithError(err).WithField("namespace", ns).WithField("name", name).Error("failed to get information of integrated stream")
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(&stream); err != nil {
+			logrus.WithError(err).WithField("namespace", ns).WithField("name", name).Error("failed to encode data")
+		}
+	}
+}
+
+var validStreams = []*regexp.Regexp{
+	regexp.MustCompile(`^ocp/4.([6-9]|\d\d+)`),
+	regexp.MustCompile(`^origin/4.([6-9]|\d\d+)`),
+	regexp.MustCompile(`^origin/scos-4.([6-9]|\d\d+)`),
+}
+
+func validateStream(ns string, name string) error {
+	if ns == "" {
+		return errors.New("namespace cannot be empty")
+	}
+	if name == "" {
+		return errors.New("name cannot be empty")
+	}
+	is := fmt.Sprintf("%s/%s", ns, name)
+	for _, re := range validStreams {
+		if re.MatchString(is) {
+			return nil
+		}
+	}
+	return fmt.Errorf("not a valid integrated stream: %s", is)
+}
+
+type IntegratedStream struct {
+	Tags                        []string `json:"tags,omitempty"`
+	ReleaseControllerConfigName string   `json:"releaseControllerConfigName"`
+}
+
+func integratedStream(ctx context.Context, client ctrlruntimeclient.Client, ns, name string) (*IntegratedStream, error) {
+	is := &imagev1.ImageStream{}
+	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, is); err != nil {
+		return nil, fmt.Errorf("failed to get image stream %s/%s: %w", ns, name, err)
+	}
+	var tags []string
+	for _, tag := range is.Status.Tags {
+		tags = append(tags, tag.Tag)
+	}
+	var releaseControllerConfigName string
+	if raw, ok := is.ObjectMeta.Annotations[api.ReleaseConfigAnnotation]; ok {
+		var releaseConfig struct {
+			Name string `json:"name"`
+		}
+		if err := json.Unmarshal([]byte(raw), &releaseConfig); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal release controller's config on image stream %s/%s: %w", ns, name, err)
+		}
+		releaseControllerConfigName = releaseConfig.Name
+	}
+	return &IntegratedStream{Tags: tags, ReleaseControllerConfigName: releaseControllerConfigName}, nil
+}
+
 // l and v keep the tree legible
 func l(fragment string, children ...simplifypath.Node) simplifypath.Node {
 	return simplifypath.L(fragment, children...)
+}
+
+func addSchemes() error {
+	if err := imagev1.AddToScheme(scheme.Scheme); err != nil {
+		return fmt.Errorf("failed to add imagev1 to scheme: %w", err)
+	}
+	return nil
 }
 
 func main() {
@@ -147,6 +234,9 @@ func main() {
 	}
 	if err := validateOptions(&o); err != nil {
 		logrus.Fatalf("invalid options: %v", err)
+	}
+	if err := addSchemes(); err != nil {
+		logrus.WithError(err).Fatal("failed to add schemes")
 	}
 	level, _ := logrus.ParseLevel(o.logLevel)
 	logrus.SetLevel(level)
@@ -191,6 +281,15 @@ func main() {
 	}
 	go func() { logrus.Fatal(<-registryErrCh) }()
 
+	inClusterConfig, err := util.LoadClusterConfig()
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to load in-cluster config")
+	}
+	ocClient, err := ctrlruntimeclient.New(inClusterConfig, ctrlruntimeclient.Options{})
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create oc client")
+	}
+
 	if o.validateOnly {
 		os.Exit(0)
 	}
@@ -226,6 +325,7 @@ func main() {
 	http.HandleFunc("/clusterProfile", handler(registryserver.ResolveClusterProfile(registryAgent, configresolverMetrics)).ServeHTTP)
 	http.HandleFunc("/configGeneration", handler(getConfigGeneration(configAgent)).ServeHTTP)
 	http.HandleFunc("/registryGeneration", handler(getRegistryGeneration(registryAgent)).ServeHTTP)
+	http.HandleFunc("/integratedStream", handler(getIntegratedStream(context.Background(), ocClient)).ServeHTTP)
 	http.HandleFunc("/readyz", func(_ http.ResponseWriter, _ *http.Request) {})
 	interrupts.ListenAndServe(&http.Server{Addr: ":" + strconv.Itoa(o.port)}, o.gracePeriod)
 	uiMux := http.NewServeMux()

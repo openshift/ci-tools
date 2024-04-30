@@ -625,7 +625,7 @@ func (o *JobRunTestCaseAnalyzerOptions) Run(ctx context.Context) error {
 	}
 
 	// if it hasn't been more than two hours since the jobRuns started, the list isn't complete.
-	readyAt := o.jobRunStartEstimate.Add(2 * time.Hour)
+	readyAt := o.jobRunStartEstimate.Add(10 * time.Minute)
 
 	durationToWait := o.timeout - 20*time.Minute
 	timeToStopWaiting := o.jobRunStartEstimate.Add(durationToWait)

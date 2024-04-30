@@ -14,6 +14,7 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/api/configresolver"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
@@ -91,17 +92,23 @@ func (s *stableImagesTagStep) Objects() []ctrlruntimeclient.Object {
 // expected that builds will overwrite these tags at
 // a later point, selectively
 type releaseImagesTagStep struct {
-	config  api.ReleaseTagConfiguration
-	client  loggingclient.LoggingClient
-	params  *api.DeferredParameters
-	jobSpec *api.JobSpec
+	config           api.ReleaseTagConfiguration
+	client           loggingclient.LoggingClient
+	params           *api.DeferredParameters
+	jobSpec          *api.JobSpec
+	integratedStream *configresolver.IntegratedStream
 }
 
 func (s *releaseImagesTagStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
-func (*releaseImagesTagStep) Validate() error { return nil }
+func (s *releaseImagesTagStep) Validate() error {
+	if s.integratedStream == nil {
+		return NilIntegratedStreamError
+	}
+	return nil
+}
 
 func sourceName(config api.ReleaseTagConfiguration) string {
 	return fmt.Sprintf("%s/%s:%s", config.Namespace, config.Name, api.ComponentFormatReplacement)
@@ -118,7 +125,7 @@ func (s *releaseImagesTagStep) run(ctx context.Context) error {
 		logrus.Infof("Tagged shared images from %s", sourceName(s.config))
 	}
 
-	is, newIS, err := snapshotStream(ctx, s.client, s.config.Namespace, s.config.Name, s.jobSpec.Namespace, api.LatestReleaseName)
+	newIS, err := snapshotStream(ctx, s.client, s.config.Namespace, s.config.Name, s.jobSpec.Namespace, api.LatestReleaseName, s.integratedStream)
 	if err != nil {
 		return err
 	}
@@ -134,12 +141,13 @@ func (s *releaseImagesTagStep) run(ctx context.Context) error {
 		return fmt.Errorf("could not copy stable-initial imagestreamtag: %w", err)
 	}
 
-	for _, tag := range is.Spec.Tags {
-		spec, ok, _ := util.ResolvePullSpec(is, tag.Name, false)
+	for _, tag := range s.integratedStream.Tags {
+		spec, ok, _ := util.ResolvePullSpec(newIS, tag, false)
 		if !ok {
+			logrus.WithField("tag", tag).Debug("Failed to resolve the pull spec")
 			continue
 		}
-		s.params.Set(utils.StableImageEnv(tag.Name), spec)
+		s.params.Set(utils.StableImageEnv(tag), spec)
 	}
 
 	return nil
@@ -196,11 +204,12 @@ func (s *releaseImagesTagStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, client loggingclient.LoggingClient, params *api.DeferredParameters, jobSpec *api.JobSpec) api.Step {
+func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, client loggingclient.LoggingClient, params *api.DeferredParameters, jobSpec *api.JobSpec, integratedStream *configresolver.IntegratedStream) api.Step {
 	return &releaseImagesTagStep{
-		config:  config,
-		client:  client,
-		params:  params,
-		jobSpec: jobSpec,
+		config:           config,
+		client:           client,
+		params:           params,
+		jobSpec:          jobSpec,
+		integratedStream: integratedStream,
 	}
 }

@@ -156,22 +156,22 @@ func ImportTagWithRetries(ctx context.Context, client ctrlruntimeclient.Client, 
 		step = step + 1
 		if err := client.Create(ctx, streamImport); err != nil {
 			if kerrors.IsConflict(err) {
-				logger.WithField("step", step-1).Warn("Unable to create image stream import up to conflicts")
+				logger.WithField("step", step-1).Debug("Unable to create image stream import up to conflicts")
 				return false, nil
 			}
 			if kerrors.IsForbidden(err) {
-				logger.WithField("step", step-1).Warn("Unable to create image stream import up to permissions")
+				logger.WithField("step", step-1).Debug("Unable to create image stream import up to permissions")
 				return false, nil
 			}
 			return false, err
 		}
 		if len(streamImport.Status.Images) == 0 {
-			logger.WithField("step", step-1).Warn("Imports' status has no images")
+			logger.WithField("step", step-1).Debug("Imports' status has no images")
 			return false, nil
 		}
 		image := streamImport.Status.Images[0]
 		if image.Image == nil {
-			logger.WithField("step", step-1).Warn("Imports' status' image is nil")
+			logger.WithField("step", step-1).Debug("Imports' status' image is nil")
 			return false, nil
 		}
 		pullSpec = image.Image.DockerImageReference
@@ -182,7 +182,7 @@ func ImportTagWithRetries(ctx context.Context, client ctrlruntimeclient.Client, 
 			var conditionMsg string
 			imagestream := imagev1.ImageStream{}
 			if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, &imagestream); err != nil {
-				logger.WithError(err).Warn("Failed to get image stream for the tag")
+				logger.WithError(err).Debug("Failed to get image stream for the tag")
 			} else {
 				for _, t := range imagestream.Status.Tags {
 					if t.Tag == tag {

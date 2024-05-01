@@ -30,6 +30,7 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/api/configresolver"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/html"
 	"github.com/openshift/ci-tools/pkg/load/agents"
@@ -187,12 +188,7 @@ func validateStream(ns string, name string) error {
 	return fmt.Errorf("not a valid integrated stream: %s", is)
 }
 
-type IntegratedStream struct {
-	Tags                        []string `json:"tags,omitempty"`
-	ReleaseControllerConfigName string   `json:"releaseControllerConfigName"`
-}
-
-func integratedStream(ctx context.Context, client ctrlruntimeclient.Client, ns, name string) (*IntegratedStream, error) {
+func integratedStream(ctx context.Context, client ctrlruntimeclient.Client, ns, name string) (*configresolver.IntegratedStream, error) {
 	is := &imagev1.ImageStream{}
 	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, is); err != nil {
 		return nil, fmt.Errorf("failed to get image stream %s/%s: %w", ns, name, err)
@@ -211,7 +207,7 @@ func integratedStream(ctx context.Context, client ctrlruntimeclient.Client, ns, 
 		}
 		releaseControllerConfigName = releaseConfig.Name
 	}
-	return &IntegratedStream{Tags: tags, ReleaseControllerConfigName: releaseControllerConfigName}, nil
+	return &configresolver.IntegratedStream{Tags: tags, ReleaseControllerConfigName: releaseControllerConfigName}, nil
 }
 
 // l and v keep the tree legible

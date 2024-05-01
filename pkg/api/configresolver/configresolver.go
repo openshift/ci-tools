@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/sirupsen/logrus"
+
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	imagev1 "github.com/openshift/api/image/v1"
@@ -42,6 +44,7 @@ func ReleaseControllerAnnotationValueToConfigName(annotationValue string) (strin
 
 // LocalIntegratedStream return the information of the given integrated stream
 func LocalIntegratedStream(ctx context.Context, client ctrlruntimeclient.Client, ns, name string) (*IntegratedStream, error) {
+	logrus.WithField("namespace", ns).WithField("name", name).Debug("Getting info for integrated stream")
 	is := &imagev1.ImageStream{}
 	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, is); err != nil {
 		return nil, fmt.Errorf("failed to get image stream %s/%s: %w", ns, name, err)

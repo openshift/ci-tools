@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -143,7 +144,44 @@ func getRegistryGeneration(agent agents.RegistryAgent) http.HandlerFunc {
 	}
 }
 
-func getIntegratedStream(ctx context.Context, client ctrlruntimeclient.Client) http.HandlerFunc {
+type memoryCache struct {
+	Client                 ctrlruntimeclient.Client
+	IntegratedStreamsMutex sync.Mutex
+	IntegratedStreams      map[string]integratedStreamRecord
+	CacheDuration          time.Duration
+}
+
+func (c *memoryCache) Get(ctx context.Context, ns, name string) (*configresolver.IntegratedStream, error) {
+	key := fmt.Sprintf("%s/%s", ns, name)
+	if c.IntegratedStreams == nil {
+		c.IntegratedStreams = map[string]integratedStreamRecord{}
+	}
+	if r, ok := c.IntegratedStreams[key]; ok {
+		if time.Now().Before(r.LastUpdatedAt.Add(c.CacheDuration)) {
+			logrus.WithField("namespace", ns).WithField("name", name).Debug("Getting info for integrated stream from cache")
+			return r.Stream, nil
+		}
+	}
+	c.IntegratedStreamsMutex.Lock()
+	defer c.IntegratedStreamsMutex.Unlock()
+	s, err := configresolver.LocalIntegratedStream(ctx, c.Client, ns, name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get information on image stream %s/%s: %w", ns, name, err)
+	}
+	c.IntegratedStreams[key] = integratedStreamRecord{Stream: s, LastUpdatedAt: time.Now()}
+	return s, nil
+}
+
+type integratedStreamRecord struct {
+	Stream        *configresolver.IntegratedStream
+	LastUpdatedAt time.Time
+}
+
+type IntegratedStreamGetter interface {
+	Get(ctx context.Context, ns, name string) (*configresolver.IntegratedStream, error)
+}
+
+func getIntegratedStream(ctx context.Context, g IntegratedStreamGetter) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		ns := q.Get("namespace")
@@ -152,7 +190,7 @@ func getIntegratedStream(ctx context.Context, client ctrlruntimeclient.Client) h
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		stream, err := configresolver.LocalIntegratedStream(ctx, client, ns, name)
+		stream, err := g.Get(ctx, ns, name)
 		if err != nil {
 			logrus.WithError(err).WithField("namespace", ns).WithField("name", name).Error("failed to get information of integrated stream")
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -299,7 +337,8 @@ func main() {
 	http.HandleFunc("/clusterProfile", handler(registryserver.ResolveClusterProfile(registryAgent, configresolverMetrics)).ServeHTTP)
 	http.HandleFunc("/configGeneration", handler(getConfigGeneration(configAgent)).ServeHTTP)
 	http.HandleFunc("/registryGeneration", handler(getRegistryGeneration(registryAgent)).ServeHTTP)
-	http.HandleFunc("/integratedStream", handler(getIntegratedStream(context.Background(), ocClient)).ServeHTTP)
+	cache := memoryCache{Client: ocClient, CacheDuration: time.Minute}
+	http.HandleFunc("/integratedStream", handler(getIntegratedStream(context.Background(), &cache)).ServeHTTP)
 	http.HandleFunc("/readyz", func(_ http.ResponseWriter, _ *http.Request) {})
 	interrupts.ListenAndServe(&http.Server{Addr: ":" + strconv.Itoa(o.port)}, o.gracePeriod)
 	uiMux := http.NewServeMux()

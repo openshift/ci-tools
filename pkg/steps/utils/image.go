@@ -97,8 +97,8 @@ func getEvaluator(ctx context.Context, client ctrlruntimeclient.Client, ns, name
 				if !exist {
 					logrus.WithField("conditionMessage", condition.Message).Debugf("Waiting to import tag[%d] on imagestream %s/%s:%s ...", i, stream.Namespace, stream.Name, tag.Name)
 					if strings.Contains(condition.Message, "Internal error occurred") {
-						if _, err := ImportTagWithRetries(ctx, client, ns, name, tag.Name, ""); err != nil {
-							return false, fmt.Errorf("failed to reimport the tag %s/%s@%s: %w", stream.Namespace, stream.Name, tag.Name, err)
+						if _, err := ImportTagWithRetries(ctx, client, ns, name, tag.Name, "", api.ImageStreamImportRetries); err != nil {
+							return false, fmt.Errorf("failed to reimport the tag %s/%s:%s: %w", stream.Namespace, stream.Name, tag.Name, err)
 						}
 					}
 					return false, nil
@@ -121,15 +121,16 @@ func WaitForImportingISTag(ctx context.Context, client ctrlruntimeclient.WithWat
 }
 
 // ImportTagWithRetries imports image with retries
-func ImportTagWithRetries(ctx context.Context, client ctrlruntimeclient.Client, ns, name, tag, sourcePullSpec string) (string, error) {
+func ImportTagWithRetries(ctx context.Context, client ctrlruntimeclient.Client, ns, name, tag, sourcePullSpec string, retries int) (string, error) {
 	var pullSpec string
 	step := 0
 	objectReferenceName := api.QuayImageReference(api.ImageStreamTagReference{Namespace: ns, Name: name, Tag: tag})
 	if sourcePullSpec != "" {
 		objectReferenceName = sourcePullSpec
 	}
-	if err := wait.ExponentialBackoff(wait.Backoff{Steps: 3, Duration: 1 * time.Second, Factor: 2}, func() (bool, error) {
-		logrus.Debugf("Retrying (%d) importing tag %s/%s:%s", step, ns, name, tag)
+	logger := logrus.WithField("tag", fmt.Sprintf(" %s/%s:%s", ns, name, tag)).WithField("sourcePullSpec", sourcePullSpec)
+	if err := wait.ExponentialBackoff(wait.Backoff{Steps: retries, Duration: 1 * time.Second, Factor: 2}, func() (bool, error) {
+		logger.WithField("step", step).Debug("Retrying importing tag ...")
 		streamImport := &imagev1.ImageStreamImport{
 			ObjectMeta: meta.ObjectMeta{
 				Namespace: ns,
@@ -155,30 +156,50 @@ func ImportTagWithRetries(ctx context.Context, client ctrlruntimeclient.Client, 
 		step = step + 1
 		if err := client.Create(ctx, streamImport); err != nil {
 			if kerrors.IsConflict(err) {
+				logger.WithField("step", step-1).Warn("Unable to create image stream import up to conflicts")
 				return false, nil
 			}
 			if kerrors.IsForbidden(err) {
-				logrus.Warnf("Unable to lock %s/%s@%s to an image digest pull spec, you don't have permission to access the necessary API.",
-					ns, name, tag)
+				logger.WithField("step", step-1).Warn("Unable to create image stream import up to permissions")
 				return false, nil
 			}
 			return false, err
 		}
 		if len(streamImport.Status.Images) == 0 {
+			logger.WithField("step", step-1).Warn("Imports' status has no images")
 			return false, nil
 		}
 		image := streamImport.Status.Images[0]
 		if image.Image == nil {
+			logger.WithField("step", step-1).Warn("Imports' status' image is nil")
 			return false, nil
 		}
 		pullSpec = image.Image.DockerImageReference
-		logrus.Debugf("Imported tag %s/%s:%s", ns, name, tag)
+		logrus.Debugf("Imported tag %s/%s:%s at import (%d)", ns, name, tag, step-1)
 		return true, nil
 	}); err != nil {
 		if err == wait.ErrorInterrupted(err) {
-			return "", fmt.Errorf("unable to import tag %s/%s@%s even with (%d) imports: %w", ns, name, tag, step, err)
+			var conditionMsg string
+			imagestream := imagev1.ImageStream{}
+			if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, &imagestream); err != nil {
+				logger.WithError(err).Warn("Failed to get image stream for the tag")
+			} else {
+				for _, t := range imagestream.Status.Tags {
+					if t.Tag == tag {
+						if len(t.Conditions) > 0 {
+							conditionMsg = t.Conditions[0].Message
+						}
+						break
+					}
+				}
+			}
+			if conditionMsg == "" {
+				return "", fmt.Errorf("unable to import tag %s/%s:%s even after (%d) imports: %w", ns, name, tag, step, err)
+			} else {
+				return "", fmt.Errorf("unable to import tag %s/%s:%s with message %s on the image stream even after (%d) imports: %w", ns, name, tag, conditionMsg, step, err)
+			}
 		}
-		return "", fmt.Errorf("unable to import tag %s/%s@%s at import (%d): %w", ns, name, tag, step-1, err)
+		return "", fmt.Errorf("unable to import tag %s/%s:%s at import (%d): %w", ns, name, tag, step-1, err)
 	}
 	return pullSpec, nil
 }

@@ -109,7 +109,7 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 	}
 	// retry importing the image a few times because we might race against establishing credentials/roles
 	// and be unable to import images on the same cluster
-	if newPullSpec, err := utils.ImportTagWithRetries(ctx, s.client, s.jobSpec.Namespace(), "release", s.name, pullSpec); err != nil {
+	if newPullSpec, err := utils.ImportTagWithRetries(ctx, s.client, s.jobSpec.Namespace(), "release", s.name, pullSpec, api.ImageStreamImportRetries); err != nil {
 		return fmt.Errorf("unable to import %s release image: %w", s.name, err)
 	} else {
 		logrus.WithField("pullSpec", pullSpec).WithField("newPullSpec", newPullSpec).WithField("name", s.name).

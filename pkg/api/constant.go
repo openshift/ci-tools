@@ -77,6 +77,8 @@ const (
 	// the version of OpenShift we create from the ImageStream, so we need
 	// to copy the annotation if it exists
 	ReleaseConfigAnnotation = "release.openshift.io/config"
+
+	ImageStreamImportRetries = 6
 )
 
 var (

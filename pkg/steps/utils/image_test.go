@@ -59,13 +59,13 @@ func TestReimportTag(t *testing.T) {
 			ns:            "timeout",
 			is:            "is",
 			tag:           "tag",
-			expectedErr:   fmt.Errorf("unable to import tag timeout/is@tag even with (3) imports: timed out waiting for the condition"),
+			expectedErr:   fmt.Errorf("unable to import tag timeout/is:tag even after (3) imports: timed out waiting for the condition"),
 			expectedCount: 3,
 		},
 	}
 
 	for _, testCase := range testCases {
-		actual, actualErr := ImportTagWithRetries(context.Background(), testCase.client, testCase.ns, testCase.is, testCase.tag, testCase.sourcePullSpec)
+		actual, actualErr := ImportTagWithRetries(context.Background(), testCase.client, testCase.ns, testCase.is, testCase.tag, testCase.sourcePullSpec, 3)
 		if diff := cmp.Diff(testCase.expectedErr, actualErr, testhelper.EquateErrorMessage); diff != "" {
 			t.Errorf("%s: actualErr does not match expectedErr, diff: %s", testCase.name, diff)
 		}
@@ -223,7 +223,7 @@ func TestGetEvaluator(t *testing.T) {
 				},
 			},
 			expected:      false,
-			expectedErr:   fmt.Errorf("failed to reimport the tag some error/is@cli: unable to import tag some error/is@cli at import (0): some error"),
+			expectedErr:   fmt.Errorf("failed to reimport the tag some error/is:cli: unable to import tag some error/is:cli at import (0): some error"),
 			expectedCount: 1,
 		},
 		{

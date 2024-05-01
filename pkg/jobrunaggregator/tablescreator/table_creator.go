@@ -19,9 +19,8 @@ type allJobsTableCreatorOptions struct {
 func (r *allJobsTableCreatorOptions) Run(ctx context.Context) error {
 
 	tableNamesToSchemas := map[string]string{
-		jobrunaggregatorlib.JobsTableName:    jobrunaggregatorapi.JobSchema,
-		jobrunaggregatorlib.TestRunTableName: jobrunaggregatorapi.TestRunsSchema,
-		jobrunaggregatorlib.JobRunTableName:  jobrunaggregatorapi.JobRunSchema,
+		jobrunaggregatorlib.JobsTableName:   jobrunaggregatorapi.JobSchema,
+		jobrunaggregatorlib.JobRunTableName: jobrunaggregatorapi.JobRunSchema,
 	}
 
 	for tableName, tableSchema := range tableNamesToSchemas {

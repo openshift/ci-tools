@@ -38,7 +38,6 @@ type AggregationJobClient interface {
 // TestRunSummarizerClient client view used by the test run summarization client.
 type TestRunSummarizerClient interface {
 	GetLastAggregationForJob(ctx context.Context, frequency, jobName string) (*jobrunaggregatorapi.AggregatedTestRunRow, error)
-	ListUnifiedTestRunsForJobAfterDay(ctx context.Context, jobName string, startDay time.Time) (*UnifiedTestRunRowIterator, error)
 }
 
 type JobLister interface {
@@ -78,9 +77,6 @@ type CIDataClient interface {
 type ciDataClient struct {
 	dataCoordinates BigQueryDataCoordinates
 	client          *bigquery.Client
-
-	disruptionJobRunTableName string
-	testJobRunTableName       string
 }
 
 type RowCount struct {
@@ -89,10 +85,8 @@ type RowCount struct {
 
 func NewCIDataClient(dataCoordinates BigQueryDataCoordinates, client *bigquery.Client) CIDataClient {
 	return &ciDataClient{
-		dataCoordinates:           dataCoordinates,
-		client:                    client,
-		disruptionJobRunTableName: jobrunaggregatorapi.DisruptionJobRunTableName,
-		testJobRunTableName:       jobrunaggregatorapi.LegacyJobRunTableName,
+		dataCoordinates: dataCoordinates,
+		client:          client,
 	}
 }
 
@@ -818,26 +812,6 @@ func (c *ciDataClient) tableForFrequency(frequency string) (string, error) {
 	default:
 		return "", fmt.Errorf("unrecognized frequency: %q", frequency)
 	}
-}
-
-func (c *ciDataClient) ListUnifiedTestRunsForJobAfterDay(ctx context.Context, jobName string, startDay time.Time) (*UnifiedTestRunRowIterator, error) {
-	queryString := c.dataCoordinates.SubstituteDataSetLocation(
-		`SELECT *
-FROM DATA_SET_LOCATION.UnifiedTestRuns
-WHERE UnifiedTestRuns.JobRunStartTime >= @TimeCutOff and UnifiedTestRuns.JobName = @JobName
-ORDER BY UnifiedTestRuns.JobRunStartTime ASC
-`)
-
-	query := c.client.Query(queryString)
-	query.QueryConfig.Parameters = []bigquery.QueryParameter{
-		{Name: "TimeCutOff", Value: startDay},
-		{Name: "JobName", Value: jobName},
-	}
-	it, err := query.Read(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return &UnifiedTestRunRowIterator{delegatedIterator: it}, nil
 }
 
 func (c *ciDataClient) ListReleaseTags(ctx context.Context) (sets.Set[string], error) {

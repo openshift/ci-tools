@@ -96,16 +96,6 @@ func (c *retryingCIDataClient) GetLastAggregationForJob(ctx context.Context, fre
 	return ret, err
 }
 
-func (c *retryingCIDataClient) ListUnifiedTestRunsForJobAfterDay(ctx context.Context, jobName string, startDay time.Time) (*UnifiedTestRunRowIterator, error) {
-	var ret *UnifiedTestRunRowIterator
-	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
-		var innerErr error
-		ret, innerErr = c.delegate.ListUnifiedTestRunsForJobAfterDay(ctx, jobName, startDay)
-		return innerErr
-	})
-	return ret, err
-}
-
 func (c *retryingCIDataClient) ListReleaseTags(ctx context.Context) (sets.Set[string], error) {
 	var ret sets.Set[string]
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {

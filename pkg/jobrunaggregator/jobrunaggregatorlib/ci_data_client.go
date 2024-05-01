@@ -35,11 +35,6 @@ type AggregationJobClient interface {
 	ListAggregatedTestRunsForJob(ctx context.Context, frequency, jobName string, startDay time.Time) ([]jobrunaggregatorapi.AggregatedTestRunRow, error)
 }
 
-// TestRunSummarizerClient client view used by the test run summarization client.
-type TestRunSummarizerClient interface {
-	GetLastAggregationForJob(ctx context.Context, frequency, jobName string) (*jobrunaggregatorapi.AggregatedTestRunRow, error)
-}
-
 type JobLister interface {
 	ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRowWithVariants, error)
 
@@ -57,7 +52,6 @@ type HistoricalDataClient interface {
 type CIDataClient interface {
 	JobLister
 	AggregationJobClient
-	TestRunSummarizerClient
 	HistoricalDataClient
 
 	// these deal with release tags
@@ -768,40 +762,6 @@ ON
 	}
 
 	return rows, nil
-}
-
-func (c *ciDataClient) GetLastAggregationForJob(ctx context.Context, frequency, jobName string) (*jobrunaggregatorapi.AggregatedTestRunRow, error) {
-	frequencyTable, err := c.tableForFrequency(frequency)
-	if err != nil {
-		return nil, err
-	}
-	queryString := strings.Replace(
-		`SELECT *
-FROM DATA_SET_LOCATION.TABLE_NAME
-WHERE TABLE_NAME.JobName = @JobName
-ORDER BY TABLE_NAME.AggregationStartDate DESC
-LIMIT 1`,
-		"TABLE_NAME", frequencyTable, -1)
-
-	queryString = c.dataCoordinates.SubstituteDataSetLocation(queryString)
-
-	query := c.client.Query(queryString)
-	query.QueryConfig.Parameters = []bigquery.QueryParameter{
-		{Name: "JobName", Value: jobName},
-	}
-	lastJobRunRow, err := query.Read(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query aggregation table with %q: %w", queryString, err)
-	}
-	lastJobRun := &jobrunaggregatorapi.AggregatedTestRunRow{}
-	err = lastJobRunRow.Next(lastJobRun)
-	if err == iterator.Done {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return lastJobRun, nil
 }
 
 func (c *ciDataClient) tableForFrequency(frequency string) (string, error) {

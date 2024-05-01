@@ -1,8 +1,6 @@
 package jobtableprimer
 
 import (
-	"strings"
-
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 )
 
@@ -11,12 +9,6 @@ type jobRowBuilder struct {
 }
 
 func newJob(name string, reverseOrderedVersions []string) *jobRowBuilder {
-	versions := []string{}
-	for _, curr := range reverseOrderedVersions {
-		if strings.Contains(name, curr) {
-			versions = append(versions, curr)
-		}
-	}
 	return &jobRowBuilder{
 		job: &jobrunaggregatorapi.JobRow{
 			JobName:                     name,

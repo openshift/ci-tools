@@ -69,6 +69,11 @@ func TestValidateStream(t *testing.T) {
 			isName: "scos-4.15",
 		},
 		{
+			name:   "ocp-private/4.16-priv is valid",
+			isNS:   "ocp-private",
+			isName: "4.16-priv",
+		},
+		{
 			name:     "origin/bar-4.15 is invalid",
 			isNS:     "origin",
 			isName:   "bar-4.15",

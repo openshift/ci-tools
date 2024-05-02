@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
-	"strings"
 	"time"
 
 	"github.com/blang/semver"
@@ -252,83 +250,12 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 
 	// loop until we observe all images have successfully imported, kicking import if a particular
 	// tag fails
-	var waiting map[string]int64
-	stable := &imagev1.ImageStream{}
-	if err := wait.Poll(3*time.Second, 15*time.Minute, func() (bool, error) {
-		if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: streamName}, stable); err != nil {
-			return false, fmt.Errorf("could not resolve imagestream %s: %w", streamName, err)
-		}
-		generations := make(map[string]int64)
-		for _, tag := range stable.Spec.Tags {
-			if tag.Generation == nil || *tag.Generation == 0 {
-				continue
-			}
-			generations[tag.Name] = *tag.Generation
-		}
-		updates := false
-		for _, event := range stable.Status.Tags {
-			gen, ok := generations[event.Tag]
-			if !ok {
-				continue
-			}
-			if len(event.Items) > 0 && event.Items[0].Generation >= gen {
-				delete(generations, event.Tag)
-				continue
-			}
-			if hasFailedImportCondition(event.Conditions, gen) {
-				zero := int64(0)
-				findSpecTagReference(stable, event.Tag).Generation = &zero
-				updates = true
-			}
-		}
-		if updates {
-			if err = s.client.Update(ctx, stable); err != nil {
-				logrus.WithError(err).Error("Failed requesting re-import of failed release image stream.")
-			}
-			return false, nil
-		}
-		if len(generations) == 0 {
-			return true, nil
-		}
-		waiting = generations
-		return false, nil
-	}); err != nil {
-		if len(waiting) == 0 || err != wait.ErrWaitTimeout {
-			return fmt.Errorf("unable to import image stream %s: %w", streamName, err)
-		}
-		var tagImportErrorMessages []string
-		for tag := range waiting {
-			msg := "- " + tag
-			if tagRef := findSpecTagReference(stable, tag); tagRef != nil && tagRef.From != nil {
-				msg = msg + " from " + tagRef.From.Name
-			}
-			tagImportErrorMessages = append(tagImportErrorMessages, msg)
-		}
-		sort.Strings(tagImportErrorMessages)
-		return fmt.Errorf("the following tags from the release could not be imported to %s after five minutes:\n%s", streamName, strings.Join(tagImportErrorMessages, "\n"))
+	logrus.Infof("Importing release %s created at %s with %d images to tag release:%s ...", releaseIS.Name, releaseIS.CreationTimestamp, len(releaseIS.Spec.Tags), s.name)
+	if err := utils.WaitForImportingISTag(ctx, s.client, s.jobSpec.Namespace(), streamName, nil, sets.New[string](), utils.DefaultImageImportTimeout); err != nil {
+		return fmt.Errorf("failed to import release %s to tag release:%s: %w", releaseIS.Name, s.name, err)
 	}
-
 	logrus.Infof("Imported release %s created at %s with %d images to tag release:%s", releaseIS.Name, releaseIS.CreationTimestamp, len(releaseIS.Spec.Tags), s.name)
 	return nil
-}
-
-func findSpecTagReference(is *imagev1.ImageStream, tag string) *imagev1.TagReference {
-	for i, t := range is.Spec.Tags {
-		if t.Name != tag {
-			continue
-		}
-		return &is.Spec.Tags[i]
-	}
-	return nil
-}
-
-func hasFailedImportCondition(conditions []imagev1.TagEventCondition, generation int64) bool {
-	for _, condition := range conditions {
-		if condition.Generation >= generation && condition.Type == imagev1.ImportSuccess && condition.Status == coreapi.ConditionFalse {
-			return true
-		}
-	}
-	return false
 }
 
 func (s *importReleaseStep) Requires() []api.StepLink {

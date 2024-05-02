@@ -872,7 +872,7 @@ func (o *options) Run() []error {
 
 	o.resolveConsoleHost()
 
-	streams, err := integratedStreams(o.configSpec, o.resolverClient)
+	streams, err := integratedStreams(o.configSpec, o.resolverClient, o.clusterConfig)
 	if err != nil {
 		return []error{results.ForReason("config_resolver").WithError(err).Errorf("failed to generate integrated streams: %v", err)}
 	}
@@ -992,12 +992,19 @@ func (o *options) Run() []error {
 	})
 }
 
-func integratedStreams(config *api.ReleaseBuildConfiguration, client server.ResolverClient) (map[string]*configresolver.IntegratedStream, error) {
+func integratedStreams(config *api.ReleaseBuildConfiguration, client server.ResolverClient, clusterConfig *rest.Config) (map[string]*configresolver.IntegratedStream, error) {
 	if config == nil {
 		return nil, errors.New("unable to get integrated stream for nil config")
 	}
 	if client == nil {
 		return nil, errors.New("unable to get integrated stream with nil client")
+	}
+	if clusterConfig == nil {
+		return nil, errors.New("unable to get integrated stream with nil rest config")
+	}
+	ocClient, err := ctrlruntimeclient.New(clusterConfig, ctrlruntimeclient.Options{})
+	if err != nil {
+		return nil, fmt.Errorf("unable to create oc client to get integreated streams: %w", err)
 	}
 	ret := map[string]*configresolver.IntegratedStream{}
 	var objectKeys []ctrlruntimeclient.ObjectKey
@@ -1010,6 +1017,14 @@ func integratedStreams(config *api.ReleaseBuildConfiguration, client server.Reso
 		}
 	}
 	for _, key := range objectKeys {
+		if api.IsCreatedForClusterBotJob(key.Namespace) {
+			stream, err := configresolver.LocalIntegratedStream(context.TODO(), ocClient, key.Namespace, key.Name)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get integrated stream %s/%s for a cluster bot job: %w", key.Namespace, key.Name, err)
+			}
+			ret[fmt.Sprintf("%s/%s", key.Namespace, key.Name)] = stream
+			continue
+		}
 		integratedStream, err := client.IntegratedStream(key.Namespace, key.Name)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get integrated stream %s/%s: %w", key.Namespace, key.Name, err)

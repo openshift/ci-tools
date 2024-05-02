@@ -1,11 +1,9 @@
-package main
+package configresolver
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -19,72 +17,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
-
-func TestValidateStream(t *testing.T) {
-	testCases := []struct {
-		name     string
-		isNS     string
-		isName   string
-		expected error
-	}{
-		{
-			name:     "namespace cannot be empty",
-			expected: errors.New("namespace cannot be empty"),
-		},
-		{
-			name:     "namespace cannot be empty",
-			isNS:     "ns",
-			expected: errors.New("name cannot be empty"),
-		},
-		{
-			name:     "namespace cannot be empty",
-			isNS:     "ns",
-			isName:   "is",
-			expected: errors.New("not a valid integrated stream: ns/is"),
-		},
-		{
-			name:   "ocp/4.9 is valid",
-			isNS:   "ocp",
-			isName: "4.9",
-		},
-		{
-			name:     "origin/4.3 is invalid",
-			isNS:     "origin",
-			isName:   "4.3",
-			expected: errors.New("not a valid integrated stream: origin/4.3"),
-		},
-		{
-			name:   "ocp/4.15 is valid",
-			isNS:   "ocp",
-			isName: "4.15",
-		},
-		{
-			name:   "origin/4.15 is valid",
-			isNS:   "origin",
-			isName: "4.15",
-		},
-		{
-			name:   "origin/scos-4.15 is valid",
-			isNS:   "origin",
-			isName: "scos-4.15",
-		},
-		{
-			name:     "origin/bar-4.15 is invalid",
-			isNS:     "origin",
-			isName:   "bar-4.15",
-			expected: errors.New("not a valid integrated stream: origin/bar-4.15"),
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			actual := validateStream(tc.isNS, tc.isName)
-			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
-				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
-			}
-		})
-	}
-}
 
 var ocp415Stream = &imagev1.ImageStream{
 	ObjectMeta: metav1.ObjectMeta{
@@ -108,44 +40,61 @@ func init() {
 	}
 }
 
-func TestGetIntegratedStream(t *testing.T) {
+func TestIntegratedStream(t *testing.T) {
+	ocp51Stream := &imagev1.ImageStream{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "5.1",
+			Namespace: "ocp",
+		},
+		Status: imagev1.ImageStreamStatus{
+			Tags: []imagev1.NamedTagEventList{
+				{Tag: "bar"},
+				{Tag: "foo"},
+			},
+		},
+	}
+
 	testCases := []struct {
-		name         string
-		client       ctrlruntimeclient.Client
-		url          string
-		expectedCode int
-		expectedBody string
+		name        string
+		client      ctrlruntimeclient.Client
+		isNS        string
+		isName      string
+		expected    *IntegratedStream
+		expectedErr error
 	}{
 		{
-			name:         "basic case",
-			client:       fakeclient.NewClientBuilder().WithRuntimeObjects(ocp415Stream.DeepCopy()).Build(),
-			url:          "/url?namespace=ocp&name=4.15",
-			expectedCode: 200,
-			expectedBody: "{\"tags\":[\"bar\",\"foo\"],\"releaseControllerConfigName\":\"4.15.0-0.ci\"}\n",
+			name:     "basic case",
+			isNS:     "ocp",
+			isName:   "4.15",
+			client:   fakeclient.NewClientBuilder().WithRuntimeObjects(ocp415Stream.DeepCopy()).Build(),
+			expected: &IntegratedStream{Tags: []string{"bar", "foo"}, ReleaseControllerConfigName: "4.15.0-0.ci"},
 		},
 		{
-			name:         "aaa",
-			client:       fakeclient.NewClientBuilder().WithRuntimeObjects(ocp415Stream.DeepCopy()).Build(),
-			url:          "/url?namespace=ocp&name=5.1",
-			expectedCode: 400,
-			expectedBody: "not a valid integrated stream: ocp/5.1\n",
+			name:        "not found",
+			isNS:        "ocp",
+			isName:      "3.15",
+			client:      fakeclient.NewClientBuilder().WithRuntimeObjects().Build(),
+			expectedErr: errors.New("failed to get image stream ocp/3.15: imagestreams.image.openshift.io \"3.15\" not found"),
+		},
+		{
+			name:     "no annotation",
+			isNS:     "ocp",
+			isName:   "5.1",
+			client:   fakeclient.NewClientBuilder().WithRuntimeObjects(ocp51Stream.DeepCopy()).Build(),
+			expected: &IntegratedStream{Tags: []string{"bar", "foo"}, ReleaseControllerConfigName: ""},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			req, err := http.NewRequest("GET", tc.url, nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			rr := httptest.NewRecorder()
-			handlerFunc := getIntegratedStream(context.Background(), tc.client)
-			handlerFunc.ServeHTTP(rr, req)
-			if diff := cmp.Diff(tc.expectedCode, rr.Code); diff != "" {
+			actual, actualErr := LocalIntegratedStream(context.Background(), tc.client, tc.isNS, tc.isName)
+			if diff := cmp.Diff(tc.expectedErr, actualErr, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}
-			if diff := cmp.Diff(tc.expectedBody, rr.Body.String()); diff != "" {
-				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
+			if actualErr == nil {
+				if diff := cmp.Diff(tc.expected, actual); diff != "" {
+					t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
+				}
 			}
 		})
 	}

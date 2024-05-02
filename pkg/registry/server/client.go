@@ -15,6 +15,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/api/configresolver"
 )
 
 type ResolverClient interface {
@@ -22,6 +23,7 @@ type ResolverClient interface {
 	ConfigWithTest(base *api.Metadata, testSource *api.MetadataWithTest) (*api.ReleaseBuildConfiguration, error)
 	Resolve([]byte) (*api.ReleaseBuildConfiguration, error)
 	ClusterProfile(profileName string) (*api.ClusterProfileDetails, error)
+	IntegratedStream(namespace, name string) (*configresolver.IntegratedStream, error)
 }
 
 func NewResolverClient(address string) ResolverClient {
@@ -186,4 +188,29 @@ func (r *resolverClient) ClusterProfile(profileName string) (*api.ClusterProfile
 		return nil, fmt.Errorf("failed to unmarshal %s cluster profile information from configresolver: %w\nvalue:\n%s", profileName, err, string(data))
 	}
 	return cp, nil
+}
+
+// IntegratedStream gets the info about an integrated stream by creating a request
+// to config resolver
+func (r *resolverClient) IntegratedStream(namespace, name string) (*configresolver.IntegratedStream, error) {
+	logrus.Infof("Loading information from %s for integrated stream %s/%s", r.Address, namespace, name)
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/integratedStream", r.Address), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request for configresolver: %w", err)
+	}
+	query := req.URL.Query()
+	query.Add("namespace", namespace)
+	query.Add("name", name)
+	req.URL.RawQuery = query.Encode()
+
+	data, err := doRequest(req)
+	if err != nil {
+		return nil, err
+	}
+
+	stream := &configresolver.IntegratedStream{}
+	if err = json.Unmarshal(data, stream); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal %s/%s integrated stream from configresolver: %w\nvalue:\n%s", namespace, name, err, string(data))
+	}
+	return stream, nil
 }

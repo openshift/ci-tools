@@ -2,7 +2,6 @@ package release
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/sirupsen/logrus"
@@ -16,7 +15,6 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/api/configresolver"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
@@ -24,23 +22,17 @@ import (
 
 // releaseSnapshotStep snapshots the state of an integration ImageStream
 type releaseSnapshotStep struct {
-	name             string
-	config           api.Integration
-	client           loggingclient.LoggingClient
-	jobSpec          *api.JobSpec
-	integratedStream *configresolver.IntegratedStream
+	name    string
+	config  api.Integration
+	client  loggingclient.LoggingClient
+	jobSpec *api.JobSpec
 }
 
 func (r *releaseSnapshotStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
-var NilIntegratedStreamError = errors.New("step snapshot an integrated stream without resolving required information")
-
 func (r *releaseSnapshotStep) Validate() error {
-	if r.integratedStream == nil {
-		return NilIntegratedStreamError
-	}
 	return nil
 }
 
@@ -49,23 +41,21 @@ func (r *releaseSnapshotStep) Run(ctx context.Context) error {
 }
 
 func (r *releaseSnapshotStep) run(ctx context.Context) error {
-	_, err := snapshotStream(ctx, r.client, r.config.Namespace, r.config.Name, r.jobSpec.Namespace, r.name, r.integratedStream)
+	_, _, err := snapshotStream(ctx, r.client, r.config.Namespace, r.config.Name, r.jobSpec.Namespace, r.name)
 	return err
 }
 
-// snapshotStream snapshots the source IS and the snapshot copy created
-func snapshotStream(ctx context.Context, client loggingclient.LoggingClient, sourceNamespace, sourceName string, targetNamespace func() string, targetRelease string, integratedStream *configresolver.IntegratedStream) (*imagev1.ImageStream, error) {
-	targetName := api.ReleaseStreamFor(targetRelease)
-	logrus.WithField("sourceNamespace", sourceNamespace).
-		WithField("sourceName", sourceName).
-		WithField("targetNamespace", targetNamespace()).
-		WithField("targetName", targetName).
-		WithField("tags", len(integratedStream.Tags)).
-		Debug("Snapshotting tags on stream ...")
+// snapshotStream snapshots the source IS, returning it and the snapshot copy created
+func snapshotStream(ctx context.Context, client loggingclient.LoggingClient, sourceNamespace, sourceName string, targetNamespace func() string, targetRelease string) (*imagev1.ImageStream, *imagev1.ImageStream, error) {
+	source := &imagev1.ImageStream{}
+	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: sourceNamespace, Name: sourceName}, source); err != nil {
+		return nil, nil, fmt.Errorf("could not resolve source imagestream %s/%s for release %s: %w", sourceNamespace, sourceName, targetRelease, err)
+	}
+
 	snapshot := &imagev1.ImageStream{
 		ObjectMeta: meta.ObjectMeta{
 			Namespace:   targetNamespace(),
-			Name:        targetName,
+			Name:        api.ReleaseStreamFor(targetRelease),
 			Annotations: map[string]string{},
 		},
 		Spec: imagev1.ImageStreamSpec{
@@ -74,33 +64,24 @@ func snapshotStream(ctx context.Context, client loggingclient.LoggingClient, sou
 			},
 		},
 	}
-	if integratedStream.ReleaseControllerConfigName != "" {
-		logrus.WithField("configName", integratedStream.ReleaseControllerConfigName).Debug("Setting up the release config annotation")
-		value, err := configresolver.ReleaseControllerConfigNameToAnnotationValue(integratedStream.ReleaseControllerConfigName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal release configuration on image stream %s: %w", targetName, err)
-		}
-		snapshot.ObjectMeta.Annotations[api.ReleaseConfigAnnotation] = value
+	if raw, ok := source.ObjectMeta.Annotations[api.ReleaseConfigAnnotation]; ok {
+		snapshot.ObjectMeta.Annotations[api.ReleaseConfigAnnotation] = raw
 	}
-	for _, tag := range integratedStream.Tags {
+	for _, tag := range source.Status.Tags {
 		from := &coreapi.ObjectReference{
 			Kind: "DockerImage",
-			Name: api.QuayImageReference(api.ImageStreamTagReference{Namespace: sourceNamespace, Name: sourceName, Tag: tag}),
+			Name: api.QuayImageReference(api.ImageStreamTagReference{Namespace: sourceNamespace, Name: sourceName, Tag: tag.Tag}),
 		}
 		// a special case for cluster-bot
 		if api.IsCreatedForClusterBotJob(sourceNamespace) {
-			source := &imagev1.ImageStream{}
-			if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: sourceNamespace, Name: sourceName}, source); err != nil {
-				return nil, fmt.Errorf("could not resolve source imagestream %s/%s for release %s: %w", sourceNamespace, sourceName, targetRelease, err)
-			}
-			if valid, _ := utils.FindStatusTag(source, tag); valid != nil {
+			if valid, _ := utils.FindStatusTag(source, tag.Tag); valid != nil {
 				from = valid
 			} else {
 				continue
 			}
 		}
 		tagReference := imagev1.TagReference{
-			Name:            tag,
+			Name:            tag.Tag,
 			From:            from,
 			ImportPolicy:    imagev1.TagImportPolicy{ImportMode: imagev1.ImportModePreserveOriginal},
 			ReferencePolicy: imagev1.TagReferencePolicy{Type: imagev1.LocalTagReferencePolicy},
@@ -110,14 +91,14 @@ func snapshotStream(ctx context.Context, client loggingclient.LoggingClient, sou
 	// the Create call mutates the input object, so we need to copy it before returning
 	created := snapshot.DeepCopy()
 	if err := client.Create(ctx, created); err != nil && !kerrors.IsAlreadyExists(err) {
-		return nil, fmt.Errorf("could not create snapshot imagestream %s/%s for release %s: %w", sourceNamespace, sourceName, targetRelease, err)
+		return nil, nil, fmt.Errorf("could not create snapshot imagestream %s/%s for release %s: %w", sourceNamespace, sourceName, targetRelease, err)
 	}
 	logrus.Infof("Waiting to import tags on imagestream (after taking snapshot) %s/%s ...", created.Namespace, created.Name)
 	if err := utils.WaitForImportingISTag(ctx, client, created.Namespace, created.Name, nil, sets.New[string](), utils.DefaultImageImportTimeout); err != nil {
-		return nil, fmt.Errorf("failed to wait for importing imagestreamtags on %s/%s: %w", created.Namespace, created.Name, err)
+		return nil, nil, fmt.Errorf("failed to wait for importing imagestreamtags on %s/%s: %w", created.Namespace, created.Name, err)
 	}
 	logrus.Infof("Imported tags on imagestream (after taking snapshot) %s/%s", created.Namespace, created.Name)
-	return snapshot, nil
+	return source, snapshot, nil
 }
 
 func (r *releaseSnapshotStep) Name() string {
@@ -144,12 +125,11 @@ func (r *releaseSnapshotStep) Objects() []ctrlruntimeclient.Object {
 	return r.client.Objects()
 }
 
-func ReleaseSnapshotStep(release string, config api.Integration, client loggingclient.LoggingClient, jobSpec *api.JobSpec, integratedStream *configresolver.IntegratedStream) api.Step {
+func ReleaseSnapshotStep(release string, config api.Integration, client loggingclient.LoggingClient, jobSpec *api.JobSpec) api.Step {
 	return &releaseSnapshotStep{
-		name:             release,
-		config:           config,
-		client:           client,
-		jobSpec:          jobSpec,
-		integratedStream: integratedStream,
+		name:    release,
+		config:  config,
+		client:  client,
+		jobSpec: jobSpec,
 	}
 }

@@ -33,7 +33,6 @@ import (
 	templateclientset "github.com/openshift/client-go/template/clientset/versioned/typed/template/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/api/configresolver"
 	testimagestreamtagimportv1 "github.com/openshift/ci-tools/pkg/api/testimagestreamtagimport/v1"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/lease"
@@ -80,7 +79,6 @@ func FromConfig(
 	manifestToolDockerCfg string,
 	localRegistryDNS string,
 	mergedConfig bool,
-	integratedStreams map[string]*configresolver.IntegratedStream,
 ) ([]api.Step, []api.Step, error) {
 	crclient, err := ctrlruntimeclient.NewWithWatch(clusterConfig, ctrlruntimeclient.Options{})
 	crclient = secretrecordingclient.Wrap(crclient, censor)
@@ -117,7 +115,7 @@ func FromConfig(
 	httpClient := retryablehttp.NewClient()
 	httpClient.Logger = nil
 
-	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, consoleHost, nodeName, targetAdditionalSuffix, nodeArchitectures, mergedConfig, integratedStreams)
+	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, consoleHost, nodeName, targetAdditionalSuffix, nodeArchitectures, mergedConfig)
 }
 
 func fromConfig(
@@ -145,7 +143,6 @@ func fromConfig(
 	targetAdditionalSuffix string,
 	nodeArchitectures []string,
 	mergedConfig bool,
-	integratedStreams map[string]*configresolver.IntegratedStream,
 ) ([]api.Step, []api.Step, error) {
 	requiredNames := sets.New[string]()
 	for _, target := range requiredTargets {
@@ -216,7 +213,7 @@ func fromConfig(
 				case resolveConfig.Integration != nil:
 					logrus.Infof("Building release %s from a snapshot of %s/%s", resolveConfig.Name, resolveConfig.Integration.Namespace, resolveConfig.Integration.Name)
 					// this is the one case where we're not importing a payload, we need to get the images and build one
-					snapshot := releasesteps.ReleaseSnapshotStep(resolveConfig.Name, *resolveConfig.Integration, podClient, jobSpec, integratedStreams[fmt.Sprintf("%s/%s", resolveConfig.Integration.Namespace, resolveConfig.Integration.Name)])
+					snapshot := releasesteps.ReleaseSnapshotStep(resolveConfig.Name, *resolveConfig.Integration, podClient, jobSpec)
 					assemble := releasesteps.AssembleReleaseStep(resolveConfig.Name, nodeName, &api.ReleaseTagConfiguration{
 						Namespace:          resolveConfig.Integration.Namespace,
 						Name:               resolveConfig.Integration.Name,
@@ -272,7 +269,7 @@ func fromConfig(
 		} else if rawStep.ReleaseImagesTagStepConfiguration != nil {
 			// if the user has specified a tag_specification we always
 			// will import those images to the stable stream
-			step = releasesteps.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, client, params, jobSpec, integratedStreams[fmt.Sprintf("%s/%s", rawStep.ReleaseImagesTagStepConfiguration.Namespace, rawStep.ReleaseImagesTagStepConfiguration.Name)])
+			step = releasesteps.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, client, params, jobSpec)
 			stepLinks = append(stepLinks, step.Creates()...)
 
 			hasReleaseStep = true

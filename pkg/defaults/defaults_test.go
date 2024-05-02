@@ -25,7 +25,6 @@ import (
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/api/configresolver"
 	testimagestreamtagimportv1 "github.com/openshift/ci-tools/pkg/api/testimagestreamtagimport/v1"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/lease"
@@ -1723,7 +1722,7 @@ func TestFromConfig(t *testing.T) {
 				params.Add(k, func() (string, error) { return v, nil })
 			}
 			graphConf := FromConfigStatic(&tc.config)
-			configSteps, post, err := fromConfig(context.Background(), &tc.config, &graphConf, &jobSpec, tc.templates, tc.paramFiles, tc.promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params, &secrets.DynamicCensor{}, api.ServiceDomainAPPCI, "", "", nil, tc.mergedConfig, map[string]*configresolver.IntegratedStream{})
+			configSteps, post, err := fromConfig(context.Background(), &tc.config, &graphConf, &jobSpec, tc.templates, tc.paramFiles, tc.promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params, &secrets.DynamicCensor{}, api.ServiceDomainAPPCI, "", "", nil, tc.mergedConfig)
 			if diff := cmp.Diff(tc.expectedErr, err); diff != "" {
 				t.Errorf("unexpected error: %v", diff)
 			}

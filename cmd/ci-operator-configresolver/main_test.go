@@ -17,7 +17,6 @@ import (
 
 	imagev1 "github.com/openshift/api/image/v1"
 
-	"github.com/openshift/ci-tools/pkg/api/configresolver"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -128,7 +127,7 @@ func TestIntegratedStream(t *testing.T) {
 		client      ctrlruntimeclient.Client
 		isNS        string
 		isName      string
-		expected    *configresolver.IntegratedStream
+		expected    *IntegratedStream
 		expectedErr error
 	}{
 		{
@@ -136,7 +135,7 @@ func TestIntegratedStream(t *testing.T) {
 			isNS:     "ocp",
 			isName:   "4.15",
 			client:   fakeclient.NewClientBuilder().WithRuntimeObjects(ocp415Stream.DeepCopy()).Build(),
-			expected: &configresolver.IntegratedStream{Tags: []string{"bar", "foo"}, ReleaseControllerConfigName: "4.15.0-0.ci"},
+			expected: &IntegratedStream{Tags: []string{"bar", "foo"}, ReleaseControllerConfigName: "4.15.0-0.ci"},
 		},
 		{
 			name:        "not found",
@@ -150,7 +149,7 @@ func TestIntegratedStream(t *testing.T) {
 			isNS:     "ocp",
 			isName:   "5.1",
 			client:   fakeclient.NewClientBuilder().WithRuntimeObjects(ocp51Stream.DeepCopy()).Build(),
-			expected: &configresolver.IntegratedStream{Tags: []string{"bar", "foo"}, ReleaseControllerConfigName: ""},
+			expected: &IntegratedStream{Tags: []string{"bar", "foo"}, ReleaseControllerConfigName: ""},
 		},
 	}
 

@@ -357,10 +357,11 @@ func buildMasterNodesUpdatedSQL(masterNodesUpdated string) string {
 }
 
 func (c *ciDataClient) GetBackendDisruptionRowCountByJob(ctx context.Context, jobName, masterNodesUpdated string) (uint64, error) {
+	// 1.5 GB query, but only run once per aggregation
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(fmt.Sprintf(`
-SELECT Count(Name) AS TotalRows
+SELECT COUNT(DISTINCT(JobRunName)) AS TotalRows
 FROM
-	DATA_SET_LOCATION.BackendDisruption_JobRuns AS JobRuns
+	DATA_SET_LOCATION.BackendDisruption AS JobRuns
 WHERE
     StartTime <= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 3 DAY)
 AND
@@ -702,14 +703,12 @@ FROM
                     PERCENTILE_CONT(BackendDisruption.DisruptionSeconds, 0.99) OVER(PARTITION BY BackendDisruption.BackendName) AS P99,
                 FROM
                     DATA_SET_LOCATION.BackendDisruption as BackendDisruption
-                INNER JOIN
-                    DATA_SET_LOCATION.BackendDisruption_JobRuns as JobRuns on JobRuns.Name = BackendDisruption.JobRunName
                 WHERE
-                    JobRuns.StartTime BETWEEN TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 10 DAY)
+                    BackendDisruption.JobRunStartTime BETWEEN TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 10 DAY)
                 AND
                     TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 3 DAY)
                 AND
-                    JobRuns.JobName = @JobName
+                    BackendDisruption.JobName = @JobName
                 %s
             )
             GROUP BY
@@ -723,14 +722,12 @@ LEFT JOIN
             STDDEV(BackendDisruption.DisruptionSeconds) as StandardDeviation,
             FROM
                 DATA_SET_LOCATION.BackendDisruption as BackendDisruption
-            INNER JOIN
-                DATA_SET_LOCATION.BackendDisruption_JobRuns as JobRuns on JobRuns.Name = BackendDisruption.JobRunName
             WHERE
-                JobRuns.StartTime BETWEEN TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 10 DAY)
+                BackendDisruption.JobRunStartTime BETWEEN TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 10 DAY)
             AND
                 TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 3 DAY)
             AND
-                JobRuns.JobName = @JobName
+                BackendDisruption.JobName = @JobName
             %s
             GROUP BY
                 BackendName

@@ -2,7 +2,6 @@ package release
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -19,6 +18,7 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/api/configresolver"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
@@ -163,13 +163,11 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 	// the release versions for nightlies and CI release candidates
 	prefix := "0.0.1-0"
 	if raw, ok := stable.ObjectMeta.Annotations[api.ReleaseConfigAnnotation]; ok {
-		var releaseConfig struct {
-			Name string `json:"name"`
-		}
-		if err := json.Unmarshal([]byte(raw), &releaseConfig); err != nil {
+		configName, err := configresolver.ReleaseControllerAnnotationValueToConfigName(raw)
+		if err != nil {
 			return results.ForReason("invalid_release").WithError(err).Errorf("could not resolve release configuration on imagestream %s: %v", streamName, err)
 		}
-		prefix = releaseConfig.Name
+		prefix = configName
 	}
 	now := time.Now().UTC().Truncate(time.Second)
 	version := fmt.Sprintf("%s.test-%s-%s-%s", prefix, now.Format("2006-01-02-150405"), s.jobSpec.Namespace(), s.name)

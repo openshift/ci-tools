@@ -70,6 +70,7 @@ import (
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/api/configresolver"
 	"github.com/openshift/ci-tools/pkg/api/nsttl"
 	"github.com/openshift/ci-tools/pkg/defaults"
 	"github.com/openshift/ci-tools/pkg/interrupt"
@@ -871,6 +872,11 @@ func (o *options) Run() []error {
 
 	o.resolveConsoleHost()
 
+	streams, err := integratedStreams(o.configSpec, o.resolverClient, o.clusterConfig)
+	if err != nil {
+		return []error{results.ForReason("config_resolver").WithError(err).Errorf("failed to generate integrated streams: %v", err)}
+	}
+
 	client, err := coreclientset.NewForConfig(o.clusterConfig)
 	if err != nil {
 		return []error{fmt.Errorf("could not get core client for cluster config: %w", err)}
@@ -885,7 +891,7 @@ func (o *options) Run() []error {
 	// load the graph from the configuration
 	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig,
 		o.podPendingTimeout, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig,
-		o.consoleHost, o.nodeName, nodeArchitectures, o.targetAdditionalSuffix, o.manifestToolDockerCfg, o.localRegistryDNS, mergedConfig)
+		o.consoleHost, o.nodeName, nodeArchitectures, o.targetAdditionalSuffix, o.manifestToolDockerCfg, o.localRegistryDNS, mergedConfig, streams)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}
@@ -984,6 +990,48 @@ func (o *options) Run() []error {
 		eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobSucceeded", eventJobDescription(o.jobSpec, o.namespace))
 		return nil
 	})
+}
+
+func integratedStreams(config *api.ReleaseBuildConfiguration, client server.ResolverClient, clusterConfig *rest.Config) (map[string]*configresolver.IntegratedStream, error) {
+	if config == nil {
+		return nil, errors.New("unable to get integrated stream for nil config")
+	}
+	if client == nil {
+		return nil, errors.New("unable to get integrated stream with nil client")
+	}
+	if clusterConfig == nil {
+		return nil, errors.New("unable to get integrated stream with nil rest config")
+	}
+	ocClient, err := ctrlruntimeclient.New(clusterConfig, ctrlruntimeclient.Options{})
+	if err != nil {
+		return nil, fmt.Errorf("unable to create oc client to get integreated streams: %w", err)
+	}
+	ret := map[string]*configresolver.IntegratedStream{}
+	var objectKeys []ctrlruntimeclient.ObjectKey
+	if config.ReleaseTagConfiguration != nil {
+		objectKeys = append(objectKeys, ctrlruntimeclient.ObjectKey{Namespace: config.ReleaseTagConfiguration.Namespace, Name: config.ReleaseTagConfiguration.Name})
+	}
+	for _, release := range config.Releases {
+		if release.Integration != nil {
+			objectKeys = append(objectKeys, ctrlruntimeclient.ObjectKey{Namespace: release.Integration.Namespace, Name: release.Integration.Name})
+		}
+	}
+	for _, key := range objectKeys {
+		if api.IsCreatedForClusterBotJob(key.Namespace) {
+			stream, err := configresolver.LocalIntegratedStream(context.TODO(), ocClient, key.Namespace, key.Name)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get integrated stream %s/%s for a cluster bot job: %w", key.Namespace, key.Name, err)
+			}
+			ret[fmt.Sprintf("%s/%s", key.Namespace, key.Name)] = stream
+			continue
+		}
+		integratedStream, err := client.IntegratedStream(key.Namespace, key.Name)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get integrated stream %s/%s: %w", key.Namespace, key.Name, err)
+		}
+		ret[fmt.Sprintf("%s/%s", key.Namespace, key.Name)] = integratedStream
+	}
+	return ret, nil
 }
 
 // runStep mostly duplicates steps.runStep. The latter uses an *api.StepNode though and we only have an api.Step for the PostSteps

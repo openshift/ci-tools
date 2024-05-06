@@ -17,6 +17,7 @@ import (
 
 	imagev1 "github.com/openshift/api/image/v1"
 
+	"github.com/openshift/ci-tools/pkg/api/configresolver"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -113,6 +114,14 @@ func init() {
 	}
 }
 
+type fakeCache struct {
+	Client ctrlruntimeclient.Client
+}
+
+func (c *fakeCache) Get(ctx context.Context, ns, name string) (*configresolver.IntegratedStream, error) {
+	return configresolver.LocalIntegratedStream(ctx, c.Client, ns, name)
+}
+
 func TestGetIntegratedStream(t *testing.T) {
 	testCases := []struct {
 		name         string
@@ -144,7 +153,7 @@ func TestGetIntegratedStream(t *testing.T) {
 				t.Fatal(err)
 			}
 			rr := httptest.NewRecorder()
-			handlerFunc := getIntegratedStream(context.Background(), tc.client)
+			handlerFunc := getIntegratedStream(context.Background(), &fakeCache{Client: tc.client})
 			handlerFunc.ServeHTTP(rr, req)
 			if diff := cmp.Diff(tc.expectedCode, rr.Code); diff != "" {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)

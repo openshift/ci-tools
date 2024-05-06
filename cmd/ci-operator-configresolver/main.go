@@ -317,6 +317,7 @@ func main() {
 		l("clusterProfile"),
 		l("configGeneration"),
 		l("registryGeneration"),
+		l("integratedStream"),
 	))
 
 	uisimplifier := simplifypath.NewSimplifier(l("", // shadow element mimicing the root

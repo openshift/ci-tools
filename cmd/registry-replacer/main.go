@@ -551,9 +551,12 @@ func extractReplacementCandidatesFromDockerfile(dockerfile []byte) (sets.Set[str
 		for _, child := range stage.Node.Children {
 			switch {
 			case child.Value == "from" && child.Next != nil:
-				image := child.Next.Value
-				replacementCandidates.Insert(image)
-				names[stage.Name] = image
+				image := child.Next
+				replacementCandidates.Insert(image.Value)
+				names[stage.Name] = image.Value
+				if alias := image.Next; alias != nil && alias.Value == "AS" && alias.Next != nil {
+					replacementCandidates.Insert(alias.Next.Value)
+				}
 			case child.Value == "copy":
 				if ref, ok := nodeHasFromRef(child); ok {
 					if len(ref) > 0 {

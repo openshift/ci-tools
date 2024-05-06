@@ -596,7 +596,17 @@ RUN yum update -y && \
     yum clean all && rm -rf /var/cache/yum/*
 COPY --from=builder /go/src/github.com/kubernetes-sigs/aws-ebs-csi-driver/bin/aws-ebs-csi-driver /usr/bin/
 ENTRYPOINT ["/usr/bin/aws-ebs-csi-driver"]`,
-			expectedResult: sets.New[string]("registry.svc.ci.openshift.org/openshift/release:golang-1.13", "registry.svc.ci.openshift.org/openshift/origin-v4.0:base"),
+			expectedResult: sets.New[string]("registry.svc.ci.openshift.org/openshift/release:golang-1.13", "builder", "registry.svc.ci.openshift.org/openshift/origin-v4.0:base"),
+		},
+		{
+			name:           "Missing image alias name",
+			in:             "FROM centos:8 AS",
+			expectedResult: sets.New("centos:8"),
+		},
+		{
+			name:           "Lowercase image alias",
+			in:             "FROM centos:8 as useless",
+			expectedResult: sets.New("centos:8"),
 		},
 		{
 			name: "Unrelated directives",

@@ -105,18 +105,17 @@ func tagsInQuay(image string, tag ImageStreamTagReference, date string) ([]strin
 	}, nil
 }
 
-// QuayImage returns the image in quay.io for an image stream tag
+// QuayImage returns the image in quay.io for an image stream tag which is used to push the image
 func QuayImage(tag ImageStreamTagReference) string {
 	return fmt.Sprintf("%s:%s_%s_%s", QuayOpenShiftCIRepo, tag.Namespace, tag.Name, tag.Tag)
 }
 
-// QuayImageReference returns the image in quay.io for an image stream tag
+// QuayImageReference returns the image in quay.io for an image stream tag which is used to pull the image
 func QuayImageReference(tag ImageStreamTagReference) string {
-	// TODO replace quay.io with the hostname of the image registry cache
-	return QuayImage(tag)
+	return strings.Replace(QuayImage(tag), "quay.io", QCIAPPCIDomain, 1)
 }
 
-// QuayImageFromDateAndDigest returns the image in quay.io for a date and an image digest
+// QuayImageFromDateAndDigest returns the image in quay.io for a date and an image digest which is used to push the image
 func QuayImageFromDateAndDigest(date, digest string) string {
 	return fmt.Sprintf("%s:%s_sha256_%s", QuayOpenShiftCIRepo, date, digest)
 }

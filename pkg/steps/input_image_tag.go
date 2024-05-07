@@ -54,7 +54,7 @@ func (s *inputImageTagStep) Inputs() (api.InputDefinition, error) {
 		}
 		s.imageName = from.Image.Name
 	} else {
-		imageName := api.QuayImage(s.config.BaseImage)
+		imageName := api.QuayImageReference(s.config.BaseImage)
 		logrus.Debugf("Resolved %s to %s.", s.config.BaseImage.ISTagName(), imageName)
 		s.imageName = imageName
 	}

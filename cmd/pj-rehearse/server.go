@@ -10,7 +10,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/git/v2"
 	"k8s.io/test-infra/prow/github"
@@ -18,7 +17,6 @@ import (
 	"k8s.io/test-infra/prow/pod-utils/gcs"
 
 	"github.com/openshift/ci-tools/pkg/config"
-	quayiociimagesdistributor "github.com/openshift/ci-tools/pkg/controller/quay_io_ci_images_distributor"
 	"github.com/openshift/ci-tools/pkg/rehearse"
 )
 
@@ -136,31 +134,6 @@ func serverFromOptions(o options) (*server, error) {
 	rehearsalConfig := rehearsalConfigFromOptions(o)
 	rehearsalConfig.ProwjobNamespace = c.ProwJobNamespace
 	rehearsalConfig.PodNamespace = c.PodNamespace
-	rehearsalConfig.MirrorOptions = quayiociimagesdistributor.OCImageMirrorOptions{
-		RegistryConfig:  o.registryConfig,
-		ContinueOnError: true,
-		MaxPerRegistry:  20,
-		BatchSize:       10,
-		DryRun:          false,
-	}
-	ocClientFactory := quayiociimagesdistributor.NewClientFactory()
-	quayIOImageHelper, err := ocClientFactory.NewClient()
-	if err != nil {
-		logrus.WithError(err).Fatal("failed to create QuayIOImageHelper")
-	}
-	rehearsalConfig.QuayIOImageHelper = quayIOImageHelper
-
-	if o.ciImagesMirrorConfigPath != "" {
-		if c, err := quayiociimagesdistributor.LoadConfig(o.ciImagesMirrorConfigPath); err != nil {
-			return nil, fmt.Errorf("failed to load config file %s: %w", o.ciImagesMirrorConfigPath, err)
-		} else {
-			s := sets.New[string]()
-			for k := range c.SupplementalCIImages {
-				s.Insert(k)
-			}
-			rehearsalConfig.IgnoredTargets = s
-		}
-	}
 
 	return &server{
 		ghc:             ghc,
@@ -402,7 +375,7 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 						limit = rc.MaxLimit
 					}
 
-					prConfig, prRefs, imageStreamTags, presubmitsToRehearse, err := rc.SetupJobs(candidate, candidatePath, presubmits, periodics, changedTemplates, changedClusterProfiles, limit, logger)
+					prConfig, prRefs, presubmitsToRehearse, err := rc.SetupJobs(candidate, candidatePath, presubmits, periodics, changedTemplates, changedClusterProfiles, limit, logger)
 					if err != nil {
 						logger.WithError(err).Error("couldn't set up jobs")
 						s.reportFailure("unable to set up jobs", err, org, repo, user, number, true, false, logger)
@@ -416,7 +389,7 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 					}
 
 					autoAckMode := rehearseAutoAck == command
-					success, err := rc.RehearseJobs(candidate, candidatePath, prRefs, imageStreamTags, s.rehearsalConfig.MirrorOptions, s.rehearsalConfig.QuayIOImageHelper, s.rehearsalConfig.IgnoredTargets, presubmitsToRehearse, changedTemplates, changedClusterProfiles, prConfig.Prow, autoAckMode, logger)
+					success, err := rc.RehearseJobs(candidate, candidatePath, prRefs, presubmitsToRehearse, changedTemplates, changedClusterProfiles, prConfig.Prow, autoAckMode, logger)
 					if err != nil {
 						logger.WithError(err).Error("couldn't rehearse jobs")
 						s.reportFailure("failed to create rehearsal jobs", err, org, repo, user, number, true, false, logger)

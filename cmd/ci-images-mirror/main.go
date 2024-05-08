@@ -169,6 +169,10 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to load in-cluster config")
 	}
+	client, err := ctrlruntimeclient.New(inClusterConfig, ctrlruntimeclient.Options{})
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create client")
+	}
 
 	eventCh := make(chan fsnotify.Event)
 	errCh := make(chan error)
@@ -228,6 +232,18 @@ func main() {
 				logrus.WithError(err).Error("Failed to mirror supplemental CI images")
 			}
 		}, time.Hour)
+
+		m, err := quayiociimagesdistributor.ARTImages(ctx, client, opts.config.ArtImages, opts.config.IgnoredSources)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to get ART images")
+		} else {
+			artImagesService := newSupplementalCIImagesServiceWithMirrorStore(mirrorStore, logrus.WithField("subcomponent", "artImagesService"))
+			interrupts.TickLiteral(func() {
+				if err := artImagesService.Mirror(m); err != nil {
+					logrus.WithError(err).Error("Failed to mirror ART images")
+				}
+			}, time.Hour)
+		}
 	}
 
 	server := &http.Server{

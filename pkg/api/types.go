@@ -1331,6 +1331,7 @@ const (
 	ClusterProfileRHOpenShiftEcosystem  ClusterProfile = "rh-openshift-ecosystem"
 	ClusterProfileODFAWS                ClusterProfile = "odf-aws"
 	ClusterProfileKonfluxWorkspacesAWS  ClusterProfile = "konfluxworkspaces-aws"
+	ClusterProfileAWSObservabiltity     ClusterProfile = "aws-observability"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -1466,6 +1467,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileRHOpenShiftEcosystem,
 		ClusterProfileODFAWS,
 		ClusterProfileKonfluxWorkspacesAWS,
+		ClusterProfileAWSObservabiltity,
 	}
 }
 
@@ -1519,6 +1521,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileQuayAWS,
 		ClusterProfileAWSEdgeInfra,
 		ClusterProfileODFAWS,
+		ClusterProfileAWSObservabiltity,
 		ClusterProfileKonfluxWorkspacesAWS:
 		return string(CloudAWS)
 	case
@@ -1922,6 +1925,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "odf-aws-quota-slice"
 	case ClusterProfileKonfluxWorkspacesAWS:
 		return "konfluxworkspaces-aws-quota-slice"
+	case ClusterProfileAWSObservabiltity:
+		return "observability-aws-quota-slice"
 	default:
 		return ""
 	}

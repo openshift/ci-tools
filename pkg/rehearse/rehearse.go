@@ -556,11 +556,29 @@ func setupDependencies(
 			buildClusters = sets.New[string]("default")
 		}
 	}
-
 	g, ctx := errgroup.WithContext(context.Background())
-	for i, cluster := range buildClusters.UnsortedList() {
+
+	g.Go(func() error {
+		// TODO: Disable the mirroring when migration to QCI is complete after which no image mirror is needed
+		//       as QCI will the new authoritative CI registry.
+		if appciConfig, ok := configs[appCIContextName]; ok {
+			if appciClient, err := ctrlruntimeclient.New(&appciConfig, ctrlruntimeclient.Options{DryRun: &dryRun}); err == nil {
+				mirrorOptions.DryRun = dryRun
+				if err := ensureISTSInQCI(context.Background(), appciClient, requiredImageStreamTags, mirrorOptions, quayIOImageHelper, ignoredTargets, log); err != nil {
+					// best effort as the required image might be there (just stale) on QCI already and rehearsal can still run with it
+					log.WithError(err).Errorf("failed to ensure imagestreamtags %s in QCI", requiredImageStreamTags)
+				}
+			} else {
+				log.WithField("cluster", appCIContextName).WithError(err).Error("Failed to construct client")
+			}
+		} else {
+			log.WithField("cluster", appCIContextName).Error("Failed to get config")
+		}
+		return nil
+	})
+
+	for _, cluster := range buildClusters.UnsortedList() {
 		buildCluster := cluster
-		index := i
 		g.Go(func() error {
 			log := log.WithField("buildCluster", buildCluster)
 			clusterConfig := configs[buildCluster]
@@ -598,17 +616,6 @@ func setupDependencies(
 			if err := ensureImageStreamTags(ctx, client, requiredImageStreamTags, buildCluster, prowJobNamespace, prowJobClient, log); err != nil {
 				return fmt.Errorf("failed to ensure imagestreamtags in cluster %s: %w", buildCluster, err)
 			}
-			// TODO: Disable the mirroring when migration to QCI is complete after which no image mirror is needed
-			// as QCI will the new authoritative CI registry.
-			// We only need to do it once.
-			if index == 0 {
-				mirrorOptions.DryRun = dryRun
-				if err := ensureISTSInQCI(ctx, client, requiredImageStreamTags, mirrorOptions, quayIOImageHelper, ignoredTargets, log); err != nil {
-					// best effort as the required image might be there (just stale) on QCI already and rehearsal can still run with it
-					log.WithError(err).Errorf("failed to ensure imagestreamtags %s in QCI", requiredImageStreamTags)
-				}
-			}
-
 			return nil
 		})
 	}

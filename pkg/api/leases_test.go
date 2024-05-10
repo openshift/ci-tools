@@ -52,11 +52,13 @@ func TestIPPoolLeaseForTest(t *testing.T) {
 	testCases := []struct {
 		name     string
 		tests    MultiStageTestConfigurationLiteral
+		metadata Metadata
 		expected StepLease
 	}{
 		{
-			name:  "aws",
-			tests: MultiStageTestConfigurationLiteral{ClusterProfile: ClusterProfileAWS},
+			name:     "aws",
+			tests:    MultiStageTestConfigurationLiteral{ClusterProfile: ClusterProfileAWS},
+			metadata: Metadata{Branch: "master"},
 			expected: StepLease{
 				ResourceType: "aws-ip-pools",
 				Env:          DefaultIPPoolLeaseEnv,
@@ -67,10 +69,25 @@ func TestIPPoolLeaseForTest(t *testing.T) {
 			name:  "other cluster profile",
 			tests: MultiStageTestConfigurationLiteral{ClusterProfile: ClusterProfileAWS2},
 		},
+		{
+			name:     "aws, with 4.16 branch",
+			tests:    MultiStageTestConfigurationLiteral{ClusterProfile: ClusterProfileAWS},
+			metadata: Metadata{Branch: "release-4.16"},
+			expected: StepLease{
+				ResourceType: "aws-ip-pools",
+				Env:          DefaultIPPoolLeaseEnv,
+				Count:        13,
+			},
+		},
+		{
+			name:     "aws, but older release branch",
+			tests:    MultiStageTestConfigurationLiteral{ClusterProfile: ClusterProfileAWS},
+			metadata: Metadata{Branch: "release-4.10"},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ret := IPPoolLeaseForTest(&tc.tests)
+			ret := IPPoolLeaseForTest(&tc.tests, tc.metadata)
 			if diff := cmp.Diff(tc.expected, ret); diff != "" {
 				t.Errorf("incorrect lease returned, diff: %s", diff)
 			}

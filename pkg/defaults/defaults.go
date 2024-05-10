@@ -440,7 +440,7 @@ func stepForTest(
 ) ([]api.Step, error) {
 	if test := c.MultiStageTestConfigurationLiteral; test != nil {
 		leases := api.LeasesForTest(test)
-		ipPoolLease := api.IPPoolLeaseForTest(test)
+		ipPoolLease := api.IPPoolLeaseForTest(test, config.Metadata)
 		if len(leases) != 0 || ipPoolLease.ResourceType != "" {
 			params = api.NewDeferredParameters(params)
 		}

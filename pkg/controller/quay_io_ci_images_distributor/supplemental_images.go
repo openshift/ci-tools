@@ -86,7 +86,15 @@ func ignored(ignoredSources []IgnoredSource, s Source, section string) bool {
 			logrus.WithField("section", section).WithField("image", s.Image).WithField("reason", ignoredSource.Reason).Info("Ignored source")
 			return true
 		}
+		if ignoredSource.Image != "" && ignoredSource.Image == fmt.Sprintf("%s/%s", api.ServiceDomainAPPCIRegistry, s.ISTagName()) {
+			logrus.WithField("section", section).WithField("image", s.Image).WithField("reason", ignoredSource.Reason).Info("Ignored source")
+			return true
+		}
 		if ignoredSource.Namespace != "" && ignoredSource.ISTagName() == s.ISTagName() {
+			logrus.WithField("section", section).WithField("ISTagName", ignoredSource.ISTagName()).WithField("reason", ignoredSource.Reason).Info("Ignored source")
+			return true
+		}
+		if ignoredSource.Namespace != "" && s.Image == fmt.Sprintf("%s/%s", api.ServiceDomainAPPCIRegistry, ignoredSource.ISTagName()) {
 			logrus.WithField("section", section).WithField("ISTagName", ignoredSource.ISTagName()).WithField("reason", ignoredSource.Reason).Info("Ignored source")
 			return true
 		}

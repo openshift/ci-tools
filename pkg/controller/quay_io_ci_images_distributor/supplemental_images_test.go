@@ -155,3 +155,60 @@ func TestARTImages(t *testing.T) {
 		})
 	}
 }
+
+func TestIgnored(t *testing.T) {
+	testCases := []struct {
+		name           string
+		ignoredSources []IgnoredSource
+		s              Source
+		expected       bool
+	}{
+		{
+			name: "source from tag and ignored source from image",
+			ignoredSources: []IgnoredSource{
+				{
+					Source: Source{
+						Image: "registry.ci.openshift.org/ocp/builder:rhel-7-golang-1.13",
+					},
+					Reason: "broken image",
+				},
+			},
+			s: Source{
+				ImageStreamTagReference: api.ImageStreamTagReference{
+					Namespace: "ocp",
+					Name:      "builder",
+					Tag:       "rhel-7-golang-1.13",
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "source from image and ignored source from tag",
+			ignoredSources: []IgnoredSource{
+				{
+					Source: Source{
+						ImageStreamTagReference: api.ImageStreamTagReference{
+							Namespace: "ocp",
+							Name:      "builder",
+							Tag:       "rhel-7-golang-1.13",
+						},
+					},
+
+					Reason: "broken image",
+				},
+			},
+			s: Source{
+				Image: "registry.ci.openshift.org/ocp/builder:rhel-7-golang-1.13",
+			},
+			expected: true,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := ignored(tc.ignoredSources, tc.s, "unit-test")
+			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
+			}
+		})
+	}
+}

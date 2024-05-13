@@ -2324,26 +2324,15 @@ func getClusterProfileSecret(clusterProfile string, client ctrlruntimeclient.Cli
 	// Use config-resolver to get details about the cluster profile (which includes the secret's name)
 	cpDetails, err := resolverClient.ClusterProfile(clusterProfile)
 	if err != nil {
-		logrus.WithError(err).Errorf("failed to retrieve details from config resolver for '%s' cluster profile", clusterProfile)
 		return nil, fmt.Errorf("failed to retrieve details from config resolver for '%s' cluster profile", clusterProfile)
 	}
-
 	// Get the secret from the ci namespace. We expect it exists
-	cpSecret, err := getSecretFromCiNamespace(cpDetails.Secret, client, ctx)
-	if err != nil {
-		return nil, err
-	}
-	return cpSecret, nil
-}
-
-// getSecretFromCiNamespace retrieves a secret from the ci namespace
-func getSecretFromCiNamespace(secretName string, client ctrlruntimeclient.Client, ctx context.Context) (*coreapi.Secret, error) {
 	ciSecret := &coreapi.Secret{}
-	err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: "ci", Name: secretName}, ciSecret)
+	err = client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: "ci", Name: cpDetails.Secret}, ciSecret)
 	if err != nil {
-		logrus.WithError(err).Errorf("failed to get secret '%s' from ci namespace", secretName)
-		return nil, fmt.Errorf("failed to get secret '%s' from ci namespace", secretName)
+		return nil, fmt.Errorf("failed to get secret '%s' from ci namespace", cpDetails.Secret)
 	}
+
 	return ciSecret, nil
 }
 

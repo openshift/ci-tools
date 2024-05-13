@@ -28,6 +28,7 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/api/configresolver"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/steps"
@@ -1617,60 +1618,6 @@ func TestHandleTargetAdditionalSuffix(t *testing.T) {
 	}
 }
 
-func TestGetSecretFromCiNamespace(t *testing.T) {
-	namespace, secretName := "ci", "ci-secret-name"
-	fakeClient := fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
-		&corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: namespace,
-				Name:      secretName,
-			}},
-	).Build()
-
-	testCases := []struct {
-		name          string
-		secretName    string
-		expected      *corev1.Secret
-		expectedErr   error
-		clusterClient ctrlruntimeclient.Client
-	}{
-		{
-			name:          "getting secret works as expected",
-			secretName:    secretName,
-			clusterClient: fakeClient,
-			expected: &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: namespace,
-					Name:      secretName,
-				}},
-		},
-		{
-			name:          "getting secret that doesn't exist in ci ns fails with error",
-			secretName:    "nonexistent-secret",
-			clusterClient: fakeClient,
-			expectedErr:   fmt.Errorf("failed to get secret '%s' from ci namespace", "nonexistent-secret"),
-		},
-	}
-
-	ctx := context.Background()
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			actual, err := getSecretFromCiNamespace(tc.secretName, tc.clusterClient, ctx)
-			if tc.expected != nil && tc.expectedErr == nil {
-				if diff := cmp.Diff(actual, tc.expected, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
-					t.Errorf("secret differs from expected:\n%v", diff)
-				}
-			}
-			if tc.expectedErr != nil {
-				if diff := cmp.Diff(tc.expectedErr, err, testhelper.EquateErrorMessage); diff != "" {
-					t.Errorf("error differs from expected:\n%v", diff)
-				}
-			}
-		})
-	}
-}
-
 type mockResolverClient struct {
 	ClusterProfileFunc func(profileName string) (*api.ClusterProfileDetails, error)
 }
@@ -1694,7 +1641,11 @@ func (m *mockResolverClient) Resolve(data []byte) (*api.ReleaseBuildConfiguratio
 	return nil, nil
 }
 
-func TestgetClusterProfileSecret(t *testing.T) {
+func (m *mockResolverClient) IntegratedStream(namespace string, name string) (*configresolver.IntegratedStream, error) {
+	return nil, nil
+}
+
+func TestGetClusterProfileSecret(t *testing.T) {
 	namespace, secretName := "ci", "profile-name-cluster-secret"
 	okClient := fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
 		&corev1.Secret{

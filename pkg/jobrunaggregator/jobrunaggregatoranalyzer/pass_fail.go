@@ -248,9 +248,9 @@ func (a *weeklyAverageFromTenDays) getNormalizedFallBackJobName(ctx context.Cont
 		}
 	}
 	if job != nil {
-		if len(job.FromRelease) > 0 {
-			fromReleaseMajor, err1 := getMajor(job.FromRelease)
-			fromReleaseMinor, err2 := getMinor(job.FromRelease)
+		if len(job.FromRelease.StringVal) > 0 {
+			fromReleaseMajor, err1 := getMajor(job.FromRelease.StringVal)
+			fromReleaseMinor, err2 := getMinor(job.FromRelease.StringVal)
 			if err1 != nil || err2 != nil {
 				fmt.Printf("Error parsing from release %s. Will not fall back to previous release data.\n", job.FromRelease)
 				return jobName, nil
@@ -267,16 +267,16 @@ func (a *weeklyAverageFromTenDays) getNormalizedFallBackJobName(ctx context.Cont
 			targetToRelease = fmt.Sprintf("%d.%d", toReleaseMajor, toReleaseMinor-1)
 		}
 
-		normalizedJobName := normalizeJobName(job.JobName, job.FromRelease, job.Release)
+		normalizedJobName := normalizeJobName(job.JobName, job.FromRelease.StringVal, job.Release)
 		for _, j := range allJobs {
 			if j.Architecture == job.Architecture &&
 				j.Topology == job.Topology &&
 				j.Network == job.Network &&
 				j.Platform == job.Platform &&
-				j.FromRelease == targetFromRelease &&
+				j.FromRelease.StringVal == targetFromRelease &&
 				j.Release == targetToRelease &&
 				j.IPMode == job.IPMode &&
-				normalizeJobName(j.JobName, j.FromRelease, j.Release) == normalizedJobName {
+				normalizeJobName(j.JobName, j.FromRelease.StringVal, j.Release) == normalizedJobName {
 				return j.JobName, nil
 			}
 		}

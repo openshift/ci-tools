@@ -1,5 +1,7 @@
 package jobrunaggregatorapi
 
+import "cloud.google.com/go/bigquery"
+
 // The jobSchema below is used to build the "Jobs" table.
 const (
 	JobsTableName = "Jobs"
@@ -59,5 +61,5 @@ type JobRowWithVariants struct {
 	IPMode                      string
 	Topology                    string
 	Release                     string
-	FromRelease                 string
+	FromRelease                 bigquery.NullString
 }

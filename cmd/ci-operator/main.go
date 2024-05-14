@@ -2341,7 +2341,12 @@ func (o *options) getClusterProfileNamesFromTargets() {
 	for _, targetName := range o.targets.values {
 		for _, test := range o.configSpec.Tests {
 			if targetName == test.As && test.MultiStageTestConfigurationLiteral != nil {
-				o.clusterProfileNames = append(o.clusterProfileNames, test.MultiStageTestConfigurationLiteral.ClusterProfile.Name())
+				//TODO delete - adding logs for debugging
+				logrus.Infof("target: %v, test.As: %v", targetName, test.As)
+				logrus.Infof("test.MultiStageTestConfigurationLiteral.ClusterProfile: %v", test.MultiStageTestConfigurationLiteral.ClusterProfile)
+				if test.MultiStageTestConfigurationLiteral.ClusterProfile.Name() != "" {
+					o.clusterProfileNames = append(o.clusterProfileNames, test.MultiStageTestConfigurationLiteral.ClusterProfile.Name())
+				}
 				break
 			}
 		}

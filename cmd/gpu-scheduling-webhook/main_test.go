@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/openshift/ci-tools/pkg/api"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -35,10 +36,10 @@ func TestMutatePod(t *testing.T) {
 							Image:   "img",
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
-									nvidiaGPU: resource.MustParse("1"),
+									api.NvidiaGPUResource: resource.MustParse("1"),
 								},
 								Limits: corev1.ResourceList{
-									nvidiaGPU: resource.MustParse("1"),
+									api.NvidiaGPUResource: resource.MustParse("1"),
 								},
 							},
 						},
@@ -58,10 +59,10 @@ func TestMutatePod(t *testing.T) {
 							Image:   "img",
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
-									nvidiaGPU: resource.MustParse("1"),
+									api.NvidiaGPUResource: resource.MustParse("1"),
 								},
 								Limits: corev1.ResourceList{
-									nvidiaGPU: resource.MustParse("1"),
+									api.NvidiaGPUResource: resource.MustParse("1"),
 								},
 							},
 						},
@@ -110,10 +111,10 @@ func TestMutatePod(t *testing.T) {
 							Image:   "img",
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
-									nvidiaGPU: resource.MustParse("1"),
+									api.NvidiaGPUResource: resource.MustParse("1"),
 								},
 								Limits: corev1.ResourceList{
-									nvidiaGPU: resource.MustParse("1"),
+									api.NvidiaGPUResource: resource.MustParse("1"),
 								},
 							},
 						},
@@ -134,10 +135,10 @@ func TestMutatePod(t *testing.T) {
 							Image:   "img",
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
-									nvidiaGPU: resource.MustParse("1"),
+									api.NvidiaGPUResource: resource.MustParse("1"),
 								},
 								Limits: corev1.ResourceList{
-									nvidiaGPU: resource.MustParse("1"),
+									api.NvidiaGPUResource: resource.MustParse("1"),
 								},
 							},
 						},

@@ -7,7 +7,6 @@ import (
 
 	"github.com/bombsimon/logrusr/v3"
 	"github.com/go-logr/logr"
-	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
@@ -20,6 +19,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 var (

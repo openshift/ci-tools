@@ -7,6 +7,7 @@ import (
 
 	"github.com/bombsimon/logrusr/v3"
 	"github.com/go-logr/logr"
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
@@ -21,11 +22,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
-const nvidiaGPU = "nvidia.com/gpu"
-
 var (
 	nvidiaGPUToleration = corev1.Toleration{
-		Key:      nvidiaGPU,
+		Key:      api.NvidiaGPUResource,
 		Operator: corev1.TolerationOpEqual,
 		Value:    "true",
 		Effect:   corev1.TaintEffectNoSchedule,
@@ -121,8 +120,8 @@ func addToleration(logger logr.Logger, pod *corev1.Pod) {
 }
 
 func needNvidiaGPU(requirement corev1.ResourceRequirements) bool {
-	_, requestExists := requirement.Requests[nvidiaGPU]
-	_, limitExists := requirement.Limits[nvidiaGPU]
+	_, requestExists := requirement.Requests[api.NvidiaGPUResource]
+	_, limitExists := requirement.Limits[api.NvidiaGPUResource]
 	return requestExists || limitExists
 }
 

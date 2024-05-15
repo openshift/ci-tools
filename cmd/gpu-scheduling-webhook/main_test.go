@@ -11,6 +11,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 func TestMutatePod(t *testing.T) {
@@ -35,10 +37,10 @@ func TestMutatePod(t *testing.T) {
 							Image:   "img",
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
-									nvidiaGPU: resource.MustParse("1"),
+									api.NvidiaGPUResource: resource.MustParse("1"),
 								},
 								Limits: corev1.ResourceList{
-									nvidiaGPU: resource.MustParse("1"),
+									api.NvidiaGPUResource: resource.MustParse("1"),
 								},
 							},
 						},
@@ -58,10 +60,10 @@ func TestMutatePod(t *testing.T) {
 							Image:   "img",
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
-									nvidiaGPU: resource.MustParse("1"),
+									api.NvidiaGPUResource: resource.MustParse("1"),
 								},
 								Limits: corev1.ResourceList{
-									nvidiaGPU: resource.MustParse("1"),
+									api.NvidiaGPUResource: resource.MustParse("1"),
 								},
 							},
 						},
@@ -110,10 +112,10 @@ func TestMutatePod(t *testing.T) {
 							Image:   "img",
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
-									nvidiaGPU: resource.MustParse("1"),
+									api.NvidiaGPUResource: resource.MustParse("1"),
 								},
 								Limits: corev1.ResourceList{
-									nvidiaGPU: resource.MustParse("1"),
+									api.NvidiaGPUResource: resource.MustParse("1"),
 								},
 							},
 						},
@@ -134,10 +136,10 @@ func TestMutatePod(t *testing.T) {
 							Image:   "img",
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
-									nvidiaGPU: resource.MustParse("1"),
+									api.NvidiaGPUResource: resource.MustParse("1"),
 								},
 								Limits: corev1.ResourceList{
-									nvidiaGPU: resource.MustParse("1"),
+									api.NvidiaGPUResource: resource.MustParse("1"),
 								},
 							},
 						},

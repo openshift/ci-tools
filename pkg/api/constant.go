@@ -70,7 +70,8 @@ const (
 
 	CIAdminsGroupName = "test-platform-ci-admins"
 
-	ShmResource = "ci-operator.openshift.io/shm"
+	ShmResource       = "ci-operator.openshift.io/shm"
+	NvidiaGPUResource = "nvidia.com/gpu"
 
 	// ReleaseConfigAnnotation is the name of annotation created by the release controller.
 	// ci-operator uses the release controller configuration to determine

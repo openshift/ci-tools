@@ -271,6 +271,33 @@ func TestValidateResources(t *testing.T) {
 			},
 			expectedErr: true,
 		},
+		{
+			name: "valid nvidia gpu value passes",
+			input: api.ResourceConfiguration{
+				"*": api.ResourceRequirements{
+					Requests: api.ResourceList{
+						api.NvidiaGPUResource: "1",
+					},
+					Limits: api.ResourceList{
+						api.NvidiaGPUResource: "1",
+					},
+				},
+			},
+		},
+		{
+			name: "invalid nvidia gpu value passes",
+			input: api.ResourceConfiguration{
+				"*": api.ResourceRequirements{
+					Requests: api.ResourceList{
+						api.NvidiaGPUResource: "foo",
+					},
+					Limits: api.ResourceList{
+						api.NvidiaGPUResource: "bar",
+					},
+				},
+			},
+			expectedErr: true,
+		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			err := validateResources("", testCase.input)

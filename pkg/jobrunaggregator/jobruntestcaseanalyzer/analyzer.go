@@ -33,10 +33,17 @@ var (
 	installTest           = "install should succeed: overall"
 	installTestIdentifier = testIdentifier{testSuites: installTestSuites, testName: installTest}
 
+	// Checking the step graph that the "test" phase succeeded is a proxy for "all tests passed"
 	overallTestGroup      = "overall"
 	overallTestsSuite     = []string{"step graph"}
 	overallTestsTest      = "Run multi-stage test test phase"
 	overallTestIdentifier = testIdentifier{testSuites: overallTestsSuite, testName: overallTestsTest}
+
+	// This test verifies that the cluster upgraded, and that the upgrade finished with the cluster in a good state.
+	upgradeTestGroup      = "upgrade"
+	upgradeTestSuite      = []string{"openshift-tests-upgrade"}
+	upgradeTest           = "[sig-arch][Feature:ClusterUpgrade] Cluster should be upgradeable after finishing upgrade [Late][Suite:upgrade]"
+	upgradeTestIdentifier = testIdentifier{testSuites: upgradeTestSuite, testName: upgradeTest}
 )
 
 // JobGetter gets related jobs for further analysis

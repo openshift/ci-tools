@@ -350,6 +350,8 @@ func (f *JobRunsTestCaseAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunTe
 		testIdentifierOpt = installTestIdentifier
 	case overallTestGroup:
 		testIdentifierOpt = overallTestIdentifier
+	case upgradeTestGroup:
+		testIdentifierOpt = upgradeTestIdentifier
 	default:
 		return nil, fmt.Errorf("unknown test group: %s", f.TestGroup)
 	}

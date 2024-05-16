@@ -606,6 +606,27 @@ func TestGenerateJobs(t *testing.T) {
 				},
 			},
 		},
+		{
+			id: "multiarch branch filtered with variant, no cluster change",
+			config: &ciop.ReleaseBuildConfiguration{
+				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{
+					{
+						From: "os",
+						To:   "ci-tools",
+					},
+				},
+				PromotionConfiguration: &ciop.PromotionConfiguration{},
+			},
+			repoInfo: &ProwgenInfo{
+				Config: config.Prowgen{MultiArch: true, MultiArchBranchFilter: []string{"branch"}},
+				Metadata: ciop.Metadata{
+					Org:     "organization",
+					Repo:    "repository",
+					Branch:  "branch",
+					Variant: "variant",
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {

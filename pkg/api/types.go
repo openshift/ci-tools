@@ -1308,6 +1308,7 @@ const (
 	ClusterProfileVSphereMultizone2     ClusterProfile = "vsphere-multizone-2"
 	ClusterProfileVSphereConnected2     ClusterProfile = "vsphere-connected-2"
 	ClusterProfileVSphereMultiVCenter   ClusterProfile = "vsphere-multi-vcenter"
+	ClusterProfileVSphereElastic        ClusterProfile = "vsphere-elastic"
 	ClusterProfileKubevirt              ClusterProfile = "kubevirt"
 	ClusterProfileAWSCPaaS              ClusterProfile = "aws-cpaas"
 	ClusterProfileOSDEphemeral          ClusterProfile = "osd-ephemeral"
@@ -1452,6 +1453,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileVSphereMultizone2,
 		ClusterProfileVSphereConnected2,
 		ClusterProfileVSphereMultiVCenter,
+		ClusterProfileVSphereElastic,
 
 		ClusterProfileOCIAssisted,
 		ClusterProfileHypershiftPowerVS,
@@ -1644,6 +1646,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileVSphereDis2,
 		ClusterProfileVSphere8Vpn,
 		ClusterProfileVSphereMultiVCenter,
+		ClusterProfileVSphereElastic,
 		ClusterProfileVSphereConnected2:
 
 		return "vsphere"
@@ -1885,6 +1888,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "vsphere-connected-2-quota-slice"
 	case ClusterProfileVSphereMultiVCenter:
 		return "vsphere-multi-vcenter-quota-slice"
+	case ClusterProfileVSphereElastic:
+		return "vsphere-elastic-quota-slice"
 	case ClusterProfileKubevirt:
 		return "kubevirt-quota-slice"
 	case ClusterProfileAWSCPaaS:

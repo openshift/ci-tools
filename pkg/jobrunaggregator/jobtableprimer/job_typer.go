@@ -8,7 +8,7 @@ type jobRowBuilder struct {
 	job *jobrunaggregatorapi.JobRow
 }
 
-func newJob(name string, reverseOrderedVersions []string) *jobRowBuilder {
+func newJob(name string) *jobRowBuilder {
 	return &jobRowBuilder{
 		job: &jobrunaggregatorapi.JobRow{
 			JobName:                     name,

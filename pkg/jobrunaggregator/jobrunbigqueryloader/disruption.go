@@ -146,7 +146,7 @@ func newDisruptionUploader(backendDisruptionInserter jobrunaggregatorlib.BigQuer
 }
 
 func newDisruptionPendingUploadLister(ciDataClient jobrunaggregatorlib.CIDataClient) pendingUploadLister {
-	return &testRunPendingUploadLister{
+	return &pendingJobRunsUploadLister{
 		tableName:    jobrunaggregatorapi.DisruptionJobRunTableName,
 		ciDataClient: ciDataClient,
 	}

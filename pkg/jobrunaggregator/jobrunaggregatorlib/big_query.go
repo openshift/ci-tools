@@ -17,7 +17,6 @@ import (
 const (
 	BigQueryProjectID = "openshift-ci-data-analysis"
 	CIDataSetID       = "ci_data"
-	TestRunTableName  = "TestRuns"
 
 	ReleaseTableName             = "ReleaseTags"
 	ReleaseRepositoryTableName   = "ReleaseRepositories"
@@ -94,9 +93,6 @@ func (d dryRunInserter) Put(ctx context.Context, src interface{}) (err error) {
 	for i := 0; i < srcVal.Len(); i++ {
 
 		switch s := srcVal.Index(i).Interface().(type) {
-		case *jobrunaggregatorapi.TestRunRow:
-			fmt.Fprintf(buf, "\tINSERT into %v: %#v\n", d.table, s)
-
 		case *jobrunaggregatorapi.JobRunRow:
 			fmt.Fprintf(buf, "\tINSERT into %v: name=%v, jobname=%v, status=%v\n", d.table, s.Name, s.JobName, s.Status)
 

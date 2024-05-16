@@ -37,6 +37,7 @@ func (f *BigQueryTestRunUploadFlags) BindFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&f.GCSBucket, "google-storage-bucket", "test-platform-results", "The optional GCS Bucket holding test artifacts")
 }
 
+// TODO: delete this command entirely once we're sure we dont need the JobRuns table it also populated.
 func NewBigQueryTestRunUploadFlagsCommand() *cobra.Command {
 	f := NewBigQueryTestRunUploadFlags()
 
@@ -101,7 +102,6 @@ func (f *BigQueryTestRunUploadFlags) ToOptions(ctx context.Context) (*allJobsLoa
 	)
 
 	var jobRunTableInserter jobrunaggregatorlib.BigQueryInserter
-	var testRunTableInserter jobrunaggregatorlib.BigQueryInserter
 
 	var backendAlertTableInserter jobrunaggregatorlib.BigQueryInserter
 	var backendDisruptionTableInserter jobrunaggregatorlib.BigQueryInserter
@@ -109,9 +109,7 @@ func (f *BigQueryTestRunUploadFlags) ToOptions(ctx context.Context) (*allJobsLoa
 	if !f.DryRun {
 		ciDataSet := bigQueryClient.Dataset(f.DataCoordinates.DataSetID)
 		jobRunTable := ciDataSet.Table(jobrunaggregatorapi.LegacyJobRunTableName)
-		testRunTable := ciDataSet.Table(jobrunaggregatorlib.TestRunTableName)
 		jobRunTableInserter = jobRunTable.Inserter()
-		testRunTableInserter = testRunTable.Inserter()
 
 		// could start with dry run for the new uploaders if we wanted
 		// backendAlertTableInserter = jobrunaggregatorlib.NewDryRunInserter(os.Stdout, jobrunaggregatorapi.AlertsTableName)
@@ -124,16 +122,12 @@ func (f *BigQueryTestRunUploadFlags) ToOptions(ctx context.Context) (*allJobsLoa
 
 	} else {
 		jobRunTableInserter = jobrunaggregatorlib.NewDryRunInserter(os.Stdout, jobrunaggregatorapi.LegacyJobRunTableName)
-		testRunTableInserter = jobrunaggregatorlib.NewDryRunInserter(os.Stdout, jobrunaggregatorlib.TestRunTableName)
-
 		backendAlertTableInserter = jobrunaggregatorlib.NewDryRunInserter(os.Stdout, jobrunaggregatorapi.AlertsTableName)
 		backendDisruptionTableInserter = jobrunaggregatorlib.NewDryRunInserter(os.Stdout, jobrunaggregatorapi.BackendDisruptionTableName)
 	}
 
 	jobRunUploaderRegistry := JobRunUploaderRegistry{}
-	testRunUploader := newTestRunUploader(testRunTableInserter, ciDataClient)
 	pendingUploadLister := newTestRunPendingUploadLister(ciDataClient)
-	jobRunUploaderRegistry.Register("testRunUploader", testRunUploader)
 
 	// Temporarily only support in dry run mode for now
 	// Do we want to support a date specific switchover so

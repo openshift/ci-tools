@@ -166,7 +166,7 @@ func newAlertUploader(alertInserter jobrunaggregatorlib.BigQueryInserter,
 }
 
 func newAlertPendingUploadLister(ciDataClient jobrunaggregatorlib.CIDataClient) pendingUploadLister {
-	return &testRunPendingUploadLister{
+	return &pendingJobRunsUploadLister{
 		tableName:    jobrunaggregatorapi.AlertJobRunTableName,
 		ciDataClient: ciDataClient,
 	}

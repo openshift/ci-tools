@@ -132,7 +132,7 @@ func (f *BigQueryAlertUploadFlags) ToOptions(ctx context.Context) (*allJobsLoade
 		gcsClient:    gcsClient,
 
 		jobRunInserter: jobRunTableInserter,
-		shouldCollectedDataForJobFn: func(job jobrunaggregatorapi.JobRow) bool {
+		shouldCollectedDataForJobFn: func(job jobrunaggregatorapi.JobRowWithVariants) bool {
 			return true
 		},
 		jobRunUploaderRegistry:  jobRunUploaderRegistry,

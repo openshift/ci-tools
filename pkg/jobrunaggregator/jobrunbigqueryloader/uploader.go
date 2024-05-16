@@ -21,12 +21,12 @@ const (
 	workerCount = 10
 )
 
-type shouldCollectDataForJobFunc func(job jobrunaggregatorapi.JobRow) bool
+type shouldCollectDataForJobFunc func(job jobrunaggregatorapi.JobRowWithVariants) bool
 
-func wantsTestRunData(job jobrunaggregatorapi.JobRow) bool {
+func wantsTestRunData(job jobrunaggregatorapi.JobRowWithVariants) bool {
 	return job.CollectTestRuns
 }
-func wantsDisruptionData(job jobrunaggregatorapi.JobRow) bool {
+func wantsDisruptionData(job jobrunaggregatorapi.JobRowWithVariants) bool {
 	return job.CollectDisruption
 }
 
@@ -77,7 +77,7 @@ func (o *allJobsLoaderOptions) Run(ctx context.Context) error {
 	}
 
 	// Convert list of JobRows to a map by job name, we're going to want quick lookups
-	jobRowsMap := map[string]jobrunaggregatorapi.JobRow{}
+	jobRowsMap := map[string]jobrunaggregatorapi.JobRowWithVariants{}
 	for _, job := range jobs {
 		jobRowsMap[job.JobName] = job
 	}
@@ -177,7 +177,7 @@ func (o *allJobsLoaderOptions) Run(ctx context.Context) error {
 
 // processJobRuns is started in several concurrent goroutines to pull job runs to process from the channel. Errors are sent
 // to the errChan for aggregation in the main thread.
-func (o *allJobsLoaderOptions) processJobRuns(ctx context.Context, jobsMap map[string]jobrunaggregatorapi.JobRow, wg *sync.WaitGroup, workerThread, origRunsToImportCount int, jobRunsToImportCh <-chan *jobrunaggregatorapi.TestPlatformProwJobRow, errChan chan<- error) {
+func (o *allJobsLoaderOptions) processJobRuns(ctx context.Context, jobsMap map[string]jobrunaggregatorapi.JobRowWithVariants, wg *sync.WaitGroup, workerThread, origRunsToImportCount int, jobRunsToImportCh <-chan *jobrunaggregatorapi.TestPlatformProwJobRow, errChan chan<- error) {
 	defer wg.Done()
 	for job := range jobRunsToImportCh {
 		jrLogger := logrus.WithFields(logrus.Fields{

@@ -301,7 +301,7 @@ func (j *gcsJobRun) GetProwJob(ctx context.Context) (*prowjobv1.ProwJob, error) 
 	if len(j.gcsProwJobPath) == 0 {
 		return nil, fmt.Errorf("missing prowjob path to GCS content for jobrun/%v/%v", j.GetJobName(), j.GetJobRunID())
 	}
-	logrus.Infof("Fetching latest prowjob content from gcs: %s", j.gcsProwJobPath)
+	logrus.Debugf("Fetching latest prowjob content from gcs: %s", j.gcsProwJobPath)
 	prowBytes, err := j.getCurrentContent(ctx, j.gcsProwJobPath)
 	if err != nil {
 		return nil, err

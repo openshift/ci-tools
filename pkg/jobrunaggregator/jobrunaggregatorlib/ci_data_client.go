@@ -238,8 +238,13 @@ ORDER BY JobName ASC
 
 // GetLastJobRunEndTimeFromTable retrieves the last imported job end time.
 func (c *ciDataClient) GetLastJobRunEndTimeFromTable(ctx context.Context, table string) (*time.Time, error) {
+	// Caution here, these tables can be large, especially for alerts. Do not query additional columns.
+	// We use the JobRunStartTime filter as this is the partition column to cut down on the size of the query.
+	// If we go more than 14 days without uploading data, we will have problems.
+	// At time of writing, this is a 120MB query for alerts, and 32MB for disruption.
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(
-		`SELECT max(EndTime) AS EndTime FROM DATA_SET_LOCATION.` + table)
+		`SELECT max(JobRunEndTime) AS EndTime FROM DATA_SET_LOCATION.` + table +
+			` WHERE JobRunStartTime > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 14 DAY)`)
 	logrus.Debug(queryString)
 
 	type endTime struct {
@@ -266,11 +271,13 @@ func (c *ciDataClient) GetLastJobRunEndTimeFromTable(ctx context.Context, table 
 }
 
 func (c *ciDataClient) ListUploadedJobRunIDsSinceFromTable(ctx context.Context, table string, since *time.Time) (map[string]bool, error) {
+	// Query includes JobRunStartTime to limit query size as this is the partition column
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(
-		`SELECT Name as JobRunID  
+		`SELECT JobRunName as JobRunID  
 FROM DATA_SET_LOCATION.` + table + `
-WHERE EndTime >= @Since
-ORDER BY EndTime ASC
+WHERE JobRunEndTime >= @Since
+  AND JobRunStartTime >= TIMESTAMP_SUB(@Since, INTERVAL 12 HOUR)
+ORDER BY JobRunEndTime ASC
 `)
 	query := c.client.Query(queryString)
 	query.QueryConfig.Parameters = []bigquery.QueryParameter{

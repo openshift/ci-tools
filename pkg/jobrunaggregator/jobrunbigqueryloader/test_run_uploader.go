@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 )
 
@@ -13,13 +12,6 @@ import (
 type pendingJobRunsUploadLister struct {
 	tableName    string
 	ciDataClient jobrunaggregatorlib.CIDataClient
-}
-
-func newTestRunPendingUploadLister(ciDataClient jobrunaggregatorlib.CIDataClient) pendingUploadLister {
-	return &pendingJobRunsUploadLister{
-		tableName:    jobrunaggregatorapi.LegacyJobRunTableName,
-		ciDataClient: ciDataClient,
-	}
 }
 
 func (o *pendingJobRunsUploadLister) getLastUploadedJobRunEndTime(ctx context.Context) (*time.Time, error) {

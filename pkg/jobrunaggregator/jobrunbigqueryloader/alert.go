@@ -107,16 +107,12 @@ func (f *BigQueryAlertUploadFlags) ToOptions(ctx context.Context) (*allJobsLoade
 		jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, bigQueryClient),
 	)
 
-	var jobRunTableInserter jobrunaggregatorlib.BigQueryInserter
 	var backendAlertTableInserter jobrunaggregatorlib.BigQueryInserter
 	if !f.DryRun {
 		ciDataSet := bigQueryClient.Dataset(f.DataCoordinates.DataSetID)
-		jobRunTable := ciDataSet.Table(jobrunaggregatorapi.AlertJobRunTableName)
 		backendAlertTable := ciDataSet.Table(jobrunaggregatorapi.AlertsTableName)
-		jobRunTableInserter = jobRunTable.Inserter()
 		backendAlertTableInserter = backendAlertTable.Inserter()
 	} else {
-		jobRunTableInserter = jobrunaggregatorlib.NewDryRunInserter(os.Stdout, jobrunaggregatorapi.AlertJobRunTableName)
 		backendAlertTableInserter = jobrunaggregatorlib.NewDryRunInserter(os.Stdout, jobrunaggregatorapi.AlertsTableName)
 	}
 	pendingUploadLister := newAlertPendingUploadLister(ciDataClient)
@@ -131,7 +127,6 @@ func (f *BigQueryAlertUploadFlags) ToOptions(ctx context.Context) (*allJobsLoade
 		ciDataClient: ciDataClient,
 		gcsClient:    gcsClient,
 
-		jobRunInserter: jobRunTableInserter,
 		shouldCollectedDataForJobFn: func(job jobrunaggregatorapi.JobRowWithVariants) bool {
 			return true
 		},
@@ -167,7 +162,7 @@ func newAlertUploader(alertInserter jobrunaggregatorlib.BigQueryInserter,
 
 func newAlertPendingUploadLister(ciDataClient jobrunaggregatorlib.CIDataClient) pendingUploadLister {
 	return &pendingJobRunsUploadLister{
-		tableName:    jobrunaggregatorapi.AlertJobRunTableName,
+		tableName:    jobrunaggregatorapi.AlertsTableName,
 		ciDataClient: ciDataClient,
 	}
 }
@@ -179,7 +174,6 @@ func (o *alertUploader) uploadContent(ctx context.Context, jobRun jobrunaggregat
 	if err != nil {
 		return err
 	}
-	logger.Debug("got test files with prefix")
 	if len(alertData) > 0 {
 		alertRows := getAlertsFromPerJobRunData(alertData, jobRunRow)
 
@@ -191,7 +185,7 @@ func (o *alertUploader) uploadContent(ctx context.Context, jobRun jobrunaggregat
 		}
 		logger.Debug("insert complete")
 	} else {
-		logger.Debug("no alert data found, skipping insert")
+		logger.Info("no alert data found, skipping")
 	}
 
 	return nil
@@ -263,8 +257,8 @@ func populateZeros(jobRunRow *jobrunaggregatorapi.JobRunRow,
 			injectedCtr++
 		}
 	}
-	logger.Infof("job observed %d alerts, injected additional %d 0s entries for remaining known alerts",
-		origCount, injectedCtr)
+	logger.WithField("observedAlerts", origCount).WithField("injectedKnownAlerts", injectedCtr).
+		Info("populated zeros for known alerts")
 	return observedAlertRows
 }
 

@@ -10,7 +10,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobruntestcaseanalyzer"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobtableprimer"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/releasebigqueryloader"
-	"github.com/openshift/ci-tools/pkg/jobrunaggregator/tablescreator"
 )
 
 func NewJobAggregatorCommand() *cobra.Command {
@@ -27,7 +26,6 @@ func NewJobAggregatorCommand() *cobra.Command {
 	log.SetFormatter(formatter)
 	log.SetLevel(log.DebugLevel)
 
-	cmd.AddCommand(jobrunbigqueryloader.NewBigQueryTestRunUploadFlagsCommand())
 	cmd.AddCommand(jobrunbigqueryloader.NewBigQueryDisruptionUploadFlagsCommand())
 	cmd.AddCommand(jobrunbigqueryloader.NewBigQueryAlertUploadFlagsCommand())
 	cmd.AddCommand(jobrunaggregatoranalyzer.NewJobRunsAnalyzerCommand())
@@ -35,8 +33,6 @@ func NewJobAggregatorCommand() *cobra.Command {
 
 	cmd.AddCommand(releasebigqueryloader.NewBigQueryReleaseTableCreateFlagsCommand())
 	cmd.AddCommand(releasebigqueryloader.NewBigQueryReleaseUploadFlagsCommand())
-
-	cmd.AddCommand(tablescreator.NewBigQueryCreateTablesFlagsCommand())
 
 	cmd.AddCommand(jobruntestcaseanalyzer.NewJobRunsTestCaseAnalyzerCommand())
 

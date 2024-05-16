@@ -46,8 +46,8 @@ func (c *retryingCIDataClient) GetBackendDisruptionStatisticsByJob(ctx context.C
 	return ret, err
 }
 
-func (c *retryingCIDataClient) ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRowWithVariants, error) {
-	var ret []jobrunaggregatorapi.JobRowWithVariants
+func (c *retryingCIDataClient) ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRow, error) {
+	var ret []jobrunaggregatorapi.JobRow
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
 		var innerErr error
 		ret, innerErr = c.delegate.ListAllJobs(ctx)
@@ -81,6 +81,26 @@ func (c *retryingCIDataClient) ListUploadedJobRunIDsSinceFromTable(ctx context.C
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
 		var innerErr error
 		ret, innerErr = c.delegate.ListUploadedJobRunIDsSinceFromTable(ctx, table, since)
+		return innerErr
+	})
+	return ret, err
+}
+
+func (c *retryingCIDataClient) GetLastAggregationForJob(ctx context.Context, frequency, jobName string) (*jobrunaggregatorapi.AggregatedTestRunRow, error) {
+	var ret *jobrunaggregatorapi.AggregatedTestRunRow
+	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
+		var innerErr error
+		ret, innerErr = c.delegate.GetLastAggregationForJob(ctx, frequency, jobName)
+		return innerErr
+	})
+	return ret, err
+}
+
+func (c *retryingCIDataClient) ListUnifiedTestRunsForJobAfterDay(ctx context.Context, jobName string, startDay time.Time) (*UnifiedTestRunRowIterator, error) {
+	var ret *UnifiedTestRunRowIterator
+	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
+		var innerErr error
+		ret, innerErr = c.delegate.ListUnifiedTestRunsForJobAfterDay(ctx, jobName, startDay)
 		return innerErr
 	})
 	return ret, err

@@ -35,8 +35,14 @@ type AggregationJobClient interface {
 	ListAggregatedTestRunsForJob(ctx context.Context, frequency, jobName string, startDay time.Time) ([]jobrunaggregatorapi.AggregatedTestRunRow, error)
 }
 
+// TestRunSummarizerClient client view used by the test run summarization client.
+type TestRunSummarizerClient interface {
+	GetLastAggregationForJob(ctx context.Context, frequency, jobName string) (*jobrunaggregatorapi.AggregatedTestRunRow, error)
+	ListUnifiedTestRunsForJobAfterDay(ctx context.Context, jobName string, startDay time.Time) (*UnifiedTestRunRowIterator, error)
+}
+
 type JobLister interface {
-	ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRowWithVariants, error)
+	ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRow, error)
 
 	// ListProwJobRunsSince lists from the testplatform BigQuery dataset in a separate project from
 	// where we normally operate. Job runs are inserted here just after their GCS artifacts are uploaded.
@@ -52,6 +58,7 @@ type HistoricalDataClient interface {
 type CIDataClient interface {
 	JobLister
 	AggregationJobClient
+	TestRunSummarizerClient
 	HistoricalDataClient
 
 	// these deal with release tags
@@ -71,6 +78,9 @@ type CIDataClient interface {
 type ciDataClient struct {
 	dataCoordinates BigQueryDataCoordinates
 	client          *bigquery.Client
+
+	disruptionJobRunTableName string
+	testJobRunTableName       string
 }
 
 type RowCount struct {
@@ -79,8 +89,10 @@ type RowCount struct {
 
 func NewCIDataClient(dataCoordinates BigQueryDataCoordinates, client *bigquery.Client) CIDataClient {
 	return &ciDataClient{
-		dataCoordinates: dataCoordinates,
-		client:          client,
+		dataCoordinates:           dataCoordinates,
+		client:                    client,
+		disruptionJobRunTableName: jobrunaggregatorapi.DisruptionJobRunTableName,
+		testJobRunTableName:       jobrunaggregatorapi.LegacyJobRunTableName,
 	}
 }
 
@@ -205,14 +217,14 @@ func (c *ciDataClient) ListAlertHistoricalData(ctx context.Context) ([]*jobrunag
 	return alertDataSet, nil
 }
 
-func (c *ciDataClient) ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRowWithVariants, error) {
+func (c *ciDataClient) ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRow, error) {
 	// For Debugging, you can set "LIMIT X" where X is small
 	// so that you can process only a small subset of jobs while
 	// you debug.
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(
 		`SELECT *  
-FROM DATA_SET_LOCATION.JobsWithVariants
-ORDER BY JobName ASC
+FROM DATA_SET_LOCATION.Jobs
+ORDER BY Jobs.JobName ASC
 `)
 
 	query := c.client.Query(queryString)
@@ -220,9 +232,9 @@ ORDER BY JobName ASC
 	if err != nil {
 		return nil, fmt.Errorf("failed to query job table with %q: %w", queryString, err)
 	}
-	jobs := []jobrunaggregatorapi.JobRowWithVariants{}
+	jobs := []jobrunaggregatorapi.JobRow{}
 	for {
-		job := &jobrunaggregatorapi.JobRowWithVariants{}
+		job := &jobrunaggregatorapi.JobRow{}
 		err = jobRows.Next(job)
 		if err == iterator.Done {
 			break
@@ -357,11 +369,10 @@ func buildMasterNodesUpdatedSQL(masterNodesUpdated string) string {
 }
 
 func (c *ciDataClient) GetBackendDisruptionRowCountByJob(ctx context.Context, jobName, masterNodesUpdated string) (uint64, error) {
-	// 1.5 GB query, but only run once per aggregation
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(fmt.Sprintf(`
-SELECT COUNT(DISTINCT(JobRunName)) AS TotalRows
+SELECT Count(Name) AS TotalRows
 FROM
-	DATA_SET_LOCATION.BackendDisruption AS JobRuns
+	DATA_SET_LOCATION.BackendDisruption_JobRuns AS JobRuns
 WHERE
     StartTime <= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 3 DAY)
 AND
@@ -703,12 +714,14 @@ FROM
                     PERCENTILE_CONT(BackendDisruption.DisruptionSeconds, 0.99) OVER(PARTITION BY BackendDisruption.BackendName) AS P99,
                 FROM
                     DATA_SET_LOCATION.BackendDisruption as BackendDisruption
+                INNER JOIN
+                    DATA_SET_LOCATION.BackendDisruption_JobRuns as JobRuns on JobRuns.Name = BackendDisruption.JobRunName
                 WHERE
-                    BackendDisruption.JobRunStartTime BETWEEN TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 10 DAY)
+                    JobRuns.StartTime BETWEEN TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 10 DAY)
                 AND
                     TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 3 DAY)
                 AND
-                    BackendDisruption.JobName = @JobName
+                    JobRuns.JobName = @JobName
                 %s
             )
             GROUP BY
@@ -722,12 +735,14 @@ LEFT JOIN
             STDDEV(BackendDisruption.DisruptionSeconds) as StandardDeviation,
             FROM
                 DATA_SET_LOCATION.BackendDisruption as BackendDisruption
+            INNER JOIN
+                DATA_SET_LOCATION.BackendDisruption_JobRuns as JobRuns on JobRuns.Name = BackendDisruption.JobRunName
             WHERE
-                BackendDisruption.JobRunStartTime BETWEEN TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 10 DAY)
+                JobRuns.StartTime BETWEEN TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 10 DAY)
             AND
                 TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 3 DAY)
             AND
-                BackendDisruption.JobName = @JobName
+                JobRuns.JobName = @JobName
             %s
             GROUP BY
                 BackendName
@@ -761,6 +776,40 @@ ON
 	return rows, nil
 }
 
+func (c *ciDataClient) GetLastAggregationForJob(ctx context.Context, frequency, jobName string) (*jobrunaggregatorapi.AggregatedTestRunRow, error) {
+	frequencyTable, err := c.tableForFrequency(frequency)
+	if err != nil {
+		return nil, err
+	}
+	queryString := strings.Replace(
+		`SELECT *
+FROM DATA_SET_LOCATION.TABLE_NAME
+WHERE TABLE_NAME.JobName = @JobName
+ORDER BY TABLE_NAME.AggregationStartDate DESC
+LIMIT 1`,
+		"TABLE_NAME", frequencyTable, -1)
+
+	queryString = c.dataCoordinates.SubstituteDataSetLocation(queryString)
+
+	query := c.client.Query(queryString)
+	query.QueryConfig.Parameters = []bigquery.QueryParameter{
+		{Name: "JobName", Value: jobName},
+	}
+	lastJobRunRow, err := query.Read(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query aggregation table with %q: %w", queryString, err)
+	}
+	lastJobRun := &jobrunaggregatorapi.AggregatedTestRunRow{}
+	err = lastJobRunRow.Next(lastJobRun)
+	if err == iterator.Done {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return lastJobRun, nil
+}
+
 func (c *ciDataClient) tableForFrequency(frequency string) (string, error) {
 	switch frequency {
 	case "ByOneWeek":
@@ -769,6 +818,26 @@ func (c *ciDataClient) tableForFrequency(frequency string) (string, error) {
 	default:
 		return "", fmt.Errorf("unrecognized frequency: %q", frequency)
 	}
+}
+
+func (c *ciDataClient) ListUnifiedTestRunsForJobAfterDay(ctx context.Context, jobName string, startDay time.Time) (*UnifiedTestRunRowIterator, error) {
+	queryString := c.dataCoordinates.SubstituteDataSetLocation(
+		`SELECT *
+FROM DATA_SET_LOCATION.UnifiedTestRuns
+WHERE UnifiedTestRuns.JobRunStartTime >= @TimeCutOff and UnifiedTestRuns.JobName = @JobName
+ORDER BY UnifiedTestRuns.JobRunStartTime ASC
+`)
+
+	query := c.client.Query(queryString)
+	query.QueryConfig.Parameters = []bigquery.QueryParameter{
+		{Name: "TimeCutOff", Value: startDay},
+		{Name: "JobName", Value: jobName},
+	}
+	it, err := query.Read(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &UnifiedTestRunRowIterator{delegatedIterator: it}, nil
 }
 
 func (c *ciDataClient) ListReleaseTags(ctx context.Context) (sets.Set[string], error) {

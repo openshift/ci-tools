@@ -48,7 +48,7 @@ var (
 
 // JobGetter gets related jobs for further analysis
 type JobGetter interface {
-	GetJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRowWithVariants, error)
+	GetJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRow, error)
 }
 
 func NewTestCaseAnalyzerJobGetter(platform, infrastructure, network, testNameSuffix string,
@@ -133,7 +133,7 @@ func (s *testCaseAnalyzerJobGetter) shouldAggregateJob(prowJob *prowjobv1.ProwJo
 // For PR payload, this contains jobs correspond to the list of jobGCSPreix passed
 // For release-controller generated payload, this contains all jobs meeting selection criteria
 // from command args.
-func (s *testCaseAnalyzerJobGetter) GetJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRowWithVariants, error) {
+func (s *testCaseAnalyzerJobGetter) GetJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRow, error) {
 	jobs, err := s.ciDataClient.ListAllJobs(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list all jobs: %w", err)
@@ -156,8 +156,8 @@ func getJobInfrastructure(name string) string {
 	return "ipi"
 }
 
-func (s *testCaseAnalyzerJobGetter) filterJobsForPayload(allJobs []jobrunaggregatorapi.JobRowWithVariants) []jobrunaggregatorapi.JobRowWithVariants {
-	jobs := []jobrunaggregatorapi.JobRowWithVariants{}
+func (s *testCaseAnalyzerJobGetter) filterJobsForPayload(allJobs []jobrunaggregatorapi.JobRow) []jobrunaggregatorapi.JobRow {
+	jobs := []jobrunaggregatorapi.JobRow{}
 	for i := range allJobs {
 		job := allJobs[i]
 		if (len(s.platform) != 0 && job.Platform != s.platform) ||
@@ -210,8 +210,8 @@ func (s *testCaseAnalyzerJobGetter) isJobNameExcluded(jobName string) bool {
 	return false
 }
 
-func (s *testCaseAnalyzerJobGetter) filterJobsByNames(jobNames sets.Set[string], allJobs []jobrunaggregatorapi.JobRowWithVariants) []jobrunaggregatorapi.JobRowWithVariants {
-	ret := []jobrunaggregatorapi.JobRowWithVariants{}
+func (s *testCaseAnalyzerJobGetter) filterJobsByNames(jobNames sets.Set[string], allJobs []jobrunaggregatorapi.JobRow) []jobrunaggregatorapi.JobRow {
+	ret := []jobrunaggregatorapi.JobRow{}
 	for i := range allJobs {
 		curr := allJobs[i]
 		if jobNames.Has(curr.JobName) {
@@ -494,15 +494,15 @@ func (o *JobRunTestCaseAnalyzerOptions) loadStaticJobRuns(ctx context.Context, j
 	return outputRuns, nil
 }
 
-func (o *JobRunTestCaseAnalyzerOptions) loadStaticJobs() []jobrunaggregatorapi.JobRowWithVariants {
-	rows := make([]jobrunaggregatorapi.JobRowWithVariants, 0)
+func (o *JobRunTestCaseAnalyzerOptions) loadStaticJobs() []jobrunaggregatorapi.JobRow {
+	rows := make([]jobrunaggregatorapi.JobRow, 0)
 	uniqueNames := sets.Set[string]{}
 
 	for _, r := range o.staticJobRunIdentifiers {
 		// only one row per unique job name
 		if !uniqueNames.Has(r.JobName) {
 			// we only care about returning JobName
-			rows = append(rows, jobrunaggregatorapi.JobRowWithVariants{JobName: r.JobName})
+			rows = append(rows, jobrunaggregatorapi.JobRow{JobName: r.JobName})
 			uniqueNames.Insert(r.JobName)
 		}
 	}
@@ -518,7 +518,7 @@ func (o *JobRunTestCaseAnalyzerOptions) GetRelatedJobRunsFromIdentifiers(ctx con
 // GetRelatedJobRuns gets all related job runs for analysis
 func (o *JobRunTestCaseAnalyzerOptions) GetRelatedJobRuns(ctx context.Context) ([]jobrunaggregatorapi.JobRunInfo, error) {
 	var jobRunsToReturn []jobrunaggregatorapi.JobRunInfo
-	var jobs []jobrunaggregatorapi.JobRowWithVariants
+	var jobs []jobrunaggregatorapi.JobRow
 	var err error
 
 	// allow for the list of ids to be passed in

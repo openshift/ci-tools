@@ -17,6 +17,8 @@ import (
 const (
 	BigQueryProjectID = "openshift-ci-data-analysis"
 	CIDataSetID       = "ci_data"
+	JobsTableName     = "Jobs"
+	JobRunTableName   = "JobRuns"
 	TestRunTableName  = "TestRuns"
 
 	ReleaseTableName             = "ReleaseTags"

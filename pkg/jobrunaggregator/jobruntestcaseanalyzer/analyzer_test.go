@@ -101,11 +101,11 @@ func TestGetJobs(t *testing.T) {
 
 }
 
-func createJobs() []jobrunaggregatorapi.JobRowWithVariants {
-	jobs := make([]jobrunaggregatorapi.JobRowWithVariants, 3)
-	jobs[0] = jobrunaggregatorapi.JobRowWithVariants{JobName: "periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn-upgrade", Platform: "metal", Network: "sdn"}
-	jobs[1] = jobrunaggregatorapi.JobRowWithVariants{JobName: "periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn-serial-ipv4", Platform: "metal", Network: "sdn"}
-	jobs[2] = jobrunaggregatorapi.JobRowWithVariants{JobName: "periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-serial-ovn-ipv6", Platform: "metal", Network: "sdn"}
+func createJobs() []jobrunaggregatorapi.JobRow {
+	jobs := make([]jobrunaggregatorapi.JobRow, 3)
+	jobs[0] = jobrunaggregatorapi.JobRow{JobName: "periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn-upgrade", Platform: "metal", Network: "sdn"}
+	jobs[1] = jobrunaggregatorapi.JobRow{JobName: "periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-sdn-serial-ipv4", Platform: "metal", Network: "sdn"}
+	jobs[2] = jobrunaggregatorapi.JobRow{JobName: "periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-serial-ovn-ipv6", Platform: "metal", Network: "sdn"}
 
 	return jobs
 }

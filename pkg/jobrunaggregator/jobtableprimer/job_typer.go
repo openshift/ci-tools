@@ -81,8 +81,16 @@ func newJob(name string, reverseOrderedVersions []string) *jobRowBuilder {
 	if len(versions) >= 1 {
 		currRelease = versions[0]
 	} else {
-		// If this job doesn't have one of the known releases, panic to avoid silently missing data for it.
-		panic(fmt.Sprintf("Unable to determine the release from job %s, please update the release list: %v", name, reverseOrderedVersions))
+		if strings.Contains(name, "414") {
+			versions = append(versions, "4.14")
+		} else if strings.Contains(name, "415") {
+			versions = append(versions, "4.15")
+		} else if strings.Contains(name, "416") {
+			versions = append(versions, "4.16")
+		} else {
+			// If this job doesn't have one of the known releases, panic to avoid silently missing data for it.
+			panic(fmt.Sprintf("Unable to determine the release from job %s, please update the release list: %v", name, reverseOrderedVersions))
+		}
 	}
 	fromRelease := ""
 	if runsUpgrade {

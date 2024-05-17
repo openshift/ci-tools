@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -31,19 +30,16 @@ type ipPoolStep struct {
 	params       api.Parameters
 
 	namespace func() string
-
-	resourcesLock *sync.RWMutex
 }
 
 func IPPoolStep(client *lease.Client, secretClient ctrlruntimeclient.Client, lease api.StepLease, wrapped api.Step, params api.Parameters, namespace func() string) api.Step {
 	ret := ipPoolStep{
-		client:        client,
-		secretClient:  secretClient,
-		wrapped:       wrapped,
-		namespace:     namespace,
-		params:        params,
-		ipPoolLease:   stepLease{StepLease: lease},
-		resourcesLock: &sync.RWMutex{},
+		client:       client,
+		secretClient: secretClient,
+		wrapped:      wrapped,
+		namespace:    namespace,
+		params:       params,
+		ipPoolLease:  stepLease{StepLease: lease},
 	}
 	return &ret
 }
@@ -74,8 +70,6 @@ func (s *ipPoolStep) Provides() api.ParameterMap {
 	// Disable unparam lint as we need to confirm to this interface, but there will never be an error
 	//nolint:unparam
 	parameters[l.Env] = func() (string, error) {
-		s.resourcesLock.RLock()
-		defer s.resourcesLock.RUnlock()
 		return strconv.Itoa(len(l.resources)), nil
 	}
 	return parameters
@@ -113,17 +107,22 @@ func (s *ipPoolStep) run(ctx context.Context, minute time.Duration) error {
 		}
 	} else {
 		logrus.Infof("Acquired %d ip pool lease(s) for %s: %v", l.Count, l.ResourceType, names)
-		s.resourcesLock.Lock()
 		s.ipPoolLease.resources = names
-		s.resourcesLock.Unlock()
 	}
 
+	remainingResources := make(chan []string)
 	if len(names) > 0 {
-		go s.checkAndReleaseUnusedLeases(ctx, minute)
+		go checkAndReleaseUnusedLeases(ctx, s.namespace(), s.wrapped.Name(), names, s.secretClient, s.client, minute, remainingResources)
 	}
 
 	wrappedErr := results.ForReason("executing_test").ForError(s.wrapped.Run(ctx))
 	logrus.Infof("Releasing ip pool leases for test %s", s.Name())
+	select {
+	case s.ipPoolLease.resources = <-remainingResources:
+		logrus.Debugf("resources left to release after unused have already been released %v", s.ipPoolLease.resources)
+	default:
+		logrus.Debug("no unused resources were released, releasing all")
+	}
 	releaseErr := results.ForReason("releasing_ip_pool_lease").ForError(releaseLeases(client, *l))
 
 	return aggregateWrappedErrorAndReleaseError(wrappedErr, releaseErr)
@@ -135,11 +134,12 @@ const UnusedIpCount = "UNUSED_IP_COUNT"
 // UNUSED_IP_COUNT data in the shared secret which signals that there are leases that can be released.
 // If/when this is discovered it will release that number of leases, and stop checking.
 // minute is provided as an argument to assist with unit testing.
-func (s *ipPoolStep) checkAndReleaseUnusedLeases(ctx context.Context, minute time.Duration) {
+// The remainingResources channel stores the names of the resources that haven't been released if applicable.
+func checkAndReleaseUnusedLeases(ctx context.Context, namespace, testName string, resources []string, secretClient ctrlruntimeclient.Client, leaseClient *lease.Client, minute time.Duration, remainingResources chan<- []string) {
 	waitUntil := time.After(minute * 15)
 	sharedDirKey := types.NamespacedName{
-		Namespace: s.namespace(),
-		Name:      s.wrapped.Name(), // This is the name of the shared-dir secret
+		Namespace: namespace,
+		Name:      testName, // This is the name of the shared-dir secret
 	}
 	ticker := time.NewTicker(minute)
 	defer ticker.Stop()
@@ -153,7 +153,7 @@ func (s *ipPoolStep) checkAndReleaseUnusedLeases(ctx context.Context, minute tim
 			return
 		default:
 			sharedDirSecret := coreapi.Secret{}
-			if err := s.secretClient.Get(ctx, sharedDirKey, &sharedDirSecret); err != nil {
+			if err := secretClient.Get(ctx, sharedDirKey, &sharedDirSecret); err != nil {
 				logrus.WithError(err).Warn("could not get shared dir secret")
 				continue
 			}
@@ -167,22 +167,19 @@ func (s *ipPoolStep) checkAndReleaseUnusedLeases(ctx context.Context, minute tim
 			}
 			logrus.Infof("there are %d unused ip-pool addresses to release", count)
 
-			client := *s.client
-			s.resourcesLock.Lock()
-			names := s.ipPoolLease.resources
-			if count > len(names) {
-				logrus.Warnf("requested to release %d ip-pool leases, but only %d have been leased; ignoring request", count, len(names))
+			client := *leaseClient
+			if count > len(resources) {
+				logrus.Warnf("requested to release %d ip-pool leases, but only %d have been leased; ignoring request", count, len(resources))
 				return
 			}
 			for i := 0; i < count; i++ {
-				name := names[i]
+				name := resources[i]
 				logrus.Infof("releasing unused ip-pool lease: %s", name)
 				if err = client.Release(name); err != nil {
 					logrus.WithError(err).Warnf("cannot release ip-pool lease %s", name)
 				}
 			}
-			s.ipPoolLease.resources = names[count:]
-			s.resourcesLock.Unlock()
+			remainingResources <- resources[count:]
 			return
 		}
 	}

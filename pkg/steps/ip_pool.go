@@ -133,7 +133,9 @@ func (s *ipPoolStep) checkAndReleaseUnusedLeases(ctx context.Context, minute tim
 		Namespace: s.namespace(),
 		Name:      s.wrapped.Name(), // This is the name of the shared-dir secret
 	}
-	for range time.Tick(minute) {
+	ticker := time.NewTicker(minute)
+	defer ticker.Stop()
+	for range ticker.C {
 		logrus.Debugf("checking for unused ip-pool leases to release")
 		select {
 		case <-ctx.Done():

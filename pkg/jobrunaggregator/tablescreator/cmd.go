@@ -1,8 +1,6 @@
 package tablescreator
 
 import (
-	"context"
-
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -37,20 +35,10 @@ func NewBigQueryCreateTablesFlagsCommand() *cobra.Command {
 		SilenceUsage: false,
 
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := context.Background()
-
 			if err := f.Validate(); err != nil {
 				logrus.WithError(err).Fatal("Flags are invalid")
 			}
-			o, err := f.ToOptions(ctx)
-			if err != nil {
-				logrus.WithError(err).Fatal("Failed to build runtime options")
-			}
-
-			if err := o.Run(ctx); err != nil {
-				logrus.WithError(err).Fatal("Command failed")
-			}
-
+			logrus.Warn("create-tables command is presently a no-op until we implement a schema management solution")
 			return nil
 		},
 
@@ -72,22 +60,4 @@ func (f *BigQueryTablesCreateFlags) Validate() error {
 	}
 
 	return nil
-}
-
-// ToOptions goes from the user input to the runtime values need to run the command.
-// Expect to see unit tests on the options, but not on the flags which are simply value mappings.
-func (f *BigQueryTablesCreateFlags) ToOptions(ctx context.Context) (*allJobsTableCreatorOptions, error) {
-	bigQueryClient, err := f.Authentication.NewBigQueryClient(ctx, f.DataCoordinates.ProjectID)
-	if err != nil {
-		return nil, err
-	}
-	ciDataClient := jobrunaggregatorlib.NewRetryingCIDataClient(
-		jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, bigQueryClient),
-	)
-	ciDataSet := bigQueryClient.Dataset(f.DataCoordinates.DataSetID)
-
-	return &allJobsTableCreatorOptions{
-		ciDataClient: ciDataClient,
-		ciDataSet:    ciDataSet,
-	}, nil
 }

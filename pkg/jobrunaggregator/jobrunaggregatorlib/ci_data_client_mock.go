@@ -160,10 +160,10 @@ func (mr *MockCIDataClientMockRecorder) ListAlertHistoricalData(arg0 interface{}
 }
 
 // ListAllJobs mocks base method.
-func (m *MockCIDataClient) ListAllJobs(arg0 context.Context) ([]jobrunaggregatorapi.JobRow, error) {
+func (m *MockCIDataClient) ListAllJobs(arg0 context.Context) ([]jobrunaggregatorapi.JobRowWithVariants, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListAllJobs", arg0)
-	ret0, _ := ret[0].([]jobrunaggregatorapi.JobRow)
+	ret0, _ := ret[0].([]jobrunaggregatorapi.JobRowWithVariants)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

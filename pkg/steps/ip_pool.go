@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -30,16 +31,19 @@ type ipPoolStep struct {
 	params       api.Parameters
 
 	namespace func() string
+
+	resourcesLock *sync.RWMutex
 }
 
 func IPPoolStep(client *lease.Client, secretClient ctrlruntimeclient.Client, lease api.StepLease, wrapped api.Step, params api.Parameters, namespace func() string) api.Step {
 	ret := ipPoolStep{
-		client:       client,
-		secretClient: secretClient,
-		wrapped:      wrapped,
-		namespace:    namespace,
-		params:       params,
-		ipPoolLease:  stepLease{StepLease: lease},
+		client:        client,
+		secretClient:  secretClient,
+		wrapped:       wrapped,
+		namespace:     namespace,
+		params:        params,
+		ipPoolLease:   stepLease{StepLease: lease},
+		resourcesLock: &sync.RWMutex{},
 	}
 	return &ret
 }
@@ -70,6 +74,8 @@ func (s *ipPoolStep) Provides() api.ParameterMap {
 	// Disable unparam lint as we need to confirm to this interface, but there will never be an error
 	//nolint:unparam
 	parameters[l.Env] = func() (string, error) {
+		s.resourcesLock.RLock()
+		defer s.resourcesLock.RUnlock()
 		return strconv.Itoa(len(l.resources)), nil
 	}
 	return parameters
@@ -107,7 +113,9 @@ func (s *ipPoolStep) run(ctx context.Context, minute time.Duration) error {
 		}
 	} else {
 		logrus.Infof("Acquired %d ip pool lease(s) for %s: %v", l.Count, l.ResourceType, names)
+		s.resourcesLock.Lock()
 		s.ipPoolLease.resources = names
+		s.resourcesLock.Unlock()
 	}
 
 	if len(names) > 0 {
@@ -160,6 +168,7 @@ func (s *ipPoolStep) checkAndReleaseUnusedLeases(ctx context.Context, minute tim
 			logrus.Infof("there are %d unused ip-pool addresses to release", count)
 
 			client := *s.client
+			s.resourcesLock.Lock()
 			names := s.ipPoolLease.resources
 			if count > len(names) {
 				logrus.Warnf("requested to release %d ip-pool leases, but only %d have been leased; ignoring request", count, len(names))
@@ -173,6 +182,7 @@ func (s *ipPoolStep) checkAndReleaseUnusedLeases(ctx context.Context, minute tim
 				}
 			}
 			s.ipPoolLease.resources = names[count:]
+			s.resourcesLock.Unlock()
 			return
 		}
 	}

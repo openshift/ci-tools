@@ -3,6 +3,7 @@ package steps
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -64,6 +65,7 @@ func TestProvides(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			tc.step.resourcesLock = &sync.RWMutex{}
 			result := tc.step.Provides()
 			if len(result) != len(tc.expected) {
 				t.Fatalf("resulting parameters (%d) are not the same length as expected (%d)", len(result), len(tc.expected))
@@ -318,6 +320,7 @@ func TestRun(t *testing.T) {
 			client := lease.NewFakeClient("owner", "url", 0, tc.injectFailures, &calls)
 			tc.step.client = &client
 			tc.step.secretClient = podClient
+			tc.step.resourcesLock = &sync.RWMutex{}
 			err := tc.step.run(context.Background(), time.Second)
 			if diff := cmp.Diff(err, tc.expectedError, testhelper.EquateErrorMessage); diff != "" {
 				t.Fatalf("unexpected error returned, diff: %s", diff)

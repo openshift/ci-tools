@@ -447,7 +447,7 @@ func stepForTest(
 		var ret []api.Step
 		step := multi_stage.MultiStageTestStep(*c, config, params, podClient, jobSpec, leases, nodeName, targetAdditionalSuffix, nil)
 		if ipPoolLease.ResourceType != "" {
-			step = steps.IPPoolStep(leaseClient, ipPoolLease, step, params, jobSpec.Namespace)
+			step = steps.IPPoolStep(leaseClient, podClient, ipPoolLease, step, params, jobSpec.Namespace)
 		}
 		if len(leases) != 0 {
 			step = steps.LeaseStep(leaseClient, leases, step, jobSpec.Namespace)

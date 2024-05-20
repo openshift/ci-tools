@@ -54,9 +54,9 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 
 	switch {
 	case o.newFile == "" && o.dataType == "alerts":
-		newHistoricalData = o.getAlertData(ctx)
+		newHistoricalData, err = o.getAlertData(ctx)
 		if newHistoricalData == nil {
-			return fmt.Errorf("Failed while attempting to read Alert Historical Data")
+			return fmt.Errorf("failed while attempting to read Alert Historical Data: %w", err)
 		}
 	case o.newFile == "" && o.dataType == "disruptions":
 		newHistoricalData, err = o.ciDataClient.ListDisruptionHistoricalData(ctx)
@@ -71,7 +71,7 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 	}
 
 	if len(newHistoricalData) == 0 {
-		return fmt.Errorf("new historical data is empty, can not compare")
+		return fmt.Errorf("new historical data is empty, can not compare %w", err)
 	}
 
 	// We convert our query data to maps to make it easier to handle
@@ -91,17 +91,17 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 	return nil
 }
 
-func (o *JobRunHistoricalDataAnalyzerOptions) getAlertData(ctx context.Context) []jobrunaggregatorapi.HistoricalData {
+func (o *JobRunHistoricalDataAnalyzerOptions) getAlertData(ctx context.Context) ([]jobrunaggregatorapi.HistoricalData, error) {
 	var allKnownAlerts []*jobrunaggregatorapi.KnownAlertRow
 	var newHistoricalData []*jobrunaggregatorapi.AlertHistoricalDataRow
 
 	newHistoricalData, err := o.ciDataClient.ListAlertHistoricalData(ctx)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("failed to list alert historical data: %w", err)
 	}
 	allKnownAlerts, err = o.ciDataClient.ListAllKnownAlerts(ctx)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("failed to list all known alerts: %w", err)
 	}
 	// Create a map to quickly access AlertHistoricalDataRow by AlertName
 	alertDataMap := make(map[string]*jobrunaggregatorapi.KnownAlertRow)
@@ -116,7 +116,7 @@ func (o *JobRunHistoricalDataAnalyzerOptions) getAlertData(ctx context.Context) 
 			alerts.LastObserved = jobData.LastObserved
 		}
 	}
-	return jobrunaggregatorapi.ConvertToHistoricalData(newHistoricalData)
+	return jobrunaggregatorapi.ConvertToHistoricalData(newHistoricalData), nil
 }
 
 func mergeResults(previousResult, currentResult compareResults) compareResults {

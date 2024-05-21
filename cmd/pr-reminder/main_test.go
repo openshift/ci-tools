@@ -141,7 +141,8 @@ func Test_prRequest_recency(t *testing.T) {
 }
 
 type fakeGithubClient struct {
-	prs map[string][]github.PullRequest
+	prs     map[string][]github.PullRequest
+	reviews map[string]map[int][]github.Review
 }
 
 func (c fakeGithubClient) GetPullRequests(org, repo string) ([]github.PullRequest, error) {
@@ -149,7 +150,15 @@ func (c fakeGithubClient) GetPullRequests(org, repo string) ([]github.PullReques
 	return c.prs[orgRepo], nil
 }
 
-func TestFindPRsForUsers(t *testing.T) {
+func (c fakeGithubClient) ListReviews(org, repo string, number int) ([]github.Review, error) {
+	orgRepo := fmt.Sprintf("%s/%s", org, repo)
+	if prs, ok := c.reviews[orgRepo]; ok {
+		return prs[number], nil
+	}
+	return nil, nil
+}
+
+func TestFindPRs(t *testing.T) {
 	now := time.Now()
 	client := fakeGithubClient{prs: map[string][]github.PullRequest{
 		"org/repo-1": {
@@ -170,6 +179,11 @@ func TestFindPRsForUsers(t *testing.T) {
 						Slug: "some-team",
 					},
 				},
+				Assignees: []github.User{
+					{
+						Login: "random",
+					},
+				},
 			},
 			{
 				Number:    2,
@@ -186,6 +200,37 @@ func TestFindPRsForUsers(t *testing.T) {
 				RequestedTeams: []github.Team{
 					{
 						Slug: "some-other-team",
+					},
+				},
+				Assignees: []github.User{
+					{
+						Login: "random",
+					},
+				},
+			},
+			{
+				Number:    3,
+				HTMLURL:   "github.com/org/repo-1/3",
+				Title:     "Reviewed",
+				User:      github.User{Login: "some-user"},
+				CreatedAt: now,
+				UpdatedAt: now,
+				RequestedReviewers: []github.User{
+					{
+						Login: "other",
+					},
+				},
+			},
+			{
+				Number:    4,
+				HTMLURL:   "github.com/org/repo-1/4",
+				Title:     "Brand New",
+				User:      github.User{Login: "some-user"},
+				CreatedAt: now,
+				UpdatedAt: now,
+				RequestedReviewers: []github.User{
+					{
+						Login: "other",
 					},
 				},
 			},
@@ -208,14 +253,28 @@ func TestFindPRsForUsers(t *testing.T) {
 						Slug: "some-team",
 					},
 				},
+				Assignees: []github.User{
+					{
+						Login: "random",
+					},
+				},
 			},
 		},
-	}}
+	},
+		reviews: map[string]map[int][]github.Review{
+			"org/repo-1": {
+				3: {{ID: 2}},
+			},
+		},
+	}
 
 	testCases := []struct {
 		name     string
 		users    map[string]user
 		expected map[string]user
+
+		channels         map[string]sets.Set[string]
+		expectedChannels map[string][]prRequest
 	}{
 		{
 			name: "PRs exist",
@@ -232,6 +291,9 @@ func TestFindPRsForUsers(t *testing.T) {
 					TeamNames:  sets.New[string]("some-team"),
 					Repos:      sets.New[string]("org/repo-1", "org/repo-2"),
 				},
+			},
+			channels: map[string]sets.Set[string]{
+				"channel": sets.New("org/repo-1", "org/repo-2"),
 			},
 			expected: map[string]user{
 				"someuser": {
@@ -296,13 +358,27 @@ func TestFindPRsForUsers(t *testing.T) {
 					},
 				},
 			},
+			expectedChannels: map[string][]prRequest{
+				"channel": {{
+					Repo:        "org/repo-1",
+					Number:      4,
+					Url:         "github.com/org/repo-1/4",
+					Title:       "Brand New",
+					Author:      "some-user",
+					Created:     now,
+					LastUpdated: now,
+				}},
+			},
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			prs := findPrsForUsers(tc.users, client)
+			unassigned, prs := findPRs(tc.users, tc.channels, client)
 			if diff := cmp.Diff(tc.expected, prs); diff != "" {
-				t.Fatalf("findPRsForUsers resulted didn't match expected, diff: %s", diff)
+				t.Fatalf("got incorrect PRs for users, diff: %s", diff)
+			}
+			if diff := cmp.Diff(tc.expectedChannels, unassigned); diff != "" {
+				t.Fatalf("got incorrect unassigned PRs, diff: %s", diff)
 			}
 		})
 	}

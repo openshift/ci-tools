@@ -164,10 +164,28 @@ func (c *config) createUsers(gtk githubToKerberos, slackClient slackClient) (map
 	return users, kerrors.NewAggregate(errors)
 }
 
+func (c *config) channels() map[string]sets.Set[string] {
+	reposByChannel := map[string]sets.Set[string]{}
+	for _, team := range c.Teams {
+		if team.Channel != "" && len(team.Repos) > 0 {
+			if _, recorded := reposByChannel[team.Channel]; recorded {
+				reposByChannel[team.Channel] = reposByChannel[team.Channel].Insert(team.Repos...)
+			} else {
+				reposByChannel[team.Channel] = sets.New[string](team.Repos...)
+			}
+		}
+	}
+	return reposByChannel
+}
+
 type team struct {
 	TeamMembers []string `json:"teamMembers"`
 	TeamNames   []string `json:"teamNames"`
 	Repos       []string `json:"repos"`
+
+	// Channel is the optional Slack channel name to which the messages about unassigned pull requests from the
+	// repos will be sent. This does not change the messages sent to the team members.
+	Channel string `json:"channel,omitempty"`
 }
 
 type githubToKerberos map[string]string
@@ -255,6 +273,11 @@ func (p prRequest) recency() string {
 	}
 }
 
+type ghClient interface {
+	prClient
+	reviewClient
+}
+
 type prClient interface {
 	GetPullRequests(org, repo string) ([]github.PullRequest, error)
 }
@@ -307,14 +330,17 @@ func main() {
 			logrus.WithError(err).Error("failed to create some users")
 		}
 
-		if len(users) > 0 {
+		channels := c.channels()
+
+		if len(users) > 0 || len(channels) > 0 {
 			ghClient, err := o.GitHubOptions.GitHubClient(false)
 			if err != nil {
 				logrus.WithError(err).Fatal("failed to create github client")
 			}
 
+			unassigned, assinged := findPRs(users, channels, ghClient)
 			var errs []error
-			for _, user := range findPrsForUsers(users, ghClient) {
+			for _, user := range assinged {
 				logrus.Infof("%d PRs were found for user: %s", len(user.PrRequests), user.KerberosId)
 				if len(user.PrRequests) > 0 {
 					// sort by most recent update first
@@ -322,8 +348,29 @@ func main() {
 						return user.PrRequests[i].LastUpdated.After(user.PrRequests[j].LastUpdated)
 					})
 
-					if err = messageUser(user, slackClient); err != nil {
-						logrus.WithField("kerberosId", user.KerberosId).WithError(err).Error("failed to message user")
+					logger := logrus.WithFields(logrus.Fields{
+						"kerberosId": user.KerberosId,
+					})
+					if err = sendMessage(logger, user.SlackId, user.PrRequests, slackClient); err != nil {
+						logger.WithError(err).Error("failed to message user")
+						errs = append(errs, err)
+					}
+				}
+			}
+
+			for channel, prs := range unassigned {
+				logrus.Infof("%d unassigned PRs were found for channel: %s", len(prs), channel)
+				if len(prs) > 0 {
+					// sort by most recent update first
+					sort.Slice(prs, func(i, j int) bool {
+						return prs[i].LastUpdated.After(prs[j].LastUpdated)
+					})
+
+					logger := logrus.WithFields(logrus.Fields{
+						"channel": channel,
+					})
+					if err = sendMessage(logger, channel, prs, slackClient); err != nil {
+						logger.WithError(err).Error("failed to message user")
 						errs = append(errs, err)
 					}
 				}
@@ -335,7 +382,9 @@ func main() {
 	}
 }
 
-func findPrsForUsers(users map[string]user, ghClient prClient) map[string]user {
+// findPRs finds the yet-to-be-reviewed PRs that should be broadcast to each channel as well as the PRs requiring
+// a reminder for each team
+func findPRs(users map[string]user, channels map[string]sets.Set[string], ghClient ghClient) (map[string][]prRequest, map[string]user) {
 	repos := sets.New[string]()
 	for _, u := range users {
 		repos.Insert(sets.List(u.Repos)...)
@@ -359,23 +408,46 @@ func findPrsForUsers(users map[string]user, ghClient prClient) map[string]user {
 		for _, repo := range sets.List(u.Repos) {
 			for _, pr := range repoToPRs[repo] {
 				if !hasUnactionableLabels(pr.Labels) && u.requestedToReview(pr) {
-					u.PrRequests = append(u.PrRequests, prRequest{
-						Repo:        repo,
-						Number:      pr.Number,
-						Url:         pr.HTMLURL,
-						Title:       pr.Title,
-						Author:      pr.User.Login,
-						Created:     pr.CreatedAt,
-						LastUpdated: pr.UpdatedAt,
-						Labels:      filterLabels(pr.Labels, getInterestedLabels()),
-					})
+					u.PrRequests = append(u.PrRequests, requestFor(repo, pr))
 					users[i] = u
 				}
 			}
 		}
 	}
 
-	return users
+	logrus.Infof("finding unassigned PRs for %d channels", len(channels))
+
+	channelToPRs := map[string][]prRequest{}
+	for channel, repos := range channels {
+		for orgRepo := range repos {
+			split := strings.Split(orgRepo, "/")
+			org, repo := split[0], split[1]
+
+			for _, pr := range repoToPRs[orgRepo] {
+				if isUnreviewed(org, repo, pr, ghClient) {
+					if _, recorded := channelToPRs[channel]; !recorded {
+						channelToPRs[channel] = []prRequest{}
+					}
+					channelToPRs[channel] = append(channelToPRs[channel], requestFor(orgRepo, pr))
+				}
+			}
+		}
+	}
+
+	return channelToPRs, users
+}
+
+func requestFor(repo string, pr github.PullRequest) prRequest {
+	return prRequest{
+		Repo:        repo,
+		Number:      pr.Number,
+		Url:         pr.HTMLURL,
+		Title:       pr.Title,
+		Author:      pr.User.Login,
+		Created:     pr.CreatedAt,
+		LastUpdated: pr.UpdatedAt,
+		Labels:      filterLabels(pr.Labels, getInterestedLabels()),
+	}
 }
 
 // filterLabels filters out those labels from the PR we are not interested in
@@ -402,7 +474,7 @@ func loadConfig(filename string, config interface{}) error {
 	return nil
 }
 
-func messageUser(user user, slackClient slackClient) error {
+func sendMessage(logger *logrus.Entry, channel string, prs []prRequest, slackClient slackClient) error {
 	var errors []error
 	message := []slack.Block{
 		&slack.HeaderBlock{
@@ -416,7 +488,7 @@ func messageUser(user user, slackClient slackClient) error {
 			Type: slack.MBTSection,
 			Text: &slack.TextBlockObject{
 				Type: slack.PlainTextType,
-				Text: fmt.Sprintf("You have %d PR(s) to review:", len(user.PrRequests)),
+				Text: fmt.Sprintf("You have %d PR(s) to review:", len(prs)),
 			},
 		},
 		&slack.ContextBlock{
@@ -446,7 +518,7 @@ func messageUser(user user, slackClient slackClient) error {
 
 	message = append(message, &slack.DividerBlock{Type: slack.MBTDivider})
 
-	for _, pr := range user.PrRequests {
+	for _, pr := range prs {
 		prBlock := &slack.ContextBlock{
 			Type: slack.MBTContext,
 			ContextElements: slack.ContextElements{
@@ -471,14 +543,14 @@ func messageUser(user user, slackClient slackClient) error {
 		message = append(message, prBlock)
 	}
 
-	responseChannel, responseTimestamp, err := slackClient.PostMessage(user.SlackId,
+	responseChannel, responseTimestamp, err := slackClient.PostMessage(channel,
 		slack.MsgOptionText("PR Review Reminders.", true),
 		slack.MsgOptionBlocks(message...))
 	if err != nil {
-		logrus.WithError(err).WithField("kerberosId", user.KerberosId).WithField("message", message).Debug("Failed to message user about PR review reminder")
-		errors = append(errors, fmt.Errorf("failed to message user: %s about PR review reminder: %w", user.KerberosId, err))
+		logger.WithError(err).WithField("message", message).Debug("Failed to message user about PR review reminder")
+		errors = append(errors, fmt.Errorf("failed to message channel %s about PR review reminder: %w", channel, err))
 	} else {
-		logrus.Infof("Posted PR review reminder for user: %s in channel: %s at: %s", user.KerberosId, responseChannel, responseTimestamp)
+		logger.Infof("Posted PR review reminder in channel: %s at: %s", responseChannel, responseTimestamp)
 	}
 
 	return kerrors.NewAggregate(errors)
@@ -499,4 +571,34 @@ func hasUnactionableLabels(labels []github.Label) bool {
 		}
 	}
 	return false
+}
+
+type reviewClient interface {
+	ListReviews(org, repo string, number int) ([]github.Review, error)
+}
+
+// isUnreviewed checks if we should post about this new PR to the channel, generally when the PR needs someone to look
+// at it and nobody has done so yet - even though Prow will auto-assign the PR to someone, it's not super useful to have
+// all those PRs get direct-message pinged to those folks as often some high-level developer gets auto-assigned to everything
+func isUnreviewed(org, repo string, pr github.PullRequest, client reviewClient) bool {
+	// if we're LGTM + approved, we're not interested in bugging anyone
+	existing := sets.Set[string]{}
+	for _, label := range pr.Labels {
+		existing.Insert(label.Name)
+	}
+	if existing.HasAll("lgtm", "approved") {
+		return false
+	}
+
+	// if it's assigned to someone, there's already been action taken on it
+	if len(pr.Assignees) > 0 {
+		return false
+	}
+
+	// otherwise, post it on the channel if nobody's reviewed it
+	reviews, err := client.ListReviews(org, repo, pr.Number)
+	if err != nil {
+		logrus.WithError(err).Errorf("Failed to list PR reviews")
+	}
+	return len(reviews) == 0
 }

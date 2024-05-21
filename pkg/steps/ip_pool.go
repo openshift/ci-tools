@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -161,6 +162,7 @@ func checkAndReleaseUnusedLeases(ctx context.Context, namespace, testName string
 			if rawCount == "" {
 				continue
 			}
+			rawCount = strings.TrimSpace(rawCount)
 			count, err := strconv.Atoi(rawCount)
 			if err != nil {
 				logrus.WithError(err).Warnf("cannot convert %s contents to int", UnusedIpCount)

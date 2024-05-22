@@ -204,7 +204,9 @@ func getIntegratedStream(ctx context.Context, g IntegratedStreamGetter) http.Han
 }
 
 var validStreams = []*regexp.Regexp{
-	regexp.MustCompile(`^ocp/4.([6-9]|\d\d+)`),
+	// https://issues.redhat.com/browse/DPTP-4005
+	// There are some upgrade tests using the 4.1 or 4.3 stream in ocp
+	regexp.MustCompile(`^ocp/4.([1-9]|\d\d+)`),
 	regexp.MustCompile(`^origin/4.([6-9]|\d\d+)`),
 	regexp.MustCompile(`^origin/scos-4.([6-9]|\d\d+)`),
 	regexp.MustCompile(`^ocp-private/4.([6-9]|\d\d+)-priv`),

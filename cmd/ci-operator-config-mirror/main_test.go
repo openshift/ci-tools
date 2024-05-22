@@ -213,6 +213,17 @@ func TestPrivatePromotionConfiguration(t *testing.T) {
 			promotion: &api.PromotionConfiguration{Targets: []api.PromotionTarget{{Tag: "4.x", Namespace: "ocp", TagByCommit: true}}},
 			expected:  &api.PromotionConfiguration{Targets: []api.PromotionTarget{{Tag: "4.x-priv", Namespace: "ocp-private"}}},
 		},
+		{
+			id: "disable non ocp targets",
+			promotion: &api.PromotionConfiguration{Targets: []api.PromotionTarget{
+				{Tag: "4.x", Namespace: "ocp"},
+				{Tag: "4.x", Namespace: "hypershift"},
+			}},
+			expected: &api.PromotionConfiguration{Targets: []api.PromotionTarget{
+				{Tag: "4.x-priv", Namespace: "ocp-private"},
+				{Tag: "4.x", Namespace: "hypershift", Disabled: true},
+			}},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.id, func(t *testing.T) {

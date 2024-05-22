@@ -255,6 +255,9 @@ func privatePromotionConfiguration(promotion *api.PromotionConfiguration) {
 			}
 			promotion.Targets[i].TagByCommit = false // Never use tag_by_commit for mirrored repos
 			promotion.Targets[i].Namespace = privatePromotionNamespace
+		} else {
+			// Disable this target or it will conflict with its non `-priv` counterpart
+			promotion.Targets[i].Disabled = true
 		}
 	}
 }

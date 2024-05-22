@@ -1946,6 +1946,16 @@ func (p ClusterProfile) IPPoolLeaseType() string {
 	}
 }
 
+// IPPoolLeaseShouldValidateBranch declares whether the ip-pool leases should only be applied to branches matching a
+// specific OpenShift validation model. returns true by default, but should return false for any cluster-profiles
+// that don't want this validation
+func (p ClusterProfile) IPPoolLeaseShouldValidateBranch() bool {
+	switch p {
+	default:
+		return true
+	}
+}
+
 // ConfigMap maps profiles to the ConfigMap they require (if applicable).
 func (p ClusterProfile) ConfigMap() string {
 	switch p {

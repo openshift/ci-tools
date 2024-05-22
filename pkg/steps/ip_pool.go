@@ -17,6 +17,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/lease"
 	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 )
 
 var NoLeaseClientForIPErr = errors.New("step needs access to an IP pool, but no lease client provided")
@@ -24,7 +25,7 @@ var NoLeaseClientForIPErr = errors.New("step needs access to an IP pool, but no 
 // ipPoolStep wraps another step and acquires/releases chunks of IPs.
 type ipPoolStep struct {
 	client       *lease.Client
-	secretClient ctrlruntimeclient.Client
+	secretClient loggingclient.LoggingClient
 	ipPoolLease  stepLease
 	wrapped      api.Step
 	params       api.Parameters
@@ -32,7 +33,7 @@ type ipPoolStep struct {
 	namespace func() string
 }
 
-func IPPoolStep(client *lease.Client, secretClient ctrlruntimeclient.Client, lease api.StepLease, wrapped api.Step, params api.Parameters, namespace func() string) api.Step {
+func IPPoolStep(client *lease.Client, secretClient loggingclient.LoggingClient, lease api.StepLease, wrapped api.Step, params api.Parameters, namespace func() string) api.Step {
 	ret := ipPoolStep{
 		client:       client,
 		secretClient: secretClient,

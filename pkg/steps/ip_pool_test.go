@@ -16,6 +16,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/lease"
+	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -133,23 +134,6 @@ func (blockingStep) SubTests() []*junit.TestCase {
 
 func TestRun(t *testing.T) {
 	ciOpNamespace := "ci-op-1234"
-	podClient := fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
-		&coreapi.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: ciOpNamespace,
-				Name:      "blocking", //The name of the wrapped step
-			},
-			Data: map[string][]byte{
-				UnusedIpCount: []byte("2"),
-			},
-		},
-		&coreapi.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: ciOpNamespace,
-				Name:      "needs_lease", //The name of the wrapped step
-			},
-		},
-	).Build()
 
 	testCases := []struct {
 		name           string
@@ -317,7 +301,23 @@ func TestRun(t *testing.T) {
 			var calls []string
 			client := lease.NewFakeClient("owner", "url", 0, tc.injectFailures, &calls)
 			tc.step.client = &client
-			tc.step.secretClient = podClient
+			tc.step.secretClient = loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
+				&coreapi.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: ciOpNamespace,
+						Name:      "blocking", //The name of the wrapped step
+					},
+					Data: map[string][]byte{
+						UnusedIpCount: []byte("2"),
+					},
+				},
+				&coreapi.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: ciOpNamespace,
+						Name:      "needs_lease", //The name of the wrapped step
+					},
+				},
+			).Build())
 			err := tc.step.run(context.Background(), time.Second)
 			if diff := cmp.Diff(err, tc.expectedError, testhelper.EquateErrorMessage); diff != "" {
 				t.Fatalf("unexpected error returned, diff: %s", diff)

@@ -1231,6 +1231,7 @@ const (
 	ClusterProfileAWSTerraformQE        ClusterProfile = "aws-terraform-qe"
 	ClusterProfileAWSPipelinesPerf      ClusterProfile = "aws-pipelines-performance"
 	ClusterProfileAWSRHTAPQE            ClusterProfile = "aws-rhtap-qe"
+	ClusterProfileAWSKonfluxQE          ClusterProfile = "aws-konflux-qe"
 	ClusterProfileAWSRHTAPPerformance   ClusterProfile = "aws-rhtap-performance"
 	ClusterProfileAWSRHDHPerf           ClusterProfile = "aws-rhdh-performance"
 	ClusterProfileAWSServerless         ClusterProfile = "aws-serverless"
@@ -1371,6 +1372,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSTerraformQE,
 		ClusterProfileAWSPipelinesPerf,
 		ClusterProfileAWSRHTAPQE,
+		ClusterProfileAWSKonfluxQE,
 		ClusterProfileAWSRHTAPPerformance,
 		ClusterProfileAWSRHDHPerf,
 		ClusterProfileAWSServerless,
@@ -1513,6 +1515,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSTerraformQE,
 		ClusterProfileAWSPipelinesPerf,
 		ClusterProfileAWSRHTAPQE,
+		ClusterProfileAWSKonfluxQE,
 		ClusterProfileAWSRHTAPPerformance,
 		ClusterProfileAWSRHDHPerf,
 		ClusterProfileOSSM,
@@ -1739,6 +1742,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-pipelines-performance-quota-slice"
 	case ClusterProfileAWSRHTAPQE:
 		return "aws-rhtap-qe-quota-slice"
+	case ClusterProfileAWSKonfluxQE:
+		return "aws-konflux-qe-quota-slice"
 	case ClusterProfileAWSRHTAPPerformance:
 		return "aws-rhtap-performance-quota-slice"
 	case ClusterProfileAWSRHDHPerf:
@@ -1948,6 +1953,16 @@ func (p ClusterProfile) IPPoolLeaseType() string {
 		return "aws-ip-pools"
 	default:
 		return ""
+	}
+}
+
+// IPPoolLeaseShouldValidateBranch declares whether the ip-pool leases should only be applied to branches matching a
+// specific OpenShift validation model. returns true by default, but should return false for any cluster-profiles
+// that don't want this validation
+func (p ClusterProfile) IPPoolLeaseShouldValidateBranch() bool {
+	switch p {
+	default:
+		return true
 	}
 }
 

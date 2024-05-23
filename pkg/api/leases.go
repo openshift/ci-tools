@@ -23,13 +23,18 @@ func LeasesForTest(s *MultiStageTestConfigurationLiteral) (ret []StepLease) {
 	return
 }
 
+const maxAddressesRequired = 13
+
 func IPPoolLeaseForTest(s *MultiStageTestConfigurationLiteral, metadata Metadata) (ret StepLease) {
-	if p := s.ClusterProfile; p == "aws" { //TODO(sgoeddel): Hardcoded to only work on aws, eventually this will be available as a configuration
-		if branchValidForIPPoolLease(metadata.Branch) {
-			ret = StepLease{
-				ResourceType: p.IPPoolLeaseType(),
-				Env:          DefaultIPPoolLeaseEnv,
-				Count:        13,
+	p := s.ClusterProfile
+	if p != "" {
+		if lt := p.IPPoolLeaseType(); lt != "" {
+			if !p.IPPoolLeaseShouldValidateBranch() || branchValidForIPPoolLease(metadata.Branch) {
+				ret = StepLease{
+					ResourceType: lt,
+					Env:          DefaultIPPoolLeaseEnv,
+					Count:        maxAddressesRequired,
+				}
 			}
 		}
 	}

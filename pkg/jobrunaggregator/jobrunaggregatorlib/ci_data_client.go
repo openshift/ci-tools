@@ -344,14 +344,14 @@ func (c *ciDataClient) ListProwJobRunsSince(ctx context.Context, since *time.Tim
 	return jobRuns, nil
 }
 
-func buildMasterNodesUpdatedSQL(masterNodesUpdated string) string {
+func buildMasterNodesUpdatedSQL(tableName, masterNodesUpdated string) string {
 	// pass in masterNodesUpdated flag
 	// empty string omits the condition for the preflag data / unable to determine
 	// or we look for the relevant N or Y
 	masterNodesUpdatedSQL := ""
 
 	if len(masterNodesUpdated) > 0 {
-		masterNodesUpdatedSQL = fmt.Sprintf("AND JobRuns.MasterNodesUpdated = '%s'", masterNodesUpdated)
+		masterNodesUpdatedSQL = fmt.Sprintf("AND %s.MasterNodesUpdated = '%s'", tableName, masterNodesUpdated)
 	}
 	return masterNodesUpdatedSQL
 }
@@ -363,10 +363,10 @@ SELECT COUNT(DISTINCT(JobRunName)) AS TotalRows
 FROM
 	DATA_SET_LOCATION.BackendDisruption AS JobRuns
 WHERE
-    StartTime <= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 3 DAY)
+    JobRunStartTime <= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 3 DAY)
 AND
 	JobName = @JobName
-%s`, buildMasterNodesUpdatedSQL(masterNodesUpdated)))
+%s`, buildMasterNodesUpdatedSQL("JobRuns", masterNodesUpdated)))
 
 	query := c.client.Query(queryString)
 	query.QueryConfig.Parameters = []bigquery.QueryParameter{
@@ -390,7 +390,7 @@ AND
 
 func (c *ciDataClient) GetBackendDisruptionStatisticsByJob(ctx context.Context, jobName, masterNodesUpdated string) ([]jobrunaggregatorapi.BackendDisruptionStatisticsRow, error) {
 	rows := make([]jobrunaggregatorapi.BackendDisruptionStatisticsRow, 0)
-	masterNodesUpdatedSQL := buildMasterNodesUpdatedSQL(masterNodesUpdated)
+	masterNodesUpdatedSQL := buildMasterNodesUpdatedSQL("BackendDisruption", masterNodesUpdated)
 
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(fmt.Sprintf(`
 SELECT

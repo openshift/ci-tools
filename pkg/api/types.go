@@ -1334,6 +1334,7 @@ const (
 	ClusterProfileODFAWS                ClusterProfile = "odf-aws"
 	ClusterProfileKonfluxWorkspacesAWS  ClusterProfile = "konfluxworkspaces-aws"
 	ClusterProfileAWSObservabiltity     ClusterProfile = "aws-observability"
+	ClusterProfileAWSStackrox           ClusterProfile = "aws-stackrox"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -1375,6 +1376,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSRHTAPPerformance,
 		ClusterProfileAWSRHDHPerf,
 		ClusterProfileAWSServerless,
+		ClusterProfileAWSStackrox,
 		ClusterProfileAWSTelco,
 		ClusterProfileAWSOpendatahub,
 		ClusterProfileAWSDevfile,
@@ -1507,6 +1509,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSPerfScaleQE,
 		ClusterProfileAWSPerfScaleLRCQE,
 		ClusterProfileAWSServerless,
+		ClusterProfileAWSStackrox,
 		ClusterProfileAWSOutpostQE,
 		ClusterProfileAWSChaos,
 		ClusterProfileAWSTerraformQE,
@@ -1747,6 +1750,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-rhdh-performance-quota-slice"
 	case ClusterProfileAWSServerless:
 		return "aws-serverless-quota-slice"
+	case ClusterProfileAWSStackrox:
+		return "aws-stackrox-quota-slice"
 	case ClusterProfileAWSTelco:
 		return "aws-telco-quota-slice"
 	case ClusterProfileAWSOpendatahub:

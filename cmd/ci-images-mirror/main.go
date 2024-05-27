@@ -55,10 +55,6 @@ type options struct {
 	config                           *quayiociimagesdistributor.CIImagesMirrorConfig
 }
 
-func (o *options) addDefaults() {
-	o.enabledControllers = flagutil.NewStrings(quayiociimagesdistributor.ControllerName)
-}
-
 type quayIOCIImagesDistributorOptions struct {
 	additionalImageStreamTagsRaw       flagutil.Strings
 	additionalImageStreamsRaw          flagutil.Strings
@@ -69,11 +65,10 @@ type quayIOCIImagesDistributorOptions struct {
 
 func newOpts() *options {
 	opts := &options{}
-	opts.addDefaults()
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&opts.leaderElectionNamespace, "leader-election-namespace", "ci", "The namespace to use for leader election")
 	fs.StringVar(&opts.leaderElectionSuffix, "leader-election-suffix", "", "Suffix for the leader election lock. Useful for local testing. If set, --dry-run must be set as well")
-	fs.Var(&opts.enabledControllers, "enable-controller", fmt.Sprintf("Enabled controllers. Available controllers are: %v. Can be specified multiple times. Defaults to %v", allControllers.UnsortedList(), opts.enabledControllers.Strings()))
+	fs.Var(&opts.enabledControllers, "enable-controller", fmt.Sprintf("Enabled controllers. Available controllers are: %v. Can be specified multiple times. Defaults to [].", allControllers.UnsortedList()))
 	fs.BoolVar(&opts.dryRun, "dry-run", false, "Whether to run the controller-manager and the mirroring with dry-run")
 	fs.StringVar(&opts.releaseRepoGitSyncPath, "release-repo-git-sync-path", "", "Path to release repository dir")
 	fs.StringVar(&opts.configFile, "config", "", "Path to the config file")
@@ -261,10 +256,10 @@ func main() {
 	mirrorConsumerController := quayiociimagesdistributor.NewMirrorConsumer(mirrorStore, quayIOImageHelper, opts.registryConfig, opts.dryRun)
 	interrupts.Run(func(ctx context.Context) { execute(ctx, mirrorConsumerController) })
 
+	if err := quayiociimagesdistributor.RegisterMetrics(); err != nil {
+		logrus.WithError(err).Fatal("failed to register metrics")
+	}
 	if opts.enabledControllersSet.Has(quayiociimagesdistributor.ControllerName) {
-		if err := quayiociimagesdistributor.RegisterMetrics(); err != nil {
-			logrus.WithError(err).Fatal("failed to register metrics")
-		}
 		ignoreImageStreamTags := sets.New[string](opts.quayIOCIImagesDistributorOptions.ignoreImageStreamTagsRaw.Strings()...)
 		if opts.config != nil {
 			for k := range opts.config.SupplementalCIImages {

@@ -183,7 +183,7 @@ type team struct {
 	TeamNames   []string `json:"teamNames"`
 	Repos       []string `json:"repos"`
 
-	// Channel is the optional Slack channel name to which the messages about unassigned pull requests from the
+	// Channel is the optional Slack channel to which the messages about unassigned pull requests from the
 	// repos will be sent. This does not change the messages sent to the team members.
 	Channel string `json:"channel,omitempty"`
 }

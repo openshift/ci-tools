@@ -143,6 +143,7 @@ func Test_prRequest_recency(t *testing.T) {
 type fakeGithubClient struct {
 	prs     map[string][]github.PullRequest
 	reviews map[string]map[int][]github.Review
+	commits map[string]map[int][]github.RepositoryCommit
 }
 
 func (c fakeGithubClient) GetPullRequests(org, repo string) ([]github.PullRequest, error) {
@@ -153,6 +154,14 @@ func (c fakeGithubClient) GetPullRequests(org, repo string) ([]github.PullReques
 func (c fakeGithubClient) ListReviews(org, repo string, number int) ([]github.Review, error) {
 	orgRepo := fmt.Sprintf("%s/%s", org, repo)
 	if prs, ok := c.reviews[orgRepo]; ok {
+		return prs[number], nil
+	}
+	return nil, nil
+}
+
+func (c fakeGithubClient) ListPullRequestCommits(org, repo string, number int) ([]github.RepositoryCommit, error) {
+	orgRepo := fmt.Sprintf("%s/%s", org, repo)
+	if prs, ok := c.commits[orgRepo]; ok {
 		return prs[number], nil
 	}
 	return nil, nil
@@ -262,6 +271,29 @@ func TestFindPRs(t *testing.T) {
 					},
 				},
 			},
+			{
+				Number:    7,
+				HTMLURL:   "github.com/org/repo-1/7",
+				Title:     "Doesn't Need Attention Yet",
+				User:      github.User{Login: "some-user"},
+				CreatedAt: now,
+				UpdatedAt: now,
+				RequestedReviewers: []github.User{
+					{
+						Login: "id-2",
+					},
+				},
+				RequestedTeams: []github.Team{
+					{
+						Slug: "some-other-team",
+					},
+				},
+				Assignees: []github.User{
+					{
+						Login: "random",
+					},
+				},
+			},
 		},
 		"org/repo-2": {
 			{
@@ -316,6 +348,12 @@ func TestFindPRs(t *testing.T) {
 		reviews: map[string]map[int][]github.Review{
 			"org/repo-1": {
 				3: {{ID: 2}},
+				7: {{ID: 2, User: github.User{Login: "id-2"}, SubmittedAt: now}},
+			},
+		},
+		commits: map[string]map[int][]github.RepositoryCommit{
+			"org/repo-1": {
+				7: {{Commit: github.GitCommit{Committer: github.CommitAuthor{Date: now.Add(-1 * time.Hour)}}}},
 			},
 		},
 	}

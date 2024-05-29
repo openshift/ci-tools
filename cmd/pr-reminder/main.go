@@ -280,6 +280,7 @@ type ghClient interface {
 
 type prClient interface {
 	GetPullRequests(org, repo string) ([]github.PullRequest, error)
+	ListPullRequestCommits(org, repo string, number int) ([]github.RepositoryCommit, error)
 }
 
 type slackClient interface {
@@ -405,10 +406,13 @@ func findPRs(users map[string]user, channels map[string]sets.Set[string], ghClie
 	}
 
 	for i, u := range users {
-		for _, repo := range sets.List(u.Repos) {
-			for _, pr := range repoToPRs[repo] {
-				if !hasUnactionableLabels(pr.Labels) && !isReadyToMerge(pr.Labels) && u.requestedToReview(pr) {
-					u.PrRequests = append(u.PrRequests, requestFor(repo, pr))
+		for _, orgRepo := range sets.List(u.Repos) {
+			split := strings.Split(orgRepo, "/")
+			org, repo := split[0], split[1]
+
+			for _, pr := range repoToPRs[orgRepo] {
+				if !hasUnactionableLabels(pr.Labels) && !isReadyToMerge(pr.Labels) && u.requestedToReview(pr) && requiresAttention(org, repo, pr, ghClient, u) {
+					u.PrRequests = append(u.PrRequests, requestFor(orgRepo, pr))
 					users[i] = u
 				}
 			}
@@ -607,4 +611,48 @@ func isUnreviewed(org, repo string, pr github.PullRequest, client reviewClient) 
 		logrus.WithError(err).Errorf("Failed to list PR reviews")
 	}
 	return len(reviews) == 0
+}
+
+// requiresAttention determines if the user needs to be reminded for the pull request in question by determining when
+// the user last interacted with the PR and if any changes have been pushed or comments posted by the author since then
+func requiresAttention(org, repo string, pr github.PullRequest, client ghClient, u user) bool {
+	reviews, err := client.ListReviews(org, repo, pr.Number)
+	if err != nil {
+		logrus.WithError(err).Errorf("Failed to list PR reviews")
+	}
+
+	var lastReview time.Time
+	for _, review := range reviews {
+		if review.User.Login == u.GithubId {
+			lastReview = review.SubmittedAt
+		}
+	}
+
+	if lastReview.IsZero() {
+		// the user has never reviewed it, so it requires attention
+		return true
+	}
+
+	commits, err := client.ListPullRequestCommits(org, repo, pr.Number)
+	if err != nil {
+		logrus.WithError(err).Errorf("Failed to list PR commits")
+	}
+
+	var lastCommit time.Time
+	for _, commit := range commits {
+		for _, date := range []time.Time{commit.Commit.Committer.Date, commit.Commit.Author.Date} {
+			if date.After(lastCommit) {
+				lastCommit = date
+			}
+		}
+	}
+
+	// n.b. a more exhaustive approach to determining whether the PR requires attention would furthermore
+	// look at issue comments and try to catch the cases where no new commits have been pushed but comments
+	// have been posted from the author in response to reviews, but this gets tricky to do as we'd need to
+	// follow each review comment thread as well as the overall issue, and this would quickly eat up a lot of
+	// GitHub API tokens. The existing heuristic is easy to cache and if it's good enough, we can omit the
+	// harder follow-up.
+
+	return lastCommit.After(lastReview)
 }

@@ -25,10 +25,7 @@ const (
 
 	QuayOpenShiftCIRepo = "quay.io/openshift/ci"
 
-	// QCIAPPCIDomain = "quay-proxy.ci.openshift.org"
-	// TODO use the value above when https://issues.redhat.com/browse/OCPBUGS-31469 is fixed on all clusters in our CI production
-	// and the image policies https://github.com/openshift/release/pull/49497 are in place
-	QCIAPPCIDomain = "quay.io"
+	QCIAPPCIDomain = "quay-proxy.ci.openshift.org"
 )
 
 type Service string

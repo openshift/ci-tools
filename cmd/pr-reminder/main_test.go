@@ -234,6 +234,34 @@ func TestFindPRs(t *testing.T) {
 					},
 				},
 			},
+			{
+				Number:    5,
+				HTMLURL:   "github.com/org/repo-1/5",
+				Title:     "Brand New But Approved",
+				User:      github.User{Login: "some-user"},
+				CreatedAt: now,
+				UpdatedAt: now,
+				Labels:    []github.Label{{Name: "approved"}, {Name: "lgtm"}},
+				RequestedReviewers: []github.User{
+					{
+						Login: "other",
+					},
+				},
+			},
+			{
+				Number:    6,
+				HTMLURL:   "github.com/org/repo-1/6",
+				Title:     "Brand New But WIP",
+				User:      github.User{Login: "some-user"},
+				CreatedAt: now,
+				UpdatedAt: now,
+				Labels:    []github.Label{{Name: "do-not-merge/work-in-progress"}},
+				RequestedReviewers: []github.User{
+					{
+						Login: "other",
+					},
+				},
+			},
 		},
 		"org/repo-2": {
 			{

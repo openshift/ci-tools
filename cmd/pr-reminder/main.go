@@ -424,7 +424,7 @@ func findPRs(users map[string]user, channels map[string]sets.Set[string], ghClie
 			org, repo := split[0], split[1]
 
 			for _, pr := range repoToPRs[orgRepo] {
-				if isUnreviewed(org, repo, pr, ghClient) {
+				if isUnreviewed(org, repo, pr, ghClient) && !hasUnactionableLabels(pr.Labels) {
 					if _, recorded := channelToPRs[channel]; !recorded {
 						channelToPRs[channel] = []prRequest{}
 					}

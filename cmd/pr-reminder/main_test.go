@@ -287,6 +287,30 @@ func TestFindPRs(t *testing.T) {
 					},
 				},
 			},
+			{
+				Number:    67,
+				HTMLURL:   "github.com/org/repo-2/67",
+				Title:     "Ready to merge",
+				User:      github.User{Login: "a-user"},
+				CreatedAt: now,
+				UpdatedAt: now,
+				Labels:    []github.Label{{Name: "approved"}, {Name: "lgtm"}},
+				RequestedReviewers: []github.User{
+					{
+						Login: "a-different-id",
+					},
+				},
+				RequestedTeams: []github.Team{
+					{
+						Slug: "some-team",
+					},
+				},
+				Assignees: []github.User{
+					{
+						Login: "random",
+					},
+				},
+			},
 		},
 	},
 		reviews: map[string]map[int][]github.Review{

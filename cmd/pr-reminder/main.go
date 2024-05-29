@@ -407,7 +407,7 @@ func findPRs(users map[string]user, channels map[string]sets.Set[string], ghClie
 	for i, u := range users {
 		for _, repo := range sets.List(u.Repos) {
 			for _, pr := range repoToPRs[repo] {
-				if !hasUnactionableLabels(pr.Labels) && u.requestedToReview(pr) {
+				if !hasUnactionableLabels(pr.Labels) && !isReadyToMerge(pr.Labels) && u.requestedToReview(pr) {
 					u.PrRequests = append(u.PrRequests, requestFor(repo, pr))
 					users[i] = u
 				}
@@ -573,6 +573,16 @@ func hasUnactionableLabels(labels []github.Label) bool {
 	return false
 }
 
+// isReadyToMerge returns whether a PR has all the labels it needs to merge, which likely means it
+// does not need to be looked at again
+func isReadyToMerge(labels []github.Label) bool {
+	existing := sets.Set[string]{}
+	for _, label := range labels {
+		existing.Insert(label.Name)
+	}
+	return existing.HasAll("lgtm", "approved")
+}
+
 type reviewClient interface {
 	ListReviews(org, repo string, number int) ([]github.Review, error)
 }
@@ -582,11 +592,7 @@ type reviewClient interface {
 // all those PRs get direct-message pinged to those folks as often some high-level developer gets auto-assigned to everything
 func isUnreviewed(org, repo string, pr github.PullRequest, client reviewClient) bool {
 	// if we're LGTM + approved, we're not interested in bugging anyone
-	existing := sets.Set[string]{}
-	for _, label := range pr.Labels {
-		existing.Insert(label.Name)
-	}
-	if existing.HasAll("lgtm", "approved") {
+	if isReadyToMerge(pr.Labels) {
 		return false
 	}
 

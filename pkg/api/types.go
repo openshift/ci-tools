@@ -2016,6 +2016,7 @@ func (p ClusterProfile) Secret() string {
 		ClusterProfileVSphereMultizone2,
 		ClusterProfileVSphereConnected2,
 		ClusterProfileVSphereMultiVCenter,
+		ClusterProfileVSphereElastic,
 		ClusterProfileVSphere8Vpn:
 
 		name = p.ClusterType()

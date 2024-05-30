@@ -53,11 +53,13 @@ type PodStepConfiguration struct {
 	Secrets            []*api.Secret
 	MemoryBackedVolume *api.MemoryBackedVolume
 	Clone              bool
+	NodeArchitecture   api.NodeArchitecture
 }
 
 type GeneratePodOptions struct {
 	Clone             bool
 	PropagateExitCode bool
+	NodeArchitecture  string
 }
 
 type podStep struct {
@@ -170,6 +172,7 @@ func TestStep(config api.TestStepConfiguration, resources api.ResourceConfigurat
 			Secrets:            config.Secrets,
 			MemoryBackedVolume: config.ContainerTestConfiguration.MemoryBackedVolume,
 			Clone:              *config.ContainerTestConfiguration.Clone,
+			NodeArchitecture:   config.NodeArchitecture,
 		},
 		resources,
 		client,
@@ -242,6 +245,10 @@ func GenerateBasePod(
 		{Name: "GIT_CONFIG_VALUE_0", Value: "*"},
 	}...)
 
+	if generatePodOptions != nil && generatePodOptions.NodeArchitecture != "" {
+		pod.Spec.NodeSelector = map[string]string{"kubernetes.io/arch": generatePodOptions.NodeArchitecture}
+	}
+
 	artifactDir = fmt.Sprintf("artifacts/%s", artifactDir)
 	if err := addPodUtils(pod, artifactDir, decorationConfig, rawJobSpec, secretsToCensor, generatePodOptions, jobSpec); err != nil {
 		return nil, fmt.Errorf("failed to decorate pod: %w", err)
@@ -293,7 +300,7 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 	pod, err := GenerateBasePod(s.jobSpec, s.config.Labels, s.config.As,
 		s.config.NodeName, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands},
 		image, containerResources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(),
-		secretVolumeMounts, &GeneratePodOptions{Clone: clone, PropagateExitCode: false})
+		secretVolumeMounts, &GeneratePodOptions{Clone: clone, PropagateExitCode: false, NodeArchitecture: string(s.config.NodeArchitecture)})
 	if err != nil {
 		return nil, err
 	}

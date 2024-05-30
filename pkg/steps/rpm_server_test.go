@@ -23,20 +23,6 @@ func TestRPMServerStepProvides(t *testing.T) {
 	if err := routev1.AddToScheme(scheme.Scheme); err != nil {
 		t.Error(err)
 	}
-	client := loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
-		&routev1.Route{
-			ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "rpm-repo"},
-			Status: routev1.RouteStatus{
-				Ingress: []routev1.RouteIngress{{
-					Host: "host",
-					Conditions: []routev1.RouteIngressCondition{{
-						Type:   routev1.RouteAdmitted,
-						Status: corev1.ConditionTrue,
-					}},
-				}},
-			},
-		},
-	).Build())
 	for _, tc := range []struct {
 		name     string
 		jobSpec  api.JobSpec
@@ -83,6 +69,20 @@ func TestRPMServerStepProvides(t *testing.T) {
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
+			client := loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
+				&routev1.Route{
+					ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "rpm-repo"},
+					Status: routev1.RouteStatus{
+						Ingress: []routev1.RouteIngress{{
+							Host: "host",
+							Conditions: []routev1.RouteIngressCondition{{
+								Type:   routev1.RouteAdmitted,
+								Status: corev1.ConditionTrue,
+							}},
+						}},
+					},
+				},
+			).Build())
 			tc.jobSpec.SetNamespace(ns)
 			step := RPMServerStep(api.RPMServeStepConfiguration{}, client, &tc.jobSpec)
 			providesMap := step.Provides()

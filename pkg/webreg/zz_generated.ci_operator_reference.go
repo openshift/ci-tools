@@ -903,6 +903,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # apart. Setting this field will create a periodic job instead of a\n" +
 	"        # presubmit\n" +
 	"        minimum_interval: \"\"\n" +
+	"        # NodeArchitecture is the architecture for the node where the test will run.\n" +
+	"        # If set, the generated test pod will include a nodeSelector for this architecture.\n" +
+	"        node_architecture: ' '\n" +
 	"        openshift_ansible:\n" +
 	"            cluster_profile: ' '\n" +
 	"        openshift_ansible_custom:\n" +
@@ -1719,6 +1722,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      # apart. Setting this field will create a periodic job instead of a\n" +
 	"      # presubmit\n" +
 	"      minimum_interval: \"\"\n" +
+	"      # NodeArchitecture is the architecture for the node where the test will run.\n" +
+	"      # If set, the generated test pod will include a nodeSelector for this architecture.\n" +
+	"      node_architecture: ' '\n" +
 	"      openshift_ansible:\n" +
 	"        cluster_profile: ' '\n" +
 	"      openshift_ansible_custom:\n" +

@@ -385,6 +385,14 @@ const (
 	ReleaseArchitectureMULTI   ReleaseArchitecture = "multi" //heterogeneous payload
 )
 
+// NodeArchitecture describes the architecture for the node
+type NodeArchitecture string
+
+const (
+	NodeArchitectureAMD64 NodeArchitecture = "amd64"
+	NodeArchitectureARM64 NodeArchitecture = "arm64"
+)
+
 type ReleaseStream string
 
 const (
@@ -768,6 +776,10 @@ type TestStepConfiguration struct {
 
 	// Timeout overrides maximum prowjob duration
 	Timeout *prowv1.Duration `json:"timeout,omitempty"`
+
+	// NodeArchitecture is the architecture for the node where the test will run.
+	// If set, the generated test pod will include a nodeSelector for this architecture.
+	NodeArchitecture NodeArchitecture `json:"node_architecture,omitempty"`
 
 	// Only one of the following can be not-null.
 	ContainerTestConfiguration                                *ContainerTestConfiguration                                `json:"container,omitempty"`

@@ -74,7 +74,7 @@ type options struct {
 }
 
 func (o *options) addDefaults() {
-	o.enabledControllers = flagutil.NewStrings(promotionreconciler.ControllerName, testimagesdistributor.ControllerName)
+	o.enabledControllers = flagutil.NewStrings(promotionreconciler.ControllerName)
 }
 
 type testImagesDistributorOptions struct {

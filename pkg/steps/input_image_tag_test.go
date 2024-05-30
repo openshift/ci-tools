@@ -79,7 +79,7 @@ func TestInputImageTagStep(t *testing.T) {
 			params: nil,
 		},
 		inputs: inputsExpectation{
-			values: api.InputDefinition{"quay.io/openshift/ci:source-namespace_BASE_BASETAG"},
+			values: api.InputDefinition{"quay-proxy.ci.openshift.org/openshift/ci:source-namespace_BASE_BASETAG"},
 			err:    false,
 		},
 	}
@@ -112,7 +112,7 @@ func TestInputImageTagStep(t *testing.T) {
 		Tag: &imagev1.TagReference{
 			From: &corev1.ObjectReference{
 				Kind: "DockerImage",
-				Name: "quay.io/openshift/ci:source-namespace_BASE_BASETAG",
+				Name: "quay-proxy.ci.openshift.org/openshift/ci:source-namespace_BASE_BASETAG",
 			},
 			ImportPolicy: imagev1.TagImportPolicy{
 				ImportMode: imagev1.ImportModePreserveOriginal,

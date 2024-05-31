@@ -106,7 +106,9 @@ func (r *registry) mergeWorkflow(config *api.MultiStageTestConfiguration) ([][]a
 	config.Environment = mergeEnvironments(workflow.Environment, config.Environment)
 	config.Dependencies = mergeDependencies(workflow.Dependencies, config.Dependencies)
 	config.DependencyOverrides = mergeDependencyOverrides(workflow.DependencyOverrides, config.DependencyOverrides)
-	config.DNSConfig = overwriteDNSIfUnset(workflow.DNSConfig, config.DNSConfig)
+	config.DNSConfig = overwriteIfUnset(workflow.DNSConfig, config.DNSConfig)
+	config.Observers = overwriteIfUnset(workflow.Observers, config.Observers)
+
 	if l, err := mergeLeases(workflow.Leases, config.Leases); err != nil {
 		errs = append(errs, err)
 	} else {
@@ -213,12 +215,10 @@ func mergeDependencyOverrides(dst api.DependencyOverrides, src api.DependencyOve
 	return mergeMaps(dst, src)
 }
 
-// overwriteDNSIfUnset returns the dst only if the src is nil
-func overwriteDNSIfUnset(dst *api.StepDNSConfig, src *api.StepDNSConfig) *api.StepDNSConfig {
+func overwriteIfUnset[T any](dst, src *T) *T {
 	if src != nil {
 		return src
 	}
-
 	return dst
 }
 

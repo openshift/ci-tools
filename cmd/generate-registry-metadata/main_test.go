@@ -69,6 +69,13 @@ func TestGenerateMetadata(t *testing.T) {
 				Path:   "ipi/install/with-parameter/ipi-install-with-parameter-chain.yaml",
 				Owners: owners1,
 			},
+			"ipi-observers-workflow.yaml": {
+				Path: "ipi-observers/ipi-observers-workflow.yaml",
+				Owners: repoowners.Config{
+					Approvers: []string{"AlexNPavel", "stevekuznetsov"},
+					Reviewers: []string{"AlexNPavel", "stevekuznetsov"},
+				},
+			},
 			"ipi-workflow.yaml": {
 				Path:   "ipi/ipi-workflow.yaml",
 				Owners: owners1,

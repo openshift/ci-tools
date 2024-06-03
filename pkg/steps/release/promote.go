@@ -92,8 +92,8 @@ func (s *promotionStep) run(ctx context.Context) error {
 		return fmt.Errorf("could not resolve pipeline imagestream: %w", err)
 	}
 
-	date := time.Now().Format("20060102")
-	imageMirrorTarget, namespaces := getImageMirrorTarget(tags, pipeline, s.registry, date, s.mirrorFunc)
+	timeStr := time.Now().Format("20060102150405")
+	imageMirrorTarget, namespaces := getImageMirrorTarget(tags, pipeline, s.registry, timeStr, s.mirrorFunc)
 	if len(imageMirrorTarget) == 0 {
 		logger.Info("Nothing to promote, skipping...")
 		return nil
@@ -111,7 +111,7 @@ func (s *promotionStep) run(ctx context.Context) error {
 		version = "4.14"
 	}
 
-	if _, err := steps.RunPod(ctx, s.client, getPromotionPod(imageMirrorTarget, s.jobSpec.Namespace(), s.name, version, s.nodeArchitectures)); err != nil {
+	if _, err := steps.RunPod(ctx, s.client, getPromotionPod(imageMirrorTarget, timeStr, s.jobSpec.Namespace(), s.name, version, s.nodeArchitectures)); err != nil {
 		return fmt.Errorf("unable to run promotion pod: %w", err)
 	}
 	return nil
@@ -161,7 +161,7 @@ func (s *promotionStep) ensureNamespaces(ctx context.Context, namespaces sets.Se
 	return nil
 }
 
-func getImageMirrorTarget(tags map[string][]api.ImageStreamTagReference, pipeline *imagev1.ImageStream, registry string, date string, mirrorFunc func(source, target string, tag api.ImageStreamTagReference, date string, imageMirror map[string]string)) (map[string]string, sets.Set[string]) {
+func getImageMirrorTarget(tags map[string][]api.ImageStreamTagReference, pipeline *imagev1.ImageStream, registry string, time string, mirrorFunc func(source, target string, tag api.ImageStreamTagReference, time string, imageMirror map[string]string)) (map[string]string, sets.Set[string]) {
 	if pipeline == nil {
 		return nil, nil
 	}
@@ -175,7 +175,7 @@ func getImageMirrorTarget(tags map[string][]api.ImageStreamTagReference, pipelin
 		}
 		dockerImageReference = getPublicImageReference(dockerImageReference, pipeline.Status.PublicDockerImageRepository)
 		for _, dst := range dsts {
-			mirrorFunc(dockerImageReference, fmt.Sprintf("%s/%s", registry, dst.ISTagName()), dst, date, imageMirror)
+			mirrorFunc(dockerImageReference, fmt.Sprintf("%s/%s", registry, dst.ISTagName()), dst, time, imageMirror)
 			namespaces.Insert(dst.Namespace)
 		}
 	}
@@ -208,7 +208,7 @@ func getPublicImageReference(dockerImageReference, publicDockerImageRepository s
 	return strings.Replace(dockerImageReference, splits[0], publicHost, 1)
 }
 
-func getPromotionPod(imageMirrorTarget map[string]string, namespace string, name string, cliVersion string, nodeArchitectures []string) *coreapi.Pod {
+func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namespace string, name string, cliVersion string, nodeArchitectures []string) *coreapi.Pod {
 	keys := make([]string, 0, len(imageMirrorTarget))
 	for k := range imageMirrorTarget {
 		keys = append(keys, k)
@@ -216,11 +216,22 @@ func getPromotionPod(imageMirrorTarget map[string]string, namespace string, name
 	sort.Strings(keys)
 
 	var images []string
+	var pruneImages []string
 	for _, k := range keys {
-		images = append(images, fmt.Sprintf("%s=%s", imageMirrorTarget[k], k))
+		if strings.Contains(k, fmt.Sprintf("%s_prune_", timeStr)) {
+			pruneImages = append(pruneImages, fmt.Sprintf("%s=%s", imageMirrorTarget[k], k))
+		} else {
+			images = append(images, fmt.Sprintf("%s=%s", imageMirrorTarget[k], k))
+		}
 	}
 	command := []string{"/bin/sh", "-c"}
-	args := []string{fmt.Sprintf("oc image mirror --keep-manifest-list --registry-config=%s --continue-on-error=true --max-per-registry=20 %s", filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey), strings.Join(images, " "))}
+	mirrorTagsCommand := fmt.Sprintf("oc image mirror --keep-manifest-list --registry-config=%s --continue-on-error=true --max-per-registry=20 %s", filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey), strings.Join(images, " "))
+	var args []string
+	if len(pruneImages) > 0 {
+		mirrorPruneTagsCommand := fmt.Sprintf("oc image mirror --keep-manifest-list --registry-config=%s --continue-on-error=true --max-per-registry=20 %s", filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey), strings.Join(pruneImages, " "))
+		args = append(args, fmt.Sprintf("%s || true", mirrorPruneTagsCommand))
+	}
+	args = append(args, mirrorTagsCommand)
 
 	image := fmt.Sprintf("%s/%s/%s:cli", api.DomainForService(api.ServiceRegistry), "ocp", cliVersion)
 	nodeSelector := map[string]string{"kubernetes.io/arch": "amd64"}

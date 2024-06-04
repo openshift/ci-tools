@@ -164,14 +164,17 @@ func (c *config) createUsers(gtk githubToKerberos, slackClient slackClient) (map
 	return users, kerrors.NewAggregate(errors)
 }
 
-func (c *config) channels() map[string]sets.Set[string] {
-	reposByChannel := map[string]sets.Set[string]{}
+type repoChannel struct {
+	orgRepo  string
+	omitBots bool
+}
+
+func (c *config) channels() map[string][]repoChannel {
+	reposByChannel := map[string][]repoChannel{}
 	for _, team := range c.Teams {
 		if team.Channel != "" && len(team.Repos) > 0 {
-			if _, recorded := reposByChannel[team.Channel]; recorded {
-				reposByChannel[team.Channel] = reposByChannel[team.Channel].Insert(team.Repos...)
-			} else {
-				reposByChannel[team.Channel] = sets.New[string](team.Repos...)
+			for _, orgRepo := range team.Repos {
+				reposByChannel[team.Channel] = append(reposByChannel[team.Channel], repoChannel{orgRepo: orgRepo, omitBots: team.OmitBots})
 			}
 		}
 	}
@@ -186,6 +189,9 @@ type team struct {
 	// Channel is the optional Slack channel to which the messages about unassigned pull requests from the
 	// repos will be sent. This does not change the messages sent to the team members.
 	Channel string `json:"channel,omitempty"`
+
+	// OmitBots determines if we will report on pull requests created by GitHub robots to the channel configured above.
+	OmitBots bool `json:"omitBots,omitempty"`
 }
 
 type githubToKerberos map[string]string
@@ -385,7 +391,7 @@ func main() {
 
 // findPRs finds the yet-to-be-reviewed PRs that should be broadcast to each channel as well as the PRs requiring
 // a reminder for each team
-func findPRs(users map[string]user, channels map[string]sets.Set[string], ghClient ghClient) (map[string][]prRequest, map[string]user) {
+func findPRs(users map[string]user, channels map[string][]repoChannel, ghClient ghClient) (map[string][]prRequest, map[string]user) {
 	repos := sets.New[string]()
 	for _, u := range users {
 		repos.Insert(sets.List(u.Repos)...)
@@ -423,16 +429,16 @@ func findPRs(users map[string]user, channels map[string]sets.Set[string], ghClie
 
 	channelToPRs := map[string][]prRequest{}
 	for channel, repos := range channels {
-		for orgRepo := range repos {
-			split := strings.Split(orgRepo, "/")
+		for _, cfg := range repos {
+			split := strings.Split(cfg.orgRepo, "/")
 			org, repo := split[0], split[1]
 
-			for _, pr := range repoToPRs[orgRepo] {
-				if isUnreviewed(org, repo, pr, ghClient) && !hasUnactionableLabels(pr.Labels) {
+			for _, pr := range repoToPRs[cfg.orgRepo] {
+				if isUnreviewed(org, repo, pr, ghClient) && !hasUnactionableLabels(pr.Labels) && !(cfg.omitBots && pr.User.Type == github.UserTypeBot) {
 					if _, recorded := channelToPRs[channel]; !recorded {
 						channelToPRs[channel] = []prRequest{}
 					}
-					channelToPRs[channel] = append(channelToPRs[channel], requestFor(orgRepo, pr))
+					channelToPRs[channel] = append(channelToPRs[channel], requestFor(cfg.orgRepo, pr))
 				}
 			}
 		}

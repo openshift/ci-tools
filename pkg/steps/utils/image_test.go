@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	coreapi "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -46,21 +47,23 @@ func TestReimportTag(t *testing.T) {
 			expectedCount:  1,
 		},
 		{
-			name:          "imported on the 2nd try",
-			client:        bcc(fakectrlruntimeclient.NewClientBuilder().Build()),
-			ns:            "imported-2nd",
-			is:            "is",
-			tag:           "tag",
-			expectedCount: 2,
+			name:           "imported on the 2nd try",
+			client:         bcc(fakectrlruntimeclient.NewClientBuilder().Build()),
+			ns:             "imported-2nd",
+			is:             "is",
+			tag:            "tag",
+			sourcePullSpec: "sourcePullSpec",
+			expectedCount:  2,
 		},
 		{
-			name:          "timeout",
-			client:        bcc(fakectrlruntimeclient.NewClientBuilder().Build()),
-			ns:            "timeout",
-			is:            "is",
-			tag:           "tag",
-			expectedErr:   fmt.Errorf("unable to import tag timeout/is:tag even after (3) imports: timed out waiting for the condition"),
-			expectedCount: 3,
+			name:           "timeout",
+			client:         bcc(fakectrlruntimeclient.NewClientBuilder().Build()),
+			ns:             "timeout",
+			is:             "is",
+			tag:            "tag",
+			sourcePullSpec: "sourcePullSpec",
+			expectedErr:    fmt.Errorf("unable to import tag timeout/is:tag even after (3) imports: timed out waiting for the condition"),
+			expectedCount:  3,
 		},
 	}
 
@@ -160,7 +163,7 @@ func TestGetEvaluator(t *testing.T) {
 				},
 				Spec: imagev1.ImageStreamSpec{
 					Tags: []imagev1.TagReference{
-						{Name: "cli"},
+						{Name: "cli", From: &coreapi.ObjectReference{Kind: "DockerImage", Name: "reg.com/ns/n:t"}},
 					},
 				},
 				Status: imagev1.ImageStreamStatus{
@@ -180,12 +183,12 @@ func TestGetEvaluator(t *testing.T) {
 			expected: true,
 		},
 		{
-			name:   "reimport",
+			name:   "not imported",
 			client: bcc(fakectrlruntimeclient.NewClientBuilder().Build()),
 			obj: &imagev1.ImageStream{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "is",
-					Namespace: "imported",
+					Namespace: "some",
 				},
 				Spec: imagev1.ImageStreamSpec{
 					Tags: []imagev1.TagReference{
@@ -202,6 +205,37 @@ func TestGetEvaluator(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "is",
 					Namespace: "some error",
+				},
+				Spec: imagev1.ImageStreamSpec{
+					Tags: []imagev1.TagReference{
+						{Name: "cli", From: &coreapi.ObjectReference{Kind: "DockerImage", Name: "reg.com/ns/n:t"}},
+					},
+				},
+				Status: imagev1.ImageStreamStatus{
+					PublicDockerImageRepository: "registry",
+					Tags: []imagev1.NamedTagEventList{
+						{
+							Tag: "cli",
+							Conditions: []imagev1.TagEventCondition{
+								{
+									Message: "Internal error occurred: a and b",
+								},
+							},
+						},
+					},
+				},
+			},
+			expected:      false,
+			expectedErr:   fmt.Errorf("failed to reimport the tag some error/is:cli: unable to import tag some error/is:cli at import (0): some error"),
+			expectedCount: 1,
+		},
+		{
+			name:   "nil-from error",
+			client: bcc(fakectrlruntimeclient.NewClientBuilder().Build()),
+			obj: &imagev1.ImageStream{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "is",
+					Namespace: "ns",
 				},
 				Spec: imagev1.ImageStreamSpec{
 					Tags: []imagev1.TagReference{
@@ -222,9 +256,68 @@ func TestGetEvaluator(t *testing.T) {
 					},
 				},
 			},
-			expected:      false,
-			expectedErr:   fmt.Errorf("failed to reimport the tag some error/is:cli: unable to import tag some error/is:cli at import (0): some error"),
-			expectedCount: 1,
+			expected:    false,
+			expectedErr: fmt.Errorf("failed to determine the source of the tag ns/is:cli"),
+		},
+		{
+			name:   "no-name error",
+			client: bcc(fakectrlruntimeclient.NewClientBuilder().Build()),
+			obj: &imagev1.ImageStream{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "is",
+					Namespace: "ns",
+				},
+				Spec: imagev1.ImageStreamSpec{
+					Tags: []imagev1.TagReference{
+						{Name: "cli", From: &coreapi.ObjectReference{Kind: "DockerImage"}},
+					},
+				},
+				Status: imagev1.ImageStreamStatus{
+					PublicDockerImageRepository: "registry",
+					Tags: []imagev1.NamedTagEventList{
+						{
+							Tag: "cli",
+							Conditions: []imagev1.TagEventCondition{
+								{
+									Message: "Internal error occurred: a and b",
+								},
+							},
+						},
+					},
+				},
+			},
+			expected:    false,
+			expectedErr: fmt.Errorf("failed to import tag ns/is:cli from an empty source"),
+		},
+		{
+			name:   "unknown-kind error",
+			client: bcc(fakectrlruntimeclient.NewClientBuilder().Build()),
+			obj: &imagev1.ImageStream{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "is",
+					Namespace: "ns",
+				},
+				Spec: imagev1.ImageStreamSpec{
+					Tags: []imagev1.TagReference{
+						{Name: "cli", From: &coreapi.ObjectReference{Kind: "UnknownKind"}},
+					},
+				},
+				Status: imagev1.ImageStreamStatus{
+					PublicDockerImageRepository: "registry",
+					Tags: []imagev1.NamedTagEventList{
+						{
+							Tag: "cli",
+							Conditions: []imagev1.TagEventCondition{
+								{
+									Message: "Internal error occurred: a and b",
+								},
+							},
+						},
+					},
+				},
+			},
+			expected:    false,
+			expectedErr: fmt.Errorf("failed to import tag ns/is:cli from an unexpected tag source {UnknownKind      }"),
 		},
 		{
 			name:   "happy path with 2 tags",

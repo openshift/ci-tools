@@ -166,5 +166,6 @@ func (c *client) ImageInfo(image string, options OCImageInfoOptions) (ImageInfo,
 }
 
 func isNotFound(output []byte) bool {
-	return strings.Contains(string(output), "not found:")
+	o := string(output)
+	return strings.Contains(o, "not found:") || strings.Contains(o, "was deleted or has expired")
 }

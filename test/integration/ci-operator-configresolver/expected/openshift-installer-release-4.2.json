@@ -112,6 +112,82 @@
               }
             }
           }
+        ]
+      }
+    },
+    {
+      "as": "e2e-azure-with-watcher",
+      "literal_steps": {
+        "cluster_profile": "azure4",
+        "pre": [
+          {
+            "as": "ipi-install-rbac",
+            "from": "installer",
+            "commands": "setup-rbac\n",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              }
+            }
+          },
+          {
+            "as": "ipi-install-install",
+            "from": "installer",
+            "commands": "openshift-cluster install\n",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              }
+            },
+            "env": [
+              {
+                "name": "TEST_PARAMETER",
+                "default": "test parameter default"
+              }
+            ],
+            "observers": [
+              "resourcewatcher"
+            ]
+          }
+        ],
+        "test": [
+          {
+            "as": "e2e",
+            "from": "my-image",
+            "commands": "make azure-e2e",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              }
+            }
+          }
+        ],
+        "post": [
+          {
+            "as": "ipi-deprovision-must-gather",
+            "from": "installer",
+            "commands": "gather\n",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              }
+            }
+          },
+          {
+            "as": "ipi-deprovision-deprovision",
+            "from": "installer",
+            "commands": "openshift-cluster destroy\n",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              }
+            }
+          }
         ],
         "observers": [
           {

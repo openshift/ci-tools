@@ -43,6 +43,18 @@ tests:
         requests:
           cpu: 1000m
           memory: 2Gi
+- as: e2e-azure-with-watcher
+  steps:
+    cluster_profile: azure4
+    workflow: ipi-observers
+    test:
+    - as: e2e
+      from: my-image
+      commands: make azure-e2e
+      resources:
+        requests:
+          cpu: 1000m
+          memory: 2Gi
 - as: e2e-gcp
   steps:
     cluster_profile: gcp

@@ -2174,7 +2174,7 @@
         - ci-operator
         env:
         - name: CONFIG_SPEC
-          value: H4sIAAAAAAAC/zSOTWrDMBCF9zrFw5tAQYtudRkxkV9sU8VSZ0Y15PRFpF0N3/D+lNaGFloKwO3jNg+g/B40tzcBpY+E5XMJ/v5GiCVMiNfheyy7nBvX2O5G/aHGq+nXo7YrAPVwqtRszv4XWOowp+au7XFUJixLeL3yxpMqzjU/6bKKy5TfVc6yJzxlegLQdEsYRgtzaG8J/7XhNwAA//+s3YR+zgAAAA==
+          value: H4sIAAAAAAAC/1SPy2rEMAxF9/6KSzYDBS+69c8EjaM8qB+pZDcw9OOLO54MWRkdS5d7hDVX8azOALePW3sA4e/KWvQ5AX6vDsPnYMqTWpA6tMEeW1mtXyktPNl8V5YfFntk+ZpDPgwQtsJCYdTCew/0oWphGXfJ8xbYYRj++eu8r1n4HCOlSR1+exOcrINZcnToBTpLFNmdafb6eTF+oavuRfnxGBdOLFR4GiMXmqhQ27wLJb86RGoyBsiyOFTlVk14z+8K5i8AAP//LFybvWcBAAA=
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""

@@ -121,6 +121,15 @@ func TestRegistry(t *testing.T) {
 				}},
 				Observers: &api.Observers{Disable: []string{"resourcewatcher"}},
 			},
+			"ipi-observers": {
+				Pre: []api.TestStep{{
+					Chain: &installChain,
+				}},
+				Post: []api.TestStep{{
+					Chain: &deprovisionChain,
+				}},
+				Observers: &api.Observers{Enable: []string{"resourcewatcher"}},
+			},
 		}
 
 		expectedObservers = registry.ObserverByName{

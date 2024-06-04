@@ -1,0 +1,12 @@
+workflow:
+  as: ipi-observers
+  steps:
+    pre:
+    - chain: ipi-install
+    post:
+    - chain: ipi-deprovision
+    observers:
+      enable:
+      - resourcewatcher
+  documentation: |-
+    The IPI workflow provides pre- and post- steps that provision and deprovision an OpenShift cluster on a target IaaS platform, allowing job authors to inject their own end-to-end test logic.

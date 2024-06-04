@@ -806,6 +806,80 @@ func TestResolve(t *testing.T) {
 		},
 		expectedErr:           errors.New(`test/test: workflow/ipi-aws: parameter "NOT_THE_STEP_ENV" is overridden in [test/test] but not declared in any step`),
 		expectedValidationErr: errors.New(`workflow/ipi-aws: parameter "NOT_THE_STEP_ENV" is overridden in [workflow/ipi-aws] but not declared in any step`),
+	}, {
+		name: "Workflow with observer",
+		config: api.MultiStageTestConfiguration{
+			Workflow: &awsWorkflow,
+		},
+		observerMap: ObserverByName{
+			"obsrv-1": api.Observer{
+				Name:     "foo-observer",
+				From:     "tests",
+				Commands: "yes",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			},
+		},
+		workflowMap: WorkflowByName{
+			awsWorkflow: {
+				Observers: &api.Observers{Enable: []string{"obsrv-1"}},
+			},
+		},
+		expectedRes: api.MultiStageTestConfigurationLiteral{
+			Observers: []api.Observer{{
+				Name:     "foo-observer",
+				From:     "tests",
+				Commands: "yes",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			}},
+		},
+	}, {
+		name: "Config overwrite observers from workflow",
+		config: api.MultiStageTestConfiguration{
+			Workflow:  &awsWorkflow,
+			Observers: &api.Observers{Enable: []string{"obsrv-2"}},
+		},
+		observerMap: ObserverByName{
+			"obsrv-1": api.Observer{
+				Name:     "foo-observer",
+				From:     "tests",
+				Commands: "yes",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			},
+			"obsrv-2": api.Observer{
+				Name:     "foo-observer-2",
+				From:     "tests",
+				Commands: "yes",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			},
+		},
+		workflowMap: WorkflowByName{
+			awsWorkflow: {
+				Observers: &api.Observers{Enable: []string{"obsrv-1"}},
+			},
+		},
+		expectedRes: api.MultiStageTestConfigurationLiteral{
+			Observers: []api.Observer{{
+				Name:     "foo-observer-2",
+				From:     "tests",
+				Commands: "yes",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			}},
+		},
 	}} {
 		t.Run(testCase.name, func(t *testing.T) {
 			err := Validate(testCase.stepMap, testCase.chainMap, testCase.workflowMap, testCase.observerMap)

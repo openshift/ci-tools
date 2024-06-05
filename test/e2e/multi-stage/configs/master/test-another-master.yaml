@@ -1,8 +1,8 @@
 base_images:
   os:
-    name: centos
-    namespace: openshift
-    tag: 'stream9'
+    name: ubi-minimal
+    namespace: ocp
+    tag: '9'
 images:
   - from: os
     to: another-os

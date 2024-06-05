@@ -1,7 +1,7 @@
-FROM quay.io/centos/centos:stream9
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 ADD autoowners /usr/bin/autoowners
 
-RUN yum install -y git
+RUN microdnf install -y git
 
 ENTRYPOINT ["/usr/bin/autoowners"]

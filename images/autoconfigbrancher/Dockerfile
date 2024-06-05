@@ -1,4 +1,4 @@
-FROM quay.io/centos/centos:stream9
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 ADD determinize-ci-operator /usr/bin/determinize-ci-operator
 ADD config-brancher /usr/bin/config-brancher
@@ -14,8 +14,8 @@ ADD ci-operator-yaml-creator /usr/bin/ci-operator-yaml-creator
 ADD clusterimageset-updater /usr/bin/clusterimageset-updater
 ADD promoted-image-governor /usr/bin/promoted-image-governor
 
-RUN dnf install -y git && \
-    dnf clean all && \
+RUN microdnf install -y git && \
+    microdnf clean all && \
     rm -rf /var/cache/dnf
 
 ENTRYPOINT ["/usr/bin/autoconfigbrancher"]

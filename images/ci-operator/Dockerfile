@@ -1,4 +1,4 @@
-FROM quay.io/centos/centos:stream8
+FROM quay.io/centos/centos:stream9
 
 RUN yum install -y git python2
 RUN alternatives --set python /usr/bin/python2

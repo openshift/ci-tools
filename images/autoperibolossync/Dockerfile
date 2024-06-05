@@ -1,4 +1,4 @@
-FROM quay.io/centos/centos:stream8
+FROM quay.io/centos/centos:stream9
 
 ADD private-org-peribolos-sync /usr/bin/private-org-peribolos-sync
 ADD autoperibolossync /usr/bin/autoperibolossync

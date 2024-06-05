@@ -1,4 +1,4 @@
-FROM quay.io/centos/centos:stream8
+FROM quay.io/centos/centos:stream9
 
 ADD determinize-ci-operator /usr/bin/determinize-ci-operator
 ADD config-brancher /usr/bin/config-brancher

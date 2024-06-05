@@ -10,18 +10,15 @@ import (
 	"strconv"
 	"time"
 
-	helpdeskfaq "github.com/openshift/ci-tools/pkg/helpdesk-faq"
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/logrusutil"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/openshift/ci-tools/pkg/api"
-)
-
-const (
-	appCIContextName = string(api.ClusterAPPCI)
+	helpdeskfaq "github.com/openshift/ci-tools/pkg/helpdesk-faq"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 type options struct {
@@ -122,9 +119,13 @@ func main() {
 	level, _ := logrus.ParseLevel(o.logLevel)
 	logrus.SetLevel(level)
 
-	kubeClient, err := o.kubernetesOptions.ClusterClientForContext(appCIContextName, false)
+	inClusterConfig, err := util.LoadClusterConfig()
 	if err != nil {
-		logrus.WithError(err).Fatal("could not load kube config")
+		logrus.WithError(err).Fatal("Failed to load in-cluster config")
+	}
+	kubeClient, err := ctrlruntimeclient.New(inClusterConfig, ctrlruntimeclient.Options{})
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create client")
 	}
 	client := helpdeskfaq.NewCMClient(kubeClient)
 	server := &http.Server{

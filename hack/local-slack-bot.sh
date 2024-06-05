@@ -63,12 +63,13 @@ sleep 5
 os::log::info "Sending production traffic from Slack to the reverse proxy..."
 ssh -N -T root@127.0.0.1 -p 2222 -R "8888:127.0.0.1:8888" &
 
+export KUBECONFIG="${data}/sa.config-updater.app.ci.config"
+
 os::log::info "Running the slack-bot server..."
 helpdesk_alias="U032D8MQZR6" # Update this to your slack userid in the dptp-robot-testing-space
 require_workflows=false # Set to true to test out the auto-reply when not using a workflow
 http_proxy=localhost:7777 https_proxy=localhost:7777 slack-bot --port 6666 \
  --slack-token-path="${data}/oauth_token" --slack-signing-secret-path="${data}/signing_secret" \
- --kubeconfig="${data}/sa.config-updater.app.ci.config" \
  --jira-bearer-token-file="${data}/token" --jira-endpoint https://issues.redhat.com \
  --log-level=trace \
  --prow-config-path="${RELEASE_REPO_DIR}/core-services/prow/02_config/_config.yaml" --prow-job-config-path="${RELEASE_REPO_DIR}/ci-operator/jobs" \

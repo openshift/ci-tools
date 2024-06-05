@@ -9,8 +9,8 @@ import (
 	"github.com/sirupsen/logrus"
 
 	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
+	"k8s.io/apimachinery/pkg/types"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -25,12 +25,12 @@ type FaqItemClient interface {
 	RemoveItem(timestamp string) error
 }
 
-func NewCMClient(kubeClient kubernetes.Interface) ConfigMapClient {
+func NewCMClient(kubeClient ctrlruntimeclient.Client) ConfigMapClient {
 	return ConfigMapClient{kubeClient: kubeClient}
 }
 
 type ConfigMapClient struct {
-	kubeClient  kubernetes.Interface
+	kubeClient  ctrlruntimeclient.Client
 	cachedItems []string
 	lastReload  time.Time
 }
@@ -84,7 +84,7 @@ func (c *ConfigMapClient) UpsertItem(item FaqItem) error {
 		return fmt.Errorf("unable to get configmap: %w", err)
 	}
 	configMap.Data[item.Timestamp] = string(data)
-	_, err = c.kubeClient.CoreV1().ConfigMaps(ci).Update(context.TODO(), configMap, metav1.UpdateOptions{})
+	err = c.kubeClient.Update(context.TODO(), configMap)
 	if err != nil {
 		return fmt.Errorf("unable to update helpdesk-faq config map: %w", err)
 	}
@@ -98,7 +98,7 @@ func (c *ConfigMapClient) RemoveItem(timestamp string) error {
 		return fmt.Errorf("unable to get configmap: %w", err)
 	}
 	delete(configMap.Data, timestamp)
-	_, err = c.kubeClient.CoreV1().ConfigMaps(ci).Update(context.TODO(), configMap, metav1.UpdateOptions{})
+	err = c.kubeClient.Update(context.TODO(), configMap)
 	if err != nil {
 		return fmt.Errorf("unable to update helpdesk-faq config map: %w", err)
 	}
@@ -107,8 +107,8 @@ func (c *ConfigMapClient) RemoveItem(timestamp string) error {
 }
 
 func (c *ConfigMapClient) getConfigMap() (*v1.ConfigMap, error) {
-	configMap, err := c.kubeClient.CoreV1().ConfigMaps(ci).Get(context.TODO(), faqConfigMap, metav1.GetOptions{})
-	if err != nil {
+	configMap := &v1.ConfigMap{}
+	if err := c.kubeClient.Get(context.TODO(), types.NamespacedName{Namespace: ci, Name: faqConfigMap}, configMap); err != nil {
 		return nil, fmt.Errorf("failed to get configMap %s: %w", faqConfigMap, err)
 	}
 	return configMap, nil

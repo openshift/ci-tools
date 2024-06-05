@@ -12,13 +12,13 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 	"google.golang.org/api/option"
 
 	"k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/test-infra/pkg/flagutil"
 	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/config/secret"
@@ -30,6 +30,9 @@ import (
 	"k8s.io/test-infra/prow/pjutil"
 	"k8s.io/test-infra/prow/pjutil/pprof"
 	"k8s.io/test-infra/prow/simplifypath"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	userv1 "github.com/openshift/api/user/v1"
 
 	"github.com/openshift/ci-tools/pkg/jira"
 	eventhandler "github.com/openshift/ci-tools/pkg/slack/events"
@@ -37,10 +40,7 @@ import (
 	eventrouter "github.com/openshift/ci-tools/pkg/slack/events/router"
 	interactionhandler "github.com/openshift/ci-tools/pkg/slack/interactions"
 	interactionrouter "github.com/openshift/ci-tools/pkg/slack/interactions/router"
-)
-
-const (
-	appCIContextName = string(api.ClusterAPPCI)
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 type options struct {
@@ -50,7 +50,6 @@ type options struct {
 	gracePeriod            time.Duration
 	instrumentationOptions prowflagutil.InstrumentationOptions
 	jiraOptions            prowflagutil.JiraOptions
-	kubernetesOptions      prowflagutil.KubernetesOptions
 
 	prowconfig configflagutil.ConfigOptions
 
@@ -83,7 +82,7 @@ func (o *options) Validate() error {
 		}
 	}
 
-	return o.kubernetesOptions.Validate(false)
+	return nil
 }
 
 func gatherOptions(fs *flag.FlagSet, args ...string) options {
@@ -106,8 +105,6 @@ func gatherOptions(fs *flag.FlagSet, args ...string) options {
 	fs.StringVar(&o.forumChannelId, "forum-channel-id", "CBN38N3MW", "Channel ID for #forum-ocp-testplatform")
 	fs.BoolVar(&o.requireWorkflowsInForum, "require-workflows-in-forum", true, "Require the use of workflows in the designated forum channel")
 
-	o.kubernetesOptions.AddFlags(fs)
-
 	if err := fs.Parse(args); err != nil {
 		logrus.WithError(err).Fatal("Could not parse args.")
 	}
@@ -122,6 +119,13 @@ func l(fragment string, children ...simplifypath.Node) simplifypath.Node {
 var (
 	promMetrics = metrics.NewMetrics("slack_bot")
 )
+
+func addSchemes() error {
+	if err := userv1.AddToScheme(scheme.Scheme); err != nil {
+		return fmt.Errorf("failed to add userv1 to scheme: %w", err)
+	}
+	return nil
+}
 
 func main() {
 	logrusutil.ComponentInit()
@@ -138,9 +142,16 @@ func main() {
 		logrus.WithError(err).Fatal("Error starting Prow config agent.")
 	}
 
-	kubeClient, err := o.kubernetesOptions.ClusterClientForContext(appCIContextName, false)
+	inClusterConfig, err := util.LoadClusterConfig()
 	if err != nil {
-		logrus.WithError(err).Fatal("could not load kube config")
+		logrus.WithError(err).Fatal("Failed to load in-cluster config")
+	}
+	kubeClient, err := ctrlruntimeclient.New(inClusterConfig, ctrlruntimeclient.Options{})
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create client")
+	}
+	if err = addSchemes(); err != nil {
+		logrus.WithError(err).Fatal("couldn't add schemes")
 	}
 
 	if err := secret.Add(o.slackTokenPath, o.slackSigningSecretPath); err != nil {

@@ -1,13 +1,20 @@
 package helpdesk
 
 import (
-	helpdeskfaq "github.com/openshift/ci-tools/pkg/helpdesk-faq"
-	"k8s.io/client-go/kubernetes"
+	"context"
+	"fmt"
+	"slices"
 
 	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 
+	"k8s.io/apimachinery/pkg/types"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	userv1 "github.com/openshift/api/user/v1"
+
+	helpdeskfaq "github.com/openshift/ci-tools/pkg/helpdesk-faq"
 	"github.com/openshift/ci-tools/pkg/slack/events"
 )
 
@@ -19,9 +26,17 @@ const (
 type slackClient interface {
 	GetConversationHistory(params *slack.GetConversationHistoryParameters) (*slack.GetConversationHistoryResponse, error)
 	GetConversationReplies(params *slack.GetConversationRepliesParameters) (msgs []slack.Message, hasMore bool, nextCursor string, err error)
+	GetUserByEmail(email string) (*slack.User, error)
 }
 
-func FAQHandler(client slackClient, kubeClient kubernetes.Interface, forumChannelId string) events.PartialHandler {
+func FAQHandler(client slackClient, kubeClient ctrlruntimeclient.Client, forumChannelId string) events.PartialHandler {
+	// We only load the authorized users from the test-platform-ci-admins group on startup.
+	// This will result in the tool needing to be restarted if this list membership changes,
+	// but that is extremely infrequent, and the restart is likely to happen naturally in a timely manner anyway
+	authorizedUsers, err := getAuthorizedUsers(client, kubeClient, logrus.WithField("handler", "faq-handler"))
+	if err != nil {
+		logrus.WithError(err).Fatalf("couldn't get authorized users")
+	}
 	return events.PartialHandlerFunc("helpdesk",
 		func(callback *slackevents.EventsAPIEvent, logger *logrus.Entry) (handled bool, err error) {
 			log := logger.WithField("handler", "helpdesk-faq")
@@ -38,7 +53,7 @@ func FAQHandler(client slackClient, kubeClient kubernetes.Interface, forumChanne
 					log.Debugf("not in correct channel. wanted: %s, reaction was in: %s", forumChannelId, event.Item.Channel)
 					return false, nil
 				}
-				return handleReactionAdded(event, client, kubeClient, &cmClient, forumChannelId, log)
+				return handleReactionAdded(event, client, &cmClient, forumChannelId, authorizedUsers, log)
 
 			} else {
 				event, removed := callback.InnerEvent.Data.(*slackevents.ReactionRemovedEvent)
@@ -47,7 +62,7 @@ func FAQHandler(client slackClient, kubeClient kubernetes.Interface, forumChanne
 						log.Debugf("not in correct channel. wanted: %s, reaction was in: %s", forumChannelId, event.Item.Channel)
 						return false, nil
 					}
-					return handleReactionRemoved(event, client, &cmClient, forumChannelId, log)
+					return handleReactionRemoved(event, client, &cmClient, forumChannelId, authorizedUsers, log)
 				} else {
 					return false, nil
 				}
@@ -55,17 +70,44 @@ func FAQHandler(client slackClient, kubeClient kubernetes.Interface, forumChanne
 		})
 }
 
-func handleReactionRemoved(event *slackevents.ReactionRemovedEvent, client slackClient, faqItemClient helpdeskfaq.FaqItemClient, forumChannelId string, logger *logrus.Entry) (bool, error) {
+func getAuthorizedUsers(client slackClient, groupClient ctrlruntimeclient.Client, logger *logrus.Entry) ([]string, error) {
+	admins := &userv1.Group{}
+	if err := groupClient.Get(context.TODO(), types.NamespacedName{Name: "test-platform-ci-admins"}, admins); err != nil {
+		logger.WithError(err).Error("unable to get test-platform-ci-admins group")
+		return nil, err
+	}
+	var slackUsers []string
+	for _, admin := range admins.Users {
+		email := fmt.Sprintf("%s@redhat.com", admin)
+		user, err := client.GetUserByEmail(email)
+		if err != nil {
+			logger.WithError(err).Errorf("unable to get user for email: %s", email)
+			continue
+		}
+		slackUsers = append(slackUsers, user.ID)
+	}
+	return slackUsers, nil
+}
+
+func handleReactionRemoved(event *slackevents.ReactionRemovedEvent, client slackClient, faqItemClient helpdeskfaq.FaqItemClient, forumChannelId string, authorizedUsers []string, logger *logrus.Entry) (bool, error) {
 	logger.Debugf("%s emoji removed from message", event.Reaction)
 	switch event.Reaction {
 	case questionReaction:
 		questionLog := logger.WithField("type", "remove-question")
+		if !slices.Contains(authorizedUsers, event.User) {
+			questionLog.Infof("user with ID: %s is not authorized", event.User)
+			return false, nil
+		}
 		if err := faqItemClient.RemoveItem(event.Item.Timestamp); err != nil {
 			questionLog.WithError(err).Error("unable to update helpdesk-faq config map")
 			return false, err
 		}
 	case answerReaction:
 		answerLog := logger.WithField("type", "remove-answer")
+		if !slices.Contains(authorizedUsers, event.User) {
+			answerLog.Infof("user with ID: %s is not authorized", event.User)
+			return false, nil
+		}
 		messageTs := event.Item.Timestamp
 		replies, _, _, err := client.GetConversationReplies(&slack.GetConversationRepliesParameters{
 			ChannelID: forumChannelId,
@@ -108,12 +150,15 @@ func handleReactionRemoved(event *slackevents.ReactionRemovedEvent, client slack
 	return true, nil
 }
 
-func handleReactionAdded(event *slackevents.ReactionAddedEvent, client slackClient, kubeClient kubernetes.Interface, faqItemClient helpdeskfaq.FaqItemClient, forumChannelId string, logger *logrus.Entry) (bool, error) {
+func handleReactionAdded(event *slackevents.ReactionAddedEvent, client slackClient, faqItemClient helpdeskfaq.FaqItemClient, forumChannelId string, authorizedUsers []string, logger *logrus.Entry) (bool, error) {
 	logger.Debugf("%s emoji added to message", event.Reaction)
-	//TODO: we will need a list of users whom reactions we actually care about, everyone else will be ignored
 	switch event.Reaction {
 	case questionReaction:
 		questionLog := logger.WithField("type", "add-question")
+		if !slices.Contains(authorizedUsers, event.User) {
+			questionLog.Infof("user with ID: %s is not authorized", event.User)
+			return false, nil
+		}
 		messageTs := event.Item.Timestamp
 		item, err := faqItemClient.GetFAQItemIfExists(messageTs)
 		if err != nil {
@@ -177,6 +222,10 @@ func handleReactionAdded(event *slackevents.ReactionAddedEvent, client slackClie
 		}
 	case answerReaction:
 		answerLog := logger.WithField("type", "add-answer")
+		if !slices.Contains(authorizedUsers, event.User) {
+			answerLog.Infof("user with ID: %s is not authorized", event.User)
+			return false, nil
+		}
 		messageTs := event.Item.Timestamp
 		replies, _, _, err := client.GetConversationReplies(&slack.GetConversationRepliesParameters{
 			ChannelID: forumChannelId,

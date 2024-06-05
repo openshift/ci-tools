@@ -1,4 +1,4 @@
-FROM quay.io/centos/centos:stream8
+FROM quay.io/centos/centos:stream9
 LABEL maintainer="sgoeddel@redhat.com"
 
 ADD repo-init /usr/bin/repo-init

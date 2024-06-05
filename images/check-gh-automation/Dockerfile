@@ -1,4 +1,4 @@
-FROM quay.io/centos/centos:stream8
+FROM quay.io/centos/centos:stream9
 LABEL maintainer="sgoeddel@redhat.com"
 
 RUN dnf install -y git && dnf clean all

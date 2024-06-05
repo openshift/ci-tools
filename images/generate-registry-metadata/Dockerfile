@@ -1,4 +1,4 @@
-FROM quay.io/centos/centos:stream8
+FROM quay.io/centos/centos:stream9
 LABEL maintainer="apavel@redhat.com"
 
 RUN yum install -y diffutils && \

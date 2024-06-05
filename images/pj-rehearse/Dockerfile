@@ -1,4 +1,4 @@
-FROM quay.io/centos/centos:stream8
+FROM quay.io/centos/centos:stream9
 LABEL maintainer="nmoraiti@redhat.com"
 
 RUN yum install -y git && yum clean all

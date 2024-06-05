@@ -1,4 +1,4 @@
-FROM quay.io/centos/centos:stream8
+FROM quay.io/centos/centos:stream9
 LABEL maintainer="nmoraiti@redhat.com"
 
 ADD autopublicizeconfig /usr/bin/autopublicizeconfig

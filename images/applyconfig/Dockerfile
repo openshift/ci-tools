@@ -1,4 +1,4 @@
-FROM quay.io/centos/centos:stream8
+FROM quay.io/centos/centos:stream9
 LABEL maintainer="muller@redhat.com"
 
 ADD applyconfig /usr/bin/applyconfig

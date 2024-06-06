@@ -85,6 +85,21 @@ func TestValidateStream(t *testing.T) {
 			isName:   "bar-4.15",
 			expected: errors.New("not a valid integrated stream: origin/bar-4.15"),
 		},
+		{
+			name:   "origin/sriov-4.15 is valid",
+			isNS:   "origin",
+			isName: "sriov-4.15",
+		},
+		{
+			name:   "origin/metallb-4.15 is valid",
+			isNS:   "origin",
+			isName: "metallb-4.15",
+		},
+		{
+			name:   "origin/ptp-4.15 is valid",
+			isNS:   "origin",
+			isName: "ptp-4.15",
+		},
 	}
 
 	for _, tc := range testCases {

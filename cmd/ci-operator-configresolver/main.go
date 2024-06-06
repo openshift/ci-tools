@@ -210,6 +210,9 @@ var validStreams = []*regexp.Regexp{
 	regexp.MustCompile(`^origin/4.([6-9]|\d\d+)`),
 	regexp.MustCompile(`^origin/scos-4.([6-9]|\d\d+)`),
 	regexp.MustCompile(`^ocp-private/4.([6-9]|\d\d+)-priv`),
+	regexp.MustCompile(`^origin/sriov-4.([6-9]|\d\d+)`),
+	regexp.MustCompile(`^origin/metallb-4.([6-9]|\d\d+)`),
+	regexp.MustCompile(`^origin/ptp-4.([6-9]|\d\d+)`),
 }
 
 func validateStream(ns string, name string) error {

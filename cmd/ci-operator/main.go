@@ -71,6 +71,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/configresolver"
+	egressfirewallv1 "github.com/openshift/ci-tools/pkg/api/egressfirewall/v1"
 	"github.com/openshift/ci-tools/pkg/api/nsttl"
 	"github.com/openshift/ci-tools/pkg/defaults"
 	"github.com/openshift/ci-tools/pkg/interrupt"
@@ -425,6 +426,8 @@ type options struct {
 	targetAdditionalSuffix string
 	manifestToolDockerCfg  string
 	localRegistryDNS       string
+
+	restrictNetworkAccess bool
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
@@ -474,6 +477,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.gitRef, "git-ref", "", "Populate the job spec from this local Git reference. If JOB_SPEC is set, the refs field will be overwritten.")
 	flag.BoolVar(&opt.givePrAuthorAccessToNamespace, "give-pr-author-access-to-namespace", true, "Give view access to the temporarily created namespace to the PR author.")
 	flag.StringVar(&opt.impersonateUser, "as", "", "Username to impersonate")
+	flag.BoolVar(&opt.restrictNetworkAccess, "restrict-network-access", false, "Restrict network access to 10.0.0.0/8 (RedHat intranet).")
 
 	// flags needed for the configresolver
 	flag.StringVar(&opt.resolverAddress, "resolver-address", configResolverAddress, "Address of configresolver")
@@ -1283,6 +1287,45 @@ func (o *options) initializeNamespace() error {
 		return updateErr
 	}); err != nil {
 		return fmt.Errorf("could not update namespace to add labels, TTLs and active annotations: %w", err)
+	}
+
+	if o.restrictNetworkAccess {
+		logrus.Debugf("Creating egress firewall in namespace %s", o.namespace)
+		egressFirewall := &egressfirewallv1.EgressFirewall{
+			ObjectMeta: meta.ObjectMeta{
+				Name:      "default",
+				Namespace: o.namespace,
+			},
+			Spec: egressfirewallv1.EgressFirewallSpec{
+				Egress: []egressfirewallv1.EgressFirewallRule{
+					{
+						To: egressfirewallv1.EgressFirewallDestination{
+							NodeSelector: &meta.LabelSelector{
+								MatchLabels: map[string]string{
+									"node-role.kubernetes.io/master": "",
+								},
+							},
+						},
+						Type: "Allow",
+					},
+					{
+						To: egressfirewallv1.EgressFirewallDestination{
+							CIDRSelector: "10.0.0.0/8",
+						},
+						Type: "Deny",
+					},
+					{
+						To: egressfirewallv1.EgressFirewallDestination{
+							CIDRSelector: "0.0.0.0/0",
+						},
+						Type: "Allow",
+					},
+				},
+			},
+		}
+		if err := client.Create(ctx, egressFirewall); err != nil && !kerrors.IsAlreadyExists(err) {
+			return fmt.Errorf("could not create egress firewall: %w", err)
+		}
 	}
 
 	pullStart := time.Now()
@@ -2240,6 +2283,9 @@ func addSchemes() error {
 	}
 	if err := hivev1.AddToScheme(scheme.Scheme); err != nil {
 		return fmt.Errorf("failed to add hivev1 to scheme: %w", err)
+	}
+	if err := egressfirewallv1.AddToScheme(scheme.Scheme); err != nil {
+		return fmt.Errorf("failed to add egressfirewallv1 to scheme: %w", err)
 	}
 	return nil
 }

@@ -413,6 +413,7 @@ func (s *SimpleClusterTokenService) Validate(token string) (bool, error) {
 			User:   username,
 			Groups: tr.Status.User.Groups,
 			ResourceAttributes: &authorizationv1.ResourceAttributes{
+				Namespace:   "ocp",
 				Group:       "image.openshift.io",
 				Version:     "v1",
 				Resource:    "imagestreams",

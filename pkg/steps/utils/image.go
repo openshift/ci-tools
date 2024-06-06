@@ -97,7 +97,19 @@ func getEvaluator(ctx context.Context, client ctrlruntimeclient.Client, ns, name
 				if !exist {
 					logrus.WithField("conditionMessage", condition.Message).Debugf("Waiting to import tag[%d] on imagestream %s/%s:%s ...", i, stream.Namespace, stream.Name, tag.Name)
 					if strings.Contains(condition.Message, "Internal error occurred") {
-						if _, err := ImportTagWithRetries(ctx, client, ns, name, tag.Name, "", api.ImageStreamImportRetries); err != nil {
+						if tag.From == nil {
+							// should never happen
+							return false, fmt.Errorf("failed to determine the source of the tag %s/%s:%s", stream.Namespace, stream.Name, tag.Name)
+						}
+						if tag.From.Kind != "DockerImage" {
+							// should never happen
+							return false, fmt.Errorf("failed to import tag %s/%s:%s from an unexpected tag source %v", stream.Namespace, stream.Name, tag.Name, *tag.From)
+						}
+						if tag.From.Name == "" {
+							// should never happen
+							return false, fmt.Errorf("failed to import tag %s/%s:%s from an empty source", stream.Namespace, stream.Name, tag.Name)
+						}
+						if _, err := ImportTagWithRetries(ctx, client, ns, name, tag.Name, tag.From.Name, api.ImageStreamImportRetries); err != nil {
 							return false, fmt.Errorf("failed to reimport the tag %s/%s:%s: %w", stream.Namespace, stream.Name, tag.Name, err)
 						}
 					}
@@ -122,12 +134,11 @@ func WaitForImportingISTag(ctx context.Context, client ctrlruntimeclient.WithWat
 
 // ImportTagWithRetries imports image with retries
 func ImportTagWithRetries(ctx context.Context, client ctrlruntimeclient.Client, ns, name, tag, sourcePullSpec string, retries int) (string, error) {
+	if sourcePullSpec == "" {
+		return "", fmt.Errorf("sourcePullSpec cannot be empty")
+	}
 	var pullSpec string
 	step := 0
-	objectReferenceName := api.QuayImageReference(api.ImageStreamTagReference{Namespace: ns, Name: name, Tag: tag})
-	if sourcePullSpec != "" {
-		objectReferenceName = sourcePullSpec
-	}
 	logger := logrus.WithField("tag", fmt.Sprintf(" %s/%s:%s", ns, name, tag)).WithField("sourcePullSpec", sourcePullSpec)
 	if err := wait.ExponentialBackoff(wait.Backoff{Steps: retries, Duration: 1 * time.Second, Factor: 2}, func() (bool, error) {
 		logger.WithField("step", step).Debug("Retrying importing tag ...")
@@ -145,7 +156,7 @@ func ImportTagWithRetries(ctx context.Context, client ctrlruntimeclient.Client, 
 						},
 						From: coreapi.ObjectReference{
 							Kind: "DockerImage",
-							Name: objectReferenceName,
+							Name: sourcePullSpec,
 						},
 						ImportPolicy:    imagev1.TagImportPolicy{ImportMode: imagev1.ImportModePreserveOriginal},
 						ReferencePolicy: imagev1.TagReferencePolicy{Type: imagev1.LocalTagReferencePolicy},

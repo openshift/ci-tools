@@ -244,6 +244,19 @@ func TestFindPRs(t *testing.T) {
 				},
 			},
 			{
+				Number:    12,
+				HTMLURL:   "github.com/org/repo-1/12",
+				Title:     "Brand New From Bot",
+				User:      github.User{Login: "some-bot", Type: github.UserTypeBot},
+				CreatedAt: now,
+				UpdatedAt: now,
+				RequestedReviewers: []github.User{
+					{
+						Login: "other",
+					},
+				},
+			},
+			{
 				Number:    5,
 				HTMLURL:   "github.com/org/repo-1/5",
 				Title:     "Brand New But Approved",
@@ -343,6 +356,19 @@ func TestFindPRs(t *testing.T) {
 					},
 				},
 			},
+			{
+				Number:    12,
+				HTMLURL:   "github.com/org/repo-2/12",
+				Title:     "Brand New From Bot",
+				User:      github.User{Login: "some-user", Type: github.UserTypeBot},
+				CreatedAt: now,
+				UpdatedAt: now,
+				RequestedReviewers: []github.User{
+					{
+						Login: "other",
+					},
+				},
+			},
 		},
 	},
 		reviews: map[string]map[int][]github.Review{
@@ -363,7 +389,7 @@ func TestFindPRs(t *testing.T) {
 		users    map[string]user
 		expected map[string]user
 
-		channels         map[string]sets.Set[string]
+		channels         map[string][]repoChannel
 		expectedChannels map[string][]prRequest
 	}{
 		{
@@ -382,8 +408,11 @@ func TestFindPRs(t *testing.T) {
 					Repos:      sets.New[string]("org/repo-1", "org/repo-2"),
 				},
 			},
-			channels: map[string]sets.Set[string]{
-				"channel": sets.New("org/repo-1", "org/repo-2"),
+			channels: map[string][]repoChannel{
+				"channel": {
+					{orgRepo: "org/repo-1"},
+					{orgRepo: "org/repo-2", omitBots: true},
+				},
 			},
 			expected: map[string]user{
 				"someuser": {
@@ -455,6 +484,14 @@ func TestFindPRs(t *testing.T) {
 					Url:         "github.com/org/repo-1/4",
 					Title:       "Brand New",
 					Author:      "some-user",
+					Created:     now,
+					LastUpdated: now,
+				}, {
+					Repo:        "org/repo-1",
+					Number:      12,
+					Url:         "github.com/org/repo-1/12",
+					Title:       "Brand New From Bot",
+					Author:      "some-bot",
 					Created:     now,
 					LastUpdated: now,
 				}},

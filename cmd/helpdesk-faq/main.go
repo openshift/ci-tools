@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -13,62 +12,14 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/logrusutil"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/openshift/ci-tools/pkg/api"
+	helpdeskfaq "github.com/openshift/ci-tools/pkg/helpdesk-faq"
+	"github.com/openshift/ci-tools/pkg/util"
 )
-
-const (
-	appCIContextName = string(api.ClusterAPPCI)
-	faqConfigMap     = "helpdesk-faq"
-	ci               = "ci"
-)
-
-type faqItemClient interface {
-	GetFAQItems() ([]string, error)
-}
-
-type configMapClient struct {
-	kubeClient  kubernetes.Interface
-	cachedItems []string
-	lastReload  time.Time
-}
-
-func (c *configMapClient) GetFAQItems() ([]string, error) {
-	fifteenMinutesFromLastCacheReload := c.lastReload.Add(time.Minute * 15)
-	if len(c.cachedItems) > 0 && time.Now().Before(fifteenMinutesFromLastCacheReload) {
-		logrus.Debugf("returning faq items from cache")
-		return c.cachedItems, nil
-	}
-	logrus.Debugf("reloading faq items from configmap")
-	configMap, err := c.getConfigMap()
-	if err != nil {
-		return nil, err
-	}
-	if configMap.Data == nil {
-		return nil, nil
-	}
-	var items []string
-	for _, item := range configMap.Data {
-		items = append(items, item)
-	}
-	c.cachedItems = items
-	c.lastReload = time.Now()
-	return items, nil
-}
-
-func (c *configMapClient) getConfigMap() (*v1.ConfigMap, error) {
-	configMap, err := c.kubeClient.CoreV1().ConfigMaps(ci).Get(context.TODO(), faqConfigMap, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get configMap %s: %w", faqConfigMap, err)
-	}
-	return configMap, nil
-}
 
 type options struct {
 	logLevel          string
@@ -78,21 +29,7 @@ type options struct {
 }
 
 type Page struct {
-	Data []FaqItem `json:"data"`
-}
-
-// TODO(sgoeddel): these structs will be placed in a common package somewhere so slack-bot can use them too
-type FaqItem struct {
-	Question  string   `json:"question"`
-	Timestamp string   `json:"timestamp"`
-	Author    string   `json:"author"`
-	Answers   []Answer `json:"answers"`
-}
-
-type Answer struct {
-	Author    string `json:"author"`
-	Timestamp string `json:"timestamp"`
-	Body      string `json:"body"`
+	Data []helpdeskfaq.FaqItem `json:"data"`
 }
 
 func gatherOptions() (options, error) {
@@ -116,7 +53,7 @@ func validateOptions(o options) error {
 	return o.kubernetesOptions.Validate(false)
 }
 
-func router(client faqItemClient) *http.ServeMux {
+func router(client helpdeskfaq.FaqItemClient) *http.ServeMux {
 	handler := http.NewServeMux()
 
 	handler.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
@@ -130,7 +67,7 @@ func router(client faqItemClient) *http.ServeMux {
 	handler.HandleFunc("/api/v1/faq-items", func(w http.ResponseWriter, r *http.Request) {
 		logrus.WithField("path", "/api/v1/faq-items").Info("serving")
 
-		items, err := client.GetFAQItems()
+		items, err := client.GetSerializedFAQItems()
 		if err != nil {
 			logrus.WithError(err).Fatal("unable to get helpdesk-faq items")
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -139,7 +76,7 @@ func router(client faqItemClient) *http.ServeMux {
 
 		page := Page{}
 		for _, item := range items {
-			faqItem := &FaqItem{}
+			faqItem := &helpdeskfaq.FaqItem{}
 			if err := json.Unmarshal([]byte(item), faqItem); err != nil {
 				logrus.WithError(err).Fatal("unable to unmarshall faq item")
 				http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -182,11 +119,15 @@ func main() {
 	level, _ := logrus.ParseLevel(o.logLevel)
 	logrus.SetLevel(level)
 
-	kubeClient, err := o.kubernetesOptions.ClusterClientForContext(appCIContextName, false)
+	inClusterConfig, err := util.LoadClusterConfig()
 	if err != nil {
-		logrus.WithError(err).Fatal("could not load kube config")
+		logrus.WithError(err).Fatal("Failed to load in-cluster config")
 	}
-	client := configMapClient{kubeClient: kubeClient}
+	kubeClient, err := ctrlruntimeclient.New(inClusterConfig, ctrlruntimeclient.Options{})
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create client")
+	}
+	client := helpdeskfaq.NewCMClient(kubeClient)
 	server := &http.Server{
 		Addr:    ":" + strconv.Itoa(o.port),
 		Handler: router(&client),

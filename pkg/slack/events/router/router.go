@@ -5,6 +5,7 @@ import (
 	"github.com/slack-go/slack"
 
 	"k8s.io/test-infra/prow/config"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/slack/events"
 	"github.com/openshift/ci-tools/pkg/slack/events/helpdesk"
@@ -14,9 +15,10 @@ import (
 
 // ForEvents returns a Handler that appropriately routes
 // event callbacks for the handlers we know about
-func ForEvents(client *slack.Client, config config.Getter, gcsClient *storage.Client, keywordsConfig helpdesk.KeywordsConfig, helpdeskAlias, forumChannelId string, requireWorkflowsInForum bool) events.Handler {
+func ForEvents(client *slack.Client, kubeClient ctrlruntimeclient.Client, config config.Getter, gcsClient *storage.Client, keywordsConfig helpdesk.KeywordsConfig, helpdeskAlias, forumChannelId string, requireWorkflowsInForum bool) events.Handler {
 	return events.MultiHandler(
-		helpdesk.Handler(client, keywordsConfig, helpdeskAlias, forumChannelId, requireWorkflowsInForum),
+		helpdesk.MessageHandler(client, keywordsConfig, helpdeskAlias, forumChannelId, requireWorkflowsInForum),
+		helpdesk.FAQHandler(client, kubeClient, forumChannelId),
 		mention.Handler(client),
 		joblink.Handler(client, joblink.NewJobGetter(config), gcsClient),
 	)

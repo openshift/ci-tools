@@ -11,12 +11,10 @@ import (
 	coreapi "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/lease"
-	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -301,8 +299,8 @@ func TestRun(t *testing.T) {
 			var calls []string
 			client := lease.NewFakeClient("owner", "url", 0, tc.injectFailures, &calls)
 			tc.step.client = &client
-			tc.step.secretClient = loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
-				&coreapi.Secret{
+			tc.step.secretClient = newFakeSecretClient([]coreapi.Secret{
+				{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: ciOpNamespace,
 						Name:      "blocking", //The name of the wrapped step
@@ -311,13 +309,13 @@ func TestRun(t *testing.T) {
 						UnusedIpCount: []byte("2"),
 					},
 				},
-				&coreapi.Secret{
+				{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: ciOpNamespace,
 						Name:      "needs_lease", //The name of the wrapped step
 					},
 				},
-			).Build())
+			})
 			err := tc.step.run(context.Background(), time.Second)
 			if diff := cmp.Diff(err, tc.expectedError, testhelper.EquateErrorMessage); diff != "" {
 				t.Fatalf("unexpected error returned, diff: %s", diff)
@@ -336,4 +334,25 @@ func TestRun(t *testing.T) {
 
 		})
 	}
+}
+
+type fakeSecretClient struct {
+	secrets []coreapi.Secret
+}
+
+func newFakeSecretClient(secrets []coreapi.Secret) *fakeSecretClient {
+	return &fakeSecretClient{secrets: secrets}
+}
+
+func (c *fakeSecretClient) Get(ctx context.Context, key ctrlruntimeclient.ObjectKey, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.GetOption) error {
+	o := obj.(*coreapi.Secret)
+	for i := range c.secrets {
+		secret := c.secrets[i]
+		if secret.GetNamespace() == key.Namespace && secret.GetName() == key.Name {
+			o.Namespace = secret.Namespace
+			o.Name = key.Name
+			o.Data = secret.Data
+		}
+	}
+	return nil
 }

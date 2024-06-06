@@ -18,7 +18,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/lease"
 	"github.com/openshift/ci-tools/pkg/results"
-	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 )
 
 var NoLeaseClientForIPErr = errors.New("step needs access to an IP pool, but no lease client provided")
@@ -26,7 +25,7 @@ var NoLeaseClientForIPErr = errors.New("step needs access to an IP pool, but no 
 // ipPoolStep wraps another step and acquires/releases chunks of IPs.
 type ipPoolStep struct {
 	client       *lease.Client
-	secretClient loggingclient.LoggingClient
+	secretClient SecretClient
 	ipPoolLease  stepLease
 	wrapped      api.Step
 	params       api.Parameters
@@ -34,7 +33,7 @@ type ipPoolStep struct {
 	namespace func() string
 }
 
-func IPPoolStep(client *lease.Client, secretClient loggingclient.LoggingClient, lease api.StepLease, wrapped api.Step, params api.Parameters, namespace func() string) api.Step {
+func IPPoolStep(client *lease.Client, secretClient SecretClient, lease api.StepLease, wrapped api.Step, params api.Parameters, namespace func() string) api.Step {
 	ret := ipPoolStep{
 		client:       client,
 		secretClient: secretClient,
@@ -130,6 +129,10 @@ func (s *ipPoolStep) run(ctx context.Context, minute time.Duration) error {
 	return aggregateWrappedErrorAndReleaseError(wrappedErr, releaseErr)
 }
 
+type SecretClient interface {
+	Get(ctx context.Context, key ctrlruntimeclient.ObjectKey, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.GetOption) error
+}
+
 const UnusedIpCount = "UNUSED_IP_COUNT"
 
 // checkAndReleaseUnusedLeases periodically checks for a positive value in the
@@ -137,7 +140,7 @@ const UnusedIpCount = "UNUSED_IP_COUNT"
 // If/when this is discovered it will release that number of leases, and stop checking.
 // minute is provided as an argument to assist with unit testing.
 // The remainingResources channel stores the names of the resources that haven't been released if applicable.
-func checkAndReleaseUnusedLeases(ctx context.Context, namespace, testName string, resources []string, secretClient ctrlruntimeclient.Client, leaseClient *lease.Client, minute time.Duration, remainingResources chan<- []string) {
+func checkAndReleaseUnusedLeases(ctx context.Context, namespace, testName string, resources []string, secretClient SecretClient, leaseClient *lease.Client, minute time.Duration, remainingResources chan<- []string) {
 	waitUntil := time.After(minute * 15)
 	sharedDirKey := types.NamespacedName{
 		Namespace: namespace,

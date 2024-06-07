@@ -103,16 +103,12 @@ func (f *BigQueryDisruptionUploadFlags) ToOptions(ctx context.Context) (*allJobs
 		jobrunaggregatorlib.NewCIDataClient(*f.DataCoordinates, bigQueryClient),
 	)
 
-	var jobRunTableInserter jobrunaggregatorlib.BigQueryInserter
 	var backendDisruptionTableInserter jobrunaggregatorlib.BigQueryInserter
 	if !f.DryRun {
 		ciDataSet := bigQueryClient.Dataset(f.DataCoordinates.DataSetID)
-		jobRunTable := ciDataSet.Table(jobrunaggregatorapi.DisruptionJobRunTableName)
 		backendDisruptionTable := ciDataSet.Table(jobrunaggregatorapi.BackendDisruptionTableName)
-		jobRunTableInserter = jobRunTable.Inserter()
 		backendDisruptionTableInserter = backendDisruptionTable.Inserter()
 	} else {
-		jobRunTableInserter = jobrunaggregatorlib.NewDryRunInserter(os.Stdout, jobrunaggregatorapi.DisruptionJobRunTableName)
 		backendDisruptionTableInserter = jobrunaggregatorlib.NewDryRunInserter(os.Stdout, jobrunaggregatorapi.BackendDisruptionTableName)
 	}
 
@@ -123,7 +119,6 @@ func (f *BigQueryDisruptionUploadFlags) ToOptions(ctx context.Context) (*allJobs
 		ciDataClient: ciDataClient,
 		gcsClient:    gcsClient,
 
-		jobRunInserter:              jobRunTableInserter,
 		shouldCollectedDataForJobFn: wantsDisruptionData,
 		jobRunUploaderRegistry:      jobRunUploaderRegistry,
 		pendingUploadJobsLister:     pendingUploadLister,
@@ -146,8 +141,8 @@ func newDisruptionUploader(backendDisruptionInserter jobrunaggregatorlib.BigQuer
 }
 
 func newDisruptionPendingUploadLister(ciDataClient jobrunaggregatorlib.CIDataClient) pendingUploadLister {
-	return &testRunPendingUploadLister{
-		tableName:    jobrunaggregatorapi.DisruptionJobRunTableName,
+	return &pendingJobRunsUploadLister{
+		tableName:    jobrunaggregatorapi.BackendDisruptionTableName,
 		ciDataClient: ciDataClient,
 	}
 }

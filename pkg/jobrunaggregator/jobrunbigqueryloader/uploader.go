@@ -23,9 +23,6 @@ const (
 
 type shouldCollectDataForJobFunc func(job jobrunaggregatorapi.JobRowWithVariants) bool
 
-func wantsTestRunData(job jobrunaggregatorapi.JobRowWithVariants) bool {
-	return job.CollectTestRuns
-}
 func wantsDisruptionData(job jobrunaggregatorapi.JobRowWithVariants) bool {
 	return job.CollectDisruption
 }
@@ -50,8 +47,6 @@ type allJobsLoaderOptions struct {
 	ciDataClient jobrunaggregatorlib.JobLister
 	// GCSClient is used to read the prowjob data
 	gcsClient jobrunaggregatorlib.CIGCSClient
-
-	jobRunInserter jobrunaggregatorlib.BigQueryInserter
 
 	shouldCollectedDataForJobFn shouldCollectDataForJobFunc
 	jobRunUploaderRegistry      JobRunUploaderRegistry
@@ -109,14 +104,14 @@ func (o *allJobsLoaderOptions) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("error listing uploaded job run IDs: %w", err)
 	}
-	logrus.WithField("idCount", len(existingJobRunIDs)).Info("found existing job run IDs")
+	logrus.WithField("count", len(existingJobRunIDs)).Info("found job run IDs within our window already imported")
 
 	// Lookup the jobs that have run and we may need to import. There will be some overlap with what we already have.
 	jobRunsToImport, err := o.ciDataClient.ListProwJobRunsSince(ctx, &listProwJobsSince)
 	if err != nil {
 		return fmt.Errorf("error listing job runs to import: %w", err)
 	}
-	logrus.WithField("recentJobRuns", len(jobRunsToImport)).Info("found job runs to potentially import")
+	logrus.WithField("count", len(jobRunsToImport)).Info("found job runs to potentially import")
 
 	// Populate a channel with all the job runs we want to import, worker threads will pull
 	// from here until there's nothing left.
@@ -187,7 +182,7 @@ func (o *allJobsLoaderOptions) processJobRuns(ctx context.Context, jobsMap map[s
 			"progress": fmt.Sprintf("%d/%d", origRunsToImportCount-len(jobRunsToImportCh), origRunsToImportCount),
 		})
 		// log how many job runs remain to be processed
-		jrLogger.Info("pulled job run from queue")
+		jrLogger.Debug("pulled job run from queue")
 
 		jobRunInserter := o.newJobRunBigQueryLoaderOptions(job.JobName, job.BuildID,
 			jobsMap[job.JobName].Release, jrLogger)
@@ -195,7 +190,7 @@ func (o *allJobsLoaderOptions) processJobRuns(ctx context.Context, jobsMap map[s
 			jrLogger.WithError(err).Error("error inserting job run")
 			errChan <- err
 		}
-		jrLogger.Info("finished processing job run")
+		jrLogger.Debug("finished processing job run")
 	}
 	logrus.WithField("worker", workerThread).Info("worker thread complete")
 }
@@ -206,7 +201,6 @@ func (o *allJobsLoaderOptions) newJobRunBigQueryLoaderOptions(jobName, jobRunID,
 		jobRunID:               jobRunID,
 		jobRelease:             jobRelease,
 		gcsClient:              o.gcsClient,
-		jobRunInserter:         o.jobRunInserter,
 		jobRunUploaderRegistry: o.jobRunUploaderRegistry,
 		logger:                 logger.WithField("jobRun", jobRunID),
 	}
@@ -242,8 +236,6 @@ type jobRunLoaderOptions struct {
 
 	// GCSClient is used to read the prowjob data
 	gcsClient jobrunaggregatorlib.CIGCSClient
-
-	jobRunInserter jobrunaggregatorlib.BigQueryInserter
 
 	jobRunUploaderRegistry JobRunUploaderRegistry
 	logger                 logrus.FieldLogger
@@ -284,8 +276,6 @@ func (o *jobRunLoaderOptions) uploadJobRun(ctx context.Context, jobRun jobrunagg
 	if err != nil {
 		return err
 	}
-	o.logger.Info("inserting job run row")
-
 	clusterData, err := jobRun.GetOpenShiftTestsFilesWithPrefix(ctx, "cluster-data")
 	if err != nil {
 		// log but continue on
@@ -294,12 +284,6 @@ func (o *jobRunLoaderOptions) uploadJobRun(ctx context.Context, jobRun jobrunagg
 	masterNodesUpdated := jobrunaggregatorlib.GetMasterNodesUpdatedStatusFromClusterData(clusterData)
 
 	jobRunRow := newJobRunRow(jobRun, prowJob, masterNodesUpdated)
-	if err := o.jobRunInserter.Put(ctx, jobRunRow); err != nil {
-		o.logger.WithError(err).Error("error inserting job run row")
-		return err
-	}
-
-	o.logger.Infof("uploading content for jobrun")
 	for name, jobRunUploader := range o.jobRunUploaderRegistry.JobRunUploaders {
 		if err := jobRunUploader.uploadContent(ctx, jobRun, o.jobRelease, jobRunRow, o.logger); err != nil {
 			o.logger.WithError(err).Errorf("error uploading content for: %s", name)

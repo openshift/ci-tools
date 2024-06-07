@@ -6,15 +6,6 @@ import (
 	"cloud.google.com/go/bigquery"
 )
 
-const (
-	LegacyJobRunTableName     = "JobRuns"
-	DisruptionJobRunTableName = "BackendDisruption_JobRuns"
-
-	// TODO: Remove population of this table, I don't think it's used anywhere in ci-tools or the views in bigquery.
-	// Instead used the data embedded in each Alerts row, or the jobs table in openshift-gce-devel.ci_analysis_us
-	AlertJobRunTableName = "Alerts_JobRuns"
-)
-
 type JobRunRow struct {
 	Name               string
 	JobName            string

@@ -388,7 +388,9 @@ func newTokenService(ctx context.Context, client ctrlruntimeclient.Client) Clust
 
 func (s *SimpleClusterTokenService) Validate(token string) (bool, error) {
 	t := time.Now()
-	s.logger.Debug("Validating token ...")
+	var username string
+	var ret bool
+	defer s.logger.WithField("username", username).WithField("validated", ret).WithField("duration", time.Since(t)).Debug("Validated token")
 	tr := &authenticationv1.TokenReview{
 		Spec: authenticationv1.TokenReviewSpec{
 			Token: token,
@@ -402,10 +404,11 @@ func (s *SimpleClusterTokenService) Validate(token string) (bool, error) {
 		return false, nil
 	}
 
-	username := tr.Status.User.Username
+	username = tr.Status.User.Username
 	// SAR check only applies to human users
 	if strings.HasPrefix(username, "system:serviceaccount:") {
-		return true, nil
+		ret = true
+		return ret, nil
 	}
 
 	sar := &authorizationv1.SubjectAccessReview{
@@ -426,8 +429,8 @@ func (s *SimpleClusterTokenService) Validate(token string) (bool, error) {
 	if err := s.client.Create(s.ctx, sar); err != nil {
 		return false, fmt.Errorf("failed to create SubjectAccessReview for user %s: %w", username, err)
 	}
-	s.logger.WithField("duration", time.Since(t)).Debug("Validated token")
-	return sar.Status.Allowed, nil
+	ret = sar.Status.Allowed
+	return ret, nil
 }
 
 type appHandler struct {

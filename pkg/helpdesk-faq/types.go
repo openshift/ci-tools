@@ -1,10 +1,16 @@
 package helpdesk_faq
 
 type FaqItem struct {
-	Question  string   `json:"question"`
+	Question  Question `json:"question"`
 	Timestamp string   `json:"timestamp"`
-	Author    string   `json:"author"`
 	Answers   []Answer `json:"answers"`
+}
+
+type Question struct {
+	Author  string `json:"author"`
+	Topic   string `json:"topic"`
+	Subject string `json:"subject"`
+	Body    string `json:"body"`
 }
 
 type Answer struct {

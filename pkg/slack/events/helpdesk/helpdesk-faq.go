@@ -3,7 +3,9 @@ package helpdesk
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"slices"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
@@ -22,6 +24,8 @@ const (
 	questionReaction = "channel_faq"
 	answerReaction   = "faq_answer"
 )
+
+var questionRegex = regexp.MustCompile(`(?smi)^(.*?)_Topic:_(?P<topic>.*)_Subject:_(?P<subject>.*)_Contains Proprietary Information:_(?P<proprietary>.*)_Question:_(?P<body>.*)$`)
 
 type slackClient interface {
 	GetConversationHistory(params *slack.GetConversationHistoryParameters) (*slack.GetConversationHistoryResponse, error)
@@ -176,10 +180,24 @@ func handleReactionAdded(event *slackevents.ReactionAddedEvent, client slackClie
 			return false, err
 		}
 		if message != nil {
+			var topic, subject, body string
+			for _, match := range questionRegex.FindAllStringSubmatch(message.Text, -1) {
+				topic = match[questionRegex.SubexpIndex("topic")]
+				subject = match[questionRegex.SubexpIndex("subject")]
+				body = match[questionRegex.SubexpIndex("body")]
+			}
+			if topic == "" || subject == "" || body == "" {
+				questionLog.Errorf("expected to find: topic, subject, and body in question, but some values were missing")
+				return false, nil
+			}
 			faqItem := helpdeskfaq.FaqItem{
-				Question:  message.Text,
+				Question: helpdeskfaq.Question{
+					Author:  message.User,
+					Topic:   formatQuestionField(topic),
+					Subject: formatQuestionField(subject),
+					Body:    formatQuestionField(body),
+				},
 				Timestamp: messageTs,
-				Author:    message.User,
 			}
 
 			var cursor string
@@ -272,6 +290,12 @@ func handleReactionAdded(event *slackevents.ReactionAddedEvent, client slackClie
 	}
 
 	return true, nil
+}
+
+func formatQuestionField(field string) string {
+	field = strings.TrimSpace(field)
+	field = strings.TrimPrefix(field, "\u0026gt;") // This "&>" is found at the beginning due to Slack workflow formatting
+	return strings.TrimSpace(field)                // With the removal, there could be extra space
 }
 
 func getTopLevelMessage(client slackClient, forumChannelId string, messageTs string, logger *logrus.Entry) (*slack.Message, error) {

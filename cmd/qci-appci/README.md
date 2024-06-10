@@ -20,11 +20,10 @@ where `ci_ci-operator_latest` stands for the image stream tag `ci-operator:lates
 - The robot from the `openshift` org can too. This robot provides the read-only access to the repo.
 More details about this comes later.
 
-# How it works
+# How the authentication of `podman` works
 
 [This artical](https://access.redhat.com/solutions/3625131) illustrates
-how a client is authenticated against quay.io. More verbose output of `podmand` with `--log-level=trace` below
-shows that `podman` makes a similar process.
+how a client is authenticated against quay.io. More verbose output of `podmand` with `--log-level=trace` below shows that `podman` makes a similar process.
 
 ```console
 $ podman login -u=$(oc --context app.ci whoami) -p=$(oc --context app.ci whoami -t) quay-proxy.ci.openshift.org --authfile /tmp/t.c --log-level=trace
@@ -40,14 +39,11 @@ DEBU[0000] Called login.PersistentPostRunE(podman login -u=<username> -p=sha256~
 DEBU[0000] Shutting down engines
 ```
 
-In the first response (`status 401`), `quay.io` tells the client the value of `service` as a parameter in the URL
-for the authentication via with the header `www-authenticate` and the URL `https://quay-proxy.ci.openshift.org/v2/auth` for the authentication.
-Then `podman` did a basic auth as it was instructed. The bearer token is returned from
-the server in the body.
-The second attempt to access `/v2` was done with the bearer and this time, it passed as expected.
+In the first response (`status 401`), `quay.io` tells the client the value of `service` as a parameter in the URL for the authentication via with the header `www-authenticate` and the URL `https://quay-proxy.ci.openshift.org/v2/auth` for the authentication. This process can be simulated by the following `curl` cmd: 
+
 
 ```console
-$ url -v https://quay-proxy.ci.openshift.org/v2/
+$ curl -v https://quay-proxy.ci.openshift.org/v2/
 ...
 > GET /v2/ HTTP/2
 > Host: quay-proxy.ci.openshift.org
@@ -60,11 +56,29 @@ Unauthorized
 
 ```
 
-The proxy manipulates the above process:
+Then, `podman` did a basic auth as it was instructed. The bearer token is returned from the server in the body. The second attempt to access `/v2` was done with the bearer token and this time, it passed as expected. The bearer token is used for authorization to access any other endpoint to quay.io.
 
-- It passes over the request to `quay.io` if robot's credentials are found in the request.
-- It returns `401` when a client sends a request to the server without any token and the path is not `v2/auth`.
-  Otherwise it checks if the bearer token from the request can be used to log into `app.ci` and returns  `401`
-  upon an authentication failure. In case of success, it returns _the token from the request_ to the client.
-- When a client accesses to any other endpoint, the token will be verified again and replace
-  by a token from the robot. In the background, the token of the robot's account us is maintained periodically.
+# How `app.ci` works 
+The proxy manipulates the above process:
+`app.ci` maintains a valid token to QCI with the provided robot's username and password.
+
+If a request comes to `/v2/auth` for authentication: a generated token will be returned if the one of the following condition is satisfied: 
+- It has the robot's username and password,
+- It the password is a valid token for `app.ci` and for human users, it has the authorization to `get` the `imagestreams/layers` in `ocp`, i.e., the token can be used to pull the images in `ocp`.
+
+Otherwise, the request will be denied with `401`.
+
+The generated token is a [JWT token](https://jwt.io/) signed by a secret provided to `qci-appci`. Any request to `qci-appci` other than path `/v2/auth` will require a valid JWT token. Otherwise, the request gets `401`. `qci-appci` replaces the valid token in the request with the QCI token and forwards the request to `quay.io` and forwards the response from `quay.io` to the client.
+
+# Authorization for human users
+
+For human users, `qci-app.ci` authorizes the requests with token that can pull images from `ocp` on `app.ci`. [Our document](https://docs.ci.openshift.org/docs/how-tos/use-registries-in-build-farm/#human-users) tells our users to bind their group to the role `qci-image-puller`. In reality, this condition becomes unnecessary as `ocp` allows all authenticaed users to pull its images by the following `RoleBinding`:  
+
+```console
+$ oc get rolebinding -n ocp image-puller -o yaml | yq -y '.subjects[0]'
+apiGroup: rbac.authorization.k8s.io
+kind: Group
+name: system:authenticated
+```
+
+The users that follows the documentation above does not rely on the above `RoleBinding`, i.e., they would still be able to pull images from QCI even if the above `RoleBinding` is modified or deleted.

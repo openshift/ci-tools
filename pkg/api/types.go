@@ -1351,6 +1351,8 @@ const (
 	ClusterProfileKonfluxWorkspacesAWS  ClusterProfile = "konfluxworkspaces-aws"
 	ClusterProfileAWSObservabiltity     ClusterProfile = "aws-observability"
 	ClusterProfileAWSStackrox           ClusterProfile = "aws-stackrox"
+	ClusterProfileAWSSDCICD             ClusterProfile = "aws-sd-cicd"
+	ClusterProfileGCPSDCICD             ClusterProfile = "gcp-sd-cicd"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -1494,6 +1496,8 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileODFAWS,
 		ClusterProfileKonfluxWorkspacesAWS,
 		ClusterProfileAWSObservabiltity,
+		ClusterProfileAWSSDCICD,
+		ClusterProfileGCPSDCICD,
 	}
 }
 
@@ -1550,6 +1554,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSEdgeInfra,
 		ClusterProfileODFAWS,
 		ClusterProfileAWSObservabiltity,
+		ClusterProfileAWSSDCICD,
 		ClusterProfileKonfluxWorkspacesAWS:
 		return string(CloudAWS)
 	case
@@ -1610,6 +1615,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileGCPVirtualization,
 		ClusterProfileGCPOpendatahub,
 		ClusterProfileGCPTelco,
+		ClusterProfileGCPSDCICD,
 		ClusterProfileOSLGCP:
 		return string(CloudGCP)
 	case
@@ -1976,6 +1982,10 @@ func (p ClusterProfile) LeaseType() string {
 		return "konfluxworkspaces-aws-quota-slice"
 	case ClusterProfileAWSObservabiltity:
 		return "observability-aws-quota-slice"
+	case ClusterProfileAWSSDCICD:
+		return "aws-sd-cicd-quota-slice"
+	case ClusterProfileGCPSDCICD:
+		return "gcp-sd-cicd-quota-slice"
 	default:
 		return ""
 	}

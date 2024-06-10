@@ -42,6 +42,9 @@ func TestInputImageTagStep(t *testing.T) {
 			Spec: imagev1.ImageStreamSpec{
 				// pipeline:* will now be directly referenceable
 				LookupPolicy: imagev1.ImageLookupPolicy{Local: true},
+				Tags: []imagev1.TagReference{
+					{Name: "TO"},
+				},
 			},
 			Status: imagev1.ImageStreamStatus{
 				PublicDockerImageRepository: "some-reg/target-namespace/pipeline",

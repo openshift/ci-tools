@@ -56,15 +56,15 @@ Unauthorized
 
 ```
 
-Then, `podman` did a basic auth as it was instructed. The bearer token is returned from the server in the body. The second attempt to access `/v2` was done with the bearer token and this time, it passed as expected. The bearer token is used for authorization to access any other endpoint to quay.io.
+Then, `podman` did a basic auth as it was instructed. The bearer token is returned from the server in the body. The second attempt to access `/v2` was done with the bearer token and this time, it passed as expected. The bearer token is used for authorization to access any other endpoint to `quay.io`.
 
-# How `app.ci` works 
+# How `qci-appci` works 
 The proxy manipulates the above process:
 `app.ci` maintains a valid token to QCI with the provided robot's username and password.
 
 If a request comes to `/v2/auth` for authentication: a generated token will be returned if the one of the following condition is satisfied: 
 - It has the robot's username and password,
-- It the password is a valid token for `app.ci` and for human users, it has the authorization to `get` the `imagestreams/layers` in `ocp`, i.e., the token can be used to pull the images in `ocp`.
+- The password is a valid token for `app.ci` and if the username represents a human user, it has the authorization to `get` the `imagestreams/layers` in `ocp`, i.e., the token can be used to pull the images in `ocp`.
 
 Otherwise, the request will be denied with `401`.
 
@@ -81,4 +81,4 @@ kind: Group
 name: system:authenticated
 ```
 
-The users that follows the documentation above does not rely on the above `RoleBinding`, i.e., they would still be able to pull images from QCI even if the above `RoleBinding` is modified or deleted.
+The users that follow the documentation above do not rely on the above `RoleBinding`, i.e., they would still be able to pull images from QCI even if the above `RoleBinding` is modified or deleted.

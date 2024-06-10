@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -87,11 +88,16 @@ const DefaultImageImportTimeout = 45 * time.Minute
 
 func getEvaluator(ctx context.Context, client ctrlruntimeclient.Client, ns, name string, tags sets.Set[string]) func(obj runtime.Object) (bool, error) {
 	return func(obj runtime.Object) (bool, error) {
+		checkedTags := sets.New[string]()
 		switch stream := obj.(type) {
 		case *imagev1.ImageStream:
 			for i, tag := range stream.Spec.Tags {
-				if tags.Len() > 0 && !tags.Has(tag.Name) {
-					continue
+				if tags.Len() > 0 {
+					if tags.Has(tag.Name) {
+						checkedTags.Insert(tag.Name)
+					} else {
+						continue
+					}
 				}
 				_, exist, condition := util.ResolvePullSpec(stream, tag.Name, true)
 				if !exist {
@@ -115,6 +121,11 @@ func getEvaluator(ctx context.Context, client ctrlruntimeclient.Client, ns, name
 					}
 					return false, nil
 				}
+			}
+			if diff := tags.Difference(checkedTags); diff.Len() > 0 {
+				l := diff.UnsortedList()
+				sort.Strings(l)
+				return false, fmt.Errorf("failed to import tag(s) [%s] on image stream %s/%s because of missing definition in the spec", strings.Join(l, ","), stream.Namespace, stream.Name)
 			}
 			return true, nil
 		default:

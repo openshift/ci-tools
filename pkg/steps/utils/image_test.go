@@ -398,6 +398,47 @@ func TestGetEvaluator(t *testing.T) {
 			},
 			tags: sets.New[string]("tag1", "tag3"),
 		},
+		{
+			name:   "failed with 1 tag not in spec",
+			client: bcc(fakectrlruntimeclient.NewClientBuilder().Build()),
+			obj: &imagev1.ImageStream{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "is",
+					Namespace: "imported",
+				},
+				Spec: imagev1.ImageStreamSpec{
+					Tags: []imagev1.TagReference{
+						{Name: "tag1"},
+						{Name: "tag2"},
+						{Name: "tag3"},
+					},
+				},
+				Status: imagev1.ImageStreamStatus{
+					PublicDockerImageRepository: "registry",
+					Tags: []imagev1.NamedTagEventList{
+						{
+							Tag: "tag1",
+							Items: []imagev1.TagEvent{
+								{
+									Image: "some",
+								},
+							},
+						},
+						{
+							Tag: "tag3",
+							Items: []imagev1.TagEvent{
+								{
+									Image: "some",
+								},
+							},
+						},
+					},
+				},
+			},
+			tags:        sets.New[string]("tag1", "m-tag1", "m-tag2"),
+			expected:    false,
+			expectedErr: fmt.Errorf("failed to import tag(s) [m-tag1,m-tag2] on image stream imported/is because of missing definition in the spec"),
+		},
 	}
 
 	for _, testCase := range testCases {

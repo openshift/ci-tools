@@ -150,13 +150,13 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 	stable := &imageapi.ImageStream{}
 	logrus.Debugf("Waiting to import tags on imagestream (before creating release) %s/%s ...", s.jobSpec.Namespace(), streamName)
 	if err := utils.WaitForImportingISTag(ctx, s.client, s.jobSpec.Namespace(), streamName, stable, sets.New("cluster-version-operator", "cli"), utils.DefaultImageImportTimeout); err != nil {
-		return fmt.Errorf("failed to wait for importing imagestreamtags on %s/%s: %w", s.jobSpec.Namespace(), streamName, err)
+		return fmt.Errorf("failed to wait for importing imagestreamtags [cluster-version-operator, cli] on %s/%s: %w", s.jobSpec.Namespace(), streamName, err)
 	}
 	logrus.Debugf("Imported tags on imagestream (before creating release) %s/%s", s.jobSpec.Namespace(), streamName)
 	cvo, _, _ := util.ResolvePullSpec(stable, "cluster-version-operator", true)
 	if cvo == "" {
 		// should never happen
-		return fmt.Errorf("failed to resolve for importing imagestreamtags on %s/%s: %w", s.jobSpec.Namespace(), streamName, err)
+		return fmt.Errorf("failed to resolve for importing imagestreamtags on %s/%s:%s: %w", s.jobSpec.Namespace(), streamName, "cluster-version-operator", err)
 	}
 
 	// we want to expose the release payload as a CI version that looks just like

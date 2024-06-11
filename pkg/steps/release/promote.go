@@ -232,6 +232,7 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 		args = append(args, fmt.Sprintf("%s || true", mirrorPruneTagsCommand))
 	}
 	args = append(args, mirrorTagsCommand)
+	args = []string{strings.Join(args, "\n")}
 
 	image := fmt.Sprintf("%s/%s/%s:cli", api.DomainForService(api.ServiceRegistry), "ocp", cliVersion)
 	nodeSelector := map[string]string{"kubernetes.io/arch": "amd64"}

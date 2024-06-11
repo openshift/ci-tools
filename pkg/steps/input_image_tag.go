@@ -3,18 +3,21 @@ package steps
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
@@ -105,12 +108,38 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 		return fmt.Errorf("failed to create imagestreamtag for input image: %w", err)
 	}
 
+	if err := waitForTagInSpec(ctx, s.client, s.jobSpec.Namespace(), api.PipelineImageStream, string(s.config.To), 3*time.Minute); err != nil {
+		return fmt.Errorf("failed to wait for the tag %s to show in the spec of imagestream %s/%s", string(s.config.To), s.jobSpec.Namespace(), api.PipelineImageStream)
+	}
+
 	logrus.Debugf("Waiting to import tags on imagestream (after creating pipeline) %s/%s:%s ...", s.jobSpec.Namespace(), api.PipelineImageStream, s.config.To)
 	if err := utils.WaitForImportingISTag(ctx, s.client, s.jobSpec.Namespace(), api.PipelineImageStream, nil, sets.New[string](string(s.config.To)), utils.DefaultImageImportTimeout); err != nil {
 		return fmt.Errorf("failed to wait for importing imagestreamtags on %s/%s:%s: %w", s.jobSpec.Namespace(), api.PipelineImageStream, s.config.To, err)
 	}
 	logrus.Debugf("Imported tags on imagestream (after creating pipeline) %s/%s:%s", s.jobSpec.Namespace(), api.PipelineImageStream, s.config.To)
 	return nil
+}
+
+// waitForTagInSpec waits for the tag on the image stream are to show in spec
+func waitForTagInSpec(ctx context.Context, client ctrlruntimeclient.WithWatch, ns, name, tag string, timeout time.Duration) error {
+	obj := &imagev1.ImageStream{}
+	getEvaluator := func(tag string) func(obj runtime.Object) (bool, error) {
+		return func(obj runtime.Object) (bool, error) {
+			switch stream := obj.(type) {
+			case *imagev1.ImageStream:
+				for _, t := range stream.Spec.Tags {
+					if t.Name == tag {
+						return true, nil
+					}
+				}
+				logrus.Debugf("Tag %s has not shown up in the spec of imagestream %s/%s, waiting ...", tag, stream.Namespace, stream.Name)
+				return false, nil
+			default:
+				return false, fmt.Errorf("got an event that did not contain an imagestream: %v", obj)
+			}
+		}
+	}
+	return kubernetes.WaitForConditionOnObject(ctx, client, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, &imagev1.ImageStreamList{}, obj, getEvaluator(tag), timeout)
 }
 
 func (s *inputImageTagStep) Requires() []api.StepLink {

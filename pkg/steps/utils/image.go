@@ -88,9 +88,9 @@ const DefaultImageImportTimeout = 45 * time.Minute
 
 func getEvaluator(ctx context.Context, client ctrlruntimeclient.Client, ns, name string, tags sets.Set[string]) func(obj runtime.Object) (bool, error) {
 	return func(obj runtime.Object) (bool, error) {
-		checkedTags := sets.New[string]()
 		switch stream := obj.(type) {
 		case *imagev1.ImageStream:
+			checkedTags := sets.New[string]()
 			for i, tag := range stream.Spec.Tags {
 				if tags.Len() > 0 {
 					if tags.Has(tag.Name) {

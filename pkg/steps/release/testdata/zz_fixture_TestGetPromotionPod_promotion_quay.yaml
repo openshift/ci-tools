@@ -5,11 +5,9 @@ metadata:
 spec:
   containers:
   - args:
-    - oc image mirror --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson
-      --continue-on-error=true --max-per-registry=20 registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb=quay.io/openshift/ci:20230619_sha256_bbb
-      registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd=quay.io/openshift/ci:20230619_sha256_ddd
-      registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb=quay.io/openshift/ci:ci_a_latest
-      registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd=quay.io/openshift/ci:ci_c_latest
+    - |-
+      oc image mirror --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --continue-on-error=true --max-per-registry=20 quay.io/openshift/ci:ci_a_latest=quay.io/openshift/ci:20240603235401_prune_ci_a_latest quay.io/openshift/ci:ci_c_latest=quay.io/openshift/ci:20240603235401_prune_ci_c_latest || true
+      oc image mirror --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --continue-on-error=true --max-per-registry=20 registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb=quay.io/openshift/ci:ci_a_latest registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd=quay.io/openshift/ci:ci_c_latest
     command:
     - /bin/sh
     - -c

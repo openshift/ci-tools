@@ -181,8 +181,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 	if imageInfo.Digest != sourceImageInfo.Digest {
 		stale := imageInfo.Config.Created.Add(24 * time.Hour).Before(sourceImageStreamTag.Image.ObjectMeta.CreationTimestamp.Time)
 		// TODO Use stale to handle errors from mirroring
-		targetImageWithDateAndDigest := cioperatorapi.QuayImageFromDateAndDigest(time.Now().Format("20060102"), colonSplit[1])
-		log.WithField("currentQuayDigest", imageInfo.Digest).WithField("currentAppCIDigest", sourceImageInfo.Digest).WithField("stale", stale).WithField("source", sourceImage).WithField("targetImageWithDateAndDigest", targetImageWithDateAndDigest).WithField("target", quayImage).Info("Mirroring")
+		log.WithField("currentQuayDigest", imageInfo.Digest).WithField("currentAppCIDigest", sourceImageInfo.Digest).WithField("stale", stale).WithField("source", sourceImage).WithField("target", quayImage).Info("Mirroring")
 
 		if err := r.mirrorStore.Put(MirrorTask{
 			SourceTagRef:      tagRef,
@@ -191,15 +190,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 			CurrentQuayDigest: imageInfo.Digest,
 			Stale:             stale,
 			Owner:             ControllerName,
-		},
-			MirrorTask{
-				SourceTagRef:      tagRef,
-				Source:            sourceImage,
-				Destination:       targetImageWithDateAndDigest,
-				CurrentQuayDigest: imageInfo.Digest,
-				Stale:             stale,
-				Owner:             ControllerName,
-			}); err != nil {
+		}); err != nil {
 			return fmt.Errorf("failed to put the mirror into store: %w", err)
 		}
 	} else {

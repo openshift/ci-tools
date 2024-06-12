@@ -673,10 +673,10 @@ func TestGetPromotionPod(t *testing.T) {
 			name:              "promotion-quay",
 			nodeArchitectures: []string{"amd64"},
 			imageMirror: map[string]string{
-				"quay.io/openshift/ci:20230619_sha256_bbb": "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
-				"quay.io/openshift/ci:20230619_sha256_ddd": "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd",
-				"quay.io/openshift/ci:ci_a_latest":         "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
-				"quay.io/openshift/ci:ci_c_latest":         "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd",
+				"quay.io/openshift/ci:20240603235401_prune_ci_a_latest": "quay.io/openshift/ci:ci_a_latest",
+				"quay.io/openshift/ci:20240603235401_prune_ci_c_latest": "quay.io/openshift/ci:ci_c_latest",
+				"quay.io/openshift/ci:ci_a_latest":                      "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
+				"quay.io/openshift/ci:ci_c_latest":                      "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd",
 			},
 			namespace: "ci-op-9bdij1f6",
 		},
@@ -702,7 +702,7 @@ func TestGetPromotionPod(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, getPromotionPod(testCase.imageMirror, testCase.namespace, "promotion", "4.14", testCase.nodeArchitectures))
+			testhelper.CompareWithFixture(t, getPromotionPod(testCase.imageMirror, "20240603235401", testCase.namespace, "promotion", "4.14", testCase.nodeArchitectures))
 		})
 	}
 }
@@ -841,10 +841,10 @@ func TestGetImageMirror(t *testing.T) {
 			registry:   "quay.io/openshift/ci",
 			mirrorFunc: api.QuayMirrorFunc,
 			expected: map[string]string{
-				"quay.io/openshift/ci:20230619_sha256_bbb": "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
-				"quay.io/openshift/ci:20230619_sha256_ddd": "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd",
-				"quay.io/openshift/ci:ci_a_latest":         "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
-				"quay.io/openshift/ci:ci_c_latest":         "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd",
+				"quay.io/openshift/ci:20240603235401_prune_ci_a_latest": "quay.io/openshift/ci:ci_a_latest",
+				"quay.io/openshift/ci:20240603235401_prune_ci_c_latest": "quay.io/openshift/ci:ci_c_latest",
+				"quay.io/openshift/ci:ci_a_latest":                      "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
+				"quay.io/openshift/ci:ci_c_latest":                      "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd",
 			},
 		},
 		{
@@ -884,18 +884,19 @@ func TestGetImageMirror(t *testing.T) {
 			registry:   "quay.io/openshift/ci",
 			mirrorFunc: api.QuayMirrorFunc,
 			expected: map[string]string{
-				"quay.io/openshift/ci:20230619_sha256_bbb": "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
-				"quay.io/openshift/ci:20230619_sha256_ddd": "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd",
-				"quay.io/openshift/ci:ci_a_also-promoted":  "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
-				"quay.io/openshift/ci:ci_a_promoted":       "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
-				"quay.io/openshift/ci:ci_c_latest":         "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd",
+				"quay.io/openshift/ci:20240603235401_prune_ci_a_promoted":      "quay.io/openshift/ci:ci_a_promoted",
+				"quay.io/openshift/ci:20240603235401_prune_ci_a_also-promoted": "quay.io/openshift/ci:ci_a_also-promoted",
+				"quay.io/openshift/ci:20240603235401_prune_ci_c_latest":        "quay.io/openshift/ci:ci_c_latest",
+				"quay.io/openshift/ci:ci_a_also-promoted":                      "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
+				"quay.io/openshift/ci:ci_a_promoted":                           "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
+				"quay.io/openshift/ci:ci_c_latest":                             "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd",
 			},
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if actual, _ := getImageMirrorTarget(testCase.tags, testCase.pipeline, testCase.registry, "20230619", testCase.mirrorFunc); !reflect.DeepEqual(actual, testCase.expected) {
+			if actual, _ := getImageMirrorTarget(testCase.tags, testCase.pipeline, testCase.registry, "20240603235401", testCase.mirrorFunc); !reflect.DeepEqual(actual, testCase.expected) {
 				t.Errorf("%s: got incorrect ImageMirror mapping: %v", testCase.name, diff.ObjectDiff(actual, testCase.expected))
 			}
 		})

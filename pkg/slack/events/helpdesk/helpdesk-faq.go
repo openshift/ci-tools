@@ -193,9 +193,9 @@ func handleReactionAdded(event *slackevents.ReactionAddedEvent, client slackClie
 			faqItem := helpdeskfaq.FaqItem{
 				Question: helpdeskfaq.Question{
 					Author:  message.User,
-					Topic:   formatQuestionField(topic),
-					Subject: formatQuestionField(subject),
-					Body:    formatQuestionField(body),
+					Topic:   formatItemField(topic),
+					Subject: formatItemField(subject),
+					Body:    formatItemField(body),
 				},
 				Timestamp: messageTs,
 			}
@@ -276,7 +276,7 @@ func handleReactionAdded(event *slackevents.ReactionAddedEvent, client slackClie
 			faqItem.Answers = append(faqItem.Answers, helpdeskfaq.Answer{
 				Author:    reply.User,
 				Timestamp: messageTs,
-				Body:      reply.Msg.Text,
+				Body:      formatItemField(reply.Msg.Text),
 			})
 			if err := faqItemClient.UpsertItem(*faqItem); err != nil {
 				answerLog.WithError(err).Error("unable to update helpdesk-faq item")
@@ -292,10 +292,16 @@ func handleReactionAdded(event *slackevents.ReactionAddedEvent, client slackClie
 	return true, nil
 }
 
-func formatQuestionField(field string) string {
+// formatItemField removes some known special chars that slack inserts into messages in the workflows,
+// and trims the field of spaces
+func formatItemField(field string) string {
 	field = strings.TrimSpace(field)
-	field = strings.TrimPrefix(field, "\u0026gt;") // This "&>" is found at the beginning due to Slack workflow formatting
-	return strings.TrimSpace(field)                // With the removal, there could be extra space
+	field = strings.ReplaceAll(field, "\u0026gt;", "") // This "&>" is found at the beginning of many lines due to Slack workflow formatting
+	// "<" and ">" are slack special formatting, see https://api.slack.com/reference/surfaces/formatting#escaping
+	field = strings.ReplaceAll(field, "\u003C", "")
+	field = strings.ReplaceAll(field, "\u003E", "")
+
+	return strings.TrimSpace(field) // With the removal, there could be extra space
 }
 
 func getTopLevelMessage(client slackClient, forumChannelId string, messageTs string, logger *logrus.Entry) (*slack.Message, error) {

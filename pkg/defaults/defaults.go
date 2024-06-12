@@ -1148,5 +1148,5 @@ func resolveCLIOverrideImage(architecture api.ReleaseArchitecture, version strin
 		Tag:       "cli",
 	}
 
-	return &coreapi.ObjectReference{Kind: "ImageStreamTag", Namespace: isTagRef.Namespace, Name: fmt.Sprintf("%s:%s", isTagRef.Name, isTagRef.Tag)}, nil
+	return &coreapi.ObjectReference{Kind: "DockerImage", Name: api.QuayImageReference(isTagRef)}, nil
 }

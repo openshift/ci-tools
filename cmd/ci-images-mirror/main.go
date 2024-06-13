@@ -169,33 +169,6 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to create client")
 	}
 
-	eventCh := make(chan fsnotify.Event)
-	errCh := make(chan error)
-	go func() { logrus.Fatal(<-errCh) }()
-	universalSymlinkWatcher := &agents.UniversalSymlinkWatcher{
-		EventCh:   eventCh,
-		ErrCh:     errCh,
-		WatchPath: opts.releaseRepoGitSyncPath,
-	}
-	configAgentOption := func(opt *agents.ConfigAgentOptions) {
-		opt.UniversalSymlinkWatcher = universalSymlinkWatcher
-	}
-	ciOperatorConfigPath := filepath.Join(opts.releaseRepoGitSyncPath, config.CiopConfigInRepoPath)
-
-	ciOPConfigAgent, err := agents.NewConfigAgent(ciOperatorConfigPath, errCh, configAgentOption)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to construct ci-operator config agent")
-	}
-
-	registryAgentOption := func(opt *agents.RegistryAgentOptions) {
-		opt.UniversalSymlinkWatcher = universalSymlinkWatcher
-	}
-	stepConfigPath := filepath.Join(opts.releaseRepoGitSyncPath, config.RegistryPath)
-	registryConfigAgent, err := agents.NewRegistryAgent(stepConfigPath, errCh, registryAgentOption)
-	if err != nil {
-		logrus.WithError(err).Fatal("failed to construct registryAgent")
-	}
-
 	clientOptions := ctrlruntimeclient.Options{}
 	clientOptions.DryRun = &opts.dryRun
 	mgr, err := controllerruntime.NewManager(inClusterConfig, controllerruntime.Options{
@@ -260,6 +233,33 @@ func main() {
 		logrus.WithError(err).Fatal("failed to register metrics")
 	}
 	if opts.enabledControllersSet.Has(quayiociimagesdistributor.ControllerName) {
+		eventCh := make(chan fsnotify.Event)
+		errCh := make(chan error)
+		go func() { logrus.Fatal(<-errCh) }()
+		universalSymlinkWatcher := &agents.UniversalSymlinkWatcher{
+			EventCh:   eventCh,
+			ErrCh:     errCh,
+			WatchPath: opts.releaseRepoGitSyncPath,
+		}
+		configAgentOption := func(opt *agents.ConfigAgentOptions) {
+			opt.UniversalSymlinkWatcher = universalSymlinkWatcher
+		}
+		ciOperatorConfigPath := filepath.Join(opts.releaseRepoGitSyncPath, config.CiopConfigInRepoPath)
+
+		ciOPConfigAgent, err := agents.NewConfigAgent(ciOperatorConfigPath, errCh, configAgentOption)
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to construct ci-operator config agent")
+		}
+
+		registryAgentOption := func(opt *agents.RegistryAgentOptions) {
+			opt.UniversalSymlinkWatcher = universalSymlinkWatcher
+		}
+		stepConfigPath := filepath.Join(opts.releaseRepoGitSyncPath, config.RegistryPath)
+		registryConfigAgent, err := agents.NewRegistryAgent(stepConfigPath, errCh, registryAgentOption)
+		if err != nil {
+			logrus.WithError(err).Fatal("failed to construct registryAgent")
+		}
+
 		ignoreImageStreamTags := sets.New[string](opts.quayIOCIImagesDistributorOptions.ignoreImageStreamTagsRaw.Strings()...)
 		if opts.config != nil {
 			for k := range opts.config.SupplementalCIImages {

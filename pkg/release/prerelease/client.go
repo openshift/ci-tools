@@ -37,7 +37,7 @@ func resolvePullSpec(client release.HTTPClient, endpoint string, bounds api.Vers
 
 func stable4Latest(client release.HTTPClient) (string, error) {
 	endpoint := endpoint(api.Prerelease{ReleaseDescriptor: api.ReleaseDescriptor{Product: api.ReleaseProductOCP, Architecture: api.ReleaseArchitectureAMD64}})
-	rel, err := candidate.ResolveReleaseCommon(client, endpoint, nil, 0)
+	rel, err := candidate.ResolveReleaseCommon(client, endpoint, nil, 0, true)
 	return rel.Name, err
 }
 

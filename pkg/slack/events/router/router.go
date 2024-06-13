@@ -15,10 +15,10 @@ import (
 
 // ForEvents returns a Handler that appropriately routes
 // event callbacks for the handlers we know about
-func ForEvents(client *slack.Client, kubeClient ctrlruntimeclient.Client, config config.Getter, gcsClient *storage.Client, keywordsConfig helpdesk.KeywordsConfig, helpdeskAlias, forumChannelId string, requireWorkflowsInForum bool) events.Handler {
+func ForEvents(client *slack.Client, kubeClient ctrlruntimeclient.Client, config config.Getter, gcsClient *storage.Client, keywordsConfig helpdesk.KeywordsConfig, helpdeskAlias, forumChannelId, namespace string, requireWorkflowsInForum bool) events.Handler {
 	return events.MultiHandler(
 		helpdesk.MessageHandler(client, keywordsConfig, helpdeskAlias, forumChannelId, requireWorkflowsInForum),
-		helpdesk.FAQHandler(client, kubeClient, forumChannelId),
+		helpdesk.FAQHandler(client, kubeClient, forumChannelId, namespace),
 		mention.Handler(client),
 		joblink.Handler(client, joblink.NewJobGetter(config), gcsClient),
 	)

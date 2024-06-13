@@ -20,9 +20,12 @@ import (
 	"github.com/openshift/ci-tools/pkg/slack/events"
 )
 
+type reaction string
+
 const (
-	questionReaction = "channel_faq"
-	answerReaction   = "faq_answer"
+	question         = reaction("channel_faq")
+	answer           = reaction("faq_answer")
+	contributingInfo = reaction("information_source")
 )
 
 var questionRegex = regexp.MustCompile(`(?smi)^(.*?)_Topic:_(?P<topic>.*)_Subject:_(?P<subject>.*)_Contains Proprietary Information:_(?P<proprietary>.*)_Question:_(?P<body>.*)$`)
@@ -33,7 +36,7 @@ type slackClient interface {
 	GetUserByEmail(email string) (*slack.User, error)
 }
 
-func FAQHandler(client slackClient, kubeClient ctrlruntimeclient.Client, forumChannelId string) events.PartialHandler {
+func FAQHandler(client slackClient, kubeClient ctrlruntimeclient.Client, forumChannelId string, namespace string) events.PartialHandler {
 	// We only load the authorized users from the test-platform-ci-admins group on startup.
 	// This will result in the tool needing to be restarted if this list membership changes,
 	// but that is extremely infrequent, and the restart is likely to happen naturally in a timely manner anyway
@@ -50,7 +53,7 @@ func FAQHandler(client slackClient, kubeClient ctrlruntimeclient.Client, forumCh
 				return false, nil
 			}
 
-			cmClient := helpdeskfaq.NewCMClient(kubeClient)
+			cmClient := helpdeskfaq.NewCMClient(kubeClient, namespace)
 			event, added := callback.InnerEvent.Data.(*slackevents.ReactionAddedEvent)
 			if added {
 				if event.Item.Channel != forumChannelId {
@@ -95,8 +98,9 @@ func getAuthorizedUsers(client slackClient, groupClient ctrlruntimeclient.Client
 
 func handleReactionRemoved(event *slackevents.ReactionRemovedEvent, client slackClient, faqItemClient helpdeskfaq.FaqItemClient, forumChannelId string, authorizedUsers []string, logger *logrus.Entry) (bool, error) {
 	logger.Debugf("%s emoji removed from message", event.Reaction)
-	switch event.Reaction {
-	case questionReaction:
+	reactionType := reaction(event.Reaction)
+	switch reactionType {
+	case question:
 		questionLog := logger.WithField("type", "remove-question")
 		if !slices.Contains(authorizedUsers, event.User) {
 			questionLog.Infof("user with ID: %s is not authorized", event.User)
@@ -106,58 +110,67 @@ func handleReactionRemoved(event *slackevents.ReactionRemovedEvent, client slack
 			questionLog.WithError(err).Error("unable to update helpdesk-faq config map")
 			return false, err
 		}
-	case answerReaction:
-		answerLog := logger.WithField("type", "remove-answer")
+	case answer, contributingInfo:
+		replyLog := logger.WithField("type", fmt.Sprintf("remove-%s", event.Reaction))
 		if !slices.Contains(authorizedUsers, event.User) {
-			answerLog.Infof("user with ID: %s is not authorized", event.User)
+			replyLog.Infof("user with ID: %s is not authorized", event.User)
 			return false, nil
 		}
 		messageTs := event.Item.Timestamp
-		replies, _, _, err := client.GetConversationReplies(&slack.GetConversationRepliesParameters{
-			ChannelID: forumChannelId,
-			Timestamp: messageTs,
-			Inclusive: true,
-		})
+		reply, err := getReply(client, forumChannelId, messageTs, logger)
+		if err != nil || reply == nil {
+			logger.WithError(err).Error("unable to get slack reply")
+			return false, nil
+		}
+		questionTs := reply.Msg.ThreadTimestamp
+		faqItem, err := faqItemClient.GetFAQItemIfExists(questionTs)
 		if err != nil {
-			answerLog.WithError(err).Error("unable to retrieve message that reaction was added for")
+			replyLog.WithError(err).Debug("unable to get faqItem, it is likely the question has not been added yet")
+			return false, nil //Don't return the error, because this is due to the question not having been added
+		}
+
+		if reactionType == answer {
+			faqItem.Answers = removeReply(messageTs, faqItem.Answers, replyLog)
+		} else {
+			faqItem.ContributingInfo = removeReply(messageTs, faqItem.ContributingInfo, replyLog)
+		}
+		if err := faqItemClient.UpsertItem(*faqItem); err != nil {
+			replyLog.WithError(err).Error("unable to update helpdesk-faq config map")
 			return false, err
 		}
-		if len(replies) == 1 {
-			reply := replies[0]
-			questionTs := reply.Msg.ThreadTimestamp
-			faqItem, err := faqItemClient.GetFAQItemIfExists(questionTs)
-			if err != nil {
-				answerLog.WithError(err).Warn("unable to get faqItem")
-				return false, nil //Don't return the error, because this is due to the question not having been added
-			}
-
-			index := -1
-			for i, answer := range faqItem.Answers {
-				if answer.Timestamp == messageTs {
-					index = i
-					break
-				}
-			}
-			if index >= 0 {
-				faqItem.Answers = append(faqItem.Answers[:index], faqItem.Answers[index+1:]...)
-			}
-			if err := faqItemClient.UpsertItem(*faqItem); err != nil {
-				answerLog.WithError(err).Error("unable to update helpdesk-faq config map")
-				return false, err
-			}
-		}
 	default:
-		logger.Debugf("emoji we do not care about: %s", event.Reaction)
+		logger.Tracef("emoji we do not care about: %s", event.Reaction)
 		return false, nil
 	}
 
 	return true, nil
 }
 
+func removeReply(messageTs string, replies []helpdeskfaq.Reply, logger *logrus.Entry) []helpdeskfaq.Reply {
+	if len(replies) == 0 {
+		logger.Debug("no replies of the proper type exist on faqItem")
+		return replies
+	}
+
+	index := -1
+	for i, r := range replies {
+		if r.Timestamp == messageTs {
+			index = i
+			break
+		}
+	}
+	if index >= 0 {
+		replies = append(replies[:index], replies[index+1:]...)
+	}
+
+	return replies
+}
+
 func handleReactionAdded(event *slackevents.ReactionAddedEvent, client slackClient, faqItemClient helpdeskfaq.FaqItemClient, forumChannelId string, authorizedUsers []string, logger *logrus.Entry) (bool, error) {
 	logger.Debugf("%s emoji added to message", event.Reaction)
-	switch event.Reaction {
-	case questionReaction:
+	reactionType := reaction(event.Reaction)
+	switch reactionType {
+	case question:
 		questionLog := logger.WithField("type", "add-question")
 		if !slices.Contains(authorizedUsers, event.User) {
 			questionLog.Infof("user with ID: %s is not authorized", event.User)
@@ -216,10 +229,17 @@ func handleReactionAdded(event *slackevents.ReactionAddedEvent, client slackClie
 				}
 
 				for _, reply := range replies {
-					for _, reaction := range reply.Reactions {
-						if reaction.Name == answerReaction {
+					for _, r := range reply.Reactions {
+						if reaction(r.Name) == answer {
 							questionLog.Debugf("adding pre-marked answer with timestamp: %s", reply.Timestamp)
-							faqItem.Answers = append(faqItem.Answers, helpdeskfaq.Answer{
+							faqItem.Answers = append(faqItem.Answers, helpdeskfaq.Reply{
+								Author:    reply.User,
+								Timestamp: reply.Timestamp,
+								Body:      reply.Msg.Text,
+							})
+						} else if reaction(r.Name) == contributingInfo {
+							questionLog.Debugf("adding pre-marked contributing-info with timestamp: %s", reply.Timestamp)
+							faqItem.ContributingInfo = append(faqItem.ContributingInfo, helpdeskfaq.Reply{
 								Author:    reply.User,
 								Timestamp: reply.Timestamp,
 								Body:      reply.Msg.Text,
@@ -238,58 +258,66 @@ func handleReactionAdded(event *slackevents.ReactionAddedEvent, client slackClie
 				return false, err
 			}
 		}
-	case answerReaction:
-		answerLog := logger.WithField("type", "add-answer")
+	case answer, contributingInfo:
+		replyLog := logger.WithField("type", fmt.Sprintf("add-%s", reactionType))
 		if !slices.Contains(authorizedUsers, event.User) {
-			answerLog.Infof("user with ID: %s is not authorized", event.User)
+			replyLog.Infof("user with ID: %s is not authorized", event.User)
 			return false, nil
 		}
-		messageTs := event.Item.Timestamp
-		replies, _, _, err := client.GetConversationReplies(&slack.GetConversationRepliesParameters{
-			ChannelID: forumChannelId,
-			Timestamp: messageTs,
-			Inclusive: true,
-		})
-		if err != nil {
-			answerLog.WithError(err).Error("unable to retrieve message that reaction was added for")
-			return false, err
-		}
-		if len(replies) == 1 {
-			reply := replies[0]
-			questionTs := reply.Msg.ThreadTimestamp
-			faqItem, err := faqItemClient.GetFAQItemIfExists(questionTs)
-			if err != nil {
-				answerLog.WithError(err).Error("unable to get faq item")
-				return false, err
-			}
-			if faqItem == nil {
-				answerLog.Info("requested answer doesn't belong to an existing question, ignoring")
-				return false, nil
-			}
-
-			for _, answer := range faqItem.Answers {
-				if answer.Timestamp == messageTs {
-					answerLog.Debug("answer already exists, ignoring")
-					return false, nil
-				}
-			}
-			faqItem.Answers = append(faqItem.Answers, helpdeskfaq.Answer{
-				Author:    reply.User,
-				Timestamp: messageTs,
-				Body:      formatItemField(reply.Msg.Text),
-			})
-			if err := faqItemClient.UpsertItem(*faqItem); err != nil {
-				answerLog.WithError(err).Error("unable to update helpdesk-faq item")
-				return false, err
-			}
-
-		}
+		return addReplyToExistingFaqItem(event.Item.Timestamp, reactionType, client, faqItemClient, forumChannelId, replyLog)
 	default:
-		logger.Debugf("emoji we do not care about: %s", event.Reaction)
+		logger.Tracef("emoji we do not care about: %s", event.Reaction)
 		return false, nil
 	}
 
 	return true, nil
+}
+
+func addReplyToExistingFaqItem(messageTs string, reactionType reaction, client slackClient, faqItemClient helpdeskfaq.FaqItemClient, forumChannelId string, logger *logrus.Entry) (bool, error) {
+	reply, err := getReply(client, forumChannelId, messageTs, logger)
+	if err != nil || reply == nil {
+		logger.WithError(err).Error("unable to get slack reply")
+		return false, nil
+	}
+	questionTs := reply.Msg.ThreadTimestamp
+	faqItem, err := faqItemClient.GetFAQItemIfExists(questionTs)
+	if err != nil {
+		logger.WithError(err).Error("unable to get faq item")
+		return false, err
+	}
+	if faqItem == nil {
+		logger.Info("requested answer doesn't belong to an existing question, ignoring")
+		return false, nil
+	}
+
+	if faqItem.ReplyExists(messageTs) {
+		logger.Debug("reply already exists, ignoring")
+		return false, nil
+	}
+
+	switch reactionType {
+	case answer:
+		faqItem.Answers = append(faqItem.Answers, helpdeskfaq.Reply{
+			Author:    reply.User,
+			Timestamp: messageTs,
+			Body:      formatItemField(reply.Msg.Text),
+		})
+	case contributingInfo:
+		faqItem.ContributingInfo = append(faqItem.ContributingInfo, helpdeskfaq.Reply{
+			Author:    reply.User,
+			Timestamp: messageTs,
+			Body:      formatItemField(reply.Msg.Text),
+		})
+	default:
+		logger.Errorf("attempted to add reply for emoji we do not care about: %s", reactionType)
+	}
+
+	if err := faqItemClient.UpsertItem(*faqItem); err != nil {
+		logger.WithError(err).Error("unable to update helpdesk-faq item")
+		return false, err
+	}
+
+	return false, nil
 }
 
 // formatItemField removes some known special chars that slack inserts into messages in the workflows,
@@ -321,4 +349,21 @@ func getTopLevelMessage(client slackClient, forumChannelId string, messageTs str
 		return nil, err
 	}
 	return &conversationHistory.Messages[0], nil
+}
+
+func getReply(client slackClient, forumChannelId string, messageTs string, logger *logrus.Entry) (*slack.Message, error) {
+	replies, _, _, err := client.GetConversationReplies(&slack.GetConversationRepliesParameters{
+		ChannelID: forumChannelId,
+		Timestamp: messageTs,
+		Inclusive: true,
+	})
+	if err != nil {
+		logger.WithError(err).Error("unable to retrieve message that reaction was added for")
+		return nil, err
+	}
+	if len(replies) == 1 {
+		return &replies[0], nil
+	}
+
+	return nil, nil
 }

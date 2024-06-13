@@ -15,7 +15,6 @@ import (
 
 const (
 	faqConfigMap = "helpdesk-faq"
-	ci           = "ci"
 )
 
 type FaqItemClient interface {
@@ -25,12 +24,13 @@ type FaqItemClient interface {
 	RemoveItem(timestamp string) error
 }
 
-func NewCMClient(kubeClient ctrlruntimeclient.Client) ConfigMapClient {
-	return ConfigMapClient{kubeClient: kubeClient}
+func NewCMClient(kubeClient ctrlruntimeclient.Client, namespace string) ConfigMapClient {
+	return ConfigMapClient{kubeClient: kubeClient, namespace: namespace}
 }
 
 type ConfigMapClient struct {
 	kubeClient  ctrlruntimeclient.Client
+	namespace   string
 	cachedItems []string
 	lastReload  time.Time
 }
@@ -108,7 +108,7 @@ func (c *ConfigMapClient) RemoveItem(timestamp string) error {
 
 func (c *ConfigMapClient) getConfigMap() (*v1.ConfigMap, error) {
 	configMap := &v1.ConfigMap{}
-	if err := c.kubeClient.Get(context.TODO(), types.NamespacedName{Namespace: ci, Name: faqConfigMap}, configMap); err != nil {
+	if err := c.kubeClient.Get(context.TODO(), types.NamespacedName{Namespace: c.namespace, Name: faqConfigMap}, configMap); err != nil {
 		return nil, fmt.Errorf("failed to get configMap %s: %w", faqConfigMap, err)
 	}
 	return configMap, nil

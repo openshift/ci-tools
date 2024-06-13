@@ -66,11 +66,11 @@ func ResolvePullSpec(client release.HTTPClient, candidate api.Candidate) (string
 }
 
 func ResolvePullSpecCommon(client release.HTTPClient, endpoint string, bounds *api.VersionBounds, relative int) (string, error) {
-	rel, err := ResolveReleaseCommon(client, endpoint, bounds, relative)
+	rel, err := ResolveReleaseCommon(client, endpoint, bounds, relative, false)
 	return rel.PullSpec, err
 }
 
-func ResolveReleaseCommon(client release.HTTPClient, endpoint string, bounds *api.VersionBounds, relative int) (Release, error) {
+func ResolveReleaseCommon(client release.HTTPClient, endpoint string, bounds *api.VersionBounds, relative int, silent bool) (Release, error) {
 	ret := Release{}
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
@@ -87,7 +87,9 @@ func ResolveReleaseCommon(client release.HTTPClient, endpoint string, bounds *ap
 	if s := q.Encode(); s != "" {
 		req.URL.RawQuery = s
 	}
-	logrus.Infof("Requesting a release from %s", req.URL.String())
+	if !silent {
+		logrus.Infof("Requesting a release from %s", req.URL.String())
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return ret, fmt.Errorf("failed to request latest release: %w", err)

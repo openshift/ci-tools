@@ -53,7 +53,7 @@ func FAQHandler(client slackClient, kubeClient ctrlruntimeclient.Client, forumCh
 				return false, nil
 			}
 
-			cmClient := helpdeskfaq.NewCMClient(kubeClient, namespace)
+			cmClient := helpdeskfaq.NewCMClient(kubeClient, namespace, log)
 			event, added := callback.InnerEvent.Data.(*slackevents.ReactionAddedEvent)
 			if added {
 				if event.Item.Channel != forumChannelId {

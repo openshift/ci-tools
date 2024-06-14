@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -24,8 +27,8 @@ type FaqItemClient interface {
 	RemoveItem(timestamp string) error
 }
 
-func NewCMClient(kubeClient ctrlruntimeclient.Client, namespace string) ConfigMapClient {
-	return ConfigMapClient{kubeClient: kubeClient, namespace: namespace}
+func NewCMClient(kubeClient ctrlruntimeclient.Client, namespace string, logger *logrus.Entry) ConfigMapClient {
+	return ConfigMapClient{kubeClient: kubeClient, namespace: namespace, logger: logger}
 }
 
 type ConfigMapClient struct {
@@ -33,15 +36,16 @@ type ConfigMapClient struct {
 	namespace   string
 	cachedItems []string
 	lastReload  time.Time
+	logger      *logrus.Entry
 }
 
 func (c *ConfigMapClient) GetSerializedFAQItems() ([]string, error) {
 	fifteenMinutesFromLastCacheReload := c.lastReload.Add(time.Minute * 15)
 	if len(c.cachedItems) > 0 && time.Now().Before(fifteenMinutesFromLastCacheReload) {
-		logrus.Debug("returning faq items from cache")
+		c.logger.Debug("returning faq items from cache")
 		return c.cachedItems, nil
 	}
-	logrus.Debug("reloading faq items from configmap")
+	c.logger.Debug("reloading faq items from configmap")
 	configMap, err := c.getConfigMap()
 	if err != nil {
 		return nil, err
@@ -75,6 +79,7 @@ func (c *ConfigMapClient) GetFAQItemIfExists(timestamp string) (*FaqItem, error)
 }
 
 func (c *ConfigMapClient) UpsertItem(item FaqItem) error {
+	c.sortReplies(&item)
 	data, err := json.Marshal(item)
 	if err != nil {
 		return fmt.Errorf("unable to marshal faqItem to json: %w", err)
@@ -112,4 +117,22 @@ func (c *ConfigMapClient) getConfigMap() (*v1.ConfigMap, error) {
 		return nil, fmt.Errorf("failed to get configMap %s: %w", faqConfigMap, err)
 	}
 	return configMap, nil
+}
+
+func (c *ConfigMapClient) sortReplies(item *FaqItem) {
+	cmp := func(a Reply, b Reply) int {
+		aTime, err := strconv.Atoi(strings.Split(a.Timestamp, ".")[0])
+		if err != nil {
+			c.logger.WithError(err).Errorf("couldn't convert timestamp to int")
+			return 0
+		}
+		bTime, err := strconv.Atoi(strings.Split(b.Timestamp, ".")[0])
+		if err != nil {
+			c.logger.WithError(err).Errorf("couldn't convert timestamp to int")
+			return 0
+		}
+		return aTime - bTime
+	}
+	slices.SortFunc(item.Answers, cmp)
+	slices.SortFunc(item.ContributingInfo, cmp)
 }

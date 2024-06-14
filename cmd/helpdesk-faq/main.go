@@ -131,7 +131,7 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create client")
 	}
-	client := helpdeskfaq.NewCMClient(kubeClient, ci)
+	client := helpdeskfaq.NewCMClient(kubeClient, ci, logrus.WithField("client", "cm-client"))
 	server := &http.Server{
 		Addr:    ":" + strconv.Itoa(o.port),
 		Handler: router(&client),

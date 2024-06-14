@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bombsimon/logrusr/v3"
@@ -53,6 +54,8 @@ type options struct {
 	onlyValidManifestV2Images        bool
 	configFile                       string
 	config                           *quayiociimagesdistributor.CIImagesMirrorConfig
+	configMutex                      sync.Mutex
+	configLastModifiedAt             time.Time
 }
 
 type quayIOCIImagesDistributorOptions struct {
@@ -86,6 +89,27 @@ func newOpts() *options {
 	return opts
 }
 
+func (o *options) loadConfig(caller string) error {
+	o.configMutex.Lock()
+	defer o.configMutex.Unlock()
+	now := time.Now()
+	if o.configFile == "" {
+		return fmt.Errorf("cannot load config when the config file is empty")
+	}
+	if o.config != nil && now.Before(o.configLastModifiedAt.Add(30*time.Minute)) {
+		logrus.WithField("caller", caller).WithField("lastModifiedAt", o.configLastModifiedAt).Info("Skip loading config as it was loaded recently")
+		return nil
+	}
+	logrus.WithField("caller", caller).Info("Loading config ...")
+	c, err := quayiociimagesdistributor.LoadConfig(o.configFile)
+	if err != nil {
+		return fmt.Errorf("failed to load config file %s: %w", o.configFile, err)
+	}
+	o.config = c
+	o.configLastModifiedAt = now
+	return nil
+}
+
 func (o *options) validate() error {
 	var errs []error
 	if o.leaderElectionNamespace == "" {
@@ -110,10 +134,8 @@ func (o *options) validate() error {
 		errs = append(errs, fmt.Errorf("file %s does not exist", o.registryConfig))
 	}
 	if o.configFile != "" {
-		if c, err := quayiociimagesdistributor.LoadConfig(o.configFile); err != nil {
+		if err := o.loadConfig("validate"); err != nil {
 			errs = append(errs, fmt.Errorf("failed to load config file %s: %w", o.configFile, err))
-		} else {
-			o.config = c
 		}
 	}
 	return utilerrors.NewAggregate(errs)
@@ -193,25 +215,33 @@ func main() {
 	}
 
 	mirrorStore := quayiociimagesdistributor.NewMirrorStore()
-	if opts.config != nil {
+	if opts.configFile != "" {
 		supplementalCIImagesService := newSupplementalCIImagesServiceWithMirrorStore(mirrorStore, logrus.WithField("subcomponent", "supplementalCIImagesService"))
 		interrupts.TickLiteral(func() {
+			if err := opts.loadConfig("supplementalCIImagesService"); err != nil {
+				logrus.WithError(err).Error("Failed to reload config")
+				return
+			}
 			if err := supplementalCIImagesService.Mirror(opts.config.SupplementalCIImages); err != nil {
 				logrus.WithError(err).Error("Failed to mirror supplemental CI images")
 			}
 		}, time.Hour)
 
-		m, err := quayiociimagesdistributor.ARTImages(ctx, client, opts.config.ArtImages, opts.config.IgnoredSources)
-		if err != nil {
-			logrus.WithError(err).Error("Failed to get ART images")
-		} else {
-			artImagesService := newSupplementalCIImagesServiceWithMirrorStore(mirrorStore, logrus.WithField("subcomponent", "artImagesService"))
-			interrupts.TickLiteral(func() {
-				if err := artImagesService.Mirror(m); err != nil {
-					logrus.WithError(err).Error("Failed to mirror ART images")
-				}
-			}, time.Hour)
-		}
+		artImagesService := newSupplementalCIImagesServiceWithMirrorStore(mirrorStore, logrus.WithField("subcomponent", "artImagesService"))
+		interrupts.TickLiteral(func() {
+			if err := opts.loadConfig("artImagesService"); err != nil {
+				logrus.WithError(err).Error("Failed to reload config")
+				return
+			}
+			m, err := quayiociimagesdistributor.ARTImages(ctx, client, opts.config.ArtImages, opts.config.IgnoredSources)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to get ART images")
+				return
+			}
+			if err := artImagesService.Mirror(m); err != nil {
+				logrus.WithError(err).Error("Failed to mirror ART images")
+			}
+		}, time.Hour)
 	}
 
 	server := &http.Server{

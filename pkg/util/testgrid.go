@@ -15,6 +15,7 @@ func IsSpecialInformingJobOnTestGrid(jobName string) bool {
 		"periodic-ci-openshift-release-master-okd-",
 		"periodic-ci-shiftstack-shiftstack-ci-main-periodic-",
 		"periodic-ci-shiftstack-shiftstack-ci-main-techpreview-",
+		"periodic-ci-shiftstack-ci-release-",
 		"promote-release-openshift-",
 		"release-openshift-",
 	}

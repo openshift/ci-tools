@@ -34,6 +34,7 @@ type slackClient interface {
 	GetConversationHistory(params *slack.GetConversationHistoryParameters) (*slack.GetConversationHistoryResponse, error)
 	GetConversationReplies(params *slack.GetConversationRepliesParameters) (msgs []slack.Message, hasMore bool, nextCursor string, err error)
 	GetUserByEmail(email string) (*slack.User, error)
+	GetPermalink(params *slack.PermalinkParameters) (string, error)
 }
 
 func FAQHandler(client slackClient, kubeClient ctrlruntimeclient.Client, forumChannelId string, namespace string) events.PartialHandler {
@@ -203,6 +204,13 @@ func handleReactionAdded(event *slackevents.ReactionAddedEvent, client slackClie
 				questionLog.Errorf("expected to find: topic, subject, and body in question, but some values were missing")
 				return false, nil
 			}
+			permalink, err := client.GetPermalink(&slack.PermalinkParameters{
+				Channel: forumChannelId,
+				Ts:      messageTs,
+			})
+			if err != nil {
+				questionLog.WithError(err).Warnf("couldn't get permalink for slack thread, it will be missing")
+			}
 			faqItem := helpdeskfaq.FaqItem{
 				Question: helpdeskfaq.Question{
 					Author:  message.User,
@@ -210,7 +218,8 @@ func handleReactionAdded(event *slackevents.ReactionAddedEvent, client slackClie
 					Subject: formatItemField(subject),
 					Body:    formatItemField(body),
 				},
-				Timestamp: messageTs,
+				Timestamp:  messageTs,
+				ThreadLink: permalink,
 			}
 
 			var cursor string

@@ -3,6 +3,7 @@ package helpdesk_faq
 type FaqItem struct {
 	Question         Question `json:"question"`
 	Timestamp        string   `json:"timestamp"`
+	ThreadLink       string   `json:"thread_link"`
 	ContributingInfo []Reply  `json:"contributing_info"`
 	Answers          []Reply  `json:"answers"`
 }

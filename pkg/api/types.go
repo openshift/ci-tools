@@ -1217,7 +1217,6 @@ const (
 	ClusterProfileAWS                   ClusterProfile = "aws"
 	ClusterProfileAWSAtomic             ClusterProfile = "aws-atomic"
 	ClusterProfileAWSCentos             ClusterProfile = "aws-centos"
-	ClusterProfileAWSCentos40           ClusterProfile = "aws-centos-40"
 	ClusterProfileAWSCSPIQE             ClusterProfile = "aws-cspi-qe"
 	ClusterProfileAWSQE                 ClusterProfile = "aws-qe"
 	ClusterProfileAWSC2SQE              ClusterProfile = "aws-c2s-qe"
@@ -1365,7 +1364,6 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSC2SQE,
 		ClusterProfileAWSCPaaS,
 		ClusterProfileAWSCentos,
-		ClusterProfileAWSCentos40,
 		ClusterProfileAWSCSPIQE,
 		ClusterProfileAWSPerfScale,
 		ClusterProfileAWSPerfQE,
@@ -1512,7 +1510,6 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWS,
 		ClusterProfileAWSAtomic,
 		ClusterProfileAWSCentos,
-		ClusterProfileAWSCentos40,
 		ClusterProfileAWSCSPIQE,
 		ClusterProfileAWSGluster,
 		ClusterProfileAWSManagedCSPIQE,
@@ -1723,7 +1720,6 @@ func (p ClusterProfile) LeaseType() string {
 		ClusterProfileAWS,
 		ClusterProfileAWSAtomic,
 		ClusterProfileAWSCentos,
-		ClusterProfileAWSCentos40,
 		ClusterProfileAWSGluster:
 		return "aws-quota-slice"
 	case ClusterProfileAWSQE:
@@ -2016,7 +2012,6 @@ func (p ClusterProfile) ConfigMap() string {
 	case
 		ClusterProfileAWSAtomic,
 		ClusterProfileAWSCentos,
-		ClusterProfileAWSCentos40,
 		ClusterProfileAWSGluster,
 		ClusterProfileAWSOutpost,
 		ClusterProfileAzure,
@@ -2045,7 +2040,6 @@ func (p ClusterProfile) Secret() string {
 	case
 		ClusterProfileAWSAtomic,
 		ClusterProfileAWSCentos,
-		ClusterProfileAWSCentos40,
 		ClusterProfileAWSGluster,
 		ClusterProfileAWSOutpost,
 		ClusterProfileGCP40,

@@ -111,5 +111,8 @@ func (c *ConfigMapClient) getConfigMap() (*v1.ConfigMap, error) {
 	if err := c.kubeClient.Get(context.TODO(), types.NamespacedName{Namespace: c.namespace, Name: faqConfigMap}, configMap); err != nil {
 		return nil, fmt.Errorf("failed to get configMap %s: %w", faqConfigMap, err)
 	}
+	if configMap.Data == nil {
+		configMap.Data = make(map[string]string)
+	}
 	return configMap, nil
 }

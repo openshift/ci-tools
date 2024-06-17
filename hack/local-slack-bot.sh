@@ -73,4 +73,4 @@ http_proxy=localhost:7777 https_proxy=localhost:7777 slack-bot --port 6666 \
  --jira-bearer-token-file="${data}/token" --jira-endpoint https://issues.redhat.com \
  --log-level=trace \
  --prow-config-path="${RELEASE_REPO_DIR}/core-services/prow/02_config/_config.yaml" --prow-job-config-path="${RELEASE_REPO_DIR}/ci-operator/jobs" \
- --keywords-config-path="${data}/config.yaml" --helpdesk-alias="${helpdesk_alias}" --forum-channel-id=C01CQ3MA5NX --require-workflows-in-forum="${require_workflows}"
+ --keywords-config-path="${data}/config.yaml" --helpdesk-alias="${helpdesk_alias}" --forum-channel-id=C01CQ3MA5NX --namespace=ci-staging --require-workflows-in-forum="${require_workflows}"

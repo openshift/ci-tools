@@ -21,6 +21,10 @@ import (
 	"github.com/openshift/ci-tools/pkg/util"
 )
 
+const (
+	ci = "ci"
+)
+
 type options struct {
 	logLevel          string
 	port              int
@@ -127,7 +131,7 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create client")
 	}
-	client := helpdeskfaq.NewCMClient(kubeClient)
+	client := helpdeskfaq.NewCMClient(kubeClient, ci)
 	server := &http.Server{
 		Addr:    ":" + strconv.Itoa(o.port),
 		Handler: router(&client),

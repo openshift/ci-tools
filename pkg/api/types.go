@@ -1272,7 +1272,6 @@ const (
 	ClusterProfileGCPArm64              ClusterProfile = "gcp-arm64"
 	ClusterProfileGCP                   ClusterProfile = "gcp"
 	ClusterProfileGCP3                  ClusterProfile = "gcp-3"
-	ClusterProfileGCP40                 ClusterProfile = "gcp-40"
 	ClusterProfileGCPHA                 ClusterProfile = "gcp-ha"
 	ClusterProfileGCPCRIO               ClusterProfile = "gcp-crio"
 	ClusterProfileGCPLogging            ClusterProfile = "gcp-logging"
@@ -1416,7 +1415,6 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileGCP,
 		ClusterProfileGCP2,
 		ClusterProfileGCP3,
-		ClusterProfileGCP40,
 		ClusterProfileGCPCRIO,
 		ClusterProfileGCPHA,
 		ClusterProfileGCPLogging,
@@ -1601,7 +1599,6 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileGCPArm64,
 		ClusterProfileGCP,
 		ClusterProfileGCP3,
-		ClusterProfileGCP40,
 		ClusterProfileGCPHA,
 		ClusterProfileGCPCRIO,
 		ClusterProfileGCPLogging,
@@ -1832,7 +1829,6 @@ func (p ClusterProfile) LeaseType() string {
 		return "gcp-arm64-quota-slice"
 	case
 		ClusterProfileGCP,
-		ClusterProfileGCP40,
 		ClusterProfileGCPHA,
 		ClusterProfileGCPCRIO,
 		ClusterProfileGCPLogging,
@@ -2018,7 +2014,6 @@ func (p ClusterProfile) ConfigMap() string {
 		ClusterProfileGCP,
 		ClusterProfileGCP2,
 		ClusterProfileGCP3,
-		ClusterProfileGCP40,
 		ClusterProfileGCPCRIO,
 		ClusterProfileGCPHA,
 		ClusterProfileGCPLogging,
@@ -2042,7 +2037,6 @@ func (p ClusterProfile) Secret() string {
 		ClusterProfileAWSCentos,
 		ClusterProfileAWSGluster,
 		ClusterProfileAWSOutpost,
-		ClusterProfileGCP40,
 		ClusterProfileGCPCRIO,
 		ClusterProfileGCPHA,
 		ClusterProfileGCPLogging,

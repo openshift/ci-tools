@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -53,13 +54,24 @@ func (c *ConfigMapClient) GetSerializedFAQItems() ([]string, error) {
 	if configMap.Data == nil {
 		return nil, nil
 	}
-	var items []string
-	for _, item := range configMap.Data {
-		items = append(items, item)
-	}
+	items := convertDataToSortedSlice(configMap.Data)
 	c.cachedItems = items
 	c.lastReload = time.Now()
 	return items, nil
+}
+
+// convertDataToSortedSlice takes the data in the configmap, sorts it by timestamp, and returns the ordered slice of items
+func convertDataToSortedSlice(data map[string]string) []string {
+	var keys []string
+	for key := range data {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	var items []string
+	for _, key := range keys {
+		items = append(items, data[key])
+	}
+	return items
 }
 
 func (c *ConfigMapClient) GetFAQItemIfExists(timestamp string) (*FaqItem, error) {

@@ -1,6 +1,6 @@
-FROM quay.io/centos/centos:stream9
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 LABEL maintainer="sgoeddel@redhat.com"
 
-RUN yum install -y git diffutils && yum clean all
+RUN microdnf install -y git diffutils && microdnf clean all
 ADD cluster-init /usr/bin/cluster-init
 ENTRYPOINT ["/usr/bin/cluster-init"]

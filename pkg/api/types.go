@@ -1275,9 +1275,6 @@ const (
 	ClusterProfileGCPHA                 ClusterProfile = "gcp-ha"
 	ClusterProfileGCPCRIO               ClusterProfile = "gcp-crio"
 	ClusterProfileGCPLogging            ClusterProfile = "gcp-logging"
-	ClusterProfileGCPLoggingJournald    ClusterProfile = "gcp-logging-journald"
-	ClusterProfileGCPLoggingJSONFile    ClusterProfile = "gcp-logging-json-file"
-	ClusterProfileGCPLoggingCRIO        ClusterProfile = "gcp-logging-crio"
 	ClusterProfileGCP2                  ClusterProfile = "gcp-openshift-gce-devel-ci-2"
 	ClusterProfileGCPOpendatahub        ClusterProfile = "gcp-opendatahub"
 	ClusterProfileGCPTelco              ClusterProfile = "gcp-telco"
@@ -1418,9 +1415,6 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileGCPCRIO,
 		ClusterProfileGCPHA,
 		ClusterProfileGCPLogging,
-		ClusterProfileGCPLoggingCRIO,
-		ClusterProfileGCPLoggingJSONFile,
-		ClusterProfileGCPLoggingJournald,
 		ClusterProfileGCPQE,
 		ClusterProfileGCPAutoReleaseQE,
 		ClusterProfileGCPArm64,
@@ -1602,9 +1596,6 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileGCPHA,
 		ClusterProfileGCPCRIO,
 		ClusterProfileGCPLogging,
-		ClusterProfileGCPLoggingJournald,
-		ClusterProfileGCPLoggingJSONFile,
-		ClusterProfileGCPLoggingCRIO,
 		ClusterProfileGCP2,
 		ClusterProfileGCPVirtualization,
 		ClusterProfileGCPOpendatahub,
@@ -1831,10 +1822,7 @@ func (p ClusterProfile) LeaseType() string {
 		ClusterProfileGCP,
 		ClusterProfileGCPHA,
 		ClusterProfileGCPCRIO,
-		ClusterProfileGCPLogging,
-		ClusterProfileGCPLoggingJournald,
-		ClusterProfileGCPLoggingJSONFile,
-		ClusterProfileGCPLoggingCRIO:
+		ClusterProfileGCPLogging:
 		return "gcp-quota-slice"
 	case ClusterProfileGCP2:
 		return "gcp-openshift-gce-devel-ci-2-quota-slice"
@@ -2017,9 +2005,6 @@ func (p ClusterProfile) ConfigMap() string {
 		ClusterProfileGCPCRIO,
 		ClusterProfileGCPHA,
 		ClusterProfileGCPLogging,
-		ClusterProfileGCPLoggingCRIO,
-		ClusterProfileGCPLoggingJSONFile,
-		ClusterProfileGCPLoggingJournald,
 		ClusterProfileOvirt:
 		return fmt.Sprintf("cluster-profile-%s", p)
 	default:
@@ -2040,9 +2025,6 @@ func (p ClusterProfile) Secret() string {
 		ClusterProfileGCPCRIO,
 		ClusterProfileGCPHA,
 		ClusterProfileGCPLogging,
-		ClusterProfileGCPLoggingCRIO,
-		ClusterProfileGCPLoggingJSONFile,
-		ClusterProfileGCPLoggingJournald,
 		ClusterProfileVSphere2,
 		ClusterProfileVSphereDis2,
 		ClusterProfileVSphereMultizone2,

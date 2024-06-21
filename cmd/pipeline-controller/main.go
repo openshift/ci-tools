@@ -10,8 +10,10 @@ import (
 	"github.com/bombsimon/logrusr/v3"
 	"github.com/sirupsen/logrus"
 
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	ctrlruntimelog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/prow/pkg/config/secret"
 	prowflagutil "sigs.k8s.io/prow/pkg/flagutil"
 	configflagutil "sigs.k8s.io/prow/pkg/flagutil/config"
@@ -130,8 +132,14 @@ func main() {
 		logger.WithError(err).Fatal("failed to get kubeconfig")
 	}
 	mgr, err := manager.New(restCfg, manager.Options{
-		Namespace:          cfg().ProwJobNamespace,
-		MetricsBindAddress: "0",
+		Cache: cache.Options{
+			DefaultNamespaces: map[string]cache.Config{
+				cfg().ProwJobNamespace: {},
+			},
+		},
+		Metrics: server.Options{
+			BindAddress: "0",
+		},
 	})
 	if err != nil {
 		logger.WithError(err).Fatal("failed to create manager")

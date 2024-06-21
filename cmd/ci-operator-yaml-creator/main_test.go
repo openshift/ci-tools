@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"k8s.io/test-infra/prow/git/localgit"
+	"sigs.k8s.io/prow/pkg/git/localgit"
 	"sigs.k8s.io/yaml"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"

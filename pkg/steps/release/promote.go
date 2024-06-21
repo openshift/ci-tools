@@ -19,8 +19,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
-	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
 	imagev1 "github.com/openshift/api/image/v1"
 

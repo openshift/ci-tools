@@ -10,8 +10,8 @@ import (
 	"github.com/sirupsen/logrus"
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
 	prpqv1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
 	"github.com/openshift/ci-tools/pkg/html"

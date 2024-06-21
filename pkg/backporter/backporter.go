@@ -15,8 +15,8 @@ import (
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/test-infra/prow/bugzilla"
-	"k8s.io/test-infra/prow/metrics"
+	"sigs.k8s.io/prow/pkg/bugzilla"
+	"sigs.k8s.io/prow/pkg/metrics"
 )
 
 const (

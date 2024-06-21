@@ -15,9 +15,9 @@ import (
 	coreapi "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
-	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+	"sigs.k8s.io/prow/pkg/pod-utils/downwardapi"
 
 	imageapi "github.com/openshift/api/image/v1"
 	templateapi "github.com/openshift/api/template/v1"

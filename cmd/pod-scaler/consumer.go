@@ -7,8 +7,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/test-infra/prow/interrupts"
-	"k8s.io/test-infra/prow/pjutil"
+	"sigs.k8s.io/prow/pkg/interrupts"
+	"sigs.k8s.io/prow/pkg/pjutil"
 
 	pod_scaler "github.com/openshift/ci-tools/pkg/pod-scaler"
 )

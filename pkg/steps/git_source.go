@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	coreapi "k8s.io/api/core/v1"
-	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
 	buildapi "github.com/openshift/api/build/v1"
 

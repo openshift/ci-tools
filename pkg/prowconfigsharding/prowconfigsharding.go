@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/afero"
 
-	"k8s.io/test-infra/prow/plugins"
+	"sigs.k8s.io/prow/pkg/plugins"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/config"

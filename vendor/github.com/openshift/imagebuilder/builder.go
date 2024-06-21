@@ -13,6 +13,7 @@ import (
 
 	docker "github.com/fsouza/go-dockerclient"
 
+	buildkitparser "github.com/moby/buildkit/frontend/dockerfile/parser"
 	"github.com/openshift/imagebuilder/dockerfile/command"
 	"github.com/openshift/imagebuilder/dockerfile/parser"
 )
@@ -29,18 +30,42 @@ type Copy struct {
 	Download bool
 	// If set, the owner:group for the destination.  This value is passed
 	// to the executor for handling.
-	Chown string
+	Chown    string
+	Chmod    string
+	Checksum string
+	// Additional files which need to be created by executor for this
+	// instruction.
+	Files []File
+}
+
+// File defines if any additional file needs to be created
+// by the executor instruction so that specified command
+// can execute/copy the created file inside the build container.
+type File struct {
+	Name string // Name of the new file.
+	Data string // Content of the file.
 }
 
 // Run defines a run operation required in the container.
 type Run struct {
 	Shell bool
 	Args  []string
+	// Mounts are mounts specified through the --mount flag inside the Containerfile
+	Mounts []string
+	// Network specifies the network mode to run the container with
+	Network string
+	// Additional files which need to be created by executor for this
+	// instruction.
+	Files []File
 }
 
 type Executor interface {
 	Preserve(path string) error
+	// EnsureContainerPath should ensure that the directory exists, creating any components required
 	EnsureContainerPath(path string) error
+	// EnsureContainerPathAs should ensure that the directory exists, creating any components required
+	// with the specified owner and mode, if either is specified
+	EnsureContainerPathAs(path, user string, mode *os.FileMode) error
 	Copy(excludes []string, copies ...Copy) error
 	Run(run Run, config docker.Config) error
 	UnrecognizedInstruction(step *Step) error
@@ -58,15 +83,24 @@ func (logExecutor) EnsureContainerPath(path string) error {
 	return nil
 }
 
+func (logExecutor) EnsureContainerPathAs(path, user string, mode *os.FileMode) error {
+	if mode != nil {
+		log.Printf("ENSURE %s AS %q with MODE=%q", path, user, *mode)
+	} else {
+		log.Printf("ENSURE %s AS %q", path, user)
+	}
+	return nil
+}
+
 func (logExecutor) Copy(excludes []string, copies ...Copy) error {
 	for _, c := range copies {
-		log.Printf("COPY %v -> %s (from:%s download:%t), chown: %s", c.Src, c.Dest, c.From, c.Download, c.Chown)
+		log.Printf("COPY %v -> %s (from:%s download:%t), chown: %s, chmod %s, checksum: %s", c.Src, c.Dest, c.From, c.Download, c.Chown, c.Chmod, c.Checksum)
 	}
 	return nil
 }
 
 func (logExecutor) Run(run Run, config docker.Config) error {
-	log.Printf("RUN %v %t (%v)", run.Args, run.Shell, config.Env)
+	log.Printf("RUN %v %v %t (%v)", run.Args, run.Mounts, run.Shell, config.Env)
 	return nil
 }
 
@@ -82,6 +116,10 @@ func (noopExecutor) Preserve(path string) error {
 }
 
 func (noopExecutor) EnsureContainerPath(path string) error {
+	return nil
+}
+
+func (noopExecutor) EnsureContainerPathAs(path, user string, mode *os.FileMode) error {
 	return nil
 }
 
@@ -160,6 +198,21 @@ func (stages Stages) ByName(name string) (Stage, bool) {
 			return stage, true
 		}
 	}
+	if i, err := strconv.Atoi(name); err == nil {
+		return stages.ByPosition(i)
+	}
+	return Stage{}, false
+}
+
+func (stages Stages) ByPosition(position int) (Stage, bool) {
+	for _, stage := range stages {
+		// stage.Position is expected to be the same as the unnamed
+		// index variable for this loop, but comparing to the Position
+		// field's value is easier to explain
+		if stage.Position == position {
+			return stage, true
+		}
+	}
 	return Stage{}, false
 }
 
@@ -171,6 +224,16 @@ func (stages Stages) ByTarget(target string) (Stages, bool) {
 	for i, stage := range stages {
 		if stage.Name == target {
 			return stages[i : i+1], true
+		}
+	}
+	if position, err := strconv.Atoi(target); err == nil {
+		for i, stage := range stages {
+			// stage.Position is expected to be the same as the unnamed
+			// index variable for this loop, but comparing to the Position
+			// field's value is easier to explain
+			if stage.Position == position {
+				return stages[i : i+1], true
+			}
 		}
 	}
 	return nil, false
@@ -186,6 +249,16 @@ func (stages Stages) ThroughTarget(target string) (Stages, bool) {
 			return stages[0 : i+1], true
 		}
 	}
+	if position, err := strconv.Atoi(target); err == nil {
+		for i, stage := range stages {
+			// stage.Position is expected to be the same as the unnamed
+			// index variable for this loop, but comparing to the Position
+			// field's value is easier to explain
+			if stage.Position == position {
+				return stages[0 : i+1], true
+			}
+		}
+	}
 	return nil, false
 }
 
@@ -198,6 +271,17 @@ type Stage struct {
 
 func NewStages(node *parser.Node, b *Builder) (Stages, error) {
 	var stages Stages
+	var allDeclaredArgs []string
+	for _, root := range SplitBy(node, command.Arg) {
+		argNode := root.Children[0]
+		if argNode.Value == command.Arg {
+			// extract declared variable
+			s := strings.SplitN(argNode.Original, " ", 2)
+			if len(s) == 2 && (strings.ToLower(s[0]) == command.Arg) {
+				allDeclaredArgs = append(allDeclaredArgs, s[1])
+			}
+		}
+	}
 	if err := b.extractHeadingArgsFromNode(node); err != nil {
 		return stages, err
 	}
@@ -209,12 +293,8 @@ func NewStages(node *parser.Node, b *Builder) (Stages, error) {
 		stages = append(stages, Stage{
 			Position: i,
 			Name:     name,
-			Builder: &Builder{
-				Args:        b.Args,
-				AllowedArgs: b.AllowedArgs,
-				Env:         b.Env,
-			},
-			Node: root,
+			Builder:  b.builderForStage(allDeclaredArgs),
+			Node:     root,
 		})
 	}
 	return stages, nil
@@ -235,17 +315,30 @@ func (b *Builder) extractHeadingArgsFromNode(node *parser.Node) error {
 		}
 	}
 
+	// Set children equal to everything except the leading ARG nodes
+	node.Children = children
+
+	// Use a separate builder to evaluate the heading args
+	tempBuilder := NewBuilder(b.UserArgs)
+
+	// Evaluate all the heading arg commands
 	for _, c := range args {
-		step := b.Step()
+		step := tempBuilder.Step()
 		if err := step.Resolve(c); err != nil {
 			return err
 		}
-		if err := b.Run(step, NoopExecutor, false); err != nil {
+		if err := tempBuilder.Run(step, NoopExecutor, false); err != nil {
 			return err
 		}
 	}
 
-	node.Children = children
+	// Add all of the defined heading args to the original builder's HeadingArgs map
+	for k, v := range tempBuilder.Args {
+		if _, ok := tempBuilder.AllowedArgs[k]; ok {
+			b.HeadingArgs[k] = v
+		}
+	}
+
 	return nil
 }
 
@@ -264,13 +357,29 @@ func extractNameFromNode(node *parser.Node) (string, bool) {
 	return n.Next.Value, true
 }
 
+func (b *Builder) builderForStage(globalArgsList []string) *Builder {
+	stageBuilder := newBuilderWithGlobalAllowedArgs(b.UserArgs, globalArgsList)
+	for k, v := range b.HeadingArgs {
+		stageBuilder.HeadingArgs[k] = v
+	}
+	return stageBuilder
+}
+
 type Builder struct {
 	RunConfig docker.Config
 
-	Env    []string
-	Args   map[string]string
-	CmdSet bool
-	Author string
+	Env         []string
+	Args        map[string]string
+	HeadingArgs map[string]string
+	UserArgs    map[string]string
+	CmdSet      bool
+	Author      string
+	// Certain instructions like `FROM` will need to use
+	// `ARG` decalred before or not in this stage hence
+	// while processing instruction like `FROM ${SOME_ARG}`
+	// we will make sure to verify if they are declared any
+	// where in containerfile or not.
+	GlobalAllowedArgs []string
 
 	AllowedArgs map[string]bool
 	Volumes     VolumeSet
@@ -281,16 +390,32 @@ type Builder struct {
 	PendingCopies  []Copy
 
 	Warnings []string
+	// Raw platform string specified with `FROM --platform` of the stage
+	// It's up to the implementation or client to parse and use this field
+	Platform string
 }
 
 func NewBuilder(args map[string]string) *Builder {
+	return newBuilderWithGlobalAllowedArgs(args, []string{})
+}
+
+func newBuilderWithGlobalAllowedArgs(args map[string]string, globalallowedargs []string) *Builder {
 	allowed := make(map[string]bool)
 	for k, v := range builtinAllowedBuildArgs {
 		allowed[k] = v
 	}
+	userArgs := make(map[string]string)
+	initialArgs := make(map[string]string)
+	for k, v := range args {
+		userArgs[k] = v
+		initialArgs[k] = v
+	}
 	return &Builder{
-		Args:        args,
-		AllowedArgs: allowed,
+		Args:              initialArgs,
+		UserArgs:          userArgs,
+		HeadingArgs:       make(map[string]string),
+		AllowedArgs:       allowed,
+		GlobalAllowedArgs: globalallowedargs,
 	}
 }
 
@@ -305,11 +430,10 @@ func ParseFile(path string) (*parser.Node, error) {
 
 // Step creates a new step from the current state.
 func (b *Builder) Step() *Step {
-	dst := make([]string, len(b.Env)+len(b.RunConfig.Env))
-	copy(dst, b.Env)
-	dst = append(dst, b.RunConfig.Env...)
-	dst = append(dst, b.Arguments()...)
-	return &Step{Env: dst}
+	// Include build arguments in the table of variables that we'll use in
+	// Resolve(), but override them with values from the actual
+	// environment in case there's any conflict.
+	return &Step{Env: mergeEnv(b.Arguments(), mergeEnv(b.Env, b.RunConfig.Env))}
 }
 
 // Run executes a step, transforming the current builder and
@@ -321,7 +445,7 @@ func (b *Builder) Run(step *Step, exec Executor, noRunsRemaining bool) error {
 	if !ok {
 		return exec.UnrecognizedInstruction(step)
 	}
-	if err := fn(b, step.Args, step.Attrs, step.Flags, step.Original); err != nil {
+	if err := fn(b, step.Args, step.Attrs, step.Flags, step.Original, step.Heredocs); err != nil {
 		return err
 	}
 
@@ -346,7 +470,7 @@ func (b *Builder) Run(step *Step, exec Executor, noRunsRemaining bool) error {
 	}
 
 	if len(b.RunConfig.WorkingDir) > 0 {
-		if err := exec.EnsureContainerPath(b.RunConfig.WorkingDir); err != nil {
+		if err := exec.EnsureContainerPathAs(b.RunConfig.WorkingDir, b.RunConfig.User, nil); err != nil {
 			return err
 		}
 	}
@@ -437,11 +561,11 @@ func (b *Builder) FromImage(image *docker.Image, node *parser.Node) error {
 	SplitChildren(node, command.From)
 
 	b.RunConfig = *image.Config
-	b.Env = append(b.Env, b.RunConfig.Env...)
+	b.Env = mergeEnv(b.Env, b.RunConfig.Env)
 	b.RunConfig.Env = nil
 
 	// Check to see if we have a default PATH, note that windows won't
-	// have one as its set by HCS
+	// have one as it's set by HCS
 	if runtime.GOOS != "windows" && !hasEnvName(b.Env, "PATH") {
 		b.RunConfig.Env = append(b.RunConfig.Env, "PATH="+defaultPathEnv)
 	}
@@ -501,7 +625,7 @@ func SplitBy(node *parser.Node, value string) []*parser.Node {
 }
 
 // StepFunc is invoked with the result of a resolved step.
-type StepFunc func(*Builder, []string, map[string]bool, []string, string) error
+type StepFunc func(*Builder, []string, map[string]bool, []string, string, []buildkitparser.Heredoc) error
 
 var evaluateTable = map[string]StepFunc{
 	command.Env:         env,
@@ -536,15 +660,39 @@ var builtinAllowedBuildArgs = map[string]bool{
 	"no_proxy":    true,
 }
 
-// ParseDockerIgnore returns a list of the excludes in the .dockerignore file.
-// extracted from fsouza/go-dockerclient.
-func ParseDockerignore(root string) ([]string, error) {
+// ParseIgnore returns a list of the excludes in the specified path
+// path should be a file with the .dockerignore format
+// extracted from fsouza/go-dockerclient and modified to drop comments and
+// empty lines.
+func ParseIgnore(path string) ([]string, error) {
 	var excludes []string
-	ignore, err := ioutil.ReadFile(filepath.Join(root, ".dockerignore"))
-	if err != nil && !os.IsNotExist(err) {
-		return excludes, fmt.Errorf("error reading .dockerignore: '%s'", err)
+
+	ignores, err := ioutil.ReadFile(path)
+	if err != nil {
+		return excludes, err
 	}
-	return strings.Split(string(ignore), "\n"), nil
+	for _, ignore := range strings.Split(string(ignores), "\n") {
+		if len(ignore) == 0 || ignore[0] == '#' {
+			continue
+		}
+		ignore = strings.Trim(ignore, "/")
+		if len(ignore) > 0 {
+			excludes = append(excludes, ignore)
+		}
+	}
+	return excludes, nil
+}
+
+// ParseDockerIgnore returns a list of the excludes in the .containerignore or .dockerignore file.
+func ParseDockerignore(root string) ([]string, error) {
+	excludes, err := ParseIgnore(filepath.Join(root, ".containerignore"))
+	if err != nil && os.IsNotExist(err) {
+		excludes, err = ParseIgnore(filepath.Join(root, ".dockerignore"))
+	}
+	if err != nil && os.IsNotExist(err) {
+		return excludes, nil
+	}
+	return excludes, err
 }
 
 // ExportEnv creates an export statement for a shell that contains all of the

@@ -9,7 +9,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
-	prowconfig "k8s.io/test-infra/prow/config"
+	prowconfig "sigs.k8s.io/prow/pkg/config"
 )
 
 var unexportedFields = []cmp.Option{

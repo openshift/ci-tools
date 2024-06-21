@@ -15,11 +15,11 @@ import (
 	"github.com/spf13/afero"
 
 	"k8s.io/apimachinery/pkg/util/sets"
-	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	prowconfig "k8s.io/test-infra/prow/config"
-	prowflagutil "k8s.io/test-infra/prow/flagutil"
-	"k8s.io/test-infra/prow/interrupts"
-	"k8s.io/test-infra/prow/plugins"
+	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+	prowconfig "sigs.k8s.io/prow/pkg/config"
+	prowflagutil "sigs.k8s.io/prow/pkg/flagutil"
+	"sigs.k8s.io/prow/pkg/interrupts"
+	"sigs.k8s.io/prow/pkg/plugins"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"

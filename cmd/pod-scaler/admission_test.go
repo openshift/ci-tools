@@ -17,8 +17,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/test-infra/prow/kube"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	"sigs.k8s.io/prow/pkg/kube"
 
 	buildv1 "github.com/openshift/api/build/v1"
 	fakebuildv1client "github.com/openshift/client-go/build/clientset/versioned/fake"

@@ -1,6 +1,6 @@
 package retester
 
-import "k8s.io/test-infra/prow/tide"
+import "sigs.k8s.io/prow/pkg/tide"
 
 type retestBackoffAction int
 

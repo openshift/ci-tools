@@ -20,7 +20,7 @@ import (
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
-	prowConfig "k8s.io/test-infra/prow/config"
+	prowConfig "sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"

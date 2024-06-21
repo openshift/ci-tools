@@ -14,10 +14,10 @@ import (
 
 	k8sv1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	"k8s.io/test-infra/prow/config"
-	prowconfig "k8s.io/test-infra/prow/config"
-	configflagutil "k8s.io/test-infra/prow/flagutil/config"
+	pjapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+	"sigs.k8s.io/prow/pkg/config"
+	prowconfig "sigs.k8s.io/prow/pkg/config"
+	configflagutil "sigs.k8s.io/prow/pkg/flagutil/config"
 )
 
 type fakeJobResult struct {

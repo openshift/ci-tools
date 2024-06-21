@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	prowconfig "k8s.io/test-infra/prow/config"
 	utilpointer "k8s.io/utils/pointer"
+	prowconfig "sigs.k8s.io/prow/pkg/config"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	ciop "github.com/openshift/ci-tools/pkg/api"

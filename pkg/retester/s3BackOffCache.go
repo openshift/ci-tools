@@ -11,7 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/test-infra/prow/tide"
+	"sigs.k8s.io/prow/pkg/tide"
 	"sigs.k8s.io/yaml"
 )
 

@@ -9,8 +9,8 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/util/sets"
-	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	prowconfig "k8s.io/test-infra/prow/config"
+	pjapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+	prowconfig "sigs.k8s.io/prow/pkg/config"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"

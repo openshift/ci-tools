@@ -22,10 +22,10 @@ import (
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/test-infra/prow/interrupts"
-	"k8s.io/test-infra/prow/metrics"
-	"k8s.io/test-infra/prow/pjutil"
-	"k8s.io/test-infra/prow/simplifypath"
+	"sigs.k8s.io/prow/pkg/interrupts"
+	"sigs.k8s.io/prow/pkg/metrics"
+	"sigs.k8s.io/prow/pkg/pjutil"
+	"sigs.k8s.io/prow/pkg/simplifypath"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	pod_scaler "github.com/openshift/ci-tools/pkg/pod-scaler"

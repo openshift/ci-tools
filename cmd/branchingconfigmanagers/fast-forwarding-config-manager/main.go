@@ -13,7 +13,7 @@ import (
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
-	prowconfig "k8s.io/test-infra/prow/config"
+	prowconfig "sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api/ocplifecycle"

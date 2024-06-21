@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"k8s.io/test-infra/prow/config"
+	"sigs.k8s.io/prow/pkg/config"
 
 	"github.com/openshift/ci-tools/pkg/dispatcher"
 )

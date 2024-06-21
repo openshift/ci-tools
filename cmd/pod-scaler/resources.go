@@ -8,7 +8,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/test-infra/prow/pjutil"
+	"sigs.k8s.io/prow/pkg/pjutil"
 
 	pod_scaler "github.com/openshift/ci-tools/pkg/pod-scaler"
 )

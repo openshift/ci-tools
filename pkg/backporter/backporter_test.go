@@ -11,9 +11,9 @@ import (
 	"strconv"
 	"testing"
 
-	"k8s.io/test-infra/prow/bugzilla"
-	"k8s.io/test-infra/prow/metrics"
 	"k8s.io/utils/diff"
+	"sigs.k8s.io/prow/pkg/bugzilla"
+	"sigs.k8s.io/prow/pkg/metrics"
 )
 
 var (

@@ -1,6 +1,6 @@
 package junit
 
-import "k8s.io/test-infra/prow/secretutil"
+import "sigs.k8s.io/prow/pkg/secretutil"
 
 // CensorTestSuite censors secret data in user-provided fields of a jUnit test suite.
 func CensorTestSuite(censor secretutil.Censorer, testSuite *TestSuite) {

@@ -10,11 +10,11 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	prowconfig "k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/git/v2"
-	"k8s.io/test-infra/prow/github"
-	"k8s.io/test-infra/prow/pluginhelp"
-	"k8s.io/test-infra/prow/pod-utils/gcs"
+	prowconfig "sigs.k8s.io/prow/pkg/config"
+	"sigs.k8s.io/prow/pkg/git/v2"
+	"sigs.k8s.io/prow/pkg/github"
+	"sigs.k8s.io/prow/pkg/pluginhelp"
+	"sigs.k8s.io/prow/pkg/pod-utils/gcs"
 
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/rehearse"

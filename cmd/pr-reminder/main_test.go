@@ -10,8 +10,8 @@ import (
 	"github.com/slack-go/slack"
 
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/test-infra/prow/github"
-	"k8s.io/test-infra/prow/labels"
+	"sigs.k8s.io/prow/pkg/github"
+	"sigs.k8s.io/prow/pkg/labels"
 
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )

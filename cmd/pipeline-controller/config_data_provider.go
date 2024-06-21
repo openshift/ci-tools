@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"k8s.io/test-infra/prow/config"
+	"sigs.k8s.io/prow/pkg/config"
 )
 
 type presubmitTests struct {

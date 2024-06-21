@@ -17,11 +17,11 @@ import (
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/test-infra/prow/cmd/generic-autobumper/bumper"
-	"k8s.io/test-infra/prow/config/secret"
-	"k8s.io/test-infra/prow/flagutil"
-	pgithub "k8s.io/test-infra/prow/github"
-	"k8s.io/test-infra/prow/labels"
+	"sigs.k8s.io/prow/cmd/generic-autobumper/bumper"
+	"sigs.k8s.io/prow/pkg/config/secret"
+	"sigs.k8s.io/prow/pkg/flagutil"
+	pgithub "sigs.k8s.io/prow/pkg/github"
+	"sigs.k8s.io/prow/pkg/labels"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/builder/pkg/build/builder/util/dockerfile"

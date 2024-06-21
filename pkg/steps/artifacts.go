@@ -23,9 +23,9 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/remotecommand"
-	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	"k8s.io/test-infra/prow/pod-utils/decorate"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+	"sigs.k8s.io/prow/pkg/pod-utils/decorate"
 
 	buildapi "github.com/openshift/api/build/v1"
 

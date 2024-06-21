@@ -51,7 +51,7 @@ func (c *Client) ListVolumes(opts ListVolumesOptions) ([]Volume, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	m := make(map[string]interface{})
+	m := make(map[string]any)
 	if err = json.NewDecoder(resp.Body).Decode(&m); err != nil {
 		return nil, err
 	}
@@ -106,7 +106,8 @@ func (c *Client) CreateVolume(opts CreateVolumeOptions) (*Volume, error) {
 func (c *Client) InspectVolume(name string) (*Volume, error) {
 	resp, err := c.do(http.MethodGet, "/volumes/"+name, doOptions{})
 	if err != nil {
-		if e, ok := err.(*Error); ok && e.Status == http.StatusNotFound {
+		var e *Error
+		if errors.As(err, &e) && e.Status == http.StatusNotFound {
 			return nil, ErrNoSuchVolume
 		}
 		return nil, err
@@ -144,7 +145,8 @@ func (c *Client) RemoveVolumeWithOptions(opts RemoveVolumeOptions) error {
 	path := "/volumes/" + opts.Name
 	resp, err := c.do(http.MethodDelete, path+"?"+queryString(opts), doOptions{context: opts.Context})
 	if err != nil {
-		if e, ok := err.(*Error); ok {
+		var e *Error
+		if errors.As(err, &e) {
 			if e.Status == http.StatusNotFound {
 				return ErrNoSuchVolume
 			}

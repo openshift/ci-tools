@@ -1,8 +1,8 @@
 package dockerfile
 
 import (
-	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/openshift/imagebuilder/dockerfile/command"
@@ -38,23 +38,18 @@ func Run(cmd string) (string, error) {
 	return unquotedArgsInstruction(command.Run, cmd)
 }
 
-// keyValueInstruction builds a Dockerfile instruction from the mapping m. Keys
-// and values are serialized as JSON strings to ensure compatibility with the
-// Dockerfile parser. Syntax:
-//   COMMAND "KEY"="VALUE" "may"="contain spaces"
+// keyValueInstruction builds a Dockerfile instruction from the mapping m. Keys and
+// values are quoted and non-printable characters escaped to ensure compatibility
+// with the Dockerfile parser. Syntax:
+//
+//	COMMAND "KEY"="VALUE" "may"="contain spaces"
 func keyValueInstruction(cmd string, m []KeyValue) (string, error) {
 	s := []string{strings.ToUpper(cmd)}
 	for _, kv := range m {
-		// Marshal kv.Key and kv.Value as JSON strings to cover cases
-		// like when the values contain spaces or special characters.
-		k, err := json.Marshal(kv.Key)
-		if err != nil {
-			return "", err
-		}
-		v, err := json.Marshal(kv.Value)
-		if err != nil {
-			return "", err
-		}
+		// Process with 'strconv.Quote' function to allow whitespaces
+		// and escape non-printable and control characters
+		k := strconv.Quote(kv.Key)
+		v := strconv.Quote(kv.Value)
 		s = append(s, fmt.Sprintf("%s=%s", k, v))
 	}
 	return strings.Join(s, " "), nil
@@ -62,8 +57,9 @@ func keyValueInstruction(cmd string, m []KeyValue) (string, error) {
 
 // unquotedArgsInstruction builds a Dockerfile instruction that takes unquoted
 // string arguments. Syntax:
-//   COMMAND single unquoted argument
-//   COMMAND value1 value2 value3 ...
+//
+//	COMMAND single unquoted argument
+//	COMMAND value1 value2 value3 ...
 func unquotedArgsInstruction(cmd string, args ...string) (string, error) {
 	s := []string{strings.ToUpper(cmd)}
 	for _, arg := range args {

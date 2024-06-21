@@ -10,9 +10,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/spyglass/api"
-	"k8s.io/test-infra/prow/spyglass/lenses"
+	"sigs.k8s.io/prow/pkg/config"
+	"sigs.k8s.io/prow/pkg/spyglass/api"
+	"sigs.k8s.io/prow/pkg/spyglass/lenses"
 	"sigs.k8s.io/yaml"
 
 	citoolsapi "github.com/openshift/ci-tools/pkg/api"

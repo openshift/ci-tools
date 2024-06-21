@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	prowconfig "k8s.io/test-infra/prow/config"
+	prowconfig "sigs.k8s.io/prow/pkg/config"
 )
 
 func TestPresubmitsAddAll(t *testing.T) {

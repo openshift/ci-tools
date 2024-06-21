@@ -10,15 +10,15 @@ import (
 	"github.com/bombsimon/logrusr/v3"
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/test-infra/prow/config/secret"
-	prowflagutil "k8s.io/test-infra/prow/flagutil"
-	configflagutil "k8s.io/test-infra/prow/flagutil/config"
-	"k8s.io/test-infra/prow/github"
-	"k8s.io/test-infra/prow/githubeventserver"
-	"k8s.io/test-infra/prow/interrupts"
-	"k8s.io/test-infra/prow/logrusutil"
 	ctrlruntimelog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/prow/pkg/config/secret"
+	prowflagutil "sigs.k8s.io/prow/pkg/flagutil"
+	configflagutil "sigs.k8s.io/prow/pkg/flagutil/config"
+	"sigs.k8s.io/prow/pkg/github"
+	"sigs.k8s.io/prow/pkg/githubeventserver"
+	"sigs.k8s.io/prow/pkg/interrupts"
+	"sigs.k8s.io/prow/pkg/logrusutil"
 )
 
 const pullRequestInfoComment = "**Pipeline controller notification**\n This repository is configured to use the [pipeline controller](https://docs.ci.openshift.org/docs/how-tos/creating-a-pipeline/). Second-stage tests will be triggered only if the required tests of the first stage are successful. The pipeline controller will automatically detect which contexts are required, or not needed and will utilize a set of `/test` and `/override` Prow commands to trigger the second stage."

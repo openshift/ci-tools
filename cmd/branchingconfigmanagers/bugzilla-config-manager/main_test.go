@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/test-infra/prow/plugins"
+	"sigs.k8s.io/prow/pkg/plugins"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api/ocplifecycle"

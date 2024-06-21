@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"k8s.io/test-infra/prow/flagutil"
+	"sigs.k8s.io/prow/pkg/flagutil"
 
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/promotion"

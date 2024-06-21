@@ -18,7 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/test-infra/prow/config/org"
+	"sigs.k8s.io/prow/pkg/config/org"
 
 	userv1 "github.com/openshift/api/user/v1"
 	v1 "github.com/openshift/api/user/v1"

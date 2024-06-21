@@ -7,12 +7,12 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"k8s.io/apimachinery/pkg/util/sets"
-	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	prowconfig "k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/git/types"
-	"k8s.io/test-infra/prow/plugins"
-	prowplugins "k8s.io/test-infra/prow/plugins"
 	utilpointer "k8s.io/utils/pointer"
+	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+	prowconfig "sigs.k8s.io/prow/pkg/config"
+	"sigs.k8s.io/prow/pkg/git/types"
+	"sigs.k8s.io/prow/pkg/plugins"
+	prowplugins "sigs.k8s.io/prow/pkg/plugins"
 )
 
 var orgRepos = orgReposWithOfficialImages{

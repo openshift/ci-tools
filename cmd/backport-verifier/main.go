@@ -14,13 +14,13 @@ import (
 	"github.com/sirupsen/logrus"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	prowconfig "k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/config/secret"
-	prowflagutil "k8s.io/test-infra/prow/flagutil"
-	"k8s.io/test-infra/prow/githubeventserver"
-	"k8s.io/test-infra/prow/interrupts"
-	"k8s.io/test-infra/prow/logrusutil"
-	"k8s.io/test-infra/prow/pjutil"
+	prowconfig "sigs.k8s.io/prow/pkg/config"
+	"sigs.k8s.io/prow/pkg/config/secret"
+	prowflagutil "sigs.k8s.io/prow/pkg/flagutil"
+	"sigs.k8s.io/prow/pkg/githubeventserver"
+	"sigs.k8s.io/prow/pkg/interrupts"
+	"sigs.k8s.io/prow/pkg/logrusutil"
+	"sigs.k8s.io/prow/pkg/pjutil"
 
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )

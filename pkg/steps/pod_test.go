@@ -8,11 +8,11 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	corev1 "k8s.io/api/core/v1"
-	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 	utilpointer "k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+	"sigs.k8s.io/prow/pkg/pod-utils/downwardapi"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/kubernetes"

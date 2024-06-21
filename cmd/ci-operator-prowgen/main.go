@@ -10,8 +10,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	prowconfig "k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/flagutil"
+	prowconfig "sigs.k8s.io/prow/pkg/config"
+	"sigs.k8s.io/prow/pkg/flagutil"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"

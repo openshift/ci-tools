@@ -9,9 +9,9 @@ import (
 	"github.com/kataras/tablewriter"
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/test-infra/prow/flagutil"
-	configflagutil "k8s.io/test-infra/prow/flagutil/config"
-	pluginflagutil "k8s.io/test-infra/prow/flagutil/plugins"
+	"sigs.k8s.io/prow/pkg/flagutil"
+	configflagutil "sigs.k8s.io/prow/pkg/flagutil/config"
+	pluginflagutil "sigs.k8s.io/prow/pkg/flagutil/plugins"
 
 	"github.com/openshift/ci-tools/pkg/deprecatetemplates"
 )

@@ -5,7 +5,7 @@ import (
 
 	"cloud.google.com/go/bigquery"
 
-	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 )

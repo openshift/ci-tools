@@ -12,9 +12,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
-	prowflagutil "k8s.io/test-infra/prow/flagutil"
-	"k8s.io/test-infra/prow/logrusutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
+	prowflagutil "sigs.k8s.io/prow/pkg/flagutil"
+	"sigs.k8s.io/prow/pkg/logrusutil"
 
 	buildv1 "github.com/openshift/api/build/v1"
 

@@ -13,10 +13,6 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	"k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/kube"
-	"k8s.io/test-infra/prow/pjutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -25,6 +21,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+	"sigs.k8s.io/prow/pkg/config"
+	"sigs.k8s.io/prow/pkg/kube"
+	"sigs.k8s.io/prow/pkg/pjutil"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 )

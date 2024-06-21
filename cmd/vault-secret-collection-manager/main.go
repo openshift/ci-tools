@@ -17,12 +17,12 @@ import (
 	"github.com/sirupsen/logrus"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/flagutil"
-	"k8s.io/test-infra/prow/interrupts"
-	"k8s.io/test-infra/prow/logrusutil"
-	"k8s.io/test-infra/prow/metrics"
-	"k8s.io/test-infra/prow/version"
+	"sigs.k8s.io/prow/pkg/config"
+	"sigs.k8s.io/prow/pkg/flagutil"
+	"sigs.k8s.io/prow/pkg/interrupts"
+	"sigs.k8s.io/prow/pkg/logrusutil"
+	"sigs.k8s.io/prow/pkg/metrics"
+	"sigs.k8s.io/prow/pkg/version"
 
 	"github.com/openshift/ci-tools/pkg/vaultclient"
 )

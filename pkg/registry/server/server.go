@@ -12,7 +12,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/test-infra/prow/metrics"
+	"sigs.k8s.io/prow/pkg/metrics"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/load/agents"

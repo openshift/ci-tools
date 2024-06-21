@@ -17,12 +17,12 @@ import (
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 
-	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	"k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/gcsupload"
-	"k8s.io/test-infra/prow/pjutil"
-	"k8s.io/test-infra/prow/pod-utils/downwardapi"
-	gcsutil "k8s.io/test-infra/prow/pod-utils/gcs"
+	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+	"sigs.k8s.io/prow/pkg/config"
+	"sigs.k8s.io/prow/pkg/gcsupload"
+	"sigs.k8s.io/prow/pkg/pjutil"
+	"sigs.k8s.io/prow/pkg/pod-utils/downwardapi"
+	gcsutil "sigs.k8s.io/prow/pkg/pod-utils/gcs"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/jobconfig"

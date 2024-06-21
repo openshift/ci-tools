@@ -15,10 +15,10 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/git/v2"
-	"k8s.io/test-infra/prow/github"
-	"k8s.io/test-infra/prow/tide"
+	"sigs.k8s.io/prow/pkg/config"
+	"sigs.k8s.io/prow/pkg/git/v2"
+	"sigs.k8s.io/prow/pkg/github"
+	"sigs.k8s.io/prow/pkg/tide"
 	"sigs.k8s.io/yaml"
 )
 

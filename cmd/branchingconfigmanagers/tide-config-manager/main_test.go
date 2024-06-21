@@ -7,7 +7,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/spf13/afero"
 
-	prowconfig "k8s.io/test-infra/prow/config"
+	prowconfig "sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api/shardprowconfig"

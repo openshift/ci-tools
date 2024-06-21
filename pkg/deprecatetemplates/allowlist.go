@@ -8,8 +8,8 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 
-	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	"k8s.io/test-infra/prow/config"
+	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+	"sigs.k8s.io/prow/pkg/config"
 
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/prowgen"

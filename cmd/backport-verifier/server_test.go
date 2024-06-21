@@ -7,7 +7,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/test-infra/prow/github"
+	"sigs.k8s.io/prow/pkg/github"
 )
 
 type orgrepopr struct {

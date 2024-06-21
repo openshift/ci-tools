@@ -10,12 +10,12 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/test-infra/pkg/flagutil"
-	prowConfig "k8s.io/test-infra/prow/config"
-	prowflagutil "k8s.io/test-infra/prow/flagutil"
-	configflagutil "k8s.io/test-infra/prow/flagutil/config"
-	"k8s.io/test-infra/prow/interrupts"
-	"k8s.io/test-infra/prow/metrics"
+	prowConfig "sigs.k8s.io/prow/pkg/config"
+	"sigs.k8s.io/prow/pkg/flagutil"
+	prowflagutil "sigs.k8s.io/prow/pkg/flagutil"
+	configflagutil "sigs.k8s.io/prow/pkg/flagutil/config"
+	"sigs.k8s.io/prow/pkg/interrupts"
+	"sigs.k8s.io/prow/pkg/metrics"
 
 	"github.com/openshift/ci-tools/pkg/retester"
 )

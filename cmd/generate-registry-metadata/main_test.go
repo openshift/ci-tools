@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"k8s.io/test-infra/prow/repoowners"
+	"sigs.k8s.io/prow/pkg/repoowners"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )

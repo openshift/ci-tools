@@ -9,10 +9,10 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/client-go/rest"
-	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	prowconfigflagutil "k8s.io/test-infra/prow/flagutil/config"
-	"k8s.io/test-infra/prow/logrusutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
+	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+	prowconfigflagutil "sigs.k8s.io/prow/pkg/flagutil/config"
+	"sigs.k8s.io/prow/pkg/logrusutil"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	prpqv1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"

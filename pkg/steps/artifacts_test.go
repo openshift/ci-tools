@@ -12,8 +12,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
-	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"

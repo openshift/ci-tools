@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	prowjobv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	fakeclock "k8s.io/utils/clock/testing"
+	prowjobv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"

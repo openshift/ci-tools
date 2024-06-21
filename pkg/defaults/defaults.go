@@ -20,10 +20,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
-	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	"k8s.io/test-infra/prow/pod-utils/decorate"
 	utilpointer "k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+	"sigs.k8s.io/prow/pkg/pod-utils/decorate"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/api/image/docker10"

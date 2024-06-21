@@ -12,8 +12,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 
-	prowjobclientset "k8s.io/test-infra/prow/client/clientset/versioned"
 	"k8s.io/utils/clock"
+	prowjobclientset "sigs.k8s.io/prow/pkg/client/clientset/versioned"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"

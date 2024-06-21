@@ -12,8 +12,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/spf13/afero"
 
-	pluginsflagutil "k8s.io/test-infra/prow/flagutil/plugins"
-	"k8s.io/test-infra/prow/plugins"
+	pluginsflagutil "sigs.k8s.io/prow/pkg/flagutil/plugins"
+	"sigs.k8s.io/prow/pkg/plugins"
 	"sigs.k8s.io/yaml"
 )
 

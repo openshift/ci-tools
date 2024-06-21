@@ -12,7 +12,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
-	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -21,6 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
 	v1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"

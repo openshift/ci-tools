@@ -19,7 +19,10 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	controllerruntime "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	"sigs.k8s.io/prow/pkg/config/secret"
 	"sigs.k8s.io/prow/pkg/flagutil"
@@ -371,7 +374,9 @@ func main() {
 		}
 
 		options := controllerruntime.Options{
-			DryRunClient: opts.dryRun,
+			Client: client.Options{
+				DryRun: &opts.dryRun,
+			},
 		}
 		if cluster == appCIContextName {
 			options.LeaderElection = true
@@ -379,11 +384,15 @@ func main() {
 			options.LeaderElectionNamespace = opts.leaderElectionNamespace
 			options.LeaderElectionID = fmt.Sprintf("dptp-controller-manager%s", opts.leaderElectionSuffix)
 		} else {
-			options.MetricsBindAddress = "0"
+			options.Metrics = server.Options{
+				BindAddress: "0",
+			}
 		}
 		if cluster == opts.registryClusterName {
 			syncPeriod := 24 * time.Hour
-			options.SyncPeriod = &syncPeriod
+			options.Cache = cache.Options{
+				SyncPeriod: &syncPeriod,
+			}
 		}
 		logrus.WithField("cluster", cluster).Info("Creating manager ...")
 		mgr, err := controllerruntime.NewManager(&cfg, options)

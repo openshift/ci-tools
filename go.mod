@@ -1,6 +1,6 @@
 module github.com/openshift/ci-tools
 
-go 1.21
+go 1.22.4
 
 replace (
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v14.2.0+incompatible

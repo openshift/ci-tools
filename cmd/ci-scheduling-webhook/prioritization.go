@@ -336,7 +336,7 @@ func (p *Prioritization) encourageSpotInstances() { //nolint: unused
 
 			if interruptibleReplicaCounts[i] > 50 {
 				// Sanity check
-				klog.Errorf("Refusing to increase interruptible machineset %v scale beyond 50", msName, err)
+				klog.Errorf("Refusing to increase interruptible machineset %v scale beyond 50: %v", msName, err)
 				continue
 			}
 
@@ -917,7 +917,7 @@ func (p *Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 		// extract logs / etc (they poll).
 		pods, err := p.getPodsUsingNode(node.Name, true, 5*time.Minute)
 		if err != nil {
-			klog.Errorf("Unable to query for pod age requirement. Encountered error: %w", err)
+			klog.Errorf("Unable to query for pod age requirement. Encountered error: %v", err)
 			break
 		}
 		if len(pods) == 0 {
@@ -1000,7 +1000,7 @@ func (p *Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 
 		deletionPayload, err := json.Marshal(deletionAnnotationsPatch)
 		if err != nil {
-			klog.Errorf("Unable to marshal machine %v annotation deletion patch: %#w", machineName, err)
+			klog.Errorf("Unable to marshal machine %v annotation deletion patch: %#v", machineName, err)
 			continue
 		}
 
@@ -1010,7 +1010,7 @@ func (p *Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 				klog.Warningf("Machine %v has disappeared -- canceling scaledown", machineName)
 				return machineSetNamespace, machineSetName, machineName, nil
 			}
-			klog.Errorf("Unable to apply machine %v annotation %v deletion patch: %#w", machineName, MachineDeleteAnnotationKey, err)
+			klog.Errorf("Unable to apply machine %v annotation %v deletion patch: %#v", machineName, MachineDeleteAnnotationKey, err)
 			continue
 		}
 
@@ -1034,7 +1034,7 @@ func (p *Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 				klog.Errorf("Machineset %v has disappeared -- canceling scaledown", machineSetName)
 				return machineSetNamespace, machineSetName, machineName, nil
 			}
-			klog.Errorf("Unable to get machineset %v: %#w", machineSetName, err)
+			klog.Errorf("Unable to get machineset %v: %#v", machineSetName, err)
 			continue
 		}
 
@@ -1043,7 +1043,7 @@ func (p *Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 
 		replicas, found, err := unstructured.NestedInt64(ms.UnstructuredContent(), "spec", "replicas")
 		if err != nil || !found {
-			klog.Errorf("unable to get current replicas in machineset %v: %#w", machineSetName, err)
+			klog.Errorf("unable to get current replicas in machineset %v: %#v", machineSetName, err)
 			continue
 		}
 
@@ -1055,7 +1055,7 @@ func (p *Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 		machinePhase, machineExists, _, err := p.getMachinePhase(machineSetNamespace, machineName)
 
 		if err != nil {
-			klog.Errorf("Error trying to determine machine phase %v / node %v: %w", machineName, node.Name, err)
+			klog.Errorf("Error trying to determine machine phase %v / node %v: %v", machineName, node.Name, err)
 			continue
 		}
 
@@ -1097,13 +1097,13 @@ func (p *Prioritization) scaleDown(podClass PodClass, node *corev1.Node) (machin
 
 		scaleDownPayload, err := json.Marshal(scaleDownPatch)
 		if err != nil {
-			klog.Errorf("unable to marshal machineset scale down patch: %#w", err)
+			klog.Errorf("unable to marshal machineset scale down patch: %#v", err)
 			continue
 		}
 
 		_, err = machineSetClient.Patch(p.context, machineSetName, types.JSONPatchType, scaleDownPayload, metav1.PatchOptions{})
 		if err != nil {
-			klog.Errorf("unable to patch machineset %v with scale down patch: %#w", machineSetName, err)
+			klog.Errorf("unable to patch machineset %v with scale down patch: %#v", machineSetName, err)
 			continue
 		}
 

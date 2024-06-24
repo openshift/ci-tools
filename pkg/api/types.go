@@ -1236,7 +1236,6 @@ const (
 	ClusterProfileAWSGluster            ClusterProfile = "aws-gluster"
 	ClusterProfileAWSManagedCSPIQE      ClusterProfile = "aws-managed-cspi-qe"
 	ClusterProfileAWSOSDMSP             ClusterProfile = "aws-osd-msp"
-	ClusterProfileAWSOutpost            ClusterProfile = "aws-outpost"
 	ClusterProfileAWSINTEROPQE          ClusterProfile = "aws-interop-qe"
 	ClusterProfileAWSLocalZones         ClusterProfile = "aws-local-zones"
 	ClusterProfileAWSTerraformQE        ClusterProfile = "aws-terraform-qe"
@@ -1377,7 +1376,6 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSSdQE,
 		ClusterProfileAWSSC2SQE,
 		ClusterProfileAWSSCPQE,
-		ClusterProfileAWSOutpost,
 		ClusterProfileAWSOutpostQE,
 		ClusterProfileAWSINTEROPQE,
 		ClusterProfileAWSLocalZones,
@@ -1508,7 +1506,6 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSCPaaS,
 		ClusterProfileAWS2,
 		ClusterProfileAWS3,
-		ClusterProfileAWSOutpost,
 		ClusterProfileAWSQE,
 		ClusterProfileAWSINTEROPQE,
 		ClusterProfileAWS1QE,
@@ -1718,8 +1715,6 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-autorelease-qe-quota-slice"
 	case ClusterProfileAWSSdQE:
 		return "aws-sd-qe-quota-slice"
-	case ClusterProfileAWSOutpost:
-		return "aws-outpost-quota-slice"
 	case ClusterProfileAWSOutpostQE:
 		return "aws-outpost-qe-quota-slice"
 	case ClusterProfileAWSC2SQE:
@@ -1997,7 +1992,6 @@ func (p ClusterProfile) ConfigMap() string {
 		ClusterProfileAWSAtomic,
 		ClusterProfileAWSCentos,
 		ClusterProfileAWSGluster,
-		ClusterProfileAWSOutpost,
 		ClusterProfileAzure,
 		ClusterProfileGCP,
 		ClusterProfileGCP2,
@@ -2021,7 +2015,6 @@ func (p ClusterProfile) Secret() string {
 		ClusterProfileAWSAtomic,
 		ClusterProfileAWSCentos,
 		ClusterProfileAWSGluster,
-		ClusterProfileAWSOutpost,
 		ClusterProfileGCPCRIO,
 		ClusterProfileGCPHA,
 		ClusterProfileGCPLogging,
@@ -2043,7 +2036,7 @@ func (p ClusterProfile) Secret() string {
 // LeaseTypeFromClusterType maps cluster types to lease types
 func LeaseTypeFromClusterType(t string) (string, error) {
 	switch t {
-	case "aws", "aws-c2s", "aws-china", "aws-usgov", "aws-sc2s", "aws-osd-msp", "aws-outpost", "aws-local-zones", "aws-opendatahub", "alibaba", "azure-2", "azure4", "azure-arc", "azure-arm64", "azurestack", "azuremag", "equinix-ocp-metal", "gcp", "gcp-arm64", "gcp-opendatahub", "libvirt-ppc64le", "libvirt-s390x", "libvirt-s390x-amd64", "ibmcloud-multi-ppc64le", "ibmcloud-multi-s390x", "nutanix", "nutanix-qe", "nutanix-qe-dis", "nutanix-qe-zone", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "openstack-nerc-dev", "vsphere", "ovirt", "packet", "packet-edge", "powervs-multi-1", "powervs-1", "powervs-2", "powervs-3", "powervs-4", "powervs-5", "kubevirt", "aws-cpaas", "osd-ephemeral", "gcp-virtualization", "aws-virtualization", "azure-virtualization", "hypershift-powervs", "hypershift-powervs-cb":
+	case "aws", "aws-c2s", "aws-china", "aws-usgov", "aws-sc2s", "aws-osd-msp", "aws-local-zones", "aws-opendatahub", "alibaba", "azure-2", "azure4", "azure-arc", "azure-arm64", "azurestack", "azuremag", "equinix-ocp-metal", "gcp", "gcp-arm64", "gcp-opendatahub", "libvirt-ppc64le", "libvirt-s390x", "libvirt-s390x-amd64", "ibmcloud-multi-ppc64le", "ibmcloud-multi-s390x", "nutanix", "nutanix-qe", "nutanix-qe-dis", "nutanix-qe-zone", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "openstack-nerc-dev", "vsphere", "ovirt", "packet", "packet-edge", "powervs-multi-1", "powervs-1", "powervs-2", "powervs-3", "powervs-4", "powervs-5", "kubevirt", "aws-cpaas", "osd-ephemeral", "gcp-virtualization", "aws-virtualization", "azure-virtualization", "hypershift-powervs", "hypershift-powervs-cb":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

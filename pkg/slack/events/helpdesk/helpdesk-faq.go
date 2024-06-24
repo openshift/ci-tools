@@ -326,7 +326,7 @@ func addReplyToExistingFaqItem(messageTs string, reactionType reaction, client s
 		return false, err
 	}
 
-	return false, nil
+	return true, nil
 }
 
 // formatItemField removes some known special chars that slack inserts into messages in the workflows,

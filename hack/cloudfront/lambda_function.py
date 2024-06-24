@@ -132,6 +132,14 @@ DISTRIBUTION_TO_CANONICAL_BUCKET = {
     'E1PPY7S6SRDS9W': {
         'us-east-1': 'build05-kwk66-image-registry-us-east-1-vuabtweixqvnbprjlctjacx',
         'us-east-2': 'build05-kwk66-image-registry-us-east-1-vuabtweixqvnbprjlctjacx',
+    },
+    'E2B105Z8OCWZSC':{
+        'us-east-1':'build09-x99t2-image-registry-us-east-2-vdprrtegoqcavvotayumroy',
+        'us-east-2':'build09-x99t2-image-registry-us-east-2-vdprrtegoqcavvotayumroy',
+    },
+    'E2N1Y2UGVWY8LA':{
+        'us-east-1':'build10-znq8n-image-registry-us-east-2-cvfrclkdmglnupvrdurssuy',
+        'us-east-2':'build10-znq8n-image-registry-us-east-2-cvfrclkdmglnupvrdurssuy',
     }
 }
 

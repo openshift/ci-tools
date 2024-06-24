@@ -1271,9 +1271,6 @@ const (
 	ClusterProfileGCPArm64              ClusterProfile = "gcp-arm64"
 	ClusterProfileGCP                   ClusterProfile = "gcp"
 	ClusterProfileGCP3                  ClusterProfile = "gcp-3"
-	ClusterProfileGCPHA                 ClusterProfile = "gcp-ha"
-	ClusterProfileGCPCRIO               ClusterProfile = "gcp-crio"
-	ClusterProfileGCPLogging            ClusterProfile = "gcp-logging"
 	ClusterProfileGCP2                  ClusterProfile = "gcp-openshift-gce-devel-ci-2"
 	ClusterProfileGCPOpendatahub        ClusterProfile = "gcp-opendatahub"
 	ClusterProfileGCPTelco              ClusterProfile = "gcp-telco"
@@ -1410,9 +1407,6 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileGCP,
 		ClusterProfileGCP2,
 		ClusterProfileGCP3,
-		ClusterProfileGCPCRIO,
-		ClusterProfileGCPHA,
-		ClusterProfileGCPLogging,
 		ClusterProfileGCPQE,
 		ClusterProfileGCPAutoReleaseQE,
 		ClusterProfileGCPArm64,
@@ -1590,9 +1584,6 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileGCPArm64,
 		ClusterProfileGCP,
 		ClusterProfileGCP3,
-		ClusterProfileGCPHA,
-		ClusterProfileGCPCRIO,
-		ClusterProfileGCPLogging,
 		ClusterProfileGCP2,
 		ClusterProfileGCPVirtualization,
 		ClusterProfileGCPOpendatahub,
@@ -1814,10 +1805,7 @@ func (p ClusterProfile) LeaseType() string {
 	case ClusterProfileGCPArm64:
 		return "gcp-arm64-quota-slice"
 	case
-		ClusterProfileGCP,
-		ClusterProfileGCPHA,
-		ClusterProfileGCPCRIO,
-		ClusterProfileGCPLogging:
+		ClusterProfileGCP:
 		return "gcp-quota-slice"
 	case ClusterProfileGCP2:
 		return "gcp-openshift-gce-devel-ci-2-quota-slice"
@@ -1996,9 +1984,6 @@ func (p ClusterProfile) ConfigMap() string {
 		ClusterProfileGCP,
 		ClusterProfileGCP2,
 		ClusterProfileGCP3,
-		ClusterProfileGCPCRIO,
-		ClusterProfileGCPHA,
-		ClusterProfileGCPLogging,
 		ClusterProfileOvirt:
 		return fmt.Sprintf("cluster-profile-%s", p)
 	default:
@@ -2015,9 +2000,6 @@ func (p ClusterProfile) Secret() string {
 		ClusterProfileAWSAtomic,
 		ClusterProfileAWSCentos,
 		ClusterProfileAWSGluster,
-		ClusterProfileGCPCRIO,
-		ClusterProfileGCPHA,
-		ClusterProfileGCPLogging,
 		ClusterProfileVSphere2,
 		ClusterProfileVSphereDis2,
 		ClusterProfileVSphereMultizone2,

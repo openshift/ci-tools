@@ -192,7 +192,7 @@ require (
 	github.com/openshift/hive/apis v0.0.0-20230525214126-ab571664f899
 	github.com/openshift/library-go v0.0.0-20231017173800-126f85ed0cc7
 	github.com/stretchr/testify v1.9.0
-	sigs.k8s.io/boskos v0.0.0-20230524062849-a7ef97ee445d
+	sigs.k8s.io/boskos v0.0.0-20240624145324-1e4de26c366a
 	sigs.k8s.io/prow v0.0.0-20240619181241-cfb8754e0459
 )
 
@@ -276,7 +276,6 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20231106174013-bbf56f31fb17 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20231106174013-bbf56f31fb17 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
-	k8s.io/test-infra v0.0.0-20240314024253-449bac00dc77 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 )
 

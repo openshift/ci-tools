@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/afero"
 
 	"k8s.io/test-infra/prow/plugins"
+	"k8s.io/test-infra/prow/plugins/ownersconfig"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/config"
@@ -21,6 +22,7 @@ type pluginsConfigWithPointers struct {
 	Welcome         []plugins.Welcome                   `json:"welcome,omitempty"`
 	ExternalPlugins map[string][]plugins.ExternalPlugin `json:"external_plugins,omitempty"`
 	Label           *plugins.Label                      `json:"label,omitempty"`
+	Owners          *plugins.Owners                     `json:"owners,omitempty"`
 }
 
 // WriteShardedPluginConfig shards the plugin config and then writes it into
@@ -34,7 +36,18 @@ func WriteShardedPluginConfig(pc *plugins.Configuration, target afero.Fs) (*plug
 		fileList[filepath.Join(orgOrRepo, config.SupplementalPluginConfigFileName)] = &file
 		delete(pc.Plugins, orgOrRepo)
 	}
-
+	for orgOrRepo, ownersFilenames := range pc.Owners.Filenames {
+		file := pluginsConfigWithPointers{
+			Owners: &plugins.Owners{Filenames: map[string]ownersconfig.Filenames{
+				orgOrRepo: ownersFilenames,
+			}},
+		}
+		fileList[filepath.Join(orgOrRepo, config.SupplementalPluginConfigFileName)] = &file
+		delete(pc.Owners.Filenames, orgOrRepo)
+	}
+	if len(pc.Owners.Filenames) == 0 {
+		pc.Owners.Filenames = nil
+	}
 	for globalOrgOrRepo := range pc.Label.RestrictedLabels {
 		if globalOrgOrRepo == "*" {
 			continue

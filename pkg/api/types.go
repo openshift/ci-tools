@@ -1997,6 +1997,11 @@ func (p ClusterProfile) Secret() string {
 	return fmt.Sprintf("cluster-secrets-%s", name)
 }
 
+// GetClusterProfileSecret returns the default secret name for the profile
+func GetClusterProfileSecret(profile ClusterProfile) string {
+	return fmt.Sprintf("cluster-secrets-%s", string(profile))
+}
+
 // LeaseTypeFromClusterType maps cluster types to lease types
 func LeaseTypeFromClusterType(t string) (string, error) {
 	switch t {

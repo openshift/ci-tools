@@ -191,6 +191,8 @@ func getOwnersHTTP(fg FileGetter, orgRepo orgRepo, filenames ownersconfig.Filena
 			}
 			return httpResult, err
 		}
+		// some OWNERS files (especially upstream ones) can have the '@' symbol in front of usernames, this will not load properly and should be pruned
+		data = []byte(strings.ReplaceAll(string(data), "@", ""))
 
 		switch filename {
 		case filenames.Owners:

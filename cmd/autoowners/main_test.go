@@ -228,6 +228,7 @@ type fakeFileGetter struct {
 	customOwners        []byte
 	aliases             []byte
 	customOwnersAliases []byte
+	invalidOwners       []byte
 	someError           error
 	notFound            error
 }
@@ -281,6 +282,14 @@ func (fg fakeFileGetter) GetFile(org, repo, filepath, commit string) ([]byte, er
 			return nil, fg.someError
 		}
 	}
+	if org == "org7" && repo == "repo7" {
+		if filepath == "OWNERS" {
+			return fg.invalidOwners, nil
+		}
+		if filepath == "OWNERS_ALIASES" {
+			return nil, fg.notFound
+		}
+	}
 
 	if filepath == "CUSTOM_OWNERS" {
 		return fg.customOwners, nil
@@ -313,6 +322,11 @@ aliases:
   approvers-from-custom-approvers-filename-team:
   - teammember-from-custom-approvers-aliases-filename
 `)
+	fakeInvalidOwners := []byte(`---
+approvers:
+- @abc
+- @team-a
+`)
 	someError := fmt.Errorf("some error")
 	notFound := &github.FileNotFound{}
 
@@ -324,6 +338,7 @@ aliases:
 		customOwners:        fakeCustomOwners,
 		aliases:             fakeOwnersAliases,
 		customOwnersAliases: fakeCustomAliases,
+		invalidOwners:       fakeInvalidOwners,
 		someError:           someError,
 		notFound:            notFound,
 	}
@@ -409,6 +424,21 @@ aliases:
 				ownersFileExists: true,
 			},
 			expectedError: someError,
+		},
+		{
+			description: "invalid OWNERS file has invalid symbols pruned",
+			given: orgRepo{
+				Organization: "org7",
+				Repository:   "repo7",
+			},
+			expectedHTTPResult: httpResult{
+				simpleConfig: SimpleConfig{
+					Config: repoowners.Config{
+						Approvers: []string{"abc", "team-a"},
+					},
+				},
+				ownersFileExists: true,
+			},
 		},
 		{
 			description: "from custom filename",

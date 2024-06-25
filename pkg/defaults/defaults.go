@@ -162,7 +162,7 @@ func fromConfig(
 	var hasReleaseStep bool
 	resolver := rootImageResolver(client, ctx, promote)
 	imageConfigs := graphConf.InputImages()
-	rawSteps, err := runtimeStepConfigsForBuild(ctx, client, config, jobSpec, os.ReadFile, resolver, imageConfigs, time.Second, consoleHost, mergedConfig)
+	rawSteps, err := runtimeStepConfigsForBuild(config, jobSpec, os.ReadFile, resolver, imageConfigs, mergedConfig)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get steps from configuration: %w", err)
 	}
@@ -917,15 +917,11 @@ func FromConfigStatic(config *api.ReleaseBuildConfiguration) api.GraphConfigurat
 const codeMountPath = "/home/prow/go"
 
 func runtimeStepConfigsForBuild(
-	ctx context.Context,
-	client ctrlruntimeclient.Client,
 	config *api.ReleaseBuildConfiguration,
 	jobSpec *api.JobSpec,
 	readFile readFile,
 	resolveRoot resolveRoot,
 	imageConfigs []*api.InputImageTagStepConfiguration,
-	second time.Duration,
-	consoleHost string,
 	mergedConfig bool,
 ) ([]api.StepConfiguration, error) {
 	buildRoots := config.InputConfiguration.BuildRootImages
@@ -996,11 +992,6 @@ func runtimeStepConfigsForBuild(
 					return nil, fmt.Errorf("could not resolve build root: %w", err)
 				}
 				istTagRef = root
-			}
-			// if ci-operator runs on app.ci, we do not need to import the image because
-			// the istTagRef has to be an image stream tag on app.ci
-			if root.FromRepository && !strings.HasSuffix(consoleHost, api.ServiceDomainAPPCI) {
-				ensureImageStreamTag(ctx, client, istTagRef, second)
 			}
 			target.InputImage.BaseImage = *istTagRef
 		}

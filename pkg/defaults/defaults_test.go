@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"sort"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -26,7 +25,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/configresolver"
-	testimagestreamtagimportv1 "github.com/openshift/ci-tools/pkg/api/testimagestreamtagimport/v1"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/lease"
 	"github.com/openshift/ci-tools/pkg/release"
@@ -54,16 +52,14 @@ func TestStepConfigsForBuild(t *testing.T) {
 		return root, nil
 	}
 	var testCases = []struct {
-		name            string
-		input           *api.ReleaseBuildConfiguration
-		consoleHost     string
-		jobSpec         *api.JobSpec
-		output          []api.StepConfiguration
-		readFile        readFile
-		resolver        resolveRoot
-		mergedConfig    bool
-		expectedError   error
-		expectedImports []testimagestreamtagimportv1.TestImageStreamTagImport
+		name          string
+		input         *api.ReleaseBuildConfiguration
+		jobSpec       *api.JobSpec
+		output        []api.StepConfiguration
+		readFile      readFile
+		resolver      resolveRoot
+		mergedConfig  bool
+		expectedError error
 	}{
 		{
 			name: "minimal information provided",
@@ -196,21 +192,6 @@ func TestStepConfigsForBuild(t *testing.T) {
   name: stream-name
   tag: stream-tag`), nil
 			},
-			expectedImports: []testimagestreamtagimportv1.TestImageStreamTagImport{{
-				ObjectMeta: meta.ObjectMeta{
-					Namespace: "ci",
-					Name:      "stream-name-stream-tag",
-					Labels: map[string]string{
-						"dptp.openshift.io/requester": "ci-operator",
-						"imagestreamtag-namespace":    "stream-namespace",
-						"imagestreamtag-name":         "stream-name_stream-tag",
-					},
-				},
-				Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
-					Namespace: "stream-namespace",
-					Name:      "stream-name:stream-tag",
-				},
-			}},
 		},
 		{
 			name: "build_root_image from repo + build cache",
@@ -265,21 +246,6 @@ func TestStepConfigsForBuild(t *testing.T) {
   name: stream-name
   tag: stream-tag`), nil
 			},
-			expectedImports: []testimagestreamtagimportv1.TestImageStreamTagImport{{
-				ObjectMeta: meta.ObjectMeta{
-					Namespace: "ci",
-					Name:      "org-repo-branch",
-					Labels: map[string]string{
-						"dptp.openshift.io/requester": "ci-operator",
-						"imagestreamtag-namespace":    "build-cache",
-						"imagestreamtag-name":         "org-repo_branch",
-					},
-				},
-				Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
-					Namespace: "build-cache",
-					Name:      "org-repo:branch",
-				},
-			}},
 		},
 		{
 			name: "binary build requested",
@@ -861,7 +827,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
-			consoleHost: "console-openshift-console.apps.ci.l2s4.p1.openshiftapps.com",
 			readFile: func(filename string) ([]byte, error) {
 				return nil, fmt.Errorf("fail to read file: reason")
 			},
@@ -1066,9 +1031,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			client := fakectrlruntimeclient.NewClientBuilder().Build()
 			graphConf := FromConfigStatic(testCase.input)
-			runtimeSteps, actualError := runtimeStepConfigsForBuild(context.Background(), client, testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, graphConf.InputImages(), time.Nanosecond, testCase.consoleHost, testCase.mergedConfig)
+			runtimeSteps, actualError := runtimeStepConfigsForBuild(testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, graphConf.InputImages(), testCase.mergedConfig)
 			graphConf.Steps = append(graphConf.Steps, runtimeSteps...)
 			if diff := cmp.Diff(testCase.expectedError, actualError, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("actualError does not match expectedError, diff: %s", diff)
@@ -1081,14 +1045,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 			if diff := cmp.Diff(actual, expected); diff != "" {
 				t.Errorf("actual differs from expected: %s", diff)
 			}
-			imports := &testimagestreamtagimportv1.TestImageStreamTagImportList{}
-			if err := client.List(context.Background(), imports); err != nil {
-				t.Errorf("failed to list testimageimports: %v", err)
-			}
-			for i := range imports.Items {
-				testhelper.CleanRVAndTypeMeta(&imports.Items[i])
-			}
-			testhelper.Diff(t, "ImageStreamTag imports", imports.Items, testCase.expectedImports)
 		})
 	}
 }

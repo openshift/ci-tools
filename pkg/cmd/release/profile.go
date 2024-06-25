@@ -2,7 +2,6 @@ package release
 
 import (
 	"fmt"
-
 	"github.com/spf13/cobra"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -54,8 +53,8 @@ func profilePrint(args []string) error {
 			Profile:     p,
 			ClusterType: p.ClusterType(),
 			LeaseType:   p.LeaseType(),
-			Secret:      p.Secret(),
-			ConfigMap:   p.ConfigMap(),
+			//Secret:      p.Secret(),
+			ConfigMap: p.ConfigMap(),
 		})
 	}
 	return printYAML(l)

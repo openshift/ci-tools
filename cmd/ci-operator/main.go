@@ -28,8 +28,6 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/sirupsen/logrus"
 
-	_ "sigs.k8s.io/prow/pkg/cache"
-
 	appsv1 "k8s.io/api/apps/v1"
 	authapi "k8s.io/api/authorization/v1"
 	coreapi "k8s.io/api/core/v1"
@@ -54,6 +52,7 @@ import (
 	crcontrollerutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	ctrlruntimelog "sigs.k8s.io/controller-runtime/pkg/log"
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+	_ "sigs.k8s.io/prow/pkg/cache"
 	"sigs.k8s.io/prow/pkg/config/secret"
 	"sigs.k8s.io/prow/pkg/logrusutil"
 	"sigs.k8s.io/prow/pkg/pod-utils/downwardapi"

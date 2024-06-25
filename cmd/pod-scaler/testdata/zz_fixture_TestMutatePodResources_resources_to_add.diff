@@ -18,9 +18,9 @@
   					Requests: {s"cpu": {i: {value: 8}, Format: "DecimalSI"}, s"memory": {i: {value: 300000000}, Format: "BinarySI"}},
   					Claims:   nil,
   				},
-  				ResizePolicy: nil,
-  				VolumeMounts: nil,
-  				... // 12 identical fields
+  				ResizePolicy:  nil,
+  				RestartPolicy: nil,
+  				... // 13 identical fields
   			},
   			{
   				... // 6 identical fields
@@ -36,9 +36,9 @@
   					},
   					Claims: nil,
   				},
-  				ResizePolicy: nil,
-  				VolumeMounts: nil,
-  				... // 12 identical fields
+  				ResizePolicy:  nil,
+  				RestartPolicy: nil,
+  				... // 13 identical fields
   			},
   			{
   				... // 6 identical fields
@@ -55,9 +55,9 @@
   					},
   					Claims: nil,
   				},
-  				ResizePolicy: nil,
-  				VolumeMounts: nil,
-  				... // 12 identical fields
+  				ResizePolicy:  nil,
+  				RestartPolicy: nil,
+  				... // 13 identical fields
   			},
   			{
   				... // 6 identical fields
@@ -73,9 +73,9 @@
   					},
   					Claims: nil,
   				},
-  				ResizePolicy: nil,
-  				VolumeMounts: nil,
-  				... // 12 identical fields
+  				ResizePolicy:  nil,
+  				RestartPolicy: nil,
+  				... // 13 identical fields
   			},
   		},
   		EphemeralContainers: nil,

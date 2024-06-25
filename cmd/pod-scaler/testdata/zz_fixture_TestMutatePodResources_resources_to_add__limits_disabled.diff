@@ -18,9 +18,9 @@
   					},
   					Claims: nil,
   				},
-  				ResizePolicy: nil,
-  				VolumeMounts: nil,
-  				... // 12 identical fields
+  				ResizePolicy:  nil,
+  				RestartPolicy: nil,
+  				... // 13 identical fields
   			},
   			{
   				... // 6 identical fields
@@ -35,9 +35,9 @@
   					},
   					Claims: nil,
   				},
-  				ResizePolicy: nil,
-  				VolumeMounts: nil,
-  				... // 12 identical fields
+  				ResizePolicy:  nil,
+  				RestartPolicy: nil,
+  				... // 13 identical fields
   			},
   			{
   				... // 6 identical fields
@@ -53,9 +53,9 @@
   					},
   					Claims: nil,
   				},
-  				ResizePolicy: nil,
-  				VolumeMounts: nil,
-  				... // 12 identical fields
+  				ResizePolicy:  nil,
+  				RestartPolicy: nil,
+  				... // 13 identical fields
   			},
   		},
   		EphemeralContainers: nil,

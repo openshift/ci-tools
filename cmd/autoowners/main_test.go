@@ -594,7 +594,7 @@ func TestLoadRepos(t *testing.T) {
 			ConfigSubDirs: []string{"jobs", "config", "templates"},
 			GitHubOrg:     "openshift",
 			GitHubRepo:    "release",
-			Blocklist:     blocklist{directories: sets.New[string]("testdata/test2/templates/openshift/installer")},
+			Blocklist:     blocklist{repos: sets.New[string]("openshift/installer")},
 			ExpectedRepos: []orgRepo{
 				{
 					Directories: []string{
@@ -603,15 +603,6 @@ func TestLoadRepos(t *testing.T) {
 					},
 					Organization: "kubevirt",
 					Repository:   "kubevirt",
-				},
-				{
-					Directories: []string{
-						"testdata/test2/jobs/openshift/installer",
-						"testdata/test2/config/openshift/installer",
-						// "testdata/test2/templates/openshift/installer", // not present due to blocklist
-					},
-					Organization: "openshift",
-					Repository:   "installer",
 				},
 			},
 		},

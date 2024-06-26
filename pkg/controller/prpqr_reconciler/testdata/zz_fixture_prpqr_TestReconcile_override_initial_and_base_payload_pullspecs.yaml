@@ -1,6 +1,4 @@
-- apiVersion: ci.openshift.io/v1
-  kind: PullRequestPayloadQualificationRun
-  metadata:
+- metadata:
     creationTimestamp: null
     finalizers:
     - pullrequestpayloadqualificationruns.ci.openshift.io/dependent-prowjobs

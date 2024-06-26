@@ -56,7 +56,7 @@ type podMutator struct {
 	client                buildclientv1.BuildV1Interface
 	resources             *resourceServer
 	mutateResourceLimits  bool
-	decoder               *admission.Decoder
+	decoder               admission.Decoder
 	cpuCap                int64
 	memoryCap             string
 	cpuPriorityScheduling int64

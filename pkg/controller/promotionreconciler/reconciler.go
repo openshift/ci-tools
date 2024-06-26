@@ -99,13 +99,14 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 	}
 
 	if err := c.Watch(
-		source.Kind(mgr.GetCache(), &imagev1.ImageStream{}),
-		imagestreamtagmapper.New(func(r reconcile.Request) []reconcile.Request {
-			if ignored(r, opts.IgnoredImageStreams) {
-				return nil
-			}
-			return []reconcile.Request{r}
-		}),
+		source.Kind(mgr.GetCache(),
+			&imagev1.ImageStream{},
+			imagestreamtagmapper.New(func(r reconcile.Request) []reconcile.Request {
+				if ignored(r, opts.IgnoredImageStreams) {
+					return nil
+				}
+				return []reconcile.Request{r}
+			})),
 	); err != nil {
 		return fmt.Errorf("failed to create watch for ImageStreams: %w", err)
 	}

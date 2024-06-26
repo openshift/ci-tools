@@ -23,7 +23,7 @@ import (
 // New returns a new ImageStreamTagMapper. Its purpose is to extract all ImageStreamTag events
 // from an ImageStream watch. It ignores unchanged tags on Update events.
 // If no additional filtering/mapping is required, upstream should just return its input.
-func New(upstream func(reconcile.Request) []reconcile.Request) handler.EventHandler {
+func New(upstream func(reconcile.Request) []reconcile.Request) handler.TypedEventHandler[*imagev1.ImageStream] {
 	return &imagestreamtagmapper{upstream: upstream}
 }
 
@@ -31,20 +31,13 @@ type imagestreamtagmapper struct {
 	upstream func(reconcile.Request) []reconcile.Request
 }
 
-func (m *imagestreamtagmapper) Create(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
+func (m *imagestreamtagmapper) Create(ctx context.Context, e event.TypedCreateEvent[*imagev1.ImageStream], q workqueue.RateLimitingInterface) {
 	m.generic(e.Object, q)
 }
 
-func (m *imagestreamtagmapper) Update(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
-	oldStream, oldOK := e.ObjectOld.(*imagev1.ImageStream)
-	newStream, newOK := e.ObjectNew.(*imagev1.ImageStream)
-	if !oldOK || !newOK {
-		logrus.WithFields(logrus.Fields{
-			"old_type": fmt.Sprintf("%T", e.ObjectOld),
-			"new_type": fmt.Sprintf("%T", e.ObjectNew),
-		}).Error("Got object that was not an *imagev1.ImageStream")
-		return
-	}
+func (m *imagestreamtagmapper) Update(ctx context.Context, e event.TypedUpdateEvent[*imagev1.ImageStream], q workqueue.RateLimitingInterface) {
+	oldStream := e.ObjectOld
+	newStream := e.ObjectNew
 
 	deletedISTags := sets.New[string]()
 	for _, tag := range newStream.Spec.Tags {
@@ -81,11 +74,11 @@ func namedTagEventListHasElement(slice []imagev1.NamedTagEventList, element imag
 	return false
 }
 
-func (m *imagestreamtagmapper) Delete(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+func (m *imagestreamtagmapper) Delete(ctx context.Context, e event.TypedDeleteEvent[*imagev1.ImageStream], q workqueue.RateLimitingInterface) {
 	m.generic(e.Object, q)
 }
 
-func (m *imagestreamtagmapper) Generic(ctx context.Context, e event.GenericEvent, q workqueue.RateLimitingInterface) {
+func (m *imagestreamtagmapper) Generic(ctx context.Context, e event.TypedGenericEvent[*imagev1.ImageStream], q workqueue.RateLimitingInterface) {
 	m.generic(e.Object, q)
 }
 

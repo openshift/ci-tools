@@ -347,42 +347,6 @@ func Promotion() PodSpecMutator {
 	}
 }
 
-const (
-	clusterProfileVolume = "cluster-profile"
-)
-
-func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile) corev1.Volume {
-	if secret, cm := profile.Secret(), profile.ConfigMap(); cm == "" {
-		return corev1.Volume{
-			Name: clusterProfileVolume,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{SecretName: secret},
-			},
-		}
-	} else {
-		return corev1.Volume{
-			Name: clusterProfileVolume,
-			VolumeSource: corev1.VolumeSource{
-				Projected: &corev1.ProjectedVolumeSource{
-					Sources: []corev1.VolumeProjection{{
-						Secret: &corev1.SecretProjection{
-							LocalObjectReference: corev1.LocalObjectReference{
-								Name: secret,
-							},
-						},
-					}, {
-						ConfigMap: &corev1.ConfigMapProjection{
-							LocalObjectReference: corev1.LocalObjectReference{
-								Name: cm,
-							},
-						},
-					}},
-				},
-			},
-		}
-	}
-}
-
 func generateConfigMapVolume(name string, templates []string) corev1.Volume {
 	ret := corev1.Volume{Name: name}
 	switch len(templates) {
@@ -413,26 +377,6 @@ func generateConfigMapVolume(name string, templates []string) corev1.Volume {
 	return ret
 }
 
-// ClusterProfile exposes the configured cluster profile to ci-operator via a
-// mounted volume
-func ClusterProfile(profile cioperatorapi.ClusterProfile, target string) PodSpecMutator {
-	return func(spec *corev1.PodSpec) error {
-		container := &spec.Containers[0]
-		wantVolume := generateClusterProfileVolume(profile)
-		if err := addVolume(spec, wantVolume); err != nil {
-			return err
-		}
-		clusterProfilePath := fmt.Sprintf("/usr/local/%s-cluster-profile", target)
-		wantVolumeMount := corev1.VolumeMount{Name: clusterProfileVolume, MountPath: clusterProfilePath}
-
-		if err := addVolumeMount(container, wantVolumeMount); err != nil {
-			return nil
-		}
-		addUniqueParameter(container, fmt.Sprintf("--secret-dir=%s", clusterProfilePath))
-		return nil
-	}
-}
-
 const (
 	envSafeJobName     = "JOB_NAME_SAFE"
 	envTestCommand     = "TEST_COMMAND"
@@ -447,7 +391,6 @@ const (
 // fromImage can be empty. If it is not empty, it configures an environmental
 // variable holding the test image ImageStreamTag (only used by the custom image
 // test template)
-// Template() also implies and includes a corresponding ClusterProfile() mutator.
 func Template(template, command, fromImage, target string, profile cioperatorapi.ClusterProfile) PodSpecMutator {
 	ensureTemplate := func(spec *corev1.PodSpec) error {
 		container := &spec.Containers[0]
@@ -485,7 +428,6 @@ func Template(template, command, fromImage, target string, profile cioperatorapi
 	}
 	return aggregateMutator(
 		ensureTemplate,
-		ClusterProfile(profile, target),
 	)
 }
 

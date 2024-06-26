@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"strings"
 
 	apiext "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
@@ -27,7 +28,10 @@ import (
 )
 
 const (
-	SchemalessName = "kubebuilder:validation:Schemaless"
+	validationPrefix = "kubebuilder:validation:"
+
+	SchemalessName        = "kubebuilder:validation:Schemaless"
+	ValidationItemsPrefix = validationPrefix + "items:"
 )
 
 // ValidationMarkers lists all available markers that affect CRD schema generation,
@@ -35,7 +39,9 @@ const (
 // All markers start with `+kubebuilder:validation:`, and continue with their type name.
 // A copy is produced of all markers that describes types as well, for making types
 // reusable and writing complex validations on slice items.
-var ValidationMarkers = mustMakeAllWithPrefix("kubebuilder:validation", markers.DescribesField,
+// At last a copy of all markers with the prefix `+kubebuilder:validation:items:` is
+// produced for marking slice fields and types.
+var ValidationMarkers = mustMakeAllWithPrefix(validationPrefix, markers.DescribesField,
 
 	// numeric markers
 
@@ -86,6 +92,9 @@ var FieldOnlyMarkers = []*definitionWithHelp{
 	must(markers.MakeAnyTypeDefinition("kubebuilder:default", markers.DescribesField, Default{})).
 		WithHelp(Default{}.Help()),
 
+	must(markers.MakeAnyTypeDefinition("kubebuilder:example", markers.DescribesField, Example{})).
+		WithHelp(Example{}.Help()),
+
 	must(markers.MakeDefinition("kubebuilder:validation:EmbeddedResource", markers.DescribesField, XEmbeddedResource{})).
 		WithHelp(XEmbeddedResource{}.Help()),
 
@@ -107,14 +116,22 @@ func init() {
 	AllDefinitions = append(AllDefinitions, ValidationMarkers...)
 
 	for _, def := range ValidationMarkers {
-		newDef := *def.Definition
-		// copy both parts so we don't change the definition
-		typDef := definitionWithHelp{
-			Definition: &newDef,
-			Help:       def.Help,
-		}
+		typDef := def.clone()
 		typDef.Target = markers.DescribesType
-		AllDefinitions = append(AllDefinitions, &typDef)
+		AllDefinitions = append(AllDefinitions, typDef)
+
+		itemsName := ValidationItemsPrefix + strings.TrimPrefix(def.Name, validationPrefix)
+
+		itemsFieldDef := def.clone()
+		itemsFieldDef.Name = itemsName
+		itemsFieldDef.Help.Summary = "for array items " + itemsFieldDef.Help.Summary
+		AllDefinitions = append(AllDefinitions, itemsFieldDef)
+
+		itemsTypDef := def.clone()
+		itemsTypDef.Name = itemsName
+		itemsTypDef.Help.Summary = "for array items " + itemsTypDef.Help.Summary
+		itemsTypDef.Target = markers.DescribesType
+		AllDefinitions = append(AllDefinitions, itemsTypDef)
 	}
 
 	AllDefinitions = append(AllDefinitions, FieldOnlyMarkers...)
@@ -170,7 +187,7 @@ type Pattern string
 type MaxItems int
 
 // +controllertools:marker:generateHelp:category="CRD validation"
-// MinItems specifies the minimun length for this list.
+// MinItems specifies the minimum length for this list.
 type MinItems int
 
 // +controllertools:marker:generateHelp:category="CRD validation"
@@ -219,6 +236,19 @@ type Nullable struct{}
 // validation will be performed. Full validation of a default requires
 // submission of the containing CRD to an apiserver.
 type Default struct {
+	Value interface{}
+}
+
+// +controllertools:marker:generateHelp:category="CRD validation"
+// Example sets the example value for this field.
+//
+// An example value will be accepted as any value valid for the
+// field. Formatting for common types include: boolean: `true`, string:
+// `Cluster`, numerical: `1.24`, array: `{1,2}`, object: `{policy:
+// "delete"}`). Examples should be defined in pruned form, and only best-effort
+// validation will be performed. Full validation of an example requires
+// submission of the containing CRD to an apiserver.
+type Example struct {
 	Value interface{}
 }
 
@@ -279,8 +309,9 @@ func isIntegral(value float64) bool {
 // This marker may be repeated to specify multiple expressions, all of
 // which must evaluate to true.
 type XValidation struct {
-	Rule    string
-	Message string `marker:",optional"`
+	Rule              string
+	Message           string `marker:",optional"`
+	MessageExpression string `marker:"messageExpression,optional"`
 }
 
 func (m Maximum) ApplyToSchema(schema *apiext.JSONSchemaProps) error {
@@ -448,7 +479,9 @@ func (m Type) ApplyToSchema(schema *apiext.JSONSchemaProps) error {
 	return nil
 }
 
-func (m Type) ApplyFirst() {}
+func (m Type) ApplyPriority() ApplyPriority {
+	return ApplyPriorityDefault - 1
+}
 
 func (m Nullable) ApplyToSchema(schema *apiext.JSONSchemaProps) error {
 	schema.Nullable = true
@@ -461,7 +494,19 @@ func (m Default) ApplyToSchema(schema *apiext.JSONSchemaProps) error {
 	if err != nil {
 		return err
 	}
+	if schema.Type == "array" && string(marshalledDefault) == "{}" {
+		marshalledDefault = []byte("[]")
+	}
 	schema.Default = &apiext.JSON{Raw: marshalledDefault}
+	return nil
+}
+
+func (m Example) ApplyToSchema(schema *apiext.JSONSchemaProps) error {
+	marshalledExample, err := json.Marshal(m.Value)
+	if err != nil {
+		return err
+	}
+	schema.Example = &apiext.JSON{Raw: marshalledExample}
 	return nil
 }
 
@@ -484,12 +529,15 @@ func (m XIntOrString) ApplyToSchema(schema *apiext.JSONSchemaProps) error {
 	return nil
 }
 
-func (m XIntOrString) ApplyFirst() {}
+func (m XIntOrString) ApplyPriority() ApplyPriority {
+	return ApplyPriorityDefault - 1
+}
 
 func (m XValidation) ApplyToSchema(schema *apiext.JSONSchemaProps) error {
 	schema.XValidations = append(schema.XValidations, apiext.ValidationRule{
-		Rule:    m.Rule,
-		Message: m.Message,
+		Rule:              m.Rule,
+		Message:           m.Message,
+		MessageExpression: m.MessageExpression,
 	})
 	return nil
 }

@@ -93,6 +93,11 @@ func loadRepos(configRootDir string, blocked blocklist, configSubDirs, extraDirs
 				if org == githubOrg && repo == githubRepo {
 					continue
 				}
+				orgRepoName := fmt.Sprintf("%s/%s", org, repo)
+				if blocked.repos.Has(orgRepoName) {
+					logrus.WithField("repository", orgRepoName).Info("repository is on repository blocklist, skipping")
+					continue
+				}
 				var repoConfigDirs []string
 				for _, sourceSubDir := range configSubDirectories {
 					repoConfigDirs = append(repoConfigDirs, filepath.Join(sourceSubDir, org, repo))
@@ -105,12 +110,6 @@ func loadRepos(configRootDir string, blocked blocklist, configSubDirs, extraDirs
 					fileInfo, err := os.Stat(d)
 					logrus.WithField("err", err).Debug("os.Stat(d): checking error ...")
 					if !os.IsNotExist(err) && fileInfo.IsDir() {
-						logrus.WithField("d", d).WithField("blocked-directories", blocked.directories).
-							Debug("trying to determine if the directory is in the repo blocklist")
-						if blocked.directories.Has(d) {
-							logrus.WithField("repository", d).Info("repository is on repository blocklist, skipping")
-							continue
-						}
 						dirs = append(dirs, d)
 					}
 				}
@@ -439,8 +438,8 @@ func listUpdatedDirectoriesFromGitStatusOutput(s string) ([]string, error) {
 }
 
 type blocklist struct {
-	directories sets.Set[string]
-	orgs        sets.Set[string]
+	repos sets.Set[string]
+	orgs  sets.Set[string]
 }
 
 func main() {
@@ -480,7 +479,7 @@ func main() {
 	}
 	configRootDirectory := filepath.Join(o.targetDir, o.targetSubDirectory)
 	var blocked blocklist
-	blocked.directories = sets.New[string](o.blockedRepos.Strings()...)
+	blocked.repos = sets.New[string](o.blockedRepos.Strings()...)
 	blocked.orgs = sets.New[string](o.blockedOrgs.Strings()...)
 	if err := pullOwners(gc, configRootDirectory, blocked, configSubDirectories, o.extraDirs.Strings(), o.githubOrg, o.githubRepo, pc); err != nil {
 		logrus.WithError(err).Fatal("Error occurred when walking through the target dir.")

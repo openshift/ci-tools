@@ -153,7 +153,7 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 	switch {
 	case test.MultiStageTestConfigurationLiteral != nil:
 		if clusterProfile := test.MultiStageTestConfigurationLiteral.ClusterProfile; clusterProfile != "" {
-			p.PodSpec.Add(ClusterProfile(clusterProfile, test.As), LeaseClient())
+			p.PodSpec.Add(LeaseClient())
 			p.WithLabel(cioperatorapi.CloudClusterProfileLabel, string(clusterProfile))
 			p.WithLabel(cioperatorapi.CloudLabel, clusterProfile.ClusterType())
 		}
@@ -162,7 +162,7 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 		}
 	case test.MultiStageTestConfiguration != nil:
 		if clusterProfile := test.MultiStageTestConfiguration.ClusterProfile; clusterProfile != "" {
-			p.PodSpec.Add(ClusterProfile(clusterProfile, test.As), LeaseClient())
+			p.PodSpec.Add(LeaseClient())
 			p.WithLabel(cioperatorapi.CloudClusterProfileLabel, string(clusterProfile))
 			p.WithLabel(cioperatorapi.CloudLabel, clusterProfile.ClusterType())
 		}
@@ -183,7 +183,6 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 		if !test.OpenshiftInstallerClusterTestConfiguration.Upgrade {
 			p.PodSpec.Add(Template("cluster-launch-installer-e2e", test.Commands, "", test.As, test.OpenshiftInstallerClusterTestConfiguration.ClusterProfile))
 		}
-		p.PodSpec.Add(ClusterProfile(test.OpenshiftInstallerClusterTestConfiguration.ClusterProfile, test.As))
 		p.PodSpec.Add(LeaseClient())
 	case test.OpenshiftInstallerUPIClusterTestConfiguration != nil:
 		p.PodSpec.Add(

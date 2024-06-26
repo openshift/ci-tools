@@ -44,30 +44,25 @@ func AddToManager(manager manager.Manager,
 		return fmt.Errorf("failed to construct controller: %w", err)
 	}
 
-	if err := c.Watch(source.Kind(manager.GetCache(), &hivev1.ClusterPool{}),
-		clusterPoolHandler(sourcePullSecretNamespace),
-	); err != nil {
+	if err := c.Watch(source.Kind(manager.GetCache(),
+		&hivev1.ClusterPool{},
+		clusterPoolHandler(sourcePullSecretNamespace))); err != nil {
 		return fmt.Errorf("failed to create watch for clusterpools: %w", err)
 	}
 
-	if err := c.Watch(
-		source.Kind(manager.GetCache(), &corev1.Secret{}),
-		secretHandler(sourcePullSecretNamespace, sourcePullSecretName, client),
-	); err != nil {
+	if err := c.Watch(source.Kind(manager.GetCache(),
+		&corev1.Secret{},
+		secretHandler(sourcePullSecretNamespace, sourcePullSecretName, client))); err != nil {
 		return fmt.Errorf("failed to create watch for secrets: %w", err)
 	}
 
 	r.log.Info("Successfully added reconciler to manager")
 	return nil
+
 }
 
-func clusterPoolHandler(sourcePullSecretNamespace string) handler.EventHandler {
-	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o ctrlruntimeclient.Object) []reconcile.Request {
-		clusterPool, ok := o.(*hivev1.ClusterPool)
-		if !ok {
-			logrus.WithField("type", fmt.Sprintf("%T", o)).Error("Got object that was not a ClusterPool")
-			return nil
-		}
+func clusterPoolHandler(sourcePullSecretNamespace string) handler.TypedEventHandler[*hivev1.ClusterPool] {
+	return handler.TypedEnqueueRequestsFromMapFunc[*hivev1.ClusterPool](func(ctx context.Context, clusterPool *hivev1.ClusterPool) []reconcile.Request {
 		if clusterPool.Namespace == sourcePullSecretNamespace {
 			return nil
 		}
@@ -99,13 +94,8 @@ func secretHandler(
 	sourcePullSecretNamespace string,
 	sourcePullSecretName string,
 	client ctrlruntimeclient.Client,
-) handler.EventHandler {
-	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o ctrlruntimeclient.Object) []reconcile.Request {
-		secret, ok := o.(*corev1.Secret)
-		if !ok {
-			logrus.WithField("type", fmt.Sprintf("%T", o)).Error("Got object that was not a Secret")
-			return nil
-		}
+) handler.TypedEventHandler[*corev1.Secret] {
+	return handler.TypedEnqueueRequestsFromMapFunc[*corev1.Secret](func(ctx context.Context, secret *corev1.Secret) []reconcile.Request {
 		if secret.Name != sourcePullSecretName {
 			return nil
 		}

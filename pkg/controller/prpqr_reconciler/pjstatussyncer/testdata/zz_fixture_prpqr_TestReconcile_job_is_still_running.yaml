@@ -1,6 +1,4 @@
-- apiVersion: ci.openshift.io/v1
-  kind: PullRequestPayloadQualificationRun
-  metadata:
+- metadata:
     creationTimestamp: null
     name: prpqr-test
     namespace: test-namespace

@@ -70,7 +70,7 @@ func AddToManager(mgr controllerruntime.Manager, config config.Getter, dryRun bo
 	}
 	enqueuer, src := newSource()
 
-	if err := ctrl.Watch(src, &handler.EnqueueRequestForObject{}); err != nil {
+	if err := ctrl.Watch(src); err != nil {
 		return nil, fmt.Errorf("failed to create watch: %w", err)
 	}
 
@@ -78,20 +78,17 @@ func AddToManager(mgr controllerruntime.Manager, config config.Getter, dryRun bo
 }
 
 func newSource() (Enqueuer, source.Source) {
-	channel := make(chan event.GenericEvent)
-	src := &source.Channel{
-		Source: channel,
-	}
+	channel := make(chan event.TypedGenericEvent[*prowv1.ProwJob])
 	enqueuer := func(orbc OrgRepoBranchCommit) {
 		channel <- orcbToEvent(orbc)
 	}
-
+	src := source.Channel(channel, &handler.TypedEnqueueRequestForObject[*prowv1.ProwJob]{})
 	return enqueuer, src
 }
 
-func orcbToEvent(orbc OrgRepoBranchCommit) event.GenericEvent {
+func orcbToEvent(orbc OrgRepoBranchCommit) event.TypedGenericEvent[*prowv1.ProwJob] {
 	// The object type is irrelvant for us but we need to fulfill the client.Object interface
-	return event.GenericEvent{Object: &prowv1.ProwJob{ObjectMeta: metav1.ObjectMeta{
+	return event.TypedGenericEvent[*prowv1.ProwJob]{Object: &prowv1.ProwJob{ObjectMeta: metav1.ObjectMeta{
 		Name: fmt.Sprintf("%s|%s|%s|%s", orbc.Org, orbc.Repo, orbc.Branch, orbc.Commit),
 	}}}
 }

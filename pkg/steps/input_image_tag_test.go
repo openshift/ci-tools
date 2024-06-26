@@ -111,7 +111,6 @@ func TestInputImageTagStep(t *testing.T) {
 			Namespace:       jobspec.Namespace(),
 			ResourceVersion: "1",
 		},
-		TypeMeta: metav1.TypeMeta{Kind: "ImageStreamTag", APIVersion: "image.openshift.io/v1"},
 		Tag: &imagev1.TagReference{
 			From: &corev1.ObjectReference{
 				Kind: "DockerImage",

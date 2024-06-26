@@ -24,7 +24,6 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/event"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	imagev1 "github.com/openshift/api/image/v1"
@@ -114,7 +113,7 @@ func TestRegistryClusterHandlerFactory(t *testing.T) {
 					Tags: []imagev1.NamedTagEventList{{Tag: tagName}},
 				},
 			}
-			event := event.CreateEvent{Object: obj}
+			event := event.TypedCreateEvent[*imagev1.ImageStream]{Object: obj}
 			handler.Create(context.Background(), event, queue)
 
 			if diff := cmp.Diff(tc.expected, queue.received); diff != "" {
@@ -662,7 +661,7 @@ func TestTestImageStramTagImportHandlerRoundTrips(t *testing.T) {
 	}
 	queue := &hijackingQueue{}
 
-	event := event.CreateEvent{Object: obj}
+	event := event.TypedCreateEvent[*testimagestreamtagimportv1.TestImageStreamTagImport]{Object: obj}
 	testImageStreamTagImportHandler(logrus.NewEntry(logrus.StandardLogger()), sets.New[string]()).Create(context.Background(), event, queue)
 
 	if n := len(queue.received); n != 1 {
@@ -891,7 +890,7 @@ func TestSourceForConfigChangeChannel(t *testing.T) {
 			defer cancel()
 			queue := &hijackingQueue{}
 
-			if err := source.Start(ctx, &handler.EnqueueRequestForObject{}, queue); err != nil {
+			if err := source.Start(ctx, queue); err != nil {
 				t.Fatalf("failed to start source: %v", err)
 			}
 			changeChannel <- tc.change

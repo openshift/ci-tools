@@ -45,23 +45,17 @@ func AddToManager(clusterName string, mgr manager.Manager, enabledNamespaces, ig
 		return fmt.Errorf("failed to construct controller: %w", err)
 	}
 
-	if err := c.Watch(source.Kind(mgr.GetCache(), &corev1.ServiceAccount{}), &handler.EnqueueRequestForObject{}); err != nil {
+	if err := c.Watch(source.Kind(mgr.GetCache(), &corev1.ServiceAccount{}, &handler.TypedEnqueueRequestForObject[*corev1.ServiceAccount]{})); err != nil {
 		return fmt.Errorf("failed to construct watch for ServiceAccounts: %w", err)
 	}
-	if err := c.Watch(source.Kind(mgr.GetCache(), &corev1.Secret{}), handler.EnqueueRequestsFromMapFunc(secretMapper)); err != nil {
+	if err := c.Watch(source.Kind(mgr.GetCache(), &corev1.Secret{}, handler.TypedEnqueueRequestsFromMapFunc(secretMapper))); err != nil {
 		return fmt.Errorf("failed to construct watch for Secrets: %w", err)
 	}
 
 	return nil
 }
 
-func secretMapper(ctx context.Context, o ctrlruntimeclient.Object) []reconcile.Request {
-	secret, ok := o.(*corev1.Secret)
-	if !ok {
-		logrus.WithField("type", fmt.Sprintf("%T", o)).Error("Got an object that was not a secret")
-		return nil
-	}
-
+func secretMapper(ctx context.Context, secret *corev1.Secret) []reconcile.Request {
 	sa, ok := secret.Annotations[corev1.ServiceAccountNameKey]
 	if !ok {
 		return nil

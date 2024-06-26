@@ -41,7 +41,7 @@ func TestImageStreamTagMapper(t *testing.T) {
 						Tags: []imagev1.NamedTagEventList{{Tag: "1"}, {Tag: "2"}},
 					},
 				}
-				return event.CreateEvent{Object: imageStream}
+				return event.TypedCreateEvent[*imagev1.ImageStream]{Object: imageStream}
 			},
 			expectedRequests: []string{
 				"first_namespace/name:1",
@@ -66,7 +66,7 @@ func TestImageStreamTagMapper(t *testing.T) {
 				ImageStreamNew := imageStreamOld.DeepCopy()
 				ImageStreamNew.Status.Tags[0].Items = []imagev1.TagEvent{{Image: "some-image"}}
 
-				return event.UpdateEvent{
+				return event.TypedUpdateEvent[*imagev1.ImageStream]{
 					ObjectOld: imageStreamOld,
 					ObjectNew: ImageStreamNew,
 				}
@@ -88,7 +88,7 @@ func TestImageStreamTagMapper(t *testing.T) {
 						Tags: []imagev1.NamedTagEventList{{Tag: "1"}, {Tag: "2"}},
 					},
 				}
-				return event.DeleteEvent{Object: imageStream}
+				return event.TypedDeleteEvent[*imagev1.ImageStream]{Object: imageStream}
 			},
 			expectedRequests: []string{
 				"first_namespace/name:1",
@@ -109,7 +109,7 @@ func TestImageStreamTagMapper(t *testing.T) {
 						Tags: []imagev1.NamedTagEventList{{Tag: "1"}, {Tag: "2"}},
 					},
 				}
-				return event.GenericEvent{Object: ImageStram}
+				return event.TypedGenericEvent[*imagev1.ImageStream]{Object: ImageStram}
 			},
 			expectedRequests: []string{
 				"first_namespace/name:1",
@@ -134,7 +134,7 @@ func TestImageStreamTagMapper(t *testing.T) {
 				ImageStreamNew := imageStreamOld.DeepCopy()
 				ImageStreamNew.DeletionTimestamp = &now
 
-				return event.UpdateEvent{
+				return event.TypedUpdateEvent[*imagev1.ImageStream]{
 					ObjectOld: imageStreamOld,
 					ObjectNew: ImageStreamNew,
 				}
@@ -173,7 +173,7 @@ func TestImageStreamTagMapper(t *testing.T) {
 					},
 				}
 
-				return event.UpdateEvent{
+				return event.TypedUpdateEvent[*imagev1.ImageStream]{
 					ObjectOld: imageStreamOld,
 					ObjectNew: ImageStreamNew,
 				}
@@ -193,13 +193,13 @@ func TestImageStreamTagMapper(t *testing.T) {
 			queue := &trackingWorkqueue{t: t}
 
 			switch e := tc.event().(type) {
-			case event.CreateEvent:
+			case event.TypedCreateEvent[*imagev1.ImageStream]:
 				mapper.Create(ctx, e, queue)
-			case event.UpdateEvent:
+			case event.TypedUpdateEvent[*imagev1.ImageStream]:
 				mapper.Update(ctx, e, queue)
-			case event.DeleteEvent:
+			case event.TypedDeleteEvent[*imagev1.ImageStream]:
 				mapper.Delete(ctx, e, queue)
-			case event.GenericEvent:
+			case event.TypedGenericEvent[*imagev1.ImageStream]:
 				mapper.Generic(ctx, e, queue)
 			default:
 				t.Fatalf("got type that was not an event but a %T", e)

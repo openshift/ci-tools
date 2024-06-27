@@ -1,17 +1,16 @@
-package system
+package system // import "github.com/docker/docker/pkg/system"
 
-import "os"
+// containerdRuntimeSupported determines if containerd should be the runtime.
+var containerdRuntimeSupported = false
 
-// LCOWSupported determines if Linux Containers on Windows are supported.
-// Note: This feature is in development (06/17) and enabled through an
-// environment variable. At a future time, it will be enabled based
-// on build number. @jhowardmsft
-var lcowSupported = false
-
-func init() {
-	// LCOW initialization
-	if os.Getenv("LCOW_SUPPORTED") != "" {
-		lcowSupported = true
+// InitContainerdRuntime sets whether to use containerd for runtime on Windows.
+func InitContainerdRuntime(cdPath string) {
+	if len(cdPath) > 0 {
+		containerdRuntimeSupported = true
 	}
+}
 
+// ContainerdRuntimeSupported returns true if the use of containerd runtime is supported.
+func ContainerdRuntimeSupported() bool {
+	return containerdRuntimeSupported
 }

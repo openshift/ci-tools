@@ -33,7 +33,7 @@ func TestGetJobs(t *testing.T) {
 			defer mockCtrl.Finish()
 
 			mockCIDataClient := jobrunaggregatorlib.NewMockCIDataClient(mockCtrl)
-			mockCIDataClient.EXPECT().ListAllJobs(ctx).Return(createJobs(), nil)
+			mockCIDataClient.EXPECT().ListAllJobsWithVaraints(ctx).Return(createJobs(), nil)
 
 			jobGetter := &testCaseAnalyzerJobGetter{
 				platform:       "metal",

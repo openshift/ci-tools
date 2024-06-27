@@ -159,19 +159,19 @@ func (mr *MockCIDataClientMockRecorder) ListAlertHistoricalData(arg0 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAlertHistoricalData", reflect.TypeOf((*MockCIDataClient)(nil).ListAlertHistoricalData), arg0)
 }
 
-// ListAllJobs mocks base method.
-func (m *MockCIDataClient) ListAllJobs(arg0 context.Context) ([]jobrunaggregatorapi.JobRowWithVariants, error) {
+// ListAllJobsWithVaraints mocks base method.
+func (m *MockCIDataClient) ListAllJobsWithVariants(arg0 context.Context) ([]jobrunaggregatorapi.JobRowWithVariants, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListAllJobs", arg0)
+	ret := m.ctrl.Call(m, "ListAllJobsWithVariants", arg0)
 	ret0, _ := ret[0].([]jobrunaggregatorapi.JobRowWithVariants)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// ListAllJobs indicates an expected call of ListAllJobs.
-func (mr *MockCIDataClientMockRecorder) ListAllJobs(arg0 interface{}) *gomock.Call {
+// ListAllJobsWithVaraints indicates an expected call of ListAllJobsWithVaraints.
+func (mr *MockCIDataClientMockRecorder) ListAllJobsWithVaraints(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAllJobs", reflect.TypeOf((*MockCIDataClient)(nil).ListAllJobs), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAllJobsWithVariants", reflect.TypeOf((*MockCIDataClient)(nil).ListAllJobsWithVariants), arg0)
 }
 
 // ListAllKnownAlerts mocks base method.

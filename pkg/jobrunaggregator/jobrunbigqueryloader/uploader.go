@@ -66,7 +66,7 @@ func (o *allJobsLoaderOptions) Run(ctx context.Context) error {
 
 	logrus.Infof("Locating jobs")
 
-	jobs, err := o.ciDataClient.ListAllJobs(ctx)
+	jobs, err := o.ciDataClient.ListAllJobsWithVariants(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get jobs: %w", err)
 	}

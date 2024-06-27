@@ -235,7 +235,7 @@ func normalizeJobName(jobName, fromRelease, toRelease string) string {
 }
 
 func (a *weeklyAverageFromTenDays) getNormalizedFallBackJobName(ctx context.Context, jobName string) (string, error) {
-	allJobs, err := a.bigQueryClient.ListAllJobs(ctx)
+	allJobs, err := a.bigQueryClient.ListAllJobsWithVariants(ctx)
 	if err != nil {
 		return jobName, err
 	}

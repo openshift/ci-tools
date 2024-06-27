@@ -36,7 +36,7 @@ type AggregationJobClient interface {
 }
 
 type JobLister interface {
-	ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRowWithVariants, error)
+	ListAllJobsWithVariants(ctx context.Context) ([]jobrunaggregatorapi.JobRowWithVariants, error)
 
 	// ListProwJobRunsSince lists from the testplatform BigQuery dataset in a separate project from
 	// where we normally operate. Job runs are inserted here just after their GCS artifacts are uploaded.
@@ -205,7 +205,7 @@ func (c *ciDataClient) ListAlertHistoricalData(ctx context.Context) ([]*jobrunag
 	return alertDataSet, nil
 }
 
-func (c *ciDataClient) ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRowWithVariants, error) {
+func (c *ciDataClient) ListAllJobsWithVariants(ctx context.Context) ([]jobrunaggregatorapi.JobRowWithVariants, error) {
 	// For Debugging, you can set "LIMIT X" where X is small
 	// so that you can process only a small subset of jobs while
 	// you debug.

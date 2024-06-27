@@ -46,11 +46,11 @@ func (c *retryingCIDataClient) GetBackendDisruptionStatisticsByJob(ctx context.C
 	return ret, err
 }
 
-func (c *retryingCIDataClient) ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRowWithVariants, error) {
+func (c *retryingCIDataClient) ListAllJobsWithVariants(ctx context.Context) ([]jobrunaggregatorapi.JobRowWithVariants, error) {
 	var ret []jobrunaggregatorapi.JobRowWithVariants
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
 		var innerErr error
-		ret, innerErr = c.delegate.ListAllJobs(ctx)
+		ret, innerErr = c.delegate.ListAllJobsWithVariants(ctx)
 		return innerErr
 	})
 	return ret, err

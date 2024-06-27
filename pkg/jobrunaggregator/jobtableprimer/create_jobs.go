@@ -67,7 +67,7 @@ func (o *CreateJobsOptions) Run(ctx context.Context) error {
 
 	fmt.Printf("Priming jobs\n")
 
-	existingJobs, err := o.ciDataClient.ListAllJobs(ctx)
+	existingJobs, err := o.ciDataClient.ListAllJobsWithVariants(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get jobs: %w", err)
 	}

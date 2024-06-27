@@ -927,10 +927,10 @@ github.com/prometheus/client_golang/prometheus
 github.com/prometheus/client_golang/prometheus/collectors
 github.com/prometheus/client_golang/prometheus/internal
 github.com/prometheus/client_golang/prometheus/promhttp
-# github.com/prometheus/client_model v0.6.0
+# github.com/prometheus/client_model v0.6.1
 ## explicit; go 1.19
 github.com/prometheus/client_model/go
-# github.com/prometheus/common v0.52.3
+# github.com/prometheus/common v0.54.0
 ## explicit; go 1.20
 github.com/prometheus/common/expfmt
 github.com/prometheus/common/internal/bitbucket.org/ww/goautoneg
@@ -2014,7 +2014,7 @@ sigs.k8s.io/controller-tools/pkg/webhook
 ## explicit; go 1.18
 sigs.k8s.io/json
 sigs.k8s.io/json/internal/golang/encoding/json
-# sigs.k8s.io/prow v0.0.0-20240619181241-cfb8754e0459
+# sigs.k8s.io/prow v0.0.0-20240627110421-79d27b6e3be3
 ## explicit; go 1.22.3
 sigs.k8s.io/prow/cmd/generic-autobumper/bumper
 sigs.k8s.io/prow/cmd/generic-autobumper/updater

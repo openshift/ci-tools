@@ -10,10 +10,8 @@ import (
 	time "time"
 
 	gomock "github.com/golang/mock/gomock"
-
-	sets "k8s.io/apimachinery/pkg/util/sets"
-
 	jobrunaggregatorapi "github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
+	sets "k8s.io/apimachinery/pkg/util/sets"
 )
 
 // MockCIDataClient is a mock of CIDataClient interface.
@@ -99,21 +97,6 @@ func (mr *MockCIDataClientMockRecorder) GetJobRunForJobNameBeforeTime(arg0, arg1
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetJobRunForJobNameBeforeTime", reflect.TypeOf((*MockCIDataClient)(nil).GetJobRunForJobNameBeforeTime), arg0, arg1, arg2)
 }
 
-// GetLastAggregationForJob mocks base method.
-func (m *MockCIDataClient) GetLastAggregationForJob(arg0 context.Context, arg1, arg2 string) (*jobrunaggregatorapi.AggregatedTestRunRow, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLastAggregationForJob", arg0, arg1, arg2)
-	ret0, _ := ret[0].(*jobrunaggregatorapi.AggregatedTestRunRow)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetLastAggregationForJob indicates an expected call of GetLastAggregationForJob.
-func (mr *MockCIDataClientMockRecorder) GetLastAggregationForJob(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLastAggregationForJob", reflect.TypeOf((*MockCIDataClient)(nil).GetLastAggregationForJob), arg0, arg1, arg2)
-}
-
 // GetLastJobRunEndTimeFromTable mocks base method.
 func (m *MockCIDataClient) GetLastJobRunEndTimeFromTable(arg0 context.Context, arg1 string) (*time.Time, error) {
 	m.ctrl.T.Helper()
@@ -159,7 +142,7 @@ func (mr *MockCIDataClientMockRecorder) ListAlertHistoricalData(arg0 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAlertHistoricalData", reflect.TypeOf((*MockCIDataClient)(nil).ListAlertHistoricalData), arg0)
 }
 
-// ListAllJobsWithVaraints mocks base method.
+// ListAllJobsWithVariants mocks base method.
 func (m *MockCIDataClient) ListAllJobsWithVariants(arg0 context.Context) ([]jobrunaggregatorapi.JobRowWithVariants, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListAllJobsWithVariants", arg0)
@@ -168,8 +151,8 @@ func (m *MockCIDataClient) ListAllJobsWithVariants(arg0 context.Context) ([]jobr
 	return ret0, ret1
 }
 
-// ListAllJobsWithVaraints indicates an expected call of ListAllJobsWithVaraints.
-func (mr *MockCIDataClientMockRecorder) ListAllJobsWithVaraints(arg0 interface{}) *gomock.Call {
+// ListAllJobsWithVariants indicates an expected call of ListAllJobsWithVariants.
+func (mr *MockCIDataClientMockRecorder) ListAllJobsWithVariants(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAllJobsWithVariants", reflect.TypeOf((*MockCIDataClient)(nil).ListAllJobsWithVariants), arg0)
 }
@@ -247,21 +230,6 @@ func (m *MockCIDataClient) ListReleases(arg0 context.Context) ([]jobrunaggregato
 func (mr *MockCIDataClientMockRecorder) ListReleases(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListReleases", reflect.TypeOf((*MockCIDataClient)(nil).ListReleases), arg0)
-}
-
-// ListUnifiedTestRunsForJobAfterDay mocks base method.
-func (m *MockCIDataClient) ListUnifiedTestRunsForJobAfterDay(arg0 context.Context, arg1 string, arg2 time.Time) (*UnifiedTestRunRowIterator, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListUnifiedTestRunsForJobAfterDay", arg0, arg1, arg2)
-	ret0, _ := ret[0].(*UnifiedTestRunRowIterator)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ListUnifiedTestRunsForJobAfterDay indicates an expected call of ListUnifiedTestRunsForJobAfterDay.
-func (mr *MockCIDataClientMockRecorder) ListUnifiedTestRunsForJobAfterDay(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListUnifiedTestRunsForJobAfterDay", reflect.TypeOf((*MockCIDataClient)(nil).ListUnifiedTestRunsForJobAfterDay), arg0, arg1, arg2)
 }
 
 // ListUploadedJobRunIDsSinceFromTable mocks base method.

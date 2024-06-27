@@ -9,8 +9,10 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	junit "github.com/openshift/ci-tools/pkg/junit"
+
 	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
+
+	junit "github.com/openshift/ci-tools/pkg/junit"
 )
 
 // MockJobRunInfo is a mock of JobRunInfo interface.

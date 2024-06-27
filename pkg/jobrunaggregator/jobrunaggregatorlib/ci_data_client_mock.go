@@ -10,8 +10,10 @@ import (
 	time "time"
 
 	gomock "github.com/golang/mock/gomock"
-	jobrunaggregatorapi "github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
+
 	sets "k8s.io/apimachinery/pkg/util/sets"
+
+	jobrunaggregatorapi "github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 )
 
 // MockCIDataClient is a mock of CIDataClient interface.
@@ -140,6 +142,21 @@ func (m *MockCIDataClient) ListAlertHistoricalData(arg0 context.Context) ([]*job
 func (mr *MockCIDataClientMockRecorder) ListAlertHistoricalData(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAlertHistoricalData", reflect.TypeOf((*MockCIDataClient)(nil).ListAlertHistoricalData), arg0)
+}
+
+// ListAllJobs mocks base method.
+func (m *MockCIDataClient) ListAllJobs(arg0 context.Context) ([]jobrunaggregatorapi.JobRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListAllJobs", arg0)
+	ret0, _ := ret[0].([]jobrunaggregatorapi.JobRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListAllJobs indicates an expected call of ListAllJobs.
+func (mr *MockCIDataClientMockRecorder) ListAllJobs(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAllJobs", reflect.TypeOf((*MockCIDataClient)(nil).ListAllJobs), arg0)
 }
 
 // ListAllJobsWithVariants mocks base method.

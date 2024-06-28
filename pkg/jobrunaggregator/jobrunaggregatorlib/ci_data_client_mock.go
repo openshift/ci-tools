@@ -99,21 +99,6 @@ func (mr *MockCIDataClientMockRecorder) GetJobRunForJobNameBeforeTime(arg0, arg1
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetJobRunForJobNameBeforeTime", reflect.TypeOf((*MockCIDataClient)(nil).GetJobRunForJobNameBeforeTime), arg0, arg1, arg2)
 }
 
-// GetLastAggregationForJob mocks base method.
-func (m *MockCIDataClient) GetLastAggregationForJob(arg0 context.Context, arg1, arg2 string) (*jobrunaggregatorapi.AggregatedTestRunRow, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLastAggregationForJob", arg0, arg1, arg2)
-	ret0, _ := ret[0].(*jobrunaggregatorapi.AggregatedTestRunRow)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetLastAggregationForJob indicates an expected call of GetLastAggregationForJob.
-func (mr *MockCIDataClientMockRecorder) GetLastAggregationForJob(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLastAggregationForJob", reflect.TypeOf((*MockCIDataClient)(nil).GetLastAggregationForJob), arg0, arg1, arg2)
-}
-
 // GetLastJobRunEndTimeFromTable mocks base method.
 func (m *MockCIDataClient) GetLastJobRunEndTimeFromTable(arg0 context.Context, arg1 string) (*time.Time, error) {
 	m.ctrl.T.Helper()
@@ -160,10 +145,10 @@ func (mr *MockCIDataClientMockRecorder) ListAlertHistoricalData(arg0 interface{}
 }
 
 // ListAllJobs mocks base method.
-func (m *MockCIDataClient) ListAllJobs(arg0 context.Context) ([]jobrunaggregatorapi.JobRowWithVariants, error) {
+func (m *MockCIDataClient) ListAllJobs(arg0 context.Context) ([]jobrunaggregatorapi.JobRow, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListAllJobs", arg0)
-	ret0, _ := ret[0].([]jobrunaggregatorapi.JobRowWithVariants)
+	ret0, _ := ret[0].([]jobrunaggregatorapi.JobRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -172,6 +157,21 @@ func (m *MockCIDataClient) ListAllJobs(arg0 context.Context) ([]jobrunaggregator
 func (mr *MockCIDataClientMockRecorder) ListAllJobs(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAllJobs", reflect.TypeOf((*MockCIDataClient)(nil).ListAllJobs), arg0)
+}
+
+// ListAllJobsWithVariants mocks base method.
+func (m *MockCIDataClient) ListAllJobsWithVariants(arg0 context.Context) ([]jobrunaggregatorapi.JobRowWithVariants, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListAllJobsWithVariants", arg0)
+	ret0, _ := ret[0].([]jobrunaggregatorapi.JobRowWithVariants)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListAllJobsWithVariants indicates an expected call of ListAllJobsWithVariants.
+func (mr *MockCIDataClientMockRecorder) ListAllJobsWithVariants(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAllJobsWithVariants", reflect.TypeOf((*MockCIDataClient)(nil).ListAllJobsWithVariants), arg0)
 }
 
 // ListAllKnownAlerts mocks base method.
@@ -247,21 +247,6 @@ func (m *MockCIDataClient) ListReleases(arg0 context.Context) ([]jobrunaggregato
 func (mr *MockCIDataClientMockRecorder) ListReleases(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListReleases", reflect.TypeOf((*MockCIDataClient)(nil).ListReleases), arg0)
-}
-
-// ListUnifiedTestRunsForJobAfterDay mocks base method.
-func (m *MockCIDataClient) ListUnifiedTestRunsForJobAfterDay(arg0 context.Context, arg1 string, arg2 time.Time) (*UnifiedTestRunRowIterator, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListUnifiedTestRunsForJobAfterDay", arg0, arg1, arg2)
-	ret0, _ := ret[0].(*UnifiedTestRunRowIterator)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ListUnifiedTestRunsForJobAfterDay indicates an expected call of ListUnifiedTestRunsForJobAfterDay.
-func (mr *MockCIDataClientMockRecorder) ListUnifiedTestRunsForJobAfterDay(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListUnifiedTestRunsForJobAfterDay", reflect.TypeOf((*MockCIDataClient)(nil).ListUnifiedTestRunsForJobAfterDay), arg0, arg1, arg2)
 }
 
 // ListUploadedJobRunIDsSinceFromTable mocks base method.

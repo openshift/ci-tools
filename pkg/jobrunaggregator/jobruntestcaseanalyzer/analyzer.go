@@ -134,7 +134,7 @@ func (s *testCaseAnalyzerJobGetter) shouldAggregateJob(prowJob *prowjobv1.ProwJo
 // For release-controller generated payload, this contains all jobs meeting selection criteria
 // from command args.
 func (s *testCaseAnalyzerJobGetter) GetJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRowWithVariants, error) {
-	jobs, err := s.ciDataClient.ListAllJobs(ctx)
+	jobs, err := s.ciDataClient.ListAllJobsWithVariants(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list all jobs: %w", err)
 	}

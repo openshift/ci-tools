@@ -51,14 +51,19 @@ git commit --quiet -m initial
 cd %s
 %s
 git commit --quiet --all --message changes
-git rev-parse HEAD^
-`, path, cmd))
+git rev-parse HEAD^ > %s/parent_commit
+`, path, cmd, tmp))
 	p.Dir = tmp
 	out, err := p.CombinedOutput()
 	if err != nil {
 		t.Fatalf("%q failed, output:\n%s", p.Args, out)
 	}
-	changed, err := f(dir, strings.TrimSpace(string(out)))
+	hashBytes, err := os.ReadFile(filepath.Join(tmp, "parent_commit"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash := strings.TrimSpace(string(hashBytes))
+	changed, err := f(dir, hash)
 	if err != nil {
 		t.Fatal(err)
 	}

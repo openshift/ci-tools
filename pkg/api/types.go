@@ -1215,8 +1215,6 @@ type ClusterProfile string
 
 const (
 	ClusterProfileAWS                   ClusterProfile = "aws"
-	ClusterProfileAWSAtomic             ClusterProfile = "aws-atomic"
-	ClusterProfileAWSCentos             ClusterProfile = "aws-centos"
 	ClusterProfileAWSCSPIQE             ClusterProfile = "aws-cspi-qe"
 	ClusterProfileAWSQE                 ClusterProfile = "aws-qe"
 	ClusterProfileAWSC2SQE              ClusterProfile = "aws-c2s-qe"
@@ -1233,7 +1231,6 @@ const (
 	ClusterProfileAWSPerfScaleLRCQE     ClusterProfile = "aws-perfscale-lrc-qe"
 	ClusterProfileAWSOutpostQE          ClusterProfile = "aws-outpost-qe"
 	ClusterProfileAWSChaos              ClusterProfile = "aws-chaos"
-	ClusterProfileAWSGluster            ClusterProfile = "aws-gluster"
 	ClusterProfileAWSManagedCSPIQE      ClusterProfile = "aws-managed-cspi-qe"
 	ClusterProfileAWSOSDMSP             ClusterProfile = "aws-osd-msp"
 	ClusterProfileAWSINTEROPQE          ClusterProfile = "aws-interop-qe"
@@ -1352,10 +1349,8 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWS,
 		ClusterProfileAWS2,
 		ClusterProfileAWS3,
-		ClusterProfileAWSAtomic,
 		ClusterProfileAWSC2SQE,
 		ClusterProfileAWSCPaaS,
-		ClusterProfileAWSCentos,
 		ClusterProfileAWSCSPIQE,
 		ClusterProfileAWSPerfScale,
 		ClusterProfileAWSPerfQE,
@@ -1363,7 +1358,6 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSPerfScaleLRCQE,
 		ClusterProfileAWSChaos,
 		ClusterProfileAWSChinaQE,
-		ClusterProfileAWSGluster,
 		ClusterProfileAWSManagedCSPIQE,
 		ClusterProfileAWSGovCloudQE,
 		ClusterProfileAWSOSDMSP,
@@ -1492,10 +1486,7 @@ func (p ClusterProfile) ClusterType() string {
 	switch p {
 	case
 		ClusterProfileAWS,
-		ClusterProfileAWSAtomic,
-		ClusterProfileAWSCentos,
 		ClusterProfileAWSCSPIQE,
-		ClusterProfileAWSGluster,
 		ClusterProfileAWSManagedCSPIQE,
 		ClusterProfileAWSCPaaS,
 		ClusterProfileAWS2,
@@ -1693,10 +1684,7 @@ func (p ClusterProfile) ClusterType() string {
 func (p ClusterProfile) LeaseType() string {
 	switch p {
 	case
-		ClusterProfileAWS,
-		ClusterProfileAWSAtomic,
-		ClusterProfileAWSCentos,
-		ClusterProfileAWSGluster:
+		ClusterProfileAWS:
 		return "aws-quota-slice"
 	case ClusterProfileAWSQE:
 		return "aws-qe-quota-slice"
@@ -1977,9 +1965,6 @@ func (p ClusterProfile) IPPoolLeaseShouldValidateBranch() bool {
 func (p ClusterProfile) ConfigMap() string {
 	switch p {
 	case
-		ClusterProfileAWSAtomic,
-		ClusterProfileAWSCentos,
-		ClusterProfileAWSGluster,
 		ClusterProfileAzure,
 		ClusterProfileGCP,
 		ClusterProfileGCP2,
@@ -1997,9 +1982,6 @@ func (p ClusterProfile) Secret() string {
 	switch p {
 	// These profiles share credentials with the base cloud provider profile.
 	case
-		ClusterProfileAWSAtomic,
-		ClusterProfileAWSCentos,
-		ClusterProfileAWSGluster,
 		ClusterProfileVSphere2,
 		ClusterProfileVSphereDis2,
 		ClusterProfileVSphereMultizone2,

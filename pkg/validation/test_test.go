@@ -92,7 +92,7 @@ func TestValidateTests(t *testing.T) {
 					ContainerTestConfiguration: &api.ContainerTestConfiguration{},
 					OpenshiftAnsibleClusterTestConfiguration: &api.OpenshiftAnsibleClusterTestConfiguration{
 						ClusterTestConfiguration: api.ClusterTestConfiguration{
-							ClusterProfile: api.ClusterProfileAWSAtomic,
+							ClusterProfile: api.ClusterProfileAWS,
 						},
 					},
 				},

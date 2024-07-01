@@ -1262,6 +1262,7 @@ const (
 	ClusterProfileAzureMagQE            ClusterProfile = "azuremag-qe"
 	ClusterProfileEquinixOcpMetal       ClusterProfile = "equinix-ocp-metal"
 	ClusterProfileEquinixOcpMetalQE     ClusterProfile = "equinix-ocp-metal-qe"
+	ClusterProfileEquinixOcpHCP         ClusterProfile = "equinix-ocp-hcp"
 	ClusterProfileFleetManagerQE        ClusterProfile = "fleet-manager-qe"
 	ClusterProfileGCPQE                 ClusterProfile = "gcp-qe"
 	ClusterProfileGCPAutoReleaseQE      ClusterProfile = "gcp-autorelease-qe"
@@ -1397,6 +1398,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAzureStackQE,
 		ClusterProfileEquinixOcpMetal,
 		ClusterProfileEquinixOcpMetalQE,
+		ClusterProfileEquinixOcpHCP,
 		ClusterProfileFleetManagerQE,
 		ClusterProfileGCP,
 		ClusterProfileGCP2,
@@ -1567,7 +1569,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "azuremag"
 	case
 		ClusterProfileEquinixOcpMetal,
-		ClusterProfileEquinixOcpMetalQE:
+		ClusterProfileEquinixOcpMetalQE,
+		ClusterProfileEquinixOcpHCP:
 		return "equinix-ocp-metal"
 	case
 		ClusterProfileGCPQE,
@@ -1784,6 +1787,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "equinix-ocp-metal-quota-slice"
 	case ClusterProfileEquinixOcpMetalQE:
 		return "equinix-ocp-metal-qe-quota-slice"
+	case ClusterProfileEquinixOcpHCP:
+		return "equinix-ocp-hcp-quota-slice"
 	case ClusterProfileFleetManagerQE:
 		return "fleet-manager-qe-quota-slice"
 	case ClusterProfileGCPQE:

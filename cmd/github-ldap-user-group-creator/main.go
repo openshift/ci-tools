@@ -418,7 +418,9 @@ func makeGroups(openshiftPrivAdmins sets.Set[string], peribolosConfig string, ma
 		}
 	}
 
+	roverUsers := sets.New[string]()
 	for k, v := range roverGroups {
+		roverUsers.Insert(v...)
 		oldGroupName := k
 		groupName := k
 		clustersForRoverGroup := clusters
@@ -449,6 +451,14 @@ func makeGroups(openshiftPrivAdmins sets.Set[string], peribolosConfig string, ma
 				Users:      sets.List(sets.New[string](v...).Delete("")),
 			},
 		}
+	}
+
+	groups[api.AllRoverUsersGroupName] = GroupClusters{
+		Clusters: clusters,
+		Group: &userv1.Group{
+			ObjectMeta: metav1.ObjectMeta{Name: api.AllRoverUsersGroupName, Labels: map[string]string{api.DPTPRequesterLabel: toolName}},
+			Users:      sets.List(roverUsers),
+		},
 	}
 	return groups, kerrors.NewAggregate(errs)
 }

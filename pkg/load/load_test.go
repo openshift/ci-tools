@@ -271,6 +271,7 @@ func TestClusterProfilesConfig(t *testing.T) {
 	for _, profileName := range api.ClusterProfiles() {
 		existingProfiles[profileName] = api.ClusterProfileDetails{
 			Profile: profileName,
+			Secret:  api.GetClusterProfileSecret(profileName),
 		}
 	}
 
@@ -280,15 +281,39 @@ func TestClusterProfilesConfig(t *testing.T) {
 			profilesWithOwners[profileName] = api.ClusterProfileDetails{
 				Profile: profileName,
 				Owners:  []api.ClusterProfileOwners{{Org: "org1"}},
+				Secret:  api.GetClusterProfileSecret(profileName),
 			}
 		} else if profileName == "aws-2" {
 			profilesWithOwners[profileName] = api.ClusterProfileDetails{
 				Profile: profileName,
 				Owners:  []api.ClusterProfileOwners{{Org: "org2", Repos: []string{"repo1", "repo2"}}},
+				Secret:  api.GetClusterProfileSecret(profileName),
 			}
 		} else {
 			profilesWithOwners[profileName] = api.ClusterProfileDetails{
 				Profile: profileName,
+				Secret:  api.GetClusterProfileSecret(profileName),
+			}
+		}
+	}
+
+	profilesWithSecrets := make(api.ClusterProfilesMap)
+	for _, profileName := range api.ClusterProfiles() {
+		if profileName == "aws-2" {
+			profilesWithSecrets[profileName] = api.ClusterProfileDetails{
+				Profile: profileName,
+				Owners:  []api.ClusterProfileOwners{{Org: "org2", Repos: []string{"repo1", "repo2"}}},
+				Secret:  "non-default-secret-name-aws",
+			}
+		} else if profileName == "vsphere-connected-2" {
+			profilesWithSecrets[profileName] = api.ClusterProfileDetails{
+				Profile: profileName,
+				Secret:  "non-default-secret-name-vsphere",
+			}
+		} else {
+			profilesWithSecrets[profileName] = api.ClusterProfileDetails{
+				Profile: profileName,
+				Secret:  api.GetClusterProfileSecret(profileName),
 			}
 		}
 	}
@@ -325,6 +350,22 @@ func TestClusterProfilesConfig(t *testing.T) {
         - profile: aws-2
     `,
 			expected: existingProfiles,
+		},
+		{
+			name: "profiles with owners and secrets",
+			testYaml: `
+        - profile: aws
+        - profile: aws-2
+          owners:
+            - org: org2
+              repos:
+                - repo1
+                - repo2
+          secret: non-default-secret-name-aws
+        - profile: vsphere-connected-2
+          secret: non-default-secret-name-vsphere
+    `,
+			expected: profilesWithSecrets,
 		},
 	}
 

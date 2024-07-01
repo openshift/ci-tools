@@ -303,10 +303,18 @@ def lambda_handler(event, context):
                     # Distribution does not want to redirect client's region to S3. CloudFront is cheaper.
                     return request
 
-                # Prep the client to talk to the distribution's / cluster's us-east-1
+                # Prep the client to talk to the distribution's / cluster's us-east-1 and us-east-2
                 # internal registry bucket. This literal string method will break if we
-                # have build farms which are not in us-east-1.
-                s3 = get_local_account_s3_client_for_region('us-east-1')
+                # have build farms which are not in us-east-1 and us-east-2.
+                DISTRIBUTION_TO_BUILD_FARM_REGION = {  # default is us-east-1
+                    'E2B105Z8OCWZSC': 'us-east-2', # build09
+                    'E2N1Y2UGVWY8LA': 'us-east-2'  # build10
+                }
+                build_farm_region = 'us-east-1'
+                if distribution_name in DISTRIBUTION_TO_BUILD_FARM_REGION:
+                    build_farm_region = DISTRIBUTION_TO_BUILD_FARM_REGION[distribution_name]
+                    
+                s3 = get_local_account_s3_client_for_region(build_farm_region)
 
             # Depending on the codepath here, s3 may be an STS assumed role client
             # to app.ci or just a direct client to the distribution's underlying s3 bucket.

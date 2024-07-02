@@ -16,7 +16,7 @@ import (
 	"google.golang.org/api/iterator"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	prowjobv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	prowjobv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
 	"github.com/openshift/ci-tools/pkg/junit"
 )

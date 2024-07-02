@@ -23,7 +23,6 @@ import (
 	"go/scanner"
 	"go/token"
 	"go/types"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -111,7 +110,7 @@ func (p *Package) NeedSyntax() {
 	for i, filename := range p.CompiledGoFiles {
 		go func(i int, filename string) {
 			defer wg.Done()
-			src, err := ioutil.ReadFile(filename)
+			src, err := os.ReadFile(filename)
 			if err != nil {
 				p.AddError(err)
 				return
@@ -338,40 +337,40 @@ func LoadRoots(roots ...string) ([]*Package, error) {
 // supports roots that are filesystem paths. For more information, please
 // refer to the high-level outline of this function's logic:
 //
-//     1. If no roots are provided then load the working directory and return
-//        early.
+//  1. If no roots are provided then load the working directory and return
+//     early.
 //
-//     2. Otherwise sort the provided roots into two, distinct buckets:
+//  2. Otherwise sort the provided roots into two, distinct buckets:
 //
-//            a. package/module names
-//            b. filesystem paths
+//     a. package/module names
+//     b. filesystem paths
 //
-//        A filesystem path is distinguished from a Go package/module name by
-//        the same rules as followed by the "go" command. At a high level, a
-//        root is a filesystem path IFF it meets ANY of the following criteria:
+//     A filesystem path is distinguished from a Go package/module name by
+//     the same rules as followed by the "go" command. At a high level, a
+//     root is a filesystem path IFF it meets ANY of the following criteria:
 //
-//            * is absolute
-//            * begins with .
-//            * begins with ..
+//     * is absolute
+//     * begins with .
+//     * begins with ..
 //
-//        For more information please refer to the output of the command
-//        "go help packages".
+//     For more information please refer to the output of the command
+//     "go help packages".
 //
-//     3. Load the package/module roots as a single call to packages.Load. If
-//        there are no filesystem path roots then return early.
+//  3. Load the package/module roots as a single call to packages.Load. If
+//     there are no filesystem path roots then return early.
 //
-//     4. For filesystem path roots ending with "...", check to see if its
-//        descendants include any nested, Go modules. If so, add the directory
-//        that contains the nested Go module to the filesystem path roots.
+//  4. For filesystem path roots ending with "...", check to see if its
+//     descendants include any nested, Go modules. If so, add the directory
+//     that contains the nested Go module to the filesystem path roots.
 //
-//     5. Load the filesystem path roots and return the load packages for the
-//        package/module roots AND the filesystem path roots.
+//  5. Load the filesystem path roots and return the load packages for the
+//     package/module roots AND the filesystem path roots.
 func LoadRootsWithConfig(cfg *packages.Config, roots ...string) ([]*Package, error) {
 	l := &loader{
 		cfg:      cfg,
 		packages: make(map[*packages.Package]*Package),
 	}
-	l.cfg.Mode |= packages.LoadImports | packages.NeedTypesSizes
+	l.cfg.Mode |= packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles | packages.NeedImports | packages.NeedTypesSizes
 	if l.cfg.Fset == nil {
 		l.cfg.Fset = token.NewFileSet()
 	}
@@ -394,7 +393,7 @@ func LoadRootsWithConfig(cfg *packages.Config, roots ...string) ([]*Package, err
 	// and try and prevent packages from showing up twice when nested module
 	// support is enabled. there is not harm that comes from this per se, but
 	// it makes testing easier when a known number of modules can be asserted
-	uniquePkgIDs := sets.String{}
+	uniquePkgIDs := sets.Set[string]{}
 
 	// loadPackages returns the Go packages for the provided roots
 	//
@@ -404,7 +403,11 @@ func LoadRootsWithConfig(cfg *packages.Config, roots ...string) ([]*Package, err
 	loadPackages := func(roots ...string) ([]*Package, error) {
 		rawPkgs, err := packages.Load(l.cfg, roots...)
 		if err != nil {
-			return nil, err
+			loadRoot := l.cfg.Dir
+			if l.cfg.Dir == "" {
+				loadRoot, _ = os.Getwd()
+			}
+			return nil, fmt.Errorf("load packages in root %q: %w", loadRoot, err)
 		}
 		var pkgs []*Package
 		for _, rp := range rawPkgs {
@@ -486,7 +489,6 @@ func LoadRootsWithConfig(cfg *packages.Config, roots ...string) ([]*Package, err
 		p string,
 		d os.DirEntry,
 		e error) error {
-
 		if e != nil {
 			return e
 		}
@@ -515,7 +517,6 @@ func LoadRootsWithConfig(cfg *packages.Config, roots ...string) ([]*Package, err
 
 		// get the absolute path of the root
 		if !filepath.IsAbs(r) {
-
 			// if the initial value of cfg.Dir was non-empty then use it when
 			// building the absolute path to this root. otherwise use the
 			// filepath.Abs function to get the absolute path of the root based
@@ -545,7 +546,6 @@ func LoadRootsWithConfig(cfg *packages.Config, roots ...string) ([]*Package, err
 			if err := filepath.WalkDir(
 				d,
 				addNestedGoModulesToRoots); err != nil {
-
 				return nil, err
 			}
 		}
@@ -601,9 +601,9 @@ func LoadRootsWithConfig(cfg *packages.Config, roots ...string) ([]*Package, err
 // references with those from the rootPkgs list. This ensures the
 // kubebuilder marker generation is handled correctly. For more info,
 // please see issue 680.
-func visitImports(rootPkgs []*Package, pkg *Package, seen sets.String) {
+func visitImports(rootPkgs []*Package, pkg *Package, seen sets.Set[string]) {
 	if seen == nil {
-		seen = sets.String{}
+		seen = sets.Set[string]{}
 	}
 	for importedPkgID, importedPkg := range pkg.Imports() {
 		for i := range rootPkgs {

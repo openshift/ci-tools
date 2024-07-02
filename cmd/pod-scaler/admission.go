@@ -15,12 +15,12 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/test-infra/prow/entrypoint"
-	"k8s.io/test-infra/prow/interrupts"
-	"k8s.io/test-infra/prow/kube"
-	"k8s.io/test-infra/prow/pjutil"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	"sigs.k8s.io/prow/pkg/entrypoint"
+	"sigs.k8s.io/prow/pkg/interrupts"
+	"sigs.k8s.io/prow/pkg/kube"
+	"sigs.k8s.io/prow/pkg/pjutil"
 	"sigs.k8s.io/yaml"
 
 	buildv1 "github.com/openshift/api/build/v1"
@@ -56,7 +56,7 @@ type podMutator struct {
 	client                buildclientv1.BuildV1Interface
 	resources             *resourceServer
 	mutateResourceLimits  bool
-	decoder               *admission.Decoder
+	decoder               admission.Decoder
 	cpuCap                int64
 	memoryCap             string
 	cpuPriorityScheduling int64

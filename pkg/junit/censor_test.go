@@ -3,7 +3,7 @@ package junit
 import (
 	"testing"
 
-	"k8s.io/test-infra/prow/secretutil"
+	"sigs.k8s.io/prow/pkg/secretutil"
 
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )

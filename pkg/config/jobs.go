@@ -1,7 +1,7 @@
 package config
 
 import (
-	prowconfig "k8s.io/test-infra/prow/config"
+	prowconfig "sigs.k8s.io/prow/pkg/config"
 )
 
 var (

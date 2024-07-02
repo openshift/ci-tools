@@ -152,7 +152,7 @@ func (r *allReleaseUploaderOptions) fetchReleaseTags(release string) []ReleaseTa
 		}
 
 		if err := json.NewDecoder(resp.Body).Decode(&tags); err != nil {
-			klog.Errorf("couldn't decode json: %w", err)
+			klog.Errorf("couldn't decode json: %v", err)
 			resp.Body.Close()
 			continue
 		}

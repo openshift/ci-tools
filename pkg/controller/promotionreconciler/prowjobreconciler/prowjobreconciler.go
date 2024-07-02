@@ -13,10 +13,6 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	"k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/kube"
-	"k8s.io/test-infra/prow/pjutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -25,6 +21,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+	"sigs.k8s.io/prow/pkg/config"
+	"sigs.k8s.io/prow/pkg/kube"
+	"sigs.k8s.io/prow/pkg/pjutil"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 )
@@ -70,7 +70,7 @@ func AddToManager(mgr controllerruntime.Manager, config config.Getter, dryRun bo
 	}
 	enqueuer, src := newSource()
 
-	if err := ctrl.Watch(src, &handler.EnqueueRequestForObject{}); err != nil {
+	if err := ctrl.Watch(src); err != nil {
 		return nil, fmt.Errorf("failed to create watch: %w", err)
 	}
 
@@ -78,20 +78,17 @@ func AddToManager(mgr controllerruntime.Manager, config config.Getter, dryRun bo
 }
 
 func newSource() (Enqueuer, source.Source) {
-	channel := make(chan event.GenericEvent)
-	src := &source.Channel{
-		Source: channel,
-	}
+	channel := make(chan event.TypedGenericEvent[*prowv1.ProwJob])
 	enqueuer := func(orbc OrgRepoBranchCommit) {
 		channel <- orcbToEvent(orbc)
 	}
-
+	src := source.Channel(channel, &handler.TypedEnqueueRequestForObject[*prowv1.ProwJob]{})
 	return enqueuer, src
 }
 
-func orcbToEvent(orbc OrgRepoBranchCommit) event.GenericEvent {
+func orcbToEvent(orbc OrgRepoBranchCommit) event.TypedGenericEvent[*prowv1.ProwJob] {
 	// The object type is irrelvant for us but we need to fulfill the client.Object interface
-	return event.GenericEvent{Object: &prowv1.ProwJob{ObjectMeta: metav1.ObjectMeta{
+	return event.TypedGenericEvent[*prowv1.ProwJob]{Object: &prowv1.ProwJob{ObjectMeta: metav1.ObjectMeta{
 		Name: fmt.Sprintf("%s|%s|%s|%s", orbc.Org, orbc.Repo, orbc.Branch, orbc.Commit),
 	}}}
 }

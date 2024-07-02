@@ -4,8 +4,8 @@ import (
 	"cloud.google.com/go/storage"
 	"github.com/slack-go/slack"
 
-	"k8s.io/test-infra/prow/config"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/prow/pkg/config"
 
 	"github.com/openshift/ci-tools/pkg/slack/events"
 	"github.com/openshift/ci-tools/pkg/slack/events/helpdesk"

@@ -7,17 +7,17 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/test-infra/pkg/flagutil"
-	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	"k8s.io/test-infra/prow/deck/jobs"
-	prowflagutil "k8s.io/test-infra/prow/flagutil"
-	configflagutil "k8s.io/test-infra/prow/flagutil/config"
-	"k8s.io/test-infra/prow/interrupts"
-	"k8s.io/test-infra/prow/io"
-	"k8s.io/test-infra/prow/logrusutil"
-	"k8s.io/test-infra/prow/spyglass"
-	"k8s.io/test-infra/prow/spyglass/lenses/common"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+	"sigs.k8s.io/prow/pkg/deck/jobs"
+	"sigs.k8s.io/prow/pkg/flagutil"
+	prowflagutil "sigs.k8s.io/prow/pkg/flagutil"
+	configflagutil "sigs.k8s.io/prow/pkg/flagutil/config"
+	"sigs.k8s.io/prow/pkg/interrupts"
+	"sigs.k8s.io/prow/pkg/io"
+	"sigs.k8s.io/prow/pkg/logrusutil"
+	"sigs.k8s.io/prow/pkg/spyglass"
+	"sigs.k8s.io/prow/pkg/spyglass/lenses/common"
 
 	"github.com/openshift/ci-tools/pkg/lenses/stepgraph"
 )

@@ -8,7 +8,7 @@ import (
 	"os/exec"
 	"time"
 
-	"k8s.io/test-infra/prow/interrupts"
+	"sigs.k8s.io/prow/pkg/interrupts"
 
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )

@@ -10,8 +10,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"gopkg.in/fsnotify.v1"
 
-	"k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/interrupts"
+	"sigs.k8s.io/prow/pkg/config"
+	"sigs.k8s.io/prow/pkg/interrupts"
 )
 
 func startWatchers(path string, errCh chan<- error, callback func() error, metric *prometheus.CounterVec, universalSymlinkWatcher *UniversalSymlinkWatcher) error {

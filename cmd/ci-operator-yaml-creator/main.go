@@ -13,7 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/util/sets"
-	git "k8s.io/test-infra/prow/git/v2"
+	git "sigs.k8s.io/prow/pkg/git/v2"
 	"sigs.k8s.io/yaml"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"

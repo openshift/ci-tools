@@ -16,7 +16,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	git "k8s.io/test-infra/prow/git/v2"
+	git "sigs.k8s.io/prow/pkg/git/v2"
 
 	"github.com/openshift/imagebuilder"
 	dockercmd "github.com/openshift/imagebuilder/dockerfile/command"

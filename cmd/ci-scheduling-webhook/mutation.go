@@ -70,7 +70,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(statusCode)
 		_, err = w.Write([]byte(msg))
 		if err != nil {
-			klog.Errorf("Unable to return http error response to caller: %w", err)
+			klog.Errorf("Unable to return http error response to caller: %v", err)
 		}
 	}
 
@@ -401,7 +401,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 	if len(patchEntries) > 0 {
 		marshalled, err := json.Marshal(patchEntries)
 		if err != nil {
-			klog.Errorf("Error marshalling JSON patch (%v) from: %v", patchEntries)
+			klog.Errorf("Error marshalling JSON patch (%v) from: %v", patchEntries, err)
 			writeHttpError(500, fmt.Errorf("error marshalling jsonpatch: %w", err))
 			return
 		}
@@ -520,7 +520,7 @@ func mutateNode(admissionReviewRequest *admissionv1.AdmissionReview, w http.Resp
 	if len(patchEntries) > 0 {
 		marshalled, err := json.Marshal(patchEntries)
 		if err != nil {
-			klog.Errorf("Error marshalling JSON patch (%v) from: %v", patchEntries)
+			klog.Errorf("Error marshalling JSON patch (%v) from: %v", patchEntries, err)
 			writeHttpError(500, fmt.Errorf("error marshalling jsonpatch: %w", err))
 			return
 		}

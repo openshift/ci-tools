@@ -38,19 +38,21 @@ func AddToManager(manager manager.Manager) error {
 		return fmt.Errorf("failed to construct controller: %w", err)
 	}
 
-	predicates := predicate.Funcs{
-		CreateFunc: func(e event.CreateEvent) bool { return hypershiftNamespace(e.Object.GetLabels()) },
-		DeleteFunc: func(event.DeleteEvent) bool { return false },
-		UpdateFunc: func(e event.UpdateEvent) bool {
+	predicates := predicate.TypedFuncs[*corev1.Namespace]{
+		CreateFunc: func(e event.TypedCreateEvent[*corev1.Namespace]) bool {
+			return hypershiftNamespace(e.Object.GetLabels())
+		},
+		DeleteFunc: func(event.TypedDeleteEvent[*corev1.Namespace]) bool { return false },
+		UpdateFunc: func(e event.TypedUpdateEvent[*corev1.Namespace]) bool {
 			return hypershiftNamespace(e.ObjectNew.GetLabels())
 		},
-		GenericFunc: func(e event.GenericEvent) bool { return hypershiftNamespace(e.Object.GetLabels()) },
+		GenericFunc: func(e event.TypedGenericEvent[*corev1.Namespace]) bool {
+			return hypershiftNamespace(e.Object.GetLabels())
+		},
 	}
 
 	if err := c.Watch(
-		source.Kind(manager.GetCache(), &corev1.Namespace{}),
-		namespaceHandler(),
-		predicates,
+		source.Kind(manager.GetCache(), &corev1.Namespace{}, namespaceHandler(), predicates),
 	); err != nil {
 		return fmt.Errorf("failed to create watch for namespaces: %w", err)
 	}
@@ -70,13 +72,8 @@ func hypershiftNamespace(labels map[string]string) bool {
 	return true
 }
 
-func namespaceHandler() handler.EventHandler {
-	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o ctrlruntimeclient.Object) []reconcile.Request {
-		ns, ok := o.(*corev1.Namespace)
-		if !ok {
-			logrus.WithField("type", fmt.Sprintf("%T", o)).Error("Got object that was not a namespace")
-			return nil
-		}
+func namespaceHandler() handler.TypedEventHandler[*corev1.Namespace] {
+	return handler.TypedEnqueueRequestsFromMapFunc[*corev1.Namespace](func(ctx context.Context, ns *corev1.Namespace) []reconcile.Request {
 		return []reconcile.Request{{NamespacedName: types.NamespacedName{
 			Name: ns.Name,
 		}}}

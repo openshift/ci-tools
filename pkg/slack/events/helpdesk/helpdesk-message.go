@@ -25,11 +25,9 @@ type KeywordsListItem struct {
 	Link     string   `json:"link"`
 }
 
-const reviewRequestWorkflow = "B03KCKGCBC7"
-
 // MessageHandler returns a handler that knows how to respond to new messages
 // in forum-ocp-testplatform channel that mention @dptp-helpdesk.
-func MessageHandler(client messagePoster, keywordsConfig KeywordsConfig, helpdeskAlias, forumChannelId string, requireWorkflowsInForum bool) events.PartialHandler {
+func MessageHandler(client messagePoster, keywordsConfig KeywordsConfig, helpdeskAlias, forumChannelId, reviewRequestWorkflowID string, requireWorkflowsInForum bool) events.PartialHandler {
 	return events.PartialHandlerFunc("helpdesk",
 		func(callback *slackevents.EventsAPIEvent, logger *logrus.Entry) (handled bool, err error) {
 			log := logger.WithField("handler", "helpdesk-message")
@@ -59,7 +57,7 @@ func MessageHandler(client messagePoster, keywordsConfig KeywordsConfig, helpdes
 				response = getTopLevelDirectMessageResponse(event.User)
 			} else if strings.Contains(event.Text, helpdeskAlias) {
 				log.Info("Handling response in forum-ocp-testplatform channel...")
-				response = getContactedHelpdeskResponse(event.BotID)
+				response = getContactedHelpdeskResponse(event.BotID, reviewRequestWorkflowID)
 			} else {
 				log.Debugf("dptp-helpdesk not mentioned in message: %s", event.Text)
 				return false, nil
@@ -79,7 +77,7 @@ func MessageHandler(client messagePoster, keywordsConfig KeywordsConfig, helpdes
 				return true, nil
 			}
 
-			if reviewRequestWorkflow != event.BotID {
+			if reviewRequestWorkflowID != event.BotID {
 				if keywords := getPresentKeywords(event.Text, keywordsConfig); len(keywords) > 0 {
 					responseChannel, responseTimestamp, err = client.PostMessage(event.Channel, slack.MsgOptionBlocks(getDocsLinks(keywords)...), slack.MsgOptionTS(timestamp), slack.MsgOptionDisableLinkUnfurl())
 					if err != nil {
@@ -105,9 +103,9 @@ func getTopLevelDirectMessageResponse(user string) []slack.Block {
 	}}
 }
 
-func getContactedHelpdeskResponse(botId string) []slack.Block {
+func getContactedHelpdeskResponse(botId, reviewRequestWorkflowID string) []slack.Block {
 	sections := []string{":wave: You have reached the Test Platform Help Desk. An assigned engineer will respond in several hours during their working hours."}
-	if reviewRequestWorkflow == botId {
+	if reviewRequestWorkflowID == botId {
 		sections = append(sections, "Your PR will be reviewed based on: age, priority, and capacity.")
 	} else {
 		sections = append(sections,

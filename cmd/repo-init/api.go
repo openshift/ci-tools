@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"net/http"
 	"net/url"
@@ -658,7 +659,9 @@ func (s server) generateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	createPR, _ := strconv.ParseBool(r.URL.Query().Get("generatePR"))
-	branch, err := pushChanges(repo, s.githubOptions, config.Org, config.Repo, githubUser, r.Header.Get("access_token"), createPR)
+	accessToken := r.Header.Get("access_token")
+	accessToken = template.JSEscapeString(accessToken)
+	branch, err := pushChanges(repo, s.githubOptions, config.Org, config.Repo, githubUser, accessToken, createPR)
 
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)

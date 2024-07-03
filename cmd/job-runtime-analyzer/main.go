@@ -2,25 +2,24 @@ package main
 
 import (
 	"flag"
-	"strings"
+	"fmt"
 
 	"github.com/sirupsen/logrus"
 
 	jobruntimeanalyzer "github.com/openshift/ci-tools/pkg/job-runtime-analyzer"
 )
 
-const defaultJobURL = "https://storage.googleapis.com/test-platform-results/pr-logs/pull/openshift_ci-tools/999/pull-ci-openshift-ci-tools-master-validate-vendor/1283812971092381696"
+const (
+	defaultJobPath = "pr-logs/pull/openshift_ci-tools/999/pull-ci-openshift-ci-tools-master-validate-vendor/1283812971092381696"
+	bucket         = "https://storage.googleapis.com/test-platform-results"
+)
 
 func main() {
-	jobURL := flag.String("job-url", defaultJobURL, "url to a job")
+	jobPath := flag.String("job-path", defaultJobPath, "path to a job in the test-platform-results bucket")
 	flag.Parse()
-	bucket := "https://storage.googleapis.com/test-platform-results"
-	if !strings.HasPrefix(*jobURL, bucket) {
-		logrus.Fatalf("job-url doesn't point to correct bucket %s", bucket)
-		return
-	}
 
-	if err := jobruntimeanalyzer.Run(*jobURL); err != nil {
+	jobURL := fmt.Sprintf("%s/%s", bucket, *jobPath)
+	if err := jobruntimeanalyzer.Run(jobURL); err != nil {
 		logrus.WithError(err).Fatal("Failed")
 	}
 }

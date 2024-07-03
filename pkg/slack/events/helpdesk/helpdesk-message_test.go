@@ -86,6 +86,7 @@ func TestGetPresentKeywords(t *testing.T) {
 }
 
 func TestGetContactedHelpdeskResponse(t *testing.T) {
+	reviewRequestWorkflow := "1234"
 	testCases := []struct {
 		name  string
 		botId string
@@ -106,7 +107,7 @@ func TestGetContactedHelpdeskResponse(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			actual := getContactedHelpdeskResponse(testCase.botId)
+			actual := getContactedHelpdeskResponse(testCase.botId, reviewRequestWorkflow)
 			testhelper.CompareWithFixture(t, actual)
 		})
 	}

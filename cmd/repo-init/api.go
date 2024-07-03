@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -558,6 +559,8 @@ func getConfigPath(org, repo, releaseRepo string) string {
 	return configPath
 }
 
+var usernameRegex = regexp.MustCompile("^[a-zA-Z0-9]+(?:-[a-zA-Z0-9]+)*$")
+
 // generateConfig is responsible for taking the initConfig and converting it into an api.ReleaseBuildConfiguration. Optionally
 // this function may also push this config to GitHub and create a pull request for the o/release repo.
 func (s server) generateConfig(w http.ResponseWriter, r *http.Request) {
@@ -578,6 +581,11 @@ func (s server) generateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	githubUser := r.Header.Get("github_user")
+	if !usernameRegex.MatchString(githubUser) {
+		w.WriteHeader(http.StatusBadRequest)
+		s.logger.WithError(err).Error("invalid github_user provided")
+		return
+	}
 	// since we might be interacting with git, grab one of the checked out o/release repos and assign it to the current
 	// user. we'll hold on to this until all git interactions are complete to prevent weirdness resulting from multiple users
 	// dealing with the same working copy.

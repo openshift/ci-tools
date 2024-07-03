@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"html/template"
 	"io"
 	"net/http"
 	"os"
@@ -116,7 +117,7 @@ func validatePodScalerRequest(request *results.PodScalerRequest) error {
 
 func handleError(w http.ResponseWriter, err error) {
 	w.WriteHeader(http.StatusBadRequest)
-	fmt.Fprint(w, err)
+	template.JSEscape(w, []byte(err.Error()))
 }
 
 func withErrorRate(request *results.Request) {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -13,6 +14,11 @@ const defaultJobURL = "https://storage.googleapis.com/test-platform-results/pr-l
 func main() {
 	jobURL := flag.String("job-url", defaultJobURL, "url to a job")
 	flag.Parse()
+	bucket := "https://storage.googleapis.com/test-platform-results"
+	if !strings.HasPrefix(*jobURL, bucket) {
+		logrus.Fatalf("job-url doesn't point to correct bucket %s", bucket)
+		return
+	}
 
 	if err := jobruntimeanalyzer.Run(*jobURL); err != nil {
 		logrus.WithError(err).Fatal("Failed")

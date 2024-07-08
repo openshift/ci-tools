@@ -286,7 +286,7 @@ func ClusterProfilesConfig(configPath string) (api.ClusterProfilesMap, error) {
 	return mergedMap, nil
 }
 
-// ClusterClaimOwnersConfig ClusterClaimsOwnersConfig loads cluster claim owners information from its config in the release repository
+// ClusterClaimOwnersConfig loads cluster claim owners information from its config in the release repository
 func ClusterClaimOwnersConfig(configPath string) (api.ClusterClaimOwnersMap, error) {
 	configContents, err := os.ReadFile(configPath)
 	if err != nil {

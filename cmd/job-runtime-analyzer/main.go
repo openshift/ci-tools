@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"fmt"
+	"path"
 
 	"github.com/sirupsen/logrus"
 
@@ -18,7 +18,7 @@ func main() {
 	jobPath := flag.String("job-path", defaultJobPath, "path to a job in the test-platform-results bucket")
 	flag.Parse()
 
-	jobURL := fmt.Sprintf("%s/%s", bucket, *jobPath)
+	jobURL := path.Join(bucket, *jobPath)
 	if err := jobruntimeanalyzer.Run(jobURL); err != nil {
 		logrus.WithError(err).Fatal("Failed")
 	}

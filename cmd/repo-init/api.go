@@ -670,7 +670,7 @@ func (s server) generateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	_, err = w.Write([]byte(fmt.Sprintf("https://github.com/%s/release/pull/new/%s", githubUser, branch)))
+	_, err = w.Write([]byte(path.Join("https://github.com", githubUser, "release/pull/new", branch)))
 
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)

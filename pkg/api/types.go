@@ -1997,8 +1997,8 @@ func (p ClusterProfile) Secret() string {
 	return fmt.Sprintf("cluster-secrets-%s", name)
 }
 
-// GetClusterProfileSecret returns the default secret name for the profile
-func GetClusterProfileSecret(profile ClusterProfile) string {
+// GetDefaultClusterProfileSecretName returns the default secret name for the profile
+func GetDefaultClusterProfileSecretName(profile ClusterProfile) string {
 	return fmt.Sprintf("cluster-secrets-%s", string(profile))
 }
 

@@ -271,7 +271,7 @@ func TestClusterProfilesConfig(t *testing.T) {
 	for _, profileName := range api.ClusterProfiles() {
 		existingProfiles[profileName] = api.ClusterProfileDetails{
 			Profile: profileName,
-			Secret:  api.GetClusterProfileSecret(profileName),
+			Secret:  api.GetDefaultClusterProfileSecretName(profileName),
 		}
 	}
 
@@ -281,18 +281,18 @@ func TestClusterProfilesConfig(t *testing.T) {
 			profilesWithOwners[profileName] = api.ClusterProfileDetails{
 				Profile: profileName,
 				Owners:  []api.ClusterProfileOwners{{Org: "org1"}},
-				Secret:  api.GetClusterProfileSecret(profileName),
+				Secret:  api.GetDefaultClusterProfileSecretName(profileName),
 			}
 		} else if profileName == "aws-2" {
 			profilesWithOwners[profileName] = api.ClusterProfileDetails{
 				Profile: profileName,
 				Owners:  []api.ClusterProfileOwners{{Org: "org2", Repos: []string{"repo1", "repo2"}}},
-				Secret:  api.GetClusterProfileSecret(profileName),
+				Secret:  api.GetDefaultClusterProfileSecretName(profileName),
 			}
 		} else {
 			profilesWithOwners[profileName] = api.ClusterProfileDetails{
 				Profile: profileName,
-				Secret:  api.GetClusterProfileSecret(profileName),
+				Secret:  api.GetDefaultClusterProfileSecretName(profileName),
 			}
 		}
 	}
@@ -313,7 +313,7 @@ func TestClusterProfilesConfig(t *testing.T) {
 		} else {
 			profilesWithSecrets[profileName] = api.ClusterProfileDetails{
 				Profile: profileName,
-				Secret:  api.GetClusterProfileSecret(profileName),
+				Secret:  api.GetDefaultClusterProfileSecretName(profileName),
 			}
 		}
 	}

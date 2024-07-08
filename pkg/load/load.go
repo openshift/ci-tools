@@ -272,13 +272,13 @@ func ClusterProfilesConfig(configPath string) (api.ClusterProfilesMap, error) {
 		profile, found := profilesFromConfigMap[profileName]
 		if found {
 			if profile.Secret == "" {
-				profile.Secret = api.GetClusterProfileSecret(profileName) // get the default secret name
+				profile.Secret = api.GetDefaultClusterProfileSecretName(profileName)
 			}
 			mergedMap[profileName] = profile
 		} else {
 			mergedMap[profileName] = api.ClusterProfileDetails{
 				Profile: profileName,
-				Secret:  api.GetClusterProfileSecret(profileName),
+				Secret:  api.GetDefaultClusterProfileSecretName(profileName),
 			}
 		}
 	}

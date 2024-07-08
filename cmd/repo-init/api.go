@@ -659,8 +659,7 @@ func (s server) generateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	createPR, _ := strconv.ParseBool(r.URL.Query().Get("generatePR"))
-	accessToken := r.Header.Get("access_token")
-	accessToken = template.JSEscapeString(accessToken)
+	accessToken := template.JSEscapeString(r.Header.Get("access_token"))
 	branch, err := pushChanges(repo, s.githubOptions, config.Org, config.Repo, githubUser, accessToken, createPR)
 
 	if err != nil {

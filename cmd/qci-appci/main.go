@@ -390,7 +390,10 @@ func (s *SimpleClusterTokenService) Validate(token string) (bool, error) {
 	t := time.Now()
 	var username string
 	var ret bool
-	defer s.logger.WithField("username", username).WithField("validated", ret).WithField("duration", time.Since(t)).Debug("Validated token")
+	defer func() {
+		duration := time.Since(t)
+		s.logger.WithField("username", username).WithField("validated", ret).WithField("duration", duration).Debug("Validated token")
+	}()
 	tr := &authenticationv1.TokenReview{
 		Spec: authenticationv1.TokenReviewSpec{
 			Token: token,

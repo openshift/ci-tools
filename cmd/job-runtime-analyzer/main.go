@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"path"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -19,6 +20,9 @@ func main() {
 	flag.Parse()
 
 	jobURL := path.Join(bucket, *jobPath)
+	if strings.Contains(jobURL, "..") {
+		logrus.Fatalf("improper url containing backward reference")
+	}
 	if err := jobruntimeanalyzer.Run(jobURL); err != nil {
 		logrus.WithError(err).Fatal("Failed")
 	}

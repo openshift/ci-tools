@@ -255,32 +255,38 @@ func ClusterProfilesConfig(configPath string) (api.ClusterProfilesMap, error) {
 		return nil, fmt.Errorf("failed to read cluster profiles config: %w", err)
 	}
 
-	var profileOwnersList api.ClusterProfilesList
-	if err = yaml.Unmarshal(configContents, &profileOwnersList); err != nil {
+	var profilesFromConfig api.ClusterProfilesList
+	if err = yaml.Unmarshal(configContents, &profilesFromConfig); err != nil {
 		return nil, fmt.Errorf("failed to unmarshall file %v. Please check that the formatting in the file is correct. Full error: %w", configPath, err)
 	}
 
 	// TODO: The following code can be erased once profiles are completely moved
 	// from code in ci-tools to the config file in openshift/release
-	profileOwnersMap := make(api.ClusterProfilesMap)
-	for _, p := range profileOwnersList {
-		profileOwnersMap[p.Profile] = p
+	profilesFromConfigMap := make(api.ClusterProfilesMap)
+	for _, p := range profilesFromConfig {
+		profilesFromConfigMap[p.Profile] = p
 	}
 
 	mergedMap := make(api.ClusterProfilesMap)
 	for _, profileName := range api.ClusterProfiles() {
-		profile, found := profileOwnersMap[profileName]
+		profile, found := profilesFromConfigMap[profileName]
 		if found {
+			if profile.Secret == "" {
+				profile.Secret = api.GetDefaultClusterProfileSecretName(profileName)
+			}
 			mergedMap[profileName] = profile
 		} else {
-			mergedMap[profileName] = api.ClusterProfileDetails{Profile: profileName}
+			mergedMap[profileName] = api.ClusterProfileDetails{
+				Profile: profileName,
+				Secret:  api.GetDefaultClusterProfileSecretName(profileName),
+			}
 		}
 	}
 
 	return mergedMap, nil
 }
 
-// ClusterClaimsOwnersConfig loads cluster claim owners information from its config in the release repository
+// ClusterClaimOwnersConfig loads cluster claim owners information from its config in the release repository
 func ClusterClaimOwnersConfig(configPath string) (api.ClusterClaimOwnersMap, error) {
 	configContents, err := os.ReadFile(configPath)
 	if err != nil {

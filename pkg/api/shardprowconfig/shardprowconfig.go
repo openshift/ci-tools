@@ -9,8 +9,8 @@ import (
 	"github.com/spf13/afero"
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
-	prowconfig "k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/git/types"
+	prowconfig "sigs.k8s.io/prow/pkg/config"
+	"sigs.k8s.io/prow/pkg/git/types"
 
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/prowconfigsharding"

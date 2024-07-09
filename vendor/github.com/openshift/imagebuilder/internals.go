@@ -52,7 +52,7 @@ func hasSlash(input string) bool {
 
 // makeAbsolute ensures that the provided path is absolute.
 func makeAbsolute(dest, workingDir string) string {
-	// Twiddle the destination when its a relative path - meaning, make it
+	// Twiddle the destination when it's a relative path - meaning, make it
 	// relative to the WORKINGDIR
 	if dest == "." {
 		if !hasSlash(workingDir) {
@@ -91,4 +91,30 @@ func parseOptInterval(f *flag.Flag) (time.Duration, error) {
 		return 0, fmt.Errorf("Interval %#v must be positive", f.Name)
 	}
 	return d, nil
+}
+
+// mergeEnv merges two lists of environment variables, avoiding duplicates.
+func mergeEnv(defaults, overrides []string) []string {
+	s := make([]string, 0, len(defaults)+len(overrides))
+	index := make(map[string]int)
+	for _, envSpec := range append(defaults, overrides...) {
+		envVar := strings.SplitN(envSpec, "=", 2)
+		if i, ok := index[envVar[0]]; ok {
+			s[i] = envSpec
+			continue
+		}
+		s = append(s, envSpec)
+		index[envVar[0]] = len(s) - 1
+	}
+	return s
+}
+
+// envMapAsSlice returns the contents of a map[string]string as a slice of keys
+// and values joined with "=".
+func envMapAsSlice(m map[string]string) []string {
+	s := make([]string, 0, len(m))
+	for k, v := range m {
+		s = append(s, k+"="+v)
+	}
+	return s
 }

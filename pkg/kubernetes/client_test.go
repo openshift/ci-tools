@@ -73,7 +73,7 @@ func TestWaitForConditionOnObject(t *testing.T) {
 						Running: &coreapi.ContainerStateRunning{},
 					},
 				})
-				if err := client.Update(ctx, pod); err != nil {
+				if err := client.Status().Update(ctx, pod); err != nil {
 					return err
 				}
 				return nil

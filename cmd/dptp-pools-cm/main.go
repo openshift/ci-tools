@@ -11,9 +11,10 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/rest"
-	"k8s.io/test-infra/prow/flagutil"
-	"k8s.io/test-infra/prow/logrusutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/prow/pkg/flagutil"
+	"sigs.k8s.io/prow/pkg/logrusutil"
 
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 
@@ -87,7 +88,9 @@ func main() {
 	}
 
 	mgr, err := controllerruntime.NewManager(inClusterConfig, controllerruntime.Options{
-		DryRunClient:                  opts.dryRun,
+		Client: client.Options{
+			DryRun: &opts.dryRun,
+		},
 		LeaderElection:                true,
 		LeaderElectionReleaseOnCancel: true,
 		LeaderElectionNamespace:       opts.leaderElectionNamespace,

@@ -13,7 +13,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/test-infra/prow/interrupts"
+	"sigs.k8s.io/prow/pkg/interrupts"
 
 	"github.com/openshift/ci-tools/pkg/testhelper"
 	"github.com/openshift/ci-tools/test/e2e/pod-scaler/kubernetes"

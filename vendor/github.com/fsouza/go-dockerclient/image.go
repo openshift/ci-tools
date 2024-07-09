@@ -138,7 +138,8 @@ type ImageHistory struct {
 func (c *Client) ImageHistory(name string) ([]ImageHistory, error) {
 	resp, err := c.do(http.MethodGet, "/images/"+name+"/history", doOptions{})
 	if err != nil {
-		if e, ok := err.(*Error); ok && e.Status == http.StatusNotFound {
+		var e *Error
+		if errors.As(err, &e) && e.Status == http.StatusNotFound {
 			return nil, ErrNoSuchImage
 		}
 		return nil, err
@@ -157,7 +158,8 @@ func (c *Client) ImageHistory(name string) ([]ImageHistory, error) {
 func (c *Client) RemoveImage(name string) error {
 	resp, err := c.do(http.MethodDelete, "/images/"+name, doOptions{})
 	if err != nil {
-		if e, ok := err.(*Error); ok && e.Status == http.StatusNotFound {
+		var e *Error
+		if errors.As(err, &e) && e.Status == http.StatusNotFound {
 			return ErrNoSuchImage
 		}
 		return err
@@ -184,7 +186,8 @@ func (c *Client) RemoveImageExtended(name string, opts RemoveImageOptions) error
 	uri := fmt.Sprintf("/images/%s?%s", name, queryString(&opts))
 	resp, err := c.do(http.MethodDelete, uri, doOptions{context: opts.Context})
 	if err != nil {
-		if e, ok := err.(*Error); ok && e.Status == http.StatusNotFound {
+		var e *Error
+		if errors.As(err, &e) && e.Status == http.StatusNotFound {
 			return ErrNoSuchImage
 		}
 		return err
@@ -199,7 +202,8 @@ func (c *Client) RemoveImageExtended(name string, opts RemoveImageOptions) error
 func (c *Client) InspectImage(name string) (*Image, error) {
 	resp, err := c.do(http.MethodGet, "/images/"+name+"/json", doOptions{})
 	if err != nil {
-		if e, ok := err.(*Error); ok && e.Status == http.StatusNotFound {
+		var e *Error
+		if errors.As(err, &e) && e.Status == http.StatusNotFound {
 			return nil, ErrNoSuchImage
 		}
 		return nil, err
@@ -287,6 +291,7 @@ func (c *Client) PushImage(opts PushImageOptions, auth AuthConfiguration) error 
 //
 // See https://goo.gl/qkoSsn for more details.
 type PullImageOptions struct {
+	All        bool
 	Repository string `qs:"fromImage"`
 	Tag        string
 	Platform   string `ver:"1.32"`
@@ -323,8 +328,7 @@ func (c *Client) PullImage(opts PullImageOptions, auth AuthConfiguration) error 
 	return c.createImage(&opts, headers, nil, opts.OutputStream, opts.RawJSONStream, opts.InactivityTimeout, opts.Context)
 }
 
-//nolint:golint
-func (c *Client) createImage(opts interface{}, headers map[string]string, in io.Reader, w io.Writer, rawJSONStream bool, timeout time.Duration, context context.Context) error {
+func (c *Client) createImage(opts any, headers map[string]string, in io.Reader, w io.Writer, rawJSONStream bool, timeout time.Duration, context context.Context) error {
 	url, err := c.getPath("/images/create", opts)
 	if err != nil {
 		return err
@@ -465,6 +469,14 @@ func (c *Client) ImportImage(opts ImportImageOptions) error {
 	return c.createImage(&opts, nil, opts.InputStream, opts.OutputStream, opts.RawJSONStream, opts.InactivityTimeout, opts.Context)
 }
 
+// BuilderVersion represents either the BuildKit or V1 ("classic") builder.
+type BuilderVersion string
+
+const (
+	BuilderV1       BuilderVersion = "1"
+	BuilderBuildKit BuilderVersion = "2"
+)
+
 // BuildImageOptions present the set of informations available for building an
 // image from a tarfile with a Dockerfile in it.
 //
@@ -500,11 +512,12 @@ type BuildImageOptions struct {
 	Target              string
 	Outputs             string `ver:"1.40"`
 	NoCache             bool
-	SuppressOutput      bool `qs:"q"`
-	Pull                bool `ver:"1.16"`
-	RmTmpContainer      bool `qs:"rm"`
-	ForceRmTmpContainer bool `qs:"forcerm" ver:"1.12"`
-	RawJSONStream       bool `qs:"-"`
+	SuppressOutput      bool           `qs:"q"`
+	Pull                bool           `ver:"1.16"`
+	RmTmpContainer      bool           `qs:"rm"`
+	ForceRmTmpContainer bool           `qs:"forcerm" ver:"1.12"`
+	RawJSONStream       bool           `qs:"-"`
+	Version             BuilderVersion `qs:"version" ver:"1.39"`
 }
 
 // BuildArg represents arguments that can be passed to the image when building

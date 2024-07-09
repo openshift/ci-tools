@@ -82,13 +82,14 @@ func AddToManager(manager manager.Manager,
 	}
 	// watch imagestream and reconcile on the events filtered by objectFilter
 	if err := c.Watch(
-		source.Kind(manager.GetCache(), &imagev1.ImageStream{}),
-		imagestreamtagmapper.New(func(in reconcile.Request) []reconcile.Request {
-			if !objectFilter(in.NamespacedName) {
-				return nil
-			}
-			return []reconcile.Request{in}
-		}),
+		source.Kind(manager.GetCache(),
+			&imagev1.ImageStream{},
+			imagestreamtagmapper.New(func(in reconcile.Request) []reconcile.Request {
+				if !objectFilter(in.NamespacedName) {
+					return nil
+				}
+				return []reconcile.Request{in}
+			})),
 	); err != nil {
 		return fmt.Errorf("failed to create watch for ImageStreams: %w", err)
 	}
@@ -99,7 +100,7 @@ func AddToManager(manager manager.Manager,
 	}
 	// besides the events created by the cluster
 	// events can be generated from the changes on the ci-op's config on the disk
-	if err := c.Watch(sourceForConfigChangeChannel(client, configChangeChannel, ignoreImageStreamTags), &handler.EnqueueRequestForObject{}); err != nil {
+	if err := c.Watch(sourceForConfigChangeChannel(client, configChangeChannel, ignoreImageStreamTags)); err != nil {
 		return fmt.Errorf("failed to subscribe for config change changes: %w", err)
 	}
 
@@ -319,9 +320,9 @@ func indexKeyForImageStream(namespace, name string) string {
 	return "imagestream_" + namespace + "/" + name
 }
 
-func sourceForConfigChangeChannel(registryClient ctrlruntimeclient.Client, changes <-chan agents.IndexDelta, ignoreImageStreamTags sets.Set[string]) *source.Channel {
-	sourceChannel := make(chan event.GenericEvent)
-	channelSource := &source.Channel{Source: sourceChannel}
+func sourceForConfigChangeChannel(registryClient ctrlruntimeclient.Client, changes <-chan agents.IndexDelta, ignoreImageStreamTags sets.Set[string]) source.Source {
+	sourceChannel := make(chan event.TypedGenericEvent[*imagev1.ImageStreamTag])
+	channelSource := source.Channel[*imagev1.ImageStreamTag](sourceChannel, &handler.TypedEnqueueRequestForObject[*imagev1.ImageStreamTag]{})
 
 	go func() {
 		for delta := range changes {
@@ -362,7 +363,7 @@ func sourceForConfigChangeChannel(registryClient ctrlruntimeclient.Client, chang
 					logrus.WithField("tag", item.String()).Debug("Ignored tag for config change")
 					continue
 				}
-				sourceChannel <- event.GenericEvent{Object: &imagev1.ImageStreamTag{ObjectMeta: metav1.ObjectMeta{
+				sourceChannel <- event.TypedGenericEvent[*imagev1.ImageStreamTag]{Object: &imagev1.ImageStreamTag{ObjectMeta: metav1.ObjectMeta{
 					Namespace: item.Namespace,
 					Name:      item.Name,
 				}}}

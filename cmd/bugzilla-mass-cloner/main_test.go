@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"k8s.io/test-infra/prow/bugzilla"
+	"sigs.k8s.io/prow/pkg/bugzilla"
 )
 
 func TestMassCloneBugs(t *testing.T) {

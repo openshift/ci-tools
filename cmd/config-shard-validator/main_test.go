@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"k8s.io/test-infra/prow/plugins"
+	"sigs.k8s.io/prow/pkg/plugins"
 
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )

@@ -22,10 +22,10 @@ import (
 	"github.com/hashicorp/vault/sdk/helper/consts"
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/test-infra/prow/flagutil"
-	"k8s.io/test-infra/prow/logrusutil"
-	"k8s.io/test-infra/prow/version"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/prow/pkg/flagutil"
+	"sigs.k8s.io/prow/pkg/logrusutil"
+	"sigs.k8s.io/prow/pkg/version"
 
 	"github.com/openshift/ci-tools/pkg/vaultclient"
 )

@@ -12,9 +12,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
-	prowflagutil "k8s.io/test-infra/prow/flagutil"
-	"k8s.io/test-infra/prow/logrusutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	prowflagutil "sigs.k8s.io/prow/pkg/flagutil"
+	"sigs.k8s.io/prow/pkg/logrusutil"
 
 	buildv1 "github.com/openshift/api/build/v1"
 
@@ -65,7 +66,9 @@ func main() {
 	}
 
 	mgr, err := controllerruntime.NewManager(cfg, controllerruntime.Options{
-		DryRunClient: o.dryRun,
+		Client: client.Options{
+			DryRun: &o.dryRun,
+		},
 	})
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to construct manager")

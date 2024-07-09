@@ -20,9 +20,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
-	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	prowconfig "k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/pjutil"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -31,6 +28,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+	prowconfig "sigs.k8s.io/prow/pkg/config"
+	"sigs.k8s.io/prow/pkg/pjutil"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	v1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
@@ -98,31 +98,27 @@ func AddToManager(mgr manager.Manager, ns string, rc injectingResolverClient, pr
 		return fmt.Errorf("failed to construct controller: %w", err)
 	}
 
-	predicateFuncs := predicate.Funcs{
-		CreateFunc: func(e event.CreateEvent) bool {
+	predicateFuncs := predicate.TypedFuncs[*v1.PullRequestPayloadQualificationRun]{
+		CreateFunc: func(e event.TypedCreateEvent[*v1.PullRequestPayloadQualificationRun]) bool {
 			return e.Object.GetNamespace() == ns
 		},
-		DeleteFunc: func(event.DeleteEvent) bool { return false },
-		UpdateFunc: func(e event.UpdateEvent) bool {
+		DeleteFunc: func(e event.TypedDeleteEvent[*v1.PullRequestPayloadQualificationRun]) bool { return false },
+		UpdateFunc: func(e event.TypedUpdateEvent[*v1.PullRequestPayloadQualificationRun]) bool {
 			return e.ObjectNew.GetNamespace() == ns
 		},
-		GenericFunc: func(event.GenericEvent) bool { return false },
+		GenericFunc: func(e event.TypedGenericEvent[*v1.PullRequestPayloadQualificationRun]) bool {
+			return false
+		},
 	}
-	if err := c.Watch(source.Kind(mgr.GetCache(), &v1.PullRequestPayloadQualificationRun{}), prpqrHandler(), predicateFuncs); err != nil {
+	if err := c.Watch(source.Kind(mgr.GetCache(), &v1.PullRequestPayloadQualificationRun{}, prpqrHandler(), predicateFuncs)); err != nil {
 		return fmt.Errorf("failed to create watch for PullRequestPayloadQualificationRun: %w", err)
 	}
 
 	return nil
 }
 
-func prpqrHandler() handler.EventHandler {
-	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o ctrlruntimeclient.Object) []reconcile.Request {
-		prpqr, ok := o.(*v1.PullRequestPayloadQualificationRun)
-		if !ok {
-			logrus.WithField("type", fmt.Sprintf("%T", o)).Error("Got object that was not a PullRequestPayloadQualificationRun")
-			return nil
-		}
-
+func prpqrHandler() handler.TypedEventHandler[*v1.PullRequestPayloadQualificationRun] {
+	return handler.TypedEnqueueRequestsFromMapFunc[*v1.PullRequestPayloadQualificationRun](func(ctx context.Context, prpqr *v1.PullRequestPayloadQualificationRun) []reconcile.Request {
 		return []reconcile.Request{
 			{NamespacedName: types.NamespacedName{Namespace: prpqr.Namespace, Name: prpqr.Name}},
 		}

@@ -12,7 +12,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
-	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -21,6 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
 	v1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
@@ -46,10 +46,10 @@ func AddToManager(mgr controllerruntime.Manager, ns string) error {
 	}
 
 	// Watch only on updates
-	predicateFuncs := predicate.Funcs{
-		CreateFunc: func(e event.CreateEvent) bool { return false },
-		DeleteFunc: func(event.DeleteEvent) bool { return false },
-		UpdateFunc: func(e event.UpdateEvent) bool {
+	predicateFuncs := predicate.TypedFuncs[*prowv1.ProwJob]{
+		CreateFunc: func(event.TypedCreateEvent[*prowv1.ProwJob]) bool { return false },
+		DeleteFunc: func(event.TypedDeleteEvent[*prowv1.ProwJob]) bool { return false },
+		UpdateFunc: func(e event.TypedUpdateEvent[*prowv1.ProwJob]) bool {
 			if _, ok := e.ObjectNew.GetLabels()[v1.PullRequestPayloadQualificationRunLabel]; !ok {
 				return false
 			}
@@ -60,27 +60,19 @@ func AddToManager(mgr controllerruntime.Manager, ns string) error {
 
 			return true
 		},
-		GenericFunc: func(event.GenericEvent) bool { return false },
+		GenericFunc: func(tge event.TypedGenericEvent[*prowv1.ProwJob]) bool { return false },
 	}
 
-	if err := ctrl.Watch(source.Kind(mgr.GetCache(), &prowv1.ProwJob{}), pjHandler(), predicateFuncs); err != nil {
+	if err := ctrl.Watch(source.Kind(mgr.GetCache(), &prowv1.ProwJob{}, pjHandler(), predicateFuncs)); err != nil {
 		return fmt.Errorf("failed to create watch: %w", err)
 	}
 
 	return nil
 }
 
-func pjHandler() handler.EventHandler {
-	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o ctrlruntimeclient.Object) []reconcile.Request {
-		pj, ok := o.(*prowv1.ProwJob)
-		if !ok {
-			logrus.WithField("type", fmt.Sprintf("%T", o)).Error("Got object that was not a ProwJob")
-			return nil
-		}
-
-		return []reconcile.Request{
-			{NamespacedName: types.NamespacedName{Namespace: pj.Namespace, Name: pj.Name}},
-		}
+func pjHandler() handler.TypedEventHandler[*prowv1.ProwJob] {
+	return handler.TypedEnqueueRequestsFromMapFunc[*prowv1.ProwJob](func(ctx context.Context, pj *prowv1.ProwJob) []reconcile.Request {
+		return []reconcile.Request{{NamespacedName: types.NamespacedName{Namespace: pj.Namespace, Name: pj.Name}}}
 	})
 }
 

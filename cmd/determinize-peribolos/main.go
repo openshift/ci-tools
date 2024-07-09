@@ -7,8 +7,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/test-infra/prow/config/org"
-	"k8s.io/test-infra/prow/logrusutil"
+	"sigs.k8s.io/prow/pkg/config/org"
+	"sigs.k8s.io/prow/pkg/logrusutil"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/util/gzip"

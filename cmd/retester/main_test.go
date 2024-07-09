@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	flagutil "k8s.io/test-infra/prow/flagutil/config"
+	flagutil "sigs.k8s.io/prow/pkg/flagutil/config"
 
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )

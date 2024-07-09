@@ -1,21 +1,23 @@
-package jsonmessage
+package jsonmessage // import "github.com/docker/docker/pkg/jsonmessage"
 
 import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"time"
 
-	gotty "github.com/Nvveen/Gotty"
-	"github.com/docker/docker/pkg/jsonlog"
-	"github.com/docker/docker/pkg/term"
 	units "github.com/docker/go-units"
+	"github.com/moby/term"
+	"github.com/morikuni/aec"
 )
 
-// JSONError wraps a concrete Code and Message, `Code` is
-// is an integer error code, `Message` is the error message.
+// RFC3339NanoFixed is time.RFC3339Nano with nanoseconds padded using zeros to
+// ensure the formatted time isalways the same number of characters.
+const RFC3339NanoFixed = "2006-01-02T15:04:05.000000000Z07:00"
+
+// JSONError wraps a concrete Code and Message, Code is
+// an integer error code, Message is the error message.
 type JSONError struct {
 	Code    int    `json:"code,omitempty"`
 	Message string `json:"message,omitempty"`
@@ -25,41 +27,44 @@ func (e *JSONError) Error() string {
 	return e.Message
 }
 
-// JSONProgress describes a Progress. terminalFd is the fd of the current terminal,
-// Start is the initial value for the operation. Current is the current status and
-// value of the progress made towards Total. Total is the end value describing when
-// we made 100% progress for an operation.
+// JSONProgress describes a progress message in a JSON stream.
 type JSONProgress struct {
+	// Current is the current status and value of the progress made towards Total.
+	Current int64 `json:"current,omitempty"`
+	// Total is the end value describing when we made 100% progress for an operation.
+	Total int64 `json:"total,omitempty"`
+	// Start is the initial value for the operation.
+	Start int64 `json:"start,omitempty"`
+	// HideCounts. if true, hides the progress count indicator (xB/yB).
+	HideCounts bool `json:"hidecounts,omitempty"`
+	// Units is the unit to print for progress. It defaults to "bytes" if empty.
+	Units string `json:"units,omitempty"`
+
+	// terminalFd is the fd of the current terminal, if any. It is used
+	// to get the terminal width.
 	terminalFd uintptr
-	Current    int64 `json:"current,omitempty"`
-	Total      int64 `json:"total,omitempty"`
-	Start      int64 `json:"start,omitempty"`
-	// If true, don't show xB/yB
-	HideCounts bool   `json:"hidecounts,omitempty"`
-	Units      string `json:"units,omitempty"`
+
+	// nowFunc is used to override the current time in tests.
+	nowFunc func() time.Time
+
+	// winSize is used to override the terminal width in tests.
+	winSize int
 }
 
 func (p *JSONProgress) String() string {
 	var (
-		width       = 200
+		width       = p.width()
 		pbBox       string
 		numbersBox  string
 		timeLeftBox string
 	)
-
-	ws, err := term.GetWinsize(p.terminalFd)
-	if err == nil {
-		width = int(ws.Width)
-	}
-
 	if p.Current <= 0 && p.Total <= 0 {
 		return ""
 	}
 	if p.Total <= 0 {
 		switch p.Units {
 		case "":
-			current := units.HumanSize(float64(p.Current))
-			return fmt.Sprintf("%8v", current)
+			return fmt.Sprintf("%8v", units.HumanSize(float64(p.Current)))
 		default:
 			return fmt.Sprintf("%d %s", p.Current, p.Units)
 		}
@@ -100,7 +105,7 @@ func (p *JSONProgress) String() string {
 	}
 
 	if p.Current > 0 && p.Start > 0 && percentage < 50 {
-		fromStart := time.Now().UTC().Sub(time.Unix(p.Start, 0))
+		fromStart := p.now().Sub(time.Unix(p.Start, 0))
 		perEntry := fromStart / time.Duration(p.Current)
 		left := time.Duration(p.Total-p.Current) * perEntry
 		left = (left / time.Second) * time.Second
@@ -112,6 +117,28 @@ func (p *JSONProgress) String() string {
 	return pbBox + numbersBox + timeLeftBox
 }
 
+// now returns the current time in UTC, but can be overridden in tests
+// by setting JSONProgress.nowFunc to a custom function.
+func (p *JSONProgress) now() time.Time {
+	if p.nowFunc != nil {
+		return p.nowFunc()
+	}
+	return time.Now().UTC()
+}
+
+// width returns the current terminal's width, but can be overridden
+// in tests by setting JSONProgress.winSize to a non-zero value.
+func (p *JSONProgress) width() int {
+	if p.winSize != 0 {
+		return p.winSize
+	}
+	ws, err := term.GetWinsize(p.terminalFd)
+	if err == nil {
+		return int(ws.Width)
+	}
+	return 200
+}
+
 // JSONMessage defines a message struct. It describes
 // the created time, where it from, status, ID of the
 // message. It's used for docker events.
@@ -119,89 +146,50 @@ type JSONMessage struct {
 	Stream          string        `json:"stream,omitempty"`
 	Status          string        `json:"status,omitempty"`
 	Progress        *JSONProgress `json:"progressDetail,omitempty"`
-	ProgressMessage string        `json:"progress,omitempty"` //deprecated
+	ProgressMessage string        `json:"progress,omitempty"` // deprecated
 	ID              string        `json:"id,omitempty"`
 	From            string        `json:"from,omitempty"`
 	Time            int64         `json:"time,omitempty"`
 	TimeNano        int64         `json:"timeNano,omitempty"`
 	Error           *JSONError    `json:"errorDetail,omitempty"`
-	ErrorMessage    string        `json:"error,omitempty"` //deprecated
+	ErrorMessage    string        `json:"error,omitempty"` // deprecated
 	// Aux contains out-of-band data, such as digests for push signing and image id after building.
 	Aux *json.RawMessage `json:"aux,omitempty"`
 }
 
-/* Satisfied by gotty.TermInfo as well as noTermInfo from below */
-type termInfo interface {
-	Parse(attr string, params ...interface{}) (string, error)
+func clearLine(out io.Writer) {
+	eraseMode := aec.EraseModes.All
+	cl := aec.EraseLine(eraseMode)
+	fmt.Fprint(out, cl)
 }
 
-type noTermInfo struct{} // canary used when no terminfo.
-
-func (ti *noTermInfo) Parse(attr string, params ...interface{}) (string, error) {
-	return "", fmt.Errorf("noTermInfo")
+func cursorUp(out io.Writer, l uint) {
+	fmt.Fprint(out, aec.Up(l))
 }
 
-func clearLine(out io.Writer, ti termInfo) {
-	// el2 (clear whole line) is not exposed by terminfo.
-
-	// First clear line from beginning to cursor
-	if attr, err := ti.Parse("el1"); err == nil {
-		fmt.Fprintf(out, "%s", attr)
-	} else {
-		fmt.Fprintf(out, "\x1b[1K")
-	}
-	// Then clear line from cursor to end
-	if attr, err := ti.Parse("el"); err == nil {
-		fmt.Fprintf(out, "%s", attr)
-	} else {
-		fmt.Fprintf(out, "\x1b[K")
-	}
+func cursorDown(out io.Writer, l uint) {
+	fmt.Fprint(out, aec.Down(l))
 }
 
-func cursorUp(out io.Writer, ti termInfo, l int) {
-	if l == 0 { // Should never be the case, but be tolerant
-		return
-	}
-	if attr, err := ti.Parse("cuu", l); err == nil {
-		fmt.Fprintf(out, "%s", attr)
-	} else {
-		fmt.Fprintf(out, "\x1b[%dA", l)
-	}
-}
-
-func cursorDown(out io.Writer, ti termInfo, l int) {
-	if l == 0 { // Should never be the case, but be tolerant
-		return
-	}
-	if attr, err := ti.Parse("cud", l); err == nil {
-		fmt.Fprintf(out, "%s", attr)
-	} else {
-		fmt.Fprintf(out, "\x1b[%dB", l)
-	}
-}
-
-// Display displays the JSONMessage to `out`. `termInfo` is non-nil if `out`
-// is a terminal. If this is the case, it will erase the entire current line
-// when displaying the progressbar.
-func (jm *JSONMessage) Display(out io.Writer, termInfo termInfo) error {
+// Display prints the JSONMessage to out. If isTerminal is true, it erases
+// the entire current line when displaying the progressbar. It returns an
+// error if the [JSONMessage.Error] field is non-nil.
+func (jm *JSONMessage) Display(out io.Writer, isTerminal bool) error {
 	if jm.Error != nil {
-		if jm.Error.Code == 401 {
-			return fmt.Errorf("authentication is required")
-		}
 		return jm.Error
 	}
 	var endl string
-	if termInfo != nil && jm.Stream == "" && jm.Progress != nil {
-		clearLine(out, termInfo)
+	if isTerminal && jm.Stream == "" && jm.Progress != nil {
+		clearLine(out)
 		endl = "\r"
-		fmt.Fprintf(out, endl)
-	} else if jm.Progress != nil && jm.Progress.String() != "" { //disable progressbar in non-terminal
+		fmt.Fprint(out, endl)
+	} else if jm.Progress != nil && jm.Progress.String() != "" { // disable progressbar in non-terminal
 		return nil
 	}
 	if jm.TimeNano != 0 {
-		fmt.Fprintf(out, "%s ", time.Unix(0, jm.TimeNano).Format(jsonlog.RFC3339NanoFixed))
+		fmt.Fprintf(out, "%s ", time.Unix(0, jm.TimeNano).Format(RFC3339NanoFixed))
 	} else if jm.Time != 0 {
-		fmt.Fprintf(out, "%s ", time.Unix(jm.Time, 0).Format(jsonlog.RFC3339NanoFixed))
+		fmt.Fprintf(out, "%s ", time.Unix(jm.Time, 0).Format(RFC3339NanoFixed))
 	}
 	if jm.ID != "" {
 		fmt.Fprintf(out, "%s: ", jm.ID)
@@ -209,9 +197,9 @@ func (jm *JSONMessage) Display(out io.Writer, termInfo termInfo) error {
 	if jm.From != "" {
 		fmt.Fprintf(out, "(from %s) ", jm.From)
 	}
-	if jm.Progress != nil && termInfo != nil {
+	if jm.Progress != nil && isTerminal {
 		fmt.Fprintf(out, "%s %s%s", jm.Status, jm.Progress.String(), endl)
-	} else if jm.ProgressMessage != "" { //deprecated
+	} else if jm.ProgressMessage != "" { // deprecated
 		fmt.Fprintf(out, "%s %s%s", jm.Status, jm.ProgressMessage, endl)
 	} else if jm.Stream != "" {
 		fmt.Fprintf(out, "%s%s", jm.Stream, endl)
@@ -221,31 +209,30 @@ func (jm *JSONMessage) Display(out io.Writer, termInfo termInfo) error {
 	return nil
 }
 
-// DisplayJSONMessagesStream displays a json message stream from `in` to `out`, `isTerminal`
-// describes if `out` is a terminal. If this is the case, it will print `\n` at the end of
-// each line and move the cursor while displaying.
-func DisplayJSONMessagesStream(in io.Reader, out io.Writer, terminalFd uintptr, isTerminal bool, auxCallback func(*json.RawMessage)) error {
+// DisplayJSONMessagesStream reads a JSON message stream from in, and writes
+// each [JSONMessage] to out. It returns an error if an invalid JSONMessage
+// is received, or if a JSONMessage containers a non-zero [JSONMessage.Error].
+//
+// Presentation of the JSONMessage depends on whether a terminal is attached,
+// and on the terminal width. Progress bars ([JSONProgress]) are suppressed
+// on narrower terminals (< 110 characters).
+//
+//   - isTerminal describes if out is a terminal, in which case it prints
+//     a newline ("\n") at the end of each line and moves the cursor while
+//     displaying.
+//   - terminalFd is the fd of the current terminal (if any), and used
+//     to get the terminal width.
+//   - auxCallback allows handling the [JSONMessage.Aux] field. It is
+//     called if a JSONMessage contains an Aux field, in which case
+//     DisplayJSONMessagesStream does not present the JSONMessage.
+func DisplayJSONMessagesStream(in io.Reader, out io.Writer, terminalFd uintptr, isTerminal bool, auxCallback func(JSONMessage)) error {
 	var (
 		dec = json.NewDecoder(in)
-		ids = make(map[string]int)
+		ids = make(map[string]uint)
 	)
 
-	var termInfo termInfo
-
-	if isTerminal {
-		term := os.Getenv("TERM")
-		if term == "" {
-			term = "vt102"
-		}
-
-		var err error
-		if termInfo, err = gotty.OpenTermInfo(term); err != nil {
-			termInfo = &noTermInfo{}
-		}
-	}
-
 	for {
-		diff := 0
+		var diff uint
 		var jm JSONMessage
 		if err := dec.Decode(&jm); err != nil {
 			if err == io.EOF {
@@ -256,7 +243,7 @@ func DisplayJSONMessagesStream(in io.Reader, out io.Writer, terminalFd uintptr, 
 
 		if jm.Aux != nil {
 			if auxCallback != nil {
-				auxCallback(jm.Aux)
+				auxCallback(jm)
 			}
 			continue
 		}
@@ -273,15 +260,15 @@ func DisplayJSONMessagesStream(in io.Reader, out io.Writer, terminalFd uintptr, 
 				// when we output something that's not
 				// accounted for in the map, such as a line
 				// with no ID.
-				line = len(ids)
+				line = uint(len(ids))
 				ids[jm.ID] = line
-				if termInfo != nil {
+				if isTerminal {
 					fmt.Fprintf(out, "\n")
 				}
 			}
-			diff = len(ids) - line
-			if termInfo != nil {
-				cursorUp(out, termInfo, diff)
+			diff = uint(len(ids)) - line
+			if isTerminal {
+				cursorUp(out, diff)
 			}
 		} else {
 			// When outputting something that isn't progress
@@ -289,11 +276,11 @@ func DisplayJSONMessagesStream(in io.Reader, out io.Writer, terminalFd uintptr, 
 			// don't want progress entries from some previous
 			// operation to be updated (for example, pull -a
 			// with multiple tags).
-			ids = make(map[string]int)
+			ids = make(map[string]uint)
 		}
-		err := jm.Display(out, termInfo)
-		if jm.ID != "" && termInfo != nil {
-			cursorDown(out, termInfo, diff)
+		err := jm.Display(out, isTerminal)
+		if jm.ID != "" && isTerminal {
+			cursorDown(out, diff)
 		}
 		if err != nil {
 			return err
@@ -302,13 +289,19 @@ func DisplayJSONMessagesStream(in io.Reader, out io.Writer, terminalFd uintptr, 
 	return nil
 }
 
-type stream interface {
+// Stream is an io.Writer for output with utilities to get the output's file
+// descriptor and to detect wether it's a terminal.
+//
+// it is subset of the streams.Out type in
+// https://pkg.go.dev/github.com/docker/cli@v20.10.17+incompatible/cli/streams#Out
+type Stream interface {
 	io.Writer
 	FD() uintptr
 	IsTerminal() bool
 }
 
-// DisplayJSONMessagesToStream prints json messages to the output stream
-func DisplayJSONMessagesToStream(in io.Reader, stream stream, auxCallback func(*json.RawMessage)) error {
+// DisplayJSONMessagesToStream prints json messages to the output Stream. It is
+// used by the Docker CLI to print JSONMessage streams.
+func DisplayJSONMessagesToStream(in io.Reader, stream Stream, auxCallback func(JSONMessage)) error {
 	return DisplayJSONMessagesStream(in, stream, stream.FD(), stream.IsTerminal(), auxCallback)
 }

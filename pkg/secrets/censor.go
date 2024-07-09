@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/test-infra/prow/secretutil"
+	"sigs.k8s.io/prow/pkg/secretutil"
 )
 
 // DynamicCensor keeps a list of censored secrets that is dynamically updated.

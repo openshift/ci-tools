@@ -15,7 +15,7 @@ import (
 	"golang.org/x/sync/semaphore"
 
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/test-infra/prow/interrupts"
+	"sigs.k8s.io/prow/pkg/interrupts"
 
 	pod_scaler "github.com/openshift/ci-tools/pkg/pod-scaler"
 )

@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"k8s.io/test-infra/prow/pod-utils/downwardapi"
+	"sigs.k8s.io/prow/pkg/pod-utils/downwardapi"
 )
 
 func TestUniqueHash(t *testing.T) {

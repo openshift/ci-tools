@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 )
 
 const fakeMatchingLabel = "fakeMatchingLabel"

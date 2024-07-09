@@ -14,8 +14,8 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"k8s.io/apimachinery/pkg/util/sets"
-	prowjobv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	prowjobclientset "k8s.io/test-infra/prow/client/clientset/versioned"
+	prowjobv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+	prowjobclientset "sigs.k8s.io/prow/pkg/client/clientset/versioned"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"

@@ -7,7 +7,7 @@ import (
 
 	"github.com/PagerDuty/go-pagerduty"
 
-	"k8s.io/test-infra/prow/config/secret"
+	"sigs.k8s.io/prow/pkg/config/secret"
 )
 
 type Options struct {

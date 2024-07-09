@@ -13,13 +13,13 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/github"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"sigs.k8s.io/prow/pkg/config"
+	"sigs.k8s.io/prow/pkg/github"
 
 	imagev1 "github.com/openshift/api/image/v1"
 
@@ -99,13 +99,14 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 	}
 
 	if err := c.Watch(
-		source.Kind(mgr.GetCache(), &imagev1.ImageStream{}),
-		imagestreamtagmapper.New(func(r reconcile.Request) []reconcile.Request {
-			if ignored(r, opts.IgnoredImageStreams) {
-				return nil
-			}
-			return []reconcile.Request{r}
-		}),
+		source.Kind(mgr.GetCache(),
+			&imagev1.ImageStream{},
+			imagestreamtagmapper.New(func(r reconcile.Request) []reconcile.Request {
+				if ignored(r, opts.IgnoredImageStreams) {
+					return nil
+				}
+				return []reconcile.Request{r}
+			})),
 	); err != nil {
 		return fmt.Errorf("failed to create watch for ImageStreams: %w", err)
 	}

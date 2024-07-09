@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"k8s.io/apimachinery/pkg/util/sets"
-	prowconfig "k8s.io/test-infra/prow/config"
-	prowplugins "k8s.io/test-infra/prow/plugins"
+	prowconfig "sigs.k8s.io/prow/pkg/config"
+	prowplugins "sigs.k8s.io/prow/pkg/plugins"
 
 	"github.com/openshift/ci-tools/pkg/rehearse"
 )

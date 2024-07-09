@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/utils/pointer"
+	v1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
 	ciop "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"

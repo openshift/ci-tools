@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"k8s.io/test-infra/prow/plugins"
+	"sigs.k8s.io/prow/pkg/plugins"
 )
 
 func TestUpdateProwPluginConfigConfigUpdater(t *testing.T) {

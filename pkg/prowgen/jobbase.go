@@ -3,9 +3,9 @@ package prowgen
 import (
 	"time"
 
-	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	prowconfig "k8s.io/test-infra/prow/config"
 	utilpointer "k8s.io/utils/pointer"
+	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+	prowconfig "sigs.k8s.io/prow/pkg/config"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"

@@ -7,7 +7,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/test-infra/pkg/genyaml"
+	"sigs.k8s.io/prow/pkg/genyaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )

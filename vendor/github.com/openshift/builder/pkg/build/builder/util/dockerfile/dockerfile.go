@@ -40,7 +40,7 @@ func Write(node *parser.Node) []byte {
 				buf.Write(Write(node.Next.Children[0]))
 			}
 			return buf.Bytes()
-		case command.Env, command.Label:
+		case command.Env, command.Label, command.Healthcheck:
 			buf.Reset()
 			buf.Write([]byte(node.Original + "\n"))
 			return buf.Bytes()
@@ -88,6 +88,26 @@ func FindAll(node *parser.Node, cmd string) []int {
 	return indices
 }
 
+// findAllBefore returns the indices of all children of node such that
+// node.Children[i].Value == cmd which occur before any children where
+// node.Children[i].Value == before. Valid values for cmd are defined in the
+// package github.com/docker/docker/builder/dockerfile/command.
+func findAllBefore(node *parser.Node, cmd, before string) []int {
+	if node == nil {
+		return nil
+	}
+	var indices []int
+	for i, child := range node.Children {
+		if child != nil && child.Value == cmd {
+			indices = append(indices, i)
+		}
+		if child != nil && child.Value == before {
+			break
+		}
+	}
+	return indices
+}
+
 // InsertInstructions inserts instructions starting from the pos-th child of
 // node, moving other children as necessary. The instructions should be valid
 // Dockerfile instructions. InsertInstructions mutates node in-place, and the
@@ -109,6 +129,16 @@ func InsertInstructions(node *parser.Node, pos int, instructions string) error {
 	// InsertVector pattern (https://github.com/golang/go/wiki/SliceTricks)
 	node.Children = append(node.Children[:pos], append(newChild.Children, node.Children[pos:]...)...)
 	return nil
+}
+
+// HeaderArgs takes a Dockerfile root node and returns a list of ARGs declared
+// before the first FROM instruction.
+func HeaderArgs(node *parser.Node) []string {
+	var args []string
+	for _, pos := range findAllBefore(node, command.Arg, command.From) {
+		args = append(args, nextValues(node.Children[pos])...)
+	}
+	return args
 }
 
 // baseImages takes a Dockerfile root node and returns a list of all base images

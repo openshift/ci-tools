@@ -10,8 +10,8 @@ import (
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/test-infra/prow/bugzilla"
-	prowflagutil "k8s.io/test-infra/prow/flagutil"
+	"sigs.k8s.io/prow/pkg/bugzilla"
+	prowflagutil "sigs.k8s.io/prow/pkg/flagutil"
 )
 
 type options struct {

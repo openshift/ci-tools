@@ -5,9 +5,11 @@ metadata:
 spec:
   containers:
   - args:
-    - oc image mirror --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson
-      --continue-on-error=true --max-per-registry=20 docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:afd71aa3cbbf7d2e00cd8696747b2abf164700147723c657919c20b13d13ec62=registry.ci.openshift.org/ci/applyconfig:latest
+    - for r in {1..5}; do echo Mirror attempt $r; oc image mirror --keep-manifest-list
+      --registry-config=/etc/push-secret/.dockerconfigjson --continue-on-error=true
+      --max-per-registry=20 docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:afd71aa3cbbf7d2e00cd8696747b2abf164700147723c657919c20b13d13ec62=registry.ci.openshift.org/ci/applyconfig:latest
       docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb=registry.ci.openshift.org/ci/bin:latest
+      && break; done
     command:
     - /bin/sh
     - -c

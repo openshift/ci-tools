@@ -1423,9 +1423,10 @@ func TestFromConfig(t *testing.T) {
 			"[images]",
 		},
 		expectedParams: map[string]string{
-			"IMAGE_FORMAT":          "public_docker_image_repository/ns/stable:${component}",
-			"RELEASE_IMAGE_INITIAL": "public_docker_image_repository:initial",
-			"RELEASE_IMAGE_LATEST":  "public_docker_image_repository:latest",
+			"IMAGE_FORMAT":                  "public_docker_image_repository/ns/stable:${component}",
+			"RELEASE_IMAGE_INITIAL":         "public_docker_image_repository:initial",
+			"RELEASE_IMAGE_LATEST":          "public_docker_image_repository:latest",
+			"ORIGINAL_RELEASE_IMAGE_LATEST": "latest",
 		},
 	}, {
 		name: "resolve release",
@@ -1457,6 +1458,29 @@ func TestFromConfig(t *testing.T) {
 		expectedSteps: []string{"[release:release]", "[images]"},
 		expectedParams: map[string]string{
 			utils.ReleaseImageEnv("release"): "public_docker_image_repository:release",
+		},
+	}, {
+		name: "resolve initial and latest with input, original vals are set",
+		config: api.ReleaseBuildConfiguration{
+			InputConfiguration: api.InputConfiguration{
+				Releases: map[string]api.UnresolvedRelease{
+					"initial": {Release: &api.Release{Version: "4.0.9"}},
+					"latest":  {Release: &api.Release{Version: "4.1.0"}},
+				},
+			},
+		},
+		env: environmentOverride{
+			m: map[string]string{
+				utils.ReleaseImageEnv("initial"): "initial",
+				utils.ReleaseImageEnv("latest"):  "latest",
+			},
+		},
+		expectedSteps: []string{"[release:initial]", "[release:latest]", "[images]"},
+		expectedParams: map[string]string{
+			utils.ReleaseImageEnv("initial"): "public_docker_image_repository:initial",
+			utils.ReleaseImageEnv("latest"):  "public_docker_image_repository:latest",
+			"ORIGINAL_RELEASE_IMAGE_INITIAL": "initial",
+			"ORIGINAL_RELEASE_IMAGE_LATEST":  "latest",
 		},
 	}, {
 		name: "container test",

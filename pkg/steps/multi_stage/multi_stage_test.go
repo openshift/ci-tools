@@ -228,6 +228,17 @@ func TestEnvironment(t *testing.T) {
 				"IM_A_POWERUSER": "nope you are not",
 			},
 		},
+		{
+			name: "ORIGINAL_* variables are exposed in environment",
+			params: fakeStepParams{
+				"ORIGINAL_RELEASE_IMAGE_INITIAL": "initial",
+				"ORIGINAL_RELEASE_IMAGE_LATEST":  "latest",
+			},
+			expected: []coreapi.EnvVar{
+				{Name: "ORIGINAL_RELEASE_IMAGE_INITIAL", Value: "initial"},
+				{Name: "ORIGINAL_RELEASE_IMAGE_LATEST", Value: "latest"},
+			},
+		},
 	}
 
 	for _, tc := range tests {

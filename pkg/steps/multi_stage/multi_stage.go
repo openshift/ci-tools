@@ -360,12 +360,25 @@ func (s *multiStageTestStep) readVPNData(secret *coreapi.Secret) error {
 
 func (s *multiStageTestStep) environment() ([]coreapi.EnvVar, error) {
 	var ret []coreapi.EnvVar
+	if s.params == nil {
+		return ret, nil
+	}
 	for _, l := range s.leases {
 		val, err := s.params.Get(l.Env)
 		if err != nil {
 			return nil, err
 		}
 		ret = append(ret, coreapi.EnvVar{Name: l.Env, Value: val})
+	}
+
+	for _, name := range []string{api.InitialReleaseName, api.LatestReleaseName} {
+		envVar := fmt.Sprintf("ORIGINAL_%s", utils.ReleaseImageEnv(name))
+		pullspec, err := s.params.Get(envVar)
+		if err != nil {
+			return nil, err
+		} else if pullspec != "" {
+			ret = append(ret, coreapi.EnvVar{Name: envVar, Value: pullspec})
+		}
 	}
 
 	if s.profile != "" {

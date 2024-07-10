@@ -1,12 +1,15 @@
 package config
 
 import (
-	"reflect"
+	"errors"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/util/diff"
+	"github.com/google/go-cmp/cmp"
+
+	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func TestExtractRepoElementsFromPath(t *testing.T) {
@@ -86,8 +89,64 @@ func TestExtractRepoElementsFromPath(t *testing.T) {
 			if err != nil && !testCase.expectedError {
 				t.Errorf("%s: expected no error, but got one: %v", testCase.name, err)
 			}
-			if actual, expected := repoInfo, testCase.expected; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: didn't get correct elements: %v", testCase.name, diff.ObjectReflectDiff(actual, expected))
+			if diff := cmp.Diff(repoInfo, testCase.expected); diff != "" {
+				t.Errorf("%s: didn't get correct elements, diff: %v", testCase.name, diff)
+			}
+		})
+	}
+}
+
+func TestValidateProwgenConfig(t *testing.T) {
+	testCases := []struct {
+		name     string
+		pConfig  *Prowgen
+		expected error
+	}{
+		{
+			name: "valid",
+			pConfig: &Prowgen{
+				SlackReporterConfigs: []SlackReporterConfig{
+					{
+						Channel:           "#slack-channel",
+						JobStatesToReport: []prowv1.ProwJobState{"error"},
+						ReportTemplate:    "some template",
+						JobNames:          []string{"unit", "e2e"},
+					},
+					{
+						Channel:           "#slack-channel",
+						JobStatesToReport: []prowv1.ProwJobState{"success"},
+						ReportTemplate:    "some other template",
+						JobNames:          []string{"lint"},
+					},
+				},
+			},
+		},
+		{
+			name: "invalid, same job in multiple slack reporter configs",
+			pConfig: &Prowgen{
+				SlackReporterConfigs: []SlackReporterConfig{
+					{
+						Channel:           "#slack-channel",
+						JobStatesToReport: []prowv1.ProwJobState{"error"},
+						ReportTemplate:    "some template",
+						JobNames:          []string{"unit", "e2e"},
+					},
+					{
+						Channel:           "#slack-channel",
+						JobStatesToReport: []prowv1.ProwJobState{"success"},
+						ReportTemplate:    "some other template",
+						JobNames:          []string{"unit"},
+					},
+				},
+			},
+			expected: errors.New("job: unit exists in multiple slack_reporter_configs, it should only be in one"),
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := validateProwgenConfig(tc.pConfig)
+			if diff := cmp.Diff(result, tc.expected, testhelper.EquateErrorMessage); diff != "" {
+				t.Fatalf("result doesn't match expected, diff: %v", diff)
 			}
 		})
 	}

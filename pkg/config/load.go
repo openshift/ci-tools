@@ -6,10 +6,15 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
+
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
+	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/util"
@@ -37,6 +42,27 @@ type Prowgen struct {
 	// MultiArchBranchFilter is a filter of branches that will be built for multiple architectures.
 	// If empty, all branches will be included.
 	MultiArchBranchFilter []string `json:"multi_arch_branch_filter,omitempty"`
+	// SlackReporterConfigs defines all desired slack reporter info for included jobs
+	SlackReporterConfigs []SlackReporterConfig `json:"slack_reporter,omitempty"`
+}
+
+// SlackReporterConfig groups test names to a channel to report; mimicking Prow's version, with some unnecessary fields removed
+type SlackReporterConfig struct {
+	Channel           string                `json:"channel,omitempty"`
+	JobStatesToReport []prowv1.ProwJobState `json:"job_states_to_report,omitempty"`
+	ReportTemplate    string                `json:"report_template,omitempty"`
+	JobNames          []string              `json:"job_names,omitempty"`
+	//TODO(sgoeddel): if desired, we could add a list of excluded or included variants here to limit which jobs
+	// have the config added
+}
+
+func (p *Prowgen) GetSlackReporterConfigForTest(test string) *SlackReporterConfig {
+	for _, s := range p.SlackReporterConfigs {
+		if slices.Contains(s.JobNames, test) {
+			return &s
+		}
+	}
+	return nil
 }
 
 func (p *Prowgen) HasMultiArchBranchFilter(branch string) bool {
@@ -87,7 +113,30 @@ func LoadProwgenConfig(folder string) (*Prowgen, error) {
 		}
 	}
 
+	if pConfig != nil {
+		if err := validateProwgenConfig(pConfig); err != nil {
+			return nil, fmt.Errorf("prowgen config found in path %s, but it is invalid: %w", path, err)
+		}
+	}
+
 	return pConfig, nil
+}
+
+func validateProwgenConfig(pConfig *Prowgen) error {
+	var errs []error
+	if len(pConfig.SlackReporterConfigs) > 1 { // There is no reason to validate if we only have one slack_reporter_config
+		jobsSeen := sets.NewString()
+		for _, sc := range pConfig.SlackReporterConfigs {
+			for _, job := range sc.JobNames {
+				if jobsSeen.Has(job) {
+					errs = append(errs, fmt.Errorf("job: %s exists in multiple slack_reporter_configs, it should only be in one", job))
+				} else {
+					jobsSeen.Insert(job)
+				}
+			}
+		}
+	}
+	return utilerrors.NewAggregate(errs)
 }
 
 type Rehearsals struct {

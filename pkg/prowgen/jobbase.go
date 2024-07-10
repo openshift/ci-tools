@@ -139,6 +139,17 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 	if testContainsLease(&test) {
 		p.PodSpec.Add(LeaseClient())
 	}
+	if slackReporter := info.Config.GetSlackReporterConfigForTest(test.As); slackReporter != nil {
+		if p.base.ReporterConfig == nil {
+			p.base.ReporterConfig = &prowv1.ReporterConfig{}
+		}
+		p.base.ReporterConfig.Slack = &prowv1.SlackReporterConfig{
+			Channel:           slackReporter.Channel,
+			JobStatesToReport: slackReporter.JobStatesToReport,
+			ReportTemplate:    slackReporter.ReportTemplate,
+		}
+
+	}
 
 	switch {
 	case test.MultiStageTestConfigurationLiteral != nil:

@@ -849,7 +849,7 @@ github.com/openshift/api/user/v1
 # github.com/openshift/builder v0.0.0-20240610114444-739f5270219e
 ## explicit; go 1.21
 github.com/openshift/builder/pkg/build/builder/util/dockerfile
-# github.com/openshift/client-go v0.0.0-20231018150822-6e226e2825a6
+# github.com/openshift/client-go v0.0.0-20231121143148-910ca30a1a9a
 ## explicit; go 1.20
 github.com/openshift/client-go/build/applyconfigurations/build/v1
 github.com/openshift/client-go/build/applyconfigurations/internal
@@ -912,6 +912,9 @@ github.com/openshift/library-go/pkg/image/reference
 ## explicit
 github.com/openshift/openshift-apiserver/pkg/image/apis/image
 github.com/openshift/openshift-apiserver/pkg/image/apis/image/docker10
+# github.com/ovn-org/ovn-kubernetes/go-controller v0.0.0-20240710195803-425a328cd172
+## explicit; go 1.21
+github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/egressfirewall/v1
 # github.com/pelletier/go-toml v1.9.5
 ## explicit; go 1.12
 github.com/pelletier/go-toml
@@ -1002,9 +1005,10 @@ github.com/slack-go/slack/internal/errorsx
 github.com/slack-go/slack/internal/timex
 github.com/slack-go/slack/slackevents
 github.com/slack-go/slack/slackutilsx
-# github.com/spf13/afero v1.6.0
-## explicit; go 1.13
+# github.com/spf13/afero v1.9.5
+## explicit; go 1.16
 github.com/spf13/afero
+github.com/spf13/afero/internal/common
 github.com/spf13/afero/mem
 # github.com/spf13/cast v1.4.1
 ## explicit
@@ -1168,7 +1172,7 @@ golang.org/x/crypto/ssh
 golang.org/x/crypto/ssh/agent
 golang.org/x/crypto/ssh/internal/bcrypt_pbkdf
 golang.org/x/crypto/ssh/knownhosts
-# golang.org/x/exp v0.0.0-20240222234643-814bf88cf225
+# golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842
 ## explicit; go 1.20
 golang.org/x/exp/constraints
 golang.org/x/exp/maps
@@ -1253,7 +1257,7 @@ golang.org/x/text/width
 # golang.org/x/time v0.5.0
 ## explicit; go 1.18
 golang.org/x/time/rate
-# golang.org/x/tools v0.20.0
+# golang.org/x/tools v0.21.0
 ## explicit; go 1.19
 golang.org/x/tools/cmd/goimports
 golang.org/x/tools/cmd/stringer
@@ -1267,7 +1271,6 @@ golang.org/x/tools/internal/event
 golang.org/x/tools/internal/event/core
 golang.org/x/tools/internal/event/keys
 golang.org/x/tools/internal/event/label
-golang.org/x/tools/internal/event/tag
 golang.org/x/tools/internal/gcimporter
 golang.org/x/tools/internal/gocommand
 golang.org/x/tools/internal/gopathwalk
@@ -1921,8 +1924,8 @@ k8s.io/kube-openapi/pkg/schemaconv
 k8s.io/kube-openapi/pkg/spec3
 k8s.io/kube-openapi/pkg/util/proto
 k8s.io/kube-openapi/pkg/validation/spec
-# k8s.io/kubernetes v1.28.2
-## explicit; go 1.20
+# k8s.io/kubernetes v1.29.2
+## explicit; go 1.21
 k8s.io/kubernetes/pkg/apis/core
 k8s.io/kubernetes/pkg/apis/core/helper
 k8s.io/kubernetes/pkg/util/taints

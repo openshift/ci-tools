@@ -26,6 +26,7 @@ import (
 
 	"github.com/bombsimon/logrusr/v3"
 	"github.com/go-logr/logr"
+	egressfirewallv1 "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/egressfirewall/v1"
 	"github.com/sirupsen/logrus"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -72,7 +73,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/configresolver"
-	egressfirewallv1 "github.com/openshift/ci-tools/pkg/api/egressfirewall/v1"
 	"github.com/openshift/ci-tools/pkg/api/nsttl"
 	"github.com/openshift/ci-tools/pkg/defaults"
 	"github.com/openshift/ci-tools/pkg/interrupt"

@@ -44,10 +44,10 @@ require (
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/slack-go/slack v0.7.3
-	github.com/spf13/afero v1.6.0
+	github.com/spf13/afero v1.9.5
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
-	golang.org/x/exp v0.0.0-20240222234643-814bf88cf225
+	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842
 	// https://security.snyk.io/vuln/SNYK-GOLANG-GOLANGORGXNETHTML-5816820
 	golang.org/x/net v0.25.0 // indirect
 	golang.org/x/oauth2 v0.20.0
@@ -150,7 +150,7 @@ require (
 	golang.org/x/sys v0.20.0 // indirect
 	golang.org/x/term v0.20.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
-	golang.org/x/tools v0.20.0 // indirect
+	golang.org/x/tools v0.21.0 // indirect
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/genproto v0.0.0-20240401170217-c3f982113cda // indirect
@@ -161,9 +161,9 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/apiextensions-apiserver v0.30.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340 // indirect
-	k8s.io/kubernetes v1.28.2
+	k8s.io/kubernetes v1.29.2
 	knative.dev/pkg v0.0.0-20240416145024-0f34a8815650 // indirect
-	sigs.k8s.io/structured-merge-diff/v4 v4.4.1
+	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 )
 
 require (
@@ -171,9 +171,10 @@ require (
 	github.com/felixge/httpsnoop v1.0.4
 	github.com/golang-jwt/jwt v3.2.1+incompatible
 	github.com/openshift/builder v0.0.0-20240610114444-739f5270219e
-	github.com/openshift/client-go v0.0.0-20231018150822-6e226e2825a6
+	github.com/openshift/client-go v0.0.0-20231121143148-910ca30a1a9a
 	github.com/openshift/hive/apis v0.0.0-20230525214126-ab571664f899
 	github.com/openshift/library-go v0.0.0-20231017173800-126f85ed0cc7
+	github.com/ovn-org/ovn-kubernetes/go-controller v0.0.0-20240710195803-425a328cd172
 	github.com/stretchr/testify v1.9.0
 	sigs.k8s.io/boskos v0.0.0-20240624145324-1e4de26c366a
 	sigs.k8s.io/prow v0.0.0-20240627110421-79d27b6e3be3

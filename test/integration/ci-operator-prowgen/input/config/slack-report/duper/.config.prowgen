@@ -12,3 +12,5 @@ slack_reporter:
   - unit
   - upload-results
   - lint
+  excluded_variants:
+  - exclude

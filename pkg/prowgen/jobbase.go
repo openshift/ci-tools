@@ -139,7 +139,7 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 	if testContainsLease(&test) {
 		p.PodSpec.Add(LeaseClient())
 	}
-	if slackReporter := info.Config.GetSlackReporterConfigForTest(test.As); slackReporter != nil {
+	if slackReporter := info.Config.GetSlackReporterConfigForTest(test.As, configSpec.Metadata.Variant); slackReporter != nil {
 		if p.base.ReporterConfig == nil {
 			p.base.ReporterConfig = &prowv1.ReporterConfig{}
 		}

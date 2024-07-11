@@ -52,13 +52,13 @@ type SlackReporterConfig struct {
 	JobStatesToReport []prowv1.ProwJobState `json:"job_states_to_report,omitempty"`
 	ReportTemplate    string                `json:"report_template,omitempty"`
 	JobNames          []string              `json:"job_names,omitempty"`
-	//TODO(sgoeddel): if desired, we could add a list of excluded or included variants here to limit which jobs
-	// have the config added
+	// ExcludedVariants lists job variants that this config will not apply to
+	ExcludedVariants []string `json:"excluded_variants,omitempty"`
 }
 
-func (p *Prowgen) GetSlackReporterConfigForTest(test string) *SlackReporterConfig {
+func (p *Prowgen) GetSlackReporterConfigForTest(test, variant string) *SlackReporterConfig {
 	for _, s := range p.SlackReporterConfigs {
-		if slices.Contains(s.JobNames, test) {
+		if !slices.Contains(s.ExcludedVariants, variant) && slices.Contains(s.JobNames, test) {
 			return &s
 		}
 	}

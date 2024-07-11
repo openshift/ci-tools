@@ -151,3 +151,125 @@ func TestValidateProwgenConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestProwgen_GetSlackReporterConfigForTest(t *testing.T) {
+	testCases := []struct {
+		name     string
+		configs  []SlackReporterConfig
+		test     string
+		variant  string
+		expected *SlackReporterConfig
+	}{
+		{
+			name: "one config exists",
+			configs: []SlackReporterConfig{
+				{
+					Channel:           "some-channel",
+					JobStatesToReport: []prowv1.ProwJobState{"error"},
+					ReportTemplate:    "something happened",
+					JobNames:          []string{"unit", "e2e"},
+				},
+			},
+			test: "unit",
+			expected: &SlackReporterConfig{
+				Channel:           "some-channel",
+				JobStatesToReport: []prowv1.ProwJobState{"error"},
+				ReportTemplate:    "something happened",
+				JobNames:          []string{"unit", "e2e"},
+			},
+		},
+		{
+			name: "multiple configs exists",
+			configs: []SlackReporterConfig{
+				{
+					Channel:           "some-channel",
+					JobStatesToReport: []prowv1.ProwJobState{"error"},
+					ReportTemplate:    "something different happened",
+					JobNames:          []string{"e2e"},
+				},
+				{
+					Channel:           "some-channel",
+					JobStatesToReport: []prowv1.ProwJobState{"error"},
+					ReportTemplate:    "something happened",
+					JobNames:          []string{"unit"},
+				},
+			},
+			test: "unit",
+			expected: &SlackReporterConfig{
+				Channel:           "some-channel",
+				JobStatesToReport: []prowv1.ProwJobState{"error"},
+				ReportTemplate:    "something happened",
+				JobNames:          []string{"unit"},
+			},
+		},
+		{
+			name: "test isn't in any config",
+			configs: []SlackReporterConfig{
+				{
+					Channel:           "some-channel",
+					JobStatesToReport: []prowv1.ProwJobState{"error"},
+					ReportTemplate:    "something different happened",
+					JobNames:          []string{"e2e"},
+				},
+				{
+					Channel:           "some-channel",
+					JobStatesToReport: []prowv1.ProwJobState{"error"},
+					ReportTemplate:    "something happened",
+					JobNames:          []string{"unit"},
+				},
+			},
+			test:     "lint",
+			expected: nil,
+		},
+		{
+			name: "excluded variant",
+			configs: []SlackReporterConfig{
+				{
+					Channel:           "some-channel",
+					JobStatesToReport: []prowv1.ProwJobState{"error"},
+					ReportTemplate:    "something happened",
+					JobNames:          []string{"unit", "e2e"},
+					ExcludedVariants:  []string{"exclude"},
+				},
+			},
+			test:     "unit",
+			variant:  "exclude",
+			expected: nil,
+		},
+		{
+			name: "excluded variant in one config, but another exists",
+			configs: []SlackReporterConfig{
+				{
+					Channel:           "some-channel",
+					JobStatesToReport: []prowv1.ProwJobState{"error"},
+					ReportTemplate:    "something happened",
+					JobNames:          []string{"unit", "e2e"},
+					ExcludedVariants:  []string{"exclude"},
+				},
+				{
+					Channel:           "some-channel",
+					JobStatesToReport: []prowv1.ProwJobState{"error"},
+					ReportTemplate:    "something happened",
+					JobNames:          []string{"unit", "e2e"},
+				},
+			},
+			test:    "unit",
+			variant: "exclude",
+			expected: &SlackReporterConfig{
+				Channel:           "some-channel",
+				JobStatesToReport: []prowv1.ProwJobState{"error"},
+				ReportTemplate:    "something happened",
+				JobNames:          []string{"unit", "e2e"},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := Prowgen{SlackReporterConfigs: tc.configs}
+			result := p.GetSlackReporterConfigForTest(tc.test, tc.variant)
+			if diff := cmp.Diff(result, tc.expected); diff != "" {
+				t.Fatalf("result doesn't match expected, diff: %v", diff)
+			}
+		})
+	}
+}

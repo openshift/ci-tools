@@ -72,7 +72,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/configresolver"
-	egressfirewallv1 "github.com/openshift/ci-tools/pkg/api/egressfirewall/v1"
 	"github.com/openshift/ci-tools/pkg/api/nsttl"
 	"github.com/openshift/ci-tools/pkg/defaults"
 	"github.com/openshift/ci-tools/pkg/interrupt"
@@ -87,6 +86,8 @@ import (
 	"github.com/openshift/ci-tools/pkg/util"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 	"github.com/openshift/ci-tools/pkg/validation"
+
+	egressfirewallv1 "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/egressfirewall/v1"
 )
 
 const usage = `Orchestrate multi-stage image-based builds

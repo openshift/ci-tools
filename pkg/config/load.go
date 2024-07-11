@@ -130,9 +130,9 @@ func validateProwgenConfig(pConfig *Prowgen) error {
 			for _, job := range sc.JobNames {
 				if jobsSeen.Has(job) {
 					errs = append(errs, fmt.Errorf("job: %s exists in multiple slack_reporter_configs, it should only be in one", job))
-				} else {
-					jobsSeen.Insert(job)
+					continue
 				}
+				jobsSeen.Insert(job)
 			}
 		}
 	}

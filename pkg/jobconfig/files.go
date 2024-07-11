@@ -527,7 +527,11 @@ func mergePeriodics(old, new *prowconfig.Periodic) prowconfig.Periodic {
 	merged := *new
 
 	merged.MaxConcurrency = old.MaxConcurrency
-	merged.ReporterConfig = old.ReporterConfig
+	//TODO(sgoeddel): We will keep this functionality for backwards-compatibility.
+	// Eventually, we should only allow the reporter_config to be set through prowgen configuration
+	if old.ReporterConfig != nil && merged.ReporterConfig == nil {
+		merged.ReporterConfig = old.ReporterConfig
+	}
 	if old.Cluster != "" {
 		merged.Cluster = old.Cluster
 	}

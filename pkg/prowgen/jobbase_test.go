@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"k8s.io/utils/pointer"
+	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	v1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
 	ciop "github.com/openshift/ci-tools/pkg/api"
@@ -254,12 +255,13 @@ func TestGenerateJobBase(t *testing.T) {
 
 func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 	ciopconfig := &ciop.ReleaseBuildConfiguration{}
-	info := &ProwgenInfo{Metadata: ciop.Metadata{Org: "o", Repo: "r", Branch: "b"}}
+	defaultInfo := &ProwgenInfo{Metadata: ciop.Metadata{Org: "o", Repo: "r", Branch: "b"}}
 	testCases := []struct {
 		name string
 
 		cfg  *ciop.ReleaseBuildConfiguration
 		test ciop.TestStepConfiguration
+		info *ProwgenInfo
 	}{
 		{
 			name: "simple container-based test",
@@ -268,6 +270,7 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 				Commands:                   "make",
 				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
 			},
+			info: defaultInfo,
 		},
 		{
 			name: "simple container-based test with timeout",
@@ -277,6 +280,7 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
 				Timeout:                    &v1.Duration{Duration: time.Second},
 			},
+			info: defaultInfo,
 		},
 		{
 			name: "simple container-based test with timeout and no decoration",
@@ -293,6 +297,7 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
 				Timeout:                    &v1.Duration{Duration: time.Second},
 			},
+			info: defaultInfo,
 		},
 		{
 			name: "simple container-based test with secret",
@@ -302,6 +307,7 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
 				Secret:                     &ciop.Secret{Name: "s", MountPath: "/path"},
 			},
+			info: defaultInfo,
 		},
 		{
 			name: "simple container-based test with secrets",
@@ -311,6 +317,7 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
 				Secrets:                    []*ciop.Secret{{Name: "s", MountPath: "/path"}, {Name: "s2", MountPath: "/path2"}},
 			},
+			info: defaultInfo,
 		},
 		{
 			name: "multi-stage test",
@@ -320,6 +327,7 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 					Workflow: pointer.StringPtr("workflow"),
 				},
 			},
+			info: defaultInfo,
 		},
 		{
 			name: "multi-stage test with claim",
@@ -330,6 +338,7 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 					Workflow: pointer.StringPtr("workflow"),
 				},
 			},
+			info: defaultInfo,
 		},
 		{
 			name: "multi-stage test with cluster_profile",
@@ -340,6 +349,7 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 					Workflow:       pointer.StringPtr("workflow"),
 				},
 			},
+			info: defaultInfo,
 		},
 		{
 			name: "multi-stage test with releases",
@@ -361,6 +371,7 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 					Workflow: pointer.StringPtr("workflow"),
 				},
 			},
+			info: defaultInfo,
 		},
 		{
 			name: "literal multi-stage test",
@@ -370,6 +381,7 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 					Test: []ciop.LiteralTestStep{{As: "step", From: "src"}},
 				},
 			},
+			info: defaultInfo,
 		},
 		{
 			name: "OpenshiftAnsibleClusterTestConfiguration",
@@ -384,6 +396,7 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: ciop.ClusterProfileAlibabaCloud},
 				},
 			},
+			info: defaultInfo,
 		},
 		{
 			name: "OpenshiftAnsibleCustomClusterTestConfiguration",
@@ -398,6 +411,7 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: ciop.ClusterProfileAlibabaCloud},
 				},
 			},
+			info: defaultInfo,
 		},
 		{
 			name: "OpenshiftInstallerClusterTestConfiguration",
@@ -407,6 +421,7 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: ciop.ClusterProfileAlibabaCloud},
 				},
 			},
+			info: defaultInfo,
 		},
 		{
 			name: "OpenshiftInstallerUPIClusterTestConfiguration",
@@ -416,6 +431,7 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: ciop.ClusterProfileAlibabaCloud},
 				},
 			},
+			info: defaultInfo,
 		},
 		{
 			name: "OpenshiftInstallerCustomTestImageClusterTestConfiguration",
@@ -426,6 +442,7 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 					From:                     "yada",
 				},
 			},
+			info: defaultInfo,
 		},
 		{
 			name: "simple container-based test with cluster",
@@ -434,6 +451,28 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 				Commands:                   "make",
 				Cluster:                    "build01",
 				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
+			},
+			info: defaultInfo,
+		},
+		{
+			name: "simple with slack reporter config",
+			test: ciop.TestStepConfiguration{
+				As:                         "unit",
+				Commands:                   "make unit",
+				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
+			},
+			info: &ProwgenInfo{
+				Metadata: ciop.Metadata{Org: "o", Repo: "r", Branch: "b"},
+				Config: config.Prowgen{
+					SlackReporterConfigs: []config.SlackReporterConfig{
+						{
+							Channel:           "some-channel",
+							JobStatesToReport: []prowv1.ProwJobState{"error"},
+							ReportTemplate:    "some template",
+							JobNames:          []string{"unit", "e2e"},
+						},
+					},
+				},
 			},
 		},
 	}
@@ -444,7 +483,7 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 			if tc.cfg == nil {
 				tc.cfg = ciopconfig
 			}
-			b := NewProwJobBaseBuilderForTest(tc.cfg, info, NewCiOperatorPodSpecGenerator(), tc.test).Build("prefix")
+			b := NewProwJobBaseBuilderForTest(tc.cfg, tc.info, NewCiOperatorPodSpecGenerator(), tc.test).Build("prefix")
 			testhelper.CompareWithFixture(t, b)
 		})
 	}

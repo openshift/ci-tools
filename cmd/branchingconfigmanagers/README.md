@@ -99,11 +99,3 @@ changes.
 
 TODO: What period
 
-### ConfigMap with OCP Lifecycle Data
-
-The [schedule-generator](https://github.com/openshift/ci-tools/tree/master/cmd/branchingconfigmanagers/schedule-generator) tool is responsible for
-creating the configMap `release-schedules` in `ci` namespace using `schedules.yaml` as a key name.
-There is an [internal Jenkins job](https://saml.buildvm.openshift.eng.bos.redhat.com:8888/job/aos-cd-builds/job/build%252Frelease-schedules)
-that runs the `schedule-generator` tool every 30 minutes.
-The YAML input file is described in [Product Lifecycle Data](#product-lifecycle-data) section and currently lives in an internal Gitlab repository
-named [ocp-release-schedule](https://gitlab.cee.redhat.com/ocp-release-schedule)

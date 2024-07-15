@@ -169,7 +169,7 @@ func fromConfig(
 		}
 	}
 	inputImages := make(inputImageSet)
-	var overridableSteps, buildSteps, postSteps []api.Step
+	var overridableSteps, buildSteps []api.Step
 	var imageStepLinks []api.StepLink
 	var hasReleaseStep bool
 	resolver := rootImageResolver(client, ctx, promote)
@@ -368,6 +368,7 @@ func fromConfig(
 	buildSteps = append(buildSteps, step)
 	addProvidesForStep(step, params)
 
+	var promotionSteps []api.Step
 	if promote {
 		if pushSecret == nil {
 			return nil, nil, errors.New("--image-mirror-push-secret is required for promoting images")
@@ -375,16 +376,17 @@ func fromConfig(
 		if config.PromotionConfiguration == nil {
 			return nil, nil, fmt.Errorf("cannot promote images, no promotion configuration defined")
 		}
-		postSteps = append(postSteps, releasesteps.PromotionStep(api.PromotionStepName, config, requiredNames, jobSpec, podClient, pushSecret, registryDomain(config.PromotionConfiguration), api.DefaultMirrorFunc, api.DefaultTargetNameFunc, nodeArchitectures))
+
+		promotionSteps = append(promotionSteps, releasesteps.PromotionStep(api.PromotionStepName, config, requiredNames, jobSpec, podClient, pushSecret, registryDomain(config.PromotionConfiguration), api.DefaultMirrorFunc, api.DefaultTargetNameFunc, nodeArchitectures))
 		// Used primarily (only?) by the ci-chat-bot
 		if config.PromotionConfiguration.RegistryOverride != "" {
 			logrus.Info("No images to promote to quay.io if the registry is overridden")
 		} else {
-			postSteps = append(postSteps, releasesteps.PromotionStep(api.PromotionQuayStepName, config, requiredNames, jobSpec, podClient, pushSecret, api.QuayOpenShiftCIRepo, api.QuayMirrorFunc, api.QuayTargetNameFunc, nodeArchitectures))
+			promotionSteps = append(promotionSteps, releasesteps.PromotionStep(api.PromotionQuayStepName, config, requiredNames, jobSpec, podClient, pushSecret, api.QuayOpenShiftCIRepo, api.QuayMirrorFunc, api.QuayTargetNameFunc, nodeArchitectures))
 		}
 	}
 
-	return append(overridableSteps, buildSteps...), postSteps, nil
+	return append(overridableSteps, buildSteps...), promotionSteps, nil
 }
 
 func stepsForImageOverrides(ctx context.Context, overriddenImages map[string]string, consoleHost string, client ctrlruntimeclient.Client, second time.Duration) []api.StepConfiguration {

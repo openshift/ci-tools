@@ -894,7 +894,7 @@ func (o *options) Run() []error {
 
 	mergedConfig := o.injectTest != "" || len(o.jobSpec.ExtraRefs) > 1
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig,
+	buildSteps, promotionSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig,
 		o.podPendingTimeout, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig,
 		o.consoleHost, o.nodeName, nodeArchitectures, o.targetAdditionalSuffix, o.manifestToolDockerCfg, o.localRegistryDNS, mergedConfig, streams)
 	if err != nil {
@@ -982,19 +982,35 @@ func (o *options) Run() []error {
 			return wrapped
 		}
 
-		for _, step := range postSteps {
-			details, err := runStep(ctx, step)
-			graph.MergeFrom(details)
-			if err != nil {
+		// Run each of the promotion steps concurrently
+		detailsChan := make(chan api.CIOperatorStepDetails)
+		errChan := make(chan error)
+		for _, step := range promotionSteps {
+			go runPromotionStep(ctx, step, detailsChan, errChan)
+		}
+		for i := 0; i < len(promotionSteps); i++ {
+			select {
+			case details := <-detailsChan:
+				graph.MergeFrom(details)
+			case err := <-errChan:
 				eventRecorder.Event(runtimeObject, coreapi.EventTypeWarning, "PostStepFailed",
-					fmt.Sprintf("Post step %s failed while %s", step.Name(), eventJobDescription(o.jobSpec, o.namespace)))
-				return []error{results.ForReason("executing_post").WithError(err).Errorf("could not run post step %s: %v", step.Name(), err)}
+					fmt.Sprintf("post step failed while %s. with error: %v", eventJobDescription(o.jobSpec, o.namespace), err))
+				return []error{results.ForReason("executing_post").WithError(err).Unwrap()} // If any of the promotion steps fail, it is considered a failure
 			}
 		}
 
 		eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobSucceeded", eventJobDescription(o.jobSpec, o.namespace))
 		return nil
 	})
+}
+
+func runPromotionStep(ctx context.Context, step api.Step, detailsChan chan<- api.CIOperatorStepDetails, errChan chan<- error) {
+	details, err := runStep(ctx, step)
+	if err != nil {
+		errChan <- fmt.Errorf("could not run promotion step %s: %w", step.Name(), err)
+	} else {
+		detailsChan <- details
+	}
 }
 
 func integratedStreams(config *api.ReleaseBuildConfiguration, client server.ResolverClient, clusterConfig *rest.Config) (map[string]*configresolver.IntegratedStream, error) {

@@ -983,12 +983,13 @@ func (o *options) Run() []error {
 		}
 
 		// Run each of the promotion steps concurrently
-		detailsChan := make(chan api.CIOperatorStepDetails)
-		errChan := make(chan error)
+		lenOfPromotionSteps := len(promotionSteps)
+		detailsChan := make(chan api.CIOperatorStepDetails, lenOfPromotionSteps)
+		errChan := make(chan error, lenOfPromotionSteps)
 		for _, step := range promotionSteps {
 			go runPromotionStep(ctx, step, detailsChan, errChan)
 		}
-		for i := 0; i < len(promotionSteps); i++ {
+		for i := 0; i < lenOfPromotionSteps; i++ {
 			select {
 			case details := <-detailsChan:
 				graph.MergeFrom(details)

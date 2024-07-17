@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
@@ -82,6 +83,7 @@ func TestProxyHandler(t *testing.T) {
 		expectedStatusCode int
 		expectedBody       string
 		expectedHeaders    map[string]string
+		ignoreSARCheck     sets.Set[string]
 	}{
 		{
 			name:            "neither token nor param",
@@ -139,7 +141,7 @@ func TestProxyHandler(t *testing.T) {
 			for k, v := range tc.requestHeaders {
 				req.Header.Set(k, v)
 			}
-			handler, err := proxyHandler(fakeQuayServer.URL, &fakeQuayService{}, &fakeAppTokenService{})
+			handler, err := proxyHandler(fakeQuayServer.URL, &fakeQuayService{}, &fakeAppTokenService{}, tc.ignoreSARCheck)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -310,6 +312,87 @@ func TestJWTTokenService(t *testing.T) {
 				if diff := cmp.Diff(actualValidateErr, actualValidateErr, testhelper.EquateErrorMessage); diff != "" {
 					t.Errorf("%s actualValidateErr differs from expected:\n%s", tc.name, diff)
 				}
+			}
+		})
+	}
+}
+
+func TestIgnoreSarCheck(t *testing.T) {
+	testCases := []struct {
+		name               string
+		url                string
+		ignoreSarCheck     map[string]bool
+		expectedStatusCode int
+		expectedBody       string
+	}{
+		{
+			name:               "ignoreSarCheck is empty",
+			url:                "/v2/openshift/ci/manifests/testns_testname_testtag",
+			ignoreSarCheck:     map[string]bool{},
+			expectedStatusCode: http.StatusOK,
+			expectedBody:       "Processed",
+		},
+		{
+			name:               "namespace matches with incoming request",
+			url:                "/v2/openshift/ci/manifests/testns_testname_testtag",
+			ignoreSarCheck:     map[string]bool{"testns": true},
+			expectedStatusCode: http.StatusOK,
+			expectedBody:       "Processed",
+		},
+		{
+			name:               "name matches with incoming request",
+			url:                "/v2/openshift/ci/manifests/testns_testname_testtag",
+			ignoreSarCheck:     map[string]bool{"testname": true},
+			expectedStatusCode: http.StatusOK,
+			expectedBody:       "Processed",
+		},
+		{
+			name:               "both namespace and name are present in ignoreSarCheck",
+			url:                "/v2/openshift/ci/manifests/testns_testname_testtag",
+			ignoreSarCheck:     map[string]bool{"testns": true, "testname": true},
+			expectedStatusCode: http.StatusOK,
+			expectedBody:       "Processed",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req, err := http.NewRequest(http.MethodGet, tc.url, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			rr := httptest.NewRecorder()
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Extract the parts of the path
+				path := strings.TrimPrefix(r.URL.Path, "/v2/openshift/ci/manifests/")
+				parts := strings.SplitN(path, "_", 3)
+				if len(parts) < 3 {
+					http.Error(w, "Invalid path", http.StatusBadRequest)
+					return
+				}
+				namespace, name := parts[0], parts[1]
+
+				// Check ignoreSarCheck
+				if tc.ignoreSarCheck[namespace] || tc.ignoreSarCheck[name] {
+					w.WriteHeader(http.StatusOK)
+					w.Write([]byte("Processed"))
+					return
+				}
+
+				// Default case
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte("Processed"))
+			})
+
+			handler.ServeHTTP(rr, req)
+
+			if diff := cmp.Diff(tc.expectedStatusCode, rr.Code); diff != "" {
+				t.Errorf("%s status code differs from expected:\n%s", tc.name, diff)
+			}
+
+			if diff := cmp.Diff(tc.expectedBody, rr.Body.String()); diff != "" {
+				t.Errorf("%s body differs from expected:\n%s", tc.name, diff)
 			}
 		})
 	}

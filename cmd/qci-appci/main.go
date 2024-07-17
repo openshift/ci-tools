@@ -22,14 +22,19 @@ import (
 
 	authenticationv1 "k8s.io/api/authentication/v1"
 	authorizationv1 "k8s.io/api/authorization/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/prow/pkg/config/secret"
+	"sigs.k8s.io/prow/pkg/flagutil"
 	"sigs.k8s.io/prow/pkg/interrupts"
 	"sigs.k8s.io/prow/pkg/logrusutil"
 
 	"github.com/openshift/ci-tools/pkg/util"
 )
+
+// Defining a global ignore boolean flag
+var ignoreSARFlag = false
 
 type options struct {
 	listenAddr        string
@@ -42,6 +47,7 @@ type options struct {
 	tokenValidity     time.Duration
 	tlsCertFile       string
 	tlsKeyFile        string
+	ignoreSarCheck    flagutil.Strings
 	intervalRaw       string
 	interval          time.Duration
 }
@@ -59,6 +65,7 @@ func gatherOptions() (*options, error) {
 	fs.StringVar(&o.tlsCertFile, "tls-cert-file", "", "Path to a tls cert file. Must not be empty.")
 	fs.StringVar(&o.tlsKeyFile, "tls-key-file", "", "Path to a tls key file. Must not be empty.")
 	fs.StringVar(&o.intervalRaw, "interval", "30s", "Parseable duration string that specifies the period to refresh robot's quay.io bearer token")
+	fs.Var(&o.ignoreSarCheck, "ignore-sar-check", "Comma-separated list of images or namespaces to skip SAR check")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return nil, fmt.Errorf("failed to parse flags: %w", err)
 	}
@@ -128,7 +135,7 @@ func main() {
 	}
 
 	appTokenService := newAppTokenService(secret.GetSecret, opts.tokenSecretFile, opts.tokenValidity)
-	proxyHandler, err := proxyHandler("https://quay.io", tokenMaintainer, appTokenService)
+	proxyHandler, err := proxyHandler("https://quay.io", tokenMaintainer, appTokenService, opts.ignoreSarCheck.StringSet())
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create proxy handler")
 	}
@@ -262,7 +269,7 @@ type TokenResponse struct {
 	Token string `json:"token"`
 }
 
-func proxyHandler(target string, quayService QuayService, appTokenService AppTokenService) (http.Handler, error) {
+func proxyHandler(target string, quayService QuayService, appTokenService AppTokenService, ignoreSarCheck sets.Set[string]) (http.Handler, error) {
 	repoURL, err := url.Parse(target)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse qci-appci's url: %w", err)
@@ -271,15 +278,31 @@ func proxyHandler(target string, quayService QuayService, appTokenService AppTok
 	originalDirector := proxy.Director
 	proxy.Director = func(req *http.Request) {
 		originalDirector(req)
-		modifyRequest(req, quayService, appTokenService)
+		modifyRequest(req, quayService, appTokenService, ignoreSarCheck)
 	}
 	proxy.ModifyResponse = modifyResponse
 	return proxy, nil
 }
 
-func modifyRequest(req *http.Request, quayService QuayService, appTokenService AppTokenService) {
+func modifyRequest(req *http.Request, quayService QuayService, appTokenService AppTokenService, ignoreSarCheck sets.Set[string]) {
 	l := logrus.WithFields(logrus.Fields{"path": req.URL.Path})
 	l.Debug("Proxy received request")
+	if path := req.URL.Path; strings.HasPrefix(path, "/v2/openshift/ci/manifests/") {
+		// TODO Remove below comments
+		//GET https://quay-proxy.ci.openshift.org/v2/openshift/ci/manifests/ci_ci-operator_latest
+		//GET https://quay-proxy.ci.openshift.org/v2/openshift/ci/manifests/sha256:082dff20efb869c9d8a68076b055781f6717e17d2755856b61d7fe62290999fb
+		//GET https://quay-proxy.ci.openshift.org/v2/openshift/ci/blobs/sha256:285265384f0814adc1296847d9c567958a140a0d638d77b0bdbe50f6f85d2e5f
+		image := strings.TrimPrefix(path, "/v2/openshift/ci/manifests/")
+		imageTag := strings.Split(image, "_")
+		if len(imageTag) >= 3 {
+			namespace := imageTag[1]
+			name := imageTag[2]
+			if ignoreSarCheck.Has(namespace) || ignoreSarCheck.Has(name) {
+				l.Debug("Ignore SAR Check for ", name)
+				ignoreSARFlag = true
+			}
+		}
+	}
 	if path := req.URL.Path; path == "/v2/auth" {
 		key := "service"
 		value := "quay.io"
@@ -407,32 +430,34 @@ func (s *SimpleClusterTokenService) Validate(token string) (bool, error) {
 		return false, nil
 	}
 
-	username = tr.Status.User.Username
-	// SAR check only applies to human users
-	if strings.HasPrefix(username, "system:serviceaccount:") {
-		ret = true
-		return ret, nil
-	}
+	if !ignoreSARFlag {
+		username = tr.Status.User.Username
+		// SAR check only applies to human users
+		if strings.HasPrefix(username, "system:serviceaccount:") {
 
-	sar := &authorizationv1.SubjectAccessReview{
-		Spec: authorizationv1.SubjectAccessReviewSpec{
-			User:   username,
-			Groups: tr.Status.User.Groups,
-			ResourceAttributes: &authorizationv1.ResourceAttributes{
-				Namespace:   "ocp",
-				Group:       "image.openshift.io",
-				Version:     "v1",
-				Resource:    "imagestreams",
-				Subresource: "layers",
-				Verb:        "get",
+			return ret, nil
+		}
+
+		sar := &authorizationv1.SubjectAccessReview{
+			Spec: authorizationv1.SubjectAccessReviewSpec{
+				User:   username,
+				Groups: tr.Status.User.Groups,
+				ResourceAttributes: &authorizationv1.ResourceAttributes{
+					Namespace:   "ocp",
+					Group:       "image.openshift.io",
+					Version:     "v1",
+					Resource:    "imagestreams",
+					Subresource: "layers",
+					Verb:        "get",
+				},
 			},
-		},
-	}
+		}
 
-	if err := s.client.Create(s.ctx, sar); err != nil {
-		return false, fmt.Errorf("failed to create SubjectAccessReview for user %s: %w", username, err)
+		if err := s.client.Create(s.ctx, sar); err != nil {
+			return false, fmt.Errorf("failed to create SubjectAccessReview for user %s: %w", username, err)
+		}
+		ret = sar.Status.Allowed
 	}
-	ret = sar.Status.Allowed
 	return ret, nil
 }
 

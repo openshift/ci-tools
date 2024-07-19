@@ -489,3 +489,7 @@ analyse-code:
 	@echo Full vulnerabilities report is available at ${ARTIFACTS}/snyk.sarif.json
 
 .PHONY: analyse-code
+
+build-and-push-image:
+	hack/build-and-push.sh "${TOOL}" "${QUAY_ACCOUNT}"
+.PHONY: build-and-push-image

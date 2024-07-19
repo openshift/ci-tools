@@ -102,11 +102,11 @@ APP_CI_DISTRIBUTION = 'E2KP8SMSY4XB67'
 # setup to do incremental updates from the associated cluster's actual S3 bucket.
 DISTRIBUTION_TO_R2_BUCKET_NAME = {
     APP_CI_DISTRIBUTION: 'app-ci-image-registry-blob-cache',
+    'E1Q1256FT1FBYD': 'build01-image-registry-blob-cache',
     'E2PBG0JIU6CTJY': 'build03-image-registry-blob-cache',
-    # 'E1Q1256FT1FBYD': 'build01-...',
-    # 'E1PPY7S6SRDS9W': 'build05-...',
-    # 'E2B105Z8OCWZSC': 'build09-...',
-    # 'E2N1Y2UGVWY8LA': 'build10-...',
+    'E1PPY7S6SRDS9W': 'build05-image-registry-blob-cache',
+    'E2B105Z8OCWZSC': 'build09-image-registry-blob-cache',
+    'E2N1Y2UGVWY8LA': 'build10-image-registry-blob-cache',
 }
 
 

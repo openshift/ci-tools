@@ -66,7 +66,7 @@ func convertDataToSortedSlice(data map[string]string) []string {
 	for key := range data {
 		keys = append(keys, key)
 	}
-	sort.Strings(keys)
+	sort.Sort(sort.Reverse(sort.StringSlice(keys)))
 	var items []string
 	for _, key := range keys {
 		items = append(items, data[key])

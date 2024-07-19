@@ -74,7 +74,7 @@ func TestConvertDataToSortedSlice(t *testing.T) {
 				"1718288192.952979": "3",
 				"1718288180.952989": "4",
 			},
-			expected: []string{"2", "4", "3", "1"},
+			expected: []string{"1", "3", "4", "2"},
 		},
 	}
 	for i := range testCases {
@@ -109,7 +109,7 @@ func TestConfigMapClient_GetSerializedFaqItems(t *testing.T) {
 					"1718288180.952979": "json representation of another faq-item",
 				},
 			},
-			expected: []string{"json representation of another faq-item", "json representation of faq-item"},
+			expected: []string{"json representation of faq-item", "json representation of another faq-item"},
 		},
 		{
 			name:        "config map doesn't exist",

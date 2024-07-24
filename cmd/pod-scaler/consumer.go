@@ -10,7 +10,7 @@ import (
 	"sigs.k8s.io/prow/pkg/interrupts"
 	"sigs.k8s.io/prow/pkg/pjutil"
 
-	pod_scaler "github.com/openshift/ci-tools/pkg/pod-scaler"
+	podscalerv1 "github.com/openshift/ci-tools/pkg/pod-scaler/v1"
 )
 
 func newReloader(name string, cache cache) *cacheReloader {
@@ -34,10 +34,10 @@ type cacheReloader struct {
 
 	lock        *sync.RWMutex
 	lastUpdated time.Time
-	subscribers []chan<- *pod_scaler.CachedQuery
+	subscribers []chan<- *podscalerv1.CachedQuery
 }
 
-func (c *cacheReloader) subscribe(out chan<- *pod_scaler.CachedQuery) {
+func (c *cacheReloader) subscribe(out chan<- *podscalerv1.CachedQuery) {
 	c.lock.Lock()
 	c.subscribers = append(c.subscribers, out)
 	c.logger.Debugf("new subscriber, subscriber count now: %d", len(c.subscribers))
@@ -88,7 +88,7 @@ func digestAll(data map[string][]*cacheReloader, digesters map[string]digester, 
 	var infos []digestInfo
 	for id, d := range digesters {
 		for _, item := range data[id] {
-			s := make(chan *pod_scaler.CachedQuery, 1)
+			s := make(chan *podscalerv1.CachedQuery, 1)
 			item.subscribe(s)
 			infos = append(infos, digestInfo{
 				name:         item.name,
@@ -116,13 +116,13 @@ func digestAll(data map[string][]*cacheReloader, digesters map[string]digester, 
 	})
 }
 
-type digester func(query *pod_scaler.CachedQuery)
+type digester func(query *podscalerv1.CachedQuery)
 
 type digestInfo struct {
 	name         string
 	data         *cacheReloader
 	digest       digester
-	subscription chan *pod_scaler.CachedQuery
+	subscription chan *podscalerv1.CachedQuery
 }
 
 func digest(logger *logrus.Entry, infos ...digestInfo) <-chan interface{} {

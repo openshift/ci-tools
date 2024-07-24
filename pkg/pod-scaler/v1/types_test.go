@@ -1,4 +1,4 @@
-package pod_scaler
+package v1
 
 import (
 	"testing"

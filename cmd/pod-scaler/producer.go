@@ -17,7 +17,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"sigs.k8s.io/prow/pkg/interrupts"
 
-	pod_scaler "github.com/openshift/ci-tools/pkg/pod-scaler"
+	podscalerv1 "github.com/openshift/ci-tools/pkg/pod-scaler/v1"
 )
 
 const (
@@ -46,18 +46,18 @@ func queriesByMetric() map[string]string {
 	}{
 		{
 			prefix:   prowjobsCachePrefix,
-			selector: `{` + string(pod_scaler.ProwLabelNameCreated) + `="true",` + string(pod_scaler.ProwLabelNameJob) + `!="",` + string(pod_scaler.LabelNameRehearsal) + `=""}`,
-			labels:   []string{string(pod_scaler.ProwLabelNameCreated), string(pod_scaler.ProwLabelNameContext), string(pod_scaler.ProwLabelNameOrg), string(pod_scaler.ProwLabelNameRepo), string(pod_scaler.ProwLabelNameBranch), string(pod_scaler.ProwLabelNameJob), string(pod_scaler.ProwLabelNameType)},
+			selector: `{` + string(podscalerv1.ProwLabelNameCreated) + `="true",` + string(podscalerv1.ProwLabelNameJob) + `!="",` + string(podscalerv1.LabelNameRehearsal) + `=""}`,
+			labels:   []string{string(podscalerv1.ProwLabelNameCreated), string(podscalerv1.ProwLabelNameContext), string(podscalerv1.ProwLabelNameOrg), string(podscalerv1.ProwLabelNameRepo), string(podscalerv1.ProwLabelNameBranch), string(podscalerv1.ProwLabelNameJob), string(podscalerv1.ProwLabelNameType)},
 		},
 		{
 			prefix:   podsCachePrefix,
-			selector: `{` + string(pod_scaler.LabelNameCreated) + `="true",` + string(pod_scaler.LabelNameStep) + `=""}`,
-			labels:   []string{string(pod_scaler.LabelNameOrg), string(pod_scaler.LabelNameRepo), string(pod_scaler.LabelNameBranch), string(pod_scaler.LabelNameVariant), string(pod_scaler.LabelNameTarget), string(pod_scaler.LabelNameBuild), string(pod_scaler.LabelNameRelease), string(pod_scaler.LabelNameApp)},
+			selector: `{` + string(podscalerv1.LabelNameCreated) + `="true",` + string(podscalerv1.LabelNameStep) + `=""}`,
+			labels:   []string{string(podscalerv1.LabelNameOrg), string(podscalerv1.LabelNameRepo), string(podscalerv1.LabelNameBranch), string(podscalerv1.LabelNameVariant), string(podscalerv1.LabelNameTarget), string(podscalerv1.LabelNameBuild), string(podscalerv1.LabelNameRelease), string(podscalerv1.LabelNameApp)},
 		},
 		{
 			prefix:   stepsCachePrefix,
-			selector: `{` + string(pod_scaler.LabelNameCreated) + `="true",` + string(pod_scaler.LabelNameStep) + `!=""}`,
-			labels:   []string{string(pod_scaler.LabelNameOrg), string(pod_scaler.LabelNameRepo), string(pod_scaler.LabelNameBranch), string(pod_scaler.LabelNameVariant), string(pod_scaler.LabelNameTarget), string(pod_scaler.LabelNameStep)},
+			selector: `{` + string(podscalerv1.LabelNameCreated) + `="true",` + string(podscalerv1.LabelNameStep) + `!=""}`,
+			labels:   []string{string(podscalerv1.LabelNameOrg), string(podscalerv1.LabelNameRepo), string(podscalerv1.LabelNameBranch), string(podscalerv1.LabelNameVariant), string(podscalerv1.LabelNameTarget), string(podscalerv1.LabelNameStep)},
 		},
 	} {
 		for name, metric := range map[string]string{
@@ -88,15 +88,15 @@ func produce(clients map[string]prometheusapi.API, dataCache cache, ignoreLatest
 			logger := logrus.WithField("metric", name)
 			cache, err := loadCache(dataCache, name, logger)
 			if errors.Is(err, notExist{}) {
-				ranges := map[string][]pod_scaler.TimeRange{}
+				ranges := map[string][]podscalerv1.TimeRange{}
 				for cluster := range clients {
-					ranges[cluster] = []pod_scaler.TimeRange{}
+					ranges[cluster] = []podscalerv1.TimeRange{}
 				}
-				cache = &pod_scaler.CachedQuery{
+				cache = &podscalerv1.CachedQuery{
 					Query:           query,
 					RangesByCluster: ranges,
 					Data:            map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups{},
-					DataByMetaData:  map[pod_scaler.FullMetadata][]model.Fingerprint{},
+					DataByMetaData:  map[podscalerv1.FullMetadata][]model.Fingerprint{},
 				}
 			} else if err != nil {
 				logrus.WithError(err).Error("Failed to load data from storage.")
@@ -159,8 +159,8 @@ func queryFor(metric, selector string, labels []string) string {
   ) (kube_pod_labels` + selector + `)`
 }
 
-func rangeFrom(r prometheusapi.Range) pod_scaler.TimeRange {
-	return pod_scaler.TimeRange{
+func rangeFrom(r prometheusapi.Range) podscalerv1.TimeRange {
+	return podscalerv1.TimeRange{
 		Start: r.Start,
 		End:   r.End,
 	}
@@ -168,7 +168,7 @@ func rangeFrom(r prometheusapi.Range) pod_scaler.TimeRange {
 
 type querier struct {
 	lock *sync.RWMutex
-	data *pod_scaler.CachedQuery
+	data *podscalerv1.CachedQuery
 }
 
 type clusterMetadata struct {
@@ -243,15 +243,15 @@ func (q *querier) execute(ctx context.Context, c *clusterMetadata, until time.Ti
 
 // uncoveredRanges determines the largest subset ranges of r that are not covered by
 // existing data in the querier.
-func (q *querier) uncoveredRanges(cluster string, r pod_scaler.TimeRange) []pod_scaler.TimeRange {
+func (q *querier) uncoveredRanges(cluster string, r podscalerv1.TimeRange) []podscalerv1.TimeRange {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
-	return pod_scaler.UncoveredRanges(r, q.data.RangesByCluster[cluster])
+	return podscalerv1.UncoveredRanges(r, q.data.RangesByCluster[cluster])
 }
 
 // divideRange divides a range into smaller ranges based on how many samples we think is reasonable
 // to ask for from Prometheus in one query
-func divideRange(uncovered []pod_scaler.TimeRange, step time.Duration, numSteps int64) []prometheusapi.Range {
+func divideRange(uncovered []podscalerv1.TimeRange, step time.Duration, numSteps int64) []prometheusapi.Range {
 	var divided []prometheusapi.Range
 	for _, uncoveredRange := range uncovered {
 		// Prometheus has practical limits for how much data we can ask for in any one request,

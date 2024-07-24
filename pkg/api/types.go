@@ -1311,12 +1311,9 @@ const (
 	ClusterProfilePacket                ClusterProfile = "packet"
 	ClusterProfilePacketAssisted        ClusterProfile = "packet-assisted"
 	ClusterProfilePacketSNO             ClusterProfile = "packet-sno"
-	ClusterProfileVSphere2              ClusterProfile = "vsphere-2"
-	ClusterProfileVSphere8Vpn           ClusterProfile = "vsphere-8-vpn"
 	ClusterProfileVSphereDis2           ClusterProfile = "vsphere-dis-2"
 	ClusterProfileVSphereMultizone2     ClusterProfile = "vsphere-multizone-2"
 	ClusterProfileVSphereConnected2     ClusterProfile = "vsphere-connected-2"
-	ClusterProfileVSphereMultiVCenter   ClusterProfile = "vsphere-multi-vcenter"
 	ClusterProfileVSphereElastic        ClusterProfile = "vsphere-elastic"
 	ClusterProfileKubevirt              ClusterProfile = "kubevirt"
 	ClusterProfileAWSCPaaS              ClusterProfile = "aws-cpaas"
@@ -1457,12 +1454,9 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfilePacketAssisted,
 		ClusterProfilePacketSNO,
 
-		ClusterProfileVSphere2,
-		ClusterProfileVSphere8Vpn,
 		ClusterProfileVSphereDis2,
 		ClusterProfileVSphereMultizone2,
 		ClusterProfileVSphereConnected2,
-		ClusterProfileVSphereMultiVCenter,
 		ClusterProfileVSphereElastic,
 
 		ClusterProfileOCIAssisted,
@@ -1657,11 +1651,8 @@ func (p ClusterProfile) ClusterType() string {
 	case ClusterProfileOpenStackNercDev:
 		return "openstack-nerc-dev"
 	case
-		ClusterProfileVSphere2,
 		ClusterProfileVSphereMultizone2,
 		ClusterProfileVSphereDis2,
-		ClusterProfileVSphere8Vpn,
-		ClusterProfileVSphereMultiVCenter,
 		ClusterProfileVSphereElastic,
 		ClusterProfileVSphereConnected2:
 
@@ -1899,18 +1890,12 @@ func (p ClusterProfile) LeaseType() string {
 		ClusterProfilePacketAssisted,
 		ClusterProfilePacketSNO:
 		return "packet-edge-quota-slice"
-	case ClusterProfileVSphere8Vpn:
-		return "vsphere-8-vpn-quota-slice"
-	case ClusterProfileVSphere2:
-		return "vsphere-2-quota-slice"
 	case ClusterProfileVSphereDis2:
 		return "vsphere-dis-2-quota-slice"
 	case ClusterProfileVSphereMultizone2:
 		return "vsphere-multizone-2-quota-slice"
 	case ClusterProfileVSphereConnected2:
 		return "vsphere-connected-2-quota-slice"
-	case ClusterProfileVSphereMultiVCenter:
-		return "vsphere-multi-vcenter-quota-slice"
 	case ClusterProfileVSphereElastic:
 		return "vsphere-elastic-quota-slice"
 	case ClusterProfileKubevirt:
@@ -2004,13 +1989,10 @@ func (p ClusterProfile) Secret() string {
 	switch p {
 	// These profiles share credentials with the base cloud provider profile.
 	case
-		ClusterProfileVSphere2,
 		ClusterProfileVSphereDis2,
 		ClusterProfileVSphereMultizone2,
 		ClusterProfileVSphereConnected2,
-		ClusterProfileVSphereMultiVCenter,
-		ClusterProfileVSphereElastic,
-		ClusterProfileVSphere8Vpn:
+		ClusterProfileVSphereElastic:
 
 		name = p.ClusterType()
 	default:

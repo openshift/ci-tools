@@ -1253,6 +1253,7 @@ const (
 	ClusterProfileAzure4                ClusterProfile = "azure4"
 	ClusterProfileAzureArc              ClusterProfile = "azure-arc"
 	ClusterProfileAzureArm64            ClusterProfile = "azure-arm64"
+	ClusterProfileAzurePerfScale        ClusterProfile = "azure-perfscale"
 	ClusterProfileAzureStack            ClusterProfile = "azurestack"
 	ClusterProfileAzureStackQE          ClusterProfile = "azurestack-qe"
 	ClusterProfileAzureMag              ClusterProfile = "azuremag"
@@ -1396,6 +1397,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAzureMagQE,
 		ClusterProfileAzureQE,
 		ClusterProfileAzureAutoreleaseQE,
+		ClusterProfileAzurePerfScale,
 		ClusterProfileAzureStack,
 		ClusterProfileAzureStackQE,
 		ClusterProfileEquinixOcpMetal,
@@ -1557,6 +1559,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAzureArc,
 		ClusterProfileAzureQE,
 		ClusterProfileAzureAutoreleaseQE,
+		ClusterProfileAzurePerfScale,
 		ClusterProfileAzureVirtualization:
 		return "azure4"
 	case
@@ -1773,6 +1776,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "azure-arm64-quota-slice"
 	case ClusterProfileAzureArc:
 		return "azure-arc-quota-slice"
+	case ClusterProfileAzurePerfScale:
+		return "azure-perfscale-quota-slice"
 	case ClusterProfileAzureStack:
 		return "azurestack-quota-slice"
 	case ClusterProfileAzureStackQE:

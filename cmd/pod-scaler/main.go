@@ -182,7 +182,7 @@ func main() {
 	var cachev2 v2.Cache
 	if opts.cacheDir != "" {
 		cachev1 = &v1.LocalCache{Dir: opts.cacheDir}
-		cachev2 = &v2.LocalCache{Dir: opts.cacheDir}
+		//Never use the cacheDir for v2. currently, this is only for e2e tests which will continue on v1 until the migration is complete
 	} else {
 		gcsClient, err := storage.NewClient(interrupts.Context(), option.WithCredentialsFile(opts.gcsCredentialsFile))
 		if err != nil {
@@ -191,8 +191,10 @@ func main() {
 		bucketv1 := gcsClient.Bucket(opts.cacheBucket)
 		cachev1 = &v1.BucketCache{Bucket: bucketv1}
 
-		bucketv2 := gcsClient.Bucket(opts.cacheBucketv2)
-		cachev2 = &v2.BucketCache{Bucket: bucketv2}
+		if opts.cacheBucketv2 != "" {
+			bucketv2 := gcsClient.Bucket(opts.cacheBucketv2)
+			cachev2 = &v2.BucketCache{Bucket: bucketv2}
+		}
 	}
 
 	switch opts.mode {
@@ -253,11 +255,13 @@ func mainProduce(opts *options, cachev1 v1.Cache, cachev2 v2.Cache) {
 		v1.Produce(clients, cachev1, opts.ignoreLatest, opts.once)
 	}()
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		v2.Produce(clients, cachev2, opts.ignoreLatest, opts.once)
-	}()
+	if cachev2 != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			v2.Produce(clients, cachev2, opts.ignoreLatest, opts.once)
+		}()
+	}
 	wg.Wait()
 }
 

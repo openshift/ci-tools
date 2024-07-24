@@ -202,6 +202,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  destination_dir: ' '\n" +
 	"                  # SourcePath is a file or directory in the source image to copy from.\n" +
 	"                  source_path: ' '\n" +
+	"      # MultiArch means the build step is built for multiple architectures if available. Defaults to false.\n" +
+	"      multi_arch: true\n" +
 	"      # Optional means the build step is not built, published, or\n" +
 	"      # promoted unless explicitly targeted. Use for builds which\n" +
 	"      # are invoked only when testing certain parts of the repo.\n" +
@@ -418,6 +420,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      destination_dir: ' '\n" +
 	"                      # SourcePath is a file or directory in the source image to copy from.\n" +
 	"                      source_path: ' '\n" +
+	"        # MultiArch means the build step is built for multiple architectures if available. Defaults to false.\n" +
+	"        multi_arch: true\n" +
 	"        # Optional means the build step is not built, published, or\n" +
 	"        # promoted unless explicitly targeted. Use for builds which\n" +
 	"        # are invoked only when testing certain parts of the repo.\n" +

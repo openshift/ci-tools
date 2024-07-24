@@ -64,7 +64,13 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 		s.config.BuildArgs,
 		s.config.Ref,
 	)
-	return handleBuilds(ctx, s.client, s.podClient, *build)
+
+	opts := []ImageBuildOptions{}
+	if s.config.MultiArch {
+		opts = append(opts, ImageBuildOptions{MultiArch: true})
+	}
+
+	return handleBuilds(ctx, s.client, s.podClient, *build, opts...)
 }
 
 type workingDir func(tag string) (string, error)

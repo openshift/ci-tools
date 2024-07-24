@@ -440,10 +440,19 @@ func isBuildPhaseTerminated(phase buildapi.BuildPhase) bool {
 	return true
 }
 
-func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubernetes.PodClient, build buildapi.Build) error {
+type ImageBuildOptions struct {
+	MultiArch bool
+}
+
+func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubernetes.PodClient, build buildapi.Build, opts ...ImageBuildOptions) error {
 	var wg sync.WaitGroup
 
-	builds := constructMultiArchBuilds(build, buildClient.NodeArchitectures())
+	multiArch := false
+	if len(opts) > 0 && opts[0].MultiArch {
+		multiArch = true
+	}
+
+	builds := constructMultiArchBuilds(build, buildClient.NodeArchitectures(), multiArch)
 	errChan := make(chan error, len(builds))
 
 	wg.Add(len(builds))
@@ -474,10 +483,18 @@ func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubern
 	return utilerrors.NewAggregate(errs)
 }
 
-func constructMultiArchBuilds(build buildapi.Build, nodeArchitectures []string) []buildapi.Build {
+// constructMultiArchBuilds gets a specific build and constructs multiple builds for each architecture.
+// The name and the output image of the build is suffixed with the architecture name and it will include the nodeSelector for the specific architecture.
+// e.x if the build name is "foo" and the architectures are "amd64,arm64", the new builds will be "foo-amd64" and "foo-arm64".
+func constructMultiArchBuilds(build buildapi.Build, nodeArchitectures []string, multiArch bool) []buildapi.Build {
 	var ret []buildapi.Build
 
-	for _, arch := range nodeArchitectures {
+	archs := nodeArchitectures
+	if !multiArch {
+		archs = []string{"amd64"}
+	}
+
+	for _, arch := range archs {
 		b := build
 		b.Name = fmt.Sprintf("%s-%s", b.Name, arch)
 		b.Spec.NodeSelector = map[string]string{

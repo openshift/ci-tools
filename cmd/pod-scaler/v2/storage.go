@@ -205,7 +205,8 @@ func storeTo(storer storer, metricName string, data []byte) error {
 	return kerrors.NewAggregate(errs)
 }
 
-// lastUpdated determines the time at which the Cache for this metric was last updated
-func lastUpdated(resolver attributeResolver, metricName string) (time.Time, error) {
-	return resolver.lastUpdated(interrupts.Context(), metricName+".json")
-}
+//TODO(sgoeddel): this will be used once v1 is removed
+//// lastUpdated determines the time at which the Cache for this metric was last updated
+//func lastUpdated(resolver attributeResolver, metricName string) (time.Time, error) {
+//	return resolver.lastUpdated(interrupts.Context(), metricName+".json")
+//}

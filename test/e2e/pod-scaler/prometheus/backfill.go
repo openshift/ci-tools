@@ -21,7 +21,7 @@ import (
 	"k8s.io/utils/pointer"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	pod_scaler "github.com/openshift/ci-tools/pkg/pod-scaler"
+	podscalerv1 "github.com/openshift/ci-tools/pkg/pod-scaler/v1"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -41,10 +41,10 @@ type DataInStages struct {
 }
 
 type Data struct {
-	ByFile map[string]map[pod_scaler.FullMetadata][]*circonusllhist.HistogramWithoutLookups
+	ByFile map[string]map[podscalerv1.FullMetadata][]*circonusllhist.HistogramWithoutLookups
 }
 
-func (d *DataInStages) record(offset time.Duration, metric string, labels seriesLabels, identifier pod_scaler.FullMetadata, data []float64) error {
+func (d *DataInStages) record(offset time.Duration, metric string, labels seriesLabels, identifier podscalerv1.FullMetadata, data []float64) error {
 	hist := circonusllhist.New(circonusllhist.NoLookup(), circonusllhist.Size(1))
 	for _, v := range data {
 		if err := hist.RecordValue(v); err != nil {
@@ -54,7 +54,7 @@ func (d *DataInStages) record(offset time.Duration, metric string, labels series
 
 	if _, ok := d.ByOffset[offset]; !ok {
 		d.ByOffset[offset] = Data{
-			ByFile: map[string]map[pod_scaler.FullMetadata][]*circonusllhist.HistogramWithoutLookups{},
+			ByFile: map[string]map[podscalerv1.FullMetadata][]*circonusllhist.HistogramWithoutLookups{},
 		}
 	}
 	var file string
@@ -67,7 +67,7 @@ func (d *DataInStages) record(offset time.Duration, metric string, labels series
 		file = fmt.Sprintf("pods/%s.json", metric)
 	}
 	if _, ok := d.ByOffset[offset].ByFile[file]; !ok {
-		d.ByOffset[offset].ByFile[file] = map[pod_scaler.FullMetadata][]*circonusllhist.HistogramWithoutLookups{}
+		d.ByOffset[offset].ByFile[file] = map[podscalerv1.FullMetadata][]*circonusllhist.HistogramWithoutLookups{}
 	}
 	d.ByOffset[offset].ByFile[file][identifier] = append(d.ByOffset[offset].ByFile[file][identifier], circonusllhist.NewHistogramWithoutLookups(hist))
 
@@ -221,14 +221,14 @@ type seriesLabels map[string]string
 
 // seriesInfo connects a set of labels with the metadata it maps to
 type seriesInfo struct {
-	meta   pod_scaler.FullMetadata
+	meta   podscalerv1.FullMetadata
 	labels seriesLabels
 }
 
 func series() []seriesInfo {
 	return []seriesInfo{
 		{
-			meta: pod_scaler.FullMetadata{
+			meta: podscalerv1.FullMetadata{
 				Metadata: api.Metadata{
 					Org:     "org",
 					Repo:    "repo",
@@ -253,7 +253,7 @@ func series() []seriesInfo {
 			},
 		},
 		{
-			meta: pod_scaler.FullMetadata{
+			meta: podscalerv1.FullMetadata{
 				Metadata: api.Metadata{
 					Org:     "org",
 					Repo:    "repo",
@@ -276,7 +276,7 @@ func series() []seriesInfo {
 			},
 		},
 		{
-			meta: pod_scaler.FullMetadata{
+			meta: podscalerv1.FullMetadata{
 				Metadata: api.Metadata{
 					Org:     "org",
 					Repo:    "repo",
@@ -299,7 +299,7 @@ func series() []seriesInfo {
 			},
 		},
 		{
-			meta: pod_scaler.FullMetadata{
+			meta: podscalerv1.FullMetadata{
 				Metadata: api.Metadata{
 					Org:     "org",
 					Repo:    "repo",
@@ -321,7 +321,7 @@ func series() []seriesInfo {
 			},
 		},
 		{
-			meta: pod_scaler.FullMetadata{
+			meta: podscalerv1.FullMetadata{
 				Metadata: api.Metadata{
 					Org:    "org",
 					Repo:   "repo",
@@ -342,7 +342,7 @@ func series() []seriesInfo {
 			},
 		},
 		{
-			meta: pod_scaler.FullMetadata{
+			meta: podscalerv1.FullMetadata{
 				Metadata: api.Metadata{
 					Org:    "org",
 					Repo:   "repo",
@@ -364,7 +364,7 @@ func series() []seriesInfo {
 			},
 		},
 		{
-			meta: pod_scaler.FullMetadata{
+			meta: podscalerv1.FullMetadata{
 				Target:    "periodic-handwritten-prowjob",
 				Container: "container",
 			},

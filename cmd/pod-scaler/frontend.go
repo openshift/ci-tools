@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/openhistogram/circonusllhist"
+	v1 "github.com/openshift/ci-tools/cmd/pod-scaler/v1"
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
@@ -212,8 +213,8 @@ func serveUI(port, healthPort int, dataDir string, loaders map[string][]*cacheRe
 	}
 	health := pjutil.NewHealthOnPort(healthPort)
 	digestAll(loaders, map[string]digester{
-		MetricNameCPUUsage:         server.digestCPU,
-		MetricNameMemoryWorkingSet: server.digestMemory,
+		v1.MetricNameCPUUsage:         server.digestCPU,
+		v1.MetricNameMemoryWorkingSet: server.digestMemory,
 	}, health, logger)
 
 	var nodes []simplifypath.Node

@@ -29,6 +29,7 @@ import (
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 
+	v1 "github.com/openshift/ci-tools/cmd/pod-scaler/v1"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/util"
 )
@@ -173,16 +174,16 @@ func main() {
 	pprofutil.Instrument(opts.instrumentationOptions)
 	metrics.ExposeMetrics("pod-scaler", prowConfig.PushGateway{}, opts.instrumentationOptions.MetricsPort)
 
-	var cache cache
+	var cache v1.Cache
 	if opts.cacheDir != "" {
-		cache = &localCache{dir: opts.cacheDir}
+		cache = &v1.LocalCache{Dir: opts.cacheDir}
 	} else {
 		gcsClient, err := storage.NewClient(interrupts.Context(), option.WithCredentialsFile(opts.gcsCredentialsFile))
 		if err != nil {
 			logrus.WithError(err).Fatal("Could not initialize GCS client.")
 		}
 		bucket := gcsClient.Bucket(opts.cacheBucket)
-		cache = &bucketCache{bucket: bucket}
+		cache = &v1.BucketCache{Bucket: bucket}
 	}
 
 	switch opts.mode {
@@ -198,7 +199,7 @@ func main() {
 	}
 }
 
-func mainProduce(opts *options, cache cache) {
+func mainProduce(opts *options, cache v1.Cache) {
 	kubeconfigChangedCallBack := func() {
 		logrus.Fatal("Kubeconfig changed, exiting to get restarted by Kubelet and pick up the changes")
 	}
@@ -236,14 +237,14 @@ func mainProduce(opts *options, cache cache) {
 		logger.Debugf("Loaded Prometheus client.")
 	}
 
-	produce(clients, cache, opts.ignoreLatest, opts.once)
+	v1.Produce(clients, cache, opts.ignoreLatest, opts.once)
 }
 
-func mainUI(opts *options, cache cache) {
+func mainUI(opts *options, cache v1.Cache) {
 	go serveUI(opts.uiPort, opts.instrumentationOptions.HealthPort, opts.dataDir, loaders(cache))
 }
 
-func mainAdmission(opts *options, cache cache) {
+func mainAdmission(opts *options, cache v1.Cache) {
 	controllerruntime.SetLogger(logrusr.New(logrus.StandardLogger()))
 
 	restConfig, err := util.LoadClusterConfig()
@@ -262,11 +263,11 @@ func mainAdmission(opts *options, cache cache) {
 	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, reporter)
 }
 
-func loaders(cache cache) map[string][]*cacheReloader {
+func loaders(cache v1.Cache) map[string][]*cacheReloader {
 	l := map[string][]*cacheReloader{}
-	for _, prefix := range []string{prowjobsCachePrefix, podsCachePrefix, stepsCachePrefix} {
-		l[MetricNameCPUUsage] = append(l[MetricNameCPUUsage], newReloader(prefix+"/"+MetricNameCPUUsage, cache))
-		l[MetricNameMemoryWorkingSet] = append(l[MetricNameMemoryWorkingSet], newReloader(prefix+"/"+MetricNameMemoryWorkingSet, cache))
+	for _, prefix := range []string{v1.ProwjobsCachePrefix, v1.PodsCachePrefix, v1.StepsCachePrefix} {
+		l[v1.MetricNameCPUUsage] = append(l[v1.MetricNameCPUUsage], newReloader(prefix+"/"+v1.MetricNameCPUUsage, cache))
+		l[v1.MetricNameMemoryWorkingSet] = append(l[v1.MetricNameMemoryWorkingSet], newReloader(prefix+"/"+v1.MetricNameMemoryWorkingSet, cache))
 	}
 	return l
 }

@@ -10,10 +10,11 @@ import (
 	"sigs.k8s.io/prow/pkg/interrupts"
 	"sigs.k8s.io/prow/pkg/pjutil"
 
+	v1 "github.com/openshift/ci-tools/cmd/pod-scaler/v1"
 	podscalerv1 "github.com/openshift/ci-tools/pkg/pod-scaler/v1"
 )
 
-func newReloader(name string, cache cache) *cacheReloader {
+func newReloader(name string, cache v1.Cache) *cacheReloader {
 	reloader := &cacheReloader{
 		name:  name,
 		cache: cache,
@@ -29,7 +30,7 @@ func newReloader(name string, cache cache) *cacheReloader {
 
 type cacheReloader struct {
 	name   string
-	cache  cache
+	cache  v1.Cache
 	logger *logrus.Entry
 
 	lock        *sync.RWMutex
@@ -47,7 +48,7 @@ func (c *cacheReloader) subscribe(out chan<- *podscalerv1.CachedQuery) {
 func (c *cacheReloader) reload() {
 	// technically this can race as we read the attribute and data from the handle at
 	// different times, but there doesn't seem to be an atomic call to GCS for that anyway
-	lastUpdated, err := lastUpdated(c.cache, c.name)
+	lastUpdated, err := v1.LastUpdated(c.cache, c.name)
 	if err != nil {
 		c.logger.WithError(err).Warn("Failed to query for last cache update time, won't reload this tick.")
 		return
@@ -66,7 +67,7 @@ func (c *cacheReloader) reload() {
 	}
 	logger.Debug("Newer update available in cloud storage, reloading data.")
 
-	data, err := loadCache(c.cache, c.name, c.logger)
+	data, err := v1.LoadCache(c.cache, c.name, c.logger)
 	if err != nil {
 		logger.WithError(err).Warn("Failed to read cached data, won't reload this tick.")
 		return

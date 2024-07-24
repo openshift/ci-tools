@@ -1,4 +1,4 @@
-package main
+package v1
 
 import (
 	"context"
@@ -31,9 +31,9 @@ const (
 	// Prometheus server for at once from many requests.
 	MaxSamplesPerRequest = 11000
 
-	prowjobsCachePrefix = "prowjobs"
-	podsCachePrefix     = "pods"
-	stepsCachePrefix    = "steps"
+	ProwjobsCachePrefix = "prowjobs"
+	PodsCachePrefix     = "pods"
+	StepsCachePrefix    = "steps"
 )
 
 // queriesByMetric returns a mapping of Prometheus query by metric name for all queries we want to execute
@@ -45,17 +45,17 @@ func queriesByMetric() map[string]string {
 		labels   []string
 	}{
 		{
-			prefix:   prowjobsCachePrefix,
+			prefix:   ProwjobsCachePrefix,
 			selector: `{` + string(podscalerv1.ProwLabelNameCreated) + `="true",` + string(podscalerv1.ProwLabelNameJob) + `!="",` + string(podscalerv1.LabelNameRehearsal) + `=""}`,
 			labels:   []string{string(podscalerv1.ProwLabelNameCreated), string(podscalerv1.ProwLabelNameContext), string(podscalerv1.ProwLabelNameOrg), string(podscalerv1.ProwLabelNameRepo), string(podscalerv1.ProwLabelNameBranch), string(podscalerv1.ProwLabelNameJob), string(podscalerv1.ProwLabelNameType)},
 		},
 		{
-			prefix:   podsCachePrefix,
+			prefix:   PodsCachePrefix,
 			selector: `{` + string(podscalerv1.LabelNameCreated) + `="true",` + string(podscalerv1.LabelNameStep) + `=""}`,
 			labels:   []string{string(podscalerv1.LabelNameOrg), string(podscalerv1.LabelNameRepo), string(podscalerv1.LabelNameBranch), string(podscalerv1.LabelNameVariant), string(podscalerv1.LabelNameTarget), string(podscalerv1.LabelNameBuild), string(podscalerv1.LabelNameRelease), string(podscalerv1.LabelNameApp)},
 		},
 		{
-			prefix:   stepsCachePrefix,
+			prefix:   StepsCachePrefix,
 			selector: `{` + string(podscalerv1.LabelNameCreated) + `="true",` + string(podscalerv1.LabelNameStep) + `!=""}`,
 			labels:   []string{string(podscalerv1.LabelNameOrg), string(podscalerv1.LabelNameRepo), string(podscalerv1.LabelNameBranch), string(podscalerv1.LabelNameVariant), string(podscalerv1.LabelNameTarget), string(podscalerv1.LabelNameStep)},
 		},
@@ -70,7 +70,7 @@ func queriesByMetric() map[string]string {
 	return queries
 }
 
-func produce(clients map[string]prometheusapi.API, dataCache cache, ignoreLatest time.Duration, once bool) {
+func Produce(clients map[string]prometheusapi.API, dataCache Cache, ignoreLatest time.Duration, once bool) {
 	var execute func(func())
 	if once {
 		execute = func(f func()) {
@@ -85,14 +85,17 @@ func produce(clients map[string]prometheusapi.API, dataCache cache, ignoreLatest
 		for name, query := range queriesByMetric() {
 			name := name
 			query := query
-			logger := logrus.WithField("metric", name)
-			cache, err := loadCache(dataCache, name, logger)
+			logger := logrus.WithFields(logrus.Fields{
+				"version": "v1",
+				"metric":  name,
+			})
+			cachev1, err := LoadCache(dataCache, name, logger)
 			if errors.Is(err, notExist{}) {
 				ranges := map[string][]podscalerv1.TimeRange{}
 				for cluster := range clients {
 					ranges[cluster] = []podscalerv1.TimeRange{}
 				}
-				cache = &podscalerv1.CachedQuery{
+				cachev1 = &podscalerv1.CachedQuery{
 					Query:           query,
 					RangesByCluster: ranges,
 					Data:            map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups{},
@@ -105,7 +108,7 @@ func produce(clients map[string]prometheusapi.API, dataCache cache, ignoreLatest
 			until := time.Now().Add(-ignoreLatest)
 			q := querier{
 				lock: &sync.RWMutex{},
-				data: cache,
+				data: cachev1,
 			}
 			wg := &sync.WaitGroup{}
 			for clusterName, client := range clients {
@@ -135,7 +138,7 @@ func produce(clients map[string]prometheusapi.API, dataCache cache, ignoreLatest
 				}()
 			}
 			wg.Wait()
-			if err := storeCache(dataCache, name, cache, logger); err != nil {
+			if err := storeCache(dataCache, name, cachev1, logger); err != nil {
 				logger.WithError(err).Error("Failed to write cached data.")
 			}
 		}

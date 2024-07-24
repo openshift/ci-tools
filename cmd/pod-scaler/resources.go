@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/openhistogram/circonusllhist"
+	v1 "github.com/openshift/ci-tools/cmd/pod-scaler/v1"
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
@@ -21,8 +22,8 @@ func newResourceServer(loaders map[string][]*cacheReloader, health *pjutil.Healt
 		byMetaData: map[podscalerv1.FullMetadata]corev1.ResourceRequirements{},
 	}
 	digestAll(loaders, map[string]digester{
-		MetricNameCPUUsage:         server.digestCPU,
-		MetricNameMemoryWorkingSet: server.digestMemory,
+		v1.MetricNameCPUUsage:         server.digestCPU,
+		v1.MetricNameMemoryWorkingSet: server.digestMemory,
 	}, health, logger)
 
 	return server

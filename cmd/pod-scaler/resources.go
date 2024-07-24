@@ -4,13 +4,13 @@ import (
 	"sync"
 
 	"github.com/openhistogram/circonusllhist"
-	v1 "github.com/openshift/ci-tools/cmd/pod-scaler/v1"
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"sigs.k8s.io/prow/pkg/pjutil"
 
+	v1 "github.com/openshift/ci-tools/cmd/pod-scaler/v1"
 	podscalerv1 "github.com/openshift/ci-tools/pkg/pod-scaler/v1"
 )
 

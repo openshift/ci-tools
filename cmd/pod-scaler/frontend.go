@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/openhistogram/circonusllhist"
-	v1 "github.com/openshift/ci-tools/cmd/pod-scaler/v1"
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
@@ -28,6 +27,7 @@ import (
 	"sigs.k8s.io/prow/pkg/pjutil"
 	"sigs.k8s.io/prow/pkg/simplifypath"
 
+	v1 "github.com/openshift/ci-tools/cmd/pod-scaler/v1"
 	"github.com/openshift/ci-tools/pkg/api"
 	podscalerv1 "github.com/openshift/ci-tools/pkg/pod-scaler/v1"
 )

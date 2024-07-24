@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"cloud.google.com/go/storage"
@@ -30,6 +31,7 @@ import (
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 
 	v1 "github.com/openshift/ci-tools/cmd/pod-scaler/v1"
+	v2 "github.com/openshift/ci-tools/cmd/pod-scaler/v2"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/util"
 )
@@ -46,6 +48,7 @@ type options struct {
 
 	cacheDir           string
 	cacheBucket        string
+	cacheBucketv2      string
 	gcsCredentialsFile string
 
 	resultsOptions results.Options
@@ -85,6 +88,7 @@ func bindOptions(fs *flag.FlagSet) *options {
 	fs.StringVar(&o.cacheDir, "cache-dir", "", "Local directory holding cache data (for development mode).")
 	fs.StringVar(&o.dataDir, "data-dir", "", "Local directory to cache UI data into.")
 	fs.StringVar(&o.cacheBucket, "cache-bucket", "", "GCS bucket name holding cached Prometheus data.")
+	fs.StringVar(&o.cacheBucketv2, "cache-bucket-v2", "", "GCS bucket name holding cached Prometheus v2 data.")
 	fs.StringVar(&o.gcsCredentialsFile, "gcs-credentials-file", "", "File where GCS credentials are stored.")
 	fs.Int64Var(&o.cpuCap, "cpu-cap", 10, "The maximum CPU request value, ex: 10")
 	fs.StringVar(&o.memoryCap, "memory-cap", "20Gi", "The maximum memory request value, ex: '20Gi'")
@@ -174,32 +178,37 @@ func main() {
 	pprofutil.Instrument(opts.instrumentationOptions)
 	metrics.ExposeMetrics("pod-scaler", prowConfig.PushGateway{}, opts.instrumentationOptions.MetricsPort)
 
-	var cache v1.Cache
+	var cachev1 v1.Cache
+	var cachev2 v2.Cache
 	if opts.cacheDir != "" {
-		cache = &v1.LocalCache{Dir: opts.cacheDir}
+		cachev1 = &v1.LocalCache{Dir: opts.cacheDir}
+		cachev2 = &v2.LocalCache{Dir: opts.cacheDir}
 	} else {
 		gcsClient, err := storage.NewClient(interrupts.Context(), option.WithCredentialsFile(opts.gcsCredentialsFile))
 		if err != nil {
 			logrus.WithError(err).Fatal("Could not initialize GCS client.")
 		}
-		bucket := gcsClient.Bucket(opts.cacheBucket)
-		cache = &v1.BucketCache{Bucket: bucket}
+		bucketv1 := gcsClient.Bucket(opts.cacheBucket)
+		cachev1 = &v1.BucketCache{Bucket: bucketv1}
+
+		bucketv2 := gcsClient.Bucket(opts.cacheBucketv2)
+		cachev2 = &v2.BucketCache{Bucket: bucketv2}
 	}
 
 	switch opts.mode {
 	case "producer":
-		mainProduce(opts, cache)
+		mainProduce(opts, cachev1, cachev2)
 	case "consumer.ui":
-		mainUI(opts, cache)
+		mainUI(opts, cachev1)
 	case "consumer.admission":
-		mainAdmission(opts, cache)
+		mainAdmission(opts, cachev1)
 	}
 	if !opts.once {
 		interrupts.WaitForGracefulShutdown()
 	}
 }
 
-func mainProduce(opts *options, cache v1.Cache) {
+func mainProduce(opts *options, cachev1 v1.Cache, cachev2 v2.Cache) {
 	kubeconfigChangedCallBack := func() {
 		logrus.Fatal("Kubeconfig changed, exiting to get restarted by Kubelet and pick up the changes")
 	}
@@ -237,7 +246,19 @@ func mainProduce(opts *options, cache v1.Cache) {
 		logger.Debugf("Loaded Prometheus client.")
 	}
 
-	v1.Produce(clients, cache, opts.ignoreLatest, opts.once)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		v1.Produce(clients, cachev1, opts.ignoreLatest, opts.once)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		v2.Produce(clients, cachev2, opts.ignoreLatest, opts.once)
+	}()
+	wg.Wait()
 }
 
 func mainUI(opts *options, cache v1.Cache) {

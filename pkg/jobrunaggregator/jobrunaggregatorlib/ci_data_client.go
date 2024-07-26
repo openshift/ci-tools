@@ -870,10 +870,10 @@ func (it *UnifiedTestRunRowIterator) Next() (*jobrunaggregatorapi.UnifiedTestRun
 
 func (c *ciDataClient) GetJobRunForJobNameBeforeTime(ctx context.Context, jobName string, targetTime time.Time) (string, error) {
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(
-		`SELECT Name
-FROM DATA_SET_LOCATION.JobRuns
-WHERE JobRuns.StartTime <= @TimeCutOff and JobRuns.JobName = @JobName
-ORDER BY JobRuns.StartTime DESC
+		`SELECT JobRunName as Name
+FROM DATA_SET_LOCATION.BackendDisruption
+WHERE JobRunStartTime <= @TimeCutOff and JobRunStartTime >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 14 DAY) and JobName = @JobName
+ORDER BY JobRunStartTime DESC
 LIMIT 1
 `)
 
@@ -900,10 +900,10 @@ LIMIT 1
 
 func (c *ciDataClient) GetJobRunForJobNameAfterTime(ctx context.Context, jobName string, targetTime time.Time) (string, error) {
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(
-		`SELECT Name
-FROM DATA_SET_LOCATION.JobRuns
-WHERE JobRuns.StartTime >= @TimeCutOff and JobRuns.JobName = @JobName
-ORDER BY JobRuns.StartTime ASC
+		`SELECT JobRunName as Name
+FROM DATA_SET_LOCATION.BackendDisruption
+WHERE JobRunStartTime >= @TimeCutOff and JobName = @JobName
+ORDER BY JobRunStartTime ASC
 LIMIT 1
 `)
 

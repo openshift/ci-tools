@@ -26,6 +26,8 @@ const (
 	QuayOpenShiftCIRepo = "quay.io/openshift/ci"
 
 	QCIAPPCIDomain = "quay-proxy.ci.openshift.org"
+
+	QCICacheDomain = "qci-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com"
 )
 
 type Service string

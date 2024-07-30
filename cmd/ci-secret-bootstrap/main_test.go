@@ -1003,6 +1003,7 @@ URL: GET fakeVaultClient.GetKV
 Code: 404. Errors:
 
 * no data at path prefix/quay.io]`,
+			expected: map[string][]*coreapi.Secret{},
 		},
 		{
 			name: "Usersecret, simple happy case",
@@ -1218,6 +1219,7 @@ Code: 404. Errors:
 				}},
 			},
 			expectedError: `failed to base64-decode config.0."secret-key": illegal base64 data at input byte 4`,
+			expected:      map[string][]*coreapi.Secret{},
 		},
 		{
 			name: "Usersecret would override dptp key, error",
@@ -1246,6 +1248,24 @@ Code: 404. Errors:
 				}},
 			},
 			expectedError: `[key dptp-key in secret some-namespace/some-name in cluster a is targeted by ci-secret-bootstrap config and by vault item in path prefix/my/vault/secret, key dptp-key in secret some-namespace/some-name in cluster b is targeted by ci-secret-bootstrap config and by vault item in path prefix/my/vault/secret]`,
+			expected: map[string][]*coreapi.Secret{
+				"a": {{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "some-namespace", Name: "some-name", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+					Type:       coreapi.SecretTypeOpaque,
+					Data: map[string][]byte{
+						"dptp-key":                     []byte("dptp-secret"),
+						"secretsync-vault-source-path": []byte("prefix/my/vault/secret"),
+					},
+				}},
+				"b": {{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "some-namespace", Name: "some-name", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+					Type:       coreapi.SecretTypeOpaque,
+					Data: map[string][]byte{
+						"dptp-key":                     []byte("dptp-secret"),
+						"secretsync-vault-source-path": []byte("prefix/my/vault/secret"),
+					},
+				}},
+			},
 		},
 		{
 			name: "dptp secret isn't of opaque type, error",
@@ -1274,37 +1294,68 @@ Code: 404. Errors:
 				}},
 			},
 			expectedError: `[secret some-namespace/some-name in cluster a has ci-secret-bootstrap config as non-opaque type and is targeted by user sync from key prefix/my/vault/secret, secret some-namespace/some-name in cluster b has ci-secret-bootstrap config as non-opaque type and is targeted by user sync from key prefix/my/vault/secret]`,
+			expected: map[string][]*coreapi.Secret{
+				"a": {{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "some-namespace", Name: "some-name", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+					Type:       coreapi.SecretTypeBasicAuth,
+					Data: map[string][]byte{
+						"dptp-key": []byte("dptp-secret"),
+					},
+				}},
+				"b": {{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "some-namespace", Name: "some-name", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+					Type:       coreapi.SecretTypeBasicAuth,
+					Data: map[string][]byte{
+						"dptp-key": []byte("dptp-secret"),
+					},
+				}},
+			},
+		},
+		{
+			name:  "skip secret because the item does not exist",
+			items: map[string]vaultclient.KVData{},
+			config: secretbootstrap.Config{
+				UserSecretsTargetClusters: []string{"a", "b"},
+				Secrets: []secretbootstrap.SecretConfig{{
+					From: map[string]secretbootstrap.ItemContext{"fake-key": {Item: "fake-item", Field: "fake-key"}},
+					To: []secretbootstrap.SecretContext{
+						{Cluster: "a", Namespace: "some-namespace", Name: "some-name", Type: coreapi.SecretTypeBasicAuth},
+					},
+				}},
+			},
+			expectedError: `config.0."fake-key": Error making API request.
+
+URL: GET fakeVaultClient.GetKV
+Code: 404. Errors:
+
+* no data at path prefix/fake-item`,
+			expected: map[string][]*coreapi.Secret{},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Run(tc.name, func(t *testing.T) {
-				client := vaultClientFromTestItems(tc.items)
+			client := vaultClientFromTestItems(tc.items)
 
-				var actualErrorMsg string
-				actual, actualError := constructSecrets(tc.config, client, tc.disabledClusters)
-				if actualError != nil {
-					actualErrorMsg = actualError.Error()
-				}
-				if actualErrorMsg != tc.expectedError {
-					t.Fatalf("expected error message %s, got %s", tc.expectedError, actualErrorMsg)
-				}
-				if actualError != nil {
-					return
-				}
-				for key := range actual {
-					sort.Slice(actual[key], func(i, j int) bool {
-						return actual[key][i].Namespace+actual[key][i].Name < actual[key][j].Namespace+actual[key][j].Name
-					})
-				}
-				for key := range tc.expected {
-					sort.Slice(tc.expected[key], func(i, j int) bool {
-						return tc.expected[key][i].Name < tc.expected[key][j].Name
-					})
-				}
-				equal(t, "secrets", tc.expected, actual)
-			})
+			var actualErrorMsg string
+			actual, actualError := constructSecrets(tc.config, client, tc.disabledClusters)
+			if actualError != nil {
+				actualErrorMsg = actualError.Error()
+			}
+			if actualErrorMsg != tc.expectedError {
+				t.Fatalf("expected error message %s, got %s", tc.expectedError, actualErrorMsg)
+			}
+			for key := range actual {
+				sort.Slice(actual[key], func(i, j int) bool {
+					return actual[key][i].Namespace+actual[key][i].Name < actual[key][j].Namespace+actual[key][j].Name
+				})
+			}
+			for key := range tc.expected {
+				sort.Slice(tc.expected[key], func(i, j int) bool {
+					return tc.expected[key][i].Name < tc.expected[key][j].Name
+				})
+			}
+			equal(t, "secrets", tc.expected, actual)
 		})
 	}
 }

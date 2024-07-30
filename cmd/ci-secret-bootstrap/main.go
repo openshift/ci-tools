@@ -621,27 +621,35 @@ func mutateGlobalPullSecret(original, secret *coreapi.Secret) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("failed to parse the constructed secret: %w", err)
 	}
-	registryDomain := api.DomainForService(api.ServiceRegistry)
-	if dockerConfig.Auths == nil || dockerConfig.Auths[api.DomainForService(api.ServiceRegistry)].Auth == "" {
-		return false, fmt.Errorf("failed to get token for %s", registryDomain)
+	if dockerConfig.Auths == nil {
+		return false, fmt.Errorf("failed to get any token")
 	}
-	token := dockerConfig.Auths[api.DomainForService(api.ServiceRegistry)].Auth
-	dockerConfig, err = dockerConfigJSON(original)
+	originalDockerConfig, err := dockerConfigJSON(original)
 	if err != nil {
 		return false, fmt.Errorf("failed to parse the original secret: %w", err)
 	}
-	if dockerConfig.Auths[api.DomainForService(api.ServiceRegistry)].Auth == token {
-		return false, nil
+	mutatedSecret := false
+	domains := []string{api.DomainForService(api.ServiceRegistry), api.QCIAPPCIDomain, api.QuayOpenShiftCIRepo, api.QCICacheDomain}
+	for _, domain := range domains {
+		if dockerConfig.Auths[domain].Auth == "" {
+			return false, fmt.Errorf("failed to get token for %s", domain)
+		}
+		originalToken := originalDockerConfig.Auths[domain].Auth
+		originalDockerConfig.Auths[domain] = secretbootstrap.DockerAuth{
+			Auth: dockerConfig.Auths[domain].Auth,
+		}
+		if !mutatedSecret && originalToken != originalDockerConfig.Auths[domain].Auth {
+			mutatedSecret = true
+		}
 	}
-	dockerConfig.Auths[api.DomainForService(api.ServiceRegistry)] = secretbootstrap.DockerAuth{
-		Auth: token,
+	if mutatedSecret {
+		data, err := json.Marshal(originalDockerConfig)
+		if err != nil {
+			return false, fmt.Errorf("failed to marshal the docker config: %w", err)
+		}
+		original.Data[coreapi.DockerConfigJsonKey] = data
 	}
-	data, err := json.Marshal(dockerConfig)
-	if err != nil {
-		return false, fmt.Errorf("failed to marshal the docker config: %w", err)
-	}
-	original.Data[coreapi.DockerConfigJsonKey] = data
-	return true, nil
+	return mutatedSecret, nil
 }
 
 func dockerConfigJSON(secret *coreapi.Secret) (*secretbootstrap.DockerConfigJSON, error) {

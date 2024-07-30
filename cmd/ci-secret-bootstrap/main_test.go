@@ -3101,7 +3101,7 @@ func TestMutateGlobalPullSecret(t *testing.T) {
 					".dockerconfigjson": []byte(`{"key":"value"}`),
 				},
 			},
-			expectedErr: fmt.Errorf("failed to get token for registry.ci.openshift.org"),
+			expectedErr: fmt.Errorf("failed to get any token"),
 		},
 		{
 			name: "bad original",
@@ -3139,6 +3139,15 @@ func TestMutateGlobalPullSecret(t *testing.T) {
 		"registry.ci.openshift.org": {
 			"auth": "cool"
 		},
+		"quay-proxy.ci.openshift.org": {
+			"auth": "supercool"
+		},
+		"quay.io/openshift/ci": {
+			"auth": "supercool"
+		},
+		"qci-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com": {
+			"auth": "supercool"
+		},
 		"c": {
 			"auth": "bar",
 			"email": "g"
@@ -3157,6 +3166,15 @@ func TestMutateGlobalPullSecret(t *testing.T) {
 		},
 		"registry.ci.openshift.org": {
 			"auth": "expired"
+		},
+		"quay-proxy.ci.openshift.org": {
+			"auth": "supercool"
+		},
+		"quay.io/openshift/ci": {
+			"auth": "supercool"
+		},
+		"qci-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com": {
+			"auth": "supercool"
 		}
 	}
 }`),
@@ -3166,7 +3184,7 @@ func TestMutateGlobalPullSecret(t *testing.T) {
 			expected: true,
 			mutatedSecret: &coreapi.Secret{
 				Data: map[string][]byte{
-					".dockerconfigjson": []byte("{\"auths\":{\"osd\":{\"auth\":\"foo\",\"email\":\"e\"},\"registry.ci.openshift.org\":{\"auth\":\"cool\"}}}"),
+					".dockerconfigjson": []byte("{\"auths\":{\"osd\":{\"auth\":\"foo\",\"email\":\"e\"},\"qci-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com\":{\"auth\":\"supercool\"},\"quay-proxy.ci.openshift.org\":{\"auth\":\"supercool\"},\"quay.io/openshift/ci\":{\"auth\":\"supercool\"},\"registry.ci.openshift.org\":{\"auth\":\"cool\"}}}"),
 				},
 				Type: coreapi.SecretTypeDockerConfigJson,
 			},
@@ -3183,6 +3201,15 @@ func TestMutateGlobalPullSecret(t *testing.T) {
 		},
 		"registry.ci.openshift.org": {
 			"auth": "cool"
+		},
+		"quay-proxy.ci.openshift.org": {
+			"auth": "supercool"
+		},
+		"quay.io/openshift/ci": {
+			"auth": "supercool"
+		},
+		"qci-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com": {
+			"auth": "supercool"
 		},
 		"c": {
 			"auth": "bar",
@@ -3202,6 +3229,15 @@ func TestMutateGlobalPullSecret(t *testing.T) {
 		},
 		"registry.ci.openshift.org": {
 			"auth": "cool"
+		},
+		"quay-proxy.ci.openshift.org": {
+			"auth": "supercool"
+		},
+		"quay.io/openshift/ci": {
+			"auth": "supercool"
+		},
+		"qci-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com": {
+			"auth": "supercool"
 		}
 	}
 }`),
@@ -3222,6 +3258,129 @@ func TestMutateGlobalPullSecret(t *testing.T) {
 		"registry.ci.openshift.org": {
 			"auth": "cool"
 		},
+		"quay-proxy.ci.openshift.org": {
+			"auth": "supercool"
+		},
+		"quay.io/openshift/ci": {
+			"auth": "supercool"
+		},
+		"qci-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com": {
+			"auth": "supercool"
+		},
+		"c": {
+			"auth": "bar",
+			"email": "g"
+		}
+	}
+}`),
+				},
+			},
+			original: &coreapi.Secret{
+				Data: map[string][]byte{
+					".dockerconfigjson": []byte(`{
+	"auths": {
+		"osd": {
+			"auth": "foo",
+			"email": "e"
+		},
+		"quay-proxy.ci.openshift.org": {
+			"auth": "supercool"
+		},
+		"quay.io/openshift/ci": {
+			"auth": "supercool"
+		},
+		"qci-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com": {
+			"auth": "supercool"
+		}
+	}
+}`),
+				},
+				Type: coreapi.SecretTypeDockerConfigJson,
+			},
+			expected: true,
+			mutatedSecret: &coreapi.Secret{
+				Data: map[string][]byte{
+					".dockerconfigjson": []byte("{\"auths\":{\"osd\":{\"auth\":\"foo\",\"email\":\"e\"},\"qci-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com\":{\"auth\":\"supercool\"},\"quay-proxy.ci.openshift.org\":{\"auth\":\"supercool\"},\"quay.io/openshift/ci\":{\"auth\":\"supercool\"},\"registry.ci.openshift.org\":{\"auth\":\"cool\"}}}"),
+				},
+				Type: coreapi.SecretTypeDockerConfigJson,
+			},
+		},
+		{
+			name: "the auth for missing registries are appended",
+			secret: &coreapi.Secret{
+				Data: map[string][]byte{
+					".dockerconfigjson": []byte(`{
+	"auths": {
+		"a": {
+			"auth": "foo",
+			"email": "e"
+		},
+		"registry.ci.openshift.org": {
+			"auth": "cool"
+		},
+		"quay-proxy.ci.openshift.org": {
+			"auth": "supercool"
+		},
+		"quay.io/openshift/ci": {
+			"auth": "supercool"
+		},
+		"qci-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com": {
+			"auth": "supercool"
+		},
+		"c": {
+			"auth": "bar",
+			"email": "g"
+		}
+	}
+}`),
+				},
+			},
+			original: &coreapi.Secret{
+				Data: map[string][]byte{
+					".dockerconfigjson": []byte(`{
+	"auths": {
+		"osd": {
+			"auth": "foo",
+			"email": "e"
+		},
+		"quay-proxy.ci.openshift.org": {
+			"auth": "supercool"
+		}
+	}
+}`),
+				},
+				Type: coreapi.SecretTypeDockerConfigJson,
+			},
+			expected: true,
+			mutatedSecret: &coreapi.Secret{
+				Data: map[string][]byte{
+					".dockerconfigjson": []byte("{\"auths\":{\"osd\":{\"auth\":\"foo\",\"email\":\"e\"},\"qci-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com\":{\"auth\":\"supercool\"},\"quay-proxy.ci.openshift.org\":{\"auth\":\"supercool\"},\"quay.io/openshift/ci\":{\"auth\":\"supercool\"},\"registry.ci.openshift.org\":{\"auth\":\"cool\"}}}"),
+				},
+				Type: coreapi.SecretTypeDockerConfigJson,
+			},
+		},
+		{
+			name: "the auth for all registries are appended",
+			secret: &coreapi.Secret{
+				Data: map[string][]byte{
+					".dockerconfigjson": []byte(`{
+	"auths": {
+		"a": {
+			"auth": "foo",
+			"email": "e"
+		},
+		"registry.ci.openshift.org": {
+			"auth": "cool"
+		},
+		"quay-proxy.ci.openshift.org": {
+			"auth": "supercool"
+		},
+		"quay.io/openshift/ci": {
+			"auth": "supercool"
+		},
+		"qci-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com": {
+			"auth": "supercool"
+		},
 		"c": {
 			"auth": "bar",
 			"email": "g"
@@ -3246,7 +3405,133 @@ func TestMutateGlobalPullSecret(t *testing.T) {
 			expected: true,
 			mutatedSecret: &coreapi.Secret{
 				Data: map[string][]byte{
-					".dockerconfigjson": []byte("{\"auths\":{\"osd\":{\"auth\":\"foo\",\"email\":\"e\"},\"registry.ci.openshift.org\":{\"auth\":\"cool\"}}}"),
+					".dockerconfigjson": []byte("{\"auths\":{\"osd\":{\"auth\":\"foo\",\"email\":\"e\"},\"qci-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com\":{\"auth\":\"supercool\"},\"quay-proxy.ci.openshift.org\":{\"auth\":\"supercool\"},\"quay.io/openshift/ci\":{\"auth\":\"supercool\"},\"registry.ci.openshift.org\":{\"auth\":\"cool\"}}}"),
+				},
+				Type: coreapi.SecretTypeDockerConfigJson,
+			},
+		},
+		{
+			name: "basic case: multiple expired auths are replaced",
+			secret: &coreapi.Secret{
+				Data: map[string][]byte{
+					".dockerconfigjson": []byte(`{
+	"auths": {
+		"a": {
+			"auth": "foo",
+			"email": "e"
+		},
+		"registry.ci.openshift.org": {
+			"auth": "cool"
+		},
+		"quay-proxy.ci.openshift.org": {
+			"auth": "supercool"
+		},
+		"quay.io/openshift/ci": {
+			"auth": "supercool"
+		},
+		"qci-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com": {
+			"auth": "supercool"
+		},
+		"c": {
+			"auth": "bar",
+			"email": "g"
+		}
+	}
+}`),
+				},
+			},
+			original: &coreapi.Secret{
+				Data: map[string][]byte{
+					".dockerconfigjson": []byte(`{
+	"auths": {
+		"osd": {
+			"auth": "foo",
+			"email": "e"
+		},
+		"registry.ci.openshift.org": {
+			"auth": "expired"
+		},
+		"quay-proxy.ci.openshift.org": {
+			"auth": "supercool"
+		},
+		"quay.io/openshift/ci": {
+			"auth": "expired"
+		},
+		"qci-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com": {
+			"auth": "supercool"
+		}
+	}
+}`),
+				},
+				Type: coreapi.SecretTypeDockerConfigJson,
+			},
+			expected: true,
+			mutatedSecret: &coreapi.Secret{
+				Data: map[string][]byte{
+					".dockerconfigjson": []byte("{\"auths\":{\"osd\":{\"auth\":\"foo\",\"email\":\"e\"},\"qci-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com\":{\"auth\":\"supercool\"},\"quay-proxy.ci.openshift.org\":{\"auth\":\"supercool\"},\"quay.io/openshift/ci\":{\"auth\":\"supercool\"},\"registry.ci.openshift.org\":{\"auth\":\"cool\"}}}"),
+				},
+				Type: coreapi.SecretTypeDockerConfigJson,
+			},
+		},
+		{
+			name: "basic case: all expired auths are replaced",
+			secret: &coreapi.Secret{
+				Data: map[string][]byte{
+					".dockerconfigjson": []byte(`{
+	"auths": {
+		"a": {
+			"auth": "foo",
+			"email": "e"
+		},
+		"registry.ci.openshift.org": {
+			"auth": "cool"
+		},
+		"quay-proxy.ci.openshift.org": {
+			"auth": "supercool"
+		},
+		"quay.io/openshift/ci": {
+			"auth": "supercool"
+		},
+		"qci-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com": {
+			"auth": "supercool"
+		},
+		"c": {
+			"auth": "bar",
+			"email": "g"
+		}
+	}
+}`),
+				},
+			},
+			original: &coreapi.Secret{
+				Data: map[string][]byte{
+					".dockerconfigjson": []byte(`{
+	"auths": {
+		"osd": {
+			"auth": "foo",
+			"email": "e"
+		},
+		"registry.ci.openshift.org": {
+			"auth": "expired"
+		},
+		"quay-proxy.ci.openshift.org": {
+			"auth": "expired"
+		},
+		"quay.io/openshift/ci": {
+			"auth": "expired"
+		},
+		"qci-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com": {
+			"auth": "expired"
+		}
+	}
+}`),
+				},
+				Type: coreapi.SecretTypeDockerConfigJson,
+			},
+			expected: true,
+			mutatedSecret: &coreapi.Secret{
+				Data: map[string][]byte{
+					".dockerconfigjson": []byte("{\"auths\":{\"osd\":{\"auth\":\"foo\",\"email\":\"e\"},\"qci-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com\":{\"auth\":\"supercool\"},\"quay-proxy.ci.openshift.org\":{\"auth\":\"supercool\"},\"quay.io/openshift/ci\":{\"auth\":\"supercool\"},\"registry.ci.openshift.org\":{\"auth\":\"cool\"}}}"),
 				},
 				Type: coreapi.SecretTypeDockerConfigJson,
 			},

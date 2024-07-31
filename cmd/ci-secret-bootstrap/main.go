@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -329,6 +330,7 @@ func constructSecrets(config secretbootstrap.Config, client secrets.ReadOnlyClie
 			}
 			sort.Strings(keys)
 
+			secretInError := atomic.Bool{}
 			keyWg := sync.WaitGroup{}
 			dataLock := &sync.Mutex{}
 			keyWg.Add(len(keys))
@@ -346,12 +348,14 @@ func constructSecrets(config secretbootstrap.Config, client secrets.ReadOnlyClie
 						value, err = constructDockerConfigJSON(client, itemContext.DockerConfigJSONData)
 					}
 					if err != nil {
+						secretInError.Store(true)
 						errChan <- fmt.Errorf("config.%d.\"%s\": %w", idx, key, err)
 						return
 					}
 					if cfg.From[key].Base64Decode {
 						decoded, err := base64.StdEncoding.DecodeString(string(value))
 						if err != nil {
+							secretInError.Store(true)
 							errChan <- fmt.Errorf(`failed to base64-decode config.%d."%s": %w`, idx, key, err)
 							return
 						}
@@ -366,6 +370,18 @@ func constructSecrets(config secretbootstrap.Config, client secrets.ReadOnlyClie
 			// We copy the data map to not have multiple secrets with the same inner data map. This implies
 			// that we need to wait for that map to be fully populated.
 			keyWg.Wait()
+
+			// We don't want to sync secrets that have not been fully fetched from the secret manager
+			// and/or have not been properly constructed.
+			if secretInError.Load() {
+				targets := make([]string, len(cfg.To))
+				for i, sc := range cfg.To {
+					targets[i] = fmt.Sprintf("%s/%s@%s", sc.Namespace, sc.Name, sc.Cluster)
+				}
+				logrus.WithField("secrets", strings.Join(targets, " ")).
+					Errorf("Failed to construct secret, skipping sync")
+				return
+			}
 
 			for _, secretContext := range cfg.To {
 				if secretContext.Type == "" {

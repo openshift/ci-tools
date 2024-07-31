@@ -26,6 +26,7 @@ import (
 	"sigs.k8s.io/prow/pkg/flagutil"
 	"sigs.k8s.io/prow/pkg/interrupts"
 	"sigs.k8s.io/prow/pkg/logrusutil"
+	"sigs.k8s.io/prow/pkg/version"
 
 	imagev1 "github.com/openshift/api/image/v1"
 
@@ -173,6 +174,7 @@ func newSupplementalCIImagesServiceWithMirrorStore(mirrorStore quayiociimagesdis
 }
 
 func main() {
+	version.Name = "ci-images-mirror"
 	logrusutil.ComponentInit()
 	controllerruntime.SetLogger(logrusr.New(logrus.StandardLogger()))
 	logrus.SetLevel(logrus.TraceLevel)

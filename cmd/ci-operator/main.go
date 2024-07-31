@@ -2330,7 +2330,7 @@ func getClusterProfileSecret(clusterProfile string, client ctrlruntimeclient.Cli
 	ciSecret := &coreapi.Secret{}
 	err = client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: "ci", Name: cpDetails.Secret}, ciSecret)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get secret '%s' from ci namespace", cpDetails.Secret)
+		return nil, fmt.Errorf("failed to get secret '%s' from ci namespace: %w", cpDetails.Secret, err)
 	}
 
 	return ciSecret, nil

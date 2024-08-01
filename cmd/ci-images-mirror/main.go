@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -27,6 +28,7 @@ import (
 	"sigs.k8s.io/prow/pkg/interrupts"
 	"sigs.k8s.io/prow/pkg/logrusutil"
 	"sigs.k8s.io/prow/pkg/version"
+	"sigs.k8s.io/yaml"
 
 	imagev1 "github.com/openshift/api/image/v1"
 
@@ -34,6 +36,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/config"
 	quayiociimagesdistributor "github.com/openshift/ci-tools/pkg/controller/quay_io_ci_images_distributor"
 	"github.com/openshift/ci-tools/pkg/load/agents"
+	"github.com/openshift/ci-tools/pkg/steps/release"
 	"github.com/openshift/ci-tools/pkg/util"
 )
 
@@ -57,6 +60,7 @@ type options struct {
 	config                           *quayiociimagesdistributor.CIImagesMirrorConfig
 	configMutex                      sync.Mutex
 	configLastModifiedAt             time.Time
+	validateConfigOnly               bool
 }
 
 type quayIOCIImagesDistributorOptions struct {
@@ -84,6 +88,7 @@ func newOpts() *options {
 	fs.IntVar(&opts.port, "port", 8090, "Port to run the server on")
 	fs.DurationVar(&opts.gracePeriod, "gracePeriod", time.Second*10, "Grace period for server shutdown")
 	fs.BoolVar(&opts.onlyValidManifestV2Images, "only-valid-manifest-v2-images", true, "If set, source images with invalidate manifests of v2 will not be mirrored")
+	fs.BoolVar(&opts.validateConfigOnly, "validate-config-only", false, "If set, only validate the config file and exit")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse args")
 	}
@@ -113,7 +118,7 @@ func (o *options) loadConfig(caller string) error {
 
 func (o *options) validate() error {
 	var errs []error
-	if o.leaderElectionNamespace == "" {
+	if o.leaderElectionNamespace == "" && !o.validateConfigOnly {
 		errs = append(errs, errors.New("--leader-election-namespace must be set"))
 	}
 	if o.leaderElectionSuffix != "" && !o.dryRun {
@@ -151,6 +156,10 @@ type supplementalCIImagesServiceWithMirrorStore struct {
 	logger      *logrus.Entry
 }
 
+func targetToQuayImage(target string) string {
+	return fmt.Sprintf("%s:%s", api.QuayOpenShiftCIRepo, strings.Replace(strings.Replace(target, "/", "_", 1), ":", "_", 1))
+}
+
 func (s *supplementalCIImagesServiceWithMirrorStore) Mirror(m map[string]quayiociimagesdistributor.Source) error {
 	s.logger.Info("Mirroring supplemental CI images ...")
 	for k, v := range m {
@@ -160,7 +169,7 @@ func (s *supplementalCIImagesServiceWithMirrorStore) Mirror(m map[string]quayioc
 		}
 		if err := s.mirrorStore.Put(quayiociimagesdistributor.MirrorTask{
 			Source:      source,
-			Destination: fmt.Sprintf("%s:%s", api.QuayOpenShiftCIRepo, strings.Replace(strings.Replace(k, "/", "_", 1), ":", "_", 1)),
+			Destination: targetToQuayImage(k),
 			Owner:       "supplementalCIImagesService",
 		}); err != nil {
 			return fmt.Errorf("failed to put mirror task: %w", err)
@@ -181,6 +190,16 @@ func main() {
 	opts := newOpts()
 	if err := opts.validate(); err != nil {
 		logrus.WithError(err).Fatal("Failed to validate options")
+	}
+
+	if opts.validateConfigOnly {
+		ciOperatorConfigPath := filepath.Join(opts.releaseRepoGitSyncPath, config.CiopConfigInRepoPath)
+		configFilePathInReleaseRepo := strings.Replace(opts.configFile, opts.releaseRepoGitSyncPath, "", 1)
+		err := validateConfig(opts.config, opts.registryConfig, ciOperatorConfigPath, configFilePathInReleaseRepo)
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to validate config")
+		}
+		os.Exit(0)
 	}
 
 	ctx := controllerruntime.SetupSignalHandler()
@@ -320,6 +339,89 @@ func main() {
 	}
 
 	logrus.Info("Process ended gracefully")
+}
+
+func validateConfig(config *quayiociimagesdistributor.CIImagesMirrorConfig, registryConfig string, ciOperatorConfigPath string, configFilePathInReleaseRepo string) error {
+	diff, err := getConfigDiff(configFilePathInReleaseRepo, config)
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to get config diff")
+	}
+	errs := []error{}
+	for _, target := range diff {
+		source := config.SupplementalCIImages[target]
+		if source.Image != "" {
+			if strings.HasPrefix(source.Image, "docker.io/") {
+				errs = append(errs, fmt.Errorf("source image %s is from docker.io", source.Image))
+			}
+			if !isAccessible(source.Image, registryConfig) {
+				errs = append(errs, fmt.Errorf("source image %s is not accessible", source.Image))
+			}
+		}
+		if isPromoted(target, ciOperatorConfigPath) {
+			errs = append(errs, fmt.Errorf("target %s would overwrite a promoted tag", target))
+		}
+		if isAccessible(targetToQuayImage(target), registryConfig) {
+			errs = append(errs, fmt.Errorf("target %s already exists in quay", target))
+		}
+	}
+	return utilerrors.NewAggregate(errs)
+}
+
+func getConfigDiff(configFilePathInReleaseRepo string, config *quayiociimagesdistributor.CIImagesMirrorConfig) ([]string, error) {
+	url := "https://github.com/openshift/release/raw/master" + configFilePathInReleaseRepo
+	logrus.WithField("url", url).Info("Fetching master config")
+	response, err := http.Get(url)
+	if err != nil {
+		return []string{}, fmt.Errorf("failed to fetch master config: %w", err)
+	}
+	defer response.Body.Close()
+	bytes, err := io.ReadAll(response.Body)
+	if err != nil {
+		return []string{}, fmt.Errorf("failed to read body  %s: %w", url, err)
+	}
+	masterConfig := &quayiociimagesdistributor.CIImagesMirrorConfig{}
+	if err := yaml.UnmarshalStrict(bytes, masterConfig); err != nil {
+		return []string{}, fmt.Errorf("failed to unmarshal yaml from + %s: %w", url, err)
+	}
+
+	diff := []string{}
+	for k := range config.SupplementalCIImages {
+		if _, ok := masterConfig.SupplementalCIImages[k]; !ok {
+			diff = append(diff, k)
+		}
+	}
+	return diff, nil
+}
+
+func isPromoted(sourceISTagRef string, ciOperatorConfigPath string) bool {
+	abs, err := filepath.Abs(ciOperatorConfigPath)
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to determine absolute CI Operator configuration path")
+	}
+	err = config.OperateOnCIOperatorConfigDir(abs, func(cfg *api.ReleaseBuildConfiguration, metadata *config.Info) error {
+		for _, isTagRef := range release.PromotedTags(cfg) {
+			if sourceISTagRef == isTagRef.ISTagName() {
+				return fmt.Errorf("source image %s is promoted", sourceISTagRef)
+			}
+		}
+		return nil
+	})
+	return err != nil
+}
+
+func isAccessible(image string, registryConfig string) bool {
+	ocClientFactory := quayiociimagesdistributor.NewClientFactory()
+	quayIOImageHelper, err := ocClientFactory.NewClient()
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to create QuayIOImageHelper")
+	}
+	opts := quayiociimagesdistributor.OCImageInfoOptions{
+		RegistryConfig: registryConfig,
+		//TODO add multiarch support
+		FilterByOS: "linux/amd64",
+	}
+	_, err = quayIOImageHelper.ImageInfo(image, opts)
+	return err == nil
 }
 
 func getRouter(_ context.Context, ms quayiociimagesdistributor.MirrorStore) *http.ServeMux {

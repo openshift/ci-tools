@@ -19,11 +19,19 @@ import (
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
-func LoadConfig(file string) (*CIImagesMirrorConfig, error) {
-	bytes, err := gzip.ReadFileMaybeGZIP(file)
+func LoadConfigFromFile(path string) (*CIImagesMirrorConfig, error) {
+	bytes, err := gzip.ReadFileMaybeGZIP(path)
 	if err != nil {
 		return nil, err
 	}
+	c, err := LoadConfig(bytes)
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+func LoadConfig(bytes []byte) (*CIImagesMirrorConfig, error) {
 	c := &CIImagesMirrorConfig{}
 	if err := yaml.UnmarshalStrict(bytes, c); err != nil {
 		return nil, err

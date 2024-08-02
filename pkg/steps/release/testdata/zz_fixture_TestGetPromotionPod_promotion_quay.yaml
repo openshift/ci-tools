@@ -6,8 +6,8 @@ spec:
   containers:
   - args:
     - |-
-      oc image mirror --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --continue-on-error=true --max-per-registry=20 quay.io/openshift/ci:ci_a_latest=quay.io/openshift/ci:20240603235401_prune_ci_a_latest quay.io/openshift/ci:ci_c_latest=quay.io/openshift/ci:20240603235401_prune_ci_c_latest || true
-      for r in {1..5}; do echo Mirror attempt $r; oc image mirror --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --continue-on-error=true --max-per-registry=20 registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb=quay.io/openshift/ci:ci_a_latest registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd=quay.io/openshift/ci:ci_c_latest && break; done
+      oc image mirror --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --continue-on-error=true --max-per-registry=10 quay.io/openshift/ci:ci_a_latest=quay.io/openshift/ci:20240603235401_prune_ci_a_latest quay.io/openshift/ci:ci_c_latest=quay.io/openshift/ci:20240603235401_prune_ci_c_latest || true
+      for r in {1..5}; do echo Mirror attempt $r; oc image mirror --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --continue-on-error=true --max-per-registry=10 registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb=quay.io/openshift/ci:ci_a_latest registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd=quay.io/openshift/ci:ci_c_latest && break; backoff=$(($RANDOM % 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff; done
     command:
     - /bin/sh
     - -c

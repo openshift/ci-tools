@@ -40,6 +40,7 @@ from typing import Dict, List
 from urllib.parse import quote, unquote_plus
 import boto3
 from botocore.client import Config
+import ipaddress
 
 
 # Ensure s3v4 signature is used regardless of the region the lambda is executing in.
@@ -136,6 +137,16 @@ def lambda_handler(event: Dict, context: Dict):
     uri: str = request['uri']
     event_config = event['Records'][0]['cf']['config']
     distribution_name = event_config['distributionId']
+    request_ip = request['clientIp']
+
+    # There is presently an issue with vsphere where it is improperly resolving
+    # cloudflare IP addresses. vsphere is reaching out from IBM and with a
+    # CIDR 169.59.196.160/28 .
+    # If we see an IP in this range, serve the request from CloudFront instead
+    # of R2 -- until the vsphere environment can be fixed to correctly resolve
+    # the IP address of R2 hostnames.
+    if ipaddress.ip_address(request_ip) in ipaddress.ip_network('169.59.196.160/28'):
+        return request
 
     request_method = request.get('method', None)
     if request_method.lower() != "get":

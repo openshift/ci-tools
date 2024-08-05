@@ -2315,6 +2315,9 @@ type ProjectDirectoryImageBuildStepConfiguration struct {
 	// are invoked only when testing certain parts of the repo.
 	Optional bool `json:"optional,omitempty"`
 
+	// MultiArch means the build step is built for multiple architectures if available. Defaults to false.
+	MultiArch bool `json:"multi_arch,omitempty"`
+
 	// Ref is an optional string linking to the extra_ref in "org.repo" format that this belongs to
 	Ref string `json:"ref,omitempty"`
 }

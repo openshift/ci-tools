@@ -774,11 +774,13 @@ func Test_constructMultiArchBuilds(t *testing.T) {
 		name              string
 		build             buildapi.Build
 		nodeArchitectures []string
+		multiArch         bool
 		want              []buildapi.Build
 	}{
 		{
 			name:              "basic case - only amd64",
 			nodeArchitectures: []string{"amd64"},
+			multiArch:         true,
 			build: buildapi.Build{
 				ObjectMeta: meta.ObjectMeta{Name: "test-build"},
 				Spec: buildv1.BuildSpec{
@@ -817,6 +819,7 @@ func Test_constructMultiArchBuilds(t *testing.T) {
 		{
 			name:              "basic case - multi architectures",
 			nodeArchitectures: []string{"amd64", "arm64", "ppc64"},
+			multiArch:         true,
 			build: buildapi.Build{
 				ObjectMeta: meta.ObjectMeta{Name: "test-build"},
 				Spec: buildv1.BuildSpec{
@@ -888,11 +891,50 @@ func Test_constructMultiArchBuilds(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:              "basic case - multi architectures - multi arch image disabled",
+			nodeArchitectures: []string{"amd64", "arm64", "ppc64"},
+			multiArch:         false,
+			build: buildapi.Build{
+				ObjectMeta: meta.ObjectMeta{Name: "test-build"},
+				Spec: buildv1.BuildSpec{
+					CommonSpec: buildv1.CommonSpec{
+						Output: buildv1.BuildOutput{
+							ImageLabels: []buildapi.ImageLabel{
+								{Name: "io.openshift.build.namespace", Value: "namespace"},
+								{Name: "io.openshift.build.commit.id", Value: "commit-id"},
+								{Name: "io.openshift.build.commit.ref", Value: "commit-id"},
+							},
+						},
+					},
+				},
+			},
+			want: []buildapi.Build{
+				{
+					ObjectMeta: meta.ObjectMeta{Name: "test-build-amd64"},
+					Spec: buildapi.BuildSpec{
+						CommonSpec: buildapi.CommonSpec{
+							NodeSelector: map[string]string{
+								"kubernetes.io/arch": "amd64",
+							},
+							Output: buildv1.BuildOutput{
+								ImageLabels: []buildapi.ImageLabel{
+									{Name: "io.openshift.build.namespace", Value: "namespace"},
+									{Name: "io.openshift.build.commit.id", Value: "commit-id"},
+									{Name: "io.openshift.build.commit.ref", Value: "commit-id"},
+								},
+								To: &coreapi.ObjectReference{Name: "pipeline:test-build-amd64"},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if diff := cmp.Diff(constructMultiArchBuilds(tt.build, tt.nodeArchitectures), tt.want, cmpopts.IgnoreFields(coreapi.ObjectReference{}, "Kind")); diff != "" {
+			if diff := cmp.Diff(constructMultiArchBuilds(tt.build, tt.nodeArchitectures, tt.multiArch), tt.want, cmpopts.IgnoreFields(coreapi.ObjectReference{}, "Kind")); diff != "" {
 				t.Fatal(diff)
 			}
 		})

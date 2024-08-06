@@ -447,9 +447,9 @@ type ImageBuildOptions struct {
 func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubernetes.PodClient, build buildapi.Build, opts ...ImageBuildOptions) error {
 	var wg sync.WaitGroup
 
-	multiArch := false
-	if len(opts) > 0 && opts[0].MultiArch {
-		multiArch = true
+	multiArch := true
+	if len(opts) > 0 {
+		multiArch = opts[0].MultiArch
 	}
 
 	builds := constructMultiArchBuilds(build, buildClient.NodeArchitectures(), multiArch)

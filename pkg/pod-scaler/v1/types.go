@@ -1,4 +1,4 @@
-package pod_scaler
+package v1
 
 import (
 	"encoding/json"
@@ -314,7 +314,7 @@ func coalesceOnce(input []TimeRange) []TimeRange {
 	return input
 }
 
-// Prune ensures that no identifying set of labels contains more than fifty entries.
+// Prune ensures that no identifying set of labels contains more than twenty-five entries.
 // We know that an entry fingerprint can only exist for one fully-qualified label set,
 // but if the label set contains a multi-stage step, it will also be referenced in
 // the additional per-step index.

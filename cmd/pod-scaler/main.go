@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"cloud.google.com/go/storage"
@@ -29,6 +30,8 @@ import (
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 
+	v1 "github.com/openshift/ci-tools/cmd/pod-scaler/v1"
+	v2 "github.com/openshift/ci-tools/cmd/pod-scaler/v2"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/util"
 )
@@ -45,6 +48,7 @@ type options struct {
 
 	cacheDir           string
 	cacheBucket        string
+	cacheBucketv2      string
 	gcsCredentialsFile string
 
 	resultsOptions results.Options
@@ -84,6 +88,7 @@ func bindOptions(fs *flag.FlagSet) *options {
 	fs.StringVar(&o.cacheDir, "cache-dir", "", "Local directory holding cache data (for development mode).")
 	fs.StringVar(&o.dataDir, "data-dir", "", "Local directory to cache UI data into.")
 	fs.StringVar(&o.cacheBucket, "cache-bucket", "", "GCS bucket name holding cached Prometheus data.")
+	fs.StringVar(&o.cacheBucketv2, "cache-bucket-v2", "", "GCS bucket name holding cached Prometheus v2 data.")
 	fs.StringVar(&o.gcsCredentialsFile, "gcs-credentials-file", "", "File where GCS credentials are stored.")
 	fs.Int64Var(&o.cpuCap, "cpu-cap", 10, "The maximum CPU request value, ex: 10")
 	fs.StringVar(&o.memoryCap, "memory-cap", "20Gi", "The maximum memory request value, ex: '20Gi'")
@@ -173,32 +178,39 @@ func main() {
 	pprofutil.Instrument(opts.instrumentationOptions)
 	metrics.ExposeMetrics("pod-scaler", prowConfig.PushGateway{}, opts.instrumentationOptions.MetricsPort)
 
-	var cache cache
+	var cachev1 v1.Cache
+	var cachev2 v2.Cache
 	if opts.cacheDir != "" {
-		cache = &localCache{dir: opts.cacheDir}
+		cachev1 = &v1.LocalCache{Dir: opts.cacheDir}
+		//Never use the cacheDir for v2. currently, this is only for e2e tests which will continue on v1 until the migration is complete
 	} else {
 		gcsClient, err := storage.NewClient(interrupts.Context(), option.WithCredentialsFile(opts.gcsCredentialsFile))
 		if err != nil {
 			logrus.WithError(err).Fatal("Could not initialize GCS client.")
 		}
-		bucket := gcsClient.Bucket(opts.cacheBucket)
-		cache = &bucketCache{bucket: bucket}
+		bucketv1 := gcsClient.Bucket(opts.cacheBucket)
+		cachev1 = &v1.BucketCache{Bucket: bucketv1}
+
+		if opts.cacheBucketv2 != "" {
+			bucketv2 := gcsClient.Bucket(opts.cacheBucketv2)
+			cachev2 = &v2.BucketCache{Bucket: bucketv2}
+		}
 	}
 
 	switch opts.mode {
 	case "producer":
-		mainProduce(opts, cache)
+		mainProduce(opts, cachev1, cachev2)
 	case "consumer.ui":
-		mainUI(opts, cache)
+		mainUI(opts, cachev1)
 	case "consumer.admission":
-		mainAdmission(opts, cache)
+		mainAdmission(opts, cachev1)
 	}
 	if !opts.once {
 		interrupts.WaitForGracefulShutdown()
 	}
 }
 
-func mainProduce(opts *options, cache cache) {
+func mainProduce(opts *options, cachev1 v1.Cache, cachev2 v2.Cache) {
 	kubeconfigChangedCallBack := func() {
 		logrus.Fatal("Kubeconfig changed, exiting to get restarted by Kubelet and pick up the changes")
 	}
@@ -236,14 +248,28 @@ func mainProduce(opts *options, cache cache) {
 		logger.Debugf("Loaded Prometheus client.")
 	}
 
-	produce(clients, cache, opts.ignoreLatest, opts.once)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		v1.Produce(clients, cachev1, opts.ignoreLatest, opts.once)
+	}()
+
+	if cachev2 != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			v2.Produce(clients, cachev2, opts.ignoreLatest, opts.once)
+		}()
+	}
+	wg.Wait()
 }
 
-func mainUI(opts *options, cache cache) {
+func mainUI(opts *options, cache v1.Cache) {
 	go serveUI(opts.uiPort, opts.instrumentationOptions.HealthPort, opts.dataDir, loaders(cache))
 }
 
-func mainAdmission(opts *options, cache cache) {
+func mainAdmission(opts *options, cache v1.Cache) {
 	controllerruntime.SetLogger(logrusr.New(logrus.StandardLogger()))
 
 	restConfig, err := util.LoadClusterConfig()
@@ -262,11 +288,11 @@ func mainAdmission(opts *options, cache cache) {
 	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, reporter)
 }
 
-func loaders(cache cache) map[string][]*cacheReloader {
+func loaders(cache v1.Cache) map[string][]*cacheReloader {
 	l := map[string][]*cacheReloader{}
-	for _, prefix := range []string{prowjobsCachePrefix, podsCachePrefix, stepsCachePrefix} {
-		l[MetricNameCPUUsage] = append(l[MetricNameCPUUsage], newReloader(prefix+"/"+MetricNameCPUUsage, cache))
-		l[MetricNameMemoryWorkingSet] = append(l[MetricNameMemoryWorkingSet], newReloader(prefix+"/"+MetricNameMemoryWorkingSet, cache))
+	for _, prefix := range []string{v1.ProwjobsCachePrefix, v1.PodsCachePrefix, v1.StepsCachePrefix} {
+		l[v1.MetricNameCPUUsage] = append(l[v1.MetricNameCPUUsage], newReloader(prefix+"/"+v1.MetricNameCPUUsage, cache))
+		l[v1.MetricNameMemoryWorkingSet] = append(l[v1.MetricNameMemoryWorkingSet], newReloader(prefix+"/"+v1.MetricNameMemoryWorkingSet, cache))
 	}
 	return l
 }

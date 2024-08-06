@@ -27,8 +27,9 @@ import (
 	"sigs.k8s.io/prow/pkg/pjutil"
 	"sigs.k8s.io/prow/pkg/simplifypath"
 
+	v1 "github.com/openshift/ci-tools/cmd/pod-scaler/v1"
 	"github.com/openshift/ci-tools/pkg/api"
-	pod_scaler "github.com/openshift/ci-tools/pkg/pod-scaler"
+	podscalerv1 "github.com/openshift/ci-tools/pkg/pod-scaler/v1"
 )
 
 // l keeps the tree legible
@@ -54,28 +55,28 @@ const (
 // parameters and expose that information to the UI as well.
 type metadataQueryMapping struct {
 	// matches determines if the given metadata matches this mapping
-	matches func(*pod_scaler.FullMetadata) bool
+	matches func(*podscalerv1.FullMetadata) bool
 
 	// preProcess acts on the metadata before the mapping is sent to the UI
-	preProcess func(*pod_scaler.FullMetadata)
+	preProcess func(*podscalerv1.FullMetadata)
 	// fields define how metadata is mapped to a query
 	fields []*fieldMapping
 	// postProcess acts on the metadata after the mapping is read from a request
-	postProcess func(*pod_scaler.FullMetadata)
+	postProcess func(*podscalerv1.FullMetadata)
 }
 
 type fieldMapping struct {
 	// query is the request query that should hold this field
 	query string
 	// field is the metadata field the query should be inserted into
-	field func(*pod_scaler.FullMetadata) *string
+	field func(*podscalerv1.FullMetadata) *string
 	// optional defines if the query is required
 	optional bool
 }
 
 // metadataFromQuery uses the mapping to extract metadata from a query
-func (m *metadataQueryMapping) metadataFromQuery(w http.ResponseWriter, r *http.Request) (pod_scaler.FullMetadata, error) {
-	meta := pod_scaler.FullMetadata{
+func (m *metadataQueryMapping) metadataFromQuery(w http.ResponseWriter, r *http.Request) (podscalerv1.FullMetadata, error) {
+	meta := podscalerv1.FullMetadata{
 		Metadata: api.Metadata{},
 	}
 	for _, entry := range m.fields {
@@ -83,7 +84,7 @@ func (m *metadataQueryMapping) metadataFromQuery(w http.ResponseWriter, r *http.
 		if value == "" && !entry.optional {
 			w.WriteHeader(http.StatusBadRequest)
 			fmt.Fprintf(w, "%s query missing", entry.query)
-			return pod_scaler.FullMetadata{}, fmt.Errorf("missing query %q", entry.query)
+			return podscalerv1.FullMetadata{}, fmt.Errorf("missing query %q", entry.query)
 		}
 		into := entry.field(&meta)
 		*into = value
@@ -94,7 +95,7 @@ func (m *metadataQueryMapping) metadataFromQuery(w http.ResponseWriter, r *http.
 	return meta, nil
 }
 
-func (m *metadataQueryMapping) nodesFromMeta(metadata *pod_scaler.FullMetadata) []*IndexNodeMeta {
+func (m *metadataQueryMapping) nodesFromMeta(metadata *podscalerv1.FullMetadata) []*IndexNodeMeta {
 	var nodes []*IndexNodeMeta
 	meta := *metadata // do not mutate the passed metadata
 	if m.preProcess != nil {
@@ -117,78 +118,78 @@ func (m *metadataQueryMapping) nodesFromMeta(metadata *pod_scaler.FullMetadata) 
 func endpoints() map[string]metadataQueryMapping {
 	return map[string]metadataQueryMapping{
 		"steps": {
-			matches: func(meta *pod_scaler.FullMetadata) bool {
+			matches: func(meta *podscalerv1.FullMetadata) bool {
 				return meta.Step != ""
 			},
 			fields: []*fieldMapping{
-				{query: OrgQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Metadata.Org }},
-				{query: RepoQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Metadata.Repo }},
-				{query: BranchQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Metadata.Branch }},
-				{query: VariantQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Metadata.Variant }, optional: true},
-				{query: TargetQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Target }},
-				{query: StepQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Step }},
-				{query: ContainerQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Container }},
+				{query: OrgQuery, field: func(meta *podscalerv1.FullMetadata) *string { return &meta.Metadata.Org }},
+				{query: RepoQuery, field: func(meta *podscalerv1.FullMetadata) *string { return &meta.Metadata.Repo }},
+				{query: BranchQuery, field: func(meta *podscalerv1.FullMetadata) *string { return &meta.Metadata.Branch }},
+				{query: VariantQuery, field: func(meta *podscalerv1.FullMetadata) *string { return &meta.Metadata.Variant }, optional: true},
+				{query: TargetQuery, field: func(meta *podscalerv1.FullMetadata) *string { return &meta.Target }},
+				{query: StepQuery, field: func(meta *podscalerv1.FullMetadata) *string { return &meta.Step }},
+				{query: ContainerQuery, field: func(meta *podscalerv1.FullMetadata) *string { return &meta.Container }},
 			},
-			postProcess: func(meta *pod_scaler.FullMetadata) {
+			postProcess: func(meta *podscalerv1.FullMetadata) {
 				meta.Pod = fmt.Sprintf("%s-%s", meta.Target, meta.Step)
 			},
 		},
 		"builds": {
-			matches: func(meta *pod_scaler.FullMetadata) bool {
+			matches: func(meta *podscalerv1.FullMetadata) bool {
 				return meta.Target == "" && strings.HasSuffix(meta.Pod, "-build")
 			},
-			preProcess: func(meta *pod_scaler.FullMetadata) {
+			preProcess: func(meta *podscalerv1.FullMetadata) {
 				meta.Pod = strings.TrimSuffix(meta.Pod, "-build")
 			},
 			fields: []*fieldMapping{
-				{query: OrgQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Metadata.Org }},
-				{query: RepoQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Metadata.Repo }},
-				{query: BranchQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Metadata.Branch }},
-				{query: VariantQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Metadata.Variant }, optional: true},
-				{query: BuildQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Pod }},
-				{query: ContainerQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Container }},
+				{query: OrgQuery, field: func(meta *podscalerv1.FullMetadata) *string { return &meta.Metadata.Org }},
+				{query: RepoQuery, field: func(meta *podscalerv1.FullMetadata) *string { return &meta.Metadata.Repo }},
+				{query: BranchQuery, field: func(meta *podscalerv1.FullMetadata) *string { return &meta.Metadata.Branch }},
+				{query: VariantQuery, field: func(meta *podscalerv1.FullMetadata) *string { return &meta.Metadata.Variant }, optional: true},
+				{query: BuildQuery, field: func(meta *podscalerv1.FullMetadata) *string { return &meta.Pod }},
+				{query: ContainerQuery, field: func(meta *podscalerv1.FullMetadata) *string { return &meta.Container }},
 			},
-			postProcess: func(meta *pod_scaler.FullMetadata) {
+			postProcess: func(meta *podscalerv1.FullMetadata) {
 				meta.Pod += "-build"
 			},
 		},
 		"pods": {
-			matches: func(meta *pod_scaler.FullMetadata) bool {
+			matches: func(meta *podscalerv1.FullMetadata) bool {
 				return meta.Target != "" && meta.Step == ""
 			},
 			fields: []*fieldMapping{
-				{query: OrgQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Metadata.Org }},
-				{query: RepoQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Metadata.Repo }},
-				{query: BranchQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Metadata.Branch }},
-				{query: VariantQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Metadata.Variant }, optional: true},
-				{query: TargetQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Target }},
-				{query: ContainerQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Container }},
+				{query: OrgQuery, field: func(meta *podscalerv1.FullMetadata) *string { return &meta.Metadata.Org }},
+				{query: RepoQuery, field: func(meta *podscalerv1.FullMetadata) *string { return &meta.Metadata.Repo }},
+				{query: BranchQuery, field: func(meta *podscalerv1.FullMetadata) *string { return &meta.Metadata.Branch }},
+				{query: VariantQuery, field: func(meta *podscalerv1.FullMetadata) *string { return &meta.Metadata.Variant }, optional: true},
+				{query: TargetQuery, field: func(meta *podscalerv1.FullMetadata) *string { return &meta.Target }},
+				{query: ContainerQuery, field: func(meta *podscalerv1.FullMetadata) *string { return &meta.Container }},
 			},
-			postProcess: func(meta *pod_scaler.FullMetadata) {
+			postProcess: func(meta *podscalerv1.FullMetadata) {
 				meta.Pod = meta.Target
 			},
 		},
 		"rpms": {
-			matches: func(meta *pod_scaler.FullMetadata) bool {
+			matches: func(meta *podscalerv1.FullMetadata) bool {
 				return meta.Container == "rpm-repo"
 			},
 			fields: []*fieldMapping{
-				{query: OrgQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Metadata.Org }},
-				{query: RepoQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Metadata.Repo }},
-				{query: BranchQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Metadata.Branch }},
-				{query: VariantQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Metadata.Variant }, optional: true},
+				{query: OrgQuery, field: func(meta *podscalerv1.FullMetadata) *string { return &meta.Metadata.Org }},
+				{query: RepoQuery, field: func(meta *podscalerv1.FullMetadata) *string { return &meta.Metadata.Repo }},
+				{query: BranchQuery, field: func(meta *podscalerv1.FullMetadata) *string { return &meta.Metadata.Branch }},
+				{query: VariantQuery, field: func(meta *podscalerv1.FullMetadata) *string { return &meta.Metadata.Variant }, optional: true},
 			},
-			postProcess: func(meta *pod_scaler.FullMetadata) {
+			postProcess: func(meta *podscalerv1.FullMetadata) {
 				meta.Container += "rpm-repo"
 			},
 		},
 		"prowjobs": {
-			matches: func(meta *pod_scaler.FullMetadata) bool {
+			matches: func(meta *podscalerv1.FullMetadata) bool {
 				return meta.Org == ""
 			},
 			fields: []*fieldMapping{
-				{query: TargetQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Target }},
-				{query: ContainerQuery, field: func(meta *pod_scaler.FullMetadata) *string { return &meta.Container }},
+				{query: TargetQuery, field: func(meta *podscalerv1.FullMetadata) *string { return &meta.Target }},
+				{query: ContainerQuery, field: func(meta *podscalerv1.FullMetadata) *string { return &meta.Container }},
 			},
 		},
 	}
@@ -212,8 +213,8 @@ func serveUI(port, healthPort int, dataDir string, loaders map[string][]*cacheRe
 	}
 	health := pjutil.NewHealthOnPort(healthPort)
 	digestAll(loaders, map[string]digester{
-		MetricNameCPUUsage:         server.digestCPU,
-		MetricNameMemoryWorkingSet: server.digestMemory,
+		v1.MetricNameCPUUsage:         server.digestCPU,
+		v1.MetricNameMemoryWorkingSet: server.digestMemory,
 	}, health, logger)
 
 	var nodes []simplifypath.Node
@@ -398,7 +399,7 @@ func (s *frontendServer) getData(index string) http.HandlerFunc {
 	}
 }
 
-func hashed(meta pod_scaler.FullMetadata) (string, error) {
+func hashed(meta podscalerv1.FullMetadata) (string, error) {
 	raw, err := json.Marshal(meta)
 	if err != nil {
 		return "", fmt.Errorf("could not marshal metadata: %w", err)
@@ -410,7 +411,7 @@ func hashed(meta pod_scaler.FullMetadata) (string, error) {
 	return base32.StdEncoding.EncodeToString(hash.Sum(nil)), nil
 }
 
-func (s *frontendServer) getDatum(meta pod_scaler.FullMetadata) (map[corev1.ResourceName]dataForDisplay, bool, error) {
+func (s *frontendServer) getDatum(meta podscalerv1.FullMetadata) (map[corev1.ResourceName]dataForDisplay, bool, error) {
 	hash, err := hashed(meta)
 	if err != nil {
 		return nil, false, fmt.Errorf("could not determine hash for meta: %w", err)
@@ -445,7 +446,7 @@ func (s *frontendServer) getDatum(meta pod_scaler.FullMetadata) (map[corev1.Reso
 	return datum, true, nil
 }
 
-func (s *frontendServer) setDatum(meta pod_scaler.FullMetadata, resource corev1.ResourceName, datum dataForDisplay) error {
+func (s *frontendServer) setDatum(meta podscalerv1.FullMetadata, resource corev1.ResourceName, datum dataForDisplay) error {
 	hash, err := hashed(meta)
 	if err != nil {
 		return fmt.Errorf("could not determine hash for meta: %w", err)
@@ -461,17 +462,17 @@ func (s *frontendServer) setDatum(meta pod_scaler.FullMetadata, resource corev1.
 	return os.WriteFile(filepath.Join(subDir, fmt.Sprintf("%s.json", string(resource))), raw, 0777)
 }
 
-func (s *frontendServer) digestCPU(data *pod_scaler.CachedQuery) {
+func (s *frontendServer) digestCPU(data *podscalerv1.CachedQuery) {
 	s.logger.Debugf("Digesting new CPU consumption metrics.")
 	s.digestData(data, corev1.ResourceCPU, cpuRequestQuantile)
 }
 
-func (s *frontendServer) digestMemory(data *pod_scaler.CachedQuery) {
+func (s *frontendServer) digestMemory(data *podscalerv1.CachedQuery) {
 	s.logger.Debugf("Digesting new Memory consumption metrics.")
 	s.digestData(data, corev1.ResourceMemory, memRequestQuantile)
 }
 
-func (s *frontendServer) digestData(data *pod_scaler.CachedQuery, metric corev1.ResourceName, quantile float64) {
+func (s *frontendServer) digestData(data *podscalerv1.CachedQuery, metric corev1.ResourceName, quantile float64) {
 	s.logger.Debugf("Digesting %d identifiers.", len(data.DataByMetaData))
 	for meta, fingerprints := range data.DataByMetaData {
 		s.lock.Lock()

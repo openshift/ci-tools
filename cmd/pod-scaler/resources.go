@@ -10,7 +10,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"sigs.k8s.io/prow/pkg/pjutil"
 
-	pod_scaler "github.com/openshift/ci-tools/pkg/pod-scaler"
+	v1 "github.com/openshift/ci-tools/cmd/pod-scaler/v1"
+	podscalerv1 "github.com/openshift/ci-tools/pkg/pod-scaler/v1"
 )
 
 func newResourceServer(loaders map[string][]*cacheReloader, health *pjutil.Health) *resourceServer {
@@ -18,11 +19,11 @@ func newResourceServer(loaders map[string][]*cacheReloader, health *pjutil.Healt
 	server := &resourceServer{
 		logger:     logger,
 		lock:       sync.RWMutex{},
-		byMetaData: map[pod_scaler.FullMetadata]corev1.ResourceRequirements{},
+		byMetaData: map[podscalerv1.FullMetadata]corev1.ResourceRequirements{},
 	}
 	digestAll(loaders, map[string]digester{
-		MetricNameCPUUsage:         server.digestCPU,
-		MetricNameMemoryWorkingSet: server.digestMemory,
+		v1.MetricNameCPUUsage:         server.digestCPU,
+		v1.MetricNameMemoryWorkingSet: server.digestMemory,
 	}, health, logger)
 
 	return server
@@ -33,7 +34,7 @@ type resourceServer struct {
 	lock   sync.RWMutex
 	// byMetaData caches resource requirements calculated for the full assortment of
 	// metadata labels.
-	byMetaData map[pod_scaler.FullMetadata]corev1.ResourceRequirements
+	byMetaData map[podscalerv1.FullMetadata]corev1.ResourceRequirements
 }
 
 const (
@@ -47,7 +48,7 @@ func formatCPU() toQuantity {
 	}
 }
 
-func (s *resourceServer) digestCPU(data *pod_scaler.CachedQuery) {
+func (s *resourceServer) digestCPU(data *podscalerv1.CachedQuery) {
 	s.logger.Debugf("Digesting new CPU consumption metrics.")
 	s.digestData(data, cpuRequestQuantile, corev1.ResourceCPU, formatCPU())
 }
@@ -63,14 +64,14 @@ func formatMemory() toQuantity {
 	}
 }
 
-func (s *resourceServer) digestMemory(data *pod_scaler.CachedQuery) {
+func (s *resourceServer) digestMemory(data *podscalerv1.CachedQuery) {
 	s.logger.Debugf("Digesting new memory consumption metrics.")
 	s.digestData(data, memRequestQuantile, corev1.ResourceMemory, formatMemory())
 }
 
 type toQuantity func(valueAtQuantile float64) (quantity *resource.Quantity)
 
-func (s *resourceServer) digestData(data *pod_scaler.CachedQuery, quantile float64, request corev1.ResourceName, quantity toQuantity) {
+func (s *resourceServer) digestData(data *podscalerv1.CachedQuery, quantile float64, request corev1.ResourceName, quantity toQuantity) {
 	logger := s.logger.WithField("resource", request)
 	logger.Debugf("Digesting %d identifiers.", len(data.DataByMetaData))
 	for meta, fingerprints := range data.DataByMetaData {
@@ -98,7 +99,7 @@ func (s *resourceServer) digestData(data *pod_scaler.CachedQuery, quantile float
 	logger.Debug("Finished digesting new data.")
 }
 
-func (s *resourceServer) recommendedRequestFor(meta pod_scaler.FullMetadata) (corev1.ResourceRequirements, bool) {
+func (s *resourceServer) recommendedRequestFor(meta podscalerv1.FullMetadata) (corev1.ResourceRequirements, bool) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 	data, ok := s.byMetaData[meta]

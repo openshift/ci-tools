@@ -24,7 +24,7 @@ import (
 	fakebuildv1client "github.com/openshift/client-go/build/clientset/versioned/fake"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	pod_scaler "github.com/openshift/ci-tools/pkg/pod-scaler"
+	podscalerv1 "github.com/openshift/ci-tools/pkg/pod-scaler/v1"
 	"github.com/openshift/ci-tools/pkg/rehearse"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/testhelper"
@@ -77,7 +77,7 @@ func TestMutatePods(t *testing.T) {
 	resources := &resourceServer{
 		logger: logger,
 		lock:   sync.RWMutex{},
-		byMetaData: map[pod_scaler.FullMetadata]corev1.ResourceRequirements{
+		byMetaData: map[podscalerv1.FullMetadata]corev1.ResourceRequirements{
 			{
 				Metadata: api.Metadata{
 					Org:     "org",
@@ -338,7 +338,7 @@ func TestMutatePodLabels(t *testing.T) {
 
 func TestMutatePodResources(t *testing.T) {
 	logger := logrus.WithField("test", t.Name())
-	metaBase := pod_scaler.FullMetadata{
+	metaBase := podscalerv1.FullMetadata{
 		Metadata: api.Metadata{
 			Org:     "org",
 			Repo:    "repo",
@@ -349,7 +349,7 @@ func TestMutatePodResources(t *testing.T) {
 		Step:   "step",
 		Pod:    "tomutate",
 	}
-	baseWithContainer := func(base *pod_scaler.FullMetadata, container string) pod_scaler.FullMetadata {
+	baseWithContainer := func(base *podscalerv1.FullMetadata, container string) podscalerv1.FullMetadata {
 		copied := *base
 		copied.Container = container
 		return copied
@@ -366,7 +366,7 @@ func TestMutatePodResources(t *testing.T) {
 			server: &resourceServer{
 				logger:     logger,
 				lock:       sync.RWMutex{},
-				byMetaData: map[pod_scaler.FullMetadata]corev1.ResourceRequirements{},
+				byMetaData: map[podscalerv1.FullMetadata]corev1.ResourceRequirements{},
 			},
 			pod: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{
 				"ci.openshift.io/metadata.org":     "org",
@@ -382,7 +382,7 @@ func TestMutatePodResources(t *testing.T) {
 			server: &resourceServer{
 				logger: logger,
 				lock:   sync.RWMutex{},
-				byMetaData: map[pod_scaler.FullMetadata]corev1.ResourceRequirements{
+				byMetaData: map[podscalerv1.FullMetadata]corev1.ResourceRequirements{
 					baseWithContainer(&metaBase, "large"): {
 						Requests: corev1.ResourceList{
 							corev1.ResourceCPU:    *resource.NewQuantity(5, resource.DecimalSI),
@@ -476,7 +476,7 @@ func TestMutatePodResources(t *testing.T) {
 			server: &resourceServer{
 				logger: logger,
 				lock:   sync.RWMutex{},
-				byMetaData: map[pod_scaler.FullMetadata]corev1.ResourceRequirements{
+				byMetaData: map[podscalerv1.FullMetadata]corev1.ResourceRequirements{
 					baseWithContainer(&metaBase, "large"): {
 						Requests: corev1.ResourceList{
 							corev1.ResourceCPU:    *resource.NewQuantity(5, resource.DecimalSI),
@@ -907,7 +907,7 @@ func TestRehearsalMetadata(t *testing.T) {
   repo: REPO
   branch: BRANCH`}}}}},
 	}
-	meta := pod_scaler.FullMetadata{
+	meta := podscalerv1.FullMetadata{
 		Metadata: api.Metadata{
 			Org:    "ORG",
 			Repo:   "REPO",
@@ -919,7 +919,7 @@ func TestRehearsalMetadata(t *testing.T) {
 	if err := mutatePodMetadata(pod, logrus.WithField("test", "TestRehearsalMetadata")); err != nil {
 		t.Fatalf("failed to mutate metadata: %v", err)
 	}
-	if diff := cmp.Diff(pod_scaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, "test"), meta); diff != "" {
+	if diff := cmp.Diff(podscalerv1.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, "test"), meta); diff != "" {
 		t.Errorf("rehearsal job: got incorrect metadata: %v", diff)
 	}
 }

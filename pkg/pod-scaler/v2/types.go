@@ -326,16 +326,31 @@ func coalesceOnce(input []TimeRange) []TimeRange {
 	return input
 }
 
-// Prune ensures that no identifying set of labels contains more than twenty-five entries.
+// Prune ensures that no identifying set of labels contains more than twenty-five entries,
+// as well as removing any data that was added more than 90 days ago.
 // We know that an entry fingerprint can only exist for one fully-qualified label set,
 // but if the label set contains a multi-stage step, it will also be referenced in
 // the additional per-step index.
 func (q *CachedQuery) Prune() {
+	ninetyDaysAgo := time.Now().Add(-90 * 24 * time.Hour)
+	q.prune(ninetyDaysAgo)
+}
+
+func (q *CachedQuery) prune(pruneBefore time.Time) {
 	for meta, values := range q.DataByMetaData {
 		var toRemove []FingerprintTime
+		// First, prune to a max of 25 entries
 		if num := len(values); num > 25 {
 			toRemove = append(toRemove, values[0:num-25]...)
 			q.DataByMetaData[meta] = values[num-25:]
+		}
+		// Next, remove any data older than the requested date
+		for i := len(q.DataByMetaData[meta]) - 1; i >= 0; i-- {
+			data := q.DataByMetaData[meta][i]
+			if data.Added.Before(pruneBefore) {
+				toRemove = append(toRemove, data)
+				q.DataByMetaData[meta] = append(q.DataByMetaData[meta][:i], q.DataByMetaData[meta][i+1:]...)
+			}
 		}
 		if len(toRemove) == 0 {
 			continue

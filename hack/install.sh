@@ -29,5 +29,5 @@ fi
 
 for dir in $( find ./cmd/ -mindepth 1 -maxdepth 1 -type d -not \( -name '*ipi-deprovison*' \) ); do
     command="$( basename "${dir}" )"
-    go install -v $RACE_FLAG -ldflags "-X 'k8s.io/test-infra/prow/version.Name=${command}' -X 'k8s.io/test-infra/prow/version.Version=${version}'" "./cmd/${command}/..."
+    go install -v $RACE_FLAG -ldflags "-X 'sigs.k8s.io/prow/pkg/version.Name=${command}' -X 'sigs.k8s.io/prow/pkg/version.Version=${version}'" "./cmd/${command}/..."
 done

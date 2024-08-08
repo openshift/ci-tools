@@ -1185,11 +1185,11 @@ func (o *options) initializeNamespace() error {
 	if err != nil {
 		return fmt.Errorf("could not get project client for cluster config: %w", err)
 	}
-	client, err := ctrlruntimeclient.New(o.clusterConfig, ctrlruntimeclient.Options{})
+	ctrlClient, err := ctrlruntimeclient.New(o.clusterConfig, ctrlruntimeclient.Options{})
 	if err != nil {
 		return fmt.Errorf("failed to construct client: %w", err)
 	}
-	client = ctrlruntimeclient.NewNamespacedClient(client, o.namespace)
+	client := ctrlruntimeclient.NewNamespacedClient(ctrlClient, o.namespace)
 	client = labeledclient.Wrap(client, o.jobSpec)
 	ctx := context.Background()
 
@@ -1454,10 +1454,11 @@ func (o *options) initializeNamespace() error {
 	// adds the appropriate cluster profile secrets to o.secrets,
 	// so they can be created by ctrlruntime client in the for cycle below this one
 	for _, cp := range o.clusterProfileNames {
-		cpSecret, err := getClusterProfileSecret(cp, client, o.resolverClient, ctx)
+		cpSecret, err := getClusterProfileSecret(cp, ctrlClient, o.resolverClient, ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create cluster profile  secret %s: %w", cp, err)
 		}
+		cpSecret.Namespace = o.namespace
 		o.secrets = append(o.secrets, cpSecret)
 	}
 
@@ -2333,7 +2334,15 @@ func getClusterProfileSecret(clusterProfile string, client ctrlruntimeclient.Cli
 		return nil, fmt.Errorf("failed to get secret '%s' from ci namespace: %w", cpDetails.Secret, err)
 	}
 
-	return ciSecret, nil
+	newSecret := &coreapi.Secret{
+		Data: ciSecret.Data,
+		Type: ciSecret.Type,
+		ObjectMeta: meta.ObjectMeta{
+			Name: ciSecret.Name,
+		},
+	}
+
+	return newSecret, nil
 }
 
 // getClusterProfileNamesFromTargets extracts the needed cluster profile name(s) from the target arg(s)

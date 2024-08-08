@@ -126,10 +126,6 @@ ORDER BY
     BackendName
 `)
 	query := c.client.Query(queryString)
-	query.Labels = map[string]string{
-		bigQueryLabelKeyApp:   bigQueryLabelValueApp,
-		bigQueryLabelKeyQuery: bigQueryLabelValueDisruptionHistoricalData,
-	}
 	disruptionRow, err := query.Read(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query disruption tables with %q: %w", queryString, err)
@@ -176,10 +172,6 @@ func (c *ciDataClient) ListAlertHistoricalData(ctx context.Context) ([]*jobrunag
         Release, AlertName, AlertNamespace, AlertLevel, FromRelease, Topology, Platform, Network
     `)
 	query := c.client.Query(queryString)
-	query.Labels = map[string]string{
-		bigQueryLabelKeyApp:   bigQueryLabelValueApp,
-		bigQueryLabelKeyQuery: bigQueryLabelValueAlertHistoricalData,
-	}
 	disruptionRow, err := query.Read(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query disruption tables with %q: %w", queryString, err)
@@ -225,10 +217,6 @@ ORDER BY JobName ASC
 `)
 
 	query := c.client.Query(queryString)
-	query.Labels = map[string]string{
-		bigQueryLabelKeyApp:   bigQueryLabelValueApp,
-		bigQueryLabelKeyQuery: bigQueryLabelValueAllJobsWithVariants,
-	}
 	jobRows, err := query.Read(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query job table with %q: %w", queryString, err)
@@ -257,10 +245,6 @@ ORDER BY JobName ASC
 `)
 
 	query := c.client.Query(queryString)
-	query.Labels = map[string]string{
-		bigQueryLabelKeyApp:   bigQueryLabelValueApp,
-		bigQueryLabelKeyQuery: bigQueryLabelValueAllJobs,
-	}
 	jobRows, err := query.Read(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query job table with %q: %w", queryString, err)
@@ -297,10 +281,6 @@ func (c *ciDataClient) GetLastJobRunEndTimeFromTable(ctx context.Context, table 
 	}
 
 	query := c.client.Query(queryString)
-	query.Labels = map[string]string{
-		bigQueryLabelKeyApp:   bigQueryLabelValueApp,
-		bigQueryLabelKeyQuery: bigQueryLabelValueLastJobRunTime,
-	}
 	rows, err := query.Read(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query job table with %q: %w", queryString, err)
@@ -329,10 +309,6 @@ WHERE JobRunEndTime >= @Since
 ORDER BY JobRunEndTime ASC
 `)
 	query := c.client.Query(queryString)
-	query.Labels = map[string]string{
-		bigQueryLabelKeyApp:   bigQueryLabelValueApp,
-		bigQueryLabelKeyQuery: bigQueryLabelValueJobRunIDsSinceTime,
-	}
 	query.QueryConfig.Parameters = []bigquery.QueryParameter{
 		{Name: "Since", Value: *since},
 	}
@@ -380,10 +356,6 @@ func (c *ciDataClient) ListProwJobRunsSince(ctx context.Context, since *time.Tim
            AND prowjob_completion is NOT NULL
            ORDER BY prowjob_completion_ts`
 	query := c.client.Query(queryString)
-	query.Labels = map[string]string{
-		bigQueryLabelKeyApp:   bigQueryLabelValueApp,
-		bigQueryLabelKeyQuery: bigQueryLabelValueJobRunsSinceTime,
-	}
 	query.QueryConfig.Parameters = []bigquery.QueryParameter{
 		{Name: "Since", Value: *since},
 	}
@@ -433,10 +405,6 @@ AND
 %s`, buildMasterNodesUpdatedSQL("JobRuns", masterNodesUpdated)))
 
 	query := c.client.Query(queryString)
-	query.Labels = map[string]string{
-		bigQueryLabelKeyApp:   bigQueryLabelValueApp,
-		bigQueryLabelKeyQuery: bigQueryLabelValueDisruptionRowCountByJob,
-	}
 	query.QueryConfig.Parameters = []bigquery.QueryParameter{
 		{Name: "JobName", Value: jobName},
 	}
@@ -804,10 +772,6 @@ ON
     (p95.BackendName = mean.BackendName)
 `, masterNodesUpdatedSQL, masterNodesUpdatedSQL))
 	query := c.client.Query(queryString)
-	query.Labels = map[string]string{
-		bigQueryLabelKeyApp:   bigQueryLabelValueApp,
-		bigQueryLabelKeyQuery: bigQueryLabelValueDisruptionStats,
-	}
 	query.QueryConfig.Parameters = []bigquery.QueryParameter{
 		{Name: "JobName", Value: jobName},
 	}
@@ -847,10 +811,6 @@ func (c *ciDataClient) ListReleaseTags(ctx context.Context) (sets.Set[string], e
 	set := sets.Set[string]{}
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(`SELECT distinct(ReleaseTag) FROM DATA_SET_LOCATION.ReleaseTags`)
 	query := c.client.Query(queryString)
-	query.Labels = map[string]string{
-		bigQueryLabelKeyApp:   bigQueryLabelValueApp,
-		bigQueryLabelKeyQuery: bigQueryLabelValueReleaseTags,
-	}
 	it, err := query.Read(ctx)
 	if err != nil {
 		return nil, err
@@ -875,10 +835,6 @@ func (c *ciDataClient) ListReleases(ctx context.Context) ([]jobrunaggregatorapi.
 	releases := []jobrunaggregatorapi.ReleaseRow{}
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(`SELECT * FROM DATA_SET_LOCATION.Releases ORDER BY DevelStartDate DESC`)
 	query := c.client.Query(queryString)
-	query.Labels = map[string]string{
-		bigQueryLabelKeyApp:   bigQueryLabelValueApp,
-		bigQueryLabelKeyQuery: bigQueryLabelValueAllReleases,
-	}
 	it, err := query.Read(ctx)
 	if err != nil {
 		return nil, err
@@ -922,10 +878,6 @@ LIMIT 1
 `)
 
 	query := c.client.Query(queryString)
-	query.Labels = map[string]string{
-		bigQueryLabelKeyApp:   bigQueryLabelValueApp,
-		bigQueryLabelKeyQuery: bigQueryLabelValueJobRunFromName,
-	}
 	query.QueryConfig.Parameters = []bigquery.QueryParameter{
 		{Name: "TimeCutOff", Value: targetTime},
 		{Name: "JobName", Value: jobName},
@@ -956,10 +908,6 @@ LIMIT 1
 `)
 
 	query := c.client.Query(queryString)
-	query.Labels = map[string]string{
-		bigQueryLabelKeyApp:   bigQueryLabelValueApp,
-		bigQueryLabelKeyQuery: bigQueryLabelValueJobRunFromName,
-	}
 	query.QueryConfig.Parameters = []bigquery.QueryParameter{
 		{Name: "TimeCutOff", Value: targetTime},
 		{Name: "JobName", Value: jobName},
@@ -995,10 +943,6 @@ WHERE TABLE_NAME.JobName = @JobName
 	queryString = c.dataCoordinates.SubstituteDataSetLocation(queryString)
 
 	query := c.client.Query(queryString)
-	query.Labels = map[string]string{
-		bigQueryLabelKeyApp:   bigQueryLabelValueApp,
-		bigQueryLabelKeyQuery: bigQueryLabelValueAggregatedTestRun,
-	}
 	query.QueryConfig.Parameters = []bigquery.QueryParameter{
 		{Name: "JobName", Value: jobName},
 	}
@@ -1035,10 +979,6 @@ func (c *ciDataClient) ListAllKnownAlerts(ctx context.Context) ([]*jobrunaggrega
 `)
 
 	query := c.client.Query(queryString)
-	query.Labels = map[string]string{
-		bigQueryLabelKeyApp:   bigQueryLabelValueApp,
-		bigQueryLabelKeyQuery: bigQueryLabelValueAllKnownAlerts,
-	}
 	alertsRows, err := query.Read(ctx)
 	if err != nil {
 		err = fmt.Errorf("failed to query Alerts_AllKnown view with %q: %w", queryString, err)

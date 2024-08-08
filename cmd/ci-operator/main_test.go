@@ -1698,7 +1698,7 @@ func TestGetClusterProfileSecret(t *testing.T) {
 					Secret:  "profile-name-cluster-secret",
 				}, nil
 			},
-			expectedErr: fmt.Errorf("failed to get secret '%s' from ci namespace", secretName),
+			expectedErr: fmt.Errorf("failed to get secret '%s' from ci namespace: secrets \"%s\" not found", secretName, secretName),
 		},
 	}
 

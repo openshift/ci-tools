@@ -36,6 +36,26 @@ const (
 	prowJobJobRunIDLabel = "prow.k8s.io/build-id"
 )
 
+const (
+	bigQueryLabelKeyApp                        = "client-application"
+	bigQueryLabelKeyQuery                      = "query-details"
+	bigQueryLabelValueApp                      = "aggregator"
+	bigQueryLabelValueDisruptionRowCountByJob  = "disruption-row-count"
+	bigQueryLabelValueDisruptionStats          = "aggregator-disruption-stats"
+	bigQueryLabelValueJobRunFromName           = "aggregator-job-run-from-name"
+	bigQueryLabelValueLastJobRunTime           = "aggregator-last-job-run-time"
+	bigQueryLabelValueAggregatedTestRun        = "aggregator-aggregated-test-run"
+	bigQueryLabelValueAlertHistoricalData      = "aggregator-alert-historical"
+	bigQueryLabelValueAllJobs                  = "aggregator-all-jobs"
+	bigQueryLabelValueAllJobsWithVariants      = "aggregator-all-jobs-with-variants"
+	bigQueryLabelValueAllKnownAlerts           = "aggregator-all-known-alerts"
+	bigQueryLabelValueDisruptionHistoricalData = "aggregator-disruption-historical"
+	bigQueryLabelValueJobRunsSinceTime         = "aggregator-job-runs-since-time"
+	bigQueryLabelValueAllReleases              = "aggregator-all-releases"
+	bigQueryLabelValueReleaseTags              = "aggregator-release-tags"
+	bigQueryLabelValueJobRunIDsSinceTime       = "aggregator-job-run-IDs-since-time"
+)
+
 var (
 	KnownQuerySources = sets.Set[string]{JobStateQuerySourceBigQuery: sets.Empty{}, JobStateQuerySourceCluster: sets.Empty{}}
 )

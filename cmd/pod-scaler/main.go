@@ -32,6 +32,7 @@ import (
 
 	v1 "github.com/openshift/ci-tools/cmd/pod-scaler/v1"
 	v2 "github.com/openshift/ci-tools/cmd/pod-scaler/v2"
+	"github.com/openshift/ci-tools/pkg/prowconfigutils"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/util"
 )
@@ -215,6 +216,10 @@ func mainProduce(opts *options, cachev1 v1.Cache, cachev2 v2.Cache) {
 		logrus.Fatal("Kubeconfig changed, exiting to get restarted by Kubelet and pick up the changes")
 	}
 
+	_, err := prowconfigutils.ProwDisabledClusters(&opts.kubernetesOptions)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to get Prow disable clusters")
+	}
 	kubeconfigs, err := opts.kubernetesOptions.LoadClusterConfigs(kubeconfigChangedCallBack)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to load kubeconfigs")

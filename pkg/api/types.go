@@ -781,6 +781,9 @@ type TestStepConfiguration struct {
 	// If set, the generated test pod will include a nodeSelector for this architecture.
 	NodeArchitecture NodeArchitecture `json:"node_architecture,omitempty"`
 
+	// RestrictNetworkAccess restricts network access to RedHat intranet.
+	RestrictNetworkAccess *bool `json:"restrict_network_access,omitempty"`
+
 	// Only one of the following can be not-null.
 	ContainerTestConfiguration                                *ContainerTestConfiguration                                `json:"container,omitempty"`
 	MultiStageTestConfiguration                               *MultiStageTestConfiguration                               `json:"steps,omitempty"`

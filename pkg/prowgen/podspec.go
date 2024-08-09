@@ -297,6 +297,15 @@ func CIPullSecret() PodSpecMutator {
 	return makeSecretAddingMutator("ci-pull-credentials")
 }
 
+// Arg adds a unique parameter to the first container
+func Arg(name, value string) PodSpecMutator {
+	return func(spec *corev1.PodSpec) error {
+		container := &spec.Containers[0]
+		addUniqueParameter(container, fmt.Sprintf("%s=%s", name, value))
+		return nil
+	}
+}
+
 // Secrets exposes the configured secrets via mounted volumes and a `--secret-dir`
 // option passed to ci-operator
 func Secrets(secrets ...*cioperatorapi.Secret) PodSpecMutator {

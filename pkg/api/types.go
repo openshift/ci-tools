@@ -822,6 +822,14 @@ func (config TestStepConfiguration) IsPeriodic() bool {
 	return config.Interval != nil || config.MinimumInterval != nil || config.Cron != nil || config.ReleaseController
 }
 
+// GetClusterProfileName returns the cluster profile name if it's set
+func (config TestStepConfiguration) GetClusterProfileName() string {
+	if config.MultiStageTestConfigurationLiteral != nil {
+		return config.MultiStageTestConfigurationLiteral.ClusterProfile.Name()
+	}
+	return ""
+}
+
 // Cloud is the name of a cloud provider, e.g., aws cluster topology, etc.
 type Cloud string
 

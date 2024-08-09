@@ -81,6 +81,7 @@ func FromConfig(
 	localRegistryDNS string,
 	mergedConfig bool,
 	integratedStreams map[string]*configresolver.IntegratedStream,
+	awsCodeBuildProjectName string,
 ) ([]api.Step, []api.Step, error) {
 	crclient, err := ctrlruntimeclient.NewWithWatch(clusterConfig, ctrlruntimeclient.Options{})
 	crclient = secretrecordingclient.Wrap(crclient, censor)
@@ -117,7 +118,7 @@ func FromConfig(
 	httpClient := retryablehttp.NewClient()
 	httpClient.Logger = nil
 
-	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, consoleHost, nodeName, targetAdditionalSuffix, nodeArchitectures, mergedConfig, integratedStreams)
+	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, consoleHost, nodeName, targetAdditionalSuffix, nodeArchitectures, mergedConfig, integratedStreams, awsCodeBuildProjectName)
 }
 
 func fromConfig(
@@ -146,6 +147,7 @@ func fromConfig(
 	nodeArchitectures []string,
 	mergedConfig bool,
 	integratedStreams map[string]*configresolver.IntegratedStream,
+	awsCodeBuildProjectName string,
 ) ([]api.Step, []api.Step, error) {
 	requiredNames := sets.New[string]()
 	for _, target := range requiredTargets {
@@ -262,7 +264,11 @@ func fromConfig(
 		} else if rawStep.PipelineImageCacheStepConfiguration != nil {
 			step = steps.PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, config.Resources, buildClient, podClient, jobSpec, pullSecret)
 		} else if rawStep.SourceStepConfiguration != nil {
-			step = steps.SourceStep(*rawStep.SourceStepConfiguration, config.Resources, buildClient, podClient, jobSpec, cloneAuthConfig, pullSecret)
+			if awsCodeBuildProjectName == "" {
+				step = steps.SourceStep(*rawStep.SourceStepConfiguration, config.Resources, buildClient, podClient, jobSpec, cloneAuthConfig, pullSecret)
+			} else {
+				step = steps.SourceAwsStep(*rawStep.SourceStepConfiguration, config.Resources, buildClient, podClient, jobSpec, cloneAuthConfig, pullSecret, awsCodeBuildProjectName)
+			}
 		} else if rawStep.BundleSourceStepConfiguration != nil {
 			step = steps.BundleSourceStep(*rawStep.BundleSourceStepConfiguration, config, config.Resources, buildClient, podClient, jobSpec, pullSecret)
 		} else if rawStep.IndexGeneratorStepConfiguration != nil {

@@ -1723,3 +1723,77 @@ func TestGetClusterProfileSecret(t *testing.T) {
 		})
 	}
 }
+
+func TestGetClusterProfileNamesFromTargets(t *testing.T) {
+	testCases := []struct {
+		name                 string
+		options              *options
+		expectedProfileNames []string
+	}{
+		{
+			name: "single target, single profile",
+			options: &options{
+				targets: stringSlice{values: []string{"target-test-1"}},
+				configSpec: &api.ReleaseBuildConfiguration{
+					Tests: []api.TestStepConfiguration{
+						{
+							As: "target-test-1",
+							MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+								ClusterProfile: "profile1",
+							},
+						},
+					},
+				},
+			},
+			expectedProfileNames: []string{"profile1"},
+		},
+		{
+			name: "multiple targets, multiple profiles",
+			options: &options{
+				targets: stringSlice{values: []string{"target-test-1", "target-test-2"}},
+				configSpec: &api.ReleaseBuildConfiguration{
+					Tests: []api.TestStepConfiguration{
+						{
+							As: "target-test-1",
+							MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+								ClusterProfile: "profile1",
+							},
+						},
+						{
+							As: "target-test-2",
+							MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+								ClusterProfile: "profile2",
+							},
+						},
+					},
+				},
+			},
+			expectedProfileNames: []string{"profile1", "profile2"},
+		},
+		{
+			name: "target without cluster profile",
+			options: &options{
+				targets: stringSlice{values: []string{"target-test-1"}},
+				configSpec: &api.ReleaseBuildConfiguration{
+					Tests: []api.TestStepConfiguration{
+						{
+							As: "target-test-1",
+						},
+						{
+							As:                                 "target-test-2",
+							MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{},
+						},
+					},
+				},
+			},
+			expectedProfileNames: nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.options.getClusterProfileNamesFromTargets()
+			reflect.DeepEqual(tc.expectedProfileNames, tc.options.clusterProfileNames)
+		})
+	}
+}

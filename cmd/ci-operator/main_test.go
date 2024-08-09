@@ -13,7 +13,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	corev1 "k8s.io/api/core/v1"
 	rbacapi "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -28,7 +27,6 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/api/configresolver"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/steps"
@@ -1613,112 +1611,6 @@ func TestHandleTargetAdditionalSuffix(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expectedJobSpec.Target, o.jobSpec.Target); diff != "" {
 				t.Fatalf("expectedJobSpec Target differs from actual, diff: %s", diff)
-			}
-		})
-	}
-}
-
-type mockResolverClient struct {
-	ClusterProfileFunc func(profileName string) (*api.ClusterProfileDetails, error)
-}
-
-func (m *mockResolverClient) ClusterProfile(profileName string) (*api.ClusterProfileDetails, error) {
-	if m.ClusterProfileFunc != nil {
-		return m.ClusterProfileFunc(profileName)
-	}
-	return nil, nil
-}
-
-func (m *mockResolverClient) Config(metadata *api.Metadata) (*api.ReleaseBuildConfiguration, error) {
-	return nil, nil
-}
-
-func (m *mockResolverClient) ConfigWithTest(base *api.Metadata, testSource *api.MetadataWithTest) (*api.ReleaseBuildConfiguration, error) {
-	return nil, nil
-}
-
-func (m *mockResolverClient) Resolve(data []byte) (*api.ReleaseBuildConfiguration, error) {
-	return nil, nil
-}
-
-func (m *mockResolverClient) IntegratedStream(namespace string, name string) (*configresolver.IntegratedStream, error) {
-	return nil, nil
-}
-
-func TestGetClusterProfileSecret(t *testing.T) {
-	namespace, secretName := "ci", "profile-name-cluster-secret"
-	okClient := fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
-		&corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: namespace,
-				Name:      secretName,
-			}},
-	).Build()
-
-	testCases := []struct {
-		name           string
-		clusterProfile string
-		client         ctrlruntimeclient.Client
-		resolverFunc   func(profileName string) (*api.ClusterProfileDetails, error)
-		expected       *corev1.Secret
-		expectedErr    error
-	}{
-		{
-			name:           "ok path",
-			clusterProfile: "profile-name",
-			client:         okClient,
-			resolverFunc: func(profileName string) (*api.ClusterProfileDetails, error) {
-				return &api.ClusterProfileDetails{
-					Profile: "profile-name",
-					Secret:  "profile-name-cluster-secret",
-				}, nil
-			},
-			expected: &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: namespace,
-					Name:      secretName,
-				}},
-		},
-		{
-			name:           "resolver error path",
-			clusterProfile: "wrong-profile-name",
-			client:         okClient,
-			resolverFunc: func(profileName string) (*api.ClusterProfileDetails, error) {
-				return nil, fmt.Errorf("some config resolver error occurred")
-			},
-			expectedErr: fmt.Errorf("failed to retrieve details from config resolver for '%s' cluster profile", "wrong-profile-name"),
-		},
-		{
-			name:           "error while getting secret from ci namespace path",
-			clusterProfile: "nonexistent-profile-name",
-			client:         fakectrlruntimeclient.NewClientBuilder().Build(),
-			resolverFunc: func(profileName string) (*api.ClusterProfileDetails, error) {
-				return &api.ClusterProfileDetails{
-					Profile: "profile-name",
-					Secret:  "profile-name-cluster-secret",
-				}, nil
-			},
-			expectedErr: fmt.Errorf("failed to get secret '%s' from ci namespace: secrets \"%s\" not found", secretName, secretName),
-		},
-	}
-
-	ctx := context.Background()
-	mockResolverClient := &mockResolverClient{}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			mockResolverClient.ClusterProfileFunc = tc.resolverFunc
-			actual, err := getClusterProfileSecret(tc.clusterProfile, tc.client, mockResolverClient, ctx)
-
-			if tc.expected != nil && tc.expectedErr == nil {
-				if diff := cmp.Diff(actual, tc.expected, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
-					t.Errorf("secret differs from expected:\n%v", diff)
-				}
-			}
-			if tc.expectedErr != nil {
-				if diff := cmp.Diff(tc.expectedErr, err, testhelper.EquateErrorMessage); diff != "" {
-					t.Errorf("error differs from expected:\n%v", diff)
-				}
 			}
 		})
 	}

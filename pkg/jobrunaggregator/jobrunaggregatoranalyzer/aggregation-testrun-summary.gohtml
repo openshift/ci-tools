@@ -1,0 +1,234 @@
+{{define "printTable"}}
+    <table>
+            <tr>
+                <th>Name</th>
+                <th>Job Runs</th>
+            </tr>
+        {{ range . }}
+        {{ $jobRuns := .JobRuns }}
+            {{ $formatedSummary := (.Summary | formatSummary)}}
+            {{ $failedQuantileData := ( "" | parseQuantileValues) }}
+            {{with $formatedSummary.failures}}
+            {{ $failedQuantileData = ( . | parseQuantileValues) }}
+            {{end}}
+            <tr>
+                <td >
+                <h3 style="font-weight: bold;">{{ .Name }}</h3>
+                <p style="margin-left: 50px;">
+                {{ with $formatedSummary }}
+                    {{with $formatedSummary.passNum }}
+                    <div class="chip success">
+                    Passed: {{.}}
+                    </div>
+                    {{end}}
+                    {{with $formatedSummary.failedNum }}
+                    <div class="chip {{ if ne . "0" }}failed{{end}}">
+                    Failed: {{.}}
+                    </div>
+                    {{end}}
+                    {{with $formatedSummary.requiredNum }}
+                    <div class="chip">
+                    Required: {{.}}
+                    </div>
+                    {{end}}
+                    {{ with $formatedSummary.passHistoryPercent }}
+                    <div class="chip">
+                    Historical Pass: {{.}}%
+                    </div>
+                    {{else}}
+                    <div class="chip">
+                    {{$formatedSummary.quantile}}: <span style="font-weight: bold;">{{$formatedSummary.quantileValue}}</span>
+                    </div>
+                    {{end}}
+                {{else}}
+                    {{ .Summary }}
+                {{end}}
+                </p>
+                </td>
+                <td>
+                {{ range $jobRuns }}
+                    {{ $jobName := .JobName}}
+                    {{ $jobID := .JobRunID}}
+                    <div class="job-item">
+                    <a href="{{ .HumanURL }}" target="_blank" style="text-decoration:none;">
+                        <div class="tooltip {{ toLower .Status }}">
+                            <div class="tooltiptext">
+                                <p>{{ $jobName }}</p>
+                                <p>ID: {{ $jobID  }}</p>
+                                {{ with $failedQuantileData }}
+                                {{ if mapHasKey . $jobID }}
+                                    <div>Quantile Value: {{ (index . $jobID) }}</div>
+                                {{end}}
+                                {{end}}
+                            </div>
+                            {{ with $failedQuantileData }}
+                            {{ if mapHasKey . $jobID }}
+                                <div style="padding: 2px 5px;">+{{ quantileTimeDiff (index . $jobID) $formatedSummary.quantileValue }}</div>
+                            {{end}}
+                            {{end}}
+                        </div>
+                    </a>
+                    </div>
+                {{ end }}
+                </td>
+            </tr>
+        {{ end }}
+    </table>
+{{end}}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Spyglass Suite Information</title>
+    <style>
+        body {
+            background-color: white;
+            margin: 0;
+        }
+        a div div {
+            cursor: pointer;
+        }
+        table {
+            font-family: arial, sans-serif;
+            border-collapse: collapse;
+            width: 100%;
+        }
+        td, th {
+            border: 1px solid #dddddd;
+            text-align: left;
+            padding: 8px;
+        }
+        td:first-child { width: 70% ;}
+        tr:nth-child(even) {
+            background-color: #dddddd;
+        }
+        .container {
+            margin: 30px 10px;
+            padding: 10px;
+        }
+        .tooltip {
+            cursor: pointer;
+            position: relative;
+            display: inline-block;
+            background-color: #0c3;
+            min-width: 20px;
+            min-height: 20px;
+            max-width: 500px;
+            color: white;
+            border-radius: 5px;
+        }
+        .tooltip.failure {
+            background-color: #a00;
+        }
+        .tooltip.flake {
+            background-color: #609;
+        }
+        .tooltip.gray {
+            background-color: #f1f1f1;
+        }
+        .tooltip .tooltiptext {
+            cursor: pointer;
+            visibility: hidden;
+            min-width: 300px;
+            max-width: 500px;
+            background-color: black;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px;
+            position: absolute;
+            z-index: 1;
+            top: -5px;
+            right: 105%;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            cursor: pointer;
+        }
+        .chip {
+            display: inline-block;
+            padding: 0 20px;
+            height: 40px;
+            font-size: 14px;
+            line-height: 40px;
+            border-radius: 25px;
+            background-color: #f1f1f1;
+        }
+        .chip.success {
+            background-color: #aaefc2;
+        }
+        .chip.failed {
+            background-color: #efaaaa;
+        }
+        .nav {
+            list-style-type: none;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #333;
+            position: fixed;
+            top: 0;
+            width: 100%;
+            z-index: 1;
+        }
+        .navli {
+            float: left;
+        }
+        .navli a {
+            display: block;
+            color: white;
+            text-align: center;
+            padding: 14px 16px;
+            text-decoration: none;
+        }
+        .navli a:hover {
+            background-color: #111;
+        }
+        .job-item {
+            display: inline-block;
+            margin: 5px 0px;
+        }
+    </style>
+</head>
+<body>
+{{ $failedData := infoForTestSuite .JobName .InitialParents .Suite isFailed }}
+{{ $skippedData := infoForTestSuite .JobName .InitialParents .Suite isSkipped }}
+{{ $successData := infoForTestSuite .JobName .InitialParents .Suite isSuccess }}
+  <div id="top" style="margin-bottom: 20px"></div>
+  <div class="nav">
+    <div class="navli"><a href="#top">Home</a></div>
+    {{ with $failedData }}<div class="navli"><a href="#failed-tests">Failed Tests</a></div>{{end}}
+    {{ with $skippedData }}<div class="navli"><a href="#skipped-tests">Skipped Tests</a></div>{{end}}
+    {{ with $successData }}<div class="navli"><a href="#passed-tests">Passed Tests</a></div>{{end}}
+  </div>
+
+{{ with $failedData }}
+<div class="container">
+<div>
+<h2 id="failed-tests">Failed Tests</h2>
+</div>
+{{ template "printTable" .}}
+</div>
+{{end}}
+
+{{ with $skippedData }}
+<div class="container">
+<div>
+<h2 id="skipped-tests">Skipped Tests</h2>
+</div>
+{{ template "printTable" .}}
+</div>
+{{end}}
+
+{{ with $successData }}
+<div class="container">
+<div>
+<h2 id="passed-tests">Passed Tests</h2>
+</div>
+<div style="padding: 10px;">
+{{ template "printTable" .}}
+</div>
+{{end}}
+</body>
+</html>

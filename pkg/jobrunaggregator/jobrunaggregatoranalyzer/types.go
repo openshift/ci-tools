@@ -13,3 +13,11 @@ type JobRunInfo struct {
 
 	Status string
 }
+
+type TestInfo struct {
+	JobRuns []JobRunInfo
+	Name    string
+	Status  string
+	Parents []string
+	Summary string
+}

@@ -279,7 +279,10 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 	fakeSuite := &junit.TestSuite{Children: currentAggregationJunitSuites.Suites}
 	jobrunaggregatorlib.OutputTestCaseFailures([]string{"root"}, fakeSuite)
 
-	summaryHTML := htmlForTestRuns(o.jobName, fakeSuite)
+	summaryHTML, err := htmlForTestRuns(o.jobName, fakeSuite)
+	if err != nil {
+		return err
+	}
 	if err := os.WriteFile(filepath.Join(o.workingDir, "aggregation-testrun-summary.html"), []byte(summaryHTML), 0644); err != nil {
 		return err
 	}

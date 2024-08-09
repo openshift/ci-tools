@@ -385,6 +385,7 @@ type options struct {
 	leaseServerCredentialsFile string
 	leaseAcquireTimeout        time.Duration
 	leaseClient                lease.Client
+	clusterProfileNames        []string
 
 	givePrAuthorAccessToNamespace bool
 	impersonateUser               string
@@ -645,6 +646,8 @@ func (o *options) Complete() error {
 		}
 		o.secrets = append(o.secrets, secret)
 	}
+
+	o.getClusterProfileNamesFromTargets()
 
 	for _, path := range o.templatePaths.values {
 		contents, err := os.ReadFile(path)
@@ -1174,11 +1177,11 @@ func (o *options) initializeNamespace() error {
 	if err != nil {
 		return fmt.Errorf("could not get project client for cluster config: %w", err)
 	}
-	client, err := ctrlruntimeclient.New(o.clusterConfig, ctrlruntimeclient.Options{})
+	ctrlClient, err := ctrlruntimeclient.New(o.clusterConfig, ctrlruntimeclient.Options{})
 	if err != nil {
 		return fmt.Errorf("failed to construct client: %w", err)
 	}
-	client = ctrlruntimeclient.NewNamespacedClient(client, o.namespace)
+	client := ctrlruntimeclient.NewNamespacedClient(ctrlClient, o.namespace)
 	ctx := context.Background()
 
 	logrus.Debugf("Creating namespace %s", o.namespace)
@@ -1449,6 +1452,17 @@ func (o *options) initializeNamespace() error {
 		if err := client.Create(ctx, o.cloneAuthConfig.Secret); err != nil && !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("couldn't create secret %s for %s authentication: %w", o.cloneAuthConfig.Secret.Name, o.cloneAuthConfig.Type, err)
 		}
+	}
+
+	// adds the appropriate cluster profile secrets to o.secrets,
+	// so they can be created by ctrlruntime client in the for cycle below this one
+	for _, cp := range o.clusterProfileNames {
+		cpSecret, err := getClusterProfileSecret(cp, ctrlClient, o.resolverClient, ctx)
+		if err != nil {
+			return fmt.Errorf("failed to create cluster profile  secret %s: %w", cp, err)
+		}
+		cpSecret.Namespace = o.namespace
+		o.secrets = append(o.secrets, cpSecret)
 	}
 
 	for _, secret := range o.secrets {
@@ -2306,4 +2320,45 @@ func addSchemes() error {
 		return fmt.Errorf("failed to add egressfirewallv1 to scheme: %w", err)
 	}
 	return nil
+}
+
+// getClusterProfileSecret retrieves the cluster profile secret name using config resolver,
+// and gets the secret from the ci namespace
+func getClusterProfileSecret(clusterProfile string, client ctrlruntimeclient.Client, resolverClient server.ResolverClient, ctx context.Context) (*coreapi.Secret, error) {
+	// Use config-resolver to get details about the cluster profile (which includes the secret's name)
+	cpDetails, err := resolverClient.ClusterProfile(clusterProfile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve details from config resolver for '%s' cluster profile", clusterProfile)
+	}
+	// Get the secret from the ci namespace. We expect it exists
+	ciSecret := &coreapi.Secret{}
+	err = client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: "ci", Name: cpDetails.Secret}, ciSecret)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get secret '%s' from ci namespace: %w", cpDetails.Secret, err)
+	}
+
+	newSecret := &coreapi.Secret{
+		Data: ciSecret.Data,
+		Type: ciSecret.Type,
+		ObjectMeta: meta.ObjectMeta{
+			Name: ciSecret.Name,
+		},
+	}
+
+	return newSecret, nil
+}
+
+// getClusterProfileNamesFromTargets extracts the needed cluster profile name(s) from the target arg(s)
+func (o *options) getClusterProfileNamesFromTargets() {
+	for _, targetName := range o.targets.values {
+		for _, test := range o.configSpec.Tests {
+			if targetName != test.As {
+				continue
+			}
+			profile := test.GetClusterProfileName()
+			if profile != "" {
+				o.clusterProfileNames = append(o.clusterProfileNames, profile)
+			}
+		}
+	}
 }

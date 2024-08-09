@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"sync"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -167,7 +168,7 @@ func TestDispatchJobs(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := dispatchJobs(context.TODO(), tc.prowJobConfigDir, tc.maxConcurrency, tc.config, tc.jobVolumes)
+			_, actual := dispatchJobs(context.TODO(), tc.prowJobConfigDir, tc.maxConcurrency, tc.config, tc.jobVolumes, sets.New[string]())
 			equalError(t, tc.expected, actual)
 			if tc.config != nil && !reflect.DeepEqual(tc.expectedBuildFarm, tc.config.BuildFarm) {
 				t.Errorf("%s: actual differs from expected:\n%s", t.Name(), cmp.Diff(tc.expectedBuildFarm, tc.config.BuildFarm))
@@ -192,6 +193,7 @@ func TestDispatchJobConfig(t *testing.T) {
 			cv: &clusterVolume{
 				clusterVolumeMap: map[string]map[string]float64{"aws": {"build01": 0}, "gcp": {"build02": 0}},
 				cloudProviders:   sets.New[string]("aws", "gcp"),
+				pjs:              map[string]string{},
 			},
 			config: &c,
 			jc: &prowconfig.JobConfig{
@@ -217,6 +219,8 @@ func TestDispatchJobConfig(t *testing.T) {
 			cv: &clusterVolume{
 				clusterVolumeMap: map[string]map[string]float64{"aws": {"build01": 1}, "gcp": {"build02": 0}},
 				cloudProviders:   sets.New[string]("aws", "gcp"),
+				pjs:              map[string]string{},
+				blocked:          sets.New[string](),
 			},
 			config: &c,
 			jc: &prowconfig.JobConfig{
@@ -242,6 +246,8 @@ func TestDispatchJobConfig(t *testing.T) {
 			cv: &clusterVolume{
 				clusterVolumeMap: map[string]map[string]float64{"aws": {"build01": 1}, "gcp": {"build02": 0}},
 				cloudProviders:   sets.New[string]("aws", "gcp"),
+				pjs:              map[string]string{},
+				blocked:          sets.New[string](),
 			},
 			config: &c,
 			jc: &prowconfig.JobConfig{
@@ -451,6 +457,104 @@ func TestRemoveDisabledClusters(t *testing.T) {
 				}
 			}
 
+		})
+	}
+}
+
+func TestDetermineCluster(t *testing.T) {
+	type fields struct {
+		blocked sets.Set[string]
+	}
+	type args struct {
+		cluster           string
+		determinedCluster string
+		defaultCluster    string
+		canBeRelocated    bool
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+		want   string
+	}{
+		{
+			name: "relocate to cluster for a test group",
+			fields: fields{
+				blocked: sets.New[string](),
+			},
+			args: args{
+				cluster:           "build01",
+				determinedCluster: "build02",
+				defaultCluster:    "build03",
+				canBeRelocated:    true,
+			},
+			want: "build01",
+		},
+		{
+			name: "can't relocate to cluster for a test group",
+			fields: fields{
+				blocked: sets.New[string](),
+			},
+			args: args{
+				cluster:           "build01",
+				determinedCluster: "build02",
+				defaultCluster:    "build03",
+				canBeRelocated:    false,
+			},
+			want: "build02",
+		},
+		{
+			name: "both clusters are blocked, relocate to default",
+			fields: fields{
+				blocked: sets.New[string]("build01", "build02"),
+			},
+			args: args{
+				cluster:           "build01",
+				determinedCluster: "build02",
+				defaultCluster:    "build03",
+				canBeRelocated:    false,
+			},
+			want: "build03",
+		},
+		{
+			name: "determined is blocked, relocate to a group cluster despite canBeRelocated=false",
+			fields: fields{
+				blocked: sets.New[string]("build02"),
+			},
+			args: args{
+				cluster:           "build01",
+				determinedCluster: "build02",
+				defaultCluster:    "build03",
+				canBeRelocated:    false,
+			},
+			want: "build01",
+		},
+		{
+			name: "group cluster is blocked, use determined cluster",
+			fields: fields{
+				blocked: sets.New[string]("build01"),
+			},
+			args: args{
+				cluster:           "build01",
+				determinedCluster: "build02",
+				defaultCluster:    "build03",
+				canBeRelocated:    false,
+			},
+			want: "build02",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cv := &clusterVolume{
+				clusterVolumeMap: make(map[string]map[string]float64),
+				cloudProviders:   make(sets.Set[string]),
+				pjs:              make(map[string]string),
+				blocked:          tt.fields.blocked,
+				mutex:            sync.Mutex{},
+			}
+			if got := cv.determineCluster(tt.args.cluster, tt.args.determinedCluster, tt.args.defaultCluster, tt.args.canBeRelocated); got != tt.want {
+				t.Errorf("clusterVolume.determineCluster() = %v, want %v", got, tt.want)
+			}
 		})
 	}
 }

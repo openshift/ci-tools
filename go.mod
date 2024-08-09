@@ -90,7 +90,7 @@ require (
 	github.com/fatih/color v1.16.0 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/felixge/fgprof v0.9.1 // indirect
-	github.com/fsnotify/fsnotify v1.7.0 // indirect
+	github.com/fsnotify/fsnotify v1.7.0
 	github.com/fsouza/go-dockerclient v1.11.0 // indirect
 	github.com/fvbommel/sortorder v1.1.0 // indirect
 	github.com/go-logr/logr v1.4.1
@@ -175,6 +175,7 @@ require (
 	github.com/openshift/hive/apis v0.0.0-20230525214126-ab571664f899
 	github.com/openshift/library-go v0.0.0-20231017173800-126f85ed0cc7
 	github.com/ovn-org/ovn-kubernetes/go-controller v0.0.0-20240710195803-425a328cd172
+	github.com/robfig/cron/v3 v3.0.1
 	github.com/stretchr/testify v1.9.0
 	sigs.k8s.io/boskos v0.0.0-20240624145324-1e4de26c366a
 	sigs.k8s.io/prow v0.0.0-20240627110421-79d27b6e3be3

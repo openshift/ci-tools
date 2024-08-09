@@ -167,7 +167,7 @@ func TestDispatchJobs(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := dispatchJobs(context.TODO(), tc.prowJobConfigDir, tc.maxConcurrency, tc.config, tc.jobVolumes)
+			_, actual := dispatchJobs(context.TODO(), tc.prowJobConfigDir, tc.maxConcurrency, tc.config, tc.jobVolumes, sets.New[string]())
 			equalError(t, tc.expected, actual)
 			if tc.config != nil && !reflect.DeepEqual(tc.expectedBuildFarm, tc.config.BuildFarm) {
 				t.Errorf("%s: actual differs from expected:\n%s", t.Name(), cmp.Diff(tc.expectedBuildFarm, tc.config.BuildFarm))
@@ -192,6 +192,7 @@ func TestDispatchJobConfig(t *testing.T) {
 			cv: &clusterVolume{
 				clusterVolumeMap: map[string]map[string]float64{"aws": {"build01": 0}, "gcp": {"build02": 0}},
 				cloudProviders:   sets.New[string]("aws", "gcp"),
+				pjs:              map[string]string{},
 			},
 			config: &c,
 			jc: &prowconfig.JobConfig{
@@ -217,6 +218,7 @@ func TestDispatchJobConfig(t *testing.T) {
 			cv: &clusterVolume{
 				clusterVolumeMap: map[string]map[string]float64{"aws": {"build01": 1}, "gcp": {"build02": 0}},
 				cloudProviders:   sets.New[string]("aws", "gcp"),
+				pjs:              map[string]string{},
 			},
 			config: &c,
 			jc: &prowconfig.JobConfig{
@@ -242,6 +244,7 @@ func TestDispatchJobConfig(t *testing.T) {
 			cv: &clusterVolume{
 				clusterVolumeMap: map[string]map[string]float64{"aws": {"build01": 1}, "gcp": {"build02": 0}},
 				cloudProviders:   sets.New[string]("aws", "gcp"),
+				pjs:              map[string]string{},
 			},
 			config: &c,
 			jc: &prowconfig.JobConfig{
@@ -273,7 +276,7 @@ func TestDispatchJobConfig(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, actualErr := tc.cv.dispatchJobConfig(tc.jc, tc.path, tc.config, tc.jobVolumes)
+			actual, actualErr := tc.cv.dispatchJobConfig(tc.jc, tc.path, tc.config, tc.jobVolumes, sets.New[string]())
 			if diff := cmp.Diff(tc.expected, actual); diff != "" {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}

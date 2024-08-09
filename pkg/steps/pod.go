@@ -247,6 +247,8 @@ func GenerateBasePod(
 
 	if generatePodOptions != nil && generatePodOptions.NodeArchitecture != "" {
 		pod.Spec.NodeSelector = map[string]string{"kubernetes.io/arch": generatePodOptions.NodeArchitecture}
+	} else {
+		pod.Spec.NodeSelector = map[string]string{"kubernetes.io/arch": string(api.NodeArchitectureAMD64)}
 	}
 
 	artifactDir = fmt.Sprintf("artifacts/%s", artifactDir)

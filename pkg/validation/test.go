@@ -879,6 +879,14 @@ func validateDNSConfig(fieldRoot string, dnsConfig []api.StepDNSConfig) (ret []e
 	return errs
 }
 
+func validateNodeArchitecture(fieldRoot string, nodeArchitecture api.NodeArchitecture) (ret []error) {
+	var errs []error
+	if nodeArchitecture != api.NodeArchitectureAMD64 && nodeArchitecture != api.NodeArchitectureARM64 {
+		errs = append(errs, fmt.Errorf("%s.nodeArchitecture cannot be empty", fieldRoot))
+	}
+	return errs
+}
+
 func validateLeases(context *context, leases []api.StepLease) (ret []error) {
 	for i, l := range leases {
 		if l.ResourceType == "" {

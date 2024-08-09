@@ -181,8 +181,7 @@ func main() {
 	var cachev1 v1.Cache
 	var cachev2 v2.Cache
 	if opts.cacheDir != "" {
-		cachev1 = &v1.LocalCache{Dir: opts.cacheDir}
-		//Never use the cacheDir for v2. currently, this is only for e2e tests which will continue on v1 until the migration is complete
+		cachev2 = &v2.LocalCache{Dir: opts.cacheDir}
 	} else {
 		gcsClient, err := storage.NewClient(interrupts.Context(), option.WithCredentialsFile(opts.gcsCredentialsFile))
 		if err != nil {
@@ -201,9 +200,9 @@ func main() {
 	case "producer":
 		mainProduce(opts, cachev1, cachev2)
 	case "consumer.ui":
-		mainUI(opts, cachev1)
+		mainUI(opts, cachev2)
 	case "consumer.admission":
-		mainAdmission(opts, cachev1)
+		mainAdmission(opts, cachev2)
 	}
 	if !opts.once {
 		interrupts.WaitForGracefulShutdown()
@@ -249,11 +248,13 @@ func mainProduce(opts *options, cachev1 v1.Cache, cachev2 v2.Cache) {
 	}
 
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		v1.Produce(clients, cachev1, opts.ignoreLatest, opts.once)
-	}()
+	if cachev1 != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			v1.Produce(clients, cachev1, opts.ignoreLatest, opts.once)
+		}()
+	}
 
 	if cachev2 != nil {
 		wg.Add(1)
@@ -265,11 +266,11 @@ func mainProduce(opts *options, cachev1 v1.Cache, cachev2 v2.Cache) {
 	wg.Wait()
 }
 
-func mainUI(opts *options, cache v1.Cache) {
+func mainUI(opts *options, cache v2.Cache) {
 	go serveUI(opts.uiPort, opts.instrumentationOptions.HealthPort, opts.dataDir, loaders(cache))
 }
 
-func mainAdmission(opts *options, cache v1.Cache) {
+func mainAdmission(opts *options, cache v2.Cache) {
 	controllerruntime.SetLogger(logrusr.New(logrus.StandardLogger()))
 
 	restConfig, err := util.LoadClusterConfig()
@@ -288,11 +289,11 @@ func mainAdmission(opts *options, cache v1.Cache) {
 	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, reporter)
 }
 
-func loaders(cache v1.Cache) map[string][]*cacheReloader {
+func loaders(cache v2.Cache) map[string][]*cacheReloader {
 	l := map[string][]*cacheReloader{}
-	for _, prefix := range []string{v1.ProwjobsCachePrefix, v1.PodsCachePrefix, v1.StepsCachePrefix} {
-		l[v1.MetricNameCPUUsage] = append(l[v1.MetricNameCPUUsage], newReloader(prefix+"/"+v1.MetricNameCPUUsage, cache))
-		l[v1.MetricNameMemoryWorkingSet] = append(l[v1.MetricNameMemoryWorkingSet], newReloader(prefix+"/"+v1.MetricNameMemoryWorkingSet, cache))
+	for _, prefix := range []string{v2.ProwjobsCachePrefix, v2.PodsCachePrefix, v2.StepsCachePrefix} {
+		l[v2.MetricNameCPUUsage] = append(l[v2.MetricNameCPUUsage], newReloader(prefix+"/"+v2.MetricNameCPUUsage, cache))
+		l[v2.MetricNameMemoryWorkingSet] = append(l[v2.MetricNameMemoryWorkingSet], newReloader(prefix+"/"+v2.MetricNameMemoryWorkingSet, cache))
 	}
 	return l
 }

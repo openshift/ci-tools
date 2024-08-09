@@ -27,7 +27,7 @@ import (
 	buildclientv1 "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	podscalerv1 "github.com/openshift/ci-tools/pkg/pod-scaler/v1"
+	podscalerv2 "github.com/openshift/ci-tools/pkg/pod-scaler/v2"
 	"github.com/openshift/ci-tools/pkg/rehearse"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
@@ -288,7 +288,7 @@ func preventUnschedulable(resources *corev1.ResourceRequirements, cpuCap int64, 
 func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool, cpuCap int64, memoryCap string, reporter results.PodScalerReporter, logger *logrus.Entry) {
 	mutateResources := func(containers []corev1.Container) {
 		for i := range containers {
-			meta := podscalerv1.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, containers[i].Name)
+			meta := podscalerv2.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, containers[i].Name)
 			resources, recommendationExists := server.recommendedRequestFor(meta)
 			if recommendationExists {
 				logger.Debugf("recommendation exists for: %s", containers[i].Name)

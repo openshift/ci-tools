@@ -32,9 +32,9 @@ const (
 	// Prometheus server for at once from many requests.
 	MaxSamplesPerRequest = 11000
 
-	prowjobsCachePrefix = "prowjobs"
-	podsCachePrefix     = "pods"
-	stepsCachePrefix    = "steps"
+	ProwjobsCachePrefix = "prowjobs"
+	PodsCachePrefix     = "pods"
+	StepsCachePrefix    = "steps"
 )
 
 // queriesByMetric returns a mapping of Prometheus query by metric name for all queries we want to execute
@@ -46,17 +46,17 @@ func queriesByMetric() map[string]string {
 		labels   []string
 	}{
 		{
-			prefix:   prowjobsCachePrefix,
+			prefix:   ProwjobsCachePrefix,
 			selector: `{` + string(podscalerv2.ProwLabelNameCreated) + `="true",` + string(podscalerv2.ProwLabelNameJob) + `!="",` + string(podscalerv2.LabelNameRehearsal) + `=""}`,
 			labels:   []string{string(podscalerv2.ProwLabelNameCreated), string(podscalerv2.ProwLabelNameContext), string(podscalerv2.ProwLabelNameOrg), string(podscalerv2.ProwLabelNameRepo), string(podscalerv2.ProwLabelNameBranch), string(podscalerv2.ProwLabelNameJob), string(podscalerv2.ProwLabelNameType)},
 		},
 		{
-			prefix:   podsCachePrefix,
+			prefix:   PodsCachePrefix,
 			selector: `{` + string(podscalerv2.LabelNameCreated) + `="true",` + string(podscalerv2.LabelNameStep) + `=""}`,
 			labels:   []string{string(podscalerv2.LabelNameOrg), string(podscalerv2.LabelNameRepo), string(podscalerv2.LabelNameBranch), string(podscalerv2.LabelNameVariant), string(podscalerv2.LabelNameTarget), string(podscalerv2.LabelNameBuild), string(podscalerv2.LabelNameRelease), string(podscalerv2.LabelNameApp)},
 		},
 		{
-			prefix:   stepsCachePrefix,
+			prefix:   StepsCachePrefix,
 			selector: `{` + string(podscalerv2.LabelNameCreated) + `="true",` + string(podscalerv2.LabelNameStep) + `!=""}`,
 			labels:   []string{string(podscalerv2.LabelNameOrg), string(podscalerv2.LabelNameRepo), string(podscalerv2.LabelNameBranch), string(podscalerv2.LabelNameVariant), string(podscalerv2.LabelNameTarget), string(podscalerv2.LabelNameStep)},
 		},
@@ -90,7 +90,7 @@ func Produce(clients map[string]prometheusapi.API, dataCache Cache, ignoreLatest
 				"version": "v2",
 				"metric":  name,
 			})
-			cache, err := loadCache(dataCache, name, logger)
+			cache, err := LoadCache(dataCache, name, logger)
 			if errors.Is(err, notExist{}) {
 				ranges := map[string][]podscalerv2.TimeRange{}
 				for cluster := range clients {

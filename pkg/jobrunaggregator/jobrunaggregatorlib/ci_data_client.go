@@ -37,6 +37,7 @@ type AggregationJobClient interface {
 
 type JobLister interface {
 	ListAllJobsWithVariants(ctx context.Context) ([]jobrunaggregatorapi.JobRowWithVariants, error)
+	GetJobVariants(ctx context.Context) (*jobrunaggregatorapi.JobRowWithVariants, error)
 	ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRow, error)
 
 	// ListProwJobRunsSince lists from the testplatform BigQuery dataset in a separate project from
@@ -247,6 +248,36 @@ ORDER BY JobName ASC
 	}
 
 	return jobs, nil
+}
+
+func (c *ciDataClient) GetJobVariants(ctx context.Context) (*jobrunaggregatorapi.JobRowWithVariants, error) {
+	queryString := c.dataCoordinates.SubstituteDataSetLocation(
+		`SELECT *  
+FROM DATA_SET_LOCATION.JobsWithVariants
+WHERE JobName = @JobName
+ORDER BY JobName ASC
+`)
+
+	query := c.client.Query(queryString)
+	query.Labels = map[string]string{
+		bigQueryLabelKeyApp:   bigQueryLabelValueApp,
+		bigQueryLabelKeyQuery: bigQueryLabelValueAllJobsWithVariants,
+	}
+	jobRows, err := query.Read(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query job table with %q: %w", queryString, err)
+	}
+	job := &jobrunaggregatorapi.JobRowWithVariants{}
+	for {
+		err = jobRows.Next(job)
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	return job, nil
 }
 
 func (c *ciDataClient) ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRow, error) {

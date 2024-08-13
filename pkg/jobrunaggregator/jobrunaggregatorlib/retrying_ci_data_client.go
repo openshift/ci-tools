@@ -56,6 +56,16 @@ func (c *retryingCIDataClient) ListAllJobsWithVariants(ctx context.Context) ([]j
 	return ret, err
 }
 
+func (c *retryingCIDataClient) GetJobVariants(ctx context.Context) (*jobrunaggregatorapi.JobRowWithVariants, error) {
+	var ret *jobrunaggregatorapi.JobRowWithVariants
+	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
+		var innerErr error
+		ret, innerErr = c.delegate.GetJobVariants(ctx)
+		return innerErr
+	})
+	return ret, err
+}
+
 func (c *retryingCIDataClient) ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRow, error) {
 	var ret []jobrunaggregatorapi.JobRow
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {

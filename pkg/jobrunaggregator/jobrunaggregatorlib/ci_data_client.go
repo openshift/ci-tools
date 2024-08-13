@@ -10,8 +10,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/api/iterator"
 
-	"k8s.io/apimachinery/pkg/util/sets"
-
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 )
 
@@ -57,7 +55,7 @@ type CIDataClient interface {
 	HistoricalDataClient
 
 	// these deal with release tags
-	ListReleaseTags(ctx context.Context) (sets.Set[string], error)
+	ListReleaseTags(ctx context.Context) (map[string]bool, error)
 
 	// GetLastJobRunEndTimeFromTable returns the last uploaded job runs EndTime in the given table.
 	GetLastJobRunEndTimeFromTable(ctx context.Context, table string) (*time.Time, error)
@@ -874,8 +872,8 @@ func (c *ciDataClient) tableForFrequency(frequency string) (string, error) {
 	}
 }
 
-func (c *ciDataClient) ListReleaseTags(ctx context.Context) (sets.Set[string], error) {
-	set := sets.Set[string]{}
+func (c *ciDataClient) ListReleaseTags(ctx context.Context) (map[string]bool, error) {
+	set := map[string]bool{}
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(`SELECT distinct(ReleaseTag) FROM DATA_SET_LOCATION.ReleaseTags`)
 	query := c.client.Query(queryString)
 	query.Labels = map[string]string{
@@ -896,7 +894,7 @@ func (c *ciDataClient) ListReleaseTags(ctx context.Context) (sets.Set[string], e
 			return nil, err
 		}
 
-		set.Insert(row.ReleaseTag)
+		set[row.ReleaseTag] = true
 	}
 
 	return set, nil

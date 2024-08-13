@@ -7,7 +7,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
 
@@ -106,8 +105,8 @@ func (c *retryingCIDataClient) ListUploadedJobRunIDsSinceFromTable(ctx context.C
 	return ret, err
 }
 
-func (c *retryingCIDataClient) ListReleaseTags(ctx context.Context) (sets.Set[string], error) {
-	var ret sets.Set[string]
+func (c *retryingCIDataClient) ListReleaseTags(ctx context.Context) (map[string]bool, error) {
+	var ret map[string]bool
 	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
 		var innerErr error
 		ret, innerErr = c.delegate.ListReleaseTags(ctx)

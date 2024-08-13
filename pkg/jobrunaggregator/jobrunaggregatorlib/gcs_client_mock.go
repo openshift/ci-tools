@@ -9,9 +9,8 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	logrus "github.com/sirupsen/logrus"
-
 	jobrunaggregatorapi "github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
+	logrus "github.com/sirupsen/logrus"
 )
 
 // MockCIGCSClient is a mock of CIGCSClient interface.

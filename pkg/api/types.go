@@ -1014,6 +1014,9 @@ type LiteralTestStep struct {
 	// RunAsScript defines if this step should be executed as a script mounted
 	// in the test container instead of being executed directly via bash
 	RunAsScript *bool `json:"run_as_script,omitempty"`
+	// NodeArchitecture is the architecture for the node where the test will run.
+	// If set, the generated test pod will include a nodeSelector for this architecture.
+	NodeArchitecture *NodeArchitecture `json:"node_architecture,omitempty"`
 }
 
 // StepParameter is a variable set by the test, with an optional default.
@@ -1126,6 +1129,9 @@ type MultiStageTestConfiguration struct {
 	// DependencyOverrides allows a step to override a dependency with a fully-qualified pullspec. This will probably only ever
 	// be used with rehearsals. Otherwise, the overrides should be passed in as parameters to ci-operator.
 	DependencyOverrides DependencyOverrides `json:"dependency_overrides,omitempty"`
+	// NodeArchitecture is the architecture for the node where the test will run.
+	// If set, the generated test pod will include a nodeSelector for this architecture.
+	NodeArchitecture *NodeArchitecture `json:"node_architecture,omitempty"`
 }
 type DependencyOverrides map[string]string
 
@@ -1163,6 +1169,9 @@ type MultiStageTestConfigurationLiteral struct {
 	// DependencyOverrides allows a step to override a dependency with a fully-qualified pullspec. This will probably only ever
 	// be used with rehearsals. Otherwise, the overrides should be passed in as parameters to ci-operator.
 	DependencyOverrides DependencyOverrides `json:"dependency_overrides,omitempty"`
+	// NodeArchitecture is the architecture for the node where the test will run.
+	// If set, the generated test pod will include a nodeSelector for this architecture.
+	NodeArchitecture *NodeArchitecture `json:"node_architecture,omitempty"`
 
 	// Override job timeout
 	Timeout *prowv1.Duration `json:"timeout,omitempty"`

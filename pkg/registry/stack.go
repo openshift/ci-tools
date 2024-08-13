@@ -18,15 +18,15 @@ func stackForChain() stack {
 	return stack{partial: true}
 }
 
-func stackForWorkflow(name string, env api.TestEnvironment, deps api.TestDependencies, dnsConfig *api.StepDNSConfig) stack {
+func stackForWorkflow(name string, env api.TestEnvironment, deps api.TestDependencies, dnsConfig *api.StepDNSConfig, nodeArchitecture *api.NodeArchitecture) stack {
 	return stack{
-		records: []stackRecord{stackRecordForTest("workflow/"+name, env, deps, dnsConfig)},
+		records: []stackRecord{stackRecordForTest("workflow/"+name, env, deps, dnsConfig, nodeArchitecture)},
 		partial: true,
 	}
 }
 
-func stackForTest(name string, env api.TestEnvironment, deps api.TestDependencies, dns *api.StepDNSConfig) stack {
-	return stack{records: []stackRecord{stackRecordForTest("test/"+name, env, deps, dns)}}
+func stackForTest(name string, env api.TestEnvironment, deps api.TestDependencies, dns *api.StepDNSConfig, nodeArchitecture *api.NodeArchitecture) stack {
+	return stack{records: []stackRecord{stackRecordForTest("test/"+name, env, deps, dns, nodeArchitecture)}}
 }
 
 func (s *stack) push(r stackRecord) {
@@ -84,6 +84,20 @@ func (s *stack) resolveDNS(dns *api.StepDNSConfig) *api.StepDNSConfig {
 	}
 	// If no overrides are found, return original
 	return dns
+}
+
+// resolveNodeArchitecture propagates a nodeArchitecture to determine the type of node to utilize for the pod run.
+func (s *stack) resolveNodeArchitecture(nodeArchitecture *api.NodeArchitecture) *api.NodeArchitecture {
+	for _, r := range s.records {
+		if r.nodeArchitecture != nil {
+			return r.nodeArchitecture
+		}
+	}
+	if nodeArchitecture != nil {
+		return nodeArchitecture
+	}
+	defaultNodeArchitecture := api.NodeArchitectureAMD64
+	return &defaultNodeArchitecture
 }
 
 // checkUnused emits errors for each unused parameter/dependency in the record.
@@ -146,15 +160,16 @@ func (s *stack) checkUnused(r *stackRecord, overridden [][]api.TestStep, registr
 }
 
 type stackRecord struct {
-	name       string
-	env        []api.StepParameter
-	unusedEnv  sets.Set[string]
-	deps       []api.StepDependency
-	unusedDeps sets.Set[string]
-	dnsConfig  *api.StepDNSConfig
+	name             string
+	env              []api.StepParameter
+	unusedEnv        sets.Set[string]
+	deps             []api.StepDependency
+	unusedDeps       sets.Set[string]
+	dnsConfig        *api.StepDNSConfig
+	nodeArchitecture *api.NodeArchitecture
 }
 
-func stackRecordForStep(name string, env []api.StepParameter, deps []api.StepDependency, dns *api.StepDNSConfig) stackRecord {
+func stackRecordForStep(name string, env []api.StepParameter, deps []api.StepDependency, dns *api.StepDNSConfig, nodeArchitecture *api.NodeArchitecture) stackRecord {
 	unusedEnv := sets.New[string]()
 	for _, x := range env {
 		unusedEnv.Insert(x.Name)
@@ -163,10 +178,10 @@ func stackRecordForStep(name string, env []api.StepParameter, deps []api.StepDep
 	for _, x := range deps {
 		unusedDeps.Insert(x.Env)
 	}
-	return stackRecord{name: name, env: env, unusedEnv: unusedEnv, deps: deps, unusedDeps: unusedDeps, dnsConfig: dns}
+	return stackRecord{name: name, env: env, unusedEnv: unusedEnv, deps: deps, unusedDeps: unusedDeps, dnsConfig: dns, nodeArchitecture: nodeArchitecture}
 }
 
-func stackRecordForTest(name string, env api.TestEnvironment, deps api.TestDependencies, dns *api.StepDNSConfig) stackRecord {
+func stackRecordForTest(name string, env api.TestEnvironment, deps api.TestDependencies, dns *api.StepDNSConfig, nodeArchitecture *api.NodeArchitecture) stackRecord {
 	params := make([]api.StepParameter, 0, len(env))
 	for k, v := range env {
 		unique := v
@@ -176,5 +191,5 @@ func stackRecordForTest(name string, env api.TestEnvironment, deps api.TestDepen
 	for k, v := range deps {
 		dependencies = append(dependencies, api.StepDependency{Name: v, Env: k})
 	}
-	return stackRecordForStep(name, params, dependencies, dns)
+	return stackRecordForStep(name, params, dependencies, dns, nodeArchitecture)
 }

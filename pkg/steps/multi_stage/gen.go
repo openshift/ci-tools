@@ -163,6 +163,14 @@ func (s *multiStageTestStep) generatePods(
 				pod.Spec.DNSPolicy = coreapi.DNSNone
 			}
 		}
+		if step.NodeArchitecture != nil {
+			if pod.Spec.NodeSelector == nil {
+				// if nodeArchitecture is not set, default to amd64 node selector
+				pod.Spec.NodeSelector = map[string]string{"kubernetes.io/arch": string(api.NodeArchitectureAMD64)}
+			} else {
+				pod.Spec.NodeSelector = map[string]string{"kubernetes.io/arch": string(*step.NodeArchitecture)}
+			}
+		}
 		pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{Name: homeVolumeName, VolumeSource: coreapi.VolumeSource{EmptyDir: &coreapi.EmptyDirVolumeSource{}}})
 		pod.Spec.Volumes = append(pod.Spec.Volumes, secretVolumes...)
 		for idx := range pod.Spec.Containers {

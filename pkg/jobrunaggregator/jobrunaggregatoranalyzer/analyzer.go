@@ -45,6 +45,7 @@ type JobRunAggregatorAnalyzerOptions struct {
 	prowJobClient       *prowjobclientset.Clientset
 	jobStateQuerySource string
 	prowJobMatcherFunc  jobrunaggregatorlib.ProwJobMatcherFunc
+	ciDataClient        jobrunaggregatorlib.CIDataClient
 
 	staticJobRunIdentifiers []jobrunaggregatorlib.JobRunIdentifier
 	gcsBucket               string
@@ -254,13 +255,23 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 		return err
 	}
 
-	logrus.Infof("%q for %q:  aggregating disruption tests", o.jobName, o.payloadTag)
-
-	disruptionSuite, err := o.CalculateDisruptionTestSuite(ctx, currentAggregationJunit.jobGCSBucketRoot, finishedJobsToAggregate, masterNodesUpdated)
+	jobWithVariants, err := o.ciDataClient.GetJobVariants(ctx, o.jobName)
 	if err != nil {
 		return err
 	}
-	currentAggregationJunitSuites.Suites = append(currentAggregationJunitSuites.Suites, disruptionSuite)
+	// We do not run aggregated disruption testing against single node as our tolerances are not applicable
+	// to job runs that routinely have 5-10 minutes of disruption:
+	if jobWithVariants.Topology == "single" {
+		alog.Info("skipping aggregated disruption tests on single node")
+	} else {
+		alog.Info("running aggregated disruption tests")
+
+		disruptionSuite, err := o.CalculateDisruptionTestSuite(ctx, currentAggregationJunit.jobGCSBucketRoot, finishedJobsToAggregate, masterNodesUpdated)
+		if err != nil {
+			return err
+		}
+		currentAggregationJunitSuites.Suites = append(currentAggregationJunitSuites.Suites, disruptionSuite)
+	}
 
 	// TODO this is the spot where we would add an alertSuite that aggregates the alerts firing in our clusters to prevent
 	//  allowing more and more failing alerts through just because one fails.

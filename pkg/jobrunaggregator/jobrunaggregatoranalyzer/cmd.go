@@ -207,6 +207,7 @@ func (f *JobRunsAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunAggregator
 		jobName:                 f.JobName,
 		payloadTag:              f.PayloadTag,
 		workingDir:              f.WorkingDir,
+		ciDataClient:            ciDataClient,
 		jobRunStartEstimate:     estimatedStartTime,
 		clock:                   clock.RealClock{},
 		timeout:                 f.Timeout,

@@ -279,7 +279,7 @@ ORDER BY JobName ASC
 		}
 	}
 	if job == nil || job.JobName == "" {
-		return nil, fmt.Errorf("no entry for %s found in variant registry")
+		return nil, fmt.Errorf("%s not found in variant registry", jobName)
 	}
 	return job, nil
 }

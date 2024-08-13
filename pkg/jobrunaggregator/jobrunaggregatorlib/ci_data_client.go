@@ -35,7 +35,7 @@ type AggregationJobClient interface {
 
 type JobLister interface {
 	ListAllJobsWithVariants(ctx context.Context) ([]jobrunaggregatorapi.JobRowWithVariants, error)
-	GetJobVariants(ctx context.Context) (*jobrunaggregatorapi.JobRowWithVariants, error)
+	GetJobVariants(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRowWithVariants, error)
 	ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRow, error)
 
 	// ListProwJobRunsSince lists from the testplatform BigQuery dataset in a separate project from
@@ -248,7 +248,7 @@ ORDER BY JobName ASC
 	return jobs, nil
 }
 
-func (c *ciDataClient) GetJobVariants(ctx context.Context) (*jobrunaggregatorapi.JobRowWithVariants, error) {
+func (c *ciDataClient) GetJobVariants(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRowWithVariants, error) {
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(
 		`SELECT *  
 FROM DATA_SET_LOCATION.JobsWithVariants
@@ -260,6 +260,9 @@ ORDER BY JobName ASC
 	query.Labels = map[string]string{
 		bigQueryLabelKeyApp:   bigQueryLabelValueApp,
 		bigQueryLabelKeyQuery: bigQueryLabelValueAllJobsWithVariants,
+	}
+	query.QueryConfig.Parameters = []bigquery.QueryParameter{
+		{Name: "JobName", Value: jobName},
 	}
 	jobRows, err := query.Read(ctx)
 	if err != nil {
@@ -274,6 +277,9 @@ ORDER BY JobName ASC
 		if err != nil {
 			return nil, err
 		}
+	}
+	if job == nil || job.JobName == "" {
+		return nil, fmt.Errorf("no entry for %s found in variant registry")
 	}
 	return job, nil
 }

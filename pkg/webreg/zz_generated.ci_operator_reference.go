@@ -591,6 +591,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  env: ' '\n" +
 	"                  # ResourceType is the type of resource that will be leased.\n" +
 	"                  resource_type: ' '\n" +
+	"            # NodeArchitecture is the architecture for the node where the test will run.\n" +
+	"            # If set, the generated test pod will include a nodeSelector for this architecture.\n" +
+	"            node_architecture: \"\"\n" +
 	"            # Observers are the observers that need to be run\n" +
 	"            observers:\n" +
 	"                - # Commands is the command(s) that will be run inside the image.\n" +
@@ -697,6 +700,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  # so no local copy of it will be created for the step and if the step\n" +
 	"                  # creates one, it will not be propagated.\n" +
 	"                  no_kubeconfig: false\n" +
+	"                  # NodeArchitecture is the architecture for the node where the test will run.\n" +
+	"                  # If set, the generated test pod will include a nodeSelector for this architecture.\n" +
+	"                  node_architecture: \"\"\n" +
 	"                  # Observers are the observers that should be running\n" +
 	"                  observers:\n" +
 	"                    - \"\"\n" +
@@ -787,6 +793,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  # so no local copy of it will be created for the step and if the step\n" +
 	"                  # creates one, it will not be propagated.\n" +
 	"                  no_kubeconfig: false\n" +
+	"                  # NodeArchitecture is the architecture for the node where the test will run.\n" +
+	"                  # If set, the generated test pod will include a nodeSelector for this architecture.\n" +
+	"                  node_architecture: \"\"\n" +
 	"                  # Observers are the observers that should be running\n" +
 	"                  observers:\n" +
 	"                    - \"\"\n" +
@@ -877,6 +886,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  # so no local copy of it will be created for the step and if the step\n" +
 	"                  # creates one, it will not be propagated.\n" +
 	"                  no_kubeconfig: false\n" +
+	"                  # NodeArchitecture is the architecture for the node where the test will run.\n" +
+	"                  # If set, the generated test pod will include a nodeSelector for this architecture.\n" +
+	"                  node_architecture: \"\"\n" +
 	"                  # Observers are the observers that should be running\n" +
 	"                  observers:\n" +
 	"                    - \"\"\n" +
@@ -1008,6 +1020,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  env: ' '\n" +
 	"                  # ResourceType is the type of resource that will be leased.\n" +
 	"                  resource_type: ' '\n" +
+	"            # NodeArchitecture is the architecture for the node where the test will run.\n" +
+	"            # If set, the generated test pod will include a nodeSelector for this architecture.\n" +
+	"            node_architecture: \"\"\n" +
 	"            # Observers are the observers that should be running\n" +
 	"            observers:\n" +
 	"                # Disable is a list of named observers that should be disabled\n" +
@@ -1064,6 +1079,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    - env: ' '\n" +
 	"                      resource_type: ' '\n" +
 	"                  no_kubeconfig: false\n" +
+	"                  node_architecture: \"\"\n" +
+	"                  # Observers are the observers that should be running\n" +
 	"                  observers:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - \"\"\n" +
@@ -1127,6 +1144,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    - env: ' '\n" +
 	"                      resource_type: ' '\n" +
 	"                  no_kubeconfig: false\n" +
+	"                  node_architecture: \"\"\n" +
+	"                  # Observers are the observers that should be running\n" +
 	"                  observers:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - \"\"\n" +
@@ -1190,6 +1209,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    - env: ' '\n" +
 	"                      resource_type: ' '\n" +
 	"                  no_kubeconfig: false\n" +
+	"                  node_architecture: \"\"\n" +
+	"                  # Observers are the observers that should be running\n" +
 	"                  observers:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - \"\"\n" +
@@ -1410,6 +1431,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              env: ' '\n" +
 	"              # ResourceType is the type of resource that will be leased.\n" +
 	"              resource_type: ' '\n" +
+	"        # NodeArchitecture is the architecture for the node where the test will run.\n" +
+	"        # If set, the generated test pod will include a nodeSelector for this architecture.\n" +
+	"        node_architecture: \"\"\n" +
 	"        # Observers are the observers that need to be run\n" +
 	"        observers:\n" +
 	"            - # Commands is the command(s) that will be run inside the image.\n" +
@@ -1516,6 +1540,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              # so no local copy of it will be created for the step and if the step\n" +
 	"              # creates one, it will not be propagated.\n" +
 	"              no_kubeconfig: false\n" +
+	"              # NodeArchitecture is the architecture for the node where the test will run.\n" +
+	"              # If set, the generated test pod will include a nodeSelector for this architecture.\n" +
+	"              node_architecture: \"\"\n" +
 	"              # Observers are the observers that should be running\n" +
 	"              observers:\n" +
 	"                - \"\"\n" +
@@ -1606,6 +1633,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              # so no local copy of it will be created for the step and if the step\n" +
 	"              # creates one, it will not be propagated.\n" +
 	"              no_kubeconfig: false\n" +
+	"              # NodeArchitecture is the architecture for the node where the test will run.\n" +
+	"              # If set, the generated test pod will include a nodeSelector for this architecture.\n" +
+	"              node_architecture: \"\"\n" +
 	"              # Observers are the observers that should be running\n" +
 	"              observers:\n" +
 	"                - \"\"\n" +
@@ -1696,6 +1726,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              # so no local copy of it will be created for the step and if the step\n" +
 	"              # creates one, it will not be propagated.\n" +
 	"              no_kubeconfig: false\n" +
+	"              # NodeArchitecture is the architecture for the node where the test will run.\n" +
+	"              # If set, the generated test pod will include a nodeSelector for this architecture.\n" +
+	"              node_architecture: \"\"\n" +
 	"              # Observers are the observers that should be running\n" +
 	"              observers:\n" +
 	"                - \"\"\n" +
@@ -1827,6 +1860,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              env: ' '\n" +
 	"              # ResourceType is the type of resource that will be leased.\n" +
 	"              resource_type: ' '\n" +
+	"        # NodeArchitecture is the architecture for the node where the test will run.\n" +
+	"        # If set, the generated test pod will include a nodeSelector for this architecture.\n" +
+	"        node_architecture: \"\"\n" +
 	"        # Observers are the observers that should be running\n" +
 	"        observers:\n" +
 	"            # Disable is a list of named observers that should be disabled\n" +
@@ -1883,6 +1919,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                - env: ' '\n" +
 	"                  resource_type: ' '\n" +
 	"              no_kubeconfig: false\n" +
+	"              node_architecture: \"\"\n" +
+	"              # Observers are the observers that should be running\n" +
 	"              observers:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - \"\"\n" +
@@ -1946,6 +1984,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                - env: ' '\n" +
 	"                  resource_type: ' '\n" +
 	"              no_kubeconfig: false\n" +
+	"              node_architecture: \"\"\n" +
+	"              # Observers are the observers that should be running\n" +
 	"              observers:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - \"\"\n" +
@@ -2009,6 +2049,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                - env: ' '\n" +
 	"                  resource_type: ' '\n" +
 	"              no_kubeconfig: false\n" +
+	"              node_architecture: \"\"\n" +
+	"              # Observers are the observers that should be running\n" +
 	"              observers:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - \"\"\n" +

@@ -44,7 +44,8 @@
                 "cpu": "1000m",
                 "memory": "2Gi"
               }
-            }
+            },
+            "node_architecture": "amd64"
           },
           {
             "as": "ipi-install-install",
@@ -64,7 +65,8 @@
             ],
             "observers": [
               "resourcewatcher"
-            ]
+            ],
+            "node_architecture": "amd64"
           }
         ],
         "test": [
@@ -77,7 +79,8 @@
                 "cpu": "1000m",
                 "memory": "2Gi"
               }
-            }
+            },
+            "node_architecture": "amd64"
           }
         ],
         "post": [
@@ -90,7 +93,8 @@
                 "cpu": "1000m",
                 "memory": "2Gi"
               }
-            }
+            },
+            "node_architecture": "amd64"
           },
           {
             "as": "ipi-deprovision-deprovision",
@@ -101,7 +105,8 @@
                 "cpu": "1000m",
                 "memory": "2Gi"
               }
-            }
+            },
+            "node_architecture": "amd64"
           }
         ]
       }

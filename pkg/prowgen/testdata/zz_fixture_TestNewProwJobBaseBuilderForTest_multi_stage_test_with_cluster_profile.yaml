@@ -13,7 +13,6 @@ spec:
     - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
     - --lease-server-credentials-file=/etc/boskos/credentials
     - --report-credentials-file=/etc/report/credentials
-    - --secret-dir=/usr/local/simple-cluster-profile
     - --target=simple
     command:
     - ci-operator
@@ -27,8 +26,6 @@ spec:
     - mountPath: /etc/boskos
       name: boskos
       readOnly: true
-    - mountPath: /usr/local/simple-cluster-profile
-      name: cluster-profile
     - mountPath: /secrets/gcs
       name: gcs-credentials
       readOnly: true
@@ -49,9 +46,6 @@ spec:
       - key: credentials
         path: credentials
       secretName: boskos-credentials
-  - name: cluster-profile
-    secret:
-      secretName: cluster-secrets-alibabacloud
   - name: manifest-tool-local-pusher
     secret:
       secretName: manifest-tool-local-pusher

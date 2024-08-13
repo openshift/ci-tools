@@ -802,6 +802,58 @@ See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
 			expectedAdditionalPRs: []config.AdditionalPR{"openshift/kubernetes#999"},
 		},
 		{
+			name: "payload-job-with-prs incorrectly issued multiple times in the same comment",
+			s: &server{
+				ghc:                ghc,
+				ctx:                context.TODO(),
+				kubeClient:         fakeclient.NewClientBuilder().Build(),
+				namespace:          "ci",
+				testResolver:       newFakeTestResolver(),
+				trustedChecker:     &fakeTrustedChecker{},
+				ciOpConfigResolver: &fakeCIOpConfigResolver{},
+			},
+			ic: github.IssueCommentEvent{
+				GUID: "guid",
+				Repo: github.Repo{Owner: github.User{Login: "openshift"}},
+				Issue: github.Issue{
+					Number:      123,
+					PullRequest: &struct{}{},
+				},
+				Comment: github.IssueComment{
+					Body: `/payload-job-with-prs periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial openshift/kubernetes#999
+/payload-job-with-prs periodic-ci-openshift-release-master-nightly-4.11-e2e-aws-serial openshift/kubernetes#999`,
+				},
+			},
+			expectedMessage: "given command is invalid: at least one of the commands given is only supported on a one-command-per-comment basis, please separate out commands as multiple comments",
+		},
+		{
+			name: "multiple singular commands incorrectly issued in the same comment",
+			s: &server{
+				ghc:                ghc,
+				ctx:                context.TODO(),
+				kubeClient:         fakeclient.NewClientBuilder().Build(),
+				namespace:          "ci",
+				testResolver:       newFakeTestResolver(),
+				trustedChecker:     &fakeTrustedChecker{},
+				ciOpConfigResolver: &fakeCIOpConfigResolver{},
+			},
+			ic: github.IssueCommentEvent{
+				GUID: "guid",
+				Repo: github.Repo{Owner: github.User{Login: "openshift"}},
+				Issue: github.Issue{
+					Number:      123,
+					PullRequest: &struct{}{},
+				},
+				Comment: github.IssueComment{
+					Body: `/payload-job-with-prs periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial openshift/kubernetes#999
+/payload-with-prs informing openshift/kubernetes#999
+/payload-aggregate-with-prs periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial 10 openshift/kubernetes#999
+`,
+				},
+			},
+			expectedMessage: "given command is invalid: at least one of the commands given is only supported on a one-command-per-comment basis, please separate out commands as multiple comments",
+		},
+		{
 			name: "non-prowgen jobs",
 			s: &server{
 				ghc:        ghc,

@@ -50,12 +50,14 @@ func (s *multiStageTestStep) generateObservers(
 }
 
 type generatePodOptions struct {
-	IsObserver bool
+	IsObserver       bool
+	NodeArchitecture string
 }
 
 func defaultGeneratePodOptions() *generatePodOptions {
 	return &generatePodOptions{
-		IsObserver: false,
+		IsObserver:       false,
+		NodeArchitecture: string(api.NodeArchitectureAMD64),
 	}
 }
 
@@ -134,9 +136,10 @@ func (s *multiStageTestStep) generatePods(
 			commands = []string{"/bin/bash", "-c", CommandPrefix + step.Commands}
 		}
 		labels := map[string]string{base_steps.LabelMetadataStep: step.As}
+		//pod.Spec.NodeSelector = map[string]string{"kubernetes.io/arch": string(*step.NodeArchitecture)}
 		pod, err := base_steps.GenerateBasePod(s.jobSpec, labels, name, s.nodeName,
 			containerName, commands, image, resources, artifactDir, s.jobSpec.DecorationConfig,
-			s.jobSpec.RawSpec(), secretVolumeMounts, &base_steps.GeneratePodOptions{PropagateExitCode: genPodOpts.IsObserver})
+			s.jobSpec.RawSpec(), secretVolumeMounts, &base_steps.GeneratePodOptions{PropagateExitCode: genPodOpts.IsObserver, NodeArchitecture: genPodOpts.NodeArchitecture})
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -161,14 +164,6 @@ func (s *multiStageTestStep) generatePods(
 			pod.Spec.DNSConfig.Searches = append(pod.Spec.DNSConfig.Searches, step.DNSConfig.Searches...)
 			if len(pod.Spec.DNSConfig.Nameservers) > 0 {
 				pod.Spec.DNSPolicy = coreapi.DNSNone
-			}
-		}
-		if step.NodeArchitecture != nil {
-			if pod.Spec.NodeSelector == nil {
-				// if nodeArchitecture is not set, default to amd64 node selector
-				pod.Spec.NodeSelector = map[string]string{"kubernetes.io/arch": string(api.NodeArchitectureAMD64)}
-			} else {
-				pod.Spec.NodeSelector = map[string]string{"kubernetes.io/arch": string(*step.NodeArchitecture)}
 			}
 		}
 		pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{Name: homeVolumeName, VolumeSource: coreapi.VolumeSource{EmptyDir: &coreapi.EmptyDirVolumeSource{}}})

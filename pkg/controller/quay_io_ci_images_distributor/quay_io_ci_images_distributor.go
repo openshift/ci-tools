@@ -374,6 +374,20 @@ func sourceForConfigChangeChannel(registryClient ctrlruntimeclient.Client, chang
 	return channelSource
 }
 
+func LoadConfigFromReleaseRepo(configPath string) ([]byte, error) {
+	metadata := cioperatorapi.Metadata{
+		Org:    "openshift",
+		Repo:   "release",
+		Branch: "master",
+	}
+	fileGetter := repoFileGetterWithIgnore(metadata)
+	file, err := fileGetter(metadata.Org, metadata.Repo, metadata.Branch)(configPath)
+	if err != nil {
+		return []byte{}, err
+	}
+	return file, nil
+}
+
 type ImageInfo struct {
 	Name string `json:"name"`
 	// Digest is the digest of the image, e.g., sha256:b24f782bee7dfddcc36b962f663aeabb16d6fa56a64a7cd0639ebfb1e5fa73f4

@@ -134,7 +134,7 @@ func (o *options) validate() error {
 		return errors.New("--mode must be either \"producer\", \"consumer.ui\", or \"consumer.admission\"")
 	}
 	if o.cacheDir == "" {
-		if o.cacheBucket == "" {
+		if o.cacheBucket == "" && o.cacheBucketv2 == "" {
 			return errors.New("--cache-bucket is required")
 		}
 		if o.gcsCredentialsFile == "" {
@@ -187,8 +187,10 @@ func main() {
 		if err != nil {
 			logrus.WithError(err).Fatal("Could not initialize GCS client.")
 		}
-		bucketv1 := gcsClient.Bucket(opts.cacheBucket)
-		cachev1 = &v1.BucketCache{Bucket: bucketv1}
+		if opts.cacheBucket != "" {
+			bucketv1 := gcsClient.Bucket(opts.cacheBucket)
+			cachev1 = &v1.BucketCache{Bucket: bucketv1}
+		}
 
 		if opts.cacheBucketv2 != "" {
 			bucketv2 := gcsClient.Bucket(opts.cacheBucketv2)

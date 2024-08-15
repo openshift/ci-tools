@@ -50,12 +50,14 @@ func (s *multiStageTestStep) generateObservers(
 }
 
 type generatePodOptions struct {
-	IsObserver bool
+	IsObserver       bool
+	NodeArchitecture string
 }
 
 func defaultGeneratePodOptions() *generatePodOptions {
 	return &generatePodOptions{
-		IsObserver: false,
+		IsObserver:       false,
+		NodeArchitecture: string(api.NodeArchitectureAMD64),
 	}
 }
 
@@ -136,7 +138,7 @@ func (s *multiStageTestStep) generatePods(
 		labels := map[string]string{base_steps.LabelMetadataStep: step.As}
 		pod, err := base_steps.GenerateBasePod(s.jobSpec, labels, name, s.nodeName,
 			containerName, commands, image, resources, artifactDir, s.jobSpec.DecorationConfig,
-			s.jobSpec.RawSpec(), secretVolumeMounts, &base_steps.GeneratePodOptions{PropagateExitCode: genPodOpts.IsObserver})
+			s.jobSpec.RawSpec(), secretVolumeMounts, &base_steps.GeneratePodOptions{PropagateExitCode: genPodOpts.IsObserver, NodeArchitecture: genPodOpts.NodeArchitecture})
 		if err != nil {
 			errs = append(errs, err)
 			continue

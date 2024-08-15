@@ -1407,6 +1407,40 @@ func TestValidateDNSConfig(t *testing.T) {
 	}
 }
 
+func TestValidateNodeArchitecture(t *testing.T) {
+	var testCases = []struct {
+		name   string
+		input  api.NodeArchitecture
+		output error
+	}{
+		{
+			name:   "empty Node Architecture",
+			output: errors.New("root.nodeArchitecture expected one of amd64 or arm64"),
+		},
+		{
+			name:  "valid AMD64 Node Architecture",
+			input: api.NodeArchitectureAMD64,
+		},
+		{
+			name:  "valid ARM64 Node Architecture",
+			input: api.NodeArchitectureARM64,
+		},
+		{
+			name:   "invalid Node Architecture",
+			input:  api.NodeArchitecture("s390x"),
+			output: errors.New("root.nodeArchitecture expected one of amd64 or arm64"),
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			err := validateNodeArchitecture("root", testCase.input)
+			if diff := cmp.Diff(err, testCase.output, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("actualError does not match expectedError, diff: %s", diff)
+			}
+		})
+	}
+}
+
 func TestValidateLeases(t *testing.T) {
 	for _, tc := range []struct {
 		name string

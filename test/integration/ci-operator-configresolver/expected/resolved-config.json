@@ -26,7 +26,8 @@
                 "cpu": "100m",
                 "memory": "200Mi"
               }
-            }
+            },
+            "node_architecture": "amd64"
           }
         ]
       }
@@ -45,7 +46,8 @@
                 "cpu": "1000m",
                 "memory": "2Gi"
               }
-            }
+            },
+            "node_architecture": "amd64"
           }
         ]
       }

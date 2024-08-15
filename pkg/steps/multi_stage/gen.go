@@ -136,7 +136,6 @@ func (s *multiStageTestStep) generatePods(
 			commands = []string{"/bin/bash", "-c", CommandPrefix + step.Commands}
 		}
 		labels := map[string]string{base_steps.LabelMetadataStep: step.As}
-		//pod.Spec.NodeSelector = map[string]string{"kubernetes.io/arch": string(*step.NodeArchitecture)}
 		pod, err := base_steps.GenerateBasePod(s.jobSpec, labels, name, s.nodeName,
 			containerName, commands, image, resources, artifactDir, s.jobSpec.DecorationConfig,
 			s.jobSpec.RawSpec(), secretVolumeMounts, &base_steps.GeneratePodOptions{PropagateExitCode: genPodOpts.IsObserver, NodeArchitecture: genPodOpts.NodeArchitecture})

@@ -1111,6 +1111,317 @@ func TestResolve(t *testing.T) {
 					NodeArchitecture: &nodeArchitectureARM64,
 				}},
 			},
+		},
+		{
+			name: "Only Post Step on arm64",
+			config: api.MultiStageTestConfiguration{
+				Workflow: &awsWorkflow,
+			},
+			chainMap: ChainByName{
+				fipsPreChain: {
+					Steps: []api.TestStep{{
+						LiteralTestStep: &api.LiteralTestStep{
+							As:       "ipi-install",
+							From:     "installer",
+							Commands: "openshift-cluster install",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{"cpu": "1000m"},
+								Limits:   api.ResourceList{"memory": "2Gi"},
+							}},
+					}, {
+						LiteralTestStep: &api.LiteralTestStep{
+							As:       "enable-fips",
+							From:     "fips-enabler",
+							Commands: "enable_fips",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{"cpu": "1000m"},
+								Limits:   api.ResourceList{"memory": "2Gi"},
+							}},
+					}},
+				},
+			},
+			stepMap: ReferenceByName{
+				teardownRef: {
+					As:       "ipi-teardown",
+					From:     "installer",
+					Commands: "openshift-cluster destroy",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					},
+					NodeArchitecture: &nodeArchitectureARM64},
+			},
+			workflowMap: WorkflowByName{
+				awsWorkflow: {
+					ClusterProfile: api.ClusterProfileAWS,
+					Pre: []api.TestStep{{
+						Chain: &fipsPreChain,
+					}},
+					Test: []api.TestStep{{
+						LiteralTestStep: &api.LiteralTestStep{
+							As:       "e2e",
+							From:     "my-image",
+							Commands: "make custom-e2e",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{"cpu": "1000m"},
+								Limits:   api.ResourceList{"memory": "2Gi"},
+							}},
+					}},
+					Post: []api.TestStep{{
+						Reference: &teardownRef,
+					}},
+				},
+			},
+			expectedRes: api.MultiStageTestConfigurationLiteral{
+				ClusterProfile: api.ClusterProfileAWS,
+				Pre: []api.LiteralTestStep{{
+					As:       "ipi-install",
+					From:     "installer",
+					Commands: "openshift-cluster install",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					},
+					NodeArchitecture: &nodeArchitectureAMD64}, {
+					As:       "enable-fips",
+					From:     "fips-enabler",
+					Commands: "enable_fips",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					},
+					NodeArchitecture: &nodeArchitectureAMD64},
+				},
+				Test: []api.LiteralTestStep{{
+					As:       "e2e",
+					From:     "my-image",
+					Commands: "make custom-e2e",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					},
+					NodeArchitecture: &nodeArchitectureAMD64,
+				}},
+				Post: []api.LiteralTestStep{{
+					As:       "ipi-teardown",
+					From:     "installer",
+					Commands: "openshift-cluster destroy",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					},
+					NodeArchitecture: &nodeArchitectureARM64,
+				}},
+			},
+		},
+		{
+			name: "Pre Step on arm64",
+			config: api.MultiStageTestConfiguration{
+				Workflow: &awsWorkflow,
+			},
+			chainMap: ChainByName{
+				fipsPreChain: {
+					Steps: []api.TestStep{{
+						LiteralTestStep: &api.LiteralTestStep{
+							As:       "ipi-install",
+							From:     "installer",
+							Commands: "openshift-cluster install",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{"cpu": "1000m"},
+								Limits:   api.ResourceList{"memory": "2Gi"},
+							},
+							NodeArchitecture: &nodeArchitectureARM64},
+					}, {
+						LiteralTestStep: &api.LiteralTestStep{
+							As:       "enable-fips",
+							From:     "fips-enabler",
+							Commands: "enable_fips",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{"cpu": "1000m"},
+								Limits:   api.ResourceList{"memory": "2Gi"},
+							},
+							NodeArchitecture: &nodeArchitectureARM64},
+					}},
+				},
+			},
+			stepMap: ReferenceByName{
+				teardownRef: {
+					As:       "ipi-teardown",
+					From:     "installer",
+					Commands: "openshift-cluster destroy",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					}},
+			},
+			workflowMap: WorkflowByName{
+				awsWorkflow: {
+					ClusterProfile: api.ClusterProfileAWS,
+					Pre: []api.TestStep{{
+						Chain: &fipsPreChain,
+					}},
+					Test: []api.TestStep{{
+						LiteralTestStep: &api.LiteralTestStep{
+							As:       "e2e",
+							From:     "my-image",
+							Commands: "make custom-e2e",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{"cpu": "1000m"},
+								Limits:   api.ResourceList{"memory": "2Gi"},
+							}},
+					}},
+					Post: []api.TestStep{{
+						Reference: &teardownRef,
+					}},
+				},
+			},
+			expectedRes: api.MultiStageTestConfigurationLiteral{
+				ClusterProfile: api.ClusterProfileAWS,
+				Pre: []api.LiteralTestStep{{
+					As:       "ipi-install",
+					From:     "installer",
+					Commands: "openshift-cluster install",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					},
+					NodeArchitecture: &nodeArchitectureARM64}, {
+					As:       "enable-fips",
+					From:     "fips-enabler",
+					Commands: "enable_fips",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					},
+					NodeArchitecture: &nodeArchitectureARM64},
+				},
+				Test: []api.LiteralTestStep{{
+					As:       "e2e",
+					From:     "my-image",
+					Commands: "make custom-e2e",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					},
+					NodeArchitecture: &nodeArchitectureAMD64,
+				}},
+				Post: []api.LiteralTestStep{{
+					As:       "ipi-teardown",
+					From:     "installer",
+					Commands: "openshift-cluster destroy",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					},
+					NodeArchitecture: &nodeArchitectureAMD64,
+				}},
+			},
+		},
+		{
+			name: "Workflow Overrides: Workflow and Post on arm64 while Pre and Test are amd64",
+			config: api.MultiStageTestConfiguration{
+				NodeArchitecture: &nodeArchitectureARM64,
+				Workflow:         &awsWorkflow,
+			},
+			chainMap: ChainByName{
+				fipsPreChain: {
+					Steps: []api.TestStep{{
+						LiteralTestStep: &api.LiteralTestStep{
+							As:       "ipi-install",
+							From:     "installer",
+							Commands: "openshift-cluster install",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{"cpu": "1000m"},
+								Limits:   api.ResourceList{"memory": "2Gi"},
+							},
+							NodeArchitecture: &nodeArchitectureAMD64},
+					}, {
+						LiteralTestStep: &api.LiteralTestStep{
+							As:       "enable-fips",
+							From:     "fips-enabler",
+							Commands: "enable_fips",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{"cpu": "1000m"},
+								Limits:   api.ResourceList{"memory": "2Gi"},
+							},
+							NodeArchitecture: &nodeArchitectureAMD64},
+					}},
+				},
+			},
+			stepMap: ReferenceByName{
+				teardownRef: {
+					As:       "ipi-teardown",
+					From:     "installer",
+					Commands: "openshift-cluster destroy",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					},
+					NodeArchitecture: &nodeArchitectureARM64},
+			},
+			workflowMap: WorkflowByName{
+				awsWorkflow: {
+					ClusterProfile: api.ClusterProfileAWS,
+					Pre: []api.TestStep{{
+						Chain: &fipsPreChain,
+					}},
+					Test: []api.TestStep{{
+						LiteralTestStep: &api.LiteralTestStep{
+							As:       "e2e",
+							From:     "my-image",
+							Commands: "make custom-e2e",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{"cpu": "1000m"},
+								Limits:   api.ResourceList{"memory": "2Gi"},
+							},
+							NodeArchitecture: &nodeArchitectureAMD64},
+					}},
+					Post: []api.TestStep{{
+						Reference: &teardownRef,
+					}},
+				},
+			},
+			expectedRes: api.MultiStageTestConfigurationLiteral{
+				ClusterProfile: api.ClusterProfileAWS,
+				Pre: []api.LiteralTestStep{{
+					As:       "ipi-install",
+					From:     "installer",
+					Commands: "openshift-cluster install",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					},
+					NodeArchitecture: &nodeArchitectureARM64}, {
+					As:       "enable-fips",
+					From:     "fips-enabler",
+					Commands: "enable_fips",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					},
+					NodeArchitecture: &nodeArchitectureARM64},
+				},
+				Test: []api.LiteralTestStep{{
+					As:       "e2e",
+					From:     "my-image",
+					Commands: "make custom-e2e",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					},
+					NodeArchitecture: &nodeArchitectureARM64,
+				}},
+				Post: []api.LiteralTestStep{{
+					As:       "ipi-teardown",
+					From:     "installer",
+					Commands: "openshift-cluster destroy",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					},
+					NodeArchitecture: &nodeArchitectureARM64,
+				}},
+			},
 		}} {
 		t.Run(testCase.name, func(t *testing.T) {
 			err := Validate(testCase.stepMap, testCase.chainMap, testCase.workflowMap, testCase.observerMap)

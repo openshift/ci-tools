@@ -47,7 +47,8 @@
                 "cpu": "1000m",
                 "memory": "2Gi"
               }
-            }
+            },
+            "node_architecture": "amd64"
           },
           {
             "as": "ipi-install-install",

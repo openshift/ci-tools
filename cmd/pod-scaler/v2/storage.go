@@ -119,8 +119,8 @@ func (e notExist) Unwrap() error {
 	return e.wrapped
 }
 
-// loadCache loads cached query data from the given storage loader.
-func loadCache(loader loader, metricName string, logger *logrus.Entry) (*podscalerv2.CachedQuery, error) {
+// LoadCache loads cached query data from the given storage loader.
+func LoadCache(loader loader, metricName string, logger *logrus.Entry) (*podscalerv2.CachedQuery, error) {
 	readStart := time.Now()
 	logger.Info("Reading Prometheus data from Cache.")
 	logger.Debug("Loading Prometheus data from storage.")
@@ -205,8 +205,7 @@ func storeTo(storer storer, metricName string, data []byte) error {
 	return kerrors.NewAggregate(errs)
 }
 
-//TODO(sgoeddel): this will be used once v1 is removed
-//// lastUpdated determines the time at which the Cache for this metric was last updated
-//func lastUpdated(resolver attributeResolver, metricName string) (time.Time, error) {
-//	return resolver.lastUpdated(interrupts.Context(), metricName+".json")
-//}
+// LastUpdated determines the time at which the Cache for this metric was last updated
+func LastUpdated(resolver attributeResolver, metricName string) (time.Time, error) {
+	return resolver.lastUpdated(interrupts.Context(), metricName+".json")
+}

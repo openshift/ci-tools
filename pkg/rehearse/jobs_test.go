@@ -117,6 +117,7 @@ func generateTestConfigFiles() config.DataByFilename {
 var ignoreUnexported = cmpopts.IgnoreUnexported(prowconfig.Presubmit{}, prowconfig.Brancher{}, prowconfig.RegexpChangeMatcher{}, prowconfig.Periodic{})
 
 func TestInlineCiopConfig(t *testing.T) {
+	nodeArchitectureAMD64 := api.NodeArchitectureAMD64
 	unresolvedConfig := api.ReleaseBuildConfiguration{
 		Tests: []api.TestStepConfiguration{
 			{
@@ -130,6 +131,7 @@ func TestInlineCiopConfig(t *testing.T) {
 							Requests: api.ResourceList{"cpu": "1000m"},
 							Limits:   api.ResourceList{"memory": "2Gi"},
 						},
+						NodeArchitecture: &nodeArchitectureAMD64,
 					}}},
 				},
 			},
@@ -153,7 +155,8 @@ func TestInlineCiopConfig(t *testing.T) {
 						Resources: api.ResourceRequirements{
 							Requests: api.ResourceList{"cpu": "1000m"},
 							Limits:   api.ResourceList{"memory": "2Gi"},
-						}}},
+						},
+						NodeArchitecture: &nodeArchitectureAMD64}},
 				},
 			},
 		},
@@ -171,7 +174,7 @@ func TestInlineCiopConfig(t *testing.T) {
 		Tests: []api.TestStepConfiguration{{
 			As: "test1",
 			MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-				Pre: []api.LiteralTestStep{{FromImage: &api.ImageStreamTagReference{Namespace: "fancy", Name: "willem", Tag: "first"}}},
+				Pre: []api.LiteralTestStep{{FromImage: &api.ImageStreamTagReference{Namespace: "fancy", Name: "willem", Tag: "first"}, NodeArchitecture: &nodeArchitectureAMD64}},
 			},
 		}, {
 			As: "test2",

@@ -42,6 +42,7 @@ func TestARTImages(t *testing.T) {
 				{Namespace: "openshift", Name: regexp.MustCompile("^release$")},
 				{Namespace: "ocp", Name: regexp.MustCompile("^builder$")},
 				{Namespace: "origin", Name: regexp.MustCompile("^scos.*")},
+				{Namespace: "ocp", Name: regexp.MustCompile(`^4.\d+$`), Tag: regexp.MustCompile("^rhel-coreos.*")},
 			},
 			ignoredSources: []IgnoredSource{{Source: Source{ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "openshift", Name: "release", Tag: "ignore"}}, Reason: "unit-test"}},
 			client: fakeclient.NewClientBuilder().WithRuntimeObjects(
@@ -105,6 +106,82 @@ func TestARTImages(t *testing.T) {
 				},
 				&imagev1.ImageStream{
 					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "ocp",
+						Name:      "4.18",
+					},
+					Status: imagev1.ImageStreamStatus{
+						Tags: []imagev1.NamedTagEventList{
+							{
+								Tag: "a",
+							},
+							{
+								Tag: "rhel-coreos",
+							},
+							{
+								Tag: "rhel-coreos-extensions",
+							},
+						},
+					},
+				},
+				&imagev1.ImageStream{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "ocp",
+						Name:      "some-4.18",
+					},
+					Status: imagev1.ImageStreamStatus{
+						Tags: []imagev1.NamedTagEventList{
+							{
+								Tag: "a",
+							},
+							{
+								Tag: "rhel-coreos",
+							},
+							{
+								Tag: "rhel-coreos-extensions",
+							},
+						},
+					},
+				},
+				&imagev1.ImageStream{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "ocp",
+						Name:      "3.18",
+					},
+					Status: imagev1.ImageStreamStatus{
+						Tags: []imagev1.NamedTagEventList{
+							{
+								Tag: "a",
+							},
+							{
+								Tag: "rhel-coreos",
+							},
+							{
+								Tag: "rhel-coreos-extensions",
+							},
+						},
+					},
+				},
+				&imagev1.ImageStream{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "origin",
+						Name:      "4.18",
+					},
+					Status: imagev1.ImageStreamStatus{
+						Tags: []imagev1.NamedTagEventList{
+							{
+								Tag: "a",
+							},
+							{
+								Tag: "rhel-coreos",
+							},
+							{
+								Tag: "rhel-coreos-extensions",
+							},
+						},
+					},
+				},
+				&imagev1.ImageStream{
+					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "origin",
 						Name:      "scos-4.16",
 					},
@@ -139,6 +216,12 @@ func TestARTImages(t *testing.T) {
 				"ocp/builder:b":       {ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "ocp", Name: "builder", Tag: "b"}},
 				"origin/scos-4.16:a":  {ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "origin", Name: "scos-4.16", Tag: "a"}},
 				"origin/scos-4.16:b":  {ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "origin", Name: "scos-4.16", Tag: "b"}},
+				"ocp/4.18:rhel-coreos": {
+					ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "ocp", Name: "4.18", Tag: "rhel-coreos"},
+				},
+				"ocp/4.18:rhel-coreos-extensions": {
+					ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "ocp", Name: "4.18", Tag: "rhel-coreos-extensions"},
+				},
 			},
 		},
 	}

@@ -10,13 +10,16 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
-	prometheusapi "github.com/prometheus/client_golang/api/prometheus/v1"
+	"github.com/fsnotify/fsnotify"
+	"github.com/robfig/cron/v3"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
 
@@ -35,7 +38,10 @@ import (
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
+type ClusterMap map[string]string
+
 const (
+	blocked        = "blocked"
 	githubOrg      = "openshift"
 	githubRepo     = "release"
 	githubLogin    = "openshift-bot"
@@ -44,8 +50,11 @@ const (
 )
 
 type options struct {
-	prowJobConfigDir string
-	configPath       string
+	prowJobConfigDir  string
+	configPath        string
+	clusterConfigPath string
+	jobsStoragePath   string
+	daemonize         bool
 
 	maxConcurrency       int
 	prometheusDaysBefore int
@@ -70,6 +79,9 @@ func gatherOptions() options {
 
 	fs.StringVar(&o.prowJobConfigDir, "prow-jobs-dir", "", "Path to a root of directory structure with Prow job config files (ci-operator/jobs in openshift/release)")
 	fs.StringVar(&o.configPath, "config-path", "", "Path to the config file (core-services/sanitize-prow-jobs/_config.yaml in openshift/release)")
+	fs.StringVar(&o.clusterConfigPath, "cluster-config-path", "core-services/sanitize-prow-jobs/_clusters.yaml", "Path to the config file (core-services/sanitize-prow-jobs/_clusters.yaml in openshift/release)")
+	fs.StringVar(&o.jobsStoragePath, "jobs-storage-path", "", "Path to the file holding only job assignments in Gob format")
+	fs.BoolVar(&o.daemonize, "daemonize", false, "Run dispatcher in daemon mode")
 	fs.IntVar(&o.prometheusDaysBefore, "prometheus-days-before", 1, "Number [1,15] of days before. Time 00-00-00 of that day will be used as time to query Prometheus. E.g., 1 means 00-00-00 of yesterday.")
 	fs.IntVar(&o.maxConcurrency, "concurrency", 0, "Maximum number of concurrent in-flight goroutines to handle files.")
 
@@ -138,6 +150,34 @@ func (o *options) validate() error {
 	return o.PrometheusOptions.Validate()
 }
 
+func loadClusterConfig(filePath string) (ClusterMap, sets.Set[string], error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var clusters map[string][]string
+	err = yaml.Unmarshal(data, &clusters)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	blockedClusters := sets.New[string]()
+	clusterMap := make(ClusterMap)
+	for provider, clusterList := range clusters {
+		if provider != blocked {
+			for _, cluster := range clusterList {
+				clusterMap[cluster] = provider
+			}
+		}
+		if provider == blocked {
+			blockedClusters.Insert(clusterList...)
+		}
+	}
+
+	return clusterMap, blockedClusters, nil
+}
+
 // getCloudProvidersForE2ETests returns a set of cloud providers where a cluster is hosted for an e2e test defined in the given Prow job config.
 func getCloudProvidersForE2ETests(jc *prowconfig.JobConfig) sets.Set[string] {
 	cloudProviders := sets.New[string]()
@@ -168,6 +208,8 @@ type clusterVolume struct {
 	clusterVolumeMap map[string]map[string]float64
 	// only needed for stable tests: traverse the above map by sorted key list
 	cloudProviders sets.Set[string]
+	pjs            map[string]string
+	blocked        sets.Set[string]
 	mutex          sync.Mutex
 }
 
@@ -231,7 +273,25 @@ func (cv *clusterVolume) addToVolume(cloudProvider, cluster string, jobBase prow
 	} else if determinedCloudProvider := config.IsInBuildFarm(determinedCluster); determinedCloudProvider != "" {
 		cv.clusterVolumeMap[string(determinedCloudProvider)][string(determinedCluster)] = cv.clusterVolumeMap[string(determinedCloudProvider)][string(determinedCluster)] + jobVolumes[jobBase.Name]
 	}
+
+	cv.pjs[jobBase.Name] = cv.determineCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated)
 	return nil
+}
+
+func (cv *clusterVolume) determineCluster(cluster, determinedCluster, defaultCluster string, canBeRelocated bool) string {
+	var targetCluster string
+	if cluster == determinedCluster || canBeRelocated {
+		targetCluster = cluster
+	} else if _, isBlocked := cv.blocked[determinedCluster]; !isBlocked {
+		targetCluster = determinedCluster
+	} else {
+		targetCluster = cluster
+	}
+
+	if _, isBlocked := cv.blocked[targetCluster]; isBlocked {
+		return defaultCluster
+	}
+	return targetCluster
 }
 
 // dispatchJobConfig dispatches the jobs defined in a Prow jon config
@@ -260,13 +320,13 @@ type configResult struct {
 //   - When all the e2e tests are targeting the same cloud provider, we run the test pod on the that cloud provider too.
 //   - When the e2e tests are targeting different cloud providers, or there is no e2e tests at all, we can run the tests
 //     on any cluster in the build farm. Those jobs are used to load balance the workload of clusters in the build farm.
-func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency int, config *dispatcher.Config, jobVolumes map[string]float64) error {
+func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency int, config *dispatcher.Config, jobVolumes map[string]float64, blocked sets.Set[string]) (map[string]string, error) {
 	if config == nil {
-		return fmt.Errorf("config is nil")
+		return nil, fmt.Errorf("config is nil")
 	}
 
 	// cv stores the volume for each cluster in the build farm
-	cv := &clusterVolume{clusterVolumeMap: map[string]map[string]float64{}, cloudProviders: sets.New[string]()}
+	cv := &clusterVolume{clusterVolumeMap: map[string]map[string]float64{}, cloudProviders: sets.New[string](), pjs: map[string]string{}, blocked: blocked}
 	for cloudProvider, v := range config.BuildFarm {
 		for cluster := range v {
 			cloudProviderString := string(cloudProvider)
@@ -282,7 +342,7 @@ func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency i
 
 	// no clusters in the build farm
 	if len(cv.clusterVolumeMap) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	sem := semaphore.NewWeighted(int64(maxConcurrency))
@@ -346,7 +406,7 @@ func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency i
 
 		return nil
 	}); err != nil {
-		return fmt.Errorf("failed to dispatch all Prow jobs: %w", err)
+		return nil, fmt.Errorf("failed to dispatch all Prow jobs: %w", err)
 	}
 
 	if err := sem.Acquire(ctx, int64(maxConcurrency)); err != nil {
@@ -367,7 +427,7 @@ func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency i
 		}
 	}
 
-	return utilerrors.NewAggregate(errs)
+	return cv.pjs, utilerrors.NewAggregate(errs)
 }
 
 // getClusterProvider gets information using get request what is the current cloud provider for the given cluster
@@ -398,7 +458,7 @@ func getClusterProvider(cluster string) (api.Cloud, error) {
 			}
 		}
 	}
-	return "", fmt.Errorf("Have not found provider for cluster %s", cluster)
+	return "", fmt.Errorf("have not found provider for cluster %s", cluster)
 }
 
 // removeDisabledClusters removes disabled clusters from BuildFarm and BuildFarmConfig
@@ -447,6 +507,186 @@ func addEnabledClusters(config *dispatcher.Config, enabled sets.Set[string], get
 	}
 }
 
+func getEnabledClusters(config *dispatcher.Config) sets.Set[string] {
+	enabled := sets.New[string]()
+	for _, clusters := range config.BuildFarm {
+		for cluster := range clusters {
+			enabled.Insert(string(cluster))
+		}
+	}
+	return enabled
+}
+
+func getDiffClusters(enabledClusters, clustersFromConfig sets.Set[string]) (clustersToAdd, clustersToRemove sets.Set[string]) {
+	return clustersFromConfig.Difference(enabledClusters), enabledClusters.Difference(clustersFromConfig)
+}
+
+func clustersMapToSet(clusterMap ClusterMap) sets.Set[string] {
+	clusterSet := sets.Set[string]{}
+	for cluster := range clusterMap {
+		clusterSet.Insert(cluster)
+	}
+	return clusterSet
+}
+
+func createPR(o options) {
+	logrus.WithField("targetDir", o.targetDir).Info("Changing working directory ...")
+	if err := os.Chdir(o.targetDir); err != nil {
+		logrus.WithError(err).Fatal("Failed to change to root dir")
+	}
+
+	command := "/usr/bin/sanitize-prow-jobs"
+	arguments := []string{"--prow-jobs-dir", "./ci-operator/jobs", "--config-path", "./core-services/sanitize-prow-jobs/_config.yaml"}
+	fullCommand := fmt.Sprintf("%s %s", filepath.Base(command), strings.Join(arguments, " "))
+	logrus.WithField("fullCommand", fullCommand).Infof("Running the command ...")
+
+	combinedOutput, err := exec.Command(command, arguments...).CombinedOutput()
+	if err != nil {
+		logrus.WithError(err).WithField("combinedOutput", string(combinedOutput)).Fatal("failed to run the command")
+	}
+
+	title := fmt.Sprintf("%s at %s", matchTitle, time.Now().Format(time.RFC1123))
+	if err := o.PRCreationOptions.UpsertPR(o.targetDir, githubOrg, githubRepo, upstreamBranch, title, prcreation.PrAssignee(o.assign), prcreation.MatchTitle(matchTitle), prcreation.AdditionalLabels([]string{rehearse.RehearsalsAckLabel})); err != nil {
+		logrus.WithError(err).Fatalf("failed to upsert PR")
+	}
+}
+
+func runAsDaemon(o options, promVolumes *prometheusVolumes) {
+	if o.clusterConfigPath == "" {
+		logrus.Fatal("mandatory argument --cluster-config-path wasn't set")
+	}
+
+	if o.jobsStoragePath == "" {
+		logrus.Fatal("mandatory argument --cluster-config-path wasn't set")
+	}
+
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigs
+		logrus.Info("Ctrl+C pressed. Exiting immediately.")
+		os.Exit(0)
+	}()
+
+	var dispatchWrapper func(cron bool)
+	prowjobs := newProwjobs(o.jobsStoragePath)
+	c := cron.New()
+
+	{
+		savedBlocked := sets.Set[string]{}
+		var mu sync.Mutex
+
+		dispatchWrapper = func(cron bool) {
+			mu.Lock()
+			defer mu.Unlock()
+
+			config, err := dispatcher.LoadConfig(o.configPath)
+			if err != nil {
+				logrus.WithError(err).Errorf("failed to load config from %q", o.configPath)
+				return
+			}
+
+			configClusterMap, blocked, err := loadClusterConfig(o.clusterConfigPath)
+			if err != nil {
+				logrus.WithError(err).Error("failed to load cluster config")
+				return
+			}
+			clustersFromConfig := clustersMapToSet(configClusterMap)
+
+			enabled, disabled := getDiffClusters(getEnabledClusters(config), clustersFromConfig)
+			if len(disabled) > 0 {
+				removeDisabledClusters(config, disabled)
+			}
+
+			firstRunOrBlockedChange := !savedBlocked.Equal(blocked)
+			if (!cron && enabled.Len() == 0 && disabled.Len() == 0) && !firstRunOrBlockedChange {
+				return
+			}
+			savedBlocked = blocked
+
+			jobVolumes, err := promVolumes.GetJobVolumes()
+			if err != nil {
+				logrus.WithError(err).Fatal("failed to get job volumes")
+			}
+
+			addEnabledClusters(config, enabled,
+				func(cluster string) (api.Cloud, error) {
+					provider, exists := configClusterMap[cluster]
+					if !exists {
+						return "", fmt.Errorf("have not found provider for cluster %s", cluster)
+					}
+					return api.Cloud(provider), nil
+				})
+
+			pjs, err := dispatchJobs(context.TODO(), o.prowJobConfigDir, o.maxConcurrency, config, jobVolumes, blocked)
+			if err != nil {
+				logrus.WithError(err).Error("failed to dispatch")
+				return
+			}
+			prowjobs.regenerate(pjs)
+
+			if err := dispatcher.SaveConfig(config, o.configPath); err != nil {
+				logrus.WithError(err).Fatalf("Failed to save config file to %s", o.configPath)
+			}
+
+			if err := writeGob(o.jobsStoragePath, pjs); err != nil {
+				logrus.Errorf("continuing on cache memory, error writing Gob file: %v", err)
+			}
+
+			if o.createPR {
+				createPR(o)
+			}
+		}
+	}
+
+	cronDispatchWrapper := func() {
+		dispatchWrapper(true)
+	}
+
+	_, err := c.AddFunc("0 7 * * 0", cronDispatchWrapper)
+	if err != nil {
+		logrus.WithError(err).Error("error scheduling cron job")
+		return
+	}
+	c.Start()
+
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		logrus.WithError(err).Fatal("failed setup watcher")
+	}
+	defer watcher.Close()
+
+	go func() {
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				if event.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Rename|fsnotify.Remove) != 0 {
+					dispatchWrapper(false)
+				}
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+				logrus.WithError(err)
+			}
+		}
+	}()
+
+	err = watcher.Add(o.clusterConfigPath)
+	if err != nil {
+		logrus.Fatal(err)
+	}
+
+	dispatchWrapper(false)
+
+	server := newServer(prowjobs)
+	http.HandleFunc("/", server.requestHandler)
+	logrus.Fatal(http.ListenAndServe(":8080", nil))
+}
+
 func main() {
 	o := gatherOptions()
 	if err := o.validate(); err != nil {
@@ -471,23 +711,20 @@ func main() {
 		}
 	}
 
-	promClient, err := o.PrometheusOptions.NewPrometheusClient(secret.GetSecret)
+	promVolumes, err := newPrometheusVolumes(o.PrometheusOptions, o.prometheusDaysBefore)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create prometheus client.")
+		logrus.WithError(err).Fatal("failed to create prometheus volumes")
 	}
 
-	v1api := prometheusapi.NewAPI(promClient)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	y, m, d := time.Now().Add(-time.Duration(24*o.prometheusDaysBefore) * time.Hour).Date()
-	ts := time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
-	jobVolumes, err := dispatcher.GetJobVolumesFromPrometheus(ctx, v1api, ts)
-	logrus.Debugf("we use %s as now to query prometheus", ts.UTC())
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to get job volumes from Prometheus.")
+	if o.daemonize {
+		runAsDaemon(o, &promVolumes)
+		return
 	}
-	logrus.WithField("jobVolumes", jobVolumes).Debug("loaded job volumes")
+
+	jobVolumes, err := promVolumes.GetJobVolumes()
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to get job volumes")
+	}
 
 	config, err := dispatcher.LoadConfig(o.configPath)
 	if err != nil {
@@ -506,7 +743,7 @@ func main() {
 	addEnabledClusters(config, enabled, getClusterProvider)
 
 	logrus.Info("Dispatching ...")
-	if err := dispatchJobs(context.TODO(), o.prowJobConfigDir, o.maxConcurrency, config, jobVolumes); err != nil {
+	if _, err := dispatchJobs(context.TODO(), o.prowJobConfigDir, o.maxConcurrency, config, jobVolumes, sets.Set[string](sets.NewString())); err != nil {
 		logrus.WithError(err).Fatal("Failed to dispatch")
 	}
 	if err := dispatcher.SaveConfig(config, o.configPath); err != nil {
@@ -517,24 +754,5 @@ func main() {
 		logrus.Info("Finished dispatching and create no PR, exiting ...")
 		os.Exit(0)
 	}
-
-	logrus.WithField("targetDir", o.targetDir).Info("Changing working directory ...")
-	if err := os.Chdir(o.targetDir); err != nil {
-		logrus.WithError(err).Fatal("Failed to change to root dir")
-	}
-
-	command := "/usr/bin/sanitize-prow-jobs"
-	arguments := []string{"--prow-jobs-dir", "./ci-operator/jobs", "--config-path", "./core-services/sanitize-prow-jobs/_config.yaml"}
-	fullCommand := fmt.Sprintf("%s %s", filepath.Base(command), strings.Join(arguments, " "))
-	logrus.WithField("fullCommand", fullCommand).Infof("Running the command ...")
-
-	combinedOutput, err := exec.Command(command, arguments...).CombinedOutput()
-	if err != nil {
-		logrus.WithError(err).WithField("combinedOutput", string(combinedOutput)).Fatal("failed to run the command")
-	}
-
-	title := fmt.Sprintf("%s at %s", matchTitle, time.Now().Format(time.RFC1123))
-	if err := o.PRCreationOptions.UpsertPR(o.targetDir, githubOrg, githubRepo, upstreamBranch, title, prcreation.PrAssignee(o.assign), prcreation.MatchTitle(matchTitle), prcreation.AdditionalLabels([]string{rehearse.RehearsalsAckLabel})); err != nil {
-		logrus.WithError(err).Fatalf("failed to upsert PR")
-	}
+	createPR(o)
 }

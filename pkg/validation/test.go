@@ -591,6 +591,9 @@ func (v *Validator) validateTestConfigurationType(
 		}
 		context := newContext(fieldPath(fieldRoot), testConfig.Environment, releases, inputImagesSeen)
 		validationErrors = append(validationErrors, validateLeases(context.addField("leases"), testConfig.Leases)...)
+		if testConfig.NodeArchitecture != nil {
+			validationErrors = append(validationErrors, validateNodeArchitecture(fieldRoot, *testConfig.NodeArchitecture))
+		}
 		validationErrors = append(validationErrors, v.validateTestSteps(context.addField("pre"), testStagePre, testConfig.Pre, claimRelease)...)
 		validationErrors = append(validationErrors, v.validateTestSteps(context.addField("test"), testStageTest, testConfig.Test, claimRelease)...)
 		validationErrors = append(validationErrors, v.validateTestSteps(context.addField("post"), testStagePost, testConfig.Post, claimRelease)...)
@@ -706,6 +709,10 @@ func (v *Validator) validateLiteralTestStep(context *context, stage testStage, s
 	}
 	ret = append(ret, validateDependencies(string(context.field), step.Dependencies)...)
 	ret = append(ret, validateLeases(context.addField("leases"), step.Leases)...)
+	if step.NodeArchitecture != nil {
+		err := validateNodeArchitecture(string(context.field), *step.NodeArchitecture)
+		ret = append(ret, err)
+	}
 	switch stage {
 	case testStagePre, testStageTest:
 		if step.OptionalOnSuccess != nil {
@@ -877,6 +884,13 @@ func validateDNSConfig(fieldRoot string, dnsConfig []api.StepDNSConfig) (ret []e
 	}
 
 	return errs
+}
+
+func validateNodeArchitecture(fieldRoot string, nodeArchitecture api.NodeArchitecture) error {
+	if nodeArchitecture != api.NodeArchitectureAMD64 && nodeArchitecture != api.NodeArchitectureARM64 {
+		return fmt.Errorf("%s.nodeArchitecture expected one of %v or %v", fieldRoot, api.NodeArchitectureAMD64, api.NodeArchitectureARM64)
+	}
+	return nil
 }
 
 func validateLeases(context *context, leases []api.StepLease) (ret []error) {

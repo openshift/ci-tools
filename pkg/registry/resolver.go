@@ -33,7 +33,7 @@ func Validate(stepsByName ReferenceByName, chainsByName ChainByName, workflowsBy
 		}
 	}
 	for k, v := range workflowsByName {
-		stack := stackForWorkflow(k, v.Environment, v.Dependencies, v.DNSConfig)
+		stack := stackForWorkflow(k, v.Environment, v.Dependencies, v.DNSConfig, v.NodeArchitecture)
 		for _, s := range [][]api.TestStep{v.Pre, v.Test, v.Post} {
 			if _, err := reg.process(s, sets.New[string](), stack); err != nil {
 				ret = append(ret, err...)
@@ -75,7 +75,7 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 			return api.MultiStageTestConfigurationLiteral{}, utilerrors.NewAggregate(errs)
 		}
 	}
-	return r.resolveTest(config, stackForTest(name, config.Environment, config.Dependencies, config.DNSConfig), overridden)
+	return r.resolveTest(config, stackForTest(name, config.Environment, config.Dependencies, config.DNSConfig, config.NodeArchitecture), overridden)
 }
 
 func (r *registry) mergeWorkflow(config *api.MultiStageTestConfiguration) ([][]api.TestStep, []error) {
@@ -108,6 +108,7 @@ func (r *registry) mergeWorkflow(config *api.MultiStageTestConfiguration) ([][]a
 	config.DependencyOverrides = mergeDependencyOverrides(workflow.DependencyOverrides, config.DependencyOverrides)
 	config.DNSConfig = overwriteIfUnset(workflow.DNSConfig, config.DNSConfig)
 	config.Observers = overwriteIfUnset(workflow.Observers, config.Observers)
+	config.NodeArchitecture = (overwriteIfUnset(workflow.NodeArchitecture, config.NodeArchitecture))
 
 	if l, err := mergeLeases(workflow.Leases, config.Leases); err != nil {
 		errs = append(errs, err)
@@ -137,7 +138,7 @@ func (r *registry) resolveTest(
 		DependencyOverrides:      config.DependencyOverrides,
 	}
 	if config.Workflow != nil {
-		stack.push(stackRecordForTest("workflow/"+*config.Workflow, nil, nil, nil))
+		stack.push(stackRecordForTest("workflow/"+*config.Workflow, nil, nil, nil, nil))
 	}
 	pre, errs := r.process(config.Pre, sets.New[string](), stack)
 	expandedFlow.Pre = append(expandedFlow.Pre, pre...)
@@ -176,7 +177,7 @@ func (r *registry) ResolveWorkflow(name string) (api.MultiStageTestConfiguration
 	if !ok {
 		return api.MultiStageTestConfigurationLiteral{}, fmt.Errorf("no workflow named %s", name)
 	}
-	stack := stackForWorkflow(name, workflow.Environment, workflow.Dependencies, workflow.DNSConfig)
+	stack := stackForWorkflow(name, workflow.Environment, workflow.Dependencies, workflow.DNSConfig, workflow.NodeArchitecture)
 	ret, err := r.resolveTest(workflow, stack, nil)
 	return ret, err
 }
@@ -283,7 +284,7 @@ func (r *registry) processChain(name string, seen sets.Set[string], stack stack)
 	if !ok {
 		return nil, []error{stack.errorf("unknown step chain: %s", name)}
 	}
-	rec := stackRecordForStep("chain/"+name, chain.Environment, nil, nil)
+	rec := stackRecordForStep("chain/"+name, chain.Environment, nil, nil, nil)
 	stack.push(rec)
 	defer stack.pop()
 	ret, err := r.process(chain.Steps, seen, stack)
@@ -338,7 +339,7 @@ func (r *registry) processStep(step *api.TestStep, seen sets.Set[string], stack 
 	// This pushes the responsibility of handling steps that need custom dnsConfigs to workflow
 	// and job authors. This implementation allows for steps to be shared between teams.
 	ret.DNSConfig = stack.resolveDNS(ret.DNSConfig)
-
+	ret.NodeArchitecture = stack.resolveNodeArchitecture(ret.NodeArchitecture)
 	return ret, errs
 }
 

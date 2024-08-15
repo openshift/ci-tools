@@ -63,6 +63,13 @@ func LoadConfig(file string) (*CIImagesMirrorConfig, error) {
 				errs = append(errs, fmt.Errorf("name's regex for ArtImages[%d] cannot be compiled", i))
 			}
 			artImage.Name = re
+			if artImage.TagRaw != "" {
+				re, err = regexp.Compile(artImage.TagRaw)
+				if err != nil {
+					errs = append(errs, fmt.Errorf("tag's regex for ArtImages[%d] cannot be compiled", i))
+				}
+				artImage.Tag = re
+			}
 			artImages = append(artImages, artImage)
 		}
 	}
@@ -130,6 +137,8 @@ type ArtImage struct {
 	Namespace string         `json:"namespace"`
 	NameRaw   string         `json:"Name"`
 	Name      *regexp.Regexp `json:"-"`
+	TagRaw    string         `json:"Tag"`
+	Tag       *regexp.Regexp `json:"-"`
 }
 
 type IgnoredSource struct {
@@ -157,6 +166,10 @@ func ARTImages(ctx context.Context, client ctrlruntimeclient.Client, artImages [
 				continue
 			}
 			for _, tag := range is.Status.Tags {
+				if artImage.Tag != nil && !artImage.Tag.MatchString(tag.Tag) {
+					logrus.WithField("namespace", artImage.Namespace).WithField("name", is.Name).WithField("tag", tag.Tag).Debug("Ignored image stream tag")
+					continue
+				}
 				if ret == nil {
 					ret = map[string]Source{}
 				}

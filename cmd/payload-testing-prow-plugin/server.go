@@ -37,13 +37,22 @@ type githubClient interface {
 	GetPullRequest(org, repo string, number int) (*github.PullRequest, error)
 }
 
+const (
+	payloadPrefix                 = "/payload"
+	payloadJobPrefix              = "/payload-job"
+	payloadWithPRsPrefix          = "/payload-with-prs"
+	payloadJobWithPRsPrefix       = "/payload-job-with-prs"
+	payloadAggregatePrefix        = "/payload-aggregate"
+	payloadAggregateWithPRsPrefix = "/payload-aggregate-with-prs"
+)
+
 var (
-	ocpPayloadTestsPattern                     = regexp.MustCompile(`(?mi)^/payload\s+(?P<ocp>4\.\d+)\s+(?P<release>\w+)\s+(?P<jobs>\w+)\s*$`)
-	ocpPayloadWithPRsTestsPattern              = regexp.MustCompile(`(?mi)^/payload-with-prs\s+(?P<ocp>4\.\d+)\s+(?P<release>\w+)\s+(?P<jobs>\w+)\s+(?P<prs>(?:[-\w./#]+\s*)+)\s*$`)
-	ocpPayloadJobTestsPattern                  = regexp.MustCompile(`(?mi)^/payload-job\s+((?:[-\w.]+\s*?)+)\s*$`)
-	ocpPayloadJobTestsWithPRsPattern           = regexp.MustCompile(`(?mi)^/payload-job-with-prs\s+(?P<job>[-\w.]+)\s+(?P<prs>(?:[-\w./#]+\s*)+)\s*$`)
-	ocpPayloadAggregatedJobTestsPattern        = regexp.MustCompile(`(?mi)^/payload-aggregate\s+(?P<job>[-\w.]+)\s+(?P<aggregate>\d+)\s*$`)
-	ocpPayloadAggregatedWithPRsJobTestsPattern = regexp.MustCompile(`(?mi)^/payload-aggregate-with-prs\s+(?P<job>[-\w.]+)\s+(?P<aggregate>\d+)\s+(?P<prs>(?:[-\w./#]+\s*)+)\s*$`)
+	ocpPayloadTestsPattern                     = regexp.MustCompile(fmt.Sprintf(`(?mi)^%s\s+(?P<ocp>4\.\d+)\s+(?P<release>\w+)\s+(?P<jobs>\w+)\s*$`, payloadPrefix))
+	ocpPayloadJobTestsPattern                  = regexp.MustCompile(fmt.Sprintf(`(?mi)^%s\s+((?:[-\w.]+\s*?)+)\s*$`, payloadJobPrefix))
+	ocpPayloadWithPRsTestsPattern              = regexp.MustCompile(fmt.Sprintf(`(?mi)^%s\s+(?P<ocp>4\.\d+)\s+(?P<release>\w+)\s+(?P<jobs>\w+)\s+(?P<prs>(?:[-\w./#]+\s*)+)\s*$`, payloadWithPRsPrefix))
+	ocpPayloadJobTestsWithPRsPattern           = regexp.MustCompile(fmt.Sprintf(`(?mi)^%s\s+(?P<job>[-\w.]+)\s+(?P<prs>(?:[-\w./#]+\s*)+)\s*$`, payloadJobWithPRsPrefix))
+	ocpPayloadAggregatedJobTestsPattern        = regexp.MustCompile(fmt.Sprintf(`(?mi)^%s\s+(?P<job>[-\w.]+)\s+(?P<aggregate>\d+)\s*$`, payloadAggregatePrefix))
+	ocpPayloadAggregatedWithPRsJobTestsPattern = regexp.MustCompile(fmt.Sprintf(`(?mi)^%s\s+(?P<job>[-\w.]+)\s+(?P<aggregate>\d+)\s+(?P<prs>(?:[-\w./#]+\s*)+)\s*$`, payloadAggregateWithPRsPrefix))
 	ocpPayloadAbortPattern                     = regexp.MustCompile(`(?mi)^/payload-abort$`)
 )
 
@@ -227,6 +236,32 @@ func jobsFromComment(comment string) []config.Job {
 	return ret
 }
 
+var singleCommandOnlyPrefixes = []string{
+	payloadWithPRsPrefix,
+	payloadJobWithPRsPrefix,
+	payloadAggregateWithPRsPrefix,
+}
+
+// validateCommentCommand verifies that the commands in singleCommandOnlyPrefixes are not executed multiple times in the same comment
+func validateCommentCommand(comment string) error {
+	lines := strings.Split(comment, "\n")
+	if len(lines) <= 1 {
+		return nil
+	}
+	commands := 0
+	for _, line := range lines {
+		for _, prefix := range singleCommandOnlyPrefixes {
+			if strings.HasPrefix(line, prefix) {
+				commands++
+			}
+		}
+	}
+	if commands > 1 {
+		return fmt.Errorf("at least one of the commands given is only supported on a one-command-per-comment basis, please separate out commands as multiple comments")
+	}
+	return nil
+}
+
 const (
 	pluginName = "payload-testing"
 )
@@ -274,10 +309,16 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) (string, [
 		return "", nil
 	}
 
-	logger.WithField("ic.Comment.Body", ic.Comment.Body).Trace("received a comment")
+	body := ic.Comment.Body
+	logger.WithField("ic.Comment.Body", body).Trace("received a comment")
 
-	specs := specsFromComment(ic.Comment.Body)
-	jobsFromComment := jobsFromComment(ic.Comment.Body)
+	if err := validateCommentCommand(body); err != nil {
+		logger.WithError(err).Debug("invalid comment command")
+		return fmt.Sprintf("given command is invalid: %s", err.Error()), nil
+	}
+
+	specs := specsFromComment(body)
+	jobsFromComment := jobsFromComment(body)
 	if len(specs) == 0 {
 		logger.Trace("found no specs from comment")
 	}
@@ -289,9 +330,9 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) (string, [
 		specs = append(specs, jobSetSpecification{})
 	}
 
-	abortRequested := ocpPayloadAbortPattern.MatchString(strings.TrimSpace(ic.Comment.Body))
+	abortRequested := ocpPayloadAbortPattern.MatchString(strings.TrimSpace(body))
 	if len(specs) == 0 && !abortRequested {
-		if strings.HasPrefix(ic.Comment.Body, "/payload") {
+		if strings.HasPrefix(body, "/payload") {
 			// Someone was probably attempting to use the command, but due to a formatting error, nothing was picked up
 			return unknownCommandResponse, nil
 		}

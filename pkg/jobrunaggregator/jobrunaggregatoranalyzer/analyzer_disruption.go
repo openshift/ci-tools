@@ -33,6 +33,7 @@ func isExcludedDisruptionBackend(name string) bool {
 		"pod-to-pod",
 		"pod-to-service",
 		"-localhost-",
+		"-internal-lb-",
 	}
 
 	for _, excludedName := range excludedNames {

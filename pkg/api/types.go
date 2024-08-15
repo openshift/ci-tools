@@ -1014,6 +1014,9 @@ type LiteralTestStep struct {
 	// RunAsScript defines if this step should be executed as a script mounted
 	// in the test container instead of being executed directly via bash
 	RunAsScript *bool `json:"run_as_script,omitempty"`
+	// NodeArchitecture is the architecture for the node where the test will run.
+	// If set, the generated test pod will include a nodeSelector for this architecture.
+	NodeArchitecture *NodeArchitecture `json:"node_architecture,omitempty"`
 }
 
 // StepParameter is a variable set by the test, with an optional default.
@@ -1126,6 +1129,9 @@ type MultiStageTestConfiguration struct {
 	// DependencyOverrides allows a step to override a dependency with a fully-qualified pullspec. This will probably only ever
 	// be used with rehearsals. Otherwise, the overrides should be passed in as parameters to ci-operator.
 	DependencyOverrides DependencyOverrides `json:"dependency_overrides,omitempty"`
+	// NodeArchitecture is the architecture for the node where the test will run.
+	// If set, the generated test pod will include a nodeSelector for this architecture.
+	NodeArchitecture *NodeArchitecture `json:"node_architecture,omitempty"`
 }
 type DependencyOverrides map[string]string
 
@@ -1163,6 +1169,9 @@ type MultiStageTestConfigurationLiteral struct {
 	// DependencyOverrides allows a step to override a dependency with a fully-qualified pullspec. This will probably only ever
 	// be used with rehearsals. Otherwise, the overrides should be passed in as parameters to ci-operator.
 	DependencyOverrides DependencyOverrides `json:"dependency_overrides,omitempty"`
+	// NodeArchitecture is the architecture for the node where the test will run.
+	// If set, the generated test pod will include a nodeSelector for this architecture.
+	NodeArchitecture *NodeArchitecture `json:"node_architecture,omitempty"`
 
 	// Override job timeout
 	Timeout *prowv1.Duration `json:"timeout,omitempty"`
@@ -1312,12 +1321,9 @@ const (
 	ClusterProfilePacket                ClusterProfile = "packet"
 	ClusterProfilePacketAssisted        ClusterProfile = "packet-assisted"
 	ClusterProfilePacketSNO             ClusterProfile = "packet-sno"
-	ClusterProfileVSphere2              ClusterProfile = "vsphere-2"
-	ClusterProfileVSphere8Vpn           ClusterProfile = "vsphere-8-vpn"
 	ClusterProfileVSphereDis2           ClusterProfile = "vsphere-dis-2"
 	ClusterProfileVSphereMultizone2     ClusterProfile = "vsphere-multizone-2"
 	ClusterProfileVSphereConnected2     ClusterProfile = "vsphere-connected-2"
-	ClusterProfileVSphereMultiVCenter   ClusterProfile = "vsphere-multi-vcenter"
 	ClusterProfileVSphereElastic        ClusterProfile = "vsphere-elastic"
 	ClusterProfileKubevirt              ClusterProfile = "kubevirt"
 	ClusterProfileAWSCPaaS              ClusterProfile = "aws-cpaas"
@@ -1459,12 +1465,9 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfilePacketAssisted,
 		ClusterProfilePacketSNO,
 
-		ClusterProfileVSphere2,
-		ClusterProfileVSphere8Vpn,
 		ClusterProfileVSphereDis2,
 		ClusterProfileVSphereMultizone2,
 		ClusterProfileVSphereConnected2,
-		ClusterProfileVSphereMultiVCenter,
 		ClusterProfileVSphereElastic,
 
 		ClusterProfileOCIAssisted,
@@ -1660,11 +1663,8 @@ func (p ClusterProfile) ClusterType() string {
 	case ClusterProfileOpenStackNercDev:
 		return "openstack-nerc-dev"
 	case
-		ClusterProfileVSphere2,
 		ClusterProfileVSphereMultizone2,
 		ClusterProfileVSphereDis2,
-		ClusterProfileVSphere8Vpn,
-		ClusterProfileVSphereMultiVCenter,
 		ClusterProfileVSphereElastic,
 		ClusterProfileVSphereConnected2:
 
@@ -1904,18 +1904,12 @@ func (p ClusterProfile) LeaseType() string {
 		ClusterProfilePacketAssisted,
 		ClusterProfilePacketSNO:
 		return "packet-edge-quota-slice"
-	case ClusterProfileVSphere8Vpn:
-		return "vsphere-8-vpn-quota-slice"
-	case ClusterProfileVSphere2:
-		return "vsphere-2-quota-slice"
 	case ClusterProfileVSphereDis2:
 		return "vsphere-dis-2-quota-slice"
 	case ClusterProfileVSphereMultizone2:
 		return "vsphere-multizone-2-quota-slice"
 	case ClusterProfileVSphereConnected2:
 		return "vsphere-connected-2-quota-slice"
-	case ClusterProfileVSphereMultiVCenter:
-		return "vsphere-multi-vcenter-quota-slice"
 	case ClusterProfileVSphereElastic:
 		return "vsphere-elastic-quota-slice"
 	case ClusterProfileKubevirt:

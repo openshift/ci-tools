@@ -1,4 +1,4 @@
-package v1
+package pod_scaler
 
 import (
 	"encoding/json"
@@ -62,9 +62,17 @@ type CachedQuery struct {
 	// https://www.circonus.com/2018/11/the-problem-with-percentiles-aggregation-brings-aggravation/
 	Data map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups `json:"data"`
 	// DataByMetaData indexes the metric data by the full set of labels.
-	// The list of fingerprints is guaranteed to be unique for any set of labels
-	// and will never contain more than fifty items.
-	DataByMetaData map[FullMetadata][]model.Fingerprint `json:"data_by_meta_data"`
+	// The list of fingerprintTimes is guaranteed to be unique for any set of labels
+	// and will never contain more than twenty-five items.
+	DataByMetaData map[FullMetadata][]FingerprintTime `json:"data_by_meta_data"`
+}
+
+// FingerprintTime holds both the fingerprint for referencing the data, and the time at which it was added for later pruning
+type FingerprintTime struct {
+	// Fingerprint provides a hash-capable representation of a Metric.
+	Fingerprint model.Fingerprint `json:"fingerprint"`
+	// Added is the time which this was sourced. This is useful for later pruning of stale data.
+	Added time.Time `json:"added"`
 }
 
 // Record adds the data in the matrix to the cache and records that the given cluster has
@@ -98,7 +106,11 @@ func (q *CachedQuery) Record(clusterName string, r TimeRange, matrix model.Matri
 		}
 		q.Data[fingerprint] = circonusllhist.NewHistogramWithoutLookups(hist)
 		if !seen {
-			q.DataByMetaData[meta] = append(q.DataByMetaData[meta], fingerprint)
+			ft := FingerprintTime{
+				Fingerprint: fingerprint,
+				Added:       r.End, // We use the end time from the range as the added time, it is sufficient for pruning
+			}
+			q.DataByMetaData[meta] = append(q.DataByMetaData[meta], ft)
 		}
 	}
 }
@@ -314,22 +326,37 @@ func coalesceOnce(input []TimeRange) []TimeRange {
 	return input
 }
 
-// Prune ensures that no identifying set of labels contains more than twenty-five entries.
+// Prune ensures that no identifying set of labels contains more than twenty-five entries,
+// as well as removing any data that was added more than 90 days ago.
 // We know that an entry fingerprint can only exist for one fully-qualified label set,
 // but if the label set contains a multi-stage step, it will also be referenced in
 // the additional per-step index.
 func (q *CachedQuery) Prune() {
+	ninetyDaysAgo := time.Now().Add(-90 * 24 * time.Hour)
+	q.prune(ninetyDaysAgo)
+}
+
+func (q *CachedQuery) prune(pruneBefore time.Time) {
 	for meta, values := range q.DataByMetaData {
-		var toRemove []model.Fingerprint
-		if numFingerprints := len(values); numFingerprints > 25 {
-			toRemove = append(toRemove, values[0:numFingerprints-25]...)
-			q.DataByMetaData[meta] = values[numFingerprints-25:]
+		var toRemove []FingerprintTime
+		// First, prune to a max of 25 entries
+		if num := len(values); num > 25 {
+			toRemove = append(toRemove, values[0:num-25]...)
+			q.DataByMetaData[meta] = values[num-25:]
+		}
+		// Next, remove any data older than the requested date
+		for i := len(q.DataByMetaData[meta]) - 1; i >= 0; i-- {
+			data := q.DataByMetaData[meta][i]
+			if data.Added.Before(pruneBefore) {
+				toRemove = append(toRemove, data)
+				q.DataByMetaData[meta] = append(q.DataByMetaData[meta][:i], q.DataByMetaData[meta][i+1:]...)
+			}
 		}
 		if len(toRemove) == 0 {
 			continue
 		}
 		for _, item := range toRemove {
-			delete(q.Data, item)
+			delete(q.Data, item.Fingerprint)
 		}
 	}
 }

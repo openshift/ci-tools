@@ -10,11 +10,10 @@ import (
 	"sigs.k8s.io/prow/pkg/interrupts"
 	"sigs.k8s.io/prow/pkg/pjutil"
 
-	v2 "github.com/openshift/ci-tools/cmd/pod-scaler/v2"
-	podscalerv2 "github.com/openshift/ci-tools/pkg/pod-scaler/v2"
+	podscaler "github.com/openshift/ci-tools/pkg/pod-scaler"
 )
 
-func newReloader(name string, cache v2.Cache) *cacheReloader {
+func newReloader(name string, cache Cache) *cacheReloader {
 	reloader := &cacheReloader{
 		name:  name,
 		cache: cache,
@@ -30,15 +29,15 @@ func newReloader(name string, cache v2.Cache) *cacheReloader {
 
 type cacheReloader struct {
 	name   string
-	cache  v2.Cache
+	cache  Cache
 	logger *logrus.Entry
 
 	lock        *sync.RWMutex
 	lastUpdated time.Time
-	subscribers []chan<- *podscalerv2.CachedQuery
+	subscribers []chan<- *podscaler.CachedQuery
 }
 
-func (c *cacheReloader) subscribe(out chan<- *podscalerv2.CachedQuery) {
+func (c *cacheReloader) subscribe(out chan<- *podscaler.CachedQuery) {
 	c.lock.Lock()
 	c.subscribers = append(c.subscribers, out)
 	c.logger.Debugf("new subscriber, subscriber count now: %d", len(c.subscribers))
@@ -48,7 +47,7 @@ func (c *cacheReloader) subscribe(out chan<- *podscalerv2.CachedQuery) {
 func (c *cacheReloader) reload() {
 	// technically this can race as we read the attribute and data from the handle at
 	// different times, but there doesn't seem to be an atomic call to GCS for that anyway
-	lastUpdated, err := v2.LastUpdated(c.cache, c.name)
+	lastUpdated, err := LastUpdated(c.cache, c.name)
 	if err != nil {
 		c.logger.WithError(err).Warn("Failed to query for last cache update time, won't reload this tick.")
 		return
@@ -67,7 +66,7 @@ func (c *cacheReloader) reload() {
 	}
 	logger.Debug("Newer update available in cloud storage, reloading data.")
 
-	data, err := v2.LoadCache(c.cache, c.name, c.logger)
+	data, err := LoadCache(c.cache, c.name, c.logger)
 	if err != nil {
 		logger.WithError(err).Warn("Failed to read cached data, won't reload this tick.")
 		return
@@ -89,7 +88,7 @@ func digestAll(data map[string][]*cacheReloader, digesters map[string]digester, 
 	var infos []digestInfo
 	for id, d := range digesters {
 		for _, item := range data[id] {
-			s := make(chan *podscalerv2.CachedQuery, 1)
+			s := make(chan *podscaler.CachedQuery, 1)
 			item.subscribe(s)
 			infos = append(infos, digestInfo{
 				name:         item.name,
@@ -117,13 +116,13 @@ func digestAll(data map[string][]*cacheReloader, digesters map[string]digester, 
 	})
 }
 
-type digester func(query *podscalerv2.CachedQuery)
+type digester func(query *podscaler.CachedQuery)
 
 type digestInfo struct {
 	name         string
 	data         *cacheReloader
 	digest       digester
-	subscription chan *podscalerv2.CachedQuery
+	subscription chan *podscaler.CachedQuery
 }
 
 func digest(logger *logrus.Entry, infos ...digestInfo) <-chan interface{} {

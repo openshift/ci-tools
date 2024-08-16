@@ -8,11 +8,11 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	podscalerv2 "github.com/openshift/ci-tools/pkg/pod-scaler/v2"
+	podscaler "github.com/openshift/ci-tools/pkg/pod-scaler"
 )
 
 func TestMetadataQueryMappingRoundTripping(t *testing.T) {
-	metas := []podscalerv2.FullMetadata{
+	metas := []podscaler.FullMetadata{
 		{
 			Metadata: api.Metadata{
 				Org:     "org",

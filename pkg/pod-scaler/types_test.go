@@ -1,4 +1,4 @@
-package v1
+package pod_scaler
 
 import (
 	"testing"
@@ -582,7 +582,7 @@ func TestCachedQuery_Record(t *testing.T) {
 			"CLUSTER": {},
 		},
 		Data:           map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups{},
-		DataByMetaData: map[FullMetadata][]model.Fingerprint{},
+		DataByMetaData: map[FullMetadata][]FingerprintTime{},
 	}
 
 	logger := logrus.WithField("test", "TestCachedQuery_Record")
@@ -613,8 +613,13 @@ func TestCachedQuery_Record(t *testing.T) {
 		Data: map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups{
 			metrics[0].metric.Fingerprint(): expectedHist,
 		},
-		DataByMetaData: map[FullMetadata][]model.Fingerprint{
-			metrics[0].meta: {metrics[0].metric.Fingerprint()},
+		DataByMetaData: map[FullMetadata][]FingerprintTime{
+			metrics[0].meta: {
+				{
+					Fingerprint: metrics[0].metric.Fingerprint(),
+					Added:       year(20),
+				},
+			},
 		},
 	}
 	if diff := cmp.Diff(expected, q, dataComparer); diff != "" {
@@ -641,9 +646,19 @@ func TestCachedQuery_Record(t *testing.T) {
 			metrics[0].metric.Fingerprint(): expectedHist,
 			metrics[1].metric.Fingerprint(): expectedHist,
 		},
-		DataByMetaData: map[FullMetadata][]model.Fingerprint{
-			metrics[0].meta: {metrics[0].metric.Fingerprint()},
-			metrics[1].meta: {metrics[1].metric.Fingerprint()},
+		DataByMetaData: map[FullMetadata][]FingerprintTime{
+			metrics[0].meta: {
+				{
+					Fingerprint: metrics[0].metric.Fingerprint(),
+					Added:       year(20),
+				},
+			},
+			metrics[1].meta: {
+				{
+					Fingerprint: metrics[1].metric.Fingerprint(),
+					Added:       year(20),
+				},
+			},
 		},
 	}
 	if diff := cmp.Diff(expected, q, dataComparer); diff != "" {
@@ -677,9 +692,19 @@ func TestCachedQuery_Record(t *testing.T) {
 			metrics[0].metric.Fingerprint(): expectedHist,
 			metrics[1].metric.Fingerprint(): biggerHist,
 		},
-		DataByMetaData: map[FullMetadata][]model.Fingerprint{
-			metrics[0].meta: {metrics[0].metric.Fingerprint()},
-			metrics[1].meta: {metrics[1].metric.Fingerprint()},
+		DataByMetaData: map[FullMetadata][]FingerprintTime{
+			metrics[0].meta: {
+				{
+					Fingerprint: metrics[0].metric.Fingerprint(),
+					Added:       year(20),
+				},
+			},
+			metrics[1].meta: {
+				{
+					Fingerprint: metrics[1].metric.Fingerprint(),
+					Added:       year(20),
+				},
+			},
 		},
 	}
 	if diff := cmp.Diff(expected, q, dataComparer); diff != "" {
@@ -714,9 +739,23 @@ func TestCachedQuery_Record(t *testing.T) {
 			metrics[1].metric.Fingerprint(): biggerHist,
 			metrics[2].metric.Fingerprint(): otherHist,
 		},
-		DataByMetaData: map[FullMetadata][]model.Fingerprint{
-			metrics[0].meta: {metrics[0].metric.Fingerprint()},
-			metrics[1].meta: {metrics[1].metric.Fingerprint(), metrics[2].metric.Fingerprint()},
+		DataByMetaData: map[FullMetadata][]FingerprintTime{
+			metrics[0].meta: {
+				{
+					Fingerprint: metrics[0].metric.Fingerprint(),
+					Added:       year(20),
+				},
+			},
+			metrics[1].meta: {
+				{
+					Fingerprint: metrics[1].metric.Fingerprint(),
+					Added:       year(20),
+				},
+				{
+					Fingerprint: metrics[2].metric.Fingerprint(),
+					Added:       year(35),
+				},
+			},
 		},
 	}
 	if diff := cmp.Diff(expected, q, dataComparer); diff != "" {
@@ -728,35 +767,36 @@ var dataComparer = cmp.Comparer(func(a, b *circonusllhist.HistogramWithoutLookup
 	return a.Histogram().Equals(b.Histogram())
 })
 
-func TestCachedQuery_Prune(t *testing.T) {
+func TestCachedQuery_Prune_limitOverallFingerprints(t *testing.T) {
 	q := CachedQuery{
 		Data: map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups{},
-		DataByMetaData: map[FullMetadata][]model.Fingerprint{
-			{Step: "1"}:      {1},
-			{Step: "2"}:      {2},
-			{Step: "3"}:      {3},
-			{Step: "4"}:      {4},
-			{Step: "5"}:      {5},
-			{Step: "6-30"}:   {6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30},
-			{Step: "31-130"}: {31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130},
+		DataByMetaData: map[FullMetadata][]FingerprintTime{
+			{Step: "1"}:      {ft(1)},
+			{Step: "2"}:      {ft(2)},
+			{Step: "3"}:      {ft(3)},
+			{Step: "4"}:      {ft(4)},
+			{Step: "5"}:      {ft(5)},
+			{Step: "6-30"}:   {ft(6), ft(7), ft(8), ft(9), ft(10), ft(11), ft(12), ft(13), ft(14), ft(15), ft(16), ft(17), ft(18), ft(19), ft(20), ft(21), ft(22), ft(23), ft(24), ft(25), ft(26), ft(27), ft(28), ft(29), ft(30)},
+			{Step: "31-130"}: {ft(31), ft(32), ft(33), ft(34), ft(35), ft(36), ft(37), ft(38), ft(39), ft(40), ft(41), ft(42), ft(43), ft(44), ft(45), ft(46), ft(47), ft(48), ft(49), ft(50), ft(51), ft(52), ft(53), ft(54), ft(55), ft(56), ft(57), ft(58), ft(59), ft(60), ft(61), ft(62), ft(63), ft(64), ft(65), ft(66), ft(67), ft(68), ft(69), ft(70), ft(71), ft(72), ft(73), ft(74), ft(75), ft(76), ft(77), ft(78), ft(79), ft(80), ft(81), ft(82), ft(83), ft(84), ft(85), ft(86), ft(87), ft(88), ft(89), ft(90), ft(91), ft(92), ft(93), ft(94), ft(95), ft(96), ft(97), ft(98), ft(99), ft(100), ft(101), ft(102), ft(103), ft(104), ft(105), ft(106), ft(107), ft(108), ft(109), ft(110), ft(111), ft(112), ft(113), ft(114), ft(115), ft(116), ft(117), ft(118), ft(119), ft(120), ft(121), ft(122), ft(123), ft(124), ft(125), ft(126), ft(127), ft(128), ft(129), ft(130)},
 		},
 	}
 
 	for i := 1; i < 131; i++ {
 		q.Data[model.Fingerprint(i)] = circonusllhist.NewHistogramWithoutLookups(circonusllhist.New(circonusllhist.NoLookup()))
 	}
-	q.Prune()
+	// invoke prune with a date that will not prune any data for simply being old
+	q.prune(year(20).Add(-24 * time.Hour))
 
 	expected := CachedQuery{
 		Data: map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups{},
-		DataByMetaData: map[FullMetadata][]model.Fingerprint{
-			{Step: "1"}:      {1},
-			{Step: "2"}:      {2},
-			{Step: "3"}:      {3},
-			{Step: "4"}:      {4},
-			{Step: "5"}:      {5},
-			{Step: "6-30"}:   {6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30},
-			{Step: "31-130"}: {106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130},
+		DataByMetaData: map[FullMetadata][]FingerprintTime{
+			{Step: "1"}:      {ft(1)},
+			{Step: "2"}:      {ft(2)},
+			{Step: "3"}:      {ft(3)},
+			{Step: "4"}:      {ft(4)},
+			{Step: "5"}:      {ft(5)},
+			{Step: "6-30"}:   {ft(6), ft(7), ft(8), ft(9), ft(10), ft(11), ft(12), ft(13), ft(14), ft(15), ft(16), ft(17), ft(18), ft(19), ft(20), ft(21), ft(22), ft(23), ft(24), ft(25), ft(26), ft(27), ft(28), ft(29), ft(30)},
+			{Step: "31-130"}: {ft(106), ft(107), ft(108), ft(109), ft(110), ft(111), ft(112), ft(113), ft(114), ft(115), ft(116), ft(117), ft(118), ft(119), ft(120), ft(121), ft(122), ft(123), ft(124), ft(125), ft(126), ft(127), ft(128), ft(129), ft(130)},
 		},
 	}
 
@@ -770,6 +810,64 @@ func TestCachedQuery_Prune(t *testing.T) {
 
 	if diff := cmp.Diff(expected, q, dataComparer); diff != "" {
 		t.Errorf("got incorrect state after pruning: %v", diff)
+	}
+}
+
+// ft generates a FingerprintTime for the supplied int representation of a fingerprint
+func ft(fingerprint int) FingerprintTime {
+	return FingerprintTime{
+		Fingerprint: model.Fingerprint(fingerprint),
+		Added:       year(20),
+	}
+}
+
+func TestCachedQuery_Prune_removeOldFingerprints(t *testing.T) {
+	now := time.Now()
+	q := CachedQuery{
+		Data: map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups{},
+		DataByMetaData: map[FullMetadata][]FingerprintTime{
+			{Step: "a"}: {
+				fta(1, now),
+				fta(2, now.Add(-25*time.Hour)), // Should be pruned
+			},
+			{Step: "b"}: {
+				fta(3, now.Add(1*time.Hour)),
+				fta(4, now.Add(-25*time.Hour)), // Should be pruned
+				fta(5, now.Add(-23*time.Hour)),
+				fta(6, now.Add(-80*24*time.Hour)), // Should be pruned
+			},
+		},
+	}
+
+	for i := 1; i < 7; i++ {
+		q.Data[model.Fingerprint(i)] = circonusllhist.NewHistogramWithoutLookups(circonusllhist.New(circonusllhist.NoLookup()))
+	}
+
+	// Prune any data that was added longer than 1 day ago
+	q.prune(now.Add(-24 * time.Hour))
+
+	expected := CachedQuery{
+		Data: map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups{
+			model.Fingerprint(1): circonusllhist.NewHistogramWithoutLookups(circonusllhist.New(circonusllhist.NoLookup())),
+			model.Fingerprint(3): circonusllhist.NewHistogramWithoutLookups(circonusllhist.New(circonusllhist.NoLookup())),
+			model.Fingerprint(5): circonusllhist.NewHistogramWithoutLookups(circonusllhist.New(circonusllhist.NoLookup())),
+		},
+		DataByMetaData: map[FullMetadata][]FingerprintTime{
+			{Step: "a"}: {fta(1, now)},
+			{Step: "b"}: {fta(3, now.Add(1*time.Hour)), fta(5, now.Add(-23*time.Hour))},
+		},
+	}
+
+	if diff := cmp.Diff(expected, q, dataComparer); diff != "" {
+		t.Errorf("got incorrect state after pruning: %v", diff)
+	}
+}
+
+// fta generates a FingerprintTime for the supplied int representation of a fingerprint, and the added time
+func fta(fingerprint int, added time.Time) FingerprintTime {
+	return FingerprintTime{
+		Fingerprint: model.Fingerprint(fingerprint),
+		Added:       added,
 	}
 }
 

@@ -11,8 +11,6 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 
-	sets "k8s.io/apimachinery/pkg/util/sets"
-
 	jobrunaggregatorapi "github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 )
 
@@ -97,6 +95,21 @@ func (m *MockCIDataClient) GetJobRunForJobNameBeforeTime(arg0 context.Context, a
 func (mr *MockCIDataClientMockRecorder) GetJobRunForJobNameBeforeTime(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetJobRunForJobNameBeforeTime", reflect.TypeOf((*MockCIDataClient)(nil).GetJobRunForJobNameBeforeTime), arg0, arg1, arg2)
+}
+
+// GetJobVariants mocks base method.
+func (m *MockCIDataClient) GetJobVariants(arg0 context.Context, arg1 string) (*jobrunaggregatorapi.JobRowWithVariants, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetJobVariants", arg0, arg1)
+	ret0, _ := ret[0].(*jobrunaggregatorapi.JobRowWithVariants)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetJobVariants indicates an expected call of GetJobVariants.
+func (mr *MockCIDataClientMockRecorder) GetJobVariants(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetJobVariants", reflect.TypeOf((*MockCIDataClient)(nil).GetJobVariants), arg0, arg1)
 }
 
 // GetLastJobRunEndTimeFromTable mocks base method.
@@ -220,10 +233,10 @@ func (mr *MockCIDataClientMockRecorder) ListProwJobRunsSince(arg0, arg1 interfac
 }
 
 // ListReleaseTags mocks base method.
-func (m *MockCIDataClient) ListReleaseTags(arg0 context.Context) (sets.Set[string], error) {
+func (m *MockCIDataClient) ListReleaseTags(arg0 context.Context) (map[string]bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListReleaseTags", arg0)
-	ret0, _ := ret[0].(sets.Set[string])
+	ret0, _ := ret[0].(map[string]bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

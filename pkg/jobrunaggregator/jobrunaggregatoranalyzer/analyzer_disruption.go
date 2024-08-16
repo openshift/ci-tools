@@ -97,6 +97,7 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 			if isExcludedDisruptionBackend(backendName) {
 				continue
 			}
+
 			jobRunIDToAvailabilityResultForBackend := getDisruptionForBackend(jobRunIDToBackendNameToAvailabilityResult, backendName)
 			failedJobRunIDs, successfulJobRunIDs, status, message, err := disruptionCheckFn(ctx, jobRunIDToAvailabilityResultForBackend, backendName, masterNodesUpdated)
 			if err != nil {

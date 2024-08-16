@@ -10,8 +10,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/api/iterator"
 
-	"k8s.io/apimachinery/pkg/util/sets"
-
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 )
 
@@ -37,6 +35,7 @@ type AggregationJobClient interface {
 
 type JobLister interface {
 	ListAllJobsWithVariants(ctx context.Context) ([]jobrunaggregatorapi.JobRowWithVariants, error)
+	GetJobVariants(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRowWithVariants, error)
 	ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRow, error)
 
 	// ListProwJobRunsSince lists from the testplatform BigQuery dataset in a separate project from
@@ -56,7 +55,7 @@ type CIDataClient interface {
 	HistoricalDataClient
 
 	// these deal with release tags
-	ListReleaseTags(ctx context.Context) (sets.Set[string], error)
+	ListReleaseTags(ctx context.Context) (map[string]bool, error)
 
 	// GetLastJobRunEndTimeFromTable returns the last uploaded job runs EndTime in the given table.
 	GetLastJobRunEndTimeFromTable(ctx context.Context, table string) (*time.Time, error)
@@ -247,6 +246,42 @@ ORDER BY JobName ASC
 	}
 
 	return jobs, nil
+}
+
+func (c *ciDataClient) GetJobVariants(ctx context.Context, jobName string) (*jobrunaggregatorapi.JobRowWithVariants, error) {
+	queryString := c.dataCoordinates.SubstituteDataSetLocation(
+		`SELECT *  
+FROM DATA_SET_LOCATION.JobsWithVariants
+WHERE JobName = @JobName
+ORDER BY JobName ASC
+`)
+
+	query := c.client.Query(queryString)
+	query.Labels = map[string]string{
+		bigQueryLabelKeyApp:   bigQueryLabelValueApp,
+		bigQueryLabelKeyQuery: bigQueryLabelValueAllJobsWithVariants,
+	}
+	query.QueryConfig.Parameters = []bigquery.QueryParameter{
+		{Name: "JobName", Value: jobName},
+	}
+	jobRows, err := query.Read(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query job table with %q: %w", queryString, err)
+	}
+	job := &jobrunaggregatorapi.JobRowWithVariants{}
+	for {
+		err = jobRows.Next(job)
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	if job == nil || job.JobName == "" {
+		return nil, fmt.Errorf("%s not found in variant registry", jobName)
+	}
+	return job, nil
 }
 
 func (c *ciDataClient) ListAllJobs(ctx context.Context) ([]jobrunaggregatorapi.JobRow, error) {
@@ -843,8 +878,8 @@ func (c *ciDataClient) tableForFrequency(frequency string) (string, error) {
 	}
 }
 
-func (c *ciDataClient) ListReleaseTags(ctx context.Context) (sets.Set[string], error) {
-	set := sets.Set[string]{}
+func (c *ciDataClient) ListReleaseTags(ctx context.Context) (map[string]bool, error) {
+	set := map[string]bool{}
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(`SELECT distinct(ReleaseTag) FROM DATA_SET_LOCATION.ReleaseTags`)
 	query := c.client.Query(queryString)
 	query.Labels = map[string]string{
@@ -865,7 +900,7 @@ func (c *ciDataClient) ListReleaseTags(ctx context.Context) (sets.Set[string], e
 			return nil, err
 		}
 
-		set.Insert(row.ReleaseTag)
+		set[row.ReleaseTag] = true
 	}
 
 	return set, nil

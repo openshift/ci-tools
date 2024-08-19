@@ -1,0 +1,10 @@
+- profile: badly-formatted-profile
+    random-field:
+      - org: org1
+        repos:
+          - repo1
+- profile: gcp
+  owners:
+    - org: gcp-org
+- profile: aws2
+  secret: some-secret

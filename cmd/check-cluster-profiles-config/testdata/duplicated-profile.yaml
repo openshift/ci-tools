@@ -1,0 +1,12 @@
+- profile: aws
+  owners:
+    - org: org1
+      repos:
+        - repo1
+- profile: gcp
+  owners:
+    - org: gcp-org
+- profile: aws
+- profile: gcp2
+  owners:
+    - org: gcp-org

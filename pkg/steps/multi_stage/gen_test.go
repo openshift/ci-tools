@@ -22,6 +22,8 @@ import (
 
 func TestGeneratePods(t *testing.T) {
 	yes := true
+	nodeArchitectureARM64 := api.NodeArchitectureARM64
+	nodeArchitectureAMD64 := api.NodeArchitectureAMD64
 	config := api.ReleaseBuildConfiguration{
 		Tests: []api.TestStepConfiguration{{
 			As: "test",
@@ -42,6 +44,10 @@ func TestGeneratePods(t *testing.T) {
 						Nameservers: []string{"nameserver1", "nameserver2"},
 						Searches:    []string{"my.dns.search1", "my.dns.search2"},
 					},
+				}, {
+					As: "step4", From: "src", Commands: "command4", NodeArchitecture: &nodeArchitectureARM64,
+				}, {
+					As: "step5", From: "src", Commands: "command5", NodeArchitecture: &nodeArchitectureAMD64,
 				}},
 			}},
 		},

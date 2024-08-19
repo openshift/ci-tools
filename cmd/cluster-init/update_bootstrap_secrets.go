@@ -139,7 +139,7 @@ func generateRegistryPushCredentialsSecret(o options) secretbootstrap.SecretConf
 				{
 					AuthField:   "auth",
 					Item:        "quay-io-push-credentials",
-					RegistryURL: "quay.io/openshift/ci",
+					RegistryURL: "quay.io/openshift",
 				},
 			}),
 		},

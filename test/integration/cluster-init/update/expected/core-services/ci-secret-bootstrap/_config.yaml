@@ -285,7 +285,7 @@ secret_configs:
         registry_url: registry.ci.openshift.org
       - auth_field: auth
         item: quay-io-push-credentials
-        registry_url: quay.io/openshift/ci
+        registry_url: quay.io/openshift
   to:
   - cluster: existingCluster
     name: registry-push-credentials-ci-central

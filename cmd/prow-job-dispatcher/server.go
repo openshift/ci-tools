@@ -19,7 +19,7 @@ func newServer(jobs *prowjobs) *Server {
 
 // SchedulingRequest represents the incoming request structure
 type SchedulingRequest struct {
-	Name string `json:"name"`
+	Job string `json:"job"`
 }
 
 // Response represents the response structure
@@ -47,7 +47,7 @@ func (s *Server) requestHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	cluster := s.pjs.get(req.Name)
+	cluster := s.pjs.get(req.Job)
 	if cluster == "" {
 		http.Error(w, "Cluster not found", http.StatusNotFound)
 		return

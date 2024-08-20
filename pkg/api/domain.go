@@ -24,6 +24,7 @@ const (
 	ServiceDomainMulti01Registry   = "registry.multi-build01.arm-build.devcluster.openshift.com"
 
 	QuayOpenShiftCIRepo = "quay.io/openshift/ci"
+	QuayOpenShiftRepo   = "quay.io/openshift"
 
 	QCIAPPCIDomain = "quay-proxy.ci.openshift.org"
 

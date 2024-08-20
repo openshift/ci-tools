@@ -1,4 +1,4 @@
-package main
+package onboard
 
 import (
 	"os"
@@ -35,7 +35,7 @@ func updateSanitizeProwJobs(o options) error {
 
 func updateSanitizeProwJobsConfig(c *dispatcher.Config, clusterName string) {
 	appGroup := c.Groups[api.ClusterAPPCI]
-	metadata := RepoMetadata()
+	metadata := repoMetadata()
 	appGroup.Jobs = sets.List(sets.New[string](appGroup.Jobs...).
 		Insert(metadata.JobName(jobconfig.PresubmitPrefix, clusterName+"-dry")).
 		Insert(metadata.JobName(jobconfig.PostsubmitPrefix, clusterName+"-apply")).

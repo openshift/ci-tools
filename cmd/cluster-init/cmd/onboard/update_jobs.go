@@ -1,4 +1,4 @@
-package main
+package onboard
 
 import (
 	"fmt"
@@ -36,7 +36,7 @@ func updateJobs(o options, osdClusters []string) error {
 		},
 		Periodics: []prowconfig.Periodic{generatePeriodic(o.clusterName, osdClustersSet.Has(o.clusterName), o.unmanaged)},
 	}
-	metadata := RepoMetadata()
+	metadata := repoMetadata()
 	jobsDir := filepath.Join(o.releaseRepo, "ci-operator", "jobs")
 	return jobconfig.WriteToDir(jobsDir,
 		metadata.Org,
@@ -49,7 +49,7 @@ func updateJobs(o options, osdClusters []string) error {
 func generatePeriodic(clusterName string, osd bool, unmanaged bool) prowconfig.Periodic {
 	return prowconfig.Periodic{
 		JobBase: prowconfig.JobBase{
-			Name:       RepoMetadata().SimpleJobName(jobconfig.PeriodicPrefix, clusterName+"-apply"),
+			Name:       repoMetadata().SimpleJobName(jobconfig.PeriodicPrefix, clusterName+"-apply"),
 			Agent:      string(prowapi.KubernetesAgent),
 			Cluster:    string(api.ClusterAPPCI),
 			SourcePath: "",
@@ -83,7 +83,7 @@ func generatePeriodic(clusterName string, osd bool, unmanaged bool) prowconfig.P
 func generatePostsubmit(clusterName string, osd bool, unmanaged bool) prowconfig.Postsubmit {
 	return prowconfig.Postsubmit{
 		JobBase: prowconfig.JobBase{
-			Name:       RepoMetadata().JobName(jobconfig.PostsubmitPrefix, clusterName+"-apply"),
+			Name:       repoMetadata().JobName(jobconfig.PostsubmitPrefix, clusterName+"-apply"),
 			Agent:      string(prowapi.KubernetesAgent),
 			Cluster:    string(api.ClusterAPPCI),
 			SourcePath: "",
@@ -115,7 +115,7 @@ func generatePresubmit(clusterName string, osd bool, unmanaged bool) prowconfig.
 	}
 	return prowconfig.Presubmit{
 		JobBase: prowconfig.JobBase{
-			Name:       RepoMetadata().JobName(jobconfig.PresubmitPrefix, clusterName+"-dry"),
+			Name:       repoMetadata().JobName(jobconfig.PresubmitPrefix, clusterName+"-dry"),
 			Agent:      string(prowapi.KubernetesAgent),
 			Cluster:    string(api.ClusterAPPCI),
 			SourcePath: "",

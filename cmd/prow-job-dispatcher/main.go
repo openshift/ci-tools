@@ -529,25 +529,59 @@ func clustersMapToSet(clusterMap ClusterMap) sets.Set[string] {
 	return clusterSet
 }
 
-func createPR(o options) {
+func gitCloneRelease() error {
+	cmd := exec.Command("git", "clone", "--depth", "1", "--single-branch", "git@github.com:openshift/release.git")
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to clone repository: %w, output: %s", err, string(output))
+	}
+
+	return nil
+}
+
+func cleanup(directory string) {
+	err := os.RemoveAll(directory)
+	if err != nil {
+		logrus.WithField("directory", directory).WithError(err).Error("failed to remove directory")
+	}
+	logrus.WithField("directory", directory).Info("Successfully removed directory")
+}
+
+func createPR(o options, config *dispatcher.Config) {
+	targetDirWithRelease := filepath.Join(o.targetDir, "/release")
+	cleanup(targetDirWithRelease)
+	defer cleanup(targetDirWithRelease)
+
 	logrus.WithField("targetDir", o.targetDir).Info("Changing working directory ...")
 	if err := os.Chdir(o.targetDir); err != nil {
-		logrus.WithError(err).Fatal("Failed to change to root dir")
+		logrus.WithError(err).Error("failed to change to root dir")
+		return
+	}
+
+	if err := gitCloneRelease(); err != nil {
+		logrus.WithError(err).Error("failed to clone release repository")
+		return
+	}
+
+	if err := dispatcher.SaveConfig(config, filepath.Join(targetDirWithRelease, "/core-services/sanitize-prow-jobs/_config.yaml")); err != nil {
+		logrus.WithError(err).Errorf("failed to save config file to %s", o.configPath)
+		return
 	}
 
 	command := "/usr/bin/sanitize-prow-jobs"
-	arguments := []string{"--prow-jobs-dir", "./ci-operator/jobs", "--config-path", "./core-services/sanitize-prow-jobs/_config.yaml"}
+	arguments := []string{"--prow-jobs-dir", "./release/ci-operator/jobs", "--config-path", "./release/core-services/sanitize-prow-jobs/_config.yaml"}
 	fullCommand := fmt.Sprintf("%s %s", filepath.Base(command), strings.Join(arguments, " "))
 	logrus.WithField("fullCommand", fullCommand).Infof("Running the command ...")
 
 	combinedOutput, err := exec.Command(command, arguments...).CombinedOutput()
 	if err != nil {
-		logrus.WithError(err).WithField("combinedOutput", string(combinedOutput)).Fatal("failed to run the command")
+		logrus.WithError(err).WithField("combinedOutput", string(combinedOutput)).Error("failed to run the command")
 	}
 
 	title := fmt.Sprintf("%s at %s", matchTitle, time.Now().Format(time.RFC1123))
-	if err := o.PRCreationOptions.UpsertPR(o.targetDir, githubOrg, githubRepo, upstreamBranch, title, prcreation.PrAssignee(o.assign), prcreation.MatchTitle(matchTitle), prcreation.AdditionalLabels([]string{rehearse.RehearsalsAckLabel})); err != nil {
-		logrus.WithError(err).Fatalf("failed to upsert PR")
+	if err := o.PRCreationOptions.UpsertPR(targetDirWithRelease, githubOrg, githubRepo, upstreamBranch, title, prcreation.PrAssignee(o.assign), prcreation.MatchTitle(matchTitle), prcreation.AdditionalLabels([]string{rehearse.RehearsalsAckLabel})); err != nil {
+		logrus.WithError(err).Error("failed to upsert PR")
 	}
 }
 
@@ -573,7 +607,6 @@ func runAsDaemon(o options, promVolumes *prometheusVolumes) {
 	c := cron.New()
 
 	{
-		savedBlocked := sets.Set[string]{}
 		var mu sync.Mutex
 
 		dispatchWrapper = func(cron bool) {
@@ -598,11 +631,11 @@ func runAsDaemon(o options, promVolumes *prometheusVolumes) {
 				removeDisabledClusters(config, disabled)
 			}
 
-			firstRunOrBlockedChange := !savedBlocked.Equal(blocked)
-			if (!cron && enabled.Len() == 0 && disabled.Len() == 0) && !firstRunOrBlockedChange {
+			newBlockedClusters := prowjobs.hasAnyOfClusters(blocked)
+
+			if (!cron && enabled.Len() == 0 && disabled.Len() == 0) && !newBlockedClusters {
 				return
 			}
-			savedBlocked = blocked
 
 			jobVolumes, err := promVolumes.GetJobVolumes()
 			if err != nil {
@@ -625,16 +658,12 @@ func runAsDaemon(o options, promVolumes *prometheusVolumes) {
 			}
 			prowjobs.regenerate(pjs)
 
-			if err := dispatcher.SaveConfig(config, o.configPath); err != nil {
-				logrus.WithError(err).Fatalf("Failed to save config file to %s", o.configPath)
-			}
-
 			if err := writeGob(o.jobsStoragePath, pjs); err != nil {
 				logrus.Errorf("continuing on cache memory, error writing Gob file: %v", err)
 			}
 
 			if o.createPR {
-				createPR(o)
+				createPR(o, config)
 			}
 		}
 	}
@@ -656,29 +685,31 @@ func runAsDaemon(o options, promVolumes *prometheusVolumes) {
 	}
 	defer watcher.Close()
 
-	go func() {
+	go func(config string) {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		initialFileInfo, err := os.Stat(config)
+		if err != nil {
+			logrus.WithError(err).Fatal("failed to get initial cluster config info")
+			return
+		}
+		lastModTime := initialFileInfo.ModTime()
+
 		for {
-			select {
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-				if event.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Rename|fsnotify.Remove) != 0 {
-					dispatchWrapper(false)
-				}
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-				logrus.WithError(err)
+			<-ticker.C
+			currentFileInfo, err := os.Stat(config)
+			if err != nil {
+				logrus.WithError(err).Error("failed to get cluster config info")
+				continue
+			}
+
+			if currentFileInfo.ModTime().After(lastModTime) {
+				dispatchWrapper(false)
+				lastModTime = currentFileInfo.ModTime()
 			}
 		}
-	}()
 
-	err = watcher.Add(o.clusterConfigPath)
-	if err != nil {
-		logrus.Fatal(err)
-	}
+	}(o.clusterConfigPath)
 
 	dispatchWrapper(false)
 
@@ -754,5 +785,23 @@ func main() {
 		logrus.Info("Finished dispatching and create no PR, exiting ...")
 		os.Exit(0)
 	}
-	createPR(o)
+	logrus.WithField("targetDir", o.targetDir).Info("Changing working directory ...")
+	if err := os.Chdir(o.targetDir); err != nil {
+		logrus.WithError(err).Fatal("Failed to change to root dir")
+	}
+
+	command := "/usr/bin/sanitize-prow-jobs"
+	arguments := []string{"--prow-jobs-dir", "./ci-operator/jobs", "--config-path", "./core-services/sanitize-prow-jobs/_config.yaml"}
+	fullCommand := fmt.Sprintf("%s %s", filepath.Base(command), strings.Join(arguments, " "))
+	logrus.WithField("fullCommand", fullCommand).Infof("Running the command ...")
+
+	combinedOutput, err := exec.Command(command, arguments...).CombinedOutput()
+	if err != nil {
+		logrus.WithError(err).WithField("combinedOutput", string(combinedOutput)).Fatal("failed to run the command")
+	}
+
+	title := fmt.Sprintf("%s at %s", matchTitle, time.Now().Format(time.RFC1123))
+	if err := o.PRCreationOptions.UpsertPR(o.targetDir, githubOrg, githubRepo, upstreamBranch, title, prcreation.PrAssignee(o.assign), prcreation.MatchTitle(matchTitle), prcreation.AdditionalLabels([]string{rehearse.RehearsalsAckLabel})); err != nil {
+		logrus.WithError(err).Fatalf("failed to upsert PR")
+	}
 }

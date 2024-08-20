@@ -645,7 +645,7 @@ func mutateGlobalPullSecret(original, secret *coreapi.Secret) (bool, error) {
 		return false, fmt.Errorf("failed to parse the original secret: %w", err)
 	}
 	mutatedSecret := false
-	domains := []string{api.DomainForService(api.ServiceRegistry), api.QCIAPPCIDomain, api.QuayOpenShiftCIRepo, api.QCICacheDomain}
+	domains := []string{api.DomainForService(api.ServiceRegistry), api.QCIAPPCIDomain, api.QuayOpenShiftRepo, api.QCICacheDomain}
 	for _, domain := range domains {
 		if dockerConfig.Auths[domain].Auth == "" {
 			return false, fmt.Errorf("failed to get token for %s", domain)

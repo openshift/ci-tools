@@ -125,13 +125,17 @@ func TestUpdateSecretGeneratorConfig(t *testing.T) {
 				{
 					ItemName: buildUFarm,
 					Fields: []secretgenerator.FieldGenerator{{
-						Name: fmt.Sprintf("token_image-puller_%s_reg_auth_value.txt", clusterWildcard),
+						Name: fmt.Sprintf("token_%s_%s_reg_auth_value.txt", serviceAccountWildcard, clusterWildcard),
 						Cmd:  "oc --context $(cluster) sa create-kubeconfig --namespace ci $(service_account) | sed \"s/$(service_account)/$(cluster)/g\"",
 					}},
 					Params: map[string][]string{
 						"cluster": {
 							string(api.ClusterAPPCI),
-							string(api.ClusterBuild01)}},
+							string(api.ClusterBuild01)},
+						"service_account": {
+							"image-puller",
+						},
+					},
 				},
 				{
 					ItemName: "ci-chat-bot",
@@ -172,14 +176,19 @@ func TestUpdateSecretGeneratorConfig(t *testing.T) {
 				{
 					ItemName: buildUFarm,
 					Fields: []secretgenerator.FieldGenerator{{
-						Name: fmt.Sprintf("token_image-puller_%s_reg_auth_value.txt", clusterWildcard),
+						Name: fmt.Sprintf("token_%s_%s_reg_auth_value.txt", serviceAccountWildcard, clusterWildcard),
 						Cmd:  "oc --context $(cluster) sa create-kubeconfig --namespace ci $(service_account) | sed \"s/$(service_account)/$(cluster)/g\"",
 					}},
 					Params: map[string][]string{
 						"cluster": {
 							string(api.ClusterAPPCI),
 							string(api.ClusterBuild01),
-							"newcluster"}},
+							"newcluster",
+						},
+						"service_account": {
+							"image-puller",
+						},
+					},
 				},
 				{
 					ItemName: "ci-chat-bot",

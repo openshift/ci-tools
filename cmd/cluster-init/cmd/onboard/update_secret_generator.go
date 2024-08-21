@@ -49,7 +49,7 @@ func updateSecretGeneratorConfig(o options, c *SecretGenConfig) error {
 	if err := appendToSecretItem(buildUFarm, serviceAccountConfigPath, o, c); err != nil {
 		return err
 	}
-	if err := appendToSecretItem(buildUFarm, fmt.Sprintf("token_image-puller_%s_reg_auth_value.txt", clusterWildcard), o, c); err != nil {
+	if err := appendToSecretItem(buildUFarm, fmt.Sprintf("token_%s_%s_reg_auth_value.txt", serviceAccountWildcard, clusterWildcard), o, c); err != nil {
 		return err
 	}
 	if err := appendToSecretItem("ci-chat-bot", serviceAccountConfigPath, o, c); err != nil {

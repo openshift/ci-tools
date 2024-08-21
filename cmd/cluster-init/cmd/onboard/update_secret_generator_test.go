@@ -80,12 +80,15 @@ func TestFindSecretItem(t *testing.T) {
 				c:           config,
 			},
 			expected:      nil,
-			expectedError: errors.New("couldn't find SecretItem with item_name: build_farm name: secret-c containing cluster: build01"),
+			expectedError: errors.New("couldn't find SecretItem: item name: build_farm - field name: secret-c - param: cluster=build01"),
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			secretItem, err := findSecretItem(tc.args.itemName, tc.args.name, tc.args.likeCluster, tc.args.c)
+			secretItem, err := findSecretItem(tc.args.c,
+				byItemName(tc.args.itemName),
+				byFieldName(tc.args.name),
+				byParam("cluster", tc.args.likeCluster))
 			if diff := cmp.Diff(tc.expectedError, err, testhelper.EquateErrorMessage); diff != "" {
 				t.Fatalf("error: %v - expectedError: %v", err, tc.expectedError)
 				return
@@ -125,13 +128,12 @@ func TestUpdateSecretGeneratorConfig(t *testing.T) {
 				{
 					ItemName: buildUFarm,
 					Fields: []secretgenerator.FieldGenerator{{
-						Name: fmt.Sprintf("token_image-puller_%s_reg_auth_value.txt", clusterWildcard),
+						Name: fmt.Sprintf("token_%s_%s_reg_auth_value.txt", serviceAccountWildcard, clusterWildcard),
 						Cmd:  "oc --context $(cluster) sa create-kubeconfig --namespace ci $(service_account) | sed \"s/$(service_account)/$(cluster)/g\"",
 					}},
 					Params: map[string][]string{
-						"cluster": {
-							string(api.ClusterAPPCI),
-							string(api.ClusterBuild01)}},
+						"cluster":         {string(api.ClusterAPPCI), string(api.ClusterBuild01)},
+						"service_account": {"image-puller", "image-pusher"}},
 				},
 				{
 					ItemName: "ci-chat-bot",
@@ -172,14 +174,13 @@ func TestUpdateSecretGeneratorConfig(t *testing.T) {
 				{
 					ItemName: buildUFarm,
 					Fields: []secretgenerator.FieldGenerator{{
-						Name: fmt.Sprintf("token_image-puller_%s_reg_auth_value.txt", clusterWildcard),
+						Name: fmt.Sprintf("token_%s_%s_reg_auth_value.txt", serviceAccountWildcard, clusterWildcard),
 						Cmd:  "oc --context $(cluster) sa create-kubeconfig --namespace ci $(service_account) | sed \"s/$(service_account)/$(cluster)/g\"",
 					}},
 					Params: map[string][]string{
-						"cluster": {
-							string(api.ClusterAPPCI),
-							string(api.ClusterBuild01),
-							"newcluster"}},
+						"cluster":         {string(api.ClusterAPPCI), string(api.ClusterBuild01), "newcluster"},
+						"service_account": {"image-puller", "image-pusher"},
+					},
 				},
 				{
 					ItemName: "ci-chat-bot",

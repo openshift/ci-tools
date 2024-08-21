@@ -48,9 +48,10 @@ const (
 	conditionAllJobsTriggered = "AllJobsTriggered"
 	conditionWithErrors       = "WithErrors"
 
-	aggregationIDLabel          = "release.openshift.io/aggregation-id"
-	defaultAggregatorJobTimeout = 6 * time.Hour
-	defaultMultiRefJobTimeout   = 6 * time.Hour
+	aggregationIDLabel = "release.openshift.io/aggregation-id"
+	// TODO: temporarily increase timeout to allow payload tests to run during k8s rebase
+	defaultAggregatorJobTimeout = 8 * time.Hour
+	defaultMultiRefJobTimeout   = 8 * time.Hour
 
 	dependentProwJobsFinalizer = "pullrequestpayloadqualificationruns.ci.openshift.io/dependent-prowjobs"
 )
@@ -628,6 +629,11 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 			options.Cron = "@yearly"
 		})
 		periodic.Name = generateJobNameToSubmit(inject, prs)
+		// TODO: temporarily increase timeout to allow payload tests to run during k8s rebase
+		if periodic.DecorationConfig == nil {
+			periodic.DecorationConfig = &prowv1.DecorationConfig{}
+		}
+		periodic.DecorationConfig.Timeout = &prowv1.Duration{Duration: 6 * time.Hour}
 		break
 	}
 	// We did not find the injected test: this is a bug

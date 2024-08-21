@@ -224,6 +224,7 @@ github.com/aws/aws-sdk-go/private/protocol/rest
 github.com/aws/aws-sdk-go/private/protocol/restjson
 github.com/aws/aws-sdk-go/private/protocol/restxml
 github.com/aws/aws-sdk-go/private/protocol/xml/xmlutil
+github.com/aws/aws-sdk-go/service/codebuild
 github.com/aws/aws-sdk-go/service/s3
 github.com/aws/aws-sdk-go/service/s3/s3iface
 github.com/aws/aws-sdk-go/service/s3/s3manager
@@ -231,6 +232,16 @@ github.com/aws/aws-sdk-go/service/sso
 github.com/aws/aws-sdk-go/service/sso/ssoiface
 github.com/aws/aws-sdk-go/service/sts
 github.com/aws/aws-sdk-go/service/sts/stsiface
+# github.com/aws/aws-sdk-go-v2 v1.30.3
+## explicit; go 1.20
+# github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.15
+## explicit; go 1.20
+# github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.15
+## explicit; go 1.20
+# github.com/aws/aws-sdk-go-v2/service/codebuild v1.40.3
+## explicit; go 1.20
+# github.com/aws/smithy-go v1.20.3
+## explicit; go 1.20
 # github.com/bazelbuild/buildtools v0.0.0-20200922170545-10384511ce98
 ## explicit
 github.com/bazelbuild/buildtools/build

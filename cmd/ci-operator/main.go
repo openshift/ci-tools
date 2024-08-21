@@ -428,7 +428,8 @@ type options struct {
 	manifestToolDockerCfg  string
 	localRegistryDNS       string
 
-	restrictNetworkAccess bool
+	restrictNetworkAccess   bool
+	awsCodeBuildProjectName string
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
@@ -479,6 +480,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.BoolVar(&opt.givePrAuthorAccessToNamespace, "give-pr-author-access-to-namespace", true, "Give view access to the temporarily created namespace to the PR author.")
 	flag.StringVar(&opt.impersonateUser, "as", "", "Username to impersonate")
 	flag.BoolVar(&opt.restrictNetworkAccess, "restrict-network-access", false, "Restrict network access to 10.0.0.0/8 (RedHat intranet).")
+	flag.StringVar(&opt.awsCodeBuildProjectName, "aws-codebuild-project-name", "", "The name of the AWS CodeBuild project to use for building the project. WARNING: Setting this option will use AWS CodeBuild instead of OpenShift Build.")
 
 	// flags needed for the configresolver
 	flag.StringVar(&opt.resolverAddress, "resolver-address", configResolverAddress, "Address of configresolver")
@@ -896,7 +898,7 @@ func (o *options) Run() []error {
 	// load the graph from the configuration
 	buildSteps, promotionSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig,
 		o.podPendingTimeout, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig,
-		o.consoleHost, o.nodeName, nodeArchitectures, o.targetAdditionalSuffix, o.manifestToolDockerCfg, o.localRegistryDNS, mergedConfig, streams)
+		o.consoleHost, o.nodeName, nodeArchitectures, o.targetAdditionalSuffix, o.manifestToolDockerCfg, o.localRegistryDNS, mergedConfig, streams, o.awsCodeBuildProjectName)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}

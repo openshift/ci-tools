@@ -318,3 +318,18 @@ func SaveConfig(config *Config, configPath string) error {
 	}
 	return nil
 }
+
+// GetBuildFarmSize returns build farm size
+func (config *Config) GetBuildFarmSize() int {
+	size := 0
+
+	if config == nil || config.BuildFarm == nil {
+		return size
+	}
+	for cloud := range config.BuildFarm {
+		for range config.BuildFarm[cloud] {
+			size++
+		}
+	}
+	return size
+}

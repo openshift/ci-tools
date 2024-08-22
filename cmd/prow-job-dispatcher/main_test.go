@@ -1,12 +1,10 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"path/filepath"
 	"reflect"
 	"regexp"
-	"sync"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -90,7 +88,8 @@ func TestValidate(t *testing.T) {
 
 var (
 	c = dispatcher.Config{
-		Default: "api.ci",
+		DetermineE2EByJob: true,
+		Default:           "api.ci",
 		BuildFarm: map[api.Cloud]map[api.Cluster]*dispatcher.BuildFarmConfig{
 			api.CloudAWS: {
 				api.ClusterBuild01: {},
@@ -98,6 +97,10 @@ var (
 			api.CloudGCP: {
 				api.ClusterBuild02: {},
 			},
+		},
+		BuildFarmCloud: map[api.Cloud][]string{
+			api.CloudAWS: {string(api.ClusterBuild01)},
+			api.CloudGCP: {string(api.ClusterBuild02)},
 		},
 		Groups: map[api.Cluster]dispatcher.Group{
 			"api.ci": {
@@ -156,19 +159,27 @@ func TestDispatchJobs(t *testing.T) {
 			prowJobConfigDir: filepath.Join("testdata", t.Name()),
 			maxConcurrency:   1,
 			jobVolumes: map[string]float64{
-				"pull-ci-openshift-ci-tools-master-breaking-changes":  23,
-				"pull-ci-openshift-ci-tools-master-e2e":               12,
-				"pull-ci-openshift-cluster-etcd-operator-master-unit": 6,
+				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp":          24,
+				"pull-ci-openshift-ci-tools-master-breaking-changes":                 43,
+				"pull-ci-openshift-ci-tools-master-e2e":                              12,
+				"pull-ci-openshift-cluster-etcd-operator-master-unit":                6,
+				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp-operator": 2,
+				"branch-ci-wildfly-wildfly-operator-master-images":                   1,
+				"branch-ci-xyz-xyz-operator-master-images":                           10,
 			},
 			expectedBuildFarm: map[api.Cloud]map[api.Cluster]*dispatcher.BuildFarmConfig{
-				"aws": {"build01": {FilenamesRaw: []string{"ci-tools-presubmits.yaml"}}},
-				"gcp": {"build02": {FilenamesRaw: []string{"cluster-api-provider-gcp-presubmits.yaml", "cluster-etcd-operator-master-presubmits.yaml", "wildfly-operator-presubmits.yaml"}}},
+				"aws": {"build01": {FilenamesRaw: []string{"cluster-etcd-operator-master-presubmits.yaml", "cluster-api-provider-gcp-presubmits.yaml", "ci-tools-presubmits.yaml"}}},
+				"gcp": {"build02": {FilenamesRaw: []string{"wildfly-operator-presubmits.yaml", "xyz-operator-presubmits.yaml"}}},
 			},
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, actual := dispatchJobs(context.TODO(), tc.prowJobConfigDir, tc.maxConcurrency, tc.config, tc.jobVolumes, sets.New[string]())
+			var totalVolume float64
+			for _, volume := range tc.jobVolumes {
+				totalVolume += volume
+			}
+			_, actual := dispatchJobs(tc.prowJobConfigDir, tc.config, tc.jobVolumes, sets.New[string](), totalVolume/float64(tc.config.GetBuildFarmSize()))
 			equalError(t, tc.expected, actual)
 			if tc.config != nil && !reflect.DeepEqual(tc.expectedBuildFarm, tc.config.BuildFarm) {
 				t.Errorf("%s: actual differs from expected:\n%s", t.Name(), cmp.Diff(tc.expectedBuildFarm, tc.config.BuildFarm))
@@ -549,8 +560,8 @@ func TestDetermineCluster(t *testing.T) {
 				clusterVolumeMap: make(map[string]map[string]float64),
 				cloudProviders:   make(sets.Set[string]),
 				pjs:              make(map[string]string),
+				specialClusters:  make(map[string]float64),
 				blocked:          tt.fields.blocked,
-				mutex:            sync.Mutex{},
 			}
 			if got := cv.determineCluster(tt.args.cluster, tt.args.determinedCluster, tt.args.defaultCluster, tt.args.canBeRelocated); got != tt.want {
 				t.Errorf("clusterVolume.determineCluster() = %v, want %v", got, tt.want)

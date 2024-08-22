@@ -56,3 +56,12 @@ func (pv *prometheusVolumes) GetJobVolumes() (map[string]float64, error) {
 	logrus.Info("Fetched new job volumes")
 	return pv.jobVolumes, nil
 }
+
+func (pv *prometheusVolumes) getTotalVolume() float64 {
+	var totalVolume float64
+	for _, volume := range pv.jobVolumes {
+		totalVolume += volume
+	}
+
+	return totalVolume
+}

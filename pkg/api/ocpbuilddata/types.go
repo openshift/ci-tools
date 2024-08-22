@@ -17,7 +17,6 @@ import (
 )
 
 type OCPImageConfig struct {
-	Mode           *Mode                  `json:"mode"`
 	Content        *OCPImageConfigContent `json:"content"`
 	From           OCPImageConfigFrom     `json:"from"`
 	Push           OCPImageConfigPush     `json:"push"`
@@ -36,9 +35,6 @@ func (o OCPImageConfig) validate() error {
 		errs = append(errs, fmt.Errorf(".from failed validation: %w", err))
 	}
 	for idx, cfg := range o.From.Builder {
-		if o.Mode.ModeDisabled != "" && cfg.Image != "" {
-			continue
-		}
 		if err := cfg.validate(); err != nil {
 			errs = append(errs, fmt.Errorf(".from.%d failed validation: %w", idx, err))
 		}
@@ -49,14 +45,6 @@ func (o OCPImageConfig) validate() error {
 
 func (o OCPImageConfig) PromotesTo() string {
 	return fmt.Sprintf("registry.ci.openshift.org/ocp/%s.%s:%s", o.Version.Major, o.Version.Minor, strings.TrimPrefix(o.Name, "openshift/ose-"))
-}
-
-// Config mode: enabled | disabled | wip
-// Leaving this out entirely means `enable` which is normal operation
-type Mode struct {
-	ModeEnabled  string `json:"enabled"`
-	ModeDisabled string `json:"disabled"`
-	ModeWip      string `json:"wip"`
 }
 
 type OCPImageConfigContent struct {
@@ -97,16 +85,11 @@ type OCPImageConfigFrom struct {
 type OCPImageConfigFromStream struct {
 	Stream string `json:"stream"`
 	Member string `json:"member"`
-	Image  string `json:"image"`
 }
 
 func (icfs OCPImageConfigFromStream) validate() error {
 	if icfs.Stream == "" && icfs.Member == "" {
 		return errors.New("both stream and member were unset")
-	}
-	if icfs.Image == "" {
-		// skip validation for image
-		return nil
 	}
 	if icfs.Stream != "" && icfs.Member != "" {
 		return fmt.Errorf("both stream(%s) and member(%s) were set", icfs.Stream, icfs.Member)

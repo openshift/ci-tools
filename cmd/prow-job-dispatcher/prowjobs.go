@@ -4,6 +4,8 @@ import (
 	"sync"
 
 	"github.com/sirupsen/logrus"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 type prowjobs struct {
@@ -43,4 +45,15 @@ func (pjs *prowjobs) get(pj string) string {
 		return cluster
 	}
 	return ""
+}
+
+func (pjs *prowjobs) hasAnyOfClusters(clusters sets.Set[string]) bool {
+	pjs.mu.Lock()
+	defer pjs.mu.Unlock()
+	for _, cluster := range pjs.data {
+		if clusters.Has(cluster) {
+			return true
+		}
+	}
+	return false
 }

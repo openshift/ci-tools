@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/prometheus/client_golang/prometheus"
 	githubql "github.com/shurcooL/githubv4"
 	"github.com/sirupsen/logrus"
@@ -186,11 +186,11 @@ func validatePolicies(policy RetesterPolicy) []error {
 }
 
 // NewController generates a retest controller.
-func NewController(ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool, cacheFile string, cacheRecordAge time.Duration, config *Config, awsSession *session.Session) *RetestController {
+func NewController(ctx context.Context, ghClient githubClient, cfg config.Getter, gitClient git.ClientFactory, usesApp bool, cacheFile string, cacheRecordAge time.Duration, config *Config, awsConfig *aws.Config) *RetestController {
 	logger := logrus.NewEntry(logrus.StandardLogger())
 	var backoff backoffCache
-	if awsSession != nil {
-		backoff = &s3BackOffCache{cache: map[string]*pullRequest{}, file: cacheFile, cacheRecordAge: cacheRecordAge, logger: logger, awsClient: s3.New(awsSession)}
+	if awsConfig != nil {
+		backoff = &s3BackOffCache{cache: map[string]*pullRequest{}, file: cacheFile, cacheRecordAge: cacheRecordAge, logger: logger, awsClient: s3.NewFromConfig(*awsConfig)}
 	} else {
 		backoff = &fileBackoffCache{cache: map[string]*pullRequest{}, file: cacheFile, cacheRecordAge: cacheRecordAge, logger: logger}
 	}
@@ -204,7 +204,7 @@ func NewController(ghClient githubClient, cfg config.Getter, gitClient git.Clien
 		backoff:       backoff,
 		config:        config,
 	}
-	if err := ret.backoff.load(); err != nil {
+	if err := ret.backoff.load(ctx); err != nil {
 		logger.WithError(err).Warn("Failed to load backoff cache from disk")
 	}
 	return ret
@@ -215,17 +215,17 @@ func prUrl(pr tide.PullRequest) string {
 }
 
 // Run implements the business of the controller: filters out the pull requests satisfying the Tide's merge criteria except some required job failed and issue "/retest required" command on them.
-func (c *RetestController) Run() error {
+func (c *RetestController) Run(ctx context.Context) error {
 	// Input: Tide Config
 	// Output: A list of PRs that are filter out by the queries in Tide's config
 	candidates, err := findCandidates(c.configGetter, c.ghClient, c.usesGitHubApp, c.logger)
 	if err != nil {
 		return fmt.Errorf("failed to find retestable candidates: %w", err)
 	}
-	return c.runWithCandidates(candidates)
+	return c.runWithCandidates(ctx, candidates)
 }
 
-func (c *RetestController) runWithCandidates(candidates map[string]tide.PullRequest) error {
+func (c *RetestController) runWithCandidates(ctx context.Context, candidates map[string]tide.PullRequest) error {
 	logrus.Infof("Found %d candidates for retest (pass label criteria, fail some tests)", len(candidates))
 	for _, pr := range candidates {
 		logrus.Infof("Candidate PR: %s", prUrl(pr))
@@ -249,7 +249,7 @@ func (c *RetestController) runWithCandidates(candidates map[string]tide.PullRequ
 		errs = append(errs, c.retestOrBackoff(pr))
 	}
 
-	if err := c.backoff.save(); err != nil {
+	if err := c.backoff.save(ctx); err != nil {
 		errs = append(errs, fmt.Errorf("failed to save cache to disk: %w", err))
 	}
 	logrus.Info("Sync finished")

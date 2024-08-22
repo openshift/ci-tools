@@ -1,13 +1,14 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/sirupsen/logrus"
 
 	prowConfig "sigs.k8s.io/prow/pkg/config"
@@ -119,19 +120,21 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to load config from file")
 	}
 
-	var awsSession *session.Session
+	ctx := interrupts.Context()
+
+	var awsConfig aws.Config
 	if o.cacheFileOnS3 {
-		awsSession, err = session.NewSession(&aws.Config{Region: aws.String("us-east-1")})
+		awsConfig, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion("us-east-1"))
 		if err != nil {
-			logrus.WithError(err).Fatal("Failed to create AWS session.")
+			logrus.WithError(err).Fatal("Failed to create AWS config.")
 		}
-		_, err = awsSession.Config.Credentials.Get()
+		_, err = awsConfig.Credentials.Retrieve(ctx)
 		if err != nil {
 			logrus.WithError(err).Fatal("Error getting AWS credentials.")
 		}
 	}
 
-	c := retester.NewController(gc, configAgent.Config, gitClient, o.github.AppPrivateKeyPath != "", o.cacheFile, o.cacheRecordAge, config, awsSession)
+	c := retester.NewController(ctx, gc, configAgent.Config, gitClient, o.github.AppPrivateKeyPath != "", o.cacheFile, o.cacheRecordAge, config, &awsConfig)
 
 	metrics.ExposeMetrics("retester", prowConfig.PushGateway{}, prowflagutil.DefaultMetricsPort)
 
@@ -141,7 +144,7 @@ func main() {
 		}
 	})
 
-	execute(c)
+	execute(ctx, c)
 	if o.runOnce {
 		return
 	}
@@ -153,12 +156,12 @@ func main() {
 	case <-time.After(o.interval):
 	}
 
-	interrupts.Tick(func() { execute(c) }, func() time.Duration { return o.interval })
+	interrupts.Tick(func() { execute(ctx, c) }, func() time.Duration { return o.interval })
 	interrupts.WaitForGracefulShutdown()
 }
 
-func execute(c *retester.RetestController) {
-	if err := c.Run(); err != nil {
+func execute(ctx context.Context, c *retester.RetestController) {
+	if err := c.Run(ctx); err != nil {
 		logrus.WithError(err).Error("Error running")
 	}
 }

@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/google/go-cmp/cmp"
 	"github.com/shurcooL/githubv4"
 	"github.com/sirupsen/logrus"
@@ -564,7 +564,7 @@ pr3:
 			if tc.name != "empty file name" {
 				tc.cache.file = filepath.Join(dir, tc.name)
 			}
-			actual := tc.cache.save()
+			actual := tc.cache.save(context.TODO())
 			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("Error differs from expected:\n%s", diff)
 			}
@@ -587,11 +587,11 @@ type mockS3Client struct {
 	GetObjectFunc func(input *s3.GetObjectInput) (*s3.GetObjectOutput, error)
 }
 
-func (m *mockS3Client) PutObject(input *s3.PutObjectInput) (*s3.PutObjectOutput, error) {
+func (m *mockS3Client) PutObject(ctx context.Context, input *s3.PutObjectInput, optFns ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
 	return m.PutObjectFunc(input)
 }
 
-func (m *mockS3Client) GetObject(input *s3.GetObjectInput) (*s3.GetObjectOutput, error) {
+func (m *mockS3Client) GetObject(ctx context.Context, input *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
 	return m.GetObjectFunc(input)
 }
 
@@ -635,7 +635,7 @@ func TestSaveS3BackoffCache(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actualErr := tc.s3cache.save()
+			actualErr := tc.s3cache.save(context.TODO())
 			if diff := cmp.Diff(tc.expectedError, actualErr, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("error differs from expected:\n%s", diff)
 			}
@@ -712,7 +712,7 @@ func TestLoadFromAwsNow(t *testing.T) {
 
 	mockClientForNoFile := &mockS3Client{}
 	mockClientForNoFile.GetObjectFunc = func(input *s3.GetObjectInput) (*s3.GetObjectOutput, error) {
-		return nil, awserr.New(s3.ErrCodeNoSuchKey, "", nil)
+		return nil, &s3types.NoSuchKey{}
 	}
 
 	testCases := []struct {
@@ -751,7 +751,7 @@ func TestLoadFromAwsNow(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actualErr := tc.s3cache.loadFromAwsNow(now)
+			actualErr := tc.s3cache.loadFromAwsNow(context.TODO(), now)
 			if diff := cmp.Diff(tc.expectedError, actualErr, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("error differs from expected:\n%s", diff)
 			}
@@ -919,7 +919,7 @@ func TestRunWithCandidates(t *testing.T) {
 				backoff:       &fileBackoffCache{cache: map[string]*pullRequest{}, logger: logger},
 				config:        config,
 			}
-			actual := c.runWithCandidates(tc.candidates)
+			actual := c.runWithCandidates(context.TODO(), tc.candidates)
 			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("Error differs from expected:\n%s", diff)
 			}

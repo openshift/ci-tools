@@ -1,6 +1,7 @@
 package retester
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -21,7 +22,7 @@ type fileBackoffCache struct {
 	logger         *logrus.Entry
 }
 
-func (b *fileBackoffCache) load() error {
+func (b *fileBackoffCache) load(_ context.Context) error {
 	b.logger.WithField("backOffCache", "fileBackoffCache").Info("Loading the cache file ...")
 	return b.loadFromDiskNow(time.Now())
 }
@@ -62,7 +63,7 @@ func loadAndDelete(content []byte, logger *logrus.Entry, now time.Time, cacheRec
 	return cache, nil
 }
 
-func (b *fileBackoffCache) save() (ret error) {
+func (b *fileBackoffCache) save(_ context.Context) (ret error) {
 	if b.file == "" {
 		return nil
 	}

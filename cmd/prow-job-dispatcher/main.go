@@ -18,7 +18,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/robfig/cron/v3"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
@@ -35,6 +34,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/dispatcher"
 	"github.com/openshift/ci-tools/pkg/github/prcreation"
 	"github.com/openshift/ci-tools/pkg/rehearse"
+	"github.com/openshift/ci-tools/pkg/sanitizer"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
@@ -548,7 +548,7 @@ func cleanup(directory string) {
 	logrus.WithField("directory", directory).Info("Successfully removed directory")
 }
 
-func createPR(o options, config *dispatcher.Config) {
+func createPR(o options, config *dispatcher.Config, pjs map[string]string) {
 	targetDirWithRelease := filepath.Join(o.targetDir, "/release")
 	cleanup(targetDirWithRelease)
 	defer cleanup(targetDirWithRelease)
@@ -569,14 +569,9 @@ func createPR(o options, config *dispatcher.Config) {
 		return
 	}
 
-	command := "/usr/bin/sanitize-prow-jobs"
-	arguments := []string{"--prow-jobs-dir", "./release/ci-operator/jobs", "--config-path", "./release/core-services/sanitize-prow-jobs/_config.yaml"}
-	fullCommand := fmt.Sprintf("%s %s", filepath.Base(command), strings.Join(arguments, " "))
-	logrus.WithField("fullCommand", fullCommand).Infof("Running the command ...")
-
-	combinedOutput, err := exec.Command(command, arguments...).CombinedOutput()
-	if err != nil {
-		logrus.WithError(err).WithField("combinedOutput", string(combinedOutput)).Error("failed to run the command")
+	if err := sanitizer.DeterminizeJobs(filepath.Join(targetDirWithRelease, "/ci-operator/jobs"), config, pjs); err != nil {
+		logrus.WithError(err).Error("failed to determinize")
+		return
 	}
 
 	title := fmt.Sprintf("%s at %s", matchTitle, time.Now().Format(time.RFC1123))
@@ -663,7 +658,7 @@ func runAsDaemon(o options, promVolumes *prometheusVolumes) {
 			}
 
 			if o.createPR {
-				createPR(o, config)
+				createPR(o, config, pjs)
 			}
 		}
 	}
@@ -679,12 +674,8 @@ func runAsDaemon(o options, promVolumes *prometheusVolumes) {
 	}
 	c.Start()
 
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		logrus.WithError(err).Fatal("failed setup watcher")
-	}
-	defer watcher.Close()
-
+	// instead using fsnotify watcher falling back to periodic checks as
+	// watcher not working properly with git-sync
 	go func(config string) {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()

@@ -1,4 +1,4 @@
-package main
+package sanitizer
 
 import (
 	"testing"
@@ -22,7 +22,7 @@ func TestDefaultJobConfig(t *testing.T) {
 	}
 
 	config := &dispatcher.Config{Default: "api.ci"}
-	if err := defaultJobConfig(jc, "", config); err != nil {
+	if err := defaultJobConfig(jc, "", config, nil); err != nil {
 		t.Errorf("failed default job config: %v", err)
 	}
 

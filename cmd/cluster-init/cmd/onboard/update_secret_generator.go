@@ -27,7 +27,7 @@ type SecretGenConfig []secretgenerator.SecretItem
 
 // secretItemFilter applies a filter on a secretgenerator.SecretItem.
 // Return true whenever the outcome is positive, that means the SecretItem
-// should be consider for futher processing, false otherwise.
+// should be consider for further processing, false otherwise.
 type secretItemFilter struct {
 	apply   func(si *secretgenerator.SecretItem) bool
 	explain string

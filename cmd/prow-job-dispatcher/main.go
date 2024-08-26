@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -718,32 +719,32 @@ func runAsDaemon(o options, promVolumes *prometheusVolumes) {
 	}
 	c.Start()
 
-	// instead using fsnotify watcher falling back to periodic checks as
-	// watcher not working properly with git-sync
+	// In the long term, git-sync and shallow syncing can affect the modification time,
+	// making it inconsistent with the actual data in the repository. To address this,
+	// the cluster config data is loaded every minute and checked for changes.
 	go func(config string) {
-		ticker := time.NewTicker(30 * time.Second)
+		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
-		initialFileInfo, err := os.Stat(config)
+		prevConfigClusterMap, prevBlocked, err := loadClusterConfig(config)
 		if err != nil {
-			logrus.WithError(err).Fatal("failed to get initial cluster config info")
+			logrus.WithError(err).Fatal("failed to load initial cluster config")
 			return
 		}
-		lastModTime := initialFileInfo.ModTime()
 
 		for {
 			<-ticker.C
-			currentFileInfo, err := os.Stat(config)
+			currentConfigClusterMap, currentBlocked, err := loadClusterConfig(config)
 			if err != nil {
-				logrus.WithError(err).Error("failed to get cluster config info")
+				logrus.WithError(err).Error("failed to load cluster config")
 				continue
 			}
 
-			if currentFileInfo.ModTime().After(lastModTime) {
+			if !reflect.DeepEqual(currentConfigClusterMap, prevConfigClusterMap) || !reflect.DeepEqual(currentBlocked, prevBlocked) {
 				dispatchWrapper(false)
-				lastModTime = currentFileInfo.ModTime()
+				prevConfigClusterMap = currentConfigClusterMap
+				prevBlocked = currentBlocked
 			}
 		}
-
 	}(o.clusterConfigPath)
 
 	dispatchWrapper(false)

@@ -27,6 +27,7 @@ type projectDirectoryImageBuildStep struct {
 	podClient          kubernetes.PodClient
 	jobSpec            *api.JobSpec
 	pullSecret         *coreapi.Secret
+	multiArch          bool
 }
 
 func (s *projectDirectoryImageBuildStep) Inputs() (api.InputDefinition, error) {
@@ -65,7 +66,7 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 		s.config.Ref,
 	)
 
-	return handleBuilds(ctx, s.client, s.podClient, *build, ImageBuildOptions{MultiArch: s.config.MultiArch})
+	return handleBuilds(ctx, s.client, s.podClient, *build, newImageBuildOptions(s.multiArch))
 }
 
 type workingDir func(tag string) (string, error)
@@ -188,6 +189,14 @@ func (s *projectDirectoryImageBuildStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
+func (s *projectDirectoryImageBuildStep) IsMultiArch() bool {
+	return s.config.MultiArch
+}
+
+func (s *projectDirectoryImageBuildStep) SetMultiArch(m bool) {
+	s.multiArch = m
+}
+
 func ProjectDirectoryImageBuildStep(
 	config api.ProjectDirectoryImageBuildStepConfiguration,
 	releaseBuildConfig *api.ReleaseBuildConfiguration,
@@ -205,5 +214,6 @@ func ProjectDirectoryImageBuildStep(
 		podClient:          podClient,
 		jobSpec:            jobSpec,
 		pullSecret:         pullSecret,
+		multiArch:          config.MultiArch,
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -34,6 +35,61 @@ type Step interface {
 	Provides() ParameterMap
 	// Objects returns all objects the client for this step has seen
 	Objects() []ctrlruntimeclient.Object
+}
+
+// MultiArchStep is a step that holds multi-arch information
+// +k8s:deepcopy-gen=false
+type MultiArchStep interface {
+	Step
+
+	IsMultiArch() bool
+	SetMultiArch(multiArch bool)
+}
+
+func ResolveMultiArch(steps []Step) []Step {
+	stepsMap := make(map[string]Step)
+	for _, step := range steps {
+		stepsMap[step.Name()] = step
+	}
+	for _, step := range stepsMap {
+		if multiArchStep, ok := step.(MultiArchStep); ok {
+			if multiArchStep.IsMultiArch() {
+				setMultiArchForParents(logrus.WithField("step_parent", multiArchStep.Name()), multiArchStep, stepsMap)
+			}
+		}
+	}
+
+	for i, step := range steps {
+		steps[i] = stepsMap[step.Name()]
+	}
+
+	return steps
+}
+
+func setMultiArchForParents(l *logrus.Entry, step Step, stepsMap map[string]Step) {
+	if step == nil {
+		return
+	}
+
+	for _, link := range step.Requires() {
+		if internalLink, ok := link.(*internalImageStreamTagLink); ok {
+			parentStepName := internalLink.tag
+			parentStep := stepsMap[parentStepName]
+			if parentStep != nil {
+				if multiArchStep, ok := parentStep.(MultiArchStep); ok {
+
+					if multiArchStep.IsMultiArch() {
+						continue
+					}
+
+					l.Infof("Setting multi-arch for %s:%s", internalLink.name, internalLink.tag)
+					multiArchStep.SetMultiArch(true)
+
+					setMultiArchForParents(logrus.WithField("step_parent", multiArchStep.Name()), multiArchStep, stepsMap)
+				}
+			}
+		}
+	}
 }
 
 type InputDefinition []string

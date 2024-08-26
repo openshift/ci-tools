@@ -27,6 +27,7 @@ type rpmImageInjectionStep struct {
 	podClient  kubernetes.PodClient
 	jobSpec    *api.JobSpec
 	pullSecret *coreapi.Secret
+	multiArch  bool
 }
 
 func (s *rpmImageInjectionStep) Inputs() (api.InputDefinition, error) {
@@ -62,7 +63,7 @@ func (s *rpmImageInjectionStep) run(ctx context.Context) error {
 		s.pullSecret,
 		nil,
 		"",
-	))
+	), newImageBuildOptions(s.multiArch))
 }
 
 func (s *rpmImageInjectionStep) Requires() []api.StepLink {
@@ -86,6 +87,9 @@ func (s *rpmImageInjectionStep) Description() string {
 func (s *rpmImageInjectionStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
+
+func (s *rpmImageInjectionStep) IsMultiArch() bool           { return s.multiArch }
+func (s *rpmImageInjectionStep) SetMultiArch(multiArch bool) { s.multiArch = multiArch }
 
 func RPMImageInjectionStep(
 	config api.RPMImageInjectionStepConfiguration,

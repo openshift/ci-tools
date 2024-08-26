@@ -28,6 +28,7 @@ type pipelineImageCacheStep struct {
 	podClient  kubernetes.PodClient
 	jobSpec    *api.JobSpec
 	pullSecret *coreapi.Secret
+	multiArch  bool
 }
 
 func (s *pipelineImageCacheStep) Inputs() (api.InputDefinition, error) {
@@ -58,7 +59,7 @@ func (s *pipelineImageCacheStep) run(ctx context.Context) error {
 		s.pullSecret,
 		nil,
 		s.config.Ref,
-	))
+	), newImageBuildOptions(s.multiArch))
 }
 
 func (s *pipelineImageCacheStep) Requires() []api.StepLink {
@@ -87,6 +88,9 @@ func (s *pipelineImageCacheStep) Description() string {
 func (s *pipelineImageCacheStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
+
+func (s *pipelineImageCacheStep) IsMultiArch() bool           { return s.multiArch }
+func (s *pipelineImageCacheStep) SetMultiArch(multiArch bool) { s.multiArch = multiArch }
 
 func PipelineImageCacheStep(
 	config api.PipelineImageCacheStepConfiguration,

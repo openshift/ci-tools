@@ -26,6 +26,7 @@ type bundleSourceStep struct {
 	podClient          kubernetes.PodClient
 	jobSpec            *api.JobSpec
 	pullSecret         *coreapi.Secret
+	multiArch          bool
 }
 
 func (s *bundleSourceStep) Inputs() (api.InputDefinition, error) {
@@ -78,7 +79,8 @@ func (s *bundleSourceStep) run(ctx context.Context) error {
 		nil,
 		"",
 	)
-	return handleBuilds(ctx, s.client, s.podClient, *build)
+
+	return handleBuilds(ctx, s.client, s.podClient, *build, newImageBuildOptions(s.multiArch))
 }
 
 func replaceCommand(pullSpec, with string) string {
@@ -131,6 +133,9 @@ func (s *bundleSourceStep) Name() string { return s.config.TargetName() }
 func (s *bundleSourceStep) Description() string {
 	return fmt.Sprintf("Build image %s from the repository", api.PipelineImageStreamTagReferenceBundleSource)
 }
+
+func (s *bundleSourceStep) IsMultiArch() bool           { return s.multiArch }
+func (s *bundleSourceStep) SetMultiArch(multiArch bool) { s.multiArch = multiArch }
 
 func BundleSourceStep(
 	config api.BundleSourceStepConfiguration,

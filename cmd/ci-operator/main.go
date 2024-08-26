@@ -900,6 +900,10 @@ func (o *options) Run() []error {
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}
+
+	// Resolve which of the steps should enable multi arch based on the graph build steps.
+	buildSteps = api.ResolveMultiArch(buildSteps)
+
 	// Before we create the namespace, we need to ensure all inputs to the graph
 	// have been resolved. We must run this step before we resolve the partial
 	// graph or otherwise two jobs with different targets would create different

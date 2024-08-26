@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -12,7 +11,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"syscall"
@@ -20,7 +19,6 @@ import (
 
 	"github.com/robfig/cron/v3"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sync/semaphore"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -56,7 +54,6 @@ type options struct {
 	jobsStoragePath   string
 	daemonize         bool
 
-	maxConcurrency       int
 	prometheusDaysBefore int
 
 	createPR    bool
@@ -83,7 +80,6 @@ func gatherOptions() options {
 	fs.StringVar(&o.jobsStoragePath, "jobs-storage-path", "", "Path to the file holding only job assignments in Gob format")
 	fs.BoolVar(&o.daemonize, "daemonize", false, "Run dispatcher in daemon mode")
 	fs.IntVar(&o.prometheusDaysBefore, "prometheus-days-before", 1, "Number [1,15] of days before. Time 00-00-00 of that day will be used as time to query Prometheus. E.g., 1 means 00-00-00 of yesterday.")
-	fs.IntVar(&o.maxConcurrency, "concurrency", 0, "Maximum number of concurrent in-flight goroutines to handle files.")
 
 	fs.BoolVar(&o.createPR, "create-pr", false, "Create a pull request to the change made with this tool.")
 	fs.StringVar(&o.githubLogin, "github-login", githubLogin, "The GitHub username to use.")
@@ -106,9 +102,6 @@ func gatherOptions() options {
 }
 
 func (o *options) validate() error {
-	if o.maxConcurrency == 0 {
-		o.maxConcurrency = runtime.GOMAXPROCS(0)
-	}
 	if o.prowJobConfigDir == "" {
 		return fmt.Errorf("mandatory argument --prow-jobs-dir wasn't set")
 	}
@@ -206,32 +199,41 @@ func getCloudProvidersForE2ETests(jc *prowconfig.JobConfig) sets.Set[string] {
 type clusterVolume struct {
 	// [cloudProvider][cluster]volume
 	clusterVolumeMap map[string]map[string]float64
+	specialClusters  map[string]float64
 	// only needed for stable tests: traverse the above map by sorted key list
-	cloudProviders sets.Set[string]
-	pjs            map[string]string
-	blocked        sets.Set[string]
-	mutex          sync.Mutex
+	cloudProviders   sets.Set[string]
+	pjs              map[string]string
+	blocked          sets.Set[string]
+	volumePerCluster float64
 }
 
 // findClusterForJobConfig finds a cluster running on a preferred cloud provider for the jobs in a Prow job config.
 // The chosen cluster will be the one with minimal workload with the given cloud provider.
 // If the cluster provider is empty string, it will choose the one with minimal workload across all cloud providers.
 func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowconfig.JobConfig, path string, config *dispatcher.Config, jobVolumes map[string]float64) (string, error) {
-	// no cluster in the build farm is from the targeting cloud provider
 	if _, ok := cv.clusterVolumeMap[cloudProvider]; !ok {
 		cloudProvider = ""
 	}
-	var cluster, rCloudProvider string
-	min := float64(-1)
-	cv.mutex.Lock()
-	for _, cp := range sets.List(cv.cloudProviders) {
-		m := cv.clusterVolumeMap[cp]
-		for c, v := range m {
-			if cloudProvider == "" || cloudProvider == cp {
-				if min < 0 || min > v {
-					min = v
-					cluster = c
-					rCloudProvider = cp
+	var cluster string
+	var totalVolume float64
+	for _, volume := range jobVolumes {
+		totalVolume += volume
+	}
+	mostUsedCluster := findMostUsedCluster(jc)
+	// TODO: 75% as we still have manual assignments and these are affecting even distribution, re-evaluate when manual assignments are gone
+	if determinedCloudProvider := config.IsInBuildFarm(api.Cluster(mostUsedCluster)); determinedCloudProvider != "" &&
+		cv.clusterVolumeMap[string(determinedCloudProvider)][mostUsedCluster] < cv.volumePerCluster*0.75 {
+		cluster = mostUsedCluster
+	} else {
+		min := float64(-1)
+		for _, cp := range sets.List(cv.cloudProviders) {
+			m := cv.clusterVolumeMap[cp]
+			for c, v := range m {
+				if cloudProvider == "" || cloudProvider == cp {
+					if min < 0 || min > v {
+						min = v
+						cluster = c
+					}
 				}
 			}
 		}
@@ -240,7 +242,7 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 	var errs []error
 	for k := range jc.PresubmitsStatic {
 		for _, job := range jc.PresubmitsStatic[k] {
-			if err := cv.addToVolume(rCloudProvider, cluster, job.JobBase, path, config, jobVolumes); err != nil {
+			if err := cv.addToVolume(cluster, job.JobBase, path, config, jobVolumes); err != nil {
 				errs = append(errs, err)
 			}
 		}
@@ -248,33 +250,61 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 
 	for k := range jc.PostsubmitsStatic {
 		for _, job := range jc.PostsubmitsStatic[k] {
-			if err := cv.addToVolume(rCloudProvider, cluster, job.JobBase, path, config, jobVolumes); err != nil {
+			if err := cv.addToVolume(cluster, job.JobBase, path, config, jobVolumes); err != nil {
 				errs = append(errs, err)
 			}
 		}
 	}
 	for _, job := range jc.Periodics {
-		if err := cv.addToVolume(rCloudProvider, cluster, job.JobBase, path, config, jobVolumes); err != nil {
+		if err := cv.addToVolume(cluster, job.JobBase, path, config, jobVolumes); err != nil {
 			errs = append(errs, err)
 		}
 	}
 
-	cv.mutex.Unlock()
 	return cluster, utilerrors.NewAggregate(errs)
 }
 
-func (cv *clusterVolume) addToVolume(cloudProvider, cluster string, jobBase prowconfig.JobBase, path string, config *dispatcher.Config, jobVolumes map[string]float64) error {
+func findMostUsedCluster(jc *prowconfig.JobConfig) string {
+	clusters := make(map[string]int)
+	for k := range jc.PresubmitsStatic {
+		for _, job := range jc.PresubmitsStatic[k] {
+			clusters[job.Cluster]++
+		}
+	}
+
+	for k := range jc.PostsubmitsStatic {
+		for _, job := range jc.PostsubmitsStatic[k] {
+			clusters[job.Cluster]++
+		}
+	}
+	for _, job := range jc.Periodics {
+		clusters[job.Cluster]++
+	}
+	cluster := ""
+	value := 0
+	for c, v := range clusters {
+		if v > value {
+			cluster = c
+			value = v
+		}
+	}
+	return cluster
+}
+
+func (cv *clusterVolume) addToVolume(cluster string, jobBase prowconfig.JobBase, path string, config *dispatcher.Config, jobVolumes map[string]float64) error {
 	determinedCluster, canBeRelocated, err := config.DetermineClusterForJob(jobBase, path)
+
 	if err != nil {
 		return fmt.Errorf("failed to determine cluster for the job %s in path %q: %w", jobBase.Name, path, err)
 	}
-	if cluster == string(determinedCluster) || canBeRelocated {
-		cv.clusterVolumeMap[cloudProvider][cluster] = cv.clusterVolumeMap[cloudProvider][cluster] + jobVolumes[jobBase.Name]
-	} else if determinedCloudProvider := config.IsInBuildFarm(determinedCluster); determinedCloudProvider != "" {
-		cv.clusterVolumeMap[string(determinedCloudProvider)][string(determinedCluster)] = cv.clusterVolumeMap[string(determinedCloudProvider)][string(determinedCluster)] + jobVolumes[jobBase.Name]
-	}
 
-	cv.pjs[jobBase.Name] = cv.determineCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated)
+	c := cv.determineCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated)
+	cv.pjs[jobBase.Name] = c
+	if determinedCloudProvider := config.IsInBuildFarm(api.Cluster(c)); determinedCloudProvider != "" {
+		cv.clusterVolumeMap[string(determinedCloudProvider)][c] = cv.clusterVolumeMap[string(determinedCloudProvider)][c] + jobVolumes[jobBase.Name]
+		return nil
+	}
+	cv.specialClusters[c] = cv.specialClusters[c] + jobVolumes[jobBase.Name]
 	return nil
 }
 
@@ -314,19 +344,26 @@ type configResult struct {
 	path     string
 }
 
+type fileSizeInfo struct {
+	path string
+	info fs.DirEntry
+	size int64
+}
+
 // dispatchJobs loads the Prow jobs and chooses a cluster in the build farm if possible.
 // The current implementation walks through the Prow Job config files.
 // For each file, it tries to assign all jobs in it to a cluster in the build farm.
 //   - When all the e2e tests are targeting the same cloud provider, we run the test pod on the that cloud provider too.
 //   - When the e2e tests are targeting different cloud providers, or there is no e2e tests at all, we can run the tests
 //     on any cluster in the build farm. Those jobs are used to load balance the workload of clusters in the build farm.
-func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency int, config *dispatcher.Config, jobVolumes map[string]float64, blocked sets.Set[string]) (map[string]string, error) {
+func dispatchJobs(prowJobConfigDir string, config *dispatcher.Config, jobVolumes map[string]float64, blocked sets.Set[string], volumePerCluster float64) (map[string]string, error) {
 	if config == nil {
 		return nil, fmt.Errorf("config is nil")
 	}
 
 	// cv stores the volume for each cluster in the build farm
-	cv := &clusterVolume{clusterVolumeMap: map[string]map[string]float64{}, cloudProviders: sets.New[string](), pjs: map[string]string{}, blocked: blocked}
+	cv := &clusterVolume{clusterVolumeMap: map[string]map[string]float64{}, cloudProviders: sets.New[string](), pjs: map[string]string{}, blocked: blocked,
+		volumePerCluster: volumePerCluster, specialClusters: map[string]float64{}}
 	for cloudProvider, v := range config.BuildFarm {
 		for cluster := range v {
 			cloudProviderString := string(cloudProvider)
@@ -345,7 +382,6 @@ func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency i
 		return nil, nil
 	}
 
-	sem := semaphore.NewWeighted(int64(maxConcurrency))
 	objChan := make(chan interface{})
 	var errs []error
 	results := map[string][]string{}
@@ -368,6 +404,7 @@ func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency i
 		close(readingDone)
 	}()
 
+	fileList := make([]fileSizeInfo, 0)
 	if err := filepath.WalkDir(prowJobConfigDir, func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
 			objChan <- fmt.Errorf("failed to walk file/directory '%s'", path)
@@ -377,14 +414,26 @@ func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency i
 		if info.IsDir() || !strings.HasSuffix(path, ".yaml") {
 			return nil
 		}
-
-		if err := sem.Acquire(ctx, 1); err != nil {
-			objChan <- fmt.Errorf("failed to acquire semaphore for path %s: %w", path, err)
+		fileInfo, err := os.Stat(path)
+		if err != nil {
+			objChan <- fmt.Errorf("failed to get file info for '%s': %w", path, err)
 			return nil
 		}
-		go func(path string) {
-			defer sem.Release(1)
 
+		fileList = append(fileList, fileSizeInfo{
+			path: path,
+			info: info,
+			size: fileInfo.Size(),
+		})
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("failed to dispatch all Prow jobs: %w", err)
+	}
+
+	sort.Slice(fileList, func(i, j int) bool { return fileList[i].size > fileList[j].size })
+
+	for _, file := range fileList {
+		func(path string, info fs.DirEntry) {
 			data, err := gzip.ReadFileMaybeGZIP(path)
 			if err != nil {
 				objChan <- fmt.Errorf("failed to read file %q: %w", path, err)
@@ -402,15 +451,8 @@ func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency i
 				objChan <- fmt.Errorf("failed to dispatch job config %q: %w", path, err)
 			}
 			objChan <- configResult{cluster: cluster, path: path, filename: info.Name()}
-		}(path)
+		}(file.path, file.info)
 
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("failed to dispatch all Prow jobs: %w", err)
-	}
-
-	if err := sem.Acquire(ctx, int64(maxConcurrency)); err != nil {
-		objChan <- fmt.Errorf("failed to acquire semaphore while wating all workers to finish: %w", err)
 	}
 	close(objChan)
 	<-readingDone
@@ -421,6 +463,9 @@ func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency i
 		}
 	}
 
+	for cluster, volume := range cv.specialClusters {
+		logrus.WithField("cluster", cluster).WithField("volume", volume).Info("dispatched the volume on the cluster")
+	}
 	for cloudProvider, jobGroups := range config.BuildFarm {
 		for cluster := range jobGroups {
 			config.BuildFarm[cloudProvider][cluster] = &dispatcher.BuildFarmConfig{FilenamesRaw: results[string(cluster)]}
@@ -645,8 +690,7 @@ func runAsDaemon(o options, promVolumes *prometheusVolumes) {
 					}
 					return api.Cloud(provider), nil
 				})
-
-			pjs, err := dispatchJobs(context.TODO(), o.prowJobConfigDir, o.maxConcurrency, config, jobVolumes, blocked)
+			pjs, err := dispatchJobs(o.prowJobConfigDir, config, jobVolumes, blocked, promVolumes.getTotalVolume()/float64(len(configClusterMap)))
 			if err != nil {
 				logrus.WithError(err).Error("failed to dispatch")
 				return
@@ -654,7 +698,7 @@ func runAsDaemon(o options, promVolumes *prometheusVolumes) {
 			prowjobs.regenerate(pjs)
 
 			if err := writeGob(o.jobsStoragePath, pjs); err != nil {
-				logrus.Errorf("continuing on cache memory, error writing Gob file: %v", err)
+				logrus.WithError(err).Errorf("continuing on cache memory, error writing Gob file")
 			}
 
 			if o.createPR {
@@ -765,7 +809,7 @@ func main() {
 	addEnabledClusters(config, enabled, getClusterProvider)
 
 	logrus.Info("Dispatching ...")
-	if _, err := dispatchJobs(context.TODO(), o.prowJobConfigDir, o.maxConcurrency, config, jobVolumes, sets.Set[string](sets.NewString())); err != nil {
+	if _, err := dispatchJobs(o.prowJobConfigDir, config, jobVolumes, sets.Set[string](sets.NewString()), promVolumes.getTotalVolume()/float64(config.GetBuildFarmSize())); err != nil {
 		logrus.WithError(err).Fatal("Failed to dispatch")
 	}
 	if err := dispatcher.SaveConfig(config, o.configPath); err != nil {

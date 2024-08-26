@@ -17,6 +17,7 @@ import (
 )
 
 type OCPImageConfig struct {
+	Mode           string                 `json:"mode"`
 	Content        *OCPImageConfigContent `json:"content"`
 	From           OCPImageConfigFrom     `json:"from"`
 	Push           OCPImageConfigPush     `json:"push"`
@@ -85,10 +86,14 @@ type OCPImageConfigFrom struct {
 type OCPImageConfigFromStream struct {
 	Stream string `json:"stream"`
 	Member string `json:"member"`
+	Image  string `json:"image"`
 }
 
 func (icfs OCPImageConfigFromStream) validate() error {
 	if icfs.Stream == "" && icfs.Member == "" {
+		if icfs.Image != "" {
+			return nil
+		}
 		return errors.New("both stream and member were unset")
 	}
 	if icfs.Stream != "" && icfs.Member != "" {
@@ -253,6 +258,10 @@ func dereferenceConfig(
 				errs = append(errs, fmt.Errorf("failed to replace .from.%d.member: %w", blder, err))
 			}
 			config.From.Builder[blder].Member = ""
+		}
+		if config.Mode == "disabled" && config.From.Builder[blder].Image != "" {
+			// skip image replacement when mode is set to disabled
+			continue
 		}
 		if config.From.Builder[blder].Stream == "" {
 			errs = append(errs, fmt.Errorf("failed to dereference from.builder.%d", blder))

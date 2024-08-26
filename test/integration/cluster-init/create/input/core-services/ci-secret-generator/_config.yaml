@@ -28,12 +28,14 @@
       jq --slurp '.[-1] | .data[".dockercfg"]' --raw-output | base64 --decode | jq
       '.["image-registry.openshift-image-registry.svc:5000"].auth' --raw-output |
       tr -d '\n'
-    name: token_image-puller_$(cluster)_reg_auth_value.txt
+    name: token_$(service_account)_$(cluster)_reg_auth_value.txt
   item_name: build_farm
   params:
     cluster:
     - app.ci
     - build01
+    service_account:
+    - image-puller
 - fields:
   - cmd: oc --context $(cluster) sa create-kubeconfig --namespace ci $(service_account)
       | sed "s/$(service_account)/$(cluster)/g"

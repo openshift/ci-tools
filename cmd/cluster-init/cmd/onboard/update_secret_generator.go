@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -23,6 +24,57 @@ const (
 // where '$(*)' wildcards from the yaml are expanded in the output. Doing so for this purpose results in
 // incorrect re-serialization
 type SecretGenConfig []secretgenerator.SecretItem
+
+// secretItemFilter applies a filter on a secretgenerator.SecretItem.
+// Return true whenever the outcome is positive, that means the SecretItem
+// should be consider for further processing, false otherwise.
+type secretItemFilter struct {
+	apply   func(si *secretgenerator.SecretItem) bool
+	explain string
+}
+
+func byItemName(name string) secretItemFilter {
+	return secretItemFilter{
+		apply:   func(si *secretgenerator.SecretItem) bool { return si.ItemName == name },
+		explain: fmt.Sprintf("item name: %s", name),
+	}
+}
+
+func byFieldName(name string) secretItemFilter {
+	return secretItemFilter{
+		apply: func(si *secretgenerator.SecretItem) bool {
+			for _, f := range si.Fields {
+				if f.Name == name {
+					return true
+				}
+			}
+			return false
+		},
+		explain: fmt.Sprintf("field name: %s", name),
+	}
+}
+
+func byParam(name, value string) secretItemFilter {
+	return secretItemFilter{
+		apply: func(si *secretgenerator.SecretItem) bool {
+			for _, v := range si.Params[name] {
+				if v == value {
+					return true
+				}
+			}
+			return false
+		},
+		explain: fmt.Sprintf("param: %s=%s", name, value),
+	}
+}
+
+func explainFilters(filters ...secretItemFilter) string {
+	explanations := make([]string, len(filters))
+	for i, f := range filters {
+		explanations[i] = f.explain
+	}
+	return strings.Join(explanations, " - ")
+}
 
 func updateSecretGenerator(o options) error {
 	filename := filepath.Join(o.releaseRepo, "core-services", "ci-secret-generator", "_config.yaml")
@@ -45,64 +97,52 @@ func updateSecretGenerator(o options) error {
 }
 
 func updateSecretGeneratorConfig(o options, c *SecretGenConfig) error {
+	filterByCluster := byParam("cluster", string(api.ClusterBuild01))
+
 	serviceAccountConfigPath := serviceAccountKubeconfigPath(serviceAccountWildcard, clusterWildcard)
-	if err := appendToSecretItem(buildUFarm, serviceAccountConfigPath, o, c); err != nil {
+	if err := appendToSecretItem(o, c, byItemName(buildUFarm), filterByCluster, byFieldName(serviceAccountConfigPath)); err != nil {
 		return err
 	}
-	if err := appendToSecretItem(buildUFarm, fmt.Sprintf("token_image-puller_%s_reg_auth_value.txt", clusterWildcard), o, c); err != nil {
+
+	token := fmt.Sprintf("token_%s_%s_reg_auth_value.txt", serviceAccountWildcard, clusterWildcard)
+	filterByFieldName, filterBySA := byFieldName(token), byParam("service_account", "image-puller")
+	if err := appendToSecretItem(o, c, byItemName(buildUFarm), filterByCluster, filterByFieldName, filterBySA); err != nil {
 		return err
 	}
-	if err := appendToSecretItem("ci-chat-bot", serviceAccountConfigPath, o, c); err != nil {
+
+	if err := appendToSecretItem(o, c, byItemName("ci-chat-bot"), filterByCluster, byFieldName(serviceAccountConfigPath)); err != nil {
 		return err
 	}
+
 	if !o.unmanaged {
-		if err := appendToSecretItem(podScaler, serviceAccountConfigPath, o, c); err != nil {
+		if err := appendToSecretItem(o, c, byItemName(podScaler), filterByCluster, byFieldName(serviceAccountConfigPath)); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
-func appendToSecretItem(itemName string, name string, o options, c *SecretGenConfig) error {
-	si, err := findSecretItem(itemName, name, string(api.ClusterBuild01), *c)
+func appendToSecretItem(o options, c *SecretGenConfig, filters ...secretItemFilter) error {
+	si, err := findSecretItem(*c, filters...)
 	if err != nil {
 		return err
 	}
-	logrus.Infof("Appending to secret item: {itemName: %s, name: %s, likeCluster: %s}", itemName, name, string(api.ClusterBuild01))
-	si.Params["cluster"] = sets.List(sets.New[string](si.Params["cluster"]...).Insert(o.clusterName))
+	logrus.Infof("Appending to secret item: %s", explainFilters(filters...))
+	si.Params["cluster"] = sets.List(sets.New(si.Params["cluster"]...).Insert(o.clusterName))
 	return nil
 }
 
-func findSecretItem(itemName string, name string, likeCluster string, c SecretGenConfig) (*secretgenerator.SecretItem, error) {
-	idx := -1
+func findSecretItem(c SecretGenConfig, filters ...secretItemFilter) (*secretgenerator.SecretItem, error) {
+siLoop:
 	for i, si := range c {
-		if itemName == si.ItemName {
-			containsName := false
-			containsCluster := false
-			for _, fj := range si.Fields {
-				if name == fj.Name {
-					containsName = true
-					break
-				}
-			}
-			for _, cluster := range si.Params["cluster"] {
-				if likeCluster == cluster {
-					containsCluster = true
-					break
-				}
-			}
-			if containsName && containsCluster {
-				idx = i
-				break
+		for _, f := range filters {
+			if !f.apply(&si) {
+				continue siLoop
 			}
 		}
+		return &c[i], nil
 	}
-	if idx != -1 {
-		return &c[idx], nil
-	}
-	return nil,
-		fmt.Errorf("couldn't find SecretItem with item_name: %s name: %s containing cluster: %v",
-			itemName,
-			name,
-			likeCluster)
+
+	return nil, fmt.Errorf("couldn't find SecretItem: %s", explainFilters(filters...))
 }

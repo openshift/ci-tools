@@ -575,7 +575,7 @@ func clustersMapToSet(clusterMap ClusterMap) sets.Set[string] {
 }
 
 func gitCloneRelease() error {
-	cmd := exec.Command("git", "clone", "--depth", "1", "--single-branch", "git@github.com:openshift/release.git")
+	cmd := exec.Command("git", "clone", "--depth", "1", "--single-branch", "https://github.com/openshift/release.git")
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {

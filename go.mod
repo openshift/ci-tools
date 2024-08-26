@@ -72,7 +72,7 @@ require (
 	github.com/Azure/go-ansiterm v0.0.0-20230124172434-306776ec8161 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/anaskhan96/soup v1.2.4
-	github.com/aws/aws-sdk-go v1.44.116 // indirect
+	github.com/aws/aws-sdk-go v1.44.116
 	github.com/bazelbuild/buildtools v0.0.0-20200922170545-10384511ce98 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bwmarrin/snowflake v0.0.0 // indirect
@@ -172,6 +172,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.27.16
 	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.53.4
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.30.6
+	github.com/aws/smithy-go v1.20.4
 	github.com/felixge/httpsnoop v1.0.4
 	github.com/golang-jwt/jwt v3.2.1+incompatible
 	github.com/openshift/builder v0.0.0-20240610114444-739f5270219e
@@ -214,7 +215,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.20.9 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.24.3 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.28.10 // indirect
-	github.com/aws/smithy-go v1.20.4 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/blendle/zapdriver v1.3.1 // indirect
 	github.com/bombsimon/logrusr/v4 v4.1.0 // indirect

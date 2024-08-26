@@ -27,7 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/prow/pkg/interrupts"
 
-	podscalerv2 "github.com/openshift/ci-tools/pkg/pod-scaler/v2"
+	podscaler "github.com/openshift/ci-tools/pkg/pod-scaler"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 	"github.com/openshift/ci-tools/test/e2e/pod-scaler/kubernetes"
 	"github.com/openshift/ci-tools/test/e2e/pod-scaler/prometheus"
@@ -49,13 +49,13 @@ func TestProduce(t *testing.T) {
 	sort.Slice(offsets, func(i, j int) bool {
 		return offsets[i] > offsets[j]
 	})
-	expected := prometheus.Data{ByFile: map[string]map[podscalerv2.FullMetadata][]*circonusllhist.HistogramWithoutLookups{}}
+	expected := prometheus.Data{ByFile: map[string]map[podscaler.FullMetadata][]*circonusllhist.HistogramWithoutLookups{}}
 	for _, offset := range offsets {
 		// we expect the data from this offset and all earlier ones, too
 		data := info.ByOffset[offset]
 		for filename := range data.ByFile {
 			if _, ok := expected.ByFile[filename]; !ok {
-				expected.ByFile[filename] = map[podscalerv2.FullMetadata][]*circonusllhist.HistogramWithoutLookups{}
+				expected.ByFile[filename] = map[podscaler.FullMetadata][]*circonusllhist.HistogramWithoutLookups{}
 			}
 			for identifier, hists := range data.ByFile[filename] {
 				expected.ByFile[filename][identifier] = append(expected.ByFile[filename][identifier], hists...)
@@ -71,7 +71,7 @@ func TestProduce(t *testing.T) {
 // - we store Prometheus data by series fingerprint, which we can't determine ahead of time
 func check(t *testing.T, dataDir string, checkAgainst prometheus.Data) {
 	for filename, data := range checkAgainst.ByFile {
-		var c podscalerv2.CachedQuery
+		var c podscaler.CachedQuery
 		raw, err := os.ReadFile(filepath.Join(dataDir, filename))
 		if err != nil {
 			t.Fatalf("%s: failed to read cache: %v", filename, err)
@@ -79,7 +79,7 @@ func check(t *testing.T, dataDir string, checkAgainst prometheus.Data) {
 		if err := json.Unmarshal(raw, &c); err != nil {
 			t.Fatalf("%s: failed to unmarshal cache: %v", filename, err)
 		}
-		actualIdentifiers, expectedIdentifiers := map[podscalerv2.FullMetadata]interface{}{}, map[podscalerv2.FullMetadata]interface{}{}
+		actualIdentifiers, expectedIdentifiers := map[podscaler.FullMetadata]interface{}{}, map[podscaler.FullMetadata]interface{}{}
 		for item := range data {
 			expectedIdentifiers[item] = nil
 		}

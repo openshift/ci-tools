@@ -1,6 +1,5 @@
-package v2
+package main
 
-//TODO(sgoeddel): this entire file will eventually replace v1/producer.go once we are no longer handling v1 data types
 import (
 	"context"
 	"errors"
@@ -18,7 +17,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"sigs.k8s.io/prow/pkg/interrupts"
 
-	podscalerv2 "github.com/openshift/ci-tools/pkg/pod-scaler/v2"
+	podscaler "github.com/openshift/ci-tools/pkg/pod-scaler"
 )
 
 const (
@@ -47,18 +46,18 @@ func queriesByMetric() map[string]string {
 	}{
 		{
 			prefix:   ProwjobsCachePrefix,
-			selector: `{` + string(podscalerv2.ProwLabelNameCreated) + `="true",` + string(podscalerv2.ProwLabelNameJob) + `!="",` + string(podscalerv2.LabelNameRehearsal) + `=""}`,
-			labels:   []string{string(podscalerv2.ProwLabelNameCreated), string(podscalerv2.ProwLabelNameContext), string(podscalerv2.ProwLabelNameOrg), string(podscalerv2.ProwLabelNameRepo), string(podscalerv2.ProwLabelNameBranch), string(podscalerv2.ProwLabelNameJob), string(podscalerv2.ProwLabelNameType)},
+			selector: `{` + string(podscaler.ProwLabelNameCreated) + `="true",` + string(podscaler.ProwLabelNameJob) + `!="",` + string(podscaler.LabelNameRehearsal) + `=""}`,
+			labels:   []string{string(podscaler.ProwLabelNameCreated), string(podscaler.ProwLabelNameContext), string(podscaler.ProwLabelNameOrg), string(podscaler.ProwLabelNameRepo), string(podscaler.ProwLabelNameBranch), string(podscaler.ProwLabelNameJob), string(podscaler.ProwLabelNameType)},
 		},
 		{
 			prefix:   PodsCachePrefix,
-			selector: `{` + string(podscalerv2.LabelNameCreated) + `="true",` + string(podscalerv2.LabelNameStep) + `=""}`,
-			labels:   []string{string(podscalerv2.LabelNameOrg), string(podscalerv2.LabelNameRepo), string(podscalerv2.LabelNameBranch), string(podscalerv2.LabelNameVariant), string(podscalerv2.LabelNameTarget), string(podscalerv2.LabelNameBuild), string(podscalerv2.LabelNameRelease), string(podscalerv2.LabelNameApp)},
+			selector: `{` + string(podscaler.LabelNameCreated) + `="true",` + string(podscaler.LabelNameStep) + `=""}`,
+			labels:   []string{string(podscaler.LabelNameOrg), string(podscaler.LabelNameRepo), string(podscaler.LabelNameBranch), string(podscaler.LabelNameVariant), string(podscaler.LabelNameTarget), string(podscaler.LabelNameBuild), string(podscaler.LabelNameRelease), string(podscaler.LabelNameApp)},
 		},
 		{
 			prefix:   StepsCachePrefix,
-			selector: `{` + string(podscalerv2.LabelNameCreated) + `="true",` + string(podscalerv2.LabelNameStep) + `!=""}`,
-			labels:   []string{string(podscalerv2.LabelNameOrg), string(podscalerv2.LabelNameRepo), string(podscalerv2.LabelNameBranch), string(podscalerv2.LabelNameVariant), string(podscalerv2.LabelNameTarget), string(podscalerv2.LabelNameStep)},
+			selector: `{` + string(podscaler.LabelNameCreated) + `="true",` + string(podscaler.LabelNameStep) + `!=""}`,
+			labels:   []string{string(podscaler.LabelNameOrg), string(podscaler.LabelNameRepo), string(podscaler.LabelNameBranch), string(podscaler.LabelNameVariant), string(podscaler.LabelNameTarget), string(podscaler.LabelNameStep)},
 		},
 	} {
 		for name, metric := range map[string]string{
@@ -71,7 +70,7 @@ func queriesByMetric() map[string]string {
 	return queries
 }
 
-func Produce(clients map[string]prometheusapi.API, dataCache Cache, ignoreLatest time.Duration, once bool) {
+func produce(clients map[string]prometheusapi.API, dataCache Cache, ignoreLatest time.Duration, once bool) {
 	var execute func(func())
 	if once {
 		execute = func(f func()) {
@@ -92,15 +91,15 @@ func Produce(clients map[string]prometheusapi.API, dataCache Cache, ignoreLatest
 			})
 			cache, err := LoadCache(dataCache, name, logger)
 			if errors.Is(err, notExist{}) {
-				ranges := map[string][]podscalerv2.TimeRange{}
+				ranges := map[string][]podscaler.TimeRange{}
 				for cluster := range clients {
-					ranges[cluster] = []podscalerv2.TimeRange{}
+					ranges[cluster] = []podscaler.TimeRange{}
 				}
-				cache = &podscalerv2.CachedQuery{
+				cache = &podscaler.CachedQuery{
 					Query:           query,
 					RangesByCluster: ranges,
 					Data:            map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups{},
-					DataByMetaData:  map[podscalerv2.FullMetadata][]podscalerv2.FingerprintTime{},
+					DataByMetaData:  map[podscaler.FullMetadata][]podscaler.FingerprintTime{},
 				}
 			} else if err != nil {
 				logrus.WithError(err).Error("Failed to load data from storage.")
@@ -163,8 +162,8 @@ func queryFor(metric, selector string, labels []string) string {
   ) (kube_pod_labels` + selector + `)`
 }
 
-func rangeFrom(r prometheusapi.Range) podscalerv2.TimeRange {
-	return podscalerv2.TimeRange{
+func rangeFrom(r prometheusapi.Range) podscaler.TimeRange {
+	return podscaler.TimeRange{
 		Start: r.Start,
 		End:   r.End,
 	}
@@ -172,7 +171,7 @@ func rangeFrom(r prometheusapi.Range) podscalerv2.TimeRange {
 
 type querier struct {
 	lock *sync.RWMutex
-	data *podscalerv2.CachedQuery
+	data *podscaler.CachedQuery
 }
 
 type clusterMetadata struct {
@@ -247,15 +246,15 @@ func (q *querier) execute(ctx context.Context, c *clusterMetadata, until time.Ti
 
 // uncoveredRanges determines the largest subset ranges of r that are not covered by
 // existing data in the querier.
-func (q *querier) uncoveredRanges(cluster string, r podscalerv2.TimeRange) []podscalerv2.TimeRange {
+func (q *querier) uncoveredRanges(cluster string, r podscaler.TimeRange) []podscaler.TimeRange {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
-	return podscalerv2.UncoveredRanges(r, q.data.RangesByCluster[cluster])
+	return podscaler.UncoveredRanges(r, q.data.RangesByCluster[cluster])
 }
 
 // divideRange divides a range into smaller ranges based on how many samples we think is reasonable
 // to ask for from Prometheus in one query
-func divideRange(uncovered []podscalerv2.TimeRange, step time.Duration, numSteps int64) []prometheusapi.Range {
+func divideRange(uncovered []podscaler.TimeRange, step time.Duration, numSteps int64) []prometheusapi.Range {
 	var divided []prometheusapi.Range
 	for _, uncoveredRange := range uncovered {
 		// Prometheus has practical limits for how much data we can ask for in any one request,

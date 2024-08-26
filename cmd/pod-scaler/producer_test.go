@@ -1,4 +1,4 @@
-package v2
+package main
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	prometheusapi "github.com/prometheus/client_golang/api/prometheus/v1"
 
-	podscalerv2 "github.com/openshift/ci-tools/pkg/pod-scaler/v2"
+	podscaler "github.com/openshift/ci-tools/pkg/pod-scaler"
 )
 
 func TestQueriesByMetric(t *testing.T) {
@@ -171,14 +171,14 @@ func TestQueriesByMetric(t *testing.T) {
 func TestDivideRange(t *testing.T) {
 	var testCases = []struct {
 		name      string
-		uncovered []podscalerv2.TimeRange
+		uncovered []podscaler.TimeRange
 		step      time.Duration
 		numSteps  int64
 		expected  []prometheusapi.Range
 	}{
 		{
 			name: "smaller range than one step",
-			uncovered: []podscalerv2.TimeRange{{
+			uncovered: []podscaler.TimeRange{{
 				Start: time.Date(0, 0, 0, 0, 0, 0, 0, time.UTC),
 				End:   time.Date(0, 0, 0, 0, 0, 20, 0, time.UTC),
 			}},
@@ -188,7 +188,7 @@ func TestDivideRange(t *testing.T) {
 		},
 		{
 			name: "range is one step",
-			uncovered: []podscalerv2.TimeRange{{
+			uncovered: []podscaler.TimeRange{{
 				Start: time.Date(0, 0, 0, 0, 0, 0, 0, time.UTC),
 				End:   time.Date(0, 0, 0, 0, 1, 0, 0, time.UTC),
 			}},
@@ -198,7 +198,7 @@ func TestDivideRange(t *testing.T) {
 		},
 		{
 			name: "smaller range than one division",
-			uncovered: []podscalerv2.TimeRange{{
+			uncovered: []podscaler.TimeRange{{
 				Start: time.Date(0, 0, 0, 0, 0, 0, 0, time.UTC),
 				End:   time.Date(0, 0, 0, 0, 10, 0, 0, time.UTC),
 			}},
@@ -212,7 +212,7 @@ func TestDivideRange(t *testing.T) {
 		},
 		{
 			name: "range fits exactly one division",
-			uncovered: []podscalerv2.TimeRange{{
+			uncovered: []podscaler.TimeRange{{
 				Start: time.Date(0, 0, 0, 0, 0, 0, 0, time.UTC),
 				End:   time.Date(0, 0, 0, 0, 10, 0, 0, time.UTC),
 			}},
@@ -226,7 +226,7 @@ func TestDivideRange(t *testing.T) {
 		},
 		{
 			name: "range fits more than one division, evenly divisible",
-			uncovered: []podscalerv2.TimeRange{{
+			uncovered: []podscaler.TimeRange{{
 				Start: time.Date(0, 0, 0, 0, 0, 0, 0, time.UTC),
 				End:   time.Date(0, 0, 0, 0, 30, 0, 0, time.UTC),
 			}},
@@ -248,7 +248,7 @@ func TestDivideRange(t *testing.T) {
 		},
 		{
 			name: "range fits more than one division, not evenly divisible",
-			uncovered: []podscalerv2.TimeRange{{
+			uncovered: []podscaler.TimeRange{{
 				Start: time.Date(0, 0, 0, 0, 0, 0, 0, time.UTC),
 				End:   time.Date(0, 0, 0, 0, 36, 0, 0, time.UTC),
 			}},
@@ -274,7 +274,7 @@ func TestDivideRange(t *testing.T) {
 		},
 		{
 			name: "uncovered ranges smaller than, and larger than divisions, both equally and unequally divisible",
-			uncovered: []podscalerv2.TimeRange{{ // this one is smaller than a step
+			uncovered: []podscaler.TimeRange{{ // this one is smaller than a step
 				Start: time.Date(0, 0, 0, 0, 0, 0, 0, time.UTC),
 				End:   time.Date(0, 0, 0, 0, 0, 10, 0, time.UTC),
 			}, { // this one is smaller than a division

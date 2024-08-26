@@ -18,7 +18,10 @@ func main() {
 	// root command and attach onboard to it.
 	onboardCmd := onboardcmd.New()
 
-	provisionCmd := cmd.NewProvision(ctx, log)
+	provisionCmd, err := cmd.NewProvision(ctx, log)
+	if err != nil {
+		logrus.Fatalf("%s", err)
+	}
 	onboardCmd.AddCommand(provisionCmd)
 
 	if err := onboardCmd.Execute(); err != nil {

@@ -20,15 +20,17 @@ var (
 	opts = options{}
 )
 
-func NewProvision(ctx context.Context, log *logrus.Entry) *cobra.Command {
+func NewProvision(ctx context.Context, log *logrus.Entry) (*cobra.Command, error) {
 	cmd := cobra.Command{
 		Use:   "provision",
 		Short: "Commands to provision the infrastructure on a cloud provider",
 	}
 	cmd.PersistentFlags().StringVar(&opts.clusterInstall, "cluster-install", "", "Path to cluster-install.yaml")
-	cmd.MarkPersistentFlagRequired("cluster-install")
+	if err := cmd.MarkPersistentFlagRequired("cluster-install"); err != nil {
+		return nil, err
+	}
 	cmd.AddCommand(newProvisionAWS(ctx, log))
-	return &cmd
+	return &cmd, nil
 }
 
 func newProvisionAWS(ctx context.Context, log *logrus.Entry) *cobra.Command {
@@ -59,14 +61,14 @@ func newAWSCreateStacks(ctx context.Context, log *logrus.Entry) *cobra.Command {
 					log.Info("Loading AWS config")
 					awsconfig, err := config.LoadDefaultConfig(ctx)
 					if err != nil {
-						return nil, fmt.Errorf("load aws config: %v", err)
+						return nil, fmt.Errorf("load aws config: %w", err)
 					}
 					return cloudformation.NewFromConfig(awsconfig), nil
 				},
 				nil, nil,
 			)
 			if err := step.Run(ctx); err != nil {
-				return fmt.Errorf("%s: %v", step.Name(), err)
+				return fmt.Errorf("%s: %w", step.Name(), err)
 			}
 			return nil
 		},

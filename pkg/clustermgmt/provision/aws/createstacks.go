@@ -19,7 +19,7 @@ var (
 	createStackCompleteWaitTimeDef time.Duration = 10 * time.Minute
 )
 
-// CloudFormationClient is a conveniente interface that has been created
+// CloudFormationClient is a convenience interface that has been created
 // to make unit test easier to write
 type CloudFormationClient interface {
 	CreateStack(ctx context.Context, params *cloudformation.CreateStackInput, optFns ...func(*cloudformation.Options)) (*cloudformation.CreateStackOutput, error)
@@ -46,7 +46,7 @@ func (s *createAWSStacksStep) Run(ctx context.Context) error {
 
 	ci, err := s.getClusterInstall()
 	if err != nil {
-		return fmt.Errorf("get cluster install: %v", err)
+		return fmt.Errorf("get cluster install: %w", err)
 	}
 
 	if ci.Provision.AWS == nil {
@@ -60,7 +60,7 @@ func (s *createAWSStacksStep) Run(ctx context.Context) error {
 
 	client, err := s.getCFClient()
 	if err != nil {
-		return fmt.Errorf("get cloud formation client: %v", err)
+		return fmt.Errorf("get cloud formation client: %w", err)
 	}
 
 	if err := s.createStacks(ctx, log, client, ci.Provision.AWS.CloudFormationTemplates); err != nil {
@@ -91,7 +91,7 @@ func (s *createAWSStacksStep) createStacks(ctx context.Context,
 
 		templateBody, err := s.templateResolver(t.TemplateBody)
 		if err != nil {
-			return fmt.Errorf("read template body file %s: %v", t.TemplateBody, err)
+			return fmt.Errorf("read template body file %s: %w", t.TemplateBody, err)
 		}
 
 		log.Info("Creating stack")
@@ -107,7 +107,7 @@ func (s *createAWSStacksStep) createStacks(ctx context.Context,
 			if errors.As(err, &aee) {
 				log.Warn("Stack exists already, skipping")
 			} else {
-				return fmt.Errorf("create stack %s: %v", t.StackName, err)
+				return fmt.Errorf("create stack %s: %w", t.StackName, err)
 			}
 		}
 	}
@@ -125,7 +125,7 @@ func waitForStacksToComplete(ctx context.Context, log *logrus.Entry, client Clou
 			log.Info("Waiting to complete")
 			if err := waiter.Wait(wCtx, &cloudformation.DescribeStacksInput{StackName: &t.StackName},
 				wait); err != nil {
-				return fmt.Errorf("stack %s failed: %v", t.StackName, err)
+				return fmt.Errorf("stack %s failed: %w", t.StackName, err)
 			}
 			log.Info("Created successfully")
 			return nil

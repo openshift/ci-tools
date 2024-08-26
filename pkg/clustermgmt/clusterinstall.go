@@ -10,11 +10,11 @@ import (
 func LoadClusterInstall(path string) (*ClusterInstall, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read file %s: %v", path, err)
+		return nil, fmt.Errorf("read file %s: %w", path, err)
 	}
 	ci := &ClusterInstall{}
 	if err := yaml.Unmarshal(b, &ci); err != nil {
-		return nil, fmt.Errorf("unmarshal %s: %v", path, err)
+		return nil, fmt.Errorf("unmarshal %s: %w", path, err)
 	}
 	return ci, nil
 }

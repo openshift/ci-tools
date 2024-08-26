@@ -6,10 +6,11 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
-	"github.com/openshift/ci-tools/pkg/clustermgmt"
-	"github.com/openshift/ci-tools/pkg/clustermgmt/provision/aws"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+
+	"github.com/openshift/ci-tools/pkg/clustermgmt"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/provision/aws"
 )
 
 type options struct {

@@ -10,9 +10,10 @@ import (
 	cloudformationtypes "github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
 	"github.com/aws/aws-sdk-go/aws"
 	smithy "github.com/aws/smithy-go"
+	"github.com/sirupsen/logrus"
+
 	"github.com/openshift/ci-tools/pkg/clustermgmt"
 	provisionaws "github.com/openshift/ci-tools/pkg/clustermgmt/provision/aws"
-	"github.com/sirupsen/logrus"
 )
 
 type fakeCloudFormationClient struct {

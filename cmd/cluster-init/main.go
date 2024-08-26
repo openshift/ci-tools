@@ -5,9 +5,10 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
+
 	"github.com/openshift/ci-tools/cmd/cluster-init/cmd"
 	onboardcmd "github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard"
-	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 )
 
 func main() {

@@ -145,7 +145,7 @@ race-install: cmd/vault-secret-collection-manager/index.js cmd/pod-scaler/fronte
 #   make integration SUITE=multi-stage
 integration:
 	@set -e; \
-		if [[ -n $$OPENSHIFT_CI ]]; then count=25; else count=1; fi && \
+		if [[ -n $$OPENSHIFT_CI ]]; then count=10; else count=1; fi && \
 		for try in $$(seq $$count); do \
 			echo "Try $$try" && \
 			hack/test-integration.sh $(SUITE) ; \

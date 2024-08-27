@@ -730,6 +730,8 @@ func runAsDaemon(o options, promVolumes *prometheusVolumes) {
 			logrus.WithError(err).Fatal("failed to load initial cluster config")
 			return
 		}
+		// run dispatch for the first time
+		dispatchWrapper(false)
 
 		for {
 			<-ticker.C
@@ -740,14 +742,14 @@ func runAsDaemon(o options, promVolumes *prometheusVolumes) {
 			}
 
 			if !reflect.DeepEqual(currentConfigClusterMap, prevConfigClusterMap) || !reflect.DeepEqual(currentBlocked, prevBlocked) {
-				dispatchWrapper(false)
+				logrus.WithField("prevConfigClusterMap", prevConfigClusterMap).WithField("prevBlocked", prevBlocked).
+					WithField("currentConfigClusterMap", currentConfigClusterMap).WithField("currentBlocked", currentBlocked).Info("new dispatch")
 				prevConfigClusterMap = currentConfigClusterMap
 				prevBlocked = currentBlocked
+				dispatchWrapper(false)
 			}
 		}
 	}(o.clusterConfigPath)
-
-	dispatchWrapper(false)
 
 	server := newServer(prowjobs)
 	http.HandleFunc("/", server.requestHandler)

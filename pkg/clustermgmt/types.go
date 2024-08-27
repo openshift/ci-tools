@@ -3,7 +3,8 @@ package clustermgmt
 import "context"
 
 type ClusterInstall struct {
-	Provision Provision `json:"provision,omitempty"`
+	InstallBase string    `json:"installBase,omitempty"`
+	Provision   Provision `json:"provision,omitempty"`
 }
 
 type ClusterInstallGetter func() (*ClusterInstall, error)

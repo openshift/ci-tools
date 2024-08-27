@@ -28,6 +28,7 @@ type indexGeneratorStep struct {
 	podClient          kubernetes.PodClient
 	jobSpec            *api.JobSpec
 	pullSecret         *coreapi.Secret
+	multiArch          bool
 }
 
 const IndexDataDirectory = "/index-data"
@@ -122,7 +123,7 @@ func (s *indexGeneratorStep) run(ctx context.Context) error {
 		nil,
 		"",
 	)
-	err = handleBuilds(ctx, s.client, s.podClient, *build)
+	err = handleBuilds(ctx, s.client, s.podClient, *build, newImageBuildOptions(s.multiArch))
 	if err != nil && strings.Contains(err.Error(), "error checking provided apis") {
 		return results.ForReason("generating_index").WithError(err).Errorf("failed to generate operator index due to invalid bundle info: %v", err)
 	}
@@ -195,6 +196,9 @@ func (s *indexGeneratorStep) Description() string {
 func (s *indexGeneratorStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
+
+func (s *indexGeneratorStep) IsMultiArch() bool           { return s.multiArch }
+func (s *indexGeneratorStep) SetMultiArch(multiArch bool) { s.multiArch = multiArch }
 
 func IndexGeneratorStep(
 	config api.IndexGeneratorStepConfiguration,

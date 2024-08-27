@@ -12,7 +12,8 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/gofuzz"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	fuzz "github.com/google/gofuzz"
 
 	corev1 "k8s.io/api/core/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -495,6 +496,73 @@ func TestCIOperatorStepWithDependenciesSerializationRoundTrips(t *testing.T) {
 			}
 			if diff := cmp.Diff(o1, o2); diff != "" {
 				t.Errorf("Serializations differ: %s", diff)
+			}
+		})
+	}
+}
+
+type fakeMultiArchStep struct {
+	fakeStep
+	multiArch bool
+}
+
+func (f *fakeMultiArchStep) IsMultiArch() bool { return f.multiArch }
+func (f *fakeMultiArchStep) SetMultiArch(multiArch bool) {
+	f.multiArch = multiArch
+}
+
+func TestResolveMultiArch(t *testing.T) {
+	testCases := []struct {
+		name     string
+		steps    []Step
+		expected []Step
+	}{
+
+		{
+			name: "propagation of multi-arch property",
+			steps: []Step{
+				&fakeMultiArchStep{fakeStep: fakeStep{name: "step1"}},
+				&fakeMultiArchStep{
+					fakeStep:  fakeStep{name: "step2", requires: []StepLink{InternalImageLink("step1")}},
+					multiArch: true,
+				},
+				&fakeStep{name: "step3"},
+			},
+			expected: []Step{
+				&fakeMultiArchStep{fakeStep: fakeStep{name: "step1"}, multiArch: true},
+				&fakeMultiArchStep{fakeStep: fakeStep{name: "step2", requires: []StepLink{InternalImageLink("step1")}}, multiArch: true},
+				&fakeStep{name: "step3"},
+			},
+		},
+
+		{
+			name: "multiple propagation of multi-arch property",
+			steps: []Step{
+				&fakeMultiArchStep{fakeStep: fakeStep{name: "step1"}},
+				&fakeStep{name: "step2"},
+				&fakeStep{name: "step3"},
+				&fakeMultiArchStep{fakeStep: fakeStep{name: "step4"}},
+				&fakeMultiArchStep{fakeStep: fakeStep{name: "step5", requires: []StepLink{InternalImageLink("step4")}}, multiArch: true},
+				&fakeMultiArchStep{fakeStep: fakeStep{name: "step6", requires: []StepLink{InternalImageLink("step1")}}, multiArch: true},
+				&fakeMultiArchStep{fakeStep: fakeStep{name: "step7", requires: []StepLink{InternalImageLink("step1")}}, multiArch: true},
+			},
+			expected: []Step{
+				&fakeMultiArchStep{fakeStep: fakeStep{name: "step1"}, multiArch: true},
+				&fakeStep{name: "step2"},
+				&fakeStep{name: "step3"},
+				&fakeMultiArchStep{fakeStep: fakeStep{name: "step4"}, multiArch: true},
+				&fakeMultiArchStep{fakeStep: fakeStep{name: "step5", requires: []StepLink{InternalImageLink("step4")}}, multiArch: true},
+				&fakeMultiArchStep{fakeStep: fakeStep{name: "step6", requires: []StepLink{InternalImageLink("step1")}}, multiArch: true},
+				&fakeMultiArchStep{fakeStep: fakeStep{name: "step7", requires: []StepLink{InternalImageLink("step1")}}, multiArch: true},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ResolveMultiArch(tc.steps)
+			if diff := cmp.Diff(got, tc.expected, cmpopts.IgnoreUnexported(fakeStep{}, fakeMultiArchStep{})); diff != "" {
+				t.Fatal(diff)
 			}
 		})
 	}

@@ -169,7 +169,8 @@ func fromConfig(
 		}
 	}
 	inputImages := make(inputImageSet)
-	var overridableSteps, buildSteps []api.Step
+	var overridableSteps []api.Step
+	var buildSteps []api.Step
 	var imageStepLinks []api.StepLink
 	var hasReleaseStep bool
 	resolver := rootImageResolver(client, ctx, promote)

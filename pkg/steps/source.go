@@ -159,6 +159,7 @@ type sourceStep struct {
 	jobSpec         *api.JobSpec
 	cloneAuthConfig *CloneAuthConfig
 	pullSecret      *corev1.Secret
+	multiArch       bool
 }
 
 func (s *sourceStep) Inputs() (api.InputDefinition, error) {
@@ -181,7 +182,12 @@ func (s *sourceStep) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return handleBuilds(ctx, s.client, s.podClient, *createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret, fromDigest))
+	return handleBuilds(
+		ctx,
+		s.client,
+		s.podClient,
+		*createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret, fromDigest), newImageBuildOptions(s.multiArch),
+	)
 }
 
 func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef corev1.ObjectReference, resources api.ResourceConfiguration, cloneAuthConfig *CloneAuthConfig, pullSecret *corev1.Secret, fromDigest string) *buildapi.Build {
@@ -442,6 +448,10 @@ func isBuildPhaseTerminated(phase buildapi.BuildPhase) bool {
 
 type ImageBuildOptions struct {
 	MultiArch bool
+}
+
+func newImageBuildOptions(multiArch bool) ImageBuildOptions {
+	return ImageBuildOptions{MultiArch: multiArch}
 }
 
 func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubernetes.PodClient, build buildapi.Build, opts ...ImageBuildOptions) error {
@@ -780,6 +790,9 @@ func (s *sourceStep) Description() string {
 func (s *sourceStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
+
+func (s *sourceStep) IsMultiArch() bool           { return s.multiArch }
+func (s *sourceStep) SetMultiArch(multiArch bool) { s.multiArch = multiArch }
 
 func SourceStep(
 	config api.SourceStepConfiguration,

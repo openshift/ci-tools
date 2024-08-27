@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	createStackCompleteWaitTimeDef time.Duration = 10 * time.Minute
+	createStackCompleteWaitTimeDefault time.Duration = 10 * time.Minute
 )
 
 // CloudFormationClient is a convenience interface that has been created
@@ -146,7 +146,7 @@ func NewCreateAWSStacksStep(log *logrus.Entry,
 	createStackCompleteWaitTime *time.Duration,
 	templateResolver TemplateResolver) *createAWSStacksStep {
 	if createStackCompleteWaitTime == nil {
-		createStackCompleteWaitTime = &createStackCompleteWaitTimeDef
+		createStackCompleteWaitTime = &createStackCompleteWaitTimeDefault
 	}
 	if templateResolver == nil {
 		templateResolver = resolveTemplate

@@ -7,8 +7,8 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
-	"github.com/openshift/ci-tools/cmd/cluster-init/cmd"
 	onboardcmd "github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard"
+	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/provision"
 )
 
 func main() {
@@ -19,7 +19,7 @@ func main() {
 	// root command and attach onboard to it.
 	onboardCmd := onboardcmd.New()
 
-	provisionCmd, err := cmd.NewProvision(ctx, log)
+	provisionCmd, err := provision.NewProvision(ctx, log)
 	if err != nil {
 		logrus.Fatalf("%s", err)
 	}

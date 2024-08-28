@@ -265,6 +265,52 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 	return cluster, utilerrors.NewAggregate(errs)
 }
 
+func findClusterAssigmentsForMissingJobs(jc *prowconfig.JobConfig, path string, config *dispatcher.Config, pjs map[string]string, blocked sets.Set[string]) error {
+	mostUsedCluster := findMostUsedCluster(jc)
+
+	getClusterForMissingJob := func(cluster string, jobBase prowconfig.JobBase, pjs map[string]string) error {
+		determinedCluster, canBeRelocated, err := config.DetermineClusterForJob(jobBase, path)
+		if err != nil {
+			return fmt.Errorf("failed to determine cluster for the job %s in path %q: %w", jobBase.Name, path, err)
+		}
+
+		c := determineCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated, blocked)
+		pjs[jobBase.Name] = c
+		logrus.WithField("job", jobBase.Name).WithField("cluster", c).Info("found cluster for missing job")
+		return nil
+	}
+
+	var errs []error
+	for k := range jc.PresubmitsStatic {
+		for _, job := range jc.PresubmitsStatic[k] {
+			if _, ok := pjs[job.Name]; !ok {
+				if err := getClusterForMissingJob(mostUsedCluster, job.JobBase, pjs); err != nil {
+					errs = append(errs, err)
+				}
+			}
+		}
+	}
+
+	for k := range jc.PostsubmitsStatic {
+		for _, job := range jc.PostsubmitsStatic[k] {
+			if _, ok := pjs[job.Name]; !ok {
+				if err := getClusterForMissingJob(mostUsedCluster, job.JobBase, pjs); err != nil {
+					errs = append(errs, err)
+				}
+			}
+		}
+	}
+	for _, job := range jc.Periodics {
+		if _, ok := pjs[job.Name]; !ok {
+			if err := getClusterForMissingJob(mostUsedCluster, job.JobBase, pjs); err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+
+	return utilerrors.NewAggregate(errs)
+}
+
 func findMostUsedCluster(jc *prowconfig.JobConfig) string {
 	clusters := make(map[string]int)
 	for k := range jc.PresubmitsStatic {
@@ -299,7 +345,7 @@ func (cv *clusterVolume) addToVolume(cluster string, jobBase prowconfig.JobBase,
 		return fmt.Errorf("failed to determine cluster for the job %s in path %q: %w", jobBase.Name, path, err)
 	}
 
-	c := cv.determineCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated)
+	c := determineCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated, cv.blocked)
 	cv.pjs[jobBase.Name] = c
 	if determinedCloudProvider := config.IsInBuildFarm(api.Cluster(c)); determinedCloudProvider != "" {
 		cv.clusterVolumeMap[string(determinedCloudProvider)][c] = cv.clusterVolumeMap[string(determinedCloudProvider)][c] + jobVolumes[jobBase.Name]
@@ -309,17 +355,17 @@ func (cv *clusterVolume) addToVolume(cluster string, jobBase prowconfig.JobBase,
 	return nil
 }
 
-func (cv *clusterVolume) determineCluster(cluster, determinedCluster, defaultCluster string, canBeRelocated bool) string {
+func determineCluster(cluster, determinedCluster, defaultCluster string, canBeRelocated bool, blocked sets.Set[string]) string {
 	var targetCluster string
 	if cluster == determinedCluster || canBeRelocated {
 		targetCluster = cluster
-	} else if _, isBlocked := cv.blocked[determinedCluster]; !isBlocked {
+	} else if _, isBlocked := blocked[determinedCluster]; !isBlocked {
 		targetCluster = determinedCluster
 	} else {
 		targetCluster = cluster
 	}
 
-	if _, isBlocked := cv.blocked[targetCluster]; isBlocked {
+	if _, isBlocked := blocked[targetCluster]; isBlocked {
 		return defaultCluster
 	}
 	return targetCluster
@@ -383,80 +429,29 @@ func dispatchJobs(prowJobConfigDir string, config *dispatcher.Config, jobVolumes
 		return nil, nil
 	}
 
-	objChan := make(chan interface{})
-	var errs []error
 	results := map[string][]string{}
+	var errs []error
 
-	readingDone := make(chan struct{})
-	go func() {
-		for o := range objChan {
-			switch o := o.(type) {
-			case configResult:
-				if !config.MatchingPathRegEx(o.path) {
-					results[o.cluster] = append(results[o.cluster], o.filename)
-				}
-			case error:
-				errs = append(errs, o)
-			default:
-				// this should never happen
-				logrus.Errorf("Received unknown type %T of o with value %v", o, o)
-			}
-		}
-		close(readingDone)
-	}()
-
-	fileList := make([]fileSizeInfo, 0)
-	if err := filepath.WalkDir(prowJobConfigDir, func(path string, info fs.DirEntry, err error) error {
+	dispatch := func(jobConfig *prowconfig.JobConfig, path string, info fs.DirEntry) {
+		cluster, err := cv.dispatchJobConfig(jobConfig, path, config, jobVolumes)
 		if err != nil {
-			objChan <- fmt.Errorf("failed to walk file/directory '%s'", path)
-			return nil
-		}
+			errs = append(errs, fmt.Errorf("failed to dispatch job config %q: %w", path, err))
 
-		if info.IsDir() || !strings.HasSuffix(path, ".yaml") {
-			return nil
 		}
-		fileInfo, err := os.Stat(path)
-		if err != nil {
-			objChan <- fmt.Errorf("failed to get file info for '%s': %w", path, err)
-			return nil
+		cr := configResult{cluster: cluster, path: path, filename: info.Name()}
+		if !config.MatchingPathRegEx(cr.path) {
+			results[cr.cluster] = append(results[cr.cluster], cr.filename)
 		}
-
-		fileList = append(fileList, fileSizeInfo{
-			path: path,
-			info: info,
-			size: fileInfo.Size(),
-		})
-		return nil
-	}); err != nil {
+	}
+	fileList, err := composeFileInfoList(prowJobConfigDir)
+	if err != nil {
 		return nil, fmt.Errorf("failed to dispatch all Prow jobs: %w", err)
 	}
 
 	sort.Slice(fileList, func(i, j int) bool { return fileList[i].size > fileList[j].size })
-
-	for _, file := range fileList {
-		func(path string, info fs.DirEntry) {
-			data, err := gzip.ReadFileMaybeGZIP(path)
-			if err != nil {
-				objChan <- fmt.Errorf("failed to read file %q: %w", path, err)
-				return
-			}
-
-			jobConfig := &prowconfig.JobConfig{}
-			if err := yaml.Unmarshal(data, jobConfig); err != nil {
-				objChan <- fmt.Errorf("failed to unmarshal file %q: %w", path, err)
-				return
-			}
-
-			cluster, err := cv.dispatchJobConfig(jobConfig, path, config, jobVolumes)
-			if err != nil {
-				objChan <- fmt.Errorf("failed to dispatch job config %q: %w", path, err)
-			}
-			objChan <- configResult{cluster: cluster, path: path, filename: info.Name()}
-		}(file.path, file.info)
-
+	if err := dispatchEveryFile(fileList, dispatch); err != nil {
+		errs = append(errs, err)
 	}
-	close(objChan)
-	<-readingDone
 
 	for cloudProvider, m := range cv.clusterVolumeMap {
 		for cluster, volume := range m {
@@ -474,6 +469,78 @@ func dispatchJobs(prowJobConfigDir string, config *dispatcher.Config, jobVolumes
 	}
 
 	return cv.pjs, utilerrors.NewAggregate(errs)
+}
+
+func dispatchMissingJobs(prowJobConfigDir string, config *dispatcher.Config, blocked sets.Set[string], pjs map[string]string) error {
+	var errs []error
+	dispatch := func(jobConfig *prowconfig.JobConfig, path string, info fs.DirEntry) {
+		if err := findClusterAssigmentsForMissingJobs(jobConfig, path, config, pjs, blocked); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	fileList, err := composeFileInfoList(prowJobConfigDir)
+	if err != nil {
+		return fmt.Errorf("failed to dispatch all Prow jobs: %w", err)
+	}
+
+	sort.Slice(fileList, func(i, j int) bool { return fileList[i].size > fileList[j].size })
+	if err := dispatchEveryFile(fileList, dispatch); err != nil {
+		errs = append(errs, err)
+	}
+	return utilerrors.NewAggregate(errs)
+}
+
+func dispatchEveryFile(fileList []fileSizeInfo, dispatch func(jobConfig *prowconfig.JobConfig, path string, info fs.DirEntry)) error {
+	var errs []error
+	for _, file := range fileList {
+		func(path string, info fs.DirEntry) {
+			data, err := gzip.ReadFileMaybeGZIP(path)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("failed to read file %q: %w", path, err))
+				return
+			}
+
+			jobConfig := &prowconfig.JobConfig{}
+			if err := yaml.Unmarshal(data, jobConfig); err != nil {
+				errs = append(errs, fmt.Errorf("failed to unmarshal file %q: %w", path, err))
+
+				return
+			}
+			dispatch(jobConfig, path, info)
+
+		}(file.path, file.info)
+	}
+	return utilerrors.NewAggregate(errs)
+}
+
+func composeFileInfoList(prowJobConfigDir string) ([]fileSizeInfo, error) {
+	fileList := make([]fileSizeInfo, 0)
+	var errs []error
+	if err := filepath.WalkDir(prowJobConfigDir, func(path string, info fs.DirEntry, err error) error {
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to walk file/directory '%s'", path))
+			return nil
+		}
+
+		if info.IsDir() || !strings.HasSuffix(path, ".yaml") {
+			return nil
+		}
+		fileInfo, err := os.Stat(path)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to get file info for '%s': %w", path, err))
+			return nil
+		}
+
+		fileList = append(fileList, fileSizeInfo{
+			path: path,
+			info: info,
+			size: fileInfo.Size(),
+		})
+		return nil
+	}); err != nil {
+		errs = append(errs, err)
+	}
+	return fileList, utilerrors.NewAggregate(errs)
 }
 
 // getClusterProvider gets information using get request what is the current cloud provider for the given cluster
@@ -644,11 +711,35 @@ func runAsDaemon(o options, promVolumes *prometheusVolumes) {
 	}()
 
 	var dispatchWrapper func(cron bool)
+	var dispatchDeltaWrapper func()
 	prowjobs := newProwjobs(o.jobsStoragePath)
 	c := cron.New()
 
 	{
 		var mu sync.Mutex
+
+		dispatchDeltaWrapper = func() {
+			mu.Lock()
+			defer mu.Unlock()
+			config, err := dispatcher.LoadConfig(o.configPath)
+			if err != nil {
+				logrus.WithError(err).Errorf("failed to load config from %q", o.configPath)
+				return
+			}
+			_, blocked, err := loadClusterConfig(o.clusterConfigPath)
+			if err != nil {
+				logrus.WithError(err).Error("failed to load cluster config")
+				return
+			}
+
+			pjs := prowjobs.getDataCopy()
+
+			if err := dispatchMissingJobs(o.prowJobConfigDir, config, blocked, pjs); err != nil {
+				logrus.WithError(err).Error("failed to dispatch")
+				return
+			}
+			prowjobs.regenerate(pjs)
+		}
 
 		dispatchWrapper = func(cron bool) {
 			mu.Lock()
@@ -723,30 +814,40 @@ func runAsDaemon(o options, promVolumes *prometheusVolumes) {
 	// making it inconsistent with the actual data in the repository. To address this,
 	// the cluster config data is loaded every minute and checked for changes.
 	go func(config string) {
-		ticker := time.NewTicker(time.Minute)
-		defer ticker.Stop()
+		// Ticker for checking the cluster config every minute
+		configTicker := time.NewTicker(time.Minute)
+		defer configTicker.Stop()
+
+		deltaTicker := time.NewTicker(5 * time.Minute)
+		defer deltaTicker.Stop()
+
 		prevConfigClusterMap, prevBlocked, err := loadClusterConfig(config)
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to load initial cluster config")
 			return
 		}
-		// run dispatch for the first time
+		// Run dispatch for the first time
 		dispatchWrapper(false)
 
 		for {
-			<-ticker.C
-			currentConfigClusterMap, currentBlocked, err := loadClusterConfig(config)
-			if err != nil {
-				logrus.WithError(err).Error("failed to load cluster config")
-				continue
-			}
+			select {
+			case <-configTicker.C:
+				currentConfigClusterMap, currentBlocked, err := loadClusterConfig(config)
+				if err != nil {
+					logrus.WithError(err).Error("failed to load cluster config")
+					continue
+				}
 
-			if !reflect.DeepEqual(currentConfigClusterMap, prevConfigClusterMap) || !reflect.DeepEqual(currentBlocked, prevBlocked) {
-				logrus.WithField("prevConfigClusterMap", prevConfigClusterMap).WithField("prevBlocked", prevBlocked).
-					WithField("currentConfigClusterMap", currentConfigClusterMap).WithField("currentBlocked", currentBlocked).Info("new dispatch")
-				prevConfigClusterMap = currentConfigClusterMap
-				prevBlocked = currentBlocked
-				dispatchWrapper(false)
+				if !reflect.DeepEqual(currentConfigClusterMap, prevConfigClusterMap) || !reflect.DeepEqual(currentBlocked, prevBlocked) {
+					logrus.WithField("prevConfigClusterMap", prevConfigClusterMap).WithField("prevBlocked", prevBlocked).
+						WithField("currentConfigClusterMap", currentConfigClusterMap).WithField("currentBlocked", currentBlocked).Info("new dispatch")
+					prevConfigClusterMap = currentConfigClusterMap
+					prevBlocked = currentBlocked
+					dispatchWrapper(false)
+				}
+
+			case <-deltaTicker.C:
+				dispatchDeltaWrapper()
 			}
 		}
 	}(o.clusterConfigPath)

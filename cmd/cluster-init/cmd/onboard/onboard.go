@@ -58,6 +58,69 @@ func (o options) String() string {
 	return fmt.Sprintf("%#v", o)
 }
 
+func validateOptions(o options) []error {
+	var errs []error
+	if !o.update && o.clusterName == "" {
+		errs = append(errs, errors.New("--cluster-name must be provided"))
+	} else {
+		for _, char := range o.clusterName {
+			if unicode.IsSpace(char) {
+				errs = append(errs, errors.New("--cluster-name must not contain whitespace"))
+				break
+			}
+		}
+	}
+	if o.releaseRepo == "" {
+		// If the release repo is missing, further checks won't be possible
+		errs = append(errs, errors.New("--release-repo must be provided"))
+	} else {
+		if o.createPR {
+			// make sure the release repo is on the master branch and clean
+			if err := os.Chdir(o.releaseRepo); err != nil {
+				errs = append(errs, err)
+			} else {
+				branch, err := exec.Command("git", "rev-parse", "--symbolic-full-name", "--abbrev-ref", "HEAD").Output()
+				if err != nil {
+					errs = append(errs, err)
+				} else if clustermgmtonboard.Master != strings.TrimSpace(string(branch)) {
+					errs = append(errs, errors.New("--release-repo is not currently on master branch"))
+				} else {
+					hasChanges, err := bumper.HasChanges()
+					if err != nil {
+						errs = append(errs, err)
+					}
+					if hasChanges {
+						errs = append(errs, errors.New("--release-repo has local changes"))
+					}
+				}
+			}
+		}
+
+		if o.update {
+			if o.clusterName != "" {
+				buildDir := clustermgmtonboard.BuildFarmDirFor(o.releaseRepo, o.clusterName)
+				if _, err := os.Stat(buildDir); os.IsNotExist(err) {
+					errs = append(errs, fmt.Errorf("build farm directory: %s does not exist. Must exist to perform update", o.clusterName))
+				}
+			}
+		} else {
+			if o.clusterName != "" {
+				buildDir := clustermgmtonboard.BuildFarmDirFor(o.releaseRepo, o.clusterName)
+				if _, err := os.Stat(buildDir); !os.IsNotExist(err) {
+					errs = append(errs, fmt.Errorf("build farm directory: %s already exists", o.clusterName))
+				}
+			}
+		}
+	}
+	if err := o.GitAuthorOptions.Validate(); err != nil {
+		errs = append(errs, err)
+	}
+	if err := o.PRCreationOptions.Validate(true); err != nil {
+		errs = append(errs, err)
+	}
+	return errs
+}
+
 func New() *cobra.Command {
 	cmd := cobra.Command{
 		Use:   "cluster-init",
@@ -206,69 +269,6 @@ func onboard() {
 			logrus.WithError(err).Fatalf("couldn't commit changes")
 		}
 	}
-}
-
-func validateOptions(o options) []error {
-	var errs []error
-	if !o.update && o.clusterName == "" {
-		errs = append(errs, errors.New("--cluster-name must be provided"))
-	} else {
-		for _, char := range o.clusterName {
-			if unicode.IsSpace(char) {
-				errs = append(errs, errors.New("--cluster-name must not contain whitespace"))
-				break
-			}
-		}
-	}
-	if o.releaseRepo == "" {
-		// If the release repo is missing, further checks won't be possible
-		errs = append(errs, errors.New("--release-repo must be provided"))
-	} else {
-		if o.createPR {
-			// make sure the release repo is on the master branch and clean
-			if err := os.Chdir(o.releaseRepo); err != nil {
-				errs = append(errs, err)
-			} else {
-				branch, err := exec.Command("git", "rev-parse", "--symbolic-full-name", "--abbrev-ref", "HEAD").Output()
-				if err != nil {
-					errs = append(errs, err)
-				} else if clustermgmtonboard.Master != strings.TrimSpace(string(branch)) {
-					errs = append(errs, errors.New("--release-repo is not currently on master branch"))
-				} else {
-					hasChanges, err := bumper.HasChanges()
-					if err != nil {
-						errs = append(errs, err)
-					}
-					if hasChanges {
-						errs = append(errs, errors.New("--release-repo has local changes"))
-					}
-				}
-			}
-		}
-
-		if o.update {
-			if o.clusterName != "" {
-				buildDir := clustermgmtonboard.BuildFarmDirFor(o.releaseRepo, o.clusterName)
-				if _, err := os.Stat(buildDir); os.IsNotExist(err) {
-					errs = append(errs, fmt.Errorf("build farm directory: %s does not exist. Must exist to perform update", o.clusterName))
-				}
-			}
-		} else {
-			if o.clusterName != "" {
-				buildDir := clustermgmtonboard.BuildFarmDirFor(o.releaseRepo, o.clusterName)
-				if _, err := os.Stat(buildDir); !os.IsNotExist(err) {
-					errs = append(errs, fmt.Errorf("build farm directory: %s already exists", o.clusterName))
-				}
-			}
-		}
-	}
-	if err := o.GitAuthorOptions.Validate(); err != nil {
-		errs = append(errs, err)
-	}
-	if err := o.PRCreationOptions.Validate(true); err != nil {
-		errs = append(errs, err)
-	}
-	return errs
 }
 
 func submitPR(o options) error {

@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/prow/cmd/generic-autobumper/bumper"
 
+	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/cisecretbootstrap"
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/github/prcreation"
 )
@@ -127,12 +128,20 @@ func onboard() {
 			osdClusters = append(buildClusters.Osd, opts.clusterName)
 		}
 	}
+
 	for _, cluster := range clusters {
 		opts.clusterName = cluster
 		steps := []func(options) error{
 			func(o options) error { return updateJobs(o, osdClusters) },
 			func(o options) error { return updateClusterBuildFarmDir(o, hostedClusters) },
-			func(o options) error { return updateCiSecretBootstrap(o, osdClusters) },
+			func(o options) error {
+				return cisecretbootstrap.UpdateCiSecretBootstrap(cisecretbootstrap.Options{
+					ClusterName:              o.clusterName,
+					ReleaseRepo:              o.releaseRepo,
+					UseTokenFileInKubeconfig: o.useTokenFileInKubeconfig,
+					Unmanaged:                o.unmanaged,
+				}, osdClusters)
+			},
 			updateSecretGenerator,
 			updateSanitizeProwJobs,
 			updateSyncRoverGroups,
@@ -298,7 +307,7 @@ func buildFarmDirFor(releaseRepo, clusterName string) string {
 }
 
 func serviceAccountKubeconfigPath(serviceAccount, clusterName string) string {
-	return serviceAccountFile(serviceAccount, clusterName, config)
+	return serviceAccountFile(serviceAccount, clusterName, cisecretbootstrap.Config)
 }
 
 func serviceAccountTokenFile(serviceAccount, clusterName string) string {

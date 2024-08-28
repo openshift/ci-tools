@@ -1,4 +1,4 @@
-package onboard
+package cisecretgenerator
 
 import (
 	"errors"
@@ -104,14 +104,14 @@ func TestUpdateSecretGeneratorConfig(t *testing.T) {
 	serviceAccountConfigPath := serviceAccountKubeconfigPath(serviceAccountWildcard, clusterWildcard)
 	testCases := []struct {
 		name string
-		options
+		Options
 		input    SecretGenConfig
 		expected SecretGenConfig
 	}{
 		{
 			name: "basic",
-			options: options{
-				clusterName: "newcluster",
+			Options: Options{
+				ClusterName: "newcluster",
 			},
 			input: SecretGenConfig{
 				{
@@ -211,7 +211,7 @@ func TestUpdateSecretGeneratorConfig(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := updateSecretGeneratorConfig(tc.options, &tc.input); err != nil {
+			if err := updateSecretGeneratorConfig(tc.Options, &tc.input); err != nil {
 				t.Fatalf("error received while updating secret generator config: %v", err)
 			}
 			if diff := cmp.Diff(tc.expected, tc.input); diff != "" {

@@ -1,4 +1,4 @@
-package onboard
+package cisecretgenerator
 
 import (
 	"fmt"
@@ -11,9 +11,34 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/yaml"
 
+	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/cisecretbootstrap"
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
 )
+
+// TODO: the following types, consts and functions (till the --- mark) are duplicated and
+// have to be removed. They serve as a temporary workaround to make this package compile.
+
+type Options struct {
+	ClusterName string
+	ReleaseRepo string
+	Unmanaged   bool
+}
+
+func serviceAccountKubeconfigPath(serviceAccount, clusterName string) string {
+	return serviceAccountFile(serviceAccount, clusterName, cisecretbootstrap.Config)
+}
+
+func serviceAccountFile(serviceAccount, clusterName, fileType string) string {
+	return fmt.Sprintf("sa.%s.%s.%s", serviceAccount, clusterName, fileType)
+}
+
+const (
+	buildUFarm = "build_farm"
+	podScaler  = "pod-scaler"
+)
+
+// ---
 
 const (
 	serviceAccountWildcard = "$(service_account)"
@@ -76,8 +101,8 @@ func explainFilters(filters ...secretItemFilter) string {
 	return strings.Join(explanations, " - ")
 }
 
-func updateSecretGenerator(o options) error {
-	filename := filepath.Join(o.releaseRepo, "core-services", "ci-secret-generator", "_config.yaml")
+func UpdateSecretGenerator(o Options) error {
+	filename := filepath.Join(o.ReleaseRepo, "core-services", "ci-secret-generator", "_config.yaml")
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return err
@@ -96,7 +121,7 @@ func updateSecretGenerator(o options) error {
 	return os.WriteFile(filename, rawYaml, 0644)
 }
 
-func updateSecretGeneratorConfig(o options, c *SecretGenConfig) error {
+func updateSecretGeneratorConfig(o Options, c *SecretGenConfig) error {
 	filterByCluster := byParam("cluster", string(api.ClusterBuild01))
 
 	serviceAccountConfigPath := serviceAccountKubeconfigPath(serviceAccountWildcard, clusterWildcard)
@@ -114,7 +139,7 @@ func updateSecretGeneratorConfig(o options, c *SecretGenConfig) error {
 		return err
 	}
 
-	if !o.unmanaged {
+	if !o.Unmanaged {
 		if err := appendToSecretItem(o, c, byItemName(podScaler), filterByCluster, byFieldName(serviceAccountConfigPath)); err != nil {
 			return err
 		}
@@ -123,13 +148,13 @@ func updateSecretGeneratorConfig(o options, c *SecretGenConfig) error {
 	return nil
 }
 
-func appendToSecretItem(o options, c *SecretGenConfig, filters ...secretItemFilter) error {
+func appendToSecretItem(o Options, c *SecretGenConfig, filters ...secretItemFilter) error {
 	si, err := findSecretItem(*c, filters...)
 	if err != nil {
 		return err
 	}
 	logrus.Infof("Appending to secret item: %s", explainFilters(filters...))
-	si.Params["cluster"] = sets.List(sets.New(si.Params["cluster"]...).Insert(o.clusterName))
+	si.Params["cluster"] = sets.List(sets.New(si.Params["cluster"]...).Insert(o.ClusterName))
 	return nil
 }
 

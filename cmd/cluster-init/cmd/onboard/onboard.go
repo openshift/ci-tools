@@ -18,6 +18,7 @@ import (
 
 	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/buildclusters"
 	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/cisecretbootstrap"
+	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/cisecretgenerator"
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/github/prcreation"
 )
@@ -149,7 +150,13 @@ func onboard() {
 					Unmanaged:                o.unmanaged,
 				}, osdClusters)
 			},
-			updateSecretGenerator,
+			func(o options) error {
+				return cisecretgenerator.UpdateSecretGenerator(cisecretgenerator.Options{
+					ClusterName: o.clusterName,
+					ReleaseRepo: o.releaseRepo,
+					Unmanaged:   o.unmanaged,
+				})
+			},
 			updateSanitizeProwJobs,
 			updateSyncRoverGroups,
 			updateProwPluginConfig,

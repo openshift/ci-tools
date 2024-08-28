@@ -5,9 +5,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
 	"github.com/sirupsen/logrus"
+
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	"github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
 )
 
 type Options struct {

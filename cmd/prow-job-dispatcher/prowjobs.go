@@ -30,10 +30,21 @@ func newProwjobs(jobsStoragePath string) *prowjobs {
 func (pjs *prowjobs) regenerate(prowjobs map[string]string) {
 	pjs.mu.Lock()
 	defer pjs.mu.Unlock()
-	pjs.data = make(map[string]string)
+	pjs.data = make(map[string]string, len(prowjobs))
 	for key, value := range prowjobs {
 		pjs.data[key] = value
 	}
+}
+
+func (pjs *prowjobs) getDataCopy() map[string]string {
+	pjs.mu.Lock()
+	defer pjs.mu.Unlock()
+
+	copy := make(map[string]string, len(pjs.data))
+	for key, value := range pjs.data {
+		copy[key] = value
+	}
+	return copy
 }
 
 func (pjs *prowjobs) get(pj string) string {

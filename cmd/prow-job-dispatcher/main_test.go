@@ -143,7 +143,6 @@ func TestDispatchJobs(t *testing.T) {
 	testCases := []struct {
 		name              string
 		prowJobConfigDir  string
-		maxConcurrency    int
 		config            *dispatcher.Config
 		jobVolumes        map[string]float64
 		expected          error
@@ -157,7 +156,6 @@ func TestDispatchJobs(t *testing.T) {
 			name:             "basic case",
 			config:           &c,
 			prowJobConfigDir: filepath.Join("testdata", t.Name()),
-			maxConcurrency:   1,
 			jobVolumes: map[string]float64{
 				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp":          24,
 				"pull-ci-openshift-ci-tools-master-breaking-changes":                 43,
@@ -556,15 +554,50 @@ func TestDetermineCluster(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cv := &clusterVolume{
-				clusterVolumeMap: make(map[string]map[string]float64),
-				cloudProviders:   make(sets.Set[string]),
-				pjs:              make(map[string]string),
-				specialClusters:  make(map[string]float64),
-				blocked:          tt.fields.blocked,
-			}
-			if got := cv.determineCluster(tt.args.cluster, tt.args.determinedCluster, tt.args.defaultCluster, tt.args.canBeRelocated); got != tt.want {
+			if got := determineCluster(tt.args.cluster, tt.args.determinedCluster, tt.args.defaultCluster, tt.args.canBeRelocated, tt.fields.blocked); got != tt.want {
 				t.Errorf("clusterVolume.determineCluster() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDispatchMissingJobs(t *testing.T) {
+	type args struct {
+		prowJobConfigDir string
+		config           *dispatcher.Config
+		blocked          sets.Set[string]
+		pjs              map[string]string
+	}
+	tests := []struct {
+		name        string
+		args        args
+		wantErr     bool
+		expectedPjs map[string]string
+	}{
+		{
+			name: "basic case",
+			args: args{
+				prowJobConfigDir: filepath.Join("testdata", t.Name()),
+				config:           &c,
+				blocked:          sets.New[string](),
+				pjs:              map[string]string{"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp": "build02"},
+			},
+			wantErr: false,
+			expectedPjs: map[string]string{
+				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp":          "build02",
+				"pull-ci-openshift-cluster-api-provider-gcp-master-govet":            "build02",
+				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp-operator": "build02",
+				"pull-ci-openshift-cluster-api-provider-gcp-master-goimports":        "build02",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := dispatchMissingJobs(tt.args.prowJobConfigDir, tt.args.config, tt.args.blocked, tt.args.pjs); (err != nil) != tt.wantErr {
+				t.Errorf("dispatchMissingJobs() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !reflect.DeepEqual(tt.expectedPjs, tt.args.pjs) {
+				t.Errorf("Maps are not equal. Expected: %v, Got: %v", tt.expectedPjs, tt.args.pjs)
 			}
 		})
 	}

@@ -21,6 +21,7 @@ import (
 	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/cisecretgenerator"
 	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/jobs"
 	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/prowplugin"
+	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/sanitizeprowjob"
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/github/prcreation"
 )
@@ -165,7 +166,12 @@ func onboard() {
 					Unmanaged:   o.unmanaged,
 				})
 			},
-			updateSanitizeProwJobs,
+			func(o options) error {
+				return sanitizeprowjob.UpdateSanitizeProwJobs(sanitizeprowjob.Options{
+					ClusterName: o.clusterName,
+					ReleaseRepo: o.releaseRepo,
+				})
+			},
 			updateSyncRoverGroups,
 			func(o options) error {
 				return prowplugin.UpdateProwPluginConfig(prowplugin.Options{

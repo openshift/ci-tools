@@ -1,4 +1,4 @@
-package onboard
+package sanitizeprowjob
 
 import (
 	"os"
@@ -14,9 +14,27 @@ import (
 	"github.com/openshift/ci-tools/pkg/jobconfig"
 )
 
-func updateSanitizeProwJobs(o options) error {
+// TODO: the following types, consts and functions (till the --- mark) are duplicated and
+// have to be removed. They serve as a temporary workaround to make this package compile.
+
+type Options struct {
+	ClusterName string
+	ReleaseRepo string
+}
+
+func repoMetadata() *api.Metadata {
+	return &api.Metadata{
+		Org:    "openshift",
+		Repo:   "release",
+		Branch: "master",
+	}
+}
+
+// ---
+
+func UpdateSanitizeProwJobs(o Options) error {
 	logrus.Info("Updating sanitize-prow-jobs config")
-	filename := filepath.Join(o.releaseRepo, "core-services", "sanitize-prow-jobs", "_config.yaml")
+	filename := filepath.Join(o.ReleaseRepo, "core-services", "sanitize-prow-jobs", "_config.yaml")
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return err
@@ -25,7 +43,7 @@ func updateSanitizeProwJobs(o options) error {
 	if err = yaml.Unmarshal(data, &c); err != nil {
 		return err
 	}
-	updateSanitizeProwJobsConfig(&c, o.clusterName)
+	updateSanitizeProwJobsConfig(&c, o.ClusterName)
 	rawYaml, err := yaml.Marshal(c)
 	if err != nil {
 		return err

@@ -880,6 +880,21 @@ func TestReconcileLimits(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "do nothing when no memory limits have been configured",
+			input: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{},
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{},
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+				},
+			},
+		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {

@@ -241,23 +241,25 @@ func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, worklo
 }
 
 // reconcileLimits ensures that container resource limits do not set anything for CPU (as we
-// are fairly certain this is never a useful thing to do) and that the limits are >=200% of
-// requests (which they may not be any longer if we've changed requests)
+// are fairly certain this is never a useful thing to do) and that any limits that have been configured
+// are >=200% of requests (which they may not be any longer if we've changed requests)
 func reconcileLimits(resources *corev1.ResourceRequirements) {
 	if resources.Limits == nil {
 		return
 	}
 	delete(resources.Limits, corev1.ResourceCPU)
-	// Note: doing math on Quantities is not easy, since they may contain values that overflow
-	// normal integers. Doing math on inf.Dec is possible, but there does not exist any way to
-	// convert back from an inf.Dec to a resource.Quantity. So, while we would want to have a
-	// limit threshold like 120% or similar, we use 200% as that's what is trivially easy to
-	// accomplish with the math we can do on resource.Quantity.
-	minimumLimit := resources.Requests[corev1.ResourceMemory]
-	minimumLimit.Add(minimumLimit)
-	currentLimit := resources.Limits[corev1.ResourceMemory]
-	if currentLimit.Cmp(minimumLimit) == -1 {
-		resources.Limits[corev1.ResourceMemory] = minimumLimit
+	if !resources.Limits.Memory().IsZero() { // Never set a limit where there isn't one defined
+		// Note: doing math on Quantities is not easy, since they may contain values that overflow
+		// normal integers. Doing math on inf.Dec is possible, but there does not exist any way to
+		// convert back from an inf.Dec to a resource.Quantity. So, while we would want to have a
+		// limit threshold like 120% or similar, we use 200% as that's what is trivially easy to
+		// accomplish with the math we can do on resource.Quantity.
+		minimumLimit := resources.Requests[corev1.ResourceMemory]
+		minimumLimit.Add(minimumLimit)
+		currentLimit := resources.Limits[corev1.ResourceMemory]
+		if currentLimit.Cmp(minimumLimit) == -1 {
+			resources.Limits[corev1.ResourceMemory] = minimumLimit
+		}
 	}
 }
 

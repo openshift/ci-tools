@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/prow/cmd/generic-autobumper/bumper"
 
+	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/buildclusters"
 	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/cisecretbootstrap"
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/github/prcreation"
@@ -109,7 +110,13 @@ func onboard() {
 	var hostedClusters []string
 	var osdClusters []string
 
-	buildClusters, err := loadBuildClusters(opts)
+	buildClusters, err := buildclusters.LoadBuildClusters(buildclusters.Options{
+		ClusterName: opts.clusterName,
+		ReleaseRepo: opts.releaseRepo,
+		Unmanaged:   opts.unmanaged,
+		OSD:         opts.osd,
+		Hosted:      opts.hosted,
+	})
 	if err != nil {
 		logrus.WithError(err).Error("failed to obtain managed build clusters")
 	}
@@ -148,7 +155,15 @@ func onboard() {
 			updateProwPluginConfig,
 		}
 		if !opts.update {
-			steps = append(steps, updateBuildClusters)
+			steps = append(steps, func(o options) error {
+				return buildclusters.UpdateBuildClusters(buildclusters.Options{
+					ClusterName: o.clusterName,
+					ReleaseRepo: o.releaseRepo,
+					Unmanaged:   o.unmanaged,
+					OSD:         o.osd,
+					Hosted:      o.hosted,
+				})
+			})
 		}
 		for _, step := range steps {
 			if err := step(opts); err != nil {

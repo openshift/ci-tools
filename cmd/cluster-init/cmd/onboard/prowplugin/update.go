@@ -1,4 +1,4 @@
-package onboard
+package prowplugin
 
 import (
 	"fmt"
@@ -12,9 +12,14 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-func updateProwPluginConfig(o options) error {
+type Options struct {
+	ClusterName string
+	ReleaseRepo string
+}
+
+func UpdateProwPluginConfig(o Options) error {
 	logrus.Info("Updating Prow plugin config")
-	filename := filepath.Join(o.releaseRepo, "core-services", "prow", "02_config", "_plugins.yaml")
+	filename := filepath.Join(o.ReleaseRepo, "core-services", "prow", "02_config", "_plugins.yaml")
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return err
@@ -23,7 +28,7 @@ func updateProwPluginConfig(o options) error {
 	if err = yaml.Unmarshal(data, &c); err != nil {
 		return err
 	}
-	updateProwPluginConfigConfigUpdater(&c, o.clusterName)
+	updateProwPluginConfigConfigUpdater(&c, o.ClusterName)
 	rawYaml, err := yaml.Marshal(c)
 	if err != nil {
 		return err

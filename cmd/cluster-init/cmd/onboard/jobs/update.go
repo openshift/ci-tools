@@ -1,4 +1,4 @@
-package onboard
+package jobs
 
 import (
 	"fmt"
@@ -14,6 +14,7 @@ import (
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
 )
 
@@ -24,32 +25,38 @@ const (
 	generator    jobconfig.Generator = "cluster-init"
 )
 
-func updateJobs(o options, osdClusters []string) error {
-	logrus.Infof("generating: presubmits, postsubmits, and periodics for %s", o.clusterName)
+type Options struct {
+	ClusterName string
+	ReleaseRepo string
+	Unmanaged   bool
+}
+
+func UpdateJobs(o Options, osdClusters []string) error {
+	logrus.Infof("generating: presubmits, postsubmits, and periodics for %s", o.ClusterName)
 	osdClustersSet := sets.NewString(osdClusters...)
 	config := prowconfig.JobConfig{
 		PresubmitsStatic: map[string][]prowconfig.Presubmit{
-			"openshift/release": {generatePresubmit(o.clusterName, osdClustersSet.Has(o.clusterName), o.unmanaged)},
+			"openshift/release": {generatePresubmit(o.ClusterName, osdClustersSet.Has(o.ClusterName), o.Unmanaged)},
 		},
 		PostsubmitsStatic: map[string][]prowconfig.Postsubmit{
-			"openshift/release": {generatePostsubmit(o.clusterName, osdClustersSet.Has(o.clusterName), o.unmanaged)},
+			"openshift/release": {generatePostsubmit(o.ClusterName, osdClustersSet.Has(o.ClusterName), o.Unmanaged)},
 		},
-		Periodics: []prowconfig.Periodic{generatePeriodic(o.clusterName, osdClustersSet.Has(o.clusterName), o.unmanaged)},
+		Periodics: []prowconfig.Periodic{generatePeriodic(o.ClusterName, osdClustersSet.Has(o.ClusterName), o.Unmanaged)},
 	}
-	metadata := repoMetadata()
-	jobsDir := filepath.Join(o.releaseRepo, "ci-operator", "jobs")
+	metadata := onboard.RepoMetadata()
+	jobsDir := filepath.Join(o.ReleaseRepo, "ci-operator", "jobs")
 	return jobconfig.WriteToDir(jobsDir,
 		metadata.Org,
 		metadata.Repo,
 		&config,
 		generator,
-		map[string]string{jobconfig.LabelBuildFarm: o.clusterName})
+		map[string]string{jobconfig.LabelBuildFarm: o.ClusterName})
 }
 
 func generatePeriodic(clusterName string, osd bool, unmanaged bool) prowconfig.Periodic {
 	return prowconfig.Periodic{
 		JobBase: prowconfig.JobBase{
-			Name:       repoMetadata().SimpleJobName(jobconfig.PeriodicPrefix, clusterName+"-apply"),
+			Name:       onboard.RepoMetadata().SimpleJobName(jobconfig.PeriodicPrefix, clusterName+"-apply"),
 			Agent:      string(prowapi.KubernetesAgent),
 			Cluster:    string(api.ClusterAPPCI),
 			SourcePath: "",
@@ -61,7 +68,7 @@ func generatePeriodic(clusterName string, osd bool, unmanaged bool) prowconfig.P
 						osd, unmanaged,
 						[]string{"--confirm=true"},
 						nil, nil)},
-				ServiceAccountName: configUpdater,
+				ServiceAccountName: onboard.ConfigUpdater,
 			},
 			UtilityConfig: prowconfig.UtilityConfig{
 				Decorate: utilpointer.Bool(true),
@@ -83,7 +90,7 @@ func generatePeriodic(clusterName string, osd bool, unmanaged bool) prowconfig.P
 func generatePostsubmit(clusterName string, osd bool, unmanaged bool) prowconfig.Postsubmit {
 	return prowconfig.Postsubmit{
 		JobBase: prowconfig.JobBase{
-			Name:       repoMetadata().JobName(jobconfig.PostsubmitPrefix, clusterName+"-apply"),
+			Name:       onboard.RepoMetadata().JobName(jobconfig.PostsubmitPrefix, clusterName+"-apply"),
 			Agent:      string(prowapi.KubernetesAgent),
 			Cluster:    string(api.ClusterAPPCI),
 			SourcePath: "",
@@ -91,7 +98,7 @@ func generatePostsubmit(clusterName string, osd bool, unmanaged bool) prowconfig
 				Volumes: []v1.Volume{generateSecretVolume(clusterName)},
 				Containers: []v1.Container{
 					generateContainer(latestImage, clusterName, osd, unmanaged, []string{"--confirm=true"}, nil, nil)},
-				ServiceAccountName: configUpdater,
+				ServiceAccountName: onboard.ConfigUpdater,
 			},
 			UtilityConfig: prowconfig.UtilityConfig{
 				Decorate: utilpointer.Bool(true),
@@ -115,7 +122,7 @@ func generatePresubmit(clusterName string, osd bool, unmanaged bool) prowconfig.
 	}
 	return prowconfig.Presubmit{
 		JobBase: prowconfig.JobBase{
-			Name:       repoMetadata().JobName(jobconfig.PresubmitPrefix, clusterName+"-dry"),
+			Name:       onboard.RepoMetadata().JobName(jobconfig.PresubmitPrefix, clusterName+"-dry"),
 			Agent:      string(prowapi.KubernetesAgent),
 			Cluster:    string(api.ClusterAPPCI),
 			SourcePath: "",
@@ -133,7 +140,7 @@ func generatePresubmit(clusterName string, osd bool, unmanaged bool) prowconfig.
 						osd, unmanaged,
 						nil,
 						[]v1.VolumeMount{{Name: "tmp", MountPath: "/tmp"}}, []v1.EnvVar{{Name: "HOME", Value: "/tmp"}})},
-				ServiceAccountName: configUpdater,
+				ServiceAccountName: onboard.ConfigUpdater,
 			},
 			UtilityConfig: prowconfig.UtilityConfig{Decorate: utilpointer.Bool(true)},
 			Labels: map[string]string{
@@ -165,7 +172,7 @@ func generateSecretVolume(clusterName string) v1.Volume {
 				SecretName: "config-updater",
 				Items: []v1.KeyToPath{
 					{
-						Key:  serviceAccountKubeconfigPath(configUpdater, clusterName),
+						Key:  onboard.ServiceAccountKubeconfigPath(onboard.ConfigUpdater, clusterName),
 						Path: "kubeconfig",
 					},
 				},

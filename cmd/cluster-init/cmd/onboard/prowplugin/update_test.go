@@ -1,4 +1,4 @@
-package onboard
+package prowplugin
 
 import (
 	"testing"

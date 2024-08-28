@@ -1,4 +1,4 @@
-package onboard
+package cisecretbootstrap
 
 import (
 	"fmt"
@@ -10,26 +10,31 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
 )
 
 const (
-	credentials         = "credentials"
-	dotDockerConfigJson = ".dockerconfigjson"
-	testCredentials     = "test-credentials"
-	kubeconfig          = "kubeconfig"
-	config              = "config"
-	pjRehearse          = "pj-rehearse"
+	credentials                  = "credentials"
+	dotDockerConfigJson          = ".dockerconfigjson"
+	testCredentials              = "test-credentials"
+	kubeconfig                   = "kubeconfig"
+	Config                       = "config"
+	pjRehearse                   = "pj-rehearse"
+	pull                pushPull = "puller"
+	push                pushPull = "pusher"
 )
+
+type Options struct {
+	ClusterName              string
+	ReleaseRepo              string
+	UseTokenFileInKubeconfig bool
+	Unmanaged                bool
+}
 
 type pushPull string
 
-const (
-	pull pushPull = "puller"
-	push pushPull = "pusher"
-)
-
-func updateCiSecretBootstrap(o options, osdClusters []string) error {
-	secretBootstrapDir := filepath.Join(o.releaseRepo, "core-services", "ci-secret-bootstrap")
+func UpdateCiSecretBootstrap(o Options, osdClusters []string) error {
+	secretBootstrapDir := filepath.Join(o.ReleaseRepo, "core-services", "ci-secret-bootstrap")
 	secretBootstrapConfigFile := filepath.Join(secretBootstrapDir, "_config.yaml")
 	logrus.Infof("Updating ci-secret-bootstrap: %s", secretBootstrapConfigFile)
 
@@ -38,30 +43,30 @@ func updateCiSecretBootstrap(o options, osdClusters []string) error {
 		return err
 	}
 	osdClustersSet := sets.New[string](osdClusters...)
-	if err := updateCiSecretBootstrapConfig(o, &c, osdClustersSet.Has(o.clusterName)); err != nil {
+	if err := updateCiSecretBootstrapConfig(o, &c, osdClustersSet.Has(o.ClusterName)); err != nil {
 		return err
 	}
 	return secretbootstrap.SaveConfigToFile(secretBootstrapConfigFile, &c)
 }
 
-func updateCiSecretBootstrapConfig(o options, c *secretbootstrap.Config, osd bool) error {
-	for _, groupName := range []string{buildUFarm, "non_app_ci"} {
-		c.ClusterGroups[groupName] = sets.List(sets.New[string](c.ClusterGroups[groupName]...).Insert(o.clusterName))
+func updateCiSecretBootstrapConfig(o Options, c *secretbootstrap.Config, osd bool) error {
+	for _, groupName := range []string{onboard.BuildUFarm, "non_app_ci"} {
+		c.ClusterGroups[groupName] = sets.List(sets.New[string](c.ClusterGroups[groupName]...).Insert(o.ClusterName))
 	}
 	// non-OSD clusters should never be in the group
 	var groupName string = ""
-	if osd && !o.unmanaged {
+	if osd && !o.Unmanaged {
 		groupName = secretbootstrap.OSDGlobalPullSecretGroupName
 	}
 	if !osd {
 		groupName = secretbootstrap.OpenShiftConfigPullSecretGroupName
 	}
 	if groupName != "" {
-		c.ClusterGroups[groupName] = sets.List(sets.New[string](append(c.ClusterGroups[groupName], o.clusterName)...))
+		c.ClusterGroups[groupName] = sets.List(sets.New[string](append(c.ClusterGroups[groupName], o.ClusterName)...))
 	}
-	c.UserSecretsTargetClusters = sets.List(sets.New[string](c.UserSecretsTargetClusters...).Insert(o.clusterName))
+	c.UserSecretsTargetClusters = sets.List(sets.New[string](c.UserSecretsTargetClusters...).Insert(o.ClusterName))
 
-	var steps = []func(c *secretbootstrap.Config, o options) error{
+	var steps = []func(c *secretbootstrap.Config, o Options) error{
 		updateBuildFarmSecrets,
 		updateDPTPControllerManagerSecret,
 		updateRehearseSecret,
@@ -73,7 +78,7 @@ func updateCiSecretBootstrapConfig(o options, c *secretbootstrap.Config, osd boo
 		updateSecret(generateRegistryPullCredentialsSecret),
 		updateSecret(generateCiOperatorSecret),
 	}
-	if !o.unmanaged {
+	if !o.Unmanaged {
 		steps = append(steps, updatePodScalerSecret)
 	}
 
@@ -86,10 +91,10 @@ func updateCiSecretBootstrapConfig(o options, c *secretbootstrap.Config, osd boo
 	return nil
 }
 
-func updateSecret(secretGenerator func(options) secretbootstrap.SecretConfig) func(c *secretbootstrap.Config, o options) error {
-	return func(c *secretbootstrap.Config, o options) error {
+func updateSecret(secretGenerator func(Options) secretbootstrap.SecretConfig) func(c *secretbootstrap.Config, o Options) error {
+	return func(c *secretbootstrap.Config, o Options) error {
 		secret := secretGenerator(o)
-		idx, _, _ := findSecretConfig(secret.To[0].Name, o.clusterName, c.Secrets)
+		idx, _, _ := findSecretConfig(secret.To[0].Name, o.ClusterName, c.Secrets)
 		if idx != -1 {
 			logrus.Infof("Replacing existing secret with 'to' of: %v", secret.To)
 			c.Secrets = append(c.Secrets[:idx], append([]secretbootstrap.SecretConfig{secret}, c.Secrets[idx+1:]...)...)
@@ -101,39 +106,39 @@ func updateSecret(secretGenerator func(options) secretbootstrap.SecretConfig) fu
 	}
 }
 
-func generateCiOperatorSecret(o options) secretbootstrap.SecretConfig {
+func generateCiOperatorSecret(o Options) secretbootstrap.SecretConfig {
 	from := map[string]secretbootstrap.ItemContext{
 		kubeconfig: {
-			Field: serviceAccountKubeconfigPath(ciOperator, o.clusterName),
-			Item:  buildUFarm,
+			Field: onboard.ServiceAccountKubeconfigPath(onboard.CIOperator, o.ClusterName),
+			Item:  onboard.BuildUFarm,
 		},
 	}
-	if o.useTokenFileInKubeconfig {
-		tokenFile := serviceAccountTokenFile(ciOperator, o.clusterName)
+	if o.UseTokenFileInKubeconfig {
+		tokenFile := onboard.ServiceAccountTokenFile(onboard.CIOperator, o.ClusterName)
 		from[tokenFile] = secretbootstrap.ItemContext{
 			Field: tokenFile,
-			Item:  buildUFarm,
+			Item:  onboard.BuildUFarm,
 		}
 	}
 	return secretbootstrap.SecretConfig{
 		From: from,
 		To: []secretbootstrap.SecretContext{
 			{
-				Cluster:   o.clusterName,
-				Name:      ciOperator,
+				Cluster:   o.ClusterName,
+				Name:      onboard.CIOperator,
 				Namespace: testCredentials,
 			},
 		},
 	}
 }
 
-func generateRegistryPushCredentialsSecret(o options) secretbootstrap.SecretConfig {
+func generateRegistryPushCredentialsSecret(o Options) secretbootstrap.SecretConfig {
 	return secretbootstrap.SecretConfig{
 		From: map[string]secretbootstrap.ItemContext{
-			dotDockerConfigJson: generatePushPullSecretFrom(o.clusterName, []secretbootstrap.DockerConfigJSONData{
+			dotDockerConfigJson: generatePushPullSecretFrom(o.ClusterName, []secretbootstrap.DockerConfigJSONData{
 				{
 					AuthField:   registryCommandTokenField(string(api.ClusterAPPCI), push),
-					Item:        buildUFarm,
+					Item:        onboard.BuildUFarm,
 					RegistryURL: api.ServiceDomainAPPCIRegistry,
 				},
 				{
@@ -144,19 +149,19 @@ func generateRegistryPushCredentialsSecret(o options) secretbootstrap.SecretConf
 			}),
 		},
 		To: []secretbootstrap.SecretContext{
-			generateDockerConfigJsonSecretConfigTo(api.RegistryPushCredentialsCICentralSecret, ci, o.clusterName),
-			generateDockerConfigJsonSecretConfigTo(api.RegistryPushCredentialsCICentralSecret, testCredentials, o.clusterName),
+			generateDockerConfigJsonSecretConfigTo(api.RegistryPushCredentialsCICentralSecret, onboard.CI, o.ClusterName),
+			generateDockerConfigJsonSecretConfigTo(api.RegistryPushCredentialsCICentralSecret, testCredentials, o.ClusterName),
 		},
 	}
 }
 
-func generateRegistryPullCredentialsSecret(o options) secretbootstrap.SecretConfig {
+func generateRegistryPullCredentialsSecret(o Options) secretbootstrap.SecretConfig {
 	return secretbootstrap.SecretConfig{
 		From: map[string]secretbootstrap.ItemContext{
-			dotDockerConfigJson: generatePushPullSecretFrom(o.clusterName, []secretbootstrap.DockerConfigJSONData{
+			dotDockerConfigJson: generatePushPullSecretFrom(o.ClusterName, []secretbootstrap.DockerConfigJSONData{
 				{
 					AuthField:   registryCommandTokenField(string(api.ClusterAPPCI), pull),
-					Item:        buildUFarm,
+					Item:        onboard.BuildUFarm,
 					RegistryURL: api.ServiceDomainAPPCIRegistry,
 				},
 				{
@@ -188,8 +193,8 @@ func generateRegistryPullCredentialsSecret(o options) secretbootstrap.SecretConf
 			}),
 		},
 		To: []secretbootstrap.SecretContext{
-			generateDockerConfigJsonSecretConfigTo(api.RegistryPullCredentialsSecret, ci, o.clusterName),
-			generateDockerConfigJsonSecretConfigTo(api.RegistryPullCredentialsSecret, testCredentials, o.clusterName),
+			generateDockerConfigJsonSecretConfigTo(api.RegistryPullCredentialsSecret, onboard.CI, o.ClusterName),
+			generateDockerConfigJsonSecretConfigTo(api.RegistryPullCredentialsSecret, testCredentials, o.ClusterName),
 		},
 	}
 }
@@ -199,17 +204,17 @@ func generatePushPullSecretFrom(clusterName string, items []secretbootstrap.Dock
 		DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
 			{
 				AuthField:   registryCommandTokenField(clusterName, pull),
-				Item:        buildUFarm,
+				Item:        onboard.BuildUFarm,
 				RegistryURL: "image-registry.openshift-image-registry.svc.cluster.local:5000",
 			},
 			{
 				AuthField:   registryCommandTokenField(clusterName, pull),
-				Item:        buildUFarm,
+				Item:        onboard.BuildUFarm,
 				RegistryURL: "image-registry.openshift-image-registry.svc:5000",
 			},
 			{
 				AuthField:   registryCommandTokenField(clusterName, pull),
-				Item:        buildUFarm,
+				Item:        onboard.BuildUFarm,
 				RegistryURL: registryUrlFor(clusterName),
 			},
 		},
@@ -232,115 +237,115 @@ func generateDockerConfigJsonSecretConfigTo(name string, namespace string, clust
 	}
 }
 
-func updatePodScalerSecret(c *secretbootstrap.Config, o options) error {
-	if o.useTokenFileInKubeconfig {
-		key := serviceAccountTokenFile(podScaler, o.clusterName)
-		if err := updateSecretItemContext(c, podScaler, string(api.ClusterAPPCI),
+func updatePodScalerSecret(c *secretbootstrap.Config, o Options) error {
+	if o.UseTokenFileInKubeconfig {
+		key := onboard.ServiceAccountTokenFile(onboard.PodScaler, o.ClusterName)
+		if err := updateSecretItemContext(c, onboard.PodScaler, string(api.ClusterAPPCI),
 			key, secretbootstrap.ItemContext{
 				Field: key,
-				Item:  podScaler,
+				Item:  onboard.PodScaler,
 			}); err != nil {
 			return err
 		}
 	}
-	key := fmt.Sprintf("%s.%s", o.clusterName, config)
-	return updateSecretItemContext(c, podScaler, string(api.ClusterAPPCI), key, secretbootstrap.ItemContext{
-		Field: serviceAccountKubeconfigPath(podScaler, o.clusterName),
-		Item:  podScaler,
+	key := fmt.Sprintf("%s.%s", o.ClusterName, Config)
+	return updateSecretItemContext(c, onboard.PodScaler, string(api.ClusterAPPCI), key, secretbootstrap.ItemContext{
+		Field: onboard.ServiceAccountKubeconfigPath(onboard.PodScaler, o.ClusterName),
+		Item:  onboard.PodScaler,
 	})
 }
 
-func updateDPTPControllerManagerSecret(c *secretbootstrap.Config, o options) error {
+func updateDPTPControllerManagerSecret(c *secretbootstrap.Config, o Options) error {
 	const DPTPControllerManager = "dptp-controller-manager"
-	if o.useTokenFileInKubeconfig {
-		keyAndFieldToken := serviceAccountTokenFile(DPTPControllerManager, o.clusterName)
+	if o.UseTokenFileInKubeconfig {
+		keyAndFieldToken := onboard.ServiceAccountTokenFile(DPTPControllerManager, o.ClusterName)
 		if err := updateSecretItemContext(c, DPTPControllerManager, string(api.ClusterAPPCI), keyAndFieldToken, secretbootstrap.ItemContext{
 			Field: keyAndFieldToken,
-			Item:  buildUFarm,
+			Item:  onboard.BuildUFarm,
 		}); err != nil {
 			return err
 		}
 	}
-	keyAndField := serviceAccountKubeconfigPath(DPTPControllerManager, o.clusterName)
+	keyAndField := onboard.ServiceAccountKubeconfigPath(DPTPControllerManager, o.ClusterName)
 	return updateSecretItemContext(c, DPTPControllerManager, string(api.ClusterAPPCI), keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,
-		Item:  buildUFarm,
+		Item:  onboard.BuildUFarm,
 	})
 }
 
-func updateRehearseSecret(c *secretbootstrap.Config, o options) error {
-	if o.useTokenFileInKubeconfig {
-		keyAndFieldToken := serviceAccountTokenFile(ciOperator, o.clusterName)
+func updateRehearseSecret(c *secretbootstrap.Config, o Options) error {
+	if o.UseTokenFileInKubeconfig {
+		keyAndFieldToken := onboard.ServiceAccountTokenFile(onboard.CIOperator, o.ClusterName)
 		if err := updateSecretItemContext(c, pjRehearse, string(api.ClusterBuild01), keyAndFieldToken, secretbootstrap.ItemContext{
 			Field: keyAndFieldToken,
-			Item:  buildUFarm,
+			Item:  onboard.BuildUFarm,
 		}); err != nil {
 			return err
 		}
 	}
-	keyAndField := serviceAccountKubeconfigPath(ciOperator, o.clusterName)
+	keyAndField := onboard.ServiceAccountKubeconfigPath(onboard.CIOperator, o.ClusterName)
 	return updateSecretItemContext(c, pjRehearse, string(api.ClusterBuild01), keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,
-		Item:  buildUFarm,
+		Item:  onboard.BuildUFarm,
 	})
 }
 
-func updateGithubLdapUserGroupCreatorSecret(c *secretbootstrap.Config, o options) error {
-	if o.useTokenFileInKubeconfig {
-		keyAndFieldToken := serviceAccountTokenFile(githubLdapUserGroupCreator, o.clusterName)
-		if err := updateSecretItemContext(c, githubLdapUserGroupCreator, string(api.ClusterAPPCI), keyAndFieldToken, secretbootstrap.ItemContext{
+func updateGithubLdapUserGroupCreatorSecret(c *secretbootstrap.Config, o Options) error {
+	if o.UseTokenFileInKubeconfig {
+		keyAndFieldToken := onboard.ServiceAccountTokenFile(onboard.GithubLdapUserGroupCreator, o.ClusterName)
+		if err := updateSecretItemContext(c, onboard.GithubLdapUserGroupCreator, string(api.ClusterAPPCI), keyAndFieldToken, secretbootstrap.ItemContext{
 			Field: keyAndFieldToken,
-			Item:  buildUFarm,
+			Item:  onboard.BuildUFarm,
 		}); err != nil {
 			return err
 		}
 	}
-	keyAndField := serviceAccountKubeconfigPath(githubLdapUserGroupCreator, o.clusterName)
-	return updateSecretItemContext(c, githubLdapUserGroupCreator, string(api.ClusterAPPCI), keyAndField, secretbootstrap.ItemContext{
+	keyAndField := onboard.ServiceAccountKubeconfigPath(onboard.GithubLdapUserGroupCreator, o.ClusterName)
+	return updateSecretItemContext(c, onboard.GithubLdapUserGroupCreator, string(api.ClusterAPPCI), keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,
-		Item:  buildUFarm,
+		Item:  onboard.BuildUFarm,
 	})
 }
 
-func updatePromotedImageGovernor(c *secretbootstrap.Config, o options) error {
-	if o.useTokenFileInKubeconfig {
-		keyAndFieldToken := serviceAccountTokenFile(promotedImageGovernor, o.clusterName)
-		if err := updateSecretItemContext(c, promotedImageGovernor, string(api.ClusterAPPCI), keyAndFieldToken, secretbootstrap.ItemContext{
+func updatePromotedImageGovernor(c *secretbootstrap.Config, o Options) error {
+	if o.UseTokenFileInKubeconfig {
+		keyAndFieldToken := onboard.ServiceAccountTokenFile(onboard.PromotedImageGovernor, o.ClusterName)
+		if err := updateSecretItemContext(c, onboard.PromotedImageGovernor, string(api.ClusterAPPCI), keyAndFieldToken, secretbootstrap.ItemContext{
 			Field: keyAndFieldToken,
-			Item:  buildUFarm,
+			Item:  onboard.BuildUFarm,
 		}); err != nil {
 			return err
 		}
 	}
-	keyAndField := serviceAccountKubeconfigPath(promotedImageGovernor, o.clusterName)
-	return updateSecretItemContext(c, promotedImageGovernor, string(api.ClusterAPPCI), keyAndField, secretbootstrap.ItemContext{
+	keyAndField := onboard.ServiceAccountKubeconfigPath(onboard.PromotedImageGovernor, o.ClusterName)
+	return updateSecretItemContext(c, onboard.PromotedImageGovernor, string(api.ClusterAPPCI), keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,
-		Item:  buildUFarm,
+		Item:  onboard.BuildUFarm,
 	})
 }
 
-func updateClusterDisplay(c *secretbootstrap.Config, o options) error {
-	if o.useTokenFileInKubeconfig {
-		keyAndFieldToken := serviceAccountTokenFile(clusterDisplay, o.clusterName)
-		if err := updateSecretItemContext(c, clusterDisplay, string(api.ClusterAPPCI), keyAndFieldToken, secretbootstrap.ItemContext{
+func updateClusterDisplay(c *secretbootstrap.Config, o Options) error {
+	if o.UseTokenFileInKubeconfig {
+		keyAndFieldToken := onboard.ServiceAccountTokenFile(onboard.ClusterDisplay, o.ClusterName)
+		if err := updateSecretItemContext(c, onboard.ClusterDisplay, string(api.ClusterAPPCI), keyAndFieldToken, secretbootstrap.ItemContext{
 			Field: keyAndFieldToken,
-			Item:  buildUFarm,
+			Item:  onboard.BuildUFarm,
 		}); err != nil {
 			return err
 		}
 	}
-	keyAndField := serviceAccountKubeconfigPath(clusterDisplay, o.clusterName)
-	return updateSecretItemContext(c, clusterDisplay, string(api.ClusterAPPCI), keyAndField, secretbootstrap.ItemContext{
+	keyAndField := onboard.ServiceAccountKubeconfigPath(onboard.ClusterDisplay, o.ClusterName)
+	return updateSecretItemContext(c, onboard.ClusterDisplay, string(api.ClusterAPPCI), keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,
-		Item:  buildUFarm,
+		Item:  onboard.BuildUFarm,
 	})
 }
 
-func updateChatBotSecret(c *secretbootstrap.Config, o options) error {
+func updateChatBotSecret(c *secretbootstrap.Config, o Options) error {
 	const chatBot = "ci-chat-bot"
 	name := chatBot + "-kubeconfigs"
-	if o.useTokenFileInKubeconfig {
-		keyAndFieldToken := serviceAccountTokenFile(chatBot, o.clusterName)
+	if o.UseTokenFileInKubeconfig {
+		keyAndFieldToken := onboard.ServiceAccountTokenFile(chatBot, o.ClusterName)
 		if err := updateSecretItemContext(c, name, string(api.ClusterAPPCI), keyAndFieldToken, secretbootstrap.ItemContext{
 			Field: keyAndFieldToken,
 			Item:  chatBot,
@@ -348,7 +353,7 @@ func updateChatBotSecret(c *secretbootstrap.Config, o options) error {
 			return err
 		}
 	}
-	keyAndField := serviceAccountKubeconfigPath(chatBot, o.clusterName)
+	keyAndField := onboard.ServiceAccountKubeconfigPath(chatBot, o.ClusterName)
 	return updateSecretItemContext(c, name, string(api.ClusterAPPCI), keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,
 		Item:  chatBot,
@@ -381,37 +386,38 @@ func registryUrlFor(cluster string) string {
 	}
 }
 
-func updateBuildFarmSecrets(c *secretbootstrap.Config, o options) error {
-	if o.clusterName == string(api.ClusterVSphere02) {
-		_, buildFarmCredentials, err := findSecretConfig(fmt.Sprintf("%s-%s", buildFarm, credentials), string(api.ClusterAPPCI), c.Secrets)
+func updateBuildFarmSecrets(c *secretbootstrap.Config, o Options) error {
+	if o.ClusterName == string(api.ClusterVSphere02) {
+		_, buildFarmCredentials, err := findSecretConfig(fmt.Sprintf("%s-%s", onboard.BuildFarm, credentials), string(api.ClusterAPPCI), c.Secrets)
 		if err != nil {
 			return err
 		}
-		clientId := o.clusterName + "_github_client_id"
+		clientId := o.ClusterName + "_github_client_id"
 		buildFarmCredentials.From[clientId] = secretbootstrap.ItemContext{
-			Item:  fmt.Sprintf("%s_%s", buildUFarm, o.clusterName),
+			Item:  fmt.Sprintf("%s_%s", onboard.BuildUFarm, o.ClusterName),
 			Field: "github_client_id",
 		}
 	}
-	for _, s := range []string{configUpdater, "crier", "deck", "hook", "prow-controller-manager", "sinker"} {
+	for _, s := range []string{onboard.ConfigUpdater, "crier", "deck", "hook", "prow-controller-manager", "sinker"} {
+		// for _, s := range []string{configUpdater} {
 		_, sc, err := findSecretConfig(s, string(api.ClusterAPPCI), c.Secrets)
 		if err != nil {
 			return err
 		}
-		keyAndField := serviceAccountKubeconfigPath(s, o.clusterName)
-		item := buildUFarm
-		if s == configUpdater {
-			item = configUpdater
+		keyAndField := onboard.ServiceAccountKubeconfigPath(s, o.ClusterName)
+		item := onboard.BuildUFarm
+		if s == onboard.ConfigUpdater {
+			item = onboard.ConfigUpdater
 		}
 		sc.From[keyAndField] = secretbootstrap.ItemContext{
 			Field: keyAndField,
 			Item:  item,
 		}
-		if o.useTokenFileInKubeconfig && s != configUpdater {
-			keyAndFieldToken := serviceAccountTokenFile(s, o.clusterName)
+		if o.UseTokenFileInKubeconfig && s != onboard.ConfigUpdater {
+			keyAndFieldToken := onboard.ServiceAccountTokenFile(s, o.ClusterName)
 			sc.From[keyAndFieldToken] = secretbootstrap.ItemContext{
 				Field: keyAndFieldToken,
-				Item:  buildUFarm,
+				Item:  onboard.BuildUFarm,
 			}
 		}
 	}

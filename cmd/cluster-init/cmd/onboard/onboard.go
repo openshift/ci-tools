@@ -6,33 +6,29 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"unicode"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/prow/cmd/generic-autobumper/bumper"
 
-	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/buildclusterdir"
+	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/buildclusters"
+	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/cisecretbootstrap"
+	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/cisecretgenerator"
+	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/jobs"
+	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/prowplugin"
+	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/sanitizeprowjob"
+	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/syncrovergroup"
+	clustermgmtonboard "github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
 	"github.com/openshift/ci-tools/pkg/github/prcreation"
 )
 
 const (
-	githubLogin                = "openshift-bot"
-	githubTeam                 = "openshift/test-platform"
-	master                     = "master"
-	buildUFarm                 = "build_farm"
-	podScaler                  = "pod-scaler"
-	configUpdater              = "config-updater"
-	ciOperator                 = "ci-operator"
-	buildFarm                  = "build-farm"
-	githubLdapUserGroupCreator = "github-ldap-user-group-creator"
-	promotedImageGovernor      = "promoted-image-governor"
-	clusterDisplay             = "cluster-display"
-	ci                         = "ci"
+	githubLogin = "openshift-bot"
+	githubTeam  = "openshift/test-platform"
 )
 
 var (
@@ -60,6 +56,69 @@ type options struct {
 
 func (o options) String() string {
 	return fmt.Sprintf("%#v", o)
+}
+
+func validateOptions(o options) []error {
+	var errs []error
+	if !o.update && o.clusterName == "" {
+		errs = append(errs, errors.New("--cluster-name must be provided"))
+	} else {
+		for _, char := range o.clusterName {
+			if unicode.IsSpace(char) {
+				errs = append(errs, errors.New("--cluster-name must not contain whitespace"))
+				break
+			}
+		}
+	}
+	if o.releaseRepo == "" {
+		// If the release repo is missing, further checks won't be possible
+		errs = append(errs, errors.New("--release-repo must be provided"))
+	} else {
+		if o.createPR {
+			// make sure the release repo is on the master branch and clean
+			if err := os.Chdir(o.releaseRepo); err != nil {
+				errs = append(errs, err)
+			} else {
+				branch, err := exec.Command("git", "rev-parse", "--symbolic-full-name", "--abbrev-ref", "HEAD").Output()
+				if err != nil {
+					errs = append(errs, err)
+				} else if clustermgmtonboard.Master != strings.TrimSpace(string(branch)) {
+					errs = append(errs, errors.New("--release-repo is not currently on master branch"))
+				} else {
+					hasChanges, err := bumper.HasChanges()
+					if err != nil {
+						errs = append(errs, err)
+					}
+					if hasChanges {
+						errs = append(errs, errors.New("--release-repo has local changes"))
+					}
+				}
+			}
+		}
+
+		if o.update {
+			if o.clusterName != "" {
+				buildDir := clustermgmtonboard.BuildFarmDirFor(o.releaseRepo, o.clusterName)
+				if _, err := os.Stat(buildDir); os.IsNotExist(err) {
+					errs = append(errs, fmt.Errorf("build farm directory: %s does not exist. Must exist to perform update", o.clusterName))
+				}
+			}
+		} else {
+			if o.clusterName != "" {
+				buildDir := clustermgmtonboard.BuildFarmDirFor(o.releaseRepo, o.clusterName)
+				if _, err := os.Stat(buildDir); !os.IsNotExist(err) {
+					errs = append(errs, fmt.Errorf("build farm directory: %s already exists", o.clusterName))
+				}
+			}
+		}
+	}
+	if err := o.GitAuthorOptions.Validate(); err != nil {
+		errs = append(errs, err)
+	}
+	if err := o.PRCreationOptions.Validate(true); err != nil {
+		errs = append(errs, err)
+	}
+	return errs
 }
 
 func New() *cobra.Command {
@@ -108,7 +167,13 @@ func onboard() {
 	var hostedClusters []string
 	var osdClusters []string
 
-	buildClusters, err := loadBuildClusters(opts)
+	buildClusters, err := buildclusters.LoadBuildClusters(buildclusters.Options{
+		ClusterName: opts.clusterName,
+		ReleaseRepo: opts.releaseRepo,
+		Unmanaged:   opts.unmanaged,
+		OSD:         opts.osd,
+		Hosted:      opts.hosted,
+	})
 	if err != nil {
 		logrus.WithError(err).Error("failed to obtain managed build clusters")
 	}
@@ -127,19 +192,68 @@ func onboard() {
 			osdClusters = append(buildClusters.Osd, opts.clusterName)
 		}
 	}
+
 	for _, cluster := range clusters {
 		opts.clusterName = cluster
 		steps := []func(options) error{
-			func(o options) error { return updateJobs(o, osdClusters) },
-			func(o options) error { return updateClusterBuildFarmDir(o, hostedClusters) },
-			func(o options) error { return updateCiSecretBootstrap(o, osdClusters) },
-			updateSecretGenerator,
-			updateSanitizeProwJobs,
-			updateSyncRoverGroups,
-			updateProwPluginConfig,
+			func(o options) error {
+				return jobs.UpdateJobs(jobs.Options{
+					ClusterName: o.clusterName,
+					ReleaseRepo: o.releaseRepo,
+					Unmanaged:   o.unmanaged,
+				}, osdClusters)
+			},
+			func(o options) error {
+				return buildclusterdir.UpdateClusterBuildFarmDir(buildclusterdir.Options{
+					ClusterName: o.clusterName,
+					ReleaseRepo: o.releaseRepo,
+					Update:      o.update,
+				}, hostedClusters)
+			},
+			func(o options) error {
+				return cisecretbootstrap.UpdateCiSecretBootstrap(cisecretbootstrap.Options{
+					ClusterName:              o.clusterName,
+					ReleaseRepo:              o.releaseRepo,
+					UseTokenFileInKubeconfig: o.useTokenFileInKubeconfig,
+					Unmanaged:                o.unmanaged,
+				}, osdClusters)
+			},
+			func(o options) error {
+				return cisecretgenerator.UpdateSecretGenerator(cisecretgenerator.Options{
+					ClusterName: o.clusterName,
+					ReleaseRepo: o.releaseRepo,
+					Unmanaged:   o.unmanaged,
+				})
+			},
+			func(o options) error {
+				return sanitizeprowjob.UpdateSanitizeProwJobs(sanitizeprowjob.Options{
+					ClusterName: o.clusterName,
+					ReleaseRepo: o.releaseRepo,
+				})
+			},
+			func(o options) error {
+				return syncrovergroup.UpdateSyncRoverGroups(syncrovergroup.Options{
+					ClusterName: o.clusterName,
+					ReleaseRepo: o.releaseRepo,
+				})
+			},
+			func(o options) error {
+				return prowplugin.UpdateProwPluginConfig(prowplugin.Options{
+					ClusterName: o.clusterName,
+					ReleaseRepo: o.releaseRepo,
+				})
+			},
 		}
 		if !opts.update {
-			steps = append(steps, updateBuildClusters)
+			steps = append(steps, func(o options) error {
+				return buildclusters.UpdateBuildClusters(buildclusters.Options{
+					ClusterName: o.clusterName,
+					ReleaseRepo: o.releaseRepo,
+					Unmanaged:   o.unmanaged,
+					OSD:         o.osd,
+					Hosted:      o.hosted,
+				})
+			})
 		}
 		for _, step := range steps {
 			if err := step(opts); err != nil {
@@ -157,77 +271,6 @@ func onboard() {
 	}
 }
 
-func validateOptions(o options) []error {
-	var errs []error
-	if !o.update && o.clusterName == "" {
-		errs = append(errs, errors.New("--cluster-name must be provided"))
-	} else {
-		for _, char := range o.clusterName {
-			if unicode.IsSpace(char) {
-				errs = append(errs, errors.New("--cluster-name must not contain whitespace"))
-				break
-			}
-		}
-	}
-	if o.releaseRepo == "" {
-		// If the release repo is missing, further checks won't be possible
-		errs = append(errs, errors.New("--release-repo must be provided"))
-	} else {
-		if o.createPR {
-			// make sure the release repo is on the master branch and clean
-			if err := os.Chdir(o.releaseRepo); err != nil {
-				errs = append(errs, err)
-			} else {
-				branch, err := exec.Command("git", "rev-parse", "--symbolic-full-name", "--abbrev-ref", "HEAD").Output()
-				if err != nil {
-					errs = append(errs, err)
-				} else if master != strings.TrimSpace(string(branch)) {
-					errs = append(errs, errors.New("--release-repo is not currently on master branch"))
-				} else {
-					hasChanges, err := bumper.HasChanges()
-					if err != nil {
-						errs = append(errs, err)
-					}
-					if hasChanges {
-						errs = append(errs, errors.New("--release-repo has local changes"))
-					}
-				}
-			}
-		}
-
-		if o.update {
-			if o.clusterName != "" {
-				buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)
-				if _, err := os.Stat(buildDir); os.IsNotExist(err) {
-					errs = append(errs, fmt.Errorf("build farm directory: %s does not exist. Must exist to perform update", o.clusterName))
-				}
-			}
-		} else {
-			if o.clusterName != "" {
-				buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)
-				if _, err := os.Stat(buildDir); !os.IsNotExist(err) {
-					errs = append(errs, fmt.Errorf("build farm directory: %s already exists", o.clusterName))
-				}
-			}
-		}
-	}
-	if err := o.GitAuthorOptions.Validate(); err != nil {
-		errs = append(errs, err)
-	}
-	if err := o.PRCreationOptions.Validate(true); err != nil {
-		errs = append(errs, err)
-	}
-	return errs
-}
-
-func repoMetadata() *api.Metadata {
-	return &api.Metadata{
-		Org:    "openshift",
-		Repo:   "release",
-		Branch: "master",
-	}
-}
-
 func submitPR(o options) error {
 	if err := o.PRCreationOptions.Finalize(); err != nil {
 		logrus.WithError(err).Fatal("failed to finalize PR creation options")
@@ -240,7 +283,7 @@ func submitPR(o options) error {
 		return err
 	}
 	title := fmt.Sprintf("Initialize Build Cluster %s", o.clusterName)
-	metadata := repoMetadata()
+	metadata := clustermgmtonboard.RepoMetadata()
 	if err := o.PRCreationOptions.UpsertPR(o.releaseRepo,
 		metadata.Org,
 		metadata.Repo,
@@ -254,57 +297,5 @@ func submitPR(o options) error {
 	if err := exec.Command("git", "remote", "rm", "bumper-fork-remote").Run(); err != nil {
 		return err
 	}
-	return exec.Command("git", "checkout", master).Run()
-}
-
-func updateClusterBuildFarmDir(o options, hostedClusters []string) error {
-	buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)
-	if o.update {
-		logrus.Infof("Updating build dir: %s", buildDir)
-	} else {
-		logrus.Infof("creating build dir: %s", buildDir)
-		if err := os.MkdirAll(buildDir, 0777); err != nil {
-			return fmt.Errorf("failed to create base directory for cluster: %w", err)
-		}
-	}
-
-	config_dirs := []string{
-		"common",
-		"common_except_app.ci",
-	}
-
-	hostedClustersSet := sets.New[string](hostedClusters...)
-	if !hostedClustersSet.Has(o.clusterName) {
-		config_dirs = append(config_dirs, "common_except_hosted")
-	}
-
-	for _, item := range config_dirs {
-		target := fmt.Sprintf("../%s", item)
-		source := filepath.Join(buildDir, item)
-		if o.update {
-			if err := os.RemoveAll(source); err != nil {
-				return fmt.Errorf("failed to remove symlink %s, error: %w", source, err)
-			}
-		}
-		if err := os.Symlink(target, source); err != nil {
-			return fmt.Errorf("failed to symlink %s to ../%s", item, item)
-		}
-	}
-	return nil
-}
-
-func buildFarmDirFor(releaseRepo, clusterName string) string {
-	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName)
-}
-
-func serviceAccountKubeconfigPath(serviceAccount, clusterName string) string {
-	return serviceAccountFile(serviceAccount, clusterName, config)
-}
-
-func serviceAccountTokenFile(serviceAccount, clusterName string) string {
-	return serviceAccountFile(serviceAccount, clusterName, "token.txt")
-}
-
-func serviceAccountFile(serviceAccount, clusterName, fileType string) string {
-	return fmt.Sprintf("sa.%s.%s.%s", serviceAccount, clusterName, fileType)
+	return exec.Command("git", "checkout", clustermgmtonboard.Master).Run()
 }

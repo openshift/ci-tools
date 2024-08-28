@@ -1,4 +1,4 @@
-package onboard
+package cisecretbootstrap
 
 import (
 	"errors"
@@ -13,17 +13,17 @@ import (
 func TestUpdateSecret(t *testing.T) {
 	testCases := []struct {
 		name string
-		options
-		secretGenerator func(options) secretbootstrap.SecretConfig
+		Options
+		secretGenerator func(Options) secretbootstrap.SecretConfig
 		config          secretbootstrap.Config
 		expectedConfig  secretbootstrap.Config
 	}{
 		{
 			name: "secret does not exist",
-			options: options{
-				clusterName: "newCluster",
+			Options: Options{
+				ClusterName: "newCluster",
 			},
-			secretGenerator: func(o options) secretbootstrap.SecretConfig {
+			secretGenerator: func(o Options) secretbootstrap.SecretConfig {
 				return secretbootstrap.SecretConfig{
 					From: map[string]secretbootstrap.ItemContext{"item": {Item: "item-a"}},
 					To:   []secretbootstrap.SecretContext{{Cluster: "newCluster", Name: "secret-a"}},
@@ -52,10 +52,10 @@ func TestUpdateSecret(t *testing.T) {
 		},
 		{
 			name: "secret exists",
-			options: options{
-				clusterName: "existingCluster",
+			Options: Options{
+				ClusterName: "existingCluster",
 			},
-			secretGenerator: func(o options) secretbootstrap.SecretConfig {
+			secretGenerator: func(o Options) secretbootstrap.SecretConfig {
 				return secretbootstrap.SecretConfig{
 					From: map[string]secretbootstrap.ItemContext{"item": {Item: "item-a"}},
 					To:   []secretbootstrap.SecretContext{{Cluster: "existingCluster", Name: "secret-a"}},
@@ -97,7 +97,7 @@ func TestUpdateSecret(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := updateSecret(tc.secretGenerator)(&tc.config, tc.options); err != nil {
+			if err := updateSecret(tc.secretGenerator)(&tc.config, tc.Options); err != nil {
 				t.Fatalf("received error: %v", err)
 			}
 			if diff := cmp.Diff(tc.expectedConfig, tc.config); diff != "" {

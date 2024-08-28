@@ -1,4 +1,4 @@
-package onboard
+package sanitizeprowjob
 
 import (
 	"os"
@@ -10,13 +10,19 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
 	"github.com/openshift/ci-tools/pkg/dispatcher"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
 )
 
-func updateSanitizeProwJobs(o options) error {
+type Options struct {
+	ClusterName string
+	ReleaseRepo string
+}
+
+func UpdateSanitizeProwJobs(o Options) error {
 	logrus.Info("Updating sanitize-prow-jobs config")
-	filename := filepath.Join(o.releaseRepo, "core-services", "sanitize-prow-jobs", "_config.yaml")
+	filename := filepath.Join(o.ReleaseRepo, "core-services", "sanitize-prow-jobs", "_config.yaml")
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return err
@@ -25,7 +31,7 @@ func updateSanitizeProwJobs(o options) error {
 	if err = yaml.Unmarshal(data, &c); err != nil {
 		return err
 	}
-	updateSanitizeProwJobsConfig(&c, o.clusterName)
+	updateSanitizeProwJobsConfig(&c, o.ClusterName)
 	rawYaml, err := yaml.Marshal(c)
 	if err != nil {
 		return err
@@ -35,7 +41,7 @@ func updateSanitizeProwJobs(o options) error {
 
 func updateSanitizeProwJobsConfig(c *dispatcher.Config, clusterName string) {
 	appGroup := c.Groups[api.ClusterAPPCI]
-	metadata := repoMetadata()
+	metadata := onboard.RepoMetadata()
 	appGroup.Jobs = sets.List(sets.New[string](appGroup.Jobs...).
 		Insert(metadata.JobName(jobconfig.PresubmitPrefix, clusterName+"-dry")).
 		Insert(metadata.JobName(jobconfig.PostsubmitPrefix, clusterName+"-apply")).

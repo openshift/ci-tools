@@ -23,23 +23,13 @@ import (
 	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/prowplugin"
 	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/sanitizeprowjob"
 	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/syncrovergroup"
-	"github.com/openshift/ci-tools/pkg/api"
+	clustermgmtonboard "github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
 	"github.com/openshift/ci-tools/pkg/github/prcreation"
 )
 
 const (
-	githubLogin                = "openshift-bot"
-	githubTeam                 = "openshift/test-platform"
-	master                     = "master"
-	buildUFarm                 = "build_farm"
-	podScaler                  = "pod-scaler"
-	configUpdater              = "config-updater"
-	ciOperator                 = "ci-operator"
-	buildFarm                  = "build-farm"
-	githubLdapUserGroupCreator = "github-ldap-user-group-creator"
-	promotedImageGovernor      = "promoted-image-governor"
-	clusterDisplay             = "cluster-display"
-	ci                         = "ci"
+	githubLogin = "openshift-bot"
+	githubTeam  = "openshift/test-platform"
 )
 
 var (
@@ -237,7 +227,7 @@ func validateOptions(o options) []error {
 				branch, err := exec.Command("git", "rev-parse", "--symbolic-full-name", "--abbrev-ref", "HEAD").Output()
 				if err != nil {
 					errs = append(errs, err)
-				} else if master != strings.TrimSpace(string(branch)) {
+				} else if clustermgmtonboard.Master != strings.TrimSpace(string(branch)) {
 					errs = append(errs, errors.New("--release-repo is not currently on master branch"))
 				} else {
 					hasChanges, err := bumper.HasChanges()
@@ -276,14 +266,6 @@ func validateOptions(o options) []error {
 	return errs
 }
 
-func repoMetadata() *api.Metadata {
-	return &api.Metadata{
-		Org:    "openshift",
-		Repo:   "release",
-		Branch: "master",
-	}
-}
-
 func submitPR(o options) error {
 	if err := o.PRCreationOptions.Finalize(); err != nil {
 		logrus.WithError(err).Fatal("failed to finalize PR creation options")
@@ -296,7 +278,7 @@ func submitPR(o options) error {
 		return err
 	}
 	title := fmt.Sprintf("Initialize Build Cluster %s", o.clusterName)
-	metadata := repoMetadata()
+	metadata := clustermgmtonboard.RepoMetadata()
 	if err := o.PRCreationOptions.UpsertPR(o.releaseRepo,
 		metadata.Org,
 		metadata.Repo,
@@ -310,7 +292,7 @@ func submitPR(o options) error {
 	if err := exec.Command("git", "remote", "rm", "bumper-fork-remote").Run(); err != nil {
 		return err
 	}
-	return exec.Command("git", "checkout", master).Run()
+	return exec.Command("git", "checkout", clustermgmtonboard.Master).Run()
 }
 
 func updateClusterBuildFarmDir(o options, hostedClusters []string) error {
@@ -351,16 +333,4 @@ func updateClusterBuildFarmDir(o options, hostedClusters []string) error {
 
 func buildFarmDirFor(releaseRepo, clusterName string) string {
 	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName)
-}
-
-func serviceAccountKubeconfigPath(serviceAccount, clusterName string) string {
-	return serviceAccountFile(serviceAccount, clusterName, cisecretbootstrap.Config)
-}
-
-func serviceAccountTokenFile(serviceAccount, clusterName string) string {
-	return serviceAccountFile(serviceAccount, clusterName, "token.txt")
-}
-
-func serviceAccountFile(serviceAccount, clusterName, fileType string) string {
-	return fmt.Sprintf("sa.%s.%s.%s", serviceAccount, clusterName, fileType)
 }

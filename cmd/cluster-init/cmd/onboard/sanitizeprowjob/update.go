@@ -10,27 +10,15 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
 	"github.com/openshift/ci-tools/pkg/dispatcher"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
 )
-
-// TODO: the following types, consts and functions (till the --- mark) are duplicated and
-// have to be removed. They serve as a temporary workaround to make this package compile.
 
 type Options struct {
 	ClusterName string
 	ReleaseRepo string
 }
-
-func repoMetadata() *api.Metadata {
-	return &api.Metadata{
-		Org:    "openshift",
-		Repo:   "release",
-		Branch: "master",
-	}
-}
-
-// ---
 
 func UpdateSanitizeProwJobs(o Options) error {
 	logrus.Info("Updating sanitize-prow-jobs config")
@@ -53,7 +41,7 @@ func UpdateSanitizeProwJobs(o Options) error {
 
 func updateSanitizeProwJobsConfig(c *dispatcher.Config, clusterName string) {
 	appGroup := c.Groups[api.ClusterAPPCI]
-	metadata := repoMetadata()
+	metadata := onboard.RepoMetadata()
 	appGroup.Jobs = sets.List(sets.New[string](appGroup.Jobs...).
 		Insert(metadata.JobName(jobconfig.PresubmitPrefix, clusterName+"-dry")).
 		Insert(metadata.JobName(jobconfig.PostsubmitPrefix, clusterName+"-apply")).

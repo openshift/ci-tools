@@ -11,39 +11,21 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/yaml"
 
-	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/cisecretbootstrap"
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
 )
 
-// TODO: the following types, consts and functions (till the --- mark) are duplicated and
-// have to be removed. They serve as a temporary workaround to make this package compile.
+const (
+	serviceAccountWildcard = "$(service_account)"
+	clusterWildcard        = "$(cluster)"
+)
 
 type Options struct {
 	ClusterName string
 	ReleaseRepo string
 	Unmanaged   bool
 }
-
-func serviceAccountKubeconfigPath(serviceAccount, clusterName string) string {
-	return serviceAccountFile(serviceAccount, clusterName, cisecretbootstrap.Config)
-}
-
-func serviceAccountFile(serviceAccount, clusterName, fileType string) string {
-	return fmt.Sprintf("sa.%s.%s.%s", serviceAccount, clusterName, fileType)
-}
-
-const (
-	buildUFarm = "build_farm"
-	podScaler  = "pod-scaler"
-)
-
-// ---
-
-const (
-	serviceAccountWildcard = "$(service_account)"
-	clusterWildcard        = "$(cluster)"
-)
 
 // SecretGenConfig is used here as using secretgenerator.Config results in 'special' unmarshalling
 // where '$(*)' wildcards from the yaml are expanded in the output. Doing so for this purpose results in
@@ -124,14 +106,14 @@ func UpdateSecretGenerator(o Options) error {
 func updateSecretGeneratorConfig(o Options, c *SecretGenConfig) error {
 	filterByCluster := byParam("cluster", string(api.ClusterBuild01))
 
-	serviceAccountConfigPath := serviceAccountKubeconfigPath(serviceAccountWildcard, clusterWildcard)
-	if err := appendToSecretItem(o, c, byItemName(buildUFarm), filterByCluster, byFieldName(serviceAccountConfigPath)); err != nil {
+	serviceAccountConfigPath := onboard.ServiceAccountKubeconfigPath(serviceAccountWildcard, clusterWildcard)
+	if err := appendToSecretItem(o, c, byItemName(onboard.BuildUFarm), filterByCluster, byFieldName(serviceAccountConfigPath)); err != nil {
 		return err
 	}
 
 	token := fmt.Sprintf("token_%s_%s_reg_auth_value.txt", serviceAccountWildcard, clusterWildcard)
 	filterByFieldName, filterBySA := byFieldName(token), byParam("service_account", "image-puller")
-	if err := appendToSecretItem(o, c, byItemName(buildUFarm), filterByCluster, filterByFieldName, filterBySA); err != nil {
+	if err := appendToSecretItem(o, c, byItemName(onboard.BuildUFarm), filterByCluster, filterByFieldName, filterBySA); err != nil {
 		return err
 	}
 
@@ -140,7 +122,7 @@ func updateSecretGeneratorConfig(o Options, c *SecretGenConfig) error {
 	}
 
 	if !o.Unmanaged {
-		if err := appendToSecretItem(o, c, byItemName(podScaler), filterByCluster, byFieldName(serviceAccountConfigPath)); err != nil {
+		if err := appendToSecretItem(o, c, byItemName(onboard.PodScaler), filterByCluster, byFieldName(serviceAccountConfigPath)); err != nil {
 			return err
 		}
 	}

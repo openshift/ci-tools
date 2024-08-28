@@ -1,4 +1,4 @@
-package onboard
+package jobs
 
 import (
 	"fmt"
@@ -13,9 +13,41 @@ import (
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 
+	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/cisecretbootstrap"
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
 )
+
+// TODO: the following types, consts and functions (till the --- mark) are duplicated and
+// have to be removed. They serve as a temporary workaround to make this package compile.
+
+type Options struct {
+	ClusterName string
+	ReleaseRepo string
+	Unmanaged   bool
+}
+
+const (
+	configUpdater = "config-updater"
+)
+
+func repoMetadata() *api.Metadata {
+	return &api.Metadata{
+		Org:    "openshift",
+		Repo:   "release",
+		Branch: "master",
+	}
+}
+
+func serviceAccountKubeconfigPath(serviceAccount, clusterName string) string {
+	return serviceAccountFile(serviceAccount, clusterName, cisecretbootstrap.Config)
+}
+
+func serviceAccountFile(serviceAccount, clusterName, fileType string) string {
+	return fmt.Sprintf("sa.%s.%s.%s", serviceAccount, clusterName, fileType)
+}
+
+// ---
 
 const (
 	latestImage                      = api.ServiceDomainAPPCIRegistry + "/ci/applyconfig:latest"
@@ -24,26 +56,26 @@ const (
 	generator    jobconfig.Generator = "cluster-init"
 )
 
-func updateJobs(o options, osdClusters []string) error {
-	logrus.Infof("generating: presubmits, postsubmits, and periodics for %s", o.clusterName)
+func UpdateJobs(o Options, osdClusters []string) error {
+	logrus.Infof("generating: presubmits, postsubmits, and periodics for %s", o.ClusterName)
 	osdClustersSet := sets.NewString(osdClusters...)
 	config := prowconfig.JobConfig{
 		PresubmitsStatic: map[string][]prowconfig.Presubmit{
-			"openshift/release": {generatePresubmit(o.clusterName, osdClustersSet.Has(o.clusterName), o.unmanaged)},
+			"openshift/release": {generatePresubmit(o.ClusterName, osdClustersSet.Has(o.ClusterName), o.Unmanaged)},
 		},
 		PostsubmitsStatic: map[string][]prowconfig.Postsubmit{
-			"openshift/release": {generatePostsubmit(o.clusterName, osdClustersSet.Has(o.clusterName), o.unmanaged)},
+			"openshift/release": {generatePostsubmit(o.ClusterName, osdClustersSet.Has(o.ClusterName), o.Unmanaged)},
 		},
-		Periodics: []prowconfig.Periodic{generatePeriodic(o.clusterName, osdClustersSet.Has(o.clusterName), o.unmanaged)},
+		Periodics: []prowconfig.Periodic{generatePeriodic(o.ClusterName, osdClustersSet.Has(o.ClusterName), o.Unmanaged)},
 	}
 	metadata := repoMetadata()
-	jobsDir := filepath.Join(o.releaseRepo, "ci-operator", "jobs")
+	jobsDir := filepath.Join(o.ReleaseRepo, "ci-operator", "jobs")
 	return jobconfig.WriteToDir(jobsDir,
 		metadata.Org,
 		metadata.Repo,
 		&config,
 		generator,
-		map[string]string{jobconfig.LabelBuildFarm: o.clusterName})
+		map[string]string{jobconfig.LabelBuildFarm: o.ClusterName})
 }
 
 func generatePeriodic(clusterName string, osd bool, unmanaged bool) prowconfig.Periodic {

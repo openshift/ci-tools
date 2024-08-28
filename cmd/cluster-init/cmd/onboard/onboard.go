@@ -19,6 +19,7 @@ import (
 	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/buildclusters"
 	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/cisecretbootstrap"
 	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/cisecretgenerator"
+	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/jobs"
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/github/prcreation"
 )
@@ -140,7 +141,13 @@ func onboard() {
 	for _, cluster := range clusters {
 		opts.clusterName = cluster
 		steps := []func(options) error{
-			func(o options) error { return updateJobs(o, osdClusters) },
+			func(o options) error {
+				return jobs.UpdateJobs(jobs.Options{
+					ClusterName: o.clusterName,
+					ReleaseRepo: o.releaseRepo,
+					Unmanaged:   o.unmanaged,
+				}, osdClusters)
+			},
 			func(o options) error { return updateClusterBuildFarmDir(o, hostedClusters) },
 			func(o options) error {
 				return cisecretbootstrap.UpdateCiSecretBootstrap(cisecretbootstrap.Options{

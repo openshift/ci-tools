@@ -6,16 +6,15 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"unicode"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/prow/cmd/generic-autobumper/bumper"
 
+	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/buildclusterdir"
 	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/buildclusters"
 	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/cisecretbootstrap"
 	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/cisecretgenerator"
@@ -141,7 +140,13 @@ func onboard() {
 					Unmanaged:   o.unmanaged,
 				}, osdClusters)
 			},
-			func(o options) error { return updateClusterBuildFarmDir(o, hostedClusters) },
+			func(o options) error {
+				return buildclusterdir.UpdateClusterBuildFarmDir(buildclusterdir.Options{
+					ClusterName: o.clusterName,
+					ReleaseRepo: o.releaseRepo,
+					Update:      o.update,
+				}, hostedClusters)
+			},
 			func(o options) error {
 				return cisecretbootstrap.UpdateCiSecretBootstrap(cisecretbootstrap.Options{
 					ClusterName:              o.clusterName,
@@ -243,14 +248,14 @@ func validateOptions(o options) []error {
 
 		if o.update {
 			if o.clusterName != "" {
-				buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)
+				buildDir := clustermgmtonboard.BuildFarmDirFor(o.releaseRepo, o.clusterName)
 				if _, err := os.Stat(buildDir); os.IsNotExist(err) {
 					errs = append(errs, fmt.Errorf("build farm directory: %s does not exist. Must exist to perform update", o.clusterName))
 				}
 			}
 		} else {
 			if o.clusterName != "" {
-				buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)
+				buildDir := clustermgmtonboard.BuildFarmDirFor(o.releaseRepo, o.clusterName)
 				if _, err := os.Stat(buildDir); !os.IsNotExist(err) {
 					errs = append(errs, fmt.Errorf("build farm directory: %s already exists", o.clusterName))
 				}
@@ -293,44 +298,4 @@ func submitPR(o options) error {
 		return err
 	}
 	return exec.Command("git", "checkout", clustermgmtonboard.Master).Run()
-}
-
-func updateClusterBuildFarmDir(o options, hostedClusters []string) error {
-	buildDir := buildFarmDirFor(o.releaseRepo, o.clusterName)
-	if o.update {
-		logrus.Infof("Updating build dir: %s", buildDir)
-	} else {
-		logrus.Infof("creating build dir: %s", buildDir)
-		if err := os.MkdirAll(buildDir, 0777); err != nil {
-			return fmt.Errorf("failed to create base directory for cluster: %w", err)
-		}
-	}
-
-	config_dirs := []string{
-		"common",
-		"common_except_app.ci",
-	}
-
-	hostedClustersSet := sets.New[string](hostedClusters...)
-	if !hostedClustersSet.Has(o.clusterName) {
-		config_dirs = append(config_dirs, "common_except_hosted")
-	}
-
-	for _, item := range config_dirs {
-		target := fmt.Sprintf("../%s", item)
-		source := filepath.Join(buildDir, item)
-		if o.update {
-			if err := os.RemoveAll(source); err != nil {
-				return fmt.Errorf("failed to remove symlink %s, error: %w", source, err)
-			}
-		}
-		if err := os.Symlink(target, source); err != nil {
-			return fmt.Errorf("failed to symlink %s to ../%s", item, item)
-		}
-	}
-	return nil
-}
-
-func buildFarmDirFor(releaseRepo, clusterName string) string {
-	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName)
 }

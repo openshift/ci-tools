@@ -2,6 +2,7 @@ package onboard
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
@@ -37,4 +38,8 @@ func RepoMetadata() *api.Metadata {
 		Repo:   "release",
 		Branch: "master",
 	}
+}
+
+func BuildFarmDirFor(releaseRepo, clusterName string) string {
+	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName)
 }

@@ -1324,6 +1324,7 @@ const (
 	ClusterProfileVSphereDis2           ClusterProfile = "vsphere-dis-2"
 	ClusterProfileVSphereMultizone2     ClusterProfile = "vsphere-multizone-2"
 	ClusterProfileVSphereConnected2     ClusterProfile = "vsphere-connected-2"
+	ClusterProfileVSpherePerfScaleDual  ClusterProfile = "vsphere-perfscale-dual"
 	ClusterProfileVSphereElastic        ClusterProfile = "vsphere-elastic"
 	ClusterProfileKubevirt              ClusterProfile = "kubevirt"
 	ClusterProfileAWSCPaaS              ClusterProfile = "aws-cpaas"
@@ -1468,6 +1469,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileVSphereDis2,
 		ClusterProfileVSphereMultizone2,
 		ClusterProfileVSphereConnected2,
+		ClusterProfileVSpherePerfScaleDual,
 		ClusterProfileVSphereElastic,
 
 		ClusterProfileOCIAssisted,
@@ -1666,7 +1668,8 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileVSphereMultizone2,
 		ClusterProfileVSphereDis2,
 		ClusterProfileVSphereElastic,
-		ClusterProfileVSphereConnected2:
+		ClusterProfileVSphereConnected2,
+		ClusterProfileVSpherePerfScaleDual:
 
 		return "vsphere"
 	case ClusterProfileOvirt:
@@ -1910,6 +1913,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "vsphere-multizone-2-quota-slice"
 	case ClusterProfileVSphereConnected2:
 		return "vsphere-connected-2-quota-slice"
+	case ClusterProfileVSpherePerfScaleDual:
+		return "vsphere-perfscale-dual-quota-slice"
 	case ClusterProfileVSphereElastic:
 		return "vsphere-elastic-quota-slice"
 	case ClusterProfileKubevirt:
@@ -2006,6 +2011,7 @@ func (p ClusterProfile) Secret() string {
 		ClusterProfileVSphereDis2,
 		ClusterProfileVSphereMultizone2,
 		ClusterProfileVSphereConnected2,
+		ClusterProfileVSpherePerfScaleDual,
 		ClusterProfileVSphereElastic:
 
 		name = p.ClusterType()

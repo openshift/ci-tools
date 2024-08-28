@@ -1,4 +1,4 @@
-package onboard
+package syncrovergroup
 
 import (
 	"fmt"
@@ -11,8 +11,13 @@ import (
 	"github.com/openshift/ci-tools/pkg/group"
 )
 
-func updateSyncRoverGroups(o options) error {
-	filename := filepath.Join(o.releaseRepo, "core-services", "sync-rover-groups", "_config.yaml")
+type Options struct {
+	ClusterName string
+	ReleaseRepo string
+}
+
+func UpdateSyncRoverGroups(o Options) error {
+	filename := filepath.Join(o.ReleaseRepo, "core-services", "sync-rover-groups", "_config.yaml")
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return err
@@ -24,7 +29,7 @@ func updateSyncRoverGroups(o options) error {
 	if c.ClusterGroups == nil {
 		return fmt.Errorf("`cluster_groups` is not defined in the sync-rover-groups' configuration")
 	}
-	c.ClusterGroups["build-farm"] = sets.List(sets.New[string](c.ClusterGroups["build-farm"]...).Insert(o.clusterName))
+	c.ClusterGroups["build-farm"] = sets.List(sets.New[string](c.ClusterGroups["build-farm"]...).Insert(o.ClusterName))
 	rawYaml, err := yaml.Marshal(c)
 	if err != nil {
 		return err

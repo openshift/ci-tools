@@ -22,6 +22,7 @@ import (
 	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/jobs"
 	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/prowplugin"
 	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/sanitizeprowjob"
+	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/syncrovergroup"
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/github/prcreation"
 )
@@ -172,7 +173,12 @@ func onboard() {
 					ReleaseRepo: o.releaseRepo,
 				})
 			},
-			updateSyncRoverGroups,
+			func(o options) error {
+				return syncrovergroup.UpdateSyncRoverGroups(syncrovergroup.Options{
+					ClusterName: o.clusterName,
+					ReleaseRepo: o.releaseRepo,
+				})
+			},
 			func(o options) error {
 				return prowplugin.UpdateProwPluginConfig(prowplugin.Options{
 					ClusterName: o.clusterName,

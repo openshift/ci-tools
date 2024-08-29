@@ -27,8 +27,7 @@
   				EnvFrom: nil,
   				Env:     nil,
   				Resources: v1.ResourceRequirements{
-- 					Limits: v1.ResourceList{},
-+ 					Limits: v1.ResourceList{s"memory": {i: resource.int64Amount{value: 400000000}, Format: "BinarySI"}},
+  					Limits: {},
   					Requests: v1.ResourceList{
   						s"cpu":    {i: {value: 8}, Format: "DecimalSI"},
 - 						s"memory": {i: resource.int64Amount{value: 100000000}, Format: "BinarySI"},
@@ -45,8 +44,7 @@
   				EnvFrom: nil,
   				Env:     nil,
   				Resources: v1.ResourceRequirements{
-- 					Limits: v1.ResourceList{},
-+ 					Limits: v1.ResourceList{s"memory": {i: resource.int64Amount{value: 400000000}, Format: "BinarySI"}},
+  					Limits: {},
   					Requests: v1.ResourceList{
 - 						s"cpu":    {i: resource.int64Amount{value: 2}, Format: "DecimalSI"},
 + 						s"cpu":    {i: resource.int64Amount{value: 5}, s: "5", Format: "DecimalSI"},
@@ -64,8 +62,7 @@
   				EnvFrom: nil,
   				Env:     nil,
   				Resources: v1.ResourceRequirements{
-- 					Limits: v1.ResourceList{},
-+ 					Limits: v1.ResourceList{s"memory": {i: resource.int64Amount{value: 400000000}, Format: "BinarySI"}},
+  					Limits: {},
   					Requests: v1.ResourceList{
   						s"cpu":    {i: {value: 10}, Format: "DecimalSI"},
 - 						s"memory": {i: resource.int64Amount{value: 100}, Format: "BinarySI"},

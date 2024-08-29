@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	fuzz "github.com/google/gofuzz"
 
 	corev1 "k8s.io/api/core/v1"
@@ -114,9 +113,10 @@ func TestMatches(t *testing.T) {
 }
 
 type fakeStep struct {
-	requires []StepLink
-	creates  []StepLink
-	name     string
+	requires  []StepLink
+	creates   []StepLink
+	name      string
+	multiArch bool
 }
 
 func (f *fakeStep) Inputs() (InputDefinition, error) { return nil, nil }
@@ -130,6 +130,9 @@ func (f *fakeStep) Description() string                 { return f.name }
 func (f *fakeStep) Objects() []ctrlruntimeclient.Object { return nil }
 
 func (f *fakeStep) Provides() ParameterMap { return nil }
+
+func (f *fakeStep) IsMultiArch() bool           { return f.multiArch }
+func (f *fakeStep) SetMultiArch(multiArch bool) { f.multiArch = multiArch }
 
 func TestBuildGraph(t *testing.T) {
 	root := &fakeStep{
@@ -260,6 +263,8 @@ func (*fakeSortStep) Description() string                 { return "" }
 func (*fakeSortStep) Provides() ParameterMap              { return nil }
 func (f *fakeSortStep) Validate() error                   { return f.err }
 func (*fakeSortStep) Objects() []ctrlruntimeclient.Object { return nil }
+func (f *fakeSortStep) IsMultiArch() bool                 { return false }
+func (f *fakeSortStep) SetMultiArch(multiArch bool)       {}
 
 func (f *fakeSortStep) Creates() []StepLink {
 	return []StepLink{fakeSortLink{name: f.name}}
@@ -501,67 +506,118 @@ func TestCIOperatorStepWithDependenciesSerializationRoundTrips(t *testing.T) {
 	}
 }
 
-type fakeMultiArchStep struct {
-	fakeStep
-	multiArch bool
-}
-
-func (f *fakeMultiArchStep) IsMultiArch() bool { return f.multiArch }
-func (f *fakeMultiArchStep) SetMultiArch(multiArch bool) {
-	f.multiArch = multiArch
-}
-
 func TestResolveMultiArch(t *testing.T) {
 	testCases := []struct {
 		name     string
-		steps    []Step
-		expected []Step
+		nodes    []*StepNode
+		expected []*StepNode
 	}{
-
 		{
-			name: "propagation of multi-arch property",
-			steps: []Step{
-				&fakeMultiArchStep{fakeStep: fakeStep{name: "step1"}},
-				&fakeMultiArchStep{
-					fakeStep:  fakeStep{name: "step2", requires: []StepLink{InternalImageLink("step1")}},
-					multiArch: true,
+			name: "no multi-arch, no change",
+			nodes: []*StepNode{
+				{
+					Step: &fakeStep{name: "step1"},
+					Children: []*StepNode{
+						{Step: &fakeStep{name: "step2", multiArch: false}},
+						{Step: &fakeStep{name: "step3", multiArch: false}},
+						{Step: &fakeStep{name: "step4", multiArch: false}},
+					},
 				},
-				&fakeStep{name: "step3"},
 			},
-			expected: []Step{
-				&fakeMultiArchStep{fakeStep: fakeStep{name: "step1"}, multiArch: true},
-				&fakeMultiArchStep{fakeStep: fakeStep{name: "step2", requires: []StepLink{InternalImageLink("step1")}}, multiArch: true},
-				&fakeStep{name: "step3"},
+			expected: []*StepNode{
+				{
+					Step: &fakeStep{name: "step1", multiArch: false},
+					Children: []*StepNode{
+						{Step: &fakeStep{name: "step2", multiArch: false}},
+						{Step: &fakeStep{name: "step3", multiArch: false}},
+						{Step: &fakeStep{name: "step4", multiArch: false}}},
+				},
 			},
 		},
-
 		{
-			name: "multiple propagation of multi-arch property",
-			steps: []Step{
-				&fakeMultiArchStep{fakeStep: fakeStep{name: "step1"}},
-				&fakeStep{name: "step2"},
-				&fakeStep{name: "step3"},
-				&fakeMultiArchStep{fakeStep: fakeStep{name: "step4"}},
-				&fakeMultiArchStep{fakeStep: fakeStep{name: "step5", requires: []StepLink{InternalImageLink("step4")}}, multiArch: true},
-				&fakeMultiArchStep{fakeStep: fakeStep{name: "step6", requires: []StepLink{InternalImageLink("step1")}}, multiArch: true},
-				&fakeMultiArchStep{fakeStep: fakeStep{name: "step7", requires: []StepLink{InternalImageLink("step1")}}, multiArch: true},
+			name: "one or more children are multi-arch",
+			nodes: []*StepNode{
+				{
+					Step: &fakeStep{name: "step1"},
+					Children: []*StepNode{
+						{Step: &fakeStep{name: "step2", multiArch: true}},
+						{Step: &fakeStep{name: "step3", multiArch: false}},
+						{Step: &fakeStep{name: "step4", multiArch: true}},
+					},
+				},
 			},
-			expected: []Step{
-				&fakeMultiArchStep{fakeStep: fakeStep{name: "step1"}, multiArch: true},
-				&fakeStep{name: "step2"},
-				&fakeStep{name: "step3"},
-				&fakeMultiArchStep{fakeStep: fakeStep{name: "step4"}, multiArch: true},
-				&fakeMultiArchStep{fakeStep: fakeStep{name: "step5", requires: []StepLink{InternalImageLink("step4")}}, multiArch: true},
-				&fakeMultiArchStep{fakeStep: fakeStep{name: "step6", requires: []StepLink{InternalImageLink("step1")}}, multiArch: true},
-				&fakeMultiArchStep{fakeStep: fakeStep{name: "step7", requires: []StepLink{InternalImageLink("step1")}}, multiArch: true},
+			expected: []*StepNode{
+				{
+					Step: &fakeStep{name: "step1", multiArch: true},
+					Children: []*StepNode{
+						{Step: &fakeStep{name: "step2", multiArch: true}},
+						{Step: &fakeStep{name: "step3", multiArch: false}},
+						{Step: &fakeStep{name: "step4", multiArch: true}}},
+					MultiArchReasons: []string{"step2", "step4"},
+				},
+			},
+		},
+		{
+			name: "multiple nodes - one or more children are multi-arch",
+			nodes: []*StepNode{
+				{
+					Step: &fakeStep{name: "step10"},
+					Children: []*StepNode{
+						{Step: &fakeStep{name: "step1", multiArch: false}},
+						{Step: &fakeStep{name: "step2", multiArch: false}},
+					},
+				},
+				{
+					Step: &fakeStep{name: "step20"},
+					Children: []*StepNode{
+						{Step: &fakeStep{name: "step1", multiArch: true}},
+						{Step: &fakeStep{name: "step2", multiArch: false}},
+						{Step: &fakeStep{name: "step3", multiArch: true}},
+					},
+				},
+				{
+					Step: &fakeStep{name: "step30"},
+					Children: []*StepNode{
+						{Step: &fakeStep{name: "step1", multiArch: true}},
+						{Step: &fakeStep{name: "step2", multiArch: false}},
+						{Step: &fakeStep{name: "step3", multiArch: false}},
+					},
+				},
+			},
+			expected: []*StepNode{
+				{
+					Step: &fakeStep{name: "step10"},
+					Children: []*StepNode{
+						{Step: &fakeStep{name: "step1", multiArch: false}},
+						{Step: &fakeStep{name: "step2", multiArch: false}},
+					},
+				},
+				{
+					Step: &fakeStep{name: "step20", multiArch: true},
+					Children: []*StepNode{
+						{Step: &fakeStep{name: "step1", multiArch: true}},
+						{Step: &fakeStep{name: "step2", multiArch: false}},
+						{Step: &fakeStep{name: "step3", multiArch: true}},
+					},
+					MultiArchReasons: []string{"step1", "step3"},
+				},
+				{
+					Step: &fakeStep{name: "step30", multiArch: true},
+					Children: []*StepNode{
+						{Step: &fakeStep{name: "step1", multiArch: true}},
+						{Step: &fakeStep{name: "step2", multiArch: false}},
+						{Step: &fakeStep{name: "step3", multiArch: false}},
+					},
+					MultiArchReasons: []string{"step1"},
+				},
 			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := ResolveMultiArch(tc.steps)
-			if diff := cmp.Diff(got, tc.expected, cmpopts.IgnoreUnexported(fakeStep{}, fakeMultiArchStep{})); diff != "" {
+			ResolveMultiArch(tc.nodes)
+			if diff := cmp.Diff(tc.expected, tc.nodes, cmp.AllowUnexported(fakeStep{})); diff != "" {
 				t.Fatal(diff)
 			}
 		})

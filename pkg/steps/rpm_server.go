@@ -410,6 +410,9 @@ func (s *rpmServerStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
+func (s *rpmServerStep) IsMultiArch() bool           { return false }
+func (s *rpmServerStep) SetMultiArch(multiArch bool) {}
+
 func admittedHostForRoute(client ctrlruntimeclient.Client, namespace, name string, timeout time.Duration) (string, error) {
 	var repoHost string
 	if err := wait.PollImmediate(time.Second, timeout, func() (bool, error) {

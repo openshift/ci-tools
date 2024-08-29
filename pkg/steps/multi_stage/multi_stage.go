@@ -89,20 +89,21 @@ type multiStageTestStep struct {
 	profile          api.ClusterProfile
 	config           *api.ReleaseBuildConfiguration
 	// params exposes getters for variables created by other steps
-	params          api.Parameters
-	env             api.TestEnvironment
-	client          kubernetes.PodClient
-	jobSpec         *api.JobSpec
-	observers       []api.Observer
-	pre, test, post []api.LiteralTestStep
-	subLock         *sync.Mutex
-	subTests        []*junit.TestCase
-	subSteps        []api.CIOperatorStepDetailInfo
-	flags           stepFlag
-	leases          []api.StepLease
-	clusterClaim    *api.ClusterClaim
-	vpnConf         *vpnConf
-	cancelObservers func(context.CancelFunc)
+	params           api.Parameters
+	env              api.TestEnvironment
+	client           kubernetes.PodClient
+	jobSpec          *api.JobSpec
+	observers        []api.Observer
+	pre, test, post  []api.LiteralTestStep
+	subLock          *sync.Mutex
+	subTests         []*junit.TestCase
+	subSteps         []api.CIOperatorStepDetailInfo
+	flags            stepFlag
+	leases           []api.StepLease
+	clusterClaim     *api.ClusterClaim
+	vpnConf          *vpnConf
+	cancelObservers  func(context.CancelFunc)
+	nodeArchitecture api.NodeArchitecture
 }
 
 func MultiStageTestStep(
@@ -157,6 +158,7 @@ func newMultiStageTestStep(
 		clusterClaim:     testConfig.ClusterClaim,
 		subLock:          &sync.Mutex{},
 		cancelObservers:  cancelObservers,
+		nodeArchitecture: testConfig.NodeArchitecture,
 	}
 }
 
@@ -407,6 +409,14 @@ func (s *multiStageTestStep) cancelObserversContext(cancel context.CancelFunc) {
 		cancel()
 	}
 }
+
+func (s *multiStageTestStep) IsMultiArch() bool {
+	// If the node architecture is not set, we assume it's AMD64
+	// and if the architecture is anything else, we assume that it's multi-arch
+	return s.nodeArchitecture != "" && s.nodeArchitecture != api.NodeArchitectureAMD64
+}
+
+func (s *multiStageTestStep) SetMultiArch(multiArch bool) {}
 
 // secretsForCensoring returns the secret volumes and mounts that will allow sidecar to censor
 // their content from uploads. This is the full secret list in our namespace, except for the ones

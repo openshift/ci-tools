@@ -161,6 +161,11 @@ func (s *podStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
+func (s *podStep) IsMultiArch() bool {
+	return s.config.NodeArchitecture != "" && s.config.NodeArchitecture != api.NodeArchitectureAMD64
+}
+func (s *podStep) SetMultiArch(multiArch bool) {}
+
 func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, client kubernetes.PodClient, jobSpec *api.JobSpec, nodeName string) api.Step {
 	return PodStep(
 		"test",

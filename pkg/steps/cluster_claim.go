@@ -305,6 +305,9 @@ func (s *clusterClaimStep) saveObjectAsArtifact(ctx context.Context, key ctrlrun
 	return api.SaveArtifact(s.censor, path, data)
 }
 
+func (s *clusterClaimStep) IsMultiArch() bool           { return false }
+func (s *clusterClaimStep) SetMultiArch(multiArch bool) {}
+
 func ClusterClaimStep(as string, clusterClaim *api.ClusterClaim, hiveClient ctrlruntimeclient.WithWatch, client loggingclient.LoggingClient, jobSpec *api.JobSpec, wrapped api.Step, censor *secrets.DynamicCensor) api.Step {
 	return &clusterClaimStep{
 		as:           as,

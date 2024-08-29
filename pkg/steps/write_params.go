@@ -75,6 +75,9 @@ func (s *writeParametersStep) Objects() []ctrlruntimeclient.Object {
 	return nil
 }
 
+func (s *writeParametersStep) IsMultiArch() bool           { return false }
+func (s *writeParametersStep) SetMultiArch(multiArch bool) {}
+
 func WriteParametersStep(params *api.DeferredParameters, paramFile string) api.Step {
 	return &writeParametersStep{
 		params:    params,

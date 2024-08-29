@@ -43,8 +43,9 @@ func (f *fakeStep) Creates() []api.StepLink           { return f.creates }
 func (f *fakeStep) Name() string                      { return f.name }
 func (f *fakeStep) Description() string               { return f.name }
 func (*fakeStep) Objects() []ctrlruntimeclient.Object { return nil }
-
-func (f *fakeStep) Provides() api.ParameterMap { return nil }
+func (f *fakeStep) Provides() api.ParameterMap        { return nil }
+func (f *fakeStep) IsMultiArch() bool                 { return false }
+func (f *fakeStep) SetMultiArch(multiArch bool)       {}
 
 func TestStepsRun(t *testing.T) {
 	testCases := []struct {

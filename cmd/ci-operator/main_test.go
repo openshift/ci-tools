@@ -1046,6 +1046,9 @@ func (*fakeValidationStep) Provides() api.ParameterMap           { return nil }
 func (f *fakeValidationStep) Validate() error                    { return f.err }
 func (*fakeValidationStep) Objects() []ctrlruntimeclient.Object  { return nil }
 
+func (*fakeValidationStep) IsMultiArch() bool { return false }
+func (*fakeValidationStep) SetMultiArch(bool) {}
+
 func TestValidateSteps(t *testing.T) {
 	valid0 := fakeValidationStep{name: "valid0"}
 	valid1 := fakeValidationStep{name: "valid1"}

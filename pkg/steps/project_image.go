@@ -190,6 +190,7 @@ func (s *projectDirectoryImageBuildStep) Objects() []ctrlruntimeclient.Object {
 }
 
 func (s *projectDirectoryImageBuildStep) IsMultiArch() bool {
+	// fmt.Printf("config: %s -- %v\n", s.config.To, s.config.MultiArch)
 	return s.config.MultiArch
 }
 

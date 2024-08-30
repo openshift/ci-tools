@@ -17,8 +17,9 @@ type Options struct {
 	ReleaseRepo string
 }
 
-func UpdateProwPluginConfig(o Options) error {
-	logrus.Info("Updating Prow plugin config")
+func UpdateProwPluginConfig(log *logrus.Entry, o Options) error {
+	log = log.WithField("step", "prow-plugin")
+	log.Info("Updating Prow plugin config")
 	filename := filepath.Join(o.ReleaseRepo, "core-services", "prow", "02_config", "_plugins.yaml")
 	data, err := os.ReadFile(filename)
 	if err != nil {

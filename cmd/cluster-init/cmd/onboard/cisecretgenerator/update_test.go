@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
@@ -212,7 +213,8 @@ func TestUpdateSecretGeneratorConfig(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := updateSecretGeneratorConfig(tc.Options, &tc.input); err != nil {
+			if err := updateSecretGeneratorConfig(logrus.NewEntry(logrus.StandardLogger()),
+				tc.Options, &tc.input); err != nil {
 				t.Fatalf("error received while updating secret generator config: %v", err)
 			}
 			if diff := cmp.Diff(tc.expected, tc.input); diff != "" {

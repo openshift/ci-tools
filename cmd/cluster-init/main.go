@@ -36,7 +36,7 @@ func newRootCmd(ctx context.Context, log *logrus.Entry) (*cobra.Command, error) 
 		},
 	}
 
-	cmd.AddCommand(onboardcmd.NewOnboard())
+	cmd.AddCommand(onboardcmd.NewOnboard(ctx, log))
 	provisionCmd, err := provision.NewProvision(ctx, log)
 	if err != nil {
 		return nil, err

@@ -31,8 +31,9 @@ type Options struct {
 	Unmanaged   bool
 }
 
-func UpdateJobs(o Options, osdClusters []string) error {
-	logrus.Infof("generating: presubmits, postsubmits, and periodics for %s", o.ClusterName)
+func UpdateJobs(log *logrus.Entry, o Options, osdClusters []string) error {
+	log = log.WithField("step", "jobs")
+	log.Infof("generating: presubmits, postsubmits, and periodics for %s", o.ClusterName)
 	osdClustersSet := sets.NewString(osdClusters...)
 	config := prowconfig.JobConfig{
 		PresubmitsStatic: map[string][]prowconfig.Presubmit{

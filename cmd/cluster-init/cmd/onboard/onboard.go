@@ -1,10 +1,13 @@
 package onboard
 
 import (
+	"context"
+
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
-func NewOnboard() *cobra.Command {
+func NewOnboard(ctx context.Context, log *logrus.Entry) *cobra.Command {
 	cmd := cobra.Command{
 		Use:   "onboard",
 		Short: "Onboard a cluster",
@@ -13,6 +16,6 @@ func NewOnboard() *cobra.Command {
 			return cmd.Help()
 		},
 	}
-	cmd.AddCommand(newConfigCmd())
+	cmd.AddCommand(newConfigCmd(ctx, log))
 	return &cmd
 }

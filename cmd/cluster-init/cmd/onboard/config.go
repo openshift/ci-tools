@@ -1,6 +1,7 @@
 package onboard
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -121,7 +122,7 @@ func validateOptions(o options) []error {
 	return errs
 }
 
-func newConfigCmd() *cobra.Command {
+func newConfigCmd(_ context.Context, log *logrus.Entry) *cobra.Command {
 	cmd := cobra.Command{
 		Use:   "config [generate|apply]",
 		Short: "Onboard a cluster",
@@ -133,7 +134,7 @@ func newConfigCmd() *cobra.Command {
 
 			switch args[0] {
 			case "generate":
-				generateConfig()
+				generateConfig(log)
 			case "apply":
 				return errors.New("onboard config apply not implemented yet")
 			default:
@@ -164,7 +165,9 @@ func newConfigCmd() *cobra.Command {
 	return &cmd
 }
 
-func generateConfig() error {
+func generateConfig(log *logrus.Entry) error {
+	log = log.WithField("stage", "onboard config")
+
 	validationErrors := validateOptions(opts)
 	if len(validationErrors) > 0 {
 		var errorMessage string
@@ -210,21 +213,21 @@ func generateConfig() error {
 		opts.clusterName = cluster
 		steps := []func(options) error{
 			func(o options) error {
-				return jobs.UpdateJobs(jobs.Options{
+				return jobs.UpdateJobs(log, jobs.Options{
 					ClusterName: o.clusterName,
 					ReleaseRepo: o.releaseRepo,
 					Unmanaged:   o.unmanaged,
 				}, osdClusters)
 			},
 			func(o options) error {
-				return buildclusterdir.UpdateClusterBuildFarmDir(buildclusterdir.Options{
+				return buildclusterdir.UpdateClusterBuildFarmDir(log, buildclusterdir.Options{
 					ClusterName: o.clusterName,
 					ReleaseRepo: o.releaseRepo,
 					Update:      o.update,
 				}, hostedClusters)
 			},
 			func(o options) error {
-				return cisecretbootstrap.UpdateCiSecretBootstrap(cisecretbootstrap.Options{
+				return cisecretbootstrap.UpdateCiSecretBootstrap(log, cisecretbootstrap.Options{
 					ClusterName:              o.clusterName,
 					ReleaseRepo:              o.releaseRepo,
 					UseTokenFileInKubeconfig: o.useTokenFileInKubeconfig,
@@ -232,14 +235,14 @@ func generateConfig() error {
 				}, osdClusters)
 			},
 			func(o options) error {
-				return cisecretgenerator.UpdateSecretGenerator(cisecretgenerator.Options{
+				return cisecretgenerator.UpdateSecretGenerator(log, cisecretgenerator.Options{
 					ClusterName: o.clusterName,
 					ReleaseRepo: o.releaseRepo,
 					Unmanaged:   o.unmanaged,
 				})
 			},
 			func(o options) error {
-				return sanitizeprowjob.UpdateSanitizeProwJobs(sanitizeprowjob.Options{
+				return sanitizeprowjob.UpdateSanitizeProwJobs(log, sanitizeprowjob.Options{
 					ClusterName: o.clusterName,
 					ReleaseRepo: o.releaseRepo,
 				})
@@ -251,7 +254,7 @@ func generateConfig() error {
 				})
 			},
 			func(o options) error {
-				return prowplugin.UpdateProwPluginConfig(prowplugin.Options{
+				return prowplugin.UpdateProwPluginConfig(log, prowplugin.Options{
 					ClusterName: o.clusterName,
 					ReleaseRepo: o.releaseRepo,
 				})
@@ -259,7 +262,7 @@ func generateConfig() error {
 		}
 		if !opts.update {
 			steps = append(steps, func(o options) error {
-				return buildclusters.UpdateBuildClusters(buildclusters.Options{
+				return buildclusters.UpdateBuildClusters(log, buildclusters.Options{
 					ClusterName: o.clusterName,
 					ReleaseRepo: o.releaseRepo,
 					Unmanaged:   o.unmanaged,
@@ -270,7 +273,7 @@ func generateConfig() error {
 		}
 		for _, step := range steps {
 			if err := step(opts); err != nil {
-				logrus.WithError(err).Error("failed to execute step")
+				log.WithError(err).Error("failed to execute step")
 				errorCount++
 			}
 		}

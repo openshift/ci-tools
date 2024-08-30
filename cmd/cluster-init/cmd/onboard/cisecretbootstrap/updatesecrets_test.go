@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/testhelper"
@@ -97,7 +98,8 @@ func TestUpdateSecret(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := updateSecret(tc.secretGenerator)(&tc.config, tc.Options); err != nil {
+			if err := updateSecret(tc.secretGenerator)(logrus.NewEntry(logrus.StandardLogger()),
+				&tc.config, tc.Options); err != nil {
 				t.Fatalf("received error: %v", err)
 			}
 			if diff := cmp.Diff(tc.expectedConfig, tc.config); diff != "" {

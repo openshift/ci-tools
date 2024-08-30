@@ -20,8 +20,9 @@ type Options struct {
 	ReleaseRepo string
 }
 
-func UpdateSanitizeProwJobs(o Options) error {
-	logrus.Info("Updating sanitize-prow-jobs config")
+func UpdateSanitizeProwJobs(log *logrus.Entry, o Options) error {
+	log = log.WithField("step", "sanitize-prowjob")
+	log.Info("Updating sanitize-prow-jobs config")
 	filename := filepath.Join(o.ReleaseRepo, "core-services", "sanitize-prow-jobs", "_config.yaml")
 	data, err := os.ReadFile(filename)
 	if err != nil {

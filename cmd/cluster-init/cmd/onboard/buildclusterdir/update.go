@@ -18,12 +18,13 @@ type Options struct {
 	Update      bool
 }
 
-func UpdateClusterBuildFarmDir(o Options, hostedClusters []string) error {
+func UpdateClusterBuildFarmDir(log *logrus.Entry, o Options, hostedClusters []string) error {
+	log = log.WithField("step", "build-cluster-dir")
 	buildDir := onboard.BuildFarmDirFor(o.ReleaseRepo, o.ClusterName)
 	if o.Update {
-		logrus.Infof("Updating build dir: %s", buildDir)
+		log.Infof("Updating build dir: %s", buildDir)
 	} else {
-		logrus.Infof("creating build dir: %s", buildDir)
+		log.Infof("creating build dir: %s", buildDir)
 		if err := os.MkdirAll(buildDir, 0777); err != nil {
 			return fmt.Errorf("failed to create base directory for cluster: %w", err)
 		}

@@ -3,29 +3,16 @@ package provision
 import (
 	"context"
 	"fmt"
-	"os"
-	"os/exec"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
+	"github.com/openshift/ci-tools/cmd/cluster-init/runtime"
 	"github.com/openshift/ci-tools/pkg/clustermgmt"
 	"github.com/openshift/ci-tools/pkg/clustermgmt/provision/ocp"
 )
 
-func buildCmd(ctx context.Context, program string, args ...string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, program, args...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd
-}
-
-func runCmd(cmd *exec.Cmd) error {
-	return cmd.Run()
-}
-
-func newProvisionOCP(ctx context.Context, log *logrus.Entry) *cobra.Command {
+func newProvisionOCP(ctx context.Context, log *logrus.Entry, opts *runtime.Options) *cobra.Command {
 	cmd := cobra.Command{
 		Use:   "ocp",
 		Short: "Provision an OCP Cluster",
@@ -35,11 +22,11 @@ The procedure consists of three steps:
 2. openshift-install create manifests
 3. openshift-install create cluster`,
 	}
-	cmd.AddCommand(newOCPCreate(ctx, log))
+	cmd.AddCommand(newOCPCreate(ctx, log, opts))
 	return &cmd
 }
 
-func newOCPCreate(ctx context.Context, log *logrus.Entry) *cobra.Command {
+func newOCPCreate(ctx context.Context, log *logrus.Entry, opts *runtime.Options) *cobra.Command {
 	cmd := cobra.Command{
 		Use:   "create [install-config|manifests|cluster]",
 		Short: "Create OCP assets",
@@ -56,11 +43,14 @@ func newOCPCreate(ctx context.Context, log *logrus.Entry) *cobra.Command {
 
 			switch args[0] {
 			case "install-config":
-				step = ocp.NewCreateInstallConfigStep(log, clusterInstallGetterFunc(opts.clusterInstall), buildCmd, runCmd)
+				step = ocp.NewCreateInstallConfigStep(log, runtime.ClusterInstallGetterFunc(opts.ClusterInstall),
+					runtime.BuildCmd, runtime.RunCmd)
 			case "manifests":
-				step = ocp.NewCreateManifestsStep(log, clusterInstallGetterFunc(opts.clusterInstall), buildCmd, runCmd)
+				step = ocp.NewCreateManifestsStep(log, runtime.ClusterInstallGetterFunc(opts.ClusterInstall),
+					runtime.BuildCmd, runtime.RunCmd)
 			case "cluster":
-				step = ocp.NewCreateClusterStep(log, clusterInstallGetterFunc(opts.clusterInstall), buildCmd, runCmd)
+				step = ocp.NewCreateClusterStep(log, runtime.ClusterInstallGetterFunc(opts.ClusterInstall),
+					runtime.BuildCmd, runtime.RunCmd)
 			default:
 				return fmt.Errorf("action %q is not supported", args[0])
 			}

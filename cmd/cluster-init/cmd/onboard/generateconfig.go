@@ -122,26 +122,13 @@ func validateOptions(o options) []error {
 	return errs
 }
 
-func newConfigCmd(_ context.Context, log *logrus.Entry) *cobra.Command {
+func newGenerateConfigCmd(_ context.Context, log *logrus.Entry) *cobra.Command {
 	cmd := cobra.Command{
-		Use:   "config [generate|apply]",
-		Short: "Onboard a cluster",
-		Long:  "Handle the onboarding procedure by generate the required yamls and secrets",
+		Use:   "generate",
+		Short: "Generate the configuration files for a new cluster",
+		Long:  "Generate the configuration files for a new cluster",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
-				return cmd.Help()
-			}
-
-			switch args[0] {
-			case "generate":
-				generateConfig(log)
-			case "apply":
-				return errors.New("onboard config apply not implemented yet")
-			default:
-				return fmt.Errorf("action %q is not supported", args[0])
-			}
-
-			return nil
+			return generateConfig(log)
 		},
 	}
 

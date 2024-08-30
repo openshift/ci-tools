@@ -13,8 +13,8 @@ import (
 type createClusterStep struct {
 	log               *logrus.Entry
 	getClusterInstall clustermgmt.ClusterInstallGetter
-	cmdBuilder        CmdBuilder
-	cmdRunner         CmdRunner
+	cmdBuilder        clustermgmt.CmdBuilder
+	cmdRunner         clustermgmt.CmdRunner
 }
 
 func (s *createClusterStep) Name() string {
@@ -41,7 +41,7 @@ func (s *createClusterStep) Run(ctx context.Context) error {
 }
 
 func NewCreateClusterStep(log *logrus.Entry, getClusterInstall clustermgmt.ClusterInstallGetter,
-	cmdBuilder CmdBuilder, cmdRunner CmdRunner) *createClusterStep {
+	cmdBuilder clustermgmt.CmdBuilder, cmdRunner clustermgmt.CmdRunner) *createClusterStep {
 	return &createClusterStep{
 		log:               log,
 		getClusterInstall: getClusterInstall,

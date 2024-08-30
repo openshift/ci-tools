@@ -10,6 +10,7 @@ import (
 
 	onboardcmd "github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard"
 	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/provision"
+	"github.com/openshift/ci-tools/cmd/cluster-init/runtime"
 )
 
 func main() {
@@ -27,6 +28,7 @@ func main() {
 }
 
 func newRootCmd(ctx context.Context, log *logrus.Entry) (*cobra.Command, error) {
+	opts := &runtime.Options{}
 	cmd := cobra.Command{
 		Use:   "cluster-init",
 		Short: "cluster-init manages a TP cluster lifecycle",
@@ -35,9 +37,9 @@ func newRootCmd(ctx context.Context, log *logrus.Entry) (*cobra.Command, error) 
 			return cmd.Help()
 		},
 	}
-
-	cmd.AddCommand(onboardcmd.NewOnboard(ctx, log))
-	provisionCmd, err := provision.NewProvision(ctx, log)
+	cmd.PersistentFlags().StringVar(&opts.ClusterInstall, "cluster-install", "", "Path to cluster-install.yaml")
+	cmd.AddCommand(onboardcmd.NewOnboard(ctx, log, opts))
+	provisionCmd, err := provision.NewProvision(ctx, log, opts)
 	if err != nil {
 		return nil, err
 	}

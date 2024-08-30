@@ -164,14 +164,14 @@ func newConfigCmd() *cobra.Command {
 	return &cmd
 }
 
-func generateConfig() {
+func generateConfig() error {
 	validationErrors := validateOptions(opts)
 	if len(validationErrors) > 0 {
 		var errorMessage string
 		for _, err := range validationErrors {
 			errorMessage += "\n" + err.Error()
 		}
-		logrus.Fatalf("validation errors: %v", errorMessage)
+		return fmt.Errorf("validation errors: %s", errorMessage)
 	}
 
 	// Each step in the process is allowed to fail independently so that the diffs for the others can still be generated
@@ -188,7 +188,7 @@ func generateConfig() {
 		Hosted:      opts.hosted,
 	})
 	if err != nil {
-		logrus.WithError(err).Error("failed to obtain managed build clusters")
+		return fmt.Errorf("load build cluster: %w", err)
 	}
 
 	if opts.clusterName == "" {
@@ -276,17 +276,19 @@ func generateConfig() {
 		}
 	}
 	if errorCount > 0 {
-		logrus.Fatalf("Due to the %d error(s) encountered a PR will not be generated. The resulting files can be PR'd manually", errorCount)
+		return fmt.Errorf("due to the %d error(s) encountered a PR will not be generated. The resulting files can be PR'd manually", errorCount)
 	} else if opts.createPR {
 		if err := submitPR(opts); err != nil {
-			logrus.WithError(err).Fatalf("couldn't commit changes")
+			return fmt.Errorf("submit PR: %w", err)
 		}
 	}
+
+	return nil
 }
 
 func submitPR(o options) error {
 	if err := o.PRCreationOptions.Finalize(); err != nil {
-		logrus.WithError(err).Fatal("failed to finalize PR creation options")
+		return fmt.Errorf("finalize PR: %w", err)
 	}
 	if err := os.Chdir(o.releaseRepo); err != nil {
 		return err

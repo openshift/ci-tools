@@ -20,6 +20,7 @@ import (
 
 	"github.com/robfig/cron/v3"
 	"github.com/sirupsen/logrus"
+	"github.com/slack-go/slack"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -46,6 +47,7 @@ const (
 	githubLogin    = "openshift-bot"
 	matchTitle     = "Automate prow job dispatcher"
 	upstreamBranch = "master"
+	listURL        = "https://github.com/openshift/release/pulls?q=is%3Apr+author%3Aopenshift-bot+prow+job+dispatcher+in%3Atitle+is%3Aopen"
 )
 
 type options struct {
@@ -69,6 +71,13 @@ type options struct {
 	bumper.GitAuthorOptions
 	dispatcher.PrometheusOptions
 	prcreation.PRCreationOptions
+
+	slackTokenPath string
+	opsChannelId   string
+}
+
+type slackClient interface {
+	PostMessage(channelID string, options ...slack.MsgOption) (string, string, error)
 }
 
 func gatherOptions() options {
@@ -90,6 +99,8 @@ func gatherOptions() options {
 	fs.Var(&o.enableClusters, "enable-cluster", "Enable this cluster. Does nothing if the cluster is enabled. Can be passed multiple times and must be disjoint with all --disable-cluster values.")
 	fs.Var(&o.disableClusters, "disable-cluster", "Disable this cluster. Does nothing if the cluster is disabled. Can be passed multiple times and must be disjoint with all --enable-cluster values.")
 	fs.StringVar(&o.defaultCluster, "default-cluster", "", "If passed, changes the default cluster to the specified value.")
+	fs.StringVar(&o.slackTokenPath, "slack-token-path", "", "Path to the file containing the Slack token to use.")
+	fs.StringVar(&o.opsChannelId, "ops-channel-id", "CHY2E1BL4", "Channel ID for #ops-testplatform")
 
 	o.GitAuthorOptions.AddFlags(fs)
 	o.PrometheusOptions.AddFlags(fs)
@@ -661,6 +672,8 @@ func cleanup(directory string) {
 	logrus.WithField("directory", directory).Info("Successfully removed directory")
 }
 
+// createPR creates PR with config changes and sanitizer changes, it causes app to exit in
+// case of failure to trigger re-run of logic
 func createPR(o options, config *dispatcher.Config, pjs map[string]string) {
 	targetDirWithRelease := filepath.Join(o.targetDir, "/release")
 	cleanup(targetDirWithRelease)
@@ -668,29 +681,40 @@ func createPR(o options, config *dispatcher.Config, pjs map[string]string) {
 
 	logrus.WithField("targetDir", o.targetDir).Info("Changing working directory ...")
 	if err := os.Chdir(o.targetDir); err != nil {
-		logrus.WithError(err).Error("failed to change to root dir")
-		return
+		logrus.WithError(err).Fatal("failed to change to root dir")
 	}
 
 	if err := gitCloneRelease(); err != nil {
-		logrus.WithError(err).Error("failed to clone release repository")
-		return
+		logrus.WithError(err).Fatal("failed to clone release repository")
 	}
 
 	if err := dispatcher.SaveConfig(config, filepath.Join(targetDirWithRelease, "/core-services/sanitize-prow-jobs/_config.yaml")); err != nil {
-		logrus.WithError(err).Errorf("failed to save config file to %s", o.configPath)
-		return
+		logrus.WithError(err).WithField("configPath", o.configPath).Fatal("failed to save config file")
 	}
 
 	if err := sanitizer.DeterminizeJobs(filepath.Join(targetDirWithRelease, "/ci-operator/jobs"), config, pjs); err != nil {
-		logrus.WithError(err).Error("failed to determinize")
-		return
+		logrus.WithError(err).Fatal("failed to determinize")
 	}
 
 	title := fmt.Sprintf("%s at %s", matchTitle, time.Now().Format(time.RFC1123))
 	if err := o.PRCreationOptions.UpsertPR(targetDirWithRelease, githubOrg, githubRepo, upstreamBranch, title, prcreation.PrAssignee(o.assign), prcreation.MatchTitle(matchTitle), prcreation.AdditionalLabels([]string{rehearse.RehearsalsAckLabel})); err != nil {
-		logrus.WithError(err).Error("failed to upsert PR")
+		logrus.WithError(err).Fatal("failed to upsert PR")
 	}
+}
+
+func sendSlackMessage(slackClient slackClient, channelId string) error {
+	blockMessage := slack.MsgOptionBlocks(
+		slack.NewSectionBlock(
+			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("*Scheduling PR to merge*\n\n<@dptp-triage> Prow jobs have been rescheduled. To ensure the proper functioning of legacy tooling, please prioritize merging PRs from this *<%s|list>*.", listURL), false, false),
+			nil,
+			nil,
+		),
+	)
+	_, _, err := slackClient.PostMessage(channelId, blockMessage)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func runAsDaemon(o options, promVolumes *prometheusVolumes) {
@@ -700,6 +724,14 @@ func runAsDaemon(o options, promVolumes *prometheusVolumes) {
 
 	if o.jobsStoragePath == "" {
 		logrus.Fatal("mandatory argument --cluster-config-path wasn't set")
+	}
+
+	if o.slackTokenPath == "" {
+		logrus.Fatal("mandatory argument --slack-token-path wasn't set")
+	}
+
+	if err := secret.Add(o.slackTokenPath); err != nil {
+		logrus.WithError(err).Fatal("failed to start secrets agent")
 	}
 
 	sigs := make(chan os.Signal, 1)
@@ -717,6 +749,7 @@ func runAsDaemon(o options, promVolumes *prometheusVolumes) {
 
 	{
 		var mu sync.Mutex
+		slackClient := slack.New(string(secret.GetSecret(o.slackTokenPath)))
 
 		dispatchDeltaWrapper = func() {
 			mu.Lock()
@@ -795,6 +828,9 @@ func runAsDaemon(o options, promVolumes *prometheusVolumes) {
 
 			if o.createPR {
 				createPR(o, config, pjs)
+				if err := sendSlackMessage(slackClient, o.opsChannelId); err != nil {
+					logrus.WithError(err).Error("Failed to post message in ops channel")
+				}
 			}
 		}
 	}

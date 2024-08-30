@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/slack-go/slack"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -598,6 +599,53 @@ func TestDispatchMissingJobs(t *testing.T) {
 			}
 			if !reflect.DeepEqual(tt.expectedPjs, tt.args.pjs) {
 				t.Errorf("Maps are not equal. Expected: %v, Got: %v", tt.expectedPjs, tt.args.pjs)
+			}
+		})
+	}
+}
+
+type fakeSlackClient struct {
+}
+
+func (c fakeSlackClient) PostMessage(channelID string, options ...slack.MsgOption) (string, string, error) {
+	if channelID == "channelId" {
+		return "", "", nil
+	}
+	return "", "", fmt.Errorf("failed to send message to channel %s", channelID)
+}
+
+func TestSendSlackMessage(t *testing.T) {
+	type args struct {
+		slackClient slackClient
+		channelId   string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{
+			name: "success",
+			args: args{
+				slackClient: &fakeSlackClient{},
+				channelId:   "channelId",
+			},
+			wantErr: false,
+		},
+		{
+			name: "failure",
+			args: args{
+				slackClient: &fakeSlackClient{},
+				channelId:   "wrong-channelId",
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := sendSlackMessage(tt.args.slackClient, tt.args.channelId); (err != nil) != tt.wantErr {
+				t.Errorf("sendSlackMessage() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}

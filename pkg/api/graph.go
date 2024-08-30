@@ -68,6 +68,7 @@ func setMultiArchForChildren(node *StepNode) {
 			node.MultiArchReasons = append(node.MultiArchReasons, child.Step.Name())
 			node.Step.SetMultiArch(true)
 		}
+		setMultiArchForChildren(child)
 	}
 }
 

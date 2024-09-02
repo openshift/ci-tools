@@ -7,9 +7,9 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-tools/pkg/clustermgmt"
-	"github.com/sirupsen/logrus"
 )
 
 func buildCmdFunc(t *testing.T, wantArgs []string) func(ctx context.Context, program string, args ...string) *exec.Cmd {

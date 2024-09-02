@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/sirupsen/logrus"
-
 	"github.com/spf13/cobra"
+
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
 	onboardcmd "github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard"

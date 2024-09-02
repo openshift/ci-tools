@@ -2,6 +2,8 @@ package jobrunaggregatoranalyzer
 
 import (
 	"context"
+	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"os"
 	"testing"
@@ -16,6 +18,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
+	"github.com/openshift/ci-tools/pkg/junit"
 )
 
 const (
@@ -41,6 +44,47 @@ func TestAnalyzer(t *testing.T) {
 	// kicked off.
 	payloadStartTime := time.Date(2023, 6, 18, 12, 0, 0, 0, time.UTC)
 
+	junitXML := `<testsuites>
+<testsuite tests="1" failures="0" time="1983" name="BackendDisruption">
+</testsuite>
+</testsuites>`
+	historicalBackendDisruptions := jobrunaggregatorlib.BackendDisruptionList{
+		BackendDisruptions: map[string]*jobrunaggregatorlib.BackendDisruption{
+			"cache-kube-api-new-connections": {
+				Name:              "cache-kube-api-new-connections",
+				ConnectionType:    "New",
+				DisruptedDuration: v1.Duration{Duration: time.Second * 1},
+			},
+			"cache-kube-api-reused-connections": {
+				Name:              "cache-kube-api-reused-connections",
+				ConnectionType:    "Reused",
+				DisruptedDuration: v1.Duration{Duration: time.Second * 1},
+			},
+		},
+	}
+
+	backendDisruptions := jobrunaggregatorlib.BackendDisruptionList{
+		BackendDisruptions: map[string]*jobrunaggregatorlib.BackendDisruption{
+			"cache-kube-api-new-connections": {
+				Name:              "cache-kube-api-new-connections",
+				ConnectionType:    "New",
+				DisruptedDuration: v1.Duration{Duration: time.Second * 2},
+			},
+			"cache-kube-api-reused-connections": {
+				Name:              "cache-kube-api-reused-connections",
+				ConnectionType:    "Reused",
+				DisruptedDuration: v1.Duration{Duration: time.Second * 2},
+			},
+		},
+	}
+	backendDisruptionJSON, err := json.Marshal(backendDisruptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	openshiftTestFiles := map[string]string{
+		"0": string(backendDisruptionJSON),
+	}
+
 	tests := []struct {
 		name              string
 		jobRunInfos       []jobrunaggregatorapi.JobRunInfo
@@ -49,18 +93,34 @@ func TestAnalyzer(t *testing.T) {
 		{
 			name: "no jobs finished",
 			jobRunInfos: []jobrunaggregatorapi.JobRunInfo{
-				buildFakeJobRunInfo(mockCtrl, "1001", payloadStartTime),
-				buildFakeJobRunInfo(mockCtrl, "1002", payloadStartTime),
-				buildFakeJobRunInfo(mockCtrl, "1003", payloadStartTime),
-				buildFakeJobRunInfo(mockCtrl, "1004", payloadStartTime),
-				buildFakeJobRunInfo(mockCtrl, "1005", payloadStartTime),
-				buildFakeJobRunInfo(mockCtrl, "1006", payloadStartTime),
-				buildFakeJobRunInfo(mockCtrl, "1007", payloadStartTime),
-				buildFakeJobRunInfo(mockCtrl, "1008", payloadStartTime),
-				buildFakeJobRunInfo(mockCtrl, "1009", payloadStartTime),
-				buildFakeJobRunInfo(mockCtrl, "1010", payloadStartTime),
+				buildFakeJobRunInfo(mockCtrl, "1001", payloadStartTime, false, "", map[string]string{}),
+				buildFakeJobRunInfo(mockCtrl, "1002", payloadStartTime, false, "", map[string]string{}),
+				buildFakeJobRunInfo(mockCtrl, "1003", payloadStartTime, false, "", map[string]string{}),
+				buildFakeJobRunInfo(mockCtrl, "1004", payloadStartTime, false, "", map[string]string{}),
+				buildFakeJobRunInfo(mockCtrl, "1005", payloadStartTime, false, "", map[string]string{}),
+				buildFakeJobRunInfo(mockCtrl, "1006", payloadStartTime, false, "", map[string]string{}),
+				buildFakeJobRunInfo(mockCtrl, "1007", payloadStartTime, false, "", map[string]string{}),
+				buildFakeJobRunInfo(mockCtrl, "1008", payloadStartTime, false, "", map[string]string{}),
+				buildFakeJobRunInfo(mockCtrl, "1009", payloadStartTime, false, "", map[string]string{}),
+				buildFakeJobRunInfo(mockCtrl, "1010", payloadStartTime, false, "", map[string]string{}),
 			},
 			expectErrContains: "found 10 unfinished related jobRuns",
+		},
+		{
+			name: "all jobs finished",
+			jobRunInfos: []jobrunaggregatorapi.JobRunInfo{
+				buildFakeJobRunInfo(mockCtrl, "1001", payloadStartTime, true, junitXML, openshiftTestFiles),
+				buildFakeJobRunInfo(mockCtrl, "1002", payloadStartTime, true, junitXML, openshiftTestFiles),
+				buildFakeJobRunInfo(mockCtrl, "1003", payloadStartTime, true, junitXML, openshiftTestFiles),
+				buildFakeJobRunInfo(mockCtrl, "1004", payloadStartTime, true, junitXML, openshiftTestFiles),
+				buildFakeJobRunInfo(mockCtrl, "1005", payloadStartTime, true, junitXML, openshiftTestFiles),
+				buildFakeJobRunInfo(mockCtrl, "1006", payloadStartTime, true, junitXML, openshiftTestFiles),
+				buildFakeJobRunInfo(mockCtrl, "1007", payloadStartTime, true, junitXML, openshiftTestFiles),
+				buildFakeJobRunInfo(mockCtrl, "1008", payloadStartTime, true, junitXML, openshiftTestFiles),
+				buildFakeJobRunInfo(mockCtrl, "1009", payloadStartTime, true, junitXML, openshiftTestFiles),
+				buildFakeJobRunInfo(mockCtrl, "1010", payloadStartTime, true, junitXML, openshiftTestFiles),
+			},
+			expectErrContains: "",
 		},
 	}
 	for _, tc := range tests {
@@ -86,8 +146,16 @@ func TestAnalyzer(t *testing.T) {
 				"2000",
 				gomock.Any()).Return(tc.jobRunInfos, nil).Times(1)
 
+			var jobRunIDs []string
+			jobRowWithVariants := &jobrunaggregatorapi.JobRowWithVariants{
+				Topology: "ha",
+			}
+
 			for _, ri := range tc.jobRunInfos {
 				mockGCSClient.EXPECT().ReadJobRunFromGCS(gomock.Any(), gomock.Any(), testJobName, ri.GetJobRunID(), gomock.Any()).Return(ri, nil)
+
+				mockDataClient.EXPECT().GetJobVariants(gomock.Any(), gomock.Any()).Return(jobRowWithVariants, nil).AnyTimes()
+				jobRunIDs = append(jobRunIDs, ri.GetJobRunID())
 			}
 
 			analyzer := JobRunAggregatorAnalyzerOptions{
@@ -99,7 +167,8 @@ func TestAnalyzer(t *testing.T) {
 					mockGCSClient,
 					"bucketname",
 				),
-				passFailCalculator:  nil,
+				passFailCalculator:  NewMockPassFailCalculator(jobRunIDs, historicalBackendDisruptions),
+				ciDataClient:        mockDataClient,
 				explicitGCSPrefix:   "",
 				jobName:             testJobName,
 				payloadTag:          testPayloadtag,
@@ -122,24 +191,85 @@ func TestAnalyzer(t *testing.T) {
 
 func buildFakeJobRunInfo(mockCtrl *gomock.Controller,
 	jobRunID string,
-	payloadStartTime time.Time) jobrunaggregatorapi.JobRunInfo {
+	payloadStartTime time.Time,
+	finished bool,
+	junitXML string,
+	openshiftTestFiles map[string]string) jobrunaggregatorapi.JobRunInfo {
 
 	prowJob := &prowjobv1.ProwJob{
 		ObjectMeta: v1.ObjectMeta{CreationTimestamp: v1.NewTime(payloadStartTime)},
 	}
-	/*
-		if finished {
-			completionTime := v1.NewTime(payloadStartTime.Add(3 * time.Hour))
-			prowJob.Status.CompletionTime = &completionTime
-		}
-	*/
-
 	mockJRI := jobrunaggregatorapi.NewMockJobRunInfo(mockCtrl)
-	// pass finished in when we're ready, damn linters...
-	mockJRI.EXPECT().IsFinished(gomock.Any()).Return(false).AnyTimes()
+	if finished {
+		completionTime := v1.NewTime(payloadStartTime.Add(3 * time.Hour))
+		prowJob.Status.CompletionTime = &completionTime
+
+		mockJRI.EXPECT().IsFinished(gomock.Any()).Return(true).AnyTimes()
+		mockJRI.EXPECT().GetJobRunFromGCS(gomock.Any()).Return(nil).AnyTimes()
+		mockJRI.EXPECT().GetOpenShiftTestsFilesWithPrefix(gomock.Any(), gomock.Any()).Return(openshiftTestFiles, nil).AnyTimes()
+
+		suites := &junit.TestSuites{}
+		err := xml.Unmarshal([]byte(junitXML), suites)
+		mockJRI.EXPECT().GetCombinedJUnitTestSuites(gomock.Any()).Return(suites, err).AnyTimes()
+
+		mockJRI.EXPECT().GetGCSArtifactURL().Return("").AnyTimes()
+
+	} else {
+		// pass finished in when we're ready, damn linters...
+		mockJRI.EXPECT().IsFinished(gomock.Any()).Return(false).AnyTimes()
+	}
 	mockJRI.EXPECT().GetJobName().Return(testJobName).AnyTimes()
 	mockJRI.EXPECT().GetJobRunID().Return(jobRunID).AnyTimes()
 	mockJRI.EXPECT().GetHumanURL().Return("unused").AnyTimes()
 	mockJRI.EXPECT().GetProwJob(gomock.Any()).Return(prowJob, nil).AnyTimes()
 	return mockJRI
+}
+
+type mockPassFailCalculator struct {
+	jobRunIDs                    []string
+	historicalBackendDisruptions jobrunaggregatorlib.BackendDisruptionList
+}
+
+func (m mockPassFailCalculator) CheckFailed(ctx context.Context, jobName string, suiteNames []string, testCaseDetails *jobrunaggregatorlib.TestCaseDetails) (status testCaseStatus, message string, err error) {
+	return "", "", nil
+}
+func (m mockPassFailCalculator) CheckDisruptionMeanWithinFiveStandardDeviations(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend, masterNodesUpdated string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error) {
+	return []string{}, m.jobRunIDs, "", "", nil
+}
+func (m mockPassFailCalculator) CheckDisruptionMeanWithinOneStandardDeviation(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend, masterNodesUpdated string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error) {
+	return []string{}, m.jobRunIDs, "", "", nil
+}
+func (m mockPassFailCalculator) CheckPercentileDisruption(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult,
+	backend string, percentile int, fixedGraceSeconds int, masterNodesUpdated string) (failureJobRunIDs []string, successJobRunIDs []string, status testCaseStatus, message string, err error) {
+	failureJobRunIDs = []string{}
+	successJobRunIDs = []string{}
+	historicalDisruptions, ok := m.historicalBackendDisruptions.BackendDisruptions[backend]
+	if !ok {
+		return m.jobRunIDs, []string{}, "", "", nil
+	}
+	for _, runID := range m.jobRunIDs {
+		result, ok := jobRunIDToAvailabilityResultForBackend[runID]
+		if !ok {
+			failureJobRunIDs = append(failureJobRunIDs, runID)
+			continue
+		}
+		maxDisruption := time.Duration(fixedGraceSeconds)*time.Second + historicalDisruptions.DisruptedDuration.Duration
+		if time.Duration(result.SecondsUnavailable)*time.Second > maxDisruption {
+			failureJobRunIDs = append(failureJobRunIDs, runID)
+			continue
+		}
+		successJobRunIDs = append(successJobRunIDs, runID)
+	}
+	status = "passed"
+	if len(failureJobRunIDs) > 0 {
+		status = "failed"
+	}
+	return failureJobRunIDs, successJobRunIDs, status, "", nil
+}
+
+func NewMockPassFailCalculator(jobRunIDs []string, historicalBackendDisruptions jobrunaggregatorlib.BackendDisruptionList) mockPassFailCalculator {
+	return mockPassFailCalculator{
+		jobRunIDs:                    jobRunIDs,
+		historicalBackendDisruptions: historicalBackendDisruptions,
+	}
 }

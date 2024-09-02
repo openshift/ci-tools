@@ -44,45 +44,27 @@ func TestAnalyzer(t *testing.T) {
 	// kicked off.
 	payloadStartTime := time.Date(2023, 6, 18, 12, 0, 0, 0, time.UTC)
 
-	junitXML := `<testsuites>
-<testsuite tests="1" failures="0" time="1983" name="BackendDisruption">
-</testsuite>
-</testsuites>`
-	historicalBackendDisruptions := jobrunaggregatorlib.BackendDisruptionList{
+	historicalDisruption := jobrunaggregatorlib.BackendDisruptionList{
 		BackendDisruptions: map[string]*jobrunaggregatorlib.BackendDisruption{
 			"cache-kube-api-new-connections": {
 				Name:              "cache-kube-api-new-connections",
 				ConnectionType:    "New",
 				DisruptedDuration: v1.Duration{Duration: time.Second * 1},
-			},
-			"cache-kube-api-reused-connections": {
-				Name:              "cache-kube-api-reused-connections",
-				ConnectionType:    "Reused",
-				DisruptedDuration: v1.Duration{Duration: time.Second * 1},
-			},
-		},
-	}
-
-	backendDisruptions := jobrunaggregatorlib.BackendDisruptionList{
-		BackendDisruptions: map[string]*jobrunaggregatorlib.BackendDisruption{
-			"cache-kube-api-new-connections": {
-				Name:              "cache-kube-api-new-connections",
-				ConnectionType:    "New",
-				DisruptedDuration: v1.Duration{Duration: time.Second * 2},
+				LoadBalancerType:  "external",
 			},
 			"cache-kube-api-reused-connections": {
 				Name:              "cache-kube-api-reused-connections",
 				ConnectionType:    "Reused",
 				DisruptedDuration: v1.Duration{Duration: time.Second * 2},
+				LoadBalancerType:  "external",
+			},
+			"openshift-api-http2-localhost-reused-connections": {
+				Name:              "openshift-api-http2-localhost-reused-connections",
+				ConnectionType:    "Reused",
+				DisruptedDuration: v1.Duration{Duration: time.Second * 2},
+				LoadBalancerType:  "localhost",
 			},
 		},
-	}
-	backendDisruptionJSON, err := json.Marshal(backendDisruptions)
-	if err != nil {
-		t.Fatal(err)
-	}
-	openshiftTestFiles := map[string]string{
-		"0": string(backendDisruptionJSON),
 	}
 
 	tests := []struct {
@@ -108,18 +90,68 @@ func TestAnalyzer(t *testing.T) {
 		},
 		{
 			name: "all jobs finished",
-			jobRunInfos: []jobrunaggregatorapi.JobRunInfo{
-				buildFakeJobRunInfo(mockCtrl, "1001", payloadStartTime, true, junitXML, openshiftTestFiles),
-				buildFakeJobRunInfo(mockCtrl, "1002", payloadStartTime, true, junitXML, openshiftTestFiles),
-				buildFakeJobRunInfo(mockCtrl, "1003", payloadStartTime, true, junitXML, openshiftTestFiles),
-				buildFakeJobRunInfo(mockCtrl, "1004", payloadStartTime, true, junitXML, openshiftTestFiles),
-				buildFakeJobRunInfo(mockCtrl, "1005", payloadStartTime, true, junitXML, openshiftTestFiles),
-				buildFakeJobRunInfo(mockCtrl, "1006", payloadStartTime, true, junitXML, openshiftTestFiles),
-				buildFakeJobRunInfo(mockCtrl, "1007", payloadStartTime, true, junitXML, openshiftTestFiles),
-				buildFakeJobRunInfo(mockCtrl, "1008", payloadStartTime, true, junitXML, openshiftTestFiles),
-				buildFakeJobRunInfo(mockCtrl, "1009", payloadStartTime, true, junitXML, openshiftTestFiles),
-				buildFakeJobRunInfo(mockCtrl, "1010", payloadStartTime, true, junitXML, openshiftTestFiles),
-			},
+			jobRunInfos: buildJobRunInfos(mockCtrl, payloadStartTime, jobrunaggregatorlib.BackendDisruptionList{
+				BackendDisruptions: map[string]*jobrunaggregatorlib.BackendDisruption{
+					"cache-kube-api-new-connections": {
+						Name:              "cache-kube-api-new-connections",
+						ConnectionType:    "New",
+						DisruptedDuration: v1.Duration{Duration: time.Second * 2},
+						LoadBalancerType:  "external",
+					},
+					"cache-kube-api-reused-connections": {
+						Name:              "cache-kube-api-reused-connections",
+						ConnectionType:    "Reused",
+						DisruptedDuration: v1.Duration{Duration: time.Second * 2},
+						LoadBalancerType:  "external",
+					},
+				},
+			}),
+			expectErrContains: "",
+		},
+		{
+			name: "too much disruption",
+			jobRunInfos: buildJobRunInfos(mockCtrl, payloadStartTime, jobrunaggregatorlib.BackendDisruptionList{
+				BackendDisruptions: map[string]*jobrunaggregatorlib.BackendDisruption{
+					"cache-kube-api-new-connections": {
+						Name:              "cache-kube-api-new-connections",
+						ConnectionType:    "New",
+						DisruptedDuration: v1.Duration{Duration: time.Second * 2},
+						LoadBalancerType:  "external",
+					},
+					"cache-kube-api-reused-connections": {
+						Name:              "cache-kube-api-reused-connections",
+						ConnectionType:    "Reused",
+						DisruptedDuration: v1.Duration{Duration: time.Second * 6},
+						LoadBalancerType:  "external",
+					},
+				},
+			}),
+			expectErrContains: "Some tests failed aggregation",
+		},
+		{
+			name: "ignore disruptions if matches job name",
+			jobRunInfos: buildJobRunInfos(mockCtrl, payloadStartTime, jobrunaggregatorlib.BackendDisruptionList{
+				BackendDisruptions: map[string]*jobrunaggregatorlib.BackendDisruption{
+					"cache-kube-api-new-connections": {
+						Name:              "cache-kube-api-new-connections",
+						ConnectionType:    "New",
+						DisruptedDuration: v1.Duration{Duration: time.Second * 2},
+						LoadBalancerType:  "external",
+					},
+					"cache-kube-api-reused-connections": {
+						Name:              "cache-kube-api-reused-connections",
+						ConnectionType:    "Reused",
+						DisruptedDuration: v1.Duration{Duration: time.Second * 2},
+						LoadBalancerType:  "external",
+					},
+					"openshift-api-http2-localhost-reused-connections": {
+						Name:              "openshift-api-http2-localhost-reused-connections",
+						ConnectionType:    "Reused",
+						DisruptedDuration: v1.Duration{Duration: time.Second * 10},
+						LoadBalancerType:  "localhost",
+					},
+				},
+			}),
 			expectErrContains: "",
 		},
 	}
@@ -167,7 +199,7 @@ func TestAnalyzer(t *testing.T) {
 					mockGCSClient,
 					"bucketname",
 				),
-				passFailCalculator:  NewMockPassFailCalculator(jobRunIDs, historicalBackendDisruptions),
+				passFailCalculator:  NewMockPassFailCalculator(jobRunIDs, historicalDisruption),
 				ciDataClient:        mockDataClient,
 				explicitGCSPrefix:   "",
 				jobName:             testJobName,
@@ -183,10 +215,32 @@ func TestAnalyzer(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 			}
-
 		})
 	}
 
+}
+
+func buildJobRunInfos(mockCtrl *gomock.Controller, payloadStartTime time.Time, disruption jobrunaggregatorlib.BackendDisruptionList) []jobrunaggregatorapi.JobRunInfo {
+	backendDisruptionJSON, _ := json.Marshal(disruption)
+	openshiftFiles := map[string]string{
+		"0": string(backendDisruptionJSON),
+	}
+	junitXML := `<testsuites>
+<testsuite tests="1" failures="0" time="1983" name="BackendDisruption">
+</testsuite>
+</testsuites>`
+	return []jobrunaggregatorapi.JobRunInfo{
+		buildFakeJobRunInfo(mockCtrl, "1001", payloadStartTime, true, junitXML, openshiftFiles),
+		buildFakeJobRunInfo(mockCtrl, "1002", payloadStartTime, true, junitXML, openshiftFiles),
+		buildFakeJobRunInfo(mockCtrl, "1003", payloadStartTime, true, junitXML, openshiftFiles),
+		buildFakeJobRunInfo(mockCtrl, "1004", payloadStartTime, true, junitXML, openshiftFiles),
+		buildFakeJobRunInfo(mockCtrl, "1005", payloadStartTime, true, junitXML, openshiftFiles),
+		buildFakeJobRunInfo(mockCtrl, "1006", payloadStartTime, true, junitXML, openshiftFiles),
+		buildFakeJobRunInfo(mockCtrl, "1007", payloadStartTime, true, junitXML, openshiftFiles),
+		buildFakeJobRunInfo(mockCtrl, "1008", payloadStartTime, true, junitXML, openshiftFiles),
+		buildFakeJobRunInfo(mockCtrl, "1009", payloadStartTime, true, junitXML, openshiftFiles),
+		buildFakeJobRunInfo(mockCtrl, "1010", payloadStartTime, true, junitXML, openshiftFiles),
+	}
 }
 
 func buildFakeJobRunInfo(mockCtrl *gomock.Controller,
@@ -261,10 +315,12 @@ func (m mockPassFailCalculator) CheckPercentileDisruption(ctx context.Context, j
 		successJobRunIDs = append(successJobRunIDs, runID)
 	}
 	status = "passed"
+	message = ""
 	if len(failureJobRunIDs) > 0 {
 		status = "failed"
+		message = fmt.Sprintf("disruption for %s should not be worse", backend)
 	}
-	return failureJobRunIDs, successJobRunIDs, status, "", nil
+	return failureJobRunIDs, successJobRunIDs, status, message, nil
 }
 
 func NewMockPassFailCalculator(jobRunIDs []string, historicalBackendDisruptions jobrunaggregatorlib.BackendDisruptionList) mockPassFailCalculator {

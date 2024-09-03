@@ -5,6 +5,8 @@ cluster_groups:
   - app.ci
   - build01
   - existingCluster
+  managed_clusters:
+  - existingCluster
   non_app_ci:
   - arm01
   - build01

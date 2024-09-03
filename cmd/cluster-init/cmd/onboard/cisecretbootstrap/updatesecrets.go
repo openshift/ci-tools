@@ -51,21 +51,24 @@ func UpdateCiSecretBootstrap(log *logrus.Entry, o Options, osdClusters []string)
 }
 
 func updateCiSecretBootstrapConfig(log *logrus.Entry, o Options, c *secretbootstrap.Config, osd bool) error {
-	for _, groupName := range []string{onboard.BuildUFarm, "non_app_ci"} {
-		c.ClusterGroups[groupName] = sets.List(sets.New[string](c.ClusterGroups[groupName]...).Insert(o.ClusterName))
-	}
+	groupNames := []string{onboard.BuildUFarm, "non_app_ci"}
+
 	// non-OSD clusters should never be in the group
-	var groupName string = ""
 	if osd && !o.Unmanaged {
-		groupName = secretbootstrap.OSDGlobalPullSecretGroupName
+		groupNames = append(groupNames, secretbootstrap.OSDGlobalPullSecretGroupName)
 	}
 	if !osd {
-		groupName = secretbootstrap.OpenShiftConfigPullSecretGroupName
+		groupNames = append(groupNames, secretbootstrap.OpenShiftConfigPullSecretGroupName)
 	}
-	if groupName != "" {
-		c.ClusterGroups[groupName] = sets.List(sets.New[string](append(c.ClusterGroups[groupName], o.ClusterName)...))
+	if !o.Unmanaged {
+		groupNames = append(groupNames, "managed_clusters")
 	}
-	c.UserSecretsTargetClusters = sets.List(sets.New[string](c.UserSecretsTargetClusters...).Insert(o.ClusterName))
+
+	for _, groupName := range groupNames {
+		c.ClusterGroups[groupName] = sets.List(sets.New(c.ClusterGroups[groupName]...).Insert(o.ClusterName))
+	}
+
+	c.UserSecretsTargetClusters = sets.List(sets.New(c.UserSecretsTargetClusters...).Insert(o.ClusterName))
 
 	var steps = []func(log *logrus.Entry, c *secretbootstrap.Config, o Options) error{
 		updateBuildFarmSecrets,

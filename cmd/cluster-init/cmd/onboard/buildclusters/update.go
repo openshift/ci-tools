@@ -23,12 +23,13 @@ type BuildClusters struct {
 	Osd     []string `json:"osd,omitempty"`
 }
 
-func UpdateBuildClusters(o Options) error {
+func UpdateBuildClusters(log *logrus.Entry, o Options) error {
+	log = log.WithField("step", "update-build-clusters")
 	if o.Unmanaged {
-		logrus.Infof("skipping build clusters config update for unmanaged cluster: %s", o.ClusterName)
+		log.Infof("skipping build clusters config update for unmanaged cluster: %s", o.ClusterName)
 		return nil
 	}
-	logrus.Infof("updating build clusters config to add: %s", o.ClusterName)
+	log.Infof("updating build clusters config to add: %s", o.ClusterName)
 	buildClusters, err := LoadBuildClusters(o)
 	if err != nil {
 		return err

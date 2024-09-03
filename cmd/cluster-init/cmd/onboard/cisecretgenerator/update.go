@@ -83,7 +83,9 @@ func explainFilters(filters ...secretItemFilter) string {
 	return strings.Join(explanations, " - ")
 }
 
-func UpdateSecretGenerator(o Options) error {
+func UpdateSecretGenerator(log *logrus.Entry, o Options) error {
+	log = log.WithField("step", "ci-secret-generator")
+
 	filename := filepath.Join(o.ReleaseRepo, "core-services", "ci-secret-generator", "_config.yaml")
 	data, err := os.ReadFile(filename)
 	if err != nil {
@@ -93,7 +95,7 @@ func UpdateSecretGenerator(o Options) error {
 	if err = yaml.Unmarshal(data, &c); err != nil {
 		return err
 	}
-	if err = updateSecretGeneratorConfig(o, &c); err != nil {
+	if err = updateSecretGeneratorConfig(log, o, &c); err != nil {
 		return err
 	}
 	rawYaml, err := yaml.Marshal(c)
@@ -103,26 +105,26 @@ func UpdateSecretGenerator(o Options) error {
 	return os.WriteFile(filename, rawYaml, 0644)
 }
 
-func updateSecretGeneratorConfig(o Options, c *SecretGenConfig) error {
+func updateSecretGeneratorConfig(log *logrus.Entry, o Options, c *SecretGenConfig) error {
 	filterByCluster := byParam("cluster", string(api.ClusterBuild01))
 
 	serviceAccountConfigPath := onboard.ServiceAccountKubeconfigPath(serviceAccountWildcard, clusterWildcard)
-	if err := appendToSecretItem(o, c, byItemName(onboard.BuildUFarm), filterByCluster, byFieldName(serviceAccountConfigPath)); err != nil {
+	if err := appendToSecretItem(log, o, c, byItemName(onboard.BuildUFarm), filterByCluster, byFieldName(serviceAccountConfigPath)); err != nil {
 		return err
 	}
 
 	token := fmt.Sprintf("token_%s_%s_reg_auth_value.txt", serviceAccountWildcard, clusterWildcard)
 	filterByFieldName, filterBySA := byFieldName(token), byParam("service_account", "image-puller")
-	if err := appendToSecretItem(o, c, byItemName(onboard.BuildUFarm), filterByCluster, filterByFieldName, filterBySA); err != nil {
+	if err := appendToSecretItem(log, o, c, byItemName(onboard.BuildUFarm), filterByCluster, filterByFieldName, filterBySA); err != nil {
 		return err
 	}
 
-	if err := appendToSecretItem(o, c, byItemName("ci-chat-bot"), filterByCluster, byFieldName(serviceAccountConfigPath)); err != nil {
+	if err := appendToSecretItem(log, o, c, byItemName("ci-chat-bot"), filterByCluster, byFieldName(serviceAccountConfigPath)); err != nil {
 		return err
 	}
 
 	if !o.Unmanaged {
-		if err := appendToSecretItem(o, c, byItemName(onboard.PodScaler), filterByCluster, byFieldName(serviceAccountConfigPath)); err != nil {
+		if err := appendToSecretItem(log, o, c, byItemName(onboard.PodScaler), filterByCluster, byFieldName(serviceAccountConfigPath)); err != nil {
 			return err
 		}
 	}
@@ -130,12 +132,12 @@ func updateSecretGeneratorConfig(o Options, c *SecretGenConfig) error {
 	return nil
 }
 
-func appendToSecretItem(o Options, c *SecretGenConfig, filters ...secretItemFilter) error {
+func appendToSecretItem(log *logrus.Entry, o Options, c *SecretGenConfig, filters ...secretItemFilter) error {
 	si, err := findSecretItem(*c, filters...)
 	if err != nil {
 		return err
 	}
-	logrus.Infof("Appending to secret item: %s", explainFilters(filters...))
+	log.Infof("Appending to secret item: %s", explainFilters(filters...))
 	si.Params["cluster"] = sets.List(sets.New(si.Params["cluster"]...).Insert(o.ClusterName))
 	return nil
 }

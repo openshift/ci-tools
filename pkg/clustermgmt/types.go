@@ -1,10 +1,15 @@
 package clustermgmt
 
-import "context"
+import (
+	"context"
+	"os/exec"
+)
 
 type ClusterInstall struct {
+	ClusterName string    `json:"clusterName,omitempty"`
 	InstallBase string    `json:"installBase,omitempty"`
 	Provision   Provision `json:"provision,omitempty"`
+	Onboard     Onboard   `json:"onboard,omitempty"`
 }
 
 type ClusterInstallGetter func() (*ClusterInstall, error)
@@ -27,7 +32,14 @@ type AWSCloudFormationTemplate struct {
 	Capabilities []string `json:"capabilities,omitempty"`
 }
 
+type Onboard struct {
+	ReleaseRepo string `json:"releaseRepo,omitempty"`
+}
+
 type Step interface {
 	Run(ctx context.Context) error
 	Name() string
 }
+
+type CmdBuilder func(ctx context.Context, program string, args ...string) *exec.Cmd
+type CmdRunner func(cmd *exec.Cmd) error

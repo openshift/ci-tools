@@ -13,8 +13,8 @@ import (
 type createInstallConfigStep struct {
 	log               *logrus.Entry
 	getClusterInstall clustermgmt.ClusterInstallGetter
-	cmdBuilder        CmdBuilder
-	cmdRunner         CmdRunner
+	cmdBuilder        clustermgmt.CmdBuilder
+	cmdRunner         clustermgmt.CmdRunner
 }
 
 func (s *createInstallConfigStep) Name() string {
@@ -41,7 +41,7 @@ func (s *createInstallConfigStep) Run(ctx context.Context) error {
 }
 
 func NewCreateInstallConfigStep(log *logrus.Entry, getClusterInstall clustermgmt.ClusterInstallGetter,
-	cmdBuilder CmdBuilder, cmdRunner CmdRunner) *createInstallConfigStep {
+	cmdBuilder clustermgmt.CmdBuilder, cmdRunner clustermgmt.CmdRunner) *createInstallConfigStep {
 	return &createInstallConfigStep{
 		log:               log,
 		getClusterInstall: getClusterInstall,

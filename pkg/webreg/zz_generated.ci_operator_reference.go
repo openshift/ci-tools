@@ -961,6 +961,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # The job must be configured as a verification or periodic job in a\n" +
 	"        # release-controller config file when this field is set to `true`.\n" +
 	"        release_controller: true\n" +
+	"        # RestrictNetworkAccess restricts network access to RedHat intranet.\n" +
+	"        restrict_network_access: false\n" +
 	"        # RunIfChanged is a regex that will result in the test only running if something that matches it was changed.\n" +
 	"        run_if_changed: ' '\n" +
 	"        # Secret is an optional secret object which\n" +
@@ -1801,6 +1803,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      # The job must be configured as a verification or periodic job in a\n" +
 	"      # release-controller config file when this field is set to `true`.\n" +
 	"      release_controller: true\n" +
+	"      # RestrictNetworkAccess restricts network access to RedHat intranet.\n" +
+	"      restrict_network_access: false\n" +
 	"      # RunIfChanged is a regex that will result in the test only running if something that matches it was changed.\n" +
 	"      run_if_changed: ' '\n" +
 	"      # Secret is an optional secret object which\n" +

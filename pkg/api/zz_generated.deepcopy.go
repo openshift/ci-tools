@@ -2135,6 +2135,11 @@ func (in *TestStepConfiguration) DeepCopyInto(out *TestStepConfiguration) {
 		*out = new(v1.Duration)
 		**out = **in
 	}
+	if in.RestrictNetworkAccess != nil {
+		in, out := &in.RestrictNetworkAccess, &out.RestrictNetworkAccess
+		*out = new(bool)
+		**out = **in
+	}
 	if in.ContainerTestConfiguration != nil {
 		in, out := &in.ContainerTestConfiguration, &out.ContainerTestConfiguration
 		*out = new(ContainerTestConfiguration)

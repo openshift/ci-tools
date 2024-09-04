@@ -15,7 +15,7 @@ func TestUpdateSecret(t *testing.T) {
 	testCases := []struct {
 		name string
 		Options
-		secretGenerator func(Options) secretbootstrap.SecretConfig
+		secretGenerator func(_ *logrus.Entry, o Options) *secretbootstrap.SecretConfig
 		config          secretbootstrap.Config
 		expectedConfig  secretbootstrap.Config
 	}{
@@ -24,8 +24,8 @@ func TestUpdateSecret(t *testing.T) {
 			Options: Options{
 				ClusterName: "newCluster",
 			},
-			secretGenerator: func(o Options) secretbootstrap.SecretConfig {
-				return secretbootstrap.SecretConfig{
+			secretGenerator: func(_ *logrus.Entry, o Options) *secretbootstrap.SecretConfig {
+				return &secretbootstrap.SecretConfig{
 					From: map[string]secretbootstrap.ItemContext{"item": {Item: "item-a"}},
 					To:   []secretbootstrap.SecretContext{{Cluster: "newCluster", Name: "secret-a"}},
 				}
@@ -56,8 +56,8 @@ func TestUpdateSecret(t *testing.T) {
 			Options: Options{
 				ClusterName: "existingCluster",
 			},
-			secretGenerator: func(o Options) secretbootstrap.SecretConfig {
-				return secretbootstrap.SecretConfig{
+			secretGenerator: func(_ *logrus.Entry, o Options) *secretbootstrap.SecretConfig {
+				return &secretbootstrap.SecretConfig{
 					From: map[string]secretbootstrap.ItemContext{"item": {Item: "item-a"}},
 					To:   []secretbootstrap.SecretContext{{Cluster: "existingCluster", Name: "secret-a"}},
 				}

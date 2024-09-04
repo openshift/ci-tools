@@ -29,6 +29,8 @@ type Options struct {
 	ReleaseRepo              string
 	UseTokenFileInKubeconfig bool
 	Unmanaged                bool
+	Hosted                   bool
+	osd                      bool
 }
 
 type pushPull string
@@ -43,21 +45,21 @@ func UpdateCiSecretBootstrap(log *logrus.Entry, o Options, osdClusters []string)
 	if err := secretbootstrap.LoadConfigFromFile(secretBootstrapConfigFile, &c); err != nil {
 		return err
 	}
-	osdClustersSet := sets.New[string](osdClusters...)
-	if err := updateCiSecretBootstrapConfig(log, o, &c, osdClustersSet.Has(o.ClusterName)); err != nil {
+	o.osd = sets.New(osdClusters...).Has(o.ClusterName)
+	if err := updateCiSecretBootstrapConfig(log, o, &c); err != nil {
 		return err
 	}
 	return secretbootstrap.SaveConfigToFile(secretBootstrapConfigFile, &c)
 }
 
-func updateCiSecretBootstrapConfig(log *logrus.Entry, o Options, c *secretbootstrap.Config, osd bool) error {
+func updateCiSecretBootstrapConfig(log *logrus.Entry, o Options, c *secretbootstrap.Config) error {
 	groupNames := []string{onboard.BuildUFarm, "non_app_ci"}
 
 	// non-OSD clusters should never be in the group
-	if osd && !o.Unmanaged {
+	if o.osd && !o.Unmanaged {
 		groupNames = append(groupNames, secretbootstrap.OSDGlobalPullSecretGroupName)
 	}
-	if !osd {
+	if !o.osd {
 		groupNames = append(groupNames, secretbootstrap.OpenShiftConfigPullSecretGroupName)
 	}
 	if !o.Unmanaged {
@@ -81,6 +83,8 @@ func updateCiSecretBootstrapConfig(log *logrus.Entry, o Options, c *secretbootst
 		updateSecret(generateRegistryPushCredentialsSecret),
 		updateSecret(generateRegistryPullCredentialsSecret),
 		updateSecret(generateCiOperatorSecret),
+		updateSecret(generateDexIdAndSecret),
+		updateSecret(generateDexClientSecret),
 	}
 	if !o.Unmanaged {
 		steps = append(steps, updatePodScalerSecret)
@@ -95,22 +99,25 @@ func updateCiSecretBootstrapConfig(log *logrus.Entry, o Options, c *secretbootst
 	return nil
 }
 
-func updateSecret(secretGenerator func(Options) secretbootstrap.SecretConfig) func(log *logrus.Entry, c *secretbootstrap.Config, o Options) error {
+func updateSecret(secretGenerator func(*logrus.Entry, Options) *secretbootstrap.SecretConfig) func(log *logrus.Entry, c *secretbootstrap.Config, o Options) error {
 	return func(log *logrus.Entry, c *secretbootstrap.Config, o Options) error {
-		secret := secretGenerator(o)
+		secret := secretGenerator(log, o)
+		if secret == nil {
+			return nil
+		}
 		idx, _, _ := findSecretConfig(secret.To[0].Name, o.ClusterName, c.Secrets)
 		if idx != -1 {
 			log.Infof("Replacing existing secret with 'to' of: %v", secret.To)
-			c.Secrets = append(c.Secrets[:idx], append([]secretbootstrap.SecretConfig{secret}, c.Secrets[idx+1:]...)...)
+			c.Secrets = append(c.Secrets[:idx], append([]secretbootstrap.SecretConfig{*secret}, c.Secrets[idx+1:]...)...)
 		} else {
 			log.Infof("Creating new secret with 'to' of: %v", secret.To)
-			c.Secrets = append(c.Secrets, secret)
+			c.Secrets = append(c.Secrets, *secret)
 		}
 		return nil
 	}
 }
 
-func generateCiOperatorSecret(o Options) secretbootstrap.SecretConfig {
+func generateCiOperatorSecret(_ *logrus.Entry, o Options) *secretbootstrap.SecretConfig {
 	from := map[string]secretbootstrap.ItemContext{
 		kubeconfig: {
 			Field: onboard.ServiceAccountKubeconfigPath(onboard.CIOperator, o.ClusterName),
@@ -124,7 +131,7 @@ func generateCiOperatorSecret(o Options) secretbootstrap.SecretConfig {
 			Item:  onboard.BuildUFarm,
 		}
 	}
-	return secretbootstrap.SecretConfig{
+	return &secretbootstrap.SecretConfig{
 		From: from,
 		To: []secretbootstrap.SecretContext{
 			{
@@ -136,8 +143,8 @@ func generateCiOperatorSecret(o Options) secretbootstrap.SecretConfig {
 	}
 }
 
-func generateRegistryPushCredentialsSecret(o Options) secretbootstrap.SecretConfig {
-	return secretbootstrap.SecretConfig{
+func generateRegistryPushCredentialsSecret(_ *logrus.Entry, o Options) *secretbootstrap.SecretConfig {
+	return &secretbootstrap.SecretConfig{
 		From: map[string]secretbootstrap.ItemContext{
 			dotDockerConfigJson: generatePushPullSecretFrom(o.ClusterName, []secretbootstrap.DockerConfigJSONData{
 				{
@@ -159,8 +166,8 @@ func generateRegistryPushCredentialsSecret(o Options) secretbootstrap.SecretConf
 	}
 }
 
-func generateRegistryPullCredentialsSecret(o Options) secretbootstrap.SecretConfig {
-	return secretbootstrap.SecretConfig{
+func generateRegistryPullCredentialsSecret(_ *logrus.Entry, o Options) *secretbootstrap.SecretConfig {
+	return &secretbootstrap.SecretConfig{
 		From: map[string]secretbootstrap.ItemContext{
 			dotDockerConfigJson: generatePushPullSecretFrom(o.ClusterName, []secretbootstrap.DockerConfigJSONData{
 				{
@@ -362,6 +369,58 @@ func updateChatBotSecret(log *logrus.Entry, c *secretbootstrap.Config, o Options
 		Field: keyAndField,
 		Item:  chatBot,
 	})
+}
+
+func generateDexClientSecret(log *logrus.Entry, o Options) *secretbootstrap.SecretConfig {
+	if o.Hosted || o.osd {
+		log.Info("Cluster is either hosted or osd, skipping dex-rh-sso")
+		return nil
+	}
+	return &secretbootstrap.SecretConfig{
+		From: map[string]secretbootstrap.ItemContext{
+			"client-secret": {
+				Field: o.ClusterName + "-secret",
+				Item:  "dex",
+			},
+		},
+		To: []secretbootstrap.SecretContext{{
+			Cluster:   o.ClusterName,
+			Name:      "dex-rh-sso",
+			Namespace: "openshift-config",
+		}},
+	}
+}
+
+func generateDexIdAndSecret(log *logrus.Entry, o Options) *secretbootstrap.SecretConfig {
+	secret := &secretbootstrap.SecretConfig{
+		From: map[string]secretbootstrap.ItemContext{
+			o.ClusterName + "-id": {
+				Field: o.ClusterName + "-id",
+				Item:  "dex",
+			},
+			o.ClusterName + "-secret": {
+				Field: o.ClusterName + "-secret",
+				Item:  "dex",
+			},
+		},
+		To: []secretbootstrap.SecretContext{
+			{
+				Cluster:   string(api.ClusterAPPCI),
+				Name:      o.ClusterName + "-secret",
+				Namespace: "dex",
+			},
+		},
+	}
+	if o.Hosted || o.osd {
+		return secret
+	}
+	log.Info("Cluster is neither hosted nor osd, syncing dex OIDC secret")
+	secret.To = append(secret.To, secretbootstrap.SecretContext{
+		Cluster:   string(api.ClusterAPPCI),
+		Name:      o.ClusterName + "-dex-oidc",
+		Namespace: "ci",
+	})
+	return secret
 }
 
 func updateSecretItemContext(log *logrus.Entry, c *secretbootstrap.Config, name, cluster, key string, value secretbootstrap.ItemContext) error {

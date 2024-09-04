@@ -338,6 +338,17 @@ secret_configs:
   - cluster: newCluster
     name: ci-operator
     namespace: test-credentials
+- from:
+    newCluster-id:
+      field: newCluster-id
+      item: dex
+    newCluster-secret:
+      field: newCluster-secret
+      item: dex
+  to:
+  - cluster: app.ci
+    name: newCluster-secret
+    namespace: dex
 user_secrets_target_clusters:
 - app.ci
 - arm01

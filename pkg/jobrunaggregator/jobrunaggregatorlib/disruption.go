@@ -46,7 +46,10 @@ type BackendDisruption struct {
 	// Name ensure self-identification
 	Name string
 	// ConnectionType is New or Reused
-	ConnectionType     string
+	ConnectionType string
+	// LoadBalancerType is external/internal/service-network/localhost
+	// we're only interested in
+	LoadBalancerType   string
 	DisruptedDuration  v1.Duration
 	DisruptionMessages []string
 }

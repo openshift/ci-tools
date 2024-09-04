@@ -1,0 +1,86 @@
+periodics:
+- agent: kubernetes
+  cluster: app.ci
+  decorate: true
+  extra_refs:
+  - base_ref: master
+    org: openshift
+    repo: release
+  interval: 12h
+  labels:
+    ci.openshift.io/generator: prowgen
+    ci.openshift.io/role: infra
+  name: periodic-openshift-release-master-build01-apply
+  spec:
+    containers:
+    - args:
+      - --config-dir=clusters/build-clusters/build01
+      - --as=
+      - --kubeconfig=/etc/build-farm-credentials/kubeconfig
+      - --confirm=true
+      command:
+      - applyconfig
+      image: applyconfig:latest
+      imagePullPolicy: Always
+      name: ""
+      resources:
+        requests:
+          cpu: 10m
+      volumeMounts:
+      - mountPath: /etc/build-farm-credentials
+        name: build-farm-credentials
+        readOnly: true
+    serviceAccountName: config-updater
+    volumes:
+    - name: build-farm-credentials
+      secret:
+        items:
+        - key: sa.config-updater.build01.config
+          path: kubeconfig
+        secretName: config-updater
+- agent: kubernetes
+  cluster: app.ci
+  decorate: true
+  extra_refs:
+  - base_ref: master
+    org: openshift
+    repo: release
+  interval: 12h
+  labels:
+    ci.openshift.io/build-farm: existingCluster
+    ci.openshift.io/generator: cluster-init
+    ci.openshift.io/role: infra
+  name: periodic-openshift-release-master-existingCluster-apply
+  spec:
+    containers:
+    - args:
+      - --config-dir=clusters/build-clusters/existingCluster
+      - --as=
+      - --kubeconfig=/etc/build-farm-credentials/kubeconfig
+      - --confirm=true
+      command:
+      - applyconfig
+      env:
+      - name: existingCluster_id
+        valueFrom:
+          secretKeyRef:
+            key: existingCluster-id
+            name: existingCluster-dex-oidc
+      image: applyconfig:latest
+      imagePullPolicy: Always
+      name: ""
+      resources:
+        requests:
+          cpu: 10m
+      volumeMounts:
+      - mountPath: /etc/build-farm-credentials
+        name: build-farm-credentials
+        readOnly: true
+    serviceAccountName: config-updater
+    volumes:
+    - name: build-farm-credentials
+      secret:
+        items:
+        - key: sa.config-updater.existingCluster.config
+          path: kubeconfig
+        secretName: config-updater

@@ -1,0 +1,4 @@
+cluster_groups:
+  build-farm:
+    - app.ci
+    - build01

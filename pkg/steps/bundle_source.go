@@ -26,7 +26,6 @@ type bundleSourceStep struct {
 	podClient          kubernetes.PodClient
 	jobSpec            *api.JobSpec
 	pullSecret         *coreapi.Secret
-	multiArch          bool
 }
 
 func (s *bundleSourceStep) Inputs() (api.InputDefinition, error) {
@@ -80,7 +79,10 @@ func (s *bundleSourceStep) run(ctx context.Context) error {
 		"",
 	)
 
-	return handleBuilds(ctx, s.client, s.podClient, *build, newImageBuildOptions(s.multiArch))
+	// Bundle images are not multi-arch by design. Here we build it without creating a manifest-listed image.
+	// Note that we are not configuring a node selector here, so the build will be scheduled on any available
+	// node no matter the architecture.
+	return handleBuild(ctx, s.client, s.podClient, *build)
 }
 
 func replaceCommand(pullSpec, with string) string {
@@ -134,8 +136,10 @@ func (s *bundleSourceStep) Description() string {
 	return fmt.Sprintf("Build image %s from the repository", api.PipelineImageStreamTagReferenceBundleSource)
 }
 
-func (s *bundleSourceStep) IsMultiArch() bool           { return s.multiArch }
-func (s *bundleSourceStep) SetMultiArch(multiArch bool) { s.multiArch = multiArch }
+func (s *bundleSourceStep) IsMultiArch() bool { return false }
+func (s *bundleSourceStep) SetMultiArch(multiArch bool) {
+	logrus.Warnf("Not setting %s as multi-arch since bundle images are not multi-arch by design", s.Name())
+}
 
 func BundleSourceStep(
 	config api.BundleSourceStepConfiguration,

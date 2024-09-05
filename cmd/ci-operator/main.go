@@ -388,7 +388,7 @@ type options struct {
 	leaseServerCredentialsFile string
 	leaseAcquireTimeout        time.Duration
 	leaseClient                lease.Client
-	clusterProfileNames        []string
+	clusterProfiles            []clusterProfileForTarget
 
 	givePrAuthorAccessToNamespace bool
 	impersonateUser               string
@@ -1453,10 +1453,10 @@ func (o *options) initializeNamespace() error {
 
 	// adds the appropriate cluster profile secrets to o.secrets,
 	// so they can be created by ctrlruntime client in the for cycle below this one
-	for _, cp := range o.clusterProfileNames {
+	for _, cp := range o.clusterProfiles {
 		cpSecret, err := getClusterProfileSecret(cp, ctrlClient, o.resolverClient, ctx)
 		if err != nil {
-			return fmt.Errorf("failed to create cluster profile  secret %s: %w", cp, err)
+			return fmt.Errorf("failed to create cluster profile secret %s: %w", cp, err)
 		}
 		cpSecret.Namespace = o.namespace
 		o.secrets = append(o.secrets, cpSecret)
@@ -2321,11 +2321,11 @@ func addSchemes() error {
 
 // getClusterProfileSecret retrieves the cluster profile secret name using config resolver,
 // and gets the secret from the ci namespace
-func getClusterProfileSecret(clusterProfile string, client ctrlruntimeclient.Client, resolverClient server.ResolverClient, ctx context.Context) (*coreapi.Secret, error) {
+func getClusterProfileSecret(cp clusterProfileForTarget, client ctrlruntimeclient.Client, resolverClient server.ResolverClient, ctx context.Context) (*coreapi.Secret, error) {
 	// Use config-resolver to get details about the cluster profile (which includes the secret's name)
-	cpDetails, err := resolverClient.ClusterProfile(clusterProfile)
+	cpDetails, err := resolverClient.ClusterProfile(cp.profileName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve details from config resolver for '%s' cluster profile", clusterProfile)
+		return nil, fmt.Errorf("failed to retrieve details from config resolver for '%s' cluster cp", cp.profileName)
 	}
 	// Get the secret from the ci namespace. We expect it exists
 	ciSecret := &coreapi.Secret{}
@@ -2338,11 +2338,16 @@ func getClusterProfileSecret(clusterProfile string, client ctrlruntimeclient.Cli
 		Data: ciSecret.Data,
 		Type: ciSecret.Type,
 		ObjectMeta: meta.ObjectMeta{
-			Name: ciSecret.Name,
+			Name: fmt.Sprintf("%s-cluster-profile", cp.target),
 		},
 	}
 
 	return newSecret, nil
+}
+
+type clusterProfileForTarget struct {
+	target      string
+	profileName string
 }
 
 // getClusterProfileNamesFromTargets extracts the needed cluster profile name(s) from the target arg(s)
@@ -2354,7 +2359,10 @@ func (o *options) getClusterProfileNamesFromTargets() {
 			}
 			profile := test.GetClusterProfileName()
 			if profile != "" {
-				o.clusterProfileNames = append(o.clusterProfileNames, profile)
+				o.clusterProfiles = append(o.clusterProfiles, clusterProfileForTarget{
+					target:      test.As,
+					profileName: profile,
+				})
 			}
 		}
 	}

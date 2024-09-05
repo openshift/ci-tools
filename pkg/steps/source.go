@@ -121,7 +121,7 @@ const (
 	LabelMetadataStep    = "ci.openshift.io/metadata.step"
 )
 
-func labelsFor(spec *api.JobSpec, base map[string]string, ref string) map[string]string {
+func LabelsFor(spec *api.JobSpec, base map[string]string, ref string) map[string]string {
 	if base == nil {
 		base = map[string]string{}
 	}
@@ -304,7 +304,7 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 	}
 
 	layer := buildapi.ImageOptimizationSkipLayers
-	labels := labelsFor(jobSpec, map[string]string{CreatesLabel: string(toTag)}, ref)
+	labels := LabelsFor(jobSpec, map[string]string{CreatesLabel: string(toTag)}, ref)
 	build := &buildapi.Build{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      string(toTag),

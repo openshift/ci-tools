@@ -6,6 +6,9 @@
     creationTimestamp: null
     labels:
       OPENSHIFT_CI: "true"
+      ci.openshift.io/jobid: prow_job_id
+      ci.openshift.io/jobname: job
+      ci.openshift.io/jobtype: postsubmit
       ci.openshift.io/metadata.branch: base_ref
       ci.openshift.io/metadata.org: org
       ci.openshift.io/metadata.repo: repo
@@ -177,6 +180,9 @@
     creationTimestamp: null
     labels:
       OPENSHIFT_CI: "true"
+      ci.openshift.io/jobid: prow_job_id
+      ci.openshift.io/jobname: job
+      ci.openshift.io/jobtype: postsubmit
       ci.openshift.io/metadata.branch: base_ref
       ci.openshift.io/metadata.org: org
       ci.openshift.io/metadata.repo: repo
@@ -342,6 +348,9 @@
     creationTimestamp: null
     labels:
       OPENSHIFT_CI: "true"
+      ci.openshift.io/jobid: prow_job_id
+      ci.openshift.io/jobname: job
+      ci.openshift.io/jobtype: postsubmit
       ci.openshift.io/metadata.branch: base_ref
       ci.openshift.io/metadata.org: org
       ci.openshift.io/metadata.repo: repo
@@ -511,6 +520,9 @@
     creationTimestamp: null
     labels:
       OPENSHIFT_CI: "true"
+      ci.openshift.io/jobid: prow_job_id
+      ci.openshift.io/jobname: job
+      ci.openshift.io/jobtype: postsubmit
       ci.openshift.io/metadata.branch: base_ref
       ci.openshift.io/metadata.org: org
       ci.openshift.io/metadata.repo: repo
@@ -684,6 +696,9 @@
     creationTimestamp: null
     labels:
       OPENSHIFT_CI: "true"
+      ci.openshift.io/jobid: prow_job_id
+      ci.openshift.io/jobname: job
+      ci.openshift.io/jobtype: postsubmit
       ci.openshift.io/metadata.branch: base_ref
       ci.openshift.io/metadata.org: org
       ci.openshift.io/metadata.repo: repo
@@ -851,6 +866,9 @@
     creationTimestamp: null
     labels:
       OPENSHIFT_CI: "true"
+      ci.openshift.io/jobid: prow_job_id
+      ci.openshift.io/jobname: job
+      ci.openshift.io/jobtype: postsubmit
       ci.openshift.io/metadata.branch: base_ref
       ci.openshift.io/metadata.org: org
       ci.openshift.io/metadata.repo: repo

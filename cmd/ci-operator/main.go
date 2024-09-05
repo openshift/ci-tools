@@ -77,6 +77,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/defaults"
 	"github.com/openshift/ci-tools/pkg/interrupt"
 	"github.com/openshift/ci-tools/pkg/junit"
+	"github.com/openshift/ci-tools/pkg/labeledclient"
 	"github.com/openshift/ci-tools/pkg/lease"
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/registry"
@@ -1184,6 +1185,7 @@ func (o *options) initializeNamespace() error {
 		return fmt.Errorf("failed to construct client: %w", err)
 	}
 	client = ctrlruntimeclient.NewNamespacedClient(client, o.namespace)
+	client = labeledclient.Wrap(client, o.jobSpec)
 	ctx := context.Background()
 
 	logrus.Debugf("Creating namespace %s", o.namespace)

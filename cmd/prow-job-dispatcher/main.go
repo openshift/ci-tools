@@ -1,10 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"io/fs"
 	"net/http"
 	"os"
@@ -38,10 +36,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
-type ClusterMap map[string]string
-
 const (
-	blocked        = "blocked"
 	githubOrg      = "openshift"
 	githubRepo     = "release"
 	githubLogin    = "openshift-bot"
@@ -55,7 +50,6 @@ type options struct {
 	configPath        string
 	clusterConfigPath string
 	jobsStoragePath   string
-	daemonize         bool
 
 	prometheusDaysBefore int
 
@@ -88,7 +82,6 @@ func gatherOptions() options {
 	fs.StringVar(&o.configPath, "config-path", "", "Path to the config file (core-services/sanitize-prow-jobs/_config.yaml in openshift/release)")
 	fs.StringVar(&o.clusterConfigPath, "cluster-config-path", "core-services/sanitize-prow-jobs/_clusters.yaml", "Path to the config file (core-services/sanitize-prow-jobs/_clusters.yaml in openshift/release)")
 	fs.StringVar(&o.jobsStoragePath, "jobs-storage-path", "", "Path to the file holding only job assignments in Gob format")
-	fs.BoolVar(&o.daemonize, "daemonize", false, "Run dispatcher in daemon mode")
 	fs.IntVar(&o.prometheusDaysBefore, "prometheus-days-before", 1, "Number [1,15] of days before. Time 00-00-00 of that day will be used as time to query Prometheus. E.g., 1 means 00-00-00 of yesterday.")
 
 	fs.BoolVar(&o.createPR, "create-pr", false, "Create a pull request to the change made with this tool.")
@@ -125,6 +118,18 @@ func (o *options) validate() error {
 		return fmt.Errorf("--prometheus-days-before must be between 1 and 15")
 	}
 
+	if o.clusterConfigPath == "" {
+		logrus.Fatal("mandatory argument --cluster-config-path wasn't set")
+	}
+
+	if o.jobsStoragePath == "" {
+		logrus.Fatal("mandatory argument --cluster-config-path wasn't set")
+	}
+
+	if o.slackTokenPath == "" {
+		logrus.Fatal("mandatory argument --slack-token-path wasn't set")
+	}
+
 	enabled := o.enableClusters.StringSet()
 	disabled := o.disableClusters.StringSet()
 	if enabled.Intersection(disabled).Len() > 0 {
@@ -153,34 +158,6 @@ func (o *options) validate() error {
 		}
 	}
 	return o.PrometheusOptions.Validate()
-}
-
-func loadClusterConfig(filePath string) (ClusterMap, sets.Set[string], error) {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var clusters map[string][]string
-	err = yaml.Unmarshal(data, &clusters)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	blockedClusters := sets.New[string]()
-	clusterMap := make(ClusterMap)
-	for provider, clusterList := range clusters {
-		if provider != blocked {
-			for _, cluster := range clusterList {
-				clusterMap[cluster] = provider
-			}
-		}
-		if provider == blocked {
-			blockedClusters.Insert(clusterList...)
-		}
-	}
-
-	return clusterMap, blockedClusters, nil
 }
 
 // getCloudProvidersForE2ETests returns a set of cloud providers where a cluster is hosted for an e2e test defined in the given Prow job config.
@@ -231,7 +208,7 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 	for _, volume := range jobVolumes {
 		totalVolume += volume
 	}
-	mostUsedCluster := findMostUsedCluster(jc)
+	mostUsedCluster := sanitizer.FindMostUsedCluster(jc)
 	// TODO: 75% as we still have manual assignments and these are affecting even distribution, re-evaluate when manual assignments are gone
 	if determinedCloudProvider := config.IsInBuildFarm(api.Cluster(mostUsedCluster)); determinedCloudProvider != "" &&
 		cv.clusterVolumeMap[string(determinedCloudProvider)][mostUsedCluster] < cv.volumePerCluster*0.75 {
@@ -277,7 +254,7 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 }
 
 func findClusterAssigmentsForMissingJobs(jc *prowconfig.JobConfig, path string, config *dispatcher.Config, pjs map[string]string, blocked sets.Set[string]) error {
-	mostUsedCluster := findMostUsedCluster(jc)
+	mostUsedCluster := sanitizer.FindMostUsedCluster(jc)
 
 	getClusterForMissingJob := func(cluster string, jobBase prowconfig.JobBase, pjs map[string]string) error {
 		determinedCluster, canBeRelocated, err := config.DetermineClusterForJob(jobBase, path)
@@ -285,7 +262,7 @@ func findClusterAssigmentsForMissingJobs(jc *prowconfig.JobConfig, path string, 
 			return fmt.Errorf("failed to determine cluster for the job %s in path %q: %w", jobBase.Name, path, err)
 		}
 
-		c := determineCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated, blocked)
+		c := sanitizer.DetermineTargetCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated, blocked)
 		pjs[jobBase.Name] = c
 		logrus.WithField("job", jobBase.Name).WithField("cluster", c).Info("found cluster for missing job")
 		return nil
@@ -322,33 +299,6 @@ func findClusterAssigmentsForMissingJobs(jc *prowconfig.JobConfig, path string, 
 	return utilerrors.NewAggregate(errs)
 }
 
-func findMostUsedCluster(jc *prowconfig.JobConfig) string {
-	clusters := make(map[string]int)
-	for k := range jc.PresubmitsStatic {
-		for _, job := range jc.PresubmitsStatic[k] {
-			clusters[job.Cluster]++
-		}
-	}
-
-	for k := range jc.PostsubmitsStatic {
-		for _, job := range jc.PostsubmitsStatic[k] {
-			clusters[job.Cluster]++
-		}
-	}
-	for _, job := range jc.Periodics {
-		clusters[job.Cluster]++
-	}
-	cluster := ""
-	value := 0
-	for c, v := range clusters {
-		if v > value {
-			cluster = c
-			value = v
-		}
-	}
-	return cluster
-}
-
 func (cv *clusterVolume) addToVolume(cluster string, jobBase prowconfig.JobBase, path string, config *dispatcher.Config, jobVolumes map[string]float64) error {
 	determinedCluster, canBeRelocated, err := config.DetermineClusterForJob(jobBase, path)
 
@@ -356,7 +306,7 @@ func (cv *clusterVolume) addToVolume(cluster string, jobBase prowconfig.JobBase,
 		return fmt.Errorf("failed to determine cluster for the job %s in path %q: %w", jobBase.Name, path, err)
 	}
 
-	c := determineCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated, cv.blocked)
+	c := sanitizer.DetermineTargetCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated, cv.blocked)
 	cv.pjs[jobBase.Name] = c
 	if determinedCloudProvider := config.IsInBuildFarm(api.Cluster(c)); determinedCloudProvider != "" {
 		cv.clusterVolumeMap[string(determinedCloudProvider)][c] = cv.clusterVolumeMap[string(determinedCloudProvider)][c] + jobVolumes[jobBase.Name]
@@ -364,22 +314,6 @@ func (cv *clusterVolume) addToVolume(cluster string, jobBase prowconfig.JobBase,
 	}
 	cv.specialClusters[c] = cv.specialClusters[c] + jobVolumes[jobBase.Name]
 	return nil
-}
-
-func determineCluster(cluster, determinedCluster, defaultCluster string, canBeRelocated bool, blocked sets.Set[string]) string {
-	var targetCluster string
-	if cluster == determinedCluster || canBeRelocated {
-		targetCluster = cluster
-	} else if _, isBlocked := blocked[determinedCluster]; !isBlocked {
-		targetCluster = determinedCluster
-	} else {
-		targetCluster = cluster
-	}
-
-	if _, isBlocked := blocked[targetCluster]; isBlocked {
-		return defaultCluster
-	}
-	return targetCluster
 }
 
 // dispatchJobConfig dispatches the jobs defined in a Prow jon config
@@ -554,37 +488,6 @@ func composeFileInfoList(prowJobConfigDir string) ([]fileSizeInfo, error) {
 	return fileList, utilerrors.NewAggregate(errs)
 }
 
-// getClusterProvider gets information using get request what is the current cloud provider for the given cluster
-func getClusterProvider(cluster string) (api.Cloud, error) {
-	type pageData struct {
-		Data []map[string]string `json:"data"`
-	}
-	resp, err := http.Get("https://cluster-display.ci.openshift.org/api/v1/clusters")
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-	var page pageData
-	if err := json.Unmarshal(body, &page); err != nil {
-		return "", err
-	}
-	for _, data := range page.Data {
-		if errMsg, exists := data["error"]; exists && errMsg == "cannot reach cluster" {
-			continue
-		}
-		if c, exists := data["cluster"]; exists && c == cluster {
-			if provider, exists := data["cloud"]; exists {
-				return api.Cloud(strings.ToLower(provider)), nil
-			}
-		}
-	}
-	return "", fmt.Errorf("have not found provider for cluster %s", cluster)
-}
-
 // removeDisabledClusters removes disabled clusters from BuildFarm and BuildFarmConfig
 func removeDisabledClusters(config *dispatcher.Config, disabled sets.Set[string]) {
 	for provider := range config.BuildFarm {
@@ -645,7 +548,7 @@ func getDiffClusters(enabledClusters, clustersFromConfig sets.Set[string]) (clus
 	return clustersFromConfig.Difference(enabledClusters), enabledClusters.Difference(clustersFromConfig)
 }
 
-func clustersMapToSet(clusterMap ClusterMap) sets.Set[string] {
+func clustersMapToSet(clusterMap sanitizer.ClusterMap) sets.Set[string] {
 	clusterSet := sets.Set[string]{}
 	for cluster := range clusterMap {
 		clusterSet.Insert(cluster)
@@ -692,7 +595,7 @@ func createPR(o options, config *dispatcher.Config, pjs map[string]string) {
 		logrus.WithError(err).WithField("configPath", o.configPath).Fatal("failed to save config file")
 	}
 
-	if err := sanitizer.DeterminizeJobs(filepath.Join(targetDirWithRelease, "/ci-operator/jobs"), config, pjs); err != nil {
+	if err := sanitizer.DeterminizeJobs(filepath.Join(targetDirWithRelease, "/ci-operator/jobs"), config, pjs, make(sets.Set[string])); err != nil {
 		logrus.WithError(err).Fatal("failed to determinize")
 	}
 
@@ -717,17 +620,33 @@ func sendSlackMessage(slackClient slackClient, channelId string) error {
 	return nil
 }
 
-func runAsDaemon(o options, promVolumes *prometheusVolumes) {
-	if o.clusterConfigPath == "" {
-		logrus.Fatal("mandatory argument --cluster-config-path wasn't set")
+func main() {
+	o := gatherOptions()
+	if err := o.validate(); err != nil {
+		logrus.WithError(err).Fatal("Failed to complete options.")
 	}
 
-	if o.jobsStoragePath == "" {
-		logrus.Fatal("mandatory argument --cluster-config-path wasn't set")
+	if o.createPR {
+		if err := o.PRCreationOptions.Finalize(); err != nil {
+			logrus.WithError(err).Fatal("Failed to finalize PR creation options")
+		}
 	}
 
-	if o.slackTokenPath == "" {
-		logrus.Fatal("mandatory argument --slack-token-path wasn't set")
+	if o.PrometheusOptions.PrometheusPasswordPath != "" {
+		if err := secret.Add(o.PrometheusOptions.PrometheusPasswordPath); err != nil {
+			logrus.WithError(err).Fatal("Failed to start secrets agent")
+		}
+	}
+
+	if o.PrometheusOptions.PrometheusBearerTokenPath != "" {
+		if err := secret.Add(o.PrometheusOptions.PrometheusBearerTokenPath); err != nil {
+			logrus.WithError(err).Fatal("Failed to start secrets agent")
+		}
+	}
+
+	promVolumes, err := newPrometheusVolumes(o.PrometheusOptions, o.prometheusDaysBefore)
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to create prometheus volumes")
 	}
 
 	if err := secret.Add(o.slackTokenPath); err != nil {
@@ -759,7 +678,7 @@ func runAsDaemon(o options, promVolumes *prometheusVolumes) {
 				logrus.WithError(err).Errorf("failed to load config from %q", o.configPath)
 				return
 			}
-			_, blocked, err := loadClusterConfig(o.clusterConfigPath)
+			_, blocked, err := sanitizer.LoadClusterConfig(o.clusterConfigPath)
 			if err != nil {
 				logrus.WithError(err).Error("failed to load cluster config")
 				return
@@ -784,7 +703,7 @@ func runAsDaemon(o options, promVolumes *prometheusVolumes) {
 				return
 			}
 
-			configClusterMap, blocked, err := loadClusterConfig(o.clusterConfigPath)
+			configClusterMap, blocked, err := sanitizer.LoadClusterConfig(o.clusterConfigPath)
 			if err != nil {
 				logrus.WithError(err).Error("failed to load cluster config")
 				return
@@ -839,10 +758,9 @@ func runAsDaemon(o options, promVolumes *prometheusVolumes) {
 		dispatchWrapper(true)
 	}
 
-	_, err := c.AddFunc("0 7 * * 0", cronDispatchWrapper)
+	_, err = c.AddFunc("0 7 * * 0", cronDispatchWrapper)
 	if err != nil {
-		logrus.WithError(err).Error("error scheduling cron job")
-		return
+		logrus.WithError(err).Fatal("error scheduling cron job")
 	}
 	c.Start()
 
@@ -857,7 +775,7 @@ func runAsDaemon(o options, promVolumes *prometheusVolumes) {
 		deltaTicker := time.NewTicker(5 * time.Minute)
 		defer deltaTicker.Stop()
 
-		prevConfigClusterMap, prevBlocked, err := loadClusterConfig(config)
+		prevConfigClusterMap, prevBlocked, err := sanitizer.LoadClusterConfig(config)
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to load initial cluster config")
 			return
@@ -868,7 +786,7 @@ func runAsDaemon(o options, promVolumes *prometheusVolumes) {
 		for {
 			select {
 			case <-configTicker.C:
-				currentConfigClusterMap, currentBlocked, err := loadClusterConfig(config)
+				currentConfigClusterMap, currentBlocked, err := sanitizer.LoadClusterConfig(config)
 				if err != nil {
 					logrus.WithError(err).Error("failed to load cluster config")
 					continue
@@ -891,92 +809,5 @@ func runAsDaemon(o options, promVolumes *prometheusVolumes) {
 	server := newServer(prowjobs)
 	http.HandleFunc("/", server.requestHandler)
 	logrus.Fatal(http.ListenAndServe(":8080", nil))
-}
 
-func main() {
-	o := gatherOptions()
-	if err := o.validate(); err != nil {
-		logrus.WithError(err).Fatal("Failed to complete options.")
-	}
-
-	if o.createPR {
-		if err := o.PRCreationOptions.Finalize(); err != nil {
-			logrus.WithError(err).Fatal("Failed to finalize PR creation options")
-		}
-	}
-
-	if o.PrometheusOptions.PrometheusPasswordPath != "" {
-		if err := secret.Add(o.PrometheusOptions.PrometheusPasswordPath); err != nil {
-			logrus.WithError(err).Fatal("Failed to start secrets agent")
-		}
-	}
-
-	if o.PrometheusOptions.PrometheusBearerTokenPath != "" {
-		if err := secret.Add(o.PrometheusOptions.PrometheusBearerTokenPath); err != nil {
-			logrus.WithError(err).Fatal("Failed to start secrets agent")
-		}
-	}
-
-	promVolumes, err := newPrometheusVolumes(o.PrometheusOptions, o.prometheusDaysBefore)
-	if err != nil {
-		logrus.WithError(err).Fatal("failed to create prometheus volumes")
-	}
-
-	if o.daemonize {
-		runAsDaemon(o, &promVolumes)
-		return
-	}
-
-	jobVolumes, err := promVolumes.GetJobVolumes()
-	if err != nil {
-		logrus.WithError(err).Fatal("failed to get job volumes")
-	}
-
-	config, err := dispatcher.LoadConfig(o.configPath)
-	if err != nil {
-		logrus.WithError(err).Fatalf("Failed to load config from %q", o.configPath)
-	}
-
-	if o.defaultCluster != "" {
-		config.Default = api.Cluster(o.defaultCluster)
-	}
-
-	enabled := o.enableClusters.StringSet()
-	disabled := o.disableClusters.StringSet()
-	if len(disabled) > 0 {
-		removeDisabledClusters(config, disabled)
-	}
-	addEnabledClusters(config, enabled, getClusterProvider)
-
-	logrus.Info("Dispatching ...")
-	if _, err := dispatchJobs(o.prowJobConfigDir, config, jobVolumes, sets.Set[string](sets.NewString()), promVolumes.getTotalVolume()/float64(config.GetBuildFarmSize())); err != nil {
-		logrus.WithError(err).Fatal("Failed to dispatch")
-	}
-	if err := dispatcher.SaveConfig(config, o.configPath); err != nil {
-		logrus.WithError(err).Fatalf("Failed to save config file to %s", o.configPath)
-	}
-
-	if !o.createPR {
-		logrus.Info("Finished dispatching and create no PR, exiting ...")
-		os.Exit(0)
-	}
-	logrus.WithField("targetDir", o.targetDir).Info("Changing working directory ...")
-	if err := os.Chdir(o.targetDir); err != nil {
-		logrus.WithError(err).Fatal("Failed to change to root dir")
-	}
-
-	command := "/usr/bin/sanitize-prow-jobs"
-	arguments := []string{"--prow-jobs-dir", "./ci-operator/jobs", "--config-path", "./core-services/sanitize-prow-jobs/_config.yaml"}
-	fullCommand := fmt.Sprintf("%s %s", filepath.Base(command), strings.Join(arguments, " "))
-	logrus.WithField("fullCommand", fullCommand).Infof("Running the command ...")
-
-	combinedOutput, err := exec.Command(command, arguments...).CombinedOutput()
-	if err != nil {
-		logrus.WithError(err).WithField("combinedOutput", string(combinedOutput)).Fatal("failed to run the command")
-	}
-
-	title := fmt.Sprintf("%s at %s", matchTitle, time.Now().Format(time.RFC1123))
-	if err := o.PRCreationOptions.UpsertPR(o.targetDir, githubOrg, githubRepo, upstreamBranch, title, prcreation.PrAssignee(o.assign), prcreation.MatchTitle(matchTitle), prcreation.AdditionalLabels([]string{rehearse.RehearsalsAckLabel})); err != nil {
-		logrus.WithError(err).Fatalf("failed to upsert PR")
-	}
 }

@@ -102,7 +102,7 @@ inputs=(
 export inputs
 os::cmd::expect_success 'for input in "${inputs[@]}"; do echo "${input}"; done | repo-init -release-repo "${actual}"'
 os::cmd::expect_success 'ci-operator-prowgen --from-dir "${actual}/ci-operator/config" --to-dir "${actual}/ci-operator/jobs"'
-os::cmd::expect_success 'sanitize-prow-jobs --prow-jobs-dir "${actual}/ci-operator/jobs" --config-path "${actual}/core-services/sanitize-prow-jobs/_config.yaml"'
+os::cmd::expect_success 'sanitize-prow-jobs --prow-jobs-dir "${actual}/ci-operator/jobs" --config-path "${actual}/core-services/sanitize-prow-jobs/_config.yaml" --cluster-config-path "${actual}/core-services/sanitize-prow-jobs/_clusters.yaml"'
 os::cmd::expect_success 'determinize-ci-operator --config-dir "${actual}/ci-operator/config" --confirm'
 os::integration::compare "${actual}" "${expected}"
 

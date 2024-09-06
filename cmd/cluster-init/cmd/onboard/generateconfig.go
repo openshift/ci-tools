@@ -23,6 +23,8 @@ import (
 	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/prowplugin"
 	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/sanitizeprowjob"
 	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/syncrovergroup"
+	"github.com/openshift/ci-tools/cmd/cluster-init/runtime"
+	"github.com/openshift/ci-tools/pkg/clustermgmt"
 	clustermgmtonboard "github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
 	"github.com/openshift/ci-tools/pkg/github/prcreation"
 )
@@ -53,6 +55,8 @@ type options struct {
 	hosted    bool
 	unmanaged bool
 	osd       bool
+
+	*runtime.Options
 }
 
 func (o options) String() string {
@@ -122,13 +126,15 @@ func validateOptions(o options) []error {
 	return errs
 }
 
-func newGenerateConfigCmd(_ context.Context, log *logrus.Entry) *cobra.Command {
+func newGenerateConfigCmd(ctx context.Context, log *logrus.Entry,
+	parentOpts *runtime.Options) *cobra.Command {
+	opts.Options = parentOpts
 	cmd := cobra.Command{
 		Use:   "generate",
 		Short: "Generate the configuration files for a new cluster",
 		Long:  "Generate the configuration files for a new cluster",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return generateConfig(log)
+			return generateConfig(ctx, log, runtime.ClusterInstallGetterFunc(opts.ClusterInstall))
 		},
 	}
 
@@ -152,7 +158,7 @@ func newGenerateConfigCmd(_ context.Context, log *logrus.Entry) *cobra.Command {
 	return &cmd
 }
 
-func generateConfig(log *logrus.Entry) error {
+func generateConfig(ctx context.Context, log *logrus.Entry, getClusterInstall clustermgmt.ClusterInstallGetter) error {
 	log = log.WithField("stage", "onboard config")
 
 	validationErrors := validateOptions(opts)
@@ -245,6 +251,17 @@ func generateConfig(log *logrus.Entry) error {
 					ClusterName: o.clusterName,
 					ReleaseRepo: o.releaseRepo,
 				})
+			},
+			func(o options) error {
+				kubeclient, err := runtime.NewAdminKubeClient(getClusterInstall)
+				if err != nil {
+					return fmt.Errorf("new admin kubeclient: %w", err)
+				}
+				dexStep := clustermgmtonboard.NewDexStep(log, getClusterInstall, kubeclient)
+				if err := dexStep.Run(ctx); err != nil {
+					return fmt.Errorf("update dex manifests: %w", err)
+				}
+				return nil
 			},
 		}
 		if !opts.update {

@@ -30,8 +30,7 @@ func (s *applyConfigStep) Run(ctx context.Context) error {
 
 	configDir := fmt.Sprintf("--config-dir=%s/clusters/build-clusters/%s", ci.Onboard.ReleaseRepo, ci.ClusterName)
 
-	// The openshift-install places the first kubeconfig in ${installation_directory}/auth/kubeconfig
-	kubeconfig := fmt.Sprintf("--kubeconfig=%s/ocp-install-base/%s", ci.InstallBase, "auth/kubeconfig")
+	kubeconfig := fmt.Sprintf("--kubeconfig=%s", AdminKubeconfig(ci.InstallBase))
 
 	cmd := s.cmdBuilder(ctx, "applyconfig", configDir, "--as=", kubeconfig, "--confirm=true")
 

@@ -22,7 +22,7 @@ const (
 	cioperatorLatestImage = "ci-operator:latest"
 )
 
-func DeterminizeJobs(prowJobConfigDir string, config *dispatcher.Config, pjs map[string]string) error {
+func DeterminizeJobs(prowJobConfigDir string, config *dispatcher.Config, pjs map[string]string, blocked sets.Set[string]) error {
 	ch := make(chan string)
 	errCh := make(chan error)
 	produce := func() error {
@@ -53,7 +53,7 @@ func DeterminizeJobs(prowJobConfigDir string, config *dispatcher.Config, pjs map
 				continue
 			}
 
-			if err := defaultJobConfig(jobConfig, path, config, pjs); err != nil {
+			if err := defaultJobConfig(jobConfig, path, config, pjs, blocked); err != nil {
 				errCh <- fmt.Errorf("failed to default job config %q: %w", path, err)
 			}
 
@@ -76,10 +76,11 @@ func DeterminizeJobs(prowJobConfigDir string, config *dispatcher.Config, pjs map
 	return nil
 }
 
-func defaultJobConfig(jc *prowconfig.JobConfig, path string, config *dispatcher.Config, pjs map[string]string) error {
+func defaultJobConfig(jc *prowconfig.JobConfig, path string, config *dispatcher.Config, pjs map[string]string, blocked sets.Set[string]) error {
+	mostUsedCluster := FindMostUsedCluster(jc)
 	for k := range jc.PresubmitsStatic {
 		for idx := range jc.PresubmitsStatic[k] {
-			cluster, err := determineCluster(jc.PresubmitsStatic[k][idx].JobBase, config, pjs, path)
+			cluster, err := determineCluster(jc.PresubmitsStatic[k][idx].JobBase, config, pjs, path, mostUsedCluster, blocked)
 			if err != nil {
 				return err
 			}
@@ -102,7 +103,7 @@ func defaultJobConfig(jc *prowconfig.JobConfig, path string, config *dispatcher.
 	}
 	for k := range jc.PostsubmitsStatic {
 		for idx := range jc.PostsubmitsStatic[k] {
-			cluster, err := determineCluster(jc.PostsubmitsStatic[k][idx].JobBase, config, pjs, path)
+			cluster, err := determineCluster(jc.PostsubmitsStatic[k][idx].JobBase, config, pjs, path, mostUsedCluster, blocked)
 			if err != nil {
 				return err
 			}
@@ -122,7 +123,7 @@ func defaultJobConfig(jc *prowconfig.JobConfig, path string, config *dispatcher.
 		}
 	}
 	for idx := range jc.Periodics {
-		cluster, err := determineCluster(jc.Periodics[idx].JobBase, config, pjs, path)
+		cluster, err := determineCluster(jc.Periodics[idx].JobBase, config, pjs, path, mostUsedCluster, blocked)
 		if err != nil {
 			return err
 		}
@@ -138,13 +139,13 @@ func isCIOperatorLatest(image string) bool {
 	return lastPart == cioperatorLatestImage
 }
 
-func determineCluster(jb prowconfig.JobBase, config *dispatcher.Config, pjs map[string]string, path string) (string, error) {
+func determineCluster(jb prowconfig.JobBase, config *dispatcher.Config, pjs map[string]string, path string, mostUsedCluster string, blocked sets.Set[string]) (string, error) {
 	if pjs == nil {
-		c, err := config.GetClusterForJob(jb, path)
+		c, canBeRelocated, err := config.DetermineClusterForJob(jb, path)
 		if err != nil {
 			return "", err
 		}
-		return string(c), nil
+		return DetermineTargetCluster(mostUsedCluster, string(c), string(config.Default), canBeRelocated, blocked), nil
 	}
 	return pjs[jb.Name], nil
 

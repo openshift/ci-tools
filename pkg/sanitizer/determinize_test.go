@@ -3,6 +3,7 @@ package sanitizer
 import (
 	"testing"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/prow/pkg/config"
 
 	"github.com/openshift/ci-tools/pkg/dispatcher"
@@ -22,7 +23,7 @@ func TestDefaultJobConfig(t *testing.T) {
 	}
 
 	config := &dispatcher.Config{Default: "api.ci"}
-	if err := defaultJobConfig(jc, "", config, nil); err != nil {
+	if err := defaultJobConfig(jc, "", config, nil, make(sets.Set[string])); err != nil {
 		t.Errorf("failed default job config: %v", err)
 	}
 

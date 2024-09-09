@@ -145,7 +145,10 @@ func determineCluster(jb prowconfig.JobBase, config *dispatcher.Config, pjs map[
 		if err != nil {
 			return "", err
 		}
-		return DetermineTargetCluster(mostUsedCluster, string(c), string(config.Default), canBeRelocated, blocked), nil
+		if blocked.Has(string(c)) {
+			return DetermineTargetCluster(mostUsedCluster, string(c), string(config.Default), canBeRelocated, blocked), nil
+		}
+		return string(c), nil
 	}
 	return pjs[jb.Name], nil
 

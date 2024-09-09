@@ -235,15 +235,36 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 		}
 		logger := logrus.WithField("merged", "true")
 
-		mergedConfig := api.ReleaseBuildConfiguration{
-			InputConfiguration: api.InputConfiguration{
-				BuildRootImages: make(map[string]api.BuildRootImageConfiguration, len(metadataList)),
-				BaseImages:      make(map[string]api.ImageStreamTagReference),
-				BaseRPMImages:   make(map[string]api.ImageStreamTagReference),
-			},
-			Resources: make(api.ResourceConfiguration),
+		// If the requested injected test is from one of the configs to be merged, we will use that entire config as the base to merge into
+		injected, err := getInjectTestFromQuery(w, r)
+		if err != nil {
+			metrics.RecordError("invalid query", resolverMetrics.ErrorRate)
+			logrus.WithError(err).Warning("failed to read inject query from request")
 		}
+		var metadataToMerge []api.Metadata
+		var mergedConfig *api.ReleaseBuildConfiguration
+		var injectedTestIncluded bool
 		for _, metadata := range metadataList {
+			if injected.Metadata == metadata {
+				config, err := configs.GetMatchingConfig(metadata)
+				if err != nil {
+					metrics.RecordError("config not found", resolverMetrics.ErrorRate)
+					w.WriteHeader(http.StatusNotFound)
+					fmt.Fprintf(w, "failed to get config: %v", err)
+					logger.WithError(err).Warning("failed to get config")
+					return
+				}
+				mergedConfig = &config
+				injectedTestIncluded = true
+			} else {
+				metadataToMerge = append(metadataToMerge, metadata)
+			}
+		}
+		if mergedConfig == nil {
+			mergedConfig = &api.ReleaseBuildConfiguration{}
+		}
+		defaultMissingConfigValues(mergedConfig)
+		for _, metadata := range metadataToMerge {
 			configLogger := logger.WithFields(api.LogFieldsFor(metadata))
 			configLogger.Info("requested metadata to be merged")
 			config, err := configs.GetMatchingConfig(metadata)
@@ -386,11 +407,29 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 				mergedConfig.RawSteps = append(mergedConfig.RawSteps, *modifiedStep)
 			}
 		}
-		//TODO: If this is to be used for a general purpose outside of payload testing, we will need to merge tests and other elements
 
-		if configWithInjectedTest := injectTest(mergedConfig, configs, resolverMetrics, w, r, logger); configWithInjectedTest != nil {
-			resolveAndRespond(resolver, *configWithInjectedTest, w, logger, resolverMetrics)
+		// Only inject the test if the config containing it is not already included in the result
+		if !injectedTestIncluded {
+			mergedConfig = injectTest(*mergedConfig, configs, resolverMetrics, w, r, logger)
 		}
+		if mergedConfig != nil {
+			resolveAndRespond(resolver, *mergedConfig, w, logger, resolverMetrics)
+		}
+	}
+}
+
+func defaultMissingConfigValues(mergedConfig *api.ReleaseBuildConfiguration) {
+	if mergedConfig.InputConfiguration.BuildRootImages == nil {
+		mergedConfig.InputConfiguration.BuildRootImages = make(map[string]api.BuildRootImageConfiguration)
+	}
+	if mergedConfig.InputConfiguration.BaseImages == nil {
+		mergedConfig.InputConfiguration.BaseImages = make(map[string]api.ImageStreamTagReference)
+	}
+	if mergedConfig.InputConfiguration.BaseRPMImages == nil {
+		mergedConfig.InputConfiguration.BaseRPMImages = make(map[string]api.ImageStreamTagReference)
+	}
+	if mergedConfig.Resources == nil {
+		mergedConfig.Resources = make(api.ResourceConfiguration)
 	}
 }
 

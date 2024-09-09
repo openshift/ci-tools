@@ -212,6 +212,10 @@ func (m MajorMinor) GetPastVersion() string {
 	return fmt.Sprintf("%d.%d", m.Major, m.Minor-1)
 }
 
+func (m MajorMinor) GetPastPastVersion() string {
+	return fmt.Sprintf("%d.%d", m.Major, m.Minor-1)
+}
+
 func (m MajorMinor) GetVersion() string {
 	return fmt.Sprintf("%d.%d", m.Major, m.Minor)
 }

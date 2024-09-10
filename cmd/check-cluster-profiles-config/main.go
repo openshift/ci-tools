@@ -59,29 +59,38 @@ func main() {
 	}
 	validator := newValidator(client)
 
-	if err := validator.loadConfig(o.configPath); err != nil {
-		logger.WithError(err).Fatal("failed to load profiles from config")
+	list, err := loadConfig(o.configPath)
+	if err != nil {
+		logger.WithError(err).Fatal("failed to load cluster profiles from config file")
+	}
+
+	if err := validator.Validate(list); err != nil {
+		logger.WithError(err).Fatal("failed to validate cluster profiles")
 	}
 
 	if err := validator.checkCiSecrets(); err != nil {
-		logger.WithError(err).Fatal("failed to check secrets for cluster profiles")
+		logger.WithError(err).Fatal("failed to validate secrets for cluster profiles")
 	}
 
 	logger.Info("Cluster profiles successfully checked.")
 }
 
-func (validator *profileValidator) loadConfig(configPath string) error {
+func loadConfig(configPath string) (api.ClusterProfilesList, error) {
 	configContents, err := os.ReadFile(configPath)
 	if err != nil {
-		return fmt.Errorf("failed to read cluster profiles config: %w", err)
+		return api.ClusterProfilesList{}, fmt.Errorf("failed to read cluster profiles config: %w", err)
 	}
 
 	var profilesList api.ClusterProfilesList
 	if err = yaml.Unmarshal(configContents, &profilesList); err != nil {
-		return fmt.Errorf("failed to unmarshall file %s: %w", configPath, err)
+		return api.ClusterProfilesList{}, fmt.Errorf("failed to unmarshall file %s: %w", configPath, err)
 	}
 
-	for _, p := range profilesList {
+	return profilesList, nil
+}
+
+func (validator *profileValidator) Validate(profiles api.ClusterProfilesList) error {
+	for _, p := range profiles {
 		// Check if a profile isn't already defined in the config
 		if _, found := validator.profiles[p.Profile]; found {
 			return fmt.Errorf("cluster profile '%v' already exists in the configuration file", p.Profile)

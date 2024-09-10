@@ -8,28 +8,48 @@ import (
 
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
-func TestLoadConfig(t *testing.T) {
+func TestValidate(t *testing.T) {
 	var testCases = []struct {
-		name       string
-		expected   error
-		configPath string
+		name     string
+		expected error
+		profiles api.ClusterProfilesList
 	}{
 		{
-			name:       "Valid config file",
-			configPath: "testdata/ok-case.yaml",
+			name: "Empty config file",
 		},
 		{
-			name:       "Config file with invalid formatting",
-			configPath: "testdata/invalid-formatting.yaml",
-			expected:   fmt.Errorf("failed to unmarshall file testdata/invalid-formatting.yaml: error converting YAML to JSON: yaml: line 2: mapping values are not allowed in this context"),
+			name: "Valid config file",
+			profiles: api.ClusterProfilesList{
+				api.ClusterProfileDetails{
+					Profile: "aws",
+					Owners:  []api.ClusterProfileOwners{{Org: "aws", Repos: []string{"repo1"}}},
+				},
+				api.ClusterProfileDetails{
+					Profile: "gcp",
+					Owners:  []api.ClusterProfileOwners{{Org: "gcp-org"}},
+				},
+				api.ClusterProfileDetails{Profile: "aws2"},
+			},
 		},
 		{
-			name:       "Duplicated profile in config file",
-			configPath: "testdata/duplicated-profile.yaml",
-			expected:   fmt.Errorf("cluster profile 'aws' already exists in the configuration file"),
+			name: "Duplicated profile in config file",
+			profiles: api.ClusterProfilesList{
+				api.ClusterProfileDetails{
+					Profile: "aws",
+					Owners:  []api.ClusterProfileOwners{{Org: "aws", Repos: []string{"repo1"}}},
+				},
+				api.ClusterProfileDetails{
+					Profile: "gcp",
+					Owners:  []api.ClusterProfileOwners{{Org: "gcp-org"}},
+				},
+				api.ClusterProfileDetails{Profile: "aws"},
+				api.ClusterProfileDetails{Profile: "gcp2"},
+			},
+			expected: fmt.Errorf("cluster profile 'aws' already exists in the configuration file"),
 		},
 	}
 
@@ -37,7 +57,7 @@ func TestLoadConfig(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validator.loadConfig(tc.configPath)
+			err := validator.Validate(tc.profiles)
 			if diff := cmp.Diff(tc.expected, err, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("error differs from expected:\n%v", diff)
 			}

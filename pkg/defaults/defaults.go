@@ -79,7 +79,6 @@ func FromConfig(
 	targetAdditionalSuffix string,
 	manifestToolDockerCfg string,
 	localRegistryDNS string,
-	mergedConfig bool,
 	integratedStreams map[string]*configresolver.IntegratedStream,
 ) ([]api.Step, []api.Step, error) {
 	crclient, err := ctrlruntimeclient.NewWithWatch(clusterConfig, ctrlruntimeclient.Options{})
@@ -117,7 +116,7 @@ func FromConfig(
 	httpClient := retryablehttp.NewClient()
 	httpClient.Logger = nil
 
-	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, consoleHost, nodeName, targetAdditionalSuffix, nodeArchitectures, mergedConfig, integratedStreams)
+	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, consoleHost, nodeName, targetAdditionalSuffix, nodeArchitectures, integratedStreams)
 }
 
 func fromConfig(
@@ -144,7 +143,6 @@ func fromConfig(
 	nodeName string,
 	targetAdditionalSuffix string,
 	nodeArchitectures []string,
-	mergedConfig bool,
 	integratedStreams map[string]*configresolver.IntegratedStream,
 ) ([]api.Step, []api.Step, error) {
 	requiredNames := sets.New[string]()
@@ -175,7 +173,7 @@ func fromConfig(
 	var hasReleaseStep bool
 	resolver := rootImageResolver(client, ctx, promote)
 	imageConfigs := graphConf.InputImages()
-	rawSteps, err := runtimeStepConfigsForBuild(config, jobSpec, os.ReadFile, resolver, imageConfigs, mergedConfig)
+	rawSteps, err := runtimeStepConfigsForBuild(config, jobSpec, os.ReadFile, resolver, imageConfigs)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get steps from configuration: %w", err)
 	}
@@ -644,7 +642,7 @@ func FromConfigStatic(config *api.ReleaseBuildConfiguration) api.GraphConfigurat
 	if buildRoots == nil {
 		buildRoots = make(map[string]api.BuildRootImageConfiguration)
 	}
-	if target := config.InputConfiguration.BuildRootImage; target != nil { //This will only be the case when config.InputConfiguration.BuildRootImages is empty
+	if target := config.InputConfiguration.BuildRootImage; target != nil {
 		buildRoots[""] = *target
 	}
 
@@ -937,7 +935,6 @@ func runtimeStepConfigsForBuild(
 	readFile readFile,
 	resolveRoot resolveRoot,
 	imageConfigs []*api.InputImageTagStepConfiguration,
-	mergedConfig bool,
 ) ([]api.StepConfiguration, error) {
 	buildRoots := config.InputConfiguration.BuildRootImages
 	if buildRoots == nil {
@@ -968,13 +965,16 @@ func runtimeStepConfigsForBuild(
 		if target != nil {
 			istTagRef := &target.InputImage.BaseImage
 			if root.FromRepository {
-				path := "."    // By default, the path will be the working directory
-				if ref != "" { // If we are getting the build root image for a specific ref we must determine the absolute path
+				path := "."        // By default, the path will be the working directory
+				if len(refs) > 1 { // If we are getting the build root image for a specific ref we must determine the absolute path
 					var matchingRefs []prowapi.Refs
 					for _, r := range refs {
 						if ref == fmt.Sprintf("%s.%s", r.Org, r.Repo) {
 							matchingRefs = append(matchingRefs, r)
 						}
+					}
+					if len(matchingRefs) == 0 { // If we didn't find anything, use the primary refs
+						matchingRefs = append(matchingRefs, *jobSpec.Refs)
 					}
 					path = decorate.DetermineWorkDir(codeMountPath, matchingRefs)
 				}
@@ -1011,36 +1011,36 @@ func runtimeStepConfigsForBuild(
 			target.InputImage.BaseImage = *istTagRef
 		}
 	}
-	//If there is a ref we only add a src step for that ref, otherwise do it for each extra_ref supplied
-	var sourceRefs []prowapi.Refs
+
 	if jobSpec.Refs != nil {
-		sourceRefs = []prowapi.Refs{*jobSpec.Refs}
-	} else {
-		sourceRefs = jobSpec.ExtraRefs
+		buildSteps = append(buildSteps, sourceStepForRef(jobSpec.Refs, true))
 	}
-	for _, r := range sourceRefs {
-		ref := ""
-		root := api.PipelineImageStreamTagReferenceRoot
-		source := api.PipelineImageStreamTagReferenceSource
-		if mergedConfig { // We only care about these suffixes when building from multiple sources
-			ref = fmt.Sprintf("%s.%s", r.Org, r.Repo)
-			root = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", api.PipelineImageStreamTagReferenceRoot, ref))
-			source = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", api.PipelineImageStreamTagReferenceSource, ref))
-		}
-		step := api.StepConfiguration{SourceStepConfiguration: &api.SourceStepConfiguration{
-			From: root,
-			To:   source,
-			ClonerefsImage: api.ImageStreamTagReference{
-				Namespace: "ci",
-				Name:      "managed-clonerefs",
-				Tag:       "latest",
-			},
-			ClonerefsPath: "/clonerefs",
-			Ref:           ref,
-		}}
-		buildSteps = append(buildSteps, step)
+	for _, ref := range jobSpec.ExtraRefs {
+		buildSteps = append(buildSteps, sourceStepForRef(&ref, false))
 	}
 	return buildSteps, nil
+}
+
+func sourceStepForRef(ref *prowapi.Refs, primaryRef bool) api.StepConfiguration {
+	orgRepo := ""
+	root := api.PipelineImageStreamTagReferenceRoot
+	source := api.PipelineImageStreamTagReferenceSource
+	if !primaryRef { // We only care about these suffixes when building extra refs
+		orgRepo = fmt.Sprintf("%s.%s", ref.Org, ref.Repo)
+		root = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", api.PipelineImageStreamTagReferenceRoot, orgRepo))
+		source = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", api.PipelineImageStreamTagReferenceSource, orgRepo))
+	}
+	return api.StepConfiguration{SourceStepConfiguration: &api.SourceStepConfiguration{
+		From: root,
+		To:   source,
+		ClonerefsImage: api.ImageStreamTagReference{
+			Namespace: "ci",
+			Name:      "managed-clonerefs",
+			Tag:       "latest",
+		},
+		ClonerefsPath: "/clonerefs",
+		Ref:           orgRepo,
+	}}
 }
 
 func paramsHasAllParametersAsInput(p api.Parameters, params map[string]func() (string, error)) (map[string]string, bool) {

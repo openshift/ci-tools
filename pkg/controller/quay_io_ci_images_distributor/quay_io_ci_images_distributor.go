@@ -374,6 +374,14 @@ func sourceForConfigChangeChannel(registryClient ctrlruntimeclient.Client, chang
 	return channelSource
 }
 
+func LoadConfigFromReleaseRepo(configPath string) ([]byte, error) {
+	file, err := repoFileGetterWithIgnore(cioperatorapi.Metadata{})("openshift", "release", "master")(configPath)
+	if err != nil {
+		return []byte{}, fmt.Errorf("failed to get the file %s in repo openshift/release for branch master: %w", configPath, err)
+	}
+	return file, nil
+}
+
 type ImageInfo struct {
 	Name string `json:"name"`
 	// Digest is the digest of the image, e.g., sha256:b24f782bee7dfddcc36b962f663aeabb16d6fa56a64a7cd0639ebfb1e5fa73f4

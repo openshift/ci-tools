@@ -1,0 +1,102 @@
+metadata:
+  annotations:
+    ci-operator.openshift.io/container-sub-tests: StepName
+    ci.openshift.io/job-spec: ""
+  creationTimestamp: null
+  labels:
+    OPENSHIFT_CI: "true"
+    ci.openshift.io/metadata.branch: base-ref
+    ci.openshift.io/metadata.org: org
+    ci.openshift.io/metadata.repo: repo
+    ci.openshift.io/metadata.target: target
+    ci.openshift.io/metadata.variant: variant
+    created-by-ci: "true"
+  name: TestName
+  namespace: TestNamespace
+  resourceVersion: "1"
+spec:
+  containers:
+  - command:
+    - /tools/entrypoint
+    env:
+    - name: BUILD_ID
+      value: test-build-id
+    - name: CI
+      value: "true"
+    - name: JOB_NAME
+      value: very-cool-prow-job
+    - name: JOB_SPEC
+      value: '{"type":"presubmit","job":"very-cool-prow-job","buildid":"test-build-id","prowjobid":"prow-job-id","refs":{"org":"org","repo":"repo","base_ref":"base-ref","base_sha":"base-sha","pulls":[{"number":123,"author":"","sha":"72532003f9e01e89f455187dd92c275204bc9781"}]},"decoration_config":{"timeout":"1m0s","grace_period":"1s","utility_images":{"entrypoint":"entrypoint","sidecar":"sidecar"},"skip_cloning":true}}'
+    - name: JOB_TYPE
+      value: presubmit
+    - name: OPENSHIFT_CI
+      value: "true"
+    - name: PROW_JOB_ID
+      value: prow-job-id
+    - name: PULL_BASE_REF
+      value: base-ref
+    - name: PULL_BASE_SHA
+      value: base-sha
+    - name: PULL_HEAD_REF
+    - name: PULL_NUMBER
+      value: "123"
+    - name: PULL_PULL_SHA
+      value: 72532003f9e01e89f455187dd92c275204bc9781
+    - name: PULL_REFS
+      value: base-ref:base-sha,123:72532003f9e01e89f455187dd92c275204bc9781
+    - name: PULL_TITLE
+    - name: REPO_NAME
+      value: repo
+    - name: REPO_OWNER
+      value: org
+    - name: GIT_CONFIG_COUNT
+      value: "1"
+    - name: GIT_CONFIG_KEY_0
+      value: safe.directory
+    - name: GIT_CONFIG_VALUE_0
+      value: '*'
+    - name: ENTRYPOINT_OPTIONS
+      value: '{"timeout":60000000000,"grace_period":1000000000,"artifact_dir":"/logs/artifacts","args":["/bin/bash","-c","#!/bin/bash\nset
+        -eu\nlaunch-tests"],"container_name":"StepName","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}'
+    - name: ARTIFACT_DIR
+      value: /logs/artifacts
+    image: somename:sometag
+    name: StepName
+    resources: {}
+    terminationMessagePolicy: FallbackToLogsOnError
+    volumeMounts:
+    - mountPath: /logs
+      name: logs
+    - mountPath: /tools
+      name: tools
+  - env:
+    - name: JOB_SPEC
+    - name: SIDECAR_OPTIONS
+      value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/StepName","dry_run":false},"entries":[{"args":["/bin/bash","-c","#!/bin/bash\nset
+        -eu\nlaunch-tests"],"container_name":"StepName","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}],"ignore_interrupts":true,"censoring_options":{}}'
+    image: sidecar
+    name: sidecar
+    resources: {}
+    terminationMessagePolicy: FallbackToLogsOnError
+    volumeMounts:
+    - mountPath: /logs
+      name: logs
+  initContainers:
+  - args:
+    - --copy-mode-only
+    image: entrypoint
+    name: place-entrypoint
+    resources: {}
+    volumeMounts:
+    - mountPath: /tools
+      name: tools
+  nodeSelector:
+    kubernetes.io/arch: amd64
+  restartPolicy: Never
+  volumes:
+  - emptyDir: {}
+    name: logs
+  - emptyDir: {}
+    name: tools
+status:
+  phase: Succeeded

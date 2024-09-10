@@ -1,0 +1,350 @@
+{
+  "zz_generated_metadata": {
+    "org": "openshift",
+    "repo": "installer",
+    "branch": "release-4.2"
+  },
+  "base_images": {
+    "base": {
+      "namespace": "ocp",
+      "name": "4.2",
+      "tag": "base"
+    },
+    "base-openshift.console": {
+      "namespace": "ocp",
+      "name": "4.2",
+      "tag": "base"
+    }
+  },
+  "build_root": {
+    "image_stream_tag": {
+      "namespace": "openshift",
+      "name": "release",
+      "tag": "golang-1.10"
+    }
+  },
+  "build_roots": {
+    "openshift.console": {
+      "image_stream_tag": {
+        "namespace": "openshift",
+        "name": "release",
+        "tag": "golang-1.20"
+      }
+    }
+  },
+  "images": [
+    {
+      "from": "base",
+      "to": "installer"
+    },
+    {
+      "from": "base-openshift.console",
+      "to": "console-openshift.console",
+      "ref": "openshift.console"
+    }
+  ],
+  "tests": [
+    {
+      "as": "unit",
+      "commands": "go test ./pkg/...",
+      "container": {
+        "from": "src"
+      }
+    },
+    {
+      "as": "e2e-aws",
+      "commands": "TEST_SUITE=openshift/conformance/parallel run-tests",
+      "openshift_installer": {
+        "cluster_profile": "aws"
+      }
+    },
+    {
+      "as": "e2e-azure",
+      "literal_steps": {
+        "cluster_profile": "azure4",
+        "pre": [
+          {
+            "as": "ipi-install-rbac",
+            "from": "installer",
+            "commands": "setup-rbac\n",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              }
+            },
+            "node_architecture": "amd64"
+          },
+          {
+            "as": "ipi-install-install",
+            "from": "installer",
+            "commands": "openshift-cluster install\n",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              }
+            },
+            "env": [
+              {
+                "name": "TEST_PARAMETER",
+                "default": "test parameter default"
+              }
+            ],
+            "observers": [
+              "resourcewatcher"
+            ],
+            "node_architecture": "amd64"
+          }
+        ],
+        "test": [
+          {
+            "as": "e2e",
+            "from": "my-image",
+            "commands": "make azure-e2e",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              }
+            },
+            "node_architecture": "amd64"
+          }
+        ],
+        "post": [
+          {
+            "as": "ipi-deprovision-must-gather",
+            "from": "installer",
+            "commands": "gather\n",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              }
+            },
+            "node_architecture": "amd64"
+          },
+          {
+            "as": "ipi-deprovision-deprovision",
+            "from": "installer",
+            "commands": "openshift-cluster destroy\n",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              }
+            },
+            "node_architecture": "amd64"
+          }
+        ]
+      }
+    },
+    {
+      "as": "e2e-azure-with-watcher",
+      "literal_steps": {
+        "cluster_profile": "azure4",
+        "pre": [
+          {
+            "as": "ipi-install-rbac",
+            "from": "installer",
+            "commands": "setup-rbac\n",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              }
+            },
+            "node_architecture": "amd64"
+          },
+          {
+            "as": "ipi-install-install",
+            "from": "installer",
+            "commands": "openshift-cluster install\n",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              }
+            },
+            "env": [
+              {
+                "name": "TEST_PARAMETER",
+                "default": "test parameter default"
+              }
+            ],
+            "observers": [
+              "resourcewatcher"
+            ],
+            "node_architecture": "amd64"
+          }
+        ],
+        "test": [
+          {
+            "as": "e2e",
+            "from": "my-image",
+            "commands": "make azure-e2e",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              }
+            },
+            "node_architecture": "amd64"
+          }
+        ],
+        "post": [
+          {
+            "as": "ipi-deprovision-must-gather",
+            "from": "installer",
+            "commands": "gather\n",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              }
+            },
+            "node_architecture": "amd64"
+          },
+          {
+            "as": "ipi-deprovision-deprovision",
+            "from": "installer",
+            "commands": "openshift-cluster destroy\n",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              }
+            },
+            "node_architecture": "amd64"
+          }
+        ],
+        "observers": [
+          {
+            "name": "resourcewatcher",
+            "from_image": {
+              "namespace": "ocp",
+              "name": "resourcewatcher",
+              "tag": "latest"
+            },
+            "commands": "#!/bin/bash\n\nsleep 300",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "as": "e2e-gcp",
+      "literal_steps": {
+        "cluster_profile": "gcp",
+        "pre": [
+          {
+            "as": "ipi-install-rbac",
+            "from": "installer",
+            "commands": "setup-rbac\n",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              }
+            },
+            "node_architecture": "amd64"
+          },
+          {
+            "as": "ipi-install-install",
+            "from": "installer",
+            "commands": "openshift-cluster install\n",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              }
+            },
+            "env": [
+              {
+                "name": "TEST_PARAMETER",
+                "default": "test parameter default"
+              }
+            ],
+            "observers": [
+              "resourcewatcher"
+            ],
+            "node_architecture": "amd64"
+          }
+        ],
+        "test": [
+          {
+            "as": "e2e",
+            "from": "my-image",
+            "commands": "make custom-e2e",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              }
+            },
+            "node_architecture": "amd64"
+          }
+        ],
+        "post": [
+          {
+            "as": "ipi-deprovision-must-gather",
+            "from": "installer",
+            "commands": "gather\n",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              }
+            },
+            "node_architecture": "amd64"
+          },
+          {
+            "as": "ipi-deprovision-deprovision",
+            "from": "installer",
+            "commands": "openshift-cluster destroy\n",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              }
+            },
+            "node_architecture": "amd64"
+          }
+        ],
+        "observers": [
+          {
+            "name": "resourcewatcher",
+            "from_image": {
+              "namespace": "ocp",
+              "name": "resourcewatcher",
+              "tag": "latest"
+            },
+            "commands": "#!/bin/bash\n\nsleep 300",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "resources": {
+    "*": {
+      "requests": {
+        "cpu": "110m",
+        "memory": "300Mi"
+      },
+      "limits": {
+        "memory": "4Gi"
+      }
+    }
+  }
+}

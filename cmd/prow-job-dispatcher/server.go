@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"regexp"
 
 	"github.com/sirupsen/logrus"
 )
@@ -27,6 +28,15 @@ type SchedulingResponse struct {
 	Cluster string `json:"cluster"`
 }
 
+func removeRehearsePrefix(jobName string) string {
+	re := regexp.MustCompile(`^rehearse-\d+-`)
+
+	if re.MatchString(jobName) {
+		return re.ReplaceAllString(jobName, "")
+	}
+	return jobName
+}
+
 func (s *Server) requestHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
@@ -47,7 +57,7 @@ func (s *Server) requestHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	cluster := s.pjs.get(req.Job)
+	cluster := s.pjs.get(removeRehearsePrefix(req.Job))
 	if cluster == "" {
 		http.Error(w, "Cluster not found", http.StatusNotFound)
 		return

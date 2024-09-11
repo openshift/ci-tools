@@ -1,5 +1,3 @@
-hosted:
-- newCluster
 managed:
 - existingCluster
 - newCluster

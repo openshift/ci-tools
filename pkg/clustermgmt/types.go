@@ -33,7 +33,14 @@ type AWSCloudFormationTemplate struct {
 }
 
 type Onboard struct {
-	ReleaseRepo string `json:"releaseRepo,omitempty"`
+	ReleaseRepo      string `json:"releaseRepo,omitempty"`
+	KubeconfigDir    string `json:"kubeconfigDir,omitempty"`
+	KubeconfigSuffix string `json:"kubeconfigSuffix,omitempty"`
+	Dex              Dex    `json:"dex,omitempty"`
+}
+
+type Dex struct {
+	RedirectURIs map[string]string `json:"redirectURI,omitempty"`
 }
 
 type Step interface {

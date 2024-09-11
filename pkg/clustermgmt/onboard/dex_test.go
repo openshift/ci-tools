@@ -11,28 +11,26 @@ import (
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	routev1 "github.com/openshift/api/route/v1"
-
-	"github.com/openshift/ci-tools/pkg/clustermgmt"
 )
 
 func TestUpdateDexConfig(t *testing.T) {
 	releaseRepo := "/release/repo"
 	for _, tc := range []struct {
 		name          string
-		ci            *clustermgmt.ClusterInstall
+		releaseRepo   string
+		clusterName   string
+		redirectURIs  map[string]string
 		dexManifests  string
 		wantManifests string
 		wantErr       error
 	}{
 		{
-			name: "Add static client and env",
-			ci: &clustermgmt.ClusterInstall{
-				ClusterName: "build11",
-				Onboard:     clustermgmt.Onboard{ReleaseRepo: releaseRepo},
-			},
+			name:        "Add static client and env",
+			clusterName: "build11",
 			dexManifests: `apiVersion: apps/v1
 kind: Deployment
 spec:
@@ -82,11 +80,60 @@ status: {}
 `,
 		},
 		{
-			name: "Update client and env",
-			ci: &clustermgmt.ClusterInstall{
-				ClusterName: "build11",
-				Onboard:     clustermgmt.Onboard{ReleaseRepo: releaseRepo},
-			},
+			name:         "Get redirectURI from config",
+			clusterName:  "build11",
+			redirectURIs: map[string]string{"build11": "https://redirect.uri"},
+			dexManifests: `apiVersion: apps/v1
+kind: Deployment
+spec:
+  template:
+    metadata:
+      annotations:
+        config.yaml: |
+          staticClients: []
+    spec:
+      containers:
+      - env: []
+`,
+			wantManifests: `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+spec:
+  selector: null
+  strategy: {}
+  template:
+    metadata:
+      annotations:
+        config.yaml: |
+          staticClients:
+          - idEnv: BUILD11-ID
+            name: build11
+            redirectURIs:
+            - https://redirect.uri
+            secretEnv: BUILD11-SECRET
+      creationTimestamp: null
+    spec:
+      containers:
+      - env:
+        - name: BUILD11-ID
+          valueFrom:
+            secretKeyRef:
+              key: build11-id
+              name: build11-secret
+        - name: BUILD11-SECRET
+          valueFrom:
+            secretKeyRef:
+              key: build11-secret
+              name: build11-secret
+        name: ""
+        resources: {}
+status: {}
+`,
+		},
+		{
+			name:        "Update client and env",
+			clusterName: "build11",
 			dexManifests: `apiVersion: apps/v1
 kind: Deployment
 spec:
@@ -152,12 +199,9 @@ status: {}
 `,
 		},
 		{
-			name: "No deployment",
-			ci: &clustermgmt.ClusterInstall{
-				ClusterName: "build11",
-				Onboard:     clustermgmt.Onboard{ReleaseRepo: releaseRepo},
-			},
-			wantErr: errors.New("deployment not found"),
+			name:        "No deployment",
+			clusterName: "build11",
+			wantErr:     errors.New("deployment not found"),
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -173,7 +217,8 @@ status: {}
 			}).Build()
 
 			step := NewDexStep(logrus.NewEntry(logrus.StandardLogger()),
-				func() (*clustermgmt.ClusterInstall, error) { return tc.ci, nil }, c,
+				func() (ctrlruntimeclient.Client, error) { return c, nil },
+				releaseRepo, tc.clusterName, tc.redirectURIs,
 			)
 
 			var readManifestsPath string

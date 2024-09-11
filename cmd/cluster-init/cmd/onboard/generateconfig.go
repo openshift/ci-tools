@@ -12,6 +12,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"k8s.io/client-go/rest"
 
 	"sigs.k8s.io/prow/cmd/generic-autobumper/bumper"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/clustermgmt"
 	clustermgmtonboard "github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
 	"github.com/openshift/ci-tools/pkg/github/prcreation"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -139,8 +141,6 @@ func newGenerateConfigCmd(ctx context.Context, log *logrus.Entry,
 	}
 
 	fs := cmd.PersistentFlags()
-	fs.StringVar(&opts.clusterName, "cluster-name", "", "The name of the new cluster.")
-	fs.StringVar(&opts.releaseRepo, "release-repo", "", "Path to the root of the openshift/release repository.")
 	fs.BoolVar(&opts.update, "update", false, "Run in update mode. Set to false by default")
 	fs.BoolVar(&opts.createPR, "create-pr", true, "If a PR should be created. Set to true by default")
 	fs.StringVar(&opts.githubLogin, "github-login", githubLogin, "The GitHub username to use. Set to "+githubLogin+" by default")
@@ -158,8 +158,16 @@ func newGenerateConfigCmd(ctx context.Context, log *logrus.Entry,
 	return &cmd
 }
 
-func generateConfig(ctx context.Context, log *logrus.Entry, getClusterInstall clustermgmt.ClusterInstallGetter) error {
+func generateConfig(ctx context.Context, log *logrus.Entry, clusterInstall clustermgmt.ClusterInstallGetter) error {
 	log = log.WithField("stage", "onboard config")
+
+	ci, err := clusterInstall()
+	if err != nil {
+		return fmt.Errorf("cluster install: %w", err)
+	}
+
+	opts.clusterName = ci.ClusterName
+	opts.releaseRepo = ci.Onboard.ReleaseRepo
 
 	validationErrors := validateOptions(opts)
 	if len(validationErrors) > 0 {
@@ -184,7 +192,7 @@ func generateConfig(ctx context.Context, log *logrus.Entry, getClusterInstall cl
 		Hosted:      opts.hosted,
 	})
 	if err != nil {
-		return fmt.Errorf("load build cluster: %w", err)
+		return fmt.Errorf("load build clusters: %w", err)
 	}
 
 	if opts.clusterName == "" {
@@ -200,6 +208,11 @@ func generateConfig(ctx context.Context, log *logrus.Entry, getClusterInstall cl
 		if opts.osd {
 			osdClusters = append(buildClusters.Osd, opts.clusterName)
 		}
+	}
+
+	kubeconfigs, err := loadKubeconfigs(ci, opts.update)
+	if err != nil {
+		return fmt.Errorf("load kubeconfigs: %w", err)
 	}
 
 	for _, cluster := range clusters {
@@ -253,11 +266,8 @@ func generateConfig(ctx context.Context, log *logrus.Entry, getClusterInstall cl
 				})
 			},
 			func(o options) error {
-				kubeclient, err := runtime.NewAdminKubeClient(getClusterInstall)
-				if err != nil {
-					return fmt.Errorf("new admin kubeclient: %w", err)
-				}
-				dexStep := clustermgmtonboard.NewDexStep(log, getClusterInstall, kubeclient)
+				kubeClient := kubeClientFunc(kubeconfigs, o.clusterName, o.update)
+				dexStep := clustermgmtonboard.NewDexStep(log, kubeClient, o.releaseRepo, o.clusterName, ci.Onboard.Dex.RedirectURIs)
 				if err := dexStep.Run(ctx); err != nil {
 					return fmt.Errorf("update dex manifests: %w", err)
 				}
@@ -291,6 +301,42 @@ func generateConfig(ctx context.Context, log *logrus.Entry, getClusterInstall cl
 	}
 
 	return nil
+}
+
+func loadKubeconfigs(ci *clustermgmt.ClusterInstall, updateMode bool) (*runtime.Kubeconfigs, error) {
+	adminKubeconfigPath := ""
+	if !updateMode {
+		adminKubeconfigPath = clustermgmtonboard.AdminKubeconfig(ci.InstallBase)
+	}
+	kubeconfigs, err := runtime.LoadKubeconfigs(ci.Onboard.KubeconfigDir, ci.Onboard.KubeconfigSuffix, adminKubeconfigPath)
+	if err != nil {
+		return nil, err
+	}
+	return kubeconfigs, nil
+}
+
+// kubeClientFunc return a function that resolves a kube client. When the cluster-init tool runs in "update"
+// mode we pass it a bunch of kubeconfigs regarding clusters that have been created and onboarded already.
+// On the other hand, when we are in the middle of creating one, we have to rely on the admin kubeconfig
+// dropped by the openshit-install.
+func kubeClientFunc(kubeconfigs *runtime.Kubeconfigs, clusterName string, updateMode bool) func() (ctrlruntimeclient.Client, error) {
+	return func() (ctrlruntimeclient.Client, error) {
+		var config *rest.Config
+		if updateMode {
+			c, found := kubeconfigs.Resolve(clusterName)
+			if !found {
+				return nil, fmt.Errorf("kubeconfig for %s not found", clusterName)
+			}
+			config = &c
+		} else {
+			c, found := kubeconfigs.Admin()
+			if !found {
+				return nil, fmt.Errorf("admin kubeconfig for %s not found", clusterName)
+			}
+			config = &c
+		}
+		return ctrlruntimeclient.New(config, ctrlruntimeclient.Options{})
+	}
 }
 
 func submitPR(o options) error {

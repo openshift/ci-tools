@@ -3,6 +3,7 @@ package cisecretbootstrap
 import (
 	"fmt"
 	"path/filepath"
+	"reflect"
 
 	"github.com/sirupsen/logrus"
 
@@ -83,8 +84,8 @@ func updateCiSecretBootstrapConfig(log *logrus.Entry, o Options, c *secretbootst
 		updateSecret(generateRegistryPushCredentialsSecret),
 		updateSecret(generateRegistryPullCredentialsSecret),
 		updateSecret(generateCiOperatorSecret),
-		updateSecret(generateDexIdAndSecret),
-		updateSecret(generateDexClientSecret),
+		updateDexIdAndSecret,
+		updateDexClientSecret,
 	}
 	if !o.Unmanaged {
 		steps = append(steps, updatePodScalerSecret)
@@ -371,16 +372,16 @@ func updateChatBotSecret(log *logrus.Entry, c *secretbootstrap.Config, o Options
 	})
 }
 
-func generateDexClientSecret(log *logrus.Entry, o Options) *secretbootstrap.SecretConfig {
+func updateDexClientSecret(log *logrus.Entry, c *secretbootstrap.Config, o Options) error {
 	if o.Hosted || o.osd {
 		log.Info("Cluster is either hosted or osd, skipping dex-rh-sso")
 		return nil
 	}
-	return &secretbootstrap.SecretConfig{
+	secret := &secretbootstrap.SecretConfig{
 		From: map[string]secretbootstrap.ItemContext{
 			"client-secret": {
 				Field: o.ClusterName + "-secret",
-				Item:  "dex",
+				Item:  c.VaultDPTPPrefix + "/dex",
 			},
 		},
 		To: []secretbootstrap.SecretContext{{
@@ -389,18 +390,24 @@ func generateDexClientSecret(log *logrus.Entry, o Options) *secretbootstrap.Secr
 			Namespace: "openshift-config",
 		}},
 	}
+
+	if !secretConfigExist(secret, c.Secrets) {
+		c.Secrets = append(c.Secrets, *secret)
+	}
+
+	return nil
 }
 
-func generateDexIdAndSecret(log *logrus.Entry, o Options) *secretbootstrap.SecretConfig {
+func updateDexIdAndSecret(log *logrus.Entry, c *secretbootstrap.Config, o Options) error {
 	secret := &secretbootstrap.SecretConfig{
 		From: map[string]secretbootstrap.ItemContext{
 			o.ClusterName + "-id": {
 				Field: o.ClusterName + "-id",
-				Item:  "dex",
+				Item:  c.VaultDPTPPrefix + "/dex",
 			},
 			o.ClusterName + "-secret": {
 				Field: o.ClusterName + "-secret",
-				Item:  "dex",
+				Item:  c.VaultDPTPPrefix + "/dex",
 			},
 		},
 		To: []secretbootstrap.SecretContext{
@@ -411,16 +418,21 @@ func generateDexIdAndSecret(log *logrus.Entry, o Options) *secretbootstrap.Secre
 			},
 		},
 	}
-	if o.Hosted || o.osd {
-		return secret
+
+	if !(o.Hosted || o.osd) {
+		log.Info("Cluster is neither hosted nor osd, syncing dex OIDC secret")
+		secret.To = append(secret.To, secretbootstrap.SecretContext{
+			Cluster:   string(api.ClusterAPPCI),
+			Name:      o.ClusterName + "-dex-oidc",
+			Namespace: "ci",
+		})
 	}
-	log.Info("Cluster is neither hosted nor osd, syncing dex OIDC secret")
-	secret.To = append(secret.To, secretbootstrap.SecretContext{
-		Cluster:   string(api.ClusterAPPCI),
-		Name:      o.ClusterName + "-dex-oidc",
-		Namespace: "ci",
-	})
-	return secret
+
+	if !secretConfigExist(secret, c.Secrets) {
+		c.Secrets = append(c.Secrets, *secret)
+	}
+
+	return nil
 }
 
 func updateSecretItemContext(log *logrus.Entry, c *secretbootstrap.Config, name, cluster, key string, value secretbootstrap.ItemContext) error {
@@ -503,4 +515,13 @@ func findSecretConfig(name string, cluster string, sc []secretbootstrap.SecretCo
 		return idx, &sc[idx], nil
 	}
 	return -1, nil, fmt.Errorf("couldn't find SecretConfig with name: %s and cluster: %s", name, cluster)
+}
+
+func secretConfigExist(target *secretbootstrap.SecretConfig, secrets []secretbootstrap.SecretConfig) bool {
+	for _, candidate := range secrets {
+		if reflect.DeepEqual(target, &candidate) {
+			return true
+		}
+	}
+	return false
 }

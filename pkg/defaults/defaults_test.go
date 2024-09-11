@@ -944,7 +944,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 							},
 							To: api.PipelineImageStreamTagReferenceRoot,
 						},
-						Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceType(api.ImageStreamSourceRoot)}},
+						Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceRoot}},
 					},
 				}, {
 					InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{

@@ -2,15 +2,10 @@ package runtime
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/exec"
 
-	"k8s.io/client-go/tools/clientcmd"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-
 	"github.com/openshift/ci-tools/pkg/clustermgmt"
-	clustermgmtonboard "github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
 )
 
 var (
@@ -34,18 +29,6 @@ func ClusterInstallGetterFunc(path string) clustermgmt.ClusterInstallGetter {
 		clusterInstallCache = ci
 		return clusterInstallCache, err
 	}
-}
-
-func NewAdminKubeClient(getClusterInstall clustermgmt.ClusterInstallGetter) (ctrlruntimeclient.Client, error) {
-	ci, err := getClusterInstall()
-	if err != nil {
-		return nil, fmt.Errorf("get cluster install: %w", err)
-	}
-	config, err := clientcmd.BuildConfigFromFlags("", clustermgmtonboard.AdminKubeconfig(ci.InstallBase))
-	if err != nil {
-		return nil, fmt.Errorf("build client: %w", err)
-	}
-	return ctrlruntimeclient.New(config, ctrlruntimeclient.Options{})
 }
 
 func BuildCmd(ctx context.Context, program string, args ...string) *exec.Cmd {

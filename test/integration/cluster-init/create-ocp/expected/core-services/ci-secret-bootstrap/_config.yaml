@@ -353,7 +353,7 @@ secret_configs:
     name: newCluster-dex-oidc
     namespace: ci
 - from:
-    client-secret:
+    clientSecret:
       field: newCluster-secret
       item: dex
   to:

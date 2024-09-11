@@ -33,14 +33,14 @@ func LoadKubeconfigs(dir, suffix, adminKubeconfig string) (*Kubeconfigs, error) 
 			kube.ConfigSuffix(suffix),
 			kube.NoInClusterConfig(true)))
 		if err != nil {
-			return nil, fmt.Errorf("load cluster configs: %v", err)
+			return nil, fmt.Errorf("load cluster configs: %w", err)
 		}
 		k.configs = configs
 	}
 	if adminKubeconfig != "" {
 		config, err := clientcmd.BuildConfigFromFlags("", adminKubeconfig)
 		if err != nil {
-			return nil, fmt.Errorf("load admin config: %v", err)
+			return nil, fmt.Errorf("load admin config: %w", err)
 		}
 		k.admin = config
 	}

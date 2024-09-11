@@ -12,8 +12,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"k8s.io/client-go/rest"
 
+	"k8s.io/client-go/rest"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/prow/cmd/generic-autobumper/bumper"
 
 	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard/buildclusterdir"
@@ -28,7 +29,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/clustermgmt"
 	clustermgmtonboard "github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
 	"github.com/openshift/ci-tools/pkg/github/prcreation"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (

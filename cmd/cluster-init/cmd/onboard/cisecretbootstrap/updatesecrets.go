@@ -100,25 +100,22 @@ func updateCiSecretBootstrapConfig(log *logrus.Entry, o Options, c *secretbootst
 	return nil
 }
 
-func updateSecret(secretGenerator func(*logrus.Entry, Options) *secretbootstrap.SecretConfig) func(log *logrus.Entry, c *secretbootstrap.Config, o Options) error {
+func updateSecret(secretGenerator func(Options) secretbootstrap.SecretConfig) func(log *logrus.Entry, c *secretbootstrap.Config, o Options) error {
 	return func(log *logrus.Entry, c *secretbootstrap.Config, o Options) error {
-		secret := secretGenerator(log, o)
-		if secret == nil {
-			return nil
-		}
+		secret := secretGenerator(o)
 		idx, _, _ := findSecretConfig(secret.To[0].Name, o.ClusterName, c.Secrets)
 		if idx != -1 {
 			log.Infof("Replacing existing secret with 'to' of: %v", secret.To)
-			c.Secrets = append(c.Secrets[:idx], append([]secretbootstrap.SecretConfig{*secret}, c.Secrets[idx+1:]...)...)
+			c.Secrets = append(c.Secrets[:idx], append([]secretbootstrap.SecretConfig{secret}, c.Secrets[idx+1:]...)...)
 		} else {
 			log.Infof("Creating new secret with 'to' of: %v", secret.To)
-			c.Secrets = append(c.Secrets, *secret)
+			c.Secrets = append(c.Secrets, secret)
 		}
 		return nil
 	}
 }
 
-func generateCiOperatorSecret(_ *logrus.Entry, o Options) *secretbootstrap.SecretConfig {
+func generateCiOperatorSecret(o Options) secretbootstrap.SecretConfig {
 	from := map[string]secretbootstrap.ItemContext{
 		kubeconfig: {
 			Field: onboard.ServiceAccountKubeconfigPath(onboard.CIOperator, o.ClusterName),
@@ -132,7 +129,7 @@ func generateCiOperatorSecret(_ *logrus.Entry, o Options) *secretbootstrap.Secre
 			Item:  onboard.BuildUFarm,
 		}
 	}
-	return &secretbootstrap.SecretConfig{
+	return secretbootstrap.SecretConfig{
 		From: from,
 		To: []secretbootstrap.SecretContext{
 			{
@@ -144,8 +141,8 @@ func generateCiOperatorSecret(_ *logrus.Entry, o Options) *secretbootstrap.Secre
 	}
 }
 
-func generateRegistryPushCredentialsSecret(_ *logrus.Entry, o Options) *secretbootstrap.SecretConfig {
-	return &secretbootstrap.SecretConfig{
+func generateRegistryPushCredentialsSecret(o Options) secretbootstrap.SecretConfig {
+	return secretbootstrap.SecretConfig{
 		From: map[string]secretbootstrap.ItemContext{
 			dotDockerConfigJson: generatePushPullSecretFrom(o.ClusterName, []secretbootstrap.DockerConfigJSONData{
 				{
@@ -167,8 +164,8 @@ func generateRegistryPushCredentialsSecret(_ *logrus.Entry, o Options) *secretbo
 	}
 }
 
-func generateRegistryPullCredentialsSecret(_ *logrus.Entry, o Options) *secretbootstrap.SecretConfig {
-	return &secretbootstrap.SecretConfig{
+func generateRegistryPullCredentialsSecret(o Options) secretbootstrap.SecretConfig {
+	return secretbootstrap.SecretConfig{
 		From: map[string]secretbootstrap.ItemContext{
 			dotDockerConfigJson: generatePushPullSecretFrom(o.ClusterName, []secretbootstrap.DockerConfigJSONData{
 				{
@@ -379,7 +376,7 @@ func updateDexClientSecret(log *logrus.Entry, c *secretbootstrap.Config, o Optio
 	}
 	secret := &secretbootstrap.SecretConfig{
 		From: map[string]secretbootstrap.ItemContext{
-			"client-secret": {
+			"clientSecret": {
 				Field: o.ClusterName + "-secret",
 				Item:  c.VaultDPTPPrefix + "/dex",
 			},

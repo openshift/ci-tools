@@ -1355,6 +1355,7 @@ const (
 	ClusterProfileAWSStackrox           ClusterProfile = "aws-stackrox"
 	ClusterProfileAWSSDCICD             ClusterProfile = "aws-sd-cicd"
 	ClusterProfileGCPSDCICD             ClusterProfile = "gcp-sd-cicd"
+	ClusterProfileAroRH                 ClusterProfile = "aro-redhat-tenant"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -1490,6 +1491,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSObservabiltity,
 		ClusterProfileAWSSDCICD,
 		ClusterProfileGCPSDCICD,
+		ClusterProfileAroRH,
 	}
 }
 
@@ -1695,6 +1697,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "hypershift-powervs-cb"
 	case ClusterProfileRHOpenShiftEcosystem:
 		return string(CloudAWS)
+	case ClusterProfileAroRH:
+		return "aro"
 	default:
 		return ""
 	}
@@ -1961,6 +1965,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-sd-cicd-quota-slice"
 	case ClusterProfileGCPSDCICD:
 		return "gcp-sd-cicd-quota-slice"
+	case ClusterProfileAroRH:
+		return "aro-redhat-tenant-quota-slice"
 	default:
 		return ""
 	}

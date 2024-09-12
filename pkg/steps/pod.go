@@ -221,7 +221,7 @@ func GenerateBasePod(
 		ObjectMeta: meta.ObjectMeta{
 			Namespace: jobSpec.Namespace(),
 			Name:      name,
-			Labels:    labelsFor(jobSpec, baseLabels, ""),
+			Labels:    LabelsFor(jobSpec, baseLabels, ""),
 			Annotations: map[string]string{
 				JobSpecAnnotation:                     jobSpec.RawSpec(),
 				annotationContainersForSubTestResults: containerName,

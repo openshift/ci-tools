@@ -5,6 +5,8 @@ cluster_groups:
   - app.ci
   - build01
   - existingCluster
+  managed_clusters:
+  - existingCluster
   non_app_ci:
   - arm01
   - build01
@@ -346,6 +348,17 @@ secret_configs:
   - cluster: existingCluster
     name: ci-operator
     namespace: test-credentials
+- from:
+    existingCluster-id:
+      field: existingCluster-id
+      item: dex
+    existingCluster-secret:
+      field: existingCluster-secret
+      item: dex
+  to:
+  - cluster: app.ci
+    name: existingCluster-secret
+    namespace: dex
 user_secrets_target_clusters:
 - arm01
 - existingCluster

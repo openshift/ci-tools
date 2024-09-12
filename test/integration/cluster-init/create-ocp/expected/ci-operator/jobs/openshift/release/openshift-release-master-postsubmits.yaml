@@ -1,0 +1,82 @@
+postsubmits:
+  openshift/release:
+  - agent: kubernetes
+    branches:
+    - master
+    cluster: app.ci
+    decorate: true
+    labels:
+      ci.openshift.io/role: infra
+    max_concurrency: 1
+    name: branch-ci-openshift-release-master-build01-apply
+    spec:
+      containers:
+      - args:
+        - --config-dir=clusters/build-clusters/build01
+        - --as=
+        - --kubeconfig=/etc/build-farm-credentials/kubeconfig
+        - --confirm=true
+        command:
+        - applyconfig
+        image: registry.ci.openshift.org/ci/applyconfig:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /etc/build-farm-credentials
+          name: build-farm-credentials
+          readOnly: true
+      serviceAccountName: config-updater
+      volumes:
+      - name: build-farm-credentials
+        secret:
+          items:
+          - key: sa.config-updater.build01.config
+            path: kubeconfig
+          secretName: config-updater
+  - agent: kubernetes
+    branches:
+    - ^master$
+    cluster: app.ci
+    decorate: true
+    labels:
+      ci.openshift.io/build-farm: newCluster
+      ci.openshift.io/generator: cluster-init
+      ci.openshift.io/role: infra
+    max_concurrency: 1
+    name: branch-ci-openshift-release-master-newCluster-apply
+    spec:
+      containers:
+      - args:
+        - --config-dir=clusters/build-clusters/newCluster
+        - --as=
+        - --kubeconfig=/etc/build-farm-credentials/kubeconfig
+        - --confirm=true
+        command:
+        - applyconfig
+        env:
+        - name: newCluster_id
+          valueFrom:
+            secretKeyRef:
+              key: newCluster-id
+              name: newCluster-dex-oidc
+        image: registry.ci.openshift.org/ci/applyconfig:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /etc/build-farm-credentials
+          name: build-farm-credentials
+          readOnly: true
+      serviceAccountName: config-updater
+      volumes:
+      - name: build-farm-credentials
+        secret:
+          items:
+          - key: sa.config-updater.newCluster.config
+            path: kubeconfig
+          secretName: config-updater

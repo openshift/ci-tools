@@ -32,7 +32,7 @@ func newConfigCmd(ctx context.Context, log *logrus.Entry, opts *runtime.Options)
 			return cmd.Help()
 		},
 	}
-	cmd.AddCommand(newGenerateConfigCmd(ctx, log))
+	cmd.AddCommand(newGenerateConfigCmd(ctx, log, opts))
 	cmd.AddCommand(newApplyConfigCmd(ctx, log, opts))
 	return &cmd
 }

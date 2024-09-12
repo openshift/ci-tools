@@ -1,0 +1,20 @@
+buildFarm:
+  aws:
+    build01:
+      filenames:
+        - some-yaml-file.yaml
+    build02:
+      filenames:
+        - some-other-yaml-file.yaml
+default: build01
+groups:
+  app.ci:
+    jobs:
+      - some-job
+      - pull-ci-openshift-release-master-existingCluster-dry
+  build01:
+    jobs:
+      - some-other-job
+kvm:
+  - build02
+sshBastion: build01

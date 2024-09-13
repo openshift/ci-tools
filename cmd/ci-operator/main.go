@@ -893,10 +893,11 @@ func (o *options) Run() []error {
 		return []error{fmt.Errorf("could not resolve the node architectures: %w", err)}
 	}
 
+	mergedConfig := o.injectTest != "" || len(o.jobSpec.ExtraRefs) > 1
 	// load the graph from the configuration
 	buildSteps, promotionSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig,
 		o.podPendingTimeout, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig,
-		o.consoleHost, o.nodeName, nodeArchitectures, o.targetAdditionalSuffix, o.manifestToolDockerCfg, o.localRegistryDNS, streams)
+		o.consoleHost, o.nodeName, nodeArchitectures, o.targetAdditionalSuffix, o.manifestToolDockerCfg, o.localRegistryDNS, mergedConfig, streams)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}

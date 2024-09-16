@@ -164,6 +164,9 @@ func (s *multiStageTestStep) generatePods(
 			}
 		}
 		if step.NodeArchitecture != nil {
+			if pod.Spec.NodeSelector == nil {
+				pod.Spec.NodeSelector = map[string]string{}
+			}
 			pod.Spec.NodeSelector[coreapi.LabelArchStable] = string(*step.NodeArchitecture)
 		}
 		pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{Name: homeVolumeName, VolumeSource: coreapi.VolumeSource{EmptyDir: &coreapi.EmptyDirVolumeSource{}}})

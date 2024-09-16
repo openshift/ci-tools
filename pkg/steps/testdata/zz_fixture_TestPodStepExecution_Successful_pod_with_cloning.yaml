@@ -117,8 +117,6 @@ spec:
     volumeMounts:
     - mountPath: /tools
       name: tools
-  nodeSelector:
-    kubernetes.io/arch: amd64
   restartPolicy: Never
   volumes:
   - emptyDir: {}

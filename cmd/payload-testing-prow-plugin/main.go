@@ -142,8 +142,9 @@ func main() {
 		logger.WithError(err).WithField("context", appCIContextName).Fatal("could not get client for kube config")
 	}
 
-	// TODO: add error handling
-	configAgent, err := agents.NewConfigAgent(o.ciOpConfigDir, nil)
+	errChan := make(chan error)
+	go func() { logrus.Fatal(<-errChan) }()
+	configAgent, err := agents.NewConfigAgent(o.ciOpConfigDir, errChan)
 	if err != nil {
 		logger.WithError(err).Fatal("could not get config agent")
 	}

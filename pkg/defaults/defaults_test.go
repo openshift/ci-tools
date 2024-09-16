@@ -58,6 +58,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 		output        []api.StepConfiguration
 		readFile      readFile
 		resolver      resolveRoot
+		injectedTest  bool
 		expectedError error
 	}{
 		{
@@ -1006,6 +1007,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Ref:  "org.other-repo",
 					},
 				}},
+			injectedTest: true,
 		},
 		{
 			name: "from multiple repo references",
@@ -1171,13 +1173,14 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Ref:  "org.other-repo",
 					},
 				}},
+			injectedTest: true,
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			graphConf := FromConfigStatic(testCase.input)
-			runtimeSteps, actualError := runtimeStepConfigsForBuild(testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, graphConf.InputImages())
+			runtimeSteps, actualError := runtimeStepConfigsForBuild(testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, graphConf.InputImages(), testCase.injectedTest)
 			graphConf.Steps = append(graphConf.Steps, runtimeSteps...)
 			if diff := cmp.Diff(testCase.expectedError, actualError, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("actualError does not match expectedError, diff: %s", diff)
@@ -1329,6 +1332,7 @@ func TestFromConfig(t *testing.T) {
 		env                 api.Parameters
 		params              map[string]string
 		overriddenImagesEnv map[string]string
+		injectedTest        bool
 		expectedSteps       []string
 		expectedPost        []string
 		expectedParams      map[string]string
@@ -1428,6 +1432,7 @@ func TestFromConfig(t *testing.T) {
 				},
 			},
 		},
+		injectedTest:  true,
 		expectedSteps: []string{"root-org.repo1", "root-org.repo2", "[output-images]", "[images]"},
 	}, {
 		name: "base RPM images",
@@ -1469,6 +1474,7 @@ func TestFromConfig(t *testing.T) {
 				},
 			},
 		},
+		injectedTest: true,
 		expectedSteps: []string{
 			"[input:base_rpm_image-org.repo1-without-rpms]",
 			"base_rpm_image-org.repo1",
@@ -1509,6 +1515,7 @@ func TestFromConfig(t *testing.T) {
 				},
 			},
 		},
+		injectedTest: true,
 		expectedSteps: []string{
 			"rpms-org.repo1",
 			"[serve:rpms-org.repo1]",
@@ -1844,7 +1851,7 @@ func TestFromConfig(t *testing.T) {
 				params.Add(k, func() (string, error) { return v, nil })
 			}
 			graphConf := FromConfigStatic(&tc.config)
-			configSteps, post, err := fromConfig(context.Background(), &tc.config, &graphConf, &jobSpec, tc.templates, tc.paramFiles, tc.promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params, &secrets.DynamicCensor{}, api.ServiceDomainAPPCI, "", "", nil, map[string]*configresolver.IntegratedStream{})
+			configSteps, post, err := fromConfig(context.Background(), &tc.config, &graphConf, &jobSpec, tc.templates, tc.paramFiles, tc.promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params, &secrets.DynamicCensor{}, api.ServiceDomainAPPCI, "", "", nil, map[string]*configresolver.IntegratedStream{}, tc.injectedTest)
 			if diff := cmp.Diff(tc.expectedErr, err); diff != "" {
 				t.Errorf("unexpected error: %v", diff)
 			}

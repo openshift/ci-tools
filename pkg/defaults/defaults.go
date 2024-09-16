@@ -81,6 +81,7 @@ func FromConfig(
 	manifestToolDockerCfg string,
 	localRegistryDNS string,
 	integratedStreams map[string]*configresolver.IntegratedStream,
+	injectedTest bool,
 ) ([]api.Step, []api.Step, error) {
 	crclient, err := ctrlruntimeclient.NewWithWatch(clusterConfig, ctrlruntimeclient.Options{})
 	crclient = secretrecordingclient.Wrap(crclient, censor)
@@ -118,7 +119,7 @@ func FromConfig(
 	httpClient := retryablehttp.NewClient()
 	httpClient.Logger = nil
 
-	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, consoleHost, nodeName, targetAdditionalSuffix, nodeArchitectures, integratedStreams)
+	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, consoleHost, nodeName, targetAdditionalSuffix, nodeArchitectures, integratedStreams, injectedTest)
 }
 
 func fromConfig(
@@ -146,6 +147,7 @@ func fromConfig(
 	targetAdditionalSuffix string,
 	nodeArchitectures []string,
 	integratedStreams map[string]*configresolver.IntegratedStream,
+	injectedTest bool,
 ) ([]api.Step, []api.Step, error) {
 	requiredNames := sets.New[string]()
 	for _, target := range requiredTargets {
@@ -175,7 +177,7 @@ func fromConfig(
 	var hasReleaseStep bool
 	resolver := rootImageResolver(client, ctx, promote)
 	imageConfigs := graphConf.InputImages()
-	rawSteps, err := runtimeStepConfigsForBuild(config, jobSpec, os.ReadFile, resolver, imageConfigs)
+	rawSteps, err := runtimeStepConfigsForBuild(config, jobSpec, os.ReadFile, resolver, imageConfigs, injectedTest)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get steps from configuration: %w", err)
 	}
@@ -937,6 +939,7 @@ func runtimeStepConfigsForBuild(
 	readFile readFile,
 	resolveRoot resolveRoot,
 	imageConfigs []*api.InputImageTagStepConfiguration,
+	injectedTest bool,
 ) ([]api.StepConfiguration, error) {
 	buildRoots := config.InputConfiguration.BuildRootImages
 	if buildRoots == nil {
@@ -1014,11 +1017,20 @@ func runtimeStepConfigsForBuild(
 		}
 	}
 
+	var primaryRef *prowapi.Refs
 	if jobSpec.Refs != nil {
-		buildSteps = append(buildSteps, sourceStepForRef(jobSpec.Refs, true))
+		primaryRef = jobSpec.Refs
+	} else if !injectedTest && len(jobSpec.ExtraRefs) == 1 {
+		primaryRef = &jobSpec.ExtraRefs[0]
 	}
-	for _, ref := range jobSpec.ExtraRefs {
-		buildSteps = append(buildSteps, sourceStepForRef(&ref, false))
+	if primaryRef != nil {
+		buildSteps = append(buildSteps, sourceStepForRef(primaryRef, true))
+	}
+
+	if injectedTest {
+		for _, ref := range jobSpec.ExtraRefs {
+			buildSteps = append(buildSteps, sourceStepForRef(&ref, false))
+		}
 	}
 	return buildSteps, nil
 }

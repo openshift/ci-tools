@@ -4,9 +4,6 @@ metadata:
   creationTimestamp: null
   labels:
     OPENSHIFT_CI: "true"
-    ci.openshift.io/jobid: prowJobId
-    ci.openshift.io/jobname: job
-    ci.openshift.io/jobtype: ""
     ci.openshift.io/metadata.branch: master
     ci.openshift.io/metadata.org: org
     ci.openshift.io/metadata.repo: other-repo

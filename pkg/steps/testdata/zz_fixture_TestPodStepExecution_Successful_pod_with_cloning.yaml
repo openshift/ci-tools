@@ -5,9 +5,6 @@ metadata:
   creationTimestamp: null
   labels:
     OPENSHIFT_CI: "true"
-    ci.openshift.io/jobid: prow-job-id
-    ci.openshift.io/jobname: very-cool-prow-job
-    ci.openshift.io/jobtype: presubmit
     ci.openshift.io/metadata.branch: base-ref
     ci.openshift.io/metadata.org: org
     ci.openshift.io/metadata.repo: repo

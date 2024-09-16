@@ -36,7 +36,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/api/configresolver"
 	testimagestreamtagimportv1 "github.com/openshift/ci-tools/pkg/api/testimagestreamtagimport/v1"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
-	"github.com/openshift/ci-tools/pkg/labeledclient"
 	"github.com/openshift/ci-tools/pkg/lease"
 	"github.com/openshift/ci-tools/pkg/release"
 	"github.com/openshift/ci-tools/pkg/release/official"
@@ -85,7 +84,6 @@ func FromConfig(
 ) ([]api.Step, []api.Step, error) {
 	crclient, err := ctrlruntimeclient.NewWithWatch(clusterConfig, ctrlruntimeclient.Options{})
 	crclient = secretrecordingclient.Wrap(crclient, censor)
-	crclient = labeledclient.WrapWithWatch(crclient, jobSpec)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to construct client: %w", err)
 	}

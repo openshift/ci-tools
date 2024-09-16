@@ -66,7 +66,13 @@ for org in openshift; do
   fi
 
   echo >&2 "$(date --iso-8601=seconds) Executing cluster-init update"
-    cluster-init onboard config generate --release-repo="${clonedir}" --update=true --create-pr=false
+    cluster-init onboard config generate --update=true --create-pr=false --cluster-install=<(cat <<EOF
+onboard:
+  releaseRepo: "$clonedir"
+  kubeconfigDir: "$KUBECONFIG_DIR"
+  kubeconfigSuffix: "$KUBECONFIG_SUFFIX"
+EOF
+)
     out="$(git status --porcelain)"
     if [[ -n "$out" ]]; then
       echo "ERROR: Changes in $org/release:"

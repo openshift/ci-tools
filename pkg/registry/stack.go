@@ -93,11 +93,7 @@ func (s *stack) resolveNodeArchitecture(nodeArchitecture *api.NodeArchitecture) 
 			return r.nodeArchitecture
 		}
 	}
-	if nodeArchitecture != nil {
-		return nodeArchitecture
-	}
-	defaultNodeArchitecture := api.NodeArchitectureAMD64
-	return &defaultNodeArchitecture
+	return nodeArchitecture
 }
 
 // checkUnused emits errors for each unused parameter/dependency in the record.

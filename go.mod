@@ -183,7 +183,7 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/stretchr/testify v1.9.0
 	sigs.k8s.io/boskos v0.0.0-20240624145324-1e4de26c366a
-	sigs.k8s.io/prow v0.0.0-20240627110421-79d27b6e3be3
+	sigs.k8s.io/prow v0.0.0-20240910125013-1e9790f40f9f
 )
 
 require (

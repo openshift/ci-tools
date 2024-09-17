@@ -197,6 +197,7 @@ func main() {
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to validate config")
 		}
+		logrus.WithField("configFile", opts.configFile).Info("The config file is valid")
 		os.Exit(0)
 	}
 

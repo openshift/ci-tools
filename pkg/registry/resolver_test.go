@@ -89,7 +89,6 @@ func TestResolve(t *testing.T) {
 					Requests: api.ResourceList{"cpu": "1000m"},
 					Limits:   api.ResourceList{"memory": "2Gi"},
 				},
-				NodeArchitecture: &nodeArchitectureAMD64,
 			}},
 			Test: []api.LiteralTestStep{{
 				As:       "e2e",
@@ -99,7 +98,6 @@ func TestResolve(t *testing.T) {
 					Requests: api.ResourceList{"cpu": "1000m"},
 					Limits:   api.ResourceList{"memory": "2Gi"},
 				},
-				NodeArchitecture: &nodeArchitectureAMD64,
 			}},
 			Post: []api.LiteralTestStep{{
 				As:       "ipi-teardown",
@@ -109,7 +107,6 @@ func TestResolve(t *testing.T) {
 					Requests: api.ResourceList{"cpu": "1000m"},
 					Limits:   api.ResourceList{"memory": "2Gi"},
 				},
-				NodeArchitecture: &nodeArchitectureAMD64,
 			}},
 		},
 	}, {
@@ -175,8 +172,7 @@ func TestResolve(t *testing.T) {
 					Requests: api.ResourceList{"cpu": "1000m"},
 					Limits:   api.ResourceList{"memory": "2Gi"},
 				},
-				Observers:        []string{"no", "other"},
-				NodeArchitecture: &nodeArchitectureAMD64,
+				Observers: []string{"no", "other"},
 			}},
 			Observers: []api.Observer{
 				{
@@ -247,7 +243,6 @@ func TestResolve(t *testing.T) {
 					Requests: api.ResourceList{"cpu": "1000m"},
 					Limits:   api.ResourceList{"memory": "2Gi"},
 				},
-				NodeArchitecture: &nodeArchitectureAMD64,
 			}},
 			Observers: []api.Observer{
 				{
@@ -320,7 +315,6 @@ func TestResolve(t *testing.T) {
 					Requests: api.ResourceList{"cpu": "1000m"},
 					Limits:   api.ResourceList{"memory": "2Gi"},
 				},
-				NodeArchitecture: &nodeArchitectureAMD64,
 			}},
 		},
 	}, {
@@ -408,7 +402,6 @@ func TestResolve(t *testing.T) {
 					Requests: api.ResourceList{"cpu": "1000m"},
 					Limits:   api.ResourceList{"memory": "2Gi"},
 				},
-				NodeArchitecture: &nodeArchitectureAMD64,
 			}, {
 				As:       "enable-fips",
 				From:     "fips-enabler",
@@ -417,7 +410,6 @@ func TestResolve(t *testing.T) {
 					Requests: api.ResourceList{"cpu": "1000m"},
 					Limits:   api.ResourceList{"memory": "2Gi"},
 				},
-				NodeArchitecture: &nodeArchitectureAMD64,
 			}},
 			Test: []api.LiteralTestStep{{
 				As:       "e2e",
@@ -427,7 +419,6 @@ func TestResolve(t *testing.T) {
 					Requests: api.ResourceList{"cpu": "1000m"},
 					Limits:   api.ResourceList{"memory": "2Gi"},
 				},
-				NodeArchitecture: &nodeArchitectureAMD64,
 			}},
 			Post: []api.LiteralTestStep{{
 				As:       "ipi-teardown",
@@ -437,7 +428,6 @@ func TestResolve(t *testing.T) {
 					Requests: api.ResourceList{"cpu": "1000m"},
 					Limits:   api.ResourceList{"memory": "2Gi"},
 				},
-				NodeArchitecture: &nodeArchitectureAMD64,
 			}},
 		},
 	}, {
@@ -546,7 +536,6 @@ func TestResolve(t *testing.T) {
 					Requests: api.ResourceList{"cpu": "1000m"},
 					Limits:   api.ResourceList{"memory": "2Gi"},
 				},
-				NodeArchitecture: &nodeArchitectureAMD64,
 			}, {
 				As:       "ipi-setup",
 				From:     "installer",
@@ -555,7 +544,6 @@ func TestResolve(t *testing.T) {
 					Requests: api.ResourceList{"cpu": "1000m"},
 					Limits:   api.ResourceList{"memory": "2Gi"},
 				},
-				NodeArchitecture: &nodeArchitectureAMD64,
 			}, {
 				As:       "enable-fips",
 				From:     "fips-enabler",
@@ -563,8 +551,7 @@ func TestResolve(t *testing.T) {
 				Resources: api.ResourceRequirements{
 					Requests: api.ResourceList{"cpu": "1000m"},
 					Limits:   api.ResourceList{"memory": "2Gi"},
-				},
-				NodeArchitecture: &nodeArchitectureAMD64},
+				}},
 			},
 		},
 	}, {
@@ -683,16 +670,14 @@ func TestResolve(t *testing.T) {
 				Resources: api.ResourceRequirements{
 					Requests: api.ResourceList{"cpu": "1000m"},
 					Limits:   api.ResourceList{"memory": "2Gi"},
-				},
-				NodeArchitecture: &nodeArchitectureAMD64}, {
+				}}, {
 				As:       "enable-fips",
 				From:     "fips-enabler",
 				Commands: "enable_fips",
 				Resources: api.ResourceRequirements{
 					Requests: api.ResourceList{"cpu": "1000m"},
 					Limits:   api.ResourceList{"memory": "2Gi"},
-				},
-				NodeArchitecture: &nodeArchitectureAMD64},
+				}},
 			},
 			Test: []api.LiteralTestStep{{
 				As:       "e2e",
@@ -702,7 +687,6 @@ func TestResolve(t *testing.T) {
 					Requests: api.ResourceList{"cpu": "1000m"},
 					Limits:   api.ResourceList{"memory": "2Gi"},
 				},
-				NodeArchitecture: &nodeArchitectureAMD64,
 			}},
 			Post: []api.LiteralTestStep{{
 				As:       "ipi-teardown",
@@ -712,7 +696,6 @@ func TestResolve(t *testing.T) {
 					Requests: api.ResourceList{"cpu": "1000m"},
 					Limits:   api.ResourceList{"memory": "2Gi"},
 				},
-				NodeArchitecture: &nodeArchitectureAMD64,
 			}},
 		},
 	},
@@ -777,7 +760,6 @@ func TestResolve(t *testing.T) {
 						Requests: api.ResourceList{"cpu": "1000m"},
 						Limits:   api.ResourceList{"memory": "2Gi"},
 					},
-					NodeArchitecture: &nodeArchitectureAMD64,
 				}},
 				Test: []api.LiteralTestStep{{
 					As:       "custom-e2e",
@@ -787,7 +769,6 @@ func TestResolve(t *testing.T) {
 						Requests: api.ResourceList{"cpu": "1000m"},
 						Limits:   api.ResourceList{"memory": "2Gi"},
 					},
-					NodeArchitecture: &nodeArchitectureAMD64,
 				}},
 				Post: []api.LiteralTestStep{{
 					As:       "ipi-teardown",
@@ -797,7 +778,6 @@ func TestResolve(t *testing.T) {
 						Requests: api.ResourceList{"cpu": "1000m"},
 						Limits:   api.ResourceList{"memory": "2Gi"},
 					},
-					NodeArchitecture: &nodeArchitectureAMD64,
 				}},
 			},
 		}, {
@@ -1182,7 +1162,7 @@ func TestResolve(t *testing.T) {
 						Requests: api.ResourceList{"cpu": "1000m"},
 						Limits:   api.ResourceList{"memory": "2Gi"},
 					},
-					NodeArchitecture: &nodeArchitectureAMD64}, {
+				}, {
 					As:       "enable-fips",
 					From:     "fips-enabler",
 					Commands: "enable_fips",
@@ -1190,7 +1170,7 @@ func TestResolve(t *testing.T) {
 						Requests: api.ResourceList{"cpu": "1000m"},
 						Limits:   api.ResourceList{"memory": "2Gi"},
 					},
-					NodeArchitecture: &nodeArchitectureAMD64},
+				},
 				},
 				Test: []api.LiteralTestStep{{
 					As:       "e2e",
@@ -1200,7 +1180,6 @@ func TestResolve(t *testing.T) {
 						Requests: api.ResourceList{"cpu": "1000m"},
 						Limits:   api.ResourceList{"memory": "2Gi"},
 					},
-					NodeArchitecture: &nodeArchitectureAMD64,
 				}},
 				Post: []api.LiteralTestStep{{
 					As:       "ipi-teardown",
@@ -1303,7 +1282,6 @@ func TestResolve(t *testing.T) {
 						Requests: api.ResourceList{"cpu": "1000m"},
 						Limits:   api.ResourceList{"memory": "2Gi"},
 					},
-					NodeArchitecture: &nodeArchitectureAMD64,
 				}},
 				Post: []api.LiteralTestStep{{
 					As:       "ipi-teardown",
@@ -1313,7 +1291,107 @@ func TestResolve(t *testing.T) {
 						Requests: api.ResourceList{"cpu": "1000m"},
 						Limits:   api.ResourceList{"memory": "2Gi"},
 					},
-					NodeArchitecture: &nodeArchitectureAMD64,
+				}},
+			},
+		},
+		{
+			name: "Pre Step with one on arm64 and another on amd64",
+			config: api.MultiStageTestConfiguration{
+				Workflow: &awsWorkflow,
+			},
+			chainMap: ChainByName{
+				fipsPreChain: {
+					Steps: []api.TestStep{{
+						LiteralTestStep: &api.LiteralTestStep{
+							As:       "ipi-install",
+							From:     "installer",
+							Commands: "openshift-cluster install",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{"cpu": "1000m"},
+								Limits:   api.ResourceList{"memory": "2Gi"},
+							},
+							NodeArchitecture: &nodeArchitectureARM64},
+					}, {
+						LiteralTestStep: &api.LiteralTestStep{
+							As:       "enable-fips",
+							From:     "fips-enabler",
+							Commands: "enable_fips",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{"cpu": "1000m"},
+								Limits:   api.ResourceList{"memory": "2Gi"},
+							},
+							NodeArchitecture: &nodeArchitectureAMD64},
+					}},
+				},
+			},
+			stepMap: ReferenceByName{
+				teardownRef: {
+					As:       "ipi-teardown",
+					From:     "installer",
+					Commands: "openshift-cluster destroy",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					}},
+			},
+			workflowMap: WorkflowByName{
+				awsWorkflow: {
+					ClusterProfile: api.ClusterProfileAWS,
+					Pre: []api.TestStep{{
+						Chain: &fipsPreChain,
+					}},
+					Test: []api.TestStep{{
+						LiteralTestStep: &api.LiteralTestStep{
+							As:       "e2e",
+							From:     "my-image",
+							Commands: "make custom-e2e",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{"cpu": "1000m"},
+								Limits:   api.ResourceList{"memory": "2Gi"},
+							}},
+					}},
+					Post: []api.TestStep{{
+						Reference: &teardownRef,
+					}},
+				},
+			},
+			expectedRes: api.MultiStageTestConfigurationLiteral{
+				ClusterProfile: api.ClusterProfileAWS,
+				Pre: []api.LiteralTestStep{{
+					As:       "ipi-install",
+					From:     "installer",
+					Commands: "openshift-cluster install",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					},
+					NodeArchitecture: &nodeArchitectureARM64}, {
+					As:       "enable-fips",
+					From:     "fips-enabler",
+					Commands: "enable_fips",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					},
+					NodeArchitecture: &nodeArchitectureAMD64},
+				},
+				Test: []api.LiteralTestStep{{
+					As:       "e2e",
+					From:     "my-image",
+					Commands: "make custom-e2e",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					},
+				}},
+				Post: []api.LiteralTestStep{{
+					As:       "ipi-teardown",
+					From:     "installer",
+					Commands: "openshift-cluster destroy",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					},
 				}},
 			},
 		},
@@ -1334,7 +1412,7 @@ func TestResolve(t *testing.T) {
 								Requests: api.ResourceList{"cpu": "1000m"},
 								Limits:   api.ResourceList{"memory": "2Gi"},
 							},
-							NodeArchitecture: &nodeArchitectureAMD64},
+						},
 					}, {
 						LiteralTestStep: &api.LiteralTestStep{
 							As:       "enable-fips",
@@ -1344,7 +1422,7 @@ func TestResolve(t *testing.T) {
 								Requests: api.ResourceList{"cpu": "1000m"},
 								Limits:   api.ResourceList{"memory": "2Gi"},
 							},
-							NodeArchitecture: &nodeArchitectureAMD64},
+						},
 					}},
 				},
 			},
@@ -1374,7 +1452,7 @@ func TestResolve(t *testing.T) {
 								Requests: api.ResourceList{"cpu": "1000m"},
 								Limits:   api.ResourceList{"memory": "2Gi"},
 							},
-							NodeArchitecture: &nodeArchitectureAMD64},
+						},
 					}},
 					Post: []api.TestStep{{
 						Reference: &teardownRef,

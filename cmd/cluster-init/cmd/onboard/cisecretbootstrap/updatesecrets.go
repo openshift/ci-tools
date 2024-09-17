@@ -3,6 +3,7 @@ package cisecretbootstrap
 import (
 	"fmt"
 	"path/filepath"
+	"reflect"
 
 	"github.com/sirupsen/logrus"
 
@@ -29,6 +30,8 @@ type Options struct {
 	ReleaseRepo              string
 	UseTokenFileInKubeconfig bool
 	Unmanaged                bool
+	Hosted                   bool
+	osd                      bool
 }
 
 type pushPull string
@@ -43,29 +46,32 @@ func UpdateCiSecretBootstrap(log *logrus.Entry, o Options, osdClusters []string)
 	if err := secretbootstrap.LoadConfigFromFile(secretBootstrapConfigFile, &c); err != nil {
 		return err
 	}
-	osdClustersSet := sets.New[string](osdClusters...)
-	if err := updateCiSecretBootstrapConfig(log, o, &c, osdClustersSet.Has(o.ClusterName)); err != nil {
+	o.osd = sets.New(osdClusters...).Has(o.ClusterName)
+	if err := updateCiSecretBootstrapConfig(log, o, &c); err != nil {
 		return err
 	}
 	return secretbootstrap.SaveConfigToFile(secretBootstrapConfigFile, &c)
 }
 
-func updateCiSecretBootstrapConfig(log *logrus.Entry, o Options, c *secretbootstrap.Config, osd bool) error {
-	for _, groupName := range []string{onboard.BuildUFarm, "non_app_ci"} {
-		c.ClusterGroups[groupName] = sets.List(sets.New[string](c.ClusterGroups[groupName]...).Insert(o.ClusterName))
-	}
+func updateCiSecretBootstrapConfig(log *logrus.Entry, o Options, c *secretbootstrap.Config) error {
+	groupNames := []string{onboard.BuildUFarm, "non_app_ci"}
+
 	// non-OSD clusters should never be in the group
-	var groupName string = ""
-	if osd && !o.Unmanaged {
-		groupName = secretbootstrap.OSDGlobalPullSecretGroupName
+	if o.osd && !o.Unmanaged {
+		groupNames = append(groupNames, secretbootstrap.OSDGlobalPullSecretGroupName)
 	}
-	if !osd {
-		groupName = secretbootstrap.OpenShiftConfigPullSecretGroupName
+	if !o.osd {
+		groupNames = append(groupNames, secretbootstrap.OpenShiftConfigPullSecretGroupName)
 	}
-	if groupName != "" {
-		c.ClusterGroups[groupName] = sets.List(sets.New[string](append(c.ClusterGroups[groupName], o.ClusterName)...))
+	if !o.Unmanaged {
+		groupNames = append(groupNames, "managed_clusters")
 	}
-	c.UserSecretsTargetClusters = sets.List(sets.New[string](c.UserSecretsTargetClusters...).Insert(o.ClusterName))
+
+	for _, groupName := range groupNames {
+		c.ClusterGroups[groupName] = sets.List(sets.New(c.ClusterGroups[groupName]...).Insert(o.ClusterName))
+	}
+
+	c.UserSecretsTargetClusters = sets.List(sets.New(c.UserSecretsTargetClusters...).Insert(o.ClusterName))
 
 	var steps = []func(log *logrus.Entry, c *secretbootstrap.Config, o Options) error{
 		updateBuildFarmSecrets,
@@ -78,6 +84,8 @@ func updateCiSecretBootstrapConfig(log *logrus.Entry, o Options, c *secretbootst
 		updateSecret(generateRegistryPushCredentialsSecret),
 		updateSecret(generateRegistryPullCredentialsSecret),
 		updateSecret(generateCiOperatorSecret),
+		updateDexIdAndSecret,
+		updateDexClientSecret,
 	}
 	if !o.Unmanaged {
 		steps = append(steps, updatePodScalerSecret)
@@ -361,6 +369,69 @@ func updateChatBotSecret(log *logrus.Entry, c *secretbootstrap.Config, o Options
 	})
 }
 
+func updateDexClientSecret(log *logrus.Entry, c *secretbootstrap.Config, o Options) error {
+	if o.Hosted || o.osd {
+		log.Info("Cluster is either hosted or osd, skipping dex-rh-sso")
+		return nil
+	}
+	secret := &secretbootstrap.SecretConfig{
+		From: map[string]secretbootstrap.ItemContext{
+			"clientSecret": {
+				Field: o.ClusterName + "-secret",
+				Item:  c.VaultDPTPPrefix + "/dex",
+			},
+		},
+		To: []secretbootstrap.SecretContext{{
+			Cluster:   o.ClusterName,
+			Name:      "dex-rh-sso",
+			Namespace: "openshift-config",
+		}},
+	}
+
+	if !secretConfigExist(secret, c.Secrets) {
+		c.Secrets = append(c.Secrets, *secret)
+	}
+
+	return nil
+}
+
+func updateDexIdAndSecret(log *logrus.Entry, c *secretbootstrap.Config, o Options) error {
+	secret := &secretbootstrap.SecretConfig{
+		From: map[string]secretbootstrap.ItemContext{
+			o.ClusterName + "-id": {
+				Field: o.ClusterName + "-id",
+				Item:  c.VaultDPTPPrefix + "/dex",
+			},
+			o.ClusterName + "-secret": {
+				Field: o.ClusterName + "-secret",
+				Item:  c.VaultDPTPPrefix + "/dex",
+			},
+		},
+		To: []secretbootstrap.SecretContext{
+			{
+				Cluster:   string(api.ClusterAPPCI),
+				Name:      o.ClusterName + "-secret",
+				Namespace: "dex",
+			},
+		},
+	}
+
+	if !(o.Hosted || o.osd) {
+		log.Info("Cluster is neither hosted nor osd, syncing dex OIDC secret")
+		secret.To = append(secret.To, secretbootstrap.SecretContext{
+			Cluster:   string(api.ClusterAPPCI),
+			Name:      o.ClusterName + "-dex-oidc",
+			Namespace: "ci",
+		})
+	}
+
+	if !secretConfigExist(secret, c.Secrets) {
+		c.Secrets = append(c.Secrets, *secret)
+	}
+
+	return nil
+}
+
 func updateSecretItemContext(log *logrus.Entry, c *secretbootstrap.Config, name, cluster, key string, value secretbootstrap.ItemContext) error {
 	log.WithFields(logrus.Fields{
 		"name":    name,
@@ -441,4 +512,13 @@ func findSecretConfig(name string, cluster string, sc []secretbootstrap.SecretCo
 		return idx, &sc[idx], nil
 	}
 	return -1, nil, fmt.Errorf("couldn't find SecretConfig with name: %s and cluster: %s", name, cluster)
+}
+
+func secretConfigExist(target *secretbootstrap.SecretConfig, secrets []secretbootstrap.SecretConfig) bool {
+	for _, candidate := range secrets {
+		if reflect.DeepEqual(target, &candidate) {
+			return true
+		}
+	}
+	return false
 }

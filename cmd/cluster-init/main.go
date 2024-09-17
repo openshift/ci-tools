@@ -2,11 +2,15 @@ package main
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
+	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
+
+	routev1 "github.com/openshift/api/route/v1"
 
 	onboardcmd "github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard"
 	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/provision"
@@ -16,6 +20,10 @@ import (
 func main() {
 	log := logrus.NewEntry(logrus.StandardLogger())
 	ctx := handleSignals(signals.SetupSignalHandler(), log)
+
+	if err := addSchemes(); err != nil {
+		logrus.Fatalf("%s", err)
+	}
 
 	root, err := newRootCmd(ctx, log)
 	if err != nil {
@@ -58,4 +66,11 @@ func handleSignals(signalCtx context.Context, log *logrus.Entry) context.Context
 	}()
 
 	return ctx
+}
+
+func addSchemes() error {
+	if err := routev1.AddToScheme(scheme.Scheme); err != nil {
+		return fmt.Errorf("add routev1 to scheme: %w", err)
+	}
+	return nil
 }

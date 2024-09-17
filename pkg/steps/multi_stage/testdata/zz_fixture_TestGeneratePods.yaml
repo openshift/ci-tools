@@ -143,8 +143,6 @@
       - mountPath: /tmp/entrypoint-wrapper
         name: entrypoint-wrapper
     nodeName: node-name
-    nodeSelector:
-      kubernetes.io/arch: amd64
     restartPolicy: Never
     serviceAccountName: test
     terminationGracePeriodSeconds: 25
@@ -314,8 +312,6 @@
       - mountPath: /tmp/entrypoint-wrapper
         name: entrypoint-wrapper
     nodeName: node-name
-    nodeSelector:
-      kubernetes.io/arch: amd64
     restartPolicy: Never
     serviceAccountName: test
     terminationGracePeriodSeconds: 18
@@ -481,8 +477,6 @@
       - mountPath: /tmp/entrypoint-wrapper
         name: entrypoint-wrapper
     nodeName: node-name
-    nodeSelector:
-      kubernetes.io/arch: amd64
     restartPolicy: Never
     serviceAccountName: test
     terminationGracePeriodSeconds: 18
@@ -660,8 +654,6 @@
       - mountPath: /tmp/entrypoint-wrapper
         name: entrypoint-wrapper
     nodeName: node-name
-    nodeSelector:
-      kubernetes.io/arch: amd64
     restartPolicy: Never
     serviceAccountName: test
     terminationGracePeriodSeconds: 18

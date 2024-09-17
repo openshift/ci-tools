@@ -108,7 +108,7 @@ func TestPodStepExecution(t *testing.T) {
 		{
 			purpose:        "Pod run by PodStep succeeds so PodStep terminates and returns no error",
 			podStatus:      corev1.PodSucceeded,
-			expectRunError: true,
+			expectRunError: false,
 		}, {
 			purpose:        "Pod run by PodStep fails so PodStep terminates and returns an error",
 			podStatus:      corev1.PodFailed,
@@ -116,6 +116,12 @@ func TestPodStepExecution(t *testing.T) {
 		},
 		{
 			purpose:        "Successful pod with cloning",
+			podStatus:      corev1.PodSucceeded,
+			clone:          true,
+			expectRunError: false,
+		},
+		{
+			purpose:        "Successful pod with cloning new run",
 			podStatus:      corev1.PodSucceeded,
 			clone:          true,
 			expectRunError: false,

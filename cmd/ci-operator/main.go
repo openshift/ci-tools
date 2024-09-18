@@ -19,6 +19,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1312,42 +1313,30 @@ func (o *options) initializeNamespace() error {
 		return fmt.Errorf("could not update namespace to add labels, TTLs and active annotations: %w", err)
 	}
 
-	if o.restrictNetworkAccess {
-		logrus.Debugf("Creating egress firewall in namespace %s", o.namespace)
+	intranetAccess := false
+	for _, test := range o.configSpec.Tests {
+		if slices.Contains(o.targets.values, test.As) {
+			if test.RestrictNetworkAccess != nil && !*test.RestrictNetworkAccess {
+				intranetAccess = true
+				break
+			}
+		}
+	}
+
+	if intranetAccess {
+		logrus.Debugf("Deleting egress firewall in namespace %s", o.namespace)
 		egressFirewall := &egressfirewallv1.EgressFirewall{
 			ObjectMeta: meta.ObjectMeta{
 				Name:      "default",
 				Namespace: o.namespace,
 			},
-			Spec: egressfirewallv1.EgressFirewallSpec{
-				Egress: []egressfirewallv1.EgressFirewallRule{
-					{
-						To: egressfirewallv1.EgressFirewallDestination{
-							NodeSelector: &meta.LabelSelector{
-								MatchLabels: map[string]string{
-									"node-role.kubernetes.io/master": "",
-								},
-							},
-						},
-						Type: "Allow",
-					},
-					{
-						To: egressfirewallv1.EgressFirewallDestination{
-							CIDRSelector: "10.0.0.0/8",
-						},
-						Type: "Deny",
-					},
-					{
-						To: egressfirewallv1.EgressFirewallDestination{
-							CIDRSelector: "0.0.0.0/0",
-						},
-						Type: "Allow",
-					},
-				},
-			},
 		}
-		if err := client.Create(ctx, egressFirewall); err != nil && !kerrors.IsAlreadyExists(err) {
-			return fmt.Errorf("could not create egress firewall: %w", err)
+		if err := client.Delete(ctx, egressFirewall); err != nil {
+			if kerrors.IsNotFound(err) {
+				logrus.Warnf("Warning: egress firewall does not exist: %v", err)
+			} else {
+				return fmt.Errorf("could not delete egress firewall: %w", err)
+			}
 		}
 	}
 

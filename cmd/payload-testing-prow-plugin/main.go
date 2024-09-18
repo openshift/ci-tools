@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"gopkg.in/fsnotify.v1"
 
 	"k8s.io/client-go/kubernetes/scheme"
 	controllerruntime "sigs.k8s.io/controller-runtime"
@@ -142,12 +143,29 @@ func main() {
 		logger.WithError(err).WithField("context", appCIContextName).Fatal("could not get client for kube config")
 	}
 
-	errChan := make(chan error)
-	go func() { logrus.Fatal(<-errChan) }()
-	configAgent, err := agents.NewConfigAgent(o.ciOpConfigDir, errChan)
-	if err != nil {
-		logger.WithError(err).Fatal("could not get config agent")
+	eventCh := make(chan fsnotify.Event)
+	errCh := make(chan error)
+	universalSymlinkWatcher := &agents.UniversalSymlinkWatcher{
+		EventCh:   eventCh,
+		ErrCh:     errCh,
+		WatchPath: o.ciOpConfigDir,
 	}
+
+	configAgentOption := func(opt *agents.ConfigAgentOptions) {
+		opt.UniversalSymlinkWatcher = universalSymlinkWatcher
+	}
+	watcher, err := universalSymlinkWatcher.GetWatcher()
+	if err != nil {
+		logger.Fatalf("Failed to get the universal symlink watcher: %v", err)
+	}
+	interrupts.Run(watcher)
+
+	configErrCh := make(chan error)
+	configAgent, err := agents.NewConfigAgent(o.ciOpConfigDir, configErrCh, configAgentOption)
+	if err != nil {
+		logger.WithError(err).Fatal("Failed to construct config agent")
+	}
+	go func() { logger.Fatal(<-configErrCh) }()
 
 	serv := &server{
 		ghc:          githubClient,

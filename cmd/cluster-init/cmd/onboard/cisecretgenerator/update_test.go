@@ -7,9 +7,11 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
+	"k8s.io/utils/ptr"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
+	"github.com/openshift/ci-tools/pkg/clustermgmt"
 	"github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
@@ -105,15 +107,16 @@ func TestFindSecretItem(t *testing.T) {
 func TestUpdateSecretGeneratorConfig(t *testing.T) {
 	serviceAccountConfigPath := onboard.ServiceAccountKubeconfigPath(serviceAccountWildcard, clusterWildcard)
 	testCases := []struct {
-		name string
-		Options
+		name     string
+		ci       clustermgmt.ClusterInstall
 		input    SecretGenConfig
 		expected SecretGenConfig
 	}{
 		{
 			name: "basic",
-			Options: Options{
+			ci: clustermgmt.ClusterInstall{
 				ClusterName: "newcluster",
+				Onboard:     clustermgmt.Onboard{Unmanaged: ptr.To(false)},
 			},
 			input: SecretGenConfig{
 				{
@@ -214,7 +217,7 @@ func TestUpdateSecretGeneratorConfig(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			if err := updateSecretGeneratorConfig(logrus.NewEntry(logrus.StandardLogger()),
-				tc.Options, &tc.input); err != nil {
+				&tc.ci, &tc.input); err != nil {
 				t.Fatalf("error received while updating secret generator config: %v", err)
 			}
 			if diff := cmp.Diff(tc.expected, tc.input); diff != "" {

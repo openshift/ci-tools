@@ -15,22 +15,21 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	routev1 "github.com/openshift/api/route/v1"
+	"github.com/openshift/ci-tools/pkg/clustermgmt"
 )
 
 func TestUpdateDexConfig(t *testing.T) {
 	releaseRepo := "/release/repo"
 	for _, tc := range []struct {
 		name          string
-		releaseRepo   string
-		clusterName   string
-		redirectURIs  map[string]string
+		ci            clustermgmt.ClusterInstall
 		dexManifests  string
 		wantManifests string
 		wantErr       error
 	}{
 		{
-			name:        "Add static client and env",
-			clusterName: "build11",
+			name: "Add static client and env",
+			ci:   clustermgmt.ClusterInstall{ClusterName: "build11", Onboard: clustermgmt.Onboard{ReleaseRepo: releaseRepo}},
 			dexManifests: `apiVersion: apps/v1
 kind: Deployment
 spec:
@@ -80,9 +79,14 @@ status: {}
 `,
 		},
 		{
-			name:         "Get redirectURI from config",
-			clusterName:  "build11",
-			redirectURIs: map[string]string{"build11": "https://redirect.uri"},
+			name: "Get redirectURI from config",
+			ci: clustermgmt.ClusterInstall{
+				ClusterName: "build11",
+				Onboard: clustermgmt.Onboard{
+					ReleaseRepo: releaseRepo,
+					Dex:         clustermgmt.Dex{RedirectURIs: map[string]string{"build11": "https://redirect.uri"}},
+				},
+			},
 			dexManifests: `apiVersion: apps/v1
 kind: Deployment
 spec:
@@ -132,8 +136,8 @@ status: {}
 `,
 		},
 		{
-			name:        "Update client and env",
-			clusterName: "build11",
+			name: "Update client and env",
+			ci:   clustermgmt.ClusterInstall{ClusterName: "build11", Onboard: clustermgmt.Onboard{ReleaseRepo: releaseRepo}},
 			dexManifests: `apiVersion: apps/v1
 kind: Deployment
 spec:
@@ -199,9 +203,9 @@ status: {}
 `,
 		},
 		{
-			name:        "No deployment",
-			clusterName: "build11",
-			wantErr:     errors.New("deployment not found"),
+			name:    "No deployment",
+			ci:      clustermgmt.ClusterInstall{ClusterName: "build11", Onboard: clustermgmt.Onboard{ReleaseRepo: releaseRepo}},
+			wantErr: errors.New("deployment not found"),
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -217,9 +221,7 @@ status: {}
 			}).Build()
 
 			step := NewDexStep(logrus.NewEntry(logrus.StandardLogger()),
-				func() (ctrlruntimeclient.Client, error) { return c, nil },
-				releaseRepo, tc.clusterName, tc.redirectURIs,
-			)
+				func() (ctrlruntimeclient.Client, error) { return c, nil }, &tc.ci)
 
 			var readManifestsPath string
 			step.readDexManifests = func(path string) (string, error) {

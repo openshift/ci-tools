@@ -7,8 +7,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/apimachinery/pkg/util/sets"
-
+	"github.com/openshift/ci-tools/pkg/clustermgmt"
 	"github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
 )
 
@@ -18,10 +17,10 @@ type Options struct {
 	Update      bool
 }
 
-func UpdateClusterBuildFarmDir(log *logrus.Entry, o Options, hostedClusters []string) error {
+func UpdateClusterBuildFarmDir(log *logrus.Entry, ci *clustermgmt.ClusterInstall, update bool) error {
 	log = log.WithField("step", "build-cluster-dir")
-	buildDir := onboard.BuildFarmDirFor(o.ReleaseRepo, o.ClusterName)
-	if o.Update {
+	buildDir := onboard.BuildFarmDirFor(ci.Onboard.ReleaseRepo, ci.ClusterName)
+	if update {
 		log.Infof("Updating build dir: %s", buildDir)
 	} else {
 		log.Infof("creating build dir: %s", buildDir)
@@ -35,15 +34,14 @@ func UpdateClusterBuildFarmDir(log *logrus.Entry, o Options, hostedClusters []st
 		"common_except_app.ci",
 	}
 
-	hostedClustersSet := sets.New[string](hostedClusters...)
-	if !hostedClustersSet.Has(o.ClusterName) {
+	if !*ci.Onboard.Hosted {
 		config_dirs = append(config_dirs, "common_except_hosted")
 	}
 
 	for _, item := range config_dirs {
 		target := fmt.Sprintf("../%s", item)
 		source := filepath.Join(buildDir, item)
-		if o.Update {
+		if update {
 			if err := os.RemoveAll(source); err != nil {
 				return fmt.Errorf("failed to remove symlink %s, error: %w", source, err)
 			}

@@ -8,23 +8,24 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
+	"github.com/openshift/ci-tools/pkg/clustermgmt"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func TestUpdateSecret(t *testing.T) {
 	testCases := []struct {
-		name string
-		Options
-		secretGenerator func(Options) secretbootstrap.SecretConfig
+		name            string
+		ci              clustermgmt.ClusterInstall
+		secretGenerator func(*clustermgmt.ClusterInstall) secretbootstrap.SecretConfig
 		config          secretbootstrap.Config
 		expectedConfig  secretbootstrap.Config
 	}{
 		{
 			name: "secret does not exist",
-			Options: Options{
+			ci: clustermgmt.ClusterInstall{
 				ClusterName: "newCluster",
 			},
-			secretGenerator: func(o Options) secretbootstrap.SecretConfig {
+			secretGenerator: func(*clustermgmt.ClusterInstall) secretbootstrap.SecretConfig {
 				return secretbootstrap.SecretConfig{
 					From: map[string]secretbootstrap.ItemContext{"item": {Item: "item-a"}},
 					To:   []secretbootstrap.SecretContext{{Cluster: "newCluster", Name: "secret-a"}},
@@ -53,10 +54,10 @@ func TestUpdateSecret(t *testing.T) {
 		},
 		{
 			name: "secret exists",
-			Options: Options{
+			ci: clustermgmt.ClusterInstall{
 				ClusterName: "existingCluster",
 			},
-			secretGenerator: func(o Options) secretbootstrap.SecretConfig {
+			secretGenerator: func(*clustermgmt.ClusterInstall) secretbootstrap.SecretConfig {
 				return secretbootstrap.SecretConfig{
 					From: map[string]secretbootstrap.ItemContext{"item": {Item: "item-a"}},
 					To:   []secretbootstrap.SecretContext{{Cluster: "existingCluster", Name: "secret-a"}},
@@ -99,7 +100,7 @@ func TestUpdateSecret(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			if err := updateSecret(tc.secretGenerator)(logrus.NewEntry(logrus.StandardLogger()),
-				&tc.config, tc.Options); err != nil {
+				&tc.config, &tc.ci); err != nil {
 				t.Fatalf("received error: %v", err)
 			}
 			if diff := cmp.Diff(tc.expectedConfig, tc.config); diff != "" {

@@ -10,20 +10,16 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/clustermgmt"
 	"github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
 	"github.com/openshift/ci-tools/pkg/dispatcher"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
 )
 
-type Options struct {
-	ClusterName string
-	ReleaseRepo string
-}
-
-func UpdateSanitizeProwJobs(log *logrus.Entry, o Options) error {
+func UpdateSanitizeProwJobs(log *logrus.Entry, ci *clustermgmt.ClusterInstall) error {
 	log = log.WithField("step", "sanitize-prowjob")
 	log.Info("Updating sanitize-prow-jobs config")
-	filename := filepath.Join(o.ReleaseRepo, "core-services", "sanitize-prow-jobs", "_config.yaml")
+	filename := filepath.Join(ci.Onboard.ReleaseRepo, "core-services", "sanitize-prow-jobs", "_config.yaml")
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return err
@@ -32,7 +28,7 @@ func UpdateSanitizeProwJobs(log *logrus.Entry, o Options) error {
 	if err = yaml.Unmarshal(data, &c); err != nil {
 		return err
 	}
-	updateSanitizeProwJobsConfig(&c, o.ClusterName)
+	updateSanitizeProwJobsConfig(&c, ci.ClusterName)
 	rawYaml, err := yaml.Marshal(c)
 	if err != nil {
 		return err

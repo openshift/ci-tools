@@ -5,19 +5,16 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/yaml"
 
+	"github.com/openshift/ci-tools/pkg/clustermgmt"
 	"github.com/openshift/ci-tools/pkg/group"
 )
 
-type Options struct {
-	ClusterName string
-	ReleaseRepo string
-}
-
-func UpdateSyncRoverGroups(o Options) error {
-	filename := filepath.Join(o.ReleaseRepo, "core-services", "sync-rover-groups", "_config.yaml")
+func UpdateSyncRoverGroups(_ *logrus.Entry, ci *clustermgmt.ClusterInstall) error {
+	filename := filepath.Join(ci.Onboard.ReleaseRepo, "core-services", "sync-rover-groups", "_config.yaml")
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return err
@@ -29,7 +26,7 @@ func UpdateSyncRoverGroups(o Options) error {
 	if c.ClusterGroups == nil {
 		return fmt.Errorf("`cluster_groups` is not defined in the sync-rover-groups' configuration")
 	}
-	c.ClusterGroups["build-farm"] = sets.List(sets.New[string](c.ClusterGroups["build-farm"]...).Insert(o.ClusterName))
+	c.ClusterGroups["build-farm"] = sets.List(sets.New[string](c.ClusterGroups["build-farm"]...).Insert(ci.ClusterName))
 	rawYaml, err := yaml.Marshal(c)
 	if err != nil {
 		return err

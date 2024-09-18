@@ -17,15 +17,14 @@ import (
 	"sigs.k8s.io/yaml"
 
 	routev1 "github.com/openshift/api/route/v1"
+	"github.com/openshift/ci-tools/pkg/clustermgmt"
 )
 
 type KubeClientGetter func() (ctrlruntimeclient.Client, error)
 
 type dexStep struct {
 	log               *logrus.Entry
-	releaseRepo       string
-	clusterName       string
-	redirectURIs      map[string]string
+	ci                *clustermgmt.ClusterInstall
 	kubeClient        KubeClientGetter
 	readDexManifests  func(path string) (string, error)
 	writeDexManifests func(path string, manifests []byte) error
@@ -41,7 +40,7 @@ func (s *dexStep) Name() string {
 }
 
 func (s *dexStep) Run(ctx context.Context) error {
-	dexManifestsPath := path.Join(s.releaseRepo, dexManifests)
+	dexManifestsPath := path.Join(s.ci.Onboard.ReleaseRepo, dexManifests)
 	dexManifests, err := s.readDexManifests(dexManifestsPath)
 	if err != nil {
 		return err
@@ -75,7 +74,7 @@ func (s *dexStep) Run(ctx context.Context) error {
 	}
 
 	if len(deploy.Spec.Template.Spec.Containers) > 0 {
-		s.updateEnvVar(&deploy.Spec.Template.Spec.Containers[0], s.clusterName)
+		s.updateEnvVar(&deploy.Spec.Template.Spec.Containers[0], s.ci.ClusterName)
 	} else {
 		return fmt.Errorf("no containers spec found in %s", dexManifestsPath)
 	}
@@ -108,10 +107,10 @@ func (s *dexStep) updateDexConfig(ctx context.Context, config dexConfig) error {
 		return fmt.Errorf("redirect uri: %w", err)
 	}
 
-	clusterNameUpper := strings.ToUpper(s.clusterName)
+	clusterNameUpper := strings.ToUpper(s.ci.ClusterName)
 	target := map[string]interface{}{
 		"idEnv":        clusterNameUpper + "-ID",
-		"name":         s.clusterName,
+		"name":         s.ci.ClusterName,
 		"redirectURIs": []string{redirectURI},
 		"secretEnv":    clusterNameUpper + "-SECRET",
 	}
@@ -175,7 +174,7 @@ func (s *dexStep) updateEnvVar(c *corev1.Container, clusterName string) {
 }
 
 func (s *dexStep) redirectURI(ctx context.Context) (string, error) {
-	ru, found := s.redirectURIs[s.clusterName]
+	ru, found := s.ci.Onboard.Dex.RedirectURIs[s.ci.ClusterName]
 	if found {
 		return ru, nil
 	}
@@ -229,14 +228,11 @@ func writeDexManifests(path string, manifests []byte) error {
 	return nil
 }
 
-func NewDexStep(log *logrus.Entry, kubeClient KubeClientGetter, releaseRepo, clusterName string,
-	redirectURIs map[string]string) *dexStep {
+func NewDexStep(log *logrus.Entry, kubeClient KubeClientGetter, ci *clustermgmt.ClusterInstall) *dexStep {
 	return &dexStep{
 		log:               log,
 		kubeClient:        kubeClient,
-		releaseRepo:       releaseRepo,
-		clusterName:       clusterName,
-		redirectURIs:      redirectURIs,
+		ci:                ci,
 		readDexManifests:  readDexManifests,
 		writeDexManifests: writeDexManifests,
 	}

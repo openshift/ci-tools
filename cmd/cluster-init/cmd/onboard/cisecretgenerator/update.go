@@ -13,6 +13,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
+	"github.com/openshift/ci-tools/pkg/clustermgmt"
 	"github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
 )
 
@@ -20,12 +21,6 @@ const (
 	serviceAccountWildcard = "$(service_account)"
 	clusterWildcard        = "$(cluster)"
 )
-
-type Options struct {
-	ClusterName string
-	ReleaseRepo string
-	Unmanaged   bool
-}
 
 // SecretGenConfig is used here as using secretgenerator.Config results in 'special' unmarshalling
 // where '$(*)' wildcards from the yaml are expanded in the output. Doing so for this purpose results in
@@ -83,10 +78,10 @@ func explainFilters(filters ...secretItemFilter) string {
 	return strings.Join(explanations, " - ")
 }
 
-func UpdateSecretGenerator(log *logrus.Entry, o Options) error {
+func UpdateSecretGenerator(log *logrus.Entry, ci *clustermgmt.ClusterInstall) error {
 	log = log.WithField("step", "ci-secret-generator")
 
-	filename := filepath.Join(o.ReleaseRepo, "core-services", "ci-secret-generator", "_config.yaml")
+	filename := filepath.Join(ci.Onboard.ReleaseRepo, "core-services", "ci-secret-generator", "_config.yaml")
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return err
@@ -95,7 +90,7 @@ func UpdateSecretGenerator(log *logrus.Entry, o Options) error {
 	if err = yaml.Unmarshal(data, &c); err != nil {
 		return err
 	}
-	if err = updateSecretGeneratorConfig(log, o, &c); err != nil {
+	if err = updateSecretGeneratorConfig(log, ci, &c); err != nil {
 		return err
 	}
 	rawYaml, err := yaml.Marshal(c)
@@ -105,26 +100,26 @@ func UpdateSecretGenerator(log *logrus.Entry, o Options) error {
 	return os.WriteFile(filename, rawYaml, 0644)
 }
 
-func updateSecretGeneratorConfig(log *logrus.Entry, o Options, c *SecretGenConfig) error {
+func updateSecretGeneratorConfig(log *logrus.Entry, ci *clustermgmt.ClusterInstall, c *SecretGenConfig) error {
 	filterByCluster := byParam("cluster", string(api.ClusterBuild01))
 
 	serviceAccountConfigPath := onboard.ServiceAccountKubeconfigPath(serviceAccountWildcard, clusterWildcard)
-	if err := appendToSecretItem(log, o, c, byItemName(onboard.BuildUFarm), filterByCluster, byFieldName(serviceAccountConfigPath)); err != nil {
+	if err := appendToSecretItem(log, ci, c, byItemName(onboard.BuildUFarm), filterByCluster, byFieldName(serviceAccountConfigPath)); err != nil {
 		return err
 	}
 
 	token := fmt.Sprintf("token_%s_%s_reg_auth_value.txt", serviceAccountWildcard, clusterWildcard)
 	filterByFieldName, filterBySA := byFieldName(token), byParam("service_account", "image-puller")
-	if err := appendToSecretItem(log, o, c, byItemName(onboard.BuildUFarm), filterByCluster, filterByFieldName, filterBySA); err != nil {
+	if err := appendToSecretItem(log, ci, c, byItemName(onboard.BuildUFarm), filterByCluster, filterByFieldName, filterBySA); err != nil {
 		return err
 	}
 
-	if err := appendToSecretItem(log, o, c, byItemName("ci-chat-bot"), filterByCluster, byFieldName(serviceAccountConfigPath)); err != nil {
+	if err := appendToSecretItem(log, ci, c, byItemName("ci-chat-bot"), filterByCluster, byFieldName(serviceAccountConfigPath)); err != nil {
 		return err
 	}
 
-	if !o.Unmanaged {
-		if err := appendToSecretItem(log, o, c, byItemName(onboard.PodScaler), filterByCluster, byFieldName(serviceAccountConfigPath)); err != nil {
+	if !*ci.Onboard.Unmanaged {
+		if err := appendToSecretItem(log, ci, c, byItemName(onboard.PodScaler), filterByCluster, byFieldName(serviceAccountConfigPath)); err != nil {
 			return err
 		}
 	}
@@ -132,13 +127,13 @@ func updateSecretGeneratorConfig(log *logrus.Entry, o Options, c *SecretGenConfi
 	return nil
 }
 
-func appendToSecretItem(log *logrus.Entry, o Options, c *SecretGenConfig, filters ...secretItemFilter) error {
+func appendToSecretItem(log *logrus.Entry, ci *clustermgmt.ClusterInstall, c *SecretGenConfig, filters ...secretItemFilter) error {
 	si, err := findSecretItem(*c, filters...)
 	if err != nil {
 		return err
 	}
 	log.Infof("Appending to secret item: %s", explainFilters(filters...))
-	si.Params["cluster"] = sets.List(sets.New(si.Params["cluster"]...).Insert(o.ClusterName))
+	si.Params["cluster"] = sets.List(sets.New(si.Params["cluster"]...).Insert(ci.ClusterName))
 	return nil
 }
 

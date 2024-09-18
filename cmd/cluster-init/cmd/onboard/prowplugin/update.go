@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/openshift/ci-tools/pkg/clustermgmt"
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -12,15 +13,10 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-type Options struct {
-	ClusterName string
-	ReleaseRepo string
-}
-
-func UpdateProwPluginConfig(log *logrus.Entry, o Options) error {
+func UpdateProwPluginConfig(log *logrus.Entry, ci *clustermgmt.ClusterInstall) error {
 	log = log.WithField("step", "prow-plugin")
 	log.Info("Updating Prow plugin config")
-	filename := filepath.Join(o.ReleaseRepo, "core-services", "prow", "02_config", "_plugins.yaml")
+	filename := filepath.Join(ci.Onboard.ReleaseRepo, "core-services", "prow", "02_config", "_plugins.yaml")
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return err
@@ -29,7 +25,7 @@ func UpdateProwPluginConfig(log *logrus.Entry, o Options) error {
 	if err = yaml.Unmarshal(data, &c); err != nil {
 		return err
 	}
-	updateProwPluginConfigConfigUpdater(&c, o.ClusterName)
+	updateProwPluginConfigConfigUpdater(&c, ci.ClusterName)
 	rawYaml, err := yaml.Marshal(c)
 	if err != nil {
 		return err

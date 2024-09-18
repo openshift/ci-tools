@@ -24,6 +24,7 @@ func applyDefaults(ci *ClusterInstall) {
 	coalesce(&ci.Onboard.Hosted, false)
 	coalesce(&ci.Onboard.Unmanaged, false)
 	coalesce(&ci.Onboard.OSD, true)
+	coalesce(&ci.Onboard.UseTokenFileInKubeconfig, true)
 }
 
 func coalesce[T any](x **T, def T) {

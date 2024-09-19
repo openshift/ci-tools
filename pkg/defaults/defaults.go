@@ -977,7 +977,7 @@ func runtimeStepConfigsForBuild(
 						}
 					}
 					if len(matchingRefs) == 0 { // If we didn't find anything, use the primary refs
-						matchingRefs = append(matchingRefs, *jobSpec.Refs)
+						matchingRefs = append(matchingRefs, *determinePrimaryRef(jobSpec, injectedTest))
 					}
 					path = decorate.DetermineWorkDir(codeMountPath, matchingRefs)
 				}
@@ -1015,22 +1015,41 @@ func runtimeStepConfigsForBuild(
 		}
 	}
 
-	var primaryRef *prowapi.Refs
-	if jobSpec.Refs != nil {
-		primaryRef = jobSpec.Refs
-	} else if !injectedTest && len(jobSpec.ExtraRefs) == 1 {
-		primaryRef = &jobSpec.ExtraRefs[0]
-	}
+	buildSteps = append(buildSteps, getSourceStepsForJobSpec(jobSpec, injectedTest)...)
+
+	return buildSteps, nil
+}
+
+func getSourceStepsForJobSpec(jobSpec *api.JobSpec, injectedTest bool) []api.StepConfiguration {
+	var sourceSteps []api.StepConfiguration
+	primaryRef := determinePrimaryRef(jobSpec, injectedTest)
 	if primaryRef != nil {
-		buildSteps = append(buildSteps, sourceStepForRef(primaryRef, true))
+		sourceSteps = append(sourceSteps, sourceStepForRef(primaryRef, true))
 	}
 
+	// Any extra_refs for an injected test scenario are secondary refs
 	if injectedTest {
 		for _, ref := range jobSpec.ExtraRefs {
-			buildSteps = append(buildSteps, sourceStepForRef(&ref, false))
+			sourceSteps = append(sourceSteps, sourceStepForRef(&ref, false))
 		}
 	}
-	return buildSteps, nil
+
+	return sourceSteps
+}
+
+func determinePrimaryRef(jobSpec *api.JobSpec, injectedTest bool) *prowapi.Refs {
+	// Firstly, if any of the extra_refs set the 'workdir' to 'true' it will be primary
+	for _, ref := range jobSpec.ExtraRefs {
+		if ref.WorkDir {
+			return &ref
+		}
+	}
+	if jobSpec.Refs != nil { // Secondly, if a 'ref' exists it will be primary
+		return jobSpec.Refs
+	} else if !injectedTest && len(jobSpec.ExtraRefs) == 1 { // Finally, if we are not injecting a test, and there is only one extra_ref (as in a periodic), it will be primary
+		return &jobSpec.ExtraRefs[0]
+	}
+	return nil
 }
 
 func sourceStepForRef(ref *prowapi.Refs, primaryRef bool) api.StepConfiguration {

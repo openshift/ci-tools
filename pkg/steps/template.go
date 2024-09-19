@@ -278,9 +278,6 @@ func (s *templateExecutionStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func (s *templateExecutionStep) IsMultiArch() bool           { return false }
-func (s *templateExecutionStep) SetMultiArch(multiArch bool) {}
-
 func TemplateExecutionStep(template *templateapi.Template, params api.Parameters, podClient kubernetes.PodClient, templateClient TemplateClient, jobSpec *api.JobSpec, resources api.ResourceConfiguration) api.Step {
 	return &templateExecutionStep{
 		template:  template,

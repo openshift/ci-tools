@@ -165,9 +165,6 @@ func (s *outputImageTagStep) imageStreamTag(fromImage string) *imagev1.ImageStre
 	}
 }
 
-func (s *outputImageTagStep) IsMultiArch() bool           { return false }
-func (s *outputImageTagStep) SetMultiArch(multiArch bool) {}
-
 func OutputImageTagStep(config api.OutputImageTagStepConfiguration, client loggingclient.LoggingClient, jobSpec *api.JobSpec) api.Step {
 	return &outputImageTagStep{
 		config:  config,

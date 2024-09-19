@@ -123,9 +123,6 @@ func (s *leaseStep) run(ctx context.Context) error {
 	return aggregateWrappedErrorAndReleaseError(wrappedErr, releaseErr)
 }
 
-func (s *leaseStep) IsMultiArch() bool           { return false }
-func (s *leaseStep) SetMultiArch(multiArch bool) {}
-
 func aggregateWrappedErrorAndReleaseError(wrappedErr, releaseErr error) error {
 	// we want a sensible output error for reporting, so we bubble up these individually if we can
 	if wrappedErr != nil && releaseErr == nil {

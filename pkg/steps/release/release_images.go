@@ -87,9 +87,6 @@ func (s *stableImagesTagStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func (s *stableImagesTagStep) IsMultiArch() bool           { return false }
-func (s *stableImagesTagStep) SetMultiArch(multiArch bool) {}
-
 // releaseImagesTagStep will tag a full release suite
 // of images in from the configured namespace. It is
 // expected that builds will overwrite these tags at
@@ -206,9 +203,6 @@ func (s *releaseImagesTagStep) Description() string {
 func (s *releaseImagesTagStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
-
-func (s *releaseImagesTagStep) IsMultiArch() bool           { return false }
-func (s *releaseImagesTagStep) SetMultiArch(multiArch bool) {}
 
 func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, client loggingclient.LoggingClient, params *api.DeferredParameters, jobSpec *api.JobSpec, integratedStream *configresolver.IntegratedStream) api.Step {
 	return &releaseImagesTagStep{

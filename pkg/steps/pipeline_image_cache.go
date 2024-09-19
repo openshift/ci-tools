@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	coreapi "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	buildapi "github.com/openshift/api/build/v1"
@@ -22,13 +23,13 @@ RUN ["/bin/bash", "-c", %s]`, api.PipelineImageStream, from, strconv.Quote(fmt.S
 }
 
 type pipelineImageCacheStep struct {
-	config     api.PipelineImageCacheStepConfiguration
-	resources  api.ResourceConfiguration
-	client     BuildClient
-	podClient  kubernetes.PodClient
-	jobSpec    *api.JobSpec
-	pullSecret *coreapi.Secret
-	multiArch  bool
+	config        api.PipelineImageCacheStepConfiguration
+	resources     api.ResourceConfiguration
+	client        BuildClient
+	podClient     kubernetes.PodClient
+	jobSpec       *api.JobSpec
+	pullSecret    *coreapi.Secret
+	architectures sets.Set[string]
 }
 
 func (s *pipelineImageCacheStep) Inputs() (api.InputDefinition, error) {
@@ -59,7 +60,7 @@ func (s *pipelineImageCacheStep) run(ctx context.Context) error {
 		s.pullSecret,
 		nil,
 		s.config.Ref,
-	), newImageBuildOptions(s.multiArch))
+	), newImageBuildOptions(s.architectures.UnsortedList()))
 }
 
 func (s *pipelineImageCacheStep) Requires() []api.StepLink {
@@ -89,8 +90,13 @@ func (s *pipelineImageCacheStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func (s *pipelineImageCacheStep) IsMultiArch() bool           { return s.multiArch }
-func (s *pipelineImageCacheStep) SetMultiArch(multiArch bool) { s.multiArch = multiArch }
+func (s *pipelineImageCacheStep) ResolveMultiArch() sets.Set[string] {
+	return s.architectures
+}
+
+func (s *pipelineImageCacheStep) AddArchitectures(archs []string) {
+	s.architectures.Insert(archs...)
+}
 
 func PipelineImageCacheStep(
 	config api.PipelineImageCacheStepConfiguration,
@@ -101,11 +107,12 @@ func PipelineImageCacheStep(
 	pullSecret *coreapi.Secret,
 ) api.Step {
 	return &pipelineImageCacheStep{
-		config:     config,
-		resources:  resources,
-		client:     client,
-		podClient:  podClient,
-		jobSpec:    jobSpec,
-		pullSecret: pullSecret,
+		config:        config,
+		resources:     resources,
+		client:        client,
+		podClient:     podClient,
+		jobSpec:       jobSpec,
+		pullSecret:    pullSecret,
+		architectures: sets.New[string](),
 	}
 }

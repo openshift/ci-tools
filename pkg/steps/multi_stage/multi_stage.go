@@ -12,6 +12,7 @@ import (
 
 	coreapi "k8s.io/api/core/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
@@ -410,13 +411,18 @@ func (s *multiStageTestStep) cancelObserversContext(cancel context.CancelFunc) {
 	}
 }
 
-func (s *multiStageTestStep) IsMultiArch() bool {
-	// If the node architecture is not set, we assume it's AMD64
-	// and if the architecture is anything else, we assume that it's multi-arch
-	return s.nodeArchitecture != "" && s.nodeArchitecture != api.NodeArchitectureAMD64
+func (s *multiStageTestStep) ResolveMultiArch() sets.Set[string] {
+	arch := string(api.NodeArchitectureAMD64)
+	if s.nodeArchitecture != "" {
+		arch = string(s.nodeArchitecture)
+	}
+	return sets.New[string](arch)
 }
 
-func (s *multiStageTestStep) SetMultiArch(multiArch bool) {}
+func (s *multiStageTestStep) AddArchitectures(archs ...string) {
+	// We don't want anything else rather than the node_architecture in the config
+	// to add another architecture.
+}
 
 // secretsForCensoring returns the secret volumes and mounts that will allow sidecar to censor
 // their content from uploads. This is the full secret list in our namespace, except for the ones

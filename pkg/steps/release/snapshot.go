@@ -144,9 +144,6 @@ func (r *releaseSnapshotStep) Objects() []ctrlruntimeclient.Object {
 	return r.client.Objects()
 }
 
-func (s *releaseSnapshotStep) IsMultiArch() bool           { return false }
-func (s *releaseSnapshotStep) SetMultiArch(multiArch bool) {}
-
 func ReleaseSnapshotStep(release string, config api.Integration, client loggingclient.LoggingClient, jobSpec *api.JobSpec, integratedStream *configresolver.IntegratedStream) api.Step {
 	return &releaseSnapshotStep{
 		name:             release,

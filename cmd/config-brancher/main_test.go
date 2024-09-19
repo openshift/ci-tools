@@ -631,3 +631,61 @@ func TestOptions_Bind(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdateRelease(t *testing.T) {
+	testCases := []struct {
+		name           string
+		input          *api.ReleaseBuildConfiguration
+		currentRelease string
+		futureReleases string
+		output         *api.ReleaseBuildConfiguration
+	}{
+		{
+			name: "Update integration release",
+			input: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					Releases: map[string]api.UnresolvedRelease{
+						"integration": {Integration: &api.Integration{Name: "current-release"}},
+					},
+				},
+			},
+			currentRelease: "current-release",
+			futureReleases: "future-release",
+			output: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					Releases: map[string]api.UnresolvedRelease{
+						"integration": {Integration: &api.Integration{Name: "future-release"}},
+					},
+				},
+			},
+		},
+		{
+			name: "Update candidate release",
+			input: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					Releases: map[string]api.UnresolvedRelease{
+						"candidate": {Candidate: &api.Candidate{Version: "current-release"}},
+					},
+				},
+			},
+			currentRelease: "current-release",
+			futureReleases: "future-release",
+			output: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					Releases: map[string]api.UnresolvedRelease{
+						"candidate": {Candidate: &api.Candidate{Version: "future-release"}},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			updateRelease(tc.input, tc.currentRelease, tc.futureReleases)
+			if !reflect.DeepEqual(tc.input, tc.output) {
+				t.Errorf("config mismatch (-want +got):\\n%s", diff.ObjectReflectDiff(tc.output, tc.input))
+			}
+		})
+	}
+}

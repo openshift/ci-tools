@@ -58,7 +58,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 		output        []api.StepConfiguration
 		readFile      readFile
 		resolver      resolveRoot
-		injectedTest  bool
+		mergedConfig  bool
 		expectedError error
 	}{
 		{
@@ -862,154 +862,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 			expectedError: fmt.Errorf("failed to read buildRootImageStream from repository: %w", fmt.Errorf("failed to read .ci-operator.yaml file: %w", fmt.Errorf("fail to read file: reason"))),
 		},
 		{
-			name: "from a primary ref with an additional ref",
-			input: &api.ReleaseBuildConfiguration{
-				InputConfiguration: api.InputConfiguration{
-					BuildRootImage: &api.BuildRootImageConfiguration{
-						ImageStreamTagReference: &api.ImageStreamTagReference{
-							Namespace: "root-ns",
-							Name:      "root-name",
-							Tag:       "manual",
-						},
-					},
-					BuildRootImages: map[string]api.BuildRootImageConfiguration{
-						"org.other-repo": {
-							ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
-							UseBuildCache:           true,
-						},
-					},
-				},
-				BinaryBuildCommands: "binbuild",
-				BinaryBuildCommandsList: []api.RefCommands{
-					{
-						Commands: "build",
-						Ref:      "org.other-repo",
-					},
-				},
-				TestBinaryBuildCommands: "build test-bin",
-				TestBinaryBuildCommandsList: []api.RefCommands{
-					{
-						Commands: "build tb",
-						Ref:      "org.other-repo",
-					},
-				},
-				RpmBuildCommands: "build rpm",
-				RpmBuildCommandsList: []api.RefCommands{
-					{
-						Commands: "build this-rpm",
-						Ref:      "org.other-repo",
-					},
-				},
-				RpmBuildLocation: "here",
-				RpmBuildLocationList: []api.RefLocation{
-					{
-						Location: "there",
-						Ref:      "org.other-repo",
-					},
-				},
-			},
-			jobSpec: &api.JobSpec{
-				JobSpec: downwardapi.JobSpec{
-					Refs: &prowapi.Refs{
-						Org:  "org",
-						Repo: "repo",
-					},
-					ExtraRefs: []prowapi.Refs{
-						{
-							Org:  "org",
-							Repo: "other-repo",
-						},
-					},
-				},
-			},
-			resolver: noopResolver,
-			output: []api.StepConfiguration{
-				{
-					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
-						From: api.PipelineImageStreamTagReferenceRoot,
-						To:   api.PipelineImageStreamTagReferenceSource,
-					}),
-				}, {
-					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
-						From: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceRoot)),
-						To:   api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceSource)),
-						Ref:  "org.other-repo",
-					}),
-				}, {
-					InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
-						InputImage: api.InputImage{
-							BaseImage: api.ImageStreamTagReference{
-								Namespace: "root-ns",
-								Name:      "root-name",
-								Tag:       "manual",
-							},
-							To: api.PipelineImageStreamTagReferenceRoot,
-						},
-						Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceRoot}},
-					},
-				}, {
-					InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
-						InputImage: api.InputImage{
-							BaseImage: api.ImageStreamTagReference{
-								Tag: "manual",
-							},
-							To:  api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceRoot)),
-							Ref: "org.other-repo",
-						},
-						Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceType(fmt.Sprintf("%s-org.other-repo", api.ImageStreamSourceRoot))}},
-					},
-				}, {
-					PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
-						From:     api.PipelineImageStreamTagReferenceSource,
-						To:       api.PipelineImageStreamTagReferenceBinaries,
-						Commands: "binbuild",
-					},
-				}, {
-					PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
-						From:     api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceSource)),
-						To:       api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceBinaries)),
-						Commands: "build",
-						Ref:      "org.other-repo",
-					},
-				}, {
-					PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
-						From:     api.PipelineImageStreamTagReferenceSource,
-						To:       api.PipelineImageStreamTagReferenceTestBinaries,
-						Commands: "build test-bin",
-					},
-				}, {
-					PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
-						From:     api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceSource)),
-						To:       api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceTestBinaries)),
-						Commands: "build tb",
-						Ref:      "org.other-repo",
-					},
-				}, {
-					PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
-						From:     api.PipelineImageStreamTagReferenceBinaries,
-						To:       api.PipelineImageStreamTagReferenceRPMs,
-						Commands: "build rpm; ln -s $( pwd )/here /srv/repo",
-					},
-				}, {
-					PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
-						From:     api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceBinaries)),
-						To:       api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceRPMs)),
-						Commands: "build this-rpm; ln -s $( pwd )/there /srv/repo",
-						Ref:      "org.other-repo",
-					},
-				}, {
-					RPMServeStepConfiguration: &api.RPMServeStepConfiguration{
-						From: api.PipelineImageStreamTagReferenceRPMs,
-					},
-				}, {
-					RPMServeStepConfiguration: &api.RPMServeStepConfiguration{
-						From: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceRPMs)),
-						Ref:  "org.other-repo",
-					},
-				}},
-			injectedTest: true,
-		},
-		{
 			name: "from multiple repo references",
 			input: &api.ReleaseBuildConfiguration{
 				InputConfiguration: api.InputConfiguration{
@@ -1082,7 +934,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
-			resolver: noopResolver,
+			resolver:     noopResolver,
+			mergedConfig: true,
 			output: []api.StepConfiguration{
 				{
 					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
@@ -1173,14 +1026,13 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Ref:  "org.other-repo",
 					},
 				}},
-			injectedTest: true,
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			graphConf := FromConfigStatic(testCase.input)
-			runtimeSteps, actualError := runtimeStepConfigsForBuild(testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, graphConf.InputImages(), testCase.injectedTest)
+			runtimeSteps, actualError := runtimeStepConfigsForBuild(testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, graphConf.InputImages(), testCase.mergedConfig)
 			graphConf.Steps = append(graphConf.Steps, runtimeSteps...)
 			if diff := cmp.Diff(testCase.expectedError, actualError, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("actualError does not match expectedError, diff: %s", diff)
@@ -1332,7 +1184,7 @@ func TestFromConfig(t *testing.T) {
 		env                 api.Parameters
 		params              map[string]string
 		overriddenImagesEnv map[string]string
-		injectedTest        bool
+		mergedConfig        bool
 		expectedSteps       []string
 		expectedPost        []string
 		expectedParams      map[string]string
@@ -1432,7 +1284,7 @@ func TestFromConfig(t *testing.T) {
 				},
 			},
 		},
-		injectedTest:  true,
+		mergedConfig:  true,
 		expectedSteps: []string{"root-org.repo1", "root-org.repo2", "[output-images]", "[images]"},
 	}, {
 		name: "base RPM images",
@@ -1474,7 +1326,7 @@ func TestFromConfig(t *testing.T) {
 				},
 			},
 		},
-		injectedTest: true,
+		mergedConfig: true,
 		expectedSteps: []string{
 			"[input:base_rpm_image-org.repo1-without-rpms]",
 			"base_rpm_image-org.repo1",
@@ -1515,7 +1367,7 @@ func TestFromConfig(t *testing.T) {
 				},
 			},
 		},
-		injectedTest: true,
+		mergedConfig: true,
 		expectedSteps: []string{
 			"rpms-org.repo1",
 			"[serve:rpms-org.repo1]",
@@ -1851,7 +1703,7 @@ func TestFromConfig(t *testing.T) {
 				params.Add(k, func() (string, error) { return v, nil })
 			}
 			graphConf := FromConfigStatic(&tc.config)
-			configSteps, post, err := fromConfig(context.Background(), &tc.config, &graphConf, &jobSpec, tc.templates, tc.paramFiles, tc.promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params, &secrets.DynamicCensor{}, api.ServiceDomainAPPCI, "", "", nil, map[string]*configresolver.IntegratedStream{}, tc.injectedTest)
+			configSteps, post, err := fromConfig(context.Background(), &tc.config, &graphConf, &jobSpec, tc.templates, tc.paramFiles, tc.promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params, &secrets.DynamicCensor{}, api.ServiceDomainAPPCI, "", "", nil, tc.mergedConfig, map[string]*configresolver.IntegratedStream{})
 			if diff := cmp.Diff(tc.expectedErr, err); diff != "" {
 				t.Errorf("unexpected error: %v", diff)
 			}

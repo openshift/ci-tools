@@ -34,6 +34,7 @@ type options struct {
 	kubernetesOptions        prowflagutil.KubernetesOptions
 	namespace                string
 	ciOpConfigDir            string
+	releaseRepoGitSyncPath   string
 	webhookSecretFile        string
 }
 
@@ -49,6 +50,7 @@ func gatherOptions() options {
 	o.kubernetesOptions.AddFlags(fs)
 	fs.StringVar(&o.namespace, "namespace", "ci", "Namespace to create PullRequestPayloadQualificationRuns.")
 	fs.StringVar(&o.ciOpConfigDir, "ci-op-config-dir", "", "Path to CI Operator configuration directory.")
+	fs.StringVar(&o.releaseRepoGitSyncPath, "release-repo-git-sync-path", "/var/repo/release", "Path to release repository dir")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatalf("cannot parse args: '%s'", os.Args[1:])
 	}
@@ -148,7 +150,7 @@ func main() {
 	universalSymlinkWatcher := &agents.UniversalSymlinkWatcher{
 		EventCh:   eventCh,
 		ErrCh:     errCh,
-		WatchPath: o.ciOpConfigDir,
+		WatchPath: o.releaseRepoGitSyncPath,
 	}
 
 	configAgentOption := func(opt *agents.ConfigAgentOptions) {

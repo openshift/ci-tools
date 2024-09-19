@@ -1,7 +1,6 @@
 package prowgen
 
 import (
-	"strconv"
 	"time"
 
 	utilpointer "k8s.io/utils/pointer"
@@ -149,10 +148,6 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 			JobStatesToReport: slackReporter.JobStatesToReport,
 			ReportTemplate:    slackReporter.ReportTemplate,
 		}
-	}
-
-	if test.RestrictNetworkAccess != nil {
-		p.PodSpec.Add(Arg("--restrict-network-access", strconv.FormatBool(*test.RestrictNetworkAccess)))
 	}
 
 	switch {

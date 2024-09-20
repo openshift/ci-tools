@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	coreapi "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -58,7 +59,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 		output        []api.StepConfiguration
 		readFile      readFile
 		resolver      resolveRoot
-		mergedConfig  bool
+		injectedTest  bool
 		expectedError error
 	}{
 		{
@@ -862,6 +863,154 @@ func TestStepConfigsForBuild(t *testing.T) {
 			expectedError: fmt.Errorf("failed to read buildRootImageStream from repository: %w", fmt.Errorf("failed to read .ci-operator.yaml file: %w", fmt.Errorf("fail to read file: reason"))),
 		},
 		{
+			name: "from a primary ref with an additional ref",
+			input: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BuildRootImage: &api.BuildRootImageConfiguration{
+						ImageStreamTagReference: &api.ImageStreamTagReference{
+							Namespace: "root-ns",
+							Name:      "root-name",
+							Tag:       "manual",
+						},
+					},
+					BuildRootImages: map[string]api.BuildRootImageConfiguration{
+						"org.other-repo": {
+							ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
+							UseBuildCache:           true,
+						},
+					},
+				},
+				BinaryBuildCommands: "binbuild",
+				BinaryBuildCommandsList: []api.RefCommands{
+					{
+						Commands: "build",
+						Ref:      "org.other-repo",
+					},
+				},
+				TestBinaryBuildCommands: "build test-bin",
+				TestBinaryBuildCommandsList: []api.RefCommands{
+					{
+						Commands: "build tb",
+						Ref:      "org.other-repo",
+					},
+				},
+				RpmBuildCommands: "build rpm",
+				RpmBuildCommandsList: []api.RefCommands{
+					{
+						Commands: "build this-rpm",
+						Ref:      "org.other-repo",
+					},
+				},
+				RpmBuildLocation: "here",
+				RpmBuildLocationList: []api.RefLocation{
+					{
+						Location: "there",
+						Ref:      "org.other-repo",
+					},
+				},
+			},
+			jobSpec: &api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Refs: &prowapi.Refs{
+						Org:  "org",
+						Repo: "repo",
+					},
+					ExtraRefs: []prowapi.Refs{
+						{
+							Org:  "org",
+							Repo: "other-repo",
+						},
+					},
+				},
+			},
+			resolver: noopResolver,
+			output: []api.StepConfiguration{
+				{
+					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
+						From: api.PipelineImageStreamTagReferenceRoot,
+						To:   api.PipelineImageStreamTagReferenceSource,
+					}),
+				}, {
+					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
+						From: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceRoot)),
+						To:   api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceSource)),
+						Ref:  "org.other-repo",
+					}),
+				}, {
+					InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+						InputImage: api.InputImage{
+							BaseImage: api.ImageStreamTagReference{
+								Namespace: "root-ns",
+								Name:      "root-name",
+								Tag:       "manual",
+							},
+							To: api.PipelineImageStreamTagReferenceRoot,
+						},
+						Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceRoot}},
+					},
+				}, {
+					InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+						InputImage: api.InputImage{
+							BaseImage: api.ImageStreamTagReference{
+								Tag: "manual",
+							},
+							To:  api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceRoot)),
+							Ref: "org.other-repo",
+						},
+						Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceType(fmt.Sprintf("%s-org.other-repo", api.ImageStreamSourceRoot))}},
+					},
+				}, {
+					PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
+						From:     api.PipelineImageStreamTagReferenceSource,
+						To:       api.PipelineImageStreamTagReferenceBinaries,
+						Commands: "binbuild",
+					},
+				}, {
+					PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
+						From:     api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceSource)),
+						To:       api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceBinaries)),
+						Commands: "build",
+						Ref:      "org.other-repo",
+					},
+				}, {
+					PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
+						From:     api.PipelineImageStreamTagReferenceSource,
+						To:       api.PipelineImageStreamTagReferenceTestBinaries,
+						Commands: "build test-bin",
+					},
+				}, {
+					PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
+						From:     api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceSource)),
+						To:       api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceTestBinaries)),
+						Commands: "build tb",
+						Ref:      "org.other-repo",
+					},
+				}, {
+					PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
+						From:     api.PipelineImageStreamTagReferenceBinaries,
+						To:       api.PipelineImageStreamTagReferenceRPMs,
+						Commands: "build rpm; ln -s $( pwd )/here /srv/repo",
+					},
+				}, {
+					PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
+						From:     api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceBinaries)),
+						To:       api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceRPMs)),
+						Commands: "build this-rpm; ln -s $( pwd )/there /srv/repo",
+						Ref:      "org.other-repo",
+					},
+				}, {
+					RPMServeStepConfiguration: &api.RPMServeStepConfiguration{
+						From: api.PipelineImageStreamTagReferenceRPMs,
+					},
+				}, {
+					RPMServeStepConfiguration: &api.RPMServeStepConfiguration{
+						From: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceRPMs)),
+						Ref:  "org.other-repo",
+					},
+				}},
+			injectedTest: true,
+		},
+		{
 			name: "from multiple repo references",
 			input: &api.ReleaseBuildConfiguration{
 				InputConfiguration: api.InputConfiguration{
@@ -934,8 +1083,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
-			resolver:     noopResolver,
-			mergedConfig: true,
+			resolver: noopResolver,
 			output: []api.StepConfiguration{
 				{
 					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
@@ -1026,13 +1174,14 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Ref:  "org.other-repo",
 					},
 				}},
+			injectedTest: true,
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			graphConf := FromConfigStatic(testCase.input)
-			runtimeSteps, actualError := runtimeStepConfigsForBuild(testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, graphConf.InputImages(), testCase.mergedConfig)
+			runtimeSteps, actualError := runtimeStepConfigsForBuild(testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, graphConf.InputImages(), testCase.injectedTest)
 			graphConf.Steps = append(graphConf.Steps, runtimeSteps...)
 			if diff := cmp.Diff(testCase.expectedError, actualError, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("actualError does not match expectedError, diff: %s", diff)
@@ -1184,7 +1333,7 @@ func TestFromConfig(t *testing.T) {
 		env                 api.Parameters
 		params              map[string]string
 		overriddenImagesEnv map[string]string
-		mergedConfig        bool
+		injectedTest        bool
 		expectedSteps       []string
 		expectedPost        []string
 		expectedParams      map[string]string
@@ -1284,7 +1433,7 @@ func TestFromConfig(t *testing.T) {
 				},
 			},
 		},
-		mergedConfig:  true,
+		injectedTest:  true,
 		expectedSteps: []string{"root-org.repo1", "root-org.repo2", "[output-images]", "[images]"},
 	}, {
 		name: "base RPM images",
@@ -1326,7 +1475,7 @@ func TestFromConfig(t *testing.T) {
 				},
 			},
 		},
-		mergedConfig: true,
+		injectedTest: true,
 		expectedSteps: []string{
 			"[input:base_rpm_image-org.repo1-without-rpms]",
 			"base_rpm_image-org.repo1",
@@ -1367,7 +1516,7 @@ func TestFromConfig(t *testing.T) {
 				},
 			},
 		},
-		mergedConfig: true,
+		injectedTest: true,
 		expectedSteps: []string{
 			"rpms-org.repo1",
 			"[serve:rpms-org.repo1]",
@@ -1703,7 +1852,7 @@ func TestFromConfig(t *testing.T) {
 				params.Add(k, func() (string, error) { return v, nil })
 			}
 			graphConf := FromConfigStatic(&tc.config)
-			configSteps, post, err := fromConfig(context.Background(), &tc.config, &graphConf, &jobSpec, tc.templates, tc.paramFiles, tc.promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params, &secrets.DynamicCensor{}, api.ServiceDomainAPPCI, "", "", nil, tc.mergedConfig, map[string]*configresolver.IntegratedStream{})
+			configSteps, post, err := fromConfig(context.Background(), &tc.config, &graphConf, &jobSpec, tc.templates, tc.paramFiles, tc.promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params, &secrets.DynamicCensor{}, api.ServiceDomainAPPCI, "", "", nil, map[string]*configresolver.IntegratedStream{}, tc.injectedTest)
 			if diff := cmp.Diff(tc.expectedErr, err); diff != "" {
 				t.Errorf("unexpected error: %v", diff)
 			}
@@ -1769,6 +1918,257 @@ func TestRegistryDomain(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			if diff := cmp.Diff(testCase.expected, registryDomain(testCase.config)); diff != "" {
 				t.Errorf("%s: got incorrect registry domain: %v", testCase.name, diff)
+			}
+		})
+	}
+}
+
+func TestGetSourceStepsForJobSpec(t *testing.T) {
+	testCases := []struct {
+		name         string
+		jobSpec      api.JobSpec
+		injectedTest bool
+		expected     []api.StepConfiguration
+	}{
+		{
+			name: "simple presubmit should include the only ref with no suffix",
+			jobSpec: api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Type: "presubmit",
+					Refs: &prowapi.Refs{Org: "org", Repo: "repo", BaseRef: "main", BaseSHA: "ABCD",
+						Pulls: []prowapi.Pull{{Number: 1234, Author: "developer", SHA: "ABCDEFG", Ref: "some-branch"}},
+					},
+				},
+			},
+			expected: []api.StepConfiguration{
+				{
+					SourceStepConfiguration: &api.SourceStepConfiguration{
+						From:           api.PipelineImageStreamTagReferenceRoot,
+						To:             api.PipelineImageStreamTagReferenceSource,
+						ClonerefsImage: api.ImageStreamTagReference{Namespace: "ci", Name: "managed-clonerefs", Tag: "latest"},
+						ClonerefsPath:  "/clonerefs",
+					},
+				},
+			},
+		},
+		{
+			name: "rehearsal presubmit should include only the extra_ref with no suffix",
+			jobSpec: api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Type: "presubmit",
+					Refs: &prowapi.Refs{Org: "openshift", Repo: "release", BaseRef: "master", BaseSHA: "ABCD",
+						Pulls: []prowapi.Pull{{Number: 1234, Author: "developer", SHA: "ABCDEFG", Ref: "some-branch"}},
+					},
+					ExtraRefs: []prowapi.Refs{{WorkDir: true, Org: "openshift", Repo: "other-repo", BaseRef: "main", BaseSHA: "ABCDEFG"}},
+				},
+			},
+			expected: []api.StepConfiguration{
+				{
+					SourceStepConfiguration: &api.SourceStepConfiguration{
+						From:           api.PipelineImageStreamTagReferenceRoot,
+						To:             api.PipelineImageStreamTagReferenceSource,
+						ClonerefsImage: api.ImageStreamTagReference{Namespace: "ci", Name: "managed-clonerefs", Tag: "latest"},
+						ClonerefsPath:  "/clonerefs",
+					},
+				},
+			},
+		},
+		{
+			name: "simple periodic should include only the extra_ref with no suffix",
+			jobSpec: api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Type:      "periodic",
+					ExtraRefs: []prowapi.Refs{{Org: "openshift", Repo: "other-repo", BaseRef: "main", BaseSHA: "ABCDEFG"}},
+				},
+			},
+			expected: []api.StepConfiguration{
+				{
+					SourceStepConfiguration: &api.SourceStepConfiguration{
+						From:           api.PipelineImageStreamTagReferenceRoot,
+						To:             api.PipelineImageStreamTagReferenceSource,
+						ClonerefsImage: api.ImageStreamTagReference{Namespace: "ci", Name: "managed-clonerefs", Tag: "latest"},
+						ClonerefsPath:  "/clonerefs",
+					},
+				},
+			},
+		},
+		{
+			name: "payload testing periodic should include all extra_refs with suffix",
+			jobSpec: api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Type: "periodic",
+					ExtraRefs: []prowapi.Refs{
+						{Org: "openshift", Repo: "repo", BaseRef: "main", BaseSHA: "ABCDEFG"},
+						{Org: "openshift", Repo: "other-repo", BaseRef: "master", BaseSHA: "GHTIKD"},
+						{Org: "openshift", Repo: "repo-three", BaseRef: "master", BaseSHA: "TYIER"},
+					},
+				},
+			},
+			injectedTest: true,
+			expected: []api.StepConfiguration{
+				{
+					SourceStepConfiguration: &api.SourceStepConfiguration{
+						From:           api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo", api.PipelineImageStreamTagReferenceRoot)),
+						To:             api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo", api.PipelineImageStreamTagReferenceSource)),
+						ClonerefsImage: api.ImageStreamTagReference{Namespace: "ci", Name: "managed-clonerefs", Tag: "latest"},
+						ClonerefsPath:  "/clonerefs",
+						Ref:            "openshift.repo",
+					},
+				},
+				{
+					SourceStepConfiguration: &api.SourceStepConfiguration{
+						From:           api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.other-repo", api.PipelineImageStreamTagReferenceRoot)),
+						To:             api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.other-repo", api.PipelineImageStreamTagReferenceSource)),
+						ClonerefsImage: api.ImageStreamTagReference{Namespace: "ci", Name: "managed-clonerefs", Tag: "latest"},
+						ClonerefsPath:  "/clonerefs",
+						Ref:            "openshift.other-repo",
+					},
+				},
+				{
+					SourceStepConfiguration: &api.SourceStepConfiguration{
+						From:           api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo-three", api.PipelineImageStreamTagReferenceRoot)),
+						To:             api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo-three", api.PipelineImageStreamTagReferenceSource)),
+						ClonerefsImage: api.ImageStreamTagReference{Namespace: "ci", Name: "managed-clonerefs", Tag: "latest"},
+						ClonerefsPath:  "/clonerefs",
+						Ref:            "openshift.repo-three",
+					},
+				},
+			},
+		},
+		{
+			name: "multi-pr presubmit testing should include primary ref without suffix, and all extra_refs with suffix",
+			jobSpec: api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Type: "periodic",
+					Refs: &prowapi.Refs{Org: "openshift", Repo: "repo", BaseRef: "main", BaseSHA: "ABCDEFG"},
+					ExtraRefs: []prowapi.Refs{
+						{Org: "openshift", Repo: "other-repo", BaseRef: "master", BaseSHA: "GHTIKD"},
+						{Org: "openshift", Repo: "repo-three", BaseRef: "master", BaseSHA: "TYIER"},
+					},
+				},
+			},
+			injectedTest: true,
+			expected: []api.StepConfiguration{
+				{
+					SourceStepConfiguration: &api.SourceStepConfiguration{
+						From:           api.PipelineImageStreamTagReferenceRoot,
+						To:             api.PipelineImageStreamTagReferenceSource,
+						ClonerefsImage: api.ImageStreamTagReference{Namespace: "ci", Name: "managed-clonerefs", Tag: "latest"},
+						ClonerefsPath:  "/clonerefs",
+					},
+				},
+				{
+					SourceStepConfiguration: &api.SourceStepConfiguration{
+						From:           api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.other-repo", api.PipelineImageStreamTagReferenceRoot)),
+						To:             api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.other-repo", api.PipelineImageStreamTagReferenceSource)),
+						ClonerefsImage: api.ImageStreamTagReference{Namespace: "ci", Name: "managed-clonerefs", Tag: "latest"},
+						ClonerefsPath:  "/clonerefs",
+						Ref:            "openshift.other-repo",
+					},
+				},
+				{
+					SourceStepConfiguration: &api.SourceStepConfiguration{
+						From:           api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo-three", api.PipelineImageStreamTagReferenceRoot)),
+						To:             api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo-three", api.PipelineImageStreamTagReferenceSource)),
+						ClonerefsImage: api.ImageStreamTagReference{Namespace: "ci", Name: "managed-clonerefs", Tag: "latest"},
+						ClonerefsPath:  "/clonerefs",
+						Ref:            "openshift.repo-three",
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := getSourceStepsForJobSpec(&tc.jobSpec, tc.injectedTest)
+			less := func(a, b api.StepConfiguration) bool {
+				return a.SourceStepConfiguration.Ref < b.SourceStepConfiguration.Ref
+			}
+			if diff := cmp.Diff(tc.expected, result, cmpopts.SortSlices(less)); diff != "" {
+				t.Errorf("%s: result didn't match expected, diff: %v", tc.name, diff)
+			}
+		})
+	}
+}
+
+func TestDeterminePrimaryRef(t *testing.T) {
+	testCases := []struct {
+		name         string
+		jobSpec      api.JobSpec
+		injectedTest bool
+		expected     *prowapi.Refs
+	}{
+		{
+			name: "presubmit with one ref, returns that ref",
+			jobSpec: api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Type: "presubmit",
+					Refs: &prowapi.Refs{Org: "org", Repo: "repo", BaseRef: "main", BaseSHA: "ABCD",
+						Pulls: []prowapi.Pull{{Number: 1234, Author: "developer", SHA: "ABCDEFG", Ref: "some-branch"}},
+					},
+				},
+			},
+			expected: &prowapi.Refs{Org: "org", Repo: "repo", BaseRef: "main", BaseSHA: "ABCD",
+				Pulls: []prowapi.Pull{{Number: 1234, Author: "developer", SHA: "ABCDEFG", Ref: "some-branch"}},
+			},
+		},
+		{
+			name: "periodic with one extra_ref, returns that ref",
+			jobSpec: api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Type:      "presubmit",
+					ExtraRefs: []prowapi.Refs{{Org: "org", Repo: "repo", BaseRef: "main", BaseSHA: "ABCD"}},
+				},
+			},
+			expected: &prowapi.Refs{Org: "org", Repo: "repo", BaseRef: "main", BaseSHA: "ABCD"},
+		},
+		{
+			name: "rehearsal, returns the 'workdir' extra_ref",
+			jobSpec: api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Type: "presubmit",
+					Refs: &prowapi.Refs{Org: "openshift", Repo: "release", BaseRef: "master", BaseSHA: "ABCD",
+						Pulls: []prowapi.Pull{{Number: 1234, Author: "developer", SHA: "ABCDEFG", Ref: "some-branch"}},
+					},
+					ExtraRefs: []prowapi.Refs{{WorkDir: true, Org: "openshift", Repo: "other-repo", BaseRef: "main", BaseSHA: "ABCDEFG"}},
+				},
+			},
+			expected: &prowapi.Refs{WorkDir: true, Org: "openshift", Repo: "other-repo", BaseRef: "main", BaseSHA: "ABCDEFG"},
+		},
+		{
+			name: "multi-pr presubmit, returns the ref not any of the extra_refs",
+			jobSpec: api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Type: "presubmit",
+					Refs: &prowapi.Refs{Org: "openshift", Repo: "repo", BaseRef: "main", BaseSHA: "ABCDEFG"},
+					ExtraRefs: []prowapi.Refs{
+						{Org: "openshift", Repo: "other-repo", BaseRef: "master", BaseSHA: "GHTIKD"},
+						{Org: "openshift", Repo: "repo-three", BaseRef: "master", BaseSHA: "TYIER"},
+					},
+				},
+			},
+			expected: &prowapi.Refs{Org: "openshift", Repo: "repo", BaseRef: "main", BaseSHA: "ABCDEFG"},
+		},
+		{
+			name: "payload test with multiple extra_refs, returns nil",
+			jobSpec: api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Type: "periodic",
+					ExtraRefs: []prowapi.Refs{
+						{Org: "openshift", Repo: "repo", BaseRef: "main", BaseSHA: "ABCDEFG"},
+						{Org: "openshift", Repo: "other-repo", BaseRef: "master", BaseSHA: "GHTIKD"},
+						{Org: "openshift", Repo: "repo-three", BaseRef: "master", BaseSHA: "TYIER"},
+					},
+				},
+			},
+			expected: nil,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			primaryRef := determinePrimaryRef(&tc.jobSpec, tc.injectedTest)
+			if diff := cmp.Diff(tc.expected, primaryRef); diff != "" {
+				t.Errorf("%s: result didn't match expected, diff: %v", tc.name, diff)
 			}
 		})
 	}

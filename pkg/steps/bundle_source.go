@@ -136,11 +136,6 @@ func (s *bundleSourceStep) Description() string {
 	return fmt.Sprintf("Build image %s from the repository", api.PipelineImageStreamTagReferenceBundleSource)
 }
 
-func (s *bundleSourceStep) IsMultiArch() bool { return false }
-func (s *bundleSourceStep) SetMultiArch(multiArch bool) {
-	logrus.Warnf("Not setting %s as multi-arch since bundle images are not multi-arch by design", s.Name())
-}
-
 func BundleSourceStep(
 	config api.BundleSourceStepConfiguration,
 	releaseBuildConfig *api.ReleaseBuildConfiguration,

@@ -450,9 +450,6 @@ func (s *promotionStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func (s *promotionStep) IsMultiArch() bool           { return false }
-func (s *promotionStep) SetMultiArch(multiArch bool) {}
-
 // PromotionStep copies tags from the pipeline image stream to the destination defined in the promotion config.
 // If the source tag does not exist it is silently skipped.
 func PromotionStep(

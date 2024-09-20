@@ -272,6 +272,11 @@ func getResolvedConfigForTest(ciopConfig config.DataWithInfo, resolver registry.
 		return "", nil, fmt.Errorf("failed resolve ReleaseBuildConfiguration: %w", err)
 	}
 
+	// the 'restrict_network_access' config on the test will be set to nil (effectively: 'true') regardless of configured value
+	for i := range ciopConfigResolved.Tests {
+		ciopConfigResolved.Tests[i].RestrictNetworkAccess = nil
+	}
+
 	ciOpConfigContent, err := yaml.Marshal(ciopConfigResolved)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to marshal ci-operator config file: %w", err)

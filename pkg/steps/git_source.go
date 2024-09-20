@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	coreapi "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
@@ -24,7 +23,7 @@ type gitSourceStep struct {
 	jobSpec         *api.JobSpec
 	cloneAuthConfig *CloneAuthConfig
 	pullSecret      *coreapi.Secret
-	architectures   sets.Set[string]
+	multiArch       bool
 }
 
 func (s *gitSourceStep) Inputs() (api.InputDefinition, error) {
@@ -59,7 +58,7 @@ func (s *gitSourceStep) run(ctx context.Context) error {
 				URI: cloneURI,
 				Ref: refs.BaseRef,
 			},
-		}, "", s.config.DockerfilePath, s.resources, s.pullSecret, nil, s.config.Ref), newImageBuildOptions(s.architectures.UnsortedList()))
+		}, "", s.config.DockerfilePath, s.resources, s.pullSecret, nil, s.config.Ref), newImageBuildOptions(s.multiArch))
 	}
 
 	return fmt.Errorf("nothing to build source image from, no refs")
@@ -122,13 +121,8 @@ func (s *gitSourceStep) determineRefsWorkdir(refs *prowapi.Refs, extraRefs []pro
 	return matchingRef
 }
 
-func (s *gitSourceStep) ResolveMultiArch() sets.Set[string] {
-	return s.architectures
-}
-
-func (s *gitSourceStep) AddArchitectures(archs []string) {
-	s.architectures.Insert(archs...)
-}
+func (s *gitSourceStep) IsMultiArch() bool           { return s.multiArch }
+func (s *gitSourceStep) SetMultiArch(multiArch bool) { s.multiArch = multiArch }
 
 // GitSourceStep returns gitSourceStep that holds all the required information to create a build from a git source.
 func GitSourceStep(
@@ -148,6 +142,5 @@ func GitSourceStep(
 		jobSpec:         jobSpec,
 		cloneAuthConfig: cloneAuthConfig,
 		pullSecret:      pullSecret,
-		architectures:   sets.New[string](),
 	}
 }

@@ -160,3 +160,6 @@ func (s *e2eTestStep) Description() string {
 func (s *e2eTestStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
+
+func (s *e2eTestStep) IsMultiArch() bool           { return false }
+func (s *e2eTestStep) SetMultiArch(multiArch bool) {}

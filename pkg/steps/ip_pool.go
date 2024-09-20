@@ -62,6 +62,9 @@ func (s *ipPoolStep) Requires() []api.StepLink            { return s.wrapped.Req
 func (s *ipPoolStep) Creates() []api.StepLink             { return s.wrapped.Creates() }
 func (s *ipPoolStep) Objects() []ctrlruntimeclient.Object { return s.wrapped.Objects() }
 
+func (s *ipPoolStep) IsMultiArch() bool           { return false }
+func (s *ipPoolStep) SetMultiArch(multiArch bool) {}
+
 func (s *ipPoolStep) Provides() api.ParameterMap {
 	parameters := s.wrapped.Provides()
 	if parameters == nil {

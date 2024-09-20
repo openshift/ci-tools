@@ -7,7 +7,6 @@ import (
 	"path"
 
 	coreapi "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	buildapi "github.com/openshift/api/build/v1"
@@ -29,7 +28,6 @@ type projectDirectoryImageBuildStep struct {
 	jobSpec            *api.JobSpec
 	pullSecret         *coreapi.Secret
 	multiArch          bool
-	architectures      sets.Set[string]
 }
 
 func (s *projectDirectoryImageBuildStep) Inputs() (api.InputDefinition, error) {
@@ -68,7 +66,7 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 		s.config.Ref,
 	)
 
-	return handleBuilds(ctx, s.client, s.podClient, *build, newImageBuildOptions(s.architectures.UnsortedList()))
+	return handleBuilds(ctx, s.client, s.podClient, *build, newImageBuildOptions(s.multiArch))
 }
 
 type workingDir func(tag string) (string, error)
@@ -191,15 +189,13 @@ func (s *projectDirectoryImageBuildStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func (s *projectDirectoryImageBuildStep) ResolveMultiArch() sets.Set[string] {
-	if s.multiArch {
-		s.architectures.Insert(s.client.NodeArchitectures()...)
-	}
-	return s.architectures
+func (s *projectDirectoryImageBuildStep) IsMultiArch() bool {
+	// fmt.Printf("config: %s -- %v\n", s.config.To, s.config.MultiArch)
+	return s.config.MultiArch
 }
 
-func (s *projectDirectoryImageBuildStep) AddArchitectures(archs []string) {
-	s.architectures.Insert(archs...)
+func (s *projectDirectoryImageBuildStep) SetMultiArch(m bool) {
+	s.multiArch = m
 }
 
 func ProjectDirectoryImageBuildStep(
@@ -220,6 +216,5 @@ func ProjectDirectoryImageBuildStep(
 		jobSpec:            jobSpec,
 		pullSecret:         pullSecret,
 		multiArch:          config.MultiArch,
-		architectures:      sets.New[string](),
 	}
 }

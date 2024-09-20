@@ -16,27 +16,10 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// Step holds a common step
-// +k8s:deepcopy-gen=false
-type Step interface {
-	CommonStep
-}
-
-// MultiArchStep is a step that can be executed for multiple architectures.
-// It is used to propagate the multi-arch property up the graph, ensuring that any step
-// that depends on a multi-arch step is also considered multi-arch.
-// +k8s:deepcopy-gen=false
-type MultiArchStep interface {
-	CommonStep
-
-	ResolveMultiArch() sets.Set[string]
-	AddArchitectures([]string)
-}
-
-// CommonStep is a self-contained bit of work that the
+// Step is a self-contained bit of work that the
 // build pipeline needs to do.
 // +k8s:deepcopy-gen=false
-type CommonStep interface {
+type Step interface {
 	Inputs() (InputDefinition, error)
 	// Validate checks inputs of steps that are part of the execution graph.
 	Validate() error
@@ -52,11 +35,13 @@ type CommonStep interface {
 	Provides() ParameterMap
 	// Objects returns all objects the client for this step has seen
 	Objects() []ctrlruntimeclient.Object
+
+	IsMultiArch() bool
+	SetMultiArch(bool)
 }
 
 // ResolveMultiArch traverses the graph of StepNodes and updates the multiArch field of each node.
-// If a node has a child that is multi-arch, the node itself is marked as multi-arch by
-// adding the child's architecture to the node.
+// If a node has a child that is multi-arch, the node itself is marked as multi-arch.
 // This function is used to propagate the multi-arch property up the graph, ensuring that any step
 // that depends on a multi-arch step is also considered multi-arch.
 func ResolveMultiArch(nodes []*StepNode) {
@@ -69,36 +54,21 @@ func ResolveMultiArch(nodes []*StepNode) {
 		if len(node.MultiArchReasons) == 0 {
 			continue
 		}
-
-		if multiArchStep, ok := node.Step.(MultiArchStep); ok {
-			for arch, reasons := range node.MultiArchReasons {
-				logrus.WithField("reasons", strings.Join(reasons.UnsortedList(), ", ")).
-					WithField("arch", arch).
-					Infof("Setting arch for %s", multiArchStep.Name())
-			}
+		reasons := sets.New[string]()
+		for _, r := range node.MultiArchReasons {
+			reasons.Insert(r)
 		}
+		logrus.WithField("reasons", strings.Join(reasons.UnsortedList(), ", ")).Infof("Setting multi-arch for %s", node.Step.Name())
 	}
 }
 
 func setMultiArchForChildren(node *StepNode) {
 	for _, child := range node.Children {
-		setMultiArchForChildren(child)
-
-		if multiArchStep, ok := child.Step.(MultiArchStep); ok {
-			childArchs := multiArchStep.ResolveMultiArch()
-			for _, arch := range childArchs.UnsortedList() {
-				if node.MultiArchReasons == nil {
-					node.MultiArchReasons = make(map[string]sets.Set[string])
-				}
-				if _, ok := node.MultiArchReasons[arch]; !ok {
-					node.MultiArchReasons[arch] = sets.New[string]()
-				}
-				node.MultiArchReasons[arch].Insert(multiArchStep.Name())
-				if nodeMultiArchStep, ok := node.Step.(MultiArchStep); ok {
-					nodeMultiArchStep.AddArchitectures([]string{arch})
-				}
-			}
+		if child.Step.IsMultiArch() {
+			node.MultiArchReasons = append(node.MultiArchReasons, child.Step.Name())
+			node.Step.SetMultiArch(true)
 		}
+		setMultiArchForChildren(child)
 	}
 }
 
@@ -343,7 +313,7 @@ func IsReleasePayloadStream(stream string) bool {
 type StepNode struct {
 	Step             Step
 	Children         []*StepNode
-	MultiArchReasons map[string]sets.Set[string]
+	MultiArchReasons []string
 }
 
 // GraphConfiguration contains step data used to build the execution graph.

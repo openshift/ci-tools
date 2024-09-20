@@ -15,7 +15,6 @@ import (
 	fuzz "github.com/google/gofuzz"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/testhelper"
@@ -114,10 +113,10 @@ func TestMatches(t *testing.T) {
 }
 
 type fakeStep struct {
-	requires      []StepLink
-	creates       []StepLink
-	name          string
-	architectures sets.Set[string]
+	requires  []StepLink
+	creates   []StepLink
+	name      string
+	multiArch bool
 }
 
 func (f *fakeStep) Inputs() (InputDefinition, error) { return nil, nil }
@@ -132,15 +131,8 @@ func (f *fakeStep) Objects() []ctrlruntimeclient.Object { return nil }
 
 func (f *fakeStep) Provides() ParameterMap { return nil }
 
-func (f *fakeStep) ResolveMultiArch() sets.Set[string] {
-	return f.architectures
-}
-func (f *fakeStep) AddArchitectures(archs []string) {
-	if f.architectures == nil {
-		f.architectures = sets.New[string]()
-	}
-	f.architectures.Insert(archs...)
-}
+func (f *fakeStep) IsMultiArch() bool           { return f.multiArch }
+func (f *fakeStep) SetMultiArch(multiArch bool) { f.multiArch = multiArch }
 
 func TestBuildGraph(t *testing.T) {
 	root := &fakeStep{
@@ -271,6 +263,8 @@ func (*fakeSortStep) Description() string                 { return "" }
 func (*fakeSortStep) Provides() ParameterMap              { return nil }
 func (f *fakeSortStep) Validate() error                   { return f.err }
 func (*fakeSortStep) Objects() []ctrlruntimeclient.Object { return nil }
+func (f *fakeSortStep) IsMultiArch() bool                 { return false }
+func (f *fakeSortStep) SetMultiArch(multiArch bool)       {}
 
 func (f *fakeSortStep) Creates() []StepLink {
 	return []StepLink{fakeSortLink{name: f.name}}
@@ -524,19 +518,19 @@ func TestResolveMultiArch(t *testing.T) {
 				{
 					Step: &fakeStep{name: "step1"},
 					Children: []*StepNode{
-						{Step: &fakeStep{name: "step2"}},
-						{Step: &fakeStep{name: "step3"}},
-						{Step: &fakeStep{name: "step4"}},
+						{Step: &fakeStep{name: "step2", multiArch: false}},
+						{Step: &fakeStep{name: "step3", multiArch: false}},
+						{Step: &fakeStep{name: "step4", multiArch: false}},
 					},
 				},
 			},
 			expected: []*StepNode{
 				{
-					Step: &fakeStep{name: "step1"},
+					Step: &fakeStep{name: "step1", multiArch: false},
 					Children: []*StepNode{
-						{Step: &fakeStep{name: "step2"}},
-						{Step: &fakeStep{name: "step3"}},
-						{Step: &fakeStep{name: "step4"}}},
+						{Step: &fakeStep{name: "step2", multiArch: false}},
+						{Step: &fakeStep{name: "step3", multiArch: false}},
+						{Step: &fakeStep{name: "step4", multiArch: false}}},
 				},
 			},
 		},
@@ -546,109 +540,75 @@ func TestResolveMultiArch(t *testing.T) {
 				{
 					Step: &fakeStep{name: "step1"},
 					Children: []*StepNode{
-						{Step: &fakeStep{name: "step2", architectures: sets.New[string]("arm64")}},
-						{Step: &fakeStep{name: "step3"}},
-						{Step: &fakeStep{name: "step4", architectures: sets.New[string]("arm64")}},
+						{Step: &fakeStep{name: "step2", multiArch: true}},
+						{Step: &fakeStep{name: "step3", multiArch: false}},
+						{Step: &fakeStep{name: "step4", multiArch: true}},
 					},
 				},
 			},
 			expected: []*StepNode{
 				{
-					Step: &fakeStep{name: "step1", architectures: sets.New[string]("arm64")},
+					Step: &fakeStep{name: "step1", multiArch: true},
 					Children: []*StepNode{
-						{Step: &fakeStep{name: "step2", architectures: sets.New[string]("arm64")}},
-						{Step: &fakeStep{name: "step3"}},
-						{Step: &fakeStep{name: "step4", architectures: sets.New[string]("arm64")}}},
-					MultiArchReasons: map[string]sets.Set[string]{
-						"arm64": sets.New[string]("step2", "step4"),
-					},
+						{Step: &fakeStep{name: "step2", multiArch: true}},
+						{Step: &fakeStep{name: "step3", multiArch: false}},
+						{Step: &fakeStep{name: "step4", multiArch: true}}},
+					MultiArchReasons: []string{"step2", "step4"},
 				},
 			},
 		},
-		{
-			name: "multiple children with different architectures",
-			nodes: []*StepNode{
-				{
-					Step: &fakeStep{name: "parent"},
-					Children: []*StepNode{
-						{Step: &fakeStep{name: "step1", architectures: sets.New[string]("amd64")}},
-						{Step: &fakeStep{name: "step2", architectures: sets.New[string]("arm64")}},
-					},
-				},
-			},
-			expected: []*StepNode{
-				{
-					Step: &fakeStep{name: "parent", architectures: sets.New[string]("amd64", "arm64")},
-					Children: []*StepNode{
-						{Step: &fakeStep{name: "step1", architectures: sets.New[string]("amd64")}},
-						{Step: &fakeStep{name: "step2", architectures: sets.New[string]("arm64")}},
-					},
-					MultiArchReasons: map[string]sets.Set[string]{
-						"arm64": sets.New[string]("step2"),
-						"amd64": sets.New[string]("step1"),
-					}},
-			},
-		},
-
 		{
 			name: "multiple nodes - one or more children are multi-arch",
 			nodes: []*StepNode{
 				{
 					Step: &fakeStep{name: "step10"},
 					Children: []*StepNode{
-						{Step: &fakeStep{name: "step1", architectures: sets.New[string]("arm64")}},
-						{Step: &fakeStep{name: "step2"}},
+						{Step: &fakeStep{name: "step1", multiArch: false}},
+						{Step: &fakeStep{name: "step2", multiArch: false}},
 					},
 				},
 				{
 					Step: &fakeStep{name: "step20"},
 					Children: []*StepNode{
-						{Step: &fakeStep{name: "step1", architectures: sets.New[string]("arm64")}},
-						{Step: &fakeStep{name: "step2"}},
-						{Step: &fakeStep{name: "step3"}},
+						{Step: &fakeStep{name: "step1", multiArch: true}},
+						{Step: &fakeStep{name: "step2", multiArch: false}},
+						{Step: &fakeStep{name: "step3", multiArch: true}},
 					},
 				},
 				{
 					Step: &fakeStep{name: "step30"},
 					Children: []*StepNode{
-						{Step: &fakeStep{name: "step1", architectures: sets.New[string]("arm64")}},
-						{Step: &fakeStep{name: "step2"}},
-						{Step: &fakeStep{name: "step3"}},
+						{Step: &fakeStep{name: "step1", multiArch: true}},
+						{Step: &fakeStep{name: "step2", multiArch: false}},
+						{Step: &fakeStep{name: "step3", multiArch: false}},
 					},
 				},
 			},
 			expected: []*StepNode{
 				{
-					Step: &fakeStep{name: "step10", architectures: sets.New[string]("arm64")},
+					Step: &fakeStep{name: "step10"},
 					Children: []*StepNode{
-						{Step: &fakeStep{name: "step1", architectures: sets.New[string]("arm64")}},
-						{Step: &fakeStep{name: "step2"}},
-					},
-					MultiArchReasons: map[string]sets.Set[string]{
-						"arm64": sets.New[string]("step1"),
+						{Step: &fakeStep{name: "step1", multiArch: false}},
+						{Step: &fakeStep{name: "step2", multiArch: false}},
 					},
 				},
 				{
-					Step: &fakeStep{name: "step20", architectures: sets.New[string]("arm64")},
+					Step: &fakeStep{name: "step20", multiArch: true},
 					Children: []*StepNode{
-						{Step: &fakeStep{name: "step1", architectures: sets.New[string]("arm64")}},
-						{Step: &fakeStep{name: "step2"}},
-						{Step: &fakeStep{name: "step3"}},
+						{Step: &fakeStep{name: "step1", multiArch: true}},
+						{Step: &fakeStep{name: "step2", multiArch: false}},
+						{Step: &fakeStep{name: "step3", multiArch: true}},
 					},
-					MultiArchReasons: map[string]sets.Set[string]{
-						"arm64": sets.New[string]("step1"),
-					},
+					MultiArchReasons: []string{"step1", "step3"},
 				},
 				{
-					Step: &fakeStep{name: "step30", architectures: sets.New[string]("arm64")},
+					Step: &fakeStep{name: "step30", multiArch: true},
 					Children: []*StepNode{
-						{Step: &fakeStep{name: "step1", architectures: sets.New[string]("arm64")}},
-						{Step: &fakeStep{name: "step2"}},
-						{Step: &fakeStep{name: "step3"}},
+						{Step: &fakeStep{name: "step1", multiArch: true}},
+						{Step: &fakeStep{name: "step2", multiArch: false}},
+						{Step: &fakeStep{name: "step3", multiArch: false}},
 					},
-					MultiArchReasons: map[string]sets.Set[string]{
-						"arm64": sets.New[string]("step1"),
-					},
+					MultiArchReasons: []string{"step1"},
 				},
 			},
 		},

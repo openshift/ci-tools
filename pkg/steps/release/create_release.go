@@ -242,6 +242,9 @@ func (s *assembleReleaseStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
+func (s *assembleReleaseStep) IsMultiArch() bool           { return false }
+func (s *assembleReleaseStep) SetMultiArch(multiArch bool) {}
+
 // AssembleReleaseStep builds a new update payload image based on the cluster version operator
 // and the operators defined in the release configuration.
 func AssembleReleaseStep(name, nodeName string, config *api.ReleaseTagConfiguration, resources api.ResourceConfiguration,

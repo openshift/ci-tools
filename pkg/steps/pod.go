@@ -12,7 +12,6 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	v1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	"sigs.k8s.io/prow/pkg/pod-utils/decorate"
@@ -162,11 +161,10 @@ func (s *podStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func (s *podStep) ResolveMultiArch() sets.Set[string] {
-	return sets.New[string](string(s.config.NodeArchitecture))
+func (s *podStep) IsMultiArch() bool {
+	return s.config.NodeArchitecture != "" && s.config.NodeArchitecture != api.NodeArchitectureAMD64
 }
-
-func (s *podStep) AddArchitectures(archs []string) {}
+func (s *podStep) SetMultiArch(multiArch bool) {}
 
 func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, client kubernetes.PodClient, jobSpec *api.JobSpec, nodeName string) api.Step {
 	return PodStep(

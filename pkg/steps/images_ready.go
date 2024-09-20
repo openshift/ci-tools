@@ -42,6 +42,9 @@ func (s *imagesReadyStep) Objects() []ctrlruntimeclient.Object {
 
 func (s *imagesReadyStep) Description() string { return "All images are built and tagged into stable" }
 
+func (s *imagesReadyStep) IsMultiArch() bool           { return false }
+func (s *imagesReadyStep) SetMultiArch(multiArch bool) {}
+
 func ImagesReadyStep(links []api.StepLink) api.Step {
 	return &imagesReadyStep{
 		links: links,

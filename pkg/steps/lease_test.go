@@ -54,6 +54,9 @@ func (stepNeedsLease) SubTests() []*junit.TestCase {
 	return []*junit.TestCase{&ret}
 }
 
+func (s *stepNeedsLease) IsMultiArch() bool           { return false }
+func (s *stepNeedsLease) SetMultiArch(multiArch bool) {}
+
 func emptyNamespace() string { return "" }
 
 func TestLeaseStepForward(t *testing.T) {

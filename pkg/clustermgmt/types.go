@@ -36,6 +36,9 @@ type Onboard struct {
 	ReleaseRepo      string `json:"releaseRepo,omitempty"`
 	KubeconfigDir    string `json:"kubeconfigDir,omitempty"`
 	KubeconfigSuffix string `json:"kubeconfigSuffix,omitempty"`
+	OSD              *bool  `json:"osd,omitempty"`
+	Hosted           *bool  `json:"hosted,omitempty"`
+	Unmanaged        *bool  `json:"unmanaged,omitempty"`
 	Dex              Dex    `json:"dex,omitempty"`
 }
 

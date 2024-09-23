@@ -168,6 +168,9 @@ func generateConfig(ctx context.Context, log *logrus.Entry, clusterInstall clust
 
 	opts.clusterName = ci.ClusterName
 	opts.releaseRepo = ci.Onboard.ReleaseRepo
+	opts.osd = *ci.Onboard.OSD
+	opts.hosted = *ci.Onboard.Hosted
+	opts.unmanaged = *ci.Onboard.Unmanaged
 
 	validationErrors := validateOptions(opts)
 	if len(validationErrors) > 0 {
@@ -231,6 +234,12 @@ func generateConfig(ctx context.Context, log *logrus.Entry, clusterInstall clust
 					ReleaseRepo: o.releaseRepo,
 					Update:      o.update,
 				}, hostedClusters)
+			},
+			func(o options) error {
+				if err := clustermgmtonboard.NewOAuthTemplateStep(log, ci).Run(ctx); err != nil {
+					return fmt.Errorf("update oauth template: %w", err)
+				}
+				return nil
 			},
 			func(o options) error {
 				return cisecretbootstrap.UpdateCiSecretBootstrap(log, cisecretbootstrap.Options{

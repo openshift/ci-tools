@@ -16,5 +16,18 @@ func LoadClusterInstall(path string) (*ClusterInstall, error) {
 	if err := yaml.Unmarshal(b, &ci); err != nil {
 		return nil, fmt.Errorf("unmarshal %s: %w", path, err)
 	}
+	applyDefaults(ci)
 	return ci, nil
+}
+
+func applyDefaults(ci *ClusterInstall) {
+	coalesce(&ci.Onboard.Hosted, false)
+	coalesce(&ci.Onboard.Unmanaged, false)
+	coalesce(&ci.Onboard.OSD, true)
+}
+
+func coalesce[T any](x **T, def T) {
+	if *x == nil {
+		*x = &def
+	}
 }

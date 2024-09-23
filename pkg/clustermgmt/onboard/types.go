@@ -50,3 +50,8 @@ func BuildFarmDirFor(releaseRepo, clusterName string) string {
 func AdminKubeconfig(installBase string) string {
 	return path.Join(installBase, "/ocp-install-base/auth/kubeconfig")
 }
+
+func OAuthTemplatePath(releaseRepo, clusterName string) string {
+	base := filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName)
+	return path.Join(base, "assets/admin_cluster_oauth_template.yaml")
+}

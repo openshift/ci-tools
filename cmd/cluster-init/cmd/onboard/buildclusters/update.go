@@ -4,10 +4,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/openshift/ci-tools/pkg/clustermgmt"
 	"github.com/sirupsen/logrus"
 
 	"sigs.k8s.io/yaml"
+
+	"github.com/openshift/ci-tools/pkg/clustermgmt"
 )
 
 type BuildClusters struct {

@@ -17,6 +17,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	routev1 "github.com/openshift/api/route/v1"
+
 	"github.com/openshift/ci-tools/pkg/clustermgmt"
 )
 

@@ -9,8 +9,9 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
 
-	"github.com/openshift/ci-tools/pkg/clustermgmt"
 	"k8s.io/utils/ptr"
+
+	"github.com/openshift/ci-tools/pkg/clustermgmt"
 )
 
 func TestUpdateOAuthTemplate(t *testing.T) {

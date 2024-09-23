@@ -5,12 +5,13 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/openshift/ci-tools/pkg/clustermgmt"
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/prow/pkg/plugins"
 	"sigs.k8s.io/yaml"
+
+	"github.com/openshift/ci-tools/pkg/clustermgmt"
 )
 
 func UpdateProwPluginConfig(log *logrus.Entry, ci *clustermgmt.ClusterInstall) error {

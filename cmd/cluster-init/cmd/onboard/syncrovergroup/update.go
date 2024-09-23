@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/yaml"
 

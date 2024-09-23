@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
+
 	"k8s.io/utils/ptr"
 
 	"github.com/openshift/ci-tools/pkg/api"

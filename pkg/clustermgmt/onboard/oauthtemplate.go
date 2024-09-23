@@ -8,8 +8,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/openshift/ci-tools/pkg/clustermgmt"
 	"sigs.k8s.io/yaml"
+
+	"github.com/openshift/ci-tools/pkg/clustermgmt"
 )
 
 type oauthTemplateStep struct {

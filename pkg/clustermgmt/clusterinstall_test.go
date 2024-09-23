@@ -12,9 +12,10 @@ func TestApplyDefault(t *testing.T) {
 	applyDefaults(&ci)
 	wantCI := ClusterInstall{
 		Onboard: Onboard{
-			Hosted:    ptr.To(false),
-			Unmanaged: ptr.To(false),
-			OSD:       ptr.To(true),
+			Hosted:                   ptr.To(false),
+			Unmanaged:                ptr.To(false),
+			OSD:                      ptr.To(true),
+			UseTokenFileInKubeconfig: ptr.To(true),
 		},
 	}
 	if diff := cmp.Diff(wantCI, ci); diff != "" {

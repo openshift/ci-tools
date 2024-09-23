@@ -209,9 +209,7 @@ func generateConfig(ctx context.Context, log *logrus.Entry, clusterInstall clust
 	for _, cluster := range clusters {
 		steps := []func(log *logrus.Entry, ci *clustermgmt.ClusterInstall) error{
 			jobs.UpdateJobs,
-			func(log *logrus.Entry, ci *clustermgmt.ClusterInstall) error {
-				return buildclusterdir.UpdateClusterBuildFarmDir(log, ci, opts.update)
-			},
+			buildclusterdir.UpdateClusterBuildFarmDir,
 			func(log *logrus.Entry, ci *clustermgmt.ClusterInstall) error {
 				return clustermgmtonboard.NewOAuthTemplateStep(log, ci).Run(ctx)
 			},

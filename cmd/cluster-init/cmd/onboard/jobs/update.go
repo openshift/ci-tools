@@ -25,12 +25,6 @@ const (
 	generator    jobconfig.Generator = "cluster-init"
 )
 
-type Options struct {
-	ClusterName string
-	ReleaseRepo string
-	Unmanaged   bool
-}
-
 func UpdateJobs(log *logrus.Entry, ci *clustermgmt.ClusterInstall) error {
 	log = log.WithField("step", "jobs")
 	log.Infof("generating: presubmits, postsubmits, and periodics for %s", ci.ClusterName)

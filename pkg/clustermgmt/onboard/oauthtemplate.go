@@ -31,7 +31,7 @@ func (s *oauthTemplateStep) Run(_ context.Context) error {
 	}
 
 	clusterId := fmt.Sprintf("%s_id", s.clusterInstall.ClusterName)
-	template := generateaouthTemplate(clusterId)
+	template := generateOAuthTemplate(clusterId)
 	rawTemplateOut, err := yaml.Marshal(template)
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
@@ -46,7 +46,7 @@ func (s *oauthTemplateStep) Run(_ context.Context) error {
 	return nil
 }
 
-func generateaouthTemplate(clusterIdPlaceholder string) map[string]interface{} {
+func generateOAuthTemplate(clusterIdPlaceholder string) map[string]interface{} {
 	return map[string]interface{}{
 		"objects": []interface{}{
 			map[string]interface{}{

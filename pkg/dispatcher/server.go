@@ -1,4 +1,4 @@
-package main
+package dispatcher
 
 import (
 	"encoding/json"
@@ -9,10 +9,10 @@ import (
 )
 
 type Server struct {
-	pjs *prowjobs
+	pjs *Prowjobs
 }
 
-func newServer(jobs *prowjobs) *Server {
+func NewServer(jobs *Prowjobs) *Server {
 	return &Server{
 		pjs: jobs,
 	}
@@ -37,7 +37,7 @@ func removeRehearsePrefix(jobName string) string {
 	return jobName
 }
 
-func (s *Server) requestHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) RequestHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
@@ -57,7 +57,7 @@ func (s *Server) requestHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	cluster := s.pjs.get(removeRehearsePrefix(req.Job))
+	cluster := s.pjs.Get(removeRehearsePrefix(req.Job))
 	if cluster == "" {
 		http.Error(w, "Cluster not found", http.StatusNotFound)
 		return

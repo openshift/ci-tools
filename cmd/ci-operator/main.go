@@ -1335,7 +1335,7 @@ func (o *options) initializeNamespace() error {
 			if kerrors.IsNotFound(err) {
 				logrus.Warnf("Warning: egress firewall does not exist: %v", err)
 			} else {
-				return fmt.Errorf("could not delete egress firewall: %w", err)
+				logrus.Warnf("could not delete egress firewall: %v", err)
 			}
 		}
 	}

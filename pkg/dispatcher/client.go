@@ -28,20 +28,20 @@ func (c client) ClusterForJob(jobName string) (string, error) {
 	schedulingRequest := SchedulingRequest{Job: jobName}
 	body, err := json.Marshal(schedulingRequest)
 	if err != nil {
-		return "", fmt.Errorf("could not marshal scheduling request: %v", err)
+		return "", fmt.Errorf("could not marshal scheduling request: %w", err)
 	}
 	req, err := http.NewRequest("POST", c.Address, bytes.NewReader(body))
 	if err != nil {
-		return "", fmt.Errorf("could not create request: %v", err)
+		return "", fmt.Errorf("could not create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	response, err := doRequest(req)
 	if err != nil {
-		return "", fmt.Errorf("error performing request: %v", err)
+		return "", fmt.Errorf("error performing request: %w", err)
 	}
 	schedulingResponse := SchedulingResponse{}
 	if err = json.Unmarshal(response, &schedulingResponse); err != nil {
-		return "", fmt.Errorf("could not parse scheduling response: %v", err)
+		return "", fmt.Errorf("could not parse scheduling response: %w", err)
 	}
 	return schedulingResponse.Cluster, nil
 }

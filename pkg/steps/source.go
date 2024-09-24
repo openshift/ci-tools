@@ -20,6 +20,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
@@ -159,7 +160,7 @@ type sourceStep struct {
 	jobSpec         *api.JobSpec
 	cloneAuthConfig *CloneAuthConfig
 	pullSecret      *corev1.Secret
-	multiArch       bool
+	architectures   sets.Set[string]
 }
 
 func (s *sourceStep) Inputs() (api.InputDefinition, error) {
@@ -186,7 +187,7 @@ func (s *sourceStep) run(ctx context.Context) error {
 		ctx,
 		s.client,
 		s.podClient,
-		*createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret, fromDigest), newImageBuildOptions(s.multiArch),
+		*createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret, fromDigest), newImageBuildOptions(s.architectures.UnsortedList()),
 	)
 }
 
@@ -447,22 +448,22 @@ func isBuildPhaseTerminated(phase buildapi.BuildPhase) bool {
 }
 
 type ImageBuildOptions struct {
-	MultiArch bool
+	Architectures []string
 }
 
-func newImageBuildOptions(multiArch bool) ImageBuildOptions {
-	return ImageBuildOptions{MultiArch: multiArch}
+func newImageBuildOptions(archs []string) ImageBuildOptions {
+	return ImageBuildOptions{Architectures: archs}
 }
 
 func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubernetes.PodClient, build buildapi.Build, opts ...ImageBuildOptions) error {
 	var wg sync.WaitGroup
 
-	multiArch := true
+	o := ImageBuildOptions{}
 	if len(opts) > 0 {
-		multiArch = opts[0].MultiArch
+		o = opts[0]
 	}
 
-	builds := constructMultiArchBuilds(build, buildClient.NodeArchitectures(), multiArch)
+	builds := constructMultiArchBuilds(build, o.Architectures)
 	errChan := make(chan error, len(builds))
 
 	wg.Add(len(builds))
@@ -496,12 +497,12 @@ func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubern
 // constructMultiArchBuilds gets a specific build and constructs multiple builds for each architecture.
 // The name and the output image of the build is suffixed with the architecture name and it will include the nodeSelector for the specific architecture.
 // e.x if the build name is "foo" and the architectures are "amd64,arm64", the new builds will be "foo-amd64" and "foo-arm64".
-func constructMultiArchBuilds(build buildapi.Build, nodeArchitectures []string, multiArch bool) []buildapi.Build {
+func constructMultiArchBuilds(build buildapi.Build, stepArchitectures []string) []buildapi.Build {
 	var ret []buildapi.Build
 
-	archs := nodeArchitectures
-	if !multiArch {
-		archs = []string{"amd64"}
+	archs := stepArchitectures
+	if len(stepArchitectures) == 0 {
+		archs = append(archs, "amd64")
 	}
 
 	for _, arch := range archs {
@@ -791,8 +792,13 @@ func (s *sourceStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func (s *sourceStep) IsMultiArch() bool           { return s.multiArch }
-func (s *sourceStep) SetMultiArch(multiArch bool) { s.multiArch = multiArch }
+func (s *sourceStep) ResolveMultiArch() sets.Set[string] {
+	return s.architectures
+}
+
+func (s *sourceStep) AddArchitectures(archs []string) {
+	s.architectures.Insert(archs...)
+}
 
 func SourceStep(
 	config api.SourceStepConfiguration,
@@ -811,6 +817,7 @@ func SourceStep(
 		jobSpec:         jobSpec,
 		cloneAuthConfig: cloneAuthConfig,
 		pullSecret:      pullSecret,
+		architectures:   sets.New[string](),
 	}
 }
 

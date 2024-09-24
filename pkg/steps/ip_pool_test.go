@@ -130,9 +130,6 @@ func (blockingStep) SubTests() []*junit.TestCase {
 	return []*junit.TestCase{&ret}
 }
 
-func (s *blockingStep) IsMultiArch() bool           { return false }
-func (s *blockingStep) SetMultiArch(multiArch bool) {}
-
 func TestRun(t *testing.T) {
 	ciOpNamespace := "ci-op-1234"
 

@@ -8,6 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	buildapi "github.com/openshift/api/build/v1"
@@ -28,7 +29,7 @@ type indexGeneratorStep struct {
 	podClient          kubernetes.PodClient
 	jobSpec            *api.JobSpec
 	pullSecret         *coreapi.Secret
-	multiArch          bool
+	architectures      sets.Set[string]
 }
 
 const IndexDataDirectory = "/index-data"
@@ -123,7 +124,7 @@ func (s *indexGeneratorStep) run(ctx context.Context) error {
 		nil,
 		"",
 	)
-	err = handleBuilds(ctx, s.client, s.podClient, *build, newImageBuildOptions(s.multiArch))
+	err = handleBuilds(ctx, s.client, s.podClient, *build, newImageBuildOptions(s.architectures.UnsortedList()))
 	if err != nil && strings.Contains(err.Error(), "error checking provided apis") {
 		return results.ForReason("generating_index").WithError(err).Errorf("failed to generate operator index due to invalid bundle info: %v", err)
 	}
@@ -197,8 +198,13 @@ func (s *indexGeneratorStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func (s *indexGeneratorStep) IsMultiArch() bool           { return s.multiArch }
-func (s *indexGeneratorStep) SetMultiArch(multiArch bool) { s.multiArch = multiArch }
+func (s *indexGeneratorStep) ResolveMultiArch() sets.Set[string] {
+	return s.architectures
+}
+
+func (s *indexGeneratorStep) AddArchitectures(archs []string) {
+	s.architectures.Insert(archs...)
+}
 
 func IndexGeneratorStep(
 	config api.IndexGeneratorStepConfiguration,
@@ -217,5 +223,6 @@ func IndexGeneratorStep(
 		podClient:          podClient,
 		jobSpec:            jobSpec,
 		pullSecret:         pullSecret,
+		architectures:      sets.New[string](),
 	}
 }

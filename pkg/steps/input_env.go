@@ -66,6 +66,3 @@ func (s *inputEnvironmentStep) Provides() api.ParameterMap {
 func (s *inputEnvironmentStep) Objects() []ctrlruntimeclient.Object {
 	return nil
 }
-
-func (s *inputEnvironmentStep) IsMultiArch() bool           { return false }
-func (s *inputEnvironmentStep) SetMultiArch(multiArch bool) {}

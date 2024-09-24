@@ -167,11 +167,6 @@ func (s *inputImageTagStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func (s *inputImageTagStep) IsMultiArch() bool { return false }
-func (s *inputImageTagStep) SetMultiArch(multiArch bool) {
-	logrus.WithField("step", s.Name()).Warnf("Assuming image %q is multi-arch", s.imageName)
-}
-
 func InputImageTagStep(
 	config *api.InputImageTagStepConfiguration,
 	client loggingclient.LoggingClient,

@@ -301,9 +301,6 @@ func (s *importReleaseStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func (s *importReleaseStep) IsMultiArch() bool           { return false }
-func (s *importReleaseStep) SetMultiArch(multiArch bool) {}
-
 // ImportReleaseStep imports an existing update payload image
 func ImportReleaseStep(
 	name, nodeName, target string,

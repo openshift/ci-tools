@@ -10,10 +10,13 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/getlantern/deepcopy"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/rest"
+	"k8s.io/utils/ptr"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/prow/cmd/generic-autobumper/bumper"
 
@@ -168,6 +171,9 @@ func generateConfig(ctx context.Context, log *logrus.Entry, clusterInstall clust
 
 	opts.clusterName = ci.ClusterName
 	opts.releaseRepo = ci.Onboard.ReleaseRepo
+	opts.osd = *ci.Onboard.OSD
+	opts.hosted = *ci.Onboard.Hosted
+	opts.unmanaged = *ci.Onboard.Unmanaged
 
 	validationErrors := validateOptions(opts)
 	if len(validationErrors) > 0 {
@@ -181,33 +187,16 @@ func generateConfig(ctx context.Context, log *logrus.Entry, clusterInstall clust
 	// Each step in the process is allowed to fail independently so that the diffs for the others can still be generated
 	errorCount := 0
 	var clusters []string
-	var hostedClusters []string
-	var osdClusters []string
 
-	buildClusters, err := buildclusters.LoadBuildClusters(buildclusters.Options{
-		ClusterName: opts.clusterName,
-		ReleaseRepo: opts.releaseRepo,
-		Unmanaged:   opts.unmanaged,
-		OSD:         opts.osd,
-		Hosted:      opts.hosted,
-	})
+	buildClusters, err := buildclusters.LoadBuildClusters(ci)
 	if err != nil {
 		return fmt.Errorf("load build clusters: %w", err)
 	}
 
-	if opts.clusterName == "" {
-		// Updating ALL cluster-init managed clusters
+	if ci.ClusterName == "" {
 		clusters = buildClusters.Managed
-		hostedClusters = buildClusters.Hosted
-		osdClusters = buildClusters.Osd
 	} else {
-		clusters = []string{opts.clusterName}
-		if opts.hosted {
-			hostedClusters = append(buildClusters.Hosted, opts.clusterName)
-		}
-		if opts.osd {
-			osdClusters = append(buildClusters.Osd, opts.clusterName)
-		}
+		clusters = []string{ci.ClusterName}
 	}
 
 	kubeconfigs, err := loadKubeconfigs(ci, opts.update)
@@ -215,78 +204,43 @@ func generateConfig(ctx context.Context, log *logrus.Entry, clusterInstall clust
 		return fmt.Errorf("load kubeconfigs: %w", err)
 	}
 
+	osdSet := sets.New(buildClusters.Osd...)
+	hostedSet := sets.New(buildClusters.Hosted...)
 	for _, cluster := range clusters {
-		opts.clusterName = cluster
-		steps := []func(options) error{
-			func(o options) error {
-				return jobs.UpdateJobs(log, jobs.Options{
-					ClusterName: o.clusterName,
-					ReleaseRepo: o.releaseRepo,
-					Unmanaged:   o.unmanaged,
-				}, osdClusters)
+		steps := []func(log *logrus.Entry, ci *clustermgmt.ClusterInstall) error{
+			jobs.UpdateJobs,
+			buildclusterdir.UpdateClusterBuildFarmDir,
+			func(log *logrus.Entry, ci *clustermgmt.ClusterInstall) error {
+				return clustermgmtonboard.NewOAuthTemplateStep(log, ci).Run(ctx)
 			},
-			func(o options) error {
-				return buildclusterdir.UpdateClusterBuildFarmDir(log, buildclusterdir.Options{
-					ClusterName: o.clusterName,
-					ReleaseRepo: o.releaseRepo,
-					Update:      o.update,
-				}, hostedClusters)
+			cisecretbootstrap.UpdateCiSecretBootstrap,
+			cisecretgenerator.UpdateSecretGenerator,
+			sanitizeprowjob.UpdateSanitizeProwJobs,
+			syncrovergroup.UpdateSyncRoverGroups,
+			prowplugin.UpdateProwPluginConfig,
+			func(log *logrus.Entry, ci *clustermgmt.ClusterInstall) error {
+				kubeClient := kubeClientFunc(kubeconfigs, ci, opts.update)
+				return clustermgmtonboard.NewDexStep(log, kubeClient, ci).Run(ctx)
 			},
-			func(o options) error {
-				return cisecretbootstrap.UpdateCiSecretBootstrap(log, cisecretbootstrap.Options{
-					ClusterName:              o.clusterName,
-					ReleaseRepo:              o.releaseRepo,
-					UseTokenFileInKubeconfig: o.useTokenFileInKubeconfig,
-					Unmanaged:                o.unmanaged,
-				}, osdClusters)
-			},
-			func(o options) error {
-				return cisecretgenerator.UpdateSecretGenerator(log, cisecretgenerator.Options{
-					ClusterName: o.clusterName,
-					ReleaseRepo: o.releaseRepo,
-					Unmanaged:   o.unmanaged,
-				})
-			},
-			func(o options) error {
-				return sanitizeprowjob.UpdateSanitizeProwJobs(log, sanitizeprowjob.Options{
-					ClusterName: o.clusterName,
-					ReleaseRepo: o.releaseRepo,
-				})
-			},
-			func(o options) error {
-				return syncrovergroup.UpdateSyncRoverGroups(syncrovergroup.Options{
-					ClusterName: o.clusterName,
-					ReleaseRepo: o.releaseRepo,
-				})
-			},
-			func(o options) error {
-				return prowplugin.UpdateProwPluginConfig(log, prowplugin.Options{
-					ClusterName: o.clusterName,
-					ReleaseRepo: o.releaseRepo,
-				})
-			},
-			func(o options) error {
-				kubeClient := kubeClientFunc(kubeconfigs, o.clusterName, o.update)
-				dexStep := clustermgmtonboard.NewDexStep(log, kubeClient, o.releaseRepo, o.clusterName, ci.Onboard.Dex.RedirectURIs)
-				if err := dexStep.Run(ctx); err != nil {
-					return fmt.Errorf("update dex manifests: %w", err)
-				}
-				return nil
+			func(log *logrus.Entry, ci *clustermgmt.ClusterInstall) error {
+				kubeClient := kubeClientFunc(kubeconfigs, ci, opts.update)
+				return clustermgmtonboard.NewQuayioPullThroughCacheStep(log, ci, kubeClient).Run(ctx)
 			},
 		}
 		if !opts.update {
-			steps = append(steps, func(o options) error {
-				return buildclusters.UpdateBuildClusters(log, buildclusters.Options{
-					ClusterName: o.clusterName,
-					ReleaseRepo: o.releaseRepo,
-					Unmanaged:   o.unmanaged,
-					OSD:         o.osd,
-					Hosted:      o.hosted,
-				})
-			})
+			steps = append(steps, buildclusters.UpdateBuildClusters)
 		}
 		for _, step := range steps {
-			if err := step(opts); err != nil {
+			ciCopy := clustermgmt.ClusterInstall{}
+			if err := deepcopy.Copy(&ciCopy, ci); err != nil {
+				return fmt.Errorf("cluster install deep copy: %w", err)
+			}
+			if ci.ClusterName == "" {
+				ciCopy.ClusterName = cluster
+				ciCopy.Onboard.OSD = ptr.To(osdSet.Has(cluster))
+				ciCopy.Onboard.Hosted = ptr.To(hostedSet.Has(cluster))
+			}
+			if err := step(log, &ciCopy); err != nil {
 				log.WithError(err).Error("failed to execute step")
 				errorCount++
 			}
@@ -319,19 +273,19 @@ func loadKubeconfigs(ci *clustermgmt.ClusterInstall, updateMode bool) (*runtime.
 // mode we pass it a bunch of kubeconfigs regarding clusters that have been created and onboarded already.
 // On the other hand, when we are in the middle of creating one, we have to rely on the admin kubeconfig
 // dropped by the openshit-install.
-func kubeClientFunc(kubeconfigs *runtime.Kubeconfigs, clusterName string, updateMode bool) func() (ctrlruntimeclient.Client, error) {
+func kubeClientFunc(kubeconfigs *runtime.Kubeconfigs, ci *clustermgmt.ClusterInstall, updateMode bool) func() (ctrlruntimeclient.Client, error) {
 	return func() (ctrlruntimeclient.Client, error) {
 		var config *rest.Config
 		if updateMode {
-			c, found := kubeconfigs.Resolve(clusterName)
+			c, found := kubeconfigs.Resolve(ci.ClusterName)
 			if !found {
-				return nil, fmt.Errorf("kubeconfig for %s not found", clusterName)
+				return nil, fmt.Errorf("kubeconfig for %s not found", ci.ClusterName)
 			}
 			config = &c
 		} else {
 			c, found := kubeconfigs.Admin()
 			if !found {
-				return nil, fmt.Errorf("admin kubeconfig for %s not found", clusterName)
+				return nil, fmt.Errorf("admin kubeconfig for %s not found", ci.ClusterName)
 			}
 			config = &c
 		}

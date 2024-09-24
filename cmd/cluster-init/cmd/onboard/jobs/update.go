@@ -8,12 +8,12 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/apimachinery/pkg/util/sets"
 	utilpointer "k8s.io/utils/pointer"
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/clustermgmt"
 	"github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
 )
@@ -25,33 +25,26 @@ const (
 	generator    jobconfig.Generator = "cluster-init"
 )
 
-type Options struct {
-	ClusterName string
-	ReleaseRepo string
-	Unmanaged   bool
-}
-
-func UpdateJobs(log *logrus.Entry, o Options, osdClusters []string) error {
+func UpdateJobs(log *logrus.Entry, ci *clustermgmt.ClusterInstall) error {
 	log = log.WithField("step", "jobs")
-	log.Infof("generating: presubmits, postsubmits, and periodics for %s", o.ClusterName)
-	osdClustersSet := sets.NewString(osdClusters...)
+	log.Infof("generating: presubmits, postsubmits, and periodics for %s", ci.ClusterName)
 	config := prowconfig.JobConfig{
 		PresubmitsStatic: map[string][]prowconfig.Presubmit{
-			"openshift/release": {generatePresubmit(o.ClusterName, osdClustersSet.Has(o.ClusterName), o.Unmanaged)},
+			"openshift/release": {generatePresubmit(ci.ClusterName, *ci.Onboard.OSD, *ci.Onboard.Unmanaged)},
 		},
 		PostsubmitsStatic: map[string][]prowconfig.Postsubmit{
-			"openshift/release": {generatePostsubmit(o.ClusterName, osdClustersSet.Has(o.ClusterName), o.Unmanaged)},
+			"openshift/release": {generatePostsubmit(ci.ClusterName, *ci.Onboard.OSD, *ci.Onboard.Unmanaged)},
 		},
-		Periodics: []prowconfig.Periodic{generatePeriodic(o.ClusterName, osdClustersSet.Has(o.ClusterName), o.Unmanaged)},
+		Periodics: []prowconfig.Periodic{generatePeriodic(ci.ClusterName, *ci.Onboard.OSD, *ci.Onboard.Unmanaged)},
 	}
 	metadata := onboard.RepoMetadata()
-	jobsDir := filepath.Join(o.ReleaseRepo, "ci-operator", "jobs")
+	jobsDir := filepath.Join(ci.Onboard.ReleaseRepo, "ci-operator", "jobs")
 	return jobconfig.WriteToDir(jobsDir,
 		metadata.Org,
 		metadata.Repo,
 		&config,
 		generator,
-		map[string]string{jobconfig.LabelBuildFarm: o.ClusterName})
+		map[string]string{jobconfig.LabelBuildFarm: ci.ClusterName})
 }
 
 func generatePeriodic(clusterName string, osd bool, unmanaged bool) prowconfig.Periodic {

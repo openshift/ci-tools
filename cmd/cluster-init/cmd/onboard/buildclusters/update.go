@@ -7,15 +7,9 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"sigs.k8s.io/yaml"
-)
 
-type Options struct {
-	ClusterName string
-	ReleaseRepo string
-	Unmanaged   bool
-	OSD         bool
-	Hosted      bool
-}
+	"github.com/openshift/ci-tools/pkg/clustermgmt"
+)
 
 type BuildClusters struct {
 	Managed []string `json:"managed,omitempty"`
@@ -23,36 +17,36 @@ type BuildClusters struct {
 	Osd     []string `json:"osd,omitempty"`
 }
 
-func UpdateBuildClusters(log *logrus.Entry, o Options) error {
+func UpdateBuildClusters(log *logrus.Entry, ci *clustermgmt.ClusterInstall) error {
 	log = log.WithField("step", "update-build-clusters")
-	if o.Unmanaged {
-		log.Infof("skipping build clusters config update for unmanaged cluster: %s", o.ClusterName)
+	if *ci.Onboard.Unmanaged {
+		log.Infof("skipping build clusters config update for unmanaged cluster: %s", ci.ClusterName)
 		return nil
 	}
-	log.Infof("updating build clusters config to add: %s", o.ClusterName)
-	buildClusters, err := LoadBuildClusters(o)
+	log.Infof("updating build clusters config to add: %s", ci.ClusterName)
+	buildClusters, err := LoadBuildClusters(ci)
 	if err != nil {
 		return err
 	}
 
-	buildClusters.Managed = append(buildClusters.Managed, o.ClusterName)
-	if o.Hosted {
-		buildClusters.Hosted = append(buildClusters.Hosted, o.ClusterName)
+	buildClusters.Managed = append(buildClusters.Managed, ci.ClusterName)
+	if *ci.Onboard.Hosted {
+		buildClusters.Hosted = append(buildClusters.Hosted, ci.ClusterName)
 	}
 
-	if o.OSD {
-		buildClusters.Osd = append(buildClusters.Osd, o.ClusterName)
+	if *ci.Onboard.OSD {
+		buildClusters.Osd = append(buildClusters.Osd, ci.ClusterName)
 	}
 
 	rawYaml, err := yaml.Marshal(buildClusters)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(buildClustersFile(o), rawYaml, 0644)
+	return os.WriteFile(buildClustersFile(ci), rawYaml, 0644)
 }
 
-func LoadBuildClusters(o Options) (*BuildClusters, error) {
-	filename := buildClustersFile(o)
+func LoadBuildClusters(ci *clustermgmt.ClusterInstall) (*BuildClusters, error) {
+	filename := buildClustersFile(ci)
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
@@ -64,6 +58,6 @@ func LoadBuildClusters(o Options) (*BuildClusters, error) {
 	return &buildClusters, nil
 }
 
-func buildClustersFile(o Options) string {
-	return filepath.Join(o.ReleaseRepo, "clusters", "build-clusters", "_cluster-init.yaml")
+func buildClustersFile(ci *clustermgmt.ClusterInstall) string {
+	return filepath.Join(ci.Onboard.ReleaseRepo, "clusters", "build-clusters", "_cluster-init.yaml")
 }

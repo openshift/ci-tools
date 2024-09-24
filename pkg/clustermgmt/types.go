@@ -33,14 +33,23 @@ type AWSCloudFormationTemplate struct {
 }
 
 type Onboard struct {
-	ReleaseRepo      string `json:"releaseRepo,omitempty"`
-	KubeconfigDir    string `json:"kubeconfigDir,omitempty"`
-	KubeconfigSuffix string `json:"kubeconfigSuffix,omitempty"`
-	Dex              Dex    `json:"dex,omitempty"`
+	ReleaseRepo              string                 `json:"releaseRepo,omitempty"`
+	KubeconfigDir            string                 `json:"kubeconfigDir,omitempty"`
+	KubeconfigSuffix         string                 `json:"kubeconfigSuffix,omitempty"`
+	OSD                      *bool                  `json:"osd,omitempty"`
+	Hosted                   *bool                  `json:"hosted,omitempty"`
+	Unmanaged                *bool                  `json:"unmanaged,omitempty"`
+	UseTokenFileInKubeconfig *bool                  `json:"useTokenFileInKubeconfig,omitempty"`
+	Dex                      Dex                    `json:"dex,omitempty"`
+	QuayioPullThroughCache   QuayioPullThroughCache `json:"quayioPullThroughCache,omitempty"`
 }
 
 type Dex struct {
 	RedirectURIs map[string]string `json:"redirectURI,omitempty"`
+}
+
+type QuayioPullThroughCache struct {
+	MirrorURIs map[string]string `json:"mirrorURI,omitempty"`
 }
 
 type Step interface {

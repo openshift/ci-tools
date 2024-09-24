@@ -5,8 +5,12 @@ import (
 	"path"
 	"path/filepath"
 
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/openshift/ci-tools/pkg/api"
 )
+
+type KubeClientGetter func() (ctrlruntimeclient.Client, error)
 
 const (
 	BuildFarm                  = "build-farm"
@@ -49,4 +53,12 @@ func BuildFarmDirFor(releaseRepo, clusterName string) string {
 // The openshift-install places the first kubeconfig in ${installation_directory}/auth/kubeconfig
 func AdminKubeconfig(installBase string) string {
 	return path.Join(installBase, "/ocp-install-base/auth/kubeconfig")
+}
+
+func OAuthTemplatePath(releaseRepo, clusterName string) string {
+	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "assets/admin_cluster_oauth_template.yaml")
+}
+
+func QuayioPullThroughCacheManifestPath(releaseRepo, clusterName string) string {
+	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "assets/quayio-pull-through-cache-icsp.yaml")
 }

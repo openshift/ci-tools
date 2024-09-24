@@ -13,15 +13,12 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
 	routev1 "github.com/openshift/api/route/v1"
 
 	"github.com/openshift/ci-tools/pkg/clustermgmt"
 )
-
-type KubeClientGetter func() (ctrlruntimeclient.Client, error)
 
 type dexStep struct {
 	log               *logrus.Entry

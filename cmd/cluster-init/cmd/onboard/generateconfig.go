@@ -220,8 +220,11 @@ func generateConfig(ctx context.Context, log *logrus.Entry, clusterInstall clust
 			prowplugin.UpdateProwPluginConfig,
 			func(log *logrus.Entry, ci *clustermgmt.ClusterInstall) error {
 				kubeClient := kubeClientFunc(kubeconfigs, ci, opts.update)
-				dexStep := clustermgmtonboard.NewDexStep(log, kubeClient, ci)
-				return dexStep.Run(ctx)
+				return clustermgmtonboard.NewDexStep(log, kubeClient, ci).Run(ctx)
+			},
+			func(log *logrus.Entry, ci *clustermgmt.ClusterInstall) error {
+				kubeClient := kubeClientFunc(kubeconfigs, ci, opts.update)
+				return clustermgmtonboard.NewQuayioPullThroughCacheStep(log, ci, kubeClient).Run(ctx)
 			},
 		}
 		if !opts.update {

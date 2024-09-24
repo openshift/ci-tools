@@ -10,6 +10,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
+	imageregistryv1 "github.com/openshift/api/imageregistry/v1"
 	routev1 "github.com/openshift/api/route/v1"
 
 	onboardcmd "github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard"
@@ -71,6 +72,9 @@ func handleSignals(signalCtx context.Context, log *logrus.Entry) context.Context
 func addSchemes() error {
 	if err := routev1.AddToScheme(scheme.Scheme); err != nil {
 		return fmt.Errorf("add routev1 to scheme: %w", err)
+	}
+	if err := imageregistryv1.AddToScheme(scheme.Scheme); err != nil {
+		return fmt.Errorf("add imageregistryv1 to scheme: %w", err)
 	}
 	return nil
 }

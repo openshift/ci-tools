@@ -56,6 +56,9 @@ onboard:
     dex:
       redirectURI:
         $clustername: https://oauth-openshift.apps.${clustername}.ky4t.p1.openshiftapps.com/oauth2callback/RedHat_Internal_SSO
+    quayioPullThroughCache:
+      mirrorURI:
+        $clustername: quayio-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com
 EOF
 }
 

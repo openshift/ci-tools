@@ -6,7 +6,10 @@ import (
 	"path/filepath"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+type KubeClientGetter func() (ctrlruntimeclient.Client, error)
 
 const (
 	BuildFarm                  = "build-farm"
@@ -52,6 +55,9 @@ func AdminKubeconfig(installBase string) string {
 }
 
 func OAuthTemplatePath(releaseRepo, clusterName string) string {
-	base := filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName)
-	return path.Join(base, "assets/admin_cluster_oauth_template.yaml")
+	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "assets/admin_cluster_oauth_template.yaml")
+}
+
+func QuayioPullThroughCacheManifestPath(releaseRepo, clusterName string) string {
+	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "assets/quayio-pull-through-cache-icsp.yaml")
 }

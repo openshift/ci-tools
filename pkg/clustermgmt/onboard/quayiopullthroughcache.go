@@ -7,10 +7,12 @@ import (
 	"os"
 
 	"github.com/sirupsen/logrus"
+
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/yaml"
 
 	imageregistryv1 "github.com/openshift/api/imageregistry/v1"
+
 	"github.com/openshift/ci-tools/pkg/clustermgmt"
 )
 

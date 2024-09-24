@@ -7,14 +7,15 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	imageregistryv1 "github.com/openshift/api/imageregistry/v1"
 	"github.com/sirupsen/logrus"
+
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	imageregistryv1 "github.com/openshift/api/imageregistry/v1"
 
 	"github.com/openshift/ci-tools/pkg/clustermgmt"
 )

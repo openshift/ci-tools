@@ -5,8 +5,9 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/openshift/ci-tools/pkg/api"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 type KubeClientGetter func() (ctrlruntimeclient.Client, error)

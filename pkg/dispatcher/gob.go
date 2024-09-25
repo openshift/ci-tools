@@ -1,11 +1,11 @@
-package main
+package dispatcher
 
 import (
 	"encoding/gob"
 	"os"
 )
 
-func readGob(filename string, data interface{}) error {
+func ReadGob(filename string, data interface{}) error {
 	file, err := os.Open(filename)
 	if err != nil {
 		return err
@@ -21,7 +21,7 @@ func readGob(filename string, data interface{}) error {
 	return nil
 }
 
-func writeGob(filename string, data interface{}) error {
+func WriteGob(filename string, data interface{}) error {
 	file, err := os.Create(filename)
 	if err != nil {
 		return err

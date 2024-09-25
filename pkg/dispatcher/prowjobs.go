@@ -1,4 +1,4 @@
-package main
+package dispatcher
 
 import (
 	"sync"
@@ -8,26 +8,26 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-type prowjobs struct {
+type Prowjobs struct {
 	mu              sync.Mutex
 	data            map[string]string
 	jobsStoragePath string
 }
 
-func newProwjobs(jobsStoragePath string) *prowjobs {
+func NewProwjobs(jobsStoragePath string) *Prowjobs {
 	var loadedJobs map[string]string
-	if err := readGob(jobsStoragePath, &loadedJobs); err != nil {
+	if err := ReadGob(jobsStoragePath, &loadedJobs); err != nil {
 		logrus.Errorf("falling back to empty map, error reading Gob file: %v", err)
 		loadedJobs = make(map[string]string)
 	}
-	return &prowjobs{
+	return &Prowjobs{
 		data:            loadedJobs,
 		mu:              sync.Mutex{},
 		jobsStoragePath: jobsStoragePath,
 	}
 }
 
-func (pjs *prowjobs) regenerate(prowjobs map[string]string) {
+func (pjs *Prowjobs) Regenerate(prowjobs map[string]string) {
 	pjs.mu.Lock()
 	defer pjs.mu.Unlock()
 	pjs.data = make(map[string]string, len(prowjobs))
@@ -36,7 +36,7 @@ func (pjs *prowjobs) regenerate(prowjobs map[string]string) {
 	}
 }
 
-func (pjs *prowjobs) getDataCopy() map[string]string {
+func (pjs *Prowjobs) GetDataCopy() map[string]string {
 	pjs.mu.Lock()
 	defer pjs.mu.Unlock()
 
@@ -47,7 +47,7 @@ func (pjs *prowjobs) getDataCopy() map[string]string {
 	return copy
 }
 
-func (pjs *prowjobs) get(pj string) string {
+func (pjs *Prowjobs) Get(pj string) string {
 	pjs.mu.Lock()
 	defer pjs.mu.Unlock()
 
@@ -58,7 +58,7 @@ func (pjs *prowjobs) get(pj string) string {
 	return ""
 }
 
-func (pjs *prowjobs) hasAnyOfClusters(clusters sets.Set[string]) bool {
+func (pjs *Prowjobs) HasAnyOfClusters(clusters sets.Set[string]) bool {
 	pjs.mu.Lock()
 	defer pjs.mu.Unlock()
 	for _, cluster := range pjs.data {

@@ -663,7 +663,7 @@ func main() {
 
 	var dispatchWrapper func(cron bool)
 	var dispatchDeltaWrapper func()
-	prowjobs := newProwjobs(o.jobsStoragePath)
+	prowjobs := dispatcher.NewProwjobs(o.jobsStoragePath)
 	c := cron.New()
 
 	{
@@ -684,13 +684,13 @@ func main() {
 				return
 			}
 
-			pjs := prowjobs.getDataCopy()
+			pjs := prowjobs.GetDataCopy()
 
 			if err := dispatchMissingJobs(o.prowJobConfigDir, config, blocked, pjs); err != nil {
 				logrus.WithError(err).Error("failed to dispatch")
 				return
 			}
-			prowjobs.regenerate(pjs)
+			prowjobs.Regenerate(pjs)
 		}
 
 		dispatchWrapper = func(cron bool) {
@@ -715,7 +715,7 @@ func main() {
 				removeDisabledClusters(config, disabled)
 			}
 
-			newBlockedClusters := prowjobs.hasAnyOfClusters(blocked)
+			newBlockedClusters := prowjobs.HasAnyOfClusters(blocked)
 
 			if (!cron && enabled.Len() == 0 && disabled.Len() == 0) && !newBlockedClusters {
 				return
@@ -739,9 +739,9 @@ func main() {
 				logrus.WithError(err).Error("failed to dispatch")
 				return
 			}
-			prowjobs.regenerate(pjs)
+			prowjobs.Regenerate(pjs)
 
-			if err := writeGob(o.jobsStoragePath, pjs); err != nil {
+			if err := dispatcher.WriteGob(o.jobsStoragePath, pjs); err != nil {
 				logrus.WithError(err).Errorf("continuing on cache memory, error writing Gob file")
 			}
 
@@ -806,8 +806,8 @@ func main() {
 		}
 	}(o.clusterConfigPath)
 
-	server := newServer(prowjobs)
-	http.HandleFunc("/", server.requestHandler)
+	server := dispatcher.NewServer(prowjobs)
+	http.HandleFunc("/", server.RequestHandler)
 	logrus.Fatal(http.ListenAndServe(":8080", nil))
 
 }

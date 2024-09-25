@@ -36,7 +36,8 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 	rbacapi "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -1192,18 +1193,18 @@ func (o *options) initializeNamespace() error {
 	initBeginning := time.Now()
 	for {
 		project, err := projectGetter.ProjectV1().ProjectRequests().Create(context.TODO(), &projectapi.ProjectRequest{
-			ObjectMeta: meta.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:   o.namespace,
 				Labels: map[string]string{api.DPTPRequesterLabel: "ci-operator"},
 			},
 			DisplayName: fmt.Sprintf("%s - %s", o.namespace, o.jobSpec.Job),
 			Description: jobDescription(o.jobSpec),
-		}, meta.CreateOptions{})
+		}, metav1.CreateOptions{})
 		if err != nil && !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not set up namespace for test: %w", err)
 		}
 		if err != nil {
-			project, err = projectGetter.ProjectV1().Projects().Get(context.TODO(), o.namespace, meta.GetOptions{})
+			project, err = projectGetter.ProjectV1().Projects().Get(context.TODO(), o.namespace, metav1.GetOptions{})
 			if err != nil {
 				if kerrors.IsNotFound(err) {
 					continue
@@ -1326,7 +1327,7 @@ func (o *options) initializeNamespace() error {
 	if intranetAccess {
 		logrus.Debugf("Deleting egress firewall in namespace %s", o.namespace)
 		egressFirewall := &egressfirewallv1.EgressFirewall{
-			ObjectMeta: meta.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:      "default",
 				Namespace: o.namespace,
 			},
@@ -1335,8 +1336,7 @@ func (o *options) initializeNamespace() error {
 			if kerrors.IsNotFound(err) {
 				logrus.Warnf("Warning: egress firewall does not exist: %v", err)
 			} else {
-				reason := kerrors.ReasonForError(err)
-				if reason == "" {
+				if errors.Is(err, &meta.NoKindMatchError{}) {
 					logrus.Warnf("crd not installed: %s", err)
 				} else {
 					return fmt.Errorf("could not delete egress firewall: %w", err)
@@ -1419,7 +1419,7 @@ func (o *options) initializeNamespace() error {
 
 	// create the image stream or read it to get its uid
 	is := &imageapi.ImageStream{
-		ObjectMeta: meta.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Namespace: o.jobSpec.Namespace(),
 			Name:      api.PipelineImageStream,
 		},
@@ -1436,7 +1436,7 @@ func (o *options) initializeNamespace() error {
 			return fmt.Errorf("failed to get pipeline imagestream: %w", err)
 		}
 	}
-	o.jobSpec.SetOwner(&meta.OwnerReference{
+	o.jobSpec.SetOwner(&metav1.OwnerReference{
 		APIVersion: "image.openshift.io/v1",
 		Kind:       "ImageStream",
 		Name:       api.PipelineImageStream,
@@ -1476,7 +1476,7 @@ func generateAuthorAccessRoleBinding(namespace string, authors []string) *rbacap
 		subjects = append(subjects, rbacapi.Subject{Kind: "Group", Name: api.GitHubUserGroup(author)})
 	}
 	return &rbacapi.RoleBinding{
-		ObjectMeta: meta.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      "ci-op-author-access",
 			Namespace: namespace,
 		},
@@ -1490,7 +1490,7 @@ func generateAuthorAccessRoleBinding(namespace string, authors []string) *rbacap
 
 func pdb(labelKey, namespace string) (*policyv1.PodDisruptionBudget, crcontrollerutil.MutateFn) {
 	pdb := &policyv1.PodDisruptionBudget{
-		ObjectMeta: meta.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("ci-operator-%s", strings.ReplaceAll(labelKey, "/", "-")),
 			Namespace: namespace,
 		},
@@ -1500,10 +1500,10 @@ func pdb(labelKey, namespace string) (*policyv1.PodDisruptionBudget, crcontrolle
 			Type:   intstr.Int,
 			IntVal: 0,
 		}
-		pdb.Spec.Selector = &meta.LabelSelector{
-			MatchExpressions: []meta.LabelSelectorRequirement{{
+		pdb.Spec.Selector = &metav1.LabelSelector{
+			MatchExpressions: []metav1.LabelSelectorRequirement{{
 				Key:      labelKey,
-				Operator: meta.LabelSelectorOpExists,
+				Operator: metav1.LabelSelectorOpExists,
 			}},
 		}
 		return nil
@@ -1777,18 +1777,18 @@ func inputHash(inputs api.InputDefinition) string {
 func (o *options) saveNamespaceArtifacts() {
 	namespaceDir := api.NamespaceDir
 	if kubeClient, err := coreclientset.NewForConfig(o.clusterConfig); err == nil {
-		pods, _ := kubeClient.Pods(o.namespace).List(context.TODO(), meta.ListOptions{})
+		pods, _ := kubeClient.Pods(o.namespace).List(context.TODO(), metav1.ListOptions{})
 		data, _ := json.MarshalIndent(pods, "", "  ")
 		path := filepath.Join(namespaceDir, "pods.json")
 		_ = api.SaveArtifact(o.censor, path, data)
-		events, _ := kubeClient.Events(o.namespace).List(context.TODO(), meta.ListOptions{})
+		events, _ := kubeClient.Events(o.namespace).List(context.TODO(), metav1.ListOptions{})
 		data, _ = json.MarshalIndent(events, "", "  ")
 		path = filepath.Join(namespaceDir, "events.json")
 		_ = api.SaveArtifact(o.censor, path, data)
 	}
 
 	if buildClient, err := buildclientset.NewForConfig(o.clusterConfig); err == nil {
-		builds, _ := buildClient.Builds(o.namespace).List(context.TODO(), meta.ListOptions{})
+		builds, _ := buildClient.Builds(o.namespace).List(context.TODO(), metav1.ListOptions{})
 		data, _ := json.MarshalIndent(builds, "", "  ")
 		path := filepath.Join(namespaceDir, "builds.json")
 		_ = api.SaveArtifact(o.censor, path, data)
@@ -1803,7 +1803,7 @@ func (o *options) saveNamespaceArtifacts() {
 	}
 
 	if templateClient, err := templateclientset.NewForConfig(o.clusterConfig); err == nil {
-		templateInstances, _ := templateClient.TemplateInstances(o.namespace).List(context.TODO(), meta.ListOptions{})
+		templateInstances, _ := templateClient.TemplateInstances(o.namespace).List(context.TODO(), metav1.ListOptions{})
 		data, _ := json.MarshalIndent(templateInstances, "", "  ")
 		path := filepath.Join(namespaceDir, "templateinstances.json")
 		_ = api.SaveArtifact(o.censor, path, data)
@@ -2027,7 +2027,7 @@ func eventRecorder(kubeClient *coreclientset.CoreV1Client, authClient *authclien
 				Resource:  "events",
 			},
 		},
-	}, meta.CreateOptions{})
+	}, metav1.CreateOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("could not check permission to create events: %w", err)
 	}
@@ -2087,7 +2087,7 @@ func getDockerConfigSecret(name, filename string) (*coreapi.Secret, error) {
 		Data: map[string][]byte{
 			coreapi.DockerConfigJsonKey: src,
 		},
-		ObjectMeta: meta.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
 		Type: coreapi.SecretTypeDockerConfigJson,
@@ -2103,7 +2103,7 @@ func getSecret(name, filename string) (*coreapi.Secret, error) {
 		Data: map[string][]byte{
 			path.Base(filename): src,
 		},
-		ObjectMeta: meta.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
 		Type: coreapi.SecretTypeOpaque,
@@ -2231,7 +2231,7 @@ func (o *options) loadConfig(info *api.Metadata) (*api.ReleaseBuildConfiguration
 
 func resolveNodeArchitectures(ctx context.Context, client coreclientset.NodeInterface) ([]string, error) {
 	ret := sets.New[string]()
-	nodeList, err := client.List(ctx, meta.ListOptions{})
+	nodeList, err := client.List(ctx, metav1.ListOptions{})
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to determine the node architectures: %w", err)
@@ -2246,8 +2246,8 @@ func resolveNodeArchitectures(ctx context.Context, client coreclientset.NodeInte
 func monitorNamespace(ctx context.Context, cancel func(), namespace string, client coreclientset.NamespaceInterface) {
 reset:
 	for {
-		watcher, err := client.Watch(context.Background(), meta.ListOptions{
-			TypeMeta:      meta.TypeMeta{},
+		watcher, err := client.Watch(context.Background(), metav1.ListOptions{
+			TypeMeta:      metav1.TypeMeta{},
 			FieldSelector: fields.Set{"metadata.name": namespace}.AsSelector().String(),
 			Watch:         true,
 		})

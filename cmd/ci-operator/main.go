@@ -79,6 +79,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/defaults"
 	"github.com/openshift/ci-tools/pkg/interrupt"
 	"github.com/openshift/ci-tools/pkg/junit"
+	"github.com/openshift/ci-tools/pkg/labeledclient"
 	"github.com/openshift/ci-tools/pkg/lease"
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/registry"
@@ -1186,6 +1187,7 @@ func (o *options) initializeNamespace() error {
 		return fmt.Errorf("failed to construct client: %w", err)
 	}
 	client = ctrlruntimeclient.NewNamespacedClient(client, o.namespace)
+	client = labeledclient.Wrap(client, o.jobSpec)
 	ctx := context.Background()
 
 	logrus.Debugf("Creating namespace %s", o.namespace)
@@ -1280,11 +1282,7 @@ func (o *options) initializeNamespace() error {
 		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: o.namespace}, ns); err != nil {
 			return err
 		}
-
-		if ns.Labels == nil {
-			ns.Labels = map[string]string{}
-		}
-		ns.Labels[api.AutoScalePodsLabel] = "true"
+		ns.Labels = steps.LabelsFor(o.jobSpec, map[string]string{api.AutoScalePodsLabel: "true"}, "")
 
 		if ns.Annotations == nil {
 			ns.Annotations = make(map[string]string)

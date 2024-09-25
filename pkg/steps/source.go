@@ -120,9 +120,12 @@ const (
 	LabelMetadataVariant = "ci.openshift.io/metadata.variant"
 	LabelMetadataTarget  = "ci.openshift.io/metadata.target"
 	LabelMetadataStep    = "ci.openshift.io/metadata.step"
+	LabelJobID           = "ci.openshift.io/jobid"
+	LabelJobType         = "ci.openshift.io/jobtype"
+	LabelJobName         = "ci.openshift.io/jobname"
 )
 
-func labelsFor(spec *api.JobSpec, base map[string]string, ref string) map[string]string {
+func LabelsFor(spec *api.JobSpec, base map[string]string, ref string) map[string]string {
 	if base == nil {
 		base = map[string]string{}
 	}
@@ -130,6 +133,9 @@ func labelsFor(spec *api.JobSpec, base map[string]string, ref string) map[string
 	repo := spec.Metadata.Repo
 	branch := spec.Metadata.Branch
 	variant := spec.Metadata.Variant
+	jobID := spec.ProwJobID
+	jobType := spec.Type
+	jobName := spec.Job
 	if ref != "" { //When building for a specific ref, the metadata will be empty and need to be determined from that ref
 		for _, extraRef := range spec.ExtraRefs {
 			orgRepo := fmt.Sprintf("%s.%s", extraRef.Org, extraRef.Repo)
@@ -147,6 +153,9 @@ func labelsFor(spec *api.JobSpec, base map[string]string, ref string) map[string
 	base[LabelMetadataBranch] = branch
 	base[LabelMetadataVariant] = variant
 	base[LabelMetadataTarget] = spec.Target
+	base[LabelJobID] = jobID
+	base[LabelJobType] = string(jobType)
+	base[LabelJobName] = jobName
 	base[CreatedByCILabel] = "true"
 	base[openshiftCIEnv] = "true"
 	return apiutils.SanitizeLabels(base)
@@ -305,7 +314,7 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 	}
 
 	layer := buildapi.ImageOptimizationSkipLayers
-	labels := labelsFor(jobSpec, map[string]string{CreatesLabel: string(toTag)}, ref)
+	labels := LabelsFor(jobSpec, map[string]string{CreatesLabel: string(toTag)}, ref)
 	build := &buildapi.Build{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      string(toTag),

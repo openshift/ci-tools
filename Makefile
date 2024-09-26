@@ -212,9 +212,6 @@ update-integration:
 	go run ./cmd/determinize-ci-operator --config-dir test/integration/config-brancher/input --confirm
 	go run ./cmd/determinize-ci-operator --config-dir test/integration/pj-rehearse/candidate/ci-operator/config --confirm
 	go run ./cmd/determinize-ci-operator --config-dir test/integration/pj-rehearse/master/ci-operator/config --confirm
-	go run ./cmd/determinize-ci-operator --config-dir test/integration/release-job-migrator/expected2/ci-operator --confirm
-	go run ./cmd/determinize-ci-operator --config-dir test/integration/release-job-migrator/expected/ci-operator --confirm
-	go run ./cmd/determinize-ci-operator --config-dir test/integration/release-job-migrator/input/ci-operator --confirm
 	go run ./cmd/determinize-ci-operator --config-dir test/integration/repo-init/expected/ci-operator/config --confirm
 	go run ./cmd/determinize-ci-operator --config-dir test/integration/repo-init/input/ci-operator/config --confirm
 	go run ./cmd/determinize-prow-config -prow-config-dir test/integration/repo-init/input/core-services/prow/02_config -sharded-plugin-config-base-dir test/integration/repo-init/input/core-services/prow/02_config

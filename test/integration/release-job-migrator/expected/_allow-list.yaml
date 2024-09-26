@@ -1,4 +1,0 @@
-periodic-ci-openshift-release-master-ci-4.6-e2e-aws: blocking
-release-openshift-origin-installer-e2e-gcp-4.7: blocking
-periodic-ci-openshift-release-master-ci-4.7-e2e-gcp-upgrade: informing
-release-openshift-origin-installer-e2e-aws-compact-4.7: informing

@@ -1,1 +1,0 @@
-{"kind":"Group","apiVersion":"user.openshift.io/v1","metadata":{"name":"test-group","creationTimestamp":null},"users":["admin1","admin2","admin3","admin4","admin5","member1","member2","member3","member4"]}

@@ -1000,10 +1000,6 @@ github.com/openshift/client-go/template/applyconfigurations/internal
 github.com/openshift/client-go/template/applyconfigurations/template/v1
 github.com/openshift/client-go/template/clientset/versioned/scheme
 github.com/openshift/client-go/template/clientset/versioned/typed/template/v1
-github.com/openshift/client-go/user/applyconfigurations/internal
-github.com/openshift/client-go/user/applyconfigurations/user/v1
-github.com/openshift/client-go/user/clientset/versioned/scheme
-github.com/openshift/client-go/user/clientset/versioned/typed/user/v1
 # github.com/openshift/custom-resource-status v1.1.3-0.20220503160415-f2fdb4999d87
 ## explicit; go 1.12
 github.com/openshift/custom-resource-status/conditions/v1

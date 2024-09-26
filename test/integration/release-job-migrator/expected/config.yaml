@@ -1,5 +1,0 @@
-config:
-  e2e-aws:
-    steps:
-      cluster_profile: aws
-      workflow: openshift-e2e-aws

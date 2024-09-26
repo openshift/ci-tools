@@ -31,11 +31,18 @@ func startWatchers(path string, errCh chan<- error, callback func() error, metri
 					return
 				case event := <-universalSymlinkWatcher.EventCh:
 					logrus.Infof("Received event: %s", event.String())
-					if err := universalSymlinkWatcher.ConfigEventFn(); err != nil {
-						errFunc(err, "failed to load config")
+					configEventFn := universalSymlinkWatcher.ConfigEventFn
+					if configEventFn != nil {
+						if err := configEventFn(); err != nil {
+							errFunc(err, "failed to load config")
+						}
 					}
-					if err := universalSymlinkWatcher.RegistryEventFn(); err != nil {
-						errFunc(err, "failed to load registry")
+
+					registryEventFn := universalSymlinkWatcher.RegistryEventFn
+					if registryEventFn != nil {
+						if err := registryEventFn(); err != nil {
+							errFunc(err, "failed to load registry")
+						}
 					}
 
 				case err := <-universalSymlinkWatcher.ErrCh:

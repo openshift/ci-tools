@@ -556,16 +556,13 @@ func (s *server) getUsageDetailsLines() []string {
 func (s *server) getDisabledRehearsalsLines(disabledDueToNetworkAccessToggle []string) []string {
 	var lines []string
 	if len(disabledDueToNetworkAccessToggle) > 0 {
-		lines = append(lines, "The following jobs are not rehearsable due to the `restrict_network_access` field being set to `false` in this PR. You must first merge this PR, and then subsequent changes to the job will be rehearsable: ")
 		lines = []string{
 			"The following jobs are not rehearsable due to the `restrict_network_access` field being set to `false` in this PR. You must first merge this PR, and then subsequent changes to the job will be rehearsable: ",
 			"",
 			"Test name |",
 			"--- |",
 		}
-		for _, disabled := range disabledDueToNetworkAccessToggle {
-			lines = append(lines, disabled)
-		}
+		lines = append(lines, disabledDueToNetworkAccessToggle...)
 	}
 	return lines
 }

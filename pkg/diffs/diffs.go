@@ -30,9 +30,9 @@ const (
 
 // GetChangedCiopConfigs identifies CI Operator configurations that are new or have changed and
 // determines for each which jobs are impacted if job-specific changes were made
-func GetChangedCiopConfigs(masterConfig, prConfig config.DataByFilename, logger *logrus.Entry) (config.DataByFilename, map[string]sets.Set[string]) {
-	ret := config.DataByFilename{}
-	affectedJobs := map[string]sets.Set[string]{}
+func GetChangedCiopConfigs(masterConfig, prConfig config.DataByFilename, logger *logrus.Entry) (configs config.DataByFilename, affectedJobs map[string]sets.Set[string], disabledDueToNetworkAccessToggle []string) {
+	configs = config.DataByFilename{}
+	affectedJobs = map[string]sets.Set[string]{}
 
 	for filename, newConfig := range prConfig {
 		oldConfig, ok := masterConfig[filename]
@@ -40,7 +40,7 @@ func GetChangedCiopConfigs(masterConfig, prConfig config.DataByFilename, logger 
 
 		// new ciop config
 		if !ok {
-			ret[filename] = newConfig
+			configs[filename] = newConfig
 			logger.WithField(logCiopConfig, filename).Info(newCiopConfigMsg)
 			continue
 		}
@@ -57,7 +57,7 @@ func GetChangedCiopConfigs(masterConfig, prConfig config.DataByFilename, logger 
 
 		if !equality.Semantic.DeepEqual(withoutTests(oldConfig.Configuration), withoutTests(newConfig.Configuration)) {
 			logger.WithField(logCiopConfig, filename).Info(changedCiopConfigMsg)
-			ret[filename] = newConfig
+			configs[filename] = newConfig
 			continue
 		}
 
@@ -65,10 +65,27 @@ func GetChangedCiopConfigs(masterConfig, prConfig config.DataByFilename, logger 
 		newTests := getTestsByName(newConfig.Configuration.Tests)
 
 		for as, test := range newTests {
-			if !equality.Semantic.DeepEqual(oldTests[as], test) {
-				logger.WithField(logCiopConfig, filename).Info(changedCiopConfigMsg)
-				ret[filename] = newConfig
-				jobs.Insert(as)
+			oldTest := oldTests[as]
+			if !equality.Semantic.DeepEqual(oldTest, test) {
+				testLogger := logger.WithField(logCiopConfig, filename)
+				testLogger.Info(changedCiopConfigMsg)
+				configs[filename] = newConfig
+
+				// We don't allow rehearsals of tests that specifically toggle 'restrict_network_access' off
+				nonRehearsableBecauseNetworkRestrictionOff := false
+				if oldTest.RestrictNetworkAccess != test.RestrictNetworkAccess {
+					nonRehearsableBecauseNetworkRestrictionOff = test.RestrictNetworkAccess != nil && !*test.RestrictNetworkAccess
+				}
+				if nonRehearsableBecauseNetworkRestrictionOff {
+					testLogger.Debug("new test configuration has 'restrict_network_access' set to false, not rehearsable")
+					prefix := jobconfig.PresubmitPrefix
+					if test.IsPeriodic() {
+						prefix = jobconfig.PeriodicPrefix
+					}
+					disabledDueToNetworkAccessToggle = append(disabledDueToNetworkAccessToggle, newConfig.Info.JobName(prefix, as))
+				} else {
+					jobs.Insert(as)
+				}
 			}
 		}
 
@@ -76,7 +93,7 @@ func GetChangedCiopConfigs(masterConfig, prConfig config.DataByFilename, logger 
 			affectedJobs[filename] = jobs
 		}
 	}
-	return ret, affectedJobs
+	return
 }
 
 // GetChangedPresubmits returns a mapping of repo to presubmits to execute.

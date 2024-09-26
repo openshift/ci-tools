@@ -954,9 +954,10 @@ func TestFilterPresubmits(t *testing.T) {
 	canBeRehearsed := map[string]string{"pj-rehearse.openshift.io/can-be-rehearsed": "true"}
 
 	testCases := []struct {
-		description string
-		presubmits  config.Presubmits
-		expected    config.Presubmits
+		description   string
+		presubmits    config.Presubmits
+		disabledNames []string
+		expected      config.Presubmits
 	}{
 		{
 			description: "basic presubmit job, allowed",
@@ -974,6 +975,12 @@ func TestFilterPresubmits(t *testing.T) {
 			expected:    config.Presubmits{},
 		},
 		{
+			description:   "job in disabled list, not allowed",
+			presubmits:    config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test")}},
+			disabledNames: []string{"pull-ci-organization-repo-master-test"},
+			expected:      config.Presubmits{},
+		},
+		{
 			description: "multiple jobs, some allowed",
 			presubmits: config.Presubmits{"org/repo": {
 				*makePresubmit(canBeRehearsed, true, "pull-ci-organization-repo-master-test-0"),
@@ -981,8 +988,10 @@ func TestFilterPresubmits(t *testing.T) {
 				*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test-2"),
 				*makePresubmit(map[string]string{}, false, "pull-ci-organization-repo-master-test-3"),
 				*makePresubmit(canBeRehearsed, true, "pull-ci-organization-repo-master-test-4"),
-				*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test-5")},
+				*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test-5"),
+				*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test-6")},
 			},
+			disabledNames: []string{"pull-ci-organization-repo-master-test-6"},
 			expected: config.Presubmits{"org/repo": {
 				*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test-2"),
 				*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test-5")},
@@ -998,7 +1007,7 @@ func TestFilterPresubmits(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			presubmits := filterPresubmits(tc.presubmits, logrus.New())
+			presubmits := filterPresubmits(tc.presubmits, tc.disabledNames, logrus.New())
 			if diff := cmp.Diff(tc.expected, presubmits, cmp.AllowUnexported(prowconfig.Brancher{}, prowconfig.RegexpChangeMatcher{}, prowconfig.Presubmit{})); diff != "" {
 				t.Fatalf("filtered didn't match expected, diff: %s", diff)
 			}
@@ -1037,9 +1046,10 @@ func TestFilterPeriodics(t *testing.T) {
 	canBeRehearsed := map[string]string{"pj-rehearse.openshift.io/can-be-rehearsed": "true"}
 
 	testCases := []struct {
-		description string
-		periodics   config.Periodics
-		expected    config.Periodics
+		description   string
+		periodics     config.Periodics
+		disabledNames []string
+		expected      config.Periodics
 	}{
 		{
 			description: "basic periodic job, allowed",
@@ -1057,15 +1067,23 @@ func TestFilterPeriodics(t *testing.T) {
 			expected:    config.Periodics{},
 		},
 		{
+			description:   "job in disabled list, not allowed",
+			periodics:     config.Periodics{"periodic-test": *makePeriodic(canBeRehearsed, false)},
+			disabledNames: []string{"periodic-test"},
+			expected:      config.Periodics{},
+		},
+		{
 			description: "multiple repos, some jobs allowed",
 			periodics: config.Periodics{"periodic-test": *makePeriodic(canBeRehearsed, false),
-				"other-test": *makePeriodic(map[string]string{}, false)},
-			expected: config.Periodics{"periodic-test": *makePeriodic(canBeRehearsed, false)},
+				"other-test":    *makePeriodic(map[string]string{}, false),
+				"disabled-test": *makePeriodic(canBeRehearsed, false)},
+			disabledNames: []string{"disabled-test"},
+			expected:      config.Periodics{"periodic-test": *makePeriodic(canBeRehearsed, false)},
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			periodics := filterPeriodics(tc.periodics, logrus.New())
+			periodics := filterPeriodics(tc.periodics, tc.disabledNames, logrus.New())
 			if diff := cmp.Diff(tc.expected, periodics, cmp.AllowUnexported(prowconfig.Brancher{}, prowconfig.RegexpChangeMatcher{}, prowconfig.Periodic{})); diff != "" {
 				t.Fatalf("filtered didn't match expected, diff: %s", diff)
 			}

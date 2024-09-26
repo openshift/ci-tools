@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -194,11 +195,11 @@ func contextFor(source *prowconfig.Presubmit) string {
 
 }
 
-func filterPresubmits(changedPresubmits config.Presubmits, logger logrus.FieldLogger) config.Presubmits {
+func filterPresubmits(changedPresubmits config.Presubmits, disabledJobs []string, logger logrus.FieldLogger) config.Presubmits {
 	presubmits := config.Presubmits{}
 	for repo, jobs := range changedPresubmits {
 		for _, job := range jobs {
-			jobLogger := logger.WithFields(logrus.Fields{"repo": repo, "job": job.Name})
+			jobLogger := logger.WithFields(logrus.Fields{"repo": repo, "job-name": job.Name})
 
 			if job.Hidden {
 				jobLogger.Debug("hidden jobs are not allowed to be rehearsed")
@@ -215,6 +216,11 @@ func filterPresubmits(changedPresubmits config.Presubmits, logger logrus.FieldLo
 				continue
 			}
 
+			if slices.Contains(disabledJobs, job.Name) {
+				jobLogger.Debug("cannot rehearse due to toggle of 'restrict_network_access' to 'false'")
+				continue
+			}
+
 			presubmits.Add(repo, job, config.GetSourceType(job.Labels))
 		}
 	}
@@ -222,10 +228,10 @@ func filterPresubmits(changedPresubmits config.Presubmits, logger logrus.FieldLo
 	return presubmits
 }
 
-func filterPeriodics(changedPeriodics config.Periodics, logger logrus.FieldLogger) config.Periodics {
+func filterPeriodics(changedPeriodics config.Periodics, disabledJobs []string, logger logrus.FieldLogger) config.Periodics {
 	periodics := config.Periodics{}
 	for _, periodic := range changedPeriodics {
-		jobLogger := logger.WithField("job", periodic.Name)
+		jobLogger := logger.WithField("job-name", periodic.Name)
 
 		if periodic.Hidden {
 			jobLogger.Warn("hidden jobs are not allowed to be rehearsed")
@@ -234,6 +240,11 @@ func filterPeriodics(changedPeriodics config.Periodics, logger logrus.FieldLogge
 
 		if !hasRehearsableLabel(periodic.Labels) {
 			jobLogger.Debugf("job is not allowed to be rehearsed. Label %s is required", jobconfig.CanBeRehearsedLabel)
+			continue
+		}
+
+		if slices.Contains(disabledJobs, periodic.Name) {
+			jobLogger.Debug("cannot rehearse due to toggle of 'restrict_network_access' to 'false'")
 			continue
 		}
 
@@ -270,11 +281,6 @@ func getResolvedConfigForTest(ciopConfig config.DataWithInfo, resolver registry.
 	ciopConfigResolved, err := registry.ResolveConfig(resolver, ciopCopy.Configuration)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed resolve ReleaseBuildConfiguration: %w", err)
-	}
-
-	// the 'restrict_network_access' config on the test will be set to nil (effectively: 'true') regardless of configured value
-	for i := range ciopConfigResolved.Tests {
-		ciopConfigResolved.Tests[i].RestrictNetworkAccess = nil
 	}
 
 	ciOpConfigContent, err := yaml.Marshal(ciopConfigResolved)

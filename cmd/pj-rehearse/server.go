@@ -165,7 +165,7 @@ func (s *server) respondToNewPR(pullRequest *github.PullRequest, logger *logrus.
 	repo := pullRequest.Base.Repo.Name
 	number := pullRequest.Number
 	user := pullRequest.User.Login
-	presubmits, periodics, err := s.getAffectedJobs(pullRequest, logger)
+	presubmits, periodics, disabledDueToNetworkAccessToggle, err := s.getAffectedJobs(pullRequest, logger)
 	if err != nil {
 		comment := "unable to determine affected jobs. This could be due to a branch that needs to be rebased."
 		s.reportFailure(comment, err, org, repo, user, number, false, true, logger)
@@ -177,6 +177,7 @@ func (s *server) respondToNewPR(pullRequest *github.PullRequest, logger *logrus.
 	}
 
 	lines, jobCount := s.getJobsTableLines(presubmits, periodics, user)
+	lines = append(lines, s.getDisabledRehearsalsLines(disabledDueToNetworkAccessToggle)...)
 	if foundJobsToRehearse {
 		if jobCount > s.rehearsalConfig.MaxLimit {
 			fileLocation := s.dumpAffectedJobsToGCS(pullRequest, presubmits, periodics, jobCount, logger)
@@ -226,7 +227,7 @@ func (s *server) handleNewPush(l *logrus.Entry, event github.PullRequestEvent) {
 			}
 		}
 
-		presubmits, periodics, err := s.getAffectedJobs(pullRequest, logger)
+		presubmits, periodics, disabledDueToNetworkAccessToggle, err := s.getAffectedJobs(pullRequest, logger)
 		user := pullRequest.User.Login
 		if err != nil {
 			comment := "unable to determine affected jobs. This could be due to a branch that needs to be rebased."
@@ -249,6 +250,7 @@ func (s *server) handleNewPush(l *logrus.Entry, event github.PullRequestEvent) {
 			fileLocation := s.dumpAffectedJobsToGCS(pullRequest, presubmits, periodics, jobCount, logger)
 			jobTableLines = append(jobTableLines, fmt.Sprintf("A full list of affected jobs can be found [here](%s%s)", s.rehearsalConfig.GCSBrowserPrefix, fileLocation))
 		}
+		jobTableLines = append(jobTableLines, s.getDisabledRehearsalsLines(disabledDueToNetworkAccessToggle)...)
 		jobTableLines = append(jobTableLines, s.getUsageDetailsLines()...)
 		if err := s.ghc.CreateComment(org, repo, number, strings.Join(jobTableLines, "\n")); err != nil {
 			logger.WithError(err).Error("failed to create comment")
@@ -345,7 +347,7 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 				//TODO(DPTP-2888): this is the point at which we can use repoClient.RevParse() to see if we even need to load the configs at all, and also prune the set of loaded configs to only the changed files
 
 				candidatePath := repoClient.Directory()
-				presubmits, periodics, changedTemplates, changedClusterProfiles, err := rc.DetermineAffectedJobs(candidate, candidatePath, logger)
+				presubmits, periodics, changedTemplates, changedClusterProfiles, _, err := rc.DetermineAffectedJobs(candidate, candidatePath, logger)
 				if err != nil {
 					logger.WithError(err).Error("couldn't determine affected jobs")
 					s.reportFailure("unable to determine affected jobs", err, org, repo, user, number, true, false, logger)
@@ -409,14 +411,14 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 	}
 }
 
-func (s *server) getAffectedJobs(pullRequest *github.PullRequest, logger *logrus.Entry) (config.Presubmits, config.Periodics, error) {
+func (s *server) getAffectedJobs(pullRequest *github.PullRequest, logger *logrus.Entry) (config.Presubmits, config.Periodics, []string, error) {
 	rc := s.rehearsalConfig
 	org := pullRequest.Base.Repo.Owner.Login
 	repo := pullRequest.Base.Repo.Name
 	repoClient, err := s.getRepoClient(org, repo)
 	if err != nil {
 		logger.WithError(err).Error("couldn't create repo client")
-		return nil, nil, fmt.Errorf("couldn't create repo client: %w", err)
+		return nil, nil, nil, fmt.Errorf("couldn't create repo client: %w", err)
 	}
 	defer func() {
 		if err := repoClient.Clean(); err != nil {
@@ -427,14 +429,14 @@ func (s *server) getAffectedJobs(pullRequest *github.PullRequest, logger *logrus
 	candidate, err := s.prepareCandidate(repoClient, pullRequest)
 	if err != nil {
 		logger.WithError(err).Error("couldn't prepare candidate")
-		return nil, nil, fmt.Errorf("couldn't prepare candidate: %w", err)
+		return nil, nil, nil, fmt.Errorf("couldn't prepare candidate: %w", err)
 	}
 
 	//TODO(DPTP-2888): this is the point at which we can use repoClient.RevParse() to see if we even need to load the configs at all, and also prune the set of loaded configs to only the changed files
 
 	candidatePath := repoClient.Directory()
-	presubmits, periodics, _, _, err := rc.DetermineAffectedJobs(candidate, candidatePath, logger)
-	return presubmits, periodics, err
+	presubmits, periodics, _, _, disabledDueToNetworkAccessToggle, err := rc.DetermineAffectedJobs(candidate, candidatePath, logger)
+	return presubmits, periodics, disabledDueToNetworkAccessToggle, err
 }
 
 func (s *server) reportFailure(message string, err error, org, repo, user string, number int, addContact, addUsageDetails bool, l *logrus.Entry) {
@@ -549,6 +551,23 @@ func (s *server) getUsageDetailsLines() []string {
 		fmt.Sprintf("If you would like the `%s` label removed, comment: `%s` to re-block merging.", rehearse.RehearsalsAckLabel, rehearseReject),
 		"</details>",
 	}
+}
+
+func (s *server) getDisabledRehearsalsLines(disabledDueToNetworkAccessToggle []string) []string {
+	var lines []string
+	if len(disabledDueToNetworkAccessToggle) > 0 {
+		lines = append(lines, "The following jobs are not rehearsable due to the `restrict_network_access` field being set to `false` in this PR. You must first merge this PR, and then subsequent changes to the job will be rehearsable: ")
+		lines = []string{
+			"The following jobs are not rehearsable due to the `restrict_network_access` field being set to `false` in this PR. You must first merge this PR, and then subsequent changes to the job will be rehearsable: ",
+			"",
+			"Test name |",
+			"--- |",
+		}
+		for _, disabled := range disabledDueToNetworkAccessToggle {
+			lines = append(lines, disabled)
+		}
+	}
+	return lines
 }
 
 func (s *server) acknowledgeRehearsals(org, repo string, number int, logger *logrus.Entry) {

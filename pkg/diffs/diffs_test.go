@@ -12,6 +12,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/util/sets"
+	utilpointer "k8s.io/utils/pointer"
 	pjapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 
@@ -62,10 +63,11 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name                 string
-		configGenerator      func(*testing.T) (before, after config.DataByFilename)
-		expected             func() config.DataByFilename
-		expectedAffectedJobs map[string]sets.Set[string]
+		name                                     string
+		configGenerator                          func(*testing.T) (before, after config.DataByFilename)
+		expected                                 func() config.DataByFilename
+		expectedAffectedJobs                     map[string]sets.Set[string]
+		expectedDisabledDueToNetworkAccessToggle []string
 	}{{
 		name: "no changes",
 		configGenerator: func(t *testing.T) (config.DataByFilename, config.DataByFilename) {
@@ -110,72 +112,132 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 			return config.DataByFilename{"org-repo-branch.yaml": expected}
 		},
 		expectedAffectedJobs: map[string]sets.Set[string]{},
+	}, {
+		name: "changed tests",
+		configGenerator: func(t *testing.T) (config.DataByFilename, config.DataByFilename) {
+			before := config.DataByFilename{"org-repo-branch.yaml": baseCiopConfig}
+			afterConfig := config.DataWithInfo{}
+			if err := deepcopy.Copy(&afterConfig, &baseCiopConfig); err != nil {
+				t.Fatal(err)
+			}
+			afterConfig.Configuration.Tests[0].Commands = "changed commands"
+			after := config.DataByFilename{"org-repo-branch.yaml": afterConfig}
+			return before, after
+		},
+		expected: func() config.DataByFilename {
+			expected := config.DataWithInfo{}
+			if err := deepcopy.Copy(&expected, &baseCiopConfig); err != nil {
+				t.Fatal(err)
+			}
+			expected.Configuration.Tests[0].Commands = "changed commands"
+			return config.DataByFilename{"org-repo-branch.yaml": expected}
+		},
+		expectedAffectedJobs: map[string]sets.Set[string]{"org-repo-branch.yaml": {"unit": sets.Empty{}}},
+	}, {
+		name: "changed multiple tests",
+		configGenerator: func(t *testing.T) (config.DataByFilename, config.DataByFilename) {
+			before := config.DataByFilename{"org-repo-branch.yaml": baseCiopConfig}
+			afterConfig := config.DataWithInfo{}
+			if err := deepcopy.Copy(&afterConfig, &baseCiopConfig); err != nil {
+				t.Fatal(err)
+			}
+			afterConfig.Configuration.Tests[0].Commands = "changed commands"
+			afterConfig.Configuration.Tests[1].Commands = "changed commands"
+			after := config.DataByFilename{"org-repo-branch.yaml": afterConfig}
+			return before, after
+		},
+		expected: func() config.DataByFilename {
+			expected := config.DataWithInfo{}
+			if err := deepcopy.Copy(&expected, &baseCiopConfig); err != nil {
+				t.Fatal(err)
+			}
+			expected.Configuration.Tests[0].Commands = "changed commands"
+			expected.Configuration.Tests[1].Commands = "changed commands"
+			return config.DataByFilename{"org-repo-branch.yaml": expected}
+		},
+		expectedAffectedJobs: map[string]sets.Set[string]{
+			"org-repo-branch.yaml": {
+				"unit": sets.Empty{},
+				"e2e":  sets.Empty{},
+			},
+		},
+	}, {
+		name: "one potential rehearsal disabled due to un-restricted network access toggle 'true' to 'false'",
+		configGenerator: func(t *testing.T) (config.DataByFilename, config.DataByFilename) {
+			before := config.DataByFilename{"org-repo-branch.yaml": baseCiopConfig}
+			afterConfig := config.DataWithInfo{}
+			if err := deepcopy.Copy(&afterConfig, &baseCiopConfig); err != nil {
+				t.Fatal(err)
+			}
+			afterConfig.Configuration.Tests[0].RestrictNetworkAccess = utilpointer.Bool(false)
+			afterConfig.Configuration.Tests[1].RestrictNetworkAccess = utilpointer.Bool(true)
+			after := config.DataByFilename{"org-repo-branch.yaml": afterConfig}
+			return before, after
+		},
+		expected: func() config.DataByFilename {
+			expected := config.DataWithInfo{}
+			if err := deepcopy.Copy(&expected, &baseCiopConfig); err != nil {
+				t.Fatal(err)
+			}
+			expected.Configuration.Tests[0].RestrictNetworkAccess = utilpointer.Bool(false)
+			expected.Configuration.Tests[1].RestrictNetworkAccess = utilpointer.Bool(true)
+			return config.DataByFilename{"org-repo-branch.yaml": expected}
+		},
+		expectedAffectedJobs: map[string]sets.Set[string]{
+			"org-repo-branch.yaml": {
+				"e2e": sets.Empty{},
+			},
+		},
+		expectedDisabledDueToNetworkAccessToggle: []string{"pull-ci-org-repo-branch-unit"},
+	}, {
+		name: "potential rehearsal for new test disabled due to un-restricted network access set to 'false'",
+		configGenerator: func(t *testing.T) (config.DataByFilename, config.DataByFilename) {
+			before := config.DataByFilename{"org-repo-branch.yaml": baseCiopConfig}
+			afterConfig := config.DataWithInfo{}
+			if err := deepcopy.Copy(&afterConfig, &baseCiopConfig); err != nil {
+				t.Fatal(err)
+			}
+			afterConfig.Configuration.Tests = append(afterConfig.Configuration.Tests, cioperatorapi.TestStepConfiguration{
+				As:                    "lint",
+				Commands:              "make lint",
+				RestrictNetworkAccess: utilpointer.Bool(false),
+			})
+			after := config.DataByFilename{"org-repo-branch.yaml": afterConfig}
+			return before, after
+		},
+		expected: func() config.DataByFilename {
+			expected := config.DataWithInfo{}
+			if err := deepcopy.Copy(&expected, &baseCiopConfig); err != nil {
+				t.Fatal(err)
+			}
+			expected.Configuration.Tests = append(expected.Configuration.Tests, cioperatorapi.TestStepConfiguration{
+				As:                    "lint",
+				Commands:              "make lint",
+				RestrictNetworkAccess: utilpointer.Bool(false),
+			})
+			return config.DataByFilename{"org-repo-branch.yaml": expected}
+		},
+		expectedAffectedJobs:                     map[string]sets.Set[string]{},
+		expectedDisabledDueToNetworkAccessToggle: []string{"pull-ci-org-repo-branch-lint"},
 	},
-		{
-			name: "changed tests",
-			configGenerator: func(t *testing.T) (config.DataByFilename, config.DataByFilename) {
-				before := config.DataByFilename{"org-repo-branch.yaml": baseCiopConfig}
-				afterConfig := config.DataWithInfo{}
-				if err := deepcopy.Copy(&afterConfig, &baseCiopConfig); err != nil {
-					t.Fatal(err)
-				}
-				afterConfig.Configuration.Tests[0].Commands = "changed commands"
-				after := config.DataByFilename{"org-repo-branch.yaml": afterConfig}
-				return before, after
-			},
-			expected: func() config.DataByFilename {
-				expected := config.DataWithInfo{}
-				if err := deepcopy.Copy(&expected, &baseCiopConfig); err != nil {
-					t.Fatal(err)
-				}
-				expected.Configuration.Tests[0].Commands = "changed commands"
-				return config.DataByFilename{"org-repo-branch.yaml": expected}
-			},
-			expectedAffectedJobs: map[string]sets.Set[string]{"org-repo-branch.yaml": {"unit": sets.Empty{}}},
-		},
-		{
-			name: "changed multiple tests",
-			configGenerator: func(t *testing.T) (config.DataByFilename, config.DataByFilename) {
-				before := config.DataByFilename{"org-repo-branch.yaml": baseCiopConfig}
-				afterConfig := config.DataWithInfo{}
-				if err := deepcopy.Copy(&afterConfig, &baseCiopConfig); err != nil {
-					t.Fatal(err)
-				}
-				afterConfig.Configuration.Tests[0].Commands = "changed commands"
-				afterConfig.Configuration.Tests[1].Commands = "changed commands"
-				after := config.DataByFilename{"org-repo-branch.yaml": afterConfig}
-				return before, after
-			},
-			expected: func() config.DataByFilename {
-				expected := config.DataWithInfo{}
-				if err := deepcopy.Copy(&expected, &baseCiopConfig); err != nil {
-					t.Fatal(err)
-				}
-				expected.Configuration.Tests[0].Commands = "changed commands"
-				expected.Configuration.Tests[1].Commands = "changed commands"
-				return config.DataByFilename{"org-repo-branch.yaml": expected}
-			},
-			expectedAffectedJobs: map[string]sets.Set[string]{
-				"org-repo-branch.yaml": {
-					"unit": sets.Empty{},
-					"e2e":  sets.Empty{},
-				},
-			},
-		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			before, after := tc.configGenerator(t)
-			actual, affectedJobs := GetChangedCiopConfigs(before, after, logrus.NewEntry(logrus.New()))
+			actual, affectedJobs, disabledDueToNetworkAccessToggle := GetChangedCiopConfigs(before, after, logrus.NewEntry(logrus.New()))
 			expected := tc.expected()
 
-			if !reflect.DeepEqual(expected, actual) {
-				t.Errorf("Detected changed ci-operator config changes differ from expected:\n%s", cmp.Diff(expected, actual))
+			if diff := cmp.Diff(expected, actual); diff != "" {
+				t.Errorf("Detected changed ci-operator config changes differ from expected:\n%s", diff)
 			}
 
-			if !reflect.DeepEqual(tc.expectedAffectedJobs, affectedJobs) {
-				t.Errorf("Affected jobs differ from expected:\n%s", cmp.Diff(tc.expectedAffectedJobs, affectedJobs, ignoreUnexported))
+			if diff := cmp.Diff(tc.expectedAffectedJobs, affectedJobs, ignoreUnexported); diff != "" {
+				t.Errorf("Affected jobs differ from expected:\n%s", diff)
+			}
+
+			if diff := cmp.Diff(tc.expectedDisabledDueToNetworkAccessToggle, disabledDueToNetworkAccessToggle); diff != "" {
+				t.Errorf("Actual disabledDueToNetworkAccessToggle differs from expected:\n%s", diff)
 			}
 		})
 	}

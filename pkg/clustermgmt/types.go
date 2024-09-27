@@ -53,9 +53,16 @@ type QuayioPullThroughCache struct {
 	MirrorURIs map[string]string `json:"mirrorURI,omitempty"`
 }
 
+type CertificateProjectLabel struct {
+	Key   string `json:"key,omitempty"`
+	Value string `json:"value,omitempty"`
+}
+
 type Certificate struct {
-	BaseDomains              map[string]string `json:"baseDomains,omitempty"`
-	ImageRegistryPublicHosts map[string]string `json:"imageRegistryPublicHosts,omitempty"`
+	BaseDomains              map[string]string                             `json:"baseDomains,omitempty"`
+	ImageRegistryPublicHosts map[string]string                             `json:"imageRegistryPublicHosts,omitempty"`
+	ClusterIssuer            map[string]map[string]string                  `json:"clusterIssuer,omitempty"`
+	ProjectLabel             map[string]map[string]CertificateProjectLabel `json:"projectLabel,omitempty"`
 }
 
 type Step interface {

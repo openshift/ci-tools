@@ -113,6 +113,8 @@ spec:
 					ImageRegistryPublicHosts: map[string]string{
 						"build99": "fake-public-host",
 					},
+					ClusterIssuer: map[string]map[string]string{"build99": {"apiserver-tls": "overridden"}},
+					ProjectLabel:  map[string]map[string]clustermgmt.CertificateProjectLabel{"build99": {"apps-tls": {Key: "foo-project", Value: "bar"}}},
 				},
 			}},
 			objects: []runtime.Object{
@@ -139,14 +141,14 @@ spec:
   - api.build99.fake-domain
   issuerRef:
     kind: ClusterIssuer
-    name: cert-issuer-aws
+    name: overridden
   secretName: apiserver-tls
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   labels:
-    aws-project: openshift-ci-infra
+    foo-project: bar
   name: apps-tls
   namespace: openshift-ingress
 spec:

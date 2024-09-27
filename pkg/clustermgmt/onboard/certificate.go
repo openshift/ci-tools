@@ -50,7 +50,7 @@ func (s *certificateStep) Run(ctx context.Context) error {
 		return fmt.Errorf("image registry public host: %w", err)
 	}
 
-	manifests := generateCertificateManifests(s.clusterInstall, baseDomain, host)
+	manifests := s.generateCertificateManifests(baseDomain, host)
 	manifestMarshaled, err := citoolsyaml.MarshalMultidoc(yaml.Marshal, manifests...)
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
@@ -117,58 +117,62 @@ func (s *certificateStep) imageRegistryPublicHost(ctx context.Context, client ct
 	return "", fmt.Errorf("no public registry host could be located")
 }
 
-func generateCertificateManifests(ci *clustermgmt.ClusterInstall, baseDomain, imageRegistryHost string) []interface{} {
-	clusterName := ci.ClusterName
+func (s *certificateStep) generateCertificateManifests(baseDomain, imageRegistryHost string) []interface{} {
 	manifests := make([]interface{}, 0)
 
+	projLabelKey, projLabelValue := s.projectLabelOrDefault("apiserver-tls", "aws-project", "openshift-ci-infra")
 	apiServerCert := map[string]interface{}{
 		"kind": "Certificate",
 		"metadata": map[string]interface{}{
 			"labels": map[string]interface{}{
-				"aws-project": "openshift-ci-infra",
+				projLabelKey: projLabelValue,
 			},
 			"name":      "apiserver-tls",
 			"namespace": "openshift-config",
 		},
 		"spec": map[string]interface{}{
 			"dnsNames": []interface{}{
-				fmt.Sprintf("api.%s.%s", clusterName, baseDomain),
+				fmt.Sprintf("api.%s.%s", s.clusterInstall.ClusterName, baseDomain),
 			},
 			"issuerRef": map[string]interface{}{
 				"kind": "ClusterIssuer",
-				"name": "cert-issuer-aws",
+				"name": s.clusterIssuerOrDefault("apiserver-tls", "cert-issuer-aws"),
 			},
 			"secretName": "apiserver-tls",
 		},
 		"apiVersion": "cert-manager.io/v1",
 	}
+
+	projLabelKey, projLabelValue = s.projectLabelOrDefault("apps-tls", "aws-project", "openshift-ci-infra")
 	appsCert := map[string]interface{}{
 		"apiVersion": "cert-manager.io/v1",
 		"kind":       "Certificate",
 		"metadata": map[string]interface{}{
 			"labels": map[string]interface{}{
-				"aws-project": "openshift-ci-infra",
+				projLabelKey: projLabelValue,
 			},
 			"name":      "apps-tls",
 			"namespace": "openshift-ingress",
 		},
 		"spec": map[string]interface{}{
 			"dnsNames": []interface{}{
-				fmt.Sprintf("*.apps.%s.%s", clusterName, baseDomain),
+				fmt.Sprintf("*.apps.%s.%s", s.clusterInstall.ClusterName, baseDomain),
 			},
 			"issuerRef": map[string]interface{}{
 				"kind": "ClusterIssuer",
-				"name": "cert-issuer-aws",
+				"name": s.clusterIssuerOrDefault("apps-tls", "cert-issuer-aws"),
 			},
 			"secretName": "apps-tls",
 		},
 	}
+
+	projLabelKey, projLabelValue = s.projectLabelOrDefault("registry-tls", "gcp-project", "openshift-ci-infra")
 	imageRegistryCert := map[string]interface{}{
 		"apiVersion": "cert-manager.io/v1",
 		"kind":       "Certificate",
 		"metadata": map[string]interface{}{
 			"labels": map[string]interface{}{
-				"gcp-project": "openshift-ci-infra",
+				projLabelKey: projLabelValue,
 			},
 			"name":      "registry-tls",
 			"namespace": "openshift-image-registry",
@@ -179,18 +183,38 @@ func generateCertificateManifests(ci *clustermgmt.ClusterInstall, baseDomain, im
 			},
 			"issuerRef": map[string]interface{}{
 				"kind": "ClusterIssuer",
-				"name": "cert-issuer",
+				"name": s.clusterIssuerOrDefault("registry-tls", "cert-issuer"),
 			},
 			"secretName": "public-route-tls",
 		},
 	}
 
-	if !(*ci.Onboard.OSD || *ci.Onboard.Hosted || *ci.Onboard.Unmanaged) {
+	if !(*s.clusterInstall.Onboard.OSD || *s.clusterInstall.Onboard.Hosted || *s.clusterInstall.Onboard.Unmanaged) {
 		manifests = append(manifests, apiServerCert, appsCert)
 	}
 	manifests = append(manifests, imageRegistryCert)
 
 	return manifests
+}
+
+func (s *certificateStep) clusterIssuerOrDefault(certificate, def string) string {
+	ci := s.clusterInstall.Onboard.Certificate.ClusterIssuer
+	if cluster, ok := ci[s.clusterInstall.ClusterName]; ok {
+		if clusterIssuer, ok := cluster[certificate]; ok {
+			return clusterIssuer
+		}
+	}
+	return def
+}
+
+func (s *certificateStep) projectLabelOrDefault(certificate, defKey, defValue string) (string, string) {
+	ci := s.clusterInstall.Onboard.Certificate.ProjectLabel
+	if projLabel, ok := ci[s.clusterInstall.ClusterName]; ok {
+		if keyVal, ok := projLabel[certificate]; ok {
+			return keyVal.Key, keyVal.Value
+		}
+	}
+	return defKey, defValue
 }
 
 func NewCertificateStep(log *logrus.Entry, clusterInstall *clustermgmt.ClusterInstall,

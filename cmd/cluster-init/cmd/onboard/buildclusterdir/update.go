@@ -65,12 +65,12 @@ func createSymlinks(log *logrus.Entry, clusterDir string, ci *clustermgmt.Cluste
 }
 
 func createRequiredDirs(log *logrus.Entry, clusterDir string) error {
-	for _, name := range []string{"assets"} {
+	for _, name := range []string{"assets", "cert-manager"} {
 		dir := path.Join(clusterDir, name)
 		_, err := os.Stat(dir)
 		if os.IsNotExist(err) {
 			log.WithField("dir", dir).Info("Creating directory")
-			if err := os.Mkdir(dir, 0777); err != nil {
+			if err := os.Mkdir(dir, 0755); err != nil {
 				return fmt.Errorf("mkdir %s: %w", dir, err)
 			}
 		} else if err != nil {

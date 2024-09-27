@@ -25,7 +25,6 @@ tests:
   commands: make unit CHANGED
   container:
     from: src
-  restrict_network_access: false
 - as: multistage
   steps:
     test:

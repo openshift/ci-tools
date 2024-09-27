@@ -117,7 +117,7 @@ type ref struct {
 	ref string
 }
 
-func (r RehearsalConfig) DetermineAffectedJobs(candidate RehearsalCandidate, candidatePath string, logger *logrus.Entry) (config.Presubmits, config.Periodics, *ConfigMaps, *ConfigMaps, error) {
+func (r RehearsalConfig) DetermineAffectedJobs(candidate RehearsalCandidate, candidatePath string, logger *logrus.Entry) (config.Presubmits, config.Periodics, *ConfigMaps, *ConfigMaps, []string, error) {
 	start := time.Now()
 	defer func() {
 		logger.Infof("determineAffectedJobs ran in %s", time.Since(start).Truncate(time.Second))
@@ -125,27 +125,30 @@ func (r RehearsalConfig) DetermineAffectedJobs(candidate RehearsalCandidate, can
 
 	prConfig, err := config.GetAllConfigs(candidatePath)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("could not load configuration from candidate revision of release repo: %w", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("could not load configuration from candidate revision of release repo: %w", err)
 	}
 	baseSHA := candidate.base.sha
 	masterConfig, err := config.GetAllConfigsFromSHA(candidatePath, baseSHA)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("could not load configuration from base revision of release repo: %w", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("could not load configuration from base revision of release repo: %w", err)
 	}
 
 	configUpdaterCfg, err := loadConfigUpdaterCfg(candidatePath)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("could not load plugin configuration from tested revision of release repo: %w", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("could not load plugin configuration from tested revision of release repo: %w", err)
 	}
 
 	presubmits := config.Presubmits{}
 	presubmits.AddAll(diffs.GetChangedPresubmits(masterConfig.Prow, prConfig.Prow, logger), config.ChangedPresubmit)
 	periodics := config.Periodics{}
 	periodics.AddAll(diffs.GetChangedPeriodics(masterConfig.Prow, prConfig.Prow, logger), config.ChangedPeriodic)
+	var disabledDueToNetworkAccessToggle []string
 
 	// We can only detect changes if we managed to load both ci-operator config versions
 	if masterConfig.CiOperator != nil && prConfig.CiOperator != nil {
-		changedCiopConfigData, affectedJobs := diffs.GetChangedCiopConfigs(masterConfig.CiOperator, prConfig.CiOperator, logger)
+		var changedCiopConfigData config.DataByFilename
+		var affectedJobs map[string]sets.Set[string]
+		changedCiopConfigData, affectedJobs, disabledDueToNetworkAccessToggle = diffs.GetChangedCiopConfigs(masterConfig.CiOperator, prConfig.CiOperator, logger)
 		presubmitsForCiopConfigs, periodicsForCiopConfigs := diffs.GetJobsForCiopConfigs(prConfig.Prow, changedCiopConfigData, affectedJobs, logger)
 		presubmits.AddAll(presubmitsForCiopConfigs, config.ChangedCiopConfig)
 		periodics.AddAll(periodicsForCiopConfigs, config.ChangedCiopConfig)
@@ -155,7 +158,7 @@ func (r RehearsalConfig) DetermineAffectedJobs(candidate RehearsalCandidate, can
 	if !r.NoRegistry {
 		changedRegistrySteps, err = determineChangedRegistrySteps(candidatePath, baseSHA, logger)
 		if err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("could not determine changed registry steps: %w", err)
+			return nil, nil, nil, nil, nil, fmt.Errorf("could not determine changed registry steps: %w", err)
 		}
 		presubmitsForRegistry, periodicsForRegistry := SelectJobsForChangedRegistry(changedRegistrySteps, prConfig.Prow.JobConfig.PresubmitsStatic, prConfig.Prow.JobConfig.Periodics, prConfig.CiOperator, logger)
 		presubmits.AddAll(presubmitsForRegistry, config.ChangedRegistryContent)
@@ -166,7 +169,7 @@ func (r RehearsalConfig) DetermineAffectedJobs(candidate RehearsalCandidate, can
 	if !r.NoTemplates {
 		changedTemplates, err = determineChangedTemplates(candidatePath, baseSHA, candidate.head.sha, candidate.prNumber, configUpdaterCfg, logger)
 		if err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("could not determine changed templates: %w", err)
+			return nil, nil, nil, nil, nil, fmt.Errorf("could not determine changed templates: %w", err)
 		}
 		randomJobsForChangedTemplates := AddRandomJobsForChangedTemplates(changedTemplates.ProductionNames, presubmits, prConfig.Prow.JobConfig.PresubmitsStatic, logger)
 		presubmits.AddAll(randomJobsForChangedTemplates, config.ChangedTemplate)
@@ -176,13 +179,13 @@ func (r RehearsalConfig) DetermineAffectedJobs(candidate RehearsalCandidate, can
 	if !r.NoClusterProfiles {
 		changedClusterProfiles, err = determineChangedClusterProfiles(candidatePath, baseSHA, candidate.head.sha, candidate.prNumber, configUpdaterCfg, logger)
 		if err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("could not determine changed cluster profiles: %w", err)
+			return nil, nil, nil, nil, nil, fmt.Errorf("could not determine changed cluster profiles: %w", err)
 		}
 		presubmitsForClusterProfiles := diffs.GetPresubmitsForClusterProfiles(prConfig.Prow, changedClusterProfiles.ProductionNames, logger)
 		presubmits.AddAll(presubmitsForClusterProfiles, config.ChangedClusterProfile)
 	}
 
-	return filterPresubmits(presubmits, logger), filterPeriodics(periodics, logger), changedTemplates, changedClusterProfiles, nil
+	return filterPresubmits(presubmits, disabledDueToNetworkAccessToggle, logger), filterPeriodics(periodics, disabledDueToNetworkAccessToggle, logger), changedTemplates, changedClusterProfiles, disabledDueToNetworkAccessToggle, nil
 }
 
 func (r RehearsalConfig) SetupJobs(candidate RehearsalCandidate, candidatePath string, presubmits config.Presubmits, periodics config.Periodics, rehearsalTemplates, rehearsalClusterProfiles *ConfigMaps, limit int, logger *logrus.Entry) (*config.ReleaseRepoConfig, *prowapi.Refs, []*prowconfig.Presubmit, error) {

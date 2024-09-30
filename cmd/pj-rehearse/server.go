@@ -563,6 +563,7 @@ func (s *server) getDisabledRehearsalsLines(disabledDueToNetworkAccessToggle []s
 			"--- |",
 		}
 		lines = append(lines, disabledDueToNetworkAccessToggle...)
+		lines = append(lines, "") // For formatting
 	}
 	return lines
 }

@@ -42,6 +42,7 @@ type Onboard struct {
 	UseTokenFileInKubeconfig *bool                  `json:"useTokenFileInKubeconfig,omitempty"`
 	Dex                      Dex                    `json:"dex,omitempty"`
 	QuayioPullThroughCache   QuayioPullThroughCache `json:"quayioPullThroughCache,omitempty"`
+	Certificate              Certificate            `json:"certificate,omitempty"`
 }
 
 type Dex struct {
@@ -50,6 +51,18 @@ type Dex struct {
 
 type QuayioPullThroughCache struct {
 	MirrorURIs map[string]string `json:"mirrorURI,omitempty"`
+}
+
+type CertificateProjectLabel struct {
+	Key   string `json:"key,omitempty"`
+	Value string `json:"value,omitempty"`
+}
+
+type Certificate struct {
+	BaseDomains              map[string]string                             `json:"baseDomains,omitempty"`
+	ImageRegistryPublicHosts map[string]string                             `json:"imageRegistryPublicHosts,omitempty"`
+	ClusterIssuer            map[string]map[string]string                  `json:"clusterIssuer,omitempty"`
+	ProjectLabel             map[string]map[string]CertificateProjectLabel `json:"projectLabel,omitempty"`
 }
 
 type Step interface {

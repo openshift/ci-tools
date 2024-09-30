@@ -226,6 +226,10 @@ func generateConfig(ctx context.Context, log *logrus.Entry, clusterInstall clust
 				kubeClient := kubeClientFunc(kubeconfigs, ci, opts.update)
 				return clustermgmtonboard.NewQuayioPullThroughCacheStep(log, ci, kubeClient).Run(ctx)
 			},
+			func(log *logrus.Entry, ci *clustermgmt.ClusterInstall) error {
+				kubeClient := kubeClientFunc(kubeconfigs, ci, opts.update)
+				return clustermgmtonboard.NewCertificateStep(log, ci, kubeClient).Run(ctx)
+			},
 		}
 		if !opts.update {
 			steps = append(steps, buildclusters.UpdateBuildClusters)

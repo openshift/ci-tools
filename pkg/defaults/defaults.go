@@ -849,7 +849,7 @@ func FromConfigStatic(config *api.ReleaseBuildConfiguration) api.GraphConfigurat
 					DockerfilePath: bundleConfig.DockerfilePath,
 				},
 			}
-			buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: bundle})
+			buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: bundle.WithBundleImage(true)})
 			// Build index generator
 			indexName := api.PipelineImageStreamTagReference(api.IndexName(bundleConfig.As))
 			updateGraph := bundleConfig.UpdateGraph
@@ -869,7 +869,7 @@ func FromConfigStatic(config *api.ReleaseBuildConfiguration) api.GraphConfigurat
 					DockerfilePath: steps.IndexDockerfileName,
 				},
 			}
-			buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: index})
+			buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: index.WithBundleImage(true)})
 		}
 		// Build non-named bundles following old naming system
 		var bundles []string
@@ -884,7 +884,7 @@ func FromConfigStatic(config *api.ReleaseBuildConfiguration) api.GraphConfigurat
 					DockerfilePath: bundle.DockerfilePath,
 				},
 			}
-			buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: image})
+			buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: image.WithBundleImage(true)})
 		}
 		if len(bundles) > 0 {
 			// Build index generator
@@ -900,7 +900,7 @@ func FromConfigStatic(config *api.ReleaseBuildConfiguration) api.GraphConfigurat
 					DockerfilePath: steps.IndexDockerfileName,
 				},
 			}
-			buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: image})
+			buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: image.WithBundleImage(true)})
 		}
 	}
 

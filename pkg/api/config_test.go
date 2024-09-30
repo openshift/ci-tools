@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"k8s.io/utils/pointer"
 
@@ -196,7 +197,7 @@ func TestWithPresubmitFrom(t *testing.T) {
 				t.Errorf("Error differs from expected:\n%s", errDiff)
 			}
 
-			if diff := cmp.Diff(tc.expected, actual); tc.expectedError == nil && diff != "" {
+			if diff := cmp.Diff(tc.expected, actual, cmpopts.IgnoreUnexported(ProjectDirectoryImageBuildStepConfiguration{})); tc.expectedError == nil && diff != "" {
 				t.Errorf("Result differs from expected:\n%s", diff)
 			}
 		})

@@ -809,7 +809,7 @@ func TestPruneUnusedReplacements(t *testing.T) {
 			if err := pruneUnusedReplacements(tc.in, tc.allSourceImages); err != nil {
 				t.Fatalf("pruneUnusedReplacements failed: %v", err)
 			}
-			if diff := cmp.Diff(tc.in, tc.expected, cmpopts.EquateEmpty()); diff != "" {
+			if diff := cmp.Diff(tc.in, tc.expected, cmpopts.EquateEmpty(), cmpopts.IgnoreUnexported(api.ProjectDirectoryImageBuildStepConfiguration{})); diff != "" {
 				t.Errorf("result differs from expected: %s", diff)
 			}
 		})
@@ -912,7 +912,7 @@ func TestPruneOCPBuilderReplacements(t *testing.T) {
 				t.Fatalf("pruning failed: %v", err)
 			}
 
-			if diff := cmp.Diff(tc.in, tc.expected); diff != "" {
+			if diff := cmp.Diff(tc.in, tc.expected, cmpopts.IgnoreUnexported(api.ProjectDirectoryImageBuildStepConfiguration{})); diff != "" {
 				t.Errorf("actual differs from expected: %s", diff)
 			}
 		})

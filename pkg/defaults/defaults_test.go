@@ -718,18 +718,18 @@ func TestStepConfigsForBuild(t *testing.T) {
 					Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceRoot}},
 				},
 			}, {
-				ProjectDirectoryImageBuildStepConfiguration: &api.ProjectDirectoryImageBuildStepConfiguration{
+				ProjectDirectoryImageBuildStepConfiguration: (&api.ProjectDirectoryImageBuildStepConfiguration{
 					To:                               "ci-index",
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{DockerfilePath: "index.Dockerfile"},
-				},
+				}).WithBundleImage(true),
 			}, {
-				ProjectDirectoryImageBuildStepConfiguration: &api.ProjectDirectoryImageBuildStepConfiguration{
+				ProjectDirectoryImageBuildStepConfiguration: (&api.ProjectDirectoryImageBuildStepConfiguration{
 					To: "ci-bundle0",
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						ContextDir:     "manifests/olm",
 						DockerfilePath: "bundle.Dockerfile",
 					},
-				},
+				}).WithBundleImage(true),
 			}, {
 				SourceStepConfiguration: &api.SourceStepConfiguration{
 					From:           "root",
@@ -798,18 +798,20 @@ func TestStepConfigsForBuild(t *testing.T) {
 					Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceRoot}},
 				},
 			}, {
-				ProjectDirectoryImageBuildStepConfiguration: &api.ProjectDirectoryImageBuildStepConfiguration{
-					To:                               "ci-index-my-bundle",
-					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{DockerfilePath: "index.Dockerfile"},
-				},
+				ProjectDirectoryImageBuildStepConfiguration: (&api.ProjectDirectoryImageBuildStepConfiguration{
+					To: "ci-index-my-bundle",
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						DockerfilePath: "index.Dockerfile",
+					},
+				}).WithBundleImage(true),
 			}, {
-				ProjectDirectoryImageBuildStepConfiguration: &api.ProjectDirectoryImageBuildStepConfiguration{
+				ProjectDirectoryImageBuildStepConfiguration: (&api.ProjectDirectoryImageBuildStepConfiguration{
 					To: "my-bundle",
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						ContextDir:     "manifests/olm",
 						DockerfilePath: "bundle.Dockerfile",
 					},
-				},
+				}).WithBundleImage(true),
 			}, {
 				SourceStepConfiguration: &api.SourceStepConfiguration{
 					From:           "root",
@@ -1191,7 +1193,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}
 			actual := sortStepConfig(graphConf.Steps)
 			expected := sortStepConfig(testCase.output)
-			if diff := cmp.Diff(actual, expected); diff != "" {
+			if diff := cmp.Diff(actual, expected, cmp.AllowUnexported(api.ProjectDirectoryImageBuildStepConfiguration{})); diff != "" {
 				t.Errorf("actual differs from expected: %s", diff)
 			}
 		})

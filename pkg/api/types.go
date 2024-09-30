@@ -2325,10 +2325,24 @@ type ProjectDirectoryImageBuildStepConfiguration struct {
 
 	// Ref is an optional string linking to the extra_ref in "org.repo" format that this belongs to
 	Ref string `json:"ref,omitempty"`
+
+	// isBundleImage indicates that this build step is a bundle image
+	isBundleImage bool
 }
 
 func (config ProjectDirectoryImageBuildStepConfiguration) TargetName() string {
 	return string(config.To)
+}
+
+// IsBundleImage returns the value of the isBundleImage field
+func (p *ProjectDirectoryImageBuildStepConfiguration) IsBundleImage() bool {
+	return p.isBundleImage
+}
+
+// WithBundleImage sets the isBundleImage field to the provided value
+func (p *ProjectDirectoryImageBuildStepConfiguration) WithBundleImage(isBundleImage bool) *ProjectDirectoryImageBuildStepConfiguration {
+	p.isBundleImage = isBundleImage
+	return p
 }
 
 // ProjectDirectoryImageBuildInputs holds inputs for an image build from the repo under test

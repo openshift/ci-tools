@@ -4,9 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/fs"
 	"os"
-	"path/filepath"
 
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/clusterinit/onboard"
@@ -53,26 +51,6 @@ func newUpdateConfigCmd(ctx context.Context, log *logrus.Entry) *cobra.Command {
 	return &cmd
 }
 
-func loadClusterInstalls(opts *updateConfigOptions) (map[string]*clusterinstall.ClusterInstall, error) {
-	clusterInstalls := make(map[string]*clusterinstall.ClusterInstall)
-	filepath.WalkDir(opts.clusterInstallDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return fmt.Errorf("read dir %s: %w", path, err)
-		}
-		if d.IsDir() {
-			return nil
-		}
-		ci, err := clusterinstall.Load(path)
-		if err != nil {
-			return fmt.Errorf("load cluster-install %s: %w", path, err)
-		}
-		ci.Onboard.ReleaseRepo = opts.releaseRepo
-		clusterInstalls[ci.ClusterName] = ci
-		return nil
-	})
-	return clusterInstalls, nil
-}
-
 func updateConfig(ctx context.Context, log *logrus.Entry, opts *updateConfigOptions) error {
 	kubeconfigs, err := opts.KubernetesOptions.LoadClusterConfigs()
 	if err != nil {
@@ -86,9 +64,12 @@ func updateConfig(ctx context.Context, log *logrus.Entry, opts *updateConfigOpti
 		return ctrlruntimeclient.New(&config, ctrlruntimeclient.Options{})
 	}
 
-	clusterInstalls, err := loadClusterInstalls(opts)
+	clusterInstalls, err := clusterinstall.LoadFromDir(opts.clusterInstallDir)
 	if err != nil {
 		return fmt.Errorf("load cluster-installs: %w", err)
+	}
+	for _, ci := range clusterInstalls {
+		ci.Onboard.ReleaseRepo = opts.releaseRepo
 	}
 
 	for clusterName, clusterInstall := range clusterInstalls {

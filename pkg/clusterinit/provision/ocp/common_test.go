@@ -49,8 +49,7 @@ func TestRun(t *testing.T) {
 				wantCmdArgs: []string{"create", "install-config", "--log-level=debug", "--dir=/cluster-base/ocp-install-base"},
 			},
 			newStep: func(t *testing.T, tc testParams) clusterinit.Step {
-				return NewCreateInstallConfigStep(logrus.NewEntry(logrus.StandardLogger()),
-					func() (*clusterinstall.ClusterInstall, error) { return tc.ci, nil },
+				return NewCreateInstallConfigStep(logrus.NewEntry(logrus.StandardLogger()), tc.ci,
 					buildCmdFunc(t, tc.wantCmdArgs),
 					runCmdFunc(tc.runCmdErr))
 			},
@@ -64,8 +63,7 @@ func TestRun(t *testing.T) {
 				wantErr:     errors.New("create install-config: fail"),
 			},
 			newStep: func(t *testing.T, tc testParams) clusterinit.Step {
-				return NewCreateInstallConfigStep(logrus.NewEntry(logrus.StandardLogger()),
-					func() (*clusterinstall.ClusterInstall, error) { return tc.ci, nil },
+				return NewCreateInstallConfigStep(logrus.NewEntry(logrus.StandardLogger()), tc.ci,
 					buildCmdFunc(t, tc.wantCmdArgs),
 					runCmdFunc(tc.runCmdErr))
 			},
@@ -77,8 +75,7 @@ func TestRun(t *testing.T) {
 				wantCmdArgs: []string{"create", "manifests", "--log-level=debug", "--dir=/cluster-base/ocp-install-base"},
 			},
 			newStep: func(t *testing.T, tc testParams) clusterinit.Step {
-				return NewCreateManifestsStep(logrus.NewEntry(logrus.StandardLogger()),
-					func() (*clusterinstall.ClusterInstall, error) { return tc.ci, nil },
+				return NewCreateManifestsStep(logrus.NewEntry(logrus.StandardLogger()), tc.ci,
 					buildCmdFunc(t, tc.wantCmdArgs),
 					runCmdFunc(tc.runCmdErr))
 			},
@@ -92,8 +89,7 @@ func TestRun(t *testing.T) {
 				wantErr:     errors.New("create manifests: fail"),
 			},
 			newStep: func(t *testing.T, tc testParams) clusterinit.Step {
-				return NewCreateManifestsStep(logrus.NewEntry(logrus.StandardLogger()),
-					func() (*clusterinstall.ClusterInstall, error) { return tc.ci, nil },
+				return NewCreateManifestsStep(logrus.NewEntry(logrus.StandardLogger()), tc.ci,
 					buildCmdFunc(t, tc.wantCmdArgs),
 					runCmdFunc(tc.runCmdErr))
 			},
@@ -105,8 +101,7 @@ func TestRun(t *testing.T) {
 				wantCmdArgs: []string{"create", "cluster", "--log-level=debug", "--dir=/cluster-base/ocp-install-base"},
 			},
 			newStep: func(t *testing.T, tc testParams) clusterinit.Step {
-				return NewCreateClusterStep(logrus.NewEntry(logrus.StandardLogger()),
-					func() (*clusterinstall.ClusterInstall, error) { return tc.ci, nil },
+				return NewCreateClusterStep(logrus.NewEntry(logrus.StandardLogger()), tc.ci,
 					buildCmdFunc(t, tc.wantCmdArgs),
 					runCmdFunc(tc.runCmdErr))
 			},
@@ -120,8 +115,7 @@ func TestRun(t *testing.T) {
 				wantErr:     errors.New("create cluster: fail"),
 			},
 			newStep: func(t *testing.T, tc testParams) clusterinit.Step {
-				return NewCreateClusterStep(logrus.NewEntry(logrus.StandardLogger()),
-					func() (*clusterinstall.ClusterInstall, error) { return tc.ci, nil },
+				return NewCreateClusterStep(logrus.NewEntry(logrus.StandardLogger()), tc.ci,
 					buildCmdFunc(t, tc.wantCmdArgs),
 					runCmdFunc(tc.runCmdErr))
 			},

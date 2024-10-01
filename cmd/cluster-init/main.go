@@ -48,6 +48,7 @@ func newRootCmd(ctx context.Context, log *logrus.Entry) (*cobra.Command, error) 
 		},
 	}
 	cmd.PersistentFlags().StringVar(&opts.ClusterInstall, "cluster-install", "", "Path to cluster-install.yaml")
+	cmd.PersistentFlags().StringVar(&opts.InstallBase, "install-base", "", "The working directory in which artifacts will be dropped.")
 	onboardCmd, err := onboardcmd.NewOnboard(ctx, log, opts)
 	if err != nil {
 		return nil, fmt.Errorf("onboard: %w", err)

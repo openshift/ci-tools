@@ -17,7 +17,6 @@ import (
 
 type generateConfigOptions struct {
 	releaseRepo string
-	installBase string
 	*runtime.Options
 }
 
@@ -35,7 +34,6 @@ func newGenerateCmd(ctx context.Context, log *logrus.Entry, parentOpts *runtime.
 
 	pf := cmd.PersistentFlags()
 	pf.StringVar(&opts.releaseRepo, "release-repo", "", "Path to openshift/release.")
-	pf.StringVar(&opts.installBase, "install-base", "", "Path to the installation base.")
 	if err := cmd.MarkPersistentFlagRequired("release-repo"); err != nil {
 		return nil, err
 	}
@@ -46,7 +44,7 @@ func generateConfig(ctx context.Context, log *logrus.Entry, opts generateConfigO
 	log = log.WithField("stage", "onboard config")
 
 	clusterInstall, err := clusterinstall.Load(opts.ClusterInstall, clusterinstall.FinalizeOption(clusterinstall.FinalizeOptions{
-		InstallBase: opts.installBase,
+		InstallBase: opts.Options.InstallBase,
 		ReleaseRepo: opts.releaseRepo,
 	}))
 	if err != nil {

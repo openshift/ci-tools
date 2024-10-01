@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/openshift/ci-tools/cmd/cluster-init/runtime"
+	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/clusterinit/provision/aws"
 )
 
@@ -32,8 +33,12 @@ func newAWSCreateStacks(ctx context.Context, log *logrus.Entry, opts *runtime.Op
 		Short: "Create cloud formation stacks",
 		Long:  `Create cloud formation stacks `,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			clusterInstall, err := clusterinstall.Load(opts.ClusterInstall)
+			if err != nil {
+				return fmt.Errorf("load cluster-install: %w", err)
+			}
 			step := aws.NewCreateAWSStacksStep(log,
-				runtime.ClusterInstallGetterFunc(opts.ClusterInstall),
+				clusterInstall,
 				func() (aws.CloudFormationClient, error) {
 					log.Info("Loading AWS config")
 					awsconfig, err := config.LoadDefaultConfig(ctx)

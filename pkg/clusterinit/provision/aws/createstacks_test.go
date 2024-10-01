@@ -101,8 +101,7 @@ func TestRun(t *testing.T) {
 				return newFakeCloudFormationClient(tc.onCreateStack, tc.onDescribeStack), nil
 			}
 			wait := 5 * time.Millisecond
-			step := provisionaws.NewCreateAWSStacksStep(logrus.NewEntry(logrus.StandardLogger()),
-				func() (*clusterinstall.ClusterInstall, error) { return tc.ci, nil },
+			step := provisionaws.NewCreateAWSStacksStep(logrus.NewEntry(logrus.StandardLogger()), tc.ci,
 				cfClientGetter, &wait, func(path string) (string, error) { return "", nil })
 
 			err := step.Run(context.TODO())

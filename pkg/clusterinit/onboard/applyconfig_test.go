@@ -70,8 +70,7 @@ func TestApplyConfig(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			step := NewApplyConfigStep(logrus.NewEntry(logrus.StandardLogger()),
-				func() (*clusterinstall.ClusterInstall, error) { return tc.ci, nil },
+			step := NewApplyConfigStep(logrus.NewEntry(logrus.StandardLogger()), tc.ci,
 				buildCmdFunc(t, tc.wantCmdArgs), runCmdFunc(tc.runCmdErr),
 			)
 			err := step.Run(context.TODO())

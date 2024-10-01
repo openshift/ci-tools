@@ -11,10 +11,10 @@ import (
 )
 
 type applyConfigStep struct {
-	log               *logrus.Entry
-	getClusterInstall clusterinstall.ClusterInstallGetter
-	cmdBuilder        clusterinit.CmdBuilder
-	cmdRunner         clusterinit.CmdRunner
+	log            *logrus.Entry
+	clusterInstall *clusterinstall.ClusterInstall
+	cmdBuilder     clusterinit.CmdBuilder
+	cmdRunner      clusterinit.CmdRunner
 }
 
 func (s *applyConfigStep) Name() string {
@@ -24,15 +24,8 @@ func (s *applyConfigStep) Name() string {
 func (s *applyConfigStep) Run(ctx context.Context) error {
 	log := s.log.WithField("step", "apply-config")
 
-	ci, err := s.getClusterInstall()
-	if err != nil {
-		return fmt.Errorf("get cluster install: %w", err)
-	}
-
-	configDir := fmt.Sprintf("--config-dir=%s/clusters/build-clusters/%s", ci.Onboard.ReleaseRepo, ci.ClusterName)
-
-	kubeconfig := fmt.Sprintf("--kubeconfig=%s", AdminKubeconfig(ci.InstallBase))
-
+	configDir := fmt.Sprintf("--config-dir=%s/clusters/build-clusters/%s", s.clusterInstall.Onboard.ReleaseRepo, s.clusterInstall.ClusterName)
+	kubeconfig := fmt.Sprintf("--kubeconfig=%s", AdminKubeconfig(s.clusterInstall.InstallBase))
 	cmd := s.cmdBuilder(ctx, "applyconfig", configDir, "--as=", kubeconfig, "--confirm=true")
 
 	log.Info("Applying configurations")
@@ -43,12 +36,12 @@ func (s *applyConfigStep) Run(ctx context.Context) error {
 	return nil
 }
 
-func NewApplyConfigStep(log *logrus.Entry, getClusterInstall clusterinstall.ClusterInstallGetter,
+func NewApplyConfigStep(log *logrus.Entry, clusterInstall *clusterinstall.ClusterInstall,
 	cmdBuilder clusterinit.CmdBuilder, cmdRunner clusterinit.CmdRunner) *applyConfigStep {
 	return &applyConfigStep{
-		log:               log,
-		getClusterInstall: getClusterInstall,
-		cmdBuilder:        cmdBuilder,
-		cmdRunner:         cmdRunner,
+		log:            log,
+		clusterInstall: clusterInstall,
+		cmdBuilder:     cmdBuilder,
+		cmdRunner:      cmdRunner,
 	}
 }

@@ -32,7 +32,7 @@ type TemplateResolver func(path string) (string, error)
 
 type createAWSStacksStep struct {
 	log                         *logrus.Entry
-	getClusterInstall           clusterinstall.ClusterInstallGetter
+	clusterInstall              *clusterinstall.ClusterInstall
 	getCFClient                 CloudFormationClientGetter
 	createStackCompleteWaitTime *time.Duration
 	templateResolver            TemplateResolver
@@ -45,16 +45,11 @@ func (s *createAWSStacksStep) Name() string {
 func (s *createAWSStacksStep) Run(ctx context.Context) error {
 	log := s.log.WithField("step", "provision: aws: create stacks")
 
-	ci, err := s.getClusterInstall()
-	if err != nil {
-		return fmt.Errorf("get cluster install: %w", err)
-	}
-
-	if ci.Provision.AWS == nil {
+	if s.clusterInstall.Provision.AWS == nil {
 		log.Info("No AWS provision stanza")
 		return nil
 	}
-	if len(ci.Provision.AWS.CloudFormationTemplates) == 0 {
+	if len(s.clusterInstall.Provision.AWS.CloudFormationTemplates) == 0 {
 		log.Info("No cloud formations templates stanza")
 		return nil
 	}
@@ -64,10 +59,10 @@ func (s *createAWSStacksStep) Run(ctx context.Context) error {
 		return fmt.Errorf("get cloud formation client: %w", err)
 	}
 
-	if err := s.createStacks(ctx, log, client, ci.Provision.AWS.CloudFormationTemplates); err != nil {
+	if err := s.createStacks(ctx, log, client, s.clusterInstall.Provision.AWS.CloudFormationTemplates); err != nil {
 		return err
 	}
-	if err := waitForStacksToComplete(ctx, log, client, ci.Provision.AWS.CloudFormationTemplates, *s.createStackCompleteWaitTime); err != nil {
+	if err := waitForStacksToComplete(ctx, log, client, s.clusterInstall.Provision.AWS.CloudFormationTemplates, *s.createStackCompleteWaitTime); err != nil {
 		return err
 	}
 
@@ -141,7 +136,7 @@ func resolveTemplate(path string) (string, error) {
 }
 
 func NewCreateAWSStacksStep(log *logrus.Entry,
-	getClusterInstall clusterinstall.ClusterInstallGetter,
+	clusterInstall *clusterinstall.ClusterInstall,
 	getCFClient CloudFormationClientGetter,
 	createStackCompleteWaitTime *time.Duration,
 	templateResolver TemplateResolver) *createAWSStacksStep {
@@ -153,7 +148,7 @@ func NewCreateAWSStacksStep(log *logrus.Entry,
 	}
 	return &createAWSStacksStep{
 		log:                         log,
-		getClusterInstall:           getClusterInstall,
+		clusterInstall:              clusterInstall,
 		getCFClient:                 getCFClient,
 		createStackCompleteWaitTime: createStackCompleteWaitTime,
 		templateResolver:            templateResolver,

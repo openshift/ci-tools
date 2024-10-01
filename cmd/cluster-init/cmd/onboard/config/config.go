@@ -37,7 +37,11 @@ func NewCmd(ctx context.Context, log *logrus.Entry, opts *runtime.Options) (*cob
 	}
 	cmd.AddCommand(updateConfigCmd)
 
-	cmd.AddCommand(newApplyCmd(ctx, log, opts))
+	applyCmd, err := newApplyCmd(ctx, log, opts)
+	if err != nil {
+		return nil, fmt.Errorf("apply: %w", err)
+	}
+	cmd.AddCommand(applyCmd)
 	return &cmd, nil
 }
 

@@ -6,8 +6,8 @@ import (
 )
 
 type ClusterInstall struct {
-	ClusterName string    `json:"clusterName,omitempty"`
-	InstallBase string    `json:"installBase,omitempty"`
+	ClusterName string `json:"clusterName,omitempty"`
+	InstallBase string
 	Provision   Provision `json:"provision,omitempty"`
 	Onboard     Onboard   `json:"onboard,omitempty"`
 }
@@ -36,9 +36,7 @@ type AWSCloudFormationTemplate struct {
 }
 
 type Onboard struct {
-	ReleaseRepo      string `json:"-"`
-	KubeconfigDir    string `json:"kubeconfigDir,omitempty"`
-	KubeconfigSuffix string `json:"kubeconfigSuffix,omitempty"`
+	ReleaseRepo string
 	// True if the cluster is an OSD cluster. Set to true by default
 	OSD *bool `json:"osd,omitempty"`
 	// True if the cluster is hosted (i.e., HyperShift hosted cluster). Set to false by default

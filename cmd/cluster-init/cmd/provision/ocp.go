@@ -9,6 +9,7 @@ import (
 
 	"github.com/openshift/ci-tools/cmd/cluster-init/runtime"
 	"github.com/openshift/ci-tools/pkg/clusterinit"
+	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/clusterinit/provision/ocp"
 )
 
@@ -41,16 +42,20 @@ func newOCPCreate(ctx context.Context, log *logrus.Entry, opts *runtime.Options)
 				return cmd.Help()
 			}
 
+			clusterInstall, err := clusterinstall.Load(opts.ClusterInstall, clusterinstall.FinalizeOption(clusterinstall.FinalizeOptions{
+				InstallBase: opts.InstallBase,
+			}))
+			if err != nil {
+				return fmt.Errorf("load cluster-install: %w", err)
+			}
+
 			switch args[0] {
 			case "install-config":
-				step = ocp.NewCreateInstallConfigStep(log, runtime.ClusterInstallGetterFunc(opts.ClusterInstall),
-					runtime.BuildCmd, runtime.RunCmd)
+				step = ocp.NewCreateInstallConfigStep(log, clusterInstall, runtime.BuildCmd, runtime.RunCmd)
 			case "manifests":
-				step = ocp.NewCreateManifestsStep(log, runtime.ClusterInstallGetterFunc(opts.ClusterInstall),
-					runtime.BuildCmd, runtime.RunCmd)
+				step = ocp.NewCreateManifestsStep(log, clusterInstall, runtime.BuildCmd, runtime.RunCmd)
 			case "cluster":
-				step = ocp.NewCreateClusterStep(log, runtime.ClusterInstallGetterFunc(opts.ClusterInstall),
-					runtime.BuildCmd, runtime.RunCmd)
+				step = ocp.NewCreateClusterStep(log, clusterInstall, runtime.BuildCmd, runtime.RunCmd)
 			default:
 				return fmt.Errorf("action %q is not supported", args[0])
 			}

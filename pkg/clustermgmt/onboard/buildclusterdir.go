@@ -1,34 +1,40 @@
-package buildclusterdir
+package onboard
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path"
 	"path/filepath"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
-	"github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
+	"github.com/sirupsen/logrus"
 )
 
-func UpdateClusterBuildFarmDir(log *logrus.Entry, ci *clusterinstall.ClusterInstall) error {
-	log = log.WithField("step", "build-cluster-dir")
-	clusterDir, err := createClusterDir(log, ci)
+type buildClusterDirStep struct {
+	log            *logrus.Entry
+	clusterInstall *clusterinstall.ClusterInstall
+}
+
+func (s *buildClusterDirStep) Name() string { return "build-cluster-dir" }
+
+func (s *buildClusterDirStep) Run(ctx context.Context) error {
+	s.log = s.log.WithField("step", "build-cluster-dir")
+	clusterDir, err := s.createClusterDir()
 	if err != nil {
 		return err
 	}
-	if err := createSymlinks(log, clusterDir, ci); err != nil {
+	if err := s.createSymlinks(clusterDir); err != nil {
 		return err
 	}
-	return createRequiredDirs(log, clusterDir)
+	return s.createRequiredDirs(clusterDir)
 }
 
-func createClusterDir(log *logrus.Entry, ci *clusterinstall.ClusterInstall) (string, error) {
-	clusterDir := onboard.BuildFarmDirFor(ci.Onboard.ReleaseRepo, ci.ClusterName)
+func (s *buildClusterDirStep) createClusterDir() (string, error) {
+	clusterDir := BuildFarmDirFor(s.clusterInstall.Onboard.ReleaseRepo, s.clusterInstall.ClusterName)
 	_, err := os.Stat(clusterDir)
 	if os.IsNotExist(err) {
-		log.WithField("dir", clusterDir).Info("Creating cluster directory")
+		s.log.WithField("dir", clusterDir).Info("Creating cluster directory")
 		if err := os.MkdirAll(clusterDir, 0777); err != nil {
 			return "", fmt.Errorf("failed to create base directory for cluster: %w", err)
 		}
@@ -38,13 +44,13 @@ func createClusterDir(log *logrus.Entry, ci *clusterinstall.ClusterInstall) (str
 	return clusterDir, nil
 }
 
-func createSymlinks(log *logrus.Entry, clusterDir string, ci *clusterinstall.ClusterInstall) error {
+func (s *buildClusterDirStep) createSymlinks(clusterDir string) error {
 	config_dirs := []string{
 		"common",
 		"common_except_app.ci",
 	}
 
-	if !*ci.Onboard.Hosted {
+	if !*s.clusterInstall.Onboard.Hosted {
 		config_dirs = append(config_dirs, "common_except_hosted")
 	}
 
@@ -53,7 +59,7 @@ func createSymlinks(log *logrus.Entry, clusterDir string, ci *clusterinstall.Clu
 		linkName := filepath.Join(clusterDir, item)
 		_, err := os.Lstat(linkName)
 		if os.IsNotExist(err) {
-			log.WithFields(map[string]interface{}{"linkName": linkName, "target": target}).Info("Creating symlink")
+			s.log.WithFields(map[string]interface{}{"linkName": linkName, "target": target}).Info("Creating symlink")
 			if err := os.Symlink(target, linkName); err != nil {
 				return fmt.Errorf("failed to symlink %s to %s", linkName, target)
 			}
@@ -64,12 +70,12 @@ func createSymlinks(log *logrus.Entry, clusterDir string, ci *clusterinstall.Clu
 	return nil
 }
 
-func createRequiredDirs(log *logrus.Entry, clusterDir string) error {
+func (s *buildClusterDirStep) createRequiredDirs(clusterDir string) error {
 	for _, name := range []string{"assets", "cert-manager"} {
 		dir := path.Join(clusterDir, name)
 		_, err := os.Stat(dir)
 		if os.IsNotExist(err) {
-			log.WithField("dir", dir).Info("Creating directory")
+			s.log.WithField("dir", dir).Info("Creating directory")
 			if err := os.Mkdir(dir, 0755); err != nil {
 				return fmt.Errorf("mkdir %s: %w", dir, err)
 			}
@@ -78,4 +84,11 @@ func createRequiredDirs(log *logrus.Entry, clusterDir string) error {
 		}
 	}
 	return nil
+}
+
+func NewBuildClusterDirStep(log *logrus.Entry, clusterInstall *clusterinstall.ClusterInstall) *buildClusterDirStep {
+	return &buildClusterDirStep{
+		log:            log,
+		clusterInstall: clusterInstall,
+	}
 }

@@ -70,3 +70,7 @@ func CertificateManifestPath(releaseRepo, clusterName string) string {
 func ClusterInstallPath(releaseRepo string) string {
 	return path.Join(releaseRepo, "clusters", "cluster-install")
 }
+
+func BuildClustersPath(releaseRepo string) string {
+	return filepath.Join(releaseRepo, "clusters", "build-clusters", "_cluster-init.yaml")
+}

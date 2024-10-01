@@ -1,4 +1,4 @@
-package cisecretbootstrap
+package onboard
 
 import (
 	"errors"
@@ -16,7 +16,7 @@ func TestUpdateSecret(t *testing.T) {
 	testCases := []struct {
 		name            string
 		ci              clusterinstall.ClusterInstall
-		secretGenerator func(*clusterinstall.ClusterInstall) secretbootstrap.SecretConfig
+		secretGenerator func() secretbootstrap.SecretConfig
 		config          secretbootstrap.Config
 		expectedConfig  secretbootstrap.Config
 	}{
@@ -25,7 +25,7 @@ func TestUpdateSecret(t *testing.T) {
 			ci: clusterinstall.ClusterInstall{
 				ClusterName: "newCluster",
 			},
-			secretGenerator: func(*clusterinstall.ClusterInstall) secretbootstrap.SecretConfig {
+			secretGenerator: func() secretbootstrap.SecretConfig {
 				return secretbootstrap.SecretConfig{
 					From: map[string]secretbootstrap.ItemContext{"item": {Item: "item-a"}},
 					To:   []secretbootstrap.SecretContext{{Cluster: "newCluster", Name: "secret-a"}},
@@ -57,7 +57,7 @@ func TestUpdateSecret(t *testing.T) {
 			ci: clusterinstall.ClusterInstall{
 				ClusterName: "existingCluster",
 			},
-			secretGenerator: func(*clusterinstall.ClusterInstall) secretbootstrap.SecretConfig {
+			secretGenerator: func() secretbootstrap.SecretConfig {
 				return secretbootstrap.SecretConfig{
 					From: map[string]secretbootstrap.ItemContext{"item": {Item: "item-a"}},
 					To:   []secretbootstrap.SecretContext{{Cluster: "existingCluster", Name: "secret-a"}},
@@ -99,8 +99,9 @@ func TestUpdateSecret(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := updateSecret(tc.secretGenerator)(logrus.NewEntry(logrus.StandardLogger()),
-				&tc.config, &tc.ci); err != nil {
+			s := NewCiSecretBootstrapStep(logrus.NewEntry(logrus.StandardLogger()), &tc.ci)
+			updateSecretFunc := s.updateSecret(tc.secretGenerator)
+			if err := updateSecretFunc(&tc.config); err != nil {
 				t.Fatalf("received error: %v", err)
 			}
 			if diff := cmp.Diff(tc.expectedConfig, tc.config); diff != "" {
@@ -147,7 +148,7 @@ func TestFindSecretConfig(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			idx, secretConfig, err := findSecretConfig(tc.secretName, tc.cluster, tc.secretConfigs)
+			idx, secretConfig, err := (&ciSecretBootstrapStep{}).findSecretConfig(tc.secretName, tc.cluster, tc.secretConfigs)
 			if diff := cmp.Diff(tc.expectedError, err, testhelper.EquateErrorMessage); diff != "" {
 				t.Fatalf("error did not match expectedError, diff: %s", diff)
 			}

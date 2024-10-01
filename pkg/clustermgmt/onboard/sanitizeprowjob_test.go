@@ -1,11 +1,13 @@
-package sanitizeprowjob
+package onboard
 
 import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/dispatcher"
 )
 
@@ -42,7 +44,8 @@ func TestUpdateConfig(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			updateSanitizeProwJobsConfig(&tc.input, tc.clusterName)
+			s := NewSanitizeProwjobStep(logrus.NewEntry(logrus.StandardLogger()), &clusterinstall.ClusterInstall{ClusterName: tc.clusterName})
+			s.updateSanitizeProwJobsConfig(&tc.input)
 			if diff := cmp.Diff(tc.expected, tc.input); diff != "" {
 				t.Fatalf("expected jobs were different than results: %s", diff)
 			}

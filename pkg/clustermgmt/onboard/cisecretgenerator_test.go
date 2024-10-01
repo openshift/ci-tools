@@ -1,4 +1,4 @@
-package cisecretgenerator
+package onboard
 
 import (
 	"errors"
@@ -13,13 +13,12 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
 	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
-	"github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func TestFindSecretItem(t *testing.T) {
 	secretA := secretgenerator.SecretItem{
-		ItemName: onboard.BuildUFarm,
+		ItemName: BuildUFarm,
 		Fields: []secretgenerator.FieldGenerator{{
 			Name: "secret-a",
 			Cmd:  "oc --context $(cluster) sa create-kubeconfig --namespace ci $(service_account) | sed \"s/$(service_account)/$(cluster)/g\"",
@@ -43,7 +42,7 @@ func TestFindSecretItem(t *testing.T) {
 		},
 		secretA,
 		{
-			ItemName: onboard.BuildUFarm,
+			ItemName: BuildUFarm,
 			Fields: []secretgenerator.FieldGenerator{{
 				Name: "secret-b",
 				Cmd:  "oc --context $(cluster) sa create-kubeconfig --namespace ci $(service_account) | sed \"s/$(service_account)/$(cluster)/g\"",
@@ -69,7 +68,7 @@ func TestFindSecretItem(t *testing.T) {
 		{
 			name: "existing",
 			args: args{
-				itemName:    onboard.BuildUFarm,
+				itemName:    BuildUFarm,
 				name:        "secret-a",
 				likeCluster: string(api.ClusterBuild01),
 				c:           config,
@@ -79,7 +78,7 @@ func TestFindSecretItem(t *testing.T) {
 		{
 			name: "non-existing",
 			args: args{
-				itemName:    onboard.BuildUFarm,
+				itemName:    BuildUFarm,
 				name:        "secret-c",
 				likeCluster: string(api.ClusterBuild01),
 				c:           config,
@@ -106,7 +105,7 @@ func TestFindSecretItem(t *testing.T) {
 }
 
 func TestUpdateSecretGeneratorConfig(t *testing.T) {
-	serviceAccountConfigPath := onboard.ServiceAccountKubeconfigPath(serviceAccountWildcard, clusterWildcard)
+	serviceAccountConfigPath := ServiceAccountKubeconfigPath(serviceAccountWildcard, clusterWildcard)
 	testCases := []struct {
 		name     string
 		ci       clusterinstall.ClusterInstall
@@ -121,7 +120,7 @@ func TestUpdateSecretGeneratorConfig(t *testing.T) {
 			},
 			input: SecretGenConfig{
 				{
-					ItemName: onboard.BuildUFarm,
+					ItemName: BuildUFarm,
 					Fields: []secretgenerator.FieldGenerator{{
 						Name: serviceAccountConfigPath,
 						Cmd:  "oc --context $(cluster) sa create-kubeconfig --namespace ci $(service_account) | sed \"s/$(service_account)/$(cluster)/g\"",
@@ -132,7 +131,7 @@ func TestUpdateSecretGeneratorConfig(t *testing.T) {
 							string(api.ClusterBuild01)}},
 				},
 				{
-					ItemName: onboard.BuildUFarm,
+					ItemName: BuildUFarm,
 					Fields: []secretgenerator.FieldGenerator{{
 						Name: fmt.Sprintf("token_%s_%s_reg_auth_value.txt", serviceAccountWildcard, clusterWildcard),
 						Cmd:  "oc --context $(cluster) sa create-kubeconfig --namespace ci $(service_account) | sed \"s/$(service_account)/$(cluster)/g\"",
@@ -153,7 +152,7 @@ func TestUpdateSecretGeneratorConfig(t *testing.T) {
 							string(api.ClusterBuild01)}},
 				},
 				{
-					ItemName: onboard.PodScaler,
+					ItemName: PodScaler,
 					Fields: []secretgenerator.FieldGenerator{{
 						Name: serviceAccountConfigPath,
 						Cmd:  "oc --context $(cluster) sa create-kubeconfig --namespace ci $(service_account) | sed \"s/$(service_account)/$(cluster)/g\"",
@@ -166,7 +165,7 @@ func TestUpdateSecretGeneratorConfig(t *testing.T) {
 			},
 			expected: SecretGenConfig{
 				{
-					ItemName: onboard.BuildUFarm,
+					ItemName: BuildUFarm,
 					Fields: []secretgenerator.FieldGenerator{{
 						Name: serviceAccountConfigPath,
 						Cmd:  "oc --context $(cluster) sa create-kubeconfig --namespace ci $(service_account) | sed \"s/$(service_account)/$(cluster)/g\"",
@@ -178,7 +177,7 @@ func TestUpdateSecretGeneratorConfig(t *testing.T) {
 							"newcluster"}},
 				},
 				{
-					ItemName: onboard.BuildUFarm,
+					ItemName: BuildUFarm,
 					Fields: []secretgenerator.FieldGenerator{{
 						Name: fmt.Sprintf("token_%s_%s_reg_auth_value.txt", serviceAccountWildcard, clusterWildcard),
 						Cmd:  "oc --context $(cluster) sa create-kubeconfig --namespace ci $(service_account) | sed \"s/$(service_account)/$(cluster)/g\"",
@@ -201,7 +200,7 @@ func TestUpdateSecretGeneratorConfig(t *testing.T) {
 							"newcluster"}},
 				},
 				{
-					ItemName: onboard.PodScaler,
+					ItemName: PodScaler,
 					Fields: []secretgenerator.FieldGenerator{{
 						Name: serviceAccountConfigPath,
 						Cmd:  "oc --context $(cluster) sa create-kubeconfig --namespace ci $(service_account) | sed \"s/$(service_account)/$(cluster)/g\"",
@@ -217,8 +216,8 @@ func TestUpdateSecretGeneratorConfig(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := updateSecretGeneratorConfig(logrus.NewEntry(logrus.StandardLogger()),
-				&tc.ci, &tc.input); err != nil {
+			s := NewCiSecretGeneratorStep(logrus.NewEntry(logrus.StandardLogger()), &tc.ci)
+			if err := s.updateSecretGeneratorConfig(&tc.input); err != nil {
 				t.Fatalf("error received while updating secret generator config: %v", err)
 			}
 			if diff := cmp.Diff(tc.expected, tc.input); diff != "" {

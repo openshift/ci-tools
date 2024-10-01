@@ -1,23 +1,29 @@
-package prowplugin
+package onboard
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
 	"github.com/sirupsen/logrus"
-
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/prow/pkg/plugins"
 	"sigs.k8s.io/yaml"
-
-	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
 )
 
-func UpdateProwPluginConfig(log *logrus.Entry, ci *clusterinstall.ClusterInstall) error {
-	log = log.WithField("step", "prow-plugin")
-	log.Info("Updating Prow plugin config")
-	filename := filepath.Join(ci.Onboard.ReleaseRepo, "core-services", "prow", "02_config", "_plugins.yaml")
+type prowPluginStep struct {
+	log            *logrus.Entry
+	clusterInstall *clusterinstall.ClusterInstall
+}
+
+func (s *prowPluginStep) Name() string { return "prow-plugin" }
+
+func (s *prowPluginStep) Run(ctx context.Context) error {
+	s.log = s.log.WithField("step", "prow-plugin")
+	s.log.Info("Updating Prow plugin config")
+	filename := filepath.Join(s.clusterInstall.Onboard.ReleaseRepo, "core-services", "prow", "02_config", "_plugins.yaml")
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return err
@@ -26,7 +32,7 @@ func UpdateProwPluginConfig(log *logrus.Entry, ci *clusterinstall.ClusterInstall
 	if err = yaml.Unmarshal(data, &c); err != nil {
 		return err
 	}
-	updateProwPluginConfigConfigUpdater(&c, ci.ClusterName)
+	s.updateProwPluginConfigConfigUpdater(&c, s.clusterInstall.ClusterName)
 	rawYaml, err := yaml.Marshal(c)
 	if err != nil {
 		return err
@@ -34,7 +40,7 @@ func UpdateProwPluginConfig(log *logrus.Entry, ci *clusterinstall.ClusterInstall
 	return os.WriteFile(filename, rawYaml, 0644)
 }
 
-func updateProwPluginConfigConfigUpdater(c *plugins.Configuration, clusterName string) {
+func (s *prowPluginStep) updateProwPluginConfigConfigUpdater(c *plugins.Configuration, clusterName string) {
 	if c.ConfigUpdater.ClusterGroups == nil {
 		c.ConfigUpdater.ClusterGroups = map[string]plugins.ClusterGroup{}
 	}
@@ -47,5 +53,12 @@ func updateProwPluginConfigConfigUpdater(c *plugins.Configuration, clusterName s
 			namespaces = namespaces.Union(sets.New[string](gc.Namespaces...))
 		}
 		c.ConfigUpdater.ClusterGroups[key] = plugins.ClusterGroup{Clusters: sets.List(clusters), Namespaces: sets.List(namespaces)}
+	}
+}
+
+func NewProwPluginStep(log *logrus.Entry, clusterInstall *clusterinstall.ClusterInstall) *prowPluginStep {
+	return &prowPluginStep{
+		log:            log,
+		clusterInstall: clusterInstall,
 	}
 }

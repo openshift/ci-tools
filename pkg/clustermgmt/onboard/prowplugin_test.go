@@ -1,9 +1,11 @@
-package prowplugin
+package onboard
 
 import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
+	"github.com/sirupsen/logrus"
 
 	"sigs.k8s.io/prow/pkg/plugins"
 )
@@ -51,7 +53,8 @@ func TestUpdateProwPluginConfigConfigUpdater(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			updateProwPluginConfigConfigUpdater(&tc.input, tc.clusterName)
+			s := NewProwPluginStep(logrus.NewEntry(logrus.StandardLogger()), &clusterinstall.ClusterInstall{})
+			s.updateProwPluginConfigConfigUpdater(&tc.input, tc.clusterName)
 			if diff := cmp.Diff(tc.expected, tc.input); diff != "" {
 				t.Fatalf("expected jobs were different than results: %s", diff)
 			}

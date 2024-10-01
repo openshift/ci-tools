@@ -11,10 +11,10 @@ import (
 	"sigs.k8s.io/prow/pkg/plugins"
 	"sigs.k8s.io/yaml"
 
-	"github.com/openshift/ci-tools/pkg/clustermgmt"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
 )
 
-func UpdateProwPluginConfig(log *logrus.Entry, ci *clustermgmt.ClusterInstall) error {
+func UpdateProwPluginConfig(log *logrus.Entry, ci *clusterinstall.ClusterInstall) error {
 	log = log.WithField("step", "prow-plugin")
 	log.Info("Updating Prow plugin config")
 	filename := filepath.Join(ci.Onboard.ReleaseRepo, "core-services", "prow", "02_config", "_plugins.yaml")

@@ -8,11 +8,11 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/openshift/ci-tools/pkg/clustermgmt"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
 )
 
-func UpdateClusterBuildFarmDir(log *logrus.Entry, ci *clustermgmt.ClusterInstall) error {
+func UpdateClusterBuildFarmDir(log *logrus.Entry, ci *clusterinstall.ClusterInstall) error {
 	log = log.WithField("step", "build-cluster-dir")
 	clusterDir, err := createClusterDir(log, ci)
 	if err != nil {
@@ -24,7 +24,7 @@ func UpdateClusterBuildFarmDir(log *logrus.Entry, ci *clustermgmt.ClusterInstall
 	return createRequiredDirs(log, clusterDir)
 }
 
-func createClusterDir(log *logrus.Entry, ci *clustermgmt.ClusterInstall) (string, error) {
+func createClusterDir(log *logrus.Entry, ci *clusterinstall.ClusterInstall) (string, error) {
 	clusterDir := onboard.BuildFarmDirFor(ci.Onboard.ReleaseRepo, ci.ClusterName)
 	_, err := os.Stat(clusterDir)
 	if os.IsNotExist(err) {
@@ -38,7 +38,7 @@ func createClusterDir(log *logrus.Entry, ci *clustermgmt.ClusterInstall) (string
 	return clusterDir, nil
 }
 
-func createSymlinks(log *logrus.Entry, clusterDir string, ci *clustermgmt.ClusterInstall) error {
+func createSymlinks(log *logrus.Entry, clusterDir string, ci *clusterinstall.ClusterInstall) error {
 	config_dirs := []string{
 		"common",
 		"common_except_app.ci",

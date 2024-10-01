@@ -7,11 +7,12 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-tools/pkg/clustermgmt"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
 )
 
 type applyConfigStep struct {
 	log               *logrus.Entry
-	getClusterInstall clustermgmt.ClusterInstallGetter
+	getClusterInstall clusterinstall.ClusterInstallGetter
 	cmdBuilder        clustermgmt.CmdBuilder
 	cmdRunner         clustermgmt.CmdRunner
 }
@@ -42,7 +43,7 @@ func (s *applyConfigStep) Run(ctx context.Context) error {
 	return nil
 }
 
-func NewApplyConfigStep(log *logrus.Entry, getClusterInstall clustermgmt.ClusterInstallGetter,
+func NewApplyConfigStep(log *logrus.Entry, getClusterInstall clusterinstall.ClusterInstallGetter,
 	cmdBuilder clustermgmt.CmdBuilder, cmdRunner clustermgmt.CmdRunner) *applyConfigStep {
 	return &applyConfigStep{
 		log:               log,

@@ -12,7 +12,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
-	"github.com/openshift/ci-tools/pkg/clustermgmt"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
@@ -109,15 +109,15 @@ func TestUpdateSecretGeneratorConfig(t *testing.T) {
 	serviceAccountConfigPath := onboard.ServiceAccountKubeconfigPath(serviceAccountWildcard, clusterWildcard)
 	testCases := []struct {
 		name     string
-		ci       clustermgmt.ClusterInstall
+		ci       clusterinstall.ClusterInstall
 		input    SecretGenConfig
 		expected SecretGenConfig
 	}{
 		{
 			name: "basic",
-			ci: clustermgmt.ClusterInstall{
+			ci: clusterinstall.ClusterInstall{
 				ClusterName: "newcluster",
-				Onboard:     clustermgmt.Onboard{Unmanaged: ptr.To(false)},
+				Onboard:     clusterinstall.Onboard{Unmanaged: ptr.To(false)},
 			},
 			input: SecretGenConfig{
 				{

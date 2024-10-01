@@ -12,7 +12,7 @@ import (
 	smithy "github.com/aws/smithy-go"
 	"github.com/sirupsen/logrus"
 
-	"github.com/openshift/ci-tools/pkg/clustermgmt"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
 	provisionaws "github.com/openshift/ci-tools/pkg/clustermgmt/provision/aws"
 )
 
@@ -44,15 +44,15 @@ func newFakeCloudFormationClient(onCreateStack func() (*cloudformation.CreateSta
 func TestRun(t *testing.T) {
 	for _, tc := range []struct {
 		name            string
-		ci              *clustermgmt.ClusterInstall
+		ci              *clusterinstall.ClusterInstall
 		onCreateStack   func() (*cloudformation.CreateStackOutput, error)
 		onDescribeStack func() (*cloudformation.DescribeStacksOutput, error)
 		wantErr         error
 	}{
 		{
 			name: "Create stack successfully",
-			ci: &clustermgmt.ClusterInstall{Provision: clustermgmt.Provision{
-				AWS: &clustermgmt.AWSProvision{CloudFormationTemplates: []clustermgmt.AWSCloudFormationTemplate{
+			ci: &clusterinstall.ClusterInstall{Provision: clusterinstall.Provision{
+				AWS: &clusterinstall.AWSProvision{CloudFormationTemplates: []clusterinstall.AWSCloudFormationTemplate{
 					{StackName: "s1"},
 				}}}},
 			onCreateStack: func() (*cloudformation.CreateStackOutput, error) {
@@ -66,8 +66,8 @@ func TestRun(t *testing.T) {
 		},
 		{
 			name: "Fail to create stack",
-			ci: &clustermgmt.ClusterInstall{Provision: clustermgmt.Provision{
-				AWS: &clustermgmt.AWSProvision{CloudFormationTemplates: []clustermgmt.AWSCloudFormationTemplate{
+			ci: &clusterinstall.ClusterInstall{Provision: clusterinstall.Provision{
+				AWS: &clusterinstall.AWSProvision{CloudFormationTemplates: []clusterinstall.AWSCloudFormationTemplate{
 					{StackName: "s1"},
 				}}}},
 			onCreateStack: func() (*cloudformation.CreateStackOutput, error) {
@@ -82,8 +82,8 @@ func TestRun(t *testing.T) {
 		},
 		{
 			name: "A stack exists, skip",
-			ci: &clustermgmt.ClusterInstall{Provision: clustermgmt.Provision{
-				AWS: &clustermgmt.AWSProvision{CloudFormationTemplates: []clustermgmt.AWSCloudFormationTemplate{
+			ci: &clusterinstall.ClusterInstall{Provision: clusterinstall.Provision{
+				AWS: &clusterinstall.AWSProvision{CloudFormationTemplates: []clusterinstall.AWSCloudFormationTemplate{
 					{StackName: "s1"},
 				}}}},
 			onCreateStack: func() (*cloudformation.CreateStackOutput, error) {
@@ -102,7 +102,7 @@ func TestRun(t *testing.T) {
 			}
 			wait := 5 * time.Millisecond
 			step := provisionaws.NewCreateAWSStacksStep(logrus.NewEntry(logrus.StandardLogger()),
-				func() (*clustermgmt.ClusterInstall, error) { return tc.ci, nil },
+				func() (*clusterinstall.ClusterInstall, error) { return tc.ci, nil },
 				cfClientGetter, &wait, func(path string) (string, error) { return "", nil })
 
 			err := step.Run(context.TODO())

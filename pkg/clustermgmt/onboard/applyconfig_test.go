@@ -9,7 +9,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
 
-	"github.com/openshift/ci-tools/pkg/clustermgmt"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
 )
 
 func buildCmdFunc(t *testing.T, wantArgs []string) func(ctx context.Context, program string, args ...string) *exec.Cmd {
@@ -31,17 +31,17 @@ func runCmdFunc(e error) func(*exec.Cmd) error {
 func TestApplyConfig(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
-		ci          *clustermgmt.ClusterInstall
+		ci          *clusterinstall.ClusterInstall
 		runCmdErr   error
 		wantCmdArgs []string
 		wantErr     error
 	}{
 		{
 			name: "Run successfully",
-			ci: &clustermgmt.ClusterInstall{
+			ci: &clusterinstall.ClusterInstall{
 				ClusterName: "build99",
 				InstallBase: "/install/base",
-				Onboard:     clustermgmt.Onboard{ReleaseRepo: "/release/repo"},
+				Onboard:     clusterinstall.Onboard{ReleaseRepo: "/release/repo"},
 			},
 			wantCmdArgs: []string{
 				"--config-dir=/release/repo/clusters/build-clusters/build99",
@@ -52,10 +52,10 @@ func TestApplyConfig(t *testing.T) {
 		},
 		{
 			name: "Run failed",
-			ci: &clustermgmt.ClusterInstall{
+			ci: &clusterinstall.ClusterInstall{
 				ClusterName: "build99",
 				InstallBase: "/install/base",
-				Onboard:     clustermgmt.Onboard{ReleaseRepo: "/release/repo"},
+				Onboard:     clusterinstall.Onboard{ReleaseRepo: "/release/repo"},
 			},
 			wantCmdArgs: []string{
 				"--config-dir=/release/repo/clusters/build-clusters/build99",
@@ -71,7 +71,7 @@ func TestApplyConfig(t *testing.T) {
 			t.Parallel()
 
 			step := NewApplyConfigStep(logrus.NewEntry(logrus.StandardLogger()),
-				func() (*clustermgmt.ClusterInstall, error) { return tc.ci, nil },
+				func() (*clusterinstall.ClusterInstall, error) { return tc.ci, nil },
 				buildCmdFunc(t, tc.wantCmdArgs), runCmdFunc(tc.runCmdErr),
 			)
 			err := step.Run(context.TODO())

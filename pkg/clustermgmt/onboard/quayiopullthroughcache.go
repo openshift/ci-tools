@@ -9,17 +9,18 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/types"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
 	imageregistryv1 "github.com/openshift/api/imageregistry/v1"
 
-	"github.com/openshift/ci-tools/pkg/clustermgmt"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
 )
 
 type quayioPullThroughCacheStep struct {
 	log            *logrus.Entry
-	clusterInstall *clustermgmt.ClusterInstall
-	kubeClient     KubeClientGetter
+	clusterInstall *clusterinstall.ClusterInstall
+	kubeClient     ctrlruntimeclient.Client
 	writeTemplate  func(name string, data []byte, perm fs.FileMode) error
 }
 
@@ -51,18 +52,12 @@ func (s *quayioPullThroughCacheStep) Run(ctx context.Context) error {
 }
 
 func (s *quayioPullThroughCacheStep) mirrorURI(ctx context.Context) (string, error) {
-	mu, found := s.clusterInstall.Onboard.QuayioPullThroughCache.MirrorURIs[s.clusterInstall.ClusterName]
-	if found {
-		return mu, nil
-	}
-
-	client, err := s.kubeClient()
-	if err != nil {
-		return "", fmt.Errorf("get kube client: %w", err)
+	if s.clusterInstall.Onboard.QuayioPullThroughCache.MirrorURI != "" {
+		return s.clusterInstall.Onboard.QuayioPullThroughCache.MirrorURI, nil
 	}
 
 	imageRegConfig := imageregistryv1.Config{}
-	if err := client.Get(ctx, types.NamespacedName{Namespace: "openshift-image-registry", Name: "cluster"}, &imageRegConfig); err != nil {
+	if err := s.kubeClient.Get(ctx, types.NamespacedName{Namespace: "openshift-image-registry", Name: "cluster"}, &imageRegConfig); err != nil {
 		return "", fmt.Errorf("get cluster config: %w", err)
 	}
 
@@ -92,8 +87,7 @@ func generatePullThroughCacheManifest(mirror string) map[string]interface{} {
 	}
 }
 
-func NewQuayioPullThroughCacheStep(log *logrus.Entry, clusterInstall *clustermgmt.ClusterInstall,
-	kubeClient KubeClientGetter) *quayioPullThroughCacheStep {
+func NewQuayioPullThroughCacheStep(log *logrus.Entry, clusterInstall *clusterinstall.ClusterInstall, kubeClient ctrlruntimeclient.Client) *quayioPullThroughCacheStep {
 	return &quayioPullThroughCacheStep{
 		log:            log,
 		clusterInstall: clusterInstall,

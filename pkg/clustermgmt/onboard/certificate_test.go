@@ -14,20 +14,19 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	imagev1 "github.com/openshift/api/image/v1"
 	imageregistryv1 "github.com/openshift/api/imageregistry/v1"
 
-	"github.com/openshift/ci-tools/pkg/clustermgmt"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
 )
 
 func TestGenerateCertificate(t *testing.T) {
 	releaseRepo := "/release/repo"
 	for _, tc := range []struct {
 		name           string
-		clusterInstall clustermgmt.ClusterInstall
+		clusterInstall clusterinstall.ClusterInstall
 		config         imageregistryv1.Config
 		objects        []runtime.Object
 		wantManifest   string
@@ -35,7 +34,7 @@ func TestGenerateCertificate(t *testing.T) {
 	}{
 		{
 			name: "Generate certificates successfully",
-			clusterInstall: clustermgmt.ClusterInstall{ClusterName: "build99", Onboard: clustermgmt.Onboard{
+			clusterInstall: clusterinstall.ClusterInstall{ClusterName: "build99", Onboard: clusterinstall.Onboard{
 				ReleaseRepo: "/release/repo",
 				OSD:         ptr.To(false),
 				Unmanaged:   ptr.To(false),
@@ -101,20 +100,16 @@ spec:
 		},
 		{
 			name: "Override from config",
-			clusterInstall: clustermgmt.ClusterInstall{ClusterName: "build99", Onboard: clustermgmt.Onboard{
+			clusterInstall: clusterinstall.ClusterInstall{ClusterName: "build99", Onboard: clusterinstall.Onboard{
 				ReleaseRepo: "/release/repo",
 				OSD:         ptr.To(false),
 				Unmanaged:   ptr.To(false),
 				Hosted:      ptr.To(false),
-				Certificate: clustermgmt.Certificate{
-					BaseDomains: map[string]string{
-						"build99": "fake-domain",
-					},
-					ImageRegistryPublicHosts: map[string]string{
-						"build99": "fake-public-host",
-					},
-					ClusterIssuer: map[string]map[string]string{"build99": {"apiserver-tls": "overridden"}},
-					ProjectLabel:  map[string]map[string]clustermgmt.CertificateProjectLabel{"build99": {"apps-tls": {Key: "foo-project", Value: "bar"}}},
+				Certificate: clusterinstall.Certificate{
+					BaseDomains:             "fake-domain",
+					ImageRegistryPublicHost: "fake-public-host",
+					ClusterIssuer:           map[string]string{"apiserver-tls": "overridden"},
+					ProjectLabel:            map[string]clusterinstall.CertificateProjectLabel{"apps-tls": {Key: "foo-project", Value: "bar"}},
 				},
 			}},
 			objects: []runtime.Object{
@@ -177,7 +172,7 @@ spec:
 		},
 		{
 			name: "Non OCP generates image registry certificate only",
-			clusterInstall: clustermgmt.ClusterInstall{ClusterName: "build99", Onboard: clustermgmt.Onboard{
+			clusterInstall: clusterinstall.ClusterInstall{ClusterName: "build99", Onboard: clusterinstall.Onboard{
 				ReleaseRepo: "/release/repo",
 				OSD:         ptr.To(true),
 				Unmanaged:   ptr.To(false),
@@ -213,9 +208,9 @@ spec:
 		},
 		{
 			name: "No public image registry host",
-			clusterInstall: clustermgmt.ClusterInstall{
+			clusterInstall: clusterinstall.ClusterInstall{
 				ClusterName: "build99",
-				Onboard: clustermgmt.Onboard{
+				Onboard: clusterinstall.Onboard{
 					ReleaseRepo: "/release/repo",
 					OSD:         ptr.To(false),
 					Unmanaged:   ptr.To(false),
@@ -237,7 +232,7 @@ spec:
 		},
 		{
 			name:           "No install-config.yaml",
-			clusterInstall: clustermgmt.ClusterInstall{ClusterName: "build99", Onboard: clustermgmt.Onboard{ReleaseRepo: "/release/repo"}},
+			clusterInstall: clusterinstall.ClusterInstall{ClusterName: "build99", Onboard: clusterinstall.Onboard{ReleaseRepo: "/release/repo"}},
 			objects: []runtime.Object{
 				&imagev1.ImageStreamList{
 					Items: []imagev1.ImageStream{{
@@ -261,10 +256,8 @@ spec:
 			if err := imagev1.AddToScheme(scheme); err != nil {
 				t.Fatal("add imagev1 to scheme")
 			}
-			c := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(tc.objects...).Build()
-			kubeClientGetter := func() (ctrlruntimeclient.Client, error) { return c, nil }
-			step := NewCertificateStep(logrus.NewEntry(logrus.StandardLogger()),
-				&tc.clusterInstall, kubeClientGetter)
+			kubeClient := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(tc.objects...).Build()
+			step := NewCertificateStep(logrus.NewEntry(logrus.StandardLogger()), &tc.clusterInstall, kubeClient)
 			var (
 				manifests          string
 				manifestsWritePath string

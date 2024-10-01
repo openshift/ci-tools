@@ -11,26 +11,25 @@ import (
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	routev1 "github.com/openshift/api/route/v1"
 
-	"github.com/openshift/ci-tools/pkg/clustermgmt"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
 )
 
 func TestUpdateDexConfig(t *testing.T) {
 	releaseRepo := "/release/repo"
 	for _, tc := range []struct {
 		name          string
-		ci            clustermgmt.ClusterInstall
+		ci            clusterinstall.ClusterInstall
 		dexManifests  string
 		wantManifests string
 		wantErr       error
 	}{
 		{
 			name: "Add static client and env",
-			ci:   clustermgmt.ClusterInstall{ClusterName: "build11", Onboard: clustermgmt.Onboard{ReleaseRepo: releaseRepo}},
+			ci:   clusterinstall.ClusterInstall{ClusterName: "build11", Onboard: clusterinstall.Onboard{ReleaseRepo: releaseRepo}},
 			dexManifests: `apiVersion: apps/v1
 kind: Deployment
 spec:
@@ -81,11 +80,11 @@ status: {}
 		},
 		{
 			name: "Get redirectURI from config",
-			ci: clustermgmt.ClusterInstall{
+			ci: clusterinstall.ClusterInstall{
 				ClusterName: "build11",
-				Onboard: clustermgmt.Onboard{
+				Onboard: clusterinstall.Onboard{
 					ReleaseRepo: releaseRepo,
-					Dex:         clustermgmt.Dex{RedirectURIs: map[string]string{"build11": "https://redirect.uri"}},
+					Dex:         clusterinstall.Dex{RedirectURI: "https://redirect.uri"},
 				},
 			},
 			dexManifests: `apiVersion: apps/v1
@@ -138,7 +137,7 @@ status: {}
 		},
 		{
 			name: "Update client and env",
-			ci:   clustermgmt.ClusterInstall{ClusterName: "build11", Onboard: clustermgmt.Onboard{ReleaseRepo: releaseRepo}},
+			ci:   clusterinstall.ClusterInstall{ClusterName: "build11", Onboard: clusterinstall.Onboard{ReleaseRepo: releaseRepo}},
 			dexManifests: `apiVersion: apps/v1
 kind: Deployment
 spec:
@@ -205,7 +204,7 @@ status: {}
 		},
 		{
 			name:    "No deployment",
-			ci:      clustermgmt.ClusterInstall{ClusterName: "build11", Onboard: clustermgmt.Onboard{ReleaseRepo: releaseRepo}},
+			ci:      clusterinstall.ClusterInstall{ClusterName: "build11", Onboard: clusterinstall.Onboard{ReleaseRepo: releaseRepo}},
 			wantErr: errors.New("deployment not found"),
 		},
 	} {
@@ -221,8 +220,7 @@ status: {}
 				Spec:       routev1.RouteSpec{Host: "oauth-openshift.apps.build11.ci.devcluster.openshift.com"},
 			}).Build()
 
-			step := NewDexStep(logrus.NewEntry(logrus.StandardLogger()),
-				func() (ctrlruntimeclient.Client, error) { return c, nil }, &tc.ci)
+			step := NewDexStep(logrus.NewEntry(logrus.StandardLogger()), c, &tc.ci)
 
 			var readManifestsPath string
 			step.readDexManifests = func(path string) (string, error) {

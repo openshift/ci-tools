@@ -66,3 +66,7 @@ func QuayioPullThroughCacheManifestPath(releaseRepo, clusterName string) string 
 func CertificateManifestPath(releaseRepo, clusterName string) string {
 	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "cert-manager/certificate.yaml")
 }
+
+func ClusterInstallPath(releaseRepo string) string {
+	return path.Join(releaseRepo, "clusters", "cluster-install")
+}

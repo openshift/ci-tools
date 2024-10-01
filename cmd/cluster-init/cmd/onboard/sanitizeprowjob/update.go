@@ -10,13 +10,13 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/clustermgmt"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
 	"github.com/openshift/ci-tools/pkg/dispatcher"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
 )
 
-func UpdateSanitizeProwJobs(log *logrus.Entry, ci *clustermgmt.ClusterInstall) error {
+func UpdateSanitizeProwJobs(log *logrus.Entry, ci *clusterinstall.ClusterInstall) error {
 	log = log.WithField("step", "sanitize-prowjob")
 	log.Info("Updating sanitize-prow-jobs config")
 	filename := filepath.Join(ci.Onboard.ReleaseRepo, "core-services", "sanitize-prow-jobs", "_config.yaml")

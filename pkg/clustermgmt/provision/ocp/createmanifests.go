@@ -8,11 +8,12 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-tools/pkg/clustermgmt"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
 )
 
 type createManifestsStep struct {
 	log               *logrus.Entry
-	getClusterInstall clustermgmt.ClusterInstallGetter
+	getClusterInstall clusterinstall.ClusterInstallGetter
 	cmdBuilder        clustermgmt.CmdBuilder
 	cmdRunner         clustermgmt.CmdRunner
 }
@@ -40,7 +41,7 @@ func (s *createManifestsStep) Run(ctx context.Context) error {
 	return nil
 }
 
-func NewCreateManifestsStep(log *logrus.Entry, getClusterInstall clustermgmt.ClusterInstallGetter,
+func NewCreateManifestsStep(log *logrus.Entry, getClusterInstall clusterinstall.ClusterInstallGetter,
 	cmdBuilder clustermgmt.CmdBuilder, cmdRunner clustermgmt.CmdRunner) *createManifestsStep {
 	return &createManifestsStep{
 		log:               log,

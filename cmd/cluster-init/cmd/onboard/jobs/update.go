@@ -13,7 +13,7 @@ import (
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/clustermgmt"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
 )
@@ -25,7 +25,7 @@ const (
 	generator    jobconfig.Generator = "cluster-init"
 )
 
-func UpdateJobs(log *logrus.Entry, ci *clustermgmt.ClusterInstall) error {
+func UpdateJobs(log *logrus.Entry, ci *clusterinstall.ClusterInstall) error {
 	log = log.WithField("step", "jobs")
 	log.Infof("generating: presubmits, postsubmits, and periodics for %s", ci.ClusterName)
 	config := prowconfig.JobConfig{

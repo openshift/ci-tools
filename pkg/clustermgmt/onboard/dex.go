@@ -13,17 +13,18 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
 	routev1 "github.com/openshift/api/route/v1"
 
-	"github.com/openshift/ci-tools/pkg/clustermgmt"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
 )
 
 type dexStep struct {
 	log               *logrus.Entry
-	ci                *clustermgmt.ClusterInstall
-	kubeClient        KubeClientGetter
+	ci                *clusterinstall.ClusterInstall
+	kubeClient        ctrlruntimeclient.Client
 	readDexManifests  func(path string) (string, error)
 	writeDexManifests func(path string, manifests []byte) error
 }
@@ -172,18 +173,12 @@ func (s *dexStep) updateEnvVar(c *corev1.Container, clusterName string) {
 }
 
 func (s *dexStep) redirectURI(ctx context.Context) (string, error) {
-	ru, found := s.ci.Onboard.Dex.RedirectURIs[s.ci.ClusterName]
-	if found {
-		return ru, nil
-	}
-
-	client, err := s.kubeClient()
-	if err != nil {
-		return "", fmt.Errorf("kube client: %w", err)
+	if s.ci.Onboard.Dex.RedirectURI != "" {
+		return s.ci.Onboard.Dex.RedirectURI, nil
 	}
 
 	oauthRoute := routev1.Route{}
-	if err := client.Get(ctx, types.NamespacedName{Namespace: "openshift-authentication", Name: "oauth-openshift"}, &oauthRoute); err != nil {
+	if err := s.kubeClient.Get(ctx, types.NamespacedName{Namespace: "openshift-authentication", Name: "oauth-openshift"}, &oauthRoute); err != nil {
 		return "", fmt.Errorf("get route: %w", err)
 	}
 
@@ -226,7 +221,7 @@ func writeDexManifests(path string, manifests []byte) error {
 	return nil
 }
 
-func NewDexStep(log *logrus.Entry, kubeClient KubeClientGetter, ci *clustermgmt.ClusterInstall) *dexStep {
+func NewDexStep(log *logrus.Entry, kubeClient ctrlruntimeclient.Client, ci *clusterinstall.ClusterInstall) *dexStep {
 	return &dexStep{
 		log:               log,
 		kubeClient:        kubeClient,

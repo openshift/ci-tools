@@ -17,14 +17,14 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 	"github.com/openshift/library-go/pkg/image/reference"
 
-	"github.com/openshift/ci-tools/pkg/clustermgmt"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
 	citoolsyaml "github.com/openshift/ci-tools/pkg/util/yaml"
 )
 
 type certificateStep struct {
 	log            *logrus.Entry
-	clusterInstall *clustermgmt.ClusterInstall
-	kubeClient     KubeClientGetter
+	clusterInstall *clusterinstall.ClusterInstall
+	kubeClient     ctrlruntimeclient.Client
 	writeManifest  func(name string, data []byte, perm fs.FileMode) error
 }
 
@@ -35,17 +35,12 @@ func (s *certificateStep) Name() string {
 func (s *certificateStep) Run(ctx context.Context) error {
 	log := s.log.WithField("step", s.Name())
 
-	client, err := s.kubeClient()
-	if err != nil {
-		return fmt.Errorf("kube client: %w", err)
-	}
-
-	baseDomain, err := s.baseDomain(ctx, client)
+	baseDomain, err := s.baseDomain(ctx)
 	if err != nil {
 		return fmt.Errorf("base domain: %w", err)
 	}
 
-	host, err := s.imageRegistryPublicHost(ctx, client)
+	host, err := s.imageRegistryPublicHost(ctx)
 	if err != nil {
 		return fmt.Errorf("image registry public host: %w", err)
 	}
@@ -65,16 +60,14 @@ func (s *certificateStep) Run(ctx context.Context) error {
 	return nil
 }
 
-func (s *certificateStep) baseDomain(ctx context.Context, client ctrlruntimeclient.Client) (string, error) {
-	if s.clusterInstall.Onboard.Certificate.BaseDomains != nil {
-		if domain, ok := s.clusterInstall.Onboard.Certificate.BaseDomains[s.clusterInstall.ClusterName]; ok {
-			s.log.Info("override base domain from config")
-			return domain, nil
-		}
+func (s *certificateStep) baseDomain(ctx context.Context) (string, error) {
+	if s.clusterInstall.Onboard.Certificate.BaseDomains != "" {
+		s.log.Info("override base domain from config")
+		return s.clusterInstall.Onboard.Certificate.BaseDomains, nil
 	}
 
 	cm := corev1.ConfigMap{}
-	if err := client.Get(ctx, types.NamespacedName{Namespace: "kube-system", Name: "cluster-config-v1"}, &cm); err != nil {
+	if err := s.kubeClient.Get(ctx, types.NamespacedName{Namespace: "kube-system", Name: "cluster-config-v1"}, &cm); err != nil {
 		return "", fmt.Errorf("get cluster-config-v1: %w", err)
 	}
 	installConfigRaw, ok := cm.Data["install-config"]
@@ -91,16 +84,14 @@ func (s *certificateStep) baseDomain(ctx context.Context, client ctrlruntimeclie
 	return installConfig.BaseDomain, nil
 }
 
-func (s *certificateStep) imageRegistryPublicHost(ctx context.Context, client ctrlruntimeclient.Client) (string, error) {
-	if s.clusterInstall.Onboard.Certificate.ImageRegistryPublicHosts != nil {
-		if publicHost, ok := s.clusterInstall.Onboard.Certificate.ImageRegistryPublicHosts[s.clusterInstall.ClusterName]; ok {
-			s.log.Info("override image registry public host from config")
-			return publicHost, nil
-		}
+func (s *certificateStep) imageRegistryPublicHost(ctx context.Context) (string, error) {
+	if s.clusterInstall.Onboard.Certificate.ImageRegistryPublicHost != "" {
+		s.log.Info("override image registry public host from config")
+		return s.clusterInstall.Onboard.Certificate.ImageRegistryPublicHost, nil
 	}
 
 	isList := imagev1.ImageStreamList{}
-	if err := client.List(ctx, &isList, &ctrlruntimeclient.ListOptions{Namespace: "openshift"}); err != nil {
+	if err := s.kubeClient.List(ctx, &isList, &ctrlruntimeclient.ListOptions{Namespace: "openshift"}); err != nil {
 		return "", fmt.Errorf("image streams: %w", err)
 	}
 
@@ -198,27 +189,20 @@ func (s *certificateStep) generateCertificateManifests(baseDomain, imageRegistry
 }
 
 func (s *certificateStep) clusterIssuerOrDefault(certificate, def string) string {
-	ci := s.clusterInstall.Onboard.Certificate.ClusterIssuer
-	if cluster, ok := ci[s.clusterInstall.ClusterName]; ok {
-		if clusterIssuer, ok := cluster[certificate]; ok {
-			return clusterIssuer
-		}
+	if clusterIssuer, ok := s.clusterInstall.Onboard.Certificate.ClusterIssuer[certificate]; ok {
+		return clusterIssuer
 	}
 	return def
 }
 
 func (s *certificateStep) projectLabelOrDefault(certificate, defKey, defValue string) (string, string) {
-	ci := s.clusterInstall.Onboard.Certificate.ProjectLabel
-	if projLabel, ok := ci[s.clusterInstall.ClusterName]; ok {
-		if keyVal, ok := projLabel[certificate]; ok {
-			return keyVal.Key, keyVal.Value
-		}
+	if keyVal, ok := s.clusterInstall.Onboard.Certificate.ProjectLabel[certificate]; ok {
+		return keyVal.Key, keyVal.Value
 	}
 	return defKey, defValue
 }
 
-func NewCertificateStep(log *logrus.Entry, clusterInstall *clustermgmt.ClusterInstall,
-	kubeClient KubeClientGetter) *certificateStep {
+func NewCertificateStep(log *logrus.Entry, clusterInstall *clusterinstall.ClusterInstall, kubeClient ctrlruntimeclient.Client) *certificateStep {
 	return &certificateStep{
 		log:            log,
 		clusterInstall: clusterInstall,

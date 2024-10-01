@@ -1,13 +1,15 @@
-package clustermgmt
+package clusterinstall
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 
 	"sigs.k8s.io/yaml"
 )
 
-func LoadClusterInstall(path string) (*ClusterInstall, error) {
+func Load(path string) (*ClusterInstall, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read file %s: %w", path, err)
@@ -18,6 +20,25 @@ func LoadClusterInstall(path string) (*ClusterInstall, error) {
 	}
 	applyDefaults(ci)
 	return ci, nil
+}
+
+func LoadFromDir(dir string) (map[string]*ClusterInstall, error) {
+	clusterInstalls := make(map[string]*ClusterInstall)
+	filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return fmt.Errorf("read dir %s: %w", path, err)
+		}
+		if d.IsDir() {
+			return nil
+		}
+		ci, err := Load(path)
+		if err != nil {
+			return fmt.Errorf("load cluster-install %s: %w", path, err)
+		}
+		clusterInstalls[ci.ClusterName] = ci
+		return nil
+	})
+	return clusterInstalls, nil
 }
 
 func applyDefaults(ci *ClusterInstall) {

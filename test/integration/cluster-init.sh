@@ -17,6 +17,8 @@ install_base="$tempdir/install-base"
 mkdir -p "$install_base/ocp-install-base/auth"
 kubeconfigs="$tempdir/kubeconfigs"
 mkdir -p "$kubeconfigs"
+clusterinstall_dir="$tempdir/clusterinstall"
+mkdir -p "$clusterinstall_dir"
 
 function generate_kubeconfig() {
     clustername="$1"
@@ -44,38 +46,6 @@ users:
 EOF
 }
 
-function generate_cluster_install() {
-    clustername="$1"
-    releaserepo="$2"
-    hosted="$3"
-    osd="$4"
-    cat >"${tempdir}/cluster-install.yaml" <<EOF
-clusterName: $clustername
-installBase: $install_base
-onboard:
-    releaseRepo: $releaserepo
-    hosted: $hosted
-    osd: $osd
-    kubeconfigDir: $kubeconfigs
-    kubeconfigSuffix: config
-    dex:
-      redirectURI:
-        newCluster: https://oauth-openshift.apps.newCluster.ky4t.p1.openshiftapps.com/oauth2callback/RedHat_Internal_SSO
-        existingCluster: https://oauth-openshift.apps.existingCluster.ky4t.p1.openshiftapps.com/oauth2callback/RedHat_Internal_SSO
-    quayioPullThroughCache:
-      mirrorURI:
-        newCluster: quayio-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com
-        existingCluster: quayio-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com
-    certificate:
-      baseDomains:
-        newCluster: ci.devcluster.openshift.com
-        existingCluster: ci.devcluster.openshift.com
-      imageRegistryPublicHosts:
-        newCluster: registry.newCluster.ci.openshift.org
-        existingCluster: registry.existingCluster.ci.openshift.org
-EOF
-}
-
 generate_kubeconfig "newCluster" "$kubeconfigs/newCluster.config"
 generate_kubeconfig "existingCluster" "$kubeconfigs/existingCluster.config"
 
@@ -84,31 +54,82 @@ os::test::junit::declare_suite_start "integration/cluster-init"
 # test the create scenario
 actual_create="${tempdir}/create/input"
 expected_create="${suite_dir}/create/expected"
+cat >"${clusterinstall_dir}/newCluster.yaml" <<EOF
+clusterName: newCluster
+onboard:
+    hosted: true
+    osd: true
+    dex:
+      redirectURI: https://oauth-openshift.apps.newCluster.ky4t.p1.openshiftapps.com/oauth2callback/RedHat_Internal_SSO
+    quayioPullThroughCache:
+      mirrorURI: quayio-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com
+    certificate:
+      baseDomains: ci.devcluster.openshift.com
+      imageRegistryPublicHost: registry.newCluster.ci.openshift.org
+EOF
 generate_kubeconfig "newCluster" "$install_base/ocp-install-base/auth/kubeconfig"
-generate_cluster_install "newCluster" "$actual_create" true true
-os::cmd::expect_success "cluster-init --cluster-install=${tempdir}/cluster-install.yaml onboard config generate --create-pr=false"
+os::cmd::expect_success "cluster-init --cluster-install="${clusterinstall_dir}/newCluster.yaml" onboard config generate --install-base=$install_base --release-repo=$actual_create"
 os::integration::compare "${actual_create}" "${expected_create}"
 
 # test the update scenario
 actual_update="${tempdir}/update/input"
 expected_update="${suite_dir}/update/expected"
-generate_cluster_install "existingCluster" "$actual_update" false true
-os::cmd::expect_success "cluster-init onboard --cluster-install=${tempdir}/cluster-install.yaml config generate --update=true --create-pr=false"
+rm "${clusterinstall_dir}/"*
+cat >"${clusterinstall_dir}/existingCluster.yaml" <<EOF
+clusterName: existingCluster
+onboard:
+    hosted: false
+    osd: true
+    dex:
+      redirectURI: https://oauth-openshift.apps.existingCluster.ky4t.p1.openshiftapps.com/oauth2callback/RedHat_Internal_SSO
+    quayioPullThroughCache:
+      mirrorURI: quayio-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com
+    certificate:
+      baseDomains: ci.devcluster.openshift.com
+      imageRegistryPublicHost: registry.existingCluster.ci.openshift.org
+EOF
+os::cmd::expect_success "cluster-init onboard config update --release-repo=$actual_update --cluster-install-dir=$clusterinstall_dir --kubeconfig-dir=$kubeconfigs --kubeconfig-suffix=config"
 os::integration::compare "${actual_update}" "${expected_update}"
 
 # test the create ocp scenario
 actual_create="${tempdir}/create-ocp/input"
 expected_create="${suite_dir}/create-ocp/expected"
 generate_kubeconfig "newCluster" "$install_base/ocp-install-base/auth/kubeconfig"
-generate_cluster_install "newCluster" "$actual_create" false false
-os::cmd::expect_success "cluster-init onboard --cluster-install=${tempdir}/cluster-install.yaml config generate --create-pr=false"
+rm "${clusterinstall_dir}/"*
+cat >"${clusterinstall_dir}/newCluster.yaml" <<EOF
+clusterName: newCluster
+onboard:
+    hosted: false
+    osd: false
+    dex:
+      redirectURI: https://oauth-openshift.apps.newCluster.ky4t.p1.openshiftapps.com/oauth2callback/RedHat_Internal_SSO
+    quayioPullThroughCache:
+      mirrorURI: quayio-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com
+    certificate:
+      baseDomains: ci.devcluster.openshift.com
+      imageRegistryPublicHost: registry.newCluster.ci.openshift.org
+EOF
+os::cmd::expect_success "cluster-init --cluster-install="${clusterinstall_dir}/newCluster.yaml" onboard config generate --install-base=$install_base --release-repo=$actual_create"
 os::integration::compare "${actual_create}" "${expected_create}"
 
-# test the update scenario
+# test the update ocp scenario
 actual_update="${tempdir}/update-ocp/input"
 expected_update="${suite_dir}/update-ocp/expected"
-generate_cluster_install "existingCluster" "$actual_update" false false
-os::cmd::expect_success "cluster-init onboard --cluster-install=${tempdir}/cluster-install.yaml config generate --update=true --create-pr=false"
+rm "${clusterinstall_dir}/"*
+cat >"${clusterinstall_dir}/existingCluster.yaml" <<EOF
+clusterName: existingCluster
+onboard:
+    hosted: false
+    osd: false
+    dex:
+      redirectURI: https://oauth-openshift.apps.existingCluster.ky4t.p1.openshiftapps.com/oauth2callback/RedHat_Internal_SSO
+    quayioPullThroughCache:
+      mirrorURI: quayio-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com
+    certificate:
+      baseDomains: ci.devcluster.openshift.com
+      imageRegistryPublicHost: registry.existingCluster.ci.openshift.org
+EOF
+os::cmd::expect_success "cluster-init onboard config update --release-repo=$actual_update --cluster-install-dir=$clusterinstall_dir --kubeconfig-dir=$kubeconfigs --kubeconfig-suffix=config"
 os::integration::compare "${actual_update}" "${expected_update}"
 
 os::test::junit::declare_suite_end

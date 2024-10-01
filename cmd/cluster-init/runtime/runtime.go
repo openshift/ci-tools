@@ -5,11 +5,11 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/openshift/ci-tools/pkg/clustermgmt"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
 )
 
 var (
-	clusterInstallCache *clustermgmt.ClusterInstall
+	clusterInstallCache *clusterinstall.ClusterInstall
 )
 
 type Options struct {
@@ -20,12 +20,12 @@ type Options struct {
 // solely because there are several steps that would otherwise read from the filesystem and unmarshal
 // a cluster-install.yaml over and over.
 // This function is NOT thread safe.
-func ClusterInstallGetterFunc(path string) clustermgmt.ClusterInstallGetter {
-	return func() (*clustermgmt.ClusterInstall, error) {
+func ClusterInstallGetterFunc(path string) clusterinstall.ClusterInstallGetter {
+	return func() (*clusterinstall.ClusterInstall, error) {
 		if clusterInstallCache != nil {
 			return clusterInstallCache, nil
 		}
-		ci, err := clustermgmt.LoadClusterInstall(path)
+		ci, err := clusterinstall.Load(path)
 		clusterInstallCache = ci
 		return clusterInstallCache, err
 	}

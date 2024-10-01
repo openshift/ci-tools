@@ -10,12 +10,12 @@ import (
 
 	"sigs.k8s.io/yaml"
 
-	"github.com/openshift/ci-tools/pkg/clustermgmt"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
 )
 
 type oauthTemplateStep struct {
 	log            *logrus.Entry
-	clusterInstall *clustermgmt.ClusterInstall
+	clusterInstall *clusterinstall.ClusterInstall
 	writeTemplate  func(name string, data []byte, perm fs.FileMode) error
 }
 
@@ -105,7 +105,7 @@ func generateOAuthTemplate(clusterIdPlaceholder string) map[string]interface{} {
 	}
 }
 
-func NewOAuthTemplateStep(log *logrus.Entry, clusterInstall *clustermgmt.ClusterInstall) *oauthTemplateStep {
+func NewOAuthTemplateStep(log *logrus.Entry, clusterInstall *clusterinstall.ClusterInstall) *oauthTemplateStep {
 	return &oauthTemplateStep{
 		log:            log,
 		clusterInstall: clusterInstall,

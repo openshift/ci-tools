@@ -13,7 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/openshift/ci-tools/pkg/clustermgmt"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
 )
 
 var (
@@ -32,7 +32,7 @@ type TemplateResolver func(path string) (string, error)
 
 type createAWSStacksStep struct {
 	log                         *logrus.Entry
-	getClusterInstall           clustermgmt.ClusterInstallGetter
+	getClusterInstall           clusterinstall.ClusterInstallGetter
 	getCFClient                 CloudFormationClientGetter
 	createStackCompleteWaitTime *time.Duration
 	templateResolver            TemplateResolver
@@ -77,7 +77,7 @@ func (s *createAWSStacksStep) Run(ctx context.Context) error {
 func (s *createAWSStacksStep) createStacks(ctx context.Context,
 	log *logrus.Entry,
 	client CloudFormationClient,
-	templates []clustermgmt.AWSCloudFormationTemplate) error {
+	templates []clusterinstall.AWSCloudFormationTemplate) error {
 	for _, t := range templates {
 		log := log.WithField("stack", t.StackName)
 
@@ -116,7 +116,7 @@ func (s *createAWSStacksStep) createStacks(ctx context.Context,
 }
 
 func waitForStacksToComplete(ctx context.Context, log *logrus.Entry, client CloudFormationClient,
-	templates []clustermgmt.AWSCloudFormationTemplate, wait time.Duration) error {
+	templates []clusterinstall.AWSCloudFormationTemplate, wait time.Duration) error {
 	waiter := cloudformation.NewStackCreateCompleteWaiter(client)
 	waiters, wCtx := errgroup.WithContext(ctx)
 	waiters.SetLimit(len(templates))
@@ -141,7 +141,7 @@ func resolveTemplate(path string) (string, error) {
 }
 
 func NewCreateAWSStacksStep(log *logrus.Entry,
-	getClusterInstall clustermgmt.ClusterInstallGetter,
+	getClusterInstall clusterinstall.ClusterInstallGetter,
 	getCFClient CloudFormationClientGetter,
 	createStackCompleteWaitTime *time.Duration,
 	templateResolver TemplateResolver) *createAWSStacksStep {

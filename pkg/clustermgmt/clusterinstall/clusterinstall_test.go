@@ -1,4 +1,4 @@
-package clustermgmt
+package clusterinstall
 
 import (
 	"testing"

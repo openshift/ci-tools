@@ -11,7 +11,7 @@ import (
 
 	"k8s.io/utils/ptr"
 
-	"github.com/openshift/ci-tools/pkg/clustermgmt"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
 )
 
 func TestUpdateOAuthTemplate(t *testing.T) {
@@ -19,16 +19,16 @@ func TestUpdateOAuthTemplate(t *testing.T) {
 	clusterName := "build99"
 	for _, tc := range []struct {
 		name              string
-		clusterInstall    clustermgmt.ClusterInstall
+		clusterInstall    clusterinstall.ClusterInstall
 		oauthTemplate     string
 		wantOAuthTemplate string
 		wantErr           error
 	}{
 		{
 			name: "Modify template successfully",
-			clusterInstall: clustermgmt.ClusterInstall{
+			clusterInstall: clusterinstall.ClusterInstall{
 				ClusterName: clusterName,
-				Onboard: clustermgmt.Onboard{
+				Onboard: clusterinstall.Onboard{
 					OSD:         ptr.To(false),
 					Hosted:      ptr.To(false),
 					Unmanaged:   ptr.To(false),

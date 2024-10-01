@@ -11,7 +11,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
-	"github.com/openshift/ci-tools/pkg/clustermgmt"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
 )
 
@@ -28,7 +28,7 @@ const (
 
 type pushPull string
 
-func UpdateCiSecretBootstrap(log *logrus.Entry, ci *clustermgmt.ClusterInstall) error {
+func UpdateCiSecretBootstrap(log *logrus.Entry, ci *clusterinstall.ClusterInstall) error {
 	log = log.WithField("step", "ci-secret-bootstrap")
 	secretBootstrapDir := filepath.Join(ci.Onboard.ReleaseRepo, "core-services", "ci-secret-bootstrap")
 	secretBootstrapConfigFile := filepath.Join(secretBootstrapDir, "_config.yaml")
@@ -44,7 +44,7 @@ func UpdateCiSecretBootstrap(log *logrus.Entry, ci *clustermgmt.ClusterInstall) 
 	return secretbootstrap.SaveConfigToFile(secretBootstrapConfigFile, &c)
 }
 
-func updateCiSecretBootstrapConfig(log *logrus.Entry, ci *clustermgmt.ClusterInstall, c *secretbootstrap.Config) error {
+func updateCiSecretBootstrapConfig(log *logrus.Entry, ci *clusterinstall.ClusterInstall, c *secretbootstrap.Config) error {
 	groupNames := []string{onboard.BuildUFarm, "non_app_ci"}
 
 	// non-OSD clusters should never be in the group
@@ -64,7 +64,7 @@ func updateCiSecretBootstrapConfig(log *logrus.Entry, ci *clustermgmt.ClusterIns
 
 	c.UserSecretsTargetClusters = sets.List(sets.New(c.UserSecretsTargetClusters...).Insert(ci.ClusterName))
 
-	var steps = []func(log *logrus.Entry, c *secretbootstrap.Config, ci *clustermgmt.ClusterInstall) error{
+	var steps = []func(log *logrus.Entry, c *secretbootstrap.Config, ci *clusterinstall.ClusterInstall) error{
 		updateBuildFarmSecrets,
 		updateDPTPControllerManagerSecret,
 		updateRehearseSecret,
@@ -91,8 +91,8 @@ func updateCiSecretBootstrapConfig(log *logrus.Entry, ci *clustermgmt.ClusterIns
 	return nil
 }
 
-func updateSecret(secretGenerator func(*clustermgmt.ClusterInstall) secretbootstrap.SecretConfig) func(log *logrus.Entry, c *secretbootstrap.Config, ci *clustermgmt.ClusterInstall) error {
-	return func(log *logrus.Entry, c *secretbootstrap.Config, ci *clustermgmt.ClusterInstall) error {
+func updateSecret(secretGenerator func(*clusterinstall.ClusterInstall) secretbootstrap.SecretConfig) func(log *logrus.Entry, c *secretbootstrap.Config, ci *clusterinstall.ClusterInstall) error {
+	return func(log *logrus.Entry, c *secretbootstrap.Config, ci *clusterinstall.ClusterInstall) error {
 		secret := secretGenerator(ci)
 		idx, _, _ := findSecretConfig(secret.To[0].Name, ci.ClusterName, c.Secrets)
 		if idx != -1 {
@@ -106,7 +106,7 @@ func updateSecret(secretGenerator func(*clustermgmt.ClusterInstall) secretbootst
 	}
 }
 
-func generateCiOperatorSecret(ci *clustermgmt.ClusterInstall) secretbootstrap.SecretConfig {
+func generateCiOperatorSecret(ci *clusterinstall.ClusterInstall) secretbootstrap.SecretConfig {
 	from := map[string]secretbootstrap.ItemContext{
 		kubeconfig: {
 			Field: onboard.ServiceAccountKubeconfigPath(onboard.CIOperator, ci.ClusterName),
@@ -132,7 +132,7 @@ func generateCiOperatorSecret(ci *clustermgmt.ClusterInstall) secretbootstrap.Se
 	}
 }
 
-func generateRegistryPushCredentialsSecret(ci *clustermgmt.ClusterInstall) secretbootstrap.SecretConfig {
+func generateRegistryPushCredentialsSecret(ci *clusterinstall.ClusterInstall) secretbootstrap.SecretConfig {
 	return secretbootstrap.SecretConfig{
 		From: map[string]secretbootstrap.ItemContext{
 			dotDockerConfigJson: generatePushPullSecretFrom(ci.ClusterName, []secretbootstrap.DockerConfigJSONData{
@@ -155,7 +155,7 @@ func generateRegistryPushCredentialsSecret(ci *clustermgmt.ClusterInstall) secre
 	}
 }
 
-func generateRegistryPullCredentialsSecret(ci *clustermgmt.ClusterInstall) secretbootstrap.SecretConfig {
+func generateRegistryPullCredentialsSecret(ci *clusterinstall.ClusterInstall) secretbootstrap.SecretConfig {
 	return secretbootstrap.SecretConfig{
 		From: map[string]secretbootstrap.ItemContext{
 			dotDockerConfigJson: generatePushPullSecretFrom(ci.ClusterName, []secretbootstrap.DockerConfigJSONData{
@@ -237,7 +237,7 @@ func generateDockerConfigJsonSecretConfigTo(name string, namespace string, clust
 	}
 }
 
-func updatePodScalerSecret(log *logrus.Entry, c *secretbootstrap.Config, ci *clustermgmt.ClusterInstall) error {
+func updatePodScalerSecret(log *logrus.Entry, c *secretbootstrap.Config, ci *clusterinstall.ClusterInstall) error {
 	if *ci.Onboard.UseTokenFileInKubeconfig {
 		key := onboard.ServiceAccountTokenFile(onboard.PodScaler, ci.ClusterName)
 		if err := updateSecretItemContext(log, c, onboard.PodScaler, string(api.ClusterAPPCI),
@@ -255,7 +255,7 @@ func updatePodScalerSecret(log *logrus.Entry, c *secretbootstrap.Config, ci *clu
 	})
 }
 
-func updateDPTPControllerManagerSecret(log *logrus.Entry, c *secretbootstrap.Config, ci *clustermgmt.ClusterInstall) error {
+func updateDPTPControllerManagerSecret(log *logrus.Entry, c *secretbootstrap.Config, ci *clusterinstall.ClusterInstall) error {
 	const DPTPControllerManager = "dptp-controller-manager"
 	if *ci.Onboard.UseTokenFileInKubeconfig {
 		keyAndFieldToken := onboard.ServiceAccountTokenFile(DPTPControllerManager, ci.ClusterName)
@@ -273,7 +273,7 @@ func updateDPTPControllerManagerSecret(log *logrus.Entry, c *secretbootstrap.Con
 	})
 }
 
-func updateRehearseSecret(log *logrus.Entry, c *secretbootstrap.Config, ci *clustermgmt.ClusterInstall) error {
+func updateRehearseSecret(log *logrus.Entry, c *secretbootstrap.Config, ci *clusterinstall.ClusterInstall) error {
 	if *ci.Onboard.UseTokenFileInKubeconfig {
 		keyAndFieldToken := onboard.ServiceAccountTokenFile(onboard.CIOperator, ci.ClusterName)
 		if err := updateSecretItemContext(log, c, pjRehearse, string(api.ClusterBuild01), keyAndFieldToken, secretbootstrap.ItemContext{
@@ -290,7 +290,7 @@ func updateRehearseSecret(log *logrus.Entry, c *secretbootstrap.Config, ci *clus
 	})
 }
 
-func updateGithubLdapUserGroupCreatorSecret(log *logrus.Entry, c *secretbootstrap.Config, ci *clustermgmt.ClusterInstall) error {
+func updateGithubLdapUserGroupCreatorSecret(log *logrus.Entry, c *secretbootstrap.Config, ci *clusterinstall.ClusterInstall) error {
 	if *ci.Onboard.UseTokenFileInKubeconfig {
 		keyAndFieldToken := onboard.ServiceAccountTokenFile(onboard.GithubLdapUserGroupCreator, ci.ClusterName)
 		if err := updateSecretItemContext(log, c, onboard.GithubLdapUserGroupCreator, string(api.ClusterAPPCI), keyAndFieldToken, secretbootstrap.ItemContext{
@@ -307,7 +307,7 @@ func updateGithubLdapUserGroupCreatorSecret(log *logrus.Entry, c *secretbootstra
 	})
 }
 
-func updatePromotedImageGovernor(log *logrus.Entry, c *secretbootstrap.Config, ci *clustermgmt.ClusterInstall) error {
+func updatePromotedImageGovernor(log *logrus.Entry, c *secretbootstrap.Config, ci *clusterinstall.ClusterInstall) error {
 	if *ci.Onboard.UseTokenFileInKubeconfig {
 		keyAndFieldToken := onboard.ServiceAccountTokenFile(onboard.PromotedImageGovernor, ci.ClusterName)
 		if err := updateSecretItemContext(log, c, onboard.PromotedImageGovernor, string(api.ClusterAPPCI), keyAndFieldToken, secretbootstrap.ItemContext{
@@ -324,7 +324,7 @@ func updatePromotedImageGovernor(log *logrus.Entry, c *secretbootstrap.Config, c
 	})
 }
 
-func updateClusterDisplay(log *logrus.Entry, c *secretbootstrap.Config, ci *clustermgmt.ClusterInstall) error {
+func updateClusterDisplay(log *logrus.Entry, c *secretbootstrap.Config, ci *clusterinstall.ClusterInstall) error {
 	if *ci.Onboard.UseTokenFileInKubeconfig {
 		keyAndFieldToken := onboard.ServiceAccountTokenFile(onboard.ClusterDisplay, ci.ClusterName)
 		if err := updateSecretItemContext(log, c, onboard.ClusterDisplay, string(api.ClusterAPPCI), keyAndFieldToken, secretbootstrap.ItemContext{
@@ -341,7 +341,7 @@ func updateClusterDisplay(log *logrus.Entry, c *secretbootstrap.Config, ci *clus
 	})
 }
 
-func updateChatBotSecret(log *logrus.Entry, c *secretbootstrap.Config, ci *clustermgmt.ClusterInstall) error {
+func updateChatBotSecret(log *logrus.Entry, c *secretbootstrap.Config, ci *clusterinstall.ClusterInstall) error {
 	const chatBot = "ci-chat-bot"
 	name := chatBot + "-kubeconfigs"
 	if *ci.Onboard.UseTokenFileInKubeconfig {
@@ -360,7 +360,7 @@ func updateChatBotSecret(log *logrus.Entry, c *secretbootstrap.Config, ci *clust
 	})
 }
 
-func updateDexClientSecret(log *logrus.Entry, c *secretbootstrap.Config, ci *clustermgmt.ClusterInstall) error {
+func updateDexClientSecret(log *logrus.Entry, c *secretbootstrap.Config, ci *clusterinstall.ClusterInstall) error {
 	if *ci.Onboard.Hosted || *ci.Onboard.OSD {
 		log.Info("Cluster is either hosted or osd, skipping dex-rh-sso")
 		return nil
@@ -386,7 +386,7 @@ func updateDexClientSecret(log *logrus.Entry, c *secretbootstrap.Config, ci *clu
 	return nil
 }
 
-func updateDexIdAndSecret(log *logrus.Entry, c *secretbootstrap.Config, ci *clustermgmt.ClusterInstall) error {
+func updateDexIdAndSecret(log *logrus.Entry, c *secretbootstrap.Config, ci *clusterinstall.ClusterInstall) error {
 	secret := &secretbootstrap.SecretConfig{
 		From: map[string]secretbootstrap.ItemContext{
 			ci.ClusterName + "-id": {
@@ -449,7 +449,7 @@ func registryUrlFor(cluster string) string {
 	}
 }
 
-func updateBuildFarmSecrets(_ *logrus.Entry, c *secretbootstrap.Config, ci *clustermgmt.ClusterInstall) error {
+func updateBuildFarmSecrets(_ *logrus.Entry, c *secretbootstrap.Config, ci *clusterinstall.ClusterInstall) error {
 	if ci.ClusterName == string(api.ClusterVSphere02) {
 		_, buildFarmCredentials, err := findSecretConfig(fmt.Sprintf("%s-%s", onboard.BuildFarm, credentials), string(api.ClusterAPPCI), c.Secrets)
 		if err != nil {

@@ -13,7 +13,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
-	"github.com/openshift/ci-tools/pkg/clustermgmt"
+	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
 )
 
@@ -78,7 +78,7 @@ func explainFilters(filters ...secretItemFilter) string {
 	return strings.Join(explanations, " - ")
 }
 
-func UpdateSecretGenerator(log *logrus.Entry, ci *clustermgmt.ClusterInstall) error {
+func UpdateSecretGenerator(log *logrus.Entry, ci *clusterinstall.ClusterInstall) error {
 	log = log.WithField("step", "ci-secret-generator")
 
 	filename := filepath.Join(ci.Onboard.ReleaseRepo, "core-services", "ci-secret-generator", "_config.yaml")
@@ -100,7 +100,7 @@ func UpdateSecretGenerator(log *logrus.Entry, ci *clustermgmt.ClusterInstall) er
 	return os.WriteFile(filename, rawYaml, 0644)
 }
 
-func updateSecretGeneratorConfig(log *logrus.Entry, ci *clustermgmt.ClusterInstall, c *SecretGenConfig) error {
+func updateSecretGeneratorConfig(log *logrus.Entry, ci *clusterinstall.ClusterInstall, c *SecretGenConfig) error {
 	filterByCluster := byParam("cluster", string(api.ClusterBuild01))
 
 	serviceAccountConfigPath := onboard.ServiceAccountKubeconfigPath(serviceAccountWildcard, clusterWildcard)
@@ -127,7 +127,7 @@ func updateSecretGeneratorConfig(log *logrus.Entry, ci *clustermgmt.ClusterInsta
 	return nil
 }
 
-func appendToSecretItem(log *logrus.Entry, ci *clustermgmt.ClusterInstall, c *SecretGenConfig, filters ...secretItemFilter) error {
+func appendToSecretItem(log *logrus.Entry, ci *clusterinstall.ClusterInstall, c *SecretGenConfig, filters ...secretItemFilter) error {
 	si, err := findSecretItem(*c, filters...)
 	if err != nil {
 		return err

@@ -1,4 +1,4 @@
-package onboard
+package config
 
 import (
 	"context"
@@ -22,7 +22,7 @@ type generateConfigOptions struct {
 	*runtime.Options
 }
 
-func newGenerateConfigCmd(ctx context.Context, log *logrus.Entry, parentOpts *runtime.Options) (*cobra.Command, error) {
+func newGenerateCmd(ctx context.Context, log *logrus.Entry, parentOpts *runtime.Options) (*cobra.Command, error) {
 	opts := generateConfigOptions{}
 	opts.Options = parentOpts
 	cmd := cobra.Command{

@@ -1,4 +1,4 @@
-package onboard
+package config
 
 import (
 	"context"
@@ -27,7 +27,7 @@ func (o *updateConfigOptions) complete() {
 	}
 }
 
-func newUpdateConfigCmd(ctx context.Context, log *logrus.Entry) (*cobra.Command, error) {
+func newUpdateCmd(ctx context.Context, log *logrus.Entry) (*cobra.Command, error) {
 	opts := updateConfigOptions{}
 	cmd := cobra.Command{
 		Use:   "update",

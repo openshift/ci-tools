@@ -3,10 +3,11 @@ package config
 import (
 	"context"
 
-	"github.com/openshift/ci-tools/cmd/cluster-init/runtime"
-	"github.com/openshift/ci-tools/pkg/clusterinit/onboard"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+
+	"github.com/openshift/ci-tools/cmd/cluster-init/runtime"
+	"github.com/openshift/ci-tools/pkg/clusterinit/onboard"
 )
 
 func newApplyCmd(ctx context.Context, log *logrus.Entry, opts *runtime.Options) *cobra.Command {

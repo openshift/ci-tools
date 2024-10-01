@@ -4,10 +4,11 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 	"github.com/sirupsen/logrus"
 
 	"sigs.k8s.io/prow/pkg/plugins"
+
+	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 )
 
 func TestUpdateProwPluginConfigConfigUpdater(t *testing.T) {

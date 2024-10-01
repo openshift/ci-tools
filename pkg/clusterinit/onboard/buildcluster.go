@@ -4,9 +4,11 @@ import (
 	"context"
 	"os"
 
-	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 	"github.com/sirupsen/logrus"
+
 	"sigs.k8s.io/yaml"
+
+	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 )
 
 type buildClusterStep struct {

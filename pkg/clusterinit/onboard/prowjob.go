@@ -4,9 +4,6 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
-	"github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 
@@ -15,6 +12,10 @@ import (
 	utilpointer "k8s.io/utils/pointer"
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
+
+	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
+	"github.com/openshift/ci-tools/pkg/jobconfig"
 )
 
 const (

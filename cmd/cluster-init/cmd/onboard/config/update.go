@@ -6,13 +6,15 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
-	"github.com/openshift/ci-tools/pkg/clusterinit/onboard"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+
 	"k8s.io/client-go/rest"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	prowflagutil "sigs.k8s.io/prow/pkg/flagutil"
+
+	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
+	"github.com/openshift/ci-tools/pkg/clusterinit/onboard"
 )
 
 type updateConfigOptions struct {

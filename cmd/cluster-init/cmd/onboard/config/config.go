@@ -4,13 +4,15 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
+
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/openshift/ci-tools/cmd/cluster-init/runtime"
 	"github.com/openshift/ci-tools/pkg/clusterinit"
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/clusterinit/onboard"
-	"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func NewCmd(ctx context.Context, log *logrus.Entry, opts *runtime.Options) (*cobra.Command, error) {

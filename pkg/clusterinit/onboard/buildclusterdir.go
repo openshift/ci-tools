@@ -7,8 +7,9 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 	"github.com/sirupsen/logrus"
+
+	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 )
 
 type buildClusterDirStep struct {

@@ -5,12 +5,14 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
-	"github.com/openshift/ci-tools/pkg/group"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/yaml"
+
+	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
+	"github.com/openshift/ci-tools/pkg/group"
 )
 
 type syncRoverGroupStep struct {

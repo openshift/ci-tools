@@ -3,7 +3,6 @@ package config
 import (
 	"context"
 	"fmt"
-	"path"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -46,14 +45,12 @@ func newGenerateCmd(ctx context.Context, log *logrus.Entry, parentOpts *runtime.
 func generateConfig(ctx context.Context, log *logrus.Entry, opts generateConfigOptions) error {
 	log = log.WithField("stage", "onboard config")
 
-	clusterInstall, err := clusterinstall.Load(opts.ClusterInstall)
+	clusterInstall, err := clusterinstall.Load(opts.ClusterInstall, clusterinstall.FinalizeOption(clusterinstall.FinalizeOptions{
+		InstallBase: opts.installBase,
+		ReleaseRepo: opts.releaseRepo,
+	}))
 	if err != nil {
 		return fmt.Errorf("load cluster-install: %w", err)
-	}
-	clusterInstall.Onboard.ReleaseRepo = opts.releaseRepo
-	clusterInstall.InstallBase = opts.installBase
-	if clusterInstall.InstallBase == "" {
-		clusterInstall.InstallBase = path.Dir(opts.ClusterInstall)
 	}
 
 	adminKubeconfigPath := onboard.AdminKubeconfig(clusterInstall.InstallBase)

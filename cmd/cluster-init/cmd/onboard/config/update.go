@@ -68,12 +68,12 @@ func updateConfig(ctx context.Context, log *logrus.Entry, opts *updateConfigOpti
 		return ctrlruntimeclient.New(&config, ctrlruntimeclient.Options{})
 	}
 
-	clusterInstalls, err := clusterinstall.LoadFromDir(opts.clusterInstallDir)
+	clusterInstalls, err := clusterinstall.LoadFromDir(opts.clusterInstallDir,
+		clusterinstall.FinalizeOption(clusterinstall.FinalizeOptions{
+			ReleaseRepo: opts.releaseRepo,
+		}))
 	if err != nil {
 		return fmt.Errorf("load cluster-installs: %w", err)
-	}
-	for _, ci := range clusterInstalls {
-		ci.Onboard.ReleaseRepo = opts.releaseRepo
 	}
 
 	for clusterName, clusterInstall := range clusterInstalls {

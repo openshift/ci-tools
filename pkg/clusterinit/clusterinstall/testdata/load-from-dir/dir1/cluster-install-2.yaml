@@ -1,0 +1,8 @@
+clusterName: bar
+provision:
+  gcp: {}
+onboard:
+  osd: true
+  hosted: true
+  unmanaged: true
+  useTokenFileInKubeconfig: true

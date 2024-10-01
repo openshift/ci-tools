@@ -10,8 +10,9 @@ import (
 
 func TestApplyDefault(t *testing.T) {
 	ci := ClusterInstall{}
-	applyDefaults(&ci)
+	applyDefaults(&ci, "/install/base/cluster-install.yaml")
 	wantCI := ClusterInstall{
+		InstallBase: "/install/base",
 		Onboard: Onboard{
 			Hosted:                   ptr.To(false),
 			Unmanaged:                ptr.To(false),

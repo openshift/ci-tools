@@ -27,7 +27,7 @@ func (o *updateConfigOptions) complete() {
 	}
 }
 
-func newUpdateConfigCmd(ctx context.Context, log *logrus.Entry) *cobra.Command {
+func newUpdateConfigCmd(ctx context.Context, log *logrus.Entry) (*cobra.Command, error) {
 	opts := updateConfigOptions{}
 	cmd := cobra.Command{
 		Use:   "update",
@@ -44,11 +44,13 @@ func newUpdateConfigCmd(ctx context.Context, log *logrus.Entry) *cobra.Command {
 	opts.KubernetesOptions.AddFlags(stdFs)
 	pf := cmd.PersistentFlags()
 	pf.StringVar(&opts.releaseRepo, "release-repo", "", "Path to openshift/release.")
-	cmd.MarkPersistentFlagRequired("release-repo")
+	if err := cmd.MarkPersistentFlagRequired("release-repo"); err != nil {
+		return nil, err
+	}
 	pf.StringVar(&opts.clusterInstallDir, "cluster-install-dir", "", "Path to the directory containing cluster install files.")
 	pf.AddGoFlagSet(stdFs)
 
-	return &cmd
+	return &cmd, nil
 }
 
 func updateConfig(ctx context.Context, log *logrus.Entry, opts *updateConfigOptions) error {

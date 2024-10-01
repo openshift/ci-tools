@@ -48,7 +48,11 @@ func newRootCmd(ctx context.Context, log *logrus.Entry) (*cobra.Command, error) 
 		},
 	}
 	cmd.PersistentFlags().StringVar(&opts.ClusterInstall, "cluster-install", "", "Path to cluster-install.yaml")
-	cmd.AddCommand(onboardcmd.NewOnboard(ctx, log, opts))
+	onboardCmd, err := onboardcmd.NewOnboard(ctx, log, opts)
+	if err != nil {
+		return nil, fmt.Errorf("onboard: %w", err)
+	}
+	cmd.AddCommand(onboardCmd)
 	provisionCmd, err := provision.NewProvision(ctx, log, opts)
 	if err != nil {
 		return nil, err

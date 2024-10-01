@@ -22,7 +22,7 @@ type generateConfigOptions struct {
 	*runtime.Options
 }
 
-func newGenerateConfigCmd(ctx context.Context, log *logrus.Entry, parentOpts *runtime.Options) *cobra.Command {
+func newGenerateConfigCmd(ctx context.Context, log *logrus.Entry, parentOpts *runtime.Options) (*cobra.Command, error) {
 	opts := generateConfigOptions{}
 	opts.Options = parentOpts
 	cmd := cobra.Command{
@@ -37,8 +37,10 @@ func newGenerateConfigCmd(ctx context.Context, log *logrus.Entry, parentOpts *ru
 	pf := cmd.PersistentFlags()
 	pf.StringVar(&opts.releaseRepo, "release-repo", "", "Path to openshift/release.")
 	pf.StringVar(&opts.installBase, "install-base", "", "Path to the installation base.")
-	cmd.MarkPersistentFlagRequired("release-repo")
-	return &cmd
+	if err := cmd.MarkPersistentFlagRequired("release-repo"); err != nil {
+		return nil, err
+	}
+	return &cmd, nil
 }
 
 func generateConfig(ctx context.Context, log *logrus.Entry, opts generateConfigOptions) error {

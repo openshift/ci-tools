@@ -24,7 +24,7 @@ func Load(path string) (*ClusterInstall, error) {
 
 func LoadFromDir(dir string) (map[string]*ClusterInstall, error) {
 	clusterInstalls := make(map[string]*ClusterInstall)
-	filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+	if err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return fmt.Errorf("read dir %s: %w", path, err)
 		}
@@ -37,7 +37,9 @@ func LoadFromDir(dir string) (map[string]*ClusterInstall, error) {
 		}
 		clusterInstalls[ci.ClusterName] = ci
 		return nil
-	})
+	}); err != nil {
+		return nil, err
+	}
 	return clusterInstalls, nil
 }
 

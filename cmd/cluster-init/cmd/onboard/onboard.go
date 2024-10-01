@@ -2,6 +2,7 @@ package onboard
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -10,7 +11,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/clusterinit/onboard"
 )
 
-func NewOnboard(ctx context.Context, log *logrus.Entry, opts *runtime.Options) *cobra.Command {
+func NewOnboard(ctx context.Context, log *logrus.Entry, opts *runtime.Options) (*cobra.Command, error) {
 	cmd := cobra.Command{
 		Use:   "onboard",
 		Short: "Onboard a cluster",
@@ -19,11 +20,15 @@ func NewOnboard(ctx context.Context, log *logrus.Entry, opts *runtime.Options) *
 			return cmd.Help()
 		},
 	}
-	cmd.AddCommand(newConfigCmd(ctx, log, opts))
-	return &cmd
+	configCmd, err := newConfigCmd(ctx, log, opts)
+	if err != nil {
+		return nil, fmt.Errorf("config: %w", err)
+	}
+	cmd.AddCommand(configCmd)
+	return &cmd, nil
 }
 
-func newConfigCmd(ctx context.Context, log *logrus.Entry, opts *runtime.Options) *cobra.Command {
+func newConfigCmd(ctx context.Context, log *logrus.Entry, opts *runtime.Options) (*cobra.Command, error) {
 	cmd := cobra.Command{
 		Use:   "config",
 		Short: "Handle configurations for a cluster",
@@ -32,10 +37,21 @@ func newConfigCmd(ctx context.Context, log *logrus.Entry, opts *runtime.Options)
 			return cmd.Help()
 		},
 	}
-	cmd.AddCommand(newGenerateConfigCmd(ctx, log, opts))
-	cmd.AddCommand(newUpdateConfigCmd(ctx, log))
+
+	generateConfigCmd, err := newGenerateConfigCmd(ctx, log, opts)
+	if err != nil {
+		return nil, fmt.Errorf("generate: %w", err)
+	}
+	cmd.AddCommand(generateConfigCmd)
+
+	updateConfigCmd, err := newUpdateConfigCmd(ctx, log)
+	if err != nil {
+		return nil, fmt.Errorf("update: %w", err)
+	}
+	cmd.AddCommand(updateConfigCmd)
+
 	cmd.AddCommand(newApplyConfigCmd(ctx, log, opts))
-	return &cmd
+	return &cmd, nil
 }
 
 func newApplyConfigCmd(ctx context.Context, log *logrus.Entry, opts *runtime.Options) *cobra.Command {

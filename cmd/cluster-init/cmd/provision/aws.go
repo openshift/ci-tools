@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/openshift/ci-tools/cmd/cluster-init/runtime"
-	"github.com/openshift/ci-tools/pkg/clustermgmt/provision/aws"
+	"github.com/openshift/ci-tools/pkg/clusterinit/provision/aws"
 )
 
 func newProvisionAWS(ctx context.Context, log *logrus.Entry, opts *runtime.Options) *cobra.Command {

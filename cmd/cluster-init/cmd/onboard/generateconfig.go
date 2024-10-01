@@ -11,8 +11,8 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/cmd/cluster-init/runtime"
-	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
-	clustermgmtonboard "github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
+	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
+	"github.com/openshift/ci-tools/pkg/clusterinit/onboard"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -54,7 +54,7 @@ func generateConfig(ctx context.Context, log *logrus.Entry, opts generateConfigO
 		clusterInstall.InstallBase = path.Dir(opts.ClusterInstall)
 	}
 
-	adminKubeconfigPath := clustermgmtonboard.AdminKubeconfig(clusterInstall.InstallBase)
+	adminKubeconfigPath := onboard.AdminKubeconfig(clusterInstall.InstallBase)
 	config, err := clientcmd.BuildConfigFromFlags("", adminKubeconfigPath)
 	if err != nil {
 		return fmt.Errorf("load kubeconfig: %w", err)

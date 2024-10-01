@@ -4,29 +4,29 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/openshift/ci-tools/pkg/clustermgmt"
-	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
-	clustermgmtonboard "github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
+	"github.com/openshift/ci-tools/pkg/clusterinit"
+	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
+	"github.com/openshift/ci-tools/pkg/clusterinit/onboard"
 	"github.com/sirupsen/logrus"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func runConfigSteps(ctx context.Context, log *logrus.Entry, update bool, kubeClient ctrlruntimeclient.Client, clusterInstall *clusterinstall.ClusterInstall) error {
-	steps := []clustermgmt.Step{
-		clustermgmtonboard.NewProwJobStep(log, clusterInstall),
-		clustermgmtonboard.NewBuildClusterDirStep(log, clusterInstall),
-		clustermgmtonboard.NewOAuthTemplateStep(log, clusterInstall),
-		clustermgmtonboard.NewCiSecretBootstrapStep(log, clusterInstall),
-		clustermgmtonboard.NewCiSecretGeneratorStep(log, clusterInstall),
-		clustermgmtonboard.NewSanitizeProwjobStep(log, clusterInstall),
-		clustermgmtonboard.NewSyncRoverGroupStep(log, clusterInstall),
-		clustermgmtonboard.NewProwPluginStep(log, clusterInstall),
-		clustermgmtonboard.NewDexStep(log, kubeClient, clusterInstall),
-		clustermgmtonboard.NewQuayioPullThroughCacheStep(log, clusterInstall, kubeClient),
-		clustermgmtonboard.NewCertificateStep(log, clusterInstall, kubeClient),
+	steps := []clusterinit.Step{
+		onboard.NewProwJobStep(log, clusterInstall),
+		onboard.NewBuildClusterDirStep(log, clusterInstall),
+		onboard.NewOAuthTemplateStep(log, clusterInstall),
+		onboard.NewCiSecretBootstrapStep(log, clusterInstall),
+		onboard.NewCiSecretGeneratorStep(log, clusterInstall),
+		onboard.NewSanitizeProwjobStep(log, clusterInstall),
+		onboard.NewSyncRoverGroupStep(log, clusterInstall),
+		onboard.NewProwPluginStep(log, clusterInstall),
+		onboard.NewDexStep(log, kubeClient, clusterInstall),
+		onboard.NewQuayioPullThroughCacheStep(log, clusterInstall, kubeClient),
+		onboard.NewCertificateStep(log, clusterInstall, kubeClient),
 	}
 	if !update {
-		steps = append(steps, clustermgmtonboard.NewBuildClusterStep(log, clusterInstall))
+		steps = append(steps, onboard.NewBuildClusterStep(log, clusterInstall))
 	}
 
 	for _, step := range steps {

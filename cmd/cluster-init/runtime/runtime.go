@@ -5,7 +5,7 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
+	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 )
 
 var (

@@ -8,8 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/openshift/ci-tools/pkg/clustermgmt/clusterinstall"
-	clustermgmtonboard "github.com/openshift/ci-tools/pkg/clustermgmt/onboard"
+	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
+	"github.com/openshift/ci-tools/pkg/clusterinit/onboard"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/rest"
@@ -25,7 +25,7 @@ type updateConfigOptions struct {
 
 func (o *updateConfigOptions) complete() {
 	if o.clusterInstallDir == "" {
-		o.clusterInstallDir = clustermgmtonboard.ClusterInstallPath(o.releaseRepo)
+		o.clusterInstallDir = onboard.ClusterInstallPath(o.releaseRepo)
 	}
 }
 

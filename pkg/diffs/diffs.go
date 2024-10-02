@@ -33,7 +33,7 @@ const (
 
 // GetChangedCiopConfigs identifies CI Operator configurations that are new or have changed and
 // determines for each which jobs are impacted if job-specific changes were made
-func GetChangedCiopConfigs(masterConfig, prConfig config.DataByFilename, logger *logrus.Entry) (configs config.DataByFilename, affectedJobs map[string]sets.Set[string], disabledDueToNetworkAccessToggle []string) {
+func GetChangedCiopConfigs(masterConfig, prConfig config.DataByFilename, logger *logrus.Entry) (configs config.DataByFilename, affectedJobs map[string]sets.Set[string], restrictNetworkAccessFalseJobs []string) {
 	configs = config.DataByFilename{}
 	affectedJobs = map[string]sets.Set[string]{}
 
@@ -74,21 +74,15 @@ func GetChangedCiopConfigs(masterConfig, prConfig config.DataByFilename, logger 
 				testLogger.Info(changedCiopConfigMsg)
 				configs[filename] = newConfig
 
-				// We don't allow rehearsals of tests that specifically toggle 'restrict_network_access' off
-				nonRehearsableBecauseNetworkRestrictionOff := false
-				if oldTest.RestrictNetworkAccess != test.RestrictNetworkAccess {
-					nonRehearsableBecauseNetworkRestrictionOff = test.RestrictNetworkAccess != nil && !*test.RestrictNetworkAccess
-				}
-				if nonRehearsableBecauseNetworkRestrictionOff {
-					testLogger.Debug("new test configuration has 'restrict_network_access' set to false, not rehearsable")
+				if test.RestrictNetworkAccess != nil && !*test.RestrictNetworkAccess {
+					testLogger.Debug("test configuration has 'restrict_network_access' set to false")
 					prefix := jobconfig.PresubmitPrefix
 					if test.IsPeriodic() {
 						prefix = jobconfig.PeriodicPrefix
 					}
-					disabledDueToNetworkAccessToggle = append(disabledDueToNetworkAccessToggle, newConfig.Info.JobName(prefix, as))
-				} else {
-					jobs.Insert(as)
+					restrictNetworkAccessFalseJobs = append(restrictNetworkAccessFalseJobs, newConfig.Info.JobName(prefix, as))
 				}
+				jobs.Insert(as)
 			}
 		}
 

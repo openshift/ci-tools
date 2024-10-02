@@ -35,8 +35,9 @@ import (
 )
 
 const (
-	RehearsalsAckLabel = "rehearsals-ack"
-	appCIContextName   = string(api.ClusterAPPCI)
+	RehearsalsAckLabel             = "rehearsals-ack"
+	NetworkAccessRehearsalsOkLabel = "network-access-rehearsals-ok"
+	appCIContextName               = string(api.ClusterAPPCI)
 )
 
 type RehearsalConfig struct {
@@ -117,7 +118,7 @@ type ref struct {
 	ref string
 }
 
-func (r RehearsalConfig) DetermineAffectedJobs(candidate RehearsalCandidate, candidatePath string, logger *logrus.Entry) (config.Presubmits, config.Periodics, *ConfigMaps, *ConfigMaps, []string, error) {
+func (r RehearsalConfig) DetermineAffectedJobs(candidate RehearsalCandidate, candidatePath string, networkAccessRehearsalsAllowed bool, logger *logrus.Entry) (config.Presubmits, config.Periodics, *ConfigMaps, *ConfigMaps, []string, error) {
 	start := time.Now()
 	defer func() {
 		logger.Infof("determineAffectedJobs ran in %s", time.Since(start).Truncate(time.Second))
@@ -142,13 +143,17 @@ func (r RehearsalConfig) DetermineAffectedJobs(candidate RehearsalCandidate, can
 	presubmits.AddAll(diffs.GetChangedPresubmits(masterConfig.Prow, prConfig.Prow, logger), config.ChangedPresubmit)
 	periodics := config.Periodics{}
 	periodics.AddAll(diffs.GetChangedPeriodics(masterConfig.Prow, prConfig.Prow, logger), config.ChangedPeriodic)
-	var disabledDueToNetworkAccessToggle []string
+	var restrictNetworkAccessFalseJobs []string
 
 	// We can only detect changes if we managed to load both ci-operator config versions
 	if masterConfig.CiOperator != nil && prConfig.CiOperator != nil {
 		var changedCiopConfigData config.DataByFilename
 		var affectedJobs map[string]sets.Set[string]
-		changedCiopConfigData, affectedJobs, disabledDueToNetworkAccessToggle = diffs.GetChangedCiopConfigs(masterConfig.CiOperator, prConfig.CiOperator, logger)
+		changedCiopConfigData, affectedJobs, restrictNetworkAccessFalseJobs = diffs.GetChangedCiopConfigs(masterConfig.CiOperator, prConfig.CiOperator, logger)
+		// If we allow network access rehearsals, we can just ignore the returned jobs that set it to 'false'
+		if networkAccessRehearsalsAllowed {
+			restrictNetworkAccessFalseJobs = []string{}
+		}
 		presubmitsForCiopConfigs, periodicsForCiopConfigs := diffs.GetJobsForCiopConfigs(prConfig.Prow, changedCiopConfigData, affectedJobs, logger)
 		presubmits.AddAll(presubmitsForCiopConfigs, config.ChangedCiopConfig)
 		periodics.AddAll(periodicsForCiopConfigs, config.ChangedCiopConfig)
@@ -185,7 +190,7 @@ func (r RehearsalConfig) DetermineAffectedJobs(candidate RehearsalCandidate, can
 		presubmits.AddAll(presubmitsForClusterProfiles, config.ChangedClusterProfile)
 	}
 
-	return filterPresubmits(presubmits, disabledDueToNetworkAccessToggle, logger), filterPeriodics(periodics, disabledDueToNetworkAccessToggle, logger), changedTemplates, changedClusterProfiles, disabledDueToNetworkAccessToggle, nil
+	return filterPresubmits(presubmits, restrictNetworkAccessFalseJobs, logger), filterPeriodics(periodics, restrictNetworkAccessFalseJobs, logger), changedTemplates, changedClusterProfiles, restrictNetworkAccessFalseJobs, nil
 }
 
 func (r RehearsalConfig) SetupJobs(candidate RehearsalCandidate, candidatePath string, presubmits config.Presubmits, periodics config.Periodics, rehearsalTemplates, rehearsalClusterProfiles *ConfigMaps, limit int, logger *logrus.Entry) (*config.ReleaseRepoConfig, *prowapi.Refs, []*prowconfig.Presubmit, error) {

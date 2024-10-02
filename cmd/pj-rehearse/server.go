@@ -13,6 +13,7 @@ import (
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/prow/pkg/git/v2"
 	"sigs.k8s.io/prow/pkg/github"
+	"sigs.k8s.io/prow/pkg/labels"
 	"sigs.k8s.io/prow/pkg/pluginhelp"
 	"sigs.k8s.io/prow/pkg/pod-utils/gcs"
 
@@ -21,17 +22,18 @@ import (
 )
 
 const (
-	rehearsalNotifier  = "[REHEARSALNOTIFIER]"
-	pjRehearse         = "pj-rehearse"
-	needsOkToTestLabel = "needs-ok-to-test"
-	rehearseNormal     = "/pj-rehearse"
-	rehearseMore       = "/pj-rehearse more"
-	rehearseMax        = "/pj-rehearse max"
-	rehearseSkip       = "/pj-rehearse skip"
-	rehearseAck        = "/pj-rehearse ack"
-	rehearseReject     = "/pj-rehearse reject"
-	rehearseAutoAck    = "/pj-rehearse auto-ack"
-	rehearseAbort      = "/pj-rehearse abort"
+	rehearsalNotifier          = "[REHEARSALNOTIFIER]"
+	pjRehearse                 = "pj-rehearse"
+	needsOkToTestLabel         = "needs-ok-to-test"
+	rehearseNormal             = "/pj-rehearse"
+	rehearseMore               = "/pj-rehearse more"
+	rehearseMax                = "/pj-rehearse max"
+	rehearseSkip               = "/pj-rehearse skip"
+	rehearseAck                = "/pj-rehearse ack"
+	rehearseReject             = "/pj-rehearse reject"
+	rehearseAutoAck            = "/pj-rehearse auto-ack"
+	rehearseAbort              = "/pj-rehearse abort"
+	rehearseAllowNetworkAccess = "/pj-rehearse network-access-allowed"
 )
 
 var commentRegex = regexp.MustCompile(`(?m)^/pj-rehearse\f*.*$`)
@@ -44,6 +46,7 @@ type githubClient interface {
 	GetRef(org, repo, ref string) (string, error)
 	ListIssueComments(org, repo string, number int) ([]github.IssueComment, error)
 	DeleteComment(org, repo string, id int) error
+	IsMember(org, user string) (bool, error)
 }
 
 type server struct {
@@ -110,6 +113,12 @@ func (s *server) helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, e
 		Description: "Abort all active rehearsal jobs for the PR",
 		WhoCanUse:   "Anyone can use on trusted PRs",
 		Examples:    []string{rehearseAbort},
+	})
+	pluginHelp.AddCommand(pluginhelp.Command{
+		Usage:       rehearseAllowNetworkAccess,
+		Description: fmt.Sprintf("Add the %s label to the PR allowing rehearsals of jobs with 'restrict_network_access' set to 'false'", rehearse.NetworkAccessRehearsalsOkLabel),
+		WhoCanUse:   "Openshift org members that are not the author of the PR",
+		Examples:    []string{rehearseAllowNetworkAccess},
 	})
 	return pluginHelp, nil
 }
@@ -206,6 +215,12 @@ func (s *server) handleNewPush(l *logrus.Entry, event github.PullRequestEvent) {
 			"pr":   number,
 		})
 		logger.Debug("handling new push")
+
+		if err := s.ghc.RemoveLabel(org, repo, number, rehearse.NetworkAccessRehearsalsOkLabel); err != nil {
+			// We shouldn't get an error here if the label doesn't exist, so any error is legitimate
+			logger.WithError(err).Errorf("failed to remove '%s' label", rehearse.NetworkAccessRehearsalsOkLabel)
+		}
+
 		pullRequest, err := s.ghc.GetPullRequest(org, repo, number)
 		if err != nil {
 			// This should only happen under GitHub api degradation
@@ -293,7 +308,6 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 			logger.WithError(err).Error("failed to create acknowledgement comment")
 		}
 
-		// We shouldn't allow rehearsals to run (or be ack'd) on untrusted PRs
 		for _, label := range pullRequest.Labels {
 			if needsOkToTestLabel == label.Name {
 				message := fmt.Sprintf("@%s: %s label found, no rehearsals will be run", user, needsOkToTestLabel)
@@ -311,6 +325,31 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 			switch command {
 			case rehearseAck, rehearseSkip:
 				s.acknowledgeRehearsals(org, repo, number, logger)
+			case rehearseAllowNetworkAccess:
+				member, err := s.ghc.IsMember("openshift", user)
+				if err != nil {
+					logger.WithError(err).Error("failed to check if user is a member of the openshift org")
+					continue
+				}
+				if !member {
+					message := fmt.Sprintf("@%s: not allowed to allow network access rehearsals. This must be done by a member of the `openshift` org", user)
+					if err := s.ghc.CreateComment(org, repo, number, message); err != nil {
+						logger.WithError(err).Error("failed to create comment")
+					}
+					continue
+				}
+
+				if user == pullRequest.User.Login {
+					message := fmt.Sprintf("@%s: PR author isn't allowed to allow network access rehearsals. This must be done by a different member of the `openshift` org", user)
+					if err := s.ghc.CreateComment(org, repo, number, message); err != nil {
+						logger.WithError(err).Error("failed to create comment")
+					}
+					continue
+				}
+
+				if err := s.ghc.AddLabel(org, repo, number, rehearse.NetworkAccessRehearsalsOkLabel); err != nil {
+					logger.WithError(err).Errorf("failed to add '%s' label", rehearse.NetworkAccessRehearsalsOkLabel)
+				}
 			case rehearseReject:
 				if err := s.ghc.RemoveLabel(org, repo, number, rehearse.RehearsalsAckLabel); err != nil {
 					logger.WithError(err).Errorf("failed to remove '%s' label", rehearse.RehearsalsAckLabel)
@@ -346,8 +385,19 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 
 				//TODO(DPTP-2888): this is the point at which we can use repoClient.RevParse() to see if we even need to load the configs at all, and also prune the set of loaded configs to only the changed files
 
+				allowedLabel := false
+				approved := false
+				for _, label := range pullRequest.Labels {
+					if label.Name == rehearse.NetworkAccessRehearsalsOkLabel {
+						allowedLabel = true
+					} else if label.Name == labels.Approved {
+						approved = true
+					}
+				}
+				networkAccessRehearsalsAllowed := allowedLabel && approved
+
 				candidatePath := repoClient.Directory()
-				presubmits, periodics, changedTemplates, changedClusterProfiles, _, err := rc.DetermineAffectedJobs(candidate, candidatePath, logger)
+				presubmits, periodics, changedTemplates, changedClusterProfiles, _, err := rc.DetermineAffectedJobs(candidate, candidatePath, networkAccessRehearsalsAllowed, logger)
 				if err != nil {
 					logger.WithError(err).Error("couldn't determine affected jobs")
 					s.reportFailure("unable to determine affected jobs", err, org, repo, user, number, true, false, logger)
@@ -435,7 +485,7 @@ func (s *server) getAffectedJobs(pullRequest *github.PullRequest, logger *logrus
 	//TODO(DPTP-2888): this is the point at which we can use repoClient.RevParse() to see if we even need to load the configs at all, and also prune the set of loaded configs to only the changed files
 
 	candidatePath := repoClient.Directory()
-	presubmits, periodics, _, _, disabledDueToNetworkAccessToggle, err := rc.DetermineAffectedJobs(candidate, candidatePath, logger)
+	presubmits, periodics, _, _, disabledDueToNetworkAccessToggle, err := rc.DetermineAffectedJobs(candidate, candidatePath, false, logger)
 	return presubmits, periodics, disabledDueToNetworkAccessToggle, err
 }
 
@@ -546,6 +596,7 @@ func (s *server) getUsageDetailsLines() []string {
 		fmt.Sprintf("Comment: `%s` to run up to %d rehearsals", rehearseMax, rc.MaxLimit),
 		fmt.Sprintf("Comment: `%s` to run up to %d rehearsals, and add the `%s` label on success", rehearseAutoAck, rc.NormalLimit, rehearse.RehearsalsAckLabel),
 		fmt.Sprintf("Comment: `%s` to abort all active rehearsals", rehearseAbort),
+		fmt.Sprintf("Comment: `%s` to allow rehearsals of tests that have the `restrict_network_access` field set to `false`. This must be executed by an `openshift` org member who is **not** the PR authoer.", rehearseAllowNetworkAccess),
 		"",
 		fmt.Sprintf("Once you are satisfied with the results of the rehearsals, comment: `%s` to unblock merge. When the `%s` label is present on your PR, merge will no longer be blocked by rehearsals.", rehearseAck, rehearse.RehearsalsAckLabel),
 		fmt.Sprintf("If you would like the `%s` label removed, comment: `%s` to re-block merging.", rehearse.RehearsalsAckLabel, rehearseReject),
@@ -557,7 +608,7 @@ func (s *server) getDisabledRehearsalsLines(disabledDueToNetworkAccessToggle []s
 	var lines []string
 	if len(disabledDueToNetworkAccessToggle) > 0 {
 		lines = []string{
-			"The following jobs are not rehearsable due to the `restrict_network_access` field being set to `false` in this PR. You must first merge this PR, and then subsequent changes to the job will be rehearsable: ",
+			fmt.Sprintf("The following jobs are not rehearsable without the `%s`, and `approved` labels present on this PR. This is due to the `restrict_network_access` field being set to `false`. The `%s` label can be added by any `openshift` org member other than the PR's author by commenting: `%s`.: ", rehearse.NetworkAccessRehearsalsOkLabel, rehearse.NetworkAccessRehearsalsOkLabel, rehearseAllowNetworkAccess),
 			"",
 			"Test name |",
 			"--- |",

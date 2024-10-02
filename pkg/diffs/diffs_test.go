@@ -162,7 +162,7 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 			},
 		},
 	}, {
-		name: "one potential rehearsal disabled due to un-restricted network access toggle 'true' to 'false'",
+		name: "one potential rehearsal disabled due to un-restricted network access set to 'false'",
 		configGenerator: func(t *testing.T) (config.DataByFilename, config.DataByFilename) {
 			before := config.DataByFilename{"org-repo-branch.yaml": baseCiopConfig}
 			afterConfig := config.DataWithInfo{}
@@ -185,42 +185,12 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 		},
 		expectedAffectedJobs: map[string]sets.Set[string]{
 			"org-repo-branch.yaml": {
-				"e2e": sets.Empty{},
+				"unit": sets.Empty{},
+				"e2e":  sets.Empty{},
 			},
 		},
 		expectedDisabledDueToNetworkAccessToggle: []string{"pull-ci-org-repo-branch-unit"},
-	}, {
-		name: "potential rehearsal for new test disabled due to un-restricted network access set to 'false'",
-		configGenerator: func(t *testing.T) (config.DataByFilename, config.DataByFilename) {
-			before := config.DataByFilename{"org-repo-branch.yaml": baseCiopConfig}
-			afterConfig := config.DataWithInfo{}
-			if err := deepcopy.Copy(&afterConfig, &baseCiopConfig); err != nil {
-				t.Fatal(err)
-			}
-			afterConfig.Configuration.Tests = append(afterConfig.Configuration.Tests, cioperatorapi.TestStepConfiguration{
-				As:                    "lint",
-				Commands:              "make lint",
-				RestrictNetworkAccess: utilpointer.Bool(false),
-			})
-			after := config.DataByFilename{"org-repo-branch.yaml": afterConfig}
-			return before, after
-		},
-		expected: func() config.DataByFilename {
-			expected := config.DataWithInfo{}
-			if err := deepcopy.Copy(&expected, &baseCiopConfig); err != nil {
-				t.Fatal(err)
-			}
-			expected.Configuration.Tests = append(expected.Configuration.Tests, cioperatorapi.TestStepConfiguration{
-				As:                    "lint",
-				Commands:              "make lint",
-				RestrictNetworkAccess: utilpointer.Bool(false),
-			})
-			return config.DataByFilename{"org-repo-branch.yaml": expected}
-		},
-		expectedAffectedJobs:                     map[string]sets.Set[string]{},
-		expectedDisabledDueToNetworkAccessToggle: []string{"pull-ci-org-repo-branch-lint"},
-	},
-	}
+	}}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

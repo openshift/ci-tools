@@ -217,7 +217,7 @@ func filterPresubmits(changedPresubmits config.Presubmits, disabledJobs []string
 			}
 
 			if slices.Contains(disabledJobs, job.Name) {
-				jobLogger.Debug("cannot rehearse due to toggle of 'restrict_network_access' to 'false'")
+				jobLogger.Debug("cannot rehearse due to 'restrict_network_access' set to 'false' without appropriate label on PR")
 				continue
 			}
 
@@ -244,7 +244,7 @@ func filterPeriodics(changedPeriodics config.Periodics, disabledJobs []string, l
 		}
 
 		if slices.Contains(disabledJobs, periodic.Name) {
-			jobLogger.Debug("cannot rehearse due to toggle of 'restrict_network_access' to 'false'")
+			jobLogger.Debug("cannot rehearse due to 'restrict_network_access' set to 'false' without appropriate label on PR")
 			continue
 		}
 

@@ -633,6 +633,11 @@ func (o *options) Complete() error {
 	}
 
 	for _, path := range o.secretDirectories.values {
+		// TODO: Delete this after regenerating all jobs with the new cluster profile system.
+		if strings.HasSuffix(path, "-cluster-profile") {
+			continue
+		}
+
 		secret, err := util.SecretFromDir(path)
 		name := filepath.Base(path)
 		if err != nil {

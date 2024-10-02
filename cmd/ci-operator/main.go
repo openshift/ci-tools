@@ -1454,7 +1454,7 @@ func (o *options) initializeNamespace() error {
 	// adds the appropriate cluster profile secrets to o.secrets,
 	// so they can be created by ctrlruntime client in the for cycle below this one
 	for _, cp := range o.clusterProfiles {
-		cpSecret, err := getClusterProfileSecret(cp, ctrlClient, o.resolverClient, ctx)
+		cpSecret, err := getClusterProfileSecret(cp, labeledclient.Wrap(ctrlClient, o.jobSpec), o.resolverClient, ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create cluster profile secret %s: %w", cp, err)
 		}
@@ -2337,7 +2337,7 @@ func getClusterProfileSecret(cp clusterProfileForTarget, client ctrlruntimeclien
 	newSecret := &coreapi.Secret{
 		Data: ciSecret.Data,
 		Type: ciSecret.Type,
-		ObjectMeta: meta.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf("%s-cluster-profile", cp.target),
 		},
 	}

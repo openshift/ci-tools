@@ -1,7 +1,6 @@
 package onboard
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/sirupsen/logrus"
@@ -11,7 +10,7 @@ import (
 	"github.com/openshift/ci-tools/cmd/cluster-init/runtime"
 )
 
-func NewOnboard(ctx context.Context, log *logrus.Entry, opts *runtime.Options) (*cobra.Command, error) {
+func NewOnboard(log *logrus.Entry, opts *runtime.Options) (*cobra.Command, error) {
 	cmd := cobra.Command{
 		Use:   "onboard",
 		Short: "Onboard a cluster",
@@ -20,7 +19,7 @@ func NewOnboard(ctx context.Context, log *logrus.Entry, opts *runtime.Options) (
 			return cmd.Help()
 		},
 	}
-	configCmd, err := config.NewCmd(ctx, log, opts)
+	configCmd, err := config.NewCmd(log, opts)
 	if err != nil {
 		return nil, fmt.Errorf("config: %w", err)
 	}

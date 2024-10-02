@@ -9,6 +9,8 @@ import (
 
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
+	"sigs.k8s.io/prow/pkg/logrusutil"
+	"sigs.k8s.io/prow/pkg/version"
 
 	imagev1 "github.com/openshift/api/image/v1"
 	imageregistryv1 "github.com/openshift/api/imageregistry/v1"
@@ -20,24 +22,24 @@ import (
 )
 
 func main() {
-	log := logrus.NewEntry(logrus.StandardLogger())
+	log := initLog()
 	ctx := handleSignals(signals.SetupSignalHandler(), log)
 
 	if err := addSchemes(); err != nil {
-		logrus.Fatalf("%s", err)
+		log.Fatalf("%s", err)
 	}
 
-	root, err := newRootCmd(ctx, log)
+	root, err := newRootCmd(log)
 	if err != nil {
-		logrus.Fatalf("create root cmd: %s", err)
+		log.Fatalf("create root cmd: %s", err)
 	}
 
-	if err := root.Execute(); err != nil {
-		logrus.Fatalf("%s", err)
+	if err := root.ExecuteContext(ctx); err != nil {
+		log.Fatalf("%s", err)
 	}
 }
 
-func newRootCmd(ctx context.Context, log *logrus.Entry) (*cobra.Command, error) {
+func newRootCmd(log *logrus.Entry) (*cobra.Command, error) {
 	opts := &runtime.Options{}
 	cmd := cobra.Command{
 		Use:   "cluster-init",
@@ -49,30 +51,38 @@ func newRootCmd(ctx context.Context, log *logrus.Entry) (*cobra.Command, error) 
 	}
 	cmd.PersistentFlags().StringVar(&opts.ClusterInstall, "cluster-install", "", "Path to cluster-install.yaml")
 	cmd.PersistentFlags().StringVar(&opts.InstallBase, "install-base", "", "The working directory in which artifacts will be dropped.")
-	onboardCmd, err := onboardcmd.NewOnboard(ctx, log, opts)
+	onboardCmd, err := onboardcmd.NewOnboard(log, opts)
 	if err != nil {
 		return nil, fmt.Errorf("onboard: %w", err)
 	}
 	cmd.AddCommand(onboardCmd)
-	provisionCmd, err := provision.NewProvision(ctx, log, opts)
+	provisionCmd, err := provision.NewProvision(log, opts)
 	if err != nil {
 		return nil, err
 	}
 	cmd.AddCommand(provisionCmd)
+	cmd.SilenceUsage = true
 
 	return &cmd, nil
 }
 
 func handleSignals(signalCtx context.Context, log *logrus.Entry) context.Context {
 	ctx, cancel := context.WithCancel(context.Background())
-
 	go func() {
 		<-signalCtx.Done()
 		log.Warn("Received interrupt signal")
 		cancel()
 	}()
-
 	return ctx
+}
+
+func initLog() *logrus.Entry {
+	logrusutil.Init(&logrusutil.DefaultFieldsFormatter{
+		PrintLineNumber:  true,
+		DefaultFields:    logrus.Fields{"component": version.Name},
+		WrappedFormatter: &logrus.TextFormatter{},
+	})
+	return logrus.NewEntry(logrus.StandardLogger())
 }
 
 func addSchemes() error {

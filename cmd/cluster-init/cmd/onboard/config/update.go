@@ -29,7 +29,7 @@ func (o *updateConfigOptions) complete() {
 	}
 }
 
-func newUpdateCmd(ctx context.Context, log *logrus.Entry) (*cobra.Command, error) {
+func newUpdateCmd(log *logrus.Entry) (*cobra.Command, error) {
 	opts := updateConfigOptions{}
 	cmd := cobra.Command{
 		Use:   "update",
@@ -37,7 +37,7 @@ func newUpdateCmd(ctx context.Context, log *logrus.Entry) (*cobra.Command, error
 		Long:  "Update the configuration files for a set of clusters",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.complete()
-			return updateConfig(ctx, log, &opts)
+			return updateConfig(cmd.Context(), log, &opts)
 		},
 	}
 
@@ -69,9 +69,7 @@ func updateConfig(ctx context.Context, log *logrus.Entry, opts *updateConfigOpti
 	}
 
 	clusterInstalls, err := clusterinstall.LoadFromDir(opts.clusterInstallDir,
-		clusterinstall.FinalizeOption(clusterinstall.FinalizeOptions{
-			ReleaseRepo: opts.releaseRepo,
-		}))
+		clusterinstall.FinalizeOption(clusterinstall.FinalizeOptions{ReleaseRepo: opts.releaseRepo}))
 	if err != nil {
 		return fmt.Errorf("load cluster-installs: %w", err)
 	}

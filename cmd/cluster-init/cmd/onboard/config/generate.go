@@ -20,7 +20,7 @@ type generateConfigOptions struct {
 	*runtime.Options
 }
 
-func newGenerateCmd(ctx context.Context, log *logrus.Entry, parentOpts *runtime.Options) (*cobra.Command, error) {
+func newGenerateCmd(log *logrus.Entry, parentOpts *runtime.Options) (*cobra.Command, error) {
 	opts := generateConfigOptions{}
 	opts.Options = parentOpts
 	cmd := cobra.Command{
@@ -28,7 +28,7 @@ func newGenerateCmd(ctx context.Context, log *logrus.Entry, parentOpts *runtime.
 		Short: "Generate the configuration files for a cluster",
 		Long:  "Generate the configuration files for a cluster",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return generateConfig(ctx, log, opts)
+			return generateConfig(cmd.Context(), log, opts)
 		},
 	}
 

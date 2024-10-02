@@ -15,7 +15,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/clusterinit/onboard"
 )
 
-func NewCmd(ctx context.Context, log *logrus.Entry, opts *runtime.Options) (*cobra.Command, error) {
+func NewCmd(log *logrus.Entry, opts *runtime.Options) (*cobra.Command, error) {
 	cmd := cobra.Command{
 		Use:   "config",
 		Short: "Handle configurations for a cluster",
@@ -25,19 +25,19 @@ func NewCmd(ctx context.Context, log *logrus.Entry, opts *runtime.Options) (*cob
 		},
 	}
 
-	generateConfigCmd, err := newGenerateCmd(ctx, log, opts)
+	generateConfigCmd, err := newGenerateCmd(log, opts)
 	if err != nil {
 		return nil, fmt.Errorf("generate: %w", err)
 	}
 	cmd.AddCommand(generateConfigCmd)
 
-	updateConfigCmd, err := newUpdateCmd(ctx, log)
+	updateConfigCmd, err := newUpdateCmd(log)
 	if err != nil {
 		return nil, fmt.Errorf("update: %w", err)
 	}
 	cmd.AddCommand(updateConfigCmd)
 
-	applyCmd, err := newApplyCmd(ctx, log, opts)
+	applyCmd, err := newApplyCmd(log, opts)
 	if err != nil {
 		return nil, fmt.Errorf("apply: %w", err)
 	}

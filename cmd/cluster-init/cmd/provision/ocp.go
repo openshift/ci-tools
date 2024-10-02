@@ -1,7 +1,6 @@
 package provision
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/sirupsen/logrus"
@@ -13,7 +12,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/clusterinit/provision/ocp"
 )
 
-func newProvisionOCP(ctx context.Context, log *logrus.Entry, opts *runtime.Options) *cobra.Command {
+func newProvisionOCP(log *logrus.Entry, opts *runtime.Options) *cobra.Command {
 	cmd := cobra.Command{
 		Use:   "ocp",
 		Short: "Provision an OCP Cluster",
@@ -23,11 +22,11 @@ The procedure consists of three steps:
 2. openshift-install create manifests
 3. openshift-install create cluster`,
 	}
-	cmd.AddCommand(newOCPCreate(ctx, log, opts))
+	cmd.AddCommand(newOCPCreate(log, opts))
 	return &cmd
 }
 
-func newOCPCreate(ctx context.Context, log *logrus.Entry, opts *runtime.Options) *cobra.Command {
+func newOCPCreate(log *logrus.Entry, opts *runtime.Options) *cobra.Command {
 	cmd := cobra.Command{
 		Use:   "create [install-config|manifests|cluster]",
 		Short: "Create OCP assets",
@@ -60,7 +59,7 @@ func newOCPCreate(ctx context.Context, log *logrus.Entry, opts *runtime.Options)
 				return fmt.Errorf("action %q is not supported", args[0])
 			}
 
-			if err := step.Run(ctx); err != nil {
+			if err := step.Run(cmd.Context()); err != nil {
 				return fmt.Errorf("%s: %w", step.Name(), err)
 			}
 

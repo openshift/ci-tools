@@ -1,7 +1,6 @@
 package provision
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -14,7 +13,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/clusterinit/provision/aws"
 )
 
-func newProvisionAWS(ctx context.Context, log *logrus.Entry, opts *runtime.Options) *cobra.Command {
+func newProvisionAWS(log *logrus.Entry, opts *runtime.Options) *cobra.Command {
 	cmd := cobra.Command{
 		Use:   "aws",
 		Short: "Provision assets on AWS",
@@ -23,16 +22,17 @@ An AWS profile must be properly set for these subcommands to work properly.
 How to use a named profile: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html#cli-configure-files-using-profiles
 For more information regarding env. variables: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html#envvars-set`,
 	}
-	cmd.AddCommand(newAWSCreateStacks(ctx, log, opts))
+	cmd.AddCommand(newAWSCreateStacks(log, opts))
 	return &cmd
 }
 
-func newAWSCreateStacks(ctx context.Context, log *logrus.Entry, opts *runtime.Options) *cobra.Command {
+func newAWSCreateStacks(log *logrus.Entry, opts *runtime.Options) *cobra.Command {
 	cmd := cobra.Command{
 		Use:   "create-stacks",
 		Short: "Create cloud formation stacks",
 		Long:  `Create cloud formation stacks `,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
 			clusterInstall, err := clusterinstall.Load(opts.ClusterInstall)
 			if err != nil {
 				return fmt.Errorf("load cluster-install: %w", err)

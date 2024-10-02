@@ -1,7 +1,6 @@
 package config
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/sirupsen/logrus"
@@ -16,7 +15,7 @@ type applyConfigOptions struct {
 	releaseRepo string
 }
 
-func newApplyCmd(ctx context.Context, log *logrus.Entry, parentOpts *runtime.Options) (*cobra.Command, error) {
+func newApplyCmd(log *logrus.Entry, parentOpts *runtime.Options) (*cobra.Command, error) {
 	opts := applyConfigOptions{}
 	cmd := cobra.Command{
 		Use:   "apply",
@@ -32,7 +31,7 @@ It then runs the applyconfig tool to apply them.`,
 				return fmt.Errorf("load cluster-install: %w", err)
 			}
 			step := onboard.NewApplyConfigStep(log, clusterInstall, runtime.BuildCmd, runtime.RunCmd)
-			return step.Run(ctx)
+			return step.Run(cmd.Context())
 		},
 	}
 	pf := cmd.PersistentFlags()

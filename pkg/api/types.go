@@ -2011,24 +2011,6 @@ func (p ClusterProfile) ConfigMap() string {
 	}
 }
 
-// Secret maps profiles to the Secret they require.
-func (p ClusterProfile) Secret() string {
-	var name string
-	switch p {
-	// These profiles share credentials with the base cloud provider profile.
-	case
-		ClusterProfileVSphereDis2,
-		ClusterProfileVSphereMultizone2,
-		ClusterProfileVSphereConnected2,
-		ClusterProfileVSphereElastic:
-
-		name = p.ClusterType()
-	default:
-		name = string(p)
-	}
-	return fmt.Sprintf("cluster-secrets-%s", name)
-}
-
 // GetDefaultClusterProfileSecretName returns the default secret name for the profile
 func GetDefaultClusterProfileSecretName(profile ClusterProfile) string {
 	return fmt.Sprintf("cluster-secrets-%s", string(profile))

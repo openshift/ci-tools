@@ -203,6 +203,11 @@ func updateRelease(config *api.ReleaseBuildConfiguration, currentRelease, future
 			updated.Name = futureRelease
 			config.Releases[name] = api.UnresolvedRelease{Integration: &updated}
 		}
+		if release.Candidate != nil {
+			updated := *release.Candidate
+			updated.Version = futureRelease
+			config.Releases[name] = api.UnresolvedRelease{Candidate: &updated}
+		}
 	}
 }
 

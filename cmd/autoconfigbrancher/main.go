@@ -221,16 +221,6 @@ func main() {
 			arguments: []string{"--prow-jobs-dir", "./ci-operator/jobs", "--config-path", "./core-services/sanitize-prow-jobs/_config.yaml"},
 		},
 		{
-			command: "/usr/bin/template-deprecator",
-			arguments: []string{
-				"--prow-config-path", "./core-services/prow/02_config/_config.yaml",
-				"--plugin-config", "./core-services/prow/02_config/_plugins.yaml",
-				"--prow-jobs-dir", "./ci-operator/jobs",
-				"--allowlist-path", "./core-services/template-deprecation/_allowlist.yaml",
-				"--prune=true",
-			},
-		},
-		{
 			command: "/usr/bin/clusterimageset-updater",
 			arguments: []string{
 				"--pools", "./clusters/hosted-mgmt/hive/pools",

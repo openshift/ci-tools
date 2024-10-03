@@ -1,0 +1,8 @@
+clusterName: foo
+provision:
+  aws: {}
+onboard:
+  osd: true
+  hosted: true
+  unmanaged: true
+  useTokenFileInKubeconfig: true

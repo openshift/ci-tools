@@ -1668,8 +1668,8 @@ sigs.k8s.io/controller-tools v0.15.0/go.mod h1:8zUSS2T8Hx0APCNRhJWbS3CAQEbIxLa07
 sigs.k8s.io/json v0.0.0-20211020170558-c049b76a60c6/go.mod h1:p4QtZmO4uMYipTQNzagwnNoseA6OxSUutVw05NhYDRs=
 sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd h1:EDPBXCAspyGV4jQlpZSudPeMmr1bNJefnuqLsRAsHZo=
 sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd/go.mod h1:B8JuhiUyNFVKdsE8h686QcCxMaH6HrOAZj4vswFpcB0=
-sigs.k8s.io/prow v0.0.0-20240917051714-0ac691ea5cae h1:8QQ68f5AG5fA7/2EWDBF8ieuiJsmXACfHuet0C0oZdA=
-sigs.k8s.io/prow v0.0.0-20240917051714-0ac691ea5cae/go.mod h1:nIN9CIT6eaqbXEKlOLJkADdFVk+wXKxP8Q6kf8VUM8E=
+sigs.k8s.io/prow v0.0.0-20241002215026-8442fff47c20 h1:T1Ss26g14wIvbZMWTYNcUWStH2Gx0+xjBfeom2uhpHQ=
+sigs.k8s.io/prow v0.0.0-20241002215026-8442fff47c20/go.mod h1:nIN9CIT6eaqbXEKlOLJkADdFVk+wXKxP8Q6kf8VUM8E=
 sigs.k8s.io/structured-merge-diff/v4 v4.0.1/go.mod h1:bJZC9H9iH24zzfZ/41RGcq60oK1F7G282QMXDPYydCw=
 sigs.k8s.io/structured-merge-diff/v4 v4.0.2/go.mod h1:bJZC9H9iH24zzfZ/41RGcq60oK1F7G282QMXDPYydCw=
 sigs.k8s.io/structured-merge-diff/v4 v4.1.2/go.mod h1:j/nl6xW8vLS49O8YvXW1ocPhZawJtm+Yrr7PPRQ0Vg4=

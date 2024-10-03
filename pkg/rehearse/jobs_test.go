@@ -576,7 +576,7 @@ func TestExecuteJobsErrors(t *testing.T) {
 				setSuccessCreateReactor,
 			)
 
-			jc := NewJobConfigurer(testCiopConfigs, &prowconfig.Config{}, resolver, testPrNumber, logger, nil, nil, makeBaseRefs())
+			jc := NewJobConfigurer(testCiopConfigs, &prowconfig.Config{}, resolver, testPrNumber, logger, nil, makeBaseRefs())
 
 			_, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			if err != nil {
@@ -643,7 +643,7 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 				},
 			)
 
-			jc := NewJobConfigurer(testCiopConfigs, &prowconfig.Config{}, resolver, testPrNumber, logger, nil, nil, makeBaseRefs())
+			jc := NewJobConfigurer(testCiopConfigs, &prowconfig.Config{}, resolver, testPrNumber, logger, nil, makeBaseRefs())
 			_, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
@@ -764,7 +764,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 							targetOrgRepo: targetOrgRepoPrefix,
 						}},
 				}}
-			jc := NewJobConfigurer(testCiopConfigs, &pc, resolver, testPrNumber, logger, nil, nil, makeBaseRefs())
+			jc := NewJobConfigurer(testCiopConfigs, &pc, resolver, testPrNumber, logger, nil, makeBaseRefs())
 			imageStreamTags, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)

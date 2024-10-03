@@ -392,20 +392,18 @@ type JobConfigurer struct {
 	prowConfig            *prowconfig.Config
 	registryResolver      registry.Resolver
 	clusterProfileCMNames map[string]string
-	templateCMNames       map[string]string
 	prNumber              int
 	refs                  *pjapi.Refs
 	logger                *logrus.Entry
 }
 
 // NewJobConfigurer filters the jobs and returns a new JobConfigurer.
-func NewJobConfigurer(ciopConfigs config.DataByFilename, prowConfig *prowconfig.Config, resolver registry.Resolver, prNumber int, logger *logrus.Entry, templates, profiles map[string]string, refs *pjapi.Refs) *JobConfigurer {
+func NewJobConfigurer(ciopConfigs config.DataByFilename, prowConfig *prowconfig.Config, resolver registry.Resolver, prNumber int, logger *logrus.Entry, profiles map[string]string, refs *pjapi.Refs) *JobConfigurer {
 	return &JobConfigurer{
 		ciopConfigs:           ciopConfigs,
 		prowConfig:            prowConfig,
 		registryResolver:      resolver,
 		clusterProfileCMNames: profiles,
-		templateCMNames:       templates,
 		prNumber:              prNumber,
 		refs:                  refs,
 		logger:                logger,
@@ -528,7 +526,6 @@ func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, metadata api.Metadat
 		return nil, err
 	}
 
-	replaceConfigMaps(spec.Volumes, jc.templateCMNames, logger)
 	replaceConfigMaps(spec.Volumes, jc.clusterProfileCMNames, logger)
 
 	return imageStreamTags, nil
@@ -553,29 +550,6 @@ func (jc *JobConfigurer) ConvertPeriodicsToPresubmits(periodics []prowconfig.Per
 		presubmits = append(presubmits, p)
 	}
 	return presubmits, nil
-}
-
-// AddRandomJobsForChangedTemplates finds jobs from the PR config that are using a specific template with a specific cluster type.
-// The job selection is done by iterating in an unspecified order, which avoids picking the same job
-// So if a template will be changed, find the jobs that are using a template in combination with the `aws`,`openstack`,`gcs` and `libvirt` cluster types.
-func AddRandomJobsForChangedTemplates(templates sets.Set[string], toBeRehearsed config.Presubmits, prConfigPresubmits map[string][]prowconfig.Presubmit, logger *logrus.Entry) config.Presubmits {
-	clusterTypes := getClusterTypes(prConfigPresubmits)
-	rehearsals := make(config.Presubmits)
-
-	for template := range templates {
-		for _, clusterType := range clusterTypes {
-			if isAlreadyRehearsed(toBeRehearsed, clusterType, template) {
-				continue
-			}
-
-			if repo, job := pickTemplateJob(prConfigPresubmits, template, clusterType); job != nil {
-				selectionFields := logrus.Fields{diffs.LogRepo: repo, diffs.LogJobName: job.Name, diffs.LogReasons: fmt.Sprintf("template %s changed", template)}
-				logger.WithFields(selectionFields).Info(diffs.ChosenJob)
-				rehearsals[repo] = append(rehearsals[repo], *job)
-			}
-		}
-	}
-	return rehearsals
 }
 
 // Generic Prow periodics are not related to a repo, but in OpenShift CI many of them
@@ -779,46 +753,6 @@ func getClusterTypes(jobs map[string][]prowconfig.Presubmit) []string {
 		return nil
 	}
 	return sets.List(ret)
-}
-
-func isAlreadyRehearsed(toBeRehearsed config.Presubmits, clusterType, templateFile string) bool {
-	for _, jobs := range toBeRehearsed {
-		for _, job := range jobs {
-			if hasClusterType(job, clusterType) && UsesConfigMap(job.JobBase, templateFile) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func pickTemplateJob(presubmits map[string][]prowconfig.Presubmit, templateFile, clusterType string) (string, *prowconfig.Presubmit) {
-	var keys []string
-	for k := range presubmits {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, repo := range keys {
-		for _, job := range presubmits[repo] {
-			if job.Agent != string(pjapi.KubernetesAgent) || job.Hidden || !hasRehearsableLabel(job.Labels) {
-				continue
-			}
-
-			if hasClusterType(job, clusterType) && UsesConfigMap(job.JobBase, templateFile) {
-				return repo, &job
-			}
-		}
-	}
-	return "", nil
-}
-
-func hasClusterType(job prowconfig.Presubmit, clusterType string) bool {
-	for _, env := range job.Spec.Containers[0].Env {
-		if env.Name == clusterTypeEnvName && env.Value == clusterType {
-			return true
-		}
-	}
-	return false
 }
 
 func UsesConfigMap(job prowconfig.JobBase, cm string) bool {

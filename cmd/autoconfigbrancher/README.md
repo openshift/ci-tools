@@ -35,9 +35,6 @@ _(subject to bitrot, always consult the code)_
   and saves Prow configuration to fix ordering, formatting, proper sharding etc
 - [sanitize-prow-jobs](https://github.com/openshift/ci-tools/tree/master/cmd/sanitize-prow-jobs): loads and saves Prow
   job configuration to fix ordering, formatting etc. This tool also assigns jobs to build farm clusters.
-- [template-deprecator](https://github.com/openshift/ci-tools/tree/master/cmd/template-deprecator): maintains the
-  allowlist of jobs allowed using templates (multi-stage test predecessor). Removes the jobs from the allowlist after
-  they are removed from the repository.
 - [clusterimageset-updater](https://github.com/openshift/ci-tools/tree/master/cmd/clusterimageset-updater): updates
   cluster pool manifests to use the latest stable OCP releases
 

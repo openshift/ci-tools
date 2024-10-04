@@ -140,7 +140,6 @@ func rehearsalConfigFromOptions(o options) rehearse.RehearsalConfig {
 	return rehearse.RehearsalConfig{
 		ProwjobKubeconfig:  o.prowjobKubeconfig,
 		KubernetesOptions:  o.kubernetesOptions,
-		NoTemplates:        o.noTemplates,
 		NoRegistry:         o.noRegistry,
 		NoClusterProfiles:  o.noClusterProfiles,
 		DryRun:             o.dryRun,
@@ -172,12 +171,12 @@ func dryRun(o options, logger *logrus.Entry) error {
 	candidatePath := dro.dryRunPath
 	candidate := rehearse.RehearsalCandidateFromPullRequest(pr, pr.Base.SHA)
 
-	presubmits, periodics, changedTemplates, changedClusterProfiles, _, err := rc.DetermineAffectedJobs(candidate, candidatePath, false, logger)
+	presubmits, periodics, changedClusterProfiles, _, err := rc.DetermineAffectedJobs(candidate, candidatePath, false, logger)
 	if err != nil {
 		return fmt.Errorf("error determining affected jobs: %w: %s", err, "ERROR: pj-rehearse: misconfiguration")
 	}
 
-	prConfig, prRefs, presubmitsToRehearse, err := rc.SetupJobs(candidate, candidatePath, presubmits, periodics, changedTemplates, changedClusterProfiles, dro.limit, logger)
+	prConfig, prRefs, presubmitsToRehearse, err := rc.SetupJobs(candidate, candidatePath, presubmits, periodics, changedClusterProfiles, dro.limit, logger)
 	if err != nil {
 		return fmt.Errorf("error setting up jobs: %w: %s", err, "ERROR: pj-rehearse: setup failure")
 	}
@@ -187,7 +186,7 @@ func dryRun(o options, logger *logrus.Entry) error {
 			return fmt.Errorf("%s: %w", "ERROR: pj-rehearse: failed to validate rehearsal jobs", err)
 		}
 
-		_, err := rc.RehearseJobs(candidate, candidatePath, prRefs, presubmitsToRehearse, changedTemplates, changedClusterProfiles, prConfig.Prow, true, logger)
+		_, err := rc.RehearseJobs(candidate, candidatePath, prRefs, presubmitsToRehearse, changedClusterProfiles, prConfig.Prow, true, logger)
 		return err
 	}
 

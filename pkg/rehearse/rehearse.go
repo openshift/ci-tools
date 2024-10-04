@@ -47,7 +47,6 @@ type RehearsalConfig struct {
 	ProwjobNamespace string
 	PodNamespace     string
 
-	NoTemplates       bool
 	NoRegistry        bool
 	NoClusterProfiles bool
 
@@ -118,7 +117,7 @@ type ref struct {
 	ref string
 }
 
-func (r RehearsalConfig) DetermineAffectedJobs(candidate RehearsalCandidate, candidatePath string, networkAccessRehearsalsAllowed bool, logger *logrus.Entry) (config.Presubmits, config.Periodics, *ConfigMaps, *ConfigMaps, []string, error) {
+func (r RehearsalConfig) DetermineAffectedJobs(candidate RehearsalCandidate, candidatePath string, networkAccessRehearsalsAllowed bool, logger *logrus.Entry) (config.Presubmits, config.Periodics, *ConfigMaps, []string, error) {
 	start := time.Now()
 	defer func() {
 		logger.Infof("determineAffectedJobs ran in %s", time.Since(start).Truncate(time.Second))
@@ -126,17 +125,17 @@ func (r RehearsalConfig) DetermineAffectedJobs(candidate RehearsalCandidate, can
 
 	prConfig, err := config.GetAllConfigs(candidatePath)
 	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("could not load configuration from candidate revision of release repo: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("could not load configuration from candidate revision of release repo: %w", err)
 	}
 	baseSHA := candidate.base.sha
 	masterConfig, err := config.GetAllConfigsFromSHA(candidatePath, baseSHA)
 	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("could not load configuration from base revision of release repo: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("could not load configuration from base revision of release repo: %w", err)
 	}
 
 	configUpdaterCfg, err := loadConfigUpdaterCfg(candidatePath)
 	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("could not load plugin configuration from tested revision of release repo: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("could not load plugin configuration from tested revision of release repo: %w", err)
 	}
 
 	presubmits := config.Presubmits{}
@@ -163,37 +162,27 @@ func (r RehearsalConfig) DetermineAffectedJobs(candidate RehearsalCandidate, can
 	if !r.NoRegistry {
 		changedRegistrySteps, err = determineChangedRegistrySteps(candidatePath, baseSHA, logger)
 		if err != nil {
-			return nil, nil, nil, nil, nil, fmt.Errorf("could not determine changed registry steps: %w", err)
+			return nil, nil, nil, nil, fmt.Errorf("could not determine changed registry steps: %w", err)
 		}
 		presubmitsForRegistry, periodicsForRegistry := SelectJobsForChangedRegistry(changedRegistrySteps, prConfig.Prow.JobConfig.PresubmitsStatic, prConfig.Prow.JobConfig.Periodics, prConfig.CiOperator, logger)
 		presubmits.AddAll(presubmitsForRegistry, config.ChangedRegistryContent)
 		periodics.AddAll(periodicsForRegistry, config.ChangedRegistryContent)
 	}
 
-	var changedTemplates *ConfigMaps
-	if !r.NoTemplates {
-		changedTemplates, err = determineChangedTemplates(candidatePath, baseSHA, candidate.head.sha, candidate.prNumber, configUpdaterCfg, logger)
-		if err != nil {
-			return nil, nil, nil, nil, nil, fmt.Errorf("could not determine changed templates: %w", err)
-		}
-		randomJobsForChangedTemplates := AddRandomJobsForChangedTemplates(changedTemplates.ProductionNames, presubmits, prConfig.Prow.JobConfig.PresubmitsStatic, logger)
-		presubmits.AddAll(randomJobsForChangedTemplates, config.ChangedTemplate)
-	}
-
 	var changedClusterProfiles *ConfigMaps
 	if !r.NoClusterProfiles {
 		changedClusterProfiles, err = determineChangedClusterProfiles(candidatePath, baseSHA, candidate.head.sha, candidate.prNumber, configUpdaterCfg, logger)
 		if err != nil {
-			return nil, nil, nil, nil, nil, fmt.Errorf("could not determine changed cluster profiles: %w", err)
+			return nil, nil, nil, nil, fmt.Errorf("could not determine changed cluster profiles: %w", err)
 		}
 		presubmitsForClusterProfiles := diffs.GetPresubmitsForClusterProfiles(prConfig.Prow, changedClusterProfiles.ProductionNames, logger)
 		presubmits.AddAll(presubmitsForClusterProfiles, config.ChangedClusterProfile)
 	}
 
-	return filterPresubmits(presubmits, restrictNetworkAccessFalseJobs, logger), filterPeriodics(periodics, restrictNetworkAccessFalseJobs, logger), changedTemplates, changedClusterProfiles, restrictNetworkAccessFalseJobs, nil
+	return filterPresubmits(presubmits, restrictNetworkAccessFalseJobs, logger), filterPeriodics(periodics, restrictNetworkAccessFalseJobs, logger), changedClusterProfiles, restrictNetworkAccessFalseJobs, nil
 }
 
-func (r RehearsalConfig) SetupJobs(candidate RehearsalCandidate, candidatePath string, presubmits config.Presubmits, periodics config.Periodics, rehearsalTemplates, rehearsalClusterProfiles *ConfigMaps, limit int, logger *logrus.Entry) (*config.ReleaseRepoConfig, *prowapi.Refs, []*prowconfig.Presubmit, error) {
+func (r RehearsalConfig) SetupJobs(candidate RehearsalCandidate, candidatePath string, presubmits config.Presubmits, periodics config.Periodics, rehearsalClusterProfiles *ConfigMaps, limit int, logger *logrus.Entry) (*config.ReleaseRepoConfig, *prowapi.Refs, []*prowconfig.Presubmit, error) {
 	resolver, err := r.createResolver(candidatePath)
 	if err != nil {
 		return nil, nil, nil, err
@@ -207,7 +196,7 @@ func (r RehearsalConfig) SetupJobs(candidate RehearsalCandidate, candidatePath s
 	prNumber := candidate.prNumber
 	prRefs := candidate.createRefs()
 
-	jobConfigurer := NewJobConfigurer(prConfig.CiOperator, prConfig.Prow, resolver, prNumber, logger, rehearsalTemplates.Names, rehearsalClusterProfiles.Names, prRefs)
+	jobConfigurer := NewJobConfigurer(prConfig.CiOperator, prConfig.Prow, resolver, prNumber, logger, rehearsalClusterProfiles.Names, prRefs)
 	imageStreamTags, presubmitsToRehearse, err := jobConfigurer.ConfigurePresubmitRehearsals(presubmits)
 	if err != nil {
 		return nil, nil, nil, err
@@ -314,7 +303,6 @@ func (r RehearsalConfig) RehearseJobs(
 	candidatePath string,
 	prRefs *prowapi.Refs,
 	presubmitsToRehearse []*prowconfig.Presubmit,
-	rehearsalTemplates,
 	rehearsalClusterProfiles *ConfigMaps,
 	prowCfg *prowconfig.Config,
 	waitForSuccess bool,
@@ -342,7 +330,6 @@ func (r RehearsalConfig) RehearseJobs(
 		configUpdaterCfg,
 		candidatePath,
 		r.DryRun,
-		rehearsalTemplates,
 		rehearsalClusterProfiles)
 	if err != nil {
 		logger.WithError(err).Error("Failed to set up dependencies. This might cause subsequent failures.")
@@ -385,24 +372,6 @@ func (r RehearsalConfig) getBuildClusterAndProwJobConfigs(logger *logrus.Entry) 
 	}
 
 	return buildClusterConfigs, prowJobConfig
-}
-
-func determineChangedTemplates(candidate, baseSHA, headSHA string, prNumber int, configUpdaterCfg prowplugins.ConfigUpdater, logger *logrus.Entry) (*ConfigMaps, error) {
-	var rehearsalTemplates ConfigMaps
-	changedTemplates, err := config.GetChangedTemplates(candidate, baseSHA)
-	if err != nil {
-		return nil, fmt.Errorf("could not get template differences: %w", err)
-	}
-	rehearsalTemplates, err = NewConfigMaps(changedTemplates, "template", headSHA, prNumber, configUpdaterCfg)
-	if err != nil {
-		return nil, fmt.Errorf("could not match changed templates with cluster configmaps: %w", err)
-	}
-
-	if len(rehearsalTemplates.Paths) != 0 {
-		logger.WithField("templates", rehearsalTemplates.Paths).Info("templates changed")
-	}
-
-	return &rehearsalTemplates, nil
 }
 
 func determineChangedRegistrySteps(candidate, baseSHA string, logger *logrus.Entry) ([]registry.Node, error) {
@@ -515,7 +484,6 @@ func setupDependencies(
 	configUpdaterCfg prowplugins.ConfigUpdater,
 	releaseRepoPath string,
 	dryRun bool,
-	changedTemplates *ConfigMaps,
 	changedClusterProfiles *ConfigMaps,
 ) (cleanup, error) {
 	buildClusters := sets.Set[string]{}
@@ -560,9 +528,6 @@ func setupDependencies(
 			})
 			cleanupsLock.Unlock()
 
-			if err := cmManager.Create(*changedTemplates); err != nil {
-				log.WithError(err).Error("couldn't create temporary template ConfigMaps for rehearsals")
-			}
 			if err := cmManager.Create(*changedClusterProfiles); err != nil {
 				log.WithError(err).Error("couldn't create temporary cluster profile ConfigMaps for rehearsals")
 			}

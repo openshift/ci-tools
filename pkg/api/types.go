@@ -202,6 +202,23 @@ func (config ReleaseBuildConfiguration) IsPipelineImage(name string) bool {
 	return config.IsBundleImage(name)
 }
 
+// DeterminePathAlias searches through the CanonicalGoRepositoryList to find the matching alias for the provided org and repo.
+// If not found, it returns the CanonicalGoRepository if one is configured
+func (config ReleaseBuildConfiguration) DeterminePathAlias(org, repo string) string {
+	orgRepo := fmt.Sprintf("%s.%s", org, repo)
+	for _, cgr := range config.CanonicalGoRepositoryList {
+		if cgr.Ref == orgRepo {
+			return cgr.Repository
+		}
+	}
+
+	if config.CanonicalGoRepository != nil {
+		return *config.CanonicalGoRepository
+	}
+
+	return ""
+}
+
 // ResourceConfiguration defines resource overrides for jobs run
 // by the operator.
 type ResourceConfiguration map[string]ResourceRequirements

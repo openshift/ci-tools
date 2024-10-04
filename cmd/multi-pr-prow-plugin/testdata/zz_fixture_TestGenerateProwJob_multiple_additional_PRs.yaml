@@ -1,0 +1,91 @@
+apiVersion: prow.k8s.io/v1
+kind: ProwJob
+metadata:
+  annotations:
+    prow.k8s.io/context: ""
+    prow.k8s.io/job: multi-pr-openshift-ci-tools-999-openshift-ci-tools-123-openshift-installer-456-e2e
+  creationTimestamp: null
+  labels:
+    ci.openshift.io/testwith: openshift.ci-tools.999
+    created-by-prow: "true"
+    prow.k8s.io/context: ""
+    prow.k8s.io/job: multi-pr-openshift-ci-tools-999-openshift-ci-tools-123-openshif
+    prow.k8s.io/refs.base_ref: main
+    prow.k8s.io/refs.org: openshift
+    prow.k8s.io/refs.pull: "456"
+    prow.k8s.io/refs.repo: installer
+    prow.k8s.io/type: periodic
+  name: some-uuid
+  namespace: ci
+spec:
+  agent: kubernetes
+  cluster: build02
+  decoration_config:
+    skip_cloning: true
+    timeout: 8h0m0s
+  extra_refs:
+  - base_ref: main
+    org: openshift
+    pulls:
+    - author: third-dev
+      number: 456
+      sha: SOME_OTHER_SHA
+    repo: installer
+  job: multi-pr-openshift-ci-tools-999-openshift-ci-tools-123-openshift-installer-456-e2e
+  pod_spec:
+    containers:
+    - args:
+      - --gcs-upload-secret=/secrets/gcs/service-account.json
+      - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+      - --input-hash=multi-pr-openshift-ci-tools-999-openshift-ci-tools-123-openshift-installer-456-e2e
+      - --report-credentials-file=/etc/report/credentials
+      - --target=e2e
+      - --with-test-from=openshift/ci-tools@master:e2e
+      command:
+      - ci-operator
+      image: ci-operator:latest
+      imagePullPolicy: Always
+      name: ""
+      resources:
+        requests:
+          cpu: 10m
+      volumeMounts:
+      - mountPath: /secrets/gcs
+        name: gcs-credentials
+        readOnly: true
+      - mountPath: /secrets/manifest-tool
+        name: manifest-tool-local-pusher
+        readOnly: true
+      - mountPath: /etc/pull-secret
+        name: pull-secret
+        readOnly: true
+      - mountPath: /etc/report
+        name: result-aggregator
+        readOnly: true
+    serviceAccountName: ci-operator
+    volumes:
+    - name: manifest-tool-local-pusher
+      secret:
+        secretName: manifest-tool-local-pusher
+    - name: pull-secret
+      secret:
+        secretName: registry-pull-credentials
+    - name: result-aggregator
+      secret:
+        secretName: result-aggregator
+  refs:
+    base_ref: master
+    org: openshift
+    pulls:
+    - author: other-dev
+      number: 123
+      sha: SOME_SHA
+    - author: developer
+      number: 999
+      sha: A_SHA
+    repo: ci-tools
+  report: true
+  type: periodic
+status:
+  startTime: "1970-01-01T00:00:00Z"
+  state: triggered

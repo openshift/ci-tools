@@ -596,7 +596,7 @@ func (s *server) getUsageDetailsLines() []string {
 		fmt.Sprintf("Comment: `%s` to run up to %d rehearsals", rehearseMax, rc.MaxLimit),
 		fmt.Sprintf("Comment: `%s` to run up to %d rehearsals, and add the `%s` label on success", rehearseAutoAck, rc.NormalLimit, rehearse.RehearsalsAckLabel),
 		fmt.Sprintf("Comment: `%s` to abort all active rehearsals", rehearseAbort),
-		fmt.Sprintf("Comment: `%s` to allow rehearsals of tests that have the `restrict_network_access` field set to `false`. This must be executed by an `openshift` org member who is **not** the PR authoer.", rehearseAllowNetworkAccess),
+		fmt.Sprintf("Comment: `%s` to allow rehearsals of tests that have the `restrict_network_access` field set to `false`. This must be executed by an `openshift` org member who is **not** the PR author", rehearseAllowNetworkAccess),
 		"",
 		fmt.Sprintf("Once you are satisfied with the results of the rehearsals, comment: `%s` to unblock merge. When the `%s` label is present on your PR, merge will no longer be blocked by rehearsals.", rehearseAck, rehearse.RehearsalsAckLabel),
 		fmt.Sprintf("If you would like the `%s` label removed, comment: `%s` to re-block merging.", rehearse.RehearsalsAckLabel, rehearseReject),
@@ -608,7 +608,7 @@ func (s *server) getDisabledRehearsalsLines(disabledDueToNetworkAccessToggle []s
 	var lines []string
 	if len(disabledDueToNetworkAccessToggle) > 0 {
 		lines = []string{
-			fmt.Sprintf("The following jobs are not rehearsable without the `%s`, and `approved` labels present on this PR. This is due to the `restrict_network_access` field being set to `false`. The `%s` label can be added by any `openshift` org member other than the PR's author by commenting: `%s`.: ", rehearse.NetworkAccessRehearsalsOkLabel, rehearse.NetworkAccessRehearsalsOkLabel, rehearseAllowNetworkAccess),
+			fmt.Sprintf("The following jobs are not rehearsable without the `%s`, and `approved` labels present on this PR. This is due to the `restrict_network_access` field being set to `false`. The `%s` label can be added by any `openshift` org member other than the PR's author by commenting: `%s`: ", rehearse.NetworkAccessRehearsalsOkLabel, rehearse.NetworkAccessRehearsalsOkLabel, rehearseAllowNetworkAccess),
 			"",
 			"Test name |",
 			"--- |",

@@ -190,7 +190,20 @@ export HOME=/tmp
 export XDG_RUNTIME_DIR=/tmp/run
 mkdir -p "${XDG_RUNTIME_DIR}"
 oc registry login
-oc adm release new --max-per-registry=32 -n %q --from-image-stream %q --to-image-base %q --to-image %q --name %q
+exit_code="0"
+for ((i=1; i<=5; i++)); do
+	if oc adm release new --max-per-registry=32 -n %q --from-image-stream %q --to-image-base %q --to-image %q --name %q; then
+		echo "Payload creation success."
+		exit_code="0"
+		break
+	fi
+	exit_code="$?"
+	echo "Payload creation failure. Will be retried in 60 seconds..."
+	sleep 60
+done
+if [[ "$exit_code" != "0" ]]; then
+	exit $exit_code
+fi
 oc adm release extract --from=%q --to=${ARTIFACT_DIR}/release-payload-%s
 `, s.jobSpec.Namespace(), streamName, cvo, destination, version, destination, s.name),
 	}

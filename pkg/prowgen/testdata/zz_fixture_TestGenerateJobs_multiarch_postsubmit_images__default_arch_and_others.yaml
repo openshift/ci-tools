@@ -1,17 +1,17 @@
 postsubmits:
   organization/repository:
   - always_run: true
-    cluster: build10
+    cluster: build11
     labels:
-      ci-operator.openshift.io/cluster: build10
+      ci-operator.openshift.io/cluster: build11
       ci-operator.openshift.io/is-promotion: "true"
     max_concurrency: 1
     name: branch-ci-organization-repository-branch-images
 presubmits:
   organization/repository:
   - always_run: false
-    cluster: build10
+    cluster: build11
     labels:
-      ci-operator.openshift.io/cluster: build10
+      ci-operator.openshift.io/cluster: build11
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
     name: pull-ci-organization-repository-branch-images

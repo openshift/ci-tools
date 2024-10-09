@@ -1,0 +1,79 @@
+apiVersion: prow.k8s.io/v1
+kind: ProwJob
+metadata:
+  annotations:
+    prow.k8s.io/context: ""
+    prow.k8s.io/job: multi-pr-openshift-ci-tools-999-openshift-ci-tools-123-unit
+  creationTimestamp: null
+  labels:
+    ci.openshift.io/testwith: openshift.ci-tools.999
+    created-by-prow: "true"
+    prow.k8s.io/context: ""
+    prow.k8s.io/job: multi-pr-openshift-ci-tools-999-openshift-ci-tools-123-unit
+    prow.k8s.io/type: periodic
+  name: some-uuid
+  namespace: ci
+spec:
+  agent: kubernetes
+  cluster: build01
+  decoration_config:
+    skip_cloning: true
+    timeout: 8h0m0s
+  job: multi-pr-openshift-ci-tools-999-openshift-ci-tools-123-unit
+  pod_spec:
+    containers:
+    - args:
+      - --gcs-upload-secret=/secrets/gcs/service-account.json
+      - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+      - --input-hash=multi-pr-openshift-ci-tools-999-openshift-ci-tools-123-unit
+      - --report-credentials-file=/etc/report/credentials
+      - --target=unit
+      - --with-test-from=openshift/ci-tools@master:unit
+      command:
+      - ci-operator
+      image: ci-operator:latest
+      imagePullPolicy: Always
+      name: ""
+      resources:
+        requests:
+          cpu: 10m
+      volumeMounts:
+      - mountPath: /secrets/gcs
+        name: gcs-credentials
+        readOnly: true
+      - mountPath: /secrets/manifest-tool
+        name: manifest-tool-local-pusher
+        readOnly: true
+      - mountPath: /etc/pull-secret
+        name: pull-secret
+        readOnly: true
+      - mountPath: /etc/report
+        name: result-aggregator
+        readOnly: true
+    serviceAccountName: ci-operator
+    volumes:
+    - name: manifest-tool-local-pusher
+      secret:
+        secretName: manifest-tool-local-pusher
+    - name: pull-secret
+      secret:
+        secretName: registry-pull-credentials
+    - name: result-aggregator
+      secret:
+        secretName: result-aggregator
+  refs:
+    base_ref: master
+    org: openshift
+    pulls:
+    - author: other-dev
+      number: 123
+      sha: SOME_SHA
+    - author: developer
+      number: 999
+      sha: A_SHA
+    repo: ci-tools
+  report: true
+  type: periodic
+status:
+  startTime: "1970-01-01T00:00:00Z"
+  state: triggered

@@ -667,7 +667,7 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 			BaseRef: primaryPR.BaseRef,
 			BaseSHA: primaryPR.BaseSHA,
 			// BaseLink:  fmt.Sprintf("%s/commit/%s", pr.Base.Repo.HTMLURL, pr.BaseSHA),
-			PathAlias: determinePathAlias(ciopConfig, primaryPR),
+			PathAlias: ciopConfig.DeterminePathAlias(primaryPR.Org, primaryPR.Repo),
 		}
 
 		var pulls []prowv1.Pull
@@ -698,20 +698,6 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 	pj.Namespace = prpqrNamespace
 
 	return &pj, nil
-}
-
-func determinePathAlias(ciopConfig *api.ReleaseBuildConfiguration, pr v1.PullRequestUnderTest) string {
-	if ciopConfig.CanonicalGoRepository != nil {
-		return *ciopConfig.CanonicalGoRepository
-	}
-
-	orgRepo := fmt.Sprintf("%s.%s", pr.Org, pr.Repo)
-	for _, cgr := range ciopConfig.CanonicalGoRepositoryList {
-		if cgr.Ref == orgRepo {
-			return cgr.Repository
-		}
-	}
-	return ""
 }
 
 func metadataFromPullRequestsUnderTest(prs []v1.PullRequestUnderTest) *api.Metadata {

@@ -14,6 +14,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 	provisionaws "github.com/openshift/ci-tools/pkg/clusterinit/provision/aws"
+	awstypes "github.com/openshift/ci-tools/pkg/clusterinit/types/aws"
 )
 
 type fakeCloudFormationClient struct {
@@ -52,7 +53,7 @@ func TestRun(t *testing.T) {
 		{
 			name: "Create stack successfully",
 			ci: &clusterinstall.ClusterInstall{Provision: clusterinstall.Provision{
-				AWS: &clusterinstall.AWSProvision{CloudFormationTemplates: []clusterinstall.AWSCloudFormationTemplate{
+				AWS: &awstypes.Provision{CloudFormationTemplates: []awstypes.CloudFormationTemplate{
 					{StackName: "s1"},
 				}}}},
 			onCreateStack: func() (*cloudformation.CreateStackOutput, error) {
@@ -67,7 +68,7 @@ func TestRun(t *testing.T) {
 		{
 			name: "Fail to create stack",
 			ci: &clusterinstall.ClusterInstall{Provision: clusterinstall.Provision{
-				AWS: &clusterinstall.AWSProvision{CloudFormationTemplates: []clusterinstall.AWSCloudFormationTemplate{
+				AWS: &awstypes.Provision{CloudFormationTemplates: []awstypes.CloudFormationTemplate{
 					{StackName: "s1"},
 				}}}},
 			onCreateStack: func() (*cloudformation.CreateStackOutput, error) {
@@ -83,7 +84,7 @@ func TestRun(t *testing.T) {
 		{
 			name: "A stack exists, skip",
 			ci: &clusterinstall.ClusterInstall{Provision: clusterinstall.Provision{
-				AWS: &clusterinstall.AWSProvision{CloudFormationTemplates: []clusterinstall.AWSCloudFormationTemplate{
+				AWS: &awstypes.Provision{CloudFormationTemplates: []awstypes.CloudFormationTemplate{
 					{StackName: "s1"},
 				}}}},
 			onCreateStack: func() (*cloudformation.CreateStackOutput, error) {
@@ -97,12 +98,12 @@ func TestRun(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			cfClientGetter := func() (provisionaws.CloudFormationClient, error) {
+			cfClientGetter := func(context.Context) (awstypes.CloudFormationClient, error) {
 				return newFakeCloudFormationClient(tc.onCreateStack, tc.onDescribeStack), nil
 			}
 			wait := 5 * time.Millisecond
 			step := provisionaws.NewCreateAWSStacksStep(logrus.NewEntry(logrus.StandardLogger()), tc.ci,
-				cfClientGetter, &wait, func(path string) (string, error) { return "", nil })
+				awstypes.CloudFormationClientGetterFunc(cfClientGetter), &wait, func(path string) (string, error) { return "", nil })
 
 			err := step.Run(context.TODO())
 

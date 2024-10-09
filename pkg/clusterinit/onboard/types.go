@@ -74,3 +74,11 @@ func ClusterInstallPath(releaseRepo string) string {
 func BuildClustersPath(releaseRepo string) string {
 	return filepath.Join(releaseRepo, "clusters", "build-clusters", "_cluster-init.yaml")
 }
+
+func CISchedulingWebhookManifestsPath(releaseRepo, clusterName string) string {
+	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "ci-scheduling-webhook")
+}
+
+func CISchedulingWebhookDNSPath(manifests string) string {
+	return filepath.Join(manifests, "dns.yaml")
+}

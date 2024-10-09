@@ -14,26 +14,20 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
+	awstypes "github.com/openshift/ci-tools/pkg/clusterinit/types/aws"
 )
 
 var (
 	createStackCompleteWaitTimeDefault time.Duration = 10 * time.Minute
 )
 
-// CloudFormationClient is a convenience interface that has been created
-// to make unit test easier to write
-type CloudFormationClient interface {
-	CreateStack(ctx context.Context, params *cloudformation.CreateStackInput, optFns ...func(*cloudformation.Options)) (*cloudformation.CreateStackOutput, error)
-	DescribeStacks(context.Context, *cloudformation.DescribeStacksInput, ...func(*cloudformation.Options)) (*cloudformation.DescribeStacksOutput, error)
-}
-
-type CloudFormationClientGetter func() (CloudFormationClient, error)
+type CloudFormationClientGetter func() (awstypes.CloudFormationClient, error)
 type TemplateResolver func(path string) (string, error)
 
 type createAWSStacksStep struct {
 	log                         *logrus.Entry
 	clusterInstall              *clusterinstall.ClusterInstall
-	getCFClient                 CloudFormationClientGetter
+	cfClient                    awstypes.CloudFormationClientGetter
 	createStackCompleteWaitTime *time.Duration
 	templateResolver            TemplateResolver
 }
@@ -54,7 +48,7 @@ func (s *createAWSStacksStep) Run(ctx context.Context) error {
 		return nil
 	}
 
-	client, err := s.getCFClient()
+	client, err := s.cfClient.CloudFormationClient(ctx)
 	if err != nil {
 		return fmt.Errorf("get cloud formation client: %w", err)
 	}
@@ -71,8 +65,8 @@ func (s *createAWSStacksStep) Run(ctx context.Context) error {
 
 func (s *createAWSStacksStep) createStacks(ctx context.Context,
 	log *logrus.Entry,
-	client CloudFormationClient,
-	templates []clusterinstall.AWSCloudFormationTemplate) error {
+	client awstypes.CloudFormationClient,
+	templates []awstypes.CloudFormationTemplate) error {
 	for _, t := range templates {
 		log := log.WithField("stack", t.StackName)
 
@@ -110,8 +104,8 @@ func (s *createAWSStacksStep) createStacks(ctx context.Context,
 	return nil
 }
 
-func waitForStacksToComplete(ctx context.Context, log *logrus.Entry, client CloudFormationClient,
-	templates []clusterinstall.AWSCloudFormationTemplate, wait time.Duration) error {
+func waitForStacksToComplete(ctx context.Context, log *logrus.Entry, client awstypes.CloudFormationClient,
+	templates []awstypes.CloudFormationTemplate, wait time.Duration) error {
 	waiter := cloudformation.NewStackCreateCompleteWaiter(client)
 	waiters, wCtx := errgroup.WithContext(ctx)
 	waiters.SetLimit(len(templates))
@@ -137,7 +131,7 @@ func resolveTemplate(path string) (string, error) {
 
 func NewCreateAWSStacksStep(log *logrus.Entry,
 	clusterInstall *clusterinstall.ClusterInstall,
-	getCFClient CloudFormationClientGetter,
+	cfClient awstypes.CloudFormationClientGetter,
 	createStackCompleteWaitTime *time.Duration,
 	templateResolver TemplateResolver) *createAWSStacksStep {
 	if createStackCompleteWaitTime == nil {
@@ -149,7 +143,7 @@ func NewCreateAWSStacksStep(log *logrus.Entry,
 	return &createAWSStacksStep{
 		log:                         log,
 		clusterInstall:              clusterInstall,
-		getCFClient:                 getCFClient,
+		cfClient:                    cfClient,
 		createStackCompleteWaitTime: createStackCompleteWaitTime,
 		templateResolver:            templateResolver,
 	}

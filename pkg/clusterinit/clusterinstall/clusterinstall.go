@@ -1,38 +1,24 @@
 package clusterinstall
 
 import (
-	"context"
-	"os/exec"
+	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/ci-tools/pkg/clusterinit/types/aws"
+	"github.com/openshift/ci-tools/pkg/clusterinit/types/gcp"
+	installertypes "github.com/openshift/installer/pkg/types"
 )
 
 type ClusterInstall struct {
-	ClusterName string `json:"clusterName,omitempty"`
-	InstallBase string
-	Provision   Provision `json:"provision,omitempty"`
-	Onboard     Onboard   `json:"onboard,omitempty"`
+	ClusterName    string    `json:"clusterName,omitempty"`
+	Provision      Provision `json:"provision,omitempty"`
+	Onboard        Onboard   `json:"onboard,omitempty"`
+	InstallBase    string
+	Infrastructure configv1.Infrastructure
+	InstallConfig  installertypes.InstallConfig
 }
-
-type ClusterInstallGetter func() (*ClusterInstall, error)
 
 type Provision struct {
-	AWS *AWSProvision `json:"aws,omitempty"`
-	GCP *GCPProvision `json:"gcp,omitempty"`
-}
-
-type GCPProvision struct{}
-
-type AWSProvision struct {
-	CloudFormationTemplates []AWSCloudFormationTemplate `json:"cloudFormationTemplates,omitempty"`
-}
-
-type AWSCloudFormationTemplate struct {
-	StackName    string `json:"stackName,omitempty"`
-	TemplateBody string `json:"templateBody,omitempty"`
-	Parameters   []struct {
-		Key   string `json:"key,omitempty"`
-		Value string `json:"value,omitempty"`
-	} `json:"parameters,omitempty"`
-	Capabilities []string `json:"capabilities,omitempty"`
+	AWS *aws.Provision `json:"aws,omitempty"`
+	GCP *gcp.Provision `json:"gcp,omitempty"`
 }
 
 type Onboard struct {
@@ -48,6 +34,7 @@ type Onboard struct {
 	Dex                      Dex                    `json:"dex,omitempty"`
 	QuayioPullThroughCache   QuayioPullThroughCache `json:"quayioPullThroughCache,omitempty"`
 	Certificate              Certificate            `json:"certificate,omitempty"`
+	CISchedulingWebhook      CISchedulingWebhook    `json:"ciSchedulingWebhook,omitempty"`
 }
 
 type Dex struct {
@@ -62,6 +49,37 @@ type CertificateProjectLabel struct {
 	Key   string `json:"key,omitempty"`
 	Value string `json:"value,omitempty"`
 }
+type CISchedulingWebhook struct {
+	SkipStep
+	Workloads   map[string]CISchedulingWebhookWorkload `json:"workloads,omitempty"`
+	GenerateDNS bool                                   `json:"dns,omitempty"`
+}
+
+type CISchedulingWebhookWorkload struct {
+	Archs []Architecture                  `json:"architectures,omitempty"`
+	AWS   aws.CISchedulingWebhookWorkload `json:"aws,omitempty"`
+}
+
+type CIWorkload string
+
+const (
+	BuildsWorkload    CIWorkload = "builds"
+	TestsWorkload     CIWorkload = "tests"
+	LongTestsWorkload CIWorkload = "longtests"
+	ProwJobsWorkload  CIWorkload = "prowjobs"
+)
+
+var (
+	CIWorkloadDefaults []CIWorkload = []CIWorkload{BuildsWorkload, TestsWorkload, LongTestsWorkload, ProwJobsWorkload}
+)
+
+type Architecture string
+
+var (
+	ArchAMD64   Architecture = "amd64"
+	ArchARM64   Architecture = "arm64"
+	ArchAARCH64 Architecture = "aarch64"
+)
 
 type Certificate struct {
 	BaseDomains             string                             `json:"baseDomains,omitempty"`
@@ -70,10 +88,7 @@ type Certificate struct {
 	ProjectLabel            map[string]CertificateProjectLabel `json:"projectLabel,omitempty"`
 }
 
-type Step interface {
-	Run(ctx context.Context) error
-	Name() string
+type SkipStep struct {
+	Skip   bool   `json:"skip,omitempty"`
+	Reason string `json:"reason,omitempty"`
 }
-
-type CmdBuilder func(ctx context.Context, program string, args ...string) *exec.Cmd
-type CmdRunner func(cmd *exec.Cmd) error

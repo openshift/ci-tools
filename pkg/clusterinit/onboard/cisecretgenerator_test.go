@@ -216,7 +216,7 @@ func TestUpdateSecretGeneratorConfig(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			s := NewCiSecretGeneratorStep(logrus.NewEntry(logrus.StandardLogger()), &tc.ci)
+			s := NewCISecretGeneratorStep(logrus.NewEntry(logrus.StandardLogger()), &tc.ci)
 			if err := s.updateSecretGeneratorConfig(&tc.input); err != nil {
 				t.Fatalf("error received while updating secret generator config: %v", err)
 			}

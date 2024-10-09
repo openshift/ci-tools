@@ -19,6 +19,8 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 	citoolsyaml "github.com/openshift/ci-tools/pkg/util/yaml"
+
+	installertypes "github.com/openshift/installer/pkg/types"
 )
 
 type certificateStep struct {
@@ -75,9 +77,7 @@ func (s *certificateStep) baseDomain(ctx context.Context) (string, error) {
 		return "", errors.New("install-config not found")
 	}
 
-	installConfig := struct {
-		BaseDomain string `json:"baseDomain"`
-	}{}
+	installConfig := installertypes.InstallConfig{}
 	if err := yaml.Unmarshal([]byte(installConfigRaw), &installConfig); err != nil {
 		return "", fmt.Errorf("unmarshall install config: %w", err)
 	}

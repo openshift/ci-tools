@@ -22,3 +22,8 @@ func BuildCmd(ctx context.Context, program string, args ...string) *exec.Cmd {
 func RunCmd(cmd *exec.Cmd) error {
 	return cmd.Run()
 }
+
+func IsIntegrationTest() bool {
+	_, ok := os.LookupEnv("CITOOLS_CLUSTERINIT_INTEGRATIONTEST")
+	return ok
+}

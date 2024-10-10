@@ -822,20 +822,6 @@ func (config TestStepConfiguration) IsPeriodic() bool {
 	return config.Interval != nil || config.MinimumInterval != nil || config.Cron != nil || config.ReleaseController
 }
 
-// GetClusterProfileName returns the cluster profile name if it's set
-func (config TestStepConfiguration) GetClusterProfileName() string {
-	switch {
-	case config.MultiStageTestConfigurationLiteral != nil:
-		return config.MultiStageTestConfigurationLiteral.ClusterProfile.Name()
-	case config.MultiStageTestConfiguration != nil:
-		return config.MultiStageTestConfiguration.ClusterProfile.Name()
-	case config.OpenshiftInstallerClusterTestConfiguration != nil:
-		return config.OpenshiftInstallerClusterTestConfiguration.ClusterProfile.Name()
-	default:
-		return ""
-	}
-}
-
 // Cloud is the name of a cloud provider, e.g., aws cluster topology, etc.
 type Cloud string
 

@@ -1288,6 +1288,8 @@ const (
 	ClusterProfileAzureStackQE          ClusterProfile = "azurestack-qe"
 	ClusterProfileAzureMag              ClusterProfile = "azuremag"
 	ClusterProfileAzureQE               ClusterProfile = "azure-qe"
+	ClusterProfileAzureHCPQE            ClusterProfile = "azure-hcp-qe"
+	ClusterProfileAzureHCPHAQE          ClusterProfile = "azure-hcp-ha-qe"
 	ClusterProfileAzureAutoreleaseQE    ClusterProfile = "azure-autorelease-qe"
 	ClusterProfileAzureArm64QE          ClusterProfile = "azure-arm64-qe"
 	ClusterProfileAzureMagQE            ClusterProfile = "azuremag-qe"
@@ -1426,6 +1428,8 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAzureMag,
 		ClusterProfileAzureMagQE,
 		ClusterProfileAzureQE,
+		ClusterProfileAzureHCPQE,
+		ClusterProfileAzureHCPHAQE,
 		ClusterProfileAzureAutoreleaseQE,
 		ClusterProfileAzurePerfScale,
 		ClusterProfileAzureStack,
@@ -1588,6 +1592,8 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAzure4,
 		ClusterProfileAzureArc,
 		ClusterProfileAzureQE,
+		ClusterProfileAzureHCPQE,
+		ClusterProfileAzureHCPHAQE,
 		ClusterProfileAzureAutoreleaseQE,
 		ClusterProfileAzurePerfScale,
 		ClusterProfileAzureVirtualization:
@@ -1820,6 +1826,10 @@ func (p ClusterProfile) LeaseType() string {
 		return "azuremag-quota-slice"
 	case ClusterProfileAzureQE:
 		return "azure-qe-quota-slice"
+	case ClusterProfileAzureHCPQE:
+		return "azure-hcp-qe-quota-slice"
+	case ClusterProfileAzureHCPHAQE:
+		return "azure-hcp-ha-qe-quota-slice"
 	case ClusterProfileAzureAutoreleaseQE:
 		return "azure-autorelease-qe-quota-slice"
 	case ClusterProfileAzureMagQE:
@@ -2040,6 +2050,10 @@ func (p ClusterProfile) Secret() string {
 		ClusterProfileVSphereElastic:
 
 		name = p.ClusterType()
+	case
+		ClusterProfileAzureHCPQE,
+		ClusterProfileAzureHCPHAQE:
+		name = ClusterProfileAzureHCPQE.Name()
 	default:
 		name = string(p)
 	}

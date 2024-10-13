@@ -90,3 +90,7 @@ func CISchedulingWebhookCommonPath(releaseRepo string) string {
 func CISchedulingWebhookDNSPath(manifests string) string {
 	return filepath.Join(manifests, "dns.yaml")
 }
+
+func CloudabilityAgentManifestsPath(releaseRepo, clusterName string) string {
+	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName)
+}

@@ -68,6 +68,7 @@ func runConfigSteps(ctx context.Context, log *logrus.Entry, update bool, cluster
 		onboard.NewDexStep(log, kubeClient, clusterInstall),
 		onboard.NewQuayioPullThroughCacheStep(log, clusterInstall, kubeClient),
 		onboard.NewCertificateStep(log, clusterInstall, kubeClient),
+		onboard.NewCloudabilityAgentStep(log, clusterInstall),
 	}
 
 	steps = addCloudSpecificSteps(log, kubeClient, steps, clusterInstall)

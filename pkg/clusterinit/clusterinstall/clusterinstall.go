@@ -2,6 +2,7 @@ package clusterinstall
 
 import (
 	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/ci-tools/pkg/clusterinit/manifest"
 	"github.com/openshift/ci-tools/pkg/clusterinit/types/aws"
 	"github.com/openshift/ci-tools/pkg/clusterinit/types/gcp"
 	installertypes "github.com/openshift/installer/pkg/types"
@@ -51,13 +52,9 @@ type CertificateProjectLabel struct {
 }
 type CISchedulingWebhook struct {
 	SkipStep
-	Workloads   map[string]CISchedulingWebhookWorkload `json:"workloads,omitempty"`
-	GenerateDNS bool                                   `json:"dns,omitempty"`
-}
-
-type CISchedulingWebhookWorkload struct {
-	Archs []Architecture                  `json:"architectures,omitempty"`
-	AWS   aws.CISchedulingWebhookWorkload `json:"aws,omitempty"`
+	AWS         aws.CISchedulingWebhook `json:"aws,omitempty"`
+	GenerateDNS bool                    `json:"dns,omitempty"`
+	Patches     []manifest.Patch        `json:"patches,omitempty"`
 }
 
 type CIWorkload string

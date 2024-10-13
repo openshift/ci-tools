@@ -50,6 +50,7 @@ func (p *Provider) loadConfig(ctx context.Context) (aws.Config, error) {
 		if runtime.IsIntegrationTest() {
 			c := &http.Client{Transport: httpruntime.ReplayTransport(http.DefaultTransport)}
 			loadOpts = append(loadOpts, awsconfig.WithHTTPClient(c))
+			loadOpts = append(loadOpts, awsconfig.WithRetryMaxAttempts(1))
 		}
 
 		if p.kubeClient != nil {

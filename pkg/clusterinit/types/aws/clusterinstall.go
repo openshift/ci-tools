@@ -14,6 +14,8 @@ type Provision struct {
 	CloudFormationTemplates []CloudFormationTemplate `json:"cloudFormationTemplates,omitempty"`
 }
 
-type CISchedulingWebhookWorkload struct {
-	Regions []string `json:"regions,omitempty"`
+type CISchedulingWebhook struct {
+	Workloads map[string]CISchedulingWebhookArchToAZ `json:"workloads,omitempty"`
 }
+
+type CISchedulingWebhookArchToAZ map[string][]string

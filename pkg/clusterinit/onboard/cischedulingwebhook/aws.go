@@ -17,15 +17,25 @@ type awsProvider struct {
 	subnetsCache    map[string]string
 }
 
-func (aw *awsProvider) findSubnetId(ctx context.Context, log *logrus.Entry, infraId, az string) (string, error) {
+func (aw *awsProvider) GenerateManifests(ctx context.Context, log *logrus.Entry, ci *clusterinstall.ClusterInstall, config *clusterinstall.CISchedulingWebhook) (map[string][]interface{}, error) {
+	manifests := make(map[string][]interface{}, 0)
+	for _, workload := range aw.workloadKeysOrDefault(config.AWS.Workloads) {
+		archToAZ := config.AWS.Workloads[string(workload)]
+		for _, arch := range aw.archsOrDefault(archToAZ) {
+			manifest, err := aw.manifests(ctx, log, ci, string(workload), string(arch), archToAZ[arch])
+			if err != nil {
+				return nil, err
+			}
+			manifests[fmt.Sprintf("ci-%s-worker-%s.yaml", workload, arch)] = manifest
+		}
+	}
+	return manifests, nil
+}
+
+func (aw *awsProvider) findSubnetId(ctx context.Context, client awstypes.EC2Client, log *logrus.Entry, infraId, az string) (string, error) {
 	cacheKey := infraId + "-" + az
 	if subnetId, ok := aw.subnetsCache[cacheKey]; ok {
 		return subnetId, nil
-	}
-
-	client, err := aw.ec2ClientGetter.EC2Client(ctx)
-	if err != nil {
-		return "", fmt.Errorf("aws ec2 client: %w", err)
 	}
 	paginator := ec2.NewDescribeSubnetsPaginator(client, &ec2.DescribeSubnetsInput{Filters: []ec2types.Filter{
 		{Name: ptr.To("availability-zone"), Values: []string{az}},
@@ -50,12 +60,39 @@ func (aw *awsProvider) findSubnetId(ctx context.Context, log *logrus.Entry, infr
 	return "", fmt.Errorf("%s %s: no subnet ids found", infraId, az)
 }
 
-func (aw *awsProvider) GenerateManifests(ctx context.Context, log *logrus.Entry, ci *clusterinstall.ClusterInstall, workload, arch string, config *clusterinstall.CISchedulingWebhookWorkload) ([]interface{}, error) {
+func (aw *awsProvider) securityGroups(ctx context.Context, client awstypes.EC2Client, infraId string, roles ...string) ([]interface{}, error) {
+	paginator := ec2.NewDescribeSecurityGroupsPaginator(client, &ec2.DescribeSecurityGroupsInput{Filters: []ec2types.Filter{
+		{Name: ptr.To("tag:sigs.k8s.io/cluster-api-provider-aws/role"), Values: roles},
+		{Name: ptr.To("tag-key"), Values: []string{fmt.Sprintf("sigs.k8s.io/cluster-api-provider-aws/cluster/%s", infraId)}},
+	}})
+	securityGroups := make([]interface{}, 0)
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("describe security groups %s: %w", infraId, err)
+		}
+		for i := range page.SecurityGroups {
+			if page.SecurityGroups[i].GroupName != nil {
+				securityGroups = append(securityGroups, map[string]interface{}{
+					"filters": []interface{}{
+						map[string]interface{}{
+							"name":   "tag:Name",
+							"values": []interface{}{*page.SecurityGroups[i].GroupName},
+						},
+					},
+				})
+			}
+		}
+	}
+	return securityGroups, nil
+}
+
+func (aw *awsProvider) manifests(ctx context.Context, log *logrus.Entry, ci *clusterinstall.ClusterInstall, workload, arch string, azs []string) ([]interface{}, error) {
 	manifests := make([]interface{}, 0)
 	infraId := ci.Infrastructure.Status.InfrastructureName
 	region := ci.InstallConfig.Platform.AWS.Region
 
-	ami, err := getAMI(arch)
+	ami, err := aw.getAMI(arch)
 	if err != nil {
 		return nil, err
 	}
@@ -65,13 +102,22 @@ func (aw *awsProvider) GenerateManifests(ctx context.Context, log *logrus.Entry,
 		instanceType = ec2types.InstanceTypeM6a4xlarge
 	}
 
+	client, err := aw.ec2ClientGetter.EC2Client(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("aws ec2 client: %w", err)
+	}
+	securityGroups, err := aw.securityGroups(ctx, client, infraId, "node", "lb")
+	if err != nil {
+		return nil, fmt.Errorf("generate security groups: %w", err)
+	}
+
 	for _, compute := range ci.InstallConfig.Compute {
 		computeName := compute.Name
-		for _, az := range compute.Platform.AWS.Zones {
+		for _, az := range aw.azsOrDefault(azs, compute.Platform.AWS.Zones) {
 			log = log.WithFields(logrus.Fields{"infraId": infraId, "AZ": az})
 			name := fmt.Sprintf("%s-ci-%s-%s-%s-%s", infraId, workload, computeName, arch, az)
 
-			subnetId, err := aw.findSubnetId(ctx, log, infraId, az)
+			subnetId, err := aw.findSubnetId(ctx, client, log, infraId, az)
 			if err != nil {
 				return nil, err
 			}
@@ -109,30 +155,9 @@ func (aw *awsProvider) GenerateManifests(ctx context.Context, log *logrus.Entry,
 								},
 							},
 						},
-						"deviceIndex":  0,
-						"instanceType": instanceType,
-						"securityGroups": []interface{}{
-							map[string]interface{}{
-								"filters": []interface{}{
-									map[string]interface{}{
-										"name": "tag:Name",
-										"values": []interface{}{
-											fmt.Sprintf("%s-node", infraId),
-										},
-									},
-								},
-							},
-							map[string]interface{}{
-								"filters": []interface{}{
-									map[string]interface{}{
-										"name": "tag:Name",
-										"values": []interface{}{
-											fmt.Sprintf("%s-lb", infraId),
-										},
-									},
-								},
-							},
-						},
+						"deviceIndex":    0,
+						"instanceType":   instanceType,
+						"securityGroups": securityGroups,
 						"userDataSecret": map[string]interface{}{
 							"name": fmt.Sprintf("%s-user-data", computeName),
 						},
@@ -218,7 +243,36 @@ func (aw *awsProvider) GenerateManifests(ctx context.Context, log *logrus.Entry,
 	return manifests, nil
 }
 
-func getAMI(arch string) (string, error) {
+func (aw *awsProvider) workloadKeysOrDefault(w map[string]awstypes.CISchedulingWebhookArchToAZ) []clusterinstall.CIWorkload {
+	if len(w) == 0 {
+		return clusterinstall.CIWorkloadDefaults
+	}
+	keys := make([]clusterinstall.CIWorkload, 0, len(w))
+	for k := range w {
+		keys = append(keys, clusterinstall.CIWorkload(k))
+	}
+	return keys
+}
+
+func (aw *awsProvider) archsOrDefault(archToAZ awstypes.CISchedulingWebhookArchToAZ) []string {
+	if len(archToAZ) == 0 {
+		return []string{string(clusterinstall.ArchAMD64), string(clusterinstall.ArchAARCH64)}
+	}
+	keys := make([]string, 0, len(archToAZ))
+	for k := range archToAZ {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+func (aw *awsProvider) azsOrDefault(azs []string, def []string) []string {
+	if len(azs) == 0 {
+		return def
+	}
+	return azs
+}
+
+func (aw *awsProvider) getAMI(arch string) (string, error) {
 	switch arch {
 	case string(clusterinstall.ArchAMD64):
 		return "ami-0545fae7edbbbf061", nil

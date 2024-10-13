@@ -170,6 +170,7 @@ require (
 	cloud.google.com/go v0.115.0
 	github.com/aws/aws-sdk-go-v2 v1.31.0
 	github.com/aws/aws-sdk-go-v2/config v1.27.16
+	github.com/aws/aws-sdk-go-v2/credentials v1.17.16
 	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.53.4
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.179.2
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.30.6
@@ -184,6 +185,7 @@ require (
 	github.com/ovn-org/ovn-kubernetes/go-controller v0.0.0-20240710195803-425a328cd172
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/stretchr/testify v1.9.0
+	gopkg.in/evanphx/json-patch.v5 v5.9.0
 	sigs.k8s.io/boskos v0.0.0-20240624145324-1e4de26c366a
 	sigs.k8s.io/prow v0.0.0-20241002215026-8442fff47c20
 )
@@ -206,7 +208,6 @@ require (
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
 	github.com/apache/arrow/go/v15 v15.0.2 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.4.10 // indirect
-	github.com/aws/aws-sdk-go-v2/credentials v1.17.16 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.3 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.18 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.18 // indirect

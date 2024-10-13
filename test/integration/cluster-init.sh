@@ -46,89 +46,41 @@ users:
 EOF
 }
 
-generate_kubeconfig "newCluster" "$kubeconfigs/newCluster.config"
-generate_kubeconfig "existingCluster" "$kubeconfigs/existingCluster.config"
+generate_kubeconfig "build99" "$kubeconfigs/build99.config"
 
 os::test::junit::declare_suite_start "integration/cluster-init"
 
-# test the create scenario
-actual_create="${tempdir}/create/input"
-expected_create="${suite_dir}/create/expected"
-cat >"${clusterinstall_dir}/newCluster.yaml" <<EOF
-clusterName: newCluster
-onboard:
-    hosted: true
-    osd: true
-    dex:
-      redirectURI: https://oauth-openshift.apps.newCluster.ky4t.p1.openshiftapps.com/oauth2callback/RedHat_Internal_SSO
-    quayioPullThroughCache:
-      mirrorURI: quayio-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com
-    certificate:
-      baseDomains: ci.devcluster.openshift.com
-      imageRegistryPublicHost: registry.newCluster.ci.openshift.org
-EOF
-generate_kubeconfig "newCluster" "$install_base/ocp-install-base/auth/kubeconfig"
-os::cmd::expect_success "cluster-init --cluster-install="${clusterinstall_dir}/newCluster.yaml" onboard config generate --install-base=$install_base --release-repo=$actual_create"
-os::integration::compare "${actual_create}" "${expected_create}"
-
-# test the update scenario
-actual_update="${tempdir}/update/input"
-expected_update="${suite_dir}/update/expected"
-rm "${clusterinstall_dir}/"*
-cat >"${clusterinstall_dir}/existingCluster.yaml" <<EOF
-clusterName: existingCluster
-onboard:
-    hosted: false
-    osd: true
-    dex:
-      redirectURI: https://oauth-openshift.apps.existingCluster.ky4t.p1.openshiftapps.com/oauth2callback/RedHat_Internal_SSO
-    quayioPullThroughCache:
-      mirrorURI: quayio-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com
-    certificate:
-      baseDomains: ci.devcluster.openshift.com
-      imageRegistryPublicHost: registry.existingCluster.ci.openshift.org
-EOF
-os::cmd::expect_success "cluster-init onboard config update --release-repo=$actual_update --cluster-install-dir=$clusterinstall_dir --kubeconfig-dir=$kubeconfigs --kubeconfig-suffix=config"
-os::integration::compare "${actual_update}" "${expected_update}"
-
-# test the create ocp scenario
-actual_create="${tempdir}/create-ocp/input"
-expected_create="${suite_dir}/create-ocp/expected"
-generate_kubeconfig "newCluster" "$install_base/ocp-install-base/auth/kubeconfig"
-rm "${clusterinstall_dir}/"*
-cat >"${clusterinstall_dir}/newCluster.yaml" <<EOF
-clusterName: newCluster
-onboard:
-    hosted: false
-    osd: false
-    dex:
-      redirectURI: https://oauth-openshift.apps.newCluster.ky4t.p1.openshiftapps.com/oauth2callback/RedHat_Internal_SSO
-    quayioPullThroughCache:
-      mirrorURI: quayio-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com
-    certificate:
-      baseDomains: ci.devcluster.openshift.com
-      imageRegistryPublicHost: registry.newCluster.ci.openshift.org
-EOF
-os::cmd::expect_success "cluster-init --cluster-install="${clusterinstall_dir}/newCluster.yaml" onboard config generate --install-base=$install_base --release-repo=$actual_create"
-os::integration::compare "${actual_create}" "${expected_create}"
-
 # test the update ocp scenario
-actual_update="${tempdir}/update-ocp/input"
-expected_update="${suite_dir}/update-ocp/expected"
-rm "${clusterinstall_dir}/"*
-cat >"${clusterinstall_dir}/existingCluster.yaml" <<EOF
-clusterName: existingCluster
+actual_update="${tempdir}/update-build99/input"
+expected_update="${suite_dir}/update-build99/expected"
+cat >"${clusterinstall_dir}/build99.yaml" <<EOF
+clusterName: build99
+provision:
+  aws: {}
 onboard:
     hosted: false
     osd: false
-    dex:
-      redirectURI: https://oauth-openshift.apps.existingCluster.ky4t.p1.openshiftapps.com/oauth2callback/RedHat_Internal_SSO
-    quayioPullThroughCache:
-      mirrorURI: quayio-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com
-    certificate:
-      baseDomains: ci.devcluster.openshift.com
-      imageRegistryPublicHost: registry.existingCluster.ci.openshift.org
+    unmanaged: false
+    useTokenFileInKubeconfig: true
+    ciSchedulingWebhook:
+      patches:
+      - matches:
+        - kind: MachineAutoscaler
+          name: '^.+\-us-east-2b$'
+        - kind: MachineAutoscaler
+          name: '^.+\-us-east-2a$'
+        inline: {"spec":{"minReplicas": 0}}
+      - type: json-patch
+        matches:
+        - kind: MachineSet
+          name: '^.+\-amd64-us-east-2a$'
+        inline: [{"op": "add", "path": "/spec/template/spec/providerSpec/value/blockDevices/0/ebs/iops", "value": 0}]
 EOF
+
+export CITOOLS_CLUSTERINIT_INTEGRATIONTEST="1"
+export CITOOLS_REPLAYTRANSPORT_MODE="read"
+export CITOOLS_REPLAYTRANSPORT_TRACKER="${suite_dir}/build99-replay.yaml"
+
 os::cmd::expect_success "cluster-init onboard config update --release-repo=$actual_update --cluster-install-dir=$clusterinstall_dir --kubeconfig-dir=$kubeconfigs --kubeconfig-suffix=config"
 os::integration::compare "${actual_update}" "${expected_update}"
 

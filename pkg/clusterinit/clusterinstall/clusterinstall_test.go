@@ -18,14 +18,6 @@ func TestApplyDefault(t *testing.T) {
 			Unmanaged:                ptr.To(false),
 			OSD:                      ptr.To(true),
 			UseTokenFileInKubeconfig: ptr.To(true),
-			CISchedulingWebhook: CISchedulingWebhook{
-				Workloads: map[string]CISchedulingWebhookWorkload{
-					"builds":    {Archs: []Architecture{ArchAMD64, ArchAARCH64}},
-					"longtests": {Archs: []Architecture{ArchAMD64, ArchAARCH64}},
-					"prowjobs":  {Archs: []Architecture{ArchAMD64, ArchAARCH64}},
-					"tests":     {Archs: []Architecture{ArchAMD64, ArchAARCH64}},
-				},
-			},
 		},
 	}
 	if diff := cmp.Diff(wantCI, ci); diff != "" {

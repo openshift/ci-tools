@@ -7,16 +7,16 @@ import (
 	"os"
 	"path"
 
-	citoolsyaml "github.com/openshift/ci-tools/pkg/util/yaml"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
+	cinitmanifest "github.com/openshift/ci-tools/pkg/clusterinit/manifest"
 	"github.com/openshift/ci-tools/pkg/clusterinit/onboard"
 	"github.com/sirupsen/logrus"
 )
 
 type Provider interface {
-	GenerateManifests(ctx context.Context, log *logrus.Entry, ci *clusterinstall.ClusterInstall, workload, arch string, config *clusterinstall.CISchedulingWebhookWorkload) ([]interface{}, error)
+	GenerateManifests(ctx context.Context, log *logrus.Entry, ci *clusterinstall.ClusterInstall, config *clusterinstall.CISchedulingWebhook) (map[string][]interface{}, error)
 }
 
 type step struct {
@@ -39,28 +39,29 @@ func (s *step) Run(ctx context.Context) error {
 	}
 
 	manifestsPath := onboard.CISchedulingWebhookManifestsPath(s.clusterInstall.Onboard.ReleaseRepo, s.clusterInstall.ClusterName)
+	if err := os.MkdirAll(manifestsPath, 0755); err != nil && !os.IsExist(err) {
+		return fmt.Errorf("mkdir %s: %w", manifestsPath, err)
+	}
 
-	config := &s.clusterInstall.Onboard.CISchedulingWebhook
-	for workload, config := range config.Workloads {
-		for _, arch := range config.Archs {
-			manifests, err := s.provider.GenerateManifests(ctx, log, s.clusterInstall, workload, string(arch), &config)
-			if err != nil {
-				return fmt.Errorf("generate machineset: %w", err)
-			}
-			manifestMarshaled, err := citoolsyaml.MarshalMultidoc(yaml.Marshal, manifests...)
-			if err != nil {
-				return fmt.Errorf("marshal: %w", err)
-			}
-			manifestPath := path.Join(manifestsPath, fmt.Sprintf("ci-%s-worker-%s.yaml", workload, arch))
-			if err := s.writeManifest(manifestPath, manifestMarshaled, 0644); err != nil {
-				return fmt.Errorf("write manifest %s: %w", manifestPath, err)
-			}
+	manifests, err := s.provider.GenerateManifests(ctx, log, s.clusterInstall, &s.clusterInstall.Onboard.CISchedulingWebhook)
+	if err != nil {
+		return fmt.Errorf("generate manifests: %w", err)
+	}
+
+	for name, manifest := range manifests {
+		manifestBytes, err := cinitmanifest.Marshal(manifest, s.clusterInstall.Onboard.CISchedulingWebhook.Patches)
+		if err != nil {
+			return fmt.Errorf("marshal manifests: %w", err)
+		}
+		manifestPath := path.Join(manifestsPath, name)
+		if err := s.writeManifest(manifestPath, manifestBytes, 0644); err != nil {
+			return fmt.Errorf("write manifest %s: %w", manifestPath, err)
 		}
 	}
 
 	if s.clusterInstall.Onboard.CISchedulingWebhook.GenerateDNS {
 		log.Info("Writing dns manifest")
-		dnsBytes, err := yaml.Marshal(dnsManifest())
+		dnsBytes, err := yaml.Marshal(s.dnsManifest())
 		if err != nil {
 			return fmt.Errorf("marshal dns: %w", err)
 		}
@@ -70,11 +71,24 @@ func (s *step) Run(ctx context.Context) error {
 		}
 	}
 
+	if err := s.commonSymlink(); err != nil {
+		return err
+	}
+
 	log.WithField("path", manifestsPath).Info("machines generated")
 	return nil
 }
 
-func dnsManifest() map[string]interface{} {
+func (s *step) commonSymlink() error {
+	linkName := onboard.CISchedulingWebhookManifestsCommonPath(s.clusterInstall.Onboard.ReleaseRepo, s.clusterInstall.ClusterName)
+	target := onboard.CISchedulingWebhookCommonPath(s.clusterInstall.Onboard.ReleaseRepo)
+	if err := os.Symlink(target, linkName); err != nil && !os.IsExist(err) {
+		return fmt.Errorf("symlink %s -> %s", linkName, target)
+	}
+	return nil
+}
+
+func (s *step) dnsManifest() map[string]interface{} {
 	return map[string]interface{}{
 		"metadata": map[string]interface{}{
 			"name": "default",

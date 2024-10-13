@@ -86,23 +86,6 @@ func applyDefaults(ci *ClusterInstall, ciPath string) {
 	if ci.InstallBase == "" {
 		ci.InstallBase = path.Dir(ciPath)
 	}
-	ciSchedulingWebhookDefaults(&ci.Onboard.CISchedulingWebhook)
-}
-
-func ciSchedulingWebhookDefaults(c *CISchedulingWebhook) {
-	if c.Workloads == nil {
-		c.Workloads = make(map[string]CISchedulingWebhookWorkload)
-	}
-
-	missing := map[string]CISchedulingWebhookWorkload{}
-	for _, w := range CIWorkloadDefaults {
-		if _, ok := c.Workloads[string(w)]; !ok {
-			missing[string(w)] = CISchedulingWebhookWorkload{Archs: []Architecture{ArchAMD64, ArchAARCH64}}
-		}
-	}
-	for k, v := range missing {
-		c.Workloads[k] = v
-	}
 }
 
 func coalesce[T any](x **T, def T) {

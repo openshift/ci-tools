@@ -6,10 +6,12 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/sirupsen/logrus"
+
+	"k8s.io/utils/ptr"
+
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 	awstypes "github.com/openshift/ci-tools/pkg/clusterinit/types/aws"
-	"github.com/sirupsen/logrus"
-	"k8s.io/utils/ptr"
 )
 
 type awsProvider struct {
@@ -22,7 +24,7 @@ func (aw *awsProvider) GenerateManifests(ctx context.Context, log *logrus.Entry,
 	for _, workload := range aw.workloadKeysOrDefault(config.AWS.Workloads) {
 		archToAZ := config.AWS.Workloads[string(workload)]
 		for _, arch := range aw.archsOrDefault(archToAZ) {
-			manifest, err := aw.manifests(ctx, log, ci, string(workload), string(arch), archToAZ[arch])
+			manifest, err := aw.manifests(ctx, log, ci, string(workload), arch, archToAZ[arch])
 			if err != nil {
 				return nil, err
 			}

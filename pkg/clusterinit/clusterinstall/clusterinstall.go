@@ -2,10 +2,11 @@ package clusterinstall
 
 import (
 	configv1 "github.com/openshift/api/config/v1"
+	installertypes "github.com/openshift/installer/pkg/types"
+
 	"github.com/openshift/ci-tools/pkg/clusterinit/manifest"
 	"github.com/openshift/ci-tools/pkg/clusterinit/types/aws"
 	"github.com/openshift/ci-tools/pkg/clusterinit/types/gcp"
-	installertypes "github.com/openshift/installer/pkg/types"
 )
 
 type ClusterInstall struct {

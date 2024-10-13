@@ -11,14 +11,15 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
-	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
-	awstype "github.com/openshift/ci-tools/pkg/clusterinit/types/aws"
+
 	corev1 "k8s.io/api/core/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/cmd/cluster-init/runtime"
 	httpruntime "github.com/openshift/ci-tools/cmd/cluster-init/runtime/http"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
+	awstype "github.com/openshift/ci-tools/pkg/clusterinit/types/aws"
 )
 
 type Provider struct {

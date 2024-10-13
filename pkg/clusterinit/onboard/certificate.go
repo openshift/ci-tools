@@ -15,12 +15,11 @@ import (
 	"sigs.k8s.io/yaml"
 
 	imagev1 "github.com/openshift/api/image/v1"
+	installertypes "github.com/openshift/installer/pkg/types"
 	"github.com/openshift/library-go/pkg/image/reference"
 
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 	citoolsyaml "github.com/openshift/ci-tools/pkg/util/yaml"
-
-	installertypes "github.com/openshift/installer/pkg/types"
 )
 
 type certificateStep struct {

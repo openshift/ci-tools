@@ -6,13 +6,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openshift/ci-tools/pkg/clusterinit/types/aws"
-	"github.com/openshift/ci-tools/pkg/clusterinit/types/gcp"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"k8s.io/utils/ptr"
+
+	"github.com/openshift/ci-tools/pkg/clusterinit/types/aws"
+	"github.com/openshift/ci-tools/pkg/clusterinit/types/gcp"
 )
 
 func TestLoad(t *testing.T) {

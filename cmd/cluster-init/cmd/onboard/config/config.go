@@ -7,21 +7,21 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"k8s.io/apimachinery/pkg/types"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
 	configv1 "github.com/openshift/api/config/v1"
+	installertypes "github.com/openshift/installer/pkg/types"
+
 	"github.com/openshift/ci-tools/cmd/cluster-init/runtime"
 	awsruntime "github.com/openshift/ci-tools/cmd/cluster-init/runtime/aws"
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/clusterinit/onboard"
 	"github.com/openshift/ci-tools/pkg/clusterinit/onboard/cischedulingwebhook"
 	clusterinittypes "github.com/openshift/ci-tools/pkg/clusterinit/types"
-	corev1 "k8s.io/api/core/v1"
-
-	installertypes "github.com/openshift/installer/pkg/types"
 )
 
 func NewCmd(log *logrus.Entry, opts *runtime.Options) (*cobra.Command, error) {
@@ -88,8 +88,6 @@ func addCloudSpecificSteps(log *logrus.Entry, kubeClient ctrlruntimeclient.Clien
 		awsProvider := awsruntime.NewProvider(clusterInstall, kubeClient)
 		ciSchedulingWebhookAWS := cischedulingwebhook.NewAWSProvider(awsProvider)
 		steps = append(steps, cischedulingwebhook.NewStep(log, clusterInstall, ciSchedulingWebhookAWS))
-	} else if clusterInstall.Provision.GCP != nil {
-
 	}
 	return steps
 }

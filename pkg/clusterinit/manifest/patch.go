@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/openshift/ci-tools/pkg/util/yaml"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-
 	kyaml "sigs.k8s.io/yaml"
+
+	"github.com/openshift/ci-tools/pkg/util/yaml"
 )
 
 type PatchType string

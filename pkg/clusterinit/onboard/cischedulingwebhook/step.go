@@ -7,12 +7,13 @@ import (
 	"os"
 	"path"
 
+	"github.com/sirupsen/logrus"
+
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 	cinitmanifest "github.com/openshift/ci-tools/pkg/clusterinit/manifest"
 	"github.com/openshift/ci-tools/pkg/clusterinit/onboard"
-	"github.com/sirupsen/logrus"
 )
 
 type Provider interface {

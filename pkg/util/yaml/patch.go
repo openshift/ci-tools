@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	jsonpatch "gopkg.in/evanphx/json-patch.v5"
+
 	"sigs.k8s.io/yaml"
 )
 
@@ -20,15 +21,15 @@ const (
 func ApplyPatch(yamlBytes []byte, patch Patch) ([]byte, error) {
 	jsonPatchBytes, err := yaml.YAMLToJSON(patch.bytes)
 	if err != nil {
-		return nil, fmt.Errorf("patch yaml to json: %s", err)
+		return nil, fmt.Errorf("patch yaml to json: %w", err)
 	}
 
 	jsonBytes, err := yaml.YAMLToJSON(yamlBytes)
 	if err != nil {
-		return nil, fmt.Errorf("yaml to json: %s", err)
+		return nil, fmt.Errorf("yaml to json: %w", err)
 	}
 
-	jsonPatched := []byte{}
+	var jsonPatched []byte
 	switch patch.patchType {
 	case jsonMergePatch:
 		jsonPatched, err = jsonpatch.MergePatch(jsonBytes, jsonPatchBytes)
@@ -50,7 +51,7 @@ func ApplyPatch(yamlBytes []byte, patch Patch) ([]byte, error) {
 
 	yamlPatched, err := yaml.JSONToYAML(jsonPatched)
 	if err != nil {
-		return nil, fmt.Errorf("json to yaml: %s", err)
+		return nil, fmt.Errorf("json to yaml: %w", err)
 	}
 	return yamlPatched, nil
 }

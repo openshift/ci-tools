@@ -19,7 +19,7 @@ var (
 	loadTrackerOnce = sync.OnceValue(loadTracker)
 )
 
-// replayTransport is an http transport layer intented to facilitate integration tests.
+// replayTransport is an http transport layer intended to facilitate integration tests.
 // Every time an http.request comes along, it checks whether a http.response has been previously cached and then:
 // - returns the cached response if it exists;
 // - forward the request to the inner transport if it is functioning in 'rw' mode, returns an error otherwise.
@@ -46,14 +46,11 @@ func (rt *replayTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		bodyBytes = body
 	}
 
-	replay, err := trcker.get(req, bodyBytes)
-	if err != nil {
-		return nil, fmt.Errorf("get replay: %w", err)
-	}
+	replay := trcker.get(req, bodyBytes)
 	if replay != nil {
 		return &http.Response{
 			StatusCode: replay.Response.Status,
-			Body:       io.NopCloser(bytes.NewReader([]byte(replay.Response.Body))),
+			Body:       io.NopCloser(bytes.NewReader(replay.Response.Body)),
 		}, nil
 	}
 
@@ -125,26 +122,26 @@ type tracker struct {
 	//     - request:
 	//         method: GET
 	//         body:   nil
-	//       reponse:
+	//       response:
 	//         status: 200
 	//         body:   { ... }
 	//     - request:
 	//         method: POST
 	//         body:   { ... }
-	//       reponse:
+	//       response:
 	//         status: 200
 	//         body:   { ... }
 	//
 	// For each "hostname:port", for each "path?querystring#fragment", it stores a list of
-	// request-reponse that serves as a cache.
+	// request-response that serves as a cache.
 	replays    map[string]map[string][]replay
 	m          sync.RWMutex
 	replayFile string
 }
 
-func (t *tracker) get(request *http.Request, body []byte) (*replay, error) {
+func (t *tracker) get(request *http.Request, body []byte) *replay {
 	if request.URL == nil {
-		return nil, nil
+		return nil
 	}
 
 	t.m.RLock()
@@ -153,23 +150,23 @@ func (t *tracker) get(request *http.Request, body []byte) (*replay, error) {
 	host := request.URL.Host
 	pathToReplays, ok := t.replays[host]
 	if !ok {
-		return nil, nil
+		return nil
 	}
 
 	path := composePath(request.URL)
 	replays, ok := pathToReplays[path]
 	if !ok {
-		return nil, nil
+		return nil
 	}
 
 	for i := range replays {
 		replay := &replays[i]
-		if replay.Request.Method == request.Method && slices.Compare([]byte(replay.Request.Body), body) == 0 {
-			return replay, nil
+		if replay.Request.Method == request.Method && slices.Compare(replay.Request.Body, body) == 0 {
+			return replay
 		}
 	}
 
-	return nil, nil
+	return nil
 }
 
 func (t *tracker) add(req *http.Request, reqBody []byte, res *http.Response) error {
@@ -207,7 +204,7 @@ func (t *tracker) add(req *http.Request, reqBody []byte, res *http.Response) err
 
 	for i := range replays {
 		replay := &replays[i]
-		if replay.Request.Method == req.Method && slices.Compare([]byte(replay.Request.Body), reqBody) == 0 {
+		if replay.Request.Method == req.Method && slices.Compare(replay.Request.Body, reqBody) == 0 {
 			return nil
 		}
 	}

@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/openshift/ci-tools/cmd/cluster-init/runtime"
-	httpruntime "github.com/openshift/ci-tools/cmd/cluster-init/runtime/http"
-
 	"k8s.io/client-go/rest"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/openshift/ci-tools/cmd/cluster-init/runtime"
+	httpruntime "github.com/openshift/ci-tools/cmd/cluster-init/runtime/http"
 )
 
 func NewClient(config *rest.Config) (ctrlruntimeclient.Client, error) {

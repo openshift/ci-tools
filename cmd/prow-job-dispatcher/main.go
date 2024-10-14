@@ -354,8 +354,13 @@ func dispatchJobs(prowJobConfigDir string, config *dispatcher.Config, jobVolumes
 	}
 
 	// cv stores the volume for each cluster in the build farm
-	cv := &clusterVolume{clusterVolumeMap: map[string]map[string]float64{}, cloudProviders: sets.New[string](), pjs: map[string]string{}, blocked: blocked,
-		volumePerCluster: volumePerCluster, specialClusters: map[string]float64{}}
+	cv := &clusterVolume{
+		clusterVolumeMap: map[string]map[string]float64{},
+		cloudProviders:   sets.New[string](),
+		pjs:              map[string]string{},
+		blocked:          blocked,
+		volumePerCluster: volumePerCluster,
+		specialClusters:  map[string]float64{}}
 	for cloudProvider, v := range config.BuildFarm {
 		for cluster := range v {
 			cloudProviderString := string(cloudProvider)
@@ -728,11 +733,11 @@ func main() {
 
 			addEnabledClusters(config, enabled,
 				func(cluster string) (api.Cloud, error) {
-					provider, exists := configClusterMap[cluster]
+					info, exists := configClusterMap[cluster]
 					if !exists {
 						return "", fmt.Errorf("have not found provider for cluster %s", cluster)
 					}
-					return api.Cloud(provider), nil
+					return api.Cloud(info.Provider), nil
 				})
 			pjs, err := dispatchJobs(o.prowJobConfigDir, config, jobVolumes, blocked, promVolumes.getTotalVolume()/float64(len(configClusterMap)))
 			if err != nil {

@@ -10,34 +10,59 @@ import (
 
 const blocked = "blocked"
 
-type ClusterMap map[string]string
+// ClusterInfo holds the provider, capacity, and capabilities.
+type ClusterInfo struct {
+	Provider     string
+	Capacity     int
+	Capabilities []string
+}
 
+// ClusterMap maps a cluster name to its corresponding ClusterInfo.
+type ClusterMap map[string]ClusterInfo
+
+func loadClusterConfigFromBytes(data []byte) (ClusterMap, sets.Set[string], error) {
+	var clusters map[string][]struct {
+		Name         string   `yaml:"name"`
+		Capacity     int      `yaml:"capacity"`
+		Capabilities []string `yaml:"capabilities"`
+	}
+	if err := yaml.Unmarshal(data, &clusters); err != nil {
+		return nil, nil, err
+	}
+	blockedClusters := sets.New[string]()
+	clusterMap := make(ClusterMap)
+
+	for provider, clusterList := range clusters {
+		if provider != blocked {
+			for _, cluster := range clusterList {
+				if cluster.Capacity == 0 {
+					cluster.Capacity = 100
+				}
+				clusterMap[cluster.Name] = ClusterInfo{
+					Provider:     provider,
+					Capacity:     cluster.Capacity,
+					Capabilities: cluster.Capabilities,
+				}
+			}
+		}
+		if provider == blocked {
+			for _, cluster := range clusterList {
+				blockedClusters.Insert(cluster.Name)
+			}
+		}
+	}
+
+	return clusterMap, blockedClusters, nil
+}
+
+// LoadClusterConfig loads cluster configuration from a YAML file, returning a ClusterMap and a set of blocked clusters.
 func LoadClusterConfig(filePath string) (ClusterMap, sets.Set[string], error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, nil, err
 	}
+	return loadClusterConfigFromBytes(data)
 
-	var clusters map[string][]string
-	err = yaml.Unmarshal(data, &clusters)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	blockedClusters := sets.New[string]()
-	clusterMap := make(ClusterMap)
-	for provider, clusterList := range clusters {
-		if provider != blocked {
-			for _, cluster := range clusterList {
-				clusterMap[cluster] = provider
-			}
-		}
-		if provider == blocked {
-			blockedClusters.Insert(clusterList...)
-		}
-	}
-
-	return clusterMap, blockedClusters, nil
 }
 
 func FindMostUsedCluster(jc *prowconfig.JobConfig) string {

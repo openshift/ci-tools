@@ -22,7 +22,7 @@ type cloudabilityAgentStep struct {
 }
 
 func (s *cloudabilityAgentStep) Name() string {
-	return "ci-scheduling-webhook"
+	return "cloudability-agent"
 }
 
 func (s *cloudabilityAgentStep) Run(ctx context.Context) error {

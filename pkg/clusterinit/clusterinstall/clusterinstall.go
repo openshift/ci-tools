@@ -18,6 +18,10 @@ type ClusterInstall struct {
 	InstallConfig  installertypes.InstallConfig
 }
 
+func (ci *ClusterInstall) IsOCP() bool {
+	return !(*ci.Onboard.Hosted || *ci.Onboard.OSD || *ci.Onboard.Unmanaged)
+}
+
 type Provision struct {
 	AWS *aws.Provision `json:"aws,omitempty"`
 	GCP *gcp.Provision `json:"gcp,omitempty"`

@@ -1307,6 +1307,7 @@ const (
 	ClusterProfileGCPTelco              ClusterProfile = "gcp-telco"
 	ClusterProfileIBMCloud              ClusterProfile = "ibmcloud"
 	ClusterProfileIBMCloudCSPIQE        ClusterProfile = "ibmcloud-cspi-qe"
+	ClusterProfileIBMCloudGPU           ClusterProfile = "ibmcloud-gpu"
 	ClusterProfileIBMCloudQE            ClusterProfile = "ibmcloud-qe"
 	ClusterProfileIBMCloudQE2           ClusterProfile = "ibmcloud-qe-2"
 	ClusterProfileIBMCloudMultiPpc64le  ClusterProfile = "ibmcloud-multi-ppc64le"
@@ -1452,6 +1453,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileHyperShift,
 		ClusterProfileIBMCloud,
 		ClusterProfileIBMCloudCSPIQE,
+		ClusterProfileIBMCloudGPU,
 		ClusterProfileIBMCloudQE,
 		ClusterProfileIBMCloudQE2,
 		ClusterProfileIBMCloudMultiPpc64le,
@@ -1634,6 +1636,9 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileIBMCloudQE,
 		ClusterProfileIBMCloudQE2:
 		return "ibmcloud"
+	case
+		ClusterProfileIBMCloudGPU:
+		return "ibmcloud-gpu"
 	case ClusterProfileIBMCloudMultiPpc64le:
 		return "ibmcloud-multi-ppc64le"
 	case ClusterProfileIBMCloudMultiS390x:
@@ -1867,6 +1872,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "gcp-telco-quota-slice"
 	case ClusterProfileIBMCloud:
 		return "ibmcloud-quota-slice"
+	case ClusterProfileIBMCloudGPU:
+		return "ibmcloud-gpu-quota-slice"
 	case ClusterProfileIBMCloudCSPIQE:
 		return "ibmcloud-cspi-qe-quota-slice"
 	case ClusterProfileIBMCloudQE:

@@ -41,6 +41,7 @@ type Onboard struct {
 	QuayioPullThroughCache   QuayioPullThroughCache `json:"quayioPullThroughCache,omitempty"`
 	Certificate              Certificate            `json:"certificate,omitempty"`
 	CISchedulingWebhook      CISchedulingWebhook    `json:"ciSchedulingWebhook,omitempty"`
+	MachineSet               MachineSet             `json:"machineSet,omitempty"`
 }
 
 type Dex struct {
@@ -62,25 +63,30 @@ type CISchedulingWebhook struct {
 	Patches     []manifest.Patch        `json:"patches,omitempty"`
 }
 
-type CIWorkload string
+type MachineSet struct {
+	SkipStep
+	AWS     aws.MachineSet   `json:"aws,omitempty"`
+	Patches []manifest.Patch `json:"patches,omitempty"`
+}
 
 const (
-	BuildsWorkload    CIWorkload = "builds"
-	TestsWorkload     CIWorkload = "tests"
-	LongTestsWorkload CIWorkload = "longtests"
-	ProwJobsWorkload  CIWorkload = "prowjobs"
+	MachineProfileWorker string = "worker"
+	MachineProfileInfra  string = "infra"
 )
 
 var (
-	CIWorkloadDefaults []CIWorkload = []CIWorkload{BuildsWorkload, TestsWorkload, LongTestsWorkload, ProwJobsWorkload}
+	MachineProfileDefaults []string = []string{MachineProfileWorker, MachineProfileInfra}
 )
 
-type Architecture string
+const (
+	BuildsWorkload    string = "builds"
+	TestsWorkload     string = "tests"
+	LongTestsWorkload string = "longtests"
+	ProwJobsWorkload  string = "prowjobs"
+)
 
 var (
-	ArchAMD64   Architecture = "amd64"
-	ArchARM64   Architecture = "arm64"
-	ArchAARCH64 Architecture = "aarch64"
+	CIWorkloadDefaults []string = []string{BuildsWorkload, TestsWorkload, LongTestsWorkload, ProwJobsWorkload}
 )
 
 type Certificate struct {

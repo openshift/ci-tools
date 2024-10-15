@@ -21,6 +21,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/clusterinit/onboard"
 	"github.com/openshift/ci-tools/pkg/clusterinit/onboard/cischedulingwebhook"
+	"github.com/openshift/ci-tools/pkg/clusterinit/onboard/machineset"
 	clusterinittypes "github.com/openshift/ci-tools/pkg/clusterinit/types"
 )
 
@@ -88,8 +89,8 @@ func runConfigSteps(ctx context.Context, log *logrus.Entry, update bool, cluster
 func addCloudSpecificSteps(log *logrus.Entry, kubeClient ctrlruntimeclient.Client, steps []clusterinittypes.Step, clusterInstall *clusterinstall.ClusterInstall) []clusterinittypes.Step {
 	if clusterInstall.Provision.AWS != nil {
 		awsProvider := awsruntime.NewProvider(clusterInstall, kubeClient)
-		ciSchedulingWebhookAWS := cischedulingwebhook.NewAWSProvider(awsProvider)
-		steps = append(steps, cischedulingwebhook.NewStep(log, clusterInstall, ciSchedulingWebhookAWS))
+		steps = append(steps, cischedulingwebhook.NewStep(log, clusterInstall, cischedulingwebhook.NewAWSProvider(awsProvider)))
+		steps = append(steps, machineset.NewStep(log, clusterInstall, machineset.NewAWSProvider(awsProvider)))
 	}
 	return steps
 }

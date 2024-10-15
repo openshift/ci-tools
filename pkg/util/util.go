@@ -20,6 +20,22 @@ func CopyMap[K comparable, V any](m map[K]V) map[K]V {
 	return ret
 }
 
+// DefKeys returns keys from `m` if not empty, def otherwise.
+func DefKeys[K comparable, V any](m map[K]V, def []K) []K {
+	if len(m) == 0 {
+		return def
+	}
+	return Keys(m)
+}
+
+// DefSlice returns `slice` if not empty, def otherwise.
+func DefSlice[T any](slice []T, def []T) []T {
+	if len(slice) == 0 {
+		return def
+	}
+	return slice
+}
+
 // SortSlice is a generic version of sort.Slice
 func SortSlice[T constraints.Ordered](s []T) {
 	sort.Slice(s, func(i, j int) bool { return s[i] < s[j] })

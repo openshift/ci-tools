@@ -5,6 +5,14 @@ import (
 	"os/exec"
 )
 
+type Architecture string
+
+const (
+	ArchAMD64   Architecture = "amd64"
+	ArchARM64   Architecture = "arm64"
+	ArchAARCH64 Architecture = "aarch64"
+)
+
 type Step interface {
 	Run(ctx context.Context) error
 	Name() string

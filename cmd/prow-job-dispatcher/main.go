@@ -26,6 +26,7 @@ import (
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/prow/pkg/config/secret"
 	"sigs.k8s.io/prow/pkg/flagutil"
+	"sigs.k8s.io/prow/pkg/logrusutil"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -123,7 +124,7 @@ func (o *options) validate() error {
 	}
 
 	if o.jobsStoragePath == "" {
-		logrus.Fatal("mandatory argument --cluster-config-path wasn't set")
+		logrus.Fatal("mandatory argument --jobs-storage-path wasn't set")
 	}
 
 	if o.slackTokenPath == "" {
@@ -621,6 +622,12 @@ func sendSlackMessage(slackClient slackClient, channelId string) error {
 }
 
 func main() {
+	logrusutil.Init(
+		&logrusutil.DefaultFieldsFormatter{
+			PrintLineNumber: true,
+			DefaultFields:   logrus.Fields{"component": "prow-job-dispatcher"},
+		},
+	)
 	o := gatherOptions()
 	if err := o.validate(); err != nil {
 		logrus.WithError(err).Fatal("Failed to complete options.")
@@ -806,8 +813,9 @@ func main() {
 		}
 	}(o.clusterConfigPath)
 
-	server := dispatcher.NewServer(prowjobs)
+	server := dispatcher.NewServer(prowjobs, dispatchWrapper)
 	http.HandleFunc("/", server.RequestHandler)
+	http.HandleFunc("/event", server.EventHandler)
 	logrus.Fatal(http.ListenAndServe(":8080", nil))
 
 }

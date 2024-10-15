@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -267,6 +268,14 @@ func validateBuildRootImageStreamTag(ctx *configContext, buildRoot api.ImageStre
 
 func ValidateImages(ctx *configContext, images []api.ProjectDirectoryImageBuildStepConfiguration) []error {
 	var validationErrors []error
+
+	var validArchitectures = sets.New[string](
+		"amd64",   // x86-64
+		"arm64",   // AArch64
+		"ppc64le", // PowerPC 64-bit Little Endian
+		"s390x",   // IBM System z 64-bit
+	)
+
 	for num, image := range images {
 		ctxN := ctx.addIndex(num)
 		if image.To == "" {
@@ -278,6 +287,14 @@ func ValidateImages(ctx *configContext, images []api.ProjectDirectoryImageBuildS
 		if image.DockerfileLiteral != nil && (image.ContextDir != "" || image.DockerfilePath != "") {
 			validationErrors = append(validationErrors, ctxN.errorf("dockerfile_literal is mutually exclusive with context_dir and dockerfile_path"))
 		}
+		for _, arch := range image.AdditionalArchitectures {
+			if !validArchitectures.Has(arch) {
+				archList := validArchitectures.UnsortedList()
+				sort.Strings(archList)
+				validationErrors = append(validationErrors, ctxN.errorf("invalid architecture: %s. Use one of %s", arch, strings.Join(archList, ", ")))
+			}
+		}
+
 	}
 	return validationErrors
 }

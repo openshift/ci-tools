@@ -2352,7 +2352,11 @@ type ProjectDirectoryImageBuildStepConfiguration struct {
 	Optional bool `json:"optional,omitempty"`
 
 	// MultiArch means the build step is built for multiple architectures if available. Defaults to false.
+	// DEPRECATED: use AdditionalArchitectures instead
 	MultiArch bool `json:"multi_arch,omitempty"`
+
+	// AdditionalArchitectures is a list of additional architectures to build for. AMD64 architecture is included by default.
+	AdditionalArchitectures []string `json:"additional_architectures,omitempty"`
 
 	// Ref is an optional string linking to the extra_ref in "org.repo" format that this belongs to
 	Ref string `json:"ref,omitempty"`

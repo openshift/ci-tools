@@ -481,6 +481,16 @@ func TestValidateImages(t *testing.T) {
 				errors.New("images[0]: dockerfile_literal is mutually exclusive with context_dir and dockerfile_path"),
 			},
 		},
+		{
+			name: "non valid image architecture",
+			input: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				AdditionalArchitectures: []string{"foo", "amd64"},
+				To:                      "amsterdam",
+			}},
+			output: []error{
+				errors.New("images[0]: invalid architecture: foo. Use one of amd64, arm64, ppc64le, s390x"),
+			},
+		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {

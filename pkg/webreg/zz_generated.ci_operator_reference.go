@@ -165,7 +165,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"# process. The name of each image is its \"to\" value\n" +
 	"# and can be used to build only a specific image.\n" +
 	"images:\n" +
-	"    - # BuildArgs contains build arguments that will be resolved in the Dockerfile.\n" +
+	"    - # AdditionalArchitectures is a list of additional architectures to build for. AMD64 architecture is included by default.\n" +
+	"      additional_architectures:\n" +
+	"        - \"\"\n" +
+	"      # BuildArgs contains build arguments that will be resolved in the Dockerfile.\n" +
 	"      # See https://docs.docker.com/engine/reference/builder/#/arg for more details.\n" +
 	"      build_args:\n" +
 	"        - # Name of the build arg.\n" +
@@ -203,6 +206,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  # SourcePath is a file or directory in the source image to copy from.\n" +
 	"                  source_path: ' '\n" +
 	"      # MultiArch means the build step is built for multiple architectures if available. Defaults to false.\n" +
+	"      # DEPRECATED: use AdditionalArchitectures instead\n" +
 	"      multi_arch: true\n" +
 	"      # Optional means the build step is not built, published, or\n" +
 	"      # promoted unless explicitly targeted. Use for builds which\n" +
@@ -383,6 +387,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # Ref is an optional string linking to the extra_ref in \"org.repo\" format that this belongs to\n" +
 	"        ref: ' '\n" +
 	"      project_directory_image_build_step:\n" +
+	"        # AdditionalArchitectures is a list of additional architectures to build for. AMD64 architecture is included by default.\n" +
+	"        additional_architectures:\n" +
+	"            - \"\"\n" +
 	"        # BuildArgs contains build arguments that will be resolved in the Dockerfile.\n" +
 	"        # See https://docs.docker.com/engine/reference/builder/#/arg for more details.\n" +
 	"        build_args:\n" +
@@ -421,6 +428,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      # SourcePath is a file or directory in the source image to copy from.\n" +
 	"                      source_path: ' '\n" +
 	"        # MultiArch means the build step is built for multiple architectures if available. Defaults to false.\n" +
+	"        # DEPRECATED: use AdditionalArchitectures instead\n" +
 	"        multi_arch: true\n" +
 	"        # Optional means the build step is not built, published, or\n" +
 	"        # promoted unless explicitly targeted. Use for builds which\n" +

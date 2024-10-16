@@ -43,6 +43,7 @@ type Onboard struct {
 	CISchedulingWebhook        CISchedulingWebhook        `json:"ciSchedulingWebhook,omitempty"`
 	MachineSet                 MachineSet                 `json:"machineSet,omitempty"`
 	MultiarchBuilderController MultiarchBuilderController `json:"multiarchBuilderController,omitempty"`
+	ImageRegistry              ImageRegistry              `json:"imageRegistry,omitempty"`
 }
 
 type Dex struct {
@@ -71,6 +72,10 @@ type MachineSet struct {
 }
 
 type MultiarchBuilderController struct {
+	SkipStep
+}
+
+type ImageRegistry struct {
 	SkipStep
 }
 

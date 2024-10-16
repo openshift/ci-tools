@@ -110,3 +110,7 @@ func MachineSetManifestsPath(releaseRepo, clusterName string) string {
 func MultiarchBuilderControllerManifestsPath(releaseRepo, clusterName string) string {
 	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "multi-arch-builder-controller")
 }
+
+func ImageRegistryManifestsPath(releaseRepo, clusterName string) string {
+	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "openshift-image-registry")
+}

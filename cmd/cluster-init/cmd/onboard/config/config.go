@@ -72,6 +72,7 @@ func runConfigSteps(ctx context.Context, log *logrus.Entry, update bool, cluster
 		onboard.NewCloudabilityAgentStep(log, clusterInstall),
 		onboard.NewCommonSymlinkStep(log, clusterInstall),
 		onboard.NewMultiarchBuilderControllerStep(log, clusterInstall),
+		onboard.NewImageRegistryStepStep(log, clusterInstall),
 	}
 
 	steps = addCloudSpecificSteps(log, kubeClient, steps, clusterInstall)

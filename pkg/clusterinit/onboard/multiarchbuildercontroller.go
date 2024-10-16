@@ -34,15 +34,15 @@ func (s *multiarchBuilderControllerStep) Run(ctx context.Context) error {
 		return nil
 	}
 
+	manifestsPath := MultiarchBuilderControllerManifestsPath(s.clusterInstall.Onboard.ReleaseRepo, s.clusterInstall.ClusterName)
+	if err := s.mkdirAll(manifestsPath, 0755); err != nil && !os.IsExist(err) {
+		return fmt.Errorf("mkdir %s: %w", manifestsPath, err)
+	}
+
 	manifests := s.rbacManifests()
 	manifestBytes, err := citoolsyaml.MarshalMultidoc(yaml.Marshal, manifests...)
 	if err != nil {
 		return fmt.Errorf("marshal rbac manifests: %w", err)
-	}
-
-	manifestsPath := MultiarchBuilderControllerManifestsPath(s.clusterInstall.Onboard.ReleaseRepo, s.clusterInstall.ClusterName)
-	if err := s.mkdirAll(manifestsPath, 0755); err != nil && !os.IsExist(err) {
-		return fmt.Errorf("mkdir %s: %w", manifestsPath, err)
 	}
 
 	if err := s.writeManifest(path.Join(manifestsPath, "000_mabc-updater_rbac.yaml"), manifestBytes, 0644); err != nil {
@@ -55,7 +55,6 @@ func (s *multiarchBuilderControllerStep) Run(ctx context.Context) error {
 		return fmt.Errorf("marshal deployment manifests: %w", err)
 	}
 
-	manifestsPath = MultiarchBuilderControllerManifestsPath(s.clusterInstall.Onboard.ReleaseRepo, s.clusterInstall.ClusterName)
 	if err := s.writeManifest(path.Join(manifestsPath, "100_deploy.yaml"), manifestBytes, 0644); err != nil {
 		return fmt.Errorf("write deployment manifests: %w", err)
 	}

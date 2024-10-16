@@ -12,7 +12,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/clusterinit/types"
 	awstypes "github.com/openshift/ci-tools/pkg/clusterinit/types/aws"
 	"github.com/openshift/ci-tools/pkg/util"
-	installertypes "github.com/openshift/installer/pkg/types"
 )
 
 type awsProvider struct {
@@ -81,12 +80,12 @@ func (ap *awsProvider) manifests(ctx context.Context, log *logrus.Entry, ci *clu
 		return nil, fmt.Errorf("generate security groups: %w", err)
 	}
 
-	machinePool := installertypes.MachinePool{}
+	zones := []string{}
 	if len(ci.InstallConfig.Compute) > 0 {
-		machinePool = ci.InstallConfig.Compute[0]
+		zones = ci.InstallConfig.Compute[0].Platform.AWS.Zones
 	}
 
-	for _, az := range util.DefSlice(azs, machinePool.Platform.AWS.Zones) {
+	for _, az := range util.DefSlice(azs, zones) {
 		log = log.WithFields(logrus.Fields{"infraId": infraId, "AZ": az})
 		name := fmt.Sprintf("%s-%s-%s-%s", infraId, profile, arch, az)
 

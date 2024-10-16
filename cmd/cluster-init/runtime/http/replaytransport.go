@@ -42,6 +42,9 @@ func (rt *replayTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		if err != nil {
 			return nil, fmt.Errorf("read body: %w", err)
 		}
+		if err := req.Body.Close(); err != nil {
+			return nil, fmt.Errorf("close body: %w", err)
+		}
 		req.Body = io.NopCloser(bytes.NewReader(body))
 		bodyBytes = body
 	}
@@ -180,6 +183,9 @@ func (t *tracker) add(req *http.Request, reqBody []byte, res *http.Response) err
 	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("read response body: %w", err)
+	}
+	if err := res.Body.Close(); err != nil {
+		return fmt.Errorf("close response body: %w", err)
 	}
 	res.Body = io.NopCloser(bytes.NewReader(resBody))
 

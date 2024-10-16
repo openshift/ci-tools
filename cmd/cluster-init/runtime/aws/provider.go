@@ -48,11 +48,12 @@ func (p *Provider) loadConfig(ctx context.Context) (aws.Config, error) {
 	if p.awsConfig == nil {
 		loadOpts := make([]func(*awsconfig.LoadOptions) error, 0)
 
+		client := &http.Client{Transport: CacheTransport(http.DefaultTransport)}
 		if runtime.IsIntegrationTest() {
-			c := &http.Client{Transport: httpruntime.ReplayTransport(http.DefaultTransport)}
-			loadOpts = append(loadOpts, awsconfig.WithHTTPClient(c))
+			client.Transport = httpruntime.ReplayTransport(client.Transport)
 			loadOpts = append(loadOpts, awsconfig.WithRetryMaxAttempts(1))
 		}
+		loadOpts = append(loadOpts, awsconfig.WithHTTPClient(client))
 
 		if p.kubeClient != nil {
 			awsCreds := corev1.Secret{}

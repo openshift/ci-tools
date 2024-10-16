@@ -255,22 +255,20 @@ func createReplayFile(file string) error {
 	return err
 }
 
-func ReplayTransport(inner http.RoundTripper) http.RoundTripper {
+func ReplayTransport(inner http.RoundTripper) *replayTransport {
 	if inner == nil {
-		return inner
+		return nil
 	}
 
 	clientMode, ok := os.LookupEnv("CITOOLS_REPLAYTRANSPORT_MODE")
 	if !ok {
-		return inner
+		clientMode = "read"
 	}
 
 	switch clientMode {
-	case "read":
-		return newReplayTransport(inner, false)
 	case "rw":
 		return newReplayTransport(inner, true)
+	default: // case "read":
+		return newReplayTransport(inner, false)
 	}
-
-	return inner
 }

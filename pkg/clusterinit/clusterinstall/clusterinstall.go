@@ -36,12 +36,13 @@ type Onboard struct {
 	// True if the cluster is unmanaged (i.e., not managed by DPTP). Set to false by default
 	Unmanaged *bool `json:"unmanaged,omitempty"`
 	// True if the token files are used in kubeconfigs. Set to true by default
-	UseTokenFileInKubeconfig *bool                  `json:"useTokenFileInKubeconfig,omitempty"`
-	Dex                      Dex                    `json:"dex,omitempty"`
-	QuayioPullThroughCache   QuayioPullThroughCache `json:"quayioPullThroughCache,omitempty"`
-	Certificate              Certificate            `json:"certificate,omitempty"`
-	CISchedulingWebhook      CISchedulingWebhook    `json:"ciSchedulingWebhook,omitempty"`
-	MachineSet               MachineSet             `json:"machineSet,omitempty"`
+	UseTokenFileInKubeconfig   *bool                      `json:"useTokenFileInKubeconfig,omitempty"`
+	Dex                        Dex                        `json:"dex,omitempty"`
+	QuayioPullThroughCache     QuayioPullThroughCache     `json:"quayioPullThroughCache,omitempty"`
+	Certificate                Certificate                `json:"certificate,omitempty"`
+	CISchedulingWebhook        CISchedulingWebhook        `json:"ciSchedulingWebhook,omitempty"`
+	MachineSet                 MachineSet                 `json:"machineSet,omitempty"`
+	MultiarchBuilderController MultiarchBuilderController `json:"multiarchBuilderController,omitempty"`
 }
 
 type Dex struct {
@@ -67,6 +68,10 @@ type MachineSet struct {
 	SkipStep
 	AWS     aws.MachineSet   `json:"aws,omitempty"`
 	Patches []manifest.Patch `json:"patches,omitempty"`
+}
+
+type MultiarchBuilderController struct {
+	SkipStep
 }
 
 const (

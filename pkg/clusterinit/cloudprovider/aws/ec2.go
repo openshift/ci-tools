@@ -6,8 +6,10 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	awstypes "github.com/openshift/ci-tools/pkg/clusterinit/types/aws"
+
 	"k8s.io/utils/ptr"
+
+	awstypes "github.com/openshift/ci-tools/pkg/clusterinit/types/aws"
 )
 
 func SubnetIdForMachineSet(ctx context.Context, client awstypes.EC2Client, infraId, az string) (string, error) {

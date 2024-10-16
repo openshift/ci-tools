@@ -8,14 +8,17 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/google/go-cmp/cmp"
+	"github.com/sirupsen/logrus"
+
+	"k8s.io/utils/ptr"
+	kyaml "sigs.k8s.io/yaml"
+
+	installertypes "github.com/openshift/installer/pkg/types"
+	installeraws "github.com/openshift/installer/pkg/types/aws"
+
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/clusterinit/types"
 	awstypes "github.com/openshift/ci-tools/pkg/clusterinit/types/aws"
-	installertypes "github.com/openshift/installer/pkg/types"
-	installeraws "github.com/openshift/installer/pkg/types/aws"
-	"github.com/sirupsen/logrus"
-	"k8s.io/utils/ptr"
-	kyaml "sigs.k8s.io/yaml"
 )
 
 func TestGenerateManifests(t *testing.T) {

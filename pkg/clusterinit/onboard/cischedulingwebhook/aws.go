@@ -21,9 +21,9 @@ type awsProvider struct {
 func (ap *awsProvider) GenerateManifests(ctx context.Context, log *logrus.Entry, ci *clusterinstall.ClusterInstall, config *clusterinstall.CISchedulingWebhook) (map[string][]interface{}, error) {
 	manifests := make(map[string][]interface{}, 0)
 	for _, workload := range util.DefKeys(config.AWS.Workloads, clusterinstall.CIWorkloadDefaults) {
-		archToAZ := config.AWS.Workloads[string(workload)]
+		archToAZ := config.AWS.Workloads[workload]
 		for _, arch := range util.DefKeys(archToAZ, []types.Architecture{types.ArchAMD64, types.ArchAARCH64}) {
-			manifest, err := ap.manifests(ctx, log, ci, string(workload), arch, archToAZ[arch])
+			manifest, err := ap.manifests(ctx, log, ci, workload, arch, archToAZ[arch])
 			if err != nil {
 				return nil, err
 			}

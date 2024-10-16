@@ -106,3 +106,7 @@ func CommonManagedSymlinkPath(releaseRepo, clusterName string) string {
 func MachineSetManifestsPath(releaseRepo, clusterName string) string {
 	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "machineset")
 }
+
+func MultiarchBuilderControllerManifestsPath(releaseRepo, clusterName string) string {
+	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "multi-arch-builder-controller")
+}

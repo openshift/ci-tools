@@ -44,6 +44,7 @@ type Onboard struct {
 	MachineSet                 MachineSet                 `json:"machineSet,omitempty"`
 	MultiarchBuilderController MultiarchBuilderController `json:"multiarchBuilderController,omitempty"`
 	ImageRegistry              ImageRegistry              `json:"imageRegistry,omitempty"`
+	IngressOperator            IngressOperator            `json:"ingressOperator,omitempty"`
 }
 
 type Dex struct {
@@ -76,6 +77,10 @@ type MultiarchBuilderController struct {
 }
 
 type ImageRegistry struct {
+	SkipStep
+}
+
+type IngressOperator struct {
 	SkipStep
 }
 

@@ -294,6 +294,8 @@ func (s *importReleaseStep) Provides() api.ParameterMap {
 	env := utils.ReleaseImageEnv(s.name)
 	return api.ParameterMap{
 		env: utils.ImageDigestFor(s.client, s.jobSpec.Namespace, api.ReleaseImageStream, s.name),
+		// Disable unparam lint as we need to confirm to this interface, but there will never be an error
+		//nolint:unparam
 		fmt.Sprintf("ORIGINAL_%s", env): func() (string, error) {
 			return s.originalPullSpec, nil
 		},

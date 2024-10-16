@@ -215,6 +215,7 @@ func (s *server) handleNewPush(l *logrus.Entry, event github.PullRequestEvent) {
 			"pr":   number,
 		})
 		logger.Debug("handling new push")
+		s.rehearsalConfig.AbortAllRehearsalJobs(org, repo, number, logger)
 
 		if err := s.ghc.RemoveLabel(org, repo, number, rehearse.NetworkAccessRehearsalsOkLabel); err != nil {
 			// We shouldn't get an error here if the label doesn't exist, so any error is legitimate

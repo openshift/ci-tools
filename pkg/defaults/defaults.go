@@ -158,18 +158,6 @@ func fromConfig(
 	params.Add("JOB_NAME_SAFE", func() (string, error) { return strings.Replace(jobSpec.Job, "_", "-", -1), nil })
 	params.Add("UNIQUE_HASH", func() (string, error) { return jobSpec.UniqueHash(), nil })
 	params.Add("NAMESPACE", func() (string, error) { return jobSpec.Namespace(), nil })
-	// when provided, RELEASE_IMAGE_INITIAL and RELASE_IMAGE_LATEST will be overwritten when resolving the respective releases.
-	// some multi-stage steps need the original values of these env vars, so we set them on respective ORIGINAL_* vars
-	for _, name := range []string{api.InitialReleaseName, api.LatestReleaseName} {
-		envVar := utils.ReleaseImageEnv(name)
-		val, err := params.Get(envVar)
-		if err != nil {
-			logrus.WithError(err).Warnf("couldn't get env var for: %s", name)
-		} else if val != "" {
-			logrus.Debugf("setting original value of overridden release image to env var for: %s", name)
-			params.Add(fmt.Sprintf("ORIGINAL_%s", envVar), func() (string, error) { return val, nil })
-		}
-	}
 	inputImages := make(inputImageSet)
 	var overridableSteps []api.Step
 	var buildSteps []api.Step

@@ -61,6 +61,9 @@ type importReleaseStep struct {
 	pullSecret *coreapi.Secret
 	// overrideCLIReleaseExtractImage is given for non-amd64 releases
 	overrideCLIReleaseExtractImage *coreapi.ObjectReference
+
+	// originalPullSpec stores the original value before resolving the release to pass as an env var for multi-stage steps to utilize
+	originalPullSpec string
 }
 
 func (s *importReleaseStep) Inputs() (api.InputDefinition, error) {
@@ -105,6 +108,8 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	logrus.WithField("name", s.name).Debugf("setting originalPullSpec to: %s for multi-stage steps to reference", pullSpec)
+	s.originalPullSpec = pullSpec
 	// retry importing the image a few times because we might race against establishing credentials/roles
 	// and be unable to import images on the same cluster
 	if newPullSpec, err := utils.ImportTagWithRetries(ctx, s.client, s.jobSpec.Namespace(), "release", s.name, pullSpec, api.ImageStreamImportRetries); err != nil {
@@ -286,8 +291,14 @@ func (s *importReleaseStep) Creates() []api.StepLink {
 }
 
 func (s *importReleaseStep) Provides() api.ParameterMap {
+	env := utils.ReleaseImageEnv(s.name)
 	return api.ParameterMap{
-		utils.ReleaseImageEnv(s.name): utils.ImageDigestFor(s.client, s.jobSpec.Namespace, api.ReleaseImageStream, s.name),
+		env: utils.ImageDigestFor(s.client, s.jobSpec.Namespace, api.ReleaseImageStream, s.name),
+		// Disable unparam lint as we need to confirm to this interface, but there will never be an error
+		//nolint:unparam
+		fmt.Sprintf("ORIGINAL_%s", env): func() (string, error) {
+			return s.originalPullSpec, nil
+		},
 	}
 }
 

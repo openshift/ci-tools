@@ -2142,7 +2142,7 @@ knative.dev/pkg/webhook/resourcesemantics
 sigs.k8s.io/boskos/client
 sigs.k8s.io/boskos/common
 sigs.k8s.io/boskos/storage
-# sigs.k8s.io/controller-runtime v0.18.3
+# sigs.k8s.io/controller-runtime v0.18.5
 ## explicit; go 1.22.0
 sigs.k8s.io/controller-runtime
 sigs.k8s.io/controller-runtime/pkg/builder
@@ -2208,7 +2208,7 @@ sigs.k8s.io/controller-tools/pkg/webhook
 ## explicit; go 1.18
 sigs.k8s.io/json
 sigs.k8s.io/json/internal/golang/encoding/json
-# sigs.k8s.io/prow v0.0.0-20241002215026-8442fff47c20
+# sigs.k8s.io/prow v0.0.0-20241017152705-573cf9adb6f5
 ## explicit; go 1.22.3
 sigs.k8s.io/prow/cmd/generic-autobumper/bumper
 sigs.k8s.io/prow/cmd/generic-autobumper/updater

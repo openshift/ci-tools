@@ -63,7 +63,7 @@ require (
 	k8s.io/client-go v0.30.1
 	k8s.io/klog/v2 v2.120.1
 	k8s.io/utils v0.0.0-20240310230437-4693a0247e57
-	sigs.k8s.io/controller-runtime v0.18.3
+	sigs.k8s.io/controller-runtime v0.18.5
 	sigs.k8s.io/controller-tools v0.15.0
 	sigs.k8s.io/yaml v1.4.0
 )
@@ -187,7 +187,7 @@ require (
 	github.com/stretchr/testify v1.9.0
 	gopkg.in/evanphx/json-patch.v5 v5.9.0
 	sigs.k8s.io/boskos v0.0.0-20240624145324-1e4de26c366a
-	sigs.k8s.io/prow v0.0.0-20241002215026-8442fff47c20
+	sigs.k8s.io/prow v0.0.0-20241017152705-573cf9adb6f5
 )
 
 require (

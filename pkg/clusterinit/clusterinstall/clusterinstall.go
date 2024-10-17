@@ -44,7 +44,7 @@ type Onboard struct {
 	MachineSet                 MachineSet                 `json:"machineSet,omitempty"`
 	MultiarchBuilderController MultiarchBuilderController `json:"multiarchBuilderController,omitempty"`
 	ImageRegistry              ImageRegistry              `json:"imageRegistry,omitempty"`
-	IngressOperator            IngressOperator            `json:"ingressOperator,omitempty"`
+	PassthroughManifest        PassthroughManifest        `json:"passthrough,omitempty"`
 }
 
 type Dex struct {
@@ -80,8 +80,9 @@ type ImageRegistry struct {
 	SkipStep
 }
 
-type IngressOperator struct {
+type PassthroughManifest struct {
 	SkipStep
+	Exclude []string `json:"exclude,omitempty"`
 }
 
 const (

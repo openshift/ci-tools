@@ -73,7 +73,7 @@ func runConfigSteps(ctx context.Context, log *logrus.Entry, update bool, cluster
 		onboard.NewCommonSymlinkStep(log, clusterInstall),
 		onboard.NewMultiarchBuilderControllerStep(log, clusterInstall),
 		onboard.NewImageRegistryStepStep(log, clusterInstall),
-		onboard.NewIngressOperatorStep(log, clusterInstall),
+		onboard.NewPassthroughStep(log, clusterInstall),
 	}
 
 	steps = addCloudSpecificSteps(log, kubeClient, steps, clusterInstall)

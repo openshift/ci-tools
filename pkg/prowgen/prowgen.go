@@ -100,7 +100,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		}
 		jobBaseGen := newJobBaseBuilder().TestName("images")
 		if info.Config.MultiArch && info.Config.HasMultiArchBranchFilter(info.Branch) && info.Variant == "" {
-			jobBaseGen.Cluster(api.ClusterBuild10).WithLabel(api.ClusterLabel, string(api.ClusterBuild10))
+			jobBaseGen.Cluster(api.ClusterBuild09).WithLabel(api.ClusterLabel, string(api.ClusterBuild09))
 		}
 		jobBaseGen.PodSpec.Add(Targets(presubmitTargets...))
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, "images", info))
@@ -108,7 +108,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		if configSpec.PromotionConfiguration != nil {
 			jobBaseGen = newJobBaseBuilder().TestName("images")
 			if info.Config.MultiArch && info.Config.HasMultiArchBranchFilter(info.Branch) && info.Variant == "" {
-				jobBaseGen.Cluster(api.ClusterBuild10).WithLabel(api.ClusterLabel, string(api.ClusterBuild10))
+				jobBaseGen.Cluster(api.ClusterBuild09).WithLabel(api.ClusterLabel, string(api.ClusterBuild09))
 			}
 			jobBaseGen.PodSpec.Add(Promotion(), Targets(imageTargets.UnsortedList()...))
 			postsubmit := generatePostsubmitForTest(jobBaseGen, info)

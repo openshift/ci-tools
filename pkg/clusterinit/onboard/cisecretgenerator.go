@@ -158,7 +158,7 @@ siLoop:
 	return nil, fmt.Errorf("couldn't find SecretItem: %s", explainFilters(filters...))
 }
 
-func NewCiSecretGeneratorStep(log *logrus.Entry, clusterInstall *clusterinstall.ClusterInstall) *ciSecretGeneratorStep {
+func NewCISecretGeneratorStep(log *logrus.Entry, clusterInstall *clusterinstall.ClusterInstall) *ciSecretGeneratorStep {
 	return &ciSecretGeneratorStep{
 		log:            log,
 		clusterInstall: clusterInstall,

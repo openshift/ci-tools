@@ -520,7 +520,7 @@ func (s *ciSecretBootstrapStep) secretConfigExist(target *secretbootstrap.Secret
 	return false
 }
 
-func NewCiSecretBootstrapStep(log *logrus.Entry, clusterInstall *clusterinstall.ClusterInstall) *ciSecretBootstrapStep {
+func NewCISecretBootstrapStep(log *logrus.Entry, clusterInstall *clusterinstall.ClusterInstall) *ciSecretBootstrapStep {
 	return &ciSecretBootstrapStep{
 		log:            log,
 		clusterInstall: clusterInstall,

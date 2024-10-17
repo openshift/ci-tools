@@ -7,9 +7,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/openshift/ci-tools/cmd/cluster-init/runtime"
-	"github.com/openshift/ci-tools/pkg/clusterinit"
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/clusterinit/provision/ocp"
+	"github.com/openshift/ci-tools/pkg/clusterinit/types"
 )
 
 func newProvisionOCP(log *logrus.Entry, opts *runtime.Options) *cobra.Command {
@@ -35,7 +35,7 @@ func newOCPCreate(log *logrus.Entry, opts *runtime.Options) *cobra.Command {
 2. create manifests: create the manifests from an install-config.yaml
 3. create cluster: provision a cluster`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var step clusterinit.Step
+			var step types.Step
 
 			if len(args) == 0 {
 				return cmd.Help()

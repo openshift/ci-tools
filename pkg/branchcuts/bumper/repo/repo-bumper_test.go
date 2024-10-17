@@ -25,7 +25,6 @@ baseurl = https://fake-repo.com/ocp/4.10/test
 			`[rhel-repo-1]
 name = test
 baseurl = https://fake-repo.com/ocp/4.11/test
-
 `,
 			"4.10",
 		},
@@ -38,7 +37,6 @@ baseurl = https://fake-repo.com/ocp/4-10/test
 			`[rhel-repo-1]
 name = test
 baseurl = https://fake-repo.com/ocp/4-11/test
-
 `,
 			"4.10",
 		},

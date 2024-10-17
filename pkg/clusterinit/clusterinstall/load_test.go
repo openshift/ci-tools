@@ -10,6 +10,9 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"k8s.io/utils/ptr"
+
+	"github.com/openshift/ci-tools/pkg/clusterinit/types/aws"
+	"github.com/openshift/ci-tools/pkg/clusterinit/types/gcp"
 )
 
 func TestLoad(t *testing.T) {
@@ -26,7 +29,7 @@ func TestLoad(t *testing.T) {
 			wantClusterInstall: ClusterInstall{
 				ClusterName: "foo",
 				InstallBase: path.Join("testdata", "load"),
-				Provision:   Provision{AWS: &AWSProvision{}},
+				Provision:   Provision{AWS: &aws.Provision{}},
 				Onboard: Onboard{
 					OSD:                      ptr.To(true),
 					Hosted:                   ptr.To(true),
@@ -45,7 +48,7 @@ func TestLoad(t *testing.T) {
 			wantClusterInstall: ClusterInstall{
 				ClusterName: "foo",
 				InstallBase: "/install/base",
-				Provision:   Provision{AWS: &AWSProvision{}},
+				Provision:   Provision{AWS: &aws.Provision{}},
 				Onboard: Onboard{
 					ReleaseRepo:              "/release/repo",
 					OSD:                      ptr.To(true),
@@ -100,7 +103,7 @@ func TestLoadFromDir(t *testing.T) {
 				"foo": {
 					ClusterName: "foo",
 					InstallBase: path.Join("testdata", "load-from-dir", "dir1"),
-					Provision:   Provision{AWS: &AWSProvision{}},
+					Provision:   Provision{AWS: &aws.Provision{}},
 					Onboard: Onboard{
 						OSD:                      ptr.To(true),
 						Hosted:                   ptr.To(true),
@@ -111,7 +114,7 @@ func TestLoadFromDir(t *testing.T) {
 				"bar": {
 					ClusterName: "bar",
 					InstallBase: path.Join("testdata", "load-from-dir", "dir1"),
-					Provision:   Provision{GCP: &GCPProvision{}},
+					Provision:   Provision{GCP: &gcp.Provision{}},
 					Onboard: Onboard{
 						OSD:                      ptr.To(true),
 						Hosted:                   ptr.To(true),
@@ -132,7 +135,7 @@ func TestLoadFromDir(t *testing.T) {
 				"foo": {
 					ClusterName: "foo",
 					InstallBase: "/install/base",
-					Provision:   Provision{AWS: &AWSProvision{}},
+					Provision:   Provision{AWS: &aws.Provision{}},
 					Onboard: Onboard{
 						ReleaseRepo:              "/release/repo",
 						OSD:                      ptr.To(true),
@@ -144,7 +147,7 @@ func TestLoadFromDir(t *testing.T) {
 				"bar": {
 					ClusterName: "bar",
 					InstallBase: "/install/base",
-					Provision:   Provision{GCP: &GCPProvision{}},
+					Provision:   Provision{GCP: &gcp.Provision{}},
 					Onboard: Onboard{
 						ReleaseRepo:              "/release/repo",
 						OSD:                      ptr.To(true),

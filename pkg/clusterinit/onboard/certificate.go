@@ -15,6 +15,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	imagev1 "github.com/openshift/api/image/v1"
+	installertypes "github.com/openshift/installer/pkg/types"
 	"github.com/openshift/library-go/pkg/image/reference"
 
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
@@ -75,9 +76,7 @@ func (s *certificateStep) baseDomain(ctx context.Context) (string, error) {
 		return "", errors.New("install-config not found")
 	}
 
-	installConfig := struct {
-		BaseDomain string `json:"baseDomain"`
-	}{}
+	installConfig := installertypes.InstallConfig{}
 	if err := yaml.Unmarshal([]byte(installConfigRaw), &installConfig); err != nil {
 		return "", fmt.Errorf("unmarshall install config: %w", err)
 	}

@@ -8,9 +8,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"k8s.io/client-go/tools/clientcmd"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/cmd/cluster-init/runtime"
+	kuberuntime "github.com/openshift/ci-tools/cmd/cluster-init/runtime/kube"
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/clusterinit/onboard"
 )
@@ -56,12 +56,15 @@ func generateConfig(ctx context.Context, log *logrus.Entry, opts generateConfigO
 	if err != nil {
 		return fmt.Errorf("load kubeconfig: %w", err)
 	}
-	kubeClient, err := ctrlruntimeclient.New(config, ctrlruntimeclient.Options{})
+	kubeClient, err := kuberuntime.NewClient(config)
 	if err != nil {
 		return fmt.Errorf("new kubeclient: %w", err)
 	}
+	if err := addClusterInstallRuntimeInfo(ctx, clusterInstall, kubeClient); err != nil {
+		return err
+	}
 
-	if err := runConfigSteps(ctx, log, false, kubeClient, clusterInstall); err != nil {
+	if err := runConfigSteps(ctx, log, false, clusterInstall, kubeClient); err != nil {
 		return fmt.Errorf("generate config for cluster %s, %w", clusterInstall.ClusterName, err)
 	}
 

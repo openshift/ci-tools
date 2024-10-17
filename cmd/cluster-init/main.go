@@ -12,6 +12,7 @@ import (
 	"sigs.k8s.io/prow/pkg/logrusutil"
 	"sigs.k8s.io/prow/pkg/version"
 
+	configv1 "github.com/openshift/api/config/v1"
 	imagev1 "github.com/openshift/api/image/v1"
 	imageregistryv1 "github.com/openshift/api/imageregistry/v1"
 	routev1 "github.com/openshift/api/route/v1"
@@ -94,6 +95,9 @@ func addSchemes() error {
 	}
 	if err := imagev1.AddToScheme(scheme.Scheme); err != nil {
 		return fmt.Errorf("add imagev1 to scheme: %w", err)
+	}
+	if err := configv1.AddToScheme(scheme.Scheme); err != nil {
+		return fmt.Errorf("add configv1 to scheme: %w", err)
 	}
 	return nil
 }

@@ -7,15 +7,15 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/openshift/ci-tools/pkg/clusterinit"
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
+	"github.com/openshift/ci-tools/pkg/clusterinit/types"
 )
 
 type createInstallConfigStep struct {
 	log            *logrus.Entry
 	clusterInstall *clusterinstall.ClusterInstall
-	cmdBuilder     clusterinit.CmdBuilder
-	cmdRunner      clusterinit.CmdRunner
+	cmdBuilder     types.CmdBuilder
+	cmdRunner      types.CmdRunner
 }
 
 func (s *createInstallConfigStep) Name() string {
@@ -37,7 +37,7 @@ func (s *createInstallConfigStep) Run(ctx context.Context) error {
 }
 
 func NewCreateInstallConfigStep(log *logrus.Entry, clusterInstall *clusterinstall.ClusterInstall,
-	cmdBuilder clusterinit.CmdBuilder, cmdRunner clusterinit.CmdRunner) *createInstallConfigStep {
+	cmdBuilder types.CmdBuilder, cmdRunner types.CmdRunner) *createInstallConfigStep {
 	return &createInstallConfigStep{
 		log:            log,
 		clusterInstall: clusterInstall,

@@ -1,7 +1,0 @@
-hosted:
-- newCluster
-managed:
-- existingCluster
-- newCluster
-osd:
-- newCluster

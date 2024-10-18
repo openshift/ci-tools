@@ -1275,6 +1275,7 @@ const (
 	ClusterProfileAWSDevfile            ClusterProfile = "aws-devfile"
 	ClusterProfileAWSSPLAT              ClusterProfile = "aws-splat"
 	ClusterProfileAWSKubeVirt           ClusterProfile = "aws-kubevirt"
+	ClusterProfileAWSOVNPerfScale       ClusterProfile = "aws-ovn-perfscale"
 	ClusterProfileAlibabaCloud          ClusterProfile = "alibabacloud"
 	ClusterProfileAlibabaCloudQE        ClusterProfile = "alibabacloud-qe"
 	ClusterProfileAlibabaCloudCNQE      ClusterProfile = "alibabacloud-cn-qe"
@@ -1417,6 +1418,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSDevfile,
 		ClusterProfileAWSSPLAT,
 		ClusterProfileAWSKubeVirt,
+		ClusterProfileAWSOVNPerfScale,
 		ClusterProfileAlibabaCloud,
 		ClusterProfileAlibabaCloudQE,
 		ClusterProfileAlibabaCloudCNQE,
@@ -1555,6 +1557,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSRHDHPerf,
 		ClusterProfileAWSSPLAT,
 		ClusterProfileAWSKubeVirt,
+		ClusterProfileAWSOVNPerfScale,
 		ClusterProfileOSSM,
 		ClusterProfileAWSOpendatahub,
 		ClusterProfileAWSDevfile,
@@ -1800,6 +1803,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-splat-quota-slice"
 	case ClusterProfileAWSKubeVirt:
 		return "aws-kubevirt-quota-slice"
+	case ClusterProfileAWSOVNPerfScale:
+		return "aws-ovn-perfscale-quota-slice"
 	case ClusterProfileAlibabaCloud:
 		return "alibabacloud-quota-slice"
 	case ClusterProfileAlibabaCloudQE:

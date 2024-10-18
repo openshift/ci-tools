@@ -3,12 +3,11 @@ package provision
 import (
 	"fmt"
 
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/openshift/ci-tools/cmd/cluster-init/runtime"
+	awsruntime "github.com/openshift/ci-tools/cmd/cluster-init/runtime/aws"
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/clusterinit/provision/aws"
 )
@@ -37,17 +36,8 @@ func newAWSCreateStacks(log *logrus.Entry, opts *runtime.Options) *cobra.Command
 			if err != nil {
 				return fmt.Errorf("load cluster-install: %w", err)
 			}
-			step := aws.NewCreateAWSStacksStep(log,
-				clusterInstall,
-				func() (aws.CloudFormationClient, error) {
-					log.Info("Loading AWS config")
-					awsconfig, err := config.LoadDefaultConfig(ctx)
-					if err != nil {
-						return nil, fmt.Errorf("load aws config: %w", err)
-					}
-					return cloudformation.NewFromConfig(awsconfig), nil
-				}, nil, nil,
-			)
+			awsProvider := awsruntime.NewProvider(clusterInstall, nil)
+			step := aws.NewCreateAWSStacksStep(log, clusterInstall, awsProvider, nil, nil)
 			if err := step.Run(ctx); err != nil {
 				return fmt.Errorf("%s: %w", step.Name(), err)
 			}

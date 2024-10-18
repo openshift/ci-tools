@@ -2,17 +2,26 @@ package config
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
+
+	configv1 "github.com/openshift/api/config/v1"
+	installertypes "github.com/openshift/installer/pkg/types"
 
 	"github.com/openshift/ci-tools/cmd/cluster-init/runtime"
-	"github.com/openshift/ci-tools/pkg/clusterinit"
+	awsruntime "github.com/openshift/ci-tools/cmd/cluster-init/runtime/aws"
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/clusterinit/onboard"
+	"github.com/openshift/ci-tools/pkg/clusterinit/onboard/cischedulingwebhook"
+	clusterinittypes "github.com/openshift/ci-tools/pkg/clusterinit/types"
 )
 
 func NewCmd(log *logrus.Entry, opts *runtime.Options) (*cobra.Command, error) {
@@ -45,13 +54,14 @@ func NewCmd(log *logrus.Entry, opts *runtime.Options) (*cobra.Command, error) {
 	return &cmd, nil
 }
 
-func runConfigSteps(ctx context.Context, log *logrus.Entry, update bool, kubeClient ctrlruntimeclient.Client, clusterInstall *clusterinstall.ClusterInstall) error {
-	steps := []clusterinit.Step{
+func runConfigSteps(ctx context.Context, log *logrus.Entry, update bool, clusterInstall *clusterinstall.ClusterInstall,
+	kubeClient ctrlruntimeclient.Client) error {
+	steps := []clusterinittypes.Step{
 		onboard.NewProwJobStep(log, clusterInstall),
 		onboard.NewBuildClusterDirStep(log, clusterInstall),
 		onboard.NewOAuthTemplateStep(log, clusterInstall),
-		onboard.NewCiSecretBootstrapStep(log, clusterInstall),
-		onboard.NewCiSecretGeneratorStep(log, clusterInstall),
+		onboard.NewCISecretBootstrapStep(log, clusterInstall),
+		onboard.NewCISecretGeneratorStep(log, clusterInstall),
 		onboard.NewSanitizeProwjobStep(log, clusterInstall),
 		onboard.NewSyncRoverGroupStep(log, clusterInstall),
 		onboard.NewProwPluginStep(log, clusterInstall),
@@ -59,6 +69,8 @@ func runConfigSteps(ctx context.Context, log *logrus.Entry, update bool, kubeCli
 		onboard.NewQuayioPullThroughCacheStep(log, clusterInstall, kubeClient),
 		onboard.NewCertificateStep(log, clusterInstall, kubeClient),
 	}
+
+	steps = addCloudSpecificSteps(log, kubeClient, steps, clusterInstall)
 	if !update {
 		steps = append(steps, onboard.NewBuildClusterStep(log, clusterInstall))
 	}
@@ -68,5 +80,38 @@ func runConfigSteps(ctx context.Context, log *logrus.Entry, update bool, kubeCli
 			return fmt.Errorf("run config step %s: %w", step.Name(), err)
 		}
 	}
+	return nil
+}
+
+func addCloudSpecificSteps(log *logrus.Entry, kubeClient ctrlruntimeclient.Client, steps []clusterinittypes.Step, clusterInstall *clusterinstall.ClusterInstall) []clusterinittypes.Step {
+	if clusterInstall.Provision.AWS != nil {
+		awsProvider := awsruntime.NewProvider(clusterInstall, kubeClient)
+		ciSchedulingWebhookAWS := cischedulingwebhook.NewAWSProvider(awsProvider)
+		steps = append(steps, cischedulingwebhook.NewStep(log, clusterInstall, ciSchedulingWebhookAWS))
+	}
+	return steps
+}
+
+func addClusterInstallRuntimeInfo(ctx context.Context, ci *clusterinstall.ClusterInstall, kubeClient ctrlruntimeclient.Client) error {
+	infra := configv1.Infrastructure{}
+	if err := kubeClient.Get(ctx, types.NamespacedName{Namespace: "", Name: "cluster"}, &infra); err != nil {
+		return fmt.Errorf("get infrastructure: %w", err)
+	}
+	ci.Infrastructure = infra
+
+	cm := corev1.ConfigMap{}
+	if err := kubeClient.Get(ctx, types.NamespacedName{Namespace: "kube-system", Name: "cluster-config-v1"}, &cm); err != nil {
+		return fmt.Errorf("get cluster-config-v1: %w", err)
+	}
+	installConfigRaw, ok := cm.Data["install-config"]
+	if !ok {
+		return errors.New("install-config not found")
+	}
+	installConfig := installertypes.InstallConfig{}
+	if err := yaml.Unmarshal([]byte(installConfigRaw), &installConfig); err != nil {
+		return fmt.Errorf("unmarshall install config: %w", err)
+	}
+	ci.InstallConfig = installConfig
+
 	return nil
 }

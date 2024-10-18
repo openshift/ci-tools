@@ -1,0 +1,41 @@
+postsubmits:
+  openshift/release:
+    - agent: kubernetes
+      branches:
+        - master
+      cluster: app.ci
+      decorate: true
+      labels:
+        ci.openshift.io/build-farm: build99
+        ci.openshift.io/generator: cluster-init
+        ci.openshift.io/role: infra
+      max_concurrency: 1
+      name: branch-ci-openshift-release-master-build99-apply
+      spec:
+        containers:
+          - args:
+              - --config-dir=clusters/build-clusters/build99
+              - --as=
+              - --kubeconfig=/etc/build-farm-credentials/kubeconfig
+              - --confirm=true
+              - --extra-arg=true
+            command:
+              - applyconfig
+            image: registry.ci.openshift.org/ci/applyconfig:oldest
+            imagePullPolicy: Always
+            name: ""
+            resources:
+              requests:
+                cpu: 1m
+            volumeMounts:
+              - mountPath: /etc/build-farm-credentials
+                name: build-farm-creds
+                readOnly: true
+        serviceAccountName: config-updater
+        volumes:
+          - name: build-farm-credentials
+            secret:
+              items:
+                - key: sa.config-updater.build99.config
+                  path: kubeconfig
+              secretName: config-updater

@@ -13,6 +13,7 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	prowflagutil "sigs.k8s.io/prow/pkg/flagutil"
 
+	kuberuntime "github.com/openshift/ci-tools/cmd/cluster-init/runtime/kube"
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/clusterinit/onboard"
 )
@@ -65,7 +66,7 @@ func updateConfig(ctx context.Context, log *logrus.Entry, opts *updateConfigOpti
 		if !found {
 			return nil, fmt.Errorf("kubeconfig for %s not found", clusterName)
 		}
-		return ctrlruntimeclient.New(&config, ctrlruntimeclient.Options{})
+		return kuberuntime.NewClient(&config)
 	}
 
 	clusterInstalls, err := clusterinstall.LoadFromDir(opts.clusterInstallDir,
@@ -79,7 +80,10 @@ func updateConfig(ctx context.Context, log *logrus.Entry, opts *updateConfigOpti
 		if err != nil {
 			return fmt.Errorf("new kubeclient for %s: %w", clusterName, err)
 		}
-		if err := runConfigSteps(ctx, log, true, kubeClient, clusterInstall); err != nil {
+		if err := addClusterInstallRuntimeInfo(ctx, clusterInstall, kubeClient); err != nil {
+			return err
+		}
+		if err := runConfigSteps(ctx, log, true, clusterInstall, kubeClient); err != nil {
 			return fmt.Errorf("update config for cluster %s: %w", clusterName, err)
 		}
 	}

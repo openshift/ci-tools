@@ -99,7 +99,7 @@ func TestUpdateSecret(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			s := NewCiSecretBootstrapStep(logrus.NewEntry(logrus.StandardLogger()), &tc.ci)
+			s := NewCISecretBootstrapStep(logrus.NewEntry(logrus.StandardLogger()), &tc.ci)
 			updateSecretFunc := s.updateSecret(tc.secretGenerator)
 			if err := updateSecretFunc(&tc.config); err != nil {
 				t.Fatalf("received error: %v", err)

@@ -205,6 +205,10 @@ func LoadImageConfigs(ocpBuildDataDir string, majorMinor MajorMinor) ([]OCPImage
 	var errs []error
 	var configs []OCPImageConfig
 	for _, cfg := range configsUnverified {
+		// Skip disabled configs
+		if cfg.Mode == "disabled" {
+			continue
+		}
 		if err := cfg.validate(); err != nil {
 			errs = append(errs, fmt.Errorf("error validating %s: %w", cfg.SourceFileName, err))
 			continue

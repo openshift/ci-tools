@@ -179,3 +179,124 @@ func TestDetermineTargetCluster(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadClusterConfigFromBytes(t *testing.T) {
+	tests := []struct {
+		name            string
+		yamlData        string
+		expectedCluster ClusterMap
+		expectedBlocked sets.Set[string]
+	}{
+		{
+			name: "Valid config with AWS and GCP",
+			yamlData: `
+aws:
+  - name: build01
+    capacity: 80
+    capabilities:
+      - aarch64
+      - amd64
+      - vpn
+  - name: build03
+  - name: build09
+    blocked: true
+  - name: build99
+    capacity: -99 #will be blocked as well
+gcp:
+  - name: build02
+    capacity: 60
+    capabilities:
+      - vpn
+`,
+			expectedCluster: ClusterMap{
+				"build01": {
+					Provider:     "aws",
+					Capacity:     80,
+					Capabilities: []string{"aarch64", "amd64", "vpn"},
+				},
+				"build03": {
+					Provider:     "aws",
+					Capacity:     100,
+					Capabilities: nil,
+				},
+				"build02": {
+					Provider:     "gcp",
+					Capacity:     60,
+					Capabilities: []string{"vpn"},
+				},
+			},
+			expectedBlocked: sets.New[string]("build09", "build99"),
+		},
+		{
+			name: "Config with missing capacities and capabilities",
+			yamlData: `
+aws:
+  - name: build01
+    capacity: 101 #capacity to 100
+gcp:
+  - name: build02
+    capabilities:
+      - vpn
+  - name: build03
+    blocked: true
+`,
+			expectedCluster: ClusterMap{
+				"build01": {
+					Provider:     "aws",
+					Capacity:     100,
+					Capabilities: nil,
+				},
+				"build02": {
+					Provider:     "gcp",
+					Capacity:     100,
+					Capabilities: []string{"vpn"},
+				},
+			},
+			expectedBlocked: sets.New[string]("build03"),
+		},
+		{
+			name: "Empty config",
+			yamlData: `
+aws: []
+gcp: []
+`,
+			expectedCluster: ClusterMap{},
+			expectedBlocked: sets.New[string](),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := []byte(tt.yamlData)
+
+			clusterMap, blockedClusters, err := loadClusterConfigFromBytes(data)
+			if err != nil {
+				t.Fatalf("Failed to load cluster config: %v", err)
+			}
+
+			for clusterName, expectedInfo := range tt.expectedCluster {
+				if info, exists := clusterMap[clusterName]; !exists {
+					t.Errorf("Expected cluster %s to be in clusterMap", clusterName)
+				} else {
+					if info.Provider != expectedInfo.Provider {
+						t.Errorf("Expected provider for %s: %s, got: %s", clusterName, expectedInfo.Provider, info.Provider)
+					}
+					if info.Capacity != expectedInfo.Capacity {
+						t.Errorf("Expected capacity for %s: %d, got: %d", clusterName, expectedInfo.Capacity, info.Capacity)
+					}
+					if len(info.Capabilities) != len(expectedInfo.Capabilities) {
+						t.Errorf("Expected capabilities length for %s: %d, got: %d", clusterName, len(expectedInfo.Capabilities), len(info.Capabilities))
+					}
+					for i, capability := range info.Capabilities {
+						if capability != expectedInfo.Capabilities[i] {
+							t.Errorf("Expected capability %d for %s: %s, got: %s", i, clusterName, expectedInfo.Capabilities[i], capability)
+						}
+					}
+				}
+			}
+			if !blockedClusters.Equal(tt.expectedBlocked) {
+				t.Errorf("Expected blocked clusters: %v, got: %v", tt.expectedBlocked.UnsortedList(), blockedClusters.UnsortedList())
+			}
+		})
+	}
+}

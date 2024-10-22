@@ -44,7 +44,7 @@ type githubClient interface {
 
 func helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, error) {
 	pluginHelp := &pluginhelp.PluginHelp{
-		Description: `TODO`,
+		Description: "The multi-pr-prow-plugin triggers the requested test against source(s) built from the origin PR and the requested additional PRs",
 	}
 	pluginHelp.AddCommand(pluginhelp.Command{
 		Usage:       "/testwith",

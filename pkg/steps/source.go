@@ -143,7 +143,6 @@ func LabelsFor(spec *api.JobSpec, base map[string]string, ref string) map[string
 				org = extraRef.Org
 				repo = extraRef.Repo
 				branch = extraRef.BaseRef
-				//TODO(sgoeddel): If we care about variant in the future there will need to be logic to determine it
 			}
 		}
 	}

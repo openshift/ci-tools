@@ -37,5 +37,3 @@ type Reply struct {
 	Timestamp string `json:"timestamp"`
 	Body      string `json:"body"`
 }
-
-//TODO(sgoeddel): It would also be good to link to the original full thread for additional context

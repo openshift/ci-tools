@@ -30,10 +30,11 @@ const (
 	maxPRs                    = 20
 	defaultMultiRefJobTimeout = 8 * time.Hour
 	testwithLabel             = "ci.openshift.io/testwith"
+	githubURL                 = "https://github.com/"
 )
 
 var (
-	testwithCommand = regexp.MustCompile(fmt.Sprintf(`(?mi)^%s\s+(?P<job>[-\w./]+)\s+(?P<prs>(?:[-\w./#]+\s*)+)\s*$`, testwithPrefix))
+	testwithCommand = regexp.MustCompile(fmt.Sprintf(`(?mi)^%s\s+(?P<job>[-\w./]+)\s+(?P<prs>(?:[-\w./#:]+\s*)+)\s*$`, testwithPrefix))
 	// TODO(sgoeddel): we will likely want to add abort functionality, eventually
 )
 
@@ -238,6 +239,12 @@ func (s *server) determineJobRuns(comment string, originPR github.PullRequest) (
 				return nil, fmt.Errorf("%d PRs found which is more than the max of %d, will not process request", len(rawPRs), maxPRs)
 			}
 			for _, rawPR := range rawPRs {
+				if strings.HasPrefix(rawPR, githubURL) {
+					// When users copy/paste the command, GitHub likes to fully resolve the url into the value.
+					// we can catch this and convert it to the proper format.
+					rawPR = strings.Replace(strings.TrimPrefix(rawPR, githubURL), "/pull/", "#", 1)
+				}
+
 				orgSplit := strings.Split(rawPR, "/")
 				if len(orgSplit) != 2 {
 					return nil, fmt.Errorf("invalid format for additional PR: %s", rawPR)

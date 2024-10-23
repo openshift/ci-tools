@@ -12,7 +12,6 @@ periodics:
   spec:
     containers:
     - args:
-      - --secret-dir=/usr/local/e2e-cluster-profile
       - --target=CHANGED
       - --template=/usr/local/e2e
       command:
@@ -33,20 +32,11 @@ periodics:
         requests:
           cpu: 10m
       volumeMounts:
-      - mountPath: /usr/local/e2e-cluster-profile
-        name: cluster-profile
       - mountPath: /usr/local/e2e
         name: job-definition
         subPath: cluster-launch-src.yaml
     serviceAccountName: ci-operator
     volumes:
-    - name: cluster-profile
-      projected:
-        sources:
-        - secret:
-            name: cluster-secrets-gcp
-        - configMap:
-            name: cluster-profile-gcp
     - configMap:
         name: prow-job-cluster-launch-src
       name: job-definition

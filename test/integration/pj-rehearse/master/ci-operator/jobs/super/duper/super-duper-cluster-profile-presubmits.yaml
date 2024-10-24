@@ -70,7 +70,6 @@ presubmits:
       containers:
       - args:
         - --give-pr-author-access-to-namespace=true
-        - --secret-dir=/usr/local/test-profile-cluster-profile
         - --target=test-profile
         - --template=/usr/local/test-profile
         command:
@@ -89,20 +88,11 @@ presubmits:
           requests:
             cpu: 10m
         volumeMounts:
-        - mountPath: /usr/local/test-profile-cluster-profile
-          name: cluster-profile
         - mountPath: /usr/local/test-profile
           name: job-definition
           subPath: test-template.yaml
       serviceAccountName: ci-operator
       volumes:
-      - name: cluster-profile
-        projected:
-          sources:
-          - secret:
-              name: cluster-secrets-test-profile
-          - configMap:
-              name: cluster-profile-test-profile
       - configMap:
           name: prow-job-cluster-launch-src
         name: job-definition

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"strconv"
 	"testing"
@@ -16,100 +15,13 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/fake"
-	coretesting "k8s.io/client-go/testing"
 	prowplugins "sigs.k8s.io/prow/pkg/plugins"
 
 	"github.com/openshift/ci-tools/pkg/config"
 )
-
-func TestCreateCleanupCMTemplates(t *testing.T) {
-	// TODO(nmoraitis,bbcaro): this is an integration test and should be factored better
-	testRepoPath := "../../test/integration/pj-rehearse/master"
-	testTemplatePath := filepath.Join(config.TemplatesPath, "subdir/test-template.yaml")
-	cluster := "cluster"
-	ns := "test-namespace"
-	contents, err := os.ReadFile(filepath.Join(testRepoPath, testTemplatePath))
-	if err != nil {
-		t.Fatal(err)
-	}
-	configUpdaterCfg := prowplugins.ConfigUpdater{
-		Maps: map[string]prowplugins.ConfigMapSpec{
-			testTemplatePath: {
-				Name:     "prow-job-test-template",
-				Clusters: map[string][]string{cluster: {ns}},
-			},
-		},
-	}
-	configUpdaterCfg.SetDefaults()
-	createByRehearseReq, err := labels.NewRequirement(createByRehearse, selection.Equals, []string{"true"})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	rehearseLabelPullReq, err := labels.NewRequirement(rehearseLabelPull, selection.Equals, []string{"1234"})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	selector := labels.NewSelector().Add(*createByRehearseReq).Add(*rehearseLabelPullReq)
-
-	expectedListRestricitons := coretesting.ListRestrictions{
-		Labels: selector,
-	}
-
-	cs := fake.NewSimpleClientset()
-	cs.Fake.PrependReactor("delete-collection", "configmaps", func(action coretesting.Action) (bool, runtime.Object, error) {
-		deleteAction := action.(coretesting.DeleteCollectionAction)
-		listRestrictions := deleteAction.GetListRestrictions()
-
-		if !reflect.DeepEqual(listRestrictions.Labels, expectedListRestricitons.Labels) {
-			t.Fatalf("Labels:\nExpected:%#v\nFound: %#v", expectedListRestricitons.Labels, listRestrictions.Labels)
-		}
-
-		return true, nil, nil
-	})
-	client := cs.CoreV1().ConfigMaps(ns)
-	pr := 1234
-	SHA := "SOMESHA"
-	cmManager := NewCMManager(cluster, ns, client, configUpdaterCfg, pr, testRepoPath, logrus.NewEntry(logrus.New()))
-	ciTemplates, err := NewConfigMaps([]string{testTemplatePath}, "template", SHA, pr, configUpdaterCfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := cmManager.Create(ciTemplates); err != nil {
-		t.Fatalf("CreateCMTemplates() returned error: %v", err)
-	}
-	cms, err := client.List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	expected := []v1.ConfigMap{{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rehearse-1234-SOMESHA-template-prow-job-test-template",
-			Namespace: ns,
-			Labels: map[string]string{
-				createByRehearse:  "true",
-				rehearseLabelPull: "1234",
-			},
-		},
-		Data: map[string]string{
-			"test-template.yaml": string(contents),
-		},
-	}}
-	if !equality.Semantic.DeepEqual(expected, cms.Items) {
-		t.Fatal(diff.ObjectDiff(expected, cms.Items))
-	}
-	if err := cmManager.Clean(); err != nil {
-		t.Fatalf("Clean() returned error: %v", err)
-	}
-}
 
 func TestCreateClusterProfiles(t *testing.T) {
 	dir, err := os.MkdirTemp("", "")

@@ -91,7 +91,6 @@ func TestReleaseRpms(t *testing.T) {
 			name: "envvar additional envvar generated for template",
 			generator: NewCiOperatorPodSpecGenerator().Add(
 				Targets("tgt"),
-				ClusterProfile(api.ClusterProfileAWS, "tgt"),
 				Template("template", "kommand", "", "tgt", api.ClusterProfileAWS),
 				ReleaseRpms("3.11", meta),
 			),
@@ -385,26 +384,6 @@ func TestPromotion(t *testing.T) {
 	}
 }
 
-func TestClusterProfile(t *testing.T) {
-	t.Parallel()
-	tests := []api.ClusterProfile{
-		api.ClusterProfileAWS,
-		api.ClusterProfileGCP,
-		api.ClusterProfileAWSCPaaS,
-	}
-	for _, tc := range tests {
-		tc := tc
-		t.Run(string(tc), func(t *testing.T) {
-			t.Parallel()
-			podspec, err := NewCiOperatorPodSpecGenerator().Add(ClusterProfile(tc, "test-name"), Targets("test-name")).Build()
-			if err != nil {
-				t.Fatalf("Unexpected error: %v", err)
-			}
-			testhelper.CompareWithFixture(t, podspec)
-		})
-	}
-}
-
 func TestTemplate(t *testing.T) {
 	t.Parallel()
 	cp := api.ClusterProfileAWS
@@ -415,19 +394,19 @@ func TestTemplate(t *testing.T) {
 	}{
 		{
 			name: "template with command",
-			g:    NewCiOperatorPodSpecGenerator().Add(ClusterProfile(cp, "t"), Template("cluster-launch-installer-upi-e2e", "make things", "", "t", cp), Targets("t")),
+			g:    NewCiOperatorPodSpecGenerator().Add(Template("cluster-launch-installer-upi-e2e", "make things", "", "t", cp), Targets("t")),
 		},
 		{
 			name: "template with different command",
-			g:    NewCiOperatorPodSpecGenerator().Add(ClusterProfile(cp, "t"), Template("cluster-launch-installer-upi-e2e", "make different things", "", "t", cp), Targets("t")),
+			g:    NewCiOperatorPodSpecGenerator().Add(Template("cluster-launch-installer-upi-e2e", "make different things", "", "t", cp), Targets("t")),
 		},
 		{
 			name: "different template with command",
-			g:    NewCiOperatorPodSpecGenerator().Add(ClusterProfile(cp, "t"), Template("cluster-launch-installer-libvirt-e2e", "make things", "", "t", cp)),
+			g:    NewCiOperatorPodSpecGenerator().Add(Template("cluster-launch-installer-libvirt-e2e", "make things", "", "t", cp)),
 		},
 		{
 			name: "template with a custom test image",
-			g:    NewCiOperatorPodSpecGenerator().Add(ClusterProfile(cp, "t"), Template("cluster-launch-installer-upi-e2e", "make things", "custom-image", "t", cp), Targets("t")),
+			g:    NewCiOperatorPodSpecGenerator().Add(Template("cluster-launch-installer-upi-e2e", "make things", "custom-image", "t", cp), Targets("t")),
 		},
 	}
 	for _, tc := range tests {

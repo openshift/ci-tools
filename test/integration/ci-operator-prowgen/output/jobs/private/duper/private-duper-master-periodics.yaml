@@ -20,7 +20,6 @@ periodics:
       - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
       - --oauth-token-path=/usr/local/github-credentials/oauth
       - --report-credentials-file=/etc/report/credentials
-      - --secret-dir=/usr/local/e2e-nightly-cluster-profile
       - --target=e2e-nightly
       - --template=/usr/local/e2e-nightly
       command:
@@ -41,8 +40,6 @@ periodics:
         requests:
           cpu: 10m
       volumeMounts:
-      - mountPath: /usr/local/e2e-nightly-cluster-profile
-        name: cluster-profile
       - mountPath: /secrets/gcs
         name: gcs-credentials
         readOnly: true
@@ -63,13 +60,6 @@ periodics:
         readOnly: true
     serviceAccountName: ci-operator
     volumes:
-    - name: cluster-profile
-      projected:
-        sources:
-        - secret:
-            name: cluster-secrets-gcp
-        - configMap:
-            name: cluster-profile-gcp
     - name: github-credentials-openshift-ci-robot-private-git-cloner
       secret:
         secretName: github-credentials-openshift-ci-robot-private-git-cloner

@@ -132,7 +132,7 @@ func TestHandle(t *testing.T) {
 				Comment: github.IssueComment{
 					Body: `/testwith openshift/ci-tools/master/unit openshift/ci-tools#123
 /testwith openshift/ci-tools/master/e2e openshift/release#876
-/testwith openshift/ci-tools/master/unit openshift/release#876`,
+/testwith openshift/ci-tools/master/unit https://github.com/openshift/release/pull/876`,
 					User: github.User{Login: "developer"},
 				},
 			},
@@ -384,7 +384,7 @@ func TestDetermineJobRuns(t *testing.T) {
 		{
 			name: "trigger multiple jobs with an additional PR from the same repo",
 			comment: `/testwith openshift/ci-tools/master/unit openshift/ci-tools#123
-/testwith openshift/ci-tools/master/e2e openshift/ci-tools#123`,
+/testwith openshift/ci-tools/master/e2e https://github.com/openshift/ci-tools/pull/123`,
 			originPR: github.PullRequest{
 				Base: github.PullRequestBranch{
 					Repo: github.Repo{
@@ -536,6 +536,49 @@ func TestDetermineJobRuns(t *testing.T) {
 				Number: 999,
 			},
 			expectedError: errors.New("requested job is invalid. needs to be formatted like: <org>/<repo>/<branch>/<variant?>/<job>. instead it was: openshift/ci-tools/master/blaster/faster/unit"),
+		},
+		{
+			name:    "trigger a single job with an additional PR in the github url format",
+			comment: "/testwith openshift/ci-tools/master/unit https://github.com/openshift/ci-tools/pull/123",
+			originPR: github.PullRequest{
+				Base: github.PullRequestBranch{
+					Repo: github.Repo{
+						Owner: github.User{Login: "openshift"},
+						Name:  "ci-tools",
+					},
+				},
+				Number: 999,
+			},
+			expected: []jobRun{{
+				JobMetadata: api.MetadataWithTest{
+					Metadata: api.Metadata{
+						Org:    "openshift",
+						Repo:   "ci-tools",
+						Branch: "master",
+					},
+					Test: "unit",
+				},
+				OriginPR: github.PullRequest{
+					Base: github.PullRequestBranch{
+						Repo: github.Repo{
+							Owner: github.User{Login: "openshift"},
+							Name:  "ci-tools",
+						},
+					},
+					Number: 999,
+				},
+				AdditionalPRs: []github.PullRequest{
+					{
+						Base: github.PullRequestBranch{
+							Repo: github.Repo{
+								Owner: github.User{Login: "openshift"},
+								Name:  "ci-tools",
+							},
+						},
+						Number: 123,
+					},
+				},
+			}},
 		},
 	}
 	for _, tc := range testCases {

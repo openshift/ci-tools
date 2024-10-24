@@ -120,6 +120,12 @@ func TestPodStepExecution(t *testing.T) {
 			clone:          true,
 			expectRunError: false,
 		},
+		{
+			purpose:        "Successful pod with cloning new run",
+			podStatus:      corev1.PodSucceeded,
+			clone:          true,
+			expectRunError: false,
+		},
 	}
 
 	for _, tc := range testCases {

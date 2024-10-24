@@ -62,7 +62,6 @@
     pod_spec:
       containers:
       - args:
-        - --secret-dir=/usr/local/e2e-cluster-profile
         - --target=CHANGED
         - --template=/usr/local/e2e
         command:
@@ -85,20 +84,11 @@
           requests:
             cpu: 10m
         volumeMounts:
-        - mountPath: /usr/local/e2e-cluster-profile
-          name: cluster-profile
         - mountPath: /usr/local/e2e
           name: job-definition
           subPath: cluster-launch-src.yaml
       serviceAccountName: ci-operator
       volumes:
-      - name: cluster-profile
-        projected:
-          sources:
-          - secret:
-              name: cluster-secrets-gcp
-          - configMap:
-              name: cluster-profile-gcp
       - configMap:
           name: prow-job-cluster-launch-src
         name: job-definition
@@ -782,115 +772,6 @@
   kind: ProwJob
   metadata:
     annotations:
-      prow.k8s.io/context: ci/rehearse/super/duper/cluster-profile/test-profile
-      prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-cluster-profile-test-profile
-    creationTimestamp: null
-    labels:
-      ci.openshift.io/rehearse: "1234"
-      ci.openshift.io/rehearse.context: test-profile
-      created-by-prow: "true"
-      pj-rehearse.openshift.io/can-be-rehearsed: "true"
-      pj-rehearse.openshift.io/source-type: changedClusterProfile
-      prow.k8s.io/context: test-profile
-      prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-cluster-profile-test-profile
-      prow.k8s.io/refs.base_ref: master
-      prow.k8s.io/refs.org: openshift
-      prow.k8s.io/refs.pull: "1234"
-      prow.k8s.io/refs.repo: release
-      prow.k8s.io/type: presubmit
-    name: test-prowjob
-    namespace: test-namespace
-    resourceVersion: "1"
-  spec:
-    agent: kubernetes
-    cluster: default
-    context: ci/rehearse/super/duper/cluster-profile/test-profile
-    decoration_config:
-      gcs_configuration:
-        bucket: test-platform-results
-        default_org: openshift
-        default_repo: origin
-        job_url_prefix: https://super-duper.appspot.com/build/
-        path_strategy: single
-      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
-      grace_period: 15s
-      skip_cloning: true
-      timeout: 4h0m0s
-      utility_images:
-        clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
-        entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
-        initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
-        sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
-    extra_refs:
-    - base_ref: cluster-profile
-      org: super
-      repo: duper
-      workdir: true
-    job: rehearse-1234-pull-ci-super-duper-cluster-profile-test-profile
-    namespace: test-namespace
-    pod_spec:
-      containers:
-      - args:
-        - --give-pr-author-access-to-namespace=true
-        - --secret-dir=/usr/local/test-profile-cluster-profile
-        - --target=test-profile
-        - --template=/usr/local/test-profile
-        command:
-        - ci-operator
-        env:
-        - name: CLUSTER_TYPE
-          value: gcp
-        - name: JOB_NAME_SAFE
-          value: test-profile
-        - name: TEST_COMMAND
-          value: make test
-        - name: CONFIG_SPEC
-          value: H4sIAAAAAAAC/4SQT2orMQzG93MK7QIPJkzgdeM79AxG8Wgcgf9VkrvI6YudtpQS6MqWftInfbqikueMkdQtACMcL0DBTA6qcOSyvv8/b99ZbRgGalT0xodNYBjd7F6undPupVYbQlPaqwlh9qPoh7hQotHxt3CsCUtcL+fLtnwtu8IhNX8OBbDqwEhtnXwR0tolPFyd/p0ecxNnNn38AULrDl627ZVnQuitk/7Cl0ENo9dGgQ8OaFzLKHl2oKcu7ncfqZCg0e4zGe5oOI8tWMLNQUhdjWRtUg9Ow0yV6EB7I1nGXq062Gf0EQAA//88Ldt9rwEAAA==
-        image: ci-operator:latest
-        imagePullPolicy: Always
-        name: ""
-        resources:
-          requests:
-            cpu: 10m
-        volumeMounts:
-        - mountPath: /usr/local/test-profile-cluster-profile
-          name: cluster-profile
-        - mountPath: /usr/local/test-profile
-          name: job-definition
-          subPath: test-template.yaml
-      serviceAccountName: ci-operator
-      volumes:
-      - name: cluster-profile
-        projected:
-          sources:
-          - secret:
-              name: cluster-secrets-test-profile
-          - configMap:
-              name: rehearse-1234-4de8ab7c20656998264a2593116288f5eb070b32-cluster-profile-cluster-profile-test-profile
-      - configMap:
-          name: prow-job-cluster-launch-src
-        name: job-definition
-    prowjob_defaults:
-      tenant_id: GlobalDefaultID
-    refs:
-      base_ref: master
-      base_sha: test_sha
-      org: openshift
-      pulls:
-      - author: username
-        number: 1234
-        sha: test_sha
-      repo: release
-    report: true
-    rerun_command: /pj-rehearse pull-ci-super-duper-cluster-profile-test-profile
-    type: presubmit
-  status:
-    startTime: 2020-06-22T22:25:00Z
-    state: triggered
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
-    annotations:
       prow.k8s.io/context: ci/rehearse/super/duper/master/cmd
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-master-cmd
     creationTimestamp: null
@@ -1027,7 +908,6 @@
       containers:
       - args:
         - --give-pr-author-access-to-namespace=true
-        - --secret-dir=/usr/local/e2e-aws-cluster-profile
         - --target=e2e-aws
         - --template=/usr/local/e2e-aws
         command:
@@ -1050,18 +930,11 @@
           requests:
             cpu: 10m
         volumeMounts:
-        - mountPath: /usr/local/e2e-aws-cluster-profile
-          name: cluster-profile
         - mountPath: /usr/local/e2e-aws
           name: job-definition
           subPath: cluster-launch-installer-e2e.yaml
       serviceAccountName: ci-operator
       volumes:
-      - name: cluster-profile
-        projected:
-          sources:
-          - secret:
-              name: cluster-secrets-aws
       - configMap:
           name: prow-job-cluster-launch-installer-e2e
         name: job-definition
@@ -1136,7 +1009,6 @@
       containers:
       - args:
         - --give-pr-author-access-to-namespace=true
-        - --secret-dir=/usr/local/e2e-aws-cluster-profile
         - --target=e2e-aws
         - --template=/usr/local/e2e-aws
         command:
@@ -1159,18 +1031,11 @@
           requests:
             cpu: 10m
         volumeMounts:
-        - mountPath: /usr/local/e2e-aws-cluster-profile
-          name: cluster-profile
         - mountPath: /usr/local/e2e-aws
           name: job-definition
           subPath: cluster-launch-installer-e2e.yaml
       serviceAccountName: ci-operator
       volumes:
-      - name: cluster-profile
-        projected:
-          sources:
-          - secret:
-              name: cluster-secrets-aws
       - configMap:
           name: prow-job-cluster-launch-installer-e2e
         name: job-definition
@@ -1471,7 +1336,6 @@
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
         - --lease-server-credentials-file=/etc/boskos/credentials
         - --report-credentials-file=/etc/report/credentials
-        - --secret-dir=/usr/local/multistage3-cluster-profile
         - --target=multistage3
         command:
         - ci-operator
@@ -1488,8 +1352,6 @@
         - mountPath: /etc/boskos
           name: boskos
           readOnly: true
-        - mountPath: /usr/local/multistage3-cluster-profile
-          name: cluster-profile
         - mountPath: /secrets/gcs
           name: gcs-credentials
           readOnly: true
@@ -1510,9 +1372,6 @@
           - key: credentials
             path: credentials
           secretName: boskos-credentials
-      - name: cluster-profile
-        secret:
-          secretName: cluster-secrets-azure4
       - name: manifest-tool-local-pusher
         secret:
           secretName: manifest-tool-local-pusher

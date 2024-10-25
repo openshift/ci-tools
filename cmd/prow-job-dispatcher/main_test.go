@@ -16,6 +16,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/dispatcher"
+	"github.com/openshift/ci-tools/pkg/sanitizer"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -80,6 +81,8 @@ func TestDispatchJobs(t *testing.T) {
 		jobVolumes        map[string]float64
 		expected          error
 		expectedBuildFarm map[api.Cloud]map[api.Cluster]*dispatcher.BuildFarmConfig
+		distribution      map[string]float64
+		clusterMap        sanitizer.ClusterMap
 	}{
 		{
 			name:     "nil config",
@@ -94,9 +97,17 @@ func TestDispatchJobs(t *testing.T) {
 				"pull-ci-openshift-ci-tools-master-breaking-changes":                 43,
 				"pull-ci-openshift-ci-tools-master-e2e":                              12,
 				"pull-ci-openshift-cluster-etcd-operator-master-unit":                6,
-				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp-operator": 2,
-				"branch-ci-wildfly-wildfly-operator-master-images":                   1,
+				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp-operator": 3,
+				"branch-ci-wildfly-wildfly-operator-master-images":                   2,
 				"branch-ci-xyz-xyz-operator-master-images":                           10,
+			},
+			distribution: map[string]float64{
+				"build01": 50,
+				"build02": 50,
+			},
+			clusterMap: sanitizer.ClusterMap{
+				"build01": sanitizer.ClusterInfo{Capacity: 100},
+				"build02": sanitizer.ClusterInfo{Capacity: 100},
 			},
 			expectedBuildFarm: map[api.Cloud]map[api.Cluster]*dispatcher.BuildFarmConfig{
 				"aws": {"build01": {FilenamesRaw: []string{"cluster-etcd-operator-master-presubmits.yaml", "cluster-api-provider-gcp-presubmits.yaml", "ci-tools-presubmits.yaml"}}},
@@ -106,11 +117,7 @@ func TestDispatchJobs(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			var totalVolume float64
-			for _, volume := range tc.jobVolumes {
-				totalVolume += volume
-			}
-			_, actual := dispatchJobs(tc.prowJobConfigDir, tc.config, tc.jobVolumes, sets.New[string](), totalVolume/float64(tc.config.GetBuildFarmSize()))
+			_, actual := dispatchJobs(tc.prowJobConfigDir, tc.config, tc.jobVolumes, sets.New[string](), tc.distribution, tc.clusterMap)
 			equalError(t, tc.expected, actual)
 			if tc.config != nil && !reflect.DeepEqual(tc.expectedBuildFarm, tc.config.BuildFarm) {
 				t.Errorf("%s: actual differs from expected:\n%s", t.Name(), cmp.Diff(tc.expectedBuildFarm, tc.config.BuildFarm))
@@ -120,6 +127,10 @@ func TestDispatchJobs(t *testing.T) {
 }
 
 func TestDispatchJobConfig(t *testing.T) {
+	clusterMap := sanitizer.ClusterMap{
+		"build01": sanitizer.ClusterInfo{Capacity: 100},
+		"build02": sanitizer.ClusterInfo{Capacity: 100},
+	}
 	testCases := []struct {
 		name        string
 		cv          *clusterVolume
@@ -136,6 +147,11 @@ func TestDispatchJobConfig(t *testing.T) {
 				clusterVolumeMap: map[string]map[string]float64{"aws": {"build01": 0}, "gcp": {"build02": 0}},
 				cloudProviders:   sets.New[string]("aws", "gcp"),
 				pjs:              map[string]string{},
+				volumeDistribution: map[string]float64{
+					"build01": 21,
+					"build02": 21,
+				},
+				clusterMap: clusterMap,
 			},
 			config: &c,
 			jc: &prowconfig.JobConfig{
@@ -163,6 +179,11 @@ func TestDispatchJobConfig(t *testing.T) {
 				cloudProviders:   sets.New[string]("aws", "gcp"),
 				pjs:              map[string]string{},
 				blocked:          sets.New[string](),
+				volumeDistribution: map[string]float64{
+					"build01": 21,
+					"build02": 21,
+				},
+				clusterMap: clusterMap,
 			},
 			config: &c,
 			jc: &prowconfig.JobConfig{
@@ -190,6 +211,11 @@ func TestDispatchJobConfig(t *testing.T) {
 				cloudProviders:   sets.New[string]("aws", "gcp"),
 				pjs:              map[string]string{},
 				blocked:          sets.New[string](),
+				volumeDistribution: map[string]float64{
+					"build01": 21,
+					"build02": 21,
+				},
+				clusterMap: clusterMap,
 			},
 			config: &c,
 			jc: &prowconfig.JobConfig{

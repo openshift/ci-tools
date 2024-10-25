@@ -1,0 +1,32 @@
+- metadata:
+    creationTimestamp: null
+    labels:
+      ci.openshift.io/testwith: openshift.ci-tools.999
+      prow.k8s.io/refs.org: openshift
+      prow.k8s.io/refs.pull: "999"
+      prow.k8s.io/refs.repo: ci-tools
+      prow.k8s.io/type: presubmit
+    name: some-uuid
+    namespace: ci
+    resourceVersion: "1000"
+  spec:
+    job: multi-pr-job-1
+  status:
+    startTime: "1970-01-01T00:00:00Z"
+    state: aborted
+- metadata:
+    creationTimestamp: null
+    labels:
+      ci.openshift.io/testwith: openshift.ci-tools.999
+      prow.k8s.io/refs.org: openshift
+      prow.k8s.io/refs.pull: "999"
+      prow.k8s.io/refs.repo: ci-tools
+      prow.k8s.io/type: presubmit
+    name: some-uuid
+    namespace: ci
+    resourceVersion: "1000"
+  spec:
+    job: multi-pr-job-3
+  status:
+    startTime: "1970-01-01T00:00:00Z"
+    state: aborted

@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -12,10 +13,12 @@ import (
 	"github.com/sirupsen/logrus"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/prow/pkg/github"
+	"sigs.k8s.io/prow/pkg/kube"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/testhelper"
@@ -67,6 +70,7 @@ func TestHandle(t *testing.T) {
 		name         string
 		issueComment github.IssueCommentEvent
 		originPR     github.PullRequest
+		kubeClient   ctrlruntimeclient.Client
 		expected     []prowv1.ProwJob
 		expectedErr  error
 	}{
@@ -94,6 +98,7 @@ func TestHandle(t *testing.T) {
 					Ref: "master",
 				},
 			},
+			kubeClient: fakectrlruntimeclient.NewFakeClient(),
 		},
 		{
 			name: "trigger a single multi-pr job run with additional PR from a different repo",
@@ -119,6 +124,7 @@ func TestHandle(t *testing.T) {
 					Ref: "master",
 				},
 			},
+			kubeClient: fakectrlruntimeclient.NewFakeClient(),
 		},
 		{
 			name: "trigger multiple multi-pr job runs with diverse additional PRs",
@@ -146,6 +152,7 @@ func TestHandle(t *testing.T) {
 					Ref: "master",
 				},
 			},
+			kubeClient: fakectrlruntimeclient.NewFakeClient(),
 		},
 		{
 			name: "too many PRs, expect error",
@@ -171,6 +178,7 @@ func TestHandle(t *testing.T) {
 					Ref: "master",
 				},
 			},
+			kubeClient:  fakectrlruntimeclient.NewFakeClient(),
 			expectedErr: errors.New("could not determine job runs: 24 PRs found which is more than the max of 20, will not process request"),
 		},
 		{
@@ -197,7 +205,102 @@ func TestHandle(t *testing.T) {
 					Ref: "master",
 				},
 			},
+			kubeClient:  fakectrlruntimeclient.NewFakeClient(),
 			expectedErr: errors.New("the user: not-trusted is not trusted to trigger tests"),
+		},
+		{
+			name: "abort multi-pr jobs",
+			issueComment: github.IssueCommentEvent{
+				GUID: "guid",
+				Repo: github.Repo{Owner: github.User{Login: "openshift"}, Name: "ci-tools"},
+				Issue: github.Issue{
+					Number:      999,
+					PullRequest: &struct{}{},
+				},
+				Comment: github.IssueComment{
+					Body: "/testwith abort",
+					User: github.User{Login: "developer"},
+				},
+			},
+			originPR: github.PullRequest{
+				Number: 999,
+				Base: github.PullRequestBranch{
+					Repo: github.Repo{
+						Owner: github.User{Login: "openshift"},
+						Name:  "ci-tools",
+					},
+					Ref: "master",
+				},
+			},
+			kubeClient: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
+				&prowv1.ProwJob{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "multi-pr-job-1",
+						Namespace: "ci",
+						Labels: map[string]string{
+							kube.OrgLabel:         "openshift",
+							kube.RepoLabel:        "ci-tools",
+							kube.PullLabel:        strconv.Itoa(999),
+							kube.ProwJobTypeLabel: string(prowv1.PresubmitJob),
+							testwithLabel:         "openshift.ci-tools.999",
+						},
+					},
+					Spec: prowv1.ProwJobSpec{
+						Job: "multi-pr-job-1",
+					},
+					Status: prowv1.ProwJobStatus{State: prowv1.PendingState},
+				},
+				&prowv1.ProwJob{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "multi-pr-job-2",
+						Namespace: "ci",
+						Labels: map[string]string{
+							kube.OrgLabel:         "openshift",
+							kube.RepoLabel:        "ci-tools",
+							kube.PullLabel:        strconv.Itoa(999),
+							kube.ProwJobTypeLabel: string(prowv1.PresubmitJob),
+							testwithLabel:         "openshift.ci-tools.999",
+						},
+					},
+					Spec: prowv1.ProwJobSpec{
+						Job: "multi-pr-job-2",
+					},
+					Status: prowv1.ProwJobStatus{State: prowv1.SuccessState, CompletionTime: &metav1.Time{Time: time.Now()}},
+				},
+				&prowv1.ProwJob{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "multi-pr-job-3",
+						Namespace: "ci",
+						Labels: map[string]string{
+							kube.OrgLabel:         "openshift",
+							kube.RepoLabel:        "ci-tools",
+							kube.PullLabel:        strconv.Itoa(999),
+							kube.ProwJobTypeLabel: string(prowv1.PresubmitJob),
+							testwithLabel:         "openshift.ci-tools.999",
+						},
+					},
+					Spec: prowv1.ProwJobSpec{
+						Job: "multi-pr-job-3",
+					},
+					Status: prowv1.ProwJobStatus{State: prowv1.TriggeredState},
+				},
+				&prowv1.ProwJob{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "regular-presubmit",
+						Namespace: "ci",
+						Labels: map[string]string{
+							kube.OrgLabel:         "openshift",
+							kube.RepoLabel:        "ci-tools",
+							kube.PullLabel:        strconv.Itoa(999),
+							kube.ProwJobTypeLabel: string(prowv1.PresubmitJob),
+						},
+					},
+					Spec: prowv1.ProwJobSpec{
+						Job: "regular-presubmit",
+					},
+					Status: prowv1.ProwJobStatus{State: prowv1.PendingState},
+				},
+			).Build(),
 		},
 	}
 	for _, tc := range testCases {
@@ -266,7 +369,7 @@ func TestHandle(t *testing.T) {
 				},
 				ghc:            fghc,
 				trustedChecker: &fakeTrustedChecker{},
-				kubeClient:     fakectrlruntimeclient.NewClientBuilder().Build(),
+				kubeClient:     tc.kubeClient,
 				reporter:       &fakeReporter{},
 			}
 
@@ -888,5 +991,8 @@ var (
 
 func defaultProwJobFields(prowJob *prowv1.ProwJob) {
 	prowJob.Status.StartTime = zeroTime
+	if prowJob.Status.CompletionTime != nil {
+		prowJob.Status.CompletionTime = &zeroTime
+	}
 	prowJob.Name = "some-uuid"
 }

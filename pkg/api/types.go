@@ -1487,6 +1487,8 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileKubevirt,
 		ClusterProfileLibvirtPpc64le,
 		ClusterProfileLibvirtS390x,
+		ClusterProfileLibvirtS390x1,
+		ClusterProfileLibvirtS390x2,
 		ClusterProfileLibvirtS390xAmd64,
 		ClusterProfileMetalPerfscaleCPT,
 		ClusterProfileMetalTelco5G,

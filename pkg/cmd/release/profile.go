@@ -54,8 +54,8 @@ func profilePrint(args []string) error {
 			Profile:     p,
 			ClusterType: p.ClusterType(),
 			LeaseType:   p.LeaseType(),
-			Secret:      p.Secret(),
-			ConfigMap:   p.ConfigMap(),
+			//Secret:      p.Secret(),
+			ConfigMap: p.ConfigMap(),
 		})
 	}
 	return printYAML(l)

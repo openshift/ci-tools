@@ -9,7 +9,6 @@ spec:
     - --gcs-upload-secret=/secrets/gcs/service-account.json
     - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
     - --report-credentials-file=/etc/report/credentials
-    - --secret-dir=/usr/local/template1-cluster-profile
     - --target=template1
     - --template=/usr/local/template1
     command:
@@ -29,8 +28,6 @@ spec:
       requests:
         cpu: 10m
     volumeMounts:
-    - mountPath: /usr/local/template1-cluster-profile
-      name: cluster-profile
     - mountPath: /secrets/gcs
       name: gcs-credentials
       readOnly: true
@@ -48,9 +45,6 @@ spec:
       readOnly: true
   serviceAccountName: ci-operator
   volumes:
-  - name: cluster-profile
-    secret:
-      secretName: cluster-secrets-alibabacloud
   - configMap:
       name: prow-job-cluster-launch-e2e-openshift-ansible
     name: job-definition

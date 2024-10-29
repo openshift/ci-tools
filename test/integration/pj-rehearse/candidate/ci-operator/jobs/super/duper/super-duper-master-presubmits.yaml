@@ -46,7 +46,6 @@ presubmits:
       containers:
       - args:
         - --give-pr-author-access-to-namespace=true
-        - --secret-dir=/usr/local/e2e-aws-cluster-profile
         - --target=e2e-aws
         - --template=/usr/local/e2e-aws
         command:
@@ -67,18 +66,11 @@ presubmits:
           requests:
             cpu: 10m
         volumeMounts:
-        - mountPath: /usr/local/e2e-aws-cluster-profile
-          name: cluster-profile
         - mountPath: /usr/local/e2e-aws
           name: job-definition
           subPath: cluster-launch-installer-e2e.yaml
       serviceAccountName: ci-operator
       volumes:
-      - name: cluster-profile
-        projected:
-          sources:
-          - secret:
-              name: cluster-secrets-aws
       - configMap:
           name: prow-job-cluster-launch-installer-e2e
         name: job-definition
@@ -182,7 +174,6 @@ presubmits:
       containers:
       - args:
         - --give-pr-author-access-to-namespace=true
-        - --secret-dir=/usr/local/e2e-aws-cluster-profile
         - --target=e2e-aws
         - --template=/usr/local/e2e-aws
         command:
@@ -203,18 +194,11 @@ presubmits:
           requests:
             cpu: 10m
         volumeMounts:
-        - mountPath: /usr/local/e2e-aws-cluster-profile
-          name: cluster-profile
         - mountPath: /usr/local/e2e-aws
           name: job-definition
           subPath: test-template.yaml
       serviceAccountName: ci-operator
       volumes:
-      - name: cluster-profile
-        projected:
-          sources:
-          - secret:
-              name: cluster-secrets-aws
       - configMap:
           name: prow-job-cluster-launch-installer-e2e
         name: job-definition
@@ -235,7 +219,6 @@ presubmits:
       containers:
       - args:
         - --give-pr-author-access-to-namespace=true
-        - --secret-dir=/usr/local/e2e-aws-cluster-profile
         - --target=e2e-aws
         - --template=/usr/local/e2e-aws-openstack
         command:
@@ -256,18 +239,11 @@ presubmits:
           requests:
             cpu: 10m
         volumeMounts:
-        - mountPath: /usr/local/e2e-openstack-cluster-profile
-          name: cluster-profile
         - mountPath: /usr/local/e2e-openstack
           name: job-definition
           subPath: test-template.yaml
       serviceAccountName: ci-operator
       volumes:
-      - name: cluster-profile
-        projected:
-          sources:
-          - secret:
-              name: cluster-secrets-openstack
       - configMap:
           name: prow-job-cluster-launch-installer-e2e
         name: job-definition

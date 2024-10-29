@@ -3,7 +3,6 @@ containers:
   - --gcs-upload-secret=/secrets/gcs/service-account.json
   - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
   - --report-credentials-file=/etc/report/credentials
-  - --secret-dir=/usr/local/tgt-cluster-profile
   - --target=tgt
   - --template=/usr/local/tgt
   command:
@@ -24,8 +23,6 @@ containers:
     requests:
       cpu: 10m
   volumeMounts:
-  - mountPath: /usr/local/tgt-cluster-profile
-    name: cluster-profile
   - mountPath: /secrets/gcs
     name: gcs-credentials
     readOnly: true
@@ -43,9 +40,6 @@ containers:
     readOnly: true
 serviceAccountName: ci-operator
 volumes:
-- name: cluster-profile
-  secret:
-    secretName: cluster-secrets-aws
 - configMap:
     name: prow-job-template
   name: job-definition

@@ -204,8 +204,21 @@ done
 if [[ "$exit_code" != "0" ]]; then
 	exit $exit_code
 fi
-oc adm release extract --from=%q --to=${ARTIFACT_DIR}/release-payload-%s
-`, s.jobSpec.Namespace(), streamName, cvo, destination, version, destination, s.name),
+for ((i=1; i<=5; i++)); do
+	rm -rf ${ARTIFACT_DIR}/release-payload-%s
+	if oc adm release extract --from=%q --to=${ARTIFACT_DIR}/release-payload-%s; then
+		echo "Release payload extraction success."
+		exit_code="0"
+		break
+	fi
+	exit_code="$?"
+	echo "Release payload extraction failure. Retrying in 60 seconds..."
+	sleep 60
+done
+if [[ "$exit_code" != "0" ]]; then
+	exit $exit_code
+fi
+`, s.jobSpec.Namespace(), streamName, cvo, destination, version, s.name, destination, s.name),
 	}
 
 	// set an explicit default for release-latest resources, but allow customization if necessary

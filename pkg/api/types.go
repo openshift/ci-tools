@@ -1288,6 +1288,7 @@ const (
 	ClusterProfileAWSOpendatahub        ClusterProfile = "aws-opendatahub"
 	ClusterProfileAWSDevfile            ClusterProfile = "aws-devfile"
 	ClusterProfileAWSSPLAT              ClusterProfile = "aws-splat"
+	ClusterProfileAWSSustAutoRel412     ClusterProfile = "aws-sustaining-autorelease-412"
 	ClusterProfileAWSKubeVirt           ClusterProfile = "aws-kubevirt"
 	ClusterProfileAWSOVNPerfScale       ClusterProfile = "aws-ovn-perfscale"
 	ClusterProfileAlibabaCloud          ClusterProfile = "alibabacloud"
@@ -1434,6 +1435,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSOpendatahub,
 		ClusterProfileAWSDevfile,
 		ClusterProfileAWSSPLAT,
+		ClusterProfileAWSSustAutoRel412,
 		ClusterProfileAWSKubeVirt,
 		ClusterProfileAWSOVNPerfScale,
 		ClusterProfileAlibabaCloud,
@@ -1576,6 +1578,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSRHTAPPerformance,
 		ClusterProfileAWSRHDHPerf,
 		ClusterProfileAWSSPLAT,
+		ClusterProfileAWSSustAutoRel412,
 		ClusterProfileAWSKubeVirt,
 		ClusterProfileAWSOVNPerfScale,
 		ClusterProfileOSSM,
@@ -1798,6 +1801,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-sc2s-qe-quota-slice"
 	case ClusterProfileAWSSCPQE:
 		return "aws-scp-qe-quota-slice"
+	case ClusterProfileAWSSustAutoRel412:
+		return "aws-sustaining-autorelease-412-quota-slice"
 	case ClusterProfileAWSINTEROPQE:
 		return "aws-interop-qe-quota-slice"
 	case ClusterProfileAWSVirtualization:

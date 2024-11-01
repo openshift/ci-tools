@@ -40,8 +40,6 @@ const (
 	CiopConfigInRepoPath = "ci-operator/config"
 	// TemplatesPath is the path of the templates from release repo
 	TemplatesPath = "ci-operator/templates"
-	// ClusterProfilesPath is where profiles are stored in the release repo
-	ClusterProfilesPath = "cluster/test-deploy"
 	// StagingNamespace is the staging namespace in api.ci
 	StagingNamespace = "ci-stg"
 	// RegistryPath is the path to the multistage step registry
@@ -250,10 +248,6 @@ func GetChangedRegistrySteps(path, baseRev string, graph registry.NodeByName) ([
 		}
 	}
 	return changes, nil
-}
-
-func GetChangedClusterProfiles(path, baseRev string) ([]string, error) {
-	return getRevChanges(path, ClusterProfilesPath, baseRev, false)
 }
 
 func GetAddedConfigs(path, baseRev string) ([]string, error) {

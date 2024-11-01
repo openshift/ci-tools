@@ -85,31 +85,6 @@ func TestGetChangedTemplates(t *testing.T) {
 	compareChanges(t, TemplatesPath, files, cmd, GetChangedTemplates, expected)
 }
 
-func TestGetChangedClusterProfiles(t *testing.T) {
-	files := []string{
-		"nochanges/file", "changeme/file", "removeme/file", "moveme/file",
-		"renameme/file", "dir/dir/file",
-	}
-	cmd := `
-> changeme/file
-git rm --quiet removeme/file
-mkdir new/ renamed/
-> new/file
-git add new/file
-git mv moveme/file moveme/moved
-git mv renameme/file renamed/file
-> dir/dir/file
-`
-	expected := []string{
-		filepath.Join(ClusterProfilesPath, "changeme", "file"),
-		filepath.Join(ClusterProfilesPath, "dir", "dir", "file"),
-		filepath.Join(ClusterProfilesPath, "moveme", "moved"),
-		filepath.Join(ClusterProfilesPath, "new", "file"),
-		filepath.Join(ClusterProfilesPath, "renamed", "file"),
-	}
-	compareChanges(t, ClusterProfilesPath, files, cmd, GetChangedClusterProfiles, expected)
-}
-
 type testNode struct {
 	string
 }

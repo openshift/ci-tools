@@ -47,8 +47,7 @@ type RehearsalConfig struct {
 	ProwjobNamespace string
 	PodNamespace     string
 
-	NoRegistry        bool
-	NoClusterProfiles bool
+	NoRegistry bool
 
 	NormalLimit int
 	MoreLimit   int

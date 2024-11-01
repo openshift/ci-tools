@@ -37,7 +37,6 @@ type options struct {
 	kubernetesOptions prowflagutil.KubernetesOptions
 	noTemplates       bool
 	noRegistry        bool
-	noClusterProfiles bool
 
 	normalLimit int
 	moreLimit   int
@@ -72,7 +71,6 @@ func gatherOptions() (options, error) {
 	o.kubernetesOptions.AddFlags(fs)
 	fs.BoolVar(&o.noTemplates, "no-templates", false, "If true, do not attempt to compare templates")
 	fs.BoolVar(&o.noRegistry, "no-registry", false, "If true, do not attempt to compare step registry content")
-	fs.BoolVar(&o.noClusterProfiles, "no-cluster-profiles", false, "If true, do not attempt to compare cluster profiles")
 
 	fs.IntVar(&o.normalLimit, "normal-limit", 10, "Upper limit of jobs attempted to rehearse with normal command (if more jobs are being touched, only this many will be rehearsed)")
 	fs.IntVar(&o.moreLimit, "more-limit", 20, "Upper limit of jobs attempted to rehearse with more command (if more jobs are being touched, only this many will be rehearsed)")
@@ -141,7 +139,6 @@ func rehearsalConfigFromOptions(o options) rehearse.RehearsalConfig {
 		ProwjobKubeconfig:  o.prowjobKubeconfig,
 		KubernetesOptions:  o.kubernetesOptions,
 		NoRegistry:         o.noRegistry,
-		NoClusterProfiles:  o.noClusterProfiles,
 		DryRun:             o.dryRun,
 		NormalLimit:        o.normalLimit,
 		MoreLimit:          o.moreLimit,

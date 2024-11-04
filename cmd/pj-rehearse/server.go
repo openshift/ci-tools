@@ -532,7 +532,17 @@ func (s *server) prepareCandidate(repoClient git.RepoClient, pullRequest *github
 
 	// In order to determine *only* the affected jobs from the changes in the PR, we need to rebase onto master
 	baseRef := pullRequest.Base.Ref
-	if rebased, err := repoClient.MergeWithStrategy(baseRef, "rebase"); !rebased {
+
+	// In practice, this command sometimes fails due to seemingly transient issues, we should retry it up to 4 times
+	var rebased bool
+	var rebaseErr error
+	for i := 0; i < 4; i++ {
+		rebased, rebaseErr = repoClient.MergeWithStrategy(baseRef, "rebase")
+		if rebased && rebaseErr == nil {
+			break
+		}
+	}
+	if !rebased || rebaseErr != nil {
 		return rehearse.RehearsalCandidate{}, fmt.Errorf("couldn't rebase candidate onto master: %w", err)
 	}
 

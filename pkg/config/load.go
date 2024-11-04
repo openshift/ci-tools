@@ -37,11 +37,6 @@ type Prowgen struct {
 	Expose bool `json:"expose,omitempty"`
 	// Rehearsals declares any disabled rehearsals for jobs
 	Rehearsals Rehearsals `json:"rehearsals,omitempty"`
-	// If true build images targeting multiple architectures
-	MultiArch bool `json:"multi_arch,omitempty"`
-	// MultiArchBranchFilter is a filter of branches that will be built for multiple architectures.
-	// If empty, all branches will be included.
-	MultiArchBranchFilter []string `json:"multi_arch_branch_filter,omitempty"`
 	// SlackReporterConfigs defines all desired slack reporter info for included jobs
 	SlackReporterConfigs []SlackReporterConfig `json:"slack_reporter,omitempty"`
 }
@@ -65,20 +60,6 @@ func (p *Prowgen) GetSlackReporterConfigForTest(test, variant string) *SlackRepo
 	return nil
 }
 
-func (p *Prowgen) HasMultiArchBranchFilter(branch string) bool {
-	// We assume that if the filter is empty, we should build for all branches.
-	if len(p.MultiArchBranchFilter) == 0 {
-		return true
-	}
-
-	for _, b := range p.MultiArchBranchFilter {
-		if b == branch {
-			return true
-		}
-	}
-	return false
-}
-
 func (p *Prowgen) MergeDefaults(defaults *Prowgen) {
 	if defaults.Private {
 		p.Private = true
@@ -89,13 +70,6 @@ func (p *Prowgen) MergeDefaults(defaults *Prowgen) {
 	if defaults.Rehearsals.DisableAll {
 		p.Rehearsals.DisableAll = true
 	}
-	if defaults.MultiArch {
-		p.MultiArch = true
-	}
-	if defaults.MultiArchBranchFilter != nil {
-		p.MultiArchBranchFilter = defaults.MultiArchBranchFilter
-	}
-
 	p.Rehearsals.DisabledRehearsals = append(p.Rehearsals.DisabledRehearsals, defaults.Rehearsals.DisabledRehearsals...)
 }
 

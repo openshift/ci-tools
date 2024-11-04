@@ -551,79 +551,18 @@ func TestGenerateJobs(t *testing.T) {
 			config: &ciop.ReleaseBuildConfiguration{
 				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{
 					{
-						From: "os",
-						To:   "ci-tools",
+						From:                    "os",
+						To:                      "ci-tools",
+						AdditionalArchitectures: []string{"arm64"},
 					},
 				},
 				PromotionConfiguration: &ciop.PromotionConfiguration{},
 			},
 			repoInfo: &ProwgenInfo{
-				Config: config.Prowgen{MultiArch: true},
 				Metadata: ciop.Metadata{
 					Org:    "organization",
 					Repo:   "repository",
 					Branch: "branch",
-				},
-			},
-		},
-		{
-			id: "multiarch branch filtered, cluster change",
-			config: &ciop.ReleaseBuildConfiguration{
-				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{
-					{
-						From: "os",
-						To:   "ci-tools",
-					},
-				},
-				PromotionConfiguration: &ciop.PromotionConfiguration{},
-			},
-			repoInfo: &ProwgenInfo{
-				Config: config.Prowgen{MultiArch: true, MultiArchBranchFilter: []string{"branch"}},
-				Metadata: ciop.Metadata{
-					Org:    "organization",
-					Repo:   "repository",
-					Branch: "branch",
-				},
-			},
-		},
-		{
-			id: "multiarch branch filtered, no cluster change",
-			config: &ciop.ReleaseBuildConfiguration{
-				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{
-					{
-						From: "os",
-						To:   "ci-tools",
-					},
-				},
-				PromotionConfiguration: &ciop.PromotionConfiguration{},
-			},
-			repoInfo: &ProwgenInfo{
-				Config: config.Prowgen{MultiArch: true, MultiArchBranchFilter: []string{"another-branch"}},
-				Metadata: ciop.Metadata{
-					Org:    "organization",
-					Repo:   "repository",
-					Branch: "branch",
-				},
-			},
-		},
-		{
-			id: "multiarch branch filtered with variant, no cluster change",
-			config: &ciop.ReleaseBuildConfiguration{
-				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{
-					{
-						From: "os",
-						To:   "ci-tools",
-					},
-				},
-				PromotionConfiguration: &ciop.PromotionConfiguration{},
-			},
-			repoInfo: &ProwgenInfo{
-				Config: config.Prowgen{MultiArch: true, MultiArchBranchFilter: []string{"branch"}},
-				Metadata: ciop.Metadata{
-					Org:     "organization",
-					Repo:    "repository",
-					Branch:  "branch",
-					Variant: "variant",
 				},
 			},
 		},

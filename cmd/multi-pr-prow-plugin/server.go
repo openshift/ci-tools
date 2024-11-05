@@ -56,6 +56,12 @@ func helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, error) {
 		WhoCanUse:   "Members of the trusted organization for the repo.",
 		Examples:    []string{"/testwith openshift/kubernetes/master/e2e openshift/kubernetes#1234 openshift/installer#999"},
 	})
+	pluginHelp.AddCommand(pluginhelp.Command{
+		Usage:       "/testwith abort",
+		Description: "Abort all active multi-pr presubmit jobs where the operand PR is the orign PR on the job",
+		WhoCanUse:   "Members of the trusted organization for the repo.",
+		Examples:    []string{"/testwith abort"},
+	})
 	return pluginHelp, nil
 }
 

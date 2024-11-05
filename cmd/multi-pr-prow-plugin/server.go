@@ -10,10 +10,13 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/prow/pkg/github"
+	"sigs.k8s.io/prow/pkg/kube"
 	"sigs.k8s.io/prow/pkg/pjutil"
 	"sigs.k8s.io/prow/pkg/pluginhelp"
 	"sigs.k8s.io/prow/pkg/plugins/trigger"
@@ -35,7 +38,7 @@ const (
 
 var (
 	testwithCommand = regexp.MustCompile(fmt.Sprintf(`(?mi)^%s\s+(?P<job>[-\w./]+)\s+(?P<prs>(?:[-\w./#:]+\s*)+)\s*$`, testwithPrefix))
-	// TODO(sgoeddel): we will likely want to add abort functionality, eventually
+	abortCommand    = fmt.Sprintf("%s abort", testwithPrefix)
 )
 
 type githubClient interface {
@@ -177,6 +180,15 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) ([]*prowv1
 		if !trusted {
 			l.WithField("user", ic.Comment.User.Login).Warn("the user is not trusted")
 			return nil, fmt.Errorf("the user: %s is not trusted to trigger tests", user)
+		}
+
+		if ic.Comment.Body == abortCommand {
+			abortedJobs, err := s.abortMultiPRJobs(*pr, l)
+			if err != nil {
+				l.WithError(err).Errorf("error aborting multi-PR jobs")
+				return nil, fmt.Errorf("error aborting multi-PR jobs: %w", err)
+			}
+			return abortedJobs, nil
 		}
 
 		jobRuns, err := s.determineJobRuns(ic.Comment.Body, *pr)
@@ -444,6 +456,49 @@ func createRefsForPullRequests(prs []github.PullRequest, ciopConfig *api.Release
 	}
 
 	return refs
+}
+
+func (s *server) abortMultiPRJobs(pr github.PullRequest, l *logrus.Entry) ([]*prowv1.ProwJob, error) {
+	org := pr.Base.Repo.Owner.Login
+	repo := pr.Base.Repo.Name
+	number := pr.Number
+	selector := ctrlruntimeclient.MatchingLabels{
+		kube.OrgLabel:         org,
+		kube.RepoLabel:        repo,
+		kube.PullLabel:        strconv.Itoa(number),
+		kube.ProwJobTypeLabel: string(prowv1.PresubmitJob),
+		testwithLabel:         fmt.Sprintf("%s.%s.%d", org, repo, number),
+	}
+	jobs := &prowv1.ProwJobList{}
+	err := s.kubeClient.List(context.TODO(), jobs, selector, ctrlruntimeclient.InNamespace(s.namespace))
+	if err != nil {
+		l.WithError(err).Error("failed to list prowjobs for pr")
+	}
+	l.Debugf("found %d prowjob(s) to abort", len(jobs.Items))
+
+	var errors []error
+	var abortedJobs []*prowv1.ProwJob
+	for _, job := range jobs.Items {
+		// Do not abort jobs that already completed
+		if job.Complete() {
+			continue
+		}
+		l.Debugf("aborting prowjob: %s", job.Name)
+		job.Status.State = prowv1.AbortedState
+		// We use Update and not Patch here, because we are not the authority of the .Status.State field
+		// and must not overwrite changes made to it in the interim by the responsible agent.
+		// The accepted trade-off for now is that this leads to failure if unrelated fields where changed
+		// by another different actor.
+		if err = s.kubeClient.Update(context.TODO(), &job); err != nil && !apierrors.IsConflict(err) {
+			l.WithError(err).Errorf("failed to abort prowjob: %s", job.Name)
+			errors = append(errors, fmt.Errorf("failed to abort prowjob %s: %w", job.Name, err))
+		} else {
+			l.Debugf("aborted prowjob: %s", job.Name)
+		}
+		abortedJobs = append(abortedJobs, &job)
+	}
+
+	return abortedJobs, utilerrors.NewAggregate(errors)
 }
 
 func (s *server) reportFailure(message string, err error, org, repo, user string, number int, l *logrus.Entry) {

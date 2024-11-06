@@ -109,7 +109,8 @@ func waitForStacksToComplete(ctx context.Context, log *logrus.Entry, client awst
 	waiter := cloudformation.NewStackCreateCompleteWaiter(client)
 	waiters, wCtx := errgroup.WithContext(ctx)
 	waiters.SetLimit(len(templates))
-	for _, t := range templates {
+	for i := range templates {
+		t := &templates[i]
 		waiters.Go(func() error {
 			log := log.WithField("stack", t.StackName)
 			log.Info("Waiting to complete")

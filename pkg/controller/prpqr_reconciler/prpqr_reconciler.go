@@ -333,12 +333,17 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 			// There is some delay until it gets back to our cache, so block until we can retrieve
 			// it successfully.
 			key := ctrlruntimeclient.ObjectKey{Namespace: prowjob.Namespace, Name: prowjob.Name}
-			if err := wait.Poll(100*time.Millisecond, 5*time.Second, func() (bool, error) {
-				if err := r.client.Get(ctx, key, &prowv1.ProwJob{}); err != nil {
+			retrievedJob := prowv1.ProwJob{}
+			if err := wait.Poll(time.Second, 10*time.Second, func() (bool, error) {
+				if err := r.client.Get(ctx, key, &retrievedJob); err != nil {
 					if kerrors.IsNotFound(err) {
 						return false, nil
 					}
 					return false, fmt.Errorf("getting prowJob failed: %w", err)
+				} else if retrievedJob.Status.URL == "" {
+					// There will be no URL yet if the job is still in the "Scheduling" state, we should try again until we have one
+					logger.Infof("no URL exists yet for job: %s", prowjob.Name)
+					return false, nil
 				}
 				return true, nil
 			}); err != nil {
@@ -354,8 +359,8 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 
 			statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
 				ReleaseJobName: mimickedJob,
-				ProwJob:        prowjob.Name,
-				Status:         prowjob.Status,
+				ProwJob:        retrievedJob.Name,
+				Status:         retrievedJob.Status,
 			}
 		}
 	}

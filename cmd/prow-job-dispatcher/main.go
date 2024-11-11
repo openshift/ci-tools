@@ -191,10 +191,11 @@ type clusterVolume struct {
 	clusterVolumeMap map[string]map[string]float64
 	specialClusters  map[string]float64
 	// only needed for stable tests: traverse the above map by sorted key list
-	cloudProviders   sets.Set[string]
-	pjs              map[string]string
-	blocked          sets.Set[string]
-	volumePerCluster float64
+	cloudProviders     sets.Set[string]
+	pjs                map[string]string
+	blocked            sets.Set[string]
+	volumeDistribution map[string]float64
+	clusterMap         sanitizer.ClusterMap
 }
 
 // findClusterForJobConfig finds a cluster running on a preferred cloud provider for the jobs in a Prow job config.
@@ -209,16 +210,20 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 	for _, volume := range jobVolumes {
 		totalVolume += volume
 	}
+
 	mostUsedCluster := sanitizer.FindMostUsedCluster(jc)
 	// TODO: 75% as we still have manual assignments and these are affecting even distribution, re-evaluate when manual assignments are gone
 	if determinedCloudProvider := config.IsInBuildFarm(api.Cluster(mostUsedCluster)); determinedCloudProvider != "" &&
-		cv.clusterVolumeMap[string(determinedCloudProvider)][mostUsedCluster] < cv.volumePerCluster*0.75 {
+		cv.clusterVolumeMap[string(determinedCloudProvider)][mostUsedCluster] < cv.volumeDistribution[mostUsedCluster]*0.75 {
 		cluster = mostUsedCluster
 	} else {
 		min := float64(-1)
 		for _, cp := range sets.List(cv.cloudProviders) {
 			m := cv.clusterVolumeMap[cp]
 			for c, v := range m {
+				if cv.clusterMap[c].Capacity != 100 {
+					continue
+				}
 				if cloudProvider == "" || cloudProvider == cp {
 					if min < 0 || min > v {
 						min = v
@@ -349,19 +354,20 @@ type fileSizeInfo struct {
 //   - When all the e2e tests are targeting the same cloud provider, we run the test pod on the that cloud provider too.
 //   - When the e2e tests are targeting different cloud providers, or there is no e2e tests at all, we can run the tests
 //     on any cluster in the build farm. Those jobs are used to load balance the workload of clusters in the build farm.
-func dispatchJobs(prowJobConfigDir string, config *dispatcher.Config, jobVolumes map[string]float64, blocked sets.Set[string], volumePerCluster float64) (map[string]string, error) {
+func dispatchJobs(prowJobConfigDir string, config *dispatcher.Config, jobVolumes map[string]float64, blocked sets.Set[string], volumeDistribution map[string]float64, cm sanitizer.ClusterMap) (map[string]string, error) {
 	if config == nil {
 		return nil, fmt.Errorf("config is nil")
 	}
 
 	// cv stores the volume for each cluster in the build farm
 	cv := &clusterVolume{
-		clusterVolumeMap: map[string]map[string]float64{},
-		cloudProviders:   sets.New[string](),
-		pjs:              map[string]string{},
-		blocked:          blocked,
-		volumePerCluster: volumePerCluster,
-		specialClusters:  map[string]float64{}}
+		clusterVolumeMap:   map[string]map[string]float64{},
+		cloudProviders:     sets.New[string](),
+		pjs:                map[string]string{},
+		blocked:            blocked,
+		specialClusters:    map[string]float64{},
+		volumeDistribution: volumeDistribution,
+		clusterMap:         cm}
 	for cloudProvider, v := range config.BuildFarm {
 		for cluster := range v {
 			cloudProviderString := string(cloudProvider)
@@ -673,7 +679,7 @@ func main() {
 		os.Exit(0)
 	}()
 
-	var dispatchWrapper func(cron bool)
+	var dispatchWrapper func(forceDispatch bool)
 	var dispatchDeltaWrapper func()
 	prowjobs := dispatcher.NewProwjobs(o.jobsStoragePath)
 	c := cron.New()
@@ -705,7 +711,7 @@ func main() {
 			prowjobs.Regenerate(pjs)
 		}
 
-		dispatchWrapper = func(cron bool) {
+		dispatchWrapper = func(forceDispatch bool) {
 			mu.Lock()
 			defer mu.Unlock()
 
@@ -729,7 +735,7 @@ func main() {
 
 			newBlockedClusters := prowjobs.HasAnyOfClusters(blocked)
 
-			if (!cron && enabled.Len() == 0 && disabled.Len() == 0) && !newBlockedClusters {
+			if (!forceDispatch && enabled.Len() == 0 && disabled.Len() == 0) && !newBlockedClusters {
 				return
 			}
 
@@ -746,7 +752,7 @@ func main() {
 					}
 					return api.Cloud(info.Provider), nil
 				})
-			pjs, err := dispatchJobs(o.prowJobConfigDir, config, jobVolumes, blocked, promVolumes.getTotalVolume()/float64(len(configClusterMap)))
+			pjs, err := dispatchJobs(o.prowJobConfigDir, config, jobVolumes, blocked, promVolumes.calculateVolumeDistribution(configClusterMap), configClusterMap)
 			if err != nil {
 				logrus.WithError(err).Error("failed to dispatch")
 				return
@@ -807,9 +813,9 @@ func main() {
 				if !reflect.DeepEqual(currentConfigClusterMap, prevConfigClusterMap) || !reflect.DeepEqual(currentBlocked, prevBlocked) {
 					logrus.WithField("prevConfigClusterMap", prevConfigClusterMap).WithField("prevBlocked", prevBlocked).
 						WithField("currentConfigClusterMap", currentConfigClusterMap).WithField("currentBlocked", currentBlocked).Info("new dispatch")
+					dispatchWrapper(sanitizer.HasCapacityOrCapabilitiesChanged(prevConfigClusterMap, currentConfigClusterMap))
 					prevConfigClusterMap = currentConfigClusterMap
 					prevBlocked = currentBlocked
-					dispatchWrapper(false)
 				}
 
 			case <-deltaTicker.C:

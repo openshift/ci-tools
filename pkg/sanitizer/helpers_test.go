@@ -300,3 +300,69 @@ gcp: []
 		})
 	}
 }
+
+func TestHasCapacityOrCapabilitiesChanged(t *testing.T) {
+	tests := []struct {
+		name     string
+		prev     ClusterMap
+		next     ClusterMap
+		expected bool
+	}{
+		{
+			name: "No change in capacity or capabilities",
+			prev: ClusterMap{
+				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "vpn"}},
+				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "vpn"}},
+			},
+			next: ClusterMap{
+				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "vpn"}},
+				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "vpn"}},
+			},
+			expected: false,
+		},
+		{
+			name: "Change in capacity for build01",
+			prev: ClusterMap{
+				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "vpn"}},
+				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "vpn"}},
+			},
+			next: ClusterMap{
+				"build01": {Provider: "AWS", Capacity: 15, Capabilities: []string{"aarch64", "vpn"}},
+				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "vpn"}},
+			},
+			expected: true,
+		},
+		{
+			name: "Change in capabilities for build02",
+			prev: ClusterMap{
+				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "vpn"}},
+				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "vpn"}},
+			},
+			next: ClusterMap{
+				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "vpn"}},
+				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"aarch64", "vpn"}},
+			},
+			expected: true,
+		},
+		{
+			name: "No corresponding clusters in next map",
+			prev: ClusterMap{
+				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "vpn"}},
+				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "vpn"}},
+			},
+			next: ClusterMap{
+				"build03": {Provider: "AWS", Capacity: 15, Capabilities: []string{"aarch64", "vpn"}},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := HasCapacityOrCapabilitiesChanged(tt.prev, tt.next)
+			if result != tt.expected {
+				t.Errorf("Test %s failed: expected %v, got %v", tt.name, tt.expected, result)
+			}
+		})
+	}
+}

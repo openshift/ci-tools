@@ -2,6 +2,7 @@ package prpqr_reconciler
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"testing"
@@ -13,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
@@ -27,10 +29,11 @@ func TestReconcile(t *testing.T) {
 
 	logrus.SetLevel(logrus.DebugLevel)
 	testCases := []struct {
-		name       string
-		prowJobs   []ctrlruntimeclient.Object
-		prpqr      []ctrlruntimeclient.Object
-		prowConfig prowconfig.Config
+		name          string
+		prowJobs      []ctrlruntimeclient.Object
+		prpqr         []ctrlruntimeclient.Object
+		prowConfig    prowconfig.Config
+		omitStatusURL bool
 	}{
 		{
 			name: "basic case",
@@ -161,6 +164,22 @@ func TestReconcile(t *testing.T) {
 					Status: prowv1.ProwJobStatus{State: "triggered"},
 				},
 			},
+		},
+		{
+			name: "url not found in created job",
+			prpqr: []ctrlruntimeclient.Object{
+				&v1.PullRequestPayloadQualificationRun{
+					ObjectMeta: metav1.ObjectMeta{Name: "prpqr-test", Namespace: "test-namespace"},
+					Spec: v1.PullRequestPayloadTestSpec{
+						PullRequests: []v1.PullRequestUnderTest{{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: &v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}}},
+						Jobs: v1.PullRequestPayloadJobSpec{
+							ReleaseControllerConfig: v1.ReleaseControllerConfig{OCP: "4.9", Release: "ci", Specifier: "informing"},
+							Jobs:                    []v1.ReleaseJobSpec{{CIOperatorConfig: v1.CIOperatorMetadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"}, Test: "test-name"}},
+						},
+					},
+				},
+			},
+			omitStatusURL: true,
 		},
 		{
 			name: "multiple PRs from different repositories",
@@ -419,14 +438,29 @@ func TestReconcile(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			createInterceptor := func(omitStatusURL bool) func(ctx context.Context, client ctrlruntimeclient.WithWatch, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
+				return func(ctx context.Context, client ctrlruntimeclient.WithWatch, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
+					if prowJob, ok := obj.(*prowv1.ProwJob); ok && !omitStatusURL {
+						prowJob.Status.URL = fmt.Sprintf("https://prow.ci.openshift.org/view/gs/test-platform-results/%s", prowJob.Spec.Job)
+					}
+					return client.Create(ctx, obj, opts...)
+				}
+			}
+			client := fakectrlruntimeclient.NewClientBuilder().
+				WithObjects(append(tc.prpqr, tc.prowJobs...)...).
+				WithInterceptorFuncs(
+					interceptor.Funcs{
+						Create: createInterceptor(tc.omitStatusURL),
+					}).
+				Build()
 			r := &reconciler{
 				logger:               logrus.WithField("test-name", tc.name),
-				client:               fakectrlruntimeclient.NewClientBuilder().WithObjects(append(tc.prpqr, tc.prowJobs...)...).Build(),
+				client:               client,
 				configResolverClient: &fakeResolverClient{},
 				prowConfigGetter:     &fakeProwConfigGetter{cfg: &tc.prowConfig},
 			}
 			req := reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "test-namespace", Name: "prpqr-test"}}
-			if err := r.reconcile(context.Background(), req, r.logger); err != nil {
+			if err := r.reconcile(context.Background(), req, r.logger, time.Millisecond); err != nil {
 				t.Fatal(err)
 			}
 

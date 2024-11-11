@@ -186,7 +186,7 @@ func getRunningJobs(jobs []v1.PullRequestPayloadJobStatus) []string {
 
 func hasAllJobsFinished(jobs []v1.PullRequestPayloadJobStatus) bool {
 	for _, job := range jobs {
-		if job.Status.State == prowv1.TriggeredState || job.Status.State == prowv1.PendingState {
+		if job.Status.State == prowv1.TriggeredState || job.Status.State == prowv1.PendingState || job.Status.State == prowv1.SchedulingState {
 			return false
 		}
 	}

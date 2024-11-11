@@ -334,7 +334,7 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 			// it successfully.
 			key := ctrlruntimeclient.ObjectKey{Namespace: prowjob.Namespace, Name: prowjob.Name}
 			retrievedJob := prowv1.ProwJob{}
-			if err := wait.Poll(time.Second, 10*time.Second, func() (bool, error) {
+			if err := wait.Poll(100*time.Millisecond, 5*time.Second, func() (bool, error) {
 				if err := r.client.Get(ctx, key, &retrievedJob); err != nil {
 					if kerrors.IsNotFound(err) {
 						return false, nil

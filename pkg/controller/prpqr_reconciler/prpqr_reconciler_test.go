@@ -460,7 +460,7 @@ func TestReconcile(t *testing.T) {
 				prowConfigGetter:     &fakeProwConfigGetter{cfg: &tc.prowConfig},
 			}
 			req := reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "test-namespace", Name: "prpqr-test"}}
-			if err := r.reconcile(context.Background(), req, r.logger); err != nil {
+			if err := r.reconcile(context.Background(), req, r.logger, time.Millisecond); err != nil {
 				t.Fatal(err)
 			}
 

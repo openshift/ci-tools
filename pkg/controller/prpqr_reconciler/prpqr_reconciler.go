@@ -135,7 +135,7 @@ type reconciler struct {
 
 func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	logger := r.logger.WithField("request", req.String())
-	err := r.reconcile(ctx, req, logger)
+	err := r.reconcile(ctx, req, logger, time.Second)
 	if err != nil {
 		logger.WithError(err).Error("Reconciliation failed")
 	} else {
@@ -144,7 +144,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	return reconcile.Result{}, controllerutil.SwallowIfTerminal(err)
 }
 
-func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logger *logrus.Entry) error {
+func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logger *logrus.Entry, second time.Duration) error {
 	logger = logger.WithField("namespace", req.Namespace).WithField("prpqr_name", req.Name)
 	logger.Info("Starting reconciliation")
 
@@ -163,7 +163,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 	if !prpqr.GetDeletionTimestamp().IsZero() {
 		r.abortJobs(ctx, logger, prpqr, existingProwjobs, statuses)
 	} else {
-		r.triggerJobs(ctx, logger, req, prpqr, existingProwjobs, statuses)
+		r.triggerJobs(ctx, logger, req, prpqr, existingProwjobs, statuses, second)
 	}
 
 	allJobsTriggeredCondition := constructCondition(statuses)
@@ -198,6 +198,7 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 	prpqr *v1.PullRequestPayloadQualificationRun,
 	existingProwjobs *prowv1.ProwJobList,
 	statuses map[string]*v1.PullRequestPayloadJobStatus,
+	second time.Duration,
 ) {
 	existingProwjobsByNameHash := map[string]*prowv1.ProwJob{}
 	for i, pj := range existingProwjobs.Items {
@@ -334,7 +335,7 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 			// it successfully.
 			key := ctrlruntimeclient.ObjectKey{Namespace: prowjob.Namespace, Name: prowjob.Name}
 			retrievedJob := prowv1.ProwJob{}
-			if err := wait.Poll(100*time.Millisecond, 5*time.Second, func() (bool, error) {
+			if err := wait.Poll(second, 20*second, func() (bool, error) {
 				if err := r.client.Get(ctx, key, &retrievedJob); err != nil {
 					if kerrors.IsNotFound(err) {
 						return false, nil

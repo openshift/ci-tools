@@ -51,6 +51,10 @@ func (m *mockManifestPusher) PushImageWithManifest(builds []buildv1.Build, targe
 	return m.errToReturn
 }
 
+func (m *mockManifestPusher) PushImageWithManifestV2(builds []buildv1.Build, targetImageRef string) error {
+	return m.errToReturn
+}
+
 type buildBuilder struct {
 	name     string
 	arch     string

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -303,6 +304,12 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 		return fmt.Errorf("Some tests failed aggregation.  See above for details.")
 	}
 
+	// catch edge case where *all* aggregated jobs failed before they could run any real tests.
+	// if *any* of them ran real tests, the other failures would normally fail aggregation anyway. but if all setup fell over early, we get nothing to aggregate.
+	if !anyRealTestsRan(syntheticSuite) {
+		return fmt.Errorf("None of the jobs aggregated ran an expected test suite.  This usually means they failed very early.")
+	}
+
 	return nil
 }
 
@@ -315,6 +322,20 @@ func hasFailedTestCase(suite *junit.TestSuite) bool {
 
 	for _, child := range suite.Children {
 		if hasFailedTestCase(child) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func anyRealTestsRan(suite *junit.TestSuite) bool {
+	if match, err := regexp.MatchString(`openshift-tests|e2e|E2E|BackendDisruption`, suite.Name); err == nil && match {
+		return true
+	}
+
+	for _, child := range suite.Children {
+		if anyRealTestsRan(child) {
 			return true
 		}
 	}

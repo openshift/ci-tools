@@ -854,12 +854,21 @@ tests:
     workflow: origin-e2e-aws
 `
 
+type fakeGcsReader struct {
+	content []byte
+}
+
+func (b fakeGcsReader) Read(filePath string) ([]byte, error) {
+	return b.content, nil
+}
+
 func TestConfig(t *testing.T) {
 	var testCases = []struct {
 		name          string
 		config        string
 		asFile        bool
 		asEnv         bool
+		asGcsUrlEnv   bool
 		compressEnv   bool
 		expected      *api.ReleaseBuildConfiguration
 		isGzipped     bool
@@ -896,6 +905,21 @@ func TestConfig(t *testing.T) {
 			expectedError: false,
 		},
 		{
+			name:          "loading config from GCS URL env works",
+			config:        rawConfig,
+			asGcsUrlEnv:   true,
+			expected:      parsedConfig,
+			expectedError: false,
+		},
+		{
+			name:          "loading config from compressed GCS URL env works",
+			config:        rawConfig,
+			asGcsUrlEnv:   true,
+			compressEnv:   true,
+			expected:      parsedConfig,
+			expectedError: false,
+		},
+		{
 			name:          "no file or env fails to load config",
 			config:        rawConfig,
 			asEnv:         true,
@@ -914,6 +938,7 @@ func TestConfig(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			var path string
+			var gcsReader fakeGcsReader
 			if testCase.asFile {
 				temp, err := os.CreateTemp("", "")
 				if err != nil {
@@ -951,7 +976,21 @@ func TestConfig(t *testing.T) {
 					t.Fatalf("%s: failed to populate env var: %v", testCase.name, err)
 				}
 			}
-			config, err := (&options{configSpecPath: path}).loadConfig(nil)
+			if testCase.asGcsUrlEnv {
+				config := testCase.config
+				if testCase.compressEnv {
+					var err error
+					config, err = utilgzip.CompressStringAndBase64(config)
+					if err != nil {
+						t.Fatalf("Failed to compress config: %v", err)
+					}
+				}
+				gcsReader = fakeGcsReader{content: []byte(config)}
+				if err := os.Setenv("CONFIG_SPEC_GCS_URL", "some-path"); err != nil {
+					t.Fatalf("%s: failed to populate env var: %v", testCase.name, err)
+				}
+			}
+			config, err := (&options{configSpecPath: path}).loadConfig(nil, gcsReader)
 			if err == nil && testCase.expectedError {
 				t.Errorf("%s: expected an error, but got none", testCase.name)
 			}

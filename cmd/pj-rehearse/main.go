@@ -37,7 +37,6 @@ type options struct {
 	kubernetesOptions prowflagutil.KubernetesOptions
 	noTemplates       bool
 	noRegistry        bool
-	noClusterProfiles bool
 
 	normalLimit int
 	moreLimit   int
@@ -72,7 +71,6 @@ func gatherOptions() (options, error) {
 	o.kubernetesOptions.AddFlags(fs)
 	fs.BoolVar(&o.noTemplates, "no-templates", false, "If true, do not attempt to compare templates")
 	fs.BoolVar(&o.noRegistry, "no-registry", false, "If true, do not attempt to compare step registry content")
-	fs.BoolVar(&o.noClusterProfiles, "no-cluster-profiles", false, "If true, do not attempt to compare cluster profiles")
 
 	fs.IntVar(&o.normalLimit, "normal-limit", 10, "Upper limit of jobs attempted to rehearse with normal command (if more jobs are being touched, only this many will be rehearsed)")
 	fs.IntVar(&o.moreLimit, "more-limit", 20, "Upper limit of jobs attempted to rehearse with more command (if more jobs are being touched, only this many will be rehearsed)")
@@ -141,7 +139,6 @@ func rehearsalConfigFromOptions(o options) rehearse.RehearsalConfig {
 		ProwjobKubeconfig:  o.prowjobKubeconfig,
 		KubernetesOptions:  o.kubernetesOptions,
 		NoRegistry:         o.noRegistry,
-		NoClusterProfiles:  o.noClusterProfiles,
 		DryRun:             o.dryRun,
 		NormalLimit:        o.normalLimit,
 		MoreLimit:          o.moreLimit,
@@ -171,12 +168,12 @@ func dryRun(o options, logger *logrus.Entry) error {
 	candidatePath := dro.dryRunPath
 	candidate := rehearse.RehearsalCandidateFromPullRequest(pr, pr.Base.SHA)
 
-	presubmits, periodics, changedClusterProfiles, _, err := rc.DetermineAffectedJobs(candidate, candidatePath, false, logger)
+	presubmits, periodics, _, err := rc.DetermineAffectedJobs(candidate, candidatePath, false, logger)
 	if err != nil {
 		return fmt.Errorf("error determining affected jobs: %w: %s", err, "ERROR: pj-rehearse: misconfiguration")
 	}
 
-	prConfig, prRefs, presubmitsToRehearse, err := rc.SetupJobs(candidate, candidatePath, presubmits, periodics, changedClusterProfiles, dro.limit, logger)
+	prConfig, prRefs, presubmitsToRehearse, err := rc.SetupJobs(candidate, candidatePath, presubmits, periodics, dro.limit, logger)
 	if err != nil {
 		return fmt.Errorf("error setting up jobs: %w: %s", err, "ERROR: pj-rehearse: setup failure")
 	}
@@ -186,7 +183,7 @@ func dryRun(o options, logger *logrus.Entry) error {
 			return fmt.Errorf("%s: %w", "ERROR: pj-rehearse: failed to validate rehearsal jobs", err)
 		}
 
-		_, err := rc.RehearseJobs(candidate, candidatePath, prRefs, presubmitsToRehearse, changedClusterProfiles, prConfig.Prow, true, logger)
+		_, err := rc.RehearseJobs(candidate, candidatePath, prRefs, presubmitsToRehearse, prConfig.Prow, true, logger)
 		return err
 	}
 

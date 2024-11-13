@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -205,15 +206,15 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 			clusterData, err := jobRun.GetOpenShiftTestsFilesWithPrefix(ctx, "cluster-data")
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Could not fetch cluster data for %s - %v\n", jobRun.GetJobRunID(), err)
-			}
-			updatedFlag := jobrunaggregatorlib.GetMasterNodesUpdatedStatusFromClusterData(clusterData)
+			} else {
+				updatedFlag := jobrunaggregatorlib.GetMasterNodesUpdatedStatusFromClusterData(clusterData)
 
-			// if we have any value set it here
-			// if we set a 'Y' here we won't come back in this loop based on the check above
-			if len(updatedFlag) > 0 {
-				masterNodesUpdated = updatedFlag
+				// if we have any value set it here
+				// if we set a 'Y' here we won't come back in this loop based on the check above
+				if len(updatedFlag) > 0 {
+					masterNodesUpdated = updatedFlag
+				}
 			}
-
 		}
 		currJunit, err := newJobRunJunit(ctx, jobRun)
 		if err != nil {
@@ -276,21 +277,21 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 	// TODO this is the spot where we would add an alertSuite that aggregates the alerts firing in our clusters to prevent
 	//  allowing more and more failing alerts through just because one fails.
 
-	currentAggrationJunitXML, err := xml.Marshal(currentAggregationJunitSuites)
+	currentAggregationJunitXML, err := xml.Marshal(currentAggregationJunitSuites)
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(currentAggregationDir, "junit-aggregated.xml"), currentAggrationJunitXML, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(currentAggregationDir, "junit-aggregated.xml"), currentAggregationJunitXML, 0644); err != nil {
 		return err
 	}
 
 	logrus.Infof("%q for %q:  Done aggregating", o.jobName, o.payloadTag)
 
 	// now scan for a failure
-	fakeSuite := &junit.TestSuite{Children: currentAggregationJunitSuites.Suites}
-	jobrunaggregatorlib.OutputTestCaseFailures([]string{"root"}, fakeSuite)
+	syntheticSuite := &junit.TestSuite{Children: currentAggregationJunitSuites.Suites}
+	jobrunaggregatorlib.OutputTestCaseFailures([]string{"root"}, syntheticSuite)
 
-	summaryHTML, err := htmlForTestRuns(o.jobName, fakeSuite)
+	summaryHTML, err := htmlForTestRuns(o.jobName, syntheticSuite)
 	if err != nil {
 		return err
 	}
@@ -298,9 +299,15 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 		return err
 	}
 
-	if hasFailedTestCase(fakeSuite) {
+	if hasFailedTestCase(syntheticSuite) {
 		// we already indicated failure messages above
 		return fmt.Errorf("Some tests failed aggregation.  See above for details.")
+	}
+
+	// catch edge case where *all* aggregated jobs failed before they could run any real tests.
+	// if *any* of them ran real tests, the other failures would normally fail aggregation anyway. but if all setup fell over early, we get nothing to aggregate.
+	if !anyRealTestsRan(syntheticSuite) {
+		return fmt.Errorf("None of the jobs aggregated ran an expected test suite.  This usually means they failed very early.")
 	}
 
 	return nil
@@ -315,6 +322,20 @@ func hasFailedTestCase(suite *junit.TestSuite) bool {
 
 	for _, child := range suite.Children {
 		if hasFailedTestCase(child) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func anyRealTestsRan(suite *junit.TestSuite) bool {
+	if match, err := regexp.MatchString(`openshift-tests|e2e|E2E|BackendDisruption`, suite.Name); err == nil && match {
+		return true
+	}
+
+	for _, child := range suite.Children {
+		if anyRealTestsRan(child) {
 			return true
 		}
 	}

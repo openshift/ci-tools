@@ -87,7 +87,6 @@ func newCiOperatorCommand(t *T) CiOperatorCommand {
 	cmd := exec.CommandContext(ctx, "ci-operator",
 		"--input-hash="+strconv.Itoa(rand.Int()), // we need unique namespaces
 		GCSPushCredentialsFlag(t),
-		ManifestToolCredentialsFlag(t),
 		LocalRegistryDNSFlag(t),
 	)
 	cmd.Env = append(cmd.Env, KubernetesClientEnv(t)...)

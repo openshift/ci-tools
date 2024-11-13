@@ -15,9 +15,6 @@ const (
 	GCSUploadCredentialsSecret          = "gce-sa-credentials-gcs-publisher"
 	GCSUploadCredentialsSecretMountPath = "/secrets/gcs"
 
-	ManifestToolLocalPusherSecret          = "manifest-tool-local-pusher"
-	ManifestToolLocalPusherSecretMountPath = "/secrets/manifest-tool"
-
 	ReleaseAnnotationSoftDelete = "release.openshift.io/soft-delete"
 
 	// DPTPRequesterLabel is the label on a Kubernates CR whose value indicates the automated tool that requests the CR

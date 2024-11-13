@@ -430,7 +430,6 @@ type options struct {
 	dependencyOverrides      stringSlice
 
 	targetAdditionalSuffix string
-	manifestToolDockerCfg  string
 	localRegistryDNS       string
 
 	restrictNetworkAccess bool
@@ -505,7 +504,6 @@ func bindOptions(flag *flag.FlagSet) *options {
 
 	flag.StringVar(&opt.targetAdditionalSuffix, "target-additional-suffix", "", "Inject an additional suffix onto the targeted test's 'as' name. Used for adding an aggregate index")
 
-	flag.StringVar(&opt.manifestToolDockerCfg, "manifest-tool-dockercfg", "/secrets/manifest-tool/.dockerconfigjson", "The dockercfg file path to be used to push the manifest listed image after build. This is being used by the manifest-tool binary.")
 	flag.StringVar(&opt.localRegistryDNS, "local-registry-dns", "image-registry.openshift-image-registry.svc:5000", "Defines the target image registry.")
 
 	opt.resultsOptions.Bind(flag)
@@ -911,7 +909,7 @@ func (o *options) Run() []error {
 	// load the graph from the configuration
 	buildSteps, promotionSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig,
 		o.podPendingTimeout, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig,
-		o.consoleHost, o.nodeName, nodeArchitectures, o.targetAdditionalSuffix, o.manifestToolDockerCfg, o.localRegistryDNS, streams, injectedTest)
+		o.consoleHost, o.nodeName, nodeArchitectures, o.targetAdditionalSuffix, o.localRegistryDNS, streams, injectedTest)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}

@@ -46,11 +46,6 @@ var defaultPodSpec = corev1.PodSpec{
 					MountPath: cioperatorapi.GCSUploadCredentialsSecretMountPath,
 					ReadOnly:  true,
 				},
-				{
-					Name:      "manifest-tool-local-pusher",
-					MountPath: cioperatorapi.ManifestToolLocalPusherSecretMountPath,
-					ReadOnly:  true,
-				},
 			},
 		},
 	},
@@ -65,12 +60,6 @@ var defaultPodSpec = corev1.PodSpec{
 			Name: "result-aggregator",
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{SecretName: "result-aggregator"},
-			},
-		},
-		{
-			Name: "manifest-tool-local-pusher",
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{SecretName: cioperatorapi.ManifestToolLocalPusherSecret},
 			},
 		},
 	},

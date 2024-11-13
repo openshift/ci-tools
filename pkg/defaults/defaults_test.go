@@ -1285,7 +1285,7 @@ func TestFromConfig(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	buildClient := steps.NewBuildClient(client, nil, nil, "", "")
+	buildClient := steps.NewBuildClient(client, nil, nil, "")
 	var templateClient steps.TemplateClient
 	podClient := kubernetes.NewPodClient(client, nil, nil, 0)
 

@@ -2,6 +2,7 @@ package manifestpusher
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/estesp/manifest-tool/v2/pkg/registry"
 	"github.com/estesp/manifest-tool/v2/pkg/types"
@@ -12,29 +13,30 @@ import (
 )
 
 const (
-	nodeArchitectureLabel = "kubernetes.io/arch"
+	nodeArchitectureLabel   = "kubernetes.io/arch"
+	serviceAccountTokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 )
 
 type ManifestPusher interface {
 	PushImageWithManifest(builds []buildv1.Build, targetImageRef string) error
 }
 
-func NewManifestPusher(logger *logrus.Entry, registryURL string, dockercfgPath string) ManifestPusher {
-	return &manifestPusher{
-		logger:        logger,
-		registryURL:   registryURL,
-		dockercfgPath: dockercfgPath,
-	}
+func NewManifestPusher(logger *logrus.Entry, registryURL string) ManifestPusher {
+	return &manifestPusher{logger: logger, registryURL: registryURL}
 }
 
 type manifestPusher struct {
-	logger        *logrus.Entry
-	registryURL   string
-	dockercfgPath string
+	logger      *logrus.Entry
+	registryURL string
 }
 
 func (m manifestPusher) PushImageWithManifest(builds []buildv1.Build, targetImageRef string) error {
 	srcImages := []types.ManifestEntry{}
+
+	token, err := resolveServiceAccountToken()
+	if err != nil {
+		return fmt.Errorf("couldn't get the service account token: %w", err)
+	}
 
 	for _, build := range builds {
 		srcImages = append(srcImages, types.ManifestEntry{
@@ -47,14 +49,14 @@ func (m manifestPusher) PushImageWithManifest(builds []buildv1.Build, targetImag
 	}
 
 	digest, _, err := registry.PushManifestList(
-		"", // username: we don't we use basic auth
-		"", // password:             "
+		"",
+		token,
 		types.YAMLInput{Image: fmt.Sprintf("%s/%s", m.registryURL, targetImageRef), Manifests: srcImages},
 		false,        // --ignore-missing. We don't want to ignore missing images.
 		true,         // --insecure to allow pushing to the local registry.
 		false,        // --plain-http is false by default in manifest-tool. False for the OpenShift registry.
 		types.Docker, // we only need docker type manifest.
-		m.dockercfgPath,
+		"",
 	)
 	if err != nil {
 		return err
@@ -62,4 +64,13 @@ func (m manifestPusher) PushImageWithManifest(builds []buildv1.Build, targetImag
 	m.logger.WithField("digest", digest).Infof("Image %s created", targetImageRef)
 
 	return nil
+}
+
+func resolveServiceAccountToken() (string, error) {
+	data, err := os.ReadFile(serviceAccountTokenPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read token file: %w", err)
+	}
+
+	return string(data), nil
 }

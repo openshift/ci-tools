@@ -493,7 +493,7 @@ func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubern
 	}
 
 	if len(errs) == 0 {
-		manifestPusher := manifestpusher.NewManifestPusher(logrus.WithField("for-build", build.Name), buildClient.LocalRegistryDNS(), buildClient.ManifestToolDockerCfg())
+		manifestPusher := manifestpusher.NewManifestPusher(logrus.WithField("for-build", build.Name), buildClient.LocalRegistryDNS())
 		if err := manifestPusher.PushImageWithManifest(builds, fmt.Sprintf("%s/%s", build.Spec.Output.To.Namespace, build.Spec.Output.To.Name)); err != nil {
 			errs = append(errs, err)
 		}

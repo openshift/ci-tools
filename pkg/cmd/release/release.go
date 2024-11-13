@@ -22,7 +22,7 @@ type options struct {
 	resolver  registry.Resolver
 }
 
-func NewCommand() *cobra.Command {
+func NewCommand() (*cobra.Command, error) {
 	var o options
 	ret := cobra.Command{
 		Use: "release",
@@ -41,6 +41,10 @@ directly or as the base for higher-level programs and scripts.`,
 	ret.AddCommand(newConfigCommand(&o))
 	ret.AddCommand(newJobCommand(&o))
 	ret.AddCommand(newRegistryCommand(&o))
-	ret.AddCommand(newProfileCommand())
-	return &ret
+	profileCmd, err := newProfileCommand(&o)
+	if err != nil {
+		return nil, fmt.Errorf("profile cmd: %w", err)
+	}
+	ret.AddCommand(profileCmd)
+	return &ret, nil
 }

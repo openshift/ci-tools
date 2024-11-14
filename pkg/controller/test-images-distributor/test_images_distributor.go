@@ -420,13 +420,13 @@ func (r *reconciler) isImageStreamTagCurrent(
 	return imageStreamTag.Image.Name == reference.Image.Name, nil
 }
 
-const ciOperatorPullerRoleName = "ci-operator-image-puller"
+const ciOperatorImageManagerRoleName = "ci-operator-image-manager"
 
 func ciOperatorRole(namespace string) (*rbacv1.Role, crcontrollerutil.MutateFn) {
 	r := &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
-			Name:      ciOperatorPullerRoleName,
+			Name:      ciOperatorImageManagerRoleName,
 		},
 	}
 	return r, func() error {
@@ -434,7 +434,7 @@ func ciOperatorRole(namespace string) (*rbacv1.Role, crcontrollerutil.MutateFn) 
 			{
 				APIGroups: []string{"image.openshift.io"},
 				Resources: []string{"imagestreamtags", "imagestreams", "imagestreams/layers"},
-				Verbs:     []string{"get", "list", "watch"},
+				Verbs:     []string{"get", "list", "watch", "create", "update", "patch"},
 			},
 		}
 		return nil
@@ -450,7 +450,7 @@ func ciOperatorRoleBinding(namespace string) (*rbacv1.RoleBinding, crcontrolleru
 	rb := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
-			Name:      "ci-operator-image-puller",
+			Name:      "ci-operator-image-manager",
 		},
 	}
 	return rb, func() error {
@@ -463,7 +463,7 @@ func ciOperatorRoleBinding(namespace string) (*rbacv1.RoleBinding, crcontrolleru
 			APIGroup: rbacv1.GroupName,
 			Kind:     "Role",
 			// system:image-puller is not enough, as we need get for imagestreamtags
-			Name: ciOperatorPullerRoleName,
+			Name: ciOperatorImageManagerRoleName,
 		}
 		return nil
 	}

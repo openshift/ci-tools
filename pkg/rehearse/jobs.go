@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"slices"
 	"sort"
 	"strconv"
@@ -28,6 +29,7 @@ import (
 	pjapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/prow/pkg/pjutil"
+	"sigs.k8s.io/prow/pkg/pod-utils/gcs"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	apihelper "github.com/openshift/ci-tools/pkg/api/helper"
@@ -50,6 +52,7 @@ const (
 	logCiopConfigFile = "ciop-config-file"
 
 	clusterTypeEnvName = "CLUSTER_TYPE"
+	pjRehearse         = "pj-rehearse"
 )
 
 // Number of openshift versions
@@ -118,12 +121,13 @@ func BranchFromRegexes(branches []string) string {
 	return ""
 }
 
-func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber int, refs *pjapi.Refs) (*prowconfig.Presubmit, error) {
+func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, refs *pjapi.Refs) (*prowconfig.Presubmit, error) {
 	var rehearsal prowconfig.Presubmit
 	if err := deepcopy.Copy(&rehearsal, source); err != nil {
 		return nil, fmt.Errorf("deepCopy failed: %w", err)
 	}
 
+	prNumber := refs.Pulls[0].Number
 	rehearsal.Name = fmt.Sprintf("rehearse-%d-%s", prNumber, source.Name)
 
 	var branch string
@@ -136,27 +140,25 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 			jobOrg := orgRepo[0]
 			jobRepo := orgRepo[1]
 
-			if refs != nil {
-				if refs.Org != jobOrg || refs.Repo != jobRepo {
-					// we need to add the "original" refs that the job will be testing
-					// from the target repo with all the "extra" fields from the job
-					// config, like path_alias, then remove them from the config so we
-					// don't use them in the future for any other refs
-					rehearsal.ExtraRefs = append(rehearsal.ExtraRefs, *pjutil.CompletePrimaryRefs(pjapi.Refs{
-						Org:            jobOrg,
-						Repo:           jobRepo,
-						BaseRef:        branch,
-						WorkDir:        true,
-						PathAlias:      rehearsal.PathAlias,
-						CloneURI:       rehearsal.CloneURI,
-						SkipSubmodules: rehearsal.SkipSubmodules,
-						CloneDepth:     rehearsal.CloneDepth,
-					}, source.JobBase))
-					rehearsal.PathAlias = ""
-					rehearsal.CloneURI = ""
-					rehearsal.SkipSubmodules = false
-					rehearsal.CloneDepth = 0
-				}
+			if refs.Org != jobOrg || refs.Repo != jobRepo {
+				// we need to add the "original" refs that the job will be testing
+				// from the target repo with all the "extra" fields from the job
+				// config, like path_alias, then remove them from the config so we
+				// don't use them in the future for any other refs
+				rehearsal.ExtraRefs = append(rehearsal.ExtraRefs, *pjutil.CompletePrimaryRefs(pjapi.Refs{
+					Org:            jobOrg,
+					Repo:           jobRepo,
+					BaseRef:        branch,
+					WorkDir:        true,
+					PathAlias:      rehearsal.PathAlias,
+					CloneURI:       rehearsal.CloneURI,
+					SkipSubmodules: rehearsal.SkipSubmodules,
+					CloneDepth:     rehearsal.CloneDepth,
+				}, source.JobBase))
+				rehearsal.PathAlias = ""
+				rehearsal.CloneURI = ""
+				rehearsal.SkipSubmodules = false
+				rehearsal.CloneDepth = 0
 			}
 			ghContext += repo + "/"
 		}
@@ -296,9 +298,9 @@ func getResolvedConfigForTest(ciopConfig config.DataWithInfo, resolver registry.
 }
 
 // inlineCiOpConfig detects whether a Container in a rehearsed job uses
-// a ci-operator config file and if yes, it modifies the Container so that its
-// environment has a CONFIG_SPEC variable containing a resolved configuration
-// coming from the content of the release repository.
+// a ci-operator config file. If so, it uploads the resolved configuration coming
+// from the content of the release repository, and modifies the Container so that its
+// environment has a CONFIG_SPEC_GCS_URL variable containing the uploaded location.
 // This needs to happen because the config files or step registry content they
 // refer to may change in the PR that triggered a rehearsal, and the rehearsals
 // must use all content changed in this way.
@@ -306,7 +308,7 @@ func getResolvedConfigForTest(ciopConfig config.DataWithInfo, resolver registry.
 // Also returns an ImageStreamTagMap with that contains all imagestreamtags used
 // within the inlined config (this is needed to later ensure they exist on all
 // target clusters where the rehearsals will execute).
-func inlineCiOpConfig(container *v1.Container, ciopConfigs config.DataByFilename, resolver registry.Resolver, metadata api.Metadata, testname string, logger *logrus.Entry) (apihelper.ImageStreamTagMap, error) {
+func (jc *JobConfigurer) inlineCiOpConfig(container *v1.Container, ciopConfigs config.DataByFilename, resolver registry.Resolver, metadata api.Metadata, testName, jobName string, logger *logrus.Entry) (apihelper.ImageStreamTagMap, error) {
 	allImageStreamTags := apihelper.ImageStreamTagMap{}
 	if len(container.Command) < 1 || container.Command[0] != "ci-operator" {
 		return allImageStreamTags, nil
@@ -339,17 +341,17 @@ func inlineCiOpConfig(container *v1.Container, ciopConfigs config.DataByFilename
 			//
 			// The worst case is that we do not find the matching name. In such case,
 			// the inlined config will contain all items from `tests` stanza.
-			testname = ""
+			testName = ""
 			for idx, arg := range container.Args {
 				if strings.HasPrefix(arg, "--target=") {
-					testname = strings.TrimPrefix(arg, "--target=")
+					testName = strings.TrimPrefix(arg, "--target=")
 					break
 				}
 				if arg == "--target" {
 					if len(container.Args) == (idx + 1) {
 						return nil, errors.New("plain '--target' is a last arg, expected to be followed with a value")
 					}
-					testname = container.Args[idx+1]
+					testName = container.Args[idx+1]
 					break
 				}
 			}
@@ -372,39 +374,87 @@ func inlineCiOpConfig(container *v1.Container, ciopConfigs config.DataByFilename
 		logger.WithField(logCiopConfigFile, filename).Debug("Rehearsal job would use ci-operator config from registry, its content will be inlined")
 	}
 
-	ciOpConfigContent, imageStreamTags, err := getResolvedConfigForTest(ciopConfig, resolver, testname)
+	ciOpConfigContent, imageStreamTags, err := getResolvedConfigForTest(ciopConfig, resolver, testName)
 	if err != nil {
 		logger.WithError(err).Error("Failed to get resolved config for test")
 		return nil, err
 	}
 	apihelper.MergeImageStreamTagMaps(allImageStreamTags, imageStreamTags)
+	if !jc.dryRun {
+		location, err := jc.uploader.uploadConfigSpec(ciOpConfigContent, jobName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to save config to GCS bucket: %w", err)
+		}
+		container.Env = append(envs, v1.EnvVar{Name: "CONFIG_SPEC_GCS_URL", Value: location})
+	} else {
+		compressedConfig, err := gzip.CompressStringAndBase64(ciOpConfigContent)
+		if err != nil {
+			return nil, fmt.Errorf("couldn't compress and base64 encode CONFIG_SPEC: %w", err)
+		}
+		container.Env = append(envs, v1.EnvVar{Name: "CONFIG_SPEC", Value: compressedConfig})
+	}
+
+	return allImageStreamTags, nil
+}
+
+type configSpecUploader interface {
+	uploadConfigSpec(ciOpConfigContent, jobName string) (string, error)
+}
+
+type gcsConfigSpecUploader struct {
+	refs               *pjapi.Refs
+	gcsBucket          string
+	gcsCredentialsFile string
+}
+
+// uploadConfigSpec compresses, encodes, and uploads the given ciOpConfigContent to GCS
+// returns the full GCS url to the uploaded file
+func (u *gcsConfigSpecUploader) uploadConfigSpec(ciOpConfigContent, jobName string) (string, error) {
 	compressedConfig, err := gzip.CompressStringAndBase64(ciOpConfigContent)
 	if err != nil {
-		return nil, err
+		return "", fmt.Errorf("couldn't compress and base64 encode CONFIG_SPEC: %w", err)
 	}
-	container.Env = append(envs, v1.EnvVar{Name: "CONFIG_SPEC", Value: compressedConfig})
-	return allImageStreamTags, nil
+	pull := u.refs.Pulls[0]
+	fileLocation := fmt.Sprintf("%s/configs/%s/%s/%d/%s/%s", pjRehearse, u.refs.Org, u.refs.Repo, pull.Number, pull.SHA, jobName)
+	uploadTargets := map[string]gcs.UploadFunc{
+		fileLocation: gcs.DataUpload(func() (io.ReadCloser, error) {
+			return io.NopCloser(strings.NewReader(compressedConfig)), nil
+		}),
+	}
+	if err := gcs.Upload(context.Background(), u.gcsBucket, u.gcsCredentialsFile, "", []string{"*"}, uploadTargets); err != nil {
+		return "", fmt.Errorf("couldn't upload CONFIG_SPEC to GCS: %w", err)
+	}
+	return fmt.Sprintf("gs://%s/%s", u.gcsBucket, fileLocation), nil
 }
 
 // JobConfigurer holds all the information that is needed for the configuration of the jobs.
 type JobConfigurer struct {
+	dryRun                bool
 	ciopConfigs           config.DataByFilename
 	prowConfig            *prowconfig.Config
 	registryResolver      registry.Resolver
 	clusterProfileCMNames map[string]string
-	prNumber              int
 	refs                  *pjapi.Refs
+	uploader              configSpecUploader
 	logger                *logrus.Entry
 }
 
 // NewJobConfigurer filters the jobs and returns a new JobConfigurer.
-func NewJobConfigurer(ciopConfigs config.DataByFilename, prowConfig *prowconfig.Config, resolver registry.Resolver, prNumber int, logger *logrus.Entry, refs *pjapi.Refs) *JobConfigurer {
+func NewJobConfigurer(
+	dryRun bool,
+	ciopConfigs config.DataByFilename,
+	prowConfig *prowconfig.Config,
+	resolver registry.Resolver,
+	logger *logrus.Entry,
+	refs *pjapi.Refs,
+	uploader configSpecUploader) *JobConfigurer {
 	return &JobConfigurer{
+		dryRun:           dryRun,
 		ciopConfigs:      ciopConfigs,
 		prowConfig:       prowConfig,
 		registryResolver: resolver,
-		prNumber:         prNumber,
 		refs:             refs,
+		uploader:         uploader,
 		logger:           logger,
 	}
 }
@@ -434,7 +484,7 @@ func (jc *JobConfigurer) ConfigurePeriodicRehearsals(periodics config.Periodics)
 		}
 		jc.configureDecorationConfig(&job.JobBase, metadata)
 		testname := metadata.TestNameFromJobName(job.Name, jobconfig.PeriodicPrefix)
-		imageStreamTags, err := jc.configureJobSpec(job.Spec, metadata, testname, jc.logger.WithField("name", job.Name))
+		imageStreamTags, err := jc.configureJobSpec(job.Spec, metadata, testname, job.Name, jc.logger.WithField("name", job.Name))
 		if err != nil {
 			jobLogger.WithError(err).Warn("Failed to inline ci-operator-config into rehearsal periodic job")
 			return nil, nil, err
@@ -475,13 +525,13 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 			}
 			jc.configureDecorationConfig(&job.JobBase, metadata)
 
-			rehearsal, err := makeRehearsalPresubmit(&job, orgrepo, jc.prNumber, jc.refs)
+			rehearsal, err := makeRehearsalPresubmit(&job, orgrepo, jc.refs)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to make rehearsal presubmit: %w", err)
 			}
 			testname := metadata.TestNameFromJobName(job.Name, jobconfig.PresubmitPrefix)
 
-			imageStreamTags, err := jc.configureJobSpec(rehearsal.Spec, metadata, testname, jc.logger.WithField("name", job.Name))
+			imageStreamTags, err := jc.configureJobSpec(rehearsal.Spec, metadata, testname, job.Name, jc.logger.WithField("name", job.Name))
 			if err != nil {
 				jobLogger.WithError(err).Warn("Failed to inline ci-operator-config into rehearsal presubmit job")
 				return nil, nil, err
@@ -507,7 +557,7 @@ func (jc *JobConfigurer) configureDecorationConfig(job *prowconfig.JobBase, meta
 	job.DecorationConfig.GCSConfiguration.JobURLPrefix = determineJobURLPrefix(jc.prowConfig.Plank, metadata.Org, metadata.Repo)
 }
 
-func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, metadata api.Metadata, testName string, logger *logrus.Entry) (apihelper.ImageStreamTagMap, error) {
+func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, metadata api.Metadata, testName, jobName string, logger *logrus.Entry) (apihelper.ImageStreamTagMap, error) {
 	// Remove configresolver flags from ci-operator jobs
 	var metadataFromFlags api.Metadata
 	if len(spec.Containers[0].Command) > 0 && spec.Containers[0].Command[0] == "ci-operator" {
@@ -520,7 +570,7 @@ func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, metadata api.Metadat
 		metadata = metadataFromFlags
 	}
 
-	imageStreamTags, err := inlineCiOpConfig(&spec.Containers[0], jc.ciopConfigs, jc.registryResolver, metadata, testName, jc.logger)
+	imageStreamTags, err := jc.inlineCiOpConfig(&spec.Containers[0], jc.ciopConfigs, jc.registryResolver, metadata, testName, jobName, jc.logger)
 	if err != nil {
 		return nil, err
 	}
@@ -536,7 +586,7 @@ func (jc *JobConfigurer) ConvertPeriodicsToPresubmits(periodics []prowconfig.Per
 	var presubmits []*prowconfig.Presubmit
 
 	for _, periodic := range periodics {
-		p, err := makeRehearsalPresubmit(&prowconfig.Presubmit{JobBase: periodic.JobBase}, "", jc.prNumber, jc.refs)
+		p, err := makeRehearsalPresubmit(&prowconfig.Presubmit{JobBase: periodic.JobBase}, "", jc.refs)
 		if err != nil {
 			return nil, fmt.Errorf("makeRehearsalPresubmit failed: %w", err)
 		}
@@ -802,7 +852,6 @@ func replaceConfigMaps(volumes []v1.Volume, cms map[string]string, logger *logru
 type Executor struct {
 	dryRun     bool
 	presubmits []*prowconfig.Presubmit
-	prNumber   int
 	prRepo     string
 	refs       *pjapi.Refs
 	logger     *logrus.Entry
@@ -815,13 +864,12 @@ type Executor struct {
 }
 
 // NewExecutor creates an executor. It also configures the rehearsal jobs as a list of presubmits.
-func NewExecutor(presubmits []*prowconfig.Presubmit, prNumber int, prRepo string, refs *pjapi.Refs,
+func NewExecutor(presubmits []*prowconfig.Presubmit, prRepo string, refs *pjapi.Refs,
 	dryRun bool, logger *logrus.Entry, pjclient ctrlruntimeclient.Client, namespace string,
 	prowCfg *prowconfig.Config, waitForCompletion bool) *Executor {
 	return &Executor{
 		dryRun:            dryRun,
 		presubmits:        presubmits,
-		prNumber:          prNumber,
 		prRepo:            prRepo,
 		refs:              refs,
 		logger:            logger,
@@ -866,7 +914,8 @@ func (e *Executor) ExecuteJobs() (bool, error) {
 		return true, fmt.Errorf("failed to submit all rehearsal jobs")
 	}
 
-	selector := ctrlruntimeclient.MatchingLabels{Label: strconv.Itoa(e.prNumber)}
+	prNumber := e.refs.Pulls[0].Number
+	selector := ctrlruntimeclient.MatchingLabels{Label: strconv.Itoa(prNumber)}
 
 	names := sets.New[string]()
 	for _, job := range pjs {

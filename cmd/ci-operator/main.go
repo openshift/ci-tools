@@ -2244,7 +2244,7 @@ func (o *options) loadConfig(info *api.Metadata, gcsReader gcsFileReader) (*api.
 		if len(configSpecGCSEnv) == 0 {
 			return nil, fmt.Errorf("%s environment variable cannot be set to an empty string", configSpecGcsUrlVar)
 		}
-		content, err := gcsReader.Read(configSpecEnv)
+		content, err := gcsReader.Read(configSpecGCSEnv)
 		if err != nil {
 			logrus.WithError(err).Fatalf("Error reading %s", configSpecGcsUrlVar)
 		}

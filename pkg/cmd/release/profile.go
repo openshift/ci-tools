@@ -22,6 +22,7 @@ type balanceProfileOptions struct {
 	BalancingFactors  []float64
 	BalancingStrategy string
 	ExcludeOrgs       []string
+	Branches          []string
 }
 
 func (o *balanceProfileOptions) validate() error {
@@ -171,7 +172,8 @@ func newBalanceProfileCommand(parent *options) (*cobra.Command, error) {
 	flags.Float64VarP(&o.ScalingFactor, "scaling-factor", "s", 0.25, "Scaling factor in % for source profile")
 	flags.Float64SliceVarP(&o.BalancingFactors, "balancing-factors", "b", []float64{}, "Balancing factor in % for each target profile")
 	flags.StringVarP(&o.BalancingStrategy, "strategy", "x", "rand", "Balancing algorithm")
-	flags.StringSliceVar(&o.ExcludeOrgs, "exclude-orgs", []string{}, "Skip configs under ci-operator/config/${ORG}")
+	flags.StringSliceVar(&o.ExcludeOrgs, "exclude-orgs", []string{}, "Skip configs by org")
+	flags.StringSliceVar(&o.Branches, "branches", []string{}, "Filter configs by branch")
 	if err := cmd.MarkPersistentFlagRequired("from"); err != nil {
 		return nil, err
 	}
@@ -181,10 +183,14 @@ func newBalanceProfileCommand(parent *options) (*cobra.Command, error) {
 	return cmd, nil
 }
 
-func gatherTests(configsPath, srcProfile string, excludeOrgs []string) ([]testInfo, error) {
+func gatherTests(configsPath, srcProfile string, branches, excludeOrgs []string) ([]testInfo, error) {
 	tests := make([]testInfo, 0)
+	byBranch, includeBranchesSet := len(branches) > 0, sets.New(branches...)
 	excludeOrgsSet := sets.New(excludeOrgs...)
 	if err := config.OperateOnCIOperatorConfigDir(configsPath, func(c *api.ReleaseBuildConfiguration, info *config.Info) error {
+		if byBranch && !includeBranchesSet.Has(info.Branch) {
+			return nil
+		}
 		if excludeOrgsSet.Has(info.Org) {
 			return nil
 		}
@@ -267,7 +273,7 @@ func dstProfilesInfo(dstProfiles []string, factors []float64, testsToBalance int
 
 func balanceProfiles(o *balanceProfileOptions) error {
 	configsPath := o.argsWithPrefixes(config.CiopConfigInRepoPath, o.ciOperatorConfigPath, nil)[0]
-	tests, err := gatherTests(configsPath, o.SrcProfile, o.ExcludeOrgs)
+	tests, err := gatherTests(configsPath, o.SrcProfile, o.Branches, o.ExcludeOrgs)
 	if err != nil {
 		return err
 	}

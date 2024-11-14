@@ -1309,6 +1309,7 @@ const (
 	ClusterProfileAzureAutoreleaseQE    ClusterProfile = "azure-autorelease-qe"
 	ClusterProfileAzureArm64QE          ClusterProfile = "azure-arm64-qe"
 	ClusterProfileAzureMagQE            ClusterProfile = "azuremag-qe"
+	ClusterProfileAzureSustAutoRel412   ClusterProfile = "azure-sustaining-autorelease-412"
 	ClusterProfileEquinixOcpMetal       ClusterProfile = "equinix-ocp-metal"
 	ClusterProfileEquinixOcpMetalQE     ClusterProfile = "equinix-ocp-metal-qe"
 	ClusterProfileEquinixOcpHCP         ClusterProfile = "equinix-ocp-hcp"
@@ -1455,6 +1456,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAzurePerfScale,
 		ClusterProfileAzureStack,
 		ClusterProfileAzureStackQE,
+		ClusterProfileAzureSustAutoRel412,
 		ClusterProfileEquinixOcpMetal,
 		ClusterProfileEquinixOcpMetalQE,
 		ClusterProfileEquinixOcpHCP,
@@ -1622,6 +1624,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAzureHCPHAQE,
 		ClusterProfileAzureAutoreleaseQE,
 		ClusterProfileAzurePerfScale,
+		ClusterProfileAzureSustAutoRel412,
 		ClusterProfileAzureVirtualization:
 		return "azure4"
 	case
@@ -1873,6 +1876,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "azure-arm64-qe-quota-slice"
 	case ClusterProfileAzureVirtualization:
 		return "azure-virtualization-quota-slice"
+	case ClusterProfileAzureSustAutoRel412:
+		return "azure-sustaining-autorelease-412-quota-slice"
 	case ClusterProfileEquinixOcpMetal:
 		return "equinix-ocp-metal-quota-slice"
 	case ClusterProfileEquinixOcpMetalQE:

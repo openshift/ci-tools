@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/distribution/reference"
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/manifest"
+	"github.com/docker/distribution/reference"
 	"github.com/docker/libtrust"
 	"github.com/opencontainers/go-digest"
 )
@@ -58,7 +58,7 @@ func (mb *referenceManifestBuilder) Build(ctx context.Context) (distribution.Man
 func (mb *referenceManifestBuilder) AppendReference(d distribution.Describable) error {
 	r, ok := d.(Reference)
 	if !ok {
-		return fmt.Errorf("unable to add non-reference type to v1 builder")
+		return fmt.Errorf("Unable to add non-reference type to v1 builder")
 	}
 
 	// Entries need to be prepended

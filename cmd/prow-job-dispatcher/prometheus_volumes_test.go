@@ -10,6 +10,8 @@ import (
 	"time"
 
 	promapi "github.com/prometheus/client_golang/api"
+
+	"github.com/openshift/ci-tools/pkg/sanitizer"
 )
 
 type FakeClient struct {
@@ -72,6 +74,88 @@ func TestPrometheusVolumesGetJobVolumes(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("prometheusVolumes.GetJobVolumes() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCalculateVolumeDistribution(t *testing.T) {
+	tests := []struct {
+		name       string
+		jobVolumes map[string]float64
+		clusterMap sanitizer.ClusterMap
+		expected   map[string]float64
+	}{
+		{
+			name:       "equal distribution",
+			jobVolumes: map[string]float64{"jobA": 1000},
+			clusterMap: sanitizer.ClusterMap{
+				"clusterA": {Provider: "AWS", Capacity: 100},
+				"clusterB": {Provider: "GCP", Capacity: 100},
+			},
+			expected: map[string]float64{
+				"clusterA": 500,
+				"clusterB": 500,
+			},
+		},
+		{
+			name:       "unequal distribution",
+			jobVolumes: map[string]float64{"jobA": 1000},
+			clusterMap: sanitizer.ClusterMap{
+				"clusterA": {Provider: "AWS", Capacity: 70},
+				"clusterB": {Provider: "GCP", Capacity: 30},
+			},
+			expected: map[string]float64{
+				"clusterA": 700,
+				"clusterB": 300,
+			},
+		},
+		{
+			name:       "multiple jobs with total distribution",
+			jobVolumes: map[string]float64{"jobA": 500, "jobB": 500},
+			clusterMap: sanitizer.ClusterMap{
+				"clusterA": {Provider: "AWS", Capacity: 60},
+				"clusterB": {Provider: "GCP", Capacity: 40},
+			},
+			expected: map[string]float64{
+				"clusterA": 600,
+				"clusterB": 400,
+			},
+		},
+		{
+			name:       "single cluster takes all",
+			jobVolumes: map[string]float64{"jobA": 1000},
+			clusterMap: sanitizer.ClusterMap{
+				"clusterA": {Provider: "AWS", Capacity: 100},
+			},
+			expected: map[string]float64{
+				"clusterA": 1000,
+			},
+		},
+		{
+			name:       "zero capacity clusters",
+			jobVolumes: map[string]float64{"jobA": 1000},
+			clusterMap: sanitizer.ClusterMap{
+				"clusterA": {Provider: "AWS", Capacity: 0},
+				"clusterB": {Provider: "GCP", Capacity: 100},
+			},
+			expected: map[string]float64{
+				"clusterA": 0,
+				"clusterB": 1000,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pv := &prometheusVolumes{
+				jobVolumes:           tt.jobVolumes,
+				timestamp:            time.Now(),
+				promClient:           nil,
+				prometheusDaysBefore: 15,
+				m:                    sync.Mutex{},
+			}
+			if got := pv.calculateVolumeDistribution(tt.clusterMap); !reflect.DeepEqual(got, tt.expected) {
+				t.Errorf("prometheusVolumes.calculateVolumeDistribution() = %v, want %v", got, tt.expected)
 			}
 		})
 	}

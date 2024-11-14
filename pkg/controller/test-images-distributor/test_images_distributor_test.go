@@ -221,7 +221,7 @@ func TestReconcile(t *testing.T) {
 	expectedRoleBindig := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: referenceImageStreamTag.Namespace,
-			Name:      "ci-operator-image-puller",
+			Name:      "ci-operator-image-manager",
 		},
 		Subjects: []rbacv1.Subject{{
 			Kind:      rbacv1.ServiceAccountKind,
@@ -231,7 +231,7 @@ func TestReconcile(t *testing.T) {
 		RoleRef: rbacv1.RoleRef{
 			APIGroup: rbacv1.GroupName,
 			Kind:     "Role",
-			Name:     "ci-operator-image-puller",
+			Name:     "ci-operator-image-manager",
 		},
 	}
 	outdatedRoleBindig := func() *rbacv1.RoleBinding {
@@ -243,13 +243,13 @@ func TestReconcile(t *testing.T) {
 	expectedRole := &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: referenceImageStreamTag.Namespace,
-			Name:      "ci-operator-image-puller",
+			Name:      "ci-operator-image-manager",
 		},
 		Rules: []rbacv1.PolicyRule{
 			{
 				APIGroups: []string{"image.openshift.io"},
 				Resources: []string{"imagestreamtags", "imagestreams", "imagestreams/layers"},
-				Verbs:     []string{"get", "list", "watch"},
+				Verbs:     []string{"get", "list", "watch", "create", "update", "patch"},
 			},
 		},
 	}
@@ -338,7 +338,7 @@ func TestReconcile(t *testing.T) {
 		actualRoleBinding := &rbacv1.RoleBinding{}
 		roleBindingName := types.NamespacedName{
 			Namespace: imageStreamImport.Namespace,
-			Name:      "ci-operator-image-puller",
+			Name:      "ci-operator-image-manager",
 		}
 		if err := c.Get(ctx, roleBindingName, actualRoleBinding); err != nil {
 			return fmt.Errorf("failed to get rolebinding %s: %w", roleBindingName.String(), err)
@@ -350,7 +350,7 @@ func TestReconcile(t *testing.T) {
 		actualRole := &rbacv1.Role{}
 		roleName := types.NamespacedName{
 			Namespace: imageStreamImport.Namespace,
-			Name:      "ci-operator-image-puller",
+			Name:      "ci-operator-image-manager",
 		}
 		if err := c.Get(ctx, roleName, actualRole); err != nil {
 			return fmt.Errorf("failed to get role %s: %w", roleName.String(), err)

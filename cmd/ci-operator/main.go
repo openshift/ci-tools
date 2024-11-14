@@ -57,6 +57,7 @@ import (
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	_ "sigs.k8s.io/prow/pkg/cache"
 	"sigs.k8s.io/prow/pkg/config/secret"
+	prowio "sigs.k8s.io/prow/pkg/io"
 	"sigs.k8s.io/prow/pkg/logrusutil"
 	"sigs.k8s.io/prow/pkg/pod-utils/downwardapi"
 	"sigs.k8s.io/prow/pkg/version"
@@ -564,7 +565,14 @@ func (o *options) Complete() error {
 		}
 		config, err = o.resolverClient.ConfigWithTest(info, injectTest)
 	} else {
-		config, err = o.loadConfig(info)
+		var opener prowio.Opener
+		if _, set := os.LookupEnv(configSpecGcsUrlVar); set { // The opener is only needed when we may have to read from a GCS bucket
+			opener, err = prowio.NewOpener(context.Background(), o.uploadSecretPath, "")
+			if err != nil {
+				logrus.WithError(err).Fatalf("Error creating opener to read %s", configSpecGcsUrlVar)
+			}
+		}
+		config, err = o.loadConfig(info, bucketReader{opener: opener})
 	}
 
 	if err != nil {
@@ -2176,13 +2184,46 @@ func (o *options) getInjectTest() (*api.MetadataWithTest, error) {
 	return api.MetadataTestFromString(o.injectTest)
 }
 
-// loadConfig loads the standard configuration path, env, or configresolver (in that order of priority)
-func (o *options) loadConfig(info *api.Metadata) (*api.ReleaseBuildConfiguration, error) {
+type gcsFileReader interface {
+	Read(filePath string) ([]byte, error)
+}
+
+type bucketReader struct {
+	opener prowio.Opener
+}
+
+func (b bucketReader) Read(filePath string) ([]byte, error) {
+	content, err := prowio.ReadContent(context.Background(), logrus.WithField("file", filePath), b.opener, filePath)
+	return content, err
+}
+
+const (
+	configSpecVar       = "CONFIG_SPEC"
+	configSpecGcsUrlVar = "CONFIG_SPEC_GCS_URL"
+	unresolvedConfigVar = "UNRESOLVED_CONFIG"
+	gcsBucket           = "test-platform-results"
+)
+
+// loadConfig loads the standard configuration path, env, gcs bucket env, or configresolver (in that order of priority)
+func (o *options) loadConfig(info *api.Metadata, gcsReader gcsFileReader) (*api.ReleaseBuildConfiguration, error) {
 	var raw string
 
-	configSpecEnv, configSpecSet := os.LookupEnv("CONFIG_SPEC")
-	unresolvedConfigEnv, unresolvedConfigSet := os.LookupEnv("UNRESOLVED_CONFIG")
+	configSpecEnv, configSpecSet := os.LookupEnv(configSpecVar)
+	configSpecGCSEnv, configSpecGCSSet := os.LookupEnv(configSpecGcsUrlVar)
+	unresolvedConfigEnv, unresolvedConfigSet := os.LookupEnv(unresolvedConfigVar)
 
+	decodeAndUnzip := func(rawConfig string) (string, error) {
+		// if being run by pj-rehearse, config spec may be base64 and gzipped
+		if decoded, err := base64.StdEncoding.DecodeString(rawConfig); err != nil {
+			return rawConfig, nil
+		} else {
+			data, err := gzip.ReadBytesMaybeGZIP(decoded)
+			if err != nil {
+				return "", fmt.Errorf("--config error: %w", err)
+			}
+			return string(data), nil
+		}
+	}
 	switch {
 	case len(o.configSpecPath) > 0:
 		data, err := gzip.ReadFileMaybeGZIP(o.configSpecPath)
@@ -2192,17 +2233,25 @@ func (o *options) loadConfig(info *api.Metadata) (*api.ReleaseBuildConfiguration
 		raw = string(data)
 	case configSpecSet:
 		if len(configSpecEnv) == 0 {
-			return nil, errors.New("CONFIG_SPEC environment variable cannot be set to an empty string")
+			return nil, fmt.Errorf("%s environment variable cannot be set to an empty string", configSpecVar)
 		}
-		// if being run by pj-rehearse, config spec may be base64 and gzipped
-		if decoded, err := base64.StdEncoding.DecodeString(configSpecEnv); err != nil {
-			raw = configSpecEnv
-		} else {
-			data, err := gzip.ReadBytesMaybeGZIP(decoded)
-			if err != nil {
-				return nil, fmt.Errorf("--config error: %w", err)
-			}
-			raw = string(data)
+		var err error
+		raw, err = decodeAndUnzip(configSpecEnv)
+		if err != nil {
+			return nil, err
+		}
+	case configSpecGCSSet:
+		if len(configSpecGCSEnv) == 0 {
+			return nil, fmt.Errorf("%s environment variable cannot be set to an empty string", configSpecGcsUrlVar)
+		}
+		configSpecPath := fmt.Sprintf("gs://%s/%s", gcsBucket, configSpecGCSEnv)
+		content, err := gcsReader.Read(configSpecPath)
+		if err != nil {
+			logrus.WithError(err).Fatalf("Error reading %s", configSpecGcsUrlVar)
+		}
+		raw, err = decodeAndUnzip(string(content))
+		if err != nil {
+			return nil, err
 		}
 	case len(o.unresolvedConfigPath) > 0:
 		data, err := gzip.ReadFileMaybeGZIP(o.unresolvedConfigPath)

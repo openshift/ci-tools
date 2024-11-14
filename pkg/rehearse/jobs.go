@@ -398,15 +398,14 @@ type JobConfigurer struct {
 }
 
 // NewJobConfigurer filters the jobs and returns a new JobConfigurer.
-func NewJobConfigurer(ciopConfigs config.DataByFilename, prowConfig *prowconfig.Config, resolver registry.Resolver, prNumber int, logger *logrus.Entry, profiles map[string]string, refs *pjapi.Refs) *JobConfigurer {
+func NewJobConfigurer(ciopConfigs config.DataByFilename, prowConfig *prowconfig.Config, resolver registry.Resolver, prNumber int, logger *logrus.Entry, refs *pjapi.Refs) *JobConfigurer {
 	return &JobConfigurer{
-		ciopConfigs:           ciopConfigs,
-		prowConfig:            prowConfig,
-		registryResolver:      resolver,
-		clusterProfileCMNames: profiles,
-		prNumber:              prNumber,
-		refs:                  refs,
-		logger:                logger,
+		ciopConfigs:      ciopConfigs,
+		prowConfig:       prowConfig,
+		registryResolver: resolver,
+		prNumber:         prNumber,
+		refs:             refs,
+		logger:           logger,
 	}
 }
 

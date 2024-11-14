@@ -82,3 +82,4 @@
   status:
     startTime: "1970-01-01T00:00:00Z"
     state: triggered
+    url: https://prow.ci.openshift.org/view/gs/test-platform-results/test-org-test-repo-100-test-variant-test-name

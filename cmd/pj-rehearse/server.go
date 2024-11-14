@@ -398,7 +398,7 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 				networkAccessRehearsalsAllowed := allowedLabel && approved
 
 				candidatePath := repoClient.Directory()
-				presubmits, periodics, changedClusterProfiles, _, err := rc.DetermineAffectedJobs(candidate, candidatePath, networkAccessRehearsalsAllowed, logger)
+				presubmits, periodics, _, err := rc.DetermineAffectedJobs(candidate, candidatePath, networkAccessRehearsalsAllowed, logger)
 				if err != nil {
 					logger.WithError(err).Error("couldn't determine affected jobs")
 					s.reportFailure("unable to determine affected jobs", err, org, repo, user, number, true, false, logger)
@@ -428,7 +428,7 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 						limit = rc.MaxLimit
 					}
 
-					prConfig, prRefs, presubmitsToRehearse, err := rc.SetupJobs(candidate, candidatePath, presubmits, periodics, changedClusterProfiles, limit, logger)
+					prConfig, prRefs, presubmitsToRehearse, err := rc.SetupJobs(candidate, candidatePath, presubmits, periodics, limit, logger)
 					if err != nil {
 						logger.WithError(err).Error("couldn't set up jobs")
 						s.reportFailure("unable to set up jobs", err, org, repo, user, number, true, false, logger)
@@ -442,7 +442,7 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 					}
 
 					autoAckMode := rehearseAutoAck == command
-					success, err := rc.RehearseJobs(candidate, candidatePath, prRefs, presubmitsToRehearse, changedClusterProfiles, prConfig.Prow, autoAckMode, logger)
+					success, err := rc.RehearseJobs(candidate, candidatePath, prRefs, presubmitsToRehearse, prConfig.Prow, autoAckMode, logger)
 					if err != nil {
 						logger.WithError(err).Error("couldn't rehearse jobs")
 						s.reportFailure("failed to create rehearsal jobs", err, org, repo, user, number, true, false, logger)
@@ -486,7 +486,7 @@ func (s *server) getAffectedJobs(pullRequest *github.PullRequest, logger *logrus
 	//TODO(DPTP-2888): this is the point at which we can use repoClient.RevParse() to see if we even need to load the configs at all, and also prune the set of loaded configs to only the changed files
 
 	candidatePath := repoClient.Directory()
-	presubmits, periodics, _, disabledDueToNetworkAccessToggle, err := rc.DetermineAffectedJobs(candidate, candidatePath, false, logger)
+	presubmits, periodics, disabledDueToNetworkAccessToggle, err := rc.DetermineAffectedJobs(candidate, candidatePath, false, logger)
 	return presubmits, periodics, disabledDueToNetworkAccessToggle, err
 }
 

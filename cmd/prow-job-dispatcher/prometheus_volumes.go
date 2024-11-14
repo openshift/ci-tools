@@ -12,6 +12,7 @@ import (
 	"sigs.k8s.io/prow/pkg/config/secret"
 
 	"github.com/openshift/ci-tools/pkg/dispatcher"
+	"github.com/openshift/ci-tools/pkg/sanitizer"
 )
 
 type prometheusVolumes struct {
@@ -64,4 +65,19 @@ func (pv *prometheusVolumes) getTotalVolume() float64 {
 	}
 
 	return totalVolume
+}
+
+func (pv *prometheusVolumes) calculateVolumeDistribution(clusterMap sanitizer.ClusterMap) map[string]float64 {
+	totalCapacity := 0
+	for _, cluster := range clusterMap {
+		totalCapacity += cluster.Capacity
+	}
+	totalVolume := pv.getTotalVolume()
+	volumeDistribution := make(map[string]float64)
+	for clusterName, cluster := range clusterMap {
+		volumeShare := (float64(cluster.Capacity) / float64(totalCapacity)) * totalVolume
+		volumeDistribution[clusterName] = volumeShare
+	}
+
+	return volumeDistribution
 }

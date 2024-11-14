@@ -2,6 +2,7 @@ package sanitizer
 
 import (
 	"os"
+	"reflect"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
@@ -107,4 +108,21 @@ func DetermineTargetCluster(cluster, determinedCluster, defaultCluster string, c
 		return defaultCluster
 	}
 	return targetCluster
+}
+
+func HasCapacityOrCapabilitiesChanged(prev, next ClusterMap) bool {
+	for clusterName, info1 := range prev {
+		info2, exists := next[clusterName]
+		if !exists {
+			continue
+		}
+		if info1.Capacity != info2.Capacity {
+			return true
+		}
+		if !reflect.DeepEqual(info1.Capabilities, info2.Capabilities) {
+			return true
+		}
+	}
+
+	return false
 }

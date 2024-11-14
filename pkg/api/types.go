@@ -2070,21 +2070,6 @@ func (p ClusterProfile) IPPoolLeaseShouldValidateBranch() bool {
 	}
 }
 
-// ConfigMap maps profiles to the ConfigMap they require (if applicable).
-func (p ClusterProfile) ConfigMap() string {
-	switch p {
-	case
-		ClusterProfileAzure,
-		ClusterProfileGCP,
-		ClusterProfileGCP2,
-		ClusterProfileGCP3,
-		ClusterProfileOvirt:
-		return fmt.Sprintf("cluster-profile-%s", p)
-	default:
-		return ""
-	}
-}
-
 // GetDefaultClusterProfileSecretName returns the default secret name for the profile
 func GetDefaultClusterProfileSecretName(profile ClusterProfile) string {
 	return fmt.Sprintf("cluster-secrets-%s", string(profile))

@@ -2201,7 +2201,6 @@ const (
 	configSpecVar       = "CONFIG_SPEC"
 	configSpecGcsUrlVar = "CONFIG_SPEC_GCS_URL"
 	unresolvedConfigVar = "UNRESOLVED_CONFIG"
-	gcsBucket           = "test-platform-results"
 )
 
 // loadConfig loads the standard configuration path, env, gcs bucket env, or configresolver (in that order of priority)
@@ -2246,7 +2245,7 @@ func (o *options) loadConfig(info *api.Metadata, gcsReader gcsFileReader) (*api.
 		}
 		content, err := gcsReader.Read(configSpecGCSEnv)
 		if err != nil {
-			logrus.WithError(err).Fatalf("Error reading %s", configSpecGcsUrlVar)
+			logrus.WithError(err).Fatalf("Error reading %s", configSpecGCSEnv)
 		}
 		raw, err = decodeAndUnzip(string(content))
 		if err != nil {

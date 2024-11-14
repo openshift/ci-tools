@@ -43,23 +43,6 @@ import (
 
 const testingRegistry = "../../test/multistage-registry/registry"
 
-const testingCiOpCfgJob1YAML = `tests:
-- as: job1
-  literal_steps:
-    cluster_profile: ""
-    pre:
-    - from_image:
-        name: willem
-        namespace: fancy
-        tag: first
-      resources: {}
-zz_generated_metadata:
-  branch: ""
-  org: ""
-  repo: ""
-`
-const testingCiOpCfgJob2YAML = "tests:\n- as: job2\nzz_generated_metadata:\n  branch: \"\"\n  org: \"\"\n  repo: \"\"\n"
-
 // configFiles contains the info needed to allow inlineCiOpConfig to successfully inline
 // CONFIG_SPEC and not fail
 func generateTestConfigFiles() config.DataByFilename {

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path"
 	"reflect"
 	"sort"
 	"strconv"
@@ -40,23 +42,6 @@ import (
 )
 
 const testingRegistry = "../../test/multistage-registry/registry"
-
-const testingCiOpCfgJob1YAML = `tests:
-- as: job1
-  literal_steps:
-    cluster_profile: ""
-    pre:
-    - from_image:
-        name: willem
-        namespace: fancy
-        tag: first
-      resources: {}
-zz_generated_metadata:
-  branch: ""
-  org: ""
-  repo: ""
-`
-const testingCiOpCfgJob2YAML = "tests:\n- as: job2\nzz_generated_metadata:\n  branch: \"\"\n  org: \"\"\n  repo: \"\"\n"
 
 // configFiles contains the info needed to allow inlineCiOpConfig to successfully inline
 // CONFIG_SPEC and not fail
@@ -115,6 +100,19 @@ func generateTestConfigFiles() config.DataByFilename {
 }
 
 var ignoreUnexported = cmpopts.IgnoreUnexported(prowconfig.Presubmit{}, prowconfig.Brancher{}, prowconfig.RegexpChangeMatcher{}, prowconfig.Periodic{})
+
+type fakeConfigUploader struct {
+	baseDir string
+}
+
+func (u *fakeConfigUploader) uploadConfigSpec(ciOpConfigContent, jobName string) (string, error) {
+	location := path.Join(u.baseDir, fmt.Sprintf("%s.yaml", jobName))
+	err := os.WriteFile(location, []byte(ciOpConfigContent), 0666)
+	if err != nil {
+		return "", err
+	}
+	return location, nil
+}
 
 func TestInlineCiopConfig(t *testing.T) {
 	nodeArchitectureAMD64 := api.NodeArchitectureAMD64
@@ -241,6 +239,7 @@ func TestInlineCiopConfig(t *testing.T) {
 		metadata  api.Metadata
 
 		expectedEnv               []v1.EnvVar
+		expectedUploadContent     string
 		expectedError             bool
 		expectedImageStreamTagMap apihelper.ImageStreamTagMap
 	}{
@@ -259,21 +258,21 @@ func TestInlineCiopConfig(t *testing.T) {
 			description:               "ci-operator job -> adds CONFIG_SPEC with resolved config for the given test (test1)",
 			testname:                  "test1",
 			metadata:                  standardMetadata,
-			expectedEnv:               []v1.EnvVar{{Name: "CONFIG_SPEC", Value: testCiopConfigContentTest1}},
+			expectedUploadContent:     testCiopConfigContentTest1,
 			expectedImageStreamTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
 		},
 		{
-			description: "ci-operator job -> adds CONFIG_SPEC with resolved config for the given test (test2)",
-			testname:    "test2",
-			metadata:    standardMetadata,
-			expectedEnv: []v1.EnvVar{{Name: "CONFIG_SPEC", Value: testCiopConfigContentTest2}},
+			description:           "ci-operator job -> adds CONFIG_SPEC with resolved config for the given test (test2)",
+			testname:              "test2",
+			metadata:              standardMetadata,
+			expectedUploadContent: testCiopConfigContentTest2,
 		},
 		{
-			description: "ci-operator job with UNRESOLVED_CONFIG -> adds CONFIG_SPEC with resolved config for the given test (test1)",
-			testname:    "test1",
-			metadata:    standardMetadata,
-			sourceEnv:   []v1.EnvVar{{Name: "UNRESOLVED_CONFIG", Value: string(unresolvedConfigContent)}},
-			expectedEnv: []v1.EnvVar{{Name: "CONFIG_SPEC", Value: test1ConfigContentFromUnresolved}},
+			description:           "ci-operator job with UNRESOLVED_CONFIG -> adds CONFIG_SPEC with resolved config for the given test (test1)",
+			testname:              "test1",
+			metadata:              standardMetadata,
+			sourceEnv:             []v1.EnvVar{{Name: "UNRESOLVED_CONFIG", Value: string(unresolvedConfigContent)}},
+			expectedUploadContent: test1ConfigContentFromUnresolved,
 		},
 		{
 			description:   "Incomplete metadata -> error",
@@ -298,6 +297,7 @@ func TestInlineCiopConfig(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			logger := logrus.NewEntry(logrus.New())
+			uploadDir := t.TempDir()
 			if tc.command == "" {
 				tc.command = "ci-operator"
 			}
@@ -306,9 +306,15 @@ func TestInlineCiopConfig(t *testing.T) {
 				args = append(args, fmt.Sprintf("--target=%s", tc.testname))
 			}
 			job := makePresubmit(tc.command, tc.sourceEnv, args)
+			jobName := fmt.Sprintf("pull-ci-%s", tc.testname)
+			if tc.expectedUploadContent != "" {
+				tc.expectedEnv = append(tc.expectedEnv, v1.EnvVar{Name: "CONFIG_SPEC_GCS_URL", Value: path.Join(uploadDir, fmt.Sprintf("%s.yaml", jobName))})
+			}
 			expectedJob := makePresubmit(tc.command, tc.expectedEnv, args)
 
-			imageStreamTags, err := inlineCiOpConfig(&job.Spec.Containers[0], configs, resolver, tc.metadata, tc.testname, logger)
+			uploader := &fakeConfigUploader{baseDir: uploadDir}
+			jc := NewJobConfigurer(false, configs, &prowconfig.Config{}, resolver, logger, makeBaseRefs(), uploader)
+			imageStreamTags, err := jc.inlineCiOpConfig(&job.Spec.Containers[0], configs, resolver, tc.metadata, tc.testname, jobName, logger)
 
 			if tc.expectedError && err == nil {
 				t.Fatalf("Expected inlineCiopConfig() to return an error, none returned")
@@ -325,6 +331,20 @@ func TestInlineCiopConfig(t *testing.T) {
 
 				if !equality.Semantic.DeepEqual(expectedJob, job) {
 					t.Errorf("Returned job differs from expected:\n%s", cmp.Diff(expectedJob, job, ignoreUnexported))
+				}
+
+				if tc.expectedUploadContent != "" {
+					uploadedCiOpConfig, err := os.ReadFile(path.Join(uploadDir, fmt.Sprintf("%s.yaml", jobName)))
+					if err != nil {
+						t.Fatalf("Failed to read uploaded ci-operator config file: %v", err)
+					}
+					compressedConfig, err := gzip.CompressStringAndBase64(string(uploadedCiOpConfig))
+					if err != nil {
+						t.Fatalf("Failed to compress uploaded ci-operator config file: %v", err)
+					}
+					if diff := cmp.Diff(tc.expectedUploadContent, compressedConfig); diff != "" {
+						t.Errorf("upload ci-operator config content differs from expected:\n%s", diff)
+					}
 				}
 			}
 		})
@@ -353,7 +373,6 @@ func makeTestingPresubmit(name, context, branch string) *prowconfig.Presubmit {
 }
 
 func TestMakeRehearsalPresubmit(t *testing.T) {
-	testPrNumber := 123
 	testRepo := "org/repo"
 
 	sourcePresubmit := &prowconfig.Presubmit{
@@ -414,39 +433,39 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 	}{
 		{
 			testID:   "job that belong to different org/repo than refs",
-			refs:     &pjapi.Refs{Org: "anotherOrg", Repo: "anotherRepo"},
+			refs:     &pjapi.Refs{Org: "anotherOrg", Repo: "anotherRepo", Pulls: []pjapi.Pull{{Number: 123}}},
 			original: sourcePresubmit,
 		},
 		{
 			testID:   "job that belong to different org/repo than refs with custom config",
-			refs:     &pjapi.Refs{Org: "anotherOrg", Repo: "anotherRepo"},
+			refs:     &pjapi.Refs{Org: "anotherOrg", Repo: "anotherRepo", Pulls: []pjapi.Pull{{Number: 123}}},
 			original: otherPresubmit,
 		},
 		{
 			testID:   "job that belong to the same org/repo with refs",
-			refs:     &pjapi.Refs{Org: "org", Repo: "repo"},
+			refs:     &pjapi.Refs{Org: "org", Repo: "repo", Pulls: []pjapi.Pull{{Number: 123}}},
 			original: sourcePresubmit,
 		},
 		{
 			testID:   "hidden job that belong to the same org/repo with refs",
-			refs:     &pjapi.Refs{Org: "org", Repo: "repo"},
+			refs:     &pjapi.Refs{Org: "org", Repo: "repo", Pulls: []pjapi.Pull{{Number: 123}}},
 			original: hiddenPresubmit,
 		},
 		{
 			testID:   "job that belong to the same org but different repo than refs",
-			refs:     &pjapi.Refs{Org: "org", Repo: "anotherRepo"},
+			refs:     &pjapi.Refs{Org: "org", Repo: "anotherRepo", Pulls: []pjapi.Pull{{Number: 123}}},
 			original: sourcePresubmit,
 		},
 		{
 			testID:   "reporting configuration is stripped from rehearsals to avoid polluting",
-			refs:     &pjapi.Refs{Org: "anotherOrg", Repo: "anotherRepo"},
+			refs:     &pjapi.Refs{Org: "anotherOrg", Repo: "anotherRepo", Pulls: []pjapi.Pull{{Number: 123}}},
 			original: reportingPresubmit,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.testID, func(t *testing.T) {
-			rehearsal, err := makeRehearsalPresubmit(tc.original, testRepo, testPrNumber, tc.refs)
+			rehearsal, err := makeRehearsalPresubmit(tc.original, testRepo, tc.refs)
 			if err != nil {
 				t.Fatalf("failed to make rehearsal presubmit: %v", err)
 			}
@@ -459,7 +478,7 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 	}
 }
 
-func makeTestingProwJob(namespace, rehearseJobName, context, testName string, refs *pjapi.Refs, org, repo, branch, configSpec, jobURLPrefix string) *pjapi.ProwJob {
+func makeTestingProwJob(namespace, rehearseJobName, context, testName string, refs *pjapi.Refs, org, repo, branch, baseDir, jobURLPrefix string) *pjapi.ProwJob {
 	return &pjapi.ProwJob{
 		TypeMeta: metav1.TypeMeta{Kind: "ProwJob", APIVersion: "prow.k8s.io/v1"},
 		ObjectMeta: metav1.ObjectMeta{
@@ -496,7 +515,7 @@ func makeTestingProwJob(namespace, rehearseJobName, context, testName string, re
 				Containers: []v1.Container{{
 					Command: []string{"ci-operator"},
 					Args:    []string{},
-					Env:     []v1.EnvVar{{Name: "CONFIG_SPEC", Value: configSpec}},
+					Env:     []v1.EnvVar{{Name: "CONFIG_SPEC_GCS_URL", Value: fmt.Sprintf("%s/%s.yaml", baseDir, testName)}},
 				}},
 			},
 			DecorationConfig: &pjapi.DecorationConfig{
@@ -511,19 +530,17 @@ func makeTestingProwJob(namespace, rehearseJobName, context, testName string, re
 	}
 }
 
-func makeTestData() (int, string, string, *pjapi.Refs) {
-	testPrNumber := 123
-	testNamespace := "test-namespace"
-	testRefs := &pjapi.Refs{
+func makeTestData() (testNamespace string, testReleasePath string, testRefs *pjapi.Refs) {
+	testNamespace = "test-namespace"
+	testRefs = &pjapi.Refs{
 		Org:     "testOrg",
 		Repo:    "testRepo",
 		BaseRef: "testBaseRef",
 		BaseSHA: "testBaseSHA",
-		Pulls:   []pjapi.Pull{{Number: testPrNumber, Author: "testAuthor", SHA: "testPrSHA"}},
+		Pulls:   []pjapi.Pull{{Number: 123, Author: "testAuthor", SHA: "testPrSHA"}},
 	}
-	testReleasePath := "path/to/openshift/release"
-
-	return testPrNumber, testNamespace, testReleasePath, testRefs
+	testReleasePath = "path/to/openshift/release"
+	return
 }
 
 func setSuccessCreateReactor(in runtime.Object) error {
@@ -533,7 +550,7 @@ func setSuccessCreateReactor(in runtime.Object) error {
 }
 
 func TestExecuteJobsErrors(t *testing.T) {
-	testPrNumber, testNamespace, testRepoPath, testRefs := makeTestData()
+	testNamespace, testRepoPath, testRefs := makeTestData()
 	targetOrgRepo := "targetOrg/targetRepo"
 	testCiopConfigs := generateTestConfigFiles()
 
@@ -576,13 +593,14 @@ func TestExecuteJobsErrors(t *testing.T) {
 				setSuccessCreateReactor,
 			)
 
-			jc := NewJobConfigurer(testCiopConfigs, &prowconfig.Config{}, resolver, testPrNumber, logger, makeBaseRefs())
+			uploader := &fakeConfigUploader{baseDir: t.TempDir()}
+			jc := NewJobConfigurer(false, testCiopConfigs, &prowconfig.Config{}, resolver, logger, makeBaseRefs(), uploader)
 
 			_, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
 			}
-			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, logger, client, testNamespace, &prowconfig.Config{}, true)
+			executor := NewExecutor(presubmits, testRepoPath, testRefs, true, logger, client, testNamespace, &prowconfig.Config{}, true)
 			executor.pollFunc = threetimesTryingPoller
 			_, err = executor.ExecuteJobs()
 
@@ -594,7 +612,7 @@ func TestExecuteJobsErrors(t *testing.T) {
 }
 
 func TestExecuteJobsUnsuccessful(t *testing.T) {
-	testPrNumber, testNamespace, testRepoPath, testRefs := makeTestData()
+	testNamespace, testRepoPath, testRefs := makeTestData()
 	targetOrgRepo := "targetOrg/targetRepo"
 	testCiopConfigs := generateTestConfigFiles()
 
@@ -643,12 +661,13 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 				},
 			)
 
-			jc := NewJobConfigurer(testCiopConfigs, &prowconfig.Config{}, resolver, testPrNumber, logger, makeBaseRefs())
+			uploader := &fakeConfigUploader{baseDir: t.TempDir()}
+			jc := NewJobConfigurer(false, testCiopConfigs, &prowconfig.Config{}, resolver, logger, makeBaseRefs(), uploader)
 			_, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
 			}
-			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, false, logger, client, testNamespace, &prowconfig.Config{}, true)
+			executor := NewExecutor(presubmits, testRepoPath, testRefs, false, logger, client, testNamespace, &prowconfig.Config{}, true)
 			executor.pollFunc = threetimesTryingPoller
 			success, _ := executor.ExecuteJobs()
 
@@ -660,7 +679,7 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 }
 
 func TestExecuteJobsPositive(t *testing.T) {
-	testPrNumber, testNamespace, testRepoPath, testRefs := makeTestData()
+	testNamespace, testRepoPath, testRefs := makeTestData()
 	rehearseJobContextTemplate := "ci/rehearse/%s/%s/%s"
 	targetOrgRepo := "targetOrg/targetRepo"
 	anotherTargetOrgRepo := "anotherOrg/anotherRepo"
@@ -669,15 +688,8 @@ func TestExecuteJobsPositive(t *testing.T) {
 	anotherTargetOrg := "anotherOrg"
 	anotherTargetRepo := "anotherRepo"
 	testCiopConfigs := generateTestConfigFiles()
-	job1Cfg, err := gzip.CompressStringAndBase64(testingCiOpCfgJob1YAML)
-	if err != nil {
-		t.Fatalf("Failed to compress config: %v", err)
-	}
-	job2Cfg, err := gzip.CompressStringAndBase64(testingCiOpCfgJob2YAML)
-	if err != nil {
-		t.Fatalf("Failed to compress config: %v", err)
-	}
 	targetOrgRepoPrefix := "https://org.repo.com/"
+	baseDir := t.TempDir()
 
 	testCases := []struct {
 		description               string
@@ -695,11 +707,11 @@ func TestExecuteJobsPositive(t *testing.T) {
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job1",
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job1"),
-					"job1", testRefs, targetOrg, targetRepo, "master", job1Cfg, targetOrgRepoPrefix).Spec,
+					"job1", testRefs, targetOrg, targetRepo, "master", baseDir, targetOrgRepoPrefix).Spec,
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job2",
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job2"),
-					"job2", testRefs, targetOrg, targetRepo, "master", job2Cfg, targetOrgRepoPrefix).Spec,
+					"job2", testRefs, targetOrg, targetRepo, "master", baseDir, targetOrgRepoPrefix).Spec,
 			},
 			expectedImageStreamTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
 		}, {
@@ -712,11 +724,11 @@ func TestExecuteJobsPositive(t *testing.T) {
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job1",
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job1"),
-					"job1", testRefs, targetOrg, targetRepo, "master", job1Cfg, targetOrgRepoPrefix).Spec,
+					"job1", testRefs, targetOrg, targetRepo, "master", baseDir, targetOrgRepoPrefix).Spec,
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job2",
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "not-master", "job2"),
-					"job2", testRefs, targetOrg, targetRepo, "not-master", job2Cfg, targetOrgRepoPrefix).Spec,
+					"job2", testRefs, targetOrg, targetRepo, "not-master", baseDir, targetOrgRepoPrefix).Spec,
 			},
 			expectedImageStreamTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
 		},
@@ -730,11 +742,11 @@ func TestExecuteJobsPositive(t *testing.T) {
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job1",
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job1"),
-					"job1", testRefs, targetOrg, targetRepo, "master", job1Cfg, targetOrgRepoPrefix).Spec,
+					"job1", testRefs, targetOrg, targetRepo, "master", baseDir, targetOrgRepoPrefix).Spec,
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job2",
 					fmt.Sprintf(rehearseJobContextTemplate, anotherTargetOrgRepo, "master", "job2"),
-					"job2", testRefs, anotherTargetOrg, anotherTargetRepo, "master", job2Cfg, "https://star.com/").Spec,
+					"job2", testRefs, anotherTargetOrg, anotherTargetRepo, "master", baseDir, "https://star.com/").Spec,
 			},
 			expectedImageStreamTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
 		}, {
@@ -764,7 +776,8 @@ func TestExecuteJobsPositive(t *testing.T) {
 							targetOrgRepo: targetOrgRepoPrefix,
 						}},
 				}}
-			jc := NewJobConfigurer(testCiopConfigs, &pc, resolver, testPrNumber, logger, makeBaseRefs())
+			uploader := &fakeConfigUploader{baseDir: baseDir}
+			jc := NewJobConfigurer(false, testCiopConfigs, &pc, resolver, logger, makeBaseRefs(), uploader)
 			imageStreamTags, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
@@ -772,7 +785,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 			if diff := cmp.Diff(imageStreamTags, tc.expectedImageStreamTagMap, cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("returned imageStreamTags do not match expected: %s", diff)
 			}
-			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, logger, client, testNamespace, &prowconfig.Config{}, true)
+			executor := NewExecutor(presubmits, testRepoPath, testRefs, true, logger, client, testNamespace, &prowconfig.Config{}, true)
 			success, err := executor.ExecuteJobs()
 
 			if err != nil {
@@ -876,7 +889,7 @@ func TestWaitForJobs(t *testing.T) {
 		t.Run(tc.id, func(t *testing.T) {
 			client := newTC(tc.events...)
 
-			executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, logger, client, "", &prowconfig.Config{}, true)
+			executor := NewExecutor(nil, "", &pjapi.Refs{}, true, logger, client, "", &prowconfig.Config{}, true)
 			executor.pollFunc = threetimesTryingPoller
 			success, err := executor.waitForJobs(tc.pjs, &ctrlruntimeclient.ListOptions{})
 			if err != tc.err {
@@ -905,7 +918,7 @@ func TestWaitForJobsRetries(t *testing.T) {
 		return nil
 	})
 
-	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, logrus.NewEntry(logrus.New()), client, "", &prowconfig.Config{}, true)
+	executor := NewExecutor(nil, "", &pjapi.Refs{}, true, logrus.NewEntry(logrus.New()), client, "", &prowconfig.Config{}, true)
 	executor.pollFunc = threetimesTryingPoller
 	success, err := executor.waitForJobs(sets.Set[string]{"j": {}}, &ctrlruntimeclient.ListOptions{})
 	if err != nil {
@@ -927,7 +940,7 @@ func TestWaitForJobsLog(t *testing.T) {
 			Status:     pjapi.ProwJobStatus{State: pjapi.FailureState}},
 	).Build()
 
-	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, logger.WithFields(nil), client, "", &prowconfig.Config{}, true)
+	executor := NewExecutor(nil, "", &pjapi.Refs{}, true, logger.WithFields(nil), client, "", &prowconfig.Config{}, true)
 	executor.pollFunc = threetimesTryingPoller
 	_, err := executor.waitForJobs(sets.New[string]("success", "failure"), &ctrlruntimeclient.ListOptions{})
 	if err != nil {
@@ -1269,7 +1282,7 @@ func makeBaseRefs() *pjapi.Refs {
 		BaseLink: "",
 		Pulls: []pjapi.Pull{
 			{
-				Number: 39612,
+				Number: 123,
 				Author: "droslean",
 				SHA:    "bc825725cfe0acebb06a7e0b11c8228f5a3b89c0",
 			},
@@ -1779,7 +1792,7 @@ func TestSubmitPresubmit(t *testing.T) {
 			t.Parallel()
 			client := newTC()
 			logger := logrus.NewEntry(logrus.New())
-			extor := NewExecutor([]*prowconfig.Presubmit{}, 0, "", &tc.refs, false, logger, client, tc.namespace, &tc.prowConfig, true)
+			extor := NewExecutor([]*prowconfig.Presubmit{}, "", &tc.refs, false, logger, client, tc.namespace, &tc.prowConfig, true)
 			actualJob, err := extor.submitPresubmit(&tc.presubmit)
 
 			if err != nil {

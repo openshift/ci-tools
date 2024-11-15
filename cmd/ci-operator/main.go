@@ -2201,7 +2201,6 @@ const (
 	configSpecVar       = "CONFIG_SPEC"
 	configSpecGcsUrlVar = "CONFIG_SPEC_GCS_URL"
 	unresolvedConfigVar = "UNRESOLVED_CONFIG"
-	gcsBucket           = "test-platform-results"
 )
 
 // loadConfig loads the standard configuration path, env, gcs bucket env, or configresolver (in that order of priority)
@@ -2244,10 +2243,9 @@ func (o *options) loadConfig(info *api.Metadata, gcsReader gcsFileReader) (*api.
 		if len(configSpecGCSEnv) == 0 {
 			return nil, fmt.Errorf("%s environment variable cannot be set to an empty string", configSpecGcsUrlVar)
 		}
-		configSpecPath := fmt.Sprintf("gs://%s/%s", gcsBucket, configSpecGCSEnv)
-		content, err := gcsReader.Read(configSpecPath)
+		content, err := gcsReader.Read(configSpecGCSEnv)
 		if err != nil {
-			logrus.WithError(err).Fatalf("Error reading %s", configSpecGcsUrlVar)
+			logrus.WithError(err).Fatalf("Error reading %s", configSpecGCSEnv)
 		}
 		raw, err = decodeAndUnzip(string(content))
 		if err != nil {

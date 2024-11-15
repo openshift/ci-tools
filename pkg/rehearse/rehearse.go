@@ -177,10 +177,14 @@ func (r RehearsalConfig) SetupJobs(candidate RehearsalCandidate, candidatePath s
 	}
 	org := candidate.org
 	repo := candidate.repo
-	prNumber := candidate.prNumber
 	prRefs := candidate.createRefs()
 
-	jobConfigurer := NewJobConfigurer(prConfig.CiOperator, prConfig.Prow, resolver, prNumber, logger, prRefs)
+	uploader := &gcsConfigSpecUploader{
+		refs:               prRefs,
+		gcsBucket:          r.GCSBucket,
+		gcsCredentialsFile: r.GCSCredentialsFile,
+	}
+	jobConfigurer := NewJobConfigurer(r.DryRun, prConfig.CiOperator, prConfig.Prow, resolver, logger, prRefs, uploader)
 	imageStreamTags, presubmitsToRehearse, err := jobConfigurer.ConfigurePresubmitRehearsals(presubmits)
 	if err != nil {
 		return nil, nil, nil, err
@@ -321,7 +325,7 @@ func (r RehearsalConfig) RehearseJobs(
 		defer cleanup()
 	}
 
-	executor := NewExecutor(presubmitsToRehearse, candidate.prNumber, candidatePath, prRefs, r.DryRun, logger, pjclient, r.ProwjobNamespace, prowCfg, waitForSuccess)
+	executor := NewExecutor(presubmitsToRehearse, candidatePath, prRefs, r.DryRun, logger, pjclient, r.ProwjobNamespace, prowCfg, waitForSuccess)
 	success, err := executor.ExecuteJobs()
 	if err != nil {
 		logger.WithError(err).Error("Failed to rehearse jobs")

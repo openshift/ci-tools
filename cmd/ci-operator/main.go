@@ -584,7 +584,8 @@ func (o *options) Complete() error {
 	}
 	o.configSpec = config
 	o.jobSpec.Metadata = config.Metadata
-	if err := validation.IsValidResolvedConfiguration(o.configSpec); err != nil {
+	mergedConfig := o.injectTest != ""
+	if err := validation.IsValidResolvedConfiguration(o.configSpec, mergedConfig); err != nil {
 		return results.ForReason("validating_config").ForError(err)
 	}
 	o.graphConfig = defaults.FromConfigStatic(o.configSpec)

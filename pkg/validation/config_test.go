@@ -694,9 +694,10 @@ func TestReleaseBuildConfiguration_validateImages(t *testing.T) {
 		},
 	}
 	for _, tc := range []struct {
-		name     string
-		config   api.ReleaseBuildConfiguration
-		expected error
+		name         string
+		config       api.ReleaseBuildConfiguration
+		mergedConfig bool
+		expected     error
 	}{{
 		name: "valid",
 		config: api.ReleaseBuildConfiguration{
@@ -730,9 +731,51 @@ func TestReleaseBuildConfiguration_validateImages(t *testing.T) {
 			Resources: resources,
 		},
 		expected: errors.New(`invalid configuration: tests[0].as: duplicated name "duplicated" already declared in 'images'`),
+	}, {
+		name: "valid mergedConfig",
+		config: api.ReleaseBuildConfiguration{
+			InputConfiguration: api.InputConfiguration{BuildRootImages: map[string]api.BuildRootImageConfiguration{
+				"":         root,
+				"org.repo": root,
+			},
+			},
+			Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				{To: "image"},
+			},
+			Tests: []api.TestStepConfiguration{{
+				As:       "test",
+				Commands: "commands",
+				ContainerTestConfiguration: &api.ContainerTestConfiguration{
+					From: "from",
+				},
+			}},
+			Resources: resources,
+		},
+		mergedConfig: true,
+	}, {
+		name: "non-mergeConfig uses merged fields invalid",
+		config: api.ReleaseBuildConfiguration{
+			InputConfiguration: api.InputConfiguration{BuildRootImages: map[string]api.BuildRootImageConfiguration{
+				"":         root,
+				"org.repo": root,
+			},
+			},
+			Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				{To: "image"},
+			},
+			Tests: []api.TestStepConfiguration{{
+				As:       "test",
+				Commands: "commands",
+				ContainerTestConfiguration: &api.ContainerTestConfiguration{
+					From: "from",
+				},
+			}},
+			Resources: resources,
+		},
+		expected: errors.New(`invalid configuration: it is not permissible to directly set: ‘build_roots’ directly in the config`),
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := IsValidResolvedConfiguration(&tc.config)
+			err := IsValidResolvedConfiguration(&tc.config, tc.mergedConfig)
 			testhelper.Diff(t, "error", err, tc.expected, testhelper.EquateErrorMessage)
 		})
 	}
@@ -1273,9 +1316,10 @@ func TestPipelineImages(t *testing.T) {
 
 func TestValidateReleaseBuildConfiguration(t *testing.T) {
 	testCases := []struct {
-		name     string
-		input    *api.ReleaseBuildConfiguration
-		expected []error
+		name         string
+		input        *api.ReleaseBuildConfiguration
+		mergedConfig bool
+		expected     []error
 	}{
 		{
 			name:     "empty images and tests -> error",
@@ -1288,11 +1332,89 @@ func TestValidateReleaseBuildConfiguration(t *testing.T) {
 				PromotionConfiguration: &api.PromotionConfiguration{Targets: []api.PromotionTarget{{AdditionalImages: map[string]string{"name": "src"}}}},
 			},
 		},
+		{
+			name: "merged config allows plural fields to be set",
+			input: &api.ReleaseBuildConfiguration{
+				PromotionConfiguration: &api.PromotionConfiguration{Targets: []api.PromotionTarget{{AdditionalImages: map[string]string{"name": "src"}}}},
+				BinaryBuildCommandsList: []api.RefCommands{
+					{
+						Ref:      "org.repo",
+						Commands: "build this",
+					},
+					{
+						Ref:      "org.other-repo",
+						Commands: "build that",
+					},
+				},
+				TestBinaryBuildCommandsList: []api.RefCommands{
+					{
+						Ref:      "org.repo",
+						Commands: "build test this",
+					},
+					{
+						Ref:      "org.other-repo",
+						Commands: "build test that",
+					},
+				},
+				RpmBuildCommandsList: []api.RefCommands{
+					{
+						Ref:      "org.repo",
+						Commands: "rpms",
+					},
+				},
+				RpmBuildLocationList: []api.RefLocation{
+					{
+						Ref:      "org.repo",
+						Location: "here",
+					},
+				},
+			},
+			mergedConfig: true,
+		},
+		{
+			name: "non-merged config doesn't allow plural fields to be set",
+			input: &api.ReleaseBuildConfiguration{
+				PromotionConfiguration: &api.PromotionConfiguration{Targets: []api.PromotionTarget{{AdditionalImages: map[string]string{"name": "src"}}}},
+				BinaryBuildCommandsList: []api.RefCommands{
+					{
+						Ref:      "org.repo",
+						Commands: "build this",
+					},
+					{
+						Ref:      "org.other-repo",
+						Commands: "build that",
+					},
+				},
+				TestBinaryBuildCommandsList: []api.RefCommands{
+					{
+						Ref:      "org.repo",
+						Commands: "build test this",
+					},
+					{
+						Ref:      "org.other-repo",
+						Commands: "build test that",
+					},
+				},
+				RpmBuildCommandsList: []api.RefCommands{
+					{
+						Ref:      "org.repo",
+						Commands: "rpms",
+					},
+				},
+				RpmBuildLocationList: []api.RefLocation{
+					{
+						Ref:      "org.repo",
+						Location: "here",
+					},
+				},
+			},
+			expected: []error{errors.New("it is not permissible to directly set: ‘binary_build_commands_list’, ‘test_binary_build_commands_list’, ‘rpm_build_commands_list’, or ‘rpm_build_location_list’")},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.input.Resources = map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "1"}}}
-			err := validateReleaseBuildConfiguration(tc.input, "org", "repo")
+			err := validateReleaseBuildConfiguration(tc.input, "org", "repo", tc.mergedConfig)
 			testhelper.Diff(t, "error", err, tc.expected, testhelper.EquateErrorMessage)
 		})
 	}

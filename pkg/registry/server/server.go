@@ -254,8 +254,6 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 					logger.WithError(err).Warning("failed to get config")
 					return
 				}
-				// The Metadata needs to be blank so that ci-operator knows this config is the result of a merge
-				config.Metadata = api.Metadata{}
 				mergedConfig = &config
 				injectedTestIncluded = true
 			} else {

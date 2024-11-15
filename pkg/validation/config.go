@@ -41,20 +41,20 @@ func newSingleUseValidator() Validator {
 }
 
 func (v *Validator) IsValidRuntimeConfiguration(config *api.ReleaseBuildConfiguration) error {
-	return v.validateConfiguration(NewConfigContext(), config, "", "", false)
+	return v.validateConfiguration(NewConfigContext(), config, "", "", false, false)
 }
 
 // IsValidResolvedConfiguration behaves as ValidateAtRuntime and also validates that all
 // test steps are fully resolved.
 func (v *Validator) IsValidResolvedConfiguration(config *api.ReleaseBuildConfiguration) error {
 	config.Default()
-	return v.validateConfiguration(NewConfigContext(), config, "", "", true)
+	return v.validateConfiguration(NewConfigContext(), config, "", "", true, false)
 }
 
 // IsValidConfiguration validates all the configuration's values.
 func (v *Validator) IsValidConfiguration(config *api.ReleaseBuildConfiguration, org, repo string) error {
 	config.Default()
-	return v.validateConfiguration(NewConfigContext(), config, org, repo, false)
+	return v.validateConfiguration(NewConfigContext(), config, org, repo, false, false)
 }
 
 // configContext contains data structures used for validations across fields.
@@ -115,25 +115,25 @@ func (c *configContext) addPipelineImage(name api.PipelineImageStreamTagReferenc
 // repo structure
 func IsValidRuntimeConfiguration(config *api.ReleaseBuildConfiguration) error {
 	v := newSingleUseValidator()
-	return v.validateConfiguration(NewConfigContext(), config, "", "", false)
+	return v.validateConfiguration(NewConfigContext(), config, "", "", false, false)
 }
 
 // IsValidResolvedConfiguration behaves as ValidateAtRuntime and also validates that all
 // test steps are fully resolved.
-func IsValidResolvedConfiguration(config *api.ReleaseBuildConfiguration) error {
+func IsValidResolvedConfiguration(config *api.ReleaseBuildConfiguration, mergedConfig bool) error {
 	config.Default()
 	v := newSingleUseValidator()
-	return v.validateConfiguration(NewConfigContext(), config, "", "", true)
+	return v.validateConfiguration(NewConfigContext(), config, "", "", true, mergedConfig)
 }
 
 // IsValidConfiguration validates all the configuration's values.
 func IsValidConfiguration(config *api.ReleaseBuildConfiguration, org, repo string) error {
 	config.Default()
 	v := newSingleUseValidator()
-	return v.validateConfiguration(NewConfigContext(), config, org, repo, false)
+	return v.validateConfiguration(NewConfigContext(), config, org, repo, false, false)
 }
 
-func (v *Validator) validateConfiguration(ctx *configContext, config *api.ReleaseBuildConfiguration, org, repo string, resolved bool) error {
+func (v *Validator) validateConfiguration(ctx *configContext, config *api.ReleaseBuildConfiguration, org, repo string, resolved, mergedConfig bool) error {
 	var validationErrors []error
 	if config.BinaryBuildCommands != "" {
 		ctx.pipelineImages[api.PipelineImageStreamTagReferenceBinaries] = "binary_build_commands"
@@ -156,10 +156,13 @@ func (v *Validator) validateConfiguration(ctx *configContext, config *api.Releas
 			ctx.pipelineImages[api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", api.PipelineImageStreamTagReferenceRPMs, c.Ref))] = "rpm_build_commands"
 		}
 	}
-	validationErrors = append(validationErrors, validateReleaseBuildConfiguration(config, org, repo)...)
+	validationErrors = append(validationErrors, validateReleaseBuildConfiguration(config, org, repo, mergedConfig)...)
 	if config.InputConfiguration.BuildRootImage != nil {
 		validationErrors = append(validationErrors, validateBuildRootImageConfiguration(ctx.AddField("build_root"), config.InputConfiguration.BuildRootImage, len(config.Images) > 0, "")...)
 	} else if len(config.InputConfiguration.BuildRootImages) > 0 {
+		if !mergedConfig {
+			validationErrors = append(validationErrors, errors.New("it is not permissible to directly set: ‘build_roots’ directly in the config"))
+		}
 		for ref, buildRoot := range config.InputConfiguration.BuildRootImages {
 			validationErrors = append(validationErrors, validateBuildRootImageConfiguration(ctx.AddField("build_roots"), &buildRoot, len(config.Images) > 0, ref)...)
 		}
@@ -497,7 +500,7 @@ func validateReleaseTagConfiguration(fieldRoot string, input api.ReleaseTagConfi
 	return validationErrors
 }
 
-func validateReleaseBuildConfiguration(input *api.ReleaseBuildConfiguration, org, repo string) []error {
+func validateReleaseBuildConfiguration(input *api.ReleaseBuildConfiguration, org, repo string, mergedConfig bool) []error {
 	var validationErrors []error
 
 	// Third conjunct is a corner case, the config can e.g. promote its `src`
@@ -522,9 +525,8 @@ func validateReleaseBuildConfiguration(input *api.ReleaseBuildConfiguration, org
 		}
 	}
 
-	// This is only to be set by ci-operator-configresolver when merging configs (for now).
-	// The configresolver will leave the Metadata blank, otherwise it will be populated
-	if input.Metadata.Org != "" &&
+	// These fields are only to be set by ci-operator-configresolver when merging configs
+	if !mergedConfig &&
 		(len(input.BinaryBuildCommandsList) > 0 || len(input.TestBinaryBuildCommandsList) > 0 ||
 			len(input.RpmBuildCommandsList) > 0 || len(input.RpmBuildLocationList) > 0) {
 		validationErrors = append(validationErrors, errors.New("it is not permissible to directly set: ‘binary_build_commands_list’, ‘test_binary_build_commands_list’, ‘rpm_build_commands_list’, or ‘rpm_build_location_list’"))

@@ -18,6 +18,16 @@ import (
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
+// ClusterInfo holds the provider, capacity, and capabilities.
+type ClusterInfo struct {
+	Provider     string
+	Capacity     int
+	Capabilities []string
+}
+
+// ClusterMap maps a cluster name to its corresponding ClusterInfo.
+type ClusterMap map[string]ClusterInfo
+
 // Config is the configuration file of this tools, which defines the cluster parameter for each Prow job, i.e., where it runs
 type Config struct {
 	// the job will be run on the same cloud as the one for the e2e test
@@ -60,8 +70,8 @@ type Group struct {
 }
 
 // GetClusterForJob returns a cluster for a prow job
-func (config *Config) GetClusterForJob(jobBase prowconfig.JobBase, path string) (api.Cluster, error) {
-	cluster, _, err := config.DetermineClusterForJob(jobBase, path)
+func (config *Config) GetClusterForJob(jobBase prowconfig.JobBase, path string, cm ClusterMap) (api.Cluster, error) {
+	cluster, _, err := config.DetermineClusterForJob(jobBase, path, cm)
 	return cluster, err
 }
 
@@ -108,8 +118,32 @@ func DetermineCloud(jobBase prowconfig.JobBase) string {
 	return ""
 }
 
+func extractRequiredCapabilities(labels map[string]string) []string {
+	var capabilities []string
+	for key, value := range labels {
+		if strings.HasPrefix(key, "capability/") && strings.TrimPrefix(key, "capability/") == value {
+			capabilities = append(capabilities, value)
+		}
+	}
+	return capabilities
+}
+
+func matchesAllCapabilities(clusterCapabilities, requiredCapabilities []string) bool {
+	capabilitiesSet := make(map[string]bool)
+	for _, cap := range clusterCapabilities {
+		capabilitiesSet[cap] = true
+	}
+
+	for _, reqCap := range requiredCapabilities {
+		if !capabilitiesSet[reqCap] {
+			return false
+		}
+	}
+	return true
+}
+
 // DetermineClusterForJob return the cluster for a prow job and if it can be relocated to a cluster in build farm
-func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path string) (clusterName api.Cluster, mayBeRelocated bool, _ error) {
+func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path string, cm ClusterMap) (clusterName api.Cluster, mayBeRelocated bool, _ error) {
 	if jobBase.Agent != "kubernetes" && jobBase.Agent != "" {
 		return "", false, nil
 	}
@@ -120,6 +154,38 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 		return config.SSHBastion, false, nil
 	}
 	if jobBase.Labels != nil {
+
+		requiredCapabilities := extractRequiredCapabilities(jobBase.Labels)
+		if len(requiredCapabilities) > 0 {
+			matchingClusters := []string{}
+			matchingClustersByProvider := map[string][]string{}
+
+			for clusterName, clusterInfo := range cm {
+				if matchesAllCapabilities(clusterInfo.Capabilities, requiredCapabilities) {
+					matchingClusters = append(matchingClusters, clusterName)
+					provider := clusterInfo.Provider
+					matchingClustersByProvider[provider] = append(matchingClustersByProvider[provider], clusterName)
+				}
+			}
+			if config.DetermineE2EByJob {
+				if cloud := config.DetermineCloudMapping(jobBase); cloud != "" {
+					if clusters, ok := matchingClustersByProvider[cloud]; ok {
+						if len(clusters) > 0 {
+							// as in other places in this file, use this method to have basic deterministic distribution
+							return api.Cluster(clusters[len(filepath.Base(path))%len(clusters)]), false, nil
+						}
+					}
+				}
+			}
+			if len(matchingClusters) == 0 {
+				sort.Strings(requiredCapabilities)
+				return "", false, fmt.Errorf("job %s can't be matched with any cluster using provided capabilities: %s", jobBase.Name, strings.Join(requiredCapabilities, ","))
+			}
+			// as in other places in this file, use this method to have basic deterministic distribution
+			return api.Cluster(matchingClusters[len(filepath.Base(path))%len(matchingClusters)]), false, nil
+
+		}
+
 		if _, ok := jobBase.Labels[api.KVMDeviceLabel]; ok && len(config.KVM) > 0 {
 			// Any deterministic distribution is fine for now.
 			// We could implement more effective distribution when we understand more about the jobs.

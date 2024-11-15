@@ -1,4 +1,4 @@
-package sanitizer
+package dispatcher
 
 import (
 	"os"
@@ -8,16 +8,6 @@ import (
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/yaml"
 )
-
-// ClusterInfo holds the provider, capacity, and capabilities.
-type ClusterInfo struct {
-	Provider     string
-	Capacity     int
-	Capabilities []string
-}
-
-// ClusterMap maps a cluster name to its corresponding ClusterInfo.
-type ClusterMap map[string]ClusterInfo
 
 func loadClusterConfigFromBytes(data []byte) (ClusterMap, sets.Set[string], error) {
 	var clusters map[string][]struct {

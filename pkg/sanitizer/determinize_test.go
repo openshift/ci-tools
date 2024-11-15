@@ -23,7 +23,7 @@ func TestDefaultJobConfig(t *testing.T) {
 	}
 
 	config := &dispatcher.Config{Default: "api.ci"}
-	if err := defaultJobConfig(jc, "", config, nil, make(sets.Set[string])); err != nil {
+	if err := defaultJobConfig(jc, "", config, nil, make(sets.Set[string]), dispatcher.ClusterMap{}); err != nil {
 		t.Errorf("failed default job config: %v", err)
 	}
 

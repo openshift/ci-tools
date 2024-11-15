@@ -360,7 +360,7 @@ func TestGetClusterForJob(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, actualErr := tc.config.GetClusterForJob(tc.jobBase, tc.path)
+			actual, actualErr := tc.config.GetClusterForJob(tc.jobBase, tc.path, ClusterMap{})
 			if diff := cmp.Diff(tc.expected, actual); diff != "" {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}
@@ -380,6 +380,7 @@ func TestDetermineClusterForJob(t *testing.T) {
 		expected               api.Cluster
 		expectedCanBeRelocated bool
 		expectedErr            error
+		cm                     ClusterMap
 	}{
 		{
 			name:     "some job",
@@ -521,18 +522,38 @@ func TestDetermineClusterForJob(t *testing.T) {
 			expectedCanBeRelocated: false,
 		},
 		{
-			name:   "a job with cloud label and noBuilds label: cloud label wins",
+			name:   "capabilities with enabled DetermineE2EByJob, cloud provider type is respected",
 			config: &configWithBuildFarmWithJobsAndDetermineE2EByJob,
 			jobBase: config.JobBase{Agent: "kubernetes", Name: "some-e2e-job",
-				Labels: map[string]string{"ci-operator.openshift.io/cloud": "aws", "ci.openshift.io/no-builds": "true"},
+				Labels: map[string]string{
+					"capability/vpn":                 "vpn",
+					"capability/arm64":               "arm64",
+					"ci-operator.openshift.io/cloud": "gcp"},
 			},
-			expected:               "build01",
+			cm: ClusterMap{"build03": ClusterInfo{Provider: "aws", Capacity: 100, Capabilities: []string{"vpn", "arm64"}},
+				"build02": ClusterInfo{Provider: "gcp", Capacity: 100, Capabilities: []string{"vpn", "arm64"}}},
+			expected:               "build02",
 			expectedCanBeRelocated: false,
+		},
+		{
+			name:   "no cluster with all desired capabilities will return error",
+			config: &configWithBuildFarmWithJobsAndDetermineE2EByJob,
+			jobBase: config.JobBase{Agent: "kubernetes", Name: "some-e2e-job",
+				Labels: map[string]string{
+					"capability/vpn":                 "vpn",
+					"capability/arm64":               "arm64",
+					"ci-operator.openshift.io/cloud": "gcp"},
+			},
+			cm: ClusterMap{"build03": ClusterInfo{Provider: "aws", Capacity: 100, Capabilities: []string{"vpn"}},
+				"build02": ClusterInfo{Provider: "aws", Capacity: 100, Capabilities: []string{"arm64"}}},
+			expected:               "",
+			expectedCanBeRelocated: false,
+			expectedErr:            fmt.Errorf("job some-e2e-job can't be matched with any cluster using provided capabilities: arm64,vpn"),
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, canBeRelocated, actualErr := tc.config.DetermineClusterForJob(tc.jobBase, tc.path)
+			actual, canBeRelocated, actualErr := tc.config.DetermineClusterForJob(tc.jobBase, tc.path, tc.cm)
 			if diff := cmp.Diff(tc.expected, actual); diff != "" {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}

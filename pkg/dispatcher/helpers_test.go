@@ -1,4 +1,4 @@
-package sanitizer
+package dispatcher
 
 import (
 	"testing"

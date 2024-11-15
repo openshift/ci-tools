@@ -40,10 +40,6 @@ func newSingleUseValidator() Validator {
 	return Validator{}
 }
 
-func (v *Validator) IsValidRuntimeConfiguration(config *api.ReleaseBuildConfiguration) error {
-	return v.validateConfiguration(NewConfigContext(), config, "", "", false, false)
-}
-
 // IsValidResolvedConfiguration behaves as ValidateAtRuntime and also validates that all
 // test steps are fully resolved.
 func (v *Validator) IsValidResolvedConfiguration(config *api.ReleaseBuildConfiguration) error {

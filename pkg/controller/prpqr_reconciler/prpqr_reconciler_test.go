@@ -82,7 +82,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
-			name: "basic case with vsphere override",
+			name: "basic case where test name is not found",
 			prpqr: []ctrlruntimeclient.Object{
 				&v1.PullRequestPayloadQualificationRun{
 					ObjectMeta: metav1.ObjectMeta{Name: "prpqr-test", Namespace: "test-namespace"},
@@ -90,22 +90,7 @@ func TestReconcile(t *testing.T) {
 						PullRequests: []v1.PullRequestUnderTest{{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: &v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}}},
 						Jobs: v1.PullRequestPayloadJobSpec{
 							ReleaseControllerConfig: v1.ReleaseControllerConfig{OCP: "4.9", Release: "ci", Specifier: "informing"},
-							Jobs:                    []v1.ReleaseJobSpec{{CIOperatorConfig: v1.CIOperatorMetadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"}, Test: "test-name-vsphere"}},
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "basic case with metal override",
-			prpqr: []ctrlruntimeclient.Object{
-				&v1.PullRequestPayloadQualificationRun{
-					ObjectMeta: metav1.ObjectMeta{Name: "prpqr-test", Namespace: "test-namespace"},
-					Spec: v1.PullRequestPayloadTestSpec{
-						PullRequests: []v1.PullRequestUnderTest{{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: &v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}}},
-						Jobs: v1.PullRequestPayloadJobSpec{
-							ReleaseControllerConfig: v1.ReleaseControllerConfig{OCP: "4.9", Release: "ci", Specifier: "informing"},
-							Jobs:                    []v1.ReleaseJobSpec{{CIOperatorConfig: v1.CIOperatorMetadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"}, Test: "test-name-metal"}},
+							Jobs:                    []v1.ReleaseJobSpec{{CIOperatorConfig: v1.CIOperatorMetadata{Org: "openshift", Repo: "release", Branch: "master"}, Test: "missing"}},
 						},
 					},
 				},
@@ -458,6 +443,7 @@ func TestReconcile(t *testing.T) {
 				client:                 client,
 				configResolverClient:   &fakeResolverClient{},
 				prowConfigGetter:       &fakeProwConfigGetter{cfg: &tc.prowConfig},
+				dispatcherClient:       &fakeDispatcherClient{},
 				jobTriggerWaitDuration: time.Duration(1) * time.Second,
 			}
 			req := reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "test-namespace", Name: "prpqr-test"}}
@@ -559,14 +545,16 @@ func (f *fakeProwConfigGetter) Config() *prowconfig.Config {
 
 type fakePeriodicDefaulter struct{}
 
-func (f *fakePeriodicDefaulter) DefaultPeriodic(periodic *prowconfig.Periodic) error {
-	// The current default cluster is hardcoded to "build01".  If there is a different value, then
-	// the underlying logic purposefully overwrote the default.  There are currently 2 tests to verify
-	// the existing overrides.
-	if periodic.Cluster != "build01" {
-		periodic.Cluster = "cluster-name-overwritten"
-	} else {
-		periodic.Cluster = "cluster-name-defaulted"
-	}
+func (f *fakePeriodicDefaulter) DefaultPeriodic(_ *prowconfig.Periodic) error {
 	return nil
+}
+
+type fakeDispatcherClient struct{}
+
+func (f *fakeDispatcherClient) ClusterForJob(jobName string) (string, error) {
+	if jobName == "periodic-ci-openshift-release-master-missing" {
+		return "", fmt.Errorf("job: %s not found", jobName)
+	} else {
+		return "build02", nil
+	}
 }

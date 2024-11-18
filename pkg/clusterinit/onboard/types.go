@@ -118,3 +118,7 @@ func ImageRegistryManifestsPath(releaseRepo, clusterName string) string {
 func IngressOperatorManifestsPath(releaseRepo, clusterName string) string {
 	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "openshift-ingress-operator")
 }
+
+func OpenshiftMonitoringManifestsPath(releaseRepo, clusterName string) string {
+	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "openshift-monitoring")
+}

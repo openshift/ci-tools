@@ -22,7 +22,7 @@ func (ap *awsProvider) GenerateManifests(ctx context.Context, log *logrus.Entry,
 	manifests := make(map[string][]interface{}, 0)
 	for _, workload := range util.DefKeys(config.AWS.Workloads, clusterinstall.CIWorkloadDefaults) {
 		archToAZ := config.AWS.Workloads[workload]
-		for _, arch := range util.DefKeys(archToAZ, []types.Architecture{types.ArchAMD64, types.ArchAARCH64}) {
+		for _, arch := range util.DefKeys(archToAZ, []string{types.ArchAMD64, types.ArchAARCH64}) {
 			manifest, err := ap.manifests(ctx, log, ci, workload, arch, archToAZ[arch])
 			if err != nil {
 				return nil, err
@@ -52,7 +52,7 @@ func (ap *awsProvider) securityGroups(ctx context.Context, client awstypes.EC2Cl
 	return securityGroups, nil
 }
 
-func (ap *awsProvider) manifests(ctx context.Context, log *logrus.Entry, ci *clusterinstall.ClusterInstall, workload string, arch types.Architecture, azs []string) ([]interface{}, error) {
+func (ap *awsProvider) manifests(ctx context.Context, log *logrus.Entry, ci *clusterinstall.ClusterInstall, workload string, arch string, azs []string) ([]interface{}, error) {
 	manifests := make([]interface{}, 0)
 	infraId := ci.Infrastructure.Status.InfrastructureName
 	region := ci.InstallConfig.Platform.AWS.Region

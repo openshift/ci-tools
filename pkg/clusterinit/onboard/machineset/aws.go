@@ -22,7 +22,7 @@ func (ap *awsProvider) GenerateManifests(ctx context.Context, log *logrus.Entry,
 	manifests := make(map[string][]interface{}, 0)
 	for _, profileName := range util.DefKeys(ci.Onboard.MachineSet.AWS.Profiles, clusterinstall.MachineProfileDefaults) {
 		profile := ci.Onboard.MachineSet.AWS.Profiles[profileName]
-		for _, arch := range util.DefKeys(profile.Architectures, []types.Architecture{types.ArchAMD64, types.ArchAARCH64}) {
+		for _, arch := range util.DefKeys(profile.Architectures, []string{types.ArchAMD64, types.ArchAARCH64}) {
 			generateAutoscaler := true
 			if profile.MachineAutoscaler != nil {
 				generateAutoscaler = *profile.MachineAutoscaler
@@ -56,7 +56,7 @@ func (ap *awsProvider) securityGroups(ctx context.Context, client awstypes.EC2Cl
 	return securityGroups, nil
 }
 
-func (ap *awsProvider) manifests(ctx context.Context, log *logrus.Entry, ci *clusterinstall.ClusterInstall, generateAutoscaler bool, profile string, arch types.Architecture, azs []string) ([]interface{}, error) {
+func (ap *awsProvider) manifests(ctx context.Context, log *logrus.Entry, ci *clusterinstall.ClusterInstall, generateAutoscaler bool, profile string, arch string, azs []string) ([]interface{}, error) {
 	manifests := make([]interface{}, 0)
 	infraId := ci.Infrastructure.Status.InfrastructureName
 	region := ci.InstallConfig.Platform.AWS.Region

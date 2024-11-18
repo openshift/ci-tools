@@ -2,58 +2,47 @@ package onboard
 
 import (
 	"context"
-	"fmt"
-	"io/fs"
-	"os"
 	"path"
 
 	"github.com/sirupsen/logrus"
 
-	"sigs.k8s.io/yaml"
-
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
-	citoolsyaml "github.com/openshift/ci-tools/pkg/util/yaml"
+	cinitmanifest "github.com/openshift/ci-tools/pkg/clusterinit/manifest"
+	"github.com/openshift/ci-tools/pkg/clusterinit/types"
 )
 
-type cloudabilityAgentStep struct {
-	log            *logrus.Entry
+type cloudabilityAgentGenerator struct {
 	clusterInstall *clusterinstall.ClusterInstall
-	writeManifest  func(name string, data []byte, perm fs.FileMode) error
 }
 
-func (s *cloudabilityAgentStep) Name() string {
+func (s *cloudabilityAgentGenerator) Name() string {
 	return "cloudability-agent"
 }
 
-func (s *cloudabilityAgentStep) Run(ctx context.Context) error {
-	var region string
-	switch {
-	case s.clusterInstall.Provision.AWS != nil:
-		if s.clusterInstall.Infrastructure.Status.PlatformStatus != nil && s.clusterInstall.Infrastructure.Status.PlatformStatus.AWS != nil {
-			region = s.clusterInstall.Infrastructure.Status.PlatformStatus.AWS.Region
-		}
-	default:
-		return fmt.Errorf("cloud provider not supported")
-	}
-
-	if region == "" {
-		return fmt.Errorf("region is empty")
-	}
-
-	manifests := s.manifests(s.clusterInstall.ClusterName, region)
-	manifestBytes, err := citoolsyaml.MarshalMultidoc(yaml.Marshal, manifests...)
-	if err != nil {
-		return fmt.Errorf("marshal: %w", err)
-	}
-
-	manifestsPath := CloudabilityAgentManifestsPath(s.clusterInstall.Onboard.ReleaseRepo, s.clusterInstall.ClusterName)
-	if err := s.writeManifest(path.Join(manifestsPath, "cloudability-agent.yaml"), manifestBytes, 0644); err != nil {
-		return fmt.Errorf("write manifest: %w", err)
-	}
-	return nil
+func (s *cloudabilityAgentGenerator) Skip() types.SkipStep {
+	return s.clusterInstall.Onboard.CloudabilityAgent.SkipStep
 }
 
-func (s *cloudabilityAgentStep) manifests(clusterName, region string) []interface{} {
+func (s *cloudabilityAgentGenerator) ExcludedManifests() types.ExcludeManifest {
+	return s.clusterInstall.Onboard.CloudabilityAgent.ExcludeManifest
+}
+
+func (s *cloudabilityAgentGenerator) Patches() []cinitmanifest.Patch {
+	return s.clusterInstall.Onboard.CloudabilityAgent.Patches
+}
+
+func (s *cloudabilityAgentGenerator) Generate(ctx context.Context, log *logrus.Entry) (map[string][]interface{}, error) {
+	pathToManifests := make(map[string][]interface{})
+	basePath := CloudabilityAgentManifestsPath(s.clusterInstall.Onboard.ReleaseRepo, s.clusterInstall.ClusterName)
+
+	const defaultRegion = "us-west-2"
+	manifests := s.manifests(s.clusterInstall.ClusterName, defaultRegion)
+	pathToManifests[path.Join(basePath, "cloudability-agent.yaml")] = manifests
+
+	return pathToManifests, nil
+}
+
+func (s *cloudabilityAgentGenerator) manifests(clusterName, region string) []interface{} {
 	return []interface{}{
 		map[string]interface{}{
 			"apiVersion": "v1",
@@ -284,10 +273,6 @@ func (s *cloudabilityAgentStep) manifests(clusterName, region string) []interfac
 	}
 }
 
-func NewCloudabilityAgentStep(log *logrus.Entry, clusterInstall *clusterinstall.ClusterInstall) *cloudabilityAgentStep {
-	return &cloudabilityAgentStep{
-		log:            log,
-		clusterInstall: clusterInstall,
-		writeManifest:  os.WriteFile,
-	}
+func NewCloudabilityAgentGenerator(clusterInstall *clusterinstall.ClusterInstall) *cloudabilityAgentGenerator {
+	return &cloudabilityAgentGenerator{clusterInstall: clusterInstall}
 }

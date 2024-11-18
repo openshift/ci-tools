@@ -18,6 +18,7 @@ func TestApplyDefault(t *testing.T) {
 			Unmanaged:                ptr.To(false),
 			OSD:                      ptr.To(true),
 			UseTokenFileInKubeconfig: ptr.To(true),
+			Multiarch:                ptr.To(false),
 		},
 	}
 	if diff := cmp.Diff(wantCI, ci); diff != "" {

@@ -38,13 +38,13 @@ func TestGenerateManifests(t *testing.T) {
 						AWS: awstypes.MachineSet{
 							Profiles: map[string]awstypes.MachineSetProfile{
 								"worker": {
-									Architectures: map[types.Architecture][]string{
+									Architectures: map[string][]string{
 										types.ArchAMD64: {"us-east-1a"},
 									},
 									MachineAutoscaler: ptr.To(true),
 								},
 								"infra": {
-									Architectures: map[types.Architecture][]string{
+									Architectures: map[string][]string{
 										types.ArchAMD64: {"us-east-1b"},
 									},
 								},

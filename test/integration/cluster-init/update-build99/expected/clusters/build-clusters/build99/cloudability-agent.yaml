@@ -122,7 +122,7 @@ spec:
         - name: CLOUDABILITY_CLUSTER_NAME
           value: build99
         - name: CLOUDABILITY_UPLOAD_REGION
-          value: us-east-2
+          value: us-west-2
         - name: CLOUDABILITY_POLL_INTERVAL
           value: "180"
         image: cloudability/metrics-agent:latest

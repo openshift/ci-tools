@@ -8,7 +8,6 @@ import (
 	"os"
 	"path"
 
-	"github.com/ryanuber/go-glob"
 	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
@@ -47,13 +46,15 @@ func (s *passthroughstep) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("subfs: %w", err)
 	}
+
+	excludedManifests := s.clusterInstall.Onboard.PassthroughManifest.ExcludeManifest
 	if err := fs.WalkDir(subFS, ".", func(p string, d fs.DirEntry, _ error) error {
 		if p == "." {
 			return nil
 		}
 
-		if g, exclude := s.excludePath(p); exclude {
-			log.WithField("path", p).WithField("pattern", g).Info("exclude path")
+		if g, exclude := excludedManifests.Filter(p); exclude {
+			log.WithField("manifest", p).WithField("pattern", g).Info("exclude manifest")
 			return nil
 		}
 
@@ -63,7 +64,7 @@ func (s *passthroughstep) Run(ctx context.Context) error {
 			return s.mkdirAll(fullPath, 0755)
 		}
 
-		data, err := s.readFile(manifests, p)
+		data, err := s.readFile(subFS, p)
 		if err != nil {
 			return fmt.Errorf("read %s: %w", p, err)
 		}
@@ -75,15 +76,6 @@ func (s *passthroughstep) Run(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-func (s *passthroughstep) excludePath(path string) (string, bool) {
-	for _, g := range s.clusterInstall.Onboard.PassthroughManifest.Exclude {
-		if glob.Glob(g, path) {
-			return g, true
-		}
-	}
-	return "", false
 }
 
 func NewPassthroughStep(log *logrus.Entry, clusterInstall *clusterinstall.ClusterInstall) *passthroughstep {

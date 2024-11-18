@@ -69,10 +69,11 @@ func runConfigSteps(ctx context.Context, log *logrus.Entry, update bool, cluster
 		onboard.NewDexStep(log, kubeClient, clusterInstall),
 		onboard.NewQuayioPullThroughCacheStep(log, clusterInstall, kubeClient),
 		onboard.NewCertificateStep(log, clusterInstall, kubeClient),
-		onboard.NewCloudabilityAgentStep(log, clusterInstall),
+		onboard.NewManifestGeneratorStep(log, onboard.NewCloudabilityAgentGenerator(clusterInstall)),
 		onboard.NewCommonSymlinkStep(log, clusterInstall),
 		onboard.NewMultiarchBuilderControllerStep(log, clusterInstall),
-		onboard.NewImageRegistryStepStep(log, clusterInstall),
+		onboard.NewManifestGeneratorStep(log, onboard.NewImageRegistryGenerator(clusterInstall)),
+		onboard.NewManifestGeneratorStep(log, onboard.NewOpenshiftMonitoringGenerator(clusterInstall)),
 		onboard.NewPassthroughStep(log, clusterInstall),
 	}
 

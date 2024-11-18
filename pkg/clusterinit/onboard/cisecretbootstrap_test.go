@@ -16,7 +16,7 @@ func TestUpdateSecret(t *testing.T) {
 	testCases := []struct {
 		name            string
 		ci              clusterinstall.ClusterInstall
-		secretGenerator func() secretbootstrap.SecretConfig
+		secretGenerator func() *secretbootstrap.SecretConfig
 		config          secretbootstrap.Config
 		expectedConfig  secretbootstrap.Config
 	}{
@@ -25,8 +25,8 @@ func TestUpdateSecret(t *testing.T) {
 			ci: clusterinstall.ClusterInstall{
 				ClusterName: "newCluster",
 			},
-			secretGenerator: func() secretbootstrap.SecretConfig {
-				return secretbootstrap.SecretConfig{
+			secretGenerator: func() *secretbootstrap.SecretConfig {
+				return &secretbootstrap.SecretConfig{
 					From: map[string]secretbootstrap.ItemContext{"item": {Item: "item-a"}},
 					To:   []secretbootstrap.SecretContext{{Cluster: "newCluster", Name: "secret-a"}},
 				}
@@ -57,8 +57,8 @@ func TestUpdateSecret(t *testing.T) {
 			ci: clusterinstall.ClusterInstall{
 				ClusterName: "existingCluster",
 			},
-			secretGenerator: func() secretbootstrap.SecretConfig {
-				return secretbootstrap.SecretConfig{
+			secretGenerator: func() *secretbootstrap.SecretConfig {
+				return &secretbootstrap.SecretConfig{
 					From: map[string]secretbootstrap.ItemContext{"item": {Item: "item-a"}},
 					To:   []secretbootstrap.SecretContext{{Cluster: "existingCluster", Name: "secret-a"}},
 				}

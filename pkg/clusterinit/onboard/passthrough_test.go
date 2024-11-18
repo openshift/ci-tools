@@ -13,6 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
+	"github.com/openshift/ci-tools/pkg/clusterinit/types"
 )
 
 func newMemFS(entries ...string) fs.FS {
@@ -57,7 +58,9 @@ func TestPassthroughManifests(t *testing.T) {
 				Onboard: clusterinstall.Onboard{
 					ReleaseRepo: releaseRepo,
 					PassthroughManifest: clusterinstall.PassthroughManifest{
-						Exclude: []string{"super/**", "foo*"},
+						ExcludeManifest: types.ExcludeManifest{
+							Exclude: []string{"super/**", "foo*"},
+						},
 					},
 				},
 			},

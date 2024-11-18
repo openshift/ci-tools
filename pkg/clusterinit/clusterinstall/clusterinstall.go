@@ -5,6 +5,7 @@ import (
 	installertypes "github.com/openshift/installer/pkg/types"
 
 	"github.com/openshift/ci-tools/pkg/clusterinit/manifest"
+	"github.com/openshift/ci-tools/pkg/clusterinit/types"
 	"github.com/openshift/ci-tools/pkg/clusterinit/types/aws"
 	"github.com/openshift/ci-tools/pkg/clusterinit/types/gcp"
 )
@@ -37,6 +38,7 @@ type Onboard struct {
 	Unmanaged *bool `json:"unmanaged,omitempty"`
 	// True if the token files are used in kubeconfigs. Set to true by default
 	UseTokenFileInKubeconfig   *bool                      `json:"useTokenFileInKubeconfig,omitempty"`
+	Multiarch                  *bool                      `json:"multiarch,omitempty"`
 	Dex                        Dex                        `json:"dex,omitempty"`
 	QuayioPullThroughCache     QuayioPullThroughCache     `json:"quayioPullThroughCache,omitempty"`
 	Certificate                Certificate                `json:"certificate,omitempty"`
@@ -45,6 +47,8 @@ type Onboard struct {
 	MultiarchBuilderController MultiarchBuilderController `json:"multiarchBuilderController,omitempty"`
 	ImageRegistry              ImageRegistry              `json:"imageRegistry,omitempty"`
 	PassthroughManifest        PassthroughManifest        `json:"passthrough,omitempty"`
+	CloudabilityAgent          CloudabilityAgent          `json:"cloudabilityAgent,omitempty"`
+	OpenshiftMonitoring        OpenshiftMonitoring        `json:"openshiftMonitoring,omitempty"`
 }
 
 type Dex struct {
@@ -60,29 +64,43 @@ type CertificateProjectLabel struct {
 	Value string `json:"value,omitempty"`
 }
 type CISchedulingWebhook struct {
-	SkipStep
+	types.SkipStep
 	AWS         aws.CISchedulingWebhook `json:"aws,omitempty"`
 	GenerateDNS bool                    `json:"dns,omitempty"`
 	Patches     []manifest.Patch        `json:"patches,omitempty"`
 }
 
 type MachineSet struct {
-	SkipStep
+	types.SkipStep
 	AWS     aws.MachineSet   `json:"aws,omitempty"`
 	Patches []manifest.Patch `json:"patches,omitempty"`
 }
 
 type MultiarchBuilderController struct {
-	SkipStep
+	types.SkipStep
 }
 
 type ImageRegistry struct {
-	SkipStep
+	types.SkipStep
+	types.ExcludeManifest
+	Patches []manifest.Patch `json:"patches,omitempty"`
 }
 
 type PassthroughManifest struct {
-	SkipStep
-	Exclude []string `json:"exclude,omitempty"`
+	types.SkipStep
+	types.ExcludeManifest
+}
+
+type CloudabilityAgent struct {
+	types.SkipStep
+	types.ExcludeManifest
+	Patches []manifest.Patch `json:"patches,omitempty"`
+}
+
+type OpenshiftMonitoring struct {
+	types.SkipStep
+	types.ExcludeManifest
+	Patches []manifest.Patch `json:"patches,omitempty"`
 }
 
 const (
@@ -110,9 +128,4 @@ type Certificate struct {
 	ImageRegistryPublicHost string                             `json:"imageRegistryPublicHost,omitempty"`
 	ClusterIssuer           map[string]string                  `json:"clusterIssuer,omitempty"`
 	ProjectLabel            map[string]CertificateProjectLabel `json:"projectLabel,omitempty"`
-}
-
-type SkipStep struct {
-	Skip   bool   `json:"skip,omitempty"`
-	Reason string `json:"reason,omitempty"`
 }

@@ -6,7 +6,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/clusterinit/types"
 )
 
-func AMIByArch(arch types.Architecture) (string, error) {
+func AMIByArch(arch string) (string, error) {
 	switch arch {
 	case types.ArchAMD64:
 		return "ami-0545fae7edbbbf061", nil

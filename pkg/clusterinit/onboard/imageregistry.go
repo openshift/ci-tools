@@ -3,65 +3,49 @@ package onboard
 import (
 	"context"
 	"fmt"
-	"io/fs"
-	"os"
 	"path"
 
 	"github.com/sirupsen/logrus"
 
-	"sigs.k8s.io/yaml"
-
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
-	citoolsyaml "github.com/openshift/ci-tools/pkg/util/yaml"
+	cinitmanifest "github.com/openshift/ci-tools/pkg/clusterinit/manifest"
+	"github.com/openshift/ci-tools/pkg/clusterinit/types"
 )
 
-type imageRegistryStep struct {
-	log            *logrus.Entry
+type imageRegistryGenerator struct {
 	clusterInstall *clusterinstall.ClusterInstall
-	writeManifest  func(name string, data []byte, perm fs.FileMode) error
-	mkdirAll       func(path string, perm fs.FileMode) error
 }
 
-func (s *imageRegistryStep) Name() string {
+func (s *imageRegistryGenerator) Name() string {
 	return "image-registry"
 }
 
-func (s *imageRegistryStep) Run(ctx context.Context) error {
-	log := s.log.WithField("step", s.Name())
-
-	if s.clusterInstall.Onboard.ImageRegistry.Skip {
-		log.Info("image-registry is not enabled, skipping")
-		return nil
-	}
-
-	manifestsPath := ImageRegistryManifestsPath(s.clusterInstall.Onboard.ReleaseRepo, s.clusterInstall.ClusterName)
-	if err := s.mkdirAll(manifestsPath, 0755); err != nil && !os.IsExist(err) {
-		return fmt.Errorf("mkdir %s: %w", manifestsPath, err)
-	}
-
-	manifests := s.configClusterManifests()
-	manifestBytes, err := citoolsyaml.MarshalMultidoc(yaml.Marshal, manifests...)
-	if err != nil {
-		return fmt.Errorf("marshal config/cluster manifests: %w", err)
-	}
-
-	if err := s.writeManifest(path.Join(manifestsPath, "config-cluster.yaml"), manifestBytes, 0644); err != nil {
-		return fmt.Errorf("write rbac manifests: %w", err)
-	}
-
-	manifests = s.imagePrunerManifests()
-	manifestBytes, err = citoolsyaml.MarshalMultidoc(yaml.Marshal, manifests...)
-	if err != nil {
-		return fmt.Errorf("marshal image pruner manifests: %w", err)
-	}
-
-	if err := s.writeManifest(path.Join(manifestsPath, "imagepruner-cluster.yaml"), manifestBytes, 0644); err != nil {
-		return fmt.Errorf("write image pruner manifests: %w", err)
-	}
-	return nil
+func (s *imageRegistryGenerator) Skip() types.SkipStep {
+	return s.clusterInstall.Onboard.ImageRegistry.SkipStep
 }
 
-func (s *imageRegistryStep) imagePrunerManifests() []interface{} {
+func (s *imageRegistryGenerator) ExcludedManifests() types.ExcludeManifest {
+	return s.clusterInstall.Onboard.ImageRegistry.ExcludeManifest
+}
+
+func (s *imageRegistryGenerator) Patches() []cinitmanifest.Patch {
+	return s.clusterInstall.Onboard.ImageRegistry.Patches
+}
+
+func (s *imageRegistryGenerator) Generate(ctx context.Context, log *logrus.Entry) (map[string][]interface{}, error) {
+	pathToManifests := make(map[string][]interface{})
+	basePath := ImageRegistryManifestsPath(s.clusterInstall.Onboard.ReleaseRepo, s.clusterInstall.ClusterName)
+
+	manifests := s.configClusterManifests()
+	pathToManifests[path.Join(basePath, "config-cluster.yaml")] = manifests
+
+	manifests = s.imagePrunerManifests()
+	pathToManifests[path.Join(basePath, "imagepruner-cluster.yaml")] = manifests
+
+	return pathToManifests, nil
+}
+
+func (s *imageRegistryGenerator) imagePrunerManifests() []interface{} {
 	return []interface{}{
 		map[string]interface{}{
 			"spec": map[string]interface{}{
@@ -78,10 +62,32 @@ func (s *imageRegistryStep) imagePrunerManifests() []interface{} {
 			},
 		},
 	}
-
 }
 
-func (s *imageRegistryStep) configClusterManifests() []interface{} {
+func (s *imageRegistryGenerator) configClusterManifests() []interface{} {
+	if *s.clusterInstall.Onboard.OSD {
+		clusterName := s.clusterInstall.ClusterName
+		return []interface{}{
+			map[string]interface{}{
+				"spec": map[string]interface{}{
+					"managementState": "Managed",
+					"replicas":        2,
+					"routes": []interface{}{
+						map[string]interface{}{
+							"secretName": "public-route-tls",
+							"hostname":   fmt.Sprintf("registry.%s.ci.openshift.org", clusterName),
+							"name":       fmt.Sprintf("registry-%s-ci-openshift-org", clusterName),
+						},
+					},
+				},
+				"apiVersion": "imageregistry.operator.openshift.io/v1",
+				"kind":       "Config",
+				"metadata": map[string]interface{}{
+					"name": "cluster",
+				},
+			},
+		}
+	}
 	return []interface{}{
 		map[string]interface{}{
 			"apiVersion": "imageregistry.operator.openshift.io/v1",
@@ -135,14 +141,8 @@ func (s *imageRegistryStep) configClusterManifests() []interface{} {
 			},
 		},
 	}
-
 }
 
-func NewImageRegistryStepStep(log *logrus.Entry, clusterInstall *clusterinstall.ClusterInstall) *imageRegistryStep {
-	return &imageRegistryStep{
-		log:            log,
-		clusterInstall: clusterInstall,
-		writeManifest:  os.WriteFile,
-		mkdirAll:       os.MkdirAll,
-	}
+func NewImageRegistryGenerator(clusterInstall *clusterinstall.ClusterInstall) *imageRegistryGenerator {
+	return &imageRegistryGenerator{clusterInstall: clusterInstall}
 }

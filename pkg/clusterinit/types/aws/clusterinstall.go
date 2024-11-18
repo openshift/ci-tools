@@ -1,7 +1,5 @@
 package aws
 
-import "github.com/openshift/ci-tools/pkg/clusterinit/types"
-
 type CloudFormationTemplate struct {
 	StackName    string `json:"stackName,omitempty"`
 	TemplateBody string `json:"templateBody,omitempty"`
@@ -29,4 +27,4 @@ type MachineSetProfile struct {
 	Architectures     ArchToAZ `json:"architectures,omitempty"`
 }
 
-type ArchToAZ map[types.Architecture][]string
+type ArchToAZ map[string][]string

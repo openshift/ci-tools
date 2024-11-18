@@ -2,14 +2,12 @@ package onboard
 
 import (
 	"context"
-	"io/fs"
-	"path"
-	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/sirupsen/logrus"
+
+	"k8s.io/utils/ptr"
 
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 )
@@ -19,74 +17,95 @@ func TestImageRegistryManifests(t *testing.T) {
 	for _, tt := range []struct {
 		name          string
 		ci            clusterinstall.ClusterInstall
-		wantManifests []string
+		wantManifests map[string][]interface{}
 		wantErr       error
 	}{
 		{
 			name: "Write manifests successfully",
 			ci: clusterinstall.ClusterInstall{
 				ClusterName: "build99",
-				Onboard:     clusterinstall.Onboard{ReleaseRepo: releaseRepo},
+				Onboard: clusterinstall.Onboard{
+					OSD:         ptr.To(false),
+					ReleaseRepo: releaseRepo,
+				},
 			},
-			wantManifests: []string{
-				`apiVersion: imageregistry.operator.openshift.io/v1
-kind: Config
-metadata:
-  name: cluster
-spec:
-  affinity:
-    podAntiAffinity:
-      preferredDuringSchedulingIgnoredDuringExecution:
-      - podAffinityTerm:
-          labelSelector:
-            matchExpressions:
-            - key: docker-registry
-              operator: In
-              values:
-              - default
-          topologyKey: kubernetes.io/hostname
-        weight: 100
-  managementState: Managed
-  nodeSelector:
-    node-role.kubernetes.io/infra: ""
-  replicas: 5
-  routes:
-  - hostname: registry.build99.ci.openshift.org
-    name: public-routes
-    secretName: public-route-tls
-  tolerations:
-  - effect: NoSchedule
-    key: node-role.kubernetes.io/infra
-    operator: Exists
-`,
-				`apiVersion: imageregistry.operator.openshift.io/v1
-kind: ImagePruner
-metadata:
-  name: cluster
-spec:
-  failedJobsHistoryLimit: 3
-  keepTagRevisions: 3
-  schedule: ""
-  successfulJobsHistoryLimit: 3
-  suspend: false
-`,
+			wantManifests: map[string][]interface{}{
+				"/release/repo/clusters/build-clusters/build99/openshift-image-registry/config-cluster.yaml": {
+					map[string]interface{}{
+						"apiVersion": "imageregistry.operator.openshift.io/v1",
+						"kind":       "Config",
+						"metadata": map[string]interface{}{
+							"name": "cluster",
+						},
+						"spec": map[string]interface{}{
+							"routes": []interface{}{
+								map[string]interface{}{
+									"hostname":   "registry.build99.ci.openshift.org",
+									"name":       "public-routes",
+									"secretName": "public-route-tls",
+								},
+							},
+							"tolerations": []interface{}{
+								map[string]interface{}{
+									"effect":   "NoSchedule",
+									"key":      "node-role.kubernetes.io/infra",
+									"operator": "Exists",
+								},
+							},
+							"affinity": map[string]interface{}{
+								"podAntiAffinity": map[string]interface{}{
+									"preferredDuringSchedulingIgnoredDuringExecution": []interface{}{
+										map[string]interface{}{
+											"podAffinityTerm": map[string]interface{}{
+												"labelSelector": map[string]interface{}{
+													"matchExpressions": []interface{}{
+														map[string]interface{}{
+															"key":      "docker-registry",
+															"operator": "In",
+															"values": []interface{}{
+																"default",
+															},
+														},
+													},
+												},
+												"topologyKey": "kubernetes.io/hostname",
+											},
+											"weight": 100,
+										},
+									},
+								},
+							},
+							"managementState": "Managed",
+							"nodeSelector": map[string]interface{}{
+								"node-role.kubernetes.io/infra": "",
+							},
+							"replicas": 5,
+						},
+					},
+				},
+				"/release/repo/clusters/build-clusters/build99/openshift-image-registry/imagepruner-cluster.yaml": {
+					map[string]interface{}{
+						"spec": map[string]interface{}{
+							"successfulJobsHistoryLimit": 3,
+							"suspend":                    false,
+							"failedJobsHistoryLimit":     3,
+							"keepTagRevisions":           3,
+							"schedule":                   "",
+						},
+						"apiVersion": "imageregistry.operator.openshift.io/v1",
+						"kind":       "ImagePruner",
+						"metadata": map[string]interface{}{
+							"name": "cluster",
+						},
+					},
+				},
 			},
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			step := NewImageRegistryStepStep(logrus.NewEntry(logrus.StandardLogger()), &tt.ci)
-
-			manifests := make([]string, 0)
-			writeManifestsPaths := make([]string, 0)
-			step.writeManifest = func(name string, data []byte, _ fs.FileMode) error {
-				writeManifestsPaths = append(writeManifestsPaths, name)
-				manifests = append(manifests, string(data))
-				return nil
-			}
-			step.mkdirAll = func(path string, perm fs.FileMode) error { return nil }
-
-			err := step.Run(context.TODO())
+			generator := NewImageRegistryGenerator(&tt.ci)
+			manifests, err := generator.Generate(context.TODO(), logrus.NewEntry(logrus.StandardLogger()))
 
 			if err != nil && tt.wantErr == nil {
 				t.Fatalf("want err nil but got: %v", err)
@@ -101,17 +120,7 @@ spec:
 				return
 			}
 
-			sortStr := func(a, b string) bool { return strings.Compare(a, b) <= 0 }
-
-			wantManifestsPath := []string{
-				path.Join(ImageRegistryManifestsPath(releaseRepo, tt.ci.ClusterName), "config-cluster.yaml"),
-				path.Join(ImageRegistryManifestsPath(releaseRepo, tt.ci.ClusterName), "imagepruner-cluster.yaml"),
-			}
-			if diff := cmp.Diff(wantManifestsPath, writeManifestsPaths, cmpopts.SortSlices(sortStr)); diff != "" {
-				t.Errorf("manifest paths differs:\n%s", diff)
-			}
-
-			if diff := cmp.Diff(tt.wantManifests, manifests, cmpopts.SortSlices(sortStr)); diff != "" {
+			if diff := cmp.Diff(tt.wantManifests, manifests); diff != "" {
 				t.Errorf("manifests differs:\n%s", diff)
 			}
 		})

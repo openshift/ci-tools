@@ -1851,7 +1851,7 @@ func (p ClusterProfile) LeaseType() string {
 	case ClusterProfileAWSKubeVirt:
 		return "aws-kubevirt-quota-slice"
 	case ClusterProfileAWSRHOAIQE:
-        return "aws-rhoai-qe-quota-slice"
+		return "aws-rhoai-qe-quota-slice"
 	case ClusterProfileAWSOVNPerfScale:
 		return "aws-ovn-perfscale-quota-slice"
 	case ClusterProfileAlibabaCloud:

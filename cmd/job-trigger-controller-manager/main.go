@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/bombsimon/logrusr/v3"
 	"github.com/sirupsen/logrus"
@@ -28,8 +29,9 @@ var (
 type options struct {
 	prowconfigflagutil.ConfigOptions
 
-	namespace string
-	dryRun    bool
+	namespace               string
+	jobTriggerWaitInSeconds int64
+	dryRun                  bool
 }
 
 func gatherOptions() (*options, error) {
@@ -39,6 +41,7 @@ func gatherOptions() (*options, error) {
 	o.ConfigOptions.AddFlags(fs)
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
 	fs.StringVar(&o.namespace, "namespace", "ci", "In which namespace the operation will take place")
+	fs.Int64Var(&o.jobTriggerWaitInSeconds, "job-trigger-wait-seconds", 60, "Amount of seconds to wait for job to trigger in order to update status")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return o, fmt.Errorf("failed to parse flags: %w", err)
@@ -92,7 +95,8 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to add prpqv1 to scheme")
 	}
 
-	if err := prpqr_reconciler.AddToManager(mgr, o.namespace, server.NewResolverClient(configResolverAddress), agent); err != nil {
+	duration := time.Duration(o.jobTriggerWaitInSeconds) * time.Second
+	if err := prpqr_reconciler.AddToManager(mgr, o.namespace, server.NewResolverClient(configResolverAddress), agent, duration); err != nil {
 		logrus.WithError(err).Fatal("Failed to add prpqr_reconciler to manager")
 	}
 

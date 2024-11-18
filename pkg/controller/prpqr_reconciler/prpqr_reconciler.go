@@ -80,7 +80,7 @@ type periodicDefaulter interface {
 	DefaultPeriodic(periodic *prowconfig.Periodic) error
 }
 
-func AddToManager(mgr manager.Manager, ns string, rc injectingResolverClient, prowConfigAgent *prowconfig.Agent) error {
+func AddToManager(mgr manager.Manager, ns string, rc injectingResolverClient, prowConfigAgent *prowconfig.Agent, jobTriggerWaitDuration time.Duration) error {
 	if err := pjstatussyncer.AddToManager(mgr, ns); err != nil {
 		return fmt.Errorf("failed to construct pjstatussyncer: %w", err)
 	}
@@ -88,10 +88,11 @@ func AddToManager(mgr manager.Manager, ns string, rc injectingResolverClient, pr
 	c, err := controller.New(controllerName, mgr, controller.Options{
 		MaxConcurrentReconciles: 1,
 		Reconciler: &reconciler{
-			logger:               logrus.WithField("controller", controllerName),
-			client:               mgr.GetClient(),
-			configResolverClient: rc,
-			prowConfigGetter:     &wrappedProwConfigAgent{pc: prowConfigAgent},
+			logger:                 logrus.WithField("controller", controllerName),
+			client:                 mgr.GetClient(),
+			configResolverClient:   rc,
+			prowConfigGetter:       &wrappedProwConfigAgent{pc: prowConfigAgent},
+			jobTriggerWaitDuration: jobTriggerWaitDuration,
 		},
 	})
 	if err != nil {
@@ -131,6 +132,8 @@ type reconciler struct {
 
 	configResolverClient injectingResolverClient
 	prowConfigGetter     prowConfigGetter
+
+	jobTriggerWaitDuration time.Duration
 }
 
 func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
@@ -335,7 +338,7 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 			// it successfully.
 			key := ctrlruntimeclient.ObjectKey{Namespace: prowjob.Namespace, Name: prowjob.Name}
 			retrievedJob := prowv1.ProwJob{}
-			if err := wait.Poll(second, 20*second, func() (bool, error) {
+			if err := wait.Poll(second, r.jobTriggerWaitDuration, func() (bool, error) {
 				if err := r.client.Get(ctx, key, &retrievedJob); err != nil {
 					if kerrors.IsNotFound(err) {
 						return false, nil

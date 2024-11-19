@@ -390,7 +390,7 @@ func (r *reconciler) abortJobs(ctx context.Context,
 	}
 
 	abort := func(ctx context.Context, logger *logrus.Entry, job *prowv1.ProwJob) {
-		if job.Complete() || (job.Status.State != prowv1.TriggeredState && job.Status.State != prowv1.PendingState) {
+		if job.Complete() || !pjstatussyncer.IsActiveState(job.Status.State) {
 			return
 		}
 
@@ -474,7 +474,9 @@ func reconcileStatus(theirs *v1.PullRequestPayloadQualificationRun, ourStatuses 
 		their := statusByJobName[jobName]
 		reconciled := reconcileJobStatus(jobName, their, our)
 		theirs.Status.Jobs = append(theirs.Status.Jobs, reconciled)
-		atLeastOneActive = reconciled.Status.State == prowv1.PendingState || reconciled.Status.State == prowv1.TriggeredState
+		if !atLeastOneActive {
+			atLeastOneActive = pjstatussyncer.IsActiveState(reconciled.Status.State)
+		}
 	}
 
 	manageDependentProwJobsFinalizer(atLeastOneActive, &theirs.ObjectMeta)

@@ -177,7 +177,7 @@ func constructCondition(jobs []v1.PullRequestPayloadJobStatus) metav1.Condition 
 func getRunningJobs(jobs []v1.PullRequestPayloadJobStatus) []string {
 	var ret []string
 	for _, job := range jobs {
-		if job.Status.State == prowv1.TriggeredState || job.Status.State == prowv1.PendingState {
+		if IsActiveState(job.Status.State) {
 			ret = append(ret, job.ReleaseJobName)
 		}
 	}
@@ -186,9 +186,13 @@ func getRunningJobs(jobs []v1.PullRequestPayloadJobStatus) []string {
 
 func hasAllJobsFinished(jobs []v1.PullRequestPayloadJobStatus) bool {
 	for _, job := range jobs {
-		if job.Status.State == prowv1.TriggeredState || job.Status.State == prowv1.PendingState || job.Status.State == prowv1.SchedulingState {
+		if IsActiveState(job.Status.State) {
 			return false
 		}
 	}
 	return true
+}
+
+func IsActiveState(state prowv1.ProwJobState) bool {
+	return state == prowv1.PendingState || state == prowv1.TriggeredState || state == prowv1.SchedulingState
 }

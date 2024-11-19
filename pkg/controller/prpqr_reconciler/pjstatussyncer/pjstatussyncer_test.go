@@ -105,7 +105,7 @@ func TestReconcile(t *testing.T) {
 				},
 				&prowv1.ProwJob{
 					ObjectMeta: metav1.ObjectMeta{UID: "2", Name: "test-pj", Namespace: "test-namespace", Labels: map[string]string{"pullrequestpayloadqualificationruns.ci.openshift.io": "prpqr-test"}},
-					Status:     prowv1.ProwJobStatus{State: prowv1.TriggeredState, StartTime: metav1.Time{Time: time.Now()}},
+					Status:     prowv1.ProwJobStatus{State: prowv1.SchedulingState, StartTime: metav1.Time{Time: time.Now()}},
 				},
 			},
 			pjMutations: func(obj ctrlruntimeclient.Object, client ctrlruntimeclient.Client, t *testing.T) {
@@ -126,7 +126,7 @@ func TestReconcile(t *testing.T) {
 							{
 								ReleaseJobName: "release-job-name",
 								ProwJob:        "test-pj",
-								Status:         prowv1.ProwJobStatus{State: prowv1.TriggeredState},
+								Status:         prowv1.ProwJobStatus{State: prowv1.SchedulingState},
 							},
 							{
 								ReleaseJobName: "release-job-name-2",

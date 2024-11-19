@@ -33,9 +33,11 @@ import (
 	"sigs.k8s.io/prow/pkg/pjutil"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	v1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
 	"github.com/openshift/ci-tools/pkg/controller/prpqr_reconciler/pjstatussyncer"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
+	"github.com/openshift/ci-tools/pkg/dispatcher"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/prowgen"
 )
@@ -80,7 +82,12 @@ type periodicDefaulter interface {
 	DefaultPeriodic(periodic *prowconfig.Periodic) error
 }
 
-func AddToManager(mgr manager.Manager, ns string, rc injectingResolverClient, prowConfigAgent *prowconfig.Agent, jobTriggerWaitDuration time.Duration) error {
+type jobClusterCache struct {
+	clusterForJob map[string]string
+	lastCleared   time.Time
+}
+
+func AddToManager(mgr manager.Manager, ns string, rc injectingResolverClient, prowConfigAgent *prowconfig.Agent, dispatcherAddress string, jobTriggerWaitDuration time.Duration) error {
 	if err := pjstatussyncer.AddToManager(mgr, ns); err != nil {
 		return fmt.Errorf("failed to construct pjstatussyncer: %w", err)
 	}
@@ -88,10 +95,15 @@ func AddToManager(mgr manager.Manager, ns string, rc injectingResolverClient, pr
 	c, err := controller.New(controllerName, mgr, controller.Options{
 		MaxConcurrentReconciles: 1,
 		Reconciler: &reconciler{
-			logger:                 logrus.WithField("controller", controllerName),
-			client:                 mgr.GetClient(),
-			configResolverClient:   rc,
-			prowConfigGetter:       &wrappedProwConfigAgent{pc: prowConfigAgent},
+			logger:               logrus.WithField("controller", controllerName),
+			client:               mgr.GetClient(),
+			configResolverClient: rc,
+			prowConfigGetter:     &wrappedProwConfigAgent{pc: prowConfigAgent},
+			dispatcherClient:     dispatcher.NewClient(dispatcherAddress),
+			jobClusterCache: jobClusterCache{
+				clusterForJob: make(map[string]string),
+				lastCleared:   time.Now(),
+			},
 			jobTriggerWaitDuration: jobTriggerWaitDuration,
 		},
 	})
@@ -129,6 +141,9 @@ func prpqrHandler() handler.TypedEventHandler[*v1.PullRequestPayloadQualificatio
 type reconciler struct {
 	logger *logrus.Entry
 	client ctrlruntimeclient.Client
+
+	dispatcherClient dispatcher.Client
+	jobClusterCache
 
 	configResolverClient injectingResolverClient
 	prowConfigGetter     prowConfigGetter
@@ -268,7 +283,7 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 
 		if jobSpec.AggregatedCount > 0 {
 			uid := jobNameHash(req.Name + mimickedJob)
-			aggregatedProwjobs, err := generateAggregatedProwjobs(uid, ciopConfig, r.prowConfigGetter, baseMetadata, req.Name, req.Namespace, &jobSpec, pullRequests, inject)
+			aggregatedProwjobs, err := r.generateAggregatedProwjobs(uid, ciopConfig, baseMetadata, req.Name, req.Namespace, &jobSpec, pullRequests, inject)
 			if err != nil {
 				logger.WithError(err).Error("Failed to generate the aggregated prowjobs")
 				statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
@@ -306,7 +321,7 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 			initialPullSpecOverride := prpqr.Spec.InitialPayloadBase
 			// "base" is always treated as "latest" as that is what we are layering changes on top of, additional logic will apply if this changes in the future
 			basePullSpecOverride := prpqr.Spec.PayloadOverrides.BasePullSpec
-			prowjob, err := generateProwjob(ciopConfig, r.prowConfigGetter, baseMetadata, req.Name, req.Namespace, pullRequests, mimickedJob, inject, nil, initialPullSpecOverride, basePullSpecOverride, prpqr.Spec.PayloadOverrides.ImageTagOverrides)
+			prowjob, err := r.generateProwjob(ciopConfig, baseMetadata, req.Name, req.Namespace, pullRequests, mimickedJob, inject, nil, initialPullSpecOverride, basePullSpecOverride, prpqr.Spec.PayloadOverrides.ImageTagOverrides)
 			if err != nil {
 				logger.WithError(err).Error("Failed to generate prowjob")
 				statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
@@ -552,8 +567,7 @@ type aggregatedOptions struct {
 	releaseJobName  string
 }
 
-func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
-	getCfg prowConfigGetter,
+func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 	baseCiop *api.Metadata,
 	prpqrName, prpqrNamespace string,
 	prs []v1.PullRequestUnderTest,
@@ -622,16 +636,12 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 		// PRPQR (until aggregated jobs, but for them we'll have a sequence index)
 		jobBaseGen.PodSpec.Add(hashInput)
 
-		// TODO(muller): Solve cluster assignment.
-		// The proper solution is to wire DetermineClusterForJob here but it is a more invasive change
-		switch {
-		case strings.Contains(inject.Test, "vsphere"):
-			jobBaseGen.Cluster("vsphere02")
-		case strings.Contains(inject.Test, "metal") || strings.Contains(inject.Test, "telco5g") || strings.Contains(inject.Test, "e2e-agent"):
-			jobBaseGen.Cluster("build05")
-		default:
-			jobBaseGen.Cluster("build03")
+		baseTestName := inject.JobName(jobconfig.PeriodicPrefix)
+		cluster, err := r.clusterForJob(baseTestName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get cluster for job %s: %w", baseTestName, err)
 		}
+		jobBaseGen.Cluster(cioperatorapi.Cluster(cluster))
 
 		periodic = prowgen.GeneratePeriodicForTest(jobBaseGen, fakeProwgenInfo, prowgen.FromConfigSpec(ciopConfig), func(options *prowgen.GeneratePeriodicOptions) {
 			options.Cron = "@yearly"
@@ -693,14 +703,32 @@ func generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 	}
 	periodic.ExtraRefs = refs
 
-	if err := getCfg.Defaulter().DefaultPeriodic(periodic); err != nil {
+	if err := r.prowConfigGetter.Defaulter().DefaultPeriodic(periodic); err != nil {
 		return nil, fmt.Errorf("failed to default the ProwJob: %w", err)
 	}
 
-	pj := pjutil.NewProwJob(pjutil.PeriodicSpec(*periodic), labels, annotations, pjutil.RequireScheduling(getCfg.Config().Scheduler.Enabled))
+	pj := pjutil.NewProwJob(pjutil.PeriodicSpec(*periodic), labels, annotations, pjutil.RequireScheduling(r.prowConfigGetter.Config().Scheduler.Enabled))
 	pj.Namespace = prpqrNamespace
 
 	return &pj, nil
+}
+
+func (r *reconciler) clusterForJob(jobName string) (string, error) {
+	if time.Now().Add(time.Minute * -15).After(r.jobClusterCache.lastCleared) {
+		r.jobClusterCache.lastCleared = time.Now()
+		r.jobClusterCache.clusterForJob = make(map[string]string)
+	}
+	if cluster, ok := r.jobClusterCache.clusterForJob[jobName]; ok {
+		return cluster, nil
+	}
+
+	cluster, err := r.dispatcherClient.ClusterForJob(jobName)
+	if err != nil {
+		return "", fmt.Errorf("could not determine cluster for job %s: %w", jobName, err)
+	}
+	r.jobClusterCache.clusterForJob[jobName] = cluster
+
+	return cluster, nil
 }
 
 func metadataFromPullRequestsUnderTest(prs []v1.PullRequestUnderTest) *api.Metadata {
@@ -717,7 +745,7 @@ func metadataFromPullRequestsUnderTest(prs []v1.PullRequestUnderTest) *api.Metad
 	}
 }
 
-func generateAggregatedProwjobs(uid string, ciopConfig *api.ReleaseBuildConfiguration, getCfg prowConfigGetter, baseCiop *api.Metadata, prpqrName, prpqrNamespace string, spec *v1.ReleaseJobSpec, prs []v1.PullRequestUnderTest, inject *api.MetadataWithTest) ([]*prowv1.ProwJob, error) {
+func (r *reconciler) generateAggregatedProwjobs(uid string, ciopConfig *api.ReleaseBuildConfiguration, baseCiop *api.Metadata, prpqrName, prpqrNamespace string, spec *v1.ReleaseJobSpec, prs []v1.PullRequestUnderTest, inject *api.MetadataWithTest) ([]*prowv1.ProwJob, error) {
 	var ret []*prowv1.ProwJob
 
 	for i := 0; i < spec.AggregatedCount; i++ {
@@ -728,7 +756,7 @@ func generateAggregatedProwjobs(uid string, ciopConfig *api.ReleaseBuildConfigur
 		}
 		jobName := fmt.Sprintf("%s-%d", spec.JobName(jobconfig.PeriodicPrefix), i)
 
-		pj, err := generateProwjob(ciopConfig, getCfg, baseCiop, prpqrName, prpqrNamespace, prs, jobName, inject, opts, "", "", nil)
+		pj, err := r.generateProwjob(ciopConfig, baseCiop, prpqrName, prpqrNamespace, prs, jobName, inject, opts, "", "", nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create prowjob: %w", err)
 		}

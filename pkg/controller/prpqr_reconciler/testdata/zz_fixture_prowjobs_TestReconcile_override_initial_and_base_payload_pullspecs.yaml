@@ -22,7 +22,7 @@
     resourceVersion: "1"
   spec:
     agent: kubernetes
-    cluster: cluster-name-overwritten
+    cluster: build02
     decoration_config:
       skip_cloning: true
     extra_refs:

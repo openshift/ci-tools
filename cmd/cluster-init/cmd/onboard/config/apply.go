@@ -25,6 +25,7 @@ This stage assumes that the configurations have been already generated.
 It then runs the applyconfig tool to apply them.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			clusterInstall, err := clusterinstall.Load(parentOpts.ClusterInstall, clusterinstall.FinalizeOption(clusterinstall.FinalizeOptions{
+				InstallBase: parentOpts.InstallBase,
 				ReleaseRepo: opts.releaseRepo,
 			}))
 			if err != nil {

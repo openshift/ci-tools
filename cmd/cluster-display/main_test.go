@@ -2,17 +2,23 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"golang.org/x/time/rate"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/prow/pkg/flagutil"
 
 	routev1 "github.com/openshift/api/route/v1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
@@ -145,7 +151,7 @@ func TestGetRouter(t *testing.T) {
 			}
 
 			rr := httptest.NewRecorder()
-			router := getRouter(context.TODO(), tc.hiveClient, tc.clients, tc.disabledClusters)
+			router := getRouter(context.TODO(), tc.hiveClient, tc.clients, func(ctx context.Context) ([]string, error) { return tc.disabledClusters, nil })
 			router.ServeHTTP(rr, req)
 
 			if diff := cmp.Diff(tc.expectedCode, rr.Code); diff != "" {
@@ -239,6 +245,96 @@ func TestGetCluster(t *testing.T) {
 			data := getCluster(context.TODO(), tc.clients, tc.getter)
 			if diff := cmp.Diff(data, tc.expected); diff != "" {
 				t.Errorf("result differs from expected output, diff:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestProwDisabledCluster(t *testing.T) {
+	c := func(a, b string) bool { return strings.Compare(a, b) <= 1 }
+	for _, tc := range []struct {
+		name         string
+		client       *prowClient
+		cacheTimeout time.Duration
+		wantDisabled []string
+		wantErr      error
+	}{
+		{
+			name: "Get from cache",
+			client: &prowClient{
+				cache: struct {
+					disabled []string
+					err      error
+				}{disabled: []string{"build01"}},
+				expiresAt: time.Now().Add(time.Hour),
+				upstream: func(o *flagutil.KubernetesOptions) (ret []string, retErr error) {
+					return nil, errors.New("unexpected cache miss")
+				},
+			},
+			wantDisabled: []string{"build01"},
+		},
+		{
+			name: "Error cached, make a request",
+			client: &prowClient{
+				cache: struct {
+					disabled []string
+					err      error
+				}{err: errors.New("cache error")},
+				errLimiter: rate.NewLimiter(100, 100),
+				expiresAt:  time.Now().Add(time.Hour),
+				upstream: func(o *flagutil.KubernetesOptions) (ret []string, retErr error) {
+					return []string{"build01"}, nil
+				},
+			},
+			wantDisabled: []string{"build01"},
+		},
+		{
+			name: "Cache expired, make a request",
+			client: &prowClient{
+				cache: struct {
+					disabled []string
+					err      error
+				}{disabled: []string{"build01"}},
+				expiresAt: time.Time{},
+				upstream: func(o *flagutil.KubernetesOptions) (ret []string, retErr error) {
+					return []string{"build02"}, nil
+				},
+			},
+			wantDisabled: []string{"build02"},
+		},
+		{
+			name: "Propagate error",
+			client: &prowClient{
+				cache: struct {
+					disabled []string
+					err      error
+				}{},
+				expiresAt: time.Time{},
+				upstream: func(o *flagutil.KubernetesOptions) (ret []string, retErr error) {
+					return nil, errors.New("expected")
+				},
+			},
+			wantErr: errors.New("prow disabled clusters: expected"),
+		},
+	} {
+		t.Run(tc.name, func(tt *testing.T) {
+			tt.Parallel()
+			disabled, err := tc.client.DisabledClusters(context.TODO())
+
+			if err != nil && tc.wantErr == nil {
+				t.Fatalf("want err nil but got: %v", err)
+			}
+			if err == nil && tc.wantErr != nil {
+				t.Fatalf("want err %v but nil", tc.wantErr)
+			}
+			if err != nil && tc.wantErr != nil {
+				if tc.wantErr.Error() != err.Error() {
+					t.Fatalf("expect error %q but got %q", tc.wantErr.Error(), err.Error())
+				}
+			}
+
+			if diff := cmp.Diff(tc.wantDisabled, disabled, cmpopts.SortSlices(c)); diff != "" {
+				t.Errorf("unexpected diff:\n%s", diff)
 			}
 		})
 	}

@@ -195,7 +195,7 @@ type clusterVolume struct {
 	pjs                map[string]string
 	blocked            sets.Set[string]
 	volumeDistribution map[string]float64
-	clusterMap         sanitizer.ClusterMap
+	clusterMap         dispatcher.ClusterMap
 }
 
 // findClusterForJobConfig finds a cluster running on a preferred cloud provider for the jobs in a Prow job config.
@@ -211,7 +211,7 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 		totalVolume += volume
 	}
 
-	mostUsedCluster := sanitizer.FindMostUsedCluster(jc)
+	mostUsedCluster := dispatcher.FindMostUsedCluster(jc)
 	// TODO: 75% as we still have manual assignments and these are affecting even distribution, re-evaluate when manual assignments are gone
 	if determinedCloudProvider := config.IsInBuildFarm(api.Cluster(mostUsedCluster)); determinedCloudProvider != "" &&
 		cv.clusterVolumeMap[string(determinedCloudProvider)][mostUsedCluster] < cv.volumeDistribution[mostUsedCluster]*0.75 {
@@ -259,16 +259,16 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 	return cluster, utilerrors.NewAggregate(errs)
 }
 
-func findClusterAssigmentsForMissingJobs(jc *prowconfig.JobConfig, path string, config *dispatcher.Config, pjs map[string]string, blocked sets.Set[string]) error {
-	mostUsedCluster := sanitizer.FindMostUsedCluster(jc)
+func findClusterAssigmentsForMissingJobs(jc *prowconfig.JobConfig, path string, config *dispatcher.Config, pjs map[string]string, blocked sets.Set[string], cm dispatcher.ClusterMap) error {
+	mostUsedCluster := dispatcher.FindMostUsedCluster(jc)
 
 	getClusterForMissingJob := func(cluster string, jobBase prowconfig.JobBase, pjs map[string]string) error {
-		determinedCluster, canBeRelocated, err := config.DetermineClusterForJob(jobBase, path)
+		determinedCluster, canBeRelocated, err := config.DetermineClusterForJob(jobBase, path, cm)
 		if err != nil {
 			return fmt.Errorf("failed to determine cluster for the job %s in path %q: %w", jobBase.Name, path, err)
 		}
 
-		c := sanitizer.DetermineTargetCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated, blocked)
+		c := dispatcher.DetermineTargetCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated, blocked)
 		pjs[jobBase.Name] = c
 		logrus.WithField("job", jobBase.Name).WithField("cluster", c).Info("found cluster for missing job")
 		return nil
@@ -306,13 +306,13 @@ func findClusterAssigmentsForMissingJobs(jc *prowconfig.JobConfig, path string, 
 }
 
 func (cv *clusterVolume) addToVolume(cluster string, jobBase prowconfig.JobBase, path string, config *dispatcher.Config, jobVolumes map[string]float64) error {
-	determinedCluster, canBeRelocated, err := config.DetermineClusterForJob(jobBase, path)
+	determinedCluster, canBeRelocated, err := config.DetermineClusterForJob(jobBase, path, cv.clusterMap)
 
 	if err != nil {
 		return fmt.Errorf("failed to determine cluster for the job %s in path %q: %w", jobBase.Name, path, err)
 	}
 
-	c := sanitizer.DetermineTargetCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated, cv.blocked)
+	c := dispatcher.DetermineTargetCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated, cv.blocked)
 	cv.pjs[jobBase.Name] = c
 	if determinedCloudProvider := config.IsInBuildFarm(api.Cluster(c)); determinedCloudProvider != "" {
 		cv.clusterVolumeMap[string(determinedCloudProvider)][c] = cv.clusterVolumeMap[string(determinedCloudProvider)][c] + jobVolumes[jobBase.Name]
@@ -354,7 +354,7 @@ type fileSizeInfo struct {
 //   - When all the e2e tests are targeting the same cloud provider, we run the test pod on the that cloud provider too.
 //   - When the e2e tests are targeting different cloud providers, or there is no e2e tests at all, we can run the tests
 //     on any cluster in the build farm. Those jobs are used to load balance the workload of clusters in the build farm.
-func dispatchJobs(prowJobConfigDir string, config *dispatcher.Config, jobVolumes map[string]float64, blocked sets.Set[string], volumeDistribution map[string]float64, cm sanitizer.ClusterMap) (map[string]string, error) {
+func dispatchJobs(prowJobConfigDir string, config *dispatcher.Config, jobVolumes map[string]float64, blocked sets.Set[string], volumeDistribution map[string]float64, cm dispatcher.ClusterMap) (map[string]string, error) {
 	if config == nil {
 		return nil, fmt.Errorf("config is nil")
 	}
@@ -428,10 +428,10 @@ func dispatchJobs(prowJobConfigDir string, config *dispatcher.Config, jobVolumes
 	return cv.pjs, utilerrors.NewAggregate(errs)
 }
 
-func dispatchMissingJobs(prowJobConfigDir string, config *dispatcher.Config, blocked sets.Set[string], pjs map[string]string) error {
+func dispatchMissingJobs(prowJobConfigDir string, config *dispatcher.Config, blocked sets.Set[string], pjs map[string]string, cm dispatcher.ClusterMap) error {
 	var errs []error
 	dispatch := func(jobConfig *prowconfig.JobConfig, path string, info fs.DirEntry) {
-		if err := findClusterAssigmentsForMissingJobs(jobConfig, path, config, pjs, blocked); err != nil {
+		if err := findClusterAssigmentsForMissingJobs(jobConfig, path, config, pjs, blocked, cm); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -560,7 +560,7 @@ func getDiffClusters(enabledClusters, clustersFromConfig sets.Set[string]) (clus
 	return clustersFromConfig.Difference(enabledClusters), enabledClusters.Difference(clustersFromConfig)
 }
 
-func clustersMapToSet(clusterMap sanitizer.ClusterMap) sets.Set[string] {
+func clustersMapToSet(clusterMap dispatcher.ClusterMap) sets.Set[string] {
 	clusterSet := sets.Set[string]{}
 	for cluster := range clusterMap {
 		clusterSet.Insert(cluster)
@@ -589,7 +589,7 @@ func cleanup(directory string) {
 
 // createPR creates PR with config changes and sanitizer changes, it causes app to exit in
 // case of failure to trigger re-run of logic
-func createPR(o options, config *dispatcher.Config, pjs map[string]string) {
+func createPR(o options, config *dispatcher.Config, pjs map[string]string, cm dispatcher.ClusterMap) {
 	targetDirWithRelease := filepath.Join(o.targetDir, "/release")
 	cleanup(targetDirWithRelease)
 	defer cleanup(targetDirWithRelease)
@@ -607,7 +607,7 @@ func createPR(o options, config *dispatcher.Config, pjs map[string]string) {
 		logrus.WithError(err).WithField("configPath", o.configPath).Fatal("failed to save config file")
 	}
 
-	if err := sanitizer.DeterminizeJobs(filepath.Join(targetDirWithRelease, "/ci-operator/jobs"), config, pjs, make(sets.Set[string])); err != nil {
+	if err := sanitizer.DeterminizeJobs(filepath.Join(targetDirWithRelease, "/ci-operator/jobs"), config, pjs, make(sets.Set[string]), cm); err != nil {
 		logrus.WithError(err).Fatal("failed to determinize")
 	}
 
@@ -696,7 +696,7 @@ func main() {
 				logrus.WithError(err).Errorf("failed to load config from %q", o.configPath)
 				return
 			}
-			_, blocked, err := sanitizer.LoadClusterConfig(o.clusterConfigPath)
+			cm, blocked, err := dispatcher.LoadClusterConfig(o.clusterConfigPath)
 			if err != nil {
 				logrus.WithError(err).Error("failed to load cluster config")
 				return
@@ -704,7 +704,7 @@ func main() {
 
 			pjs := prowjobs.GetDataCopy()
 
-			if err := dispatchMissingJobs(o.prowJobConfigDir, config, blocked, pjs); err != nil {
+			if err := dispatchMissingJobs(o.prowJobConfigDir, config, blocked, pjs, cm); err != nil {
 				logrus.WithError(err).Error("failed to dispatch")
 				return
 			}
@@ -721,7 +721,7 @@ func main() {
 				return
 			}
 
-			configClusterMap, blocked, err := sanitizer.LoadClusterConfig(o.clusterConfigPath)
+			configClusterMap, blocked, err := dispatcher.LoadClusterConfig(o.clusterConfigPath)
 			if err != nil {
 				logrus.WithError(err).Error("failed to load cluster config")
 				return
@@ -764,7 +764,7 @@ func main() {
 			}
 
 			if o.createPR {
-				createPR(o, config, pjs)
+				createPR(o, config, pjs, configClusterMap)
 				if err := sendSlackMessage(slackClient, o.opsChannelId); err != nil {
 					logrus.WithError(err).Error("Failed to post message in ops channel")
 				}
@@ -793,7 +793,7 @@ func main() {
 		deltaTicker := time.NewTicker(5 * time.Minute)
 		defer deltaTicker.Stop()
 
-		prevConfigClusterMap, prevBlocked, err := sanitizer.LoadClusterConfig(config)
+		prevConfigClusterMap, prevBlocked, err := dispatcher.LoadClusterConfig(config)
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to load initial cluster config")
 			return
@@ -804,7 +804,7 @@ func main() {
 		for {
 			select {
 			case <-configTicker.C:
-				currentConfigClusterMap, currentBlocked, err := sanitizer.LoadClusterConfig(config)
+				currentConfigClusterMap, currentBlocked, err := dispatcher.LoadClusterConfig(config)
 				if err != nil {
 					logrus.WithError(err).Error("failed to load cluster config")
 					continue
@@ -813,7 +813,7 @@ func main() {
 				if !reflect.DeepEqual(currentConfigClusterMap, prevConfigClusterMap) || !reflect.DeepEqual(currentBlocked, prevBlocked) {
 					logrus.WithField("prevConfigClusterMap", prevConfigClusterMap).WithField("prevBlocked", prevBlocked).
 						WithField("currentConfigClusterMap", currentConfigClusterMap).WithField("currentBlocked", currentBlocked).Info("new dispatch")
-					dispatchWrapper(sanitizer.HasCapacityOrCapabilitiesChanged(prevConfigClusterMap, currentConfigClusterMap))
+					dispatchWrapper(dispatcher.HasCapacityOrCapabilitiesChanged(prevConfigClusterMap, currentConfigClusterMap))
 					prevConfigClusterMap = currentConfigClusterMap
 					prevBlocked = currentBlocked
 				}

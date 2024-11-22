@@ -16,7 +16,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/dispatcher"
-	"github.com/openshift/ci-tools/pkg/sanitizer"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -82,7 +81,7 @@ func TestDispatchJobs(t *testing.T) {
 		expected          error
 		expectedBuildFarm map[api.Cloud]map[api.Cluster]*dispatcher.BuildFarmConfig
 		distribution      map[string]float64
-		clusterMap        sanitizer.ClusterMap
+		clusterMap        dispatcher.ClusterMap
 	}{
 		{
 			name:     "nil config",
@@ -105,9 +104,9 @@ func TestDispatchJobs(t *testing.T) {
 				"build01": 50,
 				"build02": 50,
 			},
-			clusterMap: sanitizer.ClusterMap{
-				"build01": sanitizer.ClusterInfo{Capacity: 100},
-				"build02": sanitizer.ClusterInfo{Capacity: 100},
+			clusterMap: dispatcher.ClusterMap{
+				"build01": dispatcher.ClusterInfo{Capacity: 100},
+				"build02": dispatcher.ClusterInfo{Capacity: 100},
 			},
 			expectedBuildFarm: map[api.Cloud]map[api.Cluster]*dispatcher.BuildFarmConfig{
 				"aws": {"build01": {FilenamesRaw: []string{"cluster-etcd-operator-master-presubmits.yaml", "cluster-api-provider-gcp-presubmits.yaml", "ci-tools-presubmits.yaml"}}},
@@ -127,9 +126,9 @@ func TestDispatchJobs(t *testing.T) {
 }
 
 func TestDispatchJobConfig(t *testing.T) {
-	clusterMap := sanitizer.ClusterMap{
-		"build01": sanitizer.ClusterInfo{Capacity: 100},
-		"build02": sanitizer.ClusterInfo{Capacity: 100},
+	clusterMap := dispatcher.ClusterMap{
+		"build01": dispatcher.ClusterInfo{Capacity: 100},
+		"build02": dispatcher.ClusterInfo{Capacity: 100},
 	}
 	testCases := []struct {
 		name        string
@@ -461,7 +460,7 @@ func TestDispatchMissingJobs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := dispatchMissingJobs(tt.args.prowJobConfigDir, tt.args.config, tt.args.blocked, tt.args.pjs); (err != nil) != tt.wantErr {
+			if err := dispatchMissingJobs(tt.args.prowJobConfigDir, tt.args.config, tt.args.blocked, tt.args.pjs, dispatcher.ClusterMap{}); (err != nil) != tt.wantErr {
 				t.Errorf("dispatchMissingJobs() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if !reflect.DeepEqual(tt.expectedPjs, tt.args.pjs) {

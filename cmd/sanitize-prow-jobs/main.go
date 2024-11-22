@@ -53,7 +53,7 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatalf("Failed to load config from %q", opt.configPath)
 	}
-	_, blocked, err := sanitizer.LoadClusterConfig(opt.clusterConfigPath)
+	cm, blocked, err := dispatcher.LoadClusterConfig(opt.clusterConfigPath)
 	if err != nil {
 		logrus.WithError(err).Fatalf("Failed to load cluster config from %q", opt.configPath)
 	}
@@ -66,7 +66,7 @@ func main() {
 	}
 	for _, subDir := range args {
 		subDir = filepath.Join(opt.prowJobConfigDir, subDir)
-		if err := sanitizer.DeterminizeJobs(subDir, config, nil, blocked); err != nil {
+		if err := sanitizer.DeterminizeJobs(subDir, config, nil, blocked, cm); err != nil {
 			logrus.WithError(err).Fatal("Failed to determinize")
 		}
 	}

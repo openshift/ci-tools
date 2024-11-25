@@ -85,6 +85,7 @@ func (s *ciSecretBootstrapStep) updateCiSecretBootstrapConfig(c *secretbootstrap
 		s.updateSecret(s.generateMultiarchBuilderControllerSecret),
 		s.updateDexIdAndSecret,
 		s.updateDexClientSecret,
+		s.upsertClusterInitSecret,
 	}
 	if !*s.clusterInstall.Onboard.Unmanaged {
 		steps = append(steps, s.updatePodScalerSecret)
@@ -532,6 +533,36 @@ func (s *ciSecretBootstrapStep) generateMultiarchBuilderControllerSecret() *secr
 			s.generateDockerConfigJsonSecretConfigTo(secretName, CI, clusterName),
 		},
 	}
+}
+
+func (s *ciSecretBootstrapStep) upsertClusterInitSecret(c *secretbootstrap.Config) error {
+	secret, i := secretbootstrap.FindSecret(c.Secrets, secretbootstrap.ByNamespacedName("ci", "cluster-init"))
+
+	if i == -1 {
+		secret = &secretbootstrap.SecretConfig{
+			From: map[string]secretbootstrap.ItemContext{},
+			To: []secretbootstrap.SecretContext{
+				{ClusterGroups: []string{BuildUFarm}, Namespace: "ci", Name: "cluster-init"},
+			},
+		}
+	}
+
+	for _, configContextName := range []string{
+		fmt.Sprintf("sa.cluster-init.%s.config", s.clusterInstall.ClusterName),
+		fmt.Sprintf("sa.cluster-init.%s.token.txt", s.clusterInstall.ClusterName),
+	} {
+		if _, ok := secret.From[configContextName]; !ok {
+			secret.From[configContextName] = secretbootstrap.ItemContext{Field: configContextName, Item: BuildUFarm}
+		}
+	}
+
+	if i == -1 {
+		c.Secrets = append(c.Secrets, *secret)
+	} else {
+		c.Secrets[i] = *secret
+	}
+
+	return nil
 }
 
 func (s *ciSecretBootstrapStep) findSecretConfig(name string, cluster string, sc []secretbootstrap.SecretConfig) (int, *secretbootstrap.SecretConfig, error) {

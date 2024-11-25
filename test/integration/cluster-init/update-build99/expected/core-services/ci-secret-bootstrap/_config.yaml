@@ -387,6 +387,18 @@ secret_configs:
   - cluster: build99
     name: dex-rh-sso
     namespace: openshift-config
+- from:
+    sa.cluster-init.build99.config:
+      field: sa.cluster-init.build99.config
+      item: build_farm
+    sa.cluster-init.build99.token.txt:
+      field: sa.cluster-init.build99.token.txt
+      item: build_farm
+  to:
+  - cluster_groups:
+    - build_farm
+    name: cluster-init
+    namespace: ci
 user_secrets_target_clusters:
 - arm01
 - build99

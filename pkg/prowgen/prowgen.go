@@ -104,20 +104,31 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		if api.PromotesOfficialImages(configSpec, api.WithOKD) {
 			presubmitTargets = append(presubmitTargets, "[release:latest]")
 		}
-		jobBaseGen := newJobBaseBuilder().TestName("images")
+		imagesTestName := "images"
+		jobBaseGen := newJobBaseBuilder().TestName(imagesTestName)
 		cluster := determineMultiArchCluster(configSpec.Images)
 		if cluster != "" {
 			jobBaseGen.Cluster(cluster).WithLabel(api.ClusterLabel, string(cluster))
 		}
 		jobBaseGen.PodSpec.Add(Targets(presubmitTargets...))
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, "images", info))
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, imagesTestName, info))
 
 		if configSpec.PromotionConfiguration != nil {
-			jobBaseGen = newJobBaseBuilder().TestName("images")
+			jobBaseGen = newJobBaseBuilder().TestName(imagesTestName)
 			if cluster != "" {
 				jobBaseGen.Cluster(cluster).WithLabel(api.ClusterLabel, string(cluster))
 			}
 			jobBaseGen.PodSpec.Add(Promotion(), Targets(imageTargets.UnsortedList()...))
+			if slackReporter := info.Config.GetSlackReporterConfigForTest(imagesTestName, configSpec.Metadata.Variant); slackReporter != nil {
+				if jobBaseGen.base.ReporterConfig == nil {
+					jobBaseGen.base.ReporterConfig = &prowv1.ReporterConfig{}
+				}
+				jobBaseGen.base.ReporterConfig.Slack = &prowv1.SlackReporterConfig{
+					Channel:           slackReporter.Channel,
+					JobStatesToReport: slackReporter.JobStatesToReport,
+					ReportTemplate:    slackReporter.ReportTemplate,
+				}
+			}
 			postsubmit := generatePostsubmitForTest(jobBaseGen, info)
 			postsubmit.MaxConcurrency = 1
 			if postsubmit.Labels == nil {

@@ -1399,6 +1399,7 @@ const (
 	ClusterProfileAWSSDCICD             ClusterProfile = "aws-sd-cicd"
 	ClusterProfileGCPSDCICD             ClusterProfile = "gcp-sd-cicd"
 	ClusterProfileAroRH                 ClusterProfile = "aro-redhat-tenant"
+	ClusterProfileAWSRHOAIQE            ClusterProfile = "aws-rhoai-qe"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -1547,6 +1548,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSSDCICD,
 		ClusterProfileGCPSDCICD,
 		ClusterProfileAroRH,
+		ClusterProfileAWSRHOAIQE,
 	}
 }
 
@@ -1602,7 +1604,8 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileODFAWS,
 		ClusterProfileAWSObservabiltity,
 		ClusterProfileAWSSDCICD,
-		ClusterProfileKonfluxWorkspacesAWS:
+		ClusterProfileKonfluxWorkspacesAWS,
+		ClusterProfileAWSRHOAIQE:
 		return string(CloudAWS)
 	case
 		ClusterProfileAlibabaCloud,
@@ -1847,6 +1850,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-splat-quota-slice"
 	case ClusterProfileAWSKubeVirt:
 		return "aws-kubevirt-quota-slice"
+	case ClusterProfileAWSRHOAIQE:
+		return "aws-rhoai-qe-quota-slice"
 	case ClusterProfileAWSOVNPerfScale:
 		return "aws-ovn-perfscale-quota-slice"
 	case ClusterProfileAlibabaCloud:

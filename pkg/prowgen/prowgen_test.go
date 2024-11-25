@@ -7,6 +7,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	utilpointer "k8s.io/utils/pointer"
+	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -563,6 +564,30 @@ func TestGenerateJobs(t *testing.T) {
 					Org:    "organization",
 					Repo:   "repository",
 					Branch: "branch",
+				},
+			},
+		},
+		{
+			id: "images job is configured for slack reporting",
+			config: &ciop.ReleaseBuildConfiguration{
+				Images:                 []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
+				PromotionConfiguration: &ciop.PromotionConfiguration{},
+			},
+			repoInfo: &ProwgenInfo{
+				Metadata: ciop.Metadata{
+					Org:    "organization",
+					Repo:   "repository",
+					Branch: "branch",
+				},
+				Config: config.Prowgen{
+					SlackReporterConfigs: []config.SlackReporterConfig{
+						{
+							Channel:           "some-channel",
+							JobStatesToReport: []prowv1.ProwJobState{"error"},
+							ReportTemplate:    "some template",
+							JobNames:          []string{"images", "e2e"},
+						},
+					},
 				},
 			},
 		},

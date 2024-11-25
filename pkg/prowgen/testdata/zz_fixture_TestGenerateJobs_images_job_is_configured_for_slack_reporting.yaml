@@ -1,0 +1,19 @@
+postsubmits:
+  organization/repository:
+  - always_run: true
+    labels:
+      ci-operator.openshift.io/is-promotion: "true"
+    max_concurrency: 1
+    name: branch-ci-organization-repository-branch-images
+    reporter_config:
+      slack:
+        channel: some-channel
+        job_states_to_report:
+        - error
+        report_template: some template
+presubmits:
+  organization/repository:
+  - always_run: false
+    labels:
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+    name: pull-ci-organization-repository-branch-images

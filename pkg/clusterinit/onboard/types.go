@@ -13,17 +13,18 @@ import (
 type KubeClientGetter func() (ctrlruntimeclient.Client, error)
 
 const (
-	BuildFarm                  = "build-farm"
-	BuildUFarm                 = "build_farm"
-	CI                         = "ci"
-	CIOperator                 = "ci-operator"
-	ClusterDisplay             = "cluster-display"
-	ConfigUpdater              = "config-updater"
-	GithubLdapUserGroupCreator = "github-ldap-user-group-creator"
-	Master                     = "master"
-	PodScaler                  = "pod-scaler"
-	PromotedImageGovernor      = "promoted-image-governor"
-	dexManifests               = "clusters/app.ci/dex/manifests.yaml"
+	BuildFarm                             = "build-farm"
+	BuildUFarm                            = "build_farm"
+	CI                                    = "ci"
+	CIOperator                            = "ci-operator"
+	ClusterDisplay                        = "cluster-display"
+	ConfigUpdater                         = "config-updater"
+	GithubLdapUserGroupCreator            = "github-ldap-user-group-creator"
+	Master                                = "master"
+	PodScaler                             = "pod-scaler"
+	PromotedImageGovernor                 = "promoted-image-governor"
+	dexManifests                          = "clusters/app.ci/dex/manifests.yaml"
+	CISchedulingWebhookCommonRelativePath = "../../common_ci_scheduling_webhook"
 )
 
 func ServiceAccountKubeconfigPath(serviceAccount, clusterName string) string {
@@ -81,10 +82,6 @@ func CISchedulingWebhookManifestsPath(releaseRepo, clusterName string) string {
 
 func CISchedulingWebhookManifestsCommonPath(releaseRepo, clusterName string) string {
 	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "ci-scheduling-webhook/common")
-}
-
-func CISchedulingWebhookCommonPath(releaseRepo string) string {
-	return filepath.Join(releaseRepo, "clusters", "build-clusters/common_ci_scheduling_webhook")
 }
 
 func CISchedulingWebhookDNSPath(manifests string) string {

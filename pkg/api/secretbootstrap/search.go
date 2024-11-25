@@ -2,6 +2,7 @@ package secretbootstrap
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -10,26 +11,34 @@ type secretConfigFilter struct {
 	explain string
 }
 
-// Filter secret that targets a specific namespace/name.
-// If namespace isn't provided, the filter matches name only.
-func ByNamespacedName(ns, name string) secretConfigFilter {
+// Filter secret that targets a specific destination.
+func ByDestination(targetTo *SecretContext) secretConfigFilter {
 	return secretConfigFilter{
 		apply: func(sc *SecretConfig) bool {
 			for i := range sc.To {
 				target := &sc.To[i]
-				if ns == "" {
-					if target.Name == name {
-						return true
-					}
-				} else {
-					if target.Name == name && target.Namespace == ns {
-						return true
-					}
+				if reflect.DeepEqual(targetTo, target) {
+					return true
 				}
 			}
 			return false
 		},
-		explain: fmt.Sprintf("namespace/name: %s/%s", ns, name),
+		explain: fmt.Sprintf("to: %+v", *targetTo),
+	}
+}
+
+// Filter secrets for which at least one destination matches a predicate function.
+func ByDestinationFunc(predicate func(*SecretContext) bool) secretConfigFilter {
+	return secretConfigFilter{
+		apply: func(sc *SecretConfig) bool {
+			for i := range sc.To {
+				if predicate(&sc.To[i]) {
+					return true
+				}
+			}
+			return false
+		},
+		explain: "custom predicate",
 	}
 }
 

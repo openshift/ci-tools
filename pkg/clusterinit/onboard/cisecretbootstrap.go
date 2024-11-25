@@ -24,6 +24,7 @@ const (
 	pjRehearse                   = "pj-rehearse"
 	pull                pushPull = "puller"
 	push                pushPull = "pusher"
+	dockerconfigjson             = "kubernetes.io/dockerconfigjson"
 )
 
 type pushPull string
@@ -86,6 +87,7 @@ func (s *ciSecretBootstrapStep) updateCiSecretBootstrapConfig(c *secretbootstrap
 		s.updateDexIdAndSecret,
 		s.updateDexClientSecret,
 		s.upsertClusterInitSecret,
+		s.upsertManifestToolSecret,
 	}
 	if !*s.clusterInstall.Onboard.Unmanaged {
 		steps = append(steps, s.updatePodScalerSecret)
@@ -245,7 +247,7 @@ func (s *ciSecretBootstrapStep) generateDockerConfigJsonSecretConfigTo(name stri
 		Cluster:   clusterName,
 		Name:      name,
 		Namespace: namespace,
-		Type:      "kubernetes.io/dockerconfigjson",
+		Type:      dockerconfigjson,
 	}
 }
 
@@ -536,7 +538,9 @@ func (s *ciSecretBootstrapStep) generateMultiarchBuilderControllerSecret() *secr
 }
 
 func (s *ciSecretBootstrapStep) upsertClusterInitSecret(c *secretbootstrap.Config) error {
-	secret, i := secretbootstrap.FindSecret(c.Secrets, secretbootstrap.ByNamespacedName("ci", "cluster-init"))
+	secret, i := secretbootstrap.FindSecret(c.Secrets, secretbootstrap.ByDestinationFunc(func(sc *secretbootstrap.SecretContext) bool {
+		return reflect.DeepEqual(sc.ClusterGroups, []string{BuildUFarm}) && sc.Namespace == "ci" && sc.Name == "cluster-init"
+	}))
 
 	if i == -1 {
 		secret = &secretbootstrap.SecretConfig{
@@ -554,6 +558,60 @@ func (s *ciSecretBootstrapStep) upsertClusterInitSecret(c *secretbootstrap.Confi
 		if _, ok := secret.From[configContextName]; !ok {
 			secret.From[configContextName] = secretbootstrap.ItemContext{Field: configContextName, Item: BuildUFarm}
 		}
+	}
+
+	if i == -1 {
+		c.Secrets = append(c.Secrets, *secret)
+	} else {
+		c.Secrets[i] = *secret
+	}
+
+	return nil
+}
+
+func (s *ciSecretBootstrapStep) upsertManifestToolSecret(c *secretbootstrap.Config) error {
+	clusterName := s.clusterInstall.ClusterName
+	secret, i := secretbootstrap.FindSecret(c.Secrets,
+		secretbootstrap.ByDestination(&secretbootstrap.SecretContext{
+			Cluster:   clusterName,
+			Namespace: "ci",
+			Name:      "manifest-tool-local-pusher",
+			Type:      dockerconfigjson}),
+		secretbootstrap.ByDestination(&secretbootstrap.SecretContext{
+			Cluster:   clusterName,
+			Namespace: "test-credentials",
+			Name:      "manifest-tool-local-pusher",
+			Type:      dockerconfigjson}))
+
+	if i == -1 {
+		secret = &secretbootstrap.SecretConfig{}
+	}
+
+	registryUrl, err := api.RegistryDomainForClusterName(clusterName)
+	if err != nil {
+		return fmt.Errorf("registry domain for cluster %s: %w", clusterName, err)
+	}
+
+	secret.From = map[string]secretbootstrap.ItemContext{
+		dotDockerConfigJson: {
+			DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
+				{
+					AuthField:   s.registryCommandTokenField(clusterName, push),
+					Item:        BuildUFarm,
+					RegistryURL: "image-registry.openshift-image-registry.svc:5000",
+				},
+				{
+					AuthField:   s.registryCommandTokenField(clusterName, push),
+					Item:        BuildUFarm,
+					RegistryURL: registryUrl,
+				},
+			},
+		},
+	}
+
+	secret.To = []secretbootstrap.SecretContext{
+		s.generateDockerConfigJsonSecretConfigTo("manifest-tool-local-pusher", "ci", clusterName),
+		s.generateDockerConfigJsonSecretConfigTo("manifest-tool-local-pusher", "test-credentials", clusterName),
 	}
 
 	if i == -1 {

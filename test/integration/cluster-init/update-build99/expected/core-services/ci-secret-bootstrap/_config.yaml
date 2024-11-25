@@ -399,6 +399,24 @@ secret_configs:
     - build_farm
     name: cluster-init
     namespace: ci
+- from:
+    .dockerconfigjson:
+      dockerconfigJSON:
+      - auth_field: token_image-pusher_build99_reg_auth_value.txt
+        item: build_farm
+        registry_url: image-registry.openshift-image-registry.svc:5000
+      - auth_field: token_image-pusher_build99_reg_auth_value.txt
+        item: build_farm
+        registry_url: registry.build99.ci.openshift.org
+  to:
+  - cluster: build99
+    name: manifest-tool-local-pusher
+    namespace: ci
+    type: kubernetes.io/dockerconfigjson
+  - cluster: build99
+    name: manifest-tool-local-pusher
+    namespace: test-credentials
+    type: kubernetes.io/dockerconfigjson
 user_secrets_target_clusters:
 - arm01
 - build99

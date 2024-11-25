@@ -1400,6 +1400,7 @@ const (
 	ClusterProfileGCPSDCICD             ClusterProfile = "gcp-sd-cicd"
 	ClusterProfileAroRH                 ClusterProfile = "aro-redhat-tenant"
 	ClusterProfileAWSRHOAIQE            ClusterProfile = "aws-rhoai-qe"
+	ClusterProfileAWSManagedRosaRHOAIQE ClusterProfile = "aws-managed-rosa-rhoai-qe"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -1605,7 +1606,8 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSObservabiltity,
 		ClusterProfileAWSSDCICD,
 		ClusterProfileKonfluxWorkspacesAWS,
-		ClusterProfileAWSRHOAIQE:
+		ClusterProfileAWSRHOAIQE,
+		ClusterProfileAWSManagedRosaRHOAIQE:
 		return string(CloudAWS)
 	case
 		ClusterProfileAlibabaCloud,
@@ -2067,6 +2069,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "gcp-sd-cicd-quota-slice"
 	case ClusterProfileAroRH:
 		return "aro-redhat-tenant-quota-slice"
+	case ClusterProfileAWSManagedRosaRHOAIQE:
+		return "aws-managed-rosa-rhoai-qe-quota-slice"
 	default:
 		return ""
 	}

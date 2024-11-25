@@ -1402,6 +1402,7 @@ const (
 	ClusterProfileAroRH                 ClusterProfile = "aro-redhat-tenant"
 	ClusterProfileAWSRHOAIQE            ClusterProfile = "aws-rhoai-qe"
 	ClusterProfileAWSManagedRosaRHOAIQE ClusterProfile = "aws-managed-rosa-rhoai-qe"
+	ClusterProfileAWSManagedOSDRHOAIQE  ClusterProfile = "aws-managed-osd-rhoai-qe"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -1553,6 +1554,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAroRH,
 		ClusterProfileAWSRHOAIQE,
 		ClusterProfileAWSManagedRosaRHOAIQE,
+		ClusterProfileAWSManagedOSDRHOAIQE,
 	}
 }
 
@@ -1610,7 +1612,8 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSSDCICD,
 		ClusterProfileKonfluxWorkspacesAWS,
 		ClusterProfileAWSRHOAIQE,
-		ClusterProfileAWSManagedRosaRHOAIQE:
+		ClusterProfileAWSManagedRosaRHOAIQE,
+		ClusterProfileAWSManagedOSDRHOAIQE:
 		return string(CloudAWS)
 	case
 		ClusterProfileAlibabaCloud,
@@ -2077,6 +2080,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aro-redhat-tenant-quota-slice"
 	case ClusterProfileAWSManagedRosaRHOAIQE:
 		return "aws-managed-rosa-rhoai-qe-quota-slice"
+	case ClusterProfileAWSManagedOSDRHOAIQE:
+		return "aws-managed-osd-rhoai-qe-quota-slice"
 	default:
 		return ""
 	}

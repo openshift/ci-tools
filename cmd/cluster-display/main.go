@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"golang.org/x/time/rate"
 
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -288,7 +289,7 @@ func resolveProduct(ctx context.Context, client ctrlruntimeclient.Client, versio
 	return "OSD", nil
 }
 
-func getRouter(ctx context.Context, hiveClient ctrlruntimeclient.Client, clients map[string]ctrlruntimeclient.Client, prowDisabledClusters []string) *http.ServeMux {
+func getRouter(ctx context.Context, hiveClient ctrlruntimeclient.Client, clients map[string]ctrlruntimeclient.Client, prowDisabledClustersGetter func(ctx context.Context) ([]string, error)) *http.ServeMux {
 	handler := http.NewServeMux()
 	cache := memoryCache{CacheDuration: time.Hour, ClusterPoolsCacheDuration: time.Minute}
 
@@ -312,7 +313,12 @@ func getRouter(ctx context.Context, hiveClient ctrlruntimeclient.Client, clients
 			page, err = cache.GetClusterPoolPage(ctx, hiveClient)
 		case "clusters":
 			skipHive := r.URL.Query().Get("skipHive") == "true"
-			disabledClusters := sets.New[string](prowDisabledClusters...)
+			prowDisabledClusters, err := prowDisabledClustersGetter(ctx)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			disabledClusters := sets.New(prowDisabledClusters...)
 			page = cache.GetClusterPage(ctx, allClients, skipHive, &clusterInfoGetter{})
 			var enabled []map[string]string
 			for _, d := range page.Data {
@@ -373,6 +379,58 @@ const (
 	appCIContextName = string(api.ClusterAPPCI)
 )
 
+type prowClient struct {
+	cache struct {
+		disabled []string
+		err      error
+	}
+	// In case of Prow returning errors, we want to slow down a bit not to make the situation even worse.
+	errLimiter   *rate.Limiter
+	cacheTimeout time.Duration
+	cacheM       sync.RWMutex
+	expiresAt    time.Time
+	kubeOpts     *flagutil.KubernetesOptions
+	upstream     func(o *flagutil.KubernetesOptions) (ret []string, retErr error)
+}
+
+// DisabledClusters retrieves a list of disabled clusters from Prow. The result gets cached but,
+// in case of an error, the cache is bypassed and requests are rate limited.
+func (pc *prowClient) DisabledClusters(ctx context.Context) (ret []string, retErr error) {
+	pc.cacheM.RLocker().Lock()
+	defer pc.cacheM.RLocker().Unlock()
+
+	if time.Now().After(pc.expiresAt) || pc.cache.err != nil {
+		// Be easy on Prow now, it's suffering
+		if pc.cache.err != nil && !pc.errLimiter.Allow() {
+			if err := pc.errLimiter.Wait(ctx); err != nil {
+				return nil, fmt.Errorf("wait prow disabled clusters: %w", err)
+			}
+		}
+
+		disabled, err := pc.upstream(pc.kubeOpts)
+		requestedAt := time.Now()
+
+		// Update the cache asynchronously. A possible alternative solution would be:
+		//		m.Lock()
+		//		cache.disabled, cache.err = prowconfigutils.ProwDisabledClusters(o)
+		//		m.Unlock()
+		// and we want to avoid that, as requests would otherwise be issued sequentially.
+		go func() {
+			pc.cacheM.Lock()
+			defer pc.cacheM.Unlock()
+			pc.cache.disabled, pc.cache.err = disabled, err
+			pc.expiresAt = requestedAt.Add(pc.cacheTimeout)
+		}()
+
+		if err != nil {
+			return nil, fmt.Errorf("prow disabled clusters: %w", err)
+		}
+		return disabled, err
+	}
+
+	return pc.cache.disabled, pc.cache.err
+}
+
 func main() {
 	logrusutil.ComponentInit()
 	o, err := gatherOptions()
@@ -381,11 +439,6 @@ func main() {
 	}
 	if err := validateOptions(o); err != nil {
 		logrus.WithError(err).Fatal("invalid options")
-	}
-
-	prowDisabledClusters, err := prowconfigutils.ProwDisabledClusters(&o.kubernetesOptions)
-	if err != nil {
-		logrus.WithError(err).Warn("Failed to get Prow disable clusters")
 	}
 
 	level, _ := logrus.ParseLevel(o.logLevel)
@@ -439,10 +492,22 @@ func main() {
 		clients[cluster] = client
 	}
 
+	prowClient := prowClient{
+		cache: struct {
+			disabled []string
+			err      error
+		}{},
+		errLimiter:   rate.NewLimiter(10, 5),
+		cacheTimeout: 3 * time.Minute,
+		cacheM:       sync.RWMutex{},
+		kubeOpts:     &o.kubernetesOptions,
+		upstream:     prowconfigutils.ProwDisabledClusters,
+	}
 	server := &http.Server{
 		Addr:    ":" + strconv.Itoa(o.port),
-		Handler: getRouter(interrupts.Context(), hiveClient, clients, prowDisabledClusters),
+		Handler: getRouter(interrupts.Context(), hiveClient, clients, prowClient.DisabledClusters),
 	}
+
 	interrupts.ListenAndServe(server, o.gracePeriod)
 	interrupts.WaitForGracefulShutdown()
 }

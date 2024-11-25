@@ -1315,6 +1315,7 @@ const (
 	ClusterProfileEquinixOcpHCP         ClusterProfile = "equinix-ocp-hcp"
 	ClusterProfileFleetManagerQE        ClusterProfile = "fleet-manager-qe"
 	ClusterProfileGCPQE                 ClusterProfile = "gcp-qe"
+	ClusterProfileGCPQEC3Metal          ClusterProfile = "gcp-qe-c3-metal"
 	ClusterProfileGCPAutoReleaseQE      ClusterProfile = "gcp-autorelease-qe"
 	ClusterProfileGCPArm64              ClusterProfile = "gcp-arm64"
 	ClusterProfileGCP                   ClusterProfile = "gcp"
@@ -1468,6 +1469,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileGCP2,
 		ClusterProfileGCP3,
 		ClusterProfileGCPQE,
+		ClusterProfileGCPQEC3Metal,
 		ClusterProfileGCPAutoReleaseQE,
 		ClusterProfileGCPArm64,
 		ClusterProfileGCPVirtualization,
@@ -1652,6 +1654,7 @@ func (p ClusterProfile) ClusterType() string {
 		return "equinix-ocp-metal"
 	case
 		ClusterProfileGCPQE,
+		ClusterProfileGCPQEC3Metal,
 		ClusterProfileGCPAutoReleaseQE,
 		ClusterProfileGCPArm64,
 		ClusterProfileGCP,
@@ -1899,6 +1902,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "fleet-manager-qe-quota-slice"
 	case ClusterProfileGCPQE:
 		return "gcp-qe-quota-slice"
+	case ClusterProfileGCPQEC3Metal:
+		return "gcp-qe-c3-metal-quota-slice"
 	case ClusterProfileGCPAutoReleaseQE:
 		return "gcp-autorelease-qe-quota-slice"
 	case ClusterProfileGCPArm64:

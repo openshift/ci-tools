@@ -1550,6 +1550,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileGCPSDCICD,
 		ClusterProfileAroRH,
 		ClusterProfileAWSRHOAIQE,
+		ClusterProfileAWSManagedRosaRHOAIQE,
 	}
 }
 

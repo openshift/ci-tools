@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -23,6 +24,8 @@ import (
 	"github.com/openshift/ci-tools/pkg/clusterinit/onboard/cischedulingwebhook"
 	"github.com/openshift/ci-tools/pkg/clusterinit/onboard/machineset"
 	clusterinittypes "github.com/openshift/ci-tools/pkg/clusterinit/types"
+
+	rhcostream "github.com/coreos/stream-metadata-go/stream"
 )
 
 func NewCmd(log *logrus.Entry, opts *runtime.Options) (*cobra.Command, error) {
@@ -108,7 +111,7 @@ func addClusterInstallRuntimeInfo(ctx context.Context, ci *clusterinstall.Cluste
 
 	cm := corev1.ConfigMap{}
 	if err := kubeClient.Get(ctx, types.NamespacedName{Namespace: "kube-system", Name: "cluster-config-v1"}, &cm); err != nil {
-		return fmt.Errorf("get cluster-config-v1: %w", err)
+		return fmt.Errorf("get kube-system/cluster-config-v1: %w", err)
 	}
 	installConfigRaw, ok := cm.Data["install-config"]
 	if !ok {
@@ -119,6 +122,19 @@ func addClusterInstallRuntimeInfo(ctx context.Context, ci *clusterinstall.Cluste
 		return fmt.Errorf("unmarshall install config: %w", err)
 	}
 	ci.InstallConfig = installConfig
+
+	cm = corev1.ConfigMap{}
+	if err := kubeClient.Get(ctx, types.NamespacedName{Namespace: "openshift-machine-config-operator", Name: "coreos-bootimages"}, &cm); err != nil {
+		return fmt.Errorf("get openshift-machine-config-operator/coreos-bootimages: %w", err)
+	}
+	if _, ok := cm.Data["stream"]; !ok {
+		return errors.New("coreos stream data not found")
+	}
+	stream := rhcostream.Stream{}
+	if err := json.Unmarshal([]byte(cm.Data["stream"]), &stream); err != nil {
+		return fmt.Errorf("unmarshal coreos stream: %w", err)
+	}
+	ci.CoreOSStream = stream
 
 	return nil
 }

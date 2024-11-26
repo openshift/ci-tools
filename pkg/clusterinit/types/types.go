@@ -12,9 +12,19 @@ import (
 
 const (
 	ArchAMD64   string = "amd64"
+	Arch_x86_64 string = "x86_64"
 	ArchARM64   string = "arm64"
 	ArchAARCH64 string = "aarch64"
 )
+
+// ToCoreOSStreamArch maps "our" architectures constants to arch strings that
+// make sense in the CoreOS stream.json
+func ToCoreOSStreamArch(arch string) string {
+	if arch == ArchAMD64 {
+		return Arch_x86_64
+	}
+	return arch
+}
 
 type ManifestGenerator interface {
 	Name() string

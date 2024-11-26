@@ -119,3 +119,7 @@ func IngressOperatorManifestsPath(releaseRepo, clusterName string) string {
 func OpenshiftMonitoringManifestsPath(releaseRepo, clusterName string) string {
 	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "openshift-monitoring")
 }
+
+func MultiarchTuningOperatorPath(releaseRepo, clusterName string) string {
+	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "multiarch_tuning_operator")
+}

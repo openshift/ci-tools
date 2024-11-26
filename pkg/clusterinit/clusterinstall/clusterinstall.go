@@ -52,6 +52,7 @@ type Onboard struct {
 	PassthroughManifest        PassthroughManifest        `json:"passthrough,omitempty"`
 	CloudabilityAgent          CloudabilityAgent          `json:"cloudabilityAgent,omitempty"`
 	OpenshiftMonitoring        OpenshiftMonitoring        `json:"openshiftMonitoring,omitempty"`
+	MultiarchTuningOperator    MultiarchTuningOperator    `json:"multiarchTuningOperator,omitempty"`
 }
 
 type Dex struct {
@@ -104,6 +105,10 @@ type OpenshiftMonitoring struct {
 	types.SkipStep
 	types.ExcludeManifest
 	Patches []manifest.Patch `json:"patches,omitempty"`
+}
+
+type MultiarchTuningOperator struct {
+	types.SkipStep
 }
 
 const (

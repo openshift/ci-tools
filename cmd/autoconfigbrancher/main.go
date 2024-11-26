@@ -158,7 +158,6 @@ func main() {
 				"--prune-unused-replacements",
 				"--prune-ocp-builder-replacements",
 				"--prune-unused-base-images",
-				"--ensure-correct-promotion-dockerfile",
 				"--current-release-minor=" + versionSplit[1],
 				"--ensure-correct-promotion-dockerfile-ignored-repos", "openshift/origin-aggregated-logging",
 				"--ensure-correct-promotion-dockerfile-ignored-repos", "openshift/console",

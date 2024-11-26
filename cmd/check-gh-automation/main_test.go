@@ -10,7 +10,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
-	"sigs.k8s.io/prow/pkg/github"
 	"sigs.k8s.io/prow/pkg/plugins"
 
 	"github.com/openshift/ci-tools/pkg/testhelper"
@@ -21,7 +20,6 @@ type fakeAutomationClient struct {
 	membersByOrg          map[string][]string
 	reposWithAppInstalled sets.Set[string]
 	permissionsByRepo     map[string]map[string][]string
-	privacyByRepo         map[string]bool
 }
 
 func newFakePluginConfigAgent() *plugins.ConfigAgent {
@@ -80,9 +78,6 @@ func newFakeProwConfigAgent() *prowconfig.Agent {
 								},
 							},
 							"repo-c": {
-								Policy: prowconfig.Policy{},
-							},
-							"repo-d": {
 								Policy: prowconfig.Policy{},
 							},
 						},
@@ -154,12 +149,6 @@ func (c fakeAutomationClient) IsAppInstalled(org, repo string) (bool, error) {
 	return c.reposWithAppInstalled.Has(orgRepo), nil
 }
 
-func (c fakeAutomationClient) GetRepo(owner, name string) (github.FullRepo, error) {
-	orgRepo := fmt.Sprintf("%s/%s", owner, name)
-	private := c.privacyByRepo[orgRepo]
-	return github.FullRepo{Repo: github.Repo{Private: private}}, nil
-}
-
 func TestCheckRepos(t *testing.T) {
 	client := fakeAutomationClient{
 		collaboratorsByRepo: map[string][]string{
@@ -191,10 +180,6 @@ func TestCheckRepos(t *testing.T) {
 			"org-5/repo-c": {
 				"openshift-merge-robot": []string{"read"},
 			},
-		},
-		privacyByRepo: map[string]bool{
-			"org-5/repo-a": false,
-			"org-5/repo-d": true,
 		},
 	}
 
@@ -343,18 +328,6 @@ func TestCheckRepos(t *testing.T) {
 			adminBots: []string{},
 			mode:      standard,
 			expected:  []string{},
-		},
-		{
-			name:     "repository has branch protection enabled and is public",
-			repos:    []string{"org-5/repo-a"},
-			mode:     standard,
-			expected: []string{},
-		},
-		{
-			name:        "repository has branch protection enabled but is private",
-			repos:       []string{"org-5/repo-d"},
-			mode:        standard,
-			expectedErr: errors.New("branch protection is enabled, the repository org-5/repo-d must be public"),
 		},
 	}
 	for _, tc := range testCases {

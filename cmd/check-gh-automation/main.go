@@ -13,7 +13,6 @@ import (
 	"sigs.k8s.io/prow/pkg/flagutil"
 	configflagutil "sigs.k8s.io/prow/pkg/flagutil/config"
 	prowpluginconfig "sigs.k8s.io/prow/pkg/flagutil/plugins"
-	"sigs.k8s.io/prow/pkg/github"
 	"sigs.k8s.io/prow/pkg/logrusutil"
 	"sigs.k8s.io/prow/pkg/plugins"
 	"sigs.k8s.io/prow/pkg/pod-utils/downwardapi"
@@ -83,7 +82,6 @@ type automationClient interface {
 	IsCollaborator(org, repo, user string) (bool, error)
 	IsAppInstalled(org, repo string) (bool, error)
 	HasPermission(org, repo, user string, permissions ...string) (bool, error)
-	GetRepo(owner, name string) (github.FullRepo, error)
 }
 
 func main() {
@@ -208,18 +206,7 @@ func checkRepos(repos []string, bots []string, appName string, ignore sets.Set[s
 			}
 
 			// If branch protection is configured, verify admin access for the hardcoded admin bot
-			// and if the repository is public
 			if branchProtectionEnabled {
-				fullRepo, err := client.GetRepo(org, repo)
-				if err != nil {
-					logger.Errorf("Error checking public access in %s/%s: %v", org, repo, err)
-					return nil, fmt.Errorf("error checking public access in %s/%s: %w", org, repo, err)
-				}
-				if fullRepo.Private {
-					logger.Errorf("Branch protection is enabled, the repository %s/%s must be public", org, repo)
-					return nil, fmt.Errorf("branch protection is enabled, the repository %s/%s must be public", org, repo)
-				}
-
 				logger.Infof("Branch protection is enabled for %s/%s", org, repo)
 				// Hardcoded merge robot
 				hasAdminAccess, err := client.HasPermission(org, repo, branchProtectionRobot, "admin")

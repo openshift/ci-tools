@@ -1,10 +1,11 @@
 package clusterinstall
 
 import (
+	rhcostream "github.com/coreos/stream-metadata-go/stream"
+
 	configv1 "github.com/openshift/api/config/v1"
 	installertypes "github.com/openshift/installer/pkg/types"
 
-	rhcostream "github.com/coreos/stream-metadata-go/stream"
 	"github.com/openshift/ci-tools/pkg/clusterinit/manifest"
 	"github.com/openshift/ci-tools/pkg/clusterinit/types"
 	"github.com/openshift/ci-tools/pkg/clusterinit/types/aws"

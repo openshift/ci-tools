@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	rhcostream "github.com/coreos/stream-metadata-go/stream"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
@@ -24,8 +25,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/clusterinit/onboard/cischedulingwebhook"
 	"github.com/openshift/ci-tools/pkg/clusterinit/onboard/machineset"
 	clusterinittypes "github.com/openshift/ci-tools/pkg/clusterinit/types"
-
-	rhcostream "github.com/coreos/stream-metadata-go/stream"
 )
 
 func NewCmd(log *logrus.Entry, opts *runtime.Options) (*cobra.Command, error) {

@@ -42,6 +42,9 @@ func (rt *replayTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		if err != nil {
 			return nil, fmt.Errorf("read body: %w", err)
 		}
+		if err := req.Body.Close(); err != nil {
+			return nil, fmt.Errorf("close body: %w", err)
+		}
 		req.Body = io.NopCloser(bytes.NewReader(body))
 		bodyBytes = body
 	}
@@ -181,6 +184,9 @@ func (t *tracker) add(req *http.Request, reqBody []byte, res *http.Response) err
 	if err != nil {
 		return fmt.Errorf("read response body: %w", err)
 	}
+	if err := res.Body.Close(); err != nil {
+		return fmt.Errorf("close response body: %w", err)
+	}
 	res.Body = io.NopCloser(bytes.NewReader(resBody))
 
 	rplay := replay{
@@ -249,22 +255,20 @@ func createReplayFile(file string) error {
 	return err
 }
 
-func ReplayTransport(inner http.RoundTripper) http.RoundTripper {
+func ReplayTransport(inner http.RoundTripper) *replayTransport {
 	if inner == nil {
-		return inner
+		return nil
 	}
 
 	clientMode, ok := os.LookupEnv("CITOOLS_REPLAYTRANSPORT_MODE")
 	if !ok {
-		return inner
+		clientMode = "read"
 	}
 
 	switch clientMode {
-	case "read":
-		return newReplayTransport(inner, false)
 	case "rw":
 		return newReplayTransport(inner, true)
+	default: // case "read":
+		return newReplayTransport(inner, false)
 	}
-
-	return inner
 }

@@ -116,7 +116,7 @@ func TestUpdateSecretGeneratorConfig(t *testing.T) {
 			name: "basic",
 			ci: clusterinstall.ClusterInstall{
 				ClusterName: "newcluster",
-				Onboard:     clusterinstall.Onboard{Unmanaged: ptr.To(false)},
+				Onboard:     clusterinstall.Onboard{Unmanaged: ptr.To(false), Multiarch: ptr.To(true)},
 			},
 			input: SecretGenConfig{
 				{
@@ -161,6 +161,16 @@ func TestUpdateSecretGeneratorConfig(t *testing.T) {
 						"cluster": {
 							string(api.ClusterAPPCI),
 							string(api.ClusterBuild01)}},
+				},
+				{
+					ItemName: "build_farm",
+					Fields: []secretgenerator.FieldGenerator{{
+						Name: "token_multi-arch-builder-controller_$(cluster)_reg_auth_value.txt",
+						Cmd:  "oc create token -n ci multi-arch-builder-controller",
+					}},
+					Params: map[string][]string{
+						"cluster": {string(api.ClusterBuild10)},
+					},
 				},
 			},
 			expected: SecretGenConfig{
@@ -210,6 +220,19 @@ func TestUpdateSecretGeneratorConfig(t *testing.T) {
 							string(api.ClusterAPPCI),
 							string(api.ClusterBuild01),
 							"newcluster"}},
+				},
+				{
+					ItemName: "build_farm",
+					Fields: []secretgenerator.FieldGenerator{{
+						Name: "token_multi-arch-builder-controller_$(cluster)_reg_auth_value.txt",
+						Cmd:  "oc create token -n ci multi-arch-builder-controller",
+					}},
+					Params: map[string][]string{
+						"cluster": {
+							string(api.ClusterBuild10),
+							"newcluster",
+						},
+					},
 				},
 			},
 		},

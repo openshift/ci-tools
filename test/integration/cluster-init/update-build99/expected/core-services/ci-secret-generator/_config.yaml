@@ -62,3 +62,15 @@
     - build99
     service_account:
     - pod-scaler
+- fields:
+  - cmd: oc --kubeconfig /tmp/build-farm-credentials/sa.config-updater.$(cluster).config
+      create token -n ci multi-arch-builder-controller --duration=2419200s --bound-object-kind=Secret
+      --bound-object-name=token-bound-object-1 | sed 's/^/serviceaccount:/' | base64
+      -w 0
+    name: token_multi-arch-builder-controller_$(cluster)_reg_auth_value.txt
+  item_name: build_farm
+  params:
+    cluster:
+    - build10
+    - build11
+    - build99

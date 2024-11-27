@@ -27,6 +27,27 @@ type EC2ClientGetter interface {
 	EC2Client(context.Context) (EC2Client, error)
 }
 
+type EC2ClientGetterFunc func(context.Context) (EC2Client, error)
+
+func (f EC2ClientGetterFunc) EC2Client(ctx context.Context) (EC2Client, error) {
+	return f(ctx)
+}
+
+var _ EC2Client = &FakeEC2Client{}
+
+type FakeEC2Client struct {
+	Subnets        *ec2.DescribeSubnetsOutput
+	SecurityGroups *ec2.DescribeSecurityGroupsOutput
+}
+
+func (fc *FakeEC2Client) DescribeSubnets(context.Context, *ec2.DescribeSubnetsInput, ...func(*ec2.Options)) (*ec2.DescribeSubnetsOutput, error) {
+	return fc.Subnets, nil
+}
+
+func (fc *FakeEC2Client) DescribeSecurityGroups(context.Context, *ec2.DescribeSecurityGroupsInput, ...func(*ec2.Options)) (*ec2.DescribeSecurityGroupsOutput, error) {
+	return fc.SecurityGroups, nil
+}
+
 type ClientGetters struct {
 	cloudFormation func(context.Context) (CloudFormationClient, error)
 }

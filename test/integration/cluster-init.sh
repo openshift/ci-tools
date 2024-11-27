@@ -62,6 +62,7 @@ onboard:
     osd: false
     unmanaged: false
     useTokenFileInKubeconfig: true
+    multiarch: true
     ciSchedulingWebhook:
       patches:
       - matches:

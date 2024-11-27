@@ -81,7 +81,8 @@ func (s *ciSecretBootstrapStep) updateCiSecretBootstrapConfig(c *secretbootstrap
 		s.updateChatBotSecret,
 		s.updateSecret(s.generateRegistryPushCredentialsSecret),
 		s.updateSecret(s.generateRegistryPullCredentialsSecret),
-		s.updateSecret(s.generateCiOperatorSecret),
+		s.updateSecret(s.generateCIOperatorSecret),
+		s.updateSecret(s.generateMultiarchBuilderControllerSecret),
 		s.updateDexIdAndSecret,
 		s.updateDexClientSecret,
 	}
@@ -98,22 +99,25 @@ func (s *ciSecretBootstrapStep) updateCiSecretBootstrapConfig(c *secretbootstrap
 	return nil
 }
 
-func (s *ciSecretBootstrapStep) updateSecret(secretGenerator func() secretbootstrap.SecretConfig) func(c *secretbootstrap.Config) error {
+func (s *ciSecretBootstrapStep) updateSecret(secretGenerator func() *secretbootstrap.SecretConfig) func(c *secretbootstrap.Config) error {
 	return func(c *secretbootstrap.Config) error {
 		secret := secretGenerator()
+		if secret == nil {
+			return nil
+		}
 		idx, _, _ := s.findSecretConfig(secret.To[0].Name, s.clusterInstall.ClusterName, c.Secrets)
 		if idx != -1 {
 			s.log.Infof("Replacing existing secret with 'to' of: %v", secret.To)
-			c.Secrets = append(c.Secrets[:idx], append([]secretbootstrap.SecretConfig{secret}, c.Secrets[idx+1:]...)...)
+			c.Secrets = append(c.Secrets[:idx], append([]secretbootstrap.SecretConfig{*secret}, c.Secrets[idx+1:]...)...)
 		} else {
 			s.log.Infof("Creating new secret with 'to' of: %v", secret.To)
-			c.Secrets = append(c.Secrets, secret)
+			c.Secrets = append(c.Secrets, *secret)
 		}
 		return nil
 	}
 }
 
-func (s *ciSecretBootstrapStep) generateCiOperatorSecret() secretbootstrap.SecretConfig {
+func (s *ciSecretBootstrapStep) generateCIOperatorSecret() *secretbootstrap.SecretConfig {
 	from := map[string]secretbootstrap.ItemContext{
 		kubeconfig: {
 			Field: ServiceAccountKubeconfigPath(CIOperator, s.clusterInstall.ClusterName),
@@ -127,7 +131,7 @@ func (s *ciSecretBootstrapStep) generateCiOperatorSecret() secretbootstrap.Secre
 			Item:  BuildUFarm,
 		}
 	}
-	return secretbootstrap.SecretConfig{
+	return &secretbootstrap.SecretConfig{
 		From: from,
 		To: []secretbootstrap.SecretContext{
 			{
@@ -139,8 +143,8 @@ func (s *ciSecretBootstrapStep) generateCiOperatorSecret() secretbootstrap.Secre
 	}
 }
 
-func (s *ciSecretBootstrapStep) generateRegistryPushCredentialsSecret() secretbootstrap.SecretConfig {
-	return secretbootstrap.SecretConfig{
+func (s *ciSecretBootstrapStep) generateRegistryPushCredentialsSecret() *secretbootstrap.SecretConfig {
+	return &secretbootstrap.SecretConfig{
 		From: map[string]secretbootstrap.ItemContext{
 			dotDockerConfigJson: s.generatePushPullSecretFrom(s.clusterInstall.ClusterName, []secretbootstrap.DockerConfigJSONData{
 				{
@@ -162,8 +166,8 @@ func (s *ciSecretBootstrapStep) generateRegistryPushCredentialsSecret() secretbo
 	}
 }
 
-func (s *ciSecretBootstrapStep) generateRegistryPullCredentialsSecret() secretbootstrap.SecretConfig {
-	return secretbootstrap.SecretConfig{
+func (s *ciSecretBootstrapStep) generateRegistryPullCredentialsSecret() *secretbootstrap.SecretConfig {
+	return &secretbootstrap.SecretConfig{
 		From: map[string]secretbootstrap.ItemContext{
 			dotDockerConfigJson: s.generatePushPullSecretFrom(s.clusterInstall.ClusterName, []secretbootstrap.DockerConfigJSONData{
 				{
@@ -492,6 +496,42 @@ func (s *ciSecretBootstrapStep) updateBuildFarmSecrets(c *secretbootstrap.Config
 	}
 
 	return nil
+}
+
+func (s *ciSecretBootstrapStep) generateMultiarchBuilderControllerSecret() *secretbootstrap.SecretConfig {
+	if !*s.clusterInstall.Onboard.Multiarch {
+		s.log.Info("Cluster is not multiarch, skipping multiarch secret")
+		return nil
+	}
+
+	clusterName := s.clusterInstall.ClusterName
+	secretName := fmt.Sprintf("multi-arch-builder-controller-%s-registry-credentials", clusterName)
+	return &secretbootstrap.SecretConfig{
+		From: map[string]secretbootstrap.ItemContext{
+			dotDockerConfigJson: {
+				DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
+					{
+						AuthField:   s.registryCommandTokenField(clusterName, push),
+						Item:        BuildUFarm,
+						RegistryURL: "image-registry.openshift-image-registry.svc:5000",
+					},
+					{
+						AuthField:   fmt.Sprintf("token_multi-arch-builder-controller_%s_reg_auth_value.txt", clusterName),
+						Item:        BuildUFarm,
+						RegistryURL: api.ServiceDomainMulti01Registry,
+					},
+					{
+						AuthField:   s.registryCommandTokenField(string(api.ClusterAPPCI), push),
+						Item:        BuildUFarm,
+						RegistryURL: api.ServiceDomainAPPCIRegistry,
+					},
+				},
+			},
+		},
+		To: []secretbootstrap.SecretContext{
+			s.generateDockerConfigJsonSecretConfigTo(secretName, CI, clusterName),
+		},
+	}
 }
 
 func (s *ciSecretBootstrapStep) findSecretConfig(name string, cluster string, sc []secretbootstrap.SecretConfig) (int, *secretbootstrap.SecretConfig, error) {

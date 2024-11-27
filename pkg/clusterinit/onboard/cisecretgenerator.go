@@ -125,6 +125,13 @@ func (s *ciSecretGeneratorStep) updateSecretGeneratorConfig(c *SecretGenConfig) 
 		return err
 	}
 
+	if *s.clusterInstall.Onboard.Multiarch {
+		multiarchToken := fmt.Sprintf("token_multi-arch-builder-controller_%s_reg_auth_value.txt", clusterWildcard)
+		if err := s.appendToSecretItem(c, byItemName(BuildUFarm), byFieldName(multiarchToken)); err != nil {
+			return err
+		}
+	}
+
 	if !*s.clusterInstall.Onboard.Unmanaged {
 		if err := s.appendToSecretItem(c, byItemName(PodScaler), filterByCluster, byFieldName(serviceAccountConfigPath)); err != nil {
 			return err

@@ -83,6 +83,7 @@ func applyDefaults(ci *ClusterInstall, ciPath string) {
 	coalesce(&ci.Onboard.Unmanaged, false)
 	coalesce(&ci.Onboard.OSD, true)
 	coalesce(&ci.Onboard.UseTokenFileInKubeconfig, true)
+	coalesce(&ci.Onboard.Multiarch, false)
 	if ci.InstallBase == "" {
 		ci.InstallBase = path.Dir(ciPath)
 	}

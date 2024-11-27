@@ -90,3 +90,35 @@ func CISchedulingWebhookCommonPath(releaseRepo string) string {
 func CISchedulingWebhookDNSPath(manifests string) string {
 	return filepath.Join(manifests, "dns.yaml")
 }
+
+func CloudabilityAgentManifestsPath(releaseRepo, clusterName string) string {
+	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName)
+}
+
+func CommonSymlinkPath(releaseRepo, clusterName string) string {
+	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "common")
+}
+
+func CommonManagedSymlinkPath(releaseRepo, clusterName string) string {
+	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "common_managed")
+}
+
+func MachineSetManifestsPath(releaseRepo, clusterName string) string {
+	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "machineset")
+}
+
+func MultiarchBuilderControllerManifestsPath(releaseRepo, clusterName string) string {
+	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "multi-arch-builder-controller")
+}
+
+func ImageRegistryManifestsPath(releaseRepo, clusterName string) string {
+	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "openshift-image-registry")
+}
+
+func IngressOperatorManifestsPath(releaseRepo, clusterName string) string {
+	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "openshift-ingress-operator")
+}
+
+func OpenshiftMonitoringManifestsPath(releaseRepo, clusterName string) string {
+	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "openshift-monitoring")
+}

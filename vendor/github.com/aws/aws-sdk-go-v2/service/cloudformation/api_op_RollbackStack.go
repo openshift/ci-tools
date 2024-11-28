@@ -62,8 +62,8 @@ type RollbackStackInput struct {
 	// Default: false
 	RetainExceptOnCreate *bool
 
-	// The Amazon Resource Name (ARN) of an Identity and Access Management role that
-	// CloudFormation assumes to rollback the stack.
+	// The Amazon Resource Name (ARN) of an IAM role that CloudFormation assumes to
+	// rollback the stack.
 	RoleARN *string
 
 	noSmithyDocumentSerde
@@ -123,6 +123,9 @@ func (c *Client) addOperationRollbackStackMiddlewares(stack *middleware.Stack, o
 	if err = addRecordResponseTiming(stack); err != nil {
 		return err
 	}
+	if err = addSpanRetryLoop(stack, options); err != nil {
+		return err
+	}
 	if err = addClientUserAgent(stack, options); err != nil {
 		return err
 	}
@@ -160,6 +163,18 @@ func (c *Client) addOperationRollbackStackMiddlewares(stack *middleware.Stack, o
 		return err
 	}
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
+	if err = addSpanInitializeStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanInitializeEnd(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestEnd(stack); err != nil {
 		return err
 	}
 	return nil

@@ -94,7 +94,7 @@ type DetectStackSetDriftInput struct {
 	// For more information about maximum concurrent accounts and failure tolerance,
 	// see [Stack set operation options].
 	//
-	// [Stack set operation options]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/stacksets-concepts.html#stackset-ops-options
+	// [Stack set operation options]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/what-is-cfnstacksets.html#stackset-ops-options
 	OperationPreferences *types.StackSetOperationPreferences
 
 	noSmithyDocumentSerde
@@ -157,6 +157,9 @@ func (c *Client) addOperationDetectStackSetDriftMiddlewares(stack *middleware.St
 	if err = addRecordResponseTiming(stack); err != nil {
 		return err
 	}
+	if err = addSpanRetryLoop(stack, options); err != nil {
+		return err
+	}
 	if err = addClientUserAgent(stack, options); err != nil {
 		return err
 	}
@@ -197,6 +200,18 @@ func (c *Client) addOperationDetectStackSetDriftMiddlewares(stack *middleware.St
 		return err
 	}
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
+	if err = addSpanInitializeStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanInitializeEnd(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestEnd(stack); err != nil {
 		return err
 	}
 	return nil

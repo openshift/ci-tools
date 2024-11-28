@@ -19,11 +19,11 @@ import (
 
 // Returns the description for the specified stack; if no stack name was
 // specified, then it returns the description for all the stacks created. For more
-// information about a stack's event history, see [CloudFormation stack creation events]in the CloudFormation User Guide.
+// information about a stack's event history, see [Understand CloudFormation stack creation events]in the CloudFormation User Guide.
 //
 // If the stack doesn't exist, a ValidationError is returned.
 //
-// [CloudFormation stack creation events]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/stack-resource-configuration-complete.html
+// [Understand CloudFormation stack creation events]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/stack-resource-configuration-complete.html
 func (c *Client) DescribeStacks(ctx context.Context, params *DescribeStacksInput, optFns ...func(*Options)) (*DescribeStacksOutput, error) {
 	if params == nil {
 		params = &DescribeStacksInput{}
@@ -132,6 +132,9 @@ func (c *Client) addOperationDescribeStacksMiddlewares(stack *middleware.Stack, 
 	if err = addRecordResponseTiming(stack); err != nil {
 		return err
 	}
+	if err = addSpanRetryLoop(stack, options); err != nil {
+		return err
+	}
 	if err = addClientUserAgent(stack, options); err != nil {
 		return err
 	}
@@ -166,6 +169,18 @@ func (c *Client) addOperationDescribeStacksMiddlewares(stack *middleware.Stack, 
 		return err
 	}
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
+	if err = addSpanInitializeStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanInitializeEnd(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestEnd(stack); err != nil {
 		return err
 	}
 	return nil

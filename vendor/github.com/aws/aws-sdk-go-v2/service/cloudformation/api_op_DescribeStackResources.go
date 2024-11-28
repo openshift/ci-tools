@@ -25,7 +25,7 @@ import (
 // You must specify either StackName or PhysicalResourceId , but not both. In
 // addition, you can specify LogicalResourceId to filter the returned result. For
 // more information about resources, the LogicalResourceId and PhysicalResourceId ,
-// go to the [CloudFormation User Guide].
+// see the [CloudFormation User Guide].
 //
 // A ValidationError is returned if you specify both StackName and
 // PhysicalResourceId in the same request.
@@ -140,6 +140,9 @@ func (c *Client) addOperationDescribeStackResourcesMiddlewares(stack *middleware
 	if err = addRecordResponseTiming(stack); err != nil {
 		return err
 	}
+	if err = addSpanRetryLoop(stack, options); err != nil {
+		return err
+	}
 	if err = addClientUserAgent(stack, options); err != nil {
 		return err
 	}
@@ -174,6 +177,18 @@ func (c *Client) addOperationDescribeStackResourcesMiddlewares(stack *middleware
 		return err
 	}
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
+	if err = addSpanInitializeStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanInitializeEnd(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestEnd(stack); err != nil {
 		return err
 	}
 	return nil

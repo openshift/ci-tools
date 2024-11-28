@@ -34,7 +34,7 @@ type SetStackPolicyInput struct {
 	// This member is required.
 	StackName *string
 
-	// Structure containing the stack policy body. For more information, go to [Prevent updates to stack resources] in the
+	// Structure containing the stack policy body. For more information, see [Prevent updates to stack resources] in the
 	// CloudFormation User Guide. You can specify either the StackPolicyBody or the
 	// StackPolicyURL parameter, but not both.
 	//
@@ -101,6 +101,9 @@ func (c *Client) addOperationSetStackPolicyMiddlewares(stack *middleware.Stack, 
 	if err = addRecordResponseTiming(stack); err != nil {
 		return err
 	}
+	if err = addSpanRetryLoop(stack, options); err != nil {
+		return err
+	}
 	if err = addClientUserAgent(stack, options); err != nil {
 		return err
 	}
@@ -138,6 +141,18 @@ func (c *Client) addOperationSetStackPolicyMiddlewares(stack *middleware.Stack, 
 		return err
 	}
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
+	if err = addSpanInitializeStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanInitializeEnd(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestEnd(stack); err != nil {
 		return err
 	}
 	return nil

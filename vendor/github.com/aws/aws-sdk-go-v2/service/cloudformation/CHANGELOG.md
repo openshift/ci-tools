@@ -1,3 +1,71 @@
+# v1.56.0 (2024-11-18)
+
+* **Feature**: This release adds a new API, ListHookResults, that allows retrieving CloudFormation Hooks invocation results for hooks invoked during a create change set operation or Cloud Control API operation
+* **Dependency Update**: Update to smithy-go v1.22.1.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.55.5 (2024-11-06)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.55.4 (2024-10-28)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.55.3 (2024-10-15)
+
+* **Documentation**: Documentation update for AWS CloudFormation API Reference.
+
+# v1.55.2 (2024-10-08)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.55.1 (2024-10-07)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.55.0 (2024-10-04)
+
+* **Feature**: Add support for HTTP client metrics.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.54.4 (2024-10-03)
+
+* No change notes available for this release.
+
+# v1.54.3 (2024-09-27)
+
+* No change notes available for this release.
+
+# v1.54.2 (2024-09-25)
+
+* No change notes available for this release.
+
+# v1.54.1 (2024-09-23)
+
+* No change notes available for this release.
+
+# v1.54.0 (2024-09-20)
+
+* **Feature**: Add tracing and metrics support to service clients.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.53.8 (2024-09-17)
+
+* **Bug Fix**: **BREAKFIX**: Only generate AccountIDEndpointMode config for services that use it. This is a compiler break, but removes no actual functionality, as no services currently use the account ID in endpoint resolution.
+
+# v1.53.7 (2024-09-04)
+
+* No change notes available for this release.
+
+# v1.53.6 (2024-09-03)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.53.5 (2024-08-22)
+
+* No change notes available for this release.
+
 # v1.53.4 (2024-08-15)
 
 * **Dependency Update**: Bump minimum Go version to 1.21.

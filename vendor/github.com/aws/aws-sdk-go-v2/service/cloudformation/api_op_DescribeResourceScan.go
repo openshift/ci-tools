@@ -73,13 +73,21 @@ type DescribeResourceScanOutput struct {
 
 	// Status of the resource scan.
 	//
-	// INPROGRESS The resource scan is still in progress.
+	// INPROGRESS
 	//
-	// COMPLETE The resource scan is complete.
+	// The resource scan is still in progress.
 	//
-	// EXPIRED The resource scan has expired.
+	// COMPLETE
 	//
-	// FAILED The resource scan has failed.
+	// The resource scan is complete.
+	//
+	// EXPIRED
+	//
+	// The resource scan has expired.
+	//
+	// FAILED
+	//
+	// The resource scan has failed.
 	Status types.ResourceScanStatus
 
 	// The reason for the resource scan status, providing more information if a
@@ -135,6 +143,9 @@ func (c *Client) addOperationDescribeResourceScanMiddlewares(stack *middleware.S
 	if err = addRecordResponseTiming(stack); err != nil {
 		return err
 	}
+	if err = addSpanRetryLoop(stack, options); err != nil {
+		return err
+	}
 	if err = addClientUserAgent(stack, options); err != nil {
 		return err
 	}
@@ -172,6 +183,18 @@ func (c *Client) addOperationDescribeResourceScanMiddlewares(stack *middleware.S
 		return err
 	}
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
+	if err = addSpanInitializeStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanInitializeEnd(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestEnd(stack); err != nil {
 		return err
 	}
 	return nil

@@ -16,9 +16,9 @@ import (
 // Web Services Regions.
 //
 // For information about requirements for registering as a public extension
-// publisher, see [Registering your account to publish CloudFormation extensions]in the CloudFormation CLI User Guide.
+// publisher, see [Prerequisite: Registering your account to publish CloudFormation extensions]in the CloudFormation Command Line Interface (CLI) User Guide.
 //
-// [Registering your account to publish CloudFormation extensions]: https://docs.aws.amazon.com/cloudformation-cli/latest/userguide/publish-extension.html#publish-extension-prereqs
+// [Prerequisite: Registering your account to publish CloudFormation extensions]: https://docs.aws.amazon.com/cloudformation-cli/latest/userguide/publish-extension.html#publish-extension-prereqs
 func (c *Client) RegisterPublisher(ctx context.Context, params *RegisterPublisherInput, optFns ...func(*Options)) (*RegisterPublisherOutput, error) {
 	if params == nil {
 		params = &RegisterPublisherInput{}
@@ -48,9 +48,10 @@ type RegisterPublisherInput struct {
 	// If you are using a Bitbucket or GitHub account for identity verification, the
 	// Amazon Resource Name (ARN) for your connection to that account.
 	//
-	// For more information, see [Registering your account to publish CloudFormation extensions] in the CloudFormation CLI User Guide.
+	// For more information, see [Prerequisite: Registering your account to publish CloudFormation extensions] in the CloudFormation Command Line Interface (CLI)
+	// User Guide.
 	//
-	// [Registering your account to publish CloudFormation extensions]: https://docs.aws.amazon.com/cloudformation-cli/latest/userguide/publish-extension.html#publish-extension-prereqs
+	// [Prerequisite: Registering your account to publish CloudFormation extensions]: https://docs.aws.amazon.com/cloudformation-cli/latest/userguide/publish-extension.html#publish-extension-prereqs
 	ConnectionArn *string
 
 	noSmithyDocumentSerde
@@ -110,6 +111,9 @@ func (c *Client) addOperationRegisterPublisherMiddlewares(stack *middleware.Stac
 	if err = addRecordResponseTiming(stack); err != nil {
 		return err
 	}
+	if err = addSpanRetryLoop(stack, options); err != nil {
+		return err
+	}
 	if err = addClientUserAgent(stack, options); err != nil {
 		return err
 	}
@@ -144,6 +148,18 @@ func (c *Client) addOperationRegisterPublisherMiddlewares(stack *middleware.Stac
 		return err
 	}
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
+	if err = addSpanInitializeStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanInitializeEnd(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestEnd(stack); err != nil {
 		return err
 	}
 	return nil

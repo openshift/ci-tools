@@ -1,6 +1,8 @@
 package clusterinstall
 
 import (
+	rhcostream "github.com/coreos/stream-metadata-go/stream"
+
 	configv1 "github.com/openshift/api/config/v1"
 	installertypes "github.com/openshift/installer/pkg/types"
 
@@ -17,6 +19,8 @@ type ClusterInstall struct {
 	InstallBase    string
 	Infrastructure configv1.Infrastructure
 	InstallConfig  installertypes.InstallConfig
+	// This is needed to get info about available OS images
+	CoreOSStream rhcostream.Stream
 }
 
 func (ci *ClusterInstall) IsOCP() bool {
@@ -49,6 +53,7 @@ type Onboard struct {
 	PassthroughManifest        PassthroughManifest        `json:"passthrough,omitempty"`
 	CloudabilityAgent          CloudabilityAgent          `json:"cloudabilityAgent,omitempty"`
 	OpenshiftMonitoring        OpenshiftMonitoring        `json:"openshiftMonitoring,omitempty"`
+	MultiarchTuningOperator    MultiarchTuningOperator    `json:"multiarchTuningOperator,omitempty"`
 }
 
 type Dex struct {
@@ -101,6 +106,10 @@ type OpenshiftMonitoring struct {
 	types.SkipStep
 	types.ExcludeManifest
 	Patches []manifest.Patch `json:"patches,omitempty"`
+}
+
+type MultiarchTuningOperator struct {
+	types.SkipStep
 }
 
 const (

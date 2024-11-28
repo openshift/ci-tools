@@ -32,7 +32,9 @@ func newAWSCreateStacks(log *logrus.Entry, opts *runtime.Options) *cobra.Command
 		Long:  `Create cloud formation stacks `,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			clusterInstall, err := clusterinstall.Load(opts.ClusterInstall)
+			clusterInstall, err := clusterinstall.Load(opts.ClusterInstall, clusterinstall.FinalizeOption(clusterinstall.FinalizeOptions{
+				InstallBase: opts.InstallBase,
+			}))
 			if err != nil {
 				return fmt.Errorf("load cluster-install: %w", err)
 			}

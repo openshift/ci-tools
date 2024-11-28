@@ -7,6 +7,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/coreos/stream-metadata-go/stream"
 	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
 
@@ -59,6 +60,14 @@ func TestGenerateManifests(t *testing.T) {
 						},
 					},
 				},
+				CoreOSStream: stream.Stream{Architectures: map[string]stream.Arch{
+					"aarch64": {Images: stream.Images{Aws: &stream.ReplicatedImage{Regions: map[string]stream.RegionImage{
+						"us-east-1": {Image: "ami-aarch64"},
+					}}}},
+					"x86_64": {Images: stream.Images{Aws: &stream.ReplicatedImage{Regions: map[string]stream.RegionImage{
+						"us-east-1": {Image: "ami-x8664"},
+					}}}},
+				}},
 			},
 			subnets: &ec2.DescribeSubnetsOutput{
 				Subnets: []ec2types.Subnet{
@@ -119,7 +128,7 @@ func TestGenerateManifests(t *testing.T) {
 												"name": "worker-user-data",
 											},
 											"ami": map[string]interface{}{
-												"id": "ami-0545fae7edbbbf061",
+												"id": "ami-x8664",
 											},
 											"tags": []interface{}{
 												map[string]interface{}{
@@ -278,7 +287,7 @@ func TestGenerateManifests(t *testing.T) {
 											"deviceIndex": 0,
 											"kind":        "AWSMachineProviderConfig",
 											"ami": map[string]interface{}{
-												"id": "ami-0545fae7edbbbf061",
+												"id": "ami-x8664",
 											},
 										},
 									},
@@ -330,6 +339,14 @@ func TestGenerateManifests(t *testing.T) {
 						},
 					},
 				},
+				CoreOSStream: stream.Stream{Architectures: map[string]stream.Arch{
+					"aarch64": {Images: stream.Images{Aws: &stream.ReplicatedImage{Regions: map[string]stream.RegionImage{
+						"us-east-1": {Image: "ami-aarch64"},
+					}}}},
+					"x86_64": {Images: stream.Images{Aws: &stream.ReplicatedImage{Regions: map[string]stream.RegionImage{
+						"us-east-1": {Image: "ami-x8664"},
+					}}}},
+				}},
 			},
 			subnets: &ec2.DescribeSubnetsOutput{
 				Subnets: []ec2types.Subnet{
@@ -435,7 +452,7 @@ func TestGenerateManifests(t *testing.T) {
 												"id": "subnet-12345",
 											},
 											"ami": map[string]interface{}{
-												"id": "ami-0e9cdc0e85e0a6aeb",
+												"id": "ami-aarch64",
 											},
 										},
 									},
@@ -490,7 +507,7 @@ func TestGenerateManifests(t *testing.T) {
 									"providerSpec": map[string]interface{}{
 										"value": map[string]interface{}{
 											"ami": map[string]interface{}{
-												"id": "ami-0545fae7edbbbf061",
+												"id": "ami-x8664",
 											},
 											"kind": "AWSMachineProviderConfig",
 											"metadata": map[string]interface{}{
@@ -608,7 +625,7 @@ func TestGenerateManifests(t *testing.T) {
 									"providerSpec": map[string]interface{}{
 										"value": map[string]interface{}{
 											"ami": map[string]interface{}{
-												"id": "ami-0e9cdc0e85e0a6aeb",
+												"id": "ami-aarch64",
 											},
 											"apiVersion": "machine.openshift.io/v1beta1",
 											"credentialsSecret": map[string]interface{}{
@@ -771,7 +788,7 @@ func TestGenerateManifests(t *testing.T) {
 												"id": "subnet-12345",
 											},
 											"ami": map[string]interface{}{
-												"id": "ami-0545fae7edbbbf061",
+												"id": "ami-x8664",
 											},
 											"credentialsSecret": map[string]interface{}{
 												"name": "aws-cloud-credentials",

@@ -48,7 +48,7 @@ func (p *Provider) loadConfig(ctx context.Context) (aws.Config, error) {
 	if p.awsConfig == nil {
 		loadOpts := make([]func(*awsconfig.LoadOptions) error, 0)
 
-		client := &http.Client{Transport: CacheTransport(http.DefaultTransport)}
+		client := &http.Client{Transport: http.DefaultTransport}
 		if runtime.IsIntegrationTest() {
 			client.Transport = httpruntime.ReplayTransport(client.Transport)
 			loadOpts = append(loadOpts, awsconfig.WithRetryMaxAttempts(1))

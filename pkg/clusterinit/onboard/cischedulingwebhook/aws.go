@@ -57,7 +57,7 @@ func (ap *awsProvider) manifests(ctx context.Context, log *logrus.Entry, ci *clu
 	infraId := ci.Infrastructure.Status.InfrastructureName
 	region := ci.InstallConfig.Platform.AWS.Region
 
-	ami, err := awstypes.AMIByArch(arch)
+	ami, err := awstypes.FindAMI(ci.CoreOSStream, types.ToCoreOSStreamArch(arch), region)
 	if err != nil {
 		return nil, err
 	}

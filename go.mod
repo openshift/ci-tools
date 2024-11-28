@@ -177,6 +177,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.194.0
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.69.0
 	github.com/aws/smithy-go v1.22.1
+	github.com/coreos/stream-metadata-go v0.1.8
 	github.com/estesp/manifest-tool/v2 v2.1.8
 	github.com/felixge/httpsnoop v1.0.4
 	github.com/golang-jwt/jwt v3.2.2+incompatible

@@ -2,9 +2,11 @@ package config
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
+	rhcostream "github.com/coreos/stream-metadata-go/stream"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
@@ -72,6 +74,7 @@ func runConfigSteps(ctx context.Context, log *logrus.Entry, update bool, cluster
 		onboard.NewManifestGeneratorStep(log, onboard.NewCloudabilityAgentGenerator(clusterInstall)),
 		onboard.NewCommonSymlinkStep(log, clusterInstall),
 		onboard.NewMultiarchBuilderControllerStep(log, clusterInstall),
+		onboard.NewMultiarchTuningOperatorStep(log, clusterInstall),
 		onboard.NewManifestGeneratorStep(log, onboard.NewImageRegistryGenerator(clusterInstall)),
 		onboard.NewManifestGeneratorStep(log, onboard.NewOpenshiftMonitoringGenerator(clusterInstall)),
 		onboard.NewPassthroughStep(log, clusterInstall),
@@ -108,7 +111,7 @@ func addClusterInstallRuntimeInfo(ctx context.Context, ci *clusterinstall.Cluste
 
 	cm := corev1.ConfigMap{}
 	if err := kubeClient.Get(ctx, types.NamespacedName{Namespace: "kube-system", Name: "cluster-config-v1"}, &cm); err != nil {
-		return fmt.Errorf("get cluster-config-v1: %w", err)
+		return fmt.Errorf("get kube-system/cluster-config-v1: %w", err)
 	}
 	installConfigRaw, ok := cm.Data["install-config"]
 	if !ok {
@@ -119,6 +122,19 @@ func addClusterInstallRuntimeInfo(ctx context.Context, ci *clusterinstall.Cluste
 		return fmt.Errorf("unmarshall install config: %w", err)
 	}
 	ci.InstallConfig = installConfig
+
+	cm = corev1.ConfigMap{}
+	if err := kubeClient.Get(ctx, types.NamespacedName{Namespace: "openshift-machine-config-operator", Name: "coreos-bootimages"}, &cm); err != nil {
+		return fmt.Errorf("get openshift-machine-config-operator/coreos-bootimages: %w", err)
+	}
+	if _, ok := cm.Data["stream"]; !ok {
+		return errors.New("coreos stream data not found")
+	}
+	stream := rhcostream.Stream{}
+	if err := json.Unmarshal([]byte(cm.Data["stream"]), &stream); err != nil {
+		return fmt.Errorf("unmarshal coreos stream: %w", err)
+	}
+	ci.CoreOSStream = stream
 
 	return nil
 }

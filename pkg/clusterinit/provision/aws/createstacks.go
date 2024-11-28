@@ -1,9 +1,13 @@
 package aws
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"time"
 
@@ -126,8 +130,41 @@ func waitForStacksToComplete(ctx context.Context, log *logrus.Entry, client awst
 }
 
 func resolveTemplate(path string) (string, error) {
-	t, err := os.ReadFile(path)
-	return string(t), err
+	u, err := url.Parse(path)
+	if err != nil {
+		return "", fmt.Errorf("parse %s: %w", path, err)
+	}
+
+	switch u.Scheme {
+	case "https":
+		res, err := http.Get(path)
+		if err != nil {
+			return "", fmt.Errorf("get %s: %w", path, err)
+		}
+
+		buf := bytes.NewBuffer([]byte{})
+		if _, err := io.Copy(buf, res.Body); err != nil {
+			if closeErr := res.Body.Close(); closeErr != nil {
+				err = fmt.Errorf("close body: %w", errors.Join(closeErr, err))
+			}
+			return "", fmt.Errorf("download %s: %w", path, err)
+		}
+
+		if err := res.Body.Close(); err != nil {
+			return "", fmt.Errorf("close body: %w", err)
+		}
+
+		return buf.String(), nil
+	case "", "file":
+		p := u.Path
+		data, err := os.ReadFile(p)
+		if err != nil {
+			return "", fmt.Errorf("read %s: %w", p, err)
+		}
+		return string(data), nil
+	}
+
+	return "", fmt.Errorf("unsupported scheme %s", path)
 }
 
 func NewCreateAWSStacksStep(log *logrus.Entry,

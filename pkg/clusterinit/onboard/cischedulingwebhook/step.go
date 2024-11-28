@@ -82,7 +82,7 @@ func (s *step) Run(ctx context.Context) error {
 
 func (s *step) commonSymlink() error {
 	linkName := onboard.CISchedulingWebhookManifestsCommonPath(s.clusterInstall.Onboard.ReleaseRepo, s.clusterInstall.ClusterName)
-	target := onboard.CISchedulingWebhookCommonPath(s.clusterInstall.Onboard.ReleaseRepo)
+	target := onboard.CISchedulingWebhookCommonRelativePath
 	if err := os.Symlink(target, linkName); err != nil && !os.IsExist(err) {
 		return fmt.Errorf("symlink %s -> %s", linkName, target)
 	}

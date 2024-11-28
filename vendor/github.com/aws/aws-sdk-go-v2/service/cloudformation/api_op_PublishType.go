@@ -14,7 +14,7 @@ import (
 // Publishes the specified extension to the CloudFormation registry as a public
 // extension in this Region. Public extensions are available for use by all
 // CloudFormation users. For more information about publishing extensions, see [Publishing extensions to make them available for public use]in
-// the CloudFormation CLI User Guide.
+// the CloudFormation Command Line Interface (CLI) User Guide.
 //
 // To publish an extension, you must be registered as a publisher with
 // CloudFormation. For more information, see [RegisterPublisher].
@@ -129,6 +129,9 @@ func (c *Client) addOperationPublishTypeMiddlewares(stack *middleware.Stack, opt
 	if err = addRecordResponseTiming(stack); err != nil {
 		return err
 	}
+	if err = addSpanRetryLoop(stack, options); err != nil {
+		return err
+	}
 	if err = addClientUserAgent(stack, options); err != nil {
 		return err
 	}
@@ -163,6 +166,18 @@ func (c *Client) addOperationPublishTypeMiddlewares(stack *middleware.Stack, opt
 		return err
 	}
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
+	if err = addSpanInitializeStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanInitializeEnd(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestEnd(stack); err != nil {
 		return err
 	}
 	return nil

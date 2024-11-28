@@ -42,10 +42,10 @@ type GetStackPolicyInput struct {
 // The output for the GetStackPolicy action.
 type GetStackPolicyOutput struct {
 
-	// Structure containing the stack policy body. (For more information, go to [Prevent Updates to Stack Resources] in
-	// the CloudFormation User Guide.)
+	// Structure containing the stack policy body. (For more information, see [Prevent updates to stack resources] in the
+	// CloudFormation User Guide.)
 	//
-	// [Prevent Updates to Stack Resources]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/protect-stack-resources.html
+	// [Prevent updates to stack resources]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/protect-stack-resources.html
 	StackPolicyBody *string
 
 	// Metadata pertaining to the operation's result.
@@ -97,6 +97,9 @@ func (c *Client) addOperationGetStackPolicyMiddlewares(stack *middleware.Stack, 
 	if err = addRecordResponseTiming(stack); err != nil {
 		return err
 	}
+	if err = addSpanRetryLoop(stack, options); err != nil {
+		return err
+	}
 	if err = addClientUserAgent(stack, options); err != nil {
 		return err
 	}
@@ -134,6 +137,18 @@ func (c *Client) addOperationGetStackPolicyMiddlewares(stack *middleware.Stack, 
 		return err
 	}
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
+	if err = addSpanInitializeStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanInitializeEnd(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestEnd(stack); err != nil {
 		return err
 	}
 	return nil

@@ -14,9 +14,9 @@ import (
 // Returns configuration data for the specified CloudFormation extensions, from
 // the CloudFormation registry for the account and Region.
 //
-// For more information, see [Configuring extensions at the account level] in the CloudFormation User Guide.
+// For more information, see [Edit configuration data for extensions in your account] in the CloudFormation User Guide.
 //
-// [Configuring extensions at the account level]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/registry-private.html#registry-set-configuration
+// [Edit configuration data for extensions in your account]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/registry-set-configuration.html
 func (c *Client) BatchDescribeTypeConfigurations(ctx context.Context, params *BatchDescribeTypeConfigurationsInput, optFns ...func(*Options)) (*BatchDescribeTypeConfigurationsOutput, error) {
 	if params == nil {
 		params = &BatchDescribeTypeConfigurationsInput{}
@@ -105,6 +105,9 @@ func (c *Client) addOperationBatchDescribeTypeConfigurationsMiddlewares(stack *m
 	if err = addRecordResponseTiming(stack); err != nil {
 		return err
 	}
+	if err = addSpanRetryLoop(stack, options); err != nil {
+		return err
+	}
 	if err = addClientUserAgent(stack, options); err != nil {
 		return err
 	}
@@ -142,6 +145,18 @@ func (c *Client) addOperationBatchDescribeTypeConfigurationsMiddlewares(stack *m
 		return err
 	}
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
+	if err = addSpanInitializeStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanInitializeEnd(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestEnd(stack); err != nil {
 		return err
 	}
 	return nil

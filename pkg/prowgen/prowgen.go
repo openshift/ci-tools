@@ -49,9 +49,8 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 	for _, element := range configSpec.Tests {
 		g := NewProwJobBaseBuilderForTest(configSpec, info, NewCiOperatorPodSpecGenerator(), element)
 
-		cluster := determineMultiArchClusterForTest(element)
-		if cluster != "" {
-			g.Cluster(cluster).WithLabel(api.ClusterLabel, string(cluster))
+		if element.NodeArchitecture != "" {
+			g.WithLabel(fmt.Sprintf("capability/%s", element.NodeArchitecture), string(element.NodeArchitecture))
 		}
 
 		disableRehearsal := rehearsals.DisableAll || disabledRehearsals.Has(element.As)
@@ -106,18 +105,15 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		}
 		imagesTestName := "images"
 		jobBaseGen := newJobBaseBuilder().TestName(imagesTestName)
-		cluster := determineMultiArchCluster(configSpec.Images)
-		if cluster != "" {
-			jobBaseGen.Cluster(cluster).WithLabel(api.ClusterLabel, string(cluster))
-		}
+		injectArchitectureLabels(jobBaseGen, configSpec.Images)
+
 		jobBaseGen.PodSpec.Add(Targets(presubmitTargets...))
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, imagesTestName, info))
 
 		if configSpec.PromotionConfiguration != nil {
 			jobBaseGen = newJobBaseBuilder().TestName(imagesTestName)
-			if cluster != "" {
-				jobBaseGen.Cluster(cluster).WithLabel(api.ClusterLabel, string(cluster))
-			}
+			injectArchitectureLabels(jobBaseGen, configSpec.Images)
+
 			jobBaseGen.PodSpec.Add(Promotion(), Targets(imageTargets.UnsortedList()...))
 			if slackReporter := info.Config.GetSlackReporterConfigForTest(imagesTestName, configSpec.Metadata.Variant); slackReporter != nil {
 				if jobBaseGen.base.ReporterConfig == nil {
@@ -342,25 +338,10 @@ func GeneratePeriodicForTest(jobBaseBuilder *prowJobBaseBuilder, info *ProwgenIn
 	}
 }
 
-// determineMultiArchCluster temporariy determines the cluster to use for multi-arch builds and assigns Build10 if there are
-// additional architectures in any of the images configurations.
-// TODO: Remove this function once the multi-arch cluster is determined by the prowjob dispatcher component.
-func determineMultiArchCluster(imagesConfig []cioperatorapi.ProjectDirectoryImageBuildStepConfiguration) api.Cluster {
+func injectArchitectureLabels(g *prowJobBaseBuilder, imagesConfig []cioperatorapi.ProjectDirectoryImageBuildStepConfiguration) {
 	for _, imageConfig := range imagesConfig {
-		if len(imageConfig.AdditionalArchitectures) > 0 {
-			return api.ClusterBuild10
+		for _, arch := range imageConfig.AdditionalArchitectures {
+			g.WithLabel(fmt.Sprintf("capability/%s", arch), arch)
 		}
 	}
-	return ""
-}
-
-// determineMultiArchClusterForTest temporarily determines the cluster to use for multi-arch builds and assigns Build10 if the test is for ARM64.
-// Currently, the user can also force the build10 cluster using the `cluster` field in the test configuration.
-// TODO: remove this function once the multi-arch cluster is determined by the prowjob dispatcher component.
-func determineMultiArchClusterForTest(test cioperatorapi.TestStepConfiguration) api.Cluster {
-	switch test.NodeArchitecture {
-	case api.NodeArchitectureARM64:
-		return api.ClusterBuild10
-	}
-	return ""
 }

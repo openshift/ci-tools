@@ -19,7 +19,7 @@ func (st *Stream) GetArchitecture(archname string) (*Arch, error) {
 
 // GetAliyunRegionImage returns the release data (Image ID and release ID) for a particular
 // architecture and region.
-func (st *Stream) GetAliyunRegionImage(archname, region string) (*SingleImage, error) {
+func (st *Stream) GetAliyunRegionImage(archname, region string) (*RegionImage, error) {
 	starch, err := st.GetArchitecture(archname)
 	if err != nil {
 		return nil, err
@@ -28,7 +28,7 @@ func (st *Stream) GetAliyunRegionImage(archname, region string) (*SingleImage, e
 	if aliyunimages == nil {
 		return nil, fmt.Errorf("%s: No Aliyun images", st.FormatPrefix(archname))
 	}
-	var regionVal SingleImage
+	var regionVal RegionImage
 	var ok bool
 	if regionVal, ok = aliyunimages.Regions[region]; !ok {
 		return nil, fmt.Errorf("%s: No Aliyun images in region %s", st.FormatPrefix(archname), region)
@@ -48,7 +48,7 @@ func (st *Stream) GetAliyunImage(archname, region string) (string, error) {
 
 // GetAwsRegionImage returns the release data (AMI and release ID) for a particular
 // architecture and region.
-func (st *Stream) GetAwsRegionImage(archname, region string) (*SingleImage, error) {
+func (st *Stream) GetAwsRegionImage(archname, region string) (*AwsRegionImage, error) {
 	starch, err := st.GetArchitecture(archname)
 	if err != nil {
 		return nil, err
@@ -57,7 +57,7 @@ func (st *Stream) GetAwsRegionImage(archname, region string) (*SingleImage, erro
 	if awsimages == nil {
 		return nil, fmt.Errorf("%s: No AWS images", st.FormatPrefix(archname))
 	}
-	var regionVal SingleImage
+	var regionVal AwsRegionImage
 	var ok bool
 	if regionVal, ok = awsimages.Regions[region]; !ok {
 		return nil, fmt.Errorf("%s: No AWS images in region %s", st.FormatPrefix(archname), region)

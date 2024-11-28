@@ -61,10 +61,10 @@ func TestGenerateManifests(t *testing.T) {
 					},
 				},
 				CoreOSStream: stream.Stream{Architectures: map[string]stream.Arch{
-					"aarch64": {Images: stream.Images{Aws: &stream.ReplicatedImage{Regions: map[string]stream.SingleImage{
+					"aarch64": {Images: stream.Images{Aws: &stream.ReplicatedImage{Regions: map[string]stream.RegionImage{
 						"us-east-1": {Image: "ami-aarch64"},
 					}}}},
-					"x86_64": {Images: stream.Images{Aws: &stream.ReplicatedImage{Regions: map[string]stream.SingleImage{
+					"x86_64": {Images: stream.Images{Aws: &stream.ReplicatedImage{Regions: map[string]stream.RegionImage{
 						"us-east-1": {Image: "ami-x8664"},
 					}}}},
 				}},
@@ -340,10 +340,10 @@ func TestGenerateManifests(t *testing.T) {
 					},
 				},
 				CoreOSStream: stream.Stream{Architectures: map[string]stream.Arch{
-					"aarch64": {Images: stream.Images{Aws: &stream.ReplicatedImage{Regions: map[string]stream.SingleImage{
+					"aarch64": {Images: stream.Images{Aws: &stream.ReplicatedImage{Regions: map[string]stream.RegionImage{
 						"us-east-1": {Image: "ami-aarch64"},
 					}}}},
-					"x86_64": {Images: stream.Images{Aws: &stream.ReplicatedImage{Regions: map[string]stream.SingleImage{
+					"x86_64": {Images: stream.Images{Aws: &stream.ReplicatedImage{Regions: map[string]stream.RegionImage{
 						"us-east-1": {Image: "ami-x8664"},
 					}}}},
 				}},

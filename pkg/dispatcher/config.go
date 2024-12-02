@@ -167,9 +167,13 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 					matchingClustersByProvider[provider] = append(matchingClustersByProvider[provider], clusterName)
 				}
 			}
+			// sort to be deterministic
+			sort.Strings(matchingClusters)
 			if config.DetermineE2EByJob {
 				if cloud := config.DetermineCloudMapping(jobBase); cloud != "" {
 					if clusters, ok := matchingClustersByProvider[cloud]; ok {
+						// sort to be deterministic
+						sort.Strings(clusters)
 						if len(clusters) > 0 {
 							// as in other places in this file, use this method to have basic deterministic distribution
 							return api.Cluster(clusters[len(filepath.Base(path))%len(clusters)]), false, nil

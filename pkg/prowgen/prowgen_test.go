@@ -548,7 +548,7 @@ func TestGenerateJobs(t *testing.T) {
 				}},
 		},
 		{
-			id: "multiarch postsubmit images: default arch and others",
+			id: "multiarch postsubmit images",
 			config: &ciop.ReleaseBuildConfiguration{
 				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{
 					{
@@ -556,8 +556,31 @@ func TestGenerateJobs(t *testing.T) {
 						To:                      "ci-tools",
 						AdditionalArchitectures: []string{"arm64"},
 					},
+					{
+						From:                    "os",
+						To:                      "test",
+						AdditionalArchitectures: []string{"arm64", "ppc64-le"},
+					},
 				},
 				PromotionConfiguration: &ciop.PromotionConfiguration{},
+			},
+			repoInfo: &ProwgenInfo{
+				Metadata: ciop.Metadata{
+					Org:    "organization",
+					Repo:   "repository",
+					Branch: "branch",
+				},
+			},
+		},
+		{
+			id: "multiarch test job",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{
+						As:               "unit",
+						NodeArchitecture: "arm64",
+					},
+				},
 			},
 			repoInfo: &ProwgenInfo{
 				Metadata: ciop.Metadata{

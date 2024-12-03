@@ -10,6 +10,8 @@ import (
 	"github.com/openshift/ci-tools/pkg/clusterinit/types"
 	"github.com/openshift/ci-tools/pkg/clusterinit/types/aws"
 	"github.com/openshift/ci-tools/pkg/clusterinit/types/gcp"
+
+	"k8s.io/client-go/rest"
 )
 
 type ClusterInstall struct {
@@ -21,6 +23,7 @@ type ClusterInstall struct {
 	InstallConfig  installertypes.InstallConfig
 	// This is needed to get info about available OS images
 	CoreOSStream rhcostream.Stream
+	Config       *rest.Config
 }
 
 func (ci *ClusterInstall) IsOCP() bool {
@@ -54,6 +57,7 @@ type Onboard struct {
 	CloudabilityAgent          CloudabilityAgent          `json:"cloudabilityAgent,omitempty"`
 	OpenshiftMonitoring        OpenshiftMonitoring        `json:"openshiftMonitoring,omitempty"`
 	MultiarchTuningOperator    MultiarchTuningOperator    `json:"multiarchTuningOperator,omitempty"`
+	CertManagerOperator        CertManagerOperator        `json:"certManagerOperator,omitempty"`
 }
 
 type Dex struct {
@@ -137,4 +141,10 @@ type Certificate struct {
 	ImageRegistryPublicHost string                             `json:"imageRegistryPublicHost,omitempty"`
 	ClusterIssuer           map[string]string                  `json:"clusterIssuer,omitempty"`
 	ProjectLabel            map[string]CertificateProjectLabel `json:"projectLabel,omitempty"`
+}
+
+type CertManagerOperator struct {
+	types.SkipStep
+	types.ExcludeManifest
+	Patches []manifest.Patch `json:"patches,omitempty"`
 }

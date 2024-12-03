@@ -61,12 +61,13 @@ func updateConfig(ctx context.Context, log *logrus.Entry, opts *updateConfigOpti
 	if err != nil {
 		return fmt.Errorf("load kubeconfigs: %w", err)
 	}
-	newKubeClient := func(kubeconfigs map[string]rest.Config, clusterName string) (ctrlruntimeclient.Client, error) {
+	newKubeClient := func(kubeconfigs map[string]rest.Config, clusterName string) (ctrlruntimeclient.Client, *rest.Config, error) {
 		config, found := kubeconfigs[clusterName]
 		if !found {
-			return nil, fmt.Errorf("kubeconfig for %s not found", clusterName)
+			return nil, nil, fmt.Errorf("kubeconfig for %s not found", clusterName)
 		}
-		return kuberuntime.NewClient(&config)
+		client, err := kuberuntime.NewClient(&config)
+		return client, &config, err
 	}
 
 	clusterInstalls, err := clusterinstall.LoadFromDir(opts.clusterInstallDir,
@@ -76,7 +77,8 @@ func updateConfig(ctx context.Context, log *logrus.Entry, opts *updateConfigOpti
 	}
 
 	for clusterName, clusterInstall := range clusterInstalls {
-		kubeClient, err := newKubeClient(kubeconfigs, clusterName)
+		kubeClient, config, err := newKubeClient(kubeconfigs, clusterName)
+		clusterInstall.Config = config
 		if err != nil {
 			return fmt.Errorf("new kubeclient for %s: %w", clusterName, err)
 		}

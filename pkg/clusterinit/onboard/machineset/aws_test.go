@@ -2,7 +2,6 @@ package machineset
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
@@ -12,7 +11,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/utils/ptr"
-	kyaml "sigs.k8s.io/yaml"
 
 	installertypes "github.com/openshift/installer/pkg/types"
 	installeraws "github.com/openshift/installer/pkg/types/aws"
@@ -850,9 +848,6 @@ func TestGenerateManifests(t *testing.T) {
 			}))
 
 			manifests, err := provider.GenerateManifests(context.TODO(), logrus.NewEntry(logrus.StandardLogger()), tc.ci)
-
-			b, _ := kyaml.Marshal(manifests)
-			_ = os.WriteFile("/tmp/m.yaml", b, 0644)
 
 			if err != nil && tc.wantErr == nil {
 				t.Fatalf("want err nil but got: %v", err)

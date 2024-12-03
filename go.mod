@@ -46,7 +46,7 @@ require (
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/slack-go/slack v0.7.3
-	github.com/spf13/afero v1.9.5
+	github.com/spf13/afero v1.10.0
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.6-0.20210604193023-d5e0c0615ace
 	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842
@@ -155,7 +155,7 @@ require (
 	golang.org/x/xerrors v0.0.0-20240716161551-93cc26a95ae9 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/genproto v0.0.0-20240812133136-8ffd90a71988 // indirect
-	google.golang.org/grpc v1.65.0 // indirect
+	google.golang.org/grpc v1.66.2
 	google.golang.org/protobuf v1.34.2 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.67.0
@@ -179,7 +179,9 @@ require (
 	github.com/coreos/stream-metadata-go v0.1.8
 	github.com/estesp/manifest-tool/v2 v2.1.8
 	github.com/felixge/httpsnoop v1.0.4
+	github.com/fullstorydev/grpcurl v1.9.2
 	github.com/golang-jwt/jwt v3.2.2+incompatible
+	github.com/jhump/protoreflect v1.17.0
 	github.com/openshift/builder v0.0.0-20240610114444-739f5270219e
 	github.com/openshift/client-go v0.0.0-20240528061634-b054aa794d87
 	github.com/openshift/hive/apis v0.0.0-20230525214126-ab571664f899
@@ -228,10 +230,12 @@ require (
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/blendle/zapdriver v1.3.1 // indirect
 	github.com/bombsimon/logrusr/v4 v4.1.0 // indirect
+	github.com/bufbuild/protocompile v0.14.1 // indirect
 	github.com/cenkalti/backoff/v3 v3.2.2 // indirect
 	github.com/census-instrumentation/opencensus-proto v0.4.1 // indirect
 	github.com/cjwagner/httpcache v0.0.0-20230907212505-d4841bbad466 // indirect
 	github.com/cloudflare/circl v1.3.7 // indirect
+	github.com/cncf/xds/go v0.0.0-20240423153145-555b57ec207b // indirect
 	github.com/containerd/containerd v1.7.22 // indirect
 	github.com/containerd/errdefs v0.1.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
@@ -244,6 +248,8 @@ require (
 	github.com/docker/docker-credential-helpers v0.8.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.12.0 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
+	github.com/envoyproxy/go-control-plane v0.12.1-0.20240621013728-1eb8caab5155 // indirect
+	github.com/envoyproxy/protoc-gen-validate v1.0.4 // indirect
 	github.com/evanphx/json-patch/v5 v5.9.0 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.5 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
@@ -293,6 +299,7 @@ require (
 	github.com/openshift/custom-resource-status v1.1.3-0.20220503160415-f2fdb4999d87 // indirect
 	github.com/pierrec/lz4/v4 v4.1.18 // indirect
 	github.com/pjbgf/sha1cd v0.3.0 // indirect
+	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/prometheus/statsd_exporter v0.22.7 // indirect
 	github.com/rivo/uniseg v0.4.4 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect

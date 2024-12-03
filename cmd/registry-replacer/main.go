@@ -281,12 +281,12 @@ func replacer(
 
 				dockerfile, err = applyReplacementsToDockerfile(dockerfile, &image)
 				if err != nil {
-					return fmt.Errorf("failed to apply replacements to Dockerfile: %w", err)
+					return fmt.Errorf("failed to apply replacements to Dockerfile in %s/%s@%s: %w", info.Org, info.Repo, info.Branch, err)
 				}
 
 				foundTags, err := ensureReplacement(&config.Images[idx], dockerfile)
 				if err != nil {
-					return fmt.Errorf("failed to ensure replacements: %w", err)
+					return fmt.Errorf("failed to ensure replacements in %s/%s@%s: %w", info.Org, info.Repo, info.Branch, err)
 				}
 				for _, foundTag := range foundTags {
 					if config.BaseImages == nil {
@@ -304,14 +304,14 @@ func replacer(
 
 				replacementCandidates, err := extractReplacementCandidatesFromDockerfile(dockerfile)
 				if err != nil {
-					return fmt.Errorf("failed to extract source images from dockerfile: %w", err)
+					return fmt.Errorf("failed to extract source images from dockerfile in %s/%s@%s: %w", info.Org, info.Repo, info.Branch, err)
 				}
 				allReplacementCandidates.Insert(replacementCandidates.UnsortedList()...)
 			}
 
 			if pruneUnusedReplacementsEnabled && hasNonEmptyDockerfile {
 				if err := pruneUnusedReplacements(config, allReplacementCandidates); err != nil {
-					return fmt.Errorf("failed to prune unused replacements: %w", err)
+					return fmt.Errorf("failed to prune unused replacements in %s/%s@%s: %w", info.Org, info.Repo, info.Branch, err)
 				}
 			} else if pruneUnusedReplacementsEnabled {
 				logrus.WithField("org", info.Org).WithField("repo", info.Repo).WithField("branch", info.Branch).Info("Not purging unused replacements because we got an empty dockerfile")

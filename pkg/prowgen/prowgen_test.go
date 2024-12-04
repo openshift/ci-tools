@@ -7,6 +7,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	utilpointer "k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 
@@ -579,6 +580,74 @@ func TestGenerateJobs(t *testing.T) {
 					{
 						As:               "unit",
 						NodeArchitecture: "arm64",
+					},
+				},
+			},
+			repoInfo: &ProwgenInfo{
+				Metadata: ciop.Metadata{
+					Org:    "organization",
+					Repo:   "repository",
+					Branch: "branch",
+				},
+			},
+		},
+		{
+			id: "vpn label for periodic",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{As: "unit",
+						Cron:                       utilpointer.String(cron),
+						Cluster:                    "build06",
+						ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"},
+						RestrictNetworkAccess:      ptr.To(false)},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
+		{
+			id: "vpn label for presubmit",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{As: "unit",
+						Cluster:                    "build06",
+						ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"},
+						RestrictNetworkAccess:      ptr.To(false)},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
+		{
+			id: "vpn label for postsubmit",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{As: "unit",
+						Postsubmit:                 true,
+						Cluster:                    "build06",
+						ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"},
+						RestrictNetworkAccess:      ptr.To(false)},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
+		{
+			id: "vpn test job",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{
+						As:                    "unit",
+						RestrictNetworkAccess: ptr.To(false),
 					},
 				},
 			},

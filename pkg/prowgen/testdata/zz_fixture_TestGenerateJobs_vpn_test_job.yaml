@@ -1,0 +1,7 @@
+presubmits:
+  organization/repository:
+  - always_run: false
+    labels:
+      capability/vpn: vpn
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+    name: pull-ci-organization-repository-branch-unit

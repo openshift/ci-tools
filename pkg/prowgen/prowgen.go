@@ -18,6 +18,7 @@ const (
 	oauthTokenPath              = "/usr/local/github-credentials"
 	oauthKey                    = "oauth"
 	Generator      jc.Generator = "prowgen"
+	VPN                         = "vpn"
 )
 
 type ProwgenInfo struct {
@@ -51,6 +52,10 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 
 		if element.NodeArchitecture != "" {
 			g.WithLabel(fmt.Sprintf("capability/%s", element.NodeArchitecture), string(element.NodeArchitecture))
+		}
+
+		if element.RestrictNetworkAccess != nil && !*element.RestrictNetworkAccess {
+			g.WithLabel(fmt.Sprintf("capability/%s", VPN), string(VPN))
 		}
 
 		disableRehearsal := rehearsals.DisableAll || disabledRehearsals.Has(element.As)

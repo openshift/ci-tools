@@ -1,0 +1,9 @@
+postsubmits:
+  organization/repository:
+  - always_run: true
+    cluster: build06
+    labels:
+      capability/vpn: vpn
+      ci-operator.openshift.io/cluster: build06
+    max_concurrency: 1
+    name: branch-ci-organization-repository-branch-unit

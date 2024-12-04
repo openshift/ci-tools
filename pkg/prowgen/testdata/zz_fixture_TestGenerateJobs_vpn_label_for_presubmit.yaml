@@ -1,0 +1,9 @@
+presubmits:
+  organization/repository:
+  - always_run: false
+    cluster: build06
+    labels:
+      capability/vpn: vpn
+      ci-operator.openshift.io/cluster: build06
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+    name: pull-ci-organization-repository-branch-unit

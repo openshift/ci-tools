@@ -439,12 +439,14 @@ func TestReconcile(t *testing.T) {
 					}).
 				Build()
 			r := &reconciler{
-				logger:                 logrus.WithField("test-name", tc.name),
-				client:                 client,
-				configResolverClient:   &fakeResolverClient{},
-				prowConfigGetter:       &fakeProwConfigGetter{cfg: &tc.prowConfig},
-				dispatcherClient:       &fakeDispatcherClient{},
-				jobTriggerWaitDuration: time.Duration(1) * time.Second,
+				logger:                      logrus.WithField("test-name", tc.name),
+				client:                      client,
+				configResolverClient:        &fakeResolverClient{},
+				prowConfigGetter:            &fakeProwConfigGetter{cfg: &tc.prowConfig},
+				dispatcherClient:            &fakeDispatcherClient{},
+				jobTriggerWaitDuration:      time.Duration(1) * time.Second,
+				defaultAggregatorJobTimeout: time.Duration(6) * time.Hour,
+				defaultMultiRefJobTimeout:   time.Duration(6) * time.Hour,
 			}
 			req := reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "test-namespace", Name: "prpqr-test"}}
 			if err := r.reconcile(context.Background(), req, r.logger, time.Millisecond); err != nil {

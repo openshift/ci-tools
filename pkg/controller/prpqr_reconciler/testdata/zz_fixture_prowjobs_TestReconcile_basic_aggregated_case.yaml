@@ -20,7 +20,7 @@
     agent: kubernetes
     decoration_config:
       skip_cloning: true
-      timeout: 8h0m0s
+      timeout: 6h0m0s
     job: aggregator-periodic-ci-test-org-test-repo-test-branch-test-name
     pod_spec:
       containers:

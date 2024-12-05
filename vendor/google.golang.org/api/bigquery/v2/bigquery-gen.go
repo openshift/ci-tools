@@ -1935,7 +1935,10 @@ type Dataset struct {
 	// for the following entities: access.specialGroup: projectReaders;
 	// access.role: READER; access.specialGroup: projectWriters; access.role:
 	// WRITER; access.specialGroup: projectOwners; access.role: OWNER;
-	// access.userByEmail: [dataset creator email]; access.role: OWNER;
+	// access.userByEmail: [dataset creator email]; access.role: OWNER; If you
+	// patch a dataset, then this field is overwritten by the patched dataset's
+	// access field. To add entities, you must supply the entire existing access
+	// array in addition to any new entities that you want to add.
 	Access []*DatasetAccess `json:"access,omitempty"`
 	// CreationTime: Output only. The time when this dataset was created, in
 	// milliseconds since the epoch.
@@ -2078,7 +2081,8 @@ type Dataset struct {
 	//   "LOGICAL" - Billing for logical bytes.
 	//   "PHYSICAL" - Billing for physical bytes.
 	StorageBillingModel string `json:"storageBillingModel,omitempty"`
-	// Tags: Output only. Tags for the Dataset.
+	// Tags: Output only. Tags for the dataset. To provide tags as inputs, use the
+	// `resourceTags` field.
 	Tags []*DatasetTags `json:"tags,omitempty"`
 	// Type: Output only. Same as `type` in `ListFormatDataset`. The type of the
 	// dataset, one of: * DEFAULT - only accessible by owner and authorized
@@ -3869,6 +3873,44 @@ func (s *HparamTuningTrial) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// IdentityColumnInfo: Metadata for value generation for an identity column.
+type IdentityColumnInfo struct {
+	// GeneratedMode: Optional. Dictates when system generated values are used to
+	// populate the field.
+	//
+	// Possible values:
+	//   "GENERATED_MODE_UNSPECIFIED" - Unspecified GeneratedMode will default to
+	// GENERATED_ALWAYS.
+	//   "GENERATED_ALWAYS" - Field can only have system generated values. Users
+	// cannot manually insert values into the field.
+	//   "GENERATED_BY_DEFAULT" - Use system generated values only if the user does
+	// not explicitly provide a value.
+	GeneratedMode string `json:"generatedMode,omitempty"`
+	// Increment: Optional. The minimum difference between two successive generated
+	// values. Should be INTEGER compatible. Can be negative or positive but not 0.
+	// The default value is 1 if the field is not specified.
+	Increment string `json:"increment,omitempty"`
+	// Start: Optional. The first generated value. Should be INTEGER compatible.
+	// The default value is 1 if the field is not specified.
+	Start string `json:"start,omitempty"`
+	// ForceSendFields is a list of field names (e.g. "GeneratedMode") to
+	// unconditionally include in API requests. By default, fields with empty or
+	// default values are omitted from API requests. See
+	// https://pkg.go.dev/google.golang.org/api#hdr-ForceSendFields for more
+	// details.
+	ForceSendFields []string `json:"-"`
+	// NullFields is a list of field names (e.g. "GeneratedMode") to include in API
+	// requests with the JSON null value. By default, fields with empty values are
+	// omitted from API requests. See
+	// https://pkg.go.dev/google.golang.org/api#hdr-NullFields for more details.
+	NullFields []string `json:"-"`
+}
+
+func (s IdentityColumnInfo) MarshalJSON() ([]byte, error) {
+	type NoMethod IdentityColumnInfo
+	return gensupport.MarshalJSON(NoMethod(s), s.ForceSendFields, s.NullFields)
+}
+
 // IndexUnusedReason: Reason about why no search index was used in the search
 // query (or sub-query).
 type IndexUnusedReason struct {
@@ -5025,6 +5067,16 @@ type JobStatistics struct {
 	// DataMaskingStatistics: Output only. Statistics for data-masking. Present
 	// only for query and extract jobs.
 	DataMaskingStatistics *DataMaskingStatistics `json:"dataMaskingStatistics,omitempty"`
+	// Edition: Output only. Name of edition corresponding to the reservation for
+	// this job at the time of this update.
+	//
+	// Possible values:
+	//   "RESERVATION_EDITION_UNSPECIFIED" - Default value, which will be treated
+	// as ENTERPRISE.
+	//   "STANDARD" - Standard edition.
+	//   "ENTERPRISE" - Enterprise edition.
+	//   "ENTERPRISE_PLUS" - Enterprise plus edition.
+	Edition string `json:"edition,omitempty"`
 	// EndTime: Output only. End time of this job, in milliseconds since the epoch.
 	// This field will be present whenever a job is in the DONE state.
 	EndTime int64 `json:"endTime,omitempty,string"`
@@ -8955,6 +9007,10 @@ type TableFieldSchema struct {
 	// valid for top-level schema fields (not nested fields). If the type is
 	// FOREIGN, this field is required.
 	ForeignTypeDefinition string `json:"foreignTypeDefinition,omitempty"`
+	// IdentityColumnInfo: Optional. Definition of how values are generated for the
+	// field. Setting this option means that the field is an identity column. Only
+	// valid for top-level schema INTEGER fields (not nested fields).
+	IdentityColumnInfo *IdentityColumnInfo `json:"identityColumnInfo,omitempty"`
 	// MaxLength: Optional. Maximum length of values of this field for STRINGS or
 	// BYTES. If max_length is not specified, no maximum length constraint is
 	// imposed on this field. If type = "STRING", then max_length represents the

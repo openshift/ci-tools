@@ -1,0 +1,11 @@
+agent: kubernetes
+always_run: true
+branches:
+- ^branch$
+decorate: true
+decoration_config:
+  skip_cloning: true
+labels:
+  capability/arm64: arm64
+  capability/vpn: vpn
+name: branch-ci-organization-repository-branch-postsubmit

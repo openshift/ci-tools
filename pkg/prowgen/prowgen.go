@@ -174,6 +174,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 func handlePresubmit(g *prowJobBaseBuilder, element api.TestStepConfiguration, info *ProwgenInfo, disableRehearsal bool, requests api.ResourceList, presubmits map[string][]prowconfig.Presubmit, orgrepo string) {
 	presubmit := generatePresubmitForTest(g, element.As, info, func(options *generatePresubmitOptions) {
 		options.pipelineRunIfChanged = element.PipelineRunIfChanged
+		options.Capabilities = element.Capabilities
 		options.runIfChanged = element.RunIfChanged
 		options.skipIfOnlyChanged = element.SkipIfOnlyChanged
 		options.defaultDisable = element.AlwaysRun != nil && !*element.AlwaysRun
@@ -198,6 +199,7 @@ func testContainsLease(test *cioperatorapi.TestStepConfiguration) bool {
 
 type generatePresubmitOptions struct {
 	pipelineRunIfChanged string
+	Capabilities         []string
 	runIfChanged         string
 	skipIfOnlyChanged    string
 	defaultDisable       bool
@@ -227,7 +229,7 @@ func generatePresubmitForTest(jobBaseBuilder *prowJobBaseBuilder, name string, i
 	if opts.defaultDisable && opts.runIfChanged == "" && opts.skipIfOnlyChanged == "" && !opts.optional && !pipelineOpt {
 		triggerCommand = fmt.Sprintf(`(?m)^/test( | .* )(%s|%s),?($|\s.*)`, shortName, "remaining-required")
 	}
-	return &prowconfig.Presubmit{
+	pj := &prowconfig.Presubmit{
 		JobBase:   base,
 		AlwaysRun: opts.runIfChanged == "" && opts.skipIfOnlyChanged == "" && !opts.defaultDisable && opts.pipelineRunIfChanged == "",
 		Brancher:  prowconfig.Brancher{Branches: sets.List(sets.New[string](jc.ExactlyBranch(info.Branch), jc.FeatureBranch(info.Branch)))},
@@ -242,10 +244,13 @@ func generatePresubmitForTest(jobBaseBuilder *prowJobBaseBuilder, name string, i
 		},
 		Optional: opts.optional,
 	}
+	injectCapabilities(pj.Labels, opts.Capabilities)
+	return pj
 }
 
 type generatePostsubmitOptions struct {
 	runIfChanged      string
+	Capabilities      []string
 	skipIfOnlyChanged string
 }
 
@@ -259,7 +264,7 @@ func generatePostsubmitForTest(jobBaseBuilder *prowJobBaseBuilder, info *Prowgen
 
 	base := jobBaseBuilder.Build(jc.PostsubmitPrefix)
 	alwaysRun := opts.runIfChanged == "" && opts.skipIfOnlyChanged == ""
-	return &prowconfig.Postsubmit{
+	pj := &prowconfig.Postsubmit{
 		JobBase:   base,
 		AlwaysRun: &alwaysRun,
 		RegexpChangeMatcher: prowconfig.RegexpChangeMatcher{
@@ -268,6 +273,8 @@ func generatePostsubmitForTest(jobBaseBuilder *prowJobBaseBuilder, info *Prowgen
 		},
 		Brancher: prowconfig.Brancher{Branches: []string{jc.ExactlyBranch(info.Branch)}},
 	}
+	injectCapabilities(pj.Labels, opts.Capabilities)
+	return pj
 }
 
 // hashDailyCron returns a cron pattern derived from a hash of the job name that
@@ -285,6 +292,7 @@ func hashDailyCron(job string) string {
 type GeneratePeriodicOptions struct {
 	Interval          string
 	MinimumInterval   string
+	Capabilities      []string
 	Cron              string
 	ReleaseController bool
 	PathAlias         *string
@@ -330,11 +338,19 @@ func GeneratePeriodicForTest(jobBaseBuilder *prowJobBaseBuilder, info *ProwgenIn
 		cron = "@yearly"
 		base.Labels[jc.ReleaseControllerLabel] = jc.ReleaseControllerValue
 	}
-	return &prowconfig.Periodic{
+	pj := &prowconfig.Periodic{
 		JobBase:         base,
 		Cron:            cron,
 		Interval:        opts.Interval,
 		MinimumInterval: opts.MinimumInterval,
+	}
+	injectCapabilities(pj.Labels, opts.Capabilities)
+	return pj
+}
+
+func injectCapabilities(labels map[string]string, capabilities []string) {
+	for _, c := range capabilities {
+		labels[fmt.Sprintf("capability/%s", c)] = c
 	}
 }
 

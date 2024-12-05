@@ -136,6 +136,14 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 				options.disableRehearsal = true
 			},
 		},
+		{
+			description: "capabilities added",
+			test:        "testname",
+			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			generateOption: func(options *generatePresubmitOptions) {
+				options.Capabilities = []string{"vpn", "arm64"}
+			},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
@@ -201,6 +209,15 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 				options.MinimumInterval = "4h"
 			},
 		},
+		{
+			description: "periodic with capabilities",
+			test:        "testname",
+			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			generateOption: func(options *GeneratePeriodicOptions) {
+				options.Cron = "@yearly"
+				options.Capabilities = []string{"vpn", "arm64"}
+			},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
@@ -248,6 +265,17 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 			}},
 			generateOption: func(options *generatePostsubmitOptions) {
 				options.runIfChanged = "^README.md$"
+			},
+		},
+		{
+			name: "postsubmit with capabilities",
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+			generateOption: func(options *generatePostsubmitOptions) {
+				options.Capabilities = []string{"vpn", "arm64"}
 			},
 		},
 		{

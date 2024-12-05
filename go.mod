@@ -13,7 +13,7 @@ require (
 	github.com/GoogleCloudPlatform/testgrid v0.0.123
 	github.com/PagerDuty/go-pagerduty v1.4.1
 	github.com/alecthomas/chroma v0.8.2-0.20201103103104-ab61726cdb54
-	github.com/andygrunwald/go-jira v1.14.0
+	github.com/andygrunwald/go-jira v1.16.0
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/bombsimon/logrusr/v3 v3.0.0
 	github.com/docker/distribution v2.8.3+incompatible
@@ -258,6 +258,7 @@ require (
 	github.com/go-openapi/jsonreference v0.21.0 // indirect
 	github.com/go-openapi/swag v0.23.0 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
+	github.com/golang-jwt/jwt/v4 v4.5.0 // indirect
 	github.com/google/cel-go v0.20.1 // indirect
 	github.com/google/flatbuffers v23.5.26+incompatible // indirect
 	github.com/google/gnostic-models v0.6.9-0.20230804172637-c7be7c783f49 // indirect

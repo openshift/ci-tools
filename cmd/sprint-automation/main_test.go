@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	jiraapi "github.com/andygrunwald/go-jira"
 	"github.com/google/go-cmp/cmp"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -294,72 +293,6 @@ func TestUpgradeBuild02(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expectedErr, actualErr, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("%s differs from expected:\n%s", tc.name, diff)
-			}
-		})
-	}
-}
-
-func TestCardIsReady(t *testing.T) {
-	intakeEmail := "intake@mail.com"
-
-	var testCases = []struct {
-		name     string
-		comments []*jiraapi.Comment
-		expected bool
-	}{
-		{
-			name:     "no comments",
-			comments: []*jiraapi.Comment{},
-			expected: true,
-		},
-		{
-			name: "single comment, IS by intake",
-			comments: []*jiraapi.Comment{
-				{
-					Author: jiraapi.User{EmailAddress: intakeEmail},
-				},
-			},
-			expected: false,
-		},
-		{
-			name: "single comment, NOT by intake",
-			comments: []*jiraapi.Comment{
-				{
-					Author: jiraapi.User{EmailAddress: "someone@else.com"},
-				},
-			},
-			expected: true,
-		},
-		{
-			name: "multiple comments, last comment NOT by intake",
-			comments: []*jiraapi.Comment{
-				{
-					Author: jiraapi.User{EmailAddress: intakeEmail},
-				},
-				{
-					Author: jiraapi.User{EmailAddress: "someone@else.com"},
-				},
-			},
-			expected: true,
-		},
-		{
-			name: "multiple comments, last comment IS by intake",
-			comments: []*jiraapi.Comment{
-				{
-					Author: jiraapi.User{EmailAddress: "someone@else.com"},
-				},
-				{
-					Author: jiraapi.User{EmailAddress: intakeEmail},
-				},
-			},
-			expected: false,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			if diff := cmp.Diff(cardIsReady(tc.comments, intakeEmail), tc.expected); diff != "" {
-				t.Errorf("result differs from expected, diff:\n%s", diff)
 			}
 		})
 	}

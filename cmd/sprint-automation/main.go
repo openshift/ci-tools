@@ -130,7 +130,7 @@ func main() {
 		logrus.WithError(err).Fatal("Could not ensure Slack group membership.")
 	}
 
-	if err := sendIntakeDigest(slackClient, jiraClient, userIdsByRole[roleIntake]); err != nil {
+	if err := assignAndSendIntakeDigest(slackClient, jiraClient, userIdsByRole[roleIntake]); err != nil {
 		logrus.WithError(err).Fatal("Could not post @dptp-intake digest to Slack.")
 	}
 
@@ -526,9 +526,9 @@ func postBlocks(slackClient *slack.Client, blocks []slack.Block) error {
 	return nil
 }
 
-func sendIntakeDigest(slackClient *slack.Client, jiraClient *jiraapi.Client, user user) error {
+func assignAndSendIntakeDigest(slackClient *slack.Client, jiraClient *jiraapi.Client, user user) error {
 	opts := jiraapi.SearchOptions{Fields: []string{"*navigable", "comment"}}
-	issues, response, err := jiraClient.Issue.Search(fmt.Sprintf(`project=%s AND (labels is EMPTY OR NOT (labels=ready OR labels=no-intake)) AND created >= -30d AND status = "To Do" AND issuetype != Sub-task`, jira.ProjectDPTP), &opts)
+	issues, response, err := jiraClient.Issue.Search(fmt.Sprintf(`project=%s AND (labels is EMPTY OR NOT (labels=ready OR labels=no-intake)) AND created >= -30d AND status = "To Do" AND issuetype != Sub-task AND assignee is EMPTY`, jira.ProjectDPTP), &opts)
 	if err := jirautil.HandleJiraError(response, err); err != nil {
 		return fmt.Errorf("could not query for Jira issues: %w", err)
 	}
@@ -554,10 +554,20 @@ func sendIntakeDigest(slackClient *slack.Client, jiraClient *jiraapi.Client, use
 			},
 		},
 	}
+
+	jiraUsers, userResponse, userErr := jiraClient.User.Find("", jiraapi.WithUsername(user.email))
+	if err := jirautil.HandleJiraError(userResponse, userErr); err != nil {
+		return fmt.Errorf("could not find jira user: %w", err)
+	}
+	if len(jiraUsers) != 1 {
+		return fmt.Errorf("could not find single jira user for intake role, expected 1 got %d", len(jiraUsers))
+	}
 	for _, issue := range issues {
-		if cardIsReady(issue.Fields.Comments.Comments, user.email) {
-			blocks = append(blocks, blockForIssue(issue))
+		_, err = jiraClient.Issue.UpdateAssignee(issue.ID, &jiraUsers[0])
+		if err != nil {
+			return fmt.Errorf("could not update assignee on issue(%s): %w", issue.ID, err)
 		}
+		blocks = append(blocks, blockForIssue(issue))
 	}
 	responseChannel, responseTimestamp, err := slackClient.PostMessage(user.slackId, slack.MsgOptionText("Jira card digest.", false), slack.MsgOptionBlocks(blocks...))
 	if err != nil {
@@ -566,16 +576,6 @@ func sendIntakeDigest(slackClient *slack.Client, jiraClient *jiraapi.Client, use
 
 	logrus.Infof("Posted intake digest in channel %s at %s", responseChannel, responseTimestamp)
 	return nil
-}
-
-// cardIsReady returns false if the last comment left on a card is by the person
-// that is currently on Intake (in which case, we can assume the card is not ready),
-// otherwise returns true.
-func cardIsReady(comments []*jiraapi.Comment, intakeEmail string) bool {
-	if len(comments) > 0 {
-		return comments[len(comments)-1].Author.EmailAddress != intakeEmail
-	}
-	return true
 }
 
 type versionInfo struct {

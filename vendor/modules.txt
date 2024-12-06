@@ -158,8 +158,8 @@ github.com/anaskhan96/soup
 # github.com/andygrunwald/go-gerrit v0.0.0-20230211083816-04e01d7217b2
 ## explicit; go 1.16
 github.com/andygrunwald/go-gerrit
-# github.com/andygrunwald/go-jira v1.14.0
-## explicit; go 1.12
+# github.com/andygrunwald/go-jira v1.16.0
+## explicit; go 1.15
 github.com/andygrunwald/go-jira
 # github.com/antlr4-go/antlr/v4 v4.13.0
 ## explicit; go 1.20
@@ -727,6 +727,9 @@ github.com/gogo/protobuf/sortkeys
 # github.com/golang-jwt/jwt v3.2.2+incompatible
 ## explicit
 github.com/golang-jwt/jwt
+# github.com/golang-jwt/jwt/v4 v4.5.0
+## explicit; go 1.16
+github.com/golang-jwt/jwt/v4
 # github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da
 ## explicit
 github.com/golang/groupcache/lru

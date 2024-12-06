@@ -51,9 +51,6 @@ const (
 	conditionWithErrors       = "WithErrors"
 
 	aggregationIDLabel = "release.openshift.io/aggregation-id"
-	// TODO: temporarily increase timeout to allow payload tests to run during k8s rebase
-	defaultAggregatorJobTimeout = 8 * time.Hour
-	defaultMultiRefJobTimeout   = 8 * time.Hour
 
 	dependentProwJobsFinalizer = "pullrequestpayloadqualificationruns.ci.openshift.io/dependent-prowjobs"
 )
@@ -88,7 +85,7 @@ type jobClusterCache struct {
 	lastCleared   time.Time
 }
 
-func AddToManager(mgr manager.Manager, ns string, rc injectingResolverClient, prowConfigAgent *prowconfig.Agent, dispatcherAddress string, jobTriggerWaitDuration time.Duration) error {
+func AddToManager(mgr manager.Manager, ns string, rc injectingResolverClient, prowConfigAgent *prowconfig.Agent, dispatcherAddress string, jobTriggerWaitDuration time.Duration, defaultAggregatorJobTimeout time.Duration, defaultMultiRefJobTimeout time.Duration) error {
 	if err := pjstatussyncer.AddToManager(mgr, ns); err != nil {
 		return fmt.Errorf("failed to construct pjstatussyncer: %w", err)
 	}
@@ -105,7 +102,9 @@ func AddToManager(mgr manager.Manager, ns string, rc injectingResolverClient, pr
 				clusterForJob: make(map[string]string),
 				lastCleared:   time.Now(),
 			},
-			jobTriggerWaitDuration: jobTriggerWaitDuration,
+			jobTriggerWaitDuration:      jobTriggerWaitDuration,
+			defaultAggregatorJobTimeout: defaultAggregatorJobTimeout,
+			defaultMultiRefJobTimeout:   defaultMultiRefJobTimeout,
 		},
 	})
 	if err != nil {
@@ -150,6 +149,9 @@ type reconciler struct {
 	prowConfigGetter     prowConfigGetter
 
 	jobTriggerWaitDuration time.Duration
+
+	defaultAggregatorJobTimeout time.Duration
+	defaultMultiRefJobTimeout   time.Duration
 }
 
 func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
@@ -299,7 +301,7 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 			prowjobsToCreate = append(prowjobsToCreate, aggregatedProwjobs...)
 
 			submitted := generateJobNameToSubmit(inject, pullRequests)
-			aggregatorJob, err := generateAggregatorJob(baseMetadata, uid, mimickedJob, jobSpec.JobName(jobconfig.PeriodicPrefix), req.Name, req.Namespace, r.prowConfigGetter, time.Now(), submitted)
+			aggregatorJob, err := generateAggregatorJob(baseMetadata, uid, mimickedJob, jobSpec.JobName(jobconfig.PeriodicPrefix), req.Name, req.Namespace, r.prowConfigGetter, time.Now(), submitted, r.defaultAggregatorJobTimeout)
 			if err != nil {
 				logger.WithError(err).Error("Failed to generate an aggregator prowjob")
 				statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
@@ -613,9 +615,9 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 		}
 		if len(prs) > 1 {
 			if test.Timeout == nil {
-				test.Timeout = &prowv1.Duration{Duration: defaultMultiRefJobTimeout}
-			} else if test.Timeout.Duration < defaultMultiRefJobTimeout {
-				test.Timeout.Duration = defaultMultiRefJobTimeout
+				test.Timeout = &prowv1.Duration{Duration: r.defaultMultiRefJobTimeout}
+			} else if test.Timeout.Duration < r.defaultMultiRefJobTimeout {
+				test.Timeout.Duration = r.defaultMultiRefJobTimeout
 			}
 		}
 		jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, fakeProwgenInfo, prowgen.NewCiOperatorPodSpecGenerator(), test)
@@ -650,7 +652,7 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 			options.Cron = "@yearly"
 		})
 		periodic.Name = generateJobNameToSubmit(inject, prs)
-		// TODO: temporarily increase timeout to allow payload tests to run during k8s rebase
+
 		if periodic.DecorationConfig == nil {
 			periodic.DecorationConfig = &prowv1.DecorationConfig{}
 		}
@@ -775,7 +777,7 @@ func (r *reconciler) generateAggregatedProwjobs(uid string, ciopConfig *api.Rele
 	return ret, nil
 }
 
-func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobName, prpqrName, prpqrNamespace string, getCfg prowConfigGetter, startTime time.Time, submitted string) (*prowv1.ProwJob, error) {
+func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobName, prpqrName, prpqrNamespace string, getCfg prowConfigGetter, startTime time.Time, submitted string, aggregatedJobTimeout time.Duration) (*prowv1.ProwJob, error) {
 	ciopConfig := &api.ReleaseBuildConfiguration{
 		Metadata: *baseCiop,
 		Tests: []api.TestStepConfiguration{
@@ -819,7 +821,7 @@ func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobNa
 	periodic.Name = aggregatorJobName
 
 	// Aggregator jobs need more time to finish than the jobs they are aggregating. The default job timeout in CI is set to 4h
-	periodic.DecorationConfig.Timeout = &prowv1.Duration{Duration: defaultAggregatorJobTimeout}
+	periodic.DecorationConfig.Timeout = &prowv1.Duration{Duration: aggregatedJobTimeout}
 
 	// The aggregator job doesn't need to clone any repository.
 	periodic.ExtraRefs = nil

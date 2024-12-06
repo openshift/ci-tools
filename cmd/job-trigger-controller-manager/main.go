@@ -29,10 +29,12 @@ var (
 type options struct {
 	prowconfigflagutil.ConfigOptions
 
-	namespace               string
-	jobTriggerWaitInSeconds int64
-	dispatcherAddress       string
-	dryRun                  bool
+	namespace                         string
+	jobTriggerWaitInSeconds           int64
+	defaultAggregatorJobTimeoutInHour int64
+	defaultMultiRefJobTimeoutInHour   int64
+	dispatcherAddress                 string
+	dryRun                            bool
 }
 
 func gatherOptions() (*options, error) {
@@ -43,6 +45,8 @@ func gatherOptions() (*options, error) {
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
 	fs.StringVar(&o.namespace, "namespace", "ci", "In which namespace the operation will take place")
 	fs.Int64Var(&o.jobTriggerWaitInSeconds, "job-trigger-wait-seconds", 60, "Amount of seconds to wait for job to trigger in order to update status")
+	fs.Int64Var(&o.defaultAggregatorJobTimeoutInHour, "aggregator-job-timeout", 6, "Amount of hours to wait for job to timeout in order to update status")
+	fs.Int64Var(&o.defaultMultiRefJobTimeoutInHour, "multi-ref-job-timeout", 6, "Amount of hours to wait for job to timeout in order to update status")
 	fs.StringVar(&o.dispatcherAddress, "dispatcher-address", "http://prowjob-dispatcher.ci.svc.cluster.local:8080", "Address of prowjob-dispatcher server.")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -98,7 +102,9 @@ func main() {
 	}
 
 	duration := time.Duration(o.jobTriggerWaitInSeconds) * time.Second
-	if err := prpqr_reconciler.AddToManager(mgr, o.namespace, server.NewResolverClient(configResolverAddress), agent, o.dispatcherAddress, duration); err != nil {
+	defaultAggregatorJobTimeout := time.Duration(o.defaultAggregatorJobTimeoutInHour) * time.Hour
+	defaultMultiRefJobTimeout := time.Duration(o.defaultMultiRefJobTimeoutInHour) * time.Hour
+	if err := prpqr_reconciler.AddToManager(mgr, o.namespace, server.NewResolverClient(configResolverAddress), agent, o.dispatcherAddress, duration, defaultAggregatorJobTimeout, defaultMultiRefJobTimeout); err != nil {
 		logrus.WithError(err).Fatal("Failed to add prpqr_reconciler to manager")
 	}
 

@@ -1,0 +1,14 @@
+agent: kubernetes
+cron: '@yearly'
+decorate: true
+decoration_config:
+  skip_cloning: true
+extra_refs:
+- base_ref: branch
+  org: org
+  repo: repo
+labels:
+  capability/arm64: arm64
+  capability/vpn: vpn
+  pj-rehearse.openshift.io/can-be-rehearsed: "true"
+name: periodic-ci-org-repo-branch-testname

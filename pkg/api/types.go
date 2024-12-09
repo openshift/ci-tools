@@ -721,6 +721,11 @@ const (
 type TestStepConfiguration struct {
 	// As is the name of the test.
 	As string `json:"as"`
+
+	// Capabilities is the list of strings that
+	// define additional capabilities needed by the test runs
+	Capabilities []string `json:"capabilities,omitempty"`
+
 	// Commands are the shell commands to run in
 	// the repository root to execute tests.
 	Commands string `json:"commands,omitempty"`

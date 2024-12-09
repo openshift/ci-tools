@@ -514,6 +514,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        always_run: false\n" +
 	"        # As is the name of the test.\n" +
 	"        as: ' '\n" +
+	"        # Capabilities is the list of strings that\n" +
+	"        # define additional capabilities needed by the test runs\n" +
+	"        capabilities:\n" +
+	"            - \"\"\n" +
 	"        # Cluster specifies the name of the cluster where the test runs.\n" +
 	"        cluster: ' '\n" +
 	"        # ClusterClaim claims an OpenShift cluster and exposes environment variable ${KUBECONFIG} to the test container\n" +
@@ -1356,6 +1360,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      always_run: false\n" +
 	"      # As is the name of the test.\n" +
 	"      as: ' '\n" +
+	"      # Capabilities is the list of strings that\n" +
+	"      # define additional capabilities needed by the test runs\n" +
+	"      capabilities:\n" +
+	"        - \"\"\n" +
 	"      # Cluster specifies the name of the cluster where the test runs.\n" +
 	"      cluster: ' '\n" +
 	"      # ClusterClaim claims an OpenShift cluster and exposes environment variable ${KUBECONFIG} to the test container\n" +

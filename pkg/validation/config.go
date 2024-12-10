@@ -567,7 +567,7 @@ func validateResourceList(fieldRoot string, list api.ResourceList) []error {
 	var numInvalid int
 	for key := range list {
 		switch key {
-		case "cpu", "memory", api.ShmResource, api.NvidiaGPUResource:
+		case "cpu", "memory", "ephemeral-storage", api.ShmResource, api.NvidiaGPUResource:
 			quantity, err := resource.ParseQuantity(list[key])
 			if err != nil {
 				validationErrors = append(validationErrors, fmt.Errorf("%s.%s: invalid quantity: %w", fieldRoot, key, err))

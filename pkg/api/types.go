@@ -1330,6 +1330,7 @@ const (
 	ClusterProfileGCPChaos              ClusterProfile = "gcp-chaos"
 	ClusterProfileIBMCloud              ClusterProfile = "ibmcloud"
 	ClusterProfileIBMCloudCSPIQE        ClusterProfile = "ibmcloud-cspi-qe"
+	ClusterProfileIBMCloudRHOAIQE       ClusterProfile = "ibmcloud-rhoai-qe"
 	ClusterProfileIBMCloudQE            ClusterProfile = "ibmcloud-qe"
 	ClusterProfileIBMCloudQE2           ClusterProfile = "ibmcloud-qe-2"
 	ClusterProfileIBMCloudMultiPpc64le  ClusterProfile = "ibmcloud-multi-ppc64le"
@@ -1489,6 +1490,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileHyperShift,
 		ClusterProfileIBMCloud,
 		ClusterProfileIBMCloudCSPIQE,
+		ClusterProfileIBMCloudRHOAIQE,
 		ClusterProfileIBMCloudQE,
 		ClusterProfileIBMCloudQE2,
 		ClusterProfileIBMCloudMultiPpc64le,
@@ -1686,7 +1688,8 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileIBMCloud,
 		ClusterProfileIBMCloudCSPIQE,
 		ClusterProfileIBMCloudQE,
-		ClusterProfileIBMCloudQE2:
+		ClusterProfileIBMCloudQE2,
+		ClusterProfileIBMCloudRHOAIQE:
 		return "ibmcloud"
 	case ClusterProfileIBMCloudMultiPpc64le:
 		return "ibmcloud-multi-ppc64le"
@@ -2094,6 +2097,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-managed-rosa-rhoai-qe-quota-slice"
 	case ClusterProfileAWSManagedOSDRHOAIQE:
 		return "aws-managed-osd-rhoai-qe-quota-slice"
+	case ClusterProfileIBMCloudRHOAIQE:
+		return "ibmcloud-rhoai-qe-quota-slice"
 	default:
 		return ""
 	}

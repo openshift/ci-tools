@@ -262,7 +262,7 @@ func checkRepos(repos []string, bots []string, appName string, ignore sets.Set[s
 						return nil, fmt.Errorf("error checking access level (read/write/admin) for 'openshift-cherrypick-robot' in '%s/%s': %w", org, repo, err)
 					}
 					if !isMember && !hasAccess {
-						repoLogger.Infof("'openshift-cherrypick-robot' lacks required permissions (read/write/admin) or org membership in '%s/%s'", org, repo)
+						repoLogger.Errorf("'openshift-cherrypick-robot' lacks required permissions (read/write/admin) or org membership in '%s/%s'", org, repo)
 						failing.Insert(orgRepo)
 					} else {
 						repoLogger.Infof("'openshift-cherrypick-robot' has sufficient permissions (member or read/write/admin) in '%s/%s'", org, repo)

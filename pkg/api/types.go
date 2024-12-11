@@ -1386,6 +1386,7 @@ const (
 	ClusterProfileGCPVirtualization     ClusterProfile = "gcp-virtualization"
 	ClusterProfileAWSVirtualization     ClusterProfile = "aws-virtualization"
 	ClusterProfileAzureVirtualization   ClusterProfile = "azure-virtualization"
+	ClusterProfileOCIAgent              ClusterProfile = "oci-agent-qe"
 	ClusterProfileOCIAssisted           ClusterProfile = "oci-assisted"
 	ClusterProfileHypershiftPowerVS     ClusterProfile = "hypershift-powervs"
 	ClusterProfileHypershiftPowerVSCB   ClusterProfile = "hypershift-powervs-cb"
@@ -1539,6 +1540,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileVSphereConnected2,
 		ClusterProfileVSphereElastic,
 
+		ClusterProfileOCIAgent,
 		ClusterProfileOCIAssisted,
 		ClusterProfileHypershiftPowerVS,
 		ClusterProfileHypershiftPowerVSCB,
@@ -1778,6 +1780,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "osd-ephemeral"
 	case ClusterProfileHyperShift:
 		return "hypershift"
+	case ClusterProfileOCIAgent:
+		return "oci-agent-qe"
 	case ClusterProfileOCIAssisted:
 		return "oci-edge"
 	case ClusterProfileHypershiftPowerVS:
@@ -2048,6 +2052,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-3-quota-slice"
 	case ClusterProfileHyperShift:
 		return "hypershift-quota-slice"
+	case ClusterProfileOCIAgent:
+		return "oci-agent-qe-quota-slice"
 	case ClusterProfileOCIAssisted:
 		return "oci-edge-quota-slice"
 	case ClusterProfileHypershiftPowerVS:

@@ -2092,7 +2092,7 @@ func (p ClusterProfile) LeaseType() string {
 	case ClusterProfileAWSManagedOSDRHOAIQE:
 		return "aws-managed-osd-rhoai-qe-quota-slice"
 	case ClusterProfileIBMCloudRHOAIQE:
-        return "ibmcloud-rhoai-qe-quota-slice"
+		return "ibmcloud-rhoai-qe-quota-slice"
 	default:
 		return ""
 	}

@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/prow/pkg/plugins"
 	"sigs.k8s.io/prow/pkg/pod-utils/downwardapi"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 )
 
@@ -27,6 +28,7 @@ const (
 	branchProtectionRobot = "openshift-merge-robot"
 	standard              = appCheckMode("standard")
 	tide                  = appCheckMode("tide")
+	ocp                   = "ocp"
 )
 
 type appCheckMode string
@@ -122,7 +124,14 @@ func main() {
 	}
 
 	repos := determineRepos(o, prowAgent, logger)
-	failing, err := checkRepos(repos, o.bots.Strings(), o.appName, o.ignore.StringSet(), appCheckMode(o.appCheckMode), o.checkBranchProtection, client, logger, pluginAgent, tideQueries, prowAgent)
+	configs := &config.ReleaseRepoConfig{}
+	if o.releaseRepoPath != "" {
+		configs, err = config.GetAllConfigs(o.releaseRepoPath)
+		if err != nil {
+			logger.Fatalf("error loading configurations: %v", err)
+		}
+	}
+	failing, err := checkRepos(repos, o.bots.Strings(), o.appName, o.ignore.StringSet(), appCheckMode(o.appCheckMode), o.checkBranchProtection, configs, client, logger, pluginAgent, tideQueries, prowAgent)
 	if err != nil {
 		logger.Fatalf("error checking repos: %v", err)
 	}
@@ -147,7 +156,7 @@ func determineRepos(o options, prowAgent *prowconfig.Agent, logger *logrus.Entry
 	return sets.List(prowAgent.Config().AllRepos)
 }
 
-func checkRepos(repos []string, bots []string, appName string, ignore sets.Set[string], mode appCheckMode, checkBranchProtection bool, client automationClient, logger *logrus.Entry, pluginAgent *plugins.ConfigAgent, tideQueries *prowconfig.QueryMap, prowAgent *prowconfig.Agent) ([]string, error) {
+func checkRepos(repos []string, bots []string, appName string, ignore sets.Set[string], mode appCheckMode, checkBranchProtection bool, configs *config.ReleaseRepoConfig, client automationClient, logger *logrus.Entry, pluginAgent *plugins.ConfigAgent, tideQueries *prowconfig.QueryMap, prowAgent *prowconfig.Agent) ([]string, error) {
 	logger.Infof("checking %d repo(s): %s", len(repos), strings.Join(repos, ", "))
 	failing := sets.New[string]()
 	for _, orgRepo := range repos {
@@ -162,6 +171,26 @@ func checkRepos(repos []string, bots []string, appName string, ignore sets.Set[s
 		if err != nil {
 			logger.Errorf("Error obtaining repository from github: %s/%s: %v", org, repo, err)
 			return nil, fmt.Errorf("error obtaining repository from github: %s/%s: %w", org, repo, err)
+		}
+
+		configData, found := config.DataWithInfo{}, false
+		if configs.Prow != nil {
+			configData, found = configs.CiOperator[(&api.Metadata{Org: org, Repo: repo, Branch: "master"}).Basename()]
+			if !found {
+				logger.Infof("The \"master\" file was not found, searching for \"main\".")
+				configData, found = configs.CiOperator[(&api.Metadata{Org: org, Repo: repo, Branch: "main"}).Basename()]
+				if !found {
+					logger.Infof("The \"main\" file was found for repo %s/%s, skiping autobranching verification.", org, repo)
+				}
+			}
+			for _, target := range api.PromotionTargets(configData.Configuration.PromotionConfiguration) {
+				if target.Namespace == ocp && !fullRepo.HasIssues {
+					logger.Errorf("Repository %s/%s should have issues enable for automated branching.", org, repo)
+					failing.Insert(orgRepo)
+				}
+			}
+		} else {
+			logger.Warnf("No release repository path was given, ignoring automated branching verification.")
 		}
 
 		if ignore.Has(org) || ignore.Has(orgRepo) {

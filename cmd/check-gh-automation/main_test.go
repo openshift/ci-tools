@@ -13,6 +13,8 @@ import (
 	"sigs.k8s.io/prow/pkg/github"
 	"sigs.k8s.io/prow/pkg/plugins"
 
+	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -22,7 +24,37 @@ type fakeAutomationClient struct {
 	reposWithAppInstalled sets.Set[string]
 	permissionsByRepo     map[string]map[string][]string
 	privacyByRepo         map[string]bool
+	issuesByRepo          map[string]bool
 	organizations         map[string]github.Organization
+}
+
+func newFakeConfiguration() *config.ReleaseRepoConfig {
+	relaseRepoConfig := config.ReleaseRepoConfig{
+		Prow: &prowconfig.Config{},
+		CiOperator: config.DataByFilename{
+			"org-1-repo-c-master.yaml": config.DataWithInfo{
+				Configuration: cioperatorapi.ReleaseBuildConfiguration{
+					PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
+						Targets: []cioperatorapi.PromotionTarget{
+							{Namespace: "ocp"},
+						},
+					},
+				},
+				Info: config.Info{},
+			},
+			"org-5-repo-d-main.yaml": config.DataWithInfo{
+				Configuration: cioperatorapi.ReleaseBuildConfiguration{
+					PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
+						Targets: []cioperatorapi.PromotionTarget{
+							{Namespace: "ocp"},
+						},
+					},
+				},
+				Info: config.Info{},
+			},
+		},
+	}
+	return &relaseRepoConfig
 }
 
 func newFakePluginConfigAgent() *plugins.ConfigAgent {
@@ -173,7 +205,8 @@ func (c fakeAutomationClient) IsAppInstalled(org, repo string) (bool, error) {
 func (c fakeAutomationClient) GetRepo(owner, name string) (github.FullRepo, error) {
 	orgRepo := fmt.Sprintf("%s/%s", owner, name)
 	private := c.privacyByRepo[orgRepo]
-	return github.FullRepo{Repo: github.Repo{Private: private}}, nil
+	issues := c.issuesByRepo[orgRepo]
+	return github.FullRepo{Repo: github.Repo{Private: private, HasIssues: issues}}, nil
 }
 
 func (c fakeAutomationClient) GetOrg(org string) (*github.Organization, error) {
@@ -226,6 +259,10 @@ func TestCheckRepos(t *testing.T) {
 			"org-1/repo-d": true,
 			"org-5/repo-a": false,
 			"org-5/repo-d": true,
+		},
+		issuesByRepo: map[string]bool{
+			"org-1/repo-c": true,
+			"org-5/repo-d": false,
 		},
 		organizations: map[string]github.Organization{
 			"org-1": {Plan: github.OrgPlan{Name: "gold"}},
@@ -403,11 +440,23 @@ func TestCheckRepos(t *testing.T) {
 			mode:     standard,
 			expected: []string{"org-5/repo-d"},
 		},
+		{
+			name:     "repository is participating in automated branching and has issues enabled",
+			repos:    []string{"org-1/repo-c"},
+			mode:     standard,
+			expected: []string{},
+		},
+		{
+			name:     "repository is participating in automated branching and has issues disabled",
+			repos:    []string{"org-5/repo-d"},
+			mode:     standard,
+			expected: []string{"org-5/repo-d"},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			logrus.Infof("Testing %s", tc.name)
-			failing, err := checkRepos(tc.repos, tc.bots, "openshift-ci", tc.ignore, tc.mode, true, client, logrus.NewEntry(logrus.New()), newFakePluginConfigAgent(), newFakeProwConfigAgent().Config().Tide.Queries.QueryMap(), newFakeProwConfigAgent())
+			failing, err := checkRepos(tc.repos, tc.bots, "openshift-ci", tc.ignore, tc.mode, true, newFakeConfiguration(), client, logrus.NewEntry(logrus.New()), newFakePluginConfigAgent(), newFakeProwConfigAgent().Config().Tide.Queries.QueryMap(), newFakeProwConfigAgent())
 			if diff := cmp.Diff(tc.expectedErr, err, testhelper.EquateErrorMessage); diff != "" {
 				t.Fatalf("error doesn't match expected, diff: %s", diff)
 			}

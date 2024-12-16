@@ -222,6 +222,9 @@ func loadRegistryStep(filename string, graph registry.NodeByName) (registry.Node
 		if node, ok = graph.References[name]; !ok {
 			node, ok = graph.Observers[name]
 		}
+	case strings.HasSuffix(filename, "cluster-profiles/cluster-profiles-config.yaml"):
+		// This config file should just be ignored
+		return nil, nil
 	default:
 		return nil, fmt.Errorf("invalid step registry filename: %s", filename)
 	}
@@ -244,7 +247,9 @@ func GetChangedRegistrySteps(path, baseRev string, graph registry.NodeByName) ([
 			if err != nil {
 				return changes, err
 			}
-			changes = append(changes, node)
+			if node != nil {
+				changes = append(changes, node)
+			}
 		}
 	}
 	return changes, nil

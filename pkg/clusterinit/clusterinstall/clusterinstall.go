@@ -3,6 +3,8 @@ package clusterinstall
 import (
 	rhcostream "github.com/coreos/stream-metadata-go/stream"
 
+	"k8s.io/client-go/rest"
+
 	configv1 "github.com/openshift/api/config/v1"
 	installertypes "github.com/openshift/installer/pkg/types"
 
@@ -10,8 +12,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/clusterinit/types"
 	"github.com/openshift/ci-tools/pkg/clusterinit/types/aws"
 	"github.com/openshift/ci-tools/pkg/clusterinit/types/gcp"
-
-	"k8s.io/client-go/rest"
 )
 
 type ClusterInstall struct {

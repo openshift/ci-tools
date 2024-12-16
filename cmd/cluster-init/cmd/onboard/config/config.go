@@ -9,6 +9,7 @@ import (
 	rhcostream "github.com/coreos/stream-metadata-go/stream"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"google.golang.org/grpc"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -27,8 +28,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/clusterinit/onboard/machineset"
 	clusterinittypes "github.com/openshift/ci-tools/pkg/clusterinit/types"
 	"github.com/openshift/ci-tools/pkg/kubernetes/portforward"
-
-	"google.golang.org/grpc"
 )
 
 func NewCmd(log *logrus.Entry, opts *runtime.Options) (*cobra.Command, error) {

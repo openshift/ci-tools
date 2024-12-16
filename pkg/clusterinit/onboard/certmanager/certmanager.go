@@ -10,24 +10,24 @@ import (
 	"path"
 	"strings"
 
+	"github.com/fullstorydev/grpcurl"
+	"github.com/jhump/protoreflect/grpcreflect"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
-	cinitmanifest "github.com/openshift/ci-tools/pkg/clusterinit/manifest"
-	"github.com/openshift/ci-tools/pkg/clusterinit/onboard"
-	"github.com/openshift/ci-tools/pkg/clusterinit/types"
-	"github.com/openshift/ci-tools/pkg/kubernetes/portforward"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	apimachinerytypes "k8s.io/apimachinery/pkg/types"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/fullstorydev/grpcurl"
-	"github.com/jhump/protoreflect/grpcreflect"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
+	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
+	cinitmanifest "github.com/openshift/ci-tools/pkg/clusterinit/manifest"
+	"github.com/openshift/ci-tools/pkg/clusterinit/onboard"
+	"github.com/openshift/ci-tools/pkg/clusterinit/types"
+	"github.com/openshift/ci-tools/pkg/kubernetes/portforward"
 )
 
 type GRPCClientConnFactory func(target string, opts ...grpc.DialOption) (conn *grpc.ClientConn, err error)

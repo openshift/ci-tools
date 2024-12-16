@@ -6,10 +6,10 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
-	"github.com/openshift/ci-tools/pkg/kubernetes/portforward"
+	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -17,7 +17,8 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/google/go-cmp/cmp"
+	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
+	"github.com/openshift/ci-tools/pkg/kubernetes/portforward"
 )
 
 func TestGenerateMafests(t *testing.T) {

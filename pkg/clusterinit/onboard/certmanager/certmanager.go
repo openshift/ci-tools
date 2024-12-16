@@ -71,7 +71,6 @@ func (s *certManagerGenerator) Generate(ctx context.Context, log *logrus.Entry) 
 	basePath := onboard.CertManagerOperatorManifestsPath(s.clusterInstall.Onboard.ReleaseRepo, s.clusterInstall.ClusterName)
 	pathToManifests := make(map[string][]interface{})
 	pathToManifests[path.Join(basePath, "operator.yaml")] = operatorManifests(channel, version)
-	pathToManifests[path.Join(basePath, "cert-issuer.yaml")] = certIssuerManifests()
 
 	return pathToManifests, nil
 }
@@ -177,7 +176,7 @@ func queryRedHatCatalog(ctx context.Context, clientConnFactory GRPCClientConnFac
 	}
 	defer func() {
 		if err = clientConn.Close(); err != nil {
-			err = fmt.Errorf("close: %s", err)
+			err = fmt.Errorf("close: %w", err)
 		}
 	}()
 
@@ -283,72 +282,6 @@ func operatorManifests(channel, csvName string) []interface{} {
 						"args": []interface{}{
 							"--dns01-recursive-nameservers=8.8.8.8:53",
 							"--dns01-recursive-nameservers-only",
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
-func certIssuerManifests() []interface{} {
-	return []interface{}{
-		map[string]interface{}{
-			"metadata": map[string]interface{}{
-				"name": "cert-issuer-aws",
-			},
-			"spec": map[string]interface{}{
-				"acme": map[string]interface{}{
-					"email": "openshift-ci-robot@redhat.com",
-					"privateKeySecretRef": map[string]interface{}{
-						"name": "cert-issuer-account-key",
-					},
-					"server": "https://acme-v02.api.letsencrypt.org/directory",
-					"solvers": []interface{}{
-						map[string]interface{}{
-							"dns01": map[string]interface{}{
-								"route53": map[string]interface{}{
-									"hostedZoneID": "Z1T10JYHIP2LL9",
-									"region":       "us-east-1",
-									"secretAccessKeySecretRef": map[string]interface{}{
-										"name": "cert-issuer",
-										"key":  "AWS_SECRET_ACCESS_KEY",
-									},
-									"accessKeyID": "AKIAUVEZ656HEDJ456VW",
-								},
-							},
-						},
-					},
-				},
-			},
-			"apiVersion": "cert-manager.io/v1",
-			"kind":       "ClusterIssuer",
-		},
-		map[string]interface{}{
-			"apiVersion": "cert-manager.io/v1",
-			"kind":       "ClusterIssuer",
-			"metadata": map[string]interface{}{
-				"name": "cert-issuer",
-			},
-			"spec": map[string]interface{}{
-				"acme": map[string]interface{}{
-					"email": "openshift-ci-robot@redhat.com",
-					"privateKeySecretRef": map[string]interface{}{
-						"name": "cert-issuer-account-key",
-					},
-					"server": "https://acme-v02.api.letsencrypt.org/directory",
-					"solvers": []interface{}{
-						map[string]interface{}{
-							"dns01": map[string]interface{}{
-								"cloudDNS": map[string]interface{}{
-									"hostedZoneName": "origin-ci-ocp-public-dns",
-									"project":        "openshift-ci-infra",
-									"serviceAccountSecretRef": map[string]interface{}{
-										"key":  "key.json",
-										"name": "cert-issuer",
-									},
-								},
-							},
 						},
 					},
 				},

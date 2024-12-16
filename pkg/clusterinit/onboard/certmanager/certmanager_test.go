@@ -63,8 +63,7 @@ func TestGenerateMafests(t *testing.T) {
 				Status:     corev1.PodStatus{Phase: corev1.PodRunning},
 			},
 			wantManifests: map[string][]interface{}{
-				"/release/repo/clusters/build-clusters/build99/common_ocp/cert-manager/operator.yaml":    operatorManifests("stable-v1", "foobar-v0.0.0"),
-				"/release/repo/clusters/build-clusters/build99/common_ocp/cert-manager/cert-issuer.yaml": certIssuerManifests(),
+				"/release/repo/clusters/build-clusters/build99/cert-manager-operator/operator.yaml": operatorManifests("stable-v1", "foobar-v0.0.0"),
 			},
 		},
 		{

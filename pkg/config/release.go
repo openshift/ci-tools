@@ -222,7 +222,7 @@ func loadRegistryStep(filename string, graph registry.NodeByName) (registry.Node
 		if node, ok = graph.References[name]; !ok {
 			node, ok = graph.Observers[name]
 		}
-	case strings.HasSuffix(filename, "cluster-profiles/cluster-profiles-config.yaml"):
+	case strings.HasSuffix(filename, "cluster-profiles-config.yaml"):
 		// This config file should just be ignored
 		return nil, nil
 	default:

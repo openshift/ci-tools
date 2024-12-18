@@ -123,3 +123,7 @@ func OpenshiftMonitoringManifestsPath(releaseRepo, clusterName string) string {
 func MultiarchTuningOperatorPath(releaseRepo, clusterName string) string {
 	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "multiarch_tuning_operator")
 }
+
+func CertManagerOperatorManifestsPath(releaseRepo, clusterName string) string {
+	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "cert-manager-operator")
+}

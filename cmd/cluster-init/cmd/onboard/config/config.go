@@ -9,6 +9,7 @@ import (
 	rhcostream "github.com/coreos/stream-metadata-go/stream"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"google.golang.org/grpc"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -22,9 +23,11 @@ import (
 	awsruntime "github.com/openshift/ci-tools/cmd/cluster-init/runtime/aws"
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/clusterinit/onboard"
+	"github.com/openshift/ci-tools/pkg/clusterinit/onboard/certmanager"
 	"github.com/openshift/ci-tools/pkg/clusterinit/onboard/cischedulingwebhook"
 	"github.com/openshift/ci-tools/pkg/clusterinit/onboard/machineset"
 	clusterinittypes "github.com/openshift/ci-tools/pkg/clusterinit/types"
+	"github.com/openshift/ci-tools/pkg/kubernetes/portforward"
 )
 
 func NewCmd(log *logrus.Entry, opts *runtime.Options) (*cobra.Command, error) {
@@ -83,6 +86,7 @@ func runConfigSteps(ctx context.Context, log *logrus.Entry, update bool, cluster
 	steps = addCloudSpecificSteps(log, kubeClient, steps, clusterInstall)
 	if !update {
 		steps = append(steps, onboard.NewBuildClusterStep(log, clusterInstall))
+		steps = append(steps, onboard.NewManifestGeneratorStep(log, certmanager.NewGenerator(clusterInstall, kubeClient, portforward.SPDYPortForwarder, grpc.NewClient)))
 	}
 
 	for _, step := range steps {

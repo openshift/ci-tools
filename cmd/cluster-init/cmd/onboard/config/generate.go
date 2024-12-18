@@ -56,10 +56,14 @@ func generateConfig(ctx context.Context, log *logrus.Entry, opts generateConfigO
 	if err != nil {
 		return fmt.Errorf("load kubeconfig: %w", err)
 	}
+
+	clusterInstall.Config = config
+
 	kubeClient, err := kuberuntime.NewClient(config)
 	if err != nil {
 		return fmt.Errorf("new kubeclient: %w", err)
 	}
+
 	if err := addClusterInstallRuntimeInfo(ctx, clusterInstall, kubeClient); err != nil {
 		return err
 	}

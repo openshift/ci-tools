@@ -1351,6 +1351,7 @@ const (
 	ClusterProfileLibvirtS390xAmd64     ClusterProfile = "libvirt-s390x-amd64"
 	ClusterProfileMetalPerfscaleCPT     ClusterProfile = "metal-perscale-cpt"
 	ClusterProfileMetalPerfscaleJetlag  ClusterProfile = "metal-perfscale-jetlag"
+	ClusterProfileMetalPerfscaleTelco   ClusterProfile = "metal-perfscale-telco"
 	ClusterProfileMetalTelco5G          ClusterProfile = "metal-telco5g"
 	ClusterProfileMetalTelcoV10N        ClusterProfile = "metal-telcov10n"
 	ClusterProfileMetalTelco5GPTP       ClusterProfile = "metal-telco5g-ptp"
@@ -1513,6 +1514,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileLibvirtS390xAmd64,
 		ClusterProfileMetalPerfscaleCPT,
 		ClusterProfileMetalPerfscaleJetlag,
+		ClusterProfileMetalPerfscaleTelco,
 		ClusterProfileMetalTelco5G,
 		ClusterProfileMetalTelcoV10N,
 		ClusterProfileMetalTelco5GPTP,
@@ -1728,6 +1730,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "metal-perscale-cpt"
 	case ClusterProfileMetalPerfscaleJetlag:
 		return "metal-perfscale-jetlag"
+	case ClusterProfileMetalPerfscaleTelco:
+		return "metal-perfscale-telco"
 	case ClusterProfileMetalTelco5G:
 		return "metal-telco5g"
 	case ClusterProfileMetalTelco5GPTP:
@@ -1992,6 +1996,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "metal-perscale-cpt-quota-slice"
 	case ClusterProfileMetalPerfscaleJetlag:
 		return "metal-perfscale-jetlag-quota-slice"
+	case ClusterProfileMetalPerfscaleTelco:
+		return "metal-perfscale-telco-quota-slice"
 	case ClusterProfileMetalTelco5G:
 		return "metal-telco5g-quota-slice"
 	case ClusterProfileMetalTelcoV10N:

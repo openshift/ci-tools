@@ -378,7 +378,7 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 					}
 				}()
 
-				candidate, err := s.prepareCandidate(repoClient, pullRequest)
+				candidate, err := s.prepareCandidate(repoClient, pullRequest, logger)
 				if err != nil {
 					s.reportFailure("unable prepare a candidate for rehearsal; rehearsals will not be run. This could be due to a branch that needs to be rebased.", err, org, repo, user, number, false, false, logger)
 					continue
@@ -477,7 +477,7 @@ func (s *server) getAffectedJobs(pullRequest *github.PullRequest, logger *logrus
 		}
 	}()
 
-	candidate, err := s.prepareCandidate(repoClient, pullRequest)
+	candidate, err := s.prepareCandidate(repoClient, pullRequest, logger)
 	if err != nil {
 		logger.WithError(err).Error("couldn't prepare candidate")
 		return nil, nil, nil, fmt.Errorf("couldn't prepare candidate: %w", err)
@@ -518,7 +518,7 @@ func (s *server) getRepoClient(org, repo string) (git.RepoClient, error) {
 	return repoClient, nil
 }
 
-func (s *server) prepareCandidate(repoClient git.RepoClient, pullRequest *github.PullRequest) (rehearse.RehearsalCandidate, error) {
+func (s *server) prepareCandidate(repoClient git.RepoClient, pullRequest *github.PullRequest, logger *logrus.Entry) (rehearse.RehearsalCandidate, error) {
 	if err := repoClient.CheckoutPullRequest(pullRequest.Number); err != nil {
 		return rehearse.RehearsalCandidate{}, fmt.Errorf("couldn't checkout pull request: %w", err)
 	}
@@ -536,10 +536,13 @@ func (s *server) prepareCandidate(repoClient git.RepoClient, pullRequest *github
 	// In practice, this command sometimes fails due to seemingly transient issues, we should retry it up to 4 times
 	var rebased bool
 	var rebaseErr error
-	for i := 0; i < 4; i++ {
+	totalAttempts := 4
+	for i := 0; i < totalAttempts; i++ {
 		rebased, rebaseErr = repoClient.MergeWithStrategy(baseRef, "rebase")
 		if rebased && rebaseErr == nil {
 			break
+		} else {
+			logger.Warnf("couldn't rebase PR on attempt: %d. Will retry up to %d times.", i+1, totalAttempts)
 		}
 	}
 	if !rebased || rebaseErr != nil {

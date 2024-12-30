@@ -93,6 +93,8 @@ func validateCandidate(fieldRoot string, candidate api.Candidate) []error {
 	streamsByProduct := map[api.ReleaseProduct]sets.Set[string]{
 		api.ReleaseProductOKD: sets.New[string]("", string(api.ReleaseStreamOKD),
 			string(api.ReleaseStreamOKDScos)), // we allow unset and will default it
+		api.ReleaseProductOKDScos: sets.New[string]("", string(api.ReleaseStreamOKD),
+			string(api.ReleaseStreamOKDScos)),
 		api.ReleaseProductOCP: sets.New[string](string(api.ReleaseStreamCI), string(api.ReleaseStreamNightly)),
 	}
 	if !streamsByProduct[candidate.Product].Has(string(candidate.Stream)) {

@@ -237,7 +237,7 @@ func addHeader(path string, header string) error {
 func writeOwners(orgRepo orgRepo, httpResult httpResult, cleaner ownersCleaner, header string) error {
 	for _, directory := range orgRepo.Directories {
 		path := filepath.Join(directory, "OWNERS")
-		err := os.Remove(path)
+		err := os.Remove(filepath.Clean(path))
 		if err != nil && !os.IsNotExist(err) {
 			return err
 		}

@@ -35,7 +35,7 @@ func SecretFromDir(path string) (*coreapi.Secret, error) {
 		if fi, err := os.Stat(path); err != nil || fi.IsDir() {
 			continue
 		}
-		ret.Data[f.Name()], err = os.ReadFile(path)
+		ret.Data[f.Name()], err = os.ReadFile(filepath.Clean(path))
 		if err != nil {
 			return nil, fmt.Errorf("could not read file %s: %w", path, err)
 		}

@@ -6,7 +6,7 @@ interface secretCollection {
 
 function displayCreateSecretCollectionError(attemptedAction: string, msg: string) {
   const div = document.getElementById('modalError') as HTMLDivElement;
-  div.innerHTML = `Failed to ${attemptedAction}: ${msg}`;
+  div.innerText = `Failed to ${attemptedAction}: ${msg}`;
   div.classList.remove('hidden');
 }
 
@@ -127,7 +127,7 @@ function moveSelectedOptions(source: HTMLSelectElement | HTMLDataListElement, ta
 function optionWithValue(value: string): HTMLOptionElement {
   let option = document.createElement('option') as HTMLOptionElement;
   option.value = value;
-  option.innerHTML = value;
+  option.innerText = value;
   return option;
 }
 
@@ -144,7 +144,13 @@ function getSelectValues(select: HTMLSelectElement): string[] {
 function deleteColectionEventHandler(collectionName: string) {
   return function () {
     const deleteConfirmation = document.getElementById('deleteConfirmation') as HTMLDivElement;
-    deleteConfirmation.innerHTML = `Are you sure you want to irreversibly delete the secret collection ${collectionName} and all its content?<br><br>`;
+    // clear div before adding elements, this avoids innerHTML issues
+    while(deleteConfirmation.firstChild) {
+      deleteConfirmation.removeChild(deleteConfirmation.firstChild);
+    }
+    deleteConfirmation.appendChild(document.createTextNode(`Are you sure you want to irreversibly delete the secret collection ${collectionName} and all its content?`));
+    deleteConfirmation.appendChild(document.createElement('br'));
+    deleteConfirmation.appendChild(document.createElement('br'));
 
     const cancelButton = document.createElement('button') as HTMLButtonElement;
     cancelButton.type = 'button';
@@ -189,9 +195,9 @@ function renderCollectionTable(data: secretCollection[]) {
   newTableBody.id = 'secretCollectionTableBody';
   for (const secretCollection of data) {
     const row = newTableBody.insertRow();
-    row.insertCell().innerHTML = secretCollection.name;
-    row.insertCell().innerHTML = secretCollection.path;
-    row.insertCell().innerHTML = secretCollection.members.toString();
+    row.insertCell().innerText = secretCollection.name;
+    row.insertCell().innerText = secretCollection.path;
+    row.insertCell().innerText = secretCollection.members.toString();
 
     const buttonCell = row.insertCell();
     let editMembersButton = document.createElement('button') as HTMLButtonElement;

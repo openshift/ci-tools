@@ -4,10 +4,10 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"net/url"
-	"html"
 	"os"
 	"os/exec"
 	"path"
@@ -144,7 +144,7 @@ func (s *server) loadServerConfig(configPath string) error {
 			if f.Name() == string(configKey) {
 				filePath := filepath.Join(configPath, f.Name())
 
-				fileContent, err := os.ReadFile(filePath)
+				fileContent, err := os.ReadFile(filepath.Clean(filePath))
 				if err != nil {
 					return err
 				}

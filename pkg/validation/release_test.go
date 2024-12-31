@@ -162,7 +162,7 @@ func TestValidateReleases(t *testing.T) {
 			},
 			hasTagSpec: true,
 			output: []error{
-				errors.New("root.first.product: must be one of ocp, okd"),
+				errors.New("root.first.product: must be one of ocp, okd, okd-scos"),
 				errors.New("root.second.channel: must be one of candidate, fast, stable"),
 				errors.New("root.third.version_bounds.upper: must be set"),
 			},
@@ -283,7 +283,7 @@ func TestValidateCandidate(t *testing.T) {
 				Version: "4.4",
 			},
 			output: []error{
-				errors.New("root.product: must be one of ocp, okd"),
+				errors.New("root.product: must be one of ocp, okd, okd-scos"),
 			},
 		},
 		{
@@ -497,7 +497,7 @@ func TestValidatePrerelease(t *testing.T) {
 				},
 			},
 			output: []error{
-				errors.New("root.product: must be one of ocp, okd"),
+				errors.New("root.product: must be one of ocp, okd, okd-scos"),
 			},
 		},
 		{

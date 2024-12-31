@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"html"
 
 	"github.com/sirupsen/logrus"
 
@@ -14,7 +15,7 @@ func main() {
 	jobURL := flag.String("job-url", defaultJobURL, "url to a job")
 	flag.Parse()
 
-	if err := jobruntimeanalyzer.Run(*jobURL); err != nil {
+	if err := jobruntimeanalyzer.Run(html.EscapeString(*jobURL)); err != nil {
 		logrus.WithError(err).Fatal("Failed")
 	}
 }

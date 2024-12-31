@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"html"
 	"os"
 	"os/exec"
 	"path"
@@ -589,7 +590,7 @@ func (s server) generateConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	releaseRepo := repo.path
+	releaseRepo := filepath.Clean(repo.path)
 	defer s.rm.returnInUse(repo)
 
 	// if we're only converting the initConfig, then we won't commit any changes against the local working copy or create a pull request.
@@ -608,8 +609,9 @@ func (s server) generateConfig(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
+		marshalledSanitized := html.EscapeString(string(marshalled))
 
-		if _, err := w.Write(marshalled); err != nil {
+		if _, err := w.Write([]byte(marshalledSanitized)); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			s.logger.WithError(err).Error("Could not write CI Operator configuration response")
 			return
@@ -659,7 +661,7 @@ func (s server) generateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	_, err = w.Write([]byte(fmt.Sprintf("https://github.com/%s/release/pull/new/%s", githubUser, branch)))
+	_, err = w.Write([]byte(fmt.Sprintf("https://github.com/%s/release/pull/new/%s", html.EscapeString(githubUser), html.EscapeString(branch))))
 
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)

@@ -1,26 +1,9 @@
 #!/bin/bash
 
+# This script is run as follows:
+# CANDIDATE_PATH=<path-to-local-release-repo-source>  hack/local-check-gh-automation.sh <org/repo>
+
 source "$(dirname "${BASH_SOURCE}")/lib/init.sh"
-
-TEMP=$(getopt --options "p:" --longoptions "candidate-path:" -n $0 -- "$@")
-eval set -- "$TEMP"
-
-while true; do
-  case "$1" in
-    -p | --candidate-path)
-      candidate_path="$2"
-      shift 2
-      ;;
-    --)
-      shift
-      break
-      ;;
-    *)
-      echo 'Internal error' >&2
-      exit 1
-      ;;
-  esac
-done
 
 function OC() {
 	oc --context app.ci --namespace ci "$@"
@@ -51,7 +34,7 @@ app_id=$(cat "${data}/appid")
 
 os::log::info "Running check-gh-automation"
 go run ./cmd/check-gh-automation --repo="$1" \
- ${candidate_path:+--candidate-path=$candidate_path} \
+  --candidate-path="$CANDIDATE_PATH" \
   --bot=openshift-merge-robot --bot=openshift-ci-robot \
   --github-app-id="$app_id" --github-app-private-key-path="${data}/cert" \
   --config-path="${data}/prow/config.yaml" --supplemental-prow-config-dir="${data}/prow" \

@@ -23,8 +23,7 @@ type fakeAutomationClient struct {
 	membersByOrg          map[string][]string
 	reposWithAppInstalled sets.Set[string]
 	permissionsByRepo     map[string]map[string][]string
-	privacyByRepo         map[string]bool
-	issuesByRepo          map[string]bool
+	repos                 map[string]github.FullRepo
 	organizations         map[string]github.Organization
 }
 
@@ -204,9 +203,7 @@ func (c fakeAutomationClient) IsAppInstalled(org, repo string) (bool, error) {
 
 func (c fakeAutomationClient) GetRepo(owner, name string) (github.FullRepo, error) {
 	orgRepo := fmt.Sprintf("%s/%s", owner, name)
-	private := c.privacyByRepo[orgRepo]
-	issues := c.issuesByRepo[orgRepo]
-	return github.FullRepo{Repo: github.Repo{Private: private, HasIssues: issues}}, nil
+	return c.repos[orgRepo], nil
 }
 
 func (c fakeAutomationClient) GetOrg(org string) (*github.Organization, error) {
@@ -216,6 +213,42 @@ func (c fakeAutomationClient) GetOrg(org string) (*github.Organization, error) {
 
 func TestCheckRepos(t *testing.T) {
 	client := fakeAutomationClient{
+		repos: map[string]github.FullRepo{
+			"org-1/repo-c": {
+				Repo: github.Repo{
+					Owner:     github.User{Type: "Organization"},
+					Private:   false,
+					HasIssues: true,
+				},
+			},
+			"org-1/repo-d": {
+				Repo: github.Repo{
+					Owner:     github.User{Type: "Organization"},
+					Private:   true,
+					HasIssues: true,
+				},
+			},
+			"org-5/repo-a": {
+				Repo: github.Repo{
+					Owner:     github.User{Type: "Organization"},
+					Private:   false,
+					HasIssues: false,
+				},
+			},
+			"org-5/repo-d": {
+				Repo: github.Repo{
+					Owner:     github.User{Type: "Organization"},
+					Private:   true,
+					HasIssues: false,
+				},
+			},
+			"user-1/repo-a": {
+				Repo: github.Repo{
+					Owner:   github.User{Type: "User"},
+					Private: true,
+				},
+			},
+		},
 		collaboratorsByRepo: map[string][]string{
 			"org-1/repo-a": {"a-bot", "b-bot", "openshift-cherrypick-robot"},
 			"org-2/repo-z": {"c-bot", "some-user"},
@@ -253,16 +286,6 @@ func TestCheckRepos(t *testing.T) {
 			"org-5/repo-d": {
 				"openshift-merge-robot": []string{"admin"},
 			},
-		},
-		privacyByRepo: map[string]bool{
-			"org-1/repo-c": false,
-			"org-1/repo-d": true,
-			"org-5/repo-a": false,
-			"org-5/repo-d": true,
-		},
-		issuesByRepo: map[string]bool{
-			"org-1/repo-c": true,
-			"org-5/repo-d": false,
 		},
 		organizations: map[string]github.Organization{
 			"org-1": {Plan: github.OrgPlan{Name: "gold"}},
@@ -439,6 +462,12 @@ func TestCheckRepos(t *testing.T) {
 			repos:    []string{"org-5/repo-d"},
 			mode:     standard,
 			expected: []string{"org-5/repo-d"},
+		},
+		{
+			name:     "private repository has branch protection enabled and is a user owned",
+			repos:    []string{"user-1/repo-a"},
+			mode:     standard,
+			expected: []string{"user-1/repo-a"},
 		},
 		{
 			name:     "repository is participating in automated branching and has issues enabled",

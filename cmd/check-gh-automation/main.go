@@ -229,11 +229,6 @@ func checkRepos(repos []string, bots []string, appName string, ignore sets.Set[s
 			repoLogger.Info("no bots provided to check")
 		}
 
-		fullOrg, err := client.GetOrg(org)
-		if err != nil {
-			logger.Errorf("Error obtaining org from github: %s: %v", org, err)
-			return nil, fmt.Errorf("error obtaining org from github: %s: %w", org, err)
-		}
 		if checkBranchProtection {
 			orgConfig := prowAgent.Config().BranchProtection.GetOrg(org)
 			branchProtectionEnabled := true // By default, it is turned on in absence of configuration stating otherwise
@@ -252,13 +247,23 @@ func checkRepos(repos []string, bots []string, appName string, ignore sets.Set[s
 			// also branch protection should be used only on public repos or paid plans
 			if branchProtectionEnabled {
 				logger.Infof("Branch protection is enabled for %s/%s", org, repo)
-
-				if fullRepo.Private && fullOrg.Plan.Name == "free" {
-					logger.Errorf("Branch protection is enabled, the org %s has a free plan, the repository %s must be public", org, repo)
-					failing.Insert(orgRepo)
+				if fullRepo.Private {
+					if fullRepo.Owner.Type == "Organization" {
+						fullOrg, err := client.GetOrg(org)
+						if err != nil {
+							logger.Errorf("Error obtaining org from github: %s: %v", org, err)
+							return nil, fmt.Errorf("error obtaining org from github: %s: %w", org, err)
+						}
+						if fullOrg.Plan.Name == "free" {
+							logger.Errorf("Branch protection is enabled, the org %s has a free plan, the repository %s must be public", org, repo)
+							failing.Insert(orgRepo)
+						}
+					} else {
+						logger.Errorf("Branch protection is enabled on a user owned repository, the repository %s must be public", repo)
+						failing.Insert(orgRepo)
+					}
 				}
 
-				// Hardcoded merge robot
 				hasAdminAccess, err := client.HasPermission(org, repo, branchProtectionRobot, "admin")
 				if err != nil {
 					logger.Errorf("Error checking admin access for bot %s in %s/%s: %v", branchProtectionRobot, org, repo, err)

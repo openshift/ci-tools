@@ -387,8 +387,9 @@ func BoundsFromQuery(query string) (*VersionBounds, error) {
 type ReleaseProduct string
 
 const (
-	ReleaseProductOCP ReleaseProduct = "ocp"
-	ReleaseProductOKD ReleaseProduct = "okd"
+	ReleaseProductOCP     ReleaseProduct = "ocp"
+	ReleaseProductOKD     ReleaseProduct = "okd"
+	ReleaseProductOKDScos ReleaseProduct = "okd-scos"
 )
 
 // ReleaseArchitecture describes the architecture for the product

@@ -111,7 +111,7 @@ func validateCandidate(fieldRoot string, candidate api.Candidate) []error {
 }
 
 func validateProduct(fieldRoot string, product api.ReleaseProduct) error {
-	products := sets.New[string](string(api.ReleaseProductOKD), string(api.ReleaseProductOCP))
+	products := sets.New[string](string(api.ReleaseProductOKD), string(api.ReleaseProductOCP), string(api.ReleaseProductOKDScos))
 	if !products.Has(string(product)) {
 		return fmt.Errorf("%s: must be one of %s", fieldRoot, strings.Join(sets.List(products), ", "))
 	}

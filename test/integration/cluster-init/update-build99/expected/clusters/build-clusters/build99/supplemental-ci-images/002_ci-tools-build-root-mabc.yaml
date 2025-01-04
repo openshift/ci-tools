@@ -10,7 +10,7 @@ spec:
     output:
       to:
         kind: ImageStreamTag
-        name: ci-tools-build-root:1.22
+        name: ci-tools-build-root:1.23
         namespace: ci
     source:
       images:

@@ -79,7 +79,7 @@ spec:
       containers:
       - args:
         - --dry-run=false
-        image: multi-arch-builder-controller:latest
+        image: quay-proxy.ci.openshift.org/openshift/ci:ci_multi-arch-builder-controller_latest
         imagePullPolicy: Always
         name: multi-arch-builder-controller
         resources:

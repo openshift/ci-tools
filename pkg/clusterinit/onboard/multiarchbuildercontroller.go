@@ -93,7 +93,7 @@ func (s *multiarchBuilderControllerStep) deploymentManifests(clusterName string)
 								"args": []interface{}{
 									"--dry-run=false",
 								},
-								"image":           "multi-arch-builder-controller:latest",
+								"image":           "quay-proxy.ci.openshift.org/openshift/ci:ci_multi-arch-builder-controller_latest",
 								"imagePullPolicy": "Always",
 								"name":            "multi-arch-builder-controller",
 								"resources": map[string]interface{}{

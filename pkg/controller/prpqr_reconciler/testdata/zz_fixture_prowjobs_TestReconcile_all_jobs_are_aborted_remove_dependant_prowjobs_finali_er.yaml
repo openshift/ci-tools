@@ -15,7 +15,7 @@
       prow.k8s.io/refs.repo: test-repo
       prow.k8s.io/type: periodic
       pullrequestpayloadqualificationruns.ci.openshift.io: prpqr-test
-      releaseJobNameHash: ee3858eff62263cd7266320c00d1d38b
+      releaseJobNameHash: bff80ea4af62f87fcac06a79fc7b242f6f07932f08cdba39ebd7e808
     name: some-uuid
     namespace: test-namespace
     resourceVersion: "999"

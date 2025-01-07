@@ -455,7 +455,7 @@ func TestWaitForBuild(t *testing.T) {
 							CompletionTimestamp: &end,
 						},
 					},
-				).Build()), nil, nil, ""),
+				).Build()), nil, nil, "", ""),
 			expected: fmt.Errorf("build didn't start running within 0s (phase: Pending)"),
 		},
 		{
@@ -484,7 +484,7 @@ func TestWaitForBuild(t *testing.T) {
 							Namespace: ns,
 						},
 					},
-				).Build()), nil, nil, ""),
+				).Build()), nil, nil, "", ""),
 			expected: fmt.Errorf("build didn't start running within 0s (phase: Pending):\nFound 0 events for Pod some-build-build:"),
 		},
 		{
@@ -525,7 +525,7 @@ func TestWaitForBuild(t *testing.T) {
 							}},
 						},
 					},
-				).Build()), nil, nil, ""),
+				).Build()), nil, nil, "", ""),
 			expected: fmt.Errorf(`build didn't start running within 0s (phase: Pending):
 * Container the-container is not ready with reason the_reason and message the_message
 Found 0 events for Pod some-build-build:`),
@@ -544,7 +544,7 @@ Found 0 events for Pod some-build-build:`),
 						StartTimestamp:      &start,
 						CompletionTimestamp: &end,
 					},
-				}).Build()), nil, nil, ""),
+				}).Build()), nil, nil, "", ""),
 			timeout: 30 * time.Minute,
 		},
 		{
@@ -588,7 +588,7 @@ Found 0 events for Pod some-build-build:`),
 							Time: now.Add(-59 * time.Minute),
 						},
 					},
-				}).Build()), nil, nil, ""),
+				}).Build()), nil, nil, "", ""),
 			timeout: 30 * time.Minute,
 		},
 		{

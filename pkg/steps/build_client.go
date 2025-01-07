@@ -16,22 +16,25 @@ type BuildClient interface {
 	loggingclient.LoggingClient
 	Logs(namespace, name string, options *buildapi.BuildLogOptions) (io.ReadCloser, error)
 	NodeArchitectures() []string
+	ManifestToolDockerCfg() string
 	LocalRegistryDNS() string
 }
 
 type buildClient struct {
 	loggingclient.LoggingClient
-	client            rest.Interface
-	nodeArchitectures []string
-	localRegistryDNS  string
+	client                rest.Interface
+	nodeArchitectures     []string
+	manifestToolDockerCfg string
+	localRegistryDNS      string
 }
 
-func NewBuildClient(client loggingclient.LoggingClient, restClient rest.Interface, nodeArchitectures []string, localRegistryDNS string) BuildClient {
+func NewBuildClient(client loggingclient.LoggingClient, restClient rest.Interface, nodeArchitectures []string, manifestToolDockerCfg, localRegistryDNS string) BuildClient {
 	return &buildClient{
-		LoggingClient:     client,
-		client:            restClient,
-		nodeArchitectures: nodeArchitectures,
-		localRegistryDNS:  localRegistryDNS,
+		LoggingClient:         client,
+		client:                restClient,
+		nodeArchitectures:     nodeArchitectures,
+		manifestToolDockerCfg: manifestToolDockerCfg,
+		localRegistryDNS:      localRegistryDNS,
 	}
 }
 
@@ -51,4 +54,8 @@ func (c *buildClient) NodeArchitectures() []string {
 
 func (c *buildClient) LocalRegistryDNS() string {
 	return c.localRegistryDNS
+}
+
+func (c *buildClient) ManifestToolDockerCfg() string {
+	return c.manifestToolDockerCfg
 }

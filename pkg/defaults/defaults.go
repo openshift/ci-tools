@@ -78,6 +78,7 @@ func FromConfig(
 	nodeName string,
 	nodeArchitectures []string,
 	targetAdditionalSuffix string,
+	manifestToolDockerCfg string,
 	localRegistryDNS string,
 	integratedStreams map[string]*configresolver.IntegratedStream,
 	injectedTest bool,
@@ -93,7 +94,7 @@ func FromConfig(
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not get build client for cluster config: %w", err)
 	}
-	buildClient := steps.NewBuildClient(client, buildGetter.RESTClient(), nodeArchitectures, localRegistryDNS)
+	buildClient := steps.NewBuildClient(client, buildGetter.RESTClient(), nodeArchitectures, manifestToolDockerCfg, localRegistryDNS)
 
 	templateGetter, err := templateclientset.NewForConfig(clusterConfig)
 	if err != nil {

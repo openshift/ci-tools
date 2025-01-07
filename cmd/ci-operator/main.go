@@ -905,11 +905,16 @@ func (o *options) Run() []error {
 		return []error{fmt.Errorf("could not resolve the node architectures: %w", err)}
 	}
 
+	manifestToolDockerCfg, err := constructDockerConfig()
+	if err != nil {
+		return []error{fmt.Errorf("failed to get manifest tool docker config: %v", err)}
+	}
+
 	injectedTest := o.injectTest != ""
 	// load the graph from the configuration
 	buildSteps, promotionSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig,
 		o.podPendingTimeout, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig,
-		o.consoleHost, o.nodeName, nodeArchitectures, o.targetAdditionalSuffix, o.localRegistryDNS, streams, injectedTest)
+		o.consoleHost, o.nodeName, nodeArchitectures, o.targetAdditionalSuffix, manifestToolDockerCfg, o.localRegistryDNS, streams, injectedTest)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}
@@ -2412,4 +2417,30 @@ func (o *options) getClusterProfileNamesFromTargets() {
 			}
 		}
 	}
+}
+
+func constructDockerConfig() (string, error) {
+	data, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/token")
+	if err != nil {
+		return "", fmt.Errorf("failed to read token file: %w", err)
+	}
+
+	cfg := map[string]interface{}{
+		"auths": map[string]interface{}{
+			"image-registry.openshift-image-registry.svc:5000": map[string]interface{}{
+				"auth": base64.StdEncoding.EncodeToString([]byte("serviceaccount:" + string(data))),
+			},
+		},
+	}
+
+	tmpfile, err := os.CreateTemp("", "docker-config.json")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temp file: %w", err)
+	}
+
+	if err := json.NewEncoder(tmpfile).Encode(cfg); err != nil {
+		return "", fmt.Errorf("failed to write docker config: %w", err)
+	}
+
+	return tmpfile.Name(), nil
 }

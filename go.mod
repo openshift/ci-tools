@@ -28,7 +28,6 @@ require (
 	github.com/hashicorp/vault/api v1.14.0
 	github.com/hashicorp/vault/sdk v0.12.0
 	github.com/julienschmidt/httprouter v1.3.0
-	github.com/kataras/tablewriter v0.0.0-20180708051242-e063d29b7c23
 	github.com/mattn/go-zglob v0.0.2
 	github.com/montanaflynn/stats v0.6.3
 	github.com/openhistogram/circonusllhist v0.3.1-0.20210608220433-1bd1bfa6c998
@@ -122,7 +121,6 @@ require (
 	github.com/magiconair/properties v1.8.5 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/mattn/go-runewidth v0.0.15 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/moby/spdystream v0.2.0 // indirect
@@ -301,7 +299,6 @@ require (
 	github.com/pjbgf/sha1cd v0.3.0 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/prometheus/statsd_exporter v0.22.7 // indirect
-	github.com/rivo/uniseg v0.4.4 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
 	github.com/skeema/knownhosts v1.2.2 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect

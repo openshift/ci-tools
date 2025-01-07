@@ -19,7 +19,7 @@ func ServiceHost(d api.ReleaseDescriptor) string {
 	switch d.Product {
 	case api.ReleaseProductOCP:
 		product = "ocp"
-	case api.ReleaseProductOKD:
+	case api.ReleaseProductOKD, api.ReleaseProductOKDScos:
 		product = "origin"
 	}
 
@@ -51,6 +51,8 @@ func endpoint(candidate api.Candidate) string {
 func DefaultFields(candidate api.Candidate) api.Candidate {
 	if candidate.Product == api.ReleaseProductOKD && candidate.Stream == "" {
 		candidate.Stream = api.ReleaseStreamOKD
+	} else if candidate.Product == api.ReleaseProductOKDScos && candidate.Stream == "" {
+		candidate.Stream = api.ReleaseStreamOKDScos
 	}
 
 	if candidate.Architecture == "" {

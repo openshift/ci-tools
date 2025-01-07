@@ -14,12 +14,12 @@ resources:
       cpu: 10m
 tag_specification:
   namespace: ocp
-  name: "4.15"
+  name: "4.17"
 releases:
   custom:
     candidate:
-      product: okd
-      version: "4.15"
+      product: okd-scos
+      version: "4.17"
 tests:
   - as: with-dependencies
     steps:

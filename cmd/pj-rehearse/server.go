@@ -442,7 +442,7 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 					}
 
 					autoAckMode := rehearseAutoAck == command
-					success, err := rc.RehearseJobs(candidate, candidatePath, prRefs, presubmitsToRehearse, prConfig.Prow, autoAckMode, logger)
+					success, err := rc.RehearseJobs(candidatePath, prRefs, presubmitsToRehearse, prConfig.Prow, autoAckMode, logger)
 					if err != nil {
 						logger.WithError(err).Error("couldn't rehearse jobs")
 						s.reportFailure("failed to create rehearsal jobs", err, org, repo, user, number, true, false, logger)

@@ -7,14 +7,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -24,7 +21,6 @@ import (
 	"sigs.k8s.io/prow/pkg/flagutil"
 	"sigs.k8s.io/prow/pkg/github"
 	"sigs.k8s.io/prow/pkg/kube"
-	prowplugins "sigs.k8s.io/prow/pkg/plugins"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	apihelper "github.com/openshift/ci-tools/pkg/api/helper"
@@ -241,7 +237,7 @@ func (r RehearsalConfig) createResolver(candidatePath string) (registry.Resolver
 }
 
 func (r RehearsalConfig) AbortAllRehearsalJobs(org, repo string, number int, logger *logrus.Entry) {
-	_, prowJobConfig := r.getBuildClusterAndProwJobConfigs(logger)
+	prowJobConfig := r.getProwJobKubeConfig(logger)
 	pjclient, err := NewProwJobClient(prowJobConfig, r.DryRun)
 	if err != nil {
 		logger.WithError(err).Fatal("could not create a ProwJob client")
@@ -287,7 +283,6 @@ func labelSelectorForRehearsalJobs(org, repo string, prNumber int) ctrlruntimecl
 
 // RehearseJobs returns true if the jobs were triggered and succeed
 func (r RehearsalConfig) RehearseJobs(
-	candidate RehearsalCandidate,
 	candidatePath string,
 	prRefs *prowapi.Refs,
 	presubmitsToRehearse []*prowconfig.Presubmit,
@@ -295,41 +290,16 @@ func (r RehearsalConfig) RehearseJobs(
 	waitForSuccess bool,
 	logger *logrus.Entry,
 ) (bool, error) {
-	buildClusterConfigs, prowJobConfig := r.getBuildClusterAndProwJobConfigs(logger)
+	prowJobConfig := r.getProwJobKubeConfig(logger)
 	pjclient, err := NewProwJobClient(prowJobConfig, r.DryRun)
 	if err != nil {
 		logger.WithError(err).Fatal("could not create a ProwJob client")
 	}
-
-	configUpdaterCfg, err := loadConfigUpdaterCfg(candidatePath)
-	if err != nil {
-		logger.WithError(err).Fatal("could not load plugin configuration from tested revision of release repo")
-	}
-
-	var errs []error
-	cleanup, err := setupDependencies(
-		presubmitsToRehearse,
-		candidate.prNumber,
-		buildClusterConfigs,
-		logger,
-		r.ProwjobNamespace,
-		r.PodNamespace,
-		configUpdaterCfg,
-		candidatePath,
-		r.DryRun)
-	if err != nil {
-		logger.WithError(err).Error("Failed to set up dependencies. This might cause subsequent failures.")
-		errs = append(errs, err)
-	}
-	if cleanup != nil {
-		defer cleanup()
-	}
-
 	executor := NewExecutor(presubmitsToRehearse, candidatePath, prRefs, r.DryRun, logger, pjclient, r.ProwjobNamespace, prowCfg, waitForSuccess)
 	success, err := executor.ExecuteJobs()
 	if err != nil {
 		logger.WithError(err).Error("Failed to rehearse jobs")
-		return false, utilerrors.NewAggregate(errs)
+		return false, err
 	} else if !success {
 		logger.Info("Some jobs failed their rehearsal runs")
 	} else if waitForSuccess {
@@ -338,15 +308,13 @@ func (r RehearsalConfig) RehearseJobs(
 		logger.Info("All jobs were triggered successfully")
 	}
 
-	return success, utilerrors.NewAggregate(errs)
+	return success, nil
 }
 
-func (r RehearsalConfig) getBuildClusterAndProwJobConfigs(logger *logrus.Entry) (map[string]rest.Config, *rest.Config) {
-	buildClusterConfigs := map[string]rest.Config{}
+func (r RehearsalConfig) getProwJobKubeConfig(logger *logrus.Entry) *rest.Config {
 	var prowJobConfig *rest.Config
 	if !r.DryRun {
-		var err error
-		buildClusterConfigs, err = r.KubernetesOptions.LoadClusterConfigs()
+		buildClusterConfigs, err := r.KubernetesOptions.LoadClusterConfigs()
 		if err != nil {
 			logger.WithError(err).Fatal("failed to read kubeconfigs")
 		}
@@ -357,7 +325,7 @@ func (r RehearsalConfig) getBuildClusterAndProwJobConfigs(logger *logrus.Entry) 
 		}
 	}
 
-	return buildClusterConfigs, prowJobConfig
+	return prowJobConfig
 }
 
 func determineChangedRegistrySteps(candidate, baseSHA string, logger *logrus.Entry) ([]registry.Node, error) {
@@ -383,14 +351,6 @@ func determineChangedRegistrySteps(candidate, baseSHA string, logger *logrus.Ent
 	}
 
 	return changedRegistrySteps, nil
-}
-
-func loadConfigUpdaterCfg(candidate string) (ret prowplugins.ConfigUpdater, err error) {
-	agent := prowplugins.ConfigAgent{}
-	if err = agent.Load(filepath.Join(candidate, config.PluginConfigInRepoPath), []string{filepath.Join(candidate, filepath.Dir(config.PluginConfigInRepoPath))}, "_pluginconfig.yaml", true, false); err == nil {
-		ret = agent.Config().ConfigUpdater
-	}
-	return
 }
 
 // determineSubsetToRehearse determines in a sophisticated way which subset of jobs should be chosen to be rehearsed.
@@ -430,75 +390,6 @@ func determineSubsetToRehearse(presubmitsToRehearse []*prowconfig.Presubmit, reh
 	}
 
 	return toRehearse
-}
-
-type cleanup func()
-type cleanups []cleanup
-
-func (c cleanups) cleanup() {
-	for _, cleanup := range c {
-		cleanup()
-	}
-}
-
-func setupDependencies(
-	jobs []*prowconfig.Presubmit,
-	prNumber int,
-	configs map[string]rest.Config,
-	log *logrus.Entry,
-	prowJobNamespace string,
-	podNamespace string,
-	configUpdaterCfg prowplugins.ConfigUpdater,
-	releaseRepoPath string,
-	dryRun bool,
-) (cleanup, error) {
-	buildClusters := sets.Set[string]{}
-	for _, job := range jobs {
-		if _, ok := configs[job.Cluster]; !ok && !dryRun {
-			return nil, fmt.Errorf("no config for buildcluster %s provided", job.Cluster)
-		}
-		buildClusters.Insert(job.Cluster)
-	}
-
-	var cleanups cleanups
-	cleanupsLock := &sync.Mutex{}
-
-	// Otherwise we flake in integration tests because we just capture stdout. Its not
-	// really possible to sort this as we use a client per cluster. Furthermore the output
-	// doesn't even contain the info which cluster was used.
-	// TODO: Remove the whole dry-run concept and write tests that just pass in a fakeclient.
-	if dryRun {
-		if len(buildClusters) > 1 {
-			buildClusters = sets.New[string]("default")
-		}
-	}
-
-	g, _ := errgroup.WithContext(context.Background())
-	for _, cluster := range buildClusters.UnsortedList() {
-		buildCluster := cluster
-		g.Go(func() error {
-			log := log.WithField("buildCluster", buildCluster)
-			clusterConfig := configs[buildCluster]
-			cmClient, err := NewCMClient(&clusterConfig, podNamespace, dryRun)
-			if err != nil {
-				log.WithError(err).Error("could not create a configMap client")
-			}
-
-			cmManager := NewCMManager(buildCluster, prowJobNamespace, cmClient, configUpdaterCfg, prNumber, releaseRepoPath, log)
-
-			cleanupsLock.Lock()
-			cleanups = append(cleanups, func() {
-				if err := cmManager.Clean(); err != nil {
-					log.WithError(err).Error("failed to clean up temporary ConfigMaps")
-				}
-			})
-			cleanupsLock.Unlock()
-
-			return nil
-		})
-	}
-
-	return cleanups.cleanup, g.Wait()
 }
 
 func pjKubeconfig(path string, defaultKubeconfig *rest.Config) (*rest.Config, error) {

@@ -2,90 +2,59 @@ package onboard
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io/fs"
-	"os"
 
 	"github.com/sirupsen/logrus"
 
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/yaml"
 
 	imagev1 "github.com/openshift/api/image/v1"
-	installertypes "github.com/openshift/installer/pkg/types"
+	cinitmanifest "github.com/openshift/ci-tools/pkg/clusterinit/manifest"
+	cinittypes "github.com/openshift/ci-tools/pkg/clusterinit/types"
 	"github.com/openshift/library-go/pkg/image/reference"
 
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
-	citoolsyaml "github.com/openshift/ci-tools/pkg/util/yaml"
 )
 
-type certificateStep struct {
-	log            *logrus.Entry
+type certificateGenerator struct {
 	clusterInstall *clusterinstall.ClusterInstall
 	kubeClient     ctrlruntimeclient.Client
-	writeManifest  func(name string, data []byte, perm fs.FileMode) error
 }
 
-func (s *certificateStep) Name() string {
+func (s *certificateGenerator) Name() string {
 	return "certificate"
 }
 
-func (s *certificateStep) Run(ctx context.Context) error {
-	log := s.log.WithField("step", s.Name())
+func (s *certificateGenerator) Skip() cinittypes.SkipStep {
+	return s.clusterInstall.Onboard.Certificate.SkipStep
+}
 
-	baseDomain, err := s.baseDomain(ctx)
+func (s *certificateGenerator) ExcludedManifests() cinittypes.ExcludeManifest {
+	return s.clusterInstall.Onboard.Certificate.ExcludeManifest
+}
+
+func (s *certificateGenerator) Patches() []cinitmanifest.Patch {
+	return s.clusterInstall.Onboard.Certificate.Patches
+}
+
+func (s *certificateGenerator) Generate(ctx context.Context, log *logrus.Entry) (map[string][]interface{}, error) {
+	host, err := s.imageRegistryPublicHost(ctx, log)
 	if err != nil {
-		return fmt.Errorf("base domain: %w", err)
+		return nil, fmt.Errorf("image registry public host: %w", err)
 	}
 
-	host, err := s.imageRegistryPublicHost(ctx)
-	if err != nil {
-		return fmt.Errorf("image registry public host: %w", err)
-	}
-
-	manifests := s.generateCertificateManifests(baseDomain, host)
-	manifestMarshaled, err := citoolsyaml.MarshalMultidoc(yaml.Marshal, manifests...)
-	if err != nil {
-		return fmt.Errorf("marshal: %w", err)
-	}
+	manifests := s.generateCertificateManifests(s.clusterInstall.InstallConfig.BaseDomain, host)
 
 	outputPath := CertificateManifestPath(s.clusterInstall.Onboard.ReleaseRepo, s.clusterInstall.ClusterName)
-	if err := s.writeManifest(outputPath, manifestMarshaled, 0644); err != nil {
-		return fmt.Errorf("write template %s: %w", outputPath, err)
-	}
+	pathToManifests := make(map[string][]interface{})
+	pathToManifests[outputPath] = manifests
 
-	log.WithField("certificate", outputPath).Info("certificates generated")
-	return nil
+	return pathToManifests, nil
 }
 
-func (s *certificateStep) baseDomain(ctx context.Context) (string, error) {
-	if s.clusterInstall.Onboard.Certificate.BaseDomains != "" {
-		s.log.Info("override base domain from config")
-		return s.clusterInstall.Onboard.Certificate.BaseDomains, nil
-	}
-
-	cm := corev1.ConfigMap{}
-	if err := s.kubeClient.Get(ctx, types.NamespacedName{Namespace: "kube-system", Name: "cluster-config-v1"}, &cm); err != nil {
-		return "", fmt.Errorf("get cluster-config-v1: %w", err)
-	}
-	installConfigRaw, ok := cm.Data["install-config"]
-	if !ok {
-		return "", errors.New("install-config not found")
-	}
-
-	installConfig := installertypes.InstallConfig{}
-	if err := yaml.Unmarshal([]byte(installConfigRaw), &installConfig); err != nil {
-		return "", fmt.Errorf("unmarshall install config: %w", err)
-	}
-	return installConfig.BaseDomain, nil
-}
-
-func (s *certificateStep) imageRegistryPublicHost(ctx context.Context) (string, error) {
+func (s *certificateGenerator) imageRegistryPublicHost(ctx context.Context, log *logrus.Entry) (string, error) {
 	if s.clusterInstall.Onboard.Certificate.ImageRegistryPublicHost != "" {
-		s.log.Info("override image registry public host from config")
+		log.Info("override image registry public host from config")
 		return s.clusterInstall.Onboard.Certificate.ImageRegistryPublicHost, nil
 	}
 
@@ -107,15 +76,14 @@ func (s *certificateStep) imageRegistryPublicHost(ctx context.Context) (string, 
 	return "", fmt.Errorf("no public registry host could be located")
 }
 
-func (s *certificateStep) generateCertificateManifests(baseDomain, imageRegistryHost string) []interface{} {
+func (s *certificateGenerator) generateCertificateManifests(baseDomain, imageRegistryHost string) []interface{} {
 	manifests := make([]interface{}, 0)
 
-	projLabelKey, projLabelValue := s.projectLabelOrDefault("apiserver-tls", "aws-project", "openshift-ci-infra")
 	apiServerCert := map[string]interface{}{
 		"kind": "Certificate",
 		"metadata": map[string]interface{}{
 			"labels": map[string]interface{}{
-				projLabelKey: projLabelValue,
+				"aws-project": "openshift-ci-infra",
 			},
 			"name":      "apiserver-tls",
 			"namespace": "openshift-config",
@@ -126,20 +94,19 @@ func (s *certificateStep) generateCertificateManifests(baseDomain, imageRegistry
 			},
 			"issuerRef": map[string]interface{}{
 				"kind": "ClusterIssuer",
-				"name": s.clusterIssuerOrDefault("apiserver-tls", "cert-issuer-aws"),
+				"name": "cert-issuer-aws",
 			},
 			"secretName": "apiserver-tls",
 		},
 		"apiVersion": "cert-manager.io/v1",
 	}
 
-	projLabelKey, projLabelValue = s.projectLabelOrDefault("apps-tls", "aws-project", "openshift-ci-infra")
 	appsCert := map[string]interface{}{
 		"apiVersion": "cert-manager.io/v1",
 		"kind":       "Certificate",
 		"metadata": map[string]interface{}{
 			"labels": map[string]interface{}{
-				projLabelKey: projLabelValue,
+				"aws-project": "openshift-ci-infra",
 			},
 			"name":      "apps-tls",
 			"namespace": "openshift-ingress",
@@ -150,19 +117,18 @@ func (s *certificateStep) generateCertificateManifests(baseDomain, imageRegistry
 			},
 			"issuerRef": map[string]interface{}{
 				"kind": "ClusterIssuer",
-				"name": s.clusterIssuerOrDefault("apps-tls", "cert-issuer-aws"),
+				"name": "cert-issuer-aws",
 			},
 			"secretName": "apps-tls",
 		},
 	}
 
-	projLabelKey, projLabelValue = s.projectLabelOrDefault("registry-tls", "gcp-project", "openshift-ci-infra")
 	imageRegistryCert := map[string]interface{}{
 		"apiVersion": "cert-manager.io/v1",
 		"kind":       "Certificate",
 		"metadata": map[string]interface{}{
 			"labels": map[string]interface{}{
-				projLabelKey: projLabelValue,
+				"gcp-project": "openshift-ci-infra",
 			},
 			"name":      "registry-tls",
 			"namespace": "openshift-image-registry",
@@ -173,7 +139,7 @@ func (s *certificateStep) generateCertificateManifests(baseDomain, imageRegistry
 			},
 			"issuerRef": map[string]interface{}{
 				"kind": "ClusterIssuer",
-				"name": s.clusterIssuerOrDefault("registry-tls", "cert-issuer"),
+				"name": "cert-issuer",
 			},
 			"secretName": "public-route-tls",
 		},
@@ -187,25 +153,9 @@ func (s *certificateStep) generateCertificateManifests(baseDomain, imageRegistry
 	return manifests
 }
 
-func (s *certificateStep) clusterIssuerOrDefault(certificate, def string) string {
-	if clusterIssuer, ok := s.clusterInstall.Onboard.Certificate.ClusterIssuer[certificate]; ok {
-		return clusterIssuer
-	}
-	return def
-}
-
-func (s *certificateStep) projectLabelOrDefault(certificate, defKey, defValue string) (string, string) {
-	if keyVal, ok := s.clusterInstall.Onboard.Certificate.ProjectLabel[certificate]; ok {
-		return keyVal.Key, keyVal.Value
-	}
-	return defKey, defValue
-}
-
-func NewCertificateStep(log *logrus.Entry, clusterInstall *clusterinstall.ClusterInstall, kubeClient ctrlruntimeclient.Client) *certificateStep {
-	return &certificateStep{
-		log:            log,
+func NewCertificateGenerator(clusterInstall *clusterinstall.ClusterInstall, kubeClient ctrlruntimeclient.Client) *certificateGenerator {
+	return &certificateGenerator{
 		clusterInstall: clusterInstall,
-		writeManifest:  os.WriteFile,
 		kubeClient:     kubeClient,
 	}
 }

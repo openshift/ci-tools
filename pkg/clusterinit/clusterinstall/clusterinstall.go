@@ -137,10 +137,10 @@ var (
 )
 
 type Certificate struct {
-	BaseDomains             string                             `json:"baseDomains,omitempty"`
-	ImageRegistryPublicHost string                             `json:"imageRegistryPublicHost,omitempty"`
-	ClusterIssuer           map[string]string                  `json:"clusterIssuer,omitempty"`
-	ProjectLabel            map[string]CertificateProjectLabel `json:"projectLabel,omitempty"`
+	types.SkipStep
+	types.ExcludeManifest
+	Patches                 []manifest.Patch `json:"patches,omitempty"`
+	ImageRegistryPublicHost string           `json:"imageRegistryPublicHost,omitempty"`
 }
 
 type CertManagerOperator struct {

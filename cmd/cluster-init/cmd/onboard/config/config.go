@@ -73,7 +73,7 @@ func runConfigSteps(ctx context.Context, log *logrus.Entry, update bool, cluster
 		onboard.NewProwPluginStep(log, clusterInstall),
 		onboard.NewDexStep(log, kubeClient, clusterInstall),
 		onboard.NewQuayioPullThroughCacheStep(log, clusterInstall, kubeClient),
-		onboard.NewCertificateStep(log, clusterInstall, kubeClient),
+		onboard.NewManifestGeneratorStep(log, onboard.NewCertificateGenerator(clusterInstall, kubeClient)),
 		onboard.NewManifestGeneratorStep(log, onboard.NewCloudabilityAgentGenerator(clusterInstall)),
 		onboard.NewCommonSymlinkStep(log, clusterInstall),
 		onboard.NewMultiarchBuilderControllerStep(log, clusterInstall),

@@ -68,6 +68,7 @@ func gatherOptions() (options, error) {
 	o.dryRunOptions.bind(fs)
 
 	fs.StringVar(&o.prowjobKubeconfig, "prowjob-kubeconfig", "", "Path to the prowjob kubeconfig. If unset, default kubeconfig will be used for prowjobs.")
+	o.kubernetesOptions.AddFlags(fs)
 	fs.BoolVar(&o.noTemplates, "no-templates", false, "If true, do not attempt to compare templates")
 	fs.BoolVar(&o.noRegistry, "no-registry", false, "If true, do not attempt to compare step registry content")
 

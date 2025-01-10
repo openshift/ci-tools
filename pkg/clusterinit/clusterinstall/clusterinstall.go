@@ -58,6 +58,7 @@ type Onboard struct {
 	OpenshiftMonitoring        OpenshiftMonitoring        `json:"openshiftMonitoring,omitempty"`
 	MultiarchTuningOperator    MultiarchTuningOperator    `json:"multiarchTuningOperator,omitempty"`
 	CertManagerOperator        CertManagerOperator        `json:"certManagerOperator,omitempty"`
+	OAuthTemplate              OAuthTemplate              `json:"oauthTemplate,omitempty"`
 }
 
 type Dex struct {
@@ -148,6 +149,12 @@ type Certificate struct {
 }
 
 type CertManagerOperator struct {
+	types.SkipStep
+	types.ExcludeManifest
+	Patches []manifest.Patch `json:"patches,omitempty"`
+}
+
+type OAuthTemplate struct {
 	types.SkipStep
 	types.ExcludeManifest
 	Patches []manifest.Patch `json:"patches,omitempty"`

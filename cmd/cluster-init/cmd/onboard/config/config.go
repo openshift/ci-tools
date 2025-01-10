@@ -65,7 +65,7 @@ func runConfigSteps(ctx context.Context, log *logrus.Entry, update bool, cluster
 	steps := []clusterinittypes.Step{
 		onboard.NewProwJobStep(log, clusterInstall),
 		onboard.NewBuildClusterDirStep(log, clusterInstall),
-		onboard.NewOAuthTemplateStep(log, clusterInstall),
+		onboard.NewManifestGeneratorStep(log, onboard.NewOAuthTemplateGenerator(clusterInstall)),
 		onboard.NewCISecretBootstrapStep(log, clusterInstall),
 		onboard.NewCISecretGeneratorStep(log, clusterInstall),
 		onboard.NewSanitizeProwjobStep(log, clusterInstall),

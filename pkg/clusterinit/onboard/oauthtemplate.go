@@ -3,48 +3,44 @@ package onboard
 import (
 	"context"
 	"fmt"
-	"io/fs"
-	"os"
 
 	"github.com/sirupsen/logrus"
 
-	"sigs.k8s.io/yaml"
-
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
+	cinitmanifest "github.com/openshift/ci-tools/pkg/clusterinit/manifest"
+	cinittypes "github.com/openshift/ci-tools/pkg/clusterinit/types"
 )
 
-type oauthTemplateStep struct {
-	log            *logrus.Entry
+type oauthTemplateGenerator struct {
 	clusterInstall *clusterinstall.ClusterInstall
-	writeTemplate  func(name string, data []byte, perm fs.FileMode) error
 }
 
-func (s *oauthTemplateStep) Name() string {
+func (s *oauthTemplateGenerator) Name() string {
 	return "oauth-template"
 }
 
-func (s *oauthTemplateStep) Run(_ context.Context) error {
-	log := s.log.WithField("step", s.Name())
+func (s *oauthTemplateGenerator) Skip() cinittypes.SkipStep {
+	return s.clusterInstall.Onboard.OAuthTemplate.SkipStep
+}
 
+func (s *oauthTemplateGenerator) ExcludedManifests() cinittypes.ExcludeManifest {
+	return s.clusterInstall.Onboard.OAuthTemplate.ExcludeManifest
+}
+
+func (s *oauthTemplateGenerator) Patches() []cinitmanifest.Patch {
+	return s.clusterInstall.Onboard.OAuthTemplate.Patches
+}
+
+func (s *oauthTemplateGenerator) Generate(ctx context.Context, log *logrus.Entry) (map[string][]interface{}, error) {
 	if *s.clusterInstall.Onboard.OSD || *s.clusterInstall.Onboard.Hosted || *s.clusterInstall.Onboard.Unmanaged {
 		log.WithField("cluster", s.clusterInstall.ClusterName).Info("Not an OCP cluster, skipping")
-		return nil
+		return nil, nil
 	}
 
-	clusterId := fmt.Sprintf("%s_id", s.clusterInstall.ClusterName)
-	template := generateOAuthTemplate(clusterId)
-	rawTemplateOut, err := yaml.Marshal(template)
-	if err != nil {
-		return fmt.Errorf("marshal: %w", err)
-	}
-
+	template := generateOAuthTemplate(s.clusterInstall.ClusterName + "_id")
 	outputPath := OAuthTemplatePath(s.clusterInstall.Onboard.ReleaseRepo, s.clusterInstall.ClusterName)
-	if err := s.writeTemplate(outputPath, rawTemplateOut, 0644); err != nil {
-		return fmt.Errorf("write template %s: %w", outputPath, err)
-	}
 
-	log.WithField("template", outputPath).Info("oauth template generated")
-	return nil
+	return map[string][]interface{}{outputPath: {template}}, nil
 }
 
 func generateOAuthTemplate(clusterIdPlaceholder string) map[string]interface{} {
@@ -105,10 +101,6 @@ func generateOAuthTemplate(clusterIdPlaceholder string) map[string]interface{} {
 	}
 }
 
-func NewOAuthTemplateStep(log *logrus.Entry, clusterInstall *clusterinstall.ClusterInstall) *oauthTemplateStep {
-	return &oauthTemplateStep{
-		log:            log,
-		clusterInstall: clusterInstall,
-		writeTemplate:  os.WriteFile,
-	}
+func NewOAuthTemplateGenerator(clusterInstall *clusterinstall.ClusterInstall) *oauthTemplateGenerator {
+	return &oauthTemplateGenerator{clusterInstall: clusterInstall}
 }

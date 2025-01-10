@@ -89,6 +89,8 @@ type MachineSet struct {
 
 type MultiarchBuilderController struct {
 	types.SkipStep
+	types.ExcludeManifest
+	Patches []manifest.Patch `json:"patches,omitempty"`
 }
 
 type ImageRegistry struct {

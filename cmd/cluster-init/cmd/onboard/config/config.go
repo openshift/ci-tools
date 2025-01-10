@@ -76,7 +76,7 @@ func runConfigSteps(ctx context.Context, log *logrus.Entry, update bool, cluster
 		onboard.NewManifestGeneratorStep(log, onboard.NewCertificateGenerator(clusterInstall, kubeClient)),
 		onboard.NewManifestGeneratorStep(log, onboard.NewCloudabilityAgentGenerator(clusterInstall)),
 		onboard.NewCommonSymlinkStep(log, clusterInstall),
-		onboard.NewMultiarchBuilderControllerStep(log, clusterInstall),
+		onboard.NewManifestGeneratorStep(log, onboard.NewMultiarchBuilderControllerGenerator(clusterInstall)),
 		onboard.NewMultiarchTuningOperatorStep(log, clusterInstall),
 		onboard.NewManifestGeneratorStep(log, onboard.NewImageRegistryGenerator(clusterInstall)),
 		onboard.NewManifestGeneratorStep(log, onboard.NewOpenshiftMonitoringGenerator(clusterInstall)),

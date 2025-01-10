@@ -9,11 +9,11 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	imagev1 "github.com/openshift/api/image/v1"
-	cinitmanifest "github.com/openshift/ci-tools/pkg/clusterinit/manifest"
-	cinittypes "github.com/openshift/ci-tools/pkg/clusterinit/types"
 	"github.com/openshift/library-go/pkg/image/reference"
 
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
+	cinitmanifest "github.com/openshift/ci-tools/pkg/clusterinit/manifest"
+	cinittypes "github.com/openshift/ci-tools/pkg/clusterinit/types"
 )
 
 type certificateGenerator struct {

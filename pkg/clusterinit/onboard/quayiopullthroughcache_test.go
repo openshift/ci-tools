@@ -46,7 +46,7 @@ func TestUpdateQuayioPullThroughCache(t *testing.T) {
 					Storage: imageregistryv1.ImageRegistryConfigStorage{
 						S3: &imageregistryv1.ImageRegistryConfigStorageS3{}}}},
 			wantManifests: map[string][]interface{}{
-				"/release/repo/clusters/build-clusters/build99/assets/quayio-pull-through-cache-icsp.yaml": []interface{}{
+				"/release/repo/clusters/build-clusters/build99/assets/quayio-pull-through-cache-icsp.yaml": {
 					map[string]interface{}{
 						"apiVersion": "operator.openshift.io/v1alpha1",
 						"kind":       "ImageContentSourcePolicy",
@@ -86,7 +86,7 @@ func TestUpdateQuayioPullThroughCache(t *testing.T) {
 					Storage: imageregistryv1.ImageRegistryConfigStorage{
 						GCS: &imageregistryv1.ImageRegistryConfigStorageGCS{}}}},
 			wantManifests: map[string][]interface{}{
-				"/release/repo/clusters/build-clusters/build99/assets/quayio-pull-through-cache-icsp.yaml": []interface{}{
+				"/release/repo/clusters/build-clusters/build99/assets/quayio-pull-through-cache-icsp.yaml": {
 					map[string]interface{}{
 						"apiVersion": "operator.openshift.io/v1alpha1",
 						"kind":       "ImageContentSourcePolicy",

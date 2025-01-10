@@ -9,6 +9,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
 
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -24,7 +26,7 @@ func TestUpdateDexConfig(t *testing.T) {
 		name          string
 		ci            clusterinstall.ClusterInstall
 		dexManifests  string
-		wantManifests string
+		wantManifests map[string][]interface{}
 		wantErr       error
 	}{
 		{
@@ -40,100 +42,52 @@ spec:
           staticClients: []
     spec:
       containers:
-      - env: []
+      - env: []`,
+			wantManifests: map[string][]interface{}{
+				"/release/repo/clusters/app.ci/dex/manifests.yaml": {
+					appsv1.Deployment{
+						TypeMeta: v1.TypeMeta{
+							APIVersion: "apps/v1",
+							Kind:       "Deployment",
+						},
+						Spec: appsv1.DeploymentSpec{Template: corev1.PodTemplateSpec{
+							ObjectMeta: v1.ObjectMeta{
+								Annotations: map[string]string{
+									"config.yaml": `staticClients:
+- idEnv: BUILD11-ID
+  name: build11
+  redirectURIs:
+  - https://oauth-openshift.apps.build11.ci.devcluster.openshift.com/oauth2callback/RedHat_Internal_SSO
+  secretEnv: BUILD11-SECRET
 `,
-			wantManifests: `apiVersion: apps/v1
-kind: Deployment
-metadata:
-  creationTimestamp: null
-spec:
-  selector: null
-  strategy: {}
-  template:
-    metadata:
-      annotations:
-        config.yaml: |
-          staticClients:
-          - idEnv: BUILD11-ID
-            name: build11
-            redirectURIs:
-            - https://oauth-openshift.apps.build11.ci.devcluster.openshift.com/oauth2callback/RedHat_Internal_SSO
-            secretEnv: BUILD11-SECRET
-      creationTimestamp: null
-    spec:
-      containers:
-      - env:
-        - name: BUILD11-ID
-          valueFrom:
-            secretKeyRef:
-              key: build11-id
-              name: build11-secret
-        - name: BUILD11-SECRET
-          valueFrom:
-            secretKeyRef:
-              key: build11-secret
-              name: build11-secret
-        name: ""
-        resources: {}
-status: {}
-`,
-		},
-		{
-			name: "Get redirectURI from config",
-			ci: clusterinstall.ClusterInstall{
-				ClusterName: "build11",
-				Onboard: clusterinstall.Onboard{
-					ReleaseRepo: releaseRepo,
-					Dex:         clusterinstall.Dex{RedirectURI: "https://redirect.uri"},
+								},
+							},
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{{Env: []corev1.EnvVar{
+									{
+										Name: "BUILD11-ID",
+										ValueFrom: &corev1.EnvVarSource{
+											SecretKeyRef: &corev1.SecretKeySelector{
+												Key:                  "build11-id",
+												LocalObjectReference: corev1.LocalObjectReference{Name: "build11-secret"},
+											},
+										},
+									},
+									{
+										Name: "BUILD11-SECRET",
+										ValueFrom: &corev1.EnvVarSource{
+											SecretKeyRef: &corev1.SecretKeySelector{
+												Key:                  "build11-secret",
+												LocalObjectReference: corev1.LocalObjectReference{Name: "build11-secret"},
+											},
+										},
+									},
+								}}},
+							},
+						}},
+					},
 				},
 			},
-			dexManifests: `apiVersion: apps/v1
-kind: Deployment
-spec:
-  template:
-    metadata:
-      annotations:
-        config.yaml: |
-          staticClients: []
-    spec:
-      containers:
-      - env: []
-`,
-			wantManifests: `apiVersion: apps/v1
-kind: Deployment
-metadata:
-  creationTimestamp: null
-spec:
-  selector: null
-  strategy: {}
-  template:
-    metadata:
-      annotations:
-        config.yaml: |
-          staticClients:
-          - idEnv: BUILD11-ID
-            name: build11
-            redirectURIs:
-            - https://redirect.uri
-            secretEnv: BUILD11-SECRET
-      creationTimestamp: null
-    spec:
-      containers:
-      - env:
-        - name: BUILD11-ID
-          valueFrom:
-            secretKeyRef:
-              key: build11-id
-              name: build11-secret
-        - name: BUILD11-SECRET
-          valueFrom:
-            secretKeyRef:
-              key: build11-secret
-              name: build11-secret
-        name: ""
-        resources: {}
-status: {}
-`,
 		},
 		{
 			name: "Update client and env",
@@ -146,12 +100,11 @@ spec:
       annotations:
         config.yaml: |
           staticClients:
-          - idEnv: BUILD11-ID
-            name: "???"
+          - idEnv: "???"
+            name: build11
             redirectURIs:
             - "???"
             secretEnv: "???"
-          staticClients: []
     spec:
       containers:
       - env:
@@ -164,43 +117,52 @@ spec:
           valueFrom:
             secretKeyRef:
               key: "???"
-              name: "???"
+              name: "???"`,
+			wantManifests: map[string][]interface{}{
+				"/release/repo/clusters/app.ci/dex/manifests.yaml": {
+					appsv1.Deployment{
+						TypeMeta: v1.TypeMeta{
+							APIVersion: "apps/v1",
+							Kind:       "Deployment",
+						},
+						Spec: appsv1.DeploymentSpec{Template: corev1.PodTemplateSpec{
+							ObjectMeta: v1.ObjectMeta{
+								Annotations: map[string]string{
+									"config.yaml": `staticClients:
+- idEnv: BUILD11-ID
+  name: build11
+  redirectURIs:
+  - https://oauth-openshift.apps.build11.ci.devcluster.openshift.com/oauth2callback/RedHat_Internal_SSO
+  secretEnv: BUILD11-SECRET
 `,
-			wantManifests: `apiVersion: apps/v1
-kind: Deployment
-metadata:
-  creationTimestamp: null
-spec:
-  selector: null
-  strategy: {}
-  template:
-    metadata:
-      annotations:
-        config.yaml: |
-          staticClients:
-          - idEnv: BUILD11-ID
-            name: build11
-            redirectURIs:
-            - https://oauth-openshift.apps.build11.ci.devcluster.openshift.com/oauth2callback/RedHat_Internal_SSO
-            secretEnv: BUILD11-SECRET
-      creationTimestamp: null
-    spec:
-      containers:
-      - env:
-        - name: BUILD11-ID
-          valueFrom:
-            secretKeyRef:
-              key: build11-id
-              name: build11-secret
-        - name: BUILD11-SECRET
-          valueFrom:
-            secretKeyRef:
-              key: build11-secret
-              name: build11-secret
-        name: ""
-        resources: {}
-status: {}
-`,
+								},
+							},
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{{Env: []corev1.EnvVar{
+									{
+										Name: "BUILD11-ID",
+										ValueFrom: &corev1.EnvVarSource{
+											SecretKeyRef: &corev1.SecretKeySelector{
+												Key:                  "build11-id",
+												LocalObjectReference: corev1.LocalObjectReference{Name: "build11-secret"},
+											},
+										},
+									},
+									{
+										Name: "BUILD11-SECRET",
+										ValueFrom: &corev1.EnvVarSource{
+											SecretKeyRef: &corev1.SecretKeySelector{
+												Key:                  "build11-secret",
+												LocalObjectReference: corev1.LocalObjectReference{Name: "build11-secret"},
+											},
+										},
+									},
+								}}},
+							},
+						}},
+					},
+				},
+			},
 		},
 		{
 			name:    "No deployment",
@@ -220,7 +182,7 @@ status: {}
 				Spec:       routev1.RouteSpec{Host: "oauth-openshift.apps.build11.ci.devcluster.openshift.com"},
 			}).Build()
 
-			step := NewDexStep(logrus.NewEntry(logrus.StandardLogger()), c, &tc.ci)
+			step := NewDexGenerator(c, &tc.ci)
 
 			var readManifestsPath string
 			step.readDexManifests = func(path string) (string, error) {
@@ -228,15 +190,7 @@ status: {}
 				return tc.dexManifests, nil
 			}
 
-			var manifests string
-			var writeManifestsPath string
-			step.writeDexManifests = func(path string, m []byte) error {
-				writeManifestsPath = path
-				manifests = string(m)
-				return nil
-			}
-
-			err := step.Run(context.TODO())
+			manifests, err := step.Generate(context.TODO(), logrus.NewEntry(logrus.StandardLogger()))
 
 			if err != nil && tc.wantErr == nil {
 				t.Fatalf("want err nil but got: %v", err)
@@ -254,9 +208,6 @@ status: {}
 			wantDexManifestsPath := path.Join(releaseRepo, dexManifests)
 			if readManifestsPath != wantDexManifestsPath {
 				t.Errorf("want manifests path (read) %q but got %q", wantDexManifestsPath, readManifestsPath)
-			}
-			if writeManifestsPath != wantDexManifestsPath {
-				t.Errorf("want manifests path (write) %q but got %q", wantDexManifestsPath, writeManifestsPath)
 			}
 
 			if diff := cmp.Diff(tc.wantManifests, manifests); diff != "" {

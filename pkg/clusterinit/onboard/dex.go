@@ -19,14 +19,14 @@ import (
 	routev1 "github.com/openshift/api/route/v1"
 
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
+	cinitmanifest "github.com/openshift/ci-tools/pkg/clusterinit/manifest"
+	cinittypes "github.com/openshift/ci-tools/pkg/clusterinit/types"
 )
 
-type dexStep struct {
-	log               *logrus.Entry
-	ci                *clusterinstall.ClusterInstall
-	kubeClient        ctrlruntimeclient.Client
-	readDexManifests  func(path string) (string, error)
-	writeDexManifests func(path string, manifests []byte) error
+type dexGenerator struct {
+	clusterInstall   *clusterinstall.ClusterInstall
+	kubeClient       ctrlruntimeclient.Client
+	readDexManifests func(path string) (string, error)
 }
 
 // FIXME: this is a workaround; the real type from dex repository can't be imported because
@@ -34,88 +34,94 @@ type dexStep struct {
 // https://github.com/dexidp/dex/blob/447b68845a89f3e624eddbb4f4fd54358c8cc80d/cmd/dex/config.go#L24-L52
 type dexConfig map[string]interface{}
 
-func (s *dexStep) Name() string {
+func (s *dexGenerator) Name() string {
 	return "dex-manifests"
 }
 
-func (s *dexStep) Run(ctx context.Context) error {
-	dexManifestsPath := path.Join(s.ci.Onboard.ReleaseRepo, dexManifests)
+func (s *dexGenerator) Skip() cinittypes.SkipStep {
+	return s.clusterInstall.Onboard.Dex.SkipStep
+}
+
+func (s *dexGenerator) ExcludedManifests() cinittypes.ExcludeManifest {
+	return s.clusterInstall.Onboard.Dex.ExcludeManifest
+}
+
+func (s *dexGenerator) Patches() []cinitmanifest.Patch {
+	return s.clusterInstall.Onboard.Dex.Patches
+}
+
+func (s *dexGenerator) Generate(ctx context.Context, log *logrus.Entry) (map[string][]interface{}, error) {
+	dexManifestsPath := path.Join(s.clusterInstall.Onboard.ReleaseRepo, dexManifests)
 	dexManifests, err := s.readDexManifests(dexManifestsPath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	manifestsSplit := strings.Split(dexManifests, "---")
-	deployIdx := -1
-	var deploy appsv1.Deployment
+	deploy, deployIdx := appsv1.Deployment{}, -1
+	manifests := make([]interface{}, 0, len(manifestsSplit))
 	for i := range manifestsSplit {
-		deploy = appsv1.Deployment{}
-		if err := yaml.Unmarshal([]byte(manifestsSplit[i]), &deploy); err != nil {
-			return fmt.Errorf("unmarshal: %w", err)
+		m := map[string]interface{}{}
+		if err := yaml.Unmarshal([]byte(manifestsSplit[i]), &m); err != nil {
+			return nil, fmt.Errorf("unmarshal: %w", err)
 		}
-		if deploy.Kind == "Deployment" {
+
+		manifests = append(manifests, m)
+
+		if kind, ok := m["kind"]; ok && kind == "Deployment" {
 			deployIdx = i
-			break
+			if err := yaml.Unmarshal([]byte(manifestsSplit[i]), &deploy); err != nil {
+				return nil, fmt.Errorf("unmarshal: %w", err)
+			}
 		}
 	}
 
 	if deployIdx == -1 {
-		return errors.New("deployment not found")
+		return nil, errors.New("deployment not found")
 	}
 
 	dexConfig, err := unmarshalDexConfig(&deploy)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	if err := s.updateDexConfig(ctx, dexConfig); err != nil {
-		return err
+	if err := s.updateDexConfig(ctx, log, dexConfig); err != nil {
+		return nil, err
 	}
 
 	if len(deploy.Spec.Template.Spec.Containers) > 0 {
-		s.updateEnvVar(&deploy.Spec.Template.Spec.Containers[0], s.ci.ClusterName)
+		s.updateEnvVar(&deploy.Spec.Template.Spec.Containers[0], log, s.clusterInstall.ClusterName)
 	} else {
-		return fmt.Errorf("no containers spec found in %s", dexManifestsPath)
+		return nil, fmt.Errorf("no containers spec found in %s", dexManifestsPath)
 	}
 
 	if err := marshalDexConfig(&deploy, dexConfig); err != nil {
-		return err
+		return nil, err
 	}
 
-	raw, err := yaml.Marshal(deploy)
-	if err != nil {
-		return fmt.Errorf("marshal: %w", err)
-	}
+	pathToManifests := make(map[string][]interface{})
+	manifests[deployIdx] = deploy
+	pathToManifests[dexManifestsPath] = manifests
 
-	newline := "\n"
-	if deployIdx == 0 {
-		newline = ""
-	}
-	manifestsSplit[deployIdx] = newline + string(raw)
-	dexManifestsRaw := strings.Join(manifestsSplit, "---")
-
-	if err := s.writeDexManifests(dexManifestsPath, []byte(dexManifestsRaw)); err != nil {
-		return err
-	}
-	return nil
+	return pathToManifests, nil
 }
 
-func (s *dexStep) updateDexConfig(ctx context.Context, config dexConfig) error {
+func (s *dexGenerator) updateDexConfig(ctx context.Context, log *logrus.Entry, config dexConfig) error {
 	redirectURI, err := s.redirectURI(ctx)
 	if err != nil {
 		return fmt.Errorf("redirect uri: %w", err)
 	}
 
-	clusterNameUpper := strings.ToUpper(s.ci.ClusterName)
+	clusterNameUpper := strings.ToUpper(s.clusterInstall.ClusterName)
 	target := map[string]interface{}{
 		"idEnv":        clusterNameUpper + "-ID",
-		"name":         s.ci.ClusterName,
+		"name":         s.clusterInstall.ClusterName,
 		"redirectURIs": []string{redirectURI},
 		"secretEnv":    clusterNameUpper + "-SECRET",
 	}
 	clients, ok := config["staticClients"]
 	if !ok {
-		s.log.Info("static client stanza not found, adding")
+		log.Info("static client stanza not found, adding")
 		config["staticClients"] = []interface{}{target}
 		return nil
 	}
@@ -131,19 +137,19 @@ func (s *dexStep) updateDexConfig(ctx context.Context, config dexConfig) error {
 		name := c["name"]
 		if name == target["name"] {
 			clientsSlice[i] = target
-			s.log.Info("static client found, updating")
+			log.Info("static client found, updating")
 			return nil
 		}
 	}
-	s.log.Info("static client found, adding a new one")
+	log.Info("static client found, adding a new one")
 	clientsSlice = append(clientsSlice, target)
 	config["staticClients"] = clientsSlice
 	return nil
 }
 
-func (s *dexStep) updateEnvVar(c *corev1.Container, clusterName string) {
+func (s *dexGenerator) updateEnvVar(c *corev1.Container, log *logrus.Entry, clusterName string) {
 	upsert := func(targetEnv corev1.EnvVar) {
-		log := s.log.WithField("env", targetEnv.Name)
+		log := log.WithField("env", targetEnv.Name)
 		for i := range c.Env {
 			if c.Env[i].Name == targetEnv.Name {
 				log.Info("Env variable found, updating")
@@ -172,11 +178,7 @@ func (s *dexStep) updateEnvVar(c *corev1.Container, clusterName string) {
 				}}}})
 }
 
-func (s *dexStep) redirectURI(ctx context.Context) (string, error) {
-	if s.ci.Onboard.Dex.RedirectURI != "" {
-		return s.ci.Onboard.Dex.RedirectURI, nil
-	}
-
+func (s *dexGenerator) redirectURI(ctx context.Context) (string, error) {
 	oauthRoute := routev1.Route{}
 	if err := s.kubeClient.Get(ctx, types.NamespacedName{Namespace: "openshift-authentication", Name: "oauth-openshift"}, &oauthRoute); err != nil {
 		return "", fmt.Errorf("get route: %w", err)
@@ -214,19 +216,10 @@ func readDexManifests(path string) (string, error) {
 	return string(data), nil
 }
 
-func writeDexManifests(path string, manifests []byte) error {
-	if err := os.WriteFile(path, manifests, 0644); err != nil {
-		return fmt.Errorf("write file %s: %w", path, err)
-	}
-	return nil
-}
-
-func NewDexStep(log *logrus.Entry, kubeClient ctrlruntimeclient.Client, ci *clusterinstall.ClusterInstall) *dexStep {
-	return &dexStep{
-		log:               log,
-		kubeClient:        kubeClient,
-		ci:                ci,
-		readDexManifests:  readDexManifests,
-		writeDexManifests: writeDexManifests,
+func NewDexGenerator(kubeClient ctrlruntimeclient.Client, clusterInstall *clusterinstall.ClusterInstall) *dexGenerator {
+	return &dexGenerator{
+		kubeClient:       kubeClient,
+		clusterInstall:   clusterInstall,
+		readDexManifests: readDexManifests,
 	}
 }

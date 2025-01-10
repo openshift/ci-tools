@@ -61,7 +61,9 @@ type Onboard struct {
 }
 
 type Dex struct {
-	RedirectURI string `json:"redirectURI,omitempty"`
+	types.SkipStep
+	types.ExcludeManifest
+	Patches []manifest.Patch `json:"patches,omitempty"`
 }
 
 type QuayioPullThroughCache struct {

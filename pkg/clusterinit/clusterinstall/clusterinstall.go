@@ -68,7 +68,9 @@ type Dex struct {
 }
 
 type QuayioPullThroughCache struct {
-	MirrorURI string `json:"mirrorURI,omitempty"`
+	types.SkipStep
+	types.ExcludeManifest
+	Patches []manifest.Patch `json:"patches,omitempty"`
 }
 
 type CertificateProjectLabel struct {

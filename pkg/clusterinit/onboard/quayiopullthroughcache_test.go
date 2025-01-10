@@ -2,8 +2,6 @@ package onboard
 
 import (
 	"context"
-	"io/fs"
-	"path"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -26,7 +24,7 @@ func TestUpdateQuayioPullThroughCache(t *testing.T) {
 		name           string
 		clusterInstall clusterinstall.ClusterInstall
 		config         imageregistryv1.Config
-		wantManifest   string
+		wantManifests  map[string][]interface{}
 		wantErr        error
 	}{
 		{
@@ -47,16 +45,27 @@ func TestUpdateQuayioPullThroughCache(t *testing.T) {
 				Spec: imageregistryv1.ImageRegistrySpec{
 					Storage: imageregistryv1.ImageRegistryConfigStorage{
 						S3: &imageregistryv1.ImageRegistryConfigStorageS3{}}}},
-			wantManifest: `apiVersion: operator.openshift.io/v1alpha1
-kind: ImageContentSourcePolicy
-metadata:
-  name: quayio-pull-through-cache-icsp
-spec:
-  repositoryDigestMirrors:
-  - mirrors:
-    - quayio-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com
-    source: quay.io
-`,
+			wantManifests: map[string][]interface{}{
+				"/release/repo/clusters/build-clusters/build99/assets/quayio-pull-through-cache-icsp.yaml": []interface{}{
+					map[string]interface{}{
+						"apiVersion": "operator.openshift.io/v1alpha1",
+						"kind":       "ImageContentSourcePolicy",
+						"metadata": map[string]interface{}{
+							"name": "quayio-pull-through-cache-icsp",
+						},
+						"spec": map[string]interface{}{
+							"repositoryDigestMirrors": []interface{}{
+								map[string]interface{}{
+									"mirrors": []interface{}{
+										"quayio-pull-through-cache-us-east-1-ci.apps.ci.l2s4.p1.openshiftapps.com",
+									},
+									"source": "quay.io",
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		{
 			name: "GCS cache",
@@ -76,48 +85,27 @@ spec:
 				Spec: imageregistryv1.ImageRegistrySpec{
 					Storage: imageregistryv1.ImageRegistryConfigStorage{
 						GCS: &imageregistryv1.ImageRegistryConfigStorageGCS{}}}},
-			wantManifest: `apiVersion: operator.openshift.io/v1alpha1
-kind: ImageContentSourcePolicy
-metadata:
-  name: quayio-pull-through-cache-icsp
-spec:
-  repositoryDigestMirrors:
-  - mirrors:
-    - quayio-pull-through-cache-gcs-ci.apps.ci.l2s4.p1.openshiftapps.com
-    source: quay.io
-`,
-		},
-		{
-			name: "Override from config",
-			clusterInstall: clusterinstall.ClusterInstall{
-				ClusterName: clusterName,
-				Onboard: clusterinstall.Onboard{
-					ReleaseRepo: releaseRepo,
-					OSD:         ptr.To(false),
-					Hosted:      ptr.To(false),
-					Unmanaged:   ptr.To(false),
-					QuayioPullThroughCache: clusterinstall.QuayioPullThroughCache{
-						MirrorURI: "fake",
+			wantManifests: map[string][]interface{}{
+				"/release/repo/clusters/build-clusters/build99/assets/quayio-pull-through-cache-icsp.yaml": []interface{}{
+					map[string]interface{}{
+						"apiVersion": "operator.openshift.io/v1alpha1",
+						"kind":       "ImageContentSourcePolicy",
+						"metadata": map[string]interface{}{
+							"name": "quayio-pull-through-cache-icsp",
+						},
+						"spec": map[string]interface{}{
+							"repositoryDigestMirrors": []interface{}{
+								map[string]interface{}{
+									"mirrors": []interface{}{
+										"quayio-pull-through-cache-gcs-ci.apps.ci.l2s4.p1.openshiftapps.com",
+									},
+									"source": "quay.io",
+								},
+							},
+						},
 					},
 				},
 			},
-			config: imageregistryv1.Config{
-				ObjectMeta: v1.ObjectMeta{
-					Namespace: "openshift-image-registry",
-					Name:      "cluster"},
-				Spec: imageregistryv1.ImageRegistrySpec{
-					Storage: imageregistryv1.ImageRegistryConfigStorage{
-						GCS: &imageregistryv1.ImageRegistryConfigStorageGCS{}}}},
-			wantManifest: `apiVersion: operator.openshift.io/v1alpha1
-kind: ImageContentSourcePolicy
-metadata:
-  name: quayio-pull-through-cache-icsp
-spec:
-  repositoryDigestMirrors:
-  - mirrors:
-    - fake
-    source: quay.io
-`,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -127,18 +115,9 @@ spec:
 				t.Fatal("add routev1 to scheme")
 			}
 			kubeClient := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(&tc.config).Build()
-			step := NewQuayioPullThroughCacheStep(logrus.NewEntry(logrus.StandardLogger()), &tc.clusterInstall, kubeClient)
-			var (
-				pullThroughCache          string
-				pullThroughCacheWritePath string
-			)
-			step.writeTemplate = func(name string, data []byte, perm fs.FileMode) error {
-				pullThroughCacheWritePath = name
-				pullThroughCache = string(data)
-				return nil
-			}
+			generator := NewQuayioPullThroughCacheStep(&tc.clusterInstall, kubeClient)
 
-			err := step.Run(context.TODO())
+			manifests, err := generator.Generate(context.TODO(), logrus.NewEntry(logrus.StandardLogger()))
 
 			if err != nil && tc.wantErr == nil {
 				t.Fatalf("want err nil but got: %v", err)
@@ -153,13 +132,8 @@ spec:
 				return
 			}
 
-			wantPullThroughCacheWritePath := path.Join(releaseRepo, "clusters/build-clusters/build99/assets/quayio-pull-through-cache-icsp.yaml")
-			if pullThroughCacheWritePath != wantPullThroughCacheWritePath {
-				t.Errorf("want manifests path (write) %q but got %q", wantPullThroughCacheWritePath, pullThroughCacheWritePath)
-			}
-
-			if diff := cmp.Diff(tc.wantManifest, pullThroughCache); diff != "" {
-				t.Errorf("templates differs:\n%s", diff)
+			if diff := cmp.Diff(tc.wantManifests, manifests); diff != "" {
+				t.Errorf("manifests differs:\n%s", diff)
 			}
 		})
 	}

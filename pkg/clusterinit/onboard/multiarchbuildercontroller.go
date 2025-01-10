@@ -3,65 +3,49 @@ package onboard
 import (
 	"context"
 	"fmt"
-	"io/fs"
-	"os"
 	"path"
 
 	"github.com/sirupsen/logrus"
 
-	"sigs.k8s.io/yaml"
-
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
-	citoolsyaml "github.com/openshift/ci-tools/pkg/util/yaml"
+	cinitmanifest "github.com/openshift/ci-tools/pkg/clusterinit/manifest"
+	cinittypes "github.com/openshift/ci-tools/pkg/clusterinit/types"
 )
 
-type multiarchBuilderControllerStep struct {
-	log            *logrus.Entry
+type multiarchBuilderControllerGenerator struct {
 	clusterInstall *clusterinstall.ClusterInstall
-	writeManifest  func(name string, data []byte, perm fs.FileMode) error
-	mkdirAll       func(path string, perm fs.FileMode) error
 }
 
-func (s *multiarchBuilderControllerStep) Name() string {
+func (s *multiarchBuilderControllerGenerator) Name() string {
 	return "multiarch-builder-controller"
 }
 
-func (s *multiarchBuilderControllerStep) Run(ctx context.Context) error {
-	log := s.log.WithField("step", s.Name())
-
-	if s.clusterInstall.Onboard.MultiarchBuilderController.Skip {
-		log.Info("multiarch is not enabled, skipping")
-		return nil
-	}
-
-	manifestsPath := MultiarchBuilderControllerManifestsPath(s.clusterInstall.Onboard.ReleaseRepo, s.clusterInstall.ClusterName)
-	if err := s.mkdirAll(manifestsPath, 0755); err != nil && !os.IsExist(err) {
-		return fmt.Errorf("mkdir %s: %w", manifestsPath, err)
-	}
-
-	manifests := s.rbacManifests()
-	manifestBytes, err := citoolsyaml.MarshalMultidoc(yaml.Marshal, manifests...)
-	if err != nil {
-		return fmt.Errorf("marshal rbac manifests: %w", err)
-	}
-
-	if err := s.writeManifest(path.Join(manifestsPath, "000_mabc-updater_rbac.yaml"), manifestBytes, 0644); err != nil {
-		return fmt.Errorf("write rbac manifests: %w", err)
-	}
-
-	manifests = s.deploymentManifests(s.clusterInstall.ClusterName)
-	manifestBytes, err = citoolsyaml.MarshalMultidoc(yaml.Marshal, manifests...)
-	if err != nil {
-		return fmt.Errorf("marshal deployment manifests: %w", err)
-	}
-
-	if err := s.writeManifest(path.Join(manifestsPath, "100_deploy.yaml"), manifestBytes, 0644); err != nil {
-		return fmt.Errorf("write deployment manifests: %w", err)
-	}
-	return nil
+func (s *multiarchBuilderControllerGenerator) Skip() cinittypes.SkipStep {
+	return s.clusterInstall.Onboard.MultiarchBuilderController.SkipStep
 }
 
-func (s *multiarchBuilderControllerStep) deploymentManifests(clusterName string) []interface{} {
+func (s *multiarchBuilderControllerGenerator) ExcludedManifests() cinittypes.ExcludeManifest {
+	return s.clusterInstall.Onboard.MultiarchBuilderController.ExcludeManifest
+}
+
+func (s *multiarchBuilderControllerGenerator) Patches() []cinitmanifest.Patch {
+	return s.clusterInstall.Onboard.MultiarchBuilderController.Patches
+}
+
+func (s *multiarchBuilderControllerGenerator) Generate(ctx context.Context, log *logrus.Entry) (map[string][]interface{}, error) {
+	manifestsPath := MultiarchBuilderControllerManifestsPath(s.clusterInstall.Onboard.ReleaseRepo, s.clusterInstall.ClusterName)
+	pathToManifests := make(map[string][]interface{})
+
+	manifests := s.rbacManifests()
+	pathToManifests[path.Join(manifestsPath, "000_mabc-updater_rbac.yaml")] = manifests
+
+	manifests = s.deploymentManifests(s.clusterInstall.ClusterName)
+	pathToManifests[path.Join(manifestsPath, "100_deploy.yaml")] = manifests
+
+	return pathToManifests, nil
+}
+
+func (s *multiarchBuilderControllerGenerator) deploymentManifests(clusterName string) []interface{} {
 	secretName := fmt.Sprintf("multi-arch-builder-controller-%s-registry-credentials", clusterName)
 	return []interface{}{
 		map[string]interface{}{
@@ -132,7 +116,7 @@ func (s *multiarchBuilderControllerStep) deploymentManifests(clusterName string)
 	}
 }
 
-func (s *multiarchBuilderControllerStep) rbacManifests() []interface{} {
+func (s *multiarchBuilderControllerGenerator) rbacManifests() []interface{} {
 	return []interface{}{
 		map[string]interface{}{
 			"metadata": map[string]interface{}{
@@ -185,11 +169,6 @@ func (s *multiarchBuilderControllerStep) rbacManifests() []interface{} {
 	}
 }
 
-func NewMultiarchBuilderControllerStep(log *logrus.Entry, clusterInstall *clusterinstall.ClusterInstall) *multiarchBuilderControllerStep {
-	return &multiarchBuilderControllerStep{
-		log:            log,
-		clusterInstall: clusterInstall,
-		writeManifest:  os.WriteFile,
-		mkdirAll:       os.MkdirAll,
-	}
+func NewMultiarchBuilderControllerGenerator(clusterInstall *clusterinstall.ClusterInstall) *multiarchBuilderControllerGenerator {
+	return &multiarchBuilderControllerGenerator{clusterInstall: clusterInstall}
 }

@@ -58,14 +58,19 @@ type Onboard struct {
 	OpenshiftMonitoring        OpenshiftMonitoring        `json:"openshiftMonitoring,omitempty"`
 	MultiarchTuningOperator    MultiarchTuningOperator    `json:"multiarchTuningOperator,omitempty"`
 	CertManagerOperator        CertManagerOperator        `json:"certManagerOperator,omitempty"`
+	OAuthTemplate              OAuthTemplate              `json:"oauthTemplate,omitempty"`
 }
 
 type Dex struct {
-	RedirectURI string `json:"redirectURI,omitempty"`
+	types.SkipStep
+	types.ExcludeManifest
+	Patches []manifest.Patch `json:"patches,omitempty"`
 }
 
 type QuayioPullThroughCache struct {
-	MirrorURI string `json:"mirrorURI,omitempty"`
+	types.SkipStep
+	types.ExcludeManifest
+	Patches []manifest.Patch `json:"patches,omitempty"`
 }
 
 type CertificateProjectLabel struct {
@@ -87,6 +92,8 @@ type MachineSet struct {
 
 type MultiarchBuilderController struct {
 	types.SkipStep
+	types.ExcludeManifest
+	Patches []manifest.Patch `json:"patches,omitempty"`
 }
 
 type ImageRegistry struct {
@@ -137,13 +144,19 @@ var (
 )
 
 type Certificate struct {
-	BaseDomains             string                             `json:"baseDomains,omitempty"`
-	ImageRegistryPublicHost string                             `json:"imageRegistryPublicHost,omitempty"`
-	ClusterIssuer           map[string]string                  `json:"clusterIssuer,omitempty"`
-	ProjectLabel            map[string]CertificateProjectLabel `json:"projectLabel,omitempty"`
+	types.SkipStep
+	types.ExcludeManifest
+	Patches                 []manifest.Patch `json:"patches,omitempty"`
+	ImageRegistryPublicHost string           `json:"imageRegistryPublicHost,omitempty"`
 }
 
 type CertManagerOperator struct {
+	types.SkipStep
+	types.ExcludeManifest
+	Patches []manifest.Patch `json:"patches,omitempty"`
+}
+
+type OAuthTemplate struct {
 	types.SkipStep
 	types.ExcludeManifest
 	Patches []manifest.Patch `json:"patches,omitempty"`

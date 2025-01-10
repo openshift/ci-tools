@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/getlantern/deepcopy"
 	"github.com/sirupsen/logrus"
@@ -160,6 +161,15 @@ func removePeriodics(tests *[]api.TestStepConfiguration) {
 	}
 }
 
+func bumpCurrentToFuture(currentWithPrefix *string, currentRelease, futureRelease string) {
+	prefix, isPrefix := strings.CutSuffix(*currentWithPrefix, currentRelease)
+	if isPrefix {
+		*currentWithPrefix = prefix + futureRelease
+		return
+	}
+	*currentWithPrefix = futureRelease
+}
+
 func updatePromotion(currentConfig, futureConfig *api.ReleaseBuildConfiguration, futureRelease, devRelease string) {
 	if currentConfig.PromotionConfiguration == nil {
 		return
@@ -175,8 +185,8 @@ func updatePromotion(currentConfig, futureConfig *api.ReleaseBuildConfiguration,
 	// filter and upgrade .promotion.to[] releases that promote to the current release
 	newTargets := make([]api.PromotionTarget, 0, len(currentPromotion.Targets))
 	for _, target := range currentPromotion.Targets {
-		if target.Name == devRelease {
-			target.Name = futureRelease
+		if strings.Contains(target.Name, devRelease) {
+			bumpCurrentToFuture(&target.Name, devRelease, futureRelease)
 			target.Disabled = futureRelease == devRelease
 			newTargets = append(newTargets, target)
 		}
@@ -189,23 +199,23 @@ func updatePromotion(currentConfig, futureConfig *api.ReleaseBuildConfiguration,
 func updateRelease(config *api.ReleaseBuildConfiguration, currentRelease, futureRelease string) {
 	if config.PromotionConfiguration != nil {
 		for i := range config.PromotionConfiguration.Targets {
-			if config.PromotionConfiguration.Targets[i].Name == currentRelease {
-				config.PromotionConfiguration.Targets[i].Name = futureRelease
+			if strings.Contains(config.PromotionConfiguration.Targets[i].Name, currentRelease) {
+				bumpCurrentToFuture(&config.PromotionConfiguration.Targets[i].Name, currentRelease, futureRelease)
 			}
 		}
 	}
 	if config.ReleaseTagConfiguration != nil {
-		config.ReleaseTagConfiguration.Name = futureRelease
+		bumpCurrentToFuture(&config.ReleaseTagConfiguration.Name, currentRelease, futureRelease)
 	}
 	for name, release := range config.Releases {
 		if release.Integration != nil {
 			updated := *release.Integration
-			updated.Name = futureRelease
+			bumpCurrentToFuture(&updated.Name, currentRelease, futureRelease)
 			config.Releases[name] = api.UnresolvedRelease{Integration: &updated}
 		}
 		if release.Candidate != nil {
 			updated := *release.Candidate
-			updated.Version = futureRelease
+			bumpCurrentToFuture(&updated.Version, currentRelease, futureRelease)
 			config.Releases[name] = api.UnresolvedRelease{Candidate: &updated}
 		}
 	}
@@ -216,24 +226,24 @@ func updateRelease(config *api.ReleaseBuildConfiguration, currentRelease, future
 func updateImages(config *api.ReleaseBuildConfiguration, currentRelease, futureRelease string) {
 	for name := range config.InputConfiguration.BaseImages {
 		image := config.InputConfiguration.BaseImages[name]
-		if api.RefersToOfficialImage(image.Namespace, api.WithOKD) && image.Name == currentRelease {
-			image.Name = futureRelease
+		if api.RefersToOfficialImage(image.Namespace, api.WithOKD) && strings.Contains(image.Name, currentRelease) {
+			bumpCurrentToFuture(&image.Name, currentRelease, futureRelease)
 		}
 		config.InputConfiguration.BaseImages[name] = image
 	}
 
 	for i := range config.InputConfiguration.BaseRPMImages {
 		image := config.InputConfiguration.BaseRPMImages[i]
-		if api.RefersToOfficialImage(image.Namespace, api.WithOKD) && image.Name == currentRelease {
-			image.Name = futureRelease
+		if api.RefersToOfficialImage(image.Namespace, api.WithOKD) && strings.Contains(image.Name, currentRelease) {
+			bumpCurrentToFuture(&image.Name, currentRelease, futureRelease)
 		}
 		config.InputConfiguration.BaseRPMImages[i] = image
 	}
 
 	if config.InputConfiguration.BuildRootImage != nil {
 		image := config.InputConfiguration.BuildRootImage.ImageStreamTagReference
-		if image != nil && api.RefersToOfficialImage(image.Namespace, api.WithOKD) && image.Name == currentRelease {
-			image.Name = futureRelease
+		if image != nil && api.RefersToOfficialImage(image.Namespace, api.WithOKD) && strings.Contains(image.Name, currentRelease) {
+			bumpCurrentToFuture(&image.Name, currentRelease, futureRelease)
 		}
 		config.InputConfiguration.BuildRootImage.ImageStreamTagReference = image
 	}

@@ -632,6 +632,110 @@ func TestOptions_Bind(t *testing.T) {
 	}
 }
 
+func TestUpdatePromotion(t *testing.T) {
+	testCases := []struct {
+		name           string
+		input          *api.ReleaseBuildConfiguration
+		currentRelease string
+		futureRelease  string
+		output         *api.ReleaseBuildConfiguration
+	}{
+		{
+			name: "Update promotion to future release",
+			input: &api.ReleaseBuildConfiguration{
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Targets: []api.PromotionTarget{
+						{
+							Name:      "current-release",
+							Namespace: "ocp",
+						},
+					},
+				},
+			},
+			currentRelease: "current-release",
+			futureRelease:  "future-release",
+			output: &api.ReleaseBuildConfiguration{
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Targets: []api.PromotionTarget{
+						{
+							Name:      "future-release",
+							Namespace: "ocp",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Update promotion to future release, variants",
+			input: &api.ReleaseBuildConfiguration{
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Targets: []api.PromotionTarget{
+						{
+							Name:      "current-release",
+							Namespace: "ocp",
+						},
+						{
+							Name:      "sriov-current-release",
+							Namespace: "origin",
+						},
+					},
+				},
+			},
+			currentRelease: "current-release",
+			futureRelease:  "future-release",
+			output: &api.ReleaseBuildConfiguration{
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Targets: []api.PromotionTarget{
+						{
+							Name:      "future-release",
+							Namespace: "ocp",
+						},
+						{
+							Name:      "sriov-future-release",
+							Namespace: "origin",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "current-release == future release",
+			input: &api.ReleaseBuildConfiguration{
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Targets: []api.PromotionTarget{
+						{
+							Name:      "current-release",
+							Namespace: "ocp",
+						},
+					},
+				},
+			},
+			currentRelease: "current-release",
+			futureRelease:  "current-release",
+			output: &api.ReleaseBuildConfiguration{
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Targets: []api.PromotionTarget{
+						{
+							Name:      "current-release",
+							Namespace: "ocp",
+							Disabled:  true,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			updatePromotion(tc.input, tc.input, tc.futureRelease, tc.currentRelease)
+			if !reflect.DeepEqual(tc.input, tc.output) {
+				t.Errorf("config mismatch (-want +got):\\n%s", diff.ObjectReflectDiff(tc.output, tc.input))
+			}
+		})
+	}
+}
+
 func TestUpdateRelease(t *testing.T) {
 	testCases := []struct {
 		name           string
@@ -678,6 +782,44 @@ func TestUpdateRelease(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Update integration variant release",
+			input: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					Releases: map[string]api.UnresolvedRelease{
+						"integration": {Integration: &api.Integration{Name: "sriov-current-release"}},
+					},
+				},
+			},
+			currentRelease: "current-release",
+			futureReleases: "future-release",
+			output: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					Releases: map[string]api.UnresolvedRelease{
+						"integration": {Integration: &api.Integration{Name: "sriov-future-release"}},
+					},
+				},
+			},
+		},
+		{
+			name: "Update candidate variant release",
+			input: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					Releases: map[string]api.UnresolvedRelease{
+						"candidate": {Candidate: &api.Candidate{Version: "ptp-current-release"}},
+					},
+				},
+			},
+			currentRelease: "current-release",
+			futureReleases: "future-release",
+			output: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					Releases: map[string]api.UnresolvedRelease{
+						"candidate": {Candidate: &api.Candidate{Version: "ptp-future-release"}},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -685,6 +827,189 @@ func TestUpdateRelease(t *testing.T) {
 			updateRelease(tc.input, tc.currentRelease, tc.futureReleases)
 			if !reflect.DeepEqual(tc.input, tc.output) {
 				t.Errorf("config mismatch (-want +got):\\n%s", diff.ObjectReflectDiff(tc.output, tc.input))
+			}
+		})
+	}
+}
+
+func TestUpdateImages(t *testing.T) {
+	testCases := []struct {
+		name           string
+		input          *api.ReleaseBuildConfiguration
+		currentRelease string
+		futureRelease  string
+		output         *api.ReleaseBuildConfiguration
+	}{
+		{
+			name: "Update base images",
+			input: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BaseImages: map[string]api.ImageStreamTagReference{
+						"base": {
+							Name:      "current-release",
+							Namespace: "ocp",
+							Tag:       "base",
+						},
+					},
+				},
+			},
+			currentRelease: "current-release",
+			futureRelease:  "future-release",
+			output: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BaseImages: map[string]api.ImageStreamTagReference{
+						"base": {
+							Name:      "future-release",
+							Namespace: "ocp",
+							Tag:       "base",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Update base RPM images",
+			input: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BaseRPMImages: map[string]api.ImageStreamTagReference{
+						"rpm": {
+							Name:      "current-release",
+							Namespace: "ocp",
+							Tag:       "rpm",
+						},
+					},
+				},
+			},
+			currentRelease: "current-release",
+			futureRelease:  "future-release",
+			output: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BaseRPMImages: map[string]api.ImageStreamTagReference{
+						"rpm": {
+							Name:      "future-release",
+							Namespace: "ocp",
+							Tag:       "rpm",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Update build root image",
+			input: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BuildRootImage: &api.BuildRootImageConfiguration{
+						ImageStreamTagReference: &api.ImageStreamTagReference{
+							Name:      "current-release",
+							Namespace: "ocp",
+							Tag:       "root",
+						},
+					},
+				},
+			},
+			currentRelease: "current-release",
+			futureRelease:  "future-release",
+			output: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BuildRootImage: &api.BuildRootImageConfiguration{
+						ImageStreamTagReference: &api.ImageStreamTagReference{
+							Name:      "future-release",
+							Namespace: "ocp",
+							Tag:       "root",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Update build root image, variants",
+			input: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BuildRootImage: &api.BuildRootImageConfiguration{
+						ImageStreamTagReference: &api.ImageStreamTagReference{
+							Name:      "ptp-current-release",
+							Namespace: "origin",
+							Tag:       "foo",
+						},
+					},
+				},
+			},
+			currentRelease: "current-release",
+			futureRelease:  "future-release",
+			output: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BuildRootImage: &api.BuildRootImageConfiguration{
+						ImageStreamTagReference: &api.ImageStreamTagReference{
+							Name:      "ptp-future-release",
+							Namespace: "origin",
+							Tag:       "foo",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Update all images",
+			input: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BaseImages: map[string]api.ImageStreamTagReference{
+						"base": {
+							Name:      "current-release",
+							Namespace: "ocp",
+							Tag:       "base",
+						},
+					},
+					BaseRPMImages: map[string]api.ImageStreamTagReference{
+						"rpm": {
+							Name:      "current-release",
+							Namespace: "ocp",
+							Tag:       "rpm",
+						},
+					},
+					BuildRootImage: &api.BuildRootImageConfiguration{
+						ImageStreamTagReference: &api.ImageStreamTagReference{
+							Name:      "current-release",
+							Namespace: "ocp",
+							Tag:       "root",
+						},
+					},
+				},
+			},
+			currentRelease: "current-release",
+			futureRelease:  "future-release",
+			output: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BaseImages: map[string]api.ImageStreamTagReference{
+						"base": {
+							Name:      "future-release",
+							Namespace: "ocp",
+							Tag:       "base",
+						},
+					},
+					BaseRPMImages: map[string]api.ImageStreamTagReference{
+						"rpm": {
+							Name:      "future-release",
+							Namespace: "ocp",
+							Tag:       "rpm",
+						},
+					},
+					BuildRootImage: &api.BuildRootImageConfiguration{
+						ImageStreamTagReference: &api.ImageStreamTagReference{
+							Name:      "future-release",
+							Namespace: "ocp",
+							Tag:       "root",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			updateImages(tc.input, tc.currentRelease, tc.futureRelease)
+			if !reflect.DeepEqual(tc.input, tc.output) {
+				t.Errorf("config mismatch (-want +got):\n%s", diff.ObjectReflectDiff(tc.output, tc.input))
 			}
 		})
 	}

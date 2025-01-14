@@ -3,6 +3,7 @@ package onboard
 import (
 	"context"
 	"os"
+	"slices"
 
 	"github.com/sirupsen/logrus"
 
@@ -36,13 +37,20 @@ func (s *buildClusterStep) Run(ctx context.Context) error {
 		return err
 	}
 
-	buildClusters.Managed = append(buildClusters.Managed, s.clusterInstall.ClusterName)
+	if !slices.Contains(buildClusters.Managed, s.clusterInstall.ClusterName) {
+		buildClusters.Managed = append(buildClusters.Managed, s.clusterInstall.ClusterName)
+	}
+
 	if *s.clusterInstall.Onboard.Hosted {
-		buildClusters.Hosted = append(buildClusters.Hosted, s.clusterInstall.ClusterName)
+		if !slices.Contains(buildClusters.Hosted, s.clusterInstall.ClusterName) {
+			buildClusters.Hosted = append(buildClusters.Hosted, s.clusterInstall.ClusterName)
+		}
 	}
 
 	if *s.clusterInstall.Onboard.OSD {
-		buildClusters.Osd = append(buildClusters.Osd, s.clusterInstall.ClusterName)
+		if !slices.Contains(buildClusters.Osd, s.clusterInstall.ClusterName) {
+			buildClusters.Osd = append(buildClusters.Osd, s.clusterInstall.ClusterName)
+		}
 	}
 
 	rawYaml, err := yaml.Marshal(buildClusters)

@@ -165,18 +165,19 @@ loop:
 }
 
 // queryRedHatCatalog pull information regarding the cart-manager package from the Red Hat catalog.
-func queryRedHatCatalog(ctx context.Context, clientConnFactory GRPCClientConnFactory, port string) (pack *Package, err error) {
+func queryRedHatCatalog(ctx context.Context, clientConnFactory GRPCClientConnFactory, port string) (pack *Package, retErr error) {
+
 	clientConn, err := clientConnFactory("127.0.0.1:"+port,
 		grpc.WithAuthority("localhost"),
 		grpc.WithUserAgent("cluster-init"),
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		err = fmt.Errorf("new client: %w", err)
+		retErr = fmt.Errorf("new client: %w", err)
 		return
 	}
 	defer func() {
-		if err = clientConn.Close(); err != nil {
-			err = fmt.Errorf("close: %w", err)
+		if err := clientConn.Close(); err != nil {
+			retErr = fmt.Errorf("close: %w", err)
 		}
 	}()
 
@@ -192,7 +193,7 @@ func queryRedHatCatalog(ctx context.Context, clientConnFactory GRPCClientConnFac
 	reqReader := strings.NewReader(`{"name": "openshift-cert-manager-operator"}`)
 	reqParser, formatter, err := grpcurl.RequestParserAndFormatter(grpcurl.Format("json"), descSource, reqReader, options)
 	if err != nil {
-		err = fmt.Errorf("req parser n formatter: %w", err)
+		retErr = fmt.Errorf("req parser n formatter: %w", err)
 		return
 	}
 
@@ -206,23 +207,23 @@ func queryRedHatCatalog(ctx context.Context, clientConnFactory GRPCClientConnFac
 
 	symbol := "api.Registry/GetPackage"
 	if err = grpcurl.InvokeRPC(ctx, descSource, clientConn, symbol, []string{}, handler, reqParser.Next); err != nil {
-		err = fmt.Errorf("invoke rpc: %w", err)
+		retErr = fmt.Errorf("invoke rpc: %w", err)
 		return
 	}
 
 	if handler.Status.Code() != codes.OK {
-		err = fmt.Errorf("status code: %s", handler.Status.String())
+		retErr = fmt.Errorf("status code: %s", handler.Status.String())
 		return
 	}
 
 	if err = resWriter.Flush(); err != nil {
-		err = fmt.Errorf("flush response buffer: %w", err)
+		retErr = fmt.Errorf("flush response buffer: %w", err)
 		return
 	}
 
 	pack = &Package{}
 	if err = json.Unmarshal(resBuf.Bytes(), pack); err != nil {
-		err = fmt.Errorf("unmarshal package: %w", err)
+		retErr = fmt.Errorf("unmarshal package: %w", err)
 		return
 	}
 

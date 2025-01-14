@@ -250,6 +250,20 @@ func TestValidateResources(t *testing.T) {
 			expectedErr: true,
 		},
 		{
+			name: "valid ephemeral-storage value passes",
+			input: api.ResourceConfiguration{
+				"*": api.ResourceRequirements{
+					Requests: api.ResourceList{
+						"ephemeral-storage": "60Gi",
+					},
+					Limits: api.ResourceList{
+						"ephemeral-storage": "100Gi",
+					},
+				},
+			},
+			expectedErr: false,
+		},
+		{
 			name: "valid shm value passes",
 			input: api.ResourceConfiguration{
 				"*": api.ResourceRequirements{

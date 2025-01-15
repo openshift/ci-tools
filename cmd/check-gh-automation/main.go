@@ -167,6 +167,11 @@ func checkRepos(repos []string, bots []string, appName string, ignore sets.Set[s
 			"repo": repo,
 		})
 
+		if ignore.Has(org) || ignore.Has(orgRepo) {
+			repoLogger.Infof("skipping ignored repo")
+			continue
+		}
+
 		fullRepo, err := client.GetRepo(org, repo)
 		if err != nil {
 			logger.Errorf("Error obtaining repository from github: %s/%s: %v", org, repo, err)
@@ -191,11 +196,6 @@ func checkRepos(repos []string, bots []string, appName string, ignore sets.Set[s
 			}
 		} else {
 			logger.Warnf("No release repository path was given, ignoring automated branching verification.")
-		}
-
-		if ignore.Has(org) || ignore.Has(orgRepo) {
-			repoLogger.Infof("skipping ignored repo")
-			continue
 		}
 
 		var missingBots []string

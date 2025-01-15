@@ -14,6 +14,20 @@ import (
 	"github.com/openshift/ci-tools/pkg/clusterinit/types/gcp"
 )
 
+const (
+	MachineProfileWorker string = "worker"
+	MachineProfileInfra  string = "infra"
+	BuildsWorkload       string = "builds"
+	TestsWorkload        string = "tests"
+	LongTestsWorkload    string = "longtests"
+	ProwJobsWorkload     string = "prowjobs"
+)
+
+var (
+	CIWorkloadDefaults     []string = []string{BuildsWorkload, TestsWorkload, LongTestsWorkload, ProwJobsWorkload}
+	MachineProfileDefaults []string = []string{MachineProfileWorker, MachineProfileInfra}
+)
+
 type ClusterInstall struct {
 	ClusterName    string    `json:"clusterName,omitempty"`
 	Provision      Provision `json:"provision,omitempty"`
@@ -73,10 +87,6 @@ type QuayioPullThroughCache struct {
 	Patches []manifest.Patch `json:"patches,omitempty"`
 }
 
-type CertificateProjectLabel struct {
-	Key   string `json:"key,omitempty"`
-	Value string `json:"value,omitempty"`
-}
 type CISchedulingWebhook struct {
 	types.SkipStep
 	types.ExcludeManifest
@@ -124,26 +134,6 @@ type OpenshiftMonitoring struct {
 type MultiarchTuningOperator struct {
 	types.SkipStep
 }
-
-const (
-	MachineProfileWorker string = "worker"
-	MachineProfileInfra  string = "infra"
-)
-
-var (
-	MachineProfileDefaults []string = []string{MachineProfileWorker, MachineProfileInfra}
-)
-
-const (
-	BuildsWorkload    string = "builds"
-	TestsWorkload     string = "tests"
-	LongTestsWorkload string = "longtests"
-	ProwJobsWorkload  string = "prowjobs"
-)
-
-var (
-	CIWorkloadDefaults []string = []string{BuildsWorkload, TestsWorkload, LongTestsWorkload, ProwJobsWorkload}
-)
 
 type Certificate struct {
 	types.SkipStep

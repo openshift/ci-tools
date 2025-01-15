@@ -79,9 +79,10 @@ type CertificateProjectLabel struct {
 }
 type CISchedulingWebhook struct {
 	types.SkipStep
+	types.ExcludeManifest
+	Patches     []manifest.Patch        `json:"patches,omitempty"`
 	AWS         aws.CISchedulingWebhook `json:"aws,omitempty"`
 	GenerateDNS bool                    `json:"dns,omitempty"`
-	Patches     []manifest.Patch        `json:"patches,omitempty"`
 }
 
 type MachineSet struct {

@@ -101,7 +101,7 @@ func addCloudSpecificSteps(log *logrus.Entry, kubeClient ctrlruntimeclient.Clien
 	if clusterInstall.Provision.AWS != nil {
 		awsProvider := awsruntime.NewProvider(clusterInstall, kubeClient)
 		steps = append(steps, onboard.NewManifestGeneratorStep(log, cischedulingwebhook.NewGenerator(clusterInstall, cischedulingwebhook.NewAWSProvider(awsProvider))))
-		steps = append(steps, machineset.NewStep(log, clusterInstall, machineset.NewAWSProvider(awsProvider)))
+		steps = append(steps, onboard.NewManifestGeneratorStep(log, machineset.NewGenerator(clusterInstall, machineset.NewAWSProvider(awsProvider))))
 	}
 	return steps
 }

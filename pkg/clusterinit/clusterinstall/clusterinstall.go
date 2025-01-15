@@ -87,8 +87,9 @@ type CISchedulingWebhook struct {
 
 type MachineSet struct {
 	types.SkipStep
-	AWS     aws.MachineSet   `json:"aws,omitempty"`
+	types.ExcludeManifest
 	Patches []manifest.Patch `json:"patches,omitempty"`
+	AWS     aws.MachineSet   `json:"aws,omitempty"`
 }
 
 type MultiarchBuilderController struct {

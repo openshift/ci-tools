@@ -52,11 +52,6 @@ func NewCmd(log *logrus.Entry, opts *runtime.Options) (*cobra.Command, error) {
 	}
 	cmd.AddCommand(updateConfigCmd)
 
-	applyCmd, err := newApplyCmd(log, opts)
-	if err != nil {
-		return nil, fmt.Errorf("apply: %w", err)
-	}
-	cmd.AddCommand(applyCmd)
 	return &cmd, nil
 }
 

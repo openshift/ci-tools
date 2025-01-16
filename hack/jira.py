@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # https://docs.atlassian.com/software/jira/docs/api/REST/latest
 import json
+import os
 import sys
 import urllib.parse
 import urllib.request
@@ -17,7 +18,7 @@ def main():
         print(f'Usage: {sys.argv[0]} session_file sprint', file=sys.stderr)
         sys.exit(1)
     _, session_file, sprint = sys.argv
-    ret = search(open(session_file).read().rstrip(), f'sprint="{sprint}"')
+    ret = search(open(os.path.normpath(session_file)).read().rstrip(), f'sprint="{sprint}"')
     print_issues(*partition(
         filter(
             lambda x: not x['fields']['issuetype']['subtask'],

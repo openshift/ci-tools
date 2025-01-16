@@ -68,6 +68,11 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			if element.MinimumInterval != nil {
 				minimumInterval = *element.MinimumInterval
 			}
+
+			if element.NodeArchitecture != "" && element.NodeArchitecture != cioperatorapi.NodeArchitectureAMD64 {
+				injectCapabilities(g.base.Labels, []string{string(element.NodeArchitecture)})
+			}
+
 			periodic := GeneratePeriodicForTest(g, info, FromConfigSpec(configSpec), func(options *GeneratePeriodicOptions) {
 				options.Cron = cron
 				options.Interval = interval

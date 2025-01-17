@@ -1,6 +1,7 @@
 package onboard
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 	cinitmanifest "github.com/openshift/ci-tools/pkg/clusterinit/manifest"
 	"github.com/openshift/ci-tools/pkg/clusterinit/types"
+	"sigs.k8s.io/yaml"
 )
 
 // manifestGeneratorStep is struct of convenience that enhances a MenifestGenerator capabilities
@@ -51,7 +53,7 @@ func (w *manifestGeneratorStep) Run(ctx context.Context) error {
 			continue
 		}
 
-		manifestBytes, err := cinitmanifest.Marshal(manifests, patches)
+		manifestBytes, err := w.marshal(manifests, patches)
 		if err != nil {
 			return fmt.Errorf("marshal manifests: %w", err)
 		}
@@ -72,6 +74,50 @@ func (w *manifestGeneratorStep) Run(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (w *manifestGeneratorStep) marshal(manifests []interface{}, patches []cinitmanifest.Patch) ([]byte, error) {
+	manifestsBytes := make([][]byte, 0, len(manifests))
+
+	for _, manifest := range manifests {
+		var manifestBytes []byte
+		var manifestMap map[string]interface{}
+
+		switch value := manifest.(type) {
+		case []byte:
+			manifestBytes = value
+			err := yaml.Unmarshal(manifestBytes, &manifestMap)
+			if err != nil {
+				return nil, fmt.Errorf("unmarshal: %w", err)
+			}
+		case map[string]interface{}:
+			manifestMap = value
+			bytes, err := yaml.Marshal(manifest)
+			if err != nil {
+				return nil, fmt.Errorf("marshal: %w", err)
+			}
+			manifestBytes = bytes
+		default:
+			bytes, err := yaml.Marshal(manifest)
+			if err != nil {
+				return nil, fmt.Errorf("marshal: %w", err)
+			}
+			manifestBytes = bytes
+			err = yaml.Unmarshal(manifestBytes, &manifestMap)
+			if err != nil {
+				return nil, fmt.Errorf("unmarshal: %w", err)
+			}
+		}
+
+		manifestBytesPatched, err := cinitmanifest.ApplyPatches(manifestMap, manifestBytes, patches)
+		if err != nil {
+			return nil, err
+		}
+
+		manifestsBytes = append(manifestsBytes, manifestBytesPatched)
+	}
+
+	return bytes.Join(manifestsBytes, []byte("---\n")), nil
 }
 
 func NewManifestGeneratorStep(log *logrus.Entry, manifestGenerator types.ManifestGenerator) *manifestGeneratorStep {

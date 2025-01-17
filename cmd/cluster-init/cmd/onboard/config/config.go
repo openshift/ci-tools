@@ -77,7 +77,7 @@ func runConfigSteps(ctx context.Context, log *logrus.Entry, update bool, cluster
 		onboard.NewMultiarchTuningOperatorStep(log, clusterInstall),
 		onboard.NewManifestGeneratorStep(log, onboard.NewImageRegistryGenerator(clusterInstall)),
 		onboard.NewManifestGeneratorStep(log, onboard.NewOpenshiftMonitoringGenerator(clusterInstall)),
-		onboard.NewPassthroughStep(log, clusterInstall),
+		onboard.NewManifestGeneratorStep(log, onboard.NewPassthroughGenerator(log, clusterInstall)),
 	}
 
 	if clusterInstall.CredentialsMode == operatorv1.CloudCredentialsModeManual {

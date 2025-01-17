@@ -120,6 +120,7 @@ type ImageRegistry struct {
 type PassthroughManifest struct {
 	types.SkipStep
 	types.ExcludeManifest
+	Patches []manifest.Patch `json:"patches,omitempty"`
 }
 
 type CloudabilityAgent struct {

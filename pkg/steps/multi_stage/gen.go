@@ -82,7 +82,7 @@ func (s *multiStageTestStep) generatePods(
 	for _, step := range steps {
 		name := fmt.Sprintf("%s-%s", s.name, step.As)
 		if o := step.OptionalOnSuccess; o != nil && *o && s.flags&allowSkipOnSuccess != 0 && s.flags&hasPrevErrs == 0 {
-			logrus.Infof(fmt.Sprintf("Skipping optional step %s", name))
+			logrus.Infof("Skipping optional step %s", name)
 			continue
 		}
 		image := step.From

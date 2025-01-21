@@ -322,8 +322,8 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 	if err != nil {
 		message := "destination repository does not exist or we cannot access it"
 		if g.failOnNonexistentDst {
-			logger.Errorf(message)
-			return fmt.Errorf(message)
+			logger.Errorf("%s", message)
+			return fmt.Errorf("%s", message)
 		}
 
 		logger.Warn(message)
@@ -395,7 +395,7 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 		if !maybeTooShallow(out) || err != nil {
 			message := "failed to push to destination, no retry possible"
 			logger.WithError(err).WithField("exit-code", exitCode).WithField("output", out).Error(message)
-			return nil, fmt.Errorf(message)
+			return nil, fmt.Errorf("%s", message)
 		}
 
 		if depth == unshallow {
@@ -410,7 +410,7 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 		if shallowErr != nil || shallowExitCode != 0 {
 			message := "failed to push to destination, no retry possible (cannot determine whether our git repo is shallow)"
 			logger.WithError(shallowErr).WithField("exit-code", shallowExitCode).WithField("output", shallowOut).Error(message)
-			return nil, fmt.Errorf(message)
+			return nil, fmt.Errorf("%s", message)
 		}
 
 		switch strings.TrimSpace(shallowOut) {
@@ -427,7 +427,7 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 			message := "failed to push to destination, no retry possible (cannot determine whether our git repo is shallow)"
 			logger.Error(message)
 			logger.Error("`rev-parse --is-shallow-repo` likely not supported by used git")
-			return nil, fmt.Errorf(message)
+			return nil, fmt.Errorf("%s", message)
 		}
 	}
 

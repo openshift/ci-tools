@@ -713,7 +713,7 @@ func CreateCloneHandler(client bugzilla.Client, sortedTargetReleases []string, m
 		allTargetVersions := sets.New[string](sortedTargetReleases...)
 		if !allTargetVersions.Has(req.FormValue("release")) {
 			absentReleaseErrMsg := fmt.Sprintf("invalid argument - %s is not a valid TargetRelease, must be one of %v", req.FormValue("release"), sets.List(allTargetVersions))
-			handleError(w, fmt.Errorf(absentReleaseErrMsg), absentReleaseErrMsg, http.StatusBadRequest, endpoint, bugID, m)
+			handleError(w, fmt.Errorf("%s", absentReleaseErrMsg), absentReleaseErrMsg, http.StatusBadRequest, endpoint, bugID, m)
 			return
 		}
 
@@ -783,7 +783,7 @@ func CreateCloneHandler(client bugzilla.Client, sortedTargetReleases []string, m
 		}
 		if targetRelease >= len(descMajorMinorRelease) {
 			errMsg := "failed to determine source while creating clone"
-			handleError(w, fmt.Errorf(errMsg), errMsg, http.StatusInternalServerError, endpoint, bugID, m)
+			handleError(w, fmt.Errorf("%s", errMsg), errMsg, http.StatusInternalServerError, endpoint, bugID, m)
 			return
 		}
 		var newClones []string

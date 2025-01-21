@@ -313,7 +313,7 @@ func TestStepsRun(t *testing.T) {
 			sort.Strings(actualErrorsString)
 
 			if !reflect.DeepEqual(expectedErrorsString, actualErrorsString) {
-				t.Fatalf(cmp.Diff(expectedErrorsString, actualErrorsString))
+				t.Fatalf("%s", cmp.Diff(expectedErrorsString, actualErrorsString))
 			}
 
 			if !tc.cancelled {

@@ -262,7 +262,7 @@ func TestInjectPrivateMergeType(t *testing.T) {
 		t.Run(tc.id, func(t *testing.T) {
 			injectPrivateMergeType(tc.tideMergeTypes, orgRepos)
 			if !reflect.DeepEqual(tc.tideMergeTypes, tc.expected) {
-				t.Fatalf(cmp.Diff(tc.tideMergeTypes, tc.expected))
+				t.Fatalf("%s", cmp.Diff(tc.tideMergeTypes, tc.expected))
 			}
 		})
 	}

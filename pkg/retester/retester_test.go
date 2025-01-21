@@ -604,7 +604,7 @@ func TestSaveS3BackoffCache(t *testing.T) {
 	sampleErrorMsg := "some AWS error"
 	svcFaulty := &mockS3Client{}
 	svcFaulty.PutObjectFunc = func(input *s3.PutObjectInput) (*s3.PutObjectOutput, error) {
-		return &s3.PutObjectOutput{}, fmt.Errorf(sampleErrorMsg)
+		return &s3.PutObjectOutput{}, fmt.Errorf("%s", sampleErrorMsg)
 	}
 
 	testCases := []struct {
@@ -707,7 +707,7 @@ func TestLoadFromAwsNow(t *testing.T) {
 	faultyMockClient := &mockS3Client{}
 	sampleErrorMsg := "some AWS error"
 	faultyMockClient.GetObjectFunc = func(input *s3.GetObjectInput) (*s3.GetObjectOutput, error) {
-		return nil, fmt.Errorf(sampleErrorMsg)
+		return nil, fmt.Errorf("%s", sampleErrorMsg)
 	}
 
 	mockClientForNoFile := &mockS3Client{}

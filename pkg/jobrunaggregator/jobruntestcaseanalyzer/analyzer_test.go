@@ -61,12 +61,12 @@ func TestGetJobs(t *testing.T) {
 				t.Fatalf("%s flag set parse returned error %#v", name, err)
 			}
 
-			if f.ExcludeJobNames != nil && len(f.ExcludeJobNames) > 0 {
+			if len(f.ExcludeJobNames) > 0 {
 				jobGetter.excludeJobNames = sets.Set[string]{}
 				jobGetter.excludeJobNames.Insert(f.ExcludeJobNames...)
 			}
 
-			if f.IncludeJobNames != nil && len(f.IncludeJobNames) > 0 {
+			if len(f.IncludeJobNames) > 0 {
 				jobGetter.includeJobNames = sets.Set[string]{}
 				jobGetter.includeJobNames.Insert(f.IncludeJobNames...)
 			}

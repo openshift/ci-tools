@@ -169,7 +169,7 @@ func TestCheckPrerequisites(t *testing.T) {
 			actualErr := serv.checkPrerequisites(logrus.WithField("id", tc.id), fc.PullRequests[1111], ice)
 
 			if !reflect.DeepEqual(actualErr, tc.expectedError) {
-				t.Fatalf(cmp.Diff(actualErr.Error(), tc.expectedError.Error()))
+				t.Fatalf("%s", cmp.Diff(actualErr.Error(), tc.expectedError.Error()))
 			}
 		})
 	}

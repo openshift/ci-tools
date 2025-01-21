@@ -77,7 +77,7 @@ func (t *T) Fatalf(format string, args ...interface{}) {
 }
 
 func (t *T) Fatal(args ...interface{}) {
-	t.fatals <- fmt.Errorf(fmt.Sprintln(args...))
+	t.fatals <- fmt.Errorf("%s", fmt.Sprintln(args...))
 }
 
 // Wait receives data from producer threads and forwards it

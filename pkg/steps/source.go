@@ -674,7 +674,7 @@ func waitForBuild(
 			// This second load happens much later and must look at the latest
 			// version of the object.
 			if err := checkPending(ctx, podClient, ret.Load(), timeout, time.Now()); err != nil {
-				logrus.Infof(err.Error())
+				logrus.Infof("%s", err.Error())
 				return err
 			}
 		}

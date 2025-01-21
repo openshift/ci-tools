@@ -444,7 +444,7 @@ func verifyClusterProfileOwnership(profile api.ClusterProfileDetails, m *api.Met
 	if m == nil || m.Org == "" {
 		return fmt.Errorf("can't do ownership check, metadata not defined")
 	}
-	if profile.Owners == nil || len(profile.Owners) == 0 {
+	if len(profile.Owners) == 0 {
 		return nil
 	}
 	for _, owner := range profile.Owners {
@@ -462,7 +462,7 @@ func verifyClusterClaimOwnership(claim api.ClusterClaimDetails, m *api.Metadata)
 	if m == nil || m.Org == "" {
 		return fmt.Errorf("can't do ownership check, metadata not defined")
 	}
-	if claim.Owners == nil || len(claim.Owners) == 0 {
+	if len(claim.Owners) == 0 {
 		return nil
 	}
 	for _, owner := range claim.Owners {

@@ -162,7 +162,7 @@ func (r *reporter) report(request Request) {
 		reportMsg = fmt.Sprintf("Reporting job state '%s' with reason '%s'", request.State, request.Reason)
 	}
 
-	logrus.Infof(reportMsg)
+	logrus.Infof("%s", reportMsg)
 	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/result", r.address), bytes.NewReader(data))
 	if err != nil {
 		logrus.Tracef("could not create report request: %v", err)

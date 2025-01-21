@@ -421,7 +421,7 @@ func TestGetChangedPresubmits(t *testing.T) {
 			before, after := testCase.configGenerator(t)
 			p := GetChangedPresubmits(before, after, logrus.NewEntry(logrus.New()))
 			if !equality.Semantic.DeepEqual(p, testCase.expected) {
-				t.Fatalf(cmp.Diff(testCase.expected["org/repo"], p["org/repo"], ignoreUnexported))
+				t.Fatalf("%s", cmp.Diff(testCase.expected["org/repo"], p["org/repo"], ignoreUnexported))
 			}
 		})
 	}
@@ -947,7 +947,7 @@ func TestGetChangedPeriodics(t *testing.T) {
 			before, after := testCase.configGenerator(t)
 			p := GetChangedPeriodics(before, after, logrus.NewEntry(logrus.New()))
 			if !reflect.DeepEqual(testCase.expected, p) {
-				t.Fatalf(cmp.Diff(testCase.expected, p, ignoreUnexported))
+				t.Fatalf("%s", cmp.Diff(testCase.expected, p, ignoreUnexported))
 			}
 		})
 	}

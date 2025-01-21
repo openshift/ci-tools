@@ -1,4 +1,4 @@
 build_root_image:
   namespace: ci
   name: ci-tools-build-root
-  tag: "1.22"
+  tag: "1.23"

@@ -165,7 +165,7 @@ func TestShardProwConfig(t *testing.T) {
 		{
 			name: "Tide queries get sharded",
 			in: &config.ProwConfig{Tide: config.Tide{TideGitHubConfig: config.TideGitHubConfig{Queries: config.TideQueries{
-				{Orgs: []string{"openshift", "openshift-priv"}, Repos: []string{"kube-reporting/ghostunnel", "kube-reporting/presto"}, Labels: []string{"lgtm", "approved", "bugzilla/valid-bug"}},
+				{Orgs: []string{"openshift", "openshift-priv"}, Repos: []string{"kube-reporting/ghostunnel", "kube-reporting/presto"}, Labels: []string{"lgtm", "approved", "jira/valid-bug"}},
 				{Orgs: []string{"codeready-toolchain", "integr8ly"}, Repos: []string{"containers/buildah", "containers/common"}, Labels: []string{"lgtm", "approved"}},
 				{Orgs: []string{"integr8ly"}, Author: "openshift-bot"},
 				{Repos: []string{"openshift/release"}, Author: "openshift-bot"},
@@ -211,7 +211,7 @@ func TestShardProwConfig(t *testing.T) {
   - labels:
     - lgtm
     - approved
-    - bugzilla/valid-bug
+    - jira/valid-bug
     repos:
     - kube-reporting/ghostunnel
 `,
@@ -220,7 +220,7 @@ func TestShardProwConfig(t *testing.T) {
   - labels:
     - lgtm
     - approved
-    - bugzilla/valid-bug
+    - jira/valid-bug
     repos:
     - kube-reporting/presto
 `,
@@ -229,7 +229,7 @@ func TestShardProwConfig(t *testing.T) {
   - labels:
     - lgtm
     - approved
-    - bugzilla/valid-bug
+    - jira/valid-bug
     orgs:
     - openshift-priv
 `,
@@ -238,7 +238,7 @@ func TestShardProwConfig(t *testing.T) {
   - labels:
     - lgtm
     - approved
-    - bugzilla/valid-bug
+    - jira/valid-bug
     orgs:
     - openshift
 `,

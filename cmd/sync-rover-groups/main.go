@@ -105,7 +105,7 @@ func main() {
 
 		if opts.printConfig {
 			if err := group.PrintConfig(config); err != nil {
-				logrus.WithError(err).Fatal("differences found on groups file")
+				logrus.WithError(err).Fatal("error printing groups config file")
 			}
 			return
 		}

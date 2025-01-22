@@ -31,6 +31,7 @@ type options struct {
 	manifestDirs     sets.Set[string]
 	ldapServer       string
 	validateSubjects bool
+	printConfig      bool
 	groupsFile       string
 	configFile       string
 	githubUsersFile  string
@@ -40,12 +41,13 @@ func parseOptions() *options {
 	opts := &options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&opts.logLevelRaw, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
-	fs.Var(&opts.manifestDirRaw, "manifest-dir", "directory containing Kubernetes manifests. Can be specified multiple times.")
+	fs.Var(&opts.manifestDirRaw, "manifest-dir", "directory containing Kubernetes manifests. Can be specified multiple times")
 	fs.BoolVar(&opts.validateSubjects, "validate-subjects", false, "Whether to validate subjects such as group and users in the manifests")
+	fs.BoolVar(&opts.printConfig, "print-config", false, "Print the config, removing spaces, comments and ordering the keys.")
 	fs.StringVar(&opts.ldapServer, "ldap-server", "ldap.corp.redhat.com", "LDAP server")
 	fs.StringVar(&opts.groupsFile, "groups-file", "/tmp/groups.yaml", "The file to store the groups in yaml format")
 	fs.StringVar(&opts.configFile, "config-file", "", "The yaml file storing the config file for the groups")
-	fs.StringVar(&opts.githubUsersFile, "github-users-file", "", "File used to store GitHub users.")
+	fs.StringVar(&opts.githubUsersFile, "github-users-file", "", "File used to store GitHub users")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse args")
 	}
@@ -100,6 +102,15 @@ func main() {
 			logrus.WithError(err).Fatal("failed to load config")
 		}
 		config = loadedConfig
+
+		if opts.printConfig {
+			if err := group.PrintConfig(config); err != nil {
+				logrus.WithError(err).Fatal("error printing groups config file")
+			}
+			return
+		}
+	} else if opts.printConfig {
+		logrus.Info("No --config-file specified, ignoring --print-config.")
 	}
 
 	if err := addSchemes(); err != nil {

@@ -56,6 +56,16 @@ func LoadConfig(file string) (*Config, error) {
 	return config, nil
 }
 
+// PrintConfig deserializes and re-serializes the config. Removing spaces and comments, and sorting the groups in the process prior to printing to standard out
+func PrintConfig(c *Config) error {
+	rawYaml, err := yaml.Marshal(c)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%s", rawYaml)
+	return nil
+}
+
 func (c *Config) validate() error {
 	for k, v := range c.Groups {
 		if k == OpenshiftPrivAdminsGroup || v.RenameTo == OpenshiftPrivAdminsGroup {

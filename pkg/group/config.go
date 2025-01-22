@@ -56,7 +56,7 @@ func LoadConfig(file string) (*Config, error) {
 	return config, nil
 }
 
-// Remove spaces, comments, sort the groups and write a new file
+// PrintConfig deserializes and re-serializes the config. Removing spaces and comments, and sorting the groups in the process prior to printing to standard out
 func PrintConfig(c *Config) error {
 	rawYaml, err := yaml.Marshal(c)
 	if err != nil {

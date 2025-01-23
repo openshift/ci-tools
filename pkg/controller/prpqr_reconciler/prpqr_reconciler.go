@@ -356,7 +356,7 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 			// it successfully.
 			key := ctrlruntimeclient.ObjectKey{Namespace: prowjob.Namespace, Name: prowjob.Name}
 			retrievedJob := prowv1.ProwJob{}
-			if err := wait.Poll(second, r.jobTriggerWaitDuration, func() (bool, error) {
+			if err := wait.Poll(second/10, r.jobTriggerWaitDuration, func() (bool, error) {
 				if err := r.client.Get(ctx, key, &retrievedJob); err != nil {
 					if kerrors.IsNotFound(err) {
 						return false, nil
@@ -713,7 +713,7 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 		return nil, fmt.Errorf("failed to default the ProwJob: %w", err)
 	}
 
-	pj := pjutil.NewProwJob(pjutil.PeriodicSpec(*periodic), labels, annotations, pjutil.RequireScheduling(r.prowConfigGetter.Config().Scheduler.Enabled))
+	pj := pjutil.NewProwJob(pjutil.PeriodicSpec(*periodic), labels, annotations)
 	pj.Namespace = prpqrNamespace
 
 	return &pj, nil

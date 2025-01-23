@@ -51,22 +51,6 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
-			name: "basic case with scheduling",
-			prpqr: []ctrlruntimeclient.Object{
-				&v1.PullRequestPayloadQualificationRun{
-					ObjectMeta: metav1.ObjectMeta{Name: "prpqr-test", Namespace: "test-namespace"},
-					Spec: v1.PullRequestPayloadTestSpec{
-						PullRequests: []v1.PullRequestUnderTest{{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: &v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}}},
-						Jobs: v1.PullRequestPayloadJobSpec{
-							ReleaseControllerConfig: v1.ReleaseControllerConfig{OCP: "4.9", Release: "ci", Specifier: "informing"},
-							Jobs:                    []v1.ReleaseJobSpec{{CIOperatorConfig: v1.CIOperatorMetadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"}, Test: "test-name"}},
-						},
-					},
-				},
-			},
-			prowConfig: prowconfig.Config{ProwConfig: prowconfig.ProwConfig{Scheduler: prowconfig.Scheduler{Enabled: true}}},
-		},
-		{
 			name: "basic case without PR; testing specified base",
 			prpqr: []ctrlruntimeclient.Object{
 				&v1.PullRequestPayloadQualificationRun{
@@ -149,22 +133,6 @@ func TestReconcile(t *testing.T) {
 					Status: prowv1.ProwJobStatus{State: "triggered"},
 				},
 			},
-		},
-		{
-			name: "url not found in created job",
-			prpqr: []ctrlruntimeclient.Object{
-				&v1.PullRequestPayloadQualificationRun{
-					ObjectMeta: metav1.ObjectMeta{Name: "prpqr-test", Namespace: "test-namespace"},
-					Spec: v1.PullRequestPayloadTestSpec{
-						PullRequests: []v1.PullRequestUnderTest{{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: &v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}}},
-						Jobs: v1.PullRequestPayloadJobSpec{
-							ReleaseControllerConfig: v1.ReleaseControllerConfig{OCP: "4.9", Release: "ci", Specifier: "informing"},
-							Jobs:                    []v1.ReleaseJobSpec{{CIOperatorConfig: v1.CIOperatorMetadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"}, Test: "test-name"}},
-						},
-					},
-				},
-			},
-			omitStatusURL: true,
 		},
 		{
 			name: "multiple PRs from different repositories",
@@ -257,22 +225,6 @@ func TestReconcile(t *testing.T) {
 					},
 				},
 			},
-		},
-		{
-			name: "basic aggregated case with scheduling",
-			prpqr: []ctrlruntimeclient.Object{
-				&v1.PullRequestPayloadQualificationRun{
-					ObjectMeta: metav1.ObjectMeta{Name: "prpqr-test", Namespace: "test-namespace"},
-					Spec: v1.PullRequestPayloadTestSpec{
-						PullRequests: []v1.PullRequestUnderTest{{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: &v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}}},
-						Jobs: v1.PullRequestPayloadJobSpec{
-							ReleaseControllerConfig: v1.ReleaseControllerConfig{OCP: "4.9", Release: "ci", Specifier: "informing"},
-							Jobs:                    []v1.ReleaseJobSpec{{CIOperatorConfig: v1.CIOperatorMetadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"}, Test: "test-name", AggregatedCount: 2}},
-						},
-					},
-				},
-			},
-			prowConfig: prowconfig.Config{ProwConfig: prowconfig.ProwConfig{Scheduler: prowconfig.Scheduler{Enabled: true}}},
 		},
 		{
 			name: "override initial and base payload pullspecs",

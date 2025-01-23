@@ -89,7 +89,7 @@ update-vendor:
 		-e GO111MODULE=on \
 		-e GOPROXY=https://proxy.golang.org \
 		-e GOCACHE=/tmp/go-build-cache \
-		registry.ci.openshift.org/openshift/release:golang-1.21 \
+		registry.ci.openshift.org/openshift/release:rhel-9-release-golang-1.23-openshift-4.19 \
 		/bin/bash -c "go mod tidy && go mod vendor"
 .PHONY: update-vendor
 

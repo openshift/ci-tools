@@ -42,7 +42,6 @@ func Initialize(t testhelper.TestingTInterface, tmpDir string, r *rand.Rand, str
 		"--config.file", prometheusConfig,
 		"--storage.tsdb.path", prometheusDir,
 		"--storage.tsdb.retention.time", "20d",
-		"--storage.tsdb.allow-overlapping-blocks",
 		"--log.level", "info",
 	}
 	prometheusCtx, prometheusCancel := context.WithCancel(interrupts.Context())

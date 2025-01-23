@@ -44,7 +44,7 @@ func gatherOptions() (*options, error) {
 	o.ConfigOptions.AddFlags(fs)
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
 	fs.StringVar(&o.namespace, "namespace", "ci", "In which namespace the operation will take place")
-	fs.Int64Var(&o.jobTriggerWaitInSeconds, "job-trigger-wait-seconds", 60, "Amount of seconds to wait for job to trigger in order to update status")
+	fs.Int64Var(&o.jobTriggerWaitInSeconds, "job-trigger-wait-seconds", 20, "Amount of seconds to wait for job to trigger in order to update status")
 	fs.Int64Var(&o.defaultAggregatorJobTimeoutInHour, "aggregator-job-timeout", 6, "Amount of hours to wait for job to timeout in order to update status")
 	fs.Int64Var(&o.defaultMultiRefJobTimeoutInHour, "multi-ref-job-timeout", 6, "Amount of hours to wait for job to timeout in order to update status")
 	fs.StringVar(&o.dispatcherAddress, "dispatcher-address", "http://prowjob-dispatcher.ci.svc.cluster.local:8080", "Address of prowjob-dispatcher server.")

@@ -362,10 +362,6 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 						return false, nil
 					}
 					return false, fmt.Errorf("getting prowJob failed: %w", err)
-				} else if retrievedJob.Status.URL == "" {
-					// There will be no URL yet if the job is still in the "Scheduling" state, we should try again until we have one
-					logger.Infof("no URL exists yet for job: %s", prowjob.Name)
-					return false, nil
 				}
 				return true, nil
 			}); err != nil {

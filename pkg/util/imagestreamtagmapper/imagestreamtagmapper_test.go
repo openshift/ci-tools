@@ -214,15 +214,11 @@ func TestImageStreamTagMapper(t *testing.T) {
 
 type trackingWorkqueue struct {
 	t *testing.T
-	workqueue.RateLimitingInterface
+	workqueue.TypedRateLimitingInterface[reconcile.Request]
 	received sets.Set[string]
 }
 
-func (t *trackingWorkqueue) Add(item interface{}) {
-	request, ok := item.(reconcile.Request)
-	if !ok {
-		t.t.Fatalf("workqueue got item that was not reconcile.Request but %T", item)
-	}
+func (t *trackingWorkqueue) Add(request reconcile.Request) {
 	if t.received == nil {
 		t.received = sets.Set[string]{}
 	}

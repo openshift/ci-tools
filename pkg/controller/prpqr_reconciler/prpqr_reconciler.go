@@ -130,7 +130,7 @@ func AddToManager(mgr manager.Manager, ns string, rc injectingResolverClient, pr
 	return nil
 }
 
-func prpqrHandler() handler.TypedEventHandler[*v1.PullRequestPayloadQualificationRun] {
+func prpqrHandler() handler.TypedEventHandler[*v1.PullRequestPayloadQualificationRun, reconcile.Request] {
 	return handler.TypedEnqueueRequestsFromMapFunc[*v1.PullRequestPayloadQualificationRun](func(ctx context.Context, prpqr *v1.PullRequestPayloadQualificationRun) []reconcile.Request {
 		return []reconcile.Request{
 			{NamespacedName: types.NamespacedName{Namespace: prpqr.Namespace, Name: prpqr.Name}},

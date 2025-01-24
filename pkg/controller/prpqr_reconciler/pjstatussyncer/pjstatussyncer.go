@@ -70,7 +70,7 @@ func AddToManager(mgr controllerruntime.Manager, ns string) error {
 	return nil
 }
 
-func pjHandler() handler.TypedEventHandler[*prowv1.ProwJob] {
+func pjHandler() handler.TypedEventHandler[*prowv1.ProwJob, reconcile.Request] {
 	return handler.TypedEnqueueRequestsFromMapFunc[*prowv1.ProwJob](func(ctx context.Context, pj *prowv1.ProwJob) []reconcile.Request {
 		return []reconcile.Request{{NamespacedName: types.NamespacedName{Namespace: pj.Namespace, Name: pj.Name}}}
 	})

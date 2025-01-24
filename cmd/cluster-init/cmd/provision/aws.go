@@ -10,6 +10,7 @@ import (
 	awsruntime "github.com/openshift/ci-tools/cmd/cluster-init/runtime/aws"
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/clusterinit/provision/aws"
+	_ "github.com/openshift/cloud-credential-operator/pkg/apis"
 )
 
 func newProvisionAWS(log *logrus.Entry, opts *runtime.Options) *cobra.Command {

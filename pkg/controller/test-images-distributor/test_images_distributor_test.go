@@ -132,19 +132,15 @@ type hijackingQueue struct {
 	// We must embedd it here to satisfy the RateLimitingInterface for the handler,
 	// but we leave it as nil, as we only expect the `AddRateLimited` to get called,
 	// everything else is a bug in our (test-) code, so having that panic is fine.
-	workqueue.RateLimitingInterface
+	workqueue.TypedRateLimitingInterface[reconcile.Request]
 	lock     sync.Mutex
 	received []reconcile.Request
 }
 
-func (hq *hijackingQueue) Add(item interface{}) {
-	asserted, ok := item.(reconcile.Request)
-	if !ok {
-		panic(fmt.Sprintf("expected to get reconcileRequest, got %T", item))
-	}
+func (hq *hijackingQueue) Add(item reconcile.Request) {
 	hq.lock.Lock()
 	defer hq.lock.Unlock()
-	hq.received = append(hq.received, asserted)
+	hq.received = append(hq.received, item)
 }
 
 func reconcileRequest(namespace, name string) reconcile.Request {

@@ -193,7 +193,7 @@ func sourceForConfigChangeChannel(buildClusterNames sets.Set[string], registryCl
 	return channelSource
 }
 
-func testImageStreamTagImportHandlerForNamedCluster(clusterName string) handler.TypedEventHandler[*testimagestreamtagimportv1.TestImageStreamTagImport] {
+func testImageStreamTagImportHandlerForNamedCluster(clusterName string) handler.TypedEventHandler[*testimagestreamtagimportv1.TestImageStreamTagImport, reconcile.Request] {
 	return handler.TypedEnqueueRequestsFromMapFunc[*testimagestreamtagimportv1.TestImageStreamTagImport](func(ctx context.Context, testimagestreamtagimport *testimagestreamtagimportv1.TestImageStreamTagImport) []reconcile.Request {
 		return []reconcile.Request{{NamespacedName: types.NamespacedName{
 			Namespace: clusterName + clusterAndNamespaceDelimiter + testimagestreamtagimport.Spec.Namespace,
@@ -202,7 +202,7 @@ func testImageStreamTagImportHandlerForNamedCluster(clusterName string) handler.
 	})
 }
 
-func testImageStreamTagImportHandler(l *logrus.Entry, ignoreClusterNames sets.Set[string]) handler.TypedEventHandler[*testimagestreamtagimportv1.TestImageStreamTagImport] {
+func testImageStreamTagImportHandler(l *logrus.Entry, ignoreClusterNames sets.Set[string]) handler.TypedEventHandler[*testimagestreamtagimportv1.TestImageStreamTagImport, reconcile.Request] {
 	return handler.TypedEnqueueRequestsFromMapFunc[*testimagestreamtagimportv1.TestImageStreamTagImport](func(ctx context.Context, testimagestreamtagimport *testimagestreamtagimportv1.TestImageStreamTagImport) []reconcile.Request {
 		if testimagestreamtagimport.Spec.ClusterName == "" {
 			// This should never happen
@@ -227,7 +227,7 @@ type objectFilter func(types.NamespacedName) bool
 // * Filters out the ones that are not in use
 // Note: We can not use a predicate because that is directly applied on the source and the source yields ImageStreams, not ImageStreamTags
 // * Creates a reconcile.Request per cluster and ImageStreamTag
-func registryClusterHandlerFactory(buildClusters sets.Set[string], filter objectFilter) handler.TypedEventHandler[*imagev1.ImageStream] {
+func registryClusterHandlerFactory(buildClusters sets.Set[string], filter objectFilter) handler.TypedEventHandler[*imagev1.ImageStream, reconcile.Request] {
 	return imagestreamtagmapper.New(func(in reconcile.Request) []reconcile.Request {
 		if !filter(in.NamespacedName) {
 			return nil

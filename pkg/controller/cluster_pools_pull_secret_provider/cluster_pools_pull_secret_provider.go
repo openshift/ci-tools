@@ -61,7 +61,7 @@ func AddToManager(manager manager.Manager,
 
 }
 
-func clusterPoolHandler(sourcePullSecretNamespace string) handler.TypedEventHandler[*hivev1.ClusterPool] {
+func clusterPoolHandler(sourcePullSecretNamespace string) handler.TypedEventHandler[*hivev1.ClusterPool, reconcile.Request] {
 	return handler.TypedEnqueueRequestsFromMapFunc[*hivev1.ClusterPool](func(ctx context.Context, clusterPool *hivev1.ClusterPool) []reconcile.Request {
 		if clusterPool.Namespace == sourcePullSecretNamespace {
 			return nil
@@ -94,7 +94,7 @@ func secretHandler(
 	sourcePullSecretNamespace string,
 	sourcePullSecretName string,
 	client ctrlruntimeclient.Client,
-) handler.TypedEventHandler[*corev1.Secret] {
+) handler.TypedEventHandler[*corev1.Secret, reconcile.Request] {
 	return handler.TypedEnqueueRequestsFromMapFunc[*corev1.Secret](func(ctx context.Context, secret *corev1.Secret) []reconcile.Request {
 		if secret.Name != sourcePullSecretName {
 			return nil

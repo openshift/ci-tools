@@ -376,7 +376,7 @@ func (s *server) generateProwJob(jr jobRun) (*prowv1.ProwJob, error) {
 		}
 	}
 	if primaryRef == nil {
-		return nil, fmt.Errorf("no ref for requested test included in command")
+		return nil, fmt.Errorf("No ref for requested test included in command. The org, repo, and branch containing the requested test need to be targeted by at least one of the included PRs.")
 	}
 
 	if err := s.prowConfigGetter.Defaulter().DefaultPeriodic(periodic); err != nil {

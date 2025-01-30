@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	configv1 "github.com/openshift/api/config/v1"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	installertypes "github.com/openshift/installer/pkg/types"
 
 	"github.com/openshift/ci-tools/cmd/cluster-init/runtime"
@@ -79,7 +80,12 @@ func runConfigSteps(ctx context.Context, log *logrus.Entry, update bool, cluster
 		onboard.NewPassthroughStep(log, clusterInstall),
 	}
 
+	if clusterInstall.CredentialsMode == operatorv1.CloudCredentialsModeManual {
+		steps = append(steps, onboard.NewManifestGeneratorStep(log, onboard.NewCloudCredentialGenerator(clusterInstall)))
+	}
+
 	steps = addCloudSpecificSteps(log, update, ctrlClient, kubeClient, steps, clusterInstall)
+
 	if !update {
 		steps = append(steps, onboard.NewBuildClusterStep(log, clusterInstall))
 		steps = append(steps, onboard.NewManifestGeneratorStep(log, certmanager.NewGenerator(clusterInstall, ctrlClient, portforward.SPDYPortForwarder, grpc.NewClient)))
@@ -90,6 +96,7 @@ func runConfigSteps(ctx context.Context, log *logrus.Entry, update bool, cluster
 			return fmt.Errorf("run config step %s: %w", step.Name(), err)
 		}
 	}
+
 	return nil
 }
 

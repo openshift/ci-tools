@@ -127,3 +127,7 @@ func MultiarchTuningOperatorPath(releaseRepo, clusterName string) string {
 func CertManagerOperatorManifestsPath(releaseRepo, clusterName string) string {
 	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "cert-manager-operator")
 }
+
+func CloudCredentialManifestsPath(releaseRepo, clusterName string) string {
+	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "cloud-credential")
+}

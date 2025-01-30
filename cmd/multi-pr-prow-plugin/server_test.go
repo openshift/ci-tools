@@ -939,7 +939,7 @@ func TestGenerateProwJob(t *testing.T) {
 					},
 				},
 			},
-			expectedError: errors.New("no ref for requested test included in command"),
+			expectedError: errors.New("No ref for requested test included in command. The org, repo, and branch containing the requested test need to be targeted by at least one of the included PRs."),
 		},
 	}
 	for _, tc := range testCases {

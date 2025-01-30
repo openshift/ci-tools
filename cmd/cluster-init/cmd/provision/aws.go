@@ -10,7 +10,6 @@ import (
 	awsruntime "github.com/openshift/ci-tools/cmd/cluster-init/runtime/aws"
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/clusterinit/provision/aws"
-	_ "github.com/openshift/cloud-credential-operator/pkg/apis"
 )
 
 func newProvisionAWS(log *logrus.Entry, opts *runtime.Options) *cobra.Command {
@@ -39,7 +38,7 @@ func newAWSCreateStacks(log *logrus.Entry, opts *runtime.Options) *cobra.Command
 			if err != nil {
 				return fmt.Errorf("load cluster-install: %w", err)
 			}
-			awsProvider := awsruntime.NewProvider(clusterInstall, nil)
+			awsProvider := awsruntime.NewProvider(clusterInstall, awsruntime.ConfigFromDefaults())
 			step := aws.NewCreateAWSStacksStep(log, clusterInstall, awsProvider, nil, nil)
 			if err := step.Run(ctx); err != nil {
 				return fmt.Errorf("%s: %w", step.Name(), err)

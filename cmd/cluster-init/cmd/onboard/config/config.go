@@ -13,6 +13,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
@@ -56,7 +57,7 @@ func NewCmd(log *logrus.Entry, opts *runtime.Options) (*cobra.Command, error) {
 }
 
 func runConfigSteps(ctx context.Context, log *logrus.Entry, update bool, clusterInstall *clusterinstall.ClusterInstall,
-	kubeClient ctrlruntimeclient.Client) error {
+	ctrlClient ctrlruntimeclient.Client, kubeClient *kubernetes.Clientset) error {
 	steps := []clusterinittypes.Step{
 		onboard.NewProwJobStep(log, clusterInstall),
 		onboard.NewBuildClusterDirStep(log, clusterInstall),
@@ -66,9 +67,9 @@ func runConfigSteps(ctx context.Context, log *logrus.Entry, update bool, cluster
 		onboard.NewSanitizeProwjobStep(log, clusterInstall),
 		onboard.NewSyncRoverGroupStep(log, clusterInstall),
 		onboard.NewProwPluginStep(log, clusterInstall),
-		onboard.NewManifestGeneratorStep(log, onboard.NewDexGenerator(kubeClient, clusterInstall)),
-		onboard.NewManifestGeneratorStep(log, onboard.NewQuayioPullThroughCacheStep(clusterInstall, kubeClient)),
-		onboard.NewManifestGeneratorStep(log, onboard.NewCertificateGenerator(clusterInstall, kubeClient)),
+		onboard.NewManifestGeneratorStep(log, onboard.NewDexGenerator(ctrlClient, clusterInstall)),
+		onboard.NewManifestGeneratorStep(log, onboard.NewQuayioPullThroughCacheStep(clusterInstall, ctrlClient)),
+		onboard.NewManifestGeneratorStep(log, onboard.NewCertificateGenerator(clusterInstall, ctrlClient)),
 		onboard.NewManifestGeneratorStep(log, onboard.NewCloudabilityAgentGenerator(clusterInstall)),
 		onboard.NewCommonSymlinkStep(log, clusterInstall),
 		onboard.NewManifestGeneratorStep(log, onboard.NewMultiarchBuilderControllerGenerator(clusterInstall)),
@@ -78,10 +79,10 @@ func runConfigSteps(ctx context.Context, log *logrus.Entry, update bool, cluster
 		onboard.NewPassthroughStep(log, clusterInstall),
 	}
 
-	steps = addCloudSpecificSteps(log, kubeClient, steps, clusterInstall)
+	steps = addCloudSpecificSteps(log, update, ctrlClient, kubeClient, steps, clusterInstall)
 	if !update {
 		steps = append(steps, onboard.NewBuildClusterStep(log, clusterInstall))
-		steps = append(steps, onboard.NewManifestGeneratorStep(log, certmanager.NewGenerator(clusterInstall, kubeClient, portforward.SPDYPortForwarder, grpc.NewClient)))
+		steps = append(steps, onboard.NewManifestGeneratorStep(log, certmanager.NewGenerator(clusterInstall, ctrlClient, portforward.SPDYPortForwarder, grpc.NewClient)))
 	}
 
 	for _, step := range steps {
@@ -92,9 +93,15 @@ func runConfigSteps(ctx context.Context, log *logrus.Entry, update bool, cluster
 	return nil
 }
 
-func addCloudSpecificSteps(log *logrus.Entry, kubeClient ctrlruntimeclient.Client, steps []clusterinittypes.Step, clusterInstall *clusterinstall.ClusterInstall) []clusterinittypes.Step {
+func addCloudSpecificSteps(log *logrus.Entry, update bool, ctrlClient ctrlruntimeclient.Client, kubeClient *kubernetes.Clientset, steps []clusterinittypes.Step, clusterInstall *clusterinstall.ClusterInstall) []clusterinittypes.Step {
 	if clusterInstall.Provision.AWS != nil {
-		awsProvider := awsruntime.NewProvider(clusterInstall, kubeClient)
+		var configGetter awsruntime.ConfigGetter
+		if update {
+			configGetter = awsruntime.ConfigFromCluster(kubeClient, ctrlClient)
+		} else {
+			configGetter = awsruntime.ConfigFromDefaults()
+		}
+		awsProvider := awsruntime.NewProvider(clusterInstall, configGetter)
 		steps = append(steps, onboard.NewManifestGeneratorStep(log, cischedulingwebhook.NewGenerator(clusterInstall, cischedulingwebhook.NewAWSProvider(awsProvider))))
 		steps = append(steps, onboard.NewManifestGeneratorStep(log, machineset.NewGenerator(clusterInstall, machineset.NewAWSProvider(awsProvider))))
 	}

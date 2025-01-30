@@ -9,6 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	prowflagutil "sigs.k8s.io/prow/pkg/flagutil"
@@ -61,13 +62,24 @@ func updateConfig(ctx context.Context, log *logrus.Entry, opts *updateConfigOpti
 	if err != nil {
 		return fmt.Errorf("load kubeconfigs: %w", err)
 	}
-	newKubeClient := func(kubeconfigs map[string]rest.Config, clusterName string) (ctrlruntimeclient.Client, *rest.Config, error) {
+	newKubeClients := func(kubeconfigs map[string]rest.Config, clusterName string) (ctrlruntimeclient.Client, *kubernetes.Clientset, *rest.Config, error) {
+		var kubeClient *kubernetes.Clientset
 		config, found := kubeconfigs[clusterName]
 		if !found {
-			return nil, nil, fmt.Errorf("kubeconfig for %s not found", clusterName)
+			return nil, kubeClient, nil, fmt.Errorf("kubeconfig for %s not found", clusterName)
 		}
+
 		client, err := kuberuntime.NewClient(&config)
-		return client, &config, err
+		if err != nil {
+			return nil, kubeClient, nil, fmt.Errorf("new ctrl client: %w", err)
+		}
+
+		kubeClient, err = kubernetes.NewForConfig(&config)
+		if err != nil {
+			return nil, kubeClient, nil, fmt.Errorf("new client: %w", err)
+		}
+
+		return client, kubeClient, &config, err
 	}
 
 	clusterInstalls, err := clusterinstall.LoadFromDir(opts.clusterInstallDir,
@@ -77,15 +89,15 @@ func updateConfig(ctx context.Context, log *logrus.Entry, opts *updateConfigOpti
 	}
 
 	for clusterName, clusterInstall := range clusterInstalls {
-		kubeClient, config, err := newKubeClient(kubeconfigs, clusterName)
+		ctrlClient, kubeClient, config, err := newKubeClients(kubeconfigs, clusterName)
 		clusterInstall.Config = config
 		if err != nil {
 			return fmt.Errorf("new kubeclient for %s: %w", clusterName, err)
 		}
-		if err := addClusterInstallRuntimeInfo(ctx, clusterInstall, kubeClient); err != nil {
+		if err := addClusterInstallRuntimeInfo(ctx, clusterInstall, ctrlClient); err != nil {
 			return err
 		}
-		if err := runConfigSteps(ctx, log, true, clusterInstall, kubeClient); err != nil {
+		if err := runConfigSteps(ctx, log, true, clusterInstall, ctrlClient, kubeClient); err != nil {
 			return fmt.Errorf("update config for cluster %s: %w", clusterName, err)
 		}
 	}

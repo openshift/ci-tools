@@ -28,3 +28,5 @@ type MachineSetProfile struct {
 }
 
 type ArchToAZ map[string][]string
+
+type CloudCredential struct{}

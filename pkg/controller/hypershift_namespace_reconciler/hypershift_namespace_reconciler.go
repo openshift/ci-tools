@@ -72,7 +72,7 @@ func hypershiftNamespace(labels map[string]string) bool {
 	return true
 }
 
-func namespaceHandler() handler.TypedEventHandler[*corev1.Namespace] {
+func namespaceHandler() handler.TypedEventHandler[*corev1.Namespace, reconcile.Request] {
 	return handler.TypedEnqueueRequestsFromMapFunc[*corev1.Namespace](func(ctx context.Context, ns *corev1.Namespace) []reconcile.Request {
 		return []reconcile.Request{{NamespacedName: types.NamespacedName{
 			Name: ns.Name,

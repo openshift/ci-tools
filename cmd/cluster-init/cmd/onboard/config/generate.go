@@ -7,6 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/openshift/ci-tools/cmd/cluster-init/runtime"
@@ -59,16 +60,21 @@ func generateConfig(ctx context.Context, log *logrus.Entry, opts generateConfigO
 
 	clusterInstall.Config = config
 
-	kubeClient, err := kuberuntime.NewClient(config)
+	ctrlClient, err := kuberuntime.NewClient(config)
 	if err != nil {
-		return fmt.Errorf("new kubeclient: %w", err)
+		return fmt.Errorf("new ctrl client: %w", err)
 	}
 
-	if err := addClusterInstallRuntimeInfo(ctx, clusterInstall, kubeClient); err != nil {
+	kubeClient, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return fmt.Errorf("new client: %w", err)
+	}
+
+	if err := addClusterInstallRuntimeInfo(ctx, clusterInstall, ctrlClient); err != nil {
 		return err
 	}
 
-	if err := runConfigSteps(ctx, log, false, clusterInstall, kubeClient); err != nil {
+	if err := runConfigSteps(ctx, log, false, clusterInstall, ctrlClient, kubeClient); err != nil {
 		return fmt.Errorf("generate config for cluster %s, %w", clusterInstall.ClusterName, err)
 	}
 

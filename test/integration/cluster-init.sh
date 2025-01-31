@@ -55,6 +55,7 @@ actual_update="${tempdir}/update-build99/input"
 expected_update="${suite_dir}/update-build99/expected"
 cat >"${clusterinstall_dir}/build99.yaml" <<EOF
 clusterName: build99
+credentialsMode: Manual
 provision:
   aws: {}
 onboard:
@@ -76,6 +77,8 @@ onboard:
         - kind: MachineSet
           name: '^.+\-amd64-us-east-2a$'
         inline: [{"op": "add", "path": "/spec/template/spec/providerSpec/value/blockDevices/0/ebs/iops", "value": 0}]
+    cloudCredential:
+      aws: {}
 EOF
 
 export CITOOLS_CLUSTERINIT_INTEGRATIONTEST="1"

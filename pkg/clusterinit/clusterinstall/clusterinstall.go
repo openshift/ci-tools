@@ -6,6 +6,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	configv1 "github.com/openshift/api/config/v1"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	installertypes "github.com/openshift/installer/pkg/types"
 
 	"github.com/openshift/ci-tools/pkg/clusterinit/manifest"
@@ -29,12 +30,13 @@ var (
 )
 
 type ClusterInstall struct {
-	ClusterName    string    `json:"clusterName,omitempty"`
-	Provision      Provision `json:"provision,omitempty"`
-	Onboard        Onboard   `json:"onboard,omitempty"`
-	InstallBase    string
-	Infrastructure configv1.Infrastructure
-	InstallConfig  installertypes.InstallConfig
+	ClusterName     string                          `json:"clusterName,omitempty"`
+	CredentialsMode operatorv1.CloudCredentialsMode `json:"credentialsMode,omitempty"`
+	Provision       Provision                       `json:"provision,omitempty"`
+	Onboard         Onboard                         `json:"onboard,omitempty"`
+	InstallBase     string
+	Infrastructure  configv1.Infrastructure
+	InstallConfig   installertypes.InstallConfig
 	// This is needed to get info about available OS images
 	CoreOSStream rhcostream.Stream
 	Config       *rest.Config
@@ -73,6 +75,7 @@ type Onboard struct {
 	MultiarchTuningOperator    MultiarchTuningOperator    `json:"multiarchTuningOperator,omitempty"`
 	CertManagerOperator        CertManagerOperator        `json:"certManagerOperator,omitempty"`
 	OAuthTemplate              OAuthTemplate              `json:"oauthTemplate,omitempty"`
+	CloudCredential            CloudCredential            `json:"cloudCredential,omitempty"`
 }
 
 type Dex struct {
@@ -152,4 +155,11 @@ type OAuthTemplate struct {
 	types.SkipStep
 	types.ExcludeManifest
 	Patches []manifest.Patch `json:"patches,omitempty"`
+}
+
+type CloudCredential struct {
+	types.SkipStep
+	types.ExcludeManifest
+	Patches []manifest.Patch     `json:"patches,omitempty"`
+	AWS     *aws.CloudCredential `json:"aws,omitempty"`
 }

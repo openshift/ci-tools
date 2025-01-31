@@ -7,6 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
+	authv1 "k8s.io/api/authentication/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 	"sigs.k8s.io/prow/pkg/logrusutil"
@@ -16,6 +17,7 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 	imageregistryv1 "github.com/openshift/api/imageregistry/v1"
 	routev1 "github.com/openshift/api/route/v1"
+	cloudcredentialv1 "github.com/openshift/cloud-credential-operator/pkg/apis/cloudcredential/v1"
 
 	onboardcmd "github.com/openshift/ci-tools/cmd/cluster-init/cmd/onboard"
 	"github.com/openshift/ci-tools/cmd/cluster-init/cmd/provision"
@@ -98,6 +100,12 @@ func addSchemes() error {
 	}
 	if err := configv1.AddToScheme(scheme.Scheme); err != nil {
 		return fmt.Errorf("add configv1 to scheme: %w", err)
+	}
+	if err := authv1.AddToScheme(scheme.Scheme); err != nil {
+		return fmt.Errorf("add authv1 to scheme: %w", err)
+	}
+	if err := cloudcredentialv1.AddToScheme(scheme.Scheme); err != nil {
+		return fmt.Errorf("add cloudcredentialv1 to scheme: %w", err)
 	}
 	return nil
 }

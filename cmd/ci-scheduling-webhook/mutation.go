@@ -361,7 +361,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 			delayInitContainer := []corev1.Container{
 				{
 					Name:  initContainerName,
-					Image: "registry.access.redhat.com/ubi8",
+					Image: "registry.redhat.io/ubi8",
 					Command: []string{
 						"/bin/sh",
 						"-c",

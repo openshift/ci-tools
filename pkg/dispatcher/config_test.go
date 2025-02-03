@@ -550,6 +550,19 @@ func TestDetermineClusterForJob(t *testing.T) {
 			expectedCanBeRelocated: false,
 			expectedErr:            fmt.Errorf("job some-e2e-job can't be matched with any cluster using provided capabilities: arm64,vpn"),
 		},
+		{
+			name:   "cluster label has priority over capabilities",
+			config: &configWithBuildFarmWithJobsAndDetermineE2EByJob,
+			jobBase: config.JobBase{Agent: "kubernetes", Name: "some-e2e-job",
+				Labels: map[string]string{
+					"capability/vpn":                   "vpn",
+					"ci-operator.openshift.io/cluster": "build10"},
+			},
+			cm: ClusterMap{"build03": ClusterInfo{Provider: "aws", Capacity: 100, Capabilities: []string{"vpn"}},
+				"build10": ClusterInfo{Provider: "aws", Capacity: 100}},
+			expected:               "build10",
+			expectedCanBeRelocated: false,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

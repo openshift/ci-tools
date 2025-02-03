@@ -601,7 +601,6 @@ func isInfraReason(reason buildapi.StatusReason) bool {
 		buildapi.StatusReasonNoBuildContainerStatus,
 		buildapi.StatusReasonOutOfMemoryKilled,
 		buildapi.StatusReasonPullBuilderImageFailed,
-		buildapi.StatusReasonPushImageToRegistryFailed,
 	}
 	for _, option := range infraReasons {
 		if reason == option {

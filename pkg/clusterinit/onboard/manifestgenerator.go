@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
@@ -46,19 +47,29 @@ func (w *manifestGeneratorStep) Run(ctx context.Context) error {
 	exclude := w.manifestGenerator.ExcludedManifests()
 	patches := w.manifestGenerator.Patches()
 
-	for path := range pathTomanifests {
-		manifests := pathTomanifests[path]
-		if g, skip := exclude.Filter(path); skip {
-			log.WithField("manifest", path).WithField("pattern", g).Info("exclude manifest")
+	for p := range pathTomanifests {
+		manifests := pathTomanifests[p]
+		if g, skip := exclude.Filter(p); skip {
+			log.WithField("manifest", p).WithField("pattern", g).Info("exclude manifest")
 			continue
 		}
 
-		manifestBytes, err := w.marshal(manifests, patches)
-		if err != nil {
-			return fmt.Errorf("marshal manifests: %w", err)
+		var manifestBytes []byte
+		if path.Ext(p) == ".yaml" {
+			if manifestBytes, err = w.marshalManifests(manifests, patches); err != nil {
+				return err
+			}
+		} else {
+			for i, m := range manifests {
+				bytes, ok := m.([]byte)
+				if !ok {
+					return fmt.Errorf("manifest %d at %s is not %T: %T", i, p, []byte{}, m)
+				}
+				manifestBytes = append(manifestBytes, bytes...)
+			}
 		}
 
-		dir := filepath.Dir(path)
+		dir := filepath.Dir(p)
 		if _, err := os.Stat(dir); err != nil {
 			if !os.IsNotExist(err) {
 				return fmt.Errorf("stat %s: %w", dir, err)
@@ -68,15 +79,15 @@ func (w *manifestGeneratorStep) Run(ctx context.Context) error {
 			}
 		}
 
-		if err := os.WriteFile(path, manifestBytes, 0644); err != nil {
-			return fmt.Errorf("write manifest %s: %w", path, err)
+		if err := os.WriteFile(p, manifestBytes, 0644); err != nil {
+			return fmt.Errorf("write manifest %s: %w", p, err)
 		}
 	}
 
 	return nil
 }
 
-func (w *manifestGeneratorStep) marshal(manifests []interface{}, patches []cinitmanifest.Patch) ([]byte, error) {
+func (w *manifestGeneratorStep) marshalManifests(manifests []interface{}, patches []cinitmanifest.Patch) ([]byte, error) {
 	manifestsBytes := make([][]byte, 0, len(manifests))
 
 	for _, manifest := range manifests {

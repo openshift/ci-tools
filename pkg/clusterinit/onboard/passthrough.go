@@ -5,86 +5,88 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
-	"os"
 	"path"
+	"regexp"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
+	cinitmanifest "github.com/openshift/ci-tools/pkg/clusterinit/manifest"
+	cinittypes "github.com/openshift/ci-tools/pkg/clusterinit/types"
 )
 
 const (
 	passthroughRoot string = "manifests"
 )
 
-//go:embed manifests
-var manifests embed.FS
+var (
+	tripleHyphen = regexp.MustCompile(`^\-\-\-$`)
+	//go:embed manifests
+	manifests embed.FS
+)
 
-type passthroughstep struct {
-	log            *logrus.Entry
+type passthroughGenerator struct {
 	clusterInstall *clusterinstall.ClusterInstall
 	manifests      fs.FS
 	readFile       func(fsys fs.FS, name string) ([]byte, error)
-	writeFile      func(name string, data []byte, perm fs.FileMode) error
-	mkdirAll       func(path string, perm fs.FileMode) error
 }
 
-func (s *passthroughstep) Name() string {
+func (s *passthroughGenerator) Name() string {
 	return "passthrough-manifests"
 }
 
-func (s *passthroughstep) Run(ctx context.Context) error {
-	log := s.log.WithField("step", s.Name())
+func (s *passthroughGenerator) Skip() cinittypes.SkipStep {
+	return s.clusterInstall.Onboard.PassthroughManifest.SkipStep
+}
 
-	if s.clusterInstall.Onboard.PassthroughManifest.Skip {
-		log.Info("step is not enabled, skipping")
-		return nil
-	}
+func (s *passthroughGenerator) ExcludedManifests() cinittypes.ExcludeManifest {
+	return s.clusterInstall.Onboard.PassthroughManifest.ExcludeManifest
+}
 
+func (s *passthroughGenerator) Patches() []cinitmanifest.Patch {
+	return s.clusterInstall.Onboard.PassthroughManifest.Patches
+}
+
+func (s *passthroughGenerator) Generate(ctx context.Context, log *logrus.Entry) (map[string][]interface{}, error) {
 	clusterRoot := BuildFarmDirFor(s.clusterInstall.Onboard.ReleaseRepo, s.clusterInstall.ClusterName)
+
 	subFS, err := fs.Sub(s.manifests, passthroughRoot)
 	if err != nil {
-		return fmt.Errorf("subfs: %w", err)
+		return nil, fmt.Errorf("subfs: %w", err)
 	}
 
-	excludedManifests := s.clusterInstall.Onboard.PassthroughManifest.ExcludeManifest
+	pathToManifests := make(map[string][]interface{})
+
 	if err := fs.WalkDir(subFS, ".", func(p string, d fs.DirEntry, _ error) error {
-		if p == "." {
+		if p == "." || d.IsDir() {
 			return nil
 		}
 
-		if g, exclude := excludedManifests.Filter(p); exclude {
-			log.WithField("manifest", p).WithField("pattern", g).Info("exclude manifest")
-			return nil
-		}
-
-		fullPath := path.Join(clusterRoot, p)
-		if d.IsDir() {
-			log.WithField("dir", fullPath).Info("creating directory")
-			return s.mkdirAll(fullPath, 0755)
-		}
-
-		data, err := s.readFile(subFS, p)
+		bytes, err := s.readFile(subFS, p)
 		if err != nil {
 			return fmt.Errorf("read %s: %w", p, err)
 		}
 
-		log.WithField("file", fullPath).Info("copying file")
-		return s.writeFile(fullPath, data, 0644)
+		splitStrings := tripleHyphen.Split(string(bytes), -1)
+		data := make([]interface{}, len(splitStrings))
+		for i := range splitStrings {
+			data[i] = []byte(splitStrings[i])
+		}
+
+		pathToManifests[path.Join(clusterRoot, p)] = data
+
+		return nil
 	}); err != nil {
-		return fmt.Errorf("create manifests: %w", err)
+		return nil, fmt.Errorf("create manifests: %w", err)
 	}
 
-	return nil
+	return pathToManifests, nil
 }
 
-func NewPassthroughStep(log *logrus.Entry, clusterInstall *clusterinstall.ClusterInstall) *passthroughstep {
-	return &passthroughstep{
-		log:            log,
+func NewPassthroughGenerator(log *logrus.Entry, clusterInstall *clusterinstall.ClusterInstall) *passthroughGenerator {
+	return &passthroughGenerator{
 		clusterInstall: clusterInstall,
 		manifests:      manifests,
 		readFile:       fs.ReadFile,
-		writeFile:      os.WriteFile,
-		mkdirAll:       os.MkdirAll,
 	}
 }

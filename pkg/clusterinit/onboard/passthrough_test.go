@@ -4,16 +4,13 @@ import (
 	"context"
 	"io/fs"
 	"path"
-	"strings"
 	"testing"
 	"testing/fstest"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
-	"github.com/openshift/ci-tools/pkg/clusterinit/types"
 )
 
 func newMemFS(entries ...string) fs.FS {
@@ -25,23 +22,24 @@ func newMemFS(entries ...string) fs.FS {
 }
 
 func TestPassthroughManifests(t *testing.T) {
-	manifestPaths := func(repo, clusterName string, manifests ...string) []string {
-		res := make([]string, 0, len(manifests))
+	manifestPaths := func(repo, clusterName string, manifests ...string) map[string][]interface{} {
+		pathToManifests := make(map[string][]interface{})
 		for _, m := range manifests {
-			res = append(res, path.Join(repo, "clusters", "build-clusters", clusterName, m))
+			p := path.Join(repo, "clusters", "build-clusters", clusterName, m)
+			pathToManifests[p] = []interface{}{[]byte{}}
 		}
-		return res
+		return pathToManifests
 	}
 	releaseRepo := "/release/repo"
 	for _, tt := range []struct {
 		name          string
 		ci            clusterinstall.ClusterInstall
 		fs            fs.FS
-		wantManifests []string
+		wantManifests map[string][]interface{}
 		wantErr       error
 	}{
 		{
-			name: "Write manifests without filters",
+			name: "Generate manifests",
 			ci: clusterinstall.ClusterInstall{
 				ClusterName: "build99",
 				Onboard: clusterinstall.Onboard{
@@ -51,37 +49,15 @@ func TestPassthroughManifests(t *testing.T) {
 			fs:            newMemFS("foo.yaml"),
 			wantManifests: manifestPaths("/release/repo", "build99", "foo.yaml"),
 		},
-		{
-			name: "Exclude files",
-			ci: clusterinstall.ClusterInstall{
-				ClusterName: "build99",
-				Onboard: clusterinstall.Onboard{
-					ReleaseRepo: releaseRepo,
-					PassthroughManifest: clusterinstall.PassthroughManifest{
-						ExcludeManifest: types.ExcludeManifest{
-							Exclude: []string{"super/**", "foo*"},
-						},
-					},
-				},
-			},
-			fs:            newMemFS("foo.yaml", "bar.yaml", "super/duper.yaml", "super/empty", "empty"),
-			wantManifests: manifestPaths("/release/repo", "build99", "bar.yaml", "empty"),
-		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			step := NewPassthroughStep(logrus.NewEntry(logrus.StandardLogger()), &tt.ci)
+			generator := NewPassthroughGenerator(logrus.NewEntry(logrus.StandardLogger()), &tt.ci)
 
-			manifests := make([]string, 0)
-			step.writeFile = func(name string, _ []byte, _ fs.FileMode) error {
-				manifests = append(manifests, name)
-				return nil
-			}
-			step.mkdirAll = func(path string, perm fs.FileMode) error { return nil }
-			step.readFile = func(fsys fs.FS, name string) ([]byte, error) { return []byte{}, nil }
-			step.manifests = tt.fs
+			generator.readFile = func(fsys fs.FS, name string) ([]byte, error) { return []byte{}, nil }
+			generator.manifests = tt.fs
 
-			err := step.Run(context.TODO())
+			manifests, err := generator.Generate(context.TODO(), logrus.NewEntry(logrus.StandardLogger()))
 
 			if err != nil && tt.wantErr == nil {
 				t.Fatalf("want err nil but got: %v", err)
@@ -96,9 +72,8 @@ func TestPassthroughManifests(t *testing.T) {
 				return
 			}
 
-			sortStr := func(a, b string) bool { return strings.Compare(a, b) <= 0 }
-			if diff := cmp.Diff(tt.wantManifests, manifests, cmpopts.SortSlices(sortStr)); diff != "" {
-				t.Errorf("manifest paths differs:\n%s", diff)
+			if diff := cmp.Diff(tt.wantManifests, manifests); diff != "" {
+				t.Errorf("manifest differs:\n%s", diff)
 			}
 		})
 	}

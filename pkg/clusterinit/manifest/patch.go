@@ -1,7 +1,6 @@
 package manifest
 
 import (
-	"bytes"
 	"fmt"
 	"regexp"
 
@@ -101,35 +100,20 @@ func applyPatch(manifest []byte, patch Patch) ([]byte, error) {
 	return nil, fmt.Errorf("unsupported patch type %s", patch.Type)
 }
 
-func Marshal(manifests []interface{}, patches []Patch) ([]byte, error) {
-	manifestsBytes := make([][]byte, 0, len(manifests))
-	for _, manifest := range manifests {
-		manifestBytes, err := kyaml.Marshal(manifest)
+func ApplyPatches(manifestMap map[string]interface{}, manifestBytes []byte, patches []Patch) ([]byte, error) {
+	for _, patch := range patches {
+		apply, err := shouldApplyPatch(manifestMap, patch)
 		if err != nil {
-			return nil, fmt.Errorf("marshal: %w", err)
+			return nil, fmt.Errorf("should apply patch: %w", err)
 		}
-		manifestMap, ok := manifest.(map[string]interface{})
-		if !ok {
-			manifestsBytes = append(manifestsBytes, manifestBytes)
+		if !apply {
 			continue
 		}
-
-		for _, patch := range patches {
-			apply, err := shouldApplyPatch(manifestMap, patch)
-			if err != nil {
-				return nil, fmt.Errorf("should apply patch: %w", err)
-			}
-			if !apply {
-				continue
-			}
-			manifestBytesPatched, err := applyPatch(manifestBytes, patch)
-			if err != nil {
-				return nil, fmt.Errorf("apply patch: %w", err)
-			}
-			manifestBytes = manifestBytesPatched
+		manifestBytesPatched, err := applyPatch(manifestBytes, patch)
+		if err != nil {
+			return nil, fmt.Errorf("apply patch: %w", err)
 		}
-		manifestsBytes = append(manifestsBytes, manifestBytes)
+		manifestBytes = manifestBytesPatched
 	}
-
-	return bytes.Join(manifestsBytes, []byte("---\n")), nil
+	return manifestBytes, nil
 }

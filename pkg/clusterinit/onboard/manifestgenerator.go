@@ -10,9 +10,10 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"sigs.k8s.io/yaml"
+
 	cinitmanifest "github.com/openshift/ci-tools/pkg/clusterinit/manifest"
 	"github.com/openshift/ci-tools/pkg/clusterinit/types"
-	"sigs.k8s.io/yaml"
 )
 
 // manifestGeneratorStep is struct of convenience that enhances a MenifestGenerator capabilities

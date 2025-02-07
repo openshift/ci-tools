@@ -193,7 +193,7 @@ require (
 	github.com/stretchr/testify v1.9.0
 	gopkg.in/evanphx/json-patch.v5 v5.9.0
 	sigs.k8s.io/boskos v0.0.0-20240624145324-1e4de26c366a
-	sigs.k8s.io/prow v0.0.0-20241204190702-d4937a693400
+	sigs.k8s.io/prow v0.0.0-20250205101216-e871edfd1e0c
 )
 
 require (

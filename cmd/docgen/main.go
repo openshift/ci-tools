@@ -12,12 +12,16 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
+func resolver(dir string) (string, error) {
+	return dir, nil
+}
+
 func main() {
 	files, err := filepath.Glob("./pkg/api/*.go")
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to resolve filepath")
 	}
-	commentMap, err := genyaml.NewCommentMap(map[string][]byte{}, files...)
+	commentMap, err := genyaml.NewCommentMap(resolver, map[string][]byte{}, files...)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct commentMap")
 	}

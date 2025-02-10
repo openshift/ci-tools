@@ -2,7 +2,7 @@ package prpqr_reconciler
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"reflect"
@@ -547,8 +547,9 @@ func constructCondition(statuses map[string]*v1.PullRequestPayloadJobStatus) met
 }
 
 func jobNameHash(name string) string {
-	hasher := md5.New()
-	// MD5 Write never returns error
+	// sha224 for k8s 63 characters name limitaton
+	hasher := sha256.New224()
+	// sha256 Write never returns error
 	_, _ = hasher.Write([]byte(name))
 	return hex.EncodeToString(hasher.Sum(nil))
 }

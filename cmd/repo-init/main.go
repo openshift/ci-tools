@@ -526,6 +526,9 @@ No additional "tide" queries will be added.
 
 	tideQueries := prowconfig.TideQueries(nil)
 	for _, q := range copyCatQueries {
+		// queries used as examples returns tailored configuration, we need to
+		// overwrite some of them to avoid undesirable values.
+		q.Orgs = []string{}
 		q.Repos = []string{prowconfig.OrgRepo{Org: config.Org, Repo: config.Repo}.String()}
 		tideQueries = append(tideQueries, q)
 	}

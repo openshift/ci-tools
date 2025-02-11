@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"flag"
 	"fmt"
 	"log"
 	"math/big"
@@ -176,6 +177,9 @@ func Execute() {
 }
 
 func init() {
+	klog.InitFlags(nil)
+	rootCmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
+
 	rootCmd.Flags().StringVar(&tlsCertFile, "tls-cert", "", "Certificate for TLS")
 	rootCmd.Flags().StringVar(&tlsKeyFile, "tls-key", "", "Private key file for TLS")
 	rootCmd.Flags().IntVar(&port, "port", 443, "Port to listen on for HTTPS traffic")

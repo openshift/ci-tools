@@ -30,6 +30,8 @@ var (
 		"ocp":             true,
 		"cert-manager":    true,
 	}
+	memoryThreshold = resource.MustParse("32Gi")
+	cpuThreshold    = resource.MustParse("13")
 )
 
 func admissionReviewFromRequest(r *http.Request, deserializer runtime.Decoder) (*admissionv1.AdmissionReview, error) {
@@ -182,6 +184,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	klog.Infof("Pod %s in namespace %s is classified as %s", podName, namespace, podClass)
 	if podClass == PodClassTests {
 		// Segmenting long run tests onto their own node set helps normal tests nodes scale down
 		// more effectively.
@@ -301,7 +304,15 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 			klog.Errorf("No node precludes will be set in pod due to error: %v", err)
 		}
 
+		highPerfPod := false
 		if podClass == PodClassBuilds {
+			// Use high performance nodes for large pods
+			for _, container := range pod.Spec.Containers {
+				if container.Resources.Requests.Memory().Cmp(memoryThreshold) >= 0 || container.Resources.Requests.Cpu().Cmp(cpuThreshold) >= 0 {
+					klog.Infof("Pod %s in namespace %s requests high performance node", podName, namespace)
+					highPerfPod = true
+				}
+			}
 			// If this is a build pod, prefer to be scheduled to spot instances for cost efficiency.
 			// If there are no spot instances, this will be ignored.
 			affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution = []corev1.PreferredSchedulingTerm{
@@ -320,6 +331,10 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 				},
 			}
 			affinityChanged = true
+		}
+
+		if highPerfPod {
+			patchHighPerfPod(&pod, podName, namespace, addPatchEntry)
 		}
 
 		if affinityChanged {
@@ -433,6 +448,24 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		klog.Errorf("Unable to respond to caller with admission review: %v", err)
 	}
+}
+
+func patchHighPerfPod(pod *corev1.Pod, podName, namespace string, addPatchEntry func(string, string, interface{})) {
+	klog.Infof("Pod %s in namespace %s is a high performance pod", podName, namespace)
+	tolerations := pod.Spec.Tolerations
+	tolerations = append(tolerations, corev1.Toleration{
+		Key:      "ci-instance-type",
+		Operator: corev1.TolerationOpEqual,
+		Value:    "high-perf",
+		Effect:   corev1.TaintEffectNoSchedule,
+	})
+	addPatchEntry("add", "/spec/tolerations", tolerations)
+
+	if pod.Spec.NodeSelector == nil {
+		pod.Spec.NodeSelector = make(map[string]string)
+	}
+	pod.Spec.NodeSelector["ci-instance-type"] = "high-perf"
+	addPatchEntry("replace", "/spec/nodeSelector", pod.Spec.NodeSelector)
 }
 
 func mutateNode(admissionReviewRequest *admissionv1.AdmissionReview, w http.ResponseWriter) {

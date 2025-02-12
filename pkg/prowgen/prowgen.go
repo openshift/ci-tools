@@ -75,6 +75,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 
 			periodic := GeneratePeriodicForTest(g, info, FromConfigSpec(configSpec), func(options *GeneratePeriodicOptions) {
 				options.Cron = cron
+				options.Capabilities = element.Capabilities
 				options.Interval = interval
 				options.MinimumInterval = minimumInterval
 				options.ReleaseController = element.ReleaseController

@@ -40,7 +40,10 @@ func (p *Provider) EC2Client(ctx context.Context) (awstype.EC2Client, error) {
 
 func (p *Provider) loadConfig(ctx context.Context) (aws.Config, error) {
 	if p.awsConfig == nil {
-		region := p.clusterInstall.Infrastructure.Status.PlatformStatus.AWS.Region
+		region := ""
+		if p.clusterInstall != nil && p.clusterInstall.Infrastructure.Status.PlatformStatus != nil {
+			region = p.clusterInstall.Infrastructure.Status.PlatformStatus.AWS.Region
+		}
 		awsConfig, err := p.configGetter(ctx, GetConfigOptions{
 			Region: region,
 			STSClientGetter: func() stscreds.AssumeRoleWithWebIdentityAPIClient {

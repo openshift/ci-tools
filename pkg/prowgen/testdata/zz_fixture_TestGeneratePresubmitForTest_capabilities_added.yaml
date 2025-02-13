@@ -9,7 +9,7 @@ decoration_config:
   skip_cloning: true
 labels:
   capability/arm64: arm64
-  capability/vpn: vpn
+  capability/intranet: intranet
   pj-rehearse.openshift.io/can-be-rehearsed: "true"
 name: pull-ci-org-repo-branch-testname
 rerun_command: /test testname

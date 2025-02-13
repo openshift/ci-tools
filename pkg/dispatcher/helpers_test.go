@@ -196,7 +196,7 @@ aws:
     capabilities:
       - aarch64
       - amd64
-      - vpn
+      - intranet
   - name: build03
   - name: build09
     blocked: true
@@ -206,13 +206,13 @@ gcp:
   - name: build02
     capacity: 60
     capabilities:
-      - vpn
+      - intranet
 `,
 			expectedCluster: ClusterMap{
 				"build01": {
 					Provider:     "aws",
 					Capacity:     80,
-					Capabilities: []string{"aarch64", "amd64", "vpn"},
+					Capabilities: []string{"aarch64", "amd64", "intranet"},
 				},
 				"build03": {
 					Provider:     "aws",
@@ -222,7 +222,7 @@ gcp:
 				"build02": {
 					Provider:     "gcp",
 					Capacity:     60,
-					Capabilities: []string{"vpn"},
+					Capabilities: []string{"intranet"},
 				},
 			},
 			expectedBlocked: sets.New[string]("build09", "build99"),
@@ -236,7 +236,7 @@ aws:
 gcp:
   - name: build02
     capabilities:
-      - vpn
+      - intranet
   - name: build03
     blocked: true
 `,
@@ -249,7 +249,7 @@ gcp:
 				"build02": {
 					Provider:     "gcp",
 					Capacity:     100,
-					Capabilities: []string{"vpn"},
+					Capabilities: []string{"intranet"},
 				},
 			},
 			expectedBlocked: sets.New[string]("build03"),
@@ -311,47 +311,47 @@ func TestHasCapacityOrCapabilitiesChanged(t *testing.T) {
 		{
 			name: "No change in capacity or capabilities",
 			prev: ClusterMap{
-				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "vpn"}},
-				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "vpn"}},
+				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "intranet"}},
+				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "intranet"}},
 			},
 			next: ClusterMap{
-				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "vpn"}},
-				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "vpn"}},
+				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "intranet"}},
+				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "intranet"}},
 			},
 			expected: false,
 		},
 		{
 			name: "Change in capacity for build01",
 			prev: ClusterMap{
-				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "vpn"}},
-				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "vpn"}},
+				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "intranet"}},
+				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "intranet"}},
 			},
 			next: ClusterMap{
-				"build01": {Provider: "AWS", Capacity: 15, Capabilities: []string{"aarch64", "vpn"}},
-				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "vpn"}},
+				"build01": {Provider: "AWS", Capacity: 15, Capabilities: []string{"aarch64", "intranet"}},
+				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "intranet"}},
 			},
 			expected: true,
 		},
 		{
 			name: "Change in capabilities for build02",
 			prev: ClusterMap{
-				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "vpn"}},
-				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "vpn"}},
+				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "intranet"}},
+				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "intranet"}},
 			},
 			next: ClusterMap{
-				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "vpn"}},
-				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"aarch64", "vpn"}},
+				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "intranet"}},
+				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"aarch64", "intranet"}},
 			},
 			expected: true,
 		},
 		{
 			name: "No corresponding clusters in next map",
 			prev: ClusterMap{
-				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "vpn"}},
-				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "vpn"}},
+				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "intranet"}},
+				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "intranet"}},
 			},
 			next: ClusterMap{
-				"build03": {Provider: "AWS", Capacity: 15, Capabilities: []string{"aarch64", "vpn"}},
+				"build03": {Provider: "AWS", Capacity: 15, Capabilities: []string{"aarch64", "intranet"}},
 			},
 			expected: false,
 		},

@@ -141,7 +141,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 			test:        "testname",
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
 			generateOption: func(options *generatePresubmitOptions) {
-				options.Capabilities = []string{"vpn", "arm64"}
+				options.Capabilities = []string{"intranet", "arm64"}
 			},
 		},
 	}
@@ -215,7 +215,7 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
 			generateOption: func(options *GeneratePeriodicOptions) {
 				options.Cron = "@yearly"
-				options.Capabilities = []string{"vpn", "arm64"}
+				options.Capabilities = []string{"intranet", "arm64"}
 			},
 		},
 	}
@@ -275,7 +275,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 				Branch: "branch",
 			}},
 			generateOption: func(options *generatePostsubmitOptions) {
-				options.Capabilities = []string{"vpn", "arm64"}
+				options.Capabilities = []string{"intranet", "arm64"}
 			},
 		},
 		{
@@ -646,7 +646,7 @@ func TestGenerateJobs(t *testing.T) {
 			id: "periodic with capabilities",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{
-					{As: "unit", Capabilities: []string{"vpn"}, Cron: utilpointer.String(cron), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+					{As: "unit", Capabilities: []string{"intranet"}, Cron: utilpointer.String(cron), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
 				},
 			},
 			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
@@ -659,7 +659,7 @@ func TestGenerateJobs(t *testing.T) {
 			id: "periodic/presubmit with capabilities",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{
-					{As: "unit", Capabilities: []string{"vpn", "arm64"}, Cron: utilpointer.String(cron), Presubmit: true, ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+					{As: "unit", Capabilities: []string{"intranet", "arm64"}, Cron: utilpointer.String(cron), Presubmit: true, ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
 				},
 			},
 			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{

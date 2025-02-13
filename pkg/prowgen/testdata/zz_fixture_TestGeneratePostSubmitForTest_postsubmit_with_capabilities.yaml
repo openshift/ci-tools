@@ -7,5 +7,5 @@ decoration_config:
   skip_cloning: true
 labels:
   capability/arm64: arm64
-  capability/vpn: vpn
+  capability/intranet: intranet
 name: branch-ci-organization-repository-branch-postsubmit

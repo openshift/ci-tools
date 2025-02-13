@@ -10,7 +10,7 @@ periodics:
     repo: repository
   labels:
     capability/arm64: arm64
-    capability/vpn: vpn
+    capability/intranet: intranet
     pj-rehearse.openshift.io/can-be-rehearsed: "true"
   name: periodic-ci-organization-repository-branch-unit
   spec:
@@ -57,6 +57,6 @@ presubmits:
   - always_run: false
     labels:
       capability/arm64: arm64
-      capability/vpn: vpn
+      capability/intranet: intranet
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
     name: pull-ci-organization-repository-branch-unit

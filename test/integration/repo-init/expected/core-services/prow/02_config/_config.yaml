@@ -57,15 +57,15 @@ tide:
     - release-4.4
     labels:
     - approved
-    - bugzilla/valid-bug
     - cherry-pick-approved
+    - jira/valid-bug
     - lgtm
     missingLabels:
-    - bugzilla/invalid-bug
     - do-not-merge/blocked-paths
     - do-not-merge/hold
     - do-not-merge/invalid-owners-file
     - do-not-merge/work-in-progress
+    - jira/invalid-bug
     - needs-rebase
     repos:
     - openshift/unsharded-b
@@ -80,11 +80,11 @@ tide:
     - approved
     - lgtm
     missingLabels:
-    - bugzilla/invalid-bug
     - do-not-merge/blocked-paths
     - do-not-merge/hold
     - do-not-merge/invalid-owners-file
     - do-not-merge/work-in-progress
+    - jira/invalid-bug
     - needs-rebase
     repos:
     - openshift/unsharded-a

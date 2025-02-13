@@ -40,7 +40,7 @@ const (
 	qeApproved             = "qe-approved"
 	docsApproved           = "docs-approved"
 	pxApproved             = "px-approved"
-	validBug               = "bugzilla/valid-bug"
+	validBug               = "jira/valid-bug"
 	release                = "release-"
 	openshift              = "openshift-"
 	mainBranch             = "main"

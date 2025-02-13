@@ -25,15 +25,15 @@ tide:
     labels:
     - approved
     - backport-risk-assessed
-    - bugzilla/valid-bug
     - cherry-pick-approved
+    - jira/valid-bug
     - lgtm
     missingLabels:
     - backports/unvalidated-commits
-    - bugzilla/invalid-bug
     - do-not-merge/hold
     - do-not-merge/invalid-owners-file
     - do-not-merge/work-in-progress
+    - jira/invalid-bug
     - needs-rebase
     repos:
     - org/repo
@@ -42,15 +42,15 @@ tide:
     - release-4.11
     labels:
     - approved
-    - bugzilla/valid-bug
+    - jira/valid-bug
     - lgtm
     - staff-eng-approved
     missingLabels:
     - backports/unvalidated-commits
-    - bugzilla/invalid-bug
     - do-not-merge/hold
     - do-not-merge/invalid-owners-file
     - do-not-merge/work-in-progress
+    - jira/invalid-bug
     - needs-rebase
     repos:
     - org/repo
@@ -62,10 +62,10 @@ tide:
     - lgtm
     missingLabels:
     - backports/unvalidated-commits
-    - bugzilla/invalid-bug
     - do-not-merge/hold
     - do-not-merge/invalid-owners-file
     - do-not-merge/work-in-progress
+    - jira/invalid-bug
     - keep-main-query-separate
     - needs-rebase
     repos:
@@ -104,10 +104,10 @@ tide:
     - lgtm
     missingLabels:
     - backports/unvalidated-commits
-    - bugzilla/invalid-bug
     - do-not-merge/hold
     - do-not-merge/invalid-owners-file
     - do-not-merge/work-in-progress
+    - jira/invalid-bug
     - needs-rebase
     repos:
     - org/repo

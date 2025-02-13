@@ -56,7 +56,7 @@ func (ap *awsProvider) manifests(ctx context.Context, log *logrus.Entry, ci *clu
 	manifests := make([]interface{}, 0)
 	infraId := ci.Infrastructure.Status.InfrastructureName
 	region := ci.InstallConfig.Platform.AWS.Region
-
+	volumeSize := 200
 	ami, err := awstypes.FindAMI(ci.CoreOSStream, types.ToCoreOSStreamArch(arch), region)
 	if err != nil {
 		return nil, err
@@ -86,7 +86,20 @@ func (ap *awsProvider) manifests(ctx context.Context, log *logrus.Entry, ci *clu
 			if err != nil {
 				return nil, err
 			}
-
+			for _, value := range clusterinstall.CIWorkloadDefaults {
+				switch value {
+				case "builds":
+					volumeSize = 800
+				case "tests":
+					volumeSize = 500
+				case "longtests":
+					volumeSize = 500
+				case "prowjobs":
+					volumeSize = 100
+				default:
+					volumeSize = 200
+				}
+			}
 			machineSetTemplateSpec := map[string]interface{}{
 				"metadata": map[string]interface{}{
 					"labels": map[string]interface{}{
@@ -113,7 +126,7 @@ func (ap *awsProvider) manifests(ctx context.Context, log *logrus.Entry, ci *clu
 									"kmsKey": map[string]interface{}{
 										"arn": "",
 									},
-									"volumeSize": 800,
+									"volumeSize": volumeSize,
 									"volumeType": "gp3",
 									"encrypted":  true,
 									"iops":       5000,

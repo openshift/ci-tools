@@ -14,6 +14,15 @@ import (
 	"github.com/openshift/ci-tools/pkg/util"
 )
 
+var (
+	awsVolumeSizeDefValues = map[string]int{
+		clusterinstall.BuildsWorkload:    800,
+		clusterinstall.TestsWorkload:     500,
+		clusterinstall.LongTestsWorkload: 500,
+		clusterinstall.ProwJobsWorkload:  100,
+	}
+)
+
 type awsProvider struct {
 	ec2ClientGetter awstypes.EC2ClientGetter
 }
@@ -56,7 +65,6 @@ func (ap *awsProvider) manifests(ctx context.Context, log *logrus.Entry, ci *clu
 	manifests := make([]interface{}, 0)
 	infraId := ci.Infrastructure.Status.InfrastructureName
 	region := ci.InstallConfig.Platform.AWS.Region
-
 	ami, err := awstypes.FindAMI(ci.CoreOSStream, types.ToCoreOSStreamArch(arch), region)
 	if err != nil {
 		return nil, err
@@ -86,7 +94,6 @@ func (ap *awsProvider) manifests(ctx context.Context, log *logrus.Entry, ci *clu
 			if err != nil {
 				return nil, err
 			}
-
 			machineSetTemplateSpec := map[string]interface{}{
 				"metadata": map[string]interface{}{
 					"labels": map[string]interface{}{
@@ -113,7 +120,7 @@ func (ap *awsProvider) manifests(ctx context.Context, log *logrus.Entry, ci *clu
 									"kmsKey": map[string]interface{}{
 										"arn": "",
 									},
-									"volumeSize": 800,
+									"volumeSize": ap.volumeSize(workload),
 									"volumeType": "gp3",
 									"encrypted":  true,
 									"iops":       5000,
@@ -206,6 +213,13 @@ func (ap *awsProvider) manifests(ctx context.Context, log *logrus.Entry, ci *clu
 	}
 
 	return manifests, nil
+}
+
+func (ap *awsProvider) volumeSize(workload string) int {
+	if size, ok := awsVolumeSizeDefValues[workload]; ok {
+		return size
+	}
+	return 200
 }
 
 func NewAWSProvider(ec2ClientGetter awstypes.EC2ClientGetter) *awsProvider {

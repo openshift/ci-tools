@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"sync"
 
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,86 +39,68 @@ type PortForwardOptions struct {
 	Ports   []string
 }
 
+// FowarderStatus describes the status of the port forwarder once Run has been called.
+type FowarderStatus struct {
+	// The channel the forwared might report any error to, while it is running. It gets
+	// closed right after the error is sent.
+	Error chan error
+}
+
 // Run leverages forwarder to create a TCP tunnel according to opts. This function runs asynchronously
-// and returns a channel that may:
-// - produce and error and then close immediately. This means the forwarder couldn't establish the tunnel;
-// - close without errors. In this case the tunnel is in place and ready to accept connections.
+// and returns a FowarderStatus object. When no error is returned, the caller should assume the forwarder
+// has been initialized and it is running. The caller MUST then be listening on the error channel or
+// a goroutine will be leakead.
 //
-// A client is not supposed to close the channel but it must wait for it to either close or
-// produce an error; this function will leak a goroutine otherwise.
+// Usage:
 //
-// Good:
-//
-//	if err := <-Run(ctx, PortForwardOptions{}); err != nil {
-//		// handle the error somehow
+//	status, err := Run(ctx, forwarder, opts)
+//	if err != nil {
+//		return fmt.Errorf("run portforwarder: %w", err)
 //	}
-//
-// Bad:
-//
-//	_ = Run(ctx, PortForwardOptions{}) // a goroutine will run forever, trying to push an error
-func Run(ctx context.Context, forwarder PortForwarder, opts PortForwardOptions) chan error {
-	errChannel := make(chan error)
-	sendErr := func(err error) {
-		go func() {
-			errChannel <- err
-			close(errChannel)
-		}()
-	}
-
-	readyChannel := make(chan struct{})
-
+//	defer func() {
+//		close(opts.StopChannel)
+//		if err := <-status.ErrChannel; err != nil {
+//			return fmt.Errorf("portforwarder: %w", err)
+//		}
+//	}()
+func Run(ctx context.Context, forwarder PortForwarder, opts PortForwardOptions) (FowarderStatus, error) {
+	status := FowarderStatus{Error: make(chan error)}
 	podGetter, err := podGetterOrDefault(opts)
 	if err != nil {
-		sendErr(fmt.Errorf("pod getter: %w", err))
-		return errChannel
+		return status, fmt.Errorf("pod getter: %w", err)
 	}
 
 	pod, err := podGetter(ctx, opts.Namespace, opts.PodName)
 	if err != nil {
-		sendErr(fmt.Errorf("get pod %s/%s: %w", opts.Namespace, opts.PodName, err))
-		return errChannel
+		return status, fmt.Errorf("get pod %s/%s: %w", opts.Namespace, opts.PodName, err)
 	}
 
 	if pod.Status.Phase != corev1.PodRunning {
-		sendErr(fmt.Errorf("pod is not running - current status=%v", pod.Status.Phase))
-		return errChannel
+		return status, fmt.Errorf("pod is not running - current status=%v", pod.Status.Phase)
 	}
 
 	restClient, err := restClientFor(opts.Config)
 	if err != nil {
-		sendErr(fmt.Errorf("new rest client: %w", err))
-		return errChannel
+		return status, fmt.Errorf("new rest client: %w", err)
 	}
 	req := restClient.Post().Resource("pods").Namespace(opts.Namespace).Name(opts.PodName).SubResource("portforward")
 
-	// ForwardPorts runs into its own goroutine, therefore error checking might race.
-	var fwErr error
-	m := sync.Mutex{}
-	setFwErr := func(e error) {
-		m.Lock()
-		fwErr = e
-		m.Unlock()
-	}
-	getFwErr := func() error {
-		m.Lock()
-		defer m.Unlock()
-		return fwErr
-	}
-
+	readyChannel := make(chan struct{})
 	go func() {
 		err := forwarder("POST", req.URL(), readyChannel, opts)
-		setFwErr(err)
 		// forwarder might return an error before it has any chance of closing the ready channel.
 		// We have to detect this case and close it ourselves to avoid a deadlock.
 		if _, ok := <-readyChannel; ok {
 			close(readyChannel)
 		}
+		if err != nil {
+			status.Error <- err
+		}
+		close(status.Error)
 	}()
 
 	<-readyChannel
-
-	sendErr(getFwErr())
-	return errChannel
+	return status, nil
 }
 
 func restClientFor(config *restclient.Config) (restclient.Interface, error) {

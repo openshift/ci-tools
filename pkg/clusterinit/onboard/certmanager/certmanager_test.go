@@ -22,7 +22,7 @@ import (
 )
 
 func TestGenerateMafests(t *testing.T) {
-	portForwarder := func(method string, url *url.URL, readyChannel chan struct{}, opts portforward.PortForwardOptions) error {
+	defPortForwarder := func(method string, url *url.URL, readyChannel chan struct{}, opts portforward.PortForwardOptions) error {
 		defer close(readyChannel)
 		return nil
 	}
@@ -39,6 +39,7 @@ func TestGenerateMafests(t *testing.T) {
 		queryRedHatCatalog func(context.Context, GRPCClientConnFactory, string) (*Package, error)
 		ci                 *clusterinstall.ClusterInstall
 		rhCatalogPod       *corev1.Pod
+		portForwarder      portforward.PortForwarder
 		wantManifests      map[string][]interface{}
 		wantErr            error
 	}{
@@ -63,6 +64,7 @@ func TestGenerateMafests(t *testing.T) {
 				Spec:       corev1.PodSpec{Containers: []corev1.Container{{Ports: []corev1.ContainerPort{{ContainerPort: RegistryCatalogPortInt}}}}},
 				Status:     corev1.PodStatus{Phase: corev1.PodRunning},
 			},
+			portForwarder: defPortForwarder,
 			wantManifests: map[string][]interface{}{
 				"/release/repo/clusters/build-clusters/build99/cert-manager-operator/operator.yaml": operatorManifests("stable-v1", "foobar-v0.0.0"),
 			},
@@ -82,10 +84,11 @@ func TestGenerateMafests(t *testing.T) {
 				Spec:       corev1.PodSpec{Containers: []corev1.Container{{Ports: []corev1.ContainerPort{{ContainerPort: RegistryCatalogPortInt}}}}},
 				Status:     corev1.PodStatus{Phase: corev1.PodRunning},
 			},
-			wantErr: errors.New("query catalog: package not found"),
+			portForwarder: defPortForwarder,
+			wantErr:       errors.New("query catalog: package not found"),
 		},
 		{
-			name: "Port forward error",
+			name: "Catalog pod is not running",
 			queryRedHatCatalog: func(ctx context.Context, gcf GRPCClientConnFactory, s string) (*Package, error) {
 				return &Package{
 					Channels: []Channel{{
@@ -105,7 +108,56 @@ func TestGenerateMafests(t *testing.T) {
 				Spec:       corev1.PodSpec{Containers: []corev1.Container{{Ports: []corev1.ContainerPort{{ContainerPort: RegistryCatalogPortInt}}}}},
 				Status:     corev1.PodStatus{Phase: corev1.PodPending},
 			},
-			wantErr: errors.New("port forward: pod is not running - current status=Pending"),
+			portForwarder: defPortForwarder,
+			wantErr:       errors.New("run portforward: pod is not running - current status=Pending"),
+		},
+		{
+			name: "Query and port forwarder error",
+			queryRedHatCatalog: func(ctx context.Context, gcf GRPCClientConnFactory, s string) (*Package, error) {
+				return &Package{
+					Channels: []Channel{{
+						Name:    "stable-v1",
+						CSVName: "foobar-v0.0.0",
+					}},
+					DefaultChannelName: "stable-v1",
+				}, nil
+			},
+			ci: &clusterinstall.ClusterInstall{
+				ClusterName: "build99",
+				Onboard:     clusterinstall.Onboard{ReleaseRepo: "/release/repo", Hosted: ptr.To(false), OSD: ptr.To(false), Unmanaged: ptr.To(false)},
+				Config:      &rest.Config{},
+			},
+			rhCatalogPod: &corev1.Pod{
+				ObjectMeta: v1.ObjectMeta{Namespace: OpenshiftMarketplaceNS, Labels: map[string]string{"olm.catalogSource": "redhat-operators"}},
+				Spec:       corev1.PodSpec{Containers: []corev1.Container{{Ports: []corev1.ContainerPort{{ContainerPort: RegistryCatalogPortInt}}}}},
+				Status:     corev1.PodStatus{Phase: corev1.PodRunning},
+			},
+			portForwarder: func(method string, url *url.URL, readyChannel chan struct{}, opts portforward.PortForwardOptions) error {
+				close(readyChannel)
+				return errors.New("async error")
+			},
+			wantErr: errors.New("portforward: async error"),
+		},
+		{
+			name: "Port forwarder error",
+			queryRedHatCatalog: func(ctx context.Context, gcf GRPCClientConnFactory, s string) (*Package, error) {
+				return nil, errors.New("query err")
+			},
+			ci: &clusterinstall.ClusterInstall{
+				ClusterName: "build99",
+				Onboard:     clusterinstall.Onboard{ReleaseRepo: "/release/repo", Hosted: ptr.To(false), OSD: ptr.To(false), Unmanaged: ptr.To(false)},
+				Config:      &rest.Config{},
+			},
+			rhCatalogPod: &corev1.Pod{
+				ObjectMeta: v1.ObjectMeta{Namespace: OpenshiftMarketplaceNS, Labels: map[string]string{"olm.catalogSource": "redhat-operators"}},
+				Spec:       corev1.PodSpec{Containers: []corev1.Container{{Ports: []corev1.ContainerPort{{ContainerPort: RegistryCatalogPortInt}}}}},
+				Status:     corev1.PodStatus{Phase: corev1.PodRunning},
+			},
+			portForwarder: func(method string, url *url.URL, readyChannel chan struct{}, opts portforward.PortForwardOptions) error {
+				close(readyChannel)
+				return errors.New("async error")
+			},
+			wantErr: errors.New("query catalog: query err - portforward: async error"),
 		},
 		{
 			name: "Not an OCP, won't generate any manifest",
@@ -120,7 +172,7 @@ func TestGenerateMafests(t *testing.T) {
 			tt.Parallel()
 
 			kubeClient := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(tc.rhCatalogPod).Build()
-			generator := NewGenerator(tc.ci, kubeClient, portForwarder, grpcClientConnFactory)
+			generator := NewGenerator(tc.ci, kubeClient, tc.portForwarder, grpcClientConnFactory)
 			generator.queryRedHatCatalog = tc.queryRedHatCatalog
 			manifests, err := generator.Generate(context.TODO(), logrus.NewEntry(logrus.StandardLogger()))
 

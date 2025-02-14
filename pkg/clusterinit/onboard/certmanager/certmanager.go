@@ -80,10 +80,12 @@ func (s *certManagerGenerator) Generate(ctx context.Context, log *logrus.Entry) 
 //	$ oc -n openshift-marketplace port-forward service/redhat-operators 50051 &>/dev/null &
 //	$ grpcurl -plaintext -d '{"name": "openshift-cert-manager-operator"}' localhost:50051 'api.Registry/GetPackage' \
 //		| jq '.defaultChannelName as $dc | .channels[] | select(.name==$dc)'
-func (s *certManagerGenerator) getOperatorChannelAndVersion(ctx context.Context, log *logrus.Entry) (string, string, error) {
+func (s *certManagerGenerator) getOperatorChannelAndVersion(ctx context.Context, log *logrus.Entry) (name string, csvName string, retErr error) {
+	var err error
 	pod, err := s.ensureRedHatCatalogPod(ctx, OpenshiftMarketplaceNS, RegistryCatalogPortInt)
 	if err != nil {
-		return "", "", fmt.Errorf("ensure pod: %w", err)
+		retErr = fmt.Errorf("ensure pod: %w", err)
+		return
 	}
 
 	fwOpts := portforward.PortForwardOptions{
@@ -102,27 +104,45 @@ func (s *certManagerGenerator) getOperatorChannelAndVersion(ctx context.Context,
 		Address: []string{"localhost"},
 		Ports:   []string{RegistryCatalogPort},
 	}
-	defer close(fwOpts.StopChannel)
 
-	log.WithFields(logrus.Fields{"pod": pod.Name, "port": RegistryCatalogPort}).Info("Forwarding port")
-	if err = <-portforward.Run(ctx, s.portForwarder, fwOpts); err != nil {
-		return "", "", fmt.Errorf("port forward: %w", err)
+	combineErrs := func(err, fwdErr error) error {
+		if err != nil && fwdErr != nil {
+			return fmt.Errorf("%w - portforward: %s", err, fwdErr)
+		}
+		if err == nil && fwdErr != nil {
+			return fmt.Errorf("portforward: %w", fwdErr)
+		}
+		return err
 	}
 
-	operatorPackage, err := s.queryRedHatCatalog(ctx, s.grpcConnFactory, RegistryCatalogPort)
+	log.WithFields(logrus.Fields{"pod": pod.Name, "port": RegistryCatalogPort}).Info("Forwarding port")
+	fwdStatus, err := portforward.Run(ctx, s.portForwarder, fwOpts)
 	if err != nil {
-		return "", "", fmt.Errorf("query catalog: %w", err)
+		retErr = fmt.Errorf("run portforward: %w", err)
+		return
+	}
+	defer func() {
+		close(fwOpts.StopChannel)
+		retErr = combineErrs(err, <-fwdStatus.Error)
+	}()
+
+	operatorPackage, queryErr := s.queryRedHatCatalog(ctx, s.grpcConnFactory, RegistryCatalogPort)
+	if queryErr != nil {
+		err = fmt.Errorf("query catalog: %w", queryErr)
+		return
 	}
 
 	for _, c := range operatorPackage.Channels {
 		if c.Name == operatorPackage.DefaultChannelName {
 			log.WithFields(logrus.Fields{"channel": operatorPackage.DefaultChannelName, "version": c.CSVName}).
 				Info("CertManager operator found")
-			return c.Name, c.CSVName, nil
+			name, csvName = c.Name, c.CSVName
+			return
 		}
 	}
 
-	return "", "", fmt.Errorf("cert-manager operator channel or CSVName not found")
+	err = fmt.Errorf("cert-manager operator channel or CSVName not found")
+	return
 }
 
 // Ensure the pod that exposes info about the catalog is running and exposes the port we are going to

@@ -120,7 +120,6 @@
     cluster: build02
     decoration_config:
       skip_cloning: true
-      timeout: 6h0m0s
     extra_refs:
     - base_ref: test-branch
       base_sha: "123456"
@@ -207,7 +206,6 @@
     cluster: build02
     decoration_config:
       skip_cloning: true
-      timeout: 6h0m0s
     extra_refs:
     - base_ref: test-branch
       base_sha: "123456"

@@ -649,11 +649,6 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 			options.Cron = "@yearly"
 		})
 		periodic.Name = generateJobNameToSubmit(inject, prs)
-
-		if periodic.DecorationConfig == nil {
-			periodic.DecorationConfig = &prowv1.DecorationConfig{}
-		}
-		periodic.DecorationConfig.Timeout = &prowv1.Duration{Duration: 6 * time.Hour}
 		break
 	}
 	// We did not find the injected test: this is a bug

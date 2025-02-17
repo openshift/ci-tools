@@ -6,6 +6,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+	prowconfig "sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/prow/pkg/repoowners"
 )
 
@@ -780,6 +781,9 @@ type TestStepConfiguration struct {
 
 	// AlwaysRun can be set to false to disable running the job on every PR
 	AlwaysRun *bool `json:"always_run,omitempty"`
+
+	// Retry is a configuration entry for retrying periodic prowjobs
+	Retry *prowconfig.Retry `json:"retry,omitempty"`
 
 	// RunIfChanged is a regex that will result in the test only running if something that matches it was changed.
 	RunIfChanged string `json:"run_if_changed,omitempty"`

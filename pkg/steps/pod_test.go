@@ -234,6 +234,7 @@ func TestGetPodObjectMounts(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			podStepTemplate := expectedPodStepTemplate()
 			tc.podStep(podStepTemplate)
+			podStepTemplate.client = kubernetes.NewPodClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().Build()), nil, nil, 0)
 
 			pod, err := podStepTemplate.generatePodForStep("", corev1.ResourceRequirements{}, false)
 			if err != nil {

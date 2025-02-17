@@ -1308,6 +1308,110 @@ func TestMultiStageParams(t *testing.T) {
 	}
 }
 
+func TestApplyEnvOverrides(t *testing.T) {
+	testCases := []struct {
+		id             string
+		envVars        map[string]string
+		expectedParams map[string]string
+		testConfig     []api.TestStepConfiguration
+		expectedErrs   []string
+	}{
+		{
+			id: "Apply overrides",
+			envVars: map[string]string{
+				"MULTISTAGE_PARAM_OVERRIDE_PARAM1": "VAL1",
+				"MULTISTAGE_PARAM_OVERRIDE_PARAM2": "VAL2",
+				"XXX_OVERRIDE_PARAM2":              "VAL3",
+			},
+			expectedParams: map[string]string{
+				"MULTISTAGE_PARAM_OVERRIDE_PARAM1": "VAL1",
+				"MULTISTAGE_PARAM_OVERRIDE_PARAM2": "VAL2",
+			},
+			testConfig: []api.TestStepConfiguration{
+				{
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						Environment: map[string]string{
+							"MULTISTAGE_PARAM_OVERRIDE_PARAM1": "VAL1",
+							"MULTISTAGE_PARAM_OVERRIDE_PARAM2": "VAL2",
+						},
+					},
+				},
+			},
+		},
+		{
+			id: "No OVERRIDE_ prefix",
+			envVars: map[string]string{
+				"PARAM1": "VAL1",
+			},
+			expectedParams: map[string]string{},
+			testConfig: []api.TestStepConfiguration{
+				{
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						Environment: map[string]string{},
+					},
+				},
+			},
+		},
+		{
+			id: "test environment variable contains an equal sign",
+			envVars: map[string]string{
+				"MULTISTAGE_PARAM_OVERRIDE_PARAM1": "VAL2",
+				"MULTISTAGE_PARAM_OVERRIDE_PARAM2": "VAL=2",
+				"MULTISTAGE_PARAM_OVERRIDE_PARAM3": "VAL2",
+			},
+			expectedParams: map[string]string{
+				"MULTISTAGE_PARAM_OVERRIDE_PARAM1": "VAL2",
+				"MULTISTAGE_PARAM_OVERRIDE_PARAM2": "VAL=2",
+				"MULTISTAGE_PARAM_OVERRIDE_PARAM3": "VAL2",
+			},
+			testConfig: []api.TestStepConfiguration{
+				{
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						Environment: map[string]string{
+							"MULTISTAGE_PARAM_OVERRIDE_PARAM1": "VAL2",
+							"MULTISTAGE_PARAM_OVERRIDE_PARAM2": "VAL=2",
+							"MULTISTAGE_PARAM_OVERRIDE_PARAM3": "VAL2",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.id, func(t *testing.T) {
+			for k, v := range tc.envVars {
+				t.Setenv(k, v)
+			}
+
+			configSpec := api.ReleaseBuildConfiguration{
+				Tests: tc.testConfig,
+			}
+
+			o := &options{
+				configSpec: &configSpec,
+			}
+
+			applyEnvOverrides(o)
+
+			actualParams := make(map[string]string)
+
+			for _, test := range o.configSpec.Tests {
+				if test.MultiStageTestConfigurationLiteral != nil {
+					for name, val := range test.MultiStageTestConfigurationLiteral.Environment {
+						actualParams[name] = val
+					}
+				}
+			}
+
+			if diff := cmp.Diff(tc.expectedParams, actualParams); diff != "" {
+				t.Errorf("actual does not match expected, diff: %s", diff)
+			}
+		})
+	}
+}
+
 func TestDependencyOverrides(t *testing.T) {
 	testCases := []struct {
 		id           string

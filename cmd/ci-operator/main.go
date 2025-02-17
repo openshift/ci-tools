@@ -708,6 +708,8 @@ func (o *options) Complete() error {
 		o.hiveKubeconfig = kubeConfig
 	}
 
+	applyEnvOverrides(o)
+
 	if err := overrideMultiStageParams(o); err != nil {
 		return err
 	}
@@ -784,6 +786,29 @@ func overrideMultiStageParams(o *options) error {
 	}
 
 	return nil
+}
+
+// applyEnvOverrides processes environment variables with override prefixes and applies them to the test configurations.
+// It checks for environment variables that start with "MULTISTAGE_PARAM_OVERRIDE_" and applies them to the environment settings of each test.
+func applyEnvOverrides(o *options) {
+	for _, envVar := range os.Environ() {
+		if !strings.HasPrefix(envVar, "MULTISTAGE_PARAM_OVERRIDE_") {
+			continue
+		}
+		parts := strings.SplitN(envVar, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key, value := parts[0], parts[1]
+		for _, test := range o.configSpec.Tests {
+			if test.MultiStageTestConfigurationLiteral != nil {
+				if test.MultiStageTestConfigurationLiteral.Environment == nil {
+					test.MultiStageTestConfigurationLiteral.Environment = make(api.TestEnvironment)
+				}
+				test.MultiStageTestConfigurationLiteral.Environment[key] = value
+			}
+		}
+	}
 }
 
 func overrideTestStepDependencyParams(o *options) error {

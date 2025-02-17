@@ -205,6 +205,7 @@ func PodStep(name string, config PodStepConfiguration, resources api.ResourceCon
 
 func GenerateBasePod(
 	jobSpec *api.JobSpec,
+	client kubernetes.PodClient,
 	baseLabels map[string]string,
 	name string,
 	nodeName string,
@@ -222,6 +223,14 @@ func GenerateBasePod(
 	envMap[openshiftCIEnv] = "true"
 	if err != nil {
 		return nil, err
+	}
+	var pj v1.ProwJob
+	if err = client.Get(CleanupCtx, ctrlruntimeclient.ObjectKey{Namespace: jobSpec.Namespace(), Name: jobSpec.ProwJobID}, &pj); err == nil {
+		for _, container := range pj.Spec.PodSpec.Containers {
+			for _, envVar := range container.Env {
+				envMap[envVar.Name] = envVar.Value
+			}
+		}
 	}
 	pod := &coreapi.Pod{
 		ObjectMeta: meta.ObjectMeta{
@@ -308,7 +317,7 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 	}
 
 	artifactDir := s.name
-	pod, err := GenerateBasePod(s.jobSpec, s.config.Labels, s.config.As,
+	pod, err := GenerateBasePod(s.jobSpec, s.client, s.config.Labels, s.config.As,
 		s.config.NodeName, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands},
 		image, containerResources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(),
 		secretVolumeMounts, &GeneratePodOptions{Clone: clone, PropagateExitCode: false, NodeArchitecture: string(s.config.NodeArchitecture)})

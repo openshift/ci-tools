@@ -177,6 +177,15 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 			},
 		},
 		{
+			description: "periodic for a test with retry",
+			test:        "testname",
+			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			generateOption: func(options *GeneratePeriodicOptions) {
+				options.Cron = "@yearly"
+				options.Retry = &prowconfig.Retry{RunAll: true, Attempts: 2, Interval: "3h"}
+			},
+		},
+		{
 			description: "periodic for a test in a variant config",
 			test:        "testname",
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch", Variant: "also"}},

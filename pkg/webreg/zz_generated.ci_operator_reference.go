@@ -975,6 +975,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        release_controller: true\n" +
 	"        # RestrictNetworkAccess restricts network access to RedHat intranet.\n" +
 	"        restrict_network_access: false\n" +
+	"        # Retry is a configuration entry for retrying periodic prowjobs\n" +
+	"        retry:\n" +
+	"            interval: ' '\n" +
+	"            run_all: true\n" +
 	"        # RunIfChanged is a regex that will result in the test only running if something that matches it was changed.\n" +
 	"        run_if_changed: ' '\n" +
 	"        # Secret is an optional secret object which\n" +
@@ -1821,6 +1825,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      release_controller: true\n" +
 	"      # RestrictNetworkAccess restricts network access to RedHat intranet.\n" +
 	"      restrict_network_access: false\n" +
+	"      # Retry is a configuration entry for retrying periodic prowjobs\n" +
+	"      retry:\n" +
+	"        interval: ' '\n" +
+	"        run_all: true\n" +
 	"      # RunIfChanged is a regex that will result in the test only running if something that matches it was changed.\n" +
 	"      run_if_changed: ' '\n" +
 	"      # Secret is an optional secret object which\n" +

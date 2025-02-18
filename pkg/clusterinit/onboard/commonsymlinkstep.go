@@ -28,11 +28,11 @@ func (s *commonSymlinkStep) Run(ctx context.Context) error {
 	}
 	rr := s.clusterInstall.Onboard.ReleaseRepo
 	clusterName := s.clusterInstall.ClusterName
-	if err := symlink(CommonSymlinkPath(rr, clusterName), "../common_managed"); err != nil {
+	if err := symlink(CommonManagedSymlinkPath(rr, clusterName), "../common_managed"); err != nil {
 		return err
 	}
 	if s.clusterInstall.IsOCP() {
-		if err := symlink(CommonSymlinkPath(rr, clusterName), "../common_ocp"); err != nil {
+		if err := symlink(CommonOCPSymlinkPath(rr, clusterName), "../common_ocp"); err != nil {
 			return err
 		}
 	}

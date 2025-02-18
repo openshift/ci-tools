@@ -29,6 +29,16 @@ function os::integration::compare() {
 }
 readonly -f os::integration::compare
 
+# os::integration::compare_tree is like os::integration::compare but it also ensures that
+# the directories being compared have the same structure.
+function os::integration::compare_tree() {
+    local actual="$1"
+    local expected="$2"
+    os::integration::compare $@
+    os::cmd::expect_success "diff --suppress-common-lines -y <(cd ${actual}; find .|sort) <(cd ${expected}; find .|sort)"
+}
+readonly -f os::integration::compare_tree
+
 # os::integration::sanitize_prowjob_yaml replaces known variable fields in
 # Kubernetes YAML with static strings in order to make comparisons easy.
 function os::integration::sanitize_prowjob_yaml() {

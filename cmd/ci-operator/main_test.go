@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -1342,6 +1343,125 @@ func TestMultiStageParams(t *testing.T) {
 			}
 			if diff := cmp.Diff(errs, expectedErr, testhelper.EquateErrorMessage); diff != "" {
 				t.Fatal(diff)
+			}
+		})
+	}
+}
+
+func TestApplyEnvOverrides(t *testing.T) {
+	testCases := []struct {
+		id             string
+		envVars        []string
+		expectedParams map[string]string
+		testConfig     []api.TestStepConfiguration
+		expectedErrs   []string
+	}{
+		{
+			id: "Apply overrides",
+			envVars: []string{
+				"MULTISTAGE_PARAM_OVERRIDE_PARAM1=VAL1",
+				"MULTISTAGE_PARAM_OVERRIDE_PARAM2=VAL2",
+				"XXX_OVERRIDE_PARAM2=VAL3",
+			},
+			expectedParams: map[string]string{
+				"MULTISTAGE_PARAM_OVERRIDE_PARAM1": "VAL1",
+				"MULTISTAGE_PARAM_OVERRIDE_PARAM2": "VAL2",
+			},
+			testConfig: []api.TestStepConfiguration{
+				{
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						Environment: map[string]string{
+							"MULTISTAGE_PARAM_OVERRIDE_PARAM1": "VAL1",
+							"MULTISTAGE_PARAM_OVERRIDE_PARAM2": "VAL2",
+						},
+					},
+				},
+			},
+		},
+		{
+			id: "No OVERRIDE_ prefix",
+			envVars: []string{
+				"PARAM1=VAL1",
+			},
+			expectedParams: map[string]string{},
+			testConfig: []api.TestStepConfiguration{
+				{
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						Environment: map[string]string{},
+					},
+				},
+			},
+		},
+		{
+			id: "test environment variable contains an equal sign",
+			envVars: []string{
+				"MULTISTAGE_PARAM_OVERRIDE_PARAM1=VAL2",
+				"MULTISTAGE_PARAM_OVERRIDE_PARAM2=VAL=2",
+				"MULTISTAGE_PARAM_OVERRIDE_PARAM3=VAL2",
+			},
+			expectedParams: map[string]string{
+				"MULTISTAGE_PARAM_OVERRIDE_PARAM1": "VAL2",
+				"MULTISTAGE_PARAM_OVERRIDE_PARAM2": "VAL=2",
+				"MULTISTAGE_PARAM_OVERRIDE_PARAM3": "VAL2",
+			},
+			testConfig: []api.TestStepConfiguration{
+				{
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						Environment: map[string]string{
+							"MULTISTAGE_PARAM_OVERRIDE_PARAM1": "VAL2",
+							"MULTISTAGE_PARAM_OVERRIDE_PARAM2": "VAL=2",
+							"MULTISTAGE_PARAM_OVERRIDE_PARAM3": "VAL2",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	t.Parallel()
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.id, func(t *testing.T) {
+			for _, envVar := range tc.envVars {
+				parts := strings.SplitN(envVar, "=", 2)
+				if len(parts) == 2 {
+					_ = os.Setenv(parts[0], parts[1])
+				}
+			}
+
+			defer func() {
+				// Unset the environment variables set for this test
+				for _, envVar := range tc.envVars {
+					parts := strings.SplitN(envVar, "=", 2)
+					if len(parts) == 2 {
+						_ = os.Unsetenv(parts[0])
+					}
+				}
+			}()
+
+			configSpec := api.ReleaseBuildConfiguration{
+				Tests: tc.testConfig,
+			}
+
+			o := &options{
+				configSpec: &configSpec,
+			}
+
+			applyEnvOverrides(o)
+
+			actualParams := make(map[string]string)
+
+			for _, test := range o.configSpec.Tests {
+				if test.MultiStageTestConfigurationLiteral != nil {
+					for name, val := range test.MultiStageTestConfigurationLiteral.Environment {
+						actualParams[name] = val
+					}
+				}
+			}
+
+			if diff := cmp.Diff(tc.expectedParams, actualParams); diff != "" {
+				t.Errorf("actual does not match expected, diff: %s", diff)
 			}
 		})
 	}

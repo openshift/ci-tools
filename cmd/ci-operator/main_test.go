@@ -1244,6 +1244,7 @@ func TestMultiStageParams(t *testing.T) {
 	testCases := []struct {
 		id             string
 		inputParams    stringSlice
+		envParams      map[string]string
 		expectedParams map[string]string
 		testConfig     []api.TestStepConfiguration
 		expectedErrs   []string
@@ -1292,14 +1293,97 @@ func TestMultiStageParams(t *testing.T) {
 				"could not parse multi-stage-param: PARAM2 is not in the format key=value",
 			},
 		},
+		{
+			id: "Add param from env",
+			envParams: map[string]string{
+				"MULTISTAGE_PARAM_COUNT":   "1",
+				"MULTISTAGE_PARAM_KEY_0":   "PARAM2",
+				"MULTISTAGE_PARAM_VALUE_0": "VAL2",
+			},
+			testConfig: []api.TestStepConfiguration{
+				{
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						Environment: map[string]string{
+							"PARAM1": "VAL1",
+						},
+					},
+				},
+			},
+			expectedParams: map[string]string{
+				"PARAM1": "VAL1",
+				"PARAM2": "VAL2",
+			},
+		},
+		{
+			id: "Add param from env and args",
+			envParams: map[string]string{
+				"MULTISTAGE_PARAM_COUNT":   "1",
+				"MULTISTAGE_PARAM_KEY_0":   "PARAM2",
+				"MULTISTAGE_PARAM_VALUE_0": "VAL2",
+			},
+			inputParams: stringSlice{[]string{"PARAM3=VAL3"}},
+			testConfig: []api.TestStepConfiguration{
+				{
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						Environment: map[string]string{
+							"PARAM1": "VAL1",
+						},
+					},
+				},
+			},
+			expectedParams: map[string]string{
+				"PARAM1": "VAL1",
+				"PARAM2": "VAL2",
+				"PARAM3": "VAL3",
+			},
+		},
+		{
+			id: "Param from arg takes precedence over env",
+			envParams: map[string]string{
+				"MULTISTAGE_PARAM_COUNT":   "1",
+				"MULTISTAGE_PARAM_KEY_0":   "PARAM2",
+				"MULTISTAGE_PARAM_VALUE_0": "from_env",
+			},
+			inputParams: stringSlice{[]string{"PARAM2=from_arg"}},
+			testConfig: []api.TestStepConfiguration{
+				{
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						Environment: map[string]string{
+							"PARAM1": "VAL1",
+						},
+					},
+				},
+			},
+			expectedParams: map[string]string{
+				"PARAM1": "VAL1",
+				"PARAM2": "from_arg",
+			},
+		},
+		{
+			id: "Missing env param",
+			envParams: map[string]string{
+				"MULTISTAGE_PARAM_COUNT": "1",
+			},
+			inputParams: stringSlice{[]string{"PARAM2=from_arg"}},
+			testConfig: []api.TestStepConfiguration{
+				{
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						Environment: map[string]string{
+							"PARAM1": "VAL1",
+						},
+					},
+				},
+			},
+			expectedErrs: []string{"MULTISTAGE_PARAM_KEY_0 key not found"},
+		},
 	}
 
-	t.Parallel()
-
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.id, func(t *testing.T) {
-			t.Parallel()
+			for k, v := range tc.envParams {
+				t.Setenv(k, v)
+			}
+
 			configSpec := api.ReleaseBuildConfiguration{
 				Tests: tc.testConfig,
 			}

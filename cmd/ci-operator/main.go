@@ -772,16 +772,62 @@ func handleTargetAdditionalSuffix(o *options) {
 	}
 }
 
-func overrideMultiStageParams(o *options) error {
-	// see if there are any passed-in multi-stage parameters.
-	if len(o.multiStageParamOverrides.values) == 0 {
-		return nil
+// multiStageParamsFromEnv retrieves multistage parameters from the environment.
+// `MULTISTAGE_PARAM_COUNT=n` controls how many paramenters this function expects,
+// then read `MULTISTAGE_PARAM_KEY_${i}=foo` and `MULTISTAGE_PARAM_VALUE_${i}=bar` to
+// construct on `foo=bar` pair to set on the steps.
+func multiStageParamsFromEnv() (map[string]string, error) {
+	params := make(map[string]string)
+	c, countFound := os.LookupEnv("MULTISTAGE_PARAM_COUNT")
+	if !countFound {
+		return params, nil
 	}
 
-	multiStageParams, err := parseKeyValParams(o.multiStageParamOverrides.values, "multi-stage-param")
+	count, err := strconv.Atoi(c)
+	if err != nil {
+		return nil, fmt.Errorf("parse MULTISTAGE_PARAM_COUNT: %w", err)
+	}
 
+	for i := range count {
+		keyEnv := fmt.Sprintf("MULTISTAGE_PARAM_KEY_%d", i)
+		valueEnv := fmt.Sprintf("MULTISTAGE_PARAM_VALUE_%d", i)
+
+		key, keyFound := os.LookupEnv(keyEnv)
+		if !keyFound {
+			return nil, errors.New(keyEnv + " key not found")
+		}
+
+		value, valueFound := os.LookupEnv(valueEnv)
+		if !valueFound {
+			return nil, errors.New(valueEnv + " value not found")
+		}
+
+		params[key] = value
+	}
+
+	return params, nil
+}
+
+func overrideMultiStageParams(o *options) error {
+	overrideParams, err := multiStageParamsFromEnv()
 	if err != nil {
 		return err
+	}
+
+	argsParams, err := parseKeyValParams(o.multiStageParamOverrides.values, "multi-stage-param")
+	if err != nil {
+		return err
+	}
+
+	// Parameters coming from the command line have the priority over the ones coming from
+	// the environment, therefore override.
+	for k, v := range argsParams {
+		overrideParams[k] = v
+	}
+
+	// Skip when no params have been found.
+	if len(overrideParams) == 0 {
+		return nil
 	}
 
 	// for any multi-stage tests, go ahead and inject the passed-in parameters. Note that parameters explicitly passed
@@ -792,7 +838,7 @@ func overrideMultiStageParams(o *options) error {
 				test.MultiStageTestConfigurationLiteral.Environment = make(api.TestEnvironment)
 			}
 
-			for paramName, paramVal := range multiStageParams {
+			for paramName, paramVal := range overrideParams {
 				test.MultiStageTestConfigurationLiteral.Environment[paramName] = paramVal
 			}
 		}

@@ -80,6 +80,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 				options.MinimumInterval = minimumInterval
 				options.ReleaseController = element.ReleaseController
 				options.DisableRehearsal = disableRehearsal
+				options.Retry = element.Retry
 			})
 			periodics = append(periodics, *periodic)
 			if element.Presubmit {
@@ -303,6 +304,7 @@ type GeneratePeriodicOptions struct {
 	ReleaseController bool
 	PathAlias         *string
 	DisableRehearsal  bool
+	Retry             *prowconfig.Retry
 }
 
 type GeneratePeriodicOption func(options *GeneratePeriodicOptions)
@@ -349,6 +351,7 @@ func GeneratePeriodicForTest(jobBaseBuilder *prowJobBaseBuilder, info *ProwgenIn
 		Cron:            cron,
 		Interval:        opts.Interval,
 		MinimumInterval: opts.MinimumInterval,
+		Retry:           opts.Retry,
 	}
 	injectCapabilities(pj.Labels, opts.Capabilities)
 	return pj

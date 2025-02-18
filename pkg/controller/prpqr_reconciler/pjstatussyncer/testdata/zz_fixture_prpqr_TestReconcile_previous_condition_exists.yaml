@@ -10,7 +10,6 @@
         specifier: ""
       releaseJobSpec: null
     payload: {}
-    pullRequests: null
   status:
     conditions:
     - lastTransitionTime: "1970-01-01T00:00:00Z"

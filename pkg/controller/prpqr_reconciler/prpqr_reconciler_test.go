@@ -66,6 +66,20 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			name: "basic case with no PRs included; testing determined base",
+			prpqr: []ctrlruntimeclient.Object{
+				&v1.PullRequestPayloadQualificationRun{
+					ObjectMeta: metav1.ObjectMeta{Name: "prpqr-test", Namespace: "test-namespace"},
+					Spec: v1.PullRequestPayloadTestSpec{
+						Jobs: v1.PullRequestPayloadJobSpec{
+							ReleaseControllerConfig: v1.ReleaseControllerConfig{OCP: "4.9", Release: "ci", Specifier: "informing"},
+							Jobs:                    []v1.ReleaseJobSpec{{CIOperatorConfig: v1.CIOperatorMetadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"}, Test: "test-name"}},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "basic case where test name is not found",
 			prpqr: []ctrlruntimeclient.Object{
 				&v1.PullRequestPayloadQualificationRun{

@@ -271,6 +271,13 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 			Test: jobSpec.Test,
 		}
 
+		// If we are not testing against any pull requests, we can set the base metadata to that of the injected test
+		if len(pullRequests) == 0 {
+			baseMetadata.Org = inject.Metadata.Org
+			baseMetadata.Repo = inject.Metadata.Repo
+			baseMetadata.Branch = inject.Metadata.Branch
+			baseMetadata.Variant = inject.Metadata.Variant
+		}
 		ciopConfig, err := resolveCiopConfig(r.configResolverClient, baseMetadata, inject)
 		if err != nil {
 			logger.WithError(err).Error("Failed to resolve the ci-operator configuration")
@@ -708,6 +715,15 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 
 		refs = append(refs, ref)
 	}
+
+	// If there are no refs, we are not testing against PR content, and can determine them from the injected test
+	if len(refs) == 0 {
+		refs = append(refs, prowv1.Refs{
+			Org:     baseCiop.Org,
+			Repo:    baseCiop.Repo,
+			BaseRef: baseCiop.Branch,
+		})
+	}
 	periodic.ExtraRefs = refs
 
 	if err := r.prowConfigGetter.Defaulter().DefaultPeriodic(periodic); err != nil {
@@ -849,6 +865,11 @@ func generateJobNameToSubmit(inject *api.MetadataWithTest, prs []v1.PullRequestU
 		if pr.PullRequest != nil {
 			refs += fmt.Sprintf("-%d", pr.PullRequest.Number)
 		}
+	}
+
+	//If the refs are empty, we are not testing against any PRs
+	if refs == "" {
+		refs = "no-included-prs"
 	}
 
 	var variant string

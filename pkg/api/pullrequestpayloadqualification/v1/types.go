@@ -28,8 +28,8 @@ type PullRequestPayloadQualificationRun struct {
 // PullRequestPayloadTestSpec specifies for which PR the payload qualification run was requested
 // and the list of individual jobs that should be executed.
 type PullRequestPayloadTestSpec struct {
-	// PullRequests specifies the code to be tested. Immutable and required.
-	PullRequests []PullRequestUnderTest `json:"pullRequests"`
+	// PullRequests specifies the code to be tested. Omit to not include any PR content. Immutable.
+	PullRequests []PullRequestUnderTest `json:"pullRequests,omitempty"`
 	// Jobs specifies the jobs to be executed. Immutable.
 	Jobs PullRequestPayloadJobSpec `json:"jobs"`
 	// InitialPayloadBase specifies the base payload pullspec for the "initial" release payload

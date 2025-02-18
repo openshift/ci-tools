@@ -20,12 +20,27 @@ type runTestCase struct {
 	forwarderFactory func(t *testing.T, testCase *runTestCase) PortForwarder
 	wantOpts         PortForwardOptions
 	wantErr          error
+	wantAsyncErr     error
 }
 
-func TestFoo(t *testing.T) {
+func TestRun(t *testing.T) {
 	cmpOpts := func(a, b PortForwardOptions) string {
 		return cmp.Diff(a, b, cmpopts.IgnoreUnexported(PortForwardOptions{}),
 			cmpopts.IgnoreFields(PortForwardOptions{}, "PodGetter", "StopChannel", "Out", "ErrOut", "Config"))
+	}
+
+	checkErr := func(t *testing.T, gotErr, wantErr error) {
+		if gotErr != nil && wantErr == nil {
+			t.Fatalf("want err nil but got: %v", gotErr)
+		}
+		if gotErr == nil && wantErr != nil {
+			t.Fatalf("want err %v but nil", wantErr)
+		}
+		if gotErr != nil && wantErr != nil {
+			if wantErr.Error() != gotErr.Error() {
+				t.Fatalf("expect error %q but got %q", wantErr.Error(), gotErr.Error())
+			}
+		}
 	}
 
 	for _, tc := range []runTestCase{
@@ -100,7 +115,7 @@ func TestFoo(t *testing.T) {
 					return errors.New("fw err")
 				}
 			},
-			wantErr: errors.New("fw err"),
+			wantAsyncErr: errors.New("fw err"),
 		},
 		{
 			name: "Fails if the pod is not running",
@@ -129,19 +144,13 @@ func TestFoo(t *testing.T) {
 			tt.Parallel()
 
 			fw := tc.forwarderFactory(tt, &tc)
-			err := <-Run(context.TODO(), fw, tc.opts)
+			status, err := Run(context.TODO(), fw, tc.opts)
 
-			if err != nil && tc.wantErr == nil {
-				t.Fatalf("want err nil but got: %v", err)
+			if err != nil {
+				checkErr(tt, err, tc.wantErr)
+				return
 			}
-			if err == nil && tc.wantErr != nil {
-				t.Fatalf("want err %v but nil", tc.wantErr)
-			}
-			if err != nil && tc.wantErr != nil {
-				if tc.wantErr.Error() != err.Error() {
-					t.Fatalf("expect error %q but got %q", tc.wantErr.Error(), err.Error())
-				}
-			}
+			checkErr(tt, <-status.Error, tc.wantAsyncErr)
 		})
 	}
 }

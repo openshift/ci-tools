@@ -152,8 +152,8 @@ spec:
                     type: array
                 type: object
               pullRequests:
-                description: PullRequests specifies the code to be tested. Immutable
-                  and required.
+                description: PullRequests specifies the code to be tested. Omit to
+                  not include any PR content. Immutable.
                 items:
                   description: |-
                     PullRequestUnderTest describes the state of the repo that will be under test
@@ -200,7 +200,6 @@ spec:
                 type: array
             required:
             - jobs
-            - pullRequests
             type: object
           status:
             description: |-

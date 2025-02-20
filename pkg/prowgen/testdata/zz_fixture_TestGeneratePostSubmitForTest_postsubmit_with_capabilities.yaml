@@ -8,4 +8,6 @@ decoration_config:
 labels:
   capability/arm64: arm64
   capability/intranet: intranet
+  capability/rce: rce
+  capability/sshd-bastion: sshd-bastion
 name: branch-ci-organization-repository-branch-postsubmit

@@ -311,47 +311,47 @@ func TestHasCapacityOrCapabilitiesChanged(t *testing.T) {
 		{
 			name: "No change in capacity or capabilities",
 			prev: ClusterMap{
-				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "intranet"}},
-				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "intranet"}},
+				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "intranet", "rce", "sshd-bastion"}}, // rce - release-controller-eligible, sshd-bastion - for multiarch P/Z libvirt jobs
+				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "intranet", "rce", "sshd-bastion"}},
 			},
 			next: ClusterMap{
-				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "intranet"}},
-				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "intranet"}},
+				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "intranet", "rce", "sshd-bastion"}},
+				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "intranet", "rce", "sshd-bastion"}},
 			},
 			expected: false,
 		},
 		{
 			name: "Change in capacity for build01",
 			prev: ClusterMap{
-				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "intranet"}},
-				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "intranet"}},
+				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "intranet", "rce", "sshd-bastion"}},
+				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "intranet", "rce", "sshd-bastion"}},
 			},
 			next: ClusterMap{
-				"build01": {Provider: "AWS", Capacity: 15, Capabilities: []string{"aarch64", "intranet"}},
-				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "intranet"}},
+				"build01": {Provider: "AWS", Capacity: 15, Capabilities: []string{"aarch64", "intranet", "rce", "sshd-bastion"}},
+				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "intranet", "rce", "sshd-bastion"}},
 			},
 			expected: true,
 		},
 		{
 			name: "Change in capabilities for build02",
 			prev: ClusterMap{
-				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "intranet"}},
-				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "intranet"}},
+				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "intranet", "rce", "sshd-bastion"}},
+				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "intranet", "rce", "sshd-bastion"}},
 			},
 			next: ClusterMap{
-				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "intranet"}},
-				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"aarch64", "intranet"}},
+				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "intranet", "rce", "sshd-bastion"}},
+				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"aarch64", "intranet", "rce", "sshd-bastion"}},
 			},
 			expected: true,
 		},
 		{
 			name: "No corresponding clusters in next map",
 			prev: ClusterMap{
-				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "intranet"}},
-				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "intranet"}},
+				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "intranet", "rce", "sshd-bastion"}},
+				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"amd64", "intranet", "rce", "sshd-bastion"}},
 			},
 			next: ClusterMap{
-				"build03": {Provider: "AWS", Capacity: 15, Capabilities: []string{"aarch64", "intranet"}},
+				"build03": {Provider: "AWS", Capacity: 15, Capabilities: []string{"aarch64", "intranet", "rce", "sshd-bastion"}},
 			},
 			expected: false,
 		},

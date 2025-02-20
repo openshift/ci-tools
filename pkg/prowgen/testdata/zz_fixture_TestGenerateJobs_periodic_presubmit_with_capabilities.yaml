@@ -11,6 +11,8 @@ periodics:
   labels:
     capability/arm64: arm64
     capability/intranet: intranet
+    capability/rce: rce
+    capability/sshd-bastion: sshd-bastion
     pj-rehearse.openshift.io/can-be-rehearsed: "true"
   name: periodic-ci-organization-repository-branch-unit
   spec:
@@ -58,5 +60,7 @@ presubmits:
     labels:
       capability/arm64: arm64
       capability/intranet: intranet
+      capability/rce: rce
+      capability/sshd-bastion: sshd-bastion
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
     name: pull-ci-organization-repository-branch-unit

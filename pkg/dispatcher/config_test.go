@@ -528,10 +528,12 @@ func TestDetermineClusterForJob(t *testing.T) {
 				Labels: map[string]string{
 					"capability/intranet":            "intranet",
 					"capability/arm64":               "arm64",
+					"capability/rce":                 "rce",          // rce - release-controller-eligible
+					"capability/sshd-bastion":        "sshd-bastion", // sshd-bastion - for multiarch P/Z libvirt jobs
 					"ci-operator.openshift.io/cloud": "gcp"},
 			},
-			cm: ClusterMap{"build03": ClusterInfo{Provider: "aws", Capacity: 100, Capabilities: []string{"intranet", "arm64"}},
-				"build02": ClusterInfo{Provider: "gcp", Capacity: 100, Capabilities: []string{"intranet", "arm64"}}},
+			cm: ClusterMap{"build03": ClusterInfo{Provider: "aws", Capacity: 100, Capabilities: []string{"intranet", "arm64", "rce", "sshd-bastion"}},
+				"build02": ClusterInfo{Provider: "gcp", Capacity: 100, Capabilities: []string{"intranet", "arm64", "rce", "sshd-bastion"}}},
 			expected:               "build02",
 			expectedCanBeRelocated: false,
 		},
@@ -542,13 +544,15 @@ func TestDetermineClusterForJob(t *testing.T) {
 				Labels: map[string]string{
 					"capability/intranet":            "intranet",
 					"capability/arm64":               "arm64",
+					"capability/rce":                 "rce",          // rce - release-controller-eligible
+					"capability/sshd-bastion":        "sshd-bastion", // sshd-bastion - for multiarch P/Z libvirt jobs
 					"ci-operator.openshift.io/cloud": "gcp"},
 			},
 			cm: ClusterMap{"build03": ClusterInfo{Provider: "aws", Capacity: 100, Capabilities: []string{"intranet"}},
 				"build02": ClusterInfo{Provider: "aws", Capacity: 100, Capabilities: []string{"arm64"}}},
 			expected:               "",
 			expectedCanBeRelocated: false,
-			expectedErr:            fmt.Errorf("job some-e2e-job can't be matched with any cluster using provided capabilities: arm64,intranet"),
+			expectedErr:            fmt.Errorf("job some-e2e-job can't be matched with any cluster using provided capabilities: arm64,intranet,rce,sshd-bastion"),
 		},
 		{
 			name:   "cluster label has priority over capabilities",

@@ -10,5 +10,7 @@ extra_refs:
 labels:
   capability/arm64: arm64
   capability/intranet: intranet
+  capability/rce: rce
+  capability/sshd-bastion: sshd-bastion
   pj-rehearse.openshift.io/can-be-rehearsed: "true"
 name: periodic-ci-org-repo-branch-testname

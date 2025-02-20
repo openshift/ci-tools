@@ -141,7 +141,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 			test:        "testname",
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
 			generateOption: func(options *generatePresubmitOptions) {
-				options.Capabilities = []string{"intranet", "arm64"}
+				options.Capabilities = []string{"intranet", "arm64", "rce", "sshd-bastion"} // rce - release-controller-eligible, sshd-bastion - for multiarch P/Z libvirt jobs
 			},
 		},
 	}
@@ -224,7 +224,7 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
 			generateOption: func(options *GeneratePeriodicOptions) {
 				options.Cron = "@yearly"
-				options.Capabilities = []string{"intranet", "arm64"}
+				options.Capabilities = []string{"intranet", "arm64", "rce", "sshd-bastion"} // rce - release-controller-eligible, sshd-bastion - for multiarch P/Z libvirt jobs
 			},
 		},
 	}
@@ -284,7 +284,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 				Branch: "branch",
 			}},
 			generateOption: func(options *generatePostsubmitOptions) {
-				options.Capabilities = []string{"intranet", "arm64"}
+				options.Capabilities = []string{"intranet", "arm64", "rce", "sshd-bastion"} // rce - release-controller-eligible, sshd-bastion - for multiarch P/Z libvirt jobs
 			},
 		},
 		{
@@ -668,7 +668,7 @@ func TestGenerateJobs(t *testing.T) {
 			id: "periodic/presubmit with capabilities",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{
-					{As: "unit", Capabilities: []string{"intranet", "arm64"}, Cron: utilpointer.String(cron), Presubmit: true, ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+					{As: "unit", Capabilities: []string{"intranet", "arm64", "rce", "sshd-bastion"}, Cron: utilpointer.String(cron), Presubmit: true, ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}}, // rce - release-controller-eligible, sshd-bastion - for multiarch P/Z libvirt jobs
 				},
 			},
 			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{

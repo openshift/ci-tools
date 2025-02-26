@@ -45,7 +45,7 @@ func (r *releaseControllerJobResolver) resolve(ocp string, releaseType api.Relea
 	}
 	jobSkips, err := determineJobSkips(time.Now())
 	if err != nil {
-		return nil, fmt.Errorf("could not determine job skips: %v", err)
+		return nil, fmt.Errorf("could not determine job skips: %w", err)
 	}
 	if len(jobSkips) == 0 {
 		return jobs, nil
@@ -113,11 +113,11 @@ func determineJobSkips(now time.Time) ([]jobSkip, error) {
 			}
 			expiration, err := time.Parse(time.RFC3339, expireEnvVar)
 			if err != nil {
-				return nil, fmt.Errorf("failed to parse expiration time %q: %v", expireEnvVar, err)
+				return nil, fmt.Errorf("failed to parse expiration time %q: %w", expireEnvVar, err)
 			}
 			regex, err := regexp.Compile(rawRegex)
 			if err != nil {
-				return nil, fmt.Errorf("could not compile job regexp %s: %v", rawRegex, err)
+				return nil, fmt.Errorf("could not compile job regexp %s: %w", rawRegex, err)
 			}
 			jobSkips = append(jobSkips, jobSkip{
 				regex:      *regex,

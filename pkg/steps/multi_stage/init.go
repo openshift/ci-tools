@@ -14,6 +14,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	csiapi "sigs.k8s.io/secrets-store-csi-driver/apis/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
@@ -25,6 +26,8 @@ var (
 	// This is the format of the `openshift.io/sa.scc.uid-range` annotation in
 	// OpenShift namespaces.
 	uidRangeRegexp = regexp.MustCompile(`^(\d+)/\d+`)
+	// GSMproject is the name of the GCP Secret Manager project where the secrets are stored.
+	GSMproject = "openshift-ci-secrets"
 )
 
 func (s *multiStageTestStep) createSharedDirSecret(ctx context.Context) error {
@@ -40,42 +43,49 @@ func (s *multiStageTestStep) createSharedDirSecret(ctx context.Context) error {
 	return s.client.Create(ctx, secret)
 }
 
-func (s *multiStageTestStep) createCredentials(ctx context.Context) error {
-	logrus.Debugf("Creating multi-stage test credentials for %q", s.name)
-	toCreate := map[string]*coreapi.Secret{}
+// createSPCs creates all the SecretProviderClasses (SPCs) needed
+// to fetch the appropriate secrets from GCP. This is done before
+// the individual steps are run to make sure the appropriate
+// SecretProviderClasses already exist and are available for the test pods.
+func (s *multiStageTestStep) createSPCs(ctx context.Context) error {
+	toCreate := map[string]*csiapi.SecretProviderClass{}
+
 	for _, step := range append(s.pre, append(s.test, s.post...)...) {
 		for _, credential := range step.Credentials {
-			// we don't want secrets imported from separate namespaces to collide
-			// but we want to keep them generally recognizable for debugging, and the
-			// chance we get a second-level collision (ns-a, name) and (ns, a-name) is
-			// small, so we can get away with this string prefixing
-			name := fmt.Sprintf("%s-%s", credential.Namespace, credential.Name)
-			if _, ok := toCreate[name]; ok {
+			name := fmt.Sprintf("%s-%s-spc", s.jobSpec.Namespace(), credential.Name)
+			if _, exists := toCreate[name]; exists {
 				continue
 			}
-			raw := &coreapi.Secret{}
-			if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: credential.Namespace, Name: credential.Name}, raw); err != nil {
-				return fmt.Errorf("could not read source credential: %w", err)
-			}
-			toCreate[name] = &coreapi.Secret{
-				TypeMeta: raw.TypeMeta,
+			toCreate[name] = &csiapi.SecretProviderClass{
+				TypeMeta: meta.TypeMeta{
+					Kind:       "SecretProviderClass",
+					APIVersion: csiapi.GroupVersion.String(),
+				},
 				ObjectMeta: meta.ObjectMeta{
 					Name:      name,
 					Namespace: s.jobSpec.Namespace(),
 				},
-				Type:       raw.Type,
-				Data:       raw.Data,
-				StringData: raw.StringData,
+				Spec: csiapi.SecretProviderClassSpec{
+					Provider: "gcp",
+					Parameters: map[string]string{
+						"auth":    "provider-adc",
+						"secrets": formatSecretsParam(credential.Name),
+					},
+				},
 			}
 		}
 	}
 
 	for name := range toCreate {
 		if err := s.client.Create(ctx, toCreate[name]); err != nil && !kerrors.IsAlreadyExists(err) {
-			return fmt.Errorf("could not create source credential: %w", err)
+			return fmt.Errorf("could not create SecretProviderClass object for secret: %w", err)
 		}
 	}
 	return nil
+}
+
+func formatSecretsParam(name string) string {
+	return fmt.Sprintf("- resourceName: \"projects/%s/secrets/%s/versions/latest\"\n  fileName: \"%s\"", GSMproject, name, name)
 }
 
 func (s *multiStageTestStep) createCommandConfigMaps(ctx context.Context) error {

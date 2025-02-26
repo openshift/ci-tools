@@ -546,16 +546,26 @@ func addSharedDirSecret(secret string, pod *coreapi.Pod) {
 	})
 }
 
+// addCredentialsNew modifies the test Pod by adding a CSI Volume for each credential
+// and mounting them as VolumeMounts in the test container.
 func addCredentials(credentials []api.CredentialReference, pod *coreapi.Pod) {
 	for _, credential := range credentials {
-		name := fmt.Sprintf("%s-%s", credential.Namespace, credential.Name)
 		volumeName := volumeName(credential.Namespace, credential.Name)
-		pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
+		readOnly := true
+		csiVolume := coreapi.Volume{
 			Name: volumeName,
 			VolumeSource: coreapi.VolumeSource{
-				Secret: &coreapi.SecretVolumeSource{SecretName: name},
+				CSI: &coreapi.CSIVolumeSource{
+					Driver:   "secrets-store.csi.k8s.io",
+					ReadOnly: &readOnly,
+					VolumeAttributes: map[string]string{
+						"secretProviderClass": fmt.Sprintf("%s-%s-spc", pod.Namespace, credential.Name),
+					},
+				},
 			},
-		})
+		}
+		pod.Spec.Volumes = append(pod.Spec.Volumes, csiVolume)
+
 		pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, coreapi.VolumeMount{
 			Name:      volumeName,
 			MountPath: credential.MountPath,

@@ -195,8 +195,8 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 	if err := s.createSharedDirSecret(ctx); err != nil {
 		return fmt.Errorf("failed to create secret: %w", err)
 	}
-	if err := s.createCredentials(ctx); err != nil {
-		return fmt.Errorf("failed to create credentials: %w", err)
+	if err := s.createSPCs(ctx); err != nil {
+		return fmt.Errorf("failed to create SecretProviderClass objects: %w", err)
 	}
 	if err := s.createCommandConfigMaps(ctx); err != nil {
 		return fmt.Errorf("failed to create command configmap: %w", err)
@@ -213,6 +213,7 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	secretVolumes, secretVolumeMounts = s.addCredentialsToCensoring(secretVolumes, secretVolumeMounts)
 	var errs []error
 	generateObserverOpt := defaultGeneratePodOptions()
 	generateObserverOpt.IsObserver = true
@@ -434,7 +435,8 @@ func secretsForCensoring(client loggingclient.LoggingClient, namespace string, c
 	}
 	var secretVolumes []coreapi.Volume
 	var secretVolumeMounts []coreapi.VolumeMount
-	for i, secret := range secretList.Items {
+	i := 0
+	for _, secret := range secretList.Items {
 		if _, skip := secret.ObjectMeta.Labels[api.SkipCensoringLabel]; skip {
 			continue
 		}
@@ -454,8 +456,42 @@ func secretsForCensoring(client loggingclient.LoggingClient, namespace string, c
 			Name:      volumeName,
 			MountPath: getMountPath(secret.Name),
 		})
+		i++
 	}
 	return secretVolumes, secretVolumeMounts, nil
+}
+
+func (s *multiStageTestStep) addCredentialsToCensoring(secretVolumes []coreapi.Volume, secretVolumeMounts []coreapi.VolumeMount) ([]coreapi.Volume, []coreapi.VolumeMount) {
+	seenCredentials := make(map[string]bool)
+	i := 0
+	for _, step := range append(s.pre, append(s.test, s.post...)...) {
+		for _, credential := range step.Credentials {
+			if seenCredentials[credential.Name] {
+				continue
+			}
+			seenCredentials[credential.Name] = true
+			volumeName := fmt.Sprintf("censor-cred-%d", i)
+			readOnly := true
+			secretVolumes = append(secretVolumes, coreapi.Volume{
+				Name: volumeName,
+				VolumeSource: coreapi.VolumeSource{
+					CSI: &coreapi.CSIVolumeSource{
+						Driver:   "secrets-store.csi.k8s.io",
+						ReadOnly: &readOnly,
+						VolumeAttributes: map[string]string{
+							"secretProviderClass": fmt.Sprintf("%s-%s-spc", s.jobSpec.Namespace(), credential.Name),
+						},
+					},
+				},
+			})
+			secretVolumeMounts = append(secretVolumeMounts, coreapi.VolumeMount{
+				Name:      volumeName,
+				MountPath: getMountPath(credential.Name),
+			})
+			i++
+		}
+	}
+	return secretVolumes, secretVolumeMounts
 }
 
 func getMountPath(secretName string) string {

@@ -61,6 +61,7 @@ import (
 	"sigs.k8s.io/prow/pkg/logrusutil"
 	"sigs.k8s.io/prow/pkg/pod-utils/downwardapi"
 	"sigs.k8s.io/prow/pkg/version"
+	csiapi "sigs.k8s.io/secrets-store-csi-driver/apis/v1"
 	"sigs.k8s.io/yaml"
 
 	buildv1 "github.com/openshift/api/build/v1"
@@ -2388,6 +2389,9 @@ func addSchemes() error {
 	}
 	if err := egressfirewallv1.AddToScheme(scheme.Scheme); err != nil {
 		return fmt.Errorf("failed to add egressfirewallv1 to scheme: %w", err)
+	}
+	if err := csiapi.AddToScheme(scheme.Scheme); err != nil {
+		return fmt.Errorf("failed to add secrets-store-csi-driver to scheme: %w", err)
 	}
 	return nil
 }

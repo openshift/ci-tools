@@ -47,6 +47,9 @@ func (r *releaseControllerJobResolver) resolve(ocp string, releaseType api.Relea
 	if err != nil {
 		return nil, fmt.Errorf("could not determine job skips: %v", err)
 	}
+	if len(jobSkips) == 0 {
+		return jobs, nil
+	}
 
 	var filteredJobs []config.Job
 	for _, job := range jobs {

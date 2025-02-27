@@ -10,6 +10,7 @@ import (
 
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -320,6 +321,7 @@ func TestGeneratePodBestEffort(t *testing.T) {
 }
 
 func TestAddCredentials(t *testing.T) {
+	readOnly := true
 	var testCases = []struct {
 		name        string
 		credentials []api.CredentialReference
@@ -335,53 +337,140 @@ func TestAddCredentials(t *testing.T) {
 		{
 			name:        "one to add",
 			credentials: []api.CredentialReference{{Namespace: "ns", Name: "name", MountPath: "/tmp"}},
-			pod: coreapi.Pod{Spec: coreapi.PodSpec{
-				Containers: []coreapi.Container{{VolumeMounts: []coreapi.VolumeMount{}}},
-				Volumes:    []coreapi.Volume{},
-			}},
-			expected: coreapi.Pod{Spec: coreapi.PodSpec{
-				Containers: []coreapi.Container{{VolumeMounts: []coreapi.VolumeMount{{Name: "ns-name", MountPath: "/tmp"}}}},
-				Volumes:    []coreapi.Volume{{Name: "ns-name", VolumeSource: coreapi.VolumeSource{Secret: &coreapi.SecretVolumeSource{SecretName: "ns-name"}}}},
-			}},
+			pod: coreapi.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "pod-ns",
+				},
+				Spec: coreapi.PodSpec{
+					Containers: []coreapi.Container{{VolumeMounts: []coreapi.VolumeMount{}}},
+					Volumes:    []coreapi.Volume{},
+				},
+			},
+			expected: coreapi.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "pod-ns",
+				},
+				Spec: coreapi.PodSpec{
+					Containers: []coreapi.Container{
+						{
+							VolumeMounts: []coreapi.VolumeMount{
+								{
+									Name: "ns-name", MountPath: "/tmp",
+								},
+							},
+						},
+					},
+					Volumes: []coreapi.Volume{
+						{
+							Name: "ns-name",
+							VolumeSource: coreapi.VolumeSource{
+								CSI: &coreapi.CSIVolumeSource{
+									Driver:   "secrets-store.csi.k8s.io",
+									ReadOnly: &readOnly,
+									VolumeAttributes: map[string]string{
+										"secretProviderClass": "pod-ns-name-spc",
+									},
+								},
+							},
+						},
+					},
+				}},
 		},
 		{
 			name: "many to add and disambiguate",
 			credentials: []api.CredentialReference{
-				{Namespace: "ns", Name: "name", MountPath: "/tmp"},
-				{Namespace: "other", Name: "name", MountPath: "/tamp"},
+				{Namespace: "ns", Name: "name1", MountPath: "/tmp"},
+				{Namespace: "other", Name: "name2", MountPath: "/tamp"},
 			},
-			pod: coreapi.Pod{Spec: coreapi.PodSpec{
-				Containers: []coreapi.Container{{VolumeMounts: []coreapi.VolumeMount{}}},
-				Volumes:    []coreapi.Volume{},
-			}},
-			expected: coreapi.Pod{Spec: coreapi.PodSpec{
-				Containers: []coreapi.Container{{VolumeMounts: []coreapi.VolumeMount{
-					{Name: "ns-name", MountPath: "/tmp"},
-					{Name: "other-name", MountPath: "/tamp"},
-				}}},
-				Volumes: []coreapi.Volume{
-					{Name: "ns-name", VolumeSource: coreapi.VolumeSource{Secret: &coreapi.SecretVolumeSource{SecretName: "ns-name"}}},
-					{Name: "other-name", VolumeSource: coreapi.VolumeSource{Secret: &coreapi.SecretVolumeSource{SecretName: "other-name"}}},
+			pod: coreapi.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "pod-ns",
 				},
-			}},
+				Spec: coreapi.PodSpec{
+					Containers: []coreapi.Container{{VolumeMounts: []coreapi.VolumeMount{}}},
+					Volumes:    []coreapi.Volume{},
+				},
+			},
+			expected: coreapi.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "pod-ns",
+				},
+				Spec: coreapi.PodSpec{
+					Containers: []coreapi.Container{
+						{
+							VolumeMounts: []coreapi.VolumeMount{
+								{
+									Name: "ns-name1", MountPath: "/tmp"},
+								{
+									Name: "other-name2", MountPath: "/tamp"},
+							},
+						},
+					},
+					Volumes: []coreapi.Volume{
+						{
+							Name: "ns-name1",
+							VolumeSource: coreapi.VolumeSource{
+								CSI: &coreapi.CSIVolumeSource{
+									Driver:   "secrets-store.csi.k8s.io",
+									ReadOnly: &readOnly,
+									VolumeAttributes: map[string]string{
+										"secretProviderClass": "pod-ns-name1-spc",
+									},
+								},
+							},
+						},
+						{
+							Name: "other-name2",
+							VolumeSource: coreapi.VolumeSource{
+								CSI: &coreapi.CSIVolumeSource{
+									Driver:   "secrets-store.csi.k8s.io",
+									ReadOnly: &readOnly,
+									VolumeAttributes: map[string]string{
+										"secretProviderClass": "pod-ns-name2-spc",
+									},
+								},
+							},
+						},
+					},
+				}},
 		},
 		{
 			name: "dots in volume name are replaced",
 			credentials: []api.CredentialReference{
-				{Namespace: "ns", Name: "hive-hive-credentials", MountPath: "/tmp"},
+				{Namespace: "test-ns", Name: "hive-hive-credentials", MountPath: "/tmp"},
 			},
-			pod: coreapi.Pod{Spec: coreapi.PodSpec{
-				Containers: []coreapi.Container{{VolumeMounts: []coreapi.VolumeMount{}}},
-				Volumes:    []coreapi.Volume{},
-			}},
-			expected: coreapi.Pod{Spec: coreapi.PodSpec{
-				Containers: []coreapi.Container{{VolumeMounts: []coreapi.VolumeMount{
-					{Name: "ns-hive-hive-credentials", MountPath: "/tmp"},
-				}}},
-				Volumes: []coreapi.Volume{
-					{Name: "ns-hive-hive-credentials", VolumeSource: coreapi.VolumeSource{Secret: &coreapi.SecretVolumeSource{SecretName: "ns-hive-hive-credentials"}}},
+			pod: coreapi.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "pod-ns",
 				},
-			}},
+				Spec: coreapi.PodSpec{
+					Containers: []coreapi.Container{{VolumeMounts: []coreapi.VolumeMount{}}},
+					Volumes:    []coreapi.Volume{},
+				},
+			},
+			expected: coreapi.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "pod-ns",
+				},
+				Spec: coreapi.PodSpec{
+					Containers: []coreapi.Container{{VolumeMounts: []coreapi.VolumeMount{
+						{Name: "test-ns-hive-hive-credentials", MountPath: "/tmp"},
+					}}},
+					Volumes: []coreapi.Volume{
+						{
+							Name: "test-ns-hive-hive-credentials",
+							VolumeSource: coreapi.VolumeSource{
+								CSI: &coreapi.CSIVolumeSource{
+									Driver:   "secrets-store.csi.k8s.io",
+									ReadOnly: &readOnly,
+									VolumeAttributes: map[string]string{
+										"secretProviderClass": "pod-ns-hive-hive-credentials-spc",
+									},
+								},
+							},
+						},
+					},
+				}},
 		},
 	}
 

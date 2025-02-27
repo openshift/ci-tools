@@ -2,6 +2,7 @@ package multi_stage
 
 import (
 	"context"
+	"fmt"
 	"path"
 	"sort"
 	"testing"
@@ -188,6 +189,118 @@ func TestSecretsForCensoring(t *testing.T) {
 	}
 	if diff := cmp.Diff(mounts, expectedMounts); diff != "" {
 		t.Errorf("got incorrect mounts: %v", diff)
+	}
+}
+
+func TestAddCredentialsToCensoring(t *testing.T) {
+	secretVolumes := []coreapi.Volume{
+		{
+			Name: "censor-0",
+		},
+	}
+	secretVolumeMounts := []coreapi.VolumeMount{
+		{
+			Name:      "censor-0",
+			MountPath: path.Join("/secrets", "1first"),
+		},
+	}
+	credential1 := api.CredentialReference{Name: "credential1"}
+	credential2 := api.CredentialReference{Name: "credential2"}
+
+	// Helper function to create a volume
+	newVolume := func(index int, credName string) coreapi.Volume {
+		readOnly := true
+		return coreapi.Volume{
+			Name: fmt.Sprintf("censor-cred-%d", index),
+			VolumeSource: coreapi.VolumeSource{
+				CSI: &coreapi.CSIVolumeSource{
+					Driver:   "secrets-store.csi.k8s.io",
+					ReadOnly: &readOnly,
+					VolumeAttributes: map[string]string{
+						"secretProviderClass": fmt.Sprintf("test-%s-spc", credName),
+					},
+				},
+			},
+		}
+	}
+	for _, tc := range []struct {
+		name                 string
+		credentials          []api.CredentialReference
+		pre                  []api.LiteralTestStep
+		test                 []api.LiteralTestStep
+		post                 []api.LiteralTestStep
+		expectedVolumes      []coreapi.Volume
+		expectedVolumeMounts []coreapi.VolumeMount
+	}{
+		{
+			name:                 "no credentials",
+			expectedVolumes:      secretVolumes,
+			expectedVolumeMounts: secretVolumeMounts,
+		},
+		{
+			name:        "one credential",
+			credentials: []api.CredentialReference{credential1},
+			pre: []api.LiteralTestStep{
+				{
+					Credentials: []api.CredentialReference{
+						credential1,
+					},
+				},
+			},
+			expectedVolumes: append(secretVolumes, newVolume(0, credential1.Name)),
+			expectedVolumeMounts: append(secretVolumeMounts, coreapi.VolumeMount{
+				Name:      "censor-cred-0",
+				MountPath: getMountPath(credential1.Name),
+			}),
+		},
+		{
+			name: "multiple duplicated credentials",
+			test: []api.LiteralTestStep{
+				{
+					Credentials: []api.CredentialReference{
+						credential1,
+						credential2,
+					},
+				},
+			},
+			post: []api.LiteralTestStep{
+				{
+					Credentials: []api.CredentialReference{
+						credential1,
+					},
+				},
+			},
+			expectedVolumes: append(secretVolumes, newVolume(0, credential1.Name), newVolume(1, credential2.Name)),
+			expectedVolumeMounts: append(secretVolumeMounts, coreapi.VolumeMount{
+				Name:      "censor-cred-0",
+				MountPath: getMountPath(credential1.Name),
+			}, coreapi.VolumeMount{
+				Name:      "censor-cred-1",
+				MountPath: getMountPath(credential2.Name),
+			}),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			step := &multiStageTestStep{
+				pre:     tc.pre,
+				test:    tc.test,
+				post:    tc.post,
+				jobSpec: &api.JobSpec{},
+			}
+			secretVolumes := []coreapi.Volume{{Name: "censor-0"}}
+			secretVolumeMounts := []coreapi.VolumeMount{{
+				Name:      "censor-0",
+				MountPath: path.Join("/secrets", "1first"),
+			}}
+			step.jobSpec.SetNamespace("test")
+			secretVolumes, secretVolumeMounts = step.addCredentialsToCensoring(secretVolumes, secretVolumeMounts)
+			if diff := cmp.Diff(secretVolumes, tc.expectedVolumes); diff != "" {
+				t.Errorf("got incorrect volumes: %v", diff)
+			}
+			if diff := cmp.Diff(secretVolumeMounts, tc.expectedVolumeMounts); diff != "" {
+				t.Errorf("got incorrect mounts: %v", diff)
+			}
+		})
 	}
 }
 

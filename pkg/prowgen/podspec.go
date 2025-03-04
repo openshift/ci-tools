@@ -301,7 +301,7 @@ func CIPullSecret() PodSpecMutator {
 func Arg(name, value string) PodSpecMutator {
 	return func(spec *corev1.PodSpec) error {
 		container := &spec.Containers[0]
-		addUniqueParameter(container, fmt.Sprintf("%s=%s", name, value))
+		addUniqueParameter(container, fmt.Sprintf("--%s=%s", name, value))
 		return nil
 	}
 }

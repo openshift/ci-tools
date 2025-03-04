@@ -39,6 +39,9 @@ type Prowgen struct {
 	Rehearsals Rehearsals `json:"rehearsals,omitempty"`
 	// SlackReporterConfigs defines all desired slack reporter info for included jobs
 	SlackReporterConfigs []SlackReporterConfig `json:"slack_reporter,omitempty"`
+	// EnableSecretsStoreCSIDriver indicates that jobs should use the new CSI Secrets Store
+	// mechanism to handle multi-stage credentials secrets.
+	EnableSecretsStoreCSIDriver bool `json:"enable_secrets_store_csi_driver,omitempty"`
 }
 
 // SlackReporterConfig groups test names to a channel to report; mimicking Prow's version, with some unnecessary fields removed
@@ -66,6 +69,9 @@ func (p *Prowgen) MergeDefaults(defaults *Prowgen) {
 	}
 	if defaults.Expose {
 		p.Expose = true
+	}
+	if defaults.EnableSecretsStoreCSIDriver {
+		p.EnableSecretsStoreCSIDriver = true
 	}
 	if defaults.Rehearsals.DisableAll {
 		p.Rehearsals.DisableAll = true

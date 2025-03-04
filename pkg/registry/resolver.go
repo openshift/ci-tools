@@ -108,7 +108,7 @@ func (r *registry) mergeWorkflow(config *api.MultiStageTestConfiguration) ([][]a
 	config.DependencyOverrides = mergeDependencyOverrides(workflow.DependencyOverrides, config.DependencyOverrides)
 	config.DNSConfig = overwriteIfUnset(workflow.DNSConfig, config.DNSConfig)
 	config.Observers = overwriteIfUnset(workflow.Observers, config.Observers)
-	config.NodeArchitecture = (overwriteIfUnset(workflow.NodeArchitecture, config.NodeArchitecture))
+	config.NodeArchitecture = overwriteIfUnset(workflow.NodeArchitecture, config.NodeArchitecture)
 
 	if l, err := mergeLeases(workflow.Leases, config.Leases); err != nil {
 		errs = append(errs, err)

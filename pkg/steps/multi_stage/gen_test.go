@@ -84,7 +84,7 @@ func TestGeneratePods(t *testing.T) {
 		},
 	}
 	jobSpec.SetNamespace("namespace")
-	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil, "node-name", "", nil)
+	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil, "node-name", "", nil, false)
 	step.test[0].Resources = api.ResourceRequirements{
 		Requests: api.ResourceList{api.ShmResource: "2G"},
 		Limits:   api.ResourceList{api.ShmResource: "2G"}}
@@ -162,7 +162,7 @@ func TestGenerateObservers(t *testing.T) {
 		},
 	}
 	jobSpec.SetNamespace("namespace")
-	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil, "node-name", "", nil)
+	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil, "node-name", "", nil, false)
 	ret, err := step.generateObservers(observers, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -236,7 +236,7 @@ func TestGeneratePodsEnvironment(t *testing.T) {
 					Test:        test,
 					Environment: tc.env,
 				},
-			}, &api.ReleaseBuildConfiguration{}, nil, nil, &jobSpec, nil, "node-name", "", nil)
+			}, &api.ReleaseBuildConfiguration{}, nil, nil, &jobSpec, nil, "node-name", "", nil, false)
 			pods, _, err := step.(*multiStageTestStep).generatePods(test, nil, nil, nil, nil)
 			if err != nil {
 				t.Fatal(err)
@@ -304,7 +304,7 @@ func TestGeneratePodBestEffort(t *testing.T) {
 		},
 	}
 	jobSpec.SetNamespace("namespace")
-	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil, "node-name", "", nil)
+	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil, "node-name", "", nil, false)
 	_, bestEffortSteps, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Post, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -321,6 +321,82 @@ func TestGeneratePodBestEffort(t *testing.T) {
 }
 
 func TestAddCredentials(t *testing.T) {
+	var testCases = []struct {
+		name        string
+		credentials []api.CredentialReference
+		pod         coreapi.Pod
+		expected    coreapi.Pod
+	}{
+		{
+			name:        "none to add",
+			credentials: []api.CredentialReference{},
+			pod:         coreapi.Pod{},
+			expected:    coreapi.Pod{},
+		},
+		{
+			name:        "one to add",
+			credentials: []api.CredentialReference{{Namespace: "ns", Name: "name", MountPath: "/tmp"}},
+			pod: coreapi.Pod{Spec: coreapi.PodSpec{
+				Containers: []coreapi.Container{{VolumeMounts: []coreapi.VolumeMount{}}},
+				Volumes:    []coreapi.Volume{},
+			}},
+			expected: coreapi.Pod{Spec: coreapi.PodSpec{
+				Containers: []coreapi.Container{{VolumeMounts: []coreapi.VolumeMount{{Name: "ns-name", MountPath: "/tmp"}}}},
+				Volumes:    []coreapi.Volume{{Name: "ns-name", VolumeSource: coreapi.VolumeSource{Secret: &coreapi.SecretVolumeSource{SecretName: "ns-name"}}}},
+			}},
+		},
+		{
+			name: "many to add and disambiguate",
+			credentials: []api.CredentialReference{
+				{Namespace: "ns", Name: "name", MountPath: "/tmp"},
+				{Namespace: "other", Name: "name", MountPath: "/tamp"},
+			},
+			pod: coreapi.Pod{Spec: coreapi.PodSpec{
+				Containers: []coreapi.Container{{VolumeMounts: []coreapi.VolumeMount{}}},
+				Volumes:    []coreapi.Volume{},
+			}},
+			expected: coreapi.Pod{Spec: coreapi.PodSpec{
+				Containers: []coreapi.Container{{VolumeMounts: []coreapi.VolumeMount{
+					{Name: "ns-name", MountPath: "/tmp"},
+					{Name: "other-name", MountPath: "/tamp"},
+				}}},
+				Volumes: []coreapi.Volume{
+					{Name: "ns-name", VolumeSource: coreapi.VolumeSource{Secret: &coreapi.SecretVolumeSource{SecretName: "ns-name"}}},
+					{Name: "other-name", VolumeSource: coreapi.VolumeSource{Secret: &coreapi.SecretVolumeSource{SecretName: "other-name"}}},
+				},
+			}},
+		},
+		{
+			name: "dots in volume name are replaced",
+			credentials: []api.CredentialReference{
+				{Namespace: "ns", Name: "hive-hive-credentials", MountPath: "/tmp"},
+			},
+			pod: coreapi.Pod{Spec: coreapi.PodSpec{
+				Containers: []coreapi.Container{{VolumeMounts: []coreapi.VolumeMount{}}},
+				Volumes:    []coreapi.Volume{},
+			}},
+			expected: coreapi.Pod{Spec: coreapi.PodSpec{
+				Containers: []coreapi.Container{{VolumeMounts: []coreapi.VolumeMount{
+					{Name: "ns-hive-hive-credentials", MountPath: "/tmp"},
+				}}},
+				Volumes: []coreapi.Volume{
+					{Name: "ns-hive-hive-credentials", VolumeSource: coreapi.VolumeSource{Secret: &coreapi.SecretVolumeSource{SecretName: "ns-hive-hive-credentials"}}},
+				},
+			}},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			addCredentials(testCase.credentials, &testCase.pod, false)
+			if !equality.Semantic.DeepEqual(testCase.pod, testCase.expected) {
+				t.Errorf("%s: got incorrect Pod: %s", testCase.name, cmp.Diff(testCase.pod, testCase.expected))
+			}
+		})
+	}
+}
+
+func TestAddCSICredentials(t *testing.T) {
 	readOnly := true
 	var testCases = []struct {
 		name        string
@@ -476,7 +552,7 @@ func TestAddCredentials(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			addCredentials(testCase.credentials, &testCase.pod)
+			addCredentials(testCase.credentials, &testCase.pod, true)
 			if !equality.Semantic.DeepEqual(testCase.pod, testCase.expected) {
 				t.Errorf("%s: got incorrect Pod: %s", testCase.name, cmp.Diff(testCase.pod, testCase.expected))
 			}

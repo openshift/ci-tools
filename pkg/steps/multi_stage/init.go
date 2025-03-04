@@ -43,6 +43,44 @@ func (s *multiStageTestStep) createSharedDirSecret(ctx context.Context) error {
 	return s.client.Create(ctx, secret)
 }
 
+func (s *multiStageTestStep) createCredentials(ctx context.Context) error {
+	logrus.Debugf("Creating multi-stage test credentials for %q", s.name)
+	toCreate := map[string]*coreapi.Secret{}
+	for _, step := range append(s.pre, append(s.test, s.post...)...) {
+		for _, credential := range step.Credentials {
+			// we don't want secrets imported from separate namespaces to collide
+			// but we want to keep them generally recognizable for debugging, and the
+			// chance we get a second-level collision (ns-a, name) and (ns, a-name) is
+			// small, so we can get away with this string prefixing
+			name := fmt.Sprintf("%s-%s", credential.Namespace, credential.Name)
+			if _, ok := toCreate[name]; ok {
+				continue
+			}
+			raw := &coreapi.Secret{}
+			if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: credential.Namespace, Name: credential.Name}, raw); err != nil {
+				return fmt.Errorf("could not read source credential: %w", err)
+			}
+			toCreate[name] = &coreapi.Secret{
+				TypeMeta: raw.TypeMeta,
+				ObjectMeta: meta.ObjectMeta{
+					Name:      name,
+					Namespace: s.jobSpec.Namespace(),
+				},
+				Type:       raw.Type,
+				Data:       raw.Data,
+				StringData: raw.StringData,
+			}
+		}
+	}
+
+	for name := range toCreate {
+		if err := s.client.Create(ctx, toCreate[name]); err != nil && !kerrors.IsAlreadyExists(err) {
+			return fmt.Errorf("could not create source credential: %w", err)
+		}
+	}
+	return nil
+}
+
 // createSPCs creates all the SecretProviderClasses (SPCs) needed
 // to fetch the appropriate secrets from GCP. This is done before
 // the individual steps are run to make sure the appropriate

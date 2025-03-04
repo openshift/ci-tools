@@ -90,21 +90,22 @@ type multiStageTestStep struct {
 	profile          api.ClusterProfile
 	config           *api.ReleaseBuildConfiguration
 	// params exposes getters for variables created by other steps
-	params           api.Parameters
-	env              api.TestEnvironment
-	client           kubernetes.PodClient
-	jobSpec          *api.JobSpec
-	observers        []api.Observer
-	pre, test, post  []api.LiteralTestStep
-	subLock          *sync.Mutex
-	subTests         []*junit.TestCase
-	subSteps         []api.CIOperatorStepDetailInfo
-	flags            stepFlag
-	leases           []api.StepLease
-	clusterClaim     *api.ClusterClaim
-	vpnConf          *vpnConf
-	cancelObservers  func(context.CancelFunc)
-	nodeArchitecture api.NodeArchitecture
+	params                      api.Parameters
+	env                         api.TestEnvironment
+	client                      kubernetes.PodClient
+	jobSpec                     *api.JobSpec
+	observers                   []api.Observer
+	pre, test, post             []api.LiteralTestStep
+	subLock                     *sync.Mutex
+	subTests                    []*junit.TestCase
+	subSteps                    []api.CIOperatorStepDetailInfo
+	flags                       stepFlag
+	leases                      []api.StepLease
+	clusterClaim                *api.ClusterClaim
+	vpnConf                     *vpnConf
+	cancelObservers             func(context.CancelFunc)
+	nodeArchitecture            api.NodeArchitecture
+	enableSecretsStoreCSIDriver bool
 }
 
 func MultiStageTestStep(
@@ -117,8 +118,9 @@ func MultiStageTestStep(
 	nodeName string,
 	targetAdditionalSuffix string,
 	cancelObservers func(context.CancelFunc),
+	enableSecretsStoreCSIDriver bool,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, params, client, jobSpec, leases, nodeName, targetAdditionalSuffix, cancelObservers)
+	return newMultiStageTestStep(testConfig, config, params, client, jobSpec, leases, nodeName, targetAdditionalSuffix, cancelObservers, enableSecretsStoreCSIDriver)
 }
 
 func newMultiStageTestStep(
@@ -131,6 +133,7 @@ func newMultiStageTestStep(
 	nodeName string,
 	targetAdditionalSuffix string,
 	cancelObservers func(context.CancelFunc),
+	enableSecretsStoreCSIDriver bool,
 ) *multiStageTestStep {
 	ms := testConfig.MultiStageTestConfigurationLiteral
 	var flags stepFlag
@@ -141,25 +144,26 @@ func newMultiStageTestStep(
 		flags |= allowBestEffortPostSteps
 	}
 	return &multiStageTestStep{
-		name:             testConfig.As,
-		additionalSuffix: targetAdditionalSuffix,
-		nodeName:         nodeName,
-		profile:          ms.ClusterProfile,
-		config:           config,
-		params:           params,
-		env:              ms.Environment,
-		client:           client,
-		jobSpec:          jobSpec,
-		observers:        ms.Observers,
-		pre:              ms.Pre,
-		test:             ms.Test,
-		post:             ms.Post,
-		flags:            flags,
-		leases:           leases,
-		clusterClaim:     testConfig.ClusterClaim,
-		subLock:          &sync.Mutex{},
-		cancelObservers:  cancelObservers,
-		nodeArchitecture: testConfig.NodeArchitecture,
+		name:                        testConfig.As,
+		additionalSuffix:            targetAdditionalSuffix,
+		nodeName:                    nodeName,
+		profile:                     ms.ClusterProfile,
+		config:                      config,
+		params:                      params,
+		env:                         ms.Environment,
+		client:                      client,
+		jobSpec:                     jobSpec,
+		observers:                   ms.Observers,
+		pre:                         ms.Pre,
+		test:                        ms.Test,
+		post:                        ms.Post,
+		flags:                       flags,
+		leases:                      leases,
+		clusterClaim:                testConfig.ClusterClaim,
+		subLock:                     &sync.Mutex{},
+		cancelObservers:             cancelObservers,
+		nodeArchitecture:            testConfig.NodeArchitecture,
+		enableSecretsStoreCSIDriver: enableSecretsStoreCSIDriver,
 	}
 }
 
@@ -195,8 +199,14 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 	if err := s.createSharedDirSecret(ctx); err != nil {
 		return fmt.Errorf("failed to create secret: %w", err)
 	}
-	if err := s.createSPCs(ctx); err != nil {
-		return fmt.Errorf("failed to create SecretProviderClass objects: %w", err)
+	if s.enableSecretsStoreCSIDriver {
+		if err := s.createSPCs(ctx); err != nil {
+			return fmt.Errorf("failed to create SecretProviderClass objects: %w", err)
+		}
+	} else {
+		if err := s.createCredentials(ctx); err != nil {
+			return fmt.Errorf("failed to create credentials: %w", err)
+		}
 	}
 	if err := s.createCommandConfigMaps(ctx); err != nil {
 		return fmt.Errorf("failed to create command configmap: %w", err)
@@ -213,10 +223,13 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	secretVolumes, secretVolumeMounts = s.addCredentialsToCensoring(secretVolumes, secretVolumeMounts)
+	if s.enableSecretsStoreCSIDriver {
+		secretVolumes, secretVolumeMounts = s.addCredentialsToCensoring(secretVolumes, secretVolumeMounts)
+	}
 	var errs []error
 	generateObserverOpt := defaultGeneratePodOptions()
 	generateObserverOpt.IsObserver = true
+	generateObserverOpt.enableSecretsStoreCSIDriver = s.enableSecretsStoreCSIDriver
 	observers, err := s.generateObservers(s.observers, secretVolumes, secretVolumeMounts, generateObserverOpt)
 	if err != nil {
 		// if we can't even generate the Pods there's no reason to run the job

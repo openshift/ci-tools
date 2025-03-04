@@ -710,8 +710,9 @@ func (v *Validator) validateLiteralTestStep(context *context, stage testStage, s
 	ret = append(ret, validateDependencies(string(context.field), step.Dependencies)...)
 	ret = append(ret, validateLeases(context.addField("leases"), step.Leases)...)
 	if step.NodeArchitecture != nil {
-		err := validateNodeArchitecture(string(context.field), *step.NodeArchitecture)
-		ret = append(ret, err)
+		if err := validateNodeArchitecture(string(context.field), *step.NodeArchitecture); err != nil {
+			ret = append(ret, err)
+		}
 	}
 	switch stage {
 	case testStagePre, testStageTest:

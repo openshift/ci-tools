@@ -70,7 +70,6 @@ func FromConfig(
 	pullSecret, pushSecret *coreapi.Secret,
 	censor *secrets.DynamicCensor,
 	hiveKubeconfig *rest.Config,
-	consoleHost string,
 	nodeName string,
 	nodeArchitectures []string,
 	targetAdditionalSuffix string,
@@ -115,7 +114,7 @@ func FromConfig(
 	httpClient := retryablehttp.NewClient()
 	httpClient.Logger = nil
 
-	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, consoleHost, nodeName, targetAdditionalSuffix, nodeArchitectures, integratedStreams, injectedTest)
+	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, nodeName, targetAdditionalSuffix, nodeArchitectures, integratedStreams, injectedTest)
 }
 
 func fromConfig(
@@ -138,7 +137,6 @@ func fromConfig(
 	pullSecret, pushSecret *coreapi.Secret,
 	params *api.DeferredParameters,
 	censor *secrets.DynamicCensor,
-	consoleHost string,
 	nodeName string,
 	targetAdditionalSuffix string,
 	nodeArchitectures []string,

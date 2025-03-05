@@ -330,6 +330,31 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 			info: defaultInfo,
 		},
 		{
+			name: "multi-stage test with CSI enabled",
+			test: ciop.TestStepConfiguration{
+				As: "simple",
+				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
+					Workflow: pointer.StringPtr("workflow"),
+				},
+			},
+			info: &ProwgenInfo{
+				Metadata: ciop.Metadata{Org: "o", Repo: "r", Branch: "b"},
+				Config:   config.Prowgen{EnableSecretsStoreCSIDriver: true},
+			},
+		},
+		{
+			name: "simple test with CSI enabled",
+			test: ciop.TestStepConfiguration{
+				As:                         "simple",
+				Commands:                   "make",
+				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
+			},
+			info: &ProwgenInfo{
+				Metadata: ciop.Metadata{Org: "o", Repo: "r", Branch: "b"},
+				Config:   config.Prowgen{EnableSecretsStoreCSIDriver: true},
+			},
+		},
+		{
 			name: "multi-stage test with claim",
 			test: ciop.TestStepConfiguration{
 				As:           "simple",

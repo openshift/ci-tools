@@ -14,10 +14,7 @@ import (
 
 	coreapi "k8s.io/api/core/v1"
 	kapierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/apimachinery/pkg/util/wait"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	utilpointer "k8s.io/utils/pointer"
@@ -34,7 +31,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/configresolver"
-	testimagestreamtagimportv1 "github.com/openshift/ci-tools/pkg/api/testimagestreamtagimport/v1"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/labeledclient"
 	"github.com/openshift/ci-tools/pkg/lease"
@@ -74,7 +70,6 @@ func FromConfig(
 	pullSecret, pushSecret *coreapi.Secret,
 	censor *secrets.DynamicCensor,
 	hiveKubeconfig *rest.Config,
-	consoleHost string,
 	nodeName string,
 	nodeArchitectures []string,
 	targetAdditionalSuffix string,
@@ -120,7 +115,7 @@ func FromConfig(
 	httpClient := retryablehttp.NewClient()
 	httpClient.Logger = nil
 
-	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, consoleHost, nodeName, targetAdditionalSuffix, nodeArchitectures, integratedStreams, injectedTest, enableSecretsStoreCSIDriver)
+	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, nodeName, targetAdditionalSuffix, nodeArchitectures, integratedStreams, injectedTest, enableSecretsStoreCSIDriver)
 }
 
 func fromConfig(
@@ -143,7 +138,6 @@ func fromConfig(
 	pullSecret, pushSecret *coreapi.Secret,
 	params *api.DeferredParameters,
 	censor *secrets.DynamicCensor,
-	consoleHost string,
 	nodeName string,
 	targetAdditionalSuffix string,
 	nodeArchitectures []string,
@@ -172,7 +166,7 @@ func fromConfig(
 		return nil, nil, fmt.Errorf("failed to get steps from configuration: %w", err)
 	}
 	rawSteps = append(graphConf.Steps, rawSteps...)
-	rawSteps = append(rawSteps, stepsForImageOverrides(ctx, utils.GetOverriddenImages(), consoleHost, client, time.Second)...)
+	rawSteps = append(rawSteps, stepsForImageOverrides(utils.GetOverriddenImages())...)
 
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
@@ -382,26 +376,16 @@ func fromConfig(
 	return append(overridableSteps, buildSteps...), promotionSteps, nil
 }
 
-func stepsForImageOverrides(ctx context.Context, overriddenImages map[string]string, consoleHost string, client ctrlruntimeclient.Client, second time.Duration) []api.StepConfiguration {
+func stepsForImageOverrides(overriddenImages map[string]string) []api.StepConfiguration {
 	var overrideSteps []api.StepConfiguration
 	for tag, value := range overriddenImages {
-		istRef := api.ImageStreamTagReference{
-			Namespace: "ocp",
-			Name:      value,
-			Tag:       tag,
-		}
 		inputStep := api.StepConfiguration{InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 			InputImage: api.InputImage{
-				BaseImage: istRef,
-				To:        api.PipelineImageStreamTagReference(tag),
+				To: api.PipelineImageStreamTagReference(tag),
 			},
+			ExternalPullSpec: value,
 		}}
 		overrideSteps = append(overrideSteps, inputStep)
-
-		// If we are not running on app.ci we will need to make sure the ImageStreamTag is available
-		if !strings.HasSuffix(consoleHost, api.ServiceDomainAPPCI) {
-			ensureImageStreamTag(ctx, client, &istRef, second)
-		}
 
 		outputStep := api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
 			From: api.PipelineImageStreamTagReference(tag),
@@ -1138,39 +1122,6 @@ func buildRootImageStreamFromRepository(path string, readFile readFile) (*api.Im
 	}
 
 	return &config.BuildRootImage, validateCIOperatorInrepoConfig(&config)
-}
-
-func ensureImageStreamTag(ctx context.Context, client ctrlruntimeclient.Client, isTagRef *api.ImageStreamTagReference, second time.Duration) {
-	istImport := &testimagestreamtagimportv1.TestImageStreamTagImport{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      isTagRef.Name + "-" + isTagRef.Tag,
-			Namespace: "ci",
-			Labels:    map[string]string{api.DPTPRequesterLabel: "ci-operator"},
-		},
-		Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
-			Namespace: isTagRef.Namespace,
-			Name:      isTagRef.Name + ":" + isTagRef.Tag,
-		},
-	}
-	istImport.WithImageStreamLabels()
-
-	// Conflicts are expected
-	if err := client.Create(ctx, istImport); err != nil && !kapierrors.IsAlreadyExists(err) {
-		logrus.WithError(err).Warnf("Failed to create imagestreamtagimport for root %s", isTagRef.ISTagName())
-	}
-
-	name := types.NamespacedName{Namespace: isTagRef.Namespace, Name: isTagRef.Name + ":" + isTagRef.Tag}
-	if err := wait.PollImmediate(5*second, 30*second, func() (bool, error) {
-		if err := client.Get(ctx, name, &imagev1.ImageStreamTag{}); err != nil {
-			if kapierrors.IsNotFound(err) {
-				return false, nil
-			}
-			return false, fmt.Errorf("get failed: %w", err)
-		}
-		return true, nil
-	}); err != nil {
-		logrus.WithError(err).Warnf("Waiting for imagestreamtag %s failed", isTagRef.ISTagName())
-	}
 }
 
 func resolveCLIOverrideImage(architecture api.ReleaseArchitecture, version string) (*coreapi.ObjectReference, error) {

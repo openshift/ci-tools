@@ -98,6 +98,13 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 			Namespace: s.config.BaseImage.Namespace,
 		}
 	}
+	if s.config.ExternalPullSpec != "" {
+		from = &coreapi.ObjectReference{
+			Name: s.config.ExternalPullSpec,
+			Kind: "DockerImage",
+		}
+	}
+
 	ist := &imagev1.ImageStreamTag{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.To),

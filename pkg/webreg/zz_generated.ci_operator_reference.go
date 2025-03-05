@@ -341,6 +341,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            pull_secret: ' '\n" +
 	"            registry: ' '\n" +
 	"            tag: ' '\n" +
+	"        # ExternalPullSpec allows for an arbitrary pullspec that does not have to come from QCI to be used as the image source.\n" +
+	"        # This functionality was created to allow for specific image tag content to be overridden during payload testing.\n" +
+	"        # This field should *not* be used to circumvent the standard mirroring process for QCI.\n" +
+	"        external_pull_spec: ' '\n" +
 	"        # Ref is an optional string linking to the extra_ref in \"org.repo\" format that this belongs to\n" +
 	"        ref: ' '\n" +
 	"        to: ' '\n" +

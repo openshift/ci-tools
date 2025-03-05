@@ -607,6 +607,11 @@ type StepConfiguration struct {
 type InputImageTagStepConfiguration struct {
 	InputImage `json:",inline"`
 	Sources    []ImageStreamSource `json:"-"`
+
+	// ExternalPullSpec allows for an arbitrary pullspec that does not have to come from QCI to be used as the image source.
+	// This functionality was created to allow for specific image tag content to be overridden during payload testing.
+	// This field should *not* be used to circumvent the standard mirroring process for QCI.
+	ExternalPullSpec string `json:"external_pull_spec,omitempty"`
 }
 
 func (config InputImageTagStepConfiguration) TargetName() string {

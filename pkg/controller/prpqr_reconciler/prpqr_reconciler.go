@@ -633,7 +633,7 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 			jobBaseGen.PodSpec.Add(prowgen.ReleaseInitial(initialPayloadPullspec))
 		}
 		for _, ito := range imageTagOverrides {
-			jobBaseGen.PodSpec.Add(prowgen.OverrideImage(ito.Name, ito.Tag))
+			jobBaseGen.PodSpec.Add(prowgen.OverrideImage(ito.Name, ito.Image))
 		}
 		if aggregateIndex != nil {
 			jobBaseGen.PodSpec.Add(prowgen.TargetAdditionalSuffix(strconv.Itoa(*aggregateIndex)))

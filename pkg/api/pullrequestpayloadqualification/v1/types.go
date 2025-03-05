@@ -51,8 +51,9 @@ type PayloadOverrides struct {
 type ImageTagOverride struct {
 	// Name is the name of the image like "machine-os-content"
 	Name string `json:"name"`
-	// Tag is the tag to override the image with like "4.16-art-latest-2024-02-05-071231"
-	Tag string `json:"tag"`
+	// Image is an arbitrary pullspec to override the image with
+	// like: "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:9a49368aad56c984302c3cfd7d3dfd3186687381ca9a94501960b0d6a8fb7f98"
+	Image string `json:"image"`
 }
 
 // PullRequestUnderTest describes the state of the repo that will be under test

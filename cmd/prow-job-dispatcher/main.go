@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -192,7 +193,7 @@ type clusterVolume struct {
 	specialClusters  map[string]float64
 	// only needed for stable tests: traverse the above map by sorted key list
 	cloudProviders     sets.Set[string]
-	pjs                map[string]string
+	pjs                map[string]dispatcher.ProwJobData
 	blocked            sets.Set[string]
 	volumeDistribution map[string]float64
 	clusterMap         dispatcher.ClusterMap
@@ -259,25 +260,38 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 	return cluster, utilerrors.NewAggregate(errs)
 }
 
-func findClusterAssigmentsForMissingJobs(jc *prowconfig.JobConfig, path string, config *dispatcher.Config, pjs map[string]string, blocked sets.Set[string], cm dispatcher.ClusterMap) error {
+func extractCapabilities(labels map[string]string) []string {
+	var capabilities []string
+	prefix := "capability/"
+
+	for key, value := range labels {
+		if strings.HasPrefix(key, prefix) {
+			capabilities = append(capabilities, value)
+		}
+	}
+
+	return capabilities
+}
+
+func findClusterAssigmentsForJobs(jc *prowconfig.JobConfig, path string, config *dispatcher.Config, pjs map[string]dispatcher.ProwJobData, blocked sets.Set[string], cm dispatcher.ClusterMap) error {
 	mostUsedCluster := dispatcher.FindMostUsedCluster(jc)
 
-	getClusterForMissingJob := func(cluster string, jobBase prowconfig.JobBase, pjs map[string]string) error {
+	getClusterForMissingJob := func(cluster string, jobBase prowconfig.JobBase, pjs map[string]dispatcher.ProwJobData) error {
 		determinedCluster, canBeRelocated, err := config.DetermineClusterForJob(jobBase, path, cm)
 		if err != nil {
 			return fmt.Errorf("failed to determine cluster for the job %s in path %q: %w", jobBase.Name, path, err)
 		}
 
 		c := dispatcher.DetermineTargetCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated, blocked)
-		pjs[jobBase.Name] = c
-		logrus.WithField("job", jobBase.Name).WithField("cluster", c).Info("found cluster for missing job")
+		pjs[jobBase.Name] = dispatcher.ProwJobData{Cluster: c, Capabilities: extractCapabilities(jobBase.Labels)}
+		logrus.WithField("job", jobBase.Name).WithField("cluster", c).Info("found cluster for job")
 		return nil
 	}
 
 	var errs []error
 	for k := range jc.PresubmitsStatic {
 		for _, job := range jc.PresubmitsStatic[k] {
-			if _, ok := pjs[job.Name]; !ok {
+			if _, ok := pjs[job.Name]; !ok || !slices.Equal(pjs[job.Name].Capabilities, extractCapabilities(job.Labels)) {
 				if err := getClusterForMissingJob(mostUsedCluster, job.JobBase, pjs); err != nil {
 					errs = append(errs, err)
 				}
@@ -287,7 +301,7 @@ func findClusterAssigmentsForMissingJobs(jc *prowconfig.JobConfig, path string, 
 
 	for k := range jc.PostsubmitsStatic {
 		for _, job := range jc.PostsubmitsStatic[k] {
-			if _, ok := pjs[job.Name]; !ok {
+			if _, ok := pjs[job.Name]; !ok || !slices.Equal(pjs[job.Name].Capabilities, extractCapabilities(job.Labels)) {
 				if err := getClusterForMissingJob(mostUsedCluster, job.JobBase, pjs); err != nil {
 					errs = append(errs, err)
 				}
@@ -295,7 +309,7 @@ func findClusterAssigmentsForMissingJobs(jc *prowconfig.JobConfig, path string, 
 		}
 	}
 	for _, job := range jc.Periodics {
-		if _, ok := pjs[job.Name]; !ok {
+		if _, ok := pjs[job.Name]; !ok || !slices.Equal(pjs[job.Name].Capabilities, extractCapabilities(job.Labels)) {
 			if err := getClusterForMissingJob(mostUsedCluster, job.JobBase, pjs); err != nil {
 				errs = append(errs, err)
 			}
@@ -313,7 +327,7 @@ func (cv *clusterVolume) addToVolume(cluster string, jobBase prowconfig.JobBase,
 	}
 
 	c := dispatcher.DetermineTargetCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated, cv.blocked)
-	cv.pjs[jobBase.Name] = c
+	cv.pjs[jobBase.Name] = dispatcher.ProwJobData{Cluster: c, Capabilities: extractCapabilities(jobBase.Labels)}
 	if determinedCloudProvider := config.IsInBuildFarm(api.Cluster(c)); determinedCloudProvider != "" {
 		cv.clusterVolumeMap[string(determinedCloudProvider)][c] = cv.clusterVolumeMap[string(determinedCloudProvider)][c] + jobVolumes[jobBase.Name]
 		return nil
@@ -354,7 +368,7 @@ type fileSizeInfo struct {
 //   - When all the e2e tests are targeting the same cloud provider, we run the test pod on the that cloud provider too.
 //   - When the e2e tests are targeting different cloud providers, or there is no e2e tests at all, we can run the tests
 //     on any cluster in the build farm. Those jobs are used to load balance the workload of clusters in the build farm.
-func dispatchJobs(prowJobConfigDir string, config *dispatcher.Config, jobVolumes map[string]float64, blocked sets.Set[string], volumeDistribution map[string]float64, cm dispatcher.ClusterMap) (map[string]string, error) {
+func dispatchJobs(prowJobConfigDir string, config *dispatcher.Config, jobVolumes map[string]float64, blocked sets.Set[string], volumeDistribution map[string]float64, cm dispatcher.ClusterMap) (map[string]dispatcher.ProwJobData, error) {
 	if config == nil {
 		return nil, fmt.Errorf("config is nil")
 	}
@@ -363,7 +377,7 @@ func dispatchJobs(prowJobConfigDir string, config *dispatcher.Config, jobVolumes
 	cv := &clusterVolume{
 		clusterVolumeMap:   map[string]map[string]float64{},
 		cloudProviders:     sets.New[string](),
-		pjs:                map[string]string{},
+		pjs:                map[string]dispatcher.ProwJobData{},
 		blocked:            blocked,
 		specialClusters:    map[string]float64{},
 		volumeDistribution: volumeDistribution,
@@ -428,10 +442,10 @@ func dispatchJobs(prowJobConfigDir string, config *dispatcher.Config, jobVolumes
 	return cv.pjs, utilerrors.NewAggregate(errs)
 }
 
-func dispatchMissingJobs(prowJobConfigDir string, config *dispatcher.Config, blocked sets.Set[string], pjs map[string]string, cm dispatcher.ClusterMap) error {
+func dispatchDeltaJobs(prowJobConfigDir string, config *dispatcher.Config, blocked sets.Set[string], pjs map[string]dispatcher.ProwJobData, cm dispatcher.ClusterMap) error {
 	var errs []error
 	dispatch := func(jobConfig *prowconfig.JobConfig, path string, info fs.DirEntry) {
-		if err := findClusterAssigmentsForMissingJobs(jobConfig, path, config, pjs, blocked, cm); err != nil {
+		if err := findClusterAssigmentsForJobs(jobConfig, path, config, pjs, blocked, cm); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -589,7 +603,7 @@ func cleanup(directory string) {
 
 // createPR creates PR with config changes and sanitizer changes, it causes app to exit in
 // case of failure to trigger re-run of logic
-func createPR(o options, config *dispatcher.Config, pjs map[string]string, cm dispatcher.ClusterMap) {
+func createPR(o options, config *dispatcher.Config, pjs map[string]dispatcher.ProwJobData, cm dispatcher.ClusterMap) {
 	targetDirWithRelease := filepath.Join(o.targetDir, "/release")
 	cleanup(targetDirWithRelease)
 	defer cleanup(targetDirWithRelease)
@@ -704,7 +718,7 @@ func main() {
 
 			pjs := prowjobs.GetDataCopy()
 
-			if err := dispatchMissingJobs(o.prowJobConfigDir, config, blocked, pjs, cm); err != nil {
+			if err := dispatchDeltaJobs(o.prowJobConfigDir, config, blocked, pjs, cm); err != nil {
 				logrus.WithError(err).Error("failed to dispatch")
 				return
 			}

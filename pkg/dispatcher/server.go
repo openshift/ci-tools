@@ -61,7 +61,7 @@ func (s *Server) RequestHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	cluster := s.pjs.Get(removeRehearsePrefix(req.Job))
+	cluster := s.pjs.GetCluster(removeRehearsePrefix(req.Job))
 	if cluster == "" {
 		http.Error(w, "Cluster not found", http.StatusNotFound)
 		return

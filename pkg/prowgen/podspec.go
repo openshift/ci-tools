@@ -270,17 +270,17 @@ func ReleaseInitial(pullspec string) PodSpecMutator {
 	}
 }
 
-// OverrideImage sets the "OVERRIDE_IMAGE_*" env var in order to override the respective image with the provided tag
-func OverrideImage(name, tag string) PodSpecMutator {
+// OverrideImage sets the "OVERRIDE_IMAGE_*" env var in order to override the respective image with the provided PullSpec
+func OverrideImage(name, pullSpec string) PodSpecMutator {
 	return func(spec *corev1.PodSpec) error {
-		if name == "" || tag == "" {
-			return fmt.Errorf("empty name('%s') or tag('%s') passed", name, tag)
+		if name == "" || pullSpec == "" {
+			return fmt.Errorf("empty name('%s') or pullSpec('%s') passed", name, pullSpec)
 		}
 		container := &spec.Containers[0]
 
 		return addEnvVar(container, corev1.EnvVar{
 			Name:  utils.OverrideImageEnv(name),
-			Value: tag,
+			Value: pullSpec,
 		})
 	}
 }

@@ -9,7 +9,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"k8s.io/utils/diff"
-	utilpointer "k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/testhelper"
@@ -93,6 +93,65 @@ func TestValidateBuildRoot(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if err := validateBuildRootImageConfiguration(NewConfigContext().AddField("build_root"), tc.buildRootImageConfig, tc.hasImages, tc.ref); (err != nil) && tc.expectedValid {
+				t.Errorf("expected to be valid, got: %v", err)
+			} else if !tc.expectedValid && err == nil {
+				t.Error("expected to be invalid, but returned valid")
+			}
+		})
+	}
+}
+
+func TestValidateExternalConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		externalConfig map[string]api.ExternalImage
+		expectedValid  bool
+	}{
+		{
+			name: "valid external configuration",
+			externalConfig: map[string]api.ExternalImage{
+				"foo":                {Registry: "quay.io", ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "test", Name: "test", Tag: "test"}, PullSecret: "test-pull"},
+				"bar":                {Registry: "quay.io/my", ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "bar", Name: "test", Tag: "latest"}, PullSecret: "test-pull-2"},
+				"without-pullsecret": {Registry: "quay.io/openshift/ci", ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "bar", Name: "test", Tag: "latest"}},
+			},
+			expectedValid: true,
+		},
+		{
+			name: "invalid external configuration, registry missing",
+			externalConfig: map[string]api.ExternalImage{
+				"foo": {ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "test", Name: "test", Tag: "test"}, PullSecret: "test-pull"},
+			},
+			expectedValid: false,
+		},
+		{
+			name: "invalid external configuration, namespace missing",
+			externalConfig: map[string]api.ExternalImage{
+				"foo": {Registry: "quay.io", ImageStreamTagReference: api.ImageStreamTagReference{Name: "test", Tag: "test"}},
+			},
+			expectedValid: false,
+		},
+		{
+			name: "invalid external configuration, names missing",
+			externalConfig: map[string]api.ExternalImage{
+				"foo": {Registry: "quay.io", ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "test", Tag: "test"}},
+			},
+			expectedValid: false,
+		},
+		{
+			name: "invalid external configuration, tag missing",
+			externalConfig: map[string]api.ExternalImage{
+				"foo": {Registry: "quay.io", ImageStreamTagReference: api.ImageStreamTagReference{Namespace: "test", Name: "test"}},
+			},
+			expectedValid: false,
+		},
+		{
+			name:           "nil external configuration",
+			externalConfig: nil,
+			expectedValid:  true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := validateExternalConfiguration(NewConfigContext().AddField("external"), tc.externalConfig); (err != nil) && tc.expectedValid {
 				t.Errorf("expected to be valid, got: %v", err)
 			} else if !tc.expectedValid && err == nil {
 				t.Error("expected to be invalid, but returned valid")
@@ -473,7 +532,7 @@ func TestValidateImages(t *testing.T) {
 			name: "Dockerfile literal is mutually exclusive with context_dir",
 			input: []api.ProjectDirectoryImageBuildStepConfiguration{{
 				ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
-					DockerfileLiteral: utilpointer.StringPtr("FROM foo"),
+					DockerfileLiteral: ptr.To("FROM foo"),
 					ContextDir:        "foo",
 				},
 				To: "amsterdam",
@@ -486,7 +545,7 @@ func TestValidateImages(t *testing.T) {
 			name: "Dockerfile literal is mutually exclusive with dockerfile_path",
 			input: []api.ProjectDirectoryImageBuildStepConfiguration{{
 				ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
-					DockerfileLiteral: utilpointer.StringPtr("FROM foo"),
+					DockerfileLiteral: ptr.To("FROM foo"),
 					DockerfilePath:    "foo",
 				},
 				To: "amsterdam",

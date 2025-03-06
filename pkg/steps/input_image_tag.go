@@ -90,9 +90,8 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 	}
 	if s.config.ExternalPullSpec != "" {
 		from = &coreapi.ObjectReference{
-			Namespace: s.jobSpec.Namespace(),
-			Name:      s.config.ExternalPullSpec,
-			Kind:      "DockerImage",
+			Name: s.config.ExternalPullSpec,
+			Kind: "DockerImage",
 		}
 	}
 

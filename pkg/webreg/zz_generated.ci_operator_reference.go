@@ -160,6 +160,16 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"canonical_go_repository_list:\n" +
 	"    - ref: ' '\n" +
 	"      repository: ' '\n" +
+	"# ExternalImages are images that are imported into the pipeline from an external source.\n" +
+	"external_images:\n" +
+	"    \"\":\n" +
+	"        # As is an optional string to use as the intermediate name for this reference.\n" +
+	"        as: ' '\n" +
+	"        name: ' '\n" +
+	"        namespace: ' '\n" +
+	"        pull_secret: ' '\n" +
+	"        registry: ' '\n" +
+	"        tag: ' '\n" +
 	"# Images describes the images that are built\n" +
 	"# baseImage the project as part of the release\n" +
 	"# process. The name of each image is its \"to\" value\n" +
@@ -322,6 +332,14 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            as: ' '\n" +
 	"            name: ' '\n" +
 	"            namespace: ' '\n" +
+	"            tag: ' '\n" +
+	"        external_image:\n" +
+	"            # As is an optional string to use as the intermediate name for this reference.\n" +
+	"            as: ' '\n" +
+	"            name: ' '\n" +
+	"            namespace: ' '\n" +
+	"            pull_secret: ' '\n" +
+	"            registry: ' '\n" +
 	"            tag: ' '\n" +
 	"        # Ref is an optional string linking to the extra_ref in \"org.repo\" format that this belongs to\n" +
 	"        ref: ' '\n" +

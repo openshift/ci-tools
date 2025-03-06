@@ -169,6 +169,8 @@ func (v *Validator) validateConfiguration(ctx *configContext, config *api.Releas
 	}
 	validationErrors = append(validationErrors, ValidateBaseImages(ctx.AddField("base_images"), config.InputConfiguration.BaseImages)...)
 	validationErrors = append(validationErrors, validateBaseRPMImages(ctx.AddField("base_rpm_images"), config.InputConfiguration.BaseRPMImages)...)
+	validationErrors = append(validationErrors, validateExternalConfiguration(ctx.AddField("external_images"), config.ExternalImages)...)
+	validationErrors = append(validationErrors, validateBaseAndExternalCollision(config.InputConfiguration.BaseImages, config.ExternalImages)...)
 	// Validate tag_specification
 	if config.InputConfiguration.ReleaseTagConfiguration != nil {
 		validationErrors = append(validationErrors, validateReleaseTagConfiguration("tag_specification", *config.InputConfiguration.ReleaseTagConfiguration)...)
@@ -206,6 +208,40 @@ func (v *Validator) validateConfiguration(ctx *configContext, config *api.Releas
 	default:
 		return fmt.Errorf("configuration has %d errors:\n\n  * %s\n", len(lines), strings.Join(lines, "\n  * "))
 	}
+}
+
+func validateBaseAndExternalCollision(baseImages map[string]api.ImageStreamTagReference, externalImage map[string]api.ExternalImage) []error {
+	var validationErrors []error
+	for name := range externalImage {
+		if _, ok := baseImages[name]; ok {
+			validationErrors = append(validationErrors, fmt.Errorf("external_image %s collides with base_image %s", name, name))
+		}
+	}
+	return validationErrors
+}
+
+func validateExternalConfiguration(ctx *configContext, externalImages map[string]api.ExternalImage) []error {
+	var validationErrors []error
+	istRefs := make(map[string]api.ImageStreamTagReference)
+	for name, ei := range externalImages {
+		if ei.Registry == "" {
+			validationErrors = append(validationErrors, ctx.errorf("%s.registry value required but not provided", name))
+		} else {
+			r := regexp.MustCompile("quay.io")
+			if !r.MatchString(ei.Registry) {
+				validationErrors = append(validationErrors, ctx.errorf("%s.registry is not quay.io/*", name))
+			}
+		}
+		if ei.Name == "" {
+			validationErrors = append(validationErrors, ctx.errorf("%s.name value required but not provided", name))
+		}
+		if ei.Namespace == "" {
+			validationErrors = append(validationErrors, ctx.errorf("%s.namespace value required but not provided", name))
+		}
+		istRefs[name] = ei.ImageStreamTagReference
+	}
+	validationErrors = append(validationErrors, validateImageStreamTagReferenceMap("external_images", istRefs)...)
+	return validationErrors
 }
 
 func (v *Validator) ValidateTestStepConfiguration(ctx *configContext, config *api.ReleaseBuildConfiguration, resolved bool) []error {

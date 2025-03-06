@@ -595,12 +595,12 @@ func TestUseOursIfLarger(t *testing.T) {
 			},
 			expected: corev1.ResourceRequirements{
 				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    *resource.NewQuantity(200, resource.DecimalSI),
-					corev1.ResourceMemory: *resource.NewQuantity(3e10, resource.BinarySI),
+					corev1.ResourceCPU:    *resource.NewQuantity(240, resource.DecimalSI),
+					corev1.ResourceMemory: *resource.NewQuantity(36e9, resource.BinarySI),
 				},
 				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    *resource.NewQuantity(100, resource.DecimalSI),
-					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+					corev1.ResourceCPU:    *resource.NewQuantity(120, resource.DecimalSI),
+					corev1.ResourceMemory: *resource.NewQuantity(24e9, resource.BinarySI),
 				},
 			},
 		},
@@ -651,12 +651,12 @@ func TestUseOursIfLarger(t *testing.T) {
 			},
 			expected: corev1.ResourceRequirements{
 				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    *resource.NewQuantity(200, resource.DecimalSI),
-					corev1.ResourceMemory: *resource.NewQuantity(3e10, resource.BinarySI),
+					corev1.ResourceCPU:    *resource.NewQuantity(240, resource.DecimalSI),
+					corev1.ResourceMemory: *resource.NewQuantity(36e9, resource.BinarySI),
 				},
 				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    *resource.NewQuantity(100, resource.DecimalSI),
-					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+					corev1.ResourceCPU:    *resource.NewQuantity(120, resource.DecimalSI),
+					corev1.ResourceMemory: *resource.NewQuantity(24e9, resource.BinarySI),
 				},
 			},
 		},
@@ -717,12 +717,12 @@ func TestUseOursIfLarger(t *testing.T) {
 			},
 			expected: corev1.ResourceRequirements{
 				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    *resource.NewQuantity(400, resource.DecimalSI),
+					corev1.ResourceCPU:    *resource.NewQuantity(480, resource.DecimalSI),
 					corev1.ResourceMemory: *resource.NewQuantity(3e10, resource.BinarySI),
 				},
 				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    *resource.NewQuantity(1000, resource.DecimalSI),
-					corev1.ResourceMemory: *resource.NewQuantity(4e10, resource.BinarySI),
+					corev1.ResourceCPU:    *resource.NewQuantity(1200, resource.DecimalSI),
+					corev1.ResourceMemory: *resource.NewQuantity(48e9, resource.BinarySI),
 				},
 			},
 		},

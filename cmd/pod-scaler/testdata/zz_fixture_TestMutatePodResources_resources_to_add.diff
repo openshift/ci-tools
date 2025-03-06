@@ -31,7 +31,7 @@
   					Requests: v1.ResourceList{
   						s"cpu":    {i: {value: 8}, Format: "DecimalSI"},
 - 						s"memory": {i: resource.int64Amount{value: 100000000}, Format: "BinarySI"},
-+ 						s"memory": {i: resource.int64Amount{value: 200000000}, s: "200000000", Format: "BinarySI"},
++ 						s"memory": {i: resource.int64Amount{value: 240000000}, s: "234375Ki", Format: "BinarySI"},
   					},
   					Claims: nil,
   				},
@@ -47,9 +47,9 @@
   					Limits: {},
   					Requests: v1.ResourceList{
 - 						s"cpu":    {i: resource.int64Amount{value: 2}, Format: "DecimalSI"},
-+ 						s"cpu":    {i: resource.int64Amount{value: 5}, s: "5", Format: "DecimalSI"},
++ 						s"cpu":    {i: resource.int64Amount{value: 6}, s: "6", Format: "DecimalSI"},
 - 						s"memory": {i: resource.int64Amount{value: 100}, Format: "BinarySI"},
-+ 						s"memory": {i: resource.int64Amount{value: 200000000}, s: "200000000", Format: "BinarySI"},
++ 						s"memory": {i: resource.int64Amount{value: 240000000}, s: "234375Ki", Format: "BinarySI"},
   					},
   					Claims: nil,
   				},
@@ -66,7 +66,7 @@
   					Requests: v1.ResourceList{
   						s"cpu":    {i: {value: 10}, Format: "DecimalSI"},
 - 						s"memory": {i: resource.int64Amount{value: 100}, Format: "BinarySI"},
-+ 						s"memory": {i: resource.int64Amount{value: 200000000}, s: "200000000", Format: "BinarySI"},
++ 						s"memory": {i: resource.int64Amount{value: 240000000}, s: "234375Ki", Format: "BinarySI"},
   					},
   					Claims: nil,
   				},

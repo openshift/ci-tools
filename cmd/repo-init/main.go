@@ -233,7 +233,7 @@ In order to generate a new set of configurations, some information will be neces
 Let's start with general information about the repository...`)
 		config.Org = fetchWithPrompt("Enter the organization for the repository:")
 		config.Repo = fetchWithPrompt("Enter the repository to initialize:")
-		config.Branch = fetchOrDefaultWithPrompt("Enter the development branch for the repository:", "master")
+		config.Branch = fetchOrDefaultWithPrompt("Enter the development branch for the repository:", "main")
 
 		configPath := path.Join(o.releaseRepo, "ci-operator", "config", config.Org, config.Repo)
 		if _, err := os.Stat(configPath); err == nil {
@@ -633,7 +633,7 @@ func createCIOperatorConfig(config initConfig, releaseRepo string, commit bool) 
 	info := api.Metadata{
 		Org:    "openshift",
 		Repo:   "origin",
-		Branch: "master",
+		Branch: "main",
 	}
 	originPath := path.Join(releaseRepo, ciopconfig.CiopConfigInRepoPath, info.RelativePath())
 	var originConfig *api.ReleaseBuildConfiguration

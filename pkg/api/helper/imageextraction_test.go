@@ -53,9 +53,19 @@ func TestTestInputImageStreamTagsFromResolvedConfigReturnsAllImageStreamTags(t *
 					rawStep.OutputImageTagStepConfiguration = nil
 					numberInsertedElements--
 				}
+				if rawStep.InputImageTagStepConfiguration != nil {
+					if rawStep.InputImageTagStepConfiguration.ExternalImage != nil {
+						rawStep.InputImageTagStepConfiguration.ExternalImage = nil
+						numberInsertedElements--
+					}
+				}
 			}
 			if cfg.InputConfiguration.BuildRootImage != nil && cfg.InputConfiguration.BuildRootImage.UseBuildCache {
 				numberInsertedElements++
+			}
+			if cfg.ExternalImages != nil {
+				cfg.ExternalImages = nil
+				numberInsertedElements--
 			}
 
 			res, err := TestInputImageStreamTagsFromResolvedConfig(cfg, nil)

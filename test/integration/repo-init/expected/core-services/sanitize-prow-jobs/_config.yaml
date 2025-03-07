@@ -7,4 +7,4 @@ groups:
   "ci/api-build01-ci-devcluster-openshift-com:6443":
     jobs:
       - pull-ci-org-other-nonstandard-unit
-      - pull-ci-openshift-origin-master-unit
+      - pull-ci-openshift-origin-main-unit

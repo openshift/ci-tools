@@ -28,6 +28,7 @@ const (
 	rehearseNormal             = "/pj-rehearse"
 	rehearseMore               = "/pj-rehearse more"
 	rehearseMax                = "/pj-rehearse max"
+	rehearseList               = "/pj-rehearse list"
 	rehearseSkip               = "/pj-rehearse skip"
 	rehearseAck                = "/pj-rehearse ack"
 	rehearseReject             = "/pj-rehearse reject"
@@ -89,6 +90,12 @@ func (s *server) helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, e
 		Description: fmt.Sprintf("Run up to %d affected job rehearsals for the change in the PR.", s.rehearsalConfig.MaxLimit),
 		WhoCanUse:   "Anyone can use on trusted PRs",
 		Examples:    []string{rehearseMax},
+	})
+	pluginHelp.AddCommand(pluginhelp.Command{
+		Usage:       rehearseList,
+		Description: "Request an updated list of affected jobs.",
+		WhoCanUse:   "Anyone can use on trusted PRs",
+		Examples:    []string{rehearseList},
 	})
 	pluginHelp.AddCommand(pluginhelp.Command{
 		Usage:       rehearseSkip,
@@ -228,49 +235,55 @@ func (s *server) handleNewPush(l *logrus.Entry, event github.PullRequestEvent) {
 			logger.WithError(err).Error("failed to get pull request")
 			return
 		}
+		s.commentAffectedJobsOnPR(pullRequest, l)
+	}
+}
 
-		comments, err := s.ghc.ListIssueComments(org, repo, number)
-		if err != nil {
-			// This also shouldn't happen, but if it does just log and continue it doesn't affect the rest of the process
-			logger.WithError(err).Error("failed to get comments for pull request")
-		}
-		for _, comment := range comments {
-			if strings.HasPrefix(comment.Body, rehearsalNotifier) {
-				logger.Debugf("found %s in comment...deleting", rehearsalNotifier)
-				if err := s.ghc.DeleteComment(org, repo, comment.ID); err != nil {
-					logger.WithError(err).Error("error deleting comment")
-				}
+func (s *server) commentAffectedJobsOnPR(pullRequest *github.PullRequest, logger *logrus.Entry) {
+	org := pullRequest.Base.Repo.Owner.Login
+	repo := pullRequest.Base.Repo.Name
+	number := pullRequest.Number
+	comments, err := s.ghc.ListIssueComments(org, repo, number)
+	if err != nil {
+		// This also shouldn't happen, but if it does just log and continue it doesn't affect the rest of the process
+		logger.WithError(err).Error("failed to get comments for pull request")
+	}
+	for _, comment := range comments {
+		if strings.HasPrefix(comment.Body, rehearsalNotifier) {
+			logger.Debugf("found %s in comment...deleting", rehearsalNotifier)
+			if err := s.ghc.DeleteComment(org, repo, comment.ID); err != nil {
+				logger.WithError(err).Error("error deleting comment")
 			}
 		}
+	}
 
-		presubmits, periodics, disabledDueToNetworkAccessToggle, err := s.getAffectedJobs(pullRequest, logger)
-		user := pullRequest.User.Login
-		if err != nil {
-			comment := "unable to determine affected jobs. This could be due to a branch that needs to be rebased."
-			s.reportFailure(comment, err, org, repo, user, number, false, true, logger)
-			return
-		}
-		foundJobsToRehearse := len(presubmits) > 0 || len(periodics) > 0
-		if foundJobsToRehearse {
-			if !s.rehearsalConfig.StickyLabelAuthors.Has(event.PullRequest.User.Login) {
-				if err := s.ghc.RemoveLabel(org, repo, number, rehearse.RehearsalsAckLabel); err != nil {
-					// We shouldn't get an error here if the label doesn't exist, so any error is legitimate
-					logger.WithError(err).Errorf("failed to remove '%s' label", rehearse.RehearsalsAckLabel)
-				}
+	presubmits, periodics, disabledDueToNetworkAccessToggle, err := s.getAffectedJobs(pullRequest, logger)
+	user := pullRequest.User.Login
+	if err != nil {
+		comment := "unable to determine affected jobs. This could be due to a branch that needs to be rebased."
+		s.reportFailure(comment, err, org, repo, user, number, false, true, logger)
+		return
+	}
+	foundJobsToRehearse := len(presubmits) > 0 || len(periodics) > 0
+	if foundJobsToRehearse {
+		if !s.rehearsalConfig.StickyLabelAuthors.Has(pullRequest.User.Login) {
+			if err := s.ghc.RemoveLabel(org, repo, number, rehearse.RehearsalsAckLabel); err != nil {
+				// We shouldn't get an error here if the label doesn't exist, so any error is legitimate
+				logger.WithError(err).Errorf("failed to remove '%s' label", rehearse.RehearsalsAckLabel)
 			}
-		} else {
-			s.acknowledgeRehearsals(org, repo, number, logger)
 		}
-		jobTableLines, jobCount := s.getJobsTableLines(presubmits, periodics, user)
-		if jobCount > s.rehearsalConfig.MaxLimit {
-			fileLocation := s.dumpAffectedJobsToGCS(pullRequest, presubmits, periodics, jobCount, logger)
-			jobTableLines = append(jobTableLines, fmt.Sprintf("A full list of affected jobs can be found [here](%s%s)", s.rehearsalConfig.GCSBrowserPrefix, fileLocation))
-		}
-		jobTableLines = append(jobTableLines, s.getDisabledRehearsalsLines(disabledDueToNetworkAccessToggle)...)
-		jobTableLines = append(jobTableLines, s.getUsageDetailsLines()...)
-		if err := s.ghc.CreateComment(org, repo, number, strings.Join(jobTableLines, "\n")); err != nil {
-			logger.WithError(err).Error("failed to create comment")
-		}
+	} else {
+		s.acknowledgeRehearsals(org, repo, number, logger)
+	}
+	jobTableLines, jobCount := s.getJobsTableLines(presubmits, periodics, user)
+	if jobCount > s.rehearsalConfig.MaxLimit {
+		fileLocation := s.dumpAffectedJobsToGCS(pullRequest, presubmits, periodics, jobCount, logger)
+		jobTableLines = append(jobTableLines, fmt.Sprintf("A full list of affected jobs can be found [here](%s%s)", s.rehearsalConfig.GCSBrowserPrefix, fileLocation))
+	}
+	jobTableLines = append(jobTableLines, s.getDisabledRehearsalsLines(disabledDueToNetworkAccessToggle)...)
+	jobTableLines = append(jobTableLines, s.getUsageDetailsLines()...)
+	if err := s.ghc.CreateComment(org, repo, number, strings.Join(jobTableLines, "\n")); err != nil {
+		logger.WithError(err).Error("failed to create comment")
 	}
 }
 
@@ -355,6 +368,8 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 				if err := s.ghc.RemoveLabel(org, repo, number, rehearse.RehearsalsAckLabel); err != nil {
 					logger.WithError(err).Errorf("failed to remove '%s' label", rehearse.RehearsalsAckLabel)
 				}
+			case rehearseList:
+				s.commentAffectedJobsOnPR(pullRequest, logger)
 			case rehearseAbort:
 				s.rehearsalConfig.AbortAllRehearsalJobs(org, repo, number, logger)
 			default:
@@ -609,6 +624,7 @@ func (s *server) getUsageDetailsLines() []string {
 		fmt.Sprintf("Comment: `%s` to run up to %d rehearsals", rehearseMore, rc.MoreLimit),
 		fmt.Sprintf("Comment: `%s` to run up to %d rehearsals", rehearseMax, rc.MaxLimit),
 		fmt.Sprintf("Comment: `%s` to run up to %d rehearsals, and add the `%s` label on success", rehearseAutoAck, rc.NormalLimit, rehearse.RehearsalsAckLabel),
+		fmt.Sprintf("Comment: `%s` to get an up-to-date list of affected jobs", rehearseList),
 		fmt.Sprintf("Comment: `%s` to abort all active rehearsals", rehearseAbort),
 		fmt.Sprintf("Comment: `%s` to allow rehearsals of tests that have the `restrict_network_access` field set to `false`. This must be executed by an `openshift` org member who is **not** the PR author", rehearseAllowNetworkAccess),
 		"",

@@ -62,7 +62,7 @@ presubmits:
     branches:
     - ^main$
     - ^main-
-    cluster: ci/api-build01-ci-devcluster-openshift-com:6443
+    cluster: api.ci
     context: ci/prow/unit
     decorate: true
     decoration_config:

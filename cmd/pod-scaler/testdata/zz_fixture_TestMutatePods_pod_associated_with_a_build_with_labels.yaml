@@ -21,8 +21,8 @@ Patches:
   path: /spec/containers/0/resources
   value:
     requests:
-      cpu: "9"
-      memory: "20000"
+      cpu: "10"
+      memory: "24000"
 - op: add
   path: /spec/containers/1/resources
   value: {}

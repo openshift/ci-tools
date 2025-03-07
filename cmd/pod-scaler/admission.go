@@ -215,6 +215,11 @@ func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, worklo
 	} {
 		for _, field := range []corev1.ResourceName{corev1.ResourceCPU, corev1.ResourceMemory} {
 			our := (*pair.ours)[field]
+			//TODO(sgoeddel): this is a temporary experiment to see what effect setting values that are 120% of what has
+			// been determined has on the rate of OOMKilled and similar termination of workloads
+			increased := our.AsApproximateFloat64() * 1.2
+			our.Set(int64(increased))
+
 			their := (*pair.theirs)[field]
 			fieldLogger := logger.WithFields(logrus.Fields{
 				"workloadName": workloadName,

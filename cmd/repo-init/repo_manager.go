@@ -117,7 +117,7 @@ func updateRepo(repo *repo) error {
 	if err := bumper.Call(os.Stdout,
 		os.Stderr,
 		"git",
-		[]string{"pull", "origin", "master"}); err != nil {
+		[]string{"pull", "origin", "main"}); err != nil {
 		return fmt.Errorf("failed to pull latest changes: %w", err)
 	}
 
@@ -179,7 +179,7 @@ func pushChanges(gitRepo *repo, githubOptions flagutil.GitHubOptions, org, repo,
 	if err := bumper.Call(os.Stdout,
 		os.Stderr,
 		"git",
-		[]string{"reset", "--hard", "origin/master"}); err != nil {
+		[]string{"reset", "--hard", "origin/main"}); err != nil {
 		return "", fmt.Errorf("failed to reset local: %w", err)
 	}
 

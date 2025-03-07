@@ -38,6 +38,6 @@ tests:
     memory_backed_volume:
       size: 4Gi
 zz_generated_metadata:
-  branch: master
+  branch: main
   org: openshift
   repo: origin

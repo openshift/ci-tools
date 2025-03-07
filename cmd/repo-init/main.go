@@ -633,7 +633,7 @@ func createCIOperatorConfig(config initConfig, releaseRepo string, commit bool) 
 	info := api.Metadata{
 		Org:    "openshift",
 		Repo:   "origin",
-		Branch: "master",
+		Branch: "main",
 	}
 	originPath := path.Join(releaseRepo, ciopconfig.CiopConfigInRepoPath, info.RelativePath())
 	var originConfig *api.ReleaseBuildConfiguration

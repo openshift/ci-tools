@@ -33,7 +33,9 @@ func (s *multiStageTestStep) runSteps(
 ) error {
 	start := time.Now()
 	logrus.Infof("Running multi-stage phase %s", phase)
-	pods, bestEffortSteps, err := s.generatePods(steps, env, secretVolumes, secretVolumeMounts, nil)
+	pods, bestEffortSteps, err := s.generatePods(steps, env, secretVolumes, secretVolumeMounts, &generatePodOptions{
+		enableSecretsStoreCSIDriver: s.enableSecretsStoreCSIDriver,
+	})
 	if err != nil {
 		s.flags |= hasPrevErrs
 		return err

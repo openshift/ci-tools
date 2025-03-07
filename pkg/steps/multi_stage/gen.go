@@ -50,7 +50,8 @@ func (s *multiStageTestStep) generateObservers(
 }
 
 type generatePodOptions struct {
-	IsObserver bool
+	IsObserver                  bool
+	enableSecretsStoreCSIDriver bool
 }
 
 func defaultGeneratePodOptions() *generatePodOptions {
@@ -237,7 +238,7 @@ func (s *multiStageTestStep) generatePods(
 			addCliInjector(imagestream, pod)
 		}
 		addSharedDirSecret(s.name, pod)
-		addCredentials(step.Credentials, pod)
+		addCredentials(step.Credentials, pod, genPodOpts.enableSecretsStoreCSIDriver)
 		if step.RunAsScript != nil && *step.RunAsScript {
 			addCommandScript(commandConfigMapForTest(s.name), pod)
 		}
@@ -546,20 +547,45 @@ func addSharedDirSecret(secret string, pod *coreapi.Pod) {
 	})
 }
 
-func addCredentials(credentials []api.CredentialReference, pod *coreapi.Pod) {
-	for _, credential := range credentials {
-		name := fmt.Sprintf("%s-%s", credential.Namespace, credential.Name)
-		volumeName := volumeName(credential.Namespace, credential.Name)
-		pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
-			Name: volumeName,
-			VolumeSource: coreapi.VolumeSource{
-				Secret: &coreapi.SecretVolumeSource{SecretName: name},
-			},
-		})
-		pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, coreapi.VolumeMount{
-			Name:      volumeName,
-			MountPath: credential.MountPath,
-		})
+func addCredentials(credentials []api.CredentialReference, pod *coreapi.Pod, useCSI bool) {
+	if useCSI {
+		for _, credential := range credentials {
+			volumeName := volumeName(credential.Namespace, credential.Name)
+			readOnly := true
+			csiVolume := coreapi.Volume{
+				Name: volumeName,
+				VolumeSource: coreapi.VolumeSource{
+					CSI: &coreapi.CSIVolumeSource{
+						Driver:   "secrets-store.csi.k8s.io",
+						ReadOnly: &readOnly,
+						VolumeAttributes: map[string]string{
+							"secretProviderClass": fmt.Sprintf("%s-%s-spc", pod.Namespace, credential.Name),
+						},
+					},
+				},
+			}
+			pod.Spec.Volumes = append(pod.Spec.Volumes, csiVolume)
+			pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, coreapi.VolumeMount{
+				Name:      volumeName,
+				MountPath: credential.MountPath,
+			})
+		}
+	} else {
+		//TODO: this is the old way, delete after we have enabled CSI Secrets for all repos
+		for _, credential := range credentials {
+			name := fmt.Sprintf("%s-%s", credential.Namespace, credential.Name)
+			volumeName := volumeName(credential.Namespace, credential.Name)
+			pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
+				Name: volumeName,
+				VolumeSource: coreapi.VolumeSource{
+					Secret: &coreapi.SecretVolumeSource{SecretName: name},
+				},
+			})
+			pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, coreapi.VolumeMount{
+				Name:      volumeName,
+				MountPath: credential.MountPath,
+			})
+		}
 	}
 }
 

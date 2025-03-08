@@ -3,8 +3,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     cluster: api.ci
     context: ci/prow/cmd
     decorate: true
@@ -13,7 +13,7 @@ presubmits:
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-org-repo-master-cmd
+    name: pull-ci-org-repo-main-cmd
     rerun_command: /test cmd
     spec:
       containers:
@@ -58,8 +58,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     cluster: api.ci
     context: ci/prow/e2e
     decorate: true
@@ -70,7 +70,7 @@ presubmits:
       ci-operator.openshift.io/cloud-cluster-profile: aws
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-org-repo-master-e2e
+    name: pull-ci-org-repo-main-e2e
     rerun_command: /test e2e
     spec:
       containers:
@@ -132,8 +132,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     cluster: api.ci
     context: ci/prow/e2e-aws
     decorate: true
@@ -144,7 +144,7 @@ presubmits:
       ci-operator.openshift.io/cloud-cluster-profile: aws
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-org-repo-master-e2e-aws
+    name: pull-ci-org-repo-main-e2e-aws
     rerun_command: /test e2e-aws
     spec:
       containers:
@@ -206,8 +206,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     cluster: api.ci
     context: ci/prow/race
     decorate: true
@@ -216,7 +216,7 @@ presubmits:
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-org-repo-master-race
+    name: pull-ci-org-repo-main-race
     rerun_command: /test race
     spec:
       containers:
@@ -261,8 +261,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     cluster: api.ci
     context: ci/prow/unit
     decorate: true
@@ -271,7 +271,7 @@ presubmits:
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-org-repo-master-unit
+    name: pull-ci-org-repo-main-unit
     rerun_command: /test unit
     spec:
       containers:

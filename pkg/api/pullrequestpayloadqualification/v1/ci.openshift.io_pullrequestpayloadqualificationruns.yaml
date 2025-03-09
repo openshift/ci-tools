@@ -138,16 +138,17 @@ spec:
                       description: ImageTagOverride describes a specific image name
                         that should be overridden with the provided tag
                       properties:
+                        image:
+                          description: |-
+                            Image is an arbitrary pullspec to override the image with
+                            like: "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:9a49368aad56c984302c3cfd7d3dfd3186687381ca9a94501960b0d6a8fb7f98"
+                          type: string
                         name:
                           description: Name is the name of the image like "machine-os-content"
                           type: string
-                        tag:
-                          description: Tag is the tag to override the image with like
-                            "4.16-art-latest-2024-02-05-071231"
-                          type: string
                       required:
+                      - image
                       - name
-                      - tag
                       type: object
                     type: array
                 type: object

@@ -2514,6 +2514,9 @@ sigs.k8s.io/prow/pkg/tide
 sigs.k8s.io/prow/pkg/tide/blockers
 sigs.k8s.io/prow/pkg/tide/history
 sigs.k8s.io/prow/pkg/version
+# sigs.k8s.io/secrets-store-csi-driver v1.4.7
+## explicit; go 1.21
+sigs.k8s.io/secrets-store-csi-driver/apis/v1
 # sigs.k8s.io/structured-merge-diff/v4 v4.4.2
 ## explicit; go 1.13
 sigs.k8s.io/structured-merge-diff/v4/fieldpath

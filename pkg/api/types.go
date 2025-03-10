@@ -415,10 +415,11 @@ const (
 type ReleaseStream string
 
 const (
-	ReleaseStreamCI      ReleaseStream = "ci"
-	ReleaseStreamNightly ReleaseStream = "nightly"
-	ReleaseStreamOKD     ReleaseStream = "okd"
-	ReleaseStreamOKDScos ReleaseStream = "okd-scos"
+	ReleaseStreamCI             ReleaseStream = "ci"
+	ReleaseStreamNightly        ReleaseStream = "nightly"
+	ReleaseStreamOKD            ReleaseStream = "okd"
+	ReleaseStreamOKDScos        ReleaseStream = "okd-scos"
+	ReleaseStreamKonfluxNightly ReleaseStream = "konflux-nightly"
 )
 
 // Release describes a generally available release payload

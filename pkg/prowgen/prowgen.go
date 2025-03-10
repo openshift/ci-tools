@@ -89,6 +89,8 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		} else if element.Postsubmit {
 			postsubmit := generatePostsubmitForTest(g, info, func(options *generatePostsubmitOptions) {
 				options.runIfChanged = element.RunIfChanged
+				options.Capabilities = element.Capabilities
+
 				options.skipIfOnlyChanged = element.SkipIfOnlyChanged
 			})
 			postsubmit.MaxConcurrency = 1

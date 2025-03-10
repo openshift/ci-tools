@@ -51,11 +51,23 @@ func TestResolve(t *testing.T) {
 				{Name: "periodic-ci-openshift-release-master-ci-4.10-e2e-azure-ovn-upgrade-2"},
 			},
 		},
+		{
+			name:        "konflux-nightly basic case",
+			releaseType: api.ReleaseStreamKonfluxNightly,
+			jobType:     config.Blocking,
+			expected: []config.Job{
+				{Name: "periodic-ci-openshift-release-master-konflux-nightly-4.10-e2e-aws-upgrade", AggregatedCount: 5},
+				{Name: "periodic-ci-openshift-release-master-konflux-nightly-4.10-e2e-gcp-upgrade", AggregatedCount: 10},
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			httpClient := release.NewFakeHTTPClient(func(req *http.Request) (*http.Response, error) {
-				content := `{
+				var content string
+				switch tc.releaseType {
+				case api.ReleaseStreamNightly:
+					content = `{
     "aggregated-aws-sdn-upgrade-4.10-micro": {
       "disabled": false,
       "optional": false,
@@ -93,6 +105,36 @@ func TestResolve(t *testing.T) {
 		}
 	  }
 }`
+				case api.ReleaseStreamKonfluxNightly:
+					content = `{
+    "aggregated-aws-sdn-upgrade-4.10-micro": {
+      "disabled": false,
+      "optional": false,
+      "upgrade": true,
+      "upgradeFrom": "",
+      "upgradeFromRelease": null,
+      "prowJob": {
+        "name": "periodic-ci-openshift-release-master-konflux-nightly-4.10-e2e-aws-upgrade"
+      },
+      "aggregatedProwJob": {
+        "analysisJobCount": 5
+      }
+    },
+    "aggregated-gcp-sdn-upgrade-4.10-micro": {
+      "disabled": false,
+      "optional": false,
+      "upgrade": true,
+      "upgradeFrom": "",
+      "upgradeFromRelease": null,
+      "prowJob": {
+        "name": "periodic-ci-openshift-release-master-konflux-nightly-4.10-e2e-gcp-upgrade"
+      },
+      "aggregatedProwJob": {
+        "analysisJobCount": 10
+      }
+    }
+}`
+				}
 				return &http.Response{
 					StatusCode: http.StatusOK,
 					Body:       io.NopCloser(bytes.NewBuffer([]byte(content))),

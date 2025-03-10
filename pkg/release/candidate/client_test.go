@@ -127,6 +127,17 @@ func TestEndpoint(t *testing.T) {
 			},
 			output: "https://s390x.ocp.releases.ci.openshift.org/api/v1/releasestream/4.8.0-0.nightly-s390x/latest",
 		},
+		{
+			input: api.Candidate{
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOCP,
+					Architecture: api.ReleaseArchitectureS390x,
+				},
+				Stream:  api.ReleaseStreamKonfluxNightly,
+				Version: "4.19",
+			},
+			output: "https://s390x.ocp.releases.ci.openshift.org/api/v1/releasestream/4.19.0-0.konflux-nightly-s390x/latest",
+		},
 	}
 
 	for _, testCase := range testCases {

@@ -95,7 +95,7 @@ func validateCandidate(fieldRoot string, candidate api.Candidate) []error {
 			string(api.ReleaseStreamOKDScos)), // we allow unset and will default it
 		api.ReleaseProductOKDScos: sets.New[string]("", string(api.ReleaseStreamOKD),
 			string(api.ReleaseStreamOKDScos)),
-		api.ReleaseProductOCP: sets.New[string](string(api.ReleaseStreamCI), string(api.ReleaseStreamNightly)),
+		api.ReleaseProductOCP: sets.New[string](string(api.ReleaseStreamCI), string(api.ReleaseStreamNightly), string(api.ReleaseStreamKonfluxNightly)),
 	}
 	if !streamsByProduct[candidate.Product].Has(string(candidate.Stream)) {
 		validationErrors = append(validationErrors, fmt.Errorf("%s.stream: must be one of %s", fieldRoot, strings.Join(sets.List(streamsByProduct[candidate.Product]), ", ")))

@@ -3,14 +3,14 @@ postsubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
+    - ^main$
     decorate: true
     decoration_config:
       skip_cloning: true
     labels:
       ci.openshift.io/generator: prowgen
     max_concurrency: 1
-    name: branch-ci-norehearsals-stuper-master-upload-results
+    name: branch-ci-norehearsals-stuper-main-upload-results
     spec:
       containers:
       - args:

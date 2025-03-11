@@ -3,6 +3,6 @@ presubmits:
   legacy/branches-separate-files:
   - always_run: false
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     name: pull-ci-legacy-branches-separate-files-test

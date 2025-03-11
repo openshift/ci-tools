@@ -50,7 +50,7 @@ Usage of autoowners:
   -plugin-config string
     	Path to plugin config file.
   -pr-base-branch string
-    	The base branch to use for the pull request. (default "master")
+    	The base branch to use for the pull request. (default "main")
   -repo string
     	The downstream GitHub repository name. (default "release")
   -self-approve approved
@@ -90,4 +90,4 @@ $ /usr/bin/autoowners --github-token-path=/etc/github/oauth --git-name=openshift
 ```
 
 [openshift/origin]: https://github.com/openshift/origin
-[openshift/origin-jobs]: https://github.com/openshift/release/tree/master/ci-operator/jobs/openshift/origin
+[openshift/origin-jobs]: https://github.com/openshift/release/tree/main/ci-operator/jobs/openshift/origin

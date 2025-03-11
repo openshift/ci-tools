@@ -82,15 +82,15 @@ func TestProwJobBaseBuilder(t *testing.T) {
 			podSpecBuilder: newFakePodSpecBuilder(),
 		},
 		{
-			name:           "job with no builds outside of openshift/release@master: does not have `no-builds` label",
+			name:           "job with no builds outside of openshift/release@main: does not have `no-builds` label",
 			info:           defaultInfo,
 			prefix:         "default",
 			podSpecBuilder: newFakePodSpecBuilder(),
 		},
 		{
-			name: "job with no builds in openshift/release@master: does have `no-builds` label",
+			name: "job with no builds in openshift/release@main: does have `no-builds` label",
 			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "openshift", Repo: "release", Branch: "master"},
+				Metadata: ciop.Metadata{Org: "openshift", Repo: "release", Branch: "main"},
 			},
 			prefix:         "default",
 			podSpecBuilder: newFakePodSpecBuilder(),

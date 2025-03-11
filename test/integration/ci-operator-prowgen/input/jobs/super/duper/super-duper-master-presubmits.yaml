@@ -3,12 +3,12 @@ presubmits:
   - agent: kubernetes
     always_run: false
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     context: ci/prow/images
     decorate: true
     max_concurrency: 100
-    name: pull-ci-super-duper-master-images
+    name: pull-ci-super-duper-main-images
     optional: true
     rerun_command: /test images
     run_if_changed: changes
@@ -24,8 +24,8 @@ presubmits:
         - name: CONFIG_SPEC
           valueFrom:
             configMapKeyRef:
-              key: super-duper-master.yaml
-              name: ci-operator-master-configs
+              key: super-duper-main.yaml
+              name: ci-operator-main-configs
         image: ci-operator:latest
         name: ""
         resources:
@@ -35,12 +35,12 @@ presubmits:
     trigger: '(?m)^/test (?:.*? )?images(?: .*?)?$'
   - agent: jenkins
     branches:
-    - master
-    name: pull-ci-super-duper-master-legacy
+    - main
+    name: pull-ci-super-duper-main-legacy
     always_run: true
     context: ci/openshift-jenkins/legacy
     labels:
-      master: ci.openshift.redhat.com
+      main: ci.openshift.redhat.com
     rerun_command: /test legacy
     trigger: ((?m)^/test( all| legacy),?(\s+|$))
   - agent: jenkins
@@ -48,20 +48,20 @@ presubmits:
     always_run: true
     context: ci/openshift-jenkins/oldschool
     labels:
-      master: ci.openshift.redhat.com
+      main: ci.openshift.redhat.com
     rerun_command: /test oldschool
     trigger: ((?m)^/test( all| oldschool),?(\s+|$))
   - agent: kubernetes
     always_run: false
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     context: ci/prow/images
     decorate: true
     labels:
       ci.openshift.io/generator: prowgen
     max_concurrency: 100
-    name: pull-ci-super-duper-master-should-be-removed
+    name: pull-ci-super-duper-main-should-be-removed
     optional: true
     rerun_command: /test images
     run_if_changed: changes
@@ -77,8 +77,8 @@ presubmits:
           - name: CONFIG_SPEC
             valueFrom:
               configMapKeyRef:
-                key: super-duper-master.yaml
-                name: ci-operator-master-configs
+                key: super-duper-main.yaml
+                name: ci-operator-main-configs
         image: ci-operator:latest
         name: ""
         resources:
@@ -91,7 +91,7 @@ presubmits:
     always_run: false
     context: ci/openshift-jenkins/skippy
     labels:
-      master: ci.openshift.redhat.com
+      main: ci.openshift.redhat.com
     rerun_command: /test skippy
     skip_if_only_changed: changes
     trigger: ((?m)^/test( all| skippy),?(\s+|$))

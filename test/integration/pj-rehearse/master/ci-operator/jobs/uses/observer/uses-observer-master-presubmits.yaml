@@ -3,8 +3,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     context: ci/prow/should-not-be-rehearsed
     decorate: true
     decoration_config:
@@ -12,7 +12,7 @@ presubmits:
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-uses-observer-master-should-not-be-rehearsed
+    name: pull-ci-uses-observer-main-should-not-be-rehearsed
     rerun_command: /test should-not-be-rehearsed
     spec:
       containers:
@@ -57,8 +57,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     context: ci/prow/test-with-changed-observer
     decorate: true
     decoration_config:
@@ -66,7 +66,7 @@ presubmits:
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-uses-observer-master-test-with-changed-observer
+    name: pull-ci-uses-observer-main-test-with-changed-observer
     rerun_command: /test test-with-changed-observer
     spec:
       containers:
@@ -111,8 +111,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     context: ci/prow/test-with-changed-observer-commands
     decorate: true
     decoration_config:
@@ -120,7 +120,7 @@ presubmits:
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-uses-observer-master-test-with-changed-observer-commands
+    name: pull-ci-uses-observer-main-test-with-changed-observer-commands
     rerun_command: /test test-with-changed-observer-commands
     spec:
       containers:
@@ -165,8 +165,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     context: ci/prow/test-with-changed-observer-workflow
     decorate: true
     decoration_config:
@@ -174,7 +174,7 @@ presubmits:
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-uses-observer-master-test-with-changed-observer-workflow
+    name: pull-ci-uses-observer-main-test-with-changed-observer-workflow
     rerun_command: /test test-with-changed-observer-workflow
     spec:
       containers:
@@ -219,8 +219,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     context: ci/prow/test-with-unchanged-observer
     decorate: true
     decoration_config:
@@ -228,7 +228,7 @@ presubmits:
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-uses-observer-master-test-with-unchanged-observer
+    name: pull-ci-uses-observer-main-test-with-unchanged-observer
     rerun_command: /test test-with-unchanged-observer
     spec:
       containers:
@@ -273,8 +273,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     context: ci/prow/test-with-unchanged-observer-workflow
     decorate: true
     decoration_config:
@@ -282,7 +282,7 @@ presubmits:
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-uses-observer-master-test-with-unchanged-observer-workflow
+    name: pull-ci-uses-observer-main-test-with-unchanged-observer-workflow
     rerun_command: /test test-with-unchanged-observer-workflow
     spec:
       containers:

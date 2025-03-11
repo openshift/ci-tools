@@ -15,8 +15,8 @@ For example, `registry.ci.openshift.org/namespace/name:tag` is mirrored to
   SHA256 hash of the docker image without the prefix `sha256:`.
 
 This tool is extended with the following features (and thus is no longer temporary):
-- mirror images from external registries to QCI: See `.supplementalCIImages` of [the configuration file](https://github.com/openshift/release/blob/master/core-services/image-mirroring/_config.yaml).
-- mirror ART images from app.ci to QCI: See `.artImages` of [the configuration file](https://github.com/openshift/release/blob/master/core-services/image-mirroring/_config.yaml).
+- mirror images from external registries to QCI: See `.supplementalCIImages` of [the configuration file](https://github.com/openshift/release/blob/main/core-services/image-mirroring/_config.yaml).
+- mirror ART images from app.ci to QCI: See `.artImages` of [the configuration file](https://github.com/openshift/release/blob/main/core-services/image-mirroring/_config.yaml).
 
 ## Run the tool locally
 

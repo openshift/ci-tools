@@ -15,27 +15,27 @@ be automatically merged (does not need a human approval).
 
 _(subject to bitrot, always consult the code)_
 
-- [ci-operator-yaml-creator](https://github.com/openshift/ci-tools/tree/master/cmd/ci-operator-yaml-creator): ensures
+- [ci-operator-yaml-creator](https://github.com/openshift/ci-tools/tree/main/cmd/ci-operator-yaml-creator): ensures
   that repositories with in-repo `.ci-operator.yaml` file use `build_root.from_repository: true` in their ci-operator
   configs
-- [registry-replacer](https://github.com/openshift/ci-tools/tree/master/cmd/registry-replacer): ensures that all builds
+- [registry-replacer](https://github.com/openshift/ci-tools/tree/main/cmd/registry-replacer): ensures that all builds
   specified in ci-operator configs use a local cluster registry (replaces central registry pullspecs with local
   ImageStreamTag references)
-- [config-brancher](https://github.com/openshift/ci-tools/tree/master/cmd/config-brancher): propagates ci-operator
+- [config-brancher](https://github.com/openshift/ci-tools/tree/main/cmd/config-brancher): propagates ci-operator
   config changes from `master`/`main` configs to future release branches
-- [ci-operator-config-mirror](https://github.com/openshift/ci-tools/tree/master/cmd/ci-operator-config-mirror):
+- [ci-operator-config-mirror](https://github.com/openshift/ci-tools/tree/main/cmd/ci-operator-config-mirror):
   propagates ci-operator config changes to private forks in `openshift-priv` organization
-- [determinize-ci-operator](https://github.com/openshift/ci-tools/tree/master/cmd/determinize-ci-operator): loads and
+- [determinize-ci-operator](https://github.com/openshift/ci-tools/tree/main/cmd/determinize-ci-operator): loads and
   saves ci-operator config to fix ordering, formatting etc
-- [ci-operator-prowgen](https://github.com/openshift/ci-tools/tree/master/cmd/ci-operator-prowgen): generates Prow job
+- [ci-operator-prowgen](https://github.com/openshift/ci-tools/tree/main/cmd/ci-operator-prowgen): generates Prow job
   configuration from ci-operator configuration
-- [private-prow-configs-mirror](https://github.com/openshift/ci-tools/tree/master/cmd/private-prow-configs-mirror):
+- [private-prow-configs-mirror](https://github.com/openshift/ci-tools/tree/main/cmd/private-prow-configs-mirror):
   propagates Prow configuration changes to private forks in `openshift-priv` organization
-- [determinize-prow-config](https://github.com/openshift/ci-tools/tree/master/cmd/private-prow-configs-mirror): loads
+- [determinize-prow-config](https://github.com/openshift/ci-tools/tree/main/cmd/private-prow-configs-mirror): loads
   and saves Prow configuration to fix ordering, formatting, proper sharding etc
-- [sanitize-prow-jobs](https://github.com/openshift/ci-tools/tree/master/cmd/sanitize-prow-jobs): loads and saves Prow
+- [sanitize-prow-jobs](https://github.com/openshift/ci-tools/tree/main/cmd/sanitize-prow-jobs): loads and saves Prow
   job configuration to fix ordering, formatting etc. This tool also assigns jobs to build farm clusters.
-- [clusterimageset-updater](https://github.com/openshift/ci-tools/tree/master/cmd/clusterimageset-updater): updates
+- [clusterimageset-updater](https://github.com/openshift/ci-tools/tree/main/cmd/clusterimageset-updater): updates
   cluster pool manifests to use the latest stable OCP releases
 
 ## Why it exists
@@ -44,7 +44,7 @@ Over time, we wrote a number of tools that automatically maintain parts of the C
 in [openshift/release](https://github.com/openshift/release/) so that we do not need to do so as humans. After some
 time, it was annoying to write a PR-creation capability for each tool separately and set up a periodic job for it, so we
 started to add new tools as "steps" to the most mature of them (`auto-config-brancher` was originally a tool that simply
-ran [config-brancher](https://github.com/openshift/ci-tools/tree/master/cmd/config-brancher), committed the changes and
+ran [config-brancher](https://github.com/openshift/ci-tools/tree/main/cmd/config-brancher), committed the changes and
 submitted a PR).
 
 ## How it works

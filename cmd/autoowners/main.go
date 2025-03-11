@@ -40,7 +40,7 @@ const (
 	configSubDirs      = "jobs,config,templates"
 	targetSubDirectory = "ci-operator"
 
-	defaultBaseBranch = "master"
+	defaultBaseBranch = "main"
 )
 
 type SimpleConfig = repoowners.SimpleConfig

@@ -23,7 +23,7 @@ os::test::junit::declare_suite_start "integration/repo-init"
 inputs=(
               "org" # Enter the organization for the repository: org
              "repo" # Enter the repository to initialize: repo
-                 "" # Enter the development branch for the repository: [default: master]
+                 "" # Enter the development branch for the repository: [default: main]
               "yes" # Does the repository build and promote container images?  [default: no] yes
               "yes" # Does the repository promote images as part of the OpenShift release?  [default: no] yes
               "yes" # Do any images build on top of the OpenShift base image?  [default: no] yes
@@ -61,7 +61,7 @@ os::cmd::expect_success 'for input in "${inputs[@]}"; do echo "${input}"; done |
 inputs=(
               "org" # Enter the organization for the repository: org
             "other" # Enter the repository to initialize: repo
-      "nonstandard" # Enter the development branch for the repository: [default: master]
+      "nonstandard" # Enter the development branch for the repository: [default: main]
               "yes" # Does the repository build and promote container images?  [default: no] yes
                  "" # Does the repository promote images as part of the OpenShift release?  [default: no] yes
                "no" # Do any images build on top of the OpenShift base image?  [default: no] yes
@@ -83,7 +83,7 @@ os::cmd::expect_success 'for input in "${inputs[@]}"; do echo "${input}"; done |
 inputs=(
               "org" # Enter the organization for the repository: org
             "third" # Enter the repository to initialize: repo
-      "nonstandard" # Enter the development branch for the repository: [default: master]
+      "nonstandard" # Enter the development branch for the repository: [default: main]
                "no" # Does the repository build and promote container images?  [default: no] yes
              "1.15" # What version of Go does the repository build with? [default: 1.12]
       "k8s.io/cool" # Enter the Go import path for the repository if it uses a vanity URL (e.g. "k8s.io/my-repo"):

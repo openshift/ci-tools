@@ -130,7 +130,7 @@ func processDockerfile(config ocpbuilddata.OCPImageConfig, processor diffProcess
 	if !hasDiff {
 		return nil
 	}
-	branch := "master"
+	branch := "main"
 	if config.Content != nil && config.Content.Source.Git != nil && strings.HasPrefix(config.Content.Source.Git.Branch.Taget, "openshift-") {
 		branch = config.Content.Source.Git.Branch.Taget
 	}
@@ -308,7 +308,7 @@ func (dp *diffProcessor) process() error {
 					"If you believe the content of this PR is incorrect, please contact the dptp team in",
 					"#aos-art.",
 					"",
-					"[1]: https://github.com/openshift/ci-tools/tree/master/cmd/ocp-build-data-enforcer",
+					"[1]: https://github.com/openshift/ci-tools/tree/main/cmd/ocp-build-data-enforcer",
 					"[2]: https://github.com/openshift/ocp-build-data/tree/openshift-4.6/images",
 				}, "\n")),
 			); err != nil {

@@ -44,7 +44,7 @@ const (
 )
 
 // SimpleBranchRegexp matches a branch name that does not appear to be a regex (lacks wildcard,
-// group, or other modifiers). For instance, `master` is considered simple, `master-.*` would
+// group, or other modifiers). For instance, `main` is considered simple, `main-.*` would
 // not.
 var SimpleBranchRegexp = regexp.MustCompile(`^[\w\-.]+$`)
 
@@ -278,7 +278,7 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig, gener
 		job.Labels[string(generator)] = string(newlyGenerated)
 		job.Labels[LabelGenerator] = string(generator)
 		allJobs.Insert(job.Name)
-		branch := "master"
+		branch := "main"
 		if len(job.Branches) > 0 {
 			branch = job.Branches[0]
 			// branches may be regexps, strip regexp characters and trailing dashes / slashes
@@ -297,7 +297,7 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig, gener
 		job.Labels[string(generator)] = string(newlyGenerated)
 		job.Labels[LabelGenerator] = string(generator)
 		allJobs.Insert(job.Name)
-		branch := "master"
+		branch := "main"
 		if len(job.Branches) > 0 {
 			branch = job.Branches[0]
 			// branches may be regexps, strip regexp characters and trailing dashes / slashes
@@ -628,7 +628,7 @@ func MakeRegexFilenameLabel(possibleRegex string) string {
 	label := regexParts.ReplaceAllString(possibleRegex, "")
 	label = strings.TrimLeft(strings.TrimRight(label, "-._"), "-._")
 	if len(label) == 0 {
-		label = "master"
+		label = "main"
 	}
 	return label
 }
@@ -748,7 +748,7 @@ func Prune(jobConfig *prowconfig.JobConfig, generator Generator, pruneLabels lab
 }
 
 // FeatureBranch returns a regex string that matches feature branch prefixes for the given branch name:
-// I.e. returns '^master-' for 'master'. If the given branch name already looks like a regex,
+// I.e. returns '^main-' for 'main'. If the given branch name already looks like a regex,
 // return it unchanged.
 func FeatureBranch(branch string) string {
 	if !SimpleBranchRegexp.MatchString(branch) {
@@ -758,7 +758,7 @@ func FeatureBranch(branch string) string {
 }
 
 // ExactlyBranch returns a regex string that matches exactly the given branch name: I.e. returns
-// '^master$' for 'master'. If the given branch name already looks like a regex, return it unchanged.
+// '^main$' for 'main'. If the given branch name already looks like a regex, return it unchanged.
 func ExactlyBranch(branch string) string {
 	if !SimpleBranchRegexp.MatchString(branch) {
 		return branch

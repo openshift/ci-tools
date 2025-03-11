@@ -48,7 +48,7 @@ const testingRegistry = "../../test/multistage-registry/registry"
 // CONFIG_SPEC and not fail
 func generateTestConfigFiles() config.DataByFilename {
 	return config.DataByFilename{
-		"targetOrg-targetRepo-master.yaml": config.DataWithInfo{
+		"targetOrg-targetRepo-main.yaml": config.DataWithInfo{
 			Configuration: api.ReleaseBuildConfiguration{
 				Tests: []api.TestStepConfiguration{
 					{
@@ -64,11 +64,11 @@ func generateTestConfigFiles() config.DataByFilename {
 				Metadata: api.Metadata{
 					Org:    "targetOrg",
 					Repo:   "targetRepo",
-					Branch: "master",
+					Branch: "main",
 				},
 			},
 		},
-		"targetOrg-targetRepo-not-master.yaml": config.DataWithInfo{
+		"targetOrg-targetRepo-not-main.yaml": config.DataWithInfo{
 			Configuration: api.ReleaseBuildConfiguration{
 				Tests: []api.TestStepConfiguration{
 					{As: "job1"},
@@ -79,10 +79,10 @@ func generateTestConfigFiles() config.DataByFilename {
 				Metadata: api.Metadata{
 					Org:    "targetOrg",
 					Repo:   "targetRepo",
-					Branch: "not-master",
+					Branch: "not-main",
 				},
 			},
-		}, "anotherOrg-anotherRepo-master.yaml": config.DataWithInfo{
+		}, "anotherOrg-anotherRepo-main.yaml": config.DataWithInfo{
 			Configuration: api.ReleaseBuildConfiguration{
 				Tests: []api.TestStepConfiguration{
 					{As: "job1"},
@@ -93,7 +93,7 @@ func generateTestConfigFiles() config.DataByFilename {
 				Metadata: api.Metadata{
 					Org:    "anotherOrg",
 					Repo:   "anotherRepo",
-					Branch: "master",
+					Branch: "main",
 				},
 			},
 		},
@@ -205,7 +205,7 @@ func TestInlineCiopConfig(t *testing.T) {
 		t.Fatalf("Failed to compress config: %v", err)
 	}
 
-	standardMetadata := api.Metadata{Org: "targetOrg", Repo: "targetRepo", Branch: "master"}
+	standardMetadata := api.Metadata{Org: "targetOrg", Repo: "targetRepo", Branch: "main"}
 	incompleteMetadata := api.Metadata{Org: "openshift", Repo: "release"}
 
 	makePresubmit := func(command string, env []v1.EnvVar, args []string) *prowconfig.Presubmit {
@@ -366,7 +366,7 @@ func makeTestingPresubmit(name, context, branch string) *prowconfig.Presubmit {
 			Spec: &v1.PodSpec{
 				Containers: []v1.Container{{
 					Command: []string{"ci-operator"},
-					Args:    []string{"--resolver-address=http://ci-operator-resolver", "--org", "openshift", "--repo=origin", "--branch", "master"},
+					Args:    []string{"--resolver-address=http://ci-operator-resolver", "--org", "openshift", "--repo=origin", "--branch", "main"},
 				}},
 			},
 		},
@@ -567,14 +567,14 @@ func TestExecuteJobsErrors(t *testing.T) {
 	}{{
 		description: "fail to Create a prowjob",
 		jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
-			*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
+			*makeTestingPresubmit("job1", "ci/prow/job1", "main"),
 		}},
 		failToCreate: sets.New[string]("rehearse-123-job1"),
 	}, {
 		description: "fail to Create one of two prowjobs",
 		jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
-			*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
-			*makeTestingPresubmit("job2", "ci/prow/job2", "master"),
+			*makeTestingPresubmit("job1", "ci/prow/job1", "main"),
+			*makeTestingPresubmit("job2", "ci/prow/job2", "main"),
 		}},
 		failToCreate: sets.New[string]("rehearse-123-job2"),
 	}}
@@ -629,20 +629,20 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 	}{{
 		description: "single job that fails",
 		jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
-			*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
+			*makeTestingPresubmit("job1", "ci/prow/job1", "main"),
 		}},
 		results: map[string]pjapi.ProwJobState{"rehearse-123-job1": pjapi.FailureState},
 	}, {
 		description: "single job that aborts",
 		jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
-			*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
+			*makeTestingPresubmit("job1", "ci/prow/job1", "main"),
 		}},
 		results: map[string]pjapi.ProwJobState{"rehearse-123-job1": pjapi.AbortedState},
 	}, {
 		description: "one job succeeds, one fails",
 		jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
-			*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
-			*makeTestingPresubmit("job2", "ci/prow/job2", "master"),
+			*makeTestingPresubmit("job1", "ci/prow/job1", "main"),
+			*makeTestingPresubmit("job2", "ci/prow/job2", "main"),
 		}},
 		results: map[string]pjapi.ProwJobState{
 			"rehearse-123-job1": pjapi.SuccessState,
@@ -706,53 +706,53 @@ func TestExecuteJobsPositive(t *testing.T) {
 		{
 			description: "two jobs in a single repo",
 			jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
-				*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
-				*makeTestingPresubmit("job2", "ci/prow/job2", "master"),
+				*makeTestingPresubmit("job1", "ci/prow/job1", "main"),
+				*makeTestingPresubmit("job2", "ci/prow/job2", "main"),
 			}},
 			expectedJobs: []pjapi.ProwJobSpec{
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job1",
-					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job1"),
-					"job1", testRefs, targetOrg, targetRepo, "master", baseDir, targetOrgRepoPrefix).Spec,
+					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "main", "job1"),
+					"job1", testRefs, targetOrg, targetRepo, "main", baseDir, targetOrgRepoPrefix).Spec,
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job2",
-					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job2"),
-					"job2", testRefs, targetOrg, targetRepo, "master", baseDir, targetOrgRepoPrefix).Spec,
+					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "main", "job2"),
+					"job2", testRefs, targetOrg, targetRepo, "main", baseDir, targetOrgRepoPrefix).Spec,
 			},
 			expectedImageStreamTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
 		}, {
 			description: "two jobs in a single repo, same context but different branch",
 			jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
-				*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
-				*makeTestingPresubmit("job2", "ci/prow/job2", "not-master"),
+				*makeTestingPresubmit("job1", "ci/prow/job1", "main"),
+				*makeTestingPresubmit("job2", "ci/prow/job2", "not-main"),
 			}},
 			expectedJobs: []pjapi.ProwJobSpec{
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job1",
-					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job1"),
-					"job1", testRefs, targetOrg, targetRepo, "master", baseDir, targetOrgRepoPrefix).Spec,
+					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "main", "job1"),
+					"job1", testRefs, targetOrg, targetRepo, "main", baseDir, targetOrgRepoPrefix).Spec,
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job2",
-					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "not-master", "job2"),
-					"job2", testRefs, targetOrg, targetRepo, "not-master", baseDir, targetOrgRepoPrefix).Spec,
+					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "not-main", "job2"),
+					"job2", testRefs, targetOrg, targetRepo, "not-main", baseDir, targetOrgRepoPrefix).Spec,
 			},
 			expectedImageStreamTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
 		},
 		{
 			description: "two jobs in a separate repos",
 			jobs: map[string][]prowconfig.Presubmit{
-				targetOrgRepo:        {*makeTestingPresubmit("job1", "ci/prow/job1", "master")},
-				anotherTargetOrgRepo: {*makeTestingPresubmit("job2", "ci/prow/job2", "master")},
+				targetOrgRepo:        {*makeTestingPresubmit("job1", "ci/prow/job1", "main")},
+				anotherTargetOrgRepo: {*makeTestingPresubmit("job2", "ci/prow/job2", "main")},
 			},
 			expectedJobs: []pjapi.ProwJobSpec{
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job1",
-					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job1"),
-					"job1", testRefs, targetOrg, targetRepo, "master", baseDir, targetOrgRepoPrefix).Spec,
+					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "main", "job1"),
+					"job1", testRefs, targetOrg, targetRepo, "main", baseDir, targetOrgRepoPrefix).Spec,
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job2",
-					fmt.Sprintf(rehearseJobContextTemplate, anotherTargetOrgRepo, "master", "job2"),
-					"job2", testRefs, anotherTargetOrg, anotherTargetRepo, "master", baseDir, "https://star.com/").Spec,
+					fmt.Sprintf(rehearseJobContextTemplate, anotherTargetOrgRepo, "main", "job2"),
+					"job2", testRefs, anotherTargetOrg, anotherTargetRepo, "main", baseDir, "https://star.com/").Spec,
 			},
 			expectedImageStreamTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
 		}, {
@@ -980,48 +980,48 @@ func TestFilterPresubmits(t *testing.T) {
 	}{
 		{
 			description: "basic presubmit job, allowed",
-			presubmits:  config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test")}},
-			expected:    config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test")}},
+			presubmits:  config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-main-test")}},
+			expected:    config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-main-test")}},
 		},
 		{
 			description: "job with no rehearse label, not allowed",
-			presubmits:  config.Presubmits{"org/repo": {*makePresubmit(map[string]string{}, false, "pull-ci-organization-repo-master-test")}},
+			presubmits:  config.Presubmits{"org/repo": {*makePresubmit(map[string]string{}, false, "pull-ci-organization-repo-main-test")}},
 			expected:    config.Presubmits{},
 		},
 		{
 			description: "hidden job, not allowed",
-			presubmits:  config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, true, "pull-ci-organization-repo-master-test")}},
+			presubmits:  config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, true, "pull-ci-organization-repo-main-test")}},
 			expected:    config.Presubmits{},
 		},
 		{
 			description:   "job in disabled list, not allowed",
-			presubmits:    config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test")}},
-			disabledNames: []string{"pull-ci-organization-repo-master-test"},
+			presubmits:    config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-main-test")}},
+			disabledNames: []string{"pull-ci-organization-repo-main-test"},
 			expected:      config.Presubmits{},
 		},
 		{
 			description: "multiple jobs, some allowed",
 			presubmits: config.Presubmits{"org/repo": {
-				*makePresubmit(canBeRehearsed, true, "pull-ci-organization-repo-master-test-0"),
-				*makePresubmit(map[string]string{}, false, "pull-ci-organization-repo-master-test-1"),
-				*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test-2"),
-				*makePresubmit(map[string]string{}, false, "pull-ci-organization-repo-master-test-3"),
-				*makePresubmit(canBeRehearsed, true, "pull-ci-organization-repo-master-test-4"),
-				*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test-5"),
-				*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test-6")},
+				*makePresubmit(canBeRehearsed, true, "pull-ci-organization-repo-main-test-0"),
+				*makePresubmit(map[string]string{}, false, "pull-ci-organization-repo-main-test-1"),
+				*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-main-test-2"),
+				*makePresubmit(map[string]string{}, false, "pull-ci-organization-repo-main-test-3"),
+				*makePresubmit(canBeRehearsed, true, "pull-ci-organization-repo-main-test-4"),
+				*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-main-test-5"),
+				*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-main-test-6")},
 			},
-			disabledNames: []string{"pull-ci-organization-repo-master-test-6"},
+			disabledNames: []string{"pull-ci-organization-repo-main-test-6"},
 			expected: config.Presubmits{"org/repo": {
-				*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test-2"),
-				*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test-5")},
+				*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-main-test-2"),
+				*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-main-test-5")},
 			},
 		},
 		{
 			description: "multiple repos, some jobs allowed",
-			presubmits: config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test"), *makePresubmit(map[string]string{}, false, "pull-ci-organization-repo-master-test")},
-				"org/different": {*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test")}},
-			expected: config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test")},
-				"org/different": {*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-master-test")}},
+			presubmits: config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-main-test"), *makePresubmit(map[string]string{}, false, "pull-ci-organization-repo-main-test")},
+				"org/different": {*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-main-test")}},
+			expected: config.Presubmits{"org/repo": {*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-main-test")},
+				"org/different": {*makePresubmit(canBeRehearsed, false, "pull-ci-organization-repo-main-test")}},
 		},
 	}
 	for _, tc := range testCases {
@@ -1057,7 +1057,7 @@ func makePresubmit(extraLabels map[string]string, hidden bool, name string) *pro
 		},
 		RerunCommand: fmt.Sprintf("/pj-rehearse %s", name),
 		Reporter:     prowconfig.Reporter{Context: "ci/prow/test"},
-		Brancher:     prowconfig.Brancher{Branches: []string{"^master$"}},
+		Brancher:     prowconfig.Brancher{Branches: []string{"^main$"}},
 	}
 }
 
@@ -1283,7 +1283,7 @@ func makeBaseRefs() *pjapi.Refs {
 		Org:      "openshift",
 		Repo:     "release",
 		RepoLink: "https://github.com/openshift/release",
-		BaseRef:  "master",
+		BaseRef:  "main",
 		BaseSHA:  "80af9fee7a9f63a79e01da0c74d9dd323118daf0",
 		BaseLink: "",
 		Pulls: []pjapi.Pull{
@@ -1304,28 +1304,28 @@ func TestRemoveConfigResolverFlags(t *testing.T) {
 		expectedInfo api.Metadata
 	}{{
 		description:  "just resolver flags",
-		input:        []string{"--resolver-address=http://ci-operator-resolver", "--org=openshift", "--repo=origin", "--branch=master", "--variant=v2"},
+		input:        []string{"--resolver-address=http://ci-operator-resolver", "--org=openshift", "--repo=origin", "--branch=main", "--variant=v2"},
 		expectedArgs: nil,
-		expectedInfo: api.Metadata{Org: "openshift", Repo: "origin", Branch: "master", Variant: "v2"},
+		expectedInfo: api.Metadata{Org: "openshift", Repo: "origin", Branch: "main", Variant: "v2"},
 	}, {
 		description:  "no resolver flags",
 		input:        []string{"--target=target"},
 		expectedArgs: []string{"--target=target"},
 	}, {
 		description:  "mixed resolver and non-resolver flags",
-		input:        []string{"--resolver-address=http://ci-operator-resolver", "--org=openshift", "--target=target", "--repo=origin", "--branch=master", "--variant=v2"},
+		input:        []string{"--resolver-address=http://ci-operator-resolver", "--org=openshift", "--target=target", "--repo=origin", "--branch=main", "--variant=v2"},
 		expectedArgs: []string{"--target=target"},
-		expectedInfo: api.Metadata{Org: "openshift", Repo: "origin", Branch: "master", Variant: "v2"},
+		expectedInfo: api.Metadata{Org: "openshift", Repo: "origin", Branch: "main", Variant: "v2"},
 	}, {
 		description:  "spaces in between flag and value",
-		input:        []string{"--resolver-address=http://ci-operator-resolver", "--org", "openshift", "--target=target", "--repo", "origin", "--branch", "master", "--variant=v2"},
+		input:        []string{"--resolver-address=http://ci-operator-resolver", "--org", "openshift", "--target=target", "--repo", "origin", "--branch", "main", "--variant=v2"},
 		expectedArgs: []string{"--target=target"},
-		expectedInfo: api.Metadata{Org: "openshift", Repo: "origin", Branch: "master", Variant: "v2"},
+		expectedInfo: api.Metadata{Org: "openshift", Repo: "origin", Branch: "main", Variant: "v2"},
 	}, {
 		description:  "reporting flags",
-		input:        []string{"--report-password-file=/etc/report/password.txt", "--report-username=ci", "--resolver-address=http://ci-operator-resolver", "--org", "openshift", "--target=target", "--repo", "origin", "--branch", "master", "--variant=v2"},
+		input:        []string{"--report-password-file=/etc/report/password.txt", "--report-username=ci", "--resolver-address=http://ci-operator-resolver", "--org", "openshift", "--target=target", "--repo", "origin", "--branch", "main", "--variant=v2"},
 		expectedArgs: []string{"--report-password-file=/etc/report/password.txt", "--report-username=ci", "--target=target"},
-		expectedInfo: api.Metadata{Org: "openshift", Repo: "origin", Branch: "master", Variant: "v2"},
+		expectedInfo: api.Metadata{Org: "openshift", Repo: "origin", Branch: "main", Variant: "v2"},
 	}}
 	for _, testCase := range testCases {
 		t.Run(testCase.description, func(t *testing.T) {
@@ -1346,9 +1346,9 @@ func TestGetTrimmedBranch(t *testing.T) {
 		input    []string
 		expected string
 	}{{
-		name:     "master with regex",
-		input:    []string{"^master$"},
-		expected: "master",
+		name:     "main with regex",
+		input:    []string{"^main$"},
+		expected: "main",
 	}, {
 		name:     "release-3.5 with regex",
 		input:    []string{"^release-3\\.5$"},
@@ -1667,24 +1667,24 @@ func TestMoreRelevant(t *testing.T) {
 			expected: false,
 		},
 		{
-			name: "same org/repo, branches master and not-master",
+			name: "same org/repo, branches main and not-main",
 			one: &config.DataWithInfo{
 				Info: config.Info{
-					Filename: "targetOrg-targetRepo-master.yaml",
+					Filename: "targetOrg-targetRepo-main.yaml",
 					Metadata: api.Metadata{
 						Org:    "targetOrg",
 						Repo:   "targetRepo",
-						Branch: "master",
+						Branch: "main",
 					},
 				},
 			},
 			two: &config.DataWithInfo{
 				Info: config.Info{
-					Filename: "targetOrg-targetRepo-not-master.yaml",
+					Filename: "targetOrg-targetRepo-not-main.yaml",
 					Metadata: api.Metadata{
 						Org:    "targetOrg",
 						Repo:   "targetRepo",
-						Branch: "not-master",
+						Branch: "not-main",
 					},
 				},
 			},

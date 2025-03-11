@@ -3,8 +3,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     context: ci/prow/unit
     decorate: true
     decoration_config:
@@ -15,7 +15,7 @@ presubmits:
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-private-org-super-master-unit
+    name: pull-ci-private-org-super-main-unit
     rerun_command: /test unit
     spec:
       containers:

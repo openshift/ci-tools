@@ -8,7 +8,7 @@ As designed in [[DPTP-1152] Choose a cluster for prow jobs](https://docs.google.
 * If all e2e jobs in a group run on the same cloud provider, it will only consider clusters on that cloud provider, if any. Otherwise, all build clusters are considered.
 * It will then choose the cluster with the least number of jobs, based on the Prometheus metrics and the already dispatched jobs.
 
-The choices of cluster are stored in the following stanza of [the config file](https://github.com/openshift/release/blob/master/core-services/sanitize-prow-jobs/_config.yaml) of [`sanitize-prow-jobs`](../sanitize-prow-jobs).
+The choices of cluster are stored in the following stanza of [the config file](https://github.com/openshift/release/blob/main/core-services/sanitize-prow-jobs/_config.yaml) of [`sanitize-prow-jobs`](../sanitize-prow-jobs).
 
 ```
 buildFarm:

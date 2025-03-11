@@ -26,6 +26,7 @@ const (
 	githubOrg    = "openshift"
 	githubRepo   = "release"
 	githubLogin  = "openshift-bot"
+	localBranch  = "main"
 	remoteBranch = "auto-publicize-sync"
 	privateOrg   = "openshift-priv"
 	matchTitle   = "Automate publicize configuration sync"
@@ -168,7 +169,7 @@ func main() {
 	}
 
 	source := fmt.Sprintf("%s:%s", o.githubLogin, remoteBranch)
-	if err := bumper.UpdatePullRequestWithLabels(gc, githubOrg, githubRepo, title, description, source, "master", remoteBranch, true, labelsToAdd, o.dryRun); err != nil {
+	if err := bumper.UpdatePullRequestWithLabels(gc, githubOrg, githubRepo, title, description, source, localBranch, remoteBranch, true, labelsToAdd, o.dryRun); err != nil {
 		logrus.WithError(err).Fatal("PR creation failed.")
 	}
 }

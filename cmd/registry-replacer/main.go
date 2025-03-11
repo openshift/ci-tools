@@ -65,7 +65,7 @@ func gatherOptions() (*options, error) {
 	flag.Var(o.ensureCorrectPromotionDockerfileIngoredRepos, "ensure-correct-promotion-dockerfile-ignored-repos", "Repos that are being ignored when ensuring the correct promotion dockerfile in org/repo notation. Can be passed multiple times.")
 	flag.IntVar(&o.maxConcurrency, "concurrency", 500, "Maximum number of concurrent in-flight goroutines to handle files.")
 	flag.StringVar(&o.ocpBuildDataRepoDir, "ocp-build-data-repo-dir", "../ocp-build-data", "The directory in which the ocp-build-data repository is")
-	flag.StringVar(&o.currentRelease.Minor, "current-release-minor", "6", "The minor version of the current release that is getting forwarded to from the master branch")
+	flag.StringVar(&o.currentRelease.Minor, "current-release-minor", "6", "The minor version of the current release that is getting forwarded to from the main branch")
 	flag.BoolVar(&o.pruneUnusedReplacements, "prune-unused-replacements", false, "If replacements that match nothing should get pruned from the config. Note that if --apply-replacements is set to false pruning will not take place.")
 	flag.BoolVar(&o.pruneUnusedBaseImages, "prune-unused-base-images", false, "If base images that match nothing should get pruned from the config")
 	flag.BoolVar(&o.applyReplacements, "apply-replacements", true, "If we should apply Dockerfile image replacements. You will probably always leave this as the default, and it's mostly used by tests that validate that base image pruning doesn't botch things. Note: If not applying replacements we will also skip unused replacement pruning.")
@@ -493,7 +493,7 @@ func upsertPR(gc pgithub.Client, dir, githubUsername string, token []byte, selfA
 		prTitle,
 		prBody,
 		githubUsername+":"+targetBranch,
-		"master",
+		"main",
 		targetBranch,
 		true,
 		labelsToAdd,
@@ -821,7 +821,7 @@ func updateDockerfilesToMatchOCPBuildData(
 ) {
 
 	// The tool only works for the current release
-	if config.Metadata.Branch != "master" {
+	if config.Metadata.Branch != "master" && config.Metadata.Branch != "main" {
 		return
 	}
 	if ignoredRepos.Has(config.Metadata.Org + "/" + config.Metadata.Repo) {

@@ -3,8 +3,8 @@ presubmits:
   - agent: kubernetes
     always_run: false
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     cluster: app.ci
     context: ci/build-farm/build99-dry
     decorate: true
@@ -12,7 +12,7 @@ presubmits:
       ci.openshift.io/build-farm: build99
       ci.openshift.io/generator: cluster-init
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-openshift-release-master-build99-dry
+    name: pull-ci-openshift-release-main-build99-dry
     rerun_command: /test build99-dry
     run_if_changed: ^clusters/.*
     spec:

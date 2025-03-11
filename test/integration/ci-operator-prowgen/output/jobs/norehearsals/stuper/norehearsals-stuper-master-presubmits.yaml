@@ -3,8 +3,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     context: ci/prow/lint
     decorate: true
     decoration_config:
@@ -12,7 +12,7 @@ presubmits:
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-norehearsals-stuper-master-lint
+    name: pull-ci-norehearsals-stuper-main-lint
     rerun_command: /test lint
     spec:
       containers:
@@ -57,15 +57,15 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     context: ci/prow/unit
     decorate: true
     decoration_config:
       skip_cloning: true
     labels:
       ci.openshift.io/generator: prowgen
-    name: pull-ci-norehearsals-stuper-master-unit
+    name: pull-ci-norehearsals-stuper-main-unit
     rerun_command: /test unit
     spec:
       containers:

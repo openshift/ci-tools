@@ -38,24 +38,24 @@ type jobNameGenerator struct {
 
 var (
 	periodicURLTemplates = []string{
-		"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-release-%s-periodics.yaml",
-		"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/hypershift/openshift-hypershift-release-%s-periodics.yaml",
+		"https://raw.githubusercontent.com/openshift/release/main/ci-operator/jobs/openshift/release/openshift-release-release-%s-periodics.yaml",
+		"https://raw.githubusercontent.com/openshift/release/main/ci-operator/jobs/openshift/hypershift/openshift-hypershift-release-%s-periodics.yaml",
 	}
 	releaseConfigURLTemplates = []string{
-		"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-%s-arm64.json",
-		"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-%s-ci.json",
-		"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-%s-multi.json",
-		"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-%s-ppc64le.json",
-		"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-%s-s390x.json",
-		"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-%s.json",
+		"https://raw.githubusercontent.com/openshift/release/main/core-services/release-controller/_releases/release-ocp-%s-arm64.json",
+		"https://raw.githubusercontent.com/openshift/release/main/core-services/release-controller/_releases/release-ocp-%s-ci.json",
+		"https://raw.githubusercontent.com/openshift/release/main/core-services/release-controller/_releases/release-ocp-%s-multi.json",
+		"https://raw.githubusercontent.com/openshift/release/main/core-services/release-controller/_releases/release-ocp-%s-ppc64le.json",
+		"https://raw.githubusercontent.com/openshift/release/main/core-services/release-controller/_releases/release-ocp-%s-s390x.json",
+		"https://raw.githubusercontent.com/openshift/release/main/core-services/release-controller/_releases/release-ocp-%s.json",
 	}
 )
 
 func newJobNameGenerator() *jobNameGenerator {
 	generator := &jobNameGenerator{
 		periodicURLs: []string{
-			"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-master-periodics.yaml",
-			"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/multiarch/openshift-multiarch-master-periodics.yaml",
+			"https://raw.githubusercontent.com/openshift/release/main/ci-operator/jobs/openshift/release/openshift-release-master-periodics.yaml",
+			"https://raw.githubusercontent.com/openshift/release/main/ci-operator/jobs/openshift/multiarch/openshift-multiarch-master-periodics.yaml",
 		},
 		releaseConfigURLs: []string{},
 	}
@@ -140,7 +140,7 @@ func (s *jobNameGenerator) GenerateJobNames() ([]string, error) {
 		jobNames = append(jobNames, fmt.Sprintf("// begin %v", url))
 		localLines := []string{}
 		for _, curr := range periodicConfig.Periodics {
-			// TODO: the single file for say "master" actually contains every release, but we only want jobs 4.10+
+			// TODO: the single file for say "main" actually contains every release, but we only want jobs 4.10+
 			// where we started disruption monitoring. Adding a bunch of future rows to buy us time but this could
 			// stand some logic.
 			foundRelease := false

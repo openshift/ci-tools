@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/GoogleCloudPlatform/secrets-store-csi-driver-provider-gcp/config"
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
@@ -15,6 +16,7 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	csiapi "sigs.k8s.io/secrets-store-csi-driver/apis/v1"
+	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
@@ -94,6 +96,10 @@ func (s *multiStageTestStep) createSPCs(ctx context.Context) error {
 			if _, exists := toCreate[name]; exists {
 				continue
 			}
+			secret, err := getSecretString(credential.Name)
+			if err != nil {
+				return err
+			}
 			toCreate[name] = &csiapi.SecretProviderClass{
 				TypeMeta: meta.TypeMeta{
 					Kind:       "SecretProviderClass",
@@ -107,7 +113,7 @@ func (s *multiStageTestStep) createSPCs(ctx context.Context) error {
 					Provider: "gcp",
 					Parameters: map[string]string{
 						"auth":    "provider-adc",
-						"secrets": formatSecretsParam(credential.Name),
+						"secrets": secret,
 					},
 				},
 			}
@@ -122,8 +128,16 @@ func (s *multiStageTestStep) createSPCs(ctx context.Context) error {
 	return nil
 }
 
-func formatSecretsParam(name string) string {
-	return fmt.Sprintf("- resourceName: \"projects/%s/secrets/%s/versions/latest\"\n  fileName: \"%s\"", GSMproject, name, name)
+func getSecretString(name string) (string, error) {
+	secret := config.Secret{
+		ResourceName: fmt.Sprintf("projects/%s/secrets/%s/versions/latest", GSMproject, name),
+		Path:         name,
+	}
+	y, err := yaml.Marshal([]config.Secret{secret})
+	if err != nil {
+		return "", fmt.Errorf("could not marshal secret: %w", err)
+	}
+	return string(y), nil
 }
 
 func (s *multiStageTestStep) createCommandConfigMaps(ctx context.Context) error {

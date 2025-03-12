@@ -325,7 +325,7 @@ func TestValidateCandidate(t *testing.T) {
 				Version: "4.4",
 			},
 			output: []error{
-				errors.New("root.stream: must be one of ci, nightly"),
+				errors.New("root.stream: must be one of ci, konflux-nightly, nightly"),
 			},
 		},
 		{

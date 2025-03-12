@@ -25,7 +25,7 @@ func newReleaseControllerJobResolver(httpClient release.HTTPClient) jobResolver 
 // resolve will resolve the jobs of the given parameters from the release-controller.
 // If there is an env var actively configured to skip the job, it will not be included in the returned list
 func (r *releaseControllerJobResolver) resolve(ocp string, releaseType api.ReleaseStream, jobType config.JobType) ([]config.Job, error) {
-	if releaseType != api.ReleaseStreamNightly && releaseType != api.ReleaseStreamCI {
+	if releaseType != api.ReleaseStreamNightly && releaseType != api.ReleaseStreamCI && releaseType != api.ReleaseStreamKonfluxNightly {
 		return nil, fmt.Errorf("release type is not supported: %s", releaseType)
 	}
 

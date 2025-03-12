@@ -637,6 +637,19 @@ func FromConfigStatic(config *api.ReleaseBuildConfiguration) api.GraphConfigurat
 	if target := config.InputConfiguration.BuildRootImage; target != nil {
 		buildRoots[""] = *target
 	}
+	if externalImages := config.InputConfiguration.ExternalImages; externalImages != nil {
+		for name, target := range externalImages {
+			config := api.InputImageTagStepConfiguration{
+				InputImage: api.InputImage{
+					ExternalImage: &target,
+					To:            api.PipelineImageStreamTagReference(name),
+				},
+				Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceExternal, Name: name}},
+			}
+			buildSteps = append(buildSteps,
+				api.StepConfiguration{InputImageTagStepConfiguration: &config})
+		}
+	}
 
 	for repo, target := range buildRoots {
 		root := string(api.PipelineImageStreamTagReferenceRoot)

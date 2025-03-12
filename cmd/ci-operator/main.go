@@ -1496,6 +1496,19 @@ func (o *options) initializeNamespace() error {
 		o.secrets = append(o.secrets, cpSecret)
 	}
 
+	if o.configSpec.ExternalImages != nil {
+		for _, image := range o.configSpec.ExternalImages {
+			if image.PullSecret != "" {
+				secret, err := getExternalImagePullSecret(ctx, labeledclient.Wrap(ctrlClient, o.jobSpec), image)
+				if err != nil {
+					return fmt.Errorf("failed to get external image pull secret: %w", err)
+				}
+				secret.Namespace = o.namespace
+				o.secrets = append(o.secrets, secret)
+			}
+		}
+	}
+
 	for _, secret := range o.secrets {
 		created, err := util.UpsertImmutableSecret(ctx, client, secret)
 		if err != nil {
@@ -1513,6 +1526,23 @@ func (o *options) initializeNamespace() error {
 	}
 	logrus.Debugf("Created PDB for pods with %s label", steps.CreatedByCILabel)
 	return nil
+}
+
+func getExternalImagePullSecret(ctx context.Context, client ctrlruntimeclient.Client, image api.ExternalImage) (*coreapi.Secret, error) {
+	ciSecret := &coreapi.Secret{}
+	err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: "test-credentials", Name: image.PullSecret}, ciSecret)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get secret '%s' from test-credentials namespace: %w", image.PullSecret, err)
+	}
+
+	newSecret := &coreapi.Secret{
+		Data: ciSecret.Data,
+		Type: coreapi.SecretTypeDockerConfigJson,
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "external-pull-secret-" + image.PullSecret,
+		},
+	}
+	return newSecret, nil
 }
 
 func generateAuthorAccessRoleBinding(namespace string, authors []string) *rbacapi.RoleBinding {

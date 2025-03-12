@@ -35,6 +35,9 @@ type inputImageTagStep struct {
 }
 
 func (s *inputImageTagStep) Inputs() (api.InputDefinition, error) {
+	if s.config.ExternalImage != nil {
+		s.imageName = externalImageReference(s.config)
+	}
 	if len(s.imageName) > 0 {
 		return api.InputDefinition{s.imageName}, nil
 	}
@@ -72,14 +75,21 @@ func (s *inputImageTagStep) Run(ctx context.Context) error {
 }
 
 func (s *inputImageTagStep) run(ctx context.Context) error {
-	logrus.Infof("Tagging %s into %s:%s.", s.config.BaseImage.ISTagName(), api.PipelineImageStream, s.config.To)
-
 	if _, err := s.Inputs(); err != nil {
 		return fmt.Errorf("could not resolve inputs for image tag step: %w", err)
 	}
+
+	var objectReferenceName string
+	if s.config.ExternalImage != nil {
+		logrus.Infof("Tagging %s into %s:%s.", externalImageReference(s.config), api.PipelineImageStream, s.config.To)
+		objectReferenceName = externalImageReference(s.config)
+	} else {
+		logrus.Infof("Tagging %s into %s:%s.", s.config.BaseImage.ISTagName(), api.PipelineImageStream, s.config.To)
+		objectReferenceName = api.QuayImageReference(s.config.BaseImage)
+	}
 	from := &coreapi.ObjectReference{
 		Kind: "DockerImage",
-		Name: api.QuayImageReference(s.config.BaseImage),
+		Name: objectReferenceName,
 	}
 	if api.IsCreatedForClusterBotJob(s.config.BaseImage.Namespace) {
 		from = &coreapi.ObjectReference{
@@ -113,7 +123,7 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 	}
 
 	logrus.Debugf("Waiting to import tags on imagestream (after creating pipeline) %s/%s:%s ...", s.jobSpec.Namespace(), api.PipelineImageStream, s.config.To)
-	if err := utils.WaitForImportingISTag(ctx, s.client, s.jobSpec.Namespace(), api.PipelineImageStream, nil, sets.New[string](string(s.config.To)), utils.DefaultImageImportTimeout); err != nil {
+	if err := utils.WaitForImportingISTag(ctx, s.client, s.jobSpec.Namespace(), api.PipelineImageStream, nil, sets.New(string(s.config.To)), utils.DefaultImageImportTimeout); err != nil {
 		return fmt.Errorf("failed to wait for importing imagestreamtags on %s/%s:%s: %w", s.jobSpec.Namespace(), api.PipelineImageStream, s.config.To, err)
 	}
 	logrus.Debugf("Imported tags on imagestream (after creating pipeline) %s/%s:%s", s.jobSpec.Namespace(), api.PipelineImageStream, s.config.To)
@@ -140,6 +150,10 @@ func waitForTagInSpec(ctx context.Context, client ctrlruntimeclient.WithWatch, n
 		}
 	}
 	return kubernetes.WaitForConditionOnObject(ctx, client, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, &imagev1.ImageStreamList{}, obj, getEvaluator(tag), timeout)
+}
+
+func externalImageReference(config *api.InputImageTagStepConfiguration) string {
+	return fmt.Sprintf("%s/%s/%s:%s", config.ExternalImage.Registry, config.ExternalImage.Namespace, config.ExternalImage.Name, config.ExternalImage.Tag)
 }
 
 func (s *inputImageTagStep) Requires() []api.StepLink {

@@ -171,17 +171,10 @@ func (config ReleaseBuildConfiguration) BuildsImage(name string) bool {
 // IsBaseImage checks if `name` will be a tag in the pipeline image stream
 // by virtue of being imported as a base image
 func (config ReleaseBuildConfiguration) IsBaseImage(name string) bool {
-	for i := range config.BaseImages {
-		if i == name {
-			return true
-		}
-	}
-	for i := range config.BaseRPMImages {
-		if i == name {
-			return true
-		}
-	}
-	return false
+	return sets.KeySet(config.BaseImages).
+		Union(sets.KeySet(config.BaseRPMImages)).
+		Union(sets.KeySet(config.ExternalImages)).
+		Has(name)
 }
 
 // IsPipelineImage checks if `name` will be a tag in the pipeline image stream.
@@ -292,6 +285,9 @@ type InputConfiguration struct {
 	// DO NOT set this in the config
 	BuildRootImages map[string]BuildRootImageConfiguration `json:"build_roots,omitempty"`
 
+	// ExternalImages are images that are imported into the pipeline from an external source.
+	ExternalImages map[string]ExternalImage `json:"external_images,omitempty"`
+
 	// ReleaseTagConfiguration determines how the
 	// full release is assembled.
 	ReleaseTagConfiguration *ReleaseTagConfiguration `json:"tag_specification,omitempty"`
@@ -303,6 +299,13 @@ type InputConfiguration struct {
 	// and cannot co-exist with 'tag_specification', as
 	// they result in the same output.
 	Releases map[string]UnresolvedRelease `json:"releases,omitempty"`
+}
+
+// ExternalImage describes the external image that is imported into the pipeline
+type ExternalImage struct {
+	Registry                string `json:"registry"` // Registry is the registry to pull images from (e.g. quay.io)
+	ImageStreamTagReference `json:",inline"`
+	PullSecret              string `json:"pull_secret,omitempty"` // PullSecret is the name of the secret to use to pull the image
 }
 
 // UnresolvedRelease describes a semantic release payload
@@ -643,8 +646,9 @@ func (config *InputImageTagStepConfiguration) AddSources(sources ...ImageStreamS
 }
 
 type InputImage struct {
-	BaseImage ImageStreamTagReference         `json:"base_image"`
-	To        PipelineImageStreamTagReference `json:"to,omitempty"`
+	BaseImage     ImageStreamTagReference         `json:"base_image"`
+	ExternalImage *ExternalImage                  `json:"external_image,omitempty"`
+	To            PipelineImageStreamTagReference `json:"to,omitempty"`
 
 	// Ref is an optional string linking to the extra_ref in "org.repo" format that this belongs to
 	Ref string `json:"ref,omitempty"`
@@ -653,10 +657,11 @@ type InputImage struct {
 type ImageStreamSourceType string
 
 const (
-	ImageStreamSourceRoot    ImageStreamSourceType = "root"
-	ImageStreamSourceBase    ImageStreamSourceType = "base_image"
-	ImageStreamSourceBaseRpm ImageStreamSourceType = "base_rpm_image"
-	ImageStreamSourceTest    ImageStreamSourceType = "test step"
+	ImageStreamSourceRoot     ImageStreamSourceType = "root"
+	ImageStreamSourceBase     ImageStreamSourceType = "base_image"
+	ImageStreamSourceExternal ImageStreamSourceType = "external_images"
+	ImageStreamSourceBaseRpm  ImageStreamSourceType = "base_rpm_image"
+	ImageStreamSourceTest     ImageStreamSourceType = "test step"
 )
 
 type ImageStreamSource struct {

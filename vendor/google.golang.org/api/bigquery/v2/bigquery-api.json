@@ -41,6 +41,11 @@
     },
     {
       "description": "Regional Endpoint",
+      "endpointUrl": "https://bigquery.europe-west8.rep.googleapis.com/",
+      "location": "europe-west8"
+    },
+    {
+      "description": "Regional Endpoint",
       "endpointUrl": "https://bigquery.europe-west9.rep.googleapis.com/",
       "location": "europe-west9"
     },
@@ -51,8 +56,28 @@
     },
     {
       "description": "Regional Endpoint",
+      "endpointUrl": "https://bigquery.us-central1.rep.googleapis.com/",
+      "location": "us-central1"
+    },
+    {
+      "description": "Regional Endpoint",
+      "endpointUrl": "https://bigquery.us-central2.rep.googleapis.com/",
+      "location": "us-central2"
+    },
+    {
+      "description": "Regional Endpoint",
+      "endpointUrl": "https://bigquery.us-east1.rep.googleapis.com/",
+      "location": "us-east1"
+    },
+    {
+      "description": "Regional Endpoint",
       "endpointUrl": "https://bigquery.us-east4.rep.googleapis.com/",
       "location": "us-east4"
+    },
+    {
+      "description": "Regional Endpoint",
+      "endpointUrl": "https://bigquery.us-east5.rep.googleapis.com/",
+      "location": "us-east5"
     },
     {
       "description": "Regional Endpoint",
@@ -61,8 +86,33 @@
     },
     {
       "description": "Regional Endpoint",
+      "endpointUrl": "https://bigquery.us-south1.rep.googleapis.com/",
+      "location": "us-south1"
+    },
+    {
+      "description": "Regional Endpoint",
       "endpointUrl": "https://bigquery.us-west1.rep.googleapis.com/",
       "location": "us-west1"
+    },
+    {
+      "description": "Regional Endpoint",
+      "endpointUrl": "https://bigquery.us-west2.rep.googleapis.com/",
+      "location": "us-west2"
+    },
+    {
+      "description": "Regional Endpoint",
+      "endpointUrl": "https://bigquery.us-west3.rep.googleapis.com/",
+      "location": "us-west3"
+    },
+    {
+      "description": "Regional Endpoint",
+      "endpointUrl": "https://bigquery.us-west4.rep.googleapis.com/",
+      "location": "us-west4"
+    },
+    {
+      "description": "Regional Endpoint",
+      "endpointUrl": "https://bigquery.us-west8.rep.googleapis.com/",
+      "location": "us-west8"
     }
   ],
   "fullyEncodeReservedExpansion": true,
@@ -203,6 +253,12 @@
             "datasetId"
           ],
           "parameters": {
+            "accessPolicyVersion": {
+              "description": "Optional. The version of the access policy schema to fetch. Valid values are 0, 1, and 3. Requests specifying an invalid value will be rejected. Requests for conditional access policy binding in datasets must specify version 3. Dataset with no conditional role bindings in access policy may specify any valid value or leave the field unset. This field will be mapped to [IAM Policy version] (https://cloud.google.com/iam/docs/policies#versions) and will be used to fetch policy from IAM. If unset or if 0 or 1 value is used for dataset with conditional bindings, access entry with condition will have role string appended by 'withcond' string followed by a hash value. For example : { \"access\": [ { \"role\": \"roles/bigquery.dataViewer_with_conditionalbinding_7a34awqsda\", \"userByEmail\": \"user@example.com\", } ] } Please refer https://cloud.google.com/iam/docs/troubleshooting-withcond for more details.",
+              "format": "int32",
+              "location": "query",
+              "type": "integer"
+            },
             "datasetId": {
               "description": "Required. Dataset ID of the requested dataset",
               "location": "path",
@@ -254,6 +310,12 @@
             "projectId"
           ],
           "parameters": {
+            "accessPolicyVersion": {
+              "description": "Optional. The version of the provided access policy schema. Valid values are 0, 1, and 3. Requests specifying an invalid value will be rejected. This version refers to the schema version of the access policy and not the version of access policy. This field's value can be equal or more than the access policy schema provided in the request. For example, * Requests with conditional access policy binding in datasets must specify version 3. * But dataset with no conditional role bindings in access policy may specify any valid value or leave the field unset. If unset or if 0 or 1 value is used for dataset with conditional bindings, request will be rejected. This field will be mapped to IAM Policy version (https://cloud.google.com/iam/docs/policies#versions) and will be used to set policy in IAM.",
+              "format": "int32",
+              "location": "query",
+              "type": "integer"
+            },
             "projectId": {
               "description": "Required. Project ID of the new dataset",
               "location": "path",
@@ -332,6 +394,12 @@
             "datasetId"
           ],
           "parameters": {
+            "accessPolicyVersion": {
+              "description": "Optional. The version of the provided access policy schema. Valid values are 0, 1, and 3. Requests specifying an invalid value will be rejected. This version refers to the schema version of the access policy and not the version of access policy. This field's value can be equal or more than the access policy schema provided in the request. For example, * Operations updating conditional access policy binding in datasets must specify version 3. Some of the operations are : - Adding a new access policy entry with condition. - Removing an access policy entry with condition. - Updating an access policy entry with condition. * But dataset with no conditional role bindings in access policy may specify any valid value or leave the field unset. If unset or if 0 or 1 value is used for dataset with conditional bindings, request will be rejected. This field will be mapped to IAM Policy version (https://cloud.google.com/iam/docs/policies#versions) and will be used to set policy in IAM.",
+              "format": "int32",
+              "location": "query",
+              "type": "integer"
+            },
             "datasetId": {
               "description": "Required. Dataset ID of the dataset being updated",
               "location": "path",
@@ -406,6 +474,12 @@
             "datasetId"
           ],
           "parameters": {
+            "accessPolicyVersion": {
+              "description": "Optional. The version of the provided access policy schema. Valid values are 0, 1, and 3. Requests specifying an invalid value will be rejected. This version refers to the schema version of the access policy and not the version of access policy. This field's value can be equal or more than the access policy schema provided in the request. For example, * Operations updating conditional access policy binding in datasets must specify version 3. Some of the operations are : - Adding a new access policy entry with condition. - Removing an access policy entry with condition. - Updating an access policy entry with condition. * But dataset with no conditional role bindings in access policy may specify any valid value or leave the field unset. If unset or if 0 or 1 value is used for dataset with conditional bindings, request will be rejected. This field will be mapped to IAM Policy version (https://cloud.google.com/iam/docs/policies#versions) and will be used to set policy in IAM.",
+              "format": "int32",
+              "location": "query",
+              "type": "integer"
+            },
             "datasetId": {
               "description": "Required. Dataset ID of the dataset being updated",
               "location": "path",
@@ -1935,7 +2009,7 @@
       }
     }
   },
-  "revision": "20240727",
+  "revision": "20241115",
   "rootUrl": "https://bigquery.googleapis.com/",
   "schemas": {
     "AggregateClassificationMetrics": {
@@ -2013,13 +2087,13 @@
           "enumDescriptions": [
             "Default value.",
             "The argument is a variable with fully specified type, which can be a struct or an array, but not a table.",
-            "The argument is any type, including struct or array, but not a table. To be added: FIXED_TABLE, ANY_TABLE"
+            "The argument is any type, including struct or array, but not a table."
           ],
           "type": "string"
         },
         "dataType": {
           "$ref": "StandardSqlDataType",
-          "description": "Required unless argument_kind = ANY_TYPE."
+          "description": "Set if argument_kind == FIXED_TYPE."
         },
         "isAggregate": {
           "description": "Optional. Whether the argument is an aggregate function parameter. Must be Unset for routine types other than AGGREGATE_FUNCTION. For AGGREGATE_FUNCTION, if set to false, it is equivalent to adding \"NOT AGGREGATE\" clause in DDL; Otherwise, it is equivalent to omitting \"NOT AGGREGATE\" clause in DDL.",
@@ -2518,11 +2592,11 @@
       "id": "BigLakeConfiguration",
       "properties": {
         "connectionId": {
-          "description": "Required. The connection specifying the credentials to be used to read and write to external storage, such as Cloud Storage. The connection_id can have the form `{project}.{location}.{connection_id}` or `projects/{project}/locations/{location}/connections/{connection_id}\".",
+          "description": "Optional. The connection specifying the credentials to be used to read and write to external storage, such as Cloud Storage. The connection_id can have the form `{project}.{location}.{connection_id}` or `projects/{project}/locations/{location}/connections/{connection_id}\".",
           "type": "string"
         },
         "fileFormat": {
-          "description": "Required. The file format the table data is stored in.",
+          "description": "Optional. The file format the table data is stored in.",
           "enum": [
             "FILE_FORMAT_UNSPECIFIED",
             "PARQUET"
@@ -2534,11 +2608,11 @@
           "type": "string"
         },
         "storageUri": {
-          "description": "Required. The fully qualified location prefix of the external folder where table data is stored. The '*' wildcard character is not allowed. The URI should be in the format `gs://bucket/path_to_table/`",
+          "description": "Optional. The fully qualified location prefix of the external folder where table data is stored. The '*' wildcard character is not allowed. The URI should be in the format `gs://bucket/path_to_table/`",
           "type": "string"
         },
         "tableFormat": {
-          "description": "Required. The table format the metadata only snapshots are stored in.",
+          "description": "Optional. The table format the metadata only snapshots are stored in.",
           "enum": [
             "TABLE_FORMAT_UNSPECIFIED",
             "ICEBERG"
@@ -3076,6 +3150,17 @@
       },
       "type": "object"
     },
+    "DataPolicyOption": {
+      "description": "Data policy option proto, it currently supports name only, will support precedence later.",
+      "id": "DataPolicyOption",
+      "properties": {
+        "name": {
+          "description": "Data policy resource name in the form of projects/project_id/locations/location_id/dataPolicies/data_policy_id.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "DataSplitResult": {
       "description": "Data split result. This contains references to the training and evaluation data tables that were used to train the model.",
       "id": "DataSplitResult",
@@ -3104,6 +3189,10 @@
           "items": {
             "description": "An object that defines dataset access for an entity.",
             "properties": {
+              "condition": {
+                "$ref": "Expr",
+                "description": "Optional. condition for the binding. If CEL expression in this field is true, this access binding will be considered"
+              },
               "dataset": {
                 "$ref": "DatasetAccessEntry",
                 "description": "[Pick one] A grant authorizing all resources of a particular type in a particular dataset access to this dataset. Only views are supported for now. The role field is not required when this field is set. If that dataset is deleted and re-created, its access needs to be granted again via an update operation."
@@ -3258,12 +3347,12 @@
           "additionalProperties": {
             "type": "string"
           },
-          "description": "Optional. The [tags](/bigquery/docs/tags) attached to this dataset. Tag keys are globally unique. Tag key is expected to be in the namespaced format, for example \"123456789012/environment\" where 123456789012 is the ID of the parent organization or project resource for this tag key. Tag value is expected to be the short name, for example \"Production\". See [Tag definitions](/iam/docs/tags-access-control#definitions) for more details.",
+          "description": "Optional. The [tags](https://cloud.google.com/bigquery/docs/tags) attached to this dataset. Tag keys are globally unique. Tag key is expected to be in the namespaced format, for example \"123456789012/environment\" where 123456789012 is the ID of the parent organization or project resource for this tag key. Tag value is expected to be the short name, for example \"Production\". See [Tag definitions](https://cloud.google.com/iam/docs/tags-access-control#definitions) for more details.",
           "type": "object"
         },
         "restrictions": {
           "$ref": "RestrictionConfig",
-          "description": "Optional. Output only. Restriction config for all tables and dataset. If set, restrict certain accesses on the dataset and all its tables based on the config. See [Data egress](/bigquery/docs/analytics-hub-introduction#data_egress) for more details.",
+          "description": "Optional. Output only. Restriction config for all tables and dataset. If set, restrict certain accesses on the dataset and all its tables based on the config. See [Data egress](https://cloud.google.com/bigquery/docs/analytics-hub-introduction#data_egress) for more details.",
           "readOnly": true
         },
         "satisfiesPzi": {
@@ -4505,7 +4594,7 @@
       "type": "object"
     },
     "HparamTuningTrial": {
-      "description": "Training info of a trial in [hyperparameter tuning](/bigquery-ml/docs/reference/standard-sql/bigqueryml-syntax-hp-tuning-overview) models.",
+      "description": "Training info of a trial in [hyperparameter tuning](https://cloud.google.com/bigquery-ml/docs/reference/standard-sql/bigqueryml-syntax-hp-tuning-overview) models.",
       "id": "HparamTuningTrial",
       "properties": {
         "endTimeMs": {
@@ -4574,35 +4663,6 @@
       },
       "type": "object"
     },
-    "IdentityColumnInfo": {
-      "description": "Metadata for value generation for an identity column.",
-      "id": "IdentityColumnInfo",
-      "properties": {
-        "generatedMode": {
-          "description": "Optional. Dictates when system generated values are used to populate the field.",
-          "enum": [
-            "GENERATED_MODE_UNSPECIFIED",
-            "GENERATED_ALWAYS",
-            "GENERATED_BY_DEFAULT"
-          ],
-          "enumDescriptions": [
-            "Unspecified GeneratedMode will default to GENERATED_ALWAYS.",
-            "Field can only have system generated values. Users cannot manually insert values into the field.",
-            "Use system generated values only if the user does not explicitly provide a value."
-          ],
-          "type": "string"
-        },
-        "increment": {
-          "description": "Optional. The minimum difference between two successive generated values. Should be INTEGER compatible. Can be negative or positive but not 0. The default value is 1 if the field is not specified.",
-          "type": "string"
-        },
-        "start": {
-          "description": "Optional. The first generated value. Should be INTEGER compatible. The default value is 1 if the field is not specified.",
-          "type": "string"
-        }
-      },
-      "type": "object"
-    },
     "IndexUnusedReason": {
       "description": "Reason about why no search index was used in the search query (or sub-query).",
       "id": "IndexUnusedReason",
@@ -4632,6 +4692,7 @@
             "NOT_SUPPORTED_IN_STANDARD_EDITION",
             "INDEX_SUPPRESSED_BY_FUNCTION_OPTION",
             "QUERY_CACHE_HIT",
+            "STALE_INDEX",
             "INTERNAL_ERROR",
             "OTHER_REASON"
           ],
@@ -4654,6 +4715,7 @@
             "Indicates that search indexes can not be used for search query with STANDARD edition.",
             "Indicates that an option in the search function that cannot make use of the index has been selected.",
             "Indicates that the query was cached, and thus the search index was not used.",
+            "The index cannot be used in the search query because it is stale.",
             "Indicates an internal error that causes the search index to be unused.",
             "Indicates that the reason search indexes cannot be used in the query is not covered by any of the other IndexUnusedReason options."
           ],
@@ -4828,7 +4890,7 @@
         },
         "jobCreationReason": {
           "$ref": "JobCreationReason",
-          "description": "Output only. If set, it provides the reason why a Job was created. If not set, it should be treated as the default: REQUESTED. This feature is not yet available. Jobs will always be created.",
+          "description": "Output only. The reason why a Job was created. [Preview](https://cloud.google.com/products/#product-launch-stages)",
           "readOnly": true
         },
         "jobReference": {
@@ -5388,7 +5450,7 @@
       "type": "object"
     },
     "JobCreationReason": {
-      "description": "Reason about why a Job was created from a [`jobs.query`](https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/query) method when used with `JOB_CREATION_OPTIONAL` Job creation mode. For [`jobs.insert`](https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/insert) method calls it will always be `REQUESTED`. This feature is not yet available. Jobs will always be created.",
+      "description": "Reason about why a Job was created from a [`jobs.query`](https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/query) method when used with `JOB_CREATION_OPTIONAL` Job creation mode. For [`jobs.insert`](https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/insert) method calls it will always be `REQUESTED`. [Preview](https://cloud.google.com/products/#product-launch-stages)",
       "id": "JobCreationReason",
       "properties": {
         "code": {
@@ -5548,7 +5610,7 @@
             "Default value, which will be treated as ENTERPRISE.",
             "Standard edition.",
             "Enterprise edition.",
-            "Enterprise plus edition."
+            "Enterprise Plus edition."
           ],
           "readOnly": true,
           "type": "string"
@@ -5872,7 +5934,7 @@
           "readOnly": true
         },
         "statementType": {
-          "description": "Output only. The type of query statement, if valid. Possible values: * `SELECT`: [`SELECT`](/bigquery/docs/reference/standard-sql/query-syntax#select_list) statement. * `ASSERT`: [`ASSERT`](/bigquery/docs/reference/standard-sql/debugging-statements#assert) statement. * `INSERT`: [`INSERT`](/bigquery/docs/reference/standard-sql/dml-syntax#insert_statement) statement. * `UPDATE`: [`UPDATE`](/bigquery/docs/reference/standard-sql/query-syntax#update_statement) statement. * `DELETE`: [`DELETE`](/bigquery/docs/reference/standard-sql/data-manipulation-language) statement. * `MERGE`: [`MERGE`](/bigquery/docs/reference/standard-sql/data-manipulation-language) statement. * `CREATE_TABLE`: [`CREATE TABLE`](/bigquery/docs/reference/standard-sql/data-definition-language#create_table_statement) statement, without `AS SELECT`. * `CREATE_TABLE_AS_SELECT`: [`CREATE TABLE AS SELECT`](/bigquery/docs/reference/standard-sql/data-definition-language#query_statement) statement. * `CREATE_VIEW`: [`CREATE VIEW`](/bigquery/docs/reference/standard-sql/data-definition-language#create_view_statement) statement. * `CREATE_MODEL`: [`CREATE MODEL`](/bigquery-ml/docs/reference/standard-sql/bigqueryml-syntax-create#create_model_statement) statement. * `CREATE_MATERIALIZED_VIEW`: [`CREATE MATERIALIZED VIEW`](/bigquery/docs/reference/standard-sql/data-definition-language#create_materialized_view_statement) statement. * `CREATE_FUNCTION`: [`CREATE FUNCTION`](/bigquery/docs/reference/standard-sql/data-definition-language#create_function_statement) statement. * `CREATE_TABLE_FUNCTION`: [`CREATE TABLE FUNCTION`](/bigquery/docs/reference/standard-sql/data-definition-language#create_table_function_statement) statement. * `CREATE_PROCEDURE`: [`CREATE PROCEDURE`](/bigquery/docs/reference/standard-sql/data-definition-language#create_procedure) statement. * `CREATE_ROW_ACCESS_POLICY`: [`CREATE ROW ACCESS POLICY`](/bigquery/docs/reference/standard-sql/data-definition-language#create_row_access_policy_statement) statement. * `CREATE_SCHEMA`: [`CREATE SCHEMA`](/bigquery/docs/reference/standard-sql/data-definition-language#create_schema_statement) statement. * `CREATE_SNAPSHOT_TABLE`: [`CREATE SNAPSHOT TABLE`](/bigquery/docs/reference/standard-sql/data-definition-language#create_snapshot_table_statement) statement. * `CREATE_SEARCH_INDEX`: [`CREATE SEARCH INDEX`](/bigquery/docs/reference/standard-sql/data-definition-language#create_search_index_statement) statement. * `DROP_TABLE`: [`DROP TABLE`](/bigquery/docs/reference/standard-sql/data-definition-language#drop_table_statement) statement. * `DROP_EXTERNAL_TABLE`: [`DROP EXTERNAL TABLE`](/bigquery/docs/reference/standard-sql/data-definition-language#drop_external_table_statement) statement. * `DROP_VIEW`: [`DROP VIEW`](/bigquery/docs/reference/standard-sql/data-definition-language#drop_view_statement) statement. * `DROP_MODEL`: [`DROP MODEL`](/bigquery-ml/docs/reference/standard-sql/bigqueryml-syntax-drop-model) statement. * `DROP_MATERIALIZED_VIEW`: [`DROP MATERIALIZED VIEW`](/bigquery/docs/reference/standard-sql/data-definition-language#drop_materialized_view_statement) statement. * `DROP_FUNCTION` : [`DROP FUNCTION`](/bigquery/docs/reference/standard-sql/data-definition-language#drop_function_statement) statement. * `DROP_TABLE_FUNCTION` : [`DROP TABLE FUNCTION`](/bigquery/docs/reference/standard-sql/data-definition-language#drop_table_function) statement. * `DROP_PROCEDURE`: [`DROP PROCEDURE`](/bigquery/docs/reference/standard-sql/data-definition-language#drop_procedure_statement) statement. * `DROP_SEARCH_INDEX`: [`DROP SEARCH INDEX`](/bigquery/docs/reference/standard-sql/data-definition-language#drop_search_index) statement. * `DROP_SCHEMA`: [`DROP SCHEMA`](/bigquery/docs/reference/standard-sql/data-definition-language#drop_schema_statement) statement. * `DROP_SNAPSHOT_TABLE`: [`DROP SNAPSHOT TABLE`](/bigquery/docs/reference/standard-sql/data-definition-language#drop_snapshot_table_statement) statement. * `DROP_ROW_ACCESS_POLICY`: [`DROP [ALL] ROW ACCESS POLICY|POLICIES`](/bigquery/docs/reference/standard-sql/data-definition-language#drop_row_access_policy_statement) statement. * `ALTER_TABLE`: [`ALTER TABLE`](/bigquery/docs/reference/standard-sql/data-definition-language#alter_table_set_options_statement) statement. * `ALTER_VIEW`: [`ALTER VIEW`](/bigquery/docs/reference/standard-sql/data-definition-language#alter_view_set_options_statement) statement. * `ALTER_MATERIALIZED_VIEW`: [`ALTER MATERIALIZED VIEW`](/bigquery/docs/reference/standard-sql/data-definition-language#alter_materialized_view_set_options_statement) statement. * `ALTER_SCHEMA`: [`ALTER SCHEMA`](/bigquery/docs/reference/standard-sql/data-definition-language#aalter_schema_set_options_statement) statement. * `SCRIPT`: [`SCRIPT`](/bigquery/docs/reference/standard-sql/procedural-language). * `TRUNCATE_TABLE`: [`TRUNCATE TABLE`](/bigquery/docs/reference/standard-sql/dml-syntax#truncate_table_statement) statement. * `CREATE_EXTERNAL_TABLE`: [`CREATE EXTERNAL TABLE`](/bigquery/docs/reference/standard-sql/data-definition-language#create_external_table_statement) statement. * `EXPORT_DATA`: [`EXPORT DATA`](/bigquery/docs/reference/standard-sql/other-statements#export_data_statement) statement. * `EXPORT_MODEL`: [`EXPORT MODEL`](/bigquery-ml/docs/reference/standard-sql/bigqueryml-syntax-export-model) statement. * `LOAD_DATA`: [`LOAD DATA`](/bigquery/docs/reference/standard-sql/other-statements#load_data_statement) statement. * `CALL`: [`CALL`](/bigquery/docs/reference/standard-sql/procedural-language#call) statement.",
+          "description": "Output only. The type of query statement, if valid. Possible values: * `SELECT`: [`SELECT`](https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#select_list) statement. * `ASSERT`: [`ASSERT`](https://cloud.google.com/bigquery/docs/reference/standard-sql/debugging-statements#assert) statement. * `INSERT`: [`INSERT`](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#insert_statement) statement. * `UPDATE`: [`UPDATE`](https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#update_statement) statement. * `DELETE`: [`DELETE`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-manipulation-language) statement. * `MERGE`: [`MERGE`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-manipulation-language) statement. * `CREATE_TABLE`: [`CREATE TABLE`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_table_statement) statement, without `AS SELECT`. * `CREATE_TABLE_AS_SELECT`: [`CREATE TABLE AS SELECT`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#query_statement) statement. * `CREATE_VIEW`: [`CREATE VIEW`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_view_statement) statement. * `CREATE_MODEL`: [`CREATE MODEL`](https://cloud.google.com/bigquery-ml/docs/reference/standard-sql/bigqueryml-syntax-create#create_model_statement) statement. * `CREATE_MATERIALIZED_VIEW`: [`CREATE MATERIALIZED VIEW`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_materialized_view_statement) statement. * `CREATE_FUNCTION`: [`CREATE FUNCTION`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_function_statement) statement. * `CREATE_TABLE_FUNCTION`: [`CREATE TABLE FUNCTION`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_table_function_statement) statement. * `CREATE_PROCEDURE`: [`CREATE PROCEDURE`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_procedure) statement. * `CREATE_ROW_ACCESS_POLICY`: [`CREATE ROW ACCESS POLICY`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_row_access_policy_statement) statement. * `CREATE_SCHEMA`: [`CREATE SCHEMA`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_schema_statement) statement. * `CREATE_SNAPSHOT_TABLE`: [`CREATE SNAPSHOT TABLE`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_snapshot_table_statement) statement. * `CREATE_SEARCH_INDEX`: [`CREATE SEARCH INDEX`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_search_index_statement) statement. * `DROP_TABLE`: [`DROP TABLE`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_table_statement) statement. * `DROP_EXTERNAL_TABLE`: [`DROP EXTERNAL TABLE`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_external_table_statement) statement. * `DROP_VIEW`: [`DROP VIEW`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_view_statement) statement. * `DROP_MODEL`: [`DROP MODEL`](https://cloud.google.com/bigquery-ml/docs/reference/standard-sql/bigqueryml-syntax-drop-model) statement. * `DROP_MATERIALIZED_VIEW`: [`DROP MATERIALIZED VIEW`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_materialized_view_statement) statement. * `DROP_FUNCTION` : [`DROP FUNCTION`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_function_statement) statement. * `DROP_TABLE_FUNCTION` : [`DROP TABLE FUNCTION`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_table_function) statement. * `DROP_PROCEDURE`: [`DROP PROCEDURE`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_procedure_statement) statement. * `DROP_SEARCH_INDEX`: [`DROP SEARCH INDEX`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_search_index) statement. * `DROP_SCHEMA`: [`DROP SCHEMA`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_schema_statement) statement. * `DROP_SNAPSHOT_TABLE`: [`DROP SNAPSHOT TABLE`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_snapshot_table_statement) statement. * `DROP_ROW_ACCESS_POLICY`: [`DROP [ALL] ROW ACCESS POLICY|POLICIES`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_row_access_policy_statement) statement. * `ALTER_TABLE`: [`ALTER TABLE`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_table_set_options_statement) statement. * `ALTER_VIEW`: [`ALTER VIEW`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_view_set_options_statement) statement. * `ALTER_MATERIALIZED_VIEW`: [`ALTER MATERIALIZED VIEW`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_materialized_view_set_options_statement) statement. * `ALTER_SCHEMA`: [`ALTER SCHEMA`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#aalter_schema_set_options_statement) statement. * `SCRIPT`: [`SCRIPT`](https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language). * `TRUNCATE_TABLE`: [`TRUNCATE TABLE`](https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#truncate_table_statement) statement. * `CREATE_EXTERNAL_TABLE`: [`CREATE EXTERNAL TABLE`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_external_table_statement) statement. * `EXPORT_DATA`: [`EXPORT DATA`](https://cloud.google.com/bigquery/docs/reference/standard-sql/other-statements#export_data_statement) statement. * `EXPORT_MODEL`: [`EXPORT MODEL`](https://cloud.google.com/bigquery-ml/docs/reference/standard-sql/bigqueryml-syntax-export-model) statement. * `LOAD_DATA`: [`LOAD DATA`](https://cloud.google.com/bigquery/docs/reference/standard-sql/other-statements#load_data_statement) statement. * `CALL`: [`CALL`](https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#call) statement.",
           "readOnly": true,
           "type": "string"
         },
@@ -6388,7 +6450,7 @@
       "id": "MlStatistics",
       "properties": {
         "hparamTrials": {
-          "description": "Output only. Trials of a [hyperparameter tuning job](/bigquery-ml/docs/reference/standard-sql/bigqueryml-syntax-hp-tuning-overview) sorted by trial_id.",
+          "description": "Output only. Trials of a [hyperparameter tuning job](https://cloud.google.com/bigquery-ml/docs/reference/standard-sql/bigqueryml-syntax-hp-tuning-overview) sorted by trial_id.",
           "items": {
             "$ref": "HparamTuningTrial"
           },
@@ -6396,7 +6458,7 @@
           "type": "array"
         },
         "iterationResults": {
-          "description": "Results for all completed iterations. Empty for [hyperparameter tuning jobs](/bigquery-ml/docs/reference/standard-sql/bigqueryml-syntax-hp-tuning-overview).",
+          "description": "Results for all completed iterations. Empty for [hyperparameter tuning jobs](https://cloud.google.com/bigquery-ml/docs/reference/standard-sql/bigqueryml-syntax-hp-tuning-overview).",
           "items": {
             "$ref": "IterationResult"
           },
@@ -6435,7 +6497,8 @@
             "RANDOM_FOREST_CLASSIFIER",
             "TENSORFLOW_LITE",
             "ONNX",
-            "TRANSFORM_ONLY"
+            "TRANSFORM_ONLY",
+            "CONTRIBUTION_ANALYSIS"
           ],
           "enumDescriptions": [
             "Default value.",
@@ -6462,7 +6525,8 @@
             "Random forest classifier model.",
             "An imported TensorFlow Lite model.",
             "An imported ONNX model.",
-            "Model to capture the columns and logic in the TRANSFORM clause along with statistics useful for ML analytic functions."
+            "Model to capture the columns and logic in the TRANSFORM clause along with statistics useful for ML analytic functions.",
+            "The contribution analysis model."
           ],
           "readOnly": true,
           "type": "string"
@@ -6477,7 +6541,7 @@
           "enumDescriptions": [
             "Unspecified training type.",
             "Single training with fixed parameter space.",
-            "[Hyperparameter tuning training](/bigquery-ml/docs/reference/standard-sql/bigqueryml-syntax-hp-tuning-overview)."
+            "[Hyperparameter tuning training](https://cloud.google.com/bigquery-ml/docs/reference/standard-sql/bigqueryml-syntax-hp-tuning-overview)."
           ],
           "readOnly": true,
           "type": "string"
@@ -6501,7 +6565,7 @@
           "type": "string"
         },
         "defaultTrialId": {
-          "description": "Output only. The default trial_id to use in TVFs when the trial_id is not passed in. For single-objective [hyperparameter tuning](/bigquery-ml/docs/reference/standard-sql/bigqueryml-syntax-hp-tuning-overview) models, this is the best trial ID. For multi-objective [hyperparameter tuning](/bigquery-ml/docs/reference/standard-sql/bigqueryml-syntax-hp-tuning-overview) models, this is the smallest trial ID among all Pareto optimal trials.",
+          "description": "Output only. The default trial_id to use in TVFs when the trial_id is not passed in. For single-objective [hyperparameter tuning](https://cloud.google.com/bigquery-ml/docs/reference/standard-sql/bigqueryml-syntax-hp-tuning-overview) models, this is the best trial ID. For multi-objective [hyperparameter tuning](https://cloud.google.com/bigquery-ml/docs/reference/standard-sql/bigqueryml-syntax-hp-tuning-overview) models, this is the smallest trial ID among all Pareto optimal trials.",
           "format": "int64",
           "readOnly": true,
           "type": "string"
@@ -6542,7 +6606,7 @@
           "readOnly": true
         },
         "hparamTrials": {
-          "description": "Output only. Trials of a [hyperparameter tuning](/bigquery-ml/docs/reference/standard-sql/bigqueryml-syntax-hp-tuning-overview) model sorted by trial_id.",
+          "description": "Output only. Trials of a [hyperparameter tuning](https://cloud.google.com/bigquery-ml/docs/reference/standard-sql/bigqueryml-syntax-hp-tuning-overview) model sorted by trial_id.",
           "items": {
             "$ref": "HparamTuningTrial"
           },
@@ -6606,7 +6670,8 @@
             "RANDOM_FOREST_CLASSIFIER",
             "TENSORFLOW_LITE",
             "ONNX",
-            "TRANSFORM_ONLY"
+            "TRANSFORM_ONLY",
+            "CONTRIBUTION_ANALYSIS"
           ],
           "enumDescriptions": [
             "Default value.",
@@ -6633,13 +6698,14 @@
             "Random forest classifier model.",
             "An imported TensorFlow Lite model.",
             "An imported ONNX model.",
-            "Model to capture the columns and logic in the TRANSFORM clause along with statistics useful for ML analytic functions."
+            "Model to capture the columns and logic in the TRANSFORM clause along with statistics useful for ML analytic functions.",
+            "The contribution analysis model."
           ],
           "readOnly": true,
           "type": "string"
         },
         "optimalTrialIds": {
-          "description": "Output only. For single-objective [hyperparameter tuning](/bigquery-ml/docs/reference/standard-sql/bigqueryml-syntax-hp-tuning-overview) models, it only contains the best trial. For multi-objective [hyperparameter tuning](/bigquery-ml/docs/reference/standard-sql/bigqueryml-syntax-hp-tuning-overview) models, it contains all Pareto optimal trials sorted by trial_id.",
+          "description": "Output only. For single-objective [hyperparameter tuning](https://cloud.google.com/bigquery-ml/docs/reference/standard-sql/bigqueryml-syntax-hp-tuning-overview) models, it only contains the best trial. For multi-objective [hyperparameter tuning](https://cloud.google.com/bigquery-ml/docs/reference/standard-sql/bigqueryml-syntax-hp-tuning-overview) models, it contains all Pareto optimal trials sorted by trial_id.",
           "items": {
             "format": "int64",
             "type": "string"
@@ -6706,7 +6772,7 @@
       "id": "ModelExtractOptions",
       "properties": {
         "trialId": {
-          "description": "The 1-based ID of the trial to be exported from a hyperparameter tuning model. If not specified, the trial with id = [Model](/bigquery/docs/reference/rest/v2/models#resource:-model).defaultTrialId is exported. This field is ignored for models not trained with hyperparameter tuning.",
+          "description": "The 1-based ID of the trial to be exported from a hyperparameter tuning model. If not specified, the trial with id = [Model](https://cloud.google.com/bigquery/docs/reference/rest/v2/models#resource:-model).defaultTrialId is exported. This field is ignored for models not trained with hyperparameter tuning.",
           "format": "int64",
           "type": "string"
         }
@@ -7127,7 +7193,7 @@
           "description": "Optional. Output format adjustments."
         },
         "jobCreationMode": {
-          "description": "Optional. If not set, jobs are always required. If set, the query request will follow the behavior described JobCreationMode. This feature is not yet available. Jobs will always be created.",
+          "description": "Optional. If not set, jobs are always required. If set, the query request will follow the behavior described JobCreationMode. [Preview](https://cloud.google.com/products/#product-launch-stages)",
           "enum": [
             "JOB_CREATION_MODE_UNSPECIFIED",
             "JOB_CREATION_REQUIRED",
@@ -7234,11 +7300,11 @@
         },
         "jobCreationReason": {
           "$ref": "JobCreationReason",
-          "description": "Optional. Only relevant when a job_reference is present in the response. If job_reference is not present it will always be unset. When job_reference is present, this field should be interpreted as follows: If set, it will provide the reason of why a Job was created. If not set, it should be treated as the default: REQUESTED. This feature is not yet available. Jobs will always be created."
+          "description": "Optional. The reason why a Job was created. Only relevant when a job_reference is present in the response. If job_reference is not present it will always be unset. [Preview](https://cloud.google.com/products/#product-launch-stages)"
         },
         "jobReference": {
           "$ref": "JobReference",
-          "description": "Reference to the Job that was created to run the query. This field will be present even if the original request timed out, in which case GetQueryResults can be used to read the results once the query has completed. Since this API only returns the first page of results, subsequent pages can be fetched via the same mechanism (GetQueryResults)."
+          "description": "Reference to the Job that was created to run the query. This field will be present even if the original request timed out, in which case GetQueryResults can be used to read the results once the query has completed. Since this API only returns the first page of results, subsequent pages can be fetched via the same mechanism (GetQueryResults). If job_creation_mode was set to `JOB_CREATION_OPTIONAL` and the query completes without creating a job, this field will be empty."
         },
         "kind": {
           "default": "bigquery#queryResponse",
@@ -7256,7 +7322,7 @@
           "type": "string"
         },
         "queryId": {
-          "description": "Query ID for the completed query. This ID will be auto-generated. This field is not yet available and it is currently not guaranteed to be populated.",
+          "description": "Auto-generated ID for the query. [Preview](https://cloud.google.com/products/#product-launch-stages)",
           "type": "string"
         },
         "rows": {
@@ -7520,7 +7586,7 @@
           ],
           "enumDescriptions": [
             "Should never be used.",
-            "Restrict data egress. See [Data egress](/bigquery/docs/analytics-hub-introduction#data_egress) for more details."
+            "Restrict data egress. See [Data egress](https://cloud.google.com/bigquery/docs/analytics-hub-introduction#data_egress) for more details."
           ],
           "readOnly": true,
           "type": "string"
@@ -8170,7 +8236,7 @@
       "type": "object"
     },
     "StandardSqlDataType": {
-      "description": "The data type of a variable such as a function argument. Examples include: * INT64: `{\"typeKind\": \"INT64\"}` * ARRAY: { \"typeKind\": \"ARRAY\", \"arrayElementType\": {\"typeKind\": \"STRING\"} } * STRUCT\u003e: { \"typeKind\": \"STRUCT\", \"structType\": { \"fields\": [ { \"name\": \"x\", \"type\": {\"typeKind\": \"STRING\"} }, { \"name\": \"y\", \"type\": { \"typeKind\": \"ARRAY\", \"arrayElementType\": {\"typeKind\": \"DATE\"} } } ] } }",
+      "description": "The data type of a variable such as a function argument. Examples include: * INT64: `{\"typeKind\": \"INT64\"}` * ARRAY: { \"typeKind\": \"ARRAY\", \"arrayElementType\": {\"typeKind\": \"STRING\"} } * STRUCT\u003e: { \"typeKind\": \"STRUCT\", \"structType\": { \"fields\": [ { \"name\": \"x\", \"type\": {\"typeKind\": \"STRING\"} }, { \"name\": \"y\", \"type\": { \"typeKind\": \"ARRAY\", \"arrayElementType\": {\"typeKind\": \"DATE\"} } } ] } } * RANGE: { \"typeKind\": \"RANGE\", \"rangeElementType\": {\"typeKind\": \"DATE\"} }",
       "id": "StandardSqlDataType",
       "properties": {
         "arrayElementType": {
@@ -8284,7 +8350,7 @@
           "type": "string"
         },
         "locationUri": {
-          "description": "Optional. The physical location of the table (e.g. 'gs://spark-dataproc-data/pangea-data/case_sensitive/' or 'gs://spark-dataproc-data/pangea-data/*'). The maximum length is 2056 bytes.",
+          "description": "Optional. The physical location of the table (e.g. `gs://spark-dataproc-data/pangea-data/case_sensitive/` or `gs://spark-dataproc-data/pangea-data/*`). The maximum length is 2056 bytes.",
           "type": "string"
         },
         "outputFormat": {
@@ -8458,6 +8524,20 @@
           "readOnly": true,
           "type": "string"
         },
+        "managedTableType": {
+          "description": "Optional. If set, overrides the default managed table type configured in the dataset.",
+          "enum": [
+            "MANAGED_TABLE_TYPE_UNSPECIFIED",
+            "NATIVE",
+            "ICEBERG"
+          ],
+          "enumDescriptions": [
+            "No managed table type specified.",
+            "The managed table is a native BigQuery table.",
+            "The managed table is a BigQuery table for Apache Iceberg."
+          ],
+          "type": "string"
+        },
         "materializedView": {
           "$ref": "MaterializedViewDefinition",
           "description": "Optional. The materialized view definition."
@@ -8583,7 +8663,7 @@
         },
         "restrictions": {
           "$ref": "RestrictionConfig",
-          "description": "Optional. Output only. Restriction config for table. If set, restrict certain accesses on the table based on the config. See [Data egress](/bigquery/docs/analytics-hub-introduction#data_egress) for more details.",
+          "description": "Optional. Output only. Restriction config for table. If set, restrict certain accesses on the table based on the config. See [Data egress](https://cloud.google.com/bigquery/docs/analytics-hub-introduction#data_egress) for more details.",
           "readOnly": true
         },
         "schema": {
@@ -8622,7 +8702,7 @@
           "description": "If specified, configures time-based partitioning for this table."
         },
         "type": {
-          "description": "Output only. Describes the table type. The following values are supported: * `TABLE`: A normal BigQuery table. * `VIEW`: A virtual table defined by a SQL query. * `EXTERNAL`: A table that references data stored in an external storage system, such as Google Cloud Storage. * `MATERIALIZED_VIEW`: A precomputed view defined by a SQL query. * `SNAPSHOT`: An immutable BigQuery table that preserves the contents of a base table at a particular time. See additional information on [table snapshots](/bigquery/docs/table-snapshots-intro). The default value is `TABLE`.",
+          "description": "Output only. Describes the table type. The following values are supported: * `TABLE`: A normal BigQuery table. * `VIEW`: A virtual table defined by a SQL query. * `EXTERNAL`: A table that references data stored in an external storage system, such as Google Cloud Storage. * `MATERIALIZED_VIEW`: A precomputed view defined by a SQL query. * `SNAPSHOT`: An immutable BigQuery table that preserves the contents of a base table at a particular time. See additional information on [table snapshots](https://cloud.google.com/bigquery/docs/table-snapshots-intro). The default value is `TABLE`.",
           "readOnly": true,
           "type": "string"
         },
@@ -8839,6 +8919,13 @@
           "description": "Optional. Field collation can be set only when the type of field is STRING. The following values are supported: * 'und:ci': undetermined locale, case insensitive. * '': empty string. Default to case-sensitive behavior.",
           "type": "string"
         },
+        "dataPolicies": {
+          "description": "Optional. Data policy options, will replace the data_policies.",
+          "items": {
+            "$ref": "DataPolicyOption"
+          },
+          "type": "array"
+        },
         "defaultValueExpression": {
           "description": "Optional. A SQL expression to specify the [default value] (https://cloud.google.com/bigquery/docs/default-values) for this field.",
           "type": "string"
@@ -8857,10 +8944,6 @@
         "foreignTypeDefinition": {
           "description": "Optional. Definition of the foreign data type. Only valid for top-level schema fields (not nested fields). If the type is FOREIGN, this field is required.",
           "type": "string"
-        },
-        "identityColumnInfo": {
-          "$ref": "IdentityColumnInfo",
-          "description": "Optional. Definition of how values are generated for the field. Setting this option means that the field is an identity column. Only valid for top-level schema INTEGER fields (not nested fields)."
         },
         "maxLength": {
           "description": "Optional. Maximum length of values of this field for STRINGS or BYTES. If max_length is not specified, no maximum length constraint is imposed on this field. If type = \"STRING\", then max_length represents the maximum UTF-8 length of strings in this field. If type = \"BYTES\", then max_length represents the maximum number of bytes in this field. It is invalid to set this field if type ≠ \"STRING\" and ≠ \"BYTES\".",
@@ -8923,7 +9006,7 @@
           "type": "string"
         },
         "type": {
-          "description": "Required. The field data type. Possible values include: * STRING * BYTES * INTEGER (or INT64) * FLOAT (or FLOAT64) * BOOLEAN (or BOOL) * TIMESTAMP * DATE * TIME * DATETIME * GEOGRAPHY * NUMERIC * BIGNUMERIC * JSON * RECORD (or STRUCT) * RANGE ([Preview](/products/#product-launch-stages)) Use of RECORD/STRUCT indicates that the field contains a nested schema.",
+          "description": "Required. The field data type. Possible values include: * STRING * BYTES * INTEGER (or INT64) * FLOAT (or FLOAT64) * BOOLEAN (or BOOL) * TIMESTAMP * DATE * TIME * DATETIME * GEOGRAPHY * NUMERIC * BIGNUMERIC * JSON * RECORD (or STRUCT) * RANGE Use of RECORD/STRUCT indicates that the field contains a nested schema.",
           "type": "string"
         }
       },
@@ -9050,7 +9133,7 @@
           "description": "Metadata caching eligible table referenced in the query."
         },
         "tableType": {
-          "description": "[Table type](/bigquery/docs/reference/rest/v2/tables#Table.FIELDS.type).",
+          "description": "[Table type](https://cloud.google.com/bigquery/docs/reference/rest/v2/tables#Table.FIELDS.type).",
           "type": "string"
         },
         "unusedReason": {
@@ -9337,6 +9420,10 @@
           "format": "double",
           "type": "number"
         },
+        "contributionMetric": {
+          "description": "The contribution metric. Applies to contribution analysis models. Allowed formats supported are for summable and summable ratio contribution metrics. These include expressions such as `SUM(x)` or `SUM(x)/SUM(y)`, where x and y are column names from the base table.",
+          "type": "string"
+        },
         "dartNormalizeType": {
           "description": "Type of normalization algorithm for boosted tree models using dart booster.",
           "enum": [
@@ -9409,6 +9496,13 @@
         "decomposeTimeSeries": {
           "description": "If true, perform decompose time series and save the results.",
           "type": "boolean"
+        },
+        "dimensionIdColumns": {
+          "description": "Optional. Names of the columns to slice on. Applies to contribution analysis models.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "distanceType": {
           "description": "Distance type for clustering models.",
@@ -9833,6 +9927,10 @@
           "format": "int64",
           "type": "string"
         },
+        "isTestColumn": {
+          "description": "Name of the column used to determine the rows corresponding to control and test. Applies to contribution analysis models.",
+          "type": "string"
+        },
         "itemColumn": {
           "description": "Item column specified for matrix factorization models.",
           "type": "string"
@@ -9932,6 +10030,11 @@
           "description": "Maximum depth of a tree for boosted tree models.",
           "format": "int64",
           "type": "string"
+        },
+        "minAprioriSupport": {
+          "description": "The apriori support minimum. Applies to contribution analysis models.",
+          "format": "double",
+          "type": "number"
         },
         "minRelativeProgress": {
           "description": "When early_stop is true, stops training when accuracy improvement is less than 'min_relative_progress'. Used only for iterative training algorithms.",

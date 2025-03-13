@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/GoogleCloudPlatform/secrets-store-csi-driver-provider-gcp/config"
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
@@ -14,6 +15,8 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	csiapi "sigs.k8s.io/secrets-store-csi-driver/apis/v1"
+	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
@@ -25,6 +28,8 @@ var (
 	// This is the format of the `openshift.io/sa.scc.uid-range` annotation in
 	// OpenShift namespaces.
 	uidRangeRegexp = regexp.MustCompile(`^(\d+)/\d+`)
+	// GSMproject is the name of the GCP Secret Manager project where the secrets are stored.
+	GSMproject = "openshift-ci-secrets"
 )
 
 func (s *multiStageTestStep) createSharedDirSecret(ctx context.Context) error {
@@ -76,6 +81,63 @@ func (s *multiStageTestStep) createCredentials(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// createSPCs creates all the SecretProviderClasses (SPCs) needed
+// to fetch the appropriate secrets from GCP. This is done before
+// the individual steps are run to make sure the appropriate
+// SecretProviderClasses already exist and are available for the test pods.
+func (s *multiStageTestStep) createSPCs(ctx context.Context) error {
+	toCreate := map[string]*csiapi.SecretProviderClass{}
+
+	for _, step := range append(s.pre, append(s.test, s.post...)...) {
+		for _, credential := range step.Credentials {
+			name := fmt.Sprintf("%s-%s-spc", s.jobSpec.Namespace(), credential.Name)
+			if _, exists := toCreate[name]; exists {
+				continue
+			}
+			secret, err := getSecretString(credential.Name)
+			if err != nil {
+				return err
+			}
+			toCreate[name] = &csiapi.SecretProviderClass{
+				TypeMeta: meta.TypeMeta{
+					Kind:       "SecretProviderClass",
+					APIVersion: csiapi.GroupVersion.String(),
+				},
+				ObjectMeta: meta.ObjectMeta{
+					Name:      name,
+					Namespace: s.jobSpec.Namespace(),
+				},
+				Spec: csiapi.SecretProviderClassSpec{
+					Provider: "gcp",
+					Parameters: map[string]string{
+						"auth":    "provider-adc",
+						"secrets": secret,
+					},
+				},
+			}
+		}
+	}
+
+	for name := range toCreate {
+		if err := s.client.Create(ctx, toCreate[name]); err != nil && !kerrors.IsAlreadyExists(err) {
+			return fmt.Errorf("could not create SecretProviderClass object for secret: %w", err)
+		}
+	}
+	return nil
+}
+
+func getSecretString(name string) (string, error) {
+	secret := config.Secret{
+		ResourceName: fmt.Sprintf("projects/%s/secrets/%s/versions/latest", GSMproject, name),
+		Path:         name,
+	}
+	y, err := yaml.Marshal([]config.Secret{secret})
+	if err != nil {
+		return "", fmt.Errorf("could not marshal secret: %w", err)
+	}
+	return string(y), nil
 }
 
 func (s *multiStageTestStep) createCommandConfigMaps(ctx context.Context) error {

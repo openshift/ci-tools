@@ -36,9 +36,6 @@ func IsValidGraphConfiguration(rawSteps []api.StepConfiguration) error {
 		if c := s.InputImageTagStepConfiguration; c != nil {
 			addName(c.TargetName())
 			pipelineImages[c.To] = sets.Empty{}
-			if s.InputImageTagStepConfiguration.ExternalPullSpec != "" {
-				ret = append(ret, fmt.Errorf("it is not permissible to directly set external_pull_spec. this should only be used to programttically override an image"))
-			}
 		} else if c := s.PipelineImageCacheStepConfiguration; c != nil {
 			addName(c.TargetName())
 			pipelineImages[c.To] = sets.Empty{}

@@ -379,11 +379,12 @@ func fromConfig(
 func stepsForImageOverrides(overriddenImages map[string]string) []api.StepConfiguration {
 	var overrideSteps []api.StepConfiguration
 	for tag, value := range overriddenImages {
+
 		inputStep := api.StepConfiguration{InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 			InputImage: api.InputImage{
-				To: api.PipelineImageStreamTagReference(tag),
+				ExternalImage: &api.ExternalImage{PullSpec: value},
+				To:            api.PipelineImageStreamTagReference(tag),
 			},
-			ExternalPullSpec: value,
 		}}
 		overrideSteps = append(overrideSteps, inputStep)
 

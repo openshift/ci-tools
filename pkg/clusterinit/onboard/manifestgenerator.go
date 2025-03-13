@@ -80,6 +80,7 @@ func (w *manifestGeneratorStep) Run(ctx context.Context) error {
 			}
 		}
 
+		manifestBytes = append([]byte(warningHeader), manifestBytes...)
 		if err := os.WriteFile(p, manifestBytes, 0644); err != nil {
 			return fmt.Errorf("write manifest %s: %w", p, err)
 		}

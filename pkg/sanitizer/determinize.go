@@ -22,7 +22,7 @@ const (
 	cioperatorLatestImage = "ci-operator:latest"
 )
 
-func DeterminizeJobs(prowJobConfigDir string, config *dispatcher.Config, pjs map[string]string, blocked sets.Set[string], cm dispatcher.ClusterMap) error {
+func DeterminizeJobs(prowJobConfigDir string, config *dispatcher.Config, pjs map[string]dispatcher.ProwJobData, blocked sets.Set[string], cm dispatcher.ClusterMap) error {
 	ch := make(chan string)
 	errCh := make(chan error)
 	produce := func() error {
@@ -76,7 +76,7 @@ func DeterminizeJobs(prowJobConfigDir string, config *dispatcher.Config, pjs map
 	return nil
 }
 
-func defaultJobConfig(jc *prowconfig.JobConfig, path string, config *dispatcher.Config, pjs map[string]string, blocked sets.Set[string], cm dispatcher.ClusterMap) error {
+func defaultJobConfig(jc *prowconfig.JobConfig, path string, config *dispatcher.Config, pjs map[string]dispatcher.ProwJobData, blocked sets.Set[string], cm dispatcher.ClusterMap) error {
 	mostUsedCluster := dispatcher.FindMostUsedCluster(jc)
 	for k := range jc.PresubmitsStatic {
 		for idx := range jc.PresubmitsStatic[k] {
@@ -139,7 +139,7 @@ func isCIOperatorLatest(image string) bool {
 	return lastPart == cioperatorLatestImage
 }
 
-func determineCluster(jb prowconfig.JobBase, config *dispatcher.Config, pjs map[string]string, path string, mostUsedCluster string, blocked sets.Set[string], cm dispatcher.ClusterMap) (string, error) {
+func determineCluster(jb prowconfig.JobBase, config *dispatcher.Config, pjs map[string]dispatcher.ProwJobData, path string, mostUsedCluster string, blocked sets.Set[string], cm dispatcher.ClusterMap) (string, error) {
 	if pjs == nil {
 		c, canBeRelocated, err := config.DetermineClusterForJob(jb, path, cm)
 		if err != nil {
@@ -150,6 +150,6 @@ func determineCluster(jb prowconfig.JobBase, config *dispatcher.Config, pjs map[
 		}
 		return string(c), nil
 	}
-	return pjs[jb.Name], nil
+	return pjs[jb.Name].Cluster, nil
 
 }

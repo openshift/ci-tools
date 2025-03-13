@@ -145,7 +145,7 @@ func TestDispatchJobConfig(t *testing.T) {
 			cv: &clusterVolume{
 				clusterVolumeMap: map[string]map[string]float64{"aws": {"build01": 0}, "gcp": {"build02": 0}},
 				cloudProviders:   sets.New[string]("aws", "gcp"),
-				pjs:              map[string]string{},
+				pjs:              map[string]dispatcher.ProwJobData{},
 				volumeDistribution: map[string]float64{
 					"build01": 21,
 					"build02": 21,
@@ -176,7 +176,7 @@ func TestDispatchJobConfig(t *testing.T) {
 			cv: &clusterVolume{
 				clusterVolumeMap: map[string]map[string]float64{"aws": {"build01": 1}, "gcp": {"build02": 0}},
 				cloudProviders:   sets.New[string]("aws", "gcp"),
-				pjs:              map[string]string{},
+				pjs:              map[string]dispatcher.ProwJobData{},
 				blocked:          sets.New[string](),
 				volumeDistribution: map[string]float64{
 					"build01": 21,
@@ -208,7 +208,7 @@ func TestDispatchJobConfig(t *testing.T) {
 			cv: &clusterVolume{
 				clusterVolumeMap: map[string]map[string]float64{"aws": {"build01": 1}, "gcp": {"build02": 0}},
 				cloudProviders:   sets.New[string]("aws", "gcp"),
-				pjs:              map[string]string{},
+				pjs:              map[string]dispatcher.ProwJobData{},
 				blocked:          sets.New[string](),
 				volumeDistribution: map[string]float64{
 					"build01": 21,
@@ -428,40 +428,47 @@ func TestRemoveDisabledClusters(t *testing.T) {
 	}
 }
 
-func TestDispatchMissingJobs(t *testing.T) {
+func TestDispatchDeltaJobs(t *testing.T) {
 	type args struct {
 		prowJobConfigDir string
 		config           *dispatcher.Config
 		blocked          sets.Set[string]
-		pjs              map[string]string
+		pjs              map[string]dispatcher.ProwJobData
+		cm               dispatcher.ClusterMap
 	}
 	tests := []struct {
 		name        string
 		args        args
 		wantErr     bool
-		expectedPjs map[string]string
+		expectedPjs map[string]dispatcher.ProwJobData
 	}{
 		{
-			name: "basic case",
+			name: "capabilities",
 			args: args{
+				cm:               dispatcher.ClusterMap{"build01": dispatcher.ClusterInfo{Capabilities: []string{"intranet"}}},
 				prowJobConfigDir: filepath.Join("testdata", t.Name()),
 				config:           &c,
 				blocked:          sets.New[string](),
-				pjs:              map[string]string{"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp": "build02"},
+				pjs: map[string]dispatcher.ProwJobData{
+					"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp":          {Cluster: "build02"},
+					"pull-ci-openshift-cluster-api-provider-gcp-master-govet":            {Cluster: "build02"},
+					"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp-operator": {Cluster: "build02"},
+					"pull-ci-openshift-cluster-api-provider-gcp-master-goimports":        {Cluster: "build02"},
+				},
 			},
 			wantErr: false,
-			expectedPjs: map[string]string{
-				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp":          "build02",
-				"pull-ci-openshift-cluster-api-provider-gcp-master-govet":            "build02",
-				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp-operator": "build02",
-				"pull-ci-openshift-cluster-api-provider-gcp-master-goimports":        "build02",
+			expectedPjs: map[string]dispatcher.ProwJobData{
+				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp":          {Cluster: "build01", Capabilities: []string{"intranet"}},
+				"pull-ci-openshift-cluster-api-provider-gcp-master-govet":            {Cluster: "build02"},
+				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp-operator": {Cluster: "build01", Capabilities: []string{"intranet"}},
+				"pull-ci-openshift-cluster-api-provider-gcp-master-goimports":        {Cluster: "build02"},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := dispatchMissingJobs(tt.args.prowJobConfigDir, tt.args.config, tt.args.blocked, tt.args.pjs, dispatcher.ClusterMap{}); (err != nil) != tt.wantErr {
-				t.Errorf("dispatchMissingJobs() error = %v, wantErr %v", err, tt.wantErr)
+			if err := dispatchDeltaJobs(tt.args.prowJobConfigDir, tt.args.config, tt.args.blocked, tt.args.pjs, tt.args.cm); (err != nil) != tt.wantErr {
+				t.Errorf("dispatchDeltaJobs() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if !reflect.DeepEqual(tt.expectedPjs, tt.args.pjs) {
 				t.Errorf("Maps are not equal. Expected: %v, Got: %v", tt.expectedPjs, tt.args.pjs)

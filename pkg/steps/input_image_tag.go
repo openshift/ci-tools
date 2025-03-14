@@ -81,8 +81,9 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 
 	var objectReferenceName string
 	if s.config.ExternalImage != nil {
-		logrus.Infof("Tagging %s into %s:%s.", externalImageReference(s.config), api.PipelineImageStream, s.config.To)
-		objectReferenceName = externalImageReference(s.config)
+		externalPullSpec := externalImageReference(s.config)
+		logrus.Infof("Tagging %s into %s:%s.", externalPullSpec, api.PipelineImageStream, s.config.To)
+		objectReferenceName = externalPullSpec
 	} else {
 		logrus.Infof("Tagging %s into %s:%s.", s.config.BaseImage.ISTagName(), api.PipelineImageStream, s.config.To)
 		objectReferenceName = api.QuayImageReference(s.config.BaseImage)
@@ -98,6 +99,7 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 			Namespace: s.config.BaseImage.Namespace,
 		}
 	}
+
 	ist := &imagev1.ImageStreamTag{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.To),
@@ -153,6 +155,9 @@ func waitForTagInSpec(ctx context.Context, client ctrlruntimeclient.WithWatch, n
 }
 
 func externalImageReference(config *api.InputImageTagStepConfiguration) string {
+	if config.ExternalImage.PullSpec != "" {
+		return config.ExternalImage.PullSpec
+	}
 	return fmt.Sprintf("%s/%s/%s:%s", config.ExternalImage.Registry, config.ExternalImage.Namespace, config.ExternalImage.Name, config.ExternalImage.Tag)
 }
 

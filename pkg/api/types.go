@@ -303,9 +303,14 @@ type InputConfiguration struct {
 
 // ExternalImage describes the external image that is imported into the pipeline
 type ExternalImage struct {
-	Registry                string `json:"registry"` // Registry is the registry to pull images from (e.g. quay.io)
+	// Registry is the registry to pull images from (e.g. quay.io)
+	Registry                string `json:"registry"`
 	ImageStreamTagReference `json:",inline"`
-	PullSecret              string `json:"pull_secret,omitempty"` // PullSecret is the name of the secret to use to pull the image
+	// PullSecret is the name of the secret to use to pull the image
+	PullSecret string `json:"pull_secret,omitempty"`
+	// PullSpec is the full pullSpec of the external image, only to be set programmatically,
+	// and takes precedent over the other fields in ExternalImage
+	PullSpec string `json:"pull_spec,omitempty"`
 }
 
 // UnresolvedRelease describes a semantic release payload

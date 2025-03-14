@@ -145,6 +145,13 @@ func TestValidateExternalConfiguration(t *testing.T) {
 			expectedValid: false,
 		},
 		{
+			name: "invalid external configuration, pull_spec set",
+			externalConfig: map[string]api.ExternalImage{
+				"foo": {PullSpec: "quay.io/some-pull-spec/name:tag"},
+			},
+			expectedValid: false,
+		},
+		{
 			name:           "nil external configuration",
 			externalConfig: nil,
 			expectedValid:  true,

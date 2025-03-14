@@ -224,6 +224,9 @@ func validateExternalConfiguration(ctx *configContext, externalImages map[string
 	var validationErrors []error
 	istRefs := make(map[string]api.ImageStreamTagReference)
 	for name, ei := range externalImages {
+		if ei.PullSpec != "" {
+			validationErrors = append(validationErrors, ctx.errorf("%s.pull_spec is not valid to be set directly in the config", name))
+		}
 		if ei.Registry == "" {
 			validationErrors = append(validationErrors, ctx.errorf("%s.registry value required but not provided", name))
 		} else {

@@ -4,4 +4,4 @@ decoration_config:
   skip_cloning: true
 labels:
   ci.openshift.io/no-builds: "true"
-name: default-ci-openshift-release-master-
+name: default-ci-openshift-release-main-

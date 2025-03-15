@@ -69,7 +69,7 @@ func (o *Options) Complete() error {
 	// Fill the modified files set based on the git output. If we detect anything else than modified files,
 	// turn onlyProcessChanges to false, in order to process all the files instead of a subset. For now we
 	// care of processing on modified files when there are ONLY modified files.
-	// Example output of `git diff --name-status master`
+	// Example output of `git diff --name-status main`
 	// M       path/of/modified/file.yaml
 	// D       path/of/deleted/file.yaml
 	// R100    path/of/renamed/old-name.yaml   path/of/renamed/new-name.yaml
@@ -161,7 +161,7 @@ func getUpstreamBranch() (string, error) {
 
 	if err != nil {
 		if strings.HasPrefix(string(out), "fatal: no upstream configured for branch") {
-			return "master", nil
+			return "main", nil
 		} else {
 			return "", fmt.Errorf("%s: %w", string(out), err)
 		}
@@ -171,5 +171,5 @@ func getUpstreamBranch() (string, error) {
 		return strings.TrimSuffix(string(out), "\n"), nil
 	}
 
-	return "master", nil
+	return "main", nil
 }

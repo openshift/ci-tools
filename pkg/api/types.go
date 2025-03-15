@@ -1346,6 +1346,7 @@ const (
 	ClusterProfileGCPTelco                ClusterProfile = "gcp-telco"
 	ClusterProfileGCPChaos                ClusterProfile = "gcp-chaos"
 	ClusterProfileIBMCloud                ClusterProfile = "ibmcloud"
+	ClusterProfileGCPSustAutoRel412       ClusterProfile = "gcp-sustaining-autorelease-412"
 	ClusterProfileIBMCloudCSPIQE          ClusterProfile = "ibmcloud-cspi-qe"
 	ClusterProfileIBMCloudRHOAIQE         ClusterProfile = "ibmcloud-rhoai-qe"
 	ClusterProfileIBMCloudQE              ClusterProfile = "ibmcloud-qe"
@@ -1506,6 +1507,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileGCPOpendatahub,
 		ClusterProfileGCPTelco,
 		ClusterProfileGCPChaos,
+		ClusterProfileGCPSustAutoRel412,
 		ClusterProfileAWSVirtualization,
 		ClusterProfileAzureVirtualization,
 		ClusterProfileHyperShift,
@@ -1703,6 +1705,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileGCP3,
 		ClusterProfileGCP2,
 		ClusterProfileGCPVirtualization,
+		ClusterProfileGCPSustAutoRel412,
 		ClusterProfileGCPOpendatahub,
 		ClusterProfileGCPTelco,
 		ClusterProfileGCPChaos,
@@ -1976,6 +1979,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "gcp-opendatahub-quota-slice"
 	case ClusterProfileGCPTelco:
 		return "gcp-telco-quota-slice"
+	case ClusterProfileGCPSustAutoRel412:
+		return "gcp-sustaining-autorelease-412-quota-slice"
 	case ClusterProfileGCPChaos:
 		return "gcp-chaos-quota-slice"
 	case ClusterProfileIBMCloud:

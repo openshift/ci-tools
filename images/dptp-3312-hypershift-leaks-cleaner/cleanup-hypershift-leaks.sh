@@ -33,6 +33,9 @@ echo "${clusters_json}" | jq -r '.items[] | select(.metadata.annotations.broken 
     if updateCredentialsEnv $cluster; then
         timeout 5m hypershift destroy cluster aws --name "$cluster_name" --aws-creds "$AWS_CONFIG_FILE" --destroy-cloud-resources
     fi
+    oc -n clusters patch hostedcluster $cluster_name --type='merge' -p '{"metadata":{"finalizers": []}}'
+    oc -n clusters delete hostedcluster $cluster_name
+    oc delete ns clusters-$cluster_name
     exit 0
 done
 
@@ -55,6 +58,9 @@ echo "${clusters_json}" | jq '[.items[].metadata]' | jq -c '.[]' | while read cl
         if updateCredentialsEnv $cluster; then
             timeout 5m hypershift destroy cluster aws --name "$cluster_name" --aws-creds "$AWS_CONFIG_FILE" --destroy-cloud-resources
         fi
+        oc -n clusters patch hostedcluster $cluster_name --type='merge' -p '{"metadata":{"finalizers": []}}'
+        oc -n clusters delete hostedcluster $cluster_name
+        oc delete ns clusters-$cluster_name
     fi
 done
 

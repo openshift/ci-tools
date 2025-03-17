@@ -208,6 +208,11 @@ func getPublicImageReference(dockerImageReference, publicDockerImageRepository s
 	return strings.Replace(dockerImageReference, splits[0], publicHost, 1)
 }
 
+func getMirrorCommand(registryConfig string, images []string, loglevel int) string {
+	return fmt.Sprintf("oc image mirror --loglevel=%d --keep-manifest-list --registry-config=%s --max-per-registry=10 %s",
+		loglevel, registryConfig, strings.Join(images, " "))
+}
+
 func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namespace string, name string, cliVersion string, nodeArchitectures []string) *coreapi.Pod {
 	keys := make([]string, 0, len(imageMirrorTarget))
 	for k := range imageMirrorTarget {
@@ -224,18 +229,19 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 			images = append(images, fmt.Sprintf("%s=%s", imageMirrorTarget[k], k))
 		}
 	}
+
+	registryConfig := filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey)
 	command := []string{"/bin/sh", "-c"}
 	// Try up to 5 times to mirror to the destination. The loop will exit early with 0 if successful on any iteration. If all attempts fail,
 	// it will exit with non-zero value.
-	mirrorTagsCommand := fmt.Sprintf("for r in {1..5}; do echo Mirror attempt $r; oc image mirror --keep-manifest-list --registry-config=%s --continue-on-error=true --max-per-registry=10 %s && break; backoff=$(($RANDOM %% 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff; done", filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey), strings.Join(images, " "))
+	mirrorTagsCommand := fmt.Sprintf("for r in {1..5}; do echo Mirror attempt $r; %s && break; backoff=$(($RANDOM %% 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff; done", getMirrorCommand(registryConfig, images, 10))
 	var args []string
 	if len(pruneImages) > 0 {
 		// See https://github.com/openshift/release/blob/2080ec4a49337c27577a4b2ff08a538e96436e65/hack/qci_registry_pruner.py for details.
 		// Note that we don't retry here and we ignore failures because (a) it may be the first time an image tag is
 		// being promoted to and trying to add a pruning tag to the existing image is doomed to fail. (b) pruning tags
 		// help eliminate a rare race condition. The cost of an occasional failure in establishing them is very low.
-		mirrorPruneTagsCommand := fmt.Sprintf("oc image mirror --keep-manifest-list --registry-config=%s --continue-on-error=true --max-per-registry=10 %s", filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey), strings.Join(pruneImages, " "))
-		args = append(args, fmt.Sprintf("%s || true", mirrorPruneTagsCommand))
+		args = append(args, fmt.Sprintf("%s || true", getMirrorCommand(registryConfig, pruneImages, 10)))
 	}
 	args = append(args, mirrorTagsCommand)
 	args = []string{strings.Join(args, "\n")}
@@ -253,6 +259,7 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 		ObjectMeta: meta.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			Labels:    map[string]string{steps.AnnotationSaveContainerLogs: "true"},
 		},
 		Spec: coreapi.PodSpec{
 			NodeSelector:  nodeSelector,

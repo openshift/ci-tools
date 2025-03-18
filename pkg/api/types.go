@@ -1361,6 +1361,7 @@ const (
 	ClusterProfilePOWERVS6                ClusterProfile = "powervs-6"
 	ClusterProfilePOWERVS7                ClusterProfile = "powervs-7"
 	ClusterProfileLibvirtPpc64le          ClusterProfile = "libvirt-ppc64le"
+	ClusterProfileLibvirtPpc64leS2S       ClusterProfile = "libvirt-ppc64le-s2s"
 	ClusterProfileLibvirtS390x            ClusterProfile = "libvirt-s390x"
 	ClusterProfileLibvirtS390x1           ClusterProfile = "libvirt-s390x-1"
 	ClusterProfileLibvirtS390x2           ClusterProfile = "libvirt-s390x-2"
@@ -1526,6 +1527,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfilePOWERVS7,
 		ClusterProfileKubevirt,
 		ClusterProfileLibvirtPpc64le,
+		ClusterProfileLibvirtPpc64leS2S,
 		ClusterProfileLibvirtS390x,
 		ClusterProfileLibvirtS390x1,
 		ClusterProfileLibvirtS390x2,
@@ -1738,6 +1740,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "powervs-7"
 	case ClusterProfileLibvirtPpc64le:
 		return "libvirt-ppc64le"
+	case ClusterProfileLibvirtPpc64leS2S:
+		return "libvirt-ppc64le-s2s"
 	case ClusterProfileLibvirtS390x:
 		return "libvirt-s390x"
 	case ClusterProfileLibvirtS390x1:
@@ -2008,6 +2012,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "powervs-7-quota-slice"
 	case ClusterProfileLibvirtPpc64le:
 		return "libvirt-ppc64le-quota-slice"
+	case ClusterProfileLibvirtPpc64leS2S:
+		return "libvirt-ppc64le-s2s-quota-slice"
 	case ClusterProfileLibvirtS390x:
 		return "libvirt-s390x-quota-slice"
 	case ClusterProfileLibvirtS390x1:
@@ -2170,7 +2176,7 @@ func GetDefaultClusterProfileSecretName(profile ClusterProfile) string {
 // LeaseTypeFromClusterType maps cluster types to lease types
 func LeaseTypeFromClusterType(t string) (string, error) {
 	switch t {
-	case "aws", "aws-c2s", "aws-china", "aws-usgov", "aws-sc2s", "aws-osd-msp", "aws-opendatahub", "aws-splat", "alibaba", "azure-2", "azure4", "azure-arc", "azure-arm64", "azurestack", "azuremag", "equinix-ocp-metal", "gcp", "gcp-arm64", "gcp-opendatahub", "libvirt-ppc64le", "libvirt-s390x", "libvirt-s390x-1", "libvirt-s390x-2", "libvirt-s390x-amd64", "libvirt-s390x-vpn", "ibmcloud-multi-ppc64le", "ibmcloud-multi-s390x", "nutanix", "nutanix-qe", "nutanix-qe-dis", "nutanix-qe-zone", "nutanix-qe-gpu", "nutanix-qe-flow", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "openstack-nerc-dev", "vsphere", "ovirt", "packet", "packet-edge", "powervs-multi-1", "powervs-1", "powervs-2", "powervs-3", "powervs-4", "powervs-5", "powervs-6", "powervs-7", "kubevirt", "aws-cpaas", "osd-ephemeral", "gcp-virtualization", "aws-virtualization", "azure-virtualization", "hypershift-powervs", "hypershift-powervs-cb":
+	case "aws", "aws-c2s", "aws-china", "aws-usgov", "aws-sc2s", "aws-osd-msp", "aws-opendatahub", "aws-splat", "alibaba", "azure-2", "azure4", "azure-arc", "azure-arm64", "azurestack", "azuremag", "equinix-ocp-metal", "gcp", "gcp-arm64", "gcp-opendatahub", "libvirt-ppc64le", "libvirt-ppc64le-s2s", "libvirt-s390x", "libvirt-s390x-1", "libvirt-s390x-2", "libvirt-s390x-amd64", "libvirt-s390x-vpn", "ibmcloud-multi-ppc64le", "ibmcloud-multi-s390x", "nutanix", "nutanix-qe", "nutanix-qe-dis", "nutanix-qe-zone", "nutanix-qe-gpu", "nutanix-qe-flow", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "openstack-nerc-dev", "vsphere", "ovirt", "packet", "packet-edge", "powervs-multi-1", "powervs-1", "powervs-2", "powervs-3", "powervs-4", "powervs-5", "powervs-6", "powervs-7", "kubevirt", "aws-cpaas", "osd-ephemeral", "gcp-virtualization", "aws-virtualization", "azure-virtualization", "hypershift-powervs", "hypershift-powervs-cb":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

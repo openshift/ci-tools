@@ -220,6 +220,7 @@ func fromConfig(
 						Namespace:          resolveConfig.Integration.Namespace,
 						Name:               resolveConfig.Integration.Name,
 						IncludeBuiltImages: resolveConfig.Integration.IncludeBuiltImages,
+						ReferencePolicy:    resolveConfig.Integration.ReferencePolicy,
 					}, config.Resources, podClient, jobSpec)
 					for _, s := range []api.Step{snapshot, assemble} {
 						buildSteps = append(buildSteps, s)

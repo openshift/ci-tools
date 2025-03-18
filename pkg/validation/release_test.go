@@ -544,6 +544,49 @@ func TestValidateIntegration(t *testing.T) {
 			},
 		},
 		{
+			name:      "valid integration with local reference policy",
+			inputName: "latest",
+			input: api.Integration{
+				Name:               "4.8",
+				Namespace:          "ocp",
+				IncludeBuiltImages: true,
+				ReferencePolicy:    "Local",
+			},
+		},
+		{
+			name:      "valid integration with source reference policy",
+			inputName: "latest",
+			input: api.Integration{
+				Name:               "4.8",
+				Namespace:          "ocp",
+				IncludeBuiltImages: true,
+				ReferencePolicy:    "Source",
+			},
+		},
+		{
+			name:      "valid integration with empty reference policy setting to Local as default",
+			inputName: "latest",
+			input: api.Integration{
+				Name:               "4.8",
+				Namespace:          "ocp",
+				IncludeBuiltImages: true,
+				ReferencePolicy:    "",
+			},
+		},
+		{
+			name:      "invalid integration with reference policy",
+			inputName: "latest",
+			input: api.Integration{
+				Name:               "4.8",
+				Namespace:          "ocp",
+				IncludeBuiltImages: true,
+				ReferencePolicy:    "something",
+			},
+			output: []error{
+				errors.New("root.reference_policy: must be one of Local or Source or empty defaults to Local"),
+			},
+		},
+		{
 			name:      "invalid integration missing namespace",
 			inputName: "latest",
 			input: api.Integration{

@@ -1,5 +1,5 @@
 agent: kubernetes
-always_run: true
+always_run: false
 branches:
 - ^branch$
 - ^branch-

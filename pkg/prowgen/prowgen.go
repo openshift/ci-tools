@@ -131,8 +131,18 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		jobBaseGen := newJobBaseBuilder().TestName(imagesTestName)
 		injectArchitectureLabels(jobBaseGen, configSpec.Images)
 
+		optional := false
+		for _, image := range configSpec.Images {
+			if image.Optional {
+				optional = true
+				break
+			}
+		}
+
 		jobBaseGen.PodSpec.Add(Targets(presubmitTargets...))
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, imagesTestName, info))
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, imagesTestName, info, func(options *generatePresubmitOptions) {
+			options.optional = optional
+		}))
 
 		if configSpec.PromotionConfiguration != nil {
 			jobBaseGen = newJobBaseBuilder().TestName(imagesTestName)
@@ -246,7 +256,7 @@ type generatePresubmitOptions struct {
 }
 
 func (opts *generatePresubmitOptions) shouldAlwaysRun() bool {
-	return opts.runIfChanged == "" && opts.skipIfOnlyChanged == "" && !opts.defaultDisable && opts.pipelineRunIfChanged == ""
+	return opts.runIfChanged == "" && opts.skipIfOnlyChanged == "" && !opts.defaultDisable && opts.pipelineRunIfChanged == "" && !opts.optional
 }
 
 type generatePresubmitOption func(options *generatePresubmitOptions)

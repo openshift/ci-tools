@@ -24,6 +24,23 @@ updateCredentialsEnv() {
     return 0
 }
 
+deleteHostedClusterWithNS () {
+    local cluster_name=$1
+    oc -n clusters patch hostedcluster $cluster_name --type='merge' -p '{"metadata":{"finalizers": []}}'
+    oc -n clusters delete hostedcluster $cluster_name
+    povervs=$(oc -n clusters-$cluster_name get IBMPowerVSImage -o json | jq ".items[0].metadata.name")
+    if [ "$povervs" != "null" ]; then
+        oc -n clusters-$cluster_name patch IBMPowerVSImage $povervs --type='merge' -p '{"metadata":{"finalizers": []}}'
+        oc -n clusters-$cluster_name delete IBMPowerVSImage $povervs
+    fi
+    cluster=$(oc -n clusters-$cluster_name get cluster -o json | jq ".items[0].metadata.name")
+    if [ "$cluster" != "null" ]; then
+        oc -n clusters-$cluster_name patch cluster $cluster --type='merge' -p '{"metadata":{"finalizers": []}}'
+        oc -n clusters-$cluster_name delete cluster $cluster
+    fi
+    oc delete ns clusters-$cluster_name
+}
+
 echo 'Deleting broken HostedClusters...'
 # Get json output from oc command
 clusters_json=$(oc -n clusters get hostedclusters -o json)
@@ -33,10 +50,7 @@ echo "${clusters_json}" | jq -r '.items[] | select(.metadata.annotations.broken 
     if updateCredentialsEnv $cluster; then
         timeout 5m hypershift destroy cluster aws --name "$cluster_name" --aws-creds "$AWS_CONFIG_FILE" --destroy-cloud-resources
     fi
-    oc -n clusters patch hostedcluster $cluster_name --type='merge' -p '{"metadata":{"finalizers": []}}'
-    oc -n clusters delete hostedcluster $cluster_name
-    oc delete ns clusters-$cluster_name
-    exit 0
+    deleteHostedClusterWithNS "$cluster_name"
 done
 
 echo 'Deleting expired HostedClusters...'
@@ -58,9 +72,7 @@ echo "${clusters_json}" | jq '[.items[].metadata]' | jq -c '.[]' | while read cl
         if updateCredentialsEnv $cluster; then
             timeout 5m hypershift destroy cluster aws --name "$cluster_name" --aws-creds "$AWS_CONFIG_FILE" --destroy-cloud-resources
         fi
-        oc -n clusters patch hostedcluster $cluster_name --type='merge' -p '{"metadata":{"finalizers": []}}'
-        oc -n clusters delete hostedcluster $cluster_name
-        oc delete ns clusters-$cluster_name
+       deleteHostedClusterWithNS "$cluster_name"
     fi
 done
 

@@ -195,8 +195,8 @@ func writeToDir(dir string, c map[string]*prowconfig.JobConfig) error {
 	errCh := make(chan error)
 	map_ := func() error {
 		for x := range ch {
-			i := strings.Index(x.k, "/")
-			org, repo := x.k[:i], x.k[i+1:]
+			i := strings.Split(x.k, "/")
+			org, repo := i[0], i[1]
 			if err := jc.WriteToDir(dir, org, repo, x.v, prowgen.Generator, nil); err != nil {
 				errCh <- err
 			}

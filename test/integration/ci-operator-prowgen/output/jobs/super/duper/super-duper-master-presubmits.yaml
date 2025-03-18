@@ -55,7 +55,7 @@ presubmits:
           secretName: result-aggregator
     trigger: (?m)^/test( | .* )ci-index,?($|\s.*)
   - agent: kubernetes
-    always_run: true
+    always_run: false
     branches:
     - ^master$
     - ^master-
@@ -180,7 +180,7 @@ presubmits:
           secretName: result-aggregator
     trigger: (?m)^/test( | .* )e2e,?($|\s.*)
   - agent: kubernetes
-    always_run: false
+    always_run: true
     branches:
     - ^master$
     - ^master-
@@ -193,9 +193,7 @@ presubmits:
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
     max_concurrency: 100
     name: pull-ci-super-duper-master-images
-    optional: true
     rerun_command: /test images
-    run_if_changed: changes
     skip_report: true
     spec:
       containers:
@@ -303,7 +301,7 @@ presubmits:
           secretName: result-aggregator
     trigger: (?m)^/test( | .* )lint,?($|\s.*)
   - agent: kubernetes
-    always_run: true
+    always_run: false
     branches:
     - ^master$
     - ^master-

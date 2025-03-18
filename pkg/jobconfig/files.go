@@ -365,7 +365,7 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig, gener
 	return nil
 }
 
-// Given two JobConfig, merge jobs from the `source` one to to `destination`
+// Given two JobConfig, merge jobs from the `source` one to `destination`
 // one. Jobs are matched by name. All jobs from `source` will be present in
 // `destination` - if there were jobs with the same name in `destination`, they
 // will be updated. All jobs in `destination` that are not overwritten this
@@ -471,9 +471,6 @@ func mergeJobConfig(destination, source *prowconfig.JobConfig, allJobs sets.Set[
 func mergePresubmits(old, new *prowconfig.Presubmit) prowconfig.Presubmit {
 	merged := *new
 
-	merged.AlwaysRun = old.AlwaysRun
-	merged.RunIfChanged = old.RunIfChanged
-	merged.SkipIfOnlyChanged = old.SkipIfOnlyChanged
 	merged.MaxConcurrency = old.MaxConcurrency
 	merged.SkipReport = old.SkipReport
 	merged.Cluster = func() string {
@@ -485,19 +482,14 @@ func mergePresubmits(old, new *prowconfig.Presubmit) prowconfig.Presubmit {
 		return ""
 	}()
 
-	if new.RunIfChanged != "" || new.SkipIfOnlyChanged != "" || new.Annotations["pipeline_run_if_changed"] != "" {
-		merged.RunIfChanged = new.RunIfChanged
-		merged.SkipIfOnlyChanged = new.SkipIfOnlyChanged
-		merged.AlwaysRun = new.AlwaysRun
-	}
-
 	// TODO(muller): Special case images jobs for now. Some repos are marking
 	// images jobs as optional for which we do not have syntax in ci-operator (should we?).
 	// Tolerate manual changes for these jobs for now
 	if strings.HasSuffix(merged.Name, "-images") {
-		merged.Optional = old.Optional
-		if new.Optional {
-			merged.Optional = new.Optional
+		if old.RunIfChanged != "" || old.SkipIfOnlyChanged != "" {
+			merged.RunIfChanged = old.RunIfChanged
+			merged.SkipIfOnlyChanged = old.SkipIfOnlyChanged
+			merged.AlwaysRun = false
 		}
 	}
 

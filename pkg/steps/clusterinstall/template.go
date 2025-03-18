@@ -440,7 +440,7 @@ objects:
           mkdir /tmp/.docker && cp /etc/openshift-installer/pull-secret /tmp/.docker/config.json
           oc registry login --to /tmp/.docker/config.json
           MIRROR_BASE=$( oc get is release -o 'jsonpath={.status.publicDockerImageRepository}' )
-          oc adm release new --from-release ${RELEASE_IMAGE_LATEST} --to-image ${MIRROR_BASE}-scratch:release --mirror ${MIRROR_BASE}-scratch || echo 'ignore: the release could not be reproduced from its inputs'
+          oc adm release new --reference-mode="" --from-release ${RELEASE_IMAGE_LATEST} --to-image ${MIRROR_BASE}-scratch:release --mirror ${MIRROR_BASE}-scratch || echo 'ignore: the release could not be reproduced from its inputs'
           oc adm release mirror --from ${MIRROR_BASE}-scratch:release --to ${MIRROR_BASE} --to-release-image ${MIRROR_BASE}:mirrored
           RELEASE_PAYLOAD_IMAGE_SHA=$(oc get istag ${MIRROR_BASE##*/}:mirrored -o=jsonpath="{.image.metadata.name}")
           oc delete imagestream "$(basename "${MIRROR_BASE}-scratch")"

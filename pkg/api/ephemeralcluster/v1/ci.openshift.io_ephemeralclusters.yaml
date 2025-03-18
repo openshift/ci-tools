@@ -96,6 +96,10 @@ spec:
                               description: Namespace is the namespace in which the
                                 integration stream lives.
                               type: string
+                            reference_policy:
+                              description: ReferencePolicy is the policy to use when
+                                resolving references (Local or Source)
+                              type: string
                           required:
                           - name
                           - namespace

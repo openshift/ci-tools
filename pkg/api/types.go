@@ -8,6 +8,8 @@ import (
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/prow/pkg/repoowners"
+
+	imagev1 "github.com/openshift/api/image/v1"
 )
 
 const (
@@ -335,6 +337,8 @@ type Integration struct {
 	// IncludeBuiltImages determines if the release we assemble will include
 	// images built during the test itself.
 	IncludeBuiltImages bool `json:"include_built_images,omitempty"`
+	// ReferencePolicy is the policy to use when resolving references (Local or Source)
+	ReferencePolicy *imagev1.TagReferencePolicyType `json:"reference_policy,omitempty"`
 }
 
 // ReleaseDescriptor holds common data for different types of release payloads
@@ -511,6 +515,9 @@ type ReleaseTagConfiguration struct {
 	// IncludeBuiltImages determines if the release we assemble will include
 	// images built during the test itself.
 	IncludeBuiltImages bool `json:"include_built_images,omitempty"`
+
+	// ReferencePolicy is the policy to use when resolving references (Local or Source)
+	ReferencePolicy *imagev1.TagReferencePolicyType `json:"reference_policy,omitempty"`
 }
 
 func (config ReleaseTagConfiguration) InputsName() string {

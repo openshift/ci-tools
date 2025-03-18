@@ -8,6 +8,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	imagev1 "github.com/openshift/api/image/v1"
+
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
@@ -527,6 +529,19 @@ func TestValidatePrerelease(t *testing.T) {
 	}
 }
 
+func getTagReferencePolicy(policyType string) *imagev1.TagReferencePolicyType {
+	var policy imagev1.TagReferencePolicyType
+	switch policyType {
+	case "local":
+		policy = imagev1.LocalTagReferencePolicy
+	case "source":
+		policy = imagev1.SourceTagReferencePolicy
+	default:
+		return nil
+	}
+	return &policy
+}
+
 func TestValidateIntegration(t *testing.T) {
 	var testCases = []struct {
 		name      string
@@ -542,6 +557,48 @@ func TestValidateIntegration(t *testing.T) {
 				Namespace:          "ocp",
 				IncludeBuiltImages: true,
 			},
+		},
+		{
+			name:      "valid integration with local reference policy",
+			inputName: "latest",
+			input: api.Integration{
+				Name:               "4.8",
+				Namespace:          "ocp",
+				IncludeBuiltImages: true,
+				ReferencePolicy:    getTagReferencePolicy("local"),
+			},
+		},
+		{
+			name:      "valid integration with source reference policy",
+			inputName: "latest",
+			input: api.Integration{
+				Name:               "4.8",
+				Namespace:          "ocp",
+				IncludeBuiltImages: true,
+				ReferencePolicy:    getTagReferencePolicy("source"),
+			},
+		},
+		{
+			name:      "valid integration with empty reference policy setting to Local as default",
+			inputName: "latest",
+			input: api.Integration{
+				Name:               "4.8",
+				Namespace:          "ocp",
+				IncludeBuiltImages: true,
+				ReferencePolicy:    nil,
+			},
+			output: nil,
+		},
+		{
+			name:      "invalid integration with reference policy",
+			inputName: "latest",
+			input: api.Integration{
+				Name:               "4.8",
+				Namespace:          "ocp",
+				IncludeBuiltImages: true,
+				ReferencePolicy:    getTagReferencePolicy("invalid"),
+			},
+			output: nil,
 		},
 		{
 			name:      "invalid integration missing namespace",

@@ -123,6 +123,9 @@ func (o *options) generateJobsToDir(subDir string, prowConfig map[string]*config
 func generateJobs(resolver registry.Resolver, cache map[string]*config.Prowgen, output map[string]*prowconfig.JobConfig) func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
 	return func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
 		orgRepo := fmt.Sprintf("%s/%s", info.Org, info.Repo)
+		if orgRepo == "stolostron/policy-collection" {
+			print(orgRepo)
+		}
 		pInfo := &prowgen.ProwgenInfo{Metadata: info.Metadata, Config: config.Prowgen{Private: false, Expose: false}}
 		var ok bool
 		var err error
@@ -195,8 +198,8 @@ func writeToDir(dir string, c map[string]*prowconfig.JobConfig) error {
 	errCh := make(chan error)
 	map_ := func() error {
 		for x := range ch {
-			i := strings.Index(x.k, "/")
-			org, repo := x.k[:i], x.k[i+1:]
+			i := strings.Split(x.k, "/")
+			org, repo := i[0], i[1]
 			if err := jc.WriteToDir(dir, org, repo, x.v, prowgen.Generator, nil); err != nil {
 				errCh <- err
 			}

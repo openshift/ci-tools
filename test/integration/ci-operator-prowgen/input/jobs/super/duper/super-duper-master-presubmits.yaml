@@ -1,7 +1,7 @@
 presubmits:
   super/duper:
   - agent: kubernetes
-    always_run: false
+    always_run: true
     branches:
     - ^master$
     - ^master-
@@ -9,9 +9,7 @@ presubmits:
     decorate: true
     max_concurrency: 100
     name: pull-ci-super-duper-master-images
-    optional: true
     rerun_command: /test images
-    run_if_changed: changes
     skip_cloning: true
     skip_report: true
     spec:

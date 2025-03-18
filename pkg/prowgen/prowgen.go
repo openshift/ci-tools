@@ -88,6 +88,9 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			}
 		} else if element.Postsubmit {
 			postsubmit := generatePostsubmitForTest(g, info, func(options *generatePostsubmitOptions) {
+				if element.AlwaysRun != nil {
+					options.alwaysRun = element.AlwaysRun
+				}
 				options.runIfChanged = element.RunIfChanged
 				options.skipIfOnlyChanged = element.SkipIfOnlyChanged
 			})
@@ -180,13 +183,16 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 
 func handlePresubmit(g *prowJobBaseBuilder, element api.TestStepConfiguration, info *ProwgenInfo, disableRehearsal bool, requests api.ResourceList, presubmits map[string][]prowconfig.Presubmit, orgrepo string) {
 	presubmit := generatePresubmitForTest(g, element.As, info, func(options *generatePresubmitOptions) {
-		options.pipelineRunIfChanged = element.PipelineRunIfChanged
+		if element.AlwaysRun != nil {
+			options.alwaysRun = element.AlwaysRun
+			options.defaultDisable = !*element.AlwaysRun
+		}
 		options.Capabilities = element.Capabilities
+		options.disableRehearsal = disableRehearsal
+		options.optional = element.Optional
+		options.pipelineRunIfChanged = element.PipelineRunIfChanged
 		options.runIfChanged = element.RunIfChanged
 		options.skipIfOnlyChanged = element.SkipIfOnlyChanged
-		options.defaultDisable = element.AlwaysRun != nil && !*element.AlwaysRun
-		options.optional = element.Optional
-		options.disableRehearsal = disableRehearsal
 	})
 	v, requestingKVM := requests[cioperatorapi.KVMDeviceLabel]
 	if requestingKVM {
@@ -205,6 +211,7 @@ func testContainsLease(test *cioperatorapi.TestStepConfiguration) bool {
 }
 
 type generatePresubmitOptions struct {
+	alwaysRun            *bool
 	pipelineRunIfChanged string
 	Capabilities         []string
 	runIfChanged         string
@@ -237,9 +244,8 @@ func generatePresubmitForTest(jobBaseBuilder *prowJobBaseBuilder, name string, i
 		triggerCommand = fmt.Sprintf(`(?m)^/test( | .* )(%s|%s),?($|\s.*)`, shortName, "remaining-required")
 	}
 	pj := &prowconfig.Presubmit{
-		JobBase:   base,
-		AlwaysRun: opts.runIfChanged == "" && opts.skipIfOnlyChanged == "" && !opts.defaultDisable && opts.pipelineRunIfChanged == "",
-		Brancher:  prowconfig.Brancher{Branches: sets.List(sets.New[string](jc.ExactlyBranch(info.Branch), jc.FeatureBranch(info.Branch)))},
+		JobBase:  base,
+		Brancher: prowconfig.Brancher{Branches: sets.List(sets.New[string](jc.ExactlyBranch(info.Branch), jc.FeatureBranch(info.Branch)))},
 		Reporter: prowconfig.Reporter{
 			Context: fmt.Sprintf("ci/prow/%s", shortName),
 		},
@@ -251,11 +257,17 @@ func generatePresubmitForTest(jobBaseBuilder *prowJobBaseBuilder, name string, i
 		},
 		Optional: opts.optional,
 	}
+	if opts.alwaysRun != nil {
+		pj.AlwaysRun = *opts.alwaysRun
+	} else {
+		pj.AlwaysRun = opts.runIfChanged == "" && opts.skipIfOnlyChanged == "" && !opts.defaultDisable && opts.pipelineRunIfChanged == ""
+	}
 	injectCapabilities(pj.Labels, opts.Capabilities)
 	return pj
 }
 
 type generatePostsubmitOptions struct {
+	alwaysRun         *bool
 	runIfChanged      string
 	Capabilities      []string
 	skipIfOnlyChanged string

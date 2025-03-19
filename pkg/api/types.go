@@ -544,6 +544,10 @@ type PromotionConfiguration struct {
 	// promotion does not imply output artifacts are being created
 	// for posterity.
 	DisableBuildCache bool `json:"disable_build_cache,omitempty"`
+
+	// Cron generates promotion periodic alongside with promotion
+	// postsubmit
+	Cron string `json:"cron,omitempty"`
 }
 
 type PromotionTarget struct {

@@ -26,19 +26,34 @@ updateCredentialsEnv() {
 
 deleteHostedClusterWithNS () {
     local cluster_name=$1
+    local ns="clusters-$cluster_name"
+    echo "Deleting hostedcluster: $cluster_name"
     oc -n clusters patch hostedcluster $cluster_name --type='merge' -p '{"metadata":{"finalizers": []}}'
-    oc -n clusters delete hostedcluster $cluster_name
-    povervs=$(oc -n clusters-$cluster_name get IBMPowerVSImage -o json | jq ".items[0].metadata.name")
+    povervs=$(oc -n $ns get ibmpowervsimage -o json | jq -r ".items[0].metadata.name")
     if [ "$povervs" != "null" ]; then
-        oc -n clusters-$cluster_name patch IBMPowerVSImage $povervs --type='merge' -p '{"metadata":{"finalizers": []}}'
-        oc -n clusters-$cluster_name delete IBMPowerVSImage $povervs
+        echo "Deleting ibmpowervsimage: $povervs"
+        oc -n $ns patch ibmpowervsimage $povervs --type='merge' -p '{"metadata":{"finalizers": []}}'
     fi
-    cluster=$(oc -n clusters-$cluster_name get cluster -o json | jq ".items[0].metadata.name")
+    cluster=$(oc -n $ns get cluster -o json | jq -r ".items[0].metadata.name")
     if [ "$cluster" != "null" ]; then
-        oc -n clusters-$cluster_name patch cluster $cluster --type='merge' -p '{"metadata":{"finalizers": []}}'
-        oc -n clusters-$cluster_name delete cluster $cluster
+        echo "Deleting cluster: $cluster"
+        oc -n $ns patch cluster $cluster --type='merge' -p '{"metadata":{"finalizers": []}}'
     fi
-    oc delete ns clusters-$cluster_name
+    hcp=$(oc -n $ns get hostedcontrolplanes -o json | jq -r ".items[0].metadata.name")
+    if [ "$hcp" != "null" ]; then
+        echo "Deleting hostedcontrolplane: $hcp"
+        oc -n $ns patch hostedcontrolplanes $hcp --type='merge' -p '{"metadata":{"finalizers": []}}'
+    fi
+    oc -n $ns get awsmachine -o json | jq -r ".items[].metadata.name" | while read awsmachine; do
+        echo "Deleting awsmachine: $machine"
+        oc -n $ns patch awsmachine $awsmachine --type='merge' -p '{"metadata":{"finalizers": []}}'
+    done
+    oc -n $ns get machine -o json | jq -r ".items[].metadata.name" | while read machine; do
+        echo "Deleting machine: $machine"
+        oc -n $ns patch machine $machine --type='merge' -p '{"metadata":{"finalizers": []}}'
+    done
+    echo "Deleting namespace: $ns"
+    oc delete ns $ns
 }
 
 echo 'Deleting broken HostedClusters...'

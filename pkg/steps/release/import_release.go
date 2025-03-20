@@ -398,7 +398,7 @@ func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName 
 				},
 			},
 		},
-	}); err != nil {
+	}, true); err != nil {
 		return nil, fmt.Errorf("unable to find the 'cli' image in the provided release image: %w", err)
 	}
 	pod := &coreapi.Pod{}

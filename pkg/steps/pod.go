@@ -395,10 +395,14 @@ func getSecretVolumeMountFromSecret(secretMountPath string, secretIndex int) []c
 // PodStep and is intended for other steps that may need to run transient actions.
 // This pod will not be able to gather artifacts, nor will it report log messages
 // unless it fails.
-func RunPod(ctx context.Context, podClient kubernetes.PodClient, pod *coreapi.Pod) (*coreapi.Pod, error) {
+func RunPod(ctx context.Context, podClient kubernetes.PodClient, pod *coreapi.Pod, skipLogs bool) (*coreapi.Pod, error) {
 	pod, err := util.CreateOrRestartPod(ctx, podClient, pod)
 	if err != nil {
 		return pod, err
 	}
-	return util.WaitForPodCompletion(ctx, podClient, pod.Namespace, pod.Name, nil, util.SkipLogs)
+	flag := util.SkipLogs
+	if !skipLogs {
+		flag = util.WaitForPodFlag(0)
+	}
+	return util.WaitForPodCompletion(ctx, podClient, pod.Namespace, pod.Name, nil, flag)
 }

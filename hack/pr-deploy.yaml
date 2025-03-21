@@ -154,7 +154,7 @@ objects:
           - /git-sync
           args:
           - --repo=https://github.com/openshift/release.git
-          - --branch=master
+          - --branch=main
           - --root=/tmp/git-sync
           - --one-time=true
           env:
@@ -170,7 +170,7 @@ objects:
           - /git-sync
           args:
           - --repo=https://github.com/openshift/release.git
-          - --branch=master
+          - --branch=main
           - --wait=30
           - --root=/tmp/git-sync
           env:

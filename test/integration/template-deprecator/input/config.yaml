@@ -15,7 +15,7 @@ plank:
 tide:
   queries:
   - includedBranches:
-    - master
+    - main
     - release-4.2
     repos:
     - openshift/installer

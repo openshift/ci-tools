@@ -201,6 +201,12 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if podClass == PodClassBuilds &&
+		strings.HasPrefix(podName, "hypershift") &&
+		strings.HasSuffix(podName, "amd64-build") {
+		podClass = PodClassBuildsTmpfs
+	}
+
 	if podClass != PodClassNone {
 		profile("classified request")
 
@@ -345,6 +351,15 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 			}
 
 			addPatchEntry("add", "/spec/affinity", unstructuredAffinity)
+		}
+
+		if podClass == PodClassBuildsTmpfs {
+			// Iterate over pod volumes and set medium to memory for container-storage-root and container-storage-run volumes
+			for i, volume := range pod.Spec.Volumes {
+				if volume.Name == "container-storage-root" || volume.Name == "container-storage-run" {
+					addPatchEntry("add", fmt.Sprintf("/spec/volumes/%v/emptyDir/medium", i), "Memory")
+				}
+			}
 		}
 
 		// There is currently an issue with cluster scale up where pods are stacked up, unschedulable.

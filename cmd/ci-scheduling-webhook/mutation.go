@@ -201,6 +201,11 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if podClass == PodClassBuilds &&
+		labels["ci.openshift.io/metadata.repo"] == "hypershift" {
+		podClass = PodClassBuildsTmpfs
+	}
+
 	if podClass != PodClassNone {
 		profile("classified request")
 
@@ -345,6 +350,22 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 			}
 
 			addPatchEntry("add", "/spec/affinity", unstructuredAffinity)
+		}
+
+		if podClass == PodClassBuildsTmpfs {
+			// Iterate over pod volumes and set medium to memory for container-storage-root and container-storage-run volumes
+			for i, volume := range pod.Spec.Volumes {
+				if volume.Name == "container-storage-root" || volume.Name == "container-storage-run" {
+					addPatchEntry("add", fmt.Sprintf("/spec/volumes/%v/emptyDir/medium", i), "Memory")
+				}
+			}
+
+			// Find the docker-build container and remove its memory request
+			for i, container := range pod.Spec.Containers {
+				if container.Name == "docker-build" {
+					addPatchEntry("remove", fmt.Sprintf("/spec/containers/%v/resources/requests/memory", i), nil)
+				}
+			}
 		}
 
 		// There is currently an issue with cluster scale up where pods are stacked up, unschedulable.

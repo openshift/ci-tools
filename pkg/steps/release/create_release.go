@@ -196,10 +196,14 @@ for ((i=1; i<=5; i++)); do
 		echo "Payload creation success."
 		exit_code="0"
 		break
+	else
+		exit_code="$?" # has to be in else block to actually capture oc exit code
+		echo "Payload creation failure (attempt $i/5)."
+		if [[ $i < 5 ]]; then
+			echo "Will be retried in 60 seconds..."
+			sleep 60
+		fi
 	fi
-	exit_code="$?"
-	echo "Payload creation failure. Will be retried in 60 seconds..."
-	sleep 60
 done
 if [[ "$exit_code" != "0" ]]; then
 	exit $exit_code
@@ -210,10 +214,14 @@ for ((i=1; i<=5; i++)); do
 		echo "Release payload extraction success."
 		exit_code="0"
 		break
+	else
+		exit_code="$?" # has to be in else block to actually capture oc exit code
+		echo "Release payload extraction failure (attempt $i/5)."
+		if [[ $i < 5 ]]; then
+			echo "Will be retried in 60 seconds..."
+			sleep 60
+		fi
 	fi
-	exit_code="$?"
-	echo "Release payload extraction failure. Retrying in 60 seconds..."
-	sleep 60
 done
 if [[ "$exit_code" != "0" ]]; then
 	exit $exit_code

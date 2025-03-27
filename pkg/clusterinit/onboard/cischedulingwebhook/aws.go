@@ -17,7 +17,7 @@ import (
 var (
 	awsVolumeSizeDefValues = map[string]int{
 		clusterinstall.ProwJobsWorkload:  100,
-		clusterinstall.BuildsWorkload:    200,
+		clusterinstall.BuildsWorkload:    500,
 		clusterinstall.LongTestsWorkload: 300,
 		clusterinstall.TestsWorkload:     400,
 	}

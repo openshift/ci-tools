@@ -90,7 +90,6 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			postsubmit := generatePostsubmitForTest(g, info, func(options *generatePostsubmitOptions) {
 				options.runIfChanged = element.RunIfChanged
 				options.Capabilities = element.Capabilities
-
 				options.skipIfOnlyChanged = element.SkipIfOnlyChanged
 			})
 			postsubmit.MaxConcurrency = 1
@@ -141,6 +140,20 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			}
 			postsubmit.Labels[cioperatorapi.PromotionJobLabelKey] = "true"
 			postsubmits[orgrepo] = append(postsubmits[orgrepo], *postsubmit)
+			if configSpec.PromotionConfiguration.Cron != "" {
+				periodic := GeneratePeriodicForTest(jobBaseGen, info, func(options *GeneratePeriodicOptions) {
+					//not needed in promotion job, the same way postsubmit does not need it
+					options.DisableRehearsal = true
+					options.Cron = configSpec.PromotionConfiguration.Cron
+				})
+				periodic.MaxConcurrency = 1
+				if periodic.Labels == nil {
+					periodic.Labels = map[string]string{}
+				}
+				periodic.Labels[cioperatorapi.PromotionJobLabelKey] = "true"
+				periodics = append(periodics, *periodic)
+
+			}
 		}
 	}
 

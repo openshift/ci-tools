@@ -3,6 +3,7 @@ package machineset
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/sirupsen/logrus"
@@ -42,6 +43,9 @@ func (ap *awsProvider) securityGroups(ctx context.Context, client awstypes.EC2Cl
 	if err != nil {
 		return nil, err
 	}
+
+	slices.Sort(sg)
+
 	securityGroups := make([]interface{}, 0)
 	for i := range sg {
 		securityGroups = append(securityGroups, map[string]interface{}{

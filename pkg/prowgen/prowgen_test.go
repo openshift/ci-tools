@@ -349,6 +349,18 @@ func TestGenerateJobs(t *testing.T) {
 				Repo:   "repository",
 				Branch: "branch",
 			}},
+		},
+		{
+			id: "promotion postsubmit and periodic ",
+			config: &ciop.ReleaseBuildConfiguration{
+				Images:                 []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
+				PromotionConfiguration: &ciop.PromotionConfiguration{Cron: "5 4 * * *"},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
 		}, {
 			id: "template test",
 			config: &ciop.ReleaseBuildConfiguration{

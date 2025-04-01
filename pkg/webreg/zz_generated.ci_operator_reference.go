@@ -263,6 +263,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"# have been completed so that tests can be run prior to promotion.\n" +
 	"# If no promotion is defined, it is defaulted from the ReleaseTagConfiguration.\n" +
 	"promotion:\n" +
+	"    # Cron generates promotion periodic alongside with promotion\n" +
+	"    # postsubmit\n" +
+	"    cron: ' '\n" +
 	"    # DisableBuildCache stops us from uploading the build cache.\n" +
 	"    # This is useful (only) for CI chat bot invocations where\n" +
 	"    # promotion does not imply output artifacts are being created\n" +

@@ -16,7 +16,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	v1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
-	"sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/prow/pkg/github"
 	"sigs.k8s.io/prow/pkg/kube"
 )
@@ -24,12 +23,6 @@ import (
 const (
 	retention = 24 * time.Hour
 )
-
-type minimalGhClient interface {
-	GetPullRequest(org, repo string, number int) (*github.PullRequest, error)
-	CreateComment(org, repo string, number int, comment string) error
-	GetPullRequestChanges(org string, repo string, number int) ([]github.PullRequestChange, error)
-}
 
 type pullRequest struct {
 	closed    bool
@@ -180,58 +173,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request) error
 		return err
 	}
 
-	comment := "/test remaining-required"
-	testContexts, overrideContexts, err := r.acquireConditionalContexts(&pj, presubmits.pipelineConditionallyRequired)
-	if err != nil {
-		r.ids.Delete(composeKey(pj.Spec.Refs))
-		return err
-	}
-	if testContexts != "" {
-		comment += "\n\nScheduling tests matching the `pipeline_run_if_changed` parameter:" + testContexts
-	}
-	if overrideContexts != "" {
-		comment += "\n\nOverriding unmatched contexts:\n" + "/override " + overrideContexts
-	}
-	if err := r.ghc.CreateComment(pj.Spec.Refs.Org, pj.Spec.Refs.Repo, pj.Spec.Refs.Pulls[0].Number, comment); err != nil {
-		r.ids.Delete(composeKey(pj.Spec.Refs))
-		return err
-	}
-	return nil
-}
-
-func (r *reconciler) acquireConditionalContexts(pj *v1.ProwJob, pipelineConditionallyRequired []config.Presubmit) (string, string, error) {
-	repoBaseRef := pj.Spec.Refs.Repo + "-" + pj.Spec.Refs.BaseRef
-	var overrideCommands string
-	var testCommands string
-	if len(pipelineConditionallyRequired) != 0 {
-		cfp := config.NewGitHubDeferredChangedFilesProvider(r.ghc, pj.Spec.Refs.Org, pj.Spec.Refs.Repo, pj.Spec.Refs.Pulls[0].Number)
-		for _, presubmit := range pipelineConditionallyRequired {
-			if !strings.Contains(presubmit.Name, repoBaseRef) {
-				continue
-			}
-			if run, ok := presubmit.Annotations["pipeline_run_if_changed"]; ok && run != "" {
-				psList := []config.Presubmit{presubmit}
-				psList[0].RegexpChangeMatcher = config.RegexpChangeMatcher{RunIfChanged: run}
-				if err := config.SetPresubmitRegexes(psList); err != nil {
-					r.ids.Delete(composeKey(pj.Spec.Refs))
-					return "", "", err
-				}
-				_, shouldRun, err := psList[0].RegexpChangeMatcher.ShouldRun(cfp)
-				if err != nil {
-					r.ids.Delete(composeKey(pj.Spec.Refs))
-					return "", "", err
-				}
-				if shouldRun {
-					testCommands += "\n" + presubmit.RerunCommand
-					continue
-				}
-				if !presubmit.Optional {
-					overrideCommands += " " + presubmit.Context
-				}
-			}
-		}
-	}
-	return testCommands, overrideCommands, nil
+	return sendComment(presubmits, &pj, r.ghc, func() { r.ids.Delete(composeKey(pj.Spec.Refs)) })
 }
 
 func (r *reconciler) reportSuccessOnPR(ctx context.Context, pj *v1.ProwJob, presubmits presubmitTests) (bool, error) {

@@ -14,12 +14,14 @@ import (
 	ctrlruntimelog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	v1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	"sigs.k8s.io/prow/pkg/config/secret"
 	prowflagutil "sigs.k8s.io/prow/pkg/flagutil"
 	configflagutil "sigs.k8s.io/prow/pkg/flagutil/config"
 	"sigs.k8s.io/prow/pkg/github"
 	"sigs.k8s.io/prow/pkg/githubeventserver"
 	"sigs.k8s.io/prow/pkg/interrupts"
+	"sigs.k8s.io/prow/pkg/labels"
 	"sigs.k8s.io/prow/pkg/logrusutil"
 )
 
@@ -31,6 +33,7 @@ type options struct {
 	githubEventServerOptions githubeventserver.Options
 	config                   configflagutil.ConfigOptions
 	configFile               string
+	lgtmConfigFile           string
 	dryrun                   bool
 	webhookSecretFile        string
 }
@@ -48,6 +51,7 @@ func (o *options) validate() error {
 func (o *options) parseArgs(fs *flag.FlagSet, args []string) error {
 	fs.BoolVar(&o.dryrun, "dry-run", false, "Run in dry-run mode.")
 	fs.StringVar(&o.configFile, "config-file", "", "Config file with list of enabled orgs and repos.")
+	fs.StringVar(&o.lgtmConfigFile, "lgtm-config-file", "", "Config file with list of enabled orgs and repos with second stage triggered by lgtm label.")
 	fs.StringVar(&o.webhookSecretFile, "hmac-secret-file", "/etc/webhook/hmac", "Path to the file containing the GitHub HMAC secret.")
 
 	o.config.AddFlags(fs)
@@ -61,6 +65,9 @@ func (o *options) parseArgs(fs *flag.FlagSet, args []string) error {
 
 	if o.configFile == "" {
 		return fmt.Errorf("--config-file is mandatory")
+	}
+	if o.lgtmConfigFile == "" {
+		return fmt.Errorf("--lgtm-config-file is mandatory")
 	}
 	if err := o.githubEventServerOptions.DefaultAndValidate(); err != nil {
 		return err
@@ -80,16 +87,17 @@ func parseOptions() options {
 }
 
 type clientWrapper struct {
-	ghc                github.Client
+	ghc                minimalGhClient
 	configDataProvider *ConfigDataProvider
 	watcher            *watcher
+	lgtmWatcher        *watcher
 }
 
 func (cw *clientWrapper) handlePullRequestCreation(l *logrus.Entry, event github.PullRequestEvent) {
 	if github.PullRequestActionOpened == event.Action {
 		org := event.Repo.Owner.Login
 		repo := event.Repo.Name
-		number := event.Number
+		number := event.PullRequest.Number
 
 		presubmits := cw.configDataProvider.GetPresubmits(org + "/" + repo)
 		if len(presubmits.protected) == 0 && len(presubmits.alwaysRequired) == 0 &&
@@ -110,6 +118,43 @@ func (cw *clientWrapper) handlePullRequestCreation(l *logrus.Entry, event github
 		})
 		if err := cw.ghc.CreateComment(org, repo, number, pullRequestInfoComment); err != nil {
 			logger.WithError(err).Error("failed to create comment")
+		}
+	}
+}
+
+func (cw *clientWrapper) handleLabelAddition(l *logrus.Entry, event github.PullRequestEvent) {
+	if github.PullRequestActionLabeled == event.Action && event.Label.Name == labels.LGTM {
+		org := event.Repo.Owner.Login
+		repo := event.Repo.Name
+		currentCfg := cw.lgtmWatcher.getConfig()
+		repos, ok := currentCfg[org]
+		if !ok || !(repos.Len() == 0 || repos.Has(repo)) {
+			return
+		}
+		prowJob := &v1.ProwJob{
+			Spec: v1.ProwJobSpec{
+				Refs: &v1.Refs{
+					Org:     org,
+					Repo:    repo,
+					BaseRef: event.PullRequest.Base.Ref,
+					Pulls: []v1.Pull{
+						{Number: event.PullRequest.Number},
+					},
+				},
+			},
+		}
+		presubmits := cw.configDataProvider.GetPresubmits(prowJob.Spec.Refs.Org + "/" + prowJob.Spec.Refs.Repo)
+		if len(presubmits.protected) == 0 && len(presubmits.alwaysRequired) == 0 &&
+			len(presubmits.conditionallyRequired) == 0 && len(presubmits.pipelineConditionallyRequired) == 0 {
+			return
+		}
+		logger := l.WithFields(logrus.Fields{
+			"org":  org,
+			"repo": repo,
+			"pr":   event.PullRequest.Number,
+		})
+		if err := sendComment(presubmits, prowJob, cw.ghc, func() {}); err != nil {
+			logger.WithError(err).Error("failed to send a comment")
 		}
 	}
 }
@@ -166,6 +211,9 @@ func main() {
 	watcher := newWatcher(o.configFile, logger)
 	go watcher.watch()
 
+	lgtmWatcher := newWatcher(o.configFile, logger)
+	go lgtmWatcher.watch()
+
 	configDataProvider := NewConfigDataProvider(cfg)
 	go configDataProvider.Run()
 
@@ -183,11 +231,13 @@ func main() {
 		ghc:                githubClient,
 		configDataProvider: configDataProvider,
 		watcher:            watcher,
+		lgtmWatcher:        lgtmWatcher,
 	}
 
 	logger.Debug("starting event server")
 	eventServer := githubeventserver.New(o.githubEventServerOptions, webhookTokenGenerator, logger)
 	eventServer.RegisterHandlePullRequestEvent(cw.handlePullRequestCreation)
+	eventServer.RegisterHandlePullRequestEvent(cw.handleLabelAddition)
 
 	interrupts.OnInterrupt(func() {
 		eventServer.GracefulShutdown()

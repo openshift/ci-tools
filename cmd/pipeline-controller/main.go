@@ -127,12 +127,6 @@ func (cw *clientWrapper) handleLabelAddition(l *logrus.Entry, event github.PullR
 		org := event.Repo.Owner.Login
 		repo := event.Repo.Name
 		currentCfg := cw.lgtmWatcher.getConfig()
-		logger := l.WithFields(logrus.Fields{
-			"org":  org,
-			"repo": repo,
-			"pr":   event.PullRequest.Number,
-		})
-		logger.Debug("handling label addition")
 		repos, ok := currentCfg[org]
 		if !ok || !(repos.Len() == 0 || repos.Has(repo)) {
 			return
@@ -154,6 +148,11 @@ func (cw *clientWrapper) handleLabelAddition(l *logrus.Entry, event github.PullR
 			len(presubmits.conditionallyRequired) == 0 && len(presubmits.pipelineConditionallyRequired) == 0 {
 			return
 		}
+		logger := l.WithFields(logrus.Fields{
+			"org":  org,
+			"repo": repo,
+			"pr":   event.PullRequest.Number,
+		})
 		if err := sendComment(presubmits, prowJob, cw.ghc, func() {}); err != nil {
 			logger.WithError(err).Error("failed to send a comment")
 		}
@@ -212,7 +211,7 @@ func main() {
 	watcher := newWatcher(o.configFile, logger)
 	go watcher.watch()
 
-	lgtmWatcher := newWatcher(o.configFile, logger)
+	lgtmWatcher := newWatcher(o.lgtmConfigFile, logger)
 	go lgtmWatcher.watch()
 
 	configDataProvider := NewConfigDataProvider(cfg)

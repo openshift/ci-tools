@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"slices"
 	"sort"
 	"strconv"
@@ -29,7 +28,6 @@ import (
 	pjapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/prow/pkg/pjutil"
-	"sigs.k8s.io/prow/pkg/pod-utils/gcs"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	apihelper "github.com/openshift/ci-tools/pkg/api/helper"
@@ -381,7 +379,9 @@ func (jc *JobConfigurer) inlineCiOpConfig(container *v1.Container, ciopConfigs c
 	}
 	apihelper.MergeImageStreamTagMaps(allImageStreamTags, imageStreamTags)
 	if !jc.dryRun {
-		location, err := jc.uploader.uploadConfigSpec(ciOpConfigContent, jobName)
+		pull := jc.refs.Pulls[0]
+		fileLocation := fmt.Sprintf("%s/configs/%s/%s/%d/%s/%s", pjRehearse, jc.refs.Org, jc.refs.Repo, pull.Number, pull.SHA, jobName)
+		location, err := jc.uploader.UploadConfigSpec(context.Background(), fileLocation, ciOpConfigContent)
 		if err != nil {
 			return nil, fmt.Errorf("failed to save config to GCS bucket: %w", err)
 		}
@@ -398,33 +398,7 @@ func (jc *JobConfigurer) inlineCiOpConfig(container *v1.Container, ciopConfigs c
 }
 
 type configSpecUploader interface {
-	uploadConfigSpec(ciOpConfigContent, jobName string) (string, error)
-}
-
-type gcsConfigSpecUploader struct {
-	refs               *pjapi.Refs
-	gcsBucket          string
-	gcsCredentialsFile string
-}
-
-// uploadConfigSpec compresses, encodes, and uploads the given ciOpConfigContent to GCS
-// returns the full GCS url to the uploaded file
-func (u *gcsConfigSpecUploader) uploadConfigSpec(ciOpConfigContent, jobName string) (string, error) {
-	compressedConfig, err := gzip.CompressStringAndBase64(ciOpConfigContent)
-	if err != nil {
-		return "", fmt.Errorf("couldn't compress and base64 encode CONFIG_SPEC: %w", err)
-	}
-	pull := u.refs.Pulls[0]
-	fileLocation := fmt.Sprintf("%s/configs/%s/%s/%d/%s/%s", pjRehearse, u.refs.Org, u.refs.Repo, pull.Number, pull.SHA, jobName)
-	uploadTargets := map[string]gcs.UploadFunc{
-		fileLocation: gcs.DataUpload(func() (io.ReadCloser, error) {
-			return io.NopCloser(strings.NewReader(compressedConfig)), nil
-		}),
-	}
-	if err := gcs.Upload(context.Background(), u.gcsBucket, u.gcsCredentialsFile, "", []string{"*"}, uploadTargets); err != nil {
-		return "", fmt.Errorf("couldn't upload CONFIG_SPEC to GCS: %w", err)
-	}
-	return fmt.Sprintf("gs://%s/%s", u.gcsBucket, fileLocation), nil
+	UploadConfigSpec(ctx context.Context, location, ciOpConfigContent string) (string, error)
 }
 
 // JobConfigurer holds all the information that is needed for the configuration of the jobs.

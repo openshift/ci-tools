@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -105,13 +106,18 @@ type fakeConfigUploader struct {
 	baseDir string
 }
 
-func (u *fakeConfigUploader) uploadConfigSpec(ciOpConfigContent, jobName string) (string, error) {
-	location := path.Join(u.baseDir, fmt.Sprintf("%s.yaml", jobName))
-	err := os.WriteFile(location, []byte(ciOpConfigContent), 0666)
+func (u *fakeConfigUploader) UploadConfigSpec(ctx context.Context, location, ciOpConfigContent string) (string, error) {
+	parts := strings.Split(location, "/")
+	if len(parts) == 0 {
+		return "", fmt.Errorf("can't extract job name from %s", location)
+	}
+	jobName := parts[len(parts)-1]
+	filename := path.Join(u.baseDir, fmt.Sprintf("%s.yaml", jobName))
+	err := os.WriteFile(filename, []byte(ciOpConfigContent), 0666)
 	if err != nil {
 		return "", err
 	}
-	return location, nil
+	return filename, nil
 }
 
 func TestInlineCiopConfig(t *testing.T) {

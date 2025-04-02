@@ -175,11 +175,7 @@ func (r RehearsalConfig) SetupJobs(candidate RehearsalCandidate, candidatePath s
 	repo := candidate.repo
 	prRefs := candidate.createRefs()
 
-	uploader := &gcsConfigSpecUploader{
-		refs:               prRefs,
-		gcsBucket:          r.GCSBucket,
-		gcsCredentialsFile: r.GCSCredentialsFile,
-	}
+	uploader := config.NewGCSUploader(r.GCSBucket, r.GCSCredentialsFile)
 	jobConfigurer := NewJobConfigurer(r.DryRun, prConfig.CiOperator, prConfig.Prow, resolver, logger, prRefs, uploader)
 	imageStreamTags, presubmitsToRehearse, err := jobConfigurer.ConfigurePresubmitRehearsals(presubmits)
 	if err != nil {

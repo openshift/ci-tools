@@ -400,6 +400,12 @@ func ResolveConfig(resolver Resolver, config api.ReleaseBuildConfiguration) (api
 			resolvedTests = append(resolvedTests, step)
 			continue
 		}
+
+		// Propagate NodeArchitecture to the MultiStageTestConfiguration
+		if step.MultiStageTestConfiguration.NodeArchitecture == nil && step.NodeArchitecture != "" {
+			step.MultiStageTestConfiguration.NodeArchitecture = &step.NodeArchitecture
+		}
+
 		resolvedConfig, err := resolver.Resolve(step.As, *step.MultiStageTestConfiguration)
 		if err != nil {
 			return api.ReleaseBuildConfiguration{}, fmt.Errorf("Failed resolve MultiStageTestConfiguration: %w", err)

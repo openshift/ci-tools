@@ -1,0 +1,83 @@
+items:
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
+      prow.k8s.io/context: ci/prow/cluster-provisioning
+      prow.k8s.io/job: pull-ci-org-repo-branch-cluster-provisioning
+    creationTimestamp: null
+    labels:
+      created-by-prow: "true"
+      event-GUID: no-event-guid
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      prow.k8s.io/context: cluster-provisioning
+      prow.k8s.io/is-optional: "false"
+      prow.k8s.io/job: pull-ci-org-repo-branch-cluster-provisioning
+      prow.k8s.io/refs.base_ref: ""
+      prow.k8s.io/refs.org: ""
+      prow.k8s.io/refs.pull: "0"
+      prow.k8s.io/refs.repo: ""
+      prow.k8s.io/type: presubmit
+    name: foobar
+    resourceVersion: "1"
+  spec:
+    agent: kubernetes
+    context: ci/prow/cluster-provisioning
+    decoration_config:
+      skip_cloning: true
+    job: pull-ci-org-repo-branch-cluster-provisioning
+    pod_spec:
+      containers:
+      - args:
+        - --gcs-upload-secret=/secrets/gcs/service-account.json
+        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+        - --report-credentials-file=/etc/report/credentials
+        - --secret-dir=/secrets/ci-pull-credentials
+        - --target=cluster-provisioning
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC_GCS_URL
+          value: gs://fake/gcs/path
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /secrets/ci-pull-credentials
+          name: ci-pull-credentials
+          readOnly: true
+        - mountPath: /secrets/gcs
+          name: gcs-credentials
+          readOnly: true
+        - mountPath: /secrets/manifest-tool
+          name: manifest-tool-local-pusher
+          readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
+        - mountPath: /etc/report
+          name: result-aggregator
+          readOnly: true
+      serviceAccountName: ci-operator
+      volumes:
+      - name: ci-pull-credentials
+        secret:
+          secretName: ci-pull-credentials
+      - name: manifest-tool-local-pusher
+        secret:
+          secretName: manifest-tool-local-pusher
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
+      - name: result-aggregator
+        secret:
+          secretName: result-aggregator
+    rerun_command: /test cluster-provisioning
+    type: presubmit
+  status:
+    startTime: "2025-04-02T12:12:12Z"
+    state: scheduling
+metadata: {}

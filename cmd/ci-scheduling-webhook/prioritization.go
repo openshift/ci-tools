@@ -30,11 +30,12 @@ import (
 type PodClass string
 
 const (
-	PodClassBuilds    PodClass = "builds"
-	PodClassTests     PodClass = "tests"
-	PodClassLongTests PodClass = "longtests"
-	PodClassProwJobs  PodClass = "prowjobs"
-	PodClassNone      PodClass = ""
+	PodClassBuilds      PodClass = "builds"
+	PodClassBuildsTmpfs PodClass = "builds-tmpfs"
+	PodClassTests       PodClass = "tests"
+	PodClassLongTests   PodClass = "longtests"
+	PodClassProwJobs    PodClass = "prowjobs"
+	PodClassNone        PodClass = ""
 
 	// MachineDeleteAnnotationKey When a machine is annotated with this and the machineset is scaled down,
 	// it will target machines with this annotation to satisfy the change.

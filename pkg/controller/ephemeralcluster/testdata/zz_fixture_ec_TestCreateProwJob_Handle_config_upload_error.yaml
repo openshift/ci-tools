@@ -1,0 +1,21 @@
+metadata:
+  creationTimestamp: null
+  name: ec
+  namespace: ns
+  resourceVersion: "1000"
+spec:
+  ciOperator:
+    workflow:
+      clusterProfile: ""
+      env: null
+      name: test-workflow
+status:
+  ciOperator:
+    cluster: ""
+    namespace: ""
+  conditions:
+  - lastTransitionTime: "2025-04-02T12:12:12Z"
+    message: 'upload ci config: upload error'
+    reason: CIOperatorJobsGenerateFailure
+    status: "False"
+    type: ClusterProvisioning

@@ -23,6 +23,10 @@ const (
 	ConditionFalse ConditionStatus = "False"
 )
 
+const (
+	CIOperatorJobsGenerateFailure = "CIOperatorJobsGenerateFailure"
+)
+
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:shortName=ec
 type EphemeralCluster struct {

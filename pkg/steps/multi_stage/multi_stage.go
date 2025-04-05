@@ -433,7 +433,7 @@ func (s *multiStageTestStep) ResolveMultiArch() sets.Set[string] {
 	return sets.New[string](arch)
 }
 
-func (s *multiStageTestStep) AddArchitectures(archs ...string) {
+func (s *multiStageTestStep) AddArchitectures(archs []string) {
 	// We don't want anything else rather than the node_architecture in the config
 	// to add another architecture.
 }

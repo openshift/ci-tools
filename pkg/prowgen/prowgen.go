@@ -229,6 +229,10 @@ type generatePresubmitOptions struct {
 	disableRehearsal     bool
 }
 
+func (opts *generatePresubmitOptions) shouldAlwaysRun() bool {
+	return opts.runIfChanged == "" && opts.skipIfOnlyChanged == "" && !opts.defaultDisable && opts.pipelineRunIfChanged == ""
+}
+
 type generatePresubmitOption func(options *generatePresubmitOptions)
 
 func generatePresubmitForTest(jobBaseBuilder *prowJobBaseBuilder, name string, info *ProwgenInfo, options ...generatePresubmitOption) *prowconfig.Presubmit {
@@ -253,7 +257,7 @@ func generatePresubmitForTest(jobBaseBuilder *prowJobBaseBuilder, name string, i
 	}
 	pj := &prowconfig.Presubmit{
 		JobBase:   base,
-		AlwaysRun: opts.runIfChanged == "" && opts.skipIfOnlyChanged == "" && !opts.defaultDisable && opts.pipelineRunIfChanged == "",
+		AlwaysRun: opts.shouldAlwaysRun(),
 		Brancher:  prowconfig.Brancher{Branches: sets.List(sets.New[string](jc.ExactlyBranch(info.Branch), jc.FeatureBranch(info.Branch)))},
 		Reporter: prowconfig.Reporter{
 			Context: fmt.Sprintf("ci/prow/%s", shortName),

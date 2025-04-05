@@ -365,7 +365,7 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig, gener
 	return nil
 }
 
-// Given two JobConfig, merge jobs from the `source` one to to `destination`
+// Given two JobConfig, merge jobs from the `source` one to `destination`
 // one. Jobs are matched by name. All jobs from `source` will be present in
 // `destination` - if there were jobs with the same name in `destination`, they
 // will be updated. All jobs in `destination` that are not overwritten this
@@ -471,7 +471,6 @@ func mergeJobConfig(destination, source *prowconfig.JobConfig, allJobs sets.Set[
 func mergePresubmits(old, new *prowconfig.Presubmit) prowconfig.Presubmit {
 	merged := *new
 
-	merged.AlwaysRun = old.AlwaysRun
 	merged.RunIfChanged = old.RunIfChanged
 	merged.SkipIfOnlyChanged = old.SkipIfOnlyChanged
 	merged.MaxConcurrency = old.MaxConcurrency

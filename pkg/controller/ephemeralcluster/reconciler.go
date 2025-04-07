@@ -79,6 +79,10 @@ func AddToManager(logger *logrus.Entry, mgr manager.Manager, allManagers map[str
 		return fmt.Errorf("build controller: %w", err)
 	}
 
+	if err := addPJReconcilerToManager(logger, mgr); err != nil {
+		return fmt.Errorf("build prowjob controller: %w", err)
+	}
+
 	return nil
 }
 

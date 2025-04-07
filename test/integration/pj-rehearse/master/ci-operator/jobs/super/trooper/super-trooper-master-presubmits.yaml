@@ -3,14 +3,14 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - master
+    - main
     context: ci/prow/cmd
     decorate: true
     decoration_config:
       skip_cloning: true
     labels:
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-super-trooper-master-cmd
+    name: pull-ci-super-trooper-main-cmd
     rerun_command: /test cmd
     spec:
       containers:
@@ -32,14 +32,14 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - master
+    - main
     context: ci/prow/e2e-aws
     decorate: true
     decoration_config:
       skip_cloning: true
     labels:
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-super-trooper-master-e2e-aws
+    name: pull-ci-super-trooper-main-e2e-aws
     rerun_command: /test e2e-aws
     spec:
       containers:
@@ -77,8 +77,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     context: ci/prow/images
     decorate: true
     decoration_config:
@@ -86,7 +86,7 @@ presubmits:
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-super-trooper-master-images
+    name: pull-ci-super-trooper-main-images
     rerun_command: /test images
     spec:
       containers:
@@ -131,14 +131,14 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - master
+    - main
     context: ci/prow/integration
     decorate: true
     decoration_config:
       skip_cloning: true
     labels:
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-super-trooper-master-integration
+    name: pull-ci-super-trooper-main-integration
     rerun_command: /test integration
     spec:
       containers:
@@ -160,8 +160,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     context: ci/prow/multistage
     decorate: true
     decoration_config:
@@ -169,7 +169,7 @@ presubmits:
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-super-trooper-master-multistage
+    name: pull-ci-super-trooper-main-multistage
     rerun_command: /test multistage
     spec:
       containers:
@@ -214,8 +214,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     context: ci/prow/multistage2
     decorate: true
     decoration_config:
@@ -223,7 +223,7 @@ presubmits:
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-super-trooper-master-multistage2
+    name: pull-ci-super-trooper-main-multistage2
     rerun_command: /test multistage2
     spec:
       containers:
@@ -268,8 +268,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     context: ci/prow/multistage3
     decorate: true
     decoration_config:
@@ -279,7 +279,7 @@ presubmits:
       ci-operator.openshift.io/cloud-cluster-profile: azure4
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-super-trooper-master-multistage3
+    name: pull-ci-super-trooper-main-multistage3
     rerun_command: /test multistage3
     spec:
       containers:
@@ -334,8 +334,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     context: ci/prow/multistage4
     decorate: true
     decoration_config:
@@ -343,7 +343,7 @@ presubmits:
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-super-trooper-master-multistage4
+    name: pull-ci-super-trooper-main-multistage4
     rerun_command: /test multistage4
     spec:
       containers:
@@ -388,8 +388,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     context: ci/prow/unit
     decorate: true
     decoration_config:
@@ -397,7 +397,7 @@ presubmits:
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-super-trooper-master-unit
+    name: pull-ci-super-trooper-main-unit
     rerun_command: /test unit
     spec:
       containers:
@@ -442,10 +442,10 @@ presubmits:
   - agent: jenkins
     always_run: false
     branches:
-    - master
+    - main
     context: ci/openshift-jenkins/extended_gssapi
     labels:
-      master: ci.openshift.redhat.com
+      main: ci.openshift.redhat.com
     name: test_pull_request_origin_extended_gssapi
     rerun_command: /test extended_gssapi
     trigger: ((?m)^/test extended_gssapi,?(\s+|$))

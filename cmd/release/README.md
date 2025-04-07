@@ -44,7 +44,7 @@ ci-operator/config/3scale/3scale-operator/3scale-3scale-operator-3scale-2.12-can
 
 ```console
 $ release config --list openshift/ci-tools
-ci-operator/config/openshift/ci-tools/openshift-ci-tools-master.yaml
+ci-operator/config/openshift/ci-tools/openshift-ci-tools-main.yaml
 ```
 
 Dump all configuration files individually.
@@ -75,7 +75,7 @@ $ release config | yq --slurp '[.[].tests?|length]|add'
 View resolved contents.
 
 ```console
-$ release config openshift/origin/openshift-origin-master.yaml \
+$ release config openshift/origin/openshift-origin-main.yaml \
     | yq --yaml-output '.tests[2]'
 as: e2e-aws
 optional: true
@@ -84,7 +84,7 @@ steps:
   env:
     BASE_DOMAIN: aws-2-.ci.openshift.org
   workflow: openshift-e2e-aws-loki
-$ release config --resolve ci-operator/config/openshift/origin/openshift-origin-master.yaml \
+$ release config --resolve ci-operator/config/openshift/origin/openshift-origin-main.yaml \
     | yq --raw-output '.tests[2].literal_steps.pre[].as'
 ipi-install-hosted-loki
 ipi-conf
@@ -147,9 +147,9 @@ View contents.
 
 ```console
 $ release job --list openshift/ci-tools
-ci-operator/jobs/openshift/ci-tools/openshift-ci-tools-master-periodics.yaml
-ci-operator/jobs/openshift/ci-tools/openshift-ci-tools-master-postsubmits.yaml
-ci-operator/jobs/openshift/ci-tools/openshift-ci-tools-master-presubmits.yaml
+ci-operator/jobs/openshift/ci-tools/openshift-ci-tools-main-periodics.yaml
+ci-operator/jobs/openshift/ci-tools/openshift-ci-tools-main-postsubmits.yaml
+ci-operator/jobs/openshift/ci-tools/openshift-ci-tools-main-presubmits.yaml
 $ release job ci-operator/config/openshift/ci-tools | head
 ---
 periodics:
@@ -157,7 +157,7 @@ periodics:
   cluster: build02
   decorate: true
   extra_refs:
-  - base_ref: master
+  - base_ref: main
     org: openshift
     repo: ci-tools
   interval: 5m

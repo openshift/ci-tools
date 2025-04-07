@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
@@ -196,7 +197,7 @@ func TestCreateProwJob(t *testing.T) {
 	}
 }
 
-func TestFetchKubeconfig(t *testing.T) {
+func TestReconcile(t *testing.T) {
 	scheme := fakeScheme(t)
 	fakeNow := fakeNow(t)
 	const pollingTime = 5
@@ -474,6 +475,80 @@ func TestFetchKubeconfig(t *testing.T) {
 			wantRes: reconcile.Result{},
 			wantErr: reconcile.TerminalError(errors.New("uknown cluster build01")),
 		},
+		{
+			name: "Aborted ProwJob maps to ProwJobCompleted condition",
+			ec: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "foo",
+					Namespace: "bar",
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID:  "pj-123",
+					Kubeconfig: "k",
+				},
+			},
+			objs: []ctrlclient.Object{
+				&prowv1.ProwJob{
+					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: ProwJobNamespace},
+					Status:     prowv1.ProwJobStatus{State: prowv1.AbortedState},
+				},
+			},
+			wantEC: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "foo",
+					Namespace: "bar",
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID:  "pj-123",
+					Kubeconfig: "k",
+					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+						Type:               ephemeralclusterv1.ProwJobCompleted,
+						Status:             ephemeralclusterv1.ConditionTrue,
+						Reason:             ephemeralclusterv1.ProwJobFailureReason,
+						Message:            "prowjob state: aborted",
+						LastTransitionTime: v1.NewTime(fakeNow),
+					}},
+				},
+			},
+			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+		},
+		{
+			name: "Succeeded ProwJob maps to ProwJobCompleted condition",
+			ec: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "foo",
+					Namespace: "bar",
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID:  "pj-123",
+					Kubeconfig: "k",
+				},
+			},
+			objs: []ctrlclient.Object{
+				&prowv1.ProwJob{
+					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: ProwJobNamespace},
+					Status:     prowv1.ProwJobStatus{State: prowv1.SuccessState},
+				},
+			},
+			wantEC: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "foo",
+					Namespace: "bar",
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID:  "pj-123",
+					Kubeconfig: "k",
+					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+						Type:               ephemeralclusterv1.ProwJobCompleted,
+						Status:             ephemeralclusterv1.ConditionTrue,
+						Reason:             string(ephemeralclusterv1.ProwJobCompleted),
+						Message:            "prowjob state: success",
+						LastTransitionTime: v1.NewTime(fakeNow),
+					}},
+				},
+			},
+			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -511,7 +586,8 @@ func TestFetchKubeconfig(t *testing.T) {
 				t.Errorf("unexpected get ephemeralcluster error: %s", err)
 			}
 
-			if diff := cmp.Diff(tc.wantEC, &gotEC); diff != "" {
+			ignoreFields := cmpopts.IgnoreFields(ephemeralclusterv1.EphemeralCluster{}, "ResourceVersion")
+			if diff := cmp.Diff(tc.wantEC, &gotEC, ignoreFields); diff != "" {
 				t.Errorf("unexpected ephemeralcluster: %s", diff)
 			}
 		})

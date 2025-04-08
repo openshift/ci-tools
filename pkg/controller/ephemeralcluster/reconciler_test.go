@@ -466,13 +466,13 @@ func TestFetchKubeconfig(t *testing.T) {
 						Type:               ephemeralclusterv1.ClusterReady,
 						Status:             ephemeralclusterv1.ConditionFalse,
 						Reason:             ephemeralclusterv1.KubeconfigFetchFailureReason,
-						Message:            "unkown cluster build01",
+						Message:            "uknown cluster build01",
 						LastTransitionTime: v1.NewTime(fakeNow),
 					}},
 				},
 			},
 			wantRes: reconcile.Result{},
-			wantErr: reconcile.TerminalError(errors.New("unkown cluster build01")),
+			wantErr: reconcile.TerminalError(errors.New("uknown cluster build01")),
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -242,7 +242,7 @@ func (r *reconciler) uploadCIOperatorConfig(ctx context.Context, config *api.Rel
 func (r *reconciler) fetchKubeconfig(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster, pj *prowv1.ProwJob) (reconcile.Result, error) {
 	buildClient, ok := r.buildClients[pj.Spec.Cluster]
 	if !ok {
-		err := fmt.Errorf("unkown cluster %s", pj.Spec.Cluster)
+		err := fmt.Errorf("uknown cluster %s", pj.Spec.Cluster)
 		r.upsertCondition(ec, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, ephemeralclusterv1.KubeconfigFetchFailureReason, err.Error())
 		return reconcile.Result{}, reconcile.TerminalError(err)
 	}

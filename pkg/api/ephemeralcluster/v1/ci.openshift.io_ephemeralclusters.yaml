@@ -62,23 +62,16 @@ spec:
                 required:
                 - workflow
                 type: object
+              tearDownCluster:
+                description: |-
+                  When set to true, signals the controller that the ephemeral cluster is no longer needed,
+                  allowing decommissioning procedures to begin.
+                type: boolean
             required:
             - ciOperator
             type: object
           status:
             properties:
-              ciOperator:
-                description: CIOperatorStatus contains information about a ci-operator's
-                  running instance
-                properties:
-                  cluster:
-                    type: string
-                  namespace:
-                    type: string
-                required:
-                - cluster
-                - namespace
-                type: object
               conditions:
                 items:
                   description: EphemeralClusterCondition contains details for the

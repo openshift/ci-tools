@@ -24,7 +24,12 @@ const (
 )
 
 const (
-	CIOperatorJobsGenerateFailure = "CIOperatorJobsGenerateFailure"
+	CIOperatorJobsGenerateFailureReason = "CIOperatorJobsGenerateFailure"
+	ProwJobFailureReason                = "ProwJobFailure"
+	KubeconfigFetchFailureReason        = "KubeconfigFetchFailure"
+
+	CIOperatorNSNotFoundMsg = "ci-operator NS not found"
+	KubeconfigNotReadMsg    = "kubeconfig not ready"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

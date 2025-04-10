@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	ephemeralclusterv1 "github.com/openshift/ci-tools/pkg/api/ephemeralcluster/v1"
 	"github.com/sirupsen/logrus"
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -20,11 +19,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+
+	ephemeralclusterv1 "github.com/openshift/ci-tools/pkg/api/ephemeralcluster/v1"
 )
 
 const (
 	EphemeralClusterProwJobLabel = "ci.openshift.io/ephemeral-cluster"
-	DependentProwJobFinalizer    = "ephemeralcluster.ci.openshift.io/dependent-prowjob"
 	AbortECNotFound              = "Ephemeral Cluster not found"
 )
 

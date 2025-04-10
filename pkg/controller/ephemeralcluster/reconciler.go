@@ -38,6 +38,7 @@ const (
 	EphemeralClusterNameLabel = "ci.openshift.io/ephemeral-cluster-name"
 	EphemeralClusterNamespace = "konflux-ephemeral-cluster"
 	AbortProwJobDeleteEC      = "Ephemeral Cluster deleted"
+	DependentProwJobFinalizer = "ephemeralcluster.ci.openshift.io/dependent-prowjob"
 )
 
 var (
@@ -280,6 +281,8 @@ func (r *reconciler) fetchKubeconfig(ctx context.Context, log *logrus.Entry, ec 
 	}
 
 	ns := nss.Items[0].Name
+	log.WithField("namespace", ns).Info("ci-operator namespace found")
+
 	kubeconfigSecret := corev1.Secret{}
 	// The secret is named after the test step name.
 	if err := buildClient.Get(ctx, types.NamespacedName{Name: WaitTestStepName, Namespace: ns}, &kubeconfigSecret); err != nil {
@@ -345,6 +348,7 @@ func (r *reconciler) deleteEphemeralCluster(ctx context.Context, log *logrus.Ent
 
 	pjId := ec.Status.ProwJobID
 	if pjId == "" {
+		log.Info("ProwJob ID is empty, removing the finalizer")
 		return removeFinalizer()
 	}
 
@@ -352,23 +356,26 @@ func (r *reconciler) deleteEphemeralCluster(ctx context.Context, log *logrus.Ent
 	nn := types.NamespacedName{Namespace: ProwJobNamespace, Name: pjId}
 	if err := r.masterClient.Get(ctx, nn, &pj); err != nil {
 		if kerrors.IsNotFound(err) {
+			log.Info("ProwJob not found, removing the finalizer")
 			return removeFinalizer()
 		} else {
 			return reconcile.Result{}, fmt.Errorf("get prowjob: %w", err)
 		}
 	}
 
+	log = log.WithField("pj", pj.Name)
 	switch pj.Status.State {
 	case prowv1.AbortedState, prowv1.ErrorState, prowv1.FailureState, prowv1.SuccessState:
-		log.WithField("pj: ", pj.Name).Info("ProwJob in a definitive state already, skip abortion")
+		log.Info("ProwJob in a definitive state already, skip abortion")
 		return reconcile.Result{RequeueAfter: r.polling()}, nil
 	}
 
-	return r.abortProwJob(ctx, &pj, AbortProwJobDeleteEC)
+	return r.abortProwJob(ctx, log, &pj, AbortProwJobDeleteEC)
 }
 
-func (r *reconciler) abortProwJob(ctx context.Context, pj *prowv1.ProwJob, reason string) (reconcile.Result, error) {
+func (r *reconciler) abortProwJob(ctx context.Context, log *logrus.Entry, pj *prowv1.ProwJob, reason string) (reconcile.Result, error) {
 	if pj.Status.State == prowv1.AbortedState {
+		log.Info("ProwJob aborted already, skipping")
 		return reconcile.Result{}, nil
 	}
 
@@ -379,6 +386,7 @@ func (r *reconciler) abortProwJob(ctx context.Context, pj *prowv1.ProwJob, reaso
 	if err := r.masterClient.Update(ctx, pj); err != nil {
 		return reconcile.Result{}, fmt.Errorf("abort prowjob: %w", err)
 	}
+	log.Info("ProwJob aborted")
 
 	return reconcile.Result{RequeueAfter: r.polling()}, nil
 }

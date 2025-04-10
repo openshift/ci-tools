@@ -128,6 +128,11 @@ func (cw *clientWrapper) handleLabelAddition(l *logrus.Entry, event github.PullR
 		repo := event.Repo.Name
 		currentCfg := cw.lgtmWatcher.getConfig()
 		repos, ok := currentCfg[org]
+		logger := l.WithFields(logrus.Fields{
+			"org":  org,
+			"repo": repo,
+			"pr":   event.PullRequest.Number,
+		})
 		if !ok || !(repos.Len() == 0 || repos.Has(repo)) {
 			return
 		}
@@ -144,15 +149,16 @@ func (cw *clientWrapper) handleLabelAddition(l *logrus.Entry, event github.PullR
 			},
 		}
 		presubmits := cw.configDataProvider.GetPresubmits(prowJob.Spec.Refs.Org + "/" + prowJob.Spec.Refs.Repo)
+		logger.WithField("protected", presubmits.protected).
+			WithField("always_required", presubmits.alwaysRequired).
+			WithField("conditionally_required", presubmits.conditionallyRequired).
+			WithField("pipeline_conditionally_required", presubmits.pipelineConditionallyRequired).
+			Debug("found presubmits")
 		if len(presubmits.protected) == 0 && len(presubmits.alwaysRequired) == 0 &&
 			len(presubmits.conditionallyRequired) == 0 && len(presubmits.pipelineConditionallyRequired) == 0 {
 			return
 		}
-		logger := l.WithFields(logrus.Fields{
-			"org":  org,
-			"repo": repo,
-			"pr":   event.PullRequest.Number,
-		})
+
 		if err := sendComment(presubmits, prowJob, cw.ghc, func() {}); err != nil {
 			logger.WithError(err).Error("failed to send a comment")
 		}

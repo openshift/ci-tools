@@ -15,6 +15,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	ctrlbldr "sigs.k8s.io/controller-runtime/pkg/builder"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -36,6 +37,7 @@ const (
 	ProwJobNamespace          = "ci"
 	EphemeralClusterNameLabel = "ci.openshift.io/ephemeral-cluster-name"
 	EphemeralClusterNamespace = "konflux-ephemeral-cluster"
+	AbortProwJobDeleteEC      = "Ephemeral Cluster deleted"
 )
 
 var (
@@ -97,15 +99,14 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	ec = ec.DeepCopy()
 
 	if !ec.DeletionTimestamp.IsZero() {
-		// TODO
-		return reconcile.Result{}, reconcile.TerminalError(errors.New("unimplemented"))
+		return r.deleteEphemeralCluster(ctx, log, ec)
 	}
 
 	pjId, pj := ec.Status.ProwJobID, prowv1.ProwJob{}
 	if pjId != "" {
 		nn := types.NamespacedName{Namespace: ProwJobNamespace, Name: pjId}
 		if err := r.masterClient.Get(ctx, nn, &pj); err != nil {
-			return r.handleGetProwJobError(err)
+			return r.handleGetProwJobError(ctx, ec, err)
 		}
 	} else {
 		log.Info("ProwJob not found, creating")
@@ -119,6 +120,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 
 	if ec.Status.Kubeconfig == "" {
 		log.Info("Fetching the kubeconfig")
+		// TODO: update only when needed
 		res, err := r.fetchKubeconfig(ctx, log, ec, &pj)
 		if err := r.updateEphemeralCluster(ctx, ec); err != nil {
 			return reconcile.Result{RequeueAfter: r.polling()}, err
@@ -129,10 +131,14 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	return reconcile.Result{}, nil
 }
 
-func (r *reconciler) handleGetProwJobError(err error) (reconcile.Result, error) {
+func (r *reconciler) handleGetProwJobError(ctx context.Context, ec *ephemeralclusterv1.EphemeralCluster, err error) (reconcile.Result, error) {
 	if kerrors.IsNotFound(err) {
-		// TODO
-		return reconcile.Result{}, reconcile.TerminalError(errors.New("unimplemented"))
+		finalizers, removed := removeElement(ec.Finalizers, DependentProwJobFinalizer)
+		if removed {
+			ec.Finalizers = finalizers
+			return reconcile.Result{}, r.updateEphemeralCluster(ctx, ec)
+		}
+		return reconcile.Result{}, nil
 	} else {
 		return reconcile.Result{}, fmt.Errorf("get prowjob: %w", err)
 	}
@@ -201,6 +207,7 @@ func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *e
 	}
 
 	ec.Status.ProwJobID = pj.Name
+	ec.Finalizers, _ = uniqueAdd(ec.Finalizers, DependentProwJobFinalizer)
 	upsertProvisioningCond(ephemeralclusterv1.ConditionTrue, "", "")
 }
 
@@ -326,6 +333,56 @@ func (r *reconciler) reportProwJobStatus(pj *prowv1.ProwJob, ec *ephemeralcluste
 	}
 }
 
+func (r *reconciler) deleteEphemeralCluster(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster) (reconcile.Result, error) {
+	removeFinalizer := func() (reconcile.Result, error) {
+		finalizers, removed := removeElement(ec.Finalizers, DependentProwJobFinalizer)
+		if removed {
+			ec.Finalizers = finalizers
+			return reconcile.Result{}, r.updateEphemeralCluster(ctx, ec)
+		}
+		return reconcile.Result{RequeueAfter: r.polling()}, nil
+	}
+
+	pjId := ec.Status.ProwJobID
+	if pjId == "" {
+		return removeFinalizer()
+	}
+
+	pj := prowv1.ProwJob{}
+	nn := types.NamespacedName{Namespace: ProwJobNamespace, Name: pjId}
+	if err := r.masterClient.Get(ctx, nn, &pj); err != nil {
+		if kerrors.IsNotFound(err) {
+			return removeFinalizer()
+		} else {
+			return reconcile.Result{}, fmt.Errorf("get prowjob: %w", err)
+		}
+	}
+
+	switch pj.Status.State {
+	case prowv1.AbortedState, prowv1.ErrorState, prowv1.FailureState, prowv1.SuccessState:
+		log.WithField("pj: ", pj.Name).Info("ProwJob in a definitive state already, skip abortion")
+		return reconcile.Result{RequeueAfter: r.polling()}, nil
+	}
+
+	return r.abortProwJob(ctx, &pj, AbortProwJobDeleteEC)
+}
+
+func (r *reconciler) abortProwJob(ctx context.Context, pj *prowv1.ProwJob, reason string) (reconcile.Result, error) {
+	if pj.Status.State == prowv1.AbortedState {
+		return reconcile.Result{}, nil
+	}
+
+	pj.Status.State = prowv1.AbortedState
+	pj.Status.Description = reason
+	pj.Status.CompletionTime = ptr.To(v1.NewTime(r.now()))
+
+	if err := r.masterClient.Update(ctx, pj); err != nil {
+		return reconcile.Result{}, fmt.Errorf("abort prowjob: %w", err)
+	}
+
+	return reconcile.Result{RequeueAfter: r.polling()}, nil
+}
+
 func upsertCondition(ec *ephemeralclusterv1.EphemeralCluster, t ephemeralclusterv1.EphemeralClusterConditionType, status ephemeralclusterv1.ConditionStatus, now time.Time, reason, msg string) {
 	newCond := ephemeralclusterv1.EphemeralClusterCondition{
 		Type:               t,
@@ -356,11 +413,29 @@ func uniqueAddCondition(ec *ephemeralclusterv1.EphemeralCluster, c ephemeralclus
 	return false
 }
 
+// uniqueAddFunc adds v to s.
+// It returns a slice and a boolean to indicate whether the element has been inserted or not.
+func uniqueAdd[S ~[]E, E comparable](s S, v E) (S, bool) {
+	if i := slices.Index(s, v); i == -1 {
+		return append(s, v), true
+	}
+	return s, false
+}
+
 // uniqueAddFunc adds v to s by using f as a comparison function.
 // It returns a slice and a boolean to indicate whether the element has been inserted or not.
 func uniqueAddFunc[S ~[]E, E comparable](s S, v E, f func(e E) bool) (S, bool) {
 	if i := slices.IndexFunc(s, f); i == -1 {
 		return append(s, v), true
+	}
+	return s, false
+}
+
+// removeElement removes v from s. It returns the slice and a boolean
+// to indicate whether the element has been removed or not.
+func removeElement[S ~[]E, E comparable](s S, v E) (S, bool) {
+	if i := slices.Index(s, v); i != -1 {
+		return slices.Delete(s, i, i+1), true
 	}
 	return s, false
 }

@@ -77,7 +77,7 @@ func (r *prowJobReconciler) Reconcile(ctx context.Context, req reconcile.Request
 	ec := ephemeralclusterv1.EphemeralCluster{}
 	if err := r.client.Get(ctx, types.NamespacedName{Name: ecName, Namespace: EphemeralClusterNamespace}, &ec); err != nil {
 		if kerrors.IsNotFound(err) {
-			return abortProwJob(ctx, r.client, pj, AbortECNotFound, r.now())
+			return r.abortProwJob(ctx, pj)
 		} else {
 			return reconcile.Result{}, err
 		}
@@ -86,16 +86,16 @@ func (r *prowJobReconciler) Reconcile(ctx context.Context, req reconcile.Request
 	return reconcile.Result{}, nil
 }
 
-func abortProwJob(ctx context.Context, client ctrlclient.Client, pj *prowv1.ProwJob, reason string, now time.Time) (reconcile.Result, error) {
+func (r *prowJobReconciler) abortProwJob(ctx context.Context, pj *prowv1.ProwJob) (reconcile.Result, error) {
 	if pj.Status.State == prowv1.AbortedState {
 		return reconcile.Result{}, nil
 	}
 
 	pj.Status.State = prowv1.AbortedState
-	pj.Status.Description = reason
-	pj.Status.CompletionTime = ptr.To(v1.NewTime(now))
+	pj.Status.Description = AbortECNotFound
+	pj.Status.CompletionTime = ptr.To(v1.NewTime(r.now()))
 
-	if err := client.Update(ctx, pj); err != nil {
+	if err := r.client.Update(ctx, pj); err != nil {
 		return reconcile.Result{}, fmt.Errorf("abort prowjob: %w", err)
 	}
 

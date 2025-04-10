@@ -15,6 +15,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -549,6 +550,29 @@ func TestReconcile(t *testing.T) {
 			},
 			wantRes: reconcile.Result{RequeueAfter: pollingTime},
 		},
+		{
+			name: "ProwJob not found remove the finalizer",
+			ec: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:       "foo",
+					Namespace:  "bar",
+					Finalizers: []string{DependentProwJobFinalizer},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+				},
+			},
+			wantEC: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "foo",
+					Namespace: "bar",
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+				},
+			},
+			wantRes: reconcile.Result{},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -589,6 +613,148 @@ func TestReconcile(t *testing.T) {
 			ignoreFields := cmpopts.IgnoreFields(ephemeralclusterv1.EphemeralCluster{}, "ResourceVersion")
 			if diff := cmp.Diff(tc.wantEC, &gotEC, ignoreFields); diff != "" {
 				t.Errorf("unexpected ephemeralcluster: %s", diff)
+			}
+		})
+	}
+}
+
+func TestDeleteProwJob(t *testing.T) {
+	scheme := fakeScheme(t)
+	fakeNow := fakeNow(t)
+	const pollingTime = 5
+
+	for _, tc := range []struct {
+		name    string
+		ec      *ephemeralclusterv1.EphemeralCluster
+		pj      *prowv1.ProwJob
+		wantEC  *ephemeralclusterv1.EphemeralCluster
+		wantPJ  *prowv1.ProwJob
+		wantRes reconcile.Result
+		wantErr error
+	}{
+		{
+			name: "Delete EC: abort the ProwJob",
+			ec: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:              "foo",
+					Namespace:         "bar",
+					DeletionTimestamp: ptr.To(v1.NewTime(fakeNow)),
+					Finalizers:        []string{DependentProwJobFinalizer},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+				},
+			},
+			pj: &prowv1.ProwJob{
+				ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: ProwJobNamespace},
+			},
+			wantEC: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:              "foo",
+					Namespace:         "bar",
+					DeletionTimestamp: ptr.To(v1.NewTime(fakeNow)),
+					Finalizers:        []string{DependentProwJobFinalizer},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+				},
+			},
+			wantPJ: &prowv1.ProwJob{
+				ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: ProwJobNamespace},
+				Status: prowv1.ProwJobStatus{
+					State:          prowv1.AbortedState,
+					Description:    AbortProwJobDeleteEC,
+					CompletionTime: ptr.To(v1.NewTime(fakeNow)),
+				},
+			},
+			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+		},
+		{
+			name: "Delete EC: ProwJob is gone already, remove the finalizer and delete EC",
+			ec: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:              "foo",
+					Namespace:         "bar",
+					DeletionTimestamp: ptr.To(v1.NewTime(fakeNow)),
+					Finalizers:        []string{DependentProwJobFinalizer},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+				},
+			},
+			wantRes: reconcile.Result{},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			bldr := fake.NewClientBuilder().
+				WithObjects(tc.ec).
+				WithScheme(scheme)
+
+			if tc.pj != nil {
+				bldr = bldr.WithObjects(tc.pj)
+			}
+
+			client := bldr.Build()
+
+			r := reconciler{
+				logger:       logrus.NewEntry(logrus.StandardLogger()),
+				masterClient: client,
+				buildClients: map[string]ctrlclient.Client{},
+				now:          func() time.Time { return fakeNow },
+				polling:      func() time.Duration { return pollingTime },
+			}
+
+			gotRes, gotErr := r.Reconcile(context.TODO(), reconcile.Request{NamespacedName: types.NamespacedName{Name: tc.ec.Name, Namespace: tc.ec.Namespace}})
+			cmpError(t, tc.wantErr, gotErr)
+
+			if diff := cmp.Diff(tc.wantRes, gotRes); diff != "" {
+				t.Errorf("unexpected reconcile.Result: %s", diff)
+			}
+
+			if tc.wantEC != nil {
+				gotEC := ephemeralclusterv1.EphemeralCluster{}
+				if err := client.Get(context.TODO(), types.NamespacedName{Namespace: tc.ec.Namespace, Name: tc.ec.Name}, &gotEC); err != nil {
+					t.Errorf("unexpected get ephemeralcluster error: %s", err)
+				}
+
+				ignoreFields := cmpopts.IgnoreFields(ephemeralclusterv1.EphemeralCluster{}, "ResourceVersion")
+				if diff := cmp.Diff(tc.wantEC, &gotEC, ignoreFields); diff != "" {
+					t.Errorf("unexpected ephemeralcluster: %s", diff)
+				}
+			} else {
+				ecList := ephemeralclusterv1.EphemeralClusterList{}
+				err := client.List(context.TODO(), &ecList)
+				if err != nil {
+					t.Fatalf("list ecs: %s", err)
+				}
+
+				if len(ecList.Items) > 0 {
+					t.Error("ephemeral cluster has not been deleted")
+				}
+			}
+
+			if tc.wantPJ != nil {
+				gotPJ := prowv1.ProwJob{}
+				if err := client.Get(context.TODO(), types.NamespacedName{Namespace: tc.wantPJ.Namespace, Name: tc.wantPJ.Name}, &gotPJ); err != nil {
+					t.Errorf("unexpected get ephemeralcluster error: %s", err)
+				}
+
+				ignoreFields := cmpopts.IgnoreFields(prowv1.ProwJob{}, "ResourceVersion")
+				if diff := cmp.Diff(tc.wantPJ, &gotPJ, ignoreFields); diff != "" {
+					t.Errorf("unexpected prowjob: %s", diff)
+				}
+			} else {
+				pjList := prowv1.ProwJobList{}
+				err := client.List(context.TODO(), &pjList)
+				if err != nil {
+					t.Fatalf("list pjs: %s", err)
+				}
+
+				if len(pjList.Items) > 0 {
+					t.Error("prowjob has not been deleted")
+				}
 			}
 		})
 	}

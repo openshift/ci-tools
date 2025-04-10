@@ -7,6 +7,7 @@ items:
       prow.k8s.io/job: pull-ci-org-repo-branch-cluster-provisioning
     creationTimestamp: null
     labels:
+      ci.openshift.io/ephemeral-cluster-name: ""
       created-by-prow: "true"
       event-GUID: no-event-guid
       pj-rehearse.openshift.io/can-be-rehearsed: "true"

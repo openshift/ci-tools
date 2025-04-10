@@ -12,6 +12,8 @@ const (
 	ClusterProvisioning EphemeralClusterConditionType = "ClusterProvisioning"
 	// ContainersReady indicates whether the cluster is up and running.
 	ClusterReady EphemeralClusterConditionType = "ClusterReady"
+	// ProwJobCompleted indicates whether the ProwJob is running.
+	ProwJobCompleted EphemeralClusterConditionType = "ProwJobCompleted"
 )
 
 type ConditionStatus string
@@ -26,6 +28,7 @@ const (
 const (
 	CIOperatorJobsGenerateFailureReason = "CIOperatorJobsGenerateFailure"
 	ProwJobFailureReason                = "ProwJobFailure"
+	ProwJobCompletedReason              = "ProwJobCompleted"
 	KubeconfigFetchFailureReason        = "KubeconfigFetchFailure"
 
 	CIOperatorNSNotFoundMsg = "ci-operator NS not found"

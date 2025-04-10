@@ -1,5 +1,7 @@
 metadata:
   creationTimestamp: null
+  finalizers:
+  - ephemeralcluster.ci.openshift.io/dependent-prowjob
   name: ec
   namespace: ns
   resourceVersion: "1000"

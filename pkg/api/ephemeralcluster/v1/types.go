@@ -14,6 +14,8 @@ const (
 	ClusterReady EphemeralClusterConditionType = "ClusterReady"
 	// ProwJobCompleted indicates whether the ProwJob is running.
 	ProwJobCompleted EphemeralClusterConditionType = "ProwJobCompleted"
+	// TestCompleted indicates test has completed and the ephemeral cluster isn't needed anymore.
+	TestCompleted EphemeralClusterConditionType = "TestCompleted"
 )
 
 type ConditionStatus string
@@ -26,10 +28,11 @@ const (
 )
 
 const (
-	CIOperatorJobsGenerateFailureReason = "CIOperatorJobsGenerateFailure"
-	ProwJobFailureReason                = "ProwJobFailure"
-	ProwJobCompletedReason              = "ProwJobCompleted"
-	KubeconfigFetchFailureReason        = "KubeconfigFetchFailure"
+	CIOperatorJobsGenerateFailureReason    = "CIOperatorJobsGenerateFailure"
+	ProwJobFailureReason                   = "ProwJobFailure"
+	ProwJobCompletedReason                 = "ProwJobCompleted"
+	KubeconfigFetchFailureReason           = "KubeconfigFetchFailure"
+	CreateTestCompletedFailureSecretReason = "CreateTestCompletedFailure"
 
 	CIOperatorNSNotFoundMsg = "ci-operator NS not found"
 	KubeconfigNotReadMsg    = "kubeconfig not ready"
@@ -56,6 +59,9 @@ type EphemeralClusterList struct {
 
 type EphemeralClusterSpec struct {
 	CIOperator CIOperatorSpec `json:"ciOperator"`
+	// When set to true, signals the controller that the ephemeral cluster is no longer needed,
+	// allowing decommissioning procedures to begin.
+	TearDownCluster bool `json:"tearDownCluster,omitempty"`
 }
 
 // CIOperatorSpec contains what is needed to run ci-operator
@@ -73,15 +79,8 @@ type Workflow struct {
 type EphemeralClusterStatus struct {
 	Conditions []EphemeralClusterCondition `json:"conditions,omitempty"`
 	ProwJobID  string                      `json:"prowJobId,omitempty"`
-	CIOperator CIOperatorStatus            `json:"ciOperator,omitempty"`
 	// Kubeconfig to access the ephemeral cluster
 	Kubeconfig string `json:"kubeconfig,omitempty"`
-}
-
-// CIOperatorStatus contains information about a ci-operator's running instance
-type CIOperatorStatus struct {
-	Cluster   string `json:"cluster"`
-	Namespace string `json:"namespace"`
 }
 
 // EphemeralClusterCondition contains details for the current condition of this EphemeralCluster.

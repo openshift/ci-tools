@@ -28,6 +28,7 @@ import (
 	ephemeralclusterv1 "github.com/openshift/ci-tools/pkg/api/ephemeralcluster/v1"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/testhelper"
+	ctrlruntimetest "github.com/openshift/ci-tools/pkg/testhelper/kubernetes/ctrlruntime"
 )
 
 type fakeGCSUploader struct {
@@ -204,14 +205,13 @@ func TestReconcile(t *testing.T) {
 	const pollingTime = 5
 
 	for _, tc := range []struct {
-		name             string
-		ec               *ephemeralclusterv1.EphemeralCluster
-		objs             []ctrlclient.Object
-		buildClients     func() map[string]ctrlclient.Client
-		buildClusterObjs []ctrlclient.Object
-		wantEC           *ephemeralclusterv1.EphemeralCluster
-		wantRes          reconcile.Result
-		wantErr          error
+		name         string
+		ec           *ephemeralclusterv1.EphemeralCluster
+		objs         []ctrlclient.Object
+		buildClients func() map[string]*ctrlruntimetest.FakeClient
+		wantEC       *ephemeralclusterv1.EphemeralCluster
+		wantRes      reconcile.Result
+		wantErr      error
 	}{
 		{
 			name: "Kubeconfig stored already, do nothing",
@@ -261,7 +261,7 @@ func TestReconcile(t *testing.T) {
 					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
 				},
 			},
-			buildClients: func() map[string]ctrlclient.Client {
+			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
 				objs := []ctrlclient.Object{
 					&corev1.Namespace{
 						ObjectMeta: v1.ObjectMeta{
@@ -274,8 +274,9 @@ func TestReconcile(t *testing.T) {
 						Data:       map[string][]byte{"kubeconfig": []byte("kubeconfig")},
 					},
 				}
-				return map[string]ctrlclient.Client{
-					"build01": fake.NewClientBuilder().WithObjects(objs...).WithScheme(scheme).Build(),
+				c := fake.NewClientBuilder().WithObjects(objs...).WithScheme(scheme).Build()
+				return map[string]*ctrlruntimetest.FakeClient{
+					"build01": ctrlruntimetest.NewFakeClient(c, scheme, ctrlruntimetest.WithInitObjects(objs...)),
 				}
 			},
 			wantEC: &ephemeralclusterv1.EphemeralCluster{
@@ -313,9 +314,10 @@ func TestReconcile(t *testing.T) {
 					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
 				},
 			},
-			buildClients: func() map[string]ctrlclient.Client {
-				return map[string]ctrlclient.Client{
-					"build01": fake.NewClientBuilder().WithScheme(scheme).Build(),
+			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
+				c := fake.NewClientBuilder().WithScheme(scheme).Build()
+				return map[string]*ctrlruntimetest.FakeClient{
+					"build01": ctrlruntimetest.NewFakeClient(c, scheme),
 				}
 			},
 			wantEC: &ephemeralclusterv1.EphemeralCluster{
@@ -354,7 +356,7 @@ func TestReconcile(t *testing.T) {
 					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
 				},
 			},
-			buildClients: func() map[string]ctrlclient.Client {
+			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
 				objs := []ctrlclient.Object{
 					&corev1.Namespace{
 						ObjectMeta: v1.ObjectMeta{
@@ -363,8 +365,9 @@ func TestReconcile(t *testing.T) {
 						},
 					},
 				}
-				return map[string]ctrlclient.Client{
-					"build01": fake.NewClientBuilder().WithObjects(objs...).WithScheme(scheme).Build(),
+				c := fake.NewClientBuilder().WithObjects(objs...).WithScheme(scheme).Build()
+				return map[string]*ctrlruntimetest.FakeClient{
+					"build01": ctrlruntimetest.NewFakeClient(c, scheme, ctrlruntimetest.WithInitObjects(objs...)),
 				}
 			},
 			wantEC: &ephemeralclusterv1.EphemeralCluster{
@@ -403,7 +406,7 @@ func TestReconcile(t *testing.T) {
 					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
 				},
 			},
-			buildClients: func() map[string]ctrlclient.Client {
+			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
 				objs := []ctrlclient.Object{
 					&corev1.Namespace{
 						ObjectMeta: v1.ObjectMeta{
@@ -415,8 +418,9 @@ func TestReconcile(t *testing.T) {
 						ObjectMeta: v1.ObjectMeta{Name: WaitTestStepName, Namespace: "ci-op-1234"},
 					},
 				}
-				return map[string]ctrlclient.Client{
-					"build01": fake.NewClientBuilder().WithObjects(objs...).WithScheme(scheme).Build(),
+				c := fake.NewClientBuilder().WithObjects(objs...).WithScheme(scheme).Build()
+				return map[string]*ctrlruntimetest.FakeClient{
+					"build01": ctrlruntimetest.NewFakeClient(c, scheme, ctrlruntimetest.WithInitObjects(objs...)),
 				}
 			},
 			wantEC: &ephemeralclusterv1.EphemeralCluster{
@@ -455,7 +459,9 @@ func TestReconcile(t *testing.T) {
 					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
 				},
 			},
-			buildClients: func() map[string]ctrlclient.Client { return map[string]ctrlclient.Client{} },
+			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
+				return map[string]*ctrlruntimetest.FakeClient{}
+			},
 			wantEC: &ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: v1.ObjectMeta{
 					Name:            "foo",
@@ -573,6 +579,157 @@ func TestReconcile(t *testing.T) {
 			},
 			wantRes: reconcile.Result{},
 		},
+		{
+			name: "Test completed, create secret",
+			ec: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "foo",
+					Namespace: "bar",
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{TearDownCluster: true},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+				},
+			},
+			objs: []ctrlclient.Object{
+				&prowv1.ProwJob{
+					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: ProwJobNamespace},
+					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+				},
+			},
+			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
+				objs := []ctrlclient.Object{
+					&corev1.Namespace{
+						ObjectMeta: v1.ObjectMeta{
+							Labels: map[string]string{steps.LabelJobID: "pj-123"},
+							Name:   "ci-op-1234",
+						},
+					},
+				}
+				c := fake.NewClientBuilder().WithObjects(objs...).WithScheme(scheme).Build()
+				return map[string]*ctrlruntimetest.FakeClient{
+					"build01": ctrlruntimetest.NewFakeClient(c, scheme, ctrlruntimetest.WithInitObjects(objs...)),
+				}
+			},
+			wantEC: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:            "foo",
+					Namespace:       "bar",
+					ResourceVersion: "1000",
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{TearDownCluster: true},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+						Type:               ephemeralclusterv1.TestCompleted,
+						Status:             ephemeralclusterv1.ConditionTrue,
+						LastTransitionTime: v1.NewTime(fakeNow),
+					}},
+				},
+			},
+			wantRes: reconcile.Result{},
+		},
+		{
+			name: "Test completed, ci-operator NS not found",
+			ec: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "foo",
+					Namespace: "bar",
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{TearDownCluster: true},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+				},
+			},
+			objs: []ctrlclient.Object{
+				&prowv1.ProwJob{
+					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: ProwJobNamespace},
+					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+				},
+			},
+			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
+				c := fake.NewClientBuilder().WithScheme(scheme).Build()
+				return map[string]*ctrlruntimetest.FakeClient{
+					"build01": ctrlruntimetest.NewFakeClient(c, scheme),
+				}
+			},
+			wantEC: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:            "foo",
+					Namespace:       "bar",
+					ResourceVersion: "1000",
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{TearDownCluster: true},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+						Type:               ephemeralclusterv1.TestCompleted,
+						Status:             ephemeralclusterv1.ConditionFalse,
+						Reason:             ephemeralclusterv1.CreateTestCompletedFailureSecretReason,
+						Message:            ephemeralclusterv1.CIOperatorNSNotFoundMsg,
+						LastTransitionTime: v1.NewTime(fakeNow),
+					}},
+				},
+			},
+			wantRes: reconcile.Result{},
+		},
+		{
+			name: "Test completed, secret exists do nothing",
+			ec: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "foo",
+					Namespace: "bar",
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{TearDownCluster: true},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+				},
+			},
+			objs: []ctrlclient.Object{
+				&prowv1.ProwJob{
+					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: ProwJobNamespace},
+					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+				},
+			},
+			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
+				objs := []ctrlclient.Object{
+					&corev1.Namespace{
+						ObjectMeta: v1.ObjectMeta{
+							Labels: map[string]string{steps.LabelJobID: "pj-123"},
+							Name:   "ci-op-1234",
+						},
+					},
+					&corev1.Secret{
+						ObjectMeta: v1.ObjectMeta{
+							Labels:    map[string]string{"do-not-change": ""},
+							Name:      TestDoneSecretName,
+							Namespace: "ci-op-1234",
+						},
+					},
+				}
+				c := fake.NewClientBuilder().WithObjects(objs...).WithScheme(scheme).Build()
+				return map[string]*ctrlruntimetest.FakeClient{
+					"build01": ctrlruntimetest.NewFakeClient(c, scheme, ctrlruntimetest.WithInitObjects(objs...)),
+				}
+			},
+			wantEC: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:            "foo",
+					Namespace:       "bar",
+					ResourceVersion: "1000",
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{TearDownCluster: true},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+						Type:               ephemeralclusterv1.TestCompleted,
+						Status:             ephemeralclusterv1.ConditionTrue,
+						LastTransitionTime: v1.NewTime(fakeNow),
+					}},
+				},
+			},
+			wantRes: reconcile.Result{},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -584,8 +741,12 @@ func TestReconcile(t *testing.T) {
 				Build()
 
 			clients := make(map[string]ctrlclient.Client)
+			fakeClients := make(map[string]*ctrlruntimetest.FakeClient)
 			if tc.buildClients != nil {
-				clients = tc.buildClients()
+				fakeClients = tc.buildClients()
+				for cluster, c := range fakeClients {
+					clients[cluster] = c.WithWatch
+				}
 			}
 
 			r := reconciler{
@@ -613,6 +774,17 @@ func TestReconcile(t *testing.T) {
 			ignoreFields := cmpopts.IgnoreFields(ephemeralclusterv1.EphemeralCluster{}, "ResourceVersion")
 			if diff := cmp.Diff(tc.wantEC, &gotEC, ignoreFields); diff != "" {
 				t.Errorf("unexpected ephemeralcluster: %s", diff)
+			}
+
+			for cluster, c := range fakeClients {
+				allObjs, err := c.Objects()
+				if err != nil {
+					t.Fatalf("objects: %s", err)
+				}
+
+				if len(allObjs) > 0 {
+					testhelper.CompareWithFixture(t, allObjs, testhelper.WithPrefix(cluster+"-"))
+				}
 			}
 		})
 	}

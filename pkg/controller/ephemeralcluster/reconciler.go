@@ -39,6 +39,7 @@ const (
 	EphemeralClusterNamespace = "konflux-ephemeral-cluster"
 	AbortProwJobDeleteEC      = "Ephemeral Cluster deleted"
 	DependentProwJobFinalizer = "ephemeralcluster.ci.openshift.io/dependent-prowjob"
+	TestDoneSecretName        = "test-done-keep-going"
 )
 
 var (
@@ -117,6 +118,17 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 
 	if updated := r.reportProwJobStatus(&pj, ec); updated {
 		return reconcile.Result{RequeueAfter: r.polling()}, r.updateEphemeralCluster(ctx, ec)
+	}
+
+	if ec.Spec.TearDownCluster {
+		log.Info("Notifying test is completed")
+		res, ecUpdated, err := r.notifyTestComplete(ctx, log, ec, &pj)
+		if ecUpdated {
+			if err := r.updateEphemeralCluster(ctx, ec); err != nil {
+				return reconcile.Result{RequeueAfter: r.polling()}, err
+			}
+		}
+		return res, err
 	}
 
 	if ec.Status.Kubeconfig == "" {
@@ -260,27 +272,17 @@ func (r *reconciler) uploadCIOperatorConfig(ctx context.Context, config *api.Rel
 }
 
 func (r *reconciler) fetchKubeconfig(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster, pj *prowv1.ProwJob) (reconcile.Result, error) {
-	buildClient, ok := r.buildClients[pj.Spec.Cluster]
-	if !ok {
-		err := fmt.Errorf("uknown cluster %s", pj.Spec.Cluster)
+	buildClient, err := r.buildClientFor(pj)
+	if err != nil {
 		upsertCondition(ec, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.KubeconfigFetchFailureReason, err.Error())
 		return reconcile.Result{}, reconcile.TerminalError(err)
 	}
 
-	nss := corev1.NamespaceList{}
-	if err := buildClient.List(ctx, &nss, ctrlruntimeclient.MatchingLabels{steps.LabelJobID: pj.Name}); err != nil {
-		err := fmt.Errorf("get namespace for %s: %w", pj.Name, err)
-		upsertCondition(ec, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.KubeconfigFetchFailureReason, err.Error())
-		return reconcile.Result{RequeueAfter: r.polling()}, nil
-	}
-
-	// The NS hasn't been created yet, requeuing.
-	if len(nss.Items) == 0 {
+	ns, err := r.findCIOperatorTestNS(ctx, buildClient, pj)
+	if err != nil {
 		upsertCondition(ec, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.KubeconfigFetchFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg)
 		return reconcile.Result{RequeueAfter: r.polling()}, nil
 	}
-
-	ns := nss.Items[0].Name
 	log.WithField("namespace", ns).Info("ci-operator namespace found")
 
 	kubeconfigSecret := corev1.Secret{}
@@ -391,7 +393,78 @@ func (r *reconciler) abortProwJob(ctx context.Context, log *logrus.Entry, pj *pr
 	return reconcile.Result{RequeueAfter: r.polling()}, nil
 }
 
-func upsertCondition(ec *ephemeralclusterv1.EphemeralCluster, t ephemeralclusterv1.EphemeralClusterConditionType, status ephemeralclusterv1.ConditionStatus, now time.Time, reason, msg string) {
+func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster, pj *prowv1.ProwJob) (res reconcile.Result, ecUpdated bool, retErr error) {
+	buildClient, err := r.buildClientFor(pj)
+	if err != nil {
+		log.WithField("cluster", pj.Spec.Cluster).Warn("Client not found")
+		ecUpdated = upsertCondition(ec, ephemeralclusterv1.TestCompleted, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.CreateTestCompletedFailureSecretReason, err.Error())
+		res, retErr = reconcile.Result{}, reconcile.TerminalError(err)
+		return
+	}
+
+	ns, err := r.findCIOperatorTestNS(ctx, buildClient, pj)
+	if err != nil {
+		ecUpdated = upsertCondition(ec, ephemeralclusterv1.TestCompleted, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.CreateTestCompletedFailureSecretReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg)
+		res, retErr = reconcile.Result{}, nil
+		return
+	}
+
+	log = log.WithField("namespace", ns)
+	log.Info("ci-operator namespace found")
+
+	createSecret := false
+	if err := buildClient.Get(ctx, types.NamespacedName{Name: TestDoneSecretName, Namespace: ns}, &corev1.Secret{}); err != nil {
+		if kerrors.IsNotFound(err) {
+			createSecret = true
+		} else {
+			log.Warn("Failed to fetch the secret")
+			res, retErr = reconcile.Result{RequeueAfter: r.polling()}, nil
+			return
+		}
+	}
+
+	log = log.WithField("secret", TestDoneSecretName)
+	if createSecret {
+		if err := buildClient.Create(ctx, &corev1.Secret{ObjectMeta: v1.ObjectMeta{
+			Name:      TestDoneSecretName,
+			Namespace: ns,
+		}}); err != nil {
+			log.Warn("Failed to create the secret")
+			ecUpdated = upsertCondition(ec, ephemeralclusterv1.TestCompleted, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.CreateTestCompletedFailureSecretReason, err.Error())
+			res, retErr = reconcile.Result{}, err
+			return
+		}
+	}
+	log.Info("Secret created")
+
+	ecUpdated = upsertCondition(ec, ephemeralclusterv1.TestCompleted, ephemeralclusterv1.ConditionTrue, r.now(), "", "")
+	res, retErr = reconcile.Result{}, nil
+	return
+}
+
+func (r *reconciler) buildClientFor(pj *prowv1.ProwJob) (ctrlruntimeclient.Client, error) {
+	buildClient, ok := r.buildClients[pj.Spec.Cluster]
+	if !ok {
+		return nil, fmt.Errorf("uknown cluster %s", pj.Spec.Cluster)
+	}
+	return buildClient, nil
+}
+
+func (r *reconciler) findCIOperatorTestNS(ctx context.Context, buildClient ctrlruntimeclient.Client, pj *prowv1.ProwJob) (string, error) {
+	nss := corev1.NamespaceList{}
+	if err := buildClient.List(ctx, &nss, ctrlruntimeclient.MatchingLabels{steps.LabelJobID: pj.Name}); err != nil {
+		return "", fmt.Errorf("get namespace for %s: %w", pj.Name, err)
+	}
+
+	// The NS hasn't been created yet, requeuing.
+	if len(nss.Items) == 0 {
+		return "", errors.New("ci-operator NS not found")
+	}
+
+	return nss.Items[0].Name, nil
+}
+
+func upsertCondition(ec *ephemeralclusterv1.EphemeralCluster, t ephemeralclusterv1.EphemeralClusterConditionType, status ephemeralclusterv1.ConditionStatus, now time.Time, reason, msg string) bool {
 	newCond := ephemeralclusterv1.EphemeralClusterCondition{
 		Type:               t,
 		Status:             status,
@@ -401,14 +474,18 @@ func upsertCondition(ec *ephemeralclusterv1.EphemeralCluster, t ephemeralcluster
 	}
 
 	for i := range ec.Status.Conditions {
-		cond := ec.Status.Conditions[i]
+		cond := &ec.Status.Conditions[i]
 		if cond.Type == newCond.Type {
+			if conditionsEqual(cond, &newCond) {
+				return false
+			}
 			ec.Status.Conditions[i] = newCond
-			return
+			return true
 		}
 	}
 
 	ec.Status.Conditions = append(ec.Status.Conditions, newCond)
+	return true
 }
 
 func uniqueAddCondition(ec *ephemeralclusterv1.EphemeralCluster, c ephemeralclusterv1.EphemeralClusterCondition) bool {
@@ -446,4 +523,9 @@ func removeElement[S ~[]E, E comparable](s S, v E) (S, bool) {
 		return slices.Delete(s, i, i+1), true
 	}
 	return s, false
+}
+
+func conditionsEqual(a, b *ephemeralclusterv1.EphemeralClusterCondition) bool {
+	return a.Message == b.Message && a.Reason == b.Reason &&
+		a.Status == b.Status && a.Type == b.Type
 }

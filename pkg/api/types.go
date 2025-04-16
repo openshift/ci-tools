@@ -1437,6 +1437,7 @@ const (
 	ClusterProfileAWSRHOAIQE              ClusterProfile = "aws-rhoai-qe"
 	ClusterProfileAWSManagedRosaRHOAIQE   ClusterProfile = "aws-managed-rosa-rhoai-qe"
 	ClusterProfileAWSManagedOSDRHOAIQE    ClusterProfile = "aws-managed-osd-rhoai-qe"
+	ClusterProfileGCPObservability        ClusterProfile = "gcp-observability"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -1514,6 +1515,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileGCPTelco,
 		ClusterProfileGCPChaos,
 		ClusterProfileGCPSustAutoRel412,
+		ClusterProfileGCPObservability,
 		ClusterProfileAWSVirtualization,
 		ClusterProfileAzureVirtualization,
 		ClusterProfileHyperShift,
@@ -1714,6 +1716,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileGCP2,
 		ClusterProfileGCPVirtualization,
 		ClusterProfileGCPSustAutoRel412,
+		ClusterProfileGCPObservability,
 		ClusterProfileGCPOpendatahub,
 		ClusterProfileGCPTelco,
 		ClusterProfileGCPChaos,
@@ -2159,6 +2162,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-managed-osd-rhoai-qe-quota-slice"
 	case ClusterProfileIBMCloudRHOAIQE:
 		return "ibmcloud-rhoai-qe-quota-slice"
+	case ClusterProfileGCPObservability:
+		return "gcp-observability-quota-slice"
 	default:
 		return ""
 	}

@@ -5,7 +5,6 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"slices"
 	"time"
 
 	"github.com/ghodss/yaml"
@@ -30,6 +29,7 @@ import (
 	ephemeralclusterv1 "github.com/openshift/ci-tools/pkg/api/ephemeralcluster/v1"
 	"github.com/openshift/ci-tools/pkg/prowgen"
 	"github.com/openshift/ci-tools/pkg/steps"
+	cislices "github.com/openshift/ci-tools/pkg/util/slices"
 )
 
 const (
@@ -133,10 +133,11 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 
 	if ec.Status.Kubeconfig == "" {
 		log.Info("Fetching the kubeconfig")
-		// TODO: update only when needed
-		res, err := r.fetchKubeconfig(ctx, log, ec, &pj)
-		if err := r.updateEphemeralCluster(ctx, ec); err != nil {
-			return reconcile.Result{RequeueAfter: r.polling()}, err
+		res, ecUpdated, err := r.fetchKubeconfig(ctx, log, ec, &pj)
+		if ecUpdated {
+			if err := r.updateEphemeralCluster(ctx, ec); err != nil {
+				return reconcile.Result{RequeueAfter: r.polling()}, err
+			}
 		}
 		return res, err
 	}
@@ -146,7 +147,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 
 func (r *reconciler) handleGetProwJobError(ctx context.Context, ec *ephemeralclusterv1.EphemeralCluster, err error) (reconcile.Result, error) {
 	if kerrors.IsNotFound(err) {
-		finalizers, removed := removeElement(ec.Finalizers, DependentProwJobFinalizer)
+		finalizers, removed := cislices.Delete(ec.Finalizers, DependentProwJobFinalizer)
 		if removed {
 			ec.Finalizers = finalizers
 			return reconcile.Result{}, r.updateEphemeralCluster(ctx, ec)
@@ -220,7 +221,7 @@ func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *e
 	}
 
 	ec.Status.ProwJobID = pj.Name
-	ec.Finalizers, _ = uniqueAdd(ec.Finalizers, DependentProwJobFinalizer)
+	ec.Finalizers, _ = cislices.UniqueAdd(ec.Finalizers, DependentProwJobFinalizer)
 	upsertProvisioningCond(ephemeralclusterv1.ConditionTrue, "", "")
 }
 
@@ -271,39 +272,39 @@ func (r *reconciler) uploadCIOperatorConfig(ctx context.Context, config *api.Rel
 	return r.configUploader.UploadConfigSpec(ctx, gcsPath, string(configBytes))
 }
 
-func (r *reconciler) fetchKubeconfig(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster, pj *prowv1.ProwJob) (reconcile.Result, error) {
+func (r *reconciler) fetchKubeconfig(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster, pj *prowv1.ProwJob) (reconcile.Result, bool, error) {
 	buildClient, err := r.buildClientFor(pj)
 	if err != nil {
-		upsertCondition(ec, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.KubeconfigFetchFailureReason, err.Error())
-		return reconcile.Result{}, reconcile.TerminalError(err)
+		ecUpdated := upsertCondition(ec, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.KubeconfigFetchFailureReason, err.Error())
+		return reconcile.Result{}, ecUpdated, reconcile.TerminalError(err)
 	}
 
 	ns, err := r.findCIOperatorTestNS(ctx, buildClient, pj)
 	if err != nil {
-		upsertCondition(ec, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.KubeconfigFetchFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg)
-		return reconcile.Result{RequeueAfter: r.polling()}, nil
+		ecUpdated := upsertCondition(ec, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.KubeconfigFetchFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg)
+		return reconcile.Result{RequeueAfter: r.polling()}, ecUpdated, nil
 	}
 	log.WithField("namespace", ns).Info("ci-operator namespace found")
 
 	kubeconfigSecret := corev1.Secret{}
 	// The secret is named after the test step name.
 	if err := buildClient.Get(ctx, types.NamespacedName{Name: WaitTestStepName, Namespace: ns}, &kubeconfigSecret); err != nil {
-		upsertCondition(ec, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.KubeconfigFetchFailureReason, err.Error())
-		return reconcile.Result{RequeueAfter: r.polling()}, nil
+		ecUpdated := upsertCondition(ec, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.KubeconfigFetchFailureReason, err.Error())
+		return reconcile.Result{RequeueAfter: r.polling()}, ecUpdated, nil
 	}
 
 	kubeconfig, ok := kubeconfigSecret.Data["kubeconfig"]
 	if !ok {
 		// The kubeconfig takes time before being stored into the secret, requeuing.
-		upsertCondition(ec, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.KubeconfigFetchFailureReason, ephemeralclusterv1.KubeconfigNotReadMsg)
-		return reconcile.Result{RequeueAfter: r.polling()}, nil
+		ecUpdated := upsertCondition(ec, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.KubeconfigFetchFailureReason, ephemeralclusterv1.KubeconfigNotReadMsg)
+		return reconcile.Result{RequeueAfter: r.polling()}, ecUpdated, nil
 	}
 
 	ec.Status.Kubeconfig = string(kubeconfig)
 	log.Info("kubeconfig fetched")
-	upsertCondition(ec, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionTrue, r.now(), "", "")
+	ecUpdated := upsertCondition(ec, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionTrue, r.now(), "", "")
 
-	return reconcile.Result{}, nil
+	return reconcile.Result{}, ecUpdated, nil
 }
 
 func (r *reconciler) updateEphemeralCluster(ctx context.Context, ec *ephemeralclusterv1.EphemeralCluster) error {
@@ -340,7 +341,7 @@ func (r *reconciler) reportProwJobStatus(pj *prowv1.ProwJob, ec *ephemeralcluste
 
 func (r *reconciler) deleteEphemeralCluster(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster) (reconcile.Result, error) {
 	removeFinalizer := func() (reconcile.Result, error) {
-		finalizers, removed := removeElement(ec.Finalizers, DependentProwJobFinalizer)
+		finalizers, removed := cislices.Delete(ec.Finalizers, DependentProwJobFinalizer)
 		if removed {
 			ec.Finalizers = finalizers
 			return reconcile.Result{}, r.updateEphemeralCluster(ctx, ec)
@@ -489,40 +490,13 @@ func upsertCondition(ec *ephemeralclusterv1.EphemeralCluster, t ephemeralcluster
 }
 
 func uniqueAddCondition(ec *ephemeralclusterv1.EphemeralCluster, c ephemeralclusterv1.EphemeralClusterCondition) bool {
-	if conditions, inserted := uniqueAddFunc(ec.Status.Conditions, c, func(e ephemeralclusterv1.EphemeralClusterCondition) bool {
+	if conditions, inserted := cislices.UniqueAddFunc(ec.Status.Conditions, c, func(e ephemeralclusterv1.EphemeralClusterCondition) bool {
 		return e.Type == c.Type
 	}); inserted {
 		ec.Status.Conditions = conditions
 		return true
 	}
 	return false
-}
-
-// uniqueAddFunc adds v to s.
-// It returns a slice and a boolean to indicate whether the element has been inserted or not.
-func uniqueAdd[S ~[]E, E comparable](s S, v E) (S, bool) {
-	if i := slices.Index(s, v); i == -1 {
-		return append(s, v), true
-	}
-	return s, false
-}
-
-// uniqueAddFunc adds v to s by using f as a comparison function.
-// It returns a slice and a boolean to indicate whether the element has been inserted or not.
-func uniqueAddFunc[S ~[]E, E comparable](s S, v E, f func(e E) bool) (S, bool) {
-	if i := slices.IndexFunc(s, f); i == -1 {
-		return append(s, v), true
-	}
-	return s, false
-}
-
-// removeElement removes v from s. It returns the slice and a boolean
-// to indicate whether the element has been removed or not.
-func removeElement[S ~[]E, E comparable](s S, v E) (S, bool) {
-	if i := slices.Index(s, v); i != -1 {
-		return slices.Delete(s, i, i+1), true
-	}
-	return s, false
 }
 
 func conditionsEqual(a, b *ephemeralclusterv1.EphemeralClusterCondition) bool {

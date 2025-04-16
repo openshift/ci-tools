@@ -613,7 +613,7 @@ func orgSpan(o Org, containsVariant bool) int {
 }
 
 func githubLink(path string) template.HTML {
-	link := fmt.Sprintf("https://github.com/openshift/release/blob/master/ci-operator/step-registry/%s", path)
+	link := fmt.Sprintf("https://github.com/openshift/release/blob/main/ci-operator/step-registry/%s", path)
 	return template.HTML(fmt.Sprintf("<a href=\"%s\">%s</a>", link, link))
 }
 

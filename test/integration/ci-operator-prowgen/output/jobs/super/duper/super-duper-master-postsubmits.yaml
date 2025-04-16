@@ -3,7 +3,7 @@ postsubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
+    - ^main$
     decorate: true
     decoration_config:
       skip_cloning: true
@@ -11,7 +11,7 @@ postsubmits:
       ci-operator.openshift.io/is-promotion: "true"
       ci.openshift.io/generator: prowgen
     max_concurrency: 1
-    name: branch-ci-super-duper-master-images
+    name: branch-ci-super-duper-main-images
     spec:
       containers:
       - args:
@@ -62,21 +62,21 @@ postsubmits:
   - agent: jenkins
     always_run: true
     branches:
-    - master
+    - main
     labels:
-      master: ci.openshift.redhat.com
-    name: branch-ci-super-duper-master-legacy
+      main: ci.openshift.redhat.com
+    name: branch-ci-super-duper-main-legacy
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
+    - ^main$
     decorate: true
     decoration_config:
       skip_cloning: true
     labels:
       ci.openshift.io/generator: prowgen
     max_concurrency: 1
-    name: branch-ci-super-duper-master-upload-results
+    name: branch-ci-super-duper-main-upload-results
     spec:
       containers:
       - args:
@@ -119,7 +119,7 @@ postsubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
+    - ^main$
     decorate: true
     decoration_config:
       skip_cloning: true
@@ -128,7 +128,7 @@ postsubmits:
       ci-operator.openshift.io/variant: variant
       ci.openshift.io/generator: prowgen
     max_concurrency: 1
-    name: branch-ci-super-duper-master-variant-images
+    name: branch-ci-super-duper-main-variant-images
     path_alias: whoa.com/super/duper
     spec:
       containers:

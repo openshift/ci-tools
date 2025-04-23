@@ -32,6 +32,10 @@ import (
 	ctrlruntimetest "github.com/openshift/ci-tools/pkg/testhelper/kubernetes/ctrlruntime"
 )
 
+const (
+	prowJobNamespace = "ci"
+)
+
 func newPresubmitFaker(name string, now time.Time) NewPresubmitFunc {
 	return func(pr github.PullRequest, baseSHA string, job prowconfig.Presubmit, eventGUID string, additionalLabels map[string]string, modifiers ...pjutil.Modifier) prowv1.ProwJob {
 		pj := pjutil.NewPresubmit(pr, baseSHA, job, eventGUID, additionalLabels, modifiers...)
@@ -84,8 +88,8 @@ func TestCreateProwJob(t *testing.T) {
 	const pollingTime = 5
 	prowConfig := prowconfig.Config{
 		ProwConfig: prowconfig.ProwConfig{
-			ProwJobNamespace: ProwJobNamespace,
-			PodNamespace:     ProwJobNamespace,
+			ProwJobNamespace: prowJobNamespace,
+			PodNamespace:     prowJobNamespace,
 			InRepoConfig:     prowconfig.InRepoConfig{AllowedClusters: map[string][]string{"": {"default"}}},
 			Plank: prowconfig.Plank{
 				DefaultDecorationConfigs: []*prowconfig.DefaultDecorationConfigEntry{{
@@ -312,7 +316,7 @@ func TestReconcile(t *testing.T) {
 			},
 			objs: []ctrlclient.Object{
 				&prowv1.ProwJob{
-					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: ProwJobNamespace},
+					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
 					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
 				},
 			},
@@ -342,7 +346,7 @@ func TestReconcile(t *testing.T) {
 			},
 			objs: []ctrlclient.Object{
 				&prowv1.ProwJob{
-					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: ProwJobNamespace},
+					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
 					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
 				},
 			},
@@ -395,7 +399,7 @@ func TestReconcile(t *testing.T) {
 			},
 			objs: []ctrlclient.Object{
 				&prowv1.ProwJob{
-					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: ProwJobNamespace},
+					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
 					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
 				},
 			},
@@ -437,7 +441,7 @@ func TestReconcile(t *testing.T) {
 			},
 			objs: []ctrlclient.Object{
 				&prowv1.ProwJob{
-					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: ProwJobNamespace},
+					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
 					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
 				},
 			},
@@ -487,7 +491,7 @@ func TestReconcile(t *testing.T) {
 			},
 			objs: []ctrlclient.Object{
 				&prowv1.ProwJob{
-					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: ProwJobNamespace},
+					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
 					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
 				},
 			},
@@ -540,7 +544,7 @@ func TestReconcile(t *testing.T) {
 			},
 			objs: []ctrlclient.Object{
 				&prowv1.ProwJob{
-					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: ProwJobNamespace},
+					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
 					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
 				},
 			},
@@ -581,7 +585,7 @@ func TestReconcile(t *testing.T) {
 			},
 			objs: []ctrlclient.Object{
 				&prowv1.ProwJob{
-					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: ProwJobNamespace},
+					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
 					Status:     prowv1.ProwJobStatus{State: prowv1.AbortedState},
 				},
 			},
@@ -618,7 +622,7 @@ func TestReconcile(t *testing.T) {
 			},
 			objs: []ctrlclient.Object{
 				&prowv1.ProwJob{
-					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: ProwJobNamespace},
+					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
 					Status:     prowv1.ProwJobStatus{State: prowv1.SuccessState},
 				},
 			},
@@ -678,7 +682,7 @@ func TestReconcile(t *testing.T) {
 			},
 			objs: []ctrlclient.Object{
 				&prowv1.ProwJob{
-					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: ProwJobNamespace},
+					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
 					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
 				},
 			},
@@ -728,7 +732,7 @@ func TestReconcile(t *testing.T) {
 			},
 			objs: []ctrlclient.Object{
 				&prowv1.ProwJob{
-					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: ProwJobNamespace},
+					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
 					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
 				},
 			},
@@ -772,7 +776,7 @@ func TestReconcile(t *testing.T) {
 			},
 			objs: []ctrlclient.Object{
 				&prowv1.ProwJob{
-					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: ProwJobNamespace},
+					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
 					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
 				},
 			},
@@ -841,6 +845,9 @@ func TestReconcile(t *testing.T) {
 				now:          func() time.Time { return fakeNow },
 				polling:      func() time.Duration { return pollingTime },
 				newPresubmit: newPresubmitFaker("foobar", fakeNow),
+				prowConfigAgent: prowConfigAgent(&prowconfig.Config{
+					ProwConfig: prowconfig.ProwConfig{ProwJobNamespace: prowJobNamespace},
+				}),
 			}
 
 			gotRes, gotErr := r.Reconcile(context.TODO(), reconcile.Request{NamespacedName: types.NamespacedName{Name: tc.ec.Name, Namespace: tc.ec.Namespace}})
@@ -902,7 +909,7 @@ func TestDeleteProwJob(t *testing.T) {
 				},
 			},
 			pj: &prowv1.ProwJob{
-				ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: ProwJobNamespace},
+				ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
 			},
 			wantEC: &ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: v1.ObjectMeta{
@@ -916,7 +923,7 @@ func TestDeleteProwJob(t *testing.T) {
 				},
 			},
 			wantPJ: &prowv1.ProwJob{
-				ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: ProwJobNamespace},
+				ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
 				Status: prowv1.ProwJobStatus{
 					State:          prowv1.AbortedState,
 					Description:    AbortProwJobDeleteEC,
@@ -952,11 +959,11 @@ func TestDeleteProwJob(t *testing.T) {
 				Status: ephemeralclusterv1.EphemeralClusterStatus{ProwJobID: "pj-123"},
 			},
 			pj: &prowv1.ProwJob{
-				ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: ProwJobNamespace},
+				ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
 				Status:     prowv1.ProwJobStatus{State: prowv1.AbortedState},
 			},
 			wantPJ: &prowv1.ProwJob{
-				ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: ProwJobNamespace},
+				ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
 				Status:     prowv1.ProwJobStatus{State: prowv1.AbortedState},
 			},
 			wantRes: reconcile.Result{},
@@ -981,6 +988,9 @@ func TestDeleteProwJob(t *testing.T) {
 				buildClients: map[string]ctrlclient.Client{},
 				now:          func() time.Time { return fakeNow },
 				polling:      func() time.Duration { return pollingTime },
+				prowConfigAgent: prowConfigAgent(&prowconfig.Config{
+					ProwConfig: prowconfig.ProwConfig{ProwJobNamespace: prowJobNamespace},
+				}),
 			}
 
 			gotRes, gotErr := r.Reconcile(context.TODO(), reconcile.Request{NamespacedName: types.NamespacedName{Name: tc.ec.Name, Namespace: tc.ec.Namespace}})

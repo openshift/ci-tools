@@ -34,7 +34,6 @@ import (
 
 const (
 	WaitTestStepName          = "wait-test-complete"
-	ProwJobNamespace          = "ci"
 	EphemeralClusterNameLabel = "ci.openshift.io/ephemeral-cluster-name"
 	EphemeralClusterNamespace = "konflux-ephemeral-cluster"
 	AbortProwJobDeleteEC      = "Ephemeral Cluster deleted"
@@ -136,7 +135,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 
 	pjId, pj := ec.Status.ProwJobID, prowv1.ProwJob{}
 	if pjId != "" {
-		nn := types.NamespacedName{Namespace: ProwJobNamespace, Name: pjId}
+		nn := types.NamespacedName{Namespace: r.prowConfigAgent.Config().ProwJobNamespace, Name: pjId}
 		if err := r.masterClient.Get(ctx, nn, &pj); err != nil {
 			return r.handleGetProwJobError(ctx, ec, err)
 		}
@@ -298,7 +297,7 @@ func (r *reconciler) makeProwJob(ciOperatorConfig *api.ReleaseBuildConfiguration
 	pj := r.newPresubmit(github.PullRequest{}, "fake", *presubmit, "no-event-guid", labels, pjutil.RequireScheduling(false))
 	// TODO: temporary workaround: we should leverage the scheduler instead, check the comment above.
 	pj.Spec.Cluster = string(api.ClusterBuild01)
-	pj.Namespace = ProwJobNamespace
+	pj.Namespace = r.prowConfigAgent.Config().ProwJobNamespace
 	// Do not report, we are not managing this PR as it's likely it's not comining from the OpenShift CI.
 	pj.Spec.Report = false
 
@@ -401,7 +400,7 @@ func (r *reconciler) deleteEphemeralCluster(ctx context.Context, log *logrus.Ent
 	}
 
 	pj := prowv1.ProwJob{}
-	nn := types.NamespacedName{Namespace: ProwJobNamespace, Name: pjId}
+	nn := types.NamespacedName{Namespace: r.prowConfigAgent.Config().ProwJobNamespace, Name: pjId}
 	if err := r.masterClient.Get(ctx, nn, &pj); err != nil {
 		if kerrors.IsNotFound(err) {
 			log.Info("ProwJob not found, removing the finalizer")

@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"github.com/openshift/ci-tools/pkg/api"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -66,14 +67,16 @@ type EphemeralClusterSpec struct {
 
 // CIOperatorSpec contains what is needed to run ci-operator
 type CIOperatorSpec struct {
-	Workflow Workflow `json:"workflow"`
+	Releases  map[string]api.UnresolvedRelease `json:"releases,omitempty"`
+	Resources api.ResourceConfiguration        `json:"resources,omitempty"`
+	Test      TestSpec                         `json:"test,omitempty"`
 }
 
-// Workflow determines the workflow will be executed by the ci-operator
-type Workflow struct {
-	Name           string            `json:"name"`
-	Env            map[string]string `json:"env"`
-	ClusterProfile string            `json:"clusterProfile"`
+// TestSpec determines the workflow will be executed by the ci-operator to provision a cluster.
+type TestSpec struct {
+	Workflow       string            `json:"workflow,omitempty"`
+	Env            map[string]string `json:"env,omitempty"`
+	ClusterProfile string            `json:"clusterProfile,omitempty"`
 }
 
 type EphemeralClusterStatus struct {

@@ -46,6 +46,13 @@ const (
 var (
 	//go:embed wait-test-complete.sh
 	waitKubeconfigSh string
+
+	defaultResources = api.ResourceConfiguration{
+		"*": api.ResourceRequirements{
+			Requests: api.ResourceList{"cpu": "200m"},
+			Limits:   api.ResourceList{"memory": "400Mi"},
+		},
+	}
 )
 
 type NewPresubmitFunc func(pr github.PullRequest, baseSHA string, job prowconfig.Presubmit, eventGUID string, additionalLabels map[string]string, modifiers ...pjutil.Modifier) prowv1.ProwJob
@@ -112,8 +119,11 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		}
 	} else {
 		log.Info("ProwJob not found, creating")
-		r.createProwJob(ctx, log, ec)
-		return reconcile.Result{RequeueAfter: r.polling()}, r.updateEphemeralCluster(ctx, ec)
+		err := r.createProwJob(ctx, log, ec)
+		if err := r.updateEphemeralCluster(ctx, ec); err != nil {
+			return reconcile.Result{RequeueAfter: r.polling()}, err
+		}
+		return reconcile.Result{RequeueAfter: r.polling()}, err
 	}
 
 	if updated := r.reportProwJobStatus(&pj, ec); updated {
@@ -158,50 +168,61 @@ func (r *reconciler) handleGetProwJobError(ctx context.Context, ec *ephemeralclu
 	}
 }
 
-func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster) {
-	ciOperatorConfig := &api.ReleaseBuildConfiguration{
-		InputConfiguration: api.InputConfiguration{
-			Releases: map[string]api.UnresolvedRelease{
-				"initial": {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
-				"latest":  {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
-			},
-		},
-		Resources: api.ResourceConfiguration{
-			"*": api.ResourceRequirements{
-				Requests: api.ResourceList{"cpu": "200m"},
-				Limits:   api.ResourceList{"memory": "400Mi"},
-			},
-		},
+func (r *reconciler) generateCIOperatorConfig(log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster) (*api.ReleaseBuildConfiguration, error) {
+	resources := ec.Spec.CIOperator.Resources
+	if len(resources) == 0 {
+		log.Info("Resources not set, using default values")
+		resources = defaultResources
+	}
+
+	releases := ec.Spec.CIOperator.Releases
+	if len(releases) == 0 {
+		return nil, errors.New("releases stanza not set")
+	}
+
+	return &api.ReleaseBuildConfiguration{
+		InputConfiguration: api.InputConfiguration{Releases: releases},
+		Resources:          resources,
 		Tests: []api.TestStepConfiguration{{
 			As: "cluster-provisioning",
 			MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
-				Workflow: &ec.Spec.CIOperator.Workflow.Name,
+				Workflow: &ec.Spec.CIOperator.Test.Workflow,
 				Test: []api.TestStep{{
 					LiteralTestStep: &api.LiteralTestStep{
 						As:       WaitTestStepName,
 						From:     "cli",
 						Commands: waitKubeconfigSh,
 						Resources: api.ResourceRequirements{
-							Requests: api.ResourceList{"cpu": "200m"},
-							Limits:   api.ResourceList{"memory": "400Mi"},
+							Requests: api.ResourceList{"cpu": "10m"},
+							Limits:   api.ResourceList{"memory": "100Mi"},
 						},
 					},
 				}},
-				Environment:    ec.Spec.CIOperator.Workflow.Env,
-				ClusterProfile: api.ClusterProfile(ec.Spec.CIOperator.Workflow.ClusterProfile),
+				Environment:    ec.Spec.CIOperator.Test.Env,
+				ClusterProfile: api.ClusterProfile(ec.Spec.CIOperator.Test.ClusterProfile),
 			},
 		}},
 		Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
-	}
+	}, nil
+}
 
+func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster) error {
 	upsertProvisioningCond := func(status ephemeralclusterv1.ConditionStatus, reason, msg string) {
 		upsertCondition(ec, ephemeralclusterv1.ClusterProvisioning, status, r.now(), reason, msg)
+	}
+
+	ciOperatorConfig, err := r.generateCIOperatorConfig(log, ec)
+	if err != nil {
+		log.WithError(err).Error("generate ci-operator config")
+		err = fmt.Errorf("generate ci-operator config: %w", err)
+		upsertProvisioningCond(ephemeralclusterv1.ConditionFalse, ephemeralclusterv1.CIOperatorJobsGenerateFailureReason, err.Error())
+		return reconcile.TerminalError(err)
 	}
 
 	pj, err := r.makeProwJob(ciOperatorConfig)
 	if err != nil {
 		upsertProvisioningCond(ephemeralclusterv1.ConditionFalse, ephemeralclusterv1.CIOperatorJobsGenerateFailureReason, err.Error())
-		return
+		return reconcile.TerminalError(err)
 	}
 
 	log = log.WithField("prowjob", pj.Name)
@@ -210,12 +231,13 @@ func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *e
 		log.WithError(err).Error("create prowjob")
 		err = fmt.Errorf("create prowjob: %w", err)
 		upsertProvisioningCond(ephemeralclusterv1.ConditionFalse, ephemeralclusterv1.CIOperatorJobsGenerateFailureReason, err.Error())
-		return
+		return err
 	}
 
 	ec.Status.ProwJobID = pj.Name
 	ec.Finalizers, _ = cislices.UniqueAdd(ec.Finalizers, DependentProwJobFinalizer)
 	upsertProvisioningCond(ephemeralclusterv1.ConditionTrue, "", "")
+	return nil
 }
 
 func (r *reconciler) makeProwJob(ciOperatorConfig *api.ReleaseBuildConfiguration) (*prowv1.ProwJob, error) {

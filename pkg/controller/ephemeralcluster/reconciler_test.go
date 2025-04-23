@@ -25,6 +25,7 @@ import (
 	"sigs.k8s.io/prow/pkg/github"
 	"sigs.k8s.io/prow/pkg/pjutil"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	ephemeralclusterv1 "github.com/openshift/ci-tools/pkg/api/ephemeralcluster/v1"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/testhelper"
@@ -124,8 +125,12 @@ func TestCreateProwJob(t *testing.T) {
 				},
 				Spec: ephemeralclusterv1.EphemeralClusterSpec{
 					CIOperator: ephemeralclusterv1.CIOperatorSpec{
-						Workflow: ephemeralclusterv1.Workflow{
-							Name:           "test-workflow",
+						Releases: map[string]api.UnresolvedRelease{
+							"initial": {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
+							"latest":  {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
+						},
+						Test: ephemeralclusterv1.TestSpec{
+							Workflow:       "test-workflow",
 							Env:            map[string]string{"foo": "bar"},
 							ClusterProfile: "aws",
 						},
@@ -144,8 +149,12 @@ func TestCreateProwJob(t *testing.T) {
 				},
 				Spec: ephemeralclusterv1.EphemeralClusterSpec{
 					CIOperator: ephemeralclusterv1.CIOperatorSpec{
-						Workflow: ephemeralclusterv1.Workflow{
-							Name: "test-workflow",
+						Releases: map[string]api.UnresolvedRelease{
+							"initial": {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
+							"latest":  {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
+						},
+						Test: ephemeralclusterv1.TestSpec{
+							Workflow: "test-workflow",
 						},
 					},
 				},
@@ -153,6 +162,7 @@ func TestCreateProwJob(t *testing.T) {
 			prowConfig: &prowconfig.Config{},
 			req:        reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
 			wantRes:    reconcile.Result{RequeueAfter: pollingTime},
+			wantErr:    errors.New("terminal error: validate and default presubmit: invalid presubmit job pull-ci-org-repo-branch-cluster-provisioning: failed to default namespace"),
 		},
 		{
 			name: "Fail to create a ProwJob",
@@ -163,8 +173,12 @@ func TestCreateProwJob(t *testing.T) {
 				},
 				Spec: ephemeralclusterv1.EphemeralClusterSpec{
 					CIOperator: ephemeralclusterv1.CIOperatorSpec{
-						Workflow: ephemeralclusterv1.Workflow{
-							Name: "test-workflow",
+						Releases: map[string]api.UnresolvedRelease{
+							"initial": {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
+							"latest":  {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
+						},
+						Test: ephemeralclusterv1.TestSpec{
+							Workflow: "test-workflow",
 						},
 					},
 				},
@@ -177,6 +191,51 @@ func TestCreateProwJob(t *testing.T) {
 			}},
 			req:     reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
 			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+			wantErr: errors.New("create prowjob: fake err"),
+		},
+		{
+			name: "Invalid ci-operator configuration",
+			ec: ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Namespace: "ns",
+					Name:      "ec",
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						Test: ephemeralclusterv1.TestSpec{
+							Workflow: "test-workflow",
+						},
+					},
+				},
+			},
+			req:     reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
+			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+			wantErr: errors.New("terminal error: generate ci-operator config: releases stanza not set"),
+		},
+		{
+			name: "Invalid ci-operator configuration and fail to update EC",
+			ec: ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Namespace: "ns",
+					Name:      "ec",
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						Test: ephemeralclusterv1.TestSpec{
+							Workflow: "test-workflow",
+						},
+					},
+				},
+			},
+			interceptors: interceptor.Funcs{Update: func(ctx context.Context, client ctrlclient.WithWatch, obj ctrlclient.Object, opts ...ctrlclient.UpdateOption) error {
+				if _, ok := obj.(*ephemeralclusterv1.EphemeralCluster); ok {
+					return errors.New("fake err")
+				}
+				return client.Update(ctx, obj, opts...)
+			}},
+			req:     reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
+			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+			wantErr: errors.New("update ephemereal cluster: fake err"),
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

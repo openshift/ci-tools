@@ -241,7 +241,7 @@ func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *e
 		return reconcile.TerminalError(err)
 	}
 
-	pj, err := r.makeProwJob(ciOperatorConfig)
+	pj, err := r.makeProwJob(ciOperatorConfig, ec)
 	if err != nil {
 		upsertProvisioningCond(ephemeralclusterv1.ConditionFalse, ephemeralclusterv1.CIOperatorJobsGenerateFailureReason, err.Error())
 		return reconcile.TerminalError(err)
@@ -262,7 +262,7 @@ func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *e
 	return nil
 }
 
-func (r *reconciler) makeProwJob(ciOperatorConfig *api.ReleaseBuildConfiguration) (*prowv1.ProwJob, error) {
+func (r *reconciler) makeProwJob(ciOperatorConfig *api.ReleaseBuildConfiguration, ec *ephemeralclusterv1.EphemeralCluster) (*prowv1.ProwJob, error) {
 	jobConfig, err := prowgen.GenerateJobs(ciOperatorConfig, &prowgen.ProwgenInfo{
 		Metadata: api.Metadata{
 			Org:    "org",
@@ -291,7 +291,7 @@ func (r *reconciler) makeProwJob(ciOperatorConfig *api.ReleaseBuildConfiguration
 	}
 
 	presubmit := &prowYAML.Presubmits[0]
-	labels := map[string]string{EphemeralClusterNameLabel: ""}
+	labels := map[string]string{EphemeralClusterNameLabel: ec.Name}
 	// TODO: enable scheduling only when the ci-operator config will stored into the openshift/release repository. Until then
 	// the scheduler won't be able to assign a cluster properly.
 	pj := r.newPresubmit(github.PullRequest{}, "fake", *presubmit, "no-event-guid", labels, pjutil.RequireScheduling(false))

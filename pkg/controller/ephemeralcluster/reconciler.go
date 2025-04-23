@@ -40,6 +40,7 @@ const (
 	AbortProwJobDeleteEC      = "Ephemeral Cluster deleted"
 	DependentProwJobFinalizer = "ephemeralcluster.ci.openshift.io/dependent-prowjob"
 	TestDoneSecretName        = "test-done-keep-going"
+	UnresolvedConfigVar       = "UNRESOLVED_CONFIG"
 )
 
 var (
@@ -48,32 +49,31 @@ var (
 )
 
 type NewPresubmitFunc func(pr github.PullRequest, baseSHA string, job prowconfig.Presubmit, eventGUID string, additionalLabels map[string]string, modifiers ...pjutil.Modifier) prowv1.ProwJob
-type ConfigSpecUploader interface {
-	UploadConfigSpec(ctx context.Context, location, ciOpConfigContent string) (string, error)
-}
 
 type reconciler struct {
-	logger         *logrus.Entry
-	masterClient   ctrlruntimeclient.Client
-	buildClients   map[string]ctrlruntimeclient.Client
-	newPresubmit   NewPresubmitFunc
-	configUploader ConfigSpecUploader
+	logger          *logrus.Entry
+	masterClient    ctrlruntimeclient.Client
+	buildClients    map[string]ctrlruntimeclient.Client
+	newPresubmit    NewPresubmitFunc
+	prowConfigAgent *prowconfig.Agent
 
 	// Mock for testing
 	now     func() time.Time
 	polling func() time.Duration
 }
 
-func AddToManager(logger *logrus.Entry, mgr manager.Manager, allManagers map[string]manager.Manager) error {
+func AddToManager(logger *logrus.Entry, mgr manager.Manager, allManagers map[string]manager.Manager,
+	prowConfigAgent *prowconfig.Agent) error {
 	buildClients := make(map[string]ctrlruntimeclient.Client)
 	for clusterName, clusterManager := range allManagers {
 		buildClients[clusterName] = clusterManager.GetClient()
 	}
 
 	r := reconciler{
-		logger:       logger,
-		masterClient: mgr.GetClient(),
-		buildClients: buildClients,
+		logger:          logger,
+		masterClient:    mgr.GetClient(),
+		buildClients:    buildClients,
+		prowConfigAgent: prowConfigAgent,
 	}
 
 	if err := ctrlbldr.ControllerManagedBy(mgr).
@@ -174,14 +174,16 @@ func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *e
 		},
 		Tests: []api.TestStepConfiguration{{
 			As: "cluster-provisioning",
-			MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-				Test: []api.LiteralTestStep{{
-					As:       WaitTestStepName,
-					From:     "cli",
-					Commands: waitKubeconfigSh,
-					Resources: api.ResourceRequirements{
-						Requests: api.ResourceList{"cpu": "200m"},
-						Limits:   api.ResourceList{"memory": "400Mi"},
+			MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
+				Test: []api.TestStep{{
+					LiteralTestStep: &api.LiteralTestStep{
+						As:       WaitTestStepName,
+						From:     "cli",
+						Commands: waitKubeconfigSh,
+						Resources: api.ResourceRequirements{
+							Requests: api.ResourceList{"cpu": "200m"},
+							Limits:   api.ResourceList{"memory": "400Mi"},
+						},
 					},
 				}},
 			},
@@ -199,22 +201,10 @@ func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *e
 		return
 	}
 
-	location, err := r.uploadCIOperatorConfig(ctx, ciOperatorConfig)
-	if err != nil {
-		err := fmt.Errorf("upload ci config: %w", err)
-		upsertProvisioningCond(ephemeralclusterv1.ConditionFalse, ephemeralclusterv1.CIOperatorJobsGenerateFailureReason, err.Error())
-		return
-	}
-	log.WithField("Path", location).Info("Config uploaded to GCS")
-
-	if len(pj.Spec.PodSpec.Containers) != 1 {
-		upsertProvisioningCond(ephemeralclusterv1.ConditionFalse, ephemeralclusterv1.CIOperatorJobsGenerateFailureReason, "too many presubmit containers")
-		return
-	}
-	container := &pj.Spec.PodSpec.Containers[0]
-	container.Env = append(container.Env, corev1.EnvVar{Name: "CONFIG_SPEC_GCS_URL", Value: location})
+	log = log.WithField("prowjob", pj.Name)
 
 	if err := r.masterClient.Create(ctx, pj); err != nil {
+		log.WithError(err).Error("create prowjob")
 		err = fmt.Errorf("create prowjob: %w", err)
 		upsertProvisioningCond(ephemeralclusterv1.ConditionFalse, ephemeralclusterv1.CIOperatorJobsGenerateFailureReason, err.Error())
 		return
@@ -243,33 +233,40 @@ func (r *reconciler) makeProwJob(ciOperatorConfig *api.ReleaseBuildConfiguration
 		return nil, errors.New("no presubmits generated")
 	}
 
-	var presubmit *prowconfig.Presubmit
-	for i := range presubs {
-		p := &presubs[i]
-		if p.Name == "pull-ci-org-repo-branch-cluster-provisioning" {
-			presubmit = p
-			break
-		}
-	}
-	if presubmit == nil {
+	if len(presubs) != 1 {
 		return nil, errors.New("presubmit job not found")
 	}
 
+	prowYAML := prowconfig.ProwYAML{Presubmits: presubs}
+	// This is a workaround to apply some defaults to the prowjob
+	if err := prowconfig.DefaultAndValidateProwYAML(r.prowConfigAgent.Config(), &prowYAML, ""); err != nil {
+		return nil, fmt.Errorf("validate and default presubmit: %w", err)
+	}
+
+	presubmit := &prowYAML.Presubmits[0]
 	labels := map[string]string{EphemeralClusterNameLabel: ""}
-	pj := r.newPresubmit(github.PullRequest{}, "fake", *presubmit, "no-event-guid", labels, pjutil.RequireScheduling(true))
-	pj.Spec.Refs = nil
+	// TODO: enable scheduling only when the ci-operator config will stored into the openshift/release repository. Until then
+	// the scheduler won't be able to assign a cluster properly.
+	pj := r.newPresubmit(github.PullRequest{}, "fake", *presubmit, "no-event-guid", labels, pjutil.RequireScheduling(false))
+	// TODO: temporary workaround: we should leverage the scheduler instead, check the comment above.
+	pj.Spec.Cluster = string(api.ClusterBuild01)
+	pj.Namespace = ProwJobNamespace
+	// Do not report, we are not managing this PR as it's likely it's not comining from the OpenShift CI.
 	pj.Spec.Report = false
 
-	return &pj, nil
-}
-
-func (r *reconciler) uploadCIOperatorConfig(ctx context.Context, config *api.ReleaseBuildConfiguration) (string, error) {
-	gcsPath := "ephemeral-cluster/configs"
-	configBytes, err := yaml.Marshal(config)
+	// Inline ci-operator config
+	ciOperatorConfigYaml, err := yaml.Marshal(ciOperatorConfig)
 	if err != nil {
-		return "", fmt.Errorf("marshal config: %w", err)
+		return nil, fmt.Errorf("marshal ci-operator config: %w", err)
 	}
-	return r.configUploader.UploadConfigSpec(ctx, gcsPath, string(configBytes))
+
+	ciOperatorContainer := &pj.Spec.PodSpec.Containers[0]
+	ciOperatorContainer.Env = append(ciOperatorContainer.Env, corev1.EnvVar{
+		Name:  UnresolvedConfigVar,
+		Value: string(ciOperatorConfigYaml),
+	})
+
+	return &pj, nil
 }
 
 func (r *reconciler) fetchKubeconfig(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster, pj *prowv1.ProwJob) (reconcile.Result, bool, error) {

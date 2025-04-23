@@ -53,7 +53,23 @@ var (
 			Limits:   api.ResourceList{"memory": "400Mi"},
 		},
 	}
+
+	defaultReconcilerOpts = reconcilerOptions{
+		polling: 3 * time.Second,
+	}
 )
+
+type reconcilerOptions struct {
+	polling time.Duration
+}
+
+type ReconcilerOption func(*reconcilerOptions)
+
+func WithPolling(polling time.Duration) ReconcilerOption {
+	return func(o *reconcilerOptions) {
+		o.polling = polling
+	}
+}
 
 type NewPresubmitFunc func(pr github.PullRequest, baseSHA string, job prowconfig.Presubmit, eventGUID string, additionalLabels map[string]string, modifiers ...pjutil.Modifier) prowv1.ProwJob
 
@@ -70,10 +86,14 @@ type reconciler struct {
 }
 
 func AddToManager(logger *logrus.Entry, mgr manager.Manager, allManagers map[string]manager.Manager,
-	prowConfigAgent *prowconfig.Agent) error {
+	prowConfigAgent *prowconfig.Agent, opts ...ReconcilerOption) error {
 	buildClients := make(map[string]ctrlruntimeclient.Client)
 	for clusterName, clusterManager := range allManagers {
 		buildClients[clusterName] = clusterManager.GetClient()
+	}
+
+	for _, opt := range opts {
+		opt(&defaultReconcilerOpts)
 	}
 
 	r := reconciler{
@@ -81,6 +101,9 @@ func AddToManager(logger *logrus.Entry, mgr manager.Manager, allManagers map[str
 		masterClient:    mgr.GetClient(),
 		buildClients:    buildClients,
 		prowConfigAgent: prowConfigAgent,
+		newPresubmit:    pjutil.NewPresubmit,
+		now:             time.Now,
+		polling:         func() time.Duration { return defaultReconcilerOpts.polling },
 	}
 
 	if err := ctrlbldr.ControllerManagedBy(mgr).
@@ -391,8 +414,8 @@ func (r *reconciler) deleteEphemeralCluster(ctx context.Context, log *logrus.Ent
 	log = log.WithField("pj", pj.Name)
 	switch pj.Status.State {
 	case prowv1.AbortedState, prowv1.ErrorState, prowv1.FailureState, prowv1.SuccessState:
-		log.Info("ProwJob in a definitive state already, skip abortion")
-		return reconcile.Result{RequeueAfter: r.polling()}, nil
+		log.Info("ProwJob in a definitive state already, removing the finalizer")
+		return removeFinalizer()
 	}
 
 	return r.abortProwJob(ctx, log, &pj, AbortProwJobDeleteEC)

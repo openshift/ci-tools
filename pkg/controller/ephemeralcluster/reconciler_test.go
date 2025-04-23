@@ -940,6 +940,27 @@ func TestDeleteProwJob(t *testing.T) {
 			},
 			wantRes: reconcile.Result{},
 		},
+		{
+			name: "Aborted ProwJob remove the finalizer and delete",
+			ec: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:              "foo",
+					Namespace:         "bar",
+					DeletionTimestamp: ptr.To(v1.NewTime(fakeNow)),
+					Finalizers:        []string{DependentProwJobFinalizer},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{ProwJobID: "pj-123"},
+			},
+			pj: &prowv1.ProwJob{
+				ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: ProwJobNamespace},
+				Status:     prowv1.ProwJobStatus{State: prowv1.AbortedState},
+			},
+			wantPJ: &prowv1.ProwJob{
+				ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: ProwJobNamespace},
+				Status:     prowv1.ProwJobStatus{State: prowv1.AbortedState},
+			},
+			wantRes: reconcile.Result{},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

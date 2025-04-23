@@ -7,6 +7,8 @@ items:
       prow.k8s.io/job: pull-ci-org-repo-branch-cluster-provisioning
     creationTimestamp: null
     labels:
+      ci-operator.openshift.io/cloud: aws
+      ci-operator.openshift.io/cloud-cluster-profile: aws
       ci.openshift.io/ephemeral-cluster-name: ""
       created-by-prow: "true"
       event-GUID: no-event-guid
@@ -44,6 +46,7 @@ items:
       - args:
         - --gcs-upload-secret=/secrets/gcs/service-account.json
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+        - --lease-server-credentials-file=/etc/boskos/credentials
         - --report-credentials-file=/etc/report/credentials
         - --secret-dir=/secrets/ci-pull-credentials
         - --target=cluster-provisioning
@@ -70,6 +73,9 @@ items:
             tests:
             - as: cluster-provisioning
               steps:
+                cluster_profile: aws
+                env:
+                  foo: bar
                 test:
                 - as: wait-test-complete
                   commands: "#!/bin/bash\n\n# This loop keeps the ephemeral cluster up and running
@@ -85,6 +91,7 @@ items:
                       memory: 400Mi
                     requests:
                       cpu: 200m
+                workflow: test-workflow
             zz_generated_metadata:
               branch: branch
               org: org
@@ -96,6 +103,9 @@ items:
           requests:
             cpu: 10m
         volumeMounts:
+        - mountPath: /etc/boskos
+          name: boskos
+          readOnly: true
         - mountPath: /secrets/ci-pull-credentials
           name: ci-pull-credentials
           readOnly: true
@@ -113,6 +123,12 @@ items:
           readOnly: true
       serviceAccountName: ci-operator
       volumes:
+      - name: boskos
+        secret:
+          items:
+          - key: credentials
+            path: credentials
+          secretName: boskos-credentials
       - name: ci-pull-credentials
         secret:
           secretName: ci-pull-credentials

@@ -175,6 +175,7 @@ func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *e
 		Tests: []api.TestStepConfiguration{{
 			As: "cluster-provisioning",
 			MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
+				Workflow: &ec.Spec.CIOperator.Workflow.Name,
 				Test: []api.TestStep{{
 					LiteralTestStep: &api.LiteralTestStep{
 						As:       WaitTestStepName,
@@ -186,6 +187,8 @@ func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *e
 						},
 					},
 				}},
+				Environment:    ec.Spec.CIOperator.Workflow.Env,
+				ClusterProfile: api.ClusterProfile(ec.Spec.CIOperator.Workflow.ClusterProfile),
 			},
 		}},
 		Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "branch"},

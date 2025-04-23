@@ -125,7 +125,9 @@ func TestCreateProwJob(t *testing.T) {
 				Spec: ephemeralclusterv1.EphemeralClusterSpec{
 					CIOperator: ephemeralclusterv1.CIOperatorSpec{
 						Workflow: ephemeralclusterv1.Workflow{
-							Name: "test-workflow",
+							Name:           "test-workflow",
+							Env:            map[string]string{"foo": "bar"},
+							ClusterProfile: "aws",
 						},
 					},
 				},

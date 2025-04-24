@@ -42,8 +42,9 @@ func ProwJobFilter(object ctrlclient.Object) bool {
 
 func addPJReconcilerToManager(logger *logrus.Entry, mgr manager.Manager) error {
 	r := prowJobReconciler{
-		logger: logger,
+		logger: logger.WithField("controller", "ephemeral_cluster_provisioner_pj"),
 		client: mgr.GetClient(),
+		now:    time.Now,
 	}
 
 	if err := ctrlbldr.ControllerManagedBy(mgr).

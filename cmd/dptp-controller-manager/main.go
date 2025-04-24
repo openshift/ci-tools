@@ -36,6 +36,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/controller/ephemeralcluster"
 	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler"
 	serviceaccountsecretrefresher "github.com/openshift/ci-tools/pkg/controller/serviceaccount_secret_refresher"
 	testimagesdistributor "github.com/openshift/ci-tools/pkg/controller/test-images-distributor"
@@ -54,6 +55,7 @@ var allControllers = sets.New[string](
 	testimagesdistributor.ControllerName,
 	serviceaccountsecretrefresher.ControllerName,
 	testimagestreamimportcleaner.ControllerName,
+	ephemeralcluster.ControllerName,
 )
 
 type options struct {
@@ -72,6 +74,7 @@ type options struct {
 	serviceAccountSecretRefresherOptions serviceAccountSecretRefresherOptions
 	imagePusherOptions                   imagePusherOptions
 	promotionReconcilerOptions           promotionReconcilerOptions
+	ephemeralClusterProvisinerOptions    ephemeralClusterProvisionerOptions
 	*flagutil.GitHubOptions
 	releaseRepoGitSyncPath string
 }
@@ -111,6 +114,11 @@ type serviceAccountSecretRefresherOptions struct {
 	ignoreServiceAccounts flagutil.Strings
 }
 
+type ephemeralClusterProvisionerOptions struct {
+	pollingRaw string
+	polling    time.Duration
+}
+
 func newOpts() (*options, error) {
 	opts := &options{GitHubOptions: &flagutil.GitHubOptions{}}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
@@ -137,6 +145,7 @@ func newOpts() (*options, error) {
 	fs.Var(&opts.imagePusherOptions.imageStreamsRaw, "imagePusherOptions.image-stream", "An imagestream that will be synced. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
 	fs.Var(&opts.promotionReconcilerOptions.ignoreImageStreamsRaw, "promotionReconcilerOptions.ignore-image-stream", "The image stream to ignore. It is an regular expression (e.G ^openshift-priv/.+). Can be passed multiple times.")
 	fs.StringVar(&opts.promotionReconcilerOptions.sinceRaw, "promotionReconcilerOptions.since", "360h", "The image stream tags to reconcile if it is younger than a relative duration like 5s, 2m, or 3h. Defaults to 360h, i.e., 15 days")
+	fs.StringVar(&opts.ephemeralClusterProvisinerOptions.pollingRaw, "ephemeralClusterProvisionerOptions.polling", "5s", "Set how often the reconciler checks for the ephemeral cluster before it gets provisioned. Defaults to 5s.")
 	fs.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
 	fs.StringVar(&opts.releaseRepoGitSyncPath, "release-repo-git-sync-path", "", "Path to release repository dir")
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -212,6 +221,14 @@ func newOpts() (*options, error) {
 			errs = append(errs, fmt.Errorf("--promotionReconcilerOptions.since is invalid: %w", err))
 		} else {
 			opts.promotionReconcilerOptions.since = since
+		}
+	}
+
+	if opts.ephemeralClusterProvisinerOptions.pollingRaw != "" {
+		if polling, err := time.ParseDuration(opts.ephemeralClusterProvisinerOptions.pollingRaw); err != nil {
+			errs = append(errs, fmt.Errorf("--ephemeralClusterProvisionerOptions.polling is invalid: %w", err))
+		} else {
+			opts.ephemeralClusterProvisinerOptions.polling = polling
 		}
 	}
 
@@ -516,6 +533,14 @@ func main() {
 	if opts.enabledControllersSet.Has(testimagestreamimportcleaner.ControllerName) {
 		if err := testimagestreamimportcleaner.AddToManager(mgr, allManagers); err != nil {
 			logrus.WithError(err).Fatal("Failed to construct the testimagestreamimportcleaner controller")
+		}
+	}
+
+	if opts.enabledControllersSet.Has(ephemeralcluster.ControllerName) {
+		log := logrus.NewEntry(logrus.StandardLogger())
+		if err := ephemeralcluster.AddToManager(log, mgr, allManagers, configAgent,
+			ephemeralcluster.WithPolling(opts.ephemeralClusterProvisinerOptions.polling)); err != nil {
+			logrus.WithError(err).Fatalf("Failed to construct the %s controller", ephemeralcluster.ControllerName)
 		}
 	}
 

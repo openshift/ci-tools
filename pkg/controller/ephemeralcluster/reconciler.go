@@ -33,6 +33,7 @@ import (
 )
 
 const (
+	ControllerName            = "ephemeral_cluster_provisioner"
 	WaitTestStepName          = "wait-test-complete"
 	EphemeralClusterNameLabel = "ci.openshift.io/ephemeral-cluster-name"
 	EphemeralClusterNamespace = "konflux-ephemeral-cluster"
@@ -84,7 +85,7 @@ type reconciler struct {
 	polling func() time.Duration
 }
 
-func AddToManager(logger *logrus.Entry, mgr manager.Manager, allManagers map[string]manager.Manager,
+func AddToManager(log *logrus.Entry, mgr manager.Manager, allManagers map[string]manager.Manager,
 	prowConfigAgent *prowconfig.Agent, opts ...ReconcilerOption) error {
 	buildClients := make(map[string]ctrlruntimeclient.Client)
 	for clusterName, clusterManager := range allManagers {
@@ -96,7 +97,7 @@ func AddToManager(logger *logrus.Entry, mgr manager.Manager, allManagers map[str
 	}
 
 	r := reconciler{
-		logger:          logger,
+		logger:          log.WithField("controller", ControllerName),
 		masterClient:    mgr.GetClient(),
 		buildClients:    buildClients,
 		prowConfigAgent: prowConfigAgent,
@@ -112,7 +113,7 @@ func AddToManager(logger *logrus.Entry, mgr manager.Manager, allManagers map[str
 		return fmt.Errorf("build controller: %w", err)
 	}
 
-	if err := addPJReconcilerToManager(logger, mgr); err != nil {
+	if err := addPJReconcilerToManager(log, mgr); err != nil {
 		return fmt.Errorf("build prowjob controller: %w", err)
 	}
 

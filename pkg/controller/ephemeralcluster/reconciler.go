@@ -35,7 +35,7 @@ import (
 const (
 	ControllerName            = "ephemeral_cluster_provisioner"
 	WaitTestStepName          = "wait-test-complete"
-	EphemeralClusterNameLabel = "ci.openshift.io/ephemeral-cluster-name"
+	EphemeralClusterLabel     = "ci.openshift.io/ephemeral-cluster"
 	EphemeralClusterNamespace = "konflux-ephemeral-cluster"
 	AbortProwJobDeleteEC      = "Ephemeral Cluster deleted"
 	DependentProwJobFinalizer = "ephemeralcluster.ci.openshift.io/dependent-prowjob"
@@ -292,7 +292,7 @@ func (r *reconciler) makeProwJob(ciOperatorConfig *api.ReleaseBuildConfiguration
 	}
 
 	presubmit := &prowYAML.Presubmits[0]
-	labels := map[string]string{EphemeralClusterNameLabel: ec.Name}
+	labels := map[string]string{EphemeralClusterLabel: ec.Name}
 	// TODO: enable scheduling only when the ci-operator config will stored into the openshift/release repository. Until then
 	// the scheduler won't be able to assign a cluster properly.
 	pj := r.newPresubmit(github.PullRequest{}, "fake", *presubmit, "no-event-guid", labels, pjutil.RequireScheduling(false))

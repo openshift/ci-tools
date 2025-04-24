@@ -41,7 +41,7 @@ func TestProwJobFilter(t *testing.T) {
 	}{
 		{
 			name:       "Label set, process",
-			obj:        &pjObjectMock{labels: map[string]string{EphemeralClusterProwJobLabel: ""}},
+			obj:        &pjObjectMock{labels: map[string]string{EphemeralClusterLabel: ""}},
 			wantResult: true,
 		},
 		{
@@ -100,8 +100,7 @@ func TestReconcileProwJob(t *testing.T) {
 			pj: &prowv1.ProwJob{
 				ObjectMeta: v1.ObjectMeta{
 					Labels: map[string]string{
-						EphemeralClusterProwJobLabel: "",
-						EphemeralClusterNameLabel:    "ec",
+						EphemeralClusterLabel: "ec",
 					},
 					Name:      "foo",
 					Namespace: "bar",
@@ -110,8 +109,7 @@ func TestReconcileProwJob(t *testing.T) {
 			wantPJ: &prowv1.ProwJob{
 				ObjectMeta: v1.ObjectMeta{
 					Labels: map[string]string{
-						EphemeralClusterProwJobLabel: "",
-						EphemeralClusterNameLabel:    "ec",
+						EphemeralClusterLabel: "ec",
 					},
 					Name:      "foo",
 					Namespace: "bar",

@@ -10,8 +10,9 @@ import (
 )
 
 type stack struct {
-	records []stackRecord
-	partial bool
+	records           []stackRecord
+	partial           bool
+	nodeArchOverrides api.NodeArchitectureOverrides
 }
 
 func stackForChain() stack {
@@ -86,14 +87,25 @@ func (s *stack) resolveDNS(dns *api.StepDNSConfig) *api.StepDNSConfig {
 	return dns
 }
 
+func (s *stack) setNodeArchitectureOverrides(overrides api.NodeArchitectureOverrides) {
+	s.nodeArchOverrides = overrides
+}
+
 // resolveNodeArchitecture propagates a nodeArchitecture to determine the type of node to utilize for the pod run.
-func (s *stack) resolveNodeArchitecture(nodeArchitecture *api.NodeArchitecture) *api.NodeArchitecture {
+func (s *stack) resolveNodeArchitecture(step api.LiteralTestStep) *api.NodeArchitecture {
+	if s.nodeArchOverrides != nil {
+		if arch, exists := s.nodeArchOverrides[step.As]; exists {
+			return &arch
+		}
+	}
+
 	for _, r := range s.records {
 		if r.nodeArchitecture != nil {
 			return r.nodeArchitecture
 		}
 	}
-	return nodeArchitecture
+
+	return step.NodeArchitecture
 }
 
 // checkUnused emits errors for each unused parameter/dependency in the record.

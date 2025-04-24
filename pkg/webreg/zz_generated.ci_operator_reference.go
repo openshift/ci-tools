@@ -637,6 +637,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # NodeArchitecture is the architecture for the node where the test will run.\n" +
 	"            # If set, the generated test pod will include a nodeSelector for this architecture.\n" +
 	"            node_architecture: \"\"\n" +
+	"            # NodeArchitectureOverrides is a map that allows overriding the node architecture for specific steps\n" +
+	"            # that exist in the Pre, Test and Post steps. The key is the name of the step and the value is the architecture.\n" +
+	"            node_architecture_overrides:\n" +
+	"                \"\": \"\"\n" +
 	"            # Observers are the observers that need to be run\n" +
 	"            observers:\n" +
 	"                - # Commands is the command(s) that will be run inside the image.\n" +
@@ -1072,6 +1076,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # NodeArchitecture is the architecture for the node where the test will run.\n" +
 	"            # If set, the generated test pod will include a nodeSelector for this architecture.\n" +
 	"            node_architecture: \"\"\n" +
+	"            # NodeArchitectureOverrides is a map that allows overriding the node architecture for specific steps\n" +
+	"            # that exist in the Pre, Test and Post steps. The key is the name of the step and the value is the architecture.\n" +
+	"            node_architecture_overrides:\n" +
+	"                \"\": \"\"\n" +
 	"            # Observers are the observers that should be running\n" +
 	"            observers:\n" +
 	"                # Disable is a list of named observers that should be disabled\n" +
@@ -1487,6 +1495,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # NodeArchitecture is the architecture for the node where the test will run.\n" +
 	"        # If set, the generated test pod will include a nodeSelector for this architecture.\n" +
 	"        node_architecture: \"\"\n" +
+	"        # NodeArchitectureOverrides is a map that allows overriding the node architecture for specific steps\n" +
+	"        # that exist in the Pre, Test and Post steps. The key is the name of the step and the value is the architecture.\n" +
+	"        node_architecture_overrides:\n" +
+	"            \"\": \"\"\n" +
 	"        # Observers are the observers that need to be run\n" +
 	"        observers:\n" +
 	"            - # Commands is the command(s) that will be run inside the image.\n" +
@@ -1922,6 +1934,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # NodeArchitecture is the architecture for the node where the test will run.\n" +
 	"        # If set, the generated test pod will include a nodeSelector for this architecture.\n" +
 	"        node_architecture: \"\"\n" +
+	"        # NodeArchitectureOverrides is a map that allows overriding the node architecture for specific steps\n" +
+	"        # that exist in the Pre, Test and Post steps. The key is the name of the step and the value is the architecture.\n" +
+	"        node_architecture_overrides:\n" +
+	"            \"\": \"\"\n" +
 	"        # Observers are the observers that should be running\n" +
 	"        observers:\n" +
 	"            # Disable is a list of named observers that should be disabled\n" +

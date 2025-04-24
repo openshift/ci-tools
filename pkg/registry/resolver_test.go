@@ -1500,7 +1500,79 @@ func TestResolve(t *testing.T) {
 					NodeArchitecture: &nodeArchitectureARM64,
 				}},
 			},
-		}} {
+		},
+		{
+			name: "Workflow Overrides: node architecture overrides to specific steps",
+			config: api.MultiStageTestConfiguration{
+				Workflow: &awsWorkflow,
+				NodeArchitectureOverrides: map[string]api.NodeArchitecture{
+					"ipi-install":  api.NodeArchitectureARM64,
+					"ipi-teardown": api.NodeArchitectureARM64,
+				},
+			},
+			chainMap: ChainByName{
+				fipsPreChain: {
+					Steps: []api.TestStep{
+						{LiteralTestStep: &api.LiteralTestStep{As: "ipi-install", NodeArchitecture: &nodeArchitectureAMD64}},
+						{LiteralTestStep: &api.LiteralTestStep{As: "enable-fips"}}},
+				},
+			},
+			stepMap: ReferenceByName{teardownRef: {As: "ipi-teardown"}},
+			workflowMap: WorkflowByName{
+				awsWorkflow: {
+					ClusterProfile: api.ClusterProfileAWS,
+					Pre:            []api.TestStep{{Chain: &fipsPreChain}},
+					Test:           []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{As: "e2e"}}},
+					Post:           []api.TestStep{{Reference: &teardownRef}},
+				},
+			},
+			expectedRes: api.MultiStageTestConfigurationLiteral{
+				ClusterProfile: api.ClusterProfileAWS,
+				Pre: []api.LiteralTestStep{
+					{As: "ipi-install", NodeArchitecture: &nodeArchitectureARM64},
+					{As: "enable-fips"},
+				},
+				Test: []api.LiteralTestStep{{As: "e2e"}},
+				Post: []api.LiteralTestStep{{As: "ipi-teardown", NodeArchitecture: &nodeArchitectureARM64}},
+			},
+		},
+		{
+			name: "Workflow Overrides: node architecture overrides to specific steps and global architecture config",
+			config: api.MultiStageTestConfiguration{
+				Workflow:         &awsWorkflow,
+				NodeArchitecture: &nodeArchitectureAMD64,
+				NodeArchitectureOverrides: map[string]api.NodeArchitecture{
+					"ipi-install":  api.NodeArchitectureARM64,
+					"ipi-teardown": api.NodeArchitectureARM64,
+				},
+			},
+			chainMap: ChainByName{
+				fipsPreChain: {
+					Steps: []api.TestStep{
+						{LiteralTestStep: &api.LiteralTestStep{As: "ipi-install", NodeArchitecture: &nodeArchitectureAMD64}},
+						{LiteralTestStep: &api.LiteralTestStep{As: "enable-fips"}}},
+				},
+			},
+			stepMap: ReferenceByName{teardownRef: {As: "ipi-teardown"}},
+			workflowMap: WorkflowByName{
+				awsWorkflow: {
+					ClusterProfile: api.ClusterProfileAWS,
+					Pre:            []api.TestStep{{Chain: &fipsPreChain}},
+					Test:           []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{As: "e2e"}}},
+					Post:           []api.TestStep{{Reference: &teardownRef}},
+				},
+			},
+			expectedRes: api.MultiStageTestConfigurationLiteral{
+				ClusterProfile: api.ClusterProfileAWS,
+				Pre: []api.LiteralTestStep{
+					{As: "ipi-install", NodeArchitecture: &nodeArchitectureARM64},
+					{As: "enable-fips", NodeArchitecture: &nodeArchitectureAMD64},
+				},
+				Test: []api.LiteralTestStep{{As: "e2e", NodeArchitecture: &nodeArchitectureAMD64}},
+				Post: []api.LiteralTestStep{{As: "ipi-teardown", NodeArchitecture: &nodeArchitectureARM64}},
+			},
+		},
+	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			err := Validate(testCase.stepMap, testCase.chainMap, testCase.workflowMap, testCase.observerMap)
 			if !reflect.DeepEqual(err, utilerrors.NewAggregate([]error{testCase.expectedValidationErr})) {

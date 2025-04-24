@@ -137,6 +137,8 @@ func (r *registry) resolveTest(
 		Leases:                   config.Leases,
 		DependencyOverrides:      config.DependencyOverrides,
 	}
+
+	stack.setNodeArchitectureOverrides(config.NodeArchitectureOverrides)
 	if config.Workflow != nil {
 		stack.push(stackRecordForTest("workflow/"+*config.Workflow, nil, nil, nil, nil))
 	}
@@ -339,7 +341,7 @@ func (r *registry) processStep(step *api.TestStep, seen sets.Set[string], stack 
 	// This pushes the responsibility of handling steps that need custom dnsConfigs to workflow
 	// and job authors. This implementation allows for steps to be shared between teams.
 	ret.DNSConfig = stack.resolveDNS(ret.DNSConfig)
-	ret.NodeArchitecture = stack.resolveNodeArchitecture(ret.NodeArchitecture)
+	ret.NodeArchitecture = stack.resolveNodeArchitecture(ret)
 	return ret, errs
 }
 

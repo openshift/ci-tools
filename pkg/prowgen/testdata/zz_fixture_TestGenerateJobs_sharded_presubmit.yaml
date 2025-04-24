@@ -1,0 +1,14 @@
+presubmits:
+  organization/repository:
+  - always_run: false
+    labels:
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+    name: pull-ci-organization-repository-branch-unit-1of3
+  - always_run: false
+    labels:
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+    name: pull-ci-organization-repository-branch-unit-2of3
+  - always_run: false
+    labels:
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+    name: pull-ci-organization-repository-branch-unit-3of3

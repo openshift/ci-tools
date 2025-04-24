@@ -2184,6 +2184,11 @@ func (in *TestStepConfiguration) DeepCopyInto(out *TestStepConfiguration) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.ShardCount != nil {
+		in, out := &in.ShardCount, &out.ShardCount
+		*out = new(int)
+		**out = **in
+	}
 	if in.ContainerTestConfiguration != nil {
 		in, out := &in.ContainerTestConfiguration, &out.ContainerTestConfiguration
 		*out = new(ContainerTestConfiguration)

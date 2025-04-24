@@ -72,6 +72,16 @@ func IsValidGraphConfiguration(rawSteps []api.StepConfiguration) error {
 			} else if c.MultiStageTestConfigurationLiteral != nil {
 				multiStageTests = append(multiStageTests, c)
 			}
+
+			if c.ShardCount != nil {
+				if c.Postsubmit {
+					ret = append(ret, fmt.Errorf("tests[%s].shard_count is not valid for a postsubmit", c.As))
+				}
+				shardCount := *c.ShardCount
+				if shardCount <= 1 {
+					ret = append(ret, fmt.Errorf("tests[%s].shard_count must be greater than 1 if provided", c.As))
+				}
+			}
 		} else if c := s.ProjectDirectoryImageBuildInputs; c != nil {
 			addName(string(api.PipelineImageStreamTagReferenceRoot))
 			pipelineImages[api.PipelineImageStreamTagReferenceRoot] = sets.Empty{}

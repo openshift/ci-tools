@@ -826,6 +826,11 @@ type TestStepConfiguration struct {
 	// RestrictNetworkAccess restricts network access to RedHat intranet.
 	RestrictNetworkAccess *bool `json:"restrict_network_access,omitempty"`
 
+	// ShardCount describes the number of jobs that should be generated as shards for this test
+	// Each generated job will be a duplication, but contain a suffix and the necessary SHARD_ARGS will be passed to the steps
+	// Only applicable to presubmits and periodics
+	ShardCount *int `json:"shard_count,omitempty"`
+
 	// Only one of the following can be not-null.
 	ContainerTestConfiguration                                *ContainerTestConfiguration                                `json:"container,omitempty"`
 	MultiStageTestConfiguration                               *MultiStageTestConfiguration                               `json:"steps,omitempty"`

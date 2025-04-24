@@ -689,6 +689,19 @@ func TestGenerateJobs(t *testing.T) {
 				Branch: "branch",
 			}},
 		},
+		{
+			id: "sharded presubmit",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{As: "unit", ShardCount: intPointer(3), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
 	}
 
 	for _, tc := range tests {
@@ -751,4 +764,8 @@ func pruneForTests(jobConfig *prowconfig.JobConfig) {
 			jobConfig.PostsubmitsStatic[repo][i].UtilityConfig = prowconfig.UtilityConfig{}
 		}
 	}
+}
+
+func intPointer(val int) *int {
+	return &val
 }

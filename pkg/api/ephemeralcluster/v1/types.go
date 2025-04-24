@@ -1,8 +1,9 @@
 package v1
 
 import (
-	"github.com/openshift/ci-tools/pkg/api"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 // EphemeralClusterCondition is a valid value for EphemeralClusterCondition.Type

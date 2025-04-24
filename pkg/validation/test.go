@@ -393,6 +393,10 @@ func validateTestStepDependencies(config *api.ReleaseBuildConfiguration) []error
 			claimRelease = test.ClusterClaim.ClaimRelease(test.As)
 		}
 		if test.MultiStageTestConfiguration != nil {
+			if test.MultiStageTestConfiguration.NodeArchitectureOverrides != nil {
+				errs = append(errs, validateNodeArchitectureOverrides(test.As, test.MultiStageTestConfiguration.NodeArchitectureOverrides))
+			}
+
 			for _, item := range []struct {
 				field string
 				list  []api.TestStep
@@ -405,6 +409,10 @@ func validateTestStepDependencies(config *api.ReleaseBuildConfiguration) []error
 			}
 		}
 		if test.MultiStageTestConfigurationLiteral != nil {
+			if test.MultiStageTestConfigurationLiteral.NodeArchitectureOverrides != nil {
+				errs = append(errs, validateNodeArchitectureOverrides(test.As, test.MultiStageTestConfigurationLiteral.NodeArchitectureOverrides))
+			}
+
 			for _, item := range []struct {
 				field string
 				list  []api.LiteralTestStep
@@ -888,8 +896,8 @@ func validateDNSConfig(fieldRoot string, dnsConfig []api.StepDNSConfig) (ret []e
 }
 
 func validateNodeArchitecture(fieldRoot string, nodeArchitecture api.NodeArchitecture) error {
-	if nodeArchitecture != api.NodeArchitectureAMD64 && nodeArchitecture != api.NodeArchitectureARM64 {
-		return fmt.Errorf("%s.nodeArchitecture expected one of %v or %v", fieldRoot, api.NodeArchitectureAMD64, api.NodeArchitectureARM64)
+	if err := nodeArchitecture.Validate(); err != nil {
+		return fmt.Errorf("%s.nodeArchitecture: %w", fieldRoot, err)
 	}
 	return nil
 }
@@ -910,4 +918,13 @@ func validateLeases(context *context, leases []api.StepLease) (ret []error) {
 		}
 	}
 	return
+}
+
+func validateNodeArchitectureOverrides(fieldRoot string, nodeArchitectureOverrides api.NodeArchitectureOverrides) error {
+	for index, arch := range nodeArchitectureOverrides {
+		if err := arch.Validate(); err != nil {
+			return fmt.Errorf("%s.node_architecture_overrides.%s: %w", fieldRoot, index, err)
+		}
+	}
+	return nil
 }

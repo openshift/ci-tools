@@ -415,6 +415,15 @@ const (
 // NodeArchitecture describes the architecture for the node
 type NodeArchitecture string
 
+func (na NodeArchitecture) Validate() error {
+	switch na {
+	case NodeArchitectureAMD64, NodeArchitectureARM64:
+		return nil
+	}
+
+	return fmt.Errorf("invalid node architecture %s, expected one of %v or %v", na, NodeArchitectureAMD64, NodeArchitectureARM64)
+}
+
 const (
 	NodeArchitectureAMD64 NodeArchitecture = "amd64"
 	NodeArchitectureARM64 NodeArchitecture = "arm64"
@@ -1191,7 +1200,12 @@ type MultiStageTestConfiguration struct {
 	// NodeArchitecture is the architecture for the node where the test will run.
 	// If set, the generated test pod will include a nodeSelector for this architecture.
 	NodeArchitecture *NodeArchitecture `json:"node_architecture,omitempty"`
+	// NodeArchitectureOverrides is a map that allows overriding the node architecture for specific steps
+	// that exist in the Pre, Test and Post steps. The key is the name of the step and the value is the architecture.
+	NodeArchitectureOverrides NodeArchitectureOverrides `json:"node_architecture_overrides,omitempty"`
 }
+
+type NodeArchitectureOverrides map[string]NodeArchitecture
 type DependencyOverrides map[string]string
 
 // MultiStageTestConfigurationLiteral is a form of the MultiStageTestConfiguration that does not include
@@ -1231,7 +1245,9 @@ type MultiStageTestConfigurationLiteral struct {
 	// NodeArchitecture is the architecture for the node where the test will run.
 	// If set, the generated test pod will include a nodeSelector for this architecture.
 	NodeArchitecture *NodeArchitecture `json:"node_architecture,omitempty"`
-
+	// NodeArchitectureOverrides is a map that allows overriding the node architecture for specific steps
+	// that exist in the Pre, Test and Post steps. The key is the name of the step and the value is the architecture.
+	NodeArchitectureOverrides NodeArchitectureOverrides `json:"node_architecture_overrides,omitempty"`
 	// Override job timeout
 	Timeout *prowv1.Duration `json:"timeout,omitempty"`
 }

@@ -31,17 +31,6 @@ import (
 	ctrlruntimetest "github.com/openshift/ci-tools/pkg/testhelper/kubernetes/ctrlruntime"
 )
 
-type fakeGCSUploader struct {
-	err error
-}
-
-func (u *fakeGCSUploader) UploadConfigSpec(context.Context, string, string) (string, error) {
-	if u.err != nil {
-		return "", u.err
-	}
-	return "gs://fake/gcs/path", nil
-}
-
 func newPresubmitFaker(name string, now time.Time) NewPresubmitFunc {
 	return func(pr github.PullRequest, baseSHA string, job prowconfig.Presubmit, eventGUID string, additionalLabels map[string]string, modifiers ...pjutil.Modifier) prowv1.ProwJob {
 		pj := pjutil.NewPresubmit(pr, baseSHA, job, eventGUID, additionalLabels, modifiers...)
@@ -49,6 +38,12 @@ func newPresubmitFaker(name string, now time.Time) NewPresubmitFunc {
 		pj.Status.StartTime = v1.NewTime(now)
 		return pj
 	}
+}
+
+func prowConfigAgent(c *prowconfig.Config) *prowconfig.Agent {
+	a := prowconfig.Agent{}
+	a.Set(c)
+	return &a
 }
 
 func fakeNow(t *testing.T) time.Time {
@@ -86,15 +81,39 @@ func TestCreateProwJob(t *testing.T) {
 	fakeNow := fakeNow(t)
 	scheme := fakeScheme(t)
 	const pollingTime = 5
+	prowConfig := prowconfig.Config{
+		ProwConfig: prowconfig.ProwConfig{
+			ProwJobNamespace: ProwJobNamespace,
+			PodNamespace:     ProwJobNamespace,
+			InRepoConfig:     prowconfig.InRepoConfig{AllowedClusters: map[string][]string{"": {"default"}}},
+			Plank: prowconfig.Plank{
+				DefaultDecorationConfigs: []*prowconfig.DefaultDecorationConfigEntry{{
+					Config: &prowv1.DecorationConfig{
+						GCSConfiguration: &prowv1.GCSConfiguration{
+							DefaultOrg:   "org",
+							DefaultRepo:  "repo",
+							PathStrategy: prowv1.PathStrategySingle,
+						},
+						UtilityImages: &prowv1.UtilityImages{
+							CloneRefs:  "clonerefs",
+							InitUpload: "initupload",
+							Entrypoint: "entrypoint",
+							Sidecar:    "sidecar",
+						},
+					},
+				}},
+			},
+		},
+	}
 
 	for _, tc := range []struct {
-		name            string
-		ec              ephemeralclusterv1.EphemeralCluster
-		req             reconcile.Request
-		interceptors    interceptor.Funcs
-		configUploadErr error
-		wantRes         reconcile.Result
-		wantErr         error
+		name         string
+		ec           ephemeralclusterv1.EphemeralCluster
+		req          reconcile.Request
+		interceptors interceptor.Funcs
+		prowConfig   *prowconfig.Config
+		wantRes      reconcile.Result
+		wantErr      error
 	}{
 		{
 			name: "An EphemeralCluster request creates a ProwJob",
@@ -106,7 +125,9 @@ func TestCreateProwJob(t *testing.T) {
 				Spec: ephemeralclusterv1.EphemeralClusterSpec{
 					CIOperator: ephemeralclusterv1.CIOperatorSpec{
 						Workflow: ephemeralclusterv1.Workflow{
-							Name: "test-workflow",
+							Name:           "test-workflow",
+							Env:            map[string]string{"foo": "bar"},
+							ClusterProfile: "aws",
 						},
 					},
 				},
@@ -115,8 +136,7 @@ func TestCreateProwJob(t *testing.T) {
 			wantRes: reconcile.Result{RequeueAfter: pollingTime},
 		},
 		{
-			name:            "Handle config upload error",
-			configUploadErr: errors.New("upload error"),
+			name: "Handle invalid prow config",
 			ec: ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: v1.ObjectMeta{
 					Namespace: "ns",
@@ -130,8 +150,9 @@ func TestCreateProwJob(t *testing.T) {
 					},
 				},
 			},
-			req:     reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
-			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+			prowConfig: &prowconfig.Config{},
+			req:        reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
+			wantRes:    reconcile.Result{RequeueAfter: pollingTime},
 		},
 		{
 			name: "Fail to create a ProwJob",
@@ -166,13 +187,18 @@ func TestCreateProwJob(t *testing.T) {
 				WithInterceptorFuncs(tc.interceptors).
 				Build()
 
+			pc := &prowConfig
+			if tc.prowConfig != nil {
+				pc = tc.prowConfig
+			}
+
 			r := reconciler{
-				logger:         logrus.NewEntry(logrus.StandardLogger()),
-				masterClient:   client,
-				now:            func() time.Time { return fakeNow },
-				polling:        func() time.Duration { return pollingTime },
-				newPresubmit:   newPresubmitFaker("foobar", fakeNow),
-				configUploader: &fakeGCSUploader{err: tc.configUploadErr},
+				logger:          logrus.NewEntry(logrus.StandardLogger()),
+				masterClient:    client,
+				now:             func() time.Time { return fakeNow },
+				polling:         func() time.Duration { return pollingTime },
+				newPresubmit:    newPresubmitFaker("foobar", fakeNow),
+				prowConfigAgent: prowConfigAgent(pc),
 			}
 
 			gotRes, gotErr := r.Reconcile(context.TODO(), reconcile.Request{NamespacedName: types.NamespacedName{Name: tc.ec.Name, Namespace: tc.ec.Namespace}})
@@ -750,13 +776,12 @@ func TestReconcile(t *testing.T) {
 			}
 
 			r := reconciler{
-				logger:         logrus.NewEntry(logrus.StandardLogger()),
-				masterClient:   client,
-				buildClients:   clients,
-				now:            func() time.Time { return fakeNow },
-				polling:        func() time.Duration { return pollingTime },
-				newPresubmit:   newPresubmitFaker("foobar", fakeNow),
-				configUploader: &fakeGCSUploader{err: nil},
+				logger:       logrus.NewEntry(logrus.StandardLogger()),
+				masterClient: client,
+				buildClients: clients,
+				now:          func() time.Time { return fakeNow },
+				polling:      func() time.Duration { return pollingTime },
+				newPresubmit: newPresubmitFaker("foobar", fakeNow),
 			}
 
 			gotRes, gotErr := r.Reconcile(context.TODO(), reconcile.Request{NamespacedName: types.NamespacedName{Name: tc.ec.Name, Namespace: tc.ec.Namespace}})

@@ -8,8 +8,9 @@ metadata:
 spec:
   ciOperator:
     workflow:
-      clusterProfile: ""
-      env: null
+      clusterProfile: aws
+      env:
+        foo: bar
       name: test-workflow
 status:
   conditions:

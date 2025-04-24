@@ -7,6 +7,8 @@ items:
       prow.k8s.io/job: pull-ci-org-repo-branch-cluster-provisioning
     creationTimestamp: null
     labels:
+      ci-operator.openshift.io/cloud: aws
+      ci-operator.openshift.io/cloud-cluster-profile: aws
       ci.openshift.io/ephemeral-cluster-name: ""
       created-by-prow: "true"
       event-GUID: no-event-guid
@@ -20,26 +22,80 @@ items:
       prow.k8s.io/refs.repo: ""
       prow.k8s.io/type: presubmit
     name: foobar
+    namespace: ci
     resourceVersion: "1"
   spec:
     agent: kubernetes
+    cluster: build01
     context: ci/prow/cluster-provisioning
     decoration_config:
+      gcs_configuration:
+        default_org: org
+        default_repo: repo
+        path_strategy: single
       skip_cloning: true
+      utility_images:
+        clonerefs: clonerefs
+        entrypoint: entrypoint
+        initupload: initupload
+        sidecar: sidecar
     job: pull-ci-org-repo-branch-cluster-provisioning
+    namespace: ci
     pod_spec:
       containers:
       - args:
         - --gcs-upload-secret=/secrets/gcs/service-account.json
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+        - --lease-server-credentials-file=/etc/boskos/credentials
         - --report-credentials-file=/etc/report/credentials
         - --secret-dir=/secrets/ci-pull-credentials
         - --target=cluster-provisioning
         command:
         - ci-operator
         env:
-        - name: CONFIG_SPEC_GCS_URL
-          value: gs://fake/gcs/path
+        - name: UNRESOLVED_CONFIG
+          value: |
+            releases:
+              initial:
+                integration:
+                  name: "4.17"
+                  namespace: ocp
+              latest:
+                integration:
+                  name: "4.17"
+                  namespace: ocp
+            resources:
+              '*':
+                limits:
+                  memory: 400Mi
+                requests:
+                  cpu: 200m
+            tests:
+            - as: cluster-provisioning
+              steps:
+                cluster_profile: aws
+                env:
+                  foo: bar
+                test:
+                - as: wait-test-complete
+                  commands: "#!/bin/bash\n\n# This loop keeps the ephemeral cluster up and running
+                    and then waits for\n# a konflux test to complete. Once the test is done, the
+                    EphemeralCluster \n# controller creates a synthetic secret 'test-done-keep-going'
+                    into this ci-operator NS,\n# unbloking the workflow and starting the deprovisioning
+                    procedures.\n\ni=0\nwhile true ; do\n    printf 'attempt %d\\n' $i\n    if
+                    $(oc get secret/test-done-keep-going 2>&1 | grep -qv 'not found'); then\n
+                    \       break\n    fi\n    i=$((i+1))\n    sleep 5s\ndone\n"
+                  from: cli
+                  resources:
+                    limits:
+                      memory: 400Mi
+                    requests:
+                      cpu: 200m
+                workflow: test-workflow
+            zz_generated_metadata:
+              branch: branch
+              org: org
+              repo: repo
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -47,6 +103,9 @@ items:
           requests:
             cpu: 10m
         volumeMounts:
+        - mountPath: /etc/boskos
+          name: boskos
+          readOnly: true
         - mountPath: /secrets/ci-pull-credentials
           name: ci-pull-credentials
           readOnly: true
@@ -64,6 +123,12 @@ items:
           readOnly: true
       serviceAccountName: ci-operator
       volumes:
+      - name: boskos
+        secret:
+          items:
+          - key: credentials
+            path: credentials
+          secretName: boskos-credentials
       - name: ci-pull-credentials
         secret:
           secretName: ci-pull-credentials
@@ -76,9 +141,21 @@ items:
       - name: result-aggregator
         secret:
           secretName: result-aggregator
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
+    refs:
+      base_link: /commit/fake
+      base_sha: fake
+      org: ""
+      pulls:
+      - author: ""
+        commit_link: /pull/0/commits/
+        number: 0
+        sha: ""
+      repo: ""
     rerun_command: /test cluster-provisioning
     type: presubmit
   status:
     startTime: "2025-04-02T12:12:12Z"
-    state: scheduling
+    state: triggered
 metadata: {}

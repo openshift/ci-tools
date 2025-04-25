@@ -47,55 +47,71 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 	disabledRehearsals := sets.New[string](rehearsals.DisabledRehearsals...)
 
 	for _, element := range configSpec.Tests {
-		g := NewProwJobBaseBuilderForTest(configSpec, info, NewCiOperatorPodSpecGenerator(), element)
+		shardCount := 1
+		if element.ShardCount != nil {
+			shardCount = *element.ShardCount
 
-		if element.NodeArchitecture != "" {
-			g.WithLabel(fmt.Sprintf("capability/%s", element.NodeArchitecture), string(element.NodeArchitecture))
 		}
 
-		disableRehearsal := rehearsals.DisableAll || disabledRehearsals.Has(element.As)
-
-		if element.IsPeriodic() {
-			cron := ""
-			if element.Cron != nil {
-				cron = *element.Cron
-			}
-			interval := ""
-			if element.Interval != nil {
-				interval = *element.Interval
-			}
-			minimumInterval := ""
-			if element.MinimumInterval != nil {
-				minimumInterval = *element.MinimumInterval
+		// Most of the time, this loop will only run once. the exception is if shard_count is set to an integer greater than 1
+		for i := 1; i <= shardCount; i++ {
+			g := NewProwJobBaseBuilderForTest(configSpec, info, NewCiOperatorPodSpecGenerator(), element)
+			name := element.As
+			if shardCount > 1 {
+				name = fmt.Sprintf("%s-%dof%d", name, i, shardCount)
+				g.TestName(name)
+				shardArgs := fmt.Sprintf("--shard-count %d --shard-id %d", shardCount, i)
+				g.PodSpec.Add(MultiStageParam("SHARD_ARGS", shardArgs))
 			}
 
-			if element.NodeArchitecture != "" && element.NodeArchitecture != cioperatorapi.NodeArchitectureAMD64 {
-				injectCapabilities(g.base.Labels, []string{string(element.NodeArchitecture)})
+			if element.NodeArchitecture != "" {
+				g.WithLabel(fmt.Sprintf("capability/%s", element.NodeArchitecture), string(element.NodeArchitecture))
 			}
 
-			periodic := GeneratePeriodicForTest(g, info, FromConfigSpec(configSpec), func(options *GeneratePeriodicOptions) {
-				options.Cron = cron
-				options.Capabilities = element.Capabilities
-				options.Interval = interval
-				options.MinimumInterval = minimumInterval
-				options.ReleaseController = element.ReleaseController
-				options.DisableRehearsal = disableRehearsal
-				options.Retry = element.Retry
-			})
-			periodics = append(periodics, *periodic)
-			if element.Presubmit {
-				handlePresubmit(g, element, info, disableRehearsal, configSpec.Resources.RequirementsForStep(element.As).Requests, presubmits, orgrepo)
+			disableRehearsal := rehearsals.DisableAll || disabledRehearsals.Has(element.As)
+
+			if element.IsPeriodic() {
+				cron := ""
+				if element.Cron != nil {
+					cron = *element.Cron
+				}
+				interval := ""
+				if element.Interval != nil {
+					interval = *element.Interval
+				}
+				minimumInterval := ""
+				if element.MinimumInterval != nil {
+					minimumInterval = *element.MinimumInterval
+				}
+
+				if element.NodeArchitecture != "" && element.NodeArchitecture != cioperatorapi.NodeArchitectureAMD64 {
+					injectCapabilities(g.base.Labels, []string{string(element.NodeArchitecture)})
+				}
+
+				periodic := GeneratePeriodicForTest(g, info, FromConfigSpec(configSpec), func(options *GeneratePeriodicOptions) {
+					options.Cron = cron
+					options.Capabilities = element.Capabilities
+					options.Interval = interval
+					options.MinimumInterval = minimumInterval
+					options.ReleaseController = element.ReleaseController
+					options.DisableRehearsal = disableRehearsal
+					options.Retry = element.Retry
+				})
+				periodics = append(periodics, *periodic)
+				if element.Presubmit {
+					handlePresubmit(g, element, info, name, disableRehearsal, configSpec.Resources.RequirementsForStep(element.As).Requests, presubmits, orgrepo)
+				}
+			} else if element.Postsubmit {
+				postsubmit := generatePostsubmitForTest(g, info, func(options *generatePostsubmitOptions) {
+					options.runIfChanged = element.RunIfChanged
+					options.Capabilities = element.Capabilities
+					options.skipIfOnlyChanged = element.SkipIfOnlyChanged
+				})
+				postsubmit.MaxConcurrency = 1
+				postsubmits[orgrepo] = append(postsubmits[orgrepo], *postsubmit)
+			} else {
+				handlePresubmit(g, element, info, name, disableRehearsal, configSpec.Resources.RequirementsForStep(element.As).Requests, presubmits, orgrepo)
 			}
-		} else if element.Postsubmit {
-			postsubmit := generatePostsubmitForTest(g, info, func(options *generatePostsubmitOptions) {
-				options.runIfChanged = element.RunIfChanged
-				options.Capabilities = element.Capabilities
-				options.skipIfOnlyChanged = element.SkipIfOnlyChanged
-			})
-			postsubmit.MaxConcurrency = 1
-			postsubmits[orgrepo] = append(postsubmits[orgrepo], *postsubmit)
-		} else {
-			handlePresubmit(g, element, info, disableRehearsal, configSpec.Resources.RequirementsForStep(element.As).Requests, presubmits, orgrepo)
 		}
 	}
 
@@ -193,8 +209,8 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 	}, nil
 }
 
-func handlePresubmit(g *prowJobBaseBuilder, element api.TestStepConfiguration, info *ProwgenInfo, disableRehearsal bool, requests api.ResourceList, presubmits map[string][]prowconfig.Presubmit, orgrepo string) {
-	presubmit := generatePresubmitForTest(g, element.As, info, func(options *generatePresubmitOptions) {
+func handlePresubmit(g *prowJobBaseBuilder, element api.TestStepConfiguration, info *ProwgenInfo, name string, disableRehearsal bool, requests api.ResourceList, presubmits map[string][]prowconfig.Presubmit, orgrepo string) {
+	presubmit := generatePresubmitForTest(g, name, info, func(options *generatePresubmitOptions) {
 		options.pipelineRunIfChanged = element.PipelineRunIfChanged
 		options.Capabilities = element.Capabilities
 		options.runIfChanged = element.RunIfChanged

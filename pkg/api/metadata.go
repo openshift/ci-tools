@@ -49,8 +49,12 @@ func (m *Metadata) AsString() string {
 	return identifier
 }
 
+var shardSuffix = regexp.MustCompile(`-\d+of\d+$`)
+
 // TestNameFromJobName returns the name of the test from a given job name and prefix
+// If the test contains shard information in the suffix, that will also be trimmed
 func (m *Metadata) TestNameFromJobName(jobName, prefix string) string {
+	jobName = shardSuffix.ReplaceAllString(jobName, "")
 	return strings.TrimPrefix(jobName, m.JobName(prefix, ""))
 }
 

@@ -277,6 +277,11 @@ func TestMetadata_TestNameFromJobName(t *testing.T) {
 		metadata: Metadata{Org: "gro", Repo: "oper", Branch: "hcnarb", Variant: "also"},
 		jobName:  "pull-ci-gro-oper-hcnarb-also-test2",
 		expected: "test2",
+	}, {
+		name:     "with shard suffix",
+		metadata: Metadata{Org: "gro", Repo: "oper", Branch: "hcnarb"},
+		jobName:  "pull-ci-gro-oper-hcnarb-test3-1of2",
+		expected: "test3",
 	}}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

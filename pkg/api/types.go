@@ -1336,6 +1336,7 @@ const (
 	ClusterProfileAWSSustAutoRel412       ClusterProfile = "aws-sustaining-autorelease-412"
 	ClusterProfileAWSKubeVirt             ClusterProfile = "aws-kubevirt"
 	ClusterProfileAWSOVNPerfScale         ClusterProfile = "aws-ovn-perfscale"
+	ClusterProfileAWSObservability        ClusterProfile = "aws-observability"
 	ClusterProfileAlibabaCloud            ClusterProfile = "alibabacloud"
 	ClusterProfileAlibabaCloudQE          ClusterProfile = "alibabacloud-qe"
 	ClusterProfileAlibabaCloudCNQE        ClusterProfile = "alibabacloud-cn-qe"

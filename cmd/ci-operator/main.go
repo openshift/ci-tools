@@ -798,7 +798,8 @@ func overrideMultiStageParams(o *options) error {
 			}
 
 			for paramName, paramVal := range multiStageParams {
-				test.MultiStageTestConfigurationLiteral.Environment[paramName] = paramVal
+				valueWithoutQuotes := strings.Trim(paramVal, `"'`)
+				test.MultiStageTestConfigurationLiteral.Environment[paramName] = valueWithoutQuotes
 			}
 		}
 	}

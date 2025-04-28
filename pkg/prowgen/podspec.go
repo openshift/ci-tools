@@ -588,7 +588,7 @@ func MultiStageParam(key, value string) PodSpecMutator {
 	return func(spec *corev1.PodSpec) error {
 		container := &spec.Containers[0]
 		// We must quote the entire arg as the value could contain spaces
-		container.Args = append(container.Args, fmt.Sprintf(`--multi-stage-param="%s=%s"`, key, value))
+		container.Args = append(container.Args, fmt.Sprintf(`--multi-stage-param=%s="%s"`, key, value))
 		return nil
 	}
 }

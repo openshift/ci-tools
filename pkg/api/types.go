@@ -353,7 +353,7 @@ type ReleaseDescriptor struct {
 
 // Candidate describes a validated candidate release payload
 type Candidate struct {
-	ReleaseDescriptor
+	ReleaseDescriptor `json:",inline"`
 	// ReleaseStream is the stream from which we pick the latest candidate
 	Stream ReleaseStream `json:"stream"`
 	// Version is the minor version to search for
@@ -362,7 +362,7 @@ type Candidate struct {
 
 // Prerelease describes a validated release payload before it is exposed
 type Prerelease struct {
-	ReleaseDescriptor
+	ReleaseDescriptor `json:",inline"`
 	// VersionBounds describe the allowable version bounds to search in
 	VersionBounds VersionBounds `json:"version_bounds"`
 }

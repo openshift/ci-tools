@@ -42,9 +42,155 @@ spec:
               ciOperator:
                 description: CIOperatorSpec contains what is needed to run ci-operator
                 properties:
-                  workflow:
-                    description: Workflow determines the workflow will be executed
-                      by the ci-operator
+                  releases:
+                    additionalProperties:
+                      description: |-
+                        UnresolvedRelease describes a semantic release payload
+                        identifier we need to resolve to a pull spec.
+                      properties:
+                        candidate:
+                          description: Candidate describes a candidate release payload
+                          properties:
+                            architecture:
+                              description: |-
+                                Architecture is the architecture for the product.
+                                Defaults to amd64.
+                              type: string
+                            product:
+                              description: Product is the name of the product being
+                                released
+                              type: string
+                            relative:
+                              description: |-
+                                Relative optionally specifies how old of a release
+                                is requested from this stream. For instance, a value
+                                of 1 will resolve to the previous validated release
+                                for this stream.
+                              type: integer
+                            stream:
+                              description: ReleaseStream is the stream from which
+                                we pick the latest candidate
+                              type: string
+                            version:
+                              description: Version is the minor version to search
+                                for
+                              type: string
+                          required:
+                          - product
+                          - stream
+                          - version
+                          type: object
+                        integration:
+                          description: Integration describes an integration stream
+                            which we can create a payload out of
+                          properties:
+                            include_built_images:
+                              description: |-
+                                IncludeBuiltImages determines if the release we assemble will include
+                                images built during the test itself.
+                              type: boolean
+                            name:
+                              description: Name is the name of the ImageStream
+                              type: string
+                            namespace:
+                              description: Namespace is the namespace in which the
+                                integration stream lives.
+                              type: string
+                          required:
+                          - name
+                          - namespace
+                          type: object
+                        prerelease:
+                          description: Prerelease describes a yet-to-be released payload
+                          properties:
+                            architecture:
+                              description: |-
+                                Architecture is the architecture for the product.
+                                Defaults to amd64.
+                              type: string
+                            product:
+                              description: Product is the name of the product being
+                                released
+                              type: string
+                            relative:
+                              description: |-
+                                Relative optionally specifies how old of a release
+                                is requested from this stream. For instance, a value
+                                of 1 will resolve to the previous validated release
+                                for this stream.
+                              type: integer
+                            version_bounds:
+                              description: VersionBounds describe the allowable version
+                                bounds to search in
+                              properties:
+                                lower:
+                                  type: string
+                                stream:
+                                  description: |-
+                                    Stream dictates which stream to search for a version within the specified bounds
+                                    defaults to 4-stable.
+                                  type: string
+                                upper:
+                                  type: string
+                              required:
+                              - lower
+                              - upper
+                              type: object
+                          required:
+                          - product
+                          - version_bounds
+                          type: object
+                        release:
+                          description: Release describes a released payload
+                          properties:
+                            architecture:
+                              description: |-
+                                Architecture is the architecture for the release.
+                                Defaults to amd64.
+                              type: string
+                            channel:
+                              description: Channel is the release channel to search
+                                in
+                              type: string
+                            version:
+                              description: Version is the minor version to search
+                                for
+                              type: string
+                          required:
+                          - channel
+                          - version
+                          type: object
+                      type: object
+                    type: object
+                  resources:
+                    additionalProperties:
+                      description: |-
+                        ResourceRequirements are resource requests and limits applied
+                        to the individual steps in the job. They are passed directly to
+                        builds or pods.
+                      properties:
+                        limits:
+                          additionalProperties:
+                            type: string
+                          description: |-
+                            Limits are resource limits applied to an individual step in the job.
+                            These are directly used in creating the Pods that execute the Job.
+                          type: object
+                        requests:
+                          additionalProperties:
+                            type: string
+                          description: |-
+                            Requests are resource requests applied to an individual step in the job.
+                            These are directly used in creating the Pods that execute the Job.
+                          type: object
+                      type: object
+                    description: |-
+                      ResourceConfiguration defines resource overrides for jobs run
+                      by the operator.
+                    type: object
+                  test:
+                    description: TestSpec determines the workflow will be executed
+                      by the ci-operator to provision a cluster.
                     properties:
                       clusterProfile:
                         type: string
@@ -52,15 +198,9 @@ spec:
                         additionalProperties:
                           type: string
                         type: object
-                      name:
+                      workflow:
                         type: string
-                    required:
-                    - clusterProfile
-                    - env
-                    - name
                     type: object
-                required:
-                - workflow
                 type: object
               tearDownCluster:
                 description: |-

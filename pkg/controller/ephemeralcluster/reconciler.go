@@ -33,9 +33,9 @@ import (
 )
 
 const (
+	ControllerName            = "ephemeral_cluster_provisioner"
 	WaitTestStepName          = "wait-test-complete"
-	ProwJobNamespace          = "ci"
-	EphemeralClusterNameLabel = "ci.openshift.io/ephemeral-cluster-name"
+	EphemeralClusterLabel     = "ci.openshift.io/ephemeral-cluster"
 	EphemeralClusterNamespace = "konflux-ephemeral-cluster"
 	AbortProwJobDeleteEC      = "Ephemeral Cluster deleted"
 	DependentProwJobFinalizer = "ephemeralcluster.ci.openshift.io/dependent-prowjob"
@@ -46,7 +46,30 @@ const (
 var (
 	//go:embed wait-test-complete.sh
 	waitKubeconfigSh string
+
+	defaultResources = api.ResourceConfiguration{
+		"*": api.ResourceRequirements{
+			Requests: api.ResourceList{"cpu": "200m"},
+			Limits:   api.ResourceList{"memory": "400Mi"},
+		},
+	}
+
+	defaultReconcilerOpts = reconcilerOptions{
+		polling: 3 * time.Second,
+	}
 )
+
+type reconcilerOptions struct {
+	polling time.Duration
+}
+
+type ReconcilerOption func(*reconcilerOptions)
+
+func WithPolling(polling time.Duration) ReconcilerOption {
+	return func(o *reconcilerOptions) {
+		o.polling = polling
+	}
+}
 
 type NewPresubmitFunc func(pr github.PullRequest, baseSHA string, job prowconfig.Presubmit, eventGUID string, additionalLabels map[string]string, modifiers ...pjutil.Modifier) prowv1.ProwJob
 
@@ -62,18 +85,25 @@ type reconciler struct {
 	polling func() time.Duration
 }
 
-func AddToManager(logger *logrus.Entry, mgr manager.Manager, allManagers map[string]manager.Manager,
-	prowConfigAgent *prowconfig.Agent) error {
+func AddToManager(log *logrus.Entry, mgr manager.Manager, allManagers map[string]manager.Manager,
+	prowConfigAgent *prowconfig.Agent, opts ...ReconcilerOption) error {
 	buildClients := make(map[string]ctrlruntimeclient.Client)
 	for clusterName, clusterManager := range allManagers {
 		buildClients[clusterName] = clusterManager.GetClient()
 	}
 
+	for _, opt := range opts {
+		opt(&defaultReconcilerOpts)
+	}
+
 	r := reconciler{
-		logger:          logger,
+		logger:          log.WithField("controller", ControllerName),
 		masterClient:    mgr.GetClient(),
 		buildClients:    buildClients,
 		prowConfigAgent: prowConfigAgent,
+		newPresubmit:    pjutil.NewPresubmit,
+		now:             time.Now,
+		polling:         func() time.Duration { return defaultReconcilerOpts.polling },
 	}
 
 	if err := ctrlbldr.ControllerManagedBy(mgr).
@@ -83,7 +113,7 @@ func AddToManager(logger *logrus.Entry, mgr manager.Manager, allManagers map[str
 		return fmt.Errorf("build controller: %w", err)
 	}
 
-	if err := addPJReconcilerToManager(logger, mgr); err != nil {
+	if err := addPJReconcilerToManager(log, mgr); err != nil {
 		return fmt.Errorf("build prowjob controller: %w", err)
 	}
 
@@ -106,14 +136,17 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 
 	pjId, pj := ec.Status.ProwJobID, prowv1.ProwJob{}
 	if pjId != "" {
-		nn := types.NamespacedName{Namespace: ProwJobNamespace, Name: pjId}
+		nn := types.NamespacedName{Namespace: r.prowConfigAgent.Config().ProwJobNamespace, Name: pjId}
 		if err := r.masterClient.Get(ctx, nn, &pj); err != nil {
 			return r.handleGetProwJobError(ctx, ec, err)
 		}
 	} else {
 		log.Info("ProwJob not found, creating")
-		r.createProwJob(ctx, log, ec)
-		return reconcile.Result{RequeueAfter: r.polling()}, r.updateEphemeralCluster(ctx, ec)
+		err := r.createProwJob(ctx, log, ec)
+		if err := r.updateEphemeralCluster(ctx, ec); err != nil {
+			return reconcile.Result{RequeueAfter: r.polling()}, err
+		}
+		return reconcile.Result{RequeueAfter: r.polling()}, err
 	}
 
 	if updated := r.reportProwJobStatus(&pj, ec); updated {
@@ -158,50 +191,61 @@ func (r *reconciler) handleGetProwJobError(ctx context.Context, ec *ephemeralclu
 	}
 }
 
-func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster) {
-	ciOperatorConfig := &api.ReleaseBuildConfiguration{
-		InputConfiguration: api.InputConfiguration{
-			Releases: map[string]api.UnresolvedRelease{
-				"initial": {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
-				"latest":  {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
-			},
-		},
-		Resources: api.ResourceConfiguration{
-			"*": api.ResourceRequirements{
-				Requests: api.ResourceList{"cpu": "200m"},
-				Limits:   api.ResourceList{"memory": "400Mi"},
-			},
-		},
+func (r *reconciler) generateCIOperatorConfig(log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster) (*api.ReleaseBuildConfiguration, error) {
+	resources := ec.Spec.CIOperator.Resources
+	if len(resources) == 0 {
+		log.Info("Resources not set, using default values")
+		resources = defaultResources
+	}
+
+	releases := ec.Spec.CIOperator.Releases
+	if len(releases) == 0 {
+		return nil, errors.New("releases stanza not set")
+	}
+
+	return &api.ReleaseBuildConfiguration{
+		InputConfiguration: api.InputConfiguration{Releases: releases},
+		Resources:          resources,
 		Tests: []api.TestStepConfiguration{{
 			As: "cluster-provisioning",
 			MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
-				Workflow: &ec.Spec.CIOperator.Workflow.Name,
+				Workflow: &ec.Spec.CIOperator.Test.Workflow,
 				Test: []api.TestStep{{
 					LiteralTestStep: &api.LiteralTestStep{
 						As:       WaitTestStepName,
 						From:     "cli",
 						Commands: waitKubeconfigSh,
 						Resources: api.ResourceRequirements{
-							Requests: api.ResourceList{"cpu": "200m"},
-							Limits:   api.ResourceList{"memory": "400Mi"},
+							Requests: api.ResourceList{"cpu": "10m"},
+							Limits:   api.ResourceList{"memory": "100Mi"},
 						},
 					},
 				}},
-				Environment:    ec.Spec.CIOperator.Workflow.Env,
-				ClusterProfile: api.ClusterProfile(ec.Spec.CIOperator.Workflow.ClusterProfile),
+				Environment:    ec.Spec.CIOperator.Test.Env,
+				ClusterProfile: api.ClusterProfile(ec.Spec.CIOperator.Test.ClusterProfile),
 			},
 		}},
 		Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
-	}
+	}, nil
+}
 
+func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster) error {
 	upsertProvisioningCond := func(status ephemeralclusterv1.ConditionStatus, reason, msg string) {
 		upsertCondition(ec, ephemeralclusterv1.ClusterProvisioning, status, r.now(), reason, msg)
 	}
 
-	pj, err := r.makeProwJob(ciOperatorConfig)
+	ciOperatorConfig, err := r.generateCIOperatorConfig(log, ec)
+	if err != nil {
+		log.WithError(err).Error("generate ci-operator config")
+		err = fmt.Errorf("generate ci-operator config: %w", err)
+		upsertProvisioningCond(ephemeralclusterv1.ConditionFalse, ephemeralclusterv1.CIOperatorJobsGenerateFailureReason, err.Error())
+		return reconcile.TerminalError(err)
+	}
+
+	pj, err := r.makeProwJob(ciOperatorConfig, ec)
 	if err != nil {
 		upsertProvisioningCond(ephemeralclusterv1.ConditionFalse, ephemeralclusterv1.CIOperatorJobsGenerateFailureReason, err.Error())
-		return
+		return reconcile.TerminalError(err)
 	}
 
 	log = log.WithField("prowjob", pj.Name)
@@ -210,15 +254,16 @@ func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *e
 		log.WithError(err).Error("create prowjob")
 		err = fmt.Errorf("create prowjob: %w", err)
 		upsertProvisioningCond(ephemeralclusterv1.ConditionFalse, ephemeralclusterv1.CIOperatorJobsGenerateFailureReason, err.Error())
-		return
+		return err
 	}
 
 	ec.Status.ProwJobID = pj.Name
 	ec.Finalizers, _ = cislices.UniqueAdd(ec.Finalizers, DependentProwJobFinalizer)
 	upsertProvisioningCond(ephemeralclusterv1.ConditionTrue, "", "")
+	return nil
 }
 
-func (r *reconciler) makeProwJob(ciOperatorConfig *api.ReleaseBuildConfiguration) (*prowv1.ProwJob, error) {
+func (r *reconciler) makeProwJob(ciOperatorConfig *api.ReleaseBuildConfiguration, ec *ephemeralclusterv1.EphemeralCluster) (*prowv1.ProwJob, error) {
 	jobConfig, err := prowgen.GenerateJobs(ciOperatorConfig, &prowgen.ProwgenInfo{
 		Metadata: api.Metadata{
 			Org:    "org",
@@ -247,13 +292,13 @@ func (r *reconciler) makeProwJob(ciOperatorConfig *api.ReleaseBuildConfiguration
 	}
 
 	presubmit := &prowYAML.Presubmits[0]
-	labels := map[string]string{EphemeralClusterNameLabel: ""}
+	labels := map[string]string{EphemeralClusterLabel: ec.Name}
 	// TODO: enable scheduling only when the ci-operator config will stored into the openshift/release repository. Until then
 	// the scheduler won't be able to assign a cluster properly.
 	pj := r.newPresubmit(github.PullRequest{}, "fake", *presubmit, "no-event-guid", labels, pjutil.RequireScheduling(false))
 	// TODO: temporary workaround: we should leverage the scheduler instead, check the comment above.
 	pj.Spec.Cluster = string(api.ClusterBuild01)
-	pj.Namespace = ProwJobNamespace
+	pj.Namespace = r.prowConfigAgent.Config().ProwJobNamespace
 	// Do not report, we are not managing this PR as it's likely it's not comining from the OpenShift CI.
 	pj.Spec.Report = false
 
@@ -356,7 +401,7 @@ func (r *reconciler) deleteEphemeralCluster(ctx context.Context, log *logrus.Ent
 	}
 
 	pj := prowv1.ProwJob{}
-	nn := types.NamespacedName{Namespace: ProwJobNamespace, Name: pjId}
+	nn := types.NamespacedName{Namespace: r.prowConfigAgent.Config().ProwJobNamespace, Name: pjId}
 	if err := r.masterClient.Get(ctx, nn, &pj); err != nil {
 		if kerrors.IsNotFound(err) {
 			log.Info("ProwJob not found, removing the finalizer")
@@ -369,8 +414,8 @@ func (r *reconciler) deleteEphemeralCluster(ctx context.Context, log *logrus.Ent
 	log = log.WithField("pj", pj.Name)
 	switch pj.Status.State {
 	case prowv1.AbortedState, prowv1.ErrorState, prowv1.FailureState, prowv1.SuccessState:
-		log.Info("ProwJob in a definitive state already, skip abortion")
-		return reconcile.Result{RequeueAfter: r.polling()}, nil
+		log.Info("ProwJob in a definitive state already, removing the finalizer")
+		return removeFinalizer()
 	}
 
 	return r.abortProwJob(ctx, log, &pj, AbortProwJobDeleteEC)

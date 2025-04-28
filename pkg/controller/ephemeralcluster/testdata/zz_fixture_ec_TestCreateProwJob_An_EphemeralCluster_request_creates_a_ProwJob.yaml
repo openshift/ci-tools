@@ -7,11 +7,20 @@ metadata:
   resourceVersion: "1000"
 spec:
   ciOperator:
-    workflow:
+    releases:
+      initial:
+        integration:
+          name: "4.17"
+          namespace: ocp
+      latest:
+        integration:
+          name: "4.17"
+          namespace: ocp
+    test:
       clusterProfile: aws
       env:
         foo: bar
-      name: test-workflow
+      workflow: test-workflow
 status:
   conditions:
   - lastTransitionTime: "2025-04-02T12:12:12Z"

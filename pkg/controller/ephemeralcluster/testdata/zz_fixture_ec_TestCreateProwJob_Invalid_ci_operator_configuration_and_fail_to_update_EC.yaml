@@ -1,0 +1,10 @@
+metadata:
+  creationTimestamp: null
+  name: ec
+  namespace: ns
+  resourceVersion: "999"
+spec:
+  ciOperator:
+    test:
+      workflow: test-workflow
+status: {}

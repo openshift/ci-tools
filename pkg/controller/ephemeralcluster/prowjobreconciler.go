@@ -24,8 +24,7 @@ import (
 )
 
 const (
-	EphemeralClusterProwJobLabel = "ci.openshift.io/ephemeral-cluster"
-	AbortECNotFound              = "Ephemeral Cluster not found"
+	AbortECNotFound = "Ephemeral Cluster not found"
 )
 
 type prowJobReconciler struct {
@@ -36,14 +35,15 @@ type prowJobReconciler struct {
 }
 
 func ProwJobFilter(object ctrlclient.Object) bool {
-	_, ok := object.GetLabels()[EphemeralClusterProwJobLabel]
+	_, ok := object.GetLabels()[EphemeralClusterLabel]
 	return ok
 }
 
 func addPJReconcilerToManager(logger *logrus.Entry, mgr manager.Manager) error {
 	r := prowJobReconciler{
-		logger: logger,
+		logger: logger.WithField("controller", "ephemeral_cluster_provisioner_pj"),
 		client: mgr.GetClient(),
+		now:    time.Now,
 	}
 
 	if err := ctrlbldr.ControllerManagedBy(mgr).
@@ -67,7 +67,7 @@ func (r *prowJobReconciler) Reconcile(ctx context.Context, req reconcile.Request
 		}
 	}
 
-	ecName, ok := pj.Labels[EphemeralClusterNameLabel]
+	ecName, ok := pj.Labels[EphemeralClusterLabel]
 	if !ok {
 		return reconcile.Result{}, reconcile.TerminalError(fmt.Errorf("%s doesn't have the EC label", pj.Name))
 	}

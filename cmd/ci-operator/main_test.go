@@ -1292,6 +1292,23 @@ func TestMultiStageParams(t *testing.T) {
 				"could not parse multi-stage-param: PARAM2 is not in the format key=value",
 			},
 		},
+		{
+			id:          "quoted param with spaces",
+			inputParams: stringSlice{[]string{`ARGS="--test 1 --value text"`}},
+			testConfig: []api.TestStepConfiguration{
+				{
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						Environment: map[string]string{
+							"OTHERPARAM": "OTHERVAL",
+						},
+					},
+				},
+			},
+			expectedParams: map[string]string{
+				"ARGS":       "--test 1 --value text",
+				"OTHERPARAM": "OTHERVAL",
+			},
+		},
 	}
 
 	t.Parallel()

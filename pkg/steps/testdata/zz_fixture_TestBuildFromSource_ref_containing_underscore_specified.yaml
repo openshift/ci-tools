@@ -9,7 +9,7 @@ metadata:
     ci.openshift.io/jobtype: ""
     ci.openshift.io/metadata.branch: master
     ci.openshift.io/metadata.org: org
-    ci.openshift.io/metadata.repo: other-repo
+    ci.openshift.io/metadata.repo: other_repo
     ci.openshift.io/metadata.target: ""
     ci.openshift.io/metadata.variant: ""
     created-by-ci: "true"
@@ -34,7 +34,7 @@ spec:
     - name: vcs-url
     to:
       kind: ImageStreamTag
-      name: pipeline:src-org.other-repo
+      name: pipeline:src-org.other_repo
       namespace: test-namespace
   postCommit: {}
   resources: {}

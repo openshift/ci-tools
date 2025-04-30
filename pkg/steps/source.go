@@ -299,6 +299,12 @@ func resolvePipelineImageStreamTagReference(ctx context.Context, client loggingc
 
 func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, fromTagDigest, dockerfilePath string, resources api.ResourceConfiguration, pullSecret *corev1.Secret, buildArgs []api.BuildArg, ref string) *buildapi.Build {
 	logrus.Infof("Building %s", toTag)
+	buildName := string(toTag)
+	// Build names cannot contain '_', but repository names can. When building from a multi-pr config, there could be '_' present in the toTag
+	if strings.Contains(buildName, "_") {
+		buildName = strings.Replace(buildName, "_", "-", -1)
+		logrus.Infof("replacing '_' chars in build name; new name: %s", buildName)
+	}
 	buildResources, err := ResourcesFor(resources.RequirementsForStep(string(toTag)))
 	if err != nil {
 		panic(fmt.Errorf("unable to parse resource requirement for build %s: %w", toTag, err))
@@ -313,10 +319,10 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 	}
 
 	layer := buildapi.ImageOptimizationSkipLayers
-	labels := LabelsFor(jobSpec, map[string]string{CreatesLabel: string(toTag)}, ref)
+	labels := LabelsFor(jobSpec, map[string]string{CreatesLabel: buildName}, ref)
 	build := &buildapi.Build{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      string(toTag),
+			Name:      buildName,
 			Namespace: jobSpec.Namespace(),
 			Labels:    labels,
 			Annotations: map[string]string{

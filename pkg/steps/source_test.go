@@ -407,7 +407,43 @@ func TestBuildFromSource(t *testing.T) {
 				},
 			},
 			buildArgs: []api.BuildArg{{Name: "TAGS", Value: "release"}},
+			toTag:     "src-org.other-repo",
 			ref:       "org.other-repo",
+		},
+		{
+			name: "ref containing underscore specified",
+			jobSpec: &api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Job:       "job",
+					BuildID:   "buildId",
+					ProwJobID: "prowJobId",
+					ExtraRefs: []prowapi.Refs{
+						{
+							Org:     "org",
+							Repo:    "repo",
+							BaseRef: "master",
+							BaseSHA: "masterSHA",
+							Pulls: []prowapi.Pull{{
+								Number: 1,
+								SHA:    "pullSHA",
+							}},
+						},
+						{
+							Org:     "org",
+							Repo:    "other_repo",
+							BaseRef: "master",
+							BaseSHA: "masterSHA",
+							Pulls: []prowapi.Pull{{
+								Number: 10,
+								SHA:    "pullSHA",
+							}},
+						},
+					},
+				},
+			},
+			buildArgs: []api.BuildArg{{Name: "TAGS", Value: "release"}},
+			toTag:     "src-org.other_repo",
+			ref:       "org.other_repo",
 		},
 	}
 	for _, testCase := range testCases {

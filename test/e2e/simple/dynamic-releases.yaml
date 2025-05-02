@@ -7,33 +7,33 @@ releases:
   initial:
     candidate:
       product: okd
-      version: "4.10"
+      version: "4.16"
   latest:
     release:
       channel: stable
-      version: "4.11"
+      version: "4.17"
   custom:
     candidate:
       product: ocp
       architecture: amd64
       stream: nightly
-      version: "4.11"
+      version: "4.17"
       relative: 1
   pre:
     prerelease:
       product: ocp
       version_bounds:
-        lower: "4.10.0"
-        upper: "4.11.0-0"
+        lower: "4.16.0"
+        upper: "4.17.0-0"
   mainframe:
     release:
-      version: "4.11"
+      version: "4.17"
       channel: stable
       architecture: s390x
   assembled:
     integration:
       namespace: ocp
-      name: "4.11"
+      name: "4.17"
 resources:
   '*':
     requests:

@@ -7,11 +7,11 @@ releases:
   latest:   # include `latest` as a release to verify that `latest` is automatically overridden when using claims
     release:
       channel: stable
-      version: "4.10"
+      version: "4.17"
   custom:   # include `custom` to make sure named claim imports are properly overridden
     release:
       channel: stable
-      version: "4.9"
+      version: "4.16"
 resources:
   '*':
     requests:
@@ -35,7 +35,7 @@ tests:
       owner: fake
       product: ocp
       timeout: 3m # a claim from a fake pool should become ready very soon
-      version: "4.11"
+      version: "4.17"
     steps:
       test:
         - as: claim-step
@@ -56,7 +56,7 @@ tests:
       owner: fake
       product: ocp
       timeout: 3m # a claim from a fake pool should become ready very soon
-      version: "4.11"
+      version: "4.17"
     steps:
       test:
         - as: claim-step
@@ -76,7 +76,7 @@ tests:
       owner: fake
       product: ocp
       timeout: 3m # a claim from a fake pool should become ready very soon
-      version: "4.11"
+      version: "4.17"
     steps:
       test:
         - as: claim-step

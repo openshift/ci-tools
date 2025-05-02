@@ -156,7 +156,7 @@ func TestMultiStage(t *testing.T) {
 			env:      []string{defaultJobSpec},
 			needHive: true,
 			success:  true,
-			output:   []string{`Imported release 4.11.`, `to tag release:latest-e2e-claim`, `e2e-claim-claim-step succeeded`},
+			output:   []string{`Imported release 4.17.`, `to tag release:latest-e2e-claim`, `e2e-claim-claim-step succeeded`},
 		},
 		{
 			name:     "e2e-claim-as-custom",
@@ -164,7 +164,7 @@ func TestMultiStage(t *testing.T) {
 			env:      []string{defaultJobSpec},
 			needHive: true,
 			success:  true,
-			output:   []string{`Imported release 4.11.`, `to tag release:custom-e2e-claim-as-custom`, `e2e-claim-as-custom-claim-step succeeded`},
+			output:   []string{`Imported release 4.17.`, `to tag release:custom-e2e-claim-as-custom`, `e2e-claim-as-custom-claim-step succeeded`},
 		},
 		{
 			name:     "e2e-claim depends on release image",
@@ -172,7 +172,7 @@ func TestMultiStage(t *testing.T) {
 			env:      []string{defaultJobSpec},
 			needHive: true,
 			success:  true,
-			output:   []string{`Imported release 4.11.`, `to tag release:latest-e2e-claim-depend-on-release-image`, `e2e-claim-depend-on-release-image-claim-step succeeded`},
+			output:   []string{`Imported release 4.17.`, `to tag release:latest-e2e-claim-depend-on-release-image`, `e2e-claim-depend-on-release-image-claim-step succeeded`},
 		},
 		{
 			name:    "assembled releases function",
@@ -180,8 +180,8 @@ func TestMultiStage(t *testing.T) {
 			env:     []string{defaultJobSpec},
 			success: true,
 			output: []string{
-				`Imported release 4.9.`, `images to tag release:initial`,
-				`Snapshot integration stream into release 4.11.`, `-latest to tag release:latest`,
+				`Imported release 4.16.`, `images to tag release:initial`,
+				`Snapshot integration stream into release 4.17.`, `-latest to tag release:latest`,
 				`verify-releases-initial succeeded`, `verify-releases-initial-cli succeeded`,
 				`verify-releases-latest succeeded`, `verify-releases-latest-cli succeeded`,
 			},

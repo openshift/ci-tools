@@ -284,22 +284,22 @@ func TestLiteralDynamicRelease(t *testing.T) {
 	}{
 		{
 			name:    "published release",
-			release: resolveOfficialSpec("https://api.openshift.com/api/upgrades_info/v1/graph?channel=stable-4.4&arch=amd64"),
+			release: resolveOfficialSpec("https://api.openshift.com/api/upgrades_info/v1/graph?channel=stable-4.17&arch=amd64"),
 			target:  "latest",
 		},
 		{
 			name:    "nightly release",
-			release: resolveSpec("https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4.10.0-0.nightly/latest?rel=1"),
+			release: resolveSpec("https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4.17.0-0.nightly/latest?rel=1"),
 			target:  "latest",
 		},
 		{
 			name:    "non-x86 release",
-			release: resolveSpec("https://s390x.ocp.releases.ci.openshift.org/api/v1/releasestream/4.9.0-0.nightly-s390x/latest?rel=1"),
+			release: resolveSpec("https://s390x.ocp.releases.ci.openshift.org/api/v1/releasestream/4.16.0-0.nightly-s390x/latest?rel=1"),
 			target:  "mainframe",
 		},
 		{
 			name:    "built release",
-			release: resolveSpec("https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4.10.0-0.nightly/latest?rel=1"),
+			release: resolveSpec("https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4.17.0-0.nightly/latest?rel=1"),
 			target:  "assembled",
 		},
 	}

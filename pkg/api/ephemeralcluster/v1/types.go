@@ -6,6 +6,17 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
+const (
+	CIOperatorJobsGenerateFailureReason    = "CIOperatorJobsGenerateFailure"
+	ProwJobFailureReason                   = "ProwJobFailure"
+	ProwJobCompletedReason                 = "ProwJobCompleted"
+	KubeconfigFetchFailureReason           = "KubeconfigFetchFailure"
+	CreateTestCompletedFailureSecretReason = "CreateTestCompletedFailure"
+
+	CIOperatorNSNotFoundMsg = "ci-operator NS not found"
+	KubeconfigNotReadMsg    = "kubeconfig not ready"
+)
+
 // EphemeralClusterCondition is a valid value for EphemeralClusterCondition.Type
 type EphemeralClusterConditionType string
 
@@ -29,15 +40,21 @@ const (
 	ConditionFalse ConditionStatus = "False"
 )
 
-const (
-	CIOperatorJobsGenerateFailureReason    = "CIOperatorJobsGenerateFailure"
-	ProwJobFailureReason                   = "ProwJobFailure"
-	ProwJobCompletedReason                 = "ProwJobCompleted"
-	KubeconfigFetchFailureReason           = "KubeconfigFetchFailure"
-	CreateTestCompletedFailureSecretReason = "CreateTestCompletedFailure"
+type EphemeralClusterPhase string
 
-	CIOperatorNSNotFoundMsg = "ci-operator NS not found"
-	KubeconfigNotReadMsg    = "kubeconfig not ready"
+const (
+	// EphemeralClusterProvisioning describes everything that happens before the kubeconfig is available.
+	// This phase includes creating a ProwJob and waiting for the kubeconfig to show up.
+	EphemeralClusterProvisioning = "Provisioning"
+	// EphemeralClusterReady means the cluster is running and the kubeconfig is available.
+	EphemeralClusterReady = "Ready"
+	// EphemeralClusterDeprovisioning means that the deprovisioning procedures are happening.
+	EphemeralClusterDeprovisioning = "Deprovisioning"
+	// EphemeralClusterDeprovisioning means that the cluster has been deprovisioned.
+	EphemeralClusterDeprovisioned = "Deprovisioned"
+	// EphemeralClusterFailed means that either the cluster is in a error state or the
+	// provisioning/deprovisioning procedures didn't succeed.
+	EphemeralClusterFailed = "Failed"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -81,6 +98,8 @@ type TestSpec struct {
 }
 
 type EphemeralClusterStatus struct {
+	// Phase is an high level description of where the ephemeral cluster is in its lifecycle
+	Phase      EphemeralClusterPhase       `json:"phase"`
 	Conditions []EphemeralClusterCondition `json:"conditions,omitempty"`
 	ProwJobID  string                      `json:"prowJobId,omitempty"`
 	// Kubeconfig to access the ephemeral cluster

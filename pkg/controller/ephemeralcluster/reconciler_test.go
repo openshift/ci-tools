@@ -375,6 +375,7 @@ func TestReconcile(t *testing.T) {
 					ResourceVersion: "1000",
 				},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					Phase:      ephemeralclusterv1.EphemeralClusterReady,
 					ProwJobID:  "pj-123",
 					Kubeconfig: "kubeconfig",
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
@@ -558,6 +559,7 @@ func TestReconcile(t *testing.T) {
 					ResourceVersion: "1000",
 				},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					Phase:     ephemeralclusterv1.EphemeralClusterFailed,
 					ProwJobID: "pj-123",
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
 						Type:               ephemeralclusterv1.ClusterReady,
@@ -632,6 +634,7 @@ func TestReconcile(t *testing.T) {
 					Namespace: "bar",
 				},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					Phase:      ephemeralclusterv1.EphemeralClusterDeprovisioned,
 					ProwJobID:  "pj-123",
 					Kubeconfig: "k",
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
@@ -708,6 +711,7 @@ func TestReconcile(t *testing.T) {
 				},
 				Spec: ephemeralclusterv1.EphemeralClusterSpec{TearDownCluster: true},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					Phase:     ephemeralclusterv1.EphemeralClusterDeprovisioning,
 					ProwJobID: "pj-123",
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
 						Type:               ephemeralclusterv1.TestCompleted,
@@ -750,6 +754,7 @@ func TestReconcile(t *testing.T) {
 				},
 				Spec: ephemeralclusterv1.EphemeralClusterSpec{TearDownCluster: true},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					Phase:     ephemeralclusterv1.EphemeralClusterFailed,
 					ProwJobID: "pj-123",
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
 						Type:               ephemeralclusterv1.TestCompleted,
@@ -809,6 +814,7 @@ func TestReconcile(t *testing.T) {
 				},
 				Spec: ephemeralclusterv1.EphemeralClusterSpec{TearDownCluster: true},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					Phase:     ephemeralclusterv1.EphemeralClusterDeprovisioning,
 					ProwJobID: "pj-123",
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
 						Type:               ephemeralclusterv1.TestCompleted,

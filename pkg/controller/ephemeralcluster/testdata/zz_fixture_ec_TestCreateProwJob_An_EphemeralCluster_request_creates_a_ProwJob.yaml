@@ -26,4 +26,5 @@ status:
   - lastTransitionTime: "2025-04-02T12:12:12Z"
     status: "True"
     type: ClusterProvisioning
+  phase: Provisioning
   prowJobId: foobar

@@ -7,4 +7,5 @@ spec:
   ciOperator:
     test:
       workflow: test-workflow
-status: {}
+status:
+  phase: ""

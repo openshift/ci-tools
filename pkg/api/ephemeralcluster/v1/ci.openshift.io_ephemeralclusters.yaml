@@ -244,8 +244,14 @@ spec:
               kubeconfig:
                 description: Kubeconfig to access the ephemeral cluster
                 type: string
+              phase:
+                description: Phase is an high level description of where the ephemeral
+                  cluster is in its lifecycle
+                type: string
               prowJobId:
                 type: string
+            required:
+            - phase
             type: object
         required:
         - metadata

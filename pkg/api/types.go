@@ -1461,6 +1461,9 @@ const (
 	ClusterProfileAWSManagedOSDRHOAIQE    ClusterProfile = "aws-managed-osd-rhoai-qe"
 	ClusterProfileGCPObservability        ClusterProfile = "gcp-observability"
 	ClusterProfileEquinixEdgeEnablement   ClusterProfile = "equinix-edge-enablement"
+	ClusterProfileAWSQUAYQE               ClusterProfile = "aws-quay-qe"
+	ClusterProfileGCPQUAYQE               ClusterProfile = "gcp-quay-qe"
+	ClusterProfileAzureQUAYQE             ClusterProfile = "azure-quay-qe"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -1625,6 +1628,9 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSManagedRosaRHOAIQE,
 		ClusterProfileAWSManagedOSDRHOAIQE,
 		ClusterProfileEquinixEdgeEnablement,
+		ClusterProfileAWSQUAYQE,
+		ClusterProfileGCPQUAYQE,
+		ClusterProfileAzureQUAYQE,
 	}
 }
 
@@ -1682,6 +1688,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileKonfluxWorkspacesAWS,
 		ClusterProfileAWSRHOAIQE,
 		ClusterProfileAWSManagedRosaRHOAIQE,
+		ClusterProfileAWSQUAYQE,
 		ClusterProfileAWSManagedOSDRHOAIQE:
 		return string(CloudAWS)
 	case
@@ -1711,6 +1718,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAzureAutoreleaseQE,
 		ClusterProfileAzurePerfScale,
 		ClusterProfileAzureSustAutoRel412,
+		ClusterProfileAzureQUAYQE,
 		ClusterProfileAzureVirtualization:
 		return "azure4"
 	case
@@ -1746,6 +1754,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileGCPTelco,
 		ClusterProfileGCPChaos,
 		ClusterProfileGCPSDCICD,
+		ClusterProfileGCPQUAYQE,
 		ClusterProfileOSLGCP:
 		return string(CloudGCP)
 	case
@@ -2171,6 +2180,12 @@ func (p ClusterProfile) LeaseType() string {
 		return "devsandboxci-aws-quota-slice"
 	case ClusterProfileQuayAWS:
 		return "quay-aws-quota-slice"
+	case ClusterProfileAWSQUAYQE:
+		return "aws-quay-qe-quota-slice"
+	case ClusterProfileGCPQUAYQE:
+		return "gcp-quay-qe-quota-slice"
+	case ClusterProfileAzureQUAYQE:
+		return "azure-quay-qe-quota-slice"
 	case ClusterProfileAWSEdgeInfra:
 		return "aws-edge-infra-quota-slice"
 	case ClusterProfileRHOpenShiftEcosystem:

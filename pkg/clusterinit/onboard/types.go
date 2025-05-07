@@ -51,7 +51,7 @@ func RepoMetadata() *api.Metadata {
 	return &api.Metadata{
 		Org:    "openshift",
 		Repo:   "release",
-		Branch: "master",
+		Branch: "main",
 	}
 }
 

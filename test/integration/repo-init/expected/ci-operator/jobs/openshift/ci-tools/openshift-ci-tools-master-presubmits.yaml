@@ -3,8 +3,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     cluster: api.ci
     context: ci/prow/images
     decorate: true
@@ -13,7 +13,7 @@ presubmits:
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-openshift-ci-tools-master-images
+    name: pull-ci-openshift-ci-tools-main-images
     rerun_command: /test images
     spec:
       containers:
@@ -58,8 +58,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     cluster: api.ci
     context: ci/prow/unit
     decorate: true
@@ -68,7 +68,7 @@ presubmits:
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-openshift-ci-tools-master-unit
+    name: pull-ci-openshift-ci-tools-main-unit
     rerun_command: /test unit
     spec:
       containers:

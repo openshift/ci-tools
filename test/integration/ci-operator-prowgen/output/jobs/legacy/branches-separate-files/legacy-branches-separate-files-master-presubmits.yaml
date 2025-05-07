@@ -3,8 +3,8 @@ presubmits:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     context: ci/prow/generated
     decorate: true
     decoration_config:
@@ -12,7 +12,7 @@ presubmits:
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-legacy-branches-separate-files-master-generated
+    name: pull-ci-legacy-branches-separate-files-main-generated
     rerun_command: /test generated
     spec:
       containers:
@@ -56,6 +56,6 @@ presubmits:
     trigger: (?m)^/test( | .* )generated,?($|\s.*)
   - always_run: false
     branches:
-    - ^master$
-    - ^master-
+    - ^main$
+    - ^main-
     name: pull-ci-legacy-branches-separate-files-test

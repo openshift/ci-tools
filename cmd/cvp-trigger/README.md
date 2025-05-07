@@ -9,12 +9,12 @@ To test the optional operator images built internally in Red Hat, CVP triggers
 testing jobs via the `cvp-trigger` tool. Currently, the only implemented test
 workflow is the one executing the common operator tests (component-agnostic).
 For common operator tests, `cvp-trigger` creates a parameterized instance of the
-`cpaas-cvp-optional-operator-common-tests` job, living in [openshift/release](https://github.com/openshift/release/blob/master/ci-operator/jobs/openshift/release/openshift-release-infra-periodics.yaml).
+`cpaas-cvp-optional-operator-common-tests` job, living in [openshift/release](https://github.com/openshift/release/blob/main/ci-operator/jobs/openshift/release/openshift-release-infra-periodics.yaml).
 See the [Triggered Job Interface](#triggered-job-interface) section for details
  about the parametrization.
 
 The `cpaas-cvp-optional-operator-common-tests` job runs ci-operator using
-a config stored in [redhat-openshift-ecosystem](https://github.com/redhat-openshift-ecosystem/release/tree/master/ci-operator/config/redhat-openshift-ecosystem/playground).
+a config stored in [redhat-openshift-ecosystem](https://github.com/redhat-openshift-ecosystem/release/tree/main/ci-operator/config/redhat-openshift-ecosystem/playground).
 The exact configuration to use is inferred from the desired OCP version. For
 example, for OCP version 4.5, ci-operator uses the config for the
 artificial `cvp-ocp-4.5` branch of the `redhat-openshift-ecosystem/playground`

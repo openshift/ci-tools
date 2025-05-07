@@ -18,7 +18,6 @@ import (
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/utils/ptr"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,7 +35,6 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	ephemeralclusterv1 "github.com/openshift/ci-tools/pkg/api/ephemeralcluster/v1"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/controller/ephemeralcluster"
 	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler"
@@ -402,18 +400,16 @@ func main() {
 			options.LeaderElectionReleaseOnCancel = true
 			options.LeaderElectionNamespace = opts.leaderElectionNamespace
 			options.LeaderElectionID = fmt.Sprintf("dptp-controller-manager%s", opts.leaderElectionSuffix)
-			options.Cache.ByObject = map[client.Object]cache.ByObject{
-				&ephemeralclusterv1.EphemeralCluster{}: {
-					Namespaces: map[string]cache.Config{ephemeralcluster.EphemeralClusterNamespace: {}},
-				},
-			}
 		} else {
 			options.Metrics = server.Options{
 				BindAddress: "0",
 			}
 		}
 		if cluster == opts.registryClusterName {
-			options.Cache.SyncPeriod = ptr.To(24 * time.Hour)
+			syncPeriod := 24 * time.Hour
+			options.Cache = cache.Options{
+				SyncPeriod: &syncPeriod,
+			}
 		}
 		logrus.WithField("cluster", cluster).Info("Creating manager ...")
 		mgr, err := controllerruntime.NewManager(&cfg, options)
@@ -444,10 +440,6 @@ func main() {
 	if err := prowv1.AddToScheme(mgr.GetScheme()); err != nil {
 		logrus.WithError(err).Fatal("Failed to add prowv1 to scheme")
 	}
-	if err := ephemeralclusterv1.AddToScheme(mgr.GetScheme()); err != nil {
-		logrus.WithError(err).Fatal("Failed to add ephemeralclusterv1 to scheme")
-	}
-
 	pprof.Serve(flagutil.DefaultPProfPort)
 
 	for cluster, buildClusterMgr := range allManagers {

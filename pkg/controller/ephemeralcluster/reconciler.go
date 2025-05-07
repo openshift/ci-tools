@@ -36,7 +36,7 @@ const (
 	ControllerName            = "ephemeral_cluster_provisioner"
 	WaitTestStepName          = "wait-test-complete"
 	EphemeralClusterLabel     = "ci.openshift.io/ephemeral-cluster"
-	EphemeralClusterNamespace = "ephemeral-cluster"
+	EphemeralClusterNamespace = "konflux-ephemeral-cluster"
 	AbortProwJobDeleteEC      = "Ephemeral Cluster deleted"
 	DependentProwJobFinalizer = "ephemeralcluster.ci.openshift.io/dependent-prowjob"
 	TestDoneSecretName        = "test-done-keep-going"

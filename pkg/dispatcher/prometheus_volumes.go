@@ -1,4 +1,4 @@
-package main
+package dispatcher
 
 import (
 	"context"
@@ -7,11 +7,8 @@ import (
 
 	promapi "github.com/prometheus/client_golang/api"
 	prometheusapi "github.com/prometheus/client_golang/api/prometheus/v1"
-	"github.com/sirupsen/logrus"
 
 	"sigs.k8s.io/prow/pkg/config/secret"
-
-	"github.com/openshift/ci-tools/pkg/dispatcher"
 )
 
 type prometheusVolumes struct {
@@ -22,7 +19,7 @@ type prometheusVolumes struct {
 	m                    sync.Mutex
 }
 
-func newPrometheusVolumes(promOptions dispatcher.PrometheusOptions, prometheusDaysBefore int) (prometheusVolumes, error) {
+func NewPrometheusVolumes(promOptions PrometheusOptions, prometheusDaysBefore int) (prometheusVolumes, error) {
 	promClient, err := promOptions.NewPrometheusClient(secret.GetSecret)
 	if err != nil {
 		return prometheusVolumes{}, err
@@ -39,7 +36,6 @@ func (pv *prometheusVolumes) GetJobVolumes() (map[string]float64, error) {
 	pv.m.Lock()
 	defer pv.m.Unlock()
 	if len(pv.jobVolumes) != 0 && time.Since(pv.timestamp) < 24*time.Hour {
-		logrus.Info("Using cached job volumes")
 		return pv.jobVolumes, nil
 	}
 	v1api := prometheusapi.NewAPI(pv.promClient)
@@ -47,13 +43,12 @@ func (pv *prometheusVolumes) GetJobVolumes() (map[string]float64, error) {
 	defer cancel()
 	y, m, d := time.Now().Add(-time.Duration(24*pv.prometheusDaysBefore) * time.Hour).Date()
 	ts := time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
-	jv, err := dispatcher.GetJobVolumesFromPrometheus(ctx, v1api, ts)
+	jv, err := GetJobVolumesFromPrometheus(ctx, v1api, ts)
 	if err != nil {
 		return nil, err
 	}
 	pv.jobVolumes = jv
 	pv.timestamp = time.Now()
-	logrus.Info("Fetched new job volumes")
 	return pv.jobVolumes, nil
 }
 
@@ -66,7 +61,7 @@ func (pv *prometheusVolumes) getTotalVolume() float64 {
 	return totalVolume
 }
 
-func (pv *prometheusVolumes) calculateVolumeDistribution(clusterMap dispatcher.ClusterMap) map[string]float64 {
+func (pv *prometheusVolumes) CalculateVolumeDistribution(clusterMap ClusterMap) map[string]float64 {
 	totalCapacity := 0
 	for _, cluster := range clusterMap {
 		totalCapacity += cluster.Capacity

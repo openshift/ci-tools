@@ -224,7 +224,7 @@ items:
       apiVersion: "1.0"
       kind: DockerImage
     dockerImageMetadataVersion: "1.0"
-    dockerImageReference: docker-registry.default.svc:5000/ci-op-jpdy23wx/pipeline@sha256:fd41b8b3efb8db1187ac231ca84863a8106880d049123d6eddfe21d7f751c627
+    dockerImageReference: docker.io/openshift/origin-release@sha256:fd41b8b3efb8db1187ac231ca84863a8106880d049123d6eddfe21d7f751c627
     metadata:
       annotations:
         image.openshift.io/dockerLayersOrder: ascending
@@ -252,7 +252,7 @@ items:
     importPolicy: {}
     name: root
     referencePolicy:
-      type: Local
+      type: Source
 - apiVersion: image.openshift.io/v1
   generation: 3
   image:

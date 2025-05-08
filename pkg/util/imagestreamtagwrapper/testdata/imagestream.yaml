@@ -31,7 +31,7 @@ spec:
     importPolicy: {}
     name: root
     referencePolicy:
-      type: Local
+      type: Source
 status:
   dockerImageRepository: docker-registry.default.svc:5000/ci-op-jpdy23wx/pipeline
   publicDockerImageRepository: registry.svc.ci.openshift.org/ci-op-jpdy23wx/pipeline

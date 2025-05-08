@@ -71,6 +71,12 @@ func validateIntegration(fieldRoot, name string, integration api.Integration) []
 	if integration.IncludeBuiltImages && name != api.LatestReleaseName {
 		validationErrors = append(validationErrors, fmt.Errorf("%s: only the `latest` release can set `include_built_images`", fieldRoot))
 	}
+	if integration.ReferencePolicy == "" {
+		integration.ReferencePolicy = "Local" // Set default value
+	}
+	if integration.ReferencePolicy != "Local" && integration.ReferencePolicy != "Source" {
+		validationErrors = append(validationErrors, fmt.Errorf("%s.reference_policy: must be one of Local or Source or empty defaults to Local", fieldRoot))
+	}
 	return validationErrors
 }
 

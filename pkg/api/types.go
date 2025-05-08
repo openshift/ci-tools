@@ -335,6 +335,8 @@ type Integration struct {
 	// IncludeBuiltImages determines if the release we assemble will include
 	// images built during the test itself.
 	IncludeBuiltImages bool `json:"include_built_images,omitempty"`
+	// ReferencePolicy is the policy to use when resolving references (Local or Source)
+	ReferencePolicy string `json:"reference_policy,omitempty"`
 }
 
 // ReleaseDescriptor holds common data for different types of release payloads
@@ -494,6 +496,14 @@ func (i *ImageStreamTagReference) ISTagName() string {
 	return fmt.Sprintf("%s/%s:%s", i.Namespace, i.Name, i.Tag)
 }
 
+// // ReferencePolicyTag defines the possible values for the reference policy.
+// type ReferencePolicyTag string
+
+// const (
+// 	ReferencePolicyLocal  ReferencePolicyTag = "Local"
+// 	ReferencePolicySource ReferencePolicyTag = "Source"
+// )
+
 // ReleaseTagConfiguration describes how a release is
 // assembled from release artifacts. A release image stream is a
 // single stream with multiple tags (openshift/origin-v3.9:control-plane),
@@ -511,6 +521,9 @@ type ReleaseTagConfiguration struct {
 	// IncludeBuiltImages determines if the release we assemble will include
 	// images built during the test itself.
 	IncludeBuiltImages bool `json:"include_built_images,omitempty"`
+
+	// ReferencePolicy is the policy to use when resolving references (Local or Source)
+	ReferencePolicy string `json:"reference_policy,omitempty"`
 }
 
 func (config ReleaseTagConfiguration) InputsName() string {

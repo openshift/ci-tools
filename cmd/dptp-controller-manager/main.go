@@ -35,6 +35,7 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	ephemeralclusterv1 "github.com/openshift/ci-tools/pkg/api/ephemeralcluster/v1"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/controller/ephemeralcluster"
 	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler"
@@ -439,6 +440,9 @@ func main() {
 	}
 	if err := prowv1.AddToScheme(mgr.GetScheme()); err != nil {
 		logrus.WithError(err).Fatal("Failed to add prowv1 to scheme")
+	}
+	if err := ephemeralclusterv1.AddToScheme(mgr.GetScheme()); err != nil {
+		logrus.WithError(err).Fatal("Failed to add ephemeralclusterv1 to scheme")
 	}
 	pprof.Serve(flagutil.DefaultPProfPort)
 

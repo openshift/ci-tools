@@ -2725,3 +2725,7 @@ type ClusterClaimOwnerDetails struct {
 	Org   string   `yaml:"org"`
 	Repos []string `yaml:"repos,omitempty"`
 }
+
+const (
+	EphemeralClusterTestName = "cluster-provisioning"
+)

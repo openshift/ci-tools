@@ -389,7 +389,7 @@ func TestReconcile(t *testing.T) {
 						},
 					},
 					&corev1.Secret{
-						ObjectMeta: v1.ObjectMeta{Name: WaitTestStepName, Namespace: "ci-op-1234"},
+						ObjectMeta: v1.ObjectMeta{Name: api.EphemeralClusterTestName, Namespace: "ci-op-1234"},
 						Data:       map[string][]byte{"kubeconfig": []byte("kubeconfig")},
 					},
 				}
@@ -502,7 +502,7 @@ func TestReconcile(t *testing.T) {
 						Type:               ephemeralclusterv1.ClusterReady,
 						Status:             ephemeralclusterv1.ConditionFalse,
 						Reason:             ephemeralclusterv1.KubeconfigFetchFailureReason,
-						Message:            fmt.Sprintf("secrets %q not found", WaitTestStepName),
+						Message:            fmt.Sprintf("secrets %q not found", api.EphemeralClusterTestName),
 						LastTransitionTime: v1.NewTime(fakeNow),
 					}},
 				},
@@ -535,7 +535,7 @@ func TestReconcile(t *testing.T) {
 						},
 					},
 					&corev1.Secret{
-						ObjectMeta: v1.ObjectMeta{Name: WaitTestStepName, Namespace: "ci-op-1234"},
+						ObjectMeta: v1.ObjectMeta{Name: api.EphemeralClusterTestName, Namespace: "ci-op-1234"},
 					},
 				}
 				c := fake.NewClientBuilder().WithObjects(objs...).WithScheme(scheme).Build()

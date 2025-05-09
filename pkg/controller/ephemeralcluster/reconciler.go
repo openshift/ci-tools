@@ -40,7 +40,7 @@ const (
 	EphemeralClusterNamespace = "ephemeral-cluster"
 	AbortProwJobDeleteEC      = "Ephemeral Cluster deleted"
 	DependentProwJobFinalizer = "ephemeralcluster.ci.openshift.io/dependent-prowjob"
-	TestDoneSecretName        = "test-done-keep-going"
+	TestDoneSecretName        = "test-done-signal"
 	UnresolvedConfigVar       = "UNRESOLVED_CONFIG"
 )
 
@@ -213,7 +213,7 @@ func (r *reconciler) generateCIOperatorConfig(log *logrus.Entry, ec *ephemeralcl
 		InputConfiguration: api.InputConfiguration{Releases: releases},
 		Resources:          resources,
 		Tests: []api.TestStepConfiguration{{
-			As: "cluster-provisioning",
+			As: api.EphemeralClusterTestName,
 			MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
 				Workflow: &ec.Spec.CIOperator.Test.Workflow,
 				Test: []api.TestStep{{
@@ -343,8 +343,8 @@ func (r *reconciler) fetchKubeconfig(ctx context.Context, log *logrus.Entry, ec 
 	log.WithField("namespace", ns).Info("ci-operator namespace found")
 
 	kubeconfigSecret := corev1.Secret{}
-	// The secret is named after the test step name.
-	if err := buildClient.Get(ctx, types.NamespacedName{Name: WaitTestStepName, Namespace: ns}, &kubeconfigSecret); err != nil {
+	// The secret is named after the test name.
+	if err := buildClient.Get(ctx, types.NamespacedName{Name: api.EphemeralClusterTestName, Namespace: ns}, &kubeconfigSecret); err != nil {
 		ecUpdated := upsertCondition(ec, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.KubeconfigFetchFailureReason, err.Error())
 		return reconcile.Result{RequeueAfter: r.polling()}, ecUpdated, nil
 	}

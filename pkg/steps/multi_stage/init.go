@@ -187,7 +187,7 @@ func (s *multiStageTestStep) setupRBAC(ctx context.Context) error {
 		}, {
 			APIGroups:     []string{""},
 			Resources:     []string{"secrets"},
-			ResourceNames: []string{s.name},
+			ResourceNames: []string{s.name, api.EphemeralClusterTestName},
 			Verbs:         []string{"get", "update"},
 		}, {
 			APIGroups: []string{"", "image.openshift.io"},

@@ -89,9 +89,9 @@ items:
                     \   fi\n\n    # The sole error we expect to hit is 'not found'. Break the
                     loop if we collect\n    # this many unexpected errors in a row.\n    if !
                     $(grep -qF \"secrets \\\"$secret\\\" not found\" <<<\"$output\"); then\n        printf
-                    'unexpected error: %d\\n' $unexpected_err\n\n        if [ $unexpected_err
-                    -ge 3 ]; then\n            printf 'FAILURE: too many unexpected errors\\n'
-                    $unexpected_err\n            break\n        fi\n\n        unexpected_err=$((unexpected_err+1))\n
+                    'unexpected error: %d\\n%s\\n' $unexpected_err \"$output\"\n\n        if [
+                    $unexpected_err -ge 3 ]; then\n            printf 'FAILURE: too many unexpected
+                    errors\\n' $unexpected_err\n            break\n        fi\n\n        unexpected_err=$((unexpected_err+1))\n
                     \   else\n        unexpected_err=0\n    fi\n\n    i=$((i+1))\n    sleep 5s\ndone\n"
                   from: cli
                   resources:

@@ -2727,5 +2727,5 @@ type ClusterClaimOwnerDetails struct {
 }
 
 const (
-	EphemeralClusterTestName = "cluster-provisioning"
+	EphemeralClusterTestDoneSignalSecretName = "test-done-signal"
 )

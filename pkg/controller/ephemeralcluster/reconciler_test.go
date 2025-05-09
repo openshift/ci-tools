@@ -389,7 +389,7 @@ func TestReconcile(t *testing.T) {
 						},
 					},
 					&corev1.Secret{
-						ObjectMeta: v1.ObjectMeta{Name: api.EphemeralClusterTestName, Namespace: "ci-op-1234"},
+						ObjectMeta: v1.ObjectMeta{Name: EphemeralClusterTestName, Namespace: "ci-op-1234"},
 						Data:       map[string][]byte{"kubeconfig": []byte("kubeconfig")},
 					},
 				}
@@ -502,7 +502,7 @@ func TestReconcile(t *testing.T) {
 						Type:               ephemeralclusterv1.ClusterReady,
 						Status:             ephemeralclusterv1.ConditionFalse,
 						Reason:             ephemeralclusterv1.KubeconfigFetchFailureReason,
-						Message:            fmt.Sprintf("secrets %q not found", api.EphemeralClusterTestName),
+						Message:            fmt.Sprintf("secrets %q not found", EphemeralClusterTestName),
 						LastTransitionTime: v1.NewTime(fakeNow),
 					}},
 				},
@@ -535,7 +535,7 @@ func TestReconcile(t *testing.T) {
 						},
 					},
 					&corev1.Secret{
-						ObjectMeta: v1.ObjectMeta{Name: api.EphemeralClusterTestName, Namespace: "ci-op-1234"},
+						ObjectMeta: v1.ObjectMeta{Name: EphemeralClusterTestName, Namespace: "ci-op-1234"},
 					},
 				}
 				c := fake.NewClientBuilder().WithObjects(objs...).WithScheme(scheme).Build()
@@ -826,7 +826,7 @@ func TestReconcile(t *testing.T) {
 					&corev1.Secret{
 						ObjectMeta: v1.ObjectMeta{
 							Labels:    map[string]string{"do-not-change": ""},
-							Name:      TestDoneSecretName,
+							Name:      api.EphemeralClusterTestDoneSignalSecretName,
 							Namespace: "ci-op-1234",
 						},
 					},

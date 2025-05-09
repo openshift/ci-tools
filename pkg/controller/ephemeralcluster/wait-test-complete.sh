@@ -25,7 +25,7 @@ while true; do
     # The sole error we expect to hit is 'not found'. Break the loop if we collect
     # this many unexpected errors in a row.
     if ! $(grep -qF "secrets \"$secret\" not found" <<<"$output"); then
-        printf 'unexpected error: %d\n' $unexpected_err
+        printf 'unexpected error: %d\n%s\n' $unexpected_err "$output"
 
         if [ $unexpected_err -ge 3 ]; then
             printf 'FAILURE: too many unexpected errors\n' $unexpected_err

@@ -36,11 +36,11 @@ import (
 const (
 	ControllerName            = "ephemeral_cluster_provisioner"
 	WaitTestStepName          = "wait-test-complete"
+	EphemeralClusterTestName  = "cluster-provisioning"
 	EphemeralClusterLabel     = "ci.openshift.io/ephemeral-cluster"
 	EphemeralClusterNamespace = "ephemeral-cluster"
 	AbortProwJobDeleteEC      = "Ephemeral Cluster deleted"
 	DependentProwJobFinalizer = "ephemeralcluster.ci.openshift.io/dependent-prowjob"
-	TestDoneSecretName        = "test-done-signal"
 	UnresolvedConfigVar       = "UNRESOLVED_CONFIG"
 )
 
@@ -213,7 +213,7 @@ func (r *reconciler) generateCIOperatorConfig(log *logrus.Entry, ec *ephemeralcl
 		InputConfiguration: api.InputConfiguration{Releases: releases},
 		Resources:          resources,
 		Tests: []api.TestStepConfiguration{{
-			As: api.EphemeralClusterTestName,
+			As: EphemeralClusterTestName,
 			MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
 				Workflow: &ec.Spec.CIOperator.Test.Workflow,
 				Test: []api.TestStep{{
@@ -344,7 +344,7 @@ func (r *reconciler) fetchKubeconfig(ctx context.Context, log *logrus.Entry, ec 
 
 	kubeconfigSecret := corev1.Secret{}
 	// The secret is named after the test name.
-	if err := buildClient.Get(ctx, types.NamespacedName{Name: api.EphemeralClusterTestName, Namespace: ns}, &kubeconfigSecret); err != nil {
+	if err := buildClient.Get(ctx, types.NamespacedName{Name: EphemeralClusterTestName, Namespace: ns}, &kubeconfigSecret); err != nil {
 		ecUpdated := upsertCondition(ec, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.KubeconfigFetchFailureReason, err.Error())
 		return reconcile.Result{RequeueAfter: r.polling()}, ecUpdated, nil
 	}
@@ -479,7 +479,7 @@ func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, 
 	log.Info("ci-operator namespace found")
 
 	createSecret := false
-	if err := buildClient.Get(ctx, types.NamespacedName{Name: TestDoneSecretName, Namespace: ns}, &corev1.Secret{}); err != nil {
+	if err := buildClient.Get(ctx, types.NamespacedName{Name: api.EphemeralClusterTestDoneSignalSecretName, Namespace: ns}, &corev1.Secret{}); err != nil {
 		if kerrors.IsNotFound(err) {
 			createSecret = true
 		} else {
@@ -489,10 +489,10 @@ func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, 
 		}
 	}
 
-	log = log.WithField("secret", TestDoneSecretName)
+	log = log.WithField("secret", api.EphemeralClusterTestDoneSignalSecretName)
 	if createSecret {
 		if err := buildClient.Create(ctx, &corev1.Secret{ObjectMeta: v1.ObjectMeta{
-			Name:      TestDoneSecretName,
+			Name:      api.EphemeralClusterTestDoneSignalSecretName,
 			Namespace: ns,
 		}}); err != nil {
 			log.Warn("Failed to create the secret")

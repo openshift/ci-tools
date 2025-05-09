@@ -80,11 +80,19 @@ items:
                 - as: wait-test-complete
                   commands: "#!/bin/bash\n\n# This loop keeps the ephemeral cluster up and running
                     and then waits for\n# a konflux test to complete. Once the test is done, the
-                    EphemeralCluster \n# controller creates a synthetic secret 'test-done-keep-going'
+                    EphemeralCluster \n# controller creates a synthetic secret 'test-done-signal'
                     into this ci-operator NS,\n# unbloking the workflow and starting the deprovisioning
-                    procedures.\n\ni=0\nwhile true ; do\n    printf 'attempt %d\\n' $i\n    if
-                    $(oc get secret/test-done-keep-going 2>&1 | grep -qv 'not found'); then\n
-                    \       break\n    fi\n    i=$((i+1))\n    sleep 5s\ndone\n"
+                    procedures.\n\n# This kubeconfig points to the ephemeral cluster. Unsetting
+                    it as we want to reach out to\n# the build farm cluster.\nunset KUBECONFIG\n\ni=0\nunexpected_err=0\nsecret='test-done-signal'\n\nwhile
+                    true; do\n    printf 'attempt %d\\n' $i\n\n    output=\"$(oc get secret/$secret
+                    2>&1)\"\n    if [ $? -eq 0 ]; then\n        printf 'secret found\\n'\n        break\n
+                    \   fi\n\n    # The sole error we expect to hit is 'not found'. Break the
+                    loop if we collect\n    # this many unexpected errors in a row.\n    if !
+                    $(grep -qF \"secrets \\\"$secret\\\" not found\" <<<\"$output\"); then\n        printf
+                    'unexpected error: %d\\n' $unexpected_err\n\n        if [ $unexpected_err
+                    -ge 3 ]; then\n            printf 'FAILURE: too many unexpected errors\\n'
+                    $unexpected_err\n            break\n        fi\n\n        unexpected_err=$((unexpected_err+1))\n
+                    \   else\n        unexpected_err=0\n    fi\n\n    i=$((i+1))\n    sleep 5s\ndone\n"
                   from: cli
                   resources:
                     limits:

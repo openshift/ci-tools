@@ -19,6 +19,7 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
@@ -36,10 +37,10 @@ const (
 	ControllerName            = "ephemeral_cluster_provisioner"
 	WaitTestStepName          = "wait-test-complete"
 	EphemeralClusterLabel     = "ci.openshift.io/ephemeral-cluster"
-	EphemeralClusterNamespace = "konflux-ephemeral-cluster"
+	EphemeralClusterNamespace = "ephemeral-cluster"
 	AbortProwJobDeleteEC      = "Ephemeral Cluster deleted"
 	DependentProwJobFinalizer = "ephemeralcluster.ci.openshift.io/dependent-prowjob"
-	TestDoneSecretName        = "test-done-keep-going"
+	TestDoneSecretName        = "test-done-signal"
 	UnresolvedConfigVar       = "UNRESOLVED_CONFIG"
 )
 
@@ -85,6 +86,10 @@ type reconciler struct {
 	polling func() time.Duration
 }
 
+func ECPredicateFilter(object ctrlruntimeclient.Object) bool {
+	return object.GetNamespace() == EphemeralClusterNamespace
+}
+
 func AddToManager(log *logrus.Entry, mgr manager.Manager, allManagers map[string]manager.Manager,
 	prowConfigAgent *prowconfig.Agent, opts ...ReconcilerOption) error {
 	buildClients := make(map[string]ctrlruntimeclient.Client)
@@ -108,6 +113,7 @@ func AddToManager(log *logrus.Entry, mgr manager.Manager, allManagers map[string
 
 	if err := ctrlbldr.ControllerManagedBy(mgr).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
+		WithEventFilter(predicate.NewPredicateFuncs(ECPredicateFilter)).
 		For(&ephemeralclusterv1.EphemeralCluster{}).
 		Complete(&r); err != nil {
 		return fmt.Errorf("build controller: %w", err)
@@ -207,7 +213,7 @@ func (r *reconciler) generateCIOperatorConfig(log *logrus.Entry, ec *ephemeralcl
 		InputConfiguration: api.InputConfiguration{Releases: releases},
 		Resources:          resources,
 		Tests: []api.TestStepConfiguration{{
-			As: "cluster-provisioning",
+			As: api.EphemeralClusterTestName,
 			MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
 				Workflow: &ec.Spec.CIOperator.Test.Workflow,
 				Test: []api.TestStep{{
@@ -337,8 +343,8 @@ func (r *reconciler) fetchKubeconfig(ctx context.Context, log *logrus.Entry, ec 
 	log.WithField("namespace", ns).Info("ci-operator namespace found")
 
 	kubeconfigSecret := corev1.Secret{}
-	// The secret is named after the test step name.
-	if err := buildClient.Get(ctx, types.NamespacedName{Name: WaitTestStepName, Namespace: ns}, &kubeconfigSecret); err != nil {
+	// The secret is named after the test name.
+	if err := buildClient.Get(ctx, types.NamespacedName{Name: api.EphemeralClusterTestName, Namespace: ns}, &kubeconfigSecret); err != nil {
 		ecUpdated := upsertCondition(ec, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.KubeconfigFetchFailureReason, err.Error())
 		return reconcile.Result{RequeueAfter: r.polling()}, ecUpdated, nil
 	}

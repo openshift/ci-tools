@@ -82,6 +82,36 @@ func cmpError(t *testing.T, want, got error) {
 	}
 }
 
+func TestEphemeralClusterFilter(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		obj        ctrlclient.Object
+		wantResult bool
+	}{
+		{
+			name:       "Namespace set, process",
+			obj:        &ephemeralclusterv1.EphemeralCluster{ObjectMeta: v1.ObjectMeta{Namespace: EphemeralClusterNamespace}},
+			wantResult: true,
+		},
+		{
+			name: "Unexpected namespace, do not process",
+			obj:  &ephemeralclusterv1.EphemeralCluster{ObjectMeta: v1.ObjectMeta{Namespace: "foo"}},
+		},
+		{
+			name: "Namespace unset, do not process",
+			obj:  &ephemeralclusterv1.EphemeralCluster{},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			gotResult := ECPredicateFilter(tc.obj)
+			if tc.wantResult != gotResult {
+				t.Errorf("want %t but got %t", tc.wantResult, gotResult)
+			}
+		})
+	}
+}
+
 func TestCreateProwJob(t *testing.T) {
 	fakeNow := fakeNow(t)
 	scheme := fakeScheme(t)
@@ -359,7 +389,7 @@ func TestReconcile(t *testing.T) {
 						},
 					},
 					&corev1.Secret{
-						ObjectMeta: v1.ObjectMeta{Name: WaitTestStepName, Namespace: "ci-op-1234"},
+						ObjectMeta: v1.ObjectMeta{Name: api.EphemeralClusterTestName, Namespace: "ci-op-1234"},
 						Data:       map[string][]byte{"kubeconfig": []byte("kubeconfig")},
 					},
 				}
@@ -472,7 +502,7 @@ func TestReconcile(t *testing.T) {
 						Type:               ephemeralclusterv1.ClusterReady,
 						Status:             ephemeralclusterv1.ConditionFalse,
 						Reason:             ephemeralclusterv1.KubeconfigFetchFailureReason,
-						Message:            fmt.Sprintf("secrets %q not found", WaitTestStepName),
+						Message:            fmt.Sprintf("secrets %q not found", api.EphemeralClusterTestName),
 						LastTransitionTime: v1.NewTime(fakeNow),
 					}},
 				},
@@ -505,7 +535,7 @@ func TestReconcile(t *testing.T) {
 						},
 					},
 					&corev1.Secret{
-						ObjectMeta: v1.ObjectMeta{Name: WaitTestStepName, Namespace: "ci-op-1234"},
+						ObjectMeta: v1.ObjectMeta{Name: api.EphemeralClusterTestName, Namespace: "ci-op-1234"},
 					},
 				}
 				c := fake.NewClientBuilder().WithObjects(objs...).WithScheme(scheme).Build()

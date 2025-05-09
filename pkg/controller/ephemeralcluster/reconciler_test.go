@@ -82,6 +82,36 @@ func cmpError(t *testing.T, want, got error) {
 	}
 }
 
+func TestEphemeralClusterFilter(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		obj        ctrlclient.Object
+		wantResult bool
+	}{
+		{
+			name:       "Namespace set, process",
+			obj:        &ephemeralclusterv1.EphemeralCluster{ObjectMeta: v1.ObjectMeta{Namespace: EphemeralClusterNamespace}},
+			wantResult: true,
+		},
+		{
+			name: "Unexpected namespace, do not process",
+			obj:  &ephemeralclusterv1.EphemeralCluster{ObjectMeta: v1.ObjectMeta{Namespace: "foo"}},
+		},
+		{
+			name: "Namespace unset, do not process",
+			obj:  &ephemeralclusterv1.EphemeralCluster{},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			gotResult := ECPredicateFilter(tc.obj)
+			if tc.wantResult != gotResult {
+				t.Errorf("want %t but got %t", tc.wantResult, gotResult)
+			}
+		})
+	}
+}
+
 func TestCreateProwJob(t *testing.T) {
 	fakeNow := fakeNow(t)
 	scheme := fakeScheme(t)

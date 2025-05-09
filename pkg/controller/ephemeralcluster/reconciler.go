@@ -19,6 +19,7 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
@@ -36,7 +37,7 @@ const (
 	ControllerName            = "ephemeral_cluster_provisioner"
 	WaitTestStepName          = "wait-test-complete"
 	EphemeralClusterLabel     = "ci.openshift.io/ephemeral-cluster"
-	EphemeralClusterNamespace = "konflux-ephemeral-cluster"
+	EphemeralClusterNamespace = "ephemeral-cluster"
 	AbortProwJobDeleteEC      = "Ephemeral Cluster deleted"
 	DependentProwJobFinalizer = "ephemeralcluster.ci.openshift.io/dependent-prowjob"
 	TestDoneSecretName        = "test-done-keep-going"
@@ -85,6 +86,10 @@ type reconciler struct {
 	polling func() time.Duration
 }
 
+func ECPredicateFilter(object ctrlruntimeclient.Object) bool {
+	return object.GetNamespace() == EphemeralClusterNamespace
+}
+
 func AddToManager(log *logrus.Entry, mgr manager.Manager, allManagers map[string]manager.Manager,
 	prowConfigAgent *prowconfig.Agent, opts ...ReconcilerOption) error {
 	buildClients := make(map[string]ctrlruntimeclient.Client)
@@ -108,6 +113,7 @@ func AddToManager(log *logrus.Entry, mgr manager.Manager, allManagers map[string
 
 	if err := ctrlbldr.ControllerManagedBy(mgr).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
+		WithEventFilter(predicate.NewPredicateFuncs(ECPredicateFilter)).
 		For(&ephemeralclusterv1.EphemeralCluster{}).
 		Complete(&r); err != nil {
 		return fmt.Errorf("build controller: %w", err)

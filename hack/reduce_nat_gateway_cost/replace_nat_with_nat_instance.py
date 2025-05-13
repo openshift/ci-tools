@@ -176,8 +176,12 @@ class NatInstanceInfo(NamedTuple):
 
 
 # Information about the NAT instance type to use and how to find the AMI.
-NAT_INSTANCE_INFO = NatInstanceInfo(instance_type='t4g.micro', ami_parameter='/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-arm64-gp2')
-# NAT_INSTANCE_INFO = NatInstanceInfo(instance_type='t3a.micro', ami_parameter='/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2')
+NAT_INSTANCES_INFO = [
+    NatInstanceInfo(instance_type='t4g.micro', ami_parameter='/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-arm64-gp2'),
+    NatInstanceInfo(instance_type='t3a.micro', ami_parameter='/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'),
+    NatInstanceInfo(instance_type='t3.micro', ami_parameter='/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'),
+    NatInstanceInfo(instance_type='t2.micro', ami_parameter='/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2')
+]
 
 
 VERSION = 'v1.1'
@@ -246,12 +250,12 @@ def get_iam_client(region):
     return client_cache[key]
 
 
-def get_latest_amazon_linux2_ami(region):
+def get_latest_amazon_linux2_ami(region, nat_instance_idx):
     global client_cache
     key = f'{region}-ami'
     if key not in client_cache:
         ssm = boto3.client('ssm', region_name=region)
-        response = ssm.get_parameter(Name=NAT_INSTANCE_INFO.ami_parameter)
+        response = ssm.get_parameter(Name=NAT_INSTANCES_INFO[nat_instance_idx].ami_parameter)
         ami = response['Parameter']['Value']
         client_cache[key] = ami
     return client_cache[key]
@@ -788,14 +792,15 @@ def create_nat_instance(ec2_client, vpc_id, nat_gateway_id, public_subnet: Dict,
         key_pair_info['KeyName'] = key_name
 
     nat_instance = None
+    nat_instance_idx = 0
 
     # In AWS instance profiles can take several minutes to be created.
     # Keep trying over 4 minutes if the exception is instance profile related.
     for attempt in reversed(range(24)):
         try:
             instance = ec2_client.run_instances(
-                ImageId=get_latest_amazon_linux2_ami(region),
-                InstanceType=NAT_INSTANCE_INFO.instance_type,
+                ImageId=get_latest_amazon_linux2_ami(region, nat_instance_idx),
+                InstanceType=NAT_INSTANCES_INFO[nat_instance_idx].instance_type,
                 NetworkInterfaces=[
                     {
                         'AssociatePublicIpAddress': PERMIT_IPv4_ADDRESS_POOL_USE,
@@ -852,6 +857,9 @@ def create_nat_instance(ec2_client, vpc_id, nat_gateway_id, public_subnet: Dict,
                 error_message = error_message.lower()
                 if 'instanceprofile' in error_message or 'instance profile' in error_message:
                     logger.info(f'Waiting for IAM instance profile to be available: {instance_profile_name}')
+            elif e.response["Error"]["Code"] == "Unsupported":
+                logger.info(f'{NAT_INSTANCES_INFO[nat_instance_idx].instance_type} is not supported on this region.')
+                nat_instance_idx += 1
             else:
                 raise
         time.sleep(10)

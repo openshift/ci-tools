@@ -1,0 +1,52 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  EventBridge for other regions where the lambda function is not present
+Resources:
+  UseNatInstanceForwardRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: |
+        Executes the lambda when an expected event is detected.
+      RoleName: !Sub "use-nat-instance-forward-role-${AWS::Region}"
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - events.amazonaws.com
+          Action:
+          - sts:AssumeRole
+          Sid: TrustEventBridgeService
+          Condition:
+            StringEquals:
+              aws:SourceAccount: !Ref AWS::AccountId
+      Policies:
+      - PolicyName: use-nat-instance-forward-policy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - events:PutEvents
+            Resource: arn:aws:events:us-east-1:320297955214:event-bus/default
+  UseNatInstanceForwardEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: use-nat-instance-forward-event-rule
+      EventPattern: >-
+        {
+          "source":["aws.ec2"],
+          "detail-type":["AWS API Call via CloudTrail"],
+          "detail":{
+            "eventSource":["ec2.amazonaws.com"],
+            "eventName":["CreateNatGateway","DeleteNatGateway","TerminateInstances","RunInstances"]
+          }
+        }
+      State: ENABLED
+      EventBusName: default
+      Targets:
+      -  Id: UseNatInstanceForwardEventRuleTarget
+         Arn: !Sub arn:${AWS::Partition}:events:us-east-1:${AWS::AccountId}:event-bus/default
+         RoleArn: !GetAtt UseNatInstanceForwardRole.Arn

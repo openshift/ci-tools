@@ -15,6 +15,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/promotion"
@@ -77,6 +79,8 @@ func (f *censoringFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	return f.delegate.Format(entry)
 }
 
+type gitCmd func(l *logrus.Entry, args ...string) error
+
 func main() {
 	o := gatherOptions()
 	if err := o.Validate(); err != nil {
@@ -107,7 +111,16 @@ func main() {
 		}
 	}
 
-	failed := false
+	brachingFailure := false
+	failedConfigs := sets.New[string]()
+	appendFailedConfig := func(c *api.ReleaseBuildConfiguration) {
+		configInfo := fmt.Sprintf("%s/%s@%s", c.Metadata.Org, c.Metadata.Repo, c.Metadata.Branch)
+		if c.Metadata.Variant != "" {
+			configInfo += "__" + c.Metadata.Variant
+		}
+		failedConfigs.Insert(configInfo)
+	}
+
 	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, api.WithoutOKD, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
 		logger := config.LoggerForInfo(*repoInfo)
 
@@ -117,19 +130,21 @@ func main() {
 			return nil
 		}
 
-		executeGitCmd := executeGitCMDFactory(repoDir)
+		gitCmd := gitCmdFunc(repoDir)
 
 		remote, err := url.Parse(fmt.Sprintf("https://github.com/%s/%s", repoInfo.Org, repoInfo.Repo))
 		if err != nil {
-			logger.WithError(err).Fatal("Could not construct remote URL.")
+			logger.WithError(err).Error("Could not construct remote URL.")
+			appendFailedConfig(configuration)
+			return err
 		}
 		if o.Confirm {
 			remote.User = url.UserPassword(o.username, token)
 		}
 		for _, command := range [][]string{{"init"}, {"fetch", "--depth", "1", remote.String(), repoInfo.Branch}} {
-			if err := executeGitCmd(logger, command...); err != nil {
-				failed = true
-				return nil
+			if err := gitCmd(logger, command...); err != nil {
+				appendFailedConfig(configuration)
+				return err
 			}
 		}
 
@@ -137,7 +152,7 @@ func main() {
 			futureBranch, err := promotion.DetermineReleaseBranch(o.CurrentRelease, futureRelease, repoInfo.Branch)
 			if err != nil {
 				logger.WithError(err).Error("could not determine release branch")
-				failed = true
+				appendFailedConfig(configuration)
 				return nil
 			}
 			if futureBranch == repoInfo.Branch {
@@ -148,8 +163,8 @@ func main() {
 			// it is in sync with the current branch that is promoting
 			logger := logger.WithField("future-branch", futureBranch)
 			command := []string{"ls-remote", remote.String(), fmt.Sprintf("refs/heads/%s", futureBranch)}
-			if err := executeGitCmd(logger, command...); err != nil {
-				failed = true
+			if err := gitCmd(logger, command...); err != nil {
+				appendFailedConfig(configuration)
 				continue
 			}
 
@@ -158,53 +173,69 @@ func main() {
 				continue
 			}
 
-			pushBranch := func() (retry bool) {
-				command = []string{"push", remote.String(), fmt.Sprintf("FETCH_HEAD:refs/heads/%s", futureBranch)}
-				logger := logger.WithFields(logrus.Fields{"commands": fmt.Sprintf("git %s", strings.Join(command, " "))})
-				if err := executeGitCmd(logger, command...); err != nil {
-					tooShallowErr := strings.Contains(err.Error(), "Updates were rejected because the remote contains work that you do")
-					if tooShallowErr {
-						logger.Warn("Failed to push, trying a deeper clone...")
-						return true
-					}
-					failed = true
-				}
-				return false
-			}
-
-			fetchDeeper := func(depth int) error {
-				command = []string{"fetch", "--depth", strconv.Itoa(depth), remote.String(), repoInfo.Branch}
-				if err := executeGitCmd(logger, command...); err != nil {
-					failed = true
-					return err
-				}
-				return nil
-			}
-
 			for depth := 1; depth < 9; depth += 1 {
-				retry := pushBranch()
+				retry, err := pushBranch(logger, remote, futureBranch, gitCmd)
+				if err != nil {
+					logger.WithError(err).Error("Failed to push branch")
+					appendFailedConfig(configuration)
+					break
+				}
+
 				if !retry {
 					break
 				}
 
 				if depth == 8 && retry {
 					logger.Error("Could not push branch even with retries.")
-					failed = true
+					appendFailedConfig(configuration)
 					break
 				}
 
-				if err := fetchDeeper(int(math.Exp2(float64(depth)))); err != nil {
-					break
+				if err := fetchDeeper(logger, remote, gitCmd, repoInfo, int(math.Exp2(float64(depth)))); err != nil {
+					appendFailedConfig(configuration)
+					return nil
 				}
 			}
 		}
 		return nil
-	}); err != nil || failed {
-		logrus.WithError(err).Fatal("Could not branch configurations.")
+	}); err != nil {
+		logrus.WithError(err).Error("Could not branch configurations.")
+		brachingFailure = true
+	}
+
+	if len(failedConfigs) > 0 {
+		logrus.WithField("configs", failedConfigs.UnsortedList()).Error("Failed configurations.")
+		brachingFailure = true
+	}
+
+	if brachingFailure {
+		os.Exit(1)
 	}
 }
 
-func executeGitCMDFactory(dir string) func(l *logrus.Entry, args ...string) error {
+func pushBranch(logger *logrus.Entry, remote *url.URL, futureBranch string, gitCmd gitCmd) (bool, error) {
+	command := []string{"push", remote.String(), fmt.Sprintf("FETCH_HEAD:refs/heads/%s", futureBranch)}
+	logger = logger.WithFields(logrus.Fields{"commands": fmt.Sprintf("git %s", strings.Join(command, " "))})
+	if err := gitCmd(logger, command...); err != nil {
+		tooShallowErr := strings.Contains(err.Error(), "Updates were rejected because the remote contains work that you do")
+		if tooShallowErr {
+			logger.Warn("Failed to push, trying a deeper clone...")
+			return true, nil
+		}
+		return false, err
+	}
+	return false, nil
+}
+
+func fetchDeeper(logger *logrus.Entry, remote *url.URL, gitCmd gitCmd, repoInfo *config.Info, depth int) error {
+	command := []string{"fetch", "--depth", strconv.Itoa(depth), remote.String(), repoInfo.Branch}
+	if err := gitCmd(logger, command...); err != nil {
+		return err
+	}
+	return nil
+}
+
+func gitCmdFunc(dir string) gitCmd {
 	return func(l *logrus.Entry, args ...string) error {
 		l = l.WithField("commands", fmt.Sprintf("git %s", strings.Join(args, " ")))
 		var b []byte

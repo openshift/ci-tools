@@ -1,0 +1,135 @@
+# This AWS SAM template has been generated from your function's configuration. If
+# your function has one or more triggers, note that the AWS resources associated
+# with these triggers aren't fully specified in this template and include
+# placeholder values. Open this template in AWS Infrastructure Composer or your
+# favorite IDE and modify it to specify a serverless application with other AWS
+# resources.
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: An AWS Serverless Application Model template describing your function.
+Resources:
+  UseNatInstanceFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: |
+        Intercept Openshift installation calls and create a virtual machine
+        that will act as a NAT gateway, avoiding the NAT service.
+      RoleName: use-nat-instance-function-role
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      ManagedPolicyArns: 
+      - arn:aws:iam::aws:policy/AmazonEC2FullAccess
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyName: use-nat-instance-function-policy
+        PolicyDocument: 
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - iam:CreateInstanceProfile
+            - iam:AddRoleToInstanceProfile
+            - iam:CreateRole
+            - iam:AttachRolePolicy
+            - iam:PutRolePolicy
+            - iam:ListInstanceProfiles
+            - iam:ListRoles
+            - iam:DeleteInstanceProfile
+            - iam:DeleteRole
+            - iam:DetachRolePolicy
+            - iam:DeleteRolePolicy
+            - iam:TagInstanceProfile
+            - ssm:GetParameter
+            Resource: "*"
+          - Effect: Allow
+            Action:
+            - iam:PassRole
+            Resource: !Sub arn:aws:iam::${AWS::AccountId}:role/Created-*
+  UseNatInstanceLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: use-nat-instance-log-group
+      RetentionInDays: 14
+  UseNatInstanceFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: use-nat-instance-function
+      Code:
+        ZipFile: |
+          import boto3
+          import botocore
+          
+          def lambda_handler(event, context):
+            print(f'boto3 version: {boto3.__version__}')
+            print(f'botocore version: {botocore.__version__}')
+      Description: Replace NAT with NAT instance
+      PackageType: Zip
+      Handler: replace_nat_with_nat_instance.lambda_handler
+      Runtime: python3.13
+      MemorySize: 256
+      Timeout: 600
+      Architectures:
+      - arm64
+      EphemeralStorage:
+        Size: 512
+      LoggingConfig:
+        LogGroup: !Ref UseNatInstanceLogGroup  
+      Role: !GetAtt UseNatInstanceFunctionRole.Arn
+      RecursiveLoop: Terminate
+      SnapStart:
+        ApplyOn: None
+  UseNatInstanceExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: |
+        Executes the lambda when an expected event is detected.
+      RoleName: use-nat-instance-execution-role
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - events.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Policies:
+      - PolicyName: use-nat-instance-execution-policy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - lambda:InvokeFunction
+            Resource: !GetAtt UseNatInstanceFunction.Arn
+  UseNatInstanceEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: use-nat-instance-event-rule
+      EventPattern: >-
+        {
+          "source": ["aws.ec2"],
+          "detail-type": ["AWS API Call via CloudTrail"],
+          "detail": {
+            "eventName": ["CreateNatGateway", "DeleteNatGateway", "TerminateInstances", "RunInstances"],
+            "eventSource": ["ec2.amazonaws.com"]
+          }
+        }
+      State: ENABLED
+      EventBusName: default
+      Targets:
+      -  Id: UseNatInstanceEventRuleTarget
+         Arn: !GetAtt UseNatInstanceFunction.Arn
+         RoleArn: !GetAtt UseNatInstanceExecutionRole.Arn
+         RetryPolicy:
+           MaximumRetryAttempts: 1
+           MaximumEventAgeInSeconds: 300

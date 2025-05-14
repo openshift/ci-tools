@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"gopkg.in/robfig/cron.v2"
 
 	"sigs.k8s.io/prow/cmd/generic-autobumper/bumper"
 	"sigs.k8s.io/prow/pkg/config/secret"
@@ -35,12 +36,13 @@ const (
 type options struct {
 	selfApprove bool
 
-	githubLogin string
-	gitName     string
-	gitEmail    string
-	targetDir   string
-	assign      string
-	whitelist   string
+	githubLogin    string
+	gitName        string
+	gitEmail       string
+	targetDir      string
+	assign         string
+	whitelist      string
+	rebalancerCron string
 
 	promotion.FutureOptions
 	flagutil.GitHubOptions
@@ -56,7 +58,7 @@ func parseOptions() options {
 	fs.StringVar(&o.targetDir, "target-dir", "", "The directory containing the target repo.")
 	fs.StringVar(&o.assign, "assign", githubTeam, "The github username or group name to assign the created pull request to.")
 	fs.StringVar(&o.whitelist, "whitelist-file", "", "The path of the whitelisted repositories file.")
-
+	fs.StringVar(&o.rebalancerCron, "rebalancer-cron", "", "Cron expression defining how often rebalancer should run (plus/minus 1h time window). If not specified, rebalancer will not run.")
 	fs.BoolVar(&o.selfApprove, "self-approve", false, "Self-approve the PR by adding the `approved` and `lgtm` labels. Requires write permissions on the repo.")
 	o.AddFlags(fs)
 	o.AllowAnonymous = true
@@ -140,6 +142,11 @@ func main() {
 	gc, err := o.GitHubOptions.GitHubClient(!o.Confirm)
 	if err != nil {
 		logrus.WithError(err).Fatal("error getting GitHub client")
+	}
+
+	rebalance, err := withinWindow(o.rebalancerCron)
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to parse cron")
 	}
 
 	logrus.Infof("Changing working directory to '%s' ...", o.targetDir)
@@ -238,6 +245,17 @@ func main() {
 		},
 	}
 
+	if rebalance {
+		steps = append([]step{{
+			command: "/usr/bin/rebalancer",
+			arguments: []string{
+				"--profiles=aws,aws-2,aws-3",
+				"--profiles=gcp-openshift-gce-devel-ci-2,gcp,gcp-3",
+				"--prometheus-bearer-token-path=/etc/prometheus/token",
+			},
+		}}, steps...)
+	}
+
 	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: secret.Censor}
 	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: secret.Censor}
 	author := fmt.Sprintf("%s <%s>", o.gitName, o.gitEmail)
@@ -299,4 +317,27 @@ func runSteps(steps []step, author string, stdout, stderr io.Writer) (needsPushi
 	}
 
 	return true, nil
+}
+
+// withinWindow returns true if the schedule fires at any time
+// between now-1h and now+1h.
+func withinWindow(cronExpr string) (bool, error) {
+	if cronExpr == "" {
+		return false, nil
+	}
+	schedule, err := cron.Parse(cronExpr)
+	if err != nil {
+		return false, err
+	}
+
+	now := time.Now()
+	windowStart := now.Add(-1 * time.Hour)
+	windowEnd := now.Add(+1 * time.Hour)
+
+	firstFire := schedule.Next(windowStart)
+
+	if firstFire.Before(windowEnd) {
+		return true, nil
+	}
+	return false, nil
 }

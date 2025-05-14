@@ -1,4 +1,4 @@
-package main
+package dispatcher
 
 import (
 	"context"
@@ -10,8 +10,6 @@ import (
 	"time"
 
 	promapi "github.com/prometheus/client_golang/api"
-
-	"github.com/openshift/ci-tools/pkg/dispatcher"
 )
 
 type FakeClient struct {
@@ -83,13 +81,13 @@ func TestCalculateVolumeDistribution(t *testing.T) {
 	tests := []struct {
 		name       string
 		jobVolumes map[string]float64
-		clusterMap dispatcher.ClusterMap
+		clusterMap ClusterMap
 		expected   map[string]float64
 	}{
 		{
 			name:       "equal distribution",
 			jobVolumes: map[string]float64{"jobA": 1000},
-			clusterMap: dispatcher.ClusterMap{
+			clusterMap: ClusterMap{
 				"clusterA": {Provider: "AWS", Capacity: 100},
 				"clusterB": {Provider: "GCP", Capacity: 100},
 			},
@@ -101,7 +99,7 @@ func TestCalculateVolumeDistribution(t *testing.T) {
 		{
 			name:       "unequal distribution",
 			jobVolumes: map[string]float64{"jobA": 1000},
-			clusterMap: dispatcher.ClusterMap{
+			clusterMap: ClusterMap{
 				"clusterA": {Provider: "AWS", Capacity: 70},
 				"clusterB": {Provider: "GCP", Capacity: 30},
 			},
@@ -113,7 +111,7 @@ func TestCalculateVolumeDistribution(t *testing.T) {
 		{
 			name:       "multiple jobs with total distribution",
 			jobVolumes: map[string]float64{"jobA": 500, "jobB": 500},
-			clusterMap: dispatcher.ClusterMap{
+			clusterMap: ClusterMap{
 				"clusterA": {Provider: "AWS", Capacity: 60},
 				"clusterB": {Provider: "GCP", Capacity: 40},
 			},
@@ -125,7 +123,7 @@ func TestCalculateVolumeDistribution(t *testing.T) {
 		{
 			name:       "single cluster takes all",
 			jobVolumes: map[string]float64{"jobA": 1000},
-			clusterMap: dispatcher.ClusterMap{
+			clusterMap: ClusterMap{
 				"clusterA": {Provider: "AWS", Capacity: 100},
 			},
 			expected: map[string]float64{
@@ -135,7 +133,7 @@ func TestCalculateVolumeDistribution(t *testing.T) {
 		{
 			name:       "zero capacity clusters",
 			jobVolumes: map[string]float64{"jobA": 1000},
-			clusterMap: dispatcher.ClusterMap{
+			clusterMap: ClusterMap{
 				"clusterA": {Provider: "AWS", Capacity: 0},
 				"clusterB": {Provider: "GCP", Capacity: 100},
 			},
@@ -154,7 +152,7 @@ func TestCalculateVolumeDistribution(t *testing.T) {
 				prometheusDaysBefore: 15,
 				m:                    sync.Mutex{},
 			}
-			if got := pv.calculateVolumeDistribution(tt.clusterMap); !reflect.DeepEqual(got, tt.expected) {
+			if got := pv.CalculateVolumeDistribution(tt.clusterMap); !reflect.DeepEqual(got, tt.expected) {
 				t.Errorf("prometheusVolumes.calculateVolumeDistribution() = %v, want %v", got, tt.expected)
 			}
 		})

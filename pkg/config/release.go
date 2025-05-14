@@ -115,8 +115,8 @@ func NewLocalJobSpec(path string) (*pjdwapi.JobSpec, error) {
 		return nil, fmt.Errorf("could not get current branch: %w", err)
 	}
 	if refs.BaseRef, err = revParse(path, "--abbrev-ref", refs.Pulls[0].Ref+"@{upstream}"); err != nil {
-		logrus.WithError(err).Info("current branch has no upstream, using `master`")
-		refs.BaseRef = "master"
+		logrus.WithError(err).Info("current branch has no upstream, using `main`")
+		refs.BaseRef = "main"
 	}
 	if refs.BaseSHA, err = revParse(path, refs.BaseRef); err != nil {
 		return nil, fmt.Errorf("could not parse base revision: %w", err)

@@ -281,7 +281,7 @@ func addSecretWrapper(pod *coreapi.Pod, vpnConf *vpnConf, skipKubeconfig bool, g
 	})
 	mount := coreapi.VolumeMount{Name: volume, MountPath: dir}
 	pod.Spec.InitContainers = append(pod.Spec.InitContainers, coreapi.Container{
-		Image:                    fmt.Sprintf("%s/%s/entrypoint-wrapper:latest", api.DomainForService(api.ServiceRegistry), "ci"),
+		Image:                    fmt.Sprintf("%s/%s/ci:ci_entrypoint-wrapper_latest", api.QCIAPPCIDomain, "openshift"),
 		Name:                     "cp-entrypoint-wrapper",
 		Command:                  []string{"cp"},
 		Args:                     []string{"/bin/entrypoint-wrapper", bin},

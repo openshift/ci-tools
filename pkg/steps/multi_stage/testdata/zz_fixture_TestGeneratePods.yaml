@@ -138,7 +138,7 @@
       - /tmp/entrypoint-wrapper/entrypoint-wrapper
       command:
       - cp
-      image: registry.ci.openshift.org/ci/entrypoint-wrapper:latest
+      image: quay-proxy.ci.openshift.org/openshift/ci:ci_entrypoint-wrapper_latest
       name: cp-entrypoint-wrapper
       resources: {}
       terminationMessagePolicy: FallbackToLogsOnError
@@ -310,7 +310,7 @@
       - /tmp/entrypoint-wrapper/entrypoint-wrapper
       command:
       - cp
-      image: registry.ci.openshift.org/ci/entrypoint-wrapper:latest
+      image: quay-proxy.ci.openshift.org/openshift/ci:ci_entrypoint-wrapper_latest
       name: cp-entrypoint-wrapper
       resources: {}
       terminationMessagePolicy: FallbackToLogsOnError
@@ -478,7 +478,7 @@
       - /tmp/entrypoint-wrapper/entrypoint-wrapper
       command:
       - cp
-      image: registry.ci.openshift.org/ci/entrypoint-wrapper:latest
+      image: quay-proxy.ci.openshift.org/openshift/ci:ci_entrypoint-wrapper_latest
       name: cp-entrypoint-wrapper
       resources: {}
       terminationMessagePolicy: FallbackToLogsOnError
@@ -658,7 +658,7 @@
       - /tmp/entrypoint-wrapper/entrypoint-wrapper
       command:
       - cp
-      image: registry.ci.openshift.org/ci/entrypoint-wrapper:latest
+      image: quay-proxy.ci.openshift.org/openshift/ci:ci_entrypoint-wrapper_latest
       name: cp-entrypoint-wrapper
       resources: {}
       terminationMessagePolicy: FallbackToLogsOnError
@@ -826,7 +826,7 @@
       - /tmp/entrypoint-wrapper/entrypoint-wrapper
       command:
       - cp
-      image: registry.ci.openshift.org/ci/entrypoint-wrapper:latest
+      image: quay-proxy.ci.openshift.org/openshift/ci:ci_entrypoint-wrapper_latest
       name: cp-entrypoint-wrapper
       resources: {}
       terminationMessagePolicy: FallbackToLogsOnError
@@ -996,7 +996,7 @@
       - /tmp/entrypoint-wrapper/entrypoint-wrapper
       command:
       - cp
-      image: registry.ci.openshift.org/ci/entrypoint-wrapper:latest
+      image: quay-proxy.ci.openshift.org/openshift/ci:ci_entrypoint-wrapper_latest
       name: cp-entrypoint-wrapper
       resources: {}
       terminationMessagePolicy: FallbackToLogsOnError

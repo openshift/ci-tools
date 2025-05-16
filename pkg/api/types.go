@@ -1881,7 +1881,7 @@ func (p ClusterProfile) ClusterType() string {
 	case ClusterProfileAroRH:
 		return "aro"
 	case ClusterProfileEquinixEdgeEnablement:
-		return "equinix-edge-enablemnt"
+		return "equinix-edge-enablement"
 	default:
 		return ""
 	}

@@ -3,6 +3,7 @@ package release
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -172,6 +173,12 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 	now := time.Now().UTC().Truncate(time.Second)
 	version := fmt.Sprintf("%s-%s-test-%s-%s", prefix, now.Format("2006-01-02-150405"), s.jobSpec.Namespace(), s.name)
 
+	referencePolicy := ""
+	if s.config.ReferencePolicy != nil && *s.config.ReferencePolicy == imagev1.SourceTagReferencePolicy {
+		// we need to set the reference policy to Source
+		referencePolicy = strings.ToLower(string(*s.config.ReferencePolicy))
+	}
+
 	destination := fmt.Sprintf("%s:%s", releaseImageStreamRepo, s.name)
 	logrus.Infof("Creating release image %s.", destination)
 	podConfig := steps.PodStepConfiguration{
@@ -192,7 +199,7 @@ mkdir -p "${XDG_RUNTIME_DIR}"
 oc registry login
 exit_code="0"
 for ((i=1; i<=5; i++)); do
-	if oc adm release new --max-per-registry=32 -n %q --from-image-stream %q --to-image-base %q --to-image %q --name %q; then
+	if oc adm release new --reference-mode=%q --max-per-registry=32 -n %q --from-image-stream %q --to-image-base %q --to-image %q --name %q; then
 		echo "Payload creation success."
 		exit_code="0"
 		break
@@ -226,7 +233,7 @@ done
 if [[ "$exit_code" != "0" ]]; then
 	exit $exit_code
 fi
-`, s.jobSpec.Namespace(), streamName, cvo, destination, version, s.name, destination, s.name),
+`, referencePolicy, s.jobSpec.Namespace(), streamName, cvo, destination, version, s.name, destination, s.name),
 	}
 
 	// set an explicit default for release-latest resources, but allow customization if necessary

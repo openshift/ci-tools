@@ -1,4 +1,4 @@
-#!/bin/bash
+set +e
 
 # This loop keeps the ephemeral cluster up and running and then waits for
 # a konflux test to complete. Once the test is done, the EphemeralCluster 

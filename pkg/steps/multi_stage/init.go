@@ -96,7 +96,7 @@ func (s *multiStageTestStep) createSPCs(ctx context.Context) error {
 			if _, exists := toCreate[name]; exists {
 				continue
 			}
-			secret, err := getSecretString(credential.Name)
+			secret, err := getSecretString(credential.Collection, credential.Name)
 			if err != nil {
 				return err
 			}
@@ -128,10 +128,10 @@ func (s *multiStageTestStep) createSPCs(ctx context.Context) error {
 	return nil
 }
 
-func getSecretString(name string) (string, error) {
+func getSecretString(collection, name string) (string, error) {
 	secret := config.Secret{
-		ResourceName: fmt.Sprintf("projects/%s/secrets/%s/versions/latest", GSMproject, name),
-		Path:         name,
+		ResourceName: fmt.Sprintf("projects/%s/secrets/%s__%s/versions/latest", GSMproject, collection, name),
+		FileName:     name, // we want to mount the secret as a file named without the collection prefix
 	}
 	y, err := yaml.Marshal([]config.Secret{secret})
 	if err != nil {

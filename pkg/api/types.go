@@ -1106,7 +1106,11 @@ type StepParameter struct {
 type CredentialReference struct {
 	// Namespace is where the source secret exists.
 	Namespace string `json:"namespace"`
-	// Names is which source secret to mount.
+	// Collection is the name of the collection the secret belongs to.
+	// In GCP, the secret is named <collection>__<secret-name> -- this represents
+	// the <collection> part.
+	Collection string `json:"collection"`
+	// Name is the name of the secret, without the collection prefix.
 	Name string `json:"name"`
 	// MountPath is where the secret should be mounted.
 	MountPath string `json:"mount_path"`

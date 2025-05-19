@@ -78,7 +78,7 @@ items:
                   foo: bar
                 test:
                 - as: wait-test-complete
-                  commands: "#!/bin/bash\n\n# This loop keeps the ephemeral cluster up and running
+                  commands: "set +e\n\n# This loop keeps the ephemeral cluster up and running
                     and then waits for\n# a konflux test to complete. Once the test is done, the
                     EphemeralCluster \n# controller creates a synthetic secret 'test-done-signal'
                     into this ci-operator NS,\n# unbloking the workflow and starting the deprovisioning

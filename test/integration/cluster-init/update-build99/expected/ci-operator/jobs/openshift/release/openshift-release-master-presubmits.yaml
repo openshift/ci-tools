@@ -31,7 +31,7 @@ presubmits:
             secretKeyRef:
               key: build99-id
               name: build99-dex-oidc
-        image: registry.ci.openshift.org/ci/applyconfig:latest
+        image: quay.io/openshift/ci-public:ci_applyconfig_latest
         imagePullPolicy: Always
         name: ""
         resources:

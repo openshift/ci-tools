@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/prow/pkg/flagutil"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 )
@@ -39,13 +40,13 @@ func AllPromotionImageStreamTags(configSpec *cioperatorapi.ReleaseBuildConfigura
 			continue
 		}
 
-		disabled := sets.New[string](target.ExcludedImages...)
-		if !disabled.Has("*") {
+		disabled := sets.New(target.ExcludedImages...)
+		if !disabled.Has(api.PromotionExcludeImageWildcard) {
 			for _, image := range configSpec.Images {
 				result.Insert(fmt.Sprintf("%s/%s:%s", target.Namespace, target.Name, image.To))
 			}
 		}
-		for _, image := range disabled.Delete("*").UnsortedList() {
+		for _, image := range disabled.Delete(api.PromotionExcludeImageWildcard).UnsortedList() {
 			delete(result, image)
 		}
 

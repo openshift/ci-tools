@@ -594,6 +594,68 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 			},
 			expectedRequiredImages: sets.New[string]("base", "base-7", "base-8", "other"),
 		},
+		{
+			name: "promotion only cli-ocm to ci",
+			input: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{
+						From: "cli",
+						To:   "cli-ocm",
+					},
+					{
+						From: "src",
+						To:   "cli",
+					},
+				},
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Targets: []api.PromotionTarget{
+						{
+							ExcludedImages: []string{api.PromotionExcludeImageWildcard},
+							Namespace:      "ci",
+							Name:           "cli-ocm",
+							AdditionalImages: map[string]string{
+								"latest": "cli-ocm",
+							},
+						},
+						{
+							Namespace: "ocp",
+							Name:      "4.20",
+						},
+					},
+				},
+				Metadata: api.Metadata{
+					Org:    "openshift",
+					Repo:   "oc",
+					Branch: "master",
+				},
+			},
+			expected: map[string][]api.ImageStreamTagReference{
+				"cli-ocm": {
+					{Namespace: "ci", Name: "cli-ocm", Tag: "latest"},
+					{Namespace: "ocp", Name: "4.20", Tag: "cli-ocm"},
+				},
+				"cli": {
+					{Namespace: "ocp", Name: "4.20", Tag: "cli"},
+				},
+			},
+			expectedRequiredImages: sets.New("latest", "cli-ocm", "cli"),
+		},
+		{
+			name: "exclude everything",
+			input: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{To: "img_a"},
+					{To: "img_b"},
+				},
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Targets: []api.PromotionTarget{{
+						ExcludedImages: []string{api.PromotionExcludeImageWildcard},
+					}},
+				},
+			},
+			expected:               map[string][]api.ImageStreamTagReference{},
+			expectedRequiredImages: sets.New[string](),
+		},
 	}
 
 	for _, testCase := range testCases {

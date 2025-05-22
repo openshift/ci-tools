@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	latestImage                      = api.ServiceDomainAPPCIRegistry + "/ci/applyconfig:latest"
+	latestImage                      = "quay.io/openshift/ci-public:ci_applyconfig_latest"
 	labelRole                        = "ci.openshift.io/role"
 	jobRoleInfra                     = "infra"
 	generator    jobconfig.Generator = "cluster-init"

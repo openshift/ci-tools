@@ -14,7 +14,7 @@ update the CI configuration to match the state expected by the product policy at
 ### Product Lifecycle Data
 
 The product lifecycle data will be supplied as a YAML file with the following structure (
-see https://github.com/openshift/ci-tools/blob/master/pkg/api/ocplifecycle for more details):
+see https://github.com/openshift/ci-tools/blob/main/pkg/api/ocplifecycle for more details):
 
 ```yaml
 ocp:

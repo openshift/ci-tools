@@ -76,7 +76,7 @@ func (s *prowJobStep) generatePeriodic(clusterName string, osd bool, unmanaged b
 				ExtraRefs: []prowapi.Refs{{
 					Org:     "openshift",
 					Repo:    "release",
-					BaseRef: "master",
+					BaseRef: "main",
 				}},
 			},
 			Labels: map[string]string{
@@ -111,7 +111,7 @@ func (s *prowJobStep) generatePostsubmit(clusterName string, osd bool, unmanaged
 			},
 		},
 		Brancher: prowconfig.Brancher{
-			Branches: []string{jobconfig.ExactlyBranch("master")},
+			Branches: []string{jobconfig.ExactlyBranch("main")},
 		},
 	}
 }
@@ -157,7 +157,7 @@ func (s *prowJobStep) generatePresubmit(clusterName string, osd bool, unmanaged 
 			RunIfChanged: "^clusters/.*",
 		},
 		Brancher: prowconfig.Brancher{
-			Branches: []string{jobconfig.ExactlyBranch("master"), jobconfig.FeatureBranch("master")},
+			Branches: []string{jobconfig.ExactlyBranch("main"), jobconfig.FeatureBranch("main")},
 		},
 		Reporter: prowconfig.Reporter{
 			Context: fmt.Sprintf("ci/build-farm/%s-dry", clusterName),

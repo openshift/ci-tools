@@ -29,10 +29,10 @@ there is a force-push to the source repository.
 
 ```console
 $ private-org-sync --config-path ci-operator/config/ --target-org $ORG --token-path $TOKEN_PATH --only-repo openshift/api --confirm=true --git-dir $( mktemp -d )
-INFO[0000] Syncing content between locations             branch=master (more fields...)
-INFO[0001] Destination is an empty repo: will do a full fetch right away  branch=master (more fields...)
-INFO[0001] Fetching from source (full fetch)             branch=master (more fields...)
-INFO[0005] Pushing to destination                        branch=master (more fields...)
+INFO[0000] Syncing content between locations             branch=main (more fields...)
+INFO[0001] Destination is an empty repo: will do a full fetch right away  branch=main (more fields...)
+INFO[0001] Fetching from source (full fetch)             branch=main (more fields...)
+INFO[0005] Pushing to destination                        branch=main (more fields...)
 INFO[0033] Syncing content between locations             branch=release-4.1 (more fields...)
 INFO[0034] Fetching from source (--depth=2)              branch=release-4.1 (more fields...)
 INFO[0035] Pushing to destination                        branch=release-4.1 (more fields...)
@@ -65,8 +65,8 @@ INFO[0094] Fetching from source (--depth=2)              branch=release-4.5 (mor
 INFO[0095] Pushing to destination                        branch=release-4.5 (more fields...)
 
 $ private-org-sync --config-path ci-operator/config/ --target-org $ORG --token-path $TOKEN_PATH --only-repo openshift/api --confirm=true --git-dir $( mktemp -d )
-INFO[0000] Syncing content between locations             branch=master (more fields...)
-INFO[0001] Branches are already in sync                  branch=master (more fields...)
+INFO[0000] Syncing content between locations             branch=main (more fields...)
+INFO[0001] Branches are already in sync                  branch=main (more fields...)
 INFO[0001] Syncing content between locations             branch=release-4.1 (more fields...)
 INFO[0002] Branches are already in sync                  branch=release-4.1 (more fields...)
 INFO[0002] Syncing content between locations             branch=release-4.2 (more fields...)
@@ -99,11 +99,11 @@ $ git -C dst/repo commit --allow-empty --message initial
 $ private-org-sync \
     --prefix $PWD --token-path /dev/null --config-dir config --target-org dst \
     --git-name test --git-email test --git-dir tmp
-INFO[0000] Syncing content between locations             branch=master destination=dst/repo@master local-repo=tmp/src/repo org=src repo=repo source=src/repo@master source-file=src-repo-master.yaml variant=
-INFO[0000] Fetching from source (--depth=2)              branch=master destination=dst/repo@master local-repo=tmp/src/repo org=src repo=repo source=src/repo@master source-file=src-repo-master.yaml variant=
-INFO[0000] Pushing to destination (dry-run)              branch=master destination=dst/repo@master local-repo=tmp/src/repo org=src repo=repo source=src/repo@master source-file=src-repo-master.yaml variant=
-INFO[0000] Trying to fetch source and destination full history and perform a merge  branch=master destination=dst/repo@master local-repo=tmp/src/repo org=src repo=repo source=src/repo@master source-file=src-repo-master.yaml variant=
-WARN[0000] error occurred while fetching remote and merge  branch=master destination=dst/repo@master error="[failed to merge src-repo/master: failed with 128 exit-code: fatal: refusing to merge unrelated histories\n, failed to perform merge --abort: failed with 128 exit-code: fatal: There is no merge to abort (MERGE_HEAD missing).\n]" local-repo=tmp/src/repo org=src repo=repo source=src/repo@master source-file=src-repo-master.yaml variant=
+INFO[0000] Syncing content between locations             branch=main destination=dst/repo@main local-repo=tmp/src/repo org=src repo=repo source=src/repo@main source-file=src-repo-master.yaml variant=
+INFO[0000] Fetching from source (--depth=2)              branch=main destination=dst/repo@main local-repo=tmp/src/repo org=src repo=repo source=src/repo@main source-file=src-repo-master.yaml variant=
+INFO[0000] Pushing to destination (dry-run)              branch=main destination=dst/repo@main local-repo=tmp/src/repo org=src repo=repo source=src/repo@main source-file=src-repo-master.yaml variant=
+INFO[0000] Trying to fetch source and destination full history and perform a merge  branch=main destination=dst/repo@main local-repo=tmp/src/repo org=src repo=repo source=src/repo@main source-file=src-repo-master.yaml variant=
+WARN[0000] error occurred while fetching remote and merge  branch=main destination=dst/repo@main error="[failed to merge src-repo/main: failed with 128 exit-code: fatal: refusing to merge unrelated histories\n, failed to perform merge --abort: failed with 128 exit-code: fatal: There is no merge to abort (MERGE_HEAD missing).\n]" local-repo=tmp/src/repo org=src repo=repo source=src/repo@main source-file=src-repo-master.yaml variant=
 ```
 
 [DPTP-1426]: https://issues.redhat.com/browse/DPTP-1426

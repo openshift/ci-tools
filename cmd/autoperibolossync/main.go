@@ -144,10 +144,10 @@ func main() {
 	}
 
 	// TODO fix the bumper in upstream to retrieve a default branch
-	defaultBranch := "master"
+	defaultBranch := "main"
 	if err := bumper.UpdatePullRequestWithLabels(gc, githubOrg, githubRepo, title, description, o.githubLogin+":"+remoteBranch, defaultBranch, remoteBranch, true, labelsToAdd, o.dryRun); err != nil {
-		logrus.WithError(err).Fatal("Failed to use 'master' branch")
-		defaultBranch = "main"
+		logrus.WithError(err).Fatal("Failed to use 'main' branch")
+		defaultBranch = "master"
 		if err := bumper.UpdatePullRequestWithLabels(gc, githubOrg, githubRepo, title, description, o.githubLogin+":"+remoteBranch, defaultBranch, remoteBranch, true, labelsToAdd, o.dryRun); err != nil {
 			logrus.WithError(err).Fatal("PR creation failed.")
 		}

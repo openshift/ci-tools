@@ -2,7 +2,7 @@
 
 ## What it does
 
-`sync-rover-groups` is a tool to resolve the groups in [the manifests](https://github.com/openshift/release/tree/master/clusters) of CI clusters
+`sync-rover-groups` is a tool to resolve the groups in [the manifests](https://github.com/openshift/release/tree/main/clusters) of CI clusters
 in the release repo. Its result is a configuration file consumed by [github-ldap-user-group-creator](../github-ldap-user-group-creator).
 
 It can also generate the mapping file in yaml format: `m(GitHubID)=KerberosID` for each user
@@ -24,5 +24,5 @@ and saves the resolved groups in a file.
 
 ## How is it deployed
 
-The cronjob [sync-rover-groups-update](https://console-openshift-console.apps.ocp-c1.prod.psi.redhat.com/k8s/ns/ocp-test-platform/batch~v1~CronJob/sync-rover-groups-update) ([definition](https://github.com/openshift/release/blob/master/ci-operator/jobs/infra-periodics.yaml))
+The cronjob [sync-rover-groups-update](https://console-openshift-console.apps.ocp-c1.prod.psi.redhat.com/k8s/ns/ocp-test-platform/batch~v1~CronJob/sync-rover-groups-update) ([definition](https://github.com/openshift/release/blob/main/ci-operator/jobs/infra-periodics.yaml))
 uses `sync-rover-groups` to generate the groups file which is used to form `configMap/sync-rover-groups` in `project/ci` on the `app.ci` cluster.

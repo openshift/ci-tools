@@ -13,6 +13,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
+	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/results"
 )
 
@@ -29,6 +30,7 @@ type rpmImageInjectionStep struct {
 	jobSpec       *api.JobSpec
 	pullSecret    *coreapi.Secret
 	architectures sets.Set[string]
+	metricsAgent  *metrics.MetricsAgent
 }
 
 func (s *rpmImageInjectionStep) Inputs() (api.InputDefinition, error) {
@@ -64,7 +66,7 @@ func (s *rpmImageInjectionStep) run(ctx context.Context) error {
 		s.pullSecret,
 		nil,
 		"",
-	), newImageBuildOptions(s.architectures.UnsortedList()))
+	), s.metricsAgent, newImageBuildOptions(s.architectures.UnsortedList()))
 }
 
 func (s *rpmImageInjectionStep) Requires() []api.StepLink {
@@ -104,6 +106,7 @@ func RPMImageInjectionStep(
 	podClient kubernetes.PodClient,
 	jobSpec *api.JobSpec,
 	pullSecret *coreapi.Secret,
+	metricsAgent *metrics.MetricsAgent,
 ) api.Step {
 	return &rpmImageInjectionStep{
 		config:        config,
@@ -113,5 +116,6 @@ func RPMImageInjectionStep(
 		jobSpec:       jobSpec,
 		pullSecret:    pullSecret,
 		architectures: sets.New[string](),
+		metricsAgent:  metricsAgent,
 	}
 }

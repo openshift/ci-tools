@@ -16,6 +16,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
+	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
@@ -30,6 +31,7 @@ type projectDirectoryImageBuildStep struct {
 	pullSecret         *coreapi.Secret
 	multiArch          bool
 	architectures      sets.Set[string]
+	metricsAgent       *metrics.MetricsAgent
 }
 
 func (s *projectDirectoryImageBuildStep) Inputs() (api.InputDefinition, error) {
@@ -73,7 +75,7 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 		return handleBuild(ctx, s.client, s.podClient, *build)
 	}
 
-	return handleBuilds(ctx, s.client, s.podClient, *build, newImageBuildOptions(s.architectures.UnsortedList()))
+	return handleBuilds(ctx, s.client, s.podClient, *build, s.metricsAgent, newImageBuildOptions(s.architectures.UnsortedList()))
 }
 
 type workingDir func(tag string) (string, error)
@@ -219,6 +221,7 @@ func ProjectDirectoryImageBuildStep(
 	podClient kubernetes.PodClient,
 	jobSpec *api.JobSpec,
 	pullSecret *coreapi.Secret,
+	metricsAgent *metrics.MetricsAgent,
 ) api.Step {
 	return &projectDirectoryImageBuildStep{
 		config:             config,
@@ -230,5 +233,6 @@ func ProjectDirectoryImageBuildStep(
 		pullSecret:         pullSecret,
 		multiArch:          config.MultiArch,
 		architectures:      sets.New[string](),
+		metricsAgent:       metricsAgent,
 	}
 }

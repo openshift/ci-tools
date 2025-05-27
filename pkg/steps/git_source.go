@@ -13,18 +13,20 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
+	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/results"
 )
 
 type gitSourceStep struct {
-	config          api.ProjectDirectoryImageBuildInputs
-	resources       api.ResourceConfiguration
-	buildClient     BuildClient
-	podClient       kubernetes.PodClient
-	jobSpec         *api.JobSpec
-	cloneAuthConfig *CloneAuthConfig
-	pullSecret      *coreapi.Secret
-	architectures   sets.Set[string]
+	config            api.ProjectDirectoryImageBuildInputs
+	resources         api.ResourceConfiguration
+	buildClient       BuildClient
+	podClient         kubernetes.PodClient
+	jobSpec           *api.JobSpec
+	cloneAuthConfig   *CloneAuthConfig
+	pullSecret        *coreapi.Secret
+	architectures     sets.Set[string]
+	metricsController *metrics.MetricsController
 }
 
 func (s *gitSourceStep) Inputs() (api.InputDefinition, error) {
@@ -59,7 +61,7 @@ func (s *gitSourceStep) run(ctx context.Context) error {
 				URI: cloneURI,
 				Ref: refs.BaseRef,
 			},
-		}, "", s.config.DockerfilePath, s.resources, s.pullSecret, nil, s.config.Ref), newImageBuildOptions(s.architectures.UnsortedList()))
+		}, "", s.config.DockerfilePath, s.resources, s.pullSecret, nil, s.config.Ref), s.metricsController, newImageBuildOptions(s.architectures.UnsortedList()))
 	}
 
 	return fmt.Errorf("nothing to build source image from, no refs")
@@ -139,15 +141,17 @@ func GitSourceStep(
 	jobSpec *api.JobSpec,
 	cloneAuthConfig *CloneAuthConfig,
 	pullSecret *coreapi.Secret,
+	metricsController *metrics.MetricsController,
 ) api.Step {
 	return &gitSourceStep{
-		config:          config,
-		resources:       resources,
-		buildClient:     buildClient,
-		podClient:       podClient,
-		jobSpec:         jobSpec,
-		cloneAuthConfig: cloneAuthConfig,
-		pullSecret:      pullSecret,
-		architectures:   sets.New[string](),
+		config:            config,
+		resources:         resources,
+		buildClient:       buildClient,
+		podClient:         podClient,
+		jobSpec:           jobSpec,
+		cloneAuthConfig:   cloneAuthConfig,
+		pullSecret:        pullSecret,
+		architectures:     sets.New[string](),
+		metricsController: metricsController,
 	}
 }

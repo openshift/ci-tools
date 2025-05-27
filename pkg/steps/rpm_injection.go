@@ -13,6 +13,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
+	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/results"
 )
 
@@ -22,13 +23,14 @@ RUN echo $'[built]\nname = Built RPMs\nbaseurl = http://%s/\ngpgcheck = 0\nenabl
 }
 
 type rpmImageInjectionStep struct {
-	config        api.RPMImageInjectionStepConfiguration
-	resources     api.ResourceConfiguration
-	client        BuildClient
-	podClient     kubernetes.PodClient
-	jobSpec       *api.JobSpec
-	pullSecret    *coreapi.Secret
-	architectures sets.Set[string]
+	config            api.RPMImageInjectionStepConfiguration
+	resources         api.ResourceConfiguration
+	client            BuildClient
+	podClient         kubernetes.PodClient
+	jobSpec           *api.JobSpec
+	pullSecret        *coreapi.Secret
+	architectures     sets.Set[string]
+	metricsController *metrics.MetricsController
 }
 
 func (s *rpmImageInjectionStep) Inputs() (api.InputDefinition, error) {
@@ -64,7 +66,7 @@ func (s *rpmImageInjectionStep) run(ctx context.Context) error {
 		s.pullSecret,
 		nil,
 		"",
-	), newImageBuildOptions(s.architectures.UnsortedList()))
+	), s.metricsController, newImageBuildOptions(s.architectures.UnsortedList()))
 }
 
 func (s *rpmImageInjectionStep) Requires() []api.StepLink {
@@ -104,14 +106,16 @@ func RPMImageInjectionStep(
 	podClient kubernetes.PodClient,
 	jobSpec *api.JobSpec,
 	pullSecret *coreapi.Secret,
+	metricsController *metrics.MetricsController,
 ) api.Step {
 	return &rpmImageInjectionStep{
-		config:        config,
-		resources:     resources,
-		client:        buildClient,
-		podClient:     podClient,
-		jobSpec:       jobSpec,
-		pullSecret:    pullSecret,
-		architectures: sets.New[string](),
+		config:            config,
+		resources:         resources,
+		client:            buildClient,
+		podClient:         podClient,
+		jobSpec:           jobSpec,
+		pullSecret:        pullSecret,
+		architectures:     sets.New[string](),
+		metricsController: metricsController,
 	}
 }

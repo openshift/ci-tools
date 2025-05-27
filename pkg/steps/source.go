@@ -34,6 +34,7 @@ import (
 	apiutils "github.com/openshift/ci-tools/pkg/api/utils"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/manifestpusher"
+	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
@@ -161,14 +162,15 @@ func LabelsFor(spec *api.JobSpec, base map[string]string, ref string) map[string
 }
 
 type sourceStep struct {
-	config          api.SourceStepConfiguration
-	resources       api.ResourceConfiguration
-	client          BuildClient
-	podClient       kubernetes.PodClient
-	jobSpec         *api.JobSpec
-	cloneAuthConfig *CloneAuthConfig
-	pullSecret      *corev1.Secret
-	architectures   sets.Set[string]
+	config            api.SourceStepConfiguration
+	resources         api.ResourceConfiguration
+	client            BuildClient
+	podClient         kubernetes.PodClient
+	jobSpec           *api.JobSpec
+	cloneAuthConfig   *CloneAuthConfig
+	pullSecret        *corev1.Secret
+	architectures     sets.Set[string]
+	metricsController *metrics.MetricsController
 }
 
 func (s *sourceStep) Inputs() (api.InputDefinition, error) {
@@ -195,7 +197,7 @@ func (s *sourceStep) run(ctx context.Context) error {
 		ctx,
 		s.client,
 		s.podClient,
-		*createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret, fromDigest), newImageBuildOptions(s.architectures.UnsortedList()),
+		*createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret, fromDigest), s.metricsController, newImageBuildOptions(s.architectures.UnsortedList()),
 	)
 }
 
@@ -469,7 +471,7 @@ func newImageBuildOptions(archs []string) ImageBuildOptions {
 	return ImageBuildOptions{Architectures: archs}
 }
 
-func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubernetes.PodClient, build buildapi.Build, opts ...ImageBuildOptions) error {
+func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubernetes.PodClient, build buildapi.Build, metricsController *metrics.MetricsController, opts ...ImageBuildOptions) error {
 	var wg sync.WaitGroup
 
 	o := ImageBuildOptions{}
@@ -492,6 +494,15 @@ func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubern
 
 	wg.Wait()
 	close(errChan)
+
+	for _, b := range builds {
+		var updated buildapi.Build
+		if err := buildClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: b.Namespace, Name: b.Name}, &updated); err != nil {
+			logrus.WithError(err).Warnf("failed to re-get build %q; aborting event recording", b.Name)
+			continue
+		}
+		metricsController.RecordBuildEvent(updated, build.Spec.Output.To.Name)
+	}
 
 	var errs []error
 	for err := range errChan {
@@ -822,16 +833,18 @@ func SourceStep(
 	jobSpec *api.JobSpec,
 	cloneAuthConfig *CloneAuthConfig,
 	pullSecret *corev1.Secret,
+	metricsController *metrics.MetricsController,
 ) api.Step {
 	return &sourceStep{
-		config:          config,
-		resources:       resources,
-		client:          buildClient,
-		podClient:       podClient,
-		jobSpec:         jobSpec,
-		cloneAuthConfig: cloneAuthConfig,
-		pullSecret:      pullSecret,
-		architectures:   sets.New[string](),
+		config:            config,
+		resources:         resources,
+		client:            buildClient,
+		podClient:         podClient,
+		jobSpec:           jobSpec,
+		cloneAuthConfig:   cloneAuthConfig,
+		pullSecret:        pullSecret,
+		architectures:     sets.New[string](),
+		metricsController: metricsController,
 	}
 }
 

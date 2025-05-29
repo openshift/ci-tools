@@ -57,11 +57,11 @@ func TestCreateSPCs(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = csiapi.AddToScheme(scheme)
 
-	credential1 := api.CredentialReference{Name: "credential1"}
-	credential2 := api.CredentialReference{Name: "credential2"}
+	credential1 := api.CredentialReference{Name: "credential1", Collection: "test"}
+	credential2 := api.CredentialReference{Name: "credential2", Collection: "test-2"}
 
-	newSPC := func(name, ns string) csiapi.SecretProviderClass {
-		secret, _ := getSecretString(name)
+	newSPC := func(collection, name, ns string) csiapi.SecretProviderClass {
+		secret, _ := getSecretString(collection, name)
 
 		return csiapi.SecretProviderClass{
 			TypeMeta: meta.TypeMeta{
@@ -98,7 +98,7 @@ func TestCreateSPCs(t *testing.T) {
 			pre:  []api.LiteralTestStep{{Credentials: []api.CredentialReference{credential1}}},
 			expectedSPCs: csiapi.SecretProviderClassList{
 				Items: []csiapi.SecretProviderClass{
-					newSPC(credential1.Name, "test-ns"),
+					newSPC(credential1.Collection, credential1.Name, "test-ns"),
 				},
 			},
 		},
@@ -108,8 +108,8 @@ func TestCreateSPCs(t *testing.T) {
 			test: []api.LiteralTestStep{{Credentials: []api.CredentialReference{credential2}}},
 			expectedSPCs: csiapi.SecretProviderClassList{
 				Items: []csiapi.SecretProviderClass{
-					newSPC(credential1.Name, "test-ns"),
-					newSPC(credential2.Name, "test-ns"),
+					newSPC(credential1.Collection, credential1.Name, "test-ns"),
+					newSPC(credential2.Collection, credential2.Name, "test-ns"),
 				},
 			},
 		},
@@ -120,8 +120,8 @@ func TestCreateSPCs(t *testing.T) {
 			post: []api.LiteralTestStep{{Credentials: []api.CredentialReference{credential1}}},
 			expectedSPCs: csiapi.SecretProviderClassList{
 				Items: []csiapi.SecretProviderClass{
-					newSPC(credential1.Name, "test-ns"),
-					newSPC(credential2.Name, "test-ns"),
+					newSPC(credential1.Collection, credential1.Name, "test-ns"),
+					newSPC(credential2.Collection, credential2.Name, "test-ns"),
 				},
 			},
 		},
@@ -131,8 +131,8 @@ func TestCreateSPCs(t *testing.T) {
 			test: []api.LiteralTestStep{{Credentials: []api.CredentialReference{credential2}}},
 			expectedSPCs: csiapi.SecretProviderClassList{
 				Items: []csiapi.SecretProviderClass{
-					newSPC(credential1.Name, "test-ns"),
-					newSPC(credential2.Name, "test-ns"),
+					newSPC(credential1.Collection, credential1.Name, "test-ns"),
+					newSPC(credential2.Collection, credential2.Name, "test-ns"),
 				},
 			},
 		},
@@ -174,8 +174,9 @@ func TestCreateSPCs(t *testing.T) {
 
 func TestGetSecretString(t *testing.T) {
 	name := "secret-name"
+	collection := "collection1"
 
-	yamlString, err := getSecretString(name)
+	yamlString, err := getSecretString(collection, name)
 	if err != nil {
 		t.Fatalf("unexpected error getting secret string: %v", err)
 	}
@@ -195,8 +196,8 @@ func TestGetSecretString(t *testing.T) {
 	}
 
 	expectedSecret := config.Secret{
-		ResourceName: fmt.Sprintf("projects/%s/secrets/%s/versions/latest", GSMproject, name),
-		Path:         name,
+		ResourceName: fmt.Sprintf("projects/%s/secrets/%s__%s/versions/latest", GSMproject, collection, name),
+		FileName:     name,
 	}
 
 	// Compare the actual and expected secret

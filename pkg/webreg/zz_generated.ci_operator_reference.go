@@ -702,9 +702,13 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  commands: ' '\n" +
 	"                  # Credentials defines the credentials we'll mount into this step.\n" +
 	"                  credentials:\n" +
-	"                    - # MountPath is where the secret should be mounted.\n" +
+	"                    - # Collection is the name of the collection the secret belongs to.\n" +
+	"                      # In GCP, the secret is named <collection>__<secret-name> -- this represents\n" +
+	"                      # the <collection> part.\n" +
+	"                      collection: ' '\n" +
+	"                      # MountPath is where the secret should be mounted.\n" +
 	"                      mount_path: ' '\n" +
-	"                      # Names is which source secret to mount.\n" +
+	"                      # Name is the name of the secret, without the collection prefix.\n" +
 	"                      name: ' '\n" +
 	"                      # Namespace is where the source secret exists.\n" +
 	"                      namespace: ' '\n" +
@@ -795,9 +799,13 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  commands: ' '\n" +
 	"                  # Credentials defines the credentials we'll mount into this step.\n" +
 	"                  credentials:\n" +
-	"                    - # MountPath is where the secret should be mounted.\n" +
+	"                    - # Collection is the name of the collection the secret belongs to.\n" +
+	"                      # In GCP, the secret is named <collection>__<secret-name> -- this represents\n" +
+	"                      # the <collection> part.\n" +
+	"                      collection: ' '\n" +
+	"                      # MountPath is where the secret should be mounted.\n" +
 	"                      mount_path: ' '\n" +
-	"                      # Names is which source secret to mount.\n" +
+	"                      # Name is the name of the secret, without the collection prefix.\n" +
 	"                      name: ' '\n" +
 	"                      # Namespace is where the source secret exists.\n" +
 	"                      namespace: ' '\n" +
@@ -888,9 +896,13 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  commands: ' '\n" +
 	"                  # Credentials defines the credentials we'll mount into this step.\n" +
 	"                  credentials:\n" +
-	"                    - # MountPath is where the secret should be mounted.\n" +
+	"                    - # Collection is the name of the collection the secret belongs to.\n" +
+	"                      # In GCP, the secret is named <collection>__<secret-name> -- this represents\n" +
+	"                      # the <collection> part.\n" +
+	"                      collection: ' '\n" +
+	"                      # MountPath is where the secret should be mounted.\n" +
 	"                      mount_path: ' '\n" +
-	"                      # Names is which source secret to mount.\n" +
+	"                      # Name is the name of the secret, without the collection prefix.\n" +
 	"                      name: ' '\n" +
 	"                      # Namespace is where the source secret exists.\n" +
 	"                      namespace: ' '\n" +
@@ -1113,7 +1125,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  commands: ' '\n" +
 	"                  credentials:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
-	"                    - mount_path: ' '\n" +
+	"                    - collection: ' '\n" +
+	"                      mount_path: ' '\n" +
 	"                      name: ' '\n" +
 	"                      namespace: ' '\n" +
 	"                  dependencies:\n" +
@@ -1178,7 +1191,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  commands: ' '\n" +
 	"                  credentials:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
-	"                    - mount_path: ' '\n" +
+	"                    - collection: ' '\n" +
+	"                      mount_path: ' '\n" +
 	"                      name: ' '\n" +
 	"                      namespace: ' '\n" +
 	"                  dependencies:\n" +
@@ -1243,7 +1257,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  commands: ' '\n" +
 	"                  credentials:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
-	"                    - mount_path: ' '\n" +
+	"                    - collection: ' '\n" +
+	"                      mount_path: ' '\n" +
 	"                      name: ' '\n" +
 	"                      namespace: ' '\n" +
 	"                  dependencies:\n" +
@@ -1570,9 +1585,13 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              commands: ' '\n" +
 	"              # Credentials defines the credentials we'll mount into this step.\n" +
 	"              credentials:\n" +
-	"                - # MountPath is where the secret should be mounted.\n" +
+	"                - # Collection is the name of the collection the secret belongs to.\n" +
+	"                  # In GCP, the secret is named <collection>__<secret-name> -- this represents\n" +
+	"                  # the <collection> part.\n" +
+	"                  collection: ' '\n" +
+	"                  # MountPath is where the secret should be mounted.\n" +
 	"                  mount_path: ' '\n" +
-	"                  # Names is which source secret to mount.\n" +
+	"                  # Name is the name of the secret, without the collection prefix.\n" +
 	"                  name: ' '\n" +
 	"                  # Namespace is where the source secret exists.\n" +
 	"                  namespace: ' '\n" +
@@ -1663,9 +1682,13 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              commands: ' '\n" +
 	"              # Credentials defines the credentials we'll mount into this step.\n" +
 	"              credentials:\n" +
-	"                - # MountPath is where the secret should be mounted.\n" +
+	"                - # Collection is the name of the collection the secret belongs to.\n" +
+	"                  # In GCP, the secret is named <collection>__<secret-name> -- this represents\n" +
+	"                  # the <collection> part.\n" +
+	"                  collection: ' '\n" +
+	"                  # MountPath is where the secret should be mounted.\n" +
 	"                  mount_path: ' '\n" +
-	"                  # Names is which source secret to mount.\n" +
+	"                  # Name is the name of the secret, without the collection prefix.\n" +
 	"                  name: ' '\n" +
 	"                  # Namespace is where the source secret exists.\n" +
 	"                  namespace: ' '\n" +
@@ -1756,9 +1779,13 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              commands: ' '\n" +
 	"              # Credentials defines the credentials we'll mount into this step.\n" +
 	"              credentials:\n" +
-	"                - # MountPath is where the secret should be mounted.\n" +
+	"                - # Collection is the name of the collection the secret belongs to.\n" +
+	"                  # In GCP, the secret is named <collection>__<secret-name> -- this represents\n" +
+	"                  # the <collection> part.\n" +
+	"                  collection: ' '\n" +
+	"                  # MountPath is where the secret should be mounted.\n" +
 	"                  mount_path: ' '\n" +
-	"                  # Names is which source secret to mount.\n" +
+	"                  # Name is the name of the secret, without the collection prefix.\n" +
 	"                  name: ' '\n" +
 	"                  # Namespace is where the source secret exists.\n" +
 	"                  namespace: ' '\n" +
@@ -1981,7 +2008,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              commands: ' '\n" +
 	"              credentials:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
-	"                - mount_path: ' '\n" +
+	"                - collection: ' '\n" +
+	"                  mount_path: ' '\n" +
 	"                  name: ' '\n" +
 	"                  namespace: ' '\n" +
 	"              dependencies:\n" +
@@ -2046,7 +2074,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              commands: ' '\n" +
 	"              credentials:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
-	"                - mount_path: ' '\n" +
+	"                - collection: ' '\n" +
+	"                  mount_path: ' '\n" +
 	"                  name: ' '\n" +
 	"                  namespace: ' '\n" +
 	"              dependencies:\n" +
@@ -2111,7 +2140,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              commands: ' '\n" +
 	"              credentials:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
-	"                - mount_path: ' '\n" +
+	"                - collection: ' '\n" +
+	"                  mount_path: ' '\n" +
 	"                  name: ' '\n" +
 	"                  namespace: ' '\n" +
 	"              dependencies:\n" +

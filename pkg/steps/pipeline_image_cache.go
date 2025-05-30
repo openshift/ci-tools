@@ -13,6 +13,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
+	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
@@ -23,13 +24,14 @@ RUN ["/bin/bash", "-c", %s]`, api.PipelineImageStream, from, strconv.Quote(fmt.S
 }
 
 type pipelineImageCacheStep struct {
-	config        api.PipelineImageCacheStepConfiguration
-	resources     api.ResourceConfiguration
-	client        BuildClient
-	podClient     kubernetes.PodClient
-	jobSpec       *api.JobSpec
-	pullSecret    *coreapi.Secret
-	architectures sets.Set[string]
+	config            api.PipelineImageCacheStepConfiguration
+	resources         api.ResourceConfiguration
+	client            BuildClient
+	podClient         kubernetes.PodClient
+	jobSpec           *api.JobSpec
+	pullSecret        *coreapi.Secret
+	architectures     sets.Set[string]
+	metricsController *metrics.MetricsController
 }
 
 func (s *pipelineImageCacheStep) Inputs() (api.InputDefinition, error) {
@@ -60,7 +62,7 @@ func (s *pipelineImageCacheStep) run(ctx context.Context) error {
 		s.pullSecret,
 		nil,
 		s.config.Ref,
-	), newImageBuildOptions(s.architectures.UnsortedList()))
+	), s.metricsController, newImageBuildOptions(s.architectures.UnsortedList()))
 }
 
 func (s *pipelineImageCacheStep) Requires() []api.StepLink {
@@ -105,14 +107,16 @@ func PipelineImageCacheStep(
 	podClient kubernetes.PodClient,
 	jobSpec *api.JobSpec,
 	pullSecret *coreapi.Secret,
+	metricsController *metrics.MetricsController,
 ) api.Step {
 	return &pipelineImageCacheStep{
-		config:        config,
-		resources:     resources,
-		client:        client,
-		podClient:     podClient,
-		jobSpec:       jobSpec,
-		pullSecret:    pullSecret,
-		architectures: sets.New[string](),
+		config:            config,
+		resources:         resources,
+		client:            client,
+		podClient:         podClient,
+		jobSpec:           jobSpec,
+		pullSecret:        pullSecret,
+		architectures:     sets.New[string](),
+		metricsController: metricsController,
 	}
 }

@@ -7,6 +7,8 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	imagev1 "github.com/openshift/api/image/v1"
+
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
@@ -70,6 +72,13 @@ func validateIntegration(fieldRoot, name string, integration api.Integration) []
 	}
 	if integration.IncludeBuiltImages && name != api.LatestReleaseName {
 		validationErrors = append(validationErrors, fmt.Errorf("%s: only the `latest` release can set `include_built_images`", fieldRoot))
+	}
+	if integration.ReferencePolicy == nil {
+		defaultPolicy := imagev1.LocalTagReferencePolicy
+		integration.ReferencePolicy = &defaultPolicy // Set default value
+	}
+	if *integration.ReferencePolicy != imagev1.LocalTagReferencePolicy && *integration.ReferencePolicy != imagev1.SourceTagReferencePolicy {
+		validationErrors = append(validationErrors, fmt.Errorf("%s.reference_policy: must be one of Local or Source or empty defaults to Local", fieldRoot))
 	}
 	return validationErrors
 }

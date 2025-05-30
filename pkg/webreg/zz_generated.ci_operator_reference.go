@@ -479,6 +479,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # all release artifacts not built in the current\n" +
 	"        # job are tagged from.\n" +
 	"        namespace: ' '\n" +
+	"        # ReferencePolicy is the policy to use when resolving references (Local or Source)\n" +
+	"        reference_policy: \"\"\n" +
 	"      resolved_release_images_step:\n" +
 	"        # Candidate describes a candidate release payload\n" +
 	"        candidate:\n" +
@@ -500,6 +502,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            name: ' '\n" +
 	"            # Namespace is the namespace in which the integration stream lives.\n" +
 	"            namespace: ' '\n" +
+	"            # ReferencePolicy is the policy to use when resolving references (Local or Source)\n" +
+	"            reference_policy: \"\"\n" +
 	"        name: ' '\n" +
 	"        # Prerelease describes a yet-to-be released payload\n" +
 	"        prerelease:\n" +
@@ -1343,6 +1347,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            name: ' '\n" +
 	"            # Namespace is the namespace in which the integration stream lives.\n" +
 	"            namespace: ' '\n" +
+	"            # ReferencePolicy is the policy to use when resolving references (Local or Source)\n" +
+	"            reference_policy: \"\"\n" +
 	"        # Prerelease describes a yet-to-be released payload\n" +
 	"        prerelease:\n" +
 	"            # Architecture is the architecture for the product.\n" +
@@ -1414,6 +1420,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"    # all release artifacts not built in the current\n" +
 	"    # job are tagged from.\n" +
 	"    namespace: ' '\n" +
+	"    # ReferencePolicy is the policy to use when resolving references (Local or Source)\n" +
+	"    reference_policy: \"\"\n" +
 	"# TestBinaryBuildCommands will create a \"test-bin\" image based on \"src\" that\n" +
 	"# contains the output of this command. This allows reuse of binary artifacts\n" +
 	"# across other steps. If empty, no \"test-bin\" image will be created.\n" +

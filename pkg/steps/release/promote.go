@@ -323,10 +323,17 @@ func toPromote(config api.PromotionTarget, images []api.ProjectDirectoryImageBui
 			names.Insert(tag)
 		}
 	}
+
 	for _, tag := range config.ExcludedImages {
+		if tag == api.PromotionExcludeImageWildcard {
+			clear(tagsByDst)
+			names.Clear()
+			break
+		}
 		delete(tagsByDst, tag)
 		names.Delete(tag)
 	}
+
 	for dst, src := range config.AdditionalImages {
 		tagsByDst[dst] = src
 		names.Insert(dst)

@@ -20,6 +20,8 @@ const (
 
 	PromotionStepName     = "promotion"
 	PromotionQuayStepName = "promotion-quay"
+
+	PromotionExcludeImageWildcard = "*"
 )
 
 // PromotionTargets adapts the single-target configuration to the multi-target paradigm.

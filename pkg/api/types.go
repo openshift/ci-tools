@@ -1470,6 +1470,7 @@ const (
 	ClusterProfileAWSQUAYQE               ClusterProfile = "aws-quay-qe"
 	ClusterProfileGCPQUAYQE               ClusterProfile = "gcp-quay-qe"
 	ClusterProfileAzureQUAYQE             ClusterProfile = "azure-quay-qe"
+	ClusterProfileAWSMCOQE                ClusterProfile = "aws-mco-qe"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -1639,6 +1640,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSQUAYQE,
 		ClusterProfileGCPQUAYQE,
 		ClusterProfileAzureQUAYQE,
+		ClusterProfileAWSMCOQE,
 	}
 }
 
@@ -1698,6 +1700,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSRHOAIQE,
 		ClusterProfileAWSManagedRosaRHOAIQE,
 		ClusterProfileAWSQUAYQE,
+		ClusterProfileAWSMCOQE,
 		ClusterProfileAWSManagedOSDRHOAIQE:
 		return string(CloudAWS)
 	case
@@ -2226,6 +2229,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "gcp-observability-quota-slice"
 	case ClusterProfileEquinixEdgeEnablement:
 		return "equinix-edge-enablement-quota-slice"
+	case ClusterProfileAWSMCOQE:
+		return "aws-mco-qe-quota-slice"
 	default:
 		return ""
 	}

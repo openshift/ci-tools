@@ -49,10 +49,11 @@ import (
 // branches of those releases.
 type importReleaseStep struct {
 	// name is the name of the release we're importing, like 'latest'
-	name     string
-	nodeName string
-	target   string
-	source   ReleaseSource
+	name            string
+	nodeName        string
+	target          string
+	referencePolicy imagev1.TagReferencePolicyType
+	source          ReleaseSource
 	// append determines if we wait for other processes to create images first
 	append     bool
 	resources  api.ResourceConfiguration
@@ -229,11 +230,15 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 			}
 		}
 
+		referencePolicy := imagev1.LocalTagReferencePolicy
+		if s.referencePolicy == imagev1.SourceTagReferencePolicy {
+			referencePolicy = s.referencePolicy
+		}
 		existing := sets.New[string]()
 		tags := make([]imagev1.TagReference, 0, len(releaseIS.Spec.Tags)+len(stable.Spec.Tags))
 		for _, tag := range releaseIS.Spec.Tags {
 			existing.Insert(tag.Name)
-			tag.ReferencePolicy.Type = imagev1.LocalTagReferencePolicy
+			tag.ReferencePolicy.Type = referencePolicy
 			tag.ImportPolicy.ImportMode = imagev1.ImportModePreserveOriginal
 			tags = append(tags, tag)
 		}
@@ -242,7 +247,7 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 				continue
 			}
 			existing.Insert(tag.Name)
-			tag.ReferencePolicy.Type = imagev1.LocalTagReferencePolicy
+			tag.ReferencePolicy.Type = referencePolicy
 			tag.ImportPolicy.ImportMode = imagev1.ImportModePreserveOriginal
 			tags = append(tags, tag)
 		}
@@ -315,6 +320,7 @@ func (s *importReleaseStep) Objects() []ctrlruntimeclient.Object {
 // ImportReleaseStep imports an existing update payload image
 func ImportReleaseStep(
 	name, nodeName, target string,
+	referencePolicy imagev1.TagReferencePolicyType,
 	source ReleaseSource,
 	append bool,
 	resources api.ResourceConfiguration,
@@ -326,6 +332,7 @@ func ImportReleaseStep(
 		name:                           name,
 		nodeName:                       nodeName,
 		target:                         target,
+		referencePolicy:                referencePolicy,
 		source:                         source,
 		append:                         append,
 		resources:                      resources,
@@ -345,9 +352,14 @@ func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName 
 		// create the imagestream to be able to set it there.
 		if err := s.client.Create(ctx, &imagev1.ImageStream{
 			ObjectMeta: metav1.ObjectMeta{Name: overrideCLIStreamName, Namespace: s.jobSpec.Namespace()},
-			Spec:       imagev1.ImageStreamSpec{LookupPolicy: imagev1.ImageLookupPolicy{Local: true}},
+			Spec:       imagev1.ImageStreamSpec{LookupPolicy: imagev1.ImageLookupPolicy{Local: true}, Tags: []imagev1.TagReference{{ReferencePolicy: imagev1.TagReferencePolicy{Type: s.referencePolicy}}}},
 		}); err != nil && !kerrors.IsAlreadyExists(err) {
 			return nil, fmt.Errorf("failed to create %s imagestream: %w", overrideCLIStreamName, err)
+		}
+
+		referencePolicy := imagev1.LocalTagReferencePolicy
+		if s.referencePolicy == imagev1.SourceTagReferencePolicy {
+			referencePolicy = s.referencePolicy
 		}
 		streamTag := &imagev1.ImageStreamTag{
 			ObjectMeta: meta.ObjectMeta{
@@ -356,7 +368,7 @@ func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName 
 			},
 			Tag: &imagev1.TagReference{
 				ReferencePolicy: imagev1.TagReferencePolicy{
-					Type: imagev1.LocalTagReferencePolicy,
+					Type: referencePolicy,
 				},
 				From: s.overrideCLIReleaseExtractImage,
 			},
@@ -416,6 +428,10 @@ func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName 
 		return nil, err
 	}
 	// tag the cli image into stable so we use the correct pull secrets from the namespace
+	referencePolicy := imagev1.LocalTagReferencePolicy
+	if s.referencePolicy == imagev1.SourceTagReferencePolicy {
+		referencePolicy = s.referencePolicy
+	}
 	streamTag := &imagev1.ImageStreamTag{
 		ObjectMeta: meta.ObjectMeta{
 			Namespace: s.jobSpec.Namespace(),
@@ -423,7 +439,7 @@ func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName 
 		},
 		Tag: &imagev1.TagReference{
 			ReferencePolicy: imagev1.TagReferencePolicy{
-				Type: imagev1.LocalTagReferencePolicy,
+				Type: referencePolicy,
 			},
 			From: &coreapi.ObjectReference{
 				Kind: "DockerImage",

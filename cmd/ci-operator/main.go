@@ -84,6 +84,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/labeledclient"
 	"github.com/openshift/ci-tools/pkg/lease"
 	"github.com/openshift/ci-tools/pkg/load"
+	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/registry/server"
 	"github.com/openshift/ci-tools/pkg/results"
@@ -213,6 +214,9 @@ func main() {
 		logrus.WithError(err).Fatal("failed to parse flags")
 	}
 
+	opt.metricsAgent = metrics.NewMetricsAgent()
+	go opt.metricsAgent.Run()
+
 	ctrlruntimelog.SetLogger(logr.New(ctrlruntimelog.NullLogSink{}))
 	if opt.verbose {
 		fs := flag.NewFlagSet("", flag.ExitOnError)
@@ -258,6 +262,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	opt.metricsAgent.Record(
+		&metrics.InsightsEvent{
+			Name:              "ci_operator_started",
+			AdditionalContext: map[string]any{"job_spec": opt.jobSpec},
+		},
+	)
+
 	if errs := opt.Run(); len(errs) > 0 {
 		var defaulted []error
 		for _, err := range errs {
@@ -270,10 +281,14 @@ func main() {
 		}
 		logrus.Error("Some steps failed:")
 		logrus.Error(message.String())
+
+		opt.metricsAgent.Stop()
 		opt.Report(defaulted...)
+
 		os.Exit(1)
 	}
 	opt.Report()
+	opt.metricsAgent.Stop()
 }
 
 // setupLogger sets up logrus to print all logs to a file and user-friendly logs to stdout
@@ -436,6 +451,8 @@ type options struct {
 
 	restrictNetworkAccess       bool
 	enableSecretsStoreCSIDriver bool
+
+	metricsAgent *metrics.MetricsAgent
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
@@ -940,7 +957,7 @@ func (o *options) Run() []error {
 	// load the graph from the configuration
 	buildSteps, promotionSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig,
 		o.podPendingTimeout, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig,
-		o.nodeName, nodeArchitectures, o.targetAdditionalSuffix, o.manifestToolDockerCfg, o.localRegistryDNS, streams, injectedTest, o.enableSecretsStoreCSIDriver)
+		o.nodeName, nodeArchitectures, o.targetAdditionalSuffix, o.manifestToolDockerCfg, o.localRegistryDNS, streams, injectedTest, o.enableSecretsStoreCSIDriver, o.metricsAgent)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}
@@ -994,6 +1011,7 @@ func (o *options) Run() []error {
 	if err := o.initializeNamespace(); err != nil {
 		return []error{results.ForReason("initializing_namespace").WithError(err).Errorf("could not initialize namespace: %v", err)}
 	}
+	o.metricsAgent.Record(&metrics.InsightsEvent{Name: "namespace_created", AdditionalContext: map[string]any{"namespace": o.namespace}})
 
 	return interrupt.New(handler, o.saveNamespaceArtifacts).Run(func() []error {
 		if leaseClient != nil {
@@ -1023,6 +1041,7 @@ func (o *options) Run() []error {
 			logrus.WithError(err).Warn("Unable to update metadata.json for build")
 		}
 		if len(errs) > 0 {
+			o.metricsAgent.Record(&metrics.InsightsEvent{Name: "ci_operator_failed"})
 			eventRecorder.Event(runtimeObject, coreapi.EventTypeWarning, "CiJobFailed", eventJobDescription(o.jobSpec, o.namespace))
 			var wrapped []error
 			for _, err := range errs {
@@ -1043,13 +1062,15 @@ func (o *options) Run() []error {
 			case details := <-detailsChan:
 				graph.MergeFrom(details)
 			case err := <-errChan:
-				eventRecorder.Event(runtimeObject, coreapi.EventTypeWarning, "PostStepFailed",
-					fmt.Sprintf("post step failed while %s. with error: %v", eventJobDescription(o.jobSpec, o.namespace), err))
+				errorDesc := fmt.Sprintf("post step failed while %s. with error: %v", eventJobDescription(o.jobSpec, o.namespace), err)
+				eventRecorder.Event(runtimeObject, coreapi.EventTypeWarning, "PostStepFailed", errorDesc)
+				o.metricsAgent.Record(&metrics.InsightsEvent{Name: "post_step_failed", AdditionalContext: map[string]any{"error": errorDesc}})
 				return []error{results.ForReason("executing_post").WithError(err).Unwrap()} // If any of the promotion steps fail, it is considered a failure
 			}
 		}
 
 		eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobSucceeded", eventJobDescription(o.jobSpec, o.namespace))
+		o.metricsAgent.Record(&metrics.InsightsEvent{Name: "ci_operator_succeeded"})
 		return nil
 	})
 }

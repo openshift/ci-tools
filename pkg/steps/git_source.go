@@ -13,6 +13,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
+	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/results"
 )
 
@@ -25,6 +26,7 @@ type gitSourceStep struct {
 	cloneAuthConfig *CloneAuthConfig
 	pullSecret      *coreapi.Secret
 	architectures   sets.Set[string]
+	metricsAgent    *metrics.MetricsAgent
 }
 
 func (s *gitSourceStep) Inputs() (api.InputDefinition, error) {
@@ -59,7 +61,7 @@ func (s *gitSourceStep) run(ctx context.Context) error {
 				URI: cloneURI,
 				Ref: refs.BaseRef,
 			},
-		}, "", s.config.DockerfilePath, s.resources, s.pullSecret, nil, s.config.Ref), newImageBuildOptions(s.architectures.UnsortedList()))
+		}, "", s.config.DockerfilePath, s.resources, s.pullSecret, nil, s.config.Ref), s.metricsAgent, newImageBuildOptions(s.architectures.UnsortedList()))
 	}
 
 	return fmt.Errorf("nothing to build source image from, no refs")
@@ -139,6 +141,7 @@ func GitSourceStep(
 	jobSpec *api.JobSpec,
 	cloneAuthConfig *CloneAuthConfig,
 	pullSecret *coreapi.Secret,
+	metricsAgent *metrics.MetricsAgent,
 ) api.Step {
 	return &gitSourceStep{
 		config:          config,
@@ -149,5 +152,6 @@ func GitSourceStep(
 		cloneAuthConfig: cloneAuthConfig,
 		pullSecret:      pullSecret,
 		architectures:   sets.New[string](),
+		metricsAgent:    metricsAgent,
 	}
 }

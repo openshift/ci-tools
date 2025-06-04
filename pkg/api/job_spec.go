@@ -22,14 +22,14 @@ type JobSpec struct {
 
 	// these fields allow the job to be targeted at a location
 	namespace     string
-	BaseNamespace string
+	BaseNamespace string `json:"base_namespace,omitempty"`
 
 	// if set, any new artifacts will be a child of this object
 	owner *meta.OwnerReference
 
-	Metadata               Metadata
-	Target                 string
-	TargetAdditionalSuffix string
+	Metadata               Metadata `json:"metadata,omitempty"`
+	Target                 string   `json:"target,omitempty"`
+	TargetAdditionalSuffix string   `json:"target_additional_suffix,omitempty"`
 }
 
 // Namespace returns the namespace of the job. Must not be evaluated

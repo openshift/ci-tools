@@ -1033,7 +1033,7 @@ func TestBuildPartialGraph(t *testing.T) {
 					loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(&imagev1.ImageStreamTag{ObjectMeta: metav1.ObjectMeta{Name: ":"}}).Build()),
 					nil,
 				),
-				steps.SourceStep(api.SourceStepConfiguration{From: api.PipelineImageStreamTagReferenceRoot, To: api.PipelineImageStreamTagReferenceSource}, api.ResourceConfiguration{}, nil, nil, &api.JobSpec{}, nil, nil),
+				steps.SourceStep(api.SourceStepConfiguration{From: api.PipelineImageStreamTagReferenceRoot, To: api.PipelineImageStreamTagReferenceSource}, api.ResourceConfiguration{}, nil, nil, &api.JobSpec{}, nil, nil, nil),
 				steps.ProjectDirectoryImageBuildStep(
 					api.ProjectDirectoryImageBuildStepConfiguration{
 						From: api.PipelineImageStreamTagReferenceSource,
@@ -1042,7 +1042,7 @@ func TestBuildPartialGraph(t *testing.T) {
 						},
 						To: api.PipelineImageStreamTagReference("oc-bin-image"),
 					},
-					&api.ReleaseBuildConfiguration{}, api.ResourceConfiguration{}, nil, nil, nil, nil,
+					&api.ReleaseBuildConfiguration{}, api.ResourceConfiguration{}, nil, nil, nil, nil, nil,
 				),
 				steps.OutputImageTagStep(api.OutputImageTagStepConfiguration{From: api.PipelineImageStreamTagReference("oc-bin-image")}, nil, nil),
 				steps.ImagesReadyStep(steps.OutputImageTagStep(api.OutputImageTagStepConfiguration{From: api.PipelineImageStreamTagReference("oc-bin-image")}, nil, nil).Creates()),

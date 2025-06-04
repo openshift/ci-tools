@@ -1438,6 +1438,8 @@ const (
 	ClusterProfileAWS2                    ClusterProfile = "aws-2"
 	ClusterProfileHyperShift              ClusterProfile = "hypershift"
 	ClusterProfileAWS3                    ClusterProfile = "aws-3"
+	ClusterProfileAWS4                    ClusterProfile = "aws-4"
+	ClusterProfileAWS5                    ClusterProfile = "aws-5"
 	ClusterProfileGCPVirtualization       ClusterProfile = "gcp-virtualization"
 	ClusterProfileAWSVirtualization       ClusterProfile = "aws-virtualization"
 	ClusterProfileAzureVirtualization     ClusterProfile = "azure-virtualization"

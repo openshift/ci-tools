@@ -351,6 +351,9 @@ func gatherModifiedRepos(releaseRepoPath string, logger *logrus.Entry) []string 
 		if split[1] == ".config.prowgen" {
 			continue
 		}
+		if split[1] == "OWNERS" {
+			continue
+		}
 
 		orgRepos.Insert(fmt.Sprintf("%s/%s", split[0], split[1]))
 	}

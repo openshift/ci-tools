@@ -1497,7 +1497,7 @@ golang.org/x/mod/internal/lazyregexp
 golang.org/x/mod/modfile
 golang.org/x/mod/module
 golang.org/x/mod/semver
-# golang.org/x/net v0.37.0
+# golang.org/x/net v0.38.0
 ## explicit; go 1.23.0
 golang.org/x/net/context
 golang.org/x/net/context/ctxhttp
@@ -2413,7 +2413,7 @@ sigs.k8s.io/controller-tools/pkg/webhook
 ## explicit; go 1.23
 sigs.k8s.io/json
 sigs.k8s.io/json/internal/golang/encoding/json
-# sigs.k8s.io/prow v0.0.0-20250430112356-e4f2577d57ca
+# sigs.k8s.io/prow v0.0.0-20250606085439-e2a3dbcc96af
 ## explicit; go 1.23.0
 sigs.k8s.io/prow/cmd/generic-autobumper/bumper
 sigs.k8s.io/prow/cmd/generic-autobumper/updater

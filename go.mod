@@ -52,7 +52,7 @@ require (
 	github.com/spf13/pflag v1.0.6-0.20210604193023-d5e0c0615ace
 	golang.org/x/exp v0.0.0-20250207012021-f9890c6ad9f3
 	// https://security.snyk.io/vuln/SNYK-GOLANG-GOLANGORGXNETHTML-5816820
-	golang.org/x/net v0.37.0
+	golang.org/x/net v0.38.0
 	golang.org/x/oauth2 v0.26.0
 	golang.org/x/sync v0.12.0
 	golang.org/x/text v0.23.0 // indirect
@@ -194,7 +194,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	gopkg.in/evanphx/json-patch.v5 v5.9.0
 	sigs.k8s.io/boskos v0.0.0-20240624145324-1e4de26c366a
-	sigs.k8s.io/prow v0.0.0-20250430112356-e4f2577d57ca
+	sigs.k8s.io/prow v0.0.0-20250606085439-e2a3dbcc96af
 )
 
 require (

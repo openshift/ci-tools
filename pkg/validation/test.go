@@ -808,7 +808,10 @@ func validateCredentials(fieldRoot string, credentials []api.CredentialReference
 		for j, other := range credentials[i+1:] {
 			index := i + j + 1
 			if credential.MountPath == other.MountPath {
-				errs = append(errs, fmt.Errorf("%s.credentials[%d] and credentials[%d] mount to the same location (%s)", fieldRoot, i, index, credential.MountPath))
+				if credential.Collection == other.Collection && credential.Name != other.Name {
+					continue
+				}
+				errs = append(errs, fmt.Errorf("%s.credentials[%d] and credentials[%d] mount to the same location (%s), but are in different collections", fieldRoot, i, index, credential.MountPath))
 				continue
 			}
 			// we can make a couple of assumptions here to improve our check:

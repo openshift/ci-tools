@@ -1285,11 +1285,18 @@ func TestValidateCredentials(t *testing.T) {
 		{
 			name: "duped cred mount path means error",
 			input: []api.CredentialReference{
-				{Namespace: "ns", Name: "name", MountPath: "/foo"},
-				{Namespace: "ns", Name: "name", MountPath: "/foo"},
+				{Namespace: "ns", Name: "name", MountPath: "/foo", Collection: "1"},
+				{Namespace: "ns", Name: "name", MountPath: "/foo", Collection: "2"},
 			},
 			output: []error{
-				errors.New("root.credentials[0] and credentials[1] mount to the same location (/foo)"),
+				errors.New("root.credentials[0] and credentials[1] mount to the same location (/foo), but are in different collections"),
+			},
+		},
+		{
+			name: "duped cred mount path is ok if in the same collection",
+			input: []api.CredentialReference{
+				{Namespace: "ns", Name: "name", MountPath: "/foo", Collection: "1"},
+				{Namespace: "ns", Name: "different-name", MountPath: "/foo", Collection: "1"},
 			},
 		},
 		{

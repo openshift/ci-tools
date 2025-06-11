@@ -54,7 +54,8 @@ func TestGenerateCertificate(t *testing.T) {
 						"kind": "Certificate",
 						"metadata": map[string]interface{}{
 							"labels": map[string]interface{}{
-								"aws-project": "openshift-ci-infra",
+								"platform": "aws",
+								"project":  "openshift-ci-infra",
 							},
 							"name":      "apiserver-tls",
 							"namespace": "openshift-config",
@@ -76,7 +77,8 @@ func TestGenerateCertificate(t *testing.T) {
 						"kind":       "Certificate",
 						"metadata": map[string]interface{}{
 							"labels": map[string]interface{}{
-								"aws-project": "openshift-ci-infra",
+								"platform": "aws",
+								"project":  "openshift-ci-infra",
 							},
 							"name":      "apps-tls",
 							"namespace": "openshift-ingress",

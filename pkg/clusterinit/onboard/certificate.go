@@ -3,6 +3,7 @@ package onboard
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -78,12 +79,21 @@ func (s *certificateGenerator) imageRegistryPublicHost(ctx context.Context, log 
 
 func (s *certificateGenerator) generateCertificateManifests(baseDomain, imageRegistryHost string) []interface{} {
 	manifests := make([]interface{}, 0)
+	platform := "aws"
+	project := "openshift-ci-infra"
+	issuer := "cert-issuer-aws"
+	if strings.Contains(baseDomain, "gcp") {
+		platform = "gcp"
+		project = "openshift-ci-build-farm"
+		issuer = "cert-issuer-ci-build-farm"
+	}
 
 	apiServerCert := map[string]interface{}{
 		"kind": "Certificate",
 		"metadata": map[string]interface{}{
 			"labels": map[string]interface{}{
-				"aws-project": "openshift-ci-infra",
+				"project":  project,
+				"platform": platform,
 			},
 			"name":      "apiserver-tls",
 			"namespace": "openshift-config",
@@ -94,7 +104,7 @@ func (s *certificateGenerator) generateCertificateManifests(baseDomain, imageReg
 			},
 			"issuerRef": map[string]interface{}{
 				"kind": "ClusterIssuer",
-				"name": "cert-issuer-aws",
+				"name": issuer,
 			},
 			"secretName": "apiserver-tls",
 		},
@@ -106,7 +116,8 @@ func (s *certificateGenerator) generateCertificateManifests(baseDomain, imageReg
 		"kind":       "Certificate",
 		"metadata": map[string]interface{}{
 			"labels": map[string]interface{}{
-				"aws-project": "openshift-ci-infra",
+				"project":  project,
+				"platform": platform,
 			},
 			"name":      "apps-tls",
 			"namespace": "openshift-ingress",
@@ -117,7 +128,7 @@ func (s *certificateGenerator) generateCertificateManifests(baseDomain, imageReg
 			},
 			"issuerRef": map[string]interface{}{
 				"kind": "ClusterIssuer",
-				"name": "cert-issuer-aws",
+				"name": issuer,
 			},
 			"secretName": "apps-tls",
 		},

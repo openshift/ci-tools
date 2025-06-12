@@ -660,7 +660,7 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 		if periodic.DecorationConfig == nil {
 			periodic.DecorationConfig = &prowv1.DecorationConfig{}
 		}
-		periodic.DecorationConfig.Timeout = &prowv1.Duration{Duration: 6 * time.Hour}
+		periodic.DecorationConfig.Timeout = &prowv1.Duration{Duration: r.defaultAggregatorJobTimeout}
 		break
 	}
 	// We did not find the injected test: this is a bug

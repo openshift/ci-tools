@@ -278,27 +278,23 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		affinityChanged := false
 		if err == nil {
 			if len(precludedHostnames) > 0 {
-
-				if len(precludedHostnames) > 0 {
-					// Use MatchExpressions here because MatchFields because MatchExpressions
-					// only allows one value in the Values list.
-					requiredNoSchedulingSelector := corev1.NodeSelector{
-						NodeSelectorTerms: []corev1.NodeSelectorTerm{
-							{
-								MatchExpressions: []corev1.NodeSelectorRequirement{
-									{
-										Key:      KubernetesHostnameLabelName,
-										Operator: "NotIn",
-										Values:   precludedHostnames,
-									},
+				// Use MatchExpressions here because MatchFields because MatchExpressions
+				// only allows one value in the Values list.
+				requiredNoSchedulingSelector := corev1.NodeSelector{
+					NodeSelectorTerms: []corev1.NodeSelectorTerm{
+						{
+							MatchExpressions: []corev1.NodeSelectorRequirement{
+								{
+									Key:      KubernetesHostnameLabelName,
+									Operator: "NotIn",
+									Values:   precludedHostnames,
 								},
 							},
 						},
-					}
-					affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &requiredNoSchedulingSelector
-					affinityChanged = true
+					},
 				}
-
+				affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &requiredNoSchedulingSelector
+				affinityChanged = true
 			}
 		} else {
 			klog.Errorf("No node precludes will be set in pod due to error: %v", err)

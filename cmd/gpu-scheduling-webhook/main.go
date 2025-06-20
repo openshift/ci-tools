@@ -31,6 +31,13 @@ var (
 		Effect:   corev1.TaintEffectNoSchedule,
 	}
 
+	KVMVirtToleration = corev1.Toleration{
+		Key:      "ci-workload",
+		Operator: corev1.TolerationOpEqual,
+		Value:    "virt-launcher",
+		Effect:   corev1.TaintEffectNoSchedule,
+	}
+
 	opts = options{}
 
 	rootCmd = &cobra.Command{
@@ -79,12 +86,23 @@ func (*gpuTolerator) Default(ctx context.Context, obj runtime.Object) error {
 	var gpuNeeded bool
 	gpuNeeded = hasNvidaGPURequest(logger, pod.Spec.InitContainers)
 
+	var KVMVirtNeeded bool
+	KVMVirtNeeded = hasKVMVirtRequest(logger, pod.Spec.InitContainers)
+
 	if !gpuNeeded {
 		gpuNeeded = hasNvidaGPURequest(logger, pod.Spec.Containers)
 	}
 
 	if gpuNeeded {
 		addToleration(logger, pod)
+	}
+
+	if !KVMVirtNeeded {
+		KVMVirtNeeded = hasKVMVirtRequest(logger, pod.Spec.Containers)
+	}
+
+	if KVMVirtNeeded {
+		addKVMVirtToleration(logger, pod)
 	}
 
 	return nil
@@ -99,6 +117,42 @@ func hasNvidaGPURequest(logger logr.Logger, containers []corev1.Container) bool 
 		}
 	}
 	return false
+}
+
+func hasKVMVirtRequest(logger logr.Logger, containers []corev1.Container) bool {
+	for i := range containers {
+		c := &containers[i]
+		if needKVMVirt(c.Resources) {
+			logger.Info("Request KVM Virt", "container", c.Name)
+			return true
+		}
+	}
+	return false
+}
+
+func needKVMVirt(requirement corev1.ResourceRequirements) bool {
+	_, requestExists := requirement.Requests["devices.kubevirt.io/kvm"]
+	_, limitExists := requirement.Limits["devices.kubevirt.io/kvm"]
+	return requestExists || limitExists
+}
+
+// Allow a pod to be scheduled on the KVM Virt featured node by adding a toleration.
+// Do nothing if the toleration has already been added.
+func addKVMVirtToleration(logger logr.Logger, pod *corev1.Pod) {
+	var tolerationExists bool
+	for _, t := range pod.Spec.Tolerations {
+		if t == KVMVirtToleration {
+			tolerationExists = true
+			break
+		}
+	}
+
+	if !tolerationExists {
+		pod.Spec.Tolerations = append(pod.Spec.Tolerations, KVMVirtToleration)
+		logger.Info("Add KVM Virt toleration")
+	} else {
+		logger.Info("KVM Virt toleration exists already")
+	}
 }
 
 // Allow a pod to be scheduled on the GPU featured node by adding a toleration.

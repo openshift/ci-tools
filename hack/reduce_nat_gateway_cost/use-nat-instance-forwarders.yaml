@@ -30,7 +30,7 @@ Resources:
           - Effect: Allow
             Action:
             - events:PutEvents
-            Resource: arn:aws:events:us-east-1:320297955214:event-bus/default
+            Resource: !Sub arn:aws:events:us-east-1:${AWS::AccountId}:event-bus/default
   UseNatInstanceForwardEventRule:
     Type: AWS::Events::Rule
     Properties:

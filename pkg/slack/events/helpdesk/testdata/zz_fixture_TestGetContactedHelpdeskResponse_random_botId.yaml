@@ -4,7 +4,14 @@
     type: mrkdwn
   type: section
 - text:
-    text: 'Please see if our documentation can be of use: https://docs.ci.openshift.org/docs/'
+    text: In the meantime, check our <https://docs.ci.openshift.org/docs/|documentation>
+      or <https://docs.ci.openshift.org/docs/getting-started/helpdesk-faq/|Helpdesk
+      FAQ>.
+    type: mrkdwn
+  type: section
+- text:
+    text: 'You can also try our <https://notebooklm.google.com/notebook/cb53610d-1436-4504-9277-0cb3561f7620|forum-ocp-testplatform
+      Advisor AI> :ai-generated: to see if your question has been answered before.'
     type: mrkdwn
   type: section
 - text:

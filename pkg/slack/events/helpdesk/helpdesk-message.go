@@ -109,7 +109,8 @@ func getContactedHelpdeskResponse(botId, reviewRequestWorkflowID string) []slack
 		sections = append(sections, "Your PR will be reviewed based on: age, priority, and capacity.")
 	} else {
 		sections = append(sections,
-			"Please see if our documentation can be of use: https://docs.ci.openshift.org/docs/",
+			"In the meantime, check our <https://docs.ci.openshift.org/docs/|documentation> or <https://docs.ci.openshift.org/docs/getting-started/helpdesk-faq/|Helpdesk FAQ>.",
+			"You can also try our <https://notebooklm.google.com/notebook/cb53610d-1436-4504-9277-0cb3561f7620|forum-ocp-testplatform Advisor AI> :ai-generated: to see if your question has been answered before.",
 			"If this is an urgent CI outage, please ping `(@)dptp-triage`")
 	}
 

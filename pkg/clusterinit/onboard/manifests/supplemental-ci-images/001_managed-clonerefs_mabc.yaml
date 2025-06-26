@@ -23,7 +23,7 @@ spec:
       images:
       - from:
           kind: DockerImage
-          name: us-docker.pkg.dev/k8s-infra-prow/images/clonerefs:v20250512-8cd4af136
+          name: us-docker.pkg.dev/k8s-infra-prow/images/clonerefs:v20250623-59a573d44
         paths:
         - destinationDir: .
           sourcePath: /ko-app/clonerefs

@@ -16,6 +16,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+	"sigs.k8s.io/prow/pkg/flagutil"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
@@ -28,6 +29,7 @@ type options struct {
 	username    string
 	tokenPath   string
 	fastForward bool
+	ignore      flagutil.Strings
 }
 
 func (o *options) Validate() error {
@@ -50,6 +52,7 @@ func (o *options) bind(fs *flag.FlagSet) {
 	fs.StringVar(&o.username, "username", "", "Username to use when pushing to GitHub.")
 	fs.StringVar(&o.tokenPath, "token-path", "", "Path to token to use when pushing to GitHub.")
 	fs.BoolVar(&o.fastForward, "fast-forward", false, "Attempt to fast-forward future branches if they already exist.")
+	fs.Var(&o.ignore, "ignore", "Ignore a repo or entire org. Format: org or org/repo. Can be passed multiple times.")
 	o.FutureOptions.Bind(fs)
 }
 
@@ -87,6 +90,8 @@ func main() {
 		logrus.Fatalf("Invalid options: %v", err)
 	}
 
+	ignoreSet := o.ignore.StringSet()
+
 	gitDir := o.gitDir
 	if gitDir == "" {
 		tempDir, err := os.MkdirTemp("", "")
@@ -122,6 +127,11 @@ func main() {
 	}
 
 	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, api.WithoutOKD, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
+		if ignoreSet.Has(repoInfo.Org) || ignoreSet.Has(fmt.Sprintf("%s/%s", repoInfo.Org, repoInfo.Repo)) {
+			logrus.WithField("repo", fmt.Sprintf("%s/%s", repoInfo.Org, repoInfo.Repo)).Info("Skipping due to --ignore")
+			return nil
+		}
+
 		logger := config.LoggerForInfo(*repoInfo)
 
 		repoDir := path.Join(gitDir, repoInfo.Org, repoInfo.Repo)

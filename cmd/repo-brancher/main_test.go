@@ -17,6 +17,7 @@ func TestOptions_Bind(t *testing.T) {
 		input              []string
 		expected           options
 		expectedFutureOpts []string
+		expectedIgnore     []string
 	}{
 		{
 			name:  "nothing set has defaults",
@@ -34,7 +35,7 @@ func TestOptions_Bind(t *testing.T) {
 			},
 		},
 		{
-			name: "everything set",
+			name: "everything set including ignore",
 			input: []string{
 				"--config-dir=foo",
 				"--org=bar",
@@ -48,6 +49,8 @@ func TestOptions_Bind(t *testing.T) {
 				"--username=hi",
 				"--token-path=somewhere",
 				"--fast-forward",
+				"--ignore=xyz/abc",
+				"--ignore=pqr/lmn",
 			},
 			expected: options{
 				FutureOptions: promotion.FutureOptions{
@@ -59,7 +62,8 @@ func TestOptions_Bind(t *testing.T) {
 								Repo:      "baz",
 								LogLevel:  "debug",
 							},
-							Confirm: true},
+							Confirm: true,
+						},
 						CurrentRelease:            "one",
 						CurrentPromotionNamespace: "promotionns",
 					},
@@ -69,8 +73,10 @@ func TestOptions_Bind(t *testing.T) {
 				username:    "hi",
 				tokenPath:   "somewhere",
 				fastForward: true,
+				ignore:      flagutil.Strings{},
 			},
 			expectedFutureOpts: []string{"two"},
+			expectedIgnore:     []string{"xyz/abc", "pqr/lmn"},
 		},
 	}
 
@@ -89,8 +95,14 @@ func TestOptions_Bind(t *testing.T) {
 					t.Errorf("failed to set future release: %v", err)
 				}
 			}
+			// Set expected ignore values
+			for _, ign := range testCase.expectedIgnore {
+				if err := expected.ignore.Set(ign); err != nil {
+					t.Errorf("failed to set ignore: %v", err)
+				}
+			}
 			if actual, expected := o, expected; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: got incorrect options: expected %v, got %v", testCase.name, expected, actual)
+				t.Errorf("%s: got incorrect options: expected %#v, got %#v", testCase.name, expected, actual)
 			}
 		})
 	}

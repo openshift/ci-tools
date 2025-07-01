@@ -496,12 +496,7 @@ func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubern
 	close(errChan)
 
 	for _, b := range builds {
-		var updated buildapi.Build
-		if err := buildClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: b.Namespace, Name: b.Name}, &updated); err != nil {
-			logrus.WithError(err).Warnf("failed to re-get build %q; aborting event recording", b.Name)
-			continue
-		}
-		metricsAgent.RecordBuildEvent(updated, build.Spec.Output.To.Name)
+		metricsAgent.Record(metrics.NewBuildEvent(b.Name, b.Namespace, build.Spec.Output.To.Name))
 	}
 
 	var errs []error

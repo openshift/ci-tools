@@ -79,7 +79,7 @@ func FromConfig(
 	integratedStreams map[string]*configresolver.IntegratedStream,
 	injectedTest bool,
 	enableSecretsStoreCSIDriver bool,
-	metricsController *metrics.MetricsAgent,
+	metricsAgent *metrics.MetricsAgent,
 ) ([]api.Step, []api.Step, error) {
 	crclient, err := ctrlruntimeclient.NewWithWatch(clusterConfig, ctrlruntimeclient.Options{})
 	crclient = secretrecordingclient.Wrap(crclient, censor)
@@ -117,7 +117,7 @@ func FromConfig(
 	httpClient := retryablehttp.NewClient()
 	httpClient.Logger = nil
 
-	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, nodeName, targetAdditionalSuffix, nodeArchitectures, integratedStreams, injectedTest, enableSecretsStoreCSIDriver, metricsController)
+	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, nodeName, targetAdditionalSuffix, nodeArchitectures, integratedStreams, injectedTest, enableSecretsStoreCSIDriver, metricsAgent)
 }
 
 func fromConfig(
@@ -146,7 +146,7 @@ func fromConfig(
 	integratedStreams map[string]*configresolver.IntegratedStream,
 	injectedTest bool,
 	enableSecretsStoreCSIDriver bool,
-	metricsController *metrics.MetricsAgent,
+	metricsAgent *metrics.MetricsAgent,
 ) ([]api.Step, []api.Step, error) {
 	requiredNames := sets.New[string]()
 	for _, target := range requiredTargets {
@@ -267,19 +267,19 @@ func fromConfig(
 			step = steps.InputImageTagStep(&conf, client, jobSpec)
 			inputImages[conf.InputImage] = struct{}{}
 		} else if rawStep.PipelineImageCacheStepConfiguration != nil {
-			step = steps.PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, config.Resources, buildClient, podClient, jobSpec, pullSecret, metricsController)
+			step = steps.PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, config.Resources, buildClient, podClient, jobSpec, pullSecret, metricsAgent)
 		} else if rawStep.SourceStepConfiguration != nil {
-			step = steps.SourceStep(*rawStep.SourceStepConfiguration, config.Resources, buildClient, podClient, jobSpec, cloneAuthConfig, pullSecret, metricsController)
+			step = steps.SourceStep(*rawStep.SourceStepConfiguration, config.Resources, buildClient, podClient, jobSpec, cloneAuthConfig, pullSecret, metricsAgent)
 		} else if rawStep.BundleSourceStepConfiguration != nil {
 			step = steps.BundleSourceStep(*rawStep.BundleSourceStepConfiguration, config, config.Resources, buildClient, podClient, jobSpec, pullSecret)
 		} else if rawStep.IndexGeneratorStepConfiguration != nil {
-			step = steps.IndexGeneratorStep(*rawStep.IndexGeneratorStepConfiguration, config, config.Resources, buildClient, podClient, jobSpec, pullSecret, metricsController)
+			step = steps.IndexGeneratorStep(*rawStep.IndexGeneratorStepConfiguration, config, config.Resources, buildClient, podClient, jobSpec, pullSecret, metricsAgent)
 		} else if rawStep.ProjectDirectoryImageBuildStepConfiguration != nil {
-			step = steps.ProjectDirectoryImageBuildStep(*rawStep.ProjectDirectoryImageBuildStepConfiguration, config, config.Resources, buildClient, podClient, jobSpec, pullSecret, metricsController)
+			step = steps.ProjectDirectoryImageBuildStep(*rawStep.ProjectDirectoryImageBuildStepConfiguration, config, config.Resources, buildClient, podClient, jobSpec, pullSecret, metricsAgent)
 		} else if rawStep.ProjectDirectoryImageBuildInputs != nil {
-			step = steps.GitSourceStep(*rawStep.ProjectDirectoryImageBuildInputs, config.Resources, buildClient, podClient, jobSpec, cloneAuthConfig, pullSecret, metricsController)
+			step = steps.GitSourceStep(*rawStep.ProjectDirectoryImageBuildInputs, config.Resources, buildClient, podClient, jobSpec, cloneAuthConfig, pullSecret, metricsAgent)
 		} else if rawStep.RPMImageInjectionStepConfiguration != nil {
-			step = steps.RPMImageInjectionStep(*rawStep.RPMImageInjectionStepConfiguration, config.Resources, buildClient, podClient, jobSpec, pullSecret, metricsController)
+			step = steps.RPMImageInjectionStep(*rawStep.RPMImageInjectionStepConfiguration, config.Resources, buildClient, podClient, jobSpec, pullSecret, metricsAgent)
 		} else if rawStep.RPMServeStepConfiguration != nil {
 			step = steps.RPMServerStep(*rawStep.RPMServeStepConfiguration, client, jobSpec)
 		} else if rawStep.OutputImageTagStepConfiguration != nil {

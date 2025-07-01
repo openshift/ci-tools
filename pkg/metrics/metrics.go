@@ -1,98 +1,109 @@
 package metrics
 
 import (
+	"context"
 	"encoding/json"
 	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
 
+	controllerruntime "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/prow/pkg/secretutil"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
+const (
+	CIOperatorMetricsJSON = "ci-operator-metrics.json"
+)
+
 // MetricsEvent is the interface that every metric event must implement.
 type MetricsEvent interface {
-	// Store appends the event to the appropriate slice in the MetricsAgent.
-	Store(mc *MetricsAgent)
-	// Category returns the event's category.
-	Category() string
-
 	SetTimestamp(time.Time)
 }
 
-const CI_OPERATOR_METRICS_JSON = "ci-operator-metrics.json"
-
-// MetricsAgent collects and aggregates metrics events.
+// MetricsAgent handles incoming events to each Plugin.
 type MetricsAgent struct {
-	events chan MetricsEvent
-	done   chan struct{}
-	wg     sync.WaitGroup
-	mu     sync.Mutex
+	ctx     context.Context
+	events  chan MetricsEvent
+	plugins map[string]Plugin
 
-	insights []InsightsEvent
-	builds   []BuildEvent
+	wg sync.WaitGroup
+	mu sync.Mutex
 }
 
-// NewMetricsAgent creates and returns a new MetricsAgent.
-func NewMetricsAgent() *MetricsAgent {
+// NewMetricsAgent registers the built-in plugins by default.
+func NewMetricsAgent(ctx context.Context, client controllerruntime.Client) *MetricsAgent {
 	return &MetricsAgent{
-		events: make(chan MetricsEvent),
-		done:   make(chan struct{}),
+		ctx:    ctx,
+		events: make(chan MetricsEvent, 100),
+		plugins: map[string]Plugin{
+			InsightsPluginName: newInsightsPlugin(),
+			BuildsPluginName:   newBuildPlugin(client, ctx),
+		},
 	}
 }
 
 // Run listens for events on the events channel until the channel is closed.
-// Once the events channel is closed, we flush the collected events.
-func (mc *MetricsAgent) Run() {
-	mc.wg.Add(1)
-	defer mc.wg.Done()
-	for ev := range mc.events {
-		mc.mu.Lock()
-		ev.Store(mc)
-		mc.mu.Unlock()
+func (ma *MetricsAgent) Run() {
+	ma.wg.Add(1)
+	defer ma.wg.Done()
+	for {
+		ma.mu.Lock()
+		ch := ma.events
+		ma.mu.Unlock()
+
+		select {
+		case <-ma.ctx.Done():
+			return
+		case ev, ok := <-ch:
+			if !ok {
+				return
+			}
+			for _, p := range ma.plugins {
+				p.Record(ev)
+			}
+		}
 	}
-	mc.flush()
 }
 
 // Record records an event to the MetricsAgent.
-func (mc *MetricsAgent) Record(ev MetricsEvent) {
+func (ma *MetricsAgent) Record(ev MetricsEvent) {
 	ev.SetTimestamp(time.Now())
-	mc.events <- ev
+	ma.mu.Lock()
+	defer ma.mu.Unlock()
+	ma.events <- ev
 }
 
 // Stop closes the events channel and blocks until flush completes.
-func (mc *MetricsAgent) Stop() {
-	close(mc.events)
-	mc.wg.Wait()
+func (ma *MetricsAgent) Stop() {
+	ma.mu.Lock()
+	close(ma.events)
+	ma.mu.Unlock()
+
+	ma.wg.Wait()
+	ma.flush()
 }
 
 // flush writes the accumulated events to a JSON file in the artifacts directory.
-func (mc *MetricsAgent) flush() {
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
-
-	logrus.Infof("Flushing %d insights events", len(mc.insights))
-
-	output := map[string]any{
-		"test_platform_insights": mc.insights,
-		"openshift_builds":       mc.builds,
+func (ma *MetricsAgent) flush() {
+	output := make(map[string]any, len(ma.plugins))
+	for _, p := range ma.plugins {
+		output[p.Name()] = p.Events()
 	}
 
 	data, err := json.MarshalIndent(output, "", "  ")
 	if err != nil {
-		logrus.WithError(err).Error("Failed to marshal insights")
+		logrus.WithError(err).Error("failed to marshal metrics")
 		return
 	}
 	var censor secretutil.Censorer = &noOpCensor{}
-	if err := api.SaveArtifact(censor, CI_OPERATOR_METRICS_JSON, data); err != nil {
-		logrus.WithError(err).Error("Failed to save insights artifact")
+	if err := api.SaveArtifact(censor, CIOperatorMetricsJSON, data); err != nil {
+		logrus.WithError(err).Error("failed to save metrics artifact")
 	}
 }
 
 type noOpCensor struct{}
 
-func (n *noOpCensor) Censor(data *[]byte) {
-	// no operation
-}
+func (n *noOpCensor) Censor(data *[]byte) {}

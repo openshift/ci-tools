@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"sync"
 	"time"
 )
 
@@ -11,17 +12,31 @@ type InsightsEvent struct {
 	Timestamp         time.Time      `json:"timestamp"`
 }
 
-// Store appends this insight event to the controller’s insights bucket.
-func (ie InsightsEvent) Store(mc *MetricsAgent) {
-	mc.insights = append(mc.insights, ie)
-}
-
-// Category returns the event category.
-func (ie InsightsEvent) Category() string {
-	return "test_platform_insights"
-}
-
 // SetTimestamp sets the timestamp of the event.
 func (ie *InsightsEvent) SetTimestamp(t time.Time) {
 	ie.Timestamp = t
+}
+
+// insightsPlugin collects and manages the insights events.
+type insightsPlugin struct {
+	mu     sync.Mutex
+	events []MetricsEvent
+}
+
+func newInsightsPlugin() *insightsPlugin { return &insightsPlugin{} }
+
+func (p *insightsPlugin) Name() string { return InsightsPluginName }
+
+func (p *insightsPlugin) Record(ev MetricsEvent) {
+	pe, ok := ev.(*InsightsEvent)
+	if !ok {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.events = append(p.events, pe)
+}
+
+func (p *insightsPlugin) Events() []MetricsEvent {
+	return p.events
 }

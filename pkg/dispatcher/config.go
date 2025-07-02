@@ -154,12 +154,6 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 		return config.SSHBastion, false, nil
 	}
 	if jobBase.Labels != nil {
-		if _, ok := jobBase.Labels[api.KVMDeviceLabel]; ok && len(config.KVM) > 0 {
-			// Any deterministic distribution is fine for now.
-			// We could implement more effective distribution when we understand more about the jobs.
-			return config.KVM[len(filepath.Base(path))%len(config.KVM)], false, nil
-		}
-
 		if cluster, ok := jobBase.Labels[api.ClusterLabel]; ok {
 			return api.Cluster(cluster), false, nil
 		}
@@ -197,6 +191,11 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 			// as in other places in this file, use this method to have basic deterministic distribution
 			return api.Cluster(matchingClusters[len(filepath.Base(path))%len(matchingClusters)]), false, nil
 
+		}
+		if _, ok := jobBase.Labels[api.KVMDeviceLabel]; ok && len(config.KVM) > 0 {
+			// Any deterministic distribution is fine for now.
+			// We could implement more effective distribution when we understand more about the jobs.
+			return config.KVM[len(filepath.Base(path))%len(config.KVM)], false, nil
 		}
 	}
 

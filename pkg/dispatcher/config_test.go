@@ -567,6 +567,17 @@ func TestDetermineClusterForJob(t *testing.T) {
 			expected:               "build10",
 			expectedCanBeRelocated: false,
 		},
+		{
+			name:   "capabilities have priority over kvm label",
+			config: &configWithBuildFarmWithJobsAndDetermineE2EByJob,
+			jobBase: config.JobBase{Agent: "kubernetes", Name: "some-e2e-job",
+				Labels: map[string]string{
+					"capability/kvm": "kvm"}},
+			cm: ClusterMap{"build03": ClusterInfo{Provider: "aws", Capacity: 100, Capabilities: []string{"kvm"}},
+				"build02": ClusterInfo{Provider: "aws", Capacity: 100}},
+			expected:               "build03",
+			expectedCanBeRelocated: false,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

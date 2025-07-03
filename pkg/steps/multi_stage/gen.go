@@ -549,25 +549,31 @@ func addSharedDirSecret(secret string, pod *coreapi.Pod) {
 
 func addCredentials(credentials []api.CredentialReference, pod *coreapi.Pod, useCSI bool) {
 	if useCSI {
-		for _, credential := range credentials {
-			volumeName := volumeName(credential.Namespace, credential.Name)
+		collectionMountGroups := groupCredentialsByCollectionAndMountPath(credentials)
+
+		// Create one CSI volume per (collection, mount_path)
+		for _, credentials := range collectionMountGroups {
+			collection, mountPath := credentials[0].Collection, credentials[0].MountPath
+
+			csiVolumeName := getCSIVolumeName(pod.Namespace, collection, mountPath)
+
 			readOnly := true
 			csiVolume := coreapi.Volume{
-				Name: volumeName,
+				Name: csiVolumeName,
 				VolumeSource: coreapi.VolumeSource{
 					CSI: &coreapi.CSIVolumeSource{
 						Driver:   "secrets-store.csi.k8s.io",
 						ReadOnly: &readOnly,
 						VolumeAttributes: map[string]string{
-							"secretProviderClass": fmt.Sprintf("%s-%s-spc", pod.Namespace, credential.Name),
+							"secretProviderClass": getSPCName(pod.Namespace, collection, mountPath, credentials),
 						},
 					},
 				},
 			}
 			pod.Spec.Volumes = append(pod.Spec.Volumes, csiVolume)
 			pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, coreapi.VolumeMount{
-				Name:      volumeName,
-				MountPath: credential.MountPath,
+				Name:      csiVolumeName,
+				MountPath: mountPath,
 			})
 		}
 	} else {

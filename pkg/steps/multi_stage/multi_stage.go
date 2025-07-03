@@ -485,6 +485,13 @@ func (s *multiStageTestStep) addCredentialsToCensoring(secretVolumes []coreapi.V
 			seenCredentials[credential.Name] = true
 			volumeName := fmt.Sprintf("censor-cred-%d", i)
 			readOnly := true
+
+			// Create individual SPC name for censoring - each credential
+			// had its SPC already created in init.go's createSPCs function
+			censorMountPath := getCensorMountPath(credential.Name)
+			individualCredentials := []api.CredentialReference{credential}
+			spcName := getSPCName(s.jobSpec.Namespace(), credential.Collection, censorMountPath, individualCredentials)
+
 			secretVolumes = append(secretVolumes, coreapi.Volume{
 				Name: volumeName,
 				VolumeSource: coreapi.VolumeSource{
@@ -492,7 +499,7 @@ func (s *multiStageTestStep) addCredentialsToCensoring(secretVolumes []coreapi.V
 						Driver:   "secrets-store.csi.k8s.io",
 						ReadOnly: &readOnly,
 						VolumeAttributes: map[string]string{
-							"secretProviderClass": fmt.Sprintf("%s-%s-spc", s.jobSpec.Namespace(), credential.Name),
+							"secretProviderClass": spcName,
 						},
 					},
 				},
@@ -507,6 +514,9 @@ func (s *multiStageTestStep) addCredentialsToCensoring(secretVolumes []coreapi.V
 	return secretVolumes, secretVolumeMounts
 }
 
+// getMountPath returns the mount path for a given secret name.
+// This is used to get the path where the secrets to be censored
+// will be mounted in the sidecar container.
 func getMountPath(secretName string) string {
 	return path.Join("/secrets", secretName)
 }

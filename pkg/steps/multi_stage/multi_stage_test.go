@@ -204,12 +204,15 @@ func TestAddCredentialsToCensoring(t *testing.T) {
 			MountPath: path.Join("/secrets", "1first"),
 		},
 	}
-	credential1 := api.CredentialReference{Name: "credential1"}
-	credential2 := api.CredentialReference{Name: "credential2"}
+	credential1 := api.CredentialReference{Name: "credential1", Collection: "test-collection"}
+	credential2 := api.CredentialReference{Name: "credential2", Collection: "another-collection"}
 
 	// Helper function to create a volume
-	newVolume := func(index int, credName string) coreapi.Volume {
+	newVolume := func(index int, credName, collection string) coreapi.Volume {
 		readOnly := true
+		censorMountPath := getCensorMountPath(credName)
+		individualCredentials := []api.CredentialReference{{Name: credName, Collection: collection}}
+
 		return coreapi.Volume{
 			Name: fmt.Sprintf("censor-cred-%d", index),
 			VolumeSource: coreapi.VolumeSource{
@@ -217,7 +220,7 @@ func TestAddCredentialsToCensoring(t *testing.T) {
 					Driver:   "secrets-store.csi.k8s.io",
 					ReadOnly: &readOnly,
 					VolumeAttributes: map[string]string{
-						"secretProviderClass": fmt.Sprintf("test-%s-spc", credName),
+						"secretProviderClass": getSPCName("test", collection, censorMountPath, individualCredentials),
 					},
 				},
 			},
@@ -247,7 +250,7 @@ func TestAddCredentialsToCensoring(t *testing.T) {
 					},
 				},
 			},
-			expectedVolumes: append(secretVolumes, newVolume(0, credential1.Name)),
+			expectedVolumes: append(secretVolumes, newVolume(0, credential1.Name, credential1.Collection)),
 			expectedVolumeMounts: append(secretVolumeMounts, coreapi.VolumeMount{
 				Name:      "censor-cred-0",
 				MountPath: getMountPath(credential1.Name),
@@ -270,7 +273,7 @@ func TestAddCredentialsToCensoring(t *testing.T) {
 					},
 				},
 			},
-			expectedVolumes: append(secretVolumes, newVolume(0, credential1.Name), newVolume(1, credential2.Name)),
+			expectedVolumes: append(secretVolumes, newVolume(0, credential1.Name, credential1.Collection), newVolume(1, credential2.Name, credential2.Collection)),
 			expectedVolumeMounts: append(secretVolumeMounts, coreapi.VolumeMount{
 				Name:      "censor-cred-0",
 				MountPath: getMountPath(credential1.Name),

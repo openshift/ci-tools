@@ -214,9 +214,6 @@ func main() {
 		logrus.WithError(err).Fatal("failed to parse flags")
 	}
 
-	opt.metricsAgent = metrics.NewMetricsAgent()
-	go opt.metricsAgent.Run()
-
 	ctrlruntimelog.SetLogger(logr.New(ctrlruntimelog.NullLogSink{}))
 	if opt.verbose {
 		fs := flag.NewFlagSet("", flag.ExitOnError)
@@ -261,6 +258,14 @@ func main() {
 		opt.Report(results.ForReason("loading_args").ForError(err))
 		os.Exit(1)
 	}
+
+	ctx := context.TODO()
+	metricsClient, err := ctrlruntimeclient.New(opt.clusterConfig, ctrlruntimeclient.Options{})
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create the metrics client")
+	}
+	opt.metricsAgent = metrics.NewMetricsAgent(ctx, metricsClient)
+	go opt.metricsAgent.Run()
 
 	opt.metricsAgent.Record(
 		&metrics.InsightsEvent{

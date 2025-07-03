@@ -1,7 +1,13 @@
 package metrics
 
 import (
+	"context"
+	"sync"
 	"time"
+
+	"github.com/sirupsen/logrus"
+
+	controllerruntime "sigs.k8s.io/controller-runtime/pkg/client"
 
 	buildapi "github.com/openshift/api/build/v1"
 )
@@ -21,43 +27,69 @@ type BuildEvent struct {
 	ForImage          string         `json:"for_image,omitempty"`
 }
 
-// Store appends this insight event to the controller’s builds bucket.
-func (be BuildEvent) Store(mc *MetricsAgent) {
-	mc.builds = append(mc.builds, be)
-}
-
-// Category returns the event category.
-func (be BuildEvent) Category() string {
-	return "openshift_builds"
-}
-
 // SetTimestamp sets the timestamp of the event.
 func (be *BuildEvent) SetTimestamp(t time.Time) {
 	be.Timestamp = t
 }
 
-// RecordBuildEvent extracts data from Build and records an event.
-func (mc *MetricsAgent) RecordBuildEvent(b buildapi.Build, forImage string) {
-	start := b.Status.StartTimestamp.Time
-	completion := b.Status.CompletionTimestamp.Time
+// buildPlugin manages the build events.
+type buildPlugin struct {
+	mu     sync.Mutex
+	ctx    context.Context
+	client controllerruntime.Client
+	events []MetricsEvent
+}
 
-	duration := 0
-	if !start.IsZero() && !completion.IsZero() {
-		duration = int(completion.Sub(start).Seconds())
+func newBuildPlugin(client controllerruntime.Client, ctx context.Context) *buildPlugin {
+	return &buildPlugin{client: client, ctx: ctx}
+}
+
+func (p *buildPlugin) Name() string { return BuildsPluginName }
+
+// Record populates and records a BuildEvent.
+func (p *buildPlugin) Record(ev MetricsEvent) {
+	be, ok := ev.(*BuildEvent)
+	if !ok {
+		return
 	}
 
-	be := &BuildEvent{
-		Namespace:       b.Namespace,
-		Name:            b.Name,
-		StartTime:       start,
-		CompletionTime:  completion,
-		DurationSeconds: duration,
-		Status:          string(b.Status.Phase),
-		Reason:          string(b.Status.Reason),
-		OutputImage:     b.Spec.Output.To.Name,
-		Timestamp:       time.Now(),
-		ForImage:        forImage,
+	var build buildapi.Build
+	if err := p.client.Get(p.ctx, controllerruntime.ObjectKey{Namespace: be.Namespace, Name: be.Name}, &build); err != nil {
+		logrus.WithError(err).Warnf("failed to get build %q; aborting event recording", be.Name)
+		return
 	}
 
-	mc.Record(be)
+	be.Namespace = build.Namespace
+	be.Name = build.Name
+	start := build.Status.StartTimestamp.Time
+	comp := build.Status.CompletionTimestamp.Time
+	be.StartTime = start
+	be.CompletionTime = comp
+	if !start.IsZero() && !comp.IsZero() {
+		be.DurationSeconds = int(comp.Sub(start).Seconds())
+	}
+	be.Status = string(build.Status.Phase)
+	be.Reason = string(build.Status.Reason)
+	be.OutputImage = build.Spec.Output.To.Name
+
+	if be.Timestamp.IsZero() {
+		be.Timestamp = time.Now()
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.events = append(p.events, be)
+}
+
+func (p *buildPlugin) Events() []MetricsEvent {
+	return p.events
+}
+
+// NewBuildEvent constructs a BuildEvent.
+func NewBuildEvent(name, namespace, forImage string) *BuildEvent {
+	return &BuildEvent{
+		Namespace: namespace,
+		Name:      name,
+		ForImage:  forImage,
+	}
 }

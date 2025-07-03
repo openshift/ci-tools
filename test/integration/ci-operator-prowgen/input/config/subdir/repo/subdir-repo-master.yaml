@@ -2,6 +2,8 @@ build_root:
   image_stream_tag:
     name: release
     namespace: openshift
+    reference_policy:
+      type: ""
     tag: golang-1.10
 resources:
   '*':

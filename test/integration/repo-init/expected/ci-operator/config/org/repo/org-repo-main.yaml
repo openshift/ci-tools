@@ -2,12 +2,16 @@ base_images:
   base:
     name: "4.3"
     namespace: ocp
+    reference_policy:
+      type: ""
     tag: base
 binary_build_commands: make install
 build_root:
   image_stream_tag:
     name: release
     namespace: openshift
+    reference_policy:
+      type: ""
     tag: golang-1.13
 promotion:
   to:

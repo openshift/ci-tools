@@ -2,10 +2,14 @@ base_images:
   fresh_image:
     name: fresh_image
     namespace: namespace
+    reference_policy:
+      type: ""
     tag: test-1.0
   org_image_latest:
     name: image
     namespace: org
+    reference_policy:
+      type: ""
     tag: latest
 images:
 - inputs:

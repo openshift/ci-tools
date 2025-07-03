@@ -1104,29 +1104,48 @@ func integratedStreams(config *api.ReleaseBuildConfiguration, client server.Reso
 		return nil, fmt.Errorf("unable to create oc client to get integreated streams: %w", err)
 	}
 	ret := map[string]*configresolver.IntegratedStream{}
-	var objectKeys []ctrlruntimeclient.ObjectKey
+	var objectKeys []configresolver.ObjectKeyWithReferencePolicy
 	if config.ReleaseTagConfiguration != nil {
-		objectKeys = append(objectKeys, ctrlruntimeclient.ObjectKey{Namespace: config.ReleaseTagConfiguration.Namespace, Name: config.ReleaseTagConfiguration.Name})
+		objectKeys = append(objectKeys, configresolver.ObjectKeyWithReferencePolicy{
+			Key: ctrlruntimeclient.ObjectKey{
+				Namespace: config.ReleaseTagConfiguration.Namespace,
+				Name:      config.ReleaseTagConfiguration.Name,
+			},
+			ReferencePolicy: config.ReleaseTagConfiguration.ReferencePolicy,
+		})
 	}
 	for _, release := range config.Releases {
 		if release.Integration != nil {
-			objectKeys = append(objectKeys, ctrlruntimeclient.ObjectKey{Namespace: release.Integration.Namespace, Name: release.Integration.Name})
+			objectKeys = append(objectKeys, configresolver.ObjectKeyWithReferencePolicy{
+				Key: ctrlruntimeclient.ObjectKey{
+					Namespace: release.Integration.Namespace,
+					Name:      release.Integration.Name,
+				},
+				ReferencePolicy: release.Integration.ReferencePolicy,
+			})
 		}
 	}
-	for _, key := range objectKeys {
-		if api.IsCreatedForClusterBotJob(key.Namespace) {
-			stream, err := configresolver.LocalIntegratedStream(context.TODO(), ocClient, key.Namespace, key.Name)
+	for _, keyWithPolicy := range objectKeys {
+		var refPolicy string
+		if keyWithPolicy.ReferencePolicy != nil {
+			refPolicy = string(*keyWithPolicy.ReferencePolicy)
+		}
+		key := fmt.Sprintf("%s/%s/%s", keyWithPolicy.Key.Namespace, keyWithPolicy.Key.Name, refPolicy)
+
+		var stream *configresolver.IntegratedStream
+		var err error
+		if api.IsCreatedForClusterBotJob(keyWithPolicy.Key.Namespace) {
+			stream, _, err = configresolver.LocalIntegratedStream(context.TODO(), ocClient, keyWithPolicy.Key.Namespace, keyWithPolicy.Key.Name)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get integrated stream %s/%s for a cluster bot job: %w", key.Namespace, key.Name, err)
+				return nil, fmt.Errorf("failed to get integrated stream %s for a cluster bot job: %w", key, err)
 			}
-			ret[fmt.Sprintf("%s/%s", key.Namespace, key.Name)] = stream
-			continue
+		} else {
+			stream, err = client.IntegratedStream(keyWithPolicy.Key.Namespace, keyWithPolicy.Key.Name, refPolicy)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get integrated stream %s: %w", key, err)
+			}
 		}
-		integratedStream, err := client.IntegratedStream(key.Namespace, key.Name)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get integrated stream %s/%s: %w", key.Namespace, key.Name, err)
-		}
-		ret[fmt.Sprintf("%s/%s", key.Namespace, key.Name)] = integratedStream
+		ret[key] = stream
 	}
 	return ret, nil
 }

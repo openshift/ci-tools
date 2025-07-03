@@ -492,6 +492,8 @@ type ImageStreamTagReference struct {
 
 	// As is an optional string to use as the intermediate name for this reference.
 	As string `json:"as,omitempty"`
+	// ReferencePolicy is the policy to use when resolving references (Local or Source)
+	ReferencePolicy imagev1.TagReferencePolicy `json:"reference_policy,omitempty"`
 }
 
 func (i *ImageStreamTagReference) ISTagName() string {

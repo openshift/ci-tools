@@ -23,7 +23,7 @@ type ResolverClient interface {
 	ConfigWithTest(base *api.Metadata, testSource *api.MetadataWithTest) (*api.ReleaseBuildConfiguration, error)
 	Resolve([]byte) (*api.ReleaseBuildConfiguration, error)
 	ClusterProfile(profileName string) (*api.ClusterProfileDetails, error)
-	IntegratedStream(namespace, name string) (*configresolver.IntegratedStream, error)
+	IntegratedStream(namespace, name, referencePolicy string) (*configresolver.IntegratedStream, error)
 }
 
 func NewResolverClient(address string) ResolverClient {
@@ -192,8 +192,8 @@ func (r *resolverClient) ClusterProfile(profileName string) (*api.ClusterProfile
 
 // IntegratedStream gets the info about an integrated stream by creating a request
 // to config resolver
-func (r *resolverClient) IntegratedStream(namespace, name string) (*configresolver.IntegratedStream, error) {
-	logrus.Infof("Loading information from %s for integrated stream %s/%s", r.Address, namespace, name)
+func (r *resolverClient) IntegratedStream(namespace, name, referencePolicy string) (*configresolver.IntegratedStream, error) {
+	logrus.Infof("Loading information from %s for integrated stream %s/%s with referencePolicy %s", r.Address, namespace, name, referencePolicy)
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/integratedStream", r.Address), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request for configresolver: %w", err)
@@ -201,6 +201,7 @@ func (r *resolverClient) IntegratedStream(namespace, name string) (*configresolv
 	query := req.URL.Query()
 	query.Add("namespace", namespace)
 	query.Add("name", name)
+	query.Add("referencePolicy", referencePolicy)
 	req.URL.RawQuery = query.Encode()
 
 	data, err := doRequest(req)

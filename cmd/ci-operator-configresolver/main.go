@@ -164,7 +164,7 @@ func (c *memoryCache) Get(ctx context.Context, ns, name string) (*configresolver
 	}
 	c.IntegratedStreamsMutex.Lock()
 	defer c.IntegratedStreamsMutex.Unlock()
-	s, err := configresolver.LocalIntegratedStream(ctx, c.Client, ns, name)
+	s, _, err := configresolver.LocalIntegratedStream(ctx, c.Client, ns, name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get information on image stream %s/%s: %w", ns, name, err)
 	}

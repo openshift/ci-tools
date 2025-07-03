@@ -10,6 +10,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        as: ' '\n" +
 	"        name: ' '\n" +
 	"        namespace: ' '\n" +
+	"        # ReferencePolicy is the policy to use when resolving references (Local or Source)\n" +
+	"        reference_policy:\n" +
+	"            type: ' '\n" +
 	"        tag: ' '\n" +
 	"# BaseRPMImages is a list of the images and their aliases that will\n" +
 	"# have RPM repositories injected into them for downstream\n" +
@@ -20,6 +23,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        as: ' '\n" +
 	"        name: ' '\n" +
 	"        namespace: ' '\n" +
+	"        # ReferencePolicy is the policy to use when resolving references (Local or Source)\n" +
+	"        reference_policy:\n" +
+	"            type: ' '\n" +
 	"        tag: ' '\n" +
 	"# BinaryBuildCommands will create a \"bin\" image based on \"src\" that\n" +
 	"# contains the output of this command. This allows reuse of binary artifacts\n" +
@@ -44,6 +50,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        as: ' '\n" +
 	"        name: ' '\n" +
 	"        namespace: ' '\n" +
+	"        # ReferencePolicy is the policy to use when resolving references (Local or Source)\n" +
+	"        reference_policy:\n" +
+	"            type: ' '\n" +
 	"        tag: ' '\n" +
 	"    project_image:\n" +
 	"        # BuildArgs contains build arguments that will be resolved in the Dockerfile.\n" +
@@ -102,6 +111,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            as: ' '\n" +
 	"            name: ' '\n" +
 	"            namespace: ' '\n" +
+	"            # ReferencePolicy is the policy to use when resolving references (Local or Source)\n" +
+	"            reference_policy:\n" +
+	"                type: ' '\n" +
 	"            tag: ' '\n" +
 	"        project_image:\n" +
 	"            # BuildArgs contains build arguments that will be resolved in the Dockerfile.\n" +
@@ -172,6 +184,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # PullSpec is the full pullSpec of the external image, only to be set programmatically,\n" +
 	"        # and takes precedent over the other fields in ExternalImage\n" +
 	"        pull_spec: ' '\n" +
+	"        # ReferencePolicy is the policy to use when resolving references (Local or Source)\n" +
+	"        reference_policy:\n" +
+	"            type: ' '\n" +
 	"        # Registry is the registry to pull images from (e.g. quay.io)\n" +
 	"        registry: ' '\n" +
 	"        tag: ' '\n" +
@@ -340,6 +355,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            as: ' '\n" +
 	"            name: ' '\n" +
 	"            namespace: ' '\n" +
+	"            # ReferencePolicy is the policy to use when resolving references (Local or Source)\n" +
+	"            reference_policy:\n" +
+	"                type: ' '\n" +
 	"            tag: ' '\n" +
 	"        external_image:\n" +
 	"            # As is an optional string to use as the intermediate name for this reference.\n" +
@@ -351,6 +369,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # PullSpec is the full pullSpec of the external image, only to be set programmatically,\n" +
 	"            # and takes precedent over the other fields in ExternalImage\n" +
 	"            pull_spec: ' '\n" +
+	"            # ReferencePolicy is the policy to use when resolving references (Local or Source)\n" +
+	"            reference_policy:\n" +
+	"                type: ' '\n" +
 	"            # Registry is the registry to pull images from (e.g. quay.io)\n" +
 	"            registry: ' '\n" +
 	"            tag: ' '\n" +
@@ -368,6 +389,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            as: ' '\n" +
 	"            name: ' '\n" +
 	"            namespace: ' '\n" +
+	"            # ReferencePolicy is the policy to use when resolving references (Local or Source)\n" +
+	"            reference_policy:\n" +
+	"                type: ' '\n" +
 	"            tag: ' '\n" +
 	"      pipeline_image_cache_step:\n" +
 	"        # Commands are the shell commands to run in\n" +
@@ -542,6 +566,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            as: ' '\n" +
 	"            name: ' '\n" +
 	"            namespace: ' '\n" +
+	"            # ReferencePolicy is the policy to use when resolving references (Local or Source)\n" +
+	"            reference_policy:\n" +
+	"                type: ' '\n" +
 	"            tag: ' '\n" +
 	"        # ClonerefsPath is the path in the above image where the\n" +
 	"        # clonerefs tool is placed\n" +
@@ -671,6 +698,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    as: ' '\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
+	"                    # ReferencePolicy is the policy to use when resolving references (Local or Source)\n" +
+	"                    reference_policy:\n" +
+	"                        type: ' '\n" +
 	"                    tag: ' '\n" +
 	"                  # GracePeriod is how long the we will wait after sending SIGINT to send\n" +
 	"                  # SIGKILL when aborting this observer.\n" +
@@ -747,6 +777,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    as: ' '\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
+	"                    # ReferencePolicy is the policy to use when resolving references (Local or Source)\n" +
+	"                    reference_policy:\n" +
+	"                        type: ' '\n" +
 	"                    tag: ' '\n" +
 	"                  # GracePeriod is how long the we will wait after sending SIGINT to send\n" +
 	"                  # SIGKILL when aborting a Step.\n" +
@@ -844,6 +877,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    as: ' '\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
+	"                    # ReferencePolicy is the policy to use when resolving references (Local or Source)\n" +
+	"                    reference_policy:\n" +
+	"                        type: ' '\n" +
 	"                    tag: ' '\n" +
 	"                  # GracePeriod is how long the we will wait after sending SIGINT to send\n" +
 	"                  # SIGKILL when aborting a Step.\n" +
@@ -941,6 +977,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    as: ' '\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
+	"                    # ReferencePolicy is the policy to use when resolving references (Local or Source)\n" +
+	"                    reference_policy:\n" +
+	"                        type: ' '\n" +
 	"                    tag: ' '\n" +
 	"                  # GracePeriod is how long the we will wait after sending SIGINT to send\n" +
 	"                  # SIGKILL when aborting a Step.\n" +
@@ -1156,6 +1195,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    as: ' '\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
+	"                    reference_policy:\n" +
+	"                        # LiteralTestStep is a full test step definition.\n" +
+	"                        type: ' '\n" +
 	"                    tag: ' '\n" +
 	"                  grace_period: 0s\n" +
 	"                  leases:\n" +
@@ -1222,6 +1264,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    as: ' '\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
+	"                    reference_policy:\n" +
+	"                        # LiteralTestStep is a full test step definition.\n" +
+	"                        type: ' '\n" +
 	"                    tag: ' '\n" +
 	"                  grace_period: 0s\n" +
 	"                  leases:\n" +
@@ -1288,6 +1333,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    as: ' '\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
+	"                    reference_policy:\n" +
+	"                        # LiteralTestStep is a full test step definition.\n" +
+	"                        type: ' '\n" +
 	"                    tag: ' '\n" +
 	"                  grace_period: 0s\n" +
 	"                  leases:\n" +
@@ -1558,6 +1606,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                as: ' '\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
+	"                # ReferencePolicy is the policy to use when resolving references (Local or Source)\n" +
+	"                reference_policy:\n" +
+	"                    type: ' '\n" +
 	"                tag: ' '\n" +
 	"              # GracePeriod is how long the we will wait after sending SIGINT to send\n" +
 	"              # SIGKILL when aborting this observer.\n" +
@@ -1634,6 +1685,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                as: ' '\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
+	"                # ReferencePolicy is the policy to use when resolving references (Local or Source)\n" +
+	"                reference_policy:\n" +
+	"                    type: ' '\n" +
 	"                tag: ' '\n" +
 	"              # GracePeriod is how long the we will wait after sending SIGINT to send\n" +
 	"              # SIGKILL when aborting a Step.\n" +
@@ -1731,6 +1785,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                as: ' '\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
+	"                # ReferencePolicy is the policy to use when resolving references (Local or Source)\n" +
+	"                reference_policy:\n" +
+	"                    type: ' '\n" +
 	"                tag: ' '\n" +
 	"              # GracePeriod is how long the we will wait after sending SIGINT to send\n" +
 	"              # SIGKILL when aborting a Step.\n" +
@@ -1828,6 +1885,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                as: ' '\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
+	"                # ReferencePolicy is the policy to use when resolving references (Local or Source)\n" +
+	"                reference_policy:\n" +
+	"                    type: ' '\n" +
 	"                tag: ' '\n" +
 	"              # GracePeriod is how long the we will wait after sending SIGINT to send\n" +
 	"              # SIGKILL when aborting a Step.\n" +
@@ -2043,6 +2103,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                as: ' '\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
+	"                reference_policy:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    type: ' '\n" +
 	"                tag: ' '\n" +
 	"              grace_period: 0s\n" +
 	"              leases:\n" +
@@ -2109,6 +2172,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                as: ' '\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
+	"                reference_policy:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    type: ' '\n" +
 	"                tag: ' '\n" +
 	"              grace_period: 0s\n" +
 	"              leases:\n" +
@@ -2175,6 +2241,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                as: ' '\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
+	"                reference_policy:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    type: ' '\n" +
 	"                tag: ' '\n" +
 	"              grace_period: 0s\n" +
 	"              leases:\n" +

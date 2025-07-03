@@ -2,6 +2,8 @@ base_images:
   org_repo_tag:
     name: other_repo
     namespace: other_org
+    reference_policy:
+      type: ""
     tag: other_tag
 images:
 - inputs:

@@ -142,7 +142,9 @@ func generateBranchedConfigs(currentRelease, bumpRelease string, futureReleases 
 		updateImages(&futureConfig, devRelease, futureRelease)
 		// we need to make sure this relates to the right branch
 		futureConfig.Metadata.Branch = futureBranch
-		if skipPeriodics {
+		logrus.Info(currentRelease)
+		if skipPeriodics &&
+			!(futureConfig.Metadata.Branch == fmt.Sprintf("openshift-%s", currentRelease) || futureConfig.Metadata.Branch == fmt.Sprintf("release-%s", currentRelease)) {
 			removePeriodics(&futureConfig.Tests)
 		}
 

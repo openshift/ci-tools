@@ -559,7 +559,7 @@ func addCredentials(credentials []api.CredentialReference, pod *coreapi.Pod, use
 						Driver:   "secrets-store.csi.k8s.io",
 						ReadOnly: &readOnly,
 						VolumeAttributes: map[string]string{
-							"secretProviderClass": fmt.Sprintf("%s-%s-spc", pod.Namespace, credential.Name),
+							"secretProviderClass": getSPCName(pod.Namespace, credential.Name),
 						},
 					},
 				},

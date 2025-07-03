@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/GoogleCloudPlatform/secrets-store-csi-driver-provider-gcp/config"
@@ -92,7 +93,7 @@ func (s *multiStageTestStep) createSPCs(ctx context.Context) error {
 
 	for _, step := range append(s.pre, append(s.test, s.post...)...) {
 		for _, credential := range step.Credentials {
-			name := fmt.Sprintf("%s-%s-spc", s.jobSpec.Namespace(), credential.Name)
+			name := getSPCName(s.jobSpec.Namespace(), credential.Name)
 			if _, exists := toCreate[name]; exists {
 				continue
 			}
@@ -126,6 +127,13 @@ func (s *multiStageTestStep) createSPCs(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func getSPCName(namespace, credentialName string) string {
+	name := strings.ToLower(fmt.Sprintf("%s-%s-spc", namespace, credentialName))
+	name = strings.ReplaceAll(name, ".", "-")
+	name = strings.ReplaceAll(name, "_", "-")
+	return name
 }
 
 func getSecretString(collection, name string) (string, error) {

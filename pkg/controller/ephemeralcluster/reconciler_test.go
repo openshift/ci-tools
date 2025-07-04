@@ -269,7 +269,7 @@ func TestCreateProwJob(t *testing.T) {
 			}},
 			req:     reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
 			wantRes: reconcile.Result{RequeueAfter: pollingTime},
-			wantErr: errors.New("update ephemereal cluster: fake err"),
+			wantErr: errors.New("[update ephemeral cluster: fake err, terminal error: generate ci-operator config: releases stanza not set]"),
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -333,37 +333,6 @@ func TestReconcile(t *testing.T) {
 		wantErr      error
 	}{
 		{
-			name: "Kubeconfig stored already, do nothing",
-			ec: &ephemeralclusterv1.EphemeralCluster{
-				ObjectMeta: v1.ObjectMeta{
-					Name:      "foo",
-					Namespace: "bar",
-				},
-				Status: ephemeralclusterv1.EphemeralClusterStatus{
-					ProwJobID:  "pj-123",
-					Kubeconfig: "kubeconfig",
-				},
-			},
-			objs: []ctrlclient.Object{
-				&prowv1.ProwJob{
-					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
-					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
-				},
-			},
-			wantEC: &ephemeralclusterv1.EphemeralCluster{
-				ObjectMeta: v1.ObjectMeta{
-					Name:            "foo",
-					Namespace:       "bar",
-					ResourceVersion: "999",
-				},
-				Status: ephemeralclusterv1.EphemeralClusterStatus{
-					ProwJobID:  "pj-123",
-					Kubeconfig: "kubeconfig",
-				},
-			},
-			wantRes: reconcile.Result{},
-		},
-		{
 			name: "Kubeconfig ready",
 			ec: &ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: v1.ObjectMeta{
@@ -415,7 +384,7 @@ func TestReconcile(t *testing.T) {
 					}},
 				},
 			},
-			wantRes: reconcile.Result{},
+			wantRes: reconcile.Result{RequeueAfter: pollingTime},
 		},
 		{
 			name: "ci-operator NS doesn't exist yet",
@@ -611,15 +580,21 @@ func TestReconcile(t *testing.T) {
 					Namespace: "bar",
 				},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
-					ProwJobID:  "pj-123",
-					Kubeconfig: "k",
+					ProwJobID: "pj-123",
 				},
 			},
 			objs: []ctrlclient.Object{
 				&prowv1.ProwJob{
 					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
+					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
 					Status:     prowv1.ProwJobStatus{State: prowv1.AbortedState},
 				},
+			},
+			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
+				c := fake.NewClientBuilder().WithScheme(scheme).Build()
+				return map[string]*ctrlruntimetest.FakeClient{
+					"build01": ctrlruntimetest.NewFakeClient(c, scheme),
+				}
 			},
 			wantEC: &ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: v1.ObjectMeta{
@@ -627,18 +602,24 @@ func TestReconcile(t *testing.T) {
 					Namespace: "bar",
 				},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
-					ProwJobID:  "pj-123",
-					Kubeconfig: "k",
+					ProwJobID: "pj-123",
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+						Type:               ephemeralclusterv1.ClusterReady,
+						Status:             ephemeralclusterv1.ConditionFalse,
+						Reason:             ephemeralclusterv1.KubeconfigFetchFailureReason,
+						Message:            ephemeralclusterv1.CIOperatorNSNotFoundMsg,
+						LastTransitionTime: v1.NewTime(fakeNow),
+					}, {
 						Type:               ephemeralclusterv1.ProwJobCompleted,
 						Status:             ephemeralclusterv1.ConditionTrue,
 						Reason:             ephemeralclusterv1.ProwJobFailureReason,
 						Message:            "prowjob state: aborted",
 						LastTransitionTime: v1.NewTime(fakeNow),
 					}},
+					Phase: ephemeralclusterv1.EphemeralClusterFailed,
 				},
 			},
-			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+			wantRes: reconcile.Result{},
 		},
 		{
 			name: "Succeeded ProwJob maps to ProwJobCompleted condition",
@@ -648,15 +629,33 @@ func TestReconcile(t *testing.T) {
 					Namespace: "bar",
 				},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
-					ProwJobID:  "pj-123",
-					Kubeconfig: "k",
+					ProwJobID: "pj-123",
 				},
 			},
 			objs: []ctrlclient.Object{
 				&prowv1.ProwJob{
 					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
+					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
 					Status:     prowv1.ProwJobStatus{State: prowv1.SuccessState},
 				},
+			},
+			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
+				objs := []ctrlclient.Object{
+					&corev1.Namespace{
+						ObjectMeta: v1.ObjectMeta{
+							Labels: map[string]string{steps.LabelJobID: "pj-123"},
+							Name:   "ci-op-1234",
+						},
+					},
+					&corev1.Secret{
+						ObjectMeta: v1.ObjectMeta{Name: EphemeralClusterTestName, Namespace: "ci-op-1234"},
+						Data:       map[string][]byte{"kubeconfig": []byte("kubeconfig")},
+					},
+				}
+				c := fake.NewClientBuilder().WithObjects(objs...).WithScheme(scheme).Build()
+				return map[string]*ctrlruntimetest.FakeClient{
+					"build01": ctrlruntimetest.NewFakeClient(c, scheme, ctrlruntimetest.WithInitObjects(objs...)),
+				}
 			},
 			wantEC: &ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: v1.ObjectMeta{
@@ -666,8 +665,12 @@ func TestReconcile(t *testing.T) {
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					Phase:      ephemeralclusterv1.EphemeralClusterDeprovisioned,
 					ProwJobID:  "pj-123",
-					Kubeconfig: "k",
+					Kubeconfig: "kubeconfig",
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+						Type:               ephemeralclusterv1.ClusterReady,
+						Status:             ephemeralclusterv1.ConditionTrue,
+						LastTransitionTime: v1.NewTime(fakeNow),
+					}, {
 						Type:               ephemeralclusterv1.ProwJobCompleted,
 						Status:             ephemeralclusterv1.ConditionTrue,
 						Reason:             string(ephemeralclusterv1.ProwJobCompleted),
@@ -676,7 +679,7 @@ func TestReconcile(t *testing.T) {
 					}},
 				},
 			},
-			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+			wantRes: reconcile.Result{},
 		},
 		{
 			name: "ProwJob not found remove the finalizer",
@@ -727,6 +730,10 @@ func TestReconcile(t *testing.T) {
 							Name:   "ci-op-1234",
 						},
 					},
+					&corev1.Secret{
+						ObjectMeta: v1.ObjectMeta{Name: EphemeralClusterTestName, Namespace: "ci-op-1234"},
+						Data:       map[string][]byte{"kubeconfig": []byte("kubeconfig")},
+					},
 				}
 				c := fake.NewClientBuilder().WithObjects(objs...).WithScheme(scheme).Build()
 				return map[string]*ctrlruntimetest.FakeClient{
@@ -744,13 +751,18 @@ func TestReconcile(t *testing.T) {
 					Phase:     ephemeralclusterv1.EphemeralClusterDeprovisioning,
 					ProwJobID: "pj-123",
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+						Type:               ephemeralclusterv1.ClusterReady,
+						Status:             ephemeralclusterv1.ConditionTrue,
+						LastTransitionTime: v1.NewTime(fakeNow),
+					}, {
 						Type:               ephemeralclusterv1.TestCompleted,
 						Status:             ephemeralclusterv1.ConditionTrue,
 						LastTransitionTime: v1.NewTime(fakeNow),
 					}},
+					Kubeconfig: "kubeconfig",
 				},
 			},
-			wantRes: reconcile.Result{},
+			wantRes: reconcile.Result{RequeueAfter: pollingTime},
 		},
 		{
 			name: "Test completed, ci-operator NS not found",
@@ -787,15 +799,21 @@ func TestReconcile(t *testing.T) {
 					Phase:     ephemeralclusterv1.EphemeralClusterFailed,
 					ProwJobID: "pj-123",
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+						Type:               ephemeralclusterv1.ClusterReady,
+						Status:             ephemeralclusterv1.ConditionFalse,
+						Reason:             ephemeralclusterv1.KubeconfigFetchFailureReason,
+						Message:            ephemeralclusterv1.CIOperatorNSNotFoundMsg,
+						LastTransitionTime: v1.NewTime(fakeNow),
+					}, {
 						Type:               ephemeralclusterv1.TestCompleted,
 						Status:             ephemeralclusterv1.ConditionFalse,
-						Reason:             ephemeralclusterv1.CreateTestCompletedFailureSecretReason,
+						Reason:             ephemeralclusterv1.CreateTestCompletedSecretFailureReason,
 						Message:            ephemeralclusterv1.CIOperatorNSNotFoundMsg,
 						LastTransitionTime: v1.NewTime(fakeNow),
 					}},
 				},
 			},
-			wantRes: reconcile.Result{},
+			wantRes: reconcile.Result{RequeueAfter: pollingTime},
 		},
 		{
 			name: "Test completed, secret exists do nothing",
@@ -847,13 +865,19 @@ func TestReconcile(t *testing.T) {
 					Phase:     ephemeralclusterv1.EphemeralClusterDeprovisioning,
 					ProwJobID: "pj-123",
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+						Type:               ephemeralclusterv1.ClusterReady,
+						Status:             ephemeralclusterv1.ConditionFalse,
+						Reason:             ephemeralclusterv1.KubeconfigFetchFailureReason,
+						Message:            `secrets "cluster-provisioning" not found`,
+						LastTransitionTime: v1.NewTime(fakeNow),
+					}, {
 						Type:               ephemeralclusterv1.TestCompleted,
 						Status:             ephemeralclusterv1.ConditionTrue,
 						LastTransitionTime: v1.NewTime(fakeNow),
 					}},
 				},
 			},
-			wantRes: reconcile.Result{},
+			wantRes: reconcile.Result{RequeueAfter: pollingTime},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

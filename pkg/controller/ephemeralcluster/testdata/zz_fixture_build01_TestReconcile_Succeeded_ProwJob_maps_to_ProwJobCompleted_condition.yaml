@@ -17,10 +17,3 @@
     name: cluster-provisioning
     namespace: ci-op-1234
     resourceVersion: "999"
-- apiVersion: v1
-  kind: Secret
-  metadata:
-    creationTimestamp: null
-    name: test-done-signal
-    namespace: ci-op-1234
-    resourceVersion: "1"

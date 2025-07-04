@@ -55,6 +55,7 @@ type options struct {
 	githubEventServerOptions githubeventserver.Options
 	github                   prowflagutil.GitHubOptions
 	config                   configflagutil.ConfigOptions
+	rehearsalTagConfigFile   string
 }
 
 func gatherOptions() (options, error) {
@@ -86,6 +87,7 @@ func gatherOptions() (options, error) {
 	o.github.AddFlags(fs)
 	o.githubEventServerOptions.Bind(fs)
 	o.config.AddFlags(fs)
+	fs.StringVar(&o.rehearsalTagConfigFile, "rehearsal-tag-config", "", "Path to the rehearsal tag configuration file.")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return o, fmt.Errorf("failed to parse flags: %w", err)

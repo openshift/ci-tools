@@ -217,7 +217,7 @@ func TestAddCredentialsToCensoring(t *testing.T) {
 					Driver:   "secrets-store.csi.k8s.io",
 					ReadOnly: &readOnly,
 					VolumeAttributes: map[string]string{
-						"secretProviderClass": fmt.Sprintf("test-%s-spc", credName),
+						"secretProviderClass": getSPCName("test", credName),
 					},
 				},
 			},

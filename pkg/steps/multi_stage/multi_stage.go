@@ -492,7 +492,7 @@ func (s *multiStageTestStep) addCredentialsToCensoring(secretVolumes []coreapi.V
 						Driver:   "secrets-store.csi.k8s.io",
 						ReadOnly: &readOnly,
 						VolumeAttributes: map[string]string{
-							"secretProviderClass": fmt.Sprintf("%s-%s-spc", s.jobSpec.Namespace(), credential.Name),
+							"secretProviderClass": getSPCName(s.jobSpec.Namespace(), credential.Name),
 						},
 					},
 				},

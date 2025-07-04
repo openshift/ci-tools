@@ -69,7 +69,7 @@ func TestCreateSPCs(t *testing.T) {
 				APIVersion: csiapi.GroupVersion.String(),
 			},
 			ObjectMeta: meta.ObjectMeta{
-				Name:            fmt.Sprintf("%s-%s-spc", ns, name),
+				Name:            getSPCName(ns, name),
 				Namespace:       ns,
 				ResourceVersion: "1",
 			},

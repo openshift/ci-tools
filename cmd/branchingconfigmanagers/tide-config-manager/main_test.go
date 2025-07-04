@@ -82,7 +82,7 @@ func TestReconcile(t *testing.T) {
 				path: prepareProwConfig(repos, []string{"approved", "lgtm"}, []string{"main", "master"})},
 		},
 		{
-			name: "staff-eng-approved replaced by backport-risk-assesed and cherry-pick-approved during branching",
+			name: "staff-eng-approved replaced by backport-risk-assesed during branching",
 			args: args{
 				event: branching,
 				config: &prowconfig.ProwConfig{Tide: prowconfig.Tide{TideGitHubConfig: prowconfig.TideGitHubConfig{Queries: prowconfig.TideQueries{
@@ -95,10 +95,10 @@ func TestReconcile(t *testing.T) {
 			},
 			wantErr: false,
 			expectedShardFiles: map[string]string{
-				path: prepareProwConfig(repos, []string{backportRiskAssessed, cherryPickApproved}, []string{"openshift-4.9", "release-4.9"})},
+				path: prepareProwConfig(repos, []string{backportRiskAssessed}, []string{"openshift-4.9", "release-4.9"})},
 		},
 		{
-			name: "staff-eng-approved replaced by backport-risk-assesed and cherry-pick-approved during branching - for release",
+			name: "staff-eng-approved replaced by backport-risk-assesed during branching - for release",
 			args: args{
 				event: branching,
 				config: &prowconfig.ProwConfig{Tide: prowconfig.Tide{TideGitHubConfig: prowconfig.TideGitHubConfig{Queries: prowconfig.TideQueries{
@@ -111,39 +111,39 @@ func TestReconcile(t *testing.T) {
 			},
 			wantErr: false,
 			expectedShardFiles: map[string]string{
-				path: prepareProwConfig(repos, []string{backportRiskAssessed, cherryPickApproved}, []string{"release-4.9"})},
+				path: prepareProwConfig(repos, []string{backportRiskAssessed}, []string{"release-4.9"})},
 		},
 		{
-			name: "staff-eng-approved added with backport-risk-assesed and cherry-pick-approved prserved pre GA",
+			name: "staff-eng-approved added with backport-risk-assesed prserved pre GA",
 			args: args{
 				event: preGeneralAvailability,
 				config: &prowconfig.ProwConfig{Tide: prowconfig.Tide{TideGitHubConfig: prowconfig.TideGitHubConfig{Queries: prowconfig.TideQueries{
 					{
 						Repos:            repos,
-						Labels:           []string{backportRiskAssessed, cherryPickApproved},
+						Labels:           []string{backportRiskAssessed},
 						IncludedBranches: []string{"openshift-4.9", "release-4.9"},
 					},
 				}}}},
 			},
 			wantErr: false,
 			expectedShardFiles: map[string]string{
-				path: prepareProwConfig(repos, []string{backportRiskAssessed, cherryPickApproved, staffEngApproved}, []string{"openshift-4.9", "release-4.9"})},
+				path: prepareProwConfig(repos, []string{backportRiskAssessed, staffEngApproved}, []string{"openshift-4.9", "release-4.9"})},
 		},
 		{
-			name: "staff-eng-approved added with backport-risk-assesed and cherry-pick-approved prserved pre GA - only openshift",
+			name: "staff-eng-approved added with backport-risk-assesed prserved pre GA - only openshift",
 			args: args{
 				event: preGeneralAvailability,
 				config: &prowconfig.ProwConfig{Tide: prowconfig.Tide{TideGitHubConfig: prowconfig.TideGitHubConfig{Queries: prowconfig.TideQueries{
 					{
 						Repos:            repos,
-						Labels:           []string{backportRiskAssessed, cherryPickApproved},
+						Labels:           []string{backportRiskAssessed},
 						IncludedBranches: []string{"openshift-4.9"},
 					},
 				}}}},
 			},
 			wantErr: false,
 			expectedShardFiles: map[string]string{
-				path: prepareProwConfig(repos, []string{backportRiskAssessed, cherryPickApproved, staffEngApproved}, []string{"openshift-4.9"})},
+				path: prepareProwConfig(repos, []string{backportRiskAssessed, staffEngApproved}, []string{"openshift-4.9"})},
 		},
 		{
 			name: "staff-eng-approved changes current to future during GA",
@@ -152,7 +152,7 @@ func TestReconcile(t *testing.T) {
 				config: &prowconfig.ProwConfig{Tide: prowconfig.Tide{TideGitHubConfig: prowconfig.TideGitHubConfig{Queries: prowconfig.TideQueries{
 					{
 						Repos:            repos,
-						Labels:           []string{staffEngApproved, backportRiskAssessed, cherryPickApproved},
+						Labels:           []string{staffEngApproved, backportRiskAssessed},
 						IncludedBranches: []string{"openshift-4.9", "release-4.9"},
 					},
 				}}}},
@@ -176,22 +176,6 @@ func TestReconcile(t *testing.T) {
 			wantErr: false,
 			expectedShardFiles: map[string]string{
 				path: prepareProwConfig(repos, []string{staffEngApproved}, []string{"openshift-4.10", "release-4.10"})},
-		},
-		{
-			name: "cherry-pick-approved changes past release to current during GA",
-			args: args{
-				event: GeneralAvailability,
-				config: &prowconfig.ProwConfig{Tide: prowconfig.Tide{TideGitHubConfig: prowconfig.TideGitHubConfig{Queries: prowconfig.TideQueries{
-					{
-						Repos:            repos,
-						Labels:           []string{cherryPickApproved},
-						IncludedBranches: []string{"openshift-4.8", "release-4.8"},
-					},
-				}}}},
-			},
-			wantErr: false,
-			expectedShardFiles: map[string]string{
-				path: prepareProwConfig(repos, []string{cherryPickApproved}, []string{"openshift-4.8", "openshift-4.9", "release-4.8", "release-4.9"})},
 		},
 		{
 			name: "past release excluded branches complemented with current and future during GA",

@@ -179,16 +179,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        as: ' '\n" +
 	"        name: ' '\n" +
 	"        namespace: ' '\n" +
-	"        # PullSecret is the name of the secret to use to pull the image\n" +
-	"        pull_secret: ' '\n" +
-	"        # PullSpec is the full pullSpec of the external image, only to be set programmatically,\n" +
-	"        # and takes precedent over the other fields in ExternalImage\n" +
-	"        pull_spec: ' '\n" +
 	"        # ReferencePolicy is the policy to use when resolving references (Local or Source)\n" +
 	"        reference_policy:\n" +
 	"            type: ' '\n" +
-	"        # Registry is the registry to pull images from (e.g. quay.io)\n" +
-	"        registry: ' '\n" +
 	"        tag: ' '\n" +
 	"# Images describes the images that are built\n" +
 	"# baseImage the project as part of the release\n" +
@@ -364,16 +357,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            as: ' '\n" +
 	"            name: ' '\n" +
 	"            namespace: ' '\n" +
-	"            # PullSecret is the name of the secret to use to pull the image\n" +
-	"            pull_secret: ' '\n" +
-	"            # PullSpec is the full pullSpec of the external image, only to be set programmatically,\n" +
-	"            # and takes precedent over the other fields in ExternalImage\n" +
-	"            pull_spec: ' '\n" +
 	"            # ReferencePolicy is the policy to use when resolving references (Local or Source)\n" +
 	"            reference_policy:\n" +
 	"                type: ' '\n" +
-	"            # Registry is the registry to pull images from (e.g. quay.io)\n" +
-	"            registry: ' '\n" +
 	"            tag: ' '\n" +
 	"        # Ref is an optional string linking to the extra_ref in \"org.repo\" format that this belongs to\n" +
 	"        ref: ' '\n" +

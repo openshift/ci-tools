@@ -2,21 +2,15 @@ base_images:
   base:
     name: origin-v4.0
     namespace: openshift
-    reference_policy:
-      type: ""
     tag: base
   os:
     name: centos
     namespace: ocp
-    reference_policy:
-      type: ""
     tag: os
 build_root:
   image_stream_tag:
     name: release
     namespace: openshift
-    reference_policy:
-      type: ""
     tag: golang-1.10
 images:
 - from: base

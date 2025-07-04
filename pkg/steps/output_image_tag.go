@@ -58,7 +58,7 @@ func (s *outputImageTagStep) run(ctx context.Context) error {
 		return fmt.Errorf("could not resolve base image from %s/%s: %w", namespace, name, err)
 	}
 	refPolicy := imagev1.LocalTagReferencePolicy
-	if s.config.To.ReferencePolicy.Type != "" {
+	if s.config.To.ReferencePolicy != nil {
 		refPolicy = s.config.To.ReferencePolicy.Type
 	}
 	desired := s.imageStreamTag(from.Image.Name, refPolicy)

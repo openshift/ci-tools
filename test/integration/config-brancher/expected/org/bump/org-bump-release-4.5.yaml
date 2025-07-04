@@ -2,22 +2,16 @@ base_images:
   tools:
     name: "4.5"
     namespace: ocp
-    reference_policy:
-      type: ""
     tag: tools
 base_rpm_images:
   installer:
     name: "4.5"
     namespace: ocp
-    reference_policy:
-      type: ""
     tag: installer
 build_root:
   image_stream_tag:
     name: "4.5"
     namespace: ocp
-    reference_policy:
-      type: ""
     tag: base
 promotion:
   to:

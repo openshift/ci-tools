@@ -2,15 +2,11 @@ base_images:
   base:
     name: origin-v4.0
     namespace: openshift
-    reference_policy:
-      type: ""
     tag: base
 build_root:
   image_stream_tag:
     name: release
     namespace: openshift
-    reference_policy:
-      type: ""
     tag: golang-1.10
 resources:
   '*':
@@ -42,5 +38,5 @@ tests:
   interval: 2h
 zz_generated_metadata:
   branch: master
-  org: slack-report
+  org: norehearsals
   repo: duper

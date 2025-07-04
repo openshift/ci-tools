@@ -2,8 +2,6 @@ base_images:
   base:
     name: "4.6"
     namespace: ocp
-    reference_policy:
-      type: ""
     tag: base
 releases:
   latest:

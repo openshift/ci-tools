@@ -2195,7 +2195,7 @@ func (p ClusterProfile) LeaseType() string {
 	case ClusterProfileKonfluxWorkspacesAWS:
 		return "konfluxworkspaces-aws-quota-slice"
 	case ClusterProfileAWSObservabiltity:
-		return "observability-aws-quota-slice"
+		return "aws-observability-quota-slice"
 	case ClusterProfileAWSSDCICD:
 		return "aws-sd-cicd-quota-slice"
 	case ClusterProfileGCPSDCICD:

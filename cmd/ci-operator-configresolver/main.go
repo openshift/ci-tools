@@ -151,8 +151,8 @@ type memoryCache struct {
 	CacheDuration          time.Duration
 }
 
-func (c *memoryCache) Get(ctx context.Context, ns, name string) (*configresolver.IntegratedStream, error) {
-	key := fmt.Sprintf("%s/%s", ns, name)
+func (c *memoryCache) Get(ctx context.Context, ns, name, refPolicy string) (*configresolver.IntegratedStream, error) {
+	key := fmt.Sprintf("%s/%s/%s", ns, name, refPolicy)
 	if c.IntegratedStreams == nil {
 		c.IntegratedStreams = map[string]integratedStreamRecord{}
 	}
@@ -178,7 +178,7 @@ type integratedStreamRecord struct {
 }
 
 type IntegratedStreamGetter interface {
-	Get(ctx context.Context, ns, name string) (*configresolver.IntegratedStream, error)
+	Get(ctx context.Context, ns, name, refPolicy string) (*configresolver.IntegratedStream, error)
 }
 
 func getIntegratedStream(ctx context.Context, g IntegratedStreamGetter) http.HandlerFunc {
@@ -186,11 +186,12 @@ func getIntegratedStream(ctx context.Context, g IntegratedStreamGetter) http.Han
 		q := r.URL.Query()
 		ns := q.Get("namespace")
 		name := q.Get("name")
+		refPolicy := q.Get("referencePolicy")
 		if err := validateStream(ns, name); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		stream, err := g.Get(ctx, ns, name)
+		stream, err := g.Get(ctx, ns, name, refPolicy)
 		if err != nil {
 			logrus.WithError(err).WithField("namespace", ns).WithField("name", name).Error("failed to get information of integrated stream")
 			http.Error(w, err.Error(), http.StatusInternalServerError)

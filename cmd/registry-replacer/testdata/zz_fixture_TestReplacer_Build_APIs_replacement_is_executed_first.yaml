@@ -2,8 +2,6 @@ base_images:
   org_repo_latest:
     name: repo
     namespace: org
-    reference_policy:
-      type: ""
     tag: latest
 images:
 - dockerfile_path: dockerfile

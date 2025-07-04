@@ -1126,7 +1126,7 @@ func integratedStreams(config *api.ReleaseBuildConfiguration, client server.Reso
 		}
 	}
 	for _, keyWithPolicy := range objectKeys {
-		var refPolicy string
+		refPolicy := string(imageapi.LocalTagReferencePolicy)
 		if keyWithPolicy.ReferencePolicy != nil {
 			refPolicy = string(*keyWithPolicy.ReferencePolicy)
 		}

@@ -70,13 +70,13 @@ func LocalIntegratedStream(ctx context.Context, client ctrlruntimeclient.Client,
 
 	var objectKeys []ObjectKeyWithReferencePolicy
 	for _, tag := range is.Spec.Tags {
-		var refPolicy *imagev1.TagReferencePolicyType
+		refPolicy := imagev1.LocalTagReferencePolicy
 		if tag.ReferencePolicy.Type != "" {
-			refPolicy = &tag.ReferencePolicy.Type
+			refPolicy = tag.ReferencePolicy.Type
 		}
 		objectKeys = append(objectKeys, ObjectKeyWithReferencePolicy{
 			Key:             ctrlruntimeclient.ObjectKey{Namespace: ns, Name: tag.Name},
-			ReferencePolicy: refPolicy,
+			ReferencePolicy: &refPolicy,
 		})
 	}
 

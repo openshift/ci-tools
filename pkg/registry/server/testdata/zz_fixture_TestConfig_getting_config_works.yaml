@@ -2,28 +2,20 @@ base_images:
   base:
     name: "4.0"
     namespace: ocp
-    reference_policy:
-      type: ""
     tag: base
   base-machine:
     name: fedora
     namespace: openshift
-    reference_policy:
-      type: ""
     tag: "29"
   machine-os-content-base:
     name: "4.0"
     namespace: ocp
-    reference_policy:
-      type: ""
     tag: machine-os-content
 binary_build_commands: make build WHAT='cmd/hypershift vendor/k8s.io/kubernetes/cmd/hyperkube'
 build_root:
   image_stream_tag:
     name: src-cache-origin
     namespace: ci
-    reference_policy:
-      type: ""
     tag: master
 canonical_go_repository: github.com/openshift/origin
 images:
@@ -124,8 +116,6 @@ raw_steps:
     to:
       name: stable
       namespace: ""
-      reference_policy:
-        type: ""
       tag: artifacts
 - rpm_image_injection_step:
     from: base

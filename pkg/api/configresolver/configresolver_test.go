@@ -87,7 +87,7 @@ func TestIntegratedStream(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, actualErr := LocalIntegratedStream(context.Background(), tc.client, tc.isNS, tc.isName)
+			actual, _, actualErr := LocalIntegratedStream(context.Background(), tc.client, tc.isNS, tc.isName)
 			if diff := cmp.Diff(tc.expectedErr, actualErr, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}

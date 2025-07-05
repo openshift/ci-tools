@@ -139,7 +139,8 @@ type fakeCache struct {
 }
 
 func (c *fakeCache) Get(ctx context.Context, ns, name string) (*configresolver.IntegratedStream, error) {
-	return configresolver.LocalIntegratedStream(ctx, c.Client, ns, name)
+	is, _, err := configresolver.LocalIntegratedStream(ctx, c.Client, ns, name)
+	return is, err
 }
 
 func TestGetIntegratedStream(t *testing.T) {

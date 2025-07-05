@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -492,6 +493,28 @@ type ImageStreamTagReference struct {
 
 	// As is an optional string to use as the intermediate name for this reference.
 	As string `json:"as,omitempty"`
+	// ReferencePolicy is the policy to use when resolving references (Local or Source)
+	ReferencePolicy *imagev1.TagReferencePolicy `json:"reference_policy,omitempty"`
+}
+
+func (i ImageStreamTagReference) MarshalJSON() ([]byte, error) {
+	aux := struct {
+		Namespace       string                      `json:"namespace"`
+		Name            string                      `json:"name"`
+		Tag             string                      `json:"tag"`
+		As              string                      `json:"as,omitempty"`
+		ReferencePolicy *imagev1.TagReferencePolicy `json:"reference_policy,omitempty"`
+	}{
+		Namespace: i.Namespace,
+		Name:      i.Name,
+		Tag:       i.Tag,
+		As:        i.As,
+	}
+	// Only set ReferencePolicy if it's non-nil and its Type is not empty
+	if i.ReferencePolicy != nil && i.ReferencePolicy.Type != "" {
+		aux.ReferencePolicy = i.ReferencePolicy
+	}
+	return json.Marshal(aux)
 }
 
 func (i *ImageStreamTagReference) ISTagName() string {

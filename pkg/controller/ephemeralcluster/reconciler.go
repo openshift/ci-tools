@@ -44,6 +44,7 @@ const (
 	AbortProwJobDeleteEC      = "Ephemeral Cluster deleted"
 	DependentProwJobFinalizer = "ephemeralcluster.ci.openshift.io/dependent-prowjob"
 	UnresolvedConfigVar       = "UNRESOLVED_CONFIG"
+	ProwJobCreatingDoneReason = "ProwJob has been properly created"
 )
 
 var (
@@ -136,8 +137,6 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return reconcile.Result{}, reconcile.TerminalError(fmt.Errorf("get ephemeral cluster: %w", err))
 	}
 
-	ec = ec.DeepCopy()
-
 	// TODO: Retrieve the ProwJob ID without relying on the previous state.
 	// Make sure not to create a ProwJob multiple times. As an example:
 	// 1. EphemeralCluster and its ProwJob exist
@@ -161,17 +160,23 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		err := r.createProwJob(ctx, log, ec)
 		if updateErr := r.updateEphemeralCluster(ctx, ec); updateErr != nil {
 			msg := utilerrors.NewAggregate([]error{updateErr, err}).Error()
-			return reconcile.Result{RequeueAfter: r.polling()}, errors.New(msg)
+			return reconcile.Result{}, errors.New(msg)
 		}
-		return reconcile.Result{RequeueAfter: r.polling()}, err
+		requeueAfter := r.polling()
+		if err != nil {
+			requeueAfter = 0
+		}
+		return reconcile.Result{RequeueAfter: requeueAfter}, err
 	}
+
+	upsertCondition(&observedStatus, ephemeralclusterv1.ProwJobCreating, ephemeralclusterv1.ConditionFalse, r.now(), ProwJobCreatingDoneReason, "")
 
 	log.Info("Fetching the kubeconfig")
 	err := r.fetchKubeconfig(ctx, log, &observedStatus, &pj)
 	if err != nil {
 		if updateErr := r.updateEphemeralClusterStatus(ctx, ec, &observedStatus); updateErr != nil {
 			msg := utilerrors.NewAggregate([]error{updateErr, err}).Error()
-			return reconcile.Result{RequeueAfter: r.polling()}, errors.New(msg)
+			return reconcile.Result{}, errors.New(msg)
 		}
 		return reconcile.Result{}, err
 	}
@@ -182,7 +187,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		if err != nil {
 			if updateErr := r.updateEphemeralClusterStatus(ctx, ec, &observedStatus); updateErr != nil {
 				msg := utilerrors.NewAggregate([]error{updateErr, err}).Error()
-				return reconcile.Result{RequeueAfter: r.polling()}, errors.New(msg)
+				return reconcile.Result{}, errors.New(msg)
 			}
 			return reconcile.Result{}, err
 		}
@@ -195,7 +200,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	}
 
 	if err := r.updateEphemeralClusterStatus(ctx, ec, &observedStatus); err != nil {
-		return reconcile.Result{RequeueAfter: r.polling()}, err
+		return reconcile.Result{}, err
 	}
 
 	return reconcile.Result{RequeueAfter: requeueAfter}, nil
@@ -255,7 +260,7 @@ func (r *reconciler) generateCIOperatorConfig(log *logrus.Entry, ec *ephemeralcl
 
 func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster) error {
 	upsertProvisioningCond := func(status ephemeralclusterv1.ConditionStatus, reason, msg string) {
-		upsertCondition(&ec.Status, ephemeralclusterv1.ClusterProvisioning, status, r.now(), reason, msg)
+		upsertCondition(&ec.Status, ephemeralclusterv1.ProwJobCreating, status, r.now(), reason, msg)
 	}
 
 	ciOperatorConfig, err := r.generateCIOperatorConfig(log, ec)
@@ -269,6 +274,7 @@ func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *e
 
 	pj, err := r.makeProwJob(ciOperatorConfig, ec)
 	if err != nil {
+		log.WithError(err).Error("make prowjob")
 		upsertProvisioningCond(ephemeralclusterv1.ConditionFalse, ephemeralclusterv1.CIOperatorJobsGenerateFailureReason, err.Error())
 		ec.Status.Phase = ephemeralclusterv1.EphemeralClusterFailed
 		return reconcile.TerminalError(err)

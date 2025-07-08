@@ -21,8 +21,8 @@ const (
 type EphemeralClusterConditionType string
 
 const (
-	// ClusterProvisioning indicates whether the cluster is being provisioned.
-	ClusterProvisioning EphemeralClusterConditionType = "ClusterProvisioning"
+	// ProwJobCreating indicates whether the prowjob is being created.
+	ProwJobCreating EphemeralClusterConditionType = "ProwJobCreating"
 	// ContainersReady indicates whether the cluster is up and running.
 	ClusterReady EphemeralClusterConditionType = "ClusterReady"
 	// ProwJobCompleted indicates whether the ProwJob is running.

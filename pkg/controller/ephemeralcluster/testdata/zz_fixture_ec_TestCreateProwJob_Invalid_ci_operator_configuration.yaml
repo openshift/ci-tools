@@ -13,5 +13,5 @@ status:
     message: 'generate ci-operator config: releases stanza not set'
     reason: CIOperatorJobsGenerateFailure
     status: "False"
-    type: ClusterProvisioning
+    type: ProwJobCreating
   phase: Failed

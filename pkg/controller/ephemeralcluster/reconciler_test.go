@@ -378,6 +378,11 @@ func TestReconcile(t *testing.T) {
 					ProwJobID:  "pj-123",
 					Kubeconfig: "kubeconfig",
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+						Type:               ephemeralclusterv1.ProwJobCreating,
+						Status:             ephemeralclusterv1.ConditionFalse,
+						Reason:             ProwJobCreatingDoneReason,
+						LastTransitionTime: v1.NewTime(fakeNow),
+					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
 						Status:             ephemeralclusterv1.ConditionTrue,
 						LastTransitionTime: v1.NewTime(fakeNow),
@@ -417,13 +422,19 @@ func TestReconcile(t *testing.T) {
 				},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					ProwJobID: "pj-123",
-					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
-						Type:               ephemeralclusterv1.ClusterReady,
-						Status:             ephemeralclusterv1.ConditionFalse,
-						Reason:             ephemeralclusterv1.KubeconfigFetchFailureReason,
-						Message:            ephemeralclusterv1.CIOperatorNSNotFoundMsg,
-						LastTransitionTime: v1.NewTime(fakeNow),
-					}},
+					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{
+						{
+							Type:               ephemeralclusterv1.ProwJobCreating,
+							Status:             ephemeralclusterv1.ConditionFalse,
+							Reason:             ProwJobCreatingDoneReason,
+							LastTransitionTime: v1.NewTime(fakeNow),
+						}, {
+							Type:               ephemeralclusterv1.ClusterReady,
+							Status:             ephemeralclusterv1.ConditionFalse,
+							Reason:             ephemeralclusterv1.KubeconfigFetchFailureReason,
+							Message:            ephemeralclusterv1.CIOperatorNSNotFoundMsg,
+							LastTransitionTime: v1.NewTime(fakeNow),
+						}},
 				},
 			},
 			wantRes: reconcile.Result{RequeueAfter: pollingTime},
@@ -468,6 +479,11 @@ func TestReconcile(t *testing.T) {
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					ProwJobID: "pj-123",
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+						Type:               ephemeralclusterv1.ProwJobCreating,
+						Status:             ephemeralclusterv1.ConditionFalse,
+						Reason:             ProwJobCreatingDoneReason,
+						LastTransitionTime: v1.NewTime(fakeNow),
+					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
 						Status:             ephemeralclusterv1.ConditionFalse,
 						Reason:             ephemeralclusterv1.KubeconfigFetchFailureReason,
@@ -521,6 +537,11 @@ func TestReconcile(t *testing.T) {
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					ProwJobID: "pj-123",
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+						Type:               ephemeralclusterv1.ProwJobCreating,
+						Status:             ephemeralclusterv1.ConditionFalse,
+						Reason:             ProwJobCreatingDoneReason,
+						LastTransitionTime: v1.NewTime(fakeNow),
+					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
 						Status:             ephemeralclusterv1.ConditionFalse,
 						Reason:             ephemeralclusterv1.KubeconfigFetchFailureReason,
@@ -561,6 +582,11 @@ func TestReconcile(t *testing.T) {
 					Phase:     ephemeralclusterv1.EphemeralClusterFailed,
 					ProwJobID: "pj-123",
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+						Type:               ephemeralclusterv1.ProwJobCreating,
+						Status:             ephemeralclusterv1.ConditionFalse,
+						Reason:             ProwJobCreatingDoneReason,
+						LastTransitionTime: v1.NewTime(fakeNow),
+					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
 						Status:             ephemeralclusterv1.ConditionFalse,
 						Reason:             ephemeralclusterv1.KubeconfigFetchFailureReason,
@@ -604,6 +630,11 @@ func TestReconcile(t *testing.T) {
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					ProwJobID: "pj-123",
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+						Type:               ephemeralclusterv1.ProwJobCreating,
+						Status:             ephemeralclusterv1.ConditionFalse,
+						Reason:             ProwJobCreatingDoneReason,
+						LastTransitionTime: v1.NewTime(fakeNow),
+					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
 						Status:             ephemeralclusterv1.ConditionFalse,
 						Reason:             ephemeralclusterv1.KubeconfigFetchFailureReason,
@@ -667,6 +698,11 @@ func TestReconcile(t *testing.T) {
 					ProwJobID:  "pj-123",
 					Kubeconfig: "kubeconfig",
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+						Type:               ephemeralclusterv1.ProwJobCreating,
+						Status:             ephemeralclusterv1.ConditionFalse,
+						Reason:             ProwJobCreatingDoneReason,
+						LastTransitionTime: v1.NewTime(fakeNow),
+					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
 						Status:             ephemeralclusterv1.ConditionTrue,
 						LastTransitionTime: v1.NewTime(fakeNow),
@@ -751,6 +787,11 @@ func TestReconcile(t *testing.T) {
 					Phase:     ephemeralclusterv1.EphemeralClusterDeprovisioning,
 					ProwJobID: "pj-123",
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+						Type:               ephemeralclusterv1.ProwJobCreating,
+						Status:             ephemeralclusterv1.ConditionFalse,
+						Reason:             ProwJobCreatingDoneReason,
+						LastTransitionTime: v1.NewTime(fakeNow),
+					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
 						Status:             ephemeralclusterv1.ConditionTrue,
 						LastTransitionTime: v1.NewTime(fakeNow),
@@ -799,6 +840,11 @@ func TestReconcile(t *testing.T) {
 					Phase:     ephemeralclusterv1.EphemeralClusterFailed,
 					ProwJobID: "pj-123",
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+						Type:               ephemeralclusterv1.ProwJobCreating,
+						Status:             ephemeralclusterv1.ConditionFalse,
+						Reason:             ProwJobCreatingDoneReason,
+						LastTransitionTime: v1.NewTime(fakeNow),
+					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
 						Status:             ephemeralclusterv1.ConditionFalse,
 						Reason:             ephemeralclusterv1.KubeconfigFetchFailureReason,
@@ -865,6 +911,11 @@ func TestReconcile(t *testing.T) {
 					Phase:     ephemeralclusterv1.EphemeralClusterDeprovisioning,
 					ProwJobID: "pj-123",
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+						Type:               ephemeralclusterv1.ProwJobCreating,
+						Status:             ephemeralclusterv1.ConditionFalse,
+						Reason:             ProwJobCreatingDoneReason,
+						LastTransitionTime: v1.NewTime(fakeNow),
+					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
 						Status:             ephemeralclusterv1.ConditionFalse,
 						Reason:             ephemeralclusterv1.KubeconfigFetchFailureReason,

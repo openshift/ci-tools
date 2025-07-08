@@ -23,5 +23,5 @@ status:
       failed to default namespace'
     reason: CIOperatorJobsGenerateFailure
     status: "False"
-    type: ClusterProvisioning
+    type: ProwJobCreating
   phase: Failed

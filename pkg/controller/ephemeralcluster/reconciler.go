@@ -44,6 +44,7 @@ const (
 	AbortProwJobDeleteEC      = "Ephemeral Cluster deleted"
 	DependentProwJobFinalizer = "ephemeralcluster.ci.openshift.io/dependent-prowjob"
 	UnresolvedConfigVar       = "UNRESOLVED_CONFIG"
+	ProwJobCreatingDoneReason = "ProwJob has been properly created"
 )
 
 var (
@@ -166,6 +167,8 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return reconcile.Result{RequeueAfter: r.polling()}, err
 	}
 
+	upsertCondition(&observedStatus, ephemeralclusterv1.ProwJobCreating, ephemeralclusterv1.ConditionFalse, r.now(), ProwJobCreatingDoneReason, "")
+
 	log.Info("Fetching the kubeconfig")
 	err := r.fetchKubeconfig(ctx, log, &observedStatus, &pj)
 	if err != nil {
@@ -255,7 +258,7 @@ func (r *reconciler) generateCIOperatorConfig(log *logrus.Entry, ec *ephemeralcl
 
 func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster) error {
 	upsertProvisioningCond := func(status ephemeralclusterv1.ConditionStatus, reason, msg string) {
-		upsertCondition(&ec.Status, ephemeralclusterv1.ClusterProvisioning, status, r.now(), reason, msg)
+		upsertCondition(&ec.Status, ephemeralclusterv1.ProwJobCreating, status, r.now(), reason, msg)
 	}
 
 	ciOperatorConfig, err := r.generateCIOperatorConfig(log, ec)
@@ -269,6 +272,7 @@ func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *e
 
 	pj, err := r.makeProwJob(ciOperatorConfig, ec)
 	if err != nil {
+		log.WithError(err).Error("make prowjob")
 		upsertProvisioningCond(ephemeralclusterv1.ConditionFalse, ephemeralclusterv1.CIOperatorJobsGenerateFailureReason, err.Error())
 		ec.Status.Phase = ephemeralclusterv1.EphemeralClusterFailed
 		return reconcile.TerminalError(err)

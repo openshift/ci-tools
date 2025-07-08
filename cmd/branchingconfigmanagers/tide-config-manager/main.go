@@ -35,7 +35,6 @@ const (
 	preGeneralAvailability = "pre-general-availability"
 	GeneralAvailability    = "general-availability"
 	staffEngApproved       = "staff-eng-approved"
-	cherryPickApproved     = "cherry-pick-approved"
 	backportRiskAssessed   = "backport-risk-assessed"
 	qeApproved             = "qe-approved"
 	docsApproved           = "docs-approved"
@@ -187,7 +186,7 @@ func (bde branchingDayEvent) ModifyQuery(q *prowconfig.TideQuery, repo string) {
 	if branches.Intersection(bde.openshiftReleaseBranches).Len() > 0 {
 		if reqLabels.Has(staffEngApproved) {
 			reqLabels.Delete(staffEngApproved)
-			reqLabels.Insert(cherryPickApproved, backportRiskAssessed)
+			reqLabels.Insert(backportRiskAssessed)
 		}
 	}
 	q.Labels = sets.List(reqLabels)
@@ -213,7 +212,7 @@ func (pga preGeneralAvailabilityEvent) ModifyQuery(q *prowconfig.TideQuery, repo
 	branches := sets.New[string](q.IncludedBranches...)
 
 	if branches.Intersection(pga.openshiftReleaseBranches).Len() > 0 {
-		if reqLabels.Has(cherryPickApproved) && reqLabels.Has(backportRiskAssessed) {
+		if reqLabels.Has(backportRiskAssessed) {
 			reqLabels.Insert(staffEngApproved)
 		}
 	}
@@ -279,44 +278,23 @@ func newGeneralAvailabilityEvent(past, current, future string, repos excludedRep
 }
 
 func (gae generalAvailabilityEvent) ModifyQuery(q *prowconfig.TideQuery, repo string) {
-	gae.deleteCherryPickApprovedBackportRiskAssesedLabels(q)
+	gae.deleteBackportRiskAssesedLabels(q)
 	gae.ensureStaffEngApprovedLabel(q)
-	gae.ensureCherryPickApprovedLabel(q)
 	gae.overrideExcludedBranches(q)
 }
 
 func (gae generalAvailabilityEvent) GetDataFromProwConfig(*prowconfig.ProwConfig) {}
 
-func (gae *generalAvailabilityEvent) deleteCherryPickApprovedBackportRiskAssesedLabels(q *prowconfig.TideQuery) {
+func (gae *generalAvailabilityEvent) deleteBackportRiskAssesedLabels(q *prowconfig.TideQuery) {
 	reqLabels := sets.New[string](q.Labels...)
 	branches := sets.New[string](q.IncludedBranches...)
 
 	if branches.Intersection(gae.openshiftReleaseBranches).Len() > 0 {
-		if reqLabels.Has(cherryPickApproved) && reqLabels.Has(backportRiskAssessed) && reqLabels.Has(staffEngApproved) {
-			reqLabels.Delete(cherryPickApproved, backportRiskAssessed)
+		if reqLabels.Has(backportRiskAssessed) && reqLabels.Has(staffEngApproved) {
+			reqLabels.Delete(backportRiskAssessed)
 		}
 	}
 	q.Labels = sets.List(reqLabels)
-}
-
-func (gae *generalAvailabilityEvent) ensureCherryPickApprovedLabel(q *prowconfig.TideQuery) {
-	reqLabels := sets.New[string](q.Labels...)
-	branches := sets.New[string](q.IncludedBranches...)
-	if reqLabels.Has(cherryPickApproved) {
-		if branches.Has(gae.releasePast) {
-			branches.Insert(gae.releaseCurrent)
-		}
-		if branches.Has(gae.openshiftPast) {
-			branches.Insert(gae.openshiftCurrent)
-		}
-		if branches.Intersection(gae.openshiftReleaseBranches).Len() == 0 && !gae.noXYAllowList.Has(q.Repos[0]) {
-			fmt.Printf("Suspicious cherry-pick-approved query (without %s): %s\n", gae.current, q.Repos)
-		}
-		if branches.Intersection(gae.openshiftReleaseBranchesPlus1).Len() != 0 {
-			fmt.Printf("Suspicious cherry-pick-approved query (with %s): %s\n", gae.future, q.Repos)
-		}
-	}
-	q.IncludedBranches = sets.List(branches)
 }
 
 func (gae *generalAvailabilityEvent) ensureStaffEngApprovedLabel(q *prowconfig.TideQuery) {

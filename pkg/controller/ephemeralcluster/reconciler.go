@@ -162,9 +162,13 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		err := r.createProwJob(ctx, log, ec)
 		if updateErr := r.updateEphemeralCluster(ctx, ec); updateErr != nil {
 			msg := utilerrors.NewAggregate([]error{updateErr, err}).Error()
-			return reconcile.Result{RequeueAfter: r.polling()}, errors.New(msg)
+			return reconcile.Result{}, errors.New(msg)
 		}
-		return reconcile.Result{RequeueAfter: r.polling()}, err
+		requeueAfter := r.polling()
+		if err != nil {
+			requeueAfter = 0
+		}
+		return reconcile.Result{RequeueAfter: requeueAfter}, err
 	}
 
 	upsertCondition(&observedStatus, ephemeralclusterv1.ProwJobCreating, ephemeralclusterv1.ConditionFalse, r.now(), ProwJobCreatingDoneReason, "")
@@ -174,7 +178,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	if err != nil {
 		if updateErr := r.updateEphemeralClusterStatus(ctx, ec, &observedStatus); updateErr != nil {
 			msg := utilerrors.NewAggregate([]error{updateErr, err}).Error()
-			return reconcile.Result{RequeueAfter: r.polling()}, errors.New(msg)
+			return reconcile.Result{}, errors.New(msg)
 		}
 		return reconcile.Result{}, err
 	}
@@ -185,7 +189,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		if err != nil {
 			if updateErr := r.updateEphemeralClusterStatus(ctx, ec, &observedStatus); updateErr != nil {
 				msg := utilerrors.NewAggregate([]error{updateErr, err}).Error()
-				return reconcile.Result{RequeueAfter: r.polling()}, errors.New(msg)
+				return reconcile.Result{}, errors.New(msg)
 			}
 			return reconcile.Result{}, err
 		}
@@ -198,7 +202,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	}
 
 	if err := r.updateEphemeralClusterStatus(ctx, ec, &observedStatus); err != nil {
-		return reconcile.Result{RequeueAfter: r.polling()}, err
+		return reconcile.Result{}, err
 	}
 
 	return reconcile.Result{RequeueAfter: requeueAfter}, nil

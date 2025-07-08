@@ -195,7 +195,7 @@ func TestCreateProwJob(t *testing.T) {
 			},
 			prowConfig: &prowconfig.Config{},
 			req:        reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
-			wantRes:    reconcile.Result{RequeueAfter: pollingTime},
+			wantRes:    reconcile.Result{},
 			wantErr:    errors.New("terminal error: validate and default presubmit: invalid presubmit job pull-ci-org-repo-branch-cluster-provisioning: failed to default namespace"),
 		},
 		{
@@ -224,7 +224,7 @@ func TestCreateProwJob(t *testing.T) {
 				return client.Create(ctx, obj, opts...)
 			}},
 			req:     reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
-			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+			wantRes: reconcile.Result{},
 			wantErr: errors.New("create prowjob: fake err"),
 		},
 		{
@@ -243,7 +243,7 @@ func TestCreateProwJob(t *testing.T) {
 				},
 			},
 			req:     reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
-			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+			wantRes: reconcile.Result{},
 			wantErr: errors.New("terminal error: generate ci-operator config: releases stanza not set"),
 		},
 		{
@@ -268,7 +268,7 @@ func TestCreateProwJob(t *testing.T) {
 				return client.Update(ctx, obj, opts...)
 			}},
 			req:     reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
-			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+			wantRes: reconcile.Result{},
 			wantErr: errors.New("[update ephemeral cluster: fake err, terminal error: generate ci-operator config: releases stanza not set]"),
 		},
 	} {

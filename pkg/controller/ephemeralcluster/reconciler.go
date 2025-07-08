@@ -137,8 +137,6 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return reconcile.Result{}, reconcile.TerminalError(fmt.Errorf("get ephemeral cluster: %w", err))
 	}
 
-	ec = ec.DeepCopy()
-
 	// TODO: Retrieve the ProwJob ID without relying on the previous state.
 	// Make sure not to create a ProwJob multiple times. As an example:
 	// 1. EphemeralCluster and its ProwJob exist

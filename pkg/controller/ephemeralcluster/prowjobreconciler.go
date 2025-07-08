@@ -72,8 +72,6 @@ func (r *prowJobReconciler) Reconcile(ctx context.Context, req reconcile.Request
 		return reconcile.Result{}, reconcile.TerminalError(fmt.Errorf("%s doesn't have the EC label", pj.Name))
 	}
 
-	pj = pj.DeepCopy()
-
 	ec := ephemeralclusterv1.EphemeralCluster{}
 	if err := r.client.Get(ctx, types.NamespacedName{Name: ecName, Namespace: EphemeralClusterNamespace}, &ec); err != nil {
 		if kerrors.IsNotFound(err) {

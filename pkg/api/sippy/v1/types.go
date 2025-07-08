@@ -22,4 +22,7 @@ type ReleaseConfig struct {
 
 	// InformingJobs is the list of informing payload jobs
 	InformingJobs []string `yaml:"informingJobs,omitempty"`
+
+	// AddRelease determines whether the release should be added in for sippy classic
+	AddRelease bool `yaml:"addRelease,omitempty"`
 }

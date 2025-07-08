@@ -40,6 +40,63 @@ func sorted(spec *corev1.PodSpec) {
 	}
 }
 
+func TestShouldAlwaysRun(t *testing.T) {
+	tests := []struct {
+		description     string
+		test            string
+		alwaysRun       bool
+		generateOptions generatePresubmitOption
+	}{
+		{
+			description: "shouldAlwaysRun must return true",
+			test:        "testname",
+			alwaysRun:   true,
+			generateOptions: func(options *generatePresubmitOptions) {
+				options.runIfChanged = ""
+				options.skipIfOnlyChanged = ""
+				options.defaultDisable = false
+				options.pipelineRunIfChanged = ""
+			},
+		},
+		{
+			description: "shouldAlwaysRun must return false because runIfChanged is defined",
+			test:        "testname",
+			alwaysRun:   false,
+			generateOptions: func(options *generatePresubmitOptions) {
+				options.runIfChanged = "/docs/*"
+				options.skipIfOnlyChanged = ""
+				options.defaultDisable = false
+				options.pipelineRunIfChanged = ""
+			},
+		},
+		{
+			description: "shouldAlwaysRun must return false because defaultDisable is true",
+			test:        "testname",
+			alwaysRun:   false,
+			generateOptions: func(options *generatePresubmitOptions) {
+				options.runIfChanged = ""
+				options.skipIfOnlyChanged = ""
+				options.defaultDisable = true
+				options.pipelineRunIfChanged = ""
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.description, func(t *testing.T) {
+			options := &generatePresubmitOptions{}
+			generateOptions := tc.generateOptions
+			if generateOptions == nil {
+				generateOptions = func(options *generatePresubmitOptions) {}
+			}
+			generateOptions(options)
+			alwaysRun := options.shouldAlwaysRun()
+			if tc.alwaysRun != alwaysRun {
+				t.Errorf("got different always_run than exapected, should be %t but received %t", tc.alwaysRun, alwaysRun)
+			}
+		})
+	}
+}
+
 func TestGeneratePresubmitForTest(t *testing.T) {
 	tests := []struct {
 		description string

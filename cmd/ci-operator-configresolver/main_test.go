@@ -138,9 +138,8 @@ type fakeCache struct {
 	Client ctrlruntimeclient.Client
 }
 
-func (c *fakeCache) Get(ctx context.Context, ns, name, refPolicy string) (*configresolver.IntegratedStream, error) {
-	is, _, err := configresolver.LocalIntegratedStream(ctx, c.Client, ns, name)
-	return is, err
+func (c *fakeCache) Get(ctx context.Context, ns, name string) (*configresolver.IntegratedStream, error) {
+	return configresolver.LocalIntegratedStream(ctx, c.Client, ns, name)
 }
 
 func TestGetIntegratedStream(t *testing.T) {

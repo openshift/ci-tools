@@ -49,12 +49,16 @@ func (r *releaseSnapshotStep) Run(ctx context.Context) error {
 }
 
 func (r *releaseSnapshotStep) run(ctx context.Context) error {
-	_, err := snapshotStream(ctx, r.client, r.config.Namespace, r.config.Name, r.jobSpec.Namespace, r.name, r.integratedStream)
+	refPolicy := imagev1.LocalTagReferencePolicy
+	if r.config.ReferencePolicy != nil {
+		refPolicy = *r.config.ReferencePolicy
+	}
+	_, err := snapshotStream(ctx, r.client, r.config.Namespace, r.config.Name, r.jobSpec.Namespace, r.name, r.integratedStream, refPolicy)
 	return err
 }
 
 // snapshotStream snapshots the source IS and the snapshot copy created
-func snapshotStream(ctx context.Context, client loggingclient.LoggingClient, sourceNamespace, sourceName string, targetNamespace func() string, targetRelease string, integratedStream *configresolver.IntegratedStream) (*imagev1.ImageStream, error) {
+func snapshotStream(ctx context.Context, client loggingclient.LoggingClient, sourceNamespace, sourceName string, targetNamespace func() string, targetRelease string, integratedStream *configresolver.IntegratedStream, refPolicy imagev1.TagReferencePolicyType) (*imagev1.ImageStream, error) {
 	targetName := api.ReleaseStreamFor(targetRelease)
 	logrus.WithField("sourceNamespace", sourceNamespace).
 		WithField("sourceName", sourceName).
@@ -103,7 +107,7 @@ func snapshotStream(ctx context.Context, client loggingclient.LoggingClient, sou
 			Name:            tag,
 			From:            from,
 			ImportPolicy:    imagev1.TagImportPolicy{ImportMode: imagev1.ImportModePreserveOriginal},
-			ReferencePolicy: imagev1.TagReferencePolicy{Type: imagev1.LocalTagReferencePolicy},
+			ReferencePolicy: imagev1.TagReferencePolicy{Type: refPolicy},
 		}
 		snapshot.Spec.Tags = append(snapshot.Spec.Tags, tagReference)
 	}

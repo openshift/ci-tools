@@ -23,12 +23,6 @@ type releaseConfig struct {
 	Name string `json:"name"`
 }
 
-// objectKeyWithReferencePolicy is a custom struct that holds an ObjectKey and an optional ReferencePolicy.
-type ObjectKeyWithReferencePolicy struct {
-	Key             ctrlruntimeclient.ObjectKey
-	ReferencePolicy *imagev1.TagReferencePolicyType
-}
-
 // ReleaseControllerConfigNameToAnnotationValue converts a config name to the annotation value
 func ReleaseControllerConfigNameToAnnotationValue(configName string) (string, error) {
 	rc := releaseConfig{Name: configName}
@@ -49,11 +43,11 @@ func ReleaseControllerAnnotationValueToConfigName(annotationValue string) (strin
 }
 
 // LocalIntegratedStream return the information of the given integrated stream
-func LocalIntegratedStream(ctx context.Context, client ctrlruntimeclient.Client, ns, name string) (*IntegratedStream, []ObjectKeyWithReferencePolicy, error) {
+func LocalIntegratedStream(ctx context.Context, client ctrlruntimeclient.Client, ns, name string) (*IntegratedStream, error) {
 	logrus.WithField("namespace", ns).WithField("name", name).Debug("Getting info for integrated stream")
 	is := &imagev1.ImageStream{}
 	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, is); err != nil {
-		return nil, nil, fmt.Errorf("failed to get image stream %s/%s: %w", ns, name, err)
+		return nil, fmt.Errorf("failed to get image stream %s/%s: %w", ns, name, err)
 	}
 	var tags []string
 	for _, tag := range is.Status.Tags {
@@ -63,22 +57,9 @@ func LocalIntegratedStream(ctx context.Context, client ctrlruntimeclient.Client,
 	if raw, ok := is.ObjectMeta.Annotations[api.ReleaseConfigAnnotation]; ok {
 		configName, err := ReleaseControllerAnnotationValueToConfigName(raw)
 		if err != nil {
-			return nil, nil, fmt.Errorf("could not resolve release configuration on imagestream %s/%s: %w", ns, name, err)
+			return nil, fmt.Errorf("could not resolve release configuration on imagestream %s/%s: %w", ns, name, err)
 		}
 		releaseControllerConfigName = configName
 	}
-
-	var objectKeys []ObjectKeyWithReferencePolicy
-	for _, tag := range is.Spec.Tags {
-		refPolicy := imagev1.LocalTagReferencePolicy
-		if tag.ReferencePolicy.Type != "" {
-			refPolicy = tag.ReferencePolicy.Type
-		}
-		objectKeys = append(objectKeys, ObjectKeyWithReferencePolicy{
-			Key:             ctrlruntimeclient.ObjectKey{Namespace: ns, Name: tag.Name},
-			ReferencePolicy: &refPolicy,
-		})
-	}
-
-	return &IntegratedStream{Tags: tags, ReleaseControllerConfigName: releaseControllerConfigName}, objectKeys, nil
+	return &IntegratedStream{Tags: tags, ReleaseControllerConfigName: releaseControllerConfigName}, nil
 }

@@ -151,8 +151,8 @@ type memoryCache struct {
 	CacheDuration          time.Duration
 }
 
-func (c *memoryCache) Get(ctx context.Context, ns, name, refPolicy string) (*configresolver.IntegratedStream, error) {
-	key := fmt.Sprintf("%s/%s/%s", ns, name, refPolicy)
+func (c *memoryCache) Get(ctx context.Context, ns, name string) (*configresolver.IntegratedStream, error) {
+	key := fmt.Sprintf("%s/%s", ns, name)
 	if c.IntegratedStreams == nil {
 		c.IntegratedStreams = map[string]integratedStreamRecord{}
 	}
@@ -164,7 +164,7 @@ func (c *memoryCache) Get(ctx context.Context, ns, name, refPolicy string) (*con
 	}
 	c.IntegratedStreamsMutex.Lock()
 	defer c.IntegratedStreamsMutex.Unlock()
-	s, _, err := configresolver.LocalIntegratedStream(ctx, c.Client, ns, name)
+	s, err := configresolver.LocalIntegratedStream(ctx, c.Client, ns, name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get information on image stream %s/%s: %w", ns, name, err)
 	}
@@ -178,7 +178,7 @@ type integratedStreamRecord struct {
 }
 
 type IntegratedStreamGetter interface {
-	Get(ctx context.Context, ns, name, refPolicy string) (*configresolver.IntegratedStream, error)
+	Get(ctx context.Context, ns, name string) (*configresolver.IntegratedStream, error)
 }
 
 func getIntegratedStream(ctx context.Context, g IntegratedStreamGetter) http.HandlerFunc {
@@ -186,12 +186,11 @@ func getIntegratedStream(ctx context.Context, g IntegratedStreamGetter) http.Han
 		q := r.URL.Query()
 		ns := q.Get("namespace")
 		name := q.Get("name")
-		refPolicy := q.Get("referencePolicy")
 		if err := validateStream(ns, name); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		stream, err := g.Get(ctx, ns, name, refPolicy)
+		stream, err := g.Get(ctx, ns, name)
 		if err != nil {
 			logrus.WithError(err).WithField("namespace", ns).WithField("name", name).Error("failed to get information of integrated stream")
 			http.Error(w, err.Error(), http.StatusInternalServerError)

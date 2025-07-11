@@ -125,7 +125,7 @@ func (s *releaseImagesTagStep) run(ctx context.Context) error {
 		logrus.Infof("Tagged shared images from %s", sourceName(s.config))
 	}
 
-	newIS, err := snapshotStream(ctx, s.client, s.config.Namespace, s.config.Name, s.jobSpec.Namespace, api.LatestReleaseName, s.integratedStream)
+	newIS, err := snapshotStream(ctx, s.client, s.config.Namespace, s.config.Name, s.jobSpec.Namespace, api.LatestReleaseName, s.integratedStream, s.config.ReferencePolicy)
 	if err != nil {
 		return err
 	}

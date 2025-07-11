@@ -176,9 +176,6 @@ func (v *Validator) validateConfiguration(ctx *configContext, config *api.Releas
 		validationErrors = append(validationErrors, validateReleaseTagConfiguration("tag_specification", *config.InputConfiguration.ReleaseTagConfiguration)...)
 	}
 
-	// Validate reference_policy
-	CleanReferencePolicyNil(config)
-
 	// Validate promotion
 	if config.PromotionConfiguration != nil {
 		validationErrors = append(validationErrors,
@@ -221,27 +218,6 @@ func validateBaseAndExternalCollision(baseImages map[string]api.ImageStreamTagRe
 		}
 	}
 	return validationErrors
-}
-
-func CleanReferencePolicyNil(cfg *api.ReleaseBuildConfiguration) {
-	for _, img := range cfg.InputConfiguration.BaseImages {
-		cleanImageStreamTagReference(&img)
-	}
-	for _, img := range cfg.InputConfiguration.BaseRPMImages {
-		cleanImageStreamTagReference(&img)
-	}
-	for _, ext := range cfg.InputConfiguration.ExternalImages {
-		cleanImageStreamTagReference(&ext.ImageStreamTagReference)
-	}
-	if cfg.InputConfiguration.BuildRootImage != nil && cfg.InputConfiguration.BuildRootImage.ImageStreamTagReference != nil {
-		cleanImageStreamTagReference(cfg.InputConfiguration.BuildRootImage.ImageStreamTagReference)
-	}
-}
-
-func cleanImageStreamTagReference(ref *api.ImageStreamTagReference) {
-	if ref.ReferencePolicy != nil && ref.ReferencePolicy.Type == "" {
-		ref.ReferencePolicy = nil
-	}
 }
 
 func validateExternalConfiguration(ctx *configContext, externalImages map[string]api.ExternalImage) []error {

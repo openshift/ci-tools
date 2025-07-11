@@ -57,11 +57,7 @@ func (s *outputImageTagStep) run(ctx context.Context) error {
 	}, from); err != nil {
 		return fmt.Errorf("could not resolve base image from %s/%s: %w", namespace, name, err)
 	}
-	refPolicy := imagev1.LocalTagReferencePolicy
-	if s.config.To.ReferencePolicy != nil {
-		refPolicy = s.config.To.ReferencePolicy.Type
-	}
-	desired := s.imageStreamTag(from.Image.Name, refPolicy)
+	desired := s.imageStreamTag(from.Image.Name)
 	ist := &imagev1.ImageStreamTag{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: desired.ObjectMeta.Namespace,
@@ -147,10 +143,7 @@ func (s *outputImageTagStep) namespace() string {
 	return s.jobSpec.Namespace()
 }
 
-func (s *outputImageTagStep) imageStreamTag(fromImage string, referencePolicy imagev1.TagReferencePolicyType) *imagev1.ImageStreamTag {
-	if referencePolicy == "" {
-		referencePolicy = imagev1.LocalTagReferencePolicy
-	}
+func (s *outputImageTagStep) imageStreamTag(fromImage string) *imagev1.ImageStreamTag {
 	return &imagev1.ImageStreamTag{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s:%s", s.config.To.Name, s.config.To.Tag),
@@ -158,7 +151,7 @@ func (s *outputImageTagStep) imageStreamTag(fromImage string, referencePolicy im
 		},
 		Tag: &imagev1.TagReference{
 			ReferencePolicy: imagev1.TagReferencePolicy{
-				Type: referencePolicy,
+				Type: imagev1.LocalTagReferencePolicy,
 			},
 			ImportPolicy: imagev1.TagImportPolicy{
 				ImportMode: imagev1.ImportModePreserveOriginal,

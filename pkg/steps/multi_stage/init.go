@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/GoogleCloudPlatform/secrets-store-csi-driver-provider-gcp/config"
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
@@ -16,7 +15,6 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	csiapi "sigs.k8s.io/secrets-store-csi-driver/apis/v1"
-	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
@@ -28,8 +26,6 @@ var (
 	// This is the format of the `openshift.io/sa.scc.uid-range` annotation in
 	// OpenShift namespaces.
 	uidRangeRegexp = regexp.MustCompile(`^(\d+)/\d+`)
-	// GSMproject is the name of the GCP Secret Manager project where the secrets are stored.
-	GSMproject = "openshift-ci-secrets"
 )
 
 func (s *multiStageTestStep) createSharedDirSecret(ctx context.Context) error {
@@ -88,56 +84,51 @@ func (s *multiStageTestStep) createCredentials(ctx context.Context) error {
 // the individual steps are run to make sure the appropriate
 // SecretProviderClasses already exist and are available for the test pods.
 func (s *multiStageTestStep) createSPCs(ctx context.Context) error {
-	toCreate := map[string]*csiapi.SecretProviderClass{}
+	spcsToCreate := map[string]*csiapi.SecretProviderClass{}
 
+	logrus.Infof("Creating SPCs for actual credential usage...")
+	// Create grouped SPCs for actual credential usage
 	for _, step := range append(s.pre, append(s.test, s.post...)...) {
-		for _, credential := range step.Credentials {
-			name := fmt.Sprintf("%s-%s-spc", s.jobSpec.Namespace(), credential.Name)
-			if _, exists := toCreate[name]; exists {
-				continue
-			}
-			secret, err := getSecretString(credential.Collection, credential.Name)
+		collectionMountGroups := groupCredentialsByCollectionAndMountPath(step.Credentials)
+
+		for _, credentials := range collectionMountGroups {
+			spcName := getSPCName(s.jobSpec.Namespace(), credentials[0].Collection, credentials[0].MountPath, credentials)
+			secrets, err := buildGCPSecretsParameter(credentials)
 			if err != nil {
-				return err
+				return fmt.Errorf("could not marshal secrets for mount path %s: %w", credentials[0].MountPath, err)
 			}
-			toCreate[name] = &csiapi.SecretProviderClass{
-				TypeMeta: meta.TypeMeta{
-					Kind:       "SecretProviderClass",
-					APIVersion: csiapi.GroupVersion.String(),
-				},
-				ObjectMeta: meta.ObjectMeta{
-					Name:      name,
-					Namespace: s.jobSpec.Namespace(),
-				},
-				Spec: csiapi.SecretProviderClassSpec{
-					Provider: "gcp",
-					Parameters: map[string]string{
-						"auth":    "provider-adc",
-						"secrets": secret,
-					},
-				},
-			}
+			spcsToCreate[spcName] = buildSecretProviderClass(spcName, s.jobSpec.Namespace(), secrets)
 		}
 	}
 
-	for name := range toCreate {
-		if err := s.client.Create(ctx, toCreate[name]); err != nil && !kerrors.IsAlreadyExists(err) {
+	// Create SPCs for sidecar censoring; each credential gets its own SPC.
+	logrus.Infof("Creating SPCs for sidecar censoring...")
+	seenCredentials := make(map[string]bool)
+	for _, step := range append(s.pre, append(s.test, s.post...)...) {
+		for _, credential := range step.Credentials {
+			if seenCredentials[credential.Name] {
+				continue
+			}
+			seenCredentials[credential.Name] = true
+
+			censorMountPath := getCensorMountPath(credential.Name) //arbitrary mount path for uniqueness
+			individualCredentials := []api.CredentialReference{credential}
+			spcName := getSPCName(s.jobSpec.Namespace(), credential.Collection, censorMountPath, individualCredentials)
+
+			secrets, err := buildGCPSecretsParameter(individualCredentials)
+			if err != nil {
+				return fmt.Errorf("could not marshal secrets for censored credential %s: %w", credential.Name, err)
+			}
+			spcsToCreate[spcName] = buildSecretProviderClass(spcName, s.jobSpec.Namespace(), secrets)
+		}
+	}
+
+	for name := range spcsToCreate {
+		if err := s.client.Create(ctx, spcsToCreate[name]); err != nil && !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not create SecretProviderClass object for secret: %w", err)
 		}
 	}
 	return nil
-}
-
-func getSecretString(collection, name string) (string, error) {
-	secret := config.Secret{
-		ResourceName: fmt.Sprintf("projects/%s/secrets/%s__%s/versions/latest", GSMproject, collection, name),
-		FileName:     name, // we want to mount the secret as a file named without the collection prefix
-	}
-	y, err := yaml.Marshal([]config.Secret{secret})
-	if err != nil {
-		return "", fmt.Errorf("could not marshal secret: %w", err)
-	}
-	return string(y), nil
 }
 
 func (s *multiStageTestStep) createCommandConfigMaps(ctx context.Context) error {

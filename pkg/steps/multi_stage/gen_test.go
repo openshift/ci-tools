@@ -3,6 +3,7 @@ package multi_stage
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"testing"
 	"time"
 
@@ -396,6 +397,21 @@ func TestAddCredentials(t *testing.T) {
 	}
 }
 
+// sortPodVolumesAndMounts sorts volumes and volume mounts in a pod for deterministic comparison
+func sortPodVolumesAndMounts(pod *coreapi.Pod) {
+	// Sort volumes by name
+	sort.Slice(pod.Spec.Volumes, func(i, j int) bool {
+		return pod.Spec.Volumes[i].Name < pod.Spec.Volumes[j].Name
+	})
+
+	// Sort volume mounts by name in each container
+	for i := range pod.Spec.Containers {
+		sort.Slice(pod.Spec.Containers[i].VolumeMounts, func(j, k int) bool {
+			return pod.Spec.Containers[i].VolumeMounts[j].Name < pod.Spec.Containers[i].VolumeMounts[k].Name
+		})
+	}
+}
+
 func TestAddCSICredentials(t *testing.T) {
 	readOnly := true
 	var testCases = []struct {
@@ -412,7 +428,7 @@ func TestAddCSICredentials(t *testing.T) {
 		},
 		{
 			name:        "one to add",
-			credentials: []api.CredentialReference{{Namespace: "ns", Name: "name", MountPath: "/tmp"}},
+			credentials: []api.CredentialReference{{Collection: "ns", Name: "name", MountPath: "/tmp"}},
 			pod: coreapi.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "pod-ns",
@@ -431,20 +447,20 @@ func TestAddCSICredentials(t *testing.T) {
 						{
 							VolumeMounts: []coreapi.VolumeMount{
 								{
-									Name: "ns-name", MountPath: "/tmp",
+									Name: getCSIVolumeName("pod-ns", "ns", "/tmp"), MountPath: "/tmp",
 								},
 							},
 						},
 					},
 					Volumes: []coreapi.Volume{
 						{
-							Name: "ns-name",
+							Name: getCSIVolumeName("pod-ns", "ns", "/tmp"),
 							VolumeSource: coreapi.VolumeSource{
 								CSI: &coreapi.CSIVolumeSource{
 									Driver:   "secrets-store.csi.k8s.io",
 									ReadOnly: &readOnly,
 									VolumeAttributes: map[string]string{
-										"secretProviderClass": "pod-ns-name-spc",
+										"secretProviderClass": getSPCName("pod-ns", "ns", "/tmp", []api.CredentialReference{{Collection: "ns", Name: "name", MountPath: "/tmp"}}),
 									},
 								},
 							},
@@ -455,8 +471,8 @@ func TestAddCSICredentials(t *testing.T) {
 		{
 			name: "many to add and disambiguate",
 			credentials: []api.CredentialReference{
-				{Namespace: "ns", Name: "name1", MountPath: "/tmp"},
-				{Namespace: "other", Name: "name2", MountPath: "/tamp"},
+				{Collection: "ns", Name: "name1", MountPath: "/tmp"},
+				{Collection: "other", Name: "name2", MountPath: "/tamp"},
 			},
 			pod: coreapi.Pod{
 				ObjectMeta: metav1.ObjectMeta{
@@ -476,33 +492,33 @@ func TestAddCSICredentials(t *testing.T) {
 						{
 							VolumeMounts: []coreapi.VolumeMount{
 								{
-									Name: "ns-name1", MountPath: "/tmp"},
+									Name: getCSIVolumeName("pod-ns", "ns", "/tmp"), MountPath: "/tmp"},
 								{
-									Name: "other-name2", MountPath: "/tamp"},
+									Name: getCSIVolumeName("pod-ns", "other", "/tamp"), MountPath: "/tamp"},
 							},
 						},
 					},
 					Volumes: []coreapi.Volume{
 						{
-							Name: "ns-name1",
+							Name: getCSIVolumeName("pod-ns", "ns", "/tmp"),
 							VolumeSource: coreapi.VolumeSource{
 								CSI: &coreapi.CSIVolumeSource{
 									Driver:   "secrets-store.csi.k8s.io",
 									ReadOnly: &readOnly,
 									VolumeAttributes: map[string]string{
-										"secretProviderClass": "pod-ns-name1-spc",
+										"secretProviderClass": getSPCName("pod-ns", "ns", "/tmp", []api.CredentialReference{{Collection: "ns", Name: "name1", MountPath: "/tmp"}}),
 									},
 								},
 							},
 						},
 						{
-							Name: "other-name2",
+							Name: getCSIVolumeName("pod-ns", "other", "/tamp"),
 							VolumeSource: coreapi.VolumeSource{
 								CSI: &coreapi.CSIVolumeSource{
 									Driver:   "secrets-store.csi.k8s.io",
 									ReadOnly: &readOnly,
 									VolumeAttributes: map[string]string{
-										"secretProviderClass": "pod-ns-name2-spc",
+										"secretProviderClass": getSPCName("pod-ns", "other", "/tamp", []api.CredentialReference{{Collection: "other", Name: "name2", MountPath: "/tamp"}}),
 									},
 								},
 							},
@@ -513,7 +529,7 @@ func TestAddCSICredentials(t *testing.T) {
 		{
 			name: "dots in volume name are replaced",
 			credentials: []api.CredentialReference{
-				{Namespace: "test-ns", Name: "hive-hive-credentials", MountPath: "/tmp"},
+				{Collection: "test-ns", Name: "hive-hive-credentials", MountPath: "/tmp"},
 			},
 			pod: coreapi.Pod{
 				ObjectMeta: metav1.ObjectMeta{
@@ -530,17 +546,17 @@ func TestAddCSICredentials(t *testing.T) {
 				},
 				Spec: coreapi.PodSpec{
 					Containers: []coreapi.Container{{VolumeMounts: []coreapi.VolumeMount{
-						{Name: "test-ns-hive-hive-credentials", MountPath: "/tmp"},
+						{Name: getCSIVolumeName("pod-ns", "test-ns", "/tmp"), MountPath: "/tmp"},
 					}}},
 					Volumes: []coreapi.Volume{
 						{
-							Name: "test-ns-hive-hive-credentials",
+							Name: getCSIVolumeName("pod-ns", "test-ns", "/tmp"),
 							VolumeSource: coreapi.VolumeSource{
 								CSI: &coreapi.CSIVolumeSource{
 									Driver:   "secrets-store.csi.k8s.io",
 									ReadOnly: &readOnly,
 									VolumeAttributes: map[string]string{
-										"secretProviderClass": "pod-ns-hive-hive-credentials-spc",
+										"secretProviderClass": getSPCName("pod-ns", "test-ns", "/tmp", []api.CredentialReference{{Collection: "test-ns", Name: "hive-hive-credentials", MountPath: "/tmp"}}),
 									},
 								},
 							},
@@ -553,6 +569,11 @@ func TestAddCSICredentials(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			addCredentials(testCase.credentials, &testCase.pod, true)
+
+			// Sort volumes and mounts for deterministic comparison
+			sortPodVolumesAndMounts(&testCase.pod)
+			sortPodVolumesAndMounts(&testCase.expected)
+
 			if !equality.Semantic.DeepEqual(testCase.pod, testCase.expected) {
 				t.Errorf("%s: got incorrect Pod: %s", testCase.name, cmp.Diff(testCase.pod, testCase.expected))
 			}

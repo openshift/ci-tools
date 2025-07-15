@@ -52,6 +52,7 @@ type options struct {
 	orgFromPeribolosConfig string
 	githubUsersFile        string
 	gcpCredentialsFile     string
+	skipOCPPrivAdmin       flagutil.Strings
 }
 
 func parseOptions() *options {
@@ -68,6 +69,7 @@ func parseOptions() *options {
 	fs.StringVar(&opts.orgFromPeribolosConfig, "org-from-peribolos-config", "openshift-priv", "Org from peribolos configuration")
 	fs.StringVar(&opts.githubUsersFile, "github-users-file", "", "File used to store GitHub users.")
 	fs.StringVar(&opts.gcpCredentialsFile, "gcp-credentials-file", "", "The json file storing the gcp credentials.")
+	fs.Var(&opts.skipOCPPrivAdmin, "skip-ocp-priv-admin", "Do not create a group for this admin. Can be passed multiple times.")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse args")
 	}
@@ -96,6 +98,7 @@ func (o *options) validate() error {
 			return fmt.Errorf("--org-from-peribolos-config must be set if --peribolos-config is set")
 		}
 	}
+
 	return nil
 }
 
@@ -261,7 +264,7 @@ func main() {
 		}
 	}
 
-	groups, err := makeGroups(openshiftPrivAdmins, opts.peribolosConfig, mapping, roverGroups, config, clusters)
+	groups, err := makeGroups(openshiftPrivAdmins, opts.skipOCPPrivAdmin.StringSet(), opts.peribolosConfig, mapping, roverGroups, config, clusters)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to make groups")
 	}
@@ -305,8 +308,6 @@ type GroupClusters struct {
 	Clusters sets.Set[string]
 	Group    *userv1.Group
 }
-
-var githubRobotIds = sets.New[string]("RH-Cachito", "openshift-bot", "openshift-ci-robot", "openshift-merge-robot", "openshift-cherrypick-robot")
 
 func deleteInvalidUsers(ctx context.Context, clients map[string]ctrlruntimeclient.Client,
 	kerberosIDs sets.Set[string], ciAdmins sets.Set[string], dryRun bool) error {
@@ -376,7 +377,7 @@ func getUsersWithoutKerberosID(ctx context.Context, client ctrlruntimeclient.Cli
 	return usersWithoutKerberosID, nil
 }
 
-func makeGroups(openshiftPrivAdmins sets.Set[string], peribolosConfig string, mapping map[string]string, roverGroups map[string][]string, config *group.Config, clusters sets.Set[string]) (map[string]GroupClusters, error) {
+func makeGroups(openshiftPrivAdmins sets.Set[string], skipPrivAdmins sets.Set[string], peribolosConfig string, mapping map[string]string, roverGroups map[string][]string, config *group.Config, clusters sets.Set[string]) (map[string]GroupClusters, error) {
 	groups := map[string]GroupClusters{}
 	var errs []error
 
@@ -386,7 +387,7 @@ func makeGroups(openshiftPrivAdmins sets.Set[string], peribolosConfig string, ma
 		for _, admin := range sets.List(openshiftPrivAdmins) {
 			kerberosID, ok := mapping[admin]
 			if !ok {
-				if !githubRobotIds.Has(admin) {
+				if !skipPrivAdmins.Has(admin) {
 					ignoredOpenshiftPrivAdminNames.Insert(admin)
 				}
 				continue

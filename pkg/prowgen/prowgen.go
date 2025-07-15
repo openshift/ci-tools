@@ -129,14 +129,14 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		}
 		imagesTestName := "images"
 		jobBaseGen := newJobBaseBuilder().TestName(imagesTestName)
-		injectArchitectureLabels(jobBaseGen, configSpec.Images)
+		injectCapabilitiesForImgJobs(jobBaseGen, configSpec.Images)
 
 		jobBaseGen.PodSpec.Add(Targets(presubmitTargets...))
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, imagesTestName, info))
 
 		if configSpec.PromotionConfiguration != nil {
 			jobBaseGen = newJobBaseBuilder().TestName(imagesTestName)
-			injectArchitectureLabels(jobBaseGen, configSpec.Images)
+			injectCapabilitiesForImgJobs(jobBaseGen, configSpec.Images)
 
 			jobBaseGen.PodSpec.Add(Promotion(), Targets(imageTargets.UnsortedList()...))
 			if slackReporter := info.Config.GetSlackReporterConfigForTest(imagesTestName, configSpec.Metadata.Variant); slackReporter != nil {
@@ -398,10 +398,22 @@ func injectCapabilities(labels map[string]string, capabilities []string) {
 	}
 }
 
-func injectArchitectureLabels(g *prowJobBaseBuilder, imagesConfig []cioperatorapi.ProjectDirectoryImageBuildStepConfiguration) {
-	for _, imageConfig := range imagesConfig {
-		for _, arch := range imageConfig.AdditionalArchitectures {
-			g.WithLabel(fmt.Sprintf("capability/%s", arch), arch)
+// injectCapabilitiesForImgJobs injects capabilities for image build jobs
+// If the image build job has capabilities, it will use them and skip architecture labels
+// If the image build job does not have capabilities, it will use architecture labels
+func injectCapabilitiesForImgJobs(g *prowJobBaseBuilder, imagesConfig []cioperatorapi.ProjectDirectoryImageBuildStepConfiguration) {
+	var labels []string
+	for _, img := range imagesConfig {
+		labels = append(labels, img.Capabilities...)
+	}
+
+	if len(labels) == 0 {
+		for _, img := range imagesConfig {
+			labels = append(labels, img.AdditionalArchitectures...)
 		}
+	}
+
+	for _, lbl := range labels {
+		g.WithLabel(fmt.Sprintf("capability/%s", lbl), lbl)
 	}
 }

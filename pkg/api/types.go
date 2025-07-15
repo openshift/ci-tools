@@ -2584,6 +2584,10 @@ type ProjectDirectoryImageBuildStepConfiguration struct {
 	// Ref is an optional string linking to the extra_ref in "org.repo" format that this belongs to
 	Ref string `json:"ref,omitempty"`
 
+	// Capabilities is the list of strings that
+	// define additional capabilities needed by the test runs
+	Capabilities []string `json:"capabilities,omitempty"`
+
 	// isBundleImage indicates that this build step is a bundle image
 	isBundleImage bool
 }

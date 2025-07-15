@@ -31,22 +31,24 @@ func init() {
 
 func TestMakeGroups(t *testing.T) {
 	testCases := []struct {
-		name                string
-		openshiftPrivAdmins sets.Set[string]
-		peribolosConfig     string
-		mapping             map[string]string
-		roverGroups         map[string][]string
-		config              *group.Config
-		clusters            sets.Set[string]
-		expected            map[string]GroupClusters
-		expectedErr         error
+		name                    string
+		skipOpenshiftPrivAdmins sets.Set[string]
+		openshiftPrivAdmins     sets.Set[string]
+		peribolosConfig         string
+		mapping                 map[string]string
+		roverGroups             map[string][]string
+		config                  *group.Config
+		clusters                sets.Set[string]
+		expected                map[string]GroupClusters
+		expectedErr             error
 	}{
 		{
-			name:                "basic case",
-			peribolosConfig:     "bar",
-			openshiftPrivAdmins: sets.New[string]("a", "RH-Cachito"),
-			mapping:             map[string]string{"a": "b", "c": "c"},
-			roverGroups:         map[string][]string{"old-group-name": {"b", "c"}, "x": {"y", "y"}},
+			name:                    "basic case",
+			peribolosConfig:         "bar",
+			skipOpenshiftPrivAdmins: sets.New("RH-Cachito"),
+			openshiftPrivAdmins:     sets.New("a", "RH-Cachito"),
+			mapping:                 map[string]string{"a": "b", "c": "c"},
+			roverGroups:             map[string][]string{"old-group-name": {"b", "c"}, "x": {"y", "y"}},
 			config: &group.Config{
 				ClusterGroups: map[string][]string{"cluster-group-1": {"build01", "build02"}},
 				Groups: map[string]group.Target{
@@ -114,7 +116,7 @@ func TestMakeGroups(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, actualErr := makeGroups(tc.openshiftPrivAdmins, tc.peribolosConfig,
+			actual, actualErr := makeGroups(tc.openshiftPrivAdmins, tc.skipOpenshiftPrivAdmins, tc.peribolosConfig,
 				tc.mapping, tc.roverGroups, tc.config, tc.clusters)
 			if diff := cmp.Diff(tc.expectedErr, actualErr, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
@@ -129,7 +131,6 @@ func TestMakeGroups(t *testing.T) {
 }
 
 func TestEnsureGroups(t *testing.T) {
-
 	g01 := &userv1.Group{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   "gh01-group",

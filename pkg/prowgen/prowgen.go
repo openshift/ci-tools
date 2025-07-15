@@ -126,7 +126,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		}
 		imagesTestName := "images"
 		jobBaseGen := newJobBaseBuilder().TestName(imagesTestName)
-		injectArchitectureLabels(jobBaseGen, configSpec.Images)
+		injectCapabilitiesForImgJobs(jobBaseGen, configSpec.Images)
 
 		optional := false
 		for _, image := range configSpec.Images {
@@ -143,7 +143,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 
 		if configSpec.PromotionConfiguration != nil {
 			jobBaseGen = newJobBaseBuilder().TestName(imagesTestName)
-			injectArchitectureLabels(jobBaseGen, configSpec.Images)
+			injectCapabilitiesForImgJobs(jobBaseGen, configSpec.Images)
 
 			jobBaseGen.PodSpec.Add(Promotion(), Targets(imageTargets.UnsortedList()...))
 			// Note: Slack reporter config for images postsubmit is now handled in generatePostsubmitForTest
@@ -436,10 +436,10 @@ func injectCapabilities(labels map[string]string, capabilities []string) {
 	}
 }
 
-func injectArchitectureLabels(g *prowJobBaseBuilder, imagesConfig []cioperatorapi.ProjectDirectoryImageBuildStepConfiguration) {
-	for _, imageConfig := range imagesConfig {
-		for _, arch := range imageConfig.AdditionalArchitectures {
-			g.WithLabel(fmt.Sprintf("capability/%s", arch), arch)
+func injectCapabilitiesForImgJobs(g *prowJobBaseBuilder, imagesConfig []cioperatorapi.ProjectDirectoryImageBuildStepConfiguration) {
+	for _, img := range imagesConfig {
+		for _, c := range img.AllCapabilities() {
+			g.WithLabel(fmt.Sprintf("capability/%s", c), c)
 		}
 	}
 }

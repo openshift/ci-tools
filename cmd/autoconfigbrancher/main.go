@@ -249,7 +249,7 @@ func main() {
 		steps = append([]step{{
 			command: "/usr/bin/rebalancer",
 			arguments: []string{
-				"--profiles=aws,aws-2,aws-3",
+				"--profiles=aws,aws-2,aws-3,aws-4,aws-5",
 				"--profiles=gcp-openshift-gce-devel-ci-2,gcp,gcp-3",
 				"--prometheus-bearer-token-path=/etc/prometheus/token",
 			},

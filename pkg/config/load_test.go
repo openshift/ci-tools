@@ -138,6 +138,10 @@ func TestValidateProwgenConfig(t *testing.T) {
 						JobNames:          []string{"unit"},
 					},
 				},
+				SkipPresubmitsGeneration: SkipPresubmitsGeneration{
+					Branch: "main",
+					Variant: "4.18",
+				},
 			},
 			expected: errors.New("job: unit exists in multiple slack_reporter_configs, it should only be in one"),
 		},
@@ -159,6 +163,7 @@ func TestProwgen_GetSlackReporterConfigForTest(t *testing.T) {
 		test     string
 		variant  string
 		expected *SlackReporterConfig
+		skip     SkipPresubmitsGeneration
 	}{
 		{
 			name: "one config exists",

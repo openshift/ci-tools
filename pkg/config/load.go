@@ -39,6 +39,8 @@ type Prowgen struct {
 	Rehearsals Rehearsals `json:"rehearsals,omitempty"`
 	// SlackReporterConfigs defines all desired slack reporter info for included jobs
 	SlackReporterConfigs []SlackReporterConfig `json:"slack_reporter,omitempty"`
+	// SkipPresubmitsGeneration allow users to skip the presubmit generation for that specific variant
+	SkipPresubmitsGeneration SkipPresubmitsGeneration `json:"skip_presubmits_generation,omitempty"`
 	// EnableSecretsStoreCSIDriver indicates that jobs should use the new CSI Secrets Store
 	// mechanism to handle multi-stage credentials secrets.
 	EnableSecretsStoreCSIDriver bool `json:"enable_secrets_store_csi_driver,omitempty"`
@@ -52,6 +54,11 @@ type SlackReporterConfig struct {
 	JobNames          []string              `json:"job_names,omitempty"`
 	// ExcludedVariants lists job variants that this config will not apply to
 	ExcludedVariants []string `json:"excluded_variants,omitempty"`
+}
+
+type SkipPresubmitsGeneration struct {
+	Branch	string `json:"branch,omitempty"`
+	Variant	string `json:"variant,omitempty"`
 }
 
 func (p *Prowgen) GetSlackReporterConfigForTest(test, variant string) *SlackReporterConfig {

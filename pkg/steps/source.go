@@ -437,6 +437,10 @@ func handleFailedBuild(ctx context.Context, client BuildClient, ns, name string,
 	}
 
 	logrus.Infof("Build %s previously failed from an infrastructure error (%s), retrying...", name, b.Status.Reason)
+
+	// Remove workload from metrics watching since we're about to delete and recreate the build
+	client.MetricsAgent().RemoveNodeWorkload(name)
+
 	zero := int64(0)
 	foreground := metav1.DeletePropagationForeground
 	opts := metav1.DeleteOptions{
@@ -486,9 +490,11 @@ func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubern
 	for _, build := range builds {
 		go func(b buildapi.Build) {
 			defer wg.Done()
+			metricsAgent.AddNodeWorkload(ctx, b.Namespace, fmt.Sprintf("%s-build", b.Name), b.Name, podClient)
 			if err := handleBuild(ctx, buildClient, podClient, b); err != nil {
 				errChan <- fmt.Errorf("error occurred handling build %s: %w", b.Name, err)
 			}
+			metricsAgent.RemoveNodeWorkload(b.Name)
 		}(build)
 	}
 
@@ -557,6 +563,8 @@ func handleBuild(ctx context.Context, client BuildClient, podClient kubernetes.P
 		} else {
 			return false, fmt.Errorf("could not create build %s: %w", name, err)
 		}
+
+		client.MetricsAgent().AddNodeWorkload(ctx, ns, fmt.Sprintf("%s-build", name), name, podClient)
 		if err := waitForBuildOrTimeout(ctx, client, podClient, ns, name); err != nil {
 			errs = append(errs, err)
 			return false, handleFailedBuild(ctx, client, ns, name, err)

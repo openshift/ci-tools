@@ -193,6 +193,7 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/stretchr/testify v1.10.0
 	gopkg.in/evanphx/json-patch.v5 v5.9.0
+	k8s.io/metrics v0.32.0
 	sigs.k8s.io/boskos v0.0.0-20240624145324-1e4de26c366a
 	sigs.k8s.io/prow v0.0.0-20250606085439-e2a3dbcc96af
 )

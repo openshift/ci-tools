@@ -24,6 +24,7 @@ import (
 	buildv1 "github.com/openshift/api/build/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 	testhelper_kube "github.com/openshift/ci-tools/pkg/testhelper/kubernetes"
@@ -491,7 +492,7 @@ func TestWaitForBuild(t *testing.T) {
 							CompletionTimestamp: &end,
 						},
 					},
-				).Build()), nil, nil, "", ""),
+				).Build()), nil, nil, "", "", nil),
 			expected: fmt.Errorf("build didn't start running within 0s (phase: Pending)"),
 		},
 		{
@@ -520,7 +521,7 @@ func TestWaitForBuild(t *testing.T) {
 							Namespace: ns,
 						},
 					},
-				).Build()), nil, nil, "", ""),
+				).Build()), nil, nil, "", "", nil),
 			expected: fmt.Errorf("build didn't start running within 0s (phase: Pending):\nFound 0 events for Pod some-build-build:"),
 		},
 		{
@@ -561,7 +562,7 @@ func TestWaitForBuild(t *testing.T) {
 							}},
 						},
 					},
-				).Build()), nil, nil, "", ""),
+				).Build()), nil, nil, "", "", nil),
 			expected: fmt.Errorf(`build didn't start running within 0s (phase: Pending):
 * Container the-container is not ready with reason the_reason and message the_message
 Found 0 events for Pod some-build-build:`),
@@ -580,7 +581,7 @@ Found 0 events for Pod some-build-build:`),
 						StartTimestamp:      &start,
 						CompletionTimestamp: &end,
 					},
-				}).Build()), nil, nil, "", ""),
+				}).Build()), nil, nil, "", "", nil),
 			timeout: 30 * time.Minute,
 		},
 		{
@@ -624,7 +625,7 @@ Found 0 events for Pod some-build-build:`),
 							Time: now.Add(-59 * time.Minute),
 						},
 					},
-				}).Build()), nil, nil, "", ""),
+				}).Build()), nil, nil, "", "", nil),
 			timeout: 30 * time.Minute,
 		},
 		{
@@ -804,6 +805,8 @@ func (c *fakeBuildClient) ManifestToolDockerCfg() string {
 func (c *fakeBuildClient) LocalRegistryDNS() string {
 	return ""
 }
+
+func (c *fakeBuildClient) MetricsAgent() *metrics.MetricsAgent { return nil }
 
 func Test_constructMultiArchBuilds(t *testing.T) {
 	tests := []struct {

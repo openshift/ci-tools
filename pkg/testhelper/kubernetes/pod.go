@@ -18,6 +18,7 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/kubernetes"
+	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/util"
 )
@@ -124,6 +125,10 @@ func (*FakePodClient) GetLogs(string, string, *coreapi.PodLogOptions) *rest.Requ
 
 func (f *FakePodClient) WithNewLoggingClient() kubernetes.PodClient {
 	return f
+}
+
+func (f *FakePodClient) MetricsAgent() *metrics.MetricsAgent {
+	return nil
 }
 
 type testExecutor struct {

@@ -315,10 +315,11 @@ func TestEnsureGroups(t *testing.T) {
 			name: "invalid group: duplicate members",
 			clients: map[string]ctrlruntimeclient.Client{
 				"b01": fakeclient.NewClientBuilder().Build(),
+				"b02": fakeclient.NewClientBuilder().Build(),
 			},
 			groups: map[string]GroupClusters{
 				"gh01-group": {
-					Clusters: sets.New[string]("b01", "b02"),
+					Clusters: sets.New("b01", "b02"),
 					Group: &userv1.Group{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:   "gh01-group",
@@ -331,6 +332,26 @@ func TestEnsureGroups(t *testing.T) {
 			dryRun: true,
 			expected: kerrors.NewAggregate([]error{fmt.Errorf("attempt to create invalid group gh01-group on cluster b01: duplicate member: a"),
 				fmt.Errorf("attempt to create invalid group gh01-group on cluster b02: duplicate member: a")}),
+		},
+		{
+			name: "cluster client not available",
+			clients: map[string]ctrlruntimeclient.Client{
+				"b01": fakeclient.NewClientBuilder().Build(),
+			},
+			groups: map[string]GroupClusters{
+				"gh01-group": {
+					Clusters: sets.New("b02"),
+					Group: &userv1.Group{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:   "gh01-group",
+							Labels: map[string]string{api.DPTPRequesterLabel: toolName},
+						},
+						Users: userv1.OptionalNames{"a"},
+					},
+				},
+			},
+			dryRun:   true,
+			expected: kerrors.NewAggregate([]error{fmt.Errorf(`client for cluster "b02" is unavailable`)}),
 		},
 	}
 

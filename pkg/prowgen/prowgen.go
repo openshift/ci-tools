@@ -256,7 +256,7 @@ type generatePresubmitOptions struct {
 }
 
 func (opts *generatePresubmitOptions) shouldAlwaysRun() bool {
-	return opts.runIfChanged == "" && opts.skipIfOnlyChanged == "" && !opts.defaultDisable && opts.pipelineRunIfChanged == "" && !opts.optional
+	return opts.runIfChanged == "" && opts.skipIfOnlyChanged == "" && !opts.defaultDisable && opts.pipelineRunIfChanged == ""
 }
 
 type generatePresubmitOption func(options *generatePresubmitOptions)

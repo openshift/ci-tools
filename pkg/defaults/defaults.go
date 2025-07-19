@@ -92,7 +92,7 @@ func FromConfig(
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not get build client for cluster config: %w", err)
 	}
-	buildClient := steps.NewBuildClient(client, buildGetter.RESTClient(), nodeArchitectures, manifestToolDockerCfg, localRegistryDNS)
+	buildClient := steps.NewBuildClient(client, buildGetter.RESTClient(), nodeArchitectures, manifestToolDockerCfg, localRegistryDNS, metricsAgent)
 
 	templateGetter, err := templateclientset.NewForConfig(clusterConfig)
 	if err != nil {
@@ -105,7 +105,7 @@ func FromConfig(
 		return nil, nil, fmt.Errorf("could not get core client for cluster config: %w", err)
 	}
 
-	podClient := kubernetes.NewPodClient(client, clusterConfig, coreGetter.RESTClient(), podPendingTimeout)
+	podClient := kubernetes.NewPodClient(client, clusterConfig, coreGetter.RESTClient(), podPendingTimeout, metricsAgent)
 
 	var hiveClient ctrlruntimeclient.WithWatch
 	if hiveKubeconfig != nil {

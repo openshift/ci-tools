@@ -259,7 +259,7 @@ func main() {
 		kerberosIds.Insert(kerberosId)
 	}
 	if opts.deleteInvalidUsers {
-		if err := deleteInvalidUsers(ctx, clients, kerberosIds, sets.New[string](ciAdmins...), opts.dryRun); err != nil {
+		if err := deleteInvalidUsers(ctx, clients, kerberosIds, sets.New(ciAdmins...), opts.dryRun); err != nil {
 			logrus.WithError(err).Fatal("Failed to delete users")
 		}
 	}
@@ -269,7 +269,7 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to make groups")
 	}
 
-	if err := ensureGroups(ctx, clients, groups, opts.maxConcurrency, opts.dryRun, sets.New[string](prowDisabledClusters...)); err != nil {
+	if err := ensureGroups(ctx, clients, groups, opts.maxConcurrency, opts.dryRun, sets.New(prowDisabledClusters...)); err != nil {
 		logrus.WithError(err).Fatal("could not ensure groups")
 	}
 }
@@ -521,10 +521,20 @@ func ensureGroups(ctx context.Context, clients map[string]ctrlruntimeclient.Clie
 					Debug("Skipping handling groups for a cluster that is disabled by Prow")
 				continue
 			}
+
+			clusterClient, ok := clients[cluster]
+			if !ok {
+				errLock.Lock()
+				errs = append(errs, fmt.Errorf("client for cluster %q is unavailable", cluster))
+				errLock.Unlock()
+				continue
+			}
+
 			group := groupClusters.Group.DeepCopy()
 			if err := sem.Acquire(ctx, 1); err != nil {
 				return fmt.Errorf("failed to acquire semaphore: %w", err)
 			}
+
 			go func(cluster string, client ctrlruntimeclient.Client, group *userv1.Group) {
 				defer sem.Release(1)
 				if err := handleGroup(cluster, client, group); err != nil {
@@ -532,7 +542,7 @@ func ensureGroups(ctx context.Context, clients map[string]ctrlruntimeclient.Clie
 					errs = append(errs, err)
 					errLock.Unlock()
 				}
-			}(cluster, clients[cluster], group)
+			}(cluster, clusterClient, group)
 		}
 	}
 

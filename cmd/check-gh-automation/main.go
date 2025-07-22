@@ -358,6 +358,21 @@ func gatherModifiedRepos(releaseRepoPath string, logger *logrus.Entry) []string 
 		orgRepos.Insert(fmt.Sprintf("%s/%s", split[0], split[1]))
 	}
 
+	// Check for Prow config changes that would require Tide access
+	prowConfigs, err := config.GetAddedProwConfigs(releaseRepoPath, jobSpec.Refs.BaseSHA)
+	if err != nil {
+		logger.WithError(err).Debug("Could not check for Prow config changes, continuing without them")
+	} else {
+		for _, filePath := range prowConfigs {
+			if strings.HasSuffix(filePath, "_prowconfig.yaml") {
+				pathParts := strings.Split(filePath, "/")
+				if len(pathParts) >= 6 {
+					orgRepos.Insert(fmt.Sprintf("%s/%s", pathParts[4], pathParts[5]))
+				}
+			}
+		}
+	}
+
 	if orgRepos.Len() > maxRepos {
 		logger.Warnf("Found %d repos, which is more than we will check for a PR. It is likely that this PR is a config update on many repos, and doesn't need to be checked.", orgRepos.Len())
 		return []string{}

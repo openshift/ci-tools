@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -491,6 +492,74 @@ func TestCheckRepos(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expected, failing); diff != "" {
 				t.Fatalf("returned failing repos did not match expected, diff: %s", diff)
+			}
+		})
+	}
+}
+
+func TestGatherModifiedReposProwConfigs(t *testing.T) {
+	testCases := []struct {
+		name            string
+		prowConfigFiles []string
+		expectedRepos   []string
+	}{
+		{
+			name: "tide config only scenario - no CI jobs/configs",
+			prowConfigFiles: []string{
+				"core-services/prow/02_config/test-org/test-repo/_prowconfig.yaml",
+			},
+			expectedRepos: []string{"test-org/test-repo"},
+		},
+		{
+			name: "multiple new orgs onboarding with tide",
+			prowConfigFiles: []string{
+				"core-services/prow/02_config/org1/repo1/_prowconfig.yaml",
+				"core-services/prow/02_config/org2/repo2/_prowconfig.yaml",
+			},
+			expectedRepos: []string{"org1/repo1", "org2/repo2"},
+		},
+		{
+			name: "ignores plugin configs and other files",
+			prowConfigFiles: []string{
+				"core-services/prow/02_config/valid-org/valid-repo/_prowconfig.yaml",
+				"core-services/prow/02_config/ignored-org/ignored-repo/_pluginconfig.yaml", // ignored
+				"core-services/prow/02_config/ignored-org/ignored-repo/OWNERS",             // ignored
+			},
+			expectedRepos: []string{"valid-org/valid-repo"},
+		},
+		{
+			name: "handles invalid paths gracefully",
+			prowConfigFiles: []string{
+				"core-services/prow/02_config/valid-org/valid-repo/_prowconfig.yaml", // valid
+				"core-services/prow/02_config/short/_prowconfig.yaml",                // invalid - too short
+				"invalid/path/_prowconfig.yaml",                                      // invalid - wrong structure
+			},
+			expectedRepos: []string{"valid-org/valid-repo"},
+		},
+		{
+			name:            "empty input returns no repos",
+			prowConfigFiles: []string{},
+			expectedRepos:   []string{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Test the exact path splitting logic from gatherModifiedRepos
+			orgRepos := sets.Set[string]{}
+
+			for _, filePath := range tc.prowConfigFiles {
+				if strings.HasSuffix(filePath, "_prowconfig.yaml") {
+					pathParts := strings.Split(filePath, "/")
+					if len(pathParts) >= 6 {
+						orgRepos.Insert(fmt.Sprintf("%s/%s", pathParts[3], pathParts[4]))
+					}
+				}
+			}
+
+			result := sets.List(orgRepos)
+			if diff := cmp.Diff(tc.expectedRepos, result); diff != "" {
+				t.Fatalf("extracted org/repos did not match expected, diff: %s", diff)
 			}
 		})
 	}

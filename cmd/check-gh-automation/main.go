@@ -367,7 +367,7 @@ func gatherModifiedRepos(releaseRepoPath string, logger *logrus.Entry) []string 
 			if strings.HasSuffix(filePath, "_prowconfig.yaml") {
 				pathParts := strings.Split(filePath, "/")
 				if len(pathParts) >= 6 {
-					orgRepos.Insert(fmt.Sprintf("%s/%s", pathParts[4], pathParts[5]))
+					orgRepos.Insert(fmt.Sprintf("%s/%s", pathParts[3], pathParts[4]))
 				}
 			}
 		}

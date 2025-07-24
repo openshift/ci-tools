@@ -231,7 +231,7 @@ func TestDatabaseIndex(t *testing.T) {
 			if err := yaml.Unmarshal(rawImageStreamTag, ist); err != nil {
 				t.Fatalf("failed to unmarshal imagestreamTag: %v", err)
 			}
-			actual, actualErr := databaseIndex(NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithObjects(ist, image).Build()), nil, nil, "", ""),
+			actual, actualErr := databaseIndex(NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithObjects(ist, image).Build()), nil, nil, "", "", nil),
 				testCase.isTagName, "ns")
 			if diff := cmp.Diff(testCase.expectedErr, actualErr, testhelper.EquateErrorMessage); diff != "" {
 				t.Fatalf("actual did not match expected, diff: %s", diff)

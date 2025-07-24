@@ -9,6 +9,7 @@ import (
 	buildapi "github.com/openshift/api/build/v1"
 	"github.com/openshift/client-go/build/clientset/versioned/scheme"
 
+	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 )
 
@@ -18,6 +19,7 @@ type BuildClient interface {
 	NodeArchitectures() []string
 	ManifestToolDockerCfg() string
 	LocalRegistryDNS() string
+	MetricsAgent() *metrics.MetricsAgent
 }
 
 type buildClient struct {
@@ -26,15 +28,17 @@ type buildClient struct {
 	nodeArchitectures     []string
 	manifestToolDockerCfg string
 	localRegistryDNS      string
+	metricsAgent          *metrics.MetricsAgent
 }
 
-func NewBuildClient(client loggingclient.LoggingClient, restClient rest.Interface, nodeArchitectures []string, manifestToolDockerCfg, localRegistryDNS string) BuildClient {
+func NewBuildClient(client loggingclient.LoggingClient, restClient rest.Interface, nodeArchitectures []string, manifestToolDockerCfg, localRegistryDNS string, metricsAgent *metrics.MetricsAgent) BuildClient {
 	return &buildClient{
 		LoggingClient:         client,
 		client:                restClient,
 		nodeArchitectures:     nodeArchitectures,
 		manifestToolDockerCfg: manifestToolDockerCfg,
 		localRegistryDNS:      localRegistryDNS,
+		metricsAgent:          metricsAgent,
 	}
 }
 
@@ -58,4 +62,8 @@ func (c *buildClient) ManifestToolDockerCfg() string {
 
 func (c *buildClient) LocalRegistryDNS() string {
 	return c.localRegistryDNS
+}
+
+func (c *buildClient) MetricsAgent() *metrics.MetricsAgent {
+	return c.metricsAgent
 }

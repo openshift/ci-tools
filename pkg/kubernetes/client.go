@@ -19,6 +19,7 @@ import (
 	toolswatch "k8s.io/client-go/tools/watch"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 )
 
@@ -77,14 +78,16 @@ type PodClient interface {
 	WithNewLoggingClient() PodClient
 	Exec(namespace, pod string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error)
 	GetLogs(namespace, name string, opts *coreapi.PodLogOptions) *rest.Request
+	MetricsAgent() *metrics.MetricsAgent
 }
 
-func NewPodClient(ctrlclient loggingclient.LoggingClient, config *rest.Config, client rest.Interface, pendingTimeout time.Duration) PodClient {
+func NewPodClient(ctrlclient loggingclient.LoggingClient, config *rest.Config, client rest.Interface, pendingTimeout time.Duration, metricsAgent *metrics.MetricsAgent) PodClient {
 	return &podClient{
 		LoggingClient:  ctrlclient,
 		config:         config,
 		client:         client,
 		pendingTimeout: pendingTimeout,
+		metricsAgent:   metricsAgent,
 	}
 }
 
@@ -93,6 +96,7 @@ type podClient struct {
 	config         *rest.Config
 	client         rest.Interface
 	pendingTimeout time.Duration
+	metricsAgent   *metrics.MetricsAgent
 }
 
 func (c podClient) GetPendingTimeout() time.Duration { return c.pendingTimeout }
@@ -113,4 +117,8 @@ func (c podClient) GetLogs(namespace, name string, opts *coreapi.PodLogOptions) 
 func (c podClient) WithNewLoggingClient() PodClient {
 	c.LoggingClient = c.New()
 	return c
+}
+
+func (c podClient) MetricsAgent() *metrics.MetricsAgent {
+	return c.metricsAgent
 }

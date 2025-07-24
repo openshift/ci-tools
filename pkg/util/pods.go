@@ -121,6 +121,11 @@ func WaitForPodCompletion(ctx context.Context, podClient kubernetes.PodClient, n
 	if notifier == nil {
 		notifier = NopNotifier
 	}
+
+	metricsAgent := podClient.MetricsAgent()
+	metricsAgent.AddNodeWorkload(ctx, namespace, name, name, podClient)
+	defer metricsAgent.RemoveNodeWorkload(name)
+
 	ctxDone := ctx.Done()
 	notifierDone := notifier.Done(name)
 	completed := make(map[string]time.Time)

@@ -260,12 +260,12 @@ func main() {
 	}
 
 	ctx := context.TODO()
-	metricsClient, err := ctrlruntimeclient.New(opt.clusterConfig, ctrlruntimeclient.Options{})
+	opt.metricsAgent, err = metrics.NewMetricsAgent(ctx, opt.clusterConfig)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create the metrics client")
+		logrus.WithError(err).Error("Failed to create metrics agent...Skipping metrics.")
+	} else {
+		go opt.metricsAgent.Run()
 	}
-	opt.metricsAgent = metrics.NewMetricsAgent(ctx, metricsClient)
-	go opt.metricsAgent.Run()
 
 	opt.metricsAgent.Record(
 		&metrics.InsightsEvent{

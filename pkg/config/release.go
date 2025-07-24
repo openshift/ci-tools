@@ -259,6 +259,10 @@ func GetAddedConfigs(path, baseRev string) ([]string, error) {
 	return getRevChanges(path, CiopConfigInRepoPath, baseRev, true)
 }
 
+func GetAddedProwConfigs(path, baseRev string) ([]string, error) {
+	return getRevChanges(path, "core-services/prow/02_config", baseRev, true)
+}
+
 // getRevChanges returns the name and a hash of the contents of files under
 // `path` that were added/modified since revision `base` in the repository at
 // `root`.  Paths are relative to `root`.

@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -356,6 +357,22 @@ func gatherModifiedRepos(releaseRepoPath string, logger *logrus.Entry) []string 
 		}
 
 		orgRepos.Insert(fmt.Sprintf("%s/%s", split[0], split[1]))
+	}
+
+	// Check for Prow config changes that would require Tide access
+	prowConfigs, err := config.GetAddedProwConfigs(releaseRepoPath, jobSpec.Refs.BaseSHA)
+	if err != nil {
+		logger.WithError(err).Debug("Could not check for Prow config changes, continuing without them")
+	} else {
+		prowConfigRegex := regexp.MustCompile(`core-services/prow/02_config/(?P<org>.+)/(?P<repo>.+)/_prowconfig\.yaml`)
+		for _, filePath := range prowConfigs {
+			matches := prowConfigRegex.FindStringSubmatch(filePath)
+			if matches != nil {
+				org := matches[prowConfigRegex.SubexpIndex("org")]
+				repo := matches[prowConfigRegex.SubexpIndex("repo")]
+				orgRepos.Insert(fmt.Sprintf("%s/%s", org, repo))
+			}
+		}
 	}
 
 	if orgRepos.Len() > maxRepos {

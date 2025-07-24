@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -363,12 +364,13 @@ func gatherModifiedRepos(releaseRepoPath string, logger *logrus.Entry) []string 
 	if err != nil {
 		logger.WithError(err).Debug("Could not check for Prow config changes, continuing without them")
 	} else {
+		prowConfigRegex := regexp.MustCompile(`core-services/prow/02_config/(?P<org>.+)/(?P<repo>.+)/_prowconfig\.yaml`)
 		for _, filePath := range prowConfigs {
-			if strings.HasSuffix(filePath, "_prowconfig.yaml") {
-				pathParts := strings.Split(filePath, "/")
-				if len(pathParts) >= 6 {
-					orgRepos.Insert(fmt.Sprintf("%s/%s", pathParts[3], pathParts[4]))
-				}
+			matches := prowConfigRegex.FindStringSubmatch(filePath)
+			if matches != nil {
+				org := matches[prowConfigRegex.SubexpIndex("org")]
+				repo := matches[prowConfigRegex.SubexpIndex("repo")]
+				orgRepos.Insert(fmt.Sprintf("%s/%s", org, repo))
 			}
 		}
 	}

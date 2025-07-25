@@ -6,6 +6,7 @@ bitbucket.org/creachadair/stringset
 cel.dev/expr
 # cloud.google.com/go v0.116.0
 ## explicit; go 1.21
+cloud.google.com/go
 cloud.google.com/go/civil
 cloud.google.com/go/internal
 cloud.google.com/go/internal/detect
@@ -47,7 +48,25 @@ cloud.google.com/go/compute/metadata
 # cloud.google.com/go/iam v1.3.0
 ## explicit; go 1.21
 cloud.google.com/go/iam
+cloud.google.com/go/iam/admin/apiv1
+cloud.google.com/go/iam/admin/apiv1/adminpb
 cloud.google.com/go/iam/apiv1/iampb
+cloud.google.com/go/iam/internal
+# cloud.google.com/go/longrunning v0.6.3
+## explicit; go 1.21
+cloud.google.com/go/longrunning
+cloud.google.com/go/longrunning/autogen
+cloud.google.com/go/longrunning/autogen/longrunningpb
+# cloud.google.com/go/resourcemanager v1.10.2
+## explicit; go 1.21
+cloud.google.com/go/resourcemanager/apiv3
+cloud.google.com/go/resourcemanager/apiv3/resourcemanagerpb
+cloud.google.com/go/resourcemanager/internal
+# cloud.google.com/go/secretmanager v1.14.2
+## explicit; go 1.21
+cloud.google.com/go/secretmanager/apiv1
+cloud.google.com/go/secretmanager/apiv1/secretmanagerpb
+cloud.google.com/go/secretmanager/internal
 # cloud.google.com/go/storage v1.43.0
 ## explicit; go 1.20
 cloud.google.com/go/storage
@@ -882,6 +901,7 @@ github.com/googleapis/gax-go/v2/callctx
 github.com/googleapis/gax-go/v2/internal
 github.com/googleapis/gax-go/v2/internallog
 github.com/googleapis/gax-go/v2/internallog/internal
+github.com/googleapis/gax-go/v2/iterator
 # github.com/gorilla/handlers v1.5.2
 ## explicit; go 1.20
 # github.com/gorilla/websocket v1.5.1
@@ -1621,6 +1641,7 @@ google.golang.org/api/transport/grpc
 google.golang.org/api/transport/http
 # google.golang.org/genproto v0.0.0-20241209162323-e6fa225c2576
 ## explicit; go 1.21
+google.golang.org/genproto/googleapis/cloud/location
 google.golang.org/genproto/googleapis/type/date
 google.golang.org/genproto/googleapis/type/expr
 # google.golang.org/genproto/googleapis/api v0.0.0-20250218202821-56aae31c358a

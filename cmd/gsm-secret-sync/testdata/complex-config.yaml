@@ -1,0 +1,47 @@
+cluster_groups:
+  build-farm:
+  - app.ci
+  - build01
+  - build02
+  - build03
+  - build04
+  - build05
+  - build06
+  - build07
+  - build09
+  - build10
+  - build11
+  - core-ci
+  - vsphere02
+  dp-managed:
+  - build01
+  - build02
+groups:
+  team-alpha:
+    clusters:
+    - app.ci
+    secret_collections:
+    - alpha-secrets
+  team-beta:
+    secret_collections:
+    - beta-delta-secrets
+  random-group:
+    clusters:
+    - app.ci
+    - build01
+    rename_to: some-other-name
+  team-gamma:
+    cluster_groups:
+    - dp-managed
+  team-delta:
+    cluster_groups:
+    - dp-managed
+    secret_collections:
+    - beta-delta-secrets
+  team-epsilon:
+    clusters:
+    - app.ci
+    - build01
+    rename_to: yet-another-name
+    secret_collections:
+    - epsilon-secrets

@@ -1,0 +1,9 @@
+- Collection: alpha-secrets
+  DisplayName: alpha-secrets-updater
+  Email: alpha-secrets-updater@openshift-ci-secrets.iam.gserviceaccount.com
+- Collection: beta-delta-secrets
+  DisplayName: beta-delta-secrets-updater
+  Email: beta-delta-secrets-updater@openshift-ci-secrets.iam.gserviceaccount.com
+- Collection: epsilon-secrets
+  DisplayName: epsilon-secrets-updater
+  Email: epsilon-secrets-updater@openshift-ci-secrets.iam.gserviceaccount.com

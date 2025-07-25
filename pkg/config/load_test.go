@@ -273,3 +273,63 @@ func TestProwgen_GetSlackReporterConfigForTest(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateProwgenSkipOperatorPresubmits(t *testing.T) {
+	testCases := []struct {
+		name     string
+		pConfig  *Prowgen
+		branch   string
+		variant  string
+		expected bool
+	}{
+		{
+			name: "skipping operator presubmits, exactly match",
+			pConfig: &Prowgen{
+				SkipOperatorPresubmits: []SkipOperatorPresubmits{
+					{
+						Branch:  "main",
+						Variant: "4.18",
+					},
+					{
+						Branch:  "dev",
+						Variant: "4.19",
+					},
+				},
+			},
+			branch:   "main",
+			variant:  "4.18",
+			expected: true,
+		},
+		{
+			name: "generating operator presubmits, mismatch branches",
+			pConfig: &Prowgen{
+				SkipOperatorPresubmits: []SkipOperatorPresubmits{
+					{
+						Branch:  "dev",
+						Variant: "4.18",
+					},
+				},
+			},
+			branch:   "main",
+			variant:  "4.18",
+			expected: false,
+		},
+		{
+			name:     "skipping operator presubmits, empty values",
+			pConfig:  &Prowgen{},
+			branch:   "main",
+			variant:  "4.19",
+			expected: false,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.pConfig.SkipOperatorPresubmits != nil {
+				skip := tc.pConfig.SkipPresubmits(tc.branch, tc.variant)
+				if skip != tc.expected {
+					t.Fatalf("result doesn't match, expected %v, received %v", tc.expected, skip)
+				}
+			}
+		})
+	}
+}

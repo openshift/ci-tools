@@ -18,6 +18,9 @@ slack_reporter:
   report_template: ':failed: Job *{{.Spec.Job}}* ended with *{{.Status.State}}*. <{{.Status.URL}}|View logs> {{end}}'
   job_names:
   - images
+skip_operator_presubmits:
+- branch: release-4.19
+  variant: periodics
 ```
 
 Most of the time, Prowgen will overwrite configurations on `openshift/ci-operator/jobs/` with the ones

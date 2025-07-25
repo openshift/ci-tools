@@ -439,6 +439,15 @@ func TestDetermineClusterForJob(t *testing.T) {
 			expected: "vsphere02",
 		},
 		{
+			name:   "Vsphere job not on vsphere02 with profile",
+			config: &configWithBuildFarmWithJobs,
+			jobBase: config.JobBase{Agent: "kubernetes", Name: "yalayala-vsphere", Labels: map[string]string{
+				api.CloudClusterProfileLabel: string(api.ClusterProfileVSphereElasticPoc),
+			}},
+			expected:               "api.ci",
+			expectedCanBeRelocated: true,
+		},
+		{
 			name:   "applyconfig job for vsphere",
 			config: &configWithBuildFarmWithJobs,
 			jobBase: config.JobBase{Agent: "kubernetes", Name: "pull-ci-openshift-release-master-vsphere-dry", Spec: &v1.PodSpec{

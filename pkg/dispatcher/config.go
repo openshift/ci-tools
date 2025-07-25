@@ -147,9 +147,23 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 	if jobBase.Agent != "kubernetes" && jobBase.Agent != "" {
 		return "", false, nil
 	}
+
 	if strings.Contains(jobBase.Name, "vsphere") && !isApplyConfigJob(jobBase) {
-		return api.ClusterVSphere02, false, nil
+		// TODO: remove this once we confirm we can move to generic build cluster
+		var vSphereNoVSphere02 bool
+		if jobBase.Labels != nil {
+			clusterProfile, found := jobBase.Labels[api.CloudClusterProfileLabel]
+			if found {
+				vSphereNoVSphere02 = clusterProfile == "vsphere-elastic-poc"
+				mayBeRelocated = vSphereNoVSphere02
+			}
+		}
+
+		if !vSphereNoVSphere02 {
+			return api.ClusterVSphere02, false, nil
+		}
 	}
+
 	if isSSHBastionJob(jobBase) && config.SSHBastion != "" {
 		return config.SSHBastion, false, nil
 	}

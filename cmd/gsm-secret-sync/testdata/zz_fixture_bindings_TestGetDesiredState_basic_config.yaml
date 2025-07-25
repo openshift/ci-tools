@@ -1,0 +1,80 @@
+- condition:
+    description: 'Managed by test platform: Read access to secrets in collection-alpha
+      collection'
+    expression: |-
+      (
+        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
+        resource.type == "secretmanager.googleapis.com/Secret"
+      ) && (
+        resource.name.extract("secrets/{secret}") == "collection-alpha__updater-service-account" ||
+        resource.name.extract("secrets/{secret}") == "collection-alpha____index"
+      )
+    title: Read access to secrets for collection-alpha
+  members:
+  - group:team-alpha@redhat.com
+  - serviceAccount:collection-alpha-updater@openshift-ci-secrets.iam.gserviceaccount.com
+  role: projects/openshift-ci-secrets/roles/openshift_ci_secrets_viewer
+- condition:
+    description: 'Managed by test platform: Create, update, and delete access to secrets
+      in collection-alpha collection'
+    expression: "(\n  resource.type == \"secretmanager.googleapis.com/SecretVersion\"
+      ||\n  resource.type == \"secretmanager.googleapis.com/Secret\"\n) && \n  resource.name.extract(\"secrets/{secret}\").startsWith(\"collection-alpha__\")"
+    title: Create, update, and delete access for collection-alpha
+  members:
+  - group:team-alpha@redhat.com
+  - serviceAccount:collection-alpha-updater@openshift-ci-secrets.iam.gserviceaccount.com
+  role: projects/openshift-ci-secrets/roles/openshift_ci_secrets_updater
+- condition:
+    description: 'Managed by test platform: Read access to secrets in collection-beta
+      collection'
+    expression: |-
+      (
+        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
+        resource.type == "secretmanager.googleapis.com/Secret"
+      ) && (
+        resource.name.extract("secrets/{secret}") == "collection-beta__updater-service-account" ||
+        resource.name.extract("secrets/{secret}") == "collection-beta____index"
+      )
+    title: Read access to secrets for collection-beta
+  members:
+  - group:team-beta@redhat.com
+  - serviceAccount:collection-beta-updater@openshift-ci-secrets.iam.gserviceaccount.com
+  role: projects/openshift-ci-secrets/roles/openshift_ci_secrets_viewer
+- condition:
+    description: 'Managed by test platform: Create, update, and delete access to secrets
+      in collection-beta collection'
+    expression: "(\n  resource.type == \"secretmanager.googleapis.com/SecretVersion\"
+      ||\n  resource.type == \"secretmanager.googleapis.com/Secret\"\n) && \n  resource.name.extract(\"secrets/{secret}\").startsWith(\"collection-beta__\")"
+    title: Create, update, and delete access for collection-beta
+  members:
+  - group:team-beta@redhat.com
+  - serviceAccount:collection-beta-updater@openshift-ci-secrets.iam.gserviceaccount.com
+  role: projects/openshift-ci-secrets/roles/openshift_ci_secrets_updater
+- condition:
+    description: 'Managed by test platform: Read access to secrets in shared-collection
+      collection'
+    expression: |-
+      (
+        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
+        resource.type == "secretmanager.googleapis.com/Secret"
+      ) && (
+        resource.name.extract("secrets/{secret}") == "shared-collection__updater-service-account" ||
+        resource.name.extract("secrets/{secret}") == "shared-collection____index"
+      )
+    title: Read access to secrets for shared-collection
+  members:
+  - group:team-alpha@redhat.com
+  - group:team-beta@redhat.com
+  - serviceAccount:shared-collection-updater@openshift-ci-secrets.iam.gserviceaccount.com
+  role: projects/openshift-ci-secrets/roles/openshift_ci_secrets_viewer
+- condition:
+    description: 'Managed by test platform: Create, update, and delete access to secrets
+      in shared-collection collection'
+    expression: "(\n  resource.type == \"secretmanager.googleapis.com/SecretVersion\"
+      ||\n  resource.type == \"secretmanager.googleapis.com/Secret\"\n) && \n  resource.name.extract(\"secrets/{secret}\").startsWith(\"shared-collection__\")"
+    title: Create, update, and delete access for shared-collection
+  members:
+  - group:team-alpha@redhat.com
+  - group:team-beta@redhat.com
+  - serviceAccount:shared-collection-updater@openshift-ci-secrets.iam.gserviceaccount.com
+  role: projects/openshift-ci-secrets/roles/openshift_ci_secrets_updater

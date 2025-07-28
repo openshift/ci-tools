@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/ocplifecycle"
 	"github.com/openshift/ci-tools/pkg/api/shardprowconfig"
 	"github.com/openshift/ci-tools/pkg/config"
@@ -28,12 +29,16 @@ type options struct {
 	excludedReposFile              string
 	currentOCPVersion              string
 	reposGuardedByAckCriticalFixes string
+	verifiedOptInFile              string
+	verifiedOptOutFile             string
+	ciOperatorConfigDir            string
 }
 
 const (
 	branching              = "branching"
 	preGeneralAvailability = "pre-general-availability"
 	GeneralAvailability    = "general-availability"
+	verified               = "verified"
 	staffEngApproved       = "staff-eng-approved"
 	backportRiskAssessed   = "backport-risk-assessed"
 	qeApproved             = "qe-approved"
@@ -55,10 +60,13 @@ func gatherOptions() (*options, error) {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&o.prowConfigDir, "prow-config-dir", "", "Path to the Prow configuration directory.")
 	fs.StringVar(&o.shardedProwConfigBaseDir, "sharded-prow-config-base-dir", "", "Basedir for the sharded prow config. If set, org and repo-specific config will get removed from the main prow config and written out in an org/repo tree below the base dir.")
-	fs.StringVar(&o.lifecyclePhase, "lifecycle-phase", "", "Lifecycle phase, one of: branching, pre-general-availability, general-availability,acknowledge-critical-fixes-only, revert-critical-fixes-only")
+	fs.StringVar(&o.lifecyclePhase, "lifecycle-phase", "", "Lifecycle phase, one of: branching, pre-general-availability, general-availability,acknowledge-critical-fixes-only, revert-critical-fixes-only, verified")
 	fs.StringVar(&o.currentOCPVersion, "current-release", "", "Current OCP version")
 	fs.StringVar(&o.excludedReposFile, "excluded-repos-config", "", "Path to the GA's excluded repos config file.")
 	fs.StringVar(&o.reposGuardedByAckCriticalFixes, "repos-guarded-by-ack-critical-fixes", "", "Path to the list of repos that ack-critical-fixes should be applied to.")
+	fs.StringVar(&o.verifiedOptInFile, "verified-opt-in", "", "Path to the verified opt-in file.")
+	fs.StringVar(&o.verifiedOptOutFile, "verified-opt-out", "", "Path to the verified opt-out file.")
+	fs.StringVar(&o.ciOperatorConfigDir, "ci-operator-config-dir", "", "Path to the ci-operator config directory.")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse input")
 	}
@@ -67,8 +75,8 @@ func gatherOptions() (*options, error) {
 		errs = append(errs, fmt.Errorf("couldn't parse arguments: %w", err))
 	}
 
-	if o.lifecyclePhase != branching && o.lifecyclePhase != preGeneralAvailability && o.lifecyclePhase != GeneralAvailability && o.lifecyclePhase != ackCriticalFixes && o.lifecyclePhase != revertCriticalFixes {
-		errs = append(errs, errors.New("--lifecycle-phase is required and has to be one of: branching, pre-general-availability, general-availability ,acknowledge-critical-fixes-only, revert-critical-fixes-only"))
+	if o.lifecyclePhase != branching && o.lifecyclePhase != preGeneralAvailability && o.lifecyclePhase != GeneralAvailability && o.lifecyclePhase != ackCriticalFixes && o.lifecyclePhase != revertCriticalFixes && o.lifecyclePhase != verified {
+		errs = append(errs, errors.New("--lifecycle-phase is required and has to be one of: branching, pre-general-availability, general-availability ,acknowledge-critical-fixes-only, revert-critical-fixes-only, verified"))
 	}
 
 	if o.lifecyclePhase == branching || o.lifecyclePhase == preGeneralAvailability || o.lifecyclePhase == GeneralAvailability {
@@ -83,6 +91,19 @@ func gatherOptions() (*options, error) {
 	if o.lifecyclePhase == ackCriticalFixes && o.reposGuardedByAckCriticalFixes == "" {
 		errs = append(errs, errors.New("--repos-guarded-by-ack-critical-fixes is required when ack-critical-fixes is used"))
 	}
+
+	if o.lifecyclePhase == verified {
+		if o.verifiedOptInFile == "" {
+			errs = append(errs, errors.New("--verified-opt-in is required when verified lifecycle phase is used"))
+		}
+		if o.verifiedOptOutFile == "" {
+			errs = append(errs, errors.New("--verified-opt-out is required when verified lifecycle phase is used"))
+		}
+		if o.ciOperatorConfigDir == "" {
+			errs = append(errs, errors.New("--ci-operator-config-dir is required when verified lifecycle phase is used"))
+		}
+	}
+
 	if o.prowConfigDir == "" {
 		errs = append(errs, errors.New("--prow-config-dir is required"))
 	}
@@ -336,6 +357,168 @@ func (gae *generalAvailabilityEvent) overrideExcludedBranches(q *prowconfig.Tide
 	q.ExcludedBranches = sets.List(branches)
 }
 
+type verifiedEvent struct {
+	optInRepos  sets.Set[string]
+	optOutRepos sets.Set[string]
+	*sharedDataDelegate
+}
+
+func newVerifiedEvent(optInFile, optOutFile, ciOperatorConfigDir string, delegate *sharedDataDelegate) (*verifiedEvent, error) {
+	return newVerifiedEventWithDeps(
+		optInFile,
+		optOutFile,
+		ciOperatorConfigDir,
+		delegate,
+		readRepoListYAML,
+		config.OperateOnCIOperatorConfigDir,
+	)
+}
+
+// newVerifiedEventWithDeps is the testable version that accepts dependencies
+func newVerifiedEventWithDeps(
+	optInFile, optOutFile, ciOperatorConfigDir string,
+	delegate *sharedDataDelegate,
+	fileReader func(string) ([]string, error),
+	configDirOperator func(string, config.ConfigIterFunc) error,
+) (*verifiedEvent, error) {
+	optInRepos := sets.New[string]()
+	optOutRepos := sets.New[string]()
+
+	// Load opt-in repos from YAML file
+	if optInFile != "" {
+		repos, err := fileReader(optInFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read verified opt-in file: %w", err)
+		}
+		optInRepos = sets.New[string](repos...)
+	}
+
+	// Load opt-out repos from YAML file
+	if optOutFile != "" {
+		repos, err := fileReader(optOutFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read verified opt-out file: %w", err)
+		}
+		optOutRepos = sets.New[string](repos...)
+	}
+
+	// Add repos with OCP promotion from ci-operator configs
+	ocpPromotionRepos := sets.New[string]()
+	err := configDirOperator(ciOperatorConfigDir, func(configuration *api.ReleaseBuildConfiguration, info *config.Info) error {
+		if configuration.PromotionConfiguration != nil {
+			for _, target := range configuration.PromotionConfiguration.Targets {
+				if target.Namespace == "ocp" {
+					repo := fmt.Sprintf("%s/%s", info.Org, info.Repo)
+					ocpPromotionRepos.Insert(repo)
+					break
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to process ci-operator configs: %w", err)
+	}
+
+	finalOptInRepos := optInRepos.Union(ocpPromotionRepos).Difference(optOutRepos)
+
+	return &verifiedEvent{
+		optInRepos:         finalOptInRepos,
+		optOutRepos:        optOutRepos,
+		sharedDataDelegate: delegate,
+	}, nil
+}
+
+// readRepoListYAML reads a YAML file containing org: [list of repos] format
+func readRepoListYAML(filePath string) ([]string, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file %s: %w", filePath, err)
+	}
+
+	trimmedData := strings.TrimSpace(string(data))
+	if trimmedData == "" {
+		return []string{}, nil
+	}
+
+	var orgRepoMap map[string][]string
+	if err := yaml.Unmarshal(data, &orgRepoMap); err != nil {
+		return nil, fmt.Errorf("failed to parse YAML file %s: %w", filePath, err)
+	}
+
+	var repos []string
+	for org, repoList := range orgRepoMap {
+		for _, repo := range repoList {
+			repos = append(repos, fmt.Sprintf("%s/%s", org, repo))
+		}
+	}
+
+	return repos, nil
+}
+
+func (ve *verifiedEvent) ModifyQuery(q *prowconfig.TideQuery, repo string) {
+	reqLabels := sets.New[string](q.Labels...)
+	branches := sets.New[string](q.IncludedBranches...)
+
+	// Only apply verified label to repos that are opt-in and not opt-out
+	if ve.optInRepos.Has(repo) && !ve.optOutRepos.Has(repo) {
+		shouldAddVerified := false
+
+		if branches.Intersection(ve.mainMaster).Len() > 0 {
+			shouldAddVerified = true
+		}
+
+		for branch := range branches {
+			if isVersionedBranch(branch) {
+				shouldAddVerified = true
+				break
+			}
+		}
+
+		if shouldAddVerified {
+			reqLabels.Insert("verified")
+		}
+	}
+	q.Labels = sets.List(reqLabels)
+}
+
+// isVersionedBranch checks if a branch name matches release-4.x or openshift-4.x pattern
+func isVersionedBranch(branch string) bool {
+	if strings.HasPrefix(branch, "release-4.") {
+		versionPart := strings.TrimPrefix(branch, "release-4.")
+		if isValidMinorVersion(versionPart) {
+			return true
+		}
+	}
+
+	if strings.HasPrefix(branch, "openshift-4.") {
+		versionPart := strings.TrimPrefix(branch, "openshift-4.")
+		if isValidMinorVersion(versionPart) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isValidMinorVersion checks if a string represents a valid minor version (e.g., "9", "10", "15")
+func isValidMinorVersion(version string) bool {
+	if version == "" {
+		return false
+	}
+
+	for _, char := range version {
+		if char < '0' || char > '9' {
+			return false
+		}
+	}
+
+	return version != "0"
+}
+
+func (ve *verifiedEvent) GetDataFromProwConfig(*prowconfig.ProwConfig) {
+}
+
 func updateProwConfigs(o *options) error {
 	configPath := path.Join(o.prowConfigDir, config.ProwConfigFile)
 	var additionalConfigs []string
@@ -363,10 +546,10 @@ func updateProwConfigs(o *options) error {
 
 	}
 
-	return reconcile(o.currentOCPVersion, o.lifecyclePhase, &config.ProwConfig, afero.NewBasePathFs(afero.NewOsFs(), o.shardedProwConfigBaseDir), repos, reposGuardedByAckCriticalFixes)
+	return reconcile(o.currentOCPVersion, o.lifecyclePhase, &config.ProwConfig, afero.NewBasePathFs(afero.NewOsFs(), o.shardedProwConfigBaseDir), repos, reposGuardedByAckCriticalFixes, o.verifiedOptInFile, o.verifiedOptOutFile, o.ciOperatorConfigDir)
 }
 
-func reconcile(currentOCPVersion, lifecyclePhase string, config *prowconfig.ProwConfig, target afero.Fs, repos excludedRepos, reposGuardedByAckCriticalFixes []string) error {
+func reconcile(currentOCPVersion, lifecyclePhase string, config *prowconfig.ProwConfig, target afero.Fs, repos excludedRepos, reposGuardedByAckCriticalFixes []string, verifiedOptInFile, verifiedOptOutFile, ciOperatorConfigDir string) error {
 	delegate := newSharedDataDelegate()
 	var err error
 	if lifecyclePhase == ackCriticalFixes {
@@ -377,11 +560,23 @@ func reconcile(currentOCPVersion, lifecyclePhase string, config *prowconfig.Prow
 		_, err = shardprowconfig.ShardProwConfig(config, target, newRevertCriticalFixesEvent(delegate))
 	}
 
+	if lifecyclePhase == verified {
+		verifiedEvt, err := newVerifiedEvent(verifiedOptInFile, verifiedOptOutFile, ciOperatorConfigDir, delegate)
+		if err != nil {
+			return fmt.Errorf("failed to create verified event: %w", err)
+		}
+		_, err = shardprowconfig.ShardProwConfig(config, target, verifiedEvt)
+		if err != nil {
+			return fmt.Errorf("failed to shard the prow config: %w", err)
+		}
+		return nil
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to shard the prow config: %w", err)
 	}
 
-	if lifecyclePhase == ackCriticalFixes || lifecyclePhase == revertCriticalFixes {
+	if lifecyclePhase == ackCriticalFixes || lifecyclePhase == revertCriticalFixes || lifecyclePhase == verified {
 		return nil
 	}
 

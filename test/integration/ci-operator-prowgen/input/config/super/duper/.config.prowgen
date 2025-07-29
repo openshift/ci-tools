@@ -1,0 +1,3 @@
+skip_operator_presubmits:
+- branch: release-4.19
+  variant: periodics

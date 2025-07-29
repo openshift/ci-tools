@@ -8,7 +8,6 @@ import (
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 
-	"github.com/openshift/ci-tools/pkg/api"
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
@@ -119,12 +118,12 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		return NewProwJobBaseBuilder(configSpec, info, NewCiOperatorPodSpecGenerator())
 	}
 
-	imageTargets := api.ImageTargets(configSpec)
+	imageTargets := cioperatorapi.ImageTargets(configSpec)
 
 	if len(imageTargets) > 0 {
 		// Identify which jobs need to have a release payload explicitly requested
 		var presubmitTargets = sets.List(imageTargets)
-		if api.PromotesOfficialImages(configSpec, api.WithOKD) {
+		if cioperatorapi.PromotesOfficialImages(configSpec, cioperatorapi.WithOKD) {
 			presubmitTargets = append(presubmitTargets, "[release:latest]")
 		}
 		imagesTestName := "images"
@@ -183,14 +182,14 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		}
 	}
 
-	if configSpec.Operator != nil {
+	if configSpec.Operator != nil && !info.Config.SkipPresubmits(configSpec.Metadata.Branch, configSpec.Metadata.Variant) {
 		containsUnnamedBundle := false
 		for _, bundle := range configSpec.Operator.Bundles {
 			if bundle.As == "" {
 				containsUnnamedBundle = true
 				continue
 			}
-			testName := api.IndexName(bundle.As)
+			testName := cioperatorapi.IndexName(bundle.As)
 			if bundle.SkipBuildingIndex {
 				testName = fmt.Sprintf("ci-bundle-%s", bundle.As)
 			}
@@ -205,7 +204,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			}))
 		}
 		if containsUnnamedBundle {
-			name := string(api.PipelineImageStreamTagReferenceIndexImage)
+			name := string(cioperatorapi.PipelineImageStreamTagReferenceIndexImage)
 			jobBaseGen := newJobBaseBuilder().TestName(name)
 			jobBaseGen.PodSpec.Add(Targets(name))
 			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, name, info))
@@ -219,7 +218,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 	}, nil
 }
 
-func handlePresubmit(g *prowJobBaseBuilder, element api.TestStepConfiguration, info *ProwgenInfo, name string, disableRehearsal bool, requests api.ResourceList, presubmits map[string][]prowconfig.Presubmit, orgrepo string) {
+func handlePresubmit(g *prowJobBaseBuilder, element cioperatorapi.TestStepConfiguration, info *ProwgenInfo, name string, disableRehearsal bool, requests cioperatorapi.ResourceList, presubmits map[string][]prowconfig.Presubmit, orgrepo string) {
 	presubmit := generatePresubmitForTest(g, name, info, func(options *generatePresubmitOptions) {
 		options.pipelineRunIfChanged = element.PipelineRunIfChanged
 		options.Capabilities = element.Capabilities
@@ -242,7 +241,7 @@ func testContainsLease(test *cioperatorapi.TestStepConfiguration) bool {
 		return false
 	}
 
-	return len(api.LeasesForTest(test.MultiStageTestConfigurationLiteral)) > 0
+	return len(cioperatorapi.LeasesForTest(test.MultiStageTestConfigurationLiteral)) > 0
 }
 
 type generatePresubmitOptions struct {

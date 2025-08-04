@@ -67,7 +67,16 @@ func MessageHandler(client messagePoster, keywordsConfig KeywordsConfig, helpdes
 			if event.ThreadTimeStamp != "" {
 				timestamp = event.ThreadTimeStamp
 			}
-			responseChannel, responseTimestamp, err := client.PostMessage(event.Channel, slack.MsgOptionBlocks(response...), slack.MsgOptionTS(timestamp))
+			unfurlParams := slack.PostMessageParameters{
+				UnfurlLinks: false,
+				UnfurlMedia: false,
+			}
+			responseChannel, responseTimestamp, err := client.PostMessage(
+				event.Channel,
+				slack.MsgOptionBlocks(response...),
+				slack.MsgOptionTS(timestamp),
+				slack.MsgOptionPostMessageParameters(unfurlParams),
+			)
 			if err != nil {
 				log.WithError(err).Warn("Failed to post a response")
 			} else {

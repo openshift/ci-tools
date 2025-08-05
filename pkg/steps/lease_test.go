@@ -62,7 +62,7 @@ func TestLeaseStepForward(t *testing.T) {
 		ResourceType: "lease_name",
 	}}
 	step := stepNeedsLease{}
-	withLease := LeaseStep(nil, leases, &step, emptyNamespace)
+	withLease := LeaseStep(nil, leases, &step, emptyNamespace, nil)
 	t.Run("Inputs", func(t *testing.T) {
 		s, err := step.Inputs()
 		if err != nil {
@@ -121,7 +121,7 @@ func TestLeaseStepForward(t *testing.T) {
 
 func TestProvidesStripsSuffix(t *testing.T) {
 	leases := []api.StepLease{{Env: api.DefaultLeaseEnv, ResourceType: "rtype"}}
-	withLease := LeaseStep(nil, leases, &stepNeedsLease{}, emptyNamespace)
+	withLease := LeaseStep(nil, leases, &stepNeedsLease{}, emptyNamespace, nil)
 	withLease.(*leaseStep).leases[0].resources = []string{"whatever--01"}
 	expected := "whatever"
 	actual, err := withLease.Provides()[api.DefaultLeaseEnv]()
@@ -218,7 +218,7 @@ func TestError(t *testing.T) {
 			var calls []string
 			client := lease.NewFakeClient("owner", "url", 0, tc.failures, &calls)
 			s := stepNeedsLease{fail: tc.runFails}
-			err := LeaseStep(&client, leases, &s, func() string { return "" }).Run(ctx)
+			err := LeaseStep(&client, leases, &s, func() string { return "" }, nil).Run(ctx)
 			if err == nil {
 				t.Fatalf("unexpected success, calls: %#v", calls)
 			}
@@ -238,7 +238,7 @@ func TestAcquireRelease(t *testing.T) {
 		{ResourceType: "rtype0", Count: 2},
 	}
 	step := stepNeedsLease{}
-	withLease := LeaseStep(&client, leases, &step, func() string { return "" })
+	withLease := LeaseStep(&client, leases, &step, func() string { return "" }, nil)
 	if err := withLease.Run(context.Background()); err != nil {
 		t.Fatal(err)
 	}

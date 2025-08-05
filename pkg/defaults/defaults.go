@@ -173,7 +173,7 @@ func fromConfig(
 
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
-			steps, err := stepForTest(config, params, podClient, leaseClient, templateClient, client, hiveClient, jobSpec, inputImages, testStep, &imageConfigs, pullSecret, censor, nodeName, targetAdditionalSuffix, enableSecretsStoreCSIDriver)
+			steps, err := stepForTest(config, params, podClient, leaseClient, templateClient, client, hiveClient, jobSpec, inputImages, testStep, &imageConfigs, pullSecret, censor, nodeName, targetAdditionalSuffix, enableSecretsStoreCSIDriver, metricsAgent)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -358,7 +358,7 @@ func fromConfig(
 					Env:          api.DefaultLeaseEnv,
 					Count:        1,
 				}}
-				step = steps.LeaseStep(leaseClient, leases, step, jobSpec.Namespace)
+				step = steps.LeaseStep(leaseClient, leases, step, jobSpec.Namespace, metricsAgent)
 				break
 			}
 		}
@@ -457,6 +457,7 @@ func stepForTest(
 	nodeName string,
 	targetAdditionalSuffix string,
 	enableSecretsStoreCSIDriver bool,
+	metricsAgent *metrics.MetricsAgent,
 ) ([]api.Step, error) {
 	if test := c.MultiStageTestConfigurationLiteral; test != nil {
 		leases := api.LeasesForTest(test)
@@ -470,7 +471,7 @@ func stepForTest(
 			step = steps.IPPoolStep(leaseClient, podClient, ipPoolLease, step, params, jobSpec.Namespace)
 		}
 		if len(leases) != 0 {
-			step = steps.LeaseStep(leaseClient, leases, step, jobSpec.Namespace)
+			step = steps.LeaseStep(leaseClient, leases, step, jobSpec.Namespace, metricsAgent)
 		}
 		if c.ClusterClaim != nil {
 			step = steps.ClusterClaimStep(c.As, c.ClusterClaim, hiveClient, client, jobSpec, step, censor)
@@ -498,7 +499,7 @@ func stepForTest(
 			ResourceType: test.ClusterProfile.LeaseType(),
 			Env:          api.DefaultLeaseEnv,
 			Count:        1,
-		}}, step, jobSpec.Namespace)
+		}}, step, jobSpec.Namespace, metricsAgent)
 		addProvidesForStep(step, params)
 		return []api.Step{step}, nil
 	}

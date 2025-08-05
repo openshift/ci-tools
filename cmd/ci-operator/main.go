@@ -287,13 +287,11 @@ func main() {
 		logrus.Error("Some steps failed:")
 		logrus.Error(message.String())
 
-		opt.metricsAgent.Stop()
 		opt.Report(defaulted...)
 
 		os.Exit(1)
 	}
 	opt.Report()
-	opt.metricsAgent.Stop()
 }
 
 // setupLogger sets up logrus to print all logs to a file and user-friendly logs to stdout
@@ -930,6 +928,7 @@ func (o *options) Run() []error {
 	start := time.Now()
 	defer func() {
 		logrus.Infof("Ran for %s", time.Since(start).Truncate(time.Second))
+		o.metricsAgent.Stop()
 	}()
 	ctx, cancel := context.WithCancel(context.Background())
 	handler := func(s os.Signal) {
@@ -1023,6 +1022,7 @@ func (o *options) Run() []error {
 			if err := o.initializeLeaseClient(); err != nil {
 				return []error{fmt.Errorf("failed to create the lease client: %w", err)}
 			}
+			o.metricsAgent.RegisterLeaseClient(o.leaseClient)
 		}
 		go monitorNamespace(ctx, cancel, o.namespace, client.Namespaces())
 		authClient, err := authclientset.NewForConfig(o.clusterConfig)
@@ -1979,12 +1979,24 @@ func (o *options) initializeLeaseClient() error {
 	go func() {
 		for range t.C {
 			if err := o.leaseClient.Heartbeat(); err != nil {
+				o.metricsAgent.Record(&metrics.InsightsEvent{
+					Name:              "lease_heartbeat_failed",
+					AdditionalContext: map[string]any{"error": err.Error(), "owner": owner},
+				})
 				logrus.WithError(err).Warn("Failed to update leases.")
 			}
 		}
 		if l, err := o.leaseClient.ReleaseAll(); err != nil {
+			o.metricsAgent.Record(&metrics.InsightsEvent{
+				Name:              "lease_release_failed",
+				AdditionalContext: map[string]any{"error": err.Error(), "count": len(l)},
+			})
 			logrus.WithError(err).Errorf("Failed to release leaked leases (%v)", l)
 		} else if len(l) != 0 {
+			o.metricsAgent.Record(&metrics.InsightsEvent{
+				Name:              "lease_released",
+				AdditionalContext: map[string]any{"released_count": len(l)},
+			})
 			logrus.Warnf("Would leak leases: %v", l)
 		}
 	}()

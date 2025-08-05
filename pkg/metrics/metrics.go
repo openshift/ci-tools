@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/prow/pkg/secretutil"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/lease"
 )
 
 const (
@@ -33,6 +34,7 @@ type MetricsAgent struct {
 	insightsPlugin *insightsPlugin
 	buildPlugin    *buildPlugin
 	nodesPlugin    *nodesMetricsPlugin
+	leasePlugin    *leasesPlugin
 
 	wg sync.WaitGroup
 	mu sync.Mutex
@@ -57,6 +59,7 @@ func NewMetricsAgent(ctx context.Context, clusterConfig *rest.Config) (*MetricsA
 		insightsPlugin: newInsightsPlugin(),
 		buildPlugin:    newBuildPlugin(client, ctx),
 		nodesPlugin:    newNodesMetricsPlugin(ctx, client, metricsClient, nodesCh),
+		leasePlugin:    newLeasesPlugin(),
 	}, nil
 }
 
@@ -83,6 +86,8 @@ func (ma *MetricsAgent) Run() {
 			ma.insightsPlugin.Record(ev)
 			ma.buildPlugin.Record(ev)
 			ma.nodesPlugin.Record(ev)
+			ma.leasePlugin.Record(ev)
+			logrus.WithField("event", ev).Debug("Recorded metrics event")
 		}
 	}
 }
@@ -114,6 +119,7 @@ func (ma *MetricsAgent) flush() {
 	output[ma.insightsPlugin.Name()] = ma.insightsPlugin.Events()
 	output[ma.buildPlugin.Name()] = ma.buildPlugin.Events()
 	output[ma.nodesPlugin.Name()] = ma.nodesPlugin.Events()
+	output[ma.leasePlugin.Name()] = ma.leasePlugin.Events()
 
 	data, err := json.MarshalIndent(output, "", "  ")
 	if err != nil {
@@ -144,4 +150,12 @@ func (ma *MetricsAgent) RemoveNodeWorkload(workloadName string) {
 		return
 	}
 	ma.nodesPlugin.RemoveWorkload(workloadName)
+}
+
+// RegisterLeaseClient provides the lease client to the agent after initialization.
+func (ma *MetricsAgent) RegisterLeaseClient(client lease.Client) {
+	if ma == nil || ma.leasePlugin == nil {
+		return
+	}
+	ma.leasePlugin.SetClient(client)
 }

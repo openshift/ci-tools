@@ -416,19 +416,19 @@ func hasReplacementFor(image *api.ProjectDirectoryImageBuildStepConfiguration, t
 func orgRepoTagFromPullString(pullString string) (orgRepoTag, error) {
 	res := orgRepoTag{tag: "latest"}
 	slashSplit := strings.Split(pullString, "/")
-	switch n := len(slashSplit); n {
-	case 1:
+	n := len(slashSplit)
+
+	switch {
+	case n == 1:
 		res.org = "_"
 		res.repo = slashSplit[0]
-	case 2:
-		res.org = slashSplit[0]
-		res.repo = slashSplit[1]
-	case 3:
-		res.org = slashSplit[1]
-		res.repo = slashSplit[2]
+	case n >= 2:
+		res.org = slashSplit[n-2]
+		res.repo = slashSplit[n-1]
 	default:
-		return res, fmt.Errorf("pull stringe %q couldn't be parsed, expected to get between one and three elements after slashsplitting, got %d", pullString, n)
+		return res, fmt.Errorf("pull string %q couldn't be parsed, got %d components", pullString, n)
 	}
+
 	if repoTag := strings.Split(res.repo, ":"); len(repoTag) == 2 {
 		res.repo = repoTag[0]
 		res.tag = repoTag[1]

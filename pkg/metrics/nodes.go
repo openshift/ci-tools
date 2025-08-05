@@ -143,7 +143,7 @@ func (p *nodesMetricsPlugin) Run(ctx context.Context) {
 			}
 			p.mu.Unlock()
 		case <-ctx.Done():
-			p.logger.Info("Context done, stopping nodes metrics plugin")
+			p.logger.Debug("Context done, stopping nodes metrics plugin")
 			p.mu.Lock()
 			for nodeName, ch := range p.stopCh {
 				p.logger.Debugf("Closing stop channel for node: %s", nodeName)
@@ -202,11 +202,9 @@ func (p *nodesMetricsPlugin) watchNode(ctx context.Context, nodeName string, sto
 func (p *nodesMetricsPlugin) pollNodeMetrics(ctx context.Context, nodeName string) (cpuUsageMilli int64, memUsageBytes int64) {
 	nodeMetrics, err := p.metricsClient.MetricsV1beta1().NodeMetricses().Get(ctx, nodeName, metav1.GetOptions{})
 	if err != nil {
-		p.logger.WithError(err).Errorf("Failed to fetch live metrics for node %s", nodeName)
+		p.logger.WithError(err).Debugf("Failed to fetch live metrics for node %s", nodeName)
 		return 0, 0
 	}
-
-	// Extract raw CPU and memory usage
 	cpuUsageMilli = nodeMetrics.Usage.Cpu().MilliValue()
 	memUsageBytes = nodeMetrics.Usage.Memory().Value()
 
@@ -289,7 +287,7 @@ func (p *nodesMetricsPlugin) ExtractPodNode(ctx context.Context, namespace, podN
 				p.logger.Debugf("Pod %s/%s not found yet, continuing to poll", namespace, podName)
 				return false, nil
 			}
-			p.logger.WithError(err).Warnf("Failed to get pod %s/%s for node metrics", namespace, podName)
+			p.logger.WithError(err).Debugf("Failed to get pod %s/%s for node metrics", namespace, podName)
 			return false, err
 		}
 
@@ -304,7 +302,7 @@ func (p *nodesMetricsPlugin) ExtractPodNode(ctx context.Context, namespace, podN
 	})
 
 	if err != nil {
-		p.logger.WithError(err).Warnf("Failed to extract node for workload %s (pod: %s/%s)", workloadName, namespace, podName)
+		p.logger.WithError(err).Debugf("Failed to extract node for workload %s (pod: %s/%s)", workloadName, namespace, podName)
 	}
 }
 

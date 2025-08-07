@@ -30,6 +30,8 @@ type Target struct {
 	Clusters []string `json:"clusters,omitempty"`
 	// ClusterGroups is the cluster groups where the group should exist.
 	ClusterGroups []string `json:"cluster_groups,omitempty"`
+	// SecretCollections are the secret collections the group has access to.
+	SecretCollections []string `json:"secret_collections,omitempty"`
 }
 
 func (t Target) ResolveClusters(cg map[string][]string) sets.Set[string] {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/lease"
+	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/results"
 )
 
@@ -27,19 +29,21 @@ type stepLease struct {
 
 // leaseStep wraps another step and acquires/releases one or more leases.
 type leaseStep struct {
-	client  *lease.Client
-	leases  []stepLease
-	wrapped api.Step
+	client       *lease.Client
+	leases       []stepLease
+	wrapped      api.Step
+	metricsAgent *metrics.MetricsAgent
 
 	// for sending heartbeats during lease acquisition
 	namespace func() string
 }
 
-func LeaseStep(client *lease.Client, leases []api.StepLease, wrapped api.Step, namespace func() string) api.Step {
+func LeaseStep(client *lease.Client, leases []api.StepLease, wrapped api.Step, namespace func() string, metricsAgent *metrics.MetricsAgent) api.Step {
 	ret := leaseStep{
-		client:    client,
-		wrapped:   wrapped,
-		namespace: namespace,
+		client:       client,
+		wrapped:      wrapped,
+		namespace:    namespace,
+		metricsAgent: metricsAgent,
 	}
 	for _, l := range leases {
 		ret.leases = append(ret.leases, stepLease{StepLease: l})
@@ -113,7 +117,7 @@ func (s *leaseStep) run(ctx context.Context) error {
 	logrus.Infof("Acquiring leases for test %s: %v", s.Name(), types)
 	client := *s.client
 	ctx, cancel := context.WithCancel(ctx)
-	if err := acquireLeases(client, ctx, cancel, s.leases); err != nil {
+	if err := acquireLeases(client, ctx, cancel, s.leases, s.metricsAgent); err != nil {
 		return err
 	}
 	wrappedErr := results.ForReason("executing_test").ForError(s.wrapped.Run(ctx))
@@ -139,6 +143,7 @@ func acquireLeases(
 	ctx context.Context,
 	cancel context.CancelFunc,
 	leases []stepLease,
+	metricsAgent *metrics.MetricsAgent,
 ) error {
 	// Sort by resource type to avoid a(n unlikely and temporary) deadlock.
 	var sorted []int
@@ -151,6 +156,7 @@ func acquireLeases(
 	var errs []error
 	for _, i := range sorted {
 		l := &leases[i]
+		start := time.Now()
 		logrus.Debugf("Acquiring %d lease(s) for %s", l.Count, l.ResourceType)
 		names, err := client.Acquire(l.ResourceType, l.Count, ctx, cancel)
 		if err != nil {
@@ -160,6 +166,11 @@ func acquireLeases(
 			errs = append(errs, results.ForReason(results.Reason("acquiring_lease")).WithError(err).Errorf("failed to acquire lease for %q: %v", l.ResourceType, err))
 			break
 		}
+
+		for _, name := range names {
+			metricsAgent.Record(&metrics.LeaseMetricEvent{RawLeaseName: name, AcquisitionDurationSeconds: time.Since(start).Seconds()})
+		}
+
 		logrus.Infof("Acquired %d lease(s) for %s: %v", l.Count, l.ResourceType, names)
 		l.resources = names
 	}

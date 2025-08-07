@@ -270,7 +270,7 @@ func main() {
 	opt.metricsAgent.Record(
 		&metrics.InsightsEvent{
 			Name:              "ci_operator_started",
-			AdditionalContext: map[string]any{"job_spec": opt.jobSpec},
+			AdditionalContext: map[string]any{"job_spec": opt.jobSpec.MetricsData()},
 		},
 	)
 
@@ -287,13 +287,11 @@ func main() {
 		logrus.Error("Some steps failed:")
 		logrus.Error(message.String())
 
-		opt.metricsAgent.Stop()
 		opt.Report(defaulted...)
 
 		os.Exit(1)
 	}
 	opt.Report()
-	opt.metricsAgent.Stop()
 }
 
 // setupLogger sets up logrus to print all logs to a file and user-friendly logs to stdout
@@ -930,6 +928,7 @@ func (o *options) Run() []error {
 	start := time.Now()
 	defer func() {
 		logrus.Infof("Ran for %s", time.Since(start).Truncate(time.Second))
+		o.metricsAgent.Stop()
 	}()
 	ctx, cancel := context.WithCancel(context.Background())
 	handler := func(s os.Signal) {
@@ -1023,6 +1022,7 @@ func (o *options) Run() []error {
 			if err := o.initializeLeaseClient(); err != nil {
 				return []error{fmt.Errorf("failed to create the lease client: %w", err)}
 			}
+			o.metricsAgent.RegisterLeaseClient(o.leaseClient)
 		}
 		go monitorNamespace(ctx, cancel, o.namespace, client.Namespaces())
 		authClient, err := authclientset.NewForConfig(o.clusterConfig)
@@ -1046,7 +1046,14 @@ func (o *options) Run() []error {
 			logrus.WithError(err).Warn("Unable to update metadata.json for build")
 		}
 		if len(errs) > 0 {
-			o.metricsAgent.Record(&metrics.InsightsEvent{Name: "ci_operator_failed"})
+			o.metricsAgent.Record(&metrics.InsightsEvent{
+				Name: "ci_operator_execution_completed",
+				AdditionalContext: map[string]any{
+					"duration_seconds": time.Since(start).Seconds(),
+					"success":          false,
+					"error_count":      len(errs),
+				},
+			})
 			eventRecorder.Event(runtimeObject, coreapi.EventTypeWarning, "CiJobFailed", eventJobDescription(o.jobSpec, o.namespace))
 			var wrapped []error
 			for _, err := range errs {
@@ -1060,7 +1067,7 @@ func (o *options) Run() []error {
 		detailsChan := make(chan api.CIOperatorStepDetails, lenOfPromotionSteps)
 		errChan := make(chan error, lenOfPromotionSteps)
 		for _, step := range promotionSteps {
-			go runPromotionStep(ctx, step, detailsChan, errChan)
+			go runPromotionStep(ctx, step, detailsChan, errChan, o.metricsAgent)
 		}
 		for i := 0; i < lenOfPromotionSteps; i++ {
 			select {
@@ -1075,13 +1082,17 @@ func (o *options) Run() []error {
 		}
 
 		eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobSucceeded", eventJobDescription(o.jobSpec, o.namespace))
-		o.metricsAgent.Record(&metrics.InsightsEvent{Name: "ci_operator_succeeded"})
+		o.metricsAgent.Record(&metrics.InsightsEvent{
+			Name:              "ci_operator_execution_completed",
+			AdditionalContext: map[string]any{"duration_seconds": time.Since(start).Seconds(), "success": true},
+		})
+
 		return nil
 	})
 }
 
-func runPromotionStep(ctx context.Context, step api.Step, detailsChan chan<- api.CIOperatorStepDetails, errChan chan<- error) {
-	details, err := runStep(ctx, step)
+func runPromotionStep(ctx context.Context, step api.Step, detailsChan chan<- api.CIOperatorStepDetails, errChan chan<- error, metricsAgent *metrics.MetricsAgent) {
+	details, err := runStep(ctx, step, metricsAgent)
 	if err != nil {
 		errChan <- fmt.Errorf("could not run promotion step %s: %w", step.Name(), err)
 	} else {
@@ -1133,11 +1144,26 @@ func integratedStreams(config *api.ReleaseBuildConfiguration, client server.Reso
 
 // runStep mostly duplicates steps.runStep. The latter uses an *api.StepNode though and we only have an api.Step for the PostSteps
 // so we can not re-use it.
-func runStep(ctx context.Context, step api.Step) (api.CIOperatorStepDetails, error) {
+func runStep(ctx context.Context, step api.Step, metricsAgent *metrics.MetricsAgent) (api.CIOperatorStepDetails, error) {
 	start := time.Now()
+	metricsAgent.Record(&metrics.InsightsEvent{
+		Name:              "step_started",
+		AdditionalContext: map[string]any{"step_name": step.Name(), "description": step.Description()},
+	})
+
 	err := step.Run(ctx)
 	duration := time.Since(start)
 	failed := err != nil
+
+	metricsAgent.Record(&metrics.InsightsEvent{
+		Name: "step_completed",
+		AdditionalContext: map[string]any{
+			"step_name":        step.Name(),
+			"description":      step.Description(),
+			"duration_seconds": duration.Seconds(),
+			"success":          !failed,
+		},
+	})
 
 	var subSteps []api.CIOperatorStepDetailInfo
 	if x, ok := step.(steps.SubStepReporter); ok {
@@ -1555,6 +1581,14 @@ func (o *options) initializeNamespace() error {
 		return fmt.Errorf("failed to create pdb for label key %s: %w", steps.CreatedByCILabel, err)
 	}
 	logrus.Debugf("Created PDB for pods with %s label", steps.CreatedByCILabel)
+
+	o.metricsAgent.Record(&metrics.InsightsEvent{
+		Name: "namespace_initialized",
+		AdditionalContext: map[string]any{
+			"namespace":        o.namespace,
+			"duration_seconds": time.Since(initBeginning).Seconds(),
+		},
+	})
 	return nil
 }
 
@@ -1945,12 +1979,24 @@ func (o *options) initializeLeaseClient() error {
 	go func() {
 		for range t.C {
 			if err := o.leaseClient.Heartbeat(); err != nil {
+				o.metricsAgent.Record(&metrics.InsightsEvent{
+					Name:              "lease_heartbeat_failed",
+					AdditionalContext: map[string]any{"error": err.Error(), "owner": owner},
+				})
 				logrus.WithError(err).Warn("Failed to update leases.")
 			}
 		}
 		if l, err := o.leaseClient.ReleaseAll(); err != nil {
+			o.metricsAgent.Record(&metrics.InsightsEvent{
+				Name:              "lease_release_failed",
+				AdditionalContext: map[string]any{"error": err.Error(), "count": len(l)},
+			})
 			logrus.WithError(err).Errorf("Failed to release leaked leases (%v)", l)
 		} else if len(l) != 0 {
+			o.metricsAgent.Record(&metrics.InsightsEvent{
+				Name:              "lease_released",
+				AdditionalContext: map[string]any{"released_count": len(l)},
+			})
 			logrus.Warnf("Would leak leases: %v", l)
 		}
 	}()

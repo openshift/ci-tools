@@ -757,6 +757,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      env: ' '\n" +
 	"                      # ResourceType is the type of resource that will be leased.\n" +
 	"                      resource_type: ' '\n" +
+	"                  # NestedPodman enables this test to run podman inside a container.\n" +
+	"                  nested_podman: true\n" +
 	"                  # NoKubeconfig determines that no $KUBECONFIG will exist in $SHARED_DIR,\n" +
 	"                  # so no local copy of it will be created for the step and if the step\n" +
 	"                  # creates one, it will not be propagated.\n" +
@@ -854,6 +856,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      env: ' '\n" +
 	"                      # ResourceType is the type of resource that will be leased.\n" +
 	"                      resource_type: ' '\n" +
+	"                  # NestedPodman enables this test to run podman inside a container.\n" +
+	"                  nested_podman: true\n" +
 	"                  # NoKubeconfig determines that no $KUBECONFIG will exist in $SHARED_DIR,\n" +
 	"                  # so no local copy of it will be created for the step and if the step\n" +
 	"                  # creates one, it will not be propagated.\n" +
@@ -951,6 +955,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      env: ' '\n" +
 	"                      # ResourceType is the type of resource that will be leased.\n" +
 	"                      resource_type: ' '\n" +
+	"                  # NestedPodman enables this test to run podman inside a container.\n" +
+	"                  nested_podman: true\n" +
 	"                  # NoKubeconfig determines that no $KUBECONFIG will exist in $SHARED_DIR,\n" +
 	"                  # so no local copy of it will be created for the step and if the step\n" +
 	"                  # creates one, it will not be propagated.\n" +
@@ -988,6 +994,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # apart. Setting this field will create a periodic job instead of a\n" +
 	"        # presubmit\n" +
 	"        minimum_interval: \"\"\n" +
+	"        # NestedPodman enables this test to run podman inside a container.\n" +
+	"        nested_podman: true\n" +
 	"        # NodeArchitecture is the architecture for the node where the test will run.\n" +
 	"        # If set, the generated test pod will include a nodeSelector for this architecture.\n" +
 	"        node_architecture: ' '\n" +
@@ -1162,6 +1170,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - env: ' '\n" +
 	"                      resource_type: ' '\n" +
+	"                  nested_podman: true\n" +
 	"                  no_kubeconfig: false\n" +
 	"                  node_architecture: \"\"\n" +
 	"                  # Observers are the observers that should be running\n" +
@@ -1228,6 +1237,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - env: ' '\n" +
 	"                      resource_type: ' '\n" +
+	"                  nested_podman: true\n" +
 	"                  no_kubeconfig: false\n" +
 	"                  node_architecture: \"\"\n" +
 	"                  # Observers are the observers that should be running\n" +
@@ -1294,6 +1304,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - env: ' '\n" +
 	"                      resource_type: ' '\n" +
+	"                  nested_podman: true\n" +
 	"                  no_kubeconfig: false\n" +
 	"                  node_architecture: \"\"\n" +
 	"                  # Observers are the observers that should be running\n" +
@@ -1644,6 +1655,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  env: ' '\n" +
 	"                  # ResourceType is the type of resource that will be leased.\n" +
 	"                  resource_type: ' '\n" +
+	"              # NestedPodman enables this test to run podman inside a container.\n" +
+	"              nested_podman: true\n" +
 	"              # NoKubeconfig determines that no $KUBECONFIG will exist in $SHARED_DIR,\n" +
 	"              # so no local copy of it will be created for the step and if the step\n" +
 	"              # creates one, it will not be propagated.\n" +
@@ -1741,6 +1754,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  env: ' '\n" +
 	"                  # ResourceType is the type of resource that will be leased.\n" +
 	"                  resource_type: ' '\n" +
+	"              # NestedPodman enables this test to run podman inside a container.\n" +
+	"              nested_podman: true\n" +
 	"              # NoKubeconfig determines that no $KUBECONFIG will exist in $SHARED_DIR,\n" +
 	"              # so no local copy of it will be created for the step and if the step\n" +
 	"              # creates one, it will not be propagated.\n" +
@@ -1838,6 +1853,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  env: ' '\n" +
 	"                  # ResourceType is the type of resource that will be leased.\n" +
 	"                  resource_type: ' '\n" +
+	"              # NestedPodman enables this test to run podman inside a container.\n" +
+	"              nested_podman: true\n" +
 	"              # NoKubeconfig determines that no $KUBECONFIG will exist in $SHARED_DIR,\n" +
 	"              # so no local copy of it will be created for the step and if the step\n" +
 	"              # creates one, it will not be propagated.\n" +
@@ -1875,6 +1892,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      # apart. Setting this field will create a periodic job instead of a\n" +
 	"      # presubmit\n" +
 	"      minimum_interval: \"\"\n" +
+	"      # NestedPodman enables this test to run podman inside a container.\n" +
+	"      nested_podman: true\n" +
 	"      # NodeArchitecture is the architecture for the node where the test will run.\n" +
 	"      # If set, the generated test pod will include a nodeSelector for this architecture.\n" +
 	"      node_architecture: ' '\n" +
@@ -2049,6 +2068,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - env: ' '\n" +
 	"                  resource_type: ' '\n" +
+	"              nested_podman: true\n" +
 	"              no_kubeconfig: false\n" +
 	"              node_architecture: \"\"\n" +
 	"              # Observers are the observers that should be running\n" +
@@ -2115,6 +2135,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - env: ' '\n" +
 	"                  resource_type: ' '\n" +
+	"              nested_podman: true\n" +
 	"              no_kubeconfig: false\n" +
 	"              node_architecture: \"\"\n" +
 	"              # Observers are the observers that should be running\n" +
@@ -2181,6 +2202,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - env: ' '\n" +
 	"                  resource_type: ' '\n" +
+	"              nested_podman: true\n" +
 	"              no_kubeconfig: false\n" +
 	"              node_architecture: \"\"\n" +
 	"              # Observers are the observers that should be running\n" +

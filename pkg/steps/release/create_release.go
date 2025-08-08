@@ -198,7 +198,7 @@ mkdir -p "${XDG_RUNTIME_DIR}"
 oc registry login
 exit_code="0"
 for ((i=1; i<=5; i++)); do
-	if oc adm release new %s --max-per-registry=32 -n %q --from-image-stream %q --to-image-base %q --to-image %q --name %q; then
+	if oc adm release new %s --max-per-registry=32 -n %q --from-image-stream %q --to-image-base %q --to-image %q --name %q --keep-manifest-list; then
 		echo "Payload creation success."
 		exit_code="0"
 		break

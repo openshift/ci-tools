@@ -593,6 +593,11 @@ func MultiStageParam(key, value string) PodSpecMutator {
 	}
 }
 
+func ShardArgs(shardCount, shardIndex int) PodSpecMutator {
+	shardArgs := fmt.Sprintf("--shard-count %d --shard-id %d", shardCount, shardIndex)
+	return MultiStageParam("SHARD_ARGS", shardArgs)
+}
+
 // InjectTestFrom configures ci-operator to inject the specified test from the
 // specified ci-operator config into the base config and target it
 func InjectTestFrom(source *cioperatorapi.MetadataWithTest) PodSpecMutator {

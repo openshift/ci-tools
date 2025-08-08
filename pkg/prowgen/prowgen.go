@@ -49,7 +49,6 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		shardCount := 1
 		if element.ShardCount != nil {
 			shardCount = *element.ShardCount
-
 		}
 
 		// Most of the time, this loop will only run once. the exception is if shard_count is set to an integer greater than 1
@@ -59,8 +58,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			if shardCount > 1 {
 				name = fmt.Sprintf("%s-%dof%d", name, i, shardCount)
 				g.TestName(name)
-				shardArgs := fmt.Sprintf("--shard-count %d --shard-id %d", shardCount, i)
-				g.PodSpec.Add(MultiStageParam("SHARD_ARGS", shardArgs))
+				g.PodSpec.Add(ShardArgs(shardCount, i))
 			}
 
 			if element.NodeArchitecture != "" {

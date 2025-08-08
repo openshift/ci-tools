@@ -293,7 +293,7 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 
 		if jobSpec.AggregatedCount > 0 {
 			uid := jobNameHash(req.Name + mimickedJob)
-			aggregatedProwjobs, err := r.generateAggregatedProwjobs(uid, ciopConfig, baseMetadata, req.Name, req.Namespace, &jobSpec, pullRequests, inject)
+			aggregatedProwjobs, err := r.generateAggregatedProwjobs(uid, ciopConfig, baseMetadata, req.Name, req.Namespace, &jobSpec, pullRequests, inject, jobSpec.ShardCount, jobSpec.ShardIndex)
 			if err != nil {
 				logger.WithError(err).Error("Failed to generate the aggregated prowjobs")
 				statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
@@ -307,7 +307,7 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 			}
 			prowjobsToCreate = append(prowjobsToCreate, aggregatedProwjobs...)
 
-			submitted := generateJobNameToSubmit(inject, pullRequests)
+			submitted := generateJobNameToSubmit(inject, pullRequests, jobSpec.ShardCount, jobSpec.ShardIndex)
 			aggregatorJob, err := generateAggregatorJob(baseMetadata, uid, mimickedJob, jobSpec.JobName(jobconfig.PeriodicPrefix), req.Name, req.Namespace, r.prowConfigGetter, time.Now(), submitted, r.defaultAggregatorJobTimeout)
 			if err != nil {
 				logger.WithError(err).Error("Failed to generate an aggregator prowjob")
@@ -331,7 +331,7 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 			initialPullSpecOverride := prpqr.Spec.InitialPayloadBase
 			// "base" is always treated as "latest" as that is what we are layering changes on top of, additional logic will apply if this changes in the future
 			basePullSpecOverride := prpqr.Spec.PayloadOverrides.BasePullSpec
-			prowjob, err := r.generateProwjob(ciopConfig, baseMetadata, req.Name, req.Namespace, pullRequests, mimickedJob, inject, nil, initialPullSpecOverride, basePullSpecOverride, prpqr.Spec.PayloadOverrides.ImageTagOverrides)
+			prowjob, err := r.generateProwjob(ciopConfig, baseMetadata, req.Name, req.Namespace, pullRequests, mimickedJob, inject, nil, initialPullSpecOverride, basePullSpecOverride, prpqr.Spec.PayloadOverrides.ImageTagOverrides, jobSpec.ShardCount, jobSpec.ShardIndex)
 			if err != nil {
 				logger.WithError(err).Error("Failed to generate prowjob")
 				statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
@@ -585,6 +585,7 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 	aggregatedOptions *aggregatedOptions,
 	initialPayloadPullspec, latestPayloadPullspec string,
 	imageTagOverrides []v1.ImageTagOverride,
+	shardCount, shardIndex int,
 ) (*prowv1.ProwJob, error) {
 	fakeProwgenInfo := &prowgen.ProwgenInfo{Metadata: *baseCiop}
 
@@ -638,6 +639,9 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 		if aggregateIndex != nil {
 			jobBaseGen.PodSpec.Add(prowgen.TargetAdditionalSuffix(strconv.Itoa(*aggregateIndex)))
 		}
+		if shardCount > 1 {
+			jobBaseGen.PodSpec.Add(prowgen.ShardArgs(shardCount, shardIndex))
+		}
 
 		// Avoid sharing when we run the same job multiple times.
 		// PRPQR name should be safe to use as a discriminating input, because
@@ -646,6 +650,9 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 		jobBaseGen.PodSpec.Add(hashInput)
 
 		baseTestName := inject.JobName(jobconfig.PeriodicPrefix)
+		if shardCount > 1 {
+			baseTestName = fmt.Sprintf("%s-%dof%d", baseTestName, shardIndex, shardCount)
+		}
 		cluster, err := r.clusterForJob(baseTestName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get cluster for job %s: %w", baseTestName, err)
@@ -655,7 +662,7 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 		periodic = prowgen.GeneratePeriodicForTest(jobBaseGen, fakeProwgenInfo, prowgen.FromConfigSpec(ciopConfig), func(options *prowgen.GeneratePeriodicOptions) {
 			options.Cron = "@yearly"
 		})
-		periodic.Name = generateJobNameToSubmit(inject, prs)
+		periodic.Name = generateJobNameToSubmit(inject, prs, shardCount, shardIndex)
 
 		if periodic.DecorationConfig == nil {
 			periodic.DecorationConfig = &prowv1.DecorationConfig{}
@@ -768,7 +775,7 @@ func metadataFromPullRequestsUnderTest(prs []v1.PullRequestUnderTest) *api.Metad
 	}
 }
 
-func (r *reconciler) generateAggregatedProwjobs(uid string, ciopConfig *api.ReleaseBuildConfiguration, baseCiop *api.Metadata, prpqrName, prpqrNamespace string, spec *v1.ReleaseJobSpec, prs []v1.PullRequestUnderTest, inject *api.MetadataWithTest) ([]*prowv1.ProwJob, error) {
+func (r *reconciler) generateAggregatedProwjobs(uid string, ciopConfig *api.ReleaseBuildConfiguration, baseCiop *api.Metadata, prpqrName, prpqrNamespace string, spec *v1.ReleaseJobSpec, prs []v1.PullRequestUnderTest, inject *api.MetadataWithTest, shardCount, shardIndex int) ([]*prowv1.ProwJob, error) {
 	var ret []*prowv1.ProwJob
 
 	for i := 0; i < spec.AggregatedCount; i++ {
@@ -779,7 +786,7 @@ func (r *reconciler) generateAggregatedProwjobs(uid string, ciopConfig *api.Rele
 		}
 		jobName := fmt.Sprintf("%s-%d", spec.JobName(jobconfig.PeriodicPrefix), i)
 
-		pj, err := r.generateProwjob(ciopConfig, baseCiop, prpqrName, prpqrNamespace, prs, jobName, inject, opts, "", "", nil)
+		pj, err := r.generateProwjob(ciopConfig, baseCiop, prpqrName, prpqrNamespace, prs, jobName, inject, opts, "", "", nil, shardCount, shardIndex)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create prowjob: %w", err)
 		}
@@ -855,7 +862,7 @@ func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobNa
 	return &pj, nil
 }
 
-func generateJobNameToSubmit(inject *api.MetadataWithTest, prs []v1.PullRequestUnderTest) string {
+func generateJobNameToSubmit(inject *api.MetadataWithTest, prs []v1.PullRequestUnderTest, shardCount, shardIndex int) string {
 	var refs string
 	for i, pr := range prs {
 		if i > 0 {
@@ -877,7 +884,12 @@ func generateJobNameToSubmit(inject *api.MetadataWithTest, prs []v1.PullRequestU
 		variant = fmt.Sprintf("-%s", inject.Variant)
 	}
 
-	return fmt.Sprintf("%s%s-%s", refs, variant, inject.Test)
+	var shardSuffix string
+	if shardCount > 1 {
+		shardSuffix = fmt.Sprintf("-%dof%d", shardIndex, shardCount)
+	}
+
+	return fmt.Sprintf("%s%s-%s%s", refs, variant, inject.Test, shardSuffix)
 }
 
 // manageDependentProwJobsFinalizer adds a finalizer if the prpqr has at least one running job,

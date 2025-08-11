@@ -1,6 +1,8 @@
 package v1
 
 import (
+	"fmt"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
@@ -128,6 +130,10 @@ type ReleaseJobSpec struct {
 	// When the value is 0 it means that the job is not run as aggregated and 1 means that
 	// the job is aggregated with a single execution.
 	AggregatedCount int `json:"aggregatedCount,omitempty"`
+	// ShardCount is the number of shards the main test has been broken into
+	ShardCount int `json:"shardCount,omitempty"`
+	// ShardIndex is the particular shard the job will run
+	ShardIndex int `json:"shardIndex,omitempty"`
 }
 
 // PullRequestPayloadTestStatus provides runtime data, such as references to submitted ProwJobs,
@@ -162,6 +168,7 @@ type PullRequestPayloadQualificationRunList struct {
 
 // JobName maps the name in the spec to the corresponding Prow job name.
 // It matches the `ReleaseJobName` value in the status.
+// If the job is sharded, it appends the shard suffix
 func (s *ReleaseJobSpec) JobName(prefix string) string {
 	mwt := api.MetadataWithTest{
 		Metadata: api.Metadata{
@@ -172,5 +179,9 @@ func (s *ReleaseJobSpec) JobName(prefix string) string {
 		},
 		Test: s.Test,
 	}
-	return mwt.JobName(prefix)
+	jobName := mwt.JobName(prefix)
+	if s.ShardCount > 1 {
+		jobName = fmt.Sprintf("%s-%dof%d", jobName, s.ShardIndex, s.ShardCount)
+	}
+	return jobName
 }

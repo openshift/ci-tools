@@ -14,17 +14,19 @@ type fileTestResolver struct {
 
 func (r *fileTestResolver) resolve(job string) (api.MetadataWithTest, error) {
 	byOrgRepo := r.configAgent.GetAll()
-	if v, ok := byOrgRepo["openshift"]; ok {
-		for _, configurations := range v {
-			for _, configuration := range configurations {
-				for _, element := range configuration.Tests {
-					if element.IsPeriodic() {
-						jobName := configuration.Metadata.JobName(jc.PeriodicPrefix, element.As)
-						if jobName == job {
-							return api.MetadataWithTest{
-								Metadata: configuration.Metadata,
-								Test:     element.As,
-							}, nil
+	for _, org := range []string{"openshift", "openshift-eng"} {
+		if v, ok := byOrgRepo[org]; ok {
+			for _, configurations := range v {
+				for _, configuration := range configurations {
+					for _, element := range configuration.Tests {
+						if element.IsPeriodic() {
+							testName := configuration.Metadata.TestNameFromJobName(job, jc.PeriodicPrefix)
+							if element.As == testName {
+								return api.MetadataWithTest{
+									Metadata: configuration.Metadata,
+									Test:     element.As,
+								}, nil
+							}
 						}
 					}
 				}

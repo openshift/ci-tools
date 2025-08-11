@@ -440,6 +440,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) (string, [
 					specLogger.WithError(err).WithField("job.Name", job.Name).Info("could not resolve tests for job")
 					continue
 				}
+				shardCount, shardIndex := extractShardInfo(job.Name)
 				jobNames = append(jobNames, job.Name)
 				releaseJobSpecs = append(releaseJobSpecs, prpqv1.ReleaseJobSpec{
 					CIOperatorConfig: prpqv1.CIOperatorMetadata{
@@ -450,6 +451,8 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) (string, [
 					},
 					Test:            jobTuple.Test,
 					AggregatedCount: job.AggregatedCount,
+					ShardCount:      shardCount,
+					ShardIndex:      shardIndex,
 				})
 			}
 		}
@@ -591,6 +594,29 @@ func labelSelectorForPayloadPRPQRs(org, repo string, prNumber int) (labels.Selec
 	}
 
 	return labels.NewSelector().Add(*orgRequirement, *repoRequirement, *pullRequirement), nil
+}
+
+var shardSuffixPattern = regexp.MustCompile(`-(\d+)of(\d+)$`)
+
+// extractShardInfo extracts shard count and index from job name suffix in format "-xofy"
+// Returns (0, 0) if no shard suffix is found
+func extractShardInfo(jobName string) (int, int) {
+	matches := shardSuffixPattern.FindStringSubmatch(jobName)
+	if len(matches) != 3 {
+		return 0, 0
+	}
+
+	shardIndex, err := strconv.Atoi(matches[1])
+	if err != nil {
+		return 0, 0
+	}
+
+	shardCount, err := strconv.Atoi(matches[2])
+	if err != nil {
+		return 0, 0
+	}
+
+	return shardCount, shardIndex
 }
 
 type prpqrBuilder struct {

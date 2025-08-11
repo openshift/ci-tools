@@ -686,6 +686,34 @@ See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
 			expectedAdditionalPRs: []config.AdditionalPR{"openshift/kubernetes#999"},
 		},
 		{
+			name: "payload-job with sharded job",
+			s: &server{
+				ghc:                ghc,
+				ctx:                context.TODO(),
+				kubeClient:         fakeclient.NewClientBuilder().Build(),
+				namespace:          "ci",
+				testResolver:       newFakeTestResolver(),
+				trustedChecker:     &fakeTrustedChecker{},
+				ciOpConfigResolver: &fakeCIOpConfigResolver{},
+			},
+			ic: github.IssueCommentEvent{
+				GUID: "guid",
+				Repo: github.Repo{Owner: github.User{Login: "openshift"}},
+				Issue: github.Issue{
+					Number:      123,
+					PullRequest: &struct{}{},
+				},
+				Comment: github.IssueComment{
+					Body: "/payload-job periodic-ci-openshift-release-master-nightly-4.10-e2e-sharded-1of3",
+				},
+			},
+			expectedMessage: `trigger 1 job(s) for the /payload-(with-prs|job|aggregate|job-with-prs|aggregate-with-prs) command
+- periodic-ci-openshift-release-master-nightly-4.10-e2e-sharded-1of3
+
+See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
+`,
+		},
+		{
 			name: "payload-job",
 			s: &server{
 				ghc:                ghc,
@@ -715,6 +743,34 @@ See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
 		},
 		{
 			name: "payload-aggregate",
+			s: &server{
+				ghc:                ghc,
+				ctx:                context.TODO(),
+				kubeClient:         fakeclient.NewClientBuilder().Build(),
+				namespace:          "ci",
+				testResolver:       newFakeTestResolver(),
+				trustedChecker:     &fakeTrustedChecker{},
+				ciOpConfigResolver: &fakeCIOpConfigResolver{},
+			},
+			ic: github.IssueCommentEvent{
+				GUID: "guid",
+				Repo: github.Repo{Owner: github.User{Login: "openshift"}},
+				Issue: github.Issue{
+					Number:      123,
+					PullRequest: &struct{}{},
+				},
+				Comment: github.IssueComment{
+					Body: `/payload-aggregate periodic-ci-openshift-release-master-nightly-4.10-e2e-sharded-1of3 10`,
+				},
+			},
+			expectedMessage: `trigger 1 job(s) for the /payload-(with-prs|job|aggregate|job-with-prs|aggregate-with-prs) command
+- periodic-ci-openshift-release-master-nightly-4.10-e2e-sharded-1of3
+
+See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
+`,
+		},
+		{
+			name: "payload-aggregate with sharded job",
 			s: &server{
 				ghc:                ghc,
 				ctx:                context.TODO(),
@@ -1067,12 +1123,23 @@ func newFakeTestResolver() testResolver {
 				},
 				Test: "e2e-metal-ipi",
 			},
+			"periodic-ci-openshift-release-master-nightly-4.10-e2e-sharded": {
+				Metadata: api.Metadata{
+					Org:     "openshift",
+					Repo:    "release",
+					Branch:  "master",
+					Variant: "nightly-4.10",
+				},
+				Test: "e2e-sharded",
+			},
 		},
 	}
 }
 
 func (r *fakeTestResolver) resolve(job string) (api.MetadataWithTest, error) {
-	if jt, ok := r.tuples[job]; ok {
+	// Remove shard suffix from job if present prior to searching for it in map
+	baseJob := shardSuffixPattern.ReplaceAllString(job, "")
+	if jt, ok := r.tuples[baseJob]; ok {
 		return jt, nil
 	}
 	return api.MetadataWithTest{}, fmt.Errorf("failed to resolve job %s", job)

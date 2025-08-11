@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -55,10 +56,11 @@ type options struct {
 
 	prometheusDaysBefore int
 
-	createPR    bool
-	githubLogin string
-	targetDir   string
-	assign      string
+	createPR     bool
+	validateOnly bool
+	githubLogin  string
+	targetDir    string
+	assign       string
 
 	enableClusters  flagutil.Strings
 	disableClusters flagutil.Strings
@@ -87,6 +89,7 @@ func gatherOptions() options {
 	fs.IntVar(&o.prometheusDaysBefore, "prometheus-days-before", 14, "Number [1,15] of days before. Time 00-00-00 of that day will be used as time to query Prometheus. E.g., 1 means 00-00-00 of yesterday.")
 
 	fs.BoolVar(&o.createPR, "create-pr", false, "Create a pull request to the change made with this tool.")
+	fs.BoolVar(&o.validateOnly, "validate-only", false, "Only validate the cluster configuration and exit. Used for presubmit validation.")
 	fs.StringVar(&o.githubLogin, "github-login", githubLogin, "The GitHub username to use.")
 	fs.StringVar(&o.targetDir, "target-dir", "", "The directory containing the target repo.")
 	fs.StringVar(&o.assign, "assign", "ghost", "The github username or group name to assign the created pull request to.")
@@ -109,12 +112,6 @@ func gatherOptions() options {
 }
 
 func (o *options) validate() error {
-	if o.prowJobConfigDir == "" {
-		return fmt.Errorf("mandatory argument --prow-jobs-dir wasn't set")
-	}
-	if o.configPath == "" {
-		return fmt.Errorf("mandatory argument --config-path wasn't set")
-	}
 
 	if o.prometheusDaysBefore < 1 || o.prometheusDaysBefore > 15 {
 		return fmt.Errorf("--prometheus-days-before must be between 1 and 15")
@@ -124,12 +121,20 @@ func (o *options) validate() error {
 		logrus.Fatal("mandatory argument --cluster-config-path wasn't set")
 	}
 
-	if o.jobsStoragePath == "" {
-		logrus.Fatal("mandatory argument --jobs-storage-path wasn't set")
-	}
-
-	if o.slackTokenPath == "" {
-		logrus.Fatal("mandatory argument --slack-token-path wasn't set")
+	// These arguments are not required when running in validate-only mode
+	if !o.validateOnly {
+		if o.prowJobConfigDir == "" {
+			return fmt.Errorf("mandatory argument --prow-jobs-dir wasn't set")
+		}
+		if o.jobsStoragePath == "" {
+			return fmt.Errorf("mandatory argument --jobs-storage-path wasn't set")
+		}
+		if o.configPath == "" {
+			return fmt.Errorf("mandatory argument --config-path wasn't set")
+		}
+		if o.slackTokenPath == "" {
+			logrus.Fatal("mandatory argument --slack-token-path wasn't set")
+		}
 	}
 
 	enabled := o.enableClusters.StringSet()
@@ -159,7 +164,42 @@ func (o *options) validate() error {
 			return err
 		}
 	}
-	return o.PrometheusOptions.Validate()
+
+	// Prometheus validation is not required in validate-only mode
+	if !o.validateOnly {
+		return o.PrometheusOptions.Validate()
+	}
+	return nil
+}
+
+// validateConfigurations performs validation on the cluster and main config files
+func validateConfigurations(o options) error {
+	logrus.Info("Validating cluster configuration...")
+
+	// Load and validate cluster configuration
+	clusterMap, blockedClusters, err := dispatcher.LoadClusterConfig(o.clusterConfigPath)
+	if err != nil {
+		return fmt.Errorf("failed to load config from %q: %w", o.clusterConfigPath, err)
+	}
+	outFilePath := filepath.Join("/tmp", filepath.Base(o.clusterConfigPath))
+	if err := dispatcher.SaveClusterConfigPreservingFormat(clusterMap, blockedClusters, o.clusterConfigPath, outFilePath); err != nil {
+		return fmt.Errorf("failed to save config to %q: %w", outFilePath, err)
+	}
+	// now diff the roundtripped file with the original
+	output, err := exec.Command("diff", "-u", outFilePath, o.clusterConfigPath).CombinedOutput() // Execute the diff command and get combined output
+	if err != nil {
+		switch e := err.(type) {
+		case *exec.ExitError:
+			fmt.Printf("Diff found, exit code: %d\n", e.ExitCode())
+		default:
+			log.Fatalf("Error running diff command: %v\n", err)
+		}
+	}
+
+	fmt.Println(string(output)) // Print the diff output
+
+	logrus.Info("All validations passed successfully")
+	return err
 }
 
 // getCloudProvidersForE2ETests returns a set of cloud providers where a cluster is hosted for an e2e test defined in the given Prow job config.
@@ -656,6 +696,16 @@ func main() {
 	o := gatherOptions()
 	if err := o.validate(); err != nil {
 		logrus.WithError(err).Fatal("Failed to complete options.")
+	}
+
+	// If validate-only mode is enabled, run validation and exit
+	if o.validateOnly {
+		if err := validateConfigurations(o); err != nil {
+			logrus.WithError(err).Fatal("Validation failed")
+			os.Exit(1)
+		}
+		logrus.Info("Validation completed successfully")
+		os.Exit(0)
 	}
 
 	if o.createPR {

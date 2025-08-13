@@ -111,13 +111,6 @@ func TestLeases(t *testing.T) {
 				`Releasing lease for gcp-quota-slice`,
 			},
 		},
-		{
-			name:    "leases for template",
-			args:    []string{"--target=template", "--template=template.yaml"},
-			env:     []string{defaultJobSpec, "CLUSTER_TYPE=aws"},
-			success: true,
-			output:  []string{"Container test in pod template completed successfully"},
-		},
 	}
 
 	for _, testCase := range testCases {

@@ -3,6 +3,7 @@ package release
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -14,7 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	imageapi "github.com/openshift/api/image/v1"
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -147,7 +147,7 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 	}
 
 	streamName := api.ReleaseStreamFor(s.name)
-	stable := &imageapi.ImageStream{}
+	stable := &imagev1.ImageStream{}
 	logrus.Debugf("Waiting to import tags on imagestream (before creating release) %s/%s ...", s.jobSpec.Namespace(), streamName)
 	if err := utils.WaitForImportingISTag(ctx, s.client, s.jobSpec.Namespace(), streamName, stable, sets.New("cluster-version-operator", "cli"), utils.DefaultImageImportTimeout); err != nil {
 		return fmt.Errorf("failed to wait for importing imagestreamtags [cluster-version-operator, cli] on %s/%s: %w", s.jobSpec.Namespace(), streamName, err)
@@ -172,11 +172,6 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 	now := time.Now().UTC().Truncate(time.Second)
 	version := fmt.Sprintf("%s-%s-test-%s-%s", prefix, now.Format("2006-01-02-150405"), s.jobSpec.Namespace(), s.name)
 
-	referenceModeArg := ""
-	if s.config.ReferencePolicy != nil && *s.config.ReferencePolicy == imagev1.SourceTagReferencePolicy {
-		referenceModeArg = "--reference-mode='source'"
-	}
-
 	destination := fmt.Sprintf("%s:%s", releaseImageStreamRepo, s.name)
 	logrus.Infof("Creating release image %s.", destination)
 
@@ -198,7 +193,7 @@ mkdir -p "${XDG_RUNTIME_DIR}"
 oc registry login
 exit_code="0"
 for ((i=1; i<=5; i++)); do
-	if oc adm release new %s --max-per-registry=32 -n %q --from-image-stream %q --to-image-base %q --to-image %q --name %q --keep-manifest-list; then
+	if %s; then
 		echo "Payload creation success."
 		exit_code="0"
 		break
@@ -232,7 +227,7 @@ done
 if [[ "$exit_code" != "0" ]]; then
 	exit $exit_code
 fi
-`, referenceModeArg, s.jobSpec.Namespace(), streamName, cvo, destination, version, s.name, destination, s.name),
+`, buildOcAdmReleaseNewCommand(s.config, s.jobSpec.Namespace(), streamName, cvo, destination, version), s.name, destination, s.name),
 	}
 
 	// set an explicit default for release-latest resources, but allow customization if necessary
@@ -294,4 +289,34 @@ func AssembleReleaseStep(name, nodeName string, config *api.ReleaseTagConfigurat
 		client:    client,
 		jobSpec:   jobSpec,
 	}
+}
+
+func supportsKeepManifestList(config *api.ReleaseTagConfiguration) bool {
+	var major, minor int
+	n, err := fmt.Sscanf(config.Name, "%d.%d", &major, &minor)
+	if err != nil || n != 2 {
+		logrus.Warnf("Could not parse release version from release tag configuration name=%q: %v", config.Name, err)
+		return false
+	}
+	return major > 4 || (major == 4 && minor >= 11)
+}
+
+func buildOcAdmReleaseNewCommand(config *api.ReleaseTagConfiguration, namespace, streamName, cvo, destination, version string) string {
+	cmd := []string{"oc", "adm", "release", "new",
+		"--max-per-registry=32",
+		"-n", namespace,
+		"--from-image-stream", streamName,
+		"--to-image-base", cvo,
+		"--to-image", destination,
+		"--name", version,
+	}
+
+	if config.ReferencePolicy != nil && *config.ReferencePolicy == imagev1.SourceTagReferencePolicy {
+		cmd = append(cmd, fmt.Sprintf("--reference-mode=%s", "source"))
+	}
+
+	if supportsKeepManifestList(config) {
+		cmd = append(cmd, "--keep-manifest-list")
+	}
+	return strings.Join(cmd, " ")
 }

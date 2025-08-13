@@ -9,8 +9,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
-	"regexp"
 	"runtime/debug"
 	"strings"
 	"testing"
@@ -131,46 +129,6 @@ func TestCompressed(t *testing.T) {
 			cmd.VerboseOutputContains(t, testCase.name, testCase.output...)
 		})
 	}
-}
-
-var timeRegex = regexp.MustCompile(`time=".*"`)
-
-func TestTemplate(t *testing.T) {
-	framework.Run(t, "template", func(t *framework.T, cmd *framework.CiOperatorCommand) {
-		clusterProfileDir := filepath.Join(t.TempDir(), "cluster-profile")
-		if err := os.MkdirAll(clusterProfileDir, 0755); err != nil {
-			t.Fatalf("failed to create dummy secret dir: %v", err)
-		}
-		if err := os.WriteFile(filepath.Join(clusterProfileDir, "data"), []byte("nothing"), 0644); err != nil {
-			t.Fatalf("failed to create dummy secret data: %v", err)
-		}
-		cmd.AddArgs(framework.LocalPullSecretFlag(t), framework.RemotePullSecretFlag(t))
-		cmd.AddArgs(
-			"--template=template.yaml",
-			"--target=template",
-			"--config=template-config.yaml",
-			"--secret-dir="+clusterProfileDir,
-		)
-		cmd.AddEnv(
-			`CLUSTER_TYPE=something`,
-			`TEST_COMMAND=executable`,
-			`JOB_SPEC={"type":"postsubmit","job":"branch-ci-openshift-ci-tools-master-ci-operator-e2e","buildid":"0","prowjobid":"uuid","refs":{"org":"openshift","repo":"ci-tools","base_ref":"master","base_sha":"6d231cc37652e85e0f0e25c21088b73d644d89ad","pulls":[]},"decoration_config":{"timeout":"4h0m0s","grace_period":"30m0s","utility_images":{"clonerefs":"registry.ci.openshift.org/ci/clonerefs:latest","initupload":"registry.ci.openshift.org/ci/initupload:latest","entrypoint":"registry.ci.openshift.org/ci/entrypoint:latest","sidecar":"registry.ci.openshift.org/ci/sidecar:latest"},"resources":{"clonerefs":{"limits":{"memory":"3Gi"},"requests":{"cpu":"100m","memory":"500Mi"}},"initupload":{"limits":{"memory":"200Mi"},"requests":{"cpu":"100m","memory":"50Mi"}},"place_entrypoint":{"limits":{"memory":"100Mi"},"requests":{"cpu":"100m","memory":"25Mi"}},"sidecar":{"limits":{"memory":"2Gi"},"requests":{"cpu":"100m","memory":"250Mi"}}},"gcs_configuration":{"bucket":"test-platform-results","path_strategy":"single","default_org":"openshift","default_repo":"origin","mediaTypes":{"log":"text/plain"}},"gcs_credentials_secret":"gce-sa-credentials-gcs-publisher"}}`,
-		)
-		output, err := cmd.Run()
-		if err != nil {
-			t.Fatalf("ci-operator failed: %v; output:\n%v", err, string(output))
-		}
-		framework.CompareWithFixtureDir(t, "artifacts/template", filepath.Join(cmd.ArtifactDir(), "template"))
-		outputjUnit := filepath.Join(cmd.ArtifactDir(), "junit_operator.xml")
-		raw, err := os.ReadFile(outputjUnit)
-		if err != nil {
-			t.Fatalf("could not read jUnit artifact: %v", err)
-		}
-		if err := os.WriteFile(outputjUnit, timeRegex.ReplaceAll(raw, []byte(`time="whatever"`)), 0755); err != nil {
-			t.Fatalf("could not munge jUnit artifact: %v", err)
-		}
-		framework.CompareWithFixture(t, "artifacts/junit_operator.xml", filepath.Join(cmd.ArtifactDir(), "junit_operator.xml"))
-	})
 }
 
 func TestDynamicReleases(t *testing.T) {

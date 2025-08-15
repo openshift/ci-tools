@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -845,6 +846,111 @@ func Test_hasUnactionableLabels(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if diff := cmp.Diff(hasUnactionableLabels(tc.labels), tc.expected); diff != "" {
 				t.Fatalf("actual result desn't match expected, diff: %s", diff)
+			}
+		})
+	}
+}
+
+func Test_sendMessage(t *testing.T) {
+	type args struct {
+		logger      *logrus.Entry
+		channel     string
+		prs         []prRequest
+		slackClient slackClient
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{
+			name: "send message to valid channel",
+			args: args{
+				logger:  logrus.NewEntry(logrus.New()),
+				channel: "valid-channel",
+				prs: []prRequest{
+					{
+						Repo:        "org/repo",
+						Number:      1,
+						Url:         "github.com/org/repo/1",
+						Title:       "Test PR",
+						Author:      "user",
+						Created:     time.Now(),
+						LastUpdated: time.Now(),
+					},
+				},
+				slackClient: fakeSlackClient{userIdsByEmail: map[string]string{}},
+			},
+			wantErr: false,
+		},
+		{
+			name: "send message with empty PR list",
+			args: args{
+				logger:      logrus.NewEntry(logrus.New()),
+				channel:     "valid-channel",
+				prs:         []prRequest{},
+				slackClient: fakeSlackClient{userIdsByEmail: map[string]string{}},
+			},
+			wantErr: false,
+		},
+		{
+			name: "send message with few PRs",
+			args: args{
+				logger:  logrus.NewEntry(logrus.New()),
+				channel: "valid-channel",
+				prs: []prRequest{
+					{
+						Repo:        "org/repo",
+						Number:      1,
+						Url:         "github.com/org/repo/1",
+						Title:       "Test PR",
+						Author:      "user",
+						Created:     time.Now(),
+						LastUpdated: time.Now(),
+					},
+					{
+						Repo:        "org/repo",
+						Number:      2,
+						Url:         "github.com/org/repo/2",
+						Title:       "Another Test PR",
+						Author:      "user2",
+						Created:     time.Now(),
+						LastUpdated: time.Now(),
+					},
+				},
+				slackClient: fakeSlackClient{userIdsByEmail: map[string]string{}},
+			},
+			wantErr: false,
+		},
+		{
+			name: "send message with more than 100 PRs",
+			args: args{
+				logger:  logrus.NewEntry(logrus.New()),
+				channel: "valid-channel",
+				prs: func() []prRequest {
+					prs := make([]prRequest, 101)
+					for i := 0; i < 101; i++ {
+						prs[i] = prRequest{
+							Repo:        "org/repo",
+							Number:      i + 1,
+							Url:         fmt.Sprintf("github.com/org/repo/%d", i+1),
+							Title:       fmt.Sprintf("Test PR %d", i+1),
+							Author:      "user",
+							Created:     time.Now(),
+							LastUpdated: time.Now(),
+						}
+					}
+					return prs
+				}(),
+				slackClient: fakeSlackClient{userIdsByEmail: map[string]string{}},
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := sendMessage(tt.args.logger, tt.args.channel, tt.args.prs, tt.args.slackClient); (err != nil) != tt.wantErr {
+				t.Errorf("sendMessage() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}

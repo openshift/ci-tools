@@ -185,6 +185,73 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 	}
 
 	klog.Infof("Pod %s in namespace %s is classified as %s", podName, namespace, podClass)
+
+	// Add NET_ADMIN and NET_RAW capabilities to test containers that require them
+	if podClass == PodClassTests {
+		// Check each container for the environment variable
+		for i, container := range pod.Spec.Containers {
+			if container.Name == "test" {
+				// Check if this container has TEST_REQUIRES_BUILDFARM_NET_ADMIN=true
+				requiresNetAdmin := false
+				for _, env := range container.Env {
+					if env.Name == "TEST_REQUIRES_BUILDFARM_NET_ADMIN" && env.Value == "true" {
+						requiresNetAdmin = true
+						break
+					}
+				}
+
+				if requiresNetAdmin {
+					// Build the correct patch based on existing securityContext
+					if container.SecurityContext == nil {
+						// No securityContext exists, create one with capabilities
+						securityContext := map[string]interface{}{
+							"capabilities": map[string]interface{}{
+								"add": []string{"NET_ADMIN", "NET_RAW"},
+							},
+						}
+						addPatchEntry("add", fmt.Sprintf("/spec/containers/%d/securityContext", i), securityContext)
+					} else if container.SecurityContext.Capabilities == nil {
+						// securityContext exists but no capabilities, add capabilities
+						capabilities := map[string]interface{}{
+							"add": []string{"NET_ADMIN", "NET_RAW"},
+						}
+						addPatchEntry("add", fmt.Sprintf("/spec/containers/%d/securityContext/capabilities", i), capabilities)
+					} else {
+						// Both securityContext and capabilities exist, merge the "add" array
+						existingCaps := make([]string, 0)
+						capSet := make(map[string]bool)
+
+						// Collect existing capabilities
+						if container.SecurityContext.Capabilities.Add != nil {
+							for _, cap := range container.SecurityContext.Capabilities.Add {
+								existingCaps = append(existingCaps, string(cap))
+								capSet[string(cap)] = true
+							}
+						}
+
+						// Add new capabilities if not already present
+						if !capSet["NET_ADMIN"] {
+							existingCaps = append(existingCaps, "NET_ADMIN")
+						}
+						if !capSet["NET_RAW"] {
+							existingCaps = append(existingCaps, "NET_RAW")
+						}
+
+						// Use "replace" if "add" array exists, otherwise use "add"
+						if container.SecurityContext.Capabilities.Add != nil {
+							addPatchEntry("replace", fmt.Sprintf("/spec/containers/%d/securityContext/capabilities/add", i), existingCaps)
+						} else {
+							addPatchEntry("add", fmt.Sprintf("/spec/containers/%d/securityContext/capabilities/add", i), existingCaps)
+						}
+					}
+
+					klog.Infof("Added NET_ADMIN and NET_RAW capabilities to test container in pod %s in namespace %s due to TEST_REQUIRES_BUILDFARM_NET_ADMIN=true", podName, namespace)
+				}
+				break
+			}
+		}
+	}
+
 	if podClass == PodClassTests {
 		// Segmenting long run tests onto their own node set helps normal tests nodes scale down
 		// more effectively.

@@ -528,39 +528,55 @@ func sendMessage(logger *logrus.Entry, channel string, prs []prRequest, slackCli
 
 	message = append(message, &slack.DividerBlock{Type: slack.MBTDivider})
 
-	for _, pr := range prs {
-		prBlock := &slack.ContextBlock{
-			Type: slack.MBTContext,
-			ContextElements: slack.ContextElements{
-				Elements: []slack.MixedElement{
-					&slack.TextBlockObject{
-						Type: slack.MarkdownType,
-						Text: pr.link(),
-					},
-					&slack.TextBlockObject{
-						Type: slack.MarkdownType,
-						Text: pr.createdUpdatedMessage(),
-					},
-				},
-			},
-		}
-		if len(pr.Labels) > 0 {
-			prBlock.ContextElements.Elements = append(prBlock.ContextElements.Elements, &slack.TextBlockObject{
-				Type: slack.MarkdownType,
-				Text: getLabelMessage(pr.Labels),
-			})
-		}
-		message = append(message, prBlock)
+	const maxPRsPerMessage = 40
+	totalPrs := len(prs)
+	if totalPrs > maxPRsPerMessage {
+		logger.Warnf("Too many PRs (%d) to send in a single message, splitting into multiple messages", totalPrs)
 	}
 
-	responseChannel, responseTimestamp, err := slackClient.PostMessage(channel,
-		slack.MsgOptionText("PR Review Reminders.", true),
-		slack.MsgOptionBlocks(message...))
-	if err != nil {
-		logger.WithError(err).WithField("message", message).Debug("Failed to message user about PR review reminder")
-		errors = append(errors, fmt.Errorf("failed to message channel %s about PR review reminder: %w", channel, err))
-	} else {
-		logger.Infof("Posted PR review reminder in channel: %s at: %s", responseChannel, responseTimestamp)
+	// Split the PRs into chunks of maxPRsPerMessage
+	// This is to avoid hitting Slack's message size limit
+	// and to make it easier to read the messages
+	for start := 0; start < totalPrs; start += maxPRsPerMessage {
+		end := start + maxPRsPerMessage
+		if end > totalPrs {
+			end = totalPrs
+		}
+		prsChunk := prs[start:end]
+		for _, pr := range prsChunk {
+			prBlock := &slack.ContextBlock{
+				Type: slack.MBTContext,
+				ContextElements: slack.ContextElements{
+					Elements: []slack.MixedElement{
+						&slack.TextBlockObject{
+							Type: slack.MarkdownType,
+							Text: pr.link(),
+						},
+						&slack.TextBlockObject{
+							Type: slack.MarkdownType,
+							Text: pr.createdUpdatedMessage(),
+						},
+					},
+				},
+			}
+			if len(pr.Labels) > 0 {
+				prBlock.ContextElements.Elements = append(prBlock.ContextElements.Elements, &slack.TextBlockObject{
+					Type: slack.MarkdownType,
+					Text: getLabelMessage(pr.Labels),
+				})
+			}
+			message = append(message, prBlock)
+		}
+
+		responseChannel, responseTimestamp, err := slackClient.PostMessage(channel,
+			slack.MsgOptionText("PR Review Reminders.", true),
+			slack.MsgOptionBlocks(message...))
+		if err != nil {
+			logger.WithError(err).WithField("message", message).Debug("Failed to message user about PR review reminder")
+			errors = append(errors, fmt.Errorf("failed to message channel %s about PR review reminder: %w", channel, err))
+		} else {
+			logger.Infof("Posted PR review reminder in channel: %s at: %s", responseChannel, responseTimestamp)
+		}
 	}
 
 	return kerrors.NewAggregate(errors)

@@ -1,0 +1,16 @@
+cluster_groups:
+  build-farm:
+  - app.ci
+  - build01
+  dp-managed:
+  - build01
+  - build02
+groups:
+  team-alpha:
+    secret_collections:
+    - collection-alpha
+    - shared-collection
+  team-beta:
+    secret_collections:
+    - collection-beta
+    - shared-collection

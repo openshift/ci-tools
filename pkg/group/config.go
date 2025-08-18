@@ -1,11 +1,14 @@
 package group
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 
+	"gopkg.in/yaml.v3"
+
 	"k8s.io/apimachinery/pkg/util/sets"
-	"sigs.k8s.io/yaml"
+	k8syaml "sigs.k8s.io/yaml"
 )
 
 const (
@@ -16,20 +19,22 @@ const (
 // Config represents the configuration file for the groups
 type Config struct {
 	// ClusterGroups holds the mapping from cluster group name to the clusters in the group
-	ClusterGroups map[string][]string `json:"cluster_groups,omitempty"`
+	ClusterGroups map[string][]string `json:"cluster_groups,omitempty" yaml:"cluster_groups,omitempty"`
 	// Groups holds the mapping from group name to its target
-	Groups map[string]Target `json:"groups,omitempty"`
+	Groups map[string]Target `json:"groups,omitempty" yaml:"groups,omitempty"`
 }
 
 // Target represents the distribution of a group
 // If neither Clusters and nor ClusterGroups is set, then the group is on all clusters.
 type Target struct {
 	// RenameTo is the new name of the group. If not set, the original name will be used.
-	RenameTo string `json:"rename_to,omitempty"`
+	RenameTo string `json:"rename_to,omitempty" yaml:"rename_to,omitempty"`
 	// Clusters is the clusters where the group should exist.
-	Clusters []string `json:"clusters,omitempty"`
+	Clusters []string `json:"clusters,omitempty" yaml:"clusters,omitempty"`
 	// ClusterGroups is the cluster groups where the group should exist.
-	ClusterGroups []string `json:"cluster_groups,omitempty"`
+	ClusterGroups []string `json:"cluster_groups,omitempty" yaml:"cluster_groups,omitempty"`
+	// SecretCollections are the secret collections the group has access to.
+	SecretCollections []string `json:"secret_collections,omitempty" yaml:"secret_collections,omitempty"`
 }
 
 func (t Target) ResolveClusters(cg map[string][]string) sets.Set[string] {
@@ -47,8 +52,11 @@ func LoadConfig(file string) (*Config, error) {
 		return nil, fmt.Errorf("failed to load config file")
 	}
 	config := &Config{}
-	if err := yaml.Unmarshal(data, config); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal config file: %w", err)
+
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(config); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config file (strict mode): %w", err)
 	}
 	if err := config.validate(); err != nil {
 		return nil, fmt.Errorf("failed to validate config file: %w", err)
@@ -58,7 +66,7 @@ func LoadConfig(file string) (*Config, error) {
 
 // PrintConfig deserializes and re-serializes the config. Removing spaces and comments, and sorting the groups in the process prior to printing to standard out
 func PrintConfig(c *Config) error {
-	rawYaml, err := yaml.Marshal(c)
+	rawYaml, err := k8syaml.Marshal(c)
 	if err != nil {
 		return err
 	}

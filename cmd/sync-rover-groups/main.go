@@ -84,6 +84,15 @@ func addSchemes() error {
 	return nil
 }
 
+func (o *options) setupLogger() {
+	logrus.SetLevel(o.logLevel)
+	formatter := &logrus.TextFormatter{
+		FullTimestamp: true,
+		ForceColors:   true,
+	}
+	logrus.SetFormatter(formatter)
+}
+
 func main() {
 	logrusutil.ComponentInit()
 
@@ -92,7 +101,7 @@ func main() {
 	if err := opts.validate(); err != nil {
 		logrus.WithError(err).Fatal("failed to validate the option")
 	}
-	logrus.SetLevel(opts.logLevel)
+	opts.setupLogger()
 	opts.manifestDirs = sets.New[string](opts.manifestDirRaw.Strings()...)
 
 	var config *group.Config

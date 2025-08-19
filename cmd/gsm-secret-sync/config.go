@@ -20,7 +20,6 @@ const (
 	updaterSASecretSuffix = "__updater-service-account"
 	indexSecretSuffix     = "____index"
 
-	colectionRegex  = "^[a-z0-9-]+$"
 	secretNameRegex = "^[A-Za-z0-9-]+$"
 
 	// IAM binding condition title prefixes

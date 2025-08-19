@@ -48,3 +48,101 @@ func TestLoadConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateCollectionName(t *testing.T) {
+	testCases := []struct {
+		name          string
+		collection    string
+		expectedValid bool
+	}{
+		{
+			name:          "valid collection name: lowercase letters",
+			collection:    "test-collection",
+			expectedValid: true,
+		},
+		{
+			name:          "valid collection name: numbers",
+			collection:    "test123",
+			expectedValid: true,
+		},
+		{
+			name:          "valid collection name: hyphens",
+			collection:    "test-collection-123",
+			expectedValid: true,
+		},
+		{
+			name:          "valid collection name: multiphe hyphens",
+			collection:    "test--collection",
+			expectedValid: true,
+		},
+		{
+			name:          "valid collection name: single character",
+			collection:    "a",
+			expectedValid: true,
+		},
+		{
+			name:          "invalid collection name: uppercase letters",
+			collection:    "Test-Collection",
+			expectedValid: false,
+		},
+		{
+			name:          "invalid collection name: special characters",
+			collection:    "test_collection",
+			expectedValid: false,
+		},
+		{
+			name:          "invalid collection name: symbols",
+			collection:    "abc!4@#$%^&*()+",
+			expectedValid: false,
+		},
+		{
+			name:          "invalid collection name: spaces",
+			collection:    "test collection",
+			expectedValid: false,
+		},
+		{
+			name:          "invalid collection name: empty string",
+			collection:    "",
+			expectedValid: false,
+		},
+		{
+			name:          "invalid collection name: dots",
+			collection:    "test.collection",
+			expectedValid: false,
+		},
+		{
+			name:          "invalid collection name: double underscores",
+			collection:    "test__collection",
+			expectedValid: false,
+		},
+		{
+			name:          "invalid collection name: double underscores at the end",
+			collection:    "testcollection__",
+			expectedValid: false,
+		},
+		{
+			name:          "invalid collection name: double underscores at the beginning",
+			collection:    "__testcollection",
+			expectedValid: false,
+		},
+		{
+			name:          "invalid collection name: hyphen at the beginning",
+			collection:    "-testcollection",
+			expectedValid: false,
+		},
+		{
+			name:          "invalid collection name: hyphen at the end",
+			collection:    "test-",
+			expectedValid: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actualValid := ValidateCollectionName(tc.collection)
+			if actualValid != tc.expectedValid {
+				t.Errorf("Expected %t, got %t for collection %q", tc.expectedValid, actualValid, tc.collection)
+			}
+		})
+	}
+}

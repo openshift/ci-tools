@@ -568,7 +568,7 @@ func getActualSecrets(ctx context.Context, client SecretManagerClient) (map[stri
 func extractCollectionFromSecretName(secretName string) string {
 	if strings.HasSuffix(secretName, indexSecretSuffix) {
 		collection := strings.TrimSuffix(secretName, indexSecretSuffix)
-		if collection != "" && validateCollectionName(collection) {
+		if collection != "" && group.ValidateCollectionName(collection) {
 			return collection
 		}
 		return ""
@@ -576,7 +576,7 @@ func extractCollectionFromSecretName(secretName string) string {
 
 	parts := strings.Split(secretName, "__")
 	if len(parts) == 2 && parts[0] != "" && parts[1] != "" {
-		if !validateCollectionName(parts[0]) {
+		if !group.ValidateCollectionName(parts[0]) {
 			return ""
 		}
 		if !validateSecretName(parts[1]) {
@@ -586,10 +586,6 @@ func extractCollectionFromSecretName(secretName string) string {
 	}
 
 	return ""
-}
-
-func validateCollectionName(collection string) bool {
-	return regexp.MustCompile(colectionRegex).MatchString(collection)
 }
 
 func validateSecretName(secretName string) bool {

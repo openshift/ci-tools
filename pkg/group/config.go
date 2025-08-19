@@ -1,14 +1,11 @@
 package group
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 
-	"gopkg.in/yaml.v3"
-
 	"k8s.io/apimachinery/pkg/util/sets"
-	k8syaml "sigs.k8s.io/yaml"
+	"sigs.k8s.io/yaml"
 )
 
 const (
@@ -53,9 +50,7 @@ func LoadConfig(file string) (*Config, error) {
 	}
 	config := &Config{}
 
-	decoder := yaml.NewDecoder(bytes.NewReader(data))
-	decoder.KnownFields(true)
-	if err := decoder.Decode(config); err != nil {
+	if err := yaml.UnmarshalStrict(data, config); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config file (strict mode): %w", err)
 	}
 	if err := config.validate(); err != nil {
@@ -66,7 +61,7 @@ func LoadConfig(file string) (*Config, error) {
 
 // PrintConfig deserializes and re-serializes the config. Removing spaces and comments, and sorting the groups in the process prior to printing to standard out
 func PrintConfig(c *Config) error {
-	rawYaml, err := k8syaml.Marshal(c)
+	rawYaml, err := yaml.Marshal(c)
 	if err != nil {
 		return err
 	}

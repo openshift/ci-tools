@@ -1,4 +1,4 @@
-package main
+package gsmsecrets
 
 import (
 	"bytes"
@@ -12,10 +12,14 @@ import (
 )
 
 func TestDiffServiceAccounts(t *testing.T) {
+	config := Config{
+		ProjectIdString: "test-project",
+		ProjectIdNumber: "123456789",
+	}
 	makeServiceAccount := func(collection string) ServiceAccountInfo {
 		return ServiceAccountInfo{
-			Email:       getUpdaterSAEmail(collection),
-			DisplayName: getUpdaterSAId(collection),
+			Email:       GetUpdaterSAEmail(collection, config),
+			DisplayName: GetUpdaterSAId(collection),
 			Collection:  collection,
 		}
 	}
@@ -46,7 +50,7 @@ func TestDiffServiceAccounts(t *testing.T) {
 			},
 			actualSAs: []ServiceAccountInfo{},
 			expectedToCreate: SAMap{
-				getUpdaterSAEmail("alpha"): serviceAccountAlpha,
+				GetUpdaterSAEmail("alpha", config): serviceAccountAlpha,
 			},
 			expectedToDelete: SAMap{},
 		},
@@ -58,7 +62,7 @@ func TestDiffServiceAccounts(t *testing.T) {
 			},
 			expectedToCreate: SAMap{},
 			expectedToDelete: SAMap{
-				getUpdaterSAEmail("alpha"): serviceAccountAlpha,
+				GetUpdaterSAEmail("alpha", config): serviceAccountAlpha,
 			},
 		},
 		{
@@ -85,10 +89,10 @@ func TestDiffServiceAccounts(t *testing.T) {
 				serviceAccountBeta,  // delete this
 			},
 			expectedToCreate: SAMap{
-				getUpdaterSAEmail("gamma"): serviceAccountGamma,
+				GetUpdaterSAEmail("gamma", config): serviceAccountGamma,
 			},
 			expectedToDelete: SAMap{
-				getUpdaterSAEmail("beta"): serviceAccountBeta,
+				GetUpdaterSAEmail("beta", config): serviceAccountBeta,
 			},
 		},
 		{
@@ -106,14 +110,14 @@ func TestDiffServiceAccounts(t *testing.T) {
 				serviceAccountTemp,   // delete
 			},
 			expectedToCreate: SAMap{
-				getUpdaterSAEmail("prod"):    serviceAccountProd,
-				getUpdaterSAEmail("staging"): serviceAccountStaging,
-				getUpdaterSAEmail("dev"):     serviceAccountDev,
+				GetUpdaterSAEmail("prod", config):    serviceAccountProd,
+				GetUpdaterSAEmail("staging", config): serviceAccountStaging,
+				GetUpdaterSAEmail("dev", config):     serviceAccountDev,
 			},
 			expectedToDelete: SAMap{
-				getUpdaterSAEmail("beta"):   serviceAccountBeta,
-				getUpdaterSAEmail("legacy"): serviceAccountLegacy,
-				getUpdaterSAEmail("temp"):   serviceAccountTemp,
+				GetUpdaterSAEmail("beta", config):   serviceAccountBeta,
+				GetUpdaterSAEmail("legacy", config): serviceAccountLegacy,
+				GetUpdaterSAEmail("temp", config):   serviceAccountTemp,
 			},
 		},
 		{
@@ -129,8 +133,8 @@ func TestDiffServiceAccounts(t *testing.T) {
 				serviceAccountBeta,
 			},
 			expectedToCreate: SAMap{
-				getUpdaterSAEmail("delta"):   serviceAccountDelta,
-				getUpdaterSAEmail("epsilon"): serviceAccountEpsilon,
+				GetUpdaterSAEmail("delta", config):   serviceAccountDelta,
+				GetUpdaterSAEmail("epsilon", config): serviceAccountEpsilon,
 			},
 			expectedToDelete: SAMap{},
 		},
@@ -144,9 +148,9 @@ func TestDiffServiceAccounts(t *testing.T) {
 			},
 			expectedToCreate: SAMap{},
 			expectedToDelete: SAMap{
-				getUpdaterSAEmail("alpha"):  serviceAccountAlpha,
-				getUpdaterSAEmail("beta"):   serviceAccountBeta,
-				getUpdaterSAEmail("legacy"): serviceAccountLegacy,
+				GetUpdaterSAEmail("alpha", config):  serviceAccountAlpha,
+				GetUpdaterSAEmail("beta", config):   serviceAccountBeta,
+				GetUpdaterSAEmail("legacy", config): serviceAccountLegacy,
 			},
 		},
 		{
@@ -158,9 +162,9 @@ func TestDiffServiceAccounts(t *testing.T) {
 			},
 			actualSAs: []ServiceAccountInfo{}, // no existing SAs
 			expectedToCreate: SAMap{
-				getUpdaterSAEmail("alpha"): serviceAccountAlpha,
-				getUpdaterSAEmail("beta"):  serviceAccountBeta,
-				getUpdaterSAEmail("zeta"):  serviceAccountZeta,
+				GetUpdaterSAEmail("alpha", config): serviceAccountAlpha,
+				GetUpdaterSAEmail("beta", config):  serviceAccountBeta,
+				GetUpdaterSAEmail("zeta", config):  serviceAccountZeta,
 			},
 			expectedToDelete: SAMap{},
 		},
@@ -177,12 +181,12 @@ func TestDiffServiceAccounts(t *testing.T) {
 func TestDiffSecrets(t *testing.T) {
 	testCollection := "test-collection"
 	SAsecret := GCPSecret{
-		Name:       getUpdaterSASecretName(testCollection),
+		Name:       GetUpdaterSASecretName(testCollection),
 		Type:       SecretTypeSA,
 		Collection: testCollection,
 	}
 	indexSecret := GCPSecret{
-		Name:       getIndexSecretName(testCollection),
+		Name:       GetIndexSecretName(testCollection),
 		Type:       SecretTypeIndex,
 		Collection: testCollection,
 	}
@@ -209,25 +213,25 @@ func TestDiffSecrets(t *testing.T) {
 				"test-collection": true,
 			},
 			desiredSecrets: map[string]GCPSecret{
-				getUpdaterSASecretName("test-collection"): {
-					Name:       getUpdaterSASecretName("test-collection"),
+				GetUpdaterSASecretName("test-collection"): {
+					Name:       GetUpdaterSASecretName("test-collection"),
 					Type:       SecretTypeSA,
 					Collection: "test-collection",
 				},
-				getIndexSecretName("test-collection"): {
-					Name:       getIndexSecretName("test-collection"),
+				GetIndexSecretName("test-collection"): {
+					Name:       GetIndexSecretName("test-collection"),
 					Type:       SecretTypeIndex,
 					Collection: "test-collection",
 				},
 			},
 			actualSecrets: map[string]GCPSecret{
-				getIndexSecretName("test-collection"): {
-					Name:       getIndexSecretName("test-collection"),
+				GetIndexSecretName("test-collection"): {
+					Name:       GetIndexSecretName("test-collection"),
 					Type:       SecretTypeIndex,
 					Collection: "test-collection",
 				},
-				getUpdaterSASecretName("test-collection"): {
-					Name:       getUpdaterSASecretName("test-collection"),
+				GetUpdaterSASecretName("test-collection"): {
+					Name:       GetUpdaterSASecretName("test-collection"),
 					Type:       SecretTypeSA,
 					Collection: "test-collection",
 				},
@@ -241,11 +245,11 @@ func TestDiffSecrets(t *testing.T) {
 				"test-collection-new": true,
 			},
 			desiredSecrets: map[string]GCPSecret{
-				getUpdaterSASecretName("test-collection"): SAsecret,
+				GetUpdaterSASecretName("test-collection"): SAsecret,
 			},
 			actualSecrets: map[string]GCPSecret{},
 			expectedToCreate: map[string]GCPSecret{
-				getUpdaterSASecretName("test-collection"): SAsecret,
+				GetUpdaterSASecretName("test-collection"): SAsecret,
 			},
 			expectedToDelete: []GCPSecret{},
 		},
@@ -254,8 +258,8 @@ func TestDiffSecrets(t *testing.T) {
 			desiredCollections: map[string]bool{},
 			desiredSecrets:     map[string]GCPSecret{},
 			actualSecrets: map[string]GCPSecret{
-				getUpdaterSASecretName(testCollection): SAsecret,
-				getIndexSecretName(testCollection):     indexSecret,
+				GetUpdaterSASecretName(testCollection): SAsecret,
+				GetIndexSecretName(testCollection):     indexSecret,
 			},
 			expectedToCreate: map[string]GCPSecret{},
 			expectedToDelete: []GCPSecret{indexSecret, SAsecret},
@@ -266,35 +270,35 @@ func TestDiffSecrets(t *testing.T) {
 				"keep-collection": true,
 			},
 			desiredSecrets: map[string]GCPSecret{
-				getUpdaterSASecretName("keep-collection"): {
-					Name:       getUpdaterSASecretName("keep-collection"),
+				GetUpdaterSASecretName("keep-collection"): {
+					Name:       GetUpdaterSASecretName("keep-collection"),
 					Type:       SecretTypeSA,
 					Collection: "keep-collection",
 				},
-				getIndexSecretName("keep-collection"): {
-					Name:       getIndexSecretName("keep-collection"),
+				GetIndexSecretName("keep-collection"): {
+					Name:       GetIndexSecretName("keep-collection"),
 					Type:       SecretTypeIndex,
 					Collection: "keep-collection",
 				},
 			},
 			actualSecrets: map[string]GCPSecret{
-				getUpdaterSASecretName("keep-collection"): {
-					Name:       getUpdaterSASecretName("keep-collection"),
+				GetUpdaterSASecretName("keep-collection"): {
+					Name:       GetUpdaterSASecretName("keep-collection"),
 					Type:       SecretTypeSA,
 					Collection: "keep-collection",
 				},
-				getIndexSecretName("keep-collection"): {
-					Name:       getIndexSecretName("keep-collection"),
+				GetIndexSecretName("keep-collection"): {
+					Name:       GetIndexSecretName("keep-collection"),
 					Type:       SecretTypeIndex,
 					Collection: "keep-collection",
 				},
-				getUpdaterSASecretName("delete-collection"): {
-					Name:       getUpdaterSASecretName("delete-collection"),
+				GetUpdaterSASecretName("delete-collection"): {
+					Name:       GetUpdaterSASecretName("delete-collection"),
 					Type:       SecretTypeSA,
 					Collection: "delete-collection",
 				},
-				getIndexSecretName("delete-collection"): {
-					Name:       getIndexSecretName("delete-collection"),
+				GetIndexSecretName("delete-collection"): {
+					Name:       GetIndexSecretName("delete-collection"),
 					Type:       SecretTypeIndex,
 					Collection: "delete-collection",
 				},
@@ -302,12 +306,12 @@ func TestDiffSecrets(t *testing.T) {
 			expectedToCreate: map[string]GCPSecret{},
 			expectedToDelete: []GCPSecret{
 				{
-					Name:       getIndexSecretName("delete-collection"),
+					Name:       GetIndexSecretName("delete-collection"),
 					Type:       SecretTypeIndex,
 					Collection: "delete-collection",
 				},
 				{
-					Name:       getUpdaterSASecretName("delete-collection"),
+					Name:       GetUpdaterSASecretName("delete-collection"),
 					Type:       SecretTypeSA,
 					Collection: "delete-collection",
 				},
@@ -320,69 +324,69 @@ func TestDiffSecrets(t *testing.T) {
 				"existing-keep":  true,
 			},
 			desiredSecrets: map[string]GCPSecret{
-				getUpdaterSASecretName("new-collection"): {
-					Name:       getUpdaterSASecretName("new-collection"),
+				GetUpdaterSASecretName("new-collection"): {
+					Name:       GetUpdaterSASecretName("new-collection"),
 					Type:       SecretTypeSA,
 					Collection: "new-collection",
 				},
-				getIndexSecretName("new-collection"): {
-					Name:       getIndexSecretName("new-collection"),
+				GetIndexSecretName("new-collection"): {
+					Name:       GetIndexSecretName("new-collection"),
 					Type:       SecretTypeIndex,
 					Collection: "new-collection",
 				},
-				getUpdaterSASecretName("existing-keep"): {
-					Name:       getUpdaterSASecretName("existing-keep"),
+				GetUpdaterSASecretName("existing-keep"): {
+					Name:       GetUpdaterSASecretName("existing-keep"),
 					Type:       SecretTypeSA,
 					Collection: "existing-keep",
 				},
-				getIndexSecretName("existing-keep"): {
-					Name:       getIndexSecretName("existing-keep"),
+				GetIndexSecretName("existing-keep"): {
+					Name:       GetIndexSecretName("existing-keep"),
 					Type:       SecretTypeIndex,
 					Collection: "existing-keep",
 				},
 			},
 			actualSecrets: map[string]GCPSecret{
-				getUpdaterSASecretName("existing-keep"): {
-					Name:       getUpdaterSASecretName("existing-keep"),
+				GetUpdaterSASecretName("existing-keep"): {
+					Name:       GetUpdaterSASecretName("existing-keep"),
 					Type:       SecretTypeSA,
 					Collection: "existing-keep",
 				},
-				getIndexSecretName("existing-keep"): {
-					Name:       getIndexSecretName("existing-keep"),
+				GetIndexSecretName("existing-keep"): {
+					Name:       GetIndexSecretName("existing-keep"),
 					Type:       SecretTypeIndex,
 					Collection: "existing-keep",
 				},
-				getUpdaterSASecretName("existing-delete"): {
-					Name:       getUpdaterSASecretName("existing-delete"),
+				GetUpdaterSASecretName("existing-delete"): {
+					Name:       GetUpdaterSASecretName("existing-delete"),
 					Type:       SecretTypeSA,
 					Collection: "existing-delete",
 				},
-				getIndexSecretName("existing-delete"): {
-					Name:       getIndexSecretName("existing-delete"),
+				GetIndexSecretName("existing-delete"): {
+					Name:       GetIndexSecretName("existing-delete"),
 					Type:       SecretTypeIndex,
 					Collection: "existing-delete",
 				},
 			},
 			expectedToCreate: map[string]GCPSecret{
-				getUpdaterSASecretName("new-collection"): {
-					Name:       getUpdaterSASecretName("new-collection"),
+				GetUpdaterSASecretName("new-collection"): {
+					Name:       GetUpdaterSASecretName("new-collection"),
 					Type:       SecretTypeSA,
 					Collection: "new-collection",
 				},
-				getIndexSecretName("new-collection"): {
-					Name:       getIndexSecretName("new-collection"),
+				GetIndexSecretName("new-collection"): {
+					Name:       GetIndexSecretName("new-collection"),
 					Type:       SecretTypeIndex,
 					Collection: "new-collection",
 				},
 			},
 			expectedToDelete: []GCPSecret{
 				{
-					Name:       getIndexSecretName("existing-delete"),
+					Name:       GetIndexSecretName("existing-delete"),
 					Type:       SecretTypeIndex,
 					Collection: "existing-delete",
 				},
 				{
-					Name:       getUpdaterSASecretName("existing-delete"),
+					Name:       GetUpdaterSASecretName("existing-delete"),
 					Type:       SecretTypeSA,
 					Collection: "existing-delete",
 				},
@@ -394,27 +398,27 @@ func TestDiffSecrets(t *testing.T) {
 				"partial-collection": true,
 			},
 			desiredSecrets: map[string]GCPSecret{
-				getUpdaterSASecretName("partial-collection"): {
-					Name:       getUpdaterSASecretName("partial-collection"),
+				GetUpdaterSASecretName("partial-collection"): {
+					Name:       GetUpdaterSASecretName("partial-collection"),
 					Type:       SecretTypeSA,
 					Collection: "partial-collection",
 				},
-				getIndexSecretName("partial-collection"): {
-					Name:       getIndexSecretName("partial-collection"),
+				GetIndexSecretName("partial-collection"): {
+					Name:       GetIndexSecretName("partial-collection"),
 					Type:       SecretTypeIndex,
 					Collection: "partial-collection",
 				},
 			},
 			actualSecrets: map[string]GCPSecret{
-				getIndexSecretName("partial-collection"): {
-					Name:       getIndexSecretName("partial-collection"),
+				GetIndexSecretName("partial-collection"): {
+					Name:       GetIndexSecretName("partial-collection"),
 					Type:       SecretTypeIndex,
 					Collection: "partial-collection",
 				},
 			},
 			expectedToCreate: map[string]GCPSecret{
-				getUpdaterSASecretName("partial-collection"): {
-					Name:       getUpdaterSASecretName("partial-collection"),
+				GetUpdaterSASecretName("partial-collection"): {
+					Name:       GetUpdaterSASecretName("partial-collection"),
 					Type:       SecretTypeSA,
 					Collection: "partial-collection",
 				},
@@ -432,27 +436,32 @@ func TestDiffSecrets(t *testing.T) {
 }
 
 func TestDiffIAMBindings(t *testing.T) {
+	config := Config{
+		ProjectIdString: "test-project",
+		ProjectIdNumber: "123456789",
+	}
+
 	// Helper to create test bindings
 	createViewerBinding := func(collection string, members []string) *iampb.Binding {
 		return &iampb.Binding{
-			Role:    SecretAccessorRole,
+			Role:    config.GetSecretAccessorRole(),
 			Members: members,
 			Condition: &expr.Expr{
-				Expression:  buildSecretAccessorRoleConditionExpression(collection),
-				Title:       getSecretsViewerConditionTitle(collection),
-				Description: getSecretsViewerConditionDescription(collection),
+				Expression:  BuildSecretAccessorRoleConditionExpression(collection),
+				Title:       GetSecretsViewerConditionTitle(collection),
+				Description: GetSecretsViewerConditionDescription(collection),
 			},
 		}
 	}
 
 	createUpdaterBinding := func(collection string, members []string) *iampb.Binding {
 		return &iampb.Binding{
-			Role:    SecretUpdaterRole,
+			Role:    config.GetSecretUpdaterRole(),
 			Members: members,
 			Condition: &expr.Expr{
-				Expression:  buildSecretUpdaterRoleConditionExpression(collection),
-				Title:       getSecretsUpdaterConditionTitle(collection),
-				Description: getSecretsUpdaterConditionDescription(collection),
+				Expression:  BuildSecretUpdaterRoleConditionExpression(collection),
+				Title:       GetSecretsUpdaterConditionTitle(collection),
+				Description: GetSecretsUpdaterConditionDescription(collection),
 			},
 		}
 	}
@@ -663,7 +672,7 @@ func TestDiffIAMBindings(t *testing.T) {
 
 				// Verify no obsolete managed bindings remain
 				for _, binding := range result.Bindings {
-					if isManagedBinding(binding) {
+					if IsManagedBinding(binding) {
 						key := ToCanonicalIAMBinding(binding).makeCanonicalKey()
 						if !desiredKeys[key] {
 							t.Errorf("Found obsolete managed binding in result: Role=%s, Condition=%s",
@@ -701,7 +710,7 @@ func TestClassifySecret(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := classifySecret(tc.secretName)
+			actual := ClassifySecret(tc.secretName)
 			if actual != tc.expected {
 				t.Errorf("expected %v, got %v", tc.expected, actual)
 			}
@@ -710,6 +719,11 @@ func TestClassifySecret(t *testing.T) {
 }
 
 func TestIsManagedBinding(t *testing.T) {
+	config := Config{
+		ProjectIdString: "test-project",
+		ProjectIdNumber: "123456789",
+	}
+
 	testCases := []struct {
 		name     string
 		binding  *iampb.Binding
@@ -726,7 +740,7 @@ func TestIsManagedBinding(t *testing.T) {
 		{
 			name: "binding with no condition",
 			binding: &iampb.Binding{
-				Role:    SecretAccessorRole,
+				Role:    config.GetSecretAccessorRole(),
 				Members: []string{"user:test@example.com"},
 			},
 			expected: false,
@@ -734,12 +748,12 @@ func TestIsManagedBinding(t *testing.T) {
 		{
 			name: "correct binding",
 			binding: &iampb.Binding{
-				Role:    SecretUpdaterRole,
+				Role:    config.GetSecretUpdaterRole(),
 				Members: []string{"serviceAccount:test@example.com"},
 				Condition: &expr.Expr{
-					Title:       getSecretsUpdaterConditionTitle("test-collection"),
-					Description: getSecretsUpdaterConditionDescription("test-collection"),
-					Expression:  buildSecretUpdaterRoleConditionExpression("test-collection"),
+					Title:       GetSecretsUpdaterConditionTitle("test-collection"),
+					Description: GetSecretsUpdaterConditionDescription("test-collection"),
+					Expression:  BuildSecretUpdaterRoleConditionExpression("test-collection"),
 				},
 			},
 			expected: true,
@@ -747,12 +761,12 @@ func TestIsManagedBinding(t *testing.T) {
 		{
 			name: "correct binding with different title",
 			binding: &iampb.Binding{
-				Role:    SecretUpdaterRole,
+				Role:    config.GetSecretUpdaterRole(),
 				Members: []string{"serviceAccount:test@example.com"},
 				Condition: &expr.Expr{
 					Title:       "some wrong title",
-					Description: getSecretsUpdaterConditionDescription("test-collection"),
-					Expression:  buildSecretUpdaterRoleConditionExpression("test-collection"),
+					Description: GetSecretsUpdaterConditionDescription("test-collection"),
+					Expression:  BuildSecretUpdaterRoleConditionExpression("test-collection"),
 				},
 			},
 			expected: false,
@@ -760,12 +774,12 @@ func TestIsManagedBinding(t *testing.T) {
 		{
 			name: "correct binding with different description",
 			binding: &iampb.Binding{
-				Role:    SecretUpdaterRole,
+				Role:    config.GetSecretUpdaterRole(),
 				Members: []string{"serviceAccount:test@example.com"},
 				Condition: &expr.Expr{
-					Title:       getSecretsUpdaterConditionTitle("test-collection"),
+					Title:       GetSecretsUpdaterConditionTitle("test-collection"),
 					Description: "some wrong description",
-					Expression:  buildSecretUpdaterRoleConditionExpression("test-collection"),
+					Expression:  BuildSecretUpdaterRoleConditionExpression("test-collection"),
 				},
 			},
 			expected: false,
@@ -773,10 +787,10 @@ func TestIsManagedBinding(t *testing.T) {
 		{
 			name: "correct binding with different expression",
 			binding: &iampb.Binding{
-				Role: SecretUpdaterRole,
+				Role: config.GetSecretUpdaterRole(),
 				Condition: &expr.Expr{
-					Title:       getSecretsUpdaterConditionTitle("test-collection"),
-					Description: getSecretsUpdaterConditionDescription("test-collection"),
+					Title:       GetSecretsUpdaterConditionTitle("test-collection"),
+					Description: GetSecretsUpdaterConditionDescription("test-collection"),
 					Expression:  "some wrong expression",
 				},
 			},
@@ -786,7 +800,7 @@ func TestIsManagedBinding(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := isManagedBinding(tc.binding)
+			actual := IsManagedBinding(tc.binding)
 			if actual != tc.expected {
 				t.Errorf("expected %v, got %v", tc.expected, actual)
 			}
@@ -795,6 +809,11 @@ func TestIsManagedBinding(t *testing.T) {
 }
 
 func TestToCanonicalIAMBinding(t *testing.T) {
+	config := Config{
+		ProjectIdString: "test-project",
+		ProjectIdNumber: "123456789",
+	}
+
 	testCases := []struct {
 		name     string
 		binding  *iampb.Binding
@@ -803,52 +822,52 @@ func TestToCanonicalIAMBinding(t *testing.T) {
 		{
 			name: "simple binding",
 			binding: &iampb.Binding{
-				Role:    SecretAccessorRole,
+				Role:    config.GetSecretAccessorRole(),
 				Members: []string{"user:test@example.com"},
 			},
 			expected: CanonicalIAMBinding{
-				Role:    SecretAccessorRole,
+				Role:    config.GetSecretAccessorRole(),
 				Members: "user:test@example.com",
 			},
 		},
 		{
 			name: "binding with condition",
 			binding: &iampb.Binding{
-				Role:    SecretAccessorRole,
-				Members: []string{"user:test@example.com", getUpdaterSAEmail("collection1")},
+				Role:    config.GetSecretAccessorRole(),
+				Members: []string{"user:test@example.com", GetUpdaterSAEmail("collection1", config)},
 				Condition: &expr.Expr{
-					Expression: fmt.Sprintf(`resource.name.startsWith("projects/%s/secrets/collection1__")`, ProjectId),
+					Expression: fmt.Sprintf(`resource.name.startsWith("projects/%s/secrets/collection1__")`, config.ProjectIdString),
 					Title:      "some title",
 				},
 			},
 			expected: CanonicalIAMBinding{
-				Role:           SecretAccessorRole,
-				Members:        fmt.Sprintf("%s,user:test@example.com", getUpdaterSAEmail("collection1")),
-				ConditionExpr:  fmt.Sprintf(`resource.name.startsWith("projects/%s/secrets/collection1__")`, ProjectId),
+				Role:           config.GetSecretAccessorRole(),
+				Members:        fmt.Sprintf("%s,user:test@example.com", GetUpdaterSAEmail("collection1", config)),
+				ConditionExpr:  fmt.Sprintf(`resource.name.startsWith("projects/%s/secrets/collection1__")`, config.ProjectIdString),
 				ConditionTitle: "some title",
 			},
 		},
 		{
 			name: "complex binding",
 			binding: &iampb.Binding{
-				Role: SecretUpdaterRole,
+				Role: config.GetSecretUpdaterRole(),
 				Members: []string{
 					"user:test@example.com",
 					"user:some-other-user@example.com",
-					getUpdaterSAEmail("collection1"),
+					GetUpdaterSAEmail("collection1", config),
 				},
 				Condition: &expr.Expr{
-					Title:       getSecretsUpdaterConditionTitle("collection1"),
-					Description: getSecretsUpdaterConditionDescription("collection1"),
-					Expression:  buildSecretUpdaterRoleConditionExpression("collection1"),
+					Title:       GetSecretsUpdaterConditionTitle("collection1"),
+					Description: GetSecretsUpdaterConditionDescription("collection1"),
+					Expression:  BuildSecretUpdaterRoleConditionExpression("collection1"),
 				},
 			},
 			expected: CanonicalIAMBinding{
-				Role:           SecretUpdaterRole,
-				Members:        fmt.Sprintf("%s,user:some-other-user@example.com,user:test@example.com", getUpdaterSAEmail("collection1")),
-				ConditionExpr:  buildSecretUpdaterRoleConditionExpression("collection1"),
-				ConditionTitle: getSecretsUpdaterConditionTitle("collection1"),
-				ConditionDesc:  getSecretsUpdaterConditionDescription("collection1"),
+				Role:           config.GetSecretUpdaterRole(),
+				Members:        fmt.Sprintf("%s,user:some-other-user@example.com,user:test@example.com", GetUpdaterSAEmail("collection1", config)),
+				ConditionExpr:  BuildSecretUpdaterRoleConditionExpression("collection1"),
+				ConditionTitle: GetSecretsUpdaterConditionTitle("collection1"),
+				ConditionDesc:  GetSecretsUpdaterConditionDescription("collection1"),
 			},
 		},
 	}
@@ -862,6 +881,11 @@ func TestToCanonicalIAMBinding(t *testing.T) {
 }
 
 func TestMakeCanonicalKey(t *testing.T) {
+	config := Config{
+		ProjectIdString: "test-project",
+		ProjectIdNumber: "123456789",
+	}
+
 	testCases := []struct {
 		name    string
 		binding CanonicalIAMBinding
@@ -869,28 +893,28 @@ func TestMakeCanonicalKey(t *testing.T) {
 		{
 			name: "simple binding without condition",
 			binding: CanonicalIAMBinding{
-				Role:    SecretAccessorRole,
+				Role:    config.GetSecretAccessorRole(),
 				Members: "user:test@example.com",
 			},
 		},
 		{
 			name: "binding with full condition",
 			binding: CanonicalIAMBinding{
-				Role:           SecretAccessorRole,
+				Role:           config.GetSecretAccessorRole(),
 				Members:        "group:team@example.com,user:test@example.com",
-				ConditionTitle: getSecretsViewerConditionTitle("alpha"),
-				ConditionDesc:  getSecretsViewerConditionDescription("alpha"),
-				ConditionExpr:  buildSecretAccessorRoleConditionExpression("alpha"),
+				ConditionTitle: GetSecretsViewerConditionTitle("alpha"),
+				ConditionDesc:  GetSecretsViewerConditionDescription("alpha"),
+				ConditionExpr:  BuildSecretAccessorRoleConditionExpression("alpha"),
 			},
 		},
 		{
 			name: "updater binding with condition",
 			binding: CanonicalIAMBinding{
-				Role:           SecretUpdaterRole,
-				Members:        fmt.Sprintf("serviceAccount:%s", getUpdaterSAEmail("beta")),
-				ConditionTitle: getSecretsUpdaterConditionTitle("beta"),
-				ConditionDesc:  getSecretsUpdaterConditionDescription("beta"),
-				ConditionExpr:  buildSecretUpdaterRoleConditionExpression("beta"),
+				Role:           config.GetSecretUpdaterRole(),
+				Members:        fmt.Sprintf("serviceAccount:%s", GetUpdaterSAEmail("beta", config)),
+				ConditionTitle: GetSecretsUpdaterConditionTitle("beta"),
+				ConditionDesc:  GetSecretsUpdaterConditionDescription("beta"),
+				ConditionExpr:  BuildSecretUpdaterRoleConditionExpression("beta"),
 			},
 		},
 		{
@@ -906,11 +930,11 @@ func TestMakeCanonicalKey(t *testing.T) {
 		{
 			name: "multiple members sorted",
 			binding: CanonicalIAMBinding{
-				Role:           SecretAccessorRole,
+				Role:           config.GetSecretAccessorRole(),
 				Members:        "group:admin@example.com,group:dev@example.com,user:alice@example.com,user:bob@example.com",
-				ConditionTitle: getSecretsViewerConditionTitle("gamma"),
-				ConditionDesc:  getSecretsViewerConditionDescription("gamma"),
-				ConditionExpr:  buildSecretAccessorRoleConditionExpression("gamma"),
+				ConditionTitle: GetSecretsViewerConditionTitle("gamma"),
+				ConditionDesc:  GetSecretsViewerConditionDescription("gamma"),
+				ConditionExpr:  BuildSecretAccessorRoleConditionExpression("gamma"),
 			},
 		},
 	}

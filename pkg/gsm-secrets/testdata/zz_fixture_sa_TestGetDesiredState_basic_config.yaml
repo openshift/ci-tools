@@ -1,0 +1,9 @@
+- Collection: collection-alpha
+  DisplayName: collection-alpha-updater
+  Email: collection-alpha-updater@test-project.iam.gserviceaccount.com
+- Collection: collection-beta
+  DisplayName: collection-beta-updater
+  Email: collection-beta-updater@test-project.iam.gserviceaccount.com
+- Collection: shared-collection
+  DisplayName: shared-collection-updater
+  Email: shared-collection-updater@test-project.iam.gserviceaccount.com

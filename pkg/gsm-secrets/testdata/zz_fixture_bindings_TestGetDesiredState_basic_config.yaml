@@ -12,8 +12,8 @@
     title: Read access to secrets for collection-alpha
   members:
   - group:team-alpha@redhat.com
-  - serviceAccount:collection-alpha-updater@openshift-ci-secrets.iam.gserviceaccount.com
-  role: projects/openshift-ci-secrets/roles/openshift_ci_secrets_viewer
+  - serviceAccount:collection-alpha-updater@test-project.iam.gserviceaccount.com
+  role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
     description: 'Managed by test platform: Create, update, and delete access to secrets
       in collection-alpha collection'
@@ -22,8 +22,8 @@
     title: Create, update, and delete access for collection-alpha
   members:
   - group:team-alpha@redhat.com
-  - serviceAccount:collection-alpha-updater@openshift-ci-secrets.iam.gserviceaccount.com
-  role: projects/openshift-ci-secrets/roles/openshift_ci_secrets_updater
+  - serviceAccount:collection-alpha-updater@test-project.iam.gserviceaccount.com
+  role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
     description: 'Managed by test platform: Read access to secrets in collection-beta
       collection'
@@ -38,8 +38,8 @@
     title: Read access to secrets for collection-beta
   members:
   - group:team-beta@redhat.com
-  - serviceAccount:collection-beta-updater@openshift-ci-secrets.iam.gserviceaccount.com
-  role: projects/openshift-ci-secrets/roles/openshift_ci_secrets_viewer
+  - serviceAccount:collection-beta-updater@test-project.iam.gserviceaccount.com
+  role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
     description: 'Managed by test platform: Create, update, and delete access to secrets
       in collection-beta collection'
@@ -48,8 +48,8 @@
     title: Create, update, and delete access for collection-beta
   members:
   - group:team-beta@redhat.com
-  - serviceAccount:collection-beta-updater@openshift-ci-secrets.iam.gserviceaccount.com
-  role: projects/openshift-ci-secrets/roles/openshift_ci_secrets_updater
+  - serviceAccount:collection-beta-updater@test-project.iam.gserviceaccount.com
+  role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
     description: 'Managed by test platform: Read access to secrets in shared-collection
       collection'
@@ -65,8 +65,8 @@
   members:
   - group:team-alpha@redhat.com
   - group:team-beta@redhat.com
-  - serviceAccount:shared-collection-updater@openshift-ci-secrets.iam.gserviceaccount.com
-  role: projects/openshift-ci-secrets/roles/openshift_ci_secrets_viewer
+  - serviceAccount:shared-collection-updater@test-project.iam.gserviceaccount.com
+  role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
     description: 'Managed by test platform: Create, update, and delete access to secrets
       in shared-collection collection'
@@ -76,5 +76,5 @@
   members:
   - group:team-alpha@redhat.com
   - group:team-beta@redhat.com
-  - serviceAccount:shared-collection-updater@openshift-ci-secrets.iam.gserviceaccount.com
-  role: projects/openshift-ci-secrets/roles/openshift_ci_secrets_updater
+  - serviceAccount:shared-collection-updater@test-project.iam.gserviceaccount.com
+  role: projects/test-project/roles/openshift_ci_secrets_updater

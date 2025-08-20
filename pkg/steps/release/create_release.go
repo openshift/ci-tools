@@ -53,6 +53,7 @@ type assembleReleaseStep struct {
 	resources api.ResourceConfiguration
 	client    kubernetes.PodClient
 	jobSpec   *api.JobSpec
+	secret    *coreapi.Secret
 }
 
 func (s *assembleReleaseStep) Inputs() (api.InputDefinition, error) {
@@ -182,6 +183,10 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 			Name: streamName,
 			Tag:  "cli",
 		},
+		Secrets: []*api.Secret{{
+			Name:      s.secret.Name,
+			MountPath: "/pull",
+		}},
 		Labels:             map[string]string{Label: s.name},
 		NodeName:           s.nodeName,
 		ServiceAccountName: "ci-operator",
@@ -190,7 +195,13 @@ set -xeuo pipefail
 export HOME=/tmp
 export XDG_RUNTIME_DIR=/tmp/run
 mkdir -p "${XDG_RUNTIME_DIR}"
-oc registry login
+mkdir -p "${XDG_RUNTIME_DIR}/containers"
+export DOCKER_CONFIG="${XDG_RUNTIME_DIR}/containers"
+if [[ -f /pull/.dockerconfigjson ]]; then
+	cp -f /pull/.dockerconfigjson "${XDG_RUNTIME_DIR}/containers/auth.json"
+	chmod 600 "${XDG_RUNTIME_DIR}/containers/auth.json" || true
+fi
+oc registry login --to "${XDG_RUNTIME_DIR}/containers/auth.json"
 exit_code="0"
 for ((i=1; i<=5; i++)); do
 	if %s; then
@@ -280,7 +291,7 @@ func (s *assembleReleaseStep) Objects() []ctrlruntimeclient.Object {
 // AssembleReleaseStep builds a new update payload image based on the cluster version operator
 // and the operators defined in the release configuration.
 func AssembleReleaseStep(name, nodeName string, config *api.ReleaseTagConfiguration, resources api.ResourceConfiguration,
-	client kubernetes.PodClient, jobSpec *api.JobSpec) api.Step {
+	client kubernetes.PodClient, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &assembleReleaseStep{
 		config:    config,
 		name:      name,
@@ -288,6 +299,7 @@ func AssembleReleaseStep(name, nodeName string, config *api.ReleaseTagConfigurat
 		resources: resources,
 		client:    client,
 		jobSpec:   jobSpec,
+		secret:    pullSecret,
 	}
 }
 

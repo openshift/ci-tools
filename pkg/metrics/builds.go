@@ -61,16 +61,25 @@ func (p *buildPlugin) Record(ev MetricsEvent) {
 
 	be.Namespace = build.Namespace
 	be.Name = build.Name
-	start := build.Status.StartTimestamp.Time
-	comp := build.Status.CompletionTimestamp.Time
-	be.StartTime = start
-	be.CompletionTime = comp
+
+	var start, comp time.Time
+	if build.Status.StartTimestamp != nil {
+		start = build.Status.StartTimestamp.Time
+		be.StartTime = start
+	}
+	if build.Status.CompletionTimestamp != nil {
+		comp = build.Status.CompletionTimestamp.Time
+		be.CompletionTime = comp
+	}
 	if !start.IsZero() && !comp.IsZero() {
 		be.DurationSeconds = int(comp.Sub(start).Seconds())
 	}
 	be.Status = string(build.Status.Phase)
 	be.Reason = string(build.Status.Reason)
-	be.OutputImage = build.Spec.Output.To.Name
+
+	if build.Spec.Output.To != nil {
+		be.OutputImage = build.Spec.Output.To.Name
+	}
 
 	if be.Timestamp.IsZero() {
 		be.Timestamp = time.Now()

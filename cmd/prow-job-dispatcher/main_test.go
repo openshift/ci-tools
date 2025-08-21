@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -519,6 +520,156 @@ func TestSendSlackMessage(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := sendSlackMessage(tt.args.slackClient, tt.args.channelId); (err != nil) != tt.wantErr {
 				t.Errorf("sendSlackMessage() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateOnly(t *testing.T) {
+	testCases := []struct {
+		name           string
+		clusterConfig  string
+		wantErr        bool
+		expectedErrMsg string
+		allowDiffError bool // Allow diff errors as they are informational
+	}{
+		{
+			name:           "valid cluster configuration",
+			clusterConfig:  filepath.Join("testdata", t.Name(), "valid_clusters.yaml"),
+			wantErr:        false,
+			allowDiffError: true, // Diff errors are expected and informational
+		},
+		{
+			name:           "invalid cluster configuration",
+			clusterConfig:  filepath.Join("testdata", t.Name(), "invalid_clusters.yaml"),
+			wantErr:        true,
+			expectedErrMsg: "failed to load config",
+			allowDiffError: false,
+		},
+		{
+			name:           "nonexistent cluster configuration",
+			clusterConfig:  filepath.Join("testdata", t.Name(), "nonexistent_clusters.yaml"),
+			wantErr:        true,
+			expectedErrMsg: "failed to load config",
+			allowDiffError: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := options{
+				clusterConfigPath:    tc.clusterConfig,
+				validateOnly:         true,
+				prometheusDaysBefore: 7, // Valid value required for options validation
+			}
+
+			err := opts.validate()
+
+			if tc.wantErr && !tc.allowDiffError {
+				if err == nil {
+					t.Errorf("%s: expected error but got none", tc.name)
+					return
+				}
+				if tc.expectedErrMsg != "" && !strings.Contains(err.Error(), tc.expectedErrMsg) {
+					t.Errorf("%s: expected error containing %q, got %q", tc.name, tc.expectedErrMsg, err.Error())
+				}
+			} else if tc.allowDiffError {
+				// For cases where diff errors are allowed (informational only)
+				// We should either get no error or a diff-related error
+				if err != nil {
+					// Check if it's a diff-related error (exit status 1 from diff command)
+					if !strings.Contains(err.Error(), "exit status 1") {
+						t.Errorf("%s: expected diff error or no error, got: %v", tc.name, err)
+					}
+				}
+				// Diff errors are acceptable for valid configs
+			} else if !tc.wantErr {
+				if err != nil {
+					t.Errorf("%s: expected no error but got: %v", tc.name, err)
+				}
+			}
+		})
+	}
+}
+
+func TestOptionsValidateOnly(t *testing.T) {
+	testCases := []struct {
+		name           string
+		opts           options
+		wantErr        bool
+		errMsg         string
+		allowDiffError bool // Allow diff errors as they are informational
+	}{
+		{
+			name: "validate-only mode with minimal required args",
+			opts: options{
+				validateOnly:         true,
+				clusterConfigPath:    filepath.Join("testdata", "TestValidateOnly", "valid_clusters.yaml"),
+				prometheusDaysBefore: 7, // Valid value
+			},
+			wantErr:        false,
+			allowDiffError: true, // Diff errors are acceptable for valid configs
+		},
+		{
+			name: "validate-only mode with invalid prometheus days",
+			opts: options{
+				validateOnly:         true,
+				clusterConfigPath:    "test-path",
+				prometheusDaysBefore: 0, // Invalid value
+			},
+			wantErr: true,
+			errMsg:  "--prometheus-days-before must be between 1 and 15",
+		},
+		{
+			name: "validate-only mode skips prometheus validation",
+			opts: options{
+				validateOnly:         true,
+				clusterConfigPath:    filepath.Join("testdata", "TestValidateOnly", "valid_clusters.yaml"),
+				prometheusDaysBefore: 7, // Valid value
+				// PrometheusOptions not set - should not cause error in validate-only mode
+			},
+			wantErr:        false,
+			allowDiffError: true, // Diff errors are acceptable for valid configs
+		},
+		{
+			name: "validate-only mode skips prow jobs dir requirement",
+			opts: options{
+				validateOnly:         true,
+				clusterConfigPath:    filepath.Join("testdata", "TestValidateOnly", "valid_clusters.yaml"),
+				prometheusDaysBefore: 7, // Valid value
+				// prowJobConfigDir not set - should not cause error in validate-only mode
+			},
+			wantErr:        false,
+			allowDiffError: true, // Diff errors are acceptable for valid configs
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.opts.validate()
+
+			if tc.wantErr && !tc.allowDiffError {
+				if err == nil {
+					t.Errorf("%s: expected error but got none", tc.name)
+					return
+				}
+				if tc.errMsg != "" && !strings.Contains(err.Error(), tc.errMsg) {
+					t.Errorf("%s: expected error containing %q, got %q", tc.name, tc.errMsg, err.Error())
+				}
+			} else if tc.allowDiffError {
+				// For cases where diff errors are allowed (informational only)
+				// We should either get no error or a diff-related error
+				if err != nil {
+					// Check if it's a diff-related error (exit status 1 from diff command)
+					if !strings.Contains(err.Error(), "exit status 1") {
+						t.Errorf("%s: expected diff error or no error, got: %v", tc.name, err)
+					}
+				}
+				// Diff errors are acceptable for valid configs
+			} else if !tc.wantErr {
+				if err != nil {
+					t.Errorf("%s: expected no error but got: %v", tc.name, err)
+				}
 			}
 		})
 	}

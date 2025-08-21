@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -167,39 +166,42 @@ func (o *options) validate() error {
 
 	// Prometheus validation is not required in validate-only mode
 	if !o.validateOnly {
-		return o.PrometheusOptions.Validate()
-	}
-	return nil
-}
-
-// validateConfigurations performs validation on the cluster and main config files
-func validateConfigurations(o options) error {
-	logrus.Info("Validating cluster configuration...")
-
-	// Load and validate cluster configuration
-	clusterMap, blockedClusters, err := dispatcher.LoadClusterConfig(o.clusterConfigPath)
-	if err != nil {
-		return fmt.Errorf("failed to load config from %q: %w", o.clusterConfigPath, err)
-	}
-	outFilePath := filepath.Join("/tmp", filepath.Base(o.clusterConfigPath))
-	if err := dispatcher.SaveClusterConfigPreservingFormat(clusterMap, blockedClusters, o.clusterConfigPath, outFilePath); err != nil {
-		return fmt.Errorf("failed to save config to %q: %w", outFilePath, err)
-	}
-	// now diff the roundtripped file with the original
-	output, err := exec.Command("diff", "-u", outFilePath, o.clusterConfigPath).CombinedOutput() // Execute the diff command and get combined output
-	if err != nil {
-		switch e := err.(type) {
-		case *exec.ExitError:
-			fmt.Printf("Diff found, exit code: %d\n", e.ExitCode())
-		default:
-			log.Fatalf("Error running diff command: %v\n", err)
+		if err := o.PrometheusOptions.Validate(); err != nil {
+			return err
 		}
 	}
 
-	fmt.Println(string(output)) // Print the diff output
+	// If validate-only mode is enabled, run cluster configuration validation
+	if o.validateOnly {
+		logrus.Info("Validating cluster configuration...")
 
-	logrus.Info("All validations passed successfully")
-	return err
+		// Load and validate cluster configuration
+		clusterMap, blockedClusters, err := dispatcher.LoadClusterConfig(o.clusterConfigPath)
+		if err != nil {
+			return fmt.Errorf("failed to load config from %q: %w", o.clusterConfigPath, err)
+		}
+		outFilePath := filepath.Join("/tmp", filepath.Base(o.clusterConfigPath))
+		if err := dispatcher.SaveClusterConfigPreservingFormat(clusterMap, blockedClusters, o.clusterConfigPath, outFilePath); err != nil {
+			return fmt.Errorf("failed to save config to %q: %w", outFilePath, err)
+		}
+		// now diff the roundtripped file with the original
+		output, err := exec.Command("diff", "-u", outFilePath, o.clusterConfigPath).CombinedOutput() // Execute the diff command and get combined output
+		if err != nil {
+			switch e := err.(type) {
+			case *exec.ExitError:
+				fmt.Printf("Diff found, exit code: %d\n", e.ExitCode())
+			default:
+				logrus.Fatalf("Error running diff command: %v\n", err)
+			}
+		}
+
+		fmt.Println(string(output)) // Print the diff output
+
+		logrus.Info("All validations passed successfully")
+		return err
+	}
+
+	return nil
 }
 
 // getCloudProvidersForE2ETests returns a set of cloud providers where a cluster is hosted for an e2e test defined in the given Prow job config.
@@ -698,12 +700,8 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to complete options.")
 	}
 
-	// If validate-only mode is enabled, run validation and exit
+	// If validate-only mode is enabled, validation was already done in validate() method, just exit
 	if o.validateOnly {
-		if err := validateConfigurations(o); err != nil {
-			logrus.WithError(err).Fatal("Validation failed")
-			os.Exit(1)
-		}
 		logrus.Info("Validation completed successfully")
 		os.Exit(0)
 	}

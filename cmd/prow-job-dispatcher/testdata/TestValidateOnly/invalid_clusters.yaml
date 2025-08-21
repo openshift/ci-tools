@@ -1,0 +1,12 @@
+aws:
+  - name: build01
+    capacity: 100
+    capabilities:
+    - intranet
+  - name: build03
+    capacity: invalid_capacity
+gcp:
+  - name: build02
+    capacity: 80
+    capabilities:
+    - public

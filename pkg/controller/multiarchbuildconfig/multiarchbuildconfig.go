@@ -290,7 +290,11 @@ func (r *reconciler) handleMirrorImage(ctx context.Context, logger *logrus.Entry
 	logger = logger.WithField(MirrorRegistriesLogField, strings.Join(mabc.Spec.ExternalRegistries, ","))
 	logger.Info("Mirroring image")
 
-	imageMirrorArgs := ocImageMirrorArgs(targetImageRef, mabc.Spec.ExternalRegistries)
+	imageMirrorArgs, err := ocImageMirrorArgs(targetImageRef, mabc.Spec.ExternalRegistries)
+	if err != nil {
+		return false, err
+	}
+
 	if err := r.imageMirrorer.mirror(imageMirrorArgs); err != nil {
 		logger.Errorf("Failed to mirror image: %s", err)
 		mutateFn = func(mabcToMutate *v1.MultiArchBuildConfig) {

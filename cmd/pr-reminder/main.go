@@ -484,6 +484,25 @@ func loadConfig(filename string, config interface{}) error {
 	return nil
 }
 
+func splitPRs(prs []prRequest, chunkSize int) [][]prRequest {
+	var chunks [][]prRequest
+	totalPRs := len(prs)
+	if totalPRs > chunkSize {
+		logrus.Warnf("Too many PRs (%d) to send in a single message, splitting into multiple messages", totalPRs)
+	}
+	// Split the PRs into chunks of chunkSize
+	// This is to avoid hitting Slack's message size limit
+	// and to make it easier to read the messages
+	for i := 0; i < totalPRs; i += chunkSize {
+		end := i + chunkSize
+		if end > totalPRs {
+			end = totalPRs
+		}
+		chunks = append(chunks, prs[i:end])
+	}
+	return chunks
+}
+
 func sendMessage(logger *logrus.Entry, channel string, prs []prRequest, slackClient slackClient) error {
 	var errors []error
 	message := []slack.Block{
@@ -528,39 +547,42 @@ func sendMessage(logger *logrus.Entry, channel string, prs []prRequest, slackCli
 
 	message = append(message, &slack.DividerBlock{Type: slack.MBTDivider})
 
-	for _, pr := range prs {
-		prBlock := &slack.ContextBlock{
-			Type: slack.MBTContext,
-			ContextElements: slack.ContextElements{
-				Elements: []slack.MixedElement{
-					&slack.TextBlockObject{
-						Type: slack.MarkdownType,
-						Text: pr.link(),
-					},
-					&slack.TextBlockObject{
-						Type: slack.MarkdownType,
-						Text: pr.createdUpdatedMessage(),
+	prChunks := splitPRs(prs, 40)
+	for _, prChunk := range prChunks {
+		for _, pr := range prChunk {
+			prBlock := &slack.ContextBlock{
+				Type: slack.MBTContext,
+				ContextElements: slack.ContextElements{
+					Elements: []slack.MixedElement{
+						&slack.TextBlockObject{
+							Type: slack.MarkdownType,
+							Text: pr.link(),
+						},
+						&slack.TextBlockObject{
+							Type: slack.MarkdownType,
+							Text: pr.createdUpdatedMessage(),
+						},
 					},
 				},
-			},
+			}
+			if len(pr.Labels) > 0 {
+				prBlock.ContextElements.Elements = append(prBlock.ContextElements.Elements, &slack.TextBlockObject{
+					Type: slack.MarkdownType,
+					Text: getLabelMessage(pr.Labels),
+				})
+			}
+			message = append(message, prBlock)
 		}
-		if len(pr.Labels) > 0 {
-			prBlock.ContextElements.Elements = append(prBlock.ContextElements.Elements, &slack.TextBlockObject{
-				Type: slack.MarkdownType,
-				Text: getLabelMessage(pr.Labels),
-			})
-		}
-		message = append(message, prBlock)
-	}
 
-	responseChannel, responseTimestamp, err := slackClient.PostMessage(channel,
-		slack.MsgOptionText("PR Review Reminders.", true),
-		slack.MsgOptionBlocks(message...))
-	if err != nil {
-		logger.WithError(err).WithField("message", message).Debug("Failed to message user about PR review reminder")
-		errors = append(errors, fmt.Errorf("failed to message channel %s about PR review reminder: %w", channel, err))
-	} else {
-		logger.Infof("Posted PR review reminder in channel: %s at: %s", responseChannel, responseTimestamp)
+		responseChannel, responseTimestamp, err := slackClient.PostMessage(channel,
+			slack.MsgOptionText("PR Review Reminders.", true),
+			slack.MsgOptionBlocks(message...))
+		if err != nil {
+			logger.WithError(err).WithField("message", message).Debug("Failed to message user about PR review reminder")
+			errors = append(errors, fmt.Errorf("failed to message channel %s about PR review reminder: %w", channel, err))
+		} else {
+			logger.Infof("Posted PR review reminder in channel: %s at: %s", responseChannel, responseTimestamp)
+		}
 	}
 
 	return kerrors.NewAggregate(errors)

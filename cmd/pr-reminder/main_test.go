@@ -849,3 +849,121 @@ func Test_hasUnactionableLabels(t *testing.T) {
 		})
 	}
 }
+
+func Test_splitPRs(t *testing.T) {
+	testCases := []struct {
+		name      string
+		prs       []prRequest
+		chunkSize int
+		expected  [][]prRequest
+	}{
+		{
+			name:      "empty PR list",
+			prs:       []prRequest{},
+			chunkSize: 40,
+			expected:  nil,
+		},
+		{
+			name: "only one PR",
+			prs: []prRequest{
+				{
+					Repo:        "org/repo",
+					Number:      1,
+					Url:         "github.com/org/repo/1",
+					Title:       "Test PR 1",
+					Author:      "user",
+					Created:     time.Time{},
+					LastUpdated: time.Time{},
+				},
+			},
+			chunkSize: 40,
+			expected: [][]prRequest{
+				{
+					{
+						Repo:        "org/repo",
+						Number:      1,
+						Url:         "github.com/org/repo/1",
+						Title:       "Test PR 1",
+						Author:      "user",
+						Created:     time.Time{},
+						LastUpdated: time.Time{},
+					},
+				},
+			},
+		},
+		{
+			name: "split PRs into chunks",
+			prs: []prRequest{
+				{
+					Repo:        "org/repo",
+					Number:      1,
+					Url:         "github.com/org/repo/1",
+					Title:       "Test PR 1",
+					Author:      "user",
+					Created:     time.Time{},
+					LastUpdated: time.Time{},
+				},
+				{
+					Repo:        "org/repo",
+					Number:      2,
+					Url:         "github.com/org/repo/2",
+					Title:       "Test PR 2",
+					Author:      "user",
+					Created:     time.Time{},
+					LastUpdated: time.Time{},
+				},
+				{
+					Repo:        "org/repo",
+					Number:      3,
+					Url:         "github.com/org/repo/3",
+					Title:       "Test PR 3",
+					Author:      "user",
+					Created:     time.Time{},
+					LastUpdated: time.Time{},
+				},
+			},
+			chunkSize: 2,
+			expected: [][]prRequest{
+				{
+					{
+						Repo:        "org/repo",
+						Number:      1,
+						Url:         "github.com/org/repo/1",
+						Title:       "Test PR 1",
+						Author:      "user",
+						Created:     time.Time{},
+						LastUpdated: time.Time{},
+					},
+					{
+						Repo:        "org/repo",
+						Number:      2,
+						Url:         "github.com/org/repo/2",
+						Title:       "Test PR 2",
+						Author:      "user",
+						Created:     time.Time{},
+						LastUpdated: time.Time{},
+					},
+				},
+				{
+					{
+						Repo:        "org/repo",
+						Number:      3,
+						Url:         "github.com/org/repo/3",
+						Title:       "Test PR 3",
+						Author:      "user",
+						Created:     time.Time{},
+						LastUpdated: time.Time{},
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := splitPRs(tc.prs, tc.chunkSize)
+			if diff := cmp.Diff(actual, tc.expected); diff != "" {
+				t.Fatalf("split PRs returned unexpected result, diff: %s", diff)
+			}
+		})
+	}
+}

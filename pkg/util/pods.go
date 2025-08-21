@@ -151,10 +151,13 @@ func WaitForPodCompletion(ctx context.Context, podClient kubernetes.PodClient, n
 			continue
 		}
 		if err != nil {
+			podClient.MetricsAgent().StorePodLifecycleMetrics(pod.Name, pod.Namespace)
 			return pod, err
 		}
 		break
 	}
+
+	podClient.MetricsAgent().StorePodLifecycleMetrics(pod.Name, pod.Namespace)
 	return pod, nil
 }
 

@@ -84,12 +84,12 @@ type nodesMetricsPlugin struct {
 }
 
 // newNodesMetricsPlugin creates a new instance and receives the shared nodes channel.
-func newNodesMetricsPlugin(ctx context.Context, client ctrlruntimeclient.Client, metricsClient metricsclient.Interface, nodesCh chan string) *nodesMetricsPlugin {
+func newNodesMetricsPlugin(ctx context.Context, logger *logrus.Entry, client ctrlruntimeclient.Client, metricsClient metricsclient.Interface, nodesCh chan string) *nodesMetricsPlugin {
 	return &nodesMetricsPlugin{
 		ctx:           ctx,
 		client:        client,
 		nodesCh:       nodesCh,
-		logger:        logrus.WithField("component", "metricsAgent").WithField("plugin", "nodes"),
+		logger:        logger.WithField("plugin", "nodes"),
 		nodesToPoll:   sets.New[string](),
 		watchTimes:    &sync.Map{},
 		stopCh:        make(map[string]chan struct{}),
@@ -108,6 +108,8 @@ func (p *nodesMetricsPlugin) Record(ev MetricsEvent) {
 		return
 	}
 	p.mu.Lock()
+
+	p.logger.WithField("event", ne).Debug("Recorded node metrics event")
 	p.events = append(p.events, *ne)
 	p.mu.Unlock()
 }
@@ -190,7 +192,6 @@ func (p *nodesMetricsPlugin) watchNode(ctx context.Context, nodeName string, sto
 			p.createAndStoreNodeEventWithWorkloads(nodeName, pollStartTime, cpuUtilization, memUtilization, currentWorkloads)
 			return
 		case <-ticker.C:
-			p.logger.Debugf("Ticker triggered for node: %s", nodeName)
 			cpuUtil, memUtil := p.pollNodeMetrics(ctx, nodeName)
 			cpuUtilization = append(cpuUtilization, cpuUtil)
 			memUtilization = append(memUtilization, memUtil)

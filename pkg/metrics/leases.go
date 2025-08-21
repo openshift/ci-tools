@@ -48,13 +48,15 @@ func parseLeaseEventName(raw string) (string, string, string) {
 // leasesPlugin implements the Plugin interface for lease-specific metrics.
 type leasesPlugin struct {
 	mu     sync.RWMutex
+	logger *logrus.Entry
 	events []LeaseMetricEvent
 	client lease.Client
 }
 
 // newLeasesPlugin creates a new lease metrics plugin.
-func newLeasesPlugin() *leasesPlugin {
+func newLeasesPlugin(logger *logrus.Entry) *leasesPlugin {
 	return &leasesPlugin{
+		logger: logger.WithField("plugin", "leases"),
 		events: make([]LeaseMetricEvent, 0),
 	}
 }
@@ -88,6 +90,7 @@ func (lp *leasesPlugin) Record(ev MetricsEvent) {
 	}
 
 	lp.mu.Lock()
+	lp.logger.WithField("event", le).Debug("Recording lease metrics event")
 	lp.events = append(lp.events, *le)
 	lp.mu.Unlock()
 }

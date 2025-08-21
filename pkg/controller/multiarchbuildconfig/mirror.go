@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os/exec"
 	"sort"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -64,7 +65,12 @@ func (oci *ocImage) mirror(images []string) error {
 func ocImageMirrorArgs(targetImageRef string, externalRegistries []string) []string {
 	destinations := sets.New[string]()
 	for _, externalRegistry := range externalRegistries {
-		destinations.Insert(fmt.Sprintf("%s/%s", externalRegistry, targetImageRef))
+		// This is a hack to push images to QCI using our naming convention
+		if externalRegistry == "quay.io/openshift/ci" {
+			destinations.Insert(fmt.Sprintf("%s:%s", externalRegistry, strings.ReplaceAll(strings.ReplaceAll(targetImageRef, ":", "_"), "/", "_")))
+		} else {
+			destinations.Insert(fmt.Sprintf("%s/%s", externalRegistry, targetImageRef))
+		}
 	}
 
 	destinationsList := destinations.UnsortedList()

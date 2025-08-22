@@ -79,6 +79,88 @@ func Test_buildPlugin_Record(t *testing.T) {
 			eventNS:        "default",
 			forImage:       "tag-2",
 		},
+		{
+			name: "build with nil timestamps",
+			providedBuilds: []runtime.Object{
+				&buildapi.Build{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "build-with-nil-timestamps",
+						Namespace: "test-namespace",
+					},
+					Status: buildapi.BuildStatus{
+						StartTimestamp:      nil, // Nil timestamp
+						CompletionTimestamp: nil, // Nil timestamp
+						Phase:               buildapi.BuildPhasePending,
+						Reason:              "Pending",
+					},
+					Spec: buildapi.BuildSpec{
+						CommonSpec: buildapi.CommonSpec{
+							Output: buildapi.BuildOutput{
+								To: &corev1.ObjectReference{
+									Name: "test-output-image",
+								},
+							},
+						},
+					},
+				},
+			},
+			eventName: "build-with-nil-timestamps",
+			eventNS:   "test-namespace",
+			forImage:  "tag-3",
+			expectedEvents: []MetricsEvent{
+				&BuildEvent{
+					Namespace:       "test-namespace",
+					Name:            "build-with-nil-timestamps",
+					StartTime:       time.Time{},
+					CompletionTime:  time.Time{},
+					DurationSeconds: 0,
+					Status:          string(buildapi.BuildPhasePending),
+					Reason:          "Pending",
+					OutputImage:     "test-output-image",
+					ForImage:        "tag-3",
+				},
+			},
+		},
+		{
+			name: "build with nil output reference",
+			providedBuilds: []runtime.Object{
+				&buildapi.Build{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "build-with-nil-output",
+						Namespace: "test-namespace",
+					},
+					Status: buildapi.BuildStatus{
+						StartTimestamp:      &metav1.Time{Time: time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC)},
+						CompletionTimestamp: &metav1.Time{Time: time.Date(2025, time.January, 1, 0, 5, 0, 0, time.UTC)},
+						Phase:               buildapi.BuildPhaseComplete,
+						Reason:              "Succeeded",
+					},
+					Spec: buildapi.BuildSpec{
+						CommonSpec: buildapi.CommonSpec{
+							Output: buildapi.BuildOutput{
+								To: nil,
+							},
+						},
+					},
+				},
+			},
+			eventName: "build-with-nil-output",
+			eventNS:   "test-namespace",
+			forImage:  "tag-4",
+			expectedEvents: []MetricsEvent{
+				&BuildEvent{
+					Namespace:       "test-namespace",
+					Name:            "build-with-nil-output",
+					StartTime:       time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC),
+					CompletionTime:  time.Date(2025, time.January, 1, 0, 5, 0, 0, time.UTC),
+					DurationSeconds: 300,
+					Status:          string(buildapi.BuildPhaseComplete),
+					Reason:          "Succeeded",
+					OutputImage:     "",
+					ForImage:        "tag-4",
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {

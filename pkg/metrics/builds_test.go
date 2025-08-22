@@ -111,9 +111,9 @@ func Test_buildPlugin_Record(t *testing.T) {
 				&BuildEvent{
 					Namespace:       "test-namespace",
 					Name:            "build-with-nil-timestamps",
-					StartTime:       time.Time{}, // Zero time
+					StartTime:       time.Time{},
 					CompletionTime:  time.Time{},
-					DurationSeconds: 0,           // No duration calculation
+					DurationSeconds: 0,
 					Status:          string(buildapi.BuildPhasePending),
 					Reason:          "Pending",
 					OutputImage:     "test-output-image",
@@ -138,7 +138,7 @@ func Test_buildPlugin_Record(t *testing.T) {
 					Spec: buildapi.BuildSpec{
 						CommonSpec: buildapi.CommonSpec{
 							Output: buildapi.BuildOutput{
-								To: nil, // Nil output reference
+								To: nil,
 							},
 						},
 					},
@@ -156,7 +156,7 @@ func Test_buildPlugin_Record(t *testing.T) {
 					DurationSeconds: 300,
 					Status:          string(buildapi.BuildPhaseComplete),
 					Reason:          "Succeeded",
-					OutputImage:     "", // Empty string for nil output
+					OutputImage:     "",
 					ForImage:        "tag-4",
 				},
 			},

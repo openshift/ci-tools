@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/sirupsen/logrus"
 )
 
 func Test_insightsPlugin_Record(t *testing.T) {
@@ -86,7 +87,7 @@ func Test_insightsPlugin_Record(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := newInsightsPlugin()
+			p := newInsightsPlugin(logrus.WithField("test", tt.name))
 
 			for _, event := range tt.events {
 				p.Record(event)

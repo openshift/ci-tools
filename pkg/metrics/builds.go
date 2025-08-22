@@ -12,6 +12,10 @@ import (
 	buildapi "github.com/openshift/api/build/v1"
 )
 
+const (
+	BuildsPluginName = "openshift_builds"
+)
+
 // BuildEvent defines a build event for the metrics system.
 type BuildEvent struct {
 	Namespace         string         `json:"namespace"`
@@ -36,12 +40,13 @@ func (be *BuildEvent) SetTimestamp(t time.Time) {
 type buildPlugin struct {
 	mu     sync.Mutex
 	ctx    context.Context
+	logger *logrus.Entry
 	client controllerruntime.Client
 	events []MetricsEvent
 }
 
-func newBuildPlugin(client controllerruntime.Client, ctx context.Context) *buildPlugin {
-	return &buildPlugin{client: client, ctx: ctx}
+func newBuildPlugin(ctx context.Context, logger *logrus.Entry, client controllerruntime.Client) *buildPlugin {
+	return &buildPlugin{ctx: ctx, client: client, logger: logger.WithField("plugin", BuildsPluginName)}
 }
 
 func (p *buildPlugin) Name() string { return BuildsPluginName }
@@ -87,6 +92,7 @@ func (p *buildPlugin) Record(ev MetricsEvent) {
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	p.logger.WithField("event", be).Debug("Recording build event")
 	p.events = append(p.events, be)
 }
 

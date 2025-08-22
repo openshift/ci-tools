@@ -3,6 +3,12 @@ package metrics
 import (
 	"sync"
 	"time"
+
+	"github.com/sirupsen/logrus"
+)
+
+const (
+	InsightsPluginName = "test_platform_insights"
 )
 
 // InsightsEvent defines a test platform insight event.
@@ -20,10 +26,13 @@ func (ie *InsightsEvent) SetTimestamp(t time.Time) {
 // insightsPlugin collects and manages the insights events.
 type insightsPlugin struct {
 	mu     sync.Mutex
+	logger *logrus.Entry
 	events []MetricsEvent
 }
 
-func newInsightsPlugin() *insightsPlugin { return &insightsPlugin{} }
+func newInsightsPlugin(logger *logrus.Entry) *insightsPlugin {
+	return &insightsPlugin{logger: logger.WithField("plugin", InsightsPluginName)}
+}
 
 func (p *insightsPlugin) Name() string { return InsightsPluginName }
 
@@ -34,6 +43,7 @@ func (p *insightsPlugin) Record(ev MetricsEvent) {
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	p.logger.WithField("event", pe).Debug("Recording insights event")
 	p.events = append(p.events, pe)
 }
 

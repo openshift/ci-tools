@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -165,7 +166,7 @@ func Test_buildPlugin_Record(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			bp := newBuildPlugin(fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(tc.providedBuilds...).Build(), context.Background())
+			bp := newBuildPlugin(context.Background(), logrus.WithField("test", tc.name), fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(tc.providedBuilds...).Build())
 			bp.Record(NewBuildEvent(tc.eventName, tc.eventNS, tc.forImage))
 			if diff := cmp.Diff(tc.expectedEvents, bp.Events(), cmpopts.IgnoreFields(BuildEvent{}, "Timestamp")); diff != "" {
 				t.Fatal(diff)

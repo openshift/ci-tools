@@ -3,6 +3,7 @@ package metrics
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
@@ -30,11 +31,13 @@ type MetricsEvent interface {
 type MetricsAgent struct {
 	ctx    context.Context
 	events chan MetricsEvent
+	logger *logrus.Entry
 
 	insightsPlugin *insightsPlugin
 	buildPlugin    *buildPlugin
 	nodesPlugin    *nodesMetricsPlugin
 	leasePlugin    *leasesPlugin
+	podPlugin      *PodLifecyclePlugin
 
 	wg sync.WaitGroup
 	mu sync.Mutex
@@ -53,13 +56,16 @@ func NewMetricsAgent(ctx context.Context, clusterConfig *rest.Config) (*MetricsA
 		return nil, err
 	}
 
+	logger := logrus.WithField("component", "metricsAgent")
 	return &MetricsAgent{
 		ctx:            ctx,
 		events:         make(chan MetricsEvent, 100),
-		insightsPlugin: newInsightsPlugin(),
-		buildPlugin:    newBuildPlugin(client, ctx),
-		nodesPlugin:    newNodesMetricsPlugin(ctx, client, metricsClient, nodesCh),
-		leasePlugin:    newLeasesPlugin(),
+		insightsPlugin: newInsightsPlugin(logger),
+		buildPlugin:    newBuildPlugin(ctx, logger, client),
+		nodesPlugin:    newNodesMetricsPlugin(ctx, logger, client, metricsClient, nodesCh),
+		leasePlugin:    newLeasesPlugin(logger),
+		podPlugin:      NewPodLifecyclePlugin(ctx, logger, client),
+		logger:         logger,
 	}, nil
 }
 
@@ -87,7 +93,8 @@ func (ma *MetricsAgent) Run() {
 			ma.buildPlugin.Record(ev)
 			ma.nodesPlugin.Record(ev)
 			ma.leasePlugin.Record(ev)
-			logrus.WithField("event", ev).Debug("Recorded metrics event")
+			ma.podPlugin.Record(ev)
+			ma.logger.WithField("event_type", fmt.Sprintf("%T", ev)).Debug("Recorded metrics event")
 		}
 	}
 }
@@ -115,11 +122,12 @@ func (ma *MetricsAgent) Stop() {
 
 // flush writes the accumulated events to a JSON file in the artifacts directory.
 func (ma *MetricsAgent) flush() {
-	output := make(map[string]any, 3)
+	output := make(map[string]any, 5)
 	output[ma.insightsPlugin.Name()] = ma.insightsPlugin.Events()
 	output[ma.buildPlugin.Name()] = ma.buildPlugin.Events()
 	output[ma.nodesPlugin.Name()] = ma.nodesPlugin.Events()
 	output[ma.leasePlugin.Name()] = ma.leasePlugin.Events()
+	output[ma.podPlugin.Name()] = ma.podPlugin.Events()
 
 	data, err := json.MarshalIndent(output, "", "  ")
 	if err != nil {
@@ -158,4 +166,15 @@ func (ma *MetricsAgent) RegisterLeaseClient(client lease.Client) {
 		return
 	}
 	ma.leasePlugin.SetClient(client)
+}
+
+func (ma *MetricsAgent) StorePodLifecycleMetrics(name, namespace string) {
+	if ma == nil || ma.podPlugin == nil {
+		return
+	}
+	event := PodLifecycleMetricsEvent{
+		PodName:   name,
+		Namespace: namespace,
+	}
+	ma.Record(&event)
 }

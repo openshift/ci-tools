@@ -1,0 +1,15 @@
+aws:
+  - name: build01
+    capacity: 100
+    capabilities:
+    - intranet
+  - name: build03
+    capacity: 50
+    disabled: true
+gcp:
+  - name: build02
+    capacity: 80
+    capabilities:
+    - public
+  - name: build04
+    blocked: true

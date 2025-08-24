@@ -700,6 +700,8 @@ func waitForBuild(
 		}
 		return nil
 	}
+
+	buildPodName := fmt.Sprintf("%s-build", name)
 	eg.Go(func() error {
 		defer cancel()
 		return kubernetes.WaitForConditionOnObject(ctx, buildClient, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, &buildapi.BuildList{}, &buildapi.Build{}, func(obj runtime.Object) (bool, error) {
@@ -717,10 +719,12 @@ func waitForBuild(
 				}
 			case buildapi.BuildPhaseComplete:
 				logrus.Infof("Build %s succeeded after %s", build.Name, buildDuration(build).Truncate(time.Second))
+				podClient.MetricsAgent().StorePodLifecycleMetrics(buildPodName, build.Namespace)
 				return true, nil
 			case buildapi.BuildPhaseFailed, buildapi.BuildPhaseCancelled, buildapi.BuildPhaseError:
 				logrus.Infof("Build %s failed, printing logs:", build.Name)
 				printBuildLogs(buildClient, build.Namespace, build.Name)
+				podClient.MetricsAgent().StorePodLifecycleMetrics(buildPodName, build.Namespace)
 				return true, util.AppendLogToError(fmt.Errorf("the build %s failed after %s with reason %s: %s", build.Name, buildDuration(build).Truncate(time.Second), build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
 			}
 			return false, nil

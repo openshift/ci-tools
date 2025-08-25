@@ -72,7 +72,10 @@ func TestOCImageMirrorArgs(t *testing.T) {
 		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
-			args := ocImageMirrorArgs(testCase.targetImageRef, testCase.externalRegistries)
+			args, err := ocImageMirrorArgs(testCase.targetImageRef, testCase.externalRegistries)
+			if err != nil {
+				t.Errorf("Unexpected error:\n%v", err)
+			}
 			if diff := cmp.Diff(args, testCase.want); diff != "" {
 				t.Errorf("Unexpected diff:\n%s", diff)
 			}

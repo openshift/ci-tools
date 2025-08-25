@@ -1,0 +1,80 @@
+- condition:
+    description: 'Managed by test platform: Read access to secrets in alpha-secrets
+      collection'
+    expression: |-
+      (
+        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
+        resource.type == "secretmanager.googleapis.com/Secret"
+      ) && (
+        resource.name.extract("secrets/{secret}") == "alpha-secrets__updater-service-account" ||
+        resource.name.extract("secrets/{secret}") == "alpha-secrets____index"
+      )
+    title: Read access to secrets for alpha-secrets
+  members:
+  - group:team-alpha@redhat.com
+  - serviceAccount:alpha-secrets-updater@test-project.iam.gserviceaccount.com
+  role: projects/test-project/roles/openshift_ci_secrets_viewer
+- condition:
+    description: 'Managed by test platform: Create, update, and delete access to secrets
+      in alpha-secrets collection'
+    expression: "(\n  resource.type == \"secretmanager.googleapis.com/SecretVersion\"
+      ||\n  resource.type == \"secretmanager.googleapis.com/Secret\"\n) && \n  resource.name.extract(\"secrets/{secret}\").startsWith(\"alpha-secrets__\")"
+    title: Create, update, and delete access for alpha-secrets
+  members:
+  - group:team-alpha@redhat.com
+  - serviceAccount:alpha-secrets-updater@test-project.iam.gserviceaccount.com
+  role: projects/test-project/roles/openshift_ci_secrets_updater
+- condition:
+    description: 'Managed by test platform: Read access to secrets in beta-delta-secrets
+      collection'
+    expression: |-
+      (
+        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
+        resource.type == "secretmanager.googleapis.com/Secret"
+      ) && (
+        resource.name.extract("secrets/{secret}") == "beta-delta-secrets__updater-service-account" ||
+        resource.name.extract("secrets/{secret}") == "beta-delta-secrets____index"
+      )
+    title: Read access to secrets for beta-delta-secrets
+  members:
+  - group:team-beta@redhat.com
+  - group:team-delta@redhat.com
+  - serviceAccount:beta-delta-secrets-updater@test-project.iam.gserviceaccount.com
+  role: projects/test-project/roles/openshift_ci_secrets_viewer
+- condition:
+    description: 'Managed by test platform: Create, update, and delete access to secrets
+      in beta-delta-secrets collection'
+    expression: "(\n  resource.type == \"secretmanager.googleapis.com/SecretVersion\"
+      ||\n  resource.type == \"secretmanager.googleapis.com/Secret\"\n) && \n  resource.name.extract(\"secrets/{secret}\").startsWith(\"beta-delta-secrets__\")"
+    title: Create, update, and delete access for beta-delta-secrets
+  members:
+  - group:team-beta@redhat.com
+  - group:team-delta@redhat.com
+  - serviceAccount:beta-delta-secrets-updater@test-project.iam.gserviceaccount.com
+  role: projects/test-project/roles/openshift_ci_secrets_updater
+- condition:
+    description: 'Managed by test platform: Read access to secrets in epsilon-secrets
+      collection'
+    expression: |-
+      (
+        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
+        resource.type == "secretmanager.googleapis.com/Secret"
+      ) && (
+        resource.name.extract("secrets/{secret}") == "epsilon-secrets__updater-service-account" ||
+        resource.name.extract("secrets/{secret}") == "epsilon-secrets____index"
+      )
+    title: Read access to secrets for epsilon-secrets
+  members:
+  - group:team-epsilon@redhat.com
+  - serviceAccount:epsilon-secrets-updater@test-project.iam.gserviceaccount.com
+  role: projects/test-project/roles/openshift_ci_secrets_viewer
+- condition:
+    description: 'Managed by test platform: Create, update, and delete access to secrets
+      in epsilon-secrets collection'
+    expression: "(\n  resource.type == \"secretmanager.googleapis.com/SecretVersion\"
+      ||\n  resource.type == \"secretmanager.googleapis.com/Secret\"\n) && \n  resource.name.extract(\"secrets/{secret}\").startsWith(\"epsilon-secrets__\")"
+    title: Create, update, and delete access for epsilon-secrets
+  members:
+  - group:team-epsilon@redhat.com
+  - serviceAccount:epsilon-secrets-updater@test-project.iam.gserviceaccount.com
+  role: projects/test-project/roles/openshift_ci_secrets_updater

@@ -1,0 +1,9 @@
+- Collection: alpha-secrets
+  DisplayName: alpha-secrets-updater
+  Email: alpha-secrets-updater@test-project.iam.gserviceaccount.com
+- Collection: beta-delta-secrets
+  DisplayName: beta-delta-secrets-updater
+  Email: beta-delta-secrets-updater@test-project.iam.gserviceaccount.com
+- Collection: epsilon-secrets
+  DisplayName: epsilon-secrets-updater
+  Email: epsilon-secrets-updater@test-project.iam.gserviceaccount.com

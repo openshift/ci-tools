@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -21,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/utils/ptr"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -612,4 +614,49 @@ func getEventsForPod(ctx context.Context, pod *corev1.Pod, client ctrlruntimecli
 		builder.WriteString(fmt.Sprintf("\n* %s %dx %s: %s", event.LastTimestamp.Format(time.RFC3339), event.Count, event.Source.Component, event.Message))
 	}
 	return builder.String()
+}
+
+func ConfigurePodForNestedPodman(pod *corev1.Pod, containerName string, saName string) {
+	appendNoDup := func(capabilities []corev1.Capability, capability corev1.Capability) []corev1.Capability {
+		if !slices.Contains(capabilities, capability) {
+			return append(capabilities, capability)
+		}
+		return capabilities
+	}
+
+	for i := range pod.Spec.Containers {
+		c := &pod.Spec.Containers[i]
+		if c.Name == containerName {
+			if c.SecurityContext == nil {
+				c.SecurityContext = &corev1.SecurityContext{}
+			}
+
+			if c.SecurityContext.Capabilities == nil {
+				c.SecurityContext.Capabilities = &corev1.Capabilities{}
+			}
+
+			c.SecurityContext.Capabilities.Add = appendNoDup(c.SecurityContext.Capabilities.Add, "SETUID")
+			c.SecurityContext.Capabilities.Add = appendNoDup(c.SecurityContext.Capabilities.Add, "SETGID")
+			c.SecurityContext.Capabilities.Drop = appendNoDup(c.SecurityContext.Capabilities.Drop, "ALL")
+
+			c.SecurityContext.AllowPrivilegeEscalation = ptr.To(true)
+			c.SecurityContext.RunAsNonRoot = ptr.To(true)
+			c.SecurityContext.ProcMount = ptr.To(corev1.UnmaskedProcMount)
+
+			// The nested-podman image compatible entrypoint has already been defined and
+			// it must not be overridden. We are merging commands and arguments and passing them
+			// all as args as they will be forwarded and executed by the entrypoint.
+			c.Args = append(c.Command, c.Args...)
+			c.Command = nil
+			break
+		}
+	}
+
+	pod.Spec.ServiceAccountName = saName
+
+	pod.Annotations["openshift.io/required-scc"] = api.NestedPodmanSCC
+	pod.Annotations["openshift.io/scc"] = api.NestedPodmanSCC
+	pod.Annotations["io.kubernetes.cri-o.Devices"] = "/dev/fuse,/dev/net/tun"
+
+	pod.Spec.HostUsers = ptr.To(false)
 }

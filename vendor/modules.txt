@@ -1097,6 +1097,7 @@ github.com/openshift-eng/openshift-goimports/pkg/imports
 github.com/openshift-eng/openshift-goimports/pkg/util
 # github.com/openshift/api v0.0.0-20240918231400-8f6ded478e8a
 ## explicit; go 1.22.0
+github.com/openshift/api/annotations
 github.com/openshift/api/build/v1
 github.com/openshift/api/config/v1
 github.com/openshift/api/features

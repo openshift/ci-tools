@@ -1,0 +1,166 @@
+- metadata:
+    annotations:
+      ci-operator.openshift.io/container-sub-tests: test
+      ci-operator.openshift.io/save-container-logs: "true"
+      ci.openshift.io/job-spec: ""
+      io.kubernetes.cri-o.Devices: /dev/fuse,/dev/net/tun
+      openshift.io/required-scc: nested-podman
+      openshift.io/scc: nested-podman
+    creationTimestamp: null
+    labels:
+      OPENSHIFT_CI: "true"
+      ci.openshift.io/jobid: prow_job_id
+      ci.openshift.io/jobname: job
+      ci.openshift.io/jobtype: postsubmit
+      ci.openshift.io/metadata.branch: base_ref
+      ci.openshift.io/metadata.org: org
+      ci.openshift.io/metadata.repo: repo
+      ci.openshift.io/metadata.step: step0
+      ci.openshift.io/metadata.target: target
+      ci.openshift.io/metadata.variant: variant
+      ci.openshift.io/multi-stage-test: run podman
+      created-by-ci: "true"
+    name: run podman-step0
+    namespace: namespace
+  spec:
+    containers:
+    - args:
+      - /tmp/entrypoint-wrapper/entrypoint-wrapper
+      - /tools/entrypoint
+      env:
+      - name: BUILD_ID
+        value: build id
+      - name: CI
+        value: "true"
+      - name: JOB_NAME
+        value: job
+      - name: JOB_SPEC
+        value: '{"type":"postsubmit","job":"job","buildid":"build id","prowjobid":"prow
+          job id","refs":{"org":"org","repo":"repo","base_ref":"base ref","base_sha":"base
+          sha"},"decoration_config":{"timeout":"1h0m0s","grace_period":"20s","utility_images":{"entrypoint":"entrypoint","sidecar":"sidecar"}}}'
+      - name: JOB_TYPE
+        value: postsubmit
+      - name: OPENSHIFT_CI
+        value: "true"
+      - name: PROW_JOB_ID
+        value: prow job id
+      - name: PULL_BASE_REF
+        value: base ref
+      - name: PULL_BASE_SHA
+        value: base sha
+      - name: PULL_REFS
+        value: base ref:base sha
+      - name: REPO_NAME
+        value: repo
+      - name: REPO_OWNER
+        value: org
+      - name: GIT_CONFIG_COUNT
+        value: "1"
+      - name: GIT_CONFIG_KEY_0
+        value: safe.directory
+      - name: GIT_CONFIG_VALUE_0
+        value: '*'
+      - name: ENTRYPOINT_OPTIONS
+        value: '{"timeout":3600000000000,"grace_period":20000000000,"artifact_dir":"/logs/artifacts","args":["/bin/bash","-c","#!/bin/bash\nset
+          -eu\ncommand0"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}'
+      - name: ARTIFACT_DIR
+        value: /logs/artifacts
+      - name: NAMESPACE
+        value: namespace
+      - name: JOB_NAME_SAFE
+        value: run podman
+      - name: JOB_NAME_HASH
+        value: 5e8c9
+      - name: UNIQUE_HASH
+        value: 5e8c9
+      - name: KUBECONFIG
+        value: /var/run/secrets/ci.openshift.io/multi-stage/kubeconfig
+      - name: KUBECONFIGMINIMAL
+        value: /var/run/secrets/ci.openshift.io/multi-stage/kubeconfig-minimal
+      - name: KUBEADMIN_PASSWORD_FILE
+        value: /var/run/secrets/ci.openshift.io/multi-stage/kubeadmin-password
+      - name: SHARED_DIR
+        value: /var/run/secrets/ci.openshift.io/multi-stage
+      image: pipeline:src
+      name: test
+      resources: {}
+      securityContext:
+        allowPrivilegeEscalation: true
+        capabilities:
+          add:
+          - SETUID
+          - SETGID
+          drop:
+          - ALL
+        procMount: Unmasked
+        runAsNonRoot: true
+      terminationMessagePolicy: FallbackToLogsOnError
+      volumeMounts:
+      - mountPath: /logs
+        name: logs
+      - mountPath: /tools
+        name: tools
+      - mountPath: /alabama
+        name: home
+      - mountPath: /tmp/entrypoint-wrapper
+        name: entrypoint-wrapper
+      - mountPath: /dev/shm
+        name: dshm
+      - mountPath: /var/run/secrets/ci.openshift.io/multi-stage
+        name: run podman
+    - env:
+      - name: JOB_SPEC
+      - name: SIDECAR_OPTIONS
+        value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/run
+          podman/step0","dry_run":false},"entries":[{"args":["/bin/bash","-c","#!/bin/bash\nset
+          -eu\ncommand0"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}],"ignore_interrupts":true,"censoring_options":{}}'
+      image: sidecar
+      name: sidecar
+      resources: {}
+      terminationMessagePolicy: FallbackToLogsOnError
+      volumeMounts:
+      - mountPath: /logs
+        name: logs
+    hostUsers: false
+    initContainers:
+    - args:
+      - --copy-mode-only
+      image: entrypoint
+      name: place-entrypoint
+      resources: {}
+      volumeMounts:
+      - mountPath: /tools
+        name: tools
+    - args:
+      - /bin/entrypoint-wrapper
+      - /tmp/entrypoint-wrapper/entrypoint-wrapper
+      command:
+      - cp
+      image: quay-proxy.ci.openshift.org/openshift/ci:ci_entrypoint-wrapper_latest
+      name: cp-entrypoint-wrapper
+      resources: {}
+      terminationMessagePolicy: FallbackToLogsOnError
+      volumeMounts:
+      - mountPath: /tmp/entrypoint-wrapper
+        name: entrypoint-wrapper
+    nodeName: node-name
+    restartPolicy: Never
+    serviceAccountName: run podman
+    terminationGracePeriodSeconds: 25
+    volumes:
+    - emptyDir: {}
+      name: logs
+    - emptyDir: {}
+      name: tools
+    - emptyDir: {}
+      name: home
+    - emptyDir: {}
+      name: entrypoint-wrapper
+    - emptyDir:
+        medium: Memory
+        sizeLimit: 2G
+      name: dshm
+    - name: run podman
+      secret:
+        secretName: run podman
+  status: {}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"time"
 
@@ -203,6 +204,15 @@ func (s *multiStageTestStep) setupRBAC(ctx context.Context) error {
 			Subjects: subj,
 		},
 	}
+
+	if s.requireNestedPodman {
+		bindings = append(bindings, rbacapi.RoleBinding{
+			ObjectMeta: meta.ObjectMeta{Namespace: ns, Name: s.name + "-nested-podman-scc-creater"},
+			Subjects:   subj,
+			RoleRef:    rbacapi.RoleRef{Kind: "ClusterRole", Name: api.NestedPodmanClusterRole},
+		})
+	}
+
 	if s.vpnConf != nil {
 		bindings = append(bindings, rbacapi.RoleBinding{
 			ObjectMeta: meta.ObjectMeta{Namespace: ns, Name: s.name + "-vpn"},
@@ -213,11 +223,27 @@ func (s *multiStageTestStep) setupRBAC(ctx context.Context) error {
 			Subjects: subj,
 		})
 	}
+
 	if err := util.CreateRBACs(ctx, sa, role, bindings, s.client, 1*time.Second, 1*time.Minute); err != nil {
-		return err
+		return fmt.Errorf("create RBACs: %w", err)
+	}
+
+	if s.requireNestedPodman {
+		if err := util.WaitUntilNamespaceIsPrivileged(ctx, ns, s.client, 1*time.Second, 1*time.Minute); err != nil {
+			return fmt.Errorf("wait test NS to become privileged: %w", err)
+		}
 	}
 
 	return nil
+}
+
+func stepRequiresNestedPodman(s *multiStageTestStep) bool {
+	for _, steps := range [][]api.LiteralTestStep{s.pre, s.test, s.post} {
+		if slices.ContainsFunc(steps, func(s api.LiteralTestStep) bool { return s.NestedPodman }) {
+			return true
+		}
+	}
+	return false
 }
 
 // getNamespaceUID retrieves the base UID configured for the test namespace.

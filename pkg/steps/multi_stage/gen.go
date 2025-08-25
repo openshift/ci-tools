@@ -17,6 +17,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	base_steps "github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
+	podsutils "github.com/openshift/ci-tools/pkg/util"
 )
 
 const (
@@ -134,6 +135,7 @@ func (s *multiStageTestStep) generatePods(
 		} else {
 			commands = []string{"/bin/bash", "-c", CommandPrefix + step.Commands}
 		}
+
 		labels := map[string]string{base_steps.LabelMetadataStep: step.As}
 		pod, err := base_steps.GenerateBasePod(s.jobSpec, labels, name, s.nodeName,
 			containerName, commands, image, resources, artifactDir, s.jobSpec.DecorationConfig,
@@ -259,6 +261,11 @@ func (s *multiStageTestStep) generatePods(
 			}
 			setSecurityContexts(pod, vpnContainerName, s.vpnConf.namespaceUID, &caps, &seLinuxOpts)
 		}
+
+		if step.NestedPodman {
+			podsutils.ConfigurePodForNestedPodman(pod, containerName, s.name)
+		}
+
 		ret = append(ret, *pod)
 	}
 	return ret, bestEffortSteps, utilerrors.NewAggregate(errs)

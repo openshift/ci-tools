@@ -759,6 +759,9 @@ type TestStepConfiguration struct {
 	// define additional capabilities needed by the test runs
 	Capabilities []string `json:"capabilities,omitempty"`
 
+	// NestedPodman enables this test to run podman inside a container.
+	NestedPodman bool `json:"nested_podman,omitempty"`
+
 	// Commands are the shell commands to run in
 	// the repository root to execute tests.
 	Commands string `json:"commands,omitempty"`
@@ -1052,6 +1055,8 @@ type LiteralTestStep struct {
 	From string `json:"from,omitempty"`
 	// FromImage is a literal ImageStreamTag reference to use for this step.
 	FromImage *ImageStreamTagReference `json:"from_image,omitempty"`
+	// NestedPodman enables this test to run podman inside a container.
+	NestedPodman bool `json:"nested_podman,omitempty"`
 	// Commands is the command(s) that will be run inside the image.
 	Commands string `json:"commands,omitempty"`
 	// Resources defines the resource requirements for the step.

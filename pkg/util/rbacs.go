@@ -32,9 +32,12 @@ func CreateRBACs(ctx context.Context, sa *coreapi.ServiceAccount, role *rbacapi.
 		skipPoll = true
 	}
 
-	if err := client.Create(ctx, role); err != nil && !kerrors.IsAlreadyExists(err) {
-		return results.ForReason("creating_roles").WithError(err).Errorf("could not create role %q: %v", role.Name, err)
+	if role != nil {
+		if err := client.Create(ctx, role); err != nil && !kerrors.IsAlreadyExists(err) {
+			return results.ForReason("creating_roles").WithError(err).Errorf("could not create role %q: %v", role.Name, err)
+		}
 	}
+
 	for _, roleBinding := range roleBindings {
 		if err := client.Create(ctx, &roleBinding); err != nil && !kerrors.IsAlreadyExists(err) {
 			return results.ForReason("binding_roles").WithError(err).Errorf("could not create role binding %q: %v", roleBinding.Name, err)

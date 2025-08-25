@@ -129,7 +129,7 @@ func (a *Actions) CreateSecrets(ctx context.Context, secretsClient SecretManager
 		}
 
 		if s.Type == SecretTypeIndex {
-			s.Payload = fmt.Appendf(nil, "- %s", GetUpdaterSASecretName(s.Collection))
+			s.Payload = fmt.Appendf(nil, "- updater-service-account")
 			a.SecretsToCreate[name] = s
 		}
 

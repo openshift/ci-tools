@@ -24,36 +24,39 @@ import (
 )
 
 func TestGeneratePods(t *testing.T) {
-	jobSpec := api.JobSpec{
-		Metadata: api.Metadata{
-			Org:     "org",
-			Repo:    "repo",
-			Branch:  "base ref",
-			Variant: "variant",
-		},
-		Target: "target",
-		JobSpec: prowdapi.JobSpec{
-			Job:       "job",
-			BuildID:   "build id",
-			ProwJobID: "prow job id",
-			Refs: &prowapi.Refs{
+	jobSpec := func() api.JobSpec {
+		js := api.JobSpec{
+			Metadata: api.Metadata{
 				Org:     "org",
 				Repo:    "repo",
-				BaseRef: "base ref",
-				BaseSHA: "base sha",
+				Branch:  "base ref",
+				Variant: "variant",
 			},
-			Type: "postsubmit",
-			DecorationConfig: &prowapi.DecorationConfig{
-				Timeout:     &prowapi.Duration{Duration: time.Minute},
-				GracePeriod: &prowapi.Duration{Duration: time.Second},
-				UtilityImages: &prowapi.UtilityImages{
-					Sidecar:    "sidecar",
-					Entrypoint: "entrypoint",
+			Target: "target",
+			JobSpec: prowdapi.JobSpec{
+				Job:       "job",
+				BuildID:   "build id",
+				ProwJobID: "prow job id",
+				Refs: &prowapi.Refs{
+					Org:     "org",
+					Repo:    "repo",
+					BaseRef: "base ref",
+					BaseSHA: "base sha",
+				},
+				Type: "postsubmit",
+				DecorationConfig: &prowapi.DecorationConfig{
+					Timeout:     &prowapi.Duration{Duration: time.Minute},
+					GracePeriod: &prowapi.Duration{Duration: time.Second},
+					UtilityImages: &prowapi.UtilityImages{
+						Sidecar:    "sidecar",
+						Entrypoint: "entrypoint",
+					},
 				},
 			},
-		},
+		}
+		js.SetNamespace("namespace")
+		return js
 	}
-	jobSpec.SetNamespace("namespace")
 
 	resourceRequirements := api.ResourceRequirements{
 		Requests: api.ResourceList{api.ShmResource: "2G"},
@@ -133,7 +136,8 @@ func TestGeneratePods(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			step := newMultiStageTestStep(tc.config.Tests[0], tc.config, nil, nil, &jobSpec, nil, "node-name", "", nil, false)
+			js := jobSpec()
+			step := newMultiStageTestStep(tc.config.Tests[0], tc.config, nil, nil, &js, nil, "node-name", "", nil, false)
 			step.test[0].Resources = resourceRequirements
 
 			ret, _, err := step.generatePods(tc.config.Tests[0].MultiStageTestConfigurationLiteral.Test, tc.env, tc.secretVolumes, tc.secretVolumeMounts, nil)

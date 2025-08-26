@@ -325,10 +325,10 @@ func TestSetupRBAC(t *testing.T) {
 						}
 
 						if ns, ok := obj.(*corev1.Namespace); ok && key.Name == jobSpec.Namespace() {
-							if ns.Labels == nil {
-								ns.Labels = make(map[string]string)
+							if ns.Annotations == nil {
+								ns.Annotations = make(map[string]string)
 							}
-							ns.Labels["security.openshift.io/MinimallySufficientPodSecurityStandard"] = "privileged"
+							ns.Annotations["security.openshift.io/MinimallySufficientPodSecurityStandard"] = "privileged"
 						}
 
 						return nil

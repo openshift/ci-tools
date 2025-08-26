@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/diff"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/utils/ptr"
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowdapi "sigs.k8s.io/prow/pkg/pod-utils/downwardapi"
 
@@ -23,90 +24,130 @@ import (
 )
 
 func TestGeneratePods(t *testing.T) {
-	yes := true
-	nodeArchitectureARM64 := api.NodeArchitectureARM64
-	nodeArchitectureAMD64 := api.NodeArchitectureAMD64
-	config := api.ReleaseBuildConfiguration{
-		Tests: []api.TestStepConfiguration{{
-			As: "test",
-			MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-				ClusterProfile: api.ClusterProfileAWS,
-				Test: []api.LiteralTestStep{{
-					As: "step0", From: "src", Commands: "command0",
-					Timeout:     &prowapi.Duration{Duration: time.Hour},
-					GracePeriod: &prowapi.Duration{Duration: 20 * time.Second},
-				}, {
-					As:       "step1",
-					From:     "image1",
-					Commands: "command1",
-				}, {
-					As: "step2", From: "stable-initial:installer", Commands: "command2", RunAsScript: &yes,
-				}, {
-					As: "step3", From: "src", Commands: "command3", DNSConfig: &api.StepDNSConfig{
-						Nameservers: []string{"nameserver1", "nameserver2"},
-						Searches:    []string{"my.dns.search1", "my.dns.search2"},
-					},
-				}, {
-					As: "step4", From: "src", Commands: "command4", NodeArchitecture: &nodeArchitectureARM64,
-				}, {
-					As: "step5", From: "src", Commands: "command5", NodeArchitecture: &nodeArchitectureAMD64,
-				}},
-			}},
-		},
-	}
-
-	jobSpec := api.JobSpec{
-		Metadata: api.Metadata{
-			Org:     "org",
-			Repo:    "repo",
-			Branch:  "base ref",
-			Variant: "variant",
-		},
-		Target: "target",
-		JobSpec: prowdapi.JobSpec{
-			Job:       "job",
-			BuildID:   "build id",
-			ProwJobID: "prow job id",
-			Refs: &prowapi.Refs{
+	jobSpec := func() api.JobSpec {
+		js := api.JobSpec{
+			Metadata: api.Metadata{
 				Org:     "org",
 				Repo:    "repo",
-				BaseRef: "base ref",
-				BaseSHA: "base sha",
+				Branch:  "base ref",
+				Variant: "variant",
 			},
-			Type: "postsubmit",
-			DecorationConfig: &prowapi.DecorationConfig{
-				Timeout:     &prowapi.Duration{Duration: time.Minute},
-				GracePeriod: &prowapi.Duration{Duration: time.Second},
-				UtilityImages: &prowapi.UtilityImages{
-					Sidecar:    "sidecar",
-					Entrypoint: "entrypoint",
+			Target: "target",
+			JobSpec: prowdapi.JobSpec{
+				Job:       "job",
+				BuildID:   "build id",
+				ProwJobID: "prow job id",
+				Refs: &prowapi.Refs{
+					Org:     "org",
+					Repo:    "repo",
+					BaseRef: "base ref",
+					BaseSHA: "base sha",
+				},
+				Type: "postsubmit",
+				DecorationConfig: &prowapi.DecorationConfig{
+					Timeout:     &prowapi.Duration{Duration: time.Minute},
+					GracePeriod: &prowapi.Duration{Duration: time.Second},
+					UtilityImages: &prowapi.UtilityImages{
+						Sidecar:    "sidecar",
+						Entrypoint: "entrypoint",
+					},
 				},
 			},
-		},
+		}
+		js.SetNamespace("namespace")
+		return js
 	}
-	jobSpec.SetNamespace("namespace")
-	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil, "node-name", "", nil, false)
-	step.test[0].Resources = api.ResourceRequirements{
+
+	resourceRequirements := api.ResourceRequirements{
 		Requests: api.ResourceList{api.ShmResource: "2G"},
-		Limits:   api.ResourceList{api.ShmResource: "2G"}}
-	env := []coreapi.EnvVar{
-		{Name: "RELEASE_IMAGE_INITIAL", Value: "release:initial"},
-		{Name: "RELEASE_IMAGE_LATEST", Value: "release:latest"},
-		{Name: "LEASED_RESOURCE", Value: "uuid"},
+		Limits:   api.ResourceList{api.ShmResource: "2G"},
 	}
-	secretVolumes := []coreapi.Volume{{
-		Name:         "secret",
-		VolumeSource: coreapi.VolumeSource{Secret: &coreapi.SecretVolumeSource{SecretName: "k8-secret"}},
-	}}
-	secretVolumeMounts := []coreapi.VolumeMount{{
-		Name:      "secret",
-		MountPath: "/secret",
-	}}
-	ret, _, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Test, env, secretVolumes, secretVolumeMounts, nil)
-	if err != nil {
-		t.Fatal(err)
+
+	for _, tc := range []struct {
+		name               string
+		config             *api.ReleaseBuildConfiguration
+		env                []coreapi.EnvVar
+		secretVolumes      []coreapi.Volume
+		secretVolumeMounts []coreapi.VolumeMount
+	}{
+		{
+			name: "generate pods",
+			config: &api.ReleaseBuildConfiguration{
+				Tests: []api.TestStepConfiguration{{
+					As: "test",
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						ClusterProfile: api.ClusterProfileAWS,
+						Test: []api.LiteralTestStep{{
+							As: "step0", From: "src", Commands: "command0",
+							Timeout:     &prowapi.Duration{Duration: time.Hour},
+							GracePeriod: &prowapi.Duration{Duration: 20 * time.Second},
+						}, {
+							As:       "step1",
+							From:     "image1",
+							Commands: "command1",
+						}, {
+							As: "step2", From: "stable-initial:installer", Commands: "command2", RunAsScript: ptr.To(true),
+						}, {
+							As: "step3", From: "src", Commands: "command3", DNSConfig: &api.StepDNSConfig{
+								Nameservers: []string{"nameserver1", "nameserver2"},
+								Searches:    []string{"my.dns.search1", "my.dns.search2"},
+							},
+						}, {
+							As: "step4", From: "src", Commands: "command4", NodeArchitecture: ptr.To(api.NodeArchitectureARM64),
+						}, {
+							As: "step5", From: "src", Commands: "command5", NodeArchitecture: ptr.To(api.NodeArchitectureAMD64),
+						}},
+					}},
+				},
+			},
+			env: []coreapi.EnvVar{
+				{Name: "RELEASE_IMAGE_INITIAL", Value: "release:initial"},
+				{Name: "RELEASE_IMAGE_LATEST", Value: "release:latest"},
+				{Name: "LEASED_RESOURCE", Value: "uuid"},
+			},
+			secretVolumes: []coreapi.Volume{{
+				Name:         "secret",
+				VolumeSource: coreapi.VolumeSource{Secret: &coreapi.SecretVolumeSource{SecretName: "k8-secret"}},
+			}},
+			secretVolumeMounts: []coreapi.VolumeMount{{
+				Name:      "secret",
+				MountPath: "/secret",
+			}},
+		},
+		{
+			name: "enable nested podman",
+			config: &api.ReleaseBuildConfiguration{
+				Tests: []api.TestStepConfiguration{{
+					As: "run podman",
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						Test: []api.LiteralTestStep{{
+							As:           "step0",
+							From:         "src",
+							NestedPodman: true,
+							Commands:     "command0",
+							Timeout:      &prowapi.Duration{Duration: time.Hour},
+							GracePeriod:  &prowapi.Duration{Duration: 20 * time.Second},
+						}},
+					},
+				}},
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			js := jobSpec()
+			step := newMultiStageTestStep(tc.config.Tests[0], tc.config, nil, nil, &js, nil, "node-name", "", nil, false)
+			step.test[0].Resources = resourceRequirements
+
+			ret, _, err := step.generatePods(tc.config.Tests[0].MultiStageTestConfigurationLiteral.Test, tc.env, tc.secretVolumes, tc.secretVolumeMounts, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			testhelper.CompareWithFixture(t, ret)
+		})
 	}
-	testhelper.CompareWithFixture(t, ret)
 }
 
 func TestGenerateObservers(t *testing.T) {

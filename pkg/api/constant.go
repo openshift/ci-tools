@@ -80,6 +80,9 @@ const (
 	ReleaseConfigAnnotation = "release.openshift.io/config"
 
 	ImageStreamImportRetries = 6
+
+	NestedPodmanSCC         = "nested-podman"
+	NestedPodmanClusterRole = "nested-podman-creater"
 )
 
 var (

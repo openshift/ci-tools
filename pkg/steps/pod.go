@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -23,6 +25,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/util"
+	podsutils "github.com/openshift/ci-tools/pkg/util"
 )
 
 const (
@@ -55,6 +58,7 @@ type PodStepConfiguration struct {
 	MemoryBackedVolume *api.MemoryBackedVolume
 	Clone              bool
 	NodeArchitecture   api.NodeArchitecture
+	NestedPodman       bool
 }
 
 type GeneratePodOptions struct {
@@ -103,6 +107,14 @@ func (s *podStep) run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("pod step was invalid: %w", err)
 	}
+
+	if s.config.NestedPodman {
+		podsutils.ConfigurePodForNestedPodman(pod, s.name, s.config.As)
+		if err := s.setupNestedPodmanRBACs(ctx); err != nil {
+			return fmt.Errorf("setup rbac for nested-podman: %w", err)
+		}
+	}
+
 	testCaseNotifier := NewTestCaseNotifier(util.NopNotifier)
 
 	if owner := s.jobSpec.Owner(); owner != nil {
@@ -184,6 +196,7 @@ func TestStep(config api.TestStepConfiguration, resources api.ResourceConfigurat
 			MemoryBackedVolume: config.ContainerTestConfiguration.MemoryBackedVolume,
 			Clone:              *config.ContainerTestConfiguration.Clone,
 			NodeArchitecture:   config.NodeArchitecture,
+			NestedPodman:       config.NestedPodman,
 		},
 		resources,
 		client,
@@ -348,6 +361,30 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 	}
 
 	return pod, nil
+}
+
+func (s *podStep) setupNestedPodmanRBACs(ctx context.Context) error {
+	ns := s.jobSpec.Namespace()
+	sa := &coreapi.ServiceAccount{
+		ObjectMeta:       meta.ObjectMeta{Namespace: ns, Name: s.config.As},
+		ImagePullSecrets: []coreapi.LocalObjectReference{{Name: api.RegistryPullCredentialsSecret}},
+	}
+	bindings := []rbacv1.RoleBinding{{
+		ObjectMeta: meta.ObjectMeta{Namespace: ns, Name: s.config.As + "-nested-podman-scc-creater"},
+		Subjects:   []rbacv1.Subject{{Kind: "ServiceAccount", Namespace: ns, Name: s.config.As}},
+		RoleRef:    rbacv1.RoleRef{Kind: "ClusterRole", Name: api.NestedPodmanClusterRole},
+	}}
+
+	if err := util.CreateRBACs(ctx, sa, nil, bindings, s.client, 1*time.Second, 1*time.Minute); err != nil {
+		return fmt.Errorf("create RBACs: %w", err)
+	}
+
+	// Wait until the cluster-policy-controller sets the NS as privileged
+	if err := util.WaitUntilNamespaceIsPrivileged(ctx, ns, s.client, 1*time.Second, 1*time.Minute); err != nil {
+		return fmt.Errorf("wait test NS to become privileged: %w", err)
+	}
+
+	return nil
 }
 
 func getVolumeFromSecret(secretName string, secretIndex int) []coreapi.Volume {

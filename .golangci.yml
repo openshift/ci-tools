@@ -23,6 +23,9 @@ linters-settings:
     errorf-multi: false
     asserts: false
     comparison: false
+  misspell:
+    ignore-words:
+    - creater
 
 issues:
   exclude-rules:

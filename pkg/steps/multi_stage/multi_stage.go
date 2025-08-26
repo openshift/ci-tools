@@ -106,6 +106,7 @@ type multiStageTestStep struct {
 	cancelObservers             func(context.CancelFunc)
 	nodeArchitecture            api.NodeArchitecture
 	enableSecretsStoreCSIDriver bool
+	requireNestedPodman         bool
 }
 
 func MultiStageTestStep(
@@ -143,7 +144,7 @@ func newMultiStageTestStep(
 	if p := ms.AllowBestEffortPostSteps; p != nil && *p {
 		flags |= allowBestEffortPostSteps
 	}
-	return &multiStageTestStep{
+	s := &multiStageTestStep{
 		name:                        testConfig.As,
 		additionalSuffix:            targetAdditionalSuffix,
 		nodeName:                    nodeName,
@@ -165,6 +166,9 @@ func newMultiStageTestStep(
 		nodeArchitecture:            testConfig.NodeArchitecture,
 		enableSecretsStoreCSIDriver: enableSecretsStoreCSIDriver,
 	}
+	s.requireNestedPodman = stepRequiresNestedPodman(s)
+
+	return s
 }
 
 func (s *multiStageTestStep) profileSecretName() string {

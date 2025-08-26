@@ -3,11 +3,19 @@ package multi_stage
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
+	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	csiapi "sigs.k8s.io/secrets-store-csi-driver/apis/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -188,6 +196,188 @@ func TestCreateSPCs(t *testing.T) {
 					t.Errorf("SPC %s: expected auth %s but got %s", name, expectedSPC.Spec.Parameters["auth"], actualSPC.Spec.Parameters["auth"])
 				}
 				// Note: We don't compare secrets parameter exactly since it's complex YAML
+			}
+		})
+	}
+}
+
+func TestSetupRBAC(t *testing.T) {
+	jobSpec := &api.JobSpec{}
+	jobSpec.SetNamespace("ci-op-xxxx")
+
+	for _, tc := range []struct {
+		name string
+		step *multiStageTestStep
+
+		wantSAs          []corev1.ServiceAccount
+		wantRoles        []rbacv1.Role
+		wantRoleBindings []rbacv1.RoleBinding
+	}{
+		{
+			name: "Create role binding for nested podman",
+			step: &multiStageTestStep{
+				name:    "nested-podman",
+				jobSpec: jobSpec,
+				config: &api.ReleaseBuildConfiguration{
+					Tests: []api.TestStepConfiguration{{
+						As: "test",
+						MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+							Test: []api.LiteralTestStep{{
+								As:           "test",
+								NestedPodman: true,
+							}},
+						},
+					}},
+				},
+				test: []api.LiteralTestStep{{
+					As:           "test",
+					NestedPodman: true,
+				}},
+				requireNestedPodman: true,
+			},
+			wantSAs: []corev1.ServiceAccount{{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "nested-podman",
+					Namespace:       "ci-op-xxxx",
+					ResourceVersion: "1",
+					Labels:          map[string]string{"ci.openshift.io/multi-stage-test": "nested-podman"},
+				},
+				ImagePullSecrets: []corev1.LocalObjectReference{{Name: "random-pull-secret"}},
+			}},
+			wantRoles: []rbacv1.Role{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "nested-podman",
+						Namespace:       "ci-op-xxxx",
+						ResourceVersion: "1",
+						Labels:          map[string]string{"ci.openshift.io/multi-stage-test": "nested-podman"},
+					},
+					Rules: []rbacv1.PolicyRule{
+						{
+							Verbs:     []string{"create", "list"},
+							APIGroups: []string{"rbac.authorization.k8s.io"},
+							Resources: []string{"rolebindings", "roles"},
+						},
+						{
+							Verbs:         []string{"get", "update"},
+							APIGroups:     []string{""},
+							Resources:     []string{"secrets"},
+							ResourceNames: []string{"nested-podman", "test-done-signal"},
+						},
+						{
+							Verbs:     []string{"get"},
+							APIGroups: []string{"", "image.openshift.io"},
+							Resources: []string{"imagestreams/layers"},
+						},
+					},
+				},
+			},
+			wantRoleBindings: []rbacv1.RoleBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "nested-podman",
+						Namespace:       "ci-op-xxxx",
+						ResourceVersion: "1",
+						Labels:          map[string]string{"ci.openshift.io/multi-stage-test": "nested-podman"},
+					},
+					Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Name: "nested-podman"}},
+					RoleRef:  rbacv1.RoleRef{Kind: "Role", Name: "nested-podman"},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "nested-podman-view",
+						Namespace:       "ci-op-xxxx",
+						ResourceVersion: "1",
+						Labels:          map[string]string{"ci.openshift.io/multi-stage-test": "nested-podman"},
+					},
+					Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Name: "nested-podman"}},
+					RoleRef:  rbacv1.RoleRef{Kind: "ClusterRole", Name: "view"},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "nested-podman-nested-podman-scc-creater",
+						Namespace:       "ci-op-xxxx",
+						ResourceVersion: "1",
+					},
+					Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Name: "nested-podman"}},
+					RoleRef:  rbacv1.RoleRef{Kind: "ClusterRole", Name: "nested-podman-creater"},
+				},
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ctx := context.TODO()
+
+			client := fakectrlruntimeclient.NewClientBuilder().
+				WithInterceptorFuncs(interceptor.Funcs{
+					Create: func(ctx context.Context, client ctrlruntimeclient.WithWatch, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
+						if sa, ok := obj.(*corev1.ServiceAccount); ok {
+							sa.ImagePullSecrets = []corev1.LocalObjectReference{{
+								Name: "random-pull-secret",
+							}}
+						}
+						return client.Create(ctx, obj, opts...)
+					},
+					Get: func(ctx context.Context, client ctrlruntimeclient.WithWatch, key ctrlruntimeclient.ObjectKey, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.GetOption) error {
+						if err := client.Get(ctx, key, obj, opts...); err != nil {
+							return err
+						}
+
+						if ns, ok := obj.(*corev1.Namespace); ok && key.Name == jobSpec.Namespace() {
+							if ns.Annotations == nil {
+								ns.Annotations = make(map[string]string)
+							}
+							ns.Annotations["security.openshift.io/MinimallySufficientPodSecurityStandard"] = "privileged"
+						}
+
+						return nil
+					},
+				}).
+				WithObjects(&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: jobSpec.Namespace()}}).
+				Build()
+
+			tc.step.client = &testhelper_kube.FakePodClient{
+				FakePodExecutor: &testhelper_kube.FakePodExecutor{
+					LoggingClient: loggingclient.New(client),
+				},
+			}
+
+			if err := tc.step.setupRBAC(ctx); err != nil {
+				t.Errorf("unexpected error: %s", err)
+			}
+
+			sas := corev1.ServiceAccountList{}
+			if err := client.List(ctx, &sas, &ctrlruntimeclient.ListOptions{}); err != nil {
+				t.Fatal("Error listing SAs")
+			}
+
+			if diff := cmp.Diff(tc.wantSAs, sas.Items, cmpopts.SortSlices(func(a, b corev1.ServiceAccount) bool {
+				return strings.Compare(a.Name, b.Name) == -1
+			})); diff != "" {
+				t.Errorf("SAs are different:\n%s", diff)
+			}
+
+			roles := rbacv1.RoleList{}
+			if err := client.List(ctx, &roles, &ctrlruntimeclient.ListOptions{}); err != nil {
+				t.Fatal("Error listing Roles")
+			}
+
+			if diff := cmp.Diff(tc.wantRoles, roles.Items, cmpopts.SortSlices(func(a, b rbacv1.Role) bool {
+				return strings.Compare(a.Name, b.Name) == -1
+			})); diff != "" {
+				t.Errorf("Roles are different:\n%s", diff)
+			}
+
+			rolebindings := rbacv1.RoleBindingList{}
+			if err := client.List(ctx, &rolebindings, &ctrlruntimeclient.ListOptions{}); err != nil {
+				t.Fatal("Error listing RoleBindings")
+			}
+
+			if diff := cmp.Diff(tc.wantRoleBindings, rolebindings.Items, cmpopts.SortSlices(func(a, b rbacv1.RoleBinding) bool {
+				return strings.Compare(a.Name, b.Name) == -1
+			})); diff != "" {
+				t.Errorf("RoleBindings are different:\n%s", diff)
 			}
 		})
 	}

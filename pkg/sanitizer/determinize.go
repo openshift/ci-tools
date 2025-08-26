@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	cioperatorLatestImage = "ci-operator:latest"
+	cioperatorLatestImage = "quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest"
 )
 
 func DeterminizeJobs(prowJobConfigDir string, config *dispatcher.Config, pjs map[string]dispatcher.ProwJobData, blocked sets.Set[string], cm dispatcher.ClusterMap) error {

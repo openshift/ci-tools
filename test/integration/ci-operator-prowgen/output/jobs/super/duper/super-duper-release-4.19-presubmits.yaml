@@ -1,28 +1,26 @@
-postsubmits:
-  openshift/origin:
+presubmits:
+  super/duper:
   - agent: kubernetes
     always_run: true
     branches:
-    - ^main$
-    cluster: api.ci
+    - ^release-4\.19$
+    - ^release-4\.19-
+    context: ci/prow/periodics-ci-index-super-duper-bundle
     decorate: true
-    decoration_config:
-      skip_cloning: true
     labels:
-      ci-operator.openshift.io/is-promotion: "true"
+      ci-operator.openshift.io/variant: periodics
       ci.openshift.io/generator: prowgen
-    max_concurrency: 1
-    name: branch-ci-openshift-origin-main-images
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+    name: pull-ci-super-duper-release-4.19-periodics-ci-index-super-duper-bundle
+    rerun_command: /test periodics-ci-index-super-duper-bundle
     spec:
       containers:
       - args:
         - --gcs-upload-secret=/secrets/gcs/service-account.json
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --image-mirror-push-secret=/etc/push-secret/.dockerconfigjson
-        - --promote
         - --report-credentials-file=/etc/report/credentials
-        - --target=[images]
-        - --target=artifacts
+        - --target=ci-index-super-duper-bundle
+        - --variant=periodics
         command:
         - ci-operator
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
@@ -41,9 +39,6 @@ postsubmits:
         - mountPath: /etc/pull-secret
           name: pull-secret
           readOnly: true
-        - mountPath: /etc/push-secret
-          name: push-secret
-          readOnly: true
         - mountPath: /etc/report
           name: result-aggregator
           readOnly: true
@@ -55,9 +50,7 @@ postsubmits:
       - name: pull-secret
         secret:
           secretName: registry-pull-credentials
-      - name: push-secret
-        secret:
-          secretName: registry-push-credentials-ci-central
       - name: result-aggregator
         secret:
           secretName: result-aggregator
+    trigger: (?m)^/test( | .* )periodics-ci-index-super-duper-bundle,?($|\s.*)

@@ -369,8 +369,8 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) (string, [
 		return formatError(fmt.Errorf("could not resolve ci-operator's config for %s/%s/%s: %w", org, repo, pr.Base.Ref, err)), nil
 	}
 	if !api.PromotesOfficialImages(ciOpConfig, api.WithOKD) {
-		logger.Info("the repo does not contribute to the OpenShift official images")
-		return fmt.Sprintf("the repo %s/%s does not contribute to the OpenShift official images", org, repo), nil
+		logger.Info("the repo does not contribute to the OpenShift official images, or the branch's promotion is disabled")
+		return fmt.Sprintf("the repo %s/%s does not contribute to the OpenShift official images, or the base branch is not currently having images promoted", org, repo), nil
 	}
 
 	var messages []string

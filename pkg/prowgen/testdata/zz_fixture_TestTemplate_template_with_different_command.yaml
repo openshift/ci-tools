@@ -14,7 +14,7 @@ containers:
     value: t
   - name: TEST_COMMAND
     value: make different things
-  image: ci-operator:latest
+  image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
   imagePullPolicy: Always
   name: ""
   resources:

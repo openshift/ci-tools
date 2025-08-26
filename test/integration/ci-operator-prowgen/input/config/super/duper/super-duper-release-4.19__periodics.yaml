@@ -26,10 +26,10 @@ resources:
       memory: 200Mi
 tests:
 - as: unit
-  cron: '@daily'
   commands: make test-unit
   container:
     from: src
+  cron: '@daily'
 zz_generated_metadata:
   branch: release-4.19
   org: super

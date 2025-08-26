@@ -38,5 +38,5 @@ tests:
   interval: 2h
 zz_generated_metadata:
   branch: master
-  org: norehearsals
+  org: slack-report
   repo: duper

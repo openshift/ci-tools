@@ -104,7 +104,7 @@ items:
               branch: branch
               org: org
               repo: repo
-        image: ci-operator:latest
+        image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
         resources:

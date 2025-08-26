@@ -19,7 +19,8 @@ import (
 )
 
 const (
-	cioperatorLatestImage = "ci-operator:latest"
+	cioperatorLatestImage    = "ci-operator:latest"
+	qciCioperatorLatestImage = "quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest"
 )
 
 func DeterminizeJobs(prowJobConfigDir string, config *dispatcher.Config, pjs map[string]dispatcher.ProwJobData, blocked sets.Set[string], cm dispatcher.ClusterMap) error {
@@ -136,7 +137,7 @@ func isCIOperatorLatest(image string) bool {
 	parts := strings.Split(image, "/")
 	lastPart := parts[len(parts)-1]
 
-	return lastPart == cioperatorLatestImage
+	return lastPart == cioperatorLatestImage || image == qciCioperatorLatestImage
 }
 
 func determineCluster(jb prowconfig.JobBase, config *dispatcher.Config, pjs map[string]dispatcher.ProwJobData, path string, mostUsedCluster string, blocked sets.Set[string], cm dispatcher.ClusterMap) (string, error) {

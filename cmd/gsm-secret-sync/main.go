@@ -119,15 +119,10 @@ func main() {
 func logChangeSummary(actions gsm.Actions) {
 	totalChanges := len(actions.SAsToCreate) + len(actions.SAsToDelete) + len(actions.SecretsToCreate) + len(actions.SecretsToDelete)
 
-	if actions.ConsolidatedIAMPolicy != nil {
-		totalChanges++
-	}
-
 	if totalChanges == 0 {
 		logrus.Info("No changes required")
 		return
 	}
-
 	logrus.Infof("Found (%d) changes to apply", totalChanges)
 
 	if len(actions.SAsToCreate) > 0 {

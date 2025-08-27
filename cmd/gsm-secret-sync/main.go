@@ -126,37 +126,37 @@ func logChangeSummary(actions gsm.Actions) {
 	logrus.Infof("Found (%d) changes to apply", totalChanges)
 
 	if len(actions.SAsToCreate) > 0 {
-		logrus.Infof("Creating (%d) service accounts", len(actions.SAsToCreate))
+		logrus.Debugf("Creating (%d) service accounts", len(actions.SAsToCreate))
 		for _, sa := range actions.SAsToCreate {
-			logrus.Debugf("  + SA: %s", sa.Collection)
+			logrus.Tracef("  + SA: %s", sa.Collection)
 		}
 	}
 
 	if len(actions.SecretsToCreate) > 0 {
-		logrus.Infof("Creating (%d) secrets", len(actions.SecretsToCreate))
+		logrus.Debugf("Creating (%d) secrets", len(actions.SecretsToCreate))
 		for _, secret := range actions.SecretsToCreate {
-			logrus.Debugf("  + Secret: %s", secret.Name)
+			logrus.Tracef("  + Secret: %s", secret.Name)
 		}
 	}
 
 	if len(actions.SAsToDelete) > 0 {
-		logrus.Infof("Deleting (%d) service accounts", len(actions.SAsToDelete))
+		logrus.Debugf("Deleting (%d) service accounts", len(actions.SAsToDelete))
 		for _, sa := range actions.SAsToDelete {
-			logrus.Debugf("  - SA: %s", sa.Collection)
+			logrus.Tracef("  - SA: %s", sa.Collection)
 		}
 	}
 
 	if len(actions.SecretsToDelete) > 0 {
-		logrus.Infof("Deleting (%d) secrets", len(actions.SecretsToDelete))
+		logrus.Debugf("Deleting (%d) secrets", len(actions.SecretsToDelete))
 		for _, secret := range actions.SecretsToDelete {
-			logrus.Debugf("  - %s", secret.Name)
+			logrus.Tracef("  - %s", secret.Name)
 		}
 	}
 
 	if actions.ConsolidatedIAMPolicy != nil {
 		logrus.Debugf("Updating IAM policy with %d bindings", len(actions.ConsolidatedIAMPolicy.Bindings))
 		for _, binding := range actions.ConsolidatedIAMPolicy.Bindings {
-			logrus.Debugf("  + Role: %s, Members: %s", binding.Role, binding.Members)
+			logrus.Tracef("  + Role: %s, Members: [%d members]", binding.Role, len(binding.Members))
 		}
 	}
 }

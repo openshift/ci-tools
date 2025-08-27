@@ -173,7 +173,7 @@ func (a *Actions) ApplyPolicy(ctx context.Context, client ResourceManagerClient)
 		return fmt.Errorf("failed to apply IAM policy: %w", err)
 	}
 
-	logrus.Info("Successfully applied IAM policy")
+	logrus.Debug("Successfully applied IAM policy")
 	return nil
 }
 
@@ -199,7 +199,7 @@ func (a *Actions) DeleteObsoleteServiceAccounts(ctx context.Context, client IAMC
 		if err != nil {
 			logrus.WithError(err).Errorf("Failed to delete service account: %s", sa.Email)
 		} else {
-			logrus.Infof("Deleted service account: %s", sa.Email)
+			logrus.Debugf("Deleted service account: %s", sa.Email)
 		}
 	}
 }

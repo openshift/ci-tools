@@ -14,6 +14,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+	prowflagutil "sigs.k8s.io/prow/pkg/flagutil"
 	"sigs.k8s.io/prow/pkg/github"
 	"sigs.k8s.io/prow/pkg/github/fakegithub"
 	"sigs.k8s.io/prow/pkg/kube"
@@ -1208,4 +1209,65 @@ func (r fakeCIOpConfigResolver) Config(m *api.Metadata) (*api.ReleaseBuildConfig
 		}, nil
 	}
 	return &api.ReleaseBuildConfiguration{}, nil
+}
+
+func makeTrustedApps(slugs ...string) prowflagutil.Strings {
+	var s prowflagutil.Strings
+	for _, slug := range slugs {
+		_ = s.Set(slug)
+	}
+	return s
+}
+
+func TestGithubTrustedChecker_isTrustedApp(t *testing.T) {
+	c := &githubTrustedChecker{
+		githubClient: nil,
+		trustedApps:  makeTrustedApps("openshift-pr-manager[bot]", "another-trusted-app"),
+	}
+
+	tests := []struct {
+		login   string
+		allowed bool
+	}{
+		{"openshift-pr-manager[bot]", true},
+		{"another-trusted-app", true},
+		{"untrusted-app[bot]", false},
+	}
+
+	for _, tt := range tests {
+		got := c.isTrustedApp(tt.login)
+		if got != tt.allowed {
+			t.Fatalf("isTrustedApp(%q)=%v, want %v", tt.login, got, tt.allowed)
+		}
+	}
+}
+
+func TestGithubTrustedChecker_trustedUser_AllowsTrustedApp(t *testing.T) {
+	c := &githubTrustedChecker{
+		githubClient: nil,
+		trustedApps:  makeTrustedApps("openshift-pr-manager[bot]"),
+	}
+
+	trusted, err := c.trustedUser("openshift-pr-manager[bot]", "openshift", "ovn-kubernetes", 0)
+	if err != nil {
+		t.Fatalf("trustedUser returned error: %v", err)
+	}
+	if !trusted {
+		t.Fatalf("trustedUser should trust allowed app installation user")
+	}
+}
+
+func TestGithubTrustedChecker_trustedUser_UntrustedAppFallsBackToHumanCheck(t *testing.T) {
+	c := &githubTrustedChecker{
+		githubClient: nil,
+		trustedApps:  makeTrustedApps("some-other-trusted-app"),
+	}
+
+	trusted, err := c.trustedUser("random-untrusted-bot[bot]", "openshift", "ovn-kubernetes", 0)
+	if err != nil {
+		t.Fatalf("trustedUser returned error: %v", err)
+	}
+	if trusted {
+		t.Fatalf("trustedUser unexpectedly trusted unlisted app installation user")
+	}
 }

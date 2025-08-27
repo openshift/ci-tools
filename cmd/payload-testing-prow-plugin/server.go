@@ -17,6 +17,7 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
+	prowflagutil "sigs.k8s.io/prow/pkg/flagutil"
 	"sigs.k8s.io/prow/pkg/github"
 	"sigs.k8s.io/prow/pkg/kube"
 	"sigs.k8s.io/prow/pkg/pluginhelp"
@@ -113,9 +114,26 @@ type trustedChecker interface {
 
 type githubTrustedChecker struct {
 	githubClient github.Client
+	trustedApps  prowflagutil.Strings
+}
+
+func (c *githubTrustedChecker) isTrustedApp(login string) bool {
+	for _, app := range c.trustedApps.Strings() {
+		if app == login {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *githubTrustedChecker) trustedUser(author, org, repo string, _ int) (bool, error) {
+	if c.isTrustedApp(author) {
+		return true, nil
+	}
+	// in the case of UT there or any other reason there is no real githubClient just bail w/ false
+	if c.githubClient == nil {
+		return false, nil
+	}
 	triggerTrustedResponse, err := trigger.TrustedUser(c.githubClient, false, []string{}, "", author, org, repo)
 	if err != nil {
 		return false, fmt.Errorf("error checking %s for trust: %w", author, err)

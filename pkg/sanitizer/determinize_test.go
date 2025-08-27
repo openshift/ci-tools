@@ -54,7 +54,7 @@ func TestIsCIOperatorLatest(t *testing.T) {
 		image    string
 		expected bool
 	}{
-		{name: "standard image", image: "ci-operator:latest", expected: true},
+		{name: "standard image", image: "quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest", expected: true},
 		{name: "full registry path", image: "registry/namespace/ci-operator:latest", expected: true},
 		{name: "different tag", image: "registry/namespace/ci-operator:other", expected: false},
 		{name: "fifferent image", image: "other-image:latest", expected: false},

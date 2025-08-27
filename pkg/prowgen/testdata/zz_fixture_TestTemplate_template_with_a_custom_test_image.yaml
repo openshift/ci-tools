@@ -16,7 +16,7 @@ containers:
     value: make things
   - name: TEST_IMAGESTREAM_TAG
     value: custom-image
-  image: ci-operator:latest
+  image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
   imagePullPolicy: Always
   name: ""
   resources:

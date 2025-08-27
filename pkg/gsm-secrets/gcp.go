@@ -88,3 +88,14 @@ func GetAllSecrets(ctx context.Context, client SecretManagerClient, config Confi
 	}
 	return actualSecrets, nil
 }
+
+func GetSecretPayload(ctx context.Context, client SecretManagerClient, secretResourceName string) ([]byte, error) {
+	accessReq := &secretmanagerpb.AccessSecretVersionRequest{
+		Name: secretResourceName + "/versions/latest",
+	}
+	accessResp, err := client.AccessSecretVersion(ctx, accessReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to access secret version: %w", err)
+	}
+	return accessResp.Payload.Data, nil
+}

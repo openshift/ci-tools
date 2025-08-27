@@ -1000,7 +1000,7 @@ trigger 0 job(s) of type all for the ci release of OCP 4.8
 					Body: "/payload 4.10 nightly informing",
 				},
 			},
-			expectedMessage: `the repo org/repo does not contribute to the OpenShift official images`,
+			expectedMessage: `the repo org/repo does not contribute to the OpenShift official images, or the base branch is not currently having images promoted`,
 		},
 		{
 			name: "abort all jobs",

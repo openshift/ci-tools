@@ -1,8 +1,84 @@
 package gsmsecrets
 
 import (
+	"fmt"
 	"testing"
 )
+
+func TestClassifySecret(t *testing.T) {
+	testCases := []struct {
+		name       string
+		secretName string
+		expected   SecretType
+	}{
+		{
+			name:       "updater-sa secret is classified as SA",
+			secretName: "collection1__updater-service-account",
+			expected:   SecretTypeSA,
+		},
+		{
+			name:       "index secret is classified as index",
+			secretName: "collection1____index",
+			expected:   SecretTypeIndex,
+		},
+		{
+			name:       "secret is classified a common secret",
+			secretName: "collection1__some-random-secret",
+			expected:   SecretTypeGeneric,
+		},
+		{
+			name:       "secret is classified as unknown",
+			secretName: "some-random-secret",
+			expected:   SecretTypeUnknown,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := ClassifySecret(tc.secretName)
+			if actual != tc.expected {
+				t.Errorf("expected %v, got %v", tc.expected, actual)
+			}
+		})
+	}
+}
+
+func TestVerifyIndexSecretContent(t *testing.T) {
+	testCases := []struct {
+		name          string
+		payload       []byte
+		expectedError error
+	}{
+		{
+			name:    "test-collection-updater-sa",
+			payload: fmt.Appendf(nil, "- updater-service-account"),
+		},
+		{
+			name:    "test-collection-updater-sa-with-newline",
+			payload: fmt.Appendf(nil, "- updater-service-account\n"),
+		},
+		{
+			name:          "test-collection-updater-sa-with-multiple-lines",
+			payload:       fmt.Appendf(nil, "- updater-service-account\n- another-service-account"),
+			expectedError: fmt.Errorf("index secret content mismatch: expected %q, got %q", "- updater-service-account\n- another-service-account", "- updater-service-account\n- another-service-account"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := VerifyIndexSecretContent(tc.payload)
+			if tc.expectedError != nil {
+				if err == nil {
+					t.Fatalf("verifyIndexSecretContent should have failed: %v", tc.expectedError)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("verifyIndexSecretContent failed: %v", err)
+				}
+			}
+		})
+	}
+}
 
 func TestValidateSecretName(t *testing.T) {
 	testCases := []struct {

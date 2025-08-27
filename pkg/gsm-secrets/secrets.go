@@ -1,6 +1,7 @@
 package gsmsecrets
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -48,4 +49,17 @@ func ExtractCollectionFromSecretName(secretName string) string {
 	}
 
 	return ""
+}
+
+// VerifyIndexSecretContent verifies that the index secret content is correct.
+// At this point we assume that the index secret only contains the updater service account secret name.
+func VerifyIndexSecretContent(payload []byte) error {
+	expectedContent := "- updater-service-account"
+	actualContent := strings.TrimSpace(string(payload))
+
+	if actualContent != expectedContent {
+		return fmt.Errorf("index secret content mismatch: expected %q, got %q", expectedContent, actualContent)
+	}
+
+	return nil
 }

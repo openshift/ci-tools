@@ -46,26 +46,27 @@ func TestOCImageMirrorArgs(t *testing.T) {
 		},
 		{
 			name:               "Mirror to multiple external registries",
-			targetImageRef:     "src-image:latest",
-			externalRegistries: []string{"dst-registry-1.com", "dst-registry-2.com"},
+			targetImageRef:     "ci/src-image:latest",
+			externalRegistries: []string{"dst-registry-1.com", "dst-registry-2.com", "quay.io/openshift/ci"},
 			want: []string{
-				"image-registry.openshift-image-registry.svc:5000/src-image:latest",
-				"dst-registry-1.com/src-image:latest",
-				"dst-registry-2.com/src-image:latest",
+				"image-registry.openshift-image-registry.svc:5000/ci/src-image:latest",
+				"dst-registry-1.com/ci/src-image:latest",
+				"dst-registry-2.com/ci/src-image:latest",
+				"quay.io/openshift/ci:ci_src-image_latest",
 			},
 		},
 		{
 			name:           "Deduplicate destinations",
-			targetImageRef: "src-image:latest",
+			targetImageRef: "ci/src-image:latest",
 			externalRegistries: []string{
 				"dst-registry-1.com",
 				"dst-registry-1.com",
 				"dst-registry-3.com",
 			},
 			want: []string{
-				"image-registry.openshift-image-registry.svc:5000/src-image:latest",
-				"dst-registry-1.com/src-image:latest",
-				"dst-registry-3.com/src-image:latest",
+				"image-registry.openshift-image-registry.svc:5000/ci/src-image:latest",
+				"dst-registry-1.com/ci/src-image:latest",
+				"dst-registry-3.com/ci/src-image:latest",
 			},
 		},
 	} {

@@ -7,7 +7,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -56,9 +55,10 @@ func (s *stableImagesTagStep) run(ctx context.Context) error {
 			},
 		},
 	}
-	if err := s.client.Create(ctx, newIS); err != nil && !kerrors.IsAlreadyExists(err) {
-		return fmt.Errorf("could not create stable imagestreamtag: %w", err)
+	if _, err := util.CreateImageStreamWithMetrics(ctx, s.client, newIS, s.client.MetricsAgent()); err != nil {
+		return fmt.Errorf("could not create stable imagestream: %w", err)
 	}
+
 	return nil
 }
 
@@ -133,11 +133,11 @@ func (s *releaseImagesTagStep) run(ctx context.Context) error {
 	initialIS := newIS.DeepCopy()
 	initialIS.Name = api.ReleaseStreamFor(api.InitialReleaseName)
 
-	if err := s.client.Create(ctx, newIS); err != nil && !kerrors.IsAlreadyExists(err) {
+	if _, err := util.CreateImageStreamWithMetrics(ctx, s.client, newIS, s.client.MetricsAgent()); err != nil {
 		return fmt.Errorf("could not copy stable imagestreamtag: %w", err)
 	}
 
-	if err := s.client.Create(ctx, initialIS); err != nil && !kerrors.IsAlreadyExists(err) {
+	if _, err := util.CreateImageStreamWithMetrics(ctx, s.client, initialIS, s.client.MetricsAgent()); err != nil {
 		return fmt.Errorf("could not copy stable-initial imagestreamtag: %w", err)
 	}
 

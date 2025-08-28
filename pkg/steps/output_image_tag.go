@@ -17,6 +17,7 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
@@ -42,6 +43,7 @@ func (s *outputImageTagStep) Run(ctx context.Context) error {
 }
 
 func (s *outputImageTagStep) run(ctx context.Context) error {
+	startTime := time.Now()
 	toNamespace := s.namespace()
 	if string(s.config.From) == s.config.To.Tag && toNamespace == s.jobSpec.Namespace() && s.config.To.Name == api.StableImageStream {
 		logrus.Infof("Tagging %s into %s", s.config.From, s.config.To.Name)
@@ -86,6 +88,19 @@ func (s *outputImageTagStep) run(ctx context.Context) error {
 	}); waitErr != nil {
 		return fmt.Errorf("could not upsert output imagestreamtag: %w", waitErr)
 	}
+
+	event := &metrics.TagImportEvent{
+		Namespace:       s.namespace(),
+		ImageStreamName: s.config.To.Name,
+		TagName:         s.config.To.Tag,
+		FullTagName:     s.namespace() + "/" + s.config.To.Name + ":" + s.config.To.Tag,
+		SourceImage:     fmt.Sprintf("%s@%s", api.PipelineImageStream, from.Image.Name),
+		SourceImageKind: "ImageStreamImage",
+		StartTime:       startTime,
+		CompletionTime:  time.Now(),
+		Success:         true,
+	}
+	s.client.MetricsAgent().Record(event)
 
 	return nil
 }

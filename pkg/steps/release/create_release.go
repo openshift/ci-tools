@@ -10,7 +10,6 @@ import (
 
 	coreapi "k8s.io/api/core/v1"
 	rbacapi "k8s.io/api/rbac/v1"
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -20,6 +19,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/configresolver"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
+	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
@@ -66,7 +66,7 @@ func (s *assembleReleaseStep) Run(ctx context.Context) error {
 	return results.ForReason("assembling_release").ForError(s.run(ctx))
 }
 
-func setupReleaseImageStream(ctx context.Context, namespace string, client ctrlruntimeclient.Client) (string, error) {
+func setupReleaseImageStream(ctx context.Context, namespace string, client ctrlruntimeclient.Client, metricsAgent *metrics.MetricsAgent) (string, error) {
 	sa := &coreapi.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "ci-operator",
@@ -130,19 +130,14 @@ func setupReleaseImageStream(ctx context.Context, namespace string, client ctrlr
 			},
 		},
 	}
-	if err := client.Create(ctx, release); err != nil {
-		if !kerrors.IsAlreadyExists(err) {
-			return "", err
-		}
-		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: "release"}, release); err != nil {
-			return "", results.ForReason("creating_release_stream").ForError(err)
-		}
+	if _, err := util.CreateImageStreamWithMetrics(ctx, client, release, metricsAgent); err != nil {
+		return "", err
 	}
 	return release.Status.PublicDockerImageRepository, nil
 }
 
 func (s *assembleReleaseStep) run(ctx context.Context) error {
-	releaseImageStreamRepo, err := setupReleaseImageStream(ctx, s.jobSpec.Namespace(), s.client)
+	releaseImageStreamRepo, err := setupReleaseImageStream(ctx, s.jobSpec.Namespace(), s.client, s.client.MetricsAgent())
 	if err != nil {
 		return err
 	}
@@ -150,7 +145,7 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 	streamName := api.ReleaseStreamFor(s.name)
 	stable := &imagev1.ImageStream{}
 	logrus.Debugf("Waiting to import tags on imagestream (before creating release) %s/%s ...", s.jobSpec.Namespace(), streamName)
-	if err := utils.WaitForImportingISTag(ctx, s.client, s.jobSpec.Namespace(), streamName, stable, sets.New("cluster-version-operator", "cli"), utils.DefaultImageImportTimeout); err != nil {
+	if err := utils.WaitForImportingISTag(ctx, s.client, s.jobSpec.Namespace(), streamName, stable, sets.New("cluster-version-operator", "cli"), utils.DefaultImageImportTimeout, s.client.MetricsAgent()); err != nil {
 		return fmt.Errorf("failed to wait for importing imagestreamtags [cluster-version-operator, cli] on %s/%s: %w", s.jobSpec.Namespace(), streamName, err)
 	}
 	logrus.Debugf("Imported tags on imagestream (before creating release) %s/%s", s.jobSpec.Namespace(), streamName)

@@ -1494,13 +1494,9 @@ func (o *options) initializeNamespace() error {
 			LookupPolicy: imageapi.ImageLookupPolicy{Local: true},
 		},
 	}
-	if err := client.Create(ctx, is); err != nil {
-		if !kerrors.IsAlreadyExists(err) {
-			return fmt.Errorf("could not set up pipeline imagestream for test: %w", err)
-		}
-		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: api.PipelineImageStream}, is); err != nil {
-			return fmt.Errorf("failed to get pipeline imagestream: %w", err)
-		}
+	is, err = util.CreateImageStreamWithMetrics(ctx, client, is, o.metricsAgent)
+	if err != nil {
+		return fmt.Errorf("could not set up pipeline imagestream for test: %w", err)
 	}
 	o.jobSpec.SetOwner(&metav1.OwnerReference{
 		APIVersion: "image.openshift.io/v1",

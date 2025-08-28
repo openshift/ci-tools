@@ -18,6 +18,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
+	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
@@ -125,10 +126,24 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 	}
 
 	logrus.Debugf("Waiting to import tags on imagestream (after creating pipeline) %s/%s:%s ...", s.jobSpec.Namespace(), api.PipelineImageStream, s.config.To)
-	if err := utils.WaitForImportingISTag(ctx, s.client, s.jobSpec.Namespace(), api.PipelineImageStream, nil, sets.New(string(s.config.To)), utils.DefaultImageImportTimeout); err != nil {
+	startTime := time.Now()
+	if err := utils.WaitForImportingISTag(ctx, s.client, s.jobSpec.Namespace(), api.PipelineImageStream, nil, sets.New(string(s.config.To)), utils.DefaultImageImportTimeout, s.client.MetricsAgent()); err != nil {
 		return fmt.Errorf("failed to wait for importing imagestreamtags on %s/%s:%s: %w", s.jobSpec.Namespace(), api.PipelineImageStream, s.config.To, err)
 	}
 	logrus.Debugf("Imported tags on imagestream (after creating pipeline) %s/%s:%s", s.jobSpec.Namespace(), api.PipelineImageStream, s.config.To)
+
+	s.client.MetricsAgent().Record(&metrics.TagImportEvent{
+		Namespace:       s.jobSpec.Namespace(),
+		ImageStreamName: api.PipelineImageStream,
+		TagName:         string(s.config.To),
+		FullTagName:     s.jobSpec.Namespace() + "/" + api.PipelineImageStream + ":" + string(s.config.To),
+		SourceImage:     objectReferenceName,
+		SourceImageKind: from.Kind,
+		StartTime:       startTime,
+		CompletionTime:  time.Now(),
+		Success:         true,
+	})
+
 	return nil
 }
 

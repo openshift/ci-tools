@@ -23,6 +23,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
+	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
@@ -79,7 +80,7 @@ func (s *importReleaseStep) Run(ctx context.Context) error {
 }
 
 func (s *importReleaseStep) run(ctx context.Context) error {
-	_, err := setupReleaseImageStream(ctx, s.jobSpec.Namespace(), s.client)
+	_, err := setupReleaseImageStream(ctx, s.jobSpec.Namespace(), s.client, s.client.MetricsAgent())
 	if err != nil {
 		return err
 	}
@@ -87,9 +88,10 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 	streamName := api.ReleaseStreamFor(s.name)
 
 	logrus.Infof("Importing release image %s.", s.name)
+	startTime := time.Now()
 
 	// create the stable image stream with lookup policy so we have a place to put our imported images
-	err = s.client.Create(ctx, &imagev1.ImageStream{
+	newIS := &imagev1.ImageStream{
 		ObjectMeta: meta.ObjectMeta{
 			Namespace: s.jobSpec.Namespace(),
 			Name:      streamName,
@@ -99,8 +101,8 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 				Local: true,
 			},
 		},
-	})
-	if err != nil && !kerrors.IsAlreadyExists(err) {
+	}
+	if _, err := util.CreateImageStreamWithMetrics(ctx, s.client, newIS, s.client.MetricsAgent()); err != nil {
 		return fmt.Errorf("could not create stable imagestream: %w", err)
 	}
 
@@ -113,7 +115,7 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 	s.originalPullSpec = pullSpec
 	// retry importing the image a few times because we might race against establishing credentials/roles
 	// and be unable to import images on the same cluster
-	if newPullSpec, err := utils.ImportTagWithRetries(ctx, s.client, s.jobSpec.Namespace(), "release", s.name, pullSpec, api.ImageStreamImportRetries); err != nil {
+	if newPullSpec, err := utils.ImportTagWithRetries(ctx, s.client, s.jobSpec.Namespace(), "release", s.name, pullSpec, api.ImageStreamImportRetries, s.client.MetricsAgent()); err != nil {
 		return fmt.Errorf("unable to import %s release image: %w", s.name, err)
 	} else {
 		logrus.WithField("pullSpec", pullSpec).WithField("newPullSpec", newPullSpec).WithField("name", s.name).
@@ -261,10 +263,24 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 	// loop until we observe all images have successfully imported, kicking import if a particular
 	// tag fails
 	logrus.Infof("Importing release %s created at %s with %d images to tag release:%s ...", releaseIS.Name, releaseIS.CreationTimestamp, len(releaseIS.Spec.Tags), s.name)
-	if err := utils.WaitForImportingISTag(ctx, s.client, s.jobSpec.Namespace(), streamName, nil, sets.New[string](), utils.DefaultImageImportTimeout); err != nil {
+	if err := utils.WaitForImportingISTag(ctx, s.client, s.jobSpec.Namespace(), streamName, nil, sets.New[string](), utils.DefaultImageImportTimeout, s.client.MetricsAgent()); err != nil {
 		return fmt.Errorf("failed to import release %s to tag release:%s: %w", releaseIS.Name, s.name, err)
 	}
 	logrus.Infof("Imported release %s created at %s with %d images to tag release:%s", releaseIS.Name, releaseIS.CreationTimestamp, len(releaseIS.Spec.Tags), s.name)
+
+	event := &metrics.TagImportEvent{
+		Namespace:       s.jobSpec.Namespace(),
+		ImageStreamName: streamName,
+		TagName:         s.name,
+		FullTagName:     s.jobSpec.Namespace() + "/" + streamName + ":" + s.name,
+		SourceImage:     s.originalPullSpec,
+		SourceImageKind: "DockerImage",
+		StartTime:       startTime,
+		CompletionTime:  time.Now(),
+		Success:         true,
+	}
+	s.client.MetricsAgent().Record(event)
+
 	return nil
 }
 
@@ -350,10 +366,11 @@ func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName 
 
 		// Setting the lookup policy on the imagestreamtag doesn't do anything, it gets happily reset to false so we have to
 		// create the imagestream to be able to set it there.
-		if err := s.client.Create(ctx, &imagev1.ImageStream{
+		overrideIS := &imagev1.ImageStream{
 			ObjectMeta: metav1.ObjectMeta{Name: overrideCLIStreamName, Namespace: s.jobSpec.Namespace()},
 			Spec:       imagev1.ImageStreamSpec{LookupPolicy: imagev1.ImageLookupPolicy{Local: true}, Tags: []imagev1.TagReference{{ReferencePolicy: imagev1.TagReferencePolicy{Type: s.referencePolicy}}}},
-		}); err != nil && !kerrors.IsAlreadyExists(err) {
+		}
+		if _, err := util.CreateImageStreamWithMetrics(ctx, s.client, overrideIS, s.client.MetricsAgent()); err != nil {
 			return nil, fmt.Errorf("failed to create %s imagestream: %w", overrideCLIStreamName, err)
 		}
 

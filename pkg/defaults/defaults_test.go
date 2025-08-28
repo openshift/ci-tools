@@ -1241,7 +1241,7 @@ func TestFromConfig(t *testing.T) {
 			Body:       io.NopCloser(bytes.NewBuffer([]byte(content))),
 		}, nil
 	})
-	client := loggingclient.New(fakectrlruntimeclient.NewClientBuilder().Build())
+	client := loggingclient.New(fakectrlruntimeclient.NewClientBuilder().Build(), nil)
 	if err := imageapi.AddToScheme(scheme.Scheme); err != nil {
 		t.Fatal(err)
 	}

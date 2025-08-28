@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"time"
 
 	iamadmin "cloud.google.com/go/iam/admin/apiv1"
 	resourcemanager "cloud.google.com/go/resourcemanager/apiv3"
@@ -48,11 +47,7 @@ func (o *options) setupLogger() error {
 		return fmt.Errorf("invalid log level specified: %w", err)
 	}
 	logrus.SetLevel(level)
-	formatter := new(logrus.TextFormatter)
-	formatter.TimestampFormat = time.RFC3339
-	formatter.FullTimestamp = true
-	formatter.ForceColors = true
-	logrus.SetFormatter(formatter)
+	logrus.SetFormatter(&logrus.JSONFormatter{})
 	return nil
 }
 

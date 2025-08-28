@@ -144,7 +144,8 @@ RUN find . -type f -regex ".*\.\(yaml\|yml\)" -exec sed -i s?quay.io/openshift/o
 					}},
 				}},
 			},
-		}).Build())}
+		}).Build(), nil),
+	}
 
 	s := bundleSourceStep{
 		config: api.BundleSourceStepConfiguration{

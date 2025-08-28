@@ -116,8 +116,11 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 		},
 	}
 
+	created := false
 	if err := s.client.Create(ctx, ist); err != nil && !kerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("failed to create imagestreamtag for input image: %w", err)
+	} else if err == nil {
+		created = true
 	}
 
 	if err := waitForTagInSpec(ctx, s.client, s.jobSpec.Namespace(), api.PipelineImageStream, string(s.config.To), 3*time.Minute); err != nil {
@@ -125,10 +128,14 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 	}
 
 	logrus.Debugf("Waiting to import tags on imagestream (after creating pipeline) %s/%s:%s ...", s.jobSpec.Namespace(), api.PipelineImageStream, s.config.To)
-	if err := utils.WaitForImportingISTag(ctx, s.client, s.jobSpec.Namespace(), api.PipelineImageStream, nil, sets.New(string(s.config.To)), utils.DefaultImageImportTimeout); err != nil {
+	startTime := time.Now()
+	if err := utils.WaitForImportingISTag(ctx, s.client, s.jobSpec.Namespace(), api.PipelineImageStream, nil, sets.New(string(s.config.To)), utils.DefaultImageImportTimeout, s.client.MetricsAgent()); err != nil {
 		return fmt.Errorf("failed to wait for importing imagestreamtags on %s/%s:%s: %w", s.jobSpec.Namespace(), api.PipelineImageStream, s.config.To, err)
 	}
 	logrus.Debugf("Imported tags on imagestream (after creating pipeline) %s/%s:%s", s.jobSpec.Namespace(), api.PipelineImageStream, s.config.To)
+
+	s.client.MetricsAgent().RecordTagImportEvent(s.jobSpec.Namespace(), api.PipelineImageStream, string(s.config.To), objectReferenceName, from.Kind, created, startTime)
+
 	return nil
 }
 

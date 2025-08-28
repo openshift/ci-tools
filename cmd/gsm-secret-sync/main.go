@@ -12,13 +12,17 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/api/option"
 
+	"sigs.k8s.io/prow/pkg/logrusutil"
+
 	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
+	"github.com/openshift/ci-tools/pkg/secrets"
 )
 
 type options struct {
-	configFile string
-	dryRun     bool
-	logLevel   string
+	configFile               string
+	dryRun                   bool
+	logLevel                 string
+	gcpServiceAccountKeyFile string
 }
 
 func parseOptions() options {
@@ -27,6 +31,7 @@ func parseOptions() options {
 	fs.StringVar(&o.configFile, "config", "", "path to config file")
 	fs.StringVar(&o.logLevel, "log-level", "info", "log level")
 	fs.BoolVar(&o.dryRun, "dry-run", false, "dry run mode")
+	fs.StringVar(&o.gcpServiceAccountKeyFile, "gcp-service-account-key-file", "", "path to GCP service account key file (JSON format)")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse args")
 	}
@@ -37,17 +42,37 @@ func (o *options) Validate() error {
 	if o.configFile == "" {
 		return fmt.Errorf("--config is required")
 	}
+	if o.gcpServiceAccountKeyFile == "" {
+		return fmt.Errorf("--gcp-service-account-key-file is required")
+	}
 
 	return nil
 }
 
-func (o *options) setupLogger() error {
+func getConfigFromEnv() (gsm.Config, error) {
+	projectID := os.Getenv("GCP_PROJECT_ID")
+	if projectID == "" {
+		return gsm.Config{}, fmt.Errorf("GCP_PROJECT_ID environment variable is required")
+	}
+
+	projectNumber := os.Getenv("GCP_PROJECT_NUMBER")
+	if projectNumber == "" {
+		return gsm.Config{}, fmt.Errorf("GCP_PROJECT_NUMBER environment variable is required")
+	}
+
+	return gsm.Config{
+		ProjectIdString: projectID,
+		ProjectIdNumber: projectNumber,
+	}, nil
+}
+
+func (o *options) setupLogger(censor *secrets.DynamicCensor) error {
 	level, err := logrus.ParseLevel(o.logLevel)
 	if err != nil {
 		return fmt.Errorf("invalid log level specified: %w", err)
 	}
 	logrus.SetLevel(level)
-	logrus.SetFormatter(&logrus.JSONFormatter{})
+	logrus.SetFormatter(logrusutil.NewFormatterWithCensor(&logrus.JSONFormatter{}, censor))
 	return nil
 }
 
@@ -56,13 +81,23 @@ func main() {
 	if err := o.Validate(); err != nil {
 		logrus.WithError(err).Fatal("Failed to validate options")
 	}
-	if err := o.setupLogger(); err != nil {
+
+	censor := secrets.NewDynamicCensor()
+	if err := o.setupLogger(&censor); err != nil {
 		logrus.WithError(err).Fatal("Failed to set up logging")
 	}
 
-	logrus.Info("Starting reconciliation")
+	gcpCredentials, err := secrets.ReadFromFile(o.gcpServiceAccountKeyFile, &censor)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to read GCP credentials")
+	}
 
-	config := gsm.Production
+	config, err := getConfigFromEnv()
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to get GCP project configuration")
+	}
+
+	logrus.Info("Starting reconciliation")
 
 	desiredSAs, desiredSecrets, desiredIAMBindings, desiredCollections, err := gsm.GetDesiredState(o.configFile, config)
 	if err != nil {
@@ -71,7 +106,10 @@ func main() {
 
 	ctx := context.Background()
 
-	projectsClient, err := resourcemanager.NewProjectsClient(ctx, option.WithQuotaProject(config.ProjectIdNumber))
+	gcpCreds := []byte(gcpCredentials)
+	projectsClient, err := resourcemanager.NewProjectsClient(ctx,
+		option.WithCredentialsJSON(gcpCreds),
+		option.WithQuotaProject(config.ProjectIdNumber))
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create resource manager client")
 	}
@@ -81,7 +119,9 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to get project IAM policy")
 	}
 
-	iamClient, err := iamadmin.NewIamClient(ctx, option.WithQuotaProject(config.ProjectIdNumber))
+	iamClient, err := iamadmin.NewIamClient(ctx,
+		option.WithCredentialsJSON(gcpCreds),
+		option.WithQuotaProject(config.ProjectIdNumber))
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create IAM client")
 	}
@@ -90,7 +130,9 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to get service accounts")
 	}
 
-	secretsClient, err := secretmanager.NewClient(ctx, option.WithQuotaProject(config.ProjectIdNumber))
+	secretsClient, err := secretmanager.NewClient(ctx,
+		option.WithCredentialsJSON(gcpCreds),
+		option.WithQuotaProject(config.ProjectIdNumber))
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create secrets client")
 	}

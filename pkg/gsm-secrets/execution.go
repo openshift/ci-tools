@@ -3,16 +3,22 @@ package gsmsecrets
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"time"
 
 	iamadmin "cloud.google.com/go/iam/admin/apiv1"
 	"cloud.google.com/go/iam/admin/apiv1/adminpb"
 	"cloud.google.com/go/iam/apiv1/iampb"
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
-	secretmanagerpb "cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
+	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 	"github.com/googleapis/gax-go/v2"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/retry"
 )
 
 // Client interfaces - these should be defined by the cmd package
@@ -90,19 +96,67 @@ func (a *Actions) CreateServiceAccounts(ctx context.Context, client IAMClient) {
 		secret := a.SecretsToCreate[secretName]
 		secret.Payload = keyData
 		a.SecretsToCreate[secretName] = secret
-
-		logrus.Infof("Created service account: %s", sa.Email)
 	}
 }
 
-func GenerateServiceAccountKey(ctx context.Context, client IAMClient, saEmail string, projectID string) ([]byte, error) {
-	name := fmt.Sprintf("%s/serviceAccounts/%s", GetProjectResourceString(projectID), saEmail)
-	key, err := client.CreateServiceAccountKey(ctx, &adminpb.CreateServiceAccountKeyRequest{
-		Name: name,
-	})
-	if err != nil {
-		return nil, err
+// gcpServiceAccountBackoff defines retry behavior for GCP service account operations
+var gcpServiceAccountBackoff = wait.Backoff{
+	Steps:    3,
+	Duration: 8 * time.Second,
+	Factor:   2.0,
+	Jitter:   0.1,
+	Cap:      30 * time.Second,
+}
+
+// isServiceAccountNotFoundError detects GCP service account "not found" errors indicating eventual consistency
+func isServiceAccountNotFoundError(err error) bool {
+	if err == nil {
+		return false
 	}
+
+	if gcpError, ok := err.(*googleapi.Error); ok {
+		return gcpError.Code == http.StatusNotFound
+	}
+
+	if s, ok := status.FromError(err); ok {
+		return s.Code() == codes.NotFound
+	}
+
+	return false
+}
+
+func GenerateServiceAccountKey(ctx context.Context, client IAMClient, saEmail string, projectID string) ([]byte, error) {
+	return generateServiceAccountKeyWithBackoff(ctx, client, saEmail, projectID, gcpServiceAccountBackoff)
+}
+
+func generateServiceAccountKeyWithBackoff(ctx context.Context, client IAMClient, saEmail string, projectID string, backoff wait.Backoff) ([]byte, error) {
+	name := fmt.Sprintf("%s/serviceAccounts/%s", GetProjectResourceString(projectID), saEmail)
+	attemptCount := 0
+	var key *adminpb.ServiceAccountKey
+	err := retry.OnError(backoff, isServiceAccountNotFoundError, func() error {
+		attemptCount++
+
+		var innerErr error
+		key, innerErr = client.CreateServiceAccountKey(ctx, &adminpb.CreateServiceAccountKeyRequest{
+			Name: name,
+		})
+
+		if innerErr != nil {
+			if isServiceAccountNotFoundError(innerErr) {
+				logrus.Warnf("Service account %s not available (attempt #%d), retrying...", saEmail, attemptCount)
+			} else {
+				logrus.Errorf("Non-retryable error (attempt #%d): %v", attemptCount, innerErr)
+			}
+			return innerErr
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate key for service account %s after %d attempts: %w", saEmail, attemptCount, err)
+	}
+
+	logrus.Debugf("Successfully generated key for service account %s (attempts: %d)", saEmail, attemptCount)
 	return key.GetPrivateKeyData(), nil
 }
 

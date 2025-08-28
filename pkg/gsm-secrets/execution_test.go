@@ -5,15 +5,19 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"net/http"
 	"testing"
+	"time"
 
 	"cloud.google.com/go/iam/admin/apiv1/adminpb"
 	secretmanagerpb "cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
-	"github.com/google/go-cmp/cmp"
 	gax "github.com/googleapis/gax-go/v2"
 	"go.uber.org/mock/gomock"
+	"google.golang.org/api/googleapi"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
-	"github.com/openshift/ci-tools/pkg/testhelper"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 func TestGenerateServiceAccountKey(t *testing.T) {
@@ -23,25 +27,63 @@ func TestGenerateServiceAccountKey(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name        string
-		saEmail     string
-		mockKeyData []byte
-		mockError   error
-		expectError bool
+		name             string
+		saEmail          string
+		mockKeyData      []byte
+		mockErrors       []error
+		expectError      bool
+		expectedAttempts int
 	}{
 		{
-			name:        "successful key generation",
-			saEmail:     GetUpdaterSAEmail("test-collection", config),
-			mockKeyData: []byte("fake-private-key-data"),
-			mockError:   nil,
-			expectError: false,
+			name:             "successful key generation",
+			saEmail:          GetUpdaterSAEmail("test-collection", config),
+			mockKeyData:      []byte("fake-private-key-data"),
+			mockErrors:       []error{nil},
+			expectError:      false,
+			expectedAttempts: 1,
 		},
 		{
-			name:        "IAM client error",
+			name:             "non-retryable IAM client error",
+			saEmail:          GetUpdaterSAEmail("test-collection", config),
+			mockKeyData:      nil,
+			mockErrors:       []error{errors.New("some non-retryable GCP error")},
+			expectError:      true,
+			expectedAttempts: 1,
+		},
+		{
+			name:        "retryable NotFound error - eventual success",
+			saEmail:     GetUpdaterSAEmail("test-collection", config),
+			mockKeyData: []byte("fake-private-key-data"),
+			mockErrors: []error{
+				status.Error(codes.NotFound, "service account not found"),
+				status.Error(codes.NotFound, "service account not found"),
+				nil,
+			},
+			expectError:      false,
+			expectedAttempts: 3,
+		},
+		{
+			name:        "retryable NotFound error - all attempts fail",
 			saEmail:     GetUpdaterSAEmail("test-collection", config),
 			mockKeyData: nil,
-			mockError:   errors.New("some GCP error"),
-			expectError: true,
+			mockErrors: []error{
+				status.Error(codes.NotFound, "service account not found"),
+				status.Error(codes.NotFound, "service account not found"),
+				status.Error(codes.NotFound, "service account not found"),
+			},
+			expectError:      true,
+			expectedAttempts: 3,
+		},
+		{
+			name:        "retryable HTTP 404 error - eventual success",
+			saEmail:     GetUpdaterSAEmail("test-collection", config),
+			mockKeyData: []byte("fake-private-key-data"),
+			mockErrors: []error{
+				&googleapi.Error{Code: http.StatusNotFound, Message: "service account not found"},
+				nil,
+			},
+			expectError:      false,
+			expectedAttempts: 2,
 		},
 	}
 
@@ -56,28 +98,42 @@ func TestGenerateServiceAccountKey(t *testing.T) {
 				Name: fmt.Sprintf("%s/serviceAccounts/%s", GetProjectResourceString(config.ProjectIdString), tc.saEmail),
 			}
 
-			if tc.mockError != nil {
-				mockIAMClient.EXPECT().
-					CreateServiceAccountKey(gomock.Any(), keyRequest).
-					Return(nil, tc.mockError).
-					Times(1)
-			} else {
-				mockIAMClient.EXPECT().
-					CreateServiceAccountKey(gomock.Any(), keyRequest).
-					Return(&adminpb.ServiceAccountKey{
-						PrivateKeyData: tc.mockKeyData,
-					}, nil).
-					Times(1)
-			}
+			callCount := 0
+			mockIAMClient.EXPECT().
+				CreateServiceAccountKey(gomock.Any(), keyRequest).
+				DoAndReturn(func(ctx context.Context, req *adminpb.CreateServiceAccountKeyRequest, opts ...gax.CallOption) (*adminpb.ServiceAccountKey, error) {
+					if callCount < len(tc.mockErrors) {
+						err := tc.mockErrors[callCount]
+						callCount++
+						if err != nil {
+							return nil, err
+						}
+						return &adminpb.ServiceAccountKey{
+							PrivateKeyData: tc.mockKeyData,
+						}, nil
+					}
+					return nil, errors.New("unexpected call beyond expected attempts")
+				}).
+				Times(tc.expectedAttempts)
 
-			result, actualErr := GenerateServiceAccountKey(context.Background(), mockIAMClient, tc.saEmail, config.ProjectIdString)
+			testBackoff := wait.Backoff{
+				Steps:    3,
+				Duration: 10 * time.Millisecond,
+				Factor:   2.0,
+				Cap:      50 * time.Millisecond,
+			}
+			result, actualErr := generateServiceAccountKeyWithBackoff(context.Background(), mockIAMClient, tc.saEmail, config.ProjectIdString, testBackoff)
 
 			if tc.expectError {
 				if actualErr == nil {
 					t.Errorf("Expected error but got none")
+					return
 				}
-				if diff := cmp.Diff(tc.mockError, actualErr, testhelper.EquateErrorMessage); diff != "" {
-					t.Errorf("%s: mismatch (-expected +actual), diff: %s", tc.name, diff)
+				finalError := tc.mockErrors[len(tc.mockErrors)-1]
+				expectedErrMsg := fmt.Sprintf("failed to generate key for service account %s after %d attempts: %s", tc.saEmail, tc.expectedAttempts, finalError.Error())
+
+				if actualErr.Error() != expectedErrMsg {
+					t.Errorf("Expected error message %q, got %q", expectedErrMsg, actualErr.Error())
 				}
 				return
 			}

@@ -82,7 +82,7 @@ func TestRPMServerStepProvides(t *testing.T) {
 						}},
 					},
 				},
-			).Build())
+			).Build(), nil)
 			tc.jobSpec.SetNamespace(ns)
 			step := RPMServerStep(api.RPMServeStepConfiguration{}, client, &tc.jobSpec)
 			providesMap := step.Provides()

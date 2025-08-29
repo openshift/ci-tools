@@ -40,32 +40,25 @@ type IAMClient interface {
 // ExecuteActions performs the actual resource changes in GCP based on the computed diff.
 func (a *Actions) ExecuteActions(ctx context.Context, iamClient IAMClient, secretsClient SecretManagerClient, projectsClient ResourceManagerClient) {
 	if len(a.SAsToCreate) > 0 {
-		logrus.Info("Creating service accounts")
 		a.CreateServiceAccounts(ctx, iamClient)
 	}
 
 	if len(a.SecretsToCreate) > 0 {
-		logrus.Info("Creating secrets")
 		a.CreateSecrets(ctx, secretsClient, iamClient)
 	}
 
 	if a.ConsolidatedIAMPolicy != nil {
-		logrus.Info("Applying IAM policy")
 		if err := a.ApplyPolicy(ctx, projectsClient); err != nil {
 			logrus.WithError(err).Fatal("Failed to apply IAM policy")
 		}
 	}
 
 	if len(a.SAsToDelete) > 0 {
-		logrus.Info("Revoking obsolete service account keys")
 		a.RevokeObsoleteServiceAccountKeys(ctx, iamClient)
-
-		logrus.Info("Deleting obsolete service accounts")
 		a.DeleteObsoleteServiceAccounts(ctx, iamClient)
 	}
 
 	if len(a.SecretsToDelete) > 0 {
-		logrus.Info("Deleting obsolete secrets")
 		a.DeleteObsoleteSecrets(ctx, secretsClient)
 	}
 }
@@ -86,8 +79,7 @@ func (a *Actions) CreateServiceAccounts(ctx context.Context, client IAMClient) {
 			delete(a.SecretsToCreate, secretName)
 			continue
 		}
-		logrus.Debugf("Service account created: %s", newSA.Email)
-		logrus.Debugf("Generating key for service account: %s", newSA.Email)
+		logrus.Debugf("Service account created for collection %s", sa.Collection)
 		keyData, err := GenerateServiceAccountKey(ctx, client, newSA.Email, a.Config.ProjectIdString)
 		if err != nil {
 			logrus.WithError(err).Errorf("Failed to generate key for service account: %s", newSA.Email)
@@ -181,7 +173,7 @@ func (a *Actions) ApplyPolicy(ctx context.Context, client ResourceManagerClient)
 		return fmt.Errorf("failed to apply IAM policy: %w", err)
 	}
 
-	logrus.Info("Successfully applied IAM policy")
+	logrus.Debug("Successfully applied IAM policy")
 	return nil
 }
 
@@ -207,7 +199,7 @@ func (a *Actions) DeleteObsoleteServiceAccounts(ctx context.Context, client IAMC
 		if err != nil {
 			logrus.WithError(err).Errorf("Failed to delete service account: %s", sa.Email)
 		} else {
-			logrus.Infof("Deleted service account: %s", sa.Email)
+			logrus.Debugf("Deleted service account: %s", sa.Email)
 		}
 	}
 }

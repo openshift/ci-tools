@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"time"
 
 	iamadmin "cloud.google.com/go/iam/admin/apiv1"
 	resourcemanager "cloud.google.com/go/resourcemanager/apiv3"
@@ -13,13 +12,17 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/api/option"
 
+	"sigs.k8s.io/prow/pkg/logrusutil"
+
 	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
+	"github.com/openshift/ci-tools/pkg/secrets"
 )
 
 type options struct {
-	configFile string
-	dryRun     bool
-	logLevel   string
+	configFile               string
+	dryRun                   bool
+	logLevel                 string
+	gcpServiceAccountKeyFile string
 }
 
 func parseOptions() options {
@@ -28,6 +31,7 @@ func parseOptions() options {
 	fs.StringVar(&o.configFile, "config", "", "path to config file")
 	fs.StringVar(&o.logLevel, "log-level", "info", "log level")
 	fs.BoolVar(&o.dryRun, "dry-run", false, "dry run mode")
+	fs.StringVar(&o.gcpServiceAccountKeyFile, "gcp-service-account-key-file", "", "path to GCP service account key file (JSON format)")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse args")
 	}
@@ -38,21 +42,37 @@ func (o *options) Validate() error {
 	if o.configFile == "" {
 		return fmt.Errorf("--config is required")
 	}
+	if o.gcpServiceAccountKeyFile == "" {
+		return fmt.Errorf("--gcp-service-account-key-file is required")
+	}
 
 	return nil
 }
 
-func (o *options) setupLogger() error {
+func getConfigFromEnv() (gsm.Config, error) {
+	projectID := os.Getenv("GCP_PROJECT_ID")
+	if projectID == "" {
+		return gsm.Config{}, fmt.Errorf("GCP_PROJECT_ID environment variable is required")
+	}
+
+	projectNumber := os.Getenv("GCP_PROJECT_NUMBER")
+	if projectNumber == "" {
+		return gsm.Config{}, fmt.Errorf("GCP_PROJECT_NUMBER environment variable is required")
+	}
+
+	return gsm.Config{
+		ProjectIdString: projectID,
+		ProjectIdNumber: projectNumber,
+	}, nil
+}
+
+func (o *options) setupLogger(censor *secrets.DynamicCensor) error {
 	level, err := logrus.ParseLevel(o.logLevel)
 	if err != nil {
 		return fmt.Errorf("invalid log level specified: %w", err)
 	}
 	logrus.SetLevel(level)
-	formatter := new(logrus.TextFormatter)
-	formatter.TimestampFormat = time.RFC3339
-	formatter.FullTimestamp = true
-	formatter.ForceColors = true
-	logrus.SetFormatter(formatter)
+	logrus.SetFormatter(logrusutil.NewFormatterWithCensor(&logrus.JSONFormatter{}, censor))
 	return nil
 }
 
@@ -61,13 +81,23 @@ func main() {
 	if err := o.Validate(); err != nil {
 		logrus.WithError(err).Fatal("Failed to validate options")
 	}
-	if err := o.setupLogger(); err != nil {
+
+	censor := secrets.NewDynamicCensor()
+	if err := o.setupLogger(&censor); err != nil {
 		logrus.WithError(err).Fatal("Failed to set up logging")
 	}
 
-	logrus.Info("Starting reconciliation")
+	gcpCredentials, err := secrets.ReadFromFile(o.gcpServiceAccountKeyFile, &censor)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to read GCP credentials")
+	}
 
-	config := gsm.Production
+	config, err := getConfigFromEnv()
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to get GCP project configuration")
+	}
+
+	logrus.Info("Starting reconciliation")
 
 	desiredSAs, desiredSecrets, desiredIAMBindings, desiredCollections, err := gsm.GetDesiredState(o.configFile, config)
 	if err != nil {
@@ -76,7 +106,10 @@ func main() {
 
 	ctx := context.Background()
 
-	projectsClient, err := resourcemanager.NewProjectsClient(ctx, option.WithQuotaProject(config.ProjectIdNumber))
+	gcpCreds := []byte(gcpCredentials)
+	projectsClient, err := resourcemanager.NewProjectsClient(ctx,
+		option.WithCredentialsJSON(gcpCreds),
+		option.WithQuotaProject(config.ProjectIdNumber))
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create resource manager client")
 	}
@@ -86,7 +119,9 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to get project IAM policy")
 	}
 
-	iamClient, err := iamadmin.NewIamClient(ctx, option.WithQuotaProject(config.ProjectIdNumber))
+	iamClient, err := iamadmin.NewIamClient(ctx,
+		option.WithCredentialsJSON(gcpCreds),
+		option.WithQuotaProject(config.ProjectIdNumber))
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create IAM client")
 	}
@@ -95,7 +130,9 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to get service accounts")
 	}
 
-	secretsClient, err := secretmanager.NewClient(ctx, option.WithQuotaProject(config.ProjectIdNumber))
+	secretsClient, err := secretmanager.NewClient(ctx,
+		option.WithCredentialsJSON(gcpCreds),
+		option.WithQuotaProject(config.ProjectIdNumber))
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create secrets client")
 	}
@@ -119,49 +156,44 @@ func main() {
 func logChangeSummary(actions gsm.Actions) {
 	totalChanges := len(actions.SAsToCreate) + len(actions.SAsToDelete) + len(actions.SecretsToCreate) + len(actions.SecretsToDelete)
 
-	if actions.ConsolidatedIAMPolicy != nil {
-		totalChanges++
-	}
-
 	if totalChanges == 0 {
 		logrus.Info("No changes required")
 		return
 	}
-
 	logrus.Infof("Found (%d) changes to apply", totalChanges)
 
 	if len(actions.SAsToCreate) > 0 {
-		logrus.Infof("Creating (%d) service accounts", len(actions.SAsToCreate))
+		logrus.Debugf("Creating (%d) service accounts", len(actions.SAsToCreate))
 		for _, sa := range actions.SAsToCreate {
-			logrus.Debugf("  + SA: %s", sa.Collection)
+			logrus.Tracef("  + SA: %s", sa.Collection)
 		}
 	}
 
 	if len(actions.SecretsToCreate) > 0 {
-		logrus.Infof("Creating (%d) secrets", len(actions.SecretsToCreate))
+		logrus.Debugf("Creating (%d) secrets", len(actions.SecretsToCreate))
 		for _, secret := range actions.SecretsToCreate {
-			logrus.Debugf("  + Secret: %s", secret.Name)
+			logrus.Tracef("  + Secret: %s", secret.Name)
 		}
 	}
 
 	if len(actions.SAsToDelete) > 0 {
-		logrus.Infof("Deleting (%d) service accounts", len(actions.SAsToDelete))
+		logrus.Debugf("Deleting (%d) service accounts", len(actions.SAsToDelete))
 		for _, sa := range actions.SAsToDelete {
-			logrus.Debugf("  - SA: %s", sa.Collection)
+			logrus.Tracef("  - SA: %s", sa.Collection)
 		}
 	}
 
 	if len(actions.SecretsToDelete) > 0 {
-		logrus.Infof("Deleting (%d) secrets", len(actions.SecretsToDelete))
+		logrus.Debugf("Deleting (%d) secrets", len(actions.SecretsToDelete))
 		for _, secret := range actions.SecretsToDelete {
-			logrus.Debugf("  - %s", secret.Name)
+			logrus.Tracef("  - %s", secret.Name)
 		}
 	}
 
 	if actions.ConsolidatedIAMPolicy != nil {
 		logrus.Debugf("Updating IAM policy with %d bindings", len(actions.ConsolidatedIAMPolicy.Bindings))
 		for _, binding := range actions.ConsolidatedIAMPolicy.Bindings {
-			logrus.Debugf("  + Role: %s, Members: %s", binding.Role, binding.Members)
+			logrus.Tracef("  + Role: %s, Members: [%d members]", binding.Role, len(binding.Members))
 		}
 	}
 }

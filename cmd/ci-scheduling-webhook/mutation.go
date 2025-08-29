@@ -203,21 +203,36 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 				if requiresNetAdmin {
 					// Build the correct patch based on existing securityContext
 					if container.SecurityContext == nil {
-						// No securityContext exists, create one with capabilities
+						// No securityContext exists, create one with capabilities and runAsUser
 						securityContext := map[string]interface{}{
+							"runAsUser":    int64(0),
+							"runAsNonRoot": false,
 							"capabilities": map[string]interface{}{
 								"add": []string{"NET_ADMIN", "NET_RAW"},
 							},
 						}
 						addPatchEntry("add", fmt.Sprintf("/spec/containers/%d/securityContext", i), securityContext)
 					} else if container.SecurityContext.Capabilities == nil {
-						// securityContext exists but no capabilities, add capabilities
-						capabilities := map[string]interface{}{
-							"add": []string{"NET_ADMIN", "NET_RAW"},
+						// securityContext exists but no capabilities, add capabilities and ensure runAsUser
+						securityContextPatch := map[string]interface{}{
+							"capabilities": map[string]interface{}{
+								"add": []string{"NET_ADMIN", "NET_RAW"},
+							},
 						}
-						addPatchEntry("add", fmt.Sprintf("/spec/containers/%d/securityContext/capabilities", i), capabilities)
+
+						addPatchEntry("add", fmt.Sprintf("/spec/containers/%d/securityContext/capabilities", i), securityContextPatch["capabilities"])
+
+						// Patch runAsUser separately if needed
+						if container.SecurityContext.RunAsUser == nil || *container.SecurityContext.RunAsUser != 0 {
+							addPatchEntry("add", fmt.Sprintf("/spec/containers/%d/securityContext/runAsUser", i), int64(0))
+						}
+
+						// Remove or set runAsNonRoot to false if it exists and is true
+						if container.SecurityContext.RunAsNonRoot != nil && *container.SecurityContext.RunAsNonRoot {
+							addPatchEntry("replace", fmt.Sprintf("/spec/containers/%d/securityContext/runAsNonRoot", i), false)
+						}
 					} else {
-						// Both securityContext and capabilities exist, merge the "add" array
+						// Both securityContext and capabilities exist, merge the "add" array and ensure runAsUser
 						existingCaps := make([]string, 0)
 						capSet := make(map[string]bool)
 
@@ -243,9 +258,19 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 						} else {
 							addPatchEntry("add", fmt.Sprintf("/spec/containers/%d/securityContext/capabilities/add", i), existingCaps)
 						}
+
+						// Ensure runAsUser is set to 0 if not already
+						if container.SecurityContext.RunAsUser == nil || *container.SecurityContext.RunAsUser != 0 {
+							addPatchEntry("add", fmt.Sprintf("/spec/containers/%d/securityContext/runAsUser", i), int64(0))
+						}
+
+						// Remove or set runAsNonRoot to false if it exists and is true
+						if container.SecurityContext.RunAsNonRoot != nil && *container.SecurityContext.RunAsNonRoot {
+							addPatchEntry("replace", fmt.Sprintf("/spec/containers/%d/securityContext/runAsNonRoot", i), false)
+						}
 					}
 
-					klog.Infof("Added NET_ADMIN and NET_RAW capabilities to test container in pod %s in namespace %s due to TEST_REQUIRES_BUILDFARM_NET_ADMIN=true", podName, namespace)
+					klog.Infof("Added NET_ADMIN and NET_RAW capabilities and ensured runAsUser=0 for test container in pod %s in namespace %s due to TEST_REQUIRES_BUILDFARM_NET_ADMIN=true", podName, namespace)
 				}
 				break
 			}

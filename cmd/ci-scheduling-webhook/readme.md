@@ -87,9 +87,9 @@ To keep focus on scaling down nodes (PreferNoSchedule is not perfect), incoming 
 ## Manual Image Builds 
 ```shell
 [ci-tools]$ CGO_ENABLED=0 go build -ldflags="-extldflags=-static" github.com/openshift/ci-tools/cmd/ci-scheduling-webhook
-[ci-tools]$ sudo docker build -t quay.io/jupierce/ci-scheduling-webhook:latest -f images/ci-scheduling-webhook/Dockerfile .
+[ci-tools]$ podman build -t quay.io/jupierce/ci-scheduling-webhook:latest -f images/ci-scheduling-webhook/Dockerfile .
 # Temporary hosting location
-[ci-tools]$ sudo docker push quay.io/jupierce/ci-scheduling-webhook:latest
+[ci-tools]$ podman push quay.io/jupierce/ci-scheduling-webhook:latest
 ```
 
 ## Local Test
@@ -98,3 +98,9 @@ To keep focus on scaling down nodes (PreferNoSchedule is not perfect), incoming 
 [ci-tools]$ go run github.com/openshift/ci-tools/cmd/ci-scheduling-webhook --as system:admin --port 8443
 [ci-tools]$ cmd/ci-scheduling-webhook/testing/post-pods.sh
 ```
+
+## Pushing to Prod
+[ci-tools]$ podman build -t quay.io/openshift/ci:ci_ci-scheduling-webhook_latest -f images/ci-scheduling-webhook/Dockerfile .
+[ci-tools]$ podman push quay.io/openshift/ci:ci_ci-scheduling-webhook_latest
+
+And delete ci-scheduling-webhook pods on build farms to ensure they pull the update.

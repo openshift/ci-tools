@@ -1,0 +1,22 @@
+items:
+- metadata:
+    creationTimestamp: null
+    labels:
+      ci.openshift.io/ephemeral-cluster: ec
+    name: pj1
+    namespace: ci
+    resourceVersion: "999"
+  spec: {}
+  status:
+    startTime: null
+- metadata:
+    creationTimestamp: null
+    labels:
+      ci.openshift.io/ephemeral-cluster: ec
+    name: pj2
+    namespace: ci
+    resourceVersion: "999"
+  spec: {}
+  status:
+    startTime: null
+metadata: {}

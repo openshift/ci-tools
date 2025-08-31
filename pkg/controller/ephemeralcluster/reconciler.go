@@ -156,17 +156,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 			return r.handleGetProwJobError(ctx, log, ec, err)
 		}
 	} else {
-		log.Info("ProwJob not found, creating")
-		err := r.createProwJob(ctx, log, ec)
-		if updateErr := r.updateEphemeralCluster(ctx, ec); updateErr != nil {
-			msg := utilerrors.NewAggregate([]error{updateErr, err}).Error()
-			return reconcile.Result{}, errors.New(msg)
-		}
-		requeueAfter := r.polling()
-		if err != nil {
-			requeueAfter = 0
-		}
-		return reconcile.Result{RequeueAfter: requeueAfter}, err
+		return r.handleCreateProwJob(ctx, log, ec, &observedStatus)
 	}
 
 	upsertCondition(&observedStatus, ephemeralclusterv1.ProwJobCreating, ephemeralclusterv1.ConditionFalse, r.now(), ProwJobCreatingDoneReason, "")
@@ -256,6 +246,50 @@ func (r *reconciler) generateCIOperatorConfig(log *logrus.Entry, ec *ephemeralcl
 		}},
 		Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 	}, nil
+}
+
+func (r *reconciler) handleCreateProwJob(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) (reconcile.Result, error) {
+	pjsForEC := prowv1.ProwJobList{}
+	listOpts := []ctrlruntimeclient.ListOption{
+		ctrlruntimeclient.MatchingLabels{EphemeralClusterLabel: ec.Name},
+		ctrlruntimeclient.InNamespace(r.prowConfigAgent.Config().ProwJobNamespace),
+	}
+	if err := r.masterClient.List(ctx, &pjsForEC, listOpts...); err != nil {
+		log.WithError(err).Error("Failed to list ProwJobs to check whether the request has one associated already")
+		return reconcile.Result{}, fmt.Errorf("list pjs to create ec: %w", err)
+	}
+
+	// This is a case that should never happen but if it does it means that either someone
+	// is creating PJs manually or there is a bug in this controller.
+	if len(pjsForEC.Items) > 1 {
+		log.Error("Too many ProwJobs bound, this is a bug")
+		return reconcile.Result{}, reconcile.TerminalError(errors.New("too many ProwJobs associated"))
+	}
+
+	// This is another case that should be very unlikely to happen. We expect this controller
+	// to bind the PJ to an EC as soon as the former gets created.
+	if len(pjsForEC.Items) == 1 {
+		log.Info("ProwJob found but was not bound to the EC, binding now")
+		observedStatus.ProwJobID = pjsForEC.Items[0].Name
+		if err := r.updateEphemeralClusterStatus(ctx, ec, observedStatus); err != nil {
+			return reconcile.Result{}, err
+		}
+		return reconcile.Result{RequeueAfter: r.polling()}, nil
+	}
+
+	log.Info("ProwJob not found, creating")
+	err := r.createProwJob(ctx, log, ec)
+	if updateErr := r.updateEphemeralCluster(ctx, ec); updateErr != nil {
+		msg := utilerrors.NewAggregate([]error{updateErr, err}).Error()
+		return reconcile.Result{}, errors.New(msg)
+	}
+
+	requeueAfter := r.polling()
+	if err != nil {
+		requeueAfter = 0
+	}
+
+	return reconcile.Result{RequeueAfter: requeueAfter}, err
 }
 
 func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster) error {

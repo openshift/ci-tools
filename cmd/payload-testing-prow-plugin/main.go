@@ -32,6 +32,7 @@ type options struct {
 	githubEventServerOptions githubeventserver.Options
 	github                   prowflagutil.GitHubOptions
 	kubernetesOptions        prowflagutil.KubernetesOptions
+	trustedApps              prowflagutil.Strings
 	namespace                string
 	ciOpConfigDir            string
 	releaseRepoGitSyncPath   string
@@ -51,6 +52,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.namespace, "namespace", "ci", "Namespace to create PullRequestPayloadQualificationRuns.")
 	fs.StringVar(&o.ciOpConfigDir, "ci-op-config-dir", "", "Path to CI Operator configuration directory.")
 	fs.StringVar(&o.releaseRepoGitSyncPath, "release-repo-git-sync-path", "/var/repo/release", "Path to release repository dir")
+	fs.Var(&o.trustedApps, "trusted-app", "Repeatable. GitHub App slug allowed to issue /payload . Example: --trusted-app=openshift-pr-manager")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatalf("cannot parse args: '%s'", os.Args[1:])
 	}
@@ -178,6 +180,7 @@ func main() {
 		testResolver: &fileTestResolver{configAgent: configAgent},
 		trustedChecker: &githubTrustedChecker{
 			githubClient: githubClient,
+			trustedApps:  o.trustedApps,
 		},
 		ciOpConfigResolver: registryserver.NewResolverClient(api.URLForService(api.ServiceConfig)),
 	}

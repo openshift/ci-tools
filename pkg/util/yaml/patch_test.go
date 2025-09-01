@@ -11,6 +11,7 @@ func TestApplyPatch(t *testing.T) {
 		name       string
 		object     string
 		patch      Patch
+		opts       []ApplyPatchOption
 		wantObject string
 	}{
 		{
@@ -37,9 +38,16 @@ func TestApplyPatch(t *testing.T) {
 			patch:      JsonPatch([]byte(`[{"op": "add", "path": "/foo/bar", "value": "duper"}]`)),
 			wantObject: "foo:\n  bar: duper\n",
 		},
+		{
+			name:       "JsonPatch patch: ignore missing key on remove",
+			object:     "foo:\n  bar: super",
+			patch:      JsonPatch([]byte(`[{"op": "remove", "path": "/foo/bax"}, {"op": "remove", "path": "/foo/bar"}]`)),
+			opts:       []ApplyPatchOption{IgnoreMissingKeyOnRemove()},
+			wantObject: "foo: {}\n",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			patched, err := ApplyPatch([]byte(tc.object), tc.patch)
+			patched, err := ApplyPatch([]byte(tc.object), tc.patch, tc.opts...)
 			if err != nil {
 				t.Errorf("unexpected err: %s", err)
 				return

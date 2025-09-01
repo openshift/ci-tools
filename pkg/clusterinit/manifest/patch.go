@@ -95,7 +95,7 @@ func applyPatch(manifest []byte, patch Patch) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("marshal patch: %w", err)
 		}
-		return yaml.ApplyPatch(manifest, yaml.JsonPatch(patchBytes))
+		return yaml.ApplyPatch(manifest, yaml.JsonPatch(patchBytes), yaml.IgnoreMissingKeyOnRemove())
 	}
 	return nil, fmt.Errorf("unsupported patch type %s", patch.Type)
 }

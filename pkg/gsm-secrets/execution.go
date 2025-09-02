@@ -38,6 +38,7 @@ type IAMClient interface {
 	CreateServiceAccountKey(ctx context.Context, req *adminpb.CreateServiceAccountKeyRequest, opts ...gax.CallOption) (*adminpb.ServiceAccountKey, error)
 	CreateServiceAccount(ctx context.Context, req *adminpb.CreateServiceAccountRequest, opts ...gax.CallOption) (*adminpb.ServiceAccount, error)
 	DeleteServiceAccount(ctx context.Context, req *adminpb.DeleteServiceAccountRequest, opts ...gax.CallOption) error
+	GetServiceAccount(ctx context.Context, req *adminpb.GetServiceAccountRequest, opts ...gax.CallOption) (*adminpb.ServiceAccount, error)
 	ListServiceAccounts(ctx context.Context, req *adminpb.ListServiceAccountsRequest, opts ...gax.CallOption) *iamadmin.ServiceAccountIterator
 	ListServiceAccountKeys(ctx context.Context, req *adminpb.ListServiceAccountKeysRequest, opts ...gax.CallOption) (*adminpb.ListServiceAccountKeysResponse, error)
 	DeleteServiceAccountKey(ctx context.Context, req *adminpb.DeleteServiceAccountKeyRequest, opts ...gax.CallOption) error
@@ -131,32 +132,50 @@ func GenerateServiceAccountKey(ctx context.Context, client IAMClient, saEmail st
 
 func generateServiceAccountKeyWithBackoff(ctx context.Context, client IAMClient, saEmail string, projectID string, backoff wait.Backoff) ([]byte, error) {
 	name := fmt.Sprintf("%s/serviceAccounts/%s", GetProjectResourceString(projectID), saEmail)
-	attemptCount := 0
-	var key *adminpb.ServiceAccountKey
-	err := retry.OnError(backoff, isServiceAccountNotFoundError, func() error {
-		attemptCount++
 
-		var innerErr error
-		key, innerErr = client.CreateServiceAccountKey(ctx, &adminpb.CreateServiceAccountKeyRequest{
-			Name: name,
-		})
-
-		if innerErr != nil {
-			if isServiceAccountNotFoundError(innerErr) {
-				logrus.Warnf("Service account %s not available (attempt #%d), retrying...", saEmail, attemptCount)
-			} else {
-				logrus.Errorf("Non-retryable error (attempt #%d): %v", attemptCount, innerErr)
-			}
-			return innerErr
-		}
-		return nil
+	key, err := client.CreateServiceAccountKey(ctx, &adminpb.CreateServiceAccountKeyRequest{
+		Name: name,
 	})
 
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate key for service account %s after %d attempts: %w", saEmail, attemptCount, err)
+	if err != nil && isServiceAccountNotFoundError(err) {
+		// The reason for the service account not found may be due to eventual consistency, so we wait for it to become available
+		logrus.Warnf("Service account %s not available, waiting for eventual consistency...", saEmail)
+
+		attemptCount := 0
+		retryErr := retry.OnError(backoff, isServiceAccountNotFoundError, func() error {
+			attemptCount++
+			logrus.WithField("service account", saEmail).Debugf("Checking availability (attempt #%d)...", attemptCount)
+
+			_, err := client.GetServiceAccount(ctx, &adminpb.GetServiceAccountRequest{
+				Name: name,
+			})
+
+			if err != nil {
+				if isServiceAccountNotFoundError(err) {
+					logrus.WithField("service account", saEmail).Warnf("Still not available (attempt #%d), retrying...", attemptCount)
+				} else {
+					logrus.WithField("service account", saEmail).Errorf("Non-retryable error while checking (attempt #%d): %v", attemptCount, err)
+				}
+			}
+			return err
+		})
+
+		if retryErr != nil {
+			return nil, fmt.Errorf("service account %s never became available after %d attempts: %w", saEmail, attemptCount, retryErr)
+		}
+		key, err = client.CreateServiceAccountKey(ctx, &adminpb.CreateServiceAccountKeyRequest{
+			Name: name,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create service account key evenafter waiting for availability: %w", err)
+		}
+		logrus.WithField("service account", saEmail).Debugf("Successfully generated key after waiting for eventual consistency (attempts: %d)", attemptCount)
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to create service account key: %w", err)
+	} else {
+		logrus.WithField("service account", saEmail).Debugf("Successfully generated key on first attempt")
 	}
 
-	logrus.Debugf("Successfully generated key for service account %s (attempts: %d)", saEmail, attemptCount)
 	return key.GetPrivateKeyData(), nil
 }
 

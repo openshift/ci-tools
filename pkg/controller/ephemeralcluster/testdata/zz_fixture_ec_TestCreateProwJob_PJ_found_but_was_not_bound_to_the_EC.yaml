@@ -1,0 +1,11 @@
+metadata:
+  creationTimestamp: null
+  name: ec
+  namespace: ns
+  resourceVersion: "1000"
+spec:
+  ciOperator:
+    test: {}
+status:
+  phase: ""
+  prowJobId: pj

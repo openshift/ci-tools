@@ -144,6 +144,7 @@ func TestCreateProwJob(t *testing.T) {
 	for _, tc := range []struct {
 		name         string
 		ec           ephemeralclusterv1.EphemeralCluster
+		pjs          []ctrlclient.Object
 		req          reconcile.Request
 		interceptors interceptor.Funcs
 		prowConfig   *prowconfig.Config
@@ -271,10 +272,48 @@ func TestCreateProwJob(t *testing.T) {
 			wantRes: reconcile.Result{},
 			wantErr: errors.New("[update ephemeral cluster: fake err, terminal error: generate ci-operator config: releases stanza not set]"),
 		},
+		{
+			name: "Several PJ for the same EC raises an error",
+			ec: ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{Namespace: "ns", Name: "ec"},
+			},
+			pjs: []ctrlclient.Object{
+				&prowv1.ProwJob{ObjectMeta: v1.ObjectMeta{
+					Labels:    map[string]string{EphemeralClusterLabel: "ec"},
+					Name:      "pj1",
+					Namespace: prowJobNamespace,
+				}},
+				&prowv1.ProwJob{ObjectMeta: v1.ObjectMeta{
+					Labels:    map[string]string{EphemeralClusterLabel: "ec"},
+					Name:      "pj2",
+					Namespace: prowJobNamespace,
+				}},
+			},
+			wantRes: reconcile.Result{},
+			wantErr: errors.New("terminal error: too many ProwJobs associated"),
+		},
+		{
+			name: "PJ found but was not bound to the EC",
+			ec: ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{Namespace: "ns", Name: "ec"},
+			},
+			pjs: []ctrlclient.Object{&prowv1.ProwJob{ObjectMeta: v1.ObjectMeta{
+				Labels:    map[string]string{EphemeralClusterLabel: "ec"},
+				Name:      "pj",
+				Namespace: prowJobNamespace,
+			}}},
+			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			client := fake.NewClientBuilder().
+			clientBldr := fake.NewClientBuilder()
+
+			if tc.pjs != nil {
+				clientBldr = clientBldr.WithObjects(tc.pjs...)
+			}
+
+			client := clientBldr.
 				WithObjects(&tc.ec).
 				WithScheme(scheme).
 				WithInterceptorFuncs(tc.interceptors).

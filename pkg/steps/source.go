@@ -719,12 +719,12 @@ func waitForBuild(
 				}
 			case buildapi.BuildPhaseComplete:
 				logrus.Infof("Build %s succeeded after %s", build.Name, buildDuration(build).Truncate(time.Second))
-				podClient.MetricsAgent().StorePodLifecycleMetrics(buildPodName, build.Namespace)
+				podClient.MetricsAgent().StorePodLifecycleMetrics(buildPodName, build.Namespace, corev1.PodSucceeded)
 				return true, nil
 			case buildapi.BuildPhaseFailed, buildapi.BuildPhaseCancelled, buildapi.BuildPhaseError:
 				logrus.Infof("Build %s failed, printing logs:", build.Name)
 				printBuildLogs(buildClient, build.Namespace, build.Name)
-				podClient.MetricsAgent().StorePodLifecycleMetrics(buildPodName, build.Namespace)
+				podClient.MetricsAgent().StorePodLifecycleMetrics(buildPodName, build.Namespace, corev1.PodFailed)
 				return true, util.AppendLogToError(fmt.Errorf("the build %s failed after %s with reason %s: %s", build.Name, buildDuration(build).Truncate(time.Second), build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
 			}
 			return false, nil

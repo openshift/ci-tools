@@ -9,6 +9,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/rest"
 	metricsclient "k8s.io/metrics/pkg/client/clientset/versioned"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -168,13 +169,14 @@ func (ma *MetricsAgent) RegisterLeaseClient(client lease.Client) {
 	ma.leasePlugin.SetClient(client)
 }
 
-func (ma *MetricsAgent) StorePodLifecycleMetrics(name, namespace string) {
+func (ma *MetricsAgent) StorePodLifecycleMetrics(name, namespace string, phase corev1.PodPhase) {
 	if ma == nil || ma.podPlugin == nil {
 		return
 	}
 	event := PodLifecycleMetricsEvent{
 		PodName:   name,
 		Namespace: namespace,
+		PodPhase:  phase,
 	}
 	ma.Record(&event)
 }

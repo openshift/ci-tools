@@ -12,9 +12,13 @@ import (
 const (
 	// OpenshiftPrivAdminsGroup defines the group that will be used for the openshift-priv namespace in the app.ci cluster.
 	OpenshiftPrivAdminsGroup = "openshift-priv-admins"
-
-	//CollectionRegex determines the allowed naming pattern for a secret collection
+	// CollectionRegex defines the regex pattern for valid collection names
 	CollectionRegex = "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+
+	// GCP limits the service account ID's to be max 30 chars;
+	// since we use the suffix '-sa' for all updater service accounts,
+	// it leaves 27 chars for the collection name.
+	GCPServiceAccountIDMaxLength = 27
 )
 
 // Config represents the configuration file for the groups
@@ -80,7 +84,7 @@ func (c *Config) validate() error {
 		}
 		for _, collection := range v.SecretCollections {
 			if !ValidateCollectionName(collection) {
-				return fmt.Errorf("invalid collection name '%s' in the configuration file: must start and end with lowercase letters or numbers, hyphens allowed in the middle", collection)
+				return fmt.Errorf("invalid collection name '%s' in the configuration file: must be max 27 characters (GCP limit), and must start and end with lowercase letters or numbers; hyphens are allowed in the middle", collection)
 			}
 		}
 	}
@@ -88,5 +92,6 @@ func (c *Config) validate() error {
 }
 
 func ValidateCollectionName(collection string) bool {
-	return regexp.MustCompile(CollectionRegex).MatchString(collection)
+	return regexp.MustCompile(CollectionRegex).MatchString(collection) &&
+		len(collection) <= GCPServiceAccountIDMaxLength
 }

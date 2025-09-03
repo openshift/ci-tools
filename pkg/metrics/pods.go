@@ -8,27 +8,28 @@ import (
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type PodLifecycleMetricsEvent struct {
-	PodName                  string               `json:"pod_name,omitempty"`
-	Namespace                string               `json:"namespace,omitempty"`
-	StartTime                *time.Time           `json:"start_time,omitempty"`
-	PodScheduledTime         *time.Time           `json:"pod_scheduled_time,omitempty"`
-	InitializedTime          *time.Time           `json:"initialized_time,omitempty"`
-	ReadyToStartTime         *time.Time           `json:"ready_to_start_time,omitempty"`
-	ContainersReadyTime      *time.Time           `json:"containers_ready_time,omitempty"`
-	ReadyTime                *time.Time           `json:"ready_time,omitempty"`
+	PodName        string     `json:"pod_name,omitempty"`
+	Namespace      string     `json:"namespace,omitempty"`
+	CreationTime   *time.Time `json:"creation_time,omitempty"`
+	StartTime      *time.Time `json:"start_time,omitempty"`
+	CompletionTime *time.Time `json:"completion_time,omitempty"`
+
 	ConditionTransitionTimes map[string]time.Time `json:"condition_transition_times,omitempty"`
 
 	SchedulingLatency     *time.Duration `json:"scheduling_latency,omitempty"`
 	InitializationLatency *time.Duration `json:"initialization_latency,omitempty"`
 	ReadyLatency          *time.Duration `json:"ready_latency,omitempty"`
+	CompletionLatency     *time.Duration `json:"completion_latency,omitempty"`
 
-	InitContainerRestarts  int       `json:"init_container_restarts,omitempty"`
-	InitContainerLastError string    `json:"init_container_last_error,omitempty"`
-	Timestamp              time.Time `json:"timestamp,omitempty"`
+	PodPhase               corev1.PodPhase `json:"pod_phase,omitempty"`
+	InitContainerRestarts  int             `json:"init_container_restarts,omitempty"`
+	InitContainerLastError string          `json:"init_container_last_error,omitempty"`
+	Timestamp              time.Time       `json:"timestamp,omitempty"`
 }
 
 func (e *PodLifecycleMetricsEvent) SetTimestamp(ts time.Time) {
@@ -60,44 +61,40 @@ func (p *PodLifecyclePlugin) Record(ev MetricsEvent) {
 			p.logger.WithError(err).Errorf("Failed to get pod %s/%s for lifecycle metrics", e.Namespace, e.PodName)
 			return
 		}
-		if pod.Status.StartTime != nil {
-			e.StartTime = &pod.Status.StartTime.Time
-		}
 
+		e.CreationTime = &pod.CreationTimestamp.Time
+		e.StartTime = &pod.Status.StartTime.Time
+		e.CompletionTime = getPodCompletionTime(pod)
+
+		// Only set pod phase if not already set by caller (preserves success/failure determination)
+		if e.PodPhase == "" {
+			e.PodPhase = pod.Status.Phase
+		}
 		e.ConditionTransitionTimes = make(map[string]time.Time)
 		for _, cond := range pod.Status.Conditions {
 			e.ConditionTransitionTimes[string(cond.Type)] = cond.LastTransitionTime.Time
+		}
 
-			switch cond.Type {
-			case corev1.PodScheduled:
-				t := cond.LastTransitionTime.Time
-				e.PodScheduledTime = &t
-			case corev1.PodInitialized:
-				t := cond.LastTransitionTime.Time
-				e.InitializedTime = &t
-			case corev1.ContainersReady:
-				t := cond.LastTransitionTime.Time
-				e.ContainersReadyTime = &t
-			case corev1.PodReady:
-				t := cond.LastTransitionTime.Time
-				e.ReadyTime = &t
-			case corev1.PodReadyToStartContainers:
-				t := cond.LastTransitionTime.Time
-				e.ReadyToStartTime = &t
+		if scheduledTime, ok := e.ConditionTransitionTimes[string(corev1.PodScheduled)]; ok && e.CreationTime != nil {
+			d := scheduledTime.Sub(*e.CreationTime)
+			e.SchedulingLatency = &d
+		}
+
+		if scheduledTime, ok := e.ConditionTransitionTimes[string(corev1.PodScheduled)]; ok {
+			if initializedTime, ok := e.ConditionTransitionTimes[string(corev1.PodInitialized)]; ok {
+				d := initializedTime.Sub(scheduledTime)
+				e.InitializationLatency = &d
 			}
 		}
 
-		if e.StartTime != nil && e.PodScheduledTime != nil {
-			d := e.PodScheduledTime.Sub(*e.StartTime)
-			e.SchedulingLatency = &d
-		}
-		if e.PodScheduledTime != nil && e.InitializedTime != nil {
-			d := e.InitializedTime.Sub(*e.PodScheduledTime)
-			e.InitializationLatency = &d
-		}
-		if e.StartTime != nil && e.ReadyTime != nil {
-			d := e.ReadyTime.Sub(*e.StartTime)
+		if readyTime, ok := e.ConditionTransitionTimes[string(corev1.PodReady)]; ok && e.CreationTime != nil {
+			d := readyTime.Sub(*e.CreationTime)
 			e.ReadyLatency = &d
+		}
+
+		if e.CreationTime != nil && e.CompletionTime != nil {
+			d := e.CompletionTime.Sub(*e.CreationTime)
+			e.CompletionLatency = &d
 		}
 
 		for _, status := range pod.Status.InitContainerStatuses {
@@ -120,4 +117,28 @@ func (p *PodLifecyclePlugin) Events() []MetricsEvent {
 		out[i] = &p.events[i]
 	}
 	return out
+}
+
+func getPodCompletionTime(pod *corev1.Pod) *time.Time {
+	var end metav1.Time
+	for _, status := range pod.Status.ContainerStatuses {
+		if s := status.State.Terminated; s != nil {
+			if end.IsZero() || s.FinishedAt.Time.After(end.Time) {
+				end = s.FinishedAt
+			}
+		}
+	}
+	if end.IsZero() {
+		for _, status := range pod.Status.InitContainerStatuses {
+			if s := status.State.Terminated; s != nil && s.ExitCode != 0 {
+				if end.IsZero() || s.FinishedAt.Time.After(end.Time) {
+					end = s.FinishedAt
+				}
+			}
+		}
+	}
+	if end.IsZero() {
+		return nil
+	}
+	return &end.Time
 }

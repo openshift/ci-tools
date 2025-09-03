@@ -210,7 +210,7 @@ func (v *Validator) validateTestStepConfiguration(
 			}
 		}
 
-		maxJobTimeout := time.Hour * 8
+		maxJobTimeout := time.Hour * 72
 		if test.Timeout != nil && test.Timeout.Duration > maxJobTimeout {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: job timeout is limited to %s", fieldRootN, maxJobTimeout))
 		}

@@ -3,16 +3,22 @@ package gsmsecrets
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"time"
 
 	iamadmin "cloud.google.com/go/iam/admin/apiv1"
 	"cloud.google.com/go/iam/admin/apiv1/adminpb"
 	"cloud.google.com/go/iam/apiv1/iampb"
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
-	secretmanagerpb "cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
+	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 	"github.com/googleapis/gax-go/v2"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/retry"
 )
 
 // Client interfaces - these should be defined by the cmd package
@@ -32,6 +38,7 @@ type IAMClient interface {
 	CreateServiceAccountKey(ctx context.Context, req *adminpb.CreateServiceAccountKeyRequest, opts ...gax.CallOption) (*adminpb.ServiceAccountKey, error)
 	CreateServiceAccount(ctx context.Context, req *adminpb.CreateServiceAccountRequest, opts ...gax.CallOption) (*adminpb.ServiceAccount, error)
 	DeleteServiceAccount(ctx context.Context, req *adminpb.DeleteServiceAccountRequest, opts ...gax.CallOption) error
+	GetServiceAccount(ctx context.Context, req *adminpb.GetServiceAccountRequest, opts ...gax.CallOption) (*adminpb.ServiceAccount, error)
 	ListServiceAccounts(ctx context.Context, req *adminpb.ListServiceAccountsRequest, opts ...gax.CallOption) *iamadmin.ServiceAccountIterator
 	ListServiceAccountKeys(ctx context.Context, req *adminpb.ListServiceAccountKeysRequest, opts ...gax.CallOption) (*adminpb.ListServiceAccountKeysResponse, error)
 	DeleteServiceAccountKey(ctx context.Context, req *adminpb.DeleteServiceAccountKeyRequest, opts ...gax.CallOption) error
@@ -90,19 +97,85 @@ func (a *Actions) CreateServiceAccounts(ctx context.Context, client IAMClient) {
 		secret := a.SecretsToCreate[secretName]
 		secret.Payload = keyData
 		a.SecretsToCreate[secretName] = secret
-
-		logrus.Infof("Created service account: %s", sa.Email)
 	}
 }
 
+// gcpServiceAccountBackoff defines retry behavior for GCP service account operations
+var gcpServiceAccountBackoff = wait.Backoff{
+	Steps:    3,
+	Duration: 8 * time.Second,
+	Factor:   2.0,
+	Jitter:   0.1,
+	Cap:      30 * time.Second,
+}
+
+// isServiceAccountNotFoundError detects GCP service account "not found" errors indicating eventual consistency
+func isServiceAccountNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	if gcpError, ok := err.(*googleapi.Error); ok {
+		return gcpError.Code == http.StatusNotFound
+	}
+
+	if s, ok := status.FromError(err); ok {
+		return s.Code() == codes.NotFound
+	}
+
+	return false
+}
+
 func GenerateServiceAccountKey(ctx context.Context, client IAMClient, saEmail string, projectID string) ([]byte, error) {
+	return generateServiceAccountKeyWithBackoff(ctx, client, saEmail, projectID, gcpServiceAccountBackoff)
+}
+
+func generateServiceAccountKeyWithBackoff(ctx context.Context, client IAMClient, saEmail string, projectID string, backoff wait.Backoff) ([]byte, error) {
 	name := fmt.Sprintf("%s/serviceAccounts/%s", GetProjectResourceString(projectID), saEmail)
+
 	key, err := client.CreateServiceAccountKey(ctx, &adminpb.CreateServiceAccountKeyRequest{
 		Name: name,
 	})
-	if err != nil {
-		return nil, err
+
+	if err != nil && isServiceAccountNotFoundError(err) {
+		// The reason for the service account not found may be due to eventual consistency, so we wait for it to become available
+		logrus.Warnf("Service account %s not available, waiting for eventual consistency...", saEmail)
+
+		attemptCount := 0
+		retryErr := retry.OnError(backoff, isServiceAccountNotFoundError, func() error {
+			attemptCount++
+			logrus.WithField("service account", saEmail).Debugf("Checking availability (attempt #%d)...", attemptCount)
+
+			_, err := client.GetServiceAccount(ctx, &adminpb.GetServiceAccountRequest{
+				Name: name,
+			})
+
+			if err != nil {
+				if isServiceAccountNotFoundError(err) {
+					logrus.WithField("service account", saEmail).Warnf("Still not available (attempt #%d), retrying...", attemptCount)
+				} else {
+					logrus.WithField("service account", saEmail).Errorf("Non-retryable error while checking (attempt #%d): %v", attemptCount, err)
+				}
+			}
+			return err
+		})
+
+		if retryErr != nil {
+			return nil, fmt.Errorf("service account %s never became available after %d attempts: %w", saEmail, attemptCount, retryErr)
+		}
+		key, err = client.CreateServiceAccountKey(ctx, &adminpb.CreateServiceAccountKeyRequest{
+			Name: name,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create service account key evenafter waiting for availability: %w", err)
+		}
+		logrus.WithField("service account", saEmail).Debugf("Successfully generated key after waiting for eventual consistency (attempts: %d)", attemptCount)
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to create service account key: %w", err)
+	} else {
+		logrus.WithField("service account", saEmail).Debugf("Successfully generated key on first attempt")
 	}
+
 	return key.GetPrivateKeyData(), nil
 }
 

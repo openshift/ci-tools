@@ -290,6 +290,26 @@ func (mr *MockIAMClientMockRecorder) DeleteServiceAccountKey(ctx, req any, opts 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteServiceAccountKey", reflect.TypeOf((*MockIAMClient)(nil).DeleteServiceAccountKey), varargs...)
 }
 
+// GetServiceAccount mocks base method.
+func (m *MockIAMClient) GetServiceAccount(ctx context.Context, req *adminpb.GetServiceAccountRequest, opts ...gax.CallOption) (*adminpb.ServiceAccount, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, req}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetServiceAccount", varargs...)
+	ret0, _ := ret[0].(*adminpb.ServiceAccount)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetServiceAccount indicates an expected call of GetServiceAccount.
+func (mr *MockIAMClientMockRecorder) GetServiceAccount(ctx, req any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, req}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetServiceAccount", reflect.TypeOf((*MockIAMClient)(nil).GetServiceAccount), varargs...)
+}
+
 // ListServiceAccountKeys mocks base method.
 func (m *MockIAMClient) ListServiceAccountKeys(ctx context.Context, req *adminpb.ListServiceAccountKeysRequest, opts ...gax.CallOption) (*adminpb.ListServiceAccountKeysResponse, error) {
 	m.ctrl.T.Helper()

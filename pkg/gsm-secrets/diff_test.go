@@ -2,6 +2,7 @@ package gsmsecrets
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
 	"cloud.google.com/go/iam/apiv1/iampb"
@@ -507,11 +508,11 @@ func TestDiffIAMBindings(t *testing.T) {
 		{
 			name: "preserve unmanaged bindings",
 			desiredBindings: []*iampb.Binding{
-				createViewerBinding("alpha", []string{"user:test@example.com", "serviceAccount:alpha-updater@example.com"}),
+				createViewerBinding("alpha", []string{"user:test@example.com", fmt.Sprintf("serviceAccount:alpha%s@example.com", ServiceAccountIDSuffix)}),
 			},
 			actualPolicy: &iampb.Policy{
 				Bindings: []*iampb.Binding{
-					createViewerBinding("alpha", []string{"user:test@example.com", "serviceAccount:alpha-updater@example.com"}),
+					createViewerBinding("alpha", []string{"user:test@example.com", fmt.Sprintf("serviceAccount:alpha%s@example.com", ServiceAccountIDSuffix)}),
 					createUnmanagedBinding(),
 				},
 				Etag:    []byte("test-etag"),
@@ -522,7 +523,7 @@ func TestDiffIAMBindings(t *testing.T) {
 		{
 			name: "create new binding",
 			desiredBindings: []*iampb.Binding{
-				createViewerBinding("alpha", []string{"user:test@example.com", "serviceAccount:alpha-updater@example.com"}),
+				createViewerBinding("alpha", []string{"user:test@example.com", fmt.Sprintf("serviceAccount:alpha%s@example.com", ServiceAccountIDSuffix)}),
 			},
 			actualPolicy: &iampb.Policy{
 				Bindings: []*iampb.Binding{},

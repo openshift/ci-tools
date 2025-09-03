@@ -2,6 +2,7 @@ package gsmsecrets
 
 import (
 	"fmt"
+	"strings"
 
 	"cloud.google.com/go/iam/apiv1/iampb"
 )
@@ -11,6 +12,8 @@ const (
 
 	UpdaterSASecretSuffix = "__updater-service-account"
 	IndexSecretSuffix     = "____index"
+
+	ServiceAccountIDSuffix = "-sa"
 
 	SecretNameRegex = "^[A-Za-z0-9-]+$"
 
@@ -31,10 +34,6 @@ type Config struct {
 var Production = Config{
 	ProjectIdString: "openshift-ci-secrets",
 	ProjectIdNumber: "384486694155",
-}
-
-func (c Config) GetUpdaterSAEmailSuffix() string {
-	return fmt.Sprintf("-updater@%s.iam.gserviceaccount.com", c.ProjectIdString)
 }
 
 func (c Config) GetSecretAccessorRole() string {
@@ -103,4 +102,56 @@ type Actions struct {
 	SecretsToCreate       map[string]GCPSecret
 	SecretsToDelete       []GCPSecret
 	ConsolidatedIAMPolicy *iampb.Policy
+}
+
+// GetProjectResourceIdNumber returns the resource id number for our GCP project
+// in format `projects/{project id number}`, e.g., "projects/1234567890"
+func GetProjectResourceIdNumber(projectIdNumber string) string {
+	return fmt.Sprintf("projects/%s", projectIdNumber)
+}
+
+// GetProjectResourceString returns the resource string for our GCP project
+// in format `projects/{project id string}`, e.g., "projects/ci-secrets"
+func GetProjectResourceString(projectIdString string) string {
+	return fmt.Sprintf("projects/%s", projectIdString)
+}
+
+// GetUpdaterSAFormat returns the regex pattern for updater service account emails for a given project
+func GetUpdaterSAFormat(config Config) string {
+	return fmt.Sprintf(`[a-z0-9-]+%s$`, config.GetUpdaterSAEmailSuffix())
+}
+
+// GetUpdaterSAEmailSuffix returns the suffix for updater service account emails for a given project
+// e.g., "-sa@<project-id>.iam.gserviceaccount.com".
+func (c Config) GetUpdaterSAEmailSuffix() string {
+	return fmt.Sprintf("%s@%s.iam.gserviceaccount.com", ServiceAccountIDSuffix, c.ProjectIdString)
+}
+
+// GetUpdaterSAEmail returns the updater service account email for a collection,
+// e.g., "my-collection-sa@<project-id>.iam.gserviceaccount.com".
+func GetUpdaterSAEmail(collection string, config Config) string {
+	return fmt.Sprintf("%s%s@%s.iam.gserviceaccount.com", collection, ServiceAccountIDSuffix, config.ProjectIdString)
+}
+
+// GetUpdaterSAId returns the updater service account ID for a given display name.
+func GetUpdaterSAId(displayName string) string {
+	return fmt.Sprintf("%s%s", displayName, ServiceAccountIDSuffix)
+}
+
+// GetUpdaterSASecretName returns standardized name for updater service account secret,
+// `{collection}__updater-service-account`.
+func GetUpdaterSASecretName(collection string) string {
+	return fmt.Sprintf("%s%s", collection, UpdaterSASecretSuffix)
+}
+
+// GetIndexSecretName returns standardized name for the index secret,
+// `{collection}____index`.
+func GetIndexSecretName(collection string) string {
+	return fmt.Sprintf("%s%s", collection, IndexSecretSuffix)
+}
+
+// GetSecretID extracts the secret ID from the secret name, e.g.,
+// "projects/openshift-ci-secrets/secrets/collection__secret" -> "collection__secret"
+func GetSecretID(secretName string) string {
+	return strings.Split(secretName, "/")[len(strings.Split(secretName, "/"))-1] // Extract just the secret ID
 }

@@ -1,6 +1,7 @@
 package gsmsecrets
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -18,27 +19,27 @@ func TestGetUpdaterSAEmail(t *testing.T) {
 		{
 			name:          "standard collection",
 			collection:    "alpha-secrets",
-			expectedEmail: "alpha-secrets-updater@test-project.iam.gserviceaccount.com",
+			expectedEmail: fmt.Sprintf("alpha-secrets%s@test-project.iam.gserviceaccount.com", ServiceAccountIDSuffix),
 		},
 		{
 			name:          "single word collection",
 			collection:    "beta",
-			expectedEmail: "beta-updater@test-project.iam.gserviceaccount.com",
+			expectedEmail: fmt.Sprintf("beta%s@test-project.iam.gserviceaccount.com", ServiceAccountIDSuffix),
 		},
 		{
 			name:          "collection with numbers",
 			collection:    "test-collection-123",
-			expectedEmail: "test-collection-123-updater@test-project.iam.gserviceaccount.com",
+			expectedEmail: fmt.Sprintf("test-collection-123%s@test-project.iam.gserviceaccount.com", ServiceAccountIDSuffix),
 		},
 		{
 			name:          "one letter collection name",
 			collection:    "a",
-			expectedEmail: "a-updater@test-project.iam.gserviceaccount.com",
+			expectedEmail: fmt.Sprintf("a%s@test-project.iam.gserviceaccount.com", ServiceAccountIDSuffix),
 		},
 		{
 			name:          "collection with multiple hyphens",
 			collection:    "my-test-collection-name",
-			expectedEmail: "my-test-collection-name-updater@test-project.iam.gserviceaccount.com",
+			expectedEmail: fmt.Sprintf("my-test-collection-name%s@test-project.iam.gserviceaccount.com", ServiceAccountIDSuffix),
 		},
 	}
 
@@ -61,22 +62,22 @@ func TestGetUpdaterSAId(t *testing.T) {
 		{
 			name:        "standard display name",
 			displayName: "alpha-secrets",
-			expectedId:  "alpha-secrets-updater",
+			expectedId:  fmt.Sprintf("alpha-secrets%s", ServiceAccountIDSuffix),
 		},
 		{
 			name:        "single word display name",
 			displayName: "beta",
-			expectedId:  "beta-updater",
+			expectedId:  fmt.Sprintf("beta%s", ServiceAccountIDSuffix),
 		},
 		{
 			name:        "display name with numbers",
 			displayName: "test-collection-123",
-			expectedId:  "test-collection-123-updater",
+			expectedId:  fmt.Sprintf("test-collection-123%s", ServiceAccountIDSuffix),
 		},
 		{
 			name:        "display name with multiple hyphens",
 			displayName: "my-test-collection-name",
-			expectedId:  "my-test-collection-name-updater",
+			expectedId:  fmt.Sprintf("my-test-collection-name%s", ServiceAccountIDSuffix),
 		},
 	}
 

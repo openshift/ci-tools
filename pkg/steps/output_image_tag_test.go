@@ -132,7 +132,7 @@ func TestOutputImageStep(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			client := loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(tt.input...).Build())
+			client := loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(tt.input...).Build(), nil)
 
 			oits := OutputImageTagStep(config, client, jobspec)
 

@@ -2,6 +2,7 @@ package gsmsecrets
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -146,6 +147,11 @@ func TestValidateSecretName(t *testing.T) {
 			secretName:    "secret__name",
 			expectedValid: false,
 		},
+		{
+			name:          "invalid secret name: too long",
+			secretName:    fmt.Sprintf("collection__%s", strings.Repeat("a", 243)),
+			expectedValid: false,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -154,6 +160,7 @@ func TestValidateSecretName(t *testing.T) {
 			if actualValid != tc.expectedValid {
 				t.Errorf("Expected %t, got %t for secret name %q", tc.expectedValid, actualValid, tc.secretName)
 			}
+
 		})
 	}
 }

@@ -12,7 +12,7 @@
     title: Read access to secrets for alpha-secrets
   members:
   - group:team-alpha@redhat.com
-  - serviceAccount:alpha-secrets-updater@test-project.iam.gserviceaccount.com
+  - serviceAccount:alpha-secrets-sa@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
     description: 'Managed by test platform: Create, update, and delete access to secrets
@@ -22,7 +22,7 @@
     title: Create, update, and delete access for alpha-secrets
   members:
   - group:team-alpha@redhat.com
-  - serviceAccount:alpha-secrets-updater@test-project.iam.gserviceaccount.com
+  - serviceAccount:alpha-secrets-sa@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
     description: 'Managed by test platform: Read access to secrets in beta-delta-secrets
@@ -39,7 +39,7 @@
   members:
   - group:team-beta@redhat.com
   - group:team-delta@redhat.com
-  - serviceAccount:beta-delta-secrets-updater@test-project.iam.gserviceaccount.com
+  - serviceAccount:beta-delta-secrets-sa@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
     description: 'Managed by test platform: Create, update, and delete access to secrets
@@ -50,7 +50,7 @@
   members:
   - group:team-beta@redhat.com
   - group:team-delta@redhat.com
-  - serviceAccount:beta-delta-secrets-updater@test-project.iam.gserviceaccount.com
+  - serviceAccount:beta-delta-secrets-sa@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
     description: 'Managed by test platform: Read access to secrets in epsilon-secrets
@@ -66,7 +66,7 @@
     title: Read access to secrets for epsilon-secrets
   members:
   - group:team-epsilon@redhat.com
-  - serviceAccount:epsilon-secrets-updater@test-project.iam.gserviceaccount.com
+  - serviceAccount:epsilon-secrets-sa@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
     description: 'Managed by test platform: Create, update, and delete access to secrets
@@ -76,5 +76,5 @@
     title: Create, update, and delete access for epsilon-secrets
   members:
   - group:team-epsilon@redhat.com
-  - serviceAccount:epsilon-secrets-updater@test-project.iam.gserviceaccount.com
+  - serviceAccount:epsilon-secrets-sa@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater

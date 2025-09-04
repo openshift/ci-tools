@@ -8,9 +8,12 @@ import (
 	"github.com/openshift/ci-tools/pkg/group"
 )
 
-// ValidateSecretName validates if a secret name matches the allowed pattern
+const GcpMaxNameLength = 255
+
+// ValidateSecretName validates if a secret name matches the allowed pattern.
+// The secret name must be between 1 and 255 characters long (GCP limit).
 func ValidateSecretName(secretName string) bool {
-	return regexp.MustCompile(SecretNameRegex).MatchString(secretName)
+	return regexp.MustCompile(SecretNameRegex).MatchString(secretName) && len(secretName) <= GcpMaxNameLength
 }
 
 // ClassifySecret determines the type of secret based on its name

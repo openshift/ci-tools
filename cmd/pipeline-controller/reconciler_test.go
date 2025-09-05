@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	v1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	"sigs.k8s.io/prow/pkg/github"
 	"sigs.k8s.io/prow/pkg/kube"
@@ -52,6 +53,27 @@ func (tr FakeReader) List(ctx context.Context, list ctrlruntimeclient.ObjectList
 	}
 	pjList.Items = tr.pjs.Items
 	return nil
+}
+
+type fakeGhClientWithTracking struct {
+	closed      sets.Int
+	commentSent bool
+}
+
+func (c *fakeGhClientWithTracking) GetPullRequest(org, repo string, number int) (*github.PullRequest, error) {
+	if c.closed.Has(number) {
+		return &github.PullRequest{State: github.PullRequestStateClosed}, nil
+	}
+	return &github.PullRequest{State: github.PullRequestStateOpen}, nil
+}
+
+func (c *fakeGhClientWithTracking) CreateComment(owner, repo string, number int, comment string) error {
+	c.commentSent = true
+	return nil
+}
+
+func (c *fakeGhClientWithTracking) GetPullRequestChanges(org string, repo string, number int) ([]github.PullRequestChange, error) {
+	return []github.PullRequestChange{}, nil
 }
 
 func composePresubmit(name string, state v1.ProwJobState, sha string) v1.ProwJob {
@@ -294,6 +316,27 @@ func Test_reconciler_reportSuccessOnPR(t *testing.T) {
 			want:    false,
 			wantErr: false,
 		},
+		{
+			name: "do not trigger as user is manually triggering",
+			fields: fields{
+				lister: FakeReader{pjs: v1.ProwJobList{Items: []v1.ProwJob{
+					composePresubmit("org-repo-master-ps1", v1.SuccessState, baseSha),
+					composePresubmit("org-repo-master-ps2", v1.SuccessState, baseSha),
+					composePresubmit("org-repo-master-ps3", v1.SuccessState, baseSha),
+				}}},
+				ghc: defaultGhClient,
+			},
+			args: args{
+				ctx: context.Background(),
+				presubmits: presubmitTests{
+					protected:             []string{"org-repo-master-ps1", "org-repo-master-ps4"},
+					alwaysRequired:        []string{"org-repo-master-ps2"},
+					conditionallyRequired: []string{"org-repo-master-ps3"},
+				},
+			},
+			want:    false,
+			wantErr: false,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -312,6 +355,195 @@ func Test_reconciler_reportSuccessOnPR(t *testing.T) {
 			}
 			if got != tc.want {
 				t.Errorf("reconciler.reportSuccessOnPR() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func Test_reconciler_reconcile_with_modes(t *testing.T) {
+	baseSha := "sha"
+	// Create a ProwJob with all required fields
+	dummyPJ := v1.ProwJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "org-repo-master-ps1",
+			Namespace: "test-namespace",
+			Labels: map[string]string{
+				kube.ProwJobTypeLabel: "presubmit",
+				kube.OrgLabel:         "org",
+				kube.RepoLabel:        "repo",
+				kube.PullLabel:        "123",
+				kube.BaseRefLabel:     "master",
+			},
+			CreationTimestamp: metav1.Time{
+				Time: time.Now(),
+			},
+			ResourceVersion: "999",
+		},
+		Status: v1.ProwJobStatus{
+			State: v1.SuccessState,
+		},
+		Spec: v1.ProwJobSpec{
+			Type: v1.PresubmitJob,
+			Refs: &v1.Refs{
+				Org:     "org",
+				Repo:    "repo",
+				BaseRef: "master",
+				Pulls: []v1.Pull{
+					{
+						Number: 123,
+						SHA:    baseSha,
+					},
+				},
+			},
+			Job:    "org-repo-master-ps1",
+			Report: true,
+		},
+	}
+
+	type fields struct {
+		watcherConfig     enabledConfig
+		presubmits        map[string]presubmitTests
+		expectSendComment bool
+	}
+	tests := []struct {
+		name   string
+		fields fields
+	}{
+		{
+			name: "auto mode: should send comment",
+			fields: fields{
+				watcherConfig: enabledConfig{Orgs: []struct {
+					Org   string     `yaml:"org"`
+					Repos []RepoItem `yaml:"repos"`
+				}{
+					{
+						Org: "org",
+						Repos: []RepoItem{
+							{
+								Name: "repo",
+								Mode: struct {
+									Trigger string
+								}{
+									Trigger: "auto",
+								},
+							},
+						},
+					},
+				}},
+				presubmits: map[string]presubmitTests{
+					"org/repo": {
+						protected:      []string{"org-repo-master-ps-protected"},
+						alwaysRequired: []string{"org-repo-master-ps2"},
+					},
+				},
+				expectSendComment: true,
+			},
+		},
+		{
+			name: "manual mode: should not send comment",
+			fields: fields{
+				watcherConfig: enabledConfig{Orgs: []struct {
+					Org   string     `yaml:"org"`
+					Repos []RepoItem `yaml:"repos"`
+				}{
+					{
+						Org: "org",
+						Repos: []RepoItem{
+							{
+								Name: "repo",
+								Mode: struct {
+									Trigger string
+								}{
+									Trigger: "manual",
+								},
+							},
+						},
+					},
+				}},
+				presubmits: map[string]presubmitTests{
+					"org/repo": {
+						protected:      []string{"org-repo-master-ps-protected"},
+						alwaysRequired: []string{"org-repo-master-ps2"},
+					},
+				},
+				expectSendComment: false,
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ghc := &fakeGhClientWithTracking{closed: sets.NewInt()}
+
+			// Create a successful always-required job in the lister
+			successfulJob := v1.ProwJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "org-repo-master-ps2",
+					Namespace: "test-namespace",
+					Labels: map[string]string{
+						kube.ProwJobTypeLabel: "presubmit",
+						kube.OrgLabel:         "org",
+						kube.RepoLabel:        "repo",
+						kube.PullLabel:        "123",
+						kube.BaseRefLabel:     "master",
+					},
+					CreationTimestamp: metav1.Time{
+						Time: time.Now(),
+					},
+				},
+				Status: v1.ProwJobStatus{
+					State: v1.SuccessState,
+				},
+				Spec: v1.ProwJobSpec{
+					Type: v1.PresubmitJob,
+					Job:  "org-repo-master-ps2",
+					Refs: &v1.Refs{
+						Org:     "org",
+						Repo:    "repo",
+						BaseRef: "master",
+						Pulls: []v1.Pull{
+							{
+								Number: 123,
+								SHA:    baseSha,
+							},
+						},
+					},
+				},
+			}
+
+			r := &reconciler{
+				pjclientset: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(&dummyPJ).Build(),
+				lister: FakeReader{pjs: v1.ProwJobList{Items: []v1.ProwJob{
+					successfulJob,
+				}}},
+				configDataProvider: &ConfigDataProvider{
+					updatedPresubmits: tc.fields.presubmits,
+				},
+				ghc:     ghc,
+				ids:     sync.Map{},
+				watcher: &watcher{config: tc.fields.watcherConfig},
+				closedPRsCache: closedPRsCache{
+					prs:       map[string]pullRequest{},
+					m:         sync.Mutex{},
+					ghc:       ghc,
+					clearTime: time.Now(),
+				},
+			}
+
+			ctx := context.Background()
+			err := r.reconcile(ctx, reconcile.Request{
+				NamespacedName: ctrlruntimeclient.ObjectKey{
+					Namespace: dummyPJ.Namespace,
+					Name:      dummyPJ.Name,
+				},
+			})
+
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if ghc.commentSent != tc.fields.expectSendComment {
+				t.Errorf("expected comment sent = %v, got %v", tc.fields.expectSendComment, ghc.commentSent)
 			}
 		})
 	}

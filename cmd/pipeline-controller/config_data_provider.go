@@ -71,6 +71,16 @@ func (c *ConfigDataProvider) gatherData() {
 					}
 					continue
 				}
+				// Also check for pipeline_skip_if_only_changed annotation
+				if val, ok := p.Annotations["pipeline_skip_if_only_changed"]; ok && val != "" {
+					if pre, ok := updatedPresubmits[orgRepo]; !ok {
+						updatedPresubmits[orgRepo] = presubmitTests{pipelineConditionallyRequired: []config.Presubmit{p}}
+					} else {
+						pre.pipelineConditionallyRequired = append(pre.pipelineConditionallyRequired, p)
+						updatedPresubmits[orgRepo] = pre
+					}
+					continue
+				}
 				if !p.Optional {
 					if pre, ok := updatedPresubmits[orgRepo]; !ok {
 						updatedPresubmits[orgRepo] = presubmitTests{protected: []string{p.Name}}

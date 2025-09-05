@@ -15,14 +15,25 @@ type minimalGhClient interface {
 }
 
 func sendComment(presubmits presubmitTests, pj *v1.ProwJob, ghc minimalGhClient, deleteIds func()) error {
+	return sendCommentWithMode(presubmits, pj, ghc, deleteIds, false)
+}
+
+func sendCommentWithMode(presubmits presubmitTests, pj *v1.ProwJob, ghc minimalGhClient, deleteIds func(), isManualMode bool) error {
 	testContexts, overrideContexts, err := acquireConditionalContexts(pj, presubmits.pipelineConditionallyRequired, ghc, deleteIds)
 	if err != nil {
 		deleteIds()
 		return err
 	}
-	comment := "/test remaining-required"
+
+	var comment string
+	if isManualMode {
+		comment = "**Pipeline controller response to `pipeline required`**\n\n"
+	}
+
+	comment += "/test remaining-required"
 	if testContexts != "" {
-		comment += "\n\nScheduling tests matching the `pipeline_run_if_changed` parameter:" + testContexts
+		comment += "\n\nScheduling tests matching the `pipeline_run_if_changed` or not excluded by `pipeline_skip_if_only_changed` parameters:"
+		comment += testContexts
 	}
 	if overrideContexts != "" {
 		comment += "\n\nOverriding unmatched contexts:\n" + "/override " + overrideContexts
@@ -44,6 +55,7 @@ func acquireConditionalContexts(pj *v1.ProwJob, pipelineConditionallyRequired []
 			if !strings.Contains(presubmit.Name, repoBaseRef) {
 				continue
 			}
+			// Check pipeline_run_if_changed first (takes precedence)
 			if run, ok := presubmit.Annotations["pipeline_run_if_changed"]; ok && run != "" {
 				psList := []config.Presubmit{presubmit}
 				psList[0].RegexpChangeMatcher = config.RegexpChangeMatcher{RunIfChanged: run}
@@ -61,7 +73,37 @@ func acquireConditionalContexts(pj *v1.ProwJob, pipelineConditionallyRequired []
 					continue
 				}
 				if !presubmit.Optional {
-					overrideCommands += " " + presubmit.Context
+					if overrideCommands == "" {
+						overrideCommands = presubmit.Context
+					} else {
+						overrideCommands += " " + presubmit.Context
+					}
+				}
+				continue
+			}
+			// Check pipeline_skip_if_only_changed if pipeline_run_if_changed is not present
+			if skip, ok := presubmit.Annotations["pipeline_skip_if_only_changed"]; ok && skip != "" {
+				psList := []config.Presubmit{presubmit}
+				psList[0].RegexpChangeMatcher = config.RegexpChangeMatcher{SkipIfOnlyChanged: skip}
+				if err := config.SetPresubmitRegexes(psList); err != nil {
+					deleteIds()
+					return "", "", err
+				}
+				_, shouldRun, err := psList[0].RegexpChangeMatcher.ShouldRun(cfp)
+				if err != nil {
+					deleteIds()
+					return "", "", err
+				}
+				if shouldRun {
+					testCommands += "\n" + presubmit.RerunCommand
+					continue
+				}
+				if !presubmit.Optional {
+					if overrideCommands == "" {
+						overrideCommands = presubmit.Context
+					} else {
+						overrideCommands += " " + presubmit.Context
+					}
 				}
 			}
 		}

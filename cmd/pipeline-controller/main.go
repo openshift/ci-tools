@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/bombsimon/logrusr/v3"
@@ -25,7 +26,7 @@ import (
 	"sigs.k8s.io/prow/pkg/logrusutil"
 )
 
-const pullRequestInfoComment = "**Pipeline controller notification**\n This repository is configured to use the [pipeline controller](https://docs.ci.openshift.org/docs/how-tos/creating-a-pipeline/). Second-stage tests will be triggered only if the required tests of the first stage are successful. The pipeline controller will automatically detect which contexts are required, or not needed and will utilize a set of `/test` and `/override` Prow commands to trigger the second stage."
+const pullRequestInfoComment = "**Pipeline controller notification**\nThis repository is configured to use the [pipeline controller](https://docs.ci.openshift.org/docs/how-tos/creating-a-pipeline/). Second-stage tests will be triggered only if the required tests of the first stage are successful. The pipeline controller will automatically detect which contexts are required, or not needed and will utilize a set of `/test` and `/override` Prow commands to trigger the second stage.\n\nFor optional jobs, comment `/test ?` to see a list of all defined jobs. Review these jobs and use `/test <job>` to manually trigger optional jobs most likely to be impacted by the proposed changes."
 
 type options struct {
 	client                   prowflagutil.KubernetesOptions
@@ -99,25 +100,50 @@ func (cw *clientWrapper) handlePullRequestCreation(l *logrus.Entry, event github
 		repo := event.Repo.Name
 		number := event.PullRequest.Number
 
-		presubmits := cw.configDataProvider.GetPresubmits(org + "/" + repo)
-		if len(presubmits.protected) == 0 && len(presubmits.alwaysRequired) == 0 &&
-			len(presubmits.conditionallyRequired) == 0 && len(presubmits.pipelineConditionallyRequired) == 0 {
-			return
-		}
-
-		currentCfg := cw.watcher.getConfig()
-		repos, ok := currentCfg[org]
-		if !ok || !(repos.Len() == 0 || repos.Has(repo)) {
-			return
-		}
-
 		logger := l.WithFields(logrus.Fields{
 			"org":  org,
 			"repo": repo,
 			"pr":   number,
 		})
-		if err := cw.ghc.CreateComment(org, repo, number, pullRequestInfoComment); err != nil {
-			logger.WithError(err).Error("failed to create comment")
+
+		// Check if repo is configured for automatic pipelines
+		currentCfg := cw.watcher.getConfig()
+		repos, ok := currentCfg[org]
+		isAutomaticPipeline := ok && (repos.Len() == 0 || repos.Has(repo))
+
+		if isAutomaticPipeline {
+			// Original behavior for repos configured for automatic pipelines
+			presubmits := cw.configDataProvider.GetPresubmits(org + "/" + repo)
+			if len(presubmits.protected) == 0 && len(presubmits.alwaysRequired) == 0 &&
+				len(presubmits.conditionallyRequired) == 0 && len(presubmits.pipelineConditionallyRequired) == 0 {
+				return
+			}
+
+			if err := cw.ghc.CreateComment(org, repo, number, pullRequestInfoComment); err != nil {
+				logger.WithError(err).Error("failed to create comment")
+			}
+		} else {
+			// Check for non-always-run jobs
+			cfg := cw.configDataProvider.configGetter()
+			presubmits := cfg.GetPresubmitsStatic(org + "/" + repo)
+
+			hasNonAlwaysRunJobs := false
+			for _, p := range presubmits {
+				if !p.AlwaysRun {
+					hasNonAlwaysRunJobs = true
+					break
+				}
+			}
+
+			if hasNonAlwaysRunJobs {
+				comment := "There are test jobs defined for this repository which are not configured to run automatically. " +
+					"Comment `/test ?` to see a list of all defined jobs. Review these jobs and use `/test <job>` to manually trigger jobs most likely to be impacted by the proposed changes. " +
+					"Comment `/run remaining-required` to trigger all required & necessary jobs."
+
+				if err := cw.ghc.CreateComment(org, repo, number, comment); err != nil {
+					logger.WithError(err).Error("failed to create comment")
+				}
+			}
 		}
 	}
 }
@@ -162,6 +188,64 @@ func (cw *clientWrapper) handleLabelAddition(l *logrus.Entry, event github.PullR
 		if err := sendComment(presubmits, prowJob, cw.ghc, func() {}); err != nil {
 			logger.WithError(err).Error("failed to send a comment")
 		}
+	}
+}
+
+func (cw *clientWrapper) handleIssueComment(l *logrus.Entry, event github.IssueCommentEvent) {
+	// Only handle issue comments on PRs
+	if !event.Issue.IsPullRequest() {
+		return
+	}
+
+	// Check if the comment contains "/run remaining-required"
+	if !strings.Contains(event.Comment.Body, "/run remaining-required") {
+		return
+	}
+
+	org := event.Repo.Owner.Login
+	repo := event.Repo.Name
+	number := event.Issue.Number
+
+	logger := l.WithFields(logrus.Fields{
+		"org":  org,
+		"repo": repo,
+		"pr":   number,
+	})
+
+	// Get presubmits for this repo
+	presubmits := cw.configDataProvider.GetPresubmits(org + "/" + repo)
+
+	// Check if there are any pipeline-controlled jobs
+	if len(presubmits.protected) == 0 && len(presubmits.alwaysRequired) == 0 &&
+		len(presubmits.conditionallyRequired) == 0 && len(presubmits.pipelineConditionallyRequired) == 0 {
+		logger.Debug("No pipeline-controlled jobs found for repo")
+		return
+	}
+
+	// Fetch PR details
+	pr, err := cw.ghc.GetPullRequest(org, repo, number)
+	if err != nil {
+		logger.WithError(err).Error("failed to get PR details")
+		return
+	}
+
+	// Create a fake ProwJob to reuse existing logic
+	prowJob := &v1.ProwJob{
+		Spec: v1.ProwJobSpec{
+			Refs: &v1.Refs{
+				Org:     org,
+				Repo:    repo,
+				BaseRef: pr.Base.Ref,
+				Pulls: []v1.Pull{
+					{Number: number, SHA: pr.Head.SHA},
+				},
+			},
+		},
+	}
+
+	// Generate the comment with test/override commands
+	if err := sendCommentWithMode(presubmits, prowJob, cw.ghc, func() {}, true); err != nil {
+		logger.WithError(err).Error("failed to send comment in response to /run remaining-required")
 	}
 }
 
@@ -244,6 +328,7 @@ func main() {
 	eventServer := githubeventserver.New(o.githubEventServerOptions, webhookTokenGenerator, logger)
 	eventServer.RegisterHandlePullRequestEvent(cw.handlePullRequestCreation)
 	eventServer.RegisterHandlePullRequestEvent(cw.handleLabelAddition)
+	eventServer.RegisterHandleIssueCommentEvent(cw.handleIssueComment)
 
 	interrupts.OnInterrupt(func() {
 		eventServer.GracefulShutdown()

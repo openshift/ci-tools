@@ -1,7 +1,7 @@
-//go:build gsm_e2e
-// +build gsm_e2e
+//go:build e2e
+// +build e2e
 
-package gsm_e2e
+package gsm_secret_sync
 
 import (
 	"context"
@@ -230,7 +230,6 @@ func TestMain(m *testing.M) {
 		resourceManagerClient: resourceManagerClient,
 	}
 
-	tr.cleanup()
 	if !tr.verifyProjectIsClean() {
 		logrus.Error("gcp project is not clean; skipping tests")
 		tr.cleanup()

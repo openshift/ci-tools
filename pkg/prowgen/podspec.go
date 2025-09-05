@@ -25,7 +25,7 @@ var defaultPodSpec = corev1.PodSpec{
 				"--report-credentials-file=/etc/report/credentials",
 			},
 			Command:         []string{"ci-operator"},
-			Image:           "ci-operator:latest",
+			Image:           "quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest",
 			ImagePullPolicy: corev1.PullAlways,
 			Resources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},

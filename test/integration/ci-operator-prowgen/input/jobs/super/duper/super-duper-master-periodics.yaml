@@ -21,7 +21,7 @@ periodics:
       - --template=/usr/local/e2e-aws-nightly
       command:
       - ci-operator
-      image: ci-operator:latest
+      image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
       imagePullPolicy: Always
       name: ""
       env:
@@ -79,7 +79,7 @@ periodics:
       - --template=/usr/local/e2e-azure-nightly
       command:
       - ci-operator
-      image: ci-operator:latest
+      image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
       imagePullPolicy: Always
       name: ""
       env:

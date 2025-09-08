@@ -1491,6 +1491,7 @@ const (
 	ClusterProfileAWSMCOQE                ClusterProfile = "aws-mco-qe"
 	ClusterProfileAWSOADPQE               ClusterProfile = "aws-oadp-qe"
 	ClusterProfileAzureOADPQE             ClusterProfile = "azure-oadp-qe"
+	ClusterProfileGCPOADPQE               ClusterProfile = "gcp-oadp-qe"
 	ClusterProfileAWSlpChaos              ClusterProfile = "aws-lp-chaos"
 )
 
@@ -1669,6 +1670,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSMCOQE,
 		ClusterProfileAWSOADPQE,
 		ClusterProfileAzureOADPQE,
+		ClusterProfileGCPOADPQE,
 		ClusterProfileAWSlpChaos,
 	}
 }
@@ -2286,6 +2288,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-oadp-qe-quota-slice"
 	case ClusterProfileAzureOADPQE:
 		return "azure-oadp-qe-quota-slice"
+	case ClusterProfileGCPOADPQE:
+		return "gcp-oadp-qe-quota-slice"
 	case ClusterProfileAWSlpChaos:
 		return "aws-lp-chaos-quota-slice"
 	default:
@@ -2330,7 +2334,7 @@ func LeaseTypeFromClusterType(t string) (string, error) {
 		"openstack-nerc-dev", "vsphere", "ovirt", "packet", "packet-edge", "powervs-multi-1", "powervs-1", "powervs-2",
 		"powervs-3", "powervs-4", "powervs-5", "powervs-6", "powervs-7", "kubevirt", "aws-cpaas", "osd-ephemeral",
 		"gcp-virtualization", "aws-virtualization", "azure-virtualization", "hypershift-powervs",
-		"hypershift-powervs-cb", "aws-mco-qe", "equinix-edge-enablement", "aws-oadp-qe", "azure-oadp-qe",
+		"hypershift-powervs-cb", "aws-mco-qe", "equinix-edge-enablement", "aws-oadp-qe", "azure-oadp-qe", "gcp-oadp-qe",
 		"aws-lp-chaos":
 		return t + "-quota-slice", nil
 	default:

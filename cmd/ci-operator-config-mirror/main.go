@@ -117,7 +117,7 @@ func main() {
 
 		if len(o.onlyOrg) > 0 && repoInfo.Org != o.onlyOrg {
 			if !o.WhitelistConfig.IsWhitelisted(repoInfo) {
-				logger.Warnf("Skipping... This repo doesn't belong to %s organization", o.onlyOrg)
+				logger.Warnf("Skipping... This repo doesn't belong to %s organization and is not whitelisted", o.onlyOrg)
 				return nil
 			}
 			logger.Warnf("Repository %s doesn't belong to the %s organization but it is whitelisted", repoInfo.Repo, o.onlyOrg)

@@ -15,6 +15,8 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/prow/pkg/secretutil"
 
+	configv1 "github.com/openshift/api/config/v1"
+
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/lease"
 )
@@ -33,6 +35,7 @@ type MetricsAgent struct {
 	ctx    context.Context
 	events chan MetricsEvent
 	logger *logrus.Entry
+	client ctrlruntimeclient.Client
 
 	insightsPlugin *insightsPlugin
 	buildPlugin    *buildPlugin
@@ -61,12 +64,13 @@ func NewMetricsAgent(ctx context.Context, clusterConfig *rest.Config) (*MetricsA
 	return &MetricsAgent{
 		ctx:            ctx,
 		events:         make(chan MetricsEvent, 100),
+		logger:         logger,
+		client:         client,
 		insightsPlugin: newInsightsPlugin(logger),
 		buildPlugin:    newBuildPlugin(ctx, logger, client),
 		nodesPlugin:    newNodesMetricsPlugin(ctx, logger, client, metricsClient, nodesCh),
 		leasePlugin:    newLeasesPlugin(logger),
 		podPlugin:      NewPodLifecyclePlugin(ctx, logger, client),
-		logger:         logger,
 	}, nil
 }
 
@@ -179,4 +183,37 @@ func (ma *MetricsAgent) StorePodLifecycleMetrics(name, namespace string, phase c
 		PodPhase:  phase,
 	}
 	ma.Record(&event)
+}
+
+// RecordConfigurationInsight records configuration insight
+func (ma *MetricsAgent) RecordConfigurationInsight(targets []string, promote bool, org, repo, branch, variant, baseNamespace, consoleHost, nodeName string, clusterProfiles any) {
+	if ma == nil {
+		return
+	}
+
+	clusterID := "unknown"
+	clusterVersion := &configv1.ClusterVersion{}
+	if err := ma.client.Get(ma.ctx, ctrlruntimeclient.ObjectKey{Name: "version"}, clusterVersion); err != nil {
+		ma.logger.WithError(err).Warn("Failed to get ClusterVersion for cluster ID")
+	} else {
+		clusterID = string(clusterVersion.Spec.ClusterID)
+	}
+
+	configData := Context{
+		"targets":        targets,
+		"promote":        promote,
+		"org":            org,
+		"repo":           repo,
+		"branch":         branch,
+		"variant":        variant,
+		"base_namespace": baseNamespace,
+		"cluster_info": Context{
+			"console_host":     consoleHost,
+			"node_name":        nodeName,
+			"cluster_profiles": clusterProfiles,
+			"cluster_id":       clusterID,
+		},
+	}
+
+	ma.Record(NewInsightsEvent(InsightConfiguration, configData))
 }

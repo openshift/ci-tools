@@ -65,6 +65,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	buildv1 "github.com/openshift/api/build/v1"
+	configv1 "github.com/openshift/api/config/v1"
 	imageapi "github.com/openshift/api/image/v1"
 	projectapi "github.com/openshift/api/project/v1"
 	routev1 "github.com/openshift/api/route/v1"
@@ -267,13 +268,7 @@ func main() {
 		go opt.metricsAgent.Run()
 	}
 
-	opt.metricsAgent.Record(
-		&metrics.InsightsEvent{
-			Name:              "ci_operator_started",
-			AdditionalContext: map[string]any{"job_spec": opt.jobSpec.MetricsData()},
-		},
-	)
-
+	opt.metricsAgent.Record(metrics.NewInsightsEvent(metrics.InsightStarted, metrics.Context{"job_spec": opt.jobSpec.MetricsData()}))
 	if errs := opt.Run(); len(errs) > 0 {
 		var defaulted []error
 		for _, err := range errs {
@@ -1015,7 +1010,8 @@ func (o *options) Run() []error {
 	if err := o.initializeNamespace(); err != nil {
 		return []error{results.ForReason("initializing_namespace").WithError(err).Errorf("could not initialize namespace: %v", err)}
 	}
-	o.metricsAgent.Record(&metrics.InsightsEvent{Name: "namespace_created", AdditionalContext: map[string]any{"namespace": o.namespace}})
+	o.metricsAgent.Record(metrics.NewInsightsEvent(metrics.InsightNamespaceCreated, metrics.Context{"namespace": o.namespace}))
+	o.metricsAgent.RecordConfigurationInsight(o.targets.values, o.promote, o.org, o.repo, o.branch, o.variant, o.baseNamespace, o.consoleHost, o.nodeName, o.clusterProfiles)
 
 	return interrupt.New(handler, o.saveNamespaceArtifacts).Run(func() []error {
 		if leaseClient != nil {
@@ -1035,6 +1031,7 @@ func (o *options) Run() []error {
 		}
 		runtimeObject := &coreapi.ObjectReference{Namespace: o.namespace}
 		eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobStarted", eventJobDescription(o.jobSpec, o.namespace))
+		o.metricsAgent.Record(metrics.NewInsightsEvent(metrics.InsightExecutionStarted, metrics.Context{"started_after": time.Since(start).Seconds()}))
 		// execute the graph
 		suites, graphDetails, errs := steps.Run(ctx, nodes)
 		if err := o.writeJUnit(suites, "operator"); err != nil {
@@ -1046,14 +1043,7 @@ func (o *options) Run() []error {
 			logrus.WithError(err).Warn("Unable to update metadata.json for build")
 		}
 		if len(errs) > 0 {
-			o.metricsAgent.Record(&metrics.InsightsEvent{
-				Name: "ci_operator_execution_completed",
-				AdditionalContext: map[string]any{
-					"duration_seconds": time.Since(start).Seconds(),
-					"success":          false,
-					"error_count":      len(errs),
-				},
-			})
+			o.metricsAgent.Record(metrics.NewInsightsEvent(metrics.InsightExecutionCompleted, metrics.Context{"duration_seconds": time.Since(start).Seconds(), "success": false, "error_count": len(errs)}))
 			eventRecorder.Event(runtimeObject, coreapi.EventTypeWarning, "CiJobFailed", eventJobDescription(o.jobSpec, o.namespace))
 			var wrapped []error
 			for _, err := range errs {
@@ -1076,16 +1066,12 @@ func (o *options) Run() []error {
 			case err := <-errChan:
 				errorDesc := fmt.Sprintf("post step failed while %s. with error: %v", eventJobDescription(o.jobSpec, o.namespace), err)
 				eventRecorder.Event(runtimeObject, coreapi.EventTypeWarning, "PostStepFailed", errorDesc)
-				o.metricsAgent.Record(&metrics.InsightsEvent{Name: "post_step_failed", AdditionalContext: map[string]any{"error": errorDesc}})
 				return []error{results.ForReason("executing_post").WithError(err).Unwrap()} // If any of the promotion steps fail, it is considered a failure
 			}
 		}
 
 		eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobSucceeded", eventJobDescription(o.jobSpec, o.namespace))
-		o.metricsAgent.Record(&metrics.InsightsEvent{
-			Name:              "ci_operator_execution_completed",
-			AdditionalContext: map[string]any{"duration_seconds": time.Since(start).Seconds(), "success": true},
-		})
+		o.metricsAgent.Record(metrics.NewInsightsEvent(metrics.InsightExecutionCompleted, metrics.Context{"duration_seconds": time.Since(start).Seconds(), "success": true}))
 
 		return nil
 	})
@@ -1146,24 +1132,13 @@ func integratedStreams(config *api.ReleaseBuildConfiguration, client server.Reso
 // so we can not re-use it.
 func runStep(ctx context.Context, step api.Step, metricsAgent *metrics.MetricsAgent) (api.CIOperatorStepDetails, error) {
 	start := time.Now()
-	metricsAgent.Record(&metrics.InsightsEvent{
-		Name:              "step_started",
-		AdditionalContext: map[string]any{"step_name": step.Name(), "description": step.Description()},
-	})
+	metricsAgent.Record(metrics.NewInsightsEvent(metrics.InsightStepStarted, metrics.Context{"step_name": step.Name(), "description": step.Description()}))
 
 	err := step.Run(ctx)
 	duration := time.Since(start)
 	failed := err != nil
 
-	metricsAgent.Record(&metrics.InsightsEvent{
-		Name: "step_completed",
-		AdditionalContext: map[string]any{
-			"step_name":        step.Name(),
-			"description":      step.Description(),
-			"duration_seconds": duration.Seconds(),
-			"success":          !failed,
-		},
-	})
+	metricsAgent.Record(metrics.NewInsightsEvent(metrics.InsightStepCompleted, metrics.Context{"step_name": step.Name(), "description": step.Description(), "duration_seconds": duration.Seconds(), "success": !failed}))
 
 	var subSteps []api.CIOperatorStepDetailInfo
 	if x, ok := step.(steps.SubStepReporter); ok {
@@ -1582,13 +1557,7 @@ func (o *options) initializeNamespace() error {
 	}
 	logrus.Debugf("Created PDB for pods with %s label", steps.CreatedByCILabel)
 
-	o.metricsAgent.Record(&metrics.InsightsEvent{
-		Name: "namespace_initialized",
-		AdditionalContext: map[string]any{
-			"namespace":        o.namespace,
-			"duration_seconds": time.Since(initBeginning).Seconds(),
-		},
-	})
+	o.metricsAgent.Record(metrics.NewInsightsEvent(metrics.InsightNamespaceInitialized, metrics.Context{"namespace": o.namespace, "duration_seconds": time.Since(initBeginning).Seconds()}))
 	return nil
 }
 
@@ -1948,6 +1917,8 @@ func (o *options) saveNamespaceArtifacts() {
 		path := filepath.Join(namespaceDir, "templateinstances.json")
 		_ = api.SaveArtifact(o.censor, path, data)
 	}
+
+	o.metricsAgent.Record(metrics.NewInsightsEvent(metrics.InsightNamespaceArtifacts, metrics.Context{"namespace": o.namespace}))
 }
 
 func loadLeaseCredentials(leaseServerCredentialsFile string) (string, func() []byte, error) {
@@ -1972,6 +1943,9 @@ func (o *options) initializeLeaseClient() error {
 	if err != nil {
 		return fmt.Errorf("failed to load lease credentials: %w", err)
 	}
+
+	o.metricsAgent.Record(metrics.NewInsightsEvent(metrics.InsightLeaseCredentials, metrics.Context{"lease_server": o.leaseServer, "username": username}))
+
 	if o.leaseClient, err = lease.NewClient(owner, o.leaseServer, username, passwordGetter, 60, o.leaseAcquireTimeout); err != nil {
 		return fmt.Errorf("failed to create the lease client: %w", err)
 	}
@@ -1979,24 +1953,13 @@ func (o *options) initializeLeaseClient() error {
 	go func() {
 		for range t.C {
 			if err := o.leaseClient.Heartbeat(); err != nil {
-				o.metricsAgent.Record(&metrics.InsightsEvent{
-					Name:              "lease_heartbeat_failed",
-					AdditionalContext: map[string]any{"error": err.Error(), "owner": owner},
-				})
 				logrus.WithError(err).Warn("Failed to update leases.")
 			}
 		}
 		if l, err := o.leaseClient.ReleaseAll(); err != nil {
-			o.metricsAgent.Record(&metrics.InsightsEvent{
-				Name:              "lease_release_failed",
-				AdditionalContext: map[string]any{"error": err.Error(), "count": len(l)},
-			})
 			logrus.WithError(err).Errorf("Failed to release leaked leases (%v)", l)
 		} else if len(l) != 0 {
-			o.metricsAgent.Record(&metrics.InsightsEvent{
-				Name:              "lease_released",
-				AdditionalContext: map[string]any{"released_count": len(l)},
-			})
+			o.metricsAgent.Record(metrics.NewInsightsEvent(metrics.InsightLeaseReleased, metrics.Context{"released_count": len(l)}))
 			logrus.Warnf("Would leak leases: %v", l)
 		}
 	}()
@@ -2498,6 +2461,10 @@ func addSchemes() error {
 	if err := csiapi.AddToScheme(scheme.Scheme); err != nil {
 		return fmt.Errorf("failed to add secrets-store-csi-driver to scheme: %w", err)
 	}
+	if err := configv1.AddToScheme(scheme.Scheme); err != nil {
+		return fmt.Errorf("failed to add configv1 to scheme: %w", err)
+	}
+
 	return nil
 }
 

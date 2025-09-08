@@ -11,11 +11,37 @@ const (
 	InsightsPluginName = "test_platform_insights"
 )
 
+type InsightEventName string
+
+const (
+	InsightStarted              InsightEventName = "started"
+	InsightConfiguration        InsightEventName = "configuration"
+	InsightNamespaceCreated     InsightEventName = "namespace_created"
+	InsightExecutionStarted     InsightEventName = "execution_started"
+	InsightExecutionCompleted   InsightEventName = "execution_completed"
+	InsightStepStarted          InsightEventName = "step_started"
+	InsightStepCompleted        InsightEventName = "step_completed"
+	InsightSecretCreated        InsightEventName = "secret_created"
+	InsightNamespaceInitialized InsightEventName = "namespace_initialized"
+	InsightNamespaceArtifacts   InsightEventName = "namespace_artifacts"
+	InsightLeaseCredentials     InsightEventName = "lease_credentials"
+	InsightLeaseReleased        InsightEventName = "lease_released"
+)
+
 // InsightsEvent defines a test platform insight event.
 type InsightsEvent struct {
-	Name              string         `json:"name"`
-	AdditionalContext map[string]any `json:"additional_context,omitempty"`
-	Timestamp         time.Time      `json:"timestamp"`
+	Name              string    `json:"name"`
+	AdditionalContext Context   `json:"additional_context,omitempty"`
+	Timestamp         time.Time `json:"timestamp"`
+}
+
+type Context map[string]any
+
+func NewInsightsEvent(name InsightEventName, additionalContext Context) *InsightsEvent {
+	return &InsightsEvent{
+		Name:              string(name),
+		AdditionalContext: additionalContext,
+	}
 }
 
 // SetTimestamp sets the timestamp of the event.

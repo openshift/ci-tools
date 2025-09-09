@@ -3,7 +3,6 @@ package onboard
 import (
 	"context"
 	"io/fs"
-	"path"
 	"testing"
 	"testing/fstest"
 
@@ -16,17 +15,16 @@ import (
 func newMemFS(entries ...string) fs.FS {
 	memFS := fstest.MapFS{}
 	for _, e := range entries {
-		memFS[path.Join(passthroughRoot, e)] = &fstest.MapFile{}
+		memFS[e] = &fstest.MapFile{}
 	}
 	return memFS
 }
 
 func TestPassthroughManifests(t *testing.T) {
-	manifestPaths := func(repo, clusterName string, manifests ...string) map[string][]interface{} {
+	manifestPaths := func(manifests ...string) map[string][]interface{} {
 		pathToManifests := make(map[string][]interface{})
 		for _, m := range manifests {
-			p := path.Join(repo, "clusters", "build-clusters", clusterName, m)
-			pathToManifests[p] = []interface{}{[]byte{}}
+			pathToManifests[m] = []interface{}{[]byte{}}
 		}
 		return pathToManifests
 	}
@@ -46,8 +44,8 @@ func TestPassthroughManifests(t *testing.T) {
 					ReleaseRepo: releaseRepo,
 				},
 			},
-			fs:            newMemFS("foo.yaml"),
-			wantManifests: manifestPaths("/release/repo", "build99", "foo.yaml"),
+			fs:            newMemFS("release/repo/build99/foo.yaml"),
+			wantManifests: manifestPaths("release/repo/build99/foo.yaml"),
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -55,7 +53,7 @@ func TestPassthroughManifests(t *testing.T) {
 			generator := NewPassthroughGenerator(logrus.NewEntry(logrus.StandardLogger()), &tt.ci)
 
 			generator.readFile = func(fsys fs.FS, name string) ([]byte, error) { return []byte{}, nil }
-			generator.manifests = tt.fs
+			generator.manifests = []fs.FS{tt.fs}
 
 			manifests, err := generator.Generate(context.TODO(), logrus.NewEntry(logrus.StandardLogger()))
 

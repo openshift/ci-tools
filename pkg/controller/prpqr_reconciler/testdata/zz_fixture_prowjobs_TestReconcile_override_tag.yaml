@@ -51,7 +51,7 @@
         env:
         - name: OVERRIDE_IMAGE_MACHINE_OS_CONTENT
           value: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:9a49368aad56c984302c3cfd7d3dfd3186687381ca9a94501960b0d6a8fb7f98
-        image: ci-operator:latest
+        image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
         resources:

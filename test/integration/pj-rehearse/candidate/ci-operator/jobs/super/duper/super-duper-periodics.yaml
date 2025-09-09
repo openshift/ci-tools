@@ -25,7 +25,7 @@ periodics:
         value: https://artifacts-rpms-openshift-origin-ci-rpms.apps.ci.l2s4.p1.openshiftapps.com/openshift-origin-v3.11/
       - name: TEST_COMMAND
         value: make test-e2e
-      image: ci-operator:latest
+      image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
       imagePullPolicy: Always
       name: ""
       resources:
@@ -57,7 +57,7 @@ periodics:
       - --CHANGED
       command:
       - no-ci-op
-      image: ci-operator:latest
+      image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
       imagePullPolicy: Always
       name: ""
       resources:
@@ -118,7 +118,7 @@ periodics:
                     cpu: 1000m
                     memory: 2Gi
               workflow: ipi
-      image: ci-operator:latest
+      image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
       imagePullPolicy: Always
       name: ""
       resources:
@@ -178,7 +178,7 @@ periodics:
                     cpu: 1000m
                     memory: 2Gi
               workflow: ipi
-      image: ci-operator:latest
+      image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
       imagePullPolicy: Always
       name: ""
       resources:

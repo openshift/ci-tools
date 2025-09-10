@@ -120,7 +120,7 @@ func TestSecretCollectionManager(t *testing.T) {
 				ModifyIndex:     1,
 			}},
 			expectedVaultPolicies: []string{"default", "secret-collection-manager-managed-mine-alone", "root"},
-			dataCheckScenario:     []dataCheckScenario{{"user-1", "secret/self-managed/mine-alone/index", map[string]string{".": "."}}},
+			dataCheckScenario:     []dataCheckScenario{{"user-1", "secret/self-managed/mine-alone/placeholder", map[string]string{"placeholder": "Make entry visible from the webconsole"}}},
 			permCheckScenarios: []permCheckScenario{
 				{"user-1", "secret/self-managed/mine-alone", true},
 				{"user-2", "secret/self-managed/mine-alone", false},
@@ -296,7 +296,7 @@ func TestSecretCollectionManager(t *testing.T) {
 					if err == nil {
 						var expected []string
 						if scenario.expectSuccess {
-							expected = []string{"index"}
+							expected = []string{"placeholder"}
 						}
 						if diff := cmp.Diff(initialResult, expected); diff != "" {
 							t.Errorf("unexpected initial listing: %s", diff)

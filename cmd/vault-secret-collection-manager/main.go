@@ -398,9 +398,10 @@ func (m *secretCollectionManager) createSecretCollection(_ *logrus.Entry, userNa
 		return fmt.Errorf("failed to create group %s: %w", prefixedName(secretCollectionName), err)
 	}
 
-	// Create an empty file so ppl see the secret collection in the vault UI.
-	indexFileLocation := strings.Replace(m.kvDataPrefix, "/data", "", 1) + "/" + secretCollectionName + "/index"
-	if err := m.privilegedVaultClient.UpsertKV(indexFileLocation, map[string]string{".": "."}); err != nil {
+	// Create a placeholder file with name and contents greater than a length of 3 to
+	// bypass censoring plugin's rules and allow people to see the secret collection in the vault UI.
+	indexFileLocation := strings.Replace(m.kvDataPrefix, "/data", "", 1) + "/" + secretCollectionName + "/placeholder"
+	if err := m.privilegedVaultClient.UpsertKV(indexFileLocation, map[string]string{"placeholder": "Make entry visible from the webconsole"}); err != nil {
 		return fmt.Errorf("failed to create %s: %w", indexFileLocation, err)
 	}
 

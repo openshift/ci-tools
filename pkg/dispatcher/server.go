@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/openshift/ci-tools/pkg/controller/ephemeralcluster"
 	"github.com/sirupsen/logrus"
 )
 
@@ -65,7 +66,7 @@ func (s *Server) RequestHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	cluster := ""
-	if strings.HasPrefix(req.Job, "ephemeralcluster-") {
+	if strings.HasPrefix(req.Job, ephemeralcluster.ProwJobNamePrefix) {
 		cluster, err = s.ecd.Dispatch(req.Job)
 		if err != nil {
 			http.Error(w, "Failed to get the cluster", http.StatusInternalServerError)

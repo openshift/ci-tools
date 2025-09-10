@@ -371,7 +371,7 @@ func (r *reconciler) makeProwJob(ciOperatorConfig *api.ReleaseBuildConfiguration
 	presubmit := &prowYAML.Presubmits[0]
 	labels := map[string]string{EphemeralClusterLabel: ec.Name}
 	pj := r.newPresubmit(github.PullRequest{}, "fake", *presubmit, "no-event-guid", labels, pjutil.RequireScheduling(true))
-	// The cluster will be choosen by the dispatcher. Set a default one here in case things go sideways.
+	// The cluster will be chosen by the dispatcher. Set a default one here in case things go sideways.
 	pj.Spec.Cluster = string(api.ClusterBuild01)
 	pj.Namespace = r.prowConfigAgent.Config().ProwJobNamespace
 	// Do not report, we are not managing this PR as it's likely it's not comining from the OpenShift CI.

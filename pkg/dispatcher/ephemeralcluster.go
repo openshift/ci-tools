@@ -16,11 +16,11 @@ var (
 	ErrNoClusterAvailable = errors.New("no clusters available")
 )
 
-// ephemeralClusterScheduler schedules Konflux ephemeral cluster requests accross the build farms
+// ephemeralClusterScheduler schedules Konflux ephemeral cluster requests across the build farms
 // by implementing a simple round-robin algorithm.
 type ephemeralClusterScheduler struct {
 	clusters []string
-	// idx is the index of the last choosen cluster
+	// idx is the index of the last chosen cluster
 	idx int
 	// m keeps this struct thread safe
 	m sync.Mutex

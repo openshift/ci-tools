@@ -5,18 +5,21 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 )
 
 type Server struct {
 	pjs      *Prowjobs
+	ecd      *ephemeralClusterScheduler
 	dispatch func(bool)
 }
 
-func NewServer(jobs *Prowjobs, dispatch func(bool)) *Server {
+func NewServer(jobs *Prowjobs, ecd *ephemeralClusterScheduler, dispatch func(bool)) *Server {
 	return &Server{
 		pjs:      jobs,
+		ecd:      ecd,
 		dispatch: dispatch,
 	}
 }
@@ -61,7 +64,17 @@ func (s *Server) RequestHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	cluster := s.pjs.GetCluster(removeRehearsePrefix(req.Job))
+	cluster := ""
+	if strings.HasPrefix(req.Job, "ephemeralcluster-") {
+		cluster, err = s.ecd.Dispatch(req.Job)
+		if err != nil {
+			http.Error(w, "Failed to get the cluster", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		cluster = s.pjs.GetCluster(removeRehearsePrefix(req.Job))
+	}
+
 	if cluster == "" {
 		http.Error(w, "Cluster not found", http.StatusNotFound)
 		return

@@ -1,0 +1,23 @@
+build_root:
+  image_stream_tag:
+    name: release
+    namespace: openshift
+    tag: golang-1.21
+images:
+- dockerfile_path: Dockerfile
+  from: base
+  to: non-official-image
+promotion:
+  to:
+  - name: "latest"
+    namespace: some-namespace
+resources:
+  '*':
+    requests:
+      cpu: 100m
+      memory: 200Mi
+tests:
+- as: unit
+  commands: make test
+  container:
+    from: src

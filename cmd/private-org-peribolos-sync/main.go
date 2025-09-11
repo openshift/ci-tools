@@ -109,7 +109,7 @@ func main() {
 		logger.WithError(err).Fatal("Error getting GitHub client.")
 	}
 
-	orgRepos, err := getReposForPrivateOrg(o.releaseRepoPath, o.WhitelistOptions.WhitelistConfig.Whitelist, o.onlyOrg)
+	orgRepos, err := getReposForPrivateOrg(o.releaseRepoPath, o.WhitelistOptions.WhitelistConfig, o.onlyOrg)
 	if err != nil {
 		logger.WithError(err).Fatal("couldn't get the list of org/repos that promote official images")
 	}
@@ -162,29 +162,16 @@ func generateRepositories(gc gitHubClient, orgRepos map[string]sets.Set[string],
 }
 
 // getReposForPrivateOrg iterates through the release repository directory and creates a map of
-// repository sets by organization that promote official images.
-func getReposForPrivateOrg(releaseRepoPath string, whitelist map[string][]string, onlyOrg string) (map[string]sets.Set[string], error) {
+// repository sets by organization that promote official images or are whitelisted.
+func getReposForPrivateOrg(releaseRepoPath string, whitelistConfig config.WhitelistConfig, onlyOrg string) (map[string]sets.Set[string], error) {
 	ret := make(map[string]sets.Set[string])
 
-	for org, repos := range whitelist {
-		if onlyOrg != "" && onlyOrg != org {
-			continue
-		}
-		for _, repo := range repos {
-			if _, ok := ret[org]; !ok {
-				ret[org] = sets.New[string](repo)
-			} else {
-				ret[org].Insert(repo)
-			}
-		}
-	}
-
 	callback := func(c *api.ReleaseBuildConfiguration, i *config.Info) error {
-		if !api.BuildsAnyOfficialImages(c, api.WithoutOKD) {
-			return nil
-		}
+		buildsOfficialImages := api.BuildsAnyOfficialImages(c, api.WithoutOKD)
+		isWhitelisted := whitelistConfig.IsWhitelisted(i)
+		correctOrg := onlyOrg == "" || onlyOrg == i.Org
 
-		if onlyOrg != "" && onlyOrg != i.Org {
+		if !isWhitelisted && !(buildsOfficialImages && correctOrg) {
 			return nil
 		}
 

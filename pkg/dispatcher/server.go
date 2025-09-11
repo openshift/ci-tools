@@ -7,8 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/openshift/ci-tools/pkg/controller/ephemeralcluster"
 	"github.com/sirupsen/logrus"
+
+	"github.com/openshift/ci-tools/pkg/controller/ephemeralcluster"
 )
 
 type Server struct {

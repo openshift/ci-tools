@@ -12,8 +12,8 @@ func TestErrOutWhenNoClusterIsAvailable(t *testing.T) {
 	s := NewEphemeralClusterDispatcher([]string{})
 
 	_, err := s.Dispatch("foobar")
-	if !errors.Is(err, ErrNoClusterAvailable) {
-		t.Errorf("Expected error %T but got %T", ErrNoClusterAvailable, err)
+	if !errors.Is(err, errNoClusterAvailable) {
+		t.Errorf("Expected error %T but got %T", errNoClusterAvailable, err)
 	}
 }
 

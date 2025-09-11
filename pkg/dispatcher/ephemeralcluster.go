@@ -2,8 +2,11 @@ package dispatcher
 
 import (
 	"errors"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/openshift/ci-tools/pkg/controller/ephemeralcluster"
 )
 
 const (
@@ -13,7 +16,7 @@ const (
 )
 
 var (
-	ErrNoClusterAvailable = errors.New("no clusters available")
+	errNoClusterAvailable = errors.New("no clusters available")
 )
 
 // ephemeralClusterScheduler schedules Konflux ephemeral cluster requests across the build farms
@@ -40,7 +43,7 @@ func (ecs *ephemeralClusterScheduler) Dispatch(jobName string) (string, error) {
 	defer ecs.m.Unlock()
 
 	if len(ecs.clusters) == 0 {
-		return "", ErrNoClusterAvailable
+		return "", errNoClusterAvailable
 	}
 
 	now := ecs.now()
@@ -77,6 +80,10 @@ func (ecs *ephemeralClusterScheduler) Reset(clusters []string) {
 	for k := range ecs.cache {
 		delete(ecs.cache, k)
 	}
+}
+
+func (ecs *ephemeralClusterScheduler) ShouldHandle(jobName string) bool {
+	return strings.HasPrefix(jobName, ephemeralcluster.ProwJobNamePrefix)
 }
 
 func NewEphemeralClusterDispatcher(clusters []string) *ephemeralClusterScheduler {

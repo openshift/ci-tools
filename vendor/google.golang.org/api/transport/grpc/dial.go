@@ -235,12 +235,14 @@ func dialPoolNewAuth(ctx context.Context, secure bool, poolSize int, ds *interna
 			Audience:        aud,
 			CredentialsFile: ds.CredentialsFile,
 			CredentialsJSON: ds.CredentialsJSON,
+			Logger:          ds.Logger,
 		},
 		InternalOptions: &grpctransport.InternalOptions{
 			EnableNonDefaultSAForDirectPath: ds.AllowNonDefaultServiceAccount,
 			EnableDirectPath:                ds.EnableDirectPath,
 			EnableDirectPathXds:             ds.EnableDirectPathXds,
 			EnableJWTWithScope:              ds.EnableJwtWithScope,
+			AllowHardBoundTokens:            ds.AllowHardBoundTokens,
 			DefaultAudience:                 ds.DefaultAudience,
 			DefaultEndpointTemplate:         defaultEndpointTemplate,
 			DefaultMTLSEndpoint:             ds.DefaultMTLSEndpoint,
@@ -248,6 +250,7 @@ func dialPoolNewAuth(ctx context.Context, secure bool, poolSize int, ds *interna
 			SkipValidation:                  skipValidation,
 		},
 		UniverseDomain: ds.UniverseDomain,
+		Logger:         ds.Logger,
 	})
 	return pool, err
 }

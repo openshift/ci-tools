@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC.
+// Copyright 2025 Google LLC.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -64,11 +64,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 
+	"github.com/googleapis/gax-go/v2/internallog"
 	googleapi "google.golang.org/api/googleapi"
 	internal "google.golang.org/api/internal"
 	gensupport "google.golang.org/api/internal/gensupport"
@@ -92,6 +94,7 @@ var _ = strings.Replace
 var _ = context.Canceled
 var _ = internaloption.WithDefaultEndpoint
 var _ = internal.Version
+var _ = internallog.New
 
 const apiId = "bigquery:v2"
 const apiName = "bigquery"
@@ -150,7 +153,15 @@ func NewService(ctx context.Context, opts ...option.ClientOption) (*Service, err
 	if err != nil {
 		return nil, err
 	}
-	s, err := New(client)
+	s := &Service{client: client, BasePath: basePath, logger: internaloption.GetLogger(opts)}
+	s.Datasets = NewDatasetsService(s)
+	s.Jobs = NewJobsService(s)
+	s.Models = NewModelsService(s)
+	s.Projects = NewProjectsService(s)
+	s.Routines = NewRoutinesService(s)
+	s.RowAccessPolicies = NewRowAccessPoliciesService(s)
+	s.Tabledata = NewTabledataService(s)
+	s.Tables = NewTablesService(s)
 	if err != nil {
 		return nil, err
 	}
@@ -169,20 +180,12 @@ func New(client *http.Client) (*Service, error) {
 	if client == nil {
 		return nil, errors.New("client is nil")
 	}
-	s := &Service{client: client, BasePath: basePath}
-	s.Datasets = NewDatasetsService(s)
-	s.Jobs = NewJobsService(s)
-	s.Models = NewModelsService(s)
-	s.Projects = NewProjectsService(s)
-	s.Routines = NewRoutinesService(s)
-	s.RowAccessPolicies = NewRowAccessPoliciesService(s)
-	s.Tabledata = NewTabledataService(s)
-	s.Tables = NewTablesService(s)
-	return s, nil
+	return NewService(context.Background(), option.WithHTTPClient(client))
 }
 
 type Service struct {
 	client    *http.Client
+	logger    *slog.Logger
 	BasePath  string // API endpoint base URL
 	UserAgent string // optional additional User-Agent fragment
 
@@ -309,7 +312,7 @@ type AggregateClassificationMetrics struct {
 	RocAuc float64 `json:"rocAuc,omitempty"`
 	// Threshold: Threshold at which the metrics are computed. For binary
 	// classification models this is the positive class threshold. For multi-class
-	// classfication models this is the confidence threshold.
+	// classification models this is the confidence threshold.
 	Threshold float64 `json:"threshold,omitempty"`
 	// ForceSendFields is a list of field names (e.g. "Accuracy") to
 	// unconditionally include in API requests. By default, fields with empty or
@@ -857,6 +860,33 @@ type AvroOptions struct {
 
 func (s AvroOptions) MarshalJSON() ([]byte, error) {
 	type NoMethod AvroOptions
+	return gensupport.MarshalJSON(NoMethod(s), s.ForceSendFields, s.NullFields)
+}
+
+// BatchDeleteRowAccessPoliciesRequest: Request message for the
+// BatchDeleteRowAccessPoliciesRequest method.
+type BatchDeleteRowAccessPoliciesRequest struct {
+	// Force: If set to true, it deletes the row access policy even if it's the
+	// last row access policy on the table and the deletion will widen the access
+	// rather narrowing it.
+	Force bool `json:"force,omitempty"`
+	// PolicyIds: Required. Policy IDs of the row access policies.
+	PolicyIds []string `json:"policyIds,omitempty"`
+	// ForceSendFields is a list of field names (e.g. "Force") to unconditionally
+	// include in API requests. By default, fields with empty or default values are
+	// omitted from API requests. See
+	// https://pkg.go.dev/google.golang.org/api#hdr-ForceSendFields for more
+	// details.
+	ForceSendFields []string `json:"-"`
+	// NullFields is a list of field names (e.g. "Force") to include in API
+	// requests with the JSON null value. By default, fields with empty values are
+	// omitted from API requests. See
+	// https://pkg.go.dev/google.golang.org/api#hdr-NullFields for more details.
+	NullFields []string `json:"-"`
+}
+
+func (s BatchDeleteRowAccessPoliciesRequest) MarshalJSON() ([]byte, error) {
+	type NoMethod BatchDeleteRowAccessPoliciesRequest
 	return gensupport.MarshalJSON(NoMethod(s), s.ForceSendFields, s.NullFields)
 }
 
@@ -1624,8 +1654,9 @@ type Clustering struct {
 	// Fields: One or more fields on which data should be clustered. Only
 	// top-level, non-repeated, simple-type fields are supported. The ordering of
 	// the clustering fields should be prioritized from most to least important for
-	// filtering purposes. Additional information on limitations can be found here:
-	// https://cloud.google.com/bigquery/docs/creating-clustered-tables#limitations
+	// filtering purposes. For additional information, see Introduction to
+	// clustered tables
+	// (https://cloud.google.com/bigquery/docs/clustered-tables#limitations).
 	Fields []string `json:"fields,omitempty"`
 	// ForceSendFields is a list of field names (e.g. "Fields") to unconditionally
 	// include in API requests. By default, fields with empty or default values are
@@ -3067,14 +3098,14 @@ func (s Expr) MarshalJSON() ([]byte, error) {
 
 // ExternalCatalogDatasetOptions: Options defining open source compatible
 // datasets living in the BigQuery catalog. Contains metadata of open source
-// database, schema or namespace represented by the current dataset.
+// database, schema, or namespace represented by the current dataset.
 type ExternalCatalogDatasetOptions struct {
 	// DefaultStorageLocationUri: Optional. The storage location URI for all tables
 	// in the dataset. Equivalent to hive metastore's database locationUri. Maximum
 	// length of 1024 characters.
 	DefaultStorageLocationUri string `json:"defaultStorageLocationUri,omitempty"`
 	// Parameters: Optional. A map of key value pairs defining the parameters and
-	// properties of the open source schema. Maximum size of 2Mib.
+	// properties of the open source schema. Maximum size of 2MiB.
 	Parameters map[string]string `json:"parameters,omitempty"`
 	// ForceSendFields is a list of field names (e.g. "DefaultStorageLocationUri")
 	// to unconditionally include in API requests. By default, fields with empty or
@@ -3095,17 +3126,18 @@ func (s ExternalCatalogDatasetOptions) MarshalJSON() ([]byte, error) {
 }
 
 // ExternalCatalogTableOptions: Metadata about open source compatible table.
-// The fields contained in these options correspond to hive metastore's table
-// level properties.
+// The fields contained in these options correspond to Hive metastore's
+// table-level properties.
 type ExternalCatalogTableOptions struct {
-	// ConnectionId: Optional. The connection specifying the credentials to be used
-	// to read external storage, such as Azure Blob, Cloud Storage, or S3. The
-	// connection is needed to read the open source table from BigQuery Engine. The
-	// connection_id can have the form `..` or `projects//locations//connections/`.
+	// ConnectionId: Optional. A connection ID that specifies the credentials to be
+	// used to read external storage, such as Azure Blob, Cloud Storage, or Amazon
+	// S3. This connection is needed to read the open source table from BigQuery.
+	// The connection_id format must be either `..` or
+	// `projects//locations//connections/`.
 	ConnectionId string `json:"connectionId,omitempty"`
-	// Parameters: Optional. A map of key value pairs defining the parameters and
-	// properties of the open source table. Corresponds with hive meta store table
-	// parameters. Maximum size of 4Mib.
+	// Parameters: Optional. A map of the key-value pairs defining the parameters
+	// and properties of the open source table. Corresponds with Hive metastore
+	// table parameters. Maximum size of 4MiB.
 	Parameters map[string]string `json:"parameters,omitempty"`
 	// StorageDescriptor: Optional. A storage descriptor containing information
 	// about the physical storage of this table.
@@ -3152,6 +3184,12 @@ type ExternalDataConfiguration struct {
 	// CsvOptions: Optional. Additional properties to set if sourceFormat is set to
 	// CSV.
 	CsvOptions *CsvOptions `json:"csvOptions,omitempty"`
+	// DateFormat: Optional. Format used to parse DATE values. Supports C-style and
+	// SQL-style values.
+	DateFormat string `json:"dateFormat,omitempty"`
+	// DatetimeFormat: Optional. Format used to parse DATETIME values. Supports
+	// C-style and SQL-style values.
+	DatetimeFormat string `json:"datetimeFormat,omitempty"`
 	// DecimalTargetTypes: Defines the list of possible SQL data types to which the
 	// source decimal values are converted. This list and the precision and the
 	// scale parameters of the decimal field determine the target type. In the
@@ -3164,7 +3202,7 @@ type ExternalDataConfiguration struct {
 	// of this field is ["NUMERIC", "BIGNUMERIC"]. If (precision,scale) is: *
 	// (38,9) -> NUMERIC; * (39,9) -> BIGNUMERIC (NUMERIC cannot hold 30 integer
 	// digits); * (38,10) -> BIGNUMERIC (NUMERIC cannot hold 10 fractional digits);
-	// * (76,38) -> BIGNUMERIC; * (77,38) -> BIGNUMERIC (error if value exeeds
+	// * (76,38) -> BIGNUMERIC; * (77,38) -> BIGNUMERIC (error if value exceeds
 	// supported range). This field cannot contain duplicate types. The order of
 	// the types in this field is ignored. For example, ["BIGNUMERIC", "NUMERIC"]
 	// is the same as ["NUMERIC", "BIGNUMERIC"] and NUMERIC always takes precedence
@@ -3216,7 +3254,7 @@ type ExternalDataConfiguration struct {
 	//
 	// Possible values:
 	//   "JSON_EXTENSION_UNSPECIFIED" - The default if provided value is not one
-	// included in the enum, or the value is not specified. The source formate is
+	// included in the enum, or the value is not specified. The source format is
 	// parsed without any modification.
 	//   "GEOJSON" - Use GeoJSON variant of JSON. See
 	// https://tools.ietf.org/html/rfc7946.
@@ -3280,6 +3318,16 @@ type ExternalDataConfiguration struct {
 	// Cloud Datastore backups, exactly one URI can be specified. Also, the '*'
 	// wildcard character is not allowed.
 	SourceUris []string `json:"sourceUris,omitempty"`
+	// TimeFormat: Optional. Format used to parse TIME values. Supports C-style and
+	// SQL-style values.
+	TimeFormat string `json:"timeFormat,omitempty"`
+	// TimeZone: Optional. Time zone used when parsing timestamp values that do not
+	// have specific time zone information (e.g. 2024-04-20 12:34:56). The expected
+	// format is a IANA timezone string (e.g. America/Los_Angeles).
+	TimeZone string `json:"timeZone,omitempty"`
+	// TimestampFormat: Optional. Format used to parse TIMESTAMP values. Supports
+	// C-style and SQL-style values.
+	TimestampFormat string `json:"timestampFormat,omitempty"`
 	// ForceSendFields is a list of field names (e.g. "Autodetect") to
 	// unconditionally include in API requests. By default, fields with empty or
 	// default values are omitted from API requests. See
@@ -4434,6 +4482,10 @@ type JobConfigurationLoad struct {
 	// location will be set to `Job.JobReference.location` if it is present,
 	// otherwise it's set to the default location based on existing routing logic.
 	CreateSession bool `json:"createSession,omitempty"`
+	// DateFormat: Optional. Date format used for parsing DATE values.
+	DateFormat string `json:"dateFormat,omitempty"`
+	// DatetimeFormat: Optional. Date format used for parsing DATETIME values.
+	DatetimeFormat string `json:"datetimeFormat,omitempty"`
 	// DecimalTargetTypes: Defines the list of possible SQL data types to which the
 	// source decimal values are converted. This list and the precision and the
 	// scale parameters of the decimal field determine the target type. In the
@@ -4446,7 +4498,7 @@ type JobConfigurationLoad struct {
 	// of this field is ["NUMERIC", "BIGNUMERIC"]. If (precision,scale) is: *
 	// (38,9) -> NUMERIC; * (39,9) -> BIGNUMERIC (NUMERIC cannot hold 30 integer
 	// digits); * (38,10) -> BIGNUMERIC (NUMERIC cannot hold 10 fractional digits);
-	// * (76,38) -> BIGNUMERIC; * (77,38) -> BIGNUMERIC (error if value exeeds
+	// * (76,38) -> BIGNUMERIC; * (77,38) -> BIGNUMERIC (error if value exceeds
 	// supported range). This field cannot contain duplicate types. The order of
 	// the types in this field is ignored. For example, ["BIGNUMERIC", "NUMERIC"]
 	// is the same as ["NUMERIC", "BIGNUMERIC"] and NUMERIC always takes precedence
@@ -4525,7 +4577,7 @@ type JobConfigurationLoad struct {
 	//
 	// Possible values:
 	//   "JSON_EXTENSION_UNSPECIFIED" - The default if provided value is not one
-	// included in the enum, or the value is not specified. The source formate is
+	// included in the enum, or the value is not specified. The source format is
 	// parsed without any modification.
 	//   "GEOJSON" - Use GeoJSON variant of JSON. See
 	// https://tools.ietf.org/html/rfc7946.
@@ -4629,10 +4681,17 @@ type JobConfigurationLoad struct {
 	// Cloud Datastore backups: Exactly one URI can be specified. Also, the '*'
 	// wildcard character is not allowed.
 	SourceUris []string `json:"sourceUris,omitempty"`
+	// TimeFormat: Optional. Date format used for parsing TIME values.
+	TimeFormat string `json:"timeFormat,omitempty"`
 	// TimePartitioning: Time-based partitioning specification for the destination
 	// table. Only one of timePartitioning and rangePartitioning should be
 	// specified.
 	TimePartitioning *TimePartitioning `json:"timePartitioning,omitempty"`
+	// TimeZone: Optional. [Experimental] Default time zone that will apply when
+	// parsing timestamp values that have no specific time zone.
+	TimeZone string `json:"timeZone,omitempty"`
+	// TimestampFormat: Optional. Date format used for parsing TIMESTAMP values.
+	TimestampFormat string `json:"timestampFormat,omitempty"`
 	// UseAvroLogicalTypes: Optional. If sourceFormat is set to "AVRO", indicates
 	// whether to interpret logical types as the corresponding BigQuery data type
 	// (for example, TIMESTAMP), instead of using the raw type (for example,
@@ -4814,6 +4873,12 @@ type JobConfigurationQuery struct {
 	// complete the job successfully. Creation, truncation and append actions occur
 	// as one atomic update upon job completion.
 	WriteDisposition string `json:"writeDisposition,omitempty"`
+	// WriteIncrementalResults: Optional. This is only supported for a SELECT query
+	// using a temporary table. If set, the query is allowed to write results
+	// incrementally to the temporary result table. This may incur a performance
+	// penalty. This option cannot be used with Legacy SQL. This feature is not yet
+	// available.
+	WriteIncrementalResults bool `json:"writeIncrementalResults,omitempty"`
 	// ForceSendFields is a list of field names (e.g. "AllowLargeResults") to
 	// unconditionally include in API requests. By default, fields with empty or
 	// default values are omitted from API requests. See
@@ -5281,7 +5346,7 @@ type JobStatistics2 struct {
 	// statement. * `INSERT`: `INSERT`
 	// (https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#insert_statement)
 	// statement. * `UPDATE`: `UPDATE`
-	// (https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#update_statement)
+	// (https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#update_statement)
 	// statement. * `DELETE`: `DELETE`
 	// (https://cloud.google.com/bigquery/docs/reference/standard-sql/data-manipulation-language)
 	// statement. * `MERGE`: `MERGE`
@@ -5290,7 +5355,7 @@ type JobStatistics2 struct {
 	// (https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_table_statement)
 	// statement, without `AS SELECT`. * `CREATE_TABLE_AS_SELECT`: `CREATE TABLE AS
 	// SELECT`
-	// (https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#query_statement)
+	// (https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_table_statement)
 	// statement. * `CREATE_VIEW`: `CREATE VIEW`
 	// (https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_view_statement)
 	// statement. * `CREATE_MODEL`: `CREATE MODEL`
@@ -5343,7 +5408,7 @@ type JobStatistics2 struct {
 	// statement. * `ALTER_MATERIALIZED_VIEW`: `ALTER MATERIALIZED VIEW`
 	// (https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_materialized_view_set_options_statement)
 	// statement. * `ALTER_SCHEMA`: `ALTER SCHEMA`
-	// (https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#aalter_schema_set_options_statement)
+	// (https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_schema_set_options_statement)
 	// statement. * `SCRIPT`: `SCRIPT`
 	// (https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language).
 	// * `TRUNCATE_TABLE`: `TRUNCATE TABLE`
@@ -5856,9 +5921,9 @@ type MaterializedView struct {
 	// truncated.
 	//   "BASE_TABLE_DATA_CHANGE" - View is invalidated because of a data change in
 	// one or more base tables. It could be any recent change if the
-	// [`max_staleness`](https://cloud.google.com/bigquery/docs/materialized-views-c
-	// reate#max_staleness) option is not set for the view, or otherwise any change
-	// outside of the staleness window.
+	// [`maxStaleness`](https://cloud.google.com/bigquery/docs/reference/rest/v2/tab
+	// les#Table.FIELDS.max_staleness) option is not set for the view, or otherwise
+	// any change outside of the staleness window.
 	//   "BASE_TABLE_PARTITION_EXPIRATION_CHANGE" - View is invalidated because a
 	// base table's partition expiration has changed.
 	//   "BASE_TABLE_EXPIRED_PARTITION" - View is invalidated because a base
@@ -5899,6 +5964,9 @@ func (s MaterializedView) MarshalJSON() ([]byte, error) {
 type MaterializedViewDefinition struct {
 	// AllowNonIncrementalDefinition: Optional. This option declares the intention
 	// to construct a materialized view that isn't refreshed incrementally.
+	// Non-incremental materialized views support an expanded range of SQL queries.
+	// The `allow_non_incremental_definition` option can't be changed after the
+	// materialized view is created.
 	AllowNonIncrementalDefinition bool `json:"allowNonIncrementalDefinition,omitempty"`
 	// EnableRefresh: Optional. Enable automatic refresh of the materialized view
 	// when the base table is updated. The default value is "true".
@@ -5988,7 +6056,7 @@ func (s MaterializedViewStatus) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(NoMethod(s), s.ForceSendFields, s.NullFields)
 }
 
-// MetadataCacheStatistics: Statistics for metadata caching in BigLake tables.
+// MetadataCacheStatistics: Statistics for metadata caching in queried tables.
 type MetadataCacheStatistics struct {
 	// TableMetadataCacheUsage: Set for the Metadata caching eligible tables
 	// referenced in the query.
@@ -6896,6 +6964,9 @@ type QueryRequest struct {
 	// names in the query string must be qualified in the format
 	// 'datasetId.tableId'.
 	DefaultDataset *DatasetReference `json:"defaultDataset,omitempty"`
+	// DestinationEncryptionConfiguration: Optional. Custom encryption
+	// configuration (e.g., Cloud KMS keys)
+	DestinationEncryptionConfiguration *EncryptionConfiguration `json:"destinationEncryptionConfiguration,omitempty"`
 	// DryRun: Optional. If set to true, BigQuery doesn't run the job. Instead, if
 	// the query is valid, BigQuery returns statistics about the job such as how
 	// many bytes would be processed. If the query is invalid, an error returns.
@@ -6917,6 +6988,13 @@ type QueryRequest struct {
 	// a Job are subject to change. If Job creation is required,
 	// JOB_CREATION_REQUIRED mode should be used, which is the default.
 	JobCreationMode string `json:"jobCreationMode,omitempty"`
+	// JobTimeoutMs: Optional. Job timeout in milliseconds. If this time limit is
+	// exceeded, BigQuery will attempt to stop a longer job, but may not always
+	// succeed in canceling it before the job completes. For example, a job that
+	// takes more than 60 seconds to complete has a better chance of being stopped
+	// than a job that takes 10 seconds to complete. This timeout applies to the
+	// query even if a job does not need to be created.
+	JobTimeoutMs int64 `json:"jobTimeoutMs,omitempty,string"`
 	// Kind: The resource type of the request.
 	Kind string `json:"kind,omitempty"`
 	// Labels: Optional. The labels associated with this query. Labels can be used
@@ -6926,8 +7004,9 @@ type QueryRequest struct {
 	// must start with a letter and each label in the list must have a different
 	// key.
 	Labels map[string]string `json:"labels,omitempty"`
-	// Location: The geographic location where the job should run. See details at
-	// https://cloud.google.com/bigquery/docs/locations#specifying_your_location.
+	// Location: The geographic location where the job should run. For more
+	// information, see how to specify locations
+	// (https://cloud.google.com/bigquery/docs/locations#specify_locations).
 	Location string `json:"location,omitempty"`
 	// MaxResults: Optional. The maximum number of rows of data to return per page
 	// of results. Setting this flag to a small value such as 1000 and then paging
@@ -6997,6 +7076,11 @@ type QueryRequest struct {
 	//
 	// Default: true
 	UseQueryCache *bool `json:"useQueryCache,omitempty"`
+	// WriteIncrementalResults: Optional. This is only supported for SELECT query.
+	// If set, the query is allowed to write results incrementally to the temporary
+	// result table. This may incur a performance penalty. This option cannot be
+	// used with Legacy SQL. This feature is not yet available.
+	WriteIncrementalResults bool `json:"writeIncrementalResults,omitempty"`
 	// ForceSendFields is a list of field names (e.g. "ConnectionProperties") to
 	// unconditionally include in API requests. By default, fields with empty or
 	// default values are omitted from API requests. See
@@ -7018,9 +7102,15 @@ func (s QueryRequest) MarshalJSON() ([]byte, error) {
 type QueryResponse struct {
 	// CacheHit: Whether the query result was fetched from the query cache.
 	CacheHit bool `json:"cacheHit,omitempty"`
+	// CreationTime: Output only. Creation time of this query, in milliseconds
+	// since the epoch. This field will be present on all queries.
+	CreationTime int64 `json:"creationTime,omitempty,string"`
 	// DmlStats: Output only. Detailed statistics for DML statements INSERT,
 	// UPDATE, DELETE, MERGE or TRUNCATE.
 	DmlStats *DmlStatistics `json:"dmlStats,omitempty"`
+	// EndTime: Output only. End time of this query, in milliseconds since the
+	// epoch. This field will be present whenever a query job is in the DONE state.
+	EndTime int64 `json:"endTime,omitempty,string"`
 	// Errors: Output only. The first errors or warnings encountered during the
 	// running of the job. The final message includes the number of errors that
 	// caused the process to stop. Errors here do not necessarily mean that the job
@@ -7047,6 +7137,10 @@ type QueryResponse struct {
 	JobReference *JobReference `json:"jobReference,omitempty"`
 	// Kind: The resource type.
 	Kind string `json:"kind,omitempty"`
+	// Location: Output only. The geographic location of the query. For more
+	// information about BigQuery locations, see:
+	// https://cloud.google.com/bigquery/docs/locations
+	Location string `json:"location,omitempty"`
 	// NumDmlAffectedRows: Output only. The number of rows affected by a DML
 	// statement. Present only for DML statements INSERT, UPDATE or DELETE.
 	NumDmlAffectedRows int64 `json:"numDmlAffectedRows,omitempty,string"`
@@ -7070,6 +7164,15 @@ type QueryResponse struct {
 	// SessionInfo: Output only. Information of the session if this job is part of
 	// one.
 	SessionInfo *SessionInfo `json:"sessionInfo,omitempty"`
+	// StartTime: Output only. Start time of this query, in milliseconds since the
+	// epoch. This field will be present when the query job transitions from the
+	// PENDING state to either RUNNING or DONE.
+	StartTime int64 `json:"startTime,omitempty,string"`
+	// TotalBytesBilled: Output only. If the project is configured to use on-demand
+	// pricing, then this field contains the total bytes billed for the job. If the
+	// project is configured to use flat-rate pricing, then you are not billed for
+	// bytes and this field is informational only.
+	TotalBytesBilled int64 `json:"totalBytesBilled,omitempty,string"`
 	// TotalBytesProcessed: The total number of bytes processed for this query. If
 	// this query was a dry run, this is the number of bytes that would be
 	// processed if the query were run.
@@ -7077,6 +7180,8 @@ type QueryResponse struct {
 	// TotalRows: The total number of rows in the complete query result set, which
 	// can be more than the number of rows in this single page of results.
 	TotalRows uint64 `json:"totalRows,omitempty,string"`
+	// TotalSlotMs: Output only. Number of slot ms the user is actually billed for.
+	TotalSlotMs int64 `json:"totalSlotMs,omitempty,string"`
 
 	// ServerResponse contains the HTTP response code and headers from the server.
 	googleapi.ServerResponse `json:"-"`
@@ -7654,12 +7759,33 @@ type RowAccessPolicy struct {
 	// date_field = CAST('2019-9-27' as DATE) nullable_field is not NULL
 	// numeric_field BETWEEN 1.0 AND 5.0
 	FilterPredicate string `json:"filterPredicate,omitempty"`
+	// Grantees: Optional. Input only. The optional list of iam_member users or
+	// groups that specifies the initial members that the row-level access policy
+	// should be created with. grantees types: - "user:alice@example.com": An email
+	// address that represents a specific Google account. -
+	// "serviceAccount:my-other-app@appspot.gserviceaccount.com": An email address
+	// that represents a service account. - "group:admins@example.com": An email
+	// address that represents a Google group. - "domain:example.com":The Google
+	// Workspace domain (primary) that represents all the users of that domain. -
+	// "allAuthenticatedUsers": A special identifier that represents all service
+	// accounts and all users on the internet who have authenticated with a Google
+	// Account. This identifier includes accounts that aren't connected to a Google
+	// Workspace or Cloud Identity domain, such as personal Gmail accounts. Users
+	// who aren't authenticated, such as anonymous visitors, aren't included. -
+	// "allUsers":A special identifier that represents anyone who is on the
+	// internet, including authenticated and unauthenticated users. Because
+	// BigQuery requires authentication before a user can access the service,
+	// allUsers includes only authenticated users.
+	Grantees []string `json:"grantees,omitempty"`
 	// LastModifiedTime: Output only. The time when this row access policy was last
 	// modified, in milliseconds since the epoch.
 	LastModifiedTime string `json:"lastModifiedTime,omitempty"`
 	// RowAccessPolicyReference: Required. Reference describing the ID of this row
 	// access policy.
 	RowAccessPolicyReference *RowAccessPolicyReference `json:"rowAccessPolicyReference,omitempty"`
+
+	// ServerResponse contains the HTTP response code and headers from the server.
+	googleapi.ServerResponse `json:"-"`
 	// ForceSendFields is a list of field names (e.g. "CreationTime") to
 	// unconditionally include in API requests. By default, fields with empty or
 	// default values are omitted from API requests. See
@@ -8376,6 +8502,75 @@ type StorageDescriptor struct {
 
 func (s StorageDescriptor) MarshalJSON() ([]byte, error) {
 	type NoMethod StorageDescriptor
+	return gensupport.MarshalJSON(NoMethod(s), s.ForceSendFields, s.NullFields)
+}
+
+// StoredColumnsUnusedReason: If the stored column was not used, explain why.
+type StoredColumnsUnusedReason struct {
+	// Code: Specifies the high-level reason for the unused scenario, each reason
+	// must have a code associated.
+	//
+	// Possible values:
+	//   "CODE_UNSPECIFIED" - Default value.
+	//   "STORED_COLUMNS_COVER_INSUFFICIENT" - If stored columns do not fully cover
+	// the columns.
+	//   "BASE_TABLE_HAS_RLS" - If the base table has RLS (Row Level Security).
+	//   "BASE_TABLE_HAS_CLS" - If the base table has CLS (Column Level Security).
+	//   "UNSUPPORTED_PREFILTER" - If the provided prefilter is not supported.
+	//   "INTERNAL_ERROR" - If an internal error is preventing stored columns from
+	// being used.
+	//   "OTHER_REASON" - Indicates that the reason stored columns cannot be used
+	// in the query is not covered by any of the other StoredColumnsUnusedReason
+	// options.
+	Code string `json:"code,omitempty"`
+	// Message: Specifies the detailed description for the scenario.
+	Message string `json:"message,omitempty"`
+	// UncoveredColumns: Specifies which columns were not covered by the stored
+	// columns for the specified code up to 20 columns. This is populated when the
+	// code is STORED_COLUMNS_COVER_INSUFFICIENT and BASE_TABLE_HAS_CLS.
+	UncoveredColumns []string `json:"uncoveredColumns,omitempty"`
+	// ForceSendFields is a list of field names (e.g. "Code") to unconditionally
+	// include in API requests. By default, fields with empty or default values are
+	// omitted from API requests. See
+	// https://pkg.go.dev/google.golang.org/api#hdr-ForceSendFields for more
+	// details.
+	ForceSendFields []string `json:"-"`
+	// NullFields is a list of field names (e.g. "Code") to include in API requests
+	// with the JSON null value. By default, fields with empty values are omitted
+	// from API requests. See
+	// https://pkg.go.dev/google.golang.org/api#hdr-NullFields for more details.
+	NullFields []string `json:"-"`
+}
+
+func (s StoredColumnsUnusedReason) MarshalJSON() ([]byte, error) {
+	type NoMethod StoredColumnsUnusedReason
+	return gensupport.MarshalJSON(NoMethod(s), s.ForceSendFields, s.NullFields)
+}
+
+// StoredColumnsUsage: Indicates the stored columns usage in the query.
+type StoredColumnsUsage struct {
+	// BaseTable: Specifies the base table.
+	BaseTable *TableReference `json:"baseTable,omitempty"`
+	// IsQueryAccelerated: Specifies whether the query was accelerated with stored
+	// columns.
+	IsQueryAccelerated bool `json:"isQueryAccelerated,omitempty"`
+	// StoredColumnsUnusedReasons: If stored columns were not used, explain why.
+	StoredColumnsUnusedReasons []*StoredColumnsUnusedReason `json:"storedColumnsUnusedReasons,omitempty"`
+	// ForceSendFields is a list of field names (e.g. "BaseTable") to
+	// unconditionally include in API requests. By default, fields with empty or
+	// default values are omitted from API requests. See
+	// https://pkg.go.dev/google.golang.org/api#hdr-ForceSendFields for more
+	// details.
+	ForceSendFields []string `json:"-"`
+	// NullFields is a list of field names (e.g. "BaseTable") to include in API
+	// requests with the JSON null value. By default, fields with empty values are
+	// omitted from API requests. See
+	// https://pkg.go.dev/google.golang.org/api#hdr-NullFields for more details.
+	NullFields []string `json:"-"`
+}
+
+func (s StoredColumnsUsage) MarshalJSON() ([]byte, error) {
+	type NoMethod StoredColumnsUsage
 	return gensupport.MarshalJSON(NoMethod(s), s.ForceSendFields, s.NullFields)
 }
 
@@ -9245,7 +9440,7 @@ func (s TableListTables) MarshalJSON() ([]byte, error) {
 
 // TableListTablesView: Information about a logical view.
 type TableListTablesView struct {
-	// PrivacyPolicy: Specifices the privacy policy for the view.
+	// PrivacyPolicy: Specifies the privacy policy for the view.
 	PrivacyPolicy *PrivacyPolicy `json:"privacyPolicy,omitempty"`
 	// UseLegacySql: True if view is defined in legacy SQL dialect, false if in
 	// GoogleSQL.
@@ -9622,7 +9817,7 @@ type TrainingOptions struct {
 	// DATA_SPLIT_EVAL_FRACTION rows (from smallest to largest) in the
 	// corresponding column are used as training data, and the rest are eval data.
 	// It respects the order in Orderable data types:
-	// https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#data-type-properties
+	// https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#data_type_properties
 	DataSplitColumn string `json:"dataSplitColumn,omitempty"`
 	// DataSplitEvalFraction: The fraction of evaluation data over the whole input
 	// data. The rest of data will be used as training data. The format should be
@@ -9672,6 +9867,13 @@ type TrainingOptions struct {
 	// FitIntercept: Whether the model should include intercept during model
 	// training.
 	FitIntercept bool `json:"fitIntercept,omitempty"`
+	// ForecastLimitLowerBound: The forecast limit lower bound that was used during
+	// ARIMA model training with limits. To see more details of the algorithm:
+	// https://otexts.com/fpp2/limits.html
+	ForecastLimitLowerBound float64 `json:"forecastLimitLowerBound,omitempty"`
+	// ForecastLimitUpperBound: The forecast limit upper bound that was used during
+	// ARIMA model training with limits.
+	ForecastLimitUpperBound float64 `json:"forecastLimitUpperBound,omitempty"`
 	// HiddenUnits: Hidden units for dnn models.
 	HiddenUnits googleapi.Int64s `json:"hiddenUnits,omitempty"`
 	// HolidayRegion: The geographical region based on which the holidays are
@@ -9747,7 +9949,7 @@ type TrainingOptions struct {
 	//   "UA" - Ukraine
 	//   "US" - United States
 	//   "VE" - Venezuela
-	//   "VN" - Viet Nam
+	//   "VN" - Vietnam
 	//   "ZA" - South Africa
 	HolidayRegion string `json:"holidayRegion,omitempty"`
 	// HolidayRegions: A list of geographical regions that are used for time series
@@ -9822,7 +10024,7 @@ type TrainingOptions struct {
 	//   "UA" - Ukraine
 	//   "US" - United States
 	//   "VE" - Venezuela
-	//   "VN" - Viet Nam
+	//   "VN" - Vietnam
 	//   "ZA" - South Africa
 	HolidayRegions []string `json:"holidayRegions,omitempty"`
 	// Horizon: The number of periods ahead that need to be forecasted.
@@ -9853,7 +10055,7 @@ type TrainingOptions struct {
 	// label. For multiclass this is a globally micro-averaged metric.
 	//   "F1_SCORE" - The F1 score is an average of recall and precision. For
 	// multiclass this is a macro-averaged metric.
-	//   "LOG_LOSS" - Logorithmic Loss. For multiclass this is a macro-averaged
+	//   "LOG_LOSS" - Logarithmic Loss. For multiclass this is a macro-averaged
 	// metric.
 	//   "ROC_AUC" - Area Under an ROC Curve. For multiclass this is a
 	// macro-averaged metric.
@@ -10095,6 +10297,8 @@ func (s *TrainingOptions) UnmarshalJSON(data []byte) error {
 		ColsampleBytree           gensupport.JSONFloat64 `json:"colsampleBytree"`
 		DataSplitEvalFraction     gensupport.JSONFloat64 `json:"dataSplitEvalFraction"`
 		Dropout                   gensupport.JSONFloat64 `json:"dropout"`
+		ForecastLimitLowerBound   gensupport.JSONFloat64 `json:"forecastLimitLowerBound"`
+		ForecastLimitUpperBound   gensupport.JSONFloat64 `json:"forecastLimitUpperBound"`
 		InitialLearnRate          gensupport.JSONFloat64 `json:"initialLearnRate"`
 		L1RegActivation           gensupport.JSONFloat64 `json:"l1RegActivation"`
 		L1Regularization          gensupport.JSONFloat64 `json:"l1Regularization"`
@@ -10119,6 +10323,8 @@ func (s *TrainingOptions) UnmarshalJSON(data []byte) error {
 	s.ColsampleBytree = float64(s1.ColsampleBytree)
 	s.DataSplitEvalFraction = float64(s1.DataSplitEvalFraction)
 	s.Dropout = float64(s1.Dropout)
+	s.ForecastLimitLowerBound = float64(s1.ForecastLimitLowerBound)
+	s.ForecastLimitUpperBound = float64(s1.ForecastLimitUpperBound)
 	s.InitialLearnRate = float64(s1.InitialLearnRate)
 	s.L1RegActivation = float64(s1.L1RegActivation)
 	s.L1Regularization = float64(s1.L1Regularization)
@@ -10314,6 +10520,9 @@ type VectorSearchStatistics struct {
 	// of the query did not use vector indexes.
 	//   "FULLY_USED" - The entire vector search query used vector indexes.
 	IndexUsageMode string `json:"indexUsageMode,omitempty"`
+	// StoredColumnsUsages: Specifies the usage of stored columns in the query when
+	// stored columns are used in the query.
+	StoredColumnsUsages []*StoredColumnsUsage `json:"storedColumnsUsages,omitempty"`
 	// ForceSendFields is a list of field names (e.g. "IndexUnusedReasons") to
 	// unconditionally include in API requests. By default, fields with empty or
 	// default values are omitted from API requests. See
@@ -10336,7 +10545,7 @@ func (s VectorSearchStatistics) MarshalJSON() ([]byte, error) {
 type ViewDefinition struct {
 	// ForeignDefinitions: Optional. Foreign view representations.
 	ForeignDefinitions []*ForeignViewDefinition `json:"foreignDefinitions,omitempty"`
-	// PrivacyPolicy: Optional. Specifices the privacy policy for the view.
+	// PrivacyPolicy: Optional. Specifies the privacy policy for the view.
 	PrivacyPolicy *PrivacyPolicy `json:"privacyPolicy,omitempty"`
 	// Query: Required. A query that BigQuery executes when the view is referenced.
 	Query string `json:"query,omitempty"`
@@ -10427,12 +10636,11 @@ func (c *DatasetsDeleteCall) Header() http.Header {
 
 func (c *DatasetsDeleteCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "", c.header_)
-	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	c.urlParams_.Set("prettyPrint", "false")
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{+projectId}/datasets/{+datasetId}")
 	urls += "?" + c.urlParams_.Encode()
-	req, err := http.NewRequest("DELETE", urls, body)
+	req, err := http.NewRequest("DELETE", urls, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -10441,6 +10649,7 @@ func (c *DatasetsDeleteCall) doRequest(alt string) (*http.Response, error) {
 		"projectId": c.projectId,
 		"datasetId": c.datasetId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.datasets.delete", "request", internallog.HTTPRequest(req, nil))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -10455,6 +10664,7 @@ func (c *DatasetsDeleteCall) Do(opts ...googleapi.CallOption) error {
 	if err := googleapi.CheckResponse(res); err != nil {
 		return gensupport.WrapError(err)
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.datasets.delete", "response", internallog.HTTPResponse(res, nil))
 	return nil
 }
 
@@ -10555,12 +10765,11 @@ func (c *DatasetsGetCall) doRequest(alt string) (*http.Response, error) {
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
 	}
-	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	c.urlParams_.Set("prettyPrint", "false")
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{+projectId}/datasets/{+datasetId}")
 	urls += "?" + c.urlParams_.Encode()
-	req, err := http.NewRequest("GET", urls, body)
+	req, err := http.NewRequest("GET", urls, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -10569,6 +10778,7 @@ func (c *DatasetsGetCall) doRequest(alt string) (*http.Response, error) {
 		"projectId": c.projectId,
 		"datasetId": c.datasetId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.datasets.get", "request", internallog.HTTPRequest(req, nil))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -10603,9 +10813,11 @@ func (c *DatasetsGetCall) Do(opts ...googleapi.CallOption) (*Dataset, error) {
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.datasets.get", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -10670,8 +10882,7 @@ func (c *DatasetsInsertCall) Header() http.Header {
 
 func (c *DatasetsInsertCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "application/json", c.header_)
-	var body io.Reader = nil
-	body, err := googleapi.WithoutDataWrapper.JSONReader(c.dataset)
+	body, err := googleapi.WithoutDataWrapper.JSONBuffer(c.dataset)
 	if err != nil {
 		return nil, err
 	}
@@ -10687,6 +10898,7 @@ func (c *DatasetsInsertCall) doRequest(alt string) (*http.Response, error) {
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.datasets.insert", "request", internallog.HTTPRequest(req, body.Bytes()))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -10721,9 +10933,11 @@ func (c *DatasetsInsertCall) Do(opts ...googleapi.CallOption) (*Dataset, error) 
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.datasets.insert", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -10755,7 +10969,7 @@ func (c *DatasetsListCall) All(all bool) *DatasetsListCall {
 
 // Filter sets the optional parameter "filter": An expression for filtering the
 // results of the request by label. The syntax is `labels.[:]`. Multiple
-// filters can be ANDed together by connecting with a space. Example:
+// filters can be AND-ed together by connecting with a space. Example:
 // `labels.department:receiving labels.active`. See Filtering datasets using
 // labels
 // (https://cloud.google.com/bigquery/docs/filtering-labels#filtering_datasets_using_labels)
@@ -10816,12 +11030,11 @@ func (c *DatasetsListCall) doRequest(alt string) (*http.Response, error) {
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
 	}
-	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	c.urlParams_.Set("prettyPrint", "false")
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{+projectId}/datasets")
 	urls += "?" + c.urlParams_.Encode()
-	req, err := http.NewRequest("GET", urls, body)
+	req, err := http.NewRequest("GET", urls, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -10829,6 +11042,7 @@ func (c *DatasetsListCall) doRequest(alt string) (*http.Response, error) {
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.datasets.list", "request", internallog.HTTPRequest(req, nil))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -10863,9 +11077,11 @@ func (c *DatasetsListCall) Do(opts ...googleapi.CallOption) (*DatasetList, error
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.datasets.list", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -10960,8 +11176,7 @@ func (c *DatasetsPatchCall) Header() http.Header {
 
 func (c *DatasetsPatchCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "application/json", c.header_)
-	var body io.Reader = nil
-	body, err := googleapi.WithoutDataWrapper.JSONReader(c.dataset)
+	body, err := googleapi.WithoutDataWrapper.JSONBuffer(c.dataset)
 	if err != nil {
 		return nil, err
 	}
@@ -10978,6 +11193,7 @@ func (c *DatasetsPatchCall) doRequest(alt string) (*http.Response, error) {
 		"projectId": c.projectId,
 		"datasetId": c.datasetId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.datasets.patch", "request", internallog.HTTPRequest(req, body.Bytes()))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -11012,9 +11228,11 @@ func (c *DatasetsPatchCall) Do(opts ...googleapi.CallOption) (*Dataset, error) {
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.datasets.patch", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -11067,8 +11285,7 @@ func (c *DatasetsUndeleteCall) Header() http.Header {
 
 func (c *DatasetsUndeleteCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "application/json", c.header_)
-	var body io.Reader = nil
-	body, err := googleapi.WithoutDataWrapper.JSONReader(c.undeletedatasetrequest)
+	body, err := googleapi.WithoutDataWrapper.JSONBuffer(c.undeletedatasetrequest)
 	if err != nil {
 		return nil, err
 	}
@@ -11085,6 +11302,7 @@ func (c *DatasetsUndeleteCall) doRequest(alt string) (*http.Response, error) {
 		"projectId": c.projectId,
 		"datasetId": c.datasetId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.datasets.undelete", "request", internallog.HTTPRequest(req, body.Bytes()))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -11119,9 +11337,11 @@ func (c *DatasetsUndeleteCall) Do(opts ...googleapi.CallOption) (*Dataset, error
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.datasets.undelete", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -11194,8 +11414,7 @@ func (c *DatasetsUpdateCall) Header() http.Header {
 
 func (c *DatasetsUpdateCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "application/json", c.header_)
-	var body io.Reader = nil
-	body, err := googleapi.WithoutDataWrapper.JSONReader(c.dataset)
+	body, err := googleapi.WithoutDataWrapper.JSONBuffer(c.dataset)
 	if err != nil {
 		return nil, err
 	}
@@ -11212,6 +11431,7 @@ func (c *DatasetsUpdateCall) doRequest(alt string) (*http.Response, error) {
 		"projectId": c.projectId,
 		"datasetId": c.datasetId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.datasets.update", "request", internallog.HTTPRequest(req, body.Bytes()))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -11246,9 +11466,11 @@ func (c *DatasetsUpdateCall) Do(opts ...googleapi.CallOption) (*Dataset, error) 
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.datasets.update", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -11275,11 +11497,11 @@ func (r *JobsService) Cancel(projectId string, jobId string) *JobsCancelCall {
 }
 
 // Location sets the optional parameter "location": The geographic location of
-// the job. You must specify the location to run the job for the following
-// scenarios: * If the location to run a job is not in the `us` or the `eu`
-// multi-regional location * If the job's location is in a single region (for
-// example, `us-central1`) For more information, see
-// https://cloud.google.com/bigquery/docs/locations#specifying_your_location.
+// the job. You must specify the location
+// (https://cloud.google.com/bigquery/docs/locations#specify_locations) to run
+// the job for the following scenarios: * If the location to run a job is not
+// in the `us` or the `eu` multi-regional location * If the job's location is
+// in a single region (for example, `us-central1`)
 func (c *JobsCancelCall) Location(location string) *JobsCancelCall {
 	c.urlParams_.Set("location", location)
 	return c
@@ -11310,12 +11532,11 @@ func (c *JobsCancelCall) Header() http.Header {
 
 func (c *JobsCancelCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "", c.header_)
-	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	c.urlParams_.Set("prettyPrint", "false")
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{+projectId}/jobs/{+jobId}/cancel")
 	urls += "?" + c.urlParams_.Encode()
-	req, err := http.NewRequest("POST", urls, body)
+	req, err := http.NewRequest("POST", urls, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -11324,6 +11545,7 @@ func (c *JobsCancelCall) doRequest(alt string) (*http.Response, error) {
 		"projectId": c.projectId,
 		"jobId":     c.jobId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.jobs.cancel", "request", internallog.HTTPRequest(req, nil))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -11359,9 +11581,11 @@ func (c *JobsCancelCall) Do(opts ...googleapi.CallOption) (*JobCancelResponse, e
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.jobs.cancel", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -11390,8 +11614,8 @@ func (r *JobsService) Delete(projectId string, jobId string) *JobsDeleteCall {
 }
 
 // Location sets the optional parameter "location": The geographic location of
-// the job. Required. See details at:
-// https://cloud.google.com/bigquery/docs/locations#specifying_your_location.
+// the job. Required. For more information, see how to specify locations
+// (https://cloud.google.com/bigquery/docs/locations#specify_locations).
 func (c *JobsDeleteCall) Location(location string) *JobsDeleteCall {
 	c.urlParams_.Set("location", location)
 	return c
@@ -11422,12 +11646,11 @@ func (c *JobsDeleteCall) Header() http.Header {
 
 func (c *JobsDeleteCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "", c.header_)
-	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	c.urlParams_.Set("prettyPrint", "false")
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{+projectId}/jobs/{+jobId}/delete")
 	urls += "?" + c.urlParams_.Encode()
-	req, err := http.NewRequest("DELETE", urls, body)
+	req, err := http.NewRequest("DELETE", urls, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -11436,6 +11659,7 @@ func (c *JobsDeleteCall) doRequest(alt string) (*http.Response, error) {
 		"projectId": c.projectId,
 		"jobId":     c.jobId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.jobs.delete", "request", internallog.HTTPRequest(req, nil))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -11450,6 +11674,7 @@ func (c *JobsDeleteCall) Do(opts ...googleapi.CallOption) error {
 	if err := googleapi.CheckResponse(res); err != nil {
 		return gensupport.WrapError(err)
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.jobs.delete", "response", internallog.HTTPResponse(res, nil))
 	return nil
 }
 
@@ -11480,8 +11705,8 @@ func (r *JobsService) Get(projectId string, jobId string) *JobsGetCall {
 // the job. You must specify the location to run the job for the following
 // scenarios: * If the location to run a job is not in the `us` or the `eu`
 // multi-regional location * If the job's location is in a single region (for
-// example, `us-central1`) For more information, see
-// https://cloud.google.com/bigquery/docs/locations#specifying_your_location.
+// example, `us-central1`) For more information, see how to specify locations
+// (https://cloud.google.com/bigquery/docs/locations#specify_locations).
 func (c *JobsGetCall) Location(location string) *JobsGetCall {
 	c.urlParams_.Set("location", location)
 	return c
@@ -11523,12 +11748,11 @@ func (c *JobsGetCall) doRequest(alt string) (*http.Response, error) {
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
 	}
-	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	c.urlParams_.Set("prettyPrint", "false")
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{+projectId}/jobs/{+jobId}")
 	urls += "?" + c.urlParams_.Encode()
-	req, err := http.NewRequest("GET", urls, body)
+	req, err := http.NewRequest("GET", urls, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -11537,6 +11761,7 @@ func (c *JobsGetCall) doRequest(alt string) (*http.Response, error) {
 		"projectId": c.projectId,
 		"jobId":     c.jobId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.jobs.get", "request", internallog.HTTPRequest(req, nil))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -11571,9 +11796,11 @@ func (c *JobsGetCall) Do(opts ...googleapi.CallOption) (*Job, error) {
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.jobs.get", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -11610,8 +11837,8 @@ func (c *JobsGetQueryResultsCall) FormatOptionsUseInt64Timestamp(formatOptionsUs
 // the job. You must specify the location to run the job for the following
 // scenarios: * If the location to run a job is not in the `us` or the `eu`
 // multi-regional location * If the job's location is in a single region (for
-// example, `us-central1`) For more information, see
-// https://cloud.google.com/bigquery/docs/locations#specifying_your_location.
+// example, `us-central1`) For more information, see how to specify locations
+// (https://cloud.google.com/bigquery/docs/locations#specify_locations).
 func (c *JobsGetQueryResultsCall) Location(location string) *JobsGetQueryResultsCall {
 	c.urlParams_.Set("location", location)
 	return c
@@ -11690,12 +11917,11 @@ func (c *JobsGetQueryResultsCall) doRequest(alt string) (*http.Response, error) 
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
 	}
-	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	c.urlParams_.Set("prettyPrint", "false")
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{+projectId}/queries/{+jobId}")
 	urls += "?" + c.urlParams_.Encode()
-	req, err := http.NewRequest("GET", urls, body)
+	req, err := http.NewRequest("GET", urls, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -11704,6 +11930,7 @@ func (c *JobsGetQueryResultsCall) doRequest(alt string) (*http.Response, error) 
 		"projectId": c.projectId,
 		"jobId":     c.jobId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.jobs.getQueryResults", "request", internallog.HTTPRequest(req, nil))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -11739,9 +11966,11 @@ func (c *JobsGetQueryResultsCall) Do(opts ...googleapi.CallOption) (*GetQueryRes
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.jobs.getQueryResults", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -11855,8 +12084,7 @@ func (c *JobsInsertCall) Header() http.Header {
 
 func (c *JobsInsertCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "application/json", c.header_)
-	var body io.Reader = nil
-	body, err := googleapi.WithoutDataWrapper.JSONReader(c.job)
+	body, err := googleapi.WithoutDataWrapper.JSONBuffer(c.job)
 	if err != nil {
 		return nil, err
 	}
@@ -11867,14 +12095,10 @@ func (c *JobsInsertCall) doRequest(alt string) (*http.Response, error) {
 		urls = googleapi.ResolveRelative(c.s.BasePath, "/upload/bigquery/v2/projects/{+projectId}/jobs")
 		c.urlParams_.Set("uploadType", c.mediaInfo_.UploadType())
 	}
-	if body == nil {
-		body = new(bytes.Buffer)
-		reqHeaders.Set("Content-Type", "application/json")
-	}
-	body, getBody, cleanup := c.mediaInfo_.UploadRequest(reqHeaders, body)
+	newBody, getBody, cleanup := c.mediaInfo_.UploadRequest(reqHeaders, body)
 	defer cleanup()
 	urls += "?" + c.urlParams_.Encode()
-	req, err := http.NewRequest("POST", urls, body)
+	req, err := http.NewRequest("POST", urls, newBody)
 	if err != nil {
 		return nil, err
 	}
@@ -11883,6 +12107,7 @@ func (c *JobsInsertCall) doRequest(alt string) (*http.Response, error) {
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.jobs.insert", "request", internallog.HTTPRequest(req, body.Bytes()))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -11934,9 +12159,11 @@ func (c *JobsInsertCall) Do(opts ...googleapi.CallOption) (*Job, error) {
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.jobs.insert", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -12067,12 +12294,11 @@ func (c *JobsListCall) doRequest(alt string) (*http.Response, error) {
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
 	}
-	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	c.urlParams_.Set("prettyPrint", "false")
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{+projectId}/jobs")
 	urls += "?" + c.urlParams_.Encode()
-	req, err := http.NewRequest("GET", urls, body)
+	req, err := http.NewRequest("GET", urls, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -12080,6 +12306,7 @@ func (c *JobsListCall) doRequest(alt string) (*http.Response, error) {
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.jobs.list", "request", internallog.HTTPRequest(req, nil))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -12114,9 +12341,11 @@ func (c *JobsListCall) Do(opts ...googleapi.CallOption) (*JobList, error) {
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.jobs.list", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -12186,8 +12415,7 @@ func (c *JobsQueryCall) Header() http.Header {
 
 func (c *JobsQueryCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "application/json", c.header_)
-	var body io.Reader = nil
-	body, err := googleapi.WithoutDataWrapper.JSONReader(c.queryrequest)
+	body, err := googleapi.WithoutDataWrapper.JSONBuffer(c.queryrequest)
 	if err != nil {
 		return nil, err
 	}
@@ -12203,6 +12431,7 @@ func (c *JobsQueryCall) doRequest(alt string) (*http.Response, error) {
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.jobs.query", "request", internallog.HTTPRequest(req, body.Bytes()))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -12237,9 +12466,11 @@ func (c *JobsQueryCall) Do(opts ...googleapi.CallOption) (*QueryResponse, error)
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.jobs.query", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -12291,12 +12522,11 @@ func (c *ModelsDeleteCall) Header() http.Header {
 
 func (c *ModelsDeleteCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "", c.header_)
-	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	c.urlParams_.Set("prettyPrint", "false")
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{+projectId}/datasets/{+datasetId}/models/{+modelId}")
 	urls += "?" + c.urlParams_.Encode()
-	req, err := http.NewRequest("DELETE", urls, body)
+	req, err := http.NewRequest("DELETE", urls, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -12306,6 +12536,7 @@ func (c *ModelsDeleteCall) doRequest(alt string) (*http.Response, error) {
 		"datasetId": c.datasetId,
 		"modelId":   c.modelId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.models.delete", "request", internallog.HTTPRequest(req, nil))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -12320,6 +12551,7 @@ func (c *ModelsDeleteCall) Do(opts ...googleapi.CallOption) error {
 	if err := googleapi.CheckResponse(res); err != nil {
 		return gensupport.WrapError(err)
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.models.delete", "response", internallog.HTTPResponse(res, nil))
 	return nil
 }
 
@@ -12383,12 +12615,11 @@ func (c *ModelsGetCall) doRequest(alt string) (*http.Response, error) {
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
 	}
-	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	c.urlParams_.Set("prettyPrint", "false")
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{+projectId}/datasets/{+datasetId}/models/{+modelId}")
 	urls += "?" + c.urlParams_.Encode()
-	req, err := http.NewRequest("GET", urls, body)
+	req, err := http.NewRequest("GET", urls, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -12398,6 +12629,7 @@ func (c *ModelsGetCall) doRequest(alt string) (*http.Response, error) {
 		"datasetId": c.datasetId,
 		"modelId":   c.modelId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.models.get", "request", internallog.HTTPRequest(req, nil))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -12432,9 +12664,11 @@ func (c *ModelsGetCall) Do(opts ...googleapi.CallOption) (*Model, error) {
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.models.get", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -12512,12 +12746,11 @@ func (c *ModelsListCall) doRequest(alt string) (*http.Response, error) {
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
 	}
-	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	c.urlParams_.Set("prettyPrint", "false")
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{+projectId}/datasets/{+datasetId}/models")
 	urls += "?" + c.urlParams_.Encode()
-	req, err := http.NewRequest("GET", urls, body)
+	req, err := http.NewRequest("GET", urls, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -12526,6 +12759,7 @@ func (c *ModelsListCall) doRequest(alt string) (*http.Response, error) {
 		"projectId": c.projectId,
 		"datasetId": c.datasetId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.models.list", "request", internallog.HTTPRequest(req, nil))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -12561,9 +12795,11 @@ func (c *ModelsListCall) Do(opts ...googleapi.CallOption) (*ListModelsResponse, 
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.models.list", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -12638,8 +12874,7 @@ func (c *ModelsPatchCall) Header() http.Header {
 
 func (c *ModelsPatchCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "application/json", c.header_)
-	var body io.Reader = nil
-	body, err := googleapi.WithoutDataWrapper.JSONReader(c.model)
+	body, err := googleapi.WithoutDataWrapper.JSONBuffer(c.model)
 	if err != nil {
 		return nil, err
 	}
@@ -12657,6 +12892,7 @@ func (c *ModelsPatchCall) doRequest(alt string) (*http.Response, error) {
 		"datasetId": c.datasetId,
 		"modelId":   c.modelId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.models.patch", "request", internallog.HTTPRequest(req, body.Bytes()))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -12691,9 +12927,11 @@ func (c *ModelsPatchCall) Do(opts ...googleapi.CallOption) (*Model, error) {
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.models.patch", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -12752,12 +12990,11 @@ func (c *ProjectsGetServiceAccountCall) doRequest(alt string) (*http.Response, e
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
 	}
-	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	c.urlParams_.Set("prettyPrint", "false")
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{+projectId}/serviceAccount")
 	urls += "?" + c.urlParams_.Encode()
-	req, err := http.NewRequest("GET", urls, body)
+	req, err := http.NewRequest("GET", urls, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -12765,6 +13002,7 @@ func (c *ProjectsGetServiceAccountCall) doRequest(alt string) (*http.Response, e
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.projects.getServiceAccount", "request", internallog.HTTPRequest(req, nil))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -12800,9 +13038,11 @@ func (c *ProjectsGetServiceAccountCall) Do(opts ...googleapi.CallOption) (*GetSe
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.projects.getServiceAccount", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -12876,16 +13116,16 @@ func (c *ProjectsListCall) doRequest(alt string) (*http.Response, error) {
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
 	}
-	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	c.urlParams_.Set("prettyPrint", "false")
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects")
 	urls += "?" + c.urlParams_.Encode()
-	req, err := http.NewRequest("GET", urls, body)
+	req, err := http.NewRequest("GET", urls, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header = reqHeaders
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.projects.list", "request", internallog.HTTPRequest(req, nil))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -12920,9 +13160,11 @@ func (c *ProjectsListCall) Do(opts ...googleapi.CallOption) (*ProjectList, error
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.projects.list", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -12995,12 +13237,11 @@ func (c *RoutinesDeleteCall) Header() http.Header {
 
 func (c *RoutinesDeleteCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "", c.header_)
-	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	c.urlParams_.Set("prettyPrint", "false")
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{+projectId}/datasets/{+datasetId}/routines/{+routineId}")
 	urls += "?" + c.urlParams_.Encode()
-	req, err := http.NewRequest("DELETE", urls, body)
+	req, err := http.NewRequest("DELETE", urls, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -13010,6 +13251,7 @@ func (c *RoutinesDeleteCall) doRequest(alt string) (*http.Response, error) {
 		"datasetId": c.datasetId,
 		"routineId": c.routineId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.routines.delete", "request", internallog.HTTPRequest(req, nil))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -13024,6 +13266,7 @@ func (c *RoutinesDeleteCall) Do(opts ...googleapi.CallOption) error {
 	if err := googleapi.CheckResponse(res); err != nil {
 		return gensupport.WrapError(err)
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.routines.delete", "response", internallog.HTTPResponse(res, nil))
 	return nil
 }
 
@@ -13095,12 +13338,11 @@ func (c *RoutinesGetCall) doRequest(alt string) (*http.Response, error) {
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
 	}
-	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	c.urlParams_.Set("prettyPrint", "false")
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{+projectId}/datasets/{+datasetId}/routines/{+routineId}")
 	urls += "?" + c.urlParams_.Encode()
-	req, err := http.NewRequest("GET", urls, body)
+	req, err := http.NewRequest("GET", urls, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -13110,6 +13352,7 @@ func (c *RoutinesGetCall) doRequest(alt string) (*http.Response, error) {
 		"datasetId": c.datasetId,
 		"routineId": c.routineId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.routines.get", "request", internallog.HTTPRequest(req, nil))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -13144,9 +13387,11 @@ func (c *RoutinesGetCall) Do(opts ...googleapi.CallOption) (*Routine, error) {
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.routines.get", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -13197,8 +13442,7 @@ func (c *RoutinesGetIamPolicyCall) Header() http.Header {
 
 func (c *RoutinesGetIamPolicyCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "application/json", c.header_)
-	var body io.Reader = nil
-	body, err := googleapi.WithoutDataWrapper.JSONReader(c.getiampolicyrequest)
+	body, err := googleapi.WithoutDataWrapper.JSONBuffer(c.getiampolicyrequest)
 	if err != nil {
 		return nil, err
 	}
@@ -13214,6 +13458,7 @@ func (c *RoutinesGetIamPolicyCall) doRequest(alt string) (*http.Response, error)
 	googleapi.Expand(req.URL, map[string]string{
 		"resource": c.resource,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.routines.getIamPolicy", "request", internallog.HTTPRequest(req, body.Bytes()))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -13248,9 +13493,11 @@ func (c *RoutinesGetIamPolicyCall) Do(opts ...googleapi.CallOption) (*Policy, er
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.routines.getIamPolicy", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -13301,8 +13548,7 @@ func (c *RoutinesInsertCall) Header() http.Header {
 
 func (c *RoutinesInsertCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "application/json", c.header_)
-	var body io.Reader = nil
-	body, err := googleapi.WithoutDataWrapper.JSONReader(c.routine)
+	body, err := googleapi.WithoutDataWrapper.JSONBuffer(c.routine)
 	if err != nil {
 		return nil, err
 	}
@@ -13319,6 +13565,7 @@ func (c *RoutinesInsertCall) doRequest(alt string) (*http.Response, error) {
 		"projectId": c.projectId,
 		"datasetId": c.datasetId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.routines.insert", "request", internallog.HTTPRequest(req, body.Bytes()))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -13353,9 +13600,11 @@ func (c *RoutinesInsertCall) Do(opts ...googleapi.CallOption) (*Routine, error) 
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.routines.insert", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -13451,12 +13700,11 @@ func (c *RoutinesListCall) doRequest(alt string) (*http.Response, error) {
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
 	}
-	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	c.urlParams_.Set("prettyPrint", "false")
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{+projectId}/datasets/{+datasetId}/routines")
 	urls += "?" + c.urlParams_.Encode()
-	req, err := http.NewRequest("GET", urls, body)
+	req, err := http.NewRequest("GET", urls, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -13465,6 +13713,7 @@ func (c *RoutinesListCall) doRequest(alt string) (*http.Response, error) {
 		"projectId": c.projectId,
 		"datasetId": c.datasetId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.routines.list", "request", internallog.HTTPRequest(req, nil))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -13500,9 +13749,11 @@ func (c *RoutinesListCall) Do(opts ...googleapi.CallOption) (*ListRoutinesRespon
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.routines.list", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -13575,8 +13826,7 @@ func (c *RoutinesSetIamPolicyCall) Header() http.Header {
 
 func (c *RoutinesSetIamPolicyCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "application/json", c.header_)
-	var body io.Reader = nil
-	body, err := googleapi.WithoutDataWrapper.JSONReader(c.setiampolicyrequest)
+	body, err := googleapi.WithoutDataWrapper.JSONBuffer(c.setiampolicyrequest)
 	if err != nil {
 		return nil, err
 	}
@@ -13592,6 +13842,7 @@ func (c *RoutinesSetIamPolicyCall) doRequest(alt string) (*http.Response, error)
 	googleapi.Expand(req.URL, map[string]string{
 		"resource": c.resource,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.routines.setIamPolicy", "request", internallog.HTTPRequest(req, body.Bytes()))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -13626,9 +13877,11 @@ func (c *RoutinesSetIamPolicyCall) Do(opts ...googleapi.CallOption) (*Policy, er
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.routines.setIamPolicy", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -13683,8 +13936,7 @@ func (c *RoutinesUpdateCall) Header() http.Header {
 
 func (c *RoutinesUpdateCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "application/json", c.header_)
-	var body io.Reader = nil
-	body, err := googleapi.WithoutDataWrapper.JSONReader(c.routine)
+	body, err := googleapi.WithoutDataWrapper.JSONBuffer(c.routine)
 	if err != nil {
 		return nil, err
 	}
@@ -13702,6 +13954,7 @@ func (c *RoutinesUpdateCall) doRequest(alt string) (*http.Response, error) {
 		"datasetId": c.datasetId,
 		"routineId": c.routineId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.routines.update", "request", internallog.HTTPRequest(req, body.Bytes()))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -13736,9 +13989,313 @@ func (c *RoutinesUpdateCall) Do(opts ...googleapi.CallOption) (*Routine, error) 
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.routines.update", "response", internallog.HTTPResponse(res, b))
+	return ret, nil
+}
+
+type RowAccessPoliciesBatchDeleteCall struct {
+	s                                   *Service
+	projectId                           string
+	datasetId                           string
+	tableId                             string
+	batchdeleterowaccesspoliciesrequest *BatchDeleteRowAccessPoliciesRequest
+	urlParams_                          gensupport.URLParams
+	ctx_                                context.Context
+	header_                             http.Header
+}
+
+// BatchDelete: Deletes provided row access policies.
+//
+// - datasetId: Dataset ID of the table to delete the row access policies.
+// - projectId: Project ID of the table to delete the row access policies.
+// - tableId: Table ID of the table to delete the row access policies.
+func (r *RowAccessPoliciesService) BatchDelete(projectId string, datasetId string, tableId string, batchdeleterowaccesspoliciesrequest *BatchDeleteRowAccessPoliciesRequest) *RowAccessPoliciesBatchDeleteCall {
+	c := &RowAccessPoliciesBatchDeleteCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.projectId = projectId
+	c.datasetId = datasetId
+	c.tableId = tableId
+	c.batchdeleterowaccesspoliciesrequest = batchdeleterowaccesspoliciesrequest
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse for more
+// details.
+func (c *RowAccessPoliciesBatchDeleteCall) Fields(s ...googleapi.Field) *RowAccessPoliciesBatchDeleteCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// Context sets the context to be used in this call's Do method.
+func (c *RowAccessPoliciesBatchDeleteCall) Context(ctx context.Context) *RowAccessPoliciesBatchDeleteCall {
+	c.ctx_ = ctx
+	return c
+}
+
+// Header returns a http.Header that can be modified by the caller to add
+// headers to the request.
+func (c *RowAccessPoliciesBatchDeleteCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
+func (c *RowAccessPoliciesBatchDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "application/json", c.header_)
+	body, err := googleapi.WithoutDataWrapper.JSONBuffer(c.batchdeleterowaccesspoliciesrequest)
+	if err != nil {
+		return nil, err
+	}
+	c.urlParams_.Set("alt", alt)
+	c.urlParams_.Set("prettyPrint", "false")
+	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{+projectId}/datasets/{+datasetId}/tables/{+tableId}/rowAccessPolicies:batchDelete")
+	urls += "?" + c.urlParams_.Encode()
+	req, err := http.NewRequest("POST", urls, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"projectId": c.projectId,
+		"datasetId": c.datasetId,
+		"tableId":   c.tableId,
+	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.rowAccessPolicies.batchDelete", "request", internallog.HTTPRequest(req, body.Bytes()))
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "bigquery.rowAccessPolicies.batchDelete" call.
+func (c *RowAccessPoliciesBatchDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if err != nil {
+		return err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return gensupport.WrapError(err)
+	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.rowAccessPolicies.batchDelete", "response", internallog.HTTPResponse(res, nil))
+	return nil
+}
+
+type RowAccessPoliciesDeleteCall struct {
+	s          *Service
+	projectId  string
+	datasetId  string
+	tableId    string
+	policyId   string
+	urlParams_ gensupport.URLParams
+	ctx_       context.Context
+	header_    http.Header
+}
+
+// Delete: Deletes a row access policy.
+//
+// - datasetId: Dataset ID of the table to delete the row access policy.
+// - policyId: Policy ID of the row access policy.
+// - projectId: Project ID of the table to delete the row access policy.
+// - tableId: Table ID of the table to delete the row access policy.
+func (r *RowAccessPoliciesService) Delete(projectId string, datasetId string, tableId string, policyId string) *RowAccessPoliciesDeleteCall {
+	c := &RowAccessPoliciesDeleteCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.projectId = projectId
+	c.datasetId = datasetId
+	c.tableId = tableId
+	c.policyId = policyId
+	return c
+}
+
+// Force sets the optional parameter "force": If set to true, it deletes the
+// row access policy even if it's the last row access policy on the table and
+// the deletion will widen the access rather narrowing it.
+func (c *RowAccessPoliciesDeleteCall) Force(force bool) *RowAccessPoliciesDeleteCall {
+	c.urlParams_.Set("force", fmt.Sprint(force))
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse for more
+// details.
+func (c *RowAccessPoliciesDeleteCall) Fields(s ...googleapi.Field) *RowAccessPoliciesDeleteCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// Context sets the context to be used in this call's Do method.
+func (c *RowAccessPoliciesDeleteCall) Context(ctx context.Context) *RowAccessPoliciesDeleteCall {
+	c.ctx_ = ctx
+	return c
+}
+
+// Header returns a http.Header that can be modified by the caller to add
+// headers to the request.
+func (c *RowAccessPoliciesDeleteCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
+func (c *RowAccessPoliciesDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "", c.header_)
+	c.urlParams_.Set("alt", alt)
+	c.urlParams_.Set("prettyPrint", "false")
+	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{+projectId}/datasets/{+datasetId}/tables/{+tableId}/rowAccessPolicies/{+policyId}")
+	urls += "?" + c.urlParams_.Encode()
+	req, err := http.NewRequest("DELETE", urls, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"projectId": c.projectId,
+		"datasetId": c.datasetId,
+		"tableId":   c.tableId,
+		"policyId":  c.policyId,
+	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.rowAccessPolicies.delete", "request", internallog.HTTPRequest(req, nil))
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "bigquery.rowAccessPolicies.delete" call.
+func (c *RowAccessPoliciesDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if err != nil {
+		return err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return gensupport.WrapError(err)
+	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.rowAccessPolicies.delete", "response", internallog.HTTPResponse(res, nil))
+	return nil
+}
+
+type RowAccessPoliciesGetCall struct {
+	s            *Service
+	projectId    string
+	datasetId    string
+	tableId      string
+	policyId     string
+	urlParams_   gensupport.URLParams
+	ifNoneMatch_ string
+	ctx_         context.Context
+	header_      http.Header
+}
+
+// Get: Gets the specified row access policy by policy ID.
+//
+// - datasetId: Dataset ID of the table to get the row access policy.
+// - policyId: Policy ID of the row access policy.
+// - projectId: Project ID of the table to get the row access policy.
+// - tableId: Table ID of the table to get the row access policy.
+func (r *RowAccessPoliciesService) Get(projectId string, datasetId string, tableId string, policyId string) *RowAccessPoliciesGetCall {
+	c := &RowAccessPoliciesGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.projectId = projectId
+	c.datasetId = datasetId
+	c.tableId = tableId
+	c.policyId = policyId
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse for more
+// details.
+func (c *RowAccessPoliciesGetCall) Fields(s ...googleapi.Field) *RowAccessPoliciesGetCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// IfNoneMatch sets an optional parameter which makes the operation fail if the
+// object's ETag matches the given value. This is useful for getting updates
+// only after the object has changed since the last request.
+func (c *RowAccessPoliciesGetCall) IfNoneMatch(entityTag string) *RowAccessPoliciesGetCall {
+	c.ifNoneMatch_ = entityTag
+	return c
+}
+
+// Context sets the context to be used in this call's Do method.
+func (c *RowAccessPoliciesGetCall) Context(ctx context.Context) *RowAccessPoliciesGetCall {
+	c.ctx_ = ctx
+	return c
+}
+
+// Header returns a http.Header that can be modified by the caller to add
+// headers to the request.
+func (c *RowAccessPoliciesGetCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
+func (c *RowAccessPoliciesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "", c.header_)
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
+	c.urlParams_.Set("alt", alt)
+	c.urlParams_.Set("prettyPrint", "false")
+	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{+projectId}/datasets/{+datasetId}/tables/{+tableId}/rowAccessPolicies/{+policyId}")
+	urls += "?" + c.urlParams_.Encode()
+	req, err := http.NewRequest("GET", urls, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"projectId": c.projectId,
+		"datasetId": c.datasetId,
+		"tableId":   c.tableId,
+		"policyId":  c.policyId,
+	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.rowAccessPolicies.get", "request", internallog.HTTPRequest(req, nil))
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "bigquery.rowAccessPolicies.get" call.
+// Any non-2xx status code is an error. Response headers are in either
+// *RowAccessPolicy.ServerResponse.Header or (if a response was returned at
+// all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
+// check whether the returned error was because http.StatusNotModified was
+// returned.
+func (c *RowAccessPoliciesGetCall) Do(opts ...googleapi.CallOption) (*RowAccessPolicy, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, gensupport.WrapError(&googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		})
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, gensupport.WrapError(err)
+	}
+	ret := &RowAccessPolicy{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
+		return nil, err
+	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.rowAccessPolicies.get", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -13789,8 +14346,7 @@ func (c *RowAccessPoliciesGetIamPolicyCall) Header() http.Header {
 
 func (c *RowAccessPoliciesGetIamPolicyCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "application/json", c.header_)
-	var body io.Reader = nil
-	body, err := googleapi.WithoutDataWrapper.JSONReader(c.getiampolicyrequest)
+	body, err := googleapi.WithoutDataWrapper.JSONBuffer(c.getiampolicyrequest)
 	if err != nil {
 		return nil, err
 	}
@@ -13806,6 +14362,7 @@ func (c *RowAccessPoliciesGetIamPolicyCall) doRequest(alt string) (*http.Respons
 	googleapi.Expand(req.URL, map[string]string{
 		"resource": c.resource,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.rowAccessPolicies.getIamPolicy", "request", internallog.HTTPRequest(req, body.Bytes()))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -13840,9 +14397,123 @@ func (c *RowAccessPoliciesGetIamPolicyCall) Do(opts ...googleapi.CallOption) (*P
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.rowAccessPolicies.getIamPolicy", "response", internallog.HTTPResponse(res, b))
+	return ret, nil
+}
+
+type RowAccessPoliciesInsertCall struct {
+	s               *Service
+	projectId       string
+	datasetId       string
+	tableId         string
+	rowaccesspolicy *RowAccessPolicy
+	urlParams_      gensupport.URLParams
+	ctx_            context.Context
+	header_         http.Header
+}
+
+// Insert: Creates a row access policy.
+//
+// - datasetId: Dataset ID of the table to get the row access policy.
+// - projectId: Project ID of the table to get the row access policy.
+// - tableId: Table ID of the table to get the row access policy.
+func (r *RowAccessPoliciesService) Insert(projectId string, datasetId string, tableId string, rowaccesspolicy *RowAccessPolicy) *RowAccessPoliciesInsertCall {
+	c := &RowAccessPoliciesInsertCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.projectId = projectId
+	c.datasetId = datasetId
+	c.tableId = tableId
+	c.rowaccesspolicy = rowaccesspolicy
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse for more
+// details.
+func (c *RowAccessPoliciesInsertCall) Fields(s ...googleapi.Field) *RowAccessPoliciesInsertCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// Context sets the context to be used in this call's Do method.
+func (c *RowAccessPoliciesInsertCall) Context(ctx context.Context) *RowAccessPoliciesInsertCall {
+	c.ctx_ = ctx
+	return c
+}
+
+// Header returns a http.Header that can be modified by the caller to add
+// headers to the request.
+func (c *RowAccessPoliciesInsertCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
+func (c *RowAccessPoliciesInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "application/json", c.header_)
+	body, err := googleapi.WithoutDataWrapper.JSONBuffer(c.rowaccesspolicy)
+	if err != nil {
+		return nil, err
+	}
+	c.urlParams_.Set("alt", alt)
+	c.urlParams_.Set("prettyPrint", "false")
+	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{+projectId}/datasets/{+datasetId}/tables/{+tableId}/rowAccessPolicies")
+	urls += "?" + c.urlParams_.Encode()
+	req, err := http.NewRequest("POST", urls, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"projectId": c.projectId,
+		"datasetId": c.datasetId,
+		"tableId":   c.tableId,
+	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.rowAccessPolicies.insert", "request", internallog.HTTPRequest(req, body.Bytes()))
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "bigquery.rowAccessPolicies.insert" call.
+// Any non-2xx status code is an error. Response headers are in either
+// *RowAccessPolicy.ServerResponse.Header or (if a response was returned at
+// all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
+// check whether the returned error was because http.StatusNotModified was
+// returned.
+func (c *RowAccessPoliciesInsertCall) Do(opts ...googleapi.CallOption) (*RowAccessPolicy, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, gensupport.WrapError(&googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		})
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, gensupport.WrapError(err)
+	}
+	ret := &RowAccessPolicy{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
+		return nil, err
+	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.rowAccessPolicies.insert", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -13921,12 +14592,11 @@ func (c *RowAccessPoliciesListCall) doRequest(alt string) (*http.Response, error
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
 	}
-	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	c.urlParams_.Set("prettyPrint", "false")
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{+projectId}/datasets/{+datasetId}/tables/{+tableId}/rowAccessPolicies")
 	urls += "?" + c.urlParams_.Encode()
-	req, err := http.NewRequest("GET", urls, body)
+	req, err := http.NewRequest("GET", urls, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -13936,6 +14606,7 @@ func (c *RowAccessPoliciesListCall) doRequest(alt string) (*http.Response, error
 		"datasetId": c.datasetId,
 		"tableId":   c.tableId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.rowAccessPolicies.list", "request", internallog.HTTPRequest(req, nil))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -13971,9 +14642,11 @@ func (c *RowAccessPoliciesListCall) Do(opts ...googleapi.CallOption) (*ListRowAc
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.rowAccessPolicies.list", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -14049,8 +14722,7 @@ func (c *RowAccessPoliciesTestIamPermissionsCall) Header() http.Header {
 
 func (c *RowAccessPoliciesTestIamPermissionsCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "application/json", c.header_)
-	var body io.Reader = nil
-	body, err := googleapi.WithoutDataWrapper.JSONReader(c.testiampermissionsrequest)
+	body, err := googleapi.WithoutDataWrapper.JSONBuffer(c.testiampermissionsrequest)
 	if err != nil {
 		return nil, err
 	}
@@ -14066,6 +14738,7 @@ func (c *RowAccessPoliciesTestIamPermissionsCall) doRequest(alt string) (*http.R
 	googleapi.Expand(req.URL, map[string]string{
 		"resource": c.resource,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.rowAccessPolicies.testIamPermissions", "request", internallog.HTTPRequest(req, body.Bytes()))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -14101,9 +14774,127 @@ func (c *RowAccessPoliciesTestIamPermissionsCall) Do(opts ...googleapi.CallOptio
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.rowAccessPolicies.testIamPermissions", "response", internallog.HTTPResponse(res, b))
+	return ret, nil
+}
+
+type RowAccessPoliciesUpdateCall struct {
+	s               *Service
+	projectId       string
+	datasetId       string
+	tableId         string
+	policyId        string
+	rowaccesspolicy *RowAccessPolicy
+	urlParams_      gensupport.URLParams
+	ctx_            context.Context
+	header_         http.Header
+}
+
+// Update: Updates a row access policy.
+//
+// - datasetId: Dataset ID of the table to get the row access policy.
+// - policyId: Policy ID of the row access policy.
+// - projectId: Project ID of the table to get the row access policy.
+// - tableId: Table ID of the table to get the row access policy.
+func (r *RowAccessPoliciesService) Update(projectId string, datasetId string, tableId string, policyId string, rowaccesspolicy *RowAccessPolicy) *RowAccessPoliciesUpdateCall {
+	c := &RowAccessPoliciesUpdateCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.projectId = projectId
+	c.datasetId = datasetId
+	c.tableId = tableId
+	c.policyId = policyId
+	c.rowaccesspolicy = rowaccesspolicy
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse for more
+// details.
+func (c *RowAccessPoliciesUpdateCall) Fields(s ...googleapi.Field) *RowAccessPoliciesUpdateCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// Context sets the context to be used in this call's Do method.
+func (c *RowAccessPoliciesUpdateCall) Context(ctx context.Context) *RowAccessPoliciesUpdateCall {
+	c.ctx_ = ctx
+	return c
+}
+
+// Header returns a http.Header that can be modified by the caller to add
+// headers to the request.
+func (c *RowAccessPoliciesUpdateCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
+func (c *RowAccessPoliciesUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "application/json", c.header_)
+	body, err := googleapi.WithoutDataWrapper.JSONBuffer(c.rowaccesspolicy)
+	if err != nil {
+		return nil, err
+	}
+	c.urlParams_.Set("alt", alt)
+	c.urlParams_.Set("prettyPrint", "false")
+	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{+projectId}/datasets/{+datasetId}/tables/{+tableId}/rowAccessPolicies/{+policyId}")
+	urls += "?" + c.urlParams_.Encode()
+	req, err := http.NewRequest("PUT", urls, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"projectId": c.projectId,
+		"datasetId": c.datasetId,
+		"tableId":   c.tableId,
+		"policyId":  c.policyId,
+	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.rowAccessPolicies.update", "request", internallog.HTTPRequest(req, body.Bytes()))
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "bigquery.rowAccessPolicies.update" call.
+// Any non-2xx status code is an error. Response headers are in either
+// *RowAccessPolicy.ServerResponse.Header or (if a response was returned at
+// all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
+// check whether the returned error was because http.StatusNotModified was
+// returned.
+func (c *RowAccessPoliciesUpdateCall) Do(opts ...googleapi.CallOption) (*RowAccessPolicy, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, gensupport.WrapError(&googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		})
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, gensupport.WrapError(err)
+	}
+	ret := &RowAccessPolicy{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
+		return nil, err
+	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.rowAccessPolicies.update", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -14158,8 +14949,7 @@ func (c *TabledataInsertAllCall) Header() http.Header {
 
 func (c *TabledataInsertAllCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "application/json", c.header_)
-	var body io.Reader = nil
-	body, err := googleapi.WithoutDataWrapper.JSONReader(c.tabledatainsertallrequest)
+	body, err := googleapi.WithoutDataWrapper.JSONBuffer(c.tabledatainsertallrequest)
 	if err != nil {
 		return nil, err
 	}
@@ -14177,6 +14967,7 @@ func (c *TabledataInsertAllCall) doRequest(alt string) (*http.Response, error) {
 		"datasetId": c.datasetId,
 		"tableId":   c.tableId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.tabledata.insertAll", "request", internallog.HTTPRequest(req, body.Bytes()))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -14212,9 +15003,11 @@ func (c *TabledataInsertAllCall) Do(opts ...googleapi.CallOption) (*TableDataIns
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.tabledata.insertAll", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -14315,12 +15108,11 @@ func (c *TabledataListCall) doRequest(alt string) (*http.Response, error) {
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
 	}
-	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	c.urlParams_.Set("prettyPrint", "false")
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{+projectId}/datasets/{+datasetId}/tables/{+tableId}/data")
 	urls += "?" + c.urlParams_.Encode()
-	req, err := http.NewRequest("GET", urls, body)
+	req, err := http.NewRequest("GET", urls, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -14330,6 +15122,7 @@ func (c *TabledataListCall) doRequest(alt string) (*http.Response, error) {
 		"datasetId": c.datasetId,
 		"tableId":   c.tableId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.tabledata.list", "request", internallog.HTTPRequest(req, nil))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -14364,9 +15157,11 @@ func (c *TabledataListCall) Do(opts ...googleapi.CallOption) (*TableDataList, er
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.tabledata.list", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -14440,12 +15235,11 @@ func (c *TablesDeleteCall) Header() http.Header {
 
 func (c *TablesDeleteCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "", c.header_)
-	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	c.urlParams_.Set("prettyPrint", "false")
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{+projectId}/datasets/{+datasetId}/tables/{+tableId}")
 	urls += "?" + c.urlParams_.Encode()
-	req, err := http.NewRequest("DELETE", urls, body)
+	req, err := http.NewRequest("DELETE", urls, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -14455,6 +15249,7 @@ func (c *TablesDeleteCall) doRequest(alt string) (*http.Response, error) {
 		"datasetId": c.datasetId,
 		"tableId":   c.tableId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.tables.delete", "request", internallog.HTTPRequest(req, nil))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -14469,6 +15264,7 @@ func (c *TablesDeleteCall) Do(opts ...googleapi.CallOption) error {
 	if err := googleapi.CheckResponse(res); err != nil {
 		return gensupport.WrapError(err)
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.tables.delete", "response", internallog.HTTPResponse(res, nil))
 	return nil
 }
 
@@ -14575,12 +15371,11 @@ func (c *TablesGetCall) doRequest(alt string) (*http.Response, error) {
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
 	}
-	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	c.urlParams_.Set("prettyPrint", "false")
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{+projectId}/datasets/{+datasetId}/tables/{+tableId}")
 	urls += "?" + c.urlParams_.Encode()
-	req, err := http.NewRequest("GET", urls, body)
+	req, err := http.NewRequest("GET", urls, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -14590,6 +15385,7 @@ func (c *TablesGetCall) doRequest(alt string) (*http.Response, error) {
 		"datasetId": c.datasetId,
 		"tableId":   c.tableId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.tables.get", "request", internallog.HTTPRequest(req, nil))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -14624,9 +15420,11 @@ func (c *TablesGetCall) Do(opts ...googleapi.CallOption) (*Table, error) {
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.tables.get", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -14677,8 +15475,7 @@ func (c *TablesGetIamPolicyCall) Header() http.Header {
 
 func (c *TablesGetIamPolicyCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "application/json", c.header_)
-	var body io.Reader = nil
-	body, err := googleapi.WithoutDataWrapper.JSONReader(c.getiampolicyrequest)
+	body, err := googleapi.WithoutDataWrapper.JSONBuffer(c.getiampolicyrequest)
 	if err != nil {
 		return nil, err
 	}
@@ -14694,6 +15491,7 @@ func (c *TablesGetIamPolicyCall) doRequest(alt string) (*http.Response, error) {
 	googleapi.Expand(req.URL, map[string]string{
 		"resource": c.resource,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.tables.getIamPolicy", "request", internallog.HTTPRequest(req, body.Bytes()))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -14728,9 +15526,11 @@ func (c *TablesGetIamPolicyCall) Do(opts ...googleapi.CallOption) (*Policy, erro
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.tables.getIamPolicy", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -14781,8 +15581,7 @@ func (c *TablesInsertCall) Header() http.Header {
 
 func (c *TablesInsertCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "application/json", c.header_)
-	var body io.Reader = nil
-	body, err := googleapi.WithoutDataWrapper.JSONReader(c.table)
+	body, err := googleapi.WithoutDataWrapper.JSONBuffer(c.table)
 	if err != nil {
 		return nil, err
 	}
@@ -14799,6 +15598,7 @@ func (c *TablesInsertCall) doRequest(alt string) (*http.Response, error) {
 		"projectId": c.projectId,
 		"datasetId": c.datasetId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.tables.insert", "request", internallog.HTTPRequest(req, body.Bytes()))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -14833,9 +15633,11 @@ func (c *TablesInsertCall) Do(opts ...googleapi.CallOption) (*Table, error) {
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.tables.insert", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -14912,12 +15714,11 @@ func (c *TablesListCall) doRequest(alt string) (*http.Response, error) {
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
 	}
-	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	c.urlParams_.Set("prettyPrint", "false")
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{+projectId}/datasets/{+datasetId}/tables")
 	urls += "?" + c.urlParams_.Encode()
-	req, err := http.NewRequest("GET", urls, body)
+	req, err := http.NewRequest("GET", urls, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -14926,6 +15727,7 @@ func (c *TablesListCall) doRequest(alt string) (*http.Response, error) {
 		"projectId": c.projectId,
 		"datasetId": c.datasetId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.tables.list", "request", internallog.HTTPRequest(req, nil))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -14960,9 +15762,11 @@ func (c *TablesListCall) Do(opts ...googleapi.CallOption) (*TableList, error) {
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.tables.list", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -15047,8 +15851,7 @@ func (c *TablesPatchCall) Header() http.Header {
 
 func (c *TablesPatchCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "application/json", c.header_)
-	var body io.Reader = nil
-	body, err := googleapi.WithoutDataWrapper.JSONReader(c.table)
+	body, err := googleapi.WithoutDataWrapper.JSONBuffer(c.table)
 	if err != nil {
 		return nil, err
 	}
@@ -15066,6 +15869,7 @@ func (c *TablesPatchCall) doRequest(alt string) (*http.Response, error) {
 		"datasetId": c.datasetId,
 		"tableId":   c.tableId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.tables.patch", "request", internallog.HTTPRequest(req, body.Bytes()))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -15100,9 +15904,11 @@ func (c *TablesPatchCall) Do(opts ...googleapi.CallOption) (*Table, error) {
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.tables.patch", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -15154,8 +15960,7 @@ func (c *TablesSetIamPolicyCall) Header() http.Header {
 
 func (c *TablesSetIamPolicyCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "application/json", c.header_)
-	var body io.Reader = nil
-	body, err := googleapi.WithoutDataWrapper.JSONReader(c.setiampolicyrequest)
+	body, err := googleapi.WithoutDataWrapper.JSONBuffer(c.setiampolicyrequest)
 	if err != nil {
 		return nil, err
 	}
@@ -15171,6 +15976,7 @@ func (c *TablesSetIamPolicyCall) doRequest(alt string) (*http.Response, error) {
 	googleapi.Expand(req.URL, map[string]string{
 		"resource": c.resource,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.tables.setIamPolicy", "request", internallog.HTTPRequest(req, body.Bytes()))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -15205,9 +16011,11 @@ func (c *TablesSetIamPolicyCall) Do(opts ...googleapi.CallOption) (*Policy, erro
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.tables.setIamPolicy", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -15262,8 +16070,7 @@ func (c *TablesTestIamPermissionsCall) Header() http.Header {
 
 func (c *TablesTestIamPermissionsCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "application/json", c.header_)
-	var body io.Reader = nil
-	body, err := googleapi.WithoutDataWrapper.JSONReader(c.testiampermissionsrequest)
+	body, err := googleapi.WithoutDataWrapper.JSONBuffer(c.testiampermissionsrequest)
 	if err != nil {
 		return nil, err
 	}
@@ -15279,6 +16086,7 @@ func (c *TablesTestIamPermissionsCall) doRequest(alt string) (*http.Response, er
 	googleapi.Expand(req.URL, map[string]string{
 		"resource": c.resource,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.tables.testIamPermissions", "request", internallog.HTTPRequest(req, body.Bytes()))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -15314,9 +16122,11 @@ func (c *TablesTestIamPermissionsCall) Do(opts ...googleapi.CallOption) (*TestIa
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.tables.testIamPermissions", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }
 
@@ -15379,8 +16189,7 @@ func (c *TablesUpdateCall) Header() http.Header {
 
 func (c *TablesUpdateCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := gensupport.SetHeaders(c.s.userAgent(), "application/json", c.header_)
-	var body io.Reader = nil
-	body, err := googleapi.WithoutDataWrapper.JSONReader(c.table)
+	body, err := googleapi.WithoutDataWrapper.JSONBuffer(c.table)
 	if err != nil {
 		return nil, err
 	}
@@ -15398,6 +16207,7 @@ func (c *TablesUpdateCall) doRequest(alt string) (*http.Response, error) {
 		"datasetId": c.datasetId,
 		"tableId":   c.tableId,
 	})
+	c.s.logger.DebugContext(c.ctx_, "api request", "serviceName", apiName, "rpcName", "bigquery.tables.update", "request", internallog.HTTPRequest(req, body.Bytes()))
 	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
@@ -15432,8 +16242,10 @@ func (c *TablesUpdateCall) Do(opts ...googleapi.CallOption) (*Table, error) {
 		},
 	}
 	target := &ret
-	if err := gensupport.DecodeResponse(target, res); err != nil {
+	b, err := gensupport.DecodeResponseBytes(target, res)
+	if err != nil {
 		return nil, err
 	}
+	c.s.logger.DebugContext(c.ctx_, "api response", "serviceName", apiName, "rpcName", "bigquery.tables.update", "response", internallog.HTTPResponse(res, b))
 	return ret, nil
 }

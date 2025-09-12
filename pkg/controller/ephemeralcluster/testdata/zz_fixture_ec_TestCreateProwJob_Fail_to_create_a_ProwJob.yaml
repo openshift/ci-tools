@@ -16,6 +16,12 @@ spec:
           namespace: ocp
     test:
       workflow: test-workflow
+  pullRequest:
+    event: "\n{\n  \"pull_request\": {\n    \"base\": {\n\t  \"repo\": {\n\t    \"name\":
+      \"ci-tools\",\n\t    \"owner\": {\n\t\t  \"login\": \"openshift\"\n\t\t}\n\t
+      \ },\n\t  \"ref\": \"main\",\n\t  \"sha\": \"8f5e7d6ec106ccf86684fcff808d85cac960f0a3\"\n\t}\n
+      \ }\n}"
+    headers: '{"X-Github-Delivery": "aa9ede40-8fbb-11f0-8717-9eed0c1315d0"}'
 status:
   conditions:
   - lastTransitionTime: "2025-04-02T12:12:12Z"

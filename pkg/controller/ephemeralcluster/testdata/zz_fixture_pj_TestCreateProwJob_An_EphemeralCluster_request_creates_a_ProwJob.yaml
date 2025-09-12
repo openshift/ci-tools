@@ -4,22 +4,22 @@ items:
   metadata:
     annotations:
       prow.k8s.io/context: ci/prow/cluster-provisioning
-      prow.k8s.io/job: ephemeralcluster-ci-org-repo-branch-cluster-provisioning
+      prow.k8s.io/job: ephemeralcluster-ci-openshift-ci-tools-main-cluster-provisioning
     creationTimestamp: null
     labels:
       ci-operator.openshift.io/cloud: aws
       ci-operator.openshift.io/cloud-cluster-profile: aws
       ci.openshift.io/ephemeral-cluster: ec
       created-by-prow: "true"
-      event-GUID: no-event-guid
+      event-GUID: aa9ede40-8fbb-11f0-8717-9eed0c1315d0
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       prow.k8s.io/context: cluster-provisioning
       prow.k8s.io/is-optional: "false"
-      prow.k8s.io/job: ephemeralcluster-ci-org-repo-branch-cluster-provisioning
-      prow.k8s.io/refs.base_ref: ""
-      prow.k8s.io/refs.org: ""
+      prow.k8s.io/job: ephemeralcluster-ci-openshift-ci-tools-main-cluster-provisionin
+      prow.k8s.io/refs.base_ref: main
+      prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "0"
-      prow.k8s.io/refs.repo: ""
+      prow.k8s.io/refs.repo: ci-tools
       prow.k8s.io/type: presubmit
     name: foobar
     namespace: ci
@@ -39,7 +39,7 @@ items:
         entrypoint: entrypoint
         initupload: initupload
         sidecar: sidecar
-    job: ephemeralcluster-ci-org-repo-branch-cluster-provisioning
+    job: ephemeralcluster-ci-openshift-ci-tools-main-cluster-provisioning
     namespace: ci
     pod_spec:
       containers:
@@ -55,6 +55,22 @@ items:
         env:
         - name: UNRESOLVED_CONFIG
           value: |
+            base_images:
+              upi-installer:
+                name: "4.20"
+                namespace: ocp
+                tag: upi-installer
+            build_root:
+              image_stream_tag:
+                name: "4.20"
+                namespace: ocp
+                tag: cli
+            external_images:
+              fedora:
+                name: ""
+                namespace: ""
+                registry: quay.io/fedora/fedora:43
+                tag: ""
             releases:
               initial:
                 integration:
@@ -101,9 +117,9 @@ items:
                       cpu: 10m
                 workflow: test-workflow
             zz_generated_metadata:
-              branch: branch
-              org: org
-              repo: repo
+              branch: main
+              org: openshift
+              repo: ci-tools
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
@@ -152,15 +168,16 @@ items:
     prowjob_defaults:
       tenant_id: GlobalDefaultID
     refs:
-      base_link: /commit/fake
-      base_sha: fake
-      org: ""
+      base_link: /commit/8f5e7d6ec106ccf86684fcff808d85cac960f0a3
+      base_ref: main
+      base_sha: 8f5e7d6ec106ccf86684fcff808d85cac960f0a3
+      org: openshift
       pulls:
       - author: ""
         commit_link: /pull/0/commits/
         number: 0
         sha: ""
-      repo: ""
+      repo: ci-tools
     rerun_command: /test cluster-provisioning
     type: presubmit
   status:

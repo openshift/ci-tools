@@ -77,17 +77,27 @@ type EphemeralClusterList struct {
 }
 
 type EphemeralClusterSpec struct {
-	CIOperator CIOperatorSpec `json:"ciOperator"`
+	// PullRequest holds the information regarding the PR this requested originated from.
+	PullRequest PullRequestMeta `json:"pullRequest,omitempty"`
+	CIOperator  CIOperatorSpec  `json:"ciOperator"`
 	// When set to true, signals the controller that the ephemeral cluster is no longer needed,
 	// allowing decommissioning procedures to begin.
 	TearDownCluster bool `json:"tearDownCluster,omitempty"`
 }
 
+type PullRequestMeta struct {
+	Payload string `json:"event,omitempty"`
+	Headers string `json:"headers,omitempty"`
+}
+
 // CIOperatorSpec contains what is needed to run ci-operator
 type CIOperatorSpec struct {
-	Releases  map[string]api.UnresolvedRelease `json:"releases,omitempty"`
-	Resources api.ResourceConfiguration        `json:"resources,omitempty"`
-	Test      TestSpec                         `json:"test,omitempty"`
+	BuildRootImage *api.BuildRootImageConfiguration       `json:"buildRoot,omitempty"`
+	BaseImages     map[string]api.ImageStreamTagReference `json:"baseImages,omitempty"`
+	ExternalImages map[string]api.ExternalImage           `json:"externalImages,omitempty"`
+	Releases       map[string]api.UnresolvedRelease       `json:"releases,omitempty"`
+	Resources      api.ResourceConfiguration              `json:"resources,omitempty"`
+	Test           TestSpec                               `json:"test,omitempty"`
 }
 
 // TestSpec determines the workflow will be executed by the ci-operator to provision a cluster.
@@ -95,6 +105,7 @@ type TestSpec struct {
 	Workflow       string            `json:"workflow,omitempty"`
 	Env            map[string]string `json:"env,omitempty"`
 	ClusterProfile string            `json:"clusterProfile,omitempty"`
+	ClusterClaim   *api.ClusterClaim `json:"clusterClaim,omitempty"`
 }
 
 type EphemeralClusterStatus struct {

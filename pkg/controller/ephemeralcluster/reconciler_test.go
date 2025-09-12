@@ -34,6 +34,22 @@ import (
 
 const (
 	prowJobNamespace = "ci"
+	prEventPayload   = `
+{
+  "pull_request": {
+    "base": {
+	  "repo": {
+	    "name": "ci-tools",
+	    "owner": {
+		  "login": "openshift"
+		}
+	  },
+	  "ref": "main",
+	  "sha": "8f5e7d6ec106ccf86684fcff808d85cac960f0a3"
+	}
+  }
+}`
+	prEventHeaders = `{"X-Github-Delivery": "aa9ede40-8fbb-11f0-8717-9eed0c1315d0"}`
 )
 
 func newPresubmitFaker(name string, now time.Time) NewPresubmitFunc {
@@ -159,7 +175,28 @@ func TestCreateProwJob(t *testing.T) {
 					Name:      "ec",
 				},
 				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					PullRequest: ephemeralclusterv1.PullRequestMeta{
+						Payload: prEventPayload,
+						Headers: prEventHeaders,
+					},
 					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						BuildRootImage: &api.BuildRootImageConfiguration{
+							ImageStreamTagReference: &api.ImageStreamTagReference{
+								Namespace: "ocp",
+								Name:      "4.20",
+								Tag:       "cli",
+							},
+						},
+						BaseImages: map[string]api.ImageStreamTagReference{
+							"upi-installer": {
+								Namespace: "ocp",
+								Name:      "4.20",
+								Tag:       "upi-installer",
+							},
+						},
+						ExternalImages: map[string]api.ExternalImage{
+							"fedora": {Registry: "quay.io/fedora/fedora:43"},
+						},
 						Releases: map[string]api.UnresolvedRelease{
 							"initial": {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
 							"latest":  {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
@@ -183,6 +220,10 @@ func TestCreateProwJob(t *testing.T) {
 					Name:      "ec",
 				},
 				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					PullRequest: ephemeralclusterv1.PullRequestMeta{
+						Payload: prEventPayload,
+						Headers: prEventHeaders,
+					},
 					CIOperator: ephemeralclusterv1.CIOperatorSpec{
 						Releases: map[string]api.UnresolvedRelease{
 							"initial": {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
@@ -197,7 +238,7 @@ func TestCreateProwJob(t *testing.T) {
 			prowConfig: &prowconfig.Config{},
 			req:        reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
 			wantRes:    reconcile.Result{},
-			wantErr:    errors.New("terminal error: validate and default presubmit: invalid presubmit job ephemeralcluster-ci-org-repo-branch-cluster-provisioning: failed to default namespace"),
+			wantErr:    errors.New("terminal error: validate and default presubmit: invalid presubmit job ephemeralcluster-ci-openshift-ci-tools-main-cluster-provisioning: failed to default namespace"),
 		},
 		{
 			name: "Fail to create a ProwJob",
@@ -207,6 +248,10 @@ func TestCreateProwJob(t *testing.T) {
 					Name:      "ec",
 				},
 				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					PullRequest: ephemeralclusterv1.PullRequestMeta{
+						Payload: prEventPayload,
+						Headers: prEventHeaders,
+					},
 					CIOperator: ephemeralclusterv1.CIOperatorSpec{
 						Releases: map[string]api.UnresolvedRelease{
 							"initial": {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
@@ -236,6 +281,10 @@ func TestCreateProwJob(t *testing.T) {
 					Name:      "ec",
 				},
 				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					PullRequest: ephemeralclusterv1.PullRequestMeta{
+						Payload: prEventPayload,
+						Headers: prEventHeaders,
+					},
 					CIOperator: ephemeralclusterv1.CIOperatorSpec{
 						Test: ephemeralclusterv1.TestSpec{
 							Workflow: "test-workflow",
@@ -255,6 +304,10 @@ func TestCreateProwJob(t *testing.T) {
 					Name:      "ec",
 				},
 				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					PullRequest: ephemeralclusterv1.PullRequestMeta{
+						Payload: prEventPayload,
+						Headers: prEventHeaders,
+					},
 					CIOperator: ephemeralclusterv1.CIOperatorSpec{
 						Test: ephemeralclusterv1.TestSpec{
 							Workflow: "test-workflow",
@@ -303,6 +356,61 @@ func TestCreateProwJob(t *testing.T) {
 				Namespace: prowJobNamespace,
 			}}},
 			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+		},
+		{
+			name: "Unsupported Pull Request event payload",
+			ec: ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Namespace: "ns",
+					Name:      "ec",
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					PullRequest: ephemeralclusterv1.PullRequestMeta{
+						Payload: prEventPayload,
+						Headers: `{}`,
+					},
+					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						Releases: map[string]api.UnresolvedRelease{
+							"initial": {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
+							"latest":  {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
+						},
+						Test: ephemeralclusterv1.TestSpec{
+							Workflow:       "test-workflow",
+							Env:            map[string]string{"foo": "bar"},
+							ClusterProfile: "aws",
+						},
+					},
+				},
+			},
+			wantRes: reconcile.Result{},
+			wantErr: errors.New("terminal error: parse pull request meta: unsupported PR event payload"),
+		}, {
+			name: "Malformed Pull Request event payload",
+			ec: ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Namespace: "ns",
+					Name:      "ec",
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					PullRequest: ephemeralclusterv1.PullRequestMeta{
+						Payload: `{}`,
+						Headers: prEventHeaders,
+					},
+					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						Releases: map[string]api.UnresolvedRelease{
+							"initial": {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
+							"latest":  {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
+						},
+						Test: ephemeralclusterv1.TestSpec{
+							Workflow:       "test-workflow",
+							Env:            map[string]string{"foo": "bar"},
+							ClusterProfile: "aws",
+						},
+					},
+				},
+			},
+			wantRes: reconcile.Result{},
+			wantErr: errors.New("terminal error: parse pull request meta: malformed PR event payload"),
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

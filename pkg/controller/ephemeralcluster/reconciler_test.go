@@ -197,7 +197,7 @@ func TestCreateProwJob(t *testing.T) {
 			prowConfig: &prowconfig.Config{},
 			req:        reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
 			wantRes:    reconcile.Result{},
-			wantErr:    errors.New("terminal error: validate and default presubmit: invalid presubmit job pull-ci-org-repo-branch-cluster-provisioning: failed to default namespace"),
+			wantErr:    errors.New("terminal error: validate and default presubmit: invalid presubmit job ephemeralcluster-ci-org-repo-branch-cluster-provisioning: failed to default namespace"),
 		},
 		{
 			name: "Fail to create a ProwJob",

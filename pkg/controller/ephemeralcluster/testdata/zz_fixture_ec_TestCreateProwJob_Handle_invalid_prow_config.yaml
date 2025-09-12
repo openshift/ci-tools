@@ -19,7 +19,7 @@ spec:
 status:
   conditions:
   - lastTransitionTime: "2025-04-02T12:12:12Z"
-    message: 'validate and default presubmit: invalid presubmit job pull-ci-org-repo-branch-cluster-provisioning:
+    message: 'validate and default presubmit: invalid presubmit job ephemeralcluster-ci-org-repo-branch-cluster-provisioning:
       failed to default namespace'
     reason: CIOperatorJobsGenerateFailure
     status: "False"

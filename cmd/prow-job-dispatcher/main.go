@@ -698,6 +698,10 @@ func main() {
 	prowjobs := dispatcher.NewProwjobs(o.jobsStoragePath)
 	c := cron.New()
 
+	// Pass an empty cluster list to it. This works as long as it's guaranteed that the
+	// dispatchWrapper func below is called one when this program starts.
+	ecd := dispatcher.NewEphemeralClusterDispatcher([]string{})
+
 	{
 		var mu sync.Mutex
 		slackClient := slack.New(string(secret.GetSecret(o.slackTokenPath)))
@@ -773,6 +777,8 @@ func main() {
 			}
 			prowjobs.Regenerate(pjs)
 
+			ecd.Reset(clustersFromConfig.UnsortedList())
+
 			if err := dispatcher.WriteGob(o.jobsStoragePath, pjs); err != nil {
 				logrus.WithError(err).Errorf("continuing on cache memory, error writing Gob file")
 			}
@@ -838,9 +844,8 @@ func main() {
 		}
 	}(o.clusterConfigPath)
 
-	server := dispatcher.NewServer(prowjobs, dispatchWrapper)
+	server := dispatcher.NewServer(prowjobs, ecd, dispatchWrapper)
 	http.HandleFunc("/", server.RequestHandler)
 	http.HandleFunc("/event", server.EventHandler)
 	logrus.Fatal(http.ListenAndServe(":8080", nil))
-
 }

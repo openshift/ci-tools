@@ -88,5 +88,6 @@ func (c *Config) validate() error {
 }
 
 func ValidateCollectionName(collection string) bool {
-	return regexp.MustCompile(CollectionRegex).MatchString(collection)
+	return regexp.MustCompile(CollectionRegex).MatchString(collection) &&
+		len(collection) <= 27 // GCP limitation of service account ID's being max 30 chars
 }

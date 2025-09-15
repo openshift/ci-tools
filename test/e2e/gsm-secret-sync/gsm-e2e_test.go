@@ -32,6 +32,12 @@ import (
 	"github.com/openshift/ci-tools/pkg/secrets"
 )
 
+const (
+	credentialsEnvVar   = "GCP_SECRETS_DEV_CREDENTIALS_FILE"
+	projectIdEnvVar     = "GCP_DEV_PROJECT_ID"
+	projectNumberEnvVar = "GCP_DEV_PROJECT_NUMBER"
+)
+
 type GCPState struct {
 	Secrets         map[string]gsm.GCPSecret
 	IAMBindings     []*iampb.Binding
@@ -61,14 +67,14 @@ var (
 )
 
 func getProjectConfigFromEnv() gsm.Config {
-	projectID := os.Getenv("GCP_PROJECT_ID")
+	projectID := os.Getenv(projectIdEnvVar)
 	if projectID == "" {
-		logrus.Fatal("GCP_PROJECT_ID not set")
+		logrus.Fatalf("%s not set", projectIdEnvVar)
 	}
 
-	projectNumber := os.Getenv("GCP_PROJECT_NUMBER")
+	projectNumber := os.Getenv(projectNumberEnvVar)
 	if projectNumber == "" {
-		logrus.Fatal("GCP_PROJECT_NUMBER not set")
+		logrus.Fatalf("%s not set", projectNumberEnvVar)
 	}
 
 	return gsm.Config{
@@ -189,9 +195,9 @@ func TestMain(m *testing.M) {
 		logrus.WithError(err).Fatal("Failed to setup logger")
 	}
 
-	credFile := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+	credFile := os.Getenv(credentialsEnvVar)
 	if credFile == "" {
-		logrus.Fatal("Missing GOOGLE_APPLICATION_CREDENTIALS")
+		logrus.Fatalf("Missing %s environment variable", credentialsEnvVar)
 	}
 	gcpCredentials, err := secrets.ReadFromFile(credFile, &censor)
 	if err != nil {
@@ -320,7 +326,7 @@ func TestDeletion(t *testing.T) {
 
 // runReconcilerTool runs the reconciler tool's binary with the given config path
 func (tr *testRunner) runReconcilerTool(configPath string) error {
-	credFile := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+	credFile := os.Getenv(credentialsEnvVar)
 	cmd := exec.Command(tr.binaryPath,
 		"--config", configPath,
 		"--log-level", "info",

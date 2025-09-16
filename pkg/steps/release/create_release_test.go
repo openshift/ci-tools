@@ -45,6 +45,16 @@ func TestBuildOcAdmReleaseNewCommand(t *testing.T) {
 			expectedCmd: "oc adm release new --max-per-registry=32 -n ns --from-image-stream stream --to-image-base cvo --to-image dest --name ver --keep-manifest-list",
 		},
 		{
+			name:        "4.12 with keep-manifest-list and reference mode",
+			config:      &api.ReleaseTagConfiguration{Name: "4.12", ReferencePolicy: &sourceTagReference},
+			namespace:   "ns",
+			streamName:  "stream",
+			cvo:         "cvo",
+			destination: "dest",
+			version:     "ver",
+			expectedCmd: "oc adm release new --max-per-registry=32 -n ns --from-image-stream stream --to-image-base cvo --to-image dest --name ver --keep-manifest-list",
+		},
+		{
 			name:        "4.15 with keep-manifest-list and reference mode",
 			config:      &api.ReleaseTagConfiguration{Name: "4.15", ReferencePolicy: &sourceTagReference},
 			namespace:   "ns",
@@ -57,6 +67,16 @@ func TestBuildOcAdmReleaseNewCommand(t *testing.T) {
 		{
 			name:        "malformed version returns no keep-manifest-list",
 			config:      &api.ReleaseTagConfiguration{Name: "not-a-version"},
+			namespace:   "ns",
+			streamName:  "stream",
+			cvo:         "cvo",
+			destination: "dest",
+			version:     "ver",
+			expectedCmd: "oc adm release new --max-per-registry=32 -n ns --from-image-stream stream --to-image-base cvo --to-image dest --name ver",
+		},
+		{
+			name:        "malformed version with reference policy yields no extra flags",
+			config:      &api.ReleaseTagConfiguration{Name: "oops", ReferencePolicy: &sourceTagReference},
 			namespace:   "ns",
 			streamName:  "stream",
 			cvo:         "cvo",

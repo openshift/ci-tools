@@ -230,8 +230,8 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 			}
 		}
 
-		referencePolicy := imagev1.LocalTagReferencePolicy
-		if s.referencePolicy == imagev1.SourceTagReferencePolicy {
+		referencePolicy := imagev1.SourceTagReferencePolicy
+		if s.referencePolicy == imagev1.LocalTagReferencePolicy {
 			referencePolicy = s.referencePolicy
 		}
 		existing := sets.New[string]()
@@ -357,8 +357,8 @@ func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName 
 			return nil, fmt.Errorf("failed to create %s imagestream: %w", overrideCLIStreamName, err)
 		}
 
-		referencePolicy := imagev1.LocalTagReferencePolicy
-		if s.referencePolicy == imagev1.SourceTagReferencePolicy {
+		referencePolicy := imagev1.SourceTagReferencePolicy
+		if s.referencePolicy == imagev1.LocalTagReferencePolicy {
 			referencePolicy = s.referencePolicy
 		}
 		streamTag := &imagev1.ImageStreamTag{

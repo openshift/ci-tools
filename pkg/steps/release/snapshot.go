@@ -100,8 +100,8 @@ func snapshotStream(ctx context.Context, client loggingclient.LoggingClient, sou
 			}
 		}
 		if refPolicy == nil {
-			localPolicy := imagev1.LocalTagReferencePolicy
-			refPolicy = &localPolicy
+			sourcePolicy := imagev1.SourceTagReferencePolicy
+			refPolicy = &sourcePolicy
 		}
 		tagReference := imagev1.TagReference{
 			Name:            tag,

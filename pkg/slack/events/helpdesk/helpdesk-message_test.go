@@ -90,24 +90,33 @@ func TestGetContactedHelpdeskResponse(t *testing.T) {
 	testCases := []struct {
 		name  string
 		botId string
+		user  string
 	}{
 		{
 			name:  "empty botId",
 			botId: "",
+			user:  "",
 		},
 		{
 			name:  "botId like review workflow",
 			botId: reviewRequestWorkflow,
+			user:  "user",
 		},
 		{
 			name:  "random botId",
 			botId: "botId can be anything except review",
+			user:  "user",
+		},
+		{
+			name:  "user is present",
+			botId: reviewRequestWorkflow,
+			user:  "user",
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			actual := getContactedHelpdeskResponse(testCase.botId, reviewRequestWorkflow)
+			actual := getContactedHelpdeskResponse(testCase.botId, reviewRequestWorkflow, testCase.user)
 			testhelper.CompareWithFixture(t, actual)
 		})
 	}

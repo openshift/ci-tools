@@ -163,8 +163,14 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request) error
 	}
 
 	currentCfg := r.watcher.getConfig()
-	repos, ok := currentCfg[pj.Spec.Refs.Org]
-	if !ok || !(repos.Len() == 0 || repos.Has(pj.Spec.Refs.Repo)) {
+	repos, orgExists := currentCfg[pj.Spec.Refs.Org]
+	repoConfig, repoExists := repos[pj.Spec.Refs.Repo]
+	if !orgExists || !repoExists {
+		return nil
+	}
+
+	// Only proceed with automatic triggering if mode is "auto"
+	if repoConfig.Trigger != "auto" {
 		return nil
 	}
 

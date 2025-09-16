@@ -504,51 +504,60 @@ func splitPRs(prs []prRequest, chunkSize int) [][]prRequest {
 }
 
 func sendMessage(logger *logrus.Entry, channel string, prs []prRequest, slackClient slackClient) error {
-	var errors []error
-	message := []slack.Block{
-		&slack.HeaderBlock{
-			Type: slack.MBTHeader,
-			Text: &slack.TextBlockObject{
-				Type: slack.PlainTextType,
-				Text: "PR Review Reminders",
+	header := func(prsNum int, title string) []slack.Block {
+		return []slack.Block{
+			&slack.HeaderBlock{
+				Type: slack.MBTHeader,
+				Text: &slack.TextBlockObject{
+					Type: slack.PlainTextType,
+					Text: title,
+				},
 			},
-		},
-		&slack.SectionBlock{
-			Type: slack.MBTSection,
-			Text: &slack.TextBlockObject{
-				Type: slack.PlainTextType,
-				Text: fmt.Sprintf("You have %d PR(s) to review:", len(prs)),
+			&slack.SectionBlock{
+				Type: slack.MBTSection,
+				Text: &slack.TextBlockObject{
+					Type: slack.PlainTextType,
+					Text: fmt.Sprintf("You have %d PR(s) to review:", prsNum),
+				},
 			},
-		},
-		&slack.ContextBlock{
-			Type: slack.MBTContext,
-			ContextElements: slack.ContextElements{
-				Elements: []slack.MixedElement{
-					&slack.TextBlockObject{
-						Type: slack.MarkdownType,
-						Text: fmt.Sprintf("%s: created in the last 2 days", recent),
-					},
-					&slack.TextBlockObject{
-						Type: slack.MarkdownType,
-						Text: fmt.Sprintf("%s: created in the last week", normal),
-					},
-					&slack.TextBlockObject{
-						Type: slack.MarkdownType,
-						Text: fmt.Sprintf("%s: created more than a week ago", old),
-					},
-					&slack.TextBlockObject{
-						Type: slack.MarkdownType,
-						Text: fmt.Sprintf("%s: updated in the last 24 hours", newUpdate),
+			&slack.ContextBlock{
+				Type: slack.MBTContext,
+				ContextElements: slack.ContextElements{
+					Elements: []slack.MixedElement{
+						&slack.TextBlockObject{
+							Type: slack.MarkdownType,
+							Text: fmt.Sprintf("%s: created in the last 2 days", recent),
+						},
+						&slack.TextBlockObject{
+							Type: slack.MarkdownType,
+							Text: fmt.Sprintf("%s: created in the last week", normal),
+						},
+						&slack.TextBlockObject{
+							Type: slack.MarkdownType,
+							Text: fmt.Sprintf("%s: created more than a week ago", old),
+						},
+						&slack.TextBlockObject{
+							Type: slack.MarkdownType,
+							Text: fmt.Sprintf("%s: updated in the last 24 hours", newUpdate),
+						},
 					},
 				},
 			},
-		},
+			&slack.DividerBlock{Type: slack.MBTDivider},
+		}
 	}
 
-	message = append(message, &slack.DividerBlock{Type: slack.MBTDivider})
-
+	var errors []error
 	prChunks := splitPRs(prs, 40)
-	for _, prChunk := range prChunks {
+	prChunksLen := len(prChunks)
+
+	for chunkIdx, prChunk := range prChunks {
+		headerTitle := "PR Review Reminders."
+		if len(prChunks) > 1 {
+			headerTitle = fmt.Sprintf("PR Review Reminders (%d/%d)", chunkIdx+1, prChunksLen)
+		}
+		message := header(len(prChunk), headerTitle)
+
 		for _, pr := range prChunk {
 			prBlock := &slack.ContextBlock{
 				Type: slack.MBTContext,
@@ -575,7 +584,7 @@ func sendMessage(logger *logrus.Entry, channel string, prs []prRequest, slackCli
 		}
 
 		responseChannel, responseTimestamp, err := slackClient.PostMessage(channel,
-			slack.MsgOptionText("PR Review Reminders.", true),
+			slack.MsgOptionText(headerTitle, true),
 			slack.MsgOptionBlocks(message...))
 		if err != nil {
 			logger.WithError(err).WithField("message", message).Debug("Failed to message user about PR review reminder")

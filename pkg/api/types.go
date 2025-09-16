@@ -1494,6 +1494,7 @@ const (
 	ClusterProfileAzureOADPQE             ClusterProfile = "azure-oadp-qe"
 	ClusterProfileGCPOADPQE               ClusterProfile = "gcp-oadp-qe"
 	ClusterProfileAWSlpChaos              ClusterProfile = "aws-lp-chaos"
+	ClusterProfileMetalGS                 ClusterProfile = "metal-gs"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -1674,6 +1675,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAzureOADPQE,
 		ClusterProfileGCPOADPQE,
 		ClusterProfileAWSlpChaos,
+		ClusterProfileMetalGS,
 	}
 }
 
@@ -1852,6 +1854,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "libvirt-s390x-amd64"
 	case ClusterProfileLibvirtS390xVPN:
 		return "libvirt-s390x-vpn"
+	case ClusterProfileMetalGS:
+		return "metal-gs"
 	case ClusterProfileMetalPerfscaleCPT:
 		return "metal-perscale-cpt"
 	case ClusterProfileMetalPerfscaleJetlag:
@@ -2297,6 +2301,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "gcp-oadp-qe-quota-slice"
 	case ClusterProfileAWSlpChaos:
 		return "aws-lp-chaos-quota-slice"
+	case ClusterProfileMetalGS:
+		return "metal-gs-quota-slice"
 	default:
 		return ""
 	}
@@ -2340,7 +2346,7 @@ func LeaseTypeFromClusterType(t string) (string, error) {
 		"powervs-3", "powervs-4", "powervs-5", "powervs-6", "powervs-7", "kubevirt", "aws-cpaas", "osd-ephemeral",
 		"gcp-virtualization", "aws-virtualization", "azure-virtualization", "hypershift-powervs",
 		"hypershift-powervs-cb", "aws-mco-qe", "equinix-edge-enablement", "aws-oadp-qe", "azure-oadp-qe", "gcp-oadp-qe",
-		"aws-lp-chaos":
+		"aws-lp-chaos", "metal-gs":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

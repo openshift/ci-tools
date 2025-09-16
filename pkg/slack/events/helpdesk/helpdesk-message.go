@@ -57,7 +57,7 @@ func MessageHandler(client messagePoster, keywordsConfig KeywordsConfig, helpdes
 				response = getTopLevelDirectMessageResponse(event.User)
 			} else if strings.Contains(event.Text, helpdeskAlias) {
 				log.Info("Handling response in forum-ocp-testplatform channel...")
-				response = getContactedHelpdeskResponse(event.BotID, reviewRequestWorkflowID)
+				response = getContactedHelpdeskResponse(event.BotID, reviewRequestWorkflowID, event.User)
 			} else {
 				log.Debugf("dptp-helpdesk not mentioned in message: %s", event.Text)
 				return false, nil
@@ -112,8 +112,12 @@ func getTopLevelDirectMessageResponse(user string) []slack.Block {
 	}}
 }
 
-func getContactedHelpdeskResponse(botId, reviewRequestWorkflowID string) []slack.Block {
-	sections := []string{":wave: You have reached the Test Platform Help Desk. An assigned engineer will respond in several hours during their working hours."}
+func getContactedHelpdeskResponse(botId, reviewRequestWorkflowID, user string) []slack.Block {
+	userPrefix := ""
+	if user != "" {
+		userPrefix = fmt.Sprintf("<@%s> ", user)
+	}
+	sections := []string{fmt.Sprintf("%s :wave: You have reached the Test Platform Help Desk. An assigned engineer will respond in several hours during their working hours.", userPrefix)}
 	if reviewRequestWorkflowID == botId {
 		sections = append(sections, "Your PR will be reviewed based on: age, priority, and capacity.")
 	} else {

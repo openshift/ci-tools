@@ -1,6 +1,8 @@
 package gsmsecrets
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"strings"
 
@@ -10,10 +12,13 @@ import (
 const (
 	TestPlatform = "test platform"
 
+	GCPMaxServiceAccountIDLength = 30
+
 	UpdaterSASecretSuffix = "__updater-service-account"
 	IndexSecretSuffix     = "____index"
 
-	ServiceAccountIDSuffix = "-sa"
+	ServiceAccountIDSuffix          = "-updater"
+	ServiceAccountDescriptionPrefix = "Updater service account for secret collection: "
 
 	SecretNameRegex = "^[A-Za-z0-9-]+$"
 
@@ -92,7 +97,9 @@ type CanonicalIAMBinding struct {
 type ServiceAccountInfo struct {
 	Email       string
 	DisplayName string
+	ID          string
 	Collection  string
+	Description string
 }
 
 type Actions struct {
@@ -116,26 +123,55 @@ func GetProjectResourceString(projectIdString string) string {
 	return fmt.Sprintf("projects/%s", projectIdString)
 }
 
-// GetUpdaterSAFormat returns the regex pattern for updater service account emails for a given project
-func GetUpdaterSAFormat(config Config) string {
-	return fmt.Sprintf(`[a-z0-9-]+%s$`, config.GetUpdaterSAEmailSuffix())
+// GetUpdaterSAEmailRegex returns the regex pattern for updater service account emails for a given project
+func GetUpdaterSAEmailRegex(config Config) string {
+	return fmt.Sprintf(`[a-z0-9-]+%s@%s\.iam\.gserviceaccount\.com$`, ServiceAccountIDSuffix, config.ProjectIdString)
 }
 
-// GetUpdaterSAEmailSuffix returns the suffix for updater service account emails for a given project
-// e.g., "-sa@<project-id>.iam.gserviceaccount.com".
-func (c Config) GetUpdaterSAEmailSuffix() string {
-	return fmt.Sprintf("%s@%s.iam.gserviceaccount.com", ServiceAccountIDSuffix, c.ProjectIdString)
-}
-
-// GetUpdaterSAEmail returns the updater service account email for a collection,
-// e.g., "my-collection-sa@<project-id>.iam.gserviceaccount.com".
+// GetUpdaterSAEmail returns the updater service account email for a collection.
 func GetUpdaterSAEmail(collection string, config Config) string {
-	return fmt.Sprintf("%s%s@%s.iam.gserviceaccount.com", collection, ServiceAccountIDSuffix, config.ProjectIdString)
+	return fmt.Sprintf("%s@%s.iam.gserviceaccount.com", GetUpdaterSAId(collection), config.ProjectIdString)
 }
 
-// GetUpdaterSAId returns the updater service account ID for a given display name.
-func GetUpdaterSAId(displayName string) string {
-	return fmt.Sprintf("%s%s", displayName, ServiceAccountIDSuffix)
+// GetUpdaterSAId returns the updater service account ID for a given collection name.
+// Uses the collection name directly if it fits within GCP's 30-character limit,
+// otherwise uses a hash-based approach.
+func GetUpdaterSAId(collection string) string {
+	suffixLen := len(ServiceAccountIDSuffix)
+	directId := fmt.Sprintf("%s%s", collection, ServiceAccountIDSuffix)
+
+	if len(directId) <= GCPMaxServiceAccountIDLength {
+		return directId
+	}
+
+	maxHashLen := GCPMaxServiceAccountIDLength - suffixLen
+	hash := sha256.Sum256([]byte(collection))
+	encodedHash := base64.RawURLEncoding.EncodeToString(hash[:])
+
+	if len(encodedHash) > maxHashLen {
+		encodedHash = encodedHash[:maxHashLen]
+	}
+
+	return fmt.Sprintf("%s%s", strings.ToLower(encodedHash), ServiceAccountIDSuffix)
+}
+
+// GetUpdaterSADisplayName returns the display name for the service account,
+// which is the collection name.
+func GetUpdaterSADisplayName(collection string) string {
+	return collection
+}
+
+// GetUpdaterSADescription returns the description for the service account
+func GetUpdaterSADescription(collection string) string {
+	return fmt.Sprintf("%s%s", ServiceAccountDescriptionPrefix, collection)
+}
+
+// ExtractCollectionFromDescription extracts the collection name from a service account description
+func ExtractCollectionFromDescription(description string) string {
+	if after, ok := strings.CutPrefix(description, ServiceAccountDescriptionPrefix); ok {
+		return after
+	}
+	return ""
 }
 
 // GetUpdaterSASecretName returns standardized name for updater service account secret,

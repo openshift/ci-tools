@@ -43,12 +43,28 @@ func GetUpdaterServiceAccounts(ctx context.Context, client IAMClient, config Con
 			return nil, err
 		}
 		// Only add updater service accounts
-		if matched, _ := regexp.MatchString(GetUpdaterSAFormat(config), serviceAccount.Email); matched {
-			collection := strings.TrimSuffix(serviceAccount.Email, config.GetUpdaterSAEmailSuffix())
+		if matched, _ := regexp.MatchString(GetUpdaterSAEmailRegex(config), serviceAccount.Email); matched {
+			collection := serviceAccount.DisplayName // The display name is the collection name
+			if collection == "" {
+				// Fallback: try to extract from description
+				collection = ExtractCollectionFromDescription(serviceAccount.Description)
+			}
+			if collection == "" {
+				return nil, fmt.Errorf("couldn't determine collection of service account %s", serviceAccount.Email)
+			}
+
+			emailParts := strings.Split(serviceAccount.Email, "@")
+			id := ""
+			if len(emailParts) > 0 {
+				id = emailParts[0]
+			}
+
 			actualServiceAccounts = append(actualServiceAccounts, ServiceAccountInfo{
 				Email:       serviceAccount.Email,
 				DisplayName: serviceAccount.DisplayName,
+				ID:          id,
 				Collection:  collection,
+				Description: serviceAccount.Description,
 			})
 		}
 	}

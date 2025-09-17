@@ -74,9 +74,10 @@ func (a *Actions) CreateServiceAccounts(ctx context.Context, client IAMClient) {
 	for _, sa := range a.SAsToCreate {
 		request := &adminpb.CreateServiceAccountRequest{
 			Name:      GetProjectResourceString(a.Config.ProjectIdString),
-			AccountId: sa.DisplayName,
+			AccountId: sa.ID,
 			ServiceAccount: &adminpb.ServiceAccount{
 				DisplayName: sa.DisplayName,
+				Description: sa.Description,
 			},
 		}
 		secretName := GetUpdaterSASecretName(sa.Collection)

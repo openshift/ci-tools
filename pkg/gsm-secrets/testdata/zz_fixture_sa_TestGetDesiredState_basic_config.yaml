@@ -1,9 +1,15 @@
 - Collection: collection-alpha
-  DisplayName: collection-alpha-sa
-  Email: collection-alpha-sa@test-project.iam.gserviceaccount.com
-- Collection: collection-beta
-  DisplayName: collection-beta-sa
-  Email: collection-beta-sa@test-project.iam.gserviceaccount.com
+  Description: 'Updater service account for secret collection: collection-alpha'
+  DisplayName: collection-alpha
+  Email: collection-alpha-updater@test-project.iam.gserviceaccount.com
+  ID: collection-alpha-updater
 - Collection: shared-collection
-  DisplayName: shared-collection-sa
-  Email: shared-collection-sa@test-project.iam.gserviceaccount.com
+  Description: 'Updater service account for secret collection: shared-collection'
+  DisplayName: shared-collection
+  Email: shared-collection-updater@test-project.iam.gserviceaccount.com
+  ID: shared-collection-updater
+- Collection: some-collection-with-a-very-long-name
+  Description: 'Updater service account for secret collection: some-collection-with-a-very-long-name'
+  DisplayName: some-collection-with-a-very-long-name
+  Email: ynbbgzp1q3u3iwp8edyqix-updater@test-project.iam.gserviceaccount.com
+  ID: ynbbgzp1q3u3iwp8edyqix-updater

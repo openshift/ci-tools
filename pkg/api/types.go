@@ -1354,6 +1354,7 @@ const (
 	ClusterProfileAWSSustAutoRel412       ClusterProfile = "aws-sustaining-autorelease-412"
 	ClusterProfileAWSKubeVirt             ClusterProfile = "aws-kubevirt"
 	ClusterProfileAWSOVNPerfScale         ClusterProfile = "aws-ovn-perfscale"
+	ClusterProfileAWSConfidentialQE       ClusterProfile = "aws-confidential-qe"
 	ClusterProfileAlibabaCloud            ClusterProfile = "alibabacloud"
 	ClusterProfileAlibabaCloudQE          ClusterProfile = "alibabacloud-qe"
 	ClusterProfileAlibabaCloudCNQE        ClusterProfile = "alibabacloud-cn-qe"
@@ -1540,6 +1541,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSSustAutoRel412,
 		ClusterProfileAWSKubeVirt,
 		ClusterProfileAWSOVNPerfScale,
+		ClusterProfileAWSConfidentialQE,
 		ClusterProfileAlibabaCloud,
 		ClusterProfileAlibabaCloudQE,
 		ClusterProfileAlibabaCloudCNQE,
@@ -1739,6 +1741,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSMCOQE,
 		ClusterProfileAWSManagedOSDRHOAIQE,
 		ClusterProfileAWSOADPQE,
+		ClusterProfileAWSConfidentialQE,
 		ClusterProfileAWSlpChaos:
 		return string(CloudAWS)
 	case
@@ -2243,6 +2246,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "hypershift-powervs-cb-quota-slice"
 	case ClusterProfileOSSM:
 		return "ossm-aws-quota-slice"
+	case ClusterProfileAWSConfidentialQE:
+		return "aws-confidential-qe-quota-slice"
 	case ClusterProfileMedik8sAWS:
 		return "medik8s-aws-quota-slice"
 	case ClusterProfileGitOpsAWS:

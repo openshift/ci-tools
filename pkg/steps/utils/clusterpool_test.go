@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -40,7 +39,7 @@ func TestClusterPoolFromClaim(t *testing.T) {
 	testCases := []struct {
 		description string
 		pools       []hivev1.ClusterPool
-		expected    *hivev1.ClusterPool
+		expectAny   []*hivev1.ClusterPool
 		expectErr   error
 	}{
 		{
@@ -50,21 +49,22 @@ func TestClusterPoolFromClaim(t *testing.T) {
 		{
 			description: "returns the cluster when there is just one",
 			pools:       []hivev1.ClusterPool{{ObjectMeta: v1.ObjectMeta{Name: "i-have-six-clusters"}, Status: hivev1.ClusterPoolStatus{Ready: 6}}},
-			expected:    &hivev1.ClusterPool{ObjectMeta: v1.ObjectMeta{Name: "i-have-six-clusters"}, Status: hivev1.ClusterPoolStatus{Ready: 6}},
+			expectAny:   []*hivev1.ClusterPool{{ObjectMeta: v1.ObjectMeta{Name: "i-have-six-clusters"}, Status: hivev1.ClusterPoolStatus{Ready: 6}}},
 		},
 		{
-			// The method samples from the best pools so technically both could be returned. The actual one selected depends
-			// on the random seed
+			// When pools are tied, any of them is a valid selection
 			description: "select one when there are many depleted",
 			pools: []hivev1.ClusterPool{
 				{ObjectMeta: v1.ObjectMeta{Name: "i-have-no-clusters"}, Status: hivev1.ClusterPoolStatus{Ready: 0}},
 				{ObjectMeta: v1.ObjectMeta{Name: "me-neither"}, Status: hivev1.ClusterPoolStatus{Ready: 0}},
 			},
-			expected: &hivev1.ClusterPool{ObjectMeta: v1.ObjectMeta{Name: "i-have-no-clusters"}, Status: hivev1.ClusterPoolStatus{Ready: 0}},
+			expectAny: []*hivev1.ClusterPool{
+				{ObjectMeta: v1.ObjectMeta{Name: "i-have-no-clusters"}, Status: hivev1.ClusterPoolStatus{Ready: 0}},
+				{ObjectMeta: v1.ObjectMeta{Name: "me-neither"}, Status: hivev1.ClusterPoolStatus{Ready: 0}},
+			},
 		},
 		{
-			// The method samples from the best pools so technically both could be returned. The actual one selected depends
-			// on the random seed
+			// When there are better pools, one of the better ones should be selected
 			description: "select one from the better two",
 			pools: []hivev1.ClusterPool{
 				{ObjectMeta: v1.ObjectMeta{Name: "i-have-no-clusters"}, Status: hivev1.ClusterPoolStatus{Ready: 0}},
@@ -72,7 +72,10 @@ func TestClusterPoolFromClaim(t *testing.T) {
 				{ObjectMeta: v1.ObjectMeta{Name: "i-have-one"}, Status: hivev1.ClusterPoolStatus{Ready: 1}},
 				{ObjectMeta: v1.ObjectMeta{Name: "me-too"}, Status: hivev1.ClusterPoolStatus{Ready: 1}},
 			},
-			expected: &hivev1.ClusterPool{ObjectMeta: v1.ObjectMeta{Name: "i-have-one"}, Status: hivev1.ClusterPoolStatus{Ready: 1}},
+			expectAny: []*hivev1.ClusterPool{
+				{ObjectMeta: v1.ObjectMeta{Name: "i-have-one"}, Status: hivev1.ClusterPoolStatus{Ready: 1}},
+				{ObjectMeta: v1.ObjectMeta{Name: "me-too"}, Status: hivev1.ClusterPoolStatus{Ready: 1}},
+			},
 		},
 		{
 			description: "select the cluster with most ready clusters",
@@ -82,7 +85,7 @@ func TestClusterPoolFromClaim(t *testing.T) {
 				{ObjectMeta: v1.ObjectMeta{Name: "i-have-6-clusters"}, Status: hivev1.ClusterPoolStatus{Ready: 6}},
 				{ObjectMeta: v1.ObjectMeta{Name: "i-have-5-clusters"}, Status: hivev1.ClusterPoolStatus{Ready: 5}},
 			},
-			expected: &hivev1.ClusterPool{ObjectMeta: v1.ObjectMeta{Name: "i-have-6-clusters"}, Status: hivev1.ClusterPoolStatus{Ready: 6}},
+			expectAny: []*hivev1.ClusterPool{{ObjectMeta: v1.ObjectMeta{Name: "i-have-6-clusters"}, Status: hivev1.ClusterPoolStatus{Ready: 6}}},
 		},
 		{
 			description: "select the clusters with larger size when ready are equal",
@@ -90,7 +93,7 @@ func TestClusterPoolFromClaim(t *testing.T) {
 				{ObjectMeta: v1.ObjectMeta{Name: "i-have-no-clusters-of-3"}, Spec: hivev1.ClusterPoolSpec{Size: 3}, Status: hivev1.ClusterPoolStatus{Ready: 0}},
 				{ObjectMeta: v1.ObjectMeta{Name: "i-have-no-clusters-of-4"}, Spec: hivev1.ClusterPoolSpec{Size: 4}, Status: hivev1.ClusterPoolStatus{Ready: 0}},
 			},
-			expected: &hivev1.ClusterPool{ObjectMeta: v1.ObjectMeta{Name: "i-have-no-clusters-of-4"}, Spec: hivev1.ClusterPoolSpec{Size: 4}, Status: hivev1.ClusterPoolStatus{Ready: 0}},
+			expectAny: []*hivev1.ClusterPool{{ObjectMeta: v1.ObjectMeta{Name: "i-have-no-clusters-of-4"}, Spec: hivev1.ClusterPoolSpec{Size: 4}, Status: hivev1.ClusterPoolStatus{Ready: 0}}},
 		},
 		{
 			description: "select the clusters with larger maxsize when ready and size are equal",
@@ -98,21 +101,44 @@ func TestClusterPoolFromClaim(t *testing.T) {
 				{ObjectMeta: v1.ObjectMeta{Name: "i-have-no-clusters-of-4max"}, Spec: hivev1.ClusterPoolSpec{Size: 3, MaxSize: pointer.Int32(4)}, Status: hivev1.ClusterPoolStatus{Ready: 0}},
 				{ObjectMeta: v1.ObjectMeta{Name: "i-have-no-clusters-of-3max"}, Spec: hivev1.ClusterPoolSpec{Size: 3, MaxSize: pointer.Int32(3)}, Status: hivev1.ClusterPoolStatus{Ready: 0}},
 			},
-			expected: &hivev1.ClusterPool{ObjectMeta: v1.ObjectMeta{Name: "i-have-no-clusters-of-4max"}, Spec: hivev1.ClusterPoolSpec{Size: 3, MaxSize: pointer.Int32(4)}, Status: hivev1.ClusterPoolStatus{Ready: 0}},
+			expectAny: []*hivev1.ClusterPool{{ObjectMeta: v1.ObjectMeta{Name: "i-have-no-clusters-of-4max"}, Spec: hivev1.ClusterPoolSpec{Size: 3, MaxSize: pointer.Int32(4)}, Status: hivev1.ClusterPoolStatus{Ready: 0}}},
 		},
 	}
 
-	// Stable seed is needed because `ClusterPoolFromClaim` randomly samples in some situations
-	rand.Seed(0)
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			got, err := ClusterPoolFromClaim(context.TODO(), &api.ClusterClaim{}, fakePoolClient{returns: tc.pools})
-			if diff := cmp.Diff(tc.expectErr, err, testhelper.EquateErrorMessage); diff != "" {
-				t.Errorf("error differs from expected:\n%s", diff)
+			if tc.expectErr != nil {
+				if diff := cmp.Diff(tc.expectErr, err, testhelper.EquateErrorMessage); diff != "" {
+					t.Errorf("error differs from expectAny:\n%s", diff)
+					return
+				} else {
+					return // Expected
+				}
+			}
+
+			// Check if the result matches any of the expectAny results
+			if len(tc.expectAny) == 0 {
+				t.Errorf("Test case must specify at least one expectAny result")
 				return
 			}
-			if diff := cmp.Diff(tc.expected, got); err == nil && diff != "" {
-				t.Errorf("Selected pool differs from expected:\n%s", diff)
+
+			found := false
+			for _, expectedResult := range tc.expectAny {
+				if cmp.Equal(expectedResult, got) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("Selected pool %q is not one of the valid results: %v",
+					got.Name, func() []string {
+						var names []string
+						for _, er := range tc.expectAny {
+							names = append(names, er.Name)
+						}
+						return names
+					}())
 			}
 		})
 	}

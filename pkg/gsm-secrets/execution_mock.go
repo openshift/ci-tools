@@ -46,6 +46,26 @@ func (m *MockSecretManagerClient) EXPECT() *MockSecretManagerClientMockRecorder 
 	return m.recorder
 }
 
+// AccessSecretVersion mocks base method.
+func (m *MockSecretManagerClient) AccessSecretVersion(ctx context.Context, req *secretmanagerpb.AccessSecretVersionRequest, opts ...gax.CallOption) (*secretmanagerpb.AccessSecretVersionResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, req}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "AccessSecretVersion", varargs...)
+	ret0, _ := ret[0].(*secretmanagerpb.AccessSecretVersionResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AccessSecretVersion indicates an expected call of AccessSecretVersion.
+func (mr *MockSecretManagerClientMockRecorder) AccessSecretVersion(ctx, req any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, req}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AccessSecretVersion", reflect.TypeOf((*MockSecretManagerClient)(nil).AccessSecretVersion), varargs...)
+}
+
 // AddSecretVersion mocks base method.
 func (m *MockSecretManagerClient) AddSecretVersion(ctx context.Context, req *secretmanagerpb.AddSecretVersionRequest, opts ...gax.CallOption) (*secretmanagerpb.SecretVersion, error) {
 	m.ctrl.T.Helper()

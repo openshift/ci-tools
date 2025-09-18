@@ -1,0 +1,18 @@
+cluster_groups:
+  build-farm:
+  - app.ci
+  - build01
+  - build02
+  dp-managed:
+  - build01
+  - build02
+groups:
+  test-platform-ci-admins:
+    clusters:
+    - app.ci
+    secret_collections:
+    - alpha-secrets
+  team-noop:
+    cluster_groups:
+    - dp-managed
+

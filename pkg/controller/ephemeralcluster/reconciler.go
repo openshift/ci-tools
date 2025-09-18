@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -41,11 +43,15 @@ import (
 const (
 	ControllerName            = "ephemeral_cluster_provisioner"
 	WaitTestStepName          = "wait-test-complete"
+	HiveKubeconfigSecret      = EphemeralClusterTestName + "-" + api.HiveAdminKubeconfigSecret
+	HiveAdminPasswdSecret     = EphemeralClusterTestName + "-" + api.HiveAdminPasswordSecret
 	EphemeralClusterTestName  = "cluster-provisioning"
 	EphemeralClusterLabel     = "ci.openshift.io/ephemeral-cluster"
 	EphemeralClusterNamespace = "ephemeral-cluster"
 	AbortProwJobDeleteEC      = "Ephemeral Cluster deleted"
 	DependentProwJobFinalizer = "ephemeralcluster.ci.openshift.io/dependent-prowjob"
+	PREventPayload            = "ephemeralcluster.ci.openshift.io/pr-event-payload"
+	PREventHeaders            = "ephemeralcluster.ci.openshift.io/pr-event-headers"
 	UnresolvedConfigVar       = "UNRESOLVED_CONFIG"
 	ProwJobCreatingDoneReason = "ProwJob has been properly created"
 	ProwJobNamePrefix         = "ephemeralcluster"
@@ -66,10 +72,13 @@ var (
 	defaultReconcilerOpts = reconcilerOptions{
 		polling: 3 * time.Second,
 	}
+
+	isTagRegexp = regexp.MustCompile(`(?P<Namespace>.+)/(?P<Name>.+)\:(?P<Tag>.+)`)
 )
 
 type reconcilerOptions struct {
-	polling time.Duration
+	polling     time.Duration
+	cliISTagRef string
 }
 
 type ReconcilerOption func(*reconcilerOptions)
@@ -77,6 +86,13 @@ type ReconcilerOption func(*reconcilerOptions)
 func WithPolling(polling time.Duration) ReconcilerOption {
 	return func(o *reconcilerOptions) {
 		o.polling = polling
+	}
+}
+
+// Set the image stream tag reference for the `cli` image in the form of `ocp/4.22:cli`.
+func WithCLIISTagRef(isTagRef string) ReconcilerOption {
+	return func(o *reconcilerOptions) {
+		o.cliISTagRef = isTagRef
 	}
 }
 
@@ -105,8 +121,9 @@ type reconciler struct {
 	prowConfigAgent *prowconfig.Agent
 
 	// Mock for testing
-	now     func() time.Time
-	polling func() time.Duration
+	now         func() time.Time
+	polling     func() time.Duration
+	cliISTagRef api.ImageStreamTagReference
 }
 
 func ECPredicateFilter(object ctrlruntimeclient.Object) bool {
@@ -124,6 +141,11 @@ func AddToManager(log *logrus.Entry, mgr manager.Manager, allManagers map[string
 		opt(&defaultReconcilerOpts)
 	}
 
+	cliISTagRef, err := parseCLIISTagRef(defaultReconcilerOpts.cliISTagRef)
+	if err != nil {
+		return err
+	}
+
 	r := reconciler{
 		logger:          log.WithField("controller", ControllerName),
 		masterClient:    mgr.GetClient(),
@@ -132,6 +154,7 @@ func AddToManager(log *logrus.Entry, mgr manager.Manager, allManagers map[string
 		newPresubmit:    pjutil.NewPresubmit,
 		now:             time.Now,
 		polling:         func() time.Duration { return defaultReconcilerOpts.polling },
+		cliISTagRef:     cliISTagRef,
 	}
 
 	if err := ctrlbldr.ControllerManagedBy(mgr).
@@ -181,8 +204,8 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 
 	upsertCondition(&observedStatus, ephemeralclusterv1.ProwJobCreating, ephemeralclusterv1.ConditionFalse, r.now(), ProwJobCreatingDoneReason, "")
 
-	log.Info("Fetching the kubeconfig")
-	err := r.fetchKubeconfig(ctx, log, &observedStatus, &pj)
+	log.Info("Fetching the secrets")
+	err := r.fetchSecrets(ctx, log, ec, &observedStatus, &pj)
 	if err != nil {
 		if updateErr := r.updateEphemeralClusterStatus(ctx, ec, &observedStatus); updateErr != nil {
 			msg := utilerrors.NewAggregate([]error{updateErr, err}).Error()
@@ -238,8 +261,18 @@ func (r *reconciler) generateCIOperatorConfig(log *logrus.Entry, ec *ephemeralcl
 	}
 
 	releases := ec.Spec.CIOperator.Releases
-	if len(releases) == 0 {
-		return nil, errors.New("releases stanza not set")
+	baseImages := make(map[string]api.ImageStreamTagReference)
+	if ec.Spec.CIOperator.BaseImages != nil {
+		baseImages = ec.Spec.CIOperator.BaseImages
+	}
+
+	cliImgName := "cli"
+	if ec.Spec.CIOperator.Test.ClusterClaim == nil {
+		if len(releases) == 0 {
+			return nil, errors.New("releases stanza not set")
+		}
+	} else {
+		cliImgName = r.injectCLIIntoBaseImages(baseImages)
 	}
 
 	org := prMeta.Event.PullRequest.Base.Repo.Owner.Login
@@ -249,19 +282,20 @@ func (r *reconciler) generateCIOperatorConfig(log *logrus.Entry, ec *ephemeralcl
 	return &api.ReleaseBuildConfiguration{
 		InputConfiguration: api.InputConfiguration{
 			BuildRootImage: ec.Spec.CIOperator.BuildRootImage,
-			BaseImages:     ec.Spec.CIOperator.BaseImages,
+			BaseImages:     baseImages,
 			ExternalImages: ec.Spec.CIOperator.ExternalImages,
 			Releases:       releases,
 		},
 		Resources: resources,
 		Tests: []api.TestStepConfiguration{{
-			As: EphemeralClusterTestName,
+			As:           EphemeralClusterTestName,
+			ClusterClaim: ec.Spec.CIOperator.Test.ClusterClaim,
 			MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
 				Workflow: &ec.Spec.CIOperator.Test.Workflow,
 				Test: []api.TestStep{{
 					LiteralTestStep: &api.LiteralTestStep{
 						As:       WaitTestStepName,
-						From:     "cli",
+						From:     cliImgName,
 						Commands: waitKubeconfigSh,
 						Resources: api.ResourceRequirements{
 							Requests: api.ResourceList{"cpu": "10m"},
@@ -275,6 +309,30 @@ func (r *reconciler) generateCIOperatorConfig(log *logrus.Entry, ec *ephemeralcl
 		}},
 		Metadata: api.Metadata{Org: org, Repo: repo, Branch: branch},
 	}, nil
+}
+
+// injectCLIIntoBaseImages makes sure the `cli` image is always available. When a cluster is
+// assembled from a regular release payload, `cli` gets resolved from the payload itself.
+// On the other hand that's not the case for clusters claimed from Hive, hence this routime ensure
+// to import the `cli` image anyway.
+func (r *reconciler) injectCLIIntoBaseImages(baseImages map[string]api.ImageStreamTagReference) string {
+	// Find the longest base image whose name starts with `cli` and then append a suffix to
+	// it in order to avoid collisions.
+	var longestName string
+	for name := range baseImages {
+		if strings.HasPrefix(name, "cli") && len(name) > len(longestName) {
+			longestName = name
+		}
+	}
+
+	if longestName == "" {
+		longestName = "cli"
+	} else {
+		longestName = longestName + "-2"
+	}
+
+	baseImages[longestName] = r.cliISTagRef
+	return longestName
 }
 
 func (r *reconciler) handleCreateProwJob(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) (reconcile.Result, error) {
@@ -326,9 +384,14 @@ func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *e
 		upsertCondition(&ec.Status, ephemeralclusterv1.ProwJobCreating, status, r.now(), reason, msg)
 	}
 
-	prMeta, err := parsePRMeta(ec.Spec.PullRequest.Payload, ec.Spec.PullRequest.Headers)
+	annotations := ec.Annotations
+	if annotations == nil {
+		annotations = map[string]string{}
+	}
+
+	prMeta, err := parsePRMeta(annotations[PREventPayload], annotations[PREventHeaders])
 	if err != nil {
-		log.WithError(err).Errorf("parse pull request meta %s", ec.Spec.PullRequest)
+		log.WithError(err).Error("parse pull request meta")
 		err = fmt.Errorf("parse pull request meta: %w", err)
 		upsertProvisioningCond(ephemeralclusterv1.ConditionFalse, ephemeralclusterv1.CIOperatorJobsGenerateFailureReason, err.Error())
 		ec.Status.Phase = ephemeralclusterv1.EphemeralClusterFailed
@@ -427,11 +490,11 @@ func (r *reconciler) makeProwJob(ciOperatorConfig *api.ReleaseBuildConfiguration
 	return &pj, nil
 }
 
-func (r *reconciler) fetchKubeconfig(ctx context.Context, log *logrus.Entry, ecStatus *ephemeralclusterv1.EphemeralClusterStatus, pj *prowv1.ProwJob) error {
+func (r *reconciler) fetchSecrets(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster, ecStatus *ephemeralclusterv1.EphemeralClusterStatus, pj *prowv1.ProwJob) error {
 	buildClient, err := r.buildClientFor(pj)
 	if err != nil {
 		log.WithField("cluster", pj.Spec.Cluster).WithError(err).Error("Build client not found")
-		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.KubeconfigFetchFailureReason, err.Error())
+		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, err.Error())
 		ecStatus.Phase = ephemeralclusterv1.EphemeralClusterFailed
 		return reconcile.TerminalError(err)
 	}
@@ -439,31 +502,91 @@ func (r *reconciler) fetchKubeconfig(ctx context.Context, log *logrus.Entry, ecS
 	ns, err := r.findCIOperatorTestNS(ctx, buildClient, pj)
 	if err != nil {
 		log.Info("ci-operator NS not found")
-		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.KubeconfigFetchFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg)
+		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg)
 		return nil
 	}
 	log.WithField("namespace", ns).Info("ci-operator namespace found")
 
+	if ec.Spec.CIOperator.Test.ClusterClaim != nil {
+		r.fetchHiveSecrets(ctx, log, buildClient, ns, ecStatus)
+	} else {
+		r.fetchClusterKubeconfig(ctx, log, buildClient, ns, ecStatus)
+	}
+
+	return nil
+}
+
+func (r *reconciler) fetchHiveSecrets(ctx context.Context, log *logrus.Entry, buildClient ctrlruntimeclient.Client, ns string, ecStatus *ephemeralclusterv1.EphemeralClusterStatus) {
+	secretsReady := true
+	var err error
+	var kubeconfig, passwd []byte
+
+	for _, secret := range []struct {
+		name string
+		key  string
+		data *[]byte
+	}{
+		{name: HiveKubeconfigSecret, key: api.HiveAdminKubeconfigSecretKey, data: &kubeconfig},
+		{name: HiveAdminPasswdSecret, key: api.HiveAdminPasswordSecretKey, data: &passwd},
+	} {
+		s := corev1.Secret{}
+		if err = buildClient.Get(ctx, types.NamespacedName{Name: secret.name, Namespace: ns}, &s); err != nil {
+			secretsReady = false
+			if kerrors.IsNotFound(err) {
+				// Not available yet, do not report this as an error
+				err = nil
+			} else {
+				log.WithField("secret", secret.name).WithError(err).Error("Failed to read secret")
+			}
+			break
+		}
+
+		data, ok := s.Data[secret.key]
+		if !ok {
+			secretsReady = false
+			break
+		}
+
+		*secret.data = slices.Clone(data)
+	}
+
+	if err != nil {
+		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, err.Error())
+		return
+	}
+
+	if !secretsReady {
+		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, ephemeralclusterv1.HiveSecretsNotReadyMsg)
+		return
+	}
+
+	ecStatus.Kubeconfig = string(kubeconfig)
+	ecStatus.KubeAdminPassword = string(passwd)
+	log.Info("hive secrets fetched")
+	upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionTrue, r.now(), "", "")
+	ecStatus.Phase = ephemeralclusterv1.EphemeralClusterReady
+}
+
+func (r *reconciler) fetchClusterKubeconfig(ctx context.Context, log *logrus.Entry, buildClient ctrlruntimeclient.Client, ns string, ecStatus *ephemeralclusterv1.EphemeralClusterStatus) {
 	kubeconfigSecret := corev1.Secret{}
 	// The secret is named after the test name.
 	if err := buildClient.Get(ctx, types.NamespacedName{Name: EphemeralClusterTestName, Namespace: ns}, &kubeconfigSecret); err != nil {
-		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.KubeconfigFetchFailureReason, err.Error())
-		return nil
+		log.WithField("secret", EphemeralClusterTestName).WithError(err).Error("Failed to read secret")
+		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, err.Error())
+		return
 	}
 
 	kubeconfig, ok := kubeconfigSecret.Data["kubeconfig"]
 	if !ok {
 		// The kubeconfig takes time before being stored into the secret, requeuing.
-		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.KubeconfigFetchFailureReason, ephemeralclusterv1.KubeconfigNotReadMsg)
-		return nil
+		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, ephemeralclusterv1.KubeconfigNotReadyMsg)
+		return
 	}
 
 	ecStatus.Kubeconfig = string(kubeconfig)
 	log.Info("kubeconfig fetched")
 	upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionTrue, r.now(), "", "")
 	ecStatus.Phase = ephemeralclusterv1.EphemeralClusterReady
-
-	return nil
 }
 
 func (r *reconciler) updateEphemeralClusterStatus(ctx context.Context, ec *ephemeralclusterv1.EphemeralCluster, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) error {
@@ -657,6 +780,10 @@ func conditionsEqual(a, b *ephemeralclusterv1.EphemeralClusterCondition) bool {
 func parsePRMeta(event, headers string) (PRMeta, error) {
 	prMeta := PRMeta{}
 
+	if event == "" || headers == "" {
+		return prMeta, errors.New("malformed PR event payload")
+	}
+
 	if err := json.Unmarshal([]byte(event), &prMeta.Event); err != nil {
 		return prMeta, fmt.Errorf("unmarshal event: %w", err)
 	}
@@ -669,9 +796,19 @@ func parsePRMeta(event, headers string) (PRMeta, error) {
 		return prMeta, errors.New("unsupported PR event payload")
 	}
 
-	if prMeta.Event == nil || prMeta.Event.PullRequest == nil {
-		return prMeta, errors.New("malformed PR event payload")
+	return prMeta, nil
+}
+
+func parseCLIISTagRef(isTag string) (api.ImageStreamTagReference, error) {
+	isTagRef := api.ImageStreamTagReference{}
+	matches := isTagRegexp.FindStringSubmatch(isTag)
+	if matches == nil || len(matches) != 4 {
+		return isTagRef, fmt.Errorf("invalid istag for the cli image: %s", isTag)
 	}
 
-	return prMeta, nil
+	isTagRef.Namespace = matches[1]
+	isTagRef.Name = matches[2]
+	isTagRef.Tag = matches[3]
+
+	return isTagRef, nil
 }

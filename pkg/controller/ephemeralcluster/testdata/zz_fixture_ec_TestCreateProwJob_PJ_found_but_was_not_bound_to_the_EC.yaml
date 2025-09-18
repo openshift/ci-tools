@@ -6,7 +6,6 @@ metadata:
 spec:
   ciOperator:
     test: {}
-  pullRequest: {}
 status:
   phase: ""
   prowJobId: pj

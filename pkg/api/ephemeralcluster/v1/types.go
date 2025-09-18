@@ -10,11 +10,12 @@ const (
 	CIOperatorJobsGenerateFailureReason    = "CIOperatorJobsGenerateFailure"
 	ProwJobFailureReason                   = "ProwJobFailure"
 	ProwJobCompletedReason                 = "ProwJobCompleted"
-	KubeconfigFetchFailureReason           = "KubeconfigFetchFailure"
+	SecretsFetchFailureReason              = "SecretsFetchFailure"
 	CreateTestCompletedSecretFailureReason = "CreateTestCompletedSecretFailure"
 
 	CIOperatorNSNotFoundMsg = "ci-operator NS not found"
-	KubeconfigNotReadMsg    = "kubeconfig not ready"
+	KubeconfigNotReadyMsg   = "kubeconfig not ready"
+	HiveSecretsNotReadyMsg  = "hive secrets not ready"
 )
 
 // EphemeralClusterCondition is a valid value for EphemeralClusterCondition.Type
@@ -77,9 +78,7 @@ type EphemeralClusterList struct {
 }
 
 type EphemeralClusterSpec struct {
-	// PullRequest holds the information regarding the PR this requested originated from.
-	PullRequest PullRequestMeta `json:"pullRequest,omitempty"`
-	CIOperator  CIOperatorSpec  `json:"ciOperator"`
+	CIOperator CIOperatorSpec `json:"ciOperator"`
 	// When set to true, signals the controller that the ephemeral cluster is no longer needed,
 	// allowing decommissioning procedures to begin.
 	TearDownCluster bool `json:"tearDownCluster,omitempty"`
@@ -114,7 +113,8 @@ type EphemeralClusterStatus struct {
 	Conditions []EphemeralClusterCondition `json:"conditions,omitempty"`
 	ProwJobID  string                      `json:"prowJobId,omitempty"`
 	// Kubeconfig to access the ephemeral cluster
-	Kubeconfig string `json:"kubeconfig,omitempty"`
+	Kubeconfig        string `json:"kubeconfig,omitempty"`
+	KubeAdminPassword string `json:"kubeAdminPassword,omitempty"`
 }
 
 // EphemeralClusterCondition contains details for the current condition of this EphemeralCluster.

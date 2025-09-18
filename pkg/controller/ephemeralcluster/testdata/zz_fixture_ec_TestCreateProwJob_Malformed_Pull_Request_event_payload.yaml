@@ -19,9 +19,6 @@ spec:
       env:
         foo: bar
       workflow: test-workflow
-  pullRequest:
-    event: '{}'
-    headers: '{"X-Github-Delivery": "aa9ede40-8fbb-11f0-8717-9eed0c1315d0"}'
 status:
   conditions:
   - lastTransitionTime: "2025-04-02T12:12:12Z"

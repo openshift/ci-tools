@@ -1,0 +1,198 @@
+items:
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
+      prow.k8s.io/context: ci/prow/cluster-provisioning
+      prow.k8s.io/job: ephemeralcluster-ci-openshift-ci-tools-main-cluster-provisioning
+    creationTimestamp: null
+    labels:
+      ci-operator.openshift.io/cloud: aws
+      ci-operator.openshift.io/cloud-cluster-profile: aws
+      ci.openshift.io/ephemeral-cluster: ec
+      created-by-prow: "true"
+      event-GUID: aa9ede40-8fbb-11f0-8717-9eed0c1315d0
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      prow.k8s.io/context: cluster-provisioning
+      prow.k8s.io/is-optional: "false"
+      prow.k8s.io/job: ephemeralcluster-ci-openshift-ci-tools-main-cluster-provisionin
+      prow.k8s.io/refs.base_ref: main
+      prow.k8s.io/refs.org: openshift
+      prow.k8s.io/refs.pull: "0"
+      prow.k8s.io/refs.repo: ci-tools
+      prow.k8s.io/type: presubmit
+    name: foobar
+    namespace: ci
+    resourceVersion: "1"
+  spec:
+    agent: kubernetes
+    cluster: build01
+    context: ci/prow/cluster-provisioning
+    decoration_config:
+      gcs_configuration:
+        default_org: org
+        default_repo: repo
+        path_strategy: single
+      skip_cloning: true
+      utility_images:
+        clonerefs: clonerefs
+        entrypoint: entrypoint
+        initupload: initupload
+        sidecar: sidecar
+    job: ephemeralcluster-ci-openshift-ci-tools-main-cluster-provisioning
+    namespace: ci
+    pod_spec:
+      containers:
+      - args:
+        - --gcs-upload-secret=/secrets/gcs/service-account.json
+        - --hive-kubeconfig=/secrets/hive-hive-credentials/kubeconfig
+        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+        - --lease-server-credentials-file=/etc/boskos/credentials
+        - --report-credentials-file=/etc/report/credentials
+        - --secret-dir=/secrets/ci-pull-credentials
+        - --target=cluster-provisioning
+        command:
+        - ci-operator
+        env:
+        - name: UNRESOLVED_CONFIG
+          value: |
+            base_images:
+              cli:
+                name: "4.20"
+                namespace: ocp
+                tag: cli
+              cli-2:
+                name: "4.22"
+                namespace: ocp
+                tag: cli
+            build_root:
+              image_stream_tag:
+                name: "4.20"
+                namespace: ocp
+                tag: cli
+            external_images:
+              fedora:
+                name: ""
+                namespace: ""
+                registry: quay.io/fedora/fedora:43
+                tag: ""
+            resources:
+              '*':
+                limits:
+                  memory: 400Mi
+                requests:
+                  cpu: 200m
+            tests:
+            - as: cluster-provisioning
+              cluster_claim:
+                architecture: amd64
+                as: claim
+                cloud: aws
+                labels:
+                  region: us-east-1
+                owner: test-platform
+                product: ocp
+                timeout: 0s
+                version: "4.22"
+              steps:
+                cluster_profile: aws
+                env:
+                  foo: bar
+                test:
+                - as: wait-test-complete
+                  commands: "set +e\n\n# This loop keeps the ephemeral cluster up and running
+                    and then waits for\n# a konflux test to complete. Once the test is done, the
+                    EphemeralCluster \n# controller creates a synthetic secret 'test-done-signal'
+                    into this ci-operator NS,\n# unbloking the workflow and starting the deprovisioning
+                    procedures.\n\n# This kubeconfig points to the ephemeral cluster. Unsetting
+                    it as we want to reach out to\n# the build farm cluster.\nunset KUBECONFIG\n\ni=0\nunexpected_err=0\nsecret='test-done-signal'\n\nwhile
+                    true; do\n    printf 'attempt %d\\n' $i\n\n    output=\"$(oc get secret/$secret
+                    2>&1)\"\n    if [ $? -eq 0 ]; then\n        printf 'secret found\\n'\n        break\n
+                    \   fi\n\n    # The sole error we expect to hit is 'not found'. Break the
+                    loop if we collect\n    # this many unexpected errors in a row.\n    if !
+                    $(grep -qF \"secrets \\\"$secret\\\" not found\" <<<\"$output\"); then\n        printf
+                    'unexpected error: %d\\n%s\\n' $unexpected_err \"$output\"\n\n        if [
+                    $unexpected_err -ge 3 ]; then\n            printf 'FAILURE: too many unexpected
+                    errors\\n' $unexpected_err\n            break\n        fi\n\n        unexpected_err=$((unexpected_err+1))\n
+                    \   else\n        unexpected_err=0\n    fi\n\n    i=$((i+1))\n    sleep 5s\ndone\n"
+                  from: cli-2
+                  resources:
+                    limits:
+                      memory: 100Mi
+                    requests:
+                      cpu: 10m
+                workflow: generic-claim
+            zz_generated_metadata:
+              branch: main
+              org: openshift
+              repo: ci-tools
+        image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /etc/boskos
+          name: boskos
+          readOnly: true
+        - mountPath: /secrets/ci-pull-credentials
+          name: ci-pull-credentials
+          readOnly: true
+        - mountPath: /secrets/gcs
+          name: gcs-credentials
+          readOnly: true
+        - mountPath: /secrets/hive-hive-credentials
+          name: hive-hive-credentials
+          readOnly: true
+        - mountPath: /secrets/manifest-tool
+          name: manifest-tool-local-pusher
+          readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
+        - mountPath: /etc/report
+          name: result-aggregator
+          readOnly: true
+      serviceAccountName: ci-operator
+      volumes:
+      - name: boskos
+        secret:
+          items:
+          - key: credentials
+            path: credentials
+          secretName: boskos-credentials
+      - name: ci-pull-credentials
+        secret:
+          secretName: ci-pull-credentials
+      - name: hive-hive-credentials
+        secret:
+          secretName: hive-hive-credentials
+      - name: manifest-tool-local-pusher
+        secret:
+          secretName: manifest-tool-local-pusher
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
+      - name: result-aggregator
+        secret:
+          secretName: result-aggregator
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
+    refs:
+      base_link: /commit/8f5e7d6ec106ccf86684fcff808d85cac960f0a3
+      base_ref: main
+      base_sha: 8f5e7d6ec106ccf86684fcff808d85cac960f0a3
+      org: openshift
+      pulls:
+      - author: ""
+        commit_link: /pull/0/commits/
+        number: 0
+        sha: ""
+      repo: ci-tools
+    rerun_command: /test cluster-provisioning
+    type: presubmit
+  status:
+    startTime: "2025-04-02T12:12:12Z"
+    state: scheduling
+metadata: {}

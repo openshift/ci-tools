@@ -424,15 +424,6 @@ spec:
                         type: string
                     type: object
                 type: object
-              pullRequest:
-                description: PullRequest holds the information regarding the PR this
-                  requested originated from.
-                properties:
-                  event:
-                    type: string
-                  headers:
-                    type: string
-                type: object
               tearDownCluster:
                 description: |-
                   When set to true, signals the controller that the ephemeral cluster is no longer needed,
@@ -472,6 +463,8 @@ spec:
                   - type
                   type: object
                 type: array
+              kubeAdminPassword:
+                type: string
               kubeconfig:
                 description: Kubeconfig to access the ephemeral cluster
                 type: string

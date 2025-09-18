@@ -86,7 +86,7 @@ func TestOutputImageStep(t *testing.T) {
 			ImportPolicy: imagev1.TagImportPolicy{
 				ImportMode: imagev1.ImportModePreserveOriginal,
 			},
-			ReferencePolicy: imagev1.TagReferencePolicy{Type: imagev1.LocalTagReferencePolicy},
+			ReferencePolicy: imagev1.TagReferencePolicy{Type: imagev1.SourceTagReferencePolicy},
 		},
 	}
 

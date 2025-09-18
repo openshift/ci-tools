@@ -50,7 +50,7 @@ func validateReleases(fieldRoot string, releases map[string]api.UnresolvedReleas
 		} else if set == 0 {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.%s: must set integration, candidate, prerelease or release", fieldRoot, name))
 		} else if release.Integration != nil {
-			validationErrors = append(validationErrors, validateIntegration(fmt.Sprintf("%s.%s", fieldRoot, name), name, *release.Integration)...)
+			validationErrors = append(validationErrors, validateIntegration(fmt.Sprintf("%s.%s", fieldRoot, name), name, release.Integration)...)
 		} else if release.Candidate != nil {
 			validationErrors = append(validationErrors, validateCandidate(fmt.Sprintf("%s.%s", fieldRoot, name), *release.Candidate)...)
 		} else if release.Release != nil {
@@ -62,7 +62,7 @@ func validateReleases(fieldRoot string, releases map[string]api.UnresolvedReleas
 	return validationErrors
 }
 
-func validateIntegration(fieldRoot, name string, integration api.Integration) []error {
+func validateIntegration(fieldRoot, name string, integration *api.Integration) []error {
 	var validationErrors []error
 	if integration.Name == "" {
 		validationErrors = append(validationErrors, fmt.Errorf("%s.name: must be set", fieldRoot))
@@ -73,12 +73,10 @@ func validateIntegration(fieldRoot, name string, integration api.Integration) []
 	if integration.IncludeBuiltImages && name != api.LatestReleaseName {
 		validationErrors = append(validationErrors, fmt.Errorf("%s: only the `latest` release can set `include_built_images`", fieldRoot))
 	}
-	if integration.ReferencePolicy == nil {
-		defaultPolicy := imagev1.LocalTagReferencePolicy
-		integration.ReferencePolicy = &defaultPolicy // Set default value
-	}
-	if *integration.ReferencePolicy != imagev1.LocalTagReferencePolicy && *integration.ReferencePolicy != imagev1.SourceTagReferencePolicy {
-		validationErrors = append(validationErrors, fmt.Errorf("%s.reference_policy: must be one of Local or Source or empty defaults to Local", fieldRoot))
+	if integration.ReferencePolicy != nil {
+		if *integration.ReferencePolicy != imagev1.LocalTagReferencePolicy && *integration.ReferencePolicy != imagev1.SourceTagReferencePolicy {
+			validationErrors = append(validationErrors, fmt.Errorf("%s.reference_policy: must be one of Local or Source or empty defaults to Local", fieldRoot))
+		}
 	}
 	return validationErrors
 }

@@ -206,6 +206,10 @@ func fromConfig(
 			if overrideCLIResolveErr != nil {
 				return nil, nil, results.ForReason("resolving_cli_override").ForError(fmt.Errorf("failed to resolve override CLI image for release %s: %w", resolveConfig.Name, overrideCLIResolveErr))
 			}
+			referencePolicy := imagev1.SourceTagReferencePolicy
+			if resolveConfig.Integration != nil && resolveConfig.Integration.ReferencePolicy != nil {
+				referencePolicy = *resolveConfig.Integration.ReferencePolicy
+			}
 			var source releasesteps.ReleaseSource
 			if env := utils.ReleaseImageEnv(resolveConfig.Name); params.HasInput(env) {
 				value, err = params.Get(env)
@@ -236,12 +240,6 @@ func fromConfig(
 				default:
 					source = releasesteps.NewReleaseSourceFromConfig(resolveConfig, httpClient)
 				}
-			}
-			var referencePolicy imagev1.TagReferencePolicyType
-			if resolveConfig.Integration != nil && resolveConfig.Integration.ReferencePolicy != nil {
-				referencePolicy = *resolveConfig.Integration.ReferencePolicy
-			} else {
-				referencePolicy = imagev1.LocalTagReferencePolicy // Provide a default value or handle appropriately
 			}
 			step := releasesteps.ImportReleaseStep(resolveConfig.Name, nodeName, resolveConfig.TargetName(), referencePolicy, source, false, config.Resources, podClient, jobSpec, pullSecret, overrideCLIReleaseExtractImage)
 			buildSteps = append(buildSteps, step)
@@ -295,11 +293,9 @@ func fromConfig(
 			for _, name := range []string{api.InitialReleaseName, api.LatestReleaseName} {
 				var releaseStep api.Step
 				envVar := utils.ReleaseImageEnv(name)
-				var referencePolicy imagev1.TagReferencePolicyType
+				referencePolicy := imagev1.SourceTagReferencePolicy
 				if rawStep.ReleaseImagesTagStepConfiguration.ReferencePolicy != nil {
 					referencePolicy = *rawStep.ReleaseImagesTagStepConfiguration.ReferencePolicy
-				} else {
-					referencePolicy = imagev1.LocalTagReferencePolicy // Provide a default value or handle appropriately
 				}
 				if params.HasInput(envVar) {
 					pullSpec, err := params.Get(envVar)

@@ -303,14 +303,17 @@ func AssembleReleaseStep(name, nodeName string, config *api.ReleaseTagConfigurat
 	}
 }
 
-func supportsKeepManifestList(config *api.ReleaseTagConfiguration) bool {
+func hasMinimumVersion(config *api.ReleaseTagConfiguration, majorVersion, minorVersion int) bool {
 	var major, minor int
 	n, err := fmt.Sscanf(config.Name, "%d.%d", &major, &minor)
 	if err != nil || n != 2 {
 		logrus.Warnf("Could not parse release version from release tag configuration name=%q: %v", config.Name, err)
 		return false
 	}
-	return major > 4 || (major == 4 && minor >= 11)
+	if majorVersion == 0 && minorVersion == 0 {
+		majorVersion, minorVersion = 4, 11
+	}
+	return major > majorVersion || (major == majorVersion && minor >= minorVersion)
 }
 
 func buildOcAdmReleaseNewCommand(config *api.ReleaseTagConfiguration, namespace, streamName, cvo, destination, version string) string {
@@ -323,11 +326,14 @@ func buildOcAdmReleaseNewCommand(config *api.ReleaseTagConfiguration, namespace,
 		"--name", version,
 	}
 
-	if config.ReferencePolicy != nil && *config.ReferencePolicy == imagev1.SourceTagReferencePolicy {
-		cmd = append(cmd, fmt.Sprintf("--reference-mode=%s", "source"))
+	if config.ReferencePolicy != nil && hasMinimumVersion(config, 4, 13) {
+		if *config.ReferencePolicy == imagev1.SourceTagReferencePolicy {
+			cmd = append(cmd, "--reference-mode=source")
+		}
+
 	}
 
-	if supportsKeepManifestList(config) {
+	if hasMinimumVersion(config, 4, 11) {
 		cmd = append(cmd, "--keep-manifest-list")
 	}
 	return strings.Join(cmd, " ")

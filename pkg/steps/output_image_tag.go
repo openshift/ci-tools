@@ -151,7 +151,7 @@ func (s *outputImageTagStep) imageStreamTag(fromImage string) *imagev1.ImageStre
 		},
 		Tag: &imagev1.TagReference{
 			ReferencePolicy: imagev1.TagReferencePolicy{
-				Type: imagev1.LocalTagReferencePolicy,
+				Type: imagev1.SourceTagReferencePolicy,
 			},
 			ImportPolicy: imagev1.TagImportPolicy{
 				ImportMode: imagev1.ImportModePreserveOriginal,

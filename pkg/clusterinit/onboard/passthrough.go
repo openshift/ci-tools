@@ -10,6 +10,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	api "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 	cinitmanifest "github.com/openshift/ci-tools/pkg/clusterinit/manifest"
 	cinittypes "github.com/openshift/ci-tools/pkg/clusterinit/types"
@@ -27,7 +28,7 @@ var (
 
 type passthroughGenerator struct {
 	clusterInstall *clusterinstall.ClusterInstall
-	manifests      fs.FS
+	manifests      []fs.FS
 	readFile       func(fsys fs.FS, name string) ([]byte, error)
 }
 
@@ -49,44 +50,43 @@ func (s *passthroughGenerator) Patches() []cinitmanifest.Patch {
 
 func (s *passthroughGenerator) Generate(ctx context.Context, log *logrus.Entry) (map[string][]interface{}, error) {
 	clusterRoot := BuildFarmDirFor(s.clusterInstall.Onboard.ReleaseRepo, s.clusterInstall.ClusterName)
-
-	subFS, err := fs.Sub(s.manifests, passthroughRoot)
-	if err != nil {
-		return nil, fmt.Errorf("subfs: %w", err)
-	}
-
 	pathToManifests := make(map[string][]interface{})
 
-	if err := fs.WalkDir(subFS, ".", func(p string, d fs.DirEntry, _ error) error {
-		if p == "." || d.IsDir() {
-			return nil
-		}
-
-		bytes, err := s.readFile(subFS, p)
+	for _, v := range s.manifests {
+		subFS, err := fs.Sub(v, passthroughRoot)
 		if err != nil {
-			return fmt.Errorf("read %s: %w", p, err)
+			return nil, fmt.Errorf("subfs: %w", err)
 		}
 
-		splitStrings := tripleHyphen.Split(string(bytes), -1)
-		data := make([]interface{}, len(splitStrings))
-		for i := range splitStrings {
-			data[i] = []byte(splitStrings[i])
+		if err := fs.WalkDir(subFS, ".", func(p string, d fs.DirEntry, _ error) error {
+			if p == "." || d.IsDir() {
+				return nil
+			}
+
+			bytes, err := s.readFile(subFS, p)
+			if err != nil {
+				return fmt.Errorf("read %s: %w", p, err)
+			}
+
+			splitStrings := tripleHyphen.Split(string(bytes), -1)
+			data := make([]interface{}, len(splitStrings))
+			for i := range splitStrings {
+				data[i] = []byte(splitStrings[i])
+			}
+			pathToManifests[path.Join(clusterRoot, p)] = data
+
+			return nil
+		}); err != nil {
+			return nil, fmt.Errorf("create manifests: %w", err)
 		}
-
-		pathToManifests[path.Join(clusterRoot, p)] = data
-
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("create manifests: %w", err)
 	}
-
 	return pathToManifests, nil
 }
 
 func NewPassthroughGenerator(log *logrus.Entry, clusterInstall *clusterinstall.ClusterInstall) *passthroughGenerator {
 	return &passthroughGenerator{
 		clusterInstall: clusterInstall,
-		manifests:      manifests,
+		manifests:      []fs.FS{manifests, api.MultiArchBuildConfigManifest},
 		readFile:       fs.ReadFile,
 	}
 }

@@ -55,7 +55,7 @@ func TestPassthroughManifests(t *testing.T) {
 			generator := NewPassthroughGenerator(logrus.NewEntry(logrus.StandardLogger()), &tt.ci)
 
 			generator.readFile = func(fsys fs.FS, name string) ([]byte, error) { return []byte{}, nil }
-			generator.manifests = tt.fs
+			generator.manifests = []fs.FS{tt.fs}
 
 			manifests, err := generator.Generate(context.TODO(), logrus.NewEntry(logrus.StandardLogger()))
 

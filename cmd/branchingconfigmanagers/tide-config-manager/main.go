@@ -204,10 +204,12 @@ func (bde branchingDayEvent) ModifyQuery(q *prowconfig.TideQuery, repo string) {
 	reqLabels := sets.New[string](q.Labels...)
 	branches := sets.New[string](q.IncludedBranches...)
 
-	if branches.Intersection(bde.openshiftReleaseBranches).Len() > 0 {
-		if reqLabels.Has(staffEngApproved) {
-			reqLabels.Delete(staffEngApproved)
-			reqLabels.Insert(backportRiskAssessed)
+	if branches.Len() >= 1 && branches.Len() <= 2 {
+		if branches.Intersection(bde.openshiftReleaseBranches).Len() > 0 {
+			if reqLabels.Has(staffEngApproved) {
+				reqLabels.Delete(staffEngApproved)
+				reqLabels.Insert(backportRiskAssessed)
+			}
 		}
 	}
 	q.Labels = sets.List(reqLabels)

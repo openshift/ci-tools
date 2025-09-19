@@ -124,7 +124,7 @@ func main() {
 
 	var awsConfig aws.Config
 	if o.cacheFileOnS3 {
-		awsConfig, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion("us-east-1"))
+		awsConfig, err = awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion("us-east-1"))
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to create AWS config.")
 		}

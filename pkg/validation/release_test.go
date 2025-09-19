@@ -638,7 +638,7 @@ func TestValidateIntegration(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if actual, expected := validateIntegration("root", testCase.inputName, &testCase.input), testCase.output; !reflect.DeepEqual(actual, expected) {
+			if actual, expected := validateIntegration("root", testCase.inputName, testCase.input), testCase.output; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
 					return x.Error() == y.Error()
 				})))

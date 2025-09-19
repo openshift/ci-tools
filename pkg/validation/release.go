@@ -50,7 +50,7 @@ func validateReleases(fieldRoot string, releases map[string]api.UnresolvedReleas
 		} else if set == 0 {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.%s: must set integration, candidate, prerelease or release", fieldRoot, name))
 		} else if release.Integration != nil {
-			validationErrors = append(validationErrors, validateIntegration(fmt.Sprintf("%s.%s", fieldRoot, name), name, release.Integration)...)
+			validationErrors = append(validationErrors, validateIntegration(fmt.Sprintf("%s.%s", fieldRoot, name), name, *release.Integration)...)
 		} else if release.Candidate != nil {
 			validationErrors = append(validationErrors, validateCandidate(fmt.Sprintf("%s.%s", fieldRoot, name), *release.Candidate)...)
 		} else if release.Release != nil {
@@ -62,7 +62,7 @@ func validateReleases(fieldRoot string, releases map[string]api.UnresolvedReleas
 	return validationErrors
 }
 
-func validateIntegration(fieldRoot, name string, integration *api.Integration) []error {
+func validateIntegration(fieldRoot, name string, integration api.Integration) []error {
 	var validationErrors []error
 	if integration.Name == "" {
 		validationErrors = append(validationErrors, fmt.Errorf("%s.name: must be set", fieldRoot))

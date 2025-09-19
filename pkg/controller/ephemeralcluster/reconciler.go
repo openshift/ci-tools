@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/ghodss/yaml"
@@ -30,6 +31,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	ephemeralclusterv1 "github.com/openshift/ci-tools/pkg/api/ephemeralcluster/v1"
+	"github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/prowgen"
 	"github.com/openshift/ci-tools/pkg/steps"
 	cislices "github.com/openshift/ci-tools/pkg/util/slices"
@@ -45,6 +47,7 @@ const (
 	DependentProwJobFinalizer = "ephemeralcluster.ci.openshift.io/dependent-prowjob"
 	UnresolvedConfigVar       = "UNRESOLVED_CONFIG"
 	ProwJobCreatingDoneReason = "ProwJob has been properly created"
+	ProwJobNamePrefix         = "ephemeralcluster"
 )
 
 var (
@@ -352,6 +355,13 @@ func (r *reconciler) makeProwJob(ciOperatorConfig *api.ReleaseBuildConfiguration
 		return nil, errors.New("presubmit job not found")
 	}
 
+	presub := &presubs[0]
+	jobNameWithoutPrefix, prefixCut := strings.CutPrefix(presub.JobBase.Name, jobconfig.PresubmitPrefix)
+	if !prefixCut {
+		return nil, fmt.Errorf("failed to strip %s prefix from %s", jobconfig.PresubmitPrefix, presub.JobBase.Name)
+	}
+	presub.JobBase.Name = ProwJobNamePrefix + jobNameWithoutPrefix
+
 	prowYAML := prowconfig.ProwYAML{Presubmits: presubs}
 	// This is a workaround to apply some defaults to the prowjob
 	if err := prowconfig.DefaultAndValidateProwYAML(r.prowConfigAgent.Config(), &prowYAML, ""); err != nil {
@@ -360,10 +370,8 @@ func (r *reconciler) makeProwJob(ciOperatorConfig *api.ReleaseBuildConfiguration
 
 	presubmit := &prowYAML.Presubmits[0]
 	labels := map[string]string{EphemeralClusterLabel: ec.Name}
-	// TODO: enable scheduling only when the ci-operator config will stored into the openshift/release repository. Until then
-	// the scheduler won't be able to assign a cluster properly.
-	pj := r.newPresubmit(github.PullRequest{}, "fake", *presubmit, "no-event-guid", labels, pjutil.RequireScheduling(false))
-	// TODO: temporary workaround: we should leverage the scheduler instead, check the comment above.
+	pj := r.newPresubmit(github.PullRequest{}, "fake", *presubmit, "no-event-guid", labels, pjutil.RequireScheduling(true))
+	// The cluster will be chosen by the dispatcher. Set a default one here in case things go sideways.
 	pj.Spec.Cluster = string(api.ClusterBuild01)
 	pj.Namespace = r.prowConfigAgent.Config().ProwJobNamespace
 	// Do not report, we are not managing this PR as it's likely it's not comining from the OpenShift CI.

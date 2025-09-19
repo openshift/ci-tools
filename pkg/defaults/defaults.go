@@ -222,7 +222,7 @@ func fromConfig(
 				switch {
 				case resolveConfig.Integration != nil:
 					logrus.Infof("Building release %s from a snapshot of %s/%s", resolveConfig.Name, resolveConfig.Integration.Namespace, resolveConfig.Integration.Name)
-
+					resolveConfig.Integration.ReferencePolicy = &referencePolicy
 					key := fmt.Sprintf("%s/%s", resolveConfig.Integration.Namespace, resolveConfig.Integration.Name)
 					snapshot := releasesteps.ReleaseSnapshotStep(resolveConfig.Name, *resolveConfig.Integration, podClient, jobSpec, integratedStreams[key])
 					assemble := releasesteps.AssembleReleaseStep(resolveConfig.Name, nodeName, &api.ReleaseTagConfiguration{

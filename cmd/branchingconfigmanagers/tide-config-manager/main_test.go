@@ -201,6 +201,53 @@ func TestReconcile(t *testing.T) {
 					[]string{},
 					[]string{"openshift-4.10", "openshift-4.8", "openshift-4.9", "release-4.10", "release-4.8", "release-4.9"})},
 		},
+		{
+			name: "no label change during branching - more than 2 branches",
+			args: args{
+				event: branching,
+				config: &prowconfig.ProwConfig{Tide: prowconfig.Tide{TideGitHubConfig: prowconfig.TideGitHubConfig{Queries: prowconfig.TideQueries{
+					{
+						Repos:            repos,
+						Labels:           []string{staffEngApproved},
+						IncludedBranches: []string{"openshift-4.9", "release-4.9", "main"},
+					},
+				}}}},
+			},
+			wantErr: false,
+			expectedShardFiles: map[string]string{
+				path: prepareProwConfig(repos, []string{staffEngApproved}, []string{"openshift-4.9", "release-4.9", "main"})},
+		},
+		{
+			name: "no label change during branching - non-current version branches",
+			args: args{
+				event: branching,
+				config: &prowconfig.ProwConfig{Tide: prowconfig.Tide{TideGitHubConfig: prowconfig.TideGitHubConfig{Queries: prowconfig.TideQueries{
+					{
+						Repos:            repos,
+						Labels:           []string{staffEngApproved},
+						IncludedBranches: []string{"openshift-4.8", "release-4.8"},
+					},
+				}}}},
+			},
+			wantErr: false,
+			expectedShardFiles: map[string]string{
+				path: prepareProwConfig(repos, []string{staffEngApproved}, []string{"openshift-4.8", "release-4.8"})},
+		},
+		{
+			name: "no label change during branching - empty branches",
+			args: args{
+				event: branching,
+				config: &prowconfig.ProwConfig{Tide: prowconfig.Tide{TideGitHubConfig: prowconfig.TideGitHubConfig{Queries: prowconfig.TideQueries{
+					{
+						Repos:  repos,
+						Labels: []string{staffEngApproved},
+					},
+				}}}},
+			},
+			wantErr: false,
+			expectedShardFiles: map[string]string{
+				path: prepareProwConfig(repos, []string{staffEngApproved}, []string{})},
+		},
 	}
 
 	for _, tt := range tests {

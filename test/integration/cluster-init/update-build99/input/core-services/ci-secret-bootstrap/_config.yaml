@@ -212,6 +212,10 @@ secret_configs:
         name: registry-pull-credentials
         namespace: test-credentials
         type: kubernetes.io/dockerconfigjson
+      - cluster: newCluster
+        name: registry-pull-credentials
+        namespace: keel
+        type: kubernetes.io/dockerconfigjson
       - from:
           kubeconfig:
             field: sa.ci-operator.newCluster.config

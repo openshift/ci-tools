@@ -72,7 +72,7 @@ func preparePodStep(namespace string) (*podStep, stepExpectation) {
 	}
 	jobSpec.SetNamespace(namespace)
 
-	client := kubernetes.NewPodClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().Build()), nil, nil, 0, nil)
+	client := kubernetes.NewPodClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().Build(), nil), nil, nil, 0, nil)
 	ps := PodStep(stepName, config, resources, client, jobSpec, nil)
 
 	specification := stepExpectation{
@@ -126,7 +126,7 @@ func TestPodStepExecution(t *testing.T) {
 		t.Run(tc.purpose, func(t *testing.T) {
 			ps, _ := preparePodStep(namespace)
 			ps.config.Clone = tc.clone
-			ps.client = kubernetes.NewPodClient(loggingclient.New(&podStatusChangingClient{WithWatch: fakectrlruntimeclient.NewClientBuilder().Build(), dest: tc.podStatus}), nil, nil, 0, nil)
+			ps.client = kubernetes.NewPodClient(loggingclient.New(&podStatusChangingClient{WithWatch: fakectrlruntimeclient.NewClientBuilder().Build(), dest: tc.podStatus}, nil), nil, nil, 0, nil)
 
 			executionExpectation := executionExpectation{
 				prerun: doneExpectation{

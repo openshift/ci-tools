@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,6 +43,7 @@ type MetricsAgent struct {
 	nodesPlugin    *nodesMetricsPlugin
 	leasePlugin    *leasesPlugin
 	podPlugin      *PodLifecyclePlugin
+	imagesPlugin   *imagesPlugin
 
 	wg sync.WaitGroup
 	mu sync.Mutex
@@ -71,6 +73,7 @@ func NewMetricsAgent(ctx context.Context, clusterConfig *rest.Config) (*MetricsA
 		nodesPlugin:    newNodesMetricsPlugin(ctx, logger, client, metricsClient, nodesCh),
 		leasePlugin:    newLeasesPlugin(logger),
 		podPlugin:      NewPodLifecyclePlugin(ctx, logger, client),
+		imagesPlugin:   newImagesPlugin(ctx, logger, client),
 	}, nil
 }
 
@@ -99,6 +102,7 @@ func (ma *MetricsAgent) Run() {
 			ma.nodesPlugin.Record(ev)
 			ma.leasePlugin.Record(ev)
 			ma.podPlugin.Record(ev)
+			ma.imagesPlugin.Record(ev)
 			ma.logger.WithField("event_type", fmt.Sprintf("%T", ev)).Debug("Recorded metrics event")
 		}
 	}
@@ -127,11 +131,12 @@ func (ma *MetricsAgent) Stop() {
 
 // flush writes the accumulated events to a JSON file in the artifacts directory.
 func (ma *MetricsAgent) flush() {
-	output := make(map[string]any, 5)
+	output := make(map[string]any, 6)
 	output[ma.insightsPlugin.Name()] = ma.insightsPlugin.Events()
 	output[ma.buildPlugin.Name()] = ma.buildPlugin.Events()
 	output[ma.nodesPlugin.Name()] = ma.nodesPlugin.Events()
 	output[ma.leasePlugin.Name()] = ma.leasePlugin.Events()
+	output[ma.imagesPlugin.Name()] = ma.imagesPlugin.Events()
 	output[ma.podPlugin.Name()] = ma.podPlugin.Events()
 
 	data, err := json.MarshalIndent(output, "", "  ")
@@ -216,4 +221,64 @@ func (ma *MetricsAgent) RecordConfigurationInsight(targets []string, promote boo
 	}
 
 	ma.Record(NewInsightsEvent(InsightConfiguration, configData))
+}
+
+// RecordImageStreamEvent records an ImageStream event
+func (ma *MetricsAgent) RecordImageStreamEvent(namespace, name string, created bool, errorMsg ...string) {
+	if ma == nil {
+		return
+	}
+
+	var operationType ImageStreamOperationType
+	var success bool
+	var errorString string
+
+	switch {
+	case len(errorMsg) > 0:
+		operationType = ImageStreamOperationTypeError
+		success = false
+		errorString = strings.Join(errorMsg, "; ")
+	case created:
+		operationType = ImageStreamOperationTypeCreated
+		success = true
+	default:
+		operationType = ImageStreamOperationTypeCached
+		success = true
+	}
+
+	event := &ImageStreamEvent{
+		Namespace:       namespace,
+		ImageStreamName: name,
+		FullName:        namespace + "/" + name,
+		OperationType:   string(operationType),
+		Success:         success,
+		Error:           errorString,
+	}
+
+	ma.Record(event)
+}
+
+// RecordTagImportEvent records a TagImport event with operation type based on whether it was created or cached
+func (ma *MetricsAgent) RecordTagImportEvent(namespace, imageStreamName, tagName, sourceImage, sourceImageKind string, created bool, startTime time.Time) {
+	if ma == nil {
+		return
+	}
+
+	operationType := ImageStreamOperationTypeCached
+	if created {
+		operationType = ImageStreamOperationTypeCreated
+	}
+
+	ma.Record(&TagImportEvent{
+		Namespace:         namespace,
+		ImageStreamName:   imageStreamName,
+		TagName:           tagName,
+		FullTagName:       namespace + "/" + imageStreamName + ":" + tagName,
+		SourceImage:       sourceImage,
+		SourceImageKind:   sourceImageKind,
+		StartTime:         startTime,
+		CompletionTime:    time.Now(),
+		Success:           true,
+		AdditionalContext: map[string]any{"operation_type": string(operationType)},
+	})
 }

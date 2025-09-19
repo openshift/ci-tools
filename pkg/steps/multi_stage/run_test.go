@@ -92,7 +92,7 @@ func TestRun(t *testing.T) {
 					fakectrlruntimeclient.NewClientBuilder().
 						WithIndex(&v1.Pod{}, "metadata.name", fakePodNameIndexer).
 						WithObjects(sa).
-						Build()),
+						Build(), nil),
 				Failures: tc.failures,
 			}
 			jobSpec := api.JobSpec{
@@ -233,7 +233,7 @@ func TestJUnit(t *testing.T) {
 					fakectrlruntimeclient.NewClientBuilder().
 						WithIndex(&v1.Pod{}, "metadata.name", fakePodNameIndexer).
 						WithObjects(sa).
-						Build()),
+						Build(), nil),
 				Failures: tc.failures,
 			}
 			jobSpec := api.JobSpec{

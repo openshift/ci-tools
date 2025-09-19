@@ -8,7 +8,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -20,6 +19,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 // releaseSnapshotStep snapshots the state of an integration ImageStream
@@ -111,13 +111,13 @@ func snapshotStream(ctx context.Context, client loggingclient.LoggingClient, sou
 		}
 		snapshot.Spec.Tags = append(snapshot.Spec.Tags, tagReference)
 	}
-	// the Create call mutates the input object, so we need to copy it before returning
-	created := snapshot.DeepCopy()
-	if err := client.Create(ctx, created); err != nil && !kerrors.IsAlreadyExists(err) {
+
+	created, err := util.CreateImageStreamWithMetrics(ctx, client, snapshot.DeepCopy(), client.MetricsAgent())
+	if err != nil {
 		return nil, fmt.Errorf("could not create snapshot imagestream %s/%s for release %s: %w", sourceNamespace, sourceName, targetRelease, err)
 	}
 	logrus.Infof("Waiting to import tags on imagestream (after taking snapshot) %s/%s ...", created.Namespace, created.Name)
-	if err := utils.WaitForImportingISTag(ctx, client, created.Namespace, created.Name, nil, sets.New[string](), utils.DefaultImageImportTimeout); err != nil {
+	if err := utils.WaitForImportingISTag(ctx, client, created.Namespace, created.Name, nil, sets.New[string](), utils.DefaultImageImportTimeout, client.MetricsAgent()); err != nil {
 		return nil, fmt.Errorf("failed to wait for importing imagestreamtags on %s/%s: %w", created.Namespace, created.Name, err)
 	}
 	logrus.Infof("Imported tags on imagestream (after taking snapshot) %s/%s", created.Namespace, created.Name)

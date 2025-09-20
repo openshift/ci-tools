@@ -474,6 +474,8 @@ spec:
                 type: string
               prowJobId:
                 type: string
+              prowJobURL:
+                type: string
             required:
             - phase
             type: object

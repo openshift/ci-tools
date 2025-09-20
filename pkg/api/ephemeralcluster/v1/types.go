@@ -10,6 +10,7 @@ const (
 	CIOperatorJobsGenerateFailureReason    = "CIOperatorJobsGenerateFailure"
 	ProwJobFailureReason                   = "ProwJobFailure"
 	ProwJobCompletedReason                 = "ProwJobCompleted"
+	TooManyProwJobsBoundReason             = "TooManyProwJobsBound"
 	SecretsFetchFailureReason              = "SecretsFetchFailure"
 	CreateTestCompletedSecretFailureReason = "CreateTestCompletedSecretFailure"
 
@@ -26,7 +27,7 @@ const (
 	ProwJobCreating EphemeralClusterConditionType = "ProwJobCreating"
 	// ContainersReady indicates whether the cluster is up and running.
 	ClusterReady EphemeralClusterConditionType = "ClusterReady"
-	// ProwJobCompleted indicates whether the ProwJob is running.
+	// ProwJobCompleted indicates whether the ProwJob has done.
 	ProwJobCompleted EphemeralClusterConditionType = "ProwJobCompleted"
 	// TestCompleted indicates test has completed and the ephemeral cluster isn't needed anymore.
 	TestCompleted EphemeralClusterConditionType = "TestCompleted"
@@ -112,6 +113,7 @@ type EphemeralClusterStatus struct {
 	Phase      EphemeralClusterPhase       `json:"phase"`
 	Conditions []EphemeralClusterCondition `json:"conditions,omitempty"`
 	ProwJobID  string                      `json:"prowJobId,omitempty"`
+	ProwJobURL string                      `json:"prowJobURL,omitempty"`
 	// Kubeconfig to access the ephemeral cluster
 	Kubeconfig        string `json:"kubeconfig,omitempty"`
 	KubeAdminPassword string `json:"kubeAdminPassword,omitempty"`

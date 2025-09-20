@@ -549,6 +549,7 @@ func TestReconcile(t *testing.T) {
 				&prowv1.ProwJob{
 					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
 					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+					Status:     prowv1.ProwJobStatus{URL: "https://pj-123.html"},
 				},
 			},
 			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
@@ -579,6 +580,7 @@ func TestReconcile(t *testing.T) {
 					Phase:      ephemeralclusterv1.EphemeralClusterReady,
 					ProwJobID:  "pj-123",
 					Kubeconfig: "kubeconfig",
+					ProwJobURL: "https://pj-123.html",
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
 						Status:             ephemeralclusterv1.ConditionFalse,
@@ -624,6 +626,7 @@ func TestReconcile(t *testing.T) {
 				},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					ProwJobID: "pj-123",
+					Phase:     ephemeralclusterv1.EphemeralClusterProvisioning,
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{
 						{
 							Type:               ephemeralclusterv1.ProwJobCreating,
@@ -680,6 +683,7 @@ func TestReconcile(t *testing.T) {
 				},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					ProwJobID: "pj-123",
+					Phase:     ephemeralclusterv1.EphemeralClusterProvisioning,
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
 						Status:             ephemeralclusterv1.ConditionFalse,
@@ -738,6 +742,7 @@ func TestReconcile(t *testing.T) {
 				},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					ProwJobID: "pj-123",
+					Phase:     ephemeralclusterv1.EphemeralClusterProvisioning,
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
 						Status:             ephemeralclusterv1.ConditionFalse,
@@ -1267,6 +1272,7 @@ func TestReconcile(t *testing.T) {
 				},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					ProwJobID: "pj-123",
+					Phase:     ephemeralclusterv1.EphemeralClusterProvisioning,
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
 						Status:             ephemeralclusterv1.ConditionFalse,
@@ -1284,7 +1290,7 @@ func TestReconcile(t *testing.T) {
 			wantRes: reconcile.Result{RequeueAfter: pollingTime},
 		},
 		{
-			name: "Hive cluster not ready yet, err outs when fetching a secret",
+			name: "Hive cluster not ready yet, errs out when fetching a secret",
 			ec: &ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: v1.ObjectMeta{
 					Name:      "foo",
@@ -1349,6 +1355,7 @@ func TestReconcile(t *testing.T) {
 				},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					ProwJobID: "pj-123",
+					Phase:     ephemeralclusterv1.EphemeralClusterProvisioning,
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
 						Status:             ephemeralclusterv1.ConditionFalse,

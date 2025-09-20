@@ -180,11 +180,6 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return reconcile.Result{}, reconcile.TerminalError(fmt.Errorf("get ephemeral cluster: %w", err))
 	}
 
-	// TODO: Retrieve the ProwJob ID without relying on the previous state.
-	// Make sure not to create a ProwJob multiple times. As an example:
-	// 1. EphemeralCluster and its ProwJob exist
-	// 2. The ProwJob gets deleted
-	// 3. This reconcile loop runs and creates the ProwJob again
 	observedStatus := ephemeralclusterv1.EphemeralClusterStatus{ProwJobID: ec.Status.ProwJobID}
 
 	if !ec.DeletionTimestamp.IsZero() {
@@ -203,6 +198,8 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	}
 
 	upsertCondition(&observedStatus, ephemeralclusterv1.ProwJobCreating, ephemeralclusterv1.ConditionFalse, r.now(), ProwJobCreatingDoneReason, "")
+	observedStatus.Phase = ephemeralclusterv1.EphemeralClusterProvisioning
+	observedStatus.ProwJobURL = pj.Status.URL
 
 	log.Info("Fetching the secrets")
 	err := r.fetchSecrets(ctx, log, ec, &observedStatus, &pj)
@@ -349,7 +346,10 @@ func (r *reconciler) handleCreateProwJob(ctx context.Context, log *logrus.Entry,
 	// This is a case that should never happen but if it does it means that either someone
 	// is creating PJs manually or there is a bug in this controller.
 	if len(pjsForEC.Items) > 1 {
-		log.Error("Too many ProwJobs bound, this is a bug")
+		const errMsg = "Too many ProwJobs bound, this is a bug"
+		log.Error(errMsg)
+		upsertCondition(observedStatus, ephemeralclusterv1.ProwJobCreating, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.TooManyProwJobsBoundReason, errMsg)
+		observedStatus.Phase = ephemeralclusterv1.EphemeralClusterFailed
 		return reconcile.Result{}, reconcile.TerminalError(errors.New("too many ProwJobs associated"))
 	}
 
@@ -681,6 +681,8 @@ func (r *reconciler) abortProwJob(ctx context.Context, log *logrus.Entry, pj *pr
 }
 
 func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralClusterStatus, pj *prowv1.ProwJob) error {
+	ec.Phase = ephemeralclusterv1.EphemeralClusterDeprovisioning
+
 	buildClient, err := r.buildClientFor(pj)
 	if err != nil {
 		log.WithField("cluster", pj.Spec.Cluster).WithError(err).Warn("Build client not found")
@@ -705,7 +707,7 @@ func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, 
 			createSecret = true
 		} else {
 			log.WithError(err).Warn("Failed to fetch the secret")
-			return nil
+			return err
 		}
 	}
 
@@ -723,7 +725,6 @@ func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, 
 	}
 
 	upsertCondition(ec, ephemeralclusterv1.TestCompleted, ephemeralclusterv1.ConditionTrue, r.now(), "", "")
-	ec.Phase = ephemeralclusterv1.EphemeralClusterDeprovisioning
 	return nil
 }
 

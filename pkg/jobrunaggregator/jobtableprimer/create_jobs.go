@@ -29,8 +29,8 @@ func (o *CreateJobsOptions) getNewReleases(ctx context.Context, ciDataClient job
 		return newReleases, err
 	}
 	for _, release := range releases {
-		if release.Major > minMajor ||
-			(release.Major == minMajor && release.Minor >= minMinor) {
+		recentEnough := release.Major > minMajor || (release.Major == minMajor && release.Minor >= minMinor)
+		if release.Product.StringVal == "OCP" && recentEnough { // aggregation not defined for other products yet
 			newReleases = append(newReleases, release)
 		}
 	}

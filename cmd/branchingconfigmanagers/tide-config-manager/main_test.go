@@ -610,6 +610,36 @@ func TestIsVersionedBranch(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "valid release-5.x branch",
+			branch:   "release-5.1",
+			expected: true,
+		},
+		{
+			name:     "valid openshift-5.x branch",
+			branch:   "openshift-5.2",
+			expected: true,
+		},
+		{
+			name:     "valid release-5.x branch with double digit minor",
+			branch:   "release-5.10",
+			expected: true,
+		},
+		{
+			name:     "valid openshift-5.x branch with double digit minor",
+			branch:   "openshift-5.15",
+			expected: true,
+		},
+		{
+			name:     "invalid release-5.x branch with version 0",
+			branch:   "release-5.0",
+			expected: false,
+		},
+		{
+			name:     "invalid openshift-5.x branch with version 0",
+			branch:   "openshift-5.0",
+			expected: false,
+		},
+		{
 			name:     "invalid release branch with version 0",
 			branch:   "release-4.0",
 			expected: false,
@@ -674,6 +704,56 @@ func TestIsVersionedBranch(t *testing.T) {
 			branch:   "openshift-4.",
 			expected: false,
 		},
+		{
+			name:     "invalid release-5.x branch with non-numeric version",
+			branch:   "release-5.abc",
+			expected: false,
+		},
+		{
+			name:     "invalid openshift-5.x branch with non-numeric version",
+			branch:   "openshift-5.x",
+			expected: false,
+		},
+		{
+			name:     "release-5.x branch without version",
+			branch:   "release-5.",
+			expected: false,
+		},
+		{
+			name:     "openshift-5.x branch without version",
+			branch:   "openshift-5.",
+			expected: false,
+		},
+		{
+			name:     "valid release-6.x branch (future-proofing)",
+			branch:   "release-6.1",
+			expected: true,
+		},
+		{
+			name:     "valid openshift-6.x branch (future-proofing)",
+			branch:   "openshift-6.2",
+			expected: true,
+		},
+		{
+			name:     "valid release-10.x branch (future-proofing)",
+			branch:   "release-10.5",
+			expected: true,
+		},
+		{
+			name:     "valid openshift-15.x branch (future-proofing)",
+			branch:   "openshift-15.20",
+			expected: true,
+		},
+		{
+			name:     "invalid release-3.x branch (too old)",
+			branch:   "release-3.11",
+			expected: false,
+		},
+		{
+			name:     "invalid openshift-3.x branch (too old)",
+			branch:   "openshift-3.11",
+			expected: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -684,4 +764,151 @@ func TestIsVersionedBranch(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewPreGeneralAvailability(t *testing.T) {
+	tests := []struct {
+		name     string
+		current  string
+		expected []string
+	}{
+		{
+			name:     "4.9 version",
+			current:  "4.9",
+			expected: []string{"release-4.9", "openshift-4.9"},
+		},
+		{
+			name:     "5.1 version",
+			current:  "5.1",
+			expected: []string{"release-5.1", "openshift-5.1"},
+		},
+		{
+			name:     "4.15 version",
+			current:  "4.15",
+			expected: []string{"release-4.15", "openshift-4.15"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			delegate := newSharedDataDelegate()
+			event := newPreGeneralAvailability(tt.current, delegate)
+
+			// Check that the event contains the expected branches
+			for _, expectedBranch := range tt.expected {
+				if !event.openshiftReleaseBranches.Has(expectedBranch) {
+					t.Errorf("Expected branch %s not found in openshiftReleaseBranches", expectedBranch)
+				}
+			}
+
+			// Check that delegate is set
+			if event.sharedDataDelegate == nil {
+				t.Error("sharedDataDelegate should not be nil")
+			}
+		})
+	}
+}
+
+func TestPreGeneralAvailabilityEventModifyQuery(t *testing.T) {
+	delegate := newSharedDataDelegate()
+	event := newPreGeneralAvailability("4.9", delegate)
+
+	tests := []struct {
+		name           string
+		inputLabels    []string
+		inputBranches  []string
+		expectedLabels []string
+		repo           string
+	}{
+		{
+			name:           "adds staff-eng-approved when backport-risk-assessed present for release branch",
+			inputLabels:    []string{backportRiskAssessed},
+			inputBranches:  []string{"release-4.9"},
+			expectedLabels: []string{backportRiskAssessed, staffEngApproved},
+			repo:           "openshift/dummy",
+		},
+		{
+			name:           "adds staff-eng-approved when backport-risk-assessed present for openshift branch",
+			inputLabels:    []string{backportRiskAssessed},
+			inputBranches:  []string{"openshift-4.9"},
+			expectedLabels: []string{backportRiskAssessed, staffEngApproved},
+			repo:           "openshift/dummy",
+		},
+		{
+			name:           "adds staff-eng-approved for multiple matching branches",
+			inputLabels:    []string{backportRiskAssessed, "other-label"},
+			inputBranches:  []string{"release-4.9", "openshift-4.9"},
+			expectedLabels: []string{backportRiskAssessed, "other-label", staffEngApproved},
+			repo:           "openshift/dummy",
+		},
+		{
+			name:           "no change when backport-risk-assessed not present",
+			inputLabels:    []string{"other-label"},
+			inputBranches:  []string{"release-4.9"},
+			expectedLabels: []string{"other-label"},
+			repo:           "openshift/dummy",
+		},
+		{
+			name:           "no change for non-matching branches",
+			inputLabels:    []string{backportRiskAssessed},
+			inputBranches:  []string{"release-4.8", "main"},
+			expectedLabels: []string{backportRiskAssessed},
+			repo:           "openshift/dummy",
+		},
+		{
+			name:           "no change when staff-eng-approved already present",
+			inputLabels:    []string{backportRiskAssessed, staffEngApproved},
+			inputBranches:  []string{"release-4.9"},
+			expectedLabels: []string{backportRiskAssessed, staffEngApproved},
+			repo:           "openshift/dummy",
+		},
+		{
+			name:           "handles empty branches",
+			inputLabels:    []string{backportRiskAssessed},
+			inputBranches:  []string{},
+			expectedLabels: []string{backportRiskAssessed},
+			repo:           "openshift/dummy",
+		},
+		{
+			name:           "handles mixed branches with some matching",
+			inputLabels:    []string{backportRiskAssessed},
+			inputBranches:  []string{"main", "release-4.9", "release-4.8"},
+			expectedLabels: []string{backportRiskAssessed, staffEngApproved},
+			repo:           "openshift/dummy",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			query := &prowconfig.TideQuery{
+				Labels:           tt.inputLabels,
+				IncludedBranches: tt.inputBranches,
+			}
+
+			event.ModifyQuery(query, tt.repo)
+
+			actualLabels := sets.New[string](query.Labels...)
+			expectedLabels := sets.New[string](tt.expectedLabels...)
+
+			if !actualLabels.Equal(expectedLabels) {
+				t.Errorf("Expected labels: %v, got: %v", sets.List(expectedLabels), sets.List(actualLabels))
+			}
+		})
+	}
+}
+
+func TestPreGeneralAvailabilityEventGetDataFromProwConfig(t *testing.T) {
+	delegate := newSharedDataDelegate()
+	event := newPreGeneralAvailability("4.9", delegate)
+
+	// This method is currently empty, but we test that it doesn't panic
+	t.Run("does not panic", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Errorf("GetDataFromProwConfig panicked: %v", r)
+			}
+		}()
+
+		event.GetDataFromProwConfig(&prowconfig.ProwConfig{})
+	})
 }

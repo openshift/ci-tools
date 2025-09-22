@@ -56,6 +56,7 @@ const (
 	ProwJobCreatingDoneReason = "ProwJob has been properly created"
 	ProwJobNamePrefix         = "ephemeralcluster"
 	GitHubGUID                = "X-Github-Delivery"
+	TooManyPJsBoundErrMsg     = "Too many ProwJobs bound, this is a bug"
 )
 
 var (
@@ -346,9 +347,8 @@ func (r *reconciler) handleCreateProwJob(ctx context.Context, log *logrus.Entry,
 	// This is a case that should never happen but if it does it means that either someone
 	// is creating PJs manually or there is a bug in this controller.
 	if len(pjsForEC.Items) > 1 {
-		const errMsg = "Too many ProwJobs bound, this is a bug"
-		log.Error(errMsg)
-		upsertCondition(observedStatus, ephemeralclusterv1.ProwJobCreating, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.TooManyProwJobsBoundReason, errMsg)
+		log.Error(TooManyPJsBoundErrMsg)
+		upsertCondition(observedStatus, ephemeralclusterv1.ProwJobCreating, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.TooManyProwJobsBoundReason, TooManyPJsBoundErrMsg)
 		observedStatus.Phase = ephemeralclusterv1.EphemeralClusterFailed
 		return reconcile.Result{}, reconcile.TerminalError(errors.New("too many ProwJobs associated"))
 	}
@@ -518,7 +518,6 @@ func (r *reconciler) fetchSecrets(ctx context.Context, log *logrus.Entry, ec *ep
 
 func (r *reconciler) fetchHiveSecrets(ctx context.Context, log *logrus.Entry, buildClient ctrlruntimeclient.Client, ns string, ecStatus *ephemeralclusterv1.EphemeralClusterStatus) {
 	secretsReady := true
-	var err error
 	var kubeconfig, passwd []byte
 
 	for _, secret := range []struct {
@@ -530,13 +529,13 @@ func (r *reconciler) fetchHiveSecrets(ctx context.Context, log *logrus.Entry, bu
 		{name: HiveAdminPasswdSecret, key: api.HiveAdminPasswordSecretKey, data: &passwd},
 	} {
 		s := corev1.Secret{}
-		if err = buildClient.Get(ctx, types.NamespacedName{Name: secret.name, Namespace: ns}, &s); err != nil {
+		if err := buildClient.Get(ctx, types.NamespacedName{Name: secret.name, Namespace: ns}, &s); err != nil {
 			secretsReady = false
-			if kerrors.IsNotFound(err) {
-				// Not available yet, do not report this as an error
-				err = nil
-			} else {
+			if !kerrors.IsNotFound(err) {
 				log.WithField("secret", secret.name).WithError(err).Error("Failed to read secret")
+				readSecretErr := fmt.Errorf("read secret %s/%s: %w", secret.name, ns, err)
+				upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, readSecretErr.Error())
+				return
 			}
 			break
 		}
@@ -548,11 +547,6 @@ func (r *reconciler) fetchHiveSecrets(ctx context.Context, log *logrus.Entry, bu
 		}
 
 		*secret.data = slices.Clone(data)
-	}
-
-	if err != nil {
-		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, err.Error())
-		return
 	}
 
 	if !secretsReady {

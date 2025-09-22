@@ -1365,7 +1365,7 @@ func TestReconcile(t *testing.T) {
 						Type:               ephemeralclusterv1.ClusterReady,
 						Status:             ephemeralclusterv1.ConditionFalse,
 						Reason:             ephemeralclusterv1.SecretsFetchFailureReason,
-						Message:            "injected",
+						Message:            "read secret cluster-provisioning-hive-admin-kubeconfig/ci-op-1234: injected",
 						LastTransitionTime: v1.NewTime(fakeNow),
 					}},
 				},

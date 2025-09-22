@@ -43,7 +43,7 @@ func init() {
 }
 
 func addCloneRefs(cfg *api.SourceStepConfiguration) *api.SourceStepConfiguration {
-	cfg.ClonerefsImage = api.ImageStreamTagReference{Namespace: "ci", Name: "managed-clonerefs", Tag: "latest"}
+	cfg.ClonerefsPullSpec = api.ClonerefsPullSpec
 	cfg.ClonerefsPath = "/clonerefs"
 	return cfg
 }
@@ -731,12 +731,10 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				}).WithBundleImage(true),
 			}, {
-				SourceStepConfiguration: &api.SourceStepConfiguration{
-					From:           "root",
-					To:             "src",
-					ClonerefsImage: api.ImageStreamTagReference{Namespace: "ci", Name: "managed-clonerefs", Tag: "latest"},
-					ClonerefsPath:  "/clonerefs",
-				},
+				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
+					From: "root",
+					To:   "src",
+				}),
 			}},
 		},
 		{
@@ -813,12 +811,10 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				}).WithBundleImage(true),
 			}, {
-				SourceStepConfiguration: &api.SourceStepConfiguration{
-					From:           "root",
-					To:             "src",
-					ClonerefsImage: api.ImageStreamTagReference{Namespace: "ci", Name: "managed-clonerefs", Tag: "latest"},
-					ClonerefsPath:  "/clonerefs",
-				},
+				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
+					From: "root",
+					To:   "src",
+				}),
 			}},
 		},
 		{
@@ -1923,12 +1919,10 @@ func TestGetSourceStepsForJobSpec(t *testing.T) {
 			},
 			expected: []api.StepConfiguration{
 				{
-					SourceStepConfiguration: &api.SourceStepConfiguration{
-						From:           api.PipelineImageStreamTagReferenceRoot,
-						To:             api.PipelineImageStreamTagReferenceSource,
-						ClonerefsImage: api.ImageStreamTagReference{Namespace: "ci", Name: "managed-clonerefs", Tag: "latest"},
-						ClonerefsPath:  "/clonerefs",
-					},
+					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
+						From: api.PipelineImageStreamTagReferenceRoot,
+						To:   api.PipelineImageStreamTagReferenceSource,
+					}),
 				},
 			},
 		},
@@ -1945,12 +1939,10 @@ func TestGetSourceStepsForJobSpec(t *testing.T) {
 			},
 			expected: []api.StepConfiguration{
 				{
-					SourceStepConfiguration: &api.SourceStepConfiguration{
-						From:           api.PipelineImageStreamTagReferenceRoot,
-						To:             api.PipelineImageStreamTagReferenceSource,
-						ClonerefsImage: api.ImageStreamTagReference{Namespace: "ci", Name: "managed-clonerefs", Tag: "latest"},
-						ClonerefsPath:  "/clonerefs",
-					},
+					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
+						From: api.PipelineImageStreamTagReferenceRoot,
+						To:   api.PipelineImageStreamTagReferenceSource,
+					}),
 				},
 			},
 		},
@@ -1964,12 +1956,10 @@ func TestGetSourceStepsForJobSpec(t *testing.T) {
 			},
 			expected: []api.StepConfiguration{
 				{
-					SourceStepConfiguration: &api.SourceStepConfiguration{
-						From:           api.PipelineImageStreamTagReferenceRoot,
-						To:             api.PipelineImageStreamTagReferenceSource,
-						ClonerefsImage: api.ImageStreamTagReference{Namespace: "ci", Name: "managed-clonerefs", Tag: "latest"},
-						ClonerefsPath:  "/clonerefs",
-					},
+					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
+						From: api.PipelineImageStreamTagReferenceRoot,
+						To:   api.PipelineImageStreamTagReferenceSource,
+					}),
 				},
 			},
 		},
@@ -1988,31 +1978,25 @@ func TestGetSourceStepsForJobSpec(t *testing.T) {
 			injectedTest: true,
 			expected: []api.StepConfiguration{
 				{
-					SourceStepConfiguration: &api.SourceStepConfiguration{
-						From:           api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo", api.PipelineImageStreamTagReferenceRoot)),
-						To:             api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo", api.PipelineImageStreamTagReferenceSource)),
-						ClonerefsImage: api.ImageStreamTagReference{Namespace: "ci", Name: "managed-clonerefs", Tag: "latest"},
-						ClonerefsPath:  "/clonerefs",
-						Ref:            "openshift.repo",
-					},
+					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
+						From: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo", api.PipelineImageStreamTagReferenceRoot)),
+						To:   api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo", api.PipelineImageStreamTagReferenceSource)),
+						Ref:  "openshift.repo",
+					}),
 				},
 				{
-					SourceStepConfiguration: &api.SourceStepConfiguration{
-						From:           api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.other-repo", api.PipelineImageStreamTagReferenceRoot)),
-						To:             api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.other-repo", api.PipelineImageStreamTagReferenceSource)),
-						ClonerefsImage: api.ImageStreamTagReference{Namespace: "ci", Name: "managed-clonerefs", Tag: "latest"},
-						ClonerefsPath:  "/clonerefs",
-						Ref:            "openshift.other-repo",
-					},
+					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
+						From: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.other-repo", api.PipelineImageStreamTagReferenceRoot)),
+						To:   api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.other-repo", api.PipelineImageStreamTagReferenceSource)),
+						Ref:  "openshift.other-repo",
+					}),
 				},
 				{
-					SourceStepConfiguration: &api.SourceStepConfiguration{
-						From:           api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo-three", api.PipelineImageStreamTagReferenceRoot)),
-						To:             api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo-three", api.PipelineImageStreamTagReferenceSource)),
-						ClonerefsImage: api.ImageStreamTagReference{Namespace: "ci", Name: "managed-clonerefs", Tag: "latest"},
-						ClonerefsPath:  "/clonerefs",
-						Ref:            "openshift.repo-three",
-					},
+					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
+						From: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo-three", api.PipelineImageStreamTagReferenceRoot)),
+						To:   api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo-three", api.PipelineImageStreamTagReferenceSource)),
+						Ref:  "openshift.repo-three",
+					}),
 				},
 			},
 		},
@@ -2031,30 +2015,24 @@ func TestGetSourceStepsForJobSpec(t *testing.T) {
 			injectedTest: true,
 			expected: []api.StepConfiguration{
 				{
-					SourceStepConfiguration: &api.SourceStepConfiguration{
-						From:           api.PipelineImageStreamTagReferenceRoot,
-						To:             api.PipelineImageStreamTagReferenceSource,
-						ClonerefsImage: api.ImageStreamTagReference{Namespace: "ci", Name: "managed-clonerefs", Tag: "latest"},
-						ClonerefsPath:  "/clonerefs",
-					},
+					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
+						From: api.PipelineImageStreamTagReferenceRoot,
+						To:   api.PipelineImageStreamTagReferenceSource,
+					}),
 				},
 				{
-					SourceStepConfiguration: &api.SourceStepConfiguration{
-						From:           api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.other-repo", api.PipelineImageStreamTagReferenceRoot)),
-						To:             api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.other-repo", api.PipelineImageStreamTagReferenceSource)),
-						ClonerefsImage: api.ImageStreamTagReference{Namespace: "ci", Name: "managed-clonerefs", Tag: "latest"},
-						ClonerefsPath:  "/clonerefs",
-						Ref:            "openshift.other-repo",
-					},
+					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
+						From: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.other-repo", api.PipelineImageStreamTagReferenceRoot)),
+						To:   api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.other-repo", api.PipelineImageStreamTagReferenceSource)),
+						Ref:  "openshift.other-repo",
+					}),
 				},
 				{
-					SourceStepConfiguration: &api.SourceStepConfiguration{
-						From:           api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo-three", api.PipelineImageStreamTagReferenceRoot)),
-						To:             api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo-three", api.PipelineImageStreamTagReferenceSource)),
-						ClonerefsImage: api.ImageStreamTagReference{Namespace: "ci", Name: "managed-clonerefs", Tag: "latest"},
-						ClonerefsPath:  "/clonerefs",
-						Ref:            "openshift.repo-three",
-					},
+					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
+						From: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo-three", api.PipelineImageStreamTagReferenceRoot)),
+						To:   api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo-three", api.PipelineImageStreamTagReferenceSource)),
+						Ref:  "openshift.repo-three",
+					}),
 				},
 			},
 		},

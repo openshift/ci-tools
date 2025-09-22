@@ -21,7 +21,6 @@ import (
 	"sigs.k8s.io/prow/pkg/pod-utils/downwardapi"
 
 	buildapi "github.com/openshift/api/build/v1"
-	buildv1 "github.com/openshift/api/build/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/metrics"
@@ -34,25 +33,13 @@ func TestCreateBuild(t *testing.T) {
 	t.Parallel()
 	var testCases = []struct {
 		name            string
-		config          api.SourceStepConfiguration
 		jobSpec         *api.JobSpec
-		clonerefsRef    coreapi.ObjectReference
 		resources       api.ResourceConfiguration
 		cloneAuthConfig *CloneAuthConfig
 		pullSecret      *coreapi.Secret
 	}{
 		{
 			name: "basic options for a presubmit",
-			config: api.SourceStepConfiguration{
-				From: api.PipelineImageStreamTagReferenceRoot,
-				To:   api.PipelineImageStreamTagReferenceSource,
-				ClonerefsImage: api.ImageStreamTagReference{
-					Namespace: "ci",
-					Name:      "clonerefs",
-					Tag:       "latest",
-				},
-				ClonerefsPath: "/clonerefs",
-			},
 			jobSpec: &api.JobSpec{
 				JobSpec: downwardapi.JobSpec{
 					Job:       "job",
@@ -70,21 +57,9 @@ func TestCreateBuild(t *testing.T) {
 					},
 				},
 			},
-			clonerefsRef: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
-			resources:    map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}},
 		},
 		{
 			name: "title in pull gets squashed",
-			config: api.SourceStepConfiguration{
-				From: api.PipelineImageStreamTagReferenceRoot,
-				To:   api.PipelineImageStreamTagReferenceSource,
-				ClonerefsImage: api.ImageStreamTagReference{
-					Namespace: "ci",
-					Name:      "clonerefs",
-					Tag:       "latest",
-				},
-				ClonerefsPath: "/clonerefs",
-			},
 			jobSpec: &api.JobSpec{
 				JobSpec: downwardapi.JobSpec{
 					Job:       "job",
@@ -103,21 +78,9 @@ func TestCreateBuild(t *testing.T) {
 					},
 				},
 			},
-			clonerefsRef: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
-			resources:    map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}},
 		},
 		{
 			name: "with a pull secret",
-			config: api.SourceStepConfiguration{
-				From: api.PipelineImageStreamTagReferenceRoot,
-				To:   api.PipelineImageStreamTagReferenceSource,
-				ClonerefsImage: api.ImageStreamTagReference{
-					Namespace: "ci",
-					Name:      "clonerefs",
-					Tag:       "latest",
-				},
-				ClonerefsPath: "/clonerefs",
-			},
 			jobSpec: &api.JobSpec{
 				JobSpec: downwardapi.JobSpec{
 					Job:       "job",
@@ -135,8 +98,6 @@ func TestCreateBuild(t *testing.T) {
 					},
 				},
 			},
-			clonerefsRef: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
-			resources:    map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}},
 			pullSecret: &coreapi.Secret{
 				Data:       map[string][]byte{coreapi.DockerConfigJsonKey: []byte("secret")},
 				ObjectMeta: meta.ObjectMeta{Name: api.RegistryPullCredentialsSecret},
@@ -145,16 +106,6 @@ func TestCreateBuild(t *testing.T) {
 		},
 		{
 			name: "with a path alias",
-			config: api.SourceStepConfiguration{
-				From: api.PipelineImageStreamTagReferenceRoot,
-				To:   api.PipelineImageStreamTagReferenceSource,
-				ClonerefsImage: api.ImageStreamTagReference{
-					Namespace: "ci",
-					Name:      "clonerefs",
-					Tag:       "latest",
-				},
-				ClonerefsPath: "/clonerefs",
-			},
 			jobSpec: &api.JobSpec{
 				JobSpec: downwardapi.JobSpec{
 					Job:       "job",
@@ -173,21 +124,9 @@ func TestCreateBuild(t *testing.T) {
 					},
 				},
 			},
-			clonerefsRef: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
-			resources:    map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}},
 		},
 		{
 			name: "with extra refs",
-			config: api.SourceStepConfiguration{
-				From: api.PipelineImageStreamTagReferenceRoot,
-				To:   api.PipelineImageStreamTagReferenceSource,
-				ClonerefsImage: api.ImageStreamTagReference{
-					Namespace: "ci",
-					Name:      "managed-clonerefs",
-					Tag:       "latest",
-				},
-				ClonerefsPath: "/clonerefs",
-			},
 			jobSpec: &api.JobSpec{
 				JobSpec: downwardapi.JobSpec{
 					Job:       "job",
@@ -211,21 +150,9 @@ func TestCreateBuild(t *testing.T) {
 					}},
 				},
 			},
-			clonerefsRef: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
-			resources:    map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}},
 		},
 		{
 			name: "with extra refs setting workdir and path alias",
-			config: api.SourceStepConfiguration{
-				From: api.PipelineImageStreamTagReferenceRoot,
-				To:   api.PipelineImageStreamTagReferenceSource,
-				ClonerefsImage: api.ImageStreamTagReference{
-					Namespace: "ci",
-					Name:      "clonerefs",
-					Tag:       "latest",
-				},
-				ClonerefsPath: "/clonerefs",
-			},
 			jobSpec: &api.JobSpec{
 				JobSpec: downwardapi.JobSpec{
 					Job:       "job",
@@ -251,8 +178,6 @@ func TestCreateBuild(t *testing.T) {
 					}},
 				},
 			},
-			clonerefsRef: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
-			resources:    map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}},
 		},
 		{
 			name: "with ssh key",
@@ -261,16 +186,6 @@ func TestCreateBuild(t *testing.T) {
 					ObjectMeta: meta.ObjectMeta{Name: "ssh-nykd6bfg"},
 				},
 				Type: CloneAuthTypeSSH,
-			},
-			config: api.SourceStepConfiguration{
-				From: api.PipelineImageStreamTagReferenceRoot,
-				To:   api.PipelineImageStreamTagReferenceSource,
-				ClonerefsImage: api.ImageStreamTagReference{
-					Namespace: "ci",
-					Name:      "clonerefs",
-					Tag:       "latest",
-				},
-				ClonerefsPath: "/clonerefs",
 			},
 			jobSpec: &api.JobSpec{
 				JobSpec: downwardapi.JobSpec{
@@ -289,8 +204,6 @@ func TestCreateBuild(t *testing.T) {
 					},
 				},
 			},
-			clonerefsRef: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
-			resources:    map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}},
 		},
 
 		{
@@ -302,16 +215,6 @@ func TestCreateBuild(t *testing.T) {
 				},
 				Type: CloneAuthTypeOAuth,
 			},
-			config: api.SourceStepConfiguration{
-				From: api.PipelineImageStreamTagReferenceRoot,
-				To:   api.PipelineImageStreamTagReferenceSource,
-				ClonerefsImage: api.ImageStreamTagReference{
-					Namespace: "ci",
-					Name:      "clonerefs",
-					Tag:       "latest",
-				},
-				ClonerefsPath: "/clonerefs",
-			},
 			jobSpec: &api.JobSpec{
 				JobSpec: downwardapi.JobSpec{
 					Job:       "job",
@@ -329,15 +232,21 @@ func TestCreateBuild(t *testing.T) {
 					},
 				},
 			},
-			clonerefsRef: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
-			resources:    map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}},
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			testCase.jobSpec.SetNamespace("namespace")
-			actual := createBuild(testCase.config, testCase.jobSpec, testCase.clonerefsRef, testCase.resources, testCase.cloneAuthConfig, testCase.pullSecret, "imagedigest")
+			config := api.SourceStepConfiguration{
+				From:              api.PipelineImageStreamTagReferenceRoot,
+				To:                api.PipelineImageStreamTagReferenceSource,
+				ClonerefsPullSpec: "quay-proxy.ci.openshift.org/openshift/ci/ci:ci_managed-clonerefs_latest",
+				ClonerefsPath:     "/clonerefs",
+			}
+			clonerefsRef := coreapi.ObjectReference{Kind: "DockerImage", Name: "quay-proxy.ci.openshift.org/openshift/ci/ci:ci_managed-clonerefs_latest"}
+			resources := map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}}
+			actual := createBuild(config, testCase.jobSpec, clonerefsRef, resources, testCase.cloneAuthConfig, testCase.pullSecret, "imagedigest")
 			testhelper.CompareWithFixture(t, actual)
 		})
 	}
@@ -820,9 +729,9 @@ func Test_constructMultiArchBuilds(t *testing.T) {
 			stepArchitectures: []string{"amd64"},
 			build: buildapi.Build{
 				ObjectMeta: meta.ObjectMeta{Name: "test-build"},
-				Spec: buildv1.BuildSpec{
-					CommonSpec: buildv1.CommonSpec{
-						Output: buildv1.BuildOutput{
+				Spec: buildapi.BuildSpec{
+					CommonSpec: buildapi.CommonSpec{
+						Output: buildapi.BuildOutput{
 							ImageLabels: []buildapi.ImageLabel{
 								{Name: "io.openshift.build.namespace", Value: "namespace"},
 								{Name: "io.openshift.build.commit.id", Value: "commit-id"},
@@ -840,7 +749,7 @@ func Test_constructMultiArchBuilds(t *testing.T) {
 							NodeSelector: map[string]string{
 								"kubernetes.io/arch": "amd64",
 							},
-							Output: buildv1.BuildOutput{
+							Output: buildapi.BuildOutput{
 								ImageLabels: []buildapi.ImageLabel{
 									{Name: "io.openshift.build.namespace", Value: "namespace"},
 									{Name: "io.openshift.build.commit.id", Value: "commit-id"},
@@ -857,9 +766,9 @@ func Test_constructMultiArchBuilds(t *testing.T) {
 			name: "basic case - empty architecture - default to amd64",
 			build: buildapi.Build{
 				ObjectMeta: meta.ObjectMeta{Name: "test-build"},
-				Spec: buildv1.BuildSpec{
-					CommonSpec: buildv1.CommonSpec{
-						Output: buildv1.BuildOutput{
+				Spec: buildapi.BuildSpec{
+					CommonSpec: buildapi.CommonSpec{
+						Output: buildapi.BuildOutput{
 							ImageLabels: []buildapi.ImageLabel{
 								{Name: "io.openshift.build.namespace", Value: "namespace"},
 								{Name: "io.openshift.build.commit.id", Value: "commit-id"},
@@ -877,7 +786,7 @@ func Test_constructMultiArchBuilds(t *testing.T) {
 							NodeSelector: map[string]string{
 								"kubernetes.io/arch": "amd64",
 							},
-							Output: buildv1.BuildOutput{
+							Output: buildapi.BuildOutput{
 								ImageLabels: []buildapi.ImageLabel{
 									{Name: "io.openshift.build.namespace", Value: "namespace"},
 									{Name: "io.openshift.build.commit.id", Value: "commit-id"},
@@ -895,9 +804,9 @@ func Test_constructMultiArchBuilds(t *testing.T) {
 			stepArchitectures: []string{"amd64", "arm64", "ppc64"},
 			build: buildapi.Build{
 				ObjectMeta: meta.ObjectMeta{Name: "test-build"},
-				Spec: buildv1.BuildSpec{
-					CommonSpec: buildv1.CommonSpec{
-						Output: buildv1.BuildOutput{
+				Spec: buildapi.BuildSpec{
+					CommonSpec: buildapi.CommonSpec{
+						Output: buildapi.BuildOutput{
 							ImageLabels: []buildapi.ImageLabel{
 								{Name: "io.openshift.build.namespace", Value: "namespace"},
 								{Name: "io.openshift.build.commit.id", Value: "commit-id"},
@@ -915,7 +824,7 @@ func Test_constructMultiArchBuilds(t *testing.T) {
 							NodeSelector: map[string]string{
 								"kubernetes.io/arch": "amd64",
 							},
-							Output: buildv1.BuildOutput{
+							Output: buildapi.BuildOutput{
 								ImageLabels: []buildapi.ImageLabel{
 									{Name: "io.openshift.build.namespace", Value: "namespace"},
 									{Name: "io.openshift.build.commit.id", Value: "commit-id"},
@@ -933,7 +842,7 @@ func Test_constructMultiArchBuilds(t *testing.T) {
 							NodeSelector: map[string]string{
 								"kubernetes.io/arch": "arm64",
 							},
-							Output: buildv1.BuildOutput{
+							Output: buildapi.BuildOutput{
 								ImageLabels: []buildapi.ImageLabel{
 									{Name: "io.openshift.build.namespace", Value: "namespace"},
 									{Name: "io.openshift.build.commit.id", Value: "commit-id"},
@@ -951,7 +860,7 @@ func Test_constructMultiArchBuilds(t *testing.T) {
 							NodeSelector: map[string]string{
 								"kubernetes.io/arch": "ppc64",
 							},
-							Output: buildv1.BuildOutput{
+							Output: buildapi.BuildOutput{
 								ImageLabels: []buildapi.ImageLabel{
 									{Name: "io.openshift.build.namespace", Value: "namespace"},
 									{Name: "io.openshift.build.commit.id", Value: "commit-id"},

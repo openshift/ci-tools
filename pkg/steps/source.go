@@ -184,10 +184,7 @@ func (s *sourceStep) Run(ctx context.Context) error {
 }
 
 func (s *sourceStep) run(ctx context.Context) error {
-	clonerefsRef, err := istObjectReference(ctx, s.client, s.config.ClonerefsImage)
-	if err != nil {
-		return fmt.Errorf("could not resolve clonerefs source: %w", err)
-	}
+	clonerefsRef := corev1.ObjectReference{Kind: "DockerImage", Name: s.config.ClonerefsPullSpec}
 
 	fromDigest, err := resolvePipelineImageStreamTagReference(ctx, s.client, s.config.From, s.jobSpec)
 	if err != nil {
@@ -904,27 +901,4 @@ func addLabelsToBuild(refs *prowv1.Refs, build *buildapi.Build, contextDir strin
 	sort.Slice(build.Spec.Output.ImageLabels, func(i, j int) bool {
 		return build.Spec.Output.ImageLabels[i].Name < build.Spec.Output.ImageLabels[j].Name
 	})
-}
-
-func istObjectReference(ctx context.Context, client ctrlruntimeclient.Client, reference api.ImageStreamTagReference) (corev1.ObjectReference, error) {
-	is := &imagev1.ImageStream{}
-	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: reference.Namespace, Name: reference.Name}, is); err != nil {
-		return corev1.ObjectReference{}, fmt.Errorf("could not resolve remote image stream: %w", err)
-	}
-	var repo string
-	if len(is.Status.PublicDockerImageRepository) > 0 {
-		repo = is.Status.PublicDockerImageRepository
-	} else if len(is.Status.DockerImageRepository) > 0 {
-		repo = is.Status.DockerImageRepository
-	} else {
-		return corev1.ObjectReference{}, fmt.Errorf("remote image stream %s has no accessible image registry value", reference.Name)
-	}
-	ist := &imagev1.ImageStreamTag{}
-	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{
-		Namespace: reference.Namespace,
-		Name:      fmt.Sprintf("%s:%s", reference.Name, reference.Tag),
-	}, ist); err != nil {
-		return corev1.ObjectReference{}, fmt.Errorf("could not resolve remote image stream tag: %w", err)
-	}
-	return corev1.ObjectReference{Kind: "DockerImage", Name: fmt.Sprintf("%s@%s", repo, ist.Image.Name)}, nil
 }

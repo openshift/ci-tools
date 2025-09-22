@@ -55,9 +55,8 @@ spec:
       RUN rm -f /sshprivatekey
     images:
     - from:
-        kind: ImageStreamTag
-        name: clonerefs:latest
-        namespace: ci
+        kind: DockerImage
+        name: quay-proxy.ci.openshift.org/openshift/ci/ci:ci_managed-clonerefs_latest
       paths:
       - destinationDir: .
         sourcePath: /clonerefs

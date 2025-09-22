@@ -2480,6 +2480,10 @@ const (
 	PipelineImageStreamTagSourceRPMs         = "rpm_build_commands"
 )
 
+const (
+	ClonerefsPullSpec string = "quay-proxy.ci.openshift.org/openshift/ci:ci_managed-clonerefs_latest"
+)
+
 // SourceStepConfiguration describes a step that
 // clones the source repositories required for
 // jobs. If no output tag is provided, the default
@@ -2488,8 +2492,8 @@ type SourceStepConfiguration struct {
 	From PipelineImageStreamTagReference `json:"from"`
 	To   PipelineImageStreamTagReference `json:"to,omitempty"`
 
-	// ClonerefsImage is the image where we get the clonerefs tool
-	ClonerefsImage ImageStreamTagReference `json:"clonerefs_image"`
+	// ClonerefsPullSpec is the image pullSpec where we get the clonerefs tool
+	ClonerefsPullSpec string `json:"pull_spec,omitempty"`
 	// ClonerefsPath is the path in the above image where the
 	// clonerefs tool is placed
 	ClonerefsPath string `json:"clonerefs_path"`

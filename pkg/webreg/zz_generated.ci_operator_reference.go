@@ -536,17 +536,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # Ref is an optional string linking to the extra_ref in \"org.repo\" format that this belongs to\n" +
 	"        ref: ' '\n" +
 	"      source_step:\n" +
-	"        # ClonerefsImage is the image where we get the clonerefs tool\n" +
-	"        clonerefs_image:\n" +
-	"            # As is an optional string to use as the intermediate name for this reference.\n" +
-	"            as: ' '\n" +
-	"            name: ' '\n" +
-	"            namespace: ' '\n" +
-	"            tag: ' '\n" +
 	"        # ClonerefsPath is the path in the above image where the\n" +
 	"        # clonerefs tool is placed\n" +
 	"        clonerefs_path: ' '\n" +
 	"        from: ' '\n" +
+	"        # ClonerefsPullSpec is the image pullSpec where we get the clonerefs tool\n" +
+	"        pull_spec: ' '\n" +
 	"        # Ref is an optional string linking to the extra_ref in \"org.repo\" format that this belongs to\n" +
 	"        ref: ' '\n" +
 	"        to: ' '\n" +

@@ -516,7 +516,7 @@ func TestArtifactWorker(t *testing.T) {
 						},
 					},
 				},
-			}).Build()),
+			}).Build(), nil),
 		},
 		Namespace: "namespace",
 		Name:      pod,

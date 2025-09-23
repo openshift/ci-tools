@@ -87,7 +87,7 @@ func FromConfig(
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to construct client: %w", err)
 	}
-	client := loggingclient.New(crclient)
+	client := loggingclient.New(crclient, metricsAgent)
 	buildGetter, err := buildclientset.NewForConfig(clusterConfig)
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not get build client for cluster config: %w", err)

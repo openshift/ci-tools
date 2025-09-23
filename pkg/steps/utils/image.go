@@ -21,6 +21,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
+	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/util"
 )
 
@@ -86,7 +87,7 @@ func FindStatusTag(is *imagev1.ImageStream, tag string) (*coreapi.ObjectReferenc
 
 const DefaultImageImportTimeout = 45 * time.Minute
 
-func getEvaluator(ctx context.Context, client ctrlruntimeclient.Client, ns, name string, tags sets.Set[string]) func(obj runtime.Object) (bool, error) {
+func getEvaluator(ctx context.Context, client ctrlruntimeclient.Client, ns, name string, tags sets.Set[string], metricsAgent *metrics.MetricsAgent) func(obj runtime.Object) (bool, error) {
 	return func(obj runtime.Object) (bool, error) {
 		switch stream := obj.(type) {
 		case *imagev1.ImageStream:
@@ -115,7 +116,7 @@ func getEvaluator(ctx context.Context, client ctrlruntimeclient.Client, ns, name
 							// should never happen
 							return false, fmt.Errorf("failed to import tag %s/%s:%s from an empty source", stream.Namespace, stream.Name, tag.Name)
 						}
-						if _, err := ImportTagWithRetries(ctx, client, ns, name, tag.Name, tag.From.Name, api.ImageStreamImportRetries); err != nil {
+						if _, err := ImportTagWithRetries(ctx, client, ns, name, tag.Name, tag.From.Name, api.ImageStreamImportRetries, metricsAgent); err != nil {
 							return false, fmt.Errorf("failed to reimport the tag %s/%s:%s: %w", stream.Namespace, stream.Name, tag.Name, err)
 						}
 					}
@@ -135,24 +136,53 @@ func getEvaluator(ctx context.Context, client ctrlruntimeclient.Client, ns, name
 }
 
 // WaitForImportingISTag waits for the tags on the image stream are imported
-func WaitForImportingISTag(ctx context.Context, client ctrlruntimeclient.WithWatch, ns, name string, into *imagev1.ImageStream, tags sets.Set[string], timeout time.Duration) error {
+func WaitForImportingISTag(ctx context.Context, client ctrlruntimeclient.WithWatch, ns, name string, into *imagev1.ImageStream, tags sets.Set[string], timeout time.Duration, metricsAgent *metrics.MetricsAgent) error {
+	startTime := time.Now()
+
 	obj := into
 	if obj == nil {
 		obj = &imagev1.ImageStream{}
 	}
-	return kubernetes.WaitForConditionOnObject(ctx, client, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, &imagev1.ImageStreamList{}, obj, getEvaluator(ctx, client, ns, name, tags), timeout)
+	err := kubernetes.WaitForConditionOnObject(ctx, client, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, &imagev1.ImageStreamList{}, obj, getEvaluator(ctx, client, ns, name, tags, metricsAgent), timeout)
+
+	completionTime := time.Now()
+	duration := completionTime.Sub(startTime)
+
+	for tag := range tags {
+		metricsAgent.Record(&metrics.TagImportEvent{
+			Namespace:       ns,
+			ImageStreamName: name,
+			TagName:         tag,
+			FullTagName:     ns + "/" + name + ":" + tag,
+			StartTime:       startTime,
+			CompletionTime:  completionTime,
+			DurationSeconds: duration.Seconds(),
+			Success:         err == nil,
+			Error: func() string {
+				if err != nil {
+					return err.Error()
+				}
+				return ""
+			}(),
+		})
+	}
+
+	return err
 }
 
 // ImportTagWithRetries imports image with retries
-func ImportTagWithRetries(ctx context.Context, client ctrlruntimeclient.Client, ns, name, tag, sourcePullSpec string, retries int) (string, error) {
+func ImportTagWithRetries(ctx context.Context, client ctrlruntimeclient.Client, ns, name, tag, sourcePullSpec string, retries int, metricsAgent *metrics.MetricsAgent) (string, error) {
 	if sourcePullSpec == "" {
 		return "", fmt.Errorf("sourcePullSpec cannot be empty")
 	}
+	startTime := time.Now()
 	var pullSpec string
 	step := 0
+	retryCount := 0
 	logger := logrus.WithField("tag", fmt.Sprintf(" %s/%s:%s", ns, name, tag)).WithField("sourcePullSpec", sourcePullSpec)
 	if err := wait.ExponentialBackoff(wait.Backoff{Steps: retries, Duration: 1 * time.Second, Factor: 2}, func() (bool, error) {
 		logger.WithField("step", step).Debug("Retrying importing tag ...")
+		retryCount = step
 		streamImport := &imagev1.ImageStreamImport{
 			ObjectMeta: meta.ObjectMeta{
 				Namespace: ns,
@@ -223,5 +253,22 @@ func ImportTagWithRetries(ctx context.Context, client ctrlruntimeclient.Client, 
 		}
 		return "", fmt.Errorf("unable to import tag %s/%s:%s at import (%d): %w", ns, name, tag, step-1, err)
 	}
+
+	completionTime := time.Now()
+	duration := completionTime.Sub(startTime)
+	metricsAgent.Record(&metrics.TagImportEvent{
+		Namespace:       ns,
+		ImageStreamName: name,
+		TagName:         tag,
+		FullTagName:     ns + "/" + name + ":" + tag,
+		SourceImage:     sourcePullSpec,
+		SourceImageKind: "DockerImage",
+		StartTime:       startTime,
+		CompletionTime:  completionTime,
+		DurationSeconds: duration.Seconds(),
+		RetryCount:      retryCount,
+		Success:         true,
+	})
+
 	return pullSpec, nil
 }

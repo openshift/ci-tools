@@ -136,7 +136,7 @@ func TestSecretsForCensoring(t *testing.T) {
 					Annotations: map[string]string{"kubernetes.io/service-account.name": "foo"},
 				},
 			},
-		).Build(),
+		).Build(), nil,
 	)
 
 	volumes, mounts, err := secretsForCensoring(client, "target-namespace", context.Background())

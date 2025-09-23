@@ -68,7 +68,7 @@ func TestReimportTag(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		actual, actualErr := ImportTagWithRetries(context.Background(), testCase.client, testCase.ns, testCase.is, testCase.tag, testCase.sourcePullSpec, 3)
+		actual, actualErr := ImportTagWithRetries(context.Background(), testCase.client, testCase.ns, testCase.is, testCase.tag, testCase.sourcePullSpec, 3, nil)
 		if diff := cmp.Diff(testCase.expectedErr, actualErr, testhelper.EquateErrorMessage); diff != "" {
 			t.Errorf("%s: actualErr does not match expectedErr, diff: %s", testCase.name, diff)
 		}
@@ -442,7 +442,7 @@ func TestGetEvaluator(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		e := getEvaluator(context.Background(), testCase.client, testCase.obj.Namespace, testCase.obj.Name, testCase.tags)
+		e := getEvaluator(context.Background(), testCase.client, testCase.obj.Namespace, testCase.obj.Name, testCase.tags, nil)
 		actual, actualErr := e(testCase.obj)
 		if diff := cmp.Diff(testCase.expectedErr, actualErr, testhelper.EquateErrorMessage); diff != "" {
 			t.Errorf("%s: actualErr does not match expectedErr, diff: %s", testCase.name, diff)

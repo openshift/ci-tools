@@ -66,7 +66,7 @@ func TestInputImageTagStep(t *testing.T) {
 				Namespace: baseImage.Namespace,
 			},
 			Image: imagev1.Image{ObjectMeta: metav1.ObjectMeta{Name: "ddc0de"}},
-		}).Build())
+		}).Build(), nil)
 
 	// Make a step instance
 	jobspec := &api.JobSpec{}
@@ -179,7 +179,7 @@ func TestInputImageTagStepExternal(t *testing.T) {
 		},
 		&imagev1.ImageStreamTag{
 			Image: imagev1.Image{ObjectMeta: metav1.ObjectMeta{Name: "ddc0de"}},
-		}).Build())
+		}).Build(), nil)
 
 	// Make a step instance
 	jobspec := &api.JobSpec{}

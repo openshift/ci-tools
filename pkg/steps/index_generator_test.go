@@ -58,7 +58,7 @@ func TestIndexGenDockerfile(t *testing.T) {
 				UpdateGraph:   api.IndexUpdateSemver,
 			},
 			jobSpec: &api.JobSpec{},
-			client:  &buildClient{LoggingClient: loggingclient.New(fakeClientSet)},
+			client:  &buildClient{LoggingClient: loggingclient.New(fakeClientSet, nil)},
 		},
 		expected: `FROM quay.io/operator-framework/upstream-opm-builder AS builder
 RUN ["opm", "index", "add", "--mode", "semver", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0", "--out-dockerfile", "index.Dockerfile", "--generate"]
@@ -75,7 +75,7 @@ COPY --from=builder /database/ database`,
 			},
 			jobSpec:    &api.JobSpec{},
 			pullSecret: &coreapi.Secret{},
-			client:     &buildClient{LoggingClient: loggingclient.New(fakeClientSet)},
+			client:     &buildClient{LoggingClient: loggingclient.New(fakeClientSet, nil)},
 		},
 		expected: `FROM quay.io/operator-framework/upstream-opm-builder AS builder
 COPY .dockerconfigjson .
@@ -93,7 +93,7 @@ COPY --from=builder /database/ database`,
 				UpdateGraph:   api.IndexUpdateSemver,
 			},
 			jobSpec: &api.JobSpec{},
-			client:  &buildClient{LoggingClient: loggingclient.New(fakeClientSet)},
+			client:  &buildClient{LoggingClient: loggingclient.New(fakeClientSet, nil)},
 		},
 		expected: `FROM quay.io/operator-framework/upstream-opm-builder AS builder
 RUN ["opm", "index", "add", "--mode", "semver", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0,some-reg/target-namespace/pipeline@ci-bundle1", "--out-dockerfile", "index.Dockerfile", "--generate"]
@@ -110,7 +110,7 @@ COPY --from=builder /database/ database`,
 			},
 			jobSpec:    &api.JobSpec{},
 			pullSecret: &coreapi.Secret{},
-			client:     &buildClient{LoggingClient: loggingclient.New(fakeClientSet)},
+			client:     &buildClient{LoggingClient: loggingclient.New(fakeClientSet, nil)},
 		},
 		expected: `FROM quay.io/operator-framework/upstream-opm-builder AS builder
 COPY .dockerconfigjson .
@@ -129,7 +129,7 @@ COPY --from=builder /database/ database`,
 				BaseIndex:     "the-index",
 			},
 			jobSpec: &api.JobSpec{},
-			client:  &buildClient{LoggingClient: loggingclient.New(fakeClientSet)},
+			client:  &buildClient{LoggingClient: loggingclient.New(fakeClientSet, nil)},
 		},
 		expected: `FROM quay.io/operator-framework/upstream-opm-builder AS builder
 RUN ["opm", "index", "add", "--mode", "semver", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0", "--out-dockerfile", "index.Dockerfile", "--generate", "--from-index", "some-reg/target-namespace/pipeline@the-index"]
@@ -147,7 +147,7 @@ COPY --from=builder /database/ database`,
 			},
 			jobSpec:    &api.JobSpec{},
 			pullSecret: &coreapi.Secret{},
-			client:     &buildClient{LoggingClient: loggingclient.New(fakeClientSet)},
+			client:     &buildClient{LoggingClient: loggingclient.New(fakeClientSet, nil)},
 		},
 		expected: `FROM quay.io/operator-framework/upstream-opm-builder AS builder
 COPY .dockerconfigjson .
@@ -231,7 +231,7 @@ func TestDatabaseIndex(t *testing.T) {
 			if err := yaml.Unmarshal(rawImageStreamTag, ist); err != nil {
 				t.Fatalf("failed to unmarshal imagestreamTag: %v", err)
 			}
-			actual, actualErr := databaseIndex(NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithObjects(ist, image).Build()), nil, nil, "", "", nil),
+			actual, actualErr := databaseIndex(NewBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithObjects(ist, image).Build(), nil), nil, nil, "", "", nil),
 				testCase.isTagName, "ns")
 			if diff := cmp.Diff(testCase.expectedErr, actualErr, testhelper.EquateErrorMessage); diff != "" {
 				t.Fatalf("actual did not match expected, diff: %s", diff)

@@ -492,7 +492,7 @@ func TestWaitForBuild(t *testing.T) {
 							CompletionTimestamp: &end,
 						},
 					},
-				).Build()), nil, nil, "", "", nil),
+				).Build(), nil), nil, nil, "", "", nil),
 			expected: fmt.Errorf("build didn't start running within 0s (phase: Pending)"),
 		},
 		{
@@ -521,7 +521,7 @@ func TestWaitForBuild(t *testing.T) {
 							Namespace: ns,
 						},
 					},
-				).Build()), nil, nil, "", "", nil),
+				).Build(), nil), nil, nil, "", "", nil),
 			expected: fmt.Errorf("build didn't start running within 0s (phase: Pending):\nFound 0 events for Pod some-build-build:"),
 		},
 		{
@@ -562,7 +562,7 @@ func TestWaitForBuild(t *testing.T) {
 							}},
 						},
 					},
-				).Build()), nil, nil, "", "", nil),
+				).Build(), nil), nil, nil, "", "", nil),
 			expected: fmt.Errorf(`build didn't start running within 0s (phase: Pending):
 * Container the-container is not ready with reason the_reason and message the_message
 Found 0 events for Pod some-build-build:`),
@@ -581,7 +581,7 @@ Found 0 events for Pod some-build-build:`),
 						StartTimestamp:      &start,
 						CompletionTimestamp: &end,
 					},
-				}).Build()), nil, nil, "", "", nil),
+				}).Build(), nil), nil, nil, "", "", nil),
 			timeout: 30 * time.Minute,
 		},
 		{
@@ -601,7 +601,7 @@ Found 0 events for Pod some-build-build:`),
 						StartTimestamp:      &start,
 						CompletionTimestamp: &end,
 					},
-				}).Build()), "abc\n"), // the line break is for gotestsum https://github.com/gotestyourself/gotestsum/issues/141#issuecomment-1209146526
+				}).Build(), nil), "abc\n"), // the line break is for gotestsum https://github.com/gotestyourself/gotestsum/issues/141#issuecomment-1209146526
 			timeout:  30 * time.Minute,
 			expected: fmt.Errorf("%s\n\n%s", "the build some-build failed after 3s with reason reason: msg", "snippet"),
 		},
@@ -625,7 +625,7 @@ Found 0 events for Pod some-build-build:`),
 							Time: now.Add(-59 * time.Minute),
 						},
 					},
-				}).Build()), nil, nil, "", "", nil),
+				}).Build(), nil), nil, nil, "", "", nil),
 			timeout: 30 * time.Minute,
 		},
 		{
@@ -651,7 +651,7 @@ Found 0 events for Pod some-build-build:`),
 							Time: now.Add(-59 * time.Minute),
 						},
 					},
-				}).Build()), "abc\n"),
+				}).Build(), nil), "abc\n"),
 			timeout:  30 * time.Minute,
 			expected: fmt.Errorf("%s\n\n%s", "the build some-build failed after 1m0s with reason reason: msg", "snippet"),
 		},
@@ -766,7 +766,7 @@ func TestCheckPending(t *testing.T) {
 			timeout := 30 * time.Minute
 			client := testhelper_kube.FakePodClient{
 				FakePodExecutor: &testhelper_kube.FakePodExecutor{
-					LoggingClient: loggingclient.New(fakectrlruntimeclient.NewClientBuilder().Build()),
+					LoggingClient: loggingclient.New(fakectrlruntimeclient.NewClientBuilder().Build(), nil),
 				},
 				PendingTimeout: timeout,
 			}

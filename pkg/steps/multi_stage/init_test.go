@@ -142,7 +142,7 @@ func TestCreateSPCs(t *testing.T) {
 				LoggingClient: loggingclient.New(
 					fakectrlruntimeclient.NewClientBuilder().
 						WithScheme(scheme).
-						Build()),
+						Build(), nil),
 			}
 			fakeClient := &testhelper_kube.FakePodClient{
 				FakePodExecutor: crclient,
@@ -339,7 +339,7 @@ func TestSetupRBAC(t *testing.T) {
 
 			tc.step.client = &testhelper_kube.FakePodClient{
 				FakePodExecutor: &testhelper_kube.FakePodExecutor{
-					LoggingClient: loggingclient.New(client),
+					LoggingClient: loggingclient.New(client, nil),
 				},
 			}
 

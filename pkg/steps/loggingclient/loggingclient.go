@@ -13,6 +13,8 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+
+	"github.com/openshift/ci-tools/pkg/metrics"
 )
 
 type LoggingClient interface {
@@ -23,19 +25,22 @@ type LoggingClient interface {
 	// New returns a new instance of a LoggingClient whose objects will
 	// not be logged in the parent.
 	New() LoggingClient
+	MetricsAgent() *metrics.MetricsAgent
 }
 
-func New(upstream ctrlruntimeclient.WithWatch) LoggingClient {
+func New(upstream ctrlruntimeclient.WithWatch, metricsAgent *metrics.MetricsAgent) LoggingClient {
 	return &loggingClient{
-		upstream: upstream,
-		logTo:    map[string]map[string]ctrlruntimeclient.Object{},
+		upstream:     upstream,
+		logTo:        map[string]map[string]ctrlruntimeclient.Object{},
+		metricsAgent: metricsAgent,
 	}
 }
 
 type loggingClient struct {
-	lock     sync.Mutex
-	upstream ctrlruntimeclient.WithWatch
-	logTo    map[string]map[string]ctrlruntimeclient.Object
+	lock         sync.Mutex
+	upstream     ctrlruntimeclient.WithWatch
+	logTo        map[string]map[string]ctrlruntimeclient.Object
+	metricsAgent *metrics.MetricsAgent
 }
 
 func (lc *loggingClient) Get(ctx context.Context, key ctrlruntimeclient.ObjectKey, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.GetOption) error {
@@ -140,7 +145,7 @@ func (lc *loggingClient) Objects() []ctrlruntimeclient.Object {
 }
 
 func (lc *loggingClient) New() LoggingClient {
-	return New(lc.upstream)
+	return New(lc.upstream, lc.metricsAgent)
 }
 
 func (lc *loggingClient) Status() ctrlruntimeclient.StatusWriter {
@@ -165,4 +170,8 @@ func (lc *loggingClient) IsObjectNamespaced(obj runtime.Object) (bool, error) {
 
 func (lc *loggingClient) SubResource(subResource string) ctrlruntimeclient.SubResourceClient {
 	return lc.upstream.SubResource(subResource)
+}
+
+func (lc *loggingClient) MetricsAgent() *metrics.MetricsAgent {
+	return lc.metricsAgent
 }

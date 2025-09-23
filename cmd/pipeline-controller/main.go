@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"regexp"
 	"time"
 
 	"github.com/bombsimon/logrusr/v3"
@@ -25,7 +26,9 @@ import (
 	"sigs.k8s.io/prow/pkg/logrusutil"
 )
 
-const pullRequestInfoComment = "**Pipeline controller notification**\n This repository is configured to use the [pipeline controller](https://docs.ci.openshift.org/docs/how-tos/creating-a-pipeline/). Second-stage tests will be triggered only if the required tests of the first stage are successful. The pipeline controller will automatically detect which contexts are required, or not needed and will utilize a set of `/test` and `/override` Prow commands to trigger the second stage."
+const pullRequestInfoComment = "**Pipeline controller notification**\nThis repository is configured to use the [pipeline controller](https://docs.ci.openshift.org/docs/how-tos/creating-a-pipeline/). Second-stage tests will be triggered only if the required tests of the first stage are successful. The pipeline controller will automatically detect which contexts are required, or not needed and will utilize a set of `/test` and `/override` Prow commands to trigger the second stage.\n\nFor optional jobs, comment `/test ?` to see a list of all defined jobs. Review these jobs and use `/test <job>` to manually trigger optional jobs most likely to be impacted by the proposed changes."
+
+const RepoNotConfiguredMessage = "This repository is not currently configured for [pipeline controller](https://docs.ci.openshift.org/docs/how-tos/creating-a-pipeline/) support."
 
 type options struct {
 	client                   prowflagutil.KubernetesOptions
@@ -99,25 +102,58 @@ func (cw *clientWrapper) handlePullRequestCreation(l *logrus.Entry, event github
 		repo := event.Repo.Name
 		number := event.PullRequest.Number
 
-		presubmits := cw.configDataProvider.GetPresubmits(org + "/" + repo)
-		if len(presubmits.protected) == 0 && len(presubmits.alwaysRequired) == 0 &&
-			len(presubmits.conditionallyRequired) == 0 && len(presubmits.pipelineConditionallyRequired) == 0 {
-			return
-		}
-
-		currentCfg := cw.watcher.getConfig()
-		repos, ok := currentCfg[org]
-		if !ok || !(repos.Len() == 0 || repos.Has(repo)) {
-			return
-		}
-
 		logger := l.WithFields(logrus.Fields{
 			"org":  org,
 			"repo": repo,
 			"pr":   number,
 		})
-		if err := cw.ghc.CreateComment(org, repo, number, pullRequestInfoComment); err != nil {
-			logger.WithError(err).Error("failed to create comment")
+
+		// Check if repo is configured for automatic pipelines
+		currentCfg := cw.watcher.getConfig()
+		repos, orgExists := currentCfg[org]
+		repoConfig, repoExists := repos[repo]
+		isInConfig := orgExists && repoExists
+
+		if !isInConfig {
+			// Repository not in configuration - do not operate on it
+			return
+		}
+
+		// Check if the repository is in automatic mode
+		isAutomaticPipeline := repoConfig.Trigger == "auto"
+
+		// Repo is in configuration, add appropriate comment
+		presubmits := cw.configDataProvider.GetPresubmits(org + "/" + repo)
+		if isAutomaticPipeline {
+			if len(presubmits.protected) > 0 || len(presubmits.alwaysRequired) > 0 ||
+				len(presubmits.conditionallyRequired) > 0 || len(presubmits.pipelineConditionallyRequired) > 0 {
+				// Repo has pipeline-controlled jobs and is in automatic mode, use pipeline info comment
+				if err := cw.ghc.CreateComment(org, repo, number, pullRequestInfoComment); err != nil {
+					logger.WithError(err).Error("failed to create comment")
+				}
+			}
+		} else {
+			// Manual mode: Check for non-always-run jobs
+			cfg := cw.configDataProvider.configGetter()
+			presubmits := cfg.GetPresubmitsStatic(org + "/" + repo)
+
+			hasNonAlwaysRunJobs := false
+			for _, p := range presubmits {
+				if !p.AlwaysRun {
+					hasNonAlwaysRunJobs = true
+					break
+				}
+			}
+
+			if hasNonAlwaysRunJobs {
+				comment := "There are test jobs defined for this repository which are not configured to run automatically. " +
+					"Comment `/test ?` to see a list of all defined jobs. Review these jobs and use `/test <job>` to manually trigger jobs most likely to be impacted by the proposed changes." +
+					"Comment `/pipeline required` to trigger all required & necessary jobs."
+
+				if err := cw.ghc.CreateComment(org, repo, number, comment); err != nil {
+					logger.WithError(err).Error("failed to create comment")
+				}
+			}
 		}
 	}
 }
@@ -127,13 +163,14 @@ func (cw *clientWrapper) handleLabelAddition(l *logrus.Entry, event github.PullR
 		org := event.Repo.Owner.Login
 		repo := event.Repo.Name
 		currentCfg := cw.lgtmWatcher.getConfig()
-		repos, ok := currentCfg[org]
+		repos, orgExists := currentCfg[org]
 		logger := l.WithFields(logrus.Fields{
 			"org":  org,
 			"repo": repo,
 			"pr":   event.PullRequest.Number,
 		})
-		if !ok || !(repos.Len() == 0 || repos.Has(repo)) {
+		_, repoExists := repos[repo]
+		if !orgExists || !repoExists {
 			return
 		}
 		prowJob := &v1.ProwJob{
@@ -162,6 +199,77 @@ func (cw *clientWrapper) handleLabelAddition(l *logrus.Entry, event github.PullR
 		if err := sendComment(presubmits, prowJob, cw.ghc, func() {}); err != nil {
 			logger.WithError(err).Error("failed to send a comment")
 		}
+	}
+}
+
+func (cw *clientWrapper) handleIssueComment(l *logrus.Entry, event github.IssueCommentEvent) {
+	// Only handle issue comments on PRs
+	if !event.Issue.IsPullRequest() {
+		return
+	}
+
+	// Check if the comment contains "/pipeline required" with flexible whitespace
+	pipelineRequiredRegex := regexp.MustCompile(`(?i)/pipeline\s+required`)
+	if !pipelineRequiredRegex.MatchString(event.Comment.Body) {
+		return
+	}
+
+	org := event.Repo.Owner.Login
+	repo := event.Repo.Name
+	number := event.Issue.Number
+
+	logger := l.WithFields(logrus.Fields{
+		"org":  org,
+		"repo": repo,
+		"pr":   number,
+	})
+
+	// Get presubmits for this repo
+	presubmits := cw.configDataProvider.GetPresubmits(org + "/" + repo)
+
+	// Check if there are any pipeline-controlled jobs
+	if len(presubmits.protected) == 0 && len(presubmits.alwaysRequired) == 0 &&
+		len(presubmits.conditionallyRequired) == 0 && len(presubmits.pipelineConditionallyRequired) == 0 {
+		logger.Debug("No pipeline-controlled jobs found for repo")
+		return
+	}
+
+	// Check if repo is in configuration (either manual or auto mode)
+	currentCfg := cw.watcher.getConfig()
+	repos, orgExists := currentCfg[org]
+	_, repoExists := repos[repo]
+	if !orgExists || !repoExists {
+		logger.Debug("Repository not in pipeline controller configuration")
+		if err := cw.ghc.CreateComment(org, repo, number, RepoNotConfiguredMessage); err != nil {
+			logger.WithError(err).Error("failed to create comment")
+		}
+		return
+	}
+
+	// Fetch PR details
+	pr, err := cw.ghc.GetPullRequest(org, repo, number)
+	if err != nil {
+		logger.WithError(err).Error("failed to get PR details")
+		return
+	}
+
+	// Create a fake ProwJob to reuse existing logic
+	prowJob := &v1.ProwJob{
+		Spec: v1.ProwJobSpec{
+			Refs: &v1.Refs{
+				Org:     org,
+				Repo:    repo,
+				BaseRef: pr.Base.Ref,
+				Pulls: []v1.Pull{
+					{Number: number, SHA: pr.Head.SHA},
+				},
+			},
+		},
+	}
+
+	// Generate the comment with test/override commands
+	if err := sendCommentWithMode(presubmits, prowJob, cw.ghc, func() {}, true); err != nil {
+		logger.WithError(err).Error("failed to send comment in response to /pipeline required")
 	}
 }
 
@@ -244,6 +352,7 @@ func main() {
 	eventServer := githubeventserver.New(o.githubEventServerOptions, webhookTokenGenerator, logger)
 	eventServer.RegisterHandlePullRequestEvent(cw.handlePullRequestCreation)
 	eventServer.RegisterHandlePullRequestEvent(cw.handleLabelAddition)
+	eventServer.RegisterHandleIssueCommentEvent(cw.handleIssueComment)
 
 	interrupts.OnInterrupt(func() {
 		eventServer.GracefulShutdown()

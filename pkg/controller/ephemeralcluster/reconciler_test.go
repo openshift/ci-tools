@@ -34,6 +34,22 @@ import (
 
 const (
 	prowJobNamespace = "ci"
+	prEventPayload   = `
+{
+  "pull_request": {
+    "base": {
+	  "repo": {
+	    "name": "ci-tools",
+	    "owner": {
+		  "login": "openshift"
+		}
+	  },
+	  "ref": "main",
+	  "sha": "8f5e7d6ec106ccf86684fcff808d85cac960f0a3"
+	}
+  }
+}`
+	prEventHeaders = `{"X-Github-Delivery": "aa9ede40-8fbb-11f0-8717-9eed0c1315d0"}`
 )
 
 func newPresubmitFaker(name string, now time.Time) NewPresubmitFunc {
@@ -155,11 +171,32 @@ func TestCreateProwJob(t *testing.T) {
 			name: "An EphemeralCluster request creates a ProwJob",
 			ec: ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: v1.ObjectMeta{
+					Annotations: map[string]string{
+						PREventPayload: prEventPayload,
+						PREventHeaders: prEventHeaders,
+					},
 					Namespace: "ns",
 					Name:      "ec",
 				},
 				Spec: ephemeralclusterv1.EphemeralClusterSpec{
 					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						BuildRootImage: &api.BuildRootImageConfiguration{
+							ImageStreamTagReference: &api.ImageStreamTagReference{
+								Namespace: "ocp",
+								Name:      "4.20",
+								Tag:       "cli",
+							},
+						},
+						BaseImages: map[string]api.ImageStreamTagReference{
+							"upi-installer": {
+								Namespace: "ocp",
+								Name:      "4.20",
+								Tag:       "upi-installer",
+							},
+						},
+						ExternalImages: map[string]api.ExternalImage{
+							"fedora": {Registry: "quay.io/fedora/fedora:43"},
+						},
 						Releases: map[string]api.UnresolvedRelease{
 							"initial": {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
 							"latest":  {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
@@ -176,9 +213,64 @@ func TestCreateProwJob(t *testing.T) {
 			wantRes: reconcile.Result{RequeueAfter: pollingTime},
 		},
 		{
+			name: "Hive cluster request creates a ProwJob",
+			ec: ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Annotations: map[string]string{
+						PREventPayload: prEventPayload,
+						PREventHeaders: prEventHeaders,
+					},
+					Namespace: "ns",
+					Name:      "ec",
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						BuildRootImage: &api.BuildRootImageConfiguration{
+							ImageStreamTagReference: &api.ImageStreamTagReference{
+								Namespace: "ocp",
+								Name:      "4.20",
+								Tag:       "cli",
+							},
+						},
+						BaseImages: map[string]api.ImageStreamTagReference{
+							"cli": {
+								Namespace: "ocp",
+								Name:      "4.20",
+								Tag:       "cli",
+							},
+						},
+						ExternalImages: map[string]api.ExternalImage{
+							"fedora": {Registry: "quay.io/fedora/fedora:43"},
+						},
+						Test: ephemeralclusterv1.TestSpec{
+							Workflow:       "generic-claim",
+							Env:            map[string]string{"foo": "bar"},
+							ClusterProfile: "aws",
+							ClusterClaim: &api.ClusterClaim{
+								As:           "claim",
+								Product:      "ocp",
+								Version:      "4.22",
+								Architecture: api.ReleaseArchitectureAMD64,
+								Cloud:        "aws",
+								Owner:        "test-platform",
+								Labels:       map[string]string{"region": "us-east-1"},
+								Timeout:      &prowv1.Duration{},
+							},
+						},
+					},
+				},
+			},
+			req:     reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
+			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+		},
+		{
 			name: "Handle invalid prow config",
 			ec: ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: v1.ObjectMeta{
+					Annotations: map[string]string{
+						PREventPayload: prEventPayload,
+						PREventHeaders: prEventHeaders,
+					},
 					Namespace: "ns",
 					Name:      "ec",
 				},
@@ -197,12 +289,16 @@ func TestCreateProwJob(t *testing.T) {
 			prowConfig: &prowconfig.Config{},
 			req:        reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
 			wantRes:    reconcile.Result{},
-			wantErr:    errors.New("terminal error: validate and default presubmit: invalid presubmit job ephemeralcluster-ci-org-repo-branch-cluster-provisioning: failed to default namespace"),
+			wantErr:    errors.New("terminal error: validate and default presubmit: invalid presubmit job ephemeralcluster-ci-openshift-ci-tools-main-cluster-provisioning: failed to default namespace"),
 		},
 		{
 			name: "Fail to create a ProwJob",
 			ec: ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: v1.ObjectMeta{
+					Annotations: map[string]string{
+						PREventPayload: prEventPayload,
+						PREventHeaders: prEventHeaders,
+					},
 					Namespace: "ns",
 					Name:      "ec",
 				},
@@ -232,6 +328,10 @@ func TestCreateProwJob(t *testing.T) {
 			name: "Invalid ci-operator configuration",
 			ec: ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: v1.ObjectMeta{
+					Annotations: map[string]string{
+						PREventPayload: prEventPayload,
+						PREventHeaders: prEventHeaders,
+					},
 					Namespace: "ns",
 					Name:      "ec",
 				},
@@ -251,6 +351,10 @@ func TestCreateProwJob(t *testing.T) {
 			name: "Invalid ci-operator configuration and fail to update EC",
 			ec: ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: v1.ObjectMeta{
+					Annotations: map[string]string{
+						PREventPayload: prEventPayload,
+						PREventHeaders: prEventHeaders,
+					},
 					Namespace: "ns",
 					Name:      "ec",
 				},
@@ -275,7 +379,14 @@ func TestCreateProwJob(t *testing.T) {
 		{
 			name: "Several PJ for the same EC raises an error",
 			ec: ephemeralclusterv1.EphemeralCluster{
-				ObjectMeta: v1.ObjectMeta{Namespace: "ns", Name: "ec"},
+				ObjectMeta: v1.ObjectMeta{
+					Annotations: map[string]string{
+						PREventPayload: prEventPayload,
+						PREventHeaders: prEventHeaders,
+					},
+					Namespace: "ns",
+					Name:      "ec",
+				},
 			},
 			pjs: []ctrlclient.Object{
 				&prowv1.ProwJob{ObjectMeta: v1.ObjectMeta{
@@ -304,6 +415,57 @@ func TestCreateProwJob(t *testing.T) {
 			}}},
 			wantRes: reconcile.Result{RequeueAfter: pollingTime},
 		},
+		{
+			name: "Unsupported Pull Request event payload",
+			ec: ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Annotations: map[string]string{
+						PREventPayload: `{}`,
+						PREventHeaders: `{}`,
+					},
+					Namespace: "ns",
+					Name:      "ec",
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						Releases: map[string]api.UnresolvedRelease{
+							"initial": {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
+							"latest":  {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
+						},
+						Test: ephemeralclusterv1.TestSpec{
+							Workflow:       "test-workflow",
+							Env:            map[string]string{"foo": "bar"},
+							ClusterProfile: "aws",
+						},
+					},
+				},
+			},
+			wantRes: reconcile.Result{},
+			wantErr: errors.New("terminal error: parse pull request meta: unsupported PR event payload"),
+		}, {
+			name: "Malformed Pull Request event payload",
+			ec: ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Namespace: "ns",
+					Name:      "ec",
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						Releases: map[string]api.UnresolvedRelease{
+							"initial": {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
+							"latest":  {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
+						},
+						Test: ephemeralclusterv1.TestSpec{
+							Workflow:       "test-workflow",
+							Env:            map[string]string{"foo": "bar"},
+							ClusterProfile: "aws",
+						},
+					},
+				},
+			},
+			wantRes: reconcile.Result{},
+			wantErr: errors.New("terminal error: parse pull request meta: malformed PR event payload"),
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -329,6 +491,7 @@ func TestCreateProwJob(t *testing.T) {
 				masterClient:    client,
 				now:             func() time.Time { return fakeNow },
 				polling:         func() time.Duration { return pollingTime },
+				cliISTagRef:     api.ImageStreamTagReference{Namespace: "ocp", Name: "4.22", Tag: "cli"},
 				newPresubmit:    newPresubmitFaker("foobar", fakeNow),
 				prowConfigAgent: prowConfigAgent(pc),
 			}
@@ -386,6 +549,7 @@ func TestReconcile(t *testing.T) {
 				&prowv1.ProwJob{
 					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
 					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+					Status:     prowv1.ProwJobStatus{URL: "https://pj-123.html"},
 				},
 			},
 			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
@@ -416,6 +580,7 @@ func TestReconcile(t *testing.T) {
 					Phase:      ephemeralclusterv1.EphemeralClusterReady,
 					ProwJobID:  "pj-123",
 					Kubeconfig: "kubeconfig",
+					ProwJobURL: "https://pj-123.html",
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
 						Status:             ephemeralclusterv1.ConditionFalse,
@@ -461,6 +626,7 @@ func TestReconcile(t *testing.T) {
 				},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					ProwJobID: "pj-123",
+					Phase:     ephemeralclusterv1.EphemeralClusterProvisioning,
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{
 						{
 							Type:               ephemeralclusterv1.ProwJobCreating,
@@ -470,7 +636,7 @@ func TestReconcile(t *testing.T) {
 						}, {
 							Type:               ephemeralclusterv1.ClusterReady,
 							Status:             ephemeralclusterv1.ConditionFalse,
-							Reason:             ephemeralclusterv1.KubeconfigFetchFailureReason,
+							Reason:             ephemeralclusterv1.SecretsFetchFailureReason,
 							Message:            ephemeralclusterv1.CIOperatorNSNotFoundMsg,
 							LastTransitionTime: v1.NewTime(fakeNow),
 						}},
@@ -517,6 +683,7 @@ func TestReconcile(t *testing.T) {
 				},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					ProwJobID: "pj-123",
+					Phase:     ephemeralclusterv1.EphemeralClusterProvisioning,
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
 						Status:             ephemeralclusterv1.ConditionFalse,
@@ -525,7 +692,7 @@ func TestReconcile(t *testing.T) {
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
 						Status:             ephemeralclusterv1.ConditionFalse,
-						Reason:             ephemeralclusterv1.KubeconfigFetchFailureReason,
+						Reason:             ephemeralclusterv1.SecretsFetchFailureReason,
 						Message:            fmt.Sprintf("secrets %q not found", EphemeralClusterTestName),
 						LastTransitionTime: v1.NewTime(fakeNow),
 					}},
@@ -575,6 +742,7 @@ func TestReconcile(t *testing.T) {
 				},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					ProwJobID: "pj-123",
+					Phase:     ephemeralclusterv1.EphemeralClusterProvisioning,
 					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
 						Status:             ephemeralclusterv1.ConditionFalse,
@@ -583,8 +751,8 @@ func TestReconcile(t *testing.T) {
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
 						Status:             ephemeralclusterv1.ConditionFalse,
-						Reason:             ephemeralclusterv1.KubeconfigFetchFailureReason,
-						Message:            ephemeralclusterv1.KubeconfigNotReadMsg,
+						Reason:             ephemeralclusterv1.SecretsFetchFailureReason,
+						Message:            ephemeralclusterv1.KubeconfigNotReadyMsg,
 						LastTransitionTime: v1.NewTime(fakeNow),
 					}},
 				},
@@ -628,7 +796,7 @@ func TestReconcile(t *testing.T) {
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
 						Status:             ephemeralclusterv1.ConditionFalse,
-						Reason:             ephemeralclusterv1.KubeconfigFetchFailureReason,
+						Reason:             ephemeralclusterv1.SecretsFetchFailureReason,
 						Message:            "uknown cluster build01",
 						LastTransitionTime: v1.NewTime(fakeNow),
 					}},
@@ -676,7 +844,7 @@ func TestReconcile(t *testing.T) {
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
 						Status:             ephemeralclusterv1.ConditionFalse,
-						Reason:             ephemeralclusterv1.KubeconfigFetchFailureReason,
+						Reason:             ephemeralclusterv1.SecretsFetchFailureReason,
 						Message:            ephemeralclusterv1.CIOperatorNSNotFoundMsg,
 						LastTransitionTime: v1.NewTime(fakeNow),
 					}, {
@@ -886,7 +1054,7 @@ func TestReconcile(t *testing.T) {
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
 						Status:             ephemeralclusterv1.ConditionFalse,
-						Reason:             ephemeralclusterv1.KubeconfigFetchFailureReason,
+						Reason:             ephemeralclusterv1.SecretsFetchFailureReason,
 						Message:            ephemeralclusterv1.CIOperatorNSNotFoundMsg,
 						LastTransitionTime: v1.NewTime(fakeNow),
 					}, {
@@ -957,12 +1125,247 @@ func TestReconcile(t *testing.T) {
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
 						Status:             ephemeralclusterv1.ConditionFalse,
-						Reason:             ephemeralclusterv1.KubeconfigFetchFailureReason,
+						Reason:             ephemeralclusterv1.SecretsFetchFailureReason,
 						Message:            `secrets "cluster-provisioning" not found`,
 						LastTransitionTime: v1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.TestCompleted,
 						Status:             ephemeralclusterv1.ConditionTrue,
+						LastTransitionTime: v1.NewTime(fakeNow),
+					}},
+				},
+			},
+			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+		},
+		{
+			name: "Hive cluster provisioned, report secrets",
+			ec: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "foo",
+					Namespace: "bar",
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						Test: ephemeralclusterv1.TestSpec{
+							ClusterClaim: &api.ClusterClaim{},
+						},
+					},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+				},
+			},
+			objs: []ctrlclient.Object{
+				&prowv1.ProwJob{
+					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
+					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+				},
+			},
+			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
+				objs := []ctrlclient.Object{
+					&corev1.Namespace{
+						ObjectMeta: v1.ObjectMeta{
+							Labels: map[string]string{steps.LabelJobID: "pj-123"},
+							Name:   "ci-op-1234",
+						},
+					},
+					&corev1.Secret{
+						ObjectMeta: v1.ObjectMeta{Name: HiveKubeconfigSecret, Namespace: "ci-op-1234"},
+						Data:       map[string][]byte{api.HiveAdminKubeconfigSecretKey: []byte("kubeconfig")},
+					},
+					&corev1.Secret{
+						ObjectMeta: v1.ObjectMeta{Name: HiveAdminPasswdSecret, Namespace: "ci-op-1234"},
+						Data:       map[string][]byte{api.HiveAdminPasswordSecretKey: []byte("admin-passwd")},
+					},
+				}
+				c := fake.NewClientBuilder().WithObjects(objs...).WithScheme(scheme).Build()
+				return map[string]*ctrlruntimetest.FakeClient{
+					"build01": ctrlruntimetest.NewFakeClient(c, scheme, ctrlruntimetest.WithInitObjects(objs...)),
+				}
+			},
+			wantEC: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:            "foo",
+					Namespace:       "bar",
+					ResourceVersion: "1000",
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						Test: ephemeralclusterv1.TestSpec{
+							ClusterClaim: &api.ClusterClaim{},
+						},
+					},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					Phase:             ephemeralclusterv1.EphemeralClusterReady,
+					ProwJobID:         "pj-123",
+					Kubeconfig:        "kubeconfig",
+					KubeAdminPassword: "admin-passwd",
+					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+						Type:               ephemeralclusterv1.ProwJobCreating,
+						Status:             ephemeralclusterv1.ConditionFalse,
+						Reason:             ProwJobCreatingDoneReason,
+						LastTransitionTime: v1.NewTime(fakeNow),
+					}, {
+						Type:               ephemeralclusterv1.ClusterReady,
+						Status:             ephemeralclusterv1.ConditionTrue,
+						LastTransitionTime: v1.NewTime(fakeNow),
+					}},
+				},
+			},
+			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+		},
+		{
+			name: "Hive cluster not ready yet, kubeconfig missing",
+			ec: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "foo",
+					Namespace: "bar",
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						Test: ephemeralclusterv1.TestSpec{
+							ClusterClaim: &api.ClusterClaim{},
+						},
+					},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+				},
+			},
+			objs: []ctrlclient.Object{
+				&prowv1.ProwJob{
+					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
+					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+				},
+			},
+			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
+				objs := []ctrlclient.Object{
+					&corev1.Namespace{
+						ObjectMeta: v1.ObjectMeta{
+							Labels: map[string]string{steps.LabelJobID: "pj-123"},
+							Name:   "ci-op-1234",
+						},
+					},
+					&corev1.Secret{
+						ObjectMeta: v1.ObjectMeta{Name: HiveAdminPasswdSecret, Namespace: "ci-op-1234"},
+						Data:       map[string][]byte{api.HiveAdminPasswordSecretKey: []byte("admin-passwd")},
+					},
+				}
+				c := fake.NewClientBuilder().WithObjects(objs...).WithScheme(scheme).Build()
+				return map[string]*ctrlruntimetest.FakeClient{
+					"build01": ctrlruntimetest.NewFakeClient(c, scheme, ctrlruntimetest.WithInitObjects(objs...)),
+				}
+			},
+			wantEC: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:            "foo",
+					Namespace:       "bar",
+					ResourceVersion: "1000",
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						Test: ephemeralclusterv1.TestSpec{
+							ClusterClaim: &api.ClusterClaim{},
+						},
+					},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+					Phase:     ephemeralclusterv1.EphemeralClusterProvisioning,
+					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+						Type:               ephemeralclusterv1.ProwJobCreating,
+						Status:             ephemeralclusterv1.ConditionFalse,
+						Reason:             ProwJobCreatingDoneReason,
+						LastTransitionTime: v1.NewTime(fakeNow),
+					}, {
+						Type:               ephemeralclusterv1.ClusterReady,
+						Status:             ephemeralclusterv1.ConditionFalse,
+						Reason:             ephemeralclusterv1.SecretsFetchFailureReason,
+						Message:            ephemeralclusterv1.HiveSecretsNotReadyMsg,
+						LastTransitionTime: v1.NewTime(fakeNow),
+					}},
+				},
+			},
+			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+		},
+		{
+			name: "Hive cluster not ready yet, errs out when fetching a secret",
+			ec: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "foo",
+					Namespace: "bar",
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						Test: ephemeralclusterv1.TestSpec{
+							ClusterClaim: &api.ClusterClaim{},
+						},
+					},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+				},
+			},
+			objs: []ctrlclient.Object{
+				&prowv1.ProwJob{
+					ObjectMeta: v1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
+					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+				},
+			},
+			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
+				objs := []ctrlclient.Object{
+					&corev1.Namespace{
+						ObjectMeta: v1.ObjectMeta{
+							Labels: map[string]string{steps.LabelJobID: "pj-123"},
+							Name:   "ci-op-1234",
+						},
+					},
+					&corev1.Secret{
+						ObjectMeta: v1.ObjectMeta{Name: api.HiveAdminPasswordSecret, Namespace: "ci-op-1234"},
+						Data:       map[string][]byte{api.HiveAdminPasswordSecretKey: []byte("admin-passwd")},
+					},
+				}
+				c := fake.NewClientBuilder().WithObjects(objs...).WithScheme(scheme).
+					WithInterceptorFuncs(interceptor.Funcs{
+						Get: func(ctx context.Context, client ctrlclient.WithWatch, key ctrlclient.ObjectKey, obj ctrlclient.Object, opts ...ctrlclient.GetOption) error {
+							if _, ok := obj.(*corev1.Secret); ok && key.Name == HiveKubeconfigSecret {
+								return errors.New("injected")
+							}
+							return client.Get(ctx, key, obj, opts...)
+						},
+					}).
+					Build()
+				return map[string]*ctrlruntimetest.FakeClient{
+					"build01": ctrlruntimetest.NewFakeClient(c, scheme, ctrlruntimetest.WithInitObjects(objs...)),
+				}
+			},
+			wantEC: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:            "foo",
+					Namespace:       "bar",
+					ResourceVersion: "1000",
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						Test: ephemeralclusterv1.TestSpec{
+							ClusterClaim: &api.ClusterClaim{},
+						},
+					},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+					Phase:     ephemeralclusterv1.EphemeralClusterProvisioning,
+					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+						Type:               ephemeralclusterv1.ProwJobCreating,
+						Status:             ephemeralclusterv1.ConditionFalse,
+						Reason:             ProwJobCreatingDoneReason,
+						LastTransitionTime: v1.NewTime(fakeNow),
+					}, {
+						Type:               ephemeralclusterv1.ClusterReady,
+						Status:             ephemeralclusterv1.ConditionFalse,
+						Reason:             ephemeralclusterv1.SecretsFetchFailureReason,
+						Message:            "read secret cluster-provisioning-hive-admin-kubeconfig/ci-op-1234: injected",
 						LastTransitionTime: v1.NewTime(fakeNow),
 					}},
 				},

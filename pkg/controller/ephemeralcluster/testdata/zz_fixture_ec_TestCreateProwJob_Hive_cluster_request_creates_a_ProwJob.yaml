@@ -14,10 +14,14 @@ metadata:
 spec:
   ciOperator:
     baseImages:
-      upi-installer:
+      cli:
         name: "4.20"
         namespace: ocp
-        tag: upi-installer
+        tag: cli
+      cli-2:
+        name: "4.22"
+        namespace: ocp
+        tag: cli
     buildRoot:
       image_stream_tag:
         name: "4.20"
@@ -29,20 +33,21 @@ spec:
         namespace: ""
         registry: quay.io/fedora/fedora:43
         tag: ""
-    releases:
-      initial:
-        integration:
-          name: "4.17"
-          namespace: ocp
-      latest:
-        integration:
-          name: "4.17"
-          namespace: ocp
     test:
+      clusterClaim:
+        architecture: amd64
+        as: claim
+        cloud: aws
+        labels:
+          region: us-east-1
+        owner: test-platform
+        product: ocp
+        timeout: 0s
+        version: "4.22"
       clusterProfile: aws
       env:
         foo: bar
-      workflow: test-workflow
+      workflow: generic-claim
 status:
   conditions:
   - lastTransitionTime: "2025-04-02T12:12:12Z"

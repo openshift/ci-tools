@@ -42,6 +42,178 @@ spec:
               ciOperator:
                 description: CIOperatorSpec contains what is needed to run ci-operator
                 properties:
+                  baseImages:
+                    additionalProperties:
+                      description: ImageStreamTagReference identifies an ImageStreamTag
+                      properties:
+                        as:
+                          description: As is an optional string to use as the intermediate
+                            name for this reference.
+                          type: string
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                        tag:
+                          type: string
+                      required:
+                      - name
+                      - namespace
+                      - tag
+                      type: object
+                    type: object
+                  buildRoot:
+                    description: |-
+                      BuildRootImageConfiguration holds the two ways of using a base image
+                      that the pipeline will caches on.
+                    properties:
+                      from_repository:
+                        description: If the BuildRoot images pullspec should be read
+                          from a file in the repository (BuildRootImageFileName).
+                        type: boolean
+                      image_stream_tag:
+                        description: ImageStreamTagReference identifies an ImageStreamTag
+                        properties:
+                          as:
+                            description: As is an optional string to use as the intermediate
+                              name for this reference.
+                            type: string
+                          name:
+                            type: string
+                          namespace:
+                            type: string
+                          tag:
+                            type: string
+                        required:
+                        - name
+                        - namespace
+                        - tag
+                        type: object
+                      project_image:
+                        description: ProjectDirectoryImageBuildInputs holds inputs
+                          for an image build from the repo under test
+                        properties:
+                          build_args:
+                            description: |-
+                              BuildArgs contains build arguments that will be resolved in the Dockerfile.
+                              See https://docs.docker.com/engine/reference/builder/#/arg for more details.
+                            items:
+                              properties:
+                                name:
+                                  description: Name of the build arg.
+                                  type: string
+                                value:
+                                  description: Value of the build arg.
+                                  type: string
+                              type: object
+                            type: array
+                          context_dir:
+                            description: |-
+                              ContextDir is the directory in the project
+                              from which this build should be run.
+                            type: string
+                          dockerfile_literal:
+                            description: |-
+                              DockerfileLiteral can be used to  provide an inline Dockerfile.
+                              Mutually exclusive with DockerfilePath.
+                            type: string
+                          dockerfile_path:
+                            description: |-
+                              DockerfilePath is the path to a Dockerfile in the
+                              project to run relative to the context_dir.
+                            type: string
+                          inputs:
+                            additionalProperties:
+                              description: |-
+                                ImageBuildInputs is a subset of the v1 OpenShift Build API object
+                                defining an input source.
+                              properties:
+                                as:
+                                  description: |-
+                                    As is a list of multi-stage step names or image names that will
+                                    be replaced by the image reference from this step. For instance,
+                                    if the Dockerfile defines FROM nginx:latest AS base, specifying
+                                    either "nginx:latest" or "base" in this array will replace that
+                                    image with the pipeline input.
+                                  items:
+                                    type: string
+                                  type: array
+                                paths:
+                                  description: |-
+                                    Paths is a list of paths to copy out of this image and into the
+                                    context directory.
+                                  items:
+                                    description: |-
+                                      ImageSourcePath maps a path in the source image into a destination
+                                      path in the context. See the v1 OpenShift Build API for more info.
+                                    properties:
+                                      destination_dir:
+                                        description: |-
+                                          DestinationDir is the directory in the destination image to copy
+                                          to.
+                                        type: string
+                                      source_path:
+                                        description: SourcePath is a file or directory
+                                          in the source image to copy from.
+                                        type: string
+                                    required:
+                                    - destination_dir
+                                    - source_path
+                                    type: object
+                                  type: array
+                              type: object
+                            description: |-
+                              Inputs is a map of tag reference name to image input changes
+                              that will populate the build context for the Dockerfile or
+                              alter the input image for a multi-stage build.
+                            type: object
+                          ref:
+                            description: Ref is an optional string linking to the
+                              extra_ref in "org.repo" format that this belongs to
+                            type: string
+                        type: object
+                      use_build_cache:
+                        description: |-
+                          UseBuildCache enables the import and use of the prior `bin` image
+                          as a build cache, if the underlying build root has not changed since
+                          the previous cache was published.
+                        type: boolean
+                    type: object
+                  externalImages:
+                    additionalProperties:
+                      description: ExternalImage describes the external image that
+                        is imported into the pipeline
+                      properties:
+                        as:
+                          description: As is an optional string to use as the intermediate
+                            name for this reference.
+                          type: string
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                        pull_secret:
+                          description: PullSecret is the name of the secret to use
+                            to pull the image
+                          type: string
+                        pull_spec:
+                          description: |-
+                            PullSpec is the full pullSpec of the external image, only to be set programmatically,
+                            and takes precedent over the other fields in ExternalImage
+                          type: string
+                        registry:
+                          description: Registry is the registry to pull images from
+                            (e.g. quay.io)
+                          type: string
+                        tag:
+                          type: string
+                      required:
+                      - name
+                      - namespace
+                      - registry
+                      - tag
+                      type: object
+                    type: object
                   releases:
                     additionalProperties:
                       description: |-
@@ -196,6 +368,52 @@ spec:
                     description: TestSpec determines the workflow will be executed
                       by the ci-operator to provision a cluster.
                     properties:
+                      clusterClaim:
+                        description: ClusterClaim claims an OpenShift cluster for
+                          the job.
+                        properties:
+                          architecture:
+                            description: |-
+                              Architecture is the architecture for the product.
+                              Defaults to amd64.
+                            type: string
+                          as:
+                            description: |-
+                              As is the name to use when importing the cluster claim release payload.
+                              If unset, claim release will be imported as `latest`.
+                            type: string
+                          cloud:
+                            description: Cloud is the cloud where the product is installed,
+                              e.g., aws.
+                            type: string
+                          labels:
+                            additionalProperties:
+                              type: string
+                            description: Labels is the labels to select the cluster
+                              pools
+                            type: object
+                          owner:
+                            description: Owner is the owner of cloud account used
+                              to install the product, e.g., dpp.
+                            type: string
+                          product:
+                            description: |-
+                              Product is the name of the product being released.
+                              Defaults to ocp.
+                            type: string
+                          timeout:
+                            description: |-
+                              Timeout is how long ci-operator will wait for the cluster to be ready.
+                              Defaults to 1h.
+                            type: string
+                          version:
+                            description: Version is the version of the product
+                            type: string
+                        required:
+                        - cloud
+                        - owner
+                        - version
+                        type: object
                       clusterProfile:
                         type: string
                       env:
@@ -245,6 +463,8 @@ spec:
                   - type
                   type: object
                 type: array
+              kubeAdminPassword:
+                type: string
               kubeconfig:
                 description: Kubeconfig to access the ephemeral cluster
                 type: string
@@ -253,6 +473,8 @@ spec:
                   cluster is in its lifecycle
                 type: string
               prowJobId:
+                type: string
+              prowJobURL:
                 type: string
             required:
             - phase

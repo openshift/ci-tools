@@ -1,0 +1,29 @@
+metadata:
+  creationTimestamp: null
+  name: ec
+  namespace: ns
+  resourceVersion: "1000"
+spec:
+  ciOperator:
+    releases:
+      initial:
+        integration:
+          name: "4.17"
+          namespace: ocp
+      latest:
+        integration:
+          name: "4.17"
+          namespace: ocp
+    test:
+      clusterProfile: aws
+      env:
+        foo: bar
+      workflow: test-workflow
+status:
+  conditions:
+  - lastTransitionTime: "2025-04-02T12:12:12Z"
+    message: 'parse pull request meta: malformed PR event payload'
+    reason: CIOperatorJobsGenerateFailure
+    status: "False"
+    type: ProwJobCreating
+  phase: Failed

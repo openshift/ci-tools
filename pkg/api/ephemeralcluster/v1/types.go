@@ -10,11 +10,13 @@ const (
 	CIOperatorJobsGenerateFailureReason    = "CIOperatorJobsGenerateFailure"
 	ProwJobFailureReason                   = "ProwJobFailure"
 	ProwJobCompletedReason                 = "ProwJobCompleted"
-	KubeconfigFetchFailureReason           = "KubeconfigFetchFailure"
+	TooManyProwJobsBoundReason             = "TooManyProwJobsBound"
+	SecretsFetchFailureReason              = "SecretsFetchFailure"
 	CreateTestCompletedSecretFailureReason = "CreateTestCompletedSecretFailure"
 
 	CIOperatorNSNotFoundMsg = "ci-operator NS not found"
-	KubeconfigNotReadMsg    = "kubeconfig not ready"
+	KubeconfigNotReadyMsg   = "kubeconfig not ready"
+	HiveSecretsNotReadyMsg  = "hive secrets not ready"
 )
 
 // EphemeralClusterCondition is a valid value for EphemeralClusterCondition.Type
@@ -25,7 +27,7 @@ const (
 	ProwJobCreating EphemeralClusterConditionType = "ProwJobCreating"
 	// ContainersReady indicates whether the cluster is up and running.
 	ClusterReady EphemeralClusterConditionType = "ClusterReady"
-	// ProwJobCompleted indicates whether the ProwJob is running.
+	// ProwJobCompleted indicates whether the ProwJob has done.
 	ProwJobCompleted EphemeralClusterConditionType = "ProwJobCompleted"
 	// TestCompleted indicates test has completed and the ephemeral cluster isn't needed anymore.
 	TestCompleted EphemeralClusterConditionType = "TestCompleted"
@@ -83,11 +85,19 @@ type EphemeralClusterSpec struct {
 	TearDownCluster bool `json:"tearDownCluster,omitempty"`
 }
 
+type PullRequestMeta struct {
+	Payload string `json:"event,omitempty"`
+	Headers string `json:"headers,omitempty"`
+}
+
 // CIOperatorSpec contains what is needed to run ci-operator
 type CIOperatorSpec struct {
-	Releases  map[string]api.UnresolvedRelease `json:"releases,omitempty"`
-	Resources api.ResourceConfiguration        `json:"resources,omitempty"`
-	Test      TestSpec                         `json:"test,omitempty"`
+	BuildRootImage *api.BuildRootImageConfiguration       `json:"buildRoot,omitempty"`
+	BaseImages     map[string]api.ImageStreamTagReference `json:"baseImages,omitempty"`
+	ExternalImages map[string]api.ExternalImage           `json:"externalImages,omitempty"`
+	Releases       map[string]api.UnresolvedRelease       `json:"releases,omitempty"`
+	Resources      api.ResourceConfiguration              `json:"resources,omitempty"`
+	Test           TestSpec                               `json:"test,omitempty"`
 }
 
 // TestSpec determines the workflow will be executed by the ci-operator to provision a cluster.
@@ -95,6 +105,7 @@ type TestSpec struct {
 	Workflow       string            `json:"workflow,omitempty"`
 	Env            map[string]string `json:"env,omitempty"`
 	ClusterProfile string            `json:"clusterProfile,omitempty"`
+	ClusterClaim   *api.ClusterClaim `json:"clusterClaim,omitempty"`
 }
 
 type EphemeralClusterStatus struct {
@@ -102,8 +113,10 @@ type EphemeralClusterStatus struct {
 	Phase      EphemeralClusterPhase       `json:"phase"`
 	Conditions []EphemeralClusterCondition `json:"conditions,omitempty"`
 	ProwJobID  string                      `json:"prowJobId,omitempty"`
+	ProwJobURL string                      `json:"prowJobURL,omitempty"`
 	// Kubeconfig to access the ephemeral cluster
-	Kubeconfig string `json:"kubeconfig,omitempty"`
+	Kubeconfig        string `json:"kubeconfig,omitempty"`
+	KubeAdminPassword string `json:"kubeAdminPassword,omitempty"`
 }
 
 // EphemeralClusterCondition contains details for the current condition of this EphemeralCluster.

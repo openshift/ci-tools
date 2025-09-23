@@ -45,6 +45,7 @@ items:
       containers:
       - args:
         - --gcs-upload-secret=/secrets/gcs/service-account.json
+        - --hive-kubeconfig=/secrets/hive-hive-credentials/kubeconfig
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
         - --lease-server-credentials-file=/etc/boskos/credentials
         - --report-credentials-file=/etc/report/credentials
@@ -56,10 +57,14 @@ items:
         - name: UNRESOLVED_CONFIG
           value: |
             base_images:
-              upi-installer:
+              cli:
                 name: "4.20"
                 namespace: ocp
-                tag: upi-installer
+                tag: cli
+              cli-2:
+                name: "4.22"
+                namespace: ocp
+                tag: cli
             build_root:
               image_stream_tag:
                 name: "4.20"
@@ -71,15 +76,6 @@ items:
                 namespace: ""
                 registry: quay.io/fedora/fedora:43
                 tag: ""
-            releases:
-              initial:
-                integration:
-                  name: "4.17"
-                  namespace: ocp
-              latest:
-                integration:
-                  name: "4.17"
-                  namespace: ocp
             resources:
               '*':
                 limits:
@@ -88,6 +84,16 @@ items:
                   cpu: 200m
             tests:
             - as: cluster-provisioning
+              cluster_claim:
+                architecture: amd64
+                as: claim
+                cloud: aws
+                labels:
+                  region: us-east-1
+                owner: test-platform
+                product: ocp
+                timeout: 0s
+                version: "4.22"
               steps:
                 cluster_profile: aws
                 env:
@@ -109,13 +115,13 @@ items:
                     $unexpected_err -ge 3 ]; then\n            printf 'FAILURE: too many unexpected
                     errors\\n' $unexpected_err\n            break\n        fi\n\n        unexpected_err=$((unexpected_err+1))\n
                     \   else\n        unexpected_err=0\n    fi\n\n    i=$((i+1))\n    sleep 5s\ndone\n"
-                  from: cli
+                  from: cli-2
                   resources:
                     limits:
                       memory: 100Mi
                     requests:
                       cpu: 10m
-                workflow: test-workflow
+                workflow: generic-claim
             zz_generated_metadata:
               branch: main
               org: openshift
@@ -135,6 +141,9 @@ items:
           readOnly: true
         - mountPath: /secrets/gcs
           name: gcs-credentials
+          readOnly: true
+        - mountPath: /secrets/hive-hive-credentials
+          name: hive-hive-credentials
           readOnly: true
         - mountPath: /secrets/manifest-tool
           name: manifest-tool-local-pusher
@@ -156,6 +165,9 @@ items:
       - name: ci-pull-credentials
         secret:
           secretName: ci-pull-credentials
+      - name: hive-hive-credentials
+        secret:
+          secretName: hive-hive-credentials
       - name: manifest-tool-local-pusher
         secret:
           secretName: manifest-tool-local-pusher

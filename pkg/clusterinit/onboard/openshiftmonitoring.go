@@ -71,6 +71,11 @@ prometheusK8s:
   - key: node-role.kubernetes.io/infra
     value: reserved
     effect: NoExecute
+  volumeClaimTemplate:
+    spec:
+      resources:
+        requests:
+          storage: 100Gi
 prometheusOperator:
   nodeSelector:
     node-role.kubernetes.io/infra: ""

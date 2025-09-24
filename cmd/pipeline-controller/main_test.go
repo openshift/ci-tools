@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"io"
 	"strings"
 	"testing"
 
@@ -12,10 +13,16 @@ import (
 	"sigs.k8s.io/prow/pkg/labels"
 )
 
+// testLoggerMain creates a discarded logger for tests
+func testLoggerMain() *logrus.Entry {
+	logger := logrus.New()
+	logger.SetOutput(io.Discard)
+	return logrus.NewEntry(logger)
+}
+
 // Test constants for expected comment messages
 const (
-	testPipelineRequiredResponse = "Pipeline controller response to `pipeline required`"
-	testRemainingRequiredCommand = "/test remaining-required"
+	testPipelineRequiredResponse = "Scheduling required tests:"
 )
 
 // fakeGhClient is a fake GitHub client for testing
@@ -40,6 +47,10 @@ func (f *fakeGhClientWithComment) CreateComment(owner, repo string, number int, 
 }
 func (f *fakeGhClientWithComment) GetPullRequestChanges(org, repo string, number int) ([]github.PullRequestChange, error) {
 	return []github.PullRequestChange{}, nil
+}
+
+func (f *fakeGhClientWithComment) CreateStatus(org, repo, ref string, s github.Status) error {
+	return nil
 }
 
 // Helper function to create repo config for tests
@@ -97,11 +108,18 @@ func TestHandleLabelAddition_RealFunctions(t *testing.T) {
 			event: basicEvent,
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []string{"dummy-test"},
+					protected: func() []config.Presubmit {
+						p := config.Presubmit{
+							JobBase:      config.JobBase{Name: "dummy-test"},
+							RerunCommand: "/test dummy-test",
+						}
+						p.Context = "dummy-test"
+						return []config.Presubmit{p}
+					}(),
 				},
 			},
 			expectCommentCall: true,
-			expectedComment:   testRemainingRequiredCommand,
+			expectedComment:   "dummy-test",
 		},
 	}
 
@@ -121,8 +139,12 @@ func TestHandleLabelAddition_RealFunctions(t *testing.T) {
 						},
 					},
 				}}},
-				configDataProvider: &ConfigDataProvider{updatedPresubmits: tc.configData},
-				ghc:                ghc,
+				configDataProvider: &ConfigDataProvider{
+					updatedPresubmits: tc.configData,
+					previousRepoList:  []string{},
+					logger:            testLoggerMain(),
+				},
+				ghc: ghc,
 			}
 
 			entry := logrus.NewEntry(logrus.New())
@@ -214,7 +236,7 @@ func TestHandleIssueComment(t *testing.T) {
 			},
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []string{"protected-test"},
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
 				},
 			},
 			ghPR: &github.PullRequest{
@@ -242,7 +264,7 @@ func TestHandleIssueComment(t *testing.T) {
 			},
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []string{"protected-test"},
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
 				},
 			},
 			ghPR: &github.PullRequest{
@@ -270,7 +292,7 @@ func TestHandleIssueComment(t *testing.T) {
 			},
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []string{"protected-test"},
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
 				},
 			},
 			ghPR: &github.PullRequest{
@@ -293,7 +315,7 @@ func TestHandleIssueComment(t *testing.T) {
 			event: basicEvent,
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []string{"protected-test"},
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
 					pipelineConditionallyRequired: []config.Presubmit{
 						{
 							JobBase: config.JobBase{
@@ -322,7 +344,7 @@ func TestHandleIssueComment(t *testing.T) {
 			event: basicEvent,
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []string{"protected-test"},
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
 				},
 			},
 			ghError:           errors.New("failed to get PR"),
@@ -333,7 +355,7 @@ func TestHandleIssueComment(t *testing.T) {
 			event: basicEvent,
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []string{"protected-test"},
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
 				},
 			},
 			watcherConfig:     enabledConfig{}, // Empty config means repo not configured
@@ -352,9 +374,13 @@ func TestHandleIssueComment(t *testing.T) {
 			}
 
 			cw := &clientWrapper{
-				configDataProvider: &ConfigDataProvider{updatedPresubmits: tc.configData},
-				ghc:                ghc,
-				watcher:            &watcher{config: tc.watcherConfig},
+				configDataProvider: &ConfigDataProvider{
+					updatedPresubmits: tc.configData,
+					previousRepoList:  []string{},
+					logger:            testLoggerMain(),
+				},
+				ghc:     ghc,
+				watcher: &watcher{config: tc.watcherConfig},
 			}
 
 			// If no watcherConfig is provided, use a default config with the repo configured
@@ -382,10 +408,10 @@ func TestHandleIssueComment(t *testing.T) {
 					if !strings.Contains(ghc.comment, tc.expectedComment) {
 						t.Errorf("expected comment to contain %q, got %q", tc.expectedComment, ghc.comment)
 					}
-					// Only check for "/test remaining-required" if not the "not configured" message
+					// Check for protected job listing format if not the "not configured" message
 					if tc.expectedComment != RepoNotConfiguredMessage &&
-						!strings.Contains(ghc.comment, testRemainingRequiredCommand) {
-						t.Errorf("expected comment to contain '%s', got %q", testRemainingRequiredCommand, ghc.comment)
+						!strings.Contains(ghc.comment, "Scheduling required tests:") {
+						t.Errorf("expected comment to contain 'Scheduling required tests:', got %q", ghc.comment)
 					}
 				}
 			} else {
@@ -446,7 +472,7 @@ func TestHandlePullRequestCreation(t *testing.T) {
 			}},
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []string{"protected-test"},
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
 				},
 			},
 			expectCommentCall: true,
@@ -505,7 +531,7 @@ func TestHandlePullRequestCreation(t *testing.T) {
 			}},
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []string{"protected-test"},
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
 				},
 			},
 			expectCommentCall: false,
@@ -528,6 +554,8 @@ func TestHandlePullRequestCreation(t *testing.T) {
 				configDataProvider: &ConfigDataProvider{
 					updatedPresubmits: tc.configData,
 					configGetter:      configGetter,
+					previousRepoList:  []string{},
+					logger:            testLoggerMain(),
 				},
 				ghc: ghc,
 			}

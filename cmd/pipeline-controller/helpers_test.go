@@ -27,6 +27,10 @@ func (f *fakeGhClientWithChanges) GetPullRequestChanges(org, repo string, number
 	return f.changes, nil
 }
 
+func (f *fakeGhClientWithChanges) CreateStatus(org, repo, ref string, s github.Status) error {
+	return nil
+}
+
 func TestAcquireConditionalContexts(t *testing.T) {
 	basePJ := &v1.ProwJob{
 		Spec: v1.ProwJobSpec{
@@ -46,7 +50,6 @@ func TestAcquireConditionalContexts(t *testing.T) {
 		pipelineConditionallyRequired []config.Presubmit
 		changes                       []github.PullRequestChange
 		expectedTestCommands          []string
-		expectedOverrideContexts      []string
 	}{
 		{
 			name: "pipeline_run_if_changed matches files",
@@ -68,8 +71,7 @@ func TestAcquireConditionalContexts(t *testing.T) {
 				{Filename: "main.go"},
 				{Filename: "README.md"},
 			},
-			expectedTestCommands:     []string{"/test test"},
-			expectedOverrideContexts: []string{},
+			expectedTestCommands: []string{"/test test"},
 		},
 		{
 			name: "pipeline_run_if_changed does not match files",
@@ -92,8 +94,7 @@ func TestAcquireConditionalContexts(t *testing.T) {
 				{Filename: "README.md"},
 				{Filename: "docs/guide.md"},
 			},
-			expectedTestCommands:     []string{},
-			expectedOverrideContexts: []string{"test"},
+			expectedTestCommands: []string{},
 		},
 		{
 			name: "pipeline_skip_if_only_changed skips when only matching files changed",
@@ -116,8 +117,7 @@ func TestAcquireConditionalContexts(t *testing.T) {
 				{Filename: "docs/guide.md"},
 				{Filename: "README.md"},
 			},
-			expectedTestCommands:     []string{},
-			expectedOverrideContexts: []string{"test"},
+			expectedTestCommands: []string{},
 		},
 		{
 			name: "pipeline_skip_if_only_changed runs when other files are changed",
@@ -139,8 +139,7 @@ func TestAcquireConditionalContexts(t *testing.T) {
 				{Filename: "docs/guide.md"},
 				{Filename: "main.go"},
 			},
-			expectedTestCommands:     []string{"/test test"},
-			expectedOverrideContexts: []string{},
+			expectedTestCommands: []string{"/test test"},
 		},
 		{
 			name: "pipeline_run_if_changed takes precedence over pipeline_skip_if_only_changed",
@@ -162,8 +161,7 @@ func TestAcquireConditionalContexts(t *testing.T) {
 			changes: []github.PullRequestChange{
 				{Filename: "test/test.go"},
 			},
-			expectedTestCommands:     []string{"/test test"},
-			expectedOverrideContexts: []string{},
+			expectedTestCommands: []string{"/test test"},
 		},
 		{
 			name: "multiple jobs with different annotations",
@@ -197,8 +195,7 @@ func TestAcquireConditionalContexts(t *testing.T) {
 				{Filename: "main.go"},
 				{Filename: "docs/guide.md"},
 			},
-			expectedTestCommands:     []string{"/test test1", "/test test2"},
-			expectedOverrideContexts: []string{},
+			expectedTestCommands: []string{"/test test1", "/test test2"},
 		},
 		{
 			name: "job name does not contain repo-baseRef",
@@ -219,15 +216,14 @@ func TestAcquireConditionalContexts(t *testing.T) {
 			changes: []github.PullRequestChange{
 				{Filename: "main.go"},
 			},
-			expectedTestCommands:     []string{},
-			expectedOverrideContexts: []string{},
+			expectedTestCommands: []string{},
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ghc := &fakeGhClientWithChanges{changes: tc.changes}
-			testCmds, overrideCmds, err := acquireConditionalContexts(basePJ, tc.pipelineConditionallyRequired, ghc, func() {})
+			testCmds, err := acquireConditionalContexts(basePJ, tc.pipelineConditionallyRequired, ghc, func() {})
 
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
@@ -240,19 +236,9 @@ func TestAcquireConditionalContexts(t *testing.T) {
 				}
 			}
 
-			// Check override commands
-			for _, expected := range tc.expectedOverrideContexts {
-				if !strings.Contains(overrideCmds, expected) {
-					t.Errorf("expected override commands to contain %q, got %q", expected, overrideCmds)
-				}
-			}
-
 			// Check that we don't have unexpected commands
 			if len(tc.expectedTestCommands) == 0 && testCmds != "" {
 				t.Errorf("expected no test commands, got %q", testCmds)
-			}
-			if len(tc.expectedOverrideContexts) == 0 && overrideCmds != "" {
-				t.Errorf("expected no override commands, got %q", overrideCmds)
 			}
 		})
 	}
@@ -275,7 +261,6 @@ func TestSendCommentWithMode(t *testing.T) {
 	tests := []struct {
 		name                       string
 		presubmits                 presubmitTests
-		isManualMode               bool
 		changes                    []github.PullRequestChange
 		expectedCommentContains    []string
 		expectedCommentNotContains []string
@@ -283,6 +268,17 @@ func TestSendCommentWithMode(t *testing.T) {
 		{
 			name: "manual mode with pipeline jobs",
 			presubmits: presubmitTests{
+				protected: []config.Presubmit{
+					{
+						JobBase: config.JobBase{
+							Name: "org-repo-master-protected",
+						},
+						Reporter: config.Reporter{
+							Context: "protected",
+						},
+						RerunCommand: "/test protected",
+					},
+				},
 				pipelineConditionallyRequired: []config.Presubmit{
 					{
 						JobBase: config.JobBase{
@@ -299,14 +295,12 @@ func TestSendCommentWithMode(t *testing.T) {
 					},
 				},
 			},
-			isManualMode: true,
 			changes: []github.PullRequestChange{
 				{Filename: "README.md"},
 			},
 			expectedCommentContains: []string{
-				testPipelineRequiredResponse,
-				testRemainingRequiredCommand,
-				"/override test",
+				"Scheduling required tests:",
+				"/test protected",
 			},
 		},
 		{
@@ -327,12 +321,10 @@ func TestSendCommentWithMode(t *testing.T) {
 					},
 				},
 			},
-			isManualMode: false,
 			changes: []github.PullRequestChange{
 				{Filename: "main.go"},
 			},
 			expectedCommentContains: []string{
-				testRemainingRequiredCommand,
 				"/test test2",
 			},
 			expectedCommentNotContains: []string{
@@ -345,7 +337,7 @@ func TestSendCommentWithMode(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ghc := &fakeGhClientWithChanges{changes: tc.changes}
 
-			err := sendCommentWithMode(tc.presubmits, basePJ, ghc, func() {}, tc.isManualMode)
+			err := sendCommentWithMode(tc.presubmits, basePJ, ghc, func() {})
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}

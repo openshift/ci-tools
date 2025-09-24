@@ -1,31 +1,45 @@
 package main
 
 import (
+	"sort"
 	"sync"
 	"time"
+
+	"github.com/sirupsen/logrus"
 
 	"sigs.k8s.io/prow/pkg/config"
 )
 
+// RepoLister is a function that returns a list of "org/repo" strings that should be processed
+type RepoLister func() []string
+
 type presubmitTests struct {
-	protected                     []string
-	alwaysRequired                []string
-	conditionallyRequired         []string
+	protected                     []config.Presubmit
+	alwaysRequired                []config.Presubmit
+	conditionallyRequired         []config.Presubmit
 	pipelineConditionallyRequired []config.Presubmit
+	pipelineSkipOnlyRequired      []config.Presubmit
 }
 
 type ConfigDataProvider struct {
 	configGetter      config.Getter
+	repoLister        RepoLister
 	updatedPresubmits map[string]presubmitTests
+	previousRepoList  []string // Store previous repo list for comparison
+	logger            *logrus.Entry
 	m                 sync.Mutex
 }
 
-func NewConfigDataProvider(configGetter config.Getter) *ConfigDataProvider {
+func NewConfigDataProvider(configGetter config.Getter, repoLister RepoLister, logger *logrus.Entry) *ConfigDataProvider {
 	provider := &ConfigDataProvider{
 		configGetter:      configGetter,
+		repoLister:        repoLister,
 		updatedPresubmits: make(map[string]presubmitTests),
+		previousRepoList:  []string{},
+		logger:            logger,
 		m:                 sync.Mutex{},
 	}
+	// Initialize with first load - use direct gatherData() for initial load
 	provider.gatherData()
 	return provider
 }
@@ -42,76 +56,116 @@ func (c *ConfigDataProvider) GetPresubmits(orgRepo string) presubmitTests {
 func (c *ConfigDataProvider) Run() {
 	for {
 		time.Sleep(10 * time.Minute)
-		c.gatherData()
+		c.gatherDataWithChangeDetection()
 	}
 }
 
 func (c *ConfigDataProvider) gatherData() {
+	// Get the list of repositories from the pipeline controller configs (config + lgtm config)
+	orgRepos := c.repoLister()
+	c.gatherDataForRepos(orgRepos)
+}
+
+// gatherDataForRepos processes the given list of repositories and updates the presubmits data
+func (c *ConfigDataProvider) gatherDataForRepos(orgRepos []string) {
 	cfg := c.configGetter()
-	orgRepos := []string{}
-	for org, orgPolicy := range cfg.ProwConfig.BranchProtection.Orgs {
-		for repo, repoPolicy := range cfg.ProwConfig.BranchProtection.Orgs[org].Repos {
-			policy := orgPolicy.Apply(repoPolicy.Policy)
-			if policy.RequireManuallyTriggeredJobs != nil && *policy.RequireManuallyTriggeredJobs {
-				orgRepos = append(orgRepos, org+"/"+repo)
-			}
-		}
-	}
+
 	updatedPresubmits := make(map[string]presubmitTests)
 	for _, orgRepo := range orgRepos {
 		presubmits := cfg.GetPresubmitsStatic(orgRepo)
+
 		for _, p := range presubmits {
 			if !p.AlwaysRun && p.RunIfChanged == "" && p.SkipIfOnlyChanged == "" {
 				if val, ok := p.Annotations["pipeline_run_if_changed"]; ok && val != "" {
-					if pre, ok := updatedPresubmits[orgRepo]; !ok {
-						updatedPresubmits[orgRepo] = presubmitTests{pipelineConditionallyRequired: []config.Presubmit{p}}
-					} else {
-						pre.pipelineConditionallyRequired = append(pre.pipelineConditionallyRequired, p)
-						updatedPresubmits[orgRepo] = pre
-					}
+					pre := updatedPresubmits[orgRepo]
+					pre.pipelineConditionallyRequired = append(pre.pipelineConditionallyRequired, p)
+					updatedPresubmits[orgRepo] = pre
 					continue
 				}
-				// Also check for pipeline_skip_if_only_changed annotation
-				if val, ok := p.Annotations["pipeline_skip_if_only_changed"]; ok && val != "" {
-					if pre, ok := updatedPresubmits[orgRepo]; !ok {
-						updatedPresubmits[orgRepo] = presubmitTests{pipelineConditionallyRequired: []config.Presubmit{p}}
-					} else {
-						pre.pipelineConditionallyRequired = append(pre.pipelineConditionallyRequired, p)
-						updatedPresubmits[orgRepo] = pre
-					}
+				// Also check for pipeline_skip_only_if_changed annotation
+				if val, ok := p.Annotations["pipeline_skip_only_if_changed"]; ok && val != "" {
+					pre := updatedPresubmits[orgRepo]
+					pre.pipelineSkipOnlyRequired = append(pre.pipelineSkipOnlyRequired, p)
+					updatedPresubmits[orgRepo] = pre
 					continue
 				}
+				// Only categorize as protected if it doesn't have pipeline annotations
 				if !p.Optional {
-					if pre, ok := updatedPresubmits[orgRepo]; !ok {
-						updatedPresubmits[orgRepo] = presubmitTests{protected: []string{p.Name}}
-					} else {
-						pre.protected = append(pre.protected, p.Name)
-						updatedPresubmits[orgRepo] = pre
+					if _, hasPipelineRun := p.Annotations["pipeline_run_if_changed"]; !hasPipelineRun {
+						if _, hasPipelineSkip := p.Annotations["pipeline_skip_only_if_changed"]; !hasPipelineSkip {
+							pre := updatedPresubmits[orgRepo]
+							pre.protected = append(pre.protected, p)
+							updatedPresubmits[orgRepo] = pre
+						}
 					}
-					continue
 				}
 			}
 			if !p.Optional && p.AlwaysRun {
-				if pre, ok := updatedPresubmits[orgRepo]; !ok {
-					updatedPresubmits[orgRepo] = presubmitTests{alwaysRequired: []string{p.Name}}
-				} else {
-					pre.alwaysRequired = append(pre.alwaysRequired, p.Name)
-					updatedPresubmits[orgRepo] = pre
-				}
+				pre := updatedPresubmits[orgRepo]
+				pre.alwaysRequired = append(pre.alwaysRequired, p)
+				updatedPresubmits[orgRepo] = pre
 				continue
 			}
 			if !p.Optional && (p.RunIfChanged != "" || p.SkipIfOnlyChanged != "") {
-				if pre, ok := updatedPresubmits[orgRepo]; !ok {
-					updatedPresubmits[orgRepo] = presubmitTests{conditionallyRequired: []string{p.Name}}
-				} else {
-					pre.conditionallyRequired = append(pre.conditionallyRequired, p.Name)
-					updatedPresubmits[orgRepo] = pre
-				}
+				pre := updatedPresubmits[orgRepo]
+				pre.conditionallyRequired = append(pre.conditionallyRequired, p)
+				updatedPresubmits[orgRepo] = pre
 				continue
 			}
 		}
 	}
+
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.updatedPresubmits = updatedPresubmits
+}
+
+// gatherDataWithChangeDetection checks if the repository list has changed and only reloads if needed
+func (c *ConfigDataProvider) gatherDataWithChangeDetection() {
+	// Get current repo list
+	currentRepoList := c.repoLister()
+
+	// Compare with previous repo list
+	c.m.Lock()
+	hasChanged := !c.repoListsEqual(c.previousRepoList, currentRepoList)
+
+	// Always load on first run (when previousRepoList is empty)
+	if len(c.previousRepoList) == 0 {
+		hasChanged = true
+	}
+
+	if hasChanged {
+		// Store the new repo list
+		c.previousRepoList = make([]string, len(currentRepoList))
+		copy(c.previousRepoList, currentRepoList)
+	}
+	c.m.Unlock()
+
+	if hasChanged {
+		c.gatherDataForRepos(currentRepoList)
+	}
+}
+
+// repoListsEqual compares two repository lists for equality (order-independent)
+func (c *ConfigDataProvider) repoListsEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	// Create sorted copies for comparison
+	sortedA := make([]string, len(a))
+	sortedB := make([]string, len(b))
+	copy(sortedA, a)
+	copy(sortedB, b)
+
+	sort.Strings(sortedA)
+	sort.Strings(sortedB)
+
+	for i := range sortedA {
+		if sortedA[i] != sortedB[i] {
+			return false
+		}
+	}
+
+	return true
 }

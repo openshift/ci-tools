@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"regexp"
 	"time"
 
 	"github.com/bombsimon/logrusr/v3"
@@ -25,7 +26,7 @@ import (
 	"sigs.k8s.io/prow/pkg/logrusutil"
 )
 
-const pullRequestInfoComment = "**Pipeline controller notification**\n This repository is configured to use the [pipeline controller](https://docs.ci.openshift.org/docs/how-tos/creating-a-pipeline/). Second-stage tests will be triggered only if the required tests of the first stage are successful. The pipeline controller will automatically detect which contexts are required, or not needed and will utilize a set of `/test` and `/override` Prow commands to trigger the second stage."
+const pullRequestInfoComment = "**Pipeline controller notification**\n This repository is configured to use the [pipeline controller](https://docs.ci.openshift.org/docs/how-tos/creating-a-pipeline/). Second-stage tests will be triggered only if the required tests of the first stage are successful. The pipeline controller will automatically detect which contexts are required and will utilize `/test` Prow commands to trigger the second stage."
 
 type options struct {
 	client                   prowflagutil.KubernetesOptions
@@ -101,7 +102,8 @@ func (cw *clientWrapper) handlePullRequestCreation(l *logrus.Entry, event github
 
 		presubmits := cw.configDataProvider.GetPresubmits(org + "/" + repo)
 		if len(presubmits.protected) == 0 && len(presubmits.alwaysRequired) == 0 &&
-			len(presubmits.conditionallyRequired) == 0 && len(presubmits.pipelineConditionallyRequired) == 0 {
+			len(presubmits.conditionallyRequired) == 0 && len(presubmits.pipelineConditionallyRequired) == 0 &&
+			len(presubmits.pipelineSkipOnlyRequired) == 0 {
 			return
 		}
 
@@ -120,6 +122,147 @@ func (cw *clientWrapper) handlePullRequestCreation(l *logrus.Entry, event github
 			logger.WithError(err).Error("failed to create comment")
 		}
 	}
+}
+
+// handlePipelineContextCreation handles PR events (open, push, reopen) and creates contexts for matching tests
+func (cw *clientWrapper) handlePipelineContextCreation(l *logrus.Entry, event github.PullRequestEvent) {
+	if event.Action != github.PullRequestActionOpened &&
+		event.Action != github.PullRequestActionSynchronize &&
+		event.Action != github.PullRequestActionReopened {
+		return
+	}
+
+	org := event.Repo.Owner.Login
+	repo := event.Repo.Name
+	number := event.PullRequest.Number
+	sha := event.PullRequest.Head.SHA
+
+	presubmits := cw.configDataProvider.GetPresubmits(org + "/" + repo)
+	if len(presubmits.pipelineConditionallyRequired) == 0 && len(presubmits.pipelineSkipOnlyRequired) == 0 &&
+		len(presubmits.protected) == 0 {
+		return
+	}
+
+	currentCfg := cw.watcher.getConfig()
+	repos, ok := currentCfg[org]
+	if !ok || !(repos.Len() == 0 || repos.Has(repo)) {
+		return
+	}
+
+	logger := l.WithFields(logrus.Fields{
+		"org":  org,
+		"repo": repo,
+		"pr":   number,
+		"sha":  sha,
+	})
+
+	// Get changed files for this PR
+	changedFiles, err := cw.ghc.GetPullRequestChanges(org, repo, number)
+	if err != nil {
+		logger.WithError(err).Error("failed to get PR changes")
+		return
+	}
+
+	filenames := make([]string, 0, len(changedFiles))
+	for _, change := range changedFiles {
+		filenames = append(filenames, change.Filename)
+	}
+
+	// Evaluate pipeline_run_if_changed tests
+	for _, presubmit := range presubmits.pipelineConditionallyRequired {
+		if pattern, ok := presubmit.Annotations["pipeline_run_if_changed"]; ok && pattern != "" {
+			if shouldRun, err := matchesPattern(pattern, filenames); err != nil {
+				logger.WithError(err).WithField("test", presubmit.Name).WithField("pattern", pattern).Error("failed to evaluate pattern")
+				continue
+			} else if shouldRun {
+				if err := cw.createContext(org, repo, sha, presubmit.Name, "pending", "Pipeline controller will trigger this test"); err != nil {
+					logger.WithError(err).WithField("test", presubmit.Name).Error("failed to create context")
+				} else {
+					logger.WithField("test", presubmit.Name).Info("created pending context for pipeline test")
+				}
+			}
+		}
+	}
+
+	// Evaluate pipeline_skip_only_if_changed tests
+	for _, presubmit := range presubmits.pipelineSkipOnlyRequired {
+		if pattern, ok := presubmit.Annotations["pipeline_skip_only_if_changed"]; ok && pattern != "" {
+			if shouldSkip, err := allFilesMatchPattern(pattern, filenames); err != nil {
+				logger.WithError(err).WithField("test", presubmit.Name).WithField("pattern", pattern).Error("failed to evaluate skip pattern")
+				continue
+			} else if !shouldSkip {
+				// If not all files match the skip pattern, we should run the test
+				if err := cw.createContext(org, repo, sha, presubmit.Name, "pending", "Pipeline controller will trigger this test"); err != nil {
+					logger.WithError(err).WithField("test", presubmit.Name).Error("failed to create context")
+				} else {
+					logger.WithField("test", presubmit.Name).Info("created pending context for pipeline test")
+				}
+			}
+		}
+	}
+
+	// Create contexts for protected jobs (always_run: false, optional: false, no run conditions)
+	for _, presubmitName := range presubmits.protected {
+		if err := cw.createContext(org, repo, sha, presubmitName, "pending", "Pipeline controller will trigger this test"); err != nil {
+			logger.WithError(err).WithField("test", presubmitName).Error("failed to create context")
+		} else {
+			logger.WithField("test", presubmitName).Info("created pending context for protected test")
+		}
+	}
+
+}
+
+// createContext creates a GitHub status context
+func (cw *clientWrapper) createContext(org, repo, sha, context, state, description string) error {
+	return cw.ghc.CreateStatus(org, repo, sha, github.Status{
+		Context:     context,
+		State:       state,
+		Description: description,
+	})
+}
+
+// matchesPattern checks if any of the filenames match the given regex pattern
+func matchesPattern(pattern string, filenames []string) (bool, error) {
+	if pattern == "" {
+		return false, nil
+	}
+
+	regex, err := regexp.Compile(pattern)
+	if err != nil {
+		return false, fmt.Errorf("invalid regex pattern %q: %w", pattern, err)
+	}
+
+	for _, filename := range filenames {
+		if regex.MatchString(filename) {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// allFilesMatchPattern checks if ALL filenames match the given regex pattern
+func allFilesMatchPattern(pattern string, filenames []string) (bool, error) {
+	if pattern == "" {
+		return false, nil
+	}
+
+	if len(filenames) == 0 {
+		return false, nil
+	}
+
+	regex, err := regexp.Compile(pattern)
+	if err != nil {
+		return false, fmt.Errorf("invalid regex pattern %q: %w", pattern, err)
+	}
+
+	for _, filename := range filenames {
+		if !regex.MatchString(filename) {
+			return false, nil
+		}
+	}
+
+	return true, nil
 }
 
 func (cw *clientWrapper) handleLabelAddition(l *logrus.Entry, event github.PullRequestEvent) {
@@ -153,9 +296,11 @@ func (cw *clientWrapper) handleLabelAddition(l *logrus.Entry, event github.PullR
 			WithField("always_required", presubmits.alwaysRequired).
 			WithField("conditionally_required", presubmits.conditionallyRequired).
 			WithField("pipeline_conditionally_required", presubmits.pipelineConditionallyRequired).
+			WithField("pipeline_skip_only_required", presubmits.pipelineSkipOnlyRequired).
 			Debug("found presubmits")
 		if len(presubmits.protected) == 0 && len(presubmits.alwaysRequired) == 0 &&
-			len(presubmits.conditionallyRequired) == 0 && len(presubmits.pipelineConditionallyRequired) == 0 {
+			len(presubmits.conditionallyRequired) == 0 && len(presubmits.pipelineConditionallyRequired) == 0 &&
+			len(presubmits.pipelineSkipOnlyRequired) == 0 {
 			return
 		}
 
@@ -244,6 +389,7 @@ func main() {
 	eventServer := githubeventserver.New(o.githubEventServerOptions, webhookTokenGenerator, logger)
 	eventServer.RegisterHandlePullRequestEvent(cw.handlePullRequestCreation)
 	eventServer.RegisterHandlePullRequestEvent(cw.handleLabelAddition)
+	eventServer.RegisterHandlePullRequestEvent(cw.handlePipelineContextCreation)
 
 	interrupts.OnInterrupt(func() {
 		eventServer.GracefulShutdown()

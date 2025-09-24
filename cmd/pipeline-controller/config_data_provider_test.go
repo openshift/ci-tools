@@ -102,6 +102,8 @@ func TestConfigDataProviderGatherData(t *testing.T) {
 							composePipelineCondRequiredPresubmit("ps4", false, map[string]string{"pipeline_run_if_changed": ".*"}),
 							composePipelineCondRequiredPresubmit("ps5", true, map[string]string{"pipeline_run_if_changed": ".*"}),
 							composePipelineCondRequiredPresubmit("ps6", true, map[string]string{}),
+							composePipelineCondRequiredPresubmit("ps7", false, map[string]string{"pipeline_skip_only_if_changed": ".*\\.md$"}),
+							composePipelineCondRequiredPresubmit("ps8", true, map[string]string{"pipeline_skip_only_if_changed": "docs/.*"}),
 						},
 					}},
 					ProwConfig: decorateWithOrgPolicy(composeBPConfig()),
@@ -115,6 +117,10 @@ func TestConfigDataProviderGatherData(t *testing.T) {
 				pipelineConditionallyRequired: []config.Presubmit{
 					composePipelineCondRequiredPresubmit("ps4", false, map[string]string{"pipeline_run_if_changed": ".*"}),
 					composePipelineCondRequiredPresubmit("ps5", true, map[string]string{"pipeline_run_if_changed": ".*"}),
+				},
+				pipelineSkipOnlyRequired: []config.Presubmit{
+					composePipelineCondRequiredPresubmit("ps7", false, map[string]string{"pipeline_skip_only_if_changed": ".*\\.md$"}),
+					composePipelineCondRequiredPresubmit("ps8", true, map[string]string{"pipeline_skip_only_if_changed": "docs/.*"}),
 				}},
 		},
 		{

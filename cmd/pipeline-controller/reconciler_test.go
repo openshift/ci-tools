@@ -29,12 +29,16 @@ func (c fakeGhClient) GetPullRequest(org, repo string, number int) (*github.Pull
 
 }
 
-func (c fakeGhClient) CreateComment(owner, repo string, number int, comment string) error {
+func (c fakeGhClient) CreateComment(org, repo string, number int, comment string) error {
 	return nil
 }
 
 func (c fakeGhClient) GetPullRequestChanges(org string, repo string, number int) ([]github.PullRequestChange, error) {
-	return []github.PullRequestChange{}, nil
+	return nil, nil
+}
+
+func (c fakeGhClient) CreateStatus(org, repo, ref string, s github.Status) error {
+	return nil
 }
 
 type FakeReader struct {

@@ -17,12 +17,18 @@ type fakeGhClientWithComment struct {
 func (f *fakeGhClientWithComment) GetPullRequest(org, repo string, number int) (*github.PullRequest, error) {
 	return &github.PullRequest{State: github.PullRequestStateOpen}, nil
 }
+
 func (f *fakeGhClientWithComment) CreateComment(owner, repo string, number int, comment string) error {
 	f.comment = comment
 	return nil
 }
-func (f *fakeGhClientWithComment) GetPullRequestChanges(org, repo string, number int) ([]github.PullRequestChange, error) {
-	return []github.PullRequestChange{}, nil
+
+func (f *fakeGhClientWithComment) GetPullRequestChanges(org string, repo string, number int) ([]github.PullRequestChange, error) {
+	return nil, nil
+}
+
+func (f *fakeGhClientWithComment) CreateStatus(org, repo, ref string, s github.Status) error {
+	return nil
 }
 func TestHandleLabelAddition_RealFunctions(t *testing.T) {
 	org := "openshift"

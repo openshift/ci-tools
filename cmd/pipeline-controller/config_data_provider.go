@@ -12,6 +12,7 @@ type presubmitTests struct {
 	alwaysRequired                []string
 	conditionallyRequired         []string
 	pipelineConditionallyRequired []config.Presubmit
+	pipelineSkipOnlyRequired      []config.Presubmit
 }
 
 type ConfigDataProvider struct {
@@ -67,6 +68,15 @@ func (c *ConfigDataProvider) gatherData() {
 						updatedPresubmits[orgRepo] = presubmitTests{pipelineConditionallyRequired: []config.Presubmit{p}}
 					} else {
 						pre.pipelineConditionallyRequired = append(pre.pipelineConditionallyRequired, p)
+						updatedPresubmits[orgRepo] = pre
+					}
+					continue
+				}
+				if val, ok := p.Annotations["pipeline_skip_only_if_changed"]; ok && val != "" {
+					if pre, ok := updatedPresubmits[orgRepo]; !ok {
+						updatedPresubmits[orgRepo] = presubmitTests{pipelineSkipOnlyRequired: []config.Presubmit{p}}
+					} else {
+						pre.pipelineSkipOnlyRequired = append(pre.pipelineSkipOnlyRequired, p)
 						updatedPresubmits[orgRepo] = pre
 					}
 					continue

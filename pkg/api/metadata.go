@@ -111,14 +111,14 @@ func IsCiopConfigCM(name string) bool {
 }
 
 var releaseBranches = regexp.MustCompile(`^(release|enterprise|openshift)-([1-3])\.[0-9]+(?:\.[0-9]+)?$`)
-var fourXBranches = regexp.MustCompile(`^(release|enterprise|openshift)-(4\.[0-9]+)$`)
+var modernReleaseBranches = regexp.MustCompile(`^(release|enterprise|openshift)-((?:[4-9]|[1-9][0-9]+)\.[0-9]+)$`)
 
 func FlavorForBranch(branch string) string {
 	var flavor string
 	if branch == "master" || branch == "main" {
 		flavor = branch
-	} else if m := fourXBranches.FindStringSubmatch(branch); m != nil {
-		flavor = m[2] // the 4.x release string
+	} else if m := modernReleaseBranches.FindStringSubmatch(branch); m != nil {
+		flavor = m[2] // the X.y release string (4.x, 5.x, 6.x, etc.)
 	} else if m := releaseBranches.FindStringSubmatch(branch); m != nil {
 		flavor = m[2] + ".x"
 	} else {

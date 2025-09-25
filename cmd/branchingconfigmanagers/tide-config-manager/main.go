@@ -484,23 +484,58 @@ func (ve *verifiedEvent) ModifyQuery(q *prowconfig.TideQuery, repo string) {
 	q.Labels = sets.List(reqLabels)
 }
 
-// isVersionedBranch checks if a branch name matches release-4.x or openshift-4.x pattern
+// isVersionedBranch checks if a branch name matches release-X.y or openshift-X.y pattern for modern versions (4.x+)
 func isVersionedBranch(branch string) bool {
-	if strings.HasPrefix(branch, "release-4.") {
-		versionPart := strings.TrimPrefix(branch, "release-4.")
-		if isValidMinorVersion(versionPart) {
+	// Check for release-X.y pattern (supporting any major version >= 4)
+	if strings.HasPrefix(branch, "release-") {
+		versionPart := strings.TrimPrefix(branch, "release-")
+		if isValidVersionString(versionPart) {
 			return true
 		}
 	}
 
-	if strings.HasPrefix(branch, "openshift-4.") {
-		versionPart := strings.TrimPrefix(branch, "openshift-4.")
-		if isValidMinorVersion(versionPart) {
+	// Check for openshift-X.y pattern (supporting any major version >= 4)
+	if strings.HasPrefix(branch, "openshift-") {
+		versionPart := strings.TrimPrefix(branch, "openshift-")
+		if isValidVersionString(versionPart) {
 			return true
 		}
 	}
 
 	return false
+}
+
+// isValidVersionString checks if a version string is in X.y format where X >= 4
+func isValidVersionString(version string) bool {
+	parts := strings.Split(version, ".")
+	if len(parts) != 2 {
+		return false
+	}
+
+	// Check if major version is a number >= 4
+	majorStr, minorStr := parts[0], parts[1]
+
+	// Validate major version
+	if len(majorStr) == 0 {
+		return false
+	}
+	for _, char := range majorStr {
+		if char < '0' || char > '9' {
+			return false
+		}
+	}
+
+	// Convert to int and check if >= 4
+	major := 0
+	for _, char := range majorStr {
+		major = major*10 + int(char-'0')
+	}
+	if major < 4 {
+		return false
+	}
+
+	// Validate minor version using existing function
+	return isValidMinorVersion(minorStr)
 }
 
 // isValidMinorVersion checks if a string represents a valid minor version (e.g., "9", "10", "15")

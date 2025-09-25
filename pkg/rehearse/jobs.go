@@ -53,20 +53,10 @@ const (
 	pjRehearse         = "pj-rehearse"
 )
 
-// Number of openshift versions
-var numVersion = 50
-
 // Global map that contains relevance of known branches
 var relevancy = map[string]int{
-	"master": numVersion + 1,
-	"main":   numVersion + 1,
-}
-
-func init() {
-	for i := 1; i < numVersion; i++ {
-		relevancy[fmt.Sprintf("release-4.%d", i)] = i
-		relevancy[fmt.Sprintf("openshift-4.%d", i)] = i
-	}
+	"master": 50000, // Ensure master/main always has highest priority
+	"main":   50000,
 }
 
 // NewProwJobClient creates a ProwJob client with a dry run capability
@@ -756,9 +746,43 @@ func SelectJobsForChangedRegistry(regSteps []registry.Node, allPresubmits presub
 	return selectedPresubmits, selectedPeriodics
 }
 
+// calculateRelevancy returns the relevancy score for a branch name
+func calculateRelevancy(branch string) int {
+	// Check static entries first (master/main)
+	if score, exists := relevancy[branch]; exists {
+		return score
+	}
+
+	// Parse release-X.Y or openshift-X.Y patterns
+	var versionPart string
+	if strings.HasPrefix(branch, "release-") {
+		versionPart = strings.TrimPrefix(branch, "release-")
+	} else if strings.HasPrefix(branch, "openshift-") {
+		versionPart = strings.TrimPrefix(branch, "openshift-")
+	} else {
+		return 0 // Unknown branch format gets lowest priority
+	}
+
+	// Parse major.minor version
+	parts := strings.Split(versionPart, ".")
+	if len(parts) != 2 {
+		return 0
+	}
+
+	major, err1 := strconv.Atoi(parts[0])
+	minor, err2 := strconv.Atoi(parts[1])
+	if err1 != nil || err2 != nil || major < 4 || minor < 1 {
+		return 0
+	}
+
+	// Calculate relevancy: major version gets 1000 points per version, minor gets 1 point
+	// 4.1 = 100+1 = 101, 4.10 = 100+10 = 110, 5.1 = 1100+1 = 1101, etc.
+	return (major-4)*1000 + 100 + minor
+}
+
 // Compare two branches by their relevancy
 func moreRelevant(one, two *config.DataWithInfo) bool {
-	return relevancy[one.Info.Metadata.Branch] > relevancy[two.Info.Metadata.Branch]
+	return calculateRelevancy(one.Info.Metadata.Branch) > calculateRelevancy(two.Info.Metadata.Branch)
 }
 
 func getClusterTypes(jobs map[string][]prowconfig.Presubmit) []string {

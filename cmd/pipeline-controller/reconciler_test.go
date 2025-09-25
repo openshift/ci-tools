@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/sirupsen/logrus"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -17,6 +20,13 @@ import (
 	"sigs.k8s.io/prow/pkg/github"
 	"sigs.k8s.io/prow/pkg/kube"
 )
+
+// testLoggerReconciler creates a discarded logger for tests
+func testLoggerReconciler() *logrus.Entry {
+	logger := logrus.New()
+	logger.SetOutput(io.Discard)
+	return logrus.NewEntry(logger)
+}
 
 type fakeGhClient struct {
 	closed sets.Int
@@ -36,6 +46,10 @@ func (c fakeGhClient) CreateComment(owner, repo string, number int, comment stri
 
 func (c fakeGhClient) GetPullRequestChanges(org string, repo string, number int) ([]github.PullRequestChange, error) {
 	return []github.PullRequestChange{}, nil
+}
+
+func (c fakeGhClient) CreateStatus(org, repo, ref string, s github.Status) error {
+	return nil
 }
 
 type FakeReader struct {
@@ -74,6 +88,10 @@ func (c *fakeGhClientWithTracking) CreateComment(owner, repo string, number int,
 
 func (c *fakeGhClientWithTracking) GetPullRequestChanges(org string, repo string, number int) ([]github.PullRequestChange, error) {
 	return []github.PullRequestChange{}, nil
+}
+
+func (c *fakeGhClientWithTracking) CreateStatus(org, repo, ref string, s github.Status) error {
+	return nil
 }
 
 func composePresubmit(name string, state v1.ProwJobState, sha string) v1.ProwJob {
@@ -341,12 +359,15 @@ func Test_reconciler_reportSuccessOnPR(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			r := &reconciler{
-				pjclientset:        fakeClient,
-				lister:             tc.fields.lister,
-				configDataProvider: &ConfigDataProvider{},
-				ghc:                tc.fields.ghc,
-				ids:                sync.Map{},
-				closedPRsCache:     closedPRsCache{prs: map[string]pullRequest{}, m: sync.Mutex{}, ghc: tc.fields.ghc, clearTime: time.Now()},
+				pjclientset: fakeClient,
+				lister:      tc.fields.lister,
+				configDataProvider: &ConfigDataProvider{
+					previousRepoList: []string{},
+					logger:           testLoggerReconciler(),
+				},
+				ghc:            tc.fields.ghc,
+				ids:            sync.Map{},
+				closedPRsCache: closedPRsCache{prs: map[string]pullRequest{}, m: sync.Mutex{}, ghc: tc.fields.ghc, clearTime: time.Now()},
 			}
 			got, err := r.reportSuccessOnPR(tc.args.ctx, &dummyPJ, tc.args.presubmits)
 			if (err != nil) != tc.wantErr {
@@ -518,6 +539,8 @@ func Test_reconciler_reconcile_with_modes(t *testing.T) {
 				}}},
 				configDataProvider: &ConfigDataProvider{
 					updatedPresubmits: tc.fields.presubmits,
+					previousRepoList:  []string{},
+					logger:            testLoggerReconciler(),
 				},
 				ghc:     ghc,
 				ids:     sync.Map{},

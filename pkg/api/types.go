@@ -1408,6 +1408,7 @@ const (
 	ClusterProfilePOWERVS5                ClusterProfile = "powervs-5"
 	ClusterProfilePOWERVS6                ClusterProfile = "powervs-6"
 	ClusterProfilePOWERVS7                ClusterProfile = "powervs-7"
+	ClusterProfilePOWERVS8                ClusterProfile = "powervs-8"
 	ClusterProfileLibvirtPpc64le          ClusterProfile = "libvirt-ppc64le"
 	ClusterProfileLibvirtPpc64leS2S       ClusterProfile = "libvirt-ppc64le-s2s"
 	ClusterProfileLibvirtS390x            ClusterProfile = "libvirt-s390x"
@@ -1601,6 +1602,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfilePOWERVS5,
 		ClusterProfilePOWERVS6,
 		ClusterProfilePOWERVS7,
+		ClusterProfilePOWERVS8,
 		ClusterProfileKubevirt,
 		ClusterProfileLibvirtPpc64le,
 		ClusterProfileLibvirtPpc64leS2S,
@@ -1846,6 +1848,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "powervs-6"
 	case ClusterProfilePOWERVS7:
 		return "powervs-7"
+	case ClusterProfilePOWERVS8:
+		return "powervs-8"
 	case ClusterProfileLibvirtPpc64le:
 		return "libvirt-ppc64le"
 	case ClusterProfileLibvirtPpc64leS2S:
@@ -2141,6 +2145,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "powervs-6-quota-slice"
 	case ClusterProfilePOWERVS7:
 		return "powervs-7-quota-slice"
+	case ClusterProfilePOWERVS8:
+		return "powervs-8-quota-slice"
 	case ClusterProfileLibvirtPpc64le:
 		return "libvirt-ppc64le-quota-slice"
 	case ClusterProfileLibvirtPpc64leS2S:
@@ -2353,7 +2359,7 @@ func LeaseTypeFromClusterType(t string) (string, error) {
 		"ibmcloud-multi-s390x", "nutanix", "nutanix-qe", "nutanix-qe-dis", "nutanix-qe-zone", "nutanix-qe-gpu",
 		"nutanix-qe-flow", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le",
 		"openstack-nerc-dev", "vsphere", "ovirt", "packet", "packet-edge", "powervs-multi-1", "powervs-1", "powervs-2",
-		"powervs-3", "powervs-4", "powervs-5", "powervs-6", "powervs-7", "kubevirt", "aws-cpaas", "osd-ephemeral",
+		"powervs-3", "powervs-4", "powervs-5", "powervs-6", "powervs-7", "powervs-8", "kubevirt", "aws-cpaas", "osd-ephemeral",
 		"gcp-virtualization", "aws-virtualization", "azure-virtualization", "hypershift-powervs",
 		"hypershift-powervs-cb", "aws-mco-qe", "equinix-edge-enablement", "aws-oadp-qe", "azure-oadp-qe", "gcp-oadp-qe",
 		"aws-lp-chaos", "metal-redhat-gs":

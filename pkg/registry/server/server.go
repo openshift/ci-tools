@@ -326,6 +326,9 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 					Repository: *config.CanonicalGoRepository,
 				})
 			}
+			// Clear the single-value field after migrating to list format to avoid conflicts
+			// and ensure only CanonicalGoRepositoryList is used in the merged configuration
+			mergedConfig.CanonicalGoRepository = nil
 			for step, resources := range config.Resources {
 				if step == "*" { // * is special, and the ref should not be appended, it will be merged to use the greatest value instead
 					if existing, ok := mergedConfig.Resources["*"]; ok {

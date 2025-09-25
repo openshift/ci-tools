@@ -1070,15 +1070,11 @@ func sourceStepForRef(ref *prowapi.Refs, primaryRef bool) api.StepConfiguration 
 		source = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", api.PipelineImageStreamTagReferenceSource, orgRepo))
 	}
 	return api.StepConfiguration{SourceStepConfiguration: &api.SourceStepConfiguration{
-		From: root,
-		To:   source,
-		ClonerefsImage: api.ImageStreamTagReference{
-			Namespace: "ci",
-			Name:      "managed-clonerefs",
-			Tag:       "latest",
-		},
-		ClonerefsPath: "/clonerefs",
-		Ref:           orgRepo,
+		From:              root,
+		To:                source,
+		ClonerefsPullSpec: api.ClonerefsPullSpec,
+		ClonerefsPath:     "/clonerefs",
+		Ref:               orgRepo,
 	}}
 }
 

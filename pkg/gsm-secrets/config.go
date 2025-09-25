@@ -54,8 +54,10 @@ func GetDesiredState(configFile string, config Config) ([]ServiceAccountInfo, ma
 
 		desiredSAs = append(desiredSAs, ServiceAccountInfo{
 			Email:       GetUpdaterSAEmail(collection.Name, config),
-			DisplayName: GetUpdaterSAId(collection.Name),
+			DisplayName: GetUpdaterSADisplayName(collection.Name),
+			ID:          GetUpdaterSAId(collection.Name),
 			Collection:  collection.Name,
+			Description: GetUpdaterSADescription(collection.Name),
 		})
 
 		desiredSecrets[GetUpdaterSASecretName(collection.Name)] = GCPSecret{

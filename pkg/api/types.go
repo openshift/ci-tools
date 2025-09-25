@@ -1496,6 +1496,7 @@ const (
 	ClusterProfileGCPOADPQE               ClusterProfile = "gcp-oadp-qe"
 	ClusterProfileAWSlpChaos              ClusterProfile = "aws-lp-chaos"
 	ClusterProfileMetalRHgs               ClusterProfile = "metal-redhat-gs"
+	ClusterProfileAWSOSC                  ClusterProfile = "aws-sandboxed-containers-operator"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -1678,6 +1679,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileGCPOADPQE,
 		ClusterProfileAWSlpChaos,
 		ClusterProfileMetalRHgs,
+		ClusterProfileAWSOSC,
 	}
 }
 
@@ -1744,7 +1746,8 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSManagedOSDRHOAIQE,
 		ClusterProfileAWSOADPQE,
 		ClusterProfileAWSConfidentialQE,
-		ClusterProfileAWSlpChaos:
+		ClusterProfileAWSlpChaos,
+		ClusterProfileAWSOSC:
 		return string(CloudAWS)
 	case
 		ClusterProfileAlibabaCloud,
@@ -2308,6 +2311,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-lp-chaos-quota-slice"
 	case ClusterProfileMetalRHgs:
 		return "metal-redhat-gs-quota-slice"
+	case ClusterProfileAWSOSC:
+		return "aws-sandboxed-containers-operator-quota-slice"
 	default:
 		return ""
 	}

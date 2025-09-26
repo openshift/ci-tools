@@ -218,11 +218,13 @@ func mainProduce(opts *options, cache Cache) {
 		logger := logrus.WithField("cluster", cluster)
 		client, err := routeclientset.NewForConfig(&config)
 		if err != nil {
-			logger.WithError(err).Fatal("Failed to construct client.")
+			logger.WithError(err).Error("Failed to construct client, skipping cluster.")
+			continue
 		}
 		route, err := client.Routes("openshift-monitoring").Get(interrupts.Context(), "prometheus-k8s", metav1.GetOptions{})
 		if err != nil {
-			logger.WithError(err).Fatal("Failed to get Prometheus route.")
+			logger.WithError(err).Error("Failed to get Prometheus route, skipping cluster.")
+			continue
 		}
 		var addr string
 		if route.Spec.TLS != nil {
@@ -235,7 +237,8 @@ func mainProduce(opts *options, cache Cache) {
 			RoundTripper: transport.NewBearerAuthRoundTripper(config.BearerToken, prometheusclient.DefaultRoundTripper),
 		})
 		if err != nil {
-			logger.WithError(err).Fatal("Failed to get Prometheus client.")
+			logger.WithError(err).Error("Failed to get Prometheus client, skipping cluster.")
+			continue
 		}
 		clients[cluster] = prometheusapi.NewAPI(promClient)
 		logger.Debugf("Loaded Prometheus client.")

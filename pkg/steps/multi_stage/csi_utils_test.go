@@ -360,3 +360,117 @@ func TestCSIVolumeName(t *testing.T) {
 		})
 	}
 }
+
+func TestReplaceForbiddenSymbolsInCredentialName(t *testing.T) {
+	testCases := []struct {
+		name       string
+		secretName string
+		expected   string
+	}{
+		{
+			name:       "no dot in secret name",
+			secretName: "credential",
+			expected:   "credential",
+		},
+		{
+			name:       "secret with dashes",
+			secretName: "credential-name",
+			expected:   "credential-name",
+		},
+		{
+			name:       "secret starting with dot",
+			secretName: fmt.Sprintf("%scredential", DotReplacementString),
+			expected:   ".credential",
+		},
+		{
+			name:       "secret with dot in middle",
+			secretName: fmt.Sprintf("name%sjson", DotReplacementString),
+			expected:   "name.json",
+		},
+		{
+			name:       "secret ending with dot",
+			secretName: fmt.Sprintf("credential%s", DotReplacementString),
+			expected:   "credential.",
+		},
+		{
+			name:       "secret with multiple dots",
+			secretName: fmt.Sprintf("%scredential%stxt%s", DotReplacementString, DotReplacementString, DotReplacementString),
+			expected:   ".credential.txt.",
+		},
+		// Underscore test cases
+		{
+			name:       "secret starting with underscore",
+			secretName: fmt.Sprintf("%scredential", UnderscoreReplacementString),
+			expected:   "_credential",
+		},
+		{
+			name:       "allcaps secret with underscores",
+			secretName: fmt.Sprintf("AWS%sACCESS%sKEY%sID", UnderscoreReplacementString, UnderscoreReplacementString, UnderscoreReplacementString),
+			expected:   "AWS_ACCESS_KEY_ID",
+		},
+		{
+			name:       "secret with underscore in middle",
+			secretName: fmt.Sprintf("name%sfile", UnderscoreReplacementString),
+			expected:   "name_file",
+		},
+		{
+			name:       "secret ending with underscore",
+			secretName: fmt.Sprintf("credential%s", UnderscoreReplacementString),
+			expected:   "credential_",
+		},
+		{
+			name:       "secret with multiple underscores",
+			secretName: fmt.Sprintf("%scredential%sfile%s", UnderscoreReplacementString, UnderscoreReplacementString, UnderscoreReplacementString),
+			expected:   "_credential_file_",
+		},
+		// Combined dot and underscore test cases
+		{
+			name:       "secret with dot and underscore",
+			secretName: fmt.Sprintf("name%sfile%stxt", DotReplacementString, UnderscoreReplacementString),
+			expected:   "name.file_txt",
+		},
+		{
+			name:       "secret with underscore and dot",
+			secretName: fmt.Sprintf("name%sfile%stxt", UnderscoreReplacementString, DotReplacementString),
+			expected:   "name_file.txt",
+		},
+		{
+			name:       "secret starting with dot and ending with underscore",
+			secretName: fmt.Sprintf("%scredential%s", DotReplacementString, UnderscoreReplacementString),
+			expected:   ".credential_",
+		},
+		{
+			name:       "secret starting with underscore and ending with dot",
+			secretName: fmt.Sprintf("%scredential%s", UnderscoreReplacementString, DotReplacementString),
+			expected:   "_credential.",
+		},
+		{
+			name:       "secret with multiple dots and underscores mixed",
+			secretName: fmt.Sprintf("%sconfig%sfile%sbackup%stxt%s", DotReplacementString, UnderscoreReplacementString, DotReplacementString, UnderscoreReplacementString, DotReplacementString),
+			expected:   ".config_file.backup_txt.",
+		},
+		{
+			name:       "secret with adjacent dot and underscore replacements",
+			secretName: fmt.Sprintf("name%s%sfile", DotReplacementString, UnderscoreReplacementString),
+			expected:   "name._file",
+		},
+		{
+			name:       "secret with adjacent underscore and dot replacements",
+			secretName: fmt.Sprintf("name%s%sfile", UnderscoreReplacementString, DotReplacementString),
+			expected:   "name_.file",
+		},
+		{
+			name:       "secret with underscore and dash",
+			secretName: fmt.Sprintf("some%skey-secret", UnderscoreReplacementString),
+			expected:   "some_key-secret",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := replaceForbiddenSymbolsInCredentialName(tc.secretName)
+			if result != tc.expected {
+				t.Errorf("secret name is '%v', want '%v'", result, tc.expected)
+			}
+		})
+	}
+}

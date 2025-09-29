@@ -18,6 +18,9 @@ import (
 // GSMproject is the name of the GCP Secret Manager project where the secrets are stored.
 var GSMproject = "openshift-ci-secrets"
 
+const DotReplacementString = "--dot--"
+const UnderscoreReplacementString = "--u--"
+
 // groupCredentialsByCollectionAndMountPath groups credentials by (collection, mount_path)
 // to avoid duplicate mount paths.
 func groupCredentialsByCollectionAndMountPath(credentials []api.CredentialReference) map[string][]api.CredentialReference {
@@ -34,7 +37,7 @@ func buildGCPSecretsParameter(credentials []api.CredentialReference) (string, er
 	for _, credential := range credentials {
 		secrets = append(secrets, config.Secret{
 			ResourceName: fmt.Sprintf("projects/%s/secrets/%s__%s/versions/latest", GSMproject, credential.Collection, credential.Name),
-			FileName:     credential.Name, // we want to mount the secret as a file named without the collection prefix
+			FileName:     replaceForbiddenSymbolsInCredentialName(credential.Name), // we want to mount the secret as a file named without the collection prefix
 		})
 	}
 	secretsYaml, err := yaml.Marshal(secrets)
@@ -42,6 +45,26 @@ func buildGCPSecretsParameter(credentials []api.CredentialReference) (string, er
 		return "", fmt.Errorf("could not marshal secrets: %w", err)
 	}
 	return string(secretsYaml), nil
+}
+
+// replaceForbiddenSymbolsInCredentialName replaces all DotReplacementString substrings in credentialName with dot (.) symbol.
+func replaceForbiddenSymbolsInCredentialName(credentialName string) string {
+	// This is an unfortunate workaround needed for the initial migration.
+	// Google Secret Manager doesn't support dots in Secret names. Due to migration from Vault,
+	// where we had to shard each (multi key-value) secret into multiple ones in GSM,
+	// some secret names or their keys contained forbidden symbols, '.' (dot) and '_' (underscore) in their names.
+	// All credentials with these forbidden symbols in their names or keys have been renamed,
+	// e.g. '.awscreds' to '--dot--awscreds', to preserve backwards compatibility,
+	// we need to mount the secret as the original '.awscreds' file to the Pod created by ci-operator.
+
+	secretName := credentialName
+	if strings.ContainsAny(credentialName, DotReplacementString) {
+		secretName = strings.ReplaceAll(secretName, DotReplacementString, ".")
+	}
+	if strings.ContainsAny(credentialName, UnderscoreReplacementString) {
+		secretName = strings.ReplaceAll(secretName, UnderscoreReplacementString, "_")
+	}
+	return secretName
 }
 
 // getSPCName gets the unique SPC name for a collection, mount path, and credential contents

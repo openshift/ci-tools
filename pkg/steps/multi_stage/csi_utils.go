@@ -3,6 +3,7 @@ package multi_stage
 import (
 	"crypto/sha256"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -18,8 +19,10 @@ import (
 // GSMproject is the name of the GCP Secret Manager project where the secrets are stored.
 var GSMproject = "openshift-ci-secrets"
 
-const DotReplacementString = "--dot--"
-const UnderscoreReplacementString = "--u--"
+const (
+	DotReplacementString        = "--dot--"
+	UnderscoreReplacementString = "--u--"
+)
 
 // groupCredentialsByCollectionAndMountPath groups credentials by (collection, mount_path)
 // to avoid duplicate mount paths.
@@ -35,9 +38,13 @@ func groupCredentialsByCollectionAndMountPath(credentials []api.CredentialRefere
 func buildGCPSecretsParameter(credentials []api.CredentialReference) (string, error) {
 	var secrets []config.Secret
 	for _, credential := range credentials {
+		fileName, err := replaceForbiddenSymbolsInCredentialName(credential.Name)
+		if err != nil {
+			return "", fmt.Errorf("invalid credential name '%s': %w", credential.Name, err)
+		}
 		secrets = append(secrets, config.Secret{
 			ResourceName: fmt.Sprintf("projects/%s/secrets/%s__%s/versions/latest", GSMproject, credential.Collection, credential.Name),
-			FileName:     replaceForbiddenSymbolsInCredentialName(credential.Name), // we want to mount the secret as a file named without the collection prefix
+			FileName:     fileName, // we want to mount the secret as a file named without the collection prefix
 		})
 	}
 	secretsYaml, err := yaml.Marshal(secrets)
@@ -48,7 +55,7 @@ func buildGCPSecretsParameter(credentials []api.CredentialReference) (string, er
 }
 
 // replaceForbiddenSymbolsInCredentialName replaces all DotReplacementString substrings in credentialName with dot (.) symbol.
-func replaceForbiddenSymbolsInCredentialName(credentialName string) string {
+func replaceForbiddenSymbolsInCredentialName(credentialName string) (string, error) {
 	// This is an unfortunate workaround needed for the initial migration.
 	// Google Secret Manager doesn't support dots in Secret names. Due to migration from Vault,
 	// where we had to shard each (multi key-value) secret into multiple ones in GSM,
@@ -57,14 +64,16 @@ func replaceForbiddenSymbolsInCredentialName(credentialName string) string {
 	// e.g. '.awscreds' to '--dot--awscreds', to preserve backwards compatibility,
 	// we need to mount the secret as the original '.awscreds' file to the Pod created by ci-operator.
 
-	secretName := credentialName
-	if strings.ContainsAny(credentialName, DotReplacementString) {
-		secretName = strings.ReplaceAll(secretName, DotReplacementString, ".")
+	replacedName := strings.ReplaceAll(credentialName, DotReplacementString, ".")
+	replacedName = strings.ReplaceAll(replacedName, UnderscoreReplacementString, "_")
+
+	re := regexp.MustCompile(`[^a-zA-Z0-9\-._]`)
+	invalidCharacters := re.FindAllString(replacedName, -1)
+	if invalidCharacters != nil {
+		return "", fmt.Errorf("credential name '%s' contains forbidden characters (%s); only letters (a-z, A-Z), numbers (0-9) and dashes (-) are allowed", credentialName, strings.Join(invalidCharacters, ", "))
+	} else {
+		return replacedName, nil
 	}
-	if strings.ContainsAny(credentialName, UnderscoreReplacementString) {
-		secretName = strings.ReplaceAll(secretName, UnderscoreReplacementString, "_")
-	}
-	return secretName
 }
 
 // getSPCName gets the unique SPC name for a collection, mount path, and credential contents

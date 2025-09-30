@@ -120,9 +120,9 @@ func TestHandle(t *testing.T) {
 			expectedComments: []string{`@author: the contents of this pull request could be automatically validated.
 
 The following commits are valid:
- - [1234567|UPSTREAM: 1: whoa](https://github.com/org/repo/commit/123456789): the upstream PR [upstream/repo#1](https://github.com/upstream/repo/pull/1) has merged
- - [456789a|UPSTREAM: 2: whoa](https://github.com/org/repo/commit/456789abc): the upstream PR [upstream/repo#2](https://github.com/upstream/repo/pull/2) has merged
- - [789abcd|UPSTREAM: 3: whoa](https://github.com/org/repo/commit/789abcdef): the upstream PR [upstream/repo#3](https://github.com/upstream/repo/pull/3) has merged
+ - [1234567|UPSTREAM: 1: whoa](https://github.com/org/repo/commit/123456789): the upstream PR [upstream/repo#1](https://redirect.github.com/upstream/repo/pull/1) has merged
+ - [456789a|UPSTREAM: 2: whoa](https://github.com/org/repo/commit/456789abc): the upstream PR [upstream/repo#2](https://redirect.github.com/upstream/repo/pull/2) has merged
+ - [789abcd|UPSTREAM: 3: whoa](https://github.com/org/repo/commit/789abcdef): the upstream PR [upstream/repo#3](https://redirect.github.com/upstream/repo/pull/3) has merged
 
 Comment <code>/validate-backports</code> to re-evaluate validity of the upstream PRs, for example when they are merged upstream.`},
 		},
@@ -148,12 +148,12 @@ Comment <code>/validate-backports</code> to re-evaluate validity of the upstream
 			expectedComments: []string{`@author: the contents of this pull request could not be automatically validated.
 
 The following commits are valid:
- - [1234567|UPSTREAM: 1: whoa](https://github.com/org/repo/commit/123456789): the upstream PR [upstream/repo#1](https://github.com/upstream/repo/pull/1) has merged
+ - [1234567|UPSTREAM: 1: whoa](https://github.com/org/repo/commit/123456789): the upstream PR [upstream/repo#1](https://redirect.github.com/upstream/repo/pull/1) has merged
 
 The following commits could not be validated and must be approved by a top-level approver:
- - [456789a|UPSTREAM: 2: whoa](https://github.com/org/repo/commit/456789abc): the upstream PR [upstream/repo#2](https://github.com/upstream/repo/pull/2) has not yet merged
+ - [456789a|UPSTREAM: 2: whoa](https://github.com/org/repo/commit/456789abc): the upstream PR [upstream/repo#2](https://redirect.github.com/upstream/repo/pull/2) has not yet merged
  - [abcdefg|UPSTREAM: <carry>: whoa](https://github.com/org/repo/commit/abcdefghi): does not specify an upstream backport in the commit message
- - [defghij|UPSTREAM: 4: whoa](https://github.com/org/repo/commit/defghijkl): the upstream PR [upstream/repo#4](https://github.com/upstream/repo/pull/4) does not exist
+ - [defghij|UPSTREAM: 4: whoa](https://github.com/org/repo/commit/defghijkl): the upstream PR [upstream/repo#4](https://redirect.github.com/upstream/repo/pull/4) does not exist
 
 The following commits could not be processed:
  - [789abcd|UPSTREAM: 3: whoa](https://github.com/org/repo/commit/789abcdef): failed to fetch upstream PR: injected error

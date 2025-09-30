@@ -127,7 +127,7 @@ func (s *server) handle(l *logrus.Entry, org, repo, user string, num int, reques
 	}
 
 	for commit, pull := range upstreamPullsByCommit {
-		prMention := fmt.Sprintf("the upstream PR [%s/%s#%d](https://github.com/%s/%s/pull/%d)", upstreamOrg, upstreamRepo, pull, upstreamOrg, upstreamRepo, pull)
+		prMention := fmt.Sprintf("the upstream PR [%s/%s#%d](https://redirect.github.com/%s/%s/pull/%d)", upstreamOrg, upstreamRepo, pull, upstreamOrg, upstreamRepo, pull)
 		pr, err := s.ghc.GetPullRequest(upstreamOrg, upstreamRepo, pull)
 		if err != nil {
 			if !github.IsNotFound(err) {

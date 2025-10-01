@@ -120,7 +120,7 @@ func TestInputImageTagStep(t *testing.T) {
 				ImportMode: imagev1.ImportModePreserveOriginal,
 			},
 			ReferencePolicy: imagev1.TagReferencePolicy{
-				Type: imagev1.LocalTagReferencePolicy,
+				Type: imagev1.SourceTagReferencePolicy,
 			},
 		},
 	}
@@ -233,7 +233,7 @@ func TestInputImageTagStepExternal(t *testing.T) {
 				ImportMode: imagev1.ImportModePreserveOriginal,
 			},
 			ReferencePolicy: imagev1.TagReferencePolicy{
-				Type: imagev1.LocalTagReferencePolicy,
+				Type: imagev1.SourceTagReferencePolicy,
 			},
 		},
 	}

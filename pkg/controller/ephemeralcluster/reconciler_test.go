@@ -23,6 +23,7 @@ import (
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/prow/pkg/github"
+	"sigs.k8s.io/prow/pkg/github/fakegithub"
 	"sigs.k8s.io/prow/pkg/pjutil"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -164,6 +165,7 @@ func TestCreateProwJob(t *testing.T) {
 		req          reconcile.Request
 		interceptors interceptor.Funcs
 		prowConfig   *prowconfig.Config
+		ghClient     *fakegithub.FakeClient
 		wantRes      reconcile.Result
 		wantErr      error
 	}{
@@ -466,6 +468,92 @@ func TestCreateProwJob(t *testing.T) {
 			wantRes: reconcile.Result{},
 			wantErr: errors.New("terminal error: parse pull request meta: malformed PR event payload"),
 		},
+		{
+			name: "Inject missing PR metadata",
+			ec: ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Annotations: map[string]string{
+						PREventPayload: `{"check_run": {"pull_requests": [{"url": "https://api.github.com/repos/danilo-gemoli/foobar/pulls/24"}]}}`,
+						PREventHeaders: prEventHeaders,
+					},
+					Namespace: "ns",
+					Name:      "ec",
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						BuildRootImage: &api.BuildRootImageConfiguration{
+							ImageStreamTagReference: &api.ImageStreamTagReference{
+								Namespace: "ocp",
+								Name:      "4.20",
+								Tag:       "cli",
+							},
+						},
+						BaseImages: map[string]api.ImageStreamTagReference{
+							"upi-installer": {
+								Namespace: "ocp",
+								Name:      "4.20",
+								Tag:       "upi-installer",
+							},
+						},
+						ExternalImages: map[string]api.ExternalImage{
+							"fedora": {Registry: "quay.io/fedora/fedora:43"},
+						},
+						Releases: map[string]api.UnresolvedRelease{
+							"initial": {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
+							"latest":  {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
+						},
+						Test: ephemeralclusterv1.TestSpec{
+							Workflow:       "test-workflow",
+							Env:            map[string]string{"foo": "bar"},
+							ClusterProfile: "aws",
+						},
+					},
+				},
+			},
+			ghClient: func() *fakegithub.FakeClient {
+				c := fakegithub.NewFakeClient()
+				c.PullRequests[24] = &github.PullRequest{
+					Number: 24,
+					Title:  "pr-title",
+					User: github.User{
+						Login:   "author",
+						HTMLURL: "author-link",
+					},
+					Base: github.PullRequestBranch{
+						Ref: "base-ref",
+						Repo: github.Repo{
+							Name:    "repo",
+							HTMLURL: "repo-link",
+							Owner:   github.User{Login: "owner"},
+						},
+					},
+					Head: github.PullRequestBranch{
+						Ref: "head-ref",
+						SHA: "head-sha",
+					},
+				}
+				return c
+			}(),
+			req:     reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
+			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+		},
+		{
+			name: "Failed to pull PR metadata",
+			ec: ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Annotations: map[string]string{
+						PREventPayload: `{}`,
+						PREventHeaders: prEventHeaders,
+					},
+					Namespace: "ns",
+					Name:      "ec",
+				},
+			},
+			ghClient: fakegithub.NewFakeClient(),
+			req:      reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
+			wantRes:  reconcile.Result{},
+			wantErr:  errors.New("terminal error: inject pull request meta: unable to extract org, repo and PR number from the PR event payload"),
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -494,6 +582,7 @@ func TestCreateProwJob(t *testing.T) {
 				cliISTagRef:     api.ImageStreamTagReference{Namespace: "ocp", Name: "4.22", Tag: "cli"},
 				newPresubmit:    newPresubmitFaker("foobar", fakeNow),
 				prowConfigAgent: prowConfigAgent(pc),
+				ghClient:        tc.ghClient,
 			}
 
 			gotRes, gotErr := r.Reconcile(context.TODO(), reconcile.Request{NamespacedName: types.NamespacedName{Name: tc.ec.Name, Namespace: tc.ec.Namespace}})

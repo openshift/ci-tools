@@ -465,7 +465,7 @@ func stepForTest(
 			step = steps.ClusterClaimStep(c.As, c.ClusterClaim, hiveClient, client, jobSpec, step, censor)
 			name := c.ClusterClaim.ClaimRelease(c.As).ReleaseName
 			target := api.ReleaseConfiguration{Name: name}.TargetName()
-			referencePolicy := imagev1.LocalTagReferencePolicy
+			referencePolicy := imagev1.SourceTagReferencePolicy
 			source := releasesteps.NewReleaseSourceFromClusterClaim(c.As, c.ClusterClaim, hiveClient)
 			ret = append(ret, releasesteps.ImportReleaseStep(name, nodeName, target, referencePolicy, source, false, config.Resources, podClient, jobSpec, pullSecret, nil))
 		}

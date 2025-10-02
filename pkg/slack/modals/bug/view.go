@@ -7,7 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
 
-	"github.com/openshift/ci-tools/pkg/jira"
+	localjira "github.com/openshift/ci-tools/pkg/jira"
 	"github.com/openshift/ci-tools/pkg/slack/interactions"
 	"github.com/openshift/ci-tools/pkg/slack/modals"
 	"github.com/openshift/ci-tools/pkg/slack/modals/helpdesk"
@@ -164,7 +164,7 @@ func validateSubmissionHandler() interactions.PartialHandler {
 func issueParameters() modals.JiraIssueParameters {
 	return modals.JiraIssueParameters{
 		Id:        Identifier,
-		IssueType: jira.IssueTypeBug,
+		IssueType: localjira.IssueTypeBug,
 		Template: template.Must(template.New(string(Identifier)).Parse(`h3. Symptomatic Behavior
 {{ .` + blockIdSymptom + ` }}
 
@@ -180,16 +180,19 @@ h3. Category
 h3. How to Reproduce
 {{ .` + blockIdReproduction + ` }}`)),
 		Fields: []string{modals.BlockIdTitle, blockIdCategory, blockIdOptional, blockIdSymptom, blockIdExpected, blockIdImpact, blockIdReproduction},
+		CustomFields: map[string]interface{}{
+			localjira.ActivityTypeFieldID: localjira.ActivityTypeBugFix,
+		},
 	}
 }
 
 // processSubmissionHandler files a Jira issue for this form
-func processSubmissionHandler(filer jira.IssueFiler, updater modals.ViewUpdater) interactions.PartialHandler {
+func processSubmissionHandler(filer localjira.IssueFiler, updater modals.ViewUpdater) interactions.PartialHandler {
 	return interactions.PartialFromHandler(modals.ToJiraIssue(issueParameters(), filer, updater))
 }
 
 // Register creates a registration entry for the bug form
-func Register(filer jira.IssueFiler, client *slack.Client) *modals.FlowWithViewAndFollowUps {
+func Register(filer localjira.IssueFiler, client *slack.Client) *modals.FlowWithViewAndFollowUps {
 	return modals.ForView(Identifier, View()).WithFollowUps(map[slack.InteractionType]interactions.Handler{
 		slack.InteractionTypeBlockActions: helpdeskButtonHandler(client),
 		slack.InteractionTypeViewSubmission: interactions.MultiHandler(

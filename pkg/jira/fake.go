@@ -27,6 +27,11 @@ type Fake struct {
 
 // FileIssue files the issue using injected behavior
 func (f *Fake) FileIssue(issueType, title, description, reporter string, logger *logrus.Entry) (*jira.Issue, error) {
+	return f.FileIssueWithFields(issueType, title, description, reporter, nil, logger)
+}
+
+// FileIssueWithFields files the issue with custom fields using injected behavior
+func (f *Fake) FileIssueWithFields(issueType, title, description, reporter string, customFields map[string]interface{}, logger *logrus.Entry) (*jira.Issue, error) {
 	request := IssueRequest{
 		IssueType:   issueType,
 		Title:       title,

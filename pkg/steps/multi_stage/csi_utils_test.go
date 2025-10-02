@@ -360,3 +360,205 @@ func TestCSIVolumeName(t *testing.T) {
 		})
 	}
 }
+
+func TestReplaceForbiddenSymbolsInCredentialName(t *testing.T) {
+	testCases := []struct {
+		name        string
+		secretName  string
+		expected    string
+		expectError bool
+	}{
+		// Valid cases - letters, numbers, dashes, dots, and underscores are allowed
+		{
+			name:        "valid secret name with letters only",
+			secretName:  "credential",
+			expected:    "credential",
+			expectError: false,
+		},
+		{
+			name:        "valid secret with dashes",
+			secretName:  "credential-name",
+			expected:    "credential-name",
+			expectError: false,
+		},
+		{
+			name:        "valid secret with numbers",
+			secretName:  "secret123",
+			expected:    "secret123",
+			expectError: false,
+		},
+		{
+			name:        "valid secret with mixed case",
+			secretName:  "MySecret-123",
+			expected:    "MySecret-123",
+			expectError: false,
+		},
+		// Valid cases - replacement strings should be converted to dots and underscores
+		{
+			name:        "secret with dot replacement should work",
+			secretName:  fmt.Sprintf("%scredential", DotReplacementString),
+			expected:    ".credential",
+			expectError: false,
+		},
+		{
+			name:        "secret with dot in middle should work",
+			secretName:  fmt.Sprintf("name%sjson", DotReplacementString),
+			expected:    "name.json",
+			expectError: false,
+		},
+		{
+			name:        "secret ending with dot should work",
+			secretName:  fmt.Sprintf("credential%s", DotReplacementString),
+			expected:    "credential.",
+			expectError: false,
+		},
+		{
+			name:        "secret with multiple dots should work",
+			secretName:  fmt.Sprintf("%scredential%stxt%s", DotReplacementString, DotReplacementString, DotReplacementString),
+			expected:    ".credential.txt.",
+			expectError: false,
+		},
+		{
+			name:        "secret with underscore replacement should work",
+			secretName:  fmt.Sprintf("%scredential", UnderscoreReplacementString),
+			expected:    "_credential",
+			expectError: false,
+		},
+		{
+			name:        "allcaps secret with underscores should work",
+			secretName:  fmt.Sprintf("AWS%sACCESS%sKEY%sID", UnderscoreReplacementString, UnderscoreReplacementString, UnderscoreReplacementString),
+			expected:    "AWS_ACCESS_KEY_ID",
+			expectError: false,
+		},
+		{
+			name:        "secret with underscore in middle should work",
+			secretName:  fmt.Sprintf("name%sfile", UnderscoreReplacementString),
+			expected:    "name_file",
+			expectError: false,
+		},
+		{
+			name:        "secret ending with underscore should work",
+			secretName:  fmt.Sprintf("credential%s", UnderscoreReplacementString),
+			expected:    "credential_",
+			expectError: false,
+		},
+		{
+			name:        "secret with multiple underscores should work",
+			secretName:  fmt.Sprintf("%scredential%sfile%s", UnderscoreReplacementString, UnderscoreReplacementString, UnderscoreReplacementString),
+			expected:    "_credential_file_",
+			expectError: false,
+		},
+		{
+			name:        "secret with mixed dot and underscore should work",
+			secretName:  fmt.Sprintf("name%sfile%stxt", DotReplacementString, UnderscoreReplacementString),
+			expected:    "name.file_txt",
+			expectError: false,
+		},
+		{
+			name:        "secret with underscore and dot should work",
+			secretName:  fmt.Sprintf("name%sfile%stxt", UnderscoreReplacementString, DotReplacementString),
+			expected:    "name_file.txt",
+			expectError: false,
+		},
+		{
+			name:        "secret starting with dot and ending with underscore should work",
+			secretName:  fmt.Sprintf("%scredential%s", DotReplacementString, UnderscoreReplacementString),
+			expected:    ".credential_",
+			expectError: false,
+		},
+		{
+			name:        "secret starting with underscore and ending with dot should work",
+			secretName:  fmt.Sprintf("%scredential%s", UnderscoreReplacementString, DotReplacementString),
+			expected:    "_credential.",
+			expectError: false,
+		},
+		{
+			name:        "secret with multiple dots and underscores mixed should work",
+			secretName:  fmt.Sprintf("%sconfig%sfile%sbackup%stxt%s", DotReplacementString, UnderscoreReplacementString, DotReplacementString, UnderscoreReplacementString, DotReplacementString),
+			expected:    ".config_file.backup_txt.",
+			expectError: false,
+		},
+		{
+			name:        "secret with adjacent dot and underscore replacements should work",
+			secretName:  fmt.Sprintf("name%s%sfile", DotReplacementString, UnderscoreReplacementString),
+			expected:    "name._file",
+			expectError: false,
+		},
+		{
+			name:        "secret with adjacent underscore and dot replacements should work",
+			secretName:  fmt.Sprintf("name%s%sfile", UnderscoreReplacementString, DotReplacementString),
+			expected:    "name_.file",
+			expectError: false,
+		},
+		{
+			name:        "secret with underscore and dash should work",
+			secretName:  fmt.Sprintf("some%skey-secret", UnderscoreReplacementString),
+			expected:    "some_key-secret",
+			expectError: false,
+		},
+		// Invalid cases - forbidden characters that are not allowed
+		{
+			name:        "secret with special characters should fail validation",
+			secretName:  "secret@domain.com",
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name:        "secret with spaces should fail validation",
+			secretName:  "secret name",
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name:        "secret with slashes should fail validation",
+			secretName:  "path/to/secret",
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name:        "secret with parentheses should fail validation",
+			secretName:  "secret(test)",
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name:        "secret with brackets should fail validation",
+			secretName:  "secret[0]",
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name:        "secret with plus sign should fail validation",
+			secretName:  "secret+test",
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name:        "secret with multiple invalid characters should fail validation",
+			secretName:  "some.weird@secret/name",
+			expected:    "",
+			expectError: true,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := replaceForbiddenSymbolsInCredentialName(tc.secretName)
+
+			if tc.expectError {
+				if err == nil {
+					t.Errorf("expected error for secret name '%s', but got none", tc.secretName)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("unexpected error for secret name '%s': %v", tc.secretName, err)
+				return
+			}
+
+			if result != tc.expected {
+				t.Errorf("secret name is '%v', want '%v'", result, tc.expected)
+			}
+		})
+	}
+}

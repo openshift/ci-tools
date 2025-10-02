@@ -1,0 +1,50 @@
+metadata:
+  annotations:
+    ephemeralcluster.ci.openshift.io/pr-event-headers: '{"X-Github-Delivery": "aa9ede40-8fbb-11f0-8717-9eed0c1315d0"}'
+    ephemeralcluster.ci.openshift.io/pr-event-payload: '{"check_run": {"pull_requests":
+      [{"url": "https://api.github.com/repos/danilo-gemoli/foobar/pulls/24"}]}}'
+  creationTimestamp: null
+  finalizers:
+  - ephemeralcluster.ci.openshift.io/dependent-prowjob
+  name: ec
+  namespace: ns
+  resourceVersion: "1000"
+spec:
+  ciOperator:
+    baseImages:
+      upi-installer:
+        name: "4.20"
+        namespace: ocp
+        tag: upi-installer
+    buildRoot:
+      image_stream_tag:
+        name: "4.20"
+        namespace: ocp
+        tag: cli
+    externalImages:
+      fedora:
+        name: ""
+        namespace: ""
+        registry: quay.io/fedora/fedora:43
+        tag: ""
+    releases:
+      initial:
+        integration:
+          name: "4.17"
+          namespace: ocp
+      latest:
+        integration:
+          name: "4.17"
+          namespace: ocp
+    test:
+      clusterProfile: aws
+      env:
+        foo: bar
+      workflow: test-workflow
+status:
+  conditions:
+  - lastTransitionTime: "2025-04-02T12:12:12Z"
+    status: "True"
+    type: ProwJobCreating
+  phase: Provisioning
+  prowJobId: foobar

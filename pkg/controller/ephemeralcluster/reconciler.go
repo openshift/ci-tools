@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -57,6 +58,7 @@ const (
 	ProwJobNamePrefix         = "ephemeralcluster"
 	GitHubGUID                = "X-Github-Delivery"
 	TooManyPJsBoundErrMsg     = "Too many ProwJobs bound, this is a bug"
+	PROrgRepoNumRegexpPattern = `/([a-zA-Z0-9\-_\.]+)/([a-zA-Z0-9\-_\.]+)/pulls/(\d+)`
 )
 
 var (
@@ -74,12 +76,14 @@ var (
 		polling: 3 * time.Second,
 	}
 
-	isTagRegexp = regexp.MustCompile(`(?P<Namespace>.+)/(?P<Name>.+)\:(?P<Tag>.+)`)
+	isTagRegexp        = regexp.MustCompile(`(?P<Namespace>.+)/(?P<Name>.+)\:(?P<Tag>.+)`)
+	prOrgRepoNumRegexp = regexp.MustCompile(PROrgRepoNumRegexpPattern)
 )
 
 type reconcilerOptions struct {
 	polling     time.Duration
 	cliISTagRef string
+	ghClient    GitHubClient
 }
 
 type ReconcilerOption func(*reconcilerOptions)
@@ -95,6 +99,16 @@ func WithCLIISTagRef(isTagRef string) ReconcilerOption {
 	return func(o *reconcilerOptions) {
 		o.cliISTagRef = isTagRef
 	}
+}
+
+func WithGHClient(ghClient GitHubClient) ReconcilerOption {
+	return func(o *reconcilerOptions) {
+		o.ghClient = ghClient
+	}
+}
+
+type GitHubClient interface {
+	GetPullRequest(org, repo string, number int) (*github.PullRequest, error)
 }
 
 type PRMeta struct {
@@ -125,6 +139,7 @@ type reconciler struct {
 	now         func() time.Time
 	polling     func() time.Duration
 	cliISTagRef api.ImageStreamTagReference
+	ghClient    GitHubClient
 }
 
 func ECPredicateFilter(object ctrlruntimeclient.Object) bool {
@@ -156,6 +171,7 @@ func AddToManager(log *logrus.Entry, mgr manager.Manager, allManagers map[string
 		now:             time.Now,
 		polling:         func() time.Duration { return defaultReconcilerOpts.polling },
 		cliISTagRef:     cliISTagRef,
+		ghClient:        defaultReconcilerOpts.ghClient,
 	}
 
 	if err := ctrlbldr.ControllerManagedBy(mgr).
@@ -393,6 +409,14 @@ func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *e
 	if err != nil {
 		log.WithError(err).Error("parse pull request meta")
 		err = fmt.Errorf("parse pull request meta: %w", err)
+		upsertProvisioningCond(ephemeralclusterv1.ConditionFalse, ephemeralclusterv1.CIOperatorJobsGenerateFailureReason, err.Error())
+		ec.Status.Phase = ephemeralclusterv1.EphemeralClusterFailed
+		return reconcile.TerminalError(err)
+	}
+
+	if err := injectPRMetadata(r.ghClient, &prMeta, annotations[PREventPayload]); err != nil {
+		log.WithError(err).Error("inject pull request metadata")
+		err = fmt.Errorf("inject pull request meta: %w", err)
 		upsertProvisioningCond(ephemeralclusterv1.ConditionFalse, ephemeralclusterv1.CIOperatorJobsGenerateFailureReason, err.Error())
 		ec.Status.Phase = ephemeralclusterv1.EphemeralClusterFailed
 		return reconcile.TerminalError(err)
@@ -742,6 +766,35 @@ func (r *reconciler) findCIOperatorTestNS(ctx context.Context, buildClient ctrlr
 	}
 
 	return nss.Items[0].Name, nil
+}
+
+// injectPRMetadata retrieves the PR metadata from the GitHub api. In some cases (ex.: a check run being rerun)
+// the PR event payload doesn't contain the PR information anymore. We can't keep going this scenario,
+// therefore we make our best effort trying to extract the org, repo and PR number and then manually pull
+// the metadata.
+func injectPRMetadata(ghClient GitHubClient, prMeta *PRMeta, prEventPayload string) error {
+	// The PR exists already, there is nothing to do here
+	if prMeta.Event.PullRequest != nil {
+		return nil
+	}
+
+	matches := prOrgRepoNumRegexp.FindStringSubmatch(prEventPayload)
+	if matches == nil || len(matches) != 4 {
+		return errors.New("unable to extract org, repo and PR number from the PR event payload")
+	}
+
+	org, repo := matches[1], matches[2]
+	prNum, err := strconv.Atoi(matches[3])
+	if err != nil {
+		return fmt.Errorf("failed to parse PR number %s: %w", matches[3], err)
+	}
+
+	prMeta.Event.PullRequest, err = ghClient.GetPullRequest(org, repo, prNum)
+	if err != nil {
+		return fmt.Errorf("failed to get PR %s/%s/pulls/%d: %w", org, repo, prNum, err)
+	}
+
+	return nil
 }
 
 func upsertCondition(ecStatus *ephemeralclusterv1.EphemeralClusterStatus, t ephemeralclusterv1.EphemeralClusterConditionType, status ephemeralclusterv1.ConditionStatus, now time.Time, reason, msg string) {

@@ -1,0 +1,20 @@
+metadata:
+  annotations:
+    ephemeralcluster.ci.openshift.io/pr-event-headers: '{"X-Github-Delivery": "aa9ede40-8fbb-11f0-8717-9eed0c1315d0"}'
+    ephemeralcluster.ci.openshift.io/pr-event-payload: '{}'
+  creationTimestamp: null
+  name: ec
+  namespace: ns
+  resourceVersion: "1000"
+spec:
+  ciOperator:
+    test: {}
+status:
+  conditions:
+  - lastTransitionTime: "2025-04-02T12:12:12Z"
+    message: 'inject pull request meta: unable to extract org, repo and PR number
+      from the PR event payload'
+    reason: CIOperatorJobsGenerateFailure
+    status: "False"
+    type: ProwJobCreating
+  phase: Failed

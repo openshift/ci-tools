@@ -543,10 +543,15 @@ func main() {
 	}
 
 	if opts.enabledControllersSet.Has(ephemeralcluster.ControllerName) {
+		gitHubClient, err := opts.GitHubClient(opts.dryRun)
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to get gitHubClient")
+		}
 		log := logrus.NewEntry(logrus.StandardLogger())
 		if err := ephemeralcluster.AddToManager(log, mgr, allManagers, configAgent,
 			ephemeralcluster.WithPolling(opts.ephemeralClusterProvisinerOptions.polling),
-			ephemeralcluster.WithCLIISTagRef(opts.ephemeralClusterProvisinerOptions.cliISTagRef)); err != nil {
+			ephemeralcluster.WithCLIISTagRef(opts.ephemeralClusterProvisinerOptions.cliISTagRef),
+			ephemeralcluster.WithGHClient(gitHubClient)); err != nil {
 			logrus.WithError(err).Fatalf("Failed to construct the %s controller", ephemeralcluster.ControllerName)
 		}
 	}

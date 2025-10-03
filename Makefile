@@ -166,7 +166,11 @@ PACKAGES ?= ./test/e2e/...
 #   make e2e PACKAGES=test/e2e/pod-scaler TESTFLAGS='--run TestProduce'
 #   make e2e PACKAGES=test/e2e/pod-scaler TESTFLAGS='--count 1'
 e2e: $(TMPDIR)/.boskos-credentials
+	oc apply -f test/e2e/hack/e2e_4.17_imagestream.yaml
+	oc apply -f test/e2e/hack/e2e_4.18_imagestream.yaml
 	BOSKOS_CREDENTIALS_FILE="$(TMPDIR)/.boskos-credentials" PACKAGES="$(PACKAGES)" TESTFLAGS="$(TESTFLAGS) -tags $(TAGS) -timeout 70m -parallel 100" hack/test-go.sh
+	oc -n ocp delete is/4.17
+	oc -n ocp delete is/4.18
 .PHONY: e2e
 
 $(TMPDIR)/.boskos-credentials:

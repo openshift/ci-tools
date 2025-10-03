@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/ptr"
 )
 
 const (
@@ -206,23 +207,23 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 						// No securityContext exists, create one with capabilities
 						container.SecurityContext = &corev1.SecurityContext{
 							Capabilities: &corev1.Capabilities{
-								Add: []corev1.Capability{"NET_ADMIN", "NET_RAW"},
+								Add: []corev1.Capability{"NET_ADMIN", "NET_RAW", "SETUID", "SETGID"},
 							},
 						}
 					} else if container.SecurityContext.Capabilities == nil {
 						// securityContext exists but no capabilities, add capabilities
 						container.SecurityContext.Capabilities = &corev1.Capabilities{
-							Add: []corev1.Capability{"NET_ADMIN", "NET_RAW"},
+							Add: []corev1.Capability{"NET_ADMIN", "NET_RAW", "SYS_ADMIN", "SETUID", "SETGID"},
 						}
 					} else {
 						// Both securityContext and capabilities exist, merge the "add" array
-						container.SecurityContext.Capabilities.Add = append(container.SecurityContext.Capabilities.Add, "NET_ADMIN", "NET_RAW")
+						container.SecurityContext.Capabilities.Add = append(container.SecurityContext.Capabilities.Add, "NET_ADMIN", "NET_RAW", "SYS_ADMIN", "SETUID", "SETGID")
 					}
-					container.SecurityContext.RunAsUser = int64(0)
-					container.SecurityContext.RunAsNonRoot = false
+					container.SecurityContext.RunAsUser = ptr.To(int64(0))
+					container.SecurityContext.RunAsNonRoot = ptr.To(false)
 
 					addPatchEntry("replace", fmt.Sprintf("/spec/containers/%d/securityContext", i), container.SecurityContext)
-					klog.Infof("Added NET_ADMIN and NET_RAW capabilities and ensured runAsUser=0 for test container in pod %s in namespace %s due to TEST_REQUIRES_BUILDFARM_NET_ADMIN=true", podName, namespace)
+					klog.Infof("Added NET_ADMIN, NET_RAW, SETUID, and SETGID capabilities, ensured runAsUser=0 and allowPrivilegeEscalation=true for test container in pod %s in namespace %s due to TEST_REQUIRES_BUILDFARM_NET_ADMIN=true", podName, namespace)
 				}
 				break
 			}

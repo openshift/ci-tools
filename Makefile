@@ -166,6 +166,22 @@ PACKAGES ?= ./test/e2e/...
 #   make e2e PACKAGES=test/e2e/pod-scaler TESTFLAGS='--run TestProduce'
 #   make e2e PACKAGES=test/e2e/pod-scaler TESTFLAGS='--count 1'
 e2e: $(TMPDIR)/.boskos-credentials
+	@set -e; \
+	trap 'oc -n ocp delete is/4.17; oc -n ocp delete is/4.18' TERM EXIT; \
+	oc apply -f test/e2e/hack/e2e_4.17_imagestream.yaml; \
+	oc apply -f test/e2e/hack/e2e_4.18_imagestream.yaml; \
+	for is in 4.17 4.18; do \
+		EXPECTED_TAGS=$$(oc get is "$$is" -n ocp -o=jsonpath='{.spec.tags[*].name}' | wc -w) ; \
+		while true; do \
+			CURRENT_TAGS=$$(oc get is "$$is" -n ocp -o=jsonpath='{.status.tags[*].tag}' | wc -w) ; \
+			if [ "$$CURRENT_TAGS" -eq "$$EXPECTED_TAGS" ]; then \
+				echo "Success! ImageStream $$is has $$CURRENT_TAGS imported tags."; \
+				break; \
+			fi; \
+			echo "Current tags: $$CURRENT_TAGS / $$EXPECTED_TAGS. Waiting..."; \
+			sleep 5; \
+		done; \
+	done; \
 	BOSKOS_CREDENTIALS_FILE="$(TMPDIR)/.boskos-credentials" PACKAGES="$(PACKAGES)" TESTFLAGS="$(TESTFLAGS) -tags $(TAGS) -timeout 70m -parallel 100" hack/test-go.sh
 .PHONY: e2e
 

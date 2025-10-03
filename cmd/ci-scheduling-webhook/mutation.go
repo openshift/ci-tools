@@ -221,7 +221,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 					container.SecurityContext.RunAsUser = int64(0)
 					container.SecurityContext.RunAsNonRoot = false
 
-					addPatchEntry("replace", fmt.Sprintf("/spec/containers/%d/securityContext/capabilities", i), container.SecurityContext)
+					addPatchEntry("replace", fmt.Sprintf("/spec/containers/%d/securityContext", i), container.SecurityContext)
 					klog.Infof("Added NET_ADMIN and NET_RAW capabilities and ensured runAsUser=0 for test container in pod %s in namespace %s due to TEST_REQUIRES_BUILDFARM_NET_ADMIN=true", podName, namespace)
 				}
 				break

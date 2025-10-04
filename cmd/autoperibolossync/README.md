@@ -27,6 +27,27 @@ containing Peribolos config. If the execution results in Peribolos changes, the 
 in that repository that updates the mainline with the changes, using
 Prow's [generic-autobumper](https://github.com/kubernetes/test-infra/tree/master/prow/cmd/generic-autobumper) package.
 
+The tool uses a special naming convention to prevent repository name collisions:
+- Repositories from the organization specified by `--only-org` keep their original names
+- Repositories from organizations specified by `--flatten-org` keep their original names (can be specified multiple times)
+- Repositories from the following default organizations always keep their original names for backwards compatibility:
+  - `openshift`
+  - `openshift-eng`
+  - `operator-framework`
+  - `redhat-cne`
+  - `openshift-assisted`
+  - `ViaQ`
+- Repositories from other organizations are named as `<org>-<repo>` in the private organization
+
+For example, with `--only-org=openshift --flatten-org=migtools`:
+- `openshift/must-gather` becomes `openshift-priv/must-gather` (from --only-org and default)
+- `openshift-eng/ocp-build-data` becomes `openshift-priv/ocp-build-data` (from default)
+- `migtools/crane` becomes `openshift-priv/crane` (from --flatten-org)
+- `redhat-cne/cloud-event-proxy` becomes `openshift-priv/cloud-event-proxy` (from default)
+- `custom-org/some-repo` becomes `openshift-priv/custom-org-some-repo` (not in flatten list)
+
+This ensures that repositories from different organizations can coexist in the private organization without naming conflicts.
+
 ## How is it deployed
 
 The periodic

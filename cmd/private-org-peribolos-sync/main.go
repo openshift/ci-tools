@@ -23,8 +23,30 @@ import (
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
+// defaultFlattenOrgs contains organizations whose repos should not have org prefix by default
+// for backwards compatibility
+var defaultFlattenOrgs = []string{
+	"openshift",
+	"openshift-eng",
+	"operator-framework",
+	"redhat-cne",
+	"openshift-assisted",
+	"ViaQ",
+}
+
 type gitHubClient interface {
 	GetRepo(owner, name string) (github.FullRepo, error)
+}
+
+type arrayFlags []string
+
+func (i *arrayFlags) String() string {
+	return fmt.Sprintf("%v", *i)
+}
+
+func (i *arrayFlags) Set(value string) error {
+	*i = append(*i, value)
+	return nil
 }
 
 type options struct {
@@ -33,6 +55,7 @@ type options struct {
 	peribolosConfig string
 	destOrg         string
 	onlyOrg         string
+	flattenOrgs     arrayFlags
 	releaseRepoPath string
 	github          flagutil.GitHubOptions
 }
@@ -45,6 +68,7 @@ func gatherOptions() (options, error) {
 	fs.StringVar(&o.releaseRepoPath, "release-repo-path", "", "Path to a openshift/release repository directory")
 	fs.StringVar(&o.destOrg, "destination-org", "", "Destination name of the peribolos configuration organzation")
 	fs.StringVar(&o.onlyOrg, "only-org", "", "Only dump config of the repos belonging to this org.")
+	fs.Var(&o.flattenOrgs, "flatten-org", "Organizations whose repos should not have org prefix (can be specified multiple times)")
 
 	o.github.AddFlags(fs)
 	o.WhitelistOptions.Bind(fs)
@@ -114,7 +138,7 @@ func main() {
 		logger.WithError(err).Fatal("couldn't get the list of org/repos that promote official images")
 	}
 
-	peribolosRepos := generateRepositories(gc, orgRepos, logger)
+	peribolosRepos := generateRepositories(gc, orgRepos, logger, o.onlyOrg, o.flattenOrgs)
 	peribolosConfigByOrg := peribolosConfig.Orgs[o.destOrg]
 	peribolosConfigByOrg.Repos = peribolosRepos
 	peribolosConfig.Orgs[o.destOrg] = peribolosConfigByOrg
@@ -129,9 +153,19 @@ func main() {
 	}
 }
 
-func generateRepositories(gc gitHubClient, orgRepos map[string]sets.Set[string], logger *logrus.Entry) map[string]org.Repo {
+func generateRepositories(gc gitHubClient, orgRepos map[string]sets.Set[string], logger *logrus.Entry, onlyOrg string, flattenOrgs []string) map[string]org.Repo {
 	peribolosRepos := make(map[string]org.Repo)
 	yes := true
+
+	// Create a set of flattened orgs for efficient lookup
+	// Start with the default flattened orgs for backwards compatibility
+	flattenedOrgs := sets.New[string](defaultFlattenOrgs...)
+	// Add any additional orgs specified via --flatten-org
+	flattenedOrgs.Insert(flattenOrgs...)
+	// The --only-org is also flattened if specified
+	if onlyOrg != "" {
+		flattenedOrgs.Insert(onlyOrg)
+	}
 
 	for orgName, repos := range orgRepos {
 		for repo := range repos {
@@ -142,7 +176,13 @@ func generateRepositories(gc gitHubClient, orgRepos map[string]sets.Set[string],
 				logger.WithError(err).Fatal("couldn't get repo details")
 			}
 
-			peribolosRepos[fullRepo.Name] = org.PruneRepoDefaults(org.Repo{
+			// Use <org>-<repo> naming for repos from organizations not in the flatten list
+			destRepoName := fullRepo.Name
+			if !flattenedOrgs.Has(orgName) {
+				destRepoName = fmt.Sprintf("%s-%s", orgName, fullRepo.Name)
+			}
+
+			peribolosRepos[destRepoName] = org.PruneRepoDefaults(org.Repo{
 				Description:      &fullRepo.Description,
 				HomePage:         &fullRepo.Homepage,
 				Private:          &yes, // all repositories in private org should be private

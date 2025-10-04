@@ -8,6 +8,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 )
@@ -672,6 +674,145 @@ hint: See the 'Note about fast-forwards' in 'git push --help' for details.
 			}
 			if err = git.check(); err != nil {
 				t.Errorf("bad git operation: %v", err)
+			}
+		})
+	}
+}
+
+func TestDestinationNaming(t *testing.T) {
+	testCases := []struct {
+		name         string
+		sourceOrg    string
+		sourceRepo   string
+		targetOrg    string
+		onlyOrg      string
+		flattenOrgs  []string
+		expectedRepo string
+	}{
+		{
+			name:         "repo from only-org keeps original name",
+			sourceOrg:    "openshift",
+			sourceRepo:   "api",
+			targetOrg:    "openshift-priv",
+			onlyOrg:      "openshift",
+			flattenOrgs:  nil,
+			expectedRepo: "api",
+		},
+		{
+			name:         "repo from different org gets prefixed name",
+			sourceOrg:    "migtools",
+			sourceRepo:   "must-gather",
+			targetOrg:    "openshift-priv",
+			onlyOrg:      "openshift",
+			flattenOrgs:  nil,
+			expectedRepo: "migtools-must-gather",
+		},
+		{
+			name:         "no only-org specified, non-default orgs get prefixed name",
+			sourceOrg:    "migtools",
+			sourceRepo:   "must-gather",
+			targetOrg:    "openshift-priv",
+			onlyOrg:      "",
+			flattenOrgs:  nil,
+			expectedRepo: "migtools-must-gather",
+		},
+		{
+			name:         "repo from flatten-org keeps original name",
+			sourceOrg:    "openshift-eng",
+			sourceRepo:   "ocp-build-data",
+			targetOrg:    "openshift-priv",
+			onlyOrg:      "openshift",
+			flattenOrgs:  []string{"openshift-eng", "migtools"},
+			expectedRepo: "ocp-build-data",
+		},
+		{
+			name:         "repo from flatten-org without only-org keeps original name",
+			sourceOrg:    "openshift-eng",
+			sourceRepo:   "ocp-build-data",
+			targetOrg:    "openshift-priv",
+			onlyOrg:      "",
+			flattenOrgs:  []string{"openshift-eng"},
+			expectedRepo: "ocp-build-data",
+		},
+		{
+			name:         "repo not in flatten-org list gets prefixed",
+			sourceOrg:    "custom-org",
+			sourceRepo:   "custom-repo",
+			targetOrg:    "openshift-priv",
+			onlyOrg:      "openshift",
+			flattenOrgs:  []string{"another-org"},
+			expectedRepo: "custom-org-custom-repo",
+		},
+		{
+			name:         "default flattened orgs keep original names without --only-org",
+			sourceOrg:    "openshift",
+			sourceRepo:   "installer",
+			targetOrg:    "openshift-priv",
+			onlyOrg:      "",
+			flattenOrgs:  nil,
+			expectedRepo: "installer",
+		},
+		{
+			name:         "default flattened org openshift-eng keeps original name",
+			sourceOrg:    "openshift-eng",
+			sourceRepo:   "ocp-build-data",
+			targetOrg:    "openshift-priv",
+			onlyOrg:      "",
+			flattenOrgs:  nil,
+			expectedRepo: "ocp-build-data",
+		},
+		{
+			name:         "default flattened org redhat-cne keeps original name",
+			sourceOrg:    "redhat-cne",
+			sourceRepo:   "cloud-event-proxy",
+			targetOrg:    "openshift-priv",
+			onlyOrg:      "",
+			flattenOrgs:  nil,
+			expectedRepo: "cloud-event-proxy",
+		},
+		{
+			name:         "default flattened org ViaQ keeps original name",
+			sourceOrg:    "ViaQ",
+			sourceRepo:   "logging-fluentd",
+			targetOrg:    "openshift-priv",
+			onlyOrg:      "",
+			flattenOrgs:  nil,
+			expectedRepo: "logging-fluentd",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			o := &options{
+				targetOrg:   tc.targetOrg,
+				org:         tc.onlyOrg,
+				flattenOrgs: tc.flattenOrgs,
+			}
+
+			source := location{
+				org:    tc.sourceOrg,
+				repo:   tc.sourceRepo,
+				branch: "main",
+			}
+
+			destination := source
+			destination.org = o.targetOrg
+
+			// Apply the same logic as in main()
+			// Start with the default flattened orgs for backwards compatibility
+			flattenedOrgs := sets.New[string](defaultFlattenOrgs...)
+			// Add any additional orgs specified via --flatten-org
+			flattenedOrgs.Insert(o.flattenOrgs...)
+			// The --only-org is also flattened if specified
+			if o.org != "" {
+				flattenedOrgs.Insert(o.org)
+			}
+			if !flattenedOrgs.Has(source.org) {
+				destination.repo = fmt.Sprintf("%s-%s", source.org, source.repo)
+			}
+
+			if destination.repo != tc.expectedRepo {
+				t.Errorf("expected destination repo %q, got %q", tc.expectedRepo, destination.repo)
 			}
 		})
 	}

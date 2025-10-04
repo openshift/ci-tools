@@ -27,6 +27,17 @@ const (
 	description    = "Updates the repositories of the openshift-priv organization"
 )
 
+type arrayFlags []string
+
+func (i *arrayFlags) String() string {
+	return strings.Join(*i, ",")
+}
+
+func (i *arrayFlags) Set(value string) error {
+	*i = append(*i, value)
+	return nil
+}
+
 type options struct {
 	dryRun      bool
 	selfApprove bool
@@ -38,6 +49,7 @@ type options struct {
 	releaseRepoPath string
 	whitelist       string
 	onlyOrg         string
+	flattenOrgs     arrayFlags
 
 	flagutil.GitHubOptions
 }
@@ -56,6 +68,7 @@ func parseOptions() options {
 	fs.StringVar(&o.releaseRepoPath, "release-repo-path", "", "Path to a openshift/release repository directory")
 	fs.StringVar(&o.whitelist, "whitelist-file", "", "Path to a whitelisted repositories file")
 	fs.StringVar(&o.onlyOrg, "only-org", "", "Only dump config of repos belonging to this organization.")
+	fs.Var(&o.flattenOrgs, "flatten-org", "Organizations whose repos should not have org prefix (can be specified multiple times)")
 
 	o.AddFlags(fs)
 	o.AllowAnonymous = true
@@ -111,6 +124,10 @@ func main() {
 
 	if o.onlyOrg != "" {
 		args = append(args, "--only-org", o.onlyOrg)
+	}
+
+	for _, org := range o.flattenOrgs {
+		args = append(args, "--flatten-org", org)
 	}
 
 	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: secret.Censor}

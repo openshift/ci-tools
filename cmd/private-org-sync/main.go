@@ -23,6 +23,28 @@ import (
 	"github.com/openshift/ci-tools/pkg/config"
 )
 
+// defaultFlattenOrgs contains organizations whose repos should not have org prefix by default
+// for backwards compatibility
+var defaultFlattenOrgs = []string{
+	"openshift",
+	"openshift-eng",
+	"operator-framework",
+	"redhat-cne",
+	"openshift-assisted",
+	"ViaQ",
+}
+
+type arrayFlags []string
+
+func (i *arrayFlags) String() string {
+	return fmt.Sprintf("%v", *i)
+}
+
+func (i *arrayFlags) Set(value string) error {
+	*i = append(*i, value)
+	return nil
+}
+
 type options struct {
 	config.WhitelistOptions
 	config.Options
@@ -31,9 +53,10 @@ type options struct {
 	tokenPath string
 	targetOrg string
 
-	prefix string
-	org    string
-	repo   string
+	prefix      string
+	org         string
+	repo        string
+	flattenOrgs arrayFlags
 
 	gitName  string
 	gitEmail string
@@ -86,11 +109,11 @@ func (o *options) validate() []error {
 	}
 
 	if o.gitName == "" {
-		errs = append(errs, fmt.Errorf("--git-name is not specified."))
+		errs = append(errs, fmt.Errorf("--git-name is not specified"))
 	}
 
 	if o.gitEmail == "" {
-		errs = append(errs, fmt.Errorf("--git-email is not specified."))
+		errs = append(errs, fmt.Errorf("--git-email is not specified"))
 	}
 
 	if err := o.WhitelistOptions.Validate(); err != nil {
@@ -111,6 +134,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.prefix, "prefix", defaultPrefix, "Prefix used for all git URLs")
 	fs.StringVar(&o.org, "only-org", "", "Mirror only repos that belong to this org")
 	fs.StringVar(&o.repo, "only-repo", "", "Mirror only a single repo")
+	fs.Var(&o.flattenOrgs, "flatten-org", "Organizations whose repos should not have org prefix (can be specified multiple times)")
 	fs.StringVar(&o.gitDir, "git-dir", "", "Path to directory in which to perform Git operations")
 
 	fs.StringVar(&o.gitName, "git-name", "", "The name to use on the git merge command.")
@@ -623,6 +647,21 @@ func main() {
 
 		destination := source
 		destination.org = o.targetOrg
+
+		// Use <org>-<repo> naming for repos from organizations not in the flatten list
+		// This prevents collisions when multiple orgs have repos with the same name
+		// Start with the default flattened orgs for backwards compatibility
+		flattenedOrgs := sets.New[string](defaultFlattenOrgs...)
+		// Add any additional orgs specified via --flatten-org
+		flattenedOrgs.Insert(o.flattenOrgs...)
+		// The --only-org is also flattened if specified
+		if o.org != "" {
+			flattenedOrgs.Insert(o.org)
+		}
+		if !flattenedOrgs.Has(source.org) {
+			destination.repo = fmt.Sprintf("%s-%s", source.org, source.repo)
+		}
+
 		gitDir, err := syncer.makeGitDir(source.org, source.repo)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s->%s: %w", source.String(), destination.String(), err))

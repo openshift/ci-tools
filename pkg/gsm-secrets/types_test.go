@@ -2,6 +2,7 @@ package gsmsecrets
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -19,27 +20,27 @@ func TestGetUpdaterSAEmail(t *testing.T) {
 		{
 			name:          "standard collection",
 			collection:    "alpha-secrets",
-			expectedEmail: fmt.Sprintf("alpha-secrets%s@test-project.iam.gserviceaccount.com", ServiceAccountIDSuffix),
+			expectedEmail: fmt.Sprintf("%s@test-project.iam.gserviceaccount.com", GetUpdaterSAId("alpha-secrets")),
 		},
 		{
 			name:          "single word collection",
 			collection:    "beta",
-			expectedEmail: fmt.Sprintf("beta%s@test-project.iam.gserviceaccount.com", ServiceAccountIDSuffix),
+			expectedEmail: fmt.Sprintf("%s@test-project.iam.gserviceaccount.com", GetUpdaterSAId("beta")),
 		},
 		{
 			name:          "collection with numbers",
 			collection:    "test-collection-123",
-			expectedEmail: fmt.Sprintf("test-collection-123%s@test-project.iam.gserviceaccount.com", ServiceAccountIDSuffix),
+			expectedEmail: fmt.Sprintf("%s@test-project.iam.gserviceaccount.com", GetUpdaterSAId("test-collection-123")),
 		},
 		{
 			name:          "one letter collection name",
 			collection:    "a",
-			expectedEmail: fmt.Sprintf("a%s@test-project.iam.gserviceaccount.com", ServiceAccountIDSuffix),
+			expectedEmail: fmt.Sprintf("%s@test-project.iam.gserviceaccount.com", GetUpdaterSAId("a")),
 		},
 		{
 			name:          "collection with multiple hyphens",
 			collection:    "my-test-collection-name",
-			expectedEmail: fmt.Sprintf("my-test-collection-name%s@test-project.iam.gserviceaccount.com", ServiceAccountIDSuffix),
+			expectedEmail: fmt.Sprintf("%s@test-project.iam.gserviceaccount.com", GetUpdaterSAId("my-test-collection-name")),
 		},
 	}
 
@@ -55,37 +56,56 @@ func TestGetUpdaterSAEmail(t *testing.T) {
 
 func TestGetUpdaterSAId(t *testing.T) {
 	testCases := []struct {
-		name        string
-		displayName string
-		expectedId  string
+		name           string
+		collection     string
+		expectedLength int
+		shouldUseHash  bool
 	}{
 		{
-			name:        "standard display name",
-			displayName: "alpha-secrets",
-			expectedId:  fmt.Sprintf("alpha-secrets%s", ServiceAccountIDSuffix),
+			name:           "short collection - direct use",
+			collection:     "alpha",
+			expectedLength: 13, // "alpha-updater" = 13 chars
+			shouldUseHash:  false,
 		},
 		{
-			name:        "single word display name",
-			displayName: "beta",
-			expectedId:  fmt.Sprintf("beta%s", ServiceAccountIDSuffix),
+			name:           "medium collection - direct use",
+			collection:     "test-collection",
+			expectedLength: 23, // "test-collection-updater" = 23 chars
+			shouldUseHash:  false,
 		},
 		{
-			name:        "display name with numbers",
-			displayName: "test-collection-123",
-			expectedId:  fmt.Sprintf("test-collection-123%s", ServiceAccountIDSuffix),
+			name:           "collection at limit - direct use",
+			collection:     "collection-at-limit-22",
+			expectedLength: 30, // "collection-at-limit-22-updater" = 30 chars
+			shouldUseHash:  false,
 		},
 		{
-			name:        "display name with multiple hyphens",
-			displayName: "my-test-collection-name",
-			expectedId:  fmt.Sprintf("my-test-collection-name%s", ServiceAccountIDSuffix),
+			name:           "very long collection - hash use",
+			collection:     "this-is-a-very-long-collection-name-that-exceeds-normal-limits",
+			expectedLength: 30,
+			shouldUseHash:  true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := GetUpdaterSAId(tc.displayName)
-			if actual != tc.expectedId {
-				t.Errorf("Expected %q, got %q", tc.expectedId, actual)
+			actual := GetUpdaterSAId(tc.collection)
+			if len(actual) != tc.expectedLength {
+				t.Errorf("Expected length %d, got %d for ID %q", tc.expectedLength, len(actual), actual)
+			}
+			if !strings.HasSuffix(actual, ServiceAccountIDSuffix) {
+				t.Errorf("Expected ID %q to end with %q", actual, ServiceAccountIDSuffix)
+			}
+
+			directId := fmt.Sprintf("%s%s", tc.collection, ServiceAccountIDSuffix)
+			if tc.shouldUseHash {
+				if actual == directId {
+					t.Errorf("Expected hash to be used for long collection %q, but got direct ID", tc.collection)
+				}
+			} else {
+				if actual != directId {
+					t.Errorf("Expected direct ID %q for short collection, but got %q", directId, actual)
+				}
 			}
 		})
 	}
@@ -167,6 +187,100 @@ func TestGetSecretID(t *testing.T) {
 			actual := GetSecretID(tc.secretName)
 			if actual != tc.expectedID {
 				t.Errorf("Expected %q, got %q", tc.expectedID, actual)
+			}
+		})
+	}
+}
+
+func TestGetUpdaterSADisplayName(t *testing.T) {
+	testCases := []struct {
+		name       string
+		collection string
+		expected   string
+	}{
+		{
+			name:       "standard collection",
+			collection: "alpha-secrets",
+			expected:   "alpha-secrets",
+		},
+		{
+			name:       "long collection name",
+			collection: "this-is-a-very-long-collection-name-that-exceeds-normal-limits",
+			expected:   "this-is-a-very-long-collection-name-that-exceeds-normal-limits",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := GetUpdaterSADisplayName(tc.collection)
+			if actual != tc.expected {
+				t.Errorf("Expected %q, got %q", tc.expected, actual)
+			}
+		})
+	}
+}
+
+func TestGetUpdaterSADescription(t *testing.T) {
+	testCases := []struct {
+		name       string
+		collection string
+		expected   string
+	}{
+		{
+			name:       "standard collection",
+			collection: "alpha-secrets",
+			expected:   fmt.Sprintf("%s%s", ServiceAccountDescriptionPrefix, "alpha-secrets"),
+		},
+		{
+			name:       "collection with numbers",
+			collection: "test-collection-123",
+			expected:   fmt.Sprintf("%s%s", ServiceAccountDescriptionPrefix, "test-collection-123"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := GetUpdaterSADescription(tc.collection)
+			if actual != tc.expected {
+				t.Errorf("Expected %q, got %q", tc.expected, actual)
+			}
+		})
+	}
+}
+
+func TestExtractCollectionFromDescription(t *testing.T) {
+	testCases := []struct {
+		name        string
+		description string
+		expected    string
+	}{
+		{
+			name:        "valid description",
+			description: "Updater service account for secret collection: alpha-secrets",
+			expected:    "alpha-secrets",
+		},
+		{
+			name:        "valid description with long name",
+			description: "Updater service account for secret collection: this-is-a-very-long-collection-name",
+			expected:    "this-is-a-very-long-collection-name",
+		},
+		{
+			name:        "invalid description",
+			description: "Some other description",
+			expected:    "",
+		},
+		{
+			name:        "empty description",
+			description: "",
+			expected:    "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := ExtractCollectionFromDescription(tc.description)
+			if actual != tc.expected {
+				t.Errorf("Expected %q, got %q", tc.expected, actual)
 			}
 		})
 	}

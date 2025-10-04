@@ -15,6 +15,9 @@ const (
 
 	//CollectionRegex determines the allowed naming pattern for a secret collection
 	CollectionRegex = "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+
+	// MaxCollectionLength is the maximum length of a secret collection name
+	MaxCollectionLength = 50
 )
 
 // Config represents the configuration file for the groups
@@ -80,7 +83,7 @@ func (c *Config) validate() error {
 		}
 		for _, collection := range v.SecretCollections {
 			if !ValidateCollectionName(collection) {
-				return fmt.Errorf("invalid collection name '%s' in the configuration file: must start and end with lowercase letters or numbers, hyphens allowed in the middle", collection)
+				return fmt.Errorf("invalid collection name '%s' in the configuration file: must be max %d characters long and start and end with lowercase letters or numbers, with hyphens allowed in the middle", collection, MaxCollectionLength)
 			}
 		}
 	}
@@ -88,5 +91,6 @@ func (c *Config) validate() error {
 }
 
 func ValidateCollectionName(collection string) bool {
-	return regexp.MustCompile(CollectionRegex).MatchString(collection)
+	return regexp.MustCompile(CollectionRegex).MatchString(collection) &&
+		len(collection) <= MaxCollectionLength
 }

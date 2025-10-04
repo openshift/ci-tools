@@ -12,5 +12,5 @@ groups:
     - shared-collection
   team-beta:
     secret_collections:
-    - collection-beta
+    - some-collection-with-a-very-long-name
     - shared-collection

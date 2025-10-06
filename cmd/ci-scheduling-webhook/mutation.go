@@ -14,7 +14,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/ptr"
 )
 
 const (
@@ -204,26 +203,74 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 				if requiresNetAdmin {
 					// Build the correct patch based on existing securityContext
 					if container.SecurityContext == nil {
-						// No securityContext exists, create one with capabilities
-						container.SecurityContext = &corev1.SecurityContext{
-							Capabilities: &corev1.Capabilities{
-								Add: []corev1.Capability{"NET_ADMIN", "NET_RAW", "SETUID", "SETGID"},
+						// No securityContext exists, create one with capabilities and runAsUser
+						securityContext := map[string]interface{}{
+							"runAsUser":    int64(0),
+							"runAsNonRoot": false,
+							"capabilities": map[string]interface{}{
+								"add": []string{"NET_ADMIN", "NET_RAW"},
 							},
 						}
+						addPatchEntry("add", fmt.Sprintf("/spec/containers/%d/securityContext", i), securityContext)
 					} else if container.SecurityContext.Capabilities == nil {
-						// securityContext exists but no capabilities, add capabilities
-						container.SecurityContext.Capabilities = &corev1.Capabilities{
-							Add: []corev1.Capability{"NET_ADMIN", "NET_RAW", "SYS_ADMIN", "SETUID", "SETGID"},
+						// securityContext exists but no capabilities, add capabilities and ensure runAsUser
+						securityContextPatch := map[string]interface{}{
+							"capabilities": map[string]interface{}{
+								"add": []string{"NET_ADMIN", "NET_RAW"},
+							},
+						}
+
+						addPatchEntry("add", fmt.Sprintf("/spec/containers/%d/securityContext/capabilities", i), securityContextPatch["capabilities"])
+
+						// Patch runAsUser separately if needed
+						if container.SecurityContext.RunAsUser == nil || *container.SecurityContext.RunAsUser != 0 {
+							addPatchEntry("add", fmt.Sprintf("/spec/containers/%d/securityContext/runAsUser", i), int64(0))
+						}
+
+						// Remove or set runAsNonRoot to false if it exists and is true
+						if container.SecurityContext.RunAsNonRoot != nil && *container.SecurityContext.RunAsNonRoot {
+							addPatchEntry("replace", fmt.Sprintf("/spec/containers/%d/securityContext/runAsNonRoot", i), false)
 						}
 					} else {
-						// Both securityContext and capabilities exist, merge the "add" array
-						container.SecurityContext.Capabilities.Add = append(container.SecurityContext.Capabilities.Add, "NET_ADMIN", "NET_RAW", "SYS_ADMIN", "SETUID", "SETGID")
-					}
-					container.SecurityContext.RunAsUser = ptr.To(int64(0))
-					container.SecurityContext.RunAsNonRoot = ptr.To(false)
+						// Both securityContext and capabilities exist, merge the "add" array and ensure runAsUser
+						existingCaps := make([]string, 0)
+						capSet := make(map[string]bool)
 
-					addPatchEntry("replace", fmt.Sprintf("/spec/containers/%d/securityContext", i), container.SecurityContext)
-					klog.Infof("Added NET_ADMIN, NET_RAW, SETUID, and SETGID capabilities, ensured runAsUser=0 and allowPrivilegeEscalation=true for test container in pod %s in namespace %s due to TEST_REQUIRES_BUILDFARM_NET_ADMIN=true", podName, namespace)
+						// Collect existing capabilities
+						if container.SecurityContext.Capabilities.Add != nil {
+							for _, cap := range container.SecurityContext.Capabilities.Add {
+								existingCaps = append(existingCaps, string(cap))
+								capSet[string(cap)] = true
+							}
+						}
+
+						// Add new capabilities if not already present
+						if !capSet["NET_ADMIN"] {
+							existingCaps = append(existingCaps, "NET_ADMIN")
+						}
+						if !capSet["NET_RAW"] {
+							existingCaps = append(existingCaps, "NET_RAW")
+						}
+
+						// Use "replace" if "add" array exists, otherwise use "add"
+						if container.SecurityContext.Capabilities.Add != nil {
+							addPatchEntry("replace", fmt.Sprintf("/spec/containers/%d/securityContext/capabilities/add", i), existingCaps)
+						} else {
+							addPatchEntry("add", fmt.Sprintf("/spec/containers/%d/securityContext/capabilities/add", i), existingCaps)
+						}
+
+						// Ensure runAsUser is set to 0 if not already
+						if container.SecurityContext.RunAsUser == nil || *container.SecurityContext.RunAsUser != 0 {
+							addPatchEntry("add", fmt.Sprintf("/spec/containers/%d/securityContext/runAsUser", i), int64(0))
+						}
+
+						// Remove or set runAsNonRoot to false if it exists and is true
+						if container.SecurityContext.RunAsNonRoot != nil && *container.SecurityContext.RunAsNonRoot {
+							addPatchEntry("replace", fmt.Sprintf("/spec/containers/%d/securityContext/runAsNonRoot", i), false)
+						}
+					}
+
+					klog.Infof("Added NET_ADMIN and NET_RAW capabilities and ensured runAsUser=0 for test container in pod %s in namespace %s due to TEST_REQUIRES_BUILDFARM_NET_ADMIN=true", podName, namespace)
 				}
 				break
 			}

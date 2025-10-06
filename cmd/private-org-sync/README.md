@@ -25,6 +25,29 @@ divergence between the repositories during the process of handling a CVE.  Note
 that this causes repositories to silently diverge in other cases, such as when
 there is a force-push to the source repository.
 
+## Repository Naming Convention
+
+To prevent collisions when multiple organizations have repositories with the same name, this tool uses a special naming convention:
+- Repositories from the organization specified by `--only-org` keep their original names
+- Repositories from organizations specified by `--flatten-org` keep their original names (can be specified multiple times)
+- Repositories from the following default organizations always keep their original names for backwards compatibility:
+  - `openshift`
+  - `openshift-eng`
+  - `operator-framework`
+  - `redhat-cne`
+  - `openshift-assisted`
+  - `ViaQ`
+- All other repositories are synced with names prefixed by their source organization: `<source-org>-<repo>`
+
+For example, with `--only-org=openshift --flatten-org=migtools`:
+- `openshift/must-gather` → `openshift-priv/must-gather` (from --only-org and default)
+- `openshift-eng/ocp-build-data` → `openshift-priv/ocp-build-data` (from default)
+- `migtools/crane` → `openshift-priv/crane` (from --flatten-org)
+- `redhat-cne/cloud-event-proxy` → `openshift-priv/cloud-event-proxy` (from default)
+- `custom-org/some-repo` → `openshift-priv/custom-org-some-repo` (not in flatten list)
+
+This ensures that repositories from different organizations with the same name don't collide in the destination organization.
+
 ## Example
 
 ```console

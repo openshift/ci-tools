@@ -19,8 +19,10 @@ func TestDiffServiceAccounts(t *testing.T) {
 	makeServiceAccount := func(collection string) ServiceAccountInfo {
 		return ServiceAccountInfo{
 			Email:       GetUpdaterSAEmail(collection, config),
-			DisplayName: GetUpdaterSAId(collection),
+			DisplayName: GetUpdaterSADisplayName(collection),
+			ID:          GetUpdaterSAId(collection),
 			Collection:  collection,
+			Description: GetUpdaterSADescription(collection),
 		}
 	}
 

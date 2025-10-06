@@ -12,7 +12,7 @@
     title: Read access to secrets for collection-alpha
   members:
   - group:team-alpha@redhat.com
-  - serviceAccount:collection-alpha-sa@test-project.iam.gserviceaccount.com
+  - serviceAccount:collection-alpha-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
     description: 'Managed by test platform: Create, update, and delete access to secrets
@@ -22,33 +22,7 @@
     title: Create, update, and delete access for collection-alpha
   members:
   - group:team-alpha@redhat.com
-  - serviceAccount:collection-alpha-sa@test-project.iam.gserviceaccount.com
-  role: projects/test-project/roles/openshift_ci_secrets_updater
-- condition:
-    description: 'Managed by test platform: Read access to secrets in collection-beta
-      collection'
-    expression: |-
-      (
-        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-        resource.type == "secretmanager.googleapis.com/Secret"
-      ) && (
-        resource.name.extract("secrets/{secret}") == "collection-beta__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "collection-beta____index"
-      )
-    title: Read access to secrets for collection-beta
-  members:
-  - group:team-beta@redhat.com
-  - serviceAccount:collection-beta-sa@test-project.iam.gserviceaccount.com
-  role: projects/test-project/roles/openshift_ci_secrets_viewer
-- condition:
-    description: 'Managed by test platform: Create, update, and delete access to secrets
-      in collection-beta collection'
-    expression: "(\n  resource.type == \"secretmanager.googleapis.com/SecretVersion\"
-      ||\n  resource.type == \"secretmanager.googleapis.com/Secret\"\n) && \n  resource.name.extract(\"secrets/{secret}\").startsWith(\"collection-beta__\")"
-    title: Create, update, and delete access for collection-beta
-  members:
-  - group:team-beta@redhat.com
-  - serviceAccount:collection-beta-sa@test-project.iam.gserviceaccount.com
+  - serviceAccount:collection-alpha-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
     description: 'Managed by test platform: Read access to secrets in shared-collection
@@ -65,7 +39,7 @@
   members:
   - group:team-alpha@redhat.com
   - group:team-beta@redhat.com
-  - serviceAccount:shared-collection-sa@test-project.iam.gserviceaccount.com
+  - serviceAccount:shared-collection-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
     description: 'Managed by test platform: Create, update, and delete access to secrets
@@ -76,5 +50,31 @@
   members:
   - group:team-alpha@redhat.com
   - group:team-beta@redhat.com
-  - serviceAccount:shared-collection-sa@test-project.iam.gserviceaccount.com
+  - serviceAccount:shared-collection-updater@test-project.iam.gserviceaccount.com
+  role: projects/test-project/roles/openshift_ci_secrets_updater
+- condition:
+    description: 'Managed by test platform: Read access to secrets in some-collection-with-a-very-long-name
+      collection'
+    expression: |-
+      (
+        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
+        resource.type == "secretmanager.googleapis.com/Secret"
+      ) && (
+        resource.name.extract("secrets/{secret}") == "some-collection-with-a-very-long-name__updater-service-account" ||
+        resource.name.extract("secrets/{secret}") == "some-collection-with-a-very-long-name____index"
+      )
+    title: Read access to secrets for some-collection-with-a-very-long-name
+  members:
+  - group:team-beta@redhat.com
+  - serviceAccount:ynbbgzp1q3u3iwp8edyqix-updater@test-project.iam.gserviceaccount.com
+  role: projects/test-project/roles/openshift_ci_secrets_viewer
+- condition:
+    description: 'Managed by test platform: Create, update, and delete access to secrets
+      in some-collection-with-a-very-long-name collection'
+    expression: "(\n  resource.type == \"secretmanager.googleapis.com/SecretVersion\"
+      ||\n  resource.type == \"secretmanager.googleapis.com/Secret\"\n) && \n  resource.name.extract(\"secrets/{secret}\").startsWith(\"some-collection-with-a-very-long-name__\")"
+    title: Create, update, and delete access for some-collection-with-a-very-long-name
+  members:
+  - group:team-beta@redhat.com
+  - serviceAccount:ynbbgzp1q3u3iwp8edyqix-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater

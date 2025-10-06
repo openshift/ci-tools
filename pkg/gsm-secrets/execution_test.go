@@ -188,6 +188,7 @@ func TestCreateServiceAccounts(t *testing.T) {
 		ProjectIdNumber: "123456789",
 	}
 	collection := "test-collection"
+	longCollection := "this-is-a-very-long-collection-name-that-exceeds-normal-limits"
 	testCases := []struct {
 		name                     string
 		serviceAccountsToCreate  map[string]ServiceAccountInfo
@@ -210,8 +211,10 @@ func TestCreateServiceAccounts(t *testing.T) {
 			serviceAccountsToCreate: map[string]ServiceAccountInfo{
 				collection: {
 					Email:       GetUpdaterSAEmail(collection, config),
-					DisplayName: GetUpdaterSAId(collection),
+					DisplayName: GetUpdaterSADisplayName(collection),
+					ID:          GetUpdaterSAId(collection),
 					Collection:  collection,
+					Description: GetUpdaterSADescription(collection),
 				},
 			},
 			secretsToCreate: map[string]GCPSecret{
@@ -225,12 +228,35 @@ func TestCreateServiceAccounts(t *testing.T) {
 			expectPayloadSet:         true,
 		},
 		{
+			name: "successful service account and key creation with long collection name",
+			serviceAccountsToCreate: map[string]ServiceAccountInfo{
+				longCollection: {
+					Email:       GetUpdaterSAEmail(longCollection, config),
+					DisplayName: GetUpdaterSADisplayName(longCollection),
+					ID:          GetUpdaterSAId(longCollection),
+					Collection:  longCollection,
+					Description: GetUpdaterSADescription(longCollection),
+				},
+			},
+			secretsToCreate: map[string]GCPSecret{
+				GetUpdaterSASecretName(longCollection): {
+					Name:       GetUpdaterSASecretName(longCollection),
+					Type:       SecretTypeSA,
+					Collection: longCollection,
+				},
+			},
+			expectedSecretsRemaining: 1,
+			expectPayloadSet:         true,
+		},
+		{
 			name: "CreateServiceAccount fails - secret should be removed",
 			serviceAccountsToCreate: map[string]ServiceAccountInfo{
 				collection: {
 					Email:       GetUpdaterSAEmail(collection, config),
-					DisplayName: GetUpdaterSAId(collection),
+					DisplayName: GetUpdaterSADisplayName(collection),
+					ID:          GetUpdaterSAId(collection),
 					Collection:  collection,
+					Description: GetUpdaterSADescription(collection),
 				},
 			},
 			secretsToCreate: map[string]GCPSecret{
@@ -249,8 +275,10 @@ func TestCreateServiceAccounts(t *testing.T) {
 			serviceAccountsToCreate: map[string]ServiceAccountInfo{
 				collection: {
 					Email:       GetUpdaterSAEmail(collection, config),
-					DisplayName: GetUpdaterSAId(collection),
+					DisplayName: GetUpdaterSADisplayName(collection),
+					ID:          GetUpdaterSAId(collection),
 					Collection:  collection,
+					Description: GetUpdaterSADescription(collection),
 				},
 			},
 			secretsToCreate: map[string]GCPSecret{
@@ -269,8 +297,10 @@ func TestCreateServiceAccounts(t *testing.T) {
 			serviceAccountsToCreate: map[string]ServiceAccountInfo{
 				collection: {
 					Email:       GetUpdaterSAEmail(collection, config),
-					DisplayName: GetUpdaterSAId(collection),
+					DisplayName: GetUpdaterSADisplayName(collection),
+					ID:          GetUpdaterSAId(collection),
 					Collection:  collection,
+					Description: GetUpdaterSADescription(collection),
 				},
 				"another-collection": {
 					Email:       GetUpdaterSAEmail("another-collection", config),
@@ -314,10 +344,11 @@ func TestCreateServiceAccounts(t *testing.T) {
 					DoAndReturn(func(ctx context.Context, req *adminpb.CreateServiceAccountRequest, opts ...gax.CallOption) (*adminpb.ServiceAccount, error) {
 						// Find the matching SA from the test case
 						for _, sa := range tc.serviceAccountsToCreate {
-							if req.AccountId == sa.DisplayName {
+							if req.AccountId == sa.ID {
 								return &adminpb.ServiceAccount{
 									Email:       sa.Email,
 									DisplayName: sa.DisplayName,
+									Description: sa.Description,
 								}, nil
 							}
 						}

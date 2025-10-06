@@ -1,9 +1,15 @@
 - Collection: alpha-secrets
-  DisplayName: alpha-secrets-sa
-  Email: alpha-secrets-sa@test-project.iam.gserviceaccount.com
+  Description: 'Updater service account for secret collection: alpha-secrets'
+  DisplayName: alpha-secrets
+  Email: alpha-secrets-updater@test-project.iam.gserviceaccount.com
+  ID: alpha-secrets-updater
 - Collection: beta-delta-secrets
-  DisplayName: beta-delta-secrets-sa
-  Email: beta-delta-secrets-sa@test-project.iam.gserviceaccount.com
+  Description: 'Updater service account for secret collection: beta-delta-secrets'
+  DisplayName: beta-delta-secrets
+  Email: beta-delta-secrets-updater@test-project.iam.gserviceaccount.com
+  ID: beta-delta-secrets-updater
 - Collection: epsilon-secrets
-  DisplayName: epsilon-secrets-sa
-  Email: epsilon-secrets-sa@test-project.iam.gserviceaccount.com
+  Description: 'Updater service account for secret collection: epsilon-secrets'
+  DisplayName: epsilon-secrets
+  Email: epsilon-secrets-updater@test-project.iam.gserviceaccount.com
+  ID: epsilon-secrets-updater

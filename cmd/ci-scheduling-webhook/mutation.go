@@ -213,11 +213,11 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 					} else if container.SecurityContext.Capabilities == nil {
 						// securityContext exists but no capabilities, add capabilities
 						container.SecurityContext.Capabilities = &corev1.Capabilities{
-							Add: []corev1.Capability{"NET_ADMIN", "NET_RAW", "SYS_ADMIN", "SETUID", "SETGID"},
+							Add: []corev1.Capability{"NET_ADMIN", "NET_RAW", "SETUID", "SETGID"},
 						}
 					} else {
 						// Both securityContext and capabilities exist, merge the "add" array
-						container.SecurityContext.Capabilities.Add = append(container.SecurityContext.Capabilities.Add, "NET_ADMIN", "NET_RAW", "SYS_ADMIN", "SETUID", "SETGID")
+						container.SecurityContext.Capabilities.Add = append(container.SecurityContext.Capabilities.Add, "NET_ADMIN", "NET_RAW", "SETUID", "SETGID")
 					}
 					container.SecurityContext.RunAsUser = ptr.To(int64(0))
 					container.SecurityContext.RunAsNonRoot = ptr.To(false)

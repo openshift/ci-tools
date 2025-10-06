@@ -206,26 +206,34 @@ func generateRepositories(gc gitHubClient, orgRepos map[string]sets.Set[string],
 func getReposForPrivateOrg(releaseRepoPath string, whitelistConfig config.WhitelistConfig, onlyOrg string) (map[string]sets.Set[string], error) {
 	ret := make(map[string]sets.Set[string])
 
+	// First, collect repos from CI configs that build official images
 	callback := func(c *api.ReleaseBuildConfiguration, i *config.Info) error {
 		buildsOfficialImages := api.BuildsAnyOfficialImages(c, api.WithoutOKD)
-		isWhitelisted := whitelistConfig.IsWhitelisted(i)
 		correctOrg := onlyOrg == "" || onlyOrg == i.Org
 
-		if !isWhitelisted && !(buildsOfficialImages && correctOrg) {
-			return nil
+		if buildsOfficialImages && correctOrg {
+			repos, exist := ret[i.Org]
+			if !exist {
+				repos = sets.New[string]()
+			}
+			ret[i.Org] = repos.Insert(i.Repo)
 		}
-
-		repos, exist := ret[i.Org]
-		if !exist {
-			repos = sets.New[string]()
-		}
-		ret[i.Org] = repos.Insert(i.Repo)
 
 		return nil
 	}
 
 	if err := config.OperateOnCIOperatorConfigDir(filepath.Join(releaseRepoPath, config.CiopConfigInRepoPath), callback); err != nil {
 		return ret, fmt.Errorf("error while operating in ci-operator configuration files: %w", err)
+	}
+
+	// Then, add ALL whitelisted repos (regardless of whether they have CI configs)
+	// Note: Whitelisted repos bypass the onlyOrg filter
+	for org, repoList := range whitelistConfig.Whitelist {
+		repos, exist := ret[org]
+		if !exist {
+			repos = sets.New[string]()
+		}
+		ret[org] = repos.Insert(repoList...)
 	}
 
 	return ret, nil

@@ -248,6 +248,34 @@ func TestGetReposForPrivateOrg(t *testing.T) {
 				"org1": sets.New("repo1"),
 			},
 		},
+		{
+			name: "whitelist includes repos without CI configs",
+			whitelistConfig: config.WhitelistConfig{
+				Whitelist: map[string][]string{
+					"org1": {"repo1", "repo-without-ci-config"},
+					"org2": {"repo3", "another-repo-without-ci-config"},
+				},
+			},
+			onlyOrg: "",
+			expectedRepos: map[string]sets.Set[string]{
+				"org1": sets.New("repo1", "repo-without-ci-config"),
+				"org2": sets.New("repo3", "another-repo-without-ci-config"),
+			},
+		},
+		{
+			name: "whitelist with onlyOrg filter - whitelisted repos bypass filter",
+			whitelistConfig: config.WhitelistConfig{
+				Whitelist: map[string][]string{
+					"org1": {"repo1", "repo-without-ci-config"},
+					"org2": {"repo3", "another-repo-without-ci-config"},
+				},
+			},
+			onlyOrg: "org1",
+			expectedRepos: map[string]sets.Set[string]{
+				"org1": sets.New("repo1", "repo-without-ci-config"),
+				"org2": sets.New("repo3", "another-repo-without-ci-config"),
+			},
+		},
 	}
 
 	for _, tc := range testCases {

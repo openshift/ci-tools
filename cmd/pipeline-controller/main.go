@@ -125,8 +125,6 @@ func (cw *clientWrapper) handlePullRequestCreation(l *logrus.Entry, event github
 
 		logger.Info("Processing PR opened event")
 
-		// Check if repo is configured for automatic pipelines
-		logger.Debug("Getting configuration from watcher")
 		currentCfg := cw.watcher.getConfig()
 		repos, orgExists := currentCfg[org]
 		repoConfig, repoExists := repos[repo]
@@ -139,16 +137,13 @@ func (cw *clientWrapper) handlePullRequestCreation(l *logrus.Entry, event github
 		}).Debug("Configuration check results")
 
 		if !isInConfig {
-			// Repository not in configuration - do not operate on it
 			logger.Debug("Repository not in configuration, skipping")
 			return
 		}
 
-		// Check if the repository is in automatic mode
 		isAutomaticPipeline := repoConfig.Trigger == "auto"
 		logger.WithField("trigger_mode", repoConfig.Trigger).Debug("Repository trigger mode")
 
-		// Repo is in configuration, add appropriate comment
 		logger.Debug("Getting presubmits from config data provider")
 		presubmits := cw.configDataProvider.GetPresubmits(org + "/" + repo)
 

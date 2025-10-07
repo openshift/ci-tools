@@ -32,14 +32,14 @@ func sendCommentWithMode(presubmits presubmitTests, pj *v1.ProwJob, ghc minimalG
 	for _, presubmit := range presubmits.protected {
 		protectedCommands += "\n " + presubmit.RerunCommand
 	}
-	if protectedCommands != "" {
-		comment += "Scheduling required tests:" + protectedCommands
-	}
+	//if protectedCommands != "" {
+	//	comment += "Scheduling required tests:" + protectedCommands
+	//	}
 	if testContexts != "" {
 		if protectedCommands != "" {
 			comment += "\n"
 		}
-		comment += "\nScheduling tests matching the `pipeline_run_if_changed` or not excluded by `pipeline_skip_if_only_changed` parameters:"
+		//comment += "\nScheduling tests matching the `pipeline_run_if_changed` or not excluded by `pipeline_skip_if_only_changed` parameters:"
 		comment += testContexts
 	}
 	if err := ghc.CreateComment(pj.Spec.Refs.Org, pj.Spec.Refs.Repo, pj.Spec.Refs.Pulls[0].Number, comment); err != nil {

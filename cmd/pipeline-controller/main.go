@@ -297,22 +297,14 @@ func (cw *clientWrapper) handleIssueComment(l *logrus.Entry, event github.IssueC
 		"comment_id": event.Comment.ID,
 	})
 
-	logger.Info("Processing issue comment event")
-
 	// Only handle issue comments on PRs
 	if !event.Issue.IsPullRequest() {
-		logger.Debug("Not a pull request, skipping")
 		return
 	}
 
 	// Check if the comment contains "/pipeline required" with flexible whitespace
 	pipelineRequiredRegex := regexp.MustCompile(`(?i)/pipeline\s+required`)
 	matches := pipelineRequiredRegex.MatchString(event.Comment.Body)
-
-	logger.WithFields(logrus.Fields{
-		"comment_body":              event.Comment.Body,
-		"matches_pipeline_required": matches,
-	}).Debug("Checking comment for /pipeline required")
 
 	if !matches {
 		return

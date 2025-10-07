@@ -108,11 +108,18 @@ func TestHandleLabelAddition_RealFunctions(t *testing.T) {
 			event: basicEvent,
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []string{"dummy-test"},
+					protected: func() []config.Presubmit {
+						p := config.Presubmit{
+							JobBase:      config.JobBase{Name: "dummy-test"},
+							RerunCommand: "/test dummy-test",
+						}
+						p.Context = "dummy-test"
+						return []config.Presubmit{p}
+					}(),
 				},
 			},
 			expectCommentCall: true,
-			expectedComment:   "/test dummy-test",
+			expectedComment:   "dummy-test",
 		},
 	}
 
@@ -229,7 +236,7 @@ func TestHandleIssueComment(t *testing.T) {
 			},
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []string{"protected-test"},
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
 				},
 			},
 			ghPR: &github.PullRequest{
@@ -257,7 +264,7 @@ func TestHandleIssueComment(t *testing.T) {
 			},
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []string{"protected-test"},
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
 				},
 			},
 			ghPR: &github.PullRequest{
@@ -285,7 +292,7 @@ func TestHandleIssueComment(t *testing.T) {
 			},
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []string{"protected-test"},
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
 				},
 			},
 			ghPR: &github.PullRequest{
@@ -308,7 +315,7 @@ func TestHandleIssueComment(t *testing.T) {
 			event: basicEvent,
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []string{"protected-test"},
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
 					pipelineConditionallyRequired: []config.Presubmit{
 						{
 							JobBase: config.JobBase{
@@ -337,7 +344,7 @@ func TestHandleIssueComment(t *testing.T) {
 			event: basicEvent,
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []string{"protected-test"},
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
 				},
 			},
 			ghError:           errors.New("failed to get PR"),
@@ -348,7 +355,7 @@ func TestHandleIssueComment(t *testing.T) {
 			event: basicEvent,
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []string{"protected-test"},
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
 				},
 			},
 			watcherConfig:     enabledConfig{}, // Empty config means repo not configured
@@ -465,7 +472,7 @@ func TestHandlePullRequestCreation(t *testing.T) {
 			}},
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []string{"protected-test"},
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
 				},
 			},
 			expectCommentCall: true,
@@ -524,7 +531,7 @@ func TestHandlePullRequestCreation(t *testing.T) {
 			}},
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []string{"protected-test"},
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
 				},
 			},
 			expectCommentCall: false,

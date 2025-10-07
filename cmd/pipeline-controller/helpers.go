@@ -16,10 +16,10 @@ type minimalGhClient interface {
 }
 
 func sendComment(presubmits presubmitTests, pj *v1.ProwJob, ghc minimalGhClient, deleteIds func()) error {
-	return sendCommentWithMode(presubmits, pj, ghc, deleteIds, false)
+	return sendCommentWithMode(presubmits, pj, ghc, deleteIds)
 }
 
-func sendCommentWithMode(presubmits presubmitTests, pj *v1.ProwJob, ghc minimalGhClient, deleteIds func(), isManualMode bool) error {
+func sendCommentWithMode(presubmits presubmitTests, pj *v1.ProwJob, ghc minimalGhClient, deleteIds func()) error {
 	testContexts, err := acquireConditionalContexts(pj, presubmits.pipelineConditionallyRequired, ghc, deleteIds)
 	if err != nil {
 		deleteIds()
@@ -27,13 +27,10 @@ func sendCommentWithMode(presubmits presubmitTests, pj *v1.ProwJob, ghc minimalG
 	}
 
 	var comment string
-	if isManualMode {
-		comment = "**Pipeline controller response to `pipeline required`**\n\n"
-	}
 
 	var protectedCommands string
-	for _, jobName := range presubmits.protected {
-		protectedCommands += "\n/test " + jobName
+	for _, presubmit := range presubmits.protected {
+		protectedCommands += "\n " + presubmit.RerunCommand
 	}
 	if protectedCommands != "" {
 		comment += "Scheduling required tests:" + protectedCommands

@@ -123,9 +123,9 @@ func TestConfigDataProviderGatherData(t *testing.T) {
 				return []string{"org/repo"}
 			},
 			expected: presubmitTests{
-				protected:             []string{"ps1"},
-				alwaysRequired:        []string{"ps2"},
-				conditionallyRequired: []string{"ps3"},
+				protected:             []config.Presubmit{composeProtectedPresubmit("ps1")},
+				alwaysRequired:        []config.Presubmit{composeRequiredPresubmit("ps2")},
+				conditionallyRequired: []config.Presubmit{composeCondRequiredPresubmit("ps3")},
 				pipelineConditionallyRequired: []config.Presubmit{
 					composePipelineCondRequiredPresubmit("ps4", false, map[string]string{"pipeline_run_if_changed": ".*"}),
 					composePipelineCondRequiredPresubmit("ps5", true, map[string]string{"pipeline_run_if_changed": ".*"}),
@@ -148,7 +148,7 @@ func TestConfigDataProviderGatherData(t *testing.T) {
 			repoLister: func() []string {
 				return []string{"org/repo"}
 			},
-			expected: presubmitTests{protected: []string{"ps1"}, alwaysRequired: []string{"ps2"}},
+			expected: presubmitTests{protected: []config.Presubmit{composeProtectedPresubmit("ps1")}, alwaysRequired: []config.Presubmit{composeRequiredPresubmit("ps2")}},
 		},
 		{
 			name: "No manual trigger required",
@@ -188,9 +188,9 @@ func TestConfigDataProviderGatherData(t *testing.T) {
 				return []string{"org/repo"}
 			},
 			expected: presubmitTests{
-				protected:             []string{"ps1", "ps3"},
-				alwaysRequired:        []string{"ps2"},
-				conditionallyRequired: []string{},
+				protected:             []config.Presubmit{composeProtectedPresubmit("ps1"), composeProtectedPresubmit("ps3")},
+				alwaysRequired:        []config.Presubmit{composeRequiredPresubmit("ps2")},
+				conditionallyRequired: []config.Presubmit{},
 				pipelineConditionallyRequired: []config.Presubmit{
 					composePipelineCondRequiredPresubmit("ps5", false, map[string]string{"pipeline_run_if_changed": `.*\.go`}),
 				},
@@ -210,16 +210,57 @@ func TestConfigDataProviderGatherData(t *testing.T) {
 			}
 			c.gatherData()
 			actual := c.GetPresubmits("org/repo")
-			if !reflect.DeepEqual(actual.protected, tc.expected.protected) {
-				t.Errorf("protected - expected %v, got %v", tc.expected.protected, actual.protected)
+			// Compare protected presubmits by name
+			if len(actual.protected) != len(tc.expected.protected) {
+				t.Errorf("protected length - expected %d, got %d", len(tc.expected.protected), len(actual.protected))
+			} else {
+				for _, expected := range tc.expected.protected {
+					found := false
+					for _, actualItem := range actual.protected {
+						if expected.Name == actualItem.Name {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("protected - expected to find job %s", expected.Name)
+					}
+				}
 			}
-			if !reflect.DeepEqual(actual.alwaysRequired, tc.expected.alwaysRequired) {
-				t.Errorf("alwaysRequired - expected %v, got %v", tc.expected.alwaysRequired, actual.alwaysRequired)
+
+			// Compare always required presubmits by name
+			if len(actual.alwaysRequired) != len(tc.expected.alwaysRequired) {
+				t.Errorf("alwaysRequired length - expected %d, got %d", len(tc.expected.alwaysRequired), len(actual.alwaysRequired))
+			} else {
+				for _, expected := range tc.expected.alwaysRequired {
+					found := false
+					for _, actualItem := range actual.alwaysRequired {
+						if expected.Name == actualItem.Name {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("alwaysRequired - expected to find job %s", expected.Name)
+					}
+				}
 			}
-			if !reflect.DeepEqual(actual.conditionallyRequired, tc.expected.conditionallyRequired) {
-				// Check if both are effectively empty
-				if !(len(actual.conditionallyRequired) == 0 && len(tc.expected.conditionallyRequired) == 0) {
-					t.Errorf("conditionallyRequired - expected %v, got %v", tc.expected.conditionallyRequired, actual.conditionallyRequired)
+
+			// Compare conditionally required presubmits by name
+			if len(actual.conditionallyRequired) != len(tc.expected.conditionallyRequired) {
+				t.Errorf("conditionallyRequired length - expected %d, got %d", len(tc.expected.conditionallyRequired), len(actual.conditionallyRequired))
+			} else {
+				for _, expected := range tc.expected.conditionallyRequired {
+					found := false
+					for _, actualItem := range actual.conditionallyRequired {
+						if expected.Name == actualItem.Name {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("conditionallyRequired - expected to find job %s", expected.Name)
+					}
 				}
 			}
 			// For pipelineConditionallyRequired, check length and then check each item exists

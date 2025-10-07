@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sync"
 	"time"
 
 	"github.com/bombsimon/logrusr/v3"
@@ -94,44 +95,87 @@ type clientWrapper struct {
 	configDataProvider *ConfigDataProvider
 	watcher            *watcher
 	lgtmWatcher        *watcher
+	mu                 sync.RWMutex // Protects against race conditions in event handling
 }
 
 func (cw *clientWrapper) handlePullRequestCreation(l *logrus.Entry, event github.PullRequestEvent) {
+	cw.mu.Lock()
+	defer cw.mu.Unlock()
+
+	logger := l.WithFields(logrus.Fields{
+		"handler": "handlePullRequestCreation",
+		"action":  event.Action,
+		"org":     event.Repo.Owner.Login,
+		"repo":    event.Repo.Name,
+		"pr":      event.PullRequest.Number,
+	})
+
+	logger.Info("Processing pull request event")
+
 	if github.PullRequestActionOpened == event.Action {
 		org := event.Repo.Owner.Login
 		repo := event.Repo.Name
 		number := event.PullRequest.Number
 
-		logger := l.WithFields(logrus.Fields{
+		logger = logger.WithFields(logrus.Fields{
 			"org":  org,
 			"repo": repo,
 			"pr":   number,
 		})
 
+		logger.Info("Processing PR opened event")
+
 		// Check if repo is configured for automatic pipelines
+		logger.Debug("Getting configuration from watcher")
 		currentCfg := cw.watcher.getConfig()
 		repos, orgExists := currentCfg[org]
 		repoConfig, repoExists := repos[repo]
 		isInConfig := orgExists && repoExists
 
+		logger.WithFields(logrus.Fields{
+			"org_exists":   orgExists,
+			"repo_exists":  repoExists,
+			"is_in_config": isInConfig,
+		}).Debug("Configuration check results")
+
 		if !isInConfig {
 			// Repository not in configuration - do not operate on it
+			logger.Debug("Repository not in configuration, skipping")
 			return
 		}
 
 		// Check if the repository is in automatic mode
 		isAutomaticPipeline := repoConfig.Trigger == "auto"
+		logger.WithField("trigger_mode", repoConfig.Trigger).Debug("Repository trigger mode")
 
 		// Repo is in configuration, add appropriate comment
+		logger.Debug("Getting presubmits from config data provider")
 		presubmits := cw.configDataProvider.GetPresubmits(org + "/" + repo)
+
+		logger.WithFields(logrus.Fields{
+			"protected_count":                       len(presubmits.protected),
+			"always_required_count":                 len(presubmits.alwaysRequired),
+			"conditionally_required_count":          len(presubmits.conditionallyRequired),
+			"pipeline_conditionally_required_count": len(presubmits.pipelineConditionallyRequired),
+			"pipeline_skip_only_required_count":     len(presubmits.pipelineSkipOnlyRequired),
+		}).Debug("Presubmits retrieved")
 		if isAutomaticPipeline {
-			if len(presubmits.protected) > 0 || len(presubmits.alwaysRequired) > 0 ||
+			hasPipelineJobs := len(presubmits.protected) > 0 || len(presubmits.alwaysRequired) > 0 ||
 				len(presubmits.conditionallyRequired) > 0 || len(presubmits.pipelineConditionallyRequired) > 0 ||
-				len(presubmits.pipelineSkipOnlyRequired) > 0 {
+				len(presubmits.pipelineSkipOnlyRequired) > 0
+
+			logger.WithField("has_pipeline_jobs", hasPipelineJobs).Debug("Checking for pipeline jobs")
+
+			if hasPipelineJobs {
 				// Repo has pipeline-controlled jobs and is in automatic mode, use pipeline info comment
+				logger.Info("Creating pipeline info comment for automatic mode")
 				if err := cw.ghc.CreateComment(org, repo, number, pullRequestInfoComment); err != nil {
 					logger.WithError(err).Error("failed to create comment")
+				} else {
+					logger.Info("Successfully created pipeline info comment")
 				}
+			} else {
+				logger.Debug("No pipeline jobs found, skipping comment creation")
 			}
 		} else {
 			// Manual mode: Check for non-always-run jobs
@@ -160,18 +204,44 @@ func (cw *clientWrapper) handlePullRequestCreation(l *logrus.Entry, event github
 }
 
 func (cw *clientWrapper) handleLabelAddition(l *logrus.Entry, event github.PullRequestEvent) {
+	cw.mu.Lock()
+	defer cw.mu.Unlock()
+
+	logger := l.WithFields(logrus.Fields{
+		"handler": "handleLabelAddition",
+		"action":  event.Action,
+		"org":     event.Repo.Owner.Login,
+		"repo":    event.Repo.Name,
+		"pr":      event.PullRequest.Number,
+		"label":   event.Label.Name,
+	})
+
+	logger.Info("Processing label addition event")
+
 	if github.PullRequestActionLabeled == event.Action && event.Label.Name == labels.LGTM {
 		org := event.Repo.Owner.Login
 		repo := event.Repo.Name
-		currentCfg := cw.lgtmWatcher.getConfig()
-		repos, orgExists := currentCfg[org]
-		logger := l.WithFields(logrus.Fields{
+
+		logger = logger.WithFields(logrus.Fields{
 			"org":  org,
 			"repo": repo,
 			"pr":   event.PullRequest.Number,
 		})
+
+		logger.Info("Processing LGTM label addition")
+
+		logger.Debug("Getting LGTM configuration from watcher")
+		currentCfg := cw.lgtmWatcher.getConfig()
+		repos, orgExists := currentCfg[org]
 		_, repoExists := repos[repo]
+
+		logger.WithFields(logrus.Fields{
+			"org_exists":  orgExists,
+			"repo_exists": repoExists,
+		}).Debug("LGTM configuration check results")
+
 		if !orgExists || !repoExists {
+			logger.Debug("Repository not in LGTM configuration, skipping")
 			return
 		}
 		prowJob := &v1.ProwJob{
@@ -186,33 +256,65 @@ func (cw *clientWrapper) handleLabelAddition(l *logrus.Entry, event github.PullR
 				},
 			},
 		}
+		logger.Debug("Getting presubmits from config data provider")
 		presubmits := cw.configDataProvider.GetPresubmits(prowJob.Spec.Refs.Org + "/" + prowJob.Spec.Refs.Repo)
-		logger.WithField("protected", presubmits.protected).
-			WithField("always_required", presubmits.alwaysRequired).
-			WithField("conditionally_required", presubmits.conditionallyRequired).
-			WithField("pipeline_conditionally_required", presubmits.pipelineConditionallyRequired).
-			Debug("found presubmits")
-		if len(presubmits.protected) == 0 && len(presubmits.alwaysRequired) == 0 &&
-			len(presubmits.conditionallyRequired) == 0 && len(presubmits.pipelineConditionallyRequired) == 0 &&
-			len(presubmits.pipelineSkipOnlyRequired) == 0 {
+
+		logger.WithFields(logrus.Fields{
+			"protected_count":                       len(presubmits.protected),
+			"always_required_count":                 len(presubmits.alwaysRequired),
+			"conditionally_required_count":          len(presubmits.conditionallyRequired),
+			"pipeline_conditionally_required_count": len(presubmits.pipelineConditionallyRequired),
+			"pipeline_skip_only_required_count":     len(presubmits.pipelineSkipOnlyRequired),
+		}).Debug("Presubmits retrieved for LGTM handler")
+
+		hasPresubmits := len(presubmits.protected) > 0 || len(presubmits.alwaysRequired) > 0 ||
+			len(presubmits.conditionallyRequired) > 0 || len(presubmits.pipelineConditionallyRequired) > 0 ||
+			len(presubmits.pipelineSkipOnlyRequired) > 0
+
+		if !hasPresubmits {
+			logger.Debug("No presubmits found, skipping comment")
 			return
 		}
 
+		logger.Info("Sending comment for LGTM label addition")
 		if err := sendComment(presubmits, prowJob, cw.ghc, func() {}); err != nil {
 			logger.WithError(err).Error("failed to send a comment")
+		} else {
+			logger.Info("Successfully sent comment for LGTM label addition")
 		}
 	}
 }
 
 func (cw *clientWrapper) handleIssueComment(l *logrus.Entry, event github.IssueCommentEvent) {
+	cw.mu.Lock()
+	defer cw.mu.Unlock()
+
+	logger := l.WithFields(logrus.Fields{
+		"handler":    "handleIssueComment",
+		"org":        event.Repo.Owner.Login,
+		"repo":       event.Repo.Name,
+		"issue":      event.Issue.Number,
+		"comment_id": event.Comment.ID,
+	})
+
+	logger.Info("Processing issue comment event")
+
 	// Only handle issue comments on PRs
 	if !event.Issue.IsPullRequest() {
+		logger.Debug("Not a pull request, skipping")
 		return
 	}
 
 	// Check if the comment contains "/pipeline required" with flexible whitespace
 	pipelineRequiredRegex := regexp.MustCompile(`(?i)/pipeline\s+required`)
-	if !pipelineRequiredRegex.MatchString(event.Comment.Body) {
+	matches := pipelineRequiredRegex.MatchString(event.Comment.Body)
+
+	logger.WithFields(logrus.Fields{
+		"comment_body":              event.Comment.Body,
+		"matches_pipeline_required": matches,
+	}).Debug("Checking comment for /pipeline required")
+
+	if !matches {
 		return
 	}
 
@@ -220,20 +322,22 @@ func (cw *clientWrapper) handleIssueComment(l *logrus.Entry, event github.IssueC
 	repo := event.Repo.Name
 	number := event.Issue.Number
 
-	logger := l.WithFields(logrus.Fields{
+	logger = logger.WithFields(logrus.Fields{
 		"org":  org,
 		"repo": repo,
 		"pr":   number,
 	})
 
+	logger.Info("Processing /pipeline required comment")
+
 	// Get presubmits for this repo
+	logger.Debug("Getting presubmits from config data provider")
 	presubmits := cw.configDataProvider.GetPresubmits(org + "/" + repo)
 
 	// Check if there are any pipeline-controlled jobs
 	if len(presubmits.protected) == 0 && len(presubmits.alwaysRequired) == 0 &&
 		len(presubmits.conditionallyRequired) == 0 && len(presubmits.pipelineConditionallyRequired) == 0 &&
 		len(presubmits.pipelineSkipOnlyRequired) == 0 {
-		logger.Debug("No pipeline-controlled jobs found for repo")
 		return
 	}
 
@@ -242,7 +346,6 @@ func (cw *clientWrapper) handleIssueComment(l *logrus.Entry, event github.IssueC
 	repos, orgExists := currentCfg[org]
 	_, repoExists := repos[repo]
 	if !orgExists || !repoExists {
-		logger.Debug("Repository not in pipeline controller configuration")
 		if err := cw.ghc.CreateComment(org, repo, number, RepoNotConfiguredMessage); err != nil {
 			logger.WithError(err).Error("failed to create comment")
 		}
@@ -271,16 +374,30 @@ func (cw *clientWrapper) handleIssueComment(l *logrus.Entry, event github.IssueC
 	}
 
 	// Generate the comment with test/override commands
-	if err := sendCommentWithMode(presubmits, prowJob, cw.ghc, func() {}, true); err != nil {
+	if err := sendCommentWithMode(presubmits, prowJob, cw.ghc, func() {}); err != nil {
 		logger.WithError(err).Error("failed to send comment in response to /pipeline required")
 	}
 }
 
 // handlePipelineContextCreation handles PR events (open, push, reopen) and creates contexts for matching tests
 func (cw *clientWrapper) handlePipelineContextCreation(l *logrus.Entry, event github.PullRequestEvent) {
+	cw.mu.Lock()
+	defer cw.mu.Unlock()
+
+	logger := l.WithFields(logrus.Fields{
+		"handler": "handlePipelineContextCreation",
+		"action":  event.Action,
+		"org":     event.Repo.Owner.Login,
+		"repo":    event.Repo.Name,
+		"pr":      event.PullRequest.Number,
+	})
+
+	logger.Info("Processing pipeline context creation event")
+
 	if event.Action != github.PullRequestActionOpened &&
 		event.Action != github.PullRequestActionSynchronize &&
 		event.Action != github.PullRequestActionReopened {
+		logger.Debug("Action not supported for pipeline context creation, skipping")
 		return
 	}
 
@@ -290,6 +407,7 @@ func (cw *clientWrapper) handlePipelineContextCreation(l *logrus.Entry, event gi
 	sha := event.PullRequest.Head.SHA
 
 	presubmits := cw.configDataProvider.GetPresubmits(org + "/" + repo)
+
 	if len(presubmits.pipelineConditionallyRequired) == 0 && len(presubmits.pipelineSkipOnlyRequired) == 0 &&
 		len(presubmits.protected) == 0 {
 		return
@@ -298,11 +416,12 @@ func (cw *clientWrapper) handlePipelineContextCreation(l *logrus.Entry, event gi
 	currentCfg := cw.watcher.getConfig()
 	repos, orgExists := currentCfg[org]
 	_, repoExists := repos[repo]
+
 	if !orgExists || !repoExists {
 		return
 	}
 
-	logger := l.WithFields(logrus.Fields{
+	logger = logger.WithFields(logrus.Fields{
 		"org":  org,
 		"repo": repo,
 		"pr":   number,
@@ -328,7 +447,7 @@ func (cw *clientWrapper) handlePipelineContextCreation(l *logrus.Entry, event gi
 				logger.WithError(err).WithField("test", presubmit.Name).WithField("pattern", pattern).Error("failed to evaluate pattern")
 				continue
 			} else if shouldRun {
-				if err := cw.createContext(org, repo, sha, presubmit.Name, "pending", "Pipeline controller will trigger this test"); err != nil {
+				if err := cw.createContext(org, repo, sha, presubmit.Context, "pending", "Pipeline controller will trigger this test"); err != nil {
 					logger.WithError(err).WithField("test", presubmit.Name).Error("failed to create context")
 				} else {
 					logger.WithField("test", presubmit.Name).Info("created pending context for pipeline test")
@@ -345,7 +464,7 @@ func (cw *clientWrapper) handlePipelineContextCreation(l *logrus.Entry, event gi
 				continue
 			} else if !shouldSkip {
 				// If not all files match the skip pattern, we should run the test
-				if err := cw.createContext(org, repo, sha, presubmit.Name, "pending", "Pipeline controller will trigger this test"); err != nil {
+				if err := cw.createContext(org, repo, sha, presubmit.Context, "pending", "Pipeline controller will trigger this test"); err != nil {
 					logger.WithError(err).WithField("test", presubmit.Name).Error("failed to create context")
 				} else {
 					logger.WithField("test", presubmit.Name).Info("created pending context for pipeline test")
@@ -355,11 +474,11 @@ func (cw *clientWrapper) handlePipelineContextCreation(l *logrus.Entry, event gi
 	}
 
 	// Create contexts for protected jobs (always_run: false, optional: false, no run conditions)
-	for _, presubmitName := range presubmits.protected {
-		if err := cw.createContext(org, repo, sha, presubmitName, "pending", "Pipeline controller will trigger this test"); err != nil {
-			logger.WithError(err).WithField("test", presubmitName).Error("failed to create context")
+	for _, presubmit := range presubmits.protected {
+		if err := cw.createContext(org, repo, sha, presubmit.Context, "pending", "Pipeline controller will trigger this test"); err != nil {
+			logger.WithError(err).WithField("test", presubmit.Name).Error("failed to create context")
 		} else {
-			logger.WithField("test", presubmitName).Info("created pending context for protected test")
+			logger.WithField("test", presubmit.Name).Info("created pending context for protected test")
 		}
 	}
 }
@@ -503,11 +622,47 @@ func main() {
 			}
 		}
 
+		// If no repos found, retry once after a short delay
+		if len(repos) == 0 {
+			time.Sleep(100 * time.Millisecond)
+
+			// Retry getting configs
+			mainConfig = watcher.getConfig()
+			lgtmConfig = lgtmWatcher.getConfig()
+
+			for org, repoConfigs := range mainConfig {
+				for repo := range repoConfigs {
+					repos = append(repos, org+"/"+repo)
+				}
+			}
+
+			for org, repoConfigs := range lgtmConfig {
+				for repo := range repoConfigs {
+					orgRepo := org + "/" + repo
+					found := false
+					for _, existing := range repos {
+						if existing == orgRepo {
+							found = true
+							break
+						}
+					}
+					if !found {
+						repos = append(repos, orgRepo)
+					}
+				}
+			}
+		}
+
 		return repos
 	}
 
 	configDataProvider := NewConfigDataProvider(cfg, repoLister, logger.WithField("component", "config-data-provider"))
 	go configDataProvider.Run()
+
+	// Wait for config data provider to be ready
+	logger.Info("Waiting for config data provider to be ready...")
+	time.Sleep(2 * time.Second) // Give it time to load initial data
+	logger.Info("Config data provider should be ready")
 
 	reconciler, err := NewReconciler(mgr, configDataProvider, githubClient, logger, watcher)
 	if err != nil {
@@ -526,12 +681,16 @@ func main() {
 		lgtmWatcher:        lgtmWatcher,
 	}
 
-	logger.Debug("starting event server")
 	eventServer := githubeventserver.New(o.githubEventServerOptions, webhookTokenGenerator, logger)
+
+	// Register event handlers with proper logging
+	logger.Info("Registering event handlers")
 	eventServer.RegisterHandlePullRequestEvent(cw.handlePullRequestCreation)
 	eventServer.RegisterHandlePullRequestEvent(cw.handleLabelAddition)
 	eventServer.RegisterHandlePullRequestEvent(cw.handlePipelineContextCreation)
 	eventServer.RegisterHandleIssueCommentEvent(cw.handleIssueComment)
+
+	logger.Info("All event handlers registered successfully")
 
 	interrupts.OnInterrupt(func() {
 		eventServer.GracefulShutdown()

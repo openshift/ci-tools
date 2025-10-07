@@ -261,7 +261,6 @@ func TestSendCommentWithMode(t *testing.T) {
 	tests := []struct {
 		name                       string
 		presubmits                 presubmitTests
-		isManualMode               bool
 		changes                    []github.PullRequestChange
 		expectedCommentContains    []string
 		expectedCommentNotContains []string
@@ -285,7 +284,6 @@ func TestSendCommentWithMode(t *testing.T) {
 					},
 				},
 			},
-			isManualMode: true,
 			changes: []github.PullRequestChange{
 				{Filename: "README.md"},
 			},
@@ -311,7 +309,6 @@ func TestSendCommentWithMode(t *testing.T) {
 					},
 				},
 			},
-			isManualMode: false,
 			changes: []github.PullRequestChange{
 				{Filename: "main.go"},
 			},
@@ -328,7 +325,7 @@ func TestSendCommentWithMode(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ghc := &fakeGhClientWithChanges{changes: tc.changes}
 
-			err := sendCommentWithMode(tc.presubmits, basePJ, ghc, func() {}, tc.isManualMode)
+			err := sendCommentWithMode(tc.presubmits, basePJ, ghc, func() {})
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}

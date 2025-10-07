@@ -14,9 +14,9 @@ import (
 type RepoLister func() []string
 
 type presubmitTests struct {
-	protected                     []string
-	alwaysRequired                []string
-	conditionallyRequired         []string
+	protected                     []config.Presubmit
+	alwaysRequired                []config.Presubmit
+	conditionallyRequired         []config.Presubmit
 	pipelineConditionallyRequired []config.Presubmit
 	pipelineSkipOnlyRequired      []config.Presubmit
 }
@@ -39,8 +39,8 @@ func NewConfigDataProvider(configGetter config.Getter, repoLister RepoLister, lo
 		logger:            logger,
 		m:                 sync.Mutex{},
 	}
-	// Initialize with first load
-	provider.gatherDataWithChangeDetection()
+	// Initialize with first load - use direct gatherData() for initial load
+	provider.gatherData()
 	return provider
 }
 
@@ -73,6 +73,7 @@ func (c *ConfigDataProvider) gatherDataForRepos(orgRepos []string) {
 	updatedPresubmits := make(map[string]presubmitTests)
 	for _, orgRepo := range orgRepos {
 		presubmits := cfg.GetPresubmitsStatic(orgRepo)
+
 		for _, p := range presubmits {
 			if !p.AlwaysRun && p.RunIfChanged == "" && p.SkipIfOnlyChanged == "" {
 				if val, ok := p.Annotations["pipeline_run_if_changed"]; ok && val != "" {
@@ -93,7 +94,7 @@ func (c *ConfigDataProvider) gatherDataForRepos(orgRepos []string) {
 					if _, hasPipelineRun := p.Annotations["pipeline_run_if_changed"]; !hasPipelineRun {
 						if _, hasPipelineSkip := p.Annotations["pipeline_skip_only_if_changed"]; !hasPipelineSkip {
 							pre := updatedPresubmits[orgRepo]
-							pre.protected = append(pre.protected, p.Name)
+							pre.protected = append(pre.protected, p)
 							updatedPresubmits[orgRepo] = pre
 						}
 					}
@@ -101,18 +102,19 @@ func (c *ConfigDataProvider) gatherDataForRepos(orgRepos []string) {
 			}
 			if !p.Optional && p.AlwaysRun {
 				pre := updatedPresubmits[orgRepo]
-				pre.alwaysRequired = append(pre.alwaysRequired, p.Name)
+				pre.alwaysRequired = append(pre.alwaysRequired, p)
 				updatedPresubmits[orgRepo] = pre
 				continue
 			}
 			if !p.Optional && (p.RunIfChanged != "" || p.SkipIfOnlyChanged != "") {
 				pre := updatedPresubmits[orgRepo]
-				pre.conditionallyRequired = append(pre.conditionallyRequired, p.Name)
+				pre.conditionallyRequired = append(pre.conditionallyRequired, p)
 				updatedPresubmits[orgRepo] = pre
 				continue
 			}
 		}
 	}
+
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.updatedPresubmits = updatedPresubmits
@@ -125,8 +127,13 @@ func (c *ConfigDataProvider) gatherDataWithChangeDetection() {
 
 	// Compare with previous repo list
 	c.m.Lock()
-	previousCount := len(c.previousRepoList)
 	hasChanged := !c.repoListsEqual(c.previousRepoList, currentRepoList)
+
+	// Always load on first run (when previousRepoList is empty)
+	if len(c.previousRepoList) == 0 {
+		hasChanged = true
+	}
+
 	if hasChanged {
 		// Store the new repo list
 		c.previousRepoList = make([]string, len(currentRepoList))
@@ -135,13 +142,7 @@ func (c *ConfigDataProvider) gatherDataWithChangeDetection() {
 	c.m.Unlock()
 
 	if hasChanged {
-		c.logger.WithFields(logrus.Fields{
-			"previous_count": previousCount,
-			"current_count":  len(currentRepoList),
-		}).Info("Repository configuration change detected, reloading pipeline data")
 		c.gatherDataForRepos(currentRepoList)
-	} else {
-		c.logger.Debug("No repository configuration changes detected, skipping reload")
 	}
 }
 

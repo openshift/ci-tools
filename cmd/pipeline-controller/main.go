@@ -321,11 +321,16 @@ func (cw *clientWrapper) handleIssueComment(l *logrus.Entry, event github.IssueC
 		return
 	}
 
-	// Check if repo is in configuration (either manual or auto mode)
+	// Check if repo is in configuration (either manual/auto mode or LGTM mode)
 	currentCfg := cw.watcher.getConfig()
 	repos, orgExists := currentCfg[org]
 	_, repoExists := repos[repo]
-	if !orgExists || !repoExists {
+
+	lgtmCfg := cw.lgtmWatcher.getConfig()
+	lgtmRepos, lgtmOrgExists := lgtmCfg[org]
+	_, lgtmRepoExists := lgtmRepos[repo]
+
+	if (!orgExists || !repoExists) && (!lgtmOrgExists || !lgtmRepoExists) {
 		if err := cw.ghc.CreateComment(org, repo, number, RepoNotConfiguredMessage); err != nil {
 			logger.WithError(err).Error("failed to create comment")
 		}

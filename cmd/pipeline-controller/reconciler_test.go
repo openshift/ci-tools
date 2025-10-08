@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/sirupsen/logrus"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -14,9 +17,17 @@ import (
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	v1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+	"sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/prow/pkg/github"
 	"sigs.k8s.io/prow/pkg/kube"
 )
+
+// testLoggerReconciler creates a discarded logger for tests
+func testLoggerReconciler() *logrus.Entry {
+	logger := logrus.New()
+	logger.SetOutput(io.Discard)
+	return logrus.NewEntry(logger)
+}
 
 type fakeGhClient struct {
 	closed sets.Int
@@ -36,6 +47,10 @@ func (c fakeGhClient) CreateComment(owner, repo string, number int, comment stri
 
 func (c fakeGhClient) GetPullRequestChanges(org string, repo string, number int) ([]github.PullRequestChange, error) {
 	return []github.PullRequestChange{}, nil
+}
+
+func (c fakeGhClient) CreateStatus(org, repo, ref string, s github.Status) error {
+	return nil
 }
 
 type FakeReader struct {
@@ -74,6 +89,10 @@ func (c *fakeGhClientWithTracking) CreateComment(owner, repo string, number int,
 
 func (c *fakeGhClientWithTracking) GetPullRequestChanges(org string, repo string, number int) ([]github.PullRequestChange, error) {
 	return []github.PullRequestChange{}, nil
+}
+
+func (c *fakeGhClientWithTracking) CreateStatus(org, repo, ref string, s github.Status) error {
+	return nil
 }
 
 func composePresubmit(name string, state v1.ProwJobState, sha string) v1.ProwJob {
@@ -150,9 +169,9 @@ func Test_reconciler_reportSuccessOnPR(t *testing.T) {
 			args: args{
 				ctx: context.Background(),
 				presubmits: presubmitTests{
-					protected:             []string{"org-repo-master-ps1"},
-					alwaysRequired:        []string{"org-repo-master-ps2", "org-repo-other-branch-ps2"},
-					conditionallyRequired: []string{"org-repo-master-ps3"},
+					protected:             []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps1"}}},
+					alwaysRequired:        []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps2"}}, {JobBase: config.JobBase{Name: "org-repo-other-branch-ps2"}}},
+					conditionallyRequired: []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps3"}}},
 				},
 			},
 			want:    true,
@@ -170,9 +189,9 @@ func Test_reconciler_reportSuccessOnPR(t *testing.T) {
 			args: args{
 				ctx: context.Background(),
 				presubmits: presubmitTests{
-					protected:             []string{"org-repo-master-ps1"},
-					alwaysRequired:        []string{"org-repo-master-ps2"},
-					conditionallyRequired: []string{"org-repo-master-ps3"},
+					protected:             []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps1"}}},
+					alwaysRequired:        []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps2"}}},
+					conditionallyRequired: []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps3"}}},
 				},
 			},
 			want:    false,
@@ -190,9 +209,9 @@ func Test_reconciler_reportSuccessOnPR(t *testing.T) {
 			args: args{
 				ctx: context.Background(),
 				presubmits: presubmitTests{
-					protected:             []string{"org-repo-master-ps1"},
-					alwaysRequired:        []string{"org-repo-master-ps2"},
-					conditionallyRequired: []string{"org-repo-master-ps3"},
+					protected:             []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps1"}}},
+					alwaysRequired:        []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps2"}}},
+					conditionallyRequired: []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps3"}}},
 				},
 			},
 			want:    false,
@@ -210,9 +229,9 @@ func Test_reconciler_reportSuccessOnPR(t *testing.T) {
 			args: args{
 				ctx: context.Background(),
 				presubmits: presubmitTests{
-					protected:             []string{"org-repo-master-ps1"},
-					alwaysRequired:        []string{"org-repo-master-ps2"},
-					conditionallyRequired: []string{"org-repo-master-ps3", "org-repo-master-ps4", "org-repo-master-ps5"},
+					protected:             []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps1"}}},
+					alwaysRequired:        []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps2"}}},
+					conditionallyRequired: []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps3"}}, {JobBase: config.JobBase{Name: "org-repo-master-ps4"}}, {JobBase: config.JobBase{Name: "org-repo-master-ps5"}}},
 				},
 			},
 			want:    true,
@@ -230,9 +249,9 @@ func Test_reconciler_reportSuccessOnPR(t *testing.T) {
 			args: args{
 				ctx: context.Background(),
 				presubmits: presubmitTests{
-					protected:             []string{"org-repo-master-ps1"},
-					alwaysRequired:        []string{"org-repo-master-ps2"},
-					conditionallyRequired: []string{"org-repo-master-ps3"},
+					protected:             []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps1"}}},
+					alwaysRequired:        []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps2"}}},
+					conditionallyRequired: []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps3"}}},
 				},
 			},
 			want:    false,
@@ -251,9 +270,9 @@ func Test_reconciler_reportSuccessOnPR(t *testing.T) {
 			args: args{
 				ctx: context.Background(),
 				presubmits: presubmitTests{
-					protected:             []string{"org-repo-master-ps1", "org-repo-master-ps4"},
-					alwaysRequired:        []string{"org-repo-master-ps2"},
-					conditionallyRequired: []string{"org-repo-master-ps3"},
+					protected:             []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps1"}}, {JobBase: config.JobBase{Name: "org-repo-master-ps4"}}},
+					alwaysRequired:        []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps2"}}},
+					conditionallyRequired: []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps3"}}},
 				},
 			},
 			want:    false,
@@ -271,9 +290,9 @@ func Test_reconciler_reportSuccessOnPR(t *testing.T) {
 			args: args{
 				ctx: context.Background(),
 				presubmits: presubmitTests{
-					protected:             []string{"org-repo-master-ps1"},
-					alwaysRequired:        []string{"org-repo-master-ps2"},
-					conditionallyRequired: []string{"org-repo-master-ps3"},
+					protected:             []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps1"}}},
+					alwaysRequired:        []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps2"}}},
+					conditionallyRequired: []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps3"}}},
 				},
 			},
 			want:    false,
@@ -288,9 +307,9 @@ func Test_reconciler_reportSuccessOnPR(t *testing.T) {
 			args: args{
 				ctx: context.Background(),
 				presubmits: presubmitTests{
-					protected:             []string{"org-repo-master-ps2"},
-					alwaysRequired:        []string{},
-					conditionallyRequired: []string{},
+					protected:             []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps2"}}},
+					alwaysRequired:        []config.Presubmit{},
+					conditionallyRequired: []config.Presubmit{},
 				},
 			},
 			want:    true,
@@ -308,9 +327,9 @@ func Test_reconciler_reportSuccessOnPR(t *testing.T) {
 			args: args{
 				ctx: context.Background(),
 				presubmits: presubmitTests{
-					protected:             []string{"org-repo-master-ps1"},
-					alwaysRequired:        []string{"org-repo-master-ps2"},
-					conditionallyRequired: []string{"org-repo-master-ps3"},
+					protected:             []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps1"}}},
+					alwaysRequired:        []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps2"}}},
+					conditionallyRequired: []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps3"}}},
 				},
 			},
 			want:    false,
@@ -329,9 +348,9 @@ func Test_reconciler_reportSuccessOnPR(t *testing.T) {
 			args: args{
 				ctx: context.Background(),
 				presubmits: presubmitTests{
-					protected:             []string{"org-repo-master-ps1", "org-repo-master-ps4"},
-					alwaysRequired:        []string{"org-repo-master-ps2"},
-					conditionallyRequired: []string{"org-repo-master-ps3"},
+					protected:             []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps1"}}, {JobBase: config.JobBase{Name: "org-repo-master-ps4"}}},
+					alwaysRequired:        []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps2"}}},
+					conditionallyRequired: []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps3"}}},
 				},
 			},
 			want:    false,
@@ -341,12 +360,15 @@ func Test_reconciler_reportSuccessOnPR(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			r := &reconciler{
-				pjclientset:        fakeClient,
-				lister:             tc.fields.lister,
-				configDataProvider: &ConfigDataProvider{},
-				ghc:                tc.fields.ghc,
-				ids:                sync.Map{},
-				closedPRsCache:     closedPRsCache{prs: map[string]pullRequest{}, m: sync.Mutex{}, ghc: tc.fields.ghc, clearTime: time.Now()},
+				pjclientset: fakeClient,
+				lister:      tc.fields.lister,
+				configDataProvider: &ConfigDataProvider{
+					previousRepoList: []string{},
+					logger:           testLoggerReconciler(),
+				},
+				ghc:            tc.fields.ghc,
+				ids:            sync.Map{},
+				closedPRsCache: closedPRsCache{prs: map[string]pullRequest{}, m: sync.Mutex{}, ghc: tc.fields.ghc, clearTime: time.Now()},
 			}
 			got, err := r.reportSuccessOnPR(tc.args.ctx, &dummyPJ, tc.args.presubmits)
 			if (err != nil) != tc.wantErr {
@@ -432,8 +454,8 @@ func Test_reconciler_reconcile_with_modes(t *testing.T) {
 				}},
 				presubmits: map[string]presubmitTests{
 					"org/repo": {
-						protected:      []string{"org-repo-master-ps-protected"},
-						alwaysRequired: []string{"org-repo-master-ps2"},
+						protected:      []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps-protected"}}},
+						alwaysRequired: []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps2"}}},
 					},
 				},
 				expectSendComment: true,
@@ -462,8 +484,8 @@ func Test_reconciler_reconcile_with_modes(t *testing.T) {
 				}},
 				presubmits: map[string]presubmitTests{
 					"org/repo": {
-						protected:      []string{"org-repo-master-ps-protected"},
-						alwaysRequired: []string{"org-repo-master-ps2"},
+						protected:      []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps-protected"}}},
+						alwaysRequired: []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps2"}}},
 					},
 				},
 				expectSendComment: false,
@@ -518,6 +540,8 @@ func Test_reconciler_reconcile_with_modes(t *testing.T) {
 				}}},
 				configDataProvider: &ConfigDataProvider{
 					updatedPresubmits: tc.fields.presubmits,
+					previousRepoList:  []string{},
+					logger:            testLoggerReconciler(),
 				},
 				ghc:     ghc,
 				ids:     sync.Map{},

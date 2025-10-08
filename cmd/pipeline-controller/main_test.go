@@ -379,8 +379,9 @@ func TestHandleIssueComment(t *testing.T) {
 					previousRepoList:  []string{},
 					logger:            testLoggerMain(),
 				},
-				ghc:     ghc,
-				watcher: &watcher{config: tc.watcherConfig},
+				ghc:         ghc,
+				watcher:     &watcher{config: tc.watcherConfig},
+				lgtmWatcher: &watcher{config: enabledConfig{}},
 			}
 
 			// If no watcherConfig is provided, use a default config with the repo configured

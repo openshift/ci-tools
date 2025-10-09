@@ -403,7 +403,7 @@ type options struct {
 	leaseServerCredentialsFile string
 	leaseAcquireTimeout        time.Duration
 	leaseClient                lease.Client
-	clusterProfiles            []clusterProfileForTarget
+	clusterProfiles            []metrics.ClusterProfileForTarget
 
 	givePrAuthorAccessToNamespace bool
 	impersonateUser               string
@@ -1011,7 +1011,8 @@ func (o *options) Run() []error {
 		return []error{results.ForReason("initializing_namespace").WithError(err).Errorf("could not initialize namespace: %v", err)}
 	}
 	o.metricsAgent.Record(metrics.NewInsightsEvent(metrics.InsightNamespaceCreated, metrics.Context{"namespace": o.namespace}))
-	o.metricsAgent.RecordConfigurationInsight(o.targets.values, o.promote, o.org, o.repo, o.branch, o.variant, o.baseNamespace, o.consoleHost, o.nodeName, o.clusterProfiles)
+	info := o.getResolverInfo(o.jobSpec)
+	o.metricsAgent.RecordConfigurationInsight(o.targets.values, o.promote, info.Org, info.Repo, info.Branch, info.Variant, o.baseNamespace, o.consoleHost, o.nodeName, o.clusterProfiles)
 
 	return interrupt.New(handler, o.saveNamespaceArtifacts).Run(func() []error {
 		if leaseClient != nil {
@@ -2466,11 +2467,11 @@ func addSchemes() error {
 
 // getClusterProfileSecret retrieves the cluster profile secret name using config resolver,
 // and gets the secret from the ci namespace
-func getClusterProfileSecret(cp clusterProfileForTarget, client ctrlruntimeclient.Client, resolverClient server.ResolverClient, ctx context.Context) (*coreapi.Secret, error) {
+func getClusterProfileSecret(cp metrics.ClusterProfileForTarget, client ctrlruntimeclient.Client, resolverClient server.ResolverClient, ctx context.Context) (*coreapi.Secret, error) {
 	// Use config-resolver to get details about the cluster profile (which includes the secret's name)
-	cpDetails, err := resolverClient.ClusterProfile(cp.profileName)
+	cpDetails, err := resolverClient.ClusterProfile(cp.ProfileName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve details from config resolver for '%s' cluster cp", cp.profileName)
+		return nil, fmt.Errorf("failed to retrieve details from config resolver for '%s' cluster cp", cp.ProfileName)
 	}
 	// Get the secret from the ci namespace. We expect it exists
 	ciSecret := &coreapi.Secret{}
@@ -2483,16 +2484,11 @@ func getClusterProfileSecret(cp clusterProfileForTarget, client ctrlruntimeclien
 		Data: ciSecret.Data,
 		Type: ciSecret.Type,
 		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-cluster-profile", cp.target),
+			Name: fmt.Sprintf("%s-cluster-profile", cp.Target),
 		},
 	}
 
 	return newSecret, nil
-}
-
-type clusterProfileForTarget struct {
-	target      string
-	profileName string
 }
 
 // getClusterProfileNamesFromTargets extracts the needed cluster profile name(s) from the target arg(s)
@@ -2504,10 +2500,7 @@ func (o *options) getClusterProfileNamesFromTargets() {
 			}
 			profile := test.GetClusterProfileName()
 			if profile != "" {
-				o.clusterProfiles = append(o.clusterProfiles, clusterProfileForTarget{
-					target:      test.As,
-					profileName: profile,
-				})
+				o.clusterProfiles = append(o.clusterProfiles, metrics.ClusterProfileForTarget{Target: test.As, ProfileName: profile})
 			}
 		}
 	}

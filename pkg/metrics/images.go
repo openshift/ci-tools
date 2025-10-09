@@ -71,15 +71,13 @@ func newImagesPlugin(ctx context.Context, logger *logrus.Entry, client ctrlrunti
 func (p *imagesPlugin) Name() string { return ImagesPluginName }
 
 func (p *imagesPlugin) Record(ev MetricsEvent) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	if _, ok := ev.(*ImageStreamEvent); ok {
+	switch ev.(type) {
+	case *ImageStreamEvent, *TagImportEvent:
+		p.mu.Lock()
+		defer p.mu.Unlock()
 		p.events = append(p.events, ev)
+	default:
 		return
-	}
-	if _, ok := ev.(*TagImportEvent); ok {
-		p.events = append(p.events, ev)
 	}
 }
 

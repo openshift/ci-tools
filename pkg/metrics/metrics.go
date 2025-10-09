@@ -81,7 +81,9 @@ func (ma *MetricsAgent) Run() {
 	ma.wg.Add(1)
 	defer ma.wg.Done()
 
-	go ma.nodesPlugin.Run(ma.ctx)
+	if ma.nodesPlugin != nil {
+		go ma.nodesPlugin.Run(ma.ctx)
+	}
 
 	for {
 		ma.mu.Lock()
@@ -190,7 +192,7 @@ func (ma *MetricsAgent) StorePodLifecycleMetrics(name, namespace string, phase c
 }
 
 // RecordConfigurationInsight records configuration insight
-func (ma *MetricsAgent) RecordConfigurationInsight(targets []string, promote bool, org, repo, branch, variant, baseNamespace, consoleHost, nodeName string, clusterProfiles any) {
+func (ma *MetricsAgent) RecordConfigurationInsight(targets []string, promote bool, org, repo, branch, variant, baseNamespace, consoleHost, nodeName string, clusterProfiles []ClusterProfileForTarget) {
 	if ma == nil {
 		return
 	}
@@ -220,4 +222,9 @@ func (ma *MetricsAgent) RecordConfigurationInsight(targets []string, promote boo
 	}
 
 	ma.Record(NewInsightsEvent(InsightConfiguration, configData))
+}
+
+type ClusterProfileForTarget struct {
+	Target      string `json:"target,omitempty"`
+	ProfileName string `json:"profile_name,omitempty"`
 }

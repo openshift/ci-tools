@@ -49,23 +49,6 @@ func (o *options) Validate() error {
 	return nil
 }
 
-func getConfigFromEnv() (gsm.Config, error) {
-	projectID := os.Getenv("GCP_PROJECT_ID")
-	if projectID == "" {
-		return gsm.Config{}, fmt.Errorf("GCP_PROJECT_ID environment variable is required")
-	}
-
-	projectNumber := os.Getenv("GCP_PROJECT_NUMBER")
-	if projectNumber == "" {
-		return gsm.Config{}, fmt.Errorf("GCP_PROJECT_NUMBER environment variable is required")
-	}
-
-	return gsm.Config{
-		ProjectIdString: projectID,
-		ProjectIdNumber: projectNumber,
-	}, nil
-}
-
 func (o *options) setupLogger(censor *secrets.DynamicCensor) error {
 	level, err := logrus.ParseLevel(o.logLevel)
 	if err != nil {
@@ -92,7 +75,7 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to read GCP credentials")
 	}
 
-	config, err := getConfigFromEnv()
+	config, err := gsm.GetConfigFromEnv()
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get GCP project configuration")
 	}

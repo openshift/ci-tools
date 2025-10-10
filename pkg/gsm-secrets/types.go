@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"os"
 	"strings"
 
 	"cloud.google.com/go/iam/apiv1/iampb"
@@ -109,6 +110,23 @@ type Actions struct {
 	SecretsToCreate       map[string]GCPSecret
 	SecretsToDelete       []GCPSecret
 	ConsolidatedIAMPolicy *iampb.Policy
+}
+
+func GetConfigFromEnv() (Config, error) {
+	projectID := os.Getenv("GCP_PROJECT_ID")
+	if projectID == "" {
+		return Config{}, fmt.Errorf("GCP_PROJECT_ID environment variable is required")
+	}
+
+	projectNumber := os.Getenv("GCP_PROJECT_NUMBER")
+	if projectNumber == "" {
+		return Config{}, fmt.Errorf("GCP_PROJECT_NUMBER environment variable is required")
+	}
+
+	return Config{
+		ProjectIdString: projectID,
+		ProjectIdNumber: projectNumber,
+	}, nil
 }
 
 // GetProjectResourceIdNumber returns the resource id number for our GCP project

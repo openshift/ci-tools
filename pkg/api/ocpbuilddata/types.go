@@ -75,7 +75,7 @@ type OCPImageConfigSourceGit struct {
 }
 
 type OCPImageConfigSourceGitBRanch struct {
-	Taget string `json:"target"`
+	Target string `json:"target"`
 }
 
 type OCPImageConfigFrom struct {

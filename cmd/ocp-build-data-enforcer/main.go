@@ -131,8 +131,8 @@ func processDockerfile(config ocpbuilddata.OCPImageConfig, processor diffProcess
 		return nil
 	}
 	branch := "master"
-	if config.Content != nil && config.Content.Source.Git != nil && strings.HasPrefix(config.Content.Source.Git.Branch.Taget, "openshift-") {
-		branch = config.Content.Source.Git.Branch.Taget
+	if config.Content != nil && config.Content.Source.Git != nil && strings.HasPrefix(config.Content.Source.Git.Branch.Target, "openshift-") {
+		branch = config.Content.Source.Git.Branch.Target
 	}
 	if err := processor(log, config.PublicRepo.Org, config.PublicRepo.Repo, branch, config.Dockerfile(), data, updated); err != nil {
 		return fmt.Errorf("failed to process updated dockerfile: %w", err)

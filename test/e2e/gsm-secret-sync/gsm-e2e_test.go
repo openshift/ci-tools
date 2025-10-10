@@ -5,8 +5,10 @@ package gsm_secret_sync
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"slices"
@@ -19,7 +21,9 @@ import (
 	resourcemanager "cloud.google.com/go/resourcemanager/apiv3"
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
+	"cloud.google.com/go/storage"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -36,7 +40,18 @@ const (
 	credentialsEnvVar   = "GCP_SECRETS_DEV_CREDENTIALS_FILE"
 	projectIdEnvVar     = "GCP_DEV_PROJECT_ID"
 	projectNumberEnvVar = "GCP_DEV_PROJECT_NUMBER"
+
+	// GCS lock bucket configuration
+	gcsBucketEnvVar = "GCS_E2E_LOCK_BUCKET"
+	lockObjectName  = "gsm-secret-sync-e2e-lock"
 )
+
+var lockObjectBackoff = wait.Backoff{
+	Steps:    5,
+	Duration: 1 * time.Minute,
+	Factor:   1.5,
+	Jitter:   0.2,
+}
 
 type GCPState struct {
 	Secrets         map[string]gsm.GCPSecret
@@ -206,8 +221,25 @@ func TestMain(m *testing.M) {
 	gcpCreds := []byte(gcpCredentials)
 
 	config := getProjectConfigFromEnv()
-	logrus.Infof("config: %+v", config)
+	logrus.Debugf("config: %+v", config)
 	ctx := context.Background()
+
+	// Acquire distributed lock to prevent concurrent test runs
+	gcsBucket := os.Getenv(gcsBucketEnvVar)
+	if gcsBucket == "" {
+		logrus.Fatalf("Missing %s environment variable", gcsBucketEnvVar)
+	}
+	gcsClient, err := storage.NewClient(ctx, option.WithCredentialsJSON(gcpCreds))
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to create GCS client")
+	}
+	defer gcsClient.Close()
+
+	releaseLock, err := acquireDistributedLock(ctx, gcsClient, gcsBucket)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to acquire distributed lock, another test may be running")
+	}
+	defer releaseLock()
 
 	secretsClient, err := secretmanager.NewClient(ctx, option.WithQuotaProject(config.ProjectIdNumber), option.WithCredentialsJSON(gcpCreds))
 	if err != nil {
@@ -239,13 +271,72 @@ func TestMain(m *testing.M) {
 	if !tr.verifyProjectIsClean() {
 		logrus.Error("gcp project is not clean; skipping tests")
 		tr.cleanup()
+		releaseLock()
 		os.Exit(1)
 	}
 
 	code := m.Run()
 
 	tr.cleanup()
+	releaseLock()
 	os.Exit(code)
+}
+
+// acquireDistributedLock attempts to acquire a lock using GCS atomic operations.
+// Returns a cleanup function that must be called via defer, or nil if lock acquisition failed.
+func acquireDistributedLock(ctx context.Context, client *storage.Client, bucketName string) (func(), error) {
+	if bucketName == "" {
+		logrus.Warn("GCS_E2E_LOCK_BUCKET not set, skipping distributed locking (concurrent runs of this test may conflict)")
+		return func() {}, nil
+	}
+
+	obj := client.Bucket(bucketName).Object(lockObjectName)
+	retryErr := retry.OnError(lockObjectBackoff, isLockHeldError, func() error {
+		logrus.Debugf("Attempting to acquire lock for GCS bucket %q...", bucketName)
+		// Only write if the object does NOT exist (DoesNotExist: true) == the lock is free
+		w := obj.If(storage.Conditions{DoesNotExist: true}).NewWriter(ctx)
+		w.ContentType = "text/plain"
+		if _, writeErr := w.Write([]byte("Locked")); writeErr != nil {
+			w.Close()
+			return fmt.Errorf("failed to write to GCS bucket %q: %w", bucketName, writeErr)
+		}
+
+		closeErr := w.Close()
+		if closeErr != nil {
+			logrus.Debugf("Close failed (lock may be held): %v", closeErr)
+			return closeErr
+		}
+		logrus.Debugf("Successfully acquired distributed lock")
+		return nil
+	})
+
+	if retryErr != nil {
+		return nil, fmt.Errorf("failed to acquire distributed lock after all retries: %w", retryErr)
+	}
+
+	// Return cleanup function
+	return func() {
+		logrus.Debug("Releasing distributed lock")
+		if err := obj.Delete(ctx); err != nil {
+			logrus.Errorf("Failed to release lock: %v", err)
+		} else {
+			logrus.Debugf("Successfully released distributed lock")
+		}
+		client.Close()
+	}, nil
+}
+
+func isLockHeldError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var gcpErr *googleapi.Error
+	if errors.As(err, &gcpErr) {
+		// 412 is returned when IfGenerationMatch: 0 fails because the object exists.
+		return gcpErr.Code == http.StatusPreconditionFailed
+	}
+	// Assume other errors (like network issues) are temporary and retriable as well.
+	return true
 }
 
 func TestInitialCreate(t *testing.T) {
@@ -350,10 +441,10 @@ func (tr *testRunner) runReconcilerTool(configPath string) error {
 
 // getActualGCPState returns the current state of resources in the GCP project
 func (tr *testRunner) getActualGCPState() GCPState {
-	secrets, err := gsm.GetAllSecrets(tr.ctx, tr.secretsClient, tr.config)
+	gcpSecrets, err := gsm.GetAllSecrets(tr.ctx, tr.secretsClient, tr.config)
 	if err != nil {
 		logrus.Errorf("Error while fetching secrets: %v", err)
-		secrets = make(map[string]gsm.GCPSecret)
+		gcpSecrets = make(map[string]gsm.GCPSecret)
 	}
 
 	serviceAccounts, err := gsm.GetUpdaterServiceAccounts(tr.ctx, tr.iamAdminClient, tr.config)
@@ -375,7 +466,7 @@ func (tr *testRunner) getActualGCPState() GCPState {
 	}
 
 	return GCPState{
-		Secrets:         secrets,
+		Secrets:         gcpSecrets,
 		IAMBindings:     iamBindings,
 		ServiceAccounts: serviceAccounts,
 	}

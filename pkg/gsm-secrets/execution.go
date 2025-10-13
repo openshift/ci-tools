@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	iamadmin "cloud.google.com/go/iam/admin/apiv1"
@@ -21,9 +22,61 @@ import (
 	"k8s.io/client-go/util/retry"
 )
 
-// Client interfaces - these should be defined by the cmd package
+const (
+	DotReplacementString        = "--dot--"
+	UnderscoreReplacementString = "--u--"
+)
+
+// NormalizeSecretName replaces forbidden characters in secret names with safe replacements.
+// GSM doesn't support dots in secret names, and underscores are used to mark the end of the collection prefix,
+// so we need special handling to avoid conflicts.
+func NormalizeSecretName(name string) string {
+	normalized := strings.ReplaceAll(name, ".", DotReplacementString)
+	normalized = strings.ReplaceAll(normalized, "_", UnderscoreReplacementString)
+	return normalized
+}
+
+// CreateOrUpdateSecret creates a new secret in Google Secret Manager or updates an existing one with a new version.
+// If labels or annotations are nil, they won't be set on the secret.
+func CreateOrUpdateSecret(ctx context.Context, client SecretManagerClient, projectIdNumber, secretName string, payload []byte, labels, annotations map[string]string) error {
+	parent := GetProjectResourceIdNumber(projectIdNumber)
+	secretPath := fmt.Sprintf("%s/secrets/%s", parent, secretName)
+
+	_, err := client.GetSecret(ctx, &secretmanagerpb.GetSecretRequest{Name: secretPath})
+	if err != nil { // Secret doesn't exist, create it
+		_, err = client.CreateSecret(ctx, &secretmanagerpb.CreateSecretRequest{
+			Parent:   parent,
+			SecretId: secretName,
+			Secret: &secretmanagerpb.Secret{
+				Labels:      labels,
+				Annotations: annotations,
+				Replication: &secretmanagerpb.Replication{
+					Replication: &secretmanagerpb.Replication_Automatic_{
+						Automatic: &secretmanagerpb.Replication_Automatic{},
+					},
+				},
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create secret '%s': %w", secretName, err)
+		}
+	}
+
+	_, err = client.AddSecretVersion(ctx, &secretmanagerpb.AddSecretVersionRequest{
+		Parent:  secretPath,
+		Payload: &secretmanagerpb.SecretPayload{Data: payload},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to add version to secret %s: %w", secretName, err)
+	}
+
+	return nil
+}
+
+// SecretManagerClient interface defines methods for interacting with Google Secret Manager
 type SecretManagerClient interface {
 	ListSecrets(ctx context.Context, req *secretmanagerpb.ListSecretsRequest, opts ...gax.CallOption) *secretmanager.SecretIterator
+	GetSecret(ctx context.Context, req *secretmanagerpb.GetSecretRequest, opts ...gax.CallOption) (*secretmanagerpb.Secret, error)
 	DeleteSecret(ctx context.Context, req *secretmanagerpb.DeleteSecretRequest, opts ...gax.CallOption) error
 	CreateSecret(ctx context.Context, req *secretmanagerpb.CreateSecretRequest, opts ...gax.CallOption) (*secretmanagerpb.Secret, error)
 	AddSecretVersion(ctx context.Context, req *secretmanagerpb.AddSecretVersionRequest, opts ...gax.CallOption) (*secretmanagerpb.SecretVersion, error)
@@ -200,34 +253,8 @@ func (a *Actions) CreateSecrets(ctx context.Context, secretsClient SecretManager
 			a.SecretsToCreate[name] = s
 		}
 
-		createRequest := &secretmanagerpb.CreateSecretRequest{
-			Parent:   GetProjectResourceIdNumber(a.Config.ProjectIdNumber),
-			SecretId: s.Name,
-			Secret: &secretmanagerpb.Secret{
-				Labels:      s.Labels,
-				Annotations: s.Annotations,
-				Replication: &secretmanagerpb.Replication{
-					Replication: &secretmanagerpb.Replication_Automatic_{
-						Automatic: &secretmanagerpb.Replication_Automatic{},
-					},
-				},
-			},
-		}
-
-		gcpSecret, err := secretsClient.CreateSecret(ctx, createRequest)
-		if err != nil {
+		if err := CreateOrUpdateSecret(ctx, secretsClient, a.Config.ProjectIdNumber, s.Name, s.Payload, s.Labels, s.Annotations); err != nil {
 			logrus.WithError(err).Errorf("Failed to create secret: %s", s.Name)
-			continue
-		}
-
-		_, err = secretsClient.AddSecretVersion(ctx, &secretmanagerpb.AddSecretVersionRequest{
-			Parent: gcpSecret.Name,
-			Payload: &secretmanagerpb.SecretPayload{
-				Data: s.Payload,
-			},
-		})
-		if err != nil {
-			logrus.WithError(err).Errorf("Failed to add version to secret: %s", gcpSecret.Name)
 			continue
 		}
 

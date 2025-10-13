@@ -20,6 +20,74 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
+func TestNormalizeSecretName(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "no special characters",
+			input:    "simple-secret-name",
+			expected: "simple-secret-name",
+		},
+		{
+			name:     "dots only",
+			input:    "secret.with.dots",
+			expected: "secret--dot--with--dot--dots",
+		},
+		{
+			name:     "underscores only",
+			input:    "secret_with_underscores",
+			expected: "secret--u--with--u--underscores",
+		},
+		{
+			name:     "underscore at beginning of name",
+			input:    "_SECRET_NAME",
+			expected: "--u--SECRET--u--NAME",
+		},
+		{
+			name:     "mixed dots and underscores",
+			input:    "build_farm.cluster-init.build01.config",
+			expected: "build--u--farm--dot--cluster-init--dot--build01--dot--config",
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "multiple consecutive dots",
+			input:    "secret...name",
+			expected: "secret--dot----dot----dot--name",
+		},
+		{
+			name:     "multiple consecutive underscores",
+			input:    "secret___name",
+			expected: "secret--u----u----u--name",
+		},
+		{
+			name:     "dots and underscores together",
+			input:    "secret._name",
+			expected: "secret--dot----u--name",
+		},
+		{
+			name:     "real world example",
+			input:    "build_farm_sa__sa.cluster-init.build01.config",
+			expected: "build--u--farm--u--sa--u----u--sa--dot--cluster-init--dot--build01--dot--config",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := NormalizeSecretName(tc.input)
+			if result != tc.expected {
+				t.Errorf("Expected %q, got %q", tc.expected, result)
+			}
+		})
+	}
+}
+
 func TestGenerateServiceAccountKey(t *testing.T) {
 	config := Config{
 		ProjectIdString: "test-project",
@@ -500,6 +568,11 @@ func TestCreateSecrets(t *testing.T) {
 			defer mockCtrl.Finish()
 
 			mockSecretsClient := NewMockSecretManagerClient(mockCtrl)
+
+			// GetSecret will be called first to check if secret exists (returns not found error)
+			mockSecretsClient.EXPECT().GetSecret(gomock.Any(), gomock.Any()).
+				Return(nil, status.Error(codes.NotFound, "secret not found")).
+				Times(len(tc.secrets))
 
 			mockSecretsClient.EXPECT().CreateSecret(gomock.Any(), gomock.Any()).
 				DoAndReturn(func(ctx context.Context, req *secretmanagerpb.CreateSecretRequest, opts ...gax.CallOption) (*secretmanagerpb.Secret, error) {

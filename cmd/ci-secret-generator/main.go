@@ -18,6 +18,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
+	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
 	"github.com/openshift/ci-tools/pkg/prowconfigutils"
 	"github.com/openshift/ci-tools/pkg/secrets"
 )
@@ -48,6 +49,10 @@ type options struct {
 	maxConcurrency      int
 	disabledClusters    sets.Set[string]
 
+	enableGsmSync      bool
+	gcpProjectConfig   gsm.Config
+	gsmCredentialsFile string
+
 	config          secretgenerator.Config
 	bootstrapConfig secretbootstrap.Config
 }
@@ -63,10 +68,23 @@ func parseOptions(censor *secrets.DynamicCensor) options {
 	fs.StringVar(&o.outputFile, "output-file", "", "output file for dry-run mode")
 	fs.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
 	fs.IntVar(&o.maxConcurrency, "concurrency", 1, "Maximum number of concurrent in-flight goroutines to BitWarden.")
+
+	fs.BoolVar(&o.enableGsmSync, "enable-gsm-sync", false, "Whether to enable syncing cluster-init secrets to GSM.")
+	fs.StringVar(&o.gsmCredentialsFile, "gsm-credentials-file", "", "Path to GCP service account credentials.")
+
 	o.secrets.Bind(fs, os.Getenv, censor)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Errorf("cannot parse args: %q", os.Args[1:])
 	}
+
+	if o.enableGsmSync {
+		gcpConfig, err := gsm.GetConfigFromEnv()
+		if err != nil {
+			logrus.WithError(err).Error("Failed to get GCP config from environment, GSM sync will fail")
+		}
+		o.gcpProjectConfig = gcpConfig
+	}
+
 	return o
 }
 
@@ -297,6 +315,14 @@ func generateSecrets(o options, censor *secrets.DynamicCensor) (errs []error) {
 		client, err = o.secrets.NewClient(censor)
 		if err != nil {
 			return append(errs, fmt.Errorf("failed to create secrets client: %w", err))
+		}
+
+		if o.enableGsmSync {
+			client, err = secrets.NewGSMSyncDecorator(client, o.gcpProjectConfig, o.gsmCredentialsFile)
+			if err != nil {
+				return append(errs, fmt.Errorf("failed to enable GSM sync: %w", err))
+			}
+			logrus.Info("GSM sync enabled for cluster-init secret")
 		}
 	}
 

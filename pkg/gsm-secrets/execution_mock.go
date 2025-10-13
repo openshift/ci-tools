@@ -125,6 +125,26 @@ func (mr *MockSecretManagerClientMockRecorder) DeleteSecret(ctx, req any, opts .
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSecret", reflect.TypeOf((*MockSecretManagerClient)(nil).DeleteSecret), varargs...)
 }
 
+// GetSecret mocks base method.
+func (m *MockSecretManagerClient) GetSecret(ctx context.Context, req *secretmanagerpb.GetSecretRequest, opts ...gax.CallOption) (*secretmanagerpb.Secret, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, req}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetSecret", varargs...)
+	ret0, _ := ret[0].(*secretmanagerpb.Secret)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSecret indicates an expected call of GetSecret.
+func (mr *MockSecretManagerClientMockRecorder) GetSecret(ctx, req any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, req}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSecret", reflect.TypeOf((*MockSecretManagerClient)(nil).GetSecret), varargs...)
+}
+
 // ListSecrets mocks base method.
 func (m *MockSecretManagerClient) ListSecrets(ctx context.Context, req *secretmanagerpb.ListSecretsRequest, opts ...gax.CallOption) *secretmanager.SecretIterator {
 	m.ctrl.T.Helper()

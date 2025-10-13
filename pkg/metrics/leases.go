@@ -10,8 +10,17 @@ import (
 	"github.com/openshift/ci-tools/pkg/lease"
 )
 
-// LeaseMetricEvent is the event for a single lease acquisition.
-type LeaseMetricEvent struct {
+type leaseEvent interface {
+	MetricsEvent
+
+	GetRawLeaseName() string
+	SetParsedName(region, leaseName, slice string)
+	SetPoolMetrics(free, total int)
+	Store(lp *leasesPlugin)
+}
+
+// LeaseAcquisitionMetricEvent is the event for a single lease acquisition.
+type LeaseAcquisitionMetricEvent struct {
 	LeaseName                    string    `json:"name"`
 	Slice                        string    `json:"slice,omitempty"`
 	Region                       string    `json:"region,omitempty"`
@@ -23,13 +32,79 @@ type LeaseMetricEvent struct {
 }
 
 // Name returns the name of the event.
-func (l *LeaseMetricEvent) Name() string {
+func (l *LeaseAcquisitionMetricEvent) Name() string {
 	return l.LeaseName
 }
 
 // SetTimestamp sets the event's timestamp.
-func (l *LeaseMetricEvent) SetTimestamp(t time.Time) {
+func (l *LeaseAcquisitionMetricEvent) SetTimestamp(t time.Time) {
 	l.Timestamp = t
+}
+
+// GetRawLeaseName returns the raw lease name.
+func (l *LeaseAcquisitionMetricEvent) GetRawLeaseName() string {
+	return l.RawLeaseName
+}
+
+// SetParsedName sets the parsed lease name components.
+func (l *LeaseAcquisitionMetricEvent) SetParsedName(region, leaseName, slice string) {
+	l.Region, l.LeaseName, l.Slice = region, leaseName, slice
+}
+
+// SetPoolMetrics sets the pool metrics.
+func (l *LeaseAcquisitionMetricEvent) SetPoolMetrics(free, total int) {
+	l.LeasesRemainingAtAcquisition = free
+	l.LeasesTotal = total
+}
+
+// Store persists the acquisition event on the plugin
+func (l *LeaseAcquisitionMetricEvent) Store(lp *leasesPlugin) {
+	lp.events = append(lp.events, *l)
+}
+
+// LeaseReleaseMetricEvent is the event for a single lease release.
+type LeaseReleaseMetricEvent struct {
+	LeaseName                string    `json:"name"`
+	Slice                    string    `json:"slice,omitempty"`
+	Region                   string    `json:"region,omitempty"`
+	RawLeaseName             string    `json:"raw_lease_name,omitempty"`
+	ReleaseDurationSeconds   float64   `json:"release_duration_seconds"`
+	LeasesAvailableAtRelease int       `json:"leases_available_at_release"`
+	LeasesTotal              int       `json:"leases_total"`
+	Released                 bool      `json:"released"`
+	Error                    string    `json:"error,omitempty"`
+	Timestamp                time.Time `json:"timestamp"`
+}
+
+// Name returns the name of the event.
+func (l *LeaseReleaseMetricEvent) Name() string {
+	return l.LeaseName
+}
+
+// SetTimestamp sets the event's timestamp.
+func (l *LeaseReleaseMetricEvent) SetTimestamp(t time.Time) {
+	l.Timestamp = t
+}
+
+// GetRawLeaseName returns the raw lease name.
+func (l *LeaseReleaseMetricEvent) GetRawLeaseName() string {
+	return l.RawLeaseName
+}
+
+// SetParsedName sets the parsed lease name components.
+func (l *LeaseReleaseMetricEvent) SetParsedName(region, leaseName, slice string) {
+	l.Region, l.LeaseName, l.Slice = region, leaseName, slice
+}
+
+// SetPoolMetrics sets the pool metrics.
+func (l *LeaseReleaseMetricEvent) SetPoolMetrics(free, total int) {
+	l.LeasesAvailableAtRelease = free
+	l.LeasesTotal = total
+}
+
+// Store persists the release event on the plugin
+func (l *LeaseReleaseMetricEvent) Store(lp *leasesPlugin) {
+	lp.releaseEvents = append(lp.releaseEvents, *l)
 }
 
 // Group 1: region (non-greedy up to the literal "--")
@@ -47,17 +122,19 @@ func parseLeaseEventName(raw string) (string, string, string) {
 
 // leasesPlugin implements the Plugin interface for lease-specific metrics.
 type leasesPlugin struct {
-	mu     sync.RWMutex
-	logger *logrus.Entry
-	events []LeaseMetricEvent
-	client lease.Client
+	mu            sync.RWMutex
+	logger        *logrus.Entry
+	events        []LeaseAcquisitionMetricEvent
+	releaseEvents []LeaseReleaseMetricEvent
+	client        lease.Client
 }
 
 // newLeasesPlugin creates a new lease metrics plugin.
 func newLeasesPlugin(logger *logrus.Entry) *leasesPlugin {
 	return &leasesPlugin{
-		logger: logger.WithField("plugin", "leases"),
-		events: make([]LeaseMetricEvent, 0),
+		logger:        logger.WithField("plugin", "leases"),
+		events:        make([]LeaseAcquisitionMetricEvent, 0),
+		releaseEvents: make([]LeaseReleaseMetricEvent, 0),
 	}
 }
 
@@ -67,11 +144,9 @@ func (lp *leasesPlugin) Name() string {
 }
 
 func (lp *leasesPlugin) Record(ev MetricsEvent) {
-	le, ok := ev.(*LeaseMetricEvent)
-	if !ok {
+	if lp == nil {
 		return
 	}
-
 	lp.mu.RLock()
 	client := lp.client
 	lp.mu.RUnlock()
@@ -80,19 +155,24 @@ func (lp *leasesPlugin) Record(ev MetricsEvent) {
 		return
 	}
 
-	le.Region, le.LeaseName, le.Slice = parseLeaseEventName(le.RawLeaseName)
-	metricsData, err := client.Metrics(le.LeaseName)
-	if err != nil {
-		logrus.WithError(err).Debugf("failed to retrieve metrics for lease %q; skipping numeric updates", le.RawLeaseName)
-	} else {
-		le.LeasesRemainingAtAcquisition = metricsData.Free
-		le.LeasesTotal = metricsData.Free + metricsData.Leased
-	}
+	switch e := ev.(type) {
+	case leaseEvent:
+		rawLeaseName := e.GetRawLeaseName()
+		region, leaseName, slice := parseLeaseEventName(rawLeaseName)
+		e.SetParsedName(region, leaseName, slice)
 
-	lp.mu.Lock()
-	lp.logger.WithField("event", le).Debug("Recording lease metrics event")
-	lp.events = append(lp.events, *le)
-	lp.mu.Unlock()
+		metricsData, err := client.Metrics(leaseName)
+		if err != nil {
+			logrus.WithError(err).Debugf("failed to retrieve metrics for lease %q; skipping numeric updates", rawLeaseName)
+		} else {
+			e.SetPoolMetrics(metricsData.Free, metricsData.Free+metricsData.Leased)
+		}
+
+		lp.mu.Lock()
+		defer lp.mu.Unlock()
+		e.Store(lp)
+		lp.logger.WithField("event", e).Debug("Recording lease metrics event")
+	}
 }
 
 // Events returns a slice of MetricsEvent interfaces for the stored events.
@@ -100,9 +180,12 @@ func (lp *leasesPlugin) Events() []MetricsEvent {
 	lp.mu.Lock()
 	defer lp.mu.Unlock()
 
-	events := make([]MetricsEvent, 0, len(lp.events))
+	events := make([]MetricsEvent, 0, len(lp.events)+len(lp.releaseEvents))
 	for i := range lp.events {
 		events = append(events, &lp.events[i])
+	}
+	for i := range lp.releaseEvents {
+		events = append(events, &lp.releaseEvents[i])
 	}
 
 	return events

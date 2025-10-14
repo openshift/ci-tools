@@ -122,7 +122,7 @@ func (s *leaseStep) run(ctx context.Context) error {
 	}
 	wrappedErr := results.ForReason("executing_test").ForError(s.wrapped.Run(ctx))
 	logrus.Infof("Releasing leases for test %s", s.Name())
-	releaseErr := results.ForReason("releasing_lease").ForError(releaseLeases(client, s.leases...))
+	releaseErr := results.ForReason("releasing_lease").ForError(releaseLeases(client, s.metricsAgent, s.leases...))
 
 	return aggregateWrappedErrorAndReleaseError(wrappedErr, releaseErr)
 }
@@ -168,21 +168,21 @@ func acquireLeases(
 		}
 
 		for _, name := range names {
-			metricsAgent.Record(&metrics.LeaseMetricEvent{RawLeaseName: name, AcquisitionDurationSeconds: time.Since(start).Seconds()})
+			metricsAgent.Record(&metrics.LeaseAcquisitionMetricEvent{RawLeaseName: name, AcquisitionDurationSeconds: time.Since(start).Seconds()})
 		}
 
 		logrus.Infof("Acquired %d lease(s) for %s: %v", l.Count, l.ResourceType, names)
 		l.resources = names
 	}
 	if errs != nil {
-		if err := releaseLeases(client, leases...); err != nil {
+		if err := releaseLeases(client, metricsAgent, leases...); err != nil {
 			errs = append(errs, fmt.Errorf("failed to release leases after acquisition failure: %w", err))
 		}
 	}
 	return utilerrors.NewAggregate(errs)
 }
 
-func releaseLeases(client lease.Client, leases ...stepLease) error {
+func releaseLeases(client lease.Client, metricsAgent *metrics.MetricsAgent, leases ...stepLease) error {
 	var errs []error
 	for _, l := range leases {
 		for _, r := range l.resources {
@@ -190,9 +190,16 @@ func releaseLeases(client lease.Client, leases ...stepLease) error {
 				continue
 			}
 			logrus.Debugf("Releasing lease for %s: %v", l.ResourceType, r)
+			releaseEvent := &metrics.LeaseReleaseMetricEvent{RawLeaseName: r, Released: true}
+			start := time.Now()
 			if err := client.Release(r); err != nil {
 				errs = append(errs, err)
+				releaseEvent.Released = false
+				releaseEvent.Error = err.Error()
 			}
+			releaseEvent.ReleaseDurationSeconds = time.Since(start).Seconds()
+
+			metricsAgent.Record(releaseEvent)
 		}
 	}
 	return utilerrors.NewAggregate(errs)

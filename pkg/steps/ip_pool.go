@@ -17,6 +17,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/lease"
+	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/results"
 )
 
@@ -29,11 +30,12 @@ type ipPoolStep struct {
 	ipPoolLease  stepLease
 	wrapped      api.Step
 	params       api.Parameters
+	metricsAgent *metrics.MetricsAgent
 
 	namespace func() string
 }
 
-func IPPoolStep(client *lease.Client, secretClient SecretClient, lease api.StepLease, wrapped api.Step, params api.Parameters, namespace func() string) api.Step {
+func IPPoolStep(client *lease.Client, secretClient SecretClient, lease api.StepLease, wrapped api.Step, params api.Parameters, namespace func() string, metricsAgent *metrics.MetricsAgent) api.Step {
 	ret := ipPoolStep{
 		client:       client,
 		secretClient: secretClient,
@@ -41,6 +43,7 @@ func IPPoolStep(client *lease.Client, secretClient SecretClient, lease api.StepL
 		namespace:    namespace,
 		params:       params,
 		ipPoolLease:  stepLease{StepLease: lease},
+		metricsAgent: metricsAgent,
 	}
 	return &ret
 }
@@ -99,6 +102,7 @@ func (s *ipPoolStep) run(ctx context.Context, minute time.Duration) error {
 	client := *s.client
 	ctx, cancel := context.WithCancel(ctx)
 
+	start := time.Now()
 	names, err := client.AcquireIfAvailableImmediately(l.ResourceType, l.Count, cancel)
 	if err != nil {
 		if err == lease.ErrNotFound {
@@ -108,6 +112,9 @@ func (s *ipPoolStep) run(ctx context.Context, minute time.Duration) error {
 		}
 	} else {
 		logrus.Infof("Acquired %d ip pool lease(s) for %s: %v", l.Count, l.ResourceType, names)
+		for _, name := range names {
+			s.metricsAgent.Record(&metrics.LeaseAcquisitionMetricEvent{RawLeaseName: name, AcquisitionDurationSeconds: time.Since(start).Seconds()})
+		}
 		s.ipPoolLease.resources = names
 	}
 
@@ -124,7 +131,7 @@ func (s *ipPoolStep) run(ctx context.Context, minute time.Duration) error {
 	default:
 		logrus.Debug("no unused resources were released, releasing all")
 	}
-	releaseErr := results.ForReason("releasing_ip_pool_lease").ForError(releaseLeases(client, *l))
+	releaseErr := results.ForReason("releasing_ip_pool_lease").ForError(releaseLeases(client, s.metricsAgent, *l))
 
 	return aggregateWrappedErrorAndReleaseError(wrappedErr, releaseErr)
 }

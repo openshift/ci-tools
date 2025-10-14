@@ -2,6 +2,7 @@ package gsmsecrets
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -116,18 +117,21 @@ func withGCPPropagationDelay(operation string, fn func()) {
 // ExecuteActions performs the actual resource changes in GCP based on the computed diff.
 func (a *Actions) ExecuteActions(ctx context.Context, iamClient IAMClient, secretsClient SecretManagerClient, projectsClient ResourceManagerClient) {
 	if len(a.SAsToCreate) > 0 {
+		logrus.Infof("Creating %d service accounts", len(a.SAsToCreate))
 		withGCPPropagationDelay("service account creation", func() {
 			a.CreateServiceAccounts(ctx, iamClient)
 		})
 	}
 
 	if len(a.SecretsToCreate) > 0 {
+		logrus.Infof("Creating %d secrets", len(a.SecretsToCreate))
 		withGCPPropagationDelay("secret creation", func() {
 			a.CreateSecrets(ctx, secretsClient, iamClient)
 		})
 	}
 
 	if a.ConsolidatedIAMPolicy != nil {
+		logrus.Infof("Updating IAM policy with %d bindings", len(a.ConsolidatedIAMPolicy.Bindings))
 		withGCPPropagationDelay("IAM policy update", func() {
 			if err := a.ApplyPolicy(ctx, projectsClient); err != nil {
 				logrus.WithError(err).Fatal("Failed to apply IAM policy")
@@ -136,6 +140,7 @@ func (a *Actions) ExecuteActions(ctx context.Context, iamClient IAMClient, secre
 	}
 
 	if len(a.SAsToDelete) > 0 {
+		logrus.Infof("Deleting %d service accounts", len(a.SAsToDelete))
 		withGCPPropagationDelay("service account deletion", func() {
 			a.RevokeObsoleteServiceAccountKeys(ctx, iamClient)
 			a.DeleteObsoleteServiceAccounts(ctx, iamClient)
@@ -143,6 +148,7 @@ func (a *Actions) ExecuteActions(ctx context.Context, iamClient IAMClient, secre
 	}
 
 	if len(a.SecretsToDelete) > 0 {
+		logrus.Infof("Deleting %d secrets", len(a.SecretsToDelete))
 		withGCPPropagationDelay("secret deletion", func() {
 			a.DeleteObsoleteSecrets(ctx, secretsClient)
 		})
@@ -160,13 +166,14 @@ func (a *Actions) CreateServiceAccounts(ctx context.Context, client IAMClient) {
 			},
 		}
 		secretName := GetUpdaterSASecretName(sa.Collection)
+		logrus.Infof("Creating service account: %s (collection: %s)", sa.DisplayName, sa.Collection)
 		newSA, err := client.CreateServiceAccount(ctx, request)
 		if err != nil {
 			logrus.WithError(err).Errorf("Failed to create service account: %s", sa.DisplayName)
 			delete(a.SecretsToCreate, secretName)
 			continue
 		}
-		logrus.Debugf("Service account created for collection %s", sa.Collection)
+		logrus.Infof("Successfully created service account: %s", newSA.Email)
 		keyData, err := GenerateServiceAccountKey(ctx, client, newSA.Email, a.Config.ProjectIdString)
 		if err != nil {
 			logrus.WithError(err).Errorf("Failed to generate key for service account: %s", newSA.Email)
@@ -195,7 +202,8 @@ func isServiceAccountNotFoundError(err error) bool {
 		return false
 	}
 
-	if gcpError, ok := err.(*googleapi.Error); ok {
+	var gcpError *googleapi.Error
+	if errors.As(err, &gcpError) {
 		return gcpError.Code == http.StatusNotFound
 	}
 
@@ -232,10 +240,12 @@ func generateServiceAccountKeyWithBackoff(ctx context.Context, client IAMClient,
 
 			if err != nil {
 				if isServiceAccountNotFoundError(err) {
-					logrus.WithField("service account", saEmail).Warnf("Still not available (attempt #%d), retrying...", attemptCount)
+					logrus.WithField("service account", saEmail).Infof("Still not available (attempt #%d), retrying...", attemptCount)
 				} else {
 					logrus.WithField("service account", saEmail).Errorf("Non-retryable error while checking (attempt #%d): %v", attemptCount, err)
 				}
+			} else {
+				logrus.WithField("service account", saEmail).Infof("Service account became available after %d attempts", attemptCount)
 			}
 			return err
 		})
@@ -247,7 +257,7 @@ func generateServiceAccountKeyWithBackoff(ctx context.Context, client IAMClient,
 			Name: name,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to create service account key evenafter waiting for availability: %w", err)
+			return nil, fmt.Errorf("failed to create service account key even after waiting for availability: %w", err)
 		}
 		logrus.WithField("service account", saEmail).Debugf("Successfully generated key after waiting for eventual consistency (attempts: %d)", attemptCount)
 	} else if err != nil {
@@ -278,12 +288,13 @@ func (a *Actions) CreateSecrets(ctx context.Context, secretsClient SecretManager
 			a.SecretsToCreate[name] = s
 		}
 
+		logrus.Infof("Creating secret: %s (type: %v, collection: %s)", s.Name, s.Type, s.Collection)
 		if err := CreateOrUpdateSecret(ctx, secretsClient, a.Config.ProjectIdNumber, s.Name, s.Payload, s.Labels, s.Annotations); err != nil {
 			logrus.WithError(err).Errorf("Failed to create secret: %s", s.Name)
 			continue
 		}
 
-		logrus.Debugf("Created secret: %s", s.Name)
+		logrus.Infof("Successfully created secret: %s", s.Name)
 	}
 }
 

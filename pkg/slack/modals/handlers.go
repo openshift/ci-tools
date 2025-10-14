@@ -7,10 +7,11 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/andygrunwald/go-jira"
 	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
 
-	"github.com/openshift/ci-tools/pkg/jira"
+	localjira "github.com/openshift/ci-tools/pkg/jira"
 	"github.com/openshift/ci-tools/pkg/slack/interactions"
 )
 
@@ -48,10 +49,11 @@ func UpdateViewForButtonPress(identifier, buttonId string, updater ViewUpdater, 
 
 // JiraIssueParameters holds the metadata used to create a Jira issue
 type JiraIssueParameters struct {
-	Id        Identifier
-	IssueType string
-	Template  *template.Template
-	Fields    []string
+	Id           Identifier
+	IssueType    string
+	Template     *template.Template
+	Fields       []string
+	CustomFields map[string]interface{} // Custom fields to set on the Jira issue
 }
 
 // Process processes the interaction callback data to render the Jira issue title and body
@@ -69,7 +71,7 @@ func (p *JiraIssueParameters) Process(callback *slack.InteractionCallback) (stri
 // has finished. We need this asynchronous response mechanism as the API
 // calls needed to file the issue often take longer than the 3sec TTL on
 // responding to the interaction payload we have.
-func ToJiraIssue(parameters JiraIssueParameters, filer jira.IssueFiler, updater ViewUpdater) interactions.Handler {
+func ToJiraIssue(parameters JiraIssueParameters, filer localjira.IssueFiler, updater ViewUpdater) interactions.Handler {
 	return interactions.HandlerFunc(string(parameters.Id)+".jira", func(callback *slack.InteractionCallback, logger *logrus.Entry) (output []byte, err error) {
 		logger.Infof("Submitting new %s to Jira.", parameters.Id)
 
@@ -89,7 +91,12 @@ func ToJiraIssue(parameters JiraIssueParameters, filer jira.IssueFiler, updater 
 				return
 			}
 
-			issue, err := filer.FileIssue(parameters.IssueType, title, body, callback.User.ID, logger)
+			var issue *jira.Issue
+			if len(parameters.CustomFields) > 0 {
+				issue, err = filer.FileIssueWithFields(parameters.IssueType, title, body, callback.User.ID, parameters.CustomFields, logger)
+			} else {
+				issue, err = filer.FileIssue(parameters.IssueType, title, body, callback.User.ID, logger)
+			}
 			if err != nil {
 				logger.WithError(err).Errorf("Failed to create %s Jira.", parameters.Id)
 				overwriteView(ErrorView(fmt.Sprintf("create %s Jira issue", parameters.Id), err))

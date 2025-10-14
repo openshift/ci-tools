@@ -47,9 +47,9 @@ const (
 )
 
 var lockObjectBackoff = wait.Backoff{
-	Steps:    5,
-	Duration: 1 * time.Minute,
-	Factor:   1.5,
+	Steps:    20,
+	Duration: 2 * time.Minute,
+	Factor:   1.15,
 	Jitter:   0.2,
 }
 
@@ -292,11 +292,29 @@ func acquireDistributedLock(ctx context.Context, client *storage.Client, bucketN
 
 	obj := client.Bucket(bucketName).Object(lockObjectName)
 	retryErr := retry.OnError(lockObjectBackoff, isLockHeldError, func() error {
-		logrus.Debugf("Attempting to acquire lock for GCS bucket %q...", bucketName)
+		logrus.Infof("Attempting to acquire lock for GCS bucket %q...", bucketName)
+
+		// Check if lock exists and is stale (older than 30 minutes)
+		// This should be much longer than the worst-case test runtime to avoid
+		// deleting locks from legitimately slow but still-running tests.
+		attrs, err := obj.Attrs(ctx)
+		if err == nil {
+			lockAge := time.Since(attrs.Created)
+			if lockAge > 30*time.Minute {
+				logrus.Warnf("Found stale lock (age: %v), deleting it...", lockAge)
+				if delErr := obj.Delete(ctx); delErr != nil {
+					logrus.Warnf("Failed to delete stale lock: %v", delErr)
+				}
+			} else {
+				logrus.Debugf("Lock is held by another test (age: %v), will retry...", lockAge)
+			}
+		}
+
 		// Only write if the object does NOT exist (DoesNotExist: true) == the lock is free
 		w := obj.If(storage.Conditions{DoesNotExist: true}).NewWriter(ctx)
 		w.ContentType = "text/plain"
-		if _, writeErr := w.Write([]byte("Locked")); writeErr != nil {
+		lockContent := fmt.Sprintf("Locked at %s", time.Now().Format(time.RFC3339))
+		if _, writeErr := w.Write([]byte(lockContent)); writeErr != nil {
 			w.Close()
 			return fmt.Errorf("failed to write to GCS bucket %q: %w", bucketName, writeErr)
 		}
@@ -322,7 +340,6 @@ func acquireDistributedLock(ctx context.Context, client *storage.Client, bucketN
 		} else {
 			logrus.Debugf("Successfully released distributed lock")
 		}
-		client.Close()
 	}, nil
 }
 

@@ -98,29 +98,54 @@ type IAMClient interface {
 	DeleteServiceAccountKey(ctx context.Context, req *adminpb.DeleteServiceAccountKeyRequest, opts ...gax.CallOption) error
 }
 
+const (
+	// gcpPropagationDelay is the time to wait after write operations for GCP's eventual consistency
+	// to propagate changes to list APIs; GCP recommends "waiting a few seconds after write operations
+	// before expecting list APIs to reflect those changes". If 5 secs is not enough, we can bump it eventually.
+	gcpPropagationDelay = 5 * time.Second
+)
+
+// withGCPPropagationDelay wraps a function with a delay to account for GCP's eventual consistency.
+// This gives GCP time to propagate changes to list APIs after write operations.
+func withGCPPropagationDelay(operation string, fn func()) {
+	fn()
+	logrus.Debugf("%s: waiting %v for GCP to propagate...", gcpPropagationDelay, operation)
+	time.Sleep(gcpPropagationDelay)
+}
+
 // ExecuteActions performs the actual resource changes in GCP based on the computed diff.
 func (a *Actions) ExecuteActions(ctx context.Context, iamClient IAMClient, secretsClient SecretManagerClient, projectsClient ResourceManagerClient) {
 	if len(a.SAsToCreate) > 0 {
-		a.CreateServiceAccounts(ctx, iamClient)
+		withGCPPropagationDelay("service account creation", func() {
+			a.CreateServiceAccounts(ctx, iamClient)
+		})
 	}
 
 	if len(a.SecretsToCreate) > 0 {
-		a.CreateSecrets(ctx, secretsClient, iamClient)
+		withGCPPropagationDelay("secret creation", func() {
+			a.CreateSecrets(ctx, secretsClient, iamClient)
+		})
 	}
 
 	if a.ConsolidatedIAMPolicy != nil {
-		if err := a.ApplyPolicy(ctx, projectsClient); err != nil {
-			logrus.WithError(err).Fatal("Failed to apply IAM policy")
-		}
+		withGCPPropagationDelay("IAM policy update", func() {
+			if err := a.ApplyPolicy(ctx, projectsClient); err != nil {
+				logrus.WithError(err).Fatal("Failed to apply IAM policy")
+			}
+		})
 	}
 
 	if len(a.SAsToDelete) > 0 {
-		a.RevokeObsoleteServiceAccountKeys(ctx, iamClient)
-		a.DeleteObsoleteServiceAccounts(ctx, iamClient)
+		withGCPPropagationDelay("service account deletion", func() {
+			a.RevokeObsoleteServiceAccountKeys(ctx, iamClient)
+			a.DeleteObsoleteServiceAccounts(ctx, iamClient)
+		})
 	}
 
 	if len(a.SecretsToDelete) > 0 {
-		a.DeleteObsoleteSecrets(ctx, secretsClient)
+		withGCPPropagationDelay("secret deletion", func() {
+			a.DeleteObsoleteSecrets(ctx, secretsClient)
+		})
 	}
 }
 

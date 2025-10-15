@@ -18,8 +18,9 @@ const (
 	WithOKD    OKDInclusion = true
 	WithoutOKD OKDInclusion = false
 
-	PromotionStepName     = "promotion"
-	PromotionQuayStepName = "promotion-quay"
+	PromotionStepName          = "promotion"
+	PromotionQuayStepName      = "promotion-quay"
+	PromotionQuayProxyStepName = "promotion-quay-proxy"
 
 	PromotionExcludeImageWildcard = "*"
 )
@@ -123,6 +124,11 @@ var (
 		}
 	}
 
+	// QuayProxyTagFunc is the tagging function for quay-proxy
+	QuayProxyTagFunc = func(source, target string, tag ImageStreamTagReference, time string, tagMap map[string]string) {
+		tagMap[target] = QuayImageReference(tag)
+	}
+
 	// DefaultTargetNameFunc is the default target name function
 	DefaultTargetNameFunc = func(registry string, config PromotionTarget) string {
 		if len(config.Name) > 0 {
@@ -137,5 +143,13 @@ var (
 			return fmt.Sprintf("%s:%s_%s_${component}", QuayOpenShiftCIRepo, config.Namespace, config.Name)
 		}
 		return fmt.Sprintf("%s:%s_${component}_%s", QuayOpenShiftCIRepo, config.Namespace, config.Tag)
+	}
+
+	// QuayProxyTargetNameFunc is the target name function for quay-proxy test imagestreams
+	QuayProxyTargetNameFunc = func(registry string, config PromotionTarget) string {
+		if len(config.Name) > 0 {
+			return fmt.Sprintf("%s/%s/%s-quay:${component}", registry, config.Namespace, config.Name)
+		}
+		return fmt.Sprintf("%s/%s/${component}-quay:%s", registry, config.Namespace, config.Tag)
 	}
 )

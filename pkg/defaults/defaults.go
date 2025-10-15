@@ -385,6 +385,7 @@ func fromConfig(
 			logrus.Info("No images to promote to quay.io if the registry is overridden")
 		} else {
 			promotionSteps = append(promotionSteps, releasesteps.PromotionStep(api.PromotionQuayStepName, config, requiredNames, jobSpec, podClient, pushSecret, api.QuayOpenShiftCIRepo, api.QuayMirrorFunc, api.QuayTargetNameFunc, nodeArchitectures))
+			promotionSteps = append(promotionSteps, releasesteps.PromotionStep(api.PromotionQuayProxyStepName, config, requiredNames, jobSpec, podClient, pushSecret, registryDomain(config.PromotionConfiguration), api.QuayProxyTagFunc, api.QuayProxyTargetNameFunc, nodeArchitectures))
 		}
 	}
 

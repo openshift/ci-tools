@@ -1073,7 +1073,7 @@ func sourceStepForRef(ref *prowapi.Refs, primaryRef bool) api.StepConfiguration 
 		From:              root,
 		To:                source,
 		ClonerefsPullSpec: api.ClonerefsPullSpec,
-		ClonerefsPath:     "/clonerefs",
+		ClonerefsPath:     api.ClonerefsPath,
 		Ref:               orgRepo,
 	}}
 }

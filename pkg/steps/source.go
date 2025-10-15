@@ -54,6 +54,8 @@ const (
 	oauthToken    = "/oauth-token"
 
 	OauthSecretKey = "oauth-token"
+
+	ClonerefsBinaryPath = "/clonerefs"
 )
 
 type CloneAuthType string
@@ -85,7 +87,7 @@ func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, workingDir st
 
 	dockerCommands = append(dockerCommands, "")
 	dockerCommands = append(dockerCommands, fmt.Sprintf("FROM %s:%s", api.PipelineImageStream, fromTag))
-	dockerCommands = append(dockerCommands, "ADD ./clonerefs /clonerefs")
+	dockerCommands = append(dockerCommands, fmt.Sprintf("ADD .%s %s", ClonerefsBinaryPath, ClonerefsBinaryPath))
 
 	if cloneAuthConfig != nil {
 		switch cloneAuthConfig.Type {
@@ -99,7 +101,7 @@ func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, workingDir st
 		}
 	}
 
-	dockerCommands = append(dockerCommands, fmt.Sprintf("RUN umask 0002 && /clonerefs && find %s/src -type d -not -perm -0775 | xargs --max-procs 10 --max-args 100 --no-run-if-empty chmod g+xw", gopath))
+	dockerCommands = append(dockerCommands, fmt.Sprintf("RUN umask 0002 && %s && find %s/src -type d -not -perm -0775 | xargs --max-procs 10 --max-args 100 --no-run-if-empty chmod g+xw", ClonerefsBinaryPath, gopath))
 	dockerCommands = append(dockerCommands, fmt.Sprintf("WORKDIR %s/", workingDir))
 	dockerCommands = append(dockerCommands, fmt.Sprintf("ENV GOPATH=%s", gopath))
 

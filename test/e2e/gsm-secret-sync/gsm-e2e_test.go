@@ -8,9 +8,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"testing"
 	"time"
@@ -105,6 +107,22 @@ func setupLogger(censor *secrets.DynamicCensor) error {
 	}
 	logrus.SetLevel(level)
 	logrus.SetFormatter(logrusutil.NewFormatterWithCensor(&logrus.JSONFormatter{}, censor))
+
+	// Write logs to ARTIFACT_DIR if set (when running in ci-operator)
+	if artifactDir := os.Getenv("ARTIFACT_DIR"); artifactDir != "" {
+		logFile, err := os.OpenFile(
+			filepath.Join(artifactDir, "gsm-e2e-test.log"),
+			os.O_CREATE|os.O_WRONLY|os.O_APPEND,
+			0644,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to open log file: %w", err)
+		}
+		// Write to both stdout and the log file
+		logrus.SetOutput(io.MultiWriter(os.Stdout, logFile))
+		logrus.Infof("Logging to %s/gsm-e2e-test.log", artifactDir)
+	}
+
 	return nil
 }
 

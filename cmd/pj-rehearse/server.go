@@ -545,7 +545,7 @@ func (s *server) prepareCandidate(repoClient git.RepoClient, pullRequest *github
 	}
 	candidate := rehearse.RehearsalCandidateFromPullRequest(pullRequest, baseSHA)
 
-	// In order to determine *only* the affected jobs from the changes in the PR, we need to rebase onto master
+	// In order to determine *only* the affected jobs from the changes in the PR, we need to rebase onto default
 	baseRef := pullRequest.Base.Ref
 
 	// In practice, this command sometimes fails due to seemingly transient issues, we should retry it up to 4 times
@@ -561,7 +561,7 @@ func (s *server) prepareCandidate(repoClient git.RepoClient, pullRequest *github
 		}
 	}
 	if !rebased || rebaseErr != nil {
-		return rehearse.RehearsalCandidate{}, fmt.Errorf("couldn't rebase candidate onto master: %w", err)
+		return rehearse.RehearsalCandidate{}, fmt.Errorf("couldn't rebase candidate onto %v: %w", baseRef, err)
 	}
 
 	return candidate, nil

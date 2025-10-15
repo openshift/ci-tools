@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -52,8 +53,12 @@ type SlackReporterConfig struct {
 	JobStatesToReport []prowv1.ProwJobState `json:"job_states_to_report,omitempty"`
 	ReportTemplate    string                `json:"report_template,omitempty"`
 	JobNames          []string              `json:"job_names,omitempty"`
+	// JobNamePatterns contains regex patterns to match job names
+	JobNamePatterns []string `json:"job_name_patterns,omitempty"`
 	// ExcludedVariants lists job variants that this config will not apply to
 	ExcludedVariants []string `json:"excluded_variants,omitempty"`
+	// ExcludedJobPatterns contains regex patterns for job names to exclude from this config
+	ExcludedJobPatterns []string `json:"excluded_job_patterns,omitempty"`
 }
 
 type SkipOperatorPresubmits struct {
@@ -63,8 +68,29 @@ type SkipOperatorPresubmits struct {
 
 func (p *Prowgen) GetSlackReporterConfigForTest(test, variant string) *SlackReporterConfig {
 	for _, s := range p.SlackReporterConfigs {
-		if !slices.Contains(s.ExcludedVariants, variant) && slices.Contains(s.JobNames, test) {
-			return &s
+		if !slices.Contains(s.ExcludedVariants, variant) {
+			// Check if job is excluded by pattern
+			isExcluded := false
+			for _, excludePattern := range s.ExcludedJobPatterns {
+				if matched, err := regexp.MatchString(excludePattern, test); err == nil && matched {
+					isExcluded = true
+					break
+				}
+			}
+
+			if !isExcluded {
+				// Check exact job name matches first
+				if slices.Contains(s.JobNames, test) {
+					return &s
+				}
+
+				// Check regex pattern matches
+				for _, pattern := range s.JobNamePatterns {
+					if matched, err := regexp.MatchString(pattern, test); err == nil && matched {
+						return &s
+					}
+				}
+			}
 		}
 	}
 	return nil
@@ -113,13 +139,44 @@ func validateProwgenConfig(pConfig *Prowgen) error {
 	var errs []error
 	if len(pConfig.SlackReporterConfigs) > 1 { // There is no reason to validate if we only have one slack_reporter_config
 		jobsSeen := sets.NewString()
+		patternsSeen := sets.NewString()
+
 		for _, sc := range pConfig.SlackReporterConfigs {
+			// Validate exact job names
 			for _, job := range sc.JobNames {
 				if jobsSeen.Has(job) {
 					errs = append(errs, fmt.Errorf("job: %s exists in multiple slack_reporter_configs, it should only be in one", job))
 					continue
 				}
 				jobsSeen.Insert(job)
+			}
+
+			// Validate regex patterns
+			for _, pattern := range sc.JobNamePatterns {
+				// Check if regex pattern is valid
+				if _, err := regexp.Compile(pattern); err != nil {
+					errs = append(errs, fmt.Errorf("invalid regex pattern: %s, error: %w", pattern, err))
+					continue
+				}
+
+				// Check for duplicate patterns
+				if patternsSeen.Has(pattern) {
+					errs = append(errs, fmt.Errorf("regex pattern: %s exists in multiple slack_reporter_configs, it should only be in one", pattern))
+					continue
+				}
+				patternsSeen.Insert(pattern)
+			}
+
+			// Validate excluded job patterns
+			for _, pattern := range sc.ExcludedJobPatterns {
+				// Check if regex pattern is valid
+				if _, err := regexp.Compile(pattern); err != nil {
+					errs = append(errs, fmt.Errorf("invalid excluded job pattern: %s, error: %w", pattern, err))
+					continue
+				}
+
+				// Note: We don't check for duplicates in excluded patterns as it's reasonable
+				// to have the same exclusion in multiple configs
 			}
 		}
 	}

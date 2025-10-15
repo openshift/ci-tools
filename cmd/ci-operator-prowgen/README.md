@@ -18,6 +18,14 @@ slack_reporter:
   report_template: ':failed: Job *{{.Spec.Job}}* ended with *{{.Status.State}}*. <{{.Status.URL}}|View logs> {{end}}'
   job_names:
   - images
+  # job_name_patterns supports regex patterns for matching job names
+  job_name_patterns:
+  - "^unit-.*"
+  - "^e2e-.*-serial$"
+  # excluded_job_patterns excludes jobs matching these patterns (similar to excluded_variants)
+  excluded_job_patterns:
+  - ".*-skip$"
+  - "^nightly-.*"
 skip_operator_presubmits:
 - branch: release-4.19
   variant: periodics

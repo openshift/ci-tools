@@ -1072,6 +1072,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # they fail. The given step must explicitly ask for being ignored by setting\n" +
 	"            # the OptionalOnSuccess flag to true.\n" +
 	"            allow_best_effort_post_steps: false\n" +
+	"            # AllowPrePostStepOverrides must be set to true when a test configuration overrides the pre or post steps\n" +
+	"            # from a workflow. This is a safety mechanism to prevent accidental overriding of critical setup and\n" +
+	"            # teardown steps that could cause resource leaks.\n" +
+	"            allow_pre_post_step_overrides: false\n" +
 	"            # AllowSkipOnSuccess defines if any steps can be skipped when\n" +
 	"            # all previous `pre` and `test` steps were successful. The given step must explicitly\n" +
 	"            # ask for being skipped by setting the OptionalOnSuccess flag to true.\n" +
@@ -1970,6 +1974,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # they fail. The given step must explicitly ask for being ignored by setting\n" +
 	"        # the OptionalOnSuccess flag to true.\n" +
 	"        allow_best_effort_post_steps: false\n" +
+	"        # AllowPrePostStepOverrides must be set to true when a test configuration overrides the pre or post steps\n" +
+	"        # from a workflow. This is a safety mechanism to prevent accidental overriding of critical setup and\n" +
+	"        # teardown steps that could cause resource leaks.\n" +
+	"        allow_pre_post_step_overrides: false\n" +
 	"        # AllowSkipOnSuccess defines if any steps can be skipped when\n" +
 	"        # all previous `pre` and `test` steps were successful. The given step must explicitly\n" +
 	"        # ask for being skipped by setting the OptionalOnSuccess flag to true.\n" +

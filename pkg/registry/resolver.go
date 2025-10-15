@@ -68,6 +68,7 @@ func NewResolver(stepsByName ReferenceByName, chainsByName ChainByName, workflow
 
 func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) (api.MultiStageTestConfigurationLiteral, error) {
 	var overridden [][]api.TestStep
+
 	if config.Workflow != nil {
 		var errs []error
 		overridden, errs = r.mergeWorkflow(&config)
@@ -103,6 +104,7 @@ func (r *registry) mergeWorkflow(config *api.MultiStageTestConfiguration) ([][]a
 	} else {
 		overridden = append(overridden, workflow.Post)
 	}
+
 	config.Environment = mergeEnvironments(workflow.Environment, config.Environment)
 	config.Dependencies = mergeDependencies(workflow.Dependencies, config.Dependencies)
 	config.DependencyOverrides = mergeDependencyOverrides(workflow.DependencyOverrides, config.DependencyOverrides)
@@ -410,7 +412,7 @@ func ResolveConfig(resolver Resolver, config api.ReleaseBuildConfiguration) (api
 
 		resolvedConfig, err := resolver.Resolve(step.As, *step.MultiStageTestConfiguration)
 		if err != nil {
-			return api.ReleaseBuildConfiguration{}, fmt.Errorf("Failed resolve MultiStageTestConfiguration: %w", err)
+			return api.ReleaseBuildConfiguration{}, fmt.Errorf("failed to resolve MultiStageTestConfiguration: %w", err)
 		}
 		step.MultiStageTestConfigurationLiteral = &resolvedConfig
 		// remove old multi stage config

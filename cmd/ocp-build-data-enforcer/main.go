@@ -16,6 +16,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	localgit "sigs.k8s.io/prow/pkg/git/localgit"
 	git "sigs.k8s.io/prow/pkg/git/v2"
 
 	"github.com/openshift/imagebuilder"
@@ -130,7 +131,7 @@ func processDockerfile(config ocpbuilddata.OCPImageConfig, processor diffProcess
 	if !hasDiff {
 		return nil
 	}
-	branch := "master"
+	branch := ""
 	if config.Content != nil && config.Content.Source.Git != nil && strings.HasPrefix(config.Content.Source.Git.Branch.Target, "openshift-") {
 		branch = config.Content.Source.Git.Branch.Target
 	}
@@ -285,6 +286,9 @@ func (dp *diffProcessor) process() error {
 				}
 			}()
 
+			if d.branch == "" {
+				d.branch = localgit.DefaultBranch(gitClient.Directory())
+			}
 			if err := gitClient.Checkout(d.branch); err != nil {
 				return fmt.Errorf("failed to checkout %s branch: %w", d.branch, err)
 			}

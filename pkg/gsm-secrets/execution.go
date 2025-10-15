@@ -189,11 +189,11 @@ func (a *Actions) CreateServiceAccounts(ctx context.Context, client IAMClient) {
 
 // gcpServiceAccountBackoff defines retry behavior for GCP service account operations
 var gcpServiceAccountBackoff = wait.Backoff{
-	Steps:    3,
-	Duration: 8 * time.Second,
-	Factor:   2.0,
+	Steps:    15,
+	Duration: 5 * time.Second,
+	Factor:   1.2,
 	Jitter:   0.1,
-	Cap:      30 * time.Second,
+	Cap:      2 * time.Minute,
 }
 
 // isServiceAccountNotFoundError detects GCP service account "not found" errors indicating eventual consistency

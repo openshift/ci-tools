@@ -69,9 +69,9 @@ type testRunner struct {
 }
 
 var gcpStateCheckBackoff = wait.Backoff{
-	Steps:    8,
-	Duration: 10 * time.Second, // Start with 10s (give GCP time to propagate)
-	Factor:   1.4,
+	Steps:    10,
+	Duration: 5 * time.Second,
+	Factor:   1.3,
 	Jitter:   0.1,
 	Cap:      10 * time.Minute,
 }

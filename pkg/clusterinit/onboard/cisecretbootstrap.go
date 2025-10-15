@@ -20,6 +20,7 @@ const (
 	dotDockerConfigJson          = ".dockerconfigjson"
 	testCredentials              = "test-credentials"
 	keel                         = "keel"
+	ocp                          = "ocp"
 	kubeconfig                   = "kubeconfig"
 	config                       = "config"
 	pjRehearse                   = "pj-rehearse"
@@ -210,6 +211,7 @@ func (s *ciSecretBootstrapStep) generateRegistryPullCredentialsSecret() *secretb
 			s.generateDockerConfigJsonSecretConfigTo(api.RegistryPullCredentialsSecret, CI, s.clusterInstall.ClusterName),
 			s.generateDockerConfigJsonSecretConfigTo(api.RegistryPullCredentialsSecret, testCredentials, s.clusterInstall.ClusterName),
 			s.generateDockerConfigJsonSecretConfigTo(api.RegistryPullCredentialsSecret, keel, s.clusterInstall.ClusterName),
+			s.generateDockerConfigJsonSecretConfigTo(api.RegistryPullCredentialsSecret, ocp, s.clusterInstall.ClusterName),
 		},
 	}
 }

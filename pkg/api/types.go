@@ -2505,7 +2505,8 @@ const (
 )
 
 const (
-	ClonerefsPullSpec string = "quay-proxy.ci.openshift.org/openshift/ci:ci_managed-clonerefs_latest"
+	ClonerefsPullSpec string = "quay-proxy.ci.openshift.org/openshift/ci:ci_clonerefs_latest"
+	ClonerefsPath     string = "/ko-app/clonerefs"
 )
 
 // SourceStepConfiguration describes a step that

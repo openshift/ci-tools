@@ -55,10 +55,10 @@ spec:
     images:
     - from:
         kind: DockerImage
-        name: quay-proxy.ci.openshift.org/openshift/ci/ci:ci_managed-clonerefs_latest
+        name: quay-proxy.ci.openshift.org/openshift/ci:ci_clonerefs_latest
       paths:
       - destinationDir: .
-        sourcePath: /clonerefs
+        sourcePath: /ko-app/clonerefs
     secrets:
     - secret:
         name: oauth-nykd6bfg

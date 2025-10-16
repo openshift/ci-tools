@@ -44,7 +44,7 @@ func init() {
 
 func addCloneRefs(cfg *api.SourceStepConfiguration) *api.SourceStepConfiguration {
 	cfg.ClonerefsPullSpec = api.ClonerefsPullSpec
-	cfg.ClonerefsPath = "/clonerefs"
+	cfg.ClonerefsPath = api.ClonerefsPath
 	return cfg
 }
 

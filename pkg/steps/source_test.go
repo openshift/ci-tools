@@ -241,10 +241,10 @@ func TestCreateBuild(t *testing.T) {
 			config := api.SourceStepConfiguration{
 				From:              api.PipelineImageStreamTagReferenceRoot,
 				To:                api.PipelineImageStreamTagReferenceSource,
-				ClonerefsPullSpec: "quay-proxy.ci.openshift.org/openshift/ci/ci:ci_managed-clonerefs_latest",
-				ClonerefsPath:     "/clonerefs",
+				ClonerefsPullSpec: api.ClonerefsPullSpec,
+				ClonerefsPath:     api.ClonerefsPath,
 			}
-			clonerefsRef := coreapi.ObjectReference{Kind: "DockerImage", Name: "quay-proxy.ci.openshift.org/openshift/ci/ci:ci_managed-clonerefs_latest"}
+			clonerefsRef := coreapi.ObjectReference{Kind: "DockerImage", Name: config.ClonerefsPullSpec}
 			resources := map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}}
 			actual := createBuild(config, testCase.jobSpec, clonerefsRef, resources, testCase.cloneAuthConfig, testCase.pullSecret, "imagedigest")
 			testhelper.CompareWithFixture(t, actual)

@@ -31,7 +31,7 @@ func gatherOptions() (*options, error) {
 	flag.StringVar(&opts.prAssignee, "pr-assignee", "", "Comma separated list of assignees for the PR to create")
 	flag.StringVar(&opts.organization, "organization", "openshift", "The GitHub organization in which the PR should be created")
 	flag.StringVar(&opts.repo, "repo", "release", "The name of the repo in which the PR should be created")
-	flag.StringVar(&opts.branch, "branch", "master", "The branch for which the PR should be created")
+	flag.StringVar(&opts.branch, "branch", "main", "The branch for which the PR should be created")
 	flag.Parse()
 
 	var errs []error

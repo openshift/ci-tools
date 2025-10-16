@@ -228,18 +228,16 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 	var images []string
 	var pruneImages []string
 	var tags []string
-	isTaggingStep := name == api.PromotionQuayProxyStepName
 
 	for _, k := range keys {
 		if strings.Contains(k, fmt.Sprintf("%s_prune_", timeStr)) {
-			if isTaggingStep {
-				continue
-			}
 			pruneImages = append(pruneImages, fmt.Sprintf("%s=%s", imageMirrorTarget[k], k))
 		} else {
-			if isTaggingStep {
+			// Detect based on target format: quay-proxy targets should be tagged, others mirrored
+			if strings.HasPrefix(k, "registry.ci.openshift.org/") && (strings.Contains(k, "-quay:") || strings.Contains(k, "${component}")) {
 				tags = append(tags, fmt.Sprintf("%s %s", imageMirrorTarget[k], k))
 			} else {
+				// Default to mirroring for quay.io targets and other registries
 				images = append(images, fmt.Sprintf("%s=%s", imageMirrorTarget[k], k))
 			}
 		}
@@ -248,25 +246,30 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 	registryConfig := filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey)
 	command := []string{"/bin/sh", "-c"}
 
-	var mainCommand string
-	if isTaggingStep {
-		mainCommand = getTagCommand(tags, 10)
-	} else {
-		mainCommand = getMirrorCommand(registryConfig, images, 10)
+	var commands []string
+
+	// Generate mirror commands if there are images to mirror
+	if len(images) > 0 {
+		mirrorCommand := fmt.Sprintf("for r in {1..5}; do echo Mirror attempt $r; %s && break; backoff=$(($RANDOM %% 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff; done", getMirrorCommand(registryConfig, images, 10))
+		commands = append(commands, mirrorCommand)
 	}
 
-	retryCommand := fmt.Sprintf("for r in {1..5}; do echo %s attempt $r; %s && break; backoff=$(($RANDOM %% 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff; done",
-		map[bool]string{true: "Tag", false: "Mirror"}[isTaggingStep], mainCommand)
+	// Generate tag commands if there are tags to create
+	if len(tags) > 0 {
+		tagCommand := fmt.Sprintf("for r in {1..5}; do echo Tag attempt $r; %s && break; backoff=$(($RANDOM %% 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff; done", getTagCommand(tags, 10))
+		commands = append(commands, tagCommand)
+	}
 
 	var args []string
-	if len(pruneImages) > 0 && !isTaggingStep {
+	if len(pruneImages) > 0 {
 		// See https://github.com/openshift/release/blob/2080ec4a49337c27577a4b2ff08a538e96436e65/hack/qci_registry_pruner.py for details.
 		// Note that we don't retry here and we ignore failures because (a) it may be the first time an image tag is
 		// being promoted to and trying to add a pruning tag to the existing image is doomed to fail. (b) pruning tags
 		// help eliminate a rare race condition. The cost of an occasional failure in establishing them is very low.
 		args = append(args, fmt.Sprintf("%s || true", getMirrorCommand(registryConfig, pruneImages, 10)))
 	}
-	args = append(args, retryCommand)
+
+	args = append(args, commands...)
 	args = []string{strings.Join(args, "\n")}
 
 	image := fmt.Sprintf("%s/%s/%s:cli", api.DomainForService(api.ServiceRegistry), "ocp", cliVersion)

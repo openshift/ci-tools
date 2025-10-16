@@ -95,75 +95,62 @@ func TestGenerateServiceAccountKey(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name                    string
-		saEmail                 string
-		mockKeyData             []byte
-		firstCreateKeyError     error
-		secondCreateKeyError    error
-		getServiceAccountErrors []error
-		expectError             bool
-		expectedCreateKeyCalls  int
-		expectedGetSACalls      int
+		name                   string
+		saEmail                string
+		mockKeyData            []byte
+		createKeyErrors        []error
+		expectError            bool
+		expectedCreateKeyCalls int
 	}{
 		{
 			name:                   "successful key generation on first try",
 			saEmail:                GetUpdaterSAEmail("test-collection", config),
 			mockKeyData:            []byte("fake-private-key-data"),
-			firstCreateKeyError:    nil,
+			createKeyErrors:        []error{nil},
 			expectError:            false,
 			expectedCreateKeyCalls: 1,
-			expectedGetSACalls:     0,
 		},
 		{
 			name:                   "non-retryable IAM client error",
 			saEmail:                GetUpdaterSAEmail("test-collection", config),
 			mockKeyData:            nil,
-			firstCreateKeyError:    errors.New("some non-retryable GCP error"),
+			createKeyErrors:        []error{errors.New("some non-retryable GCP error")},
 			expectError:            true,
 			expectedCreateKeyCalls: 1,
-			expectedGetSACalls:     0,
 		},
 		{
-			name:                "retryable NotFound error - eventual success",
-			saEmail:             GetUpdaterSAEmail("test-collection", config),
-			mockKeyData:         []byte("fake-private-key-data"),
-			firstCreateKeyError: status.Error(codes.NotFound, "service account not found"),
-			getServiceAccountErrors: []error{
+			name:        "retryable NotFound error - eventual success",
+			saEmail:     GetUpdaterSAEmail("test-collection", config),
+			mockKeyData: []byte("fake-private-key-data"),
+			createKeyErrors: []error{
 				status.Error(codes.NotFound, "service account not found"),
-				status.Error(codes.NotFound, "service account not found"),
-				nil, // Success on third check
+				nil, // Success on second attempt
 			},
-			secondCreateKeyError:   nil,
 			expectError:            false,
-			expectedCreateKeyCalls: 2, // First attempt + retry after SA becomes available
-			expectedGetSACalls:     3, // Three checks for SA availability
+			expectedCreateKeyCalls: 2,
 		},
 		{
-			name:                "retryable NotFound error - all checks fail",
-			saEmail:             GetUpdaterSAEmail("test-collection", config),
-			mockKeyData:         nil,
-			firstCreateKeyError: status.Error(codes.NotFound, "service account not found"),
-			getServiceAccountErrors: []error{
+			name:        "retryable NotFound error - all attempts fail",
+			saEmail:     GetUpdaterSAEmail("test-collection", config),
+			mockKeyData: nil,
+			createKeyErrors: []error{
 				status.Error(codes.NotFound, "service account not found"),
 				status.Error(codes.NotFound, "service account not found"),
 				status.Error(codes.NotFound, "service account not found"),
 			},
 			expectError:            true,
-			expectedCreateKeyCalls: 1, // Only first attempt
-			expectedGetSACalls:     3, // Three failed checks
+			expectedCreateKeyCalls: 3,
 		},
 		{
-			name:                "retryable HTTP 404 error - eventual success",
-			saEmail:             GetUpdaterSAEmail("test-collection", config),
-			mockKeyData:         []byte("fake-private-key-data"),
-			firstCreateKeyError: &googleapi.Error{Code: http.StatusNotFound, Message: "service account not found"},
-			getServiceAccountErrors: []error{
-				nil, // SA becomes available immediately
+			name:        "retryable HTTP 404 error - eventual success",
+			saEmail:     GetUpdaterSAEmail("test-collection", config),
+			mockKeyData: []byte("fake-private-key-data"),
+			createKeyErrors: []error{
+				&googleapi.Error{Code: http.StatusNotFound, Message: "service account not found"},
+				nil, // Success on second attempt
 			},
-			secondCreateKeyError:   nil,
 			expectError:            false,
-			expectedCreateKeyCalls: 2, // First attempt + retry
-			expectedGetSACalls:     1, // One successful check
+			expectedCreateKeyCalls: 2,
 		},
 	}
 
@@ -177,50 +164,25 @@ func TestGenerateServiceAccountKey(t *testing.T) {
 			keyRequest := &adminpb.CreateServiceAccountKeyRequest{
 				Name: fmt.Sprintf("%s/serviceAccounts/%s", GetProjectResourceString(config.ProjectIdString), tc.saEmail),
 			}
-			getRequest := &adminpb.GetServiceAccountRequest{
-				Name: fmt.Sprintf("%s/serviceAccounts/%s", GetProjectResourceString(config.ProjectIdString), tc.saEmail),
-			}
 
-			// Set up first CreateServiceAccountKey call
-			firstCall := mockIAMClient.EXPECT().
+			// Set up CreateServiceAccountKey calls based on the errors list
+			callCount := 0
+			mockIAMClient.EXPECT().
 				CreateServiceAccountKey(gomock.Any(), keyRequest).
-				Return(nil, tc.firstCreateKeyError)
-
-			// Set up GetServiceAccount calls if needed
-			if tc.expectedGetSACalls > 0 {
-				getCallCount := 0
-				mockIAMClient.EXPECT().
-					GetServiceAccount(gomock.Any(), getRequest).
-					DoAndReturn(func(ctx context.Context, req *adminpb.GetServiceAccountRequest, opts ...gax.CallOption) (*adminpb.ServiceAccount, error) {
-						if getCallCount < len(tc.getServiceAccountErrors) {
-							err := tc.getServiceAccountErrors[getCallCount]
-							getCallCount++
+				DoAndReturn(func(ctx context.Context, req *adminpb.CreateServiceAccountKeyRequest, opts ...gax.CallOption) (*adminpb.ServiceAccountKey, error) {
+					if callCount < len(tc.createKeyErrors) {
+						err := tc.createKeyErrors[callCount]
+						callCount++
+						if err != nil {
 							return nil, err
 						}
-						return nil, errors.New("unexpected GetServiceAccount call")
-					}).
-					Times(tc.expectedGetSACalls)
-			}
-
-			// Set up second CreateServiceAccountKey call if needed
-			if tc.expectedCreateKeyCalls > 1 {
-				secondCall := mockIAMClient.EXPECT().
-					CreateServiceAccountKey(gomock.Any(), keyRequest).
-					After(firstCall)
-
-				if tc.secondCreateKeyError != nil {
-					secondCall.Return(nil, tc.secondCreateKeyError)
-				} else {
-					secondCall.Return(&adminpb.ServiceAccountKey{
-						PrivateKeyData: tc.mockKeyData,
-					}, nil)
-				}
-			} else if tc.firstCreateKeyError == nil {
-				// First call succeeded, return the key data
-				firstCall.Return(&adminpb.ServiceAccountKey{
-					PrivateKeyData: tc.mockKeyData,
-				}, tc.firstCreateKeyError)
-			}
+						return &adminpb.ServiceAccountKey{
+							PrivateKeyData: tc.mockKeyData,
+						}, nil
+					}
+					return nil, errors.New("unexpected CreateServiceAccountKey call")
+				}).
+				Times(tc.expectedCreateKeyCalls)
 
 			testBackoff := wait.Backoff{
 				Steps:    3,

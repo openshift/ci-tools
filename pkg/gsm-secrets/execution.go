@@ -221,49 +221,31 @@ func GenerateServiceAccountKey(ctx context.Context, client IAMClient, saEmail st
 func generateServiceAccountKeyWithBackoff(ctx context.Context, client IAMClient, saEmail string, projectID string, backoff wait.Backoff) ([]byte, error) {
 	name := fmt.Sprintf("%s/serviceAccounts/%s", GetProjectResourceString(projectID), saEmail)
 
-	key, err := client.CreateServiceAccountKey(ctx, &adminpb.CreateServiceAccountKeyRequest{
-		Name: name,
-	})
+	var key *adminpb.ServiceAccountKey
+	attemptCount := 0
 
-	if err != nil && isServiceAccountNotFoundError(err) {
-		// The reason for the service account not found may be due to eventual consistency, so we wait for it to become available
-		logrus.Warnf("Service account %s not available, waiting for eventual consistency...", saEmail)
+	retryErr := retry.OnError(backoff, isServiceAccountNotFoundError, func() error {
+		attemptCount++
 
-		attemptCount := 0
-		retryErr := retry.OnError(backoff, isServiceAccountNotFoundError, func() error {
-			attemptCount++
-			logrus.WithField("service account", saEmail).Debugf("Checking availability (attempt #%d)...", attemptCount)
-
-			_, err := client.GetServiceAccount(ctx, &adminpb.GetServiceAccountRequest{
-				Name: name,
-			})
-
-			if err != nil {
-				if isServiceAccountNotFoundError(err) {
-					logrus.WithField("service account", saEmail).Infof("Still not available (attempt #%d), retrying...", attemptCount)
-				} else {
-					logrus.WithField("service account", saEmail).Errorf("Non-retryable error while checking (attempt #%d): %v", attemptCount, err)
-				}
-			} else {
-				logrus.WithField("service account", saEmail).Infof("Service account became available after %d attempts", attemptCount)
-			}
-			return err
-		})
-
-		if retryErr != nil {
-			return nil, fmt.Errorf("service account %s never became available after %d attempts: %w", saEmail, attemptCount, retryErr)
-		}
+		var err error
 		key, err = client.CreateServiceAccountKey(ctx, &adminpb.CreateServiceAccountKeyRequest{
 			Name: name,
 		})
+
 		if err != nil {
-			return nil, fmt.Errorf("failed to create service account key even after waiting for availability: %w", err)
+			if isServiceAccountNotFoundError(err) {
+				logrus.WithField("service account", saEmail).Infof("Service account not available (attempt #%d), retrying...", attemptCount)
+			} else {
+				logrus.WithField("service account", saEmail).Errorf("Non-retryable error (attempt #%d): %v", attemptCount, err)
+			}
+		} else {
+			logrus.WithField("service account", saEmail).Infof("Successfully created key after %d attempts", attemptCount)
 		}
-		logrus.WithField("service account", saEmail).Debugf("Successfully generated key after waiting for eventual consistency (attempts: %d)", attemptCount)
-	} else if err != nil {
-		return nil, fmt.Errorf("failed to create service account key: %w", err)
-	} else {
-		logrus.WithField("service account", saEmail).Debugf("Successfully generated key on first attempt")
+		return err
+	})
+
+	if retryErr != nil {
+		return nil, fmt.Errorf("failed to create service account key after %d attempts: %w", attemptCount, retryErr)
 	}
 
 	return key.GetPrivateKeyData(), nil

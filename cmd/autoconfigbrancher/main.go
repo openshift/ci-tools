@@ -280,7 +280,11 @@ func main() {
 		logrus.Infof("Self-approving PR by adding the %q and %q labels", labels.Approved, labels.LGTM)
 		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)
 	}
-	if err := bumper.UpdatePullRequestWithLabels(gc, githubOrg, githubRepo, title, fmt.Sprintf("/cc @%s", o.assign), o.githubLogin+":"+remoteBranch, "master", remoteBranch, true, labelsToAdd, false); err != nil {
+	repo, err := gc.GetRepo(githubOrg, githubRepo)
+	if err != nil {
+		logrus.WithError(err).Fatalf("Error retrieving repository data: %v", err)
+	}
+	if err := bumper.UpdatePullRequestWithLabels(gc, githubOrg, githubRepo, title, fmt.Sprintf("/cc @%s", o.assign), o.githubLogin+":"+remoteBranch, repo.DefaultBranch, remoteBranch, true, labelsToAdd, false); err != nil {
 		logrus.WithError(err).Fatal("PR creation failed.")
 	}
 }

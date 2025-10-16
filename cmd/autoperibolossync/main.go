@@ -160,13 +160,11 @@ func main() {
 		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)
 	}
 
-	// TODO fix the bumper in upstream to retrieve a default branch
-	defaultBranch := "master"
-	if err := bumper.UpdatePullRequestWithLabels(gc, githubOrg, githubRepo, title, description, o.githubLogin+":"+remoteBranch, defaultBranch, remoteBranch, true, labelsToAdd, o.dryRun); err != nil {
-		logrus.WithError(err).Fatal("Failed to use 'master' branch")
-		defaultBranch = "main"
-		if err := bumper.UpdatePullRequestWithLabels(gc, githubOrg, githubRepo, title, description, o.githubLogin+":"+remoteBranch, defaultBranch, remoteBranch, true, labelsToAdd, o.dryRun); err != nil {
-			logrus.WithError(err).Fatal("PR creation failed.")
-		}
+	repo, err := gc.GetRepo(githubOrg, githubRepo)
+	if err != nil {
+		logrus.WithError(err).Fatalf("Error retrieving repository data: %v", err)
+	}
+	if err := bumper.UpdatePullRequestWithLabels(gc, githubOrg, githubRepo, title, description, o.githubLogin+":"+remoteBranch, repo.DefaultBranch, remoteBranch, true, labelsToAdd, o.dryRun); err != nil {
+		logrus.WithError(err).Fatalf("PR creation failed for '%s' branch", repo.DefaultBranch)
 	}
 }

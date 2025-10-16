@@ -2,6 +2,7 @@ package gsmsecrets
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -98,29 +99,59 @@ type IAMClient interface {
 	DeleteServiceAccountKey(ctx context.Context, req *adminpb.DeleteServiceAccountKeyRequest, opts ...gax.CallOption) error
 }
 
+const (
+	// gcpPropagationDelay is the time to wait after write operations for GCP's eventual consistency
+	// to propagate changes to list APIs; GCP recommends "waiting a few seconds after write operations
+	// before expecting list APIs to reflect those changes". If 5 secs is not enough, we can bump it eventually.
+	gcpPropagationDelay = 5 * time.Second
+)
+
+// withGCPPropagationDelay wraps a function with a delay to account for GCP's eventual consistency.
+// This gives GCP time to propagate changes to list APIs after write operations.
+func withGCPPropagationDelay(operation string, fn func()) {
+	fn()
+	logrus.Debugf("%s: waiting %v for GCP to propagate...", gcpPropagationDelay, operation)
+	time.Sleep(gcpPropagationDelay)
+}
+
 // ExecuteActions performs the actual resource changes in GCP based on the computed diff.
 func (a *Actions) ExecuteActions(ctx context.Context, iamClient IAMClient, secretsClient SecretManagerClient, projectsClient ResourceManagerClient) {
 	if len(a.SAsToCreate) > 0 {
-		a.CreateServiceAccounts(ctx, iamClient)
+		logrus.Infof("Creating %d service accounts", len(a.SAsToCreate))
+		withGCPPropagationDelay("service account creation", func() {
+			a.CreateServiceAccounts(ctx, iamClient)
+		})
 	}
 
 	if len(a.SecretsToCreate) > 0 {
-		a.CreateSecrets(ctx, secretsClient, iamClient)
+		logrus.Infof("Creating %d secrets", len(a.SecretsToCreate))
+		withGCPPropagationDelay("secret creation", func() {
+			a.CreateSecrets(ctx, secretsClient, iamClient)
+		})
 	}
 
 	if a.ConsolidatedIAMPolicy != nil {
-		if err := a.ApplyPolicy(ctx, projectsClient); err != nil {
-			logrus.WithError(err).Fatal("Failed to apply IAM policy")
-		}
+		logrus.Infof("Updating IAM policy with %d bindings", len(a.ConsolidatedIAMPolicy.Bindings))
+		withGCPPropagationDelay("IAM policy update", func() {
+			if err := a.ApplyPolicy(ctx, projectsClient); err != nil {
+				logrus.WithError(err).Fatal("Failed to apply IAM policy")
+			}
+		})
 	}
 
 	if len(a.SAsToDelete) > 0 {
-		a.RevokeObsoleteServiceAccountKeys(ctx, iamClient)
-		a.DeleteObsoleteServiceAccounts(ctx, iamClient)
+		logrus.Infof("Deleting %d service accounts", len(a.SAsToDelete))
+		withGCPPropagationDelay("service account deletion", func() {
+			a.RevokeObsoleteServiceAccountKeys(ctx, iamClient)
+			a.DeleteObsoleteServiceAccounts(ctx, iamClient)
+		})
 	}
 
 	if len(a.SecretsToDelete) > 0 {
-		a.DeleteObsoleteSecrets(ctx, secretsClient)
+		logrus.Infof("Deleting %d secrets", len(a.SecretsToDelete))
+		withGCPPropagationDelay("secret deletion", func() {
+			a.DeleteObsoleteSecrets(ctx, secretsClient)
+		})
 	}
 }
 
@@ -135,13 +166,14 @@ func (a *Actions) CreateServiceAccounts(ctx context.Context, client IAMClient) {
 			},
 		}
 		secretName := GetUpdaterSASecretName(sa.Collection)
+		logrus.Infof("Creating service account: %s (collection: %s)", sa.DisplayName, sa.Collection)
 		newSA, err := client.CreateServiceAccount(ctx, request)
 		if err != nil {
 			logrus.WithError(err).Errorf("Failed to create service account: %s", sa.DisplayName)
 			delete(a.SecretsToCreate, secretName)
 			continue
 		}
-		logrus.Debugf("Service account created for collection %s", sa.Collection)
+		logrus.Infof("Successfully created service account: %s", newSA.Email)
 		keyData, err := GenerateServiceAccountKey(ctx, client, newSA.Email, a.Config.ProjectIdString)
 		if err != nil {
 			logrus.WithError(err).Errorf("Failed to generate key for service account: %s", newSA.Email)
@@ -157,11 +189,11 @@ func (a *Actions) CreateServiceAccounts(ctx context.Context, client IAMClient) {
 
 // gcpServiceAccountBackoff defines retry behavior for GCP service account operations
 var gcpServiceAccountBackoff = wait.Backoff{
-	Steps:    3,
-	Duration: 8 * time.Second,
-	Factor:   2.0,
+	Steps:    15,
+	Duration: 5 * time.Second,
+	Factor:   1.2,
 	Jitter:   0.1,
-	Cap:      30 * time.Second,
+	Cap:      2 * time.Minute,
 }
 
 // isServiceAccountNotFoundError detects GCP service account "not found" errors indicating eventual consistency
@@ -170,7 +202,8 @@ func isServiceAccountNotFoundError(err error) bool {
 		return false
 	}
 
-	if gcpError, ok := err.(*googleapi.Error); ok {
+	var gcpError *googleapi.Error
+	if errors.As(err, &gcpError) {
 		return gcpError.Code == http.StatusNotFound
 	}
 
@@ -188,47 +221,31 @@ func GenerateServiceAccountKey(ctx context.Context, client IAMClient, saEmail st
 func generateServiceAccountKeyWithBackoff(ctx context.Context, client IAMClient, saEmail string, projectID string, backoff wait.Backoff) ([]byte, error) {
 	name := fmt.Sprintf("%s/serviceAccounts/%s", GetProjectResourceString(projectID), saEmail)
 
-	key, err := client.CreateServiceAccountKey(ctx, &adminpb.CreateServiceAccountKeyRequest{
-		Name: name,
-	})
+	var key *adminpb.ServiceAccountKey
+	attemptCount := 0
 
-	if err != nil && isServiceAccountNotFoundError(err) {
-		// The reason for the service account not found may be due to eventual consistency, so we wait for it to become available
-		logrus.Warnf("Service account %s not available, waiting for eventual consistency...", saEmail)
+	retryErr := retry.OnError(backoff, isServiceAccountNotFoundError, func() error {
+		attemptCount++
 
-		attemptCount := 0
-		retryErr := retry.OnError(backoff, isServiceAccountNotFoundError, func() error {
-			attemptCount++
-			logrus.WithField("service account", saEmail).Debugf("Checking availability (attempt #%d)...", attemptCount)
-
-			_, err := client.GetServiceAccount(ctx, &adminpb.GetServiceAccountRequest{
-				Name: name,
-			})
-
-			if err != nil {
-				if isServiceAccountNotFoundError(err) {
-					logrus.WithField("service account", saEmail).Warnf("Still not available (attempt #%d), retrying...", attemptCount)
-				} else {
-					logrus.WithField("service account", saEmail).Errorf("Non-retryable error while checking (attempt #%d): %v", attemptCount, err)
-				}
-			}
-			return err
-		})
-
-		if retryErr != nil {
-			return nil, fmt.Errorf("service account %s never became available after %d attempts: %w", saEmail, attemptCount, retryErr)
-		}
+		var err error
 		key, err = client.CreateServiceAccountKey(ctx, &adminpb.CreateServiceAccountKeyRequest{
 			Name: name,
 		})
+
 		if err != nil {
-			return nil, fmt.Errorf("failed to create service account key evenafter waiting for availability: %w", err)
+			if isServiceAccountNotFoundError(err) {
+				logrus.WithField("service account", saEmail).Infof("Service account not available (attempt #%d), retrying...", attemptCount)
+			} else {
+				logrus.WithField("service account", saEmail).Errorf("Non-retryable error (attempt #%d): %v", attemptCount, err)
+			}
+		} else {
+			logrus.WithField("service account", saEmail).Infof("Successfully created key after %d attempts", attemptCount)
 		}
-		logrus.WithField("service account", saEmail).Debugf("Successfully generated key after waiting for eventual consistency (attempts: %d)", attemptCount)
-	} else if err != nil {
-		return nil, fmt.Errorf("failed to create service account key: %w", err)
-	} else {
-		logrus.WithField("service account", saEmail).Debugf("Successfully generated key on first attempt")
+		return err
+	})
+
+	if retryErr != nil {
+		return nil, fmt.Errorf("failed to create service account key after %d attempts: %w", attemptCount, retryErr)
 	}
 
 	return key.GetPrivateKeyData(), nil
@@ -253,12 +270,13 @@ func (a *Actions) CreateSecrets(ctx context.Context, secretsClient SecretManager
 			a.SecretsToCreate[name] = s
 		}
 
+		logrus.Infof("Creating secret: %s (type: %v, collection: %s)", s.Name, s.Type, s.Collection)
 		if err := CreateOrUpdateSecret(ctx, secretsClient, a.Config.ProjectIdNumber, s.Name, s.Payload, s.Labels, s.Annotations); err != nil {
 			logrus.WithError(err).Errorf("Failed to create secret: %s", s.Name)
 			continue
 		}
 
-		logrus.Debugf("Created secret: %s", s.Name)
+		logrus.Infof("Successfully created secret: %s", s.Name)
 	}
 }
 

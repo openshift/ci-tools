@@ -8,9 +8,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"testing"
 	"time"
@@ -47,9 +49,9 @@ const (
 )
 
 var lockObjectBackoff = wait.Backoff{
-	Steps:    5,
-	Duration: 1 * time.Minute,
-	Factor:   1.5,
+	Steps:    20,
+	Duration: 2 * time.Minute,
+	Factor:   1.15,
 	Jitter:   0.2,
 }
 
@@ -69,16 +71,16 @@ type testRunner struct {
 }
 
 var gcpStateCheckBackoff = wait.Backoff{
-	Steps:    3,
-	Duration: 10 * time.Second, // Start with 10s (give GCP time to propagate)
-	Factor:   2.0,
+	Steps:    10,
+	Duration: 5 * time.Second,
+	Factor:   1.3,
 	Jitter:   0.1,
-	Cap:      60 * time.Second,
+	Cap:      10 * time.Minute,
 }
 
 var (
 	tr       *testRunner
-	logLevel = flag.String("log-level", "info", "log level")
+	logLevel = flag.String("log-level", "debug", "log level")
 )
 
 func getProjectConfigFromEnv() gsm.Config {
@@ -105,6 +107,22 @@ func setupLogger(censor *secrets.DynamicCensor) error {
 	}
 	logrus.SetLevel(level)
 	logrus.SetFormatter(logrusutil.NewFormatterWithCensor(&logrus.JSONFormatter{}, censor))
+
+	// Write logs to ARTIFACT_DIR if set (when running in ci-operator)
+	if artifactDir := os.Getenv("ARTIFACT_DIR"); artifactDir != "" {
+		logFile, err := os.OpenFile(
+			filepath.Join(artifactDir, "gsm-e2e-test.log"),
+			os.O_CREATE|os.O_WRONLY|os.O_APPEND,
+			0644,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to open log file: %w", err)
+		}
+		// Write to both stdout and the log file
+		logrus.SetOutput(io.MultiWriter(os.Stdout, logFile))
+		logrus.Infof("Logging to %s/gsm-e2e-test.log", artifactDir)
+	}
+
 	return nil
 }
 
@@ -113,8 +131,9 @@ func (tr *testRunner) cleanup() {
 	currentState := tr.getActualGCPState()
 
 	if len(currentState.Secrets) > 0 {
-		logrus.Debugf("Deleting %d secrets...", len(currentState.Secrets))
+		logrus.Infof("Deleting %d secrets...", len(currentState.Secrets))
 		for _, secret := range currentState.Secrets {
+			logrus.Infof("Deleting secret: %s", secret.Name)
 			err := tr.secretsClient.DeleteSecret(ctx, &secretmanagerpb.DeleteSecretRequest{
 				Name: secret.ResourceName,
 			})
@@ -123,27 +142,32 @@ func (tr *testRunner) cleanup() {
 				// (the secret is already deleted, it just takes time for the list API to reflect that)
 				s, ok := status.FromError(err)
 				if ok && (s.Code() == codes.NotFound) {
-					logrus.Debugf("Secret %s already deleted", secret.Name)
+					logrus.Infof("Secret %s already deleted", secret.Name)
 				} else {
 					logrus.Errorf("Failed to delete secret %s: %v", secret.Name, err)
 				}
+			} else {
+				logrus.Infof("Successfully deleted secret: %s", secret.Name)
 			}
 		}
 	}
 
 	if len(currentState.ServiceAccounts) > 0 {
-		logrus.Debugf("Deleting %d service accounts...", len(currentState.ServiceAccounts))
+		logrus.Infof("Deleting %d service accounts...", len(currentState.ServiceAccounts))
 		for _, sa := range currentState.ServiceAccounts {
+			logrus.Infof("Deleting service account: %s", sa.Email)
 			err := tr.iamAdminClient.DeleteServiceAccount(ctx, &adminpb.DeleteServiceAccountRequest{
 				Name: fmt.Sprintf("%s/serviceAccounts/%s", gsm.GetProjectResourceString(tr.config.ProjectIdString), sa.Email),
 			})
 			if err != nil {
 				s, ok := status.FromError(err)
 				if ok && (s.Code() == codes.NotFound) {
-					logrus.Debugf("Service account %s already deleted", sa.Email)
+					logrus.Infof("Service account %s already deleted", sa.Email)
 				} else {
 					logrus.Errorf("Failed to delete service account %s: %v", sa.Email, err)
 				}
+			} else {
+				logrus.Infof("Successfully deleted service account: %s", sa.Email)
 			}
 		}
 	}
@@ -233,7 +257,11 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to create GCS client")
 	}
-	defer gcsClient.Close()
+	defer func() {
+		if err := gcsClient.Close(); err != nil {
+			logrus.WithError(err).Error("failed to close GCS client")
+		}
+	}()
 
 	releaseLock, err := acquireDistributedLock(ctx, gcsClient, gcsBucket)
 	if err != nil {
@@ -245,19 +273,31 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create secrets client")
 	}
-	defer secretsClient.Close()
+	defer func() {
+		if err := secretsClient.Close(); err != nil {
+			logrus.WithError(err).Error("failed to close secrets client")
+		}
+	}()
 
 	iamAdminClient, err := iamadmin.NewIamClient(ctx, option.WithQuotaProject(config.ProjectIdNumber), option.WithCredentialsJSON(gcpCreds))
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create IAM client")
 	}
-	defer iamAdminClient.Close()
+	defer func() {
+		if err := iamAdminClient.Close(); err != nil {
+			logrus.WithError(err).Error("failed to close IAM client")
+		}
+	}()
 
 	resourceManagerClient, err := resourcemanager.NewProjectsClient(ctx, option.WithQuotaProject(config.ProjectIdNumber), option.WithCredentialsJSON(gcpCreds))
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create resource manager client")
 	}
-	defer resourceManagerClient.Close()
+	defer func() {
+		if err := resourceManagerClient.Close(); err != nil {
+			logrus.WithError(err).Error("failed to close resource manager client")
+		}
+	}()
 
 	tr = &testRunner{
 		ctx:                   ctx,
@@ -292,12 +332,30 @@ func acquireDistributedLock(ctx context.Context, client *storage.Client, bucketN
 
 	obj := client.Bucket(bucketName).Object(lockObjectName)
 	retryErr := retry.OnError(lockObjectBackoff, isLockHeldError, func() error {
-		logrus.Debugf("Attempting to acquire lock for GCS bucket %q...", bucketName)
+		logrus.Infof("Attempting to acquire lock for GCS bucket %q...", bucketName)
+
+		// Check if lock exists and is stale (older than 30 minutes)
+		// This should be much longer than the worst-case test runtime to avoid
+		// deleting locks from legitimately slow but still-running tests.
+		attrs, err := obj.Attrs(ctx)
+		if err == nil {
+			lockAge := time.Since(attrs.Created)
+			if lockAge > 30*time.Minute {
+				logrus.Warnf("Found stale lock (age: %v), deleting it...", lockAge)
+				if delErr := obj.Delete(ctx); delErr != nil {
+					logrus.Warnf("Failed to delete stale lock: %v", delErr)
+				}
+			} else {
+				logrus.Infof("Lock is held by another test (age: %v), will retry...", lockAge)
+			}
+		}
+
 		// Only write if the object does NOT exist (DoesNotExist: true) == the lock is free
 		w := obj.If(storage.Conditions{DoesNotExist: true}).NewWriter(ctx)
 		w.ContentType = "text/plain"
-		if _, writeErr := w.Write([]byte("Locked")); writeErr != nil {
-			w.Close()
+		lockContent := fmt.Sprintf("Locked at %s", time.Now().Format(time.RFC3339))
+		if _, writeErr := w.Write([]byte(lockContent)); writeErr != nil {
+			_ = w.Close()
 			return fmt.Errorf("failed to write to GCS bucket %q: %w", bucketName, writeErr)
 		}
 
@@ -306,7 +364,7 @@ func acquireDistributedLock(ctx context.Context, client *storage.Client, bucketN
 			logrus.Debugf("Close failed (lock may be held): %v", closeErr)
 			return closeErr
 		}
-		logrus.Debugf("Successfully acquired distributed lock")
+		logrus.Infof("Successfully acquired distributed lock")
 		return nil
 	})
 
@@ -316,13 +374,12 @@ func acquireDistributedLock(ctx context.Context, client *storage.Client, bucketN
 
 	// Return cleanup function
 	return func() {
-		logrus.Debug("Releasing distributed lock")
+		logrus.Info("Releasing distributed lock")
 		if err := obj.Delete(ctx); err != nil {
 			logrus.Errorf("Failed to release lock: %v", err)
 		} else {
-			logrus.Debugf("Successfully released distributed lock")
+			logrus.Infof("Successfully released distributed lock")
 		}
-		client.Close()
 	}, nil
 }
 
@@ -428,11 +485,12 @@ func (tr *testRunner) runReconcilerTool(configPath string) error {
 		fmt.Sprintf("GCP_PROJECT_NUMBER=%s", tr.config.ProjectIdNumber),
 	)
 
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("google secret manager sync failed: %w\nOutput:\n%s", err, string(output))
-	}
 	logrus.Info("Running reconciler tool")
+	output, err := cmd.CombinedOutput()
+	logrus.Infof("Reconciler output:\n%s", string(output))
+	if err != nil {
+		return fmt.Errorf("google secret manager sync failed: %w\n", err)
+	}
 	if *logLevel == "debug" {
 		fmt.Print(string(output))
 	}
@@ -489,14 +547,24 @@ func (tr *testRunner) getActualGCPStateWithRetry(expectedState GCPState) GCPStat
 		actualSecretCount := len(state.Secrets)
 
 		if actualSACount != expectedSACount {
-			logrus.Debugf("Expected %d service accounts, got %d, retrying...",
+			logrus.Infof("Expected %d service accounts, got %d, retrying...",
 				expectedSACount, actualSACount)
+			var actualSAEmails []string
+			for _, sa := range state.ServiceAccounts {
+				actualSAEmails = append(actualSAEmails, sa.Email)
+			}
+			logrus.Infof("Actual service accounts found: %v", actualSAEmails)
 			return fmt.Errorf("service account count mismatch: expected %d, got %d", expectedSACount, actualSACount)
 		}
 
 		if actualSecretCount != expectedSecretCount {
-			logrus.Debugf("Expected %d secrets, got %d, retrying...",
+			logrus.Infof("Expected %d secrets, got %d, retrying...",
 				expectedSecretCount, actualSecretCount)
+			var actualSecretNames []string
+			for name := range state.Secrets {
+				actualSecretNames = append(actualSecretNames, name)
+			}
+			logrus.Infof("Actual secrets found: %v", actualSecretNames)
 			return fmt.Errorf("secret count mismatch: expected %d, got %d", expectedSecretCount, actualSecretCount)
 		}
 		return nil

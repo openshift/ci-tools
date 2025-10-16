@@ -89,7 +89,7 @@ func GetAllSecrets(ctx context.Context, client SecretManagerClient, config Confi
 		secretID := GetSecretID(secret.Name)
 		collection := ExtractCollectionFromSecretName(secretID)
 		if collection == "" {
-			logrus.Warnf("Couldn't extract collection from secret name: %s from secret %s", secretID, secret.Name)
+			logrus.Infof("Skipping secret because collection extraction failed: secretID=%s, secretResourceName=%s", secretID, secret.Name)
 			continue
 		}
 

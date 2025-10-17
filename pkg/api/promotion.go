@@ -18,9 +18,8 @@ const (
 	WithOKD    OKDInclusion = true
 	WithoutOKD OKDInclusion = false
 
-	PromotionStepName          = "promotion"
-	PromotionQuayStepName      = "promotion-quay"
-	PromotionQuayProxyStepName = "promotion-quay-proxy"
+	PromotionStepName     = "promotion"
+	PromotionQuayStepName = "promotion-quay"
 
 	PromotionExcludeImageWildcard = "*"
 )
@@ -124,11 +123,6 @@ var (
 		}
 	}
 
-	// QuayProxyTagFunc is the tagging function for quay-proxy
-	QuayProxyTagFunc = func(source, target string, tag ImageStreamTagReference, time string, tagMap map[string]string) {
-		tagMap[target] = QuayImageReference(tag)
-	}
-
 	// DefaultTargetNameFunc is the default target name function
 	DefaultTargetNameFunc = func(registry string, config PromotionTarget) string {
 		if len(config.Name) > 0 {
@@ -145,11 +139,27 @@ var (
 		return fmt.Sprintf("%s:%s_${component}_%s", QuayOpenShiftCIRepo, config.Namespace, config.Tag)
 	}
 
-	// QuayProxyTargetNameFunc is the target name function for quay-proxy test imagestreams
-	QuayProxyTargetNameFunc = func(registry string, config PromotionTarget) string {
-		if len(config.Name) > 0 {
-			return fmt.Sprintf("%s/%s/%s-quay:${component}", registry, config.Namespace, config.Name)
+	// QuayCombinedMirrorFunc does both quay mirroring and quay-proxy tagging
+	QuayCombinedMirrorFunc = func(source, target string, tag ImageStreamTagReference, time string, mirror map[string]string) {
+		// quay mirroring
+		if time == "" {
+			logrus.Warn("Found time is empty string and skipped the promotion to quay for this image")
+		} else {
+			t := QuayImage(tag)
+			mirror[t] = source
+			mirror[quayImageWithTime(time, tag)] = t
 		}
-		return fmt.Sprintf("%s/%s/${component}-quay:%s", registry, config.Namespace, config.Tag)
+
+		// quay-proxy tagging by creating the proxy target
+		// Create proxy target like "registry.ci.openshift.org/ocp/4.12-quay:${component}"
+		var proxyTarget string
+		if tag.Name != "" {
+			proxyTarget = fmt.Sprintf("registry.ci.openshift.org/%s/%s-quay:${component}", tag.Namespace, tag.Name)
+		} else {
+			// Handle case where tag.Name is empty (fallback to using component name)
+			proxyTarget = fmt.Sprintf("registry.ci.openshift.org/%s/${component}-quay:%s", tag.Namespace, tag.Tag)
+		}
+		mirror[proxyTarget] = QuayImageReference(tag)
+		logrus.Debugf("Adding quay-proxy tag: %s -> %s", proxyTarget, QuayImageReference(tag))
 	}
 )

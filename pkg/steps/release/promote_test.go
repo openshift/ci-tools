@@ -716,6 +716,7 @@ func TestBuildCacheFor(t *testing.T) {
 func TestGetPromotionPod(t *testing.T) {
 	var testCases = []struct {
 		name              string
+		stepName          string
 		imageMirror       map[string]string
 		nodeArchitectures []string
 		namespace         string
@@ -724,6 +725,7 @@ func TestGetPromotionPod(t *testing.T) {
 	}{
 		{
 			name:              "basic case",
+			stepName:          "promotion",
 			nodeArchitectures: []string{"amd64"},
 			imageMirror: map[string]string{
 				"registry.ci.openshift.org/ci/applyconfig:latest": "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:afd71aa3cbbf7d2e00cd8696747b2abf164700147723c657919c20b13d13ec62",
@@ -733,17 +735,21 @@ func TestGetPromotionPod(t *testing.T) {
 		},
 		{
 			name:              "promotion-quay",
+			stepName:          "promotion-quay",
 			nodeArchitectures: []string{"amd64"},
 			imageMirror: map[string]string{
 				"quay.io/openshift/ci:20240603235401_prune_ci_a_latest": "quay.io/openshift/ci:ci_a_latest",
 				"quay.io/openshift/ci:20240603235401_prune_ci_c_latest": "quay.io/openshift/ci:ci_c_latest",
 				"quay.io/openshift/ci:ci_a_latest":                      "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
 				"quay.io/openshift/ci:ci_c_latest":                      "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd",
+				"registry.ci.openshift.org/ci/ci-quay:${component}":     "quay-proxy.ci.openshift.org/openshift/ci:ci_a_latest",
+				"registry.ci.openshift.org/ci/${component}-quay:c":      "quay-proxy.ci.openshift.org/openshift/ci:ci_c_latest",
 			},
 			namespace: "ci-op-9bdij1f6",
 		},
 		{
 			name:              "basic case - arm64 only",
+			stepName:          "promotion",
 			nodeArchitectures: []string{"arm64"},
 			imageMirror: map[string]string{
 				"registry.ci.openshift.org/ci/applyconfig:latest": "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:afd71aa3cbbf7d2e00cd8696747b2abf164700147723c657919c20b13d13ec62",
@@ -753,6 +759,7 @@ func TestGetPromotionPod(t *testing.T) {
 		},
 		{
 			name:              "basic case - multi architecture",
+			stepName:          "promotion",
 			nodeArchitectures: []string{"amd64", "arm64"},
 			imageMirror: map[string]string{
 				"registry.ci.openshift.org/ci/applyconfig:latest": "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:afd71aa3cbbf7d2e00cd8696747b2abf164700147723c657919c20b13d13ec62",
@@ -764,7 +771,7 @@ func TestGetPromotionPod(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, getPromotionPod(testCase.imageMirror, "20240603235401", testCase.namespace, "promotion", "4.14", testCase.nodeArchitectures))
+			testhelper.CompareWithFixture(t, getPromotionPod(testCase.imageMirror, "20240603235401", testCase.namespace, testCase.stepName, "4.14", testCase.nodeArchitectures))
 		})
 	}
 }

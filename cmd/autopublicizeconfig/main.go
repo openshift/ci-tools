@@ -167,8 +167,12 @@ func main() {
 		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)
 	}
 
+	repo, err := gc.GetRepo(githubOrg, githubRepo)
+	if err != nil {
+		logrus.WithError(err).Fatalf("Error retrieving repository data: %v", err)
+	}
 	source := fmt.Sprintf("%s:%s", o.githubLogin, remoteBranch)
-	if err := bumper.UpdatePullRequestWithLabels(gc, githubOrg, githubRepo, title, description, source, "master", remoteBranch, true, labelsToAdd, o.dryRun); err != nil {
+	if err := bumper.UpdatePullRequestWithLabels(gc, githubOrg, githubRepo, title, description, source, repo.DefaultBranch, remoteBranch, true, labelsToAdd, o.dryRun); err != nil {
 		logrus.WithError(err).Fatal("PR creation failed.")
 	}
 }

@@ -17,3 +17,9 @@ presubmits:
     labels:
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
     name: pull-ci-organization-repository-branch-images
+    reporter_config:
+      slack:
+        channel: some-channel
+        job_states_to_report:
+        - error
+        report_template: some template

@@ -500,6 +500,28 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "job excluded by patterns should not have slack reporter config",
+			test: ciop.TestStepConfiguration{
+				As:                         "unit-skip",
+				Commands:                   "make unit",
+				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
+			},
+			info: &ProwgenInfo{
+				Metadata: ciop.Metadata{Org: "o", Repo: "r", Branch: "b"},
+				Config: config.Prowgen{
+					SlackReporterConfigs: []config.SlackReporterConfig{
+						{
+							Channel:             "some-channel",
+							JobStatesToReport:   []prowv1.ProwJobState{"error"},
+							ReportTemplate:      "some template",
+							JobNames:            []string{"unit-skip", "e2e"},
+							ExcludedJobPatterns: []string{".*-skip$"},
+						},
+					},
+				},
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

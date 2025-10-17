@@ -540,6 +540,25 @@ func TestGenerateJobs(t *testing.T) {
 				Branch: "branch",
 			}},
 		}, {
+			id:   "operator section creates bundle with capabilities",
+			keep: true,
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{},
+				Operator: &ciop.OperatorStepConfiguration{
+					Bundles: []ciop.Bundle{{
+						As:             "my-bundle-caps",
+						DockerfilePath: "bundle.Dockerfile",
+						ContextDir:     "manifests",
+						Capabilities:   []string{"privileged", "nested-kvm"},
+					}},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		}, {
 			id: "two tests and empty Images with one test configured as a postsubmit",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{
@@ -825,4 +844,106 @@ func pruneForTests(jobConfig *prowconfig.JobConfig) {
 
 func intPointer(val int) *int {
 	return &val
+}
+
+func TestBundleWithCapabilities(t *testing.T) {
+	tests := []struct {
+		name                 string
+		bundle               ciop.Bundle
+		expectedCapabilities map[string]string
+	}{
+		{
+			name: "bundle with multiple capabilities",
+			bundle: ciop.Bundle{
+				As:             "test-bundle",
+				DockerfilePath: "bundle.Dockerfile",
+				ContextDir:     "manifests",
+				Capabilities:   []string{"privileged", "nested-kvm"},
+			},
+			expectedCapabilities: map[string]string{
+				"capability/privileged": "privileged",
+				"capability/nested-kvm": "nested-kvm",
+			},
+		},
+		{
+			name: "bundle with single capability",
+			bundle: ciop.Bundle{
+				As:             "test-bundle-single",
+				DockerfilePath: "bundle.Dockerfile",
+				ContextDir:     "manifests",
+				Capabilities:   []string{"privileged"},
+			},
+			expectedCapabilities: map[string]string{
+				"capability/privileged": "privileged",
+			},
+		},
+		{
+			name: "bundle without capabilities",
+			bundle: ciop.Bundle{
+				As:             "test-bundle-no-caps",
+				DockerfilePath: "bundle.Dockerfile",
+				ContextDir:     "manifests",
+			},
+			expectedCapabilities: map[string]string{},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &ciop.ReleaseBuildConfiguration{
+				Operator: &ciop.OperatorStepConfiguration{
+					Bundles: []ciop.Bundle{tc.bundle},
+				},
+			}
+			repoInfo := &ProwgenInfo{
+				Metadata: ciop.Metadata{
+					Org:    "test-org",
+					Repo:   "test-repo",
+					Branch: "main",
+				},
+			}
+
+			jobConfig, err := GenerateJobs(config, repoInfo)
+			if err != nil {
+				t.Fatalf("unexpected error generating jobs: %v", err)
+			}
+
+			if len(jobConfig.PresubmitsStatic) == 0 {
+				t.Fatal("expected presubmits to be generated")
+			}
+
+			var bundleJob *prowconfig.Presubmit
+			for _, presubmits := range jobConfig.PresubmitsStatic {
+				for i := range presubmits {
+					if strings.Contains(presubmits[i].Name, tc.bundle.As) {
+						bundleJob = &presubmits[i]
+						break
+					}
+				}
+			}
+
+			if bundleJob == nil {
+				t.Fatalf("could not find presubmit job for bundle %s", tc.bundle.As)
+			}
+
+			for expectedLabel, expectedValue := range tc.expectedCapabilities {
+				actualValue, exists := bundleJob.Labels[expectedLabel]
+				if !exists {
+					t.Errorf("expected label %s to be present in job labels", expectedLabel)
+					continue
+				}
+				if actualValue != expectedValue {
+					t.Errorf("expected label %s to have value %s, got %s", expectedLabel, expectedValue, actualValue)
+				}
+			}
+
+			for label := range bundleJob.Labels {
+				if strings.HasPrefix(label, "capability/") {
+					if _, expected := tc.expectedCapabilities[label]; !expected {
+						t.Errorf("unexpected capability label %s found in job", label)
+					}
+				}
+			}
+		})
+	}
 }

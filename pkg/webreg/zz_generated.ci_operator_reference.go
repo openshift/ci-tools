@@ -238,6 +238,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"          as: ' '\n" +
 	"          # BaseIndex defines what index image to use as a base when adding the bundle to an index\n" +
 	"          base_index: ' '\n" +
+	"          # Capabilities is the list of strings that define additional capabilities needed by the bundle build job\n" +
+	"          capabilities:\n" +
+	"            - \"\"\n" +
 	"          # ContextDir defines the source directory to build the bundle from relative to the repository root\n" +
 	"          context_dir: ' '\n" +
 	"          # DockerfilePath defines where the dockerfile for build the bundle exists relative to the contextdir\n" +

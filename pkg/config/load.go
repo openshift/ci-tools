@@ -96,6 +96,38 @@ func (p *Prowgen) GetSlackReporterConfigForTest(test, variant string) *SlackRepo
 	return nil
 }
 
+// GetSlackReporterConfigForJobName checks against full job names, allowing excluded_job_patterns
+// to work with prefixes like "pull-", "periodic-", etc.
+func (p *Prowgen) GetSlackReporterConfigForJobName(fullJobName, testName, variant string) *SlackReporterConfig {
+	for _, s := range p.SlackReporterConfigs {
+		if !slices.Contains(s.ExcludedVariants, variant) {
+			// Check if job is excluded by pattern (using full job name)
+			isExcluded := false
+			for _, excludePattern := range s.ExcludedJobPatterns {
+				if matched, err := regexp.MatchString(excludePattern, fullJobName); err == nil && matched {
+					isExcluded = true
+					break
+				}
+			}
+
+			if !isExcluded {
+				// Check exact job name matches first (against test name for backward compatibility)
+				if slices.Contains(s.JobNames, testName) {
+					return &s
+				}
+
+				// Check regex pattern matches (against test name for backward compatibility)
+				for _, pattern := range s.JobNamePatterns {
+					if matched, err := regexp.MatchString(pattern, testName); err == nil && matched {
+						return &s
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func (p *Prowgen) MergeDefaults(defaults *Prowgen) {
 	if defaults.Private {
 		p.Private = true

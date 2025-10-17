@@ -10,9 +10,11 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/sirupsen/logrus"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
@@ -995,4 +997,142 @@ func defaultProwJobFields(prowJob *prowv1.ProwJob) {
 		prowJob.Status.CompletionTime = &zeroTime
 	}
 	prowJob.Name = "some-uuid"
+}
+
+func TestCreateRefsForPullRequests(t *testing.T) {
+	sortRefOpt := cmpopts.SortSlices(func(a, b prowv1.Refs) bool {
+		aKey := a.Org + a.Repo + a.BaseRef + a.PathAlias + a.BaseSHA
+		bKey := b.Org + b.Repo + b.BaseRef + b.PathAlias + b.BaseSHA
+		return strings.Compare(aKey, bKey) == -1
+	})
+
+	for _, tc := range []struct {
+		name     string
+		prs      []github.PullRequest
+		config   *api.ReleaseBuildConfiguration
+		wantRefs []prowv1.Refs
+	}{
+		{
+			name: "Refs from heterogeneous PRs",
+			prs: []github.PullRequest{
+				{
+					Number: 1,
+					Base: github.PullRequestBranch{
+						Repo: github.Repo{
+							Owner: github.User{
+								Login: "openshift",
+							},
+							Name: "ci-tools",
+						},
+						SHA: "pr-1-base-sha",
+						Ref: "main",
+					},
+					User: github.User{
+						Login: "user-a",
+					},
+					Head: github.PullRequestBranch{
+						SHA: "pr-1-head-sha",
+					},
+					Title: "pr-1",
+				},
+				{
+					Number: 2,
+					Base: github.PullRequestBranch{
+						Repo: github.Repo{
+							Owner: github.User{
+								Login: "openshift",
+							},
+							Name: "ci-tools",
+						},
+						SHA: "pr-2-base-sha",
+						Ref: "dev",
+					},
+					User: github.User{
+						Login: "user-b",
+					},
+					Head: github.PullRequestBranch{
+						SHA: "pr-2-head-sha",
+					},
+					Title: "pr-2",
+				},
+				{
+					Number: 3,
+					Base: github.PullRequestBranch{
+						Repo: github.Repo{
+							Owner: github.User{
+								Login: "openshift",
+							},
+							Name: "apiserver",
+						},
+						SHA: "pr-3-base-sha",
+						Ref: "master",
+					},
+					User: github.User{
+						Login: "user-c",
+					},
+					Head: github.PullRequestBranch{
+						SHA: "pr-3-head-sha",
+					},
+					Title: "pr-3",
+				},
+			},
+			config: &api.ReleaseBuildConfiguration{
+				Metadata: api.Metadata{
+					Org:    "openshift",
+					Repo:   "ci-tools",
+					Branch: "main",
+				},
+				CanonicalGoRepository: ptr.To("ci-tools-path-alias"),
+			},
+			wantRefs: []prowv1.Refs{
+				{
+					Org:       "openshift",
+					Repo:      "ci-tools",
+					BaseRef:   "main",
+					PathAlias: "ci-tools-path-alias",
+					BaseSHA:   "pr-1-base-sha",
+					Pulls: []prowv1.Pull{{
+						Number: 1,
+						Author: "user-a",
+						SHA:    "pr-1-head-sha",
+						Title:  "pr-1",
+					}},
+				},
+				{
+					Org:       "openshift",
+					Repo:      "ci-tools",
+					BaseRef:   "dev",
+					PathAlias: "ci-tools-path-alias",
+					BaseSHA:   "pr-2-base-sha",
+					Pulls: []prowv1.Pull{{
+						Number: 2,
+						Author: "user-b",
+						SHA:    "pr-2-head-sha",
+						Title:  "pr-2",
+					}},
+				},
+				{
+					Org:       "openshift",
+					Repo:      "apiserver",
+					BaseRef:   "master",
+					PathAlias: "",
+					BaseSHA:   "pr-3-base-sha",
+					Pulls: []prowv1.Pull{{
+						Number: 3,
+						Author: "user-c",
+						SHA:    "pr-3-head-sha",
+						Title:  "pr-3",
+					}},
+				},
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+
+			gotRefs := createRefsForPullRequests(tc.prs, tc.config)
+			if diff := cmp.Diff(tc.wantRefs, gotRefs, sortRefOpt); diff != "" {
+				t.Errorf("unexpected refs: %s", diff)
+			}
+		})
+	}
 }

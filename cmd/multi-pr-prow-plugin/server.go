@@ -441,13 +441,20 @@ func createRefsForPullRequests(prs []github.PullRequest, ciopConfig *api.Release
 		prsByBase[b] = append(prsByBase[b], pr)
 	}
 
+	pathAliasFor := func(org, repo string) string {
+		if org == ciopConfig.Metadata.Org && repo == ciopConfig.Metadata.Repo {
+			return ciopConfig.DeterminePathAlias(org, repo)
+		}
+		return ""
+	}
+
 	var refs []prowv1.Refs
 	for prBase := range prsByBase {
 		ref := prowv1.Refs{
 			Org:       prBase.org,
 			Repo:      prBase.repo,
 			BaseRef:   prBase.ref,
-			PathAlias: ciopConfig.DeterminePathAlias(prBase.org, prBase.repo),
+			PathAlias: pathAliasFor(prBase.org, prBase.repo),
 			BaseSHA:   prsByBase[prBase][0].Base.SHA, //TODO(sgoeddel): It would be better if we used the oldest base SHA rather than just the first in the list, but this mimics prpqr_reconciller, and is unlikely to result in many issues
 		}
 		for _, pr := range prsByBase[prBase] {

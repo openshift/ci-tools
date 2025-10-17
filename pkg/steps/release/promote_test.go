@@ -771,13 +771,14 @@ func TestGetPromotionPod(t *testing.T) {
 
 func TestGetImageMirror(t *testing.T) {
 	var testCases = []struct {
-		name       string
-		stepName   string
-		tags       map[string][]api.ImageStreamTagReference
-		pipeline   *imageapi.ImageStream
-		registry   string
-		mirrorFunc func(source, target string, tag api.ImageStreamTagReference, date string, imageMirror map[string]string)
-		expected   map[string]string
+		name           string
+		stepName       string
+		tags           map[string][]api.ImageStreamTagReference
+		pipeline       *imageapi.ImageStream
+		registry       string
+		mirrorFunc     func(source, target string, tag api.ImageStreamTagReference, date string, imageMirror map[string]string)
+		targetNameFunc func(string, api.PromotionTarget) string
+		expected       map[string]string
 	}{
 		{
 			name: "empty input",
@@ -954,11 +955,40 @@ func TestGetImageMirror(t *testing.T) {
 				"quay.io/openshift/ci:ci_c_latest":                             "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd",
 			},
 		},
+		{
+			name: "quay-proxy with targetNameFunc",
+			tags: map[string][]api.ImageStreamTagReference{
+				"vertical-pod-autoscaler": {
+					{Namespace: "ocp", Name: "4.22", Tag: "vertical-pod-autoscaler"},
+				},
+			},
+			pipeline: &imageapi.ImageStream{
+				Status: imageapi.ImageStreamStatus{
+					PublicDockerImageRepository: "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline",
+					Tags: []imageapi.NamedTagEventList{
+						{
+							Tag: "vertical-pod-autoscaler",
+							Items: []imageapi.TagEvent{
+								{
+									DockerImageReference: "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:vpa",
+								},
+							},
+						},
+					},
+				},
+			},
+			registry:       "registry.ci.openshift.org",
+			mirrorFunc:     api.QuayProxyTagFunc,
+			targetNameFunc: api.QuayProxyTargetNameFunc,
+			expected: map[string]string{
+				"registry.ci.openshift.org/ocp/4.22-quay:vertical-pod-autoscaler": "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.22_vertical-pod-autoscaler",
+			},
+		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if actual, _ := getImageMirrorTarget(testCase.tags, testCase.pipeline, testCase.registry, "20240603235401", testCase.mirrorFunc); !reflect.DeepEqual(actual, testCase.expected) {
+			if actual, _ := getImageMirrorTarget(testCase.tags, testCase.pipeline, testCase.registry, "20240603235401", testCase.mirrorFunc, testCase.targetNameFunc); !reflect.DeepEqual(actual, testCase.expected) {
 				t.Errorf("%s: got incorrect ImageMirror mapping: %v", testCase.name, diff.ObjectDiff(actual, testCase.expected))
 			}
 		})

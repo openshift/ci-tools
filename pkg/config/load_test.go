@@ -604,3 +604,72 @@ func TestValidateProwgenSkipOperatorPresubmits(t *testing.T) {
 		})
 	}
 }
+
+func TestProwgen_MergeDefaults_SlackReporterConfigs(t *testing.T) {
+	testCases := []struct {
+		name     string
+		base     Prowgen
+		defaults Prowgen
+		expected []SlackReporterConfig
+	}{
+		{
+			name: "slack reporter configs are never merged from defaults",
+			base: Prowgen{},
+			defaults: Prowgen{
+				SlackReporterConfigs: []SlackReporterConfig{
+					{
+						Channel:             "#test-channel",
+						JobStatesToReport:   []prowv1.ProwJobState{"failure"},
+						JobNamePatterns:     []string{".*"},
+						ExcludedJobPatterns: []string{".*-skip$"},
+					},
+				},
+			},
+			expected: nil,
+		},
+		{
+			name: "existing slack reporter configs are preserved unchanged",
+			base: Prowgen{
+				SlackReporterConfigs: []SlackReporterConfig{
+					{
+						Channel:           "#existing-channel",
+						JobStatesToReport: []prowv1.ProwJobState{"error"},
+						JobNames:          []string{"unit"},
+					},
+				},
+			},
+			defaults: Prowgen{
+				SlackReporterConfigs: []SlackReporterConfig{
+					{
+						Channel:             "#default-channel",
+						JobStatesToReport:   []prowv1.ProwJobState{"failure"},
+						JobNamePatterns:     []string{".*"},
+						ExcludedJobPatterns: []string{".*-skip$"},
+					},
+				},
+			},
+			expected: []SlackReporterConfig{
+				{
+					Channel:           "#existing-channel",
+					JobStatesToReport: []prowv1.ProwJobState{"error"},
+					JobNames:          []string{"unit"},
+				},
+			},
+		},
+		{
+			name:     "empty base with empty defaults stays empty",
+			base:     Prowgen{},
+			defaults: Prowgen{},
+			expected: nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.base.MergeDefaults(&tc.defaults)
+			if diff := cmp.Diff(tc.base.SlackReporterConfigs, tc.expected); diff != "" {
+				t.Fatalf("SlackReporterConfigs don't match expected, diff: %v", diff)
+			}
+		})
+	}
+}

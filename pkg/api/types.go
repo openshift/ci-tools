@@ -2570,6 +2570,8 @@ type Bundle struct {
 	SkipBuildingIndex bool `json:"skip_building_index,omitempty"`
 	// Optional indicates that the job's status context, that is generated from the corresponding test, should not be required for merge.
 	Optional bool `json:"optional,omitempty"`
+	// Capabilities is the list of strings that define additional capabilities needed by the bundle build job
+	Capabilities []string `json:"capabilities,omitempty"`
 }
 
 // IndexGeneratorStepConfiguration describes a step that creates an index database and

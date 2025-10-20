@@ -255,6 +255,7 @@ func updateSecrets(config secretgenerator.Config, client secrets.Client, disable
 				errs = append(errs, errors.New(msg))
 			}
 		}
+
 	}
 	return utilerrors.NewAggregate(errs)
 }
@@ -328,6 +329,17 @@ func generateSecrets(o options, censor *secrets.DynamicCensor) (errs []error) {
 
 	if err := updateSecrets(o.config, client, o.disabledClusters); err != nil {
 		errs = append(errs, fmt.Errorf("failed to update secrets: %w", err))
+	}
+
+	if o.enableGsmSync {
+		type indexUpdater interface {
+			UpdateIndexSecret() error
+		}
+		if gsmClient, ok := client.(indexUpdater); ok {
+			if err := gsmClient.UpdateIndexSecret(); err != nil {
+				errs = append(errs, fmt.Errorf("failed to update GSM index secret: %w", err))
+			}
+		}
 	}
 
 	return errs

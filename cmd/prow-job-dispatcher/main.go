@@ -43,7 +43,7 @@ const (
 	githubRepo     = "release"
 	githubLogin    = "openshift-bot"
 	matchTitle     = "Automate prow job dispatcher"
-	upstreamBranch = "master"
+	upstreamBranch = "main"
 	listURL        = "https://github.com/openshift/release/pulls?q=is%3Apr+author%3Aopenshift-bot+prow+job+dispatcher+in%3Atitle+is%3Aopen"
 )
 
@@ -55,10 +55,11 @@ type options struct {
 
 	prometheusDaysBefore int
 
-	createPR    bool
-	githubLogin string
-	targetDir   string
-	assign      string
+	upstreamBranch string
+	createPR       bool
+	githubLogin    string
+	targetDir      string
+	assign         string
 
 	enableClusters  flagutil.Strings
 	disableClusters flagutil.Strings
@@ -87,6 +88,7 @@ func gatherOptions() options {
 	fs.IntVar(&o.prometheusDaysBefore, "prometheus-days-before", 14, "Number [1,15] of days before. Time 00-00-00 of that day will be used as time to query Prometheus. E.g., 1 means 00-00-00 of yesterday.")
 
 	fs.BoolVar(&o.createPR, "create-pr", false, "Create a pull request to the change made with this tool.")
+	fs.StringVar(&o.upstreamBranch, "upstream-branch", upstreamBranch, "Upstream branch where the PR should be created")
 	fs.StringVar(&o.githubLogin, "github-login", githubLogin, "The GitHub username to use.")
 	fs.StringVar(&o.targetDir, "target-dir", "", "The directory containing the target repo.")
 	fs.StringVar(&o.assign, "assign", "ghost", "The github username or group name to assign the created pull request to.")
@@ -626,7 +628,7 @@ func createPR(o options, config *dispatcher.Config, pjs map[string]dispatcher.Pr
 	}
 
 	title := fmt.Sprintf("%s at %s", matchTitle, time.Now().Format(time.RFC1123))
-	if err := o.PRCreationOptions.UpsertPR(targetDirWithRelease, githubOrg, githubRepo, upstreamBranch, title, prcreation.PrAssignee(o.assign), prcreation.MatchTitle(matchTitle), prcreation.AdditionalLabels([]string{rehearse.RehearsalsAckLabel})); err != nil {
+	if err := o.PRCreationOptions.UpsertPR(targetDirWithRelease, githubOrg, githubRepo, o.upstreamBranch, title, prcreation.PrAssignee(o.assign), prcreation.MatchTitle(matchTitle), prcreation.AdditionalLabels([]string{rehearse.RehearsalsAckLabel})); err != nil {
 		logrus.WithError(err).Fatal("failed to upsert PR")
 	}
 }

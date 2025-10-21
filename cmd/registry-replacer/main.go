@@ -486,6 +486,10 @@ func upsertPR(gc pgithub.Client, dir, githubUsername string, token []byte, selfA
 	if ensureCorrectPromotionDockerfile {
 		prBody += "\n* Ensures the Dockerfiles used for promotion jobs matches the ones configured in [ocp-build-data](https://github.com/openshift/ocp-build-data/tree/openshift-4.6/images)"
 	}
+	repo, err := gc.GetRepo("openshift", "release")
+	if err != nil {
+		return fmt.Errorf("Error retrieving repository data: %w", err)
+	}
 	if err := bumper.UpdatePullRequestWithLabels(
 		gc,
 		"openshift",
@@ -493,7 +497,7 @@ func upsertPR(gc pgithub.Client, dir, githubUsername string, token []byte, selfA
 		prTitle,
 		prBody,
 		githubUsername+":"+targetBranch,
-		"master",
+		repo.DefaultBranch,
 		targetBranch,
 		true,
 		labelsToAdd,
@@ -821,7 +825,7 @@ func updateDockerfilesToMatchOCPBuildData(
 ) {
 
 	// The tool only works for the current release
-	if config.Metadata.Branch != "master" {
+	if config.Metadata.Branch != "main" && config.Metadata.Branch != "master" {
 		return
 	}
 	if ignoredRepos.Has(config.Metadata.Org + "/" + config.Metadata.Repo) {

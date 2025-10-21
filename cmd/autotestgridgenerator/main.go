@@ -21,7 +21,7 @@ const (
 	githubLogin    = "openshift-bot"
 	githubTeam     = "openshift/test-platform"
 	matchTitle     = "Update OpenShift testgrid definitions by auto-testgrid-generator job"
-	upstreamBranch = "master"
+	upstreamBranch = "main"
 )
 
 type options struct {
@@ -33,6 +33,7 @@ type options struct {
 	allowList         string
 	githubLogin       string
 	githubOrg         string
+	upstreamBranch    string
 	prcreation.PRCreationOptions
 	bumper.GitAuthorOptions
 }
@@ -48,6 +49,7 @@ func parseOptions() options {
 	fs.StringVar(&o.prowJobsDir, "prow-jobs-dir", "", "The directory where prow-job configs are stored")
 	fs.StringVar(&o.allowList, "allow-list", "", "File containing release-type information to override the defaults")
 	fs.StringVar(&o.githubOrg, "github-org", githubOrg, "The github org to use for testing with a dummy repository.")
+	fs.StringVar(&o.upstreamBranch, "upstream-branch", upstreamBranch, "The repository branch name where the PR will be created.")
 
 	o.GitAuthorOptions.AddFlags(fs)
 	o.PRCreationOptions.GitHubOptions.AddFlags(fs)
@@ -94,7 +96,7 @@ func main() {
 		logrus.WithError(err).Fatalf("failed to run %s", fullCommand)
 	}
 	title := fmt.Sprintf("%s at %s", matchTitle, time.Now().Format(time.RFC1123))
-	err = o.PRCreationOptions.UpsertPR(o.workingDir, o.githubOrg, githubRepo, upstreamBranch, title, prcreation.PrAssignee(o.assign), prcreation.MatchTitle(matchTitle))
+	err = o.PRCreationOptions.UpsertPR(o.workingDir, o.githubOrg, githubRepo, o.upstreamBranch, title, prcreation.PrAssignee(o.assign), prcreation.MatchTitle(matchTitle))
 	if err != nil {
 		logrus.WithError(err).Fatalf("failed to upsert PR")
 	}

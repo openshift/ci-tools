@@ -96,7 +96,7 @@ func orcbToEvent(orbc OrgRepoBranchCommit) event.TypedGenericEvent[*prowv1.ProwJ
 func nameToORBC(name string) (*OrgRepoBranchCommit, error) {
 	split := strings.Split(name, "|")
 	if n := len(split); n != 4 {
-		return nil, fmt.Errorf("splitting string by '|' did not return four but %d results. This is a bug.", n)
+		return nil, fmt.Errorf("splitting string by '|' did not return four but %d results. This is a bug", n)
 	}
 	return &OrgRepoBranchCommit{
 		Org:    split[0],

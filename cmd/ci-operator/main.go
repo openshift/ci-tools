@@ -1230,7 +1230,7 @@ func (o *options) resolveInputs(steps []api.Step) error {
 	if len(o.namespace) == 0 {
 		o.namespace = "ci-op-{id}"
 	}
-	o.namespace = strings.Replace(o.namespace, "{id}", o.inputHash, -1)
+	o.namespace = strings.ReplaceAll(o.namespace, "{id}", o.inputHash)
 	// TODO: instead of mutating this here, we should pass the parts of graph execution that are resolved
 	// after the graph is created but before it is run down into the run step.
 	o.jobSpec.SetNamespace(o.namespace)
@@ -1368,7 +1368,7 @@ func (o *options) initializeNamespace() error {
 					continue
 				}
 			}
-			ns.ObjectMeta.Annotations[key] = value
+			ns.Annotations[key] = value
 		}
 
 		updateErr := client.Update(ctx, ns)
@@ -2094,9 +2094,9 @@ func validateSteps(nodes api.OrderedStepList) []error {
 	for _, n := range nodes {
 		if err := n.Step.Validate(); err != nil {
 			errs = append(errs, fmt.Errorf("step %q failed validation: %w", n.Step.Name(), err))
-			if errors.Is(err, steps.NoLeaseClientErr) {
+			if errors.Is(err, steps.ErrNoLeaseClient) {
 				errs = append(errs, errors.New("a lease client was required but none was provided, add the --lease-... arguments"))
-			} else if errors.Is(err, steps.NoHiveClientErr) {
+			} else if errors.Is(err, steps.ErrNoHiveClient) {
 				errs = append(errs, errors.New("a Hive client was required but none was provided, add the --hive-kubeconfig argument"))
 			}
 		}
@@ -2163,13 +2163,14 @@ func getCloneSecretFromPath(cloneAuthType steps.CloneAuthType, secretPath string
 	hash := getHashFromBytes(data)
 	data = bytes.TrimSpace(data)
 
-	if cloneAuthType == steps.CloneAuthTypeSSH {
+	switch cloneAuthType {
+	case steps.CloneAuthTypeSSH:
 		secret.Name = fmt.Sprintf("ssh-%s", hash)
 		secret.Type = coreapi.SecretTypeSSHAuth
 		// Secret.Data["ssh-privatekey"] is required on SecretTypeSSHAuth type.
 		// https://github.com/kubernetes/api/blob/master/core/v1/types.go#L5466-L5470
 		secret.Data[coreapi.SSHAuthPrivateKey] = data
-	} else if cloneAuthType == steps.CloneAuthTypeOAuth {
+	case steps.CloneAuthTypeOAuth:
 		secret.Type = coreapi.SecretTypeBasicAuth
 		secret.Name = fmt.Sprintf("oauth-%s", hash)
 		secret.Data[steps.OauthSecretKey] = data

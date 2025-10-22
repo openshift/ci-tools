@@ -188,7 +188,7 @@ func (r *reconciler) reportSuccessOnPR(ctx context.Context, pj *v1.ProwJob, pres
 	}
 	selector := map[string]string{}
 	for _, l := range []string{kube.OrgLabel, kube.RepoLabel, kube.PullLabel, kube.BaseRefLabel} {
-		selector[l] = pj.ObjectMeta.Labels[l]
+		selector[l] = pj.Labels[l]
 	}
 	var pjs v1.ProwJobList
 	if err := r.lister.List(ctx, &pjs, ctrlruntimeclient.MatchingLabels(selector)); err != nil {

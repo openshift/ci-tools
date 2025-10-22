@@ -144,7 +144,7 @@ func generateBranchedConfigs(currentRelease, bumpRelease string, futureReleases 
 		futureConfig.Metadata.Branch = futureBranch
 		logrus.Info(currentRelease)
 		if skipPeriodics &&
-			!(futureConfig.Metadata.Branch == fmt.Sprintf("openshift-%s", currentRelease) || futureConfig.Metadata.Branch == fmt.Sprintf("release-%s", currentRelease)) {
+			futureConfig.Metadata.Branch != fmt.Sprintf("openshift-%s", currentRelease) && futureConfig.Metadata.Branch != fmt.Sprintf("release-%s", currentRelease) {
 			removePeriodics(&futureConfig.Tests)
 		}
 
@@ -226,20 +226,20 @@ func updateRelease(config *api.ReleaseBuildConfiguration, currentRelease, future
 // updateImages updates the release that is used for input images
 // if it matches the release we are updating from
 func updateImages(config *api.ReleaseBuildConfiguration, currentRelease, futureRelease string) {
-	for name := range config.InputConfiguration.BaseImages {
-		image := config.InputConfiguration.BaseImages[name]
+	for name := range config.BaseImages {
+		image := config.BaseImages[name]
 		if api.RefersToOfficialImage(image.Namespace, api.WithOKD) && strings.Contains(image.Name, currentRelease) {
 			bumpCurrentToFuture(&image.Name, currentRelease, futureRelease)
 		}
-		config.InputConfiguration.BaseImages[name] = image
+		config.BaseImages[name] = image
 	}
 
-	for i := range config.InputConfiguration.BaseRPMImages {
-		image := config.InputConfiguration.BaseRPMImages[i]
+	for i := range config.BaseRPMImages {
+		image := config.BaseRPMImages[i]
 		if api.RefersToOfficialImage(image.Namespace, api.WithOKD) && strings.Contains(image.Name, currentRelease) {
 			bumpCurrentToFuture(&image.Name, currentRelease, futureRelease)
 		}
-		config.InputConfiguration.BaseRPMImages[i] = image
+		config.BaseRPMImages[i] = image
 	}
 
 	if config.InputConfiguration.BuildRootImage != nil {

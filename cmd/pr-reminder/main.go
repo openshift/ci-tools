@@ -434,7 +434,7 @@ func findPRs(users map[string]user, channels map[string][]repoChannel, ghClient 
 			org, repo := split[0], split[1]
 
 			for _, pr := range repoToPRs[cfg.orgRepo] {
-				if isUnreviewed(org, repo, pr, ghClient) && !hasUnactionableLabels(pr.Labels) && !(cfg.omitBots && pr.User.Type == github.UserTypeBot) {
+				if isUnreviewed(org, repo, pr, ghClient) && !hasUnactionableLabels(pr.Labels) && (!cfg.omitBots || pr.User.Type != github.UserTypeBot) {
 					if _, recorded := channelToPRs[channel]; !recorded {
 						channelToPRs[channel] = []prRequest{}
 					}

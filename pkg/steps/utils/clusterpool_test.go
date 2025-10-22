@@ -11,7 +11,6 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/utils/pointer"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -25,11 +24,11 @@ type fakePoolClient struct {
 	returns []hivev1.ClusterPool
 }
 
-func (f fakePoolClient) Get(_ context.Context, _ client.ObjectKey, _ client.Object, opts ...client.GetOption) error {
+func (f fakePoolClient) Get(_ context.Context, _ ctrlruntimeclient.ObjectKey, _ ctrlruntimeclient.Object, opts ...ctrlruntimeclient.GetOption) error {
 	panic("implement me")
 }
 
-func (f fakePoolClient) List(_ context.Context, list client.ObjectList, _ ...client.ListOption) error {
+func (f fakePoolClient) List(_ context.Context, list ctrlruntimeclient.ObjectList, _ ...ctrlruntimeclient.ListOption) error {
 	l := list.(*hivev1.ClusterPoolList)
 	l.Items = f.returns
 	return nil

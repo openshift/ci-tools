@@ -231,7 +231,7 @@ func renderDotFile(dot string) ([]byte, error) {
 	cmd.Stderr = buf
 	out, err := cmd.Output()
 	if execErr, ok := err.(*exec.Error); ok && execErr.Err == exec.ErrNotFound {
-		return []byte{}, errors.New("The 'dot' binary is not installed")
+		return []byte{}, errors.New("the 'dot' binary is not installed")
 	} else if err != nil {
 		return out, errors.New(buf.String())
 	}

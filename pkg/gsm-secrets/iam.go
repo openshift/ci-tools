@@ -60,7 +60,7 @@ func GetSecretsUpdaterConditionDescription(collection string) string {
 func IsManagedBinding(b *iampb.Binding) bool {
 	isSecretAccessorRole := strings.Contains(b.Role, "/roles/openshift_ci_secrets_viewer")
 	isSecretUpdaterRole := strings.Contains(b.Role, "/roles/openshift_ci_secrets_updater")
-	if !(isSecretAccessorRole || isSecretUpdaterRole) {
+	if !isSecretAccessorRole && !isSecretUpdaterRole {
 		return false
 	}
 	if b.Condition == nil {

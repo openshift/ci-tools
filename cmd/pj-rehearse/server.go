@@ -404,9 +404,10 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 				allowedLabel := false
 				approved := false
 				for _, label := range pullRequest.Labels {
-					if label.Name == rehearse.NetworkAccessRehearsalsOkLabel {
+					switch label.Name {
+					case rehearse.NetworkAccessRehearsalsOkLabel:
 						allowedLabel = true
-					} else if label.Name == labels.Approved {
+					case labels.Approved:
 						approved = true
 					}
 				}
@@ -435,11 +436,12 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 				}
 				if len(presubmits) > 0 || len(periodics) > 0 {
 					limit := math.MaxInt
-					if command == rehearseNormal || command == rehearseAutoAck {
+					switch command {
+					case rehearseNormal, rehearseAutoAck:
 						limit = rc.NormalLimit
-					} else if command == rehearseMore {
+					case rehearseMore:
 						limit = rc.MoreLimit
-					} else if command == rehearseMax {
+					case rehearseMax:
 						limit = rc.MaxLimit
 					}
 

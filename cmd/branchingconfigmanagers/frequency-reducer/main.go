@@ -25,7 +25,7 @@ type options struct {
 
 func (o options) validate() error {
 	var errs []error
-	if err := o.ConfirmableOptions.Validate(); err != nil {
+	if err := o.Validate(); err != nil {
 		errs = append(errs, err)
 	}
 
@@ -53,7 +53,7 @@ func main() {
 		logrus.Fatalf("Not valid --current-release: %v", err)
 	}
 
-	if err := o.ConfirmableOptions.Complete(); err != nil {
+	if err := o.Complete(); err != nil {
 		logrus.Fatalf("Couldn't complete the config options: %v", err)
 	}
 
@@ -75,11 +75,11 @@ func updateIntervalFieldsForMatchedSteps(
 	configuration *config.DataWithInfo,
 	version ocplifecycle.MajorMinor,
 ) {
-	testVersion, err := ocplifecycle.ParseMajorMinor(extractVersion(configuration.Info.Metadata.Branch))
+	testVersion, err := ocplifecycle.ParseMajorMinor(extractVersion(configuration.Info.Branch))
 	if err != nil {
 		return
 	}
-	if configuration.Info.Metadata.Org == "openshift" || configuration.Info.Metadata.Org == "openshift-priv" {
+	if configuration.Info.Org == "openshift" || configuration.Info.Org == "openshift-priv" {
 		for _, test := range configuration.Configuration.Tests {
 			if !strings.Contains(test.As, "mirror-nightly-image") && !strings.Contains(test.As, "promote-") {
 				if test.Cron != nil {

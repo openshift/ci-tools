@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	coreapi "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacapi "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -20,14 +19,14 @@ import (
 func TestCreateRBACs(t *testing.T) {
 	testCases := []struct {
 		id            string
-		sa            *coreapi.ServiceAccount
+		sa            *v1.ServiceAccount
 		role          *rbacapi.Role
 		roleBinding   *rbacapi.RoleBinding
 		expectedError string
 	}{
 		{
 			id: "happy",
-			sa: &coreapi.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "ci-operator", Namespace: "test-namespace"}},
+			sa: &v1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "ci-operator", Namespace: "test-namespace"}},
 			role: &rbacapi.Role{
 				ObjectMeta: metav1.ObjectMeta{Name: "ci-operator-image", Namespace: "test-namespace"},
 				Rules: []rbacapi.PolicyRule{
@@ -52,7 +51,7 @@ func TestCreateRBACs(t *testing.T) {
 		},
 		{
 			id: "sad",
-			sa: &coreapi.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "ci-operator", Namespace: "test-namespace"}},
+			sa: &v1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "ci-operator", Namespace: "test-namespace"}},
 			role: &rbacapi.Role{
 				ObjectMeta: metav1.ObjectMeta{Name: "ci-operator-image", Namespace: "test-namespace"},
 				Rules: []rbacapi.PolicyRule{
@@ -85,7 +84,7 @@ func TestCreateRBACs(t *testing.T) {
 			if tc.expectedError == "" {
 				go func() {
 					if err := wait.Poll(10*time.Millisecond, 100*time.Millisecond, func() (bool, error) {
-						newSA := &coreapi.ServiceAccount{}
+						newSA := &v1.ServiceAccount{}
 						if err := client.Get(context.Background(), ctrlruntimeclient.ObjectKey{
 							Namespace: "test-namespace",
 							Name:      "ci-operator",

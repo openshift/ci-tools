@@ -188,10 +188,10 @@ func makeOcApply(kubeConfig, context, path, user string, dry dryRunMethod, apply
 		cmd.Args = append(cmd.Args, "--dry-run=server", "--validate=true")
 	case dryClient:
 		cmd.Args = append(cmd.Args, "--dry-run=client")
-	default:
-		panic(fmt.Sprintf("BUG: Unknown dry run method '%s' received, this should never happen", string(dry)))
 	case dryNone:
 		// No additional args needed
+	default:
+		panic(fmt.Sprintf("BUG: Unknown dry run method '%s' received, this should never happen", string(dry)))
 	}
 
 	fileName := filepath.Base(path)

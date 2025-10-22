@@ -11,7 +11,6 @@ import (
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/prow/pkg/git/types"
-	"sigs.k8s.io/prow/pkg/plugins"
 	prowplugins "sigs.k8s.io/prow/pkg/plugins"
 )
 
@@ -404,12 +403,12 @@ func TestInjectPrivateJobURLPrefixConfig(t *testing.T) {
 func TestInjectPrivateApprovePlugin(t *testing.T) {
 	testCases := []struct {
 		id       string
-		approves []plugins.Approve
-		expected []plugins.Approve
+		approves []prowplugins.Approve
+		expected []prowplugins.Approve
 	}{
 		{
 			id: "no changes expected",
-			approves: []plugins.Approve{
+			approves: []prowplugins.Approve{
 				{
 					IgnoreReviewState: pBool(false),
 					LgtmActsAsApprove: true,
@@ -421,7 +420,7 @@ func TestInjectPrivateApprovePlugin(t *testing.T) {
 					Repos:             []string{"openshift/anotherRepo3", "testshift/anotherRepo4"},
 				},
 			},
-			expected: []plugins.Approve{
+			expected: []prowplugins.Approve{
 				{
 					IgnoreReviewState: pBool(false),
 					LgtmActsAsApprove: true,
@@ -436,7 +435,7 @@ func TestInjectPrivateApprovePlugin(t *testing.T) {
 		},
 		{
 			id: "changes expected",
-			approves: []plugins.Approve{
+			approves: []prowplugins.Approve{
 				{
 					IgnoreReviewState: pBool(false),
 					LgtmActsAsApprove: true,
@@ -448,7 +447,7 @@ func TestInjectPrivateApprovePlugin(t *testing.T) {
 					Repos:             []string{"openshift/anotherRepo3", "testshift/testRepo3"},
 				},
 			},
-			expected: []plugins.Approve{
+			expected: []prowplugins.Approve{
 				{
 					IgnoreReviewState: pBool(false),
 					LgtmActsAsApprove: true,
@@ -476,12 +475,12 @@ func TestInjectPrivateApprovePlugin(t *testing.T) {
 func TestInjectPrivateLGTMPlugin(t *testing.T) {
 	testCases := []struct {
 		id       string
-		lgtms    []plugins.Lgtm
-		expected []plugins.Lgtm
+		lgtms    []prowplugins.Lgtm
+		expected []prowplugins.Lgtm
 	}{
 		{
 			id: "no changes expected",
-			lgtms: []plugins.Lgtm{
+			lgtms: []prowplugins.Lgtm{
 				{
 					ReviewActsAsLgtm: true,
 					Repos:            []string{"openshift/anotherRepo1", "testshift/anotherRepo2"},
@@ -491,7 +490,7 @@ func TestInjectPrivateLGTMPlugin(t *testing.T) {
 					Repos:            []string{"openshift/anotherRepo3", "testshift/anotherRepo4"},
 				},
 			},
-			expected: []plugins.Lgtm{
+			expected: []prowplugins.Lgtm{
 				{
 					ReviewActsAsLgtm: true,
 					Repos:            []string{"openshift/anotherRepo1", "testshift/anotherRepo2"},
@@ -504,7 +503,7 @@ func TestInjectPrivateLGTMPlugin(t *testing.T) {
 		},
 		{
 			id: "changes expected",
-			lgtms: []plugins.Lgtm{
+			lgtms: []prowplugins.Lgtm{
 				{
 					ReviewActsAsLgtm: true,
 					Repos:            []string{"openshift/testRepo1", "testshift/anotherRepo2"},
@@ -514,7 +513,7 @@ func TestInjectPrivateLGTMPlugin(t *testing.T) {
 					Repos:            []string{"openshift/anotherRepo3", "testshift/testRepo3"},
 				},
 			},
-			expected: []plugins.Lgtm{
+			expected: []prowplugins.Lgtm{
 				{
 					ReviewActsAsLgtm: true,
 					Repos:            []string{"openshift-priv/testRepo1", "openshift/testRepo1", "testshift/anotherRepo2"},
@@ -540,48 +539,48 @@ func TestInjectPrivateLGTMPlugin(t *testing.T) {
 func TestInjectPrivateBugzillaPlugin(t *testing.T) {
 	testCases := []struct {
 		id       string
-		bugzilla plugins.Bugzilla
-		expected plugins.Bugzilla
+		bugzilla prowplugins.Bugzilla
+		expected prowplugins.Bugzilla
 	}{
 		{
 			id: "no changes expected",
-			bugzilla: plugins.Bugzilla{
-				Orgs: map[string]plugins.BugzillaOrgOptions{
-					"openshift": {Repos: map[string]plugins.BugzillaRepoOptions{
-						"anotherRepo1": {Branches: map[string]plugins.BugzillaBranchOptions{"master": {ExcludeDefaults: pBool(true)}}}}},
-					"testshift": {Repos: map[string]plugins.BugzillaRepoOptions{
-						"anotherRepo2": {Branches: map[string]plugins.BugzillaBranchOptions{"master": {ExcludeDefaults: pBool(true)}}}}},
+			bugzilla: prowplugins.Bugzilla{
+				Orgs: map[string]prowplugins.BugzillaOrgOptions{
+					"openshift": {Repos: map[string]prowplugins.BugzillaRepoOptions{
+						"anotherRepo1": {Branches: map[string]prowplugins.BugzillaBranchOptions{"master": {ExcludeDefaults: pBool(true)}}}}},
+					"testshift": {Repos: map[string]prowplugins.BugzillaRepoOptions{
+						"anotherRepo2": {Branches: map[string]prowplugins.BugzillaBranchOptions{"master": {ExcludeDefaults: pBool(true)}}}}},
 				},
 			},
-			expected: plugins.Bugzilla{
-				Orgs: map[string]plugins.BugzillaOrgOptions{
-					"openshift": {Repos: map[string]plugins.BugzillaRepoOptions{
-						"anotherRepo1": {Branches: map[string]plugins.BugzillaBranchOptions{"master": {ExcludeDefaults: pBool(true)}}}}},
-					"testshift": {Repos: map[string]plugins.BugzillaRepoOptions{
-						"anotherRepo2": {Branches: map[string]plugins.BugzillaBranchOptions{"master": {ExcludeDefaults: pBool(true)}}}}},
+			expected: prowplugins.Bugzilla{
+				Orgs: map[string]prowplugins.BugzillaOrgOptions{
+					"openshift": {Repos: map[string]prowplugins.BugzillaRepoOptions{
+						"anotherRepo1": {Branches: map[string]prowplugins.BugzillaBranchOptions{"master": {ExcludeDefaults: pBool(true)}}}}},
+					"testshift": {Repos: map[string]prowplugins.BugzillaRepoOptions{
+						"anotherRepo2": {Branches: map[string]prowplugins.BugzillaBranchOptions{"master": {ExcludeDefaults: pBool(true)}}}}},
 				},
 			},
 		},
 
 		{
 			id: "changes expected",
-			bugzilla: plugins.Bugzilla{
-				Orgs: map[string]plugins.BugzillaOrgOptions{
-					"openshift": {Repos: map[string]plugins.BugzillaRepoOptions{
-						"testRepo1": {Branches: map[string]plugins.BugzillaBranchOptions{"master": {ExcludeDefaults: pBool(true)}}}}},
-					"testshift": {Repos: map[string]plugins.BugzillaRepoOptions{
-						"testRepo3": {Branches: map[string]plugins.BugzillaBranchOptions{"master": {ExcludeDefaults: pBool(true)}}}}},
+			bugzilla: prowplugins.Bugzilla{
+				Orgs: map[string]prowplugins.BugzillaOrgOptions{
+					"openshift": {Repos: map[string]prowplugins.BugzillaRepoOptions{
+						"testRepo1": {Branches: map[string]prowplugins.BugzillaBranchOptions{"master": {ExcludeDefaults: pBool(true)}}}}},
+					"testshift": {Repos: map[string]prowplugins.BugzillaRepoOptions{
+						"testRepo3": {Branches: map[string]prowplugins.BugzillaBranchOptions{"master": {ExcludeDefaults: pBool(true)}}}}},
 				},
 			},
-			expected: plugins.Bugzilla{
-				Orgs: map[string]plugins.BugzillaOrgOptions{
-					"openshift": {Repos: map[string]plugins.BugzillaRepoOptions{
-						"testRepo1": {Branches: map[string]plugins.BugzillaBranchOptions{"master": {ExcludeDefaults: pBool(true)}}}}},
-					"testshift": {Repos: map[string]plugins.BugzillaRepoOptions{
-						"testRepo3": {Branches: map[string]plugins.BugzillaBranchOptions{"master": {ExcludeDefaults: pBool(true)}}}}},
-					"openshift-priv": {Repos: map[string]plugins.BugzillaRepoOptions{
-						"testRepo1": {Branches: map[string]plugins.BugzillaBranchOptions{"master": {ExcludeDefaults: pBool(true)}}},
-						"testRepo3": {Branches: map[string]plugins.BugzillaBranchOptions{"master": {ExcludeDefaults: pBool(true)}}}},
+			expected: prowplugins.Bugzilla{
+				Orgs: map[string]prowplugins.BugzillaOrgOptions{
+					"openshift": {Repos: map[string]prowplugins.BugzillaRepoOptions{
+						"testRepo1": {Branches: map[string]prowplugins.BugzillaBranchOptions{"master": {ExcludeDefaults: pBool(true)}}}}},
+					"testshift": {Repos: map[string]prowplugins.BugzillaRepoOptions{
+						"testRepo3": {Branches: map[string]prowplugins.BugzillaBranchOptions{"master": {ExcludeDefaults: pBool(true)}}}}},
+					"openshift-priv": {Repos: map[string]prowplugins.BugzillaRepoOptions{
+						"testRepo1": {Branches: map[string]prowplugins.BugzillaBranchOptions{"master": {ExcludeDefaults: pBool(true)}}},
+						"testRepo3": {Branches: map[string]prowplugins.BugzillaBranchOptions{"master": {ExcludeDefaults: pBool(true)}}}},
 					},
 				},
 			},

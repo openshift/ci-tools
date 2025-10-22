@@ -22,7 +22,6 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/prow/pkg/config/secret"
-	"sigs.k8s.io/prow/pkg/flagutil"
 	prowflagutil "sigs.k8s.io/prow/pkg/flagutil"
 	configflagutil "sigs.k8s.io/prow/pkg/flagutil/config"
 	"sigs.k8s.io/prow/pkg/interrupts"
@@ -78,7 +77,7 @@ func (o *options) Validate() error {
 		return fmt.Errorf("--slack-signing-secret-path is required")
 	}
 
-	for _, group := range []flagutil.OptionGroup{&o.instrumentationOptions, &o.jiraOptions, &o.prowconfig} {
+	for _, group := range []prowflagutil.OptionGroup{&o.instrumentationOptions, &o.jiraOptions, &o.prowconfig} {
 		if err := group.Validate(false); err != nil {
 			return err
 		}
@@ -96,7 +95,7 @@ func gatherOptions(fs *flag.FlagSet, args ...string) options {
 
 	o.prowconfig.ConfigPathFlagName = "prow-config-path"
 	o.prowconfig.JobConfigPathFlagName = "prow-job-config-path"
-	for _, group := range []flagutil.OptionGroup{&o.instrumentationOptions, &o.jiraOptions, &o.prowconfig} {
+	for _, group := range []prowflagutil.OptionGroup{&o.instrumentationOptions, &o.jiraOptions, &o.prowconfig} {
 		group.AddFlags(fs)
 	}
 

@@ -284,7 +284,7 @@ func (s *server) runDetails(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	title := fmt.Sprintf(runTitle, run.ObjectMeta.Name)
+	title := fmt.Sprintf(runTitle, run.Name)
 	status := make([]*prpqv1.PullRequestPayloadJobStatus, 0, len(run.Spec.Jobs.Jobs))
 	for _, j := range run.Spec.Jobs.Jobs {
 		name := j.JobName(jobconfig.PeriodicPrefix)

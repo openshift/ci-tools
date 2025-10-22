@@ -12,7 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowConfig "sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/prow/pkg/config/secret"
-	"sigs.k8s.io/prow/pkg/flagutil"
 	prowflagutil "sigs.k8s.io/prow/pkg/flagutil"
 	"sigs.k8s.io/prow/pkg/interrupts"
 	"sigs.k8s.io/prow/pkg/metrics"
@@ -45,7 +44,7 @@ func gatherOptions() (options, error) {
 	fs.DurationVar(&o.gracePeriod, "gracePeriod", time.Second*10, "Grace period for server shutdown")
 	fs.StringVar(&o.pluginConfig, "plugin-config", "/etc/plugins/plugins.yaml", "Path to plugin config file.")
 
-	for _, group := range []flagutil.OptionGroup{&o.bugzilla} {
+	for _, group := range []prowflagutil.OptionGroup{&o.bugzilla} {
 		group.AddFlags(fs)
 	}
 	err := fs.Parse(os.Args[1:])

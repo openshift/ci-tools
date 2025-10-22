@@ -56,7 +56,7 @@ func (f *FakePodExecutor) Get(ctx context.Context, n ctrlruntimeclient.ObjectKey
 }
 
 func (f *FakePodExecutor) Watch(ctx context.Context, list ctrlruntimeclient.ObjectList, opts ...ctrlruntimeclient.ListOption) (watch.Interface, error) {
-	if err := f.LoggingClient.List(ctx, list, opts...); err != nil {
+	if err := f.List(ctx, list, opts...); err != nil {
 		return nil, err
 	}
 	filter(list, opts...)

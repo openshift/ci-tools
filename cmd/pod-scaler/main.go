@@ -73,7 +73,7 @@ func bindOptions(fs *flag.FlagSet) *options {
 	o := options{producerOptions: producerOptions{kubernetesOptions: prowflagutil.KubernetesOptions{NOInClusterConfigDefault: true}}}
 	o.instrumentationOptions.AddFlags(fs)
 	fs.StringVar(&o.mode, "mode", "", "Which mode to run in.")
-	o.producerOptions.kubernetesOptions.AddFlags(fs)
+	o.kubernetesOptions.AddFlags(fs)
 	fs.DurationVar(&o.ignoreLatest, "ignore-latest", 0, "Duration of latest time series to ignore when querying Prometheus. For instance, 1h will ignore the latest hour of data.")
 	fs.BoolVar(&o.once, "produce-once", false, "Query Prometheus and refresh cached data only once before exiting.")
 	fs.IntVar(&o.port, "port", 0, "Port to serve admission webhooks on.")

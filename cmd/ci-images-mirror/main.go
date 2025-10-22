@@ -163,7 +163,7 @@ func (s *supplementalCIImagesServiceWithMirrorStore) Mirror(m map[string]quayioc
 	for k, v := range m {
 		source := v.Image
 		if source == "" {
-			source = fmt.Sprintf("%s/%s", api.ServiceDomainAPPCIRegistry, v.ImageStreamTagReference.ISTagName())
+			source = fmt.Sprintf("%s/%s", api.ServiceDomainAPPCIRegistry, v.ISTagName())
 		}
 		if err := s.mirrorStore.Put(quayiociimagesdistributor.MirrorTask{
 			Source:      source,

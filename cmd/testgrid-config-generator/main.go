@@ -162,7 +162,7 @@ func (d *dashboard) add(bucket, name string, description string, daysOfResults i
 		return
 	}
 	d.existing.Insert(name)
-	d.Dashboard.DashboardTab = append(d.Dashboard.DashboardTab, dashboardTabFor(name, description))
+	d.DashboardTab = append(d.DashboardTab, dashboardTabFor(name, description))
 	d.testGroups = append(d.testGroups, testGroupFor(bucket, name, daysOfResults))
 }
 

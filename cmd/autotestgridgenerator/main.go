@@ -52,7 +52,7 @@ func parseOptions() options {
 	fs.StringVar(&o.upstreamBranch, "upstream-branch", upstreamBranch, "The repository branch name where the PR will be created.")
 
 	o.GitAuthorOptions.AddFlags(fs)
-	o.PRCreationOptions.GitHubOptions.AddFlags(fs)
+	o.GitHubOptions.AddFlags(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Errorf("cannot parse args: '%s'", os.Args[1:])
 	}
@@ -60,7 +60,7 @@ func parseOptions() options {
 }
 
 func validateOptions(o options) error {
-	if err := o.GitAuthorOptions.Validate(); err != nil {
+	if err := o.Validate(); err != nil {
 		return err
 	}
 	return o.GitHubOptions.Validate(false)
@@ -71,7 +71,7 @@ func main() {
 	if err := validateOptions(o); err != nil {
 		logrus.WithError(err).Fatal("Invalid arguments.")
 	}
-	if err := o.PRCreationOptions.Finalize(); err != nil {
+	if err := o.Finalize(); err != nil {
 		logrus.WithError(err).Fatal("failed to finalize PR creation options")
 	}
 
@@ -96,7 +96,7 @@ func main() {
 		logrus.WithError(err).Fatalf("failed to run %s", fullCommand)
 	}
 	title := fmt.Sprintf("%s at %s", matchTitle, time.Now().Format(time.RFC1123))
-	err = o.PRCreationOptions.UpsertPR(o.workingDir, o.githubOrg, githubRepo, o.upstreamBranch, title, prcreation.PrAssignee(o.assign), prcreation.MatchTitle(matchTitle))
+	err = o.UpsertPR(o.workingDir, o.githubOrg, githubRepo, o.upstreamBranch, title, prcreation.PrAssignee(o.assign), prcreation.MatchTitle(matchTitle))
 	if err != nil {
 		logrus.WithError(err).Fatalf("failed to upsert PR")
 	}

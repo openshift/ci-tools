@@ -35,11 +35,11 @@ func (r *releaseSnapshotStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
-var NilIntegratedStreamError = errors.New("step snapshot an integrated stream without resolving required information")
+var ErrNilIntegratedStream = errors.New("step snapshot an integrated stream without resolving required information")
 
 func (r *releaseSnapshotStep) Validate() error {
 	if r.integratedStream == nil {
-		return NilIntegratedStreamError
+		return ErrNilIntegratedStream
 	}
 	return nil
 }

@@ -53,11 +53,10 @@ func (f *BigQueryDataCoordinates) Validate() error {
 }
 
 func (f *BigQueryDataCoordinates) SubstituteDataSetLocation(query string) string {
-	return strings.Replace(
+	return strings.ReplaceAll(
 		query,
 		"DATA_SET_LOCATION",
-		f.ProjectID+"."+f.DataSetID,
-		-1)
+		f.ProjectID+"."+f.DataSetID)
 }
 
 type BigQueryInserter interface {

@@ -41,7 +41,7 @@ func gatherOptions() (*options, error) {
 	o := &options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 
-	o.ConfigOptions.AddFlags(fs)
+	o.AddFlags(fs)
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
 	fs.StringVar(&o.namespace, "namespace", "ci", "In which namespace the operation will take place")
 	fs.Int64Var(&o.jobTriggerWaitInSeconds, "job-trigger-wait-seconds", 20, "Amount of seconds to wait for job to trigger in order to update status")
@@ -72,7 +72,7 @@ func main() {
 		logrus.WithError(err).Fatal("Invalid options")
 	}
 
-	agent, err := o.ConfigOptions.ConfigAgent()
+	agent, err := o.ConfigAgent()
 	if err != nil {
 		logrus.WithError(err).Fatal("could not load Prow configuration")
 	}

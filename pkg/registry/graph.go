@@ -265,7 +265,7 @@ func hasCycles(node *chainNode, ancestors sets.Set[string], traversedPath []stri
 		ancestors = sets.New[string]()
 	}
 	if ancestors.Has(node.name) {
-		return fmt.Errorf("Cycle detected: %s is an ancestor of itself; traversedPath: %v", node.name, append(traversedPath, node.name))
+		return fmt.Errorf("cycle detected: %s is an ancestor of itself; traversedPath: %v", node.name, append(traversedPath, node.name))
 	}
 	ancestors.Insert(node.name)
 	for child := range node.chainChildren {
@@ -322,7 +322,7 @@ func NewGraph(stepsByName ReferenceByName, chainsByName ChainByName, workflowsBy
 		for _, step := range chain.Steps {
 			if step.Reference != nil {
 				if _, exists := referenceNodes[*step.Reference]; !exists {
-					return nodesByName, fmt.Errorf("Chain %s contains non-existent reference %s", name, *step.Reference)
+					return nodesByName, fmt.Errorf("chain %s contains non-existent reference %s", name, *step.Reference)
 				}
 				node.addReferenceChild(referenceNodes[*step.Reference])
 			}
@@ -334,7 +334,7 @@ func NewGraph(stepsByName ReferenceByName, chainsByName ChainByName, workflowsBy
 	for parent, children := range parentChildChain {
 		for _, child := range children {
 			if _, exists := chainNodes[child]; !exists {
-				return nodesByName, fmt.Errorf("Chain %s contains non-existent chain %s", parent.Name(), child)
+				return nodesByName, fmt.Errorf("chain %s contains non-existent chain %s", parent.Name(), child)
 			}
 			parent.addChainChild(chainNodes[child])
 		}
@@ -356,7 +356,7 @@ func NewGraph(stepsByName ReferenceByName, chainsByName ChainByName, workflowsBy
 		if workflow.Observers != nil {
 			for _, observer := range workflow.Observers.Enable {
 				if child, exists := nodesByName.Observers[observer]; !exists {
-					return nodesByName, fmt.Errorf("Workflow %s contains non-existent observer %s", name, observer)
+					return nodesByName, fmt.Errorf("workflow %s contains non-existent observer %s", name, observer)
 				} else {
 					if node.observerChildren == nil {
 						node.observerChildren = make(observerNodeSet)
@@ -373,13 +373,13 @@ func NewGraph(stepsByName ReferenceByName, chainsByName ChainByName, workflowsBy
 		for _, step := range steps {
 			if step.Reference != nil {
 				if _, exists := referenceNodes[*step.Reference]; !exists {
-					return nodesByName, fmt.Errorf("Workflow %s contains non-existent reference %s", name, *step.Reference)
+					return nodesByName, fmt.Errorf("workflow %s contains non-existent reference %s", name, *step.Reference)
 				}
 				node.addReferenceChild(referenceNodes[*step.Reference])
 			}
 			if step.Chain != nil {
 				if _, exists := chainNodes[*step.Chain]; !exists {
-					return nodesByName, fmt.Errorf("Workflow %s contains non-existent chain %s", name, *step.Chain)
+					return nodesByName, fmt.Errorf("workflow %s contains non-existent chain %s", name, *step.Chain)
 				}
 				node.addChainChild(chainNodes[*step.Chain])
 			}

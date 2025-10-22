@@ -14,7 +14,6 @@ import (
 	pjapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 
-	"github.com/openshift/ci-tools/pkg/api"
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
@@ -58,7 +57,7 @@ func GetChangedCiopConfigs(masterConfig, prConfig config.DataByFilename, logger 
 			return out
 		}
 
-		if diff := cmp.Diff(withoutTests(oldConfig.Configuration), withoutTests(newConfig.Configuration), cmpopts.IgnoreUnexported(api.ProjectDirectoryImageBuildStepConfiguration{})); diff != "" {
+		if diff := cmp.Diff(withoutTests(oldConfig.Configuration), withoutTests(newConfig.Configuration), cmpopts.IgnoreUnexported(cioperatorapi.ProjectDirectoryImageBuildStepConfiguration{})); diff != "" {
 			logger.WithField(logCiopConfig, filename).Info(changedCiopConfigMsg)
 			configs[filename] = newConfig
 			continue

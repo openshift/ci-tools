@@ -394,7 +394,7 @@ func (s *rpmServerStep) Provides() api.ParameterMap {
 	}
 	ret := make(api.ParameterMap)
 	for _, ref := range refs {
-		rpmByOrgAndRepo := strings.Replace(fmt.Sprintf("RPM_REPO_%s_%s", strings.ToUpper(ref.Org), strings.ToUpper(ref.Repo)), "-", "_", -1)
+		rpmByOrgAndRepo := strings.ReplaceAll(fmt.Sprintf("RPM_REPO_%s_%s", strings.ToUpper(ref.Org), strings.ToUpper(ref.Repo)), "-", "_")
 		ret[rpmByOrgAndRepo] = s.rpmRepoURL
 	}
 	return ret

@@ -230,8 +230,8 @@ func getMinor(in string) (int, error) {
 }
 
 func normalizeJobName(jobName, fromRelease, toRelease string) string {
-	newJobName := strings.Replace(jobName, toRelease, "", -1)
-	return strings.Replace(newJobName, fromRelease, "", -1)
+	newJobName := strings.ReplaceAll(jobName, toRelease, "")
+	return strings.ReplaceAll(newJobName, fromRelease, "")
 }
 
 func (a *weeklyAverageFromTenDays) getNormalizedFallBackJobName(ctx context.Context, jobName string) (string, error) {

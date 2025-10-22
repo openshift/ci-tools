@@ -10,7 +10,6 @@ import (
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 
-	"github.com/openshift/ci-tools/pkg/api"
 	ciop "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/testhelper"
@@ -442,7 +441,7 @@ func TestGenerateJobs(t *testing.T) {
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests:                  []ciop.TestStepConfiguration{},
 				Images:                 []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
-				PromotionConfiguration: &ciop.PromotionConfiguration{Targets: []api.PromotionTarget{{Namespace: "ci"}}},
+				PromotionConfiguration: &ciop.PromotionConfiguration{Targets: []ciop.PromotionTarget{{Namespace: "ci"}}},
 			},
 			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
 				Org:    "organization",
@@ -459,7 +458,7 @@ func TestGenerateJobs(t *testing.T) {
 					{To: "out-2", From: "base"},
 				},
 				PromotionConfiguration: &ciop.PromotionConfiguration{
-					Targets: []api.PromotionTarget{{
+					Targets: []ciop.PromotionTarget{{
 						Namespace: "ci",
 						AdditionalImages: map[string]string{
 							"out": "out-1",

@@ -102,7 +102,7 @@ func (s *templateExecutionStep) run(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("could not resolve image format: %w", err)
 			}
-			s.template.Parameters[i].Value = strings.Replace(format, api.ComponentFormatReplacement, component, -1)
+			s.template.Parameters[i].Value = strings.ReplaceAll(format, api.ComponentFormatReplacement, component)
 		}
 	}
 

@@ -108,7 +108,7 @@ func (s *server) handleIssueComment(l *logrus.Entry, ic github.IssueCommentEvent
 
 func (s *server) checkPrerequisites(logger *logrus.Entry, pr *github.PullRequest, ic github.IssueCommentEvent) error {
 	if !ic.Issue.IsPullRequest() {
-		return errors.New("Publicize plugin can only be used in pull requests")
+		return errors.New("publicize plugin can only be used in pull requests")
 	}
 
 	org := ic.Repo.Owner.Login
@@ -175,7 +175,7 @@ func (s *server) mergeAndPushToRemote(sourceOrg, sourceRepo, destOrg, destRepo s
 	}
 
 	if !merged {
-		return "", fmt.Errorf("couldn't merge %s/%s, due to merge conflict. You will need to create a new PR in %s/%s which merges/resolves from %s/%s. Once this PR merges, you can then use /publicize there to merge all changes into the the public repository.", destOrg, destRepo, sourceOrg, sourceRepo, destOrg, destRepo)
+		return "", fmt.Errorf("couldn't merge %s/%s, due to merge conflict. You will need to create a new PR in %s/%s which merges/resolves from %s/%s. Once this PR merges, you can then use /publicize there to merge all changes into the the public repository", destOrg, destRepo, sourceOrg, sourceRepo, destOrg, destRepo)
 	}
 
 	if !dry {

@@ -105,7 +105,7 @@ func (s *releaseImagesTagStep) Inputs() (api.InputDefinition, error) {
 
 func (s *releaseImagesTagStep) Validate() error {
 	if s.integratedStream == nil {
-		return NilIntegratedStreamError
+		return ErrNilIntegratedStream
 	}
 	return nil
 }

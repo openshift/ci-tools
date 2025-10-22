@@ -16,7 +16,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	coreapi "k8s.io/api/core/v1"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -67,7 +66,7 @@ func NewTestCaseNotifier(nested util.ContainerNotifier) *TestCaseNotifier {
 	return &TestCaseNotifier{nested: nested}
 }
 
-func (n *TestCaseNotifier) Notify(pod *coreapi.Pod, containerName string) {
+func (n *TestCaseNotifier) Notify(pod *corev1.Pod, containerName string) {
 	n.nested.Notify(pod, containerName)
 	n.lastPod = pod
 }
@@ -91,7 +90,7 @@ func (n *TestCaseNotifier) SubTests(prefix string) []*junit.TestCase {
 	if len(names) == 0 {
 		return nil
 	}
-	statuses := make([]coreapi.ContainerStatus, len(pod.Status.ContainerStatuses))
+	statuses := make([]corev1.ContainerStatus, len(pod.Status.ContainerStatuses))
 	copy(statuses, pod.Status.ContainerStatuses)
 	sort.Slice(statuses, func(i, j int) bool {
 		aT, bT := statuses[i].State.Terminated, statuses[j].State.Terminated
@@ -171,7 +170,7 @@ func copyArtifacts(podClient kubernetes.PodClient, into, ns, name, containerName
 		args = append(args, "-C", s, ".")
 	}
 
-	e, err := podClient.Exec(ns, name, &coreapi.PodExecOptions{
+	e, err := podClient.Exec(ns, name, &corev1.PodExecOptions{
 		Container: containerName,
 		Stdout:    true,
 		Stderr:    true,
@@ -251,7 +250,7 @@ func copyArtifacts(podClient kubernetes.PodClient, into, ns, name, containerName
 }
 
 func removeFile(podClient kubernetes.PodClient, ns, name, containerName string, paths []string) error {
-	e, err := podClient.Exec(ns, name, &coreapi.PodExecOptions{
+	e, err := podClient.Exec(ns, name, &corev1.PodExecOptions{
 		Container: containerName,
 		Stdout:    true,
 		Stderr:    true,
@@ -272,11 +271,11 @@ func removeFile(podClient kubernetes.PodClient, ns, name, containerName string, 
 }
 
 func addPodUtils(
-	pod *coreapi.Pod,
+	pod *corev1.Pod,
 	artifactDir string,
 	decorationConfig *prowv1.DecorationConfig,
 	rawJobSpec string,
-	secretsToCensor []coreapi.VolumeMount,
+	secretsToCensor []corev1.VolumeMount,
 	generatePodOptions *GeneratePodOptions,
 	jobSpec *api.JobSpec,
 ) error {
@@ -292,7 +291,7 @@ func addPodUtils(
 	if err != nil {
 		return fmt.Errorf("could not inject entrypoint: %w", err)
 	}
-	pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env, coreapi.EnvVar{Name: artifactEnv, Value: logMount.MountPath + "/artifacts"})
+	pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env, corev1.EnvVar{Name: artifactEnv, Value: logMount.MountPath + "/artifacts"})
 
 	sidecar, err := decorate.Sidecar(decorationConfig, blobStorageOptions, blobStorageMounts, logMount, nil, rawJobSpec, !decorate.RequirePassingEntries, true, secretsToCensor, *wrapperOptions)
 	if err != nil {
@@ -333,11 +332,11 @@ func addPodUtils(
 	return nil
 }
 
-func artifactsContainer() coreapi.Container {
-	return coreapi.Container{
+func artifactsContainer() corev1.Container {
+	return corev1.Container{
 		Name:  "artifacts",
 		Image: "quay.io/prometheus/busybox:latest",
-		VolumeMounts: []coreapi.VolumeMount{
+		VolumeMounts: []corev1.VolumeMount{
 			{Name: "artifacts", MountPath: "/tmp/artifacts"},
 		},
 		Command: []string{
@@ -519,8 +518,8 @@ func (w *ArtifactWorker) Complete(podName string) {
 	}
 }
 
-func hasFailedContainers(pod *coreapi.Pod) bool {
-	for _, status := range append(append([]coreapi.ContainerStatus(nil), pod.Status.ContainerStatuses...), pod.Status.InitContainerStatuses...) {
+func hasFailedContainers(pod *corev1.Pod) bool {
+	for _, status := range append(append([]corev1.ContainerStatus(nil), pod.Status.ContainerStatuses...), pod.Status.InitContainerStatuses...) {
 		if status.State.Terminated != nil && status.State.Terminated.ExitCode != 0 {
 			return true
 		}
@@ -528,7 +527,7 @@ func hasFailedContainers(pod *coreapi.Pod) bool {
 	return false
 }
 
-func (w *ArtifactWorker) Notify(pod *coreapi.Pod, containerName string) {
+func (w *ArtifactWorker) Notify(pod *corev1.Pod, containerName string) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
@@ -565,9 +564,9 @@ func (w *ArtifactWorker) Done(podName string) <-chan struct{} {
 	return w.remaining[podName].done
 }
 
-func addArtifactContainersFromPod(pod *coreapi.Pod, worker *ArtifactWorker) {
+func addArtifactContainersFromPod(pod *corev1.Pod, worker *ArtifactWorker) {
 	var containers []string
-	for _, container := range append(append([]coreapi.Container{}, pod.Spec.InitContainers...), pod.Spec.Containers...) {
+	for _, container := range append(append([]corev1.Container{}, pod.Spec.InitContainers...), pod.Spec.Containers...) {
 		if !containerHasVolumeName(container, "artifacts") {
 			continue
 		}
@@ -580,7 +579,7 @@ func addArtifactContainersFromPod(pod *coreapi.Pod, worker *ArtifactWorker) {
 	worker.CollectFromPod(pod.Name, containers, waitForContainers)
 }
 
-func containerHasVolumeName(container coreapi.Container, name string) bool {
+func containerHasVolumeName(container corev1.Container, name string) bool {
 	for _, v := range container.VolumeMounts {
 		if v.Name == name {
 			return true
@@ -589,13 +588,13 @@ func containerHasVolumeName(container coreapi.Container, name string) bool {
 	return false
 }
 
-func addArtifactsToPod(pod *coreapi.Pod) {
+func addArtifactsToPod(pod *corev1.Pod) {
 	if hasArtifactsVolume(pod) && hasMountsArtifactsVolume(pod) {
 		pod.Spec.Containers = append(pod.Spec.Containers, artifactsContainer())
 	}
 }
 
-func hasArtifactsVolume(pod *coreapi.Pod) bool {
+func hasArtifactsVolume(pod *corev1.Pod) bool {
 	for _, volume := range pod.Spec.Volumes {
 		if volume.Name == "artifacts" {
 			return true
@@ -604,7 +603,7 @@ func hasArtifactsVolume(pod *coreapi.Pod) bool {
 	return false
 }
 
-func hasMountsArtifactsVolume(pod *coreapi.Pod) bool {
+func hasMountsArtifactsVolume(pod *corev1.Pod) bool {
 	for _, initContainer := range pod.Spec.InitContainers {
 		for _, volumeMount := range initContainer.VolumeMounts {
 			if volumeMount.Name == "artifacts" {
@@ -628,7 +627,7 @@ func gatherContainerLogsOutput(podClient kubernetes.PodClient, artifactDir, name
 	logger := logrus.WithFields(logrus.Fields{"pod": podName, "namespace": namespace, "artifactDir": artifactDir})
 	logger.Trace("Gathering container logs.")
 	var validationErrors []error
-	pod := &coreapi.Pod{}
+	pod := &corev1.Pod{}
 	if err := podClient.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: podName}, pod); err != nil {
 		if kerrors.IsNotFound(err) {
 			return nil
@@ -661,7 +660,7 @@ func gatherContainerLogsOutput(podClient kubernetes.PodClient, artifactDir, name
 
 			w := gzip.NewWriter(file)
 			logger.Trace("Fetching container logs.")
-			if s, err := podClient.GetLogs(namespace, podName, &coreapi.PodLogOptions{Container: status.Name}).Stream(context.TODO()); err == nil {
+			if s, err := podClient.GetLogs(namespace, podName, &corev1.PodLogOptions{Container: status.Name}).Stream(context.TODO()); err == nil {
 				if _, err := io.Copy(w, s); err != nil {
 					validationErrors = append(validationErrors, fmt.Errorf("error: Unable to copy log output from pod container %s: %w", status.Name, err))
 				}
@@ -708,8 +707,8 @@ func gatherSuccessfulBuildLog(buildClient BuildClient, namespace, buildName stri
 	return nil
 }
 
-func getContainerStatuses(pod *coreapi.Pod) []coreapi.ContainerStatus {
-	var statuses []coreapi.ContainerStatus
+func getContainerStatuses(pod *corev1.Pod) []corev1.ContainerStatus {
+	var statuses []corev1.ContainerStatus
 	statuses = append(statuses, pod.Status.InitContainerStatuses...)
 	statuses = append(statuses, pod.Status.ContainerStatuses...)
 	return statuses

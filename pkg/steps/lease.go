@@ -20,7 +20,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/results"
 )
 
-var NoLeaseClientErr = errors.New("step needs a lease but no lease client provided")
+var ErrNoLeaseClient = errors.New("step needs a lease but no lease client provided")
 
 type stepLease struct {
 	api.StepLease
@@ -57,7 +57,7 @@ func (s *leaseStep) Inputs() (api.InputDefinition, error) {
 
 func (s *leaseStep) Validate() error {
 	if s.client == nil {
-		return NoLeaseClientErr
+		return ErrNoLeaseClient
 	}
 	return nil
 }

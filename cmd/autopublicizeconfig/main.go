@@ -60,7 +60,7 @@ func parseOptions() options {
 	fs.StringVar(&o.releaseRepoPath, "release-repo-path", "", "Path to a openshift/release repository directory")
 
 	o.AddFlags(fs)
-	o.WhitelistOptions.Bind(fs)
+	o.Bind(fs)
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Errorf("cannot parse args: '%s'", os.Args[1:])
@@ -97,17 +97,17 @@ func main() {
 		logrus.WithError(err).Fatal("Invalid arguments.")
 	}
 
-	if err := secret.Add(o.GitHubOptions.TokenPath); err != nil {
+	if err := secret.Add(o.TokenPath); err != nil {
 		logrus.WithError(err).Fatal("Failed to start secrets agent")
 	}
 
-	gc, err := o.GitHubOptions.GitHubClient(o.dryRun)
+	gc, err := o.GitHubClient(o.dryRun)
 	if err != nil {
 		logrus.WithError(err).Fatal("error getting GitHub client")
 	}
 
 	logrus.Info("Getting repositories that exists in the whitelist or promote official images")
-	orgRepos, err := getReposForPrivateOrg(o.releaseRepoPath, o.WhitelistOptions.WhitelistConfig.Whitelist)
+	orgRepos, err := getReposForPrivateOrg(o.releaseRepoPath, o.WhitelistConfig.Whitelist)
 	if err != nil {
 		logrus.WithError(err).Fatal("couldn't get the list of org/repos that promote official images")
 	}
@@ -157,7 +157,7 @@ func main() {
 
 	logrus.Info("Preparing pull request")
 	title := fmt.Sprintf("%s %s", matchTitle, time.Now().Format(time.RFC1123))
-	if err := bumper.GitCommitAndPush(fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin, string(secret.GetTokenGenerator(o.GitHubOptions.TokenPath)()), o.githubLogin, githubRepo), remoteBranch, o.gitName, o.gitEmail, title, stdout, stderr, o.dryRun); err != nil {
+	if err := bumper.GitCommitAndPush(fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin, string(secret.GetTokenGenerator(o.TokenPath)()), o.githubLogin, githubRepo), remoteBranch, o.gitName, o.gitEmail, title, stdout, stderr, o.dryRun); err != nil {
 		logrus.WithError(err).Fatal("Failed to push changes.")
 	}
 

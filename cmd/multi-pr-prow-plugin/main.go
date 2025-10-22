@@ -50,7 +50,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
 	fs.StringVar(&o.webhookSecretFile, "hmac-secret-file", "/etc/webhook/hmac", "Path to the file containing the GitHub HMAC secret.")
 
-	o.ConfigOptions.AddFlags(fs)
+	o.AddFlags(fs)
 	o.github.AddFlags(fs)
 	o.githubEventServerOptions.Bind(fs)
 	o.kubernetesOptions.AddFlags(fs)
@@ -129,7 +129,7 @@ func main() {
 		logger.WithError(err).Fatal("Error getting kube client.")
 	}
 
-	agent, err := o.ConfigOptions.ConfigAgent()
+	agent, err := o.ConfigAgent()
 	if err != nil {
 		logrus.WithError(err).Fatal("could not load Prow configuration")
 	}

@@ -213,7 +213,7 @@ func bumpTestSteps(tests []cioperatorapi.TestStep, major int) error {
 }
 
 func bumpTestStepEnvVars(multistageTest cioperatorapi.TestStep, major int) error {
-	if multistageTest.LiteralTestStep == nil || multistageTest.LiteralTestStep.Environment == nil {
+	if multistageTest.LiteralTestStep == nil || multistageTest.Environment == nil {
 		return nil
 	}
 	for i := 0; i < len(multistageTest.Environment); i++ {

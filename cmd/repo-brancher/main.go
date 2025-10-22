@@ -53,7 +53,7 @@ func (o *options) bind(fs *flag.FlagSet) {
 	fs.StringVar(&o.tokenPath, "token-path", "", "Path to token to use when pushing to GitHub.")
 	fs.BoolVar(&o.fastForward, "fast-forward", false, "Attempt to fast-forward future branches if they already exist.")
 	fs.Var(&o.ignore, "ignore", "Ignore a repo or entire org. Format: org or org/repo. Can be passed multiple times.")
-	o.FutureOptions.Bind(fs)
+	o.Bind(fs)
 }
 
 func gatherOptions() options {
@@ -75,7 +75,7 @@ func (f *censoringFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	for key, value := range entry.Data {
 		if valueString, ok := value.(string); ok {
 			if strings.Contains(valueString, f.secret) {
-				entry.Data[key] = strings.Replace(valueString, f.secret, "xxx", -1)
+				entry.Data[key] = strings.ReplaceAll(valueString, f.secret, "xxx")
 			}
 		}
 	}

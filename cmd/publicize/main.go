@@ -98,11 +98,11 @@ func (o *options) Validate() error {
 
 	bytes, err := gzip.ReadFileMaybeGZIP(o.configPath)
 	if err != nil {
-		return fmt.Errorf("Couldn't read publicize configuration file: %v", o.configPath)
+		return fmt.Errorf("couldn't read publicize configuration file: %v", o.configPath)
 	}
 
 	if err := yaml.Unmarshal(bytes, &o.config); err != nil {
-		return fmt.Errorf("Couldn't unmarshal publicize configuration: %w", err)
+		return fmt.Errorf("couldn't unmarshal publicize configuration: %w", err)
 	}
 
 	if err := o.config.validate(); err != nil {
@@ -127,12 +127,12 @@ func (o *options) getConfigWatchAndUpdate() (func(ctx context.Context), error) {
 	eventFunc := func() error {
 		bytes, err := gzip.ReadFileMaybeGZIP(o.configPath)
 		if err != nil {
-			return fmt.Errorf("Couldn't read publicize configuration file %s: %w", o.configPath, err)
+			return fmt.Errorf("couldn't read publicize configuration file %s: %w", o.configPath, err)
 		}
 
 		var c *Config
 		if err := yaml.Unmarshal(bytes, &c); err != nil {
-			return fmt.Errorf("Couldn't unmarshal publicize configuration: %w", err)
+			return fmt.Errorf("couldn't unmarshal publicize configuration: %w", err)
 		}
 
 		if err := c.validate(); err != nil {

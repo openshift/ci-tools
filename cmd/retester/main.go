@@ -12,7 +12,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	prowConfig "sigs.k8s.io/prow/pkg/config"
-	"sigs.k8s.io/prow/pkg/flagutil"
 	prowflagutil "sigs.k8s.io/prow/pkg/flagutil"
 	configflagutil "sigs.k8s.io/prow/pkg/flagutil/config"
 	"sigs.k8s.io/prow/pkg/interrupts"
@@ -41,7 +40,7 @@ type options struct {
 }
 
 func (o *options) Validate() error {
-	for _, group := range []flagutil.OptionGroup{&o.github, &o.config} {
+	for _, group := range []prowflagutil.OptionGroup{&o.github, &o.config} {
 		if err := group.Validate(o.dryRun); err != nil {
 			return err
 		}
@@ -80,7 +79,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.cacheRecordAgeRaw, "cache-record-age", "168h", "Parseable duration string that specifies how long a cache record lives in cache after the last time it was considered")
 	fs.StringVar(&o.configFile, "config-file", "", "Path to the configure file of the retest.")
 
-	for _, group := range []flagutil.OptionGroup{&o.github, &o.config} {
+	for _, group := range []prowflagutil.OptionGroup{&o.github, &o.config} {
 		group.AddFlags(fs)
 	}
 

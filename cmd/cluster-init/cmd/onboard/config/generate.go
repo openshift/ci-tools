@@ -45,7 +45,7 @@ func generateConfig(ctx context.Context, log *logrus.Entry, opts generateConfigO
 	log = log.WithField("stage", "onboard config")
 
 	clusterInstall, err := clusterinstall.Load(opts.ClusterInstall, clusterinstall.FinalizeOption(clusterinstall.FinalizeOptions{
-		InstallBase: opts.Options.InstallBase,
+		InstallBase: opts.InstallBase,
 		ReleaseRepo: opts.releaseRepo,
 	}))
 	if err != nil {

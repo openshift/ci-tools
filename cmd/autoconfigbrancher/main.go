@@ -51,7 +51,7 @@ type options struct {
 func parseOptions() options {
 	var o options
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	o.FutureOptions.Bind(fs)
+	o.Bind(fs)
 	fs.StringVar(&o.githubLogin, "github-login", githubLogin, "The GitHub username to use.")
 	fs.StringVar(&o.gitName, "git-name", "", "The name to use on the git commit. Requires --git-email. If not specified, uses the system default.")
 	fs.StringVar(&o.gitEmail, "git-email", "", "The email to use on the git commit. Requires --git-name. If not specified, uses the system default.")
@@ -135,11 +135,11 @@ func main() {
 		logrus.WithError(fmt.Errorf("version %s split by dot doesn't have two elements", o.CurrentRelease)).Fatal("Failed to parse the current version")
 	}
 
-	if err := secret.Add(o.GitHubOptions.TokenPath); err != nil {
+	if err := secret.Add(o.TokenPath); err != nil {
 		logrus.WithError(err).Fatal("Failed to start secrets agent")
 	}
 
-	gc, err := o.GitHubOptions.GitHubClient(!o.Confirm)
+	gc, err := o.GitHubClient(!o.Confirm)
 	if err != nil {
 		logrus.WithError(err).Fatal("error getting GitHub client")
 	}
@@ -292,7 +292,7 @@ func main() {
 func runSteps(steps []step, author string, stdout, stderr io.Writer) (needsPushing bool, err error) {
 	startCommitOut, err := exec.Command("git", "rev-parse", "HEAD").CombinedOutput()
 	if err != nil {
-		return false, fmt.Errorf("failed to execute `git rev-parse HEAD`: %w\noutput:%s\n", err, string(startCommitOut))
+		return false, fmt.Errorf("failed to execute `git rev-parse HEAD`: %w\noutput:%s", err, string(startCommitOut))
 	}
 	startCommitSHA := strings.TrimSpace(string(startCommitOut))
 
@@ -313,7 +313,7 @@ func runSteps(steps []step, author string, stdout, stderr io.Writer) (needsPushi
 
 	overallDiff, err := exec.Command("git", "diff", startCommitSHA).CombinedOutput()
 	if err != nil {
-		return false, fmt.Errorf("failed to check the overall diff: %w, out:\n%s\n", err, string(overallDiff))
+		return false, fmt.Errorf("failed to check the overall diff: %w, out:\n%s", err, string(overallDiff))
 	}
 	if strings.TrimSpace(string(overallDiff)) == "" {
 		logrus.Info("Empty overall diff")

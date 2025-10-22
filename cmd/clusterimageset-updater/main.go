@@ -113,7 +113,7 @@ func main() {
 		}
 		bounds, err := labelsToBounds(pool.Labels)
 		if err != nil {
-			return fmt.Errorf("Pool %s: %w", pool.Name, err)
+			return fmt.Errorf("pool %s: %w", pool.Name, err)
 		}
 		if bounds != nil {
 			poolFilesByBounds[*bounds] = append(poolFilesByBounds[*bounds], path)
@@ -158,7 +158,7 @@ func main() {
 		}
 		bounds, err := labelsToBounds(imageset.Annotations)
 		if err != nil {
-			return fmt.Errorf("Failed to parse version labels for clusterimageset %s: %w", imageset.Name, err)
+			return fmt.Errorf("failed to parse version labels for clusterimageset %s: %w", imageset.Name, err)
 		}
 		if bounds != nil {
 			isCurrent := false
@@ -201,22 +201,22 @@ func main() {
 			},
 		}
 		if bounds.Stream != "" {
-			clusterimageset.ObjectMeta.Annotations[versionStreamLabel] = bounds.Stream
+			clusterimageset.Annotations[versionStreamLabel] = bounds.Stream
 		}
 		raw, err := yaml.Marshal(clusterimageset)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("Could not marshal yaml for clusterimageset %s: %w", name, err))
+			errs = append(errs, fmt.Errorf("could not marshal yaml for clusterimageset %s: %w", name, err))
 			continue
 		}
 		if err := os.WriteFile(filepath.Join(o.outputDir, fmt.Sprintf("%s_clusterimageset.yaml", name)), raw, 0644); err != nil {
-			errs = append(errs, fmt.Errorf("Failed to write file for clusterimageset %s: %w", name, err))
+			errs = append(errs, fmt.Errorf("failed to write file for clusterimageset %s: %w", name, err))
 		}
 	}
 
 	// delete old clusterimagesets
 	for _, path := range toDelete {
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-			errs = append(errs, fmt.Errorf("Failed to delete file %s: %w", path, err))
+			errs = append(errs, fmt.Errorf("failed to delete file %s: %w", path, err))
 		}
 	}
 
@@ -226,22 +226,22 @@ func main() {
 		for _, path := range files {
 			raw, err := os.ReadFile(path)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("Failed to read file %s: %w", path, err))
+				errs = append(errs, fmt.Errorf("failed to read file %s: %w", path, err))
 				continue
 			}
 			var newClusterPool hivev1.ClusterPool
 			if err := yaml.Unmarshal(raw, &newClusterPool); err != nil {
-				errs = append(errs, fmt.Errorf("Failed to unmarshal clusterpool %s: %w", path, err))
+				errs = append(errs, fmt.Errorf("failed to unmarshal clusterpool %s: %w", path, err))
 				continue
 			}
 			newClusterPool.Spec.ImageSetRef.Name = imagesetName
 			newRaw, err := yaml.Marshal(newClusterPool)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("Failed to remarshal clusterpool %s: %w", path, err))
+				errs = append(errs, fmt.Errorf("failed to remarshal clusterpool %s: %w", path, err))
 				continue
 			}
 			if err := os.WriteFile(path, newRaw, 0644); err != nil {
-				errs = append(errs, fmt.Errorf("Failed to write updated file %s: %w", path, err))
+				errs = append(errs, fmt.Errorf("failed to write updated file %s: %w", path, err))
 			}
 		}
 	}

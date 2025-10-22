@@ -6,7 +6,6 @@ import (
 
 	"k8s.io/utils/pointer"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
-	v1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
 	ciop "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
@@ -278,7 +277,7 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 				As:                         "simple",
 				Commands:                   "make",
 				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
-				Timeout:                    &v1.Duration{Duration: time.Second},
+				Timeout:                    &prowv1.Duration{Duration: time.Second},
 			},
 			info: defaultInfo,
 		},
@@ -295,7 +294,7 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 				As:                         "simple",
 				Commands:                   "make",
 				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
-				Timeout:                    &v1.Duration{Duration: time.Second},
+				Timeout:                    &prowv1.Duration{Duration: time.Second},
 			},
 			info: defaultInfo,
 		},

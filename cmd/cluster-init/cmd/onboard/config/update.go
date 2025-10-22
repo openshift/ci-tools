@@ -44,8 +44,8 @@ func newUpdateCmd(log *logrus.Entry) (*cobra.Command, error) {
 	}
 
 	stdFs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	opts.KubernetesOptions.NOInClusterConfigDefault = true
-	opts.KubernetesOptions.AddFlags(stdFs)
+	opts.NOInClusterConfigDefault = true
+	opts.AddFlags(stdFs)
 	pf := cmd.PersistentFlags()
 	pf.StringVar(&opts.releaseRepo, "release-repo", "", "Path to openshift/release.")
 	if err := cmd.MarkPersistentFlagRequired("release-repo"); err != nil {
@@ -58,7 +58,7 @@ func newUpdateCmd(log *logrus.Entry) (*cobra.Command, error) {
 }
 
 func updateConfig(ctx context.Context, log *logrus.Entry, opts *updateConfigOptions) error {
-	kubeconfigs, err := opts.KubernetesOptions.LoadClusterConfigs()
+	kubeconfigs, err := opts.LoadClusterConfigs()
 	if err != nil {
 		return fmt.Errorf("load kubeconfigs: %w", err)
 	}

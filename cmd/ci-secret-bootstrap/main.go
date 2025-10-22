@@ -224,7 +224,7 @@ func (o *options) validateCompletedOptions() error {
 			}
 
 			if itemContext.Item != "" && len(itemContext.DockerConfigJSONData) > 0 {
-				return fmt.Errorf("config[%d].from[%s]: both bitwarden dockerconfigJSON items are not allowed.", i, key)
+				return fmt.Errorf("config[%d].from[%s]: both bitwarden dockerconfigJSON items are not allowed", i, key)
 			}
 
 			if len(itemContext.DockerConfigJSONData) > 0 {

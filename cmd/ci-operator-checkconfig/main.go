@@ -46,7 +46,7 @@ func (o *options) parse() error {
 	fs.StringVar(&registryDir, "registry", "", "Path to the step registry directory")
 	fs.StringVar(&profilesConfigPath, "cluster-profiles-config", "", "Path to the cluster profile config file")
 	fs.StringVar(&clusterClaimConfigPath, "cluster-claim-owners-config", "", "Path to the cluster claim owners config file")
-	o.Options.Bind(fs)
+	o.Bind(fs)
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return fmt.Errorf("failed to parse flags: %w", err)
@@ -74,10 +74,10 @@ func (o *options) parse() error {
 	}
 	o.ciOPConfigAgent = ciOPConfigAgent
 
-	if err := o.Options.Validate(); err != nil {
+	if err := o.Validate(); err != nil {
 		return fmt.Errorf("failed to validate config options: %w", err)
 	}
-	if err := o.Options.Complete(); err != nil {
+	if err := o.Complete(); err != nil {
 		return fmt.Errorf("failed to complete config options: %w", err)
 	}
 	return nil

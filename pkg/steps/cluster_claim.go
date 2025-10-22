@@ -46,11 +46,11 @@ func (s clusterClaimStep) Inputs() (api.InputDefinition, error) {
 	return s.wrapped.Inputs()
 }
 
-var NoHiveClientErr = errors.New("step claims a cluster without providing a Hive client")
+var ErrNoHiveClient = errors.New("step claims a cluster without providing a Hive client")
 
 func (s *clusterClaimStep) Validate() error {
 	if s.hiveClient == nil {
-		return NoHiveClientErr
+		return ErrNoHiveClient
 	}
 	return nil
 }
@@ -190,11 +190,12 @@ func NamePerTest(name, testName string) string {
 
 func getHiveSecret(src *corev1.Secret, name, namespace, testName string) (*corev1.Secret, error) {
 	var key string
-	if name == api.HiveAdminKubeconfigSecret {
+	switch name {
+	case api.HiveAdminKubeconfigSecret:
 		key = api.HiveAdminKubeconfigSecretKey
-	} else if name == api.HiveAdminPasswordSecret {
+	case api.HiveAdminPasswordSecret:
 		key = api.HiveAdminPasswordSecretKey
-	} else {
+	default:
 		return nil, fmt.Errorf("cannot mutate secret %s in namespace %s", src.Name, src.Namespace)
 	}
 	_, ok := src.Data[key]

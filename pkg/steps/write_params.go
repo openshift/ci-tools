@@ -46,7 +46,7 @@ func (s *writeParametersStep) run() error {
 			params = append(params, fmt.Sprintf("%s=%s", k, v))
 			continue
 		}
-		params = append(params, fmt.Sprintf("%s='%s'", k, strings.Replace(strings.Replace(v, "\\", "\\\\", -1), "'", "\\'", -1)))
+		params = append(params, fmt.Sprintf("%s='%s'", k, strings.ReplaceAll(strings.ReplaceAll(v, "\\", "\\\\"), "'", "\\'")))
 	}
 
 	sort.Strings(params)

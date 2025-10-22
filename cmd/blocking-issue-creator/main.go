@@ -50,7 +50,7 @@ func gatherOptions() options {
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Dry run for testing. Uses API tokens but does not mutate.")
 
 	o.github.AddFlags(fs)
-	o.FutureOptions.Bind(fs)
+	o.Bind(fs)
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse input")

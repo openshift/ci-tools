@@ -1083,7 +1083,7 @@ func WebRegHandler(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent) 
 			case "ci-operator-reference":
 				ciOpConfigRefHandler(w)
 			default:
-				writeErrorPage(w, errors.New("Invalid path"), http.StatusNotImplemented)
+				writeErrorPage(w, errors.New("invalid path"), http.StatusNotImplemented)
 			}
 			return
 		} else if len(splitURI) == 2 {
@@ -1098,11 +1098,11 @@ func WebRegHandler(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent) 
 				workflowHandler(regAgent, w, req)
 				return
 			default:
-				writeErrorPage(w, fmt.Errorf("Component type %s not found", splitURI[0]), http.StatusNotFound)
+				writeErrorPage(w, fmt.Errorf("component type %s not found", splitURI[0]), http.StatusNotFound)
 				return
 			}
 		}
-		writeErrorPage(w, errors.New("Invalid path"), http.StatusNotImplemented)
+		writeErrorPage(w, errors.New("invalid path"), http.StatusNotImplemented)
 	}
 }
 
@@ -1265,7 +1265,7 @@ func referenceHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *ht
 	name := path.Base(req.URL.Path)
 	page, err := baseTemplate.Clone()
 	if err != nil {
-		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
+		writeErrorPage(w, fmt.Errorf("failed to render page: %w", err), http.StatusInternalServerError)
 		return
 	}
 	page, err = page.Funcs(
@@ -1285,17 +1285,17 @@ func referenceHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *ht
 		},
 	).Parse(referencePage)
 	if err != nil {
-		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
+		writeErrorPage(w, fmt.Errorf("failed to render page: %w", err), http.StatusInternalServerError)
 		return
 	}
 	refs, _, _, docs, metadata := agent.GetRegistryComponents()
 	if _, ok := refs[name]; !ok {
-		writeErrorPage(w, fmt.Errorf("Could not find reference `%s`. If you reached this page via a link provided in the logs of a failed test, the failed step may be a literal defined step, which does not exist in the step registry. Please look at the job info page for the failed test instead.", name), http.StatusNotFound)
+		writeErrorPage(w, fmt.Errorf("could not find reference `%s`. If you reached this page via a link provided in the logs of a failed test, the failed step may be a literal defined step, which does not exist in the step registry. Please look at the job info page for the failed test instead", name), http.StatusNotFound)
 		return
 	}
 	refMetadataName := fmt.Sprint(name, load.RefSuffix)
 	if _, ok := metadata[refMetadataName]; !ok {
-		writeErrorPage(w, fmt.Errorf("Could not find metadata for file `%s`. Please contact the Developer Productivity Test Platform.", refMetadataName), http.StatusInternalServerError)
+		writeErrorPage(w, fmt.Errorf("could not find metadata for file `%s`. Please contact the Developer Productivity Test Platform", refMetadataName), http.StatusInternalServerError)
 		return
 	}
 	ref := struct {
@@ -1334,7 +1334,7 @@ func chainHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *http.R
 	refs, chains, _, docs, metadata := agent.GetRegistryComponents()
 	page, err := baseTemplate.Clone()
 	if err != nil {
-		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
+		writeErrorPage(w, fmt.Errorf("failed to render page: %w", err), http.StatusInternalServerError)
 		return
 	}
 	page = setDocs(page, docs)
@@ -1342,16 +1342,16 @@ func chainHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *http.R
 	page = setChainDependencies(page, refs, chains)
 	page = setChainEnvironment(page, refs, chains)
 	if page, err = page.Parse(chainPage); err != nil {
-		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
+		writeErrorPage(w, fmt.Errorf("failed to render page: %w", err), http.StatusInternalServerError)
 		return
 	}
 	if _, ok := chains[name]; !ok {
-		writeErrorPage(w, fmt.Errorf("Could not find chain %s", name), http.StatusNotFound)
+		writeErrorPage(w, fmt.Errorf("could not find chain %s", name), http.StatusNotFound)
 		return
 	}
 	chainMetadataName := fmt.Sprint(name, load.ChainSuffix)
 	if _, ok := metadata[chainMetadataName]; !ok {
-		writeErrorPage(w, fmt.Errorf("Could not find metadata for file `%s`. Please contact the Developer Productivity Test Platform.", chainMetadataName), http.StatusInternalServerError)
+		writeErrorPage(w, fmt.Errorf("could not find metadata for file `%s`. Please contact the Developer Productivity Test Platform", chainMetadataName), http.StatusInternalServerError)
 		return
 	}
 	chain := struct {
@@ -1377,7 +1377,7 @@ func workflowHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *htt
 	refs, chains, workflows, docs, metadata := agent.GetRegistryComponents()
 	page, err := baseTemplate.Clone()
 	if err != nil {
-		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
+		writeErrorPage(w, fmt.Errorf("failed to render page: %w", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -1388,16 +1388,16 @@ func workflowHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *htt
 	page = setWorkflowEnvironment(page, refs, chains, workflows)
 
 	if page, err = page.Parse(workflowJobPage); err != nil {
-		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
+		writeErrorPage(w, fmt.Errorf("failed to render page: %w", err), http.StatusInternalServerError)
 		return
 	}
 	if _, ok := workflows[name]; !ok {
-		writeErrorPage(w, fmt.Errorf("Could not find workflow %s", name), http.StatusNotFound)
+		writeErrorPage(w, fmt.Errorf("could not find workflow %s", name), http.StatusNotFound)
 		return
 	}
 	workflowMetadataName := fmt.Sprint(name, load.WorkflowSuffix)
 	if _, ok := metadata[workflowMetadataName]; !ok {
-		writeErrorPage(w, fmt.Errorf("Could not find metadata for file `%s`. Please contact the Developer Productivity Test Platform.", workflowMetadataName), http.StatusInternalServerError)
+		writeErrorPage(w, fmt.Errorf("could not find metadata for file `%s`. Please contact the Developer Productivity Test Platform", workflowMetadataName), http.StatusInternalServerError)
 		return
 	}
 	workflow := struct {
@@ -1422,10 +1422,10 @@ func findConfigForJob(testName string, config api.ReleaseBuildConfiguration) (ap
 			if test.MultiStageTestConfiguration != nil {
 				return *test.MultiStageTestConfiguration, nil
 			}
-			return api.MultiStageTestConfiguration{}, fmt.Errorf("Provided job %s is not a multi stage type test", testName)
+			return api.MultiStageTestConfiguration{}, fmt.Errorf("provided job %s is not a multi stage type test", testName)
 		}
 	}
-	return api.MultiStageTestConfiguration{}, fmt.Errorf("Could not find job %s. Job either does not exist or is not a multi stage test", testName)
+	return api.MultiStageTestConfiguration{}, fmt.Errorf("could not find job %s. Job either does not exist or is not a multi stage test", testName)
 }
 
 func jobHandler(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent, w http.ResponseWriter, r *http.Request) {
@@ -1463,7 +1463,7 @@ func jobHandler(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent, w h
 
 	page, err := baseTemplate.Clone()
 	if err != nil {
-		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
+		writeErrorPage(w, fmt.Errorf("failed to render page: %w", err), http.StatusInternalServerError)
 		return
 	}
 	page = setDocs(page, docs)
@@ -1471,7 +1471,7 @@ func jobHandler(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent, w h
 	page = setChainGraph(page, chains)
 
 	if page, err = page.Parse(workflowJobPage); err != nil {
-		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
+		writeErrorPage(w, fmt.Errorf("failed to render page: %w", err), http.StatusInternalServerError)
 		return
 	}
 	workflow := struct {
@@ -1610,12 +1610,12 @@ func searchHandler(confAgent agents.ConfigAgent, w http.ResponseWriter, req *htt
 	}
 	page, err := baseTemplate.Clone()
 	if err != nil {
-		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
+		writeErrorPage(w, fmt.Errorf("failed to render page: %w", err), http.StatusInternalServerError)
 		return
 	}
 
 	if page, err = page.Parse(jobSearchPage); err != nil {
-		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
+		writeErrorPage(w, fmt.Errorf("failed to render page: %w", err), http.StatusInternalServerError)
 		return
 	}
 	writePage(w, "Job Search Page", page, matches)

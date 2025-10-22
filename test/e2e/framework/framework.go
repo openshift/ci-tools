@@ -141,7 +141,7 @@ func KubernetesClientEnv(t *T) []string {
 	port, portSet := os.LookupEnv("KUBERNETES_SERVICE_PORT")
 	kubeconfig, kubeconfigSet := os.LookupEnv("KUBECONFIG")
 
-	if !((hostSet && portSet) || kubeconfigSet) {
+	if (!hostSet || !portSet) && !kubeconfigSet {
 		t.Fatal("either KUBERNETES_SERVICE_{HOST,PORT} or KUBECONFIG must be set for this test")
 	}
 

@@ -59,7 +59,7 @@ func (o *CLIOptions) NewClient(censor *DynamicCensor) (Client, error) {
 		c, err = vaultclient.New(o.VaultAddr, o.VaultToken)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("Failed to construct vault client: %w", err)
+		return nil, fmt.Errorf("failed to construct vault client: %w", err)
 	}
 	return NewVaultClient(c, o.VaultPrefix, censor), nil
 }

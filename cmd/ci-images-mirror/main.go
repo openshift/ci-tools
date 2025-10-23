@@ -165,6 +165,14 @@ func (s *supplementalCIImagesServiceWithMirrorStore) Mirror(m map[string]quayioc
 		if source == "" {
 			source = fmt.Sprintf("%s/%s", api.ServiceDomainAPPCIRegistry, v.ImageStreamTagReference.ISTagName())
 		}
+		timeStr := time.Now().Format("20060102150405")
+		if err := s.mirrorStore.Put(quayiociimagesdistributor.MirrorTask{
+			Source:      targetToQuayImage(k),
+			Destination: targetToQuayImage(timeStr + "_prune_" + k),
+			Owner:       "supplementalCIImagesService",
+		}); err != nil {
+			return fmt.Errorf("failed to put mirror task: %w", err)
+		}
 		if err := s.mirrorStore.Put(quayiociimagesdistributor.MirrorTask{
 			Source:      source,
 			Destination: targetToQuayImage(k),

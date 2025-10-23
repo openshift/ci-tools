@@ -224,7 +224,8 @@ kubeExport := "jq 'del(.metadata.namespace,.metadata.resourceVersion,.metadata.u
 pr-deploy-configresolver:
 	$(eval USER=$(shell curl --fail -Ss https://api.github.com/repos/openshift/ci-tools/pulls/$(PULL_REQUEST)|jq -r .head.user.login))
 	$(eval BRANCH=$(shell curl --fail -Ss https://api.github.com/repos/openshift/ci-tools/pulls/$(PULL_REQUEST)|jq -r .head.ref))
-	oc --context app.ci --as system:admin process -p USER=$(USER) -p BRANCH=$(BRANCH) -p PULL_REQUEST=$(PULL_REQUEST) -f hack/pr-deploy.yaml | oc  --context app.ci --as system:admin apply -f -
+	$(eval RELEASE_BRANCH=$(shell curl --fail -Ss https://api.github.com/repos/openshift/release | jq -r .default_branch))
+	oc --context app.ci --as system:admin process -p USER=$(USER) -p BRANCH=$(BRANCH) -p PULL_REQUEST=$(PULL_REQUEST) -p RELEASE_BRANCH=$(RELEASE_BRANCH) -f hack/pr-deploy.yaml | oc  --context app.ci --as system:admin apply -f -
 	echo "server is at https://$$( oc  --context app.ci --as system:admin get route server -n ci-tools-$(PULL_REQUEST) -o jsonpath={.spec.host} )"
 .PHONY: pr-deploy
 

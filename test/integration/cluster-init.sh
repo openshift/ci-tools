@@ -85,7 +85,7 @@ export CITOOLS_CLUSTERINIT_INTEGRATIONTEST="1"
 export CITOOLS_REPLAYTRANSPORT_MODE="read"
 export CITOOLS_REPLAYTRANSPORT_TRACKER="${suite_dir}/build99-replay.yaml"
 
-os::cmd::expect_success "cluster-init onboard config update --release-repo=$actual_update --cluster-install-dir=$clusterinstall_dir --kubeconfig-dir=$kubeconfigs --kubeconfig-suffix=config"
+os::cmd::expect_success "cluster-init onboard config update --release-repo=$actual_update --cluster-install-dir=$clusterinstall_dir --kubeconfig-dir=$kubeconfigs --kubeconfig-suffix=config --release-branch=master"
 os::integration::compare_tree "${actual_update}" "${expected_update}"
 
 os::test::junit::declare_suite_end

@@ -58,9 +58,9 @@ func NewCmd(log *logrus.Entry, opts *runtime.Options) (*cobra.Command, error) {
 }
 
 func runConfigSteps(ctx context.Context, log *logrus.Entry, update bool, clusterInstall *clusterinstall.ClusterInstall,
-	ctrlClient ctrlruntimeclient.Client, kubeClient *kubernetes.Clientset) error {
+	ctrlClient ctrlruntimeclient.Client, kubeClient *kubernetes.Clientset, releaseBranch string) error {
 	steps := []clusterinittypes.Step{
-		onboard.NewProwJobStep(log, clusterInstall),
+		onboard.NewProwJobStep(log, clusterInstall, releaseBranch),
 		onboard.NewBuildClusterDirStep(log, clusterInstall),
 		onboard.NewManifestGeneratorStep(log, onboard.NewOAuthTemplateGenerator(clusterInstall)),
 		onboard.NewCISecretBootstrapStep(log, clusterInstall),

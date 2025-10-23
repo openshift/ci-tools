@@ -22,6 +22,7 @@ import (
 type updateConfigOptions struct {
 	prowflagutil.KubernetesOptions
 	releaseRepo       string
+	releaseBranch     string
 	clusterInstallDir string
 }
 
@@ -52,6 +53,7 @@ func newUpdateCmd(log *logrus.Entry) (*cobra.Command, error) {
 		return nil, err
 	}
 	pf.StringVar(&opts.clusterInstallDir, "cluster-install-dir", "", "Path to the directory containing cluster install files.")
+	pf.StringVar(&opts.releaseBranch, "release-branch", "main", "Release branch name to be used.")
 	pf.AddGoFlagSet(stdFs)
 
 	return &cmd, nil
@@ -98,7 +100,7 @@ func updateConfig(ctx context.Context, log *logrus.Entry, opts *updateConfigOpti
 		if err := addClusterInstallRuntimeInfo(ctx, clusterInstall, ctrlClient); err != nil {
 			return err
 		}
-		if err := runConfigSteps(ctx, log, true, clusterInstall, ctrlClient, kubeClient); err != nil {
+		if err := runConfigSteps(ctx, log, true, clusterInstall, ctrlClient, kubeClient, opts.releaseBranch); err != nil {
 			return fmt.Errorf("update config for cluster %s: %w", clusterName, err)
 		}
 	}

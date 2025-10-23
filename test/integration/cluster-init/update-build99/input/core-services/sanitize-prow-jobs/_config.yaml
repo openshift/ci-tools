@@ -11,7 +11,7 @@ groups:
   app.ci:
     jobs:
       - some-job
-      - pull-ci-openshift-release-master-build99-dry
+      - pull-ci-openshift-release-main-build99-dry
   build01:
     jobs:
       - some-other-job

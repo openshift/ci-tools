@@ -32,7 +32,6 @@ import (
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/prow/pkg/pjutil"
 
-	"github.com/openshift/ci-tools/pkg/api"
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	v1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
 	"github.com/openshift/ci-tools/pkg/controller/prpqr_reconciler/pjstatussyncer"
@@ -56,7 +55,7 @@ const (
 )
 
 type injectingResolverClient interface {
-	ConfigWithTest(base *api.Metadata, testSource *api.MetadataWithTest) (*api.ReleaseBuildConfiguration, error)
+	ConfigWithTest(base *cioperatorapi.Metadata, testSource *cioperatorapi.MetadataWithTest) (*cioperatorapi.ReleaseBuildConfiguration, error)
 }
 
 type prowConfigGetter interface {
@@ -261,8 +260,8 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 			continue
 		}
 
-		inject := &api.MetadataWithTest{
-			Metadata: api.Metadata{
+		inject := &cioperatorapi.MetadataWithTest{
+			Metadata: cioperatorapi.Metadata{
 				Org:     jobSpec.CIOperatorConfig.Org,
 				Repo:    jobSpec.CIOperatorConfig.Repo,
 				Branch:  jobSpec.CIOperatorConfig.Branch,
@@ -561,7 +560,7 @@ func jobNameHash(name string) string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-func resolveCiopConfig(rc injectingResolverClient, baseCiop *api.Metadata, inject *api.MetadataWithTest) (*api.ReleaseBuildConfiguration, error) {
+func resolveCiopConfig(rc injectingResolverClient, baseCiop *cioperatorapi.Metadata, inject *cioperatorapi.MetadataWithTest) (*cioperatorapi.ReleaseBuildConfiguration, error) {
 	ciopConfig, err := rc.ConfigWithTest(baseCiop, inject)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get config from resolver: %w", err)
@@ -576,12 +575,12 @@ type aggregatedOptions struct {
 	releaseJobName  string
 }
 
-func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
-	baseCiop *api.Metadata,
+func (r *reconciler) generateProwjob(ciopConfig *cioperatorapi.ReleaseBuildConfiguration,
+	baseCiop *cioperatorapi.Metadata,
 	prpqrName, prpqrNamespace string,
 	prs []v1.PullRequestUnderTest,
 	mimickedJob string,
-	inject *api.MetadataWithTest,
+	inject *cioperatorapi.MetadataWithTest,
 	aggregatedOptions *aggregatedOptions,
 	initialPayloadPullspec, latestPayloadPullspec string,
 	imageTagOverrides []v1.ImageTagOverride,
@@ -761,21 +760,21 @@ func (r *reconciler) clusterForJob(jobName string) (string, error) {
 	return cluster, nil
 }
 
-func metadataFromPullRequestsUnderTest(prs []v1.PullRequestUnderTest) *api.Metadata {
+func metadataFromPullRequestsUnderTest(prs []v1.PullRequestUnderTest) *cioperatorapi.Metadata {
 	var orgs, repos, branches []string
 	for _, pr := range prs {
 		orgs = append(orgs, pr.Org)
 		repos = append(repos, pr.Repo)
 		branches = append(branches, pr.BaseRef)
 	}
-	return &api.Metadata{
+	return &cioperatorapi.Metadata{
 		Org:    strings.Join(orgs, ","),
 		Repo:   strings.Join(repos, ","),
 		Branch: strings.Join(branches, ","),
 	}
 }
 
-func (r *reconciler) generateAggregatedProwjobs(uid string, ciopConfig *api.ReleaseBuildConfiguration, baseCiop *api.Metadata, prpqrName, prpqrNamespace string, spec *v1.ReleaseJobSpec, prs []v1.PullRequestUnderTest, inject *api.MetadataWithTest, shardCount, shardIndex int) ([]*prowv1.ProwJob, error) {
+func (r *reconciler) generateAggregatedProwjobs(uid string, ciopConfig *cioperatorapi.ReleaseBuildConfiguration, baseCiop *cioperatorapi.Metadata, prpqrName, prpqrNamespace string, spec *v1.ReleaseJobSpec, prs []v1.PullRequestUnderTest, inject *cioperatorapi.MetadataWithTest, shardCount, shardIndex int) ([]*prowv1.ProwJob, error) {
 	var ret []*prowv1.ProwJob
 
 	for i := 0; i < spec.AggregatedCount; i++ {
@@ -797,13 +796,13 @@ func (r *reconciler) generateAggregatedProwjobs(uid string, ciopConfig *api.Rele
 	return ret, nil
 }
 
-func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobName, prpqrName, prpqrNamespace string, getCfg prowConfigGetter, startTime time.Time, submitted string, aggregatedJobTimeout time.Duration) (*prowv1.ProwJob, error) {
-	ciopConfig := &api.ReleaseBuildConfiguration{
+func generateAggregatorJob(baseCiop *cioperatorapi.Metadata, uid, aggregatorJobName, jobName, prpqrName, prpqrNamespace string, getCfg prowConfigGetter, startTime time.Time, submitted string, aggregatedJobTimeout time.Duration) (*prowv1.ProwJob, error) {
+	ciopConfig := &cioperatorapi.ReleaseBuildConfiguration{
 		Metadata: *baseCiop,
-		Tests: []api.TestStepConfiguration{
+		Tests: []cioperatorapi.TestStepConfiguration{
 			{
 				As: "release-analysis-prpqr-aggregator",
-				MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
+				MultiStageTestConfiguration: &cioperatorapi.MultiStageTestConfiguration{
 					Environment: map[string]string{
 						"GOOGLE_SA_CREDENTIAL_FILE": "/var/run/secrets/google-serviceaccount-credentials.json",
 						"VERIFICATION_JOB_NAME":     jobName,
@@ -812,7 +811,7 @@ func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobNa
 						"WORKING_DIR":               "$(ARTIFACT_DIR)/release-analysis-aggregator",
 						"EXPLICIT_GCS_PREFIX":       fmt.Sprintf("logs/%s", submitted),
 					},
-					Test: []api.TestStep{
+					Test: []cioperatorapi.TestStep{
 						{
 							Reference: &[]string{"openshift-release-analysis-prpqr-aggregator"}[0],
 						},
@@ -820,7 +819,7 @@ func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobNa
 				},
 			},
 		},
-		Resources: map[string]api.ResourceRequirements{
+		Resources: map[string]cioperatorapi.ResourceRequirements{
 			"*": {
 				Requests: map[string]string{"cpu": "100m", "memory": "200Mi"},
 				Limits:   map[string]string{"memory": "6Gi"},
@@ -862,7 +861,7 @@ func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobNa
 	return &pj, nil
 }
 
-func generateJobNameToSubmit(inject *api.MetadataWithTest, prs []v1.PullRequestUnderTest, shardCount, shardIndex int) string {
+func generateJobNameToSubmit(inject *cioperatorapi.MetadataWithTest, prs []v1.PullRequestUnderTest, shardCount, shardIndex int) string {
 	var refs string
 	for i, pr := range prs {
 		if i > 0 {

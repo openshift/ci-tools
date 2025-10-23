@@ -42,7 +42,7 @@ func composeBPConfig() config.ProwConfig {
 
 func decorateWithOrgPolicy(cfg config.ProwConfig) config.ProwConfig {
 	if org, ok := cfg.BranchProtection.Orgs["org"]; ok {
-		org.Policy.RequireManuallyTriggeredJobs = yes()
+		org.RequireManuallyTriggeredJobs = yes()
 		cfg.BranchProtection.Orgs["org"] = org
 
 	}
@@ -52,7 +52,7 @@ func decorateWithOrgPolicy(cfg config.ProwConfig) config.ProwConfig {
 func decorateWithRepoPolicy(cfg config.ProwConfig) config.ProwConfig {
 	if org, ok := cfg.BranchProtection.Orgs["org"]; ok {
 		if repo, ok := org.Repos["repo"]; ok {
-			repo.Policy.RequireManuallyTriggeredJobs = yes()
+			repo.RequireManuallyTriggeredJobs = yes()
 			cfg.BranchProtection.Orgs["org"].Repos["repo"] = repo
 		}
 	}

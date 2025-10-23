@@ -173,11 +173,11 @@ func AllStepsLink() StepLink {
 
 type allStepsLink struct{}
 
-func (_ allStepsLink) SatisfiedBy(_ StepLink) bool {
+func (allStepsLink) SatisfiedBy(StepLink) bool {
 	return true
 }
 
-func (_ allStepsLink) UnsatisfiableError() string {
+func (allStepsLink) UnsatisfiableError() string {
 	return ""
 }
 

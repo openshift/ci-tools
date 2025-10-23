@@ -443,9 +443,9 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) (string, [
 				jobNames = append(jobNames, job.Name)
 				releaseJobSpecs = append(releaseJobSpecs, prpqv1.ReleaseJobSpec{
 					CIOperatorConfig: prpqv1.CIOperatorMetadata{
-						Org:     job.Metadata.Org,
-						Repo:    job.Metadata.Repo,
-						Branch:  job.Metadata.Branch,
+						Org:     job.Org,
+						Repo:    job.Repo,
+						Branch:  job.Branch,
 						Variant: job.Metadata.Variant,
 					},
 					Test:            job.Test,

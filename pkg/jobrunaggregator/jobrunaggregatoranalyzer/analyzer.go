@@ -157,7 +157,7 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 	}
 	// if more than three jobruns timed out, just fail the entire aggregation
 	if len(unfinishedJobNames) > 3 {
-		return fmt.Errorf("%s for %s: found %d unfinished related jobRuns: %v\n", o.jobName, o.payloadTag, len(unfinishedJobNames), strings.Join(unfinishedJobNames, ", "))
+		return fmt.Errorf("%s for %s: found %d unfinished related jobRuns: %v", o.jobName, o.payloadTag, len(unfinishedJobNames), strings.Join(unfinishedJobNames, ", "))
 	}
 	alog.Infof("aggregating %d related jobRuns: %v", len(finishedJobsToAggregate), strings.Join(finishedJobRunNames, ", "))
 
@@ -301,13 +301,13 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 
 	if hasFailedTestCase(syntheticSuite) {
 		// we already indicated failure messages above
-		return fmt.Errorf("Some tests failed aggregation.  See above for details.")
+		return fmt.Errorf("some tests failed aggregation.  See above for details")
 	}
 
 	// catch edge case where *all* aggregated jobs failed before they could run any real tests.
 	// if *any* of them ran real tests, the other failures would normally fail aggregation anyway. but if all setup fell over early, we get nothing to aggregate.
 	if !anyRealTestsRan(syntheticSuite) {
-		return fmt.Errorf("None of the jobs aggregated ran an expected test suite.  This usually means they failed very early.")
+		return fmt.Errorf("none of the jobs aggregated ran an expected test suite.  This usually means they failed very early")
 	}
 
 	return nil

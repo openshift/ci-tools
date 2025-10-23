@@ -54,7 +54,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 
 	flag.Var(&opt.knownInfraJobFiles, "known-infra-file", "Name of a known infra-file that will not be acted on. Can be passed multiple times.")
 
-	opt.Options.Bind(flag)
+	opt.Bind(flag)
 
 	return opt
 }

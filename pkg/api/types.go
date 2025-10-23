@@ -395,7 +395,7 @@ func (b *VersionBounds) Query() string {
 func BoundsFromQuery(query string) (*VersionBounds, error) {
 	splitParts := strings.Split(query, " ")
 	if len(splitParts) != 2 || !strings.HasPrefix(splitParts[0], ">") || !strings.HasPrefix(splitParts[1], "<") {
-		return nil, fmt.Errorf("Invalid version range `%s`. Must be in form `>4.x.y <4.a.b-c`", query)
+		return nil, fmt.Errorf("invalid version range `%s`. Must be in form `>4.x.y <4.a.b-c`", query)
 
 	}
 	return &VersionBounds{

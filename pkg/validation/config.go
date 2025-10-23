@@ -206,7 +206,7 @@ func (v *Validator) validateConfiguration(ctx *configContext, config *api.Releas
 	case 1:
 		return fmt.Errorf("invalid configuration: %s", lines[0])
 	default:
-		return fmt.Errorf("configuration has %d errors:\n\n  * %s\n", len(lines), strings.Join(lines, "\n  * "))
+		return fmt.Errorf("configuration has %d errors:\n\n  * %s", len(lines), strings.Join(lines, "\n  * "))
 	}
 }
 

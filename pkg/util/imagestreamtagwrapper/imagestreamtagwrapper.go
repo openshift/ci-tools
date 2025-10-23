@@ -15,7 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	cache "sigs.k8s.io/controller-runtime/pkg/cache"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	imagegroup "github.com/openshift/api/image"
@@ -54,7 +53,7 @@ type imagestreamtagwrapper struct {
 	ctrlruntimeclient.Client
 }
 
-func (istw *imagestreamtagwrapper) Get(ctx context.Context, key ctrlruntimeclient.ObjectKey, obj ctrlruntimeclient.Object, opts ...client.GetOption) error {
+func (istw *imagestreamtagwrapper) Get(ctx context.Context, key ctrlruntimeclient.ObjectKey, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.GetOption) error {
 	if imageStreamTag, isImageStreamTag := obj.(*imagev1.ImageStreamTag); isImageStreamTag {
 		return istw.assembleImageStreamTag(ctx, key, imageStreamTag)
 	}

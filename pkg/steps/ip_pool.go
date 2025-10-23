@@ -21,7 +21,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/results"
 )
 
-var NoLeaseClientForIPErr = errors.New("step needs access to an IP pool, but no lease client provided")
+var ErrNoLeaseClientForIP = errors.New("step needs access to an IP pool, but no lease client provided")
 
 // ipPoolStep wraps another step and acquires/releases chunks of IPs.
 type ipPoolStep struct {
@@ -54,7 +54,7 @@ func (s *ipPoolStep) Inputs() (api.InputDefinition, error) {
 
 func (s *ipPoolStep) Validate() error {
 	if s.client == nil {
-		return NoLeaseClientForIPErr
+		return ErrNoLeaseClientForIP
 	}
 	return nil
 }

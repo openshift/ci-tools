@@ -404,7 +404,7 @@ func GetBugHandler(client bugzilla.Client, m *metrics.Metrics) http.HandlerFunc 
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Bug#%d not found", bugID), http.StatusNotFound)
 			metrics.RecordError("BugID not found", m.ErrorRate)
-			logrus.WithFields(logFieldsFor(endpoint, bugID)).WithError(fmt.Errorf("Bug#%d not found: %w", bugID, err))
+			logrus.WithFields(logFieldsFor(endpoint, bugID)).WithError(fmt.Errorf("bug#%d not found: %w", bugID, err))
 			return
 		}
 
@@ -521,7 +521,7 @@ func buildDependenceTree(root *bugzilla.Bug, client bugzilla.Client) (*dependenc
 func getClonesTemplateData(bugID int, client bugzilla.Client, allTargetVersions []string) (*ClonesTemplateData, int, error) {
 	bug, err := client.GetBug(bugID)
 	if err != nil {
-		return nil, http.StatusNotFound, fmt.Errorf("Bug#%d not found: %w", bugID, err)
+		return nil, http.StatusNotFound, fmt.Errorf("bug#%d not found: %w", bugID, err)
 	}
 	clones, err := client.GetAllClones(bug)
 	if err != nil {
@@ -558,7 +558,7 @@ func getClonesTemplateData(bugID int, client bugzilla.Client, allTargetVersions 
 		g.Go(func() error {
 			clonePRs, err := client.GetExternalBugPRsOnBug(clone.ID)
 			if err != nil {
-				return fmt.Errorf("Bug#%d - error occurred while retreiving list of PRs : %w", clone.ID, err)
+				return fmt.Errorf("bug#%d - error occurred while retreiving list of PRs : %w", clone.ID, err)
 			}
 			clone.PRs = clonePRs
 			return nil

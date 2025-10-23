@@ -10,7 +10,6 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	"sigs.k8s.io/prow/pkg/deck/jobs"
-	"sigs.k8s.io/prow/pkg/flagutil"
 	prowflagutil "sigs.k8s.io/prow/pkg/flagutil"
 	configflagutil "sigs.k8s.io/prow/pkg/flagutil/config"
 	"sigs.k8s.io/prow/pkg/interrupts"
@@ -32,7 +31,7 @@ func gatherOptions() options {
 	o := options{}
 	fs := flag.CommandLine
 
-	for _, group := range []flagutil.OptionGroup{&o.storage, &o.config} {
+	for _, group := range []prowflagutil.OptionGroup{&o.storage, &o.config} {
 		group.AddFlags(fs)
 	}
 	flag.Parse()

@@ -334,7 +334,7 @@ func (gae *generalAvailabilityEvent) ensureStaffEngApprovedLabel(q *prowconfig.T
 			branches.Insert(gae.openshiftFuture)
 		}
 
-		if !(branches.Equal(sets.New[string](gae.releaseFuture)) || branches.Equal(sets.New[string](gae.openshiftFuture)) || branches.Equal(gae.openshiftReleaseBranchesPlus1)) {
+		if !branches.Equal(sets.New[string](gae.releaseFuture)) && !branches.Equal(sets.New[string](gae.openshiftFuture)) && !branches.Equal(gae.openshiftReleaseBranchesPlus1) {
 			fmt.Printf("Suspicious staff-eng-approved query: %s\n", q.Repos)
 		}
 	}

@@ -407,7 +407,7 @@ func (s *ciSecretBootstrapStep) updateDexIdAndSecret(c *secretbootstrap.Config) 
 		},
 	}
 
-	if !(*s.clusterInstall.Onboard.Hosted || *s.clusterInstall.Onboard.OSD) {
+	if !*s.clusterInstall.Onboard.Hosted && !*s.clusterInstall.Onboard.OSD {
 		s.log.Info("Cluster is neither hosted nor osd, syncing dex OIDC secret")
 		secret.To = append(secret.To, secretbootstrap.SecretContext{
 			Cluster:   string(api.ClusterAPPCI),

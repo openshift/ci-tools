@@ -19,7 +19,6 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/prow/pkg/config/secret"
-	"sigs.k8s.io/prow/pkg/flagutil"
 	prowflagutil "sigs.k8s.io/prow/pkg/flagutil"
 	jirautil "sigs.k8s.io/prow/pkg/jira"
 	"sigs.k8s.io/prow/pkg/logrusutil"
@@ -54,7 +53,7 @@ func (o *options) Validate() error {
 		return fmt.Errorf("--slack-token-path is required")
 	}
 
-	for _, group := range []flagutil.OptionGroup{&o.jiraOptions, &o.pagerDutyOptions, &o.kubernetesOptions} {
+	for _, group := range []prowflagutil.OptionGroup{&o.jiraOptions, &o.pagerDutyOptions, &o.kubernetesOptions} {
 		if err := group.Validate(false); err != nil {
 			return err
 		}
@@ -67,7 +66,7 @@ func gatherOptions(fs *flag.FlagSet, args ...string) options {
 	o := options{kubernetesOptions: prowflagutil.KubernetesOptions{NOInClusterConfigDefault: true}}
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
 
-	for _, group := range []flagutil.OptionGroup{&o.jiraOptions, &o.pagerDutyOptions, &o.kubernetesOptions} {
+	for _, group := range []prowflagutil.OptionGroup{&o.jiraOptions, &o.pagerDutyOptions, &o.kubernetesOptions} {
 		group.AddFlags(fs)
 	}
 

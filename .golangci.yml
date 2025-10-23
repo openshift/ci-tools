@@ -1,38 +1,50 @@
-run:
-  timeout: 10m
-
+version: "2"
 linters:
+  default: none
   enable:
-    - unused
-    - gosimple
-    - gofmt
-    - govet
-    - staticcheck
-    - unparam
-    - unconvert
+    - bodyclose
     - errcheck
+    - errorlint
+    - govet
     - ineffassign
     - misspell
-    - bodyclose
-    - errorlint
-  disable-all: true
-
-linters-settings:
-  errorlint:
-    errorf: true
-    errorf-multi: false
-    asserts: false
-    comparison: false
-  misspell:
-    ignore-words:
-    - creater
-
-issues:
-  exclude-rules:
-  - linters:
-    - unparam
-    text: \(\*leaseStep\)\.Provides\$1 - result 1 \(error\) is always nil
-  - linters:
     - staticcheck
-    # Code has a "Deprecated:" comment
-    text: "SA1019:"
+    - unconvert
+    - unparam
+    - unused
+  settings:
+    errorlint:
+      errorf: true
+      errorf-multi: false
+      asserts: false
+      comparison: false
+    misspell:
+      ignore-rules:
+        - creater
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - unparam
+        text: \(\*leaseStep\)\.Provides\$1 - result 1 \(error\) is always nil
+      - linters:
+          - staticcheck
+        text: 'SA1019:'
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

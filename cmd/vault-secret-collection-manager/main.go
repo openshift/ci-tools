@@ -49,14 +49,14 @@ func parseOptions() (*option, error) {
 	flag.StringVar(&o.vaultToken, "vault-token", "", "The privileged token to use when communicating with vault, must be able to CRUD policies")
 	flag.StringVar(&o.vaultRole, "vault-role", "", "The vault role to use, must be able to CRUD policies. Will be used for kubernetes service account auth.")
 	flag.StringVar(&o.authBackendType, "auth-backend-type", "oidc", "The backend type used for user authentication.")
-	o.InstrumentationOptions.AddFlags(flag.CommandLine)
+	o.AddFlags(flag.CommandLine)
 	flag.Parse()
 
 	var errs []error
 	if o.vaultToken == "" && o.vaultRole == "" {
 		errs = append(errs, errors.New("--vault-token or --vault-role is required"))
 	}
-	if err := o.InstrumentationOptions.Validate(false); err != nil {
+	if err := o.Validate(false); err != nil {
 		errs = append(errs, err)
 	}
 	return o, utilerrors.NewAggregate(errs)
@@ -90,7 +90,7 @@ func main() {
 		fmt.Fprintf(w, "OK")
 	})
 	healthServer := &http.Server{
-		Addr:    ":" + strconv.Itoa(o.InstrumentationOptions.HealthPort),
+		Addr:    ":" + strconv.Itoa(o.HealthPort),
 		Handler: healthMux,
 	}
 	interrupts.ListenAndServe(healthServer, 0)

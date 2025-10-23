@@ -666,14 +666,14 @@ func main() {
 		}
 	}
 
-	if o.PrometheusOptions.PrometheusPasswordPath != "" {
-		if err := secret.Add(o.PrometheusOptions.PrometheusPasswordPath); err != nil {
+	if o.PrometheusPasswordPath != "" {
+		if err := secret.Add(o.PrometheusPasswordPath); err != nil {
 			logrus.WithError(err).Fatal("Failed to start secrets agent")
 		}
 	}
 
-	if o.PrometheusOptions.PrometheusBearerTokenPath != "" {
-		if err := secret.Add(o.PrometheusOptions.PrometheusBearerTokenPath); err != nil {
+	if o.PrometheusBearerTokenPath != "" {
+		if err := secret.Add(o.PrometheusBearerTokenPath); err != nil {
 			logrus.WithError(err).Fatal("Failed to start secrets agent")
 		}
 	}

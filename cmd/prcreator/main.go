@@ -24,7 +24,7 @@ type options struct {
 
 func gatherOptions() (*options, error) {
 	opts := options{}
-	opts.PRCreationOptions.AddFlags(flag.CommandLine)
+	opts.AddFlags(flag.CommandLine)
 	flag.StringVar(&opts.prTitle, "pr-title", "", "The title of the PR to create")
 	flag.StringVar(&opts.prMessage, "pr-message", "", "The message of the PR to create")
 	flag.StringVar(&opts.gitCommitMessage, "git-message", "", "The git commit message of the PR to create. If not set, then its value will be composed of other flags")
@@ -48,7 +48,7 @@ func gatherOptions() (*options, error) {
 		errs = append(errs, errors.New("--branch is mandatory"))
 	}
 
-	if err := opts.PRCreationOptions.Finalize(); err != nil {
+	if err := opts.Finalize(); err != nil {
 		errs = append(errs, err)
 	}
 
@@ -61,7 +61,7 @@ func main() {
 		logrus.WithError(err).Fatal("failed to gather options")
 	}
 
-	if err := opts.PRCreationOptions.UpsertPR(".",
+	if err := opts.UpsertPR(".",
 		opts.organization,
 		opts.repo,
 		opts.branch,

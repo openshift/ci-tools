@@ -278,7 +278,7 @@ func (dp *diffProcessor) process() error {
 			dp.maxPRs--
 			gitClient, err := dp.gitClient.ClientFor(d.org, d.repo)
 			if err != nil {
-				return fmt.Errorf("Failed to get git client: %w", err)
+				return fmt.Errorf("failed to get git client: %w", err)
 			}
 			defer func() {
 				if err := gitClient.Clean(); err != nil {

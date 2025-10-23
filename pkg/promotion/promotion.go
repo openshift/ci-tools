@@ -8,7 +8,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/prow/pkg/flagutil"
 
-	"github.com/openshift/ci-tools/pkg/api"
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 )
@@ -41,12 +40,12 @@ func AllPromotionImageStreamTags(configSpec *cioperatorapi.ReleaseBuildConfigura
 		}
 
 		disabled := sets.New(target.ExcludedImages...)
-		if !disabled.Has(api.PromotionExcludeImageWildcard) {
+		if !disabled.Has(cioperatorapi.PromotionExcludeImageWildcard) {
 			for _, image := range configSpec.Images {
 				result.Insert(fmt.Sprintf("%s/%s:%s", target.Namespace, target.Name, image.To))
 			}
 		}
-		for _, image := range disabled.Delete(api.PromotionExcludeImageWildcard).UnsortedList() {
+		for _, image := range disabled.Delete(cioperatorapi.PromotionExcludeImageWildcard).UnsortedList() {
 			delete(result, image)
 		}
 
@@ -140,7 +139,7 @@ func (o *Options) matches(configuration *cioperatorapi.ReleaseBuildConfiguration
 // OperateOnCIOperatorConfigDir filters the full set of configurations
 // down to those that were selected by the user with promotion options
 func (o *Options) OperateOnCIOperatorConfigDir(configDir string, includeOKD cioperatorapi.OKDInclusion, callback func(*cioperatorapi.ReleaseBuildConfiguration, *config.Info) error) error {
-	return o.Options.OperateOnCIOperatorConfigDir(configDir, func(configuration *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
+	return o.ConfirmableOptions.OperateOnCIOperatorConfigDir(configDir, func(configuration *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
 		if !o.matches(configuration, includeOKD) {
 			return nil
 		}

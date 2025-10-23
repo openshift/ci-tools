@@ -15,7 +15,6 @@ import (
 	k8sv1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	pjapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
-	"sigs.k8s.io/prow/pkg/config"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 	configflagutil "sigs.k8s.io/prow/pkg/flagutil/config"
 )
@@ -54,7 +53,7 @@ func Test_getProwjob(t *testing.T) {
 			args: args{
 				jobName: "foo",
 				config: &prowconfig.Config{
-					JobConfig: config.JobConfig{
+					JobConfig: prowconfig.JobConfig{
 						Presets:           nil,
 						PresubmitsStatic:  nil,
 						PostsubmitsStatic: nil,
@@ -82,7 +81,7 @@ func Test_getProwjob(t *testing.T) {
 			args: args{
 				jobName: "foo",
 				config: &prowconfig.Config{
-					JobConfig: config.JobConfig{
+					JobConfig: prowconfig.JobConfig{
 						Presets:           nil,
 						PresubmitsStatic:  nil,
 						PostsubmitsStatic: nil,
@@ -110,7 +109,7 @@ func Test_getProwjob(t *testing.T) {
 			args: args{
 				jobName: "bar",
 				config: &prowconfig.Config{
-					JobConfig: config.JobConfig{
+					JobConfig: prowconfig.JobConfig{
 						Presets:           nil,
 						PresubmitsStatic:  nil,
 						PostsubmitsStatic: nil,
@@ -616,7 +615,7 @@ func Test_getJobArtifactsURL(t *testing.T) {
 	prowConfig := &prowconfig.Config{
 		JobConfig: prowconfig.JobConfig{},
 		ProwConfig: prowconfig.ProwConfig{
-			Plank: config.Plank{
+			Plank: prowconfig.Plank{
 				Controller: prowconfig.Controller{},
 				DefaultDecorationConfigsMap: map[string]*pjapi.DecorationConfig{
 					fmt.Sprintf("%s/%s", org, repo): {GCSConfiguration: &pjapi.GCSConfiguration{Bucket: bucket}},
@@ -627,7 +626,7 @@ func Test_getJobArtifactsURL(t *testing.T) {
 			},
 		},
 	}
-	if err := prowConfig.ProwConfig.Plank.FinalizeDefaultDecorationConfigs(); err != nil {
+	if err := prowConfig.Plank.FinalizeDefaultDecorationConfigs(); err != nil {
 		t.Fatalf("could not finalize config: %v", err)
 	}
 	type args struct {

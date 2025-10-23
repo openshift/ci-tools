@@ -417,7 +417,7 @@ func Template(template, command, fromImage, target string, profile cioperatorapi
 		addUniqueParameter(container, fmt.Sprintf("--template=%s", templatePath))
 
 		defaultEnvVars := []corev1.EnvVar{
-			{Name: envSafeJobName, Value: strings.Replace(target, "_", "-", -1)},
+			{Name: envSafeJobName, Value: strings.ReplaceAll(target, "_", "-")},
 			{Name: envTestCommand, Value: command},
 			{Name: envClusterType, Value: profile.ClusterType()},
 		}

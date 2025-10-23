@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	prowConfig "sigs.k8s.io/prow/pkg/config"
@@ -215,7 +214,7 @@ func handlePodScalerResult() http.HandlerFunc {
 func main() {
 	o, err := gatherOptions()
 	if err != nil {
-		logrus.WithError(err).Fatal("failed to gather options")
+		log.WithError(err).Fatal("failed to gather options")
 	}
 	if err := validateOptions(o); err != nil {
 		log.Fatalf("invalid options: %v", err)

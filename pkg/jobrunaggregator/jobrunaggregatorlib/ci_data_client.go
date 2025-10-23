@@ -1020,12 +1020,12 @@ func (c *ciDataClient) ListAggregatedTestRunsForJob(ctx context.Context, frequen
 	if err != nil {
 		return nil, err
 	}
-	queryString := strings.Replace(
+	queryString := strings.ReplaceAll(
 		`SELECT *
 FROM DATA_SET_LOCATION.TABLE_NAME
 WHERE TABLE_NAME.JobName = @JobName
 `,
-		"TABLE_NAME", frequencyTable, -1)
+		"TABLE_NAME", frequencyTable)
 
 	queryString = c.dataCoordinates.SubstituteDataSetLocation(queryString)
 

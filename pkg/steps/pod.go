@@ -25,7 +25,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/util"
-	podsutils "github.com/openshift/ci-tools/pkg/util"
 )
 
 const (
@@ -109,7 +108,7 @@ func (s *podStep) run(ctx context.Context) error {
 	}
 
 	if s.config.NestedPodman {
-		podsutils.ConfigurePodForNestedPodman(pod, s.name, s.config.As)
+		util.ConfigurePodForNestedPodman(pod, s.name, s.config.As)
 		if err := s.setupNestedPodmanRBACs(ctx); err != nil {
 			return fmt.Errorf("setup rbac for nested-podman: %w", err)
 		}

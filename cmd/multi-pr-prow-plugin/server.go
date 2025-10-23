@@ -210,7 +210,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) ([]*prowv1
 				s.reportFailure("could not generate prow job", err, org, repo, user, number, l)
 				continue
 			}
-			logrus.Infof("submitting prowjob: %s", prowJob.ObjectMeta.Name)
+			logrus.Infof("submitting prowjob: %s", prowJob.Name)
 			if err = s.kubeClient.Create(context.Background(), prowJob); err != nil {
 				l.WithError(err).Error("could not create prow job")
 				s.reportFailure("could not submit prow job", nil, org, repo, user, number, l)
@@ -376,7 +376,7 @@ func (s *server) generateProwJob(jr jobRun) (*prowv1.ProwJob, error) {
 		}
 	}
 	if primaryRef == nil {
-		return nil, fmt.Errorf("No ref for requested test included in command. The org, repo, and branch containing the requested test need to be targeted by at least one of the included PRs.")
+		return nil, fmt.Errorf("no ref for requested test included in command. The org, repo, and branch containing the requested test need to be targeted by at least one of the included PRs")
 	}
 
 	if err := s.prowConfigGetter.Defaulter().DefaultPeriodic(periodic); err != nil {
@@ -395,8 +395,8 @@ func (s *server) generateProwJob(jr jobRun) (*prowv1.ProwJob, error) {
 }
 
 func (s *server) clusterForJob(jobName string) (string, error) {
-	if time.Now().Add(time.Minute * -15).After(s.jobClusterCache.lastCleared) {
-		s.jobClusterCache.lastCleared = time.Now()
+	if time.Now().Add(time.Minute * -15).After(s.lastCleared) {
+		s.lastCleared = time.Now()
 		s.jobClusterCache.clusterForJob = make(map[string]string)
 	}
 	if cluster, ok := s.jobClusterCache.clusterForJob[jobName]; ok {

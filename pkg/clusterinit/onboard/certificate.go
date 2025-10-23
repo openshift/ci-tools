@@ -156,7 +156,7 @@ func (s *certificateGenerator) generateCertificateManifests(baseDomain, imageReg
 		},
 	}
 
-	if !(*s.clusterInstall.Onboard.OSD || *s.clusterInstall.Onboard.Hosted || *s.clusterInstall.Onboard.Unmanaged) {
+	if !*s.clusterInstall.Onboard.OSD && !*s.clusterInstall.Onboard.Hosted && !*s.clusterInstall.Onboard.Unmanaged {
 		manifests = append(manifests, apiServerCert, appsCert)
 	}
 	manifests = append(manifests, imageRegistryCert)

@@ -38,19 +38,19 @@ func (o *WhitelistOptions) Validate() error {
 	if o.whitelistFile != "" {
 		info, err := os.Stat(o.whitelistFile)
 		if os.IsNotExist(err) {
-			return fmt.Errorf("The file that specified in --whitelist-file does not exist: %v", o.whitelistFile)
+			return fmt.Errorf("the file that specified in --whitelist-file does not exist: %v", o.whitelistFile)
 		}
 
 		if info.IsDir() {
-			return fmt.Errorf("The file that specified in --whitelist-file is a directory: %v", o.whitelistFile)
+			return fmt.Errorf("the file that specified in --whitelist-file is a directory: %v", o.whitelistFile)
 		}
 
 		bytes, err := gzip.ReadFileMaybeGZIP(o.whitelistFile)
 		if err != nil {
-			return fmt.Errorf("Couldn't read whitelist configuration file: %v", o.whitelistFile)
+			return fmt.Errorf("couldn't read whitelist configuration file: %v", o.whitelistFile)
 		}
 		if err := yaml.Unmarshal(bytes, &o.WhitelistConfig); err != nil {
-			return errors.New("Couldn't unmarshal whitelist configuration")
+			return errors.New("couldn't unmarshal whitelist configuration")
 		}
 	}
 

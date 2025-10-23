@@ -14,7 +14,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"sigs.k8s.io/prow/pkg/config"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -276,27 +275,27 @@ func TestGetClusterForJob(t *testing.T) {
 		{
 			name:     "some job",
 			config:   &c,
-			jobBase:  config.JobBase{Agent: "kubernetes", Name: "some-job"},
+			jobBase:  prowconfig.JobBase{Agent: "kubernetes", Name: "some-job"},
 			path:     "org/repo/some-postsubmits.yaml",
 			expected: "api.ci",
 		},
 		{
 			name:     "job must on build01",
 			config:   &c,
-			jobBase:  config.JobBase{Agent: "kubernetes", Name: "periodic-build01-upgrade"},
+			jobBase:  prowconfig.JobBase{Agent: "kubernetes", Name: "periodic-build01-upgrade"},
 			expected: "ci/api-build01-ci-devcluster-openshift-com:6443",
 		},
 		{
 			name:     "some periodic job in release repo",
 			config:   &c,
-			jobBase:  config.JobBase{Agent: "kubernetes", Name: "promote-release-openshift-machine-os-content-e2e-aws-4.1"},
+			jobBase:  prowconfig.JobBase{Agent: "kubernetes", Name: "promote-release-openshift-machine-os-content-e2e-aws-4.1"},
 			path:     "ci-operator/jobs/openshift/release/openshift-release-release-4.1-periodics.yaml",
 			expected: "api.ci",
 		},
 		{
 			name:    "some jenkins job",
 			config:  &c,
-			jobBase: config.JobBase{Agent: "jenkins", Name: "test_branch_wildfly_images"},
+			jobBase: prowconfig.JobBase{Agent: "jenkins", Name: "test_branch_wildfly_images"},
 			path:    "ci-operator/jobs/openshift-s2i/s2i-wildfly/openshift-s2i-s2i-wildfly-master-postsubmits.yaml",
 		},
 		{
@@ -317,7 +316,7 @@ func TestGetClusterForJob(t *testing.T) {
 					},
 				},
 			},
-			jobBase:     config.JobBase{Agent: "kubernetes", Name: "some-job"},
+			jobBase:     prowconfig.JobBase{Agent: "kubernetes", Name: "some-job"},
 			path:        "ci-operator/jobs/openshift/openshift-azure/openshift-openshift-azure-infra-periodics.yaml",
 			expectedErr: fmt.Errorf("path ci-operator/jobs/openshift/openshift-azure/openshift-openshift-azure-infra-periodics.yaml matches more than 1 regex: [.*/openshift-openshift-azure-infra-periodics.yaml$ .*infra-periodics.yaml$]"),
 		},
@@ -335,7 +334,7 @@ func TestGetClusterForJob(t *testing.T) {
 					},
 				},
 			},
-			jobBase:     config.JobBase{Agent: "kubernetes", Name: "some-job"},
+			jobBase:     prowconfig.JobBase{Agent: "kubernetes", Name: "some-job"},
 			path:        "ci-operator/jobs/kubevirt/kubevirt-ssp-operator/kubevirt-kubevirt-ssp-operator-master-presubmits.yaml",
 			expectedErr: fmt.Errorf("path ci-operator/jobs/kubevirt/kubevirt-ssp-operator/kubevirt-kubevirt-ssp-operator-master-presubmits.yaml matches more than 1 regex: [.*kubevirt-kubevirt-ssp-operator-master-presubmits.yaml$ .*kubevirt-ssp-operator-master-presubmits.yaml$]"),
 		},
@@ -353,7 +352,7 @@ func TestGetClusterForJob(t *testing.T) {
 					},
 				},
 			},
-			jobBase:  config.JobBase{Agent: "kubernetes", Name: "some-job"},
+			jobBase:  prowconfig.JobBase{Agent: "kubernetes", Name: "some-job"},
 			path:     "ci-operator/jobs/kubevirt/kubevirt-ssp-operator/kubevirt-kubevirt-ssp-operator-master-presubmits.yaml",
 			expected: api.ClusterBuild02,
 		},
@@ -385,41 +384,41 @@ func TestDetermineClusterForJob(t *testing.T) {
 		{
 			name:     "some job",
 			config:   &configWithBuildFarmWithJobs,
-			jobBase:  config.JobBase{Agent: "kubernetes", Name: "some-job"},
+			jobBase:  prowconfig.JobBase{Agent: "kubernetes", Name: "some-job"},
 			path:     "org/repo/some-postsubmits.yaml",
 			expected: "api.ci",
 		},
 		{
 			name:     "job must on build01",
 			config:   &configWithBuildFarmWithJobs,
-			jobBase:  config.JobBase{Agent: "kubernetes", Name: "periodic-build01-upgrade"},
+			jobBase:  prowconfig.JobBase{Agent: "kubernetes", Name: "periodic-build01-upgrade"},
 			expected: "build01",
 		},
 		{
 			name:     "some periodic job in release repo",
 			config:   &configWithBuildFarmWithJobs,
-			jobBase:  config.JobBase{Agent: "kubernetes", Name: "promote-release-openshift-machine-os-content-e2e-aws-4.1"},
+			jobBase:  prowconfig.JobBase{Agent: "kubernetes", Name: "promote-release-openshift-machine-os-content-e2e-aws-4.1"},
 			path:     "ci-operator/jobs/openshift/release/openshift-release-release-4.1-periodics.yaml",
 			expected: "api.ci",
 		},
 		{
 			name:     "some jenkins job",
 			config:   &configWithBuildFarmWithJobs,
-			jobBase:  config.JobBase{Agent: "jenkins", Name: "test_branch_wildfly_images"},
+			jobBase:  prowconfig.JobBase{Agent: "jenkins", Name: "test_branch_wildfly_images"},
 			path:     "ci-operator/jobs/openshift-s2i/s2i-wildfly/openshift-s2i-s2i-wildfly-master-postsubmits.yaml",
 			expected: "",
 		},
 		{
 			name:     "some job without agent",
 			config:   &configWithBuildFarmWithJobs,
-			jobBase:  config.JobBase{Name: "no-agent-job"},
+			jobBase:  prowconfig.JobBase{Name: "no-agent-job"},
 			path:     "ci-operator/jobs/openshift-s2i/s2i-wildfly/openshift-s2i-s2i-wildfly-master-postsubmits.yaml",
 			expected: "api.ci",
 		},
 		{
 			name:                   "some job in build farm",
 			config:                 &configWithBuildFarmWithJobs,
-			jobBase:                config.JobBase{Agent: "kubernetes", Name: "some-build-farm-job"},
+			jobBase:                prowconfig.JobBase{Agent: "kubernetes", Name: "some-build-farm-job"},
 			path:                   "org/repo/some-build-farm-presubmits.yaml",
 			expected:               "build01",
 			expectedCanBeRelocated: true,
@@ -427,13 +426,13 @@ func TestDetermineClusterForJob(t *testing.T) {
 		{
 			name:     "Vsphere job on vsphere02",
 			config:   &configWithBuildFarmWithJobs,
-			jobBase:  config.JobBase{Agent: "kubernetes", Name: "yalayala-vsphere"},
+			jobBase:  prowconfig.JobBase{Agent: "kubernetes", Name: "yalayala-vsphere"},
 			expected: "vsphere02",
 		},
 		{
 			name:   "Vsphere job on vsphere02 with profile",
 			config: &configWithBuildFarmWithJobs,
-			jobBase: config.JobBase{Agent: "kubernetes", Name: "yalayala-vsphere", Labels: map[string]string{
+			jobBase: prowconfig.JobBase{Agent: "kubernetes", Name: "yalayala-vsphere", Labels: map[string]string{
 				api.CloudClusterProfileLabel: string(api.ClusterProfileVSphereElastic),
 			}},
 			expected: "vsphere02",
@@ -441,7 +440,7 @@ func TestDetermineClusterForJob(t *testing.T) {
 		{
 			name:   "Vsphere job not on vsphere02 with profile",
 			config: &configWithBuildFarmWithJobs,
-			jobBase: config.JobBase{Agent: "kubernetes", Name: "yalayala-vsphere", Labels: map[string]string{
+			jobBase: prowconfig.JobBase{Agent: "kubernetes", Name: "yalayala-vsphere", Labels: map[string]string{
 				api.CloudClusterProfileLabel: string(api.ClusterProfileVSphereElasticPoc),
 			}},
 			expected:               "api.ci",
@@ -450,7 +449,7 @@ func TestDetermineClusterForJob(t *testing.T) {
 		{
 			name:   "applyconfig job for vsphere",
 			config: &configWithBuildFarmWithJobs,
-			jobBase: config.JobBase{Agent: "kubernetes", Name: "pull-ci-openshift-release-master-vsphere-dry", Spec: &v1.PodSpec{
+			jobBase: prowconfig.JobBase{Agent: "kubernetes", Name: "pull-ci-openshift-release-master-vsphere-dry", Spec: &v1.PodSpec{
 				Containers: []v1.Container{
 					{Image: "registry.svc.ci.openshift.org/ci/applyconfig:latest"},
 				},
@@ -462,7 +461,7 @@ func TestDetermineClusterForJob(t *testing.T) {
 		{
 			name:   "pull-ci-openshift-os-master-unit",
 			config: &configWithBuildFarmWithJobs,
-			jobBase: config.JobBase{Agent: "kubernetes", Name: "pull-ci-openshift-os-master-unit",
+			jobBase: prowconfig.JobBase{Agent: "kubernetes", Name: "pull-ci-openshift-os-master-unit",
 				Labels: map[string]string{"devices.kubevirt.io/kvm": "1"},
 			},
 			expected:               "build02",
@@ -471,7 +470,7 @@ func TestDetermineClusterForJob(t *testing.T) {
 		{
 			name:   "a job with cluster label",
 			config: &configWithBuildFarmWithJobs,
-			jobBase: config.JobBase{Agent: "kubernetes", Name: "pull-ci-openshift-os-master-unit",
+			jobBase: prowconfig.JobBase{Agent: "kubernetes", Name: "pull-ci-openshift-os-master-unit",
 				Labels: map[string]string{"ci-operator.openshift.io/cluster": "b01"},
 			},
 			expected:               "b01",
@@ -480,7 +479,7 @@ func TestDetermineClusterForJob(t *testing.T) {
 		{
 			name:   "a job with noBuilds label",
 			config: &configWithBuildFarmWithJobs,
-			jobBase: config.JobBase{Agent: "kubernetes", Name: "pull-ci-openshift-os-master-unit",
+			jobBase: prowconfig.JobBase{Agent: "kubernetes", Name: "pull-ci-openshift-os-master-unit",
 				Labels: map[string]string{"ci.openshift.io/no-builds": "true"},
 			},
 			expected:               "build03",
@@ -489,7 +488,7 @@ func TestDetermineClusterForJob(t *testing.T) {
 		{
 			name:   "a job with cluster label and noBuilds label: cluster label wins",
 			config: &configWithBuildFarmWithJobs,
-			jobBase: config.JobBase{Agent: "kubernetes", Name: "pull-ci-openshift-os-master-unit",
+			jobBase: prowconfig.JobBase{Agent: "kubernetes", Name: "pull-ci-openshift-os-master-unit",
 				Labels: map[string]string{"ci-operator.openshift.io/cluster": "b01", "ci.openshift.io/no-builds": "true"},
 			},
 			expected:               "b01",
@@ -498,7 +497,7 @@ func TestDetermineClusterForJob(t *testing.T) {
 		{
 			name:   "DetermineE2EByJob: cloud label has no effect if DetermineE2EByJob=false",
 			config: &configWithBuildFarmWithJobs,
-			jobBase: config.JobBase{Agent: "kubernetes", Name: "some-e2e-job",
+			jobBase: prowconfig.JobBase{Agent: "kubernetes", Name: "some-e2e-job",
 				Labels: map[string]string{"ci-operator.openshift.io/cloud": "aws"},
 			},
 			expected:               "api.ci",
@@ -507,7 +506,7 @@ func TestDetermineClusterForJob(t *testing.T) {
 		{
 			name:   "DetermineE2EByJob: cloud label",
 			config: &configWithBuildFarmWithJobsAndDetermineE2EByJob,
-			jobBase: config.JobBase{Agent: "kubernetes", Name: "some-e2e-job",
+			jobBase: prowconfig.JobBase{Agent: "kubernetes", Name: "some-e2e-job",
 				Labels: map[string]string{"ci-operator.openshift.io/cloud": "aws"},
 			},
 			expected:               "build01",
@@ -516,7 +515,7 @@ func TestDetermineClusterForJob(t *testing.T) {
 		{
 			name:   "DetermineE2EByJob: env var",
 			config: &configWithBuildFarmWithJobsAndDetermineE2EByJob,
-			jobBase: config.JobBase{Agent: "kubernetes", Name: "some-e2e-job",
+			jobBase: prowconfig.JobBase{Agent: "kubernetes", Name: "some-e2e-job",
 				Spec: &v1.PodSpec{
 					Containers: []v1.Container{
 						{
@@ -533,7 +532,7 @@ func TestDetermineClusterForJob(t *testing.T) {
 		{
 			name:   "capabilities with enabled DetermineE2EByJob, cloud provider type is respected",
 			config: &configWithBuildFarmWithJobsAndDetermineE2EByJob,
-			jobBase: config.JobBase{Agent: "kubernetes", Name: "some-e2e-job",
+			jobBase: prowconfig.JobBase{Agent: "kubernetes", Name: "some-e2e-job",
 				Labels: map[string]string{
 					"capability/intranet":            "intranet",
 					"capability/arm64":               "arm64",
@@ -549,7 +548,7 @@ func TestDetermineClusterForJob(t *testing.T) {
 		{
 			name:   "no cluster with all desired capabilities will return error",
 			config: &configWithBuildFarmWithJobsAndDetermineE2EByJob,
-			jobBase: config.JobBase{Agent: "kubernetes", Name: "some-e2e-job",
+			jobBase: prowconfig.JobBase{Agent: "kubernetes", Name: "some-e2e-job",
 				Labels: map[string]string{
 					"capability/intranet":            "intranet",
 					"capability/arm64":               "arm64",
@@ -566,7 +565,7 @@ func TestDetermineClusterForJob(t *testing.T) {
 		{
 			name:   "cluster label has priority over capabilities",
 			config: &configWithBuildFarmWithJobsAndDetermineE2EByJob,
-			jobBase: config.JobBase{Agent: "kubernetes", Name: "some-e2e-job",
+			jobBase: prowconfig.JobBase{Agent: "kubernetes", Name: "some-e2e-job",
 				Labels: map[string]string{
 					"capability/intranet":              "intranet",
 					"ci-operator.openshift.io/cluster": "build10"},
@@ -579,7 +578,7 @@ func TestDetermineClusterForJob(t *testing.T) {
 		{
 			name:   "capabilities have priority over kvm label",
 			config: &configWithBuildFarmWithJobsAndDetermineE2EByJob,
-			jobBase: config.JobBase{Agent: "kubernetes", Name: "some-e2e-job",
+			jobBase: prowconfig.JobBase{Agent: "kubernetes", Name: "some-e2e-job",
 				Labels: map[string]string{
 					"capability/kvm": "kvm"}},
 			cm: ClusterMap{"build03": ClusterInfo{Provider: "aws", Capacity: 100, Capabilities: []string{"kvm"}},

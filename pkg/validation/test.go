@@ -305,7 +305,7 @@ func validateTestStepDependencies(config *api.ReleaseBuildConfiguration) []error
 					if claimRelease != nil {
 						explicitlyConfigured = explicitlyConfigured || releaseName == claimRelease.ReleaseName
 					}
-					if !(implicitlyConfigured || explicitlyConfigured) {
+					if !implicitlyConfigured && !explicitlyConfigured {
 						errs = append(errs, validationError(fmt.Sprintf("this dependency requires a %q release, which is not configured", releaseName)))
 					}
 				}
@@ -873,7 +873,7 @@ func validateDependencies(fieldRoot string, dependencies []api.StepDependency) [
 	for i, dependency := range dependencies {
 		if dependency.Name == "" {
 			errs = append(errs, fmt.Errorf("%s.dependencies[%d].name must be set", fieldRoot, i))
-		} else if numColons := strings.Count(dependency.Name, ":"); !(numColons == 0 || numColons == 1) {
+		} else if numColons := strings.Count(dependency.Name, ":"); numColons != 0 && numColons != 1 {
 			errs = append(errs, fmt.Errorf("%s.dependencies[%d].name must take the `tag` or `stream:tag` form, not %q", fieldRoot, i, dependency.Name))
 		}
 		if dependency.Env == "" {

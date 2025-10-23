@@ -303,7 +303,7 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 	buildName := string(toTag)
 	// Build names cannot contain '_', but repository names can. When building from a multi-pr config, there could be '_' present in the toTag
 	if strings.Contains(buildName, "_") {
-		buildName = strings.Replace(buildName, "_", "-", -1)
+		buildName = strings.ReplaceAll(buildName, "_", "-")
 		logrus.Infof("replacing '_' chars in build name; new name: %s", buildName)
 	}
 	buildResources, err := ResourcesFor(resources.RequirementsForStep(string(toTag)))
@@ -430,7 +430,7 @@ func handleFailedBuild(ctx context.Context, client BuildClient, ns, name string,
 		return err
 	}
 
-	if !(isInfraReason(b.Status.Reason) || hintsAtInfraReason(b.Status.LogSnippet)) {
+	if !isInfraReason(b.Status.Reason) && !hintsAtInfraReason(b.Status.LogSnippet) {
 		logrus.Debugf("Build %q (created at %v) classified as legitimate failure, will not be retried", name, b.CreationTimestamp)
 		return err
 	}

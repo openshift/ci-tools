@@ -43,19 +43,19 @@ func main() {
 	fs.Var(&o.profiles, "profiles", "Comma-separated list of profiles; may be repeated")
 	fs.IntVar(&o.prometheusDaysBefore, "prometheus-days-before", 14,
 		"Number [1,15] of days before. Time 00-00-00 of that day will be used as time to query Prometheus. E.g., 1 means 00-00-00 of yesterday.")
-	o.PrometheusOptions.AddFlags(fs)
+	o.AddFlags(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatalf("cannot parse args: '%s'", os.Args[1:])
 	}
 
-	if o.PrometheusOptions.PrometheusPasswordPath != "" {
-		if err := secret.Add(o.PrometheusOptions.PrometheusPasswordPath); err != nil {
+	if o.PrometheusPasswordPath != "" {
+		if err := secret.Add(o.PrometheusPasswordPath); err != nil {
 			logrus.WithError(err).Fatal("Failed to start secrets agent")
 		}
 	}
 
-	if o.PrometheusOptions.PrometheusBearerTokenPath != "" {
-		if err := secret.Add(o.PrometheusOptions.PrometheusBearerTokenPath); err != nil {
+	if o.PrometheusBearerTokenPath != "" {
+		if err := secret.Add(o.PrometheusBearerTokenPath); err != nil {
 			logrus.WithError(err).Fatal("Failed to start secrets agent")
 		}
 	}

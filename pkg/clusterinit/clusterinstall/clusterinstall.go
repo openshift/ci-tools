@@ -43,7 +43,7 @@ type ClusterInstall struct {
 }
 
 func (ci *ClusterInstall) IsOCP() bool {
-	return !(*ci.Onboard.Hosted || *ci.Onboard.OSD || *ci.Onboard.Unmanaged)
+	return !*ci.Onboard.Hosted && !*ci.Onboard.OSD && !*ci.Onboard.Unmanaged
 }
 
 type Provision struct {

@@ -261,10 +261,7 @@ func divideRange(uncovered []podscaler.TimeRange, step time.Duration, numSteps i
 		// so we take each uncovered range and split it into chunks we can ask for.
 		start := uncoveredRange.Start
 		stop := uncoveredRange.End
-		for {
-			if start.After(uncoveredRange.End) {
-				break
-			}
+		for !start.After(uncoveredRange.End) {
 			steps := int64(stop.Sub(start) / step)
 			if steps <= 1 {
 				// this range is likely too small to contain novel data and asking for this in a query leads

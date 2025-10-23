@@ -71,7 +71,7 @@ func gatherOptions() (options, error) {
 	fs.Var(&o.flattenOrgs, "flatten-org", "Organizations whose repos should not have org prefix (can be specified multiple times)")
 
 	o.github.AddFlags(fs)
-	o.WhitelistOptions.Bind(fs)
+	o.Bind(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return o, fmt.Errorf("faild to parse flags: %w", err)
 	}
@@ -133,7 +133,7 @@ func main() {
 		logger.WithError(err).Fatal("Error getting GitHub client.")
 	}
 
-	orgRepos, err := getReposForPrivateOrg(o.releaseRepoPath, o.WhitelistOptions.WhitelistConfig, o.onlyOrg)
+	orgRepos, err := getReposForPrivateOrg(o.releaseRepoPath, o.WhitelistConfig, o.onlyOrg)
 	if err != nil {
 		logger.WithError(err).Fatal("couldn't get the list of org/repos that promote official images")
 	}

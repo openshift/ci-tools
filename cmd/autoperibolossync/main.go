@@ -91,7 +91,7 @@ func validateOptions(o options) error {
 	if o.peribolosConfig == "" {
 		return errors.New("--peribolos-config is not specified")
 	}
-	return o.GitHubOptions.Validate(o.dryRun)
+	return o.Validate(o.dryRun)
 }
 
 func main() {
@@ -100,11 +100,11 @@ func main() {
 		logrus.WithError(err).Fatal("Invalid arguments.")
 	}
 
-	if err := secret.Add(o.GitHubOptions.TokenPath); err != nil {
+	if err := secret.Add(o.TokenPath); err != nil {
 		logrus.WithError(err).Fatal("Failed to start secrets agent")
 	}
 
-	gc, err := o.GitHubOptions.GitHubClient(o.dryRun)
+	gc, err := o.GitHubClient(o.dryRun)
 	if err != nil {
 		logrus.WithError(err).Fatal("error getting GitHub client")
 	}
@@ -150,7 +150,7 @@ func main() {
 	}
 
 	title := fmt.Sprintf("%s %s", matchTitle, time.Now().Format(time.RFC1123))
-	if err := bumper.GitCommitAndPush(fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin, string(secret.GetTokenGenerator(o.GitHubOptions.TokenPath)()), o.githubLogin, githubRepo), remoteBranch, o.gitName, o.gitEmail, title, stdout, stderr, o.dryRun); err != nil {
+	if err := bumper.GitCommitAndPush(fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin, string(secret.GetTokenGenerator(o.TokenPath)()), o.githubLogin, githubRepo), remoteBranch, o.gitName, o.gitEmail, title, stdout, stderr, o.dryRun); err != nil {
 		logrus.WithError(err).Fatal("Failed to push changes.")
 	}
 

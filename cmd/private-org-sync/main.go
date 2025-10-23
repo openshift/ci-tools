@@ -619,7 +619,7 @@ func main() {
 
 	var errs []error
 
-	locations, whitelistErrors := getWhitelistedLocations(o.WhitelistOptions.WhitelistConfig.Whitelist, syncer.git, o.prefix, token)
+	locations, whitelistErrors := getWhitelistedLocations(o.WhitelistConfig.Whitelist, syncer.git, o.prefix, token)
 	errs = append(errs, whitelistErrors...)
 
 	callback := func(_ *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {

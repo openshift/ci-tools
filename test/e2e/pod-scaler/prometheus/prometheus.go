@@ -61,7 +61,7 @@ func Initialize(t testhelper.TestingTInterface, tmpDir string, r *rand.Rand, str
 	// restart Prometheus to reload TSDB, by default this can take minutes without a restart
 	prometheusCancel()
 	if err := prometheusInit.Wait(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ProcessState.String() == "signal: killed" {
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.String() == "signal: killed" {
 			// this was us killing the process, ignore
 		} else {
 			logrus.WithError(err).Fatalf("Failed to initialize Prometheus: %v: %v", err, prometheusInitOutput.String())

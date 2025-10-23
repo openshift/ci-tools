@@ -151,7 +151,7 @@ func process(
 		if !filter(metadata) {
 			return nil
 		}
-		if cfg.BuildRootImage == nil || cfg.BuildRootImage.FromRepository || metadata.Variant != "" || (metadata.Metadata.Branch != "master" && metadata.Metadata.Branch != "main") {
+		if cfg.BuildRootImage == nil || cfg.BuildRootImage.FromRepository || metadata.Variant != "" || (metadata.Branch != "master" && metadata.Branch != "main") {
 			return nil
 		}
 

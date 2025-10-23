@@ -13,7 +13,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"github.com/openshift/ci-tools/pkg/api"
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/testhelper"
@@ -157,13 +156,13 @@ func TestOptions_Matches(t *testing.T) {
 	var testCases = []struct {
 		name     string
 		input    Options
-		metadata api.Metadata
+		metadata cioperatorapi.Metadata
 		expected bool
 	}{
 		{
 			name:  "nothing set matches everything",
 			input: Options{},
-			metadata: api.Metadata{
+			metadata: cioperatorapi.Metadata{
 				Org:  "org",
 				Repo: "repo",
 			},
@@ -174,7 +173,7 @@ func TestOptions_Matches(t *testing.T) {
 			input: Options{
 				Org: "org",
 			},
-			metadata: api.Metadata{
+			metadata: cioperatorapi.Metadata{
 				Org:  "org",
 				Repo: "repo",
 			},
@@ -185,7 +184,7 @@ func TestOptions_Matches(t *testing.T) {
 			input: Options{
 				Org: "org",
 			},
-			metadata: api.Metadata{
+			metadata: cioperatorapi.Metadata{
 				Org:  "arg",
 				Repo: "repo",
 			},
@@ -196,7 +195,7 @@ func TestOptions_Matches(t *testing.T) {
 			input: Options{
 				Repo: "repo",
 			},
-			metadata: api.Metadata{
+			metadata: cioperatorapi.Metadata{
 				Org:  "anything",
 				Repo: "repo",
 			},
@@ -207,7 +206,7 @@ func TestOptions_Matches(t *testing.T) {
 			input: Options{
 				Repo: "repo",
 			},
-			metadata: api.Metadata{
+			metadata: cioperatorapi.Metadata{
 				Org:  "anything",
 				Repo: "ripo",
 			},
@@ -219,7 +218,7 @@ func TestOptions_Matches(t *testing.T) {
 				Org:  "org",
 				Repo: "repo",
 			},
-			metadata: api.Metadata{
+			metadata: cioperatorapi.Metadata{
 				Org:  "org",
 				Repo: "repo",
 			},
@@ -231,7 +230,7 @@ func TestOptions_Matches(t *testing.T) {
 				Org:  "org",
 				Repo: "repo",
 			},
-			metadata: api.Metadata{
+			metadata: cioperatorapi.Metadata{
 				Org:  "org",
 				Repo: "ripo",
 			},
@@ -243,7 +242,7 @@ func TestOptions_Matches(t *testing.T) {
 				Org:  "org",
 				Repo: "repo",
 			},
-			metadata: api.Metadata{
+			metadata: cioperatorapi.Metadata{
 				Org:  "arg",
 				Repo: "repo",
 			},

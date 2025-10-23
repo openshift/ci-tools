@@ -35,7 +35,7 @@ type options struct {
 
 func (o options) validate() error {
 	var errs []error
-	if err := o.ConfirmableOptions.Validate(); err != nil {
+	if err := o.Validate(); err != nil {
 		errs = append(errs, err)
 	}
 	if diff := sets.New[string](o.enabledTemplateMigrations.Strings()...).Difference(validTemplateMigrations); len(diff) != 0 {
@@ -64,7 +64,7 @@ func main() {
 		logrus.Fatalf("Invalid options: %v", err)
 	}
 
-	if err := o.ConfirmableOptions.Complete(); err != nil {
+	if err := o.Complete(); err != nil {
 		logrus.Fatalf("Couldn't complete the config options: %v", err)
 	}
 

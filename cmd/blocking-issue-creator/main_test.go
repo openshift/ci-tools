@@ -21,7 +21,7 @@ type fakeGithubClient struct {
 
 func (f fakeGithubClient) FindIssues(query, sortVerb string, asc bool) ([]github.Issue, error) {
 	var issues []github.Issue
-	for _, issue := range f.FakeClient.Issues {
+	for _, issue := range f.Issues {
 		issues = append(issues, *issue)
 	}
 	sort.Slice(issues, func(i, j int) bool { return issues[i].ID < issues[j].ID })
@@ -222,7 +222,7 @@ func TestManageIssues(t *testing.T) {
 			fgh := fakeGithubClient{
 				FakeClient: fakegithub.NewFakeClient(),
 			}
-			fgh.FakeClient.Issues = tc.issues
+			fgh.Issues = tc.issues
 
 			if err := manageIssues(fgh, "", tc.repoInfo, tc.branches, logrus.WithField("id", tc.id)); err != nil {
 				t.Fatal(err)

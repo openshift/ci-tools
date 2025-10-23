@@ -24,11 +24,11 @@ type PRCreationOptions struct {
 
 func (o *PRCreationOptions) AddFlags(fs *flag.FlagSet) {
 	fs.BoolVar(&o.SelfApprove, "self-approve", false, "If the created PR should be self-approved by adding the lgtm+approved labels")
-	o.GitHubOptions.AddFlags(fs)
+	o.AddFlags(fs)
 }
 
 func (o *PRCreationOptions) Finalize() error {
-	if err := o.GitHubOptions.Validate(false); err != nil {
+	if err := o.Validate(false); err != nil {
 		return err
 	}
 	if err := secret.Add(o.TokenPath); err != nil {

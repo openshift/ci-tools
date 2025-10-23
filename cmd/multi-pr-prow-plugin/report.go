@@ -73,7 +73,7 @@ type CheckRunDetails struct {
 }
 
 func (r *reporter) reportNewProwJob(prowJob *prowv1.ProwJob, jr jobRun, logger *logrus.Entry) error {
-	key := ctrlruntimeclient.ObjectKey{Namespace: r.namespace, Name: prowJob.ObjectMeta.Name}
+	key := ctrlruntimeclient.ObjectKey{Namespace: r.namespace, Name: prowJob.Name}
 	created := &prowv1.ProwJob{}
 	if err := wait.PollUntilContextTimeout(context.Background(), time.Second*5, time.Second*60, true, func(ctx context.Context) (bool, error) {
 		if err := r.kubeClient.Get(context.Background(), key, created); err != nil {
@@ -178,12 +178,12 @@ func (r *reporter) sync(logger *logrus.Entry) error {
 			checkRun := github.CheckRun{
 				Conclusion: stateToConclusion[prowJob.Status.State],
 				Output: github.CheckRunOutput{
-					Title:   job.CheckRunDetails.Title,
+					Title:   job.Title,
 					Summary: "Job Finished",
-					Text:    job.CheckRunDetails.Text,
+					Text:    job.Text,
 				},
 			}
-			if err := r.ghc.UpdateCheckRun(job.Org, job.Repo, job.CheckRunDetails.ID, checkRun); err != nil {
+			if err := r.ghc.UpdateCheckRun(job.Org, job.Repo, job.ID, checkRun); err != nil {
 				jobLogger.WithError(err).Error("could not update check run")
 				errs = append(errs, err)
 			}

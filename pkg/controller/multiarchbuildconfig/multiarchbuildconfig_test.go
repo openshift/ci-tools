@@ -18,7 +18,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -296,8 +295,8 @@ func TestReconcile(t *testing.T) {
 			return client.Create(ctx, obj, opts...)
 		}
 	}
-	updateInterceptor := func(failOnMABCUpdate bool) func(ctx context.Context, client client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
-		return func(ctx context.Context, client client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+	updateInterceptor := func(failOnMABCUpdate bool) func(ctx context.Context, client ctrlruntimeclient.WithWatch, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.UpdateOption) error {
+		return func(ctx context.Context, client ctrlruntimeclient.WithWatch, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.UpdateOption) error {
 			if _, ok := obj.(*v1.MultiArchBuildConfig); ok && failOnMABCUpdate {
 				return errors.New("planned failure")
 			}

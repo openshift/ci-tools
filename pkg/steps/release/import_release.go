@@ -12,7 +12,6 @@ import (
 
 	coreapi "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -92,7 +91,7 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 
 	// create the stable image stream with lookup policy so we have a place to put our imported images
 	newIS := &imagev1.ImageStream{
-		ObjectMeta: meta.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Namespace: s.jobSpec.Namespace(),
 			Name:      streamName,
 		},
@@ -379,7 +378,7 @@ func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName 
 			referencePolicy = s.referencePolicy
 		}
 		streamTag := &imagev1.ImageStreamTag{
-			ObjectMeta: meta.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Namespace: s.jobSpec.Namespace(),
 				Name:      overrideCLIStreamName + ":latest",
 			},
@@ -412,7 +411,7 @@ func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName 
 
 	targetCLI := fmt.Sprintf("%s-cli", target)
 	if _, err := steps.RunPod(ctx, s.client, &coreapi.Pod{
-		ObjectMeta: meta.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      targetCLI,
 			Namespace: s.jobSpec.Namespace(),
 			Labels:    map[string]string{Label: s.name},
@@ -450,7 +449,7 @@ func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName 
 		referencePolicy = s.referencePolicy
 	}
 	streamTag := &imagev1.ImageStreamTag{
-		ObjectMeta: meta.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Namespace: s.jobSpec.Namespace(),
 			Name:      fmt.Sprintf("%s:cli", streamName),
 		},

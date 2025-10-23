@@ -141,25 +141,35 @@ var (
 
 	// QuayCombinedMirrorFunc does both quay mirroring and quay-proxy tagging
 	QuayCombinedMirrorFunc = func(source, target string, tag ImageStreamTagReference, time string, mirror map[string]string) {
+		logrus.Debugf("QuayCombinedMirrorFunc called: source=%s, target=%s, tag=%+v, time=%s", source, target, tag, time)
+
 		// quay mirroring
 		if time == "" {
 			logrus.Warn("Found time is empty string and skipped the promotion to quay for this image")
 		} else {
 			t := QuayImage(tag)
 			mirror[t] = source
+			logrus.Debugf("Adding quay mirror: %s -> %s", source, t)
 			mirror[quayImageWithTime(time, tag)] = t
+			logrus.Debugf("Adding quay prune tag: %s -> %s", t, quayImageWithTime(time, tag))
 		}
 
 		// quay-proxy tagging by creating the proxy target
-		// Create proxy target like "registry.ci.openshift.org/ocp/4.12-quay:${component}"
+		// Create proxy target like "registry.ci.openshift.org/ocp/4.12-quay:ovn-kubernetes"
+		// Component replacement already happened in promote.go:187 before calling this mirrorFunc
+		// TODO: This logic will be updated in the future to support tag-based replacement in the promotion step.
+		// We will drop the mirror to registry.ci.openshift.org and replace with tagging from quay-proxy.
 		var proxyTarget string
 		if tag.Name != "" {
-			proxyTarget = fmt.Sprintf("registry.ci.openshift.org/%s/%s-quay:${component}", tag.Namespace, tag.Name)
+			proxyTarget = fmt.Sprintf("registry.ci.openshift.org/%s/%s-quay:%s", tag.Namespace, tag.Name, tag.Tag)
+			logrus.Debugf("Created quay-proxy target (name-based): %s (namespace=%s, name=%s, tag=%s)", proxyTarget, tag.Namespace, tag.Name, tag.Tag)
 		} else {
 			// Handle case where tag.Name is empty (fallback to using component name)
-			proxyTarget = fmt.Sprintf("registry.ci.openshift.org/%s/${component}-quay:%s", tag.Namespace, tag.Tag)
+			proxyTarget = fmt.Sprintf("registry.ci.openshift.org/%s/%s-quay:%s", tag.Namespace, tag.Tag, tag.Tag)
+			logrus.Debugf("Created quay-proxy target (tag-based fallback): %s (namespace=%s, tag=%s)", proxyTarget, tag.Namespace, tag.Tag)
 		}
-		mirror[proxyTarget] = QuayImageReference(tag)
-		logrus.Debugf("Adding quay-proxy tag: %s -> %s", proxyTarget, QuayImageReference(tag))
+		quayProxySource := QuayImageReference(tag)
+		mirror[proxyTarget] = quayProxySource
+		logrus.Debugf("Adding quay-proxy tag: %s -> %s", quayProxySource, proxyTarget)
 	}
 )

@@ -93,7 +93,7 @@ func (s *promotionStep) run(ctx context.Context) error {
 	}
 
 	timeStr := time.Now().Format("20060102150405")
-	imageMirrorTarget, namespaces := getImageMirrorTarget(tags, pipeline, s.registry, timeStr, s.mirrorFunc)
+	imageMirrorTarget, namespaces := getImageMirrorTarget(tags, pipeline, s.registry, timeStr, s.mirrorFunc, s.targetNameFunc)
 	if len(imageMirrorTarget) == 0 {
 		logger.Info("Nothing to promote, skipping...")
 		return nil
@@ -161,7 +161,7 @@ func (s *promotionStep) ensureNamespaces(ctx context.Context, namespaces sets.Se
 	return nil
 }
 
-func getImageMirrorTarget(tags map[string][]api.ImageStreamTagReference, pipeline *imagev1.ImageStream, registry string, time string, mirrorFunc func(source, target string, tag api.ImageStreamTagReference, time string, imageMirror map[string]string)) (map[string]string, sets.Set[string]) {
+func getImageMirrorTarget(tags map[string][]api.ImageStreamTagReference, pipeline *imagev1.ImageStream, registry string, time string, mirrorFunc func(source, target string, tag api.ImageStreamTagReference, time string, imageMirror map[string]string), targetNameFunc func(string, api.PromotionTarget) string) (map[string]string, sets.Set[string]) {
 	if pipeline == nil {
 		return nil, nil
 	}
@@ -175,7 +175,21 @@ func getImageMirrorTarget(tags map[string][]api.ImageStreamTagReference, pipelin
 		}
 		dockerImageReference = getPublicImageReference(dockerImageReference, pipeline.Status.PublicDockerImageRepository)
 		for _, dst := range dsts {
-			mirrorFunc(dockerImageReference, fmt.Sprintf("%s/%s", registry, dst.ISTagName()), dst, time, imageMirror)
+			var target string
+			if targetNameFunc != nil {
+				// Use targetNameFunc to generate template and substitute ${component} with actual component name
+				promotionTarget := api.PromotionTarget{
+					Namespace: dst.Namespace,
+					Name:      dst.Name,
+					Tag:       dst.Tag,
+				}
+				template := targetNameFunc(registry, promotionTarget)
+				target = strings.Replace(template, api.ComponentFormatReplacement, dst.Tag, -1)
+			} else {
+				// Fallback to direct target construction for backwards compatibility
+				target = fmt.Sprintf("%s/%s", registry, dst.ISTagName())
+			}
+			mirrorFunc(dockerImageReference, target, dst, time, imageMirror)
 			namespaces.Insert(dst.Namespace)
 		}
 	}

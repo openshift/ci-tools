@@ -29,6 +29,6 @@ else
   $DOCKER run --rm \
     --volume "${PWD}:/go/src/github.com/openshift/ci-tools:z" \
     --workdir /go/src/github.com/openshift/ci-tools \
-    docker.io/golangci/golangci-lint:v1.63.4 \
+    quay-proxy.ci.openshift.org/openshift/ci-public:ci_golangci-lint_latest \
     golangci-lint run "$GOLANGCI_LINT_ARGS"
 fi

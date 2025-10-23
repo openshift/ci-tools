@@ -43,7 +43,7 @@ const (
 	githubRepo     = "release"
 	githubLogin    = "openshift-bot"
 	matchTitle     = "Automate prow job dispatcher"
-	upstreamBranch = "main"
+	upstreamBranch = "master"
 	listURL        = "https://github.com/openshift/release/pulls?q=is%3Apr+author%3Aopenshift-bot+prow+job+dispatcher+in%3Atitle+is%3Aopen"
 )
 

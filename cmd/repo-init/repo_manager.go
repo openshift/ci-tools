@@ -13,6 +13,7 @@ import (
 	"sigs.k8s.io/prow/cmd/generic-autobumper/bumper"
 	"sigs.k8s.io/prow/pkg/config/secret"
 	"sigs.k8s.io/prow/pkg/flagutil"
+	"sigs.k8s.io/prow/pkg/git/localgit"
 )
 
 type repoManager struct {
@@ -114,10 +115,11 @@ func updateRepo(repo *repo) error {
 	}
 	logrus.Debugf("Pulling latest changes")
 
+	branch := localgit.DefaultBranch(repo.path)
 	if err := bumper.Call(os.Stdout,
 		os.Stderr,
 		"git",
-		[]string{"pull", "origin", "master"}); err != nil {
+		[]string{"pull", "origin", branch}); err != nil {
 		return fmt.Errorf("failed to pull latest changes: %w", err)
 	}
 
@@ -157,6 +159,11 @@ func pushChanges(gitRepo *repo, githubOptions flagutil.GitHubOptions, org, repo,
 			return "", fmt.Errorf("failed to create github client: %w", err)
 		}
 
+		repoData, err := ghClient.GetRepo("openshift", "release")
+		if err != nil {
+			return "", fmt.Errorf("Error retrieving repository data: %w", err)
+		}
+
 		if err := bumper.UpdatePullRequestWithLabels(
 			ghClient,
 			"openshift",
@@ -164,7 +171,7 @@ func pushChanges(gitRepo *repo, githubOptions flagutil.GitHubOptions, org, repo,
 			fmt.Sprintf("New CI Operator config for %s/%s", org, repo),
 			"PR auto-generated via Repo Initializer tool.",
 			githubUsername+":"+targetBranch,
-			"master",
+			repoData.DefaultBranch,
 			targetBranch,
 			true,
 			nil,
@@ -175,11 +182,12 @@ func pushChanges(gitRepo *repo, githubOptions flagutil.GitHubOptions, org, repo,
 
 	}
 
+	branch := localgit.DefaultBranch(gitRepo.path)
 	logrus.Debugf("Resetting local repository.")
 	if err := bumper.Call(os.Stdout,
 		os.Stderr,
 		"git",
-		[]string{"reset", "--hard", "origin/master"}); err != nil {
+		[]string{"reset", "--hard", "origin/" + branch}); err != nil {
 		return "", fmt.Errorf("failed to reset local: %w", err)
 	}
 

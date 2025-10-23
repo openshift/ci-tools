@@ -49,7 +49,7 @@ func hasNoBuilds(c *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo) 
 		return false
 	}
 	// only consider release jobs ATM
-	if info.Org != "openshift" || info.Repo != "release" || info.Branch != "master" {
+	if info.Org != "openshift" || info.Repo != "release" || (info.Branch != "master" && info.Branch != "main") {
 		return false
 	}
 	if len(c.Images) == 0 && c.BuildRootImage == nil && c.RpmBuildCommands == "" && c.TestBinaryBuildCommands == "" && c.BinaryBuildCommands == "" {

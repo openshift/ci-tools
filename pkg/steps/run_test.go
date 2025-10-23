@@ -290,7 +290,7 @@ func TestStepsRun(t *testing.T) {
 			if tc.cancelled {
 				cancel()
 			}
-			suites, _, errs := Run(ctx, api.BuildGraph(steps))
+			suites, _, errs := Run(ctx, api.BuildGraph(steps), nil)
 			if errs == nil && len(tc.errExpected) > 0 {
 				t.Error("got no error but expected one")
 			}

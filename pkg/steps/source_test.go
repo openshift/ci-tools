@@ -873,6 +873,134 @@ func Test_constructMultiArchBuilds(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:              "multi-arch with From field and image sources",
+			stepArchitectures: []string{"amd64", "arm64"},
+			build: buildapi.Build{
+				ObjectMeta: meta.ObjectMeta{Name: "test-build"},
+				Spec: buildapi.BuildSpec{
+					CommonSpec: buildapi.CommonSpec{
+						Strategy: buildapi.BuildStrategy{
+							DockerStrategy: &buildapi.DockerBuildStrategy{
+								From: &coreapi.ObjectReference{
+									Kind: "ImageStreamTag",
+									Name: "pipeline:src",
+								},
+							},
+						},
+						Source: buildapi.BuildSource{
+							Images: []buildapi.ImageSource{
+								{
+									From: coreapi.ObjectReference{
+										Kind: "ImageStreamTag",
+										Name: "pipeline:base",
+									},
+									Paths: []buildapi.ImageSourcePath{{SourcePath: "/src", DestinationDir: "/dst"}},
+								},
+								{
+									From: coreapi.ObjectReference{
+										Kind: "DockerImage",
+										Name: "registry.example.com/image:tag",
+									},
+									Paths: []buildapi.ImageSourcePath{{SourcePath: "/other", DestinationDir: "/other-dst"}},
+								},
+							},
+						},
+						Output: buildapi.BuildOutput{
+							ImageLabels: []buildapi.ImageLabel{
+								{Name: "io.openshift.build.namespace", Value: "namespace"},
+							},
+						},
+					},
+				},
+			},
+			want: []buildapi.Build{
+				{
+					ObjectMeta: meta.ObjectMeta{Name: "test-build-amd64"},
+					Spec: buildapi.BuildSpec{
+						CommonSpec: buildapi.CommonSpec{
+							NodeSelector: map[string]string{
+								"kubernetes.io/arch": "amd64",
+							},
+							Strategy: buildapi.BuildStrategy{
+								DockerStrategy: &buildapi.DockerBuildStrategy{
+									From: &coreapi.ObjectReference{
+										Kind: "ImageStreamTag",
+										Name: "pipeline:src-amd64",
+									},
+								},
+							},
+							Source: buildapi.BuildSource{
+								Images: []buildapi.ImageSource{
+									{
+										From: coreapi.ObjectReference{
+											Kind: "ImageStreamTag",
+											Name: "pipeline:base-amd64",
+										},
+										Paths: []buildapi.ImageSourcePath{{SourcePath: "/src", DestinationDir: "/dst"}},
+									},
+									{
+										From: coreapi.ObjectReference{
+											Kind: "DockerImage",
+											Name: "registry.example.com/image:tag",
+										},
+										Paths: []buildapi.ImageSourcePath{{SourcePath: "/other", DestinationDir: "/other-dst"}},
+									},
+								},
+							},
+							Output: buildapi.BuildOutput{
+								ImageLabels: []buildapi.ImageLabel{
+									{Name: "io.openshift.build.namespace", Value: "namespace"},
+								},
+								To: &coreapi.ObjectReference{Name: "pipeline:test-build-amd64"},
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: meta.ObjectMeta{Name: "test-build-arm64"},
+					Spec: buildapi.BuildSpec{
+						CommonSpec: buildapi.CommonSpec{
+							NodeSelector: map[string]string{
+								"kubernetes.io/arch": "arm64",
+							},
+							Strategy: buildapi.BuildStrategy{
+								DockerStrategy: &buildapi.DockerBuildStrategy{
+									From: &coreapi.ObjectReference{
+										Kind: "ImageStreamTag",
+										Name: "pipeline:src-arm64",
+									},
+								},
+							},
+							Source: buildapi.BuildSource{
+								Images: []buildapi.ImageSource{
+									{
+										From: coreapi.ObjectReference{
+											Kind: "ImageStreamTag",
+											Name: "pipeline:base-arm64",
+										},
+										Paths: []buildapi.ImageSourcePath{{SourcePath: "/src", DestinationDir: "/dst"}},
+									},
+									{
+										From: coreapi.ObjectReference{
+											Kind: "DockerImage",
+											Name: "registry.example.com/image:tag",
+										},
+										Paths: []buildapi.ImageSourcePath{{SourcePath: "/other", DestinationDir: "/other-dst"}},
+									},
+								},
+							},
+							Output: buildapi.BuildOutput{
+								ImageLabels: []buildapi.ImageLabel{
+									{Name: "io.openshift.build.namespace", Value: "namespace"},
+								},
+								To: &coreapi.ObjectReference{Name: "pipeline:test-build-arm64"},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

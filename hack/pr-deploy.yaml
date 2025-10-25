@@ -10,6 +10,9 @@ parameters:
 - description: The branch to deploy from.
   name: BRANCH
   required: true
+- description: The remote branch name
+  name: RELEASE_BRANCH
+  required: true
 objects:
 - apiVersion: v1
   kind: Namespace
@@ -154,7 +157,7 @@ objects:
           - /git-sync
           args:
           - --repo=https://github.com/openshift/release.git
-          - --branch=master
+          - --branch=${RELEASE_BRANCH}
           - --root=/tmp/git-sync
           - --one-time=true
           env:
@@ -170,7 +173,7 @@ objects:
           - /git-sync
           args:
           - --repo=https://github.com/openshift/release.git
-          - --branch=master
+          - --branch=${RELEASE_BRANCH}
           - --wait=30
           - --root=/tmp/git-sync
           env:

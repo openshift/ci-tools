@@ -519,9 +519,40 @@ func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubern
 	return utilerrors.NewAggregate(errs)
 }
 
+// updateImageStreamTagForArch updates an ObjectReference to use an architecture-specific tag
+// if it references the pipeline imagestream. This ensures that multi-arch builds reference
+// the correct architecture-specific image instead of the manifest list.
+func updateImageStreamTagForArch(ref *corev1.ObjectReference, arch string) *corev1.ObjectReference {
+	if ref == nil || ref.Kind != "ImageStreamTag" {
+		return ref
+	}
+
+	// Check if this is a pipeline imagestream reference
+	parts := strings.SplitN(ref.Name, ":", 2)
+	if len(parts) != 2 {
+		return ref
+	}
+
+	imageStreamName, tag := parts[0], parts[1]
+	if imageStreamName != api.PipelineImageStream {
+		return ref
+	}
+
+	// Don't modify tags that already have an architecture suffix
+	if strings.HasSuffix(tag, fmt.Sprintf("-%s", arch)) {
+		return ref
+	}
+
+	// Create a new reference with the architecture suffix
+	updated := ref.DeepCopy()
+	updated.Name = fmt.Sprintf("%s:%s-%s", imageStreamName, tag, arch)
+	return updated
+}
+
 // constructMultiArchBuilds gets a specific build and constructs multiple builds for each architecture.
 // The name and the output image of the build is suffixed with the architecture name and it will include the nodeSelector for the specific architecture.
 // e.x if the build name is "foo" and the architectures are "amd64,arm64", the new builds will be "foo-amd64" and "foo-arm64".
+// All pipeline imagestream references (From and image sources) are updated to use architecture-specific tags.
 func constructMultiArchBuilds(build buildapi.Build, stepArchitectures []string) []buildapi.Build {
 	var ret []buildapi.Build
 
@@ -531,7 +562,7 @@ func constructMultiArchBuilds(build buildapi.Build, stepArchitectures []string) 
 	}
 
 	for _, arch := range archs {
-		b := build
+		b := build.DeepCopy()
 		b.Name = fmt.Sprintf("%s-%s", b.Name, arch)
 		b.Spec.NodeSelector = map[string]string{
 			corev1.LabelArchStable: arch,
@@ -542,7 +573,18 @@ func constructMultiArchBuilds(build buildapi.Build, stepArchitectures []string) 
 			Namespace: b.Namespace,
 			Name:      fmt.Sprintf("%s:%s", api.PipelineImageStream, b.Name),
 		}
-		ret = append(ret, b)
+
+		// Update the From field to use architecture-specific tag if it references the pipeline imagestream
+		if b.Spec.Strategy.DockerStrategy != nil && b.Spec.Strategy.DockerStrategy.From != nil {
+			b.Spec.Strategy.DockerStrategy.From = updateImageStreamTagForArch(b.Spec.Strategy.DockerStrategy.From, arch)
+		}
+
+		// Update any image source inputs to use architecture-specific tags
+		for i := range b.Spec.Source.Images {
+			b.Spec.Source.Images[i].From = *updateImageStreamTagForArch(&b.Spec.Source.Images[i].From, arch)
+		}
+
+		ret = append(ret, *b)
 	}
 
 	return ret

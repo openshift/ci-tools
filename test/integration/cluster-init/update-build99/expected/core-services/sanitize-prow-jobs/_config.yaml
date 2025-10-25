@@ -10,9 +10,9 @@ default: build01
 groups:
   app.ci:
     jobs:
-    - branch-ci-openshift-release-master-build99-apply
-    - periodic-openshift-release-master-build99-apply
-    - pull-ci-openshift-release-master-build99-dry
+    - branch-ci-openshift-release-main-build99-apply
+    - periodic-openshift-release-main-build99-apply
+    - pull-ci-openshift-release-main-build99-dry
     - some-job
   build01:
     jobs:

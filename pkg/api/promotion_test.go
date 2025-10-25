@@ -176,3 +176,88 @@ func TestPromotionTargets(t *testing.T) {
 		}
 	}
 }
+
+func TestQuayCombinedMirrorFunc(t *testing.T) {
+	testCases := []struct {
+		name     string
+		source   string
+		target   string
+		tag      ImageStreamTagReference
+		time     string
+		expected map[string]string
+	}{
+		{
+			name:   "name-based promotion with component",
+			source: "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:abc123",
+			target: "quay.io/openshift/ci:ocp_4.22_ovn-kubernetes",
+			tag: ImageStreamTagReference{
+				Namespace: "ocp",
+				Name:      "4.22",
+				Tag:       "ovn-kubernetes",
+			},
+			time: "20241024102030",
+			expected: map[string]string{
+				"quay.io/openshift/ci:ocp_4.22_ovn-kubernetes":                      "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:abc123",
+				"quay.io/openshift/ci:20241024102030_prune_ocp_4.22_ovn-kubernetes": "quay.io/openshift/ci:ocp_4.22_ovn-kubernetes",
+				"registry.ci.openshift.org/ocp/4.22-quay:ovn-kubernetes":            "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.22_ovn-kubernetes",
+			},
+		},
+		{
+			name:   "tag-based promotion (fallback)",
+			source: "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:def456",
+			target: "quay.io/openshift/ci:ocp_ovn-kubernetes_latest",
+			tag: ImageStreamTagReference{
+				Namespace: "ocp",
+				Name:      "",
+				Tag:       "ovn-kubernetes",
+			},
+			time: "20241024103000",
+			expected: map[string]string{
+				"quay.io/openshift/ci:ocp__ovn-kubernetes":                         "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:def456",
+				"quay.io/openshift/ci:20241024103000_prune_ocp__ovn-kubernetes":    "quay.io/openshift/ci:ocp__ovn-kubernetes",
+				"registry.ci.openshift.org/ocp/ovn-kubernetes-quay:ovn-kubernetes": "quay-proxy.ci.openshift.org/openshift/ci:ocp__ovn-kubernetes",
+			},
+		},
+		{
+			name:   "empty time skips quay mirror",
+			source: "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:xyz789",
+			target: "quay.io/openshift/ci:ocp_4.22_installer",
+			tag: ImageStreamTagReference{
+				Namespace: "ocp",
+				Name:      "4.22",
+				Tag:       "installer",
+			},
+			time: "",
+			expected: map[string]string{
+				"registry.ci.openshift.org/ocp/4.22-quay:installer": "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.22_installer",
+			},
+		},
+		{
+			name:   "multiple components in same version",
+			source: "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:111222",
+			target: "quay.io/openshift/ci:ocp_4.20_cluster-api",
+			tag: ImageStreamTagReference{
+				Namespace: "ocp",
+				Name:      "4.20",
+				Tag:       "cluster-api",
+			},
+			time: "20241024104500",
+			expected: map[string]string{
+				"quay.io/openshift/ci:ocp_4.20_cluster-api":                      "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:111222",
+				"quay.io/openshift/ci:20241024104500_prune_ocp_4.20_cluster-api": "quay.io/openshift/ci:ocp_4.20_cluster-api",
+				"registry.ci.openshift.org/ocp/4.20-quay:cluster-api":            "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.20_cluster-api",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mirror := make(map[string]string)
+			QuayCombinedMirrorFunc(tc.source, tc.target, tc.tag, tc.time, mirror)
+
+			if diff := cmp.Diff(tc.expected, mirror); diff != "" {
+				t.Errorf("QuayCombinedMirrorFunc() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}

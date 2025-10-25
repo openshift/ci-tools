@@ -38,6 +38,7 @@ type MetricsAgent struct {
 	client ctrlruntimeclient.Client
 
 	insightsPlugin *insightsPlugin
+	eventsPlugin   *eventsPlugin
 	buildPlugin    *buildPlugin
 	nodesPlugin    *nodesMetricsPlugin
 	leasePlugin    *leasesPlugin
@@ -68,6 +69,7 @@ func NewMetricsAgent(ctx context.Context, clusterConfig *rest.Config) (*MetricsA
 		logger:         logger,
 		client:         client,
 		insightsPlugin: newInsightsPlugin(logger),
+		eventsPlugin:   newEventsPlugin(logger),
 		buildPlugin:    newBuildPlugin(ctx, logger, client),
 		nodesPlugin:    newNodesMetricsPlugin(ctx, logger, client, metricsClient, nodesCh),
 		leasePlugin:    newLeasesPlugin(logger),
@@ -99,6 +101,7 @@ func (ma *MetricsAgent) Run() {
 			}
 			// Record the event to all plugins
 			ma.insightsPlugin.Record(ev)
+			ma.eventsPlugin.Record(ev)
 			ma.buildPlugin.Record(ev)
 			ma.nodesPlugin.Record(ev)
 			ma.leasePlugin.Record(ev)
@@ -132,13 +135,15 @@ func (ma *MetricsAgent) Stop() {
 
 // flush writes the accumulated events to a JSON file in the artifacts directory.
 func (ma *MetricsAgent) flush() {
-	output := make(map[string]any, 6)
-	output[ma.insightsPlugin.Name()] = ma.insightsPlugin.Events()
-	output[ma.buildPlugin.Name()] = ma.buildPlugin.Events()
-	output[ma.nodesPlugin.Name()] = ma.nodesPlugin.Events()
-	output[ma.leasePlugin.Name()] = ma.leasePlugin.Events()
-	output[ma.imagesPlugin.Name()] = ma.imagesPlugin.Events()
-	output[ma.podPlugin.Name()] = ma.podPlugin.Events()
+	output := map[string]any{
+		ma.insightsPlugin.Name(): ma.insightsPlugin.Events(),
+		ma.eventsPlugin.Name():   ma.eventsPlugin.Events(),
+		ma.buildPlugin.Name():    ma.buildPlugin.Events(),
+		ma.nodesPlugin.Name():    ma.nodesPlugin.Events(),
+		ma.leasePlugin.Name():    ma.leasePlugin.Events(),
+		ma.imagesPlugin.Name():   ma.imagesPlugin.Events(),
+		ma.podPlugin.Name():      ma.podPlugin.Events(),
+	}
 
 	data, err := json.MarshalIndent(output, "", "  ")
 	if err != nil {

@@ -199,8 +199,7 @@ func (config ReleaseBuildConfiguration) IsPipelineImage(name string) bool {
 }
 
 // DeterminePathAlias searches through the CanonicalGoRepositoryList to find the matching alias for the provided org and repo.
-// If not found, it returns the CanonicalGoRepository if one is configured, but only for single-repository scenarios.
-// For multi-repository scenarios (like multi-PR jobs), it returns empty string to let each repo use its default path alias.
+// If not found, it returns the CanonicalGoRepository if one is configured
 func (config ReleaseBuildConfiguration) DeterminePathAlias(org, repo string) string {
 	orgRepo := fmt.Sprintf("%s.%s", org, repo)
 	for _, cgr := range config.CanonicalGoRepositoryList {
@@ -209,13 +208,6 @@ func (config ReleaseBuildConfiguration) DeterminePathAlias(org, repo string) str
 		}
 	}
 
-	// Don't fall back to CanonicalGoRepository if we have entries in CanonicalGoRepositoryList,
-	// as this indicates a multi-repository scenario where each repo should have its own specific alias
-	if len(config.CanonicalGoRepositoryList) > 0 {
-		return ""
-	}
-
-	// Only use the global CanonicalGoRepository for single-repository scenarios
 	if config.CanonicalGoRepository != nil {
 		return *config.CanonicalGoRepository
 	}

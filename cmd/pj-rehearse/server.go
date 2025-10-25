@@ -55,6 +55,7 @@ type server struct {
 	gc  git.ClientFactory
 
 	rehearsalConfig rehearse.RehearsalConfig
+	tagConfig       *rehearse.RehearsalTagConfig
 }
 
 func (s *server) helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, error) {
@@ -68,10 +69,10 @@ func (s *server) helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, e
 		Examples:    []string{rehearseNormal},
 	})
 	pluginHelp.AddCommand(pluginhelp.Command{
-		Usage:       fmt.Sprintf("%s {test-name}", rehearseNormal),
-		Description: "Run one or more specific rehearsals",
+		Usage:       fmt.Sprintf("%s {test-name|tag}", rehearseNormal),
+		Description: "Run one or more specific rehearsals, or all rehearsals matching a tag",
 		WhoCanUse:   "Anyone can use on trusted PRs",
-		Examples:    []string{fmt.Sprintf("%s {some-test} {another-test}", rehearseNormal)},
+		Examples:    []string{fmt.Sprintf("%s {some-test} {another-test}", rehearseNormal), fmt.Sprintf("%s tnf", rehearseNormal)},
 	})
 	pluginHelp.AddCommand(pluginhelp.Command{
 		Usage:       rehearseAck,
@@ -127,6 +128,7 @@ func (s *server) helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, e
 		WhoCanUse:   "Openshift org members that are not the author of the PR",
 		Examples:    []string{rehearseAllowNetworkAccess},
 	})
+
 	return pluginHelp, nil
 }
 
@@ -151,10 +153,20 @@ func serverFromOptions(o options) (*server, error) {
 	rehearsalConfig.ProwjobNamespace = c.ProwJobNamespace
 	rehearsalConfig.PodNamespace = c.PodNamespace
 
+	var tagConfig *rehearse.RehearsalTagConfig
+	if o.rehearsalTagConfigFile != "" {
+		var err error
+		tagConfig, err = rehearse.LoadRehearsalTagConfig(o.rehearsalTagConfigFile)
+		if err != nil {
+			return nil, fmt.Errorf("could not load rehearsal tag config: %w", err)
+		}
+	}
+
 	return &server{
 		ghc:             ghc,
 		gc:              gc,
 		rehearsalConfig: rehearsalConfig,
+		tagConfig:       tagConfig,
 	}, nil
 }
 
@@ -424,6 +436,15 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 				if requestedOnly {
 					rawJobs := strings.TrimPrefix(command, rehearseNormal+" ")
 					requestedJobs := strings.Split(rawJobs, " ")
+
+					// Check if this is a single tag request
+					if len(requestedJobs) == 1 && s.tagConfig != nil && s.tagConfig.HasTag(requestedJobs[0]) {
+						// Handle as tag-based rehearsal
+						s.rehearseJobs(requestedJobs[0], pullRequest, user, logger)
+						continue
+					}
+
+					// Handle as regular job names
 					var unaffected []string
 					presubmits, periodics, unaffected = rehearse.FilterJobsByRequested(requestedJobs, presubmits, periodics, logger)
 					if len(unaffected) > 0 {
@@ -652,6 +673,84 @@ func (s *server) getDisabledRehearsalsLines(disabledDueToNetworkAccessToggle []s
 func (s *server) acknowledgeRehearsals(org, repo string, number int, logger *logrus.Entry) {
 	if err := s.ghc.AddLabel(org, repo, number, rehearse.RehearsalsAckLabel); err != nil {
 		logger.WithError(err).Errorf("failed to add '%s' label", rehearse.RehearsalsAckLabel)
+	}
+}
+
+// rehearseJobs handles tag-based job rehearsals
+func (s *server) rehearseJobs(tag string, pullRequest *github.PullRequest, user string, logger *logrus.Entry) bool {
+	org := pullRequest.Base.Repo.Owner.Login
+	repo := pullRequest.Base.Repo.Name
+	number := pullRequest.Number
+
+	rc := s.rehearsalConfig
+	repoClient, err := s.getRepoClient(org, repo)
+	if err != nil {
+		logger.WithError(err).Error("couldn't create repo client")
+		return false
+	}
+	defer func() {
+		if err := repoClient.Clean(); err != nil {
+			logrus.WithError(err).Error("couldn't clean temporary repo folder")
+		}
+	}()
+
+	candidate, err := s.prepareCandidate(repoClient, pullRequest, logger)
+	if err != nil {
+		s.reportFailure("unable prepare a candidate for rehearsal; rehearsals will not be run. This could be due to a branch that needs to be rebased.", err, org, repo, user, number, false, false, logger)
+		return false
+	}
+
+	allowedLabel := false
+	approved := false
+	for _, label := range pullRequest.Labels {
+		if label.Name == rehearse.NetworkAccessRehearsalsOkLabel {
+			allowedLabel = true
+		} else if label.Name == labels.Approved {
+			approved = true
+		}
+	}
+	networkAccessRehearsalsAllowed := allowedLabel && approved
+
+	candidatePath := repoClient.Directory()
+	presubmits, periodics, _, err := rc.DetermineAffectedJobs(candidate, candidatePath, networkAccessRehearsalsAllowed, logger)
+	if err != nil {
+		logger.WithError(err).Error("couldn't determine affected jobs")
+		s.reportFailure("unable to determine affected jobs", err, org, repo, user, number, true, false, logger)
+		return false
+	}
+
+	var periodicSlice []prowconfig.Periodic
+	for _, p := range periodics {
+		periodicSlice = append(periodicSlice, p)
+	}
+	presubmits = rehearse.FilterPresubmitsByTag(presubmits, periodicSlice, s.tagConfig, tag)
+
+	if len(presubmits) > 0 {
+		prConfig, prRefs, presubmitsToRehearse, err := rc.SetupJobs(candidate, candidatePath, presubmits, nil, math.MaxInt, logger)
+		if err != nil {
+			logger.WithError(err).Error("couldn't set up jobs")
+			s.reportFailure("unable to set up jobs", err, org, repo, user, number, true, false, logger)
+			return false
+		}
+
+		if err := prConfig.Prow.ValidateJobConfig(); err != nil {
+			logger.WithError(err).Error("validation of job config failed")
+			s.reportFailure("config validation failed", err, org, repo, user, number, false, false, logger)
+			return false
+		}
+
+		success, err := rc.RehearseJobs(candidatePath, prRefs, presubmitsToRehearse, prConfig.Prow, false, logger)
+		if err != nil {
+			logger.WithError(err).Error("couldn't rehearse jobs")
+			s.reportFailure("failed to create rehearsal jobs", err, org, repo, user, number, true, false, logger)
+			return false
+		}
+		return success
+	} else {
+		if err := s.ghc.CreateComment(org, repo, number, fmt.Sprintf("@%s: no jobs found matching tag '%s'", user, tag)); err != nil {
+			logger.WithError(err).Error("failed to create comment")
+		}
+		return false
 	}
 }
 

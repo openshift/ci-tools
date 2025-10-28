@@ -64,7 +64,7 @@ func (s *prowJobStep) generatePeriodic(clusterName string, osd bool, unmanaged b
 			Spec: &v1.PodSpec{
 				Volumes: []v1.Volume{s.generateSecretVolume(clusterName)},
 				Containers: []v1.Container{
-					s.generateContainer("applyconfig:latest",
+					s.generateContainer(latestImage,
 						clusterName,
 						osd, unmanaged,
 						[]string{"--confirm=true"},

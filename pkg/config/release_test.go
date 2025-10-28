@@ -46,7 +46,6 @@ git init --quiet .
 git config user.name test
 git config user.email test
 git config commit.gpgsign false
-git config core.hooksPath /dev/null
 git add .
 git commit --quiet -m initial
 cd %s

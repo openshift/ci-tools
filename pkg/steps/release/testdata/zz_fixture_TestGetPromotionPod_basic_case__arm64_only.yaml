@@ -15,18 +15,12 @@ spec:
     command:
     - /bin/sh
     - -c
-    env:
-    - name: KUBECONFIG
-      value: /etc/app-ci-kubeconfig/kubeconfig
     image: registry.ci.openshift.org/ocp-arm64/4.14:cli
     name: promotion
     resources: {}
     volumeMounts:
     - mountPath: /etc/push-secret
       name: push-secret
-      readOnly: true
-    - mountPath: /etc/app-ci-kubeconfig
-      name: app-ci-kubeconfig
       readOnly: true
   nodeSelector:
     kubernetes.io/arch: arm64
@@ -35,7 +29,4 @@ spec:
   - name: push-secret
     secret:
       secretName: registry-push-credentials-ci-central
-  - name: app-ci-kubeconfig
-    secret:
-      secretName: promotion-quay-tagger-kubeconfig
 status: {}

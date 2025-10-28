@@ -228,7 +228,7 @@ func getMirrorCommand(registryConfig string, images []string, loglevel int) stri
 }
 
 func getTagCommand(tagSpecs []string, loglevel int) string {
-	return fmt.Sprintf("oc tag --loglevel=%d --reference-policy='source' --import-mode='PreserveOriginal' %s",
+	return fmt.Sprintf("oc tag --source=docker --loglevel=%d --reference-policy='source' --import-mode='PreserveOriginal' %s",
 		loglevel, strings.Join(tagSpecs, " "))
 }
 
@@ -246,14 +246,13 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 	for _, k := range keys {
 		if strings.Contains(k, fmt.Sprintf("%s_prune_", timeStr)) {
 			pruneImages = append(pruneImages, fmt.Sprintf("%s=%s", imageMirrorTarget[k], k))
+		} else if strings.HasPrefix(k, "registry.ci.openshift.org/") && strings.Contains(k, "-quay:") {
+			// For quay-proxy targets, use oc tag --source=docker to create lightweight references
+			// This leverages referencePolicy: Source to pull directly from quay-proxy
+			tags = append(tags, fmt.Sprintf("%s %s", imageMirrorTarget[k], k))
 		} else {
-			// Detect based on target format: quay-proxy targets should be tagged, others mirrored
-			if strings.HasPrefix(k, "registry.ci.openshift.org/") && (strings.Contains(k, "-quay:") || strings.Contains(k, "${component}")) {
-				tags = append(tags, fmt.Sprintf("%s %s", imageMirrorTarget[k], k))
-			} else {
-				// Default to mirroring for quay.io targets and other registries
-				images = append(images, fmt.Sprintf("%s=%s", imageMirrorTarget[k], k))
-			}
+			// For quay.io and other targets, use oc image mirror
+			images = append(images, fmt.Sprintf("%s=%s", imageMirrorTarget[k], k))
 		}
 	}
 
@@ -268,7 +267,7 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 		commands = append(commands, mirrorCommand)
 	}
 
-	// Generate tag commands if there are tags to create
+	// Generate tag commands for quay-proxy targets
 	if len(tags) > 0 {
 		tagCommand := fmt.Sprintf("for r in {1..5}; do echo Tag attempt $r; %s && break; backoff=$(($RANDOM %% 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff; done", getTagCommand(tags, 10))
 		commands = append(commands, tagCommand)
@@ -316,6 +315,17 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 							MountPath: "/etc/push-secret",
 							ReadOnly:  true,
 						},
+						{
+							Name:      "app-ci-kubeconfig",
+							MountPath: "/etc/app-ci-kubeconfig",
+							ReadOnly:  true,
+						},
+					},
+					Env: []coreapi.EnvVar{
+						{
+							Name:  "KUBECONFIG",
+							Value: "/etc/app-ci-kubeconfig/kubeconfig",
+						},
 					},
 				},
 			},
@@ -324,6 +334,12 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 					Name: "push-secret",
 					VolumeSource: coreapi.VolumeSource{
 						Secret: &coreapi.SecretVolumeSource{SecretName: api.RegistryPushCredentialsCICentralSecret},
+					},
+				},
+				{
+					Name: "app-ci-kubeconfig",
+					VolumeSource: coreapi.VolumeSource{
+						Secret: &coreapi.SecretVolumeSource{SecretName: "promotion-quay-tagger-kubeconfig"},
 					},
 				},
 			},

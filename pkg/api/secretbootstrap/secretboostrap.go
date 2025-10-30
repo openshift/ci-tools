@@ -47,7 +47,7 @@ type SecretContext struct {
 	Cluster string `json:"cluster,omitempty"`
 	// A list of clusterGroups to target. Mutually exclusive with 'cluster'
 	ClusterGroups []string          `json:"cluster_groups,omitempty"`
-	Namespace     string            `json:"namespace"`
+	Namespace     string            `json:"namespace,omitempty"`
 	Name          string            `json:"name"`
 	Type          corev1.SecretType `json:"type,omitempty"`
 }

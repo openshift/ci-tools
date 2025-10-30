@@ -514,6 +514,11 @@ func (s *ciSecretBootstrapStep) generateMultiarchBuilderControllerSecret() *secr
 						Item:        BuildUFarm,
 						RegistryURL: api.ServiceDomainAPPCIRegistry,
 					},
+				{
+					AuthField:   "token_image-pusher_quay.io_reg_auth_value.txt",
+					Item:        BuildUFarm,
+					RegistryURL: "quay.io",
+				},
 				},
 			},
 		},

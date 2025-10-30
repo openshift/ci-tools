@@ -31,6 +31,37 @@ func (f *fakeGhClientWithChanges) CreateStatus(org, repo, ref string, s github.S
 	return nil
 }
 
+func (f *fakeGhClientWithChanges) ListStatuses(org, repo, ref string) ([]github.Status, error) {
+	return []github.Status{}, nil
+}
+
+type fakeGhClientWithStatuses struct {
+	changes  []github.PullRequestChange
+	comment  string
+	statuses []github.Status
+}
+
+func (f *fakeGhClientWithStatuses) GetPullRequest(org, repo string, number int) (*github.PullRequest, error) {
+	return &github.PullRequest{State: github.PullRequestStateOpen}, nil
+}
+
+func (f *fakeGhClientWithStatuses) CreateComment(owner, repo string, number int, comment string) error {
+	f.comment = comment
+	return nil
+}
+
+func (f *fakeGhClientWithStatuses) GetPullRequestChanges(org, repo string, number int) ([]github.PullRequestChange, error) {
+	return f.changes, nil
+}
+
+func (f *fakeGhClientWithStatuses) CreateStatus(org, repo, ref string, s github.Status) error {
+	return nil
+}
+
+func (f *fakeGhClientWithStatuses) ListStatuses(org, repo, ref string) ([]github.Status, error) {
+	return f.statuses, nil
+}
+
 func TestAcquireConditionalContexts(t *testing.T) {
 	basePJ := &v1.ProwJob{
 		Spec: v1.ProwJobSpec{
@@ -49,7 +80,9 @@ func TestAcquireConditionalContexts(t *testing.T) {
 		name                          string
 		pipelineConditionallyRequired []config.Presubmit
 		changes                       []github.PullRequestChange
+		statuses                      []github.Status
 		expectedTestCommands          []string
+		expectedError                 string
 	}{
 		{
 			name: "pipeline_run_if_changed matches files",
@@ -71,7 +104,9 @@ func TestAcquireConditionalContexts(t *testing.T) {
 				{Filename: "main.go"},
 				{Filename: "README.md"},
 			},
+			statuses:             []github.Status{},
 			expectedTestCommands: []string{"/test test"},
+			expectedError:        "",
 		},
 		{
 			name: "pipeline_run_if_changed does not match files",
@@ -94,7 +129,9 @@ func TestAcquireConditionalContexts(t *testing.T) {
 				{Filename: "README.md"},
 				{Filename: "docs/guide.md"},
 			},
+			statuses:             []github.Status{},
 			expectedTestCommands: []string{},
+			expectedError:        "",
 		},
 		{
 			name: "pipeline_skip_if_only_changed skips when only matching files changed",
@@ -117,7 +154,9 @@ func TestAcquireConditionalContexts(t *testing.T) {
 				{Filename: "docs/guide.md"},
 				{Filename: "README.md"},
 			},
+			statuses:             []github.Status{},
 			expectedTestCommands: []string{},
+			expectedError:        "",
 		},
 		{
 			name: "pipeline_skip_if_only_changed runs when other files are changed",
@@ -139,7 +178,9 @@ func TestAcquireConditionalContexts(t *testing.T) {
 				{Filename: "docs/guide.md"},
 				{Filename: "main.go"},
 			},
+			statuses:             []github.Status{},
 			expectedTestCommands: []string{"/test test"},
+			expectedError:        "",
 		},
 		{
 			name: "pipeline_run_if_changed takes precedence over pipeline_skip_if_only_changed",
@@ -161,7 +202,9 @@ func TestAcquireConditionalContexts(t *testing.T) {
 			changes: []github.PullRequestChange{
 				{Filename: "test/test.go"},
 			},
+			statuses:             []github.Status{},
 			expectedTestCommands: []string{"/test test"},
+			expectedError:        "",
 		},
 		{
 			name: "multiple jobs with different annotations",
@@ -195,7 +238,9 @@ func TestAcquireConditionalContexts(t *testing.T) {
 				{Filename: "main.go"},
 				{Filename: "docs/guide.md"},
 			},
+			statuses:             []github.Status{},
 			expectedTestCommands: []string{"/test test1", "/test test2"},
+			expectedError:        "",
 		},
 		{
 			name: "job name does not contain repo-baseRef",
@@ -216,14 +261,54 @@ func TestAcquireConditionalContexts(t *testing.T) {
 			changes: []github.PullRequestChange{
 				{Filename: "main.go"},
 			},
+			statuses:             []github.Status{},
 			expectedTestCommands: []string{},
+			expectedError:        "",
+		},
+		{
+			name: "test already running - should return manual control message",
+			pipelineConditionallyRequired: []config.Presubmit{
+				{
+					JobBase: config.JobBase{
+						Name: "org-repo-master-test",
+						Annotations: map[string]string{
+							"pipeline_run_if_changed": ".*\\.go",
+						},
+					},
+					Reporter: config.Reporter{
+						Context: "test",
+					},
+					RerunCommand: "/test test",
+				},
+			},
+			changes: []github.PullRequestChange{
+				{Filename: "main.go"},
+			},
+			statuses: []github.Status{
+				{
+					Context: "org-repo-master-test",
+					State:   "pending",
+				},
+			},
+			expectedTestCommands: []string{"Pipeline can be controlled only manually, until HEAD changes."},
+			expectedError:        "",
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			ghc := &fakeGhClientWithChanges{changes: tc.changes}
+			ghc := &fakeGhClientWithStatuses{changes: tc.changes, statuses: tc.statuses}
 			testCmds, err := acquireConditionalContexts(basePJ, tc.pipelineConditionallyRequired, ghc, func() {})
+
+			// Check expected error
+			if tc.expectedError != "" {
+				if err == nil {
+					t.Errorf("expected error %q, got nil", tc.expectedError)
+				} else if err.Error() != tc.expectedError {
+					t.Errorf("expected error %q, got %q", tc.expectedError, err.Error())
+				}
+				return
+			}
 
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)

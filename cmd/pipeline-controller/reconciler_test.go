@@ -53,6 +53,10 @@ func (c fakeGhClient) CreateStatus(org, repo, ref string, s github.Status) error
 	return nil
 }
 
+func (c fakeGhClient) ListStatuses(org, repo, ref string) ([]github.Status, error) {
+	return []github.Status{}, nil
+}
+
 type FakeReader struct {
 	pjs v1.ProwJobList
 }
@@ -93,6 +97,10 @@ func (c *fakeGhClientWithTracking) GetPullRequestChanges(org string, repo string
 
 func (c *fakeGhClientWithTracking) CreateStatus(org, repo, ref string, s github.Status) error {
 	return nil
+}
+
+func (c *fakeGhClientWithTracking) ListStatuses(org, repo, ref string) ([]github.Status, error) {
+	return []github.Status{}, nil
 }
 
 func composePresubmit(name string, state v1.ProwJobState, sha string) v1.ProwJob {

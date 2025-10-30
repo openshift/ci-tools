@@ -53,6 +53,10 @@ func (f *fakeGhClientWithComment) CreateStatus(org, repo, ref string, s github.S
 	return nil
 }
 
+func (f *fakeGhClientWithComment) ListStatuses(org, repo, ref string) ([]github.Status, error) {
+	return []github.Status{}, nil
+}
+
 // Helper function to create repo config for tests
 func createRepoConfig(name string, trigger string) RepoItem {
 	item := RepoItem{

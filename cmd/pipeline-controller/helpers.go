@@ -21,7 +21,7 @@ func sendComment(presubmits presubmitTests, pj *v1.ProwJob, ghc minimalGhClient,
 }
 
 func sendCommentWithMode(presubmits presubmitTests, pj *v1.ProwJob, ghc minimalGhClient, deleteIds func()) error {
-	testContexts, err := acquireConditionalContexts(pj, presubmits.pipelineConditionallyRequired, ghc, deleteIds)
+	testContexts, manualControlMessage, err := acquireConditionalContexts(pj, presubmits.pipelineConditionallyRequired, ghc, deleteIds)
 	if err != nil {
 		deleteIds()
 		return err
@@ -29,9 +29,8 @@ func sendCommentWithMode(presubmits presubmitTests, pj *v1.ProwJob, ghc minimalG
 
 	var comment string
 
-	// Check if testContexts contains a manual control message (starts with "Pipeline can be controlled")
-	if strings.HasPrefix(testContexts, "Pipeline can be controlled") {
-		comment = testContexts
+	if manualControlMessage != "" {
+		comment = manualControlMessage
 	} else {
 		var protectedCommands string
 		for _, presubmit := range presubmits.protected {
@@ -56,7 +55,7 @@ func sendCommentWithMode(presubmits presubmitTests, pj *v1.ProwJob, ghc minimalG
 	return nil
 }
 
-func acquireConditionalContexts(pj *v1.ProwJob, pipelineConditionallyRequired []config.Presubmit, ghc minimalGhClient, deleteIds func()) (string, error) {
+func acquireConditionalContexts(pj *v1.ProwJob, pipelineConditionallyRequired []config.Presubmit, ghc minimalGhClient, deleteIds func()) (string, string, error) {
 	repoBaseRef := pj.Spec.Refs.Repo + "-" + pj.Spec.Refs.BaseRef
 	var testCommands string
 	if len(pipelineConditionallyRequired) != 0 {
@@ -76,12 +75,12 @@ func acquireConditionalContexts(pj *v1.ProwJob, pipelineConditionallyRequired []
 				psList[0].RegexpChangeMatcher = config.RegexpChangeMatcher{RunIfChanged: run}
 				if err := config.SetPresubmitRegexes(psList); err != nil {
 					deleteIds()
-					return "", err
+					return "", "", err
 				}
 				_, shouldRunResult, err := psList[0].RegexpChangeMatcher.ShouldRun(cfp)
 				if err != nil {
 					deleteIds()
-					return "", err
+					return "", "", err
 				}
 				shouldRun = shouldRunResult
 			} else if skip, ok := presubmit.Annotations["pipeline_skip_if_only_changed"]; ok && skip != "" {
@@ -90,12 +89,12 @@ func acquireConditionalContexts(pj *v1.ProwJob, pipelineConditionallyRequired []
 				psList[0].RegexpChangeMatcher = config.RegexpChangeMatcher{SkipIfOnlyChanged: skip}
 				if err := config.SetPresubmitRegexes(psList); err != nil {
 					deleteIds()
-					return "", err
+					return "", "", err
 				}
 				_, shouldRunResult, err := psList[0].RegexpChangeMatcher.ShouldRun(cfp)
 				if err != nil {
 					deleteIds()
-					return "", err
+					return "", "", err
 				}
 				shouldRun = shouldRunResult
 			} else {
@@ -112,7 +111,7 @@ func acquireConditionalContexts(pj *v1.ProwJob, pipelineConditionallyRequired []
 			statuses, err := ghc.ListStatuses(pj.Spec.Refs.Org, pj.Spec.Refs.Repo, pj.Spec.Refs.Pulls[0].SHA)
 			if err != nil {
 				deleteIds()
-				return "", err
+				return "", "", err
 			}
 
 			// Check if any of the tests we want to run have already been triggered manually
@@ -123,7 +122,7 @@ func acquireConditionalContexts(pj *v1.ProwJob, pipelineConditionallyRequired []
 				for _, status := range statuses {
 					if strings.Contains(status.Context, testName) {
 						deleteIds()
-						return "Tests from second stage were triggered manually. Pipeline can be controlled only manually, until HEAD changes. Use `/pipeline required` to trigger second stage.", nil
+						return "", "Tests from second stage were triggered manually. Pipeline can be controlled only manually, until HEAD changes. Use `/pipeline required` to trigger second stage.", nil
 					}
 				}
 			}
@@ -133,5 +132,5 @@ func acquireConditionalContexts(pj *v1.ProwJob, pipelineConditionallyRequired []
 			testCommands += "\n" + presubmit.RerunCommand
 		}
 	}
-	return testCommands, nil
+	return testCommands, "", nil
 }

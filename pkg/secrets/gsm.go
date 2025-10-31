@@ -14,10 +14,11 @@ import (
 
 type gsmSyncDecorator struct {
 	Client
-	gsmClient *secretmanager.Client
-	config    gsm.Config
-	ctx       context.Context
-	pattern   *regexp.Regexp
+	gsmClient           *secretmanager.Client
+	config              gsm.Config
+	ctx                 context.Context
+	pattern             *regexp.Regexp
+	secretsInCollection map[string]bool // individual secrets in the cluster-init collection
 }
 
 func NewGSMSyncDecorator(wrappedVaultClient Client, gcpProjectConfig gsm.Config, credentialsFile string) (Client, error) {
@@ -37,11 +38,12 @@ func NewGSMSyncDecorator(wrappedVaultClient Client, gcpProjectConfig gsm.Config,
 	pattern := regexp.MustCompile(`^sa\.cluster-init\..*`)
 
 	return &gsmSyncDecorator{
-		Client:    wrappedVaultClient,
-		gsmClient: gsmClient,
-		config:    gcpProjectConfig,
-		pattern:   pattern,
-		ctx:       ctx,
+		Client:              wrappedVaultClient,
+		gsmClient:           gsmClient,
+		config:              gcpProjectConfig,
+		pattern:             pattern,
+		ctx:                 ctx,
+		secretsInCollection: make(map[string]bool),
 	}, nil
 }
 
@@ -72,7 +74,30 @@ func (g *gsmSyncDecorator) SetFieldOnItem(itemName, fieldName string, fieldValue
 		// Don't fail the Vault write
 	} else {
 		logrus.Debugf("Successfully synced cluster-init secret to GSM: %s", secretName)
+		g.secretsInCollection[fieldNameNormalized] = true
 	}
 
+	return nil
+}
+
+func (g *gsmSyncDecorator) UpdateIndexSecret() error {
+	indexSecretName := gsm.GetIndexSecretName("cluster-init")
+
+	var payload []byte
+	for secretName := range g.secretsInCollection {
+		payload = fmt.Appendf(payload, "- %s\n", secretName)
+	}
+
+	labels := make(map[string]string)
+	labels["jira-project"] = "dptp"
+
+	annotations := make(map[string]string)
+	annotations["request-information"] = "Created by periodic-ci-secret-generator."
+
+	if err := gsm.CreateOrUpdateSecret(g.ctx, g.gsmClient, g.config.ProjectIdNumber, indexSecretName, payload, labels, annotations); err != nil {
+		return fmt.Errorf("failed to update index secret %s: %w", indexSecretName, err)
+	}
+
+	logrus.Infof("Successfully updated index secret: %s with %d entries", indexSecretName, len(g.secretsInCollection))
 	return nil
 }

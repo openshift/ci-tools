@@ -82,6 +82,7 @@ func TestAcquireConditionalContexts(t *testing.T) {
 		changes                       []github.PullRequestChange
 		statuses                      []github.Status
 		expectedTestCommands          []string
+		expectedManualControlMessage  string
 		expectedError                 string
 	}{
 		{
@@ -104,9 +105,10 @@ func TestAcquireConditionalContexts(t *testing.T) {
 				{Filename: "main.go"},
 				{Filename: "README.md"},
 			},
-			statuses:             []github.Status{},
-			expectedTestCommands: []string{"/test test"},
-			expectedError:        "",
+			statuses:                     []github.Status{},
+			expectedTestCommands:         []string{"/test test"},
+			expectedManualControlMessage: "",
+			expectedError:                "",
 		},
 		{
 			name: "pipeline_run_if_changed does not match files",
@@ -129,9 +131,10 @@ func TestAcquireConditionalContexts(t *testing.T) {
 				{Filename: "README.md"},
 				{Filename: "docs/guide.md"},
 			},
-			statuses:             []github.Status{},
-			expectedTestCommands: []string{},
-			expectedError:        "",
+			statuses:                     []github.Status{},
+			expectedTestCommands:         []string{},
+			expectedManualControlMessage: "",
+			expectedError:                "",
 		},
 		{
 			name: "pipeline_skip_if_only_changed skips when only matching files changed",
@@ -154,9 +157,10 @@ func TestAcquireConditionalContexts(t *testing.T) {
 				{Filename: "docs/guide.md"},
 				{Filename: "README.md"},
 			},
-			statuses:             []github.Status{},
-			expectedTestCommands: []string{},
-			expectedError:        "",
+			statuses:                     []github.Status{},
+			expectedTestCommands:         []string{},
+			expectedManualControlMessage: "",
+			expectedError:                "",
 		},
 		{
 			name: "pipeline_skip_if_only_changed runs when other files are changed",
@@ -178,9 +182,10 @@ func TestAcquireConditionalContexts(t *testing.T) {
 				{Filename: "docs/guide.md"},
 				{Filename: "main.go"},
 			},
-			statuses:             []github.Status{},
-			expectedTestCommands: []string{"/test test"},
-			expectedError:        "",
+			statuses:                     []github.Status{},
+			expectedTestCommands:         []string{"/test test"},
+			expectedManualControlMessage: "",
+			expectedError:                "",
 		},
 		{
 			name: "pipeline_run_if_changed takes precedence over pipeline_skip_if_only_changed",
@@ -202,9 +207,10 @@ func TestAcquireConditionalContexts(t *testing.T) {
 			changes: []github.PullRequestChange{
 				{Filename: "test/test.go"},
 			},
-			statuses:             []github.Status{},
-			expectedTestCommands: []string{"/test test"},
-			expectedError:        "",
+			statuses:                     []github.Status{},
+			expectedTestCommands:         []string{"/test test"},
+			expectedManualControlMessage: "",
+			expectedError:                "",
 		},
 		{
 			name: "multiple jobs with different annotations",
@@ -238,9 +244,10 @@ func TestAcquireConditionalContexts(t *testing.T) {
 				{Filename: "main.go"},
 				{Filename: "docs/guide.md"},
 			},
-			statuses:             []github.Status{},
-			expectedTestCommands: []string{"/test test1", "/test test2"},
-			expectedError:        "",
+			statuses:                     []github.Status{},
+			expectedTestCommands:         []string{"/test test1", "/test test2"},
+			expectedManualControlMessage: "",
+			expectedError:                "",
 		},
 		{
 			name: "job name does not contain repo-baseRef",
@@ -261,9 +268,10 @@ func TestAcquireConditionalContexts(t *testing.T) {
 			changes: []github.PullRequestChange{
 				{Filename: "main.go"},
 			},
-			statuses:             []github.Status{},
-			expectedTestCommands: []string{},
-			expectedError:        "",
+			statuses:                     []github.Status{},
+			expectedTestCommands:         []string{},
+			expectedManualControlMessage: "",
+			expectedError:                "",
 		},
 		{
 			name: "test already running - should return manual control message",
@@ -290,15 +298,16 @@ func TestAcquireConditionalContexts(t *testing.T) {
 					State:   "pending",
 				},
 			},
-			expectedTestCommands: []string{"Pipeline can be controlled only manually, until HEAD changes."},
-			expectedError:        "",
+			expectedTestCommands:         []string{},
+			expectedManualControlMessage: "Tests from second stage were triggered manually. Pipeline can be controlled only manually, until HEAD changes. Use `/pipeline required` to trigger second stage.",
+			expectedError:                "",
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ghc := &fakeGhClientWithStatuses{changes: tc.changes, statuses: tc.statuses}
-			testCmds, err := acquireConditionalContexts(basePJ, tc.pipelineConditionallyRequired, ghc, func() {})
+			testCmds, manualControlMessage, err := acquireConditionalContexts(basePJ, tc.pipelineConditionallyRequired, ghc, func() {})
 
 			// Check expected error
 			if tc.expectedError != "" {
@@ -312,6 +321,14 @@ func TestAcquireConditionalContexts(t *testing.T) {
 
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
+			}
+
+			// Check manual control message
+			if tc.expectedManualControlMessage != "" {
+				if manualControlMessage != tc.expectedManualControlMessage {
+					t.Errorf("expected manual control message %q, got %q", tc.expectedManualControlMessage, manualControlMessage)
+				}
+				return
 			}
 
 			// Check test commands

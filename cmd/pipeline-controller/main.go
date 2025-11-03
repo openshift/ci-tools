@@ -411,11 +411,18 @@ func (cw *clientWrapper) handlePipelineContextCreation(l *logrus.Entry, event gi
 		return
 	}
 
+	// Check if repo is in configuration (either manual/auto mode or LGTM mode)
 	currentCfg := cw.watcher.getConfig()
 	repos, orgExists := currentCfg[org]
 	_, repoExists := repos[repo]
 
-	if !orgExists || !repoExists {
+	lgtmCfg := cw.lgtmWatcher.getConfig()
+	lgtmRepos, lgtmOrgExists := lgtmCfg[org]
+	_, lgtmRepoExists := lgtmRepos[repo]
+
+	isInConfig := (orgExists && repoExists) || (lgtmOrgExists && lgtmRepoExists)
+
+	if !isInConfig {
 		return
 	}
 

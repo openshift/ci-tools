@@ -944,7 +944,7 @@ func main() {
 	}
 	disabledClusters := sets.New[string](prowDisabledClusters...)
 	if err := o.completeOptions(&censor, kubeconfigs, disabledClusters); err != nil {
-		logrus.WithError(err).Error("Failed to complete options.")
+		logrus.WithError(err).Fatal("Failed to complete options.")
 	}
 	client, err := o.secrets.NewReadOnlyClient(&censor)
 	if err != nil {

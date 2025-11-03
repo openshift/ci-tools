@@ -555,7 +555,8 @@ func TestHandlePullRequestCreation(t *testing.T) {
 			}
 
 			cw := &clientWrapper{
-				watcher: &watcher{config: tc.watcherConfig},
+				watcher:     &watcher{config: tc.watcherConfig},
+				lgtmWatcher: &watcher{config: enabledConfig{}},
 				configDataProvider: &ConfigDataProvider{
 					updatedPresubmits: tc.configData,
 					configGetter:      configGetter,

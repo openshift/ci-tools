@@ -125,24 +125,40 @@ func (cw *clientWrapper) handlePullRequestCreation(l *logrus.Entry, event github
 
 		logger.Info("Processing PR opened event")
 
+		// Check if repo is in configuration (either manual/auto mode or LGTM mode)
 		currentCfg := cw.watcher.getConfig()
 		repos, orgExists := currentCfg[org]
 		repoConfig, repoExists := repos[repo]
-		isInConfig := orgExists && repoExists
+
+		lgtmCfg := cw.lgtmWatcher.getConfig()
+		lgtmRepos, lgtmOrgExists := lgtmCfg[org]
+		_, lgtmRepoExists := lgtmRepos[repo]
+
+		isInConfig := (orgExists && repoExists) || (lgtmOrgExists && lgtmRepoExists)
 
 		logger.WithFields(logrus.Fields{
-			"org_exists":   orgExists,
-			"repo_exists":  repoExists,
-			"is_in_config": isInConfig,
+			"org_exists":       orgExists,
+			"repo_exists":      repoExists,
+			"lgtm_org_exists":  lgtmOrgExists,
+			"lgtm_repo_exists": lgtmRepoExists,
+			"is_in_config":     isInConfig,
 		}).Debug("Configuration check results")
 
 		if !isInConfig {
-			logger.Debug("Repository not in configuration, skipping")
+			logger.Debug("Repository not in configuration (neither regular nor LGTM), skipping")
 			return
 		}
 
-		isAutomaticPipeline := repoConfig.Trigger == "auto"
-		logger.WithField("trigger_mode", repoConfig.Trigger).Debug("Repository trigger mode")
+		// Only check trigger mode if repo is in regular config (LGTM config doesn't have trigger mode)
+		var isAutomaticPipeline bool
+		if orgExists && repoExists {
+			isAutomaticPipeline = repoConfig.Trigger == "auto"
+			logger.WithField("trigger_mode", repoConfig.Trigger).Debug("Repository trigger mode")
+		} else {
+			// Repo is only in LGTM config, skip automatic pipeline logic
+			logger.Debug("Repository is in LGTM config only, skipping automatic pipeline logic")
+			return
+		}
 
 		logger.Debug("Getting presubmits from config data provider")
 		presubmits := cw.configDataProvider.GetPresubmits(org + "/" + repo)

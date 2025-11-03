@@ -17,10 +17,8 @@ func IsSpecialInformingJobOnTestGrid(jobName string) bool {
 		"periodic-ci-shiftstack-ci-release-",
 		"promote-release-openshift-",
 		"release-openshift-",
-		"periodic-ci-openshift-operator-framework-operator-controller-",
 		"periodic-ci-stolostron-policy-collection-",
 		"periodic-ci-openshift-eng-ocp-qe-perfscale-",
-		"periodic-ci-openshift-operator-framework-olm-release-",
 	}
 	for _, prefix := range testGridInformingPrefixes {
 		if strings.HasPrefix(jobName, prefix) {

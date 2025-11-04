@@ -18,6 +18,8 @@ const (
 	ManifestToolLocalPusherSecret          = "manifest-tool-local-pusher"
 	ManifestToolLocalPusherSecretMountPath = "/secrets/manifest-tool"
 
+	PromotionQuayTaggerKubeconfigSecret = "promotion-quay-tagger-kubeconfig"
+
 	ReleaseAnnotationSoftDelete = "release.openshift.io/soft-delete"
 
 	// DPTPRequesterLabel is the label on a Kubernates CR whose value indicates the automated tool that requests the CR

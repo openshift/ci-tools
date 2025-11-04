@@ -35,15 +35,14 @@ const (
 )
 
 var (
-	tlsCertFile     string
-	tlsKeyFile      string
-	port            int
-	impersonateUser string
-	codecs          = serializer.NewCodecFactory(runtime.NewScheme())
-	logger          = log.New(os.Stdout, "http: ", log.LstdFlags)
+	tlsCertFile        string
+	tlsKeyFile         string
+	port               int
+	impersonateUser    string
+	minBuildMillicores int64
+	codecs             = serializer.NewCodecFactory(runtime.NewScheme())
+	logger             = log.New(os.Stdout, "http: ", log.LstdFlags)
 
-	shrinkTestCPU  float32
-	shrinkBuildCPU float32
 	prioritization Prioritization
 )
 
@@ -184,9 +183,7 @@ func init() {
 	rootCmd.Flags().StringVar(&tlsKeyFile, "tls-key", "", "Private key file for TLS")
 	rootCmd.Flags().IntVar(&port, "port", 443, "Port to listen on for HTTPS traffic")
 	rootCmd.Flags().StringVar(&impersonateUser, "as", "", "Impersonate a user, like system:admin")
-
-	rootCmd.Flags().Float32Var(&shrinkTestCPU, "shrink-cpu-requests-tests", 1.0, "Multiply test workload CPU requests by this factor")
-	rootCmd.Flags().Float32Var(&shrinkBuildCPU, "shrink-cpu-requests-builds", 1.0, "Multiply build workload CPU requests by this factor")
+	rootCmd.Flags().Int64Var(&minBuildMillicores, "min-build-millicores", 4000, "Minimum CPU millicores to enforce for docker-build containers")
 }
 
 func runWebhookServer(cert *tls.Certificate) {

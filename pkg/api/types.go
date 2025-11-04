@@ -1425,6 +1425,7 @@ const (
 	ClusterProfileLibvirtS390x2           ClusterProfile = "libvirt-s390x-2"
 	ClusterProfileLibvirtS390xAmd64       ClusterProfile = "libvirt-s390x-amd64"
 	ClusterProfileLibvirtS390xVPN         ClusterProfile = "libvirt-s390x-vpn"
+	ClusterProfileMetalPerfscaleBMCPT     ClusterProfile = "metal-perfscale-cpt"
 	ClusterProfileMetalPerfscaleCPT       ClusterProfile = "metal-perscale-cpt"
 	ClusterProfileMetalPerfscaleJetlag    ClusterProfile = "metal-perfscale-jetlag"
 	ClusterProfileMetalPerfscaleOSP       ClusterProfile = "metal-perfscale-osp"
@@ -1621,6 +1622,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileLibvirtS390x2,
 		ClusterProfileLibvirtS390xAmd64,
 		ClusterProfileLibvirtS390xVPN,
+		ClusterProfileMetalPerfscaleBMCPT,
 		ClusterProfileMetalPerfscaleCPT,
 		ClusterProfileMetalPerfscaleJetlag,
 		ClusterProfileMetalPerfscaleOSP,
@@ -1877,6 +1879,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "libvirt-s390x-vpn"
 	case ClusterProfileMetalRHgs:
 		return "metal-redhat-gs"
+	case ClusterProfileMetalPerfscaleBMCPT:
+		return "metal-perfscale-cpt"
 	case ClusterProfileMetalPerfscaleCPT:
 		return "metal-perscale-cpt"
 	case ClusterProfileMetalPerfscaleJetlag:

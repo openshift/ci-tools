@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -365,7 +366,11 @@ func (s *server) generateProwJob(jr jobRun) (*prowv1.ProwJob, error) {
 	}
 	periodic.Name = jobName
 
-	refs := createRefsForPullRequests(append(jr.AdditionalPRs, jr.OriginPR), ciopConfig)
+	refs, err := createRefsForPullRequests(append(jr.AdditionalPRs, jr.OriginPR), s.ciOpConfigResolver)
+	if err != nil {
+		return nil, fmt.Errorf("create refs for PR: %w", err)
+	}
+
 	periodic.ExtraRefs = nil // remove any extra_refs that have been initialized
 	var primaryRef *prowv1.Refs
 	for _, ref := range refs {
@@ -376,7 +381,7 @@ func (s *server) generateProwJob(jr jobRun) (*prowv1.ProwJob, error) {
 		}
 	}
 	if primaryRef == nil {
-		return nil, fmt.Errorf("No ref for requested test included in command. The org, repo, and branch containing the requested test need to be targeted by at least one of the included PRs.")
+		return nil, errors.New("no ref for requested test included in command. The org, repo, and branch containing the requested test need to be targeted by at least one of the included PRs")
 	}
 
 	if err := s.prowConfigGetter.Defaulter().DefaultPeriodic(periodic); err != nil {
@@ -424,7 +429,7 @@ func determineProwJobName(jr jobRun) string {
 	return fmt.Sprintf("multi-pr-%s-%s%s", formatPR(jr.OriginPR), additionalPRs, jr.JobMetadata.Test)
 }
 
-func createRefsForPullRequests(prs []github.PullRequest, ciopConfig *api.ReleaseBuildConfiguration) []prowv1.Refs {
+func createRefsForPullRequests(prs []github.PullRequest, configResolver ciOpConfigResolver) ([]prowv1.Refs, error) {
 	type base struct {
 		org  string
 		repo string
@@ -441,13 +446,26 @@ func createRefsForPullRequests(prs []github.PullRequest, ciopConfig *api.Release
 		prsByBase[b] = append(prsByBase[b], pr)
 	}
 
+	pathAliasFor := func(org, repo, branch string) (string, error) {
+		config, err := configResolver.Config(&api.Metadata{Org: org, Repo: repo, Branch: branch})
+		if err != nil {
+			return "", fmt.Errorf("resolve config %s/%s@%s: %w", org, repo, branch, err)
+		}
+		return config.DeterminePathAlias(org, repo), nil
+	}
+
 	var refs []prowv1.Refs
 	for prBase := range prsByBase {
+		pathAlias, err := pathAliasFor(prBase.org, prBase.repo, prBase.ref)
+		if err != nil {
+			return nil, fmt.Errorf("path alias: %w", err)
+		}
+
 		ref := prowv1.Refs{
 			Org:       prBase.org,
 			Repo:      prBase.repo,
 			BaseRef:   prBase.ref,
-			PathAlias: ciopConfig.DeterminePathAlias(prBase.org, prBase.repo),
+			PathAlias: pathAlias,
 			BaseSHA:   prsByBase[prBase][0].Base.SHA, //TODO(sgoeddel): It would be better if we used the oldest base SHA rather than just the first in the list, but this mimics prpqr_reconciller, and is unlikely to result in many issues
 		}
 		for _, pr := range prsByBase[prBase] {
@@ -461,7 +479,7 @@ func createRefsForPullRequests(prs []github.PullRequest, ciopConfig *api.Release
 		refs = append(refs, ref)
 	}
 
-	return refs
+	return refs, nil
 }
 
 func (s *server) abortMultiPRJobs(pr github.PullRequest, l *logrus.Entry) ([]*prowv1.ProwJob, error) {

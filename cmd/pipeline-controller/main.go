@@ -13,6 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlruntimelog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -95,6 +96,7 @@ type clientWrapper struct {
 	configDataProvider *ConfigDataProvider
 	watcher            *watcher
 	lgtmWatcher        *watcher
+	pjLister           ctrlruntimeclient.Reader
 	mu                 sync.RWMutex // Protects against race conditions in event handling
 }
 
@@ -149,21 +151,19 @@ func (cw *clientWrapper) handlePullRequestCreation(l *logrus.Entry, event github
 			return
 		}
 
-		// Only check trigger mode if repo is in regular config (LGTM config doesn't have trigger mode)
+		// Check if repo is in regular config to determine trigger mode
 		var isAutomaticPipeline bool
+		isInLGTMConfig := lgtmOrgExists && lgtmRepoExists
 		if orgExists && repoExists {
 			isAutomaticPipeline = repoConfig.Trigger == "auto"
 			logger.WithField("trigger_mode", repoConfig.Trigger).Debug("Repository trigger mode")
-		} else {
-			// Repo is only in LGTM config, skip automatic pipeline logic
-			logger.Debug("Repository is in LGTM config only, skipping automatic pipeline logic")
-			return
 		}
 
 		logger.Debug("Getting presubmits from config data provider")
 		presubmits := cw.configDataProvider.GetPresubmits(org + "/" + repo)
 
-		if isAutomaticPipeline {
+		// Show pipeline info comment for automatic mode or LGTM mode
+		if isAutomaticPipeline || isInLGTMConfig {
 			hasPipelineJobs := len(presubmits.protected) > 0 || len(presubmits.alwaysRequired) > 0 ||
 				len(presubmits.conditionallyRequired) > 0 || len(presubmits.pipelineConditionallyRequired) > 0 ||
 				len(presubmits.pipelineSkipOnlyRequired) > 0
@@ -171,8 +171,12 @@ func (cw *clientWrapper) handlePullRequestCreation(l *logrus.Entry, event github
 			logger.WithField("has_pipeline_jobs", hasPipelineJobs).Debug("Checking for pipeline jobs")
 
 			if hasPipelineJobs {
-				// Repo has pipeline-controlled jobs and is in automatic mode, use pipeline info comment
-				logger.Info("Creating pipeline info comment for automatic mode")
+				// Repo has pipeline-controlled jobs and is in automatic mode or LGTM mode, use pipeline info comment
+				modeStr := "automatic mode"
+				if isInLGTMConfig && !isAutomaticPipeline {
+					modeStr = "LGTM mode"
+				}
+				logger.WithField("mode", modeStr).Info("Creating pipeline info comment")
 				if err := cw.ghc.CreateComment(org, repo, number, pullRequestInfoComment); err != nil {
 					logger.WithError(err).Error("failed to create comment")
 				} else {
@@ -248,6 +252,7 @@ func (cw *clientWrapper) handleLabelAddition(l *logrus.Entry, event github.PullR
 			logger.Debug("Repository not in LGTM configuration, skipping")
 			return
 		}
+
 		prowJob := &v1.ProwJob{
 			Spec: v1.ProwJobSpec{
 				Refs: &v1.Refs{
@@ -255,11 +260,23 @@ func (cw *clientWrapper) handleLabelAddition(l *logrus.Entry, event github.PullR
 					Repo:    repo,
 					BaseRef: event.PullRequest.Base.Ref,
 					Pulls: []v1.Pull{
-						{Number: event.PullRequest.Number},
+						{Number: event.PullRequest.Number, SHA: event.PullRequest.Head.SHA},
 					},
 				},
 			},
 		}
+
+		// If SHA is missing, log a warning but continue (status check will be skipped)
+		if event.PullRequest.Head.SHA == "" {
+			logger.Warn("PR head SHA is empty, status check will be skipped")
+		}
+
+		logger.WithFields(logrus.Fields{
+			"org":       org,
+			"repo":      repo,
+			"pr_number": event.PullRequest.Number,
+			"sha":       event.PullRequest.Head.SHA,
+		}).Debug("ProwJob created for LGTM label addition")
 		logger.Debug("Getting presubmits from config data provider")
 		presubmits := cw.configDataProvider.GetPresubmits(prowJob.Spec.Refs.Org + "/" + prowJob.Spec.Refs.Repo)
 
@@ -281,7 +298,7 @@ func (cw *clientWrapper) handleLabelAddition(l *logrus.Entry, event github.PullR
 		}
 
 		logger.Info("Sending comment for LGTM label addition")
-		if err := sendComment(presubmits, prowJob, cw.ghc, func() {}); err != nil {
+		if err := sendComment(presubmits, prowJob, cw.ghc, func() {}, cw.pjLister); err != nil {
 			logger.WithError(err).Error("failed to send a comment")
 		} else {
 			logger.Info("Successfully sent comment for LGTM label addition")
@@ -375,7 +392,8 @@ func (cw *clientWrapper) handleIssueComment(l *logrus.Entry, event github.IssueC
 	}
 
 	// Generate the comment with test/override commands
-	if err := sendCommentWithMode(presubmits, prowJob, cw.ghc, func() {}); err != nil {
+	// Pass true for isExplicitCommand since this is an explicit /pipeline required command
+	if err := sendCommentWithMode(presubmits, prowJob, cw.ghc, func() {}, cw.pjLister, true); err != nil {
 		logger.WithError(err).Error("failed to send comment in response to /pipeline required")
 	}
 }
@@ -684,6 +702,7 @@ func main() {
 		configDataProvider: configDataProvider,
 		watcher:            watcher,
 		lgtmWatcher:        lgtmWatcher,
+		pjLister:           mgr.GetCache(),
 	}
 
 	eventServer := githubeventserver.New(o.githubEventServerOptions, webhookTokenGenerator, logger)

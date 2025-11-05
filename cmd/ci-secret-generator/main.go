@@ -211,10 +211,11 @@ func fmtExecCmdErr(action, cmd string, wrappedErr error, stdout, stderr []byte, 
 		stdout, stderrPreamble, stderr)
 }
 
-func updateSecrets(config secretgenerator.Config, client secrets.Client, disabledClusters sets.Set[string]) error {
+func updateSecrets(config secretgenerator.Config, client secrets.Client, disabledClusters sets.Set[string], GSMsyncEnabled bool) error {
 	var errs []error
 	for _, item := range config {
 		logger := logrus.WithField("item", item.ItemName)
+		var secretsList []string
 		for _, field := range item.Fields {
 			logger = logger.WithFields(logrus.Fields{
 				"field":   field.Name,
@@ -238,6 +239,17 @@ func updateSecrets(config secretgenerator.Config, client secrets.Client, disable
 				logger.WithError(err).Error(msg)
 				errs = append(errs, errors.New(msg))
 				continue
+			}
+			if GSMsyncEnabled {
+				secretsList = append(secretsList, gsm.NormalizeSecretName(field.Name))
+			}
+		}
+
+		if GSMsyncEnabled {
+			indexPayload := gsm.ConstructIndexSecretContent(secretsList)
+			err := client.UpdateIndexSecret(gsm.GetIndexSecretName(item.ItemName), indexPayload)
+			if err != nil {
+				errs = append(errs, err)
 			}
 		}
 
@@ -326,7 +338,7 @@ func generateSecrets(o options, censor *secrets.DynamicCensor) (errs []error) {
 		}
 	}
 
-	if err := updateSecrets(o.config, client, o.disabledClusters); err != nil {
+	if err := updateSecrets(o.config, client, o.disabledClusters, o.enableGsmSync); err != nil {
 		errs = append(errs, fmt.Errorf("failed to update secrets: %w", err))
 	}
 

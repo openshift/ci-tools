@@ -193,7 +193,7 @@ func TestVault(t *testing.T) {
 					}
 				}
 			}()
-			if err := updateSecrets(tc.config, client, tc.disabledClusters); err != nil {
+			if err := updateSecrets(tc.config, client, tc.disabledClusters, false); err != nil {
 				t.Errorf("failed to update secrets: %v", err)
 			}
 			list, err := vault.ListKV("secret")

@@ -44,6 +44,10 @@ func (d dryRunClient) GetInUseInformationForAllItems(_ string) (map[string]Secre
 	return nil, nil
 }
 
+func (d dryRunClient) UpdateIndexSecret(itemName string, payload []byte) error {
+	return nil
+}
+
 func (d dryRunClient) GetUserSecrets() (map[types.NamespacedName]map[string]string, error) {
 	return nil, nil
 }
@@ -128,6 +132,11 @@ func (c *vaultClient) HasItem(itemName string) (bool, error) {
 
 func (c *vaultClient) GetFieldOnItem(itemName, fieldName string) ([]byte, error) {
 	return c.getSecretAtPath(itemName, fieldName)
+}
+
+func (c *vaultClient) UpdateIndexSecret(itemName string, payload []byte) error {
+	// No-op: index secrets are only relevant for GSM syncing
+	return nil
 }
 
 func (c *vaultClient) GetInUseInformationForAllItems(optionalSubPath string) (map[string]SecretUsageComparer, error) {

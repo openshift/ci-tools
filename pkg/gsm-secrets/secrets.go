@@ -2,6 +2,7 @@ package gsmsecrets
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	validation "github.com/openshift/ci-tools/pkg/gsm-validation"
@@ -79,4 +80,18 @@ func VerifyIndexSecretContent(payload []byte) error {
 	}
 
 	return nil
+}
+
+// ConstructIndexSecretContent constructs the index secret content from the secretsList,
+// with UpdaterSASecretName included.
+func ConstructIndexSecretContent(secretsList []string) []byte {
+	secretsList = append(secretsList, UpdaterSASecretName)
+	sort.Strings(secretsList)
+
+	var formattedSecrets []string
+	for _, secret := range secretsList {
+		formattedSecrets = append(formattedSecrets, fmt.Sprintf("- %s", secret))
+	}
+
+	return []byte(strings.Join(formattedSecrets, "\n"))
 }

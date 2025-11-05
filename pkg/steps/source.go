@@ -555,7 +555,7 @@ func handleBuild(ctx context.Context, client BuildClient, podClient kubernetes.P
 	if err := wait.ExponentialBackoff(wait.Backoff{Duration: time.Minute, Factor: 1.5, Steps: attempts}, func() (bool, error) {
 		var attempt buildapi.Build
 		// builds are using older src image, adding wait to avoid race condition
-		time.Sleep(1 * time.Minute)
+		time.Sleep(time.Minute * 4)
 		build.DeepCopyInto(&attempt)
 		if err := client.Create(ctx, &attempt); err == nil {
 			logrus.Infof("Created build %q", name)

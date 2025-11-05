@@ -52,12 +52,17 @@ type SlackReporterConfig struct {
 	Channel           string                `json:"channel,omitempty"`
 	JobStatesToReport []prowv1.ProwJobState `json:"job_states_to_report,omitempty"`
 	ReportTemplate    string                `json:"report_template,omitempty"`
-	JobNames          []string              `json:"job_names,omitempty"`
-	// JobNamePatterns contains regex patterns to match job names
+	// JobNames matches against test names (e.g., "unit", "e2e") not full Prow job names.
+	// This is intentional for backward compatibility - existing configs use test names here.
+	JobNames []string `json:"job_names,omitempty"`
+	// JobNamePatterns are regex patterns that match against test names (e.g., ".*-e2e$").
+	// Like JobNames, these match test names, not full Prow job names.
 	JobNamePatterns []string `json:"job_name_patterns,omitempty"`
-	// ExcludedVariants lists job variants that this config will not apply to
+	// ExcludedVariants is a list of variants to skip (e.g., ["hypershift", "okd"])
 	ExcludedVariants []string `json:"excluded_variants,omitempty"`
-	// ExcludedJobPatterns contains regex patterns for job names to exclude from this config
+	// ExcludedJobPatterns are regex patterns that match against FULL Prow job names
+	// (e.g., "^pull-.*-skip$" or "^periodic-"). This lets you exclude specific job types
+	// or use prefixes that only exist in the full job name, not the test name.
 	ExcludedJobPatterns []string `json:"excluded_job_patterns,omitempty"`
 }
 
@@ -66,30 +71,31 @@ type SkipOperatorPresubmits struct {
 	Variant string `json:"variant,omitempty"`
 }
 
-func (p *Prowgen) GetSlackReporterConfigForTest(test, variant string) *SlackReporterConfig {
+// GetSlackReporterConfigForJobName checks against full job names, allowing excluded_job_patterns
+// to work with prefixes like "pull-", "periodic-", etc.
+func (p *Prowgen) GetSlackReporterConfigForJobName(fullJobName, testName, variant string) *SlackReporterConfig {
+nextSlackReporterConfig:
 	for _, s := range p.SlackReporterConfigs {
-		if !slices.Contains(s.ExcludedVariants, variant) {
-			// Check if job is excluded by pattern
-			isExcluded := false
-			for _, excludePattern := range s.ExcludedJobPatterns {
-				if matched, err := regexp.MatchString(excludePattern, test); err == nil && matched {
-					isExcluded = true
-					break
-				}
+		if slices.Contains(s.ExcludedVariants, variant) {
+			continue
+		}
+
+		// Check if job is excluded by pattern (using full job name)
+		for _, excludePattern := range s.ExcludedJobPatterns {
+			if matched, err := regexp.MatchString(excludePattern, fullJobName); err == nil && matched {
+				continue nextSlackReporterConfig
 			}
+		}
 
-			if !isExcluded {
-				// Check exact job name matches first
-				if slices.Contains(s.JobNames, test) {
-					return &s
-				}
+		// Check exact job name matches first (against test name for backward compatibility)
+		if slices.Contains(s.JobNames, testName) {
+			return &s
+		}
 
-				// Check regex pattern matches
-				for _, pattern := range s.JobNamePatterns {
-					if matched, err := regexp.MatchString(pattern, test); err == nil && matched {
-						return &s
-					}
-				}
+		// Check regex pattern matches (against test name for backward compatibility)
+		for _, pattern := range s.JobNamePatterns {
+			if matched, err := regexp.MatchString(pattern, testName); err == nil && matched {
+				return &s
 			}
 		}
 	}

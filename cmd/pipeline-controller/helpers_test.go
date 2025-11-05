@@ -1,12 +1,16 @@
 package main
 
 import (
+	"context"
 	"strings"
 	"testing"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	v1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	"sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/prow/pkg/github"
+	"sigs.k8s.io/prow/pkg/kube"
 )
 
 type fakeGhClientWithChanges struct {
@@ -35,31 +39,18 @@ func (f *fakeGhClientWithChanges) ListStatuses(org, repo, ref string) ([]github.
 	return []github.Status{}, nil
 }
 
-type fakeGhClientWithStatuses struct {
-	changes  []github.PullRequestChange
-	comment  string
-	statuses []github.Status
+type fakeProwJobLister struct {
+	prowJobs []v1.ProwJob
 }
 
-func (f *fakeGhClientWithStatuses) GetPullRequest(org, repo string, number int) (*github.PullRequest, error) {
-	return &github.PullRequest{State: github.PullRequestStateOpen}, nil
-}
-
-func (f *fakeGhClientWithStatuses) CreateComment(owner, repo string, number int, comment string) error {
-	f.comment = comment
+func (f *fakeProwJobLister) Get(ctx context.Context, key ctrlruntimeclient.ObjectKey, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.GetOption) error {
 	return nil
 }
 
-func (f *fakeGhClientWithStatuses) GetPullRequestChanges(org, repo string, number int) ([]github.PullRequestChange, error) {
-	return f.changes, nil
-}
-
-func (f *fakeGhClientWithStatuses) CreateStatus(org, repo, ref string, s github.Status) error {
+func (f *fakeProwJobLister) List(ctx context.Context, list ctrlruntimeclient.ObjectList, opts ...ctrlruntimeclient.ListOption) error {
+	pjList := list.(*v1.ProwJobList)
+	pjList.Items = f.prowJobs
 	return nil
-}
-
-func (f *fakeGhClientWithStatuses) ListStatuses(org, repo, ref string) ([]github.Status, error) {
-	return f.statuses, nil
 }
 
 func TestAcquireConditionalContexts(t *testing.T) {
@@ -80,7 +71,7 @@ func TestAcquireConditionalContexts(t *testing.T) {
 		name                          string
 		pipelineConditionallyRequired []config.Presubmit
 		changes                       []github.PullRequestChange
-		statuses                      []github.Status
+		existingProwJobs              []v1.ProwJob
 		expectedTestCommands          []string
 		expectedManualControlMessage  string
 		expectedError                 string
@@ -105,7 +96,7 @@ func TestAcquireConditionalContexts(t *testing.T) {
 				{Filename: "main.go"},
 				{Filename: "README.md"},
 			},
-			statuses:                     []github.Status{},
+			existingProwJobs:             []v1.ProwJob{},
 			expectedTestCommands:         []string{"/test test"},
 			expectedManualControlMessage: "",
 			expectedError:                "",
@@ -131,7 +122,7 @@ func TestAcquireConditionalContexts(t *testing.T) {
 				{Filename: "README.md"},
 				{Filename: "docs/guide.md"},
 			},
-			statuses:                     []github.Status{},
+			existingProwJobs:             []v1.ProwJob{},
 			expectedTestCommands:         []string{},
 			expectedManualControlMessage: "",
 			expectedError:                "",
@@ -157,7 +148,7 @@ func TestAcquireConditionalContexts(t *testing.T) {
 				{Filename: "docs/guide.md"},
 				{Filename: "README.md"},
 			},
-			statuses:                     []github.Status{},
+			existingProwJobs:             []v1.ProwJob{},
 			expectedTestCommands:         []string{},
 			expectedManualControlMessage: "",
 			expectedError:                "",
@@ -182,7 +173,7 @@ func TestAcquireConditionalContexts(t *testing.T) {
 				{Filename: "docs/guide.md"},
 				{Filename: "main.go"},
 			},
-			statuses:                     []github.Status{},
+			existingProwJobs:             []v1.ProwJob{},
 			expectedTestCommands:         []string{"/test test"},
 			expectedManualControlMessage: "",
 			expectedError:                "",
@@ -207,7 +198,7 @@ func TestAcquireConditionalContexts(t *testing.T) {
 			changes: []github.PullRequestChange{
 				{Filename: "test/test.go"},
 			},
-			statuses:                     []github.Status{},
+			existingProwJobs:             []v1.ProwJob{},
 			expectedTestCommands:         []string{"/test test"},
 			expectedManualControlMessage: "",
 			expectedError:                "",
@@ -244,7 +235,7 @@ func TestAcquireConditionalContexts(t *testing.T) {
 				{Filename: "main.go"},
 				{Filename: "docs/guide.md"},
 			},
-			statuses:                     []github.Status{},
+			existingProwJobs:             []v1.ProwJob{},
 			expectedTestCommands:         []string{"/test test1", "/test test2"},
 			expectedManualControlMessage: "",
 			expectedError:                "",
@@ -268,7 +259,7 @@ func TestAcquireConditionalContexts(t *testing.T) {
 			changes: []github.PullRequestChange{
 				{Filename: "main.go"},
 			},
-			statuses:                     []github.Status{},
+			existingProwJobs:             []v1.ProwJob{},
 			expectedTestCommands:         []string{},
 			expectedManualControlMessage: "",
 			expectedError:                "",
@@ -292,22 +283,44 @@ func TestAcquireConditionalContexts(t *testing.T) {
 			changes: []github.PullRequestChange{
 				{Filename: "main.go"},
 			},
-			statuses: []github.Status{
+			existingProwJobs: []v1.ProwJob{
 				{
-					Context: "org-repo-master-test",
-					State:   "pending",
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							kube.OrgLabel:         "org",
+							kube.RepoLabel:        "repo",
+							kube.PullLabel:        "123",
+							kube.BaseRefLabel:     "master",
+							kube.ProwJobTypeLabel: string(v1.PresubmitJob),
+						},
+					},
+					Spec: v1.ProwJobSpec{
+						Job: "org-repo-master-test",
+						Refs: &v1.Refs{
+							Org:     "org",
+							Repo:    "repo",
+							BaseRef: "master",
+							Pulls: []v1.Pull{
+								{Number: 123, SHA: "abc"},
+							},
+						},
+					},
 				},
 			},
 			expectedTestCommands:         []string{},
-			expectedManualControlMessage: "Tests from second stage were triggered manually. Pipeline can be controlled only manually, until HEAD changes. Use `/pipeline required` to trigger second stage.",
+			expectedManualControlMessage: "Tests from second stage were triggered manually. Pipeline can be controlled only manually, until HEAD changes. Use command to trigger second stage.",
 			expectedError:                "",
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			ghc := &fakeGhClientWithStatuses{changes: tc.changes, statuses: tc.statuses}
-			testCmds, manualControlMessage, err := acquireConditionalContexts(basePJ, tc.pipelineConditionallyRequired, ghc, func() {})
+			ghc := &fakeGhClientWithChanges{changes: tc.changes}
+			var pjLister ctrlruntimeclient.Reader
+			if len(tc.existingProwJobs) > 0 {
+				pjLister = &fakeProwJobLister{prowJobs: tc.existingProwJobs}
+			}
+			testCmds, manualControlMessage, err := acquireConditionalContexts(context.Background(), basePJ, tc.pipelineConditionallyRequired, ghc, func() {}, pjLister, false)
 
 			// Check expected error
 			if tc.expectedError != "" {
@@ -439,7 +452,7 @@ func TestSendCommentWithMode(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ghc := &fakeGhClientWithChanges{changes: tc.changes}
 
-			err := sendCommentWithMode(tc.presubmits, basePJ, ghc, func() {})
+			err := sendCommentWithMode(tc.presubmits, basePJ, ghc, func() {}, nil, false)
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}

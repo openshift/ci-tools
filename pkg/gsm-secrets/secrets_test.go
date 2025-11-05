@@ -165,6 +165,55 @@ func TestValidateSecretName(t *testing.T) {
 	}
 }
 
+func TestConstructIndexSecretContent(t *testing.T) {
+	testCases := []struct {
+		name           string
+		secretsList    []string
+		expectedOutput string
+	}{
+		{
+			name:           "empty list",
+			secretsList:    []string{},
+			expectedOutput: "- updater-service-account",
+		},
+		{
+			name:           "single secret",
+			secretsList:    []string{"abc"},
+			expectedOutput: "- abc\n- updater-service-account",
+		},
+		{
+			name:           "multiple secrets sorted",
+			secretsList:    []string{"abc", "second-secret"},
+			expectedOutput: "- abc\n- second-secret\n- updater-service-account",
+		},
+		{
+			name:           "multiple secrets unsorted",
+			secretsList:    []string{"zebra", "apple", "banana"},
+			expectedOutput: "- apple\n- banana\n- updater-service-account\n- zebra",
+		},
+		{
+			name:           "secrets with hyphens",
+			secretsList:    []string{"my-secret", "another-secret"},
+			expectedOutput: "- another-secret\n- my-secret\n- updater-service-account",
+		},
+		{
+			name:           "secrets that sort after updater-service-account",
+			secretsList:    []string{"xyz", "zzz"},
+			expectedOutput: "- updater-service-account\n- xyz\n- zzz",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := ConstructIndexSecretContent(tc.secretsList)
+			actualOutput := string(result)
+			if actualOutput != tc.expectedOutput {
+				t.Errorf("Expected:\n%s\n\nGot:\n%s", tc.expectedOutput, actualOutput)
+			}
+		})
+	}
+}
+
 func TestExtractCollectionFromSecretName(t *testing.T) {
 	testCases := []struct {
 		name               string

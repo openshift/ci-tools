@@ -3,7 +3,6 @@ package secrets
 import (
 	"context"
 	"fmt"
-	"regexp"
 
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"github.com/sirupsen/logrus"
@@ -18,7 +17,6 @@ type gsmSyncDecorator struct {
 	gsmClient *secretmanager.Client
 	config    gsm.Config
 	ctx       context.Context
-	pattern   *regexp.Regexp
 }
 
 func NewGSMSyncDecorator(wrappedVaultClient Client, gcpProjectConfig gsm.Config, credentialsFile string) (Client, error) {
@@ -34,14 +32,10 @@ func NewGSMSyncDecorator(wrappedVaultClient Client, gcpProjectConfig gsm.Config,
 		return nil, fmt.Errorf("failed to create GSM client: %w", err)
 	}
 
-	// Hardcoded pattern to match only the fields created for cluster-init secret
-	pattern := regexp.MustCompile(`^sa\.cluster-init\..*`)
-
 	return &gsmSyncDecorator{
 		Client:    wrappedVaultClient,
 		gsmClient: gsmClient,
 		config:    gcpProjectConfig,
-		pattern:   pattern,
 		ctx:       ctx,
 	}, nil
 }
@@ -52,15 +46,14 @@ func (g *gsmSyncDecorator) SetFieldOnItem(itemName, fieldName string, fieldValue
 		return err
 	}
 
-	// Check if this field should sync to GSM (only cluster-init secrets)
-	if !g.pattern.MatchString(fieldName) {
-		return nil
-	}
-
 	// replace forbidden characters:
 	// e.g., "sa.cluster-init.build01.config" -> "sa--dot--cluster-init--dot--build01--dot--config"
 	fieldNameNormalized := gsmvalidation.NormalizeName(fieldName)
 	secretName := fmt.Sprintf("%s__%s", "cluster-init", fieldNameNormalized)
+	fieldNameNormalized := gsm.NormalizeSecretName(fieldName)
+
+	// item name will become the collection name:
+	secretName := fmt.Sprintf("%s__%s", itemName, fieldNameNormalized)
 
 	labels := make(map[string]string)
 	labels["jira-project"] = "dptp"
@@ -72,7 +65,7 @@ func (g *gsmSyncDecorator) SetFieldOnItem(itemName, fieldName string, fieldValue
 		logrus.WithError(err).Errorf("Failed to sync to GSM: %s", secretName)
 		// Don't fail the Vault write
 	} else {
-		logrus.Debugf("Successfully synced cluster-init secret to GSM: %s", secretName)
+		logrus.Debugf("Successfully synced secret '%s' to GSM", secretName)
 	}
 
 	return nil

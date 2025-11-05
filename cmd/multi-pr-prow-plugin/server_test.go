@@ -10,9 +10,11 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/sirupsen/logrus"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
@@ -349,6 +351,7 @@ func TestHandle(t *testing.T) {
 								},
 							},
 						},
+						{Org: "openshift", Repo: "release", Branch: "master"}: {},
 					},
 				},
 				prowConfigGetter: &fakeProwConfigGetter{
@@ -939,23 +942,23 @@ func TestGenerateProwJob(t *testing.T) {
 					},
 				},
 			},
-			expectedError: errors.New("No ref for requested test included in command. The org, repo, and branch containing the requested test need to be targeted by at least one of the included PRs."),
+			expectedError: errors.New("no ref for requested test included in command. The org, repo, and branch containing the requested test need to be targeted by at least one of the included PRs"),
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			s := server{
-				ciOpConfigResolver: &fakeCIOpConfigResolver{
-					configs: map[api.Metadata]*api.ReleaseBuildConfiguration{
-						tc.jobRun.JobMetadata.Metadata: {
-							Tests: []api.TestStepConfiguration{
-								{
-									As: tc.jobRun.JobMetadata.Test,
-								},
-							},
+			ciopConfigs := map[api.Metadata]*api.ReleaseBuildConfiguration{
+				tc.jobRun.JobMetadata.Metadata: {
+					Tests: []api.TestStepConfiguration{
+						{
+							As: tc.jobRun.JobMetadata.Test,
 						},
 					},
 				},
+			}
+			addCIOpConfigsFromPRs(ciopConfigs, tc.jobRun.AdditionalPRs)
+			s := server{
+				ciOpConfigResolver: &fakeCIOpConfigResolver{configs: ciopConfigs},
 				prowConfigGetter: &fakeProwConfigGetter{
 					cfg: &prowconfig.Config{
 						ProwConfig: prowconfig.ProwConfig{
@@ -985,6 +988,15 @@ func TestGenerateProwJob(t *testing.T) {
 	}
 }
 
+func addCIOpConfigsFromPRs(configs map[api.Metadata]*api.ReleaseBuildConfiguration, prs []github.PullRequest) {
+	for _, pr := range prs {
+		k := api.Metadata{Org: pr.Base.Repo.Owner.Login, Repo: pr.Base.Repo.Name, Branch: pr.Base.Ref}
+		if _, ok := configs[k]; !ok {
+			configs[k] = &api.ReleaseBuildConfiguration{}
+		}
+	}
+}
+
 var (
 	zeroTime = metav1.NewTime(time.Unix(0, 0))
 )
@@ -995,4 +1007,143 @@ func defaultProwJobFields(prowJob *prowv1.ProwJob) {
 		prowJob.Status.CompletionTime = &zeroTime
 	}
 	prowJob.Name = "some-uuid"
+}
+
+func TestCreateRefsForPullRequests(t *testing.T) {
+	ciOpConfigResolver := &fakeCIOpConfigResolver{
+		configs: map[api.Metadata]*api.ReleaseBuildConfiguration{
+			{Org: "openshift", Repo: "ci-tools", Branch: "main"}:    {CanonicalGoRepository: ptr.To("ci-tools-main-path-alias")},
+			{Org: "openshift", Repo: "ci-tools", Branch: "dev"}:     {CanonicalGoRepository: ptr.To("ci-tools-dev-path-alias")},
+			{Org: "openshift", Repo: "apiserver", Branch: "master"}: {},
+		},
+	}
+
+	sortRefsOpt := cmpopts.SortSlices(func(a, b prowv1.Refs) bool {
+		aKey := a.Org + a.Repo + a.BaseRef + a.PathAlias + a.BaseSHA
+		bKey := b.Org + b.Repo + b.BaseRef + b.PathAlias + b.BaseSHA
+		return strings.Compare(aKey, bKey) == -1
+	})
+
+	for _, tc := range []struct {
+		name     string
+		prs      []github.PullRequest
+		wantRefs []prowv1.Refs
+	}{
+		{
+			name: "Refs from heterogeneous PRs",
+			prs: []github.PullRequest{
+				{
+					Number: 1,
+					Base: github.PullRequestBranch{
+						Repo: github.Repo{
+							Owner: github.User{
+								Login: "openshift",
+							},
+							Name: "ci-tools",
+						},
+						SHA: "pr-1-base-sha",
+						Ref: "main",
+					},
+					User: github.User{
+						Login: "user-a",
+					},
+					Head: github.PullRequestBranch{
+						SHA: "pr-1-head-sha",
+					},
+					Title: "pr-1",
+				},
+				{
+					Number: 2,
+					Base: github.PullRequestBranch{
+						Repo: github.Repo{
+							Owner: github.User{
+								Login: "openshift",
+							},
+							Name: "ci-tools",
+						},
+						SHA: "pr-2-base-sha",
+						Ref: "dev",
+					},
+					User: github.User{
+						Login: "user-b",
+					},
+					Head: github.PullRequestBranch{
+						SHA: "pr-2-head-sha",
+					},
+					Title: "pr-2",
+				},
+				{
+					Number: 3,
+					Base: github.PullRequestBranch{
+						Repo: github.Repo{
+							Owner: github.User{
+								Login: "openshift",
+							},
+							Name: "apiserver",
+						},
+						SHA: "pr-3-base-sha",
+						Ref: "master",
+					},
+					User: github.User{
+						Login: "user-c",
+					},
+					Head: github.PullRequestBranch{
+						SHA: "pr-3-head-sha",
+					},
+					Title: "pr-3",
+				},
+			},
+			wantRefs: []prowv1.Refs{
+				{
+					Org:       "openshift",
+					Repo:      "ci-tools",
+					BaseRef:   "main",
+					PathAlias: "ci-tools-main-path-alias",
+					BaseSHA:   "pr-1-base-sha",
+					Pulls: []prowv1.Pull{{
+						Number: 1,
+						Author: "user-a",
+						SHA:    "pr-1-head-sha",
+						Title:  "pr-1",
+					}},
+				},
+				{
+					Org:       "openshift",
+					Repo:      "ci-tools",
+					BaseRef:   "dev",
+					PathAlias: "ci-tools-dev-path-alias",
+					BaseSHA:   "pr-2-base-sha",
+					Pulls: []prowv1.Pull{{
+						Number: 2,
+						Author: "user-b",
+						SHA:    "pr-2-head-sha",
+						Title:  "pr-2",
+					}},
+				},
+				{
+					Org:       "openshift",
+					Repo:      "apiserver",
+					BaseRef:   "master",
+					PathAlias: "",
+					BaseSHA:   "pr-3-base-sha",
+					Pulls: []prowv1.Pull{{
+						Number: 3,
+						Author: "user-c",
+						SHA:    "pr-3-head-sha",
+						Title:  "pr-3",
+					}},
+				},
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			gotRefs, err := createRefsForPullRequests(tc.prs, ciOpConfigResolver)
+			if err != nil {
+				t.Errorf("unexpected err: %s", err)
+			}
+			if diff := cmp.Diff(tc.wantRefs, gotRefs, sortRefsOpt); diff != "" {
+				t.Errorf("unexpected refs: %s", diff)
+			}
+		})
+	}
 }

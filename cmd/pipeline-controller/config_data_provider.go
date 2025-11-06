@@ -10,7 +10,7 @@ import (
 	"sigs.k8s.io/prow/pkg/config"
 )
 
-// RepoLister is a function that returns a list of "org/repo" strings that should be processed
+// RepoLister i s a function that returns a list of "org/repo" strings that should be processed
 type RepoLister func() []string
 
 type presubmitTests struct {

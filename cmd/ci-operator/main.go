@@ -261,7 +261,7 @@ func main() {
 	}
 
 	ctx := context.TODO()
-	opt.metricsAgent, err = metrics.NewMetricsAgent(ctx, opt.clusterConfig)
+	opt.metricsAgent, err = metrics.NewMetricsAgent(ctx, opt.clusterConfig, opt.censor)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to create metrics agent...Skipping metrics.")
 	} else {
@@ -1034,7 +1034,7 @@ func (o *options) Run() []error {
 		eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobStarted", eventJobDescription(o.jobSpec, o.namespace))
 		o.metricsAgent.Record(metrics.NewInsightsEvent(metrics.InsightExecutionStarted, metrics.Context{"started_after": time.Since(start).Seconds()}))
 		// execute the graph
-		suites, graphDetails, errs := steps.Run(ctx, nodes)
+		suites, graphDetails, errs := steps.Run(ctx, nodes, o.metricsAgent)
 		if err := o.writeJUnit(suites, "operator"); err != nil {
 			logrus.WithError(err).Warn("Unable to write JUnit result.")
 		}

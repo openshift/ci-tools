@@ -8,6 +8,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
+	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/results"
 )
 
@@ -19,7 +20,7 @@ type message struct {
 	stepDetails     api.CIOperatorStepDetails
 }
 
-func Run(ctx context.Context, graph api.StepGraph) (*junit.TestSuites, []api.CIOperatorStepDetails, []error) {
+func Run(ctx context.Context, graph api.StepGraph, agent *metrics.MetricsAgent) (*junit.TestSuites, []api.CIOperatorStepDetails, []error) {
 	var seen []api.StepLink
 	executionResults := make(chan message)
 	done := make(chan bool)
@@ -34,7 +35,7 @@ func Run(ctx context.Context, graph api.StepGraph) (*junit.TestSuites, []api.CIO
 
 	start := time.Now()
 	for _, root := range graph {
-		go runStep(ctx, root, executionResults)
+		go runStep(ctx, root, executionResults, agent)
 	}
 
 	suites := &junit.TestSuites{
@@ -70,7 +71,7 @@ func Run(ctx context.Context, graph api.StepGraph) (*junit.TestSuites, []api.CIO
 						// when the last of its parents finishes.
 						if api.HasAllLinks(child.Step.Requires(), seen) {
 							wg.Add(1)
-							go runStep(ctx, child, executionResults)
+							go runStep(ctx, child, executionResults, agent)
 						}
 					}
 				}
@@ -116,7 +117,7 @@ type SubStepReporter interface {
 	SubSteps() []api.CIOperatorStepDetailInfo
 }
 
-func runStep(ctx context.Context, node *api.StepNode, out chan<- message) {
+func runStep(ctx context.Context, node *api.StepNode, out chan<- message, agent *metrics.MetricsAgent) {
 	start := time.Now()
 	err := node.Step.Run(ctx)
 	var additionalTests []*junit.TestCase
@@ -132,6 +133,7 @@ func runStep(ctx context.Context, node *api.StepNode, out chan<- message) {
 		subSteps = x.SubSteps()
 	}
 
+	objects := node.Step.Objects()
 	out <- message{
 		node:            node,
 		duration:        duration,
@@ -144,10 +146,13 @@ func runStep(ctx context.Context, node *api.StepNode, out chan<- message) {
 				StartedAt:   &start,
 				FinishedAt:  &finishedAt,
 				Duration:    &duration,
-				Manifests:   node.Step.Objects(),
+				Manifests:   objects,
 				Failed:      &failed,
 			},
 			Substeps: subSteps,
 		},
+	}
+	if agent != nil {
+		agent.RecordStepEvent(node.Step, objects, start, finishedAt, err)
 	}
 }

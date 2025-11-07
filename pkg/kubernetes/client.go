@@ -78,7 +78,6 @@ type PodClient interface {
 	WithNewLoggingClient() PodClient
 	Exec(namespace, pod string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error)
 	GetLogs(namespace, name string, opts *coreapi.PodLogOptions) *rest.Request
-	MetricsAgent() *metrics.MetricsAgent
 }
 
 func NewPodClient(ctrlclient loggingclient.LoggingClient, config *rest.Config, client rest.Interface, pendingTimeout time.Duration, metricsAgent *metrics.MetricsAgent) PodClient {

@@ -2170,6 +2170,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "libvirt-s390x-amd64-quota-slice"
 	case ClusterProfileLibvirtS390xVPN:
 		return "libvirt-s390x-vpn-quota-slice"
+	case ClusterProfileMetalPerfscaleBMCPT:
+		return "metal-perfscale-cpt-quota-slice"
 	case ClusterProfileMetalPerfscaleCPT:
 		return "metal-perscale-cpt-quota-slice"
 	case ClusterProfileMetalPerfscaleJetlag:

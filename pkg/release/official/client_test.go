@@ -160,15 +160,66 @@ func TestResolvePullSpec(t *testing.T) {
 }
 
 func TestLatestPullSpec(t *testing.T) {
-	pullspec, version := latestPullSpecAndVersion([]Release{
+	releases := []Release{
 		{Version: "4.2.19", Payload: "quay.io/openshift-release-dev/ocp-release@sha256:b51a0c316bb0c11686e6b038ec7c9f7ff96763f47a53c3443ac82e8c054bc035"},
 		{Version: "4.3.21", Payload: "quay.io/openshift-release-dev/ocp-release@sha256:79a48030fc5e04fad0fd52f0cdd838ce94c7c1dfa7e7918fd7614d7bcab316f0"},
 		{Version: "4.2.20", Payload: "quay.io/openshift-release-dev/ocp-release@sha256:bd8aa8e0ce08002d4f8e73d6a2f9de5ae535a6a961ff6b8fdf2c52e4a14cc787"},
-	})
-	if pullspec != "quay.io/openshift-release-dev/ocp-release@sha256:79a48030fc5e04fad0fd52f0cdd838ce94c7c1dfa7e7918fd7614d7bcab316f0" {
-		t.Errorf("got incorrect latest pull-spec: %v", pullspec)
 	}
-	if version != "4.3.21" {
-		t.Errorf("got incorrect latest version: %v", version)
+
+	testCases := []struct {
+		name             string
+		relative         int
+		expectedPullSpec string
+		expectedVersion  string
+		expectError      bool
+	}{
+		{
+			name:             "latest release (relative=0)",
+			relative:         0,
+			expectedPullSpec: "quay.io/openshift-release-dev/ocp-release@sha256:79a48030fc5e04fad0fd52f0cdd838ce94c7c1dfa7e7918fd7614d7bcab316f0",
+			expectedVersion:  "4.3.21",
+			expectError:      false,
+		},
+		{
+			name:             "previous release (relative=1)",
+			relative:         1,
+			expectedPullSpec: "quay.io/openshift-release-dev/ocp-release@sha256:bd8aa8e0ce08002d4f8e73d6a2f9de5ae535a6a961ff6b8fdf2c52e4a14cc787",
+			expectedVersion:  "4.2.20",
+			expectError:      false,
+		},
+		{
+			name:             "two releases back (relative=2)",
+			relative:         2,
+			expectedPullSpec: "quay.io/openshift-release-dev/ocp-release@sha256:b51a0c316bb0c11686e6b038ec7c9f7ff96763f47a53c3443ac82e8c054bc035",
+			expectedVersion:  "4.2.19",
+			expectError:      false,
+		},
+		{
+			name:        "out of range (relative=3)",
+			relative:    3,
+			expectError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pullspec, version, err := latestPullSpecAndVersion(releases, tc.relative)
+			if tc.expectError {
+				if err == nil {
+					t.Errorf("expected an error but got none")
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+			if pullspec != tc.expectedPullSpec {
+				t.Errorf("got incorrect pull-spec: got %v, expected %v", pullspec, tc.expectedPullSpec)
+			}
+			if version != tc.expectedVersion {
+				t.Errorf("got incorrect version: got %v, expected %v", version, tc.expectedVersion)
+			}
+		})
 	}
 }

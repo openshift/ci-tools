@@ -103,18 +103,23 @@ func resolvePullSpec(client release.HTTPClient, endpoint string, release api.Rel
 		return "", "", fmt.Errorf("failed to request %s from %s: version not found in list of releases", release.Version, req.URL.String())
 	}
 
-	pullspec, version := latestPullSpecAndVersion(response.Nodes)
-	return pullspec, version, nil
+	pullspec, version, err := latestPullSpecAndVersion(response.Nodes, release.Relative)
+	return pullspec, version, err
 }
 
-// latestPullSpecAndVersion returns the pullSpec of the latest release in the list as a payload and version
-func latestPullSpecAndVersion(options []Release) (string, string) {
+// latestPullSpecAndVersion returns the pullSpec and version of the release at the given relative index
+// in the sorted list of releases (sorted in descending order by version).
+// A relative value of 0 returns the latest release, 1 returns the previous release, etc.
+func latestPullSpecAndVersion(options []Release, relative int) (string, string, error) {
 	sort.Slice(options, func(i, j int) bool {
 		vi := semver.MustParse(options[i].Version)
 		vj := semver.MustParse(options[j].Version)
 		return vi.GTE(vj) // greater, not less, so we get descending order
 	})
-	return options[0].Payload, options[0].Version
+	if relative >= len(options) {
+		return "", "", fmt.Errorf("relative index %d is out of range for %d available releases", relative, len(options))
+	}
+	return options[relative].Payload, options[relative].Version, nil
 }
 
 // processVersionChannel takes the configured version and channel and

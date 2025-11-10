@@ -161,6 +161,10 @@ func validateRelease(fieldRoot string, release api.Release) []error {
 		validationErrors = append(validationErrors, err)
 	}
 
+	if release.Relative < 0 {
+		validationErrors = append(validationErrors, fmt.Errorf("%s.relative: must be a non-negative integer", fieldRoot))
+	}
+
 	return validationErrors
 }
 

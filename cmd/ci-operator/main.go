@@ -261,7 +261,7 @@ func main() {
 	}
 
 	ctx := context.TODO()
-	opt.metricsAgent, err = metrics.NewMetricsAgent(ctx, opt.clusterConfig)
+	opt.metricsAgent, err = metrics.NewMetricsAgent(ctx, opt.clusterConfig, opt.censor)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to create metrics agent...Skipping metrics.")
 	} else {
@@ -1034,7 +1034,7 @@ func (o *options) Run() []error {
 		eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobStarted", eventJobDescription(o.jobSpec, o.namespace))
 		o.metricsAgent.Record(metrics.NewInsightsEvent(metrics.InsightExecutionStarted, metrics.Context{"started_after": time.Since(start).Seconds()}))
 		// execute the graph
-		suites, graphDetails, errs := steps.Run(ctx, nodes)
+		suites, graphDetails, errs := steps.Run(ctx, nodes, o.metricsAgent)
 		if err := o.writeJUnit(suites, "operator"); err != nil {
 			logrus.WithError(err).Warn("Unable to write JUnit result.")
 		}
@@ -1537,6 +1537,17 @@ func (o *options) initializeNamespace() error {
 		}
 	}
 
+	// If promotion is enabled and there are promotion targets configured, copy the promotion kubeconfig secret
+	if o.promote && o.configSpec.PromotionConfiguration != nil && len(api.PromotionTargets(o.configSpec.PromotionConfiguration)) > 0 {
+		promotionSecret, err := getPromotionKubeconfigSecret(ctx, labeledclient.Wrap(ctrlClient, o.jobSpec))
+		if err != nil {
+			return fmt.Errorf("failed to get promotion kubeconfig secret: %w", err)
+		}
+		promotionSecret.Namespace = o.namespace
+		o.secrets = append(o.secrets, promotionSecret)
+		logrus.Debugf("Added promotion kubeconfig secret %s to be created in namespace %s", api.PromotionQuayTaggerKubeconfigSecret, o.namespace)
+	}
+
 	for _, secret := range o.secrets {
 		created, err := util.UpsertImmutableSecret(ctx, client, secret)
 		if err != nil {
@@ -1570,6 +1581,25 @@ func getExternalImagePullSecret(ctx context.Context, client ctrlruntimeclient.Cl
 		Type: coreapi.SecretTypeDockerConfigJson,
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "external-pull-secret-" + image.PullSecret,
+		},
+	}
+	return newSecret, nil
+}
+
+// getPromotionKubeconfigSecret fetches the promotion-quay-tagger-kubeconfig secret from the ci namespace
+// and returns a new secret to be created in the test namespace
+func getPromotionKubeconfigSecret(ctx context.Context, client ctrlruntimeclient.Client) (*coreapi.Secret, error) {
+	ciSecret := &coreapi.Secret{}
+	err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: "ci", Name: api.PromotionQuayTaggerKubeconfigSecret}, ciSecret)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get secret '%s' from ci namespace: %w", api.PromotionQuayTaggerKubeconfigSecret, err)
+	}
+
+	newSecret := &coreapi.Secret{
+		Data: ciSecret.Data,
+		Type: ciSecret.Type,
+		ObjectMeta: metav1.ObjectMeta{
+			Name: api.PromotionQuayTaggerKubeconfigSecret,
 		},
 	}
 	return newSecret, nil

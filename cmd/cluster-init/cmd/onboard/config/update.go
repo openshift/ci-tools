@@ -92,7 +92,8 @@ func updateConfig(ctx context.Context, log *logrus.Entry, opts *updateConfigOpti
 		ctrlClient, kubeClient, config, err := newKubeClients(kubeconfigs, clusterName)
 		clusterInstall.Config = config
 		if err != nil {
-			return fmt.Errorf("new kubeclient for %s: %w", clusterName, err)
+			log.WithField("cluster", clusterName).WithError(err).Warn("Skipping cluster due to missing or invalid kubeconfig")
+			continue
 		}
 		if err := addClusterInstallRuntimeInfo(ctx, clusterInstall, ctrlClient); err != nil {
 			return err

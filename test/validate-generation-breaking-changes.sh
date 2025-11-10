@@ -65,8 +65,10 @@ for org in openshift; do
     fi
   fi
 
-  echo >&2 "$(date -u +'%Y-%m-%dT%H:%M:%S%z') Executing cluster-init update"
-  cluster-init onboard config update --release-repo="$clonedir" --kubeconfig-dir="$KUBECONFIG_DIR" --kubeconfig-suffix="$KUBECONFIG_SUFFIX"
+  # Skip cluster-init update if kubeconfig directory is not set, as we won't have access to real clusters
+  if [[ -n "${KUBECONFIG_DIR:-}" && -d "${KUBECONFIG_DIR}" ]]; then
+    echo >&2 "$(date -u +'%Y-%m-%dT%H:%M:%S%z') Executing cluster-init update"
+    cluster-init onboard config update --release-repo="$clonedir" --kubeconfig-dir="${KUBECONFIG_DIR}" --kubeconfig-suffix="${KUBECONFIG_SUFFIX:-}"
     out="$(git status --porcelain)"
     if [[ -n "$out" ]]; then
       echo "ERROR: Changes in $org/release:"
@@ -78,6 +80,9 @@ for org in openshift; do
     else
       echo "Running cluster-init in update mode in $org/release does not result in changes, no followups needed"
     fi
+  else
+    echo "Skipping cluster-init update mode check as KUBECONFIG_DIR is not set or does not exist"
+  fi
 
   popd
 done

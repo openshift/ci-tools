@@ -253,54 +253,52 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		labels[CiWorkloadLabelName] = string(podClass)
 		labels[CiWorkloadNamespaceLabelName] = namespace
 
-		// Reduce CPU requests, if appropriate
-		reduceCPURequests := func(containerType string, containers []corev1.Container, factor float32) {
-			if factor >= 1.0 {
-				// Don't allow increases as this might inadvertently make the pod completely unschedulable.
-				return
-			}
-			for i := range containers {
-				c := &containers[i]
-				// Limits are overcommited so there is no need to replace them. Besides, if they are set,
-				// it will be good to preserve them so that the pods don't wildly overconsume.
-				for key := range c.Resources.Requests {
-					if key == corev1.ResourceCPU {
-						// TODO : use convert to unstructured
+		// Ensure build pods request at least the configured minimum cores for docker-build containers
+		if podClass == PodClassBuilds && minBuildMillicores > 0 {
+			for i := range pod.Spec.Containers {
+				c := &pod.Spec.Containers[i]
 
-						// Our webhook can be reinvoked. A simple, imprecise way of determining whether
-						// we are being reinvoked which changes to cpu requests, we leave a signature
-						// value of xxxxxx1m on the end of the millicore value. If found, assume we have
-						// touched this request before and leave it be (instead of reducing it a second
-						// time by the reduction factor).
-						if c.Resources.Requests.Cpu().MilliValue()%10 == 1 {
-							continue
-						}
+				// Only apply to docker-build containers
+				if c.Name != "docker-build" {
+					continue
+				}
 
-						// Apply the reduction factory and add our signature 1 millicore.
-						reduced := int64(float32(c.Resources.Requests.Cpu().MilliValue())*factor)/10*10 + 1
+				cpuRequest, hasCPURequest := c.Resources.Requests[corev1.ResourceCPU]
+				cpuLimit, hasCPULimit := c.Resources.Limits[corev1.ResourceCPU]
 
-						newRequests := map[string]interface{}{
-							string(corev1.ResourceCPU): fmt.Sprintf("%vm", reduced),
-						}
-
-						if c.Resources.Requests.Memory().Value() > 0 {
-							newRequests[string(corev1.ResourceMemory)] = fmt.Sprintf("%v", c.Resources.Requests.Memory().String())
-						}
-
-						addPatchEntry("add", fmt.Sprintf("/spec/%v/%v/resources/requests", containerType, i), newRequests)
+				// Handle CPU requests
+				if !hasCPURequest || cpuRequest.MilliValue() < minBuildMillicores {
+					// Preserve all existing resource requests
+					newRequests := make(map[string]interface{})
+					for resourceName, quantity := range c.Resources.Requests {
+						newRequests[string(resourceName)] = quantity.String()
 					}
+					// Set/override CPU to minimum
+					newRequests[string(corev1.ResourceCPU)] = fmt.Sprintf("%dm", minBuildMillicores)
+
+					addPatchEntry("add", fmt.Sprintf("/spec/containers/%d/resources/requests", i), newRequests)
+					if hasCPURequest {
+						klog.Infof("Increasing build pod CPU request from %vm to %vm for container %s", cpuRequest.MilliValue(), minBuildMillicores, c.Name)
+					} else {
+						klog.Infof("Setting build pod CPU request to %vm for container %s", minBuildMillicores, c.Name)
+					}
+				}
+
+				// Handle CPU limits - only if they exist and are below minimum
+				if hasCPULimit && cpuLimit.MilliValue() < minBuildMillicores {
+					// Preserve all existing resource limits
+					newLimits := make(map[string]interface{})
+					for resourceName, quantity := range c.Resources.Limits {
+						newLimits[string(resourceName)] = quantity.String()
+					}
+					// Set/override CPU to minimum
+					newLimits[string(corev1.ResourceCPU)] = fmt.Sprintf("%dm", minBuildMillicores)
+
+					addPatchEntry("add", fmt.Sprintf("/spec/containers/%d/resources/limits", i), newLimits)
+					klog.Infof("Increasing build pod CPU limit from %vm to %vm for container %s", cpuLimit.MilliValue(), minBuildMillicores, c.Name)
 				}
 			}
 		}
-
-		var cpuFactor float32
-		if podClass == PodClassTests {
-			cpuFactor = shrinkTestCPU
-		} else {
-			cpuFactor = shrinkBuildCPU
-		}
-		reduceCPURequests("initContainers", pod.Spec.InitContainers, cpuFactor)
-		reduceCPURequests("containers", pod.Spec.Containers, cpuFactor)
 
 		// Setup toleration appropriate for podClass so that it can only land on desired machineset.
 		// This is achieved by virtue of using a RuntimeClass object which specifies the necessary

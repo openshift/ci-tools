@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,12 +14,12 @@ import (
 	"k8s.io/client-go/rest"
 	metricsclient "k8s.io/metrics/pkg/client/clientset/versioned"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/prow/pkg/secretutil"
 
 	configv1 "github.com/openshift/api/config/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/lease"
+	"github.com/openshift/ci-tools/pkg/secrets"
 )
 
 const (
@@ -36,8 +37,10 @@ type MetricsAgent struct {
 	events chan MetricsEvent
 	logger *logrus.Entry
 	client ctrlruntimeclient.Client
+	censor *secrets.DynamicCensor
 
 	insightsPlugin *insightsPlugin
+	eventsPlugin   *eventsPlugin
 	buildPlugin    *buildPlugin
 	nodesPlugin    *nodesMetricsPlugin
 	leasePlugin    *leasesPlugin
@@ -49,7 +52,7 @@ type MetricsAgent struct {
 }
 
 // NewMetricsAgent registers the built-in plugins by default.
-func NewMetricsAgent(ctx context.Context, clusterConfig *rest.Config) (*MetricsAgent, error) {
+func NewMetricsAgent(ctx context.Context, clusterConfig *rest.Config, censor *secrets.DynamicCensor) (*MetricsAgent, error) {
 	nodesCh := make(chan string, 100)
 
 	client, err := ctrlruntimeclient.New(clusterConfig, ctrlruntimeclient.Options{})
@@ -67,7 +70,9 @@ func NewMetricsAgent(ctx context.Context, clusterConfig *rest.Config) (*MetricsA
 		events:         make(chan MetricsEvent, 100),
 		logger:         logger,
 		client:         client,
+		censor:         censor,
 		insightsPlugin: newInsightsPlugin(logger),
+		eventsPlugin:   newEventsPlugin(logger),
 		buildPlugin:    newBuildPlugin(ctx, logger, client),
 		nodesPlugin:    newNodesMetricsPlugin(ctx, logger, client, metricsClient, nodesCh),
 		leasePlugin:    newLeasesPlugin(logger),
@@ -99,6 +104,7 @@ func (ma *MetricsAgent) Run() {
 			}
 			// Record the event to all plugins
 			ma.insightsPlugin.Record(ev)
+			ma.eventsPlugin.Record(ev)
 			ma.buildPlugin.Record(ev)
 			ma.nodesPlugin.Record(ev)
 			ma.leasePlugin.Record(ev)
@@ -132,28 +138,26 @@ func (ma *MetricsAgent) Stop() {
 
 // flush writes the accumulated events to a JSON file in the artifacts directory.
 func (ma *MetricsAgent) flush() {
-	output := make(map[string]any, 6)
-	output[ma.insightsPlugin.Name()] = ma.insightsPlugin.Events()
-	output[ma.buildPlugin.Name()] = ma.buildPlugin.Events()
-	output[ma.nodesPlugin.Name()] = ma.nodesPlugin.Events()
-	output[ma.leasePlugin.Name()] = ma.leasePlugin.Events()
-	output[ma.imagesPlugin.Name()] = ma.imagesPlugin.Events()
-	output[ma.podPlugin.Name()] = ma.podPlugin.Events()
+	output := map[string]any{
+		ma.insightsPlugin.Name(): ma.insightsPlugin.Events(),
+		ma.eventsPlugin.Name():   ma.eventsPlugin.Events(),
+		ma.buildPlugin.Name():    ma.buildPlugin.Events(),
+		ma.nodesPlugin.Name():    ma.nodesPlugin.Events(),
+		ma.leasePlugin.Name():    ma.leasePlugin.Events(),
+		ma.imagesPlugin.Name():   ma.imagesPlugin.Events(),
+		ma.podPlugin.Name():      ma.podPlugin.Events(),
+	}
 
 	data, err := json.MarshalIndent(output, "", "  ")
 	if err != nil {
 		logrus.WithError(err).Error("failed to marshal metrics")
 		return
 	}
-	var censor secretutil.Censorer = &noOpCensor{}
-	if err := api.SaveArtifact(censor, CIOperatorMetricsJSON, data); err != nil {
+
+	if err := api.SaveArtifact(ma.censor, CIOperatorMetricsJSON, data); err != nil {
 		logrus.WithError(err).Error("failed to save metrics artifact")
 	}
 }
-
-type noOpCensor struct{}
-
-func (n *noOpCensor) Censor(data *[]byte) {}
 
 // AddNodeWorkload tracks a workload's pod and the node it runs on for metrics collection
 func (ma *MetricsAgent) AddNodeWorkload(ctx context.Context, namespace, podName, workloadName string, podClient ctrlruntimeclient.Client) {
@@ -189,6 +193,35 @@ func (ma *MetricsAgent) StorePodLifecycleMetrics(name, namespace string, phase c
 		PodPhase:  phase,
 	}
 	ma.Record(&event)
+}
+
+// RecordStepEvent records a single Finished event for a step, including objects metadata.
+func (ma *MetricsAgent) RecordStepEvent(step api.Step, objects []ctrlruntimeclient.Object, start, finish time.Time, runErr error) {
+	if ma == nil {
+		return
+	}
+	level := EventLevelInfo
+	success := true
+	cause := ""
+	if runErr != nil {
+		level = EventLevelError
+		success = false
+		cause = runErr.Error()
+	}
+	keys := map[string]any{"stepName": step.Name()}
+	keys["objects"] = BuildObjectRefs(objects)
+
+	ma.Record(&Event{
+		Level:   level,
+		Source:  strings.TrimPrefix(fmt.Sprintf("%T", step), "*"),
+		Locator: EventLocator{Type: "Step", Name: step.Name(), Keys: keys},
+		Message: EventMessage{Reason: "Finished", Cause: cause, HumanMessage: step.Description(), Annotations: map[string]any{
+			"success":          success,
+			"duration_seconds": finish.Sub(start).Seconds(),
+		}},
+		From: start,
+		To:   finish,
+	})
 }
 
 // RecordConfigurationInsight records configuration insight

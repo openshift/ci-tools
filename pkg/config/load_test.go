@@ -232,319 +232,6 @@ func TestValidateProwgenConfig(t *testing.T) {
 	}
 }
 
-func TestProwgen_GetSlackReporterConfigForTest(t *testing.T) {
-	testCases := []struct {
-		name     string
-		configs  []SlackReporterConfig
-		test     string
-		variant  string
-		expected *SlackReporterConfig
-	}{
-		{
-			name: "one config exists",
-			configs: []SlackReporterConfig{
-				{
-					Channel:           "some-channel",
-					JobStatesToReport: []prowv1.ProwJobState{"error"},
-					ReportTemplate:    "something happened",
-					JobNames:          []string{"unit", "e2e"},
-				},
-			},
-			test: "unit",
-			expected: &SlackReporterConfig{
-				Channel:           "some-channel",
-				JobStatesToReport: []prowv1.ProwJobState{"error"},
-				ReportTemplate:    "something happened",
-				JobNames:          []string{"unit", "e2e"},
-			},
-		},
-		{
-			name: "multiple configs exists",
-			configs: []SlackReporterConfig{
-				{
-					Channel:           "some-channel",
-					JobStatesToReport: []prowv1.ProwJobState{"error"},
-					ReportTemplate:    "something different happened",
-					JobNames:          []string{"e2e"},
-				},
-				{
-					Channel:           "some-channel",
-					JobStatesToReport: []prowv1.ProwJobState{"error"},
-					ReportTemplate:    "something happened",
-					JobNames:          []string{"unit"},
-				},
-			},
-			test: "unit",
-			expected: &SlackReporterConfig{
-				Channel:           "some-channel",
-				JobStatesToReport: []prowv1.ProwJobState{"error"},
-				ReportTemplate:    "something happened",
-				JobNames:          []string{"unit"},
-			},
-		},
-		{
-			name: "test isn't in any config",
-			configs: []SlackReporterConfig{
-				{
-					Channel:           "some-channel",
-					JobStatesToReport: []prowv1.ProwJobState{"error"},
-					ReportTemplate:    "something different happened",
-					JobNames:          []string{"e2e"},
-				},
-				{
-					Channel:           "some-channel",
-					JobStatesToReport: []prowv1.ProwJobState{"error"},
-					ReportTemplate:    "something happened",
-					JobNames:          []string{"unit"},
-				},
-			},
-			test:     "lint",
-			expected: nil,
-		},
-		{
-			name: "excluded variant",
-			configs: []SlackReporterConfig{
-				{
-					Channel:           "some-channel",
-					JobStatesToReport: []prowv1.ProwJobState{"error"},
-					ReportTemplate:    "something happened",
-					JobNames:          []string{"unit", "e2e"},
-					ExcludedVariants:  []string{"exclude"},
-				},
-			},
-			test:     "unit",
-			variant:  "exclude",
-			expected: nil,
-		},
-		{
-			name: "excluded variant in one config, but another exists",
-			configs: []SlackReporterConfig{
-				{
-					Channel:           "some-channel",
-					JobStatesToReport: []prowv1.ProwJobState{"error"},
-					ReportTemplate:    "something happened",
-					JobNames:          []string{"unit", "e2e"},
-					ExcludedVariants:  []string{"exclude"},
-				},
-				{
-					Channel:           "some-channel",
-					JobStatesToReport: []prowv1.ProwJobState{"error"},
-					ReportTemplate:    "something happened",
-					JobNames:          []string{"unit", "e2e"},
-				},
-			},
-			test:    "unit",
-			variant: "exclude",
-			expected: &SlackReporterConfig{
-				Channel:           "some-channel",
-				JobStatesToReport: []prowv1.ProwJobState{"error"},
-				ReportTemplate:    "something happened",
-				JobNames:          []string{"unit", "e2e"},
-			},
-		},
-		{
-			name: "regex pattern matches job name",
-			configs: []SlackReporterConfig{
-				{
-					Channel:           "some-channel",
-					JobStatesToReport: []prowv1.ProwJobState{"error"},
-					ReportTemplate:    "something happened",
-					JobNamePatterns:   []string{"^unit.*", "^e2e.*"},
-				},
-			},
-			test: "unit-test-123",
-			expected: &SlackReporterConfig{
-				Channel:           "some-channel",
-				JobStatesToReport: []prowv1.ProwJobState{"error"},
-				ReportTemplate:    "something happened",
-				JobNamePatterns:   []string{"^unit.*", "^e2e.*"},
-			},
-		},
-		{
-			name: "regex pattern doesn't match job name",
-			configs: []SlackReporterConfig{
-				{
-					Channel:           "some-channel",
-					JobStatesToReport: []prowv1.ProwJobState{"error"},
-					ReportTemplate:    "something happened",
-					JobNamePatterns:   []string{"^unit.*", "^e2e.*"},
-				},
-			},
-			test:     "integration-test",
-			expected: nil,
-		},
-		{
-			name: "both exact and pattern matching - exact match takes precedence",
-			configs: []SlackReporterConfig{
-				{
-					Channel:           "exact-channel",
-					JobStatesToReport: []prowv1.ProwJobState{"error"},
-					ReportTemplate:    "exact match",
-					JobNames:          []string{"unit-test"},
-				},
-				{
-					Channel:           "pattern-channel",
-					JobStatesToReport: []prowv1.ProwJobState{"error"},
-					ReportTemplate:    "pattern match",
-					JobNamePatterns:   []string{"^unit.*"},
-				},
-			},
-			test: "unit-test",
-			expected: &SlackReporterConfig{
-				Channel:           "exact-channel",
-				JobStatesToReport: []prowv1.ProwJobState{"error"},
-				ReportTemplate:    "exact match",
-				JobNames:          []string{"unit-test"},
-			},
-		},
-		{
-			name: "fallback to pattern matching when exact match doesn't exist",
-			configs: []SlackReporterConfig{
-				{
-					Channel:           "exact-channel",
-					JobStatesToReport: []prowv1.ProwJobState{"error"},
-					ReportTemplate:    "exact match",
-					JobNames:          []string{"other-test"},
-				},
-				{
-					Channel:           "pattern-channel",
-					JobStatesToReport: []prowv1.ProwJobState{"error"},
-					ReportTemplate:    "pattern match",
-					JobNamePatterns:   []string{"^unit.*"},
-				},
-			},
-			test: "unit-test-abc",
-			expected: &SlackReporterConfig{
-				Channel:           "pattern-channel",
-				JobStatesToReport: []prowv1.ProwJobState{"error"},
-				ReportTemplate:    "pattern match",
-				JobNamePatterns:   []string{"^unit.*"},
-			},
-		},
-		{
-			name: "complex regex patterns work",
-			configs: []SlackReporterConfig{
-				{
-					Channel:           "some-channel",
-					JobStatesToReport: []prowv1.ProwJobState{"error"},
-					ReportTemplate:    "something happened",
-					JobNamePatterns:   []string{`^(unit|integration)-test-.*-v\d+$`},
-				},
-			},
-			test: "unit-test-something-v1",
-			expected: &SlackReporterConfig{
-				Channel:           "some-channel",
-				JobStatesToReport: []prowv1.ProwJobState{"error"},
-				ReportTemplate:    "something happened",
-				JobNamePatterns:   []string{`^(unit|integration)-test-.*-v\d+$`},
-			},
-		},
-		{
-			name: "invalid regex patterns are ignored",
-			configs: []SlackReporterConfig{
-				{
-					Channel:           "some-channel",
-					JobStatesToReport: []prowv1.ProwJobState{"error"},
-					ReportTemplate:    "something happened",
-					JobNamePatterns:   []string{"[invalid", "^valid.*"},
-				},
-			},
-			test: "valid-test",
-			expected: &SlackReporterConfig{
-				Channel:           "some-channel",
-				JobStatesToReport: []prowv1.ProwJobState{"error"},
-				ReportTemplate:    "something happened",
-				JobNamePatterns:   []string{"[invalid", "^valid.*"},
-			},
-		},
-		{
-			name: "excluded job patterns work with exact matches",
-			configs: []SlackReporterConfig{
-				{
-					Channel:             "some-channel",
-					JobStatesToReport:   []prowv1.ProwJobState{"error"},
-					ReportTemplate:      "something happened",
-					JobNames:            []string{"unit", "e2e", "unit-skip"},
-					ExcludedJobPatterns: []string{".*-skip$"},
-				},
-			},
-			test:     "unit-skip",
-			expected: nil,
-		},
-		{
-			name: "excluded job patterns work with regex matches",
-			configs: []SlackReporterConfig{
-				{
-					Channel:             "some-channel",
-					JobStatesToReport:   []prowv1.ProwJobState{"error"},
-					ReportTemplate:      "something happened",
-					JobNamePatterns:     []string{"^unit.*"},
-					ExcludedJobPatterns: []string{".*-skip$"},
-				},
-			},
-			test:     "unit-test-skip",
-			expected: nil,
-		},
-		{
-			name: "excluded job patterns don't affect non-matching jobs",
-			configs: []SlackReporterConfig{
-				{
-					Channel:             "some-channel",
-					JobStatesToReport:   []prowv1.ProwJobState{"error"},
-					ReportTemplate:      "something happened",
-					JobNamePatterns:     []string{"^unit.*"},
-					ExcludedJobPatterns: []string{".*-skip$"},
-				},
-			},
-			test: "unit-test",
-			expected: &SlackReporterConfig{
-				Channel:             "some-channel",
-				JobStatesToReport:   []prowv1.ProwJobState{"error"},
-				ReportTemplate:      "something happened",
-				JobNamePatterns:     []string{"^unit.*"},
-				ExcludedJobPatterns: []string{".*-skip$"},
-			},
-		},
-		{
-			name: "multiple excluded patterns work",
-			configs: []SlackReporterConfig{
-				{
-					Channel:             "some-channel",
-					JobStatesToReport:   []prowv1.ProwJobState{"error"},
-					ReportTemplate:      "something happened",
-					JobNamePatterns:     []string{".*"}, // Match all
-					ExcludedJobPatterns: []string{".*-skip$", "^nightly-.*"},
-				},
-			},
-			test:     "nightly-unit-test",
-			expected: nil,
-		},
-		{
-			name: "excluded patterns with invalid regex are ignored",
-			configs: []SlackReporterConfig{
-				{
-					Channel:             "some-channel",
-					JobStatesToReport:   []prowv1.ProwJobState{"error"},
-					ReportTemplate:      "something happened",
-					JobNamePatterns:     []string{"^unit.*"},
-					ExcludedJobPatterns: []string{"[invalid", ".*-skip$"},
-				},
-			},
-			test:     "unit-test-skip",
-			expected: nil, // Should be excluded by the valid pattern
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			p := Prowgen{SlackReporterConfigs: tc.configs}
-			result := p.GetSlackReporterConfigForTest(tc.test, tc.variant)
-			if diff := cmp.Diff(result, tc.expected); diff != "" {
-				t.Fatalf("result doesn't match expected, diff: %v", diff)
-			}
-		})
-	}
-}
-
 func TestValidateProwgenSkipOperatorPresubmits(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -600,6 +287,75 @@ func TestValidateProwgenSkipOperatorPresubmits(t *testing.T) {
 				if skip != tc.expected {
 					t.Fatalf("result doesn't match, expected %v, received %v", tc.expected, skip)
 				}
+			}
+		})
+	}
+}
+
+func TestProwgen_MergeDefaults_SlackReporterConfigs(t *testing.T) {
+	testCases := []struct {
+		name     string
+		base     Prowgen
+		defaults Prowgen
+		expected []SlackReporterConfig
+	}{
+		{
+			name: "slack reporter configs are never merged from defaults",
+			base: Prowgen{},
+			defaults: Prowgen{
+				SlackReporterConfigs: []SlackReporterConfig{
+					{
+						Channel:             "#test-channel",
+						JobStatesToReport:   []prowv1.ProwJobState{"failure"},
+						JobNamePatterns:     []string{".*"},
+						ExcludedJobPatterns: []string{".*-skip$"},
+					},
+				},
+			},
+			expected: nil,
+		},
+		{
+			name: "existing slack reporter configs are preserved unchanged",
+			base: Prowgen{
+				SlackReporterConfigs: []SlackReporterConfig{
+					{
+						Channel:           "#existing-channel",
+						JobStatesToReport: []prowv1.ProwJobState{"error"},
+						JobNames:          []string{"unit"},
+					},
+				},
+			},
+			defaults: Prowgen{
+				SlackReporterConfigs: []SlackReporterConfig{
+					{
+						Channel:             "#default-channel",
+						JobStatesToReport:   []prowv1.ProwJobState{"failure"},
+						JobNamePatterns:     []string{".*"},
+						ExcludedJobPatterns: []string{".*-skip$"},
+					},
+				},
+			},
+			expected: []SlackReporterConfig{
+				{
+					Channel:           "#existing-channel",
+					JobStatesToReport: []prowv1.ProwJobState{"error"},
+					JobNames:          []string{"unit"},
+				},
+			},
+		},
+		{
+			name:     "empty base with empty defaults stays empty",
+			base:     Prowgen{},
+			defaults: Prowgen{},
+			expected: nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.base.MergeDefaults(&tc.defaults)
+			if diff := cmp.Diff(tc.base.SlackReporterConfigs, tc.expected); diff != "" {
+				t.Fatalf("SlackReporterConfigs don't match expected, diff: %v", diff)
 			}
 		})
 	}

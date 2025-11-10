@@ -75,7 +75,7 @@ prometheusK8s:
     spec:
       resources:
         requests:
-          storage: 100Gi
+          storage: 250Gi
 prometheusOperator:
   nodeSelector:
     node-role.kubernetes.io/infra: ""

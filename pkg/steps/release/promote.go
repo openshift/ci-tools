@@ -228,7 +228,7 @@ func getMirrorCommand(registryConfig string, images []string, loglevel int) stri
 }
 
 func getTagCommand(tagSpecs []string, loglevel int) string {
-	return fmt.Sprintf("oc tag --loglevel=%d --reference-policy='source' --import-mode='PreserveOriginal' %s",
+	return fmt.Sprintf("oc tag --source=docker --loglevel=%d --reference-policy='source' --import-mode='PreserveOriginal' %s",
 		loglevel, strings.Join(tagSpecs, " "))
 }
 
@@ -248,7 +248,7 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 			pruneImages = append(pruneImages, fmt.Sprintf("%s=%s", imageMirrorTarget[k], k))
 		} else {
 			// Detect based on target format: quay-proxy targets should be tagged, others mirrored
-			if strings.HasPrefix(k, "registry.ci.openshift.org/") && (strings.Contains(k, "-quay:") || strings.Contains(k, "${component}")) {
+			if strings.Contains(k, "-quay:") || strings.Contains(k, "${component}") {
 				tags = append(tags, fmt.Sprintf("%s %s", imageMirrorTarget[k], k))
 			} else {
 				// Default to mirroring for quay.io targets and other registries
@@ -310,10 +310,21 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 					Image:   image,
 					Command: command,
 					Args:    args,
+					Env: []coreapi.EnvVar{
+						{
+							Name:  "KUBECONFIG",
+							Value: "/etc/app-ci-kubeconfig/kubeconfig",
+						},
+					},
 					VolumeMounts: []coreapi.VolumeMount{
 						{
 							Name:      "push-secret",
 							MountPath: "/etc/push-secret",
+							ReadOnly:  true,
+						},
+						{
+							Name:      "app-ci-kubeconfig",
+							MountPath: "/etc/app-ci-kubeconfig",
 							ReadOnly:  true,
 						},
 					},
@@ -324,6 +335,12 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 					Name: "push-secret",
 					VolumeSource: coreapi.VolumeSource{
 						Secret: &coreapi.SecretVolumeSource{SecretName: api.RegistryPushCredentialsCICentralSecret},
+					},
+				},
+				{
+					Name: "app-ci-kubeconfig",
+					VolumeSource: coreapi.VolumeSource{
+						Secret: &coreapi.SecretVolumeSource{SecretName: api.PromotionQuayTaggerKubeconfigSecret},
 					},
 				},
 			},

@@ -541,6 +541,18 @@ func TestHandlePullRequestCreation(t *testing.T) {
 			},
 			expectCommentCall: false,
 		},
+		{
+			name:          "LGTM mode repo with jobs: shows pipeline info",
+			event:         basicEvent,
+			watcherConfig: enabledConfig{}, // Empty regular config
+			configData: map[string]presubmitTests{
+				org + "/" + repo: {
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
+				},
+			},
+			expectCommentCall: true,
+			expectedComment:   pullRequestInfoComment,
+		},
 	}
 
 	for _, tc := range tests {
@@ -554,9 +566,22 @@ func TestHandlePullRequestCreation(t *testing.T) {
 				}
 			}
 
+			lgtmConfig := enabledConfig{}
+			if tc.name == "LGTM mode repo with jobs: shows pipeline info" {
+				lgtmConfig = enabledConfig{Orgs: []struct {
+					Org   string     `yaml:"org"`
+					Repos []RepoItem `yaml:"repos"`
+				}{
+					{
+						Org:   org,
+						Repos: []RepoItem{{Name: repo}},
+					},
+				}}
+			}
+
 			cw := &clientWrapper{
 				watcher:     &watcher{config: tc.watcherConfig},
-				lgtmWatcher: &watcher{config: enabledConfig{}},
+				lgtmWatcher: &watcher{config: lgtmConfig},
 				configDataProvider: &ConfigDataProvider{
 					updatedPresubmits: tc.configData,
 					configGetter:      configGetter,

@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"strings"
 
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	v1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	"sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/prow/pkg/github"
+	"sigs.k8s.io/prow/pkg/kube"
 )
 
 type minimalGhClient interface {
@@ -13,15 +17,14 @@ type minimalGhClient interface {
 	CreateComment(org, repo string, number int, comment string) error
 	GetPullRequestChanges(org string, repo string, number int) ([]github.PullRequestChange, error)
 	CreateStatus(org, repo, ref string, s github.Status) error
-	ListStatuses(org, repo, ref string) ([]github.Status, error)
 }
 
-func sendComment(presubmits presubmitTests, pj *v1.ProwJob, ghc minimalGhClient, deleteIds func()) error {
-	return sendCommentWithMode(presubmits, pj, ghc, deleteIds)
+func sendComment(presubmits presubmitTests, pj *v1.ProwJob, ghc minimalGhClient, deleteIds func(), pjLister ctrlruntimeclient.Reader) error {
+	return sendCommentWithMode(presubmits, pj, ghc, deleteIds, pjLister, false)
 }
 
-func sendCommentWithMode(presubmits presubmitTests, pj *v1.ProwJob, ghc minimalGhClient, deleteIds func()) error {
-	testContexts, manualControlMessage, err := acquireConditionalContexts(pj, presubmits.pipelineConditionallyRequired, ghc, deleteIds)
+func sendCommentWithMode(presubmits presubmitTests, pj *v1.ProwJob, ghc minimalGhClient, deleteIds func(), pjLister ctrlruntimeclient.Reader, isExplicitCommand bool) error {
+	testContexts, manualControlMessage, err := acquireConditionalContexts(context.Background(), pj, presubmits.pipelineConditionallyRequired, ghc, deleteIds, pjLister, isExplicitCommand)
 	if err != nil {
 		deleteIds()
 		return err
@@ -29,7 +32,9 @@ func sendCommentWithMode(presubmits presubmitTests, pj *v1.ProwJob, ghc minimalG
 
 	var comment string
 
-	if manualControlMessage != "" {
+	// If it's an explicit /pipeline required command, ignore manual control message
+	// and proceed with scheduling tests
+	if manualControlMessage != "" && !isExplicitCommand {
 		comment = manualControlMessage
 	} else {
 		var protectedCommands string
@@ -55,7 +60,7 @@ func sendCommentWithMode(presubmits presubmitTests, pj *v1.ProwJob, ghc minimalG
 	return nil
 }
 
-func acquireConditionalContexts(pj *v1.ProwJob, pipelineConditionallyRequired []config.Presubmit, ghc minimalGhClient, deleteIds func()) (string, string, error) {
+func acquireConditionalContexts(ctx context.Context, pj *v1.ProwJob, pipelineConditionallyRequired []config.Presubmit, ghc minimalGhClient, deleteIds func(), pjLister ctrlruntimeclient.Reader, isExplicitCommand bool) (string, string, error) {
 	repoBaseRef := pj.Spec.Refs.Repo + "-" + pj.Spec.Refs.BaseRef
 	var testCommands string
 	if len(pipelineConditionallyRequired) != 0 {
@@ -107,22 +112,49 @@ func acquireConditionalContexts(pj *v1.ProwJob, pipelineConditionallyRequired []
 		}
 
 		// Check if any of the tests that should run have already been manually triggered
-		if len(testsToRun) > 0 {
-			statuses, err := ghc.ListStatuses(pj.Spec.Refs.Org, pj.Spec.Refs.Repo, pj.Spec.Refs.Pulls[0].SHA)
-			if err != nil {
-				deleteIds()
-				return "", "", err
+		// Skip this check if it's an explicit /pipeline required command
+		if len(testsToRun) > 0 && pjLister != nil && pj.Spec.Refs.Pulls[0].SHA != "" && !isExplicitCommand {
+			// Build label selector from ProwJob spec (same as in reconciler.go)
+			selector := map[string]string{
+				kube.OrgLabel:         pj.Spec.Refs.Org,
+				kube.RepoLabel:        pj.Spec.Refs.Repo,
+				kube.PullLabel:        fmt.Sprintf("%d", pj.Spec.Refs.Pulls[0].Number),
+				kube.BaseRefLabel:     pj.Spec.Refs.BaseRef,
+				kube.ProwJobTypeLabel: string(v1.PresubmitJob),
 			}
 
-			// Check if any of the tests we want to run have already been triggered manually
-			// by looking for their status in the statuses
-			for _, presubmit := range testsToRun {
+			var pjs v1.ProwJobList
+			if err := pjLister.List(ctx, &pjs, ctrlruntimeclient.MatchingLabels(selector)); err != nil {
+				// If listing fails, skip check and proceed with creating comment
+				deleteIds()
+				testCommands := ""
+				for _, presubmit := range testsToRun {
+					testCommands += "\n" + presubmit.RerunCommand
+				}
+				return testCommands, "", nil
+			}
 
+			// Check if any of the tests we want to run have already been triggered
+			// by looking for ProwJobs with matching job names and same SHA
+			repoBaseRef := pj.Spec.Refs.Repo + "-" + pj.Spec.Refs.BaseRef
+			for _, presubmit := range testsToRun {
 				testName := presubmit.Name
-				for _, status := range statuses {
-					if strings.Contains(status.Context, testName) {
+				// Only check presubmits that match the repo-baseRef pattern (same as reconciler)
+				if !strings.Contains(testName, repoBaseRef) {
+					continue
+				}
+				for _, pjob := range pjs.Items {
+					// Check if this ProwJob matches the test we want to run
+					// and if it's for the same SHA
+					// If a job exists in ANY state, it means it was already triggered
+					// so we should not run it and inform the user
+					if pjob.Spec.Job == testName &&
+						pjob.Spec.Refs != nil &&
+						len(pjob.Spec.Refs.Pulls) > 0 &&
+						pjob.Spec.Refs.Pulls[0].SHA == pj.Spec.Refs.Pulls[0].SHA {
 						deleteIds()
-						return "", "Tests from second stage were triggered manually. Pipeline can be controlled only manually, until HEAD changes. Use `/pipeline required` to trigger second stage.", nil
+						//add debug log here we are sending manual message
+						return "", "Tests from second stage were triggered manually. Pipeline can be controlled only manually, until HEAD changes. Use command to trigger second stage.", nil
 					}
 				}
 			}

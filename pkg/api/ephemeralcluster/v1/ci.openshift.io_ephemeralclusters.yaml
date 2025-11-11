@@ -328,6 +328,14 @@ spec:
                               description: Channel is the release channel to search
                                 in
                               type: string
+                            relative:
+                              description: |-
+                                Relative optionally specifies how old of a release
+                                is requested from this channel. For instance, a value
+                                of 1 will resolve to the previous release in the
+                                upgrade graph for this channel.  This field is ignored
+                                if an explicit Version is provided.
+                              type: integer
                             version:
                               description: Version is the minor version to search
                                 for

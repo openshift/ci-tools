@@ -452,6 +452,12 @@ type Release struct {
 	// Architecture is the architecture for the release.
 	// Defaults to amd64.
 	Architecture ReleaseArchitecture `json:"architecture,omitempty"`
+	// Relative optionally specifies how old of a release
+	// is requested from this channel. For instance, a value
+	// of 1 will resolve to the previous release in the
+	// upgrade graph for this channel.  This field is ignored
+	// if an explicit Version is provided.
+	Relative int `json:"relative,omitempty"`
 }
 
 type ReleaseChannel string

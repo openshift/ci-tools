@@ -58,7 +58,7 @@ type options struct {
 	impersonateUser     string
 
 	secretsGetters  map[string]Getter
-	config          secretbootstrap.Config
+	vaultConfig     secretbootstrap.Config
 	generatorConfig secretgenerator.Config
 
 	allowUnused flagutil.Strings
@@ -119,15 +119,15 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor, kubeConfigs map
 		return err
 	}
 
-	if err := secretbootstrap.LoadConfigFromFile(o.configPath, &o.config); err != nil {
+	if err := secretbootstrap.LoadConfigFromFile(o.configPath, &o.vaultConfig); err != nil {
 		return err
 	}
 
 	if vals := o.secretNamesRaw.Strings(); len(vals) > 0 {
 		secretNames := sets.New[string](vals...)
 		logrus.WithField("secretNames", sets.List(secretNames)).Info("pruning irrelevant configuration ...")
-		pruneIrrelevantConfiguration(&o.config, secretNames)
-		logrus.WithField("secretNames", sets.List(secretNames)).WithField("o.config.Secrets", o.config.Secrets).Info("pruned irrelevant configuration")
+		pruneIrrelevantConfiguration(&o.vaultConfig, secretNames)
+		logrus.WithField("secretNames", sets.List(secretNames)).WithField("o.config.Secrets", o.vaultConfig.Secrets).Info("pruned irrelevant configuration")
 	}
 
 	if o.generatorConfigPath != "" {
@@ -149,7 +149,7 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor, kubeConfigs map
 
 	o.secretsGetters = map[string]Getter{}
 	var filteredSecrets []secretbootstrap.SecretConfig
-	for i, secretConfig := range o.config.Secrets {
+	for i, secretConfig := range o.vaultConfig.Secrets {
 		var to []secretbootstrap.SecretContext
 
 		for j, secretContext := range secretConfig.To {
@@ -183,7 +183,7 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor, kubeConfigs map
 			filteredSecrets = append(filteredSecrets, secretConfig)
 		}
 	}
-	o.config.Secrets = filteredSecrets
+	o.vaultConfig.Secrets = filteredSecrets
 
 	return o.validateCompletedOptions()
 }
@@ -203,11 +203,11 @@ func pruneIrrelevantConfiguration(c *secretbootstrap.Config, secretNames sets.Se
 }
 
 func (o *options) validateCompletedOptions() error {
-	if err := o.config.Validate(); err != nil {
+	if err := o.vaultConfig.Validate(); err != nil {
 		return fmt.Errorf("failed to validate the config: %w", err)
 	}
 	toMap := map[string]map[string]string{}
-	for i, secretConfig := range o.config.Secrets {
+	for i, secretConfig := range o.vaultConfig.Secrets {
 		if len(secretConfig.From) == 0 {
 			return fmt.Errorf("config[%d].from is empty", i)
 		}
@@ -859,7 +859,7 @@ func getUnusedItems(config secretbootstrap.Config, client secrets.ReadOnlyClient
 func (o *options) validateItems(client secrets.ReadOnlyClient) error {
 	var errs []error
 
-	for _, config := range o.config.Secrets {
+	for _, config := range o.vaultConfig.Secrets {
 		for _, item := range config.From {
 			logger := logrus.WithField("item", item.Item)
 
@@ -875,7 +875,7 @@ func (o *options) validateItems(client secrets.ReadOnlyClient) error {
 						break
 					}
 					if _, err := client.GetFieldOnItem(data.Item, data.AuthField); err != nil {
-						if o.generatorConfig.IsFieldGenerated(stripDPTPPrefixFromItem(data.Item, &o.config), data.AuthField) {
+						if o.generatorConfig.IsFieldGenerated(stripDPTPPrefixFromItem(data.Item, &o.vaultConfig), data.AuthField) {
 							logger.WithField("field", data.AuthField).Warn("Field doesn't exist but it will be generated")
 						} else {
 							errs = append(errs, fmt.Errorf("field %s in item %s doesn't exist", data.AuthField, data.Item))
@@ -889,7 +889,7 @@ func (o *options) validateItems(client secrets.ReadOnlyClient) error {
 					continue
 				}
 				if !hasItem {
-					if o.generatorConfig.IsItemGenerated(stripDPTPPrefixFromItem(item.Item, &o.config)) {
+					if o.generatorConfig.IsItemGenerated(stripDPTPPrefixFromItem(item.Item, &o.vaultConfig)) {
 						logrus.Warn("Item doesn't exist but it will be generated")
 					} else {
 						errs = append(errs, fmt.Errorf("item %s doesn't exist", item.Item))
@@ -899,7 +899,7 @@ func (o *options) validateItems(client secrets.ReadOnlyClient) error {
 
 				if item.Field != "" {
 					if _, err := client.GetFieldOnItem(item.Item, item.Field); err != nil {
-						if o.generatorConfig.IsFieldGenerated(stripDPTPPrefixFromItem(item.Item, &o.config), item.Field) {
+						if o.generatorConfig.IsFieldGenerated(stripDPTPPrefixFromItem(item.Item, &o.vaultConfig), item.Field) {
 							logger.WithField("field", item.Field).Warn("Field doesn't exist but it will be generated")
 						} else {
 							errs = append(errs, fmt.Errorf("field %s in item %s doesn't exist", item.Field, item.Item))
@@ -975,14 +975,14 @@ func reconcileSecrets(o options, client secrets.ReadOnlyClient, prowDisabledClus
 	}
 
 	// errors returned by constructSecrets will be handled once the rest of the secrets have been uploaded
-	secretsMap, err := constructSecrets(o.config, client, prowDisabledClusters)
+	secretsMap, err := constructSecrets(o.vaultConfig, client, prowDisabledClusters)
 	if err != nil {
 		errs = append(errs, err)
 	}
 
 	if o.validateItemsUsage {
 		unusedGracePeriod := time.Now().AddDate(0, 0, -allowUnusedDays)
-		err := getUnusedItems(o.config, client, o.allowUnused.StringSet(), unusedGracePeriod)
+		err := getUnusedItems(o.vaultConfig, client, o.allowUnused.StringSet(), unusedGracePeriod)
 		if err != nil {
 			errs = append(errs, err)
 		}
@@ -994,7 +994,7 @@ func reconcileSecrets(o options, client secrets.ReadOnlyClient, prowDisabledClus
 			errs = append(errs, fmt.Errorf("failed to write secrets on dry run: %w", err))
 		}
 	} else {
-		if err := updateSecrets(o.secretsGetters, secretsMap, o.force, o.confirm, sets.New[string](o.config.OSDGlobalPullSecretGroup()...), prowDisabledClusters); err != nil {
+		if err := updateSecrets(o.secretsGetters, secretsMap, o.force, o.confirm, sets.New[string](o.vaultConfig.OSDGlobalPullSecretGroup()...), prowDisabledClusters); err != nil {
 			errs = append(errs, fmt.Errorf("failed to update secrets: %w", err))
 		}
 		logrus.Info("Updated secrets.")

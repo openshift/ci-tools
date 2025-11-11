@@ -38,7 +38,6 @@ spec:
               clientID: $CLIENT_ID
               clientSecret: $CLIENT_SECRET
               redirectURI: https://idp.ci.openshift.org/callback
-              insecureSkipEmailVerified: true
               getUserInfo: true
               claimMapping:
                 preferred_username: preferred_username

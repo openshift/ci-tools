@@ -3,8 +3,8 @@ package group
 import (
 	"fmt"
 	"os"
-	"regexp"
 
+	validation "github.com/openshift/ci-tools/pkg/gsm-validation"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/yaml"
 )
@@ -12,12 +12,6 @@ import (
 const (
 	// OpenshiftPrivAdminsGroup defines the group that will be used for the openshift-priv namespace in the app.ci cluster.
 	OpenshiftPrivAdminsGroup = "openshift-priv-admins"
-
-	//CollectionRegex determines the allowed naming pattern for a secret collection
-	CollectionRegex = "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
-
-	// MaxCollectionLength is the maximum length of a secret collection name
-	MaxCollectionLength = 50
 )
 
 // Config represents the configuration file for the groups
@@ -82,15 +76,10 @@ func (c *Config) validate() error {
 			return fmt.Errorf("cannot use the group name %s in the configuration file", OpenshiftPrivAdminsGroup)
 		}
 		for _, collection := range v.SecretCollections {
-			if !ValidateCollectionName(collection) {
-				return fmt.Errorf("invalid collection name '%s' in the configuration file: must be max %d characters long and start and end with lowercase letters or numbers, with hyphens allowed in the middle", collection, MaxCollectionLength)
+			if !validation.ValidateCollectionName(collection) {
+				return fmt.Errorf("invalid collection name '%s' in the configuration file: must be max %d characters long and start and end with lowercase letters or numbers, with hyphens allowed in the middle", collection, validation.MaxCollectionLength)
 			}
 		}
 	}
 	return nil
-}
-
-func ValidateCollectionName(collection string) bool {
-	return regexp.MustCompile(CollectionRegex).MatchString(collection) &&
-		len(collection) <= MaxCollectionLength
 }

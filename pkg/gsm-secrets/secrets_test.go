@@ -2,7 +2,6 @@ package gsmsecrets
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 )
 
@@ -77,90 +76,6 @@ func TestVerifyIndexSecretContent(t *testing.T) {
 					t.Fatalf("verifyIndexSecretContent failed: %v", err)
 				}
 			}
-		})
-	}
-}
-
-func TestValidateSecretName(t *testing.T) {
-	testCases := []struct {
-		name          string
-		secretName    string
-		expectedValid bool
-	}{
-		{
-			name:          "valid secret name: updater-service-account",
-			secretName:    "updater-service-account",
-			expectedValid: true,
-		},
-		{
-			name:          "valid secret name: mixed case",
-			secretName:    "UpdaterServiceAccount",
-			expectedValid: true,
-		},
-		{
-			name:          "valid secret name: numbers",
-			secretName:    "secret123",
-			expectedValid: true,
-		},
-		{
-			name:          "valid secret name: hyphens",
-			secretName:    "my-secret-name",
-			expectedValid: true,
-		},
-		{
-			name:          "valid secret name: single character",
-			secretName:    "A",
-			expectedValid: true,
-		},
-		{
-			name:          "valid secret name: uppercase",
-			secretName:    "UPPERCASE",
-			expectedValid: true,
-		},
-		{
-			name:          "invalid secret name: underscores",
-			secretName:    "updater_service_account",
-			expectedValid: false,
-		},
-		{
-			name:          "invalid secret name: special characters",
-			secretName:    "!123symbols",
-			expectedValid: false,
-		},
-		{
-			name:          "invalid secret name: spaces",
-			secretName:    "my secret",
-			expectedValid: false,
-		},
-		{
-			name:          "invalid secret name: dots",
-			secretName:    "my.secret",
-			expectedValid: false,
-		},
-		{
-			name:          "invalid secret name: empty string",
-			secretName:    "",
-			expectedValid: false,
-		},
-		{
-			name:          "invalid secret name: double underscores",
-			secretName:    "secret__name",
-			expectedValid: false,
-		},
-		{
-			name:          "invalid secret name: too long",
-			secretName:    fmt.Sprintf("collection__%s", strings.Repeat("a", 243)),
-			expectedValid: false,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			actualValid := ValidateSecretName(tc.secretName)
-			if actualValid != tc.expectedValid {
-				t.Errorf("Expected %t, got %t for secret name %q", tc.expectedValid, actualValid, tc.secretName)
-			}
-
 		})
 	}
 }

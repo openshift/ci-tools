@@ -21,7 +21,9 @@ const (
 	ServiceAccountIDSuffix          = "-updater"
 	ServiceAccountDescriptionPrefix = "Updater service account for secret collection: "
 
-	SecretNameRegex = "^[A-Za-z0-9-]+$"
+	CollectionSecretDelimiter = "__"
+	DotReplacementString      = "--dot--"
+	SlashReplacementString    = "--slash--"
 
 	// IAM binding condition title prefixes
 	SecretsViewerConditionTitlePrefix  = "Read access to secrets for "

@@ -269,7 +269,7 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 
 	// Generate mirror commands if there are images to mirror
 	if len(images) > 0 {
-		mirrorCommand := fmt.Sprintf("for r in {1..5}; do echo Mirror attempt $r; %s && break; backoff=$(($RANDOM %% 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff; done", getMirrorCommand(registryConfig, images, 10))
+		mirrorCommand := fmt.Sprintf("for r in {1..5}; do echo Mirror attempt $r; %s && break; backoff=$(($RANDOM %% 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff; done", getMirrorCommand(registryConfig, images, 2))
 		commands = append(commands, mirrorCommand)
 	}
 
@@ -280,18 +280,18 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 			// For quay promotion, try all tags together first (fastest path), then fallback to individual for partial success
 			tagCommands := []string{"set +e"}
 			// Try all at once first (1-2 attempts for fastest path)
-			singleCmd := fmt.Sprintf(retryLoopTemplate, 2, "Tag attempt $r (all together)", getTagCommand(tags, 10), "")
+			singleCmd := fmt.Sprintf(retryLoopTemplate, 2, "'Tag attempt $r (all together)'", getTagCommand(tags, 2), "")
 			tagCommands = append(tagCommands, singleCmd)
 			// If that fails, try individually for partial success
 			for _, tagPair := range tags {
-				individualCmd := fmt.Sprintf(retryLoopTemplate, 3, "Tag attempt $r (individual)", getTagCommand([]string{tagPair}, 10), retryLoopWithBackoff)
+				individualCmd := fmt.Sprintf(retryLoopTemplate, 3, "'Tag attempt $r (individual)'", getTagCommand([]string{tagPair}, 2), retryLoopWithBackoff)
 				tagCommands = append(tagCommands, individualCmd)
 			}
 			tagCommands = append(tagCommands, "set -e")
 			commands = append(commands, strings.Join(tagCommands, "\n"))
 		} else {
 			// For regular promotion, use the original retry logic
-			tagCommand := fmt.Sprintf(retryLoopTemplate, 5, "Tag attempt $r", getTagCommand(tags, 10), retryLoopWithBackoff)
+			tagCommand := fmt.Sprintf(retryLoopTemplate, 5, "Tag attempt $r", getTagCommand(tags, 2), retryLoopWithBackoff)
 			commands = append(commands, tagCommand)
 		}
 	}
@@ -302,7 +302,7 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 		// Note that we don't retry here and we ignore failures because (a) it may be the first time an image tag is
 		// being promoted to and trying to add a pruning tag to the existing image is doomed to fail. (b) pruning tags
 		// help eliminate a rare race condition. The cost of an occasional failure in establishing them is very low.
-		args = append(args, fmt.Sprintf("%s || true", getMirrorCommand(registryConfig, pruneImages, 10)))
+		args = append(args, fmt.Sprintf("%s || true", getMirrorCommand(registryConfig, pruneImages, 2)))
 	}
 
 	args = append(args, commands...)

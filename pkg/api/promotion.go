@@ -112,7 +112,6 @@ func quayImageWithTime(timestamp string, tag ImageStreamTagReference) string {
 func getQuayProxyTarget(target string, tag ImageStreamTagReference) string {
 	if tag.Name != "" {
 		proxyTarget := fmt.Sprintf("%s/%s-quay:%s", tag.Namespace, tag.Name, tag.Tag)
-		logrus.Debugf("Created quay-proxy target (name-based): %s -> %s (namespace=%s, name=%s, tag=%s)", target, proxyTarget, tag.Namespace, tag.Name, tag.Tag)
 		return proxyTarget
 	}
 
@@ -128,7 +127,6 @@ func getQuayProxyTarget(target string, tag ImageStreamTagReference) string {
 			targetComponent := tagPart[first+1 : tagStart]
 			if targetComponent != "" {
 				proxyTarget := fmt.Sprintf("%s/%s-quay:%s", targetNamespace, targetComponent, tag.Tag)
-				logrus.Debugf("Created quay-proxy target from quay.io target (tag-based): %s -> %s (namespace=%s, component=%s, tag=%s)", target, proxyTarget, targetNamespace, targetComponent, tag.Tag)
 				return proxyTarget
 			}
 		}
@@ -136,7 +134,6 @@ func getQuayProxyTarget(target string, tag ImageStreamTagReference) string {
 
 	// Fallback: use namespace and tag
 	proxyTarget := fmt.Sprintf("%s/%s-quay:%s", tag.Namespace, tag.Tag, tag.Tag)
-	logrus.Debugf("Created quay-proxy target (fallback): %s (namespace=%s, tag=%s)", proxyTarget, tag.Namespace, tag.Tag)
 	return proxyTarget
 }
 
@@ -174,22 +171,17 @@ var (
 
 	// QuayCombinedMirrorFunc does both quay mirroring and quay-proxy tagging
 	QuayCombinedMirrorFunc = func(source, target string, tag ImageStreamTagReference, time string, mirror map[string]string) {
-		logrus.Debugf("QuayCombinedMirrorFunc called: source=%s, target=%s, tag=%+v, time=%s", source, target, tag, time)
-
 		// quay mirroring
 		if time == "" {
 			logrus.Warn("Found time is empty string and skipped the promotion to quay for this image")
 		} else {
 			t := QuayImage(tag)
 			mirror[t] = source
-			logrus.Debugf("Adding quay mirror: %s -> %s", source, t)
 			mirror[quayImageWithTime(time, tag)] = t
-			logrus.Debugf("Adding quay prune tag: %s -> %s", t, quayImageWithTime(time, tag))
 		}
 
 		proxyTarget := getQuayProxyTarget(target, tag)
 		quayProxySource := QuayImageReference(tag)
 		mirror[proxyTarget] = quayProxySource
-		logrus.Debugf("Adding quay-proxy tag: %s -> %s", quayProxySource, proxyTarget)
 	}
 )

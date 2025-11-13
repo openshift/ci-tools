@@ -234,7 +234,7 @@ func getTagCommand(tagSpecs []string, loglevel int) string {
 
 const (
 	retryLoopTemplate    = "for r in {1..%d}; do echo %s; %s && break; %s; done"
-	retryLoopWithBackoff = "backoff=$(($RANDOM %% 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff"
+	retryLoopWithBackoff = "backoff=$(($RANDOM % 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff"
 )
 
 func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namespace string, name string, cliVersion string, nodeArchitectures []string) *coreapi.Pod {

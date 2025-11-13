@@ -1337,6 +1337,7 @@ const (
 	ClusterProfileAWSAutoreleaseQE        ClusterProfile = "aws-autorelease-qe"
 	ClusterProfileAWSSdQE                 ClusterProfile = "aws-sd-qe"
 	ClusterProfileOEXAWSQE                ClusterProfile = "oex-aws-qe"
+	ClusterProfileHyperfleetE2E           ClusterProfile = "hyperfleet-e2e"
 	ClusterProfileAWSPerfScale            ClusterProfile = "aws-perfscale"
 	ClusterProfileAWSPerfScaleOKD         ClusterProfile = "aws-perfscale-okd"
 	ClusterProfileAWSPerfScaleQE          ClusterProfile = "aws-perfscale-qe"
@@ -1534,6 +1535,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSAutoreleaseQE,
 		ClusterProfileAWSSdQE,
 		ClusterProfileOEXAWSQE,
+		ClusterProfileHyperfleetE2E,
 		ClusterProfileAWSSC2SQE,
 		ClusterProfileAWSSCPQE,
 		ClusterProfileAWSOutpostQE,
@@ -1952,6 +1954,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "osd-ephemeral"
 	case ClusterProfileHyperShift:
 		return "hypershift"
+	case ClusterProfileHyperfleetE2E:
+		return "hyperfleet-e2e"
 	case ClusterProfileOCIAgent:
 		return "oci-agent-qe"
 	case ClusterProfileOCIAssisted:
@@ -1987,6 +1991,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-sd-qe-quota-slice"
 	case ClusterProfileOEXAWSQE:
 		return "oex-aws-qe-quota-slice"
+	case ClusterProfileHyperfleetE2E:
+		return "hyperfleet-e2e-quota-slice"
 	case ClusterProfileAWSOutpostQE:
 		return "aws-outpost-qe-quota-slice"
 	case ClusterProfileAWSC2SQE:
@@ -2379,7 +2385,7 @@ func LeaseTypeFromClusterType(t string) (string, error) {
 		"powervs-3", "powervs-4", "powervs-5", "powervs-6", "powervs-7", "powervs-8", "kubevirt", "aws-cpaas", "osd-ephemeral",
 		"gcp-virtualization", "aws-virtualization", "azure-virtualization", "hypershift-powervs",
 		"hypershift-powervs-cb", "aws-mco-qe", "equinix-edge-enablement", "aws-oadp-qe", "azure-oadp-qe", "gcp-oadp-qe",
-		"aws-lp-chaos", "metal-redhat-gs":
+		"aws-lp-chaos", "metal-redhat-gs", "hyperfleet-e2e":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

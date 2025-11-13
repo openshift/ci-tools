@@ -749,6 +749,23 @@ func TestGetPromotionPod(t *testing.T) {
 			namespace: "ci-op-9bdij1f6",
 		},
 		{
+			name:              "promotion-quay-multiple-tags",
+			stepName:          "promotion-quay",
+			nodeArchitectures: []string{"amd64"},
+			imageMirror: map[string]string{
+				"quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes":            "quay.io/openshift/ci:ocp_4.21_ovn-kubernetes",
+				"quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes-base":       "quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-base",
+				"quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes-microshift": "quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-microshift",
+				"quay.io/openshift/ci:ocp_4.21_ovn-kubernetes":                        "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:aaa",
+				"quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-base":                   "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
+				"quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-microshift":             "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ccc",
+				"ocp/4.21-quay:ovn-kubernetes":                                        "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.21_ovn-kubernetes",
+				"ocp/4.21-quay:ovn-kubernetes-base":                                   "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.21_ovn-kubernetes-base",
+				"ocp/4.21-quay:ovn-kubernetes-microshift":                             "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.21_ovn-kubernetes-microshift",
+			},
+			namespace: "ci-op-9bdij1f6",
+		},
+		{
 			name:              "basic case - arm64 only",
 			stepName:          "promotion",
 			nodeArchitectures: []string{"arm64"},

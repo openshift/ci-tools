@@ -232,6 +232,11 @@ func getTagCommand(tagSpecs []string, loglevel int) string {
 		loglevel, strings.Join(tagSpecs, " "))
 }
 
+const (
+	retryLoopTemplate    = "for r in {1..%d}; do echo %s; %s && break; %s; done"
+	retryLoopWithBackoff = "backoff=$(($RANDOM %% 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff"
+)
+
 func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namespace string, name string, cliVersion string, nodeArchitectures []string) *coreapi.Pod {
 	keys := make([]string, 0, len(imageMirrorTarget))
 	for k := range imageMirrorTarget {
@@ -270,8 +275,25 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 
 	// Generate tag commands if there are tags to create
 	if len(tags) > 0 {
-		tagCommand := fmt.Sprintf("for r in {1..5}; do echo Tag attempt $r; %s && break; backoff=$(($RANDOM %% 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff; done", getTagCommand(tags, 10))
-		commands = append(commands, tagCommand)
+		isQuayPromotion := name == api.PromotionQuayStepName
+		if isQuayPromotion {
+			// For quay promotion, try all tags together first (fastest path), then fallback to individual for partial success
+			tagCommands := []string{"set +e"}
+			// Try all at once first (1-2 attempts for fastest path)
+			singleCmd := fmt.Sprintf(retryLoopTemplate, 2, "Tag attempt $r (all together)", getTagCommand(tags, 10), "")
+			tagCommands = append(tagCommands, singleCmd)
+			// If that fails, try individually for partial success
+			for _, tagPair := range tags {
+				individualCmd := fmt.Sprintf(retryLoopTemplate, 3, "Tag attempt $r (individual)", getTagCommand([]string{tagPair}, 10), retryLoopWithBackoff)
+				tagCommands = append(tagCommands, individualCmd)
+			}
+			tagCommands = append(tagCommands, "set -e")
+			commands = append(commands, strings.Join(tagCommands, "\n"))
+		} else {
+			// For regular promotion, use the original retry logic
+			tagCommand := fmt.Sprintf(retryLoopTemplate, 5, "Tag attempt $r", getTagCommand(tags, 10), retryLoopWithBackoff)
+			commands = append(commands, tagCommand)
+		}
 	}
 
 	var args []string

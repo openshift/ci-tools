@@ -107,6 +107,39 @@ func quayImageWithTime(timestamp string, tag ImageStreamTagReference) string {
 	return fmt.Sprintf("%s:%s_prune_%s_%s_%s", QuayOpenShiftCIRepo, timestamp, tag.Namespace, tag.Name, tag.Tag)
 }
 
+// getQuayProxyTarget creates the quay-proxy target imagestream tag reference.
+// Format: namespace/imagestream-name-quay:tag
+func getQuayProxyTarget(target string, tag ImageStreamTagReference) string {
+	if tag.Name != "" {
+		proxyTarget := fmt.Sprintf("%s/%s-quay:%s", tag.Namespace, tag.Name, tag.Tag)
+		logrus.Debugf("Created quay-proxy target (name-based): %s -> %s (namespace=%s, name=%s, tag=%s)", target, proxyTarget, tag.Namespace, tag.Name, tag.Tag)
+		return proxyTarget
+	}
+
+	// For tag-based promotion, parse the target string to extract component name
+	targetParts := strings.Split(target, ":")
+	if len(targetParts) >= 2 && strings.HasPrefix(target, QuayOpenShiftCIRepo+":") {
+		tagPart := targetParts[1]
+		first := strings.Index(tagPart, "_")
+		tagSuffix := "_" + tag.Tag
+		if first > 0 && strings.HasSuffix(tagPart, tagSuffix) {
+			targetNamespace := tagPart[:first]
+			tagStart := len(tagPart) - len(tagSuffix)
+			targetComponent := tagPart[first+1 : tagStart]
+			if targetComponent != "" {
+				proxyTarget := fmt.Sprintf("%s/%s-quay:%s", targetNamespace, targetComponent, tag.Tag)
+				logrus.Debugf("Created quay-proxy target from quay.io target (tag-based): %s -> %s (namespace=%s, component=%s, tag=%s)", target, proxyTarget, targetNamespace, targetComponent, tag.Tag)
+				return proxyTarget
+			}
+		}
+	}
+
+	// Fallback: use namespace and tag
+	proxyTarget := fmt.Sprintf("%s/%s-quay:%s", tag.Namespace, tag.Tag, tag.Tag)
+	logrus.Debugf("Created quay-proxy target (fallback): %s (namespace=%s, tag=%s)", proxyTarget, tag.Namespace, tag.Tag)
+	return proxyTarget
+}
+
 var (
 	// DefaultMirrorFunc is the default mirroring function
 	DefaultMirrorFunc = func(source, target string, _ ImageStreamTagReference, _ string, mirror map[string]string) {
@@ -154,20 +187,7 @@ var (
 			logrus.Debugf("Adding quay prune tag: %s -> %s", t, quayImageWithTime(time, tag))
 		}
 
-		// quay-proxy tagging by creating the proxy target
-		// Create proxy target like "ocp/4.12-quay:ovn-kubernetes"
-		// Component replacement already happened in promote.go:187 before calling this mirrorFunc
-		// TODO: This logic will be updated in the future to support tag-based replacement in the promotion step.
-		// We will drop the mirror to registry.ci.openshift.org and replace with tagging from quay-proxy.
-		var proxyTarget string
-		if tag.Name != "" {
-			proxyTarget = fmt.Sprintf("%s/%s-quay:%s", tag.Namespace, tag.Name, tag.Tag)
-			logrus.Debugf("Created quay-proxy target (name-based): %s (namespace=%s, name=%s, tag=%s)", proxyTarget, tag.Namespace, tag.Name, tag.Tag)
-		} else {
-			// Handle case where tag.Name is empty (fallback to using component name)
-			proxyTarget = fmt.Sprintf("%s/%s-quay:%s", tag.Namespace, tag.Tag, tag.Tag)
-			logrus.Debugf("Created quay-proxy target (tag-based fallback): %s (namespace=%s, tag=%s)", proxyTarget, tag.Namespace, tag.Tag)
-		}
+		proxyTarget := getQuayProxyTarget(target, tag)
 		quayProxySource := QuayImageReference(tag)
 		mirror[proxyTarget] = quayProxySource
 		logrus.Debugf("Adding quay-proxy tag: %s -> %s", quayProxySource, proxyTarget)

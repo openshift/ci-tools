@@ -248,6 +248,38 @@ func TestQuayCombinedMirrorFunc(t *testing.T) {
 				"ocp/4.20-quay:cluster-api":                                      "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.20_cluster-api",
 			},
 		},
+		{
+			name:   "name-based promotion with underscores in tag (verifies fix for parsing issue)",
+			source: "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:abc123",
+			target: "quay.io/openshift/ci:ocp_release_payload_images",
+			tag: ImageStreamTagReference{
+				Namespace: "ocp",
+				Name:      "release",
+				Tag:       "payload_images",
+			},
+			time: "20241024102030",
+			expected: map[string]string{
+				"quay.io/openshift/ci:ocp_release_payload_images":                      "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:abc123",
+				"quay.io/openshift/ci:20241024102030_prune_ocp_release_payload_images": "quay.io/openshift/ci:ocp_release_payload_images",
+				"ocp/release-quay:payload_images":                                      "quay-proxy.ci.openshift.org/openshift/ci:ocp_release_payload_images",
+			},
+		},
+		{
+			name:   "tag-based promotion with underscores in tag (verifies fix for tag-based parsing)",
+			source: "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:def456",
+			target: "quay.io/openshift/ci:ocp_ovn-kubernetes_ci_a_latest",
+			tag: ImageStreamTagReference{
+				Namespace: "ocp",
+				Name:      "",
+				Tag:       "ci_a_latest",
+			},
+			time: "20241024103000",
+			expected: map[string]string{
+				"quay.io/openshift/ci:ocp__ci_a_latest":                      "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:def456",
+				"quay.io/openshift/ci:20241024103000_prune_ocp__ci_a_latest": "quay.io/openshift/ci:ocp__ci_a_latest",
+				"ocp/ovn-kubernetes-quay:ci_a_latest":                        "quay-proxy.ci.openshift.org/openshift/ci:ocp__ci_a_latest",
+			},
+		},
 	}
 
 	for _, tc := range testCases {

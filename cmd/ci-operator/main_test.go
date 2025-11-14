@@ -352,6 +352,66 @@ func TestGetResolverInfo(t *testing.T) {
 			Branch:  "anotherBranch",
 			Variant: "v2",
 		},
+	}, {
+		name: "Refs and ExtraRefs with variant (MultiPRPresubmit case)",
+		opt: &options{
+			org:     "",
+			repo:    "",
+			branch:  "",
+			variant: "v2",
+		},
+		jobSpec: &api.JobSpec{
+			JobSpec: downwardapi.JobSpec{
+				Refs: &prowapi.Refs{
+					Org:     "testOrganization",
+					Repo:    "testRepo",
+					BaseRef: "testBranch",
+				},
+				ExtraRefs: []prowapi.Refs{{
+					Org:     "extraOrganization",
+					Repo:    "extraRepo",
+					BaseRef: "extraBranch",
+				}},
+			},
+		},
+		expected: &api.Metadata{
+			Org:     "testOrganization,extraOrganization",
+			Repo:    "testRepo,extraRepo",
+			Branch:  "testBranch,extraBranch",
+			Variant: "v2,",
+		},
+	}, {
+		name: "Refs and 2 ExtraRefs with variant",
+		opt: &options{
+			org:     "",
+			repo:    "",
+			branch:  "",
+			variant: "v2",
+		},
+		jobSpec: &api.JobSpec{
+			JobSpec: downwardapi.JobSpec{
+				Refs: &prowapi.Refs{
+					Org:     "testOrganization",
+					Repo:    "testRepo",
+					BaseRef: "testBranch",
+				},
+				ExtraRefs: []prowapi.Refs{{
+					Org:     "extraOrganization",
+					Repo:    "extraRepo",
+					BaseRef: "extraBranch",
+				}, {
+					Org:     "moreOrganization",
+					Repo:    "moreRepo",
+					BaseRef: "moreBranch",
+				}},
+			},
+		},
+		expected: &api.Metadata{
+			Org:     "testOrganization,extraOrganization,moreOrganization",
+			Repo:    "testRepo,extraRepo,moreRepo",
+			Branch:  "testBranch,extraBranch,moreBranch",
+			Variant: "v2,,",
+		},
 	}}
 	for _, testCase := range testCases {
 		actual := testCase.opt.getResolverInfo(testCase.jobSpec)

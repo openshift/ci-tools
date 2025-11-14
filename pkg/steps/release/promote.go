@@ -280,7 +280,7 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 			// For quay promotion, try all tags together first (fastest path), then fallback to individual for partial success
 			tagCommands := []string{"set +e"}
 			// Try all at once first (1-2 attempts for fastest path)
-			singleCmd := fmt.Sprintf(retryLoopTemplate, 2, "'Tag attempt $r (all together)'", getTagCommand(tags, 2), "")
+			singleCmd := fmt.Sprintf(retryLoopTemplate, 2, "'Tag attempt $r (all together)'", getTagCommand(tags, 2), ":")
 			tagCommands = append(tagCommands, singleCmd)
 			// If that fails, try individually for partial success
 			for _, tagPair := range tags {

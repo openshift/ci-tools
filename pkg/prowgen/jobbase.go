@@ -121,7 +121,7 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 	}
 	p.testName = test.As
 
-	maxCustomDuration := time.Hour * 8
+	maxCustomDuration := time.Hour * 72
 	if test.Timeout != nil && test.Timeout.Duration <= maxCustomDuration {
 		u := &p.base.UtilityConfig
 		if u.DecorationConfig == nil {

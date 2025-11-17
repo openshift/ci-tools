@@ -146,15 +146,18 @@ func main() {
 func getTestName(t *api.TestStepConfiguration, info *config.Info) string {
 	test := ""
 	if t.IsPeriodic() {
-		test += "periodic-"
+		test += "periodic-ci-"
 	} else if t.Postsubmit {
 		test += "branch-ci-"
 	} else {
 		test += "pull-ci-"
 	}
-	test += info.Org + "-" + info.Repo + "-" + info.Branch + "-" + t.As
+
 	if info.Variant != "" {
-		test += "-" + info.Variant
+		test += info.Org + "-" + info.Repo + "-" + info.Branch + "-" + info.Variant + "-" + t.As
+	} else {
+		test += info.Org + "-" + info.Repo + "-" + info.Branch + "-" + t.As
+
 	}
 	return test
 }

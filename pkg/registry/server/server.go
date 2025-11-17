@@ -465,6 +465,7 @@ func MetadataEntriesFromQuery(w http.ResponseWriter, r *http.Request) ([]api.Met
 	if variantsExist && len(orgs) != len(variants) {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, "If any variants are passed, there must be one for each ref. Blank variants are allowed.")
+		return nil, fmt.Errorf("malformed request: variant must be set for each ref (a blank variant is allowed for placeholder) or none of them")
 	}
 
 	metadata := make(sets.Set[api.Metadata])

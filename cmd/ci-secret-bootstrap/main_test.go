@@ -388,7 +388,7 @@ func TestCompleteOptions(t *testing.T) {
 			actualError := tc.given.completeOptions(&censor, kubeconfigs, tc.disabledClusters)
 			equalError(t, tc.expectedError, actualError)
 			if tc.expectedError == nil {
-				equal(t, "config", tc.expectedConfig, tc.given.config)
+				equal(t, "config", tc.expectedConfig, tc.given.vaultConfig)
 				var actualClusters []string
 				for k := range tc.given.secretsGetters {
 					actualClusters = append(actualClusters, k)
@@ -410,8 +410,8 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "basic case",
 			given: options{
-				logLevel: "info",
-				config:   defaultConfig,
+				logLevel:    "info",
+				vaultConfig: defaultConfig,
 			},
 			kubeConfigs: map[string]rest.Config{
 				"default": configDefault,
@@ -422,7 +422,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 			name: "empty to",
 			given: options{
 				logLevel: "info",
-				config: secretbootstrap.Config{
+				vaultConfig: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
 							From: map[string]secretbootstrap.ItemContext{
@@ -441,7 +441,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 			name: "empty from",
 			given: options{
 				logLevel: "info",
-				config: secretbootstrap.Config{
+				vaultConfig: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{{}},
 				},
 			},
@@ -451,7 +451,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 			name: "empty key",
 			given: options{
 				logLevel: "info",
-				config: secretbootstrap.Config{
+				vaultConfig: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
 							From: map[string]secretbootstrap.ItemContext{
@@ -477,7 +477,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 			name: "empty item",
 			given: options{
 				logLevel: "info",
-				config: secretbootstrap.Config{
+				vaultConfig: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
 							From: map[string]secretbootstrap.ItemContext{
@@ -502,7 +502,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 			name: "empty field",
 			given: options{
 				logLevel: "info",
-				config: secretbootstrap.Config{
+				vaultConfig: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
 							From: map[string]secretbootstrap.ItemContext{
@@ -527,7 +527,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 			name: "empty cluster",
 			given: options{
 				logLevel: "info",
-				config: secretbootstrap.Config{
+				vaultConfig: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
 							From: map[string]secretbootstrap.ItemContext{
@@ -552,7 +552,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 			name: "empty namespace",
 			given: options{
 				logLevel: "info",
-				config: secretbootstrap.Config{
+				vaultConfig: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
 							From: map[string]secretbootstrap.ItemContext{
@@ -577,7 +577,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 			name: "empty name",
 			given: options{
 				logLevel: "info",
-				config: secretbootstrap.Config{
+				vaultConfig: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
 							From: map[string]secretbootstrap.ItemContext{
@@ -602,7 +602,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 			name: "conflicting secrets in same TO",
 			given: options{
 				logLevel: "info",
-				config: secretbootstrap.Config{
+				vaultConfig: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
 							From: map[string]secretbootstrap.ItemContext{
@@ -644,7 +644,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 			name: "conflicting secrets in different TOs",
 			given: options{
 				logLevel: "info",
-				config: secretbootstrap.Config{
+				vaultConfig: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
 							From: map[string]secretbootstrap.ItemContext{
@@ -699,7 +699,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 			name: "happy dockerconfigJSON configuration",
 			given: options{
 				logLevel: "info",
-				config: secretbootstrap.Config{
+				vaultConfig: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
 							From: map[string]secretbootstrap.ItemContext{
@@ -737,7 +737,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 			name: "sad dockerconfigJSON configuration",
 			given: options{
 				logLevel: "info",
-				config: secretbootstrap.Config{
+				vaultConfig: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
 							From: map[string]secretbootstrap.ItemContext{
@@ -773,7 +773,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 			name: "sad dockerconfigJSON configuration: cannot determine registry URL",
 			given: options{
 				logLevel: "info",
-				config: secretbootstrap.Config{
+				vaultConfig: secretbootstrap.Config{
 					Secrets: []secretbootstrap.SecretConfig{
 						{
 							From: map[string]secretbootstrap.ItemContext{
@@ -1338,7 +1338,7 @@ Code: 404. Errors:
 			client := vaultClientFromTestItems(tc.items)
 
 			var actualErrorMsg string
-			actual, actualError := constructSecrets(tc.config, client, tc.disabledClusters)
+			actual, actualError := constructSecretsFromVault(tc.config, client, tc.disabledClusters)
 			if actualError != nil {
 				actualErrorMsg = actualError.Error()
 			}
@@ -2234,7 +2234,7 @@ func TestValidateItems(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			o := &options{
-				config:          tc.cfg,
+				vaultConfig:     tc.cfg,
 				generatorConfig: tc.generatorCfg,
 			}
 			censor := secrets.NewDynamicCensor()
@@ -2948,7 +2948,7 @@ func TestIntegration(t *testing.T) {
 
 			o := options{
 				force:          tc.force,
-				config:         tc.config,
+				vaultConfig:    tc.config,
 				secretsGetters: tc.secretGetters,
 				secrets: secrets.CLIOptions{
 					VaultPrefix: "secret",
@@ -2979,7 +2979,7 @@ func TestIntegration(t *testing.T) {
 			actualSecretsByCluster := make(map[string][]coreapi.Secret)
 
 			// Create Case
-			errs := reconcileSecrets(o, readOnlyClient, tc.disabledClusters)
+			errs := reconcileSecrets(o, readOnlyClient, nil, tc.disabledClusters)
 			if tc.expectedError != nil {
 				if len(errs) == 0 {
 					t.Fatal("expected errors but got nothing")
@@ -3020,7 +3020,7 @@ func TestIntegration(t *testing.T) {
 				}
 			}
 
-			errs = reconcileSecrets(o, readOnlyClient, tc.disabledClusters)
+			errs = reconcileSecrets(o, readOnlyClient, nil, tc.disabledClusters)
 			if tc.expectedError != nil {
 				if len(errs) == 0 {
 					t.Fatal("expected errors but got nothing")

@@ -11,7 +11,6 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
-
 	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
 )
 

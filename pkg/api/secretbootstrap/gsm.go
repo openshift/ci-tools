@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"strings"
 
-	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
-	"github.com/openshift/ci-tools/pkg/util/gzip"
 	corev1 "k8s.io/api/core/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"sigs.k8s.io/yaml"
+
+	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 // GSMConfig is the top-level configuration for GSM-based secrets

@@ -89,6 +89,10 @@ func (s *dexGenerator) Generate(ctx context.Context, log *logrus.Entry) (map[str
 		return nil, err
 	}
 
+	if err := s.updateOIDCConnectorScopes(log, dexConfig); err != nil {
+		return nil, err
+	}
+
 	if len(deploy.Spec.Template.Spec.Containers) > 0 {
 		s.updateEnvVar(&deploy.Spec.Template.Spec.Containers[0], log, s.clusterInstall.ClusterName)
 	} else {
@@ -144,6 +148,75 @@ func (s *dexGenerator) updateDexConfig(ctx context.Context, log *logrus.Entry, c
 	log.Info("static client found, adding a new one")
 	clientsSlice = append(clientsSlice, target)
 	config["staticClients"] = clientsSlice
+	return nil
+}
+
+func (s *dexGenerator) updateOIDCConnectorScopes(log *logrus.Entry, config dexConfig) error {
+	connectors, ok := config["connectors"]
+	if !ok {
+		log.Info("connectors stanza not found, skipping scope update")
+		return nil
+	}
+	connectorsSlice, ok := connectors.([]interface{})
+	if !ok {
+		return errors.New("cannot cast connectors to a slice")
+	}
+	for i := range connectorsSlice {
+		connector, ok := connectorsSlice[i].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		connectorID, ok := connector["id"]
+		if !ok || connectorID != "sso" {
+			continue
+		}
+		connectorConfig, ok := connector["config"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		// Ensure required scopes are present: openid, profile, email
+		requiredScopes := []string{"openid", "profile", "email"}
+		scopes, ok := connectorConfig["scopes"]
+		if !ok {
+			scopesList := make([]interface{}, len(requiredScopes))
+			for i, s := range requiredScopes {
+				scopesList[i] = s
+			}
+			connectorConfig["scopes"] = scopesList
+			log.Info("Added scopes to SSO OIDC connector")
+			return nil
+		}
+		scopesSlice, ok := scopes.([]interface{})
+		if !ok {
+			scopesList := make([]interface{}, len(requiredScopes))
+			for i, s := range requiredScopes {
+				scopesList[i] = s
+			}
+			connectorConfig["scopes"] = scopesList
+			log.Info("Replaced invalid scopes in SSO OIDC connector")
+			return nil
+		}
+		// Check which required scopes are missing
+		existingScopes := make(map[string]bool)
+		for _, scope := range scopesSlice {
+			if s, ok := scope.(string); ok {
+				existingScopes[s] = true
+			}
+		}
+		updated := false
+		for _, required := range requiredScopes {
+			if !existingScopes[required] {
+				scopesSlice = append(scopesSlice, required)
+				updated = true
+			}
+		}
+		if updated {
+			connectorConfig["scopes"] = scopesSlice
+			log.Info("Added missing scopes to SSO OIDC connector")
+		}
+		return nil
+	}
+	log.Info("SSO connector not found, skipping scope update")
 	return nil
 }
 

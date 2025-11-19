@@ -17,7 +17,6 @@ import (
 	"time"
 
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
-	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
@@ -38,10 +37,52 @@ import (
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
 	vaultapi "github.com/openshift/ci-tools/pkg/api/vault"
+	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
+	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
 	"github.com/openshift/ci-tools/pkg/kubernetes/pkg/credentialprovider"
 	"github.com/openshift/ci-tools/pkg/prowconfigutils"
 	"github.com/openshift/ci-tools/pkg/secrets"
 )
+
+// gsmSecretRef uniquely identifies a GSM secret by collection and secret name
+type gsmSecretRef struct {
+	collection string
+	secret     string
+}
+
+// fetchedSecret holds the result of fetching a GSM secret (payload or error)
+type fetchedSecret struct {
+	payload []byte
+	err     error
+}
+
+// secretClient is an interface for fetching secret field values
+// Implemented by both Vault (secrets.ReadOnlyClient) and GSM (gsmSecretClient)
+type secretClient interface {
+	GetFieldOnItem(item, field string) ([]byte, error)
+}
+
+// gsmSecretClient adapts the GSM secrets cache to the secretClient interface.
+// Note: This is NOT a GSM API client - it only retrieves already-fetched secrets
+// from the in-memory cache (no network calls are made when using this client).
+type gsmSecretClient struct {
+	secretsCache map[gsmSecretRef]fetchedSecret
+}
+
+func (g *gsmSecretClient) GetFieldOnItem(collection, field string) ([]byte, error) {
+	ref := gsmSecretRef{
+		collection: collection,
+		secret:     field,
+	}
+	fetched, exists := g.secretsCache[ref]
+	if !exists {
+		return nil, fmt.Errorf("secret '%s' in collection '%s' not found in fetched secrets", field, collection)
+	}
+	if fetched.err != nil {
+		return nil, fetched.err
+	}
+	return fetched.payload, nil
+}
 
 type options struct {
 	secrets secrets.CLIOptions
@@ -387,7 +428,7 @@ func validateGSMVaultConflicts(gsmConfig *secretbootstrap.GSMConfig, vaultConfig
 	return utilerrors.NewAggregate(errs)
 }
 
-func constructDockerConfigJSON(client secrets.ReadOnlyClient, dockerConfigJSONData []secretbootstrap.DockerConfigJSONData) ([]byte, error) {
+func constructDockerConfigJSON(client secretClient, dockerConfigJSONData []secretbootstrap.DockerConfigJSONData) ([]byte, error) {
 	auths := make(map[string]secretbootstrap.DockerAuth)
 
 	for _, data := range dockerConfigJSONData {
@@ -1128,7 +1169,7 @@ func reconcileSecrets(o options, vaultClient secrets.ReadOnlyClient, gsmClient *
 	if o.enableGsm && gsmClient != nil && len(o.gsmConfig.Bundles) > 0 {
 		ctx := context.Background()
 		var gsmSecretsMap map[string][]*coreapi.Secret
-		gsmSecretsMap, err = constructSecretsFromGSM(ctx, o.gsmConfig, gsmClient, o.gsmProjectConfig, prowDisabledClusters)
+		gsmSecretsMap, err = constructSecretsFromGSM(ctx, o.gsmConfig, gsmClient, o.gsmProjectConfig)
 		if err != nil {
 			errs = append(errs, err)
 		}
@@ -1221,10 +1262,167 @@ func constructSecretsFromGSM(
 	ctx context.Context,
 	gsmConfig secretbootstrap.GSMConfig,
 	gsmClient *secretmanager.Client,
-	gsmProjectConfig gsm.Config,
-	prowDisabledClusters sets.Set[string]) (map[string][]*coreapi.Secret, error) {
+	gsmProjectConfig gsm.Config) (map[string][]*coreapi.Secret, error) {
 
 	var errs []error
+	uniqueSecrets := make(map[gsmSecretRef]bool)
+	for _, bundle := range gsmConfig.Bundles {
+		if !bundle.SyncToCluster {
+			continue
+		}
+		for _, secretEntry := range bundle.GSMSecrets {
+			for _, secret := range secretEntry.Secrets {
+				s := gsmSecretRef{
+					collection: secretEntry.Collection,
+					secret:     secret.Name,
+				}
+				uniqueSecrets[s] = true
+			}
+		}
+
+		if bundle.DockerConfig == nil {
+			continue
+		}
+		for _, dcEntry := range bundle.DockerConfig.Registries {
+			s := gsmSecretRef{
+				collection: dcEntry.Collection,
+				secret:     dcEntry.AuthField,
+			}
+			uniqueSecrets[s] = true
+
+			if dcEntry.EmailField != "" {
+				s := gsmSecretRef{
+					collection: dcEntry.Collection,
+					secret:     dcEntry.EmailField,
+				}
+				uniqueSecrets[s] = true
+			}
+		}
+	}
+
+	gsmSecretsMap := make(map[gsmSecretRef]fetchedSecret)
+	mapLock := sync.Mutex{}
+	errChan := make(chan error, len(uniqueSecrets))
+	wg := &sync.WaitGroup{}
+
+	for secretRef := range uniqueSecrets {
+		wg.Add(1)
+		secretRef := secretRef
+
+		go func() {
+			defer wg.Done()
+
+			resourceName := gsm.GetGSMSecretResourceName(gsmProjectConfig.ProjectIdNumber, secretRef.collection, secretRef.secret)
+			payload, err := gsm.GetSecretPayload(ctx, gsmClient, resourceName)
+
+			mapLock.Lock()
+			gsmSecretsMap[secretRef] = fetchedSecret{
+				payload: payload,
+				err:     err,
+			}
+			mapLock.Unlock()
+
+			if err != nil {
+				errChan <- fmt.Errorf("failed to fetch secret '%s' in collection '%s': %w", secretRef.secret, secretRef.collection, err)
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(errChan)
+	for err := range errChan {
+		errs = append(errs, err)
+	}
+
 	result := map[string][]*coreapi.Secret{}
+	for _, bundle := range gsmConfig.Bundles {
+		if !bundle.SyncToCluster {
+			continue
+		}
+
+		k8sSecretData := make(map[string][]byte)
+		bundleHasError := false
+
+		for _, gsmSecret := range bundle.GSMSecrets {
+			for _, secretEntry := range gsmSecret.Secrets {
+				ref := gsmSecretRef{
+					collection: gsmSecret.Collection,
+					secret:     secretEntry.Name,
+				}
+
+				fetchedFromGsm, exists := gsmSecretsMap[ref]
+				if !exists {
+					errs = append(errs, fmt.Errorf("skipping bundle %s: secret '%s' not found among fetched GSM secrets", bundle.Name, gsm.GetGSMSecretName(ref.collection, ref.secret)))
+					bundleHasError = true
+					break
+				}
+
+				if fetchedFromGsm.err != nil {
+					logrus.WithError(fetchedFromGsm.err).Errorf("skipping bundle %s: failed to fetch secret %s from GSM", bundle.Name, gsm.GetGSMSecretName(ref.collection, ref.secret))
+					bundleHasError = true
+					break
+				}
+
+				var keyName string
+				if secretEntry.As != "" {
+					keyName = secretEntry.As
+				} else {
+					keyName = gsmvalidation.DenormalizeName(secretEntry.Name)
+				}
+				k8sSecretData[keyName] = fetchedFromGsm.payload
+			}
+
+			if bundleHasError {
+				break
+			}
+		}
+
+		if bundleHasError {
+			continue // we don't want to construct an incomplete k8s secret, so skip this bundle entirely
+		}
+
+		if bundle.DockerConfig != nil {
+			var dockerConfigJSONData []secretbootstrap.DockerConfigJSONData
+			for _, reg := range bundle.DockerConfig.Registries {
+				dockerConfigJSONData = append(dockerConfigJSONData, secretbootstrap.DockerConfigJSONData{
+					Item:        reg.Collection,
+					RegistryURL: reg.RegistryURL,
+					AuthField:   reg.AuthField,
+					EmailField:  reg.EmailField,
+				})
+			}
+
+			gsmClient := &gsmSecretClient{secretsCache: gsmSecretsMap}
+			dockerConfigData, err := constructDockerConfigJSON(gsmClient, dockerConfigJSONData)
+			if err != nil {
+				logrus.WithError(err).Errorf("skipping bundle %s: failed to construct dockerconfig", bundle.Name)
+				errs = append(errs, fmt.Errorf("bundle %s: failed to construct dockerconfig: %w", bundle.Name, err))
+				continue
+			}
+
+			keyName := bundle.DockerConfig.As
+			if keyName == "" {
+				keyName = ".dockerconfigjson"
+			}
+			k8sSecretData[keyName] = dockerConfigData
+		}
+
+		for _, target := range bundle.Targets {
+			secret := &coreapi.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      bundle.Name,
+					Namespace: target.Namespace,
+					Labels:    map[string]string{api.DPTPRequesterLabel: "ci-secret-bootstrap"},
+				},
+				Type: target.Type,
+				Data: make(map[string][]byte, len(k8sSecretData)),
+			}
+			for k, v := range k8sSecretData {
+				secret.Data[k] = v
+			}
+			result[target.Cluster] = append(result[target.Cluster], secret)
+		}
+	}
+
 	return result, utilerrors.NewAggregate(errs)
 }

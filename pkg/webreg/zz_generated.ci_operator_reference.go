@@ -33,6 +33,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"binary_build_commands_list:\n" +
 	"    - commands: ' '\n" +
 	"      ref: ' '\n" +
+	"# BuildImagesIfAffected means images are only built if their corresponding cmd tools are affected by code changes.\n" +
+	"# When enabled, the tool-detector package analyzes git changes to determine which images should be built.\n" +
+	"# The image name (To field) should match the cmd tool name for this to work correctly.\n" +
+	"build_images_if_affected: true\n" +
 	"# BuildRootImage supports two ways to get the image that\n" +
 	"# the pipeline will caches on. The one way is to take the reference\n" +
 	"# from an image stream, and the other from a dockerfile.\n" +

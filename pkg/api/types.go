@@ -109,6 +109,11 @@ type ReleaseBuildConfiguration struct {
 	// and can be used to build only a specific image.
 	Images []ProjectDirectoryImageBuildStepConfiguration `json:"images,omitempty"`
 
+	// BuildImagesIfAffected means images are only built if their corresponding cmd tools are affected by code changes.
+	// When enabled, the tool-detector package analyzes git changes to determine which images should be built.
+	// The image name (To field) should match the cmd tool name for this to work correctly.
+	BuildImagesIfAffected bool `json:"build_images_if_affected,omitempty"`
+
 	// Operator describes the operator bundle(s) that is built by the project
 	Operator *OperatorStepConfiguration `json:"operator,omitempty"`
 

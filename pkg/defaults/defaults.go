@@ -46,6 +46,7 @@ import (
 	releasesteps "github.com/openshift/ci-tools/pkg/steps/release"
 	"github.com/openshift/ci-tools/pkg/steps/secretrecordingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
+	tooldetector "github.com/openshift/ci-tools/pkg/tool-detector"
 )
 
 type inputImageSet map[api.InputImage]struct{}
@@ -117,7 +118,36 @@ func FromConfig(
 	httpClient := retryablehttp.NewClient()
 	httpClient.Logger = nil
 
-	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, nodeName, targetAdditionalSuffix, nodeArchitectures, integratedStreams, injectedTest, enableSecretsStoreCSIDriver, metricsAgent)
+	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, nodeName, targetAdditionalSuffix, nodeArchitectures, integratedStreams, injectedTest, enableSecretsStoreCSIDriver, metricsAgent, tooldetector.New(jobSpec).AffectedTools)
+}
+
+func determineSkippedImages(config *api.ReleaseBuildConfiguration, requiredNames sets.Set[string], jobSpec *api.JobSpec, getAffectedTools func() (sets.Set[string], error)) sets.Set[string] {
+	skippedImages := sets.New[string]()
+
+	// TODO: for POC we focus only on the [images] target. Potentially we should support other targets
+	// that correspond to an image build only.
+	if !requiredNames.Has("[images]") || !config.BuildImagesIfAffected {
+		return skippedImages
+	}
+
+	var affectedTools sets.Set[string]
+	var err error
+	if getAffectedTools != nil {
+		affectedTools, err = getAffectedTools()
+	} else {
+		detector := tooldetector.New(jobSpec)
+		affectedTools, err = detector.AffectedTools()
+	}
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to detect affected tools, building all images")
+		return skippedImages
+	}
+	for _, img := range config.Images {
+		if !affectedTools.Has(string(img.To)) {
+			skippedImages.Insert(string(img.To))
+		}
+	}
+	return skippedImages
 }
 
 func fromConfig(
@@ -147,6 +177,7 @@ func fromConfig(
 	injectedTest bool,
 	enableSecretsStoreCSIDriver bool,
 	metricsAgent *metrics.MetricsAgent,
+	getAffectedTools func() (sets.Set[string], error),
 ) ([]api.Step, []api.Step, error) {
 	requiredNames := sets.New[string]()
 	for _, target := range requiredTargets {
@@ -170,6 +201,8 @@ func fromConfig(
 	}
 	rawSteps = append(graphConf.Steps, rawSteps...)
 	rawSteps = append(rawSteps, stepsForImageOverrides(utils.GetOverriddenImages())...)
+
+	skippedImages := determineSkippedImages(config, requiredNames, jobSpec, getAffectedTools)
 
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
@@ -265,7 +298,12 @@ func fromConfig(
 		} else if rawStep.IndexGeneratorStepConfiguration != nil {
 			step = steps.IndexGeneratorStep(*rawStep.IndexGeneratorStepConfiguration, config, config.Resources, buildClient, podClient, jobSpec, pullSecret, metricsAgent)
 		} else if rawStep.ProjectDirectoryImageBuildStepConfiguration != nil {
-			step = steps.ProjectDirectoryImageBuildStep(*rawStep.ProjectDirectoryImageBuildStepConfiguration, config, config.Resources, buildClient, podClient, jobSpec, pullSecret, metricsAgent)
+			imgConfig := rawStep.ProjectDirectoryImageBuildStepConfiguration
+			if skippedImages.Has(string(imgConfig.To)) {
+				logrus.Infof("Skipping image %s: tool is not affected by code changes", imgConfig.To)
+				continue
+			}
+			step = steps.ProjectDirectoryImageBuildStep(*imgConfig, config, config.Resources, buildClient, podClient, jobSpec, pullSecret, metricsAgent)
 		} else if rawStep.ProjectDirectoryImageBuildInputs != nil {
 			step = steps.GitSourceStep(*rawStep.ProjectDirectoryImageBuildInputs, config.Resources, buildClient, podClient, jobSpec, cloneAuthConfig, pullSecret, metricsAgent)
 		} else if rawStep.RPMImageInjectionStepConfiguration != nil {
@@ -273,6 +311,9 @@ func fromConfig(
 		} else if rawStep.RPMServeStepConfiguration != nil {
 			step = steps.RPMServerStep(*rawStep.RPMServeStepConfiguration, client, jobSpec)
 		} else if rawStep.OutputImageTagStepConfiguration != nil {
+			if skippedImages.Has(string(rawStep.OutputImageTagStepConfiguration.From)) {
+				continue
+			}
 			step = steps.OutputImageTagStep(*rawStep.OutputImageTagStepConfiguration, client, jobSpec)
 			// all required or non-optional output images are considered part of [images]
 			if requiredNames.Has(string(rawStep.OutputImageTagStepConfiguration.From)) || !rawStep.OutputImageTagStepConfiguration.Optional {

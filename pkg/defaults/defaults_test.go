@@ -15,6 +15,7 @@ import (
 
 	coreapi "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
@@ -1253,6 +1254,7 @@ func TestFromConfig(t *testing.T) {
 			"src", "bin", "to",
 			"ci-bundle0", "ci-index",
 			"machine-os-content",
+			"tool1", "tool2", "tool3",
 		},
 	}, {
 		name: "release",
@@ -1318,7 +1320,6 @@ func TestFromConfig(t *testing.T) {
 	hiveClient := fakectrlruntimeclient.NewClientBuilder().WithScheme(scheme).WithObjects(&clusterPool, &imageset).Build()
 
 	var leaseClient *lease.Client
-	var requiredTargets []string
 	var cloneAuthConfig *steps.CloneAuthConfig
 	pullSecret, pushSecret := &coreapi.Secret{}, &coreapi.Secret{}
 	for _, tc := range []struct {
@@ -1332,6 +1333,8 @@ func TestFromConfig(t *testing.T) {
 		params              map[string]string
 		overriddenImagesEnv map[string]string
 		injectedTest        bool
+		requiredTargets     []string
+		getAffectedTools    func() (sets.Set[string], error)
 		expectedSteps       []string
 		expectedPost        []string
 		expectedParams      map[string]string
@@ -1811,6 +1814,48 @@ func TestFromConfig(t *testing.T) {
 			"[output-images]",
 			"[images]",
 		},
+	}, {
+		name: "image with BuildImagesIfAffected enabled but not targeted [images]",
+		config: api.ReleaseBuildConfiguration{
+			Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				{From: "from", To: "tool1"},
+				{From: "from", To: "tool2"},
+			},
+			BuildImagesIfAffected: true,
+		},
+		expectedSteps: []string{
+			"tool1",
+			"[output:stable:tool1]",
+			"tool2",
+			"[output:stable:tool2]",
+			"[output-images]",
+			"[images]",
+		},
+		expectedParams: map[string]string{
+			"LOCAL_IMAGE_TOOL1": "public_docker_image_repository:tool1",
+			"LOCAL_IMAGE_TOOL2": "public_docker_image_repository:tool2",
+		},
+	}, {
+		name: "image with BuildImagesIfAffected enabled and targeted [images]",
+		config: api.ReleaseBuildConfiguration{
+			Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				{From: "from", To: "tool1"},
+				{From: "from", To: "tool2"},
+				{From: "from", To: "tool3"},
+			},
+			BuildImagesIfAffected: true,
+		},
+		requiredTargets:  []string{"[images]"},
+		getAffectedTools: func() (sets.Set[string], error) { return sets.New("tool1"), nil },
+		expectedSteps: []string{
+			"tool1",
+			"[output:stable:tool1]",
+			"[output-images]",
+			"[images]",
+		},
+		expectedParams: map[string]string{
+			"LOCAL_IMAGE_TOOL1": "public_docker_image_repository:tool1",
+		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			jobSpec := api.JobSpec{
@@ -1829,7 +1874,7 @@ func TestFromConfig(t *testing.T) {
 				params.Add(k, func() (string, error) { return v, nil })
 			}
 			graphConf := FromConfigStatic(&tc.config)
-			configSteps, post, err := fromConfig(context.Background(), &tc.config, &graphConf, &jobSpec, tc.templates, tc.paramFiles, tc.promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params, &secrets.DynamicCensor{}, api.ServiceDomainAPPCI, "", nil, map[string]*configresolver.IntegratedStream{}, tc.injectedTest, false, nil)
+			configSteps, post, err := fromConfig(context.Background(), &tc.config, &graphConf, &jobSpec, tc.templates, tc.paramFiles, tc.promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient, tc.requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params, &secrets.DynamicCensor{}, api.ServiceDomainAPPCI, "", nil, map[string]*configresolver.IntegratedStream{}, tc.injectedTest, false, nil, tc.getAffectedTools)
 			if diff := cmp.Diff(tc.expectedErr, err); diff != "" {
 				t.Errorf("unexpected error: %v", diff)
 			}

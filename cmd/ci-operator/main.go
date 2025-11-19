@@ -2270,11 +2270,14 @@ func (o *options) getResolverInfo(jobSpec *api.JobSpec) *api.Metadata {
 	}
 
 	// identify org, repo, and branch from refs object
-	for _, ref := range allRefs {
+	for i, ref := range allRefs {
 		if ref.Org != "" && ref.Repo != "" && ref.BaseRef != "" {
 			info.Org += fmt.Sprintf("%s,", ref.Org)
 			info.Repo += fmt.Sprintf("%s,", ref.Repo)
 			info.Branch += fmt.Sprintf("%s,", ref.BaseRef)
+			if info.Variant != "" && i > 0 {
+				info.Variant = fmt.Sprintf("%s,", info.Variant)
+			}
 		}
 	}
 	info.Org = strings.TrimSuffix(info.Org, ",")

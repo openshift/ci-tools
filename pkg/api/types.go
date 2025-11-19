@@ -1506,6 +1506,11 @@ const (
 	ClusterProfileAWSlpChaos              ClusterProfile = "aws-lp-chaos"
 	ClusterProfileMetalRHgs               ClusterProfile = "metal-redhat-gs"
 	ClusterProfileAWSOSC                  ClusterProfile = "aws-sandboxed-containers-operator"
+
+	ClusterProfileAROHCPInt  ClusterProfile = "aro-hcp-int"
+	ClusterProfileAROHCPStg  ClusterProfile = "aro-hcp-stg"
+	ClusterProfileAROHCPProd ClusterProfile = "aro-hcp-prod"
+	ClusterProfileAROHCPDev  ClusterProfile = "aro-hcp-dev"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -1692,6 +1697,11 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSlpChaos,
 		ClusterProfileMetalRHgs,
 		ClusterProfileAWSOSC,
+
+		ClusterProfileAROHCPInt,
+		ClusterProfileAROHCPStg,
+		ClusterProfileAROHCPProd,
+		ClusterProfileAROHCPDev,
 	}
 }
 
@@ -1966,6 +1976,16 @@ func (p ClusterProfile) ClusterType() string {
 		return "aro"
 	case ClusterProfileEquinixEdgeEnablement:
 		return "equinix-edge-enablement"
+
+	case ClusterProfileAROHCPInt:
+		return "aro-hcp-int"
+	case ClusterProfileAROHCPStg:
+		return "aro-hcp-stg"
+	case ClusterProfileAROHCPProd:
+		return "aro-hcp-prod"
+	case ClusterProfileAROHCPDev:
+		return "aro-hcp-dev"
+
 	default:
 		return ""
 	}
@@ -2336,6 +2356,14 @@ func (p ClusterProfile) LeaseType() string {
 		return "metal-redhat-gs-quota-slice"
 	case ClusterProfileAWSOSC:
 		return "aws-sandboxed-containers-operator-quota-slice"
+	case ClusterProfileAROHCPInt:
+		return "aro-hcp-int-quota-slice"
+	case ClusterProfileAROHCPStg:
+		return "aro-hcp-stg-quota-slice"
+	case ClusterProfileAROHCPProd:
+		return "aro-hcp-prod-quota-slice"
+	case ClusterProfileAROHCPDev:
+		return "aro-hcp-dev-quota-slice"
 	default:
 		return ""
 	}
@@ -2379,7 +2407,7 @@ func LeaseTypeFromClusterType(t string) (string, error) {
 		"powervs-3", "powervs-4", "powervs-5", "powervs-6", "powervs-7", "powervs-8", "kubevirt", "aws-cpaas", "osd-ephemeral",
 		"gcp-virtualization", "aws-virtualization", "azure-virtualization", "hypershift-powervs",
 		"hypershift-powervs-cb", "aws-mco-qe", "equinix-edge-enablement", "aws-oadp-qe", "azure-oadp-qe", "gcp-oadp-qe",
-		"aws-lp-chaos", "metal-redhat-gs":
+		"aws-lp-chaos", "metal-redhat-gs", "aro-hcp-int", "aro-hcp-stg", "aro-hcp-prod", "aro-hcp-dev":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

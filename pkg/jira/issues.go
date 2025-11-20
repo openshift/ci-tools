@@ -19,6 +19,7 @@ const (
 	IssueTypeBug   = "Bug"
 	IssueTypeStory = "Story"
 	IssueTypeTask  = "Task"
+	TEST           = "Test"
 )
 
 // IssueFiler knows how to file an issue in Jira

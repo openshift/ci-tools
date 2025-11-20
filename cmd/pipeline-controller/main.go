@@ -28,9 +28,11 @@ import (
 	"sigs.k8s.io/prow/pkg/logrusutil"
 )
 
-const pullRequestInfoComment = "**Pipeline controller notification**\nThis repository is configured to use the [pipeline controller](https://docs.ci.openshift.org/docs/how-tos/creating-a-pipeline/). Second-stage tests will be triggered either automatically or after lgtm label is added, depending on the repository configuration. The pipeline controller will automatically detect which contexts are required and will utilize `/test` Prow commands to trigger the second stage.\n\nFor optional jobs, comment `/test ?` to see a list of all defined jobs. Review these jobs and use `/test <job>` to manually trigger optional jobs most likely to be impacted by the proposed changes."
+const pullRequestInfoComment = "**Pipeline controller notification**\nThis repository is configured to use the [pipeline controller](https://docs.ci.openshift.org/docs/how-tos/creating-a-pipeline/). Second-stage tests will be triggered either automatically or after lgtm label is added, depending on the repository configuration. The pipeline controller will automatically detect which contexts are required and will utilize `/test` Prow commands to trigger the second stage.\n\nFor optional jobs, comment `/test ?` to see a list of all defined jobs. To trigger manually all jobs from second stage use `/pipeline required` command. \n\nThis repository is configured in: "
 
 const RepoNotConfiguredMessage = "This repository is not currently configured for [pipeline controller](https://docs.ci.openshift.org/docs/how-tos/creating-a-pipeline/) support."
+
+const PipelinePendingMessage = "Waiting for pipeline condition to trigger this job"
 
 type options struct {
 	client                   prowflagutil.KubernetesOptions
@@ -177,7 +179,7 @@ func (cw *clientWrapper) handlePullRequestCreation(l *logrus.Entry, event github
 					modeStr = "LGTM mode"
 				}
 				logger.WithField("mode", modeStr).Info("Creating pipeline info comment")
-				if err := cw.ghc.CreateComment(org, repo, number, pullRequestInfoComment); err != nil {
+				if err := cw.ghc.CreateComment(org, repo, number, pullRequestInfoComment+modeStr); err != nil {
 					logger.WithError(err).Error("failed to create comment")
 				} else {
 					logger.Info("Successfully created pipeline info comment")
@@ -323,8 +325,9 @@ func (cw *clientWrapper) handleIssueComment(l *logrus.Entry, event github.IssueC
 		return
 	}
 
-	// Check if the comment contains "/pipeline required" with flexible whitespace
-	pipelineRequiredRegex := regexp.MustCompile(`(?i)/pipeline\s+required`)
+	// Check if the comment contains "/pipeline required" as a command (at start of line)
+	// Use (?m) for multiline mode so ^ matches start of any line, not just start of string
+	pipelineRequiredRegex := regexp.MustCompile(`(?im)^/pipeline\s+required`)
 	matches := pipelineRequiredRegex.MatchString(event.Comment.Body)
 
 	if !matches {
@@ -470,7 +473,7 @@ func (cw *clientWrapper) handlePipelineContextCreation(l *logrus.Entry, event gi
 				logger.WithError(err).WithField("test", presubmit.Name).WithField("pattern", pattern).Error("failed to evaluate pattern")
 				continue
 			} else if shouldRun {
-				if err := cw.createContext(org, repo, sha, presubmit.Context, "pending", "Pipeline controller will trigger this test"); err != nil {
+				if err := cw.createContext(org, repo, sha, presubmit.Context, "pending", PipelinePendingMessage); err != nil {
 					logger.WithError(err).WithField("test", presubmit.Name).Error("failed to create context")
 				} else {
 					logger.WithField("test", presubmit.Name).Info("created pending context for pipeline test")
@@ -487,7 +490,7 @@ func (cw *clientWrapper) handlePipelineContextCreation(l *logrus.Entry, event gi
 				continue
 			} else if !shouldSkip {
 				// If not all files match the skip pattern, we should run the test
-				if err := cw.createContext(org, repo, sha, presubmit.Context, "pending", "Pipeline controller will trigger this test"); err != nil {
+				if err := cw.createContext(org, repo, sha, presubmit.Context, "pending", PipelinePendingMessage); err != nil {
 					logger.WithError(err).WithField("test", presubmit.Name).Error("failed to create context")
 				} else {
 					logger.WithField("test", presubmit.Name).Info("created pending context for pipeline test")
@@ -498,7 +501,7 @@ func (cw *clientWrapper) handlePipelineContextCreation(l *logrus.Entry, event gi
 
 	// Create contexts for protected jobs (always_run: false, optional: false, no run conditions)
 	for _, presubmit := range presubmits.protected {
-		if err := cw.createContext(org, repo, sha, presubmit.Context, "pending", "Pipeline controller will trigger this test"); err != nil {
+		if err := cw.createContext(org, repo, sha, presubmit.Context, "pending", PipelinePendingMessage); err != nil {
 			logger.WithError(err).WithField("test", presubmit.Name).Error("failed to create context")
 		} else {
 			logger.WithField("test", presubmit.Name).Info("created pending context for protected test")

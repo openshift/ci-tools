@@ -24,6 +24,11 @@ func sendComment(presubmits presubmitTests, pj *v1.ProwJob, ghc minimalGhClient,
 }
 
 func sendCommentWithMode(presubmits presubmitTests, pj *v1.ProwJob, ghc minimalGhClient, deleteIds func(), pjLister ctrlruntimeclient.Reader, isExplicitCommand bool) error {
+	if pj.Spec.Refs == nil || len(pj.Spec.Refs.Pulls) == 0 {
+		deleteIds()
+		return fmt.Errorf("ProwJob %s does not have valid Refs.Pulls", pj.Name)
+	}
+
 	testContexts, manualControlMessage, err := acquireConditionalContexts(context.Background(), pj, presubmits.pipelineConditionallyRequired, ghc, deleteIds, pjLister, isExplicitCommand)
 	if err != nil {
 		deleteIds()
@@ -61,6 +66,10 @@ func sendCommentWithMode(presubmits presubmitTests, pj *v1.ProwJob, ghc minimalG
 }
 
 func acquireConditionalContexts(ctx context.Context, pj *v1.ProwJob, pipelineConditionallyRequired []config.Presubmit, ghc minimalGhClient, deleteIds func(), pjLister ctrlruntimeclient.Reader, isExplicitCommand bool) (string, string, error) {
+	if pj.Spec.Refs == nil || len(pj.Spec.Refs.Pulls) == 0 {
+		return "", "", fmt.Errorf("ProwJob %s does not have valid Refs.Pulls", pj.Name)
+	}
+
 	repoBaseRef := pj.Spec.Refs.Repo + "-" + pj.Spec.Refs.BaseRef
 	var testCommands string
 	if len(pipelineConditionallyRequired) != 0 {

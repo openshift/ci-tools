@@ -21,7 +21,9 @@ const (
 	ServiceAccountIDSuffix          = "-updater"
 	ServiceAccountDescriptionPrefix = "Updater service account for secret collection: "
 
-	SecretNameRegex = "^[A-Za-z0-9-]+$"
+	CollectionSecretDelimiter = "__"
+	DotReplacementString      = "--dot--"
+	SlashReplacementString    = "--slash--"
 
 	// IAM binding condition title prefixes
 	SecretsViewerConditionTitlePrefix  = "Read access to secrets for "
@@ -208,4 +210,17 @@ func GetIndexSecretName(collection string) string {
 // "projects/openshift-ci-secrets/secrets/collection__secret" -> "collection__secret"
 func GetSecretID(secretName string) string {
 	return strings.Split(secretName, "/")[len(strings.Split(secretName, "/"))-1] // Extract just the secret ID
+}
+
+// GetGSMSecretName returns the actual secret name in GSM, in format {collection}__{secret}
+func GetGSMSecretName(collection, secret string) string {
+	return fmt.Sprintf("%s%s%s", collection, CollectionSecretDelimiter, secret)
+}
+
+// GetGSMSecretResourceName returns the full GCP resource name for a GSM secret,
+// in format: "projects/{project ID number}/secrets/{collection}__{secret}"
+func GetGSMSecretResourceName(projectIdNumber, collection, secret string) string {
+	return fmt.Sprintf("%s/secrets/%s",
+		GetProjectResourceIdNumber(projectIdNumber),
+		GetGSMSecretName(collection, secret))
 }

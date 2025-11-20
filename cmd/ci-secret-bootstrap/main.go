@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
@@ -36,10 +37,52 @@ import (
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
 	vaultapi "github.com/openshift/ci-tools/pkg/api/vault"
+	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
+	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
 	"github.com/openshift/ci-tools/pkg/kubernetes/pkg/credentialprovider"
 	"github.com/openshift/ci-tools/pkg/prowconfigutils"
 	"github.com/openshift/ci-tools/pkg/secrets"
 )
+
+// gsmSecretRef uniquely identifies a GSM secret by collection and secret name
+type gsmSecretRef struct {
+	collection string
+	secret     string
+}
+
+// fetchedSecret holds the result of fetching a GSM secret (payload or error)
+type fetchedSecret struct {
+	payload []byte
+	err     error
+}
+
+// secretClient is an interface for fetching secret field values
+// Implemented by both Vault (secrets.ReadOnlyClient) and GSM (gsmSecretClient)
+type secretClient interface {
+	GetFieldOnItem(item, field string) ([]byte, error)
+}
+
+// gsmSecretClient adapts the GSM secrets cache to the secretClient interface.
+// Note: This is NOT a GSM API client - it only retrieves already-fetched secrets
+// from the in-memory cache (no network calls are made when using this client).
+type gsmSecretClient struct {
+	secretsCache map[gsmSecretRef]fetchedSecret
+}
+
+func (g *gsmSecretClient) GetFieldOnItem(collection, field string) ([]byte, error) {
+	ref := gsmSecretRef{
+		collection: collection,
+		secret:     field,
+	}
+	fetched, exists := g.secretsCache[ref]
+	if !exists {
+		return nil, fmt.Errorf("secret '%s' in collection '%s' not found in fetched secrets", field, collection)
+	}
+	if fetched.err != nil {
+		return nil, fetched.err
+	}
+	return fetched.payload, nil
+}
 
 type options struct {
 	secrets secrets.CLIOptions
@@ -48,18 +91,24 @@ type options struct {
 	force              bool
 	validateItemsUsage bool
 	confirm            bool
+	enableGsm          bool
 
 	kubernetesOptions   flagutil.KubernetesOptions
 	configPath          string
+	gsmConfigPath       string
 	generatorConfigPath string
-	cluster             string
-	secretNamesRaw      flagutil.Strings
-	logLevel            string
-	impersonateUser     string
+
+	cluster         string
+	secretNamesRaw  flagutil.Strings
+	logLevel        string
+	impersonateUser string
 
 	secretsGetters  map[string]Getter
-	config          secretbootstrap.Config
+	vaultConfig     secretbootstrap.Config
 	generatorConfig secretgenerator.Config
+
+	gsmConfig        secretbootstrap.GSMConfig
+	gsmProjectConfig gsm.Config
 
 	allowUnused flagutil.Strings
 
@@ -81,9 +130,11 @@ func parseOptions(censor *secrets.DynamicCensor) (options, error) {
 	fs.BoolVar(&o.validateItemsUsage, "validate-bitwarden-items-usage", false, fmt.Sprintf("If set, the tool only validates if all fields that exist in Vault and were last modified before %d days ago are being used in the given config.", allowUnusedDays))
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the secrets with oc command")
 	fs.BoolVar(&o.confirm, "confirm", true, "Whether to mutate the actual secrets in the targeted clusters")
+	fs.BoolVar(&o.enableGsm, "enable-gsm", false, "Whether to enable GSM bundles mechanism")
 	o.kubernetesOptions.AddFlags(fs)
 	fs.StringVar(&o.configPath, "config", "", "Path to the config file to use for this tool.")
 	fs.StringVar(&o.generatorConfigPath, "generator-config", "", "Path to the secret-generator config file.")
+	fs.StringVar(&o.gsmConfigPath, "gsm-config", "", "Path to the Google Secret Manager config file.")
 	fs.StringVar(&o.cluster, "cluster", "", "If set, only provision secrets for this cluster")
 	fs.Var(&o.secretNamesRaw, "secret-names", "If set, only provision secrets with the given name. user_secrets_target_clusters in the configuration is ignored. Can be passed multiple times.")
 	fs.BoolVar(&o.force, "force", false, "If true, update the secrets even if existing one differs from Bitwarden items instead of existing with error. Default false.")
@@ -107,6 +158,9 @@ func (o *options) validateOptions() error {
 	if o.configPath == "" {
 		errs = append(errs, errors.New("--config is required"))
 	}
+	if o.enableGsm && o.gsmConfigPath == "" {
+		errs = append(errs, errors.New("--gsm-config is required when --enable-gsm is true"))
+	}
 	if len(o.allowUnused.Strings()) > 0 && !o.validateItemsUsage {
 		errs = append(errs, errors.New("--bw-allow-unused must be specified with --validate-items-usage"))
 	}
@@ -119,15 +173,26 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor, kubeConfigs map
 		return err
 	}
 
-	if err := secretbootstrap.LoadConfigFromFile(o.configPath, &o.config); err != nil {
+	if err := secretbootstrap.LoadConfigFromFile(o.configPath, &o.vaultConfig); err != nil {
 		return err
+	}
+
+	if o.enableGsm {
+		if err := secretbootstrap.LoadGSMConfigFromFile(o.gsmConfigPath, &o.gsmConfig); err != nil {
+			return err
+		}
+		gsmProjectConfig, err := gsm.GetConfigFromEnv()
+		if err != nil {
+			return err
+		}
+		o.gsmProjectConfig = gsmProjectConfig
 	}
 
 	if vals := o.secretNamesRaw.Strings(); len(vals) > 0 {
 		secretNames := sets.New[string](vals...)
 		logrus.WithField("secretNames", sets.List(secretNames)).Info("pruning irrelevant configuration ...")
-		pruneIrrelevantConfiguration(&o.config, secretNames)
-		logrus.WithField("secretNames", sets.List(secretNames)).WithField("o.config.Secrets", o.config.Secrets).Info("pruned irrelevant configuration")
+		pruneIrrelevantConfiguration(&o.vaultConfig, secretNames)
+		logrus.WithField("secretNames", sets.List(secretNames)).WithField("o.config.Secrets", o.vaultConfig.Secrets).Info("pruned irrelevant configuration")
 	}
 
 	if o.generatorConfigPath != "" {
@@ -149,7 +214,7 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor, kubeConfigs map
 
 	o.secretsGetters = map[string]Getter{}
 	var filteredSecrets []secretbootstrap.SecretConfig
-	for i, secretConfig := range o.config.Secrets {
+	for i, secretConfig := range o.vaultConfig.Secrets {
 		var to []secretbootstrap.SecretContext
 
 		for j, secretContext := range secretConfig.To {
@@ -183,7 +248,51 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor, kubeConfigs map
 			filteredSecrets = append(filteredSecrets, secretConfig)
 		}
 	}
-	o.config.Secrets = filteredSecrets
+	o.vaultConfig.Secrets = filteredSecrets
+
+	// Filter GSM bundle targets based on disabled clusters and --cluster flag.
+	// This mirrors the Vault filtering above and ensures we only process bundles
+	// for clusters that are available and match any user-specified cluster filter.
+	if o.enableGsm && len(o.gsmConfig.Bundles) > 0 {
+		for i := range o.gsmConfig.Bundles {
+			bundle := &o.gsmConfig.Bundles[i]
+			if !bundle.SyncToCluster {
+				continue
+			}
+			var filteredTargets []secretbootstrap.TargetSpec
+			for _, target := range bundle.Targets {
+				if disabledClusters.Has(target.Cluster) {
+					logrus.WithFields(logrus.Fields{
+						"bundle":  bundle.Name,
+						"cluster": target.Cluster,
+					}).Debug("Skipping GSM bundle for a cluster that is disabled by Prow")
+					continue
+				}
+				if o.cluster != "" && o.cluster != target.Cluster {
+					logrus.WithFields(logrus.Fields{
+						"target-cluster": o.cluster,
+						"bundle-cluster": target.Cluster,
+					}).Debug("Skipping GSM bundle for a cluster that does not match the one configured via --cluster")
+					continue
+				}
+				filteredTargets = append(filteredTargets, target)
+				if !o.validateOnly {
+					if o.secretsGetters[target.Cluster] == nil {
+						kc, ok := kubeConfigs[target.Cluster]
+						if !ok {
+							return fmt.Errorf("bundle %s target cluster %q not found in kubeconfig", bundle.Name, target.Cluster)
+						}
+						client, err := coreclientset.NewForConfig(&kc)
+						if err != nil {
+							return err
+						}
+						o.secretsGetters[target.Cluster] = client
+					}
+				}
+			}
+			bundle.Targets = filteredTargets
+		}
+	}
 
 	return o.validateCompletedOptions()
 }
@@ -203,11 +312,11 @@ func pruneIrrelevantConfiguration(c *secretbootstrap.Config, secretNames sets.Se
 }
 
 func (o *options) validateCompletedOptions() error {
-	if err := o.config.Validate(); err != nil {
+	if err := o.vaultConfig.Validate(); err != nil {
 		return fmt.Errorf("failed to validate the config: %w", err)
 	}
 	toMap := map[string]map[string]string{}
-	for i, secretConfig := range o.config.Secrets {
+	for i, secretConfig := range o.vaultConfig.Secrets {
 		if len(secretConfig.From) == 0 {
 			return fmt.Errorf("config[%d].from is empty", i)
 		}
@@ -224,7 +333,7 @@ func (o *options) validateCompletedOptions() error {
 			}
 
 			if itemContext.Item != "" && len(itemContext.DockerConfigJSONData) > 0 {
-				return fmt.Errorf("config[%d].from[%s]: both bitwarden dockerconfigJSON items are not allowed.", i, key)
+				return fmt.Errorf("config[%d].from[%s]: both bitwarden dockerconfigJSON items are not allowed", i, key)
 			}
 
 			if len(itemContext.DockerConfigJSONData) > 0 {
@@ -266,10 +375,60 @@ func (o *options) validateCompletedOptions() error {
 			}
 		}
 	}
+	if o.enableGsm && len(o.gsmConfig.Bundles) > 0 {
+		if err := o.gsmConfig.Validate(); err != nil {
+			return fmt.Errorf("failed to validate the GSM config: %w", err)
+		}
+		if err := o.validateVaultGSMConflicts(); err != nil {
+			return fmt.Errorf("conflicts between Vault and GSM configs: %w", err)
+		}
+	}
 	return nil
 }
 
-func constructDockerConfigJSON(client secrets.ReadOnlyClient, dockerConfigJSONData []secretbootstrap.DockerConfigJSONData) ([]byte, error) {
+func (o *options) validateVaultGSMConflicts() error {
+	return validateGSMVaultConflicts(&o.gsmConfig, &o.vaultConfig)
+}
+
+// validateGSMVaultConflicts checks for conflicts between GSM bundles and Vault secrets.
+// It ensures that no GSM bundle attempts to create a secret (cluster/namespace/name combination)
+// that already exists in the Vault configuration. This prevents accidental overwrites and ensures
+// clear ownership of secrets during the migration from Vault to GSM.
+//
+// Returns an aggregate error containing all detected conflicts, or nil if no conflicts exist.
+func validateGSMVaultConflicts(gsmConfig *secretbootstrap.GSMConfig, vaultConfig *secretbootstrap.Config) error {
+	var errs []error
+
+	// Build index of Vault secrets
+	vaultIndex := make(map[string]map[types.NamespacedName]bool)
+	for _, secretCfg := range vaultConfig.Secrets {
+		for _, to := range secretCfg.To {
+			if vaultIndex[to.Cluster] == nil {
+				vaultIndex[to.Cluster] = make(map[types.NamespacedName]bool)
+			}
+			nsName := types.NamespacedName{Namespace: to.Namespace, Name: to.Name}
+			vaultIndex[to.Cluster][nsName] = true
+		}
+	}
+	for _, bundle := range gsmConfig.Bundles {
+		if !bundle.SyncToCluster {
+			continue
+		}
+		for _, target := range bundle.Targets {
+			nsName := types.NamespacedName{Namespace: target.Namespace, Name: bundle.Name}
+			if vaultIndex[target.Cluster] != nil && vaultIndex[target.Cluster][nsName] {
+				errs = append(errs, fmt.Errorf(
+					"bundle %s conflicts with Vault: secret %s/%s on cluster %s",
+					bundle.Name, target.Namespace, bundle.Name, target.Cluster,
+				))
+			}
+		}
+	}
+
+	return utilerrors.NewAggregate(errs)
+}
+
+func constructDockerConfigJSON(client secretClient, dockerConfigJSONData []secretbootstrap.DockerConfigJSONData) ([]byte, error) {
 	auths := make(map[string]secretbootstrap.DockerAuth)
 
 	for _, data := range dockerConfigJSONData {
@@ -304,7 +463,7 @@ func constructDockerConfigJSON(client secrets.ReadOnlyClient, dockerConfigJSONDa
 	return b, nil
 }
 
-func constructSecrets(config secretbootstrap.Config, client secrets.ReadOnlyClient, prowDisabledClusters sets.Set[string]) (map[string][]*coreapi.Secret, error) {
+func constructSecretsFromVault(config secretbootstrap.Config, client secrets.ReadOnlyClient, prowDisabledClusters sets.Set[string]) (map[string][]*coreapi.Secret, error) {
 	secretsByClusterAndName := map[string]map[types.NamespacedName]coreapi.Secret{}
 	secretsMapLock := &sync.Mutex{}
 
@@ -859,7 +1018,7 @@ func getUnusedItems(config secretbootstrap.Config, client secrets.ReadOnlyClient
 func (o *options) validateItems(client secrets.ReadOnlyClient) error {
 	var errs []error
 
-	for _, config := range o.config.Secrets {
+	for _, config := range o.vaultConfig.Secrets {
 		for _, item := range config.From {
 			logger := logrus.WithField("item", item.Item)
 
@@ -875,7 +1034,7 @@ func (o *options) validateItems(client secrets.ReadOnlyClient) error {
 						break
 					}
 					if _, err := client.GetFieldOnItem(data.Item, data.AuthField); err != nil {
-						if o.generatorConfig.IsFieldGenerated(stripDPTPPrefixFromItem(data.Item, &o.config), data.AuthField) {
+						if o.generatorConfig.IsFieldGenerated(stripDPTPPrefixFromItem(data.Item, &o.vaultConfig), data.AuthField) {
 							logger.WithField("field", data.AuthField).Warn("Field doesn't exist but it will be generated")
 						} else {
 							errs = append(errs, fmt.Errorf("field %s in item %s doesn't exist", data.AuthField, data.Item))
@@ -889,7 +1048,7 @@ func (o *options) validateItems(client secrets.ReadOnlyClient) error {
 					continue
 				}
 				if !hasItem {
-					if o.generatorConfig.IsItemGenerated(stripDPTPPrefixFromItem(item.Item, &o.config)) {
+					if o.generatorConfig.IsItemGenerated(stripDPTPPrefixFromItem(item.Item, &o.vaultConfig)) {
 						logrus.Warn("Item doesn't exist but it will be generated")
 					} else {
 						errs = append(errs, fmt.Errorf("item %s doesn't exist", item.Item))
@@ -899,7 +1058,7 @@ func (o *options) validateItems(client secrets.ReadOnlyClient) error {
 
 				if item.Field != "" {
 					if _, err := client.GetFieldOnItem(item.Item, item.Field); err != nil {
-						if o.generatorConfig.IsFieldGenerated(stripDPTPPrefixFromItem(item.Item, &o.config), item.Field) {
+						if o.generatorConfig.IsFieldGenerated(stripDPTPPrefixFromItem(item.Item, &o.vaultConfig), item.Field) {
 							logger.WithField("field", item.Field).Warn("Field doesn't exist but it will be generated")
 						} else {
 							errs = append(errs, fmt.Errorf("field %s in item %s doesn't exist", item.Field, item.Item))
@@ -950,13 +1109,24 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create client.")
 	}
-
-	if errs := reconcileSecrets(o, client, disabledClusters); len(errs) > 0 {
-		logrus.WithError(utilerrors.NewAggregate(errs)).Fatalf("errors while updating secrets")
+	if o.enableGsm {
+		ctx := context.Background()
+		gsmClient, err := secretmanager.NewClient(ctx)
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to create GSM client.")
+		}
+		logrus.Info("GSM client initialized successfully")
+		if errs := reconcileSecrets(o, client, gsmClient, disabledClusters); len(errs) > 0 {
+			logrus.WithError(utilerrors.NewAggregate(errs)).Fatalf("errors while updating secrets")
+		}
+	} else {
+		if errs := reconcileSecrets(o, client, nil, disabledClusters); len(errs) > 0 {
+			logrus.WithError(utilerrors.NewAggregate(errs)).Fatalf("errors while updating secrets")
+		}
 	}
 }
 
-func reconcileSecrets(o options, client secrets.ReadOnlyClient, prowDisabledClusters sets.Set[string]) (errs []error) {
+func reconcileSecrets(o options, vaultClient secrets.ReadOnlyClient, gsmClient *secretmanager.Client, prowDisabledClusters sets.Set[string]) (errs []error) {
 	if o.validateOnly {
 		var config secretbootstrap.Config
 		if err := secretbootstrap.LoadConfigFromFile(o.configPath, &config); err != nil {
@@ -966,23 +1136,55 @@ func reconcileSecrets(o options, client secrets.ReadOnlyClient, prowDisabledClus
 			return append(errs, fmt.Errorf("failed to validate the config: %w", err))
 		}
 
-		if err := o.validateItems(client); err != nil {
+		if err := o.validateItems(vaultClient); err != nil {
 			return append(errs, fmt.Errorf("failed to validate items: %w", err))
 		}
 
 		logrus.Infof("the config file %s has been validated", o.configPath)
+
+		if o.enableGsm {
+			var gsmConfig secretbootstrap.GSMConfig
+			if err := secretbootstrap.LoadGSMConfigFromFile(o.gsmConfigPath, &gsmConfig); err != nil {
+				return append(errs, fmt.Errorf("failed to load GSM config from file: %s", o.gsmConfigPath))
+			}
+			if err := gsmConfig.Validate(); err != nil {
+				return append(errs, fmt.Errorf("failed to validate GSM config: %w", err))
+			}
+			// Check for conflicts between Vault and GSM configs
+			if err := validateGSMVaultConflicts(&gsmConfig, &config); err != nil {
+				return append(errs, fmt.Errorf("conflicts between Vault and GSM configs: %w", err))
+			}
+			logrus.Infof("GSM config file %s has been validated", o.gsmConfigPath)
+		}
+
 		return nil
 	}
 
 	// errors returned by constructSecrets will be handled once the rest of the secrets have been uploaded
-	secretsMap, err := constructSecrets(o.config, client, prowDisabledClusters)
+	secretsMap, err := constructSecretsFromVault(o.vaultConfig, vaultClient, prowDisabledClusters)
 	if err != nil {
 		errs = append(errs, err)
 	}
 
+	if o.enableGsm && gsmClient != nil && len(o.gsmConfig.Bundles) > 0 {
+		ctx := context.Background()
+		var gsmSecretsMap map[string][]*coreapi.Secret
+		gsmSecretsMap, err = constructSecretsFromGSM(ctx, o.gsmConfig, gsmClient, o.gsmProjectConfig, prowDisabledClusters)
+		if err != nil {
+			errs = append(errs, err)
+		}
+
+		if gsmSecretsMap != nil {
+			secretsMap, err = mergeSecretMaps(secretsMap, gsmSecretsMap)
+			if err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+
 	if o.validateItemsUsage {
 		unusedGracePeriod := time.Now().AddDate(0, 0, -allowUnusedDays)
-		err := getUnusedItems(o.config, client, o.allowUnused.StringSet(), unusedGracePeriod)
+		err := getUnusedItems(o.vaultConfig, vaultClient, o.allowUnused.StringSet(), unusedGracePeriod)
 		if err != nil {
 			errs = append(errs, err)
 		}
@@ -994,11 +1196,234 @@ func reconcileSecrets(o options, client secrets.ReadOnlyClient, prowDisabledClus
 			errs = append(errs, fmt.Errorf("failed to write secrets on dry run: %w", err))
 		}
 	} else {
-		if err := updateSecrets(o.secretsGetters, secretsMap, o.force, o.confirm, sets.New[string](o.config.OSDGlobalPullSecretGroup()...), prowDisabledClusters); err != nil {
+		if err := updateSecrets(o.secretsGetters, secretsMap, o.force, o.confirm, sets.New[string](o.vaultConfig.OSDGlobalPullSecretGroup()...), prowDisabledClusters); err != nil {
 			errs = append(errs, fmt.Errorf("failed to update secrets: %w", err))
 		}
 		logrus.Info("Updated secrets.")
 	}
 
 	return errs
+}
+
+// mergeSecretMaps combines Vault and GSM secret maps, with Vault taking precedence on conflicts.
+// Returns the merged map and any conflict errors encountered.
+func mergeSecretMaps(vaultSecrets, gsmSecrets map[string][]*coreapi.Secret) (map[string][]*coreapi.Secret, error) {
+	if len(gsmSecrets) == 0 {
+		return vaultSecrets, nil
+	}
+	if len(vaultSecrets) == 0 {
+		return gsmSecrets, nil
+	}
+
+	vaultIndex := make(map[string]map[types.NamespacedName]bool)
+	for cluster, secretList := range vaultSecrets {
+		if vaultIndex[cluster] == nil {
+			vaultIndex[cluster] = make(map[types.NamespacedName]bool)
+		}
+		for _, secret := range secretList {
+			nsName := types.NamespacedName{Namespace: secret.Namespace, Name: secret.Name}
+			vaultIndex[cluster][nsName] = true
+		}
+	}
+
+	var errs []error
+	merged := make(map[string][]*coreapi.Secret)
+
+	for cluster, secretList := range vaultSecrets {
+		merged[cluster] = make([]*coreapi.Secret, len(secretList))
+		copy(merged[cluster], secretList)
+	}
+
+	for cluster, secretList := range gsmSecrets {
+		for _, secret := range secretList {
+			nsName := types.NamespacedName{Namespace: secret.Namespace, Name: secret.Name}
+
+			if vaultIndex[cluster] != nil && vaultIndex[cluster][nsName] {
+				logrus.WithFields(logrus.Fields{
+					"cluster":   cluster,
+					"namespace": secret.Namespace,
+					"name":      secret.Name,
+				}).Error("GSM secret conflicts with Vault secret, keeping Vault version")
+				errs = append(errs, fmt.Errorf(
+					"conflict: GSM secret %s/%s on cluster %s conflicts with Vault (Vault takes precedence)",
+					secret.Namespace, secret.Name, cluster,
+				))
+				continue
+			}
+
+			merged[cluster] = append(merged[cluster], secret)
+		}
+	}
+
+	return merged, utilerrors.NewAggregate(errs)
+}
+
+func constructSecretsFromGSM(
+	ctx context.Context,
+	gsmConfig secretbootstrap.GSMConfig,
+	gsmClient *secretmanager.Client,
+	gsmProjectConfig gsm.Config,
+	prowDisabledClusters sets.Set[string]) (map[string][]*coreapi.Secret, error) {
+
+	var errs []error
+	uniqueSecrets := make(map[gsmSecretRef]bool)
+	for _, bundle := range gsmConfig.Bundles {
+		if !bundle.SyncToCluster {
+			continue
+		}
+		for _, secretEntry := range bundle.GSMSecrets {
+			for _, secret := range secretEntry.Secrets {
+				s := gsmSecretRef{
+					collection: secretEntry.Collection,
+					secret:     secret.Name,
+				}
+				uniqueSecrets[s] = true
+			}
+		}
+
+		if bundle.DockerConfig == nil {
+			continue
+		}
+		for _, dcEntry := range bundle.DockerConfig.Registries {
+			s := gsmSecretRef{
+				collection: dcEntry.Collection,
+				secret:     dcEntry.AuthField,
+			}
+			uniqueSecrets[s] = true
+
+			if dcEntry.EmailField != "" {
+				s := gsmSecretRef{
+					collection: dcEntry.Collection,
+					secret:     dcEntry.EmailField,
+				}
+				uniqueSecrets[s] = true
+			}
+		}
+	}
+
+	gsmSecretsMap := make(map[gsmSecretRef]fetchedSecret)
+	mapLock := sync.Mutex{}
+	errChan := make(chan error, len(uniqueSecrets))
+	wg := &sync.WaitGroup{}
+
+	for secretRef := range uniqueSecrets {
+		wg.Add(1)
+		secretRef := secretRef
+
+		go func() {
+			defer wg.Done()
+
+			resourceName := gsm.GetGSMSecretResourceName(gsmProjectConfig.ProjectIdNumber, secretRef.collection, secretRef.secret)
+			payload, err := gsm.GetSecretPayload(ctx, gsmClient, resourceName)
+
+			mapLock.Lock()
+			gsmSecretsMap[secretRef] = fetchedSecret{
+				payload: payload,
+				err:     err,
+			}
+			mapLock.Unlock()
+
+			if err != nil {
+				errChan <- fmt.Errorf("failed to fetch secret '%s' in collection '%s': %w", secretRef.secret, secretRef.collection, err)
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(errChan)
+	for err := range errChan {
+		errs = append(errs, err)
+	}
+
+	result := map[string][]*coreapi.Secret{}
+	for _, bundle := range gsmConfig.Bundles {
+		if !bundle.SyncToCluster {
+			continue
+		}
+
+		k8sSecretData := make(map[string][]byte)
+		bundleHasError := false
+
+		for _, gsmSecret := range bundle.GSMSecrets {
+			for _, secretEntry := range gsmSecret.Secrets {
+				ref := gsmSecretRef{
+					collection: gsmSecret.Collection,
+					secret:     secretEntry.Name,
+				}
+
+				fetchedFromGsm, exists := gsmSecretsMap[ref]
+				if !exists {
+					errs = append(errs, fmt.Errorf("skipping bundle %s: secret '%s' not found among fetched GSM secrets", bundle.Name, gsm.GetGSMSecretName(ref.collection, ref.secret)))
+					bundleHasError = true
+					break
+				}
+
+				if fetchedFromGsm.err != nil {
+					logrus.WithError(fetchedFromGsm.err).Errorf("skipping bundle %s: failed to fetch secret %s from GSM", bundle.Name, gsm.GetGSMSecretName(ref.collection, ref.secret))
+					bundleHasError = true
+					break
+				}
+
+				keyName := secretEntry.Name
+				if secretEntry.As != "" {
+					keyName = secretEntry.As
+				} else {
+					keyName = gsmvalidation.DenormalizeName(secretEntry.Name)
+				}
+				k8sSecretData[keyName] = fetchedFromGsm.payload
+			}
+
+			if bundleHasError {
+				break
+			}
+		}
+
+		if bundleHasError {
+			continue // we don't want to construct an incomplete k8s secret, so skip this bundle entirely
+		}
+
+		if bundle.DockerConfig != nil {
+			var dockerConfigJSONData []secretbootstrap.DockerConfigJSONData
+			for _, reg := range bundle.DockerConfig.Registries {
+				dockerConfigJSONData = append(dockerConfigJSONData, secretbootstrap.DockerConfigJSONData{
+					Item:        reg.Collection,
+					RegistryURL: reg.RegistryURL,
+					AuthField:   reg.AuthField,
+					EmailField:  reg.EmailField,
+				})
+			}
+
+			gsmClient := &gsmSecretClient{secretsCache: gsmSecretsMap}
+			dockerConfigData, err := constructDockerConfigJSON(gsmClient, dockerConfigJSONData)
+			if err != nil {
+				logrus.WithError(err).Errorf("skipping bundle %s: failed to construct dockerconfig", bundle.Name)
+				errs = append(errs, fmt.Errorf("bundle %s: failed to construct dockerconfig: %w", bundle.Name, err))
+				continue
+			}
+
+			keyName := bundle.DockerConfig.As
+			if keyName == "" {
+				keyName = ".dockerconfigjson"
+			}
+			k8sSecretData[keyName] = dockerConfigData
+		}
+
+		for _, target := range bundle.Targets {
+			secret := &coreapi.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      bundle.Name,
+					Namespace: target.Namespace,
+					Labels:    map[string]string{api.DPTPRequesterLabel: "ci-secret-bootstrap"},
+				},
+				Type: target.Type,
+				Data: make(map[string][]byte, len(k8sSecretData)),
+			}
+			for k, v := range k8sSecretData {
+				secret.Data[k] = v
+			}
+			result[target.Cluster] = append(result[target.Cluster], secret)
+		}
+	}
+
+	return result, utilerrors.NewAggregate(errs)
 }

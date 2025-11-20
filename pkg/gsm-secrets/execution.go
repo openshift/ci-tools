@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	iamadmin "cloud.google.com/go/iam/admin/apiv1"
@@ -22,20 +21,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
 )
-
-const (
-	DotReplacementString        = "--dot--"
-	UnderscoreReplacementString = "--u--"
-)
-
-// NormalizeSecretName replaces forbidden characters in secret names with safe replacements.
-// GSM doesn't support dots in secret names, and underscores are used to mark the end of the collection prefix,
-// so we need special handling to avoid conflicts.
-func NormalizeSecretName(name string) string {
-	normalized := strings.ReplaceAll(name, ".", DotReplacementString)
-	normalized = strings.ReplaceAll(normalized, "_", UnderscoreReplacementString)
-	return normalized
-}
 
 // CreateOrUpdateSecret creates a new secret in Google Secret Manager or updates an existing one with a new version.
 // If labels or annotations are nil, they won't be set on the secret.

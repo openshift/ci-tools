@@ -2,19 +2,12 @@ package gsmsecrets
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
-	"github.com/openshift/ci-tools/pkg/group"
+	validation "github.com/openshift/ci-tools/pkg/gsm-validation"
 )
 
 const GcpMaxNameLength = 255
-
-// ValidateSecretName validates if a secret name matches the allowed pattern.
-// The secret name must be between 1 and 255 characters long (GCP limit).
-func ValidateSecretName(secretName string) bool {
-	return regexp.MustCompile(SecretNameRegex).MatchString(secretName) && len(secretName) <= GcpMaxNameLength
-}
 
 // ClassifySecret determines the type of secret based on its name
 func ClassifySecret(secretName string) SecretType {
@@ -34,7 +27,7 @@ func ClassifySecret(secretName string) SecretType {
 func ExtractCollectionFromSecretName(secretName string) string {
 	if strings.HasSuffix(secretName, IndexSecretSuffix) {
 		collection := strings.TrimSuffix(secretName, IndexSecretSuffix)
-		if collection != "" && group.ValidateCollectionName(collection) {
+		if collection != "" && validation.ValidateCollectionName(collection) {
 			return collection
 		}
 		return ""
@@ -42,10 +35,10 @@ func ExtractCollectionFromSecretName(secretName string) string {
 
 	parts := strings.Split(secretName, "__")
 	if len(parts) == 2 && parts[0] != "" && parts[1] != "" {
-		if !group.ValidateCollectionName(parts[0]) {
+		if !validation.ValidateCollectionName(parts[0]) {
 			return ""
 		}
-		if !ValidateSecretName(parts[1]) {
+		if !validation.ValidateSecretName(parts[1]) {
 			return ""
 		}
 		return parts[0]

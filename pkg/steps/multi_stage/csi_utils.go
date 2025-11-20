@@ -14,15 +14,11 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
 )
 
 // GSMproject is the name of the GCP Secret Manager project where the secrets are stored.
 var GSMproject = "openshift-ci-secrets"
-
-const (
-	DotReplacementString        = "--dot--"
-	UnderscoreReplacementString = "--u--"
-)
 
 // groupCredentialsByCollectionAndMountPath groups credentials by (collection, mount_path)
 // to avoid duplicate mount paths.
@@ -59,18 +55,17 @@ func replaceForbiddenSymbolsInCredentialName(credentialName string) (string, err
 	// This is an unfortunate workaround needed for the initial migration.
 	// Google Secret Manager doesn't support dots in Secret names. Due to migration from Vault,
 	// where we had to shard each (multi key-value) secret into multiple ones in GSM,
-	// some secret names or their keys contained forbidden symbols, '.' (dot) and '_' (underscore) in their names.
+	// some secret names or their keys contained forbidden symbols, '.' (dot) and '/' (slash) in their names.
 	// All credentials with these forbidden symbols in their names or keys have been renamed,
 	// e.g. '.awscreds' to '--dot--awscreds', to preserve backwards compatibility,
 	// we need to mount the secret as the original '.awscreds' file to the Pod created by ci-operator.
 
-	replacedName := strings.ReplaceAll(credentialName, DotReplacementString, ".")
-	replacedName = strings.ReplaceAll(replacedName, UnderscoreReplacementString, "_")
+	replacedName := gsmvalidation.DenormalizeName(credentialName)
 
-	re := regexp.MustCompile(`[^a-zA-Z0-9\-._]`)
+	re := regexp.MustCompile(`[^a-zA-Z0-9\-._/]`)
 	invalidCharacters := re.FindAllString(replacedName, -1)
 	if invalidCharacters != nil {
-		return "", fmt.Errorf("credential name '%s' contains forbidden characters (%s); only letters (a-z, A-Z), numbers (0-9) and dashes (-) are allowed", credentialName, strings.Join(invalidCharacters, ", "))
+		return "", fmt.Errorf("credential name '%s' decodes to '%s' which contains forbidden characters (%s); decoded names must only contain letters, numbers, dashes (-), dots (.), underscores (_), and slashes (/)", credentialName, replacedName, strings.Join(invalidCharacters, ", "))
 	} else {
 		return replacedName, nil
 	}

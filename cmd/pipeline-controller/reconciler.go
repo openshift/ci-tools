@@ -190,6 +190,8 @@ func (r *reconciler) reportSuccessOnPR(ctx context.Context, pj *v1.ProwJob, pres
 	for _, l := range []string{kube.OrgLabel, kube.RepoLabel, kube.PullLabel, kube.BaseRefLabel} {
 		selector[l] = pj.ObjectMeta.Labels[l]
 	}
+	// Only list presubmit jobs - postsubmits, periodics, and batch jobs are not relevant
+	selector[kube.ProwJobTypeLabel] = string(v1.PresubmitJob)
 	var pjs v1.ProwJobList
 	if err := r.lister.List(ctx, &pjs, ctrlruntimeclient.MatchingLabels(selector)); err != nil {
 		return false, fmt.Errorf("cannot list prowjob using selector %v", selector)
@@ -197,6 +199,7 @@ func (r *reconciler) reportSuccessOnPR(ctx context.Context, pj *v1.ProwJob, pres
 
 	latestBatch := make(map[string]v1.ProwJob)
 	for _, pjob := range pjs.Items {
+		// All items are presubmits with Pulls (filtered by ProwJobTypeLabel)
 		if pjob.Spec.Refs.Pulls[0].SHA == pj.Spec.Refs.Pulls[0].SHA {
 			if existing, ok := latestBatch[pjob.Spec.Job]; !ok {
 				latestBatch[pjob.Spec.Job] = pjob

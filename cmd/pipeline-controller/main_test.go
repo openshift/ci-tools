@@ -223,11 +223,51 @@ func TestHandleIssueComment(t *testing.T) {
 			expectCommentCall: false,
 		},
 		{
+			name: "comment contains /pipeline required in middle of text: do nothing",
+			event: github.IssueCommentEvent{
+				Comment: github.IssueComment{
+					Body: "Comment `/pipeline required` to trigger all required & necessary jobs.",
+				},
+				Issue: github.Issue{
+					PullRequest: &struct{}{},
+				},
+			},
+			expectCommentCall: false,
+		},
+		{
 			name: "whitespace variation: double space",
 			event: github.IssueCommentEvent{
 				Action: github.IssueCommentActionCreated,
 				Comment: github.IssueComment{
 					Body: "/pipeline  required",
+				},
+				Repo: github.Repo{
+					Owner: github.User{Login: org},
+					Name:  repo,
+				},
+				Issue: github.Issue{
+					Number:      prNumber,
+					PullRequest: &struct{}{},
+				},
+			},
+			configData: map[string]presubmitTests{
+				org + "/" + repo: {
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
+				},
+			},
+			ghPR: &github.PullRequest{
+				Base: github.PullRequestBranch{Ref: "master"},
+				Head: github.PullRequestBranch{SHA: "abc123"},
+			},
+			expectCommentCall: true,
+			expectedComment:   testPipelineRequiredResponse,
+		},
+		{
+			name: "command on new line in multiline comment: should trigger",
+			event: github.IssueCommentEvent{
+				Action: github.IssueCommentActionCreated,
+				Comment: github.IssueComment{
+					Body: "Some text here\n/pipeline required",
 				},
 				Repo: github.Repo{
 					Owner: github.User{Login: org},

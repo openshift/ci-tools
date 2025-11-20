@@ -56,6 +56,7 @@ func TestShouldAlwaysRun(t *testing.T) {
 				options.skipIfOnlyChanged = ""
 				options.defaultDisable = false
 				options.pipelineRunIfChanged = ""
+				options.pipelineSkipOnlyIfChanged = ""
 			},
 		},
 		{
@@ -67,6 +68,7 @@ func TestShouldAlwaysRun(t *testing.T) {
 				options.skipIfOnlyChanged = ""
 				options.defaultDisable = false
 				options.pipelineRunIfChanged = ""
+				options.pipelineSkipOnlyIfChanged = ""
 			},
 		},
 		{
@@ -78,6 +80,19 @@ func TestShouldAlwaysRun(t *testing.T) {
 				options.skipIfOnlyChanged = ""
 				options.defaultDisable = true
 				options.pipelineRunIfChanged = ""
+				options.pipelineSkipOnlyIfChanged = ""
+			},
+		},
+		{
+			description: "shouldAlwaysRun must return false because pipelineSkipOnlyIfChanged is defined",
+			test:        "testname",
+			alwaysRun:   false,
+			generateOptions: func(options *generatePresubmitOptions) {
+				options.runIfChanged = ""
+				options.skipIfOnlyChanged = ""
+				options.defaultDisable = false
+				options.pipelineRunIfChanged = ""
+				options.pipelineSkipOnlyIfChanged = "^docs/"
 			},
 		},
 	}
@@ -150,6 +165,24 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 			generateOption: func(options *generatePresubmitOptions) {
 				options.defaultDisable = false
 				options.pipelineRunIfChanged = ".*"
+			},
+		},
+		{
+			description: "presubmit with always_run but pipeline_skip_only_if_changed set",
+			test:        "testname",
+			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			generateOption: func(options *generatePresubmitOptions) {
+				options.defaultDisable = true
+				options.pipelineSkipOnlyIfChanged = "^docs/"
+			},
+		},
+		{
+			description: "presubmit with always_run=false and pipeline_skip_only_if_changed",
+			test:        "testname",
+			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			generateOption: func(options *generatePresubmitOptions) {
+				options.defaultDisable = false
+				options.pipelineSkipOnlyIfChanged = "^docs/"
 			},
 		},
 		{

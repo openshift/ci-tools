@@ -843,6 +843,10 @@ type TestStepConfiguration struct {
 	// SkipIfOnlyChanged is a regex that will result in the test being skipped if all changed files match that regex.
 	SkipIfOnlyChanged string `json:"skip_if_only_changed,omitempty"`
 
+	// PipelineSkipOnlyIfChanged is a regex that will result in the test being skipped in second
+	// stage of the pipeline run if all changed files match that regex.
+	PipelineSkipOnlyIfChanged string `json:"pipeline_skip_only_if_changed,omitempty"`
+
 	// Timeout overrides maximum prowjob duration
 	Timeout *prowv1.Duration `json:"timeout,omitempty"`
 

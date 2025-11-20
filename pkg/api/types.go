@@ -1412,6 +1412,7 @@ const (
 	ClusterProfileIBMCloudQE2             ClusterProfile = "ibmcloud-qe-2"
 	ClusterProfileIBMCloudMultiPpc64le    ClusterProfile = "ibmcloud-multi-ppc64le"
 	ClusterProfileIBMCloudMultiS390x      ClusterProfile = "ibmcloud-multi-s390x"
+	ClusterProfilePOWERVC1                ClusterProfile = "powervc-1"
 	ClusterProfilePOWERVSMulti1           ClusterProfile = "powervs-multi-1"
 	ClusterProfilePOWERVS1                ClusterProfile = "powervs-1"
 	ClusterProfilePOWERVS2                ClusterProfile = "powervs-2"
@@ -1612,6 +1613,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileIBMCloudQE,
 		ClusterProfileIBMCloudQE2,
 		ClusterProfileIBMCloudMultiPpc64le,
+		ClusterProfilePOWERVC1,
 		ClusterProfilePOWERVSMulti1,
 		ClusterProfileIBMCloudMultiS390x,
 		ClusterProfilePOWERVS1,
@@ -1858,6 +1860,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "ibmcloud-multi-ppc64le"
 	case ClusterProfileIBMCloudMultiS390x:
 		return "ibmcloud-multi-s390x"
+	case ClusterProfilePOWERVC1:
+		return "powervc-1"
 	case ClusterProfilePOWERVSMulti1:
 		return "powervs-multi-1"
 	case ClusterProfilePOWERVS1:
@@ -2169,6 +2173,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "ibmcloud-multi-ppc64le-quota-slice"
 	case ClusterProfileIBMCloudMultiS390x:
 		return "ibmcloud-multi-s390x-quota-slice"
+	case ClusterProfilePOWERVC1:
+		return "powervc-1-quota-slice"
 	case ClusterProfilePOWERVSMulti1:
 		return "powervs-multi-1-quota-slice"
 	case ClusterProfilePOWERVS1:
@@ -2408,11 +2414,12 @@ func LeaseTypeFromClusterType(t string) (string, error) {
 		"libvirt-s390x-1", "libvirt-s390x-2", "libvirt-s390x-amd64", "libvirt-s390x-vpn", "ibmcloud-multi-ppc64le",
 		"ibmcloud-multi-s390x", "nutanix", "nutanix-qe", "nutanix-qe-dis", "nutanix-qe-zone", "nutanix-qe-gpu",
 		"nutanix-qe-flow", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le",
-		"openstack-nerc-dev", "vsphere", "ovirt", "packet", "packet-edge", "powervs-multi-1", "powervs-1", "powervs-2",
-		"powervs-3", "powervs-4", "powervs-5", "powervs-6", "powervs-7", "powervs-8", "kubevirt", "aws-cpaas", "osd-ephemeral",
-		"gcp-virtualization", "aws-virtualization", "azure-virtualization", "hypershift-powervs",
-		"hypershift-powervs-cb", "aws-mco-qe", "equinix-edge-enablement", "aws-oadp-qe", "azure-oadp-qe", "gcp-oadp-qe",
-		"aws-lp-chaos", "metal-redhat-gs", "aro-hcp-int", "aro-hcp-stg", "aro-hcp-prod", "aro-hcp-dev":
+		"openstack-nerc-dev", "vsphere", "ovirt", "packet", "packet-edge", "powervc-1", "powervs-multi-1",
+		"powervs-1", "powervs-2", "powervs-3", "powervs-4", "powervs-5", "powervs-6", "powervs-7", "powervs-8",
+		"kubevirt", "aws-cpaas", "osd-ephemeral", "gcp-virtualization", "aws-virtualization",
+		"azure-virtualization", "hypershift-powervs", "hypershift-powervs-cb", "aws-mco-qe",
+		"equinix-edge-enablement", "aws-oadp-qe", "azure-oadp-qe", "gcp-oadp-qe", "aws-lp-chaos",
+		"metal-redhat-gs", "aro-hcp-int", "aro-hcp-stg", "aro-hcp-prod", "aro-hcp-dev":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

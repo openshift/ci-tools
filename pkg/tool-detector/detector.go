@@ -23,11 +23,12 @@ const (
 // Detector detects which cmd tools are affected by code changes
 type Detector struct {
 	jobSpec *api.JobSpec
+	config  *api.ReleaseBuildConfiguration
 }
 
 // New creates a new detector.
-func New(jobSpec *api.JobSpec) *Detector {
-	return &Detector{jobSpec: jobSpec}
+func New(jobSpec *api.JobSpec, config *api.ReleaseBuildConfiguration) *Detector {
+	return &Detector{jobSpec: jobSpec, config: config}
 }
 
 // AffectedTools returns the set of cmd tool names that are affected by changes
@@ -60,13 +61,26 @@ func (d *Detector) AffectedTools() (sets.Set[string], error) {
 		return sets.New[string](), nil
 	}
 
-	changedPackages, err := d.loadChangedPackages(changedFiles)
+	affectedByImageChanges := d.getAffectedToolsByImageChanges(changedFiles)
+
+	goFiles := []string{}
+	for _, file := range changedFiles {
+		if strings.HasSuffix(file, ".go") {
+			goFiles = append(goFiles, file)
+		}
+	}
+
+	if len(goFiles) == 0 {
+		return affectedByImageChanges, nil
+	}
+
+	changedPackages, err := d.loadChangedPackages(goFiles)
 	if err != nil {
 		return nil, fmt.Errorf("load changed packages: %w", err)
 	}
 
 	if len(changedPackages) == 0 {
-		return sets.New[string](), nil
+		return affectedByImageChanges, nil
 	}
 
 	cmdTools, allPackages, err := d.loadCmdTools()
@@ -74,7 +88,8 @@ func (d *Detector) AffectedTools() (sets.Set[string], error) {
 		return nil, fmt.Errorf("load cmd tools: %w", err)
 	}
 
-	return d.findAffectedToolsFromPackages(cmdTools, allPackages, changedPackages, baseRef), nil
+	affectedByPackages := d.findAffectedToolsFromPackages(cmdTools, allPackages, changedPackages, baseRef)
+	return affectedByPackages.Union(affectedByImageChanges), nil
 }
 
 func (d *Detector) getChangedFiles(baseRef string) ([]string, error) {
@@ -88,7 +103,7 @@ func (d *Detector) getChangedFiles(baseRef string) ([]string, error) {
 	scanner := bufio.NewScanner(strings.NewReader(string(output)))
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		if line != "" && strings.HasSuffix(line, ".go") {
+		if line != "" {
 			files = append(files, line)
 		}
 	}
@@ -246,4 +261,34 @@ func (d *Detector) hasModuleDependencyChanges(baseRef string) bool {
 		}
 	}
 	return false
+}
+
+// getAffectedToolsByImageChanges checks if any files in image context directories changed
+// and returns the set of tools affected by those changes
+func (d *Detector) getAffectedToolsByImageChanges(changedFiles []string) sets.Set[string] {
+	affected := sets.New[string]()
+
+	if d.config == nil {
+		return affected
+	}
+
+	for _, image := range d.config.Images {
+		if image.ContextDir == "" {
+			continue
+		}
+
+		contextDir := image.ContextDir
+		if !strings.HasSuffix(contextDir, "/") {
+			contextDir += "/"
+		}
+
+		for _, changedFile := range changedFiles {
+			if strings.HasPrefix(changedFile, contextDir) {
+				affected.Insert(string(image.To))
+				break
+			}
+		}
+	}
+
+	return affected
 }

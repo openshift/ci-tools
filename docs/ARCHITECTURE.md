@@ -293,7 +293,7 @@ This directory contains reusable Go packages used across multiple tools. See ind
 
 ### CI Operator
 
-**How CI Operator Works:**
+#### How CI Operator Works
 
 1. **Configuration Loading** (`pkg/config/load.go`):
    - Loads YAML configuration
@@ -316,7 +316,7 @@ This directory contains reusable Go packages used across multiple tools. See ind
    - Updates ImageStreams
    - Handles promotion policies
 
-**Key API:**
+#### Key API
 
 ```go
 // Configuration Structure (pkg/api/config.go)
@@ -342,7 +342,7 @@ type Step interface {
 
 ### Configuration Management
 
-**How Configuration Management Works:**
+#### How Configuration Management Works
 
 1. **Config Brancher** (`cmd/config-brancher/`):
    - Reads ci-operator configs from openshift/release
@@ -364,7 +364,7 @@ type Step interface {
 
 ### Controllers
 
-**How Controllers Work:**
+#### How Controllers Work
 
 1. **Controller Manager** (`cmd/dptp-controller-manager/`):
    - Initializes multiple controllers
@@ -377,7 +377,7 @@ type Step interface {
    - Handle errors and retries
    - Update resource status
 
-**Reconciler Interface:**
+#### Reconciler Interface
 ```go
 type Reconciler interface {
     Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error)

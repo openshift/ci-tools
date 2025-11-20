@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/getlantern/deepcopy"
@@ -61,6 +62,41 @@ type SecretConfig struct {
 	To   []SecretContext        `json:"to"`
 }
 
+// orderSecretConfig sorts the SecretConfig data structures for deterministic ordering
+func (s *SecretConfig) orderSecretConfig() {
+	// Sort From map keys and DockerConfigJSONData slices
+	sortedFrom := make(map[string]ItemContext)
+	keys := make([]string, 0, len(s.From))
+	for k := range s.From {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		itemCtx := s.From[k]
+		// Sort DockerConfigJSONData slice
+		dockerData := make([]DockerConfigJSONData, len(itemCtx.DockerConfigJSONData))
+		copy(dockerData, itemCtx.DockerConfigJSONData)
+		sort.Slice(dockerData, func(i, j int) bool {
+			if dockerData[i].RegistryURL != dockerData[j].RegistryURL {
+				return dockerData[i].RegistryURL < dockerData[j].RegistryURL
+			}
+			if dockerData[i].Item != dockerData[j].Item {
+				return dockerData[i].Item < dockerData[j].Item
+			}
+			return dockerData[i].AuthField < dockerData[j].AuthField
+		})
+
+		sortedFrom[k] = ItemContext{
+			Item:                 itemCtx.Item,
+			Field:                itemCtx.Field,
+			DockerConfigJSONData: dockerData,
+			Base64Decode:         itemCtx.Base64Decode,
+		}
+	}
+	s.From = sortedFrom
+}
+
 // LoadConfigFromFile renders a Config object loaded from the given file
 func LoadConfigFromFile(file string, config *Config) error {
 	bytes, err := gzip.ReadFileMaybeGZIP(file)
@@ -71,12 +107,65 @@ func LoadConfigFromFile(file string, config *Config) error {
 }
 
 // SaveConfigToFile serializes a Config object to the given file
+// It orders the config for deterministic output before saving
 func SaveConfigToFile(file string, config *Config) error {
+	// Order the config data structures for deterministic output before saving
+	config.orderConfig()
 	bytes, err := yaml.Marshal(config)
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(file, bytes, 0644)
+}
+
+// orderConfig sorts the Config data structures for deterministic ordering
+func (c *Config) orderConfig() {
+	// Sort ClusterGroups map keys
+	sortedClusterGroups := make(map[string][]string)
+	clusterGroupKeys := make([]string, 0, len(c.ClusterGroups))
+	for k := range c.ClusterGroups {
+		clusterGroupKeys = append(clusterGroupKeys, k)
+	}
+	sort.Strings(clusterGroupKeys)
+	for _, k := range clusterGroupKeys {
+		clusters := make([]string, len(c.ClusterGroups[k]))
+		copy(clusters, c.ClusterGroups[k])
+		sort.Strings(clusters)
+		sortedClusterGroups[k] = clusters
+	}
+	c.ClusterGroups = sortedClusterGroups
+
+	// Sort Secrets slice
+	sort.Slice(c.Secrets, func(i, j int) bool {
+		// Sort by first To entry's Cluster, then Namespace, then Name
+		// This groups secrets by cluster, making the output more organized
+		if len(c.Secrets[i].To) == 0 && len(c.Secrets[j].To) == 0 {
+			return false
+		}
+		if len(c.Secrets[i].To) == 0 {
+			return true
+		}
+		if len(c.Secrets[j].To) == 0 {
+			return false
+		}
+		toI := c.Secrets[i].To[0]
+		toJ := c.Secrets[j].To[0]
+		if toI.Cluster != toJ.Cluster {
+			return toI.Cluster < toJ.Cluster
+		}
+		if toI.Namespace != toJ.Namespace {
+			return toI.Namespace < toJ.Namespace
+		}
+		return toI.Name < toJ.Name
+	})
+
+	// Sort UserSecretsTargetClusters
+	sort.Strings(c.UserSecretsTargetClusters)
+
+	// Order each SecretConfig
+	for i := range c.Secrets {
+		c.Secrets[i].orderSecretConfig()
+	}
 }
 
 // Config is what we version in our repository

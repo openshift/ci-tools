@@ -46,6 +46,7 @@ git init --quiet .
 git config user.name test
 git config user.email test
 git config commit.gpgsign false
+git config core.hooksPath /dev/null
 git add .
 git commit --quiet -m initial
 cd %s
@@ -54,11 +55,21 @@ git commit --quiet --all --message changes
 git rev-parse HEAD^
 `, path, cmd))
 	p.Dir = tmp
-	out, err := p.CombinedOutput()
+	// Use Output() instead of CombinedOutput() to avoid pre-commit hook output on stderr
+	out, err := p.Output()
 	if err != nil {
-		t.Fatalf("%q failed, output:\n%s", p.Args, out)
+		// If Output() fails, try CombinedOutput() for error details
+		combinedOut, combinedErr := p.CombinedOutput()
+		if combinedErr != nil {
+			t.Fatalf("%q failed, output:\n%s", p.Args, combinedOut)
+		}
+		out = combinedOut
 	}
-	changed, err := f(dir, strings.TrimSpace(string(out)))
+	commitHash := strings.TrimSpace(string(out))
+	if len(commitHash) != 40 {
+		t.Fatalf("invalid commit hash from git rev-parse: %q", commitHash)
+	}
+	changed, err := f(dir, commitHash)
 	if err != nil {
 		t.Fatal(err)
 	}

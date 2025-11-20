@@ -44,7 +44,7 @@ Welcome to the CI-Tools documentation! This directory contains comprehensive doc
 
 ## Documentation Structure
 
-```
+```text
 docs/
 ├── README.md                 # This file
 ├── OVERVIEW.md              # High-level overview

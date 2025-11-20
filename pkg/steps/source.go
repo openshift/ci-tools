@@ -490,7 +490,7 @@ func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubern
 		go func(b buildapi.Build) {
 			defer wg.Done()
 			metricsAgent.AddNodeWorkload(ctx, b.Namespace, fmt.Sprintf("%s-build", b.Name), b.Name, podClient)
-			if err := handleBuild(ctx, buildClient, podClient, b); err != nil {
+			if err := handleBuild(ctx, buildClient, podClient, b, true); err != nil {
 				errChan <- fmt.Errorf("error occurred handling build %s: %w", b.Name, err)
 			}
 			metricsAgent.RemoveNodeWorkload(b.Name)
@@ -548,14 +548,16 @@ func constructMultiArchBuilds(build buildapi.Build, stepArchitectures []string) 
 	return ret
 }
 
-func handleBuild(ctx context.Context, client BuildClient, podClient kubernetes.PodClient, build buildapi.Build) error {
+func handleBuild(ctx context.Context, client BuildClient, podClient kubernetes.PodClient, build buildapi.Build, waitOnMultiArch bool) error {
 	const attempts = 5
 	ns, name := build.Namespace, build.Name
 	var errs []error
 	if err := wait.ExponentialBackoff(wait.Backoff{Duration: time.Minute, Factor: 1.5, Steps: attempts}, func() (bool, error) {
 		var attempt buildapi.Build
-		// builds are using older src image, adding wait to avoid race condition
-		time.Sleep(5 * time.Minute)
+		if waitOnMultiArch {
+			// builds are using older src image, adding wait to avoid race condition
+			time.Sleep(5 * time.Minute)
+		}
 		build.DeepCopyInto(&attempt)
 		if err := client.Create(ctx, &attempt); err == nil {
 			logrus.Infof("Created build %q", name)

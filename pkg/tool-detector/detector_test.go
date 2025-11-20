@@ -40,7 +40,7 @@ func TestNew(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := New(tt.jobSpec)
+			d := New(tt.jobSpec, nil)
 			if d.jobSpec != tt.jobSpec {
 				t.Errorf("Expected jobSpec %v, got %v", tt.jobSpec, d.jobSpec)
 			}
@@ -76,7 +76,7 @@ func TestDetector_extractToolName(t *testing.T) {
 		},
 	}
 
-	d := New(nil)
+	d := New(nil, nil)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := d.extractToolName(tt.pkgPath)
@@ -146,7 +146,7 @@ func TestDetector_hasDependency(t *testing.T) {
 		},
 	}
 
-	d := New(nil)
+	d := New(nil, nil)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			visited := sets.New[string]()
@@ -274,12 +274,181 @@ func TestDetector_findAffectedToolsFromPackages(t *testing.T) {
 		},
 	}
 
-	d := New(nil)
+	d := New(nil, nil)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := d.findAffectedToolsFromPackages(tt.cmdTools, tt.allPackages, tt.changedPackages, "test-base-ref")
 			if diff := cmp.Diff(tt.expected, result); diff != "" {
 				t.Errorf("findAffectedToolsFromPackages() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestDetector_getAffectedToolsByImageChanges(t *testing.T) {
+	tests := []struct {
+		name         string
+		config       *api.ReleaseBuildConfiguration
+		changedFiles []string
+		expected     sets.Set[string]
+	}{
+		{
+			name:         "no config",
+			config:       nil,
+			changedFiles: []string{"images/ci-operator/Dockerfile"},
+			expected:     sets.New[string](),
+		},
+		{
+			name: "single image with context_dir change",
+			config: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{
+						To: "ci-operator",
+						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+							ContextDir: "images/ci-operator",
+						},
+					},
+				},
+			},
+			changedFiles: []string{"images/ci-operator/Dockerfile"},
+			expected:     sets.New("ci-operator"),
+		},
+		{
+			name: "single image with context_dir change - trailing slash",
+			config: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{
+						To: "ci-operator",
+						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+							ContextDir: "images/ci-operator/",
+						},
+					},
+				},
+			},
+			changedFiles: []string{"images/ci-operator/Dockerfile"},
+			expected:     sets.New("ci-operator"),
+		},
+		{
+			name: "multiple files in same context_dir",
+			config: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{
+						To: "ci-operator",
+						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+							ContextDir: "images/ci-operator",
+						},
+					},
+				},
+			},
+			changedFiles: []string{
+				"images/ci-operator/Dockerfile",
+				"images/ci-operator/entrypoint.sh",
+				"images/ci-operator/config.yaml",
+			},
+			expected: sets.New("ci-operator"),
+		},
+		{
+			name: "multiple images with different context_dirs",
+			config: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{
+						To: "ci-operator",
+						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+							ContextDir: "images/ci-operator",
+						},
+					},
+					{
+						To: "pj-rehearse",
+						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+							ContextDir: "images/pj-rehearse",
+						},
+					},
+				},
+			},
+			changedFiles: []string{
+				"images/ci-operator/Dockerfile",
+				"images/pj-rehearse/Dockerfile",
+			},
+			expected: sets.New("ci-operator", "pj-rehearse"),
+		},
+		{
+			name: "change in different directory",
+			config: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{
+						To: "ci-operator",
+						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+							ContextDir: "images/ci-operator",
+						},
+					},
+				},
+			},
+			changedFiles: []string{"images/other-tool/Dockerfile"},
+			expected:     sets.New[string](),
+		},
+		{
+			name: "mixed changes - some match, some don't",
+			config: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{
+						To: "ci-operator",
+						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+							ContextDir: "images/ci-operator",
+						},
+					},
+					{
+						To: "pj-rehearse",
+						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+							ContextDir: "images/pj-rehearse",
+						},
+					},
+				},
+			},
+			changedFiles: []string{
+				"images/ci-operator/Dockerfile",
+				"images/other-tool/Dockerfile",
+				"pkg/api/types.go",
+			},
+			expected: sets.New("ci-operator"),
+		},
+		{
+			name: "image with empty context_dir",
+			config: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{
+						To: "ci-operator",
+						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+							ContextDir: "",
+						},
+					},
+				},
+			},
+			changedFiles: []string{"images/ci-operator/Dockerfile"},
+			expected:     sets.New[string](),
+		},
+		{
+			name: "no changed files",
+			config: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{
+						To: "ci-operator",
+						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+							ContextDir: "images/ci-operator",
+						},
+					},
+				},
+			},
+			changedFiles: []string{},
+			expected:     sets.New[string](),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := New(nil, tt.config)
+			result := d.getAffectedToolsByImageChanges(tt.changedFiles)
+			if diff := cmp.Diff(tt.expected, result); diff != "" {
+				t.Errorf("getAffectedToolsByImageChanges() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

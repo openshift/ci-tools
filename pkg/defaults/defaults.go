@@ -118,7 +118,7 @@ func FromConfig(
 	httpClient := retryablehttp.NewClient()
 	httpClient.Logger = nil
 
-	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, nodeName, targetAdditionalSuffix, nodeArchitectures, integratedStreams, injectedTest, enableSecretsStoreCSIDriver, metricsAgent, tooldetector.New(jobSpec).AffectedTools)
+	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, nodeName, targetAdditionalSuffix, nodeArchitectures, integratedStreams, injectedTest, enableSecretsStoreCSIDriver, metricsAgent, tooldetector.New(jobSpec, config).AffectedTools)
 }
 
 func determineSkippedImages(config *api.ReleaseBuildConfiguration, requiredNames sets.Set[string], jobSpec *api.JobSpec, getAffectedTools func() (sets.Set[string], error)) sets.Set[string] {
@@ -135,7 +135,7 @@ func determineSkippedImages(config *api.ReleaseBuildConfiguration, requiredNames
 	if getAffectedTools != nil {
 		affectedTools, err = getAffectedTools()
 	} else {
-		detector := tooldetector.New(jobSpec)
+		detector := tooldetector.New(jobSpec, config)
 		affectedTools, err = detector.AffectedTools()
 	}
 	if err != nil {

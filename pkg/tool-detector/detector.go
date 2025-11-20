@@ -129,6 +129,18 @@ func (d *Detector) loadChangedPackages(files []string) (sets.Set[string], error)
 		return nil, err
 	}
 
+	var packageErrors []error
+	for _, pkg := range pkgs {
+		if len(pkg.Errors) > 0 {
+			for _, pkgErr := range pkg.Errors {
+				packageErrors = append(packageErrors, fmt.Errorf("package %s: %w", pkg.PkgPath, pkgErr))
+			}
+		}
+	}
+	if len(packageErrors) > 0 {
+		return nil, fmt.Errorf("failed to load changed packages: %v", packageErrors)
+	}
+
 	changed := sets.New[string]()
 	for _, pkg := range pkgs {
 		if pkg.PkgPath != "" && strings.HasPrefix(pkg.PkgPath, ModulePrefix) {
@@ -147,6 +159,18 @@ func (d *Detector) loadCmdTools() ([]*packages.Package, map[string]*packages.Pac
 	pkgs, err := packages.Load(cfg, "./cmd/...")
 	if err != nil {
 		return nil, nil, err
+	}
+
+	var packageErrors []error
+	for _, pkg := range pkgs {
+		if len(pkg.Errors) > 0 {
+			for _, pkgErr := range pkg.Errors {
+				packageErrors = append(packageErrors, fmt.Errorf("package %s: %w", pkg.PkgPath, pkgErr))
+			}
+		}
+	}
+	if len(packageErrors) > 0 {
+		return nil, nil, fmt.Errorf("failed to load cmd tools: %v", packageErrors)
 	}
 
 	allPackages := make(map[string]*packages.Package)

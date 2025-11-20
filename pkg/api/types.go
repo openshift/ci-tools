@@ -1430,7 +1430,6 @@ const (
 	ClusterProfileLibvirtS390xAmd64       ClusterProfile = "libvirt-s390x-amd64"
 	ClusterProfileLibvirtS390xVPN         ClusterProfile = "libvirt-s390x-vpn"
 	ClusterProfileMetalPerfscaleBMCPT     ClusterProfile = "metal-perfscale-cpt"
-	ClusterProfileMetalPerfscaleCPT       ClusterProfile = "metal-perscale-cpt"
 	ClusterProfileMetalPerfscaleJetlag    ClusterProfile = "metal-perfscale-jetlag"
 	ClusterProfileMetalPerfscaleOSP       ClusterProfile = "metal-perfscale-osp"
 	ClusterProfileMetalPerfscaleSelfSched ClusterProfile = "metal-perfscale-selfsched"
@@ -1633,7 +1632,6 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileLibvirtS390xAmd64,
 		ClusterProfileLibvirtS390xVPN,
 		ClusterProfileMetalPerfscaleBMCPT,
-		ClusterProfileMetalPerfscaleCPT,
 		ClusterProfileMetalPerfscaleJetlag,
 		ClusterProfileMetalPerfscaleOSP,
 		ClusterProfileMetalPerfscaleSelfSched,
@@ -1898,8 +1896,6 @@ func (p ClusterProfile) ClusterType() string {
 		return "metal-redhat-gs"
 	case ClusterProfileMetalPerfscaleBMCPT:
 		return "metal-perfscale-cpt"
-	case ClusterProfileMetalPerfscaleCPT:
-		return "metal-perscale-cpt"
 	case ClusterProfileMetalPerfscaleJetlag:
 		return "metal-perfscale-jetlag"
 	case ClusterProfileMetalPerfscaleOSP:
@@ -2209,8 +2205,6 @@ func (p ClusterProfile) LeaseType() string {
 		return "libvirt-s390x-vpn-quota-slice"
 	case ClusterProfileMetalPerfscaleBMCPT:
 		return "metal-perfscale-cpt-quota-slice"
-	case ClusterProfileMetalPerfscaleCPT:
-		return "metal-perscale-cpt-quota-slice"
 	case ClusterProfileMetalPerfscaleJetlag:
 		return "metal-perfscale-jetlag-quota-slice"
 	case ClusterProfileMetalPerfscaleOSP:

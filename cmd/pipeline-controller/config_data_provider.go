@@ -82,8 +82,8 @@ func (c *ConfigDataProvider) gatherDataForRepos(orgRepos []string) {
 					updatedPresubmits[orgRepo] = pre
 					continue
 				}
-				// Also check for pipeline_skip_only_if_changed annotation
-				if val, ok := p.Annotations["pipeline_skip_only_if_changed"]; ok && val != "" {
+				// Also check for pipeline_skip_if_only_changed annotation
+				if val, ok := p.Annotations["pipeline_skip_if_only_changed"]; ok && val != "" {
 					pre := updatedPresubmits[orgRepo]
 					pre.pipelineSkipOnlyRequired = append(pre.pipelineSkipOnlyRequired, p)
 					updatedPresubmits[orgRepo] = pre
@@ -92,7 +92,7 @@ func (c *ConfigDataProvider) gatherDataForRepos(orgRepos []string) {
 				// Only categorize as protected if it doesn't have pipeline annotations
 				if !p.Optional {
 					if _, hasPipelineRun := p.Annotations["pipeline_run_if_changed"]; !hasPipelineRun {
-						if _, hasPipelineSkip := p.Annotations["pipeline_skip_only_if_changed"]; !hasPipelineSkip {
+						if _, hasPipelineSkip := p.Annotations["pipeline_skip_if_only_changed"]; !hasPipelineSkip {
 							pre := updatedPresubmits[orgRepo]
 							pre.protected = append(pre.protected, p)
 							updatedPresubmits[orgRepo] = pre

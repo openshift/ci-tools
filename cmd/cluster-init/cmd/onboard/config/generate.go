@@ -17,7 +17,8 @@ import (
 )
 
 type generateConfigOptions struct {
-	releaseRepo string
+	releaseRepo   string
+	releaseBranch string
 	*runtime.Options
 }
 
@@ -35,6 +36,7 @@ func newGenerateCmd(log *logrus.Entry, parentOpts *runtime.Options) (*cobra.Comm
 
 	pf := cmd.PersistentFlags()
 	pf.StringVar(&opts.releaseRepo, "release-repo", "", "Path to openshift/release.")
+	pf.StringVar(&opts.releaseBranch, "release-branch", "main", "Release branch name to be used.")
 	if err := cmd.MarkPersistentFlagRequired("release-repo"); err != nil {
 		return nil, err
 	}
@@ -74,7 +76,7 @@ func generateConfig(ctx context.Context, log *logrus.Entry, opts generateConfigO
 		return err
 	}
 
-	if err := runConfigSteps(ctx, log, false, clusterInstall, ctrlClient, kubeClient); err != nil {
+	if err := runConfigSteps(ctx, log, false, clusterInstall, ctrlClient, kubeClient, opts.releaseBranch); err != nil {
 		return fmt.Errorf("generate config for cluster %s, %w", clusterInstall.ClusterName, err)
 	}
 

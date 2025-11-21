@@ -26,6 +26,7 @@ const (
 )
 
 type prowJobStep struct {
+	releaseBranch  string
 	log            *logrus.Entry
 	clusterInstall *clusterinstall.ClusterInstall
 }
@@ -35,16 +36,19 @@ func (s *prowJobStep) Name() string { return "prow-jobs" }
 func (s *prowJobStep) Run(ctx context.Context) error {
 	s.log = s.log.WithField("step", "jobs")
 	s.log.Infof("generating: presubmits, postsubmits, and periodics for %s", s.clusterInstall.ClusterName)
+
+	metadata := RepoMetadata()
+	metadata.Branch = s.releaseBranch
+
 	config := prowconfig.JobConfig{
 		PresubmitsStatic: map[string][]prowconfig.Presubmit{
-			"openshift/release": {s.generatePresubmit(s.clusterInstall.ClusterName, *s.clusterInstall.Onboard.OSD, *s.clusterInstall.Onboard.Unmanaged)},
+			"openshift/release": {s.generatePresubmit(metadata, s.clusterInstall.ClusterName, *s.clusterInstall.Onboard.OSD, *s.clusterInstall.Onboard.Unmanaged)},
 		},
 		PostsubmitsStatic: map[string][]prowconfig.Postsubmit{
-			"openshift/release": {s.generatePostsubmit(s.clusterInstall.ClusterName, *s.clusterInstall.Onboard.OSD, *s.clusterInstall.Onboard.Unmanaged)},
+			"openshift/release": {s.generatePostsubmit(metadata, s.clusterInstall.ClusterName, *s.clusterInstall.Onboard.OSD, *s.clusterInstall.Onboard.Unmanaged)},
 		},
-		Periodics: []prowconfig.Periodic{s.generatePeriodic(s.clusterInstall.ClusterName, *s.clusterInstall.Onboard.OSD, *s.clusterInstall.Onboard.Unmanaged)},
+		Periodics: []prowconfig.Periodic{s.generatePeriodic(metadata, s.clusterInstall.ClusterName, *s.clusterInstall.Onboard.OSD, *s.clusterInstall.Onboard.Unmanaged)},
 	}
-	metadata := RepoMetadata()
 	jobsDir := filepath.Join(s.clusterInstall.Onboard.ReleaseRepo, "ci-operator", "jobs")
 	return jobconfig.WriteToDir(jobsDir,
 		metadata.Org,
@@ -54,10 +58,10 @@ func (s *prowJobStep) Run(ctx context.Context) error {
 		map[string]string{jobconfig.LabelBuildFarm: s.clusterInstall.ClusterName})
 }
 
-func (s *prowJobStep) generatePeriodic(clusterName string, osd bool, unmanaged bool) prowconfig.Periodic {
+func (s *prowJobStep) generatePeriodic(metadata *api.Metadata, clusterName string, osd bool, unmanaged bool) prowconfig.Periodic {
 	return prowconfig.Periodic{
 		JobBase: prowconfig.JobBase{
-			Name:       RepoMetadata().SimpleJobName(jobconfig.PeriodicPrefix, clusterName+"-apply"),
+			Name:       metadata.SimpleJobName(jobconfig.PeriodicPrefix, clusterName+"-apply"),
 			Agent:      string(prowapi.KubernetesAgent),
 			Cluster:    string(api.ClusterAPPCI),
 			SourcePath: "",
@@ -88,10 +92,10 @@ func (s *prowJobStep) generatePeriodic(clusterName string, osd bool, unmanaged b
 	}
 }
 
-func (s *prowJobStep) generatePostsubmit(clusterName string, osd bool, unmanaged bool) prowconfig.Postsubmit {
+func (s *prowJobStep) generatePostsubmit(metadata *api.Metadata, clusterName string, osd bool, unmanaged bool) prowconfig.Postsubmit {
 	return prowconfig.Postsubmit{
 		JobBase: prowconfig.JobBase{
-			Name:       RepoMetadata().JobName(jobconfig.PostsubmitPrefix, clusterName+"-apply"),
+			Name:       metadata.JobName(jobconfig.PostsubmitPrefix, clusterName+"-apply"),
 			Agent:      string(prowapi.KubernetesAgent),
 			Cluster:    string(api.ClusterAPPCI),
 			SourcePath: "",
@@ -116,14 +120,14 @@ func (s *prowJobStep) generatePostsubmit(clusterName string, osd bool, unmanaged
 	}
 }
 
-func (s *prowJobStep) generatePresubmit(clusterName string, osd bool, unmanaged bool) prowconfig.Presubmit {
+func (s *prowJobStep) generatePresubmit(metadata *api.Metadata, clusterName string, osd bool, unmanaged bool) prowconfig.Presubmit {
 	var optional bool
 	if clusterName == string(api.ClusterVSphere02) {
 		optional = true
 	}
 	return prowconfig.Presubmit{
 		JobBase: prowconfig.JobBase{
-			Name:       RepoMetadata().JobName(jobconfig.PresubmitPrefix, clusterName+"-dry"),
+			Name:       metadata.JobName(jobconfig.PresubmitPrefix, clusterName+"-dry"),
 			Agent:      string(prowapi.KubernetesAgent),
 			Cluster:    string(api.ClusterAPPCI),
 			SourcePath: "",
@@ -248,9 +252,10 @@ func (s *prowJobStep) generateContainer(image, clusterName string, osd bool, unm
 	}
 }
 
-func NewProwJobStep(log *logrus.Entry, clusterInstall *clusterinstall.ClusterInstall) *prowJobStep {
+func NewProwJobStep(log *logrus.Entry, clusterInstall *clusterinstall.ClusterInstall, releaseBranch string) *prowJobStep {
 	return &prowJobStep{
 		log:            log,
 		clusterInstall: clusterInstall,
+		releaseBranch:  releaseBranch,
 	}
 }

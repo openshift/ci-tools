@@ -176,36 +176,61 @@ var (
 	}
 
 	defaultConfig = secretbootstrap.Config{
+		ClusterGroups: map[string][]string{},
 		Secrets: []secretbootstrap.SecretConfig{
 			{
 				From: map[string]secretbootstrap.ItemContext{
+					".dockerconfigjson": {
+						Item:                 "quay.io",
+						Field:                "pull-credentials",
+						DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{},
+					},
+				},
+				To: []secretbootstrap.SecretContext{
+					{
+						Cluster:   "default",
+						Namespace: "ci",
+						Name:      "ci-pull-credentials",
+						Type:      "kubernetes.io/dockerconfigjson",
+					},
+				},
+			},
+			{
+				From: map[string]secretbootstrap.ItemContext{
 					"key-name-1": {
-						Item:  "item-name-1",
-						Field: "field-name-1",
+						Item:                 "item-name-1",
+						Field:                "field-name-1",
+						DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{},
 					},
 					"key-name-2": {
-						Item:  "item-name-1",
-						Field: "field-name-2",
+						Item:                 "item-name-1",
+						Field:                "field-name-2",
+						DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{},
 					},
 					"key-name-3": {
-						Item:  "item-name-1",
-						Field: "field-name-3",
+						Item:                 "item-name-1",
+						Field:                "field-name-3",
+						DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{},
 					},
 					"key-name-4": {
-						Item:  "item-name-2",
-						Field: "field-name-1",
+						Item:                 "item-name-2",
+						Field:                "field-name-1",
+						DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{},
 					},
 					"key-name-5": {
-						Item:  "item-name-2",
-						Field: "field-name-2",
+						Item:                 "item-name-2",
+						Field:                "field-name-2",
+						DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{},
 					},
 					"key-name-6": {
-						Item:  "item-name-3",
-						Field: "field-name-1",
+						Item:                 "item-name-3",
+						Field:                "field-name-1",
+						DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{},
 					},
 					"key-name-7": {
-						Item:  "item-name-2",
-						Field: "field-name-2",
+						Item:                 "item-name-2",
+						Field:                "field-name-2",
+						DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{},
 					},
 				},
 				To: []secretbootstrap.SecretContext{
@@ -221,55 +246,47 @@ var (
 					},
 				},
 			},
-			{
-				From: map[string]secretbootstrap.ItemContext{
-					".dockerconfigjson": {
-						Item:  "quay.io",
-						Field: "pull-credentials",
-					},
-				},
-				To: []secretbootstrap.SecretContext{
-					{
-						Cluster:   "default",
-						Namespace: "ci",
-						Name:      "ci-pull-credentials",
-						Type:      "kubernetes.io/dockerconfigjson",
-					},
-				},
-			},
 		},
 	}
 	defaultConfigWithoutDefaultCluster = secretbootstrap.Config{
+		ClusterGroups: map[string][]string{},
 		Secrets: []secretbootstrap.SecretConfig{
 			{
 				From: map[string]secretbootstrap.ItemContext{
 					"key-name-1": {
-						Item:  "item-name-1",
-						Field: "field-name-1",
+						Item:                 "item-name-1",
+						Field:                "field-name-1",
+						DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{},
 					},
 					"key-name-2": {
-						Item:  "item-name-1",
-						Field: "field-name-2",
+						Item:                 "item-name-1",
+						Field:                "field-name-2",
+						DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{},
 					},
 					"key-name-3": {
-						Item:  "item-name-1",
-						Field: "field-name-3",
+						Item:                 "item-name-1",
+						Field:                "field-name-3",
+						DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{},
 					},
 					"key-name-4": {
-						Item:  "item-name-2",
-						Field: "field-name-1",
+						Item:                 "item-name-2",
+						Field:                "field-name-1",
+						DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{},
 					},
 					"key-name-5": {
-						Item:  "item-name-2",
-						Field: "field-name-2",
+						Item:                 "item-name-2",
+						Field:                "field-name-2",
+						DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{},
 					},
 					"key-name-6": {
-						Item:  "item-name-3",
-						Field: "field-name-1",
+						Item:                 "item-name-3",
+						Field:                "field-name-1",
+						DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{},
 					},
 					"key-name-7": {
-						Item:  "item-name-2",
-						Field: "field-name-2",
+						Item:                 "item-name-2",
+						Field:                "field-name-2",
+						DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{},
 					},
 				},
 				To: []secretbootstrap.SecretContext{
@@ -375,8 +392,14 @@ func TestCompleteOptions(t *testing.T) {
 			expectedConfig: secretbootstrap.Config{
 				ClusterGroups: map[string][]string{"group-a": {"default"}},
 				Secrets: []secretbootstrap.SecretConfig{{
-					From: map[string]secretbootstrap.ItemContext{"key-name-1": {Item: "item-name-1", Field: "field-name-1"}},
-					To:   []secretbootstrap.SecretContext{{ClusterGroups: []string{"group-a"}, Cluster: "default", Namespace: "ns", Name: "name"}},
+					From: map[string]secretbootstrap.ItemContext{
+						"key-name-1": {
+							Item:                 "item-name-1",
+							Field:                "field-name-1",
+							DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{},
+						},
+					},
+					To: []secretbootstrap.SecretContext{{ClusterGroups: []string{"group-a"}, Cluster: "default", Namespace: "ns", Name: "name"}},
 				}},
 			},
 			expectedClusters: []string{"default"},
@@ -997,12 +1020,12 @@ func TestConstructSecrets(t *testing.T) {
 					},
 				},
 			},
-			expectedError: `[config.0."key-name-1": item at path "prefix/item-name-1" has no key "field-name-1", config.1.".dockerconfigjson": Error making API request.
+			expectedError: `[config.0.".dockerconfigjson": Error making API request.
 
 URL: GET fakeVaultClient.GetKV
 Code: 404. Errors:
 
-* no data at path prefix/quay.io]`,
+* no data at path prefix/quay.io, config.1."key-name-1": item at path "prefix/item-name-1" has no key "field-name-1"]`,
 			expected: map[string][]*coreapi.Secret{},
 		},
 		{

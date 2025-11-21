@@ -49,6 +49,7 @@ func TestResolving(t *testing.T) {
 					"group-b": {"b"},
 				},
 				Secrets: []SecretConfig{{
+					From: nil,
 					To: []SecretContext{
 						{
 							ClusterGroups: []string{"group-a", "group-b"},
@@ -89,8 +90,13 @@ func TestResolving(t *testing.T) {
 			},
 			expectedConfig: Config{
 				VaultDPTPPrefix: "prefix",
+				ClusterGroups:   nil,
 				Secrets: []SecretConfig{{
-					From: map[string]ItemContext{"...": {Item: "prefix/foo", Field: "bar"}},
+					From: map[string]ItemContext{"...": {
+						Item:                 "prefix/foo",
+						Field:                "bar",
+						DockerConfigJSONData: nil,
+					}},
 					To: []SecretContext{{
 						Cluster:   "foo",
 						Namespace: "namspace",
@@ -116,6 +122,7 @@ func TestResolving(t *testing.T) {
 			},
 			expectedConfig: Config{
 				VaultDPTPPrefix: "prefix",
+				ClusterGroups:   nil,
 				Secrets: []SecretConfig{{
 					From: map[string]ItemContext{"...": {DockerConfigJSONData: []DockerConfigJSONData{{Item: "prefix/foo", AuthField: "bar"}}}},
 					To: []SecretContext{{
@@ -168,8 +175,16 @@ func TestLoadConfigFromFile(t *testing.T) {
 				Secrets: []SecretConfig{
 					{
 						From: map[string]ItemContext{
-							"ops-mirror.pem": {Item: "dptp/mirror.openshift.com", Field: "cert-key.pem"},
-							"rh-cdn.pem":     {Item: "dptp/rh-cdn", Field: "rh-cdn.pem"},
+							"ops-mirror.pem": {
+								Item:                 "dptp/mirror.openshift.com",
+								Field:                "cert-key.pem",
+								DockerConfigJSONData: nil,
+							},
+							"rh-cdn.pem": {
+								Item:                 "dptp/rh-cdn",
+								Field:                "rh-cdn.pem",
+								DockerConfigJSONData: nil,
+							},
 						},
 						To: []SecretContext{{
 							ClusterGroups: []string{"build_farm"},

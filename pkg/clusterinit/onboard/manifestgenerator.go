@@ -127,6 +127,17 @@ func (w *manifestGeneratorStep) marshalManifests(manifests []interface{}, patche
 			return nil, err
 		}
 
+		// Fix YAML scalar style for monitoring config: change trailing newline handling
+		// yaml.v2 doesn't support controlling scalar style, so we post-process it.
+		// We change "config.yaml: |-" (literal block scalar that strips trailing newline) to
+		// "config.yaml: |" (literal block scalar that preserves trailing newline).
+		// This is safe and targeted: only runs for the cluster-monitoring-config ConfigMap.
+		if kind, ok := manifestMap["kind"].(string); ok && kind == "ConfigMap" {
+			if name, ok := manifestMap["metadata"].(map[string]interface{})["name"].(string); ok && name == "cluster-monitoring-config" {
+				manifestBytesPatched = bytes.ReplaceAll(manifestBytesPatched, []byte("config.yaml: |-"), []byte("config.yaml: |"))
+			}
+		}
+
 		manifestsBytes = append(manifestsBytes, manifestBytesPatched)
 	}
 

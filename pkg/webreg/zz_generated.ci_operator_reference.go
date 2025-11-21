@@ -1028,6 +1028,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # PipelineRunIfChanged is a regex that will result in the test only running in second\n" +
 	"        # stage of the pipeline run if something that matches it was changed.\n" +
 	"        pipeline_run_if_changed: ' '\n" +
+	"        # PipelineSkipOnlyIfChanged is a regex that will result in the test being skipped in second\n" +
+	"        # stage of the pipeline run if all changed files match that regex.\n" +
+	"        pipeline_skip_only_if_changed: ' '\n" +
 	"        # Portable allows to port periodic tests to current and future release despite the demand to skip periodics\n" +
 	"        portable: true\n" +
 	"        # Postsubmit configures prowgen to generate the job as a postsubmit rather than a presubmit\n" +
@@ -1926,6 +1929,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      # PipelineRunIfChanged is a regex that will result in the test only running in second\n" +
 	"      # stage of the pipeline run if something that matches it was changed.\n" +
 	"      pipeline_run_if_changed: ' '\n" +
+	"      # PipelineSkipOnlyIfChanged is a regex that will result in the test being skipped in second\n" +
+	"      # stage of the pipeline run if all changed files match that regex.\n" +
+	"      pipeline_skip_only_if_changed: ' '\n" +
 	"      # Portable allows to port periodic tests to current and future release despite the demand to skip periodics\n" +
 	"      portable: true\n" +
 	"      # Postsubmit configures prowgen to generate the job as a postsubmit rather than a presubmit\n" +

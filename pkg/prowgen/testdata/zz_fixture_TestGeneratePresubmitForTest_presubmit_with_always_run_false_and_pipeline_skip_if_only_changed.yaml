@@ -1,7 +1,7 @@
 agent: kubernetes
 always_run: false
 annotations:
-  pipeline_skip_only_if_changed: ^docs/
+  pipeline_skip_if_only_changed: ^docs/
 branches:
 - ^branch$
 - ^branch-

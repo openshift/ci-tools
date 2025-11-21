@@ -482,9 +482,9 @@ func (cw *clientWrapper) handlePipelineContextCreation(l *logrus.Entry, event gi
 		}
 	}
 
-	// Evaluate pipeline_skip_only_if_changed tests
+	// Evaluate pipeline_skip_if_only_changed tests
 	for _, presubmit := range presubmits.pipelineSkipOnlyRequired {
-		if pattern, ok := presubmit.Annotations["pipeline_skip_only_if_changed"]; ok && pattern != "" {
+		if pattern, ok := presubmit.Annotations["pipeline_skip_if_only_changed"]; ok && pattern != "" {
 			if shouldSkip, err := allFilesMatchPattern(pattern, filenames); err != nil {
 				logger.WithError(err).WithField("test", presubmit.Name).WithField("pattern", pattern).Error("failed to evaluate skip pattern")
 				continue

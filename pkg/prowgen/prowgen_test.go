@@ -56,7 +56,7 @@ func TestShouldAlwaysRun(t *testing.T) {
 				options.skipIfOnlyChanged = ""
 				options.defaultDisable = false
 				options.pipelineRunIfChanged = ""
-				options.pipelineSkipOnlyIfChanged = ""
+				options.pipelineSkipIfOnlyChanged = ""
 			},
 		},
 		{
@@ -68,7 +68,7 @@ func TestShouldAlwaysRun(t *testing.T) {
 				options.skipIfOnlyChanged = ""
 				options.defaultDisable = false
 				options.pipelineRunIfChanged = ""
-				options.pipelineSkipOnlyIfChanged = ""
+				options.pipelineSkipIfOnlyChanged = ""
 			},
 		},
 		{
@@ -80,11 +80,11 @@ func TestShouldAlwaysRun(t *testing.T) {
 				options.skipIfOnlyChanged = ""
 				options.defaultDisable = true
 				options.pipelineRunIfChanged = ""
-				options.pipelineSkipOnlyIfChanged = ""
+				options.pipelineSkipIfOnlyChanged = ""
 			},
 		},
 		{
-			description: "shouldAlwaysRun must return false because pipelineSkipOnlyIfChanged is defined",
+			description: "shouldAlwaysRun must return false because pipelineSkipIfOnlyChanged is defined",
 			test:        "testname",
 			alwaysRun:   false,
 			generateOptions: func(options *generatePresubmitOptions) {
@@ -92,7 +92,7 @@ func TestShouldAlwaysRun(t *testing.T) {
 				options.skipIfOnlyChanged = ""
 				options.defaultDisable = false
 				options.pipelineRunIfChanged = ""
-				options.pipelineSkipOnlyIfChanged = "^docs/"
+				options.pipelineSkipIfOnlyChanged = "^docs/"
 			},
 		},
 	}
@@ -168,21 +168,21 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 			},
 		},
 		{
-			description: "presubmit with always_run but pipeline_skip_only_if_changed set",
+			description: "presubmit with always_run but pipeline_skip_if_only_changed set",
 			test:        "testname",
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
 			generateOption: func(options *generatePresubmitOptions) {
 				options.defaultDisable = true
-				options.pipelineSkipOnlyIfChanged = "^docs/"
+				options.pipelineSkipIfOnlyChanged = "^docs/"
 			},
 		},
 		{
-			description: "presubmit with always_run=false and pipeline_skip_only_if_changed",
+			description: "presubmit with always_run=false and pipeline_skip_if_only_changed",
 			test:        "testname",
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
 			generateOption: func(options *generatePresubmitOptions) {
 				options.defaultDisable = false
-				options.pipelineSkipOnlyIfChanged = "^docs/"
+				options.pipelineSkipIfOnlyChanged = "^docs/"
 			},
 		},
 		{

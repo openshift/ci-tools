@@ -188,13 +188,16 @@ func TestConfigDataProviderGatherData(t *testing.T) {
 				return []string{"org/repo"}
 			},
 			expected: presubmitTests{
-				protected:             []config.Presubmit{composeProtectedPresubmit("ps1"), composeProtectedPresubmit("ps3")},
+				protected:             []config.Presubmit{composeProtectedPresubmit("ps1")},
 				alwaysRequired:        []config.Presubmit{composeRequiredPresubmit()},
 				conditionallyRequired: []config.Presubmit{},
 				pipelineConditionallyRequired: []config.Presubmit{
 					composePipelineCondRequiredPresubmit("ps5", false, map[string]string{"pipeline_run_if_changed": `.*\.go`}),
 				},
-				pipelineSkipOnlyRequired: []config.Presubmit{},
+				pipelineSkipOnlyRequired: []config.Presubmit{
+					composePipelineCondRequiredPresubmit("ps3", false, map[string]string{"pipeline_skip_if_only_changed": "^docs/.*"}),
+					composePipelineCondRequiredPresubmit("ps4", true, map[string]string{"pipeline_skip_if_only_changed": "^test/.*"}),
+				},
 			},
 		},
 	}

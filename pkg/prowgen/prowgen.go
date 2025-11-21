@@ -211,7 +211,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 func handlePresubmit(g *prowJobBaseBuilder, element cioperatorapi.TestStepConfiguration, info *ProwgenInfo, name string, disableRehearsal bool, requests cioperatorapi.ResourceList, presubmits map[string][]prowconfig.Presubmit, orgrepo string) {
 	presubmit := generatePresubmitForTest(g, name, info, func(options *generatePresubmitOptions) {
 		options.pipelineRunIfChanged = element.PipelineRunIfChanged
-		options.pipelineSkipOnlyIfChanged = element.PipelineSkipOnlyIfChanged
+		options.pipelineSkipIfOnlyChanged = element.PipelineSkipIfOnlyChanged
 		options.Capabilities = element.Capabilities
 		options.runIfChanged = element.RunIfChanged
 		options.skipIfOnlyChanged = element.SkipIfOnlyChanged
@@ -237,7 +237,7 @@ func testContainsLease(test *cioperatorapi.TestStepConfiguration) bool {
 
 type generatePresubmitOptions struct {
 	pipelineRunIfChanged      string
-	pipelineSkipOnlyIfChanged string
+	pipelineSkipIfOnlyChanged string
 	Capabilities              []string
 	runIfChanged              string
 	skipIfOnlyChanged         string
@@ -247,7 +247,7 @@ type generatePresubmitOptions struct {
 }
 
 func (opts *generatePresubmitOptions) shouldAlwaysRun() bool {
-	return opts.runIfChanged == "" && opts.skipIfOnlyChanged == "" && !opts.defaultDisable && opts.pipelineRunIfChanged == "" && opts.pipelineSkipOnlyIfChanged == ""
+	return opts.runIfChanged == "" && opts.skipIfOnlyChanged == "" && !opts.defaultDisable && opts.pipelineRunIfChanged == "" && opts.pipelineSkipIfOnlyChanged == ""
 }
 
 type generatePresubmitOption func(options *generatePresubmitOptions)
@@ -287,11 +287,11 @@ func generatePresubmitForTest(jobBaseBuilder *prowJobBaseBuilder, name string, i
 		base.Annotations["pipeline_run_if_changed"] = opts.pipelineRunIfChanged
 		pipelineOpt = true
 	}
-	if opts.pipelineSkipOnlyIfChanged != "" {
+	if opts.pipelineSkipIfOnlyChanged != "" {
 		if base.Annotations == nil {
 			base.Annotations = make(map[string]string)
 		}
-		base.Annotations["pipeline_skip_only_if_changed"] = opts.pipelineSkipOnlyIfChanged
+		base.Annotations["pipeline_skip_if_only_changed"] = opts.pipelineSkipIfOnlyChanged
 		pipelineOpt = true
 	}
 	triggerCommand := prowconfig.DefaultTriggerFor(shortName)

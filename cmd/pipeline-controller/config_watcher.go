@@ -9,7 +9,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// RepoItem represents a repository configuration that can be either a string or an object
+// RepoItem r  epresents a repository configuration that can be either a string or an object
 type RepoItem struct {
 	Name string
 	Mode struct {

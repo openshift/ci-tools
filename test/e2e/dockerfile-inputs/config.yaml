@@ -1,0 +1,35 @@
+base_images:
+  os:
+    name: ubi-minimal
+    namespace: ocp
+    tag: '9'
+build_root:
+  image_stream_tag:
+    namespace: ocp
+    name: ubi-minimal
+    tag: '9'
+resources:
+  '*':
+    requests:
+      cpu: 10m
+images:
+- dockerfile_path: testdata/Dockerfile.single
+  to: auto-detect-single
+- dockerfile_path: testdata/Dockerfile.multiple
+  to: auto-detect-multiple
+- dockerfile_path: testdata/Dockerfile.quay-proxy
+  to: auto-detect-quay-proxy
+- dockerfile_path: testdata/Dockerfile.manual
+  inputs:
+    os:
+      as:
+      - registry.ci.openshift.org/ocp/4.19:base
+  to: manual-inputs
+- dockerfile_path: testdata/Dockerfile.copy-from
+  to: auto-detect-copy-from
+- dockerfile_path: testdata/Dockerfile.no-refs
+  to: no-registry-refs
+zz_generated_metadata:
+  branch: main
+  org: openshift
+  repo: konflux-tasks

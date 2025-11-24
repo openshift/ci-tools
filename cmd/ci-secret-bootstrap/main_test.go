@@ -176,36 +176,44 @@ var (
 	}
 
 	defaultConfig = secretbootstrap.Config{
+		ClusterGroups: nil,
 		Secrets: []secretbootstrap.SecretConfig{
 			{
 				From: map[string]secretbootstrap.ItemContext{
 					"key-name-1": {
-						Item:  "item-name-1",
-						Field: "field-name-1",
+						Item:                 "item-name-1",
+						Field:                "field-name-1",
+						DockerConfigJSONData: nil,
 					},
 					"key-name-2": {
-						Item:  "item-name-1",
-						Field: "field-name-2",
+						Item:                 "item-name-1",
+						Field:                "field-name-2",
+						DockerConfigJSONData: nil,
 					},
 					"key-name-3": {
-						Item:  "item-name-1",
-						Field: "field-name-3",
+						Item:                 "item-name-1",
+						Field:                "field-name-3",
+						DockerConfigJSONData: nil,
 					},
 					"key-name-4": {
-						Item:  "item-name-2",
-						Field: "field-name-1",
+						Item:                 "item-name-2",
+						Field:                "field-name-1",
+						DockerConfigJSONData: nil,
 					},
 					"key-name-5": {
-						Item:  "item-name-2",
-						Field: "field-name-2",
+						Item:                 "item-name-2",
+						Field:                "field-name-2",
+						DockerConfigJSONData: nil,
 					},
 					"key-name-6": {
-						Item:  "item-name-3",
-						Field: "field-name-1",
+						Item:                 "item-name-3",
+						Field:                "field-name-1",
+						DockerConfigJSONData: nil,
 					},
 					"key-name-7": {
-						Item:  "item-name-2",
-						Field: "field-name-2",
+						Item:                 "item-name-2",
+						Field:                "field-name-2",
+						DockerConfigJSONData: nil,
 					},
 				},
 				To: []secretbootstrap.SecretContext{
@@ -224,8 +232,9 @@ var (
 			{
 				From: map[string]secretbootstrap.ItemContext{
 					".dockerconfigjson": {
-						Item:  "quay.io",
-						Field: "pull-credentials",
+						Item:                 "quay.io",
+						Field:                "pull-credentials",
+						DockerConfigJSONData: nil,
 					},
 				},
 				To: []secretbootstrap.SecretContext{
@@ -240,36 +249,44 @@ var (
 		},
 	}
 	defaultConfigWithoutDefaultCluster = secretbootstrap.Config{
+		ClusterGroups: nil,
 		Secrets: []secretbootstrap.SecretConfig{
 			{
 				From: map[string]secretbootstrap.ItemContext{
 					"key-name-1": {
-						Item:  "item-name-1",
-						Field: "field-name-1",
+						Item:                 "item-name-1",
+						Field:                "field-name-1",
+						DockerConfigJSONData: nil,
 					},
 					"key-name-2": {
-						Item:  "item-name-1",
-						Field: "field-name-2",
+						Item:                 "item-name-1",
+						Field:                "field-name-2",
+						DockerConfigJSONData: nil,
 					},
 					"key-name-3": {
-						Item:  "item-name-1",
-						Field: "field-name-3",
+						Item:                 "item-name-1",
+						Field:                "field-name-3",
+						DockerConfigJSONData: nil,
 					},
 					"key-name-4": {
-						Item:  "item-name-2",
-						Field: "field-name-1",
+						Item:                 "item-name-2",
+						Field:                "field-name-1",
+						DockerConfigJSONData: nil,
 					},
 					"key-name-5": {
-						Item:  "item-name-2",
-						Field: "field-name-2",
+						Item:                 "item-name-2",
+						Field:                "field-name-2",
+						DockerConfigJSONData: nil,
 					},
 					"key-name-6": {
-						Item:  "item-name-3",
-						Field: "field-name-1",
+						Item:                 "item-name-3",
+						Field:                "field-name-1",
+						DockerConfigJSONData: nil,
 					},
 					"key-name-7": {
-						Item:  "item-name-2",
-						Field: "field-name-2",
+						Item:                 "item-name-2",
+						Field:                "field-name-2",
+						DockerConfigJSONData: nil,
 					},
 				},
 				To: []secretbootstrap.SecretContext{
@@ -375,8 +392,14 @@ func TestCompleteOptions(t *testing.T) {
 			expectedConfig: secretbootstrap.Config{
 				ClusterGroups: map[string][]string{"group-a": {"default"}},
 				Secrets: []secretbootstrap.SecretConfig{{
-					From: map[string]secretbootstrap.ItemContext{"key-name-1": {Item: "item-name-1", Field: "field-name-1"}},
-					To:   []secretbootstrap.SecretContext{{ClusterGroups: []string{"group-a"}, Cluster: "default", Namespace: "ns", Name: "name"}},
+					From: map[string]secretbootstrap.ItemContext{
+						"key-name-1": {
+							Item:                 "item-name-1",
+							Field:                "field-name-1",
+							DockerConfigJSONData: nil,
+						},
+					},
+					To: []secretbootstrap.SecretContext{{ClusterGroups: []string{"group-a"}, Cluster: "default", Namespace: "ns", Name: "name"}},
 				}},
 			},
 			expectedClusters: []string{"default"},
@@ -1342,7 +1365,74 @@ Code: 404. Errors:
 			if actualError != nil {
 				actualErrorMsg = actualError.Error()
 			}
-			if actualErrorMsg != tc.expectedError {
+			// Compare error messages as sets since order may vary after removing orderConfig()
+			if tc.expectedError != "" {
+				// Extract individual errors from aggregate error recursively
+				var extractErrors func(error) []string
+				extractErrors = func(err error) []string {
+					if err == nil {
+						return nil
+					}
+					if aggregateErr, ok := err.(interface{ Errors() []error }); ok {
+						var result []string
+						for _, e := range aggregateErr.Errors() {
+							result = append(result, extractErrors(e)...)
+						}
+						return result
+					}
+					return []string{err.Error()}
+				}
+				actualErrs := extractErrors(actualError)
+				// Parse expected errors from string format "[err1, err2, ...]"
+				expectedClean := strings.TrimPrefix(strings.TrimSuffix(tc.expectedError, "]"), "[")
+				// Normalize newlines to spaces before splitting
+				expectedClean = strings.ReplaceAll(expectedClean, "\n", " ")
+				// Split on ", " but be smarter - errors may contain ", " in their text
+				// We can split on patterns like ", key " or ", secret " or ", config." which are unique
+				// For now, try splitting on ", " and if that doesn't work, try smarter patterns
+				// Try smarter splitting first for errors that contain ", " in their text
+				var expectedErrs []string
+				if strings.Contains(expectedClean, ", key ") {
+					parts := strings.Split(expectedClean, ", key ")
+					expectedErrs = []string{strings.TrimSpace(parts[0])}
+					for i := 1; i < len(parts); i++ {
+						expectedErrs = append(expectedErrs, "key "+strings.TrimSpace(parts[i]))
+					}
+				} else if strings.Contains(expectedClean, ", secret ") {
+					parts := strings.Split(expectedClean, ", secret ")
+					expectedErrs = []string{strings.TrimSpace(parts[0])}
+					for i := 1; i < len(parts); i++ {
+						expectedErrs = append(expectedErrs, "secret "+strings.TrimSpace(parts[i]))
+					}
+				} else if strings.Contains(expectedClean, ", config.") {
+					parts := strings.Split(expectedClean, ", config.")
+					expectedErrs = []string{strings.TrimSpace(parts[0])}
+					for i := 1; i < len(parts); i++ {
+						expectedErrs = append(expectedErrs, "config."+strings.TrimSpace(parts[i]))
+					}
+				} else {
+					expectedErrs = strings.Split(expectedClean, ", ")
+				}
+				// Normalize whitespace
+				for i := range expectedErrs {
+					expectedErrs[i] = strings.TrimSpace(expectedErrs[i])
+					// Collapse multiple spaces
+					expectedErrs[i] = strings.Join(strings.Fields(expectedErrs[i]), " ")
+				}
+				for i := range actualErrs {
+					actualErrs[i] = strings.TrimSpace(actualErrs[i])
+					// Collapse multiple spaces
+					actualErrs[i] = strings.Join(strings.Fields(actualErrs[i]), " ")
+				}
+				if len(expectedErrs) != len(actualErrs) {
+					t.Fatalf("expected %d errors, got %d. Expected: %s, Got: %s", len(expectedErrs), len(actualErrs), tc.expectedError, actualErrorMsg)
+				}
+				expectedSet := sets.New[string](expectedErrs...)
+				actualSet := sets.New[string](actualErrs...)
+				if !expectedSet.Equal(actualSet) {
+					t.Fatalf("error messages differ. Expected: %s, Got: %s", tc.expectedError, actualErrorMsg)
+				}
+			} else if actualErrorMsg != tc.expectedError {
 				t.Fatalf("expected error message %s, got %s", tc.expectedError, actualErrorMsg)
 			}
 			for key := range actual {

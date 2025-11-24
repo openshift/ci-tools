@@ -482,6 +482,23 @@ func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubern
 		o = opts[0]
 	}
 
+	// Check if the source ImageStreamTag has a multi-arch manifest list
+	// Note: This check happens once per handleBuilds call, so all builds spawned will use the same value.
+	// Multiple ci-operator instances may see different states of the ImageStreamTag during manifest list creation,
+	// which is why we verify both the manifest list media type and presence of multiple manifests.
+	needsMultiArchWorkaround := false
+	if build.Spec.Strategy.DockerStrategy != nil && build.Spec.Strategy.DockerStrategy.From != nil {
+		if build.Spec.Strategy.DockerStrategy.From.Kind == "ImageStreamTag" {
+			ist := &imagev1.ImageStreamTag{}
+			if err := buildClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: build.Namespace, Name: build.Spec.Strategy.DockerStrategy.From.Name}, ist); err == nil {
+				// Verify it's a manifest list (not just a single manifest) and has multiple architecture manifests
+				hasManifestList := ist.Image.DockerImageManifestMediaType == "application/vnd.docker.distribution.manifest.list.v2+json" ||
+					ist.Image.DockerImageManifestMediaType == "application/vnd.oci.image.index.v1+json"
+				needsMultiArchWorkaround = hasManifestList && len(ist.Image.DockerImageManifests) > 0
+			}
+		}
+	}
+
 	builds := constructMultiArchBuilds(build, o.Architectures)
 	errChan := make(chan error, len(builds))
 
@@ -490,7 +507,7 @@ func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubern
 		go func(b buildapi.Build) {
 			defer wg.Done()
 			metricsAgent.AddNodeWorkload(ctx, b.Namespace, fmt.Sprintf("%s-build", b.Name), b.Name, podClient)
-			if err := handleBuild(ctx, buildClient, podClient, b, true); err != nil {
+			if err := handleBuild(ctx, buildClient, podClient, b, needsMultiArchWorkaround); err != nil {
 				errChan <- fmt.Errorf("error occurred handling build %s: %w", b.Name, err)
 			}
 			metricsAgent.RemoveNodeWorkload(b.Name)
@@ -548,14 +565,15 @@ func constructMultiArchBuilds(build buildapi.Build, stepArchitectures []string) 
 	return ret
 }
 
-func handleBuild(ctx context.Context, client BuildClient, podClient kubernetes.PodClient, build buildapi.Build, waitOnMultiArch bool) error {
+func handleBuild(ctx context.Context, client BuildClient, podClient kubernetes.PodClient, build buildapi.Build, needsMultiArchWorkaround bool) error {
 	const attempts = 5
 	ns, name := build.Namespace, build.Name
 	var errs []error
 	if err := wait.ExponentialBackoff(wait.Backoff{Duration: time.Minute, Factor: 1.5, Steps: attempts}, func() (bool, error) {
 		var attempt buildapi.Build
-		if waitOnMultiArch {
-			// builds are using older src image, adding wait to avoid race condition
+		// TODO: This is a workaround to avoid race condition with multiple ci-operator instances building different architectures
+		// See https://issues.redhat.com/browse/OCPBUGS-65845
+		if needsMultiArchWorkaround {
 			time.Sleep(5 * time.Minute)
 		}
 		build.DeepCopyInto(&attempt)

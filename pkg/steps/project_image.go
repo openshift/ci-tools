@@ -72,7 +72,7 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 
 	// Bundle images are non multi-arch by design. No manifest list is needed. Here we spawn a single build.
 	if s.config.IsBundleImage() {
-		return handleBuild(ctx, s.client, s.podClient, *build, false)
+		return handleBuild(ctx, s.client, s.podClient, *build, func() bool { return false })
 	}
 
 	return handleBuilds(ctx, s.client, s.podClient, *build, s.metricsAgent, newImageBuildOptions(s.architectures.UnsortedList()))

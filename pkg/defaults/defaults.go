@@ -32,6 +32,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/configresolver"
+	"github.com/openshift/ci-tools/pkg/dockerfile"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/labeledclient"
 	"github.com/openshift/ci-tools/pkg/lease"
@@ -1037,7 +1038,117 @@ func runtimeStepConfigsForBuild(
 
 	buildSteps = append(buildSteps, getSourceStepsForJobSpec(jobSpec, injectedTest)...)
 
+	// Detect Dockerfile inputs for project images and add InputImageTagStepConfiguration entries
+	dockerfileInputSteps, images := detectDockerfileInputs(config.Images, config.BaseImages, readFile)
+	config.Images = images
+	buildSteps = append(buildSteps, dockerfileInputSteps...)
+
 	return buildSteps, nil
+}
+
+// dockerfileDetails holds the content and path of a Dockerfile
+type dockerfileDetails struct {
+	content []byte
+	path    string
+}
+
+// detectDockerfileInputs reads Dockerfiles for project images and detects registry.ci.openshift.org
+// references that should be added as base images. It returns any required InputImageTagStepConfiguration steps to
+// import the detected base images, as well as an updated list of image configurations with the detected inputs added
+func detectDockerfileInputs(images []api.ProjectDirectoryImageBuildStepConfiguration, baseImages map[string]api.ImageStreamTagReference, readFile readFile) ([]api.StepConfiguration, []api.ProjectDirectoryImageBuildStepConfiguration) {
+	var steps []api.StepConfiguration
+	for i, image := range images {
+		dockerfileDetails, err := readDockerfileForImage(image, readFile)
+		if err != nil {
+			logrus.WithError(err).WithField("image", image.To).Debug("Failed to read Dockerfile for input detection, skipping")
+			continue
+		}
+		imageSteps, image := processDetectedBaseImages(baseImages, image, dockerfileDetails)
+		images[i] = image
+		steps = append(steps, imageSteps...)
+	}
+
+	return steps, images
+}
+
+// readDockerfileForImage reads the Dockerfile content for a given image configuration
+// Returns the dockerfileDetails and any error encountered
+func readDockerfileForImage(image api.ProjectDirectoryImageBuildStepConfiguration, readFile readFile) (dockerfileDetails, error) {
+	if image.DockerfileLiteral != nil {
+		return dockerfileDetails{content: []byte(*image.DockerfileLiteral), path: "dockerfile_literal"}, nil
+	}
+	details := dockerfileDetails{path: "Dockerfile"}
+	if image.DockerfilePath != "" {
+		details.path = image.DockerfilePath
+	}
+	dockerfilePath := fmt.Sprintf("./%s", details.path)
+	if image.ContextDir != "" {
+		dockerfilePath = fmt.Sprintf("%s/%s", image.ContextDir, details.path)
+	}
+	details.path = dockerfilePath
+
+	dockerfileContent, err := readFile(details.path)
+	if err != nil {
+		return dockerfileDetails{}, fmt.Errorf("failed to read Dockerfile at %s: %w", dockerfilePath, err)
+	}
+	details.content = dockerfileContent
+	return details, nil
+}
+
+// processDetectedBaseImages detects base images from a Dockerfile and returns any
+// required InputImageTagStepConfiguration steps to import them, as well as an updated
+// image configuration with the detected inputs added
+func processDetectedBaseImages(baseImages map[string]api.ImageStreamTagReference, image api.ProjectDirectoryImageBuildStepConfiguration, details dockerfileDetails) ([]api.StepConfiguration, api.ProjectDirectoryImageBuildStepConfiguration) {
+	detectedBaseImages := dockerfile.DetectInputsFromDockerfile(details.content, image.Inputs)
+	if len(detectedBaseImages) == 0 {
+		return nil, image
+	}
+	if image.Inputs == nil {
+		image.Inputs = make(map[string]api.ImageBuildInputs)
+	}
+	if baseImages == nil {
+		baseImages = make(map[string]api.ImageStreamTagReference)
+	}
+
+	var steps []api.StepConfiguration
+	for alias, baseImage := range detectedBaseImages {
+		if presentAlias := isBaseImagePresent(baseImages, baseImage); presentAlias != "" {
+			image = appendInputs(image, presentAlias, baseImage)
+			logrus.WithField("image", image.To).WithField("dockerfile", details.path).WithField("alias", presentAlias).Infof("Detected base image matches existing base image")
+			continue
+		}
+
+		image = appendInputs(image, alias, baseImage)
+
+		stepConfig := api.InputImageTagStepConfiguration{
+			InputImage: api.InputImage{
+				BaseImage: baseImage,
+				To:        api.PipelineImageStreamTagReference(alias),
+			},
+			Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceBase, Name: alias}},
+		}
+		steps = append(steps, api.StepConfiguration{InputImageTagStepConfiguration: &stepConfig})
+
+		logrus.WithField("image", image.To).WithField("dockerfile", details.path).WithField("alias", alias).Infof("Detected base image, will tag into pipeline:%s", alias)
+	}
+
+	return steps, image
+}
+
+func appendInputs(image api.ProjectDirectoryImageBuildStepConfiguration, alias string, baseImage api.ImageStreamTagReference) api.ProjectDirectoryImageBuildStepConfiguration {
+	inputs := image.Inputs[alias]
+	inputs.As = []string{baseImage.As}
+	image.Inputs[alias] = inputs
+	return image
+}
+
+func isBaseImagePresent(baseImages map[string]api.ImageStreamTagReference, baseImage api.ImageStreamTagReference) string {
+	for presentAlias, presentBaseImage := range baseImages {
+		if baseImage.Name == presentBaseImage.Name && baseImage.Namespace == presentBaseImage.Namespace && baseImage.Tag == presentBaseImage.Tag {
+			return presentAlias
+		}
+	}
+	return ""
 }
 
 func getSourceStepsForJobSpec(jobSpec *api.JobSpec, injectedTest bool) []api.StepConfiguration {

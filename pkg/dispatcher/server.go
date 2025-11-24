@@ -3,7 +3,6 @@ package dispatcher
 import (
 	"encoding/json"
 	"net/http"
-	"regexp"
 	"strconv"
 
 	"github.com/sirupsen/logrus"
@@ -31,15 +30,6 @@ type SchedulingRequest struct {
 // Response represents the response structure
 type SchedulingResponse struct {
 	Cluster string `json:"cluster"`
-}
-
-func removeRehearsePrefix(jobName string) string {
-	re := regexp.MustCompile(`^rehearse-\d+-`)
-
-	if re.MatchString(jobName) {
-		return re.ReplaceAllString(jobName, "")
-	}
-	return jobName
 }
 
 // RequestHandler handles scheduling requests for jobs
@@ -71,7 +61,7 @@ func (s *Server) RequestHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		cluster = s.pjs.GetCluster(removeRehearsePrefix(req.Job))
+		cluster = s.pjs.GetCluster(req.Job)
 	}
 
 	if cluster == "" {

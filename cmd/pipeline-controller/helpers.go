@@ -29,7 +29,11 @@ func sendCommentWithMode(presubmits presubmitTests, pj *v1.ProwJob, ghc minimalG
 		return fmt.Errorf("ProwJob %s does not have valid Refs.Pulls", pj.Name)
 	}
 
-	testContexts, manualControlMessage, err := acquireConditionalContexts(context.Background(), pj, presubmits.pipelineConditionallyRequired, ghc, deleteIds, pjLister, isExplicitCommand)
+	// Combine pipelineConditionallyRequired and pipelineSkipOnlyRequired for processing
+	allConditionalTests := append([]config.Presubmit{}, presubmits.pipelineConditionallyRequired...)
+	allConditionalTests = append(allConditionalTests, presubmits.pipelineSkipOnlyRequired...)
+
+	testContexts, manualControlMessage, err := acquireConditionalContexts(context.Background(), pj, allConditionalTests, ghc, deleteIds, pjLister, isExplicitCommand)
 	if err != nil {
 		deleteIds()
 		return err

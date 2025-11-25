@@ -26,6 +26,8 @@ type GeneratedReleaseGatingJobsBumper struct {
 	getFilesRegexp   *regexp.Regexp
 	jobsDir          string
 	newIntervalValue int
+	sippyConfigPath  string // could be fetched from https://github.com/openshift/sippy/blob/main/config/openshift.yaml
+	useSippyConfig   bool
 }
 
 var _ Bumper[*cioperatorcfg.DataWithInfo] = &GeneratedReleaseGatingJobsBumper{}
@@ -38,14 +40,40 @@ func NewGeneratedReleaseGatingJobsBumper(ocpVer, jobsDir string, newIntervalValu
 	mmRegexp := fmt.Sprintf("%d\\.%d", mm.Major, mm.Minor)
 	getFilesRegexp := regexp.MustCompile(fmt.Sprintf(releaseJobsRegexPatternFormat, mmRegexp))
 	return &GeneratedReleaseGatingJobsBumper{
-		mm,
-		getFilesRegexp,
-		jobsDir,
-		newIntervalValue,
+		mm:               mm,
+		getFilesRegexp:   getFilesRegexp,
+		jobsDir:          jobsDir,
+		newIntervalValue: newIntervalValue,
+		useSippyConfig:   false,
+	}, nil
+}
+
+// NewGeneratedReleaseGatingJobsBumperWithSippy creates a bumper that uses Sippy config to determine which files to bump
+func NewGeneratedReleaseGatingJobsBumperWithSippy(ocpVer, jobsDir, sippyConfigPath string, newIntervalValue int) (*GeneratedReleaseGatingJobsBumper, error) {
+	mm, err := ocplifecycle.ParseMajorMinor(ocpVer)
+	if err != nil {
+		return nil, fmt.Errorf("parse release: %w", err)
+	}
+	mmRegexp := fmt.Sprintf("%d\\.%d", mm.Major, mm.Minor)
+	getFilesRegexp := regexp.MustCompile(fmt.Sprintf(releaseJobsRegexPatternFormat, mmRegexp))
+	return &GeneratedReleaseGatingJobsBumper{
+		mm:               mm,
+		getFilesRegexp:   getFilesRegexp,
+		jobsDir:          jobsDir,
+		newIntervalValue: newIntervalValue,
+		sippyConfigPath:  sippyConfigPath,
+		useSippyConfig:   true,
 	}, nil
 }
 
 func (b *GeneratedReleaseGatingJobsBumper) GetFiles() ([]string, error) {
+	if b.useSippyConfig {
+		return b.getFilesFromSippy()
+	}
+	return b.getFilesFromRegex()
+}
+
+func (b *GeneratedReleaseGatingJobsBumper) getFilesFromRegex() ([]string, error) {
 	files := make([]string, 0)
 	err := filepath.Walk(b.jobsDir, func(path string, info fs.FileInfo, err error) error {
 		if b.getFilesRegexp.Match([]byte(path)) {
@@ -54,6 +82,25 @@ func (b *GeneratedReleaseGatingJobsBumper) GetFiles() ([]string, error) {
 		return nil
 	})
 	return files, err
+}
+
+func (b *GeneratedReleaseGatingJobsBumper) getFilesFromSippy() ([]string, error) {
+	releaseVersion := fmt.Sprintf("%d.%d", b.mm.Major, b.mm.Minor)
+	configRootDir := filepath.Dir(filepath.Dir(b.jobsDir))
+
+	configFiles, err := GetConfigFilesForReleaseFromSippy(b.sippyConfigPath, releaseVersion, configRootDir)
+	if err != nil {
+		logrus.WithError(err).Warnf("failed to get config files from Sippy for release %s, falling back to regex", releaseVersion)
+		return b.getFilesFromRegex()
+	}
+
+	if len(configFiles) == 0 {
+		logrus.Warnf("no config files found from Sippy for release %s, falling back to regex", releaseVersion)
+		return b.getFilesFromRegex()
+	}
+
+	logrus.Infof("found %d config files from Sippy for release %s", len(configFiles), releaseVersion)
+	return configFiles, nil
 }
 
 func (b *GeneratedReleaseGatingJobsBumper) Unmarshall(file string) (*cioperatorcfg.DataWithInfo, error) {
@@ -79,6 +126,12 @@ func (b *GeneratedReleaseGatingJobsBumper) BumpFilename(
 		return "", err
 	}
 	dataWithInfo.Info.Metadata.Variant = newVariant
+	newBranch, err := ReplaceWithNextVersion(dataWithInfo.Info.Metadata.Branch, b.mm.Major)
+	if err != nil {
+		return "", err
+	}
+	dataWithInfo.Info.Metadata.Branch = newBranch
+
 	return dataWithInfo.Info.Metadata.Basename(), nil
 }
 
@@ -102,7 +155,13 @@ func (b *GeneratedReleaseGatingJobsBumper) BumpContent(dataWithInfo *cioperatorc
 		return nil, err
 	}
 
+	// Bump variant in zz_generated_metadata
 	if err := ReplaceWithNextVersionInPlace(&config.Metadata.Variant, major); err != nil {
+		return nil, err
+	}
+
+	// Bump branch in zz_generated_metadata (e.g., release-4.21 -> release-4.22)
+	if err := ReplaceWithNextVersionInPlace(&config.Metadata.Branch, major); err != nil {
 		return nil, err
 	}
 
@@ -188,8 +247,10 @@ func bumpTests(config *cioperatorapi.ReleaseBuildConfiguration, major int) error
 			return err
 		}
 
-		if err := ReplaceWithNextVersionInPlace(test.MultiStageTestConfiguration.Workflow, major); err != nil {
-			return err
+		if test.MultiStageTestConfiguration.Workflow != nil {
+			if err := ReplaceWithNextVersionInPlace(test.MultiStageTestConfiguration.Workflow, major); err != nil {
+				return err
+			}
 		}
 
 		config.Tests[i] = test

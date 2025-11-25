@@ -72,6 +72,10 @@ func (c *ConfigDataProvider) gatherDataForRepos(orgRepos []string) {
 
 	updatedPresubmits := make(map[string]presubmitTests)
 	for _, orgRepo := range orgRepos {
+		// Skip if we've already processed this repo (avoid duplicates)
+		if _, exists := updatedPresubmits[orgRepo]; exists {
+			continue
+		}
 		presubmits := cfg.GetPresubmitsStatic(orgRepo)
 
 		for _, p := range presubmits {

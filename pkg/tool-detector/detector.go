@@ -4,9 +4,12 @@ import (
 	"bufio"
 	"fmt"
 	"net/url"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
+	"github.com/sirupsen/logrus"
 	"golang.org/x/tools/go/packages"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -57,8 +60,9 @@ func (d *Detector) AffectedTools() (sets.Set[string], error) {
 		return nil, fmt.Errorf("get changed files: %w", err)
 	}
 
+	logrus.WithField("baseRef", baseRef).WithField("count", len(changedFiles)).WithField("files", changedFiles).Info("Detected changed files for tool detection")
 	if len(changedFiles) == 0 {
-		return sets.New[string](), nil
+		return nil, fmt.Errorf("no changed files detected between %s and HEAD", baseRef)
 	}
 
 	affectedByImageChanges := d.getAffectedToolsByImageChanges(changedFiles)
@@ -79,6 +83,7 @@ func (d *Detector) AffectedTools() (sets.Set[string], error) {
 		return nil, fmt.Errorf("load changed packages: %w", err)
 	}
 
+	logrus.WithField("count", len(changedPackages)).WithField("packages", sets.List(changedPackages)).Info("Detected changed packages")
 	if len(changedPackages) == 0 {
 		return affectedByImageChanges, nil
 	}
@@ -89,6 +94,12 @@ func (d *Detector) AffectedTools() (sets.Set[string], error) {
 	}
 
 	affectedByPackages := d.findAffectedToolsFromPackages(cmdTools, allPackages, changedPackages, baseRef)
+
+	logrus.WithField("affectedByPackages", sets.List(affectedByPackages)).
+		WithField("affectedByImages", sets.List(affectedByImageChanges)).
+		WithField("total", affectedByPackages.Union(affectedByImageChanges).Len()).
+		Info("Detected affected tools")
+
 	return affectedByPackages.Union(affectedByImageChanges), nil
 }
 
@@ -115,16 +126,29 @@ func (d *Detector) getChangedFiles(baseRef string) ([]string, error) {
 }
 
 func (d *Detector) loadChangedPackages(files []string) (sets.Set[string], error) {
+	env := os.Environ()
+	if os.Getenv("GOCACHE") == "" {
+		env = append(env, "GOCACHE=/tmp/go-build-cache")
+	}
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedFiles,
+		Env:  env,
 	}
 
-	patterns := make([]string, 0, len(files))
+	pkgDirs := sets.New[string]()
 	for _, file := range files {
-		patterns = append(patterns, "file="+file)
+		dir := filepath.Dir(file)
+		if dir == "." || dir == "" {
+			pkgDirs.Insert(".")
+			continue
+		}
+		pkgDirs.Insert("./" + dir)
+	}
+	if pkgDirs.Len() == 0 {
+		return sets.New[string](), nil
 	}
 
-	pkgs, err := packages.Load(cfg, patterns...)
+	pkgs, err := packages.Load(cfg, sets.List(pkgDirs)...)
 	if err != nil {
 		return nil, err
 	}
@@ -142,18 +166,35 @@ func (d *Detector) loadChangedPackages(files []string) (sets.Set[string], error)
 	}
 
 	changed := sets.New[string]()
+	var emptyPkgPaths []string
 	for _, pkg := range pkgs {
-		if pkg.PkgPath != "" && strings.HasPrefix(pkg.PkgPath, ModulePrefix) {
+		if pkg.PkgPath == "" {
+			emptyPkgPaths = append(emptyPkgPaths, fmt.Sprintf("files: %v", pkg.GoFiles))
+		} else if strings.HasPrefix(pkg.PkgPath, ModulePrefix) {
 			changed.Insert(pkg.PkgPath)
 		}
+	}
+
+	// TODO: If no packages are changed let's return an error to trigger all builds for now. Keeping this as a temporary failsafe.
+	// It will be ideal to remove this in the future to avoid building images for PRs that change non-go files.
+	if len(files) > 0 && len(changed) == 0 {
+		if len(emptyPkgPaths) > 0 {
+			return nil, fmt.Errorf("go/packages returned packages with empty PkgPath for changed files %v: %v", files, emptyPkgPaths)
+		}
+		return nil, fmt.Errorf("go/packages returned 0 matching packages for changed files %v", files)
 	}
 
 	return changed, nil
 }
 
 func (d *Detector) loadCmdTools() ([]*packages.Package, map[string]*packages.Package, error) {
+	env := os.Environ()
+	if os.Getenv("GOCACHE") == "" {
+		env = append(env, "GOCACHE=/tmp/go-build-cache")
+	}
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedImports | packages.NeedDeps,
+		Env:  env,
 	}
 
 	pkgs, err := packages.Load(cfg, "./cmd/...")
@@ -207,6 +248,11 @@ func (d *Detector) findAffectedToolsFromPackages(cmdTools []*packages.Package, a
 		visited := sets.New[string]()
 		if d.hasDependency(cmdPkg, changedPackages, allPackages, visited) {
 			if toolName := d.extractToolName(cmdPkg.PkgPath); toolName != "" {
+				if path := dependencyPath(cmdPkg, changedPackages, allPackages); len(path) > 0 {
+					logrus.Infof("Tool %s is affected via dependency chain: %s", toolName, strings.Join(path, " -> "))
+				} else {
+					logrus.Infof("Tool %s is affected (dependency chain could not be fully reconstructed)", toolName)
+				}
 				affected.Insert(toolName)
 			}
 		}
@@ -236,6 +282,41 @@ func (d *Detector) hasDependency(pkg *packages.Package, targets sets.Set[string]
 	}
 
 	return false
+}
+
+// dependencyPath returns one dependency chain from the given cmdPkg down to any of the changedPackages, if such a chain exists.
+func dependencyPath(cmdPkg *packages.Package, changedPackages sets.Set[string], allPackages map[string]*packages.Package) []string {
+	visited := sets.New[string]()
+	return findDependencyPathFrom(cmdPkg, changedPackages, allPackages, visited, nil)
+}
+
+func findDependencyPathFrom(pkg *packages.Package, changedPackages sets.Set[string], allPackages map[string]*packages.Package, visited sets.Set[string], path []string) []string {
+	if pkg == nil || pkg.PkgPath == "" {
+		return nil
+	}
+	if visited.Has(pkg.PkgPath) {
+		return nil
+	}
+	visited.Insert(pkg.PkgPath)
+
+	currentPath := append(path, pkg.PkgPath)
+	if changedPackages.Has(pkg.PkgPath) {
+		return currentPath
+	}
+
+	for _, imp := range pkg.Imports {
+		var next *packages.Package
+		if impPkg, ok := allPackages[imp.PkgPath]; ok {
+			next = impPkg
+		} else {
+			next = imp
+		}
+		if candidate := findDependencyPathFrom(next, changedPackages, allPackages, visited, currentPath); candidate != nil {
+			return candidate
+		}
+	}
+
+	return nil
 }
 
 func (d *Detector) extractToolName(pkgPath string) string {

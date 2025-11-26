@@ -46,8 +46,12 @@ func sendCommentWithMode(presubmits presubmitTests, pj *v1.ProwJob, ghc minimalG
 	if manualControlMessage != "" && !isExplicitCommand {
 		comment = manualControlMessage
 	} else {
+		repoBaseRef := pj.Spec.Refs.Repo + "-" + pj.Spec.Refs.BaseRef
 		var protectedCommands string
 		for _, presubmit := range presubmits.protected {
+			if !strings.Contains(presubmit.Name, repoBaseRef) {
+				continue
+			}
 			protectedCommands += "\n" + presubmit.RerunCommand
 		}
 		if protectedCommands != "" {

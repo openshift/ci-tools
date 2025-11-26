@@ -114,7 +114,7 @@ func TestHandleLabelAddition_RealFunctions(t *testing.T) {
 				org + "/" + repo: {
 					protected: func() []config.Presubmit {
 						p := config.Presubmit{
-							JobBase:      config.JobBase{Name: "dummy-test"},
+							JobBase:      config.JobBase{Name: "pull-ci-openshift-assisted-installer-master-dummy-test"},
 							RerunCommand: "/test dummy-test",
 						}
 						p.Context = "dummy-test"
@@ -252,7 +252,7 @@ func TestHandleIssueComment(t *testing.T) {
 			},
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "pull-ci-openshift-test-repo-master-protected-test"}, RerunCommand: "/test protected-test"}},
 				},
 			},
 			ghPR: &github.PullRequest{
@@ -280,7 +280,7 @@ func TestHandleIssueComment(t *testing.T) {
 			},
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "pull-ci-openshift-test-repo-master-protected-test"}, RerunCommand: "/test protected-test"}},
 				},
 			},
 			ghPR: &github.PullRequest{
@@ -308,7 +308,7 @@ func TestHandleIssueComment(t *testing.T) {
 			},
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "pull-ci-openshift-test-repo-master-protected-test"}, RerunCommand: "/test protected-test"}},
 				},
 			},
 			ghPR: &github.PullRequest{
@@ -336,7 +336,7 @@ func TestHandleIssueComment(t *testing.T) {
 			},
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "pull-ci-openshift-test-repo-master-protected-test"}, RerunCommand: "/test protected-test"}},
 				},
 			},
 			ghPR: &github.PullRequest{
@@ -359,7 +359,7 @@ func TestHandleIssueComment(t *testing.T) {
 			event: basicEvent,
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "pull-ci-openshift-test-repo-master-protected-test"}, RerunCommand: "/test protected-test"}},
 					pipelineConditionallyRequired: []config.Presubmit{
 						{
 							JobBase: config.JobBase{
@@ -388,7 +388,7 @@ func TestHandleIssueComment(t *testing.T) {
 			event: basicEvent,
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "pull-ci-openshift-test-repo-master-protected-test"}, RerunCommand: "/test protected-test"}},
 				},
 			},
 			ghError:           errors.New("failed to get PR"),
@@ -399,7 +399,7 @@ func TestHandleIssueComment(t *testing.T) {
 			event: basicEvent,
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "pull-ci-openshift-test-repo-master-protected-test"}, RerunCommand: "/test protected-test"}},
 				},
 			},
 			watcherConfig:     enabledConfig{}, // Empty config means repo not configured
@@ -517,7 +517,7 @@ func TestHandlePullRequestCreation(t *testing.T) {
 			}},
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "pull-ci-openshift-test-repo-master-protected-test"}, RerunCommand: "/test protected-test"}},
 				},
 			},
 			expectCommentCall: true,
@@ -576,7 +576,7 @@ func TestHandlePullRequestCreation(t *testing.T) {
 			}},
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "pull-ci-openshift-test-repo-master-protected-test"}, RerunCommand: "/test protected-test"}},
 				},
 			},
 			expectCommentCall: false,
@@ -587,7 +587,7 @@ func TestHandlePullRequestCreation(t *testing.T) {
 			watcherConfig: enabledConfig{}, // Empty regular config
 			configData: map[string]presubmitTests{
 				org + "/" + repo: {
-					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "protected-test"}}},
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "pull-ci-openshift-test-repo-master-protected-test"}, RerunCommand: "/test protected-test"}},
 				},
 			},
 			expectCommentCall: true,

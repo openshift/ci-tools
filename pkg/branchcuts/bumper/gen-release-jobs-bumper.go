@@ -237,6 +237,9 @@ func bumpTests(config *cioperatorapi.ReleaseBuildConfiguration, major int) error
 			continue
 		}
 
+		if err := bumpStepEnvVars(test.MultiStageTestConfiguration.Environment, major); err != nil {
+			return err
+		}
 		if err := bumpTestSteps(test.MultiStageTestConfiguration.Pre, major); err != nil {
 			return err
 		}
@@ -256,6 +259,27 @@ func bumpTests(config *cioperatorapi.ReleaseBuildConfiguration, major int) error
 		config.Tests[i] = test
 	}
 
+	return nil
+}
+
+func bumpStepEnvVars(env cioperatorapi.TestEnvironment, major int) error {
+	if env == nil {
+		return nil
+	}
+
+	for envKey := range env {
+		envValue := env[envKey]
+		mm, err := ocplifecycle.ParseMajorMinor(envValue)
+		if err != nil {
+			continue
+		}
+		if envKey == ocpReleaseEnvVarName || mm.Major == major {
+			if err := ReplaceWithNextVersionInPlace(&envValue, major); err != nil {
+				return err
+			}
+			env[envKey] = envValue
+		}
+	}
 	return nil
 }
 
@@ -279,7 +303,11 @@ func bumpTestStepEnvVars(multistageTest cioperatorapi.TestStep, major int) error
 	}
 	for i := 0; i < len(multistageTest.Environment); i++ {
 		env := multistageTest.Environment[i]
-		if env.Name == ocpReleaseEnvVarName {
+		mm, err := ocplifecycle.ParseMajorMinor(*env.Default)
+		if err != nil {
+			continue
+		}
+		if env.Name == ocpReleaseEnvVarName || mm.Major == major {
 			if err := ReplaceWithNextVersionInPlace(env.Default, major); err != nil {
 				return err
 			}

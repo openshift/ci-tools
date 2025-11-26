@@ -111,6 +111,10 @@ func TestBumpObject(t *testing.T) {
 					{
 						Interval: strRef("24h"),
 						MultiStageTestConfiguration: &cioperatorapi.MultiStageTestConfiguration{
+							Environment: cioperatorapi.TestEnvironment{
+								"OCP_VERSION":    "4.10",
+								"Some_Other_VAR": "4.10",
+							},
 							Workflow: strRef("w-4.10-4.11"),
 							Test: []cioperatorapi.TestStep{
 								{
@@ -118,6 +122,10 @@ func TestBumpObject(t *testing.T) {
 										Environment: []cioperatorapi.StepParameter{
 											{
 												Name:    "OCP_VERSION",
+												Default: strRef("4.10"),
+											},
+											{
+												Name:    "Some_Other_VAR",
 												Default: strRef("4.10"),
 											},
 										},
@@ -163,6 +171,10 @@ func TestBumpObject(t *testing.T) {
 					{
 						Interval: strRef("168h"),
 						MultiStageTestConfiguration: &cioperatorapi.MultiStageTestConfiguration{
+							Environment: cioperatorapi.TestEnvironment{
+								"OCP_VERSION":    "4.11",
+								"Some_Other_VAR": "4.11",
+							},
 							Workflow: strRef("w-4.11-4.12"),
 							Test: []cioperatorapi.TestStep{
 								{
@@ -170,6 +182,10 @@ func TestBumpObject(t *testing.T) {
 										Environment: []cioperatorapi.StepParameter{
 											{
 												Name:    "OCP_VERSION",
+												Default: strRef("4.11"),
+											},
+											{
+												Name:    "Some_Other_VAR",
 												Default: strRef("4.11"),
 											},
 										},

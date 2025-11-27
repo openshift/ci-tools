@@ -40,6 +40,10 @@ func (c fakeGithubClient) CreateComment(owner, repo string, number int, comment 
 	return nil
 }
 
+func (c fakeGithubClient) GetRef(_, _, ref string) (string, error) {
+	return ref, nil
+}
+
 type fakeTrustedChecker struct {
 }
 
@@ -958,6 +962,7 @@ func TestGenerateProwJob(t *testing.T) {
 			}
 			addCIOpConfigsFromPRs(ciopConfigs, tc.jobRun.AdditionalPRs)
 			s := server{
+				ghc:                &fakeGithubClient{},
 				ciOpConfigResolver: &fakeCIOpConfigResolver{configs: ciopConfigs},
 				prowConfigGetter: &fakeProwConfigGetter{
 					cfg: &prowconfig.Config{
@@ -1099,7 +1104,7 @@ func TestCreateRefsForPullRequests(t *testing.T) {
 					Repo:      "ci-tools",
 					BaseRef:   "main",
 					PathAlias: "ci-tools-main-path-alias",
-					BaseSHA:   "pr-1-base-sha",
+					BaseSHA:   "heads/main",
 					Pulls: []prowv1.Pull{{
 						Number: 1,
 						Author: "user-a",
@@ -1112,7 +1117,7 @@ func TestCreateRefsForPullRequests(t *testing.T) {
 					Repo:      "ci-tools",
 					BaseRef:   "dev",
 					PathAlias: "ci-tools-dev-path-alias",
-					BaseSHA:   "pr-2-base-sha",
+					BaseSHA:   "heads/dev",
 					Pulls: []prowv1.Pull{{
 						Number: 2,
 						Author: "user-b",
@@ -1125,7 +1130,7 @@ func TestCreateRefsForPullRequests(t *testing.T) {
 					Repo:      "apiserver",
 					BaseRef:   "master",
 					PathAlias: "",
-					BaseSHA:   "pr-3-base-sha",
+					BaseSHA:   "heads/master",
 					Pulls: []prowv1.Pull{{
 						Number: 3,
 						Author: "user-c",
@@ -1137,7 +1142,7 @@ func TestCreateRefsForPullRequests(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			gotRefs, err := createRefsForPullRequests(tc.prs, ciOpConfigResolver)
+			gotRefs, err := createRefsForPullRequests(tc.prs, ciOpConfigResolver, &fakeGithubClient{})
 			if err != nil {
 				t.Errorf("unexpected err: %s", err)
 			}

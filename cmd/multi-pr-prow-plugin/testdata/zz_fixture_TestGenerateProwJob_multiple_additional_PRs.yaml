@@ -25,6 +25,7 @@ spec:
     timeout: 8h0m0s
   extra_refs:
   - base_ref: main
+    base_sha: heads/main
     org: openshift
     pulls:
     - author: third-dev
@@ -75,6 +76,7 @@ spec:
         secretName: result-aggregator
   refs:
     base_ref: master
+    base_sha: heads/master
     org: openshift
     pulls:
     - author: other-dev

@@ -699,6 +699,8 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 			// We do not need them now but we should eventually wire them through
 			// RepoLink:  pr.Base.Repo.HTMLURL,
 			BaseRef: primaryPR.BaseRef,
+			// TODO: Use the branch tip as BaseSHA instead
+			// https://github.com/kubernetes-sigs/prow/blob/db89760fea406dd2813e331c3d52b53b5bcbd140/pkg/plugins/trigger/pull-request.go#L50
 			BaseSHA: primaryPR.BaseSHA,
 			// BaseLink:  fmt.Sprintf("%s/commit/%s", pr.Base.Repo.HTMLURL, pr.BaseSHA),
 			PathAlias: ciopConfig.DeterminePathAlias(primaryPR.Org, primaryPR.Repo),

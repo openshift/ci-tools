@@ -559,6 +559,88 @@ func TestOwnersCleanerFactory(t *testing.T) {
 	}
 }
 
+func TestNormalizeNumericUsernames(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name: "numeric username gets quoted",
+			input: `approvers:
+  - 1233985
+  - NormalUsername`,
+			expected: `approvers:
+  - "1233985"
+  - NormalUsername`,
+		},
+		{
+			name: "multiple numeric usernames get quoted",
+			input: `approvers:
+  - 1233985
+  - NormalUsername
+  - 123456
+  - someuser`,
+			expected: `approvers:
+  - "1233985"
+  - NormalUsername
+  - "123456"
+  - someuser`,
+		},
+		{
+			name: "already quoted numeric username left unchanged",
+			input: `approvers:
+  - "1233985"
+  - NormalUsername`,
+			expected: `approvers:
+  - "1233985"
+  - NormalUsername`,
+		},
+		{
+			name: "alphanumeric username not changed",
+			input: `approvers:
+  - user123
+  - 456user`,
+			expected: `approvers:
+  - user123
+  - 456user`,
+		},
+		{
+			name: "numeric with comment gets quoted",
+			input: `approvers:
+  - 1233985  # some comment
+  - NormalUsername`,
+			expected: `approvers:
+  - "1233985"  # some comment
+  - NormalUsername`,
+		},
+		{
+			name: "handles reviewers and required_reviewers",
+			input: `approvers:
+  - 1233985
+reviewers:
+  - 123456
+required_reviewers:
+  - 789012`,
+			expected: `approvers:
+  - "1233985"
+reviewers:
+  - "123456"
+required_reviewers:
+  - "789012"`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := string(normalizeNumericUsernames([]byte(tc.input)))
+			if actual != tc.expected {
+				t.Errorf("Actual differs from expected:\nActual:\n%s\n\nExpected:\n%s", actual, tc.expected)
+			}
+		})
+	}
+}
+
 type loadRepoTestData struct {
 	TestDirectory string
 	ConfigSubDirs []string

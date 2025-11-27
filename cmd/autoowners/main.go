@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -177,6 +178,15 @@ type FileGetter interface {
 	GetFile(org, repo, filepath, commit string) ([]byte, error)
 }
 
+var numericListItemRegex = regexp.MustCompile(`(?m)^(\s*-\s+)(\d+)(\s*(?:#.*)?$)`)
+
+// normalizeNumericUsernames quotes unquoted numeric values in YAML lists to ensure they are parsed as strings.
+// GitHub allows numeric usernames, but YAML parsers treat unquoted numbers as integers.
+// This function adds quotes around list items that are purely numeric (e.g., "- 1233985" becomes "- \"1233985\"").
+func normalizeNumericUsernames(data []byte) []byte {
+	return numericListItemRegex.ReplaceAll(data, []byte(`${1}"${2}"${3}`))
+}
+
 func getOwnersHTTP(fg FileGetter, orgRepo orgRepo, filenames ownersconfig.Filenames) (httpResult, error) {
 	var httpResult httpResult
 
@@ -192,6 +202,8 @@ func getOwnersHTTP(fg FileGetter, orgRepo orgRepo, filenames ownersconfig.Filena
 		}
 		// some OWNERS files (especially upstream ones) can have the '@' symbol in front of usernames, this will not load properly and should be pruned
 		data = []byte(strings.ReplaceAll(string(data), "@", ""))
+		// GitHub allows numeric usernames, but YAML parsers treat unquoted numbers as integers, so we need to quote them
+		data = normalizeNumericUsernames(data)
 
 		switch filename {
 		case filenames.Owners:

@@ -78,6 +78,7 @@ func runConfigSteps(ctx context.Context, log *logrus.Entry, update bool, cluster
 		onboard.NewManifestGeneratorStep(log, onboard.NewImageRegistryGenerator(clusterInstall)),
 		onboard.NewManifestGeneratorStep(log, onboard.NewOpenshiftMonitoringGenerator(clusterInstall)),
 		onboard.NewManifestGeneratorStep(log, onboard.NewPassthroughGenerator(log, clusterInstall)),
+		onboard.NewManifestGeneratorStep(log, onboard.NewNestedPodmanStep(log, clusterInstall)),
 	}
 
 	if clusterInstall.CredentialsMode == operatorv1.CloudCredentialsModeManual {

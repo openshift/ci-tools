@@ -143,3 +143,7 @@ func CertManagerOperatorManifestsPath(releaseRepo, clusterName string) string {
 func CloudCredentialManifestsPath(releaseRepo, clusterName string) string {
 	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "cloud-credential")
 }
+
+func NestedPodmanManifestsPath(releaseRepo, clusterName string) string {
+	return filepath.Join(releaseRepo, "clusters", "build-clusters", clusterName, "nested-podman")
+}

@@ -76,6 +76,7 @@ type Onboard struct {
 	CertManagerOperator        CertManagerOperator        `json:"certManagerOperator,omitempty"`
 	OAuthTemplate              OAuthTemplate              `json:"oauthTemplate,omitempty"`
 	CloudCredential            CloudCredential            `json:"cloudCredential,omitempty"`
+	NestedPodman               NestedPodman               `json:"nestedPodman,omitempty"`
 }
 
 type Dex struct {
@@ -163,4 +164,10 @@ type CloudCredential struct {
 	types.ExcludeManifest
 	Patches []manifest.Patch     `json:"patches,omitempty"`
 	AWS     *aws.CloudCredential `json:"aws,omitempty"`
+}
+
+type NestedPodman struct {
+	types.SkipStep
+	types.ExcludeManifest
+	Patches []manifest.Patch `json:"patches,omitempty"`
 }

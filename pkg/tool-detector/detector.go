@@ -42,18 +42,19 @@ func (d *Detector) AffectedTools() (sets.Set[string], error) {
 	baseRef := d.jobSpec.Refs.BaseSHA
 
 	// For postsubmits, BaseSHA is the commit that was just pushed (HEAD). We need to compare
-	// against where the branch was before the push. The BaseLink contains a GitHub compare URL
-	// in the format: https://github.com/org/repo/compare/beforeSHA...afterSHA, so we can extract
-	// the "before" SHA from it.
+	// against where the branch was before the push:
+	// - If BaseLink is set, it points to a compare URL we can parse.
+	// - Otherwise, fall back to diffing parent(BaseSHA)...BaseSHA using git's ^ syntax.
 	if d.jobSpec.Type == prowapi.PostsubmitJob {
-		if d.jobSpec.Refs.BaseLink == "" {
-			return nil, fmt.Errorf("BaseLink is required for postsubmit jobs but is missing")
+		if d.jobSpec.Refs.BaseLink != "" {
+			beforeSHA, err := extractBeforeSHAFromCompareURL(d.jobSpec.Refs.BaseLink)
+			if err != nil {
+				return nil, fmt.Errorf("failed to extract before SHA from BaseLink: %w", err)
+			}
+			baseRef = beforeSHA
+		} else {
+			baseRef += "^"
 		}
-		beforeSHA, err := extractBeforeSHAFromCompareURL(d.jobSpec.Refs.BaseLink)
-		if err != nil {
-			return nil, fmt.Errorf("failed to extract before SHA from BaseLink: %w", err)
-		}
-		baseRef = beforeSHA
 	}
 	changedFiles, err := d.getChangedFiles(baseRef)
 	if err != nil {

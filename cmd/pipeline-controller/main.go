@@ -102,6 +102,20 @@ type clientWrapper struct {
 	mu                 sync.RWMutex // Protects against race conditions in event handling
 }
 
+// isBranchEnabled checks if the branch is enabled for the given repo configuration
+// If branches list is empty, all branches are enabled
+func isBranchEnabled(branches []string, branch string) bool {
+	if len(branches) == 0 {
+		return true // Empty list means all branches are enabled
+	}
+	for _, b := range branches {
+		if b == branch {
+			return true
+		}
+	}
+	return false
+}
+
 func (cw *clientWrapper) handlePullRequestCreation(l *logrus.Entry, event github.PullRequestEvent) {
 	cw.mu.Lock()
 	defer cw.mu.Unlock()
@@ -150,6 +164,21 @@ func (cw *clientWrapper) handlePullRequestCreation(l *logrus.Entry, event github
 
 		if !isInConfig {
 			logger.Debug("Repository not in configuration (neither regular nor LGTM), skipping")
+			return
+		}
+
+		// Check if branch is enabled for this repo
+		baseBranch := event.PullRequest.Base.Ref
+		var branchEnabled bool
+		if orgExists && repoExists {
+			branchEnabled = isBranchEnabled(repoConfig.Branches, baseBranch)
+		} else if lgtmOrgExists && lgtmRepoExists {
+			lgtmRepoConfig := lgtmRepos[repo]
+			branchEnabled = isBranchEnabled(lgtmRepoConfig.Branches, baseBranch)
+		}
+
+		if !branchEnabled {
+			logger.WithField("base_branch", baseBranch).Debug("Branch not enabled for pipeline controller, skipping")
 			return
 		}
 
@@ -252,6 +281,14 @@ func (cw *clientWrapper) handleLabelAddition(l *logrus.Entry, event github.PullR
 
 		if !orgExists || !repoExists {
 			logger.Debug("Repository not in LGTM configuration, skipping")
+			return
+		}
+
+		// Check if branch is enabled for this repo
+		baseBranch := event.PullRequest.Base.Ref
+		repoConfig := repos[repo]
+		if !isBranchEnabled(repoConfig.Branches, baseBranch) {
+			logger.WithField("base_branch", baseBranch).Debug("Branch not enabled for pipeline controller, skipping")
 			return
 		}
 
@@ -380,6 +417,22 @@ func (cw *clientWrapper) handleIssueComment(l *logrus.Entry, event github.IssueC
 		return
 	}
 
+	// Check if branch is enabled for this repo
+	baseBranch := pr.Base.Ref
+	var branchEnabled bool
+	if orgExists && repoExists {
+		repoConfig := repos[repo]
+		branchEnabled = isBranchEnabled(repoConfig.Branches, baseBranch)
+	} else if lgtmOrgExists && lgtmRepoExists {
+		lgtmRepoConfig := lgtmRepos[repo]
+		branchEnabled = isBranchEnabled(lgtmRepoConfig.Branches, baseBranch)
+	}
+
+	if !branchEnabled {
+		logger.WithField("base_branch", baseBranch).Debug("Branch not enabled for pipeline controller, skipping")
+		return
+	}
+
 	// Create a fake ProwJob to reuse existing logic
 	prowJob := &v1.ProwJob{
 		Spec: v1.ProwJobSpec{
@@ -444,6 +497,22 @@ func (cw *clientWrapper) handlePipelineContextCreation(l *logrus.Entry, event gi
 	isInConfig := (orgExists && repoExists) || (lgtmOrgExists && lgtmRepoExists)
 
 	if !isInConfig {
+		return
+	}
+
+	// Check if branch is enabled for this repo
+	baseBranch := event.PullRequest.Base.Ref
+	var branchEnabled bool
+	if orgExists && repoExists {
+		repoConfig := repos[repo]
+		branchEnabled = isBranchEnabled(repoConfig.Branches, baseBranch)
+	} else if lgtmOrgExists && lgtmRepoExists {
+		lgtmRepoConfig := lgtmRepos[repo]
+		branchEnabled = isBranchEnabled(lgtmRepoConfig.Branches, baseBranch)
+	}
+
+	if !branchEnabled {
+		logger.WithField("base_branch", baseBranch).Debug("Branch not enabled for pipeline controller, skipping")
 		return
 	}
 

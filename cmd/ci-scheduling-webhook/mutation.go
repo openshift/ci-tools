@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -45,7 +45,7 @@ func admissionReviewFromRequest(r *http.Request, deserializer runtime.Decoder) (
 	// content for the request.
 	var body []byte
 	if r.Body != nil {
-		requestData, err := ioutil.ReadAll(r.Body)
+		requestData, err := io.ReadAll(r.Body)
 		if err != nil {
 			return nil, err
 		}

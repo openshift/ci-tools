@@ -169,6 +169,20 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request) error
 		return nil
 	}
 
+	// Check if branch is enabled for this repo
+	if !isBranchEnabled(repoConfig.Branches, pj.Spec.Refs.BaseRef) {
+		if r.logger != nil {
+			log := r.logger.WithFields(logrus.Fields{
+				"org":     pj.Spec.Refs.Org,
+				"repo":    pj.Spec.Refs.Repo,
+				"branch":  pj.Spec.Refs.BaseRef,
+				"prowjob": pj.Name,
+			})
+			log.Debug("Branch not enabled for pipeline controller, skipping reconcile")
+		}
+		return nil
+	}
+
 	// Only proceed with automatic triggering if mode is "auto"
 	if repoConfig.Trigger != "auto" {
 		return nil

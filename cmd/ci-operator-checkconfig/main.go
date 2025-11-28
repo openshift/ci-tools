@@ -148,7 +148,7 @@ func (o *options) validateConfiguration(
 	if _, err := o.ciOPConfigAgent.GetMatchingConfig(configuration.Metadata); err != nil {
 		return err
 	}
-	graphConf := defaults.FromConfigStatic(&configuration)
+	graphConf := defaults.FromConfigStatic(&configuration, nil)
 	if err := validation.IsValidGraphConfiguration(graphConf.Steps); err != nil {
 		return err
 	}

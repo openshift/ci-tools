@@ -46,7 +46,6 @@ import (
 	releasesteps "github.com/openshift/ci-tools/pkg/steps/release"
 	"github.com/openshift/ci-tools/pkg/steps/secretrecordingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
-	tooldetector "github.com/openshift/ci-tools/pkg/tool-detector"
 )
 
 type inputImageSet map[api.InputImage]struct{}
@@ -81,6 +80,7 @@ func FromConfig(
 	injectedTest bool,
 	enableSecretsStoreCSIDriver bool,
 	metricsAgent *metrics.MetricsAgent,
+	skippedImages sets.Set[string],
 ) ([]api.Step, []api.Step, error) {
 	crclient, err := ctrlruntimeclient.NewWithWatch(clusterConfig, ctrlruntimeclient.Options{})
 	crclient = secretrecordingclient.Wrap(crclient, censor)
@@ -118,36 +118,7 @@ func FromConfig(
 	httpClient := retryablehttp.NewClient()
 	httpClient.Logger = nil
 
-	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, nodeName, targetAdditionalSuffix, nodeArchitectures, integratedStreams, injectedTest, enableSecretsStoreCSIDriver, metricsAgent, tooldetector.New(jobSpec, config).AffectedTools)
-}
-
-func determineSkippedImages(config *api.ReleaseBuildConfiguration, requiredNames sets.Set[string], jobSpec *api.JobSpec, getAffectedTools func() (sets.Set[string], error)) sets.Set[string] {
-	skippedImages := sets.New[string]()
-
-	// TODO: for POC we focus only on the [images] target. Potentially we should support other targets
-	// that correspond to an image build only.
-	if !requiredNames.Has("[images]") || !config.BuildImagesIfAffected {
-		return skippedImages
-	}
-
-	var affectedTools sets.Set[string]
-	var err error
-	if getAffectedTools != nil {
-		affectedTools, err = getAffectedTools()
-	} else {
-		detector := tooldetector.New(jobSpec, config)
-		affectedTools, err = detector.AffectedTools()
-	}
-	if err != nil {
-		logrus.WithError(err).Warn("Failed to detect affected tools, building all images")
-		return skippedImages
-	}
-	for _, img := range config.Images {
-		if !affectedTools.Has(string(img.To)) {
-			skippedImages.Insert(string(img.To))
-		}
-	}
-	return skippedImages
+	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, nodeName, targetAdditionalSuffix, nodeArchitectures, integratedStreams, injectedTest, enableSecretsStoreCSIDriver, metricsAgent, skippedImages)
 }
 
 func fromConfig(
@@ -177,7 +148,7 @@ func fromConfig(
 	injectedTest bool,
 	enableSecretsStoreCSIDriver bool,
 	metricsAgent *metrics.MetricsAgent,
-	getAffectedTools func() (sets.Set[string], error),
+	skippedImages sets.Set[string],
 ) ([]api.Step, []api.Step, error) {
 	requiredNames := sets.New[string]()
 	for _, target := range requiredTargets {
@@ -201,8 +172,6 @@ func fromConfig(
 	}
 	rawSteps = append(graphConf.Steps, rawSteps...)
 	rawSteps = append(rawSteps, stepsForImageOverrides(utils.GetOverriddenImages())...)
-
-	skippedImages := determineSkippedImages(config, requiredNames, jobSpec, getAffectedTools)
 
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
@@ -290,7 +259,7 @@ func fromConfig(
 			step = steps.InputImageTagStep(&conf, client, jobSpec)
 			inputImages[conf.InputImage] = struct{}{}
 		} else if rawStep.PipelineImageCacheStepConfiguration != nil {
-			step = steps.PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, config.Resources, buildClient, podClient, jobSpec, pullSecret, metricsAgent)
+			step = steps.PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, config.Resources, buildClient, podClient, jobSpec, pullSecret, metricsAgent, skippedImages)
 		} else if rawStep.SourceStepConfiguration != nil {
 			step = steps.SourceStep(*rawStep.SourceStepConfiguration, config.Resources, buildClient, podClient, jobSpec, cloneAuthConfig, pullSecret, metricsAgent)
 		} else if rawStep.BundleSourceStepConfiguration != nil {

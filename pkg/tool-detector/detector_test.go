@@ -62,7 +62,7 @@ func TestDetector_extractToolName(t *testing.T) {
 		{
 			name:     "tool with subdirectory",
 			pkgPath:  "github.com/openshift/ci-tools/cmd/branchingconfigmanagers/bugzilla-config-manager",
-			expected: "branchingconfigmanagers",
+			expected: "bugzilla-config-manager",
 		},
 		{
 			name:     "not a cmd package",

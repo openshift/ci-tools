@@ -91,6 +91,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/steps"
+	tooldetector "github.com/openshift/ci-tools/pkg/tool-detector"
 	"github.com/openshift/ci-tools/pkg/util"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 	"github.com/openshift/ci-tools/pkg/validation"
@@ -451,6 +452,8 @@ type options struct {
 	enableSecretsStoreCSIDriver bool
 
 	metricsAgent *metrics.MetricsAgent
+
+	skippedImages sets.Set[string]
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
@@ -606,6 +609,7 @@ func (o *options) Complete() error {
 	if err := validation.IsValidResolvedConfiguration(o.configSpec, mergedConfig); err != nil {
 		return results.ForReason("validating_config").ForError(err)
 	}
+	o.skippedImages = determineSkippedImages(o.configSpec, o.jobSpec, o.targets.values)
 	o.graphConfig = defaults.FromConfigStatic(o.configSpec)
 	if err := validation.IsValidGraphConfiguration(o.graphConfig.Steps); err != nil {
 		return results.ForReason("validating_config").ForError(err)
@@ -956,7 +960,7 @@ func (o *options) Run() []error {
 	// load the graph from the configuration
 	buildSteps, promotionSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig,
 		o.podPendingTimeout, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig,
-		o.nodeName, nodeArchitectures, o.targetAdditionalSuffix, o.manifestToolDockerCfg, o.localRegistryDNS, streams, injectedTest, o.enableSecretsStoreCSIDriver, o.metricsAgent)
+		o.nodeName, nodeArchitectures, o.targetAdditionalSuffix, o.manifestToolDockerCfg, o.localRegistryDNS, streams, injectedTest, o.enableSecretsStoreCSIDriver, o.metricsAgent, o.skippedImages)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}
@@ -1076,6 +1080,33 @@ func (o *options) Run() []error {
 
 		return nil
 	})
+}
+
+// determineSkippedImages determines which images can be skipped when
+// build_images_if_affected is enabled and the [images] target is requested.
+func determineSkippedImages(config *api.ReleaseBuildConfiguration, jobSpec *api.JobSpec, targets []string) sets.Set[string] {
+	if config == nil || jobSpec == nil || !config.BuildImagesIfAffected {
+		return nil
+	}
+
+	if !slices.Contains(targets, "[images]") {
+		return nil
+	}
+
+	detector := tooldetector.New(jobSpec, config)
+	affectedTools, err := detector.AffectedTools()
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to detect affected tools; building all images")
+		return nil
+	}
+
+	skipped := sets.New[string]()
+	for _, img := range config.Images {
+		if !affectedTools.Has(string(img.To)) {
+			skipped.Insert(string(img.To))
+		}
+	}
+	return skipped
 }
 
 func runPromotionStep(ctx context.Context, step api.Step, detailsChan chan<- api.CIOperatorStepDetails, errChan chan<- error, metricsAgent *metrics.MetricsAgent) {

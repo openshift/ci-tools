@@ -154,11 +154,25 @@ func generateBranchedConfigs(currentRelease, bumpRelease string, futureReleases 
 	return output
 }
 
-// removePeriodics removes periodic tests from the configuration
+// removePeriodics removes periodic tests from the configuration.
+// Tests that are both periodic and presubmit (have Presubmit: true) are preserved
+// but have their periodic-related fields (Cron, Interval, MinimumInterval, ReleaseController)
+// and Presubmit field removed.
 func removePeriodics(tests *[]api.TestStepConfiguration) {
 	for i := len(*tests) - 1; i >= 0; i-- {
-		if !(*tests)[i].Portable && (*tests)[i].IsPeriodic() {
-			*tests = append((*tests)[:i], (*tests)[i+1:]...)
+		test := &(*tests)[i]
+		if !test.Portable && test.IsPeriodic() {
+			// If the test is also a presubmit, keep it but remove periodic fields
+			if test.Presubmit {
+				test.Cron = nil
+				test.Interval = nil
+				test.MinimumInterval = nil
+				test.ReleaseController = false
+				test.Presubmit = false
+			} else {
+				// Otherwise, remove the test entirely
+				*tests = append((*tests)[:i], (*tests)[i+1:]...)
+			}
 		}
 	}
 }

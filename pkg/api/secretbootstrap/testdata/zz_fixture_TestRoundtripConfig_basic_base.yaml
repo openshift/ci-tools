@@ -11,23 +11,6 @@ cluster_groups:
   - build03
 secret_configs:
 - from:
-    ops-mirror.pem:
-      field: cert-key.pem
-      item: mirror.openshift.com
-    rh-cdn.pem:
-      field: rh-cdn.pem
-      item: rh-cdn
-  to:
-  - cluster_groups:
-    - build_farm
-    name: mirror.openshift.com
-    namespace: ocp
-  - cluster_groups:
-    - cg_2
-    - cg_3
-    name: test.openshift.com
-    namespace: ci
-- from:
     sa.ci-chat-bot.build01.config:
       field: sa.ci-chat-bot.build01.config
       item: ci-chat-bot
@@ -52,6 +35,23 @@ secret_configs:
     name: registry-push-credentials-ci-central
     namespace: ci
     type: kubernetes.io/dockerconfigjson
+- from:
+    ops-mirror.pem:
+      field: cert-key.pem
+      item: mirror.openshift.com
+    rh-cdn.pem:
+      field: rh-cdn.pem
+      item: rh-cdn
+  to:
+  - cluster_groups:
+    - build_farm
+    name: mirror.openshift.com
+    namespace: ocp
+  - cluster_groups:
+    - cg_2
+    - cg_3
+    name: test.openshift.com
+    namespace: ci
 user_secrets_target_clusters:
 - app.ci
 - build01

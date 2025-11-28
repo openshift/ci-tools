@@ -45,6 +45,7 @@ var (
 type githubClient interface {
 	CreateComment(owner, repo string, number int, comment string) error
 	GetPullRequest(org, repo string, number int) (*github.PullRequest, error)
+	GetRef(org, repo, ref string) (string, error)
 }
 
 func helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, error) {
@@ -366,7 +367,7 @@ func (s *server) generateProwJob(jr jobRun) (*prowv1.ProwJob, error) {
 	}
 	periodic.Name = jobName
 
-	refs, err := createRefsForPullRequests(append(jr.AdditionalPRs, jr.OriginPR), s.ciOpConfigResolver)
+	refs, err := createRefsForPullRequests(append(jr.AdditionalPRs, jr.OriginPR), s.ciOpConfigResolver, s.ghc)
 	if err != nil {
 		return nil, fmt.Errorf("create refs for PR: %w", err)
 	}
@@ -429,7 +430,7 @@ func determineProwJobName(jr jobRun) string {
 	return fmt.Sprintf("multi-pr-%s-%s%s", formatPR(jr.OriginPR), additionalPRs, jr.JobMetadata.Test)
 }
 
-func createRefsForPullRequests(prs []github.PullRequest, configResolver ciOpConfigResolver) ([]prowv1.Refs, error) {
+func createRefsForPullRequests(prs []github.PullRequest, configResolver ciOpConfigResolver, ghc githubClient) ([]prowv1.Refs, error) {
 	type base struct {
 		org  string
 		repo string
@@ -461,12 +462,18 @@ func createRefsForPullRequests(prs []github.PullRequest, configResolver ciOpConf
 			return nil, fmt.Errorf("path alias: %w", err)
 		}
 
+		// https://github.com/kubernetes-sigs/prow/blob/db89760fea406dd2813e331c3d52b53b5bcbd140/pkg/plugins/trigger/pull-request.go#L50
+		baseSHA, err := ghc.GetRef(prBase.org, prBase.repo, "heads/"+prBase.ref)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get baseSHA: %w", err)
+		}
+
 		ref := prowv1.Refs{
 			Org:       prBase.org,
 			Repo:      prBase.repo,
 			BaseRef:   prBase.ref,
 			PathAlias: pathAlias,
-			BaseSHA:   prsByBase[prBase][0].Base.SHA, //TODO(sgoeddel): It would be better if we used the oldest base SHA rather than just the first in the list, but this mimics prpqr_reconciller, and is unlikely to result in many issues
+			BaseSHA:   baseSHA,
 		}
 		for _, pr := range prsByBase[prBase] {
 			ref.Pulls = append(ref.Pulls, prowv1.Pull{

@@ -63,6 +63,7 @@ spec:
         secretName: result-aggregator
   refs:
     base_ref: master
+    base_sha: heads/master
     org: openshift
     pulls:
     - author: other-dev

@@ -161,7 +161,7 @@ func TestIsValidGraph_Names(t *testing.T) {
 		expected: errs("root"),
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			graphConf := defaults.FromConfigStatic(&tc.config)
+			graphConf := defaults.FromConfigStatic(&tc.config, nil)
 			graphConf.Steps = append(graphConf.Steps, api.StepConfiguration{
 				SourceStepConfiguration: &api.SourceStepConfiguration{
 					To: api.PipelineImageStreamTagReferenceSource,
@@ -311,7 +311,7 @@ func TestIsValidGraph_ContainerTestFrom(t *testing.T) {
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			graphConf := defaults.FromConfigStatic(&tc.config)
+			graphConf := defaults.FromConfigStatic(&tc.config, nil)
 			err := IsValidGraphConfiguration(graphConf.Steps)
 			testhelper.Diff(t, "error", err, tc.expected, testhelper.EquateErrorMessage)
 		})
@@ -372,7 +372,7 @@ func TestIsValidGraph_MultiStageTestFrom(t *testing.T) {
 		expected: errs("tests[test-rpms].steps.test[0].from: unknown image \"rpms\" (configuration is missing `rpm_build_commands`)"),
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			graphConf := defaults.FromConfigStatic(&tc.config)
+			graphConf := defaults.FromConfigStatic(&tc.config, nil)
 			err := IsValidGraphConfiguration(graphConf.Steps)
 			testhelper.Diff(t, "error", err, tc.expected, testhelper.EquateErrorMessage)
 		})

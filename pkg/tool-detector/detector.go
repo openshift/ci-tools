@@ -222,7 +222,7 @@ func (d *Detector) loadCmdTools() ([]*packages.Package, map[string]*packages.Pac
 
 	var cmdTools []*packages.Package
 	for _, pkg := range pkgs {
-		if strings.HasPrefix(pkg.PkgPath, CmdPrefix) {
+		if pkg.Name == "main" && strings.HasPrefix(pkg.PkgPath, CmdPrefix) {
 			cmdTools = append(cmdTools, pkg)
 		}
 	}
@@ -324,13 +324,7 @@ func (d *Detector) extractToolName(pkgPath string) string {
 	if !strings.HasPrefix(pkgPath, CmdPrefix) {
 		return ""
 	}
-
-	parts := strings.Split(strings.TrimPrefix(pkgPath, CmdPrefix+"/"), "/")
-	if len(parts) == 0 {
-		return ""
-	}
-
-	return parts[0]
+	return filepath.Base(pkgPath)
 }
 
 // extractBeforeSHAFromCompareURL extracts the "before" SHA from a GitHub compare URL.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -16,6 +17,10 @@ import (
 	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
+)
+
+const (
+	SkippedImagesEnvVar = "SKIPPED_IMAGES"
 )
 
 func rawCommandDockerfile(from api.PipelineImageStreamTagReference, commands string) string {
@@ -32,6 +37,7 @@ type pipelineImageCacheStep struct {
 	pullSecret    *coreapi.Secret
 	architectures sets.Set[string]
 	metricsAgent  *metrics.MetricsAgent
+	skippedImages sets.Set[string]
 }
 
 func (s *pipelineImageCacheStep) Inputs() (api.InputDefinition, error) {
@@ -50,7 +56,7 @@ func (s *pipelineImageCacheStep) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return handleBuilds(ctx, s.client, s.podClient, *buildFromSource(
+	build := buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,
 		buildapi.BuildSource{
 			Type:       buildapi.BuildSourceDockerfile,
@@ -62,7 +68,14 @@ func (s *pipelineImageCacheStep) run(ctx context.Context) error {
 		s.pullSecret,
 		nil,
 		s.config.Ref,
-	), s.metricsAgent, newImageBuildOptions(s.architectures.UnsortedList()))
+	)
+
+	// Here we inject the SKIPPED_IMAGES environment variable to be utilized by the build command.
+	if len(s.skippedImages) > 0 {
+		build.Spec.Strategy.DockerStrategy.Env = append(build.Spec.Strategy.DockerStrategy.Env, coreapi.EnvVar{Name: SkippedImagesEnvVar, Value: strings.Join(sets.List(s.skippedImages), ",")})
+	}
+
+	return handleBuilds(ctx, s.client, s.podClient, *build, s.metricsAgent, newImageBuildOptions(s.architectures.UnsortedList()))
 }
 
 func (s *pipelineImageCacheStep) Requires() []api.StepLink {
@@ -108,6 +121,7 @@ func PipelineImageCacheStep(
 	jobSpec *api.JobSpec,
 	pullSecret *coreapi.Secret,
 	metricsAgent *metrics.MetricsAgent,
+	skippedImages sets.Set[string],
 ) api.Step {
 	return &pipelineImageCacheStep{
 		config:        config,
@@ -118,5 +132,6 @@ func PipelineImageCacheStep(
 		pullSecret:    pullSecret,
 		architectures: sets.New[string](),
 		metricsAgent:  metricsAgent,
+		skippedImages: skippedImages,
 	}
 }

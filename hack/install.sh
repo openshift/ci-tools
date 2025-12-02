@@ -27,7 +27,20 @@ if [[ ${2:-} == "remove-dummy" ]]; then
   rm -f cmd/repo-init/frontend/dist/dummy
 fi
 
+declare -A skipped_images_map
+if [[ -n "${SKIPPED_IMAGES:-}" ]]; then
+  echo "Skipping images: ${SKIPPED_IMAGES}"
+  IFS=',' read -ra skipped_array <<< "${SKIPPED_IMAGES}"
+  for img in "${skipped_array[@]}"; do
+    skipped_images_map["${img}"]=1
+  done
+fi
+
 for dir in $( find ./cmd/ -mindepth 1 -maxdepth 1 -type d -not \( -name '*ipi-deprovison*' \) ); do
     command="$( basename "${dir}" )"
+    if [[ -n "${skipped_images_map[${command}]:-}" ]]; then
+        echo "Skipping install for ${command} (in SKIPPED_IMAGES)"
+        continue
+    fi
     go install -v $RACE_FLAG -ldflags "-X 'sigs.k8s.io/prow/pkg/version.Name=${command}' -X 'sigs.k8s.io/prow/pkg/version.Version=${version}'" "./cmd/${command}/..."
 done

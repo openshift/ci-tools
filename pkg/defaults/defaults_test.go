@@ -1334,7 +1334,7 @@ func TestFromConfig(t *testing.T) {
 		overriddenImagesEnv map[string]string
 		injectedTest        bool
 		requiredTargets     []string
-		getAffectedTools    func() (sets.Set[string], error)
+		skippedImages       sets.Set[string]
 		expectedSteps       []string
 		expectedPost        []string
 		expectedParams      map[string]string
@@ -1845,8 +1845,8 @@ func TestFromConfig(t *testing.T) {
 			},
 			BuildImagesIfAffected: true,
 		},
-		requiredTargets:  []string{"[images]"},
-		getAffectedTools: func() (sets.Set[string], error) { return sets.New("tool1"), nil },
+		requiredTargets: []string{"[images]"},
+		skippedImages:   sets.New("tool2", "tool3"),
 		expectedSteps: []string{
 			"tool1",
 			"[output:stable:tool1]",
@@ -1874,7 +1874,7 @@ func TestFromConfig(t *testing.T) {
 				params.Add(k, func() (string, error) { return v, nil })
 			}
 			graphConf := FromConfigStatic(&tc.config)
-			configSteps, post, err := fromConfig(context.Background(), &tc.config, &graphConf, &jobSpec, tc.templates, tc.paramFiles, tc.promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient, tc.requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params, &secrets.DynamicCensor{}, api.ServiceDomainAPPCI, "", nil, map[string]*configresolver.IntegratedStream{}, tc.injectedTest, false, nil, tc.getAffectedTools)
+			configSteps, post, err := fromConfig(context.Background(), &tc.config, &graphConf, &jobSpec, tc.templates, tc.paramFiles, tc.promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient, tc.requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params, &secrets.DynamicCensor{}, api.ServiceDomainAPPCI, "", nil, map[string]*configresolver.IntegratedStream{}, tc.injectedTest, false, nil, tc.skippedImages)
 			if diff := cmp.Diff(tc.expectedErr, err); diff != "" {
 				t.Errorf("unexpected error: %v", diff)
 			}

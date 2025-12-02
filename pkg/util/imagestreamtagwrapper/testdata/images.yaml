@@ -1,590 +1,588 @@
-apiVersion: v1
-items:
-- apiVersion: image.openshift.io/v1
-  dockerImageLayers:
-  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
-    name: sha256:fcd63ccfdd0ccd78cc0b23a6e9cef0c400625c1506f3eed694d92c7ced04b4c4
-    size: 76252616
-  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
-    name: sha256:09dbbf8834d2d84d8d8a37dcf7d6049794c9c8c604a3d3f2606768a82771438d
-    size: 1612
-  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
-    name: sha256:9a46ec39f5326be6a4d215cb6de224a907481ecb91e22ecc3a7f8ff3dbb72622
-    size: 402
-  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
-    name: sha256:bcdcb44ae450c6e3f129f7b4a507947e4d3791da68c8722d47a73128d9984b17
-    size: 8231209
-  dockerImageManifestMediaType: application/vnd.docker.distribution.manifest.v2+json
-  dockerImageMetadata:
-    Architecture: amd64
-    Config:
-      Cmd:
-      - /bin/bash
-      Env:
-      - foo=bar
-      - OPENSHIFT_BUILD_NAME=base
-      - OPENSHIFT_BUILD_NAMESPACE=ci-op-1t3559hx
-      - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-      - container=oci
-      Hostname: 1a6370b10892
-      Labels:
-        architecture: x86_64
-        authoritative-source-url: registry.access.redhat.com
-        build-date: 2020-03-10T10:38:13.657446
-        com.redhat.build-host: cpt-1004.osbs.prod.upshift.rdu2.redhat.com
-        com.redhat.component: ubi7-container
-        com.redhat.license_terms: https://www.redhat.com/en/about/red-hat-end-user-license-agreements#UBI
-        description: The Universal Base Image is designed and engineered to be the
-          base layer for all of your containerized applications, middleware and utilities.
-          This base image is freely redistributable, but Red Hat only supports Red
-          Hat technologies through subscriptions for Red Hat products. This image
-          is maintained by Red Hat and updated regularly.
-        distribution-scope: public
-        io.k8s.description: This is the base image from which all OpenShift images
-          inherit.
-        io.k8s.display-name: OpenShift Base
-        io.openshift.build.commit.author: ""
-        io.openshift.build.commit.date: ""
-        io.openshift.build.commit.id: 6cdb5d360768d8f87a615286180e46784ae7d28f
-        io.openshift.build.commit.message: ""
-        io.openshift.build.commit.ref: master
-        io.openshift.build.name: ""
-        io.openshift.build.namespace: ""
-        io.openshift.build.source-context-dir: base/
-        io.openshift.build.source-location: https://github.com/openshift/images
-        io.openshift.tags: base rhel7
-        maintainer: Red Hat, Inc.
-        name: ubi7
-        release: "358"
-        summary: Provides the latest release of the Red Hat Universal Base Image 7.
-        url: https://access.redhat.com/containers/#/registry.access.redhat.com/ubi7/images/7.7-358
-        vcs-ref: 6cdb5d360768d8f87a615286180e46784ae7d28f
-        vcs-type: git
-        vcs-url: https://github.com/openshift/images
-        vendor: Red Hat, Inc.
-        version: "7.7"
-    Container: 474684a462525a6e55890ae314efbd347ae95760459f0e3f1c542b1927b21f69
-    ContainerConfig:
-      Cmd:
-      - |-
-        #(imagebuilder)
-        sleep 86400
-      Entrypoint:
-      - /bin/sh
-      - -c
-      Env:
-      - foo=bar
-      - OPENSHIFT_BUILD_NAME=base-os
-      - OPENSHIFT_BUILD_NAMESPACE=ci-op-1t3559hx
-      - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-      - container=oci
-      Hostname: base-build
-      Image: docker-registry.default.svc:5000/ci-op-1t3559hx/pipeline@sha256:87ffaf4f79c350e4a99d7c161236119fee98e73f585637583236ed3c0a764e32
-      Labels:
-        architecture: x86_64
-        authoritative-source-url: registry.access.redhat.com
-        build-date: 2020-03-10T10:38:13.657446
-        com.redhat.build-host: cpt-1004.osbs.prod.upshift.rdu2.redhat.com
-        com.redhat.component: ubi7-container
-        com.redhat.license_terms: https://www.redhat.com/en/about/red-hat-end-user-license-agreements#UBI
-        description: The Universal Base Image is designed and engineered to be the
-          base layer for all of your containerized applications, middleware and utilities.
-          This base image is freely redistributable, but Red Hat only supports Red
-          Hat technologies through subscriptions for Red Hat products. This image
-          is maintained by Red Hat and updated regularly.
-        distribution-scope: public
-        io.k8s.description: The Universal Base Image is designed and engineered to
-          be the base layer for all of your containerized applications, middleware
-          and utilities. This base image is freely redistributable, but Red Hat only
-          supports Red Hat technologies through subscriptions for Red Hat products.
-          This image is maintained by Red Hat and updated regularly.
-        io.k8s.display-name: Red Hat Universal Base Image 7
-        io.openshift.build.name: base-os
-        io.openshift.build.namespace: ci-op-1t3559hx
-        io.openshift.tags: base rhel7
-        maintainer: Red Hat, Inc.
-        name: ubi7
-        release: "358"
-        summary: Provides the latest release of the Red Hat Universal Base Image 7.
-        url: https://access.redhat.com/containers/#/registry.access.redhat.com/ubi7/images/7.7-358
-        vcs-ref: 4c80c8aa26e69950ab11b87789c8fb7665b1632d
-        vcs-type: git
-        vendor: Red Hat, Inc.
-        version: "7.7"
-    Created: "2020-03-23T19:24:27Z"
-    DockerVersion: 1.13.1
-    Id: sha256:de025253220256556fc6a5b7382f093d487bbb56b2fd645b6f6d871a157d1bf5
-    Size: 84491022
-    apiVersion: "1.0"
-    kind: DockerImage
-  dockerImageMetadataVersion: "1.0"
-  dockerImageReference: docker-registry.default.svc:5000/ci-op-1t3559hx/pipeline@sha256:3823c45b9feec9e861d1fd7ef268e38717b3b94adae26dd76eba3ac5f8b8cab9
-  kind: Image
-  metadata:
-    annotations:
-      image.openshift.io/dockerLayersOrder: ascending
-      image.openshift.io/manifestBlobStored: "true"
-      openshift.io/image.managed: "true"
-    creationTimestamp: "2020-03-23T19:24:37Z"
-    name: sha256:3823c45b9feec9e861d1fd7ef268e38717b3b94adae26dd76eba3ac5f8b8cab9
-    resourceVersion: "573523026"
-    selfLink: /apis/image.openshift.io/v1/images/sha256%3A3823c45b9feec9e861d1fd7ef268e38717b3b94adae26dd76eba3ac5f8b8cab9
-    uid: ef4c7cb1-6d3b-11ea-8a30-42010a8e0004
-- apiVersion: image.openshift.io/v1
-  dockerImageLayers:
-  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
-    name: sha256:ab5ef0e5819490abe86106fd9f4381123e37a03e80e650be39f7938d30ecb530
-    size: 75780712
-  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
-    name: sha256:f56541d2c23069e1dba9509c0f41872de1d3cb2675cdfaaf2e01cfc67cb1b500
-    size: 314306086
-  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
-    name: sha256:99a3cc5ac090ea5164ed1c20d9a968c0ade92ea3dbe5b785f715e9617b378bb7
-    size: 47632240
-  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
-    name: sha256:0fa4ecd9165a0001ef5a17e237aaeb26769c83d9bb8aafef8644274a8c2b2856
-    size: 109001329
-  dockerImageManifestMediaType: application/vnd.docker.distribution.manifest.v2+json
-  dockerImageMetadata:
-    Architecture: amd64
-    Config:
-      Cmd:
-      - /bin/bash
-      Env:
-      - foo=bar
-      - OPENSHIFT_BUILD_NAME=bin
-      - OPENSHIFT_BUILD_NAMESPACE=ci-op-jpdy23wx
-      - CLONEREFS_OPTIONS={"src_root":"/go","log":"/dev/null","git_user_name":"ci-robot","git_user_email":"ci-robot@openshift.io","refs":[{"org":"openshift","repo":"cluster-etcd-operator","repo_link":"https://github.com/openshift/cluster-etcd-operator","base_ref":"master","base_sha":"de8ac8f06c9b026d8769ca95bba8a19960c28442","base_link":"https://github.com/openshift/cluster-etcd-operator/commit/de8ac8f06c9b026d8769ca95bba8a19960c28442","pulls":[{"number":295,"author":"hexfusion","sha":"1f5a55b01b75be2b67af198deb6604854a1f08e8","link":"https://github.com/openshift/cluster-etcd-operator/pull/295","commit_link":"https://github.com/openshift/cluster-etcd-operator/pull/295/commits/1f5a55b01b75be2b67af198deb6604854a1f08e8","author_link":"https://github.com/hexfusion"}]}],"fail":true}
-      - GOPATH=/go
-      - VERSION=1.13.8
-      - GOCACHE=/go/.cache
-      - GOARM=5
-      - GOROOT=/usr/local/go
-      - GOFLAGS=-mod=vendor
-      - LOGNAME=deadbeef
-      - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/go/bin:/go/bin
-      - OPENSHIFT_BUILD_SOURCE=https://github.com/openshift/release.git
-      - OPENSHIFT_BUILD_REFERENCE=master
-      - OPENSHIFT_BUILD_COMMIT=a7695ad57a0291901ce9e8c7700c42b48481cfdb
-      Labels:
-        io.k8s.description: This is the standard release image for OpenShift Origin
-          and contains the necessary build tools to build the platform.
-        io.k8s.display-name: OpenShift Origin Release Environment (golang-1.13.8)
-        io.openshift.build.commit.author: OpenShift Merge Robot \u003copenshift-merge-robot@users.noreply.github.com\u003e
-        io.openshift.build.commit.date: Fri Apr 17 17:12:40 2020 -0400
-        io.openshift.build.commit.id: a7695ad57a0291901ce9e8c7700c42b48481cfdb
-        io.openshift.build.commit.message: 'Merge pull request #7789 from hongkailiu/audit_log'
-        io.openshift.build.commit.ref: master
-        io.openshift.build.name: bin
-        io.openshift.build.namespace: ci-op-jpdy23wx
-        io.openshift.build.source-context-dir: projects/origin-release/golang-1.13
-        io.openshift.build.source-location: https://github.com/openshift/release.git
-        org.label-schema.build-date: "20191001"
-        org.label-schema.license: GPLv2
-        org.label-schema.name: CentOS Base Image
-        org.label-schema.schema-version: "1.0"
-        org.label-schema.vendor: CentOS
-      WorkingDir: /go/src/github.com/openshift/cluster-etcd-operator/
-    Container: 67df3135612fc204f5a7fa4ac443ba7f6a7ed6e5c6b8b3120f8e3b618645f05e
-    ContainerConfig:
-      Cmd:
-      - |-
-        #(imagebuilder)
-        sleep 86400
-      Entrypoint:
-      - /bin/sh
-      - -c
-      Env:
-      - foo=bar
-      - CLONEREFS_OPTIONS={"src_root":"/go","log":"/dev/null","git_user_name":"ci-robot","git_user_email":"ci-robot@openshift.io","refs":[{"org":"openshift","repo":"cluster-etcd-operator","repo_link":"https://github.com/openshift/cluster-etcd-operator","base_ref":"master","base_sha":"de8ac8f06c9b026d8769ca95bba8a19960c28442","base_link":"https://github.com/openshift/cluster-etcd-operator/commit/de8ac8f06c9b026d8769ca95bba8a19960c28442","pulls":[{"number":295,"author":"hexfusion","sha":"1f5a55b01b75be2b67af198deb6604854a1f08e8","link":"https://github.com/openshift/cluster-etcd-operator/pull/295","commit_link":"https://github.com/openshift/cluster-etcd-operator/pull/295/commits/1f5a55b01b75be2b67af198deb6604854a1f08e8","author_link":"https://github.com/hexfusion"}]}],"fail":true}
-      - GOPATH=/go
-      - OPENSHIFT_BUILD_NAME=src
-      - OPENSHIFT_BUILD_NAMESPACE=ci-op-jpdy23wx
-      - VERSION=1.13.8
-      - GOCACHE=/go/.cache
-      - GOARM=5
-      - GOROOT=/usr/local/go
-      - GOFLAGS=-mod=vendor
-      - LOGNAME=deadbeef
-      - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/go/bin:/go/bin
-      - OPENSHIFT_BUILD_SOURCE=https://github.com/openshift/release.git
-      - OPENSHIFT_BUILD_REFERENCE=master
-      - OPENSHIFT_BUILD_COMMIT=a7695ad57a0291901ce9e8c7700c42b48481cfdb
-      Hostname: bin-build
-      Image: docker-registry.default.svc:5000/ci-op-jpdy23wx/pipeline@sha256:8f73863b1fe4485ff173fdd5fefd54d03949cf83437084780815329d9d88c76a
-      Labels:
-        io.k8s.description: This is the standard release image for OpenShift Origin
-          and contains the necessary build tools to build the platform.
-        io.k8s.display-name: OpenShift Origin Release Environment (golang-1.13.8)
-        io.openshift.build.commit.author: OpenShift Merge Robot \u003copenshift-merge-robot@users.noreply.github.com\u003e
-        io.openshift.build.commit.date: Fri Apr 17 17:12:40 2020 -0400
-        io.openshift.build.commit.id: a7695ad57a0291901ce9e8c7700c42b48481cfdb
-        io.openshift.build.commit.message: 'Merge pull request #7789 from hongkailiu/audit_log'
-        io.openshift.build.commit.ref: master
-        io.openshift.build.name: src
-        io.openshift.build.namespace: ci-op-jpdy23wx
-        io.openshift.build.source-context-dir: projects/origin-release/golang-1.13
-        io.openshift.build.source-location: https://github.com/openshift/release.git
-        org.label-schema.build-date: "20191001"
-        org.label-schema.license: GPLv2
-        org.label-schema.name: CentOS Base Image
-        org.label-schema.schema-version: "1.0"
-        org.label-schema.vendor: CentOS
-      WorkingDir: /go/src/github.com/openshift/cluster-etcd-operator
-    Created: "2020-04-17T23:33:46Z"
-    DockerVersion: 1.13.1
-    Id: sha256:d32b5cc3ffd906befc2f13311e0b69748b123875107c89f9787e9f47a02dbaf8
-    Size: 546727284
-    apiVersion: "1.0"
-    kind: DockerImage
-  dockerImageMetadataVersion: "1.0"
-  dockerImageReference: docker-registry.default.svc:5000/ci-op-jpdy23wx/pipeline@sha256:1ce9116f933912f8fc948194c8515a2917e705bf7e772b465aa643544eabcaec
-  kind: Image
-  metadata:
-    annotations:
-      image.openshift.io/dockerLayersOrder: ascending
-      image.openshift.io/manifestBlobStored: "true"
-      openshift.io/image.managed: "true"
-    creationTimestamp: "2020-04-17T23:34:13Z"
-    name: sha256:1ce9116f933912f8fc948194c8515a2917e705bf7e772b465aa643544eabcaec
-    resourceVersion: "632134458"
-    selfLink: /apis/image.openshift.io/v1/images/sha256%3A1ce9116f933912f8fc948194c8515a2917e705bf7e772b465aa643544eabcaec
-    uid: f245005c-8103-11ea-99ef-42010a8e0002
-- apiVersion: image.openshift.io/v1
-  dockerImageLayers:
-  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
-    name: sha256:fcd63ccfdd0ccd78cc0b23a6e9cef0c400625c1506f3eed694d92c7ced04b4c4
-    size: 76252616
-  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
-    name: sha256:09dbbf8834d2d84d8d8a37dcf7d6049794c9c8c604a3d3f2606768a82771438d
-    size: 1612
-  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
-    name: sha256:9a46ec39f5326be6a4d215cb6de224a907481ecb91e22ecc3a7f8ff3dbb72622
-    size: 402
-  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
-    name: sha256:bcdcb44ae450c6e3f129f7b4a507947e4d3791da68c8722d47a73128d9984b17
-    size: 8231209
-  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
-    name: sha256:7f95905829510b560582a83ae4f7037d8b0502754de43740689fb4a619a07aae
-    size: 15796611
-  dockerImageManifestMediaType: application/vnd.docker.distribution.manifest.v2+json
-  dockerImageMetadata:
-    Architecture: amd64
-    Config:
-      Cmd:
-      - /bin/bash
-      Env:
-      - foo=bar
-      - OPENSHIFT_BUILD_NAME=cluster-etcd-operator
-      - OPENSHIFT_BUILD_NAMESPACE=ci-op-jpdy23wx
-      - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-      - container=oci
-      Hostname: 1a6370b10892
-      Labels:
-        architecture: x86_64
-        authoritative-source-url: registry.access.redhat.com
-        build-date: 2020-03-10T10:38:13.657446
-        com.redhat.build-host: cpt-1004.osbs.prod.upshift.rdu2.redhat.com
-        com.redhat.component: ubi7-container
-        com.redhat.license_terms: https://www.redhat.com/en/about/red-hat-end-user-license-agreements#UBI
-        description: The Universal Base Image is designed and engineered to be the
-          base layer for all of your containerized applications, middleware and utilities.
-          This base image is freely redistributable, but Red Hat only supports Red
-          Hat technologies through subscriptions for Red Hat products. This image
-          is maintained by Red Hat and updated regularly.
-        distribution-scope: public
-        io.k8s.description: This is the base image from which all OpenShift images
-          inherit.
-        io.k8s.display-name: OpenShift Base
-        io.openshift.build.commit.author: ""
-        io.openshift.build.commit.date: ""
-        io.openshift.build.commit.id: ""
-        io.openshift.build.commit.message: ""
-        io.openshift.build.commit.ref: ""
-        io.openshift.build.name: ""
-        io.openshift.build.namespace: ""
-        io.openshift.build.source-context-dir: ""
-        io.openshift.build.source-location: ""
-        io.openshift.release.operator: "true"
-        io.openshift.tags: base rhel7
-        maintainer: Red Hat, Inc.
-        name: ubi7
-        release: "358"
-        summary: Provides the latest release of the Red Hat Universal Base Image 7.
-        url: https://access.redhat.com/containers/#/registry.access.redhat.com/ubi7/images/7.7-358
-        vcs-ref: ""
-        vcs-type: ""
-        vcs-url: ""
-        vendor: Red Hat, Inc.
-        version: "7.7"
-    Container: bdc911bea844d74a31bc346d5cacb32f774e2403fc6d00601b521f382d01ce06
-    ContainerConfig:
-      Entrypoint:
-      - /bin/sh
-      - -c
-      - '#(imagebuilder)'
-      Env:
-      - foo=bar
-      - OPENSHIFT_BUILD_NAME=base
-      - OPENSHIFT_BUILD_NAMESPACE=ci-op-1t3559hx
-      - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-      - container=oci
-      Hostname: bdc911bea844
-      Image: docker-registry.default.svc:5000/ci-op-jpdy23wx/pipeline@sha256:3823c45b9feec9e861d1fd7ef268e38717b3b94adae26dd76eba3ac5f8b8cab9
-      Labels:
-        architecture: x86_64
-        authoritative-source-url: registry.access.redhat.com
-        build-date: 2020-03-10T10:38:13.657446
-        com.redhat.build-host: cpt-1004.osbs.prod.upshift.rdu2.redhat.com
-        com.redhat.component: ubi7-container
-        com.redhat.license_terms: https://www.redhat.com/en/about/red-hat-end-user-license-agreements#UBI
-        description: The Universal Base Image is designed and engineered to be the
-          base layer for all of your containerized applications, middleware and utilities.
-          This base image is freely redistributable, but Red Hat only supports Red
-          Hat technologies through subscriptions for Red Hat products. This image
-          is maintained by Red Hat and updated regularly.
-        distribution-scope: public
-        io.k8s.description: This is the base image from which all OpenShift images
-          inherit.
-        io.k8s.display-name: OpenShift Base
-        io.openshift.build.commit.author: ""
-        io.openshift.build.commit.date: ""
-        io.openshift.build.commit.id: 6cdb5d360768d8f87a615286180e46784ae7d28f
-        io.openshift.build.commit.message: ""
-        io.openshift.build.commit.ref: master
-        io.openshift.build.name: ""
-        io.openshift.build.namespace: ""
-        io.openshift.build.source-context-dir: base/
-        io.openshift.build.source-location: https://github.com/openshift/images
-        io.openshift.tags: base rhel7
-        maintainer: Red Hat, Inc.
-        name: ubi7
-        release: "358"
-        summary: Provides the latest release of the Red Hat Universal Base Image 7.
-        url: https://access.redhat.com/containers/#/registry.access.redhat.com/ubi7/images/7.7-358
-        vcs-ref: 6cdb5d360768d8f87a615286180e46784ae7d28f
-        vcs-type: git
-        vcs-url: https://github.com/openshift/images
-        vendor: Red Hat, Inc.
-        version: "7.7"
-    Created: "2020-04-17T23:34:58Z"
-    DockerVersion: 1.13.1
-    Id: sha256:eb3c03f990a8aee144809e80d64be124d9489e6933e4bf4f5f20ff6d0a4fad0e
-    Size: 100287723
-    apiVersion: "1.0"
-    kind: DockerImage
-  dockerImageMetadataVersion: "1.0"
-  dockerImageReference: docker-registry.default.svc:5000/ci-op-jpdy23wx/pipeline@sha256:382c10e43129fe7ca09b7a63c26ee01c8880168b3166615220eaa7738b2c4a31
-  kind: Image
-  metadata:
-    annotations:
-      image.openshift.io/dockerLayersOrder: ascending
-      image.openshift.io/manifestBlobStored: "true"
-      openshift.io/image.managed: "true"
-    creationTimestamp: "2020-04-17T23:35:07Z"
-    name: sha256:382c10e43129fe7ca09b7a63c26ee01c8880168b3166615220eaa7738b2c4a31
-    resourceVersion: "632136219"
-    selfLink: /apis/image.openshift.io/v1/images/sha256%3A382c10e43129fe7ca09b7a63c26ee01c8880168b3166615220eaa7738b2c4a31
-    uid: 124cef89-8104-11ea-9097-42010a8e0003
-- apiVersion: image.openshift.io/v1
-  dockerImageLayers:
-  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
-    name: sha256:ab5ef0e5819490abe86106fd9f4381123e37a03e80e650be39f7938d30ecb530
-    size: 75780712
-  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
-    name: sha256:f56541d2c23069e1dba9509c0f41872de1d3cb2675cdfaaf2e01cfc67cb1b500
-    size: 314306086
-  dockerImageManifestMediaType: application/vnd.docker.distribution.manifest.v2+json
-  dockerImageMetadata:
-    Architecture: amd64
-    Config:
-      Cmd:
-      - /bin/bash
-      Env:
-      - VERSION=1.13.8
-      - GOCACHE=/go/.cache
-      - GOARM=5
-      - GOPATH=/go
-      - GOROOT=/usr/local/go
-      - GOFLAGS=-mod=vendor
-      - LOGNAME=deadbeef
-      - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/go/bin:/go/bin
-      - OPENSHIFT_BUILD_NAME=origin-release-golang-1.13-2734
-      - OPENSHIFT_BUILD_NAMESPACE=ci
-      - OPENSHIFT_BUILD_SOURCE=https://github.com/openshift/release.git
-      - OPENSHIFT_BUILD_REFERENCE=master
-      - OPENSHIFT_BUILD_COMMIT=a7695ad57a0291901ce9e8c7700c42b48481cfdb
-      Labels:
-        io.k8s.description: This is the standard release image for OpenShift Origin
-          and contains the necessary build tools to build the platform.
-        io.k8s.display-name: OpenShift Origin Release Environment (golang-1.13.8)
-        io.openshift.build.commit.author: OpenShift Merge Robot \u003copenshift-merge-robot@users.noreply.github.com\u003e
-        io.openshift.build.commit.date: Fri Apr 17 17:12:40 2020 -0400
-        io.openshift.build.commit.id: a7695ad57a0291901ce9e8c7700c42b48481cfdb
-        io.openshift.build.commit.message: 'Merge pull request #7789 from hongkailiu/audit_log'
-        io.openshift.build.commit.ref: master
-        io.openshift.build.name: origin-release-golang-1.13-2734
-        io.openshift.build.namespace: ci
-        io.openshift.build.source-context-dir: projects/origin-release/golang-1.13
-        io.openshift.build.source-location: https://github.com/openshift/release.git
-        org.label-schema.build-date: "20191001"
-        org.label-schema.license: GPLv2
-        org.label-schema.name: CentOS Base Image
-        org.label-schema.schema-version: "1.0"
-        org.label-schema.vendor: CentOS
-      WorkingDir: /go/src/github.com/openshift/origin
-    Container: d5bac58c26c948128bffd3191249c91bb97ea4157e2cdc38ed1a433e6a1ff51b
-    ContainerConfig:
-      Cmd:
-      - |-
-        #(imagebuilder)
-        sleep 86400
-      Entrypoint:
-      - /bin/sh
-      - -c
-      Env:
-      - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-      Hostname: origin-release-golang-1.13-2734-build
-      Image: centos@sha256:285bc3161133ec01d8ca8680cd746eecbfdbc1faa6313bd863151c4b26d7e5a5
-      Labels:
-        org.label-schema.build-date: "20191001"
-        org.label-schema.license: GPLv2
-        org.label-schema.name: CentOS Base Image
-        org.label-schema.schema-version: "1.0"
-        org.label-schema.vendor: CentOS
-    Created: "2020-04-17T21:28:37Z"
-    DockerVersion: 1.13.1
-    Id: sha256:8b9cd493461ef13d494163801ac53434a754c21a2e6aac705bcd6d924889729f
-    Size: 390090377
-    apiVersion: "1.0"
-    kind: DockerImage
-  dockerImageMetadataVersion: "1.0"
-  dockerImageReference: docker.io/openshift/origin-release@sha256:fd41b8b3efb8db1187ac231ca84863a8106880d049123d6eddfe21d7f751c627
-  kind: Image
-  metadata:
-    annotations:
-      image.openshift.io/dockerLayersOrder: ascending
-    creationTimestamp: "2020-04-17T21:30:44Z"
-    name: sha256:fd41b8b3efb8db1187ac231ca84863a8106880d049123d6eddfe21d7f751c627
-    resourceVersion: "631822927"
-    selfLink: /apis/image.openshift.io/v1/images/sha256%3Afd41b8b3efb8db1187ac231ca84863a8106880d049123d6eddfe21d7f751c627
-    uid: b1dfad38-80f2-11ea-bc7d-42010a8e0004
-- apiVersion: image.openshift.io/v1
-  dockerImageLayers:
-  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
-    name: sha256:ab5ef0e5819490abe86106fd9f4381123e37a03e80e650be39f7938d30ecb530
-    size: 75780712
-  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
-    name: sha256:f56541d2c23069e1dba9509c0f41872de1d3cb2675cdfaaf2e01cfc67cb1b500
-    size: 314306086
-  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
-    name: sha256:99a3cc5ac090ea5164ed1c20d9a968c0ade92ea3dbe5b785f715e9617b378bb7
-    size: 47632240
-  dockerImageManifestMediaType: application/vnd.docker.distribution.manifest.v2+json
-  dockerImageMetadata:
-    Architecture: amd64
-    Config:
-      Cmd:
-      - /bin/bash
-      Env:
-      - foo=bar
-      - CLONEREFS_OPTIONS={"src_root":"/go","log":"/dev/null","git_user_name":"ci-robot","git_user_email":"ci-robot@openshift.io","refs":[{"org":"openshift","repo":"cluster-etcd-operator","repo_link":"https://github.com/openshift/cluster-etcd-operator","base_ref":"master","base_sha":"de8ac8f06c9b026d8769ca95bba8a19960c28442","base_link":"https://github.com/openshift/cluster-etcd-operator/commit/de8ac8f06c9b026d8769ca95bba8a19960c28442","pulls":[{"number":295,"author":"hexfusion","sha":"1f5a55b01b75be2b67af198deb6604854a1f08e8","link":"https://github.com/openshift/cluster-etcd-operator/pull/295","commit_link":"https://github.com/openshift/cluster-etcd-operator/pull/295/commits/1f5a55b01b75be2b67af198deb6604854a1f08e8","author_link":"https://github.com/hexfusion"}]}],"fail":true}
-      - GOPATH=/go
-      - OPENSHIFT_BUILD_NAME=src
-      - OPENSHIFT_BUILD_NAMESPACE=ci-op-jpdy23wx
-      - VERSION=1.13.8
-      - GOCACHE=/go/.cache
-      - GOARM=5
-      - GOROOT=/usr/local/go
-      - GOFLAGS=-mod=vendor
-      - LOGNAME=deadbeef
-      - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/go/bin:/go/bin
-      - OPENSHIFT_BUILD_SOURCE=https://github.com/openshift/release.git
-      - OPENSHIFT_BUILD_REFERENCE=master
-      - OPENSHIFT_BUILD_COMMIT=a7695ad57a0291901ce9e8c7700c42b48481cfdb
-      Labels:
-        io.k8s.description: This is the standard release image for OpenShift Origin
-          and contains the necessary build tools to build the platform.
-        io.k8s.display-name: OpenShift Origin Release Environment (golang-1.13.8)
-        io.openshift.build.commit.author: OpenShift Merge Robot \u003copenshift-merge-robot@users.noreply.github.com\u003e
-        io.openshift.build.commit.date: Fri Apr 17 17:12:40 2020 -0400
-        io.openshift.build.commit.id: a7695ad57a0291901ce9e8c7700c42b48481cfdb
-        io.openshift.build.commit.message: 'Merge pull request #7789 from hongkailiu/audit_log'
-        io.openshift.build.commit.ref: master
-        io.openshift.build.name: src
-        io.openshift.build.namespace: ci-op-jpdy23wx
-        io.openshift.build.source-context-dir: projects/origin-release/golang-1.13
-        io.openshift.build.source-location: https://github.com/openshift/release.git
-        org.label-schema.build-date: "20191001"
-        org.label-schema.license: GPLv2
-        org.label-schema.name: CentOS Base Image
-        org.label-schema.schema-version: "1.0"
-        org.label-schema.vendor: CentOS
-      WorkingDir: /go/src/github.com/openshift/cluster-etcd-operator/
-    Container: c97cd6c087f33049e016c74ce2b0a362e094cc3077693811d9ea333f37129539
-    ContainerConfig:
-      Cmd:
-      - |-
-        #(imagebuilder)
-        sleep 86400
-      Entrypoint:
-      - /bin/sh
-      - -c
-      Env:
-      - VERSION=1.13.8
-      - GOCACHE=/go/.cache
-      - GOARM=5
-      - GOPATH=/go
-      - GOROOT=/usr/local/go
-      - GOFLAGS=-mod=vendor
-      - LOGNAME=deadbeef
-      - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/go/bin:/go/bin
-      - OPENSHIFT_BUILD_NAME=origin-release-golang-1.13-2734
-      - OPENSHIFT_BUILD_NAMESPACE=ci
-      - OPENSHIFT_BUILD_SOURCE=https://github.com/openshift/release.git
-      - OPENSHIFT_BUILD_REFERENCE=master
-      - OPENSHIFT_BUILD_COMMIT=a7695ad57a0291901ce9e8c7700c42b48481cfdb
-      Hostname: src-build
-      Image: docker-registry.default.svc:5000/ci-op-jpdy23wx/pipeline@sha256:fd41b8b3efb8db1187ac231ca84863a8106880d049123d6eddfe21d7f751c627
-      Labels:
-        io.k8s.description: This is the standard release image for OpenShift Origin
-          and contains the necessary build tools to build the platform.
-        io.k8s.display-name: OpenShift Origin Release Environment (golang-1.13.8)
-        io.openshift.build.commit.author: OpenShift Merge Robot \u003copenshift-merge-robot@users.noreply.github.com\u003e
-        io.openshift.build.commit.date: Fri Apr 17 17:12:40 2020 -0400
-        io.openshift.build.commit.id: a7695ad57a0291901ce9e8c7700c42b48481cfdb
-        io.openshift.build.commit.message: 'Merge pull request #7789 from hongkailiu/audit_log'
-        io.openshift.build.commit.ref: master
-        io.openshift.build.name: origin-release-golang-1.13-2734
-        io.openshift.build.namespace: ci
-        io.openshift.build.source-context-dir: projects/origin-release/golang-1.13
-        io.openshift.build.source-location: https://github.com/openshift/release.git
-        org.label-schema.build-date: "20191001"
-        org.label-schema.license: GPLv2
-        org.label-schema.name: CentOS Base Image
-        org.label-schema.schema-version: "1.0"
-        org.label-schema.vendor: CentOS
-      WorkingDir: /go/src/github.com/openshift/origin
-    Created: "2020-04-17T23:31:35Z"
-    DockerVersion: 1.13.1
-    Id: sha256:e985c7a2491e1efb27faf7b8fc95f86bb93dcd3539bc48971edb2be5a2f91848
-    Size: 437724948
-    apiVersion: "1.0"
-    kind: DockerImage
-  dockerImageMetadataVersion: "1.0"
-  dockerImageReference: docker-registry.default.svc:5000/ci-op-jpdy23wx/pipeline@sha256:8f73863b1fe4485ff173fdd5fefd54d03949cf83437084780815329d9d88c76a
-  kind: Image
-  metadata:
-    annotations:
-      image.openshift.io/dockerLayersOrder: ascending
-      image.openshift.io/manifestBlobStored: "true"
-      openshift.io/image.managed: "true"
-    creationTimestamp: "2020-04-17T23:31:47Z"
-    name: sha256:8f73863b1fe4485ff173fdd5fefd54d03949cf83437084780815329d9d88c76a
-    resourceVersion: "632129954"
-    selfLink: /apis/image.openshift.io/v1/images/sha256%3A8f73863b1fe4485ff173fdd5fefd54d03949cf83437084780815329d9d88c76a
-    uid: 9ae43e0c-8103-11ea-9097-42010a8e0003
-kind: List
+apiVersion: image.openshift.io/v1
+dockerImageLayers:
+- mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+  name: sha256:fcd63ccfdd0ccd78cc0b23a6e9cef0c400625c1506f3eed694d92c7ced04b4c4
+  size: 76252616
+- mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+  name: sha256:09dbbf8834d2d84d8d8a37dcf7d6049794c9c8c604a3d3f2606768a82771438d
+  size: 1612
+- mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+  name: sha256:9a46ec39f5326be6a4d215cb6de224a907481ecb91e22ecc3a7f8ff3dbb72622
+  size: 402
+- mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+  name: sha256:bcdcb44ae450c6e3f129f7b4a507947e4d3791da68c8722d47a73128d9984b17
+  size: 8231209
+dockerImageManifestMediaType: application/vnd.docker.distribution.manifest.v2+json
+dockerImageMetadata:
+  Architecture: amd64
+  Config:
+    Cmd:
+    - /bin/bash
+    Env:
+    - foo=bar
+    - OPENSHIFT_BUILD_NAME=base
+    - OPENSHIFT_BUILD_NAMESPACE=ci-op-1t3559hx
+    - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    - container=oci
+    Hostname: 1a6370b10892
+    Labels:
+      architecture: x86_64
+      authoritative-source-url: registry.access.redhat.com
+      build-date: 2020-03-10T10:38:13.657446
+      com.redhat.build-host: cpt-1004.osbs.prod.upshift.rdu2.redhat.com
+      com.redhat.component: ubi7-container
+      com.redhat.license_terms: https://www.redhat.com/en/about/red-hat-end-user-license-agreements#UBI
+      description: The Universal Base Image is designed and engineered to be the
+        base layer for all of your containerized applications, middleware and utilities.
+        This base image is freely redistributable, but Red Hat only supports Red
+        Hat technologies through subscriptions for Red Hat products. This image
+        is maintained by Red Hat and updated regularly.
+      distribution-scope: public
+      io.k8s.description: This is the base image from which all OpenShift images
+        inherit.
+      io.k8s.display-name: OpenShift Base
+      io.openshift.build.commit.author: ""
+      io.openshift.build.commit.date: ""
+      io.openshift.build.commit.id: 6cdb5d360768d8f87a615286180e46784ae7d28f
+      io.openshift.build.commit.message: ""
+      io.openshift.build.commit.ref: master
+      io.openshift.build.name: ""
+      io.openshift.build.namespace: ""
+      io.openshift.build.source-context-dir: base/
+      io.openshift.build.source-location: https://github.com/openshift/images
+      io.openshift.tags: base rhel7
+      maintainer: Red Hat, Inc.
+      name: ubi7
+      release: "358"
+      summary: Provides the latest release of the Red Hat Universal Base Image 7.
+      url: https://access.redhat.com/containers/#/registry.access.redhat.com/ubi7/images/7.7-358
+      vcs-ref: 6cdb5d360768d8f87a615286180e46784ae7d28f
+      vcs-type: git
+      vcs-url: https://github.com/openshift/images
+      vendor: Red Hat, Inc.
+      version: "7.7"
+  Container: 474684a462525a6e55890ae314efbd347ae95760459f0e3f1c542b1927b21f69
+  ContainerConfig:
+    Cmd:
+    - |-
+      #(imagebuilder)
+      sleep 86400
+    Entrypoint:
+    - /bin/sh
+    - -c
+    Env:
+    - foo=bar
+    - OPENSHIFT_BUILD_NAME=base-os
+    - OPENSHIFT_BUILD_NAMESPACE=ci-op-1t3559hx
+    - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    - container=oci
+    Hostname: base-build
+    Image: docker-registry.default.svc:5000/ci-op-1t3559hx/pipeline@sha256:87ffaf4f79c350e4a99d7c161236119fee98e73f585637583236ed3c0a764e32
+    Labels:
+      architecture: x86_64
+      authoritative-source-url: registry.access.redhat.com
+      build-date: 2020-03-10T10:38:13.657446
+      com.redhat.build-host: cpt-1004.osbs.prod.upshift.rdu2.redhat.com
+      com.redhat.component: ubi7-container
+      com.redhat.license_terms: https://www.redhat.com/en/about/red-hat-end-user-license-agreements#UBI
+      description: The Universal Base Image is designed and engineered to be the
+        base layer for all of your containerized applications, middleware and utilities.
+        This base image is freely redistributable, but Red Hat only supports Red
+        Hat technologies through subscriptions for Red Hat products. This image
+        is maintained by Red Hat and updated regularly.
+      distribution-scope: public
+      io.k8s.description: The Universal Base Image is designed and engineered to
+        be the base layer for all of your containerized applications, middleware
+        and utilities. This base image is freely redistributable, but Red Hat only
+        supports Red Hat technologies through subscriptions for Red Hat products.
+        This image is maintained by Red Hat and updated regularly.
+      io.k8s.display-name: Red Hat Universal Base Image 7
+      io.openshift.build.name: base-os
+      io.openshift.build.namespace: ci-op-1t3559hx
+      io.openshift.tags: base rhel7
+      maintainer: Red Hat, Inc.
+      name: ubi7
+      release: "358"
+      summary: Provides the latest release of the Red Hat Universal Base Image 7.
+      url: https://access.redhat.com/containers/#/registry.access.redhat.com/ubi7/images/7.7-358
+      vcs-ref: 4c80c8aa26e69950ab11b87789c8fb7665b1632d
+      vcs-type: git
+      vendor: Red Hat, Inc.
+      version: "7.7"
+  Created: "2020-03-23T19:24:27Z"
+  DockerVersion: 1.13.1
+  Id: sha256:de025253220256556fc6a5b7382f093d487bbb56b2fd645b6f6d871a157d1bf5
+  Size: 84491022
+  apiVersion: "1.0"
+  kind: DockerImage
+dockerImageMetadataVersion: "1.0"
+dockerImageReference: docker-registry.default.svc:5000/ci-op-1t3559hx/pipeline@sha256:3823c45b9feec9e861d1fd7ef268e38717b3b94adae26dd76eba3ac5f8b8cab9
+kind: Image
 metadata:
-  resourceVersion: ""
-  selfLink: ""
+  annotations:
+    image.openshift.io/dockerLayersOrder: ascending
+    image.openshift.io/manifestBlobStored: "true"
+    openshift.io/image.managed: "true"
+  creationTimestamp: "2020-03-23T19:24:37Z"
+  name: sha256:3823c45b9feec9e861d1fd7ef268e38717b3b94adae26dd76eba3ac5f8b8cab9
+  resourceVersion: "573523026"
+  selfLink: /apis/image.openshift.io/v1/images/sha256%3A3823c45b9feec9e861d1fd7ef268e38717b3b94adae26dd76eba3ac5f8b8cab9
+  uid: ef4c7cb1-6d3b-11ea-8a30-42010a8e0004
+---
+apiVersion: image.openshift.io/v1
+dockerImageLayers:
+- mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+  name: sha256:ab5ef0e5819490abe86106fd9f4381123e37a03e80e650be39f7938d30ecb530
+  size: 75780712
+- mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+  name: sha256:f56541d2c23069e1dba9509c0f41872de1d3cb2675cdfaaf2e01cfc67cb1b500
+  size: 314306086
+- mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+  name: sha256:99a3cc5ac090ea5164ed1c20d9a968c0ade92ea3dbe5b785f715e9617b378bb7
+  size: 47632240
+- mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+  name: sha256:0fa4ecd9165a0001ef5a17e237aaeb26769c83d9bb8aafef8644274a8c2b2856
+  size: 109001329
+dockerImageManifestMediaType: application/vnd.docker.distribution.manifest.v2+json
+dockerImageMetadata:
+  Architecture: amd64
+  Config:
+    Cmd:
+    - /bin/bash
+    Env:
+    - foo=bar
+    - OPENSHIFT_BUILD_NAME=bin
+    - OPENSHIFT_BUILD_NAMESPACE=ci-op-jpdy23wx
+    - CLONEREFS_OPTIONS={"src_root":"/go","log":"/dev/null","git_user_name":"ci-robot","git_user_email":"ci-robot@openshift.io","refs":[{"org":"openshift","repo":"cluster-etcd-operator","repo_link":"https://github.com/openshift/cluster-etcd-operator","base_ref":"master","base_sha":"de8ac8f06c9b026d8769ca95bba8a19960c28442","base_link":"https://github.com/openshift/cluster-etcd-operator/commit/de8ac8f06c9b026d8769ca95bba8a19960c28442","pulls":[{"number":295,"author":"hexfusion","sha":"1f5a55b01b75be2b67af198deb6604854a1f08e8","link":"https://github.com/openshift/cluster-etcd-operator/pull/295","commit_link":"https://github.com/openshift/cluster-etcd-operator/pull/295/commits/1f5a55b01b75be2b67af198deb6604854a1f08e8","author_link":"https://github.com/hexfusion"}]}],"fail":true}
+    - GOPATH=/go
+    - VERSION=1.13.8
+    - GOCACHE=/go/.cache
+    - GOARM=5
+    - GOROOT=/usr/local/go
+    - GOFLAGS=-mod=vendor
+    - LOGNAME=deadbeef
+    - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/go/bin:/go/bin
+    - OPENSHIFT_BUILD_SOURCE=https://github.com/openshift/release.git
+    - OPENSHIFT_BUILD_REFERENCE=master
+    - OPENSHIFT_BUILD_COMMIT=a7695ad57a0291901ce9e8c7700c42b48481cfdb
+    Labels:
+      io.k8s.description: This is the standard release image for OpenShift Origin
+        and contains the necessary build tools to build the platform.
+      io.k8s.display-name: OpenShift Origin Release Environment (golang-1.13.8)
+      io.openshift.build.commit.author: OpenShift Merge Robot \u003copenshift-merge-robot@users.noreply.github.com\u003e
+      io.openshift.build.commit.date: Fri Apr 17 17:12:40 2020 -0400
+      io.openshift.build.commit.id: a7695ad57a0291901ce9e8c7700c42b48481cfdb
+      io.openshift.build.commit.message: 'Merge pull request #7789 from hongkailiu/audit_log'
+      io.openshift.build.commit.ref: master
+      io.openshift.build.name: bin
+      io.openshift.build.namespace: ci-op-jpdy23wx
+      io.openshift.build.source-context-dir: projects/origin-release/golang-1.13
+      io.openshift.build.source-location: https://github.com/openshift/release.git
+      org.label-schema.build-date: "20191001"
+      org.label-schema.license: GPLv2
+      org.label-schema.name: CentOS Base Image
+      org.label-schema.schema-version: "1.0"
+      org.label-schema.vendor: CentOS
+    WorkingDir: /go/src/github.com/openshift/cluster-etcd-operator/
+  Container: 67df3135612fc204f5a7fa4ac443ba7f6a7ed6e5c6b8b3120f8e3b618645f05e
+  ContainerConfig:
+    Cmd:
+    - |-
+      #(imagebuilder)
+      sleep 86400
+    Entrypoint:
+    - /bin/sh
+    - -c
+    Env:
+    - foo=bar
+    - CLONEREFS_OPTIONS={"src_root":"/go","log":"/dev/null","git_user_name":"ci-robot","git_user_email":"ci-robot@openshift.io","refs":[{"org":"openshift","repo":"cluster-etcd-operator","repo_link":"https://github.com/openshift/cluster-etcd-operator","base_ref":"master","base_sha":"de8ac8f06c9b026d8769ca95bba8a19960c28442","base_link":"https://github.com/openshift/cluster-etcd-operator/commit/de8ac8f06c9b026d8769ca95bba8a19960c28442","pulls":[{"number":295,"author":"hexfusion","sha":"1f5a55b01b75be2b67af198deb6604854a1f08e8","link":"https://github.com/openshift/cluster-etcd-operator/pull/295","commit_link":"https://github.com/openshift/cluster-etcd-operator/pull/295/commits/1f5a55b01b75be2b67af198deb6604854a1f08e8","author_link":"https://github.com/hexfusion"}]}],"fail":true}
+    - GOPATH=/go
+    - OPENSHIFT_BUILD_NAME=src
+    - OPENSHIFT_BUILD_NAMESPACE=ci-op-jpdy23wx
+    - VERSION=1.13.8
+    - GOCACHE=/go/.cache
+    - GOARM=5
+    - GOROOT=/usr/local/go
+    - GOFLAGS=-mod=vendor
+    - LOGNAME=deadbeef
+    - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/go/bin:/go/bin
+    - OPENSHIFT_BUILD_SOURCE=https://github.com/openshift/release.git
+    - OPENSHIFT_BUILD_REFERENCE=master
+    - OPENSHIFT_BUILD_COMMIT=a7695ad57a0291901ce9e8c7700c42b48481cfdb
+    Hostname: bin-build
+    Image: docker-registry.default.svc:5000/ci-op-jpdy23wx/pipeline@sha256:8f73863b1fe4485ff173fdd5fefd54d03949cf83437084780815329d9d88c76a
+    Labels:
+      io.k8s.description: This is the standard release image for OpenShift Origin
+        and contains the necessary build tools to build the platform.
+      io.k8s.display-name: OpenShift Origin Release Environment (golang-1.13.8)
+      io.openshift.build.commit.author: OpenShift Merge Robot \u003copenshift-merge-robot@users.noreply.github.com\u003e
+      io.openshift.build.commit.date: Fri Apr 17 17:12:40 2020 -0400
+      io.openshift.build.commit.id: a7695ad57a0291901ce9e8c7700c42b48481cfdb
+      io.openshift.build.commit.message: 'Merge pull request #7789 from hongkailiu/audit_log'
+      io.openshift.build.commit.ref: master
+      io.openshift.build.name: src
+      io.openshift.build.namespace: ci-op-jpdy23wx
+      io.openshift.build.source-context-dir: projects/origin-release/golang-1.13
+      io.openshift.build.source-location: https://github.com/openshift/release.git
+      org.label-schema.build-date: "20191001"
+      org.label-schema.license: GPLv2
+      org.label-schema.name: CentOS Base Image
+      org.label-schema.schema-version: "1.0"
+      org.label-schema.vendor: CentOS
+    WorkingDir: /go/src/github.com/openshift/cluster-etcd-operator
+  Created: "2020-04-17T23:33:46Z"
+  DockerVersion: 1.13.1
+  Id: sha256:d32b5cc3ffd906befc2f13311e0b69748b123875107c89f9787e9f47a02dbaf8
+  Size: 546727284
+  apiVersion: "1.0"
+  kind: DockerImage
+dockerImageMetadataVersion: "1.0"
+dockerImageReference: docker-registry.default.svc:5000/ci-op-jpdy23wx/pipeline@sha256:1ce9116f933912f8fc948194c8515a2917e705bf7e772b465aa643544eabcaec
+kind: Image
+metadata:
+  annotations:
+    image.openshift.io/dockerLayersOrder: ascending
+    image.openshift.io/manifestBlobStored: "true"
+    openshift.io/image.managed: "true"
+  creationTimestamp: "2020-04-17T23:34:13Z"
+  name: sha256:1ce9116f933912f8fc948194c8515a2917e705bf7e772b465aa643544eabcaec
+  resourceVersion: "632134458"
+  selfLink: /apis/image.openshift.io/v1/images/sha256%3A1ce9116f933912f8fc948194c8515a2917e705bf7e772b465aa643544eabcaec
+  uid: f245005c-8103-11ea-99ef-42010a8e0002
+---
+apiVersion: image.openshift.io/v1
+dockerImageLayers:
+- mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+  name: sha256:fcd63ccfdd0ccd78cc0b23a6e9cef0c400625c1506f3eed694d92c7ced04b4c4
+  size: 76252616
+- mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+  name: sha256:09dbbf8834d2d84d8d8a37dcf7d6049794c9c8c604a3d3f2606768a82771438d
+  size: 1612
+- mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+  name: sha256:9a46ec39f5326be6a4d215cb6de224a907481ecb91e22ecc3a7f8ff3dbb72622
+  size: 402
+- mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+  name: sha256:bcdcb44ae450c6e3f129f7b4a507947e4d3791da68c8722d47a73128d9984b17
+  size: 8231209
+- mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+  name: sha256:7f95905829510b560582a83ae4f7037d8b0502754de43740689fb4a619a07aae
+  size: 15796611
+dockerImageManifestMediaType: application/vnd.docker.distribution.manifest.v2+json
+dockerImageMetadata:
+  Architecture: amd64
+  Config:
+    Cmd:
+    - /bin/bash
+    Env:
+    - foo=bar
+    - OPENSHIFT_BUILD_NAME=cluster-etcd-operator
+    - OPENSHIFT_BUILD_NAMESPACE=ci-op-jpdy23wx
+    - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    - container=oci
+    Hostname: 1a6370b10892
+    Labels:
+      architecture: x86_64
+      authoritative-source-url: registry.access.redhat.com
+      build-date: 2020-03-10T10:38:13.657446
+      com.redhat.build-host: cpt-1004.osbs.prod.upshift.rdu2.redhat.com
+      com.redhat.component: ubi7-container
+      com.redhat.license_terms: https://www.redhat.com/en/about/red-hat-end-user-license-agreements#UBI
+      description: The Universal Base Image is designed and engineered to be the
+        base layer for all of your containerized applications, middleware and utilities.
+        This base image is freely redistributable, but Red Hat only supports Red
+        Hat technologies through subscriptions for Red Hat products. This image
+        is maintained by Red Hat and updated regularly.
+      distribution-scope: public
+      io.k8s.description: This is the base image from which all OpenShift images
+        inherit.
+      io.k8s.display-name: OpenShift Base
+      io.openshift.build.commit.author: ""
+      io.openshift.build.commit.date: ""
+      io.openshift.build.commit.id: ""
+      io.openshift.build.commit.message: ""
+      io.openshift.build.commit.ref: ""
+      io.openshift.build.name: ""
+      io.openshift.build.namespace: ""
+      io.openshift.build.source-context-dir: ""
+      io.openshift.build.source-location: ""
+      io.openshift.release.operator: "true"
+      io.openshift.tags: base rhel7
+      maintainer: Red Hat, Inc.
+      name: ubi7
+      release: "358"
+      summary: Provides the latest release of the Red Hat Universal Base Image 7.
+      url: https://access.redhat.com/containers/#/registry.access.redhat.com/ubi7/images/7.7-358
+      vcs-ref: ""
+      vcs-type: ""
+      vcs-url: ""
+      vendor: Red Hat, Inc.
+      version: "7.7"
+  Container: bdc911bea844d74a31bc346d5cacb32f774e2403fc6d00601b521f382d01ce06
+  ContainerConfig:
+    Entrypoint:
+    - /bin/sh
+    - -c
+    - '#(imagebuilder)'
+    Env:
+    - foo=bar
+    - OPENSHIFT_BUILD_NAME=base
+    - OPENSHIFT_BUILD_NAMESPACE=ci-op-1t3559hx
+    - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    - container=oci
+    Hostname: bdc911bea844
+    Image: docker-registry.default.svc:5000/ci-op-jpdy23wx/pipeline@sha256:3823c45b9feec9e861d1fd7ef268e38717b3b94adae26dd76eba3ac5f8b8cab9
+    Labels:
+      architecture: x86_64
+      authoritative-source-url: registry.access.redhat.com
+      build-date: 2020-03-10T10:38:13.657446
+      com.redhat.build-host: cpt-1004.osbs.prod.upshift.rdu2.redhat.com
+      com.redhat.component: ubi7-container
+      com.redhat.license_terms: https://www.redhat.com/en/about/red-hat-end-user-license-agreements#UBI
+      description: The Universal Base Image is designed and engineered to be the
+        base layer for all of your containerized applications, middleware and utilities.
+        This base image is freely redistributable, but Red Hat only supports Red
+        Hat technologies through subscriptions for Red Hat products. This image
+        is maintained by Red Hat and updated regularly.
+      distribution-scope: public
+      io.k8s.description: This is the base image from which all OpenShift images
+        inherit.
+      io.k8s.display-name: OpenShift Base
+      io.openshift.build.commit.author: ""
+      io.openshift.build.commit.date: ""
+      io.openshift.build.commit.id: 6cdb5d360768d8f87a615286180e46784ae7d28f
+      io.openshift.build.commit.message: ""
+      io.openshift.build.commit.ref: master
+      io.openshift.build.name: ""
+      io.openshift.build.namespace: ""
+      io.openshift.build.source-context-dir: base/
+      io.openshift.build.source-location: https://github.com/openshift/images
+      io.openshift.tags: base rhel7
+      maintainer: Red Hat, Inc.
+      name: ubi7
+      release: "358"
+      summary: Provides the latest release of the Red Hat Universal Base Image 7.
+      url: https://access.redhat.com/containers/#/registry.access.redhat.com/ubi7/images/7.7-358
+      vcs-ref: 6cdb5d360768d8f87a615286180e46784ae7d28f
+      vcs-type: git
+      vcs-url: https://github.com/openshift/images
+      vendor: Red Hat, Inc.
+      version: "7.7"
+  Created: "2020-04-17T23:34:58Z"
+  DockerVersion: 1.13.1
+  Id: sha256:eb3c03f990a8aee144809e80d64be124d9489e6933e4bf4f5f20ff6d0a4fad0e
+  Size: 100287723
+  apiVersion: "1.0"
+  kind: DockerImage
+dockerImageMetadataVersion: "1.0"
+dockerImageReference: docker-registry.default.svc:5000/ci-op-jpdy23wx/pipeline@sha256:382c10e43129fe7ca09b7a63c26ee01c8880168b3166615220eaa7738b2c4a31
+kind: Image
+metadata:
+  annotations:
+    image.openshift.io/dockerLayersOrder: ascending
+    image.openshift.io/manifestBlobStored: "true"
+    openshift.io/image.managed: "true"
+  creationTimestamp: "2020-04-17T23:35:07Z"
+  name: sha256:382c10e43129fe7ca09b7a63c26ee01c8880168b3166615220eaa7738b2c4a31
+  resourceVersion: "632136219"
+  selfLink: /apis/image.openshift.io/v1/images/sha256%3A382c10e43129fe7ca09b7a63c26ee01c8880168b3166615220eaa7738b2c4a31
+  uid: 124cef89-8104-11ea-9097-42010a8e0003
+---
+apiVersion: image.openshift.io/v1
+dockerImageLayers:
+- mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+  name: sha256:ab5ef0e5819490abe86106fd9f4381123e37a03e80e650be39f7938d30ecb530
+  size: 75780712
+- mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+  name: sha256:f56541d2c23069e1dba9509c0f41872de1d3cb2675cdfaaf2e01cfc67cb1b500
+  size: 314306086
+dockerImageManifestMediaType: application/vnd.docker.distribution.manifest.v2+json
+dockerImageMetadata:
+  Architecture: amd64
+  Config:
+    Cmd:
+    - /bin/bash
+    Env:
+    - VERSION=1.13.8
+    - GOCACHE=/go/.cache
+    - GOARM=5
+    - GOPATH=/go
+    - GOROOT=/usr/local/go
+    - GOFLAGS=-mod=vendor
+    - LOGNAME=deadbeef
+    - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/go/bin:/go/bin
+    - OPENSHIFT_BUILD_NAME=origin-release-golang-1.13-2734
+    - OPENSHIFT_BUILD_NAMESPACE=ci
+    - OPENSHIFT_BUILD_SOURCE=https://github.com/openshift/release.git
+    - OPENSHIFT_BUILD_REFERENCE=master
+    - OPENSHIFT_BUILD_COMMIT=a7695ad57a0291901ce9e8c7700c42b48481cfdb
+    Labels:
+      io.k8s.description: This is the standard release image for OpenShift Origin
+        and contains the necessary build tools to build the platform.
+      io.k8s.display-name: OpenShift Origin Release Environment (golang-1.13.8)
+      io.openshift.build.commit.author: OpenShift Merge Robot \u003copenshift-merge-robot@users.noreply.github.com\u003e
+      io.openshift.build.commit.date: Fri Apr 17 17:12:40 2020 -0400
+      io.openshift.build.commit.id: a7695ad57a0291901ce9e8c7700c42b48481cfdb
+      io.openshift.build.commit.message: 'Merge pull request #7789 from hongkailiu/audit_log'
+      io.openshift.build.commit.ref: master
+      io.openshift.build.name: origin-release-golang-1.13-2734
+      io.openshift.build.namespace: ci
+      io.openshift.build.source-context-dir: projects/origin-release/golang-1.13
+      io.openshift.build.source-location: https://github.com/openshift/release.git
+      org.label-schema.build-date: "20191001"
+      org.label-schema.license: GPLv2
+      org.label-schema.name: CentOS Base Image
+      org.label-schema.schema-version: "1.0"
+      org.label-schema.vendor: CentOS
+    WorkingDir: /go/src/github.com/openshift/origin
+  Container: d5bac58c26c948128bffd3191249c91bb97ea4157e2cdc38ed1a433e6a1ff51b
+  ContainerConfig:
+    Cmd:
+    - |-
+      #(imagebuilder)
+      sleep 86400
+    Entrypoint:
+    - /bin/sh
+    - -c
+    Env:
+    - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    Hostname: origin-release-golang-1.13-2734-build
+    Image: centos@sha256:285bc3161133ec01d8ca8680cd746eecbfdbc1faa6313bd863151c4b26d7e5a5
+    Labels:
+      org.label-schema.build-date: "20191001"
+      org.label-schema.license: GPLv2
+      org.label-schema.name: CentOS Base Image
+      org.label-schema.schema-version: "1.0"
+      org.label-schema.vendor: CentOS
+  Created: "2020-04-17T21:28:37Z"
+  DockerVersion: 1.13.1
+  Id: sha256:8b9cd493461ef13d494163801ac53434a754c21a2e6aac705bcd6d924889729f
+  Size: 390090377
+  apiVersion: "1.0"
+  kind: DockerImage
+dockerImageMetadataVersion: "1.0"
+dockerImageReference: docker.io/openshift/origin-release@sha256:fd41b8b3efb8db1187ac231ca84863a8106880d049123d6eddfe21d7f751c627
+kind: Image
+metadata:
+  annotations:
+    image.openshift.io/dockerLayersOrder: ascending
+  creationTimestamp: "2020-04-17T21:30:44Z"
+  name: sha256:fd41b8b3efb8db1187ac231ca84863a8106880d049123d6eddfe21d7f751c627
+  resourceVersion: "631822927"
+  selfLink: /apis/image.openshift.io/v1/images/sha256%3Afd41b8b3efb8db1187ac231ca84863a8106880d049123d6eddfe21d7f751c627
+  uid: b1dfad38-80f2-11ea-bc7d-42010a8e0004
+---
+apiVersion: image.openshift.io/v1
+dockerImageLayers:
+- mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+  name: sha256:ab5ef0e5819490abe86106fd9f4381123e37a03e80e650be39f7938d30ecb530
+  size: 75780712
+- mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+  name: sha256:f56541d2c23069e1dba9509c0f41872de1d3cb2675cdfaaf2e01cfc67cb1b500
+  size: 314306086
+- mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+  name: sha256:99a3cc5ac090ea5164ed1c20d9a968c0ade92ea3dbe5b785f715e9617b378bb7
+  size: 47632240
+dockerImageManifestMediaType: application/vnd.docker.distribution.manifest.v2+json
+dockerImageMetadata:
+  Architecture: amd64
+  Config:
+    Cmd:
+    - /bin/bash
+    Env:
+    - foo=bar
+    - CLONEREFS_OPTIONS={"src_root":"/go","log":"/dev/null","git_user_name":"ci-robot","git_user_email":"ci-robot@openshift.io","refs":[{"org":"openshift","repo":"cluster-etcd-operator","repo_link":"https://github.com/openshift/cluster-etcd-operator","base_ref":"master","base_sha":"de8ac8f06c9b026d8769ca95bba8a19960c28442","base_link":"https://github.com/openshift/cluster-etcd-operator/commit/de8ac8f06c9b026d8769ca95bba8a19960c28442","pulls":[{"number":295,"author":"hexfusion","sha":"1f5a55b01b75be2b67af198deb6604854a1f08e8","link":"https://github.com/openshift/cluster-etcd-operator/pull/295","commit_link":"https://github.com/openshift/cluster-etcd-operator/pull/295/commits/1f5a55b01b75be2b67af198deb6604854a1f08e8","author_link":"https://github.com/hexfusion"}]}],"fail":true}
+    - GOPATH=/go
+    - OPENSHIFT_BUILD_NAME=src
+    - OPENSHIFT_BUILD_NAMESPACE=ci-op-jpdy23wx
+    - VERSION=1.13.8
+    - GOCACHE=/go/.cache
+    - GOARM=5
+    - GOROOT=/usr/local/go
+    - GOFLAGS=-mod=vendor
+    - LOGNAME=deadbeef
+    - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/go/bin:/go/bin
+    - OPENSHIFT_BUILD_SOURCE=https://github.com/openshift/release.git
+    - OPENSHIFT_BUILD_REFERENCE=master
+    - OPENSHIFT_BUILD_COMMIT=a7695ad57a0291901ce9e8c7700c42b48481cfdb
+    Labels:
+      io.k8s.description: This is the standard release image for OpenShift Origin
+        and contains the necessary build tools to build the platform.
+      io.k8s.display-name: OpenShift Origin Release Environment (golang-1.13.8)
+      io.openshift.build.commit.author: OpenShift Merge Robot \u003copenshift-merge-robot@users.noreply.github.com\u003e
+      io.openshift.build.commit.date: Fri Apr 17 17:12:40 2020 -0400
+      io.openshift.build.commit.id: a7695ad57a0291901ce9e8c7700c42b48481cfdb
+      io.openshift.build.commit.message: 'Merge pull request #7789 from hongkailiu/audit_log'
+      io.openshift.build.commit.ref: master
+      io.openshift.build.name: src
+      io.openshift.build.namespace: ci-op-jpdy23wx
+      io.openshift.build.source-context-dir: projects/origin-release/golang-1.13
+      io.openshift.build.source-location: https://github.com/openshift/release.git
+      org.label-schema.build-date: "20191001"
+      org.label-schema.license: GPLv2
+      org.label-schema.name: CentOS Base Image
+      org.label-schema.schema-version: "1.0"
+      org.label-schema.vendor: CentOS
+    WorkingDir: /go/src/github.com/openshift/cluster-etcd-operator/
+  Container: c97cd6c087f33049e016c74ce2b0a362e094cc3077693811d9ea333f37129539
+  ContainerConfig:
+    Cmd:
+    - |-
+      #(imagebuilder)
+      sleep 86400
+    Entrypoint:
+    - /bin/sh
+    - -c
+    Env:
+    - VERSION=1.13.8
+    - GOCACHE=/go/.cache
+    - GOARM=5
+    - GOPATH=/go
+    - GOROOT=/usr/local/go
+    - GOFLAGS=-mod=vendor
+    - LOGNAME=deadbeef
+    - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/go/bin:/go/bin
+    - OPENSHIFT_BUILD_NAME=origin-release-golang-1.13-2734
+    - OPENSHIFT_BUILD_NAMESPACE=ci
+    - OPENSHIFT_BUILD_SOURCE=https://github.com/openshift/release.git
+    - OPENSHIFT_BUILD_REFERENCE=master
+    - OPENSHIFT_BUILD_COMMIT=a7695ad57a0291901ce9e8c7700c42b48481cfdb
+    Hostname: src-build
+    Image: docker-registry.default.svc:5000/ci-op-jpdy23wx/pipeline@sha256:fd41b8b3efb8db1187ac231ca84863a8106880d049123d6eddfe21d7f751c627
+    Labels:
+      io.k8s.description: This is the standard release image for OpenShift Origin
+        and contains the necessary build tools to build the platform.
+      io.k8s.display-name: OpenShift Origin Release Environment (golang-1.13.8)
+      io.openshift.build.commit.author: OpenShift Merge Robot \u003copenshift-merge-robot@users.noreply.github.com\u003e
+      io.openshift.build.commit.date: Fri Apr 17 17:12:40 2020 -0400
+      io.openshift.build.commit.id: a7695ad57a0291901ce9e8c7700c42b48481cfdb
+      io.openshift.build.commit.message: 'Merge pull request #7789 from hongkailiu/audit_log'
+      io.openshift.build.commit.ref: master
+      io.openshift.build.name: origin-release-golang-1.13-2734
+      io.openshift.build.namespace: ci
+      io.openshift.build.source-context-dir: projects/origin-release/golang-1.13
+      io.openshift.build.source-location: https://github.com/openshift/release.git
+      org.label-schema.build-date: "20191001"
+      org.label-schema.license: GPLv2
+      org.label-schema.name: CentOS Base Image
+      org.label-schema.schema-version: "1.0"
+      org.label-schema.vendor: CentOS
+    WorkingDir: /go/src/github.com/openshift/origin
+  Created: "2020-04-17T23:31:35Z"
+  DockerVersion: 1.13.1
+  Id: sha256:e985c7a2491e1efb27faf7b8fc95f86bb93dcd3539bc48971edb2be5a2f91848
+  Size: 437724948
+  apiVersion: "1.0"
+  kind: DockerImage
+dockerImageMetadataVersion: "1.0"
+dockerImageReference: docker-registry.default.svc:5000/ci-op-jpdy23wx/pipeline@sha256:8f73863b1fe4485ff173fdd5fefd54d03949cf83437084780815329d9d88c76a
+kind: Image
+metadata:
+  annotations:
+    image.openshift.io/dockerLayersOrder: ascending
+    image.openshift.io/manifestBlobStored: "true"
+    openshift.io/image.managed: "true"
+  creationTimestamp: "2020-04-17T23:31:47Z"
+  name: sha256:8f73863b1fe4485ff173fdd5fefd54d03949cf83437084780815329d9d88c76a
+  resourceVersion: "632129954"
+  selfLink: /apis/image.openshift.io/v1/images/sha256%3A8f73863b1fe4485ff173fdd5fefd54d03949cf83437084780815329d9d88c76a
+  uid: 9ae43e0c-8103-11ea-9097-42010a8e0003

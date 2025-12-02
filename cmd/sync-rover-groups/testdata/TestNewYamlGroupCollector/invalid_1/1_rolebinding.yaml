@@ -1,9 +1,6 @@
-kind: List
-apiVersion: v1
-items:
-  - kind: Group
-    apiVersion: user.openshift.io/v1
-    metadata:
-      name: ci-admins
-    users:
-      - tom
+kind: Group
+apiVersion: user.openshift.io/v1
+metadata:
+  name: ci-admins
+users:
+  - tom

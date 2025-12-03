@@ -1,0 +1,6 @@
+FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.22-openshift-4.19 AS builder
+RUN echo "Build stage"
+
+FROM registry.ci.openshift.org/ocp/4.19:base
+COPY --from=builder /app /app
+RUN echo "Final stage"

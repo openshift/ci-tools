@@ -2,10 +2,11 @@ package main
 
 import (
 	"os"
+	"reflect"
 	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
-	"gopkg.in/fsnotify.v1"
 	"gopkg.in/yaml.v2"
 )
 
@@ -82,33 +83,37 @@ func newWatcher(filePath string, logger *logrus.Entry) *watcher {
 }
 
 func (w *watcher) watch() {
-	fileWatcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		w.logger.Fatal(err)
+	// Load initial config
+	if err := w.reloadConfig(); err != nil {
+		w.logger.WithError(err).Error("Failed to load initial config")
 	}
 
-	defer fileWatcher.Close()
+	// Use polling instead of fsnotify because git-sync doesn't trigger filesystem events
+	ticker := time.NewTicker(3 * time.Minute)
+	defer ticker.Stop()
 
-	err = fileWatcher.Add(w.filePath)
-	if err != nil {
-		w.logger.Fatal(err)
-	}
+	// Store previous config for comparison
+	prevConfig := w.getConfigCopy()
 
-	err = w.reloadConfig()
-	if err != nil {
-		w.logger.WithError(err)
-	}
-
-	for {
-		event := <-fileWatcher.Events
-		if event.Op&fsnotify.Write == fsnotify.Write {
-			err = w.reloadConfig()
-			if err != nil {
-				w.logger.WithError(err)
-			}
+	for range ticker.C {
+		if err := w.reloadConfig(); err != nil {
+			w.logger.WithError(err).Error("Failed to reload config")
+			continue
 		}
 
+		currentConfig := w.getConfigCopy()
+		if !reflect.DeepEqual(currentConfig, prevConfig) {
+			w.logger.Info("Config change detected, config reloaded successfully")
+			prevConfig = currentConfig
+		}
 	}
+}
+
+// getConfigCopy returns a deep copy of the current config for comparison
+func (w *watcher) getConfigCopy() enabledConfig {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+	return w.config
 }
 
 func (w *watcher) reloadConfig() error {

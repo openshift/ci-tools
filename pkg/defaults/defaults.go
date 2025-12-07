@@ -31,6 +31,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/configresolver"
+	"github.com/openshift/ci-tools/pkg/dockerfile"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/labeledclient"
 	"github.com/openshift/ci-tools/pkg/lease"
@@ -1035,7 +1036,108 @@ func runtimeStepConfigsForBuild(
 
 	buildSteps = append(buildSteps, getSourceStepsForJobSpec(jobSpec, injectedTest)...)
 
+	// Detect Dockerfile inputs for project images and add InputImageTagStepConfiguration entries
+	dockerfileInputSteps, err := detectDockerfileInputs(config, readFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to detect Dockerfile inputs: %w", err)
+	}
+	buildSteps = append(buildSteps, dockerfileInputSteps...)
+
 	return buildSteps, nil
+}
+
+// detectDockerfileInputs reads Dockerfiles for project images and detects registry.ci.openshift.org
+// references that should be added as base images
+func detectDockerfileInputs(config *api.ReleaseBuildConfiguration, readFile readFile) ([]api.StepConfiguration, error) {
+	var steps []api.StepConfiguration
+
+	for i := range config.Images {
+		image := &config.Images[i]
+		dockerfileContent, dockerfilePath, err := readDockerfileForImage(image, readFile)
+		if err != nil {
+			logrus.WithError(err).WithField("image", image.To).Debug("Failed to read Dockerfile for input detection, skipping")
+			continue
+		}
+		if dockerfileContent == nil {
+			continue
+		}
+
+		imageSteps, err := processDetectedBaseImages(config, image, dockerfileContent, dockerfilePath)
+		if err != nil {
+			return nil, err
+		}
+		steps = append(steps, imageSteps...)
+	}
+
+	return steps, nil
+}
+
+// readDockerfileForImage reads the Dockerfile content for a given image configuration
+// Returns content, a description of the source, and any error
+func readDockerfileForImage(image *api.ProjectDirectoryImageBuildStepConfiguration, readFile readFile) ([]byte, string, error) {
+
+	if image.DockerfileLiteral != nil {
+		return []byte(*image.DockerfileLiteral), "dockerfile_literal", nil
+	}
+	dockerfilePath := "Dockerfile"
+	if image.DockerfilePath != "" {
+		dockerfilePath = image.DockerfilePath
+	}
+	if image.ContextDir != "" {
+		dockerfilePath = fmt.Sprintf("%s/%s", image.ContextDir, dockerfilePath)
+	}
+
+	dockerfileContent, err := readFile(dockerfilePath)
+	if err != nil {
+		return nil, dockerfilePath, fmt.Errorf("failed to read Dockerfile at %s: %w", dockerfilePath, err)
+	}
+
+	return dockerfileContent, dockerfilePath, nil
+}
+
+// processDetectedBaseImages detects base images from a Dockerfile and updates the configuration
+func processDetectedBaseImages(
+	config *api.ReleaseBuildConfiguration,
+	image *api.ProjectDirectoryImageBuildStepConfiguration,
+	dockerfileContent []byte,
+	dockerfilePath string,
+) ([]api.StepConfiguration, error) {
+	detectedBaseImages, err := dockerfile.DetectInputsFromDockerfile(dockerfileContent, image.Inputs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to detect inputs from Dockerfile %s: %w", dockerfilePath, err)
+	}
+	if len(detectedBaseImages) == 0 {
+		return nil, nil
+	}
+
+	if image.Inputs == nil {
+		image.Inputs = make(map[string]api.ImageBuildInputs)
+	}
+
+	var steps []api.StepConfiguration
+
+	for alias, baseImage := range detectedBaseImages {
+		if config.BaseImages == nil {
+			config.BaseImages = make(map[string]api.ImageStreamTagReference)
+		}
+		config.BaseImages[alias] = baseImage
+		image.Inputs[alias] = api.ImageBuildInputs{
+			As: []string{baseImage.As},
+		}
+
+		stepConfig := api.InputImageTagStepConfiguration{
+			InputImage: api.InputImage{
+				BaseImage: defaultImageFromReleaseTag(alias, baseImage, config.ReleaseTagConfiguration),
+				To:        api.PipelineImageStreamTagReference(alias),
+			},
+			Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceBase, Name: alias}},
+		}
+		steps = append(steps, api.StepConfiguration{InputImageTagStepConfiguration: &stepConfig})
+
+		logrus.Infof("Detected base image for %s from %s: will tag into pipeline:%s", image.To, dockerfilePath, alias)
+	}
+
+	return steps, nil
 }
 
 func getSourceStepsForJobSpec(jobSpec *api.JobSpec, injectedTest bool) []api.StepConfiguration {

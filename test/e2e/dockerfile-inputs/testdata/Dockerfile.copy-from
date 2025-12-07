@@ -1,0 +1,6 @@
+FROM alpine:latest AS stage1
+RUN echo "First stage"
+
+FROM registry.ci.openshift.org/ocp/4.19:base
+COPY --from=stage1 /etc/os-release /tmp/
+RUN echo "Testing COPY --from"

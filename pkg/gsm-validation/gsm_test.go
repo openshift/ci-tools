@@ -28,7 +28,7 @@ func TestValidateCollectionName(t *testing.T) {
 			expectedValid: true,
 		},
 		{
-			name:          "valid collection name: multiphe hyphens",
+			name:          "valid collection name: multiple hyphens",
 			collection:    "test--collection",
 			expectedValid: true,
 		},
@@ -218,14 +218,14 @@ func TestValidateSecretName(t *testing.T) {
 	}
 }
 
-func TestNormalizeSecretName(t *testing.T) {
+func TestNormalizeName(t *testing.T) {
 	testCases := []struct {
 		name     string
 		input    string
 		expected string
 	}{
 		{
-			name:     "secret with dashes",
+			name:     "simple secret with dashes",
 			input:    "simple-secret-name",
 			expected: "simple-secret-name",
 		},
@@ -235,9 +235,9 @@ func TestNormalizeSecretName(t *testing.T) {
 			expected: fmt.Sprintf("secret%swith%sdots", DotReplacementString, DotReplacementString),
 		},
 		{
-			name:     "valid secret with underscores",
+			name:     "underscores get encoded",
 			input:    "secret_with_underscores",
-			expected: "secret_with_underscores",
+			expected: fmt.Sprintf("secret%swith%sunderscores", UnderscoreReplacementString, UnderscoreReplacementString),
 		},
 		{
 			name:     "dot in the middle of name",
@@ -245,9 +245,9 @@ func TestNormalizeSecretName(t *testing.T) {
 			expected: fmt.Sprintf("SECRET%sNAME", DotReplacementString),
 		},
 		{
-			name:     "real world example",
+			name:     "real world example with underscores and dots",
 			input:    "build_farm.cluster-init.build01.config",
-			expected: fmt.Sprintf("build_farm%scluster-init%sbuild01%sconfig", DotReplacementString, DotReplacementString, DotReplacementString),
+			expected: fmt.Sprintf("build%sfarm%scluster-init%sbuild01%sconfig", UnderscoreReplacementString, DotReplacementString, DotReplacementString, DotReplacementString),
 		},
 		{
 			name:     "empty string",
@@ -262,17 +262,32 @@ func TestNormalizeSecretName(t *testing.T) {
 		{
 			name:     "multiple consecutive underscores",
 			input:    "secret___name",
-			expected: "secret___name",
+			expected: fmt.Sprintf("secret%s%s%sname", UnderscoreReplacementString, UnderscoreReplacementString, UnderscoreReplacementString),
 		},
 		{
 			name:     "dots and underscores together",
 			input:    "secret._name",
-			expected: fmt.Sprintf("secret%s_name", DotReplacementString),
+			expected: fmt.Sprintf("secret%s%sname", DotReplacementString, UnderscoreReplacementString),
 		},
 		{
 			name:     "name with slash",
 			input:    "secret/path",
 			expected: fmt.Sprintf("secret%spath", SlashReplacementString),
+		},
+		{
+			name:     "backwards compatibility: aws_creds",
+			input:    "aws_creds",
+			expected: fmt.Sprintf("aws%screds", UnderscoreReplacementString),
+		},
+		{
+			name:     ".dockerconfigjson",
+			input:    ".dockerconfigjson",
+			expected: fmt.Sprintf("%sdockerconfigjson", DotReplacementString),
+		},
+		{
+			name:     "complex field name",
+			input:    "sa.ci-operator.build01.config",
+			expected: fmt.Sprintf("sa%sci-operator%sbuild01%sconfig", DotReplacementString, DotReplacementString, DotReplacementString),
 		},
 	}
 
@@ -281,6 +296,197 @@ func TestNormalizeSecretName(t *testing.T) {
 			result := NormalizeName(tc.input)
 			if result != tc.expected {
 				t.Errorf("Expected %q, got %q", tc.expected, result)
+			}
+		})
+	}
+}
+
+func TestDenormalizeName(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "decode underscores",
+			input:    fmt.Sprintf("aws%screds", UnderscoreReplacementString),
+			expected: "aws_creds",
+		},
+		{
+			name:     "decode dots",
+			input:    fmt.Sprintf("%sdockerconfigjson", DotReplacementString),
+			expected: ".dockerconfigjson",
+		},
+		{
+			name:     "decode complex field name",
+			input:    fmt.Sprintf("sa%sci-operator%sbuild01%sconfig", DotReplacementString, DotReplacementString, DotReplacementString),
+			expected: "sa.ci-operator.build01.config",
+		},
+		{
+			name:     "decode mixed characters",
+			input:    fmt.Sprintf("build%sfarm%scluster-init%sbuild01%sconfig", UnderscoreReplacementString, DotReplacementString, DotReplacementString, DotReplacementString),
+			expected: "build_farm.cluster-init.build01.config",
+		},
+		{
+			name:     "no encoding to decode",
+			input:    "simple-name",
+			expected: "simple-name",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := DenormalizeName(tc.input)
+			if result != tc.expected {
+				t.Errorf("Expected %q, got %q", tc.expected, result)
+			}
+		})
+	}
+}
+
+func TestValidateGroupName(t *testing.T) {
+	testCases := []struct {
+		name          string
+		group         string
+		expectedValid bool
+	}{
+		{
+			name:          "valid group: single segment",
+			group:         "group",
+			expectedValid: true,
+		},
+		{
+			name:          "valid group: multi-level",
+			group:         "group/b/c",
+			expectedValid: true,
+		},
+		{
+			name:          "valid group: with hyphens",
+			group:         "my-group/sub-group",
+			expectedValid: true,
+		},
+		{
+			name:          "valid group: with numbers",
+			group:         "group1/group2/group3",
+			expectedValid: true,
+		},
+		{
+			name:          "valid group: single character segments",
+			group:         "a/b/c",
+			expectedValid: true,
+		},
+		{
+			name:          "valid group: starts with number",
+			group:         "123group/456test",
+			expectedValid: true,
+		},
+		{
+			name:          "valid group: hyphen in middle",
+			group:         "my-group",
+			expectedValid: true,
+		},
+		{
+			name:          "valid group: multiple hyphens",
+			group:         "my--group",
+			expectedValid: true,
+		},
+		{
+			name:          "valid group: long path",
+			group:         "a/b/c/d/e/f/g",
+			expectedValid: true,
+		},
+		{
+			name:          "invalid group: empty string",
+			group:         "",
+			expectedValid: false,
+		},
+		{
+			name:          "invalid group: leading slash",
+			group:         "/group",
+			expectedValid: false,
+		},
+		{
+			name:          "invalid group: trailing slash",
+			group:         "group/",
+			expectedValid: false,
+		},
+		{
+			name:          "invalid group: double slash",
+			group:         "a/b//c",
+			expectedValid: false,
+		},
+		{
+			name:          "invalid group: contains underscore",
+			group:         "group_name",
+			expectedValid: false,
+		},
+		{
+			name:          "invalid group: underscore in path",
+			group:         "group/sub_group",
+			expectedValid: false,
+		},
+		{
+			name:          "invalid group: uppercase letters",
+			group:         "Group/Name",
+			expectedValid: false,
+		},
+		{
+			name:          "invalid group: special characters",
+			group:         "group@name",
+			expectedValid: false,
+		},
+		{
+			name:          "invalid group: starts with hyphen",
+			group:         "-group",
+			expectedValid: false,
+		},
+		{
+			name:          "invalid group: ends with hyphen",
+			group:         "group-",
+			expectedValid: false,
+		},
+		{
+			name:          "invalid group: segment starts with hyphen",
+			group:         "group/-segment",
+			expectedValid: false,
+		},
+		{
+			name:          "invalid group: segment ends with hyphen",
+			group:         "group/segment-",
+			expectedValid: false,
+		},
+		{
+			name:          "invalid group: just a slash",
+			group:         "/",
+			expectedValid: false,
+		},
+		{
+			name:          "invalid group: just a hyphen",
+			group:         "-",
+			expectedValid: false,
+		},
+		{
+			name:          "invalid group: spaces",
+			group:         "group name",
+			expectedValid: false,
+		},
+		{
+			name:          "invalid group: dots",
+			group:         "group.name",
+			expectedValid: false,
+		},
+		{
+			name:          "invalid group: ends with underscore",
+			group:         "group_",
+			expectedValid: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actualValid := ValidateGroupName(tc.group)
+			if actualValid != tc.expectedValid {
+				t.Errorf("Expected %t, got %t for group %q", tc.expectedValid, actualValid, tc.group)
 			}
 		})
 	}

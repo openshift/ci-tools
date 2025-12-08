@@ -7,8 +7,6 @@ import (
 	validation "github.com/openshift/ci-tools/pkg/gsm-validation"
 )
 
-const GcpMaxNameLength = 255
-
 // ClassifySecret determines the type of secret based on its name
 func ClassifySecret(secretName string) SecretType {
 	if strings.HasSuffix(secretName, UpdaterSASecretSuffix) {
@@ -24,7 +22,9 @@ func ClassifySecret(secretName string) SecretType {
 }
 
 // ExtractCollectionFromSecretName returns the substring before the first "__" in a secret name.
+// Supports both 2-level (collection__field) and 3-level (collection__group__field) hierarchies.
 func ExtractCollectionFromSecretName(secretName string) string {
+	// Special case: index secrets (collection____index)
 	if strings.HasSuffix(secretName, IndexSecretSuffix) {
 		collection := strings.TrimSuffix(secretName, IndexSecretSuffix)
 		if collection != "" && validation.ValidateCollectionName(collection) {
@@ -33,18 +33,39 @@ func ExtractCollectionFromSecretName(secretName string) string {
 		return ""
 	}
 
-	parts := strings.Split(secretName, "__")
-	if len(parts) == 2 && parts[0] != "" && parts[1] != "" {
-		if !validation.ValidateCollectionName(parts[0]) {
-			return ""
-		}
-		if !validation.ValidateSecretName(parts[1]) {
-			return ""
-		}
-		return parts[0]
+	// Reject malformed index secrets (contains ____index but doesn't end with it)
+	if strings.Contains(secretName, IndexSecretSuffix) {
+		return ""
 	}
 
-	return ""
+	// Split by delimiter
+	parts := strings.Split(secretName, "__")
+
+	// Need at least 2 parts: collection and field (or collection, group, field, etc.)
+	if len(parts) < 2 {
+		return ""
+	}
+
+	// Validate collection (first part)
+	collection := parts[0]
+	if !validation.ValidateCollectionName(collection) {
+		return ""
+	}
+
+	// Validate that we have at least one more non-empty part
+	hasValidPart := false
+	for i := 1; i < len(parts); i++ {
+		if parts[i] != "" {
+			hasValidPart = true
+			break
+		}
+	}
+
+	if !hasValidPart {
+		return ""
+	}
+
+	return collection
 }
 
 // VerifyIndexSecretContent verifies that the index secret content is correct.

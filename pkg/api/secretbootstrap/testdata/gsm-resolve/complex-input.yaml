@@ -1,0 +1,76 @@
+# Complex test case: 3-level hierarchy with cluster_groups, components, and ${CLUSTER} variables
+cluster_groups:
+  build-clusters:
+    - build01
+    - build02
+  app-clusters:
+    - app01
+    - core-ci
+
+components:
+  common-credentials:
+    - collection: shared-secrets
+      group: credentials
+      fields:
+        - username
+        - password
+  monitoring-config:
+    - collection: monitoring
+      group: config
+
+bundles:
+  # Bundle with all features: cluster_groups + components + ${CLUSTER} variable
+  - name: multi-feature-bundle
+    components:
+      - common-credentials
+      - monitoring-config
+    gsm_secrets:
+      - collection: cluster-specific
+        group: kubeconfigs
+        fields:
+          - name: kubeconfig-${CLUSTER}
+            as: config
+    targets:
+      - cluster_groups:
+          - build-clusters
+        namespace: ci
+
+  # Bundle without ${CLUSTER} variable (should not be split)
+  - name: simple-bundle
+    components:
+      - common-credentials
+    targets:
+      - cluster: app01
+        namespace: default
+
+  # Bundle with explicit cluster (not expanded)
+  - name: direct-cluster-bundle
+    gsm_secrets:
+      - collection: specific-secrets
+        group: tokens
+    targets:
+      - cluster: build01
+        namespace: test-ns
+
+  # Bundle with only dockerconfigjson
+  - name: dockerconfig-bundle
+    dockerconfig:
+      as: mydockerconfig
+      registries:
+        - registry_url: registry.ci.openshift.org
+          collection: test-platform-infra
+          group: build_farm
+          auth_field: token_image-puller_app--dot--ci_reg_auth_value--dot--txt
+        - registry_url: quay.io/openshift/ci
+          collection: test-platform-infra
+          group: quayio-ci-read-only-robot
+          auth_field: auth
+          email_field: email
+    sync_to_cluster: true
+    targets:
+      - cluster_groups: [build-clusters]
+        namespace: ci
+        type: kubernetes.io/dockerconfigjson
+      - cluster_groups: [app-clusters]
+        namespace: ci
+        type: kubernetes.io/dockerconfigjson

@@ -1,0 +1,117 @@
+# Expected result after resolving complex-input.yaml
+cluster_groups:
+  build-clusters:
+    - build01
+    - build02
+  app-clusters:
+    - app01
+    - core-ci
+
+components:
+  common-credentials:
+    - collection: shared-secrets
+      group: credentials
+      fields:
+        - username
+        - password
+  monitoring-config:
+    - collection: monitoring
+      group: config
+
+bundles:
+  # The multi-feature-bundle is split into 2 bundles (one per cluster) due to ${CLUSTER} variable
+  - name: multi-feature-bundle
+    gsm_secrets:
+      # ${CLUSTER} substituted with build01
+      - collection: cluster-specific
+        group: kubeconfigs
+        fields:
+          - name: kubeconfig-build01
+            as: config
+      # Components resolved
+      - collection: shared-secrets
+        group: credentials
+        fields:
+          - username
+          - password
+      - collection: monitoring
+        group: config
+        fields: []
+    targets:
+      - cluster: build01
+        namespace: ci
+        type: Opaque
+
+  - name: multi-feature-bundle
+    gsm_secrets:
+      # ${CLUSTER} substituted with build02
+      - collection: cluster-specific
+        group: kubeconfigs
+        fields:
+          - name: kubeconfig-build02
+            as: config
+      # Components resolved
+      - collection: shared-secrets
+        group: credentials
+        fields:
+          - username
+          - password
+      - collection: monitoring
+        group: config
+        fields: []
+    targets:
+      - cluster: build02
+        namespace: ci
+        type: Opaque
+
+  # simple-bundle: component resolved, cluster not expanded, Type defaulted to Opaque
+  - name: simple-bundle
+    gsm_secrets:
+      - collection: shared-secrets
+        group: credentials
+        fields:
+          - username
+          - password
+    targets:
+      - cluster: app01
+        namespace: default
+        type: Opaque
+
+  # direct-cluster-bundle: no changes except Type defaulted to Opaque
+  - name: direct-cluster-bundle
+    gsm_secrets:
+      - collection: specific-secrets
+        group: tokens
+    targets:
+      - cluster: build01
+        namespace: test-ns
+        type: Opaque
+
+  # dockerconfig-bundle: cluster_groups expanded to all 4 clusters, stays as ONE bundle (no ${CLUSTER} variables)
+  - name: dockerconfig-bundle
+    dockerconfig:
+      as: mydockerconfig
+      registries:
+        - registry_url: registry.ci.openshift.org
+          collection: test-platform-infra
+          group: build_farm
+          auth_field: token_image-puller_app--dot--ci_reg_auth_value--dot--txt
+        - registry_url: quay.io/openshift/ci
+          collection: test-platform-infra
+          group: quayio-ci-read-only-robot
+          auth_field: auth
+          email_field: email
+    sync_to_cluster: true
+    targets:
+      - cluster: build01
+        namespace: ci
+        type: kubernetes.io/dockerconfigjson
+      - cluster: build02
+        namespace: ci
+        type: kubernetes.io/dockerconfigjson
+      - cluster: app01
+        namespace: ci
+        type: kubernetes.io/dockerconfigjson
+      - cluster: core-ci
+        namespace: ci
+        type: kubernetes.io/dockerconfigjson

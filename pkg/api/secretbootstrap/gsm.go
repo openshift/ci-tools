@@ -22,8 +22,8 @@ type GSMConfig struct {
 
 // Bundle defines a logical group of GSM secrets
 type Bundle struct {
-	Name          string `json:"name"`
-	Components    []string
+	Name          string            `json:"name"`
+	Components    []string          `json:"components,omitempty"`
 	DockerConfig  *DockerConfigSpec `json:"dockerconfig,omitempty"`
 	GSMSecrets    []GSMSecretRef    `json:"gsm_secrets,omitempty"`
 	SyncToCluster bool              `json:"sync_to_cluster,omitempty"`
@@ -31,12 +31,13 @@ type Bundle struct {
 }
 
 type GSMSecretRef struct {
-	Collection string        `json:"collection"`
-	Secrets    []SecretEntry `json:"secrets"` // Encoded names as they appear in GSM
+	Collection string       `json:"collection"`
+	Group      string       `json:"group"`
+	Fields     []FieldEntry `json:"fields,omitempty"` // Encoded names as they appear in GSM
 }
 
-// SecretEntry can be either a simple string or an object with 'as' field
-type SecretEntry struct {
+// FieldEntry can be either a simple string or an object with 'as' field
+type FieldEntry struct {
 	Name string `json:"name,omitempty"`
 	As   string `json:"as,omitempty"`
 }
@@ -44,7 +45,7 @@ type SecretEntry struct {
 // UnmarshalJSON allows SecretEntry to accept both:
 //   - "secret-name"                   (simple string)
 //   - {name: "token", as: "renamed"}  (object)
-func (s *SecretEntry) UnmarshalJSON(data []byte) error {
+func (s *FieldEntry) UnmarshalJSON(data []byte) error {
 	// Try parsing as a simple string first
 	var str string
 	if err := json.Unmarshal(data, &str); err == nil {
@@ -53,20 +54,21 @@ func (s *SecretEntry) UnmarshalJSON(data []byte) error {
 	}
 
 	// Otherwise, parse as an object with name/as fields
-	type Alias SecretEntry
+	type Alias FieldEntry
 	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
 	return json.Unmarshal(data, aux)
 }
 
 // DockerConfigSpec defines how to construct a DockerConfig json from GSM secrets
 type DockerConfigSpec struct {
-	As         string             `json:"as"`
+	As         string             `json:"as,omitempty"`
 	Registries []RegistryAuthData `json:"registries"`
 }
 
 // RegistryAuthData specifies registry credentials
 type RegistryAuthData struct {
 	Collection  string `json:"collection"`
+	Group       string `json:"group"`
 	RegistryURL string `json:"registry_url"`
 	AuthField   string `json:"auth_field"`
 	EmailField  string `json:"email_field,omitempty"`
@@ -132,10 +134,9 @@ func (c *GSMConfig) resolve() error {
 
 				for _, cluster := range clusters {
 					newBundleTargets = append(newBundleTargets, TargetSpec{
-						ClusterGroups: target.ClusterGroups, // Keep for serialization
-						Cluster:       cluster,
-						Namespace:     target.Namespace,
-						Type:          target.Type, // Inherit Type (already defaulted to Opaque above)
+						Cluster:   cluster,
+						Namespace: target.Namespace,
+						Type:      target.Type, // Inherit Type (already defaulted to Opaque above)
 					})
 				}
 			}
@@ -173,7 +174,7 @@ func (c *GSMConfig) resolve() error {
 		// Check if bundle contains ${CLUSTER} in any secret names
 		hasClusterVar := false
 		for _, gsmSecretRef := range bundle.GSMSecrets {
-			for _, secret := range gsmSecretRef.Secrets {
+			for _, secret := range gsmSecretRef.Fields {
 				if strings.Contains(secret.Name, "${CLUSTER}") {
 					hasClusterVar = true
 					break
@@ -196,6 +197,12 @@ func (c *GSMConfig) resolve() error {
 			clusterTargets[target.Cluster] = append(clusterTargets[target.Cluster], target)
 		}
 
+		// Validate that bundles using ${CLUSTER} have resolvable targets
+		if len(clusterTargets) == 0 {
+			errs = append(errs, fmt.Errorf("bundle %q uses ${CLUSTER} variable substitution but has no resolvable targets (check that cluster_groups or cluster references are valid)", bundle.Name))
+			continue
+		}
+
 		// Create one bundle per unique cluster
 		for cluster, targets := range clusterTargets {
 			expandedBundle := Bundle{
@@ -210,10 +217,11 @@ func (c *GSMConfig) resolve() error {
 			for _, gsmSecretRef := range bundle.GSMSecrets {
 				expandedSecretRef := GSMSecretRef{
 					Collection: gsmSecretRef.Collection,
-					Secrets:    make([]SecretEntry, len(gsmSecretRef.Secrets)),
+					Group:      gsmSecretRef.Group,
+					Fields:     make([]FieldEntry, len(gsmSecretRef.Fields)),
 				}
-				for i, secret := range gsmSecretRef.Secrets {
-					expandedSecretRef.Secrets[i] = SecretEntry{
+				for i, secret := range gsmSecretRef.Fields {
+					expandedSecretRef.Fields[i] = FieldEntry{
 						Name: strings.ReplaceAll(secret.Name, "${CLUSTER}", cluster),
 						As:   secret.As,
 					}
@@ -239,7 +247,6 @@ func (c *GSMConfig) Validate() error {
 	var errs []error
 
 	// Validate components
-	// TODO make this a separate func
 	componentNames := make(map[string]bool)
 
 	for componentName, gsmSecretRefs := range c.Components {
@@ -262,12 +269,21 @@ func (c *GSMConfig) Validate() error {
 			if gsmSecretRef.Collection == "" {
 				errs = append(errs, fmt.Errorf("component %s[%d] has empty collection", componentName, j))
 			}
-			if len(gsmSecretRef.Secrets) == 0 {
-				errs = append(errs, fmt.Errorf("component %s[%d] has no secrets", componentName, j))
+			if !gsmvalidation.ValidateCollectionName(gsmSecretRef.Collection) {
+				errs = append(errs, fmt.Errorf("component %s[%d] has invalid collection string", componentName, j))
 			}
-			for k, secret := range gsmSecretRef.Secrets {
+			if !gsmvalidation.ValidateGroupName(gsmSecretRef.Group) {
+				errs = append(errs, fmt.Errorf("component %s[%d] has invalid group string", componentName, j))
+			}
+			if len(gsmSecretRef.Fields) == 0 && gsmSecretRef.Group == "" {
+				errs = append(errs, fmt.Errorf("component %s[%d] has neither group nor any fields defined", componentName, j))
+			}
+			for k, secret := range gsmSecretRef.Fields {
 				if secret.Name == "" {
 					errs = append(errs, fmt.Errorf("component %s[%d].secrets[%d] has empty name", componentName, j, k))
+				}
+				if !gsmvalidation.ValidateSecretName(secret.Name) {
+					errs = append(errs, fmt.Errorf("component %s[%d].secrets[%d] has invalid name", componentName, j, k))
 				}
 			}
 		}
@@ -282,7 +298,6 @@ func (c *GSMConfig) Validate() error {
 			continue
 		}
 
-		// Check each target for duplicates
 		for _, target := range bundle.Targets {
 			key := bundleKey{
 				name:      bundle.Name,
@@ -296,7 +311,6 @@ func (c *GSMConfig) Validate() error {
 			}
 			seenBundles[key] = true
 		}
-
 		if err := validateBundle(&bundle, i); err != nil {
 			errs = append(errs, err)
 		}
@@ -324,23 +338,30 @@ func validateBundle(bundle *Bundle, idx int) error {
 		if target.Cluster == "" {
 			errs = append(errs, fmt.Errorf("bundle %s target[%d] has empty cluster (should have been resolved by this point)", bundle.Name, j))
 		}
+		// Allow empty type (will be defaulted by resolve()) or the two supported types
+		if target.Type != "" && target.Type != corev1.SecretTypeOpaque && target.Type != corev1.SecretTypeDockerConfigJson {
+			errs = append(errs, fmt.Errorf("bundle %s target[%d] has invalid type (%s)", bundle.Name, j, target.Type))
+		}
 	}
 
 	for j, gsmSecret := range bundle.GSMSecrets {
 		if gsmSecret.Collection == "" {
 			errs = append(errs, fmt.Errorf("bundle %s gsm_secrets[%d] has empty collection", bundle.Name, j))
 		}
-		if gsmvalidation.ValidateCollectionName(gsmSecret.Collection) == false {
+		if !gsmvalidation.ValidateCollectionName(gsmSecret.Collection) {
 			errs = append(errs, fmt.Errorf("bundle %s gsm_secrets[%d] has invalid collection string", bundle.Name, j))
 		}
-		if len(gsmSecret.Secrets) == 0 {
-			errs = append(errs, fmt.Errorf("bundle %s gsm_secrets[%d] has no secrets", bundle.Name, j))
+		if !gsmvalidation.ValidateGroupName(gsmSecret.Group) {
+			errs = append(errs, fmt.Errorf("bundle %s gsm_secrets[%d] has invalid group string", bundle.Name, j))
 		}
-		for k, secret := range gsmSecret.Secrets {
-			if secret.Name == "" {
+		if len(gsmSecret.Fields) == 0 && gsmSecret.Group == "" {
+			errs = append(errs, fmt.Errorf("bundle %s gsm_secrets[%d] has no secrets and no group defined", bundle.Name, j))
+		}
+		for k, field := range gsmSecret.Fields {
+			if field.Name == "" {
 				errs = append(errs, fmt.Errorf("bundle %s gsm_secrets[%d].secrets[%d] has empty name", bundle.Name, j, k))
 			}
-			if gsmvalidation.ValidateSecretName(secret.Name) == false {
+			if !gsmvalidation.ValidateSecretName(field.Name) {
 				errs = append(errs, fmt.Errorf("bundle %s gsm_secrets[%d].secrets[%d] has invalid name", bundle.Name, j, k))
 			}
 		}
@@ -362,24 +383,22 @@ func validateBundle(bundle *Bundle, idx int) error {
 func validateDockerConfig(dc *DockerConfigSpec, bundleIdx int, bundleName string) error {
 	var errs []error
 
-	if dc.As == "" {
-		errs = append(errs, fmt.Errorf("bundle[%d] %s dockerconfig has empty 'as' field", bundleIdx, bundleName))
-	}
-
 	if len(dc.Registries) == 0 {
 		errs = append(errs, fmt.Errorf("bundle[%d] %s dockerconfig has no registries", bundleIdx, bundleName))
 	}
 
 	for i, reg := range dc.Registries {
-		if reg.Collection == "" {
-			errs = append(errs, fmt.Errorf("bundle[%d] %s dockerconfig registry[%d] has empty collection", bundleIdx,
-				bundleName, i))
+		if !gsmvalidation.ValidateCollectionName(reg.Collection) {
+			errs = append(errs, fmt.Errorf("bundle[%d] %s dockerconfig registry[%d] has invalid collection string", bundleIdx, bundleName, i))
+		}
+		if !gsmvalidation.ValidateGroupName(reg.Group) {
+			errs = append(errs, fmt.Errorf("bundle[%d] %s dockerconfig registry[%d] has invalid group string", bundleIdx, bundleName, i))
 		}
 		if reg.RegistryURL == "" {
 			errs = append(errs, fmt.Errorf("bundle[%d] %s dockerconfig registry[%d] has empty registry_url", bundleIdx,
 				bundleName, i))
 		}
-		if reg.AuthField == "" {
+		if !gsmvalidation.ValidateSecretName(reg.AuthField) {
 			errs = append(errs, fmt.Errorf("bundle[%d] %s dockerconfig registry[%d] has empty auth_field", bundleIdx,
 				bundleName, i))
 		}

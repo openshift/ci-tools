@@ -13,8 +13,11 @@ import (
 	"testing"
 	"time"
 
+	secretmanager "cloud.google.com/go/secretmanager/apiv1"
+	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/googleapis/gax-go/v2"
 	"github.com/hashicorp/vault/api"
 
 	coreapi "k8s.io/api/core/v1"
@@ -27,6 +30,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
+	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
 	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 	"github.com/openshift/ci-tools/pkg/vaultclient"
@@ -296,7 +300,7 @@ func TestCompleteOptions(t *testing.T) {
 	}()
 
 	bwPasswordPath := filepath.Join(dir, "bwPasswordPath")
-	configPath := filepath.Join(dir, "configPath")
+	configPath := filepath.Join(dir, "vaultConfigPath")
 	configWithTypoPath := filepath.Join(dir, "configWithTypoPath")
 	configWithGroupsPath := filepath.Join(dir, "configWithGroups")
 	configWithNonPasswordAttributePath := filepath.Join(dir, "configContentWithNonPasswordAttribute")
@@ -331,8 +335,8 @@ func TestCompleteOptions(t *testing.T) {
 		{
 			name: "basic case",
 			given: options{
-				logLevel:   "info",
-				configPath: configPath,
+				logLevel:        "info",
+				vaultConfigPath: configPath,
 			},
 			expectedConfig:   defaultConfig,
 			expectedClusters: []string{"build01", "default"},
@@ -340,8 +344,8 @@ func TestCompleteOptions(t *testing.T) {
 		{
 			name: "disabled clusters",
 			given: options{
-				logLevel:   "info",
-				configPath: configPath,
+				logLevel:        "info",
+				vaultConfigPath: configPath,
 			},
 			disabledClusters: sets.New[string]("default"),
 			expectedConfig:   defaultConfigWithoutDefaultCluster,
@@ -350,8 +354,8 @@ func TestCompleteOptions(t *testing.T) {
 		{
 			name: "missing context in kubeconfig",
 			given: options{
-				logLevel:   "info",
-				configPath: configWithTypoPath,
+				logLevel:        "info",
+				vaultConfigPath: configWithTypoPath,
 			},
 			expectedConfig: defaultConfig,
 			expectedError:  fmt.Errorf("config[0].to[1]: failed to find cluster context \"bla\" in the kubeconfig"),
@@ -359,9 +363,9 @@ func TestCompleteOptions(t *testing.T) {
 		{
 			name: "only configured cluster is used",
 			given: options{
-				logLevel:   "info",
-				configPath: configPath,
-				cluster:    "build01",
+				logLevel:        "info",
+				vaultConfigPath: configPath,
+				cluster:         "build01",
 			},
 			expectedConfig:   defaultConfigWithoutDefaultCluster,
 			expectedClusters: []string{"build01"},
@@ -369,8 +373,8 @@ func TestCompleteOptions(t *testing.T) {
 		{
 			name: "group is resolved",
 			given: options{
-				logLevel:   "info",
-				configPath: configWithGroupsPath,
+				logLevel:        "info",
+				vaultConfigPath: configWithGroupsPath,
 			},
 			expectedConfig: secretbootstrap.Config{
 				ClusterGroups: map[string][]string{"group-a": {"default"}},
@@ -1949,7 +1953,7 @@ func TestConstructDockerConfigJSON(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.id, func(t *testing.T) {
 			client := vaultClientFromTestItems(tc.items)
-			actual, err := constructDockerConfigJSON(client, tc.dockerConfigJSONData)
+			actual, err := constructDockerConfigJSONFromVault(client, tc.dockerConfigJSONData)
 			if tc.expectedError != "" && err != nil {
 				if !reflect.DeepEqual(err.Error(), tc.expectedError) {
 					t.Fatal(cmp.Diff(err.Error(), tc.expectedError))
@@ -2279,6 +2283,43 @@ func (f *fakeVaultClient) ListKVRecursively(prefix string) ([]string, error) {
 
 func (f *fakeVaultClient) UpsertKV(_ string, _ map[string]string) error {
 	return nil
+}
+
+type fakeGSMClient struct {
+	secrets map[string][]byte
+}
+
+func (f *fakeGSMClient) AccessSecretVersion(ctx context.Context, req *secretmanagerpb.AccessSecretVersionRequest, opts ...gax.CallOption) (*secretmanagerpb.AccessSecretVersionResponse, error) {
+	payload, exists := f.secrets[req.Name]
+	if !exists {
+		return nil, fmt.Errorf("secret version not found: %s", req.Name)
+	}
+	return &secretmanagerpb.AccessSecretVersionResponse{
+		Payload: &secretmanagerpb.SecretPayload{
+			Data: payload,
+		},
+	}, nil
+}
+
+func (f *fakeGSMClient) ListSecrets(ctx context.Context, req *secretmanagerpb.ListSecretsRequest, opts ...gax.CallOption) *secretmanager.SecretIterator {
+	// Return nil - tests using explicit field lists don't call this method
+	return nil
+}
+
+func (f *fakeGSMClient) GetSecret(ctx context.Context, req *secretmanagerpb.GetSecretRequest, opts ...gax.CallOption) (*secretmanagerpb.Secret, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (f *fakeGSMClient) DeleteSecret(ctx context.Context, req *secretmanagerpb.DeleteSecretRequest, opts ...gax.CallOption) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (f *fakeGSMClient) CreateSecret(ctx context.Context, req *secretmanagerpb.CreateSecretRequest, opts ...gax.CallOption) (*secretmanagerpb.Secret, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (f *fakeGSMClient) AddSecretVersion(ctx context.Context, req *secretmanagerpb.AddSecretVersionRequest, opts ...gax.CallOption) (*secretmanagerpb.SecretVersion, error) {
+	return nil, fmt.Errorf("not implemented")
 }
 
 func TestIntegration(t *testing.T) {
@@ -3637,6 +3678,861 @@ func TestMutateGlobalPullSecret(t *testing.T) {
 			if diff := cmp.Diff(tc.original, tc.mutatedSecret, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" && actual && actualErr == nil {
 				t.Errorf("%s: actual differs from expected: %s", tc.name, diff)
 			}
+		})
+	}
+}
+
+func TestConstructSecretsFromGSM(t *testing.T) {
+	projectConfig := gsm.Config{
+		ProjectIdNumber: "123456",
+		ProjectIdString: "test-project",
+	}
+
+	testCases := []struct {
+		name               string
+		config             secretbootstrap.GSMConfig
+		gsmSecretsPayloads map[string][]byte
+		disabledClusters   sets.Set[string]
+		expected           map[string][]*coreapi.Secret
+		expectedError      string
+	}{
+		{
+			name: "basic case: explicit fields",
+			config: secretbootstrap.GSMConfig{
+				Bundles: []secretbootstrap.Bundle{
+					{
+						Name: "test-secret",
+						Targets: []secretbootstrap.TargetSpec{
+							{
+								Namespace: "ci",
+								Cluster:   "build01",
+							},
+						},
+						SyncToCluster: true,
+						GSMSecrets: []secretbootstrap.GSMSecretRef{
+							{
+								Collection: "test-infra",
+								Group:      "build-farm",
+								Fields: []secretbootstrap.FieldEntry{
+									{Name: "username"},
+									{Name: "password"},
+								},
+							},
+						},
+					},
+				},
+			},
+			gsmSecretsPayloads: map[string][]byte{
+				"projects/123456/secrets/test-infra__build-farm__username/versions/latest": []byte("admin"),
+				"projects/123456/secrets/test-infra__build-farm__password/versions/latest": []byte("secret123"),
+			},
+			expected: map[string][]*coreapi.Secret{
+				"build01": {
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "test-secret",
+							Namespace: "ci",
+							Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
+						},
+						Type: coreapi.SecretTypeOpaque,
+						Data: map[string][]byte{
+							"username": []byte("admin"),
+							"password": []byte("secret123"),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "multi-level groups",
+			config: secretbootstrap.GSMConfig{
+				Bundles: []secretbootstrap.Bundle{
+					{
+						Name: "multilevel-secret",
+						Targets: []secretbootstrap.TargetSpec{
+							{
+								Namespace: "test",
+								Cluster:   "app.ci",
+							},
+						},
+						SyncToCluster: true,
+						GSMSecrets: []secretbootstrap.GSMSecretRef{
+							{
+								Collection: "vsphere",
+								Group:      "ibmcloud/ci",
+								Fields: []secretbootstrap.FieldEntry{
+									{Name: "token"},
+								},
+							},
+						},
+					},
+				},
+			},
+			gsmSecretsPayloads: map[string][]byte{
+				"projects/123456/secrets/vsphere__ibmcloud__ci__token/versions/latest": []byte("ibm-token"),
+			},
+			expected: map[string][]*coreapi.Secret{
+				"app.ci": {
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "multilevel-secret",
+							Namespace: "test",
+							Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
+						},
+						Type: coreapi.SecretTypeOpaque,
+						Data: map[string][]byte{
+							"token": []byte("ibm-token"),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "field denormalization",
+			config: secretbootstrap.GSMConfig{
+				Bundles: []secretbootstrap.Bundle{
+					{
+						Name: "denorm-secret",
+						Targets: []secretbootstrap.TargetSpec{
+							{
+								Namespace: "ci",
+								Cluster:   "build01",
+							},
+						},
+						SyncToCluster: true,
+						GSMSecrets: []secretbootstrap.GSMSecretRef{
+							{
+								Collection: "test",
+								Group:      "group1",
+								Fields: []secretbootstrap.FieldEntry{
+									{Name: "aws--u--creds"},
+									{Name: "--dot--dockerconfigjson"},
+									{Name: "renamed--u--field", As: "custom-name"},
+								},
+							},
+						},
+					},
+				},
+			},
+			gsmSecretsPayloads: map[string][]byte{
+				"projects/123456/secrets/test__group1__aws--u--creds/versions/latest":           []byte("aws-value"),
+				"projects/123456/secrets/test__group1__--dot--dockerconfigjson/versions/latest": []byte("docker-value"),
+				"projects/123456/secrets/test__group1__renamed--u--field/versions/latest":       []byte("renamed-value"),
+			},
+			expected: map[string][]*coreapi.Secret{
+				"build01": {
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "denorm-secret",
+							Namespace: "ci",
+							Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
+						},
+						Type: coreapi.SecretTypeOpaque,
+						Data: map[string][]byte{
+							"aws_creds":         []byte("aws-value"),
+							".dockerconfigjson": []byte("docker-value"),
+							"custom-name":       []byte("renamed-value"),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "docker config from GSM",
+			config: secretbootstrap.GSMConfig{
+				Bundles: []secretbootstrap.Bundle{
+					{
+						Name: "docker-secret",
+						Targets: []secretbootstrap.TargetSpec{
+							{
+								Namespace: "ci",
+								Cluster:   "build01",
+								Type:      "kubernetes.io/dockerconfigjson",
+							},
+						},
+						SyncToCluster: true,
+						DockerConfig: &secretbootstrap.DockerConfigSpec{
+							As: "pull-secret",
+							Registries: []secretbootstrap.RegistryAuthData{
+								{
+									Collection:  "test-infra",
+									Group:       "build-farm",
+									RegistryURL: "registry.ci.openshift.org",
+									AuthField:   "auth-token",
+								},
+								{
+									Collection:  "test-infra",
+									Group:       "build-farm",
+									RegistryURL: "quay.io",
+									AuthField:   "quay-auth",
+									EmailField:  "quay-email",
+								},
+							},
+						},
+					},
+				},
+			},
+			gsmSecretsPayloads: map[string][]byte{
+				"projects/123456/secrets/test-infra__build-farm__auth-token/versions/latest": []byte("dXNlcjp0b2tlbjEyMw=="),
+				"projects/123456/secrets/test-infra__build-farm__quay-auth/versions/latest":  []byte("dXNlcjpxdWF5MTIz"),
+				"projects/123456/secrets/test-infra__build-farm__quay-email/versions/latest": []byte("user@example.com"),
+			},
+			expected: map[string][]*coreapi.Secret{
+				"build01": {
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "docker-secret",
+							Namespace: "ci",
+							Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
+						},
+						Type: coreapi.SecretTypeDockerConfigJson,
+						Data: map[string][]byte{
+							"pull-secret": []byte(`{"auths":{"quay.io":{"auth":"dXNlcjpxdWF5MTIz","email":"user@example.com"},"registry.ci.openshift.org":{"auth":"dXNlcjp0b2tlbjEyMw=="}}}`),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "secret is not created for disabled cluster",
+			config: secretbootstrap.GSMConfig{
+				Bundles: []secretbootstrap.Bundle{
+					{
+						Name: "test-secret",
+						Targets: []secretbootstrap.TargetSpec{
+							{
+								Namespace: "ci",
+								Cluster:   "build01",
+							},
+							{
+								Namespace: "ci",
+								Cluster:   "disabled-cluster",
+							},
+						},
+						SyncToCluster: true,
+						GSMSecrets: []secretbootstrap.GSMSecretRef{
+							{
+								Collection: "test",
+								Group:      "group1",
+								Fields: []secretbootstrap.FieldEntry{
+									{Name: "key"},
+								},
+							},
+						},
+					},
+				},
+			},
+			gsmSecretsPayloads: map[string][]byte{
+				"projects/123456/secrets/test__group1__key/versions/latest": []byte("value"),
+			},
+			disabledClusters: sets.New[string]("disabled-cluster"),
+			expected: map[string][]*coreapi.Secret{
+				"build01": {
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "test-secret",
+							Namespace: "ci",
+							Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
+						},
+						Type: coreapi.SecretTypeOpaque,
+						Data: map[string][]byte{
+							"key": []byte("value"),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "error: missing GSM secret",
+			config: secretbootstrap.GSMConfig{
+				Bundles: []secretbootstrap.Bundle{
+					{
+						Name: "error-secret",
+						Targets: []secretbootstrap.TargetSpec{
+							{
+								Namespace: "ci",
+								Cluster:   "build01",
+							},
+						},
+						SyncToCluster: true,
+						GSMSecrets: []secretbootstrap.GSMSecretRef{
+							{
+								Collection: "test",
+								Group:      "group1",
+								Fields: []secretbootstrap.FieldEntry{
+									{Name: "missing-field"},
+								},
+							},
+						},
+					},
+				},
+			},
+			gsmSecretsPayloads: map[string][]byte{},
+			expectedError:      "failed to fetch secret",
+		},
+		{
+			name: "error: bundle with partial failure",
+			config: secretbootstrap.GSMConfig{
+				Bundles: []secretbootstrap.Bundle{
+					{
+						Name: "partial-error-secret",
+						Targets: []secretbootstrap.TargetSpec{
+							{
+								Namespace: "ci",
+								Cluster:   "build01",
+							},
+						},
+						SyncToCluster: true,
+						GSMSecrets: []secretbootstrap.GSMSecretRef{
+							{
+								Collection: "test",
+								Group:      "group1",
+								Fields: []secretbootstrap.FieldEntry{
+									{Name: "field1"},
+									{Name: "field2"},
+								},
+							},
+						},
+					},
+				},
+			},
+			gsmSecretsPayloads: map[string][]byte{
+				"projects/123456/secrets/test__group1__field1/versions/latest": []byte("value1"),
+			},
+			expectedError: "failed to fetch secret",
+		},
+		{
+			name: "multiple bundles on different clusters",
+			config: secretbootstrap.GSMConfig{
+				Bundles: []secretbootstrap.Bundle{
+					{
+						Name: "secret-1",
+						Targets: []secretbootstrap.TargetSpec{
+							{
+								Namespace: "ns1",
+								Cluster:   "build01",
+							},
+						},
+						SyncToCluster: true,
+						GSMSecrets: []secretbootstrap.GSMSecretRef{
+							{
+								Collection: "col1",
+								Group:      "grp1",
+								Fields: []secretbootstrap.FieldEntry{
+									{Name: "key1"},
+								},
+							},
+						},
+					},
+					{
+						Name: "secret-2",
+						Targets: []secretbootstrap.TargetSpec{
+							{
+								Namespace: "ns2",
+								Cluster:   "build02",
+							},
+						},
+						SyncToCluster: true,
+						GSMSecrets: []secretbootstrap.GSMSecretRef{
+							{
+								Collection: "col2",
+								Group:      "grp2",
+								Fields: []secretbootstrap.FieldEntry{
+									{Name: "key2"},
+								},
+							},
+						},
+					},
+				},
+			},
+			gsmSecretsPayloads: map[string][]byte{
+				"projects/123456/secrets/col1__grp1__key1/versions/latest": []byte("val1"),
+				"projects/123456/secrets/col2__grp2__key2/versions/latest": []byte("val2"),
+			},
+			expected: map[string][]*coreapi.Secret{
+				"build01": {
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "secret-1",
+							Namespace: "ns1",
+							Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
+						},
+						Type: coreapi.SecretTypeOpaque,
+						Data: map[string][]byte{
+							"key1": []byte("val1"),
+						},
+					},
+				},
+				"build02": {
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "secret-2",
+							Namespace: "ns2",
+							Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
+						},
+						Type: coreapi.SecretTypeOpaque,
+						Data: map[string][]byte{
+							"key2": []byte("val2"),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "bundle with empty group",
+			config: secretbootstrap.GSMConfig{
+				Bundles: []secretbootstrap.Bundle{
+					{
+						Name: "no-group-secret",
+						Targets: []secretbootstrap.TargetSpec{
+							{
+								Namespace: "ci",
+								Cluster:   "build01",
+							},
+						},
+						SyncToCluster: true,
+						GSMSecrets: []secretbootstrap.GSMSecretRef{
+							{
+								Collection: "simple",
+								Group:      "",
+								Fields: []secretbootstrap.FieldEntry{
+									{Name: "token"},
+								},
+							},
+						},
+					},
+				},
+			},
+			gsmSecretsPayloads: map[string][]byte{
+				"projects/123456/secrets/simple__token/versions/latest": []byte("simple-token"),
+			},
+			expected: map[string][]*coreapi.Secret{
+				"build01": {
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "no-group-secret",
+							Namespace: "ci",
+							Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"},
+						},
+						Type: coreapi.SecretTypeOpaque,
+						Data: map[string][]byte{
+							"token": []byte("simple-token"),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeClient := &fakeGSMClient{
+				secrets: tc.gsmSecretsPayloads,
+			}
+
+			actual, err := constructSecretsFromGSM(
+				context.Background(),
+				tc.config,
+				fakeClient,
+				projectConfig,
+				tc.disabledClusters,
+			)
+
+			if tc.expectedError != "" {
+				if err == nil {
+					t.Fatalf("expected error %q, got nil", tc.expectedError)
+				}
+				if !strings.Contains(err.Error(), tc.expectedError) {
+					t.Fatalf("expected error containing %q, got %q", tc.expectedError, err.Error())
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			equal(t, "secrets", tc.expected, actual)
+		})
+	}
+}
+
+func TestConstructDockerConfigJSONFromGSM(t *testing.T) {
+	testCases := []struct {
+		name          string
+		secretsCache  map[gsmSecretRef]fetchedSecret
+		registries    []secretbootstrap.RegistryAuthData
+		expected      string
+		expectedError string
+	}{
+		{
+			name: "single registry with auth only",
+			secretsCache: map[gsmSecretRef]fetchedSecret{
+				{collection: "test", group: "grp", field: "auth"}: {payload: []byte("dXNlcjpwYXNz")},
+			},
+			registries: []secretbootstrap.RegistryAuthData{
+				{
+					Collection:  "test",
+					Group:       "grp",
+					RegistryURL: "quay.io",
+					AuthField:   "auth",
+				},
+			},
+			expected: `{"auths":{"quay.io":{"auth":"dXNlcjpwYXNz"}}}`,
+		},
+		{
+			name: "single registry with auth and email",
+			secretsCache: map[gsmSecretRef]fetchedSecret{
+				{collection: "test", group: "grp", field: "auth"}:  {payload: []byte("dXNlcjpwYXNz")},
+				{collection: "test", group: "grp", field: "email"}: {payload: []byte("user@example.com")},
+			},
+			registries: []secretbootstrap.RegistryAuthData{
+				{
+					Collection:  "test",
+					Group:       "grp",
+					RegistryURL: "quay.io",
+					AuthField:   "auth",
+					EmailField:  "email",
+				},
+			},
+			expected: `{"auths":{"quay.io":{"auth":"dXNlcjpwYXNz","email":"user@example.com"}}}`,
+		},
+		{
+			name: "multiple registries",
+			secretsCache: map[gsmSecretRef]fetchedSecret{
+				{collection: "test", group: "grp", field: "auth1"}:  {payload: []byte("dXNlcjE6cGFzczE=")},
+				{collection: "test", group: "grp", field: "auth2"}:  {payload: []byte("dXNlcjI6cGFzczI=")},
+				{collection: "test", group: "grp", field: "email2"}: {payload: []byte("user@example.com")},
+			},
+			registries: []secretbootstrap.RegistryAuthData{
+				{
+					Collection:  "test",
+					Group:       "grp",
+					RegistryURL: "quay.io",
+					AuthField:   "auth1",
+				},
+				{
+					Collection:  "test",
+					Group:       "grp",
+					RegistryURL: "registry.ci.openshift.org",
+					AuthField:   "auth2",
+					EmailField:  "email2",
+				},
+			},
+			expected: `{"auths":{"quay.io":{"auth":"dXNlcjE6cGFzczE="},"registry.ci.openshift.org":{"auth":"dXNlcjI6cGFzczI=","email":"user@example.com"}}}`,
+		},
+		{
+			name: "auth field with whitespace is trimmed",
+			secretsCache: map[gsmSecretRef]fetchedSecret{
+				{collection: "test", group: "grp", field: "auth"}: {payload: []byte("  dXNlcjpwYXNz  \n")},
+			},
+			registries: []secretbootstrap.RegistryAuthData{
+				{
+					Collection:  "test",
+					Group:       "grp",
+					RegistryURL: "quay.io",
+					AuthField:   "auth",
+				},
+			},
+			expected: `{"auths":{"quay.io":{"auth":"dXNlcjpwYXNz"}}}`,
+		},
+		{
+			name:         "error: auth field not found",
+			secretsCache: map[gsmSecretRef]fetchedSecret{},
+			registries: []secretbootstrap.RegistryAuthData{
+				{
+					Collection:  "test",
+					Group:       "grp",
+					RegistryURL: "quay.io",
+					AuthField:   "missing",
+				},
+			},
+			expectedError: "auth field 'missing' (collection: test, group: grp) not found in fetched secrets",
+		},
+		{
+			name: "error: auth field has error",
+			secretsCache: map[gsmSecretRef]fetchedSecret{
+				{collection: "test", group: "grp", field: "auth"}: {err: fmt.Errorf("fetch failed")},
+			},
+			registries: []secretbootstrap.RegistryAuthData{
+				{
+					Collection:  "test",
+					Group:       "grp",
+					RegistryURL: "quay.io",
+					AuthField:   "auth",
+				},
+			},
+			expectedError: "couldn't get auth field 'auth' (collection: test, group: grp): fetch failed",
+		},
+		{
+			name: "error: email field not found",
+			secretsCache: map[gsmSecretRef]fetchedSecret{
+				{collection: "test", group: "grp", field: "auth"}: {payload: []byte("dXNlcjpwYXNz")},
+			},
+			registries: []secretbootstrap.RegistryAuthData{
+				{
+					Collection:  "test",
+					Group:       "grp",
+					RegistryURL: "quay.io",
+					AuthField:   "auth",
+					EmailField:  "missing-email",
+				},
+			},
+			expectedError: "email field 'missing-email' (collection: test, group: grp) not found in fetched secrets",
+		},
+		{
+			name: "error: email field has error",
+			secretsCache: map[gsmSecretRef]fetchedSecret{
+				{collection: "test", group: "grp", field: "auth"}:  {payload: []byte("dXNlcjpwYXNz")},
+				{collection: "test", group: "grp", field: "email"}: {err: fmt.Errorf("email fetch failed")},
+			},
+			registries: []secretbootstrap.RegistryAuthData{
+				{
+					Collection:  "test",
+					Group:       "grp",
+					RegistryURL: "quay.io",
+					AuthField:   "auth",
+					EmailField:  "email",
+				},
+			},
+			expectedError: "couldn't get email field 'email' (collection: test, group: grp): email fetch failed",
+		},
+		{
+			name: "error: invalid auth format",
+			secretsCache: map[gsmSecretRef]fetchedSecret{
+				{collection: "test", group: "grp", field: "auth"}: {payload: []byte("not-base64-encoded")},
+			},
+			registries: []secretbootstrap.RegistryAuthData{
+				{
+					Collection:  "test",
+					Group:       "grp",
+					RegistryURL: "quay.io",
+					AuthField:   "auth",
+				},
+			},
+			expectedError: "the constructed dockerconfigJSON doesn't parse",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := constructDockerConfigJSONFromGSM(tc.secretsCache, tc.registries)
+
+			if tc.expectedError != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tc.expectedError)
+				}
+				if !strings.Contains(err.Error(), tc.expectedError) {
+					t.Fatalf("expected error containing %q, got %q", tc.expectedError, err.Error())
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if string(actual) != tc.expected {
+				t.Errorf("expected %q, got %q", tc.expected, string(actual))
+			}
+		})
+	}
+}
+
+func TestMergeSecretMaps(t *testing.T) {
+	testCases := []struct {
+		name          string
+		vaultSecrets  map[string][]*coreapi.Secret
+		gsmSecrets    map[string][]*coreapi.Secret
+		expected      map[string][]*coreapi.Secret
+		expectedError string
+	}{
+		{
+			name:         "both maps empty",
+			vaultSecrets: map[string][]*coreapi.Secret{},
+			gsmSecrets:   map[string][]*coreapi.Secret{},
+			expected:     map[string][]*coreapi.Secret{},
+		},
+		{
+			name: "only vault secrets",
+			vaultSecrets: map[string][]*coreapi.Secret{
+				"build01": {
+					{ObjectMeta: metav1.ObjectMeta{Name: "vault-secret", Namespace: "ci"}},
+				},
+			},
+			gsmSecrets: map[string][]*coreapi.Secret{},
+			expected: map[string][]*coreapi.Secret{
+				"build01": {
+					{ObjectMeta: metav1.ObjectMeta{Name: "vault-secret", Namespace: "ci"}},
+				},
+			},
+		},
+		{
+			name:         "only gsm secrets",
+			vaultSecrets: map[string][]*coreapi.Secret{},
+			gsmSecrets: map[string][]*coreapi.Secret{
+				"build01": {
+					{ObjectMeta: metav1.ObjectMeta{Name: "gsm-secret", Namespace: "ci"}},
+				},
+			},
+			expected: map[string][]*coreapi.Secret{
+				"build01": {
+					{ObjectMeta: metav1.ObjectMeta{Name: "gsm-secret", Namespace: "ci"}},
+				},
+			},
+		},
+		{
+			name: "no conflicts - different secrets",
+			vaultSecrets: map[string][]*coreapi.Secret{
+				"build01": {
+					{ObjectMeta: metav1.ObjectMeta{Name: "vault-secret", Namespace: "ci"}},
+				},
+			},
+			gsmSecrets: map[string][]*coreapi.Secret{
+				"build01": {
+					{ObjectMeta: metav1.ObjectMeta{Name: "gsm-secret", Namespace: "ci"}},
+				},
+			},
+			expected: map[string][]*coreapi.Secret{
+				"build01": {
+					{ObjectMeta: metav1.ObjectMeta{Name: "vault-secret", Namespace: "ci"}},
+					{ObjectMeta: metav1.ObjectMeta{Name: "gsm-secret", Namespace: "ci"}},
+				},
+			},
+		},
+		{
+			name: "conflict - same secret in both (vault wins)",
+			vaultSecrets: map[string][]*coreapi.Secret{
+				"build01": {
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "shared-secret", Namespace: "ci"},
+						Data:       map[string][]byte{"key": []byte("vault-value")},
+					},
+				},
+			},
+			gsmSecrets: map[string][]*coreapi.Secret{
+				"build01": {
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "shared-secret", Namespace: "ci"},
+						Data:       map[string][]byte{"key": []byte("gsm-value")},
+					},
+				},
+			},
+			expected: map[string][]*coreapi.Secret{
+				"build01": {
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "shared-secret", Namespace: "ci"},
+						Data:       map[string][]byte{"key": []byte("vault-value")},
+					},
+				},
+			},
+			expectedError: "conflict: GSM secret ci/shared-secret on cluster build01 conflicts with Vault",
+		},
+		{
+			name: "multiple conflicts",
+			vaultSecrets: map[string][]*coreapi.Secret{
+				"build01": {
+					{ObjectMeta: metav1.ObjectMeta{Name: "secret1", Namespace: "ci"}},
+					{ObjectMeta: metav1.ObjectMeta{Name: "secret2", Namespace: "ci"}},
+				},
+			},
+			gsmSecrets: map[string][]*coreapi.Secret{
+				"build01": {
+					{ObjectMeta: metav1.ObjectMeta{Name: "secret1", Namespace: "ci"}},
+					{ObjectMeta: metav1.ObjectMeta{Name: "secret2", Namespace: "ci"}},
+				},
+			},
+			expected: map[string][]*coreapi.Secret{
+				"build01": {
+					{ObjectMeta: metav1.ObjectMeta{Name: "secret1", Namespace: "ci"}},
+					{ObjectMeta: metav1.ObjectMeta{Name: "secret2", Namespace: "ci"}},
+				},
+			},
+			expectedError: "conflict: GSM secret ci/secret1 on cluster build01 conflicts with Vault",
+		},
+		{
+			name: "mixed - some conflicts, some no conflicts",
+			vaultSecrets: map[string][]*coreapi.Secret{
+				"build01": {
+					{ObjectMeta: metav1.ObjectMeta{Name: "vault-only", Namespace: "ci"}},
+					{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: "ci"}, Data: map[string][]byte{"key": []byte("vault-value")}},
+				},
+			},
+			gsmSecrets: map[string][]*coreapi.Secret{
+				"build01": {
+					{ObjectMeta: metav1.ObjectMeta{Name: "gsm-only", Namespace: "ci"}},
+					{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: "ci"}, Data: map[string][]byte{"key": []byte("gsm-value")}},
+				},
+			},
+			expected: map[string][]*coreapi.Secret{
+				"build01": {
+					{ObjectMeta: metav1.ObjectMeta{Name: "vault-only", Namespace: "ci"}},
+					{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: "ci"}, Data: map[string][]byte{"key": []byte("vault-value")}},
+					{ObjectMeta: metav1.ObjectMeta{Name: "gsm-only", Namespace: "ci"}},
+				},
+			},
+			expectedError: "conflict: GSM secret ci/shared on cluster build01 conflicts with Vault",
+		},
+		{
+			name: "different clusters",
+			vaultSecrets: map[string][]*coreapi.Secret{
+				"build01": {
+					{ObjectMeta: metav1.ObjectMeta{Name: "secret1", Namespace: "ci"}},
+				},
+			},
+			gsmSecrets: map[string][]*coreapi.Secret{
+				"build02": {
+					{ObjectMeta: metav1.ObjectMeta{Name: "secret2", Namespace: "ci"}},
+				},
+			},
+			expected: map[string][]*coreapi.Secret{
+				"build01": {
+					{ObjectMeta: metav1.ObjectMeta{Name: "secret1", Namespace: "ci"}},
+				},
+				"build02": {
+					{ObjectMeta: metav1.ObjectMeta{Name: "secret2", Namespace: "ci"}},
+				},
+			},
+		},
+		{
+			name: "same cluster, different namespaces",
+			vaultSecrets: map[string][]*coreapi.Secret{
+				"build01": {
+					{ObjectMeta: metav1.ObjectMeta{Name: "secret1", Namespace: "ci"}},
+				},
+			},
+			gsmSecrets: map[string][]*coreapi.Secret{
+				"build01": {
+					{ObjectMeta: metav1.ObjectMeta{Name: "secret1", Namespace: "test"}},
+				},
+			},
+			expected: map[string][]*coreapi.Secret{
+				"build01": {
+					{ObjectMeta: metav1.ObjectMeta{Name: "secret1", Namespace: "ci"}},
+					{ObjectMeta: metav1.ObjectMeta{Name: "secret1", Namespace: "test"}},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := mergeSecretMaps(tc.vaultSecrets, tc.gsmSecrets)
+
+			if tc.expectedError != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tc.expectedError)
+				}
+				if !strings.Contains(err.Error(), tc.expectedError) {
+					t.Fatalf("expected error containing %q, got %q", tc.expectedError, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+			}
+
+			equal(t, "merged secrets", tc.expected, actual)
 		})
 	}
 }

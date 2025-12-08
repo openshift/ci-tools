@@ -10,10 +10,12 @@ const (
 	CollectionSecretDelimiter = "__"
 
 	// Encoding constants for special characters
-	DotReplacementString   = "--dot--"
-	SlashReplacementString = "--slash--"
+	DotReplacementString        = "--dot--"
+	SlashReplacementString      = "--slash--"
+	UnderscoreReplacementString = "--u--"
 
 	CollectionRegex = "^([a-z0-9_-]*[a-z0-9])?$"
+	GroupRegex      = `^[a-z0-9]+([a-z0-9-]*[a-z0-9]+)?(/[a-z0-9]+([a-z0-9-]*[a-z0-9]+)?)*$`
 	SecretNameRegex = "^[A-Za-z0-9_-]+$"
 
 	// MaxCollectionLength is the maximum length of a collection name
@@ -21,6 +23,12 @@ const (
 
 	// GcpMaxNameLength is the maximum length for a GSM secret name
 	GcpMaxNameLength = 255
+)
+
+var (
+	collectionRegexp = regexp.MustCompile(CollectionRegex)
+	groupRegexp      = regexp.MustCompile(GroupRegex)
+	secretNameRegexp = regexp.MustCompile(SecretNameRegex)
 )
 
 // ValidateCollectionName validates a GSM collection name
@@ -39,7 +47,18 @@ func ValidateCollectionName(collection string) bool {
 		return false
 	}
 
-	return regexp.MustCompile(CollectionRegex).MatchString(collection)
+	return collectionRegexp.MatchString(collection)
+}
+
+func ValidateGroupName(group string) bool {
+	if group == "" {
+		return false
+	}
+
+	if strings.HasSuffix(group, "_") {
+		return false
+	}
+	return groupRegexp.MatchString(group)
 }
 
 // ValidateSecretName validates a GSM secret name
@@ -57,21 +76,32 @@ func ValidateSecretName(secretName string) bool {
 	if strings.Contains(secretName, CollectionSecretDelimiter) {
 		return false
 	}
-
-	return regexp.MustCompile(SecretNameRegex).MatchString(secretName)
+	return secretNameRegexp.MatchString(secretName)
 }
 
-// NormalizeName replaces forbidden characters in GSM collections and secret names with safe replacements.
-// GSM doesn't support dots and other special characters in secret names, so we need special handling to avoid conflicts.
+// NormalizeName replaces forbidden characters in field names with safe replacements.
+// This is used when migrating from Vault to GSM to handle special characters in field names.
+// Rules:
+//   - `.` → `--dot--` (dots not allowed in GSM secret names)
+//   - `_` → `--u--` (underscores act as delimiters in our 3-level hierarchy)
+//   - `/` → `--slash--` (slashes only allowed in group paths, not field names)
+//
+// Example: "aws_creds" → "aws--u--creds"
+// Example: ".dockerconfigjson" → "--dot--dockerconfigjson"
 func NormalizeName(name string) string {
-	normalized := strings.ReplaceAll(name, ".", DotReplacementString)
+	// Encode in specific order to avoid conflicts
+	normalized := strings.ReplaceAll(name, "_", UnderscoreReplacementString)
+	normalized = strings.ReplaceAll(normalized, ".", DotReplacementString)
 	normalized = strings.ReplaceAll(normalized, "/", SlashReplacementString)
 	return normalized
 }
 
-// Decoding counterpart to NormalizeName
+// DenormalizeName decodes field names back to their original form.
+// This reverses the encoding done by NormalizeName.
 func DenormalizeName(name string) string {
-	denormalized := strings.ReplaceAll(name, DotReplacementString, ".")
-	denormalized = strings.ReplaceAll(denormalized, SlashReplacementString, "/")
+	// Decode in reverse order
+	denormalized := strings.ReplaceAll(name, SlashReplacementString, "/")
+	denormalized = strings.ReplaceAll(denormalized, DotReplacementString, ".")
+	denormalized = strings.ReplaceAll(denormalized, UnderscoreReplacementString, "_")
 	return denormalized
 }

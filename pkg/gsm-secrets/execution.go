@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	iamadmin "cloud.google.com/go/iam/admin/apiv1"
@@ -15,11 +16,14 @@ import (
 	"github.com/googleapis/gax-go/v2"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/api/googleapi"
+	"google.golang.org/api/iterator"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
+
+	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
 )
 
 // CreateOrUpdateSecret creates a new secret in Google Secret Manager or updates an existing one with a new version.
@@ -335,4 +339,62 @@ func (a *Actions) RevokeObsoleteServiceAccountKeys(ctx context.Context, client I
 			}
 		}
 	}
+}
+
+// ListSecretFieldsByCollectionAndGroup lists all field (secret) names in a GSM collection and group.
+// Uses substring filtering on the server side, then validates client-side to match only direct children (non-recursive).
+// Group path separators (/) are converted to __ for the GSM secret name pattern.
+//
+// Example:
+//
+//		collection="vsphere", group="ibmcloud/ci"
+//		→ Matches: vsphere__ibmcloud__ci__username, vsphere__ibmcloud__ci__password
+//		→ Does NOT match: vsphere__ibmcloud__ci__subgroup__field (subgroup is excluded)
+//
+//	 Returns field names as saved in GSM (e.g., "aws--u--creds", not "aws_creds")
+func ListSecretFieldsByCollectionAndGroup(ctx context.Context, client SecretManagerClient, config Config, collection, group string) ([]string, error) {
+	groupParts := strings.ReplaceAll(group, "/", gsmvalidation.CollectionSecretDelimiter)
+	base := fmt.Sprintf("%s%s", collection, gsmvalidation.CollectionSecretDelimiter)
+	if groupParts != "" {
+		base = fmt.Sprintf("%s%s%s", base, groupParts, gsmvalidation.CollectionSecretDelimiter)
+	}
+	it := client.ListSecrets(ctx, &secretmanagerpb.ListSecretsRequest{
+		Parent: GetProjectResourceIdNumber(config.ProjectIdNumber),
+		// substring filter to narrow down candidates; strict checks are done client-side
+		Filter: fmt.Sprintf("name:%s", base),
+	})
+
+	var result []string
+	for {
+		secret, err := it.Next()
+		if errors.Is(err, iterator.Done) {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to list secrets: %w", err)
+		}
+
+		secretID := GetSecretID(secret.Name)
+		if secretID == GetIndexSecretName(collection) {
+			continue
+		}
+		if !strings.HasPrefix(secretID, base) {
+			continue
+		}
+
+		parts := strings.Split(secretID, gsmvalidation.CollectionSecretDelimiter)
+		// collection + group path segments + field
+		expectedParts := 2
+		if group != "" {
+			expectedParts += strings.Count(group, "/") + 1
+		}
+		if len(parts) != expectedParts {
+			// skip nested subgroups (non-recursive behavior)
+			continue
+		}
+
+		result = append(result, parts[len(parts)-1])
+	}
+
+	return result, nil
 }

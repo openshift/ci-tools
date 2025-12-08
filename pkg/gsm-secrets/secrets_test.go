@@ -87,68 +87,83 @@ func TestExtractCollectionFromSecretName(t *testing.T) {
 		expectedCollection string
 	}{
 		{
-			name:               "correct secret name: updater service account",
+			name:               "2-level: updater service account",
 			secretName:         "test-collection__updater-service-account",
 			expectedCollection: "test-collection",
 		},
 		{
-			name:               "correct secret name: index",
+			name:               "2-level: index",
 			secretName:         "test-collection____index",
 			expectedCollection: "test-collection",
 		},
 		{
-			name:               "malformed secret name: too many __",
-			secretName:         "test-collection__updater-service-account__malformed",
-			expectedCollection: "",
+			name:               "2-level: simple field",
+			secretName:         "my-creds__password",
+			expectedCollection: "my-creds",
 		},
 		{
-			name:               "incorrect secret name: index with only __ at the end",
+			name:               "3-level: collection, group, field",
+			secretName:         "vsphere__ibmcloud__username",
+			expectedCollection: "vsphere",
+		},
+		{
+			name:               "4-level: deep hierarchy",
+			secretName:         "telcov10n-ci-network__clusters__hlxcl8__password",
+			expectedCollection: "telcov10n-ci-network",
+		},
+		{
+			name:               "5-level: very deep hierarchy",
+			secretName:         "my-creds__a__b__c__field",
+			expectedCollection: "my-creds",
+		},
+		{
+			name:               "incorrect: index with trailing __",
 			secretName:         "test-collection____index__",
 			expectedCollection: "",
 		},
 		{
-			name:               "incorrect secret name: string after __index",
+			name:               "incorrect: string after __index",
 			secretName:         "test-collection____index__something-else",
 			expectedCollection: "",
 		},
 		{
-			name:               "incorrect secret name: index with concatenated string",
+			name:               "incorrect: index with concatenated string",
 			secretName:         "test-collection____indexsomethingelse",
 			expectedCollection: "",
 		},
 		{
-			name:               "incorrect secret name: wrong symbols in secret name",
-			secretName:         "test-collection__!123symbols",
-			expectedCollection: "",
-		},
-		{
-			name:               "malformed secret name: no __",
+			name:               "malformed: no __",
 			secretName:         "test-collectionupdater-service-account",
 			expectedCollection: "",
 		},
 		{
-			name:               "malformed secret name: no __ simple chars",
+			name:               "malformed: no __ simple chars",
 			secretName:         "testaccount",
 			expectedCollection: "",
 		},
 		{
-			name:               "malformed secret name: empty string",
+			name:               "malformed: empty string",
 			secretName:         "",
 			expectedCollection: "",
 		},
 		{
-			name:               "malformed secret name: strange characters",
+			name:               "malformed: invalid collection characters",
 			secretName:         "!4@#$%^&*()_+__some-secret",
 			expectedCollection: "",
 		},
 		{
-			name:               "malformed secret name: __ at the start",
+			name:               "malformed: __ at the start",
 			secretName:         "__test-collection__updater-service-account",
 			expectedCollection: "",
 		},
 		{
-			name:               "malformed secret name: __ at the end",
-			secretName:         "test-collection____index__",
+			name:               "malformed: only delimiter",
+			secretName:         "__",
+			expectedCollection: "",
+		},
+		{
+			name:               "malformed: empty parts",
+			secretName:         "collection____",
 			expectedCollection: "",
 		},
 	}

@@ -2,7 +2,6 @@ package gsmsecrets
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 )
 
@@ -81,90 +80,6 @@ func TestVerifyIndexSecretContent(t *testing.T) {
 	}
 }
 
-func TestValidateSecretName(t *testing.T) {
-	testCases := []struct {
-		name          string
-		secretName    string
-		expectedValid bool
-	}{
-		{
-			name:          "valid secret name: updater-service-account",
-			secretName:    "updater-service-account",
-			expectedValid: true,
-		},
-		{
-			name:          "valid secret name: mixed case",
-			secretName:    "UpdaterServiceAccount",
-			expectedValid: true,
-		},
-		{
-			name:          "valid secret name: numbers",
-			secretName:    "secret123",
-			expectedValid: true,
-		},
-		{
-			name:          "valid secret name: hyphens",
-			secretName:    "my-secret-name",
-			expectedValid: true,
-		},
-		{
-			name:          "valid secret name: single character",
-			secretName:    "A",
-			expectedValid: true,
-		},
-		{
-			name:          "valid secret name: uppercase",
-			secretName:    "UPPERCASE",
-			expectedValid: true,
-		},
-		{
-			name:          "invalid secret name: underscores",
-			secretName:    "updater_service_account",
-			expectedValid: false,
-		},
-		{
-			name:          "invalid secret name: special characters",
-			secretName:    "!123symbols",
-			expectedValid: false,
-		},
-		{
-			name:          "invalid secret name: spaces",
-			secretName:    "my secret",
-			expectedValid: false,
-		},
-		{
-			name:          "invalid secret name: dots",
-			secretName:    "my.secret",
-			expectedValid: false,
-		},
-		{
-			name:          "invalid secret name: empty string",
-			secretName:    "",
-			expectedValid: false,
-		},
-		{
-			name:          "invalid secret name: double underscores",
-			secretName:    "secret__name",
-			expectedValid: false,
-		},
-		{
-			name:          "invalid secret name: too long",
-			secretName:    fmt.Sprintf("collection__%s", strings.Repeat("a", 243)),
-			expectedValid: false,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			actualValid := ValidateSecretName(tc.secretName)
-			if actualValid != tc.expectedValid {
-				t.Errorf("Expected %t, got %t for secret name %q", tc.expectedValid, actualValid, tc.secretName)
-			}
-
-		})
-	}
-}
-
 func TestExtractCollectionFromSecretName(t *testing.T) {
 	testCases := []struct {
 		name               string
@@ -172,68 +87,83 @@ func TestExtractCollectionFromSecretName(t *testing.T) {
 		expectedCollection string
 	}{
 		{
-			name:               "correct secret name: updater service account",
+			name:               "2-level: updater service account",
 			secretName:         "test-collection__updater-service-account",
 			expectedCollection: "test-collection",
 		},
 		{
-			name:               "correct secret name: index",
+			name:               "2-level: index",
 			secretName:         "test-collection____index",
 			expectedCollection: "test-collection",
 		},
 		{
-			name:               "malformed secret name: too many __",
-			secretName:         "test-collection__updater-service-account__malformed",
-			expectedCollection: "",
+			name:               "2-level: simple field",
+			secretName:         "my-creds__password",
+			expectedCollection: "my-creds",
 		},
 		{
-			name:               "incorrect secret name: index with only __ at the end",
+			name:               "3-level: collection, group, field",
+			secretName:         "vsphere__ibmcloud__username",
+			expectedCollection: "vsphere",
+		},
+		{
+			name:               "4-level: deep hierarchy",
+			secretName:         "telcov10n-ci-network__clusters__hlxcl8__password",
+			expectedCollection: "telcov10n-ci-network",
+		},
+		{
+			name:               "5-level: very deep hierarchy",
+			secretName:         "my-creds__a__b__c__field",
+			expectedCollection: "my-creds",
+		},
+		{
+			name:               "incorrect: index with trailing __",
 			secretName:         "test-collection____index__",
 			expectedCollection: "",
 		},
 		{
-			name:               "incorrect secret name: string after __index",
+			name:               "incorrect: string after __index",
 			secretName:         "test-collection____index__something-else",
 			expectedCollection: "",
 		},
 		{
-			name:               "incorrect secret name: index with concatenated string",
+			name:               "incorrect: index with concatenated string",
 			secretName:         "test-collection____indexsomethingelse",
 			expectedCollection: "",
 		},
 		{
-			name:               "incorrect secret name: wrong symbols in secret name",
-			secretName:         "test-collection__!123symbols",
-			expectedCollection: "",
-		},
-		{
-			name:               "malformed secret name: no __",
+			name:               "malformed: no __",
 			secretName:         "test-collectionupdater-service-account",
 			expectedCollection: "",
 		},
 		{
-			name:               "malformed secret name: no __ simple chars",
+			name:               "malformed: no __ simple chars",
 			secretName:         "testaccount",
 			expectedCollection: "",
 		},
 		{
-			name:               "malformed secret name: empty string",
+			name:               "malformed: empty string",
 			secretName:         "",
 			expectedCollection: "",
 		},
 		{
-			name:               "malformed secret name: strange characters",
+			name:               "malformed: invalid collection characters",
 			secretName:         "!4@#$%^&*()_+__some-secret",
 			expectedCollection: "",
 		},
 		{
-			name:               "malformed secret name: __ at the start",
+			name:               "malformed: __ at the start",
 			secretName:         "__test-collection__updater-service-account",
 			expectedCollection: "",
 		},
 		{
-			name:               "malformed secret name: __ at the end",
-			secretName:         "test-collection____index__",
+			name:               "malformed: only delimiter",
+			secretName:         "__",
+			expectedCollection: "",
+		},
+		{
+			name:               "malformed: empty parts",
+			secretName:         "collection____",
 			expectedCollection: "",
 		},
 	}

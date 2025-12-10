@@ -2,19 +2,10 @@ package gsmsecrets
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
-	"github.com/openshift/ci-tools/pkg/group"
+	validation "github.com/openshift/ci-tools/pkg/gsm-validation"
 )
-
-const GcpMaxNameLength = 255
-
-// ValidateSecretName validates if a secret name matches the allowed pattern.
-// The secret name must be between 1 and 255 characters long (GCP limit).
-func ValidateSecretName(secretName string) bool {
-	return regexp.MustCompile(SecretNameRegex).MatchString(secretName) && len(secretName) <= GcpMaxNameLength
-}
 
 // ClassifySecret determines the type of secret based on its name
 func ClassifySecret(secretName string) SecretType {
@@ -31,27 +22,50 @@ func ClassifySecret(secretName string) SecretType {
 }
 
 // ExtractCollectionFromSecretName returns the substring before the first "__" in a secret name.
+// Supports both 2-level (collection__field) and 3-level (collection__group__field) hierarchies.
 func ExtractCollectionFromSecretName(secretName string) string {
+	// Special case: index secrets (collection____index)
 	if strings.HasSuffix(secretName, IndexSecretSuffix) {
 		collection := strings.TrimSuffix(secretName, IndexSecretSuffix)
-		if collection != "" && group.ValidateCollectionName(collection) {
+		if collection != "" && validation.ValidateCollectionName(collection) {
 			return collection
 		}
 		return ""
 	}
 
-	parts := strings.Split(secretName, "__")
-	if len(parts) == 2 && parts[0] != "" && parts[1] != "" {
-		if !group.ValidateCollectionName(parts[0]) {
-			return ""
-		}
-		if !ValidateSecretName(parts[1]) {
-			return ""
-		}
-		return parts[0]
+	// Reject malformed index secrets (contains ____index but doesn't end with it)
+	if strings.Contains(secretName, IndexSecretSuffix) {
+		return ""
 	}
 
-	return ""
+	// Split by delimiter
+	parts := strings.Split(secretName, "__")
+
+	// Need at least 2 parts: collection and field (or collection, group, field, etc.)
+	if len(parts) < 2 {
+		return ""
+	}
+
+	// Validate collection (first part)
+	collection := parts[0]
+	if !validation.ValidateCollectionName(collection) {
+		return ""
+	}
+
+	// Validate that we have at least one more non-empty part
+	hasValidPart := false
+	for i := 1; i < len(parts); i++ {
+		if parts[i] != "" {
+			hasValidPart = true
+			break
+		}
+	}
+
+	if !hasValidPart {
+		return ""
+	}
+
+	return collection
 }
 
 // VerifyIndexSecretContent verifies that the index secret content is correct.

@@ -10,6 +10,7 @@ import (
 	"google.golang.org/api/option"
 
 	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
+	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
 )
 
 type gsmSyncDecorator struct {
@@ -58,7 +59,7 @@ func (g *gsmSyncDecorator) SetFieldOnItem(itemName, fieldName string, fieldValue
 
 	// replace forbidden characters:
 	// e.g., "sa.cluster-init.build01.config" -> "sa--dot--cluster-init--dot--build01--dot--config"
-	fieldNameNormalized := gsm.NormalizeSecretName(fieldName)
+	fieldNameNormalized := gsmvalidation.NormalizeName(fieldName)
 	secretName := fmt.Sprintf("%s__%s", "cluster-init", fieldNameNormalized)
 
 	labels := make(map[string]string)

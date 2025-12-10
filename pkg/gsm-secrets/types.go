@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"cloud.google.com/go/iam/apiv1/iampb"
+
+	"github.com/openshift/ci-tools/pkg/gsm-validation"
 )
 
 const (
@@ -20,8 +22,6 @@ const (
 
 	ServiceAccountIDSuffix          = "-updater"
 	ServiceAccountDescriptionPrefix = "Updater service account for secret collection: "
-
-	SecretNameRegex = "^[A-Za-z0-9-]+$"
 
 	// IAM binding condition title prefixes
 	SecretsViewerConditionTitlePrefix  = "Read access to secrets for "
@@ -207,5 +207,29 @@ func GetIndexSecretName(collection string) string {
 // GetSecretID extracts the secret ID from the secret name, e.g.,
 // "projects/openshift-ci-secrets/secrets/collection__secret" -> "collection__secret"
 func GetSecretID(secretName string) string {
-	return strings.Split(secretName, "/")[len(strings.Split(secretName, "/"))-1] // Extract just the secret ID
+	parts := strings.Split(secretName, "/")
+	return parts[len(parts)-1] // Extract just the secret ID
+}
+
+// GetGSMSecretName returns the actual secret name in GSM, in format {collection}__{group}__{secret}
+// Group path separators (/) are converted to __ for the hierarchical structure.
+//
+// Example: collection="vsphere", group="ibmcloud/ci", field="username" => "vsphere__ibmcloud__ci__username"
+func GetGSMSecretName(collection, group, field string) string {
+	// Convert group path separators (/) to __
+	groupParts := strings.ReplaceAll(group, "/", gsmvalidation.CollectionSecretDelimiter)
+
+	// Build hierarchical name: collection__group__field
+	if groupParts == "" {
+		return fmt.Sprintf("%s%s%s", collection, gsmvalidation.CollectionSecretDelimiter, field)
+	}
+	return fmt.Sprintf("%s%s%s%s%s", collection, gsmvalidation.CollectionSecretDelimiter, groupParts, gsmvalidation.CollectionSecretDelimiter, field)
+}
+
+// GetGSMSecretResourceName returns the full GCP resource name for a GSM secret,
+// in format: "projects/{project ID number}/secrets/{collection}__{group}__{secret}"
+func GetGSMSecretResourceName(projectIdNumber, collection, group, field string) string {
+	return fmt.Sprintf("%s/secrets/%s",
+		GetProjectResourceIdNumber(projectIdNumber),
+		GetGSMSecretName(collection, group, field))
 }

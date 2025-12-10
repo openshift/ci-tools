@@ -285,3 +285,108 @@ func TestExtractCollectionFromDescription(t *testing.T) {
 		})
 	}
 }
+
+func TestGetGSMSecretName(t *testing.T) {
+	testCases := []struct {
+		name       string
+		collection string
+		group      string
+		field      string
+		expected   string
+	}{
+		{
+			name:       "simple secret with no group hierarchy",
+			collection: "my-creds",
+			group:      "default",
+			field:      "username",
+			expected:   "my-creds__default__username",
+		},
+		{
+			name:       "secret with single-level group",
+			collection: "vsphere",
+			group:      "ibmcloud",
+			field:      "password",
+			expected:   "vsphere__ibmcloud__password",
+		},
+		{
+			name:       "secret with hierarchical group (single slash)",
+			collection: "vsphere",
+			group:      "ibmcloud/ci",
+			field:      "username",
+			expected:   "vsphere__ibmcloud__ci__username",
+		},
+		{
+			name:       "secret with deep hierarchical group (multiple slashes)",
+			collection: "telcov10n-ci-network",
+			group:      "clusters/hlxcl8/ansible_group_masters",
+			field:      "ssh-privatekey",
+			expected:   "telcov10n-ci-network__clusters__hlxcl8__ansible_group_masters__ssh-privatekey",
+		},
+		{
+			name:       "secret with empty group",
+			collection: "simple",
+			group:      "",
+			field:      "token",
+			expected:   "simple__token",
+		},
+		{
+			name:       "secret with hyphens in field name",
+			collection: "dptp",
+			group:      "build-farm",
+			field:      "sa-ci-operator-build01-config",
+			expected:   "dptp__build-farm__sa-ci-operator-build01-config",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := GetGSMSecretName(tc.collection, tc.group, tc.field)
+			if actual != tc.expected {
+				t.Errorf("Expected %q, got %q", tc.expected, actual)
+			}
+		})
+	}
+}
+
+func TestGetGSMSecretResourceName(t *testing.T) {
+	projectNumber := "384486694155"
+
+	testCases := []struct {
+		name       string
+		collection string
+		group      string
+		field      string
+		expected   string
+	}{
+		{
+			name:       "simple secret resource name",
+			collection: "my-creds",
+			group:      "default",
+			field:      "username",
+			expected:   "projects/384486694155/secrets/my-creds__default__username",
+		},
+		{
+			name:       "hierarchical group resource name",
+			collection: "vsphere",
+			group:      "ibmcloud/ci",
+			field:      "api-key",
+			expected:   "projects/384486694155/secrets/vsphere__ibmcloud__ci__api-key",
+		},
+		{
+			name:       "deep hierarchy resource name",
+			collection: "telcov10n-ci-network",
+			group:      "clusters/hlxcl8/ansible_group_masters",
+			field:      "password",
+			expected:   "projects/384486694155/secrets/telcov10n-ci-network__clusters__hlxcl8__ansible_group_masters__password",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := GetGSMSecretResourceName(projectNumber, tc.collection, tc.group, tc.field)
+			if actual != tc.expected {
+				t.Errorf("Expected %q, got %q", tc.expected, actual)
+			}
+		})
+	}
+}

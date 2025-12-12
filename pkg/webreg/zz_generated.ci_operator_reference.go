@@ -194,6 +194,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"          name: ' '\n" +
 	"          # Value of the build arg.\n" +
 	"          value: ' '\n" +
+	"      # Capabilities is the list of strings that\n" +
+	"      # define additional capabilities needed by the test runs\n" +
+	"      capabilities:\n" +
+	"        - \"\"\n" +
 	"      # ContextDir is the directory in the project\n" +
 	"      # from which this build should be run.\n" +
 	"      context_dir: ' '\n" +
@@ -435,6 +439,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              name: ' '\n" +
 	"              # Value of the build arg.\n" +
 	"              value: ' '\n" +
+	"        # Capabilities is the list of strings that\n" +
+	"        # define additional capabilities needed by the test runs\n" +
+	"        capabilities:\n" +
+	"            - \"\"\n" +
 	"        # ContextDir is the directory in the project\n" +
 	"        # from which this build should be run.\n" +
 	"        context_dir: ' '\n" +

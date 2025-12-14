@@ -24,8 +24,6 @@ type JobRunHistoricalDataAnalyzerOptions struct {
 
 func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 
-	var newHistoricalData []jobrunaggregatorapi.HistoricalData
-
 	// targetRelease will either be what the caller specified on the CLI, or the most recent release.
 	// previousRelease will be the one prior to targetRelease.
 	var targetRelease, previousRelease string
@@ -43,6 +41,14 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 		}
 	}
 	fmt.Printf("Using target release: %s, previous release: %s\n", targetRelease, previousRelease)
+
+	// For tests data type, we don't do comparison - just fetch and write directly
+	if o.dataType == "tests" {
+		return o.runTestsDataType(ctx, targetRelease)
+	}
+
+	// For other data types (alerts, disruptions), continue with comparison logic
+	var newHistoricalData []jobrunaggregatorapi.HistoricalData
 
 	currentHistoricalData, err := readHistoricalDataFile(o.currentFile, o.dataType)
 	if err != nil {
@@ -88,6 +94,42 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 	}
 
 	fmt.Printf("successfully compared (%s) with specified leeway of %.2f%%\n", o.dataType, o.leeway)
+	return nil
+}
+
+func (o *JobRunHistoricalDataAnalyzerOptions) runTestsDataType(ctx context.Context, release string) error {
+	// Hardcoded parameters for test summary query
+	const (
+		suiteName    = "openshift-tests"
+		daysBack     = 30
+		minTestCount = 100
+	)
+
+	fmt.Printf("Fetching test data for release %s, suite %s, last %d days, min %d test runs\n",
+		release, suiteName, daysBack, minTestCount)
+
+	// testSummaries, err := o.ciDataClient.ListTestSummaryByPeriod(ctx, suiteName, release, daysBack, minTestCount)
+	testSummaries, err := o.ciDataClient.ListGenericTestSummaryByPeriod(ctx, suiteName, release, daysBack, minTestCount)
+	if err != nil {
+		return fmt.Errorf("failed to list test summary by period: %w", err)
+	}
+
+	if len(testSummaries) == 0 {
+		return fmt.Errorf("no test data found for suite %s, release %s", suiteName, release)
+	}
+
+	// Write the test summaries directly to the output file as JSON
+	// out, err := formatTestOutput(testSummaries)
+	out, err := formatGenericTestOutput(testSummaries)
+	if err != nil {
+		return fmt.Errorf("error formatting test output: %w", err)
+	}
+
+	if err := os.WriteFile(o.outputFile, out, 0644); err != nil {
+		return fmt.Errorf("failed to write output file: %w", err)
+	}
+
+	fmt.Printf("Successfully fetched %d test results and wrote to %s\n", len(testSummaries), o.outputFile)
 	return nil
 }
 

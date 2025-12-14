@@ -185,6 +185,26 @@ func (c *retryingCIDataClient) ListAllKnownAlerts(ctx context.Context) ([]*jobru
 	return ret, err
 }
 
+func (c *retryingCIDataClient) ListTestSummaryByPeriod(ctx context.Context, suiteName, releaseName string, daysBack, minTestCount int) ([]jobrunaggregatorapi.TestSummaryByPeriodRow, error) {
+	var ret []jobrunaggregatorapi.TestSummaryByPeriodRow
+	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
+		var innerErr error
+		ret, innerErr = c.delegate.ListTestSummaryByPeriod(ctx, suiteName, releaseName, daysBack, minTestCount)
+		return innerErr
+	})
+	return ret, err
+}
+
+func (c *retryingCIDataClient) ListGenericTestSummaryByPeriod(ctx context.Context, suiteName, releaseName string, daysBack, minTestCount int) ([]jobrunaggregatorapi.GenericTestSummaryByPeriodRow, error) {
+	var ret []jobrunaggregatorapi.GenericTestSummaryByPeriodRow
+	err := retry.OnError(slowBackoff, isReadQuotaError, func() error {
+		var innerErr error
+		ret, innerErr = c.delegate.ListGenericTestSummaryByPeriod(ctx, suiteName, releaseName, daysBack, minTestCount)
+		return innerErr
+	})
+	return ret, err
+}
+
 var slowBackoff = wait.Backoff{
 	Steps:    4,
 	Duration: 10 * time.Second,

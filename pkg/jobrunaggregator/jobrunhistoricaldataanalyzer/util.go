@@ -166,3 +166,46 @@ func formatOutput(data []parsedJobData, format string) ([]byte, error) {
 		return nil, fmt.Errorf("invalid output format (%s)", format)
 	}
 }
+
+func formatTestOutput(data []jobrunaggregatorapi.TestSummaryByPeriodRow) ([]byte, error) {
+	if len(data) == 0 {
+		return nil, nil
+	}
+	// Sort by release, platform, topology, architecture, failure count desc, test name
+	sort.SliceStable(data, func(i, j int) bool {
+		if data[i].Release != data[j].Release {
+			return data[i].Release < data[j].Release
+		}
+		if data[i].Platform != data[j].Platform {
+			return data[i].Platform < data[j].Platform
+		}
+		if data[i].Topology != data[j].Topology {
+			return data[i].Topology < data[j].Topology
+		}
+		if data[i].Architecture != data[j].Architecture {
+			return data[i].Architecture < data[j].Architecture
+		}
+		if data[i].TotalFailureCount != data[j].TotalFailureCount {
+			return data[i].TotalFailureCount > data[j].TotalFailureCount
+		}
+		return data[i].TestName < data[j].TestName
+	})
+	return json.MarshalIndent(data, "", "  ")
+}
+
+func formatGenericTestOutput(data []jobrunaggregatorapi.GenericTestSummaryByPeriodRow) ([]byte, error) {
+	if len(data) == 0 {
+		return nil, nil
+	}
+	// Sort by release, failure count desc, test name
+	sort.SliceStable(data, func(i, j int) bool {
+		if data[i].Release != data[j].Release {
+			return data[i].Release < data[j].Release
+		}
+		if data[i].TotalFailureCount != data[j].TotalFailureCount {
+			return data[i].TotalFailureCount > data[j].TotalFailureCount
+		}
+		return data[i].TestName < data[j].TestName
+	})
+	return json.MarshalIndent(data, "", "  ")
+}

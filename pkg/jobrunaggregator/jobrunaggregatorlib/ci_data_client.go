@@ -66,6 +66,24 @@ type CIDataClient interface {
 
 	// ListReleases lists all releases from the new release table
 	ListReleases(ctx context.Context) ([]jobrunaggregatorapi.ReleaseRow, error)
+
+	// ListTestSummaryByPeriod retrieves aggregated test results for a specific suite and release over a time period.
+	// Parameters:
+	//   - suiteName: The test suite to query (e.g., 'conformance')
+	//   - releaseName: The release version (e.g., '4.15')
+	//   - daysBack: Number of days to look back from current date
+	//   - minTestCount: Minimum number of test executions required to include a test in results
+	ListTestSummaryByPeriod(ctx context.Context, suiteName, releaseName string, daysBack, minTestCount int) ([]jobrunaggregatorapi.TestSummaryByPeriodRow, error)
+
+	// ListGenericTestSummaryByPeriod retrieves aggregated test results for a specific suite and release over a time period,
+	// aggregated across all infrastructure dimensions (platform, topology, architecture).
+	// This provides a higher-level view of test reliability.
+	// Parameters:
+	//   - suiteName: The test suite to query (e.g., 'conformance')
+	//   - releaseName: The release version (e.g., '4.15')
+	//   - daysBack: Number of days to look back from current date
+	//   - minTestCount: Minimum number of test executions required to include a test in results
+	ListGenericTestSummaryByPeriod(ctx context.Context, suiteName, releaseName string, daysBack, minTestCount int) ([]jobrunaggregatorapi.GenericTestSummaryByPeriodRow, error)
 }
 
 type ciDataClient struct {
@@ -1094,4 +1112,149 @@ func (c *ciDataClient) ListAllKnownAlerts(ctx context.Context) ([]*jobrunaggrega
 	}
 
 	return allKnownAlerts, nil
+}
+
+func (c *ciDataClient) ListTestSummaryByPeriod(ctx context.Context, suiteName, releaseName string, daysBack, minTestCount int) ([]jobrunaggregatorapi.TestSummaryByPeriodRow, error) {
+	// Query to summarize test results for a specific suite and release over a time period
+	// Groups by release, platform, topology, architecture, and test_name
+	// Calculates total test_count, failure_count, flake_count, failure_rate, and avg_duration_ms
+	// Filters results to only include tests with sufficient test runs
+	queryString := c.dataCoordinates.SubstituteDataSetLocation(`
+SELECT
+  release,
+  platform,
+  topology,
+  architecture,
+  test_name,
+  SUM(test_count) AS total_test_count,
+  SUM(failure_count) AS total_failure_count,
+  SUM(flake_count) AS total_flake_count,
+  SAFE_DIVIDE(SUM(failure_count), SUM(test_count)) AS failure_rate,
+  AVG(avg_duration_ms) AS avg_duration_ms,
+  MIN(date) AS period_start,
+  MAX(date) AS period_end,
+  COUNT(DISTINCT date) AS days_with_data
+FROM
+  DATA_SET_LOCATION.TestsSummaryByDate
+WHERE
+  suite = @suite_name
+  AND release = @release_name
+  AND date >= DATE_SUB(CURRENT_DATE(), INTERVAL @days_back DAY)
+  AND date <= CURRENT_DATE()
+GROUP BY
+  release,
+  platform,
+  topology,
+  architecture,
+  test_name
+HAVING
+  SUM(test_count) > @min_test_count
+ORDER BY
+  release,
+  platform,
+  topology,
+  architecture,
+  total_failure_count DESC,
+  test_name
+`)
+
+	query := c.client.Query(queryString)
+	query.Labels = map[string]string{
+		bigQueryLabelKeyApp:   bigQueryLabelValueApp,
+		bigQueryLabelKeyQuery: bigQueryLabelValueTestSummaryByPeriod,
+	}
+	query.QueryConfig.Parameters = []bigquery.QueryParameter{
+		{Name: "suite_name", Value: suiteName},
+		{Name: "release_name", Value: releaseName},
+		{Name: "days_back", Value: daysBack},
+		{Name: "min_test_count", Value: minTestCount},
+	}
+
+	rows, err := query.Read(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query test summary by period with %q: %w", queryString, err)
+	}
+
+	results := []jobrunaggregatorapi.TestSummaryByPeriodRow{}
+	for {
+		row := &jobrunaggregatorapi.TestSummaryByPeriodRow{}
+		err = rows.Next(row)
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, *row)
+	}
+
+	return results, nil
+}
+
+func (c *ciDataClient) ListGenericTestSummaryByPeriod(ctx context.Context, suiteName, releaseName string, daysBack, minTestCount int) ([]jobrunaggregatorapi.GenericTestSummaryByPeriodRow, error) {
+	// Query to summarize test results for a specific suite and release over a time period
+	// Groups by release and test_name only (no infrastructure dimensions)
+	// Calculates total test_count, failure_count, flake_count, failure_rate, and avg_duration_ms
+	// Filters results to only include tests with sufficient test runs
+	queryString := c.dataCoordinates.SubstituteDataSetLocation(`
+SELECT
+  release,
+  test_name,
+  SUM(test_count) AS total_test_count,
+  SUM(failure_count) AS total_failure_count,
+  SUM(flake_count) AS total_flake_count,
+  SAFE_DIVIDE(SUM(failure_count), SUM(test_count)) AS failure_rate,
+  AVG(avg_duration_ms) AS avg_duration_ms,
+  MIN(date) AS period_start,
+  MAX(date) AS period_end,
+  COUNT(DISTINCT date) AS days_with_data
+FROM
+  DATA_SET_LOCATION.TestsSummaryByDate
+WHERE
+  suite = @suite_name
+  AND release = @release_name
+  AND date >= DATE_SUB(CURRENT_DATE(), INTERVAL @days_back DAY)
+  AND date <= CURRENT_DATE()
+GROUP BY
+  release,
+  test_name
+HAVING
+  SUM(test_count) > @min_test_count
+ORDER BY
+  release,
+  total_failure_count DESC,
+  test_name
+`)
+
+	query := c.client.Query(queryString)
+	query.Labels = map[string]string{
+		bigQueryLabelKeyApp:   bigQueryLabelValueApp,
+		bigQueryLabelKeyQuery: bigQueryLabelValueGenericTestSummaryByPeriod,
+	}
+	query.QueryConfig.Parameters = []bigquery.QueryParameter{
+		{Name: "suite_name", Value: suiteName},
+		{Name: "release_name", Value: releaseName},
+		{Name: "days_back", Value: daysBack},
+		{Name: "min_test_count", Value: minTestCount},
+	}
+
+	rows, err := query.Read(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query generic test summary by period with %q: %w", queryString, err)
+	}
+
+	results := []jobrunaggregatorapi.GenericTestSummaryByPeriodRow{}
+	for {
+		row := &jobrunaggregatorapi.GenericTestSummaryByPeriodRow{}
+		err = rows.Next(row)
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, *row)
+	}
+
+	return results, nil
 }

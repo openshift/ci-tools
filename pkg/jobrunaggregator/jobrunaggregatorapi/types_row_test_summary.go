@@ -8,9 +8,6 @@ import (
 // This data structure corresponds to the suite_summary_by_period.sql query results.
 type TestSummaryByPeriodRow struct {
 	Release           string     `bigquery:"release"`
-	Platform          string     `bigquery:"platform"`
-	Topology          string     `bigquery:"topology"`
-	Architecture      string     `bigquery:"architecture"`
 	TestName          string     `bigquery:"test_name"`
 	TotalTestCount    int64      `bigquery:"total_test_count"`
 	TotalFailureCount int64      `bigquery:"total_failure_count"`

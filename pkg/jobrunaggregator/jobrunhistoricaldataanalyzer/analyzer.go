@@ -108,8 +108,7 @@ func (o *JobRunHistoricalDataAnalyzerOptions) runTestsDataType(ctx context.Conte
 	fmt.Printf("Fetching test data for release %s, suite %s, last %d days, min %d test runs\n",
 		release, suiteName, daysBack, minTestCount)
 
-	// testSummaries, err := o.ciDataClient.ListTestSummaryByPeriod(ctx, suiteName, release, daysBack, minTestCount)
-	testSummaries, err := o.ciDataClient.ListGenericTestSummaryByPeriod(ctx, suiteName, release, daysBack, minTestCount)
+	testSummaries, err := o.ciDataClient.ListTestSummaryByPeriod(ctx, suiteName, release, daysBack, minTestCount)
 	if err != nil {
 		return fmt.Errorf("failed to list test summary by period: %w", err)
 	}
@@ -119,8 +118,7 @@ func (o *JobRunHistoricalDataAnalyzerOptions) runTestsDataType(ctx context.Conte
 	}
 
 	// Write the test summaries directly to the output file as JSON
-	// out, err := formatTestOutput(testSummaries)
-	out, err := formatGenericTestOutput(testSummaries)
+	out, err := formatTestOutput(testSummaries)
 	if err != nil {
 		return fmt.Errorf("error formatting test output: %w", err)
 	}

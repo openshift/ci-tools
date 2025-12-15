@@ -417,13 +417,24 @@ def set_nat_instance_enabled(region: str, vpc_id: str, enabled: bool):
         route_table_id = route_table['RouteTableId']
 
         if nat_instance_id:
-            ec2_client.replace_route(
-                RouteTableId=route_table_id,
-                DestinationCidrBlock="0.0.0.0/0",
-                InstanceId=nat_instance_id
-            )
-        else:
-            logger.warning(f'Did not change route to NAT instance because the route table {route_table_id} did not have the right tag {route_table_tags}')
+            # Check if the route is already correctly set
+            routes = route_table.get('Routes', [])
+            needs_update = True
+            
+            for route in routes:
+                if route.get('DestinationCidrBlock') == '0.0.0.0/0':
+                    # Found the default route, check if it's already pointing to our NAT instance
+                    if route.get('InstanceId') == nat_instance_id:
+                        needs_update = False
+                    break
+            
+            if needs_update:
+                ec2_client.replace_route(
+                    RouteTableId=route_table_id,
+                    DestinationCidrBlock="0.0.0.0/0",
+                    InstanceId=nat_instance_id
+                )
+                logger.info(f'Updated route for 0.0.0.0/0 to point to NAT instance {nat_instance_id}')
 
     else:  # Set to disabled
 
@@ -446,15 +457,25 @@ def set_nat_instance_enabled(region: str, vpc_id: str, enabled: bool):
                 nat_gateway_id = get_tag(route_table_tags, TAG_KEY_NAT_GATEWAY_ID)
                 route_table_id = route_table['RouteTableId']
 
-                # Point the route back to the NAT gateway.
-                ec2_client.replace_route(
-                    RouteTableId=route_table_id,
-                    DestinationCidrBlock="0.0.0.0/0",
-                    NatGatewayId=nat_gateway_id
-                )
-
-            else:
-                logger.warning(f'Did not find a route table with a NAT instance tag for vpc {vpc_id}')
+                # Check if the route is already correctly set
+                routes = route_table.get('Routes', [])
+                needs_update = True
+                
+                for route in routes:
+                    if route.get('DestinationCidrBlock') == '0.0.0.0/0':
+                        # Found the default route, check if it's already pointing to our NAT gateway
+                        if route.get('NatGatewayId') == nat_gateway_id:
+                            needs_update = False
+                        break
+                
+                if needs_update:
+                    # Point the route back to the NAT gateway.
+                    ec2_client.replace_route(
+                        RouteTableId=route_table_id,
+                        DestinationCidrBlock="0.0.0.0/0",
+                        NatGatewayId=nat_gateway_id
+                    )
+                    logger.info(f'Updated route for 0.0.0.0/0 to point to NAT gateway {nat_gateway_id}')
 
         except Exception as e:
             # We might want to understand why this failed, but it shouldn't stop us
@@ -1023,8 +1044,6 @@ def cleanup(region: str, vpc_id: str):
     created_instance_profiles = set()
     while True:
 
-        instances = list()
-
         # Find instances that appear to have been set up as NAT instances.
         response = ec2_client.describe_instances(
             Filters=[
@@ -1038,6 +1057,7 @@ def cleanup(region: str, vpc_id: str):
             all_instances = reservation['Instances']
             if all_instances:
                 logger.info(f"Found {len(all_instances)} NAT instances to clean up in region {region} vpc {vpc_id}.")
+                instances_to_terminate = []
                 for instance in all_instances:
                     instance_id = instance['InstanceId']
                     instance_profile_name = instance.get('IamInstanceProfile', {}).get('Arn', '').split('/')[-1]
@@ -1050,16 +1070,24 @@ def cleanup(region: str, vpc_id: str):
                     logger.info(f'Found instance {instance_id} in state {instance_state}')
                     if instance_state == 'terminated':
                         continue
-                    logger.info(f"Terminating instance {instance_id}...")
-                    ec2_client.terminate_instances(InstanceIds=[instance_id])
+
+                    # Track all non-terminated instances so we wait for shutdown to complete
                     non_terminated_instances.add(instance_id)
 
-        if non_terminated_instances:
-            # Keep looping until they are terminated. This gives them a chance
-            # to shutdown gracefully and restore the NAT Gateway to the route
-            # table if the lambda failed to.
-            time.sleep(10)
-            continue
+                    # Only terminate instances that aren't already shutting down
+                    if instance_state != 'shutting-down':
+                        instances_to_terminate.append(instance_id)
+
+                # Batch terminate all instances in a single API call to avoid rate limiting
+                if instances_to_terminate:
+                    logger.info(f"Terminating {len(instances_to_terminate)} instances: {instances_to_terminate}")
+                    ec2_client.terminate_instances(InstanceIds=instances_to_terminate)
+
+        if instances_to_terminate:
+            # If there were instances to terminate, then when those instances terminate, they will
+            # trigger clean up as well. Allow them to perform the remainder of the clean up
+            # to prevent too many redundant threads performing the cleanup.
+            return
 
         if created_instance_profiles:
             logger.info(f"Found {len(created_instance_profiles)} instance profiles to delete.")
@@ -1114,7 +1142,7 @@ def cleanup(region: str, vpc_id: str):
                             logger.info(f'Instance profile no longer detected: {instance_profile_name}')
                             break
 
-            created_instance_profiles = set()
+            created_instance_profiles.clear()
 
         eips = get_eips_by_tag(ec2_client, TAG_KEY_VPC_ID, vpc_id)
         if eips:
@@ -1148,7 +1176,7 @@ def cleanup(region: str, vpc_id: str):
                         raise
 
         # Check if there are still instances, EIPs, or security groups to clean up
-        if not instances and not eips and not security_groups:
+        if not non_terminated_instances and not eips and not security_groups:
             logger.info("All resources cleaned up.")
             break
 

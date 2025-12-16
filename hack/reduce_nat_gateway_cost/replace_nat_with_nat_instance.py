@@ -127,16 +127,22 @@ from typing import Dict, List, Optional, NamedTuple
 #
 #         # To assign privileges to the instance profiles.
 #         "iam:AddRoleToInstanceProfile",
+#         "iam:GetInstanceProfile",
 #         "iam:CreateRole",
 #         "iam:AttachRolePolicy",
 #         "iam:PutRolePolicy",
 #         "iam:ListInstanceProfiles",
+#         "iam:ListInstanceProfilesForRole",
 #         "iam:ListRoles",
+#         "iam:GetRole",
+#         "iam:ListAttachedRolePolicies",
+#         "iam:ListRolePolicies",
 #
 #         # To clean up instance profile
 #         "iam:DeleteInstanceProfile",
 #         "iam:DeleteRole",
 #         "iam:DetachRolePolicy",
+#         "iam:RemoveRoleFromInstanceProfile",
 #         "iam:DeleteRolePolicy",
 #         "iam:TagInstanceProfile",
 #
@@ -274,8 +280,6 @@ def lambda_handler(event, context):
     if ec2_state:
         request_info_filter.set_info(request_id, req_context=ec2_state)
 
-    logger.info(f"Received event: {json.dumps(event)}")
-
     if "errorCode" in detail or "errorMessage" in detail:
         logger.warning(f"Skipping event {event_name} due to API error: {detail.get('errorMessage', 'Unknown error')}")
         return
@@ -289,13 +293,13 @@ def lambda_handler(event, context):
         nat_gateway_tags = nat_gateway.get("tagSet", {}).get('item', [])
 
         if not tags_has_tag(nat_gateway_tags, TAG_KEY_CI_NAT_REPLACE, "true"):
-            logger.info(f'NAT gateway {nat_gateway_id} does not have correct tags; skipping')
             return
 
         if tags_has_tag(nat_gateway_tags, TAG_KEY_NAT_INSTANCE_ID):
             logger.warning(f'NAT gateway {nat_gateway_id} replacement was already attempted; skipping')
             return
 
+        logger.info(f'NAT gateway {nat_gateway_id} has correct tags; creating NAT instance')
         handle_create_nat_gateway(region=region, nat_gateway_id=nat_gateway_id, public_subnet_id=public_subnet_id)
 
     elif event_name == "DeleteNatGateway":
@@ -304,16 +308,15 @@ def lambda_handler(event, context):
         ec2_client = get_ec2_client(region)
 
         nat_gateway_id = detail["requestParameters"]['DeleteNatGatewayRequest']["NatGatewayId"]
-        logger.info(f'NAT gateway {nat_gateway_id} is being deleted')
 
         response = ec2_client.describe_nat_gateways(NatGatewayIds=[nat_gateway_id])
         nat_gateway = response["NatGateways"][0]
         nat_gateway_tags = nat_gateway.get('Tags')
 
         if not tags_has_tag(nat_gateway_tags, TAG_KEY_CI_NAT_REPLACE, "true"):
-            logger.info(f'NAT gateway {nat_gateway_id} does not have correct tags; skipping')
             return  # Exit early if not a candidate
 
+        logger.info(f'NAT gateway {nat_gateway_id} has correct tags; cleaning up NAT instance')
         # When we start a NAT instance for a gateway, we tag it with the VPC
         # for this purpose. natgateway['VpcId'] may not return what we need
         # because the gateway is in the process of being deleted and may no
@@ -333,7 +336,6 @@ def lambda_handler(event, context):
             tag_set = instance_response.get('tagSet', {}).get('items', [])
 
             if not tags_has_tag(tag_set, TAG_KEY_CI_NAT_REPLACE, 'true'):
-                logger.info(f'Run Instances {instance_id} does not have {TAG_KEY_CI_NAT_REPLACE} tag; skipping.')
                 return
 
             # We only enable for master nodes coming online. This should
@@ -341,8 +343,9 @@ def lambda_handler(event, context):
             instance_name = get_tag(tag_set, 'Name')
             cluster_role = get_tag(tag_set, 'sigs.k8s.io/cluster-api-provider-aws/role')
             if (cluster_role and cluster_role not in ['master', 'control-plane']) or (not cluster_role and '-master' not in instance_name):
-                logger.info(f'Running instance {instance_id} is not a master; skipping')
                 return
+
+            logger.info(f'Running tagged instance {instance_id} since it is part of the control plane')
 
             # When instances are terminated, describe_instances doesn't always
             # include the VPC, so we tag instances we are enabling the NAT
@@ -369,15 +372,14 @@ def lambda_handler(event, context):
                     instance_name = get_tag(instance_tags, 'Name')
                     nat_instance_vpc_id = get_tag(instance_tags, TAG_KEY_VPC_ID)
                     if not nat_instance_vpc_id:
-                        logger.info(f'Terminating instance {instance_id} was not tagged with NAT instance information; skipping')
                         return
 
                     if '-bootstrap' in instance_name:
                         # We should not terminate the NAT instance just because the bootstrap machine is
                         # being terminated.
-                        logger.info(f'Running instance {instance_id} is not a bootstrap node; skipping')
                         return
 
+                    logger.info(f'Terminating instance {instance_id} was tagged with NAT instance information')
                     # If this instance was tagged by RunInstances, then we also use it
                     # trigger the shutdown of the NAT instance.
                     set_nat_instance_enabled(region, nat_instance_vpc_id, False)
@@ -1053,6 +1055,7 @@ def cleanup(region: str, vpc_id: str):
         )
 
         non_terminated_instances = set()
+        instances_to_terminate = []
         for reservation in response['Reservations']:
             all_instances = reservation['Instances']
             if all_instances:
@@ -1090,7 +1093,7 @@ def cleanup(region: str, vpc_id: str):
             return
 
         if created_instance_profiles:
-            logger.info(f"Found {len(created_instance_profiles)} instance profiles to delete.")
+            logger.info(f"Found {len(created_instance_profiles)} instance profiles to delete: {created_instance_profiles}")
 
             # To delete an instance profile, you need to remove all roles from it.
             # Until this is done, you can't delete the instance profile OR the roles.
@@ -1141,6 +1144,8 @@ def cleanup(region: str, vpc_id: str):
                             # deleting it.
                             logger.info(f'Instance profile no longer detected: {instance_profile_name}')
                             break
+                        logger.info(f'Issue trying to remove instance profile: {instance_profile_name}: {e}')
+                        time.sleep(10)
 
             created_instance_profiles.clear()
 
@@ -1169,9 +1174,12 @@ def cleanup(region: str, vpc_id: str):
                     logger.info(f"Deleting security group {sg_id}...")
                     ec2_client.delete_security_group(GroupId=sg_id)
                 except ec2_client.exceptions.ClientError as e:
+                    error_code = e.response.get('Error', {}).get('Code', '')
                     # Some security groups cannot be deleted if they're in use
-                    if 'DependencyViolation' in str(e):
+                    if error_code == 'DependencyViolation':
                         logger.info(f"Security group {sg_id} cannot be deleted due to dependencies.")
+                    elif error_code == 'InvalidGroup.NotFound':
+                        logger.info(f"Security group {sg_id} no longer exists.")
                     else:
                         raise
 

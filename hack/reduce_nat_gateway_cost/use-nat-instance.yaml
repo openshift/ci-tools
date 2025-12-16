@@ -37,14 +37,20 @@ Resources:
             Action:
             - iam:CreateInstanceProfile
             - iam:AddRoleToInstanceProfile
+            - iam:GetInstanceProfile
             - iam:CreateRole
             - iam:AttachRolePolicy
             - iam:PutRolePolicy
             - iam:ListInstanceProfiles
+            - iam:ListInstanceProfilesForRole
             - iam:ListRoles
+            - iam:GetRole
+            - iam:ListAttachedRolePolicies
+            - iam:ListRolePolicies
             - iam:DeleteInstanceProfile
             - iam:DeleteRole
             - iam:DetachRolePolicy
+            - iam:RemoveRoleFromInstanceProfile
             - iam:DeleteRolePolicy
             - iam:TagInstanceProfile
             - ssm:GetParameter

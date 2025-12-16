@@ -127,16 +127,22 @@ from typing import Dict, List, Optional, NamedTuple
 #
 #         # To assign privileges to the instance profiles.
 #         "iam:AddRoleToInstanceProfile",
+#         "iam:GetInstanceProfile",
 #         "iam:CreateRole",
 #         "iam:AttachRolePolicy",
 #         "iam:PutRolePolicy",
 #         "iam:ListInstanceProfiles",
+#         "iam:ListInstanceProfilesForRole",
 #         "iam:ListRoles",
+#         "iam:GetRole",
+#         "iam:ListAttachedRolePolicies",
+#         "iam:ListRolePolicies",
 #
 #         # To clean up instance profile
 #         "iam:DeleteInstanceProfile",
 #         "iam:DeleteRole",
 #         "iam:DetachRolePolicy",
+#         "iam:RemoveRoleFromInstanceProfile",
 #         "iam:DeleteRolePolicy",
 #         "iam:TagInstanceProfile",
 #
@@ -1087,7 +1093,7 @@ def cleanup(region: str, vpc_id: str):
             return
 
         if created_instance_profiles:
-            logger.info(f"Found {len(created_instance_profiles)} instance profiles to delete.")
+            logger.info(f"Found {len(created_instance_profiles)} instance profiles to delete: {created_instance_profiles}")
 
             # To delete an instance profile, you need to remove all roles from it.
             # Until this is done, you can't delete the instance profile OR the roles.
@@ -1138,6 +1144,8 @@ def cleanup(region: str, vpc_id: str):
                             # deleting it.
                             logger.info(f'Instance profile no longer detected: {instance_profile_name}')
                             break
+                        logger.info(f'Issue trying to remove instance profile: {instance_profile_name}: {e}')
+                        time.sleep(10)
 
             created_instance_profiles.clear()
 

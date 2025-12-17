@@ -51,6 +51,19 @@ func TestValidate(t *testing.T) {
 			},
 			expected: fmt.Errorf("cluster profile 'aws' already exists in the configuration file"),
 		},
+		{
+			name: "Duplicated org within profile",
+			profiles: api.ClusterProfilesList{
+				api.ClusterProfileDetails{
+					Profile: "aws",
+					Owners: []api.ClusterProfileOwners{
+						{Org: "aws", Repos: []string{"repo1"}},
+						{Org: "aws", Repos: []string{"repo2"}},
+					},
+				},
+			},
+			expected: fmt.Errorf("cluster profile 'aws' has duplicate org 'aws'"),
+		},
 	}
 
 	validator := newValidator(fakectrlruntimeclient.NewFakeClient())

@@ -96,10 +96,20 @@ func loadConfig(configPath string) (api.ClusterProfilesList, error) {
 
 func (validator *profileValidator) Validate(profiles api.ClusterProfilesList) error {
 	for _, p := range profiles {
+		// Check for duplicate orgs within the profile first
+		orgMap := make(map[string]bool)
+		for _, owner := range p.Owners {
+			if orgMap[owner.Org] {
+				return fmt.Errorf("cluster profile '%v' has duplicate org '%v'", p.Profile, owner.Org)
+			}
+			orgMap[owner.Org] = true
+		}
+
 		// Check if a profile isn't already defined in the config
 		if _, found := validator.profiles[p.Profile]; found {
 			return fmt.Errorf("cluster profile '%v' already exists in the configuration file", p.Profile)
 		}
+
 		validator.profiles[p.Profile] = p
 	}
 	return nil

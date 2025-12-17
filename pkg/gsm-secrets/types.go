@@ -15,6 +15,7 @@ const (
 
 	GCPMaxServiceAccountIDLength = 30
 
+	UpdaterSASecretName   = "updater-service-account"
 	UpdaterSASecretSuffix = "__updater-service-account"
 	IndexSecretSuffix     = "____index"
 

@@ -105,6 +105,8 @@ func GetAllSecrets(ctx context.Context, client SecretManagerClient, config Confi
 	return actualSecrets, nil
 }
 
+// GetSecretPayload retrieves the latest version of a secret's payload data from Google Secret Manager.
+// It takes the secret resource name (e.g., "projects/my-project/secrets/my-secret") and returns the raw payload bytes.
 func GetSecretPayload(ctx context.Context, client SecretManagerClient, secretResourceName string) ([]byte, error) {
 	accessReq := &secretmanagerpb.AccessSecretVersionRequest{
 		Name: secretResourceName + "/versions/latest",

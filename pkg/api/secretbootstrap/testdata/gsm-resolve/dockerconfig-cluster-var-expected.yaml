@@ -1,0 +1,29 @@
+# Expected result after resolving dockerconfig-cluster-var-input.yaml
+cluster_groups:
+  production-clusters:
+    - prod01
+    - prod02
+
+bundles:
+  - name: docker-registry-auth
+    dockerconfig:
+      as: .dockerconfigjson
+      registries:
+        - collection: registry-credentials
+          group: production
+          registry_url: quay.io
+          auth_field: auth-token
+          email_field: email
+    gsm_secrets:
+      - collection: registry-credentials
+        group: production
+        fields:
+          - name: auth-token
+            as: token
+    targets:
+      - cluster: prod01
+        namespace: openshift-config
+        type: kubernetes.io/dockerconfigjson
+      - cluster: prod02
+        namespace: openshift-config
+        type: kubernetes.io/dockerconfigjson

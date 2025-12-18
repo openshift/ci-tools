@@ -11,6 +11,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
 )
 
 func TestGroupCredentialsByCollectionAndMountPath(t *testing.T) {
@@ -396,104 +397,92 @@ func TestReplaceForbiddenSymbolsInCredentialName(t *testing.T) {
 		// Valid cases - replacement strings should be converted to dots and underscores
 		{
 			name:        "secret with dot replacement should work",
-			secretName:  fmt.Sprintf("%scredential", DotReplacementString),
+			secretName:  fmt.Sprintf("%scredential", gsmvalidation.DotReplacementString),
 			expected:    ".credential",
 			expectError: false,
 		},
 		{
 			name:        "secret with dot in middle should work",
-			secretName:  fmt.Sprintf("name%sjson", DotReplacementString),
+			secretName:  fmt.Sprintf("name%sjson", gsmvalidation.DotReplacementString),
 			expected:    "name.json",
 			expectError: false,
 		},
 		{
 			name:        "secret ending with dot should work",
-			secretName:  fmt.Sprintf("credential%s", DotReplacementString),
+			secretName:  fmt.Sprintf("credential%s", gsmvalidation.DotReplacementString),
 			expected:    "credential.",
 			expectError: false,
 		},
 		{
 			name:        "secret with multiple dots should work",
-			secretName:  fmt.Sprintf("%scredential%stxt%s", DotReplacementString, DotReplacementString, DotReplacementString),
+			secretName:  fmt.Sprintf("%scredential%stxt%s", gsmvalidation.DotReplacementString, gsmvalidation.DotReplacementString, gsmvalidation.DotReplacementString),
 			expected:    ".credential.txt.",
 			expectError: false,
 		},
 		{
 			name:        "secret with underscore replacement should work",
-			secretName:  fmt.Sprintf("%scredential", UnderscoreReplacementString),
-			expected:    "_credential",
+			secretName:  "some_credential",
+			expected:    "some_credential",
 			expectError: false,
 		},
 		{
 			name:        "allcaps secret with underscores should work",
-			secretName:  fmt.Sprintf("AWS%sACCESS%sKEY%sID", UnderscoreReplacementString, UnderscoreReplacementString, UnderscoreReplacementString),
+			secretName:  "AWS_ACCESS_KEY_ID",
 			expected:    "AWS_ACCESS_KEY_ID",
 			expectError: false,
 		},
 		{
-			name:        "secret with underscore in middle should work",
-			secretName:  fmt.Sprintf("name%sfile", UnderscoreReplacementString),
-			expected:    "name_file",
-			expectError: false,
-		},
-		{
 			name:        "secret ending with underscore should work",
-			secretName:  fmt.Sprintf("credential%s", UnderscoreReplacementString),
+			secretName:  "credential_",
 			expected:    "credential_",
 			expectError: false,
 		},
 		{
 			name:        "secret with multiple underscores should work",
-			secretName:  fmt.Sprintf("%scredential%sfile%s", UnderscoreReplacementString, UnderscoreReplacementString, UnderscoreReplacementString),
-			expected:    "_credential_file_",
+			secretName:  "credential_file_",
+			expected:    "credential_file_",
 			expectError: false,
 		},
 		{
 			name:        "secret with mixed dot and underscore should work",
-			secretName:  fmt.Sprintf("name%sfile%stxt", DotReplacementString, UnderscoreReplacementString),
-			expected:    "name.file_txt",
-			expectError: false,
-		},
-		{
-			name:        "secret with underscore and dot should work",
-			secretName:  fmt.Sprintf("name%sfile%stxt", UnderscoreReplacementString, DotReplacementString),
+			secretName:  fmt.Sprintf("name_file%stxt", gsmvalidation.DotReplacementString),
 			expected:    "name_file.txt",
 			expectError: false,
 		},
 		{
 			name:        "secret starting with dot and ending with underscore should work",
-			secretName:  fmt.Sprintf("%scredential%s", DotReplacementString, UnderscoreReplacementString),
+			secretName:  fmt.Sprintf("%scredential_", gsmvalidation.DotReplacementString),
 			expected:    ".credential_",
 			expectError: false,
 		},
 		{
-			name:        "secret starting with underscore and ending with dot should work",
-			secretName:  fmt.Sprintf("%scredential%s", UnderscoreReplacementString, DotReplacementString),
-			expected:    "_credential.",
+			name:        "secret ending with dot should work",
+			secretName:  fmt.Sprintf("credential%s", gsmvalidation.DotReplacementString),
+			expected:    "credential.",
 			expectError: false,
 		},
 		{
 			name:        "secret with multiple dots and underscores mixed should work",
-			secretName:  fmt.Sprintf("%sconfig%sfile%sbackup%stxt%s", DotReplacementString, UnderscoreReplacementString, DotReplacementString, UnderscoreReplacementString, DotReplacementString),
+			secretName:  fmt.Sprintf("%sconfig_file%sbackup_txt%s", gsmvalidation.DotReplacementString, gsmvalidation.DotReplacementString, gsmvalidation.DotReplacementString),
 			expected:    ".config_file.backup_txt.",
 			expectError: false,
 		},
 		{
-			name:        "secret with adjacent dot and underscore replacements should work",
-			secretName:  fmt.Sprintf("name%s%sfile", DotReplacementString, UnderscoreReplacementString),
+			name:        "secret with adjacent dot and underscore should work",
+			secretName:  fmt.Sprintf("name%s_file", gsmvalidation.DotReplacementString),
 			expected:    "name._file",
 			expectError: false,
 		},
 		{
-			name:        "secret with adjacent underscore and dot replacements should work",
-			secretName:  fmt.Sprintf("name%s%sfile", UnderscoreReplacementString, DotReplacementString),
-			expected:    "name_.file",
+			name:        "secret with underscore and dash should stay the same",
+			secretName:  "some_key-secret",
+			expected:    "some_key-secret",
 			expectError: false,
 		},
 		{
-			name:        "secret with underscore and dash should work",
-			secretName:  fmt.Sprintf("some%skey-secret", UnderscoreReplacementString),
-			expected:    "some_key-secret",
+			name:        "secret with slashes should work",
+			secretName:  fmt.Sprintf("path%sto%ssecret", gsmvalidation.SlashReplacementString, gsmvalidation.SlashReplacementString),
+			expected:    "path/to/secret",
 			expectError: false,
 		},
 		// Invalid cases - forbidden characters that are not allowed
@@ -506,12 +495,6 @@ func TestReplaceForbiddenSymbolsInCredentialName(t *testing.T) {
 		{
 			name:        "secret with spaces should fail validation",
 			secretName:  "secret name",
-			expected:    "",
-			expectError: true,
-		},
-		{
-			name:        "secret with slashes should fail validation",
-			secretName:  "path/to/secret",
 			expected:    "",
 			expectError: true,
 		},
@@ -535,7 +518,7 @@ func TestReplaceForbiddenSymbolsInCredentialName(t *testing.T) {
 		},
 		{
 			name:        "secret with multiple invalid characters should fail validation",
-			secretName:  "some.weird@secret/name",
+			secretName:  fmt.Sprintf("some%sweird@secret%sname!", gsmvalidation.DotReplacementString, gsmvalidation.SlashReplacementString),
 			expected:    "",
 			expectError: true,
 		},

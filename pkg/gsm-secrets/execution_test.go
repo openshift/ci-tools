@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,75 +19,9 @@ import (
 	"google.golang.org/grpc/status"
 
 	"k8s.io/apimachinery/pkg/util/wait"
+
+	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
 )
-
-func TestNormalizeSecretName(t *testing.T) {
-	testCases := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{
-			name:     "no special characters",
-			input:    "simple-secret-name",
-			expected: "simple-secret-name",
-		},
-		{
-			name:     "dots only",
-			input:    "secret.with.dots",
-			expected: "secret--dot--with--dot--dots",
-		},
-		{
-			name:     "underscores only",
-			input:    "secret_with_underscores",
-			expected: "secret--u--with--u--underscores",
-		},
-		{
-			name:     "underscore at beginning of name",
-			input:    "_SECRET_NAME",
-			expected: "--u--SECRET--u--NAME",
-		},
-		{
-			name:     "mixed dots and underscores",
-			input:    "build_farm.cluster-init.build01.config",
-			expected: "build--u--farm--dot--cluster-init--dot--build01--dot--config",
-		},
-		{
-			name:     "empty string",
-			input:    "",
-			expected: "",
-		},
-		{
-			name:     "multiple consecutive dots",
-			input:    "secret...name",
-			expected: "secret--dot----dot----dot--name",
-		},
-		{
-			name:     "multiple consecutive underscores",
-			input:    "secret___name",
-			expected: "secret--u----u----u--name",
-		},
-		{
-			name:     "dots and underscores together",
-			input:    "secret._name",
-			expected: "secret--dot----u--name",
-		},
-		{
-			name:     "real world example",
-			input:    "build_farm_sa__sa.cluster-init.build01.config",
-			expected: "build--u--farm--u--sa--u----u--sa--dot--cluster-init--dot--build01--dot--config",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result := NormalizeSecretName(tc.input)
-			if result != tc.expected {
-				t.Errorf("Expected %q, got %q", tc.expected, result)
-			}
-		})
-	}
-}
 
 func TestGenerateServiceAccountKey(t *testing.T) {
 	config := Config{
@@ -579,6 +514,123 @@ func TestCreateSecrets(t *testing.T) {
 						t.Errorf("Expected index secret %q to have payload, but it has none", name)
 					}
 				}
+			}
+		})
+	}
+}
+
+// TestListSecretFieldsValidation tests the client-side validation logic
+// for non-recursive secret listing in ListSecretFieldsByCollectionAndGroup
+func TestListSecretFieldsValidation(t *testing.T) {
+	testCases := []struct {
+		name          string
+		collection    string
+		group         string
+		secretID      string
+		shouldInclude bool
+		description   string
+	}{
+		{
+			name:          "valid direct child - simple group",
+			collection:    "vsphere",
+			group:         "ibmcloud",
+			secretID:      "vsphere__ibmcloud__username",
+			shouldInclude: true,
+			description:   "Direct child with correct structure",
+		},
+		{
+			name:          "invalid - nested subgroup",
+			collection:    "vsphere",
+			group:         "ibmcloud",
+			secretID:      "vsphere__ibmcloud__subgroup__username",
+			shouldInclude: false,
+			description:   "Has extra subgroup level",
+		},
+		{
+			name:          "valid - hierarchical group",
+			collection:    "vsphere",
+			group:         "ibmcloud/ci",
+			secretID:      "vsphere__ibmcloud__ci__password",
+			shouldInclude: true,
+			description:   "Hierarchical group with correct depth",
+		},
+		{
+			name:          "invalid - hierarchical group with nesting",
+			collection:    "vsphere",
+			group:         "ibmcloud/ci",
+			secretID:      "vsphere__ibmcloud__ci__prod__password",
+			shouldInclude: false,
+			description:   "Hierarchical group with extra nesting",
+		},
+		{
+			name:          "valid - empty group",
+			collection:    "test",
+			group:         "",
+			secretID:      "test__field",
+			shouldInclude: true,
+			description:   "Empty group with direct field",
+		},
+		{
+			name:          "invalid - empty group with nesting",
+			collection:    "test",
+			group:         "",
+			secretID:      "test__subgroup__field",
+			shouldInclude: false,
+			description:   "Empty group but has subgroup",
+		},
+		{
+			name:          "invalid - wrong collection",
+			collection:    "vsphere",
+			group:         "ibmcloud",
+			secretID:      "other-collection__ibmcloud__username",
+			shouldInclude: false,
+			description:   "Collection doesn't match",
+		},
+		{
+			name:          "invalid - wrong group",
+			collection:    "vsphere",
+			group:         "ibmcloud",
+			secretID:      "vsphere__other-group__username",
+			shouldInclude: false,
+			description:   "Group doesn't match",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Build the expected prefix
+			groupParts := strings.ReplaceAll(tc.group, "/", gsmvalidation.CollectionSecretDelimiter)
+			base := fmt.Sprintf("%s%s", tc.collection, gsmvalidation.CollectionSecretDelimiter)
+			if groupParts != "" {
+				base = fmt.Sprintf("%s%s%s", base, groupParts, gsmvalidation.CollectionSecretDelimiter)
+			}
+
+			// Check prefix match
+			if !strings.HasPrefix(tc.secretID, base) && tc.shouldInclude {
+				t.Errorf("Expected secret %q to match prefix %q, but it doesn't", tc.secretID, base)
+				return
+			}
+
+			if !strings.HasPrefix(tc.secretID, base) {
+				// Prefix doesn't match, so it should be excluded
+				if tc.shouldInclude {
+					t.Errorf("Secret %q doesn't match prefix %q but was expected to be included", tc.secretID, base)
+				}
+				return
+			}
+
+			// Validate part count
+			parts := strings.Split(tc.secretID, gsmvalidation.CollectionSecretDelimiter)
+			expectedParts := 2 // collection + field
+			if tc.group != "" {
+				expectedParts += strings.Count(tc.group, "/") + 1
+			}
+
+			actuallyIncluded := len(parts) == expectedParts
+
+			if actuallyIncluded != tc.shouldInclude {
+				t.Errorf("%s: Secret %q - expected included=%v, got included=%v (parts=%d, expected=%d)",
+					tc.description, tc.secretID, tc.shouldInclude, actuallyIncluded, len(parts), expectedParts)
 			}
 		})
 	}

@@ -224,6 +224,54 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 
 					addPatchEntry("replace", fmt.Sprintf("/spec/containers/%d/securityContext", i), container.SecurityContext)
 					klog.Infof("Added NET_ADMIN, NET_RAW, SETUID, and SETGID capabilities, ensured runAsUser=0 and allowPrivilegeEscalation=true for test container in pod %s in namespace %s due to TEST_REQUIRES_BUILDFARM_NET_ADMIN=true", podName, namespace)
+
+					// Set CPU resources to 12 cores for NET_ADMIN pods
+					const netAdminCPUMillicores = 12000 // 12 cores
+
+					var cpuRequest resource.Quantity
+					var hasCPURequest bool
+					var cpuLimit resource.Quantity
+					var hasCPULimit bool
+
+					// Safely check for existing CPU requests/limits
+					if container.Resources.Requests != nil {
+						cpuRequest, hasCPURequest = container.Resources.Requests[corev1.ResourceCPU]
+					}
+					if container.Resources.Limits != nil {
+						cpuLimit, hasCPULimit = container.Resources.Limits[corev1.ResourceCPU]
+					}
+
+					// Handle CPU requests
+					if !hasCPURequest || cpuRequest.MilliValue() < netAdminCPUMillicores {
+						// Preserve all existing resource requests
+						newRequests := make(map[string]interface{})
+						for resourceName, quantity := range container.Resources.Requests {
+							newRequests[string(resourceName)] = quantity.String()
+						}
+						// Set/override CPU to 12 cores
+						newRequests[string(corev1.ResourceCPU)] = fmt.Sprintf("%dm", netAdminCPUMillicores)
+
+						addPatchEntry("add", fmt.Sprintf("/spec/containers/%d/resources/requests", i), newRequests)
+						if hasCPURequest {
+							klog.Infof("Increasing NET_ADMIN pod CPU request from %vm to %vm for container %s", cpuRequest.MilliValue(), netAdminCPUMillicores, container.Name)
+						} else {
+							klog.Infof("Setting NET_ADMIN pod CPU request to %vm for container %s", netAdminCPUMillicores, container.Name)
+						}
+					}
+
+					// Handle CPU limits - only if they exist and are below 12 cores
+					if hasCPULimit && cpuLimit.MilliValue() < netAdminCPUMillicores {
+						// Preserve all existing resource limits
+						newLimits := make(map[string]interface{})
+						for resourceName, quantity := range container.Resources.Limits {
+							newLimits[string(resourceName)] = quantity.String()
+						}
+						// Set/override CPU to 12 cores
+						newLimits[string(corev1.ResourceCPU)] = fmt.Sprintf("%dm", netAdminCPUMillicores)
+
+						addPatchEntry("add", fmt.Sprintf("/spec/containers/%d/resources/limits", i), newLimits)
+						klog.Infof("Increasing NET_ADMIN pod CPU limit from %vm to %vm for container %s", cpuLimit.MilliValue(), netAdminCPUMillicores, container.Name)
+					}
 				}
 				break
 			}

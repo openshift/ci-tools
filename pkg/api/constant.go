@@ -81,6 +81,13 @@ const (
 	// to copy the annotation if it exists
 	ReleaseConfigAnnotation = "release.openshift.io/config"
 
+	// AggregationIDLabel is the label used to link aggregated jobs to their aggregator job
+	AggregationIDLabel = "release.openshift.io/aggregation-id"
+
+	// ProwJobJobNameAnnotation is the annotation in prowJob for the Job Name.
+	// It is used to match relevant job names for different aggregators
+	ProwJobJobNameAnnotation = "prow.k8s.io/job"
+
 	ImageStreamImportRetries = 6
 
 	NestedPodmanSCC         = "nested-podman"

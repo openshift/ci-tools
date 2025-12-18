@@ -584,7 +584,16 @@ func (s *server) abortAll(logger *logrus.Entry, ic github.IssueCommentEvent) str
 			continue
 		}
 
-		// If this is an aggregator job, abort all aggregated jobs (including the aggregator itself)
+		wasAborted, err := s.abortJob(job, jobLogger)
+		if err != nil {
+			erroredJobs = append(erroredJobs, jobName)
+		} else if wasAborted {
+			totalJobsAborted++
+		} else {
+			jobLogger.Info("job was already complete")
+		}
+
+		// If this is an aggregator job, abort all job runs for the aggregator
 		if aggregationID, isAggregator := isAggregatorJob(job); isAggregator {
 			jobLogger.Info("Found aggregator job, aborting all aggregated jobs (including aggregator)...")
 
@@ -608,7 +617,12 @@ func (s *server) abortAll(logger *logrus.Entry, ic github.IssueCommentEvent) str
 					"aggregatedJobSpec": aggregatedJob.Spec.Job,
 				})
 
-				wasAborted, err := s.abortJob(aggregatedJob, aggregatedJobLogger)
+				// Skip the aggregator job itself to avoid double processing
+				if aggregatedJob.Name == job.Name {
+					continue
+				}
+
+				wasAborted, err = s.abortJob(aggregatedJob, aggregatedJobLogger)
 				if err != nil {
 					erroredJobs = append(erroredJobs, aggregatedJob.Name)
 				} else if wasAborted {
@@ -617,15 +631,6 @@ func (s *server) abortAll(logger *logrus.Entry, ic github.IssueCommentEvent) str
 					jobLogger.Info("job was already complete")
 				}
 			}
-		} else {
-			wasAborted, err := s.abortJob(job, jobLogger)
-			if err != nil {
-				erroredJobs = append(erroredJobs, jobName)
-			} else if wasAborted {
-				totalJobsAborted++
-			} else {
-				jobLogger.Info("job was already complete")
-			}
 		}
 	}
 
@@ -633,7 +638,7 @@ func (s *server) abortAll(logger *logrus.Entry, ic github.IssueCommentEvent) str
 		return fmt.Sprintf("Failed to abort some payload jobs. Total jobs aborted: %d. Failed jobs: %s", totalJobsAborted, strings.Join(erroredJobs, ", "))
 	}
 
-	return fmt.Sprintf("aborted %d active payload jobs for pull request %s/%s#%d", totalJobsAborted, org, repo, prNumber)
+	return fmt.Sprintf("aborted %d active payload job(s) for pull request %s/%s#%d", totalJobsAborted, org, repo, prNumber)
 }
 
 func (s *server) getPayloadJobsForPR(org, repo string, prNumber int, logger *logrus.Entry) ([]string, error) {

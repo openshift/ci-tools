@@ -1051,7 +1051,7 @@ trigger 0 job(s) of type all for the ci release of OCP 4.8
 					Body: "/payload-abort",
 				},
 			},
-			expectedMessage: `aborted 1 active payload jobs for pull request org/repo#123`,
+			expectedMessage: `aborted 1 active payload job(s) for pull request org/repo#123`,
 		},
 		{
 			name: "abort all jobs aborts underlying aggregated job runs",
@@ -1143,7 +1143,7 @@ trigger 0 job(s) of type all for the ci release of OCP 4.8
 					Body: "/payload-abort",
 				},
 			},
-			expectedMessage: `aborted 3 active payload jobs for pull request org/repo#123`,
+			expectedMessage: `aborted 3 active payload job(s) for pull request org/repo#123`,
 		},
 		{
 			name: "incorrectly formatted command",

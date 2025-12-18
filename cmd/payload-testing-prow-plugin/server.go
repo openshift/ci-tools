@@ -628,7 +628,7 @@ func (s *server) abortAll(logger *logrus.Entry, ic github.IssueCommentEvent) str
 				} else if wasAborted {
 					totalJobsAborted++
 				} else {
-					jobLogger.Info("job was already complete")
+					aggregatedJobLogger.Info("job was already complete")
 				}
 			}
 		}

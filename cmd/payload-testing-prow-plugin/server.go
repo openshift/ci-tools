@@ -595,7 +595,7 @@ func (s *server) abortAll(logger *logrus.Entry, ic github.IssueCommentEvent) str
 
 		// If this is an aggregator job, abort all job runs for the aggregator
 		if aggregationID, isAggregator := isAggregatorJob(job); isAggregator {
-			jobLogger.Info("Found aggregator job, aborting all aggregated jobs (including aggregator)...")
+			jobLogger.Info("Found aggregator job, aborting all jobs that the aggregator is tracking...")
 
 			var aggregatedJobs prowapi.ProwJobList
 			labelSelector := labels.Set{api.AggregationIDLabel: aggregationID}.AsSelector()

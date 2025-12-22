@@ -85,6 +85,8 @@ const (
 
 	NestedPodmanSCC         = "nested-podman"
 	NestedPodmanClusterRole = "nested-podman-creater"
+
+	LeaseProxyServerPort = 8082
 )
 
 var (

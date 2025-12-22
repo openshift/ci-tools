@@ -506,12 +506,10 @@ func (c *RetestController) enabledPRs(candidates map[string]tide.PullRequest) ma
 		if validationErrors := validatePolicies(policy); len(validationErrors) != 0 {
 			c.logger.Warnf("Failed to validate retester policy: %v", validationErrors)
 		}
-		if policy.Enabled != nil {
-			if *policy.Enabled {
-				output[key] = pr
-			} else {
-				c.logger.Infof("PR %s is not from an enabled org or repo", key)
-			}
+		if policy.Enabled != nil && *policy.Enabled {
+			output[key] = pr
+		} else {
+			c.logger.Infof("PR %s is not from an enabled org or repo", key)
 		}
 	}
 	return output

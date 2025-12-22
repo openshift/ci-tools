@@ -50,8 +50,6 @@ const (
 	conditionAllJobsTriggered = "AllJobsTriggered"
 	conditionWithErrors       = "WithErrors"
 
-	aggregationIDLabel = "release.openshift.io/aggregation-id"
-
 	dependentProwJobsFinalizer = "pullrequestpayloadqualificationruns.ci.openshift.io/dependent-prowjobs"
 )
 
@@ -406,7 +404,7 @@ func (r *reconciler) abortJobs(ctx context.Context,
 		if labels == nil {
 			return "", false
 		}
-		label, exists := labels[aggregationIDLabel]
+		label, exists := labels[api.AggregationIDLabel]
 		return label, exists
 	}
 
@@ -448,7 +446,7 @@ func (r *reconciler) abortJobs(ctx context.Context,
 			logger.Info("Aborting aggregated prowjobs...")
 
 			var aggregatedProwjobs prowv1.ProwJobList
-			if err := r.client.List(ctx, &aggregatedProwjobs, ctrlruntimeclient.MatchingLabels{aggregationIDLabel: aggregationId}); err != nil {
+			if err := r.client.List(ctx, &aggregatedProwjobs, ctrlruntimeclient.MatchingLabels{api.AggregationIDLabel: aggregationId}); err != nil {
 				logger.WithError(err).Error("Failed to list aggregated jobs")
 				continue
 			}
@@ -782,7 +780,7 @@ func (r *reconciler) generateAggregatedProwjobs(uid string, ciopConfig *api.Rele
 
 	for i := 0; i < spec.AggregatedCount; i++ {
 		opts := &aggregatedOptions{
-			labels:          map[string]string{aggregationIDLabel: uid},
+			labels:          map[string]string{api.AggregationIDLabel: uid},
 			aggregatedIndex: i,
 			releaseJobName:  spec.JobName(jobconfig.PeriodicPrefix),
 		}
@@ -854,7 +852,7 @@ func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobNa
 		return nil, fmt.Errorf("failed to default the ProwJob: %w", err)
 	}
 
-	labels := map[string]string{aggregationIDLabel: uid, v1.PullRequestPayloadQualificationRunLabel: prpqrName}
+	labels := map[string]string{api.AggregationIDLabel: uid, v1.PullRequestPayloadQualificationRunLabel: prpqrName}
 	annotations := map[string]string{releaseJobNameAnnotation: jobNameHash(aggregatorJobName)}
 
 	cfg := getCfg.Config()

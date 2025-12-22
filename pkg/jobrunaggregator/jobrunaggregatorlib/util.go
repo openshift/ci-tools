@@ -29,9 +29,6 @@ import (
 const (
 	JobStateQuerySourceBigQuery = "bigquery"
 	JobStateQuerySourceCluster  = "cluster"
-	// ProwJobJobNameAnnotation is the annotation in prowJob for the Job Name.
-	// It is used to match relevant job names for different aggregators
-	ProwJobJobNameAnnotation = "prow.k8s.io/job"
 	// prowJobJobRunIDLabel is the label in prowJob for the prow job run ID. It is a unique identifier for job runs across different jobs
 	prowJobJobRunIDLabel = "prow.k8s.io/build-id"
 )

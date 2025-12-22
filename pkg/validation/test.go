@@ -428,6 +428,35 @@ func validateTestStepDependencies(config *api.ReleaseBuildConfiguration) []error
 	return errs
 }
 
+// validateWorkflowOverrides validates that tests properly acknowledge when they override workflow pre/post steps
+func (v *Validator) validateWorkflowOverrides(config api.MultiStageTestConfiguration) error {
+	if config.Workflow == nil {
+		return nil
+	}
+
+	workflow, ok := v.workflowsByName[*config.Workflow]
+	if !ok {
+		// This will be caught by mergeWorkflow, no need to duplicate the error
+		return nil
+	}
+
+	hasPreOverride := len(config.Pre) > 0 && len(workflow.Pre) > 0
+	hasPostOverride := len(config.Post) > 0 && len(workflow.Post) > 0
+
+	if (hasPreOverride || hasPostOverride) && (config.AllowPrePostStepOverrides == nil || !*config.AllowPrePostStepOverrides) {
+		var overriddenSections []string
+		if hasPreOverride {
+			overriddenSections = append(overriddenSections, "pre")
+		}
+		if hasPostOverride {
+			overriddenSections = append(overriddenSections, "post")
+		}
+		return fmt.Errorf("test configuration overrides %s steps from workflow %q but does not have 'allow_pre_post_step_overrides: true' set. This flag is required to prevent accidental overriding of critical setup and teardown steps that could cause resource leaks", strings.Join(overriddenSections, " and "), *config.Workflow)
+	}
+
+	return nil
+}
+
 func (v *Validator) validateClusterProfile(fieldRoot string, p api.ClusterProfile, metadata *api.Metadata) []error {
 	if v.validClusterProfiles != nil {
 		if _, ok := v.validClusterProfiles[p]; ok {
@@ -601,6 +630,13 @@ func (v *Validator) validateTestConfigurationType(
 		validationErrors = append(validationErrors, validateLeases(context.addField("leases"), testConfig.Leases)...)
 		if testConfig.NodeArchitecture != nil {
 			validationErrors = append(validationErrors, validateNodeArchitecture(fieldRoot, *testConfig.NodeArchitecture))
+		}
+
+		// Validate workflow overrides if workflow registry is available
+		if v.workflowsByName != nil {
+			if err := v.validateWorkflowOverrides(*testConfig); err != nil {
+				validationErrors = append(validationErrors, err)
+			}
 		}
 		validationErrors = append(validationErrors, v.validateTestSteps(context.addField("pre"), testStagePre, testConfig.Pre, claimRelease)...)
 		validationErrors = append(validationErrors, v.validateTestSteps(context.addField("test"), testStageTest, testConfig.Test, claimRelease)...)

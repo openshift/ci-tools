@@ -4,6 +4,7 @@ Description: >-
 Resources:
   UseNatInstanceForwardRole:
     Type: AWS::IAM::Role
+    DeletionPolicy: Retain
     Properties:
       Description: |
         Executes the lambda when an expected event is detected.
@@ -33,6 +34,7 @@ Resources:
             Resource: !Sub arn:aws:events:us-east-1:${AWS::AccountId}:event-bus/default
   UseNatInstanceForwardEventRule:
     Type: AWS::Events::Rule
+    DeletionPolicy: Retain
     Properties:
       Name: use-nat-instance-forward-event-rule
       EventPattern: >-

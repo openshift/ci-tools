@@ -11,9 +11,10 @@ Resources:
   # IAM Role for NAT instances - allows them to modify route tables and their own attributes
   NatInstanceRole:
     Type: AWS::IAM::Role
+    DeletionPolicy: Retain
     Properties:
       RoleName: use-nat-instance-role
-      Description: Role for NAT instances to modify route tables and instance attributes
+      Description: Role for NAT instances to modify route tables and necessary instance attributes
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -41,12 +42,14 @@ Resources:
   # Instance Profile that NAT instances will use
   NatInstanceProfile:
     Type: AWS::IAM::InstanceProfile
+    DeletionPolicy: Retain
     Properties:
       InstanceProfileName: use-nat-instance-profile
       Roles:
       - !Ref NatInstanceRole
   UseNatInstanceFunctionRole:
     Type: AWS::IAM::Role
+    DeletionPolicy: Retain
     Properties:
       Description: |
         Intercept Openshift installation calls and create a virtual machine
@@ -80,11 +83,13 @@ Resources:
             Resource: !GetAtt NatInstanceRole.Arn
   UseNatInstanceLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
     Properties:
       LogGroupName: use-nat-instance-log-group
       RetentionInDays: 14
   UseNatInstanceFunction:
     Type: AWS::Lambda::Function
+    DeletionPolicy: Retain
     Properties:
       FunctionName: use-nat-instance-function
       Code:
@@ -113,6 +118,7 @@ Resources:
         ApplyOn: None
   UseNatInstanceExecutionRole:
     Type: AWS::IAM::Role
+    DeletionPolicy: Retain
     Properties:
       Description: |
         Executes the lambda when an expected event is detected.
@@ -138,6 +144,7 @@ Resources:
             Resource: !GetAtt UseNatInstanceFunction.Arn
   UseNatInstanceEventRule:
     Type: AWS::Events::Rule
+    DeletionPolicy: Retain
     Properties:
       Name: use-nat-instance-event-rule
       EventPattern: >-

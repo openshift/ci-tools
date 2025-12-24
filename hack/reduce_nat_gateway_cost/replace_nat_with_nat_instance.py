@@ -497,6 +497,10 @@ def handle_create_nat_gateway(region: str, nat_gateway_id: str, public_subnet_id
                                            private_subnet=private_subnet,
                                            key_name=key_name)
 
+    if not new_nat_instance:
+        logger.error(f'Failed to create NAT instance for NAT gateway {nat_gateway_id}')
+        return None
+
     new_nat_instance_id = new_nat_instance["InstanceId"]
     set_tag(ec2_client, nat_gateway_id, TAG_KEY_NAT_INSTANCE_ID, new_nat_instance_id)
     return new_nat_instance
@@ -637,7 +641,8 @@ def create_nat_instance(ec2_client, vpc_id, nat_gateway_id, public_subnet: Dict,
         time.sleep(10)
 
     if not private_route_table_id:
-        print(f'Timeout waiting for route table in private subnet: {private_subnet_id}')
+        logger.error(f'Timeout waiting for route table in private subnet: {private_subnet_id}')
+        return None
 
     nat_sg_id = create_nat_security_group(ec2_client,
                                           nat_gateway_id=nat_gateway_id,
@@ -652,67 +657,87 @@ def create_nat_instance(ec2_client, vpc_id, nat_gateway_id, public_subnet: Dict,
     nat_instance_idx = 0
 
     # Try different instance types if one is not supported in the region
-    while nat_instance_idx < len(NAT_INSTANCES_INFO):
-        try:
-            instance = ec2_client.run_instances(
-                ImageId=get_latest_amazon_linux2_ami(region, nat_instance_idx),
-                InstanceType=NAT_INSTANCES_INFO[nat_instance_idx].instance_type,
-                NetworkInterfaces=[
-                    {
-                        'AssociatePublicIpAddress': PERMIT_IPv4_ADDRESS_POOL_USE,
-                        'SubnetId': public_subnet_id,
-                        'DeviceIndex': 0,
-                        'Groups': [nat_sg_id],
+    try:
+        while nat_instance_idx < len(NAT_INSTANCES_INFO):
+            try:
+                instance = ec2_client.run_instances(
+                    ImageId=get_latest_amazon_linux2_ami(region, nat_instance_idx),
+                    InstanceType=NAT_INSTANCES_INFO[nat_instance_idx].instance_type,
+                    NetworkInterfaces=[
+                        {
+                            'AssociatePublicIpAddress': PERMIT_IPv4_ADDRESS_POOL_USE,
+                            'SubnetId': public_subnet_id,
+                            'DeviceIndex': 0,
+                            'Groups': [nat_sg_id],
+                        },
+                    ],
+                    IamInstanceProfile={
+                        # As part of its userData, the EC2 instance will update the route table
+                        # for the private network to point to itself. It needs a role to have permission
+                        # to do this. The instance profile is created by CloudFormation.
+                        'Name': NAT_INSTANCE_PROFILE_NAME
                     },
-                ],
-                IamInstanceProfile={
-                    # As part of its userData, the EC2 instance will update the route table
-                    # for the private network to point to itself. It needs a role to have permission
-                    # to do this. The instance profile is created by CloudFormation.
-                    'Name': NAT_INSTANCE_PROFILE_NAME
-                },
-                UserData=get_nat_instance_user_data(
-                    region=region,
-                    nat_gateway_id=nat_gateway_id,
-                    route_table_id=private_route_table_id,
-                ),
-                MinCount=1,
-                MaxCount=1,
-                TagSpecifications=[{
-                    "ResourceType": "instance",
-                    "Tags": [
-                        {
-                            "Key": TAG_KEY_NAT_GATEWAY_ID,
-                            "Value": nat_gateway_id
-                        },
-                        {
-                            "Key": TAG_KEY_PUBLIC_SUBNET_ID,
-                            "Value": public_subnet_id
-                        },
-                        {
-                            "Key": TAG_KEY_PRIVATE_ROUTE_TABLE_ID,
-                            "Value": private_route_table_id
-                        },
-                        {
-                            "Key": TAG_KEY_VPC_ID,
-                            "Value": vpc_id,
-                        },
-                        {
-                            "Key": "Name",
-                            "Value": f"{public_subnet_name}-ci-nat",
-                        }
-                    ]
-                }],
-                **key_pair_info
-            )
-            nat_instance = instance["Instances"][0]
-            break
-        except botocore.exceptions.ClientError as e:
-            if e.response["Error"]["Code"] == "Unsupported":
-                logger.info(f'{NAT_INSTANCES_INFO[nat_instance_idx].instance_type} is not supported in this region.')
-                nat_instance_idx += 1
-            else:
-                raise
+                    UserData=get_nat_instance_user_data(
+                        region=region,
+                        nat_gateway_id=nat_gateway_id,
+                        route_table_id=private_route_table_id,
+                    ),
+                    MinCount=1,
+                    MaxCount=1,
+                    TagSpecifications=[{
+                        "ResourceType": "instance",
+                        "Tags": [
+                            {
+                                "Key": TAG_KEY_NAT_GATEWAY_ID,
+                                "Value": nat_gateway_id
+                            },
+                            {
+                                "Key": TAG_KEY_PUBLIC_SUBNET_ID,
+                                "Value": public_subnet_id
+                            },
+                            {
+                                "Key": TAG_KEY_PRIVATE_ROUTE_TABLE_ID,
+                                "Value": private_route_table_id
+                            },
+                            {
+                                "Key": TAG_KEY_VPC_ID,
+                                "Value": vpc_id,
+                            },
+                            {
+                                "Key": "Name",
+                                "Value": f"{public_subnet_name}-ci-nat",
+                            }
+                        ]
+                    }],
+                    **key_pair_info
+                )
+                nat_instance = instance["Instances"][0]
+                break
+            except botocore.exceptions.ClientError as e:
+                if e.response["Error"]["Code"] == "Unsupported":
+                    logger.info(f'{NAT_INSTANCES_INFO[nat_instance_idx].instance_type} is not supported in this region.')
+                    nat_instance_idx += 1
+                else:
+                    raise
+    except Exception as e:
+        # If instance creation fails, clean up the security group we created
+        logger.error(f'Failed to create NAT instance: {e}. Cleaning up security group {nat_sg_id}')
+        try:
+            ec2_client.delete_security_group(GroupId=nat_sg_id)
+            logger.info(f'Deleted orphaned security group {nat_sg_id}')
+        except Exception as cleanup_error:
+            logger.warning(f'Failed to clean up security group {nat_sg_id}: {cleanup_error}')
+        raise
+
+    if not nat_instance:
+        # All instance types failed - clean up the security group
+        logger.error(f'All instance types failed. Cleaning up security group {nat_sg_id}')
+        try:
+            ec2_client.delete_security_group(GroupId=nat_sg_id)
+            logger.info(f'Deleted orphaned security group {nat_sg_id}')
+        except Exception as cleanup_error:
+            logger.warning(f'Failed to clean up security group {nat_sg_id}: {cleanup_error}')
+        return None
 
     # Tag the route table with the nat gateway that we are
     # going to replace with the NAT instance once it starts.
@@ -935,7 +960,7 @@ def cleanup(region: str, vpc_id: str):
                 try:
                     logger.info(f"Deleting security group {sg_id}...")
                     ec2_client.delete_security_group(GroupId=sg_id)
-                except ec2_client.exceptions.ClientError as e:
+                except botocore.exceptions.ClientError as e:
                     error_code = e.response.get('Error', {}).get('Code', '')
                     # Some security groups cannot be deleted if they're in use
                     if error_code == 'DependencyViolation':

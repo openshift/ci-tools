@@ -1,0 +1,2 @@
+FROM registry.ci.openshift.org/ocp/4.19:base
+RUN echo "This has manual inputs.as defined, should skip auto-detect"

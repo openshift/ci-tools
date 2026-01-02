@@ -1,0 +1,2 @@
+FROM alpine:latest
+RUN echo "No registry.ci.openshift.org references here"

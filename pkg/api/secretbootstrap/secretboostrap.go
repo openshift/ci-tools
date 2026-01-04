@@ -1,11 +1,9 @@
 package secretbootstrap
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
-	"strings"
 
 	"github.com/getlantern/deepcopy"
 
@@ -67,12 +65,20 @@ func LoadConfigFromFile(file string, config *Config) error {
 	if err != nil {
 		return err
 	}
-	return yaml.UnmarshalStrict(bytes, config)
+	if err := yaml.UnmarshalStrict(bytes, config); err != nil {
+		return err
+	}
+	return config.resolve()
 }
 
 // SaveConfigToFile serializes a Config object to the given file
 func SaveConfigToFile(file string, config *Config) error {
-	bytes, err := yaml.Marshal(config)
+	// Create a deep copy to avoid mutating the original config
+	var configCopy Config
+	if err := deepcopy.Copy(&configCopy, config); err != nil {
+		return fmt.Errorf("failed to copy config: %w", err)
+	}
+	bytes, err := yaml.Marshal(&configCopy)
 	if err != nil {
 		return err
 	}
@@ -85,40 +91,6 @@ type Config struct {
 	ClusterGroups             map[string][]string `json:"cluster_groups,omitempty"`
 	Secrets                   []SecretConfig      `json:"secret_configs"`
 	UserSecretsTargetClusters []string            `json:"user_secrets_target_clusters,omitempty"`
-}
-
-type configWithoutUnmarshaler Config
-
-func (c *Config) UnmarshalJSON(d []byte) error {
-	var target configWithoutUnmarshaler
-	if err := json.Unmarshal(d, &target); err != nil {
-		return err
-	}
-
-	*c = Config(target)
-	return c.resolve()
-}
-
-func (c *Config) MarshalJSON() ([]byte, error) {
-	target := &configWithoutUnmarshaler{
-		VaultDPTPPrefix:           c.VaultDPTPPrefix,
-		ClusterGroups:             c.ClusterGroups,
-		UserSecretsTargetClusters: c.UserSecretsTargetClusters,
-	}
-	pre := c.VaultDPTPPrefix + "/"
-	var secrets []SecretConfig
-	for _, s := range c.Secrets {
-		var secret SecretConfig
-		if err := deepcopy.Copy(&secret, s); err != nil {
-			return nil, err
-		}
-		stripVaultPrefix(&secret, pre)
-		secret.groupClusters()
-		secrets = append(secrets, secret)
-	}
-
-	target.Secrets = secrets
-	return json.Marshal(target)
 }
 
 func (s *SecretConfig) groupClusters() {
@@ -148,16 +120,6 @@ func (s *SecretConfig) groupClusters() {
 	}
 
 	s.To = secrets
-}
-
-func stripVaultPrefix(s *SecretConfig, pre string) {
-	for key, from := range s.From {
-		from.Item = strings.TrimPrefix(from.Item, pre)
-		for i, dcj := range from.DockerConfigJSONData {
-			from.DockerConfigJSONData[i].Item = strings.TrimPrefix(dcj.Item, pre)
-		}
-		s.From[key] = from
-	}
 }
 
 func (c *Config) Validate() error {

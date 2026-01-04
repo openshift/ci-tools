@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -1050,7 +1051,99 @@ trigger 0 job(s) of type all for the ci release of OCP 4.8
 					Body: "/payload-abort",
 				},
 			},
-			expectedMessage: `aborted active payload jobs for pull request org/repo#123`,
+			expectedMessage: `aborted 1 active payload job(s) for pull request org/repo#123`,
+		},
+		{
+			name: "abort all jobs aborts underlying aggregated job runs",
+			s: &server{
+				ghc: ghc,
+				ctx: context.TODO(),
+				kubeClient: fakeclient.NewClientBuilder().WithRuntimeObjects(
+					&prpqv1.PullRequestPayloadQualificationRun{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: "ci",
+							Labels: map[string]string{
+								kube.OrgLabel:  "org",
+								kube.RepoLabel: "repo",
+								kube.PullLabel: "123",
+							},
+						},
+						Spec: prpqv1.PullRequestPayloadTestSpec{},
+						Status: prpqv1.PullRequestPayloadTestStatus{
+							Jobs: []prpqv1.PullRequestPayloadJobStatus{
+								{
+									Status:  prowapi.ProwJobStatus{State: prowapi.PendingState},
+									ProwJob: "aggregator-some-job",
+								},
+							},
+						},
+					},
+					// Aggregator job with aggregation-id label (pending - will be aborted)
+					&prowapi.ProwJob{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "aggregator-some-job",
+							Namespace: "ci",
+							Labels: map[string]string{
+								api.AggregationIDLabel: "test-aggregation-id",
+							},
+							Annotations: map[string]string{
+								api.ProwJobJobNameAnnotation: "aggregator-some-job",
+							},
+						},
+						Status: prowapi.ProwJobStatus{State: prowapi.PendingState},
+					},
+					// First underlying aggregated job (pending - will be aborted)
+					&prowapi.ProwJob{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "some-job-0",
+							Namespace: "ci",
+							Labels: map[string]string{
+								api.AggregationIDLabel: "test-aggregation-id",
+							},
+						},
+						Status: prowapi.ProwJobStatus{State: prowapi.PendingState},
+					},
+					// Second underlying aggregated job (triggered - will be aborted)
+					&prowapi.ProwJob{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "some-job-1",
+							Namespace: "ci",
+							Labels: map[string]string{
+								api.AggregationIDLabel: "test-aggregation-id",
+							},
+						},
+						Status: prowapi.ProwJobStatus{State: prowapi.TriggeredState},
+					},
+					// Third underlying aggregated job (already completed - will NOT be counted)
+					&prowapi.ProwJob{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "some-job-2",
+							Namespace: "ci",
+							Labels: map[string]string{
+								api.AggregationIDLabel: "test-aggregation-id",
+							},
+						},
+						Status: prowapi.ProwJobStatus{
+							State:          prowapi.SuccessState,
+							CompletionTime: &metav1.Time{Time: time.Now()},
+						},
+					},
+				).Build(),
+				namespace:      "ci",
+				trustedChecker: &fakeTrustedChecker{},
+			},
+			ic: github.IssueCommentEvent{
+				GUID: "guid",
+				Repo: github.Repo{Owner: github.User{Login: "org"}, Name: "repo"},
+				Issue: github.Issue{
+					Number:      123,
+					PullRequest: &struct{}{},
+				},
+				Comment: github.IssueComment{
+					Body: "/payload-abort",
+				},
+			},
+			expectedMessage: `aborted 3 active payload job(s) for pull request org/repo#123`,
 		},
 		{
 			name: "incorrectly formatted command",

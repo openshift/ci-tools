@@ -17,6 +17,7 @@ import (
 	prowjobv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowjobclientset "sigs.k8s.io/prow/pkg/client/clientset/versioned"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 	"github.com/openshift/ci-tools/pkg/junit"
@@ -95,7 +96,7 @@ type testCaseAnalyzerJobGetter struct {
 }
 
 func (s *testCaseAnalyzerJobGetter) shouldAggregateJob(prowJob *prowjobv1.ProwJob) bool {
-	jobName := prowJob.Annotations[jobrunaggregatorlib.ProwJobJobNameAnnotation]
+	jobName := prowJob.Annotations[api.ProwJobJobNameAnnotation]
 	// if PR payload, only find the exact jobs
 	if s.jobGCSPrefixes != nil && len(*s.jobGCSPrefixes) > 0 {
 		if !s.jobNames.Has(jobName) {
@@ -427,7 +428,7 @@ func (o *JobRunTestCaseAnalyzerOptions) shouldAggregateJob(prowJob *prowjobv1.Pr
 	}
 	// second level of match deal with payload or invocation ID
 	var prowJobRunMatcherFunc jobrunaggregatorlib.ProwJobMatcherFunc
-	jobName := prowJob.Annotations[jobrunaggregatorlib.ProwJobJobNameAnnotation]
+	jobName := prowJob.Annotations[api.ProwJobJobNameAnnotation]
 	if len(o.payloadTag) > 0 {
 		prowJobRunMatcherFunc = jobrunaggregatorlib.NewProwJobMatcherFuncForReleaseController(jobName, o.payloadTag)
 	}

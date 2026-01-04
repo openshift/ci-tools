@@ -6,6 +6,8 @@ import (
 	"github.com/sirupsen/logrus"
 
 	prowjobv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 const (
@@ -14,7 +16,7 @@ const (
 	// ProwJobPayloadInvocationIDLabel is the name of the label for the payload invocation id in prow job
 	ProwJobPayloadInvocationIDLabel = "release.openshift.io/aggregation-id"
 	// prowJobReleaseJobNameAnnotation refers to the original periodic job name for PR based payload runs.
-	// This is a special case for the PR invoked payload jobs where ProwJobJobNameAnnotation annotation
+	// This is a special case for the PR invoked payload jobs where api.ProwJobJobNameAnnotation annotation
 	// refers to a uniquely generated name per job run. Thus, prowJobReleaseJobNameAnnotation is used to
 	// refer to the original job name.
 	prowJobReleaseJobNameAnnotation = "releaseJobName"
@@ -23,7 +25,7 @@ const (
 func NewProwJobMatcherFuncForPR(matchJobName, matchID, matchLabel string) ProwJobMatcherFunc {
 	return func(prowJob *prowjobv1.ProwJob) bool {
 		id := prowJob.Labels[matchLabel]
-		jobName := prowJob.Annotations[ProwJobJobNameAnnotation]
+		jobName := prowJob.Annotations[api.ProwJobJobNameAnnotation]
 		jobRunId := prowJob.Labels[prowJobJobRunIDLabel]
 		if releaseJobName, ok := prowJob.Annotations[prowJobReleaseJobNameAnnotation]; ok {
 			if releaseJobName != matchJobName {

@@ -5,7 +5,7 @@ import (
 
 	"github.com/slack-go/slack"
 
-	"github.com/openshift/ci-tools/pkg/jira"
+	localjira "github.com/openshift/ci-tools/pkg/jira"
 	"github.com/openshift/ci-tools/pkg/slack/interactions"
 	"github.com/openshift/ci-tools/pkg/slack/modals"
 )
@@ -105,7 +105,7 @@ func View() slack.ModalViewRequest {
 func issueParameters() modals.JiraIssueParameters {
 	return modals.JiraIssueParameters{
 		Id:        Identifier,
-		IssueType: jira.IssueTypeStory,
+		IssueType: localjira.IssueTypeStory,
 		Template: template.Must(template.New(string(Identifier)).Funcs(modals.BulletListFunc()).Parse(`h3. Overview
 As a {{ .` + blockIdAsA + ` }}
 I want {{ .` + blockIdIWant + ` }}
@@ -126,16 +126,19 @@ h3. Implementation Details
 {{ .` + blockIdImplementation + ` }}
 {{- end }}`)),
 		Fields: []string{modals.BlockIdTitle, blockIdAsA, blockIdIWant, blockIdSoThat, blockIdSummary, blockIdImpact, blockIdAcceptanceCriteria, blockIdImplementation},
+		CustomFields: map[string]interface{}{
+			localjira.ActivityTypeFieldID: localjira.ActivityTypeEnhancement,
+		},
 	}
 }
 
 // processSubmissionHandler files a Jira issue for this form
-func processSubmissionHandler(filer jira.IssueFiler, updater modals.ViewUpdater) interactions.Handler {
+func processSubmissionHandler(filer localjira.IssueFiler, updater modals.ViewUpdater) interactions.Handler {
 	return modals.ToJiraIssue(issueParameters(), filer, updater)
 }
 
 // Register creates a registration entry for the enhancment request form
-func Register(filer jira.IssueFiler, client *slack.Client) *modals.FlowWithViewAndFollowUps {
+func Register(filer localjira.IssueFiler, client *slack.Client) *modals.FlowWithViewAndFollowUps {
 	return modals.ForView(Identifier, View()).WithFollowUps(map[slack.InteractionType]interactions.Handler{
 		slack.InteractionTypeViewSubmission: processSubmissionHandler(filer, client),
 	})

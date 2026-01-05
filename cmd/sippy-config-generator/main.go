@@ -147,7 +147,7 @@ func main() {
 	})
 
 	for _, p := range jobConfig.Periodics {
-		if release, ok := p.Labels["job-release"]; ok {
+		if release, ok := p.Labels[jc.JobReleaseKey]; ok {
 			// include OKD jobs but as a different release by appending `okd`
 			// to the release name.
 			if strings.Contains(p.Name, "-okd") {

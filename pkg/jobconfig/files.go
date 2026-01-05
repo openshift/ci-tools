@@ -28,19 +28,25 @@ type label string
 type Generator string
 
 const (
-	CanBeRehearsedLabel          = "pj-rehearse.openshift.io/can-be-rehearsed"
-	CanBeRehearsedValue          = "true"
-	SSHBastionLabel              = "dptp.openshift.io/ssh-bastion"
-	ProwJobLabelVariant          = "ci-operator.openshift.io/variant"
-	ReleaseControllerLabel       = "ci-operator.openshift.io/release-controller"
-	LabelBuildFarm               = "ci.openshift.io/build-farm"
-	LabelGenerator               = "ci.openshift.io/generator"
-	ReleaseControllerValue       = "true"
-	JobReleaseKey                = "job-release"
-	PresubmitPrefix              = "pull"
-	PostsubmitPrefix             = "branch"
-	PeriodicPrefix               = "periodic"
-	newlyGenerated         label = "newly-generated"
+	CanBeRehearsedLabel    = "pj-rehearse.openshift.io/can-be-rehearsed"
+	CanBeRehearsedValue    = "true"
+	SSHBastionLabel        = "dptp.openshift.io/ssh-bastion"
+	ProwJobLabelVariant    = "ci-operator.openshift.io/variant"
+	ReleaseControllerLabel = "ci-operator.openshift.io/release-controller"
+	LabelBuildFarm         = "ci.openshift.io/build-farm"
+	LabelGenerator         = "ci.openshift.io/generator"
+	ReleaseControllerValue = "true"
+	// JobReleaseKey is a label placed on jobs that test development candidate OCP versions, like CI
+	// or Nightly payloads retrieved from release-controller (as opposed to released versions like
+	// EC/RC/GA, or ephemeral OCP versions used in presubmits). The value of the label will be a
+	// <MAJOR>.<MINOR> OCP version (e.g. 4.21) for which the job provides continuous CI signal. Test
+	// result data from these jobs are consumed by TRT/ERT tooling like Sippy to provide signal on
+	// quality and regressions in the given OCP version.
+	JobReleaseKey          = "job-release"
+	PresubmitPrefix        = "pull"
+	PostsubmitPrefix       = "branch"
+	PeriodicPrefix         = "periodic"
+	newlyGenerated   label = "newly-generated"
 )
 
 // SimpleBranchRegexp matches a branch name that does not appear to be a regex (lacks wildcard,
@@ -519,7 +525,7 @@ func mergePeriodics(old, new *prowconfig.Periodic) prowconfig.Periodic {
 	merged := *new
 
 	merged.MaxConcurrency = old.MaxConcurrency
-	//TODO(sgoeddel): We will keep this functionality for backwards-compatibility.
+	// TODO(sgoeddel): We will keep this functionality for backwards-compatibility.
 	// Eventually, we should only allow the reporter_config to be set through prowgen configuration
 	if old.ReporterConfig != nil && merged.ReporterConfig == nil {
 		merged.ReporterConfig = old.ReporterConfig

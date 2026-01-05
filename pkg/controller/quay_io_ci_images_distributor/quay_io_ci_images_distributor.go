@@ -3,6 +3,7 @@ package quay_io_ci_images_distributor
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -129,6 +130,8 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	return reconcile.Result{}, controllerutil.SwallowIfTerminal(err)
 }
 
+var pruneTagPattern = regexp.MustCompile(`^\d{14}_prune_.*`)
+
 func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *logrus.Entry) error {
 	*log = *log.WithField("namespace", req.Namespace).WithField("name", req.Name)
 	log.Info("Starting reconciliation")
@@ -136,7 +139,14 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 	if n := len(colonSplit); n != 2 {
 		return fmt.Errorf("splitting %s by `:` didn't yield two but %d results", req.Name, n)
 	}
-	tagRef := cioperatorapi.ImageStreamTagReference{Namespace: req.Namespace, Name: colonSplit[0], Tag: colonSplit[1]}
+	tagName := colonSplit[1]
+	// Skip prune tags to prevent feedback loop where ci-images-mirror mirrors prune tags
+	// created by ci-operator, creating new prune tags unnecessarily
+	if pruneTagPattern.MatchString(tagName) {
+		log.WithField("tag", tagName).Debug("Skipping prune tag")
+		return nil
+	}
+	tagRef := cioperatorapi.ImageStreamTagReference{Namespace: req.Namespace, Name: colonSplit[0], Tag: tagName}
 	quayImage := cioperatorapi.QuayImage(tagRef)
 	imageInfo, err := r.quayIOImageHelper.ImageInfo(quayImage, r.ocImageInfoOptions)
 	if err != nil {

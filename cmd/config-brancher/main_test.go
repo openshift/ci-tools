@@ -376,6 +376,49 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 			},
 		},
 		{
+			name:           "config with tests that are both periodic and presubmit gets branched with presubmit preserved but periodic fields removed when skip-periodics is set",
+			currentRelease: "current-release",
+			futureReleases: []string{"future-release"},
+			skipPeriodics:  true,
+			input: config.DataWithInfo{
+				Configuration: api.ReleaseBuildConfiguration{
+					Tests: []api.TestStepConfiguration{
+						{As: "periodic-only", Cron: &cron},
+						{As: "periodic-and-presubmit", Cron: &cron, Presubmit: true},
+						{As: "periodic-presubmit-interval", Interval: &interval, Presubmit: true},
+					},
+					PromotionConfiguration: &api.PromotionConfiguration{
+						Targets: []api.PromotionTarget{{
+							Name:      "current-release",
+							Namespace: "ocp",
+						}},
+					},
+				},
+				Info: config.Info{
+					Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "master"},
+				},
+			},
+			output: []config.DataWithInfo{
+				{
+					Configuration: api.ReleaseBuildConfiguration{
+						Tests: []api.TestStepConfiguration{
+							{As: "periodic-and-presubmit"},
+							{As: "periodic-presubmit-interval"},
+						},
+						PromotionConfiguration: &api.PromotionConfiguration{
+							Targets: []api.PromotionTarget{{
+								Name:      "future-release",
+								Namespace: "ocp",
+							}},
+						},
+					},
+					Info: config.Info{
+						Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "release-future-release"},
+					},
+				},
+			},
+		},
+		{
 			name:           "previously branched config that promotes to the current release from master bumps to the future release and de-mirrors correctly",
 			currentRelease: "current-release",
 			bumpRelease:    "future-release-1",

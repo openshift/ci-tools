@@ -181,6 +181,12 @@ func (s *supplementalCIImagesServiceWithMirrorStore) Mirror(m map[string]quayioc
 			s.logger.WithError(err).WithField("source", source).Warning("Failed to get source image info, will attempt mirror")
 		}
 
+		// If source image doesn't exist, skip mirroring
+		if sourceInfo.Digest == "" {
+			s.logger.WithField("source", source).Debug("Source image does not exist, skipping mirror")
+			continue
+		}
+
 		// Skip if digests match
 		if targetInfo.Digest != "" && sourceInfo.Digest != "" && targetInfo.Digest == sourceInfo.Digest {
 			s.logger.WithField("target", targetImage).WithField("digest", targetInfo.Digest).Debug("Image already in sync, skipping")
@@ -274,7 +280,6 @@ func main() {
 	}
 
 	mirrorStore := quayiociimagesdistributor.NewMirrorStore()
-
 	ocClientFactory := quayiociimagesdistributor.NewClientFactory()
 	quayIOImageHelper, err := ocClientFactory.NewClient()
 	if err != nil {
@@ -285,7 +290,6 @@ func main() {
 		// TODO: multi-arch support
 		FilterByOS: "linux/amd64",
 	}
-
 	if opts.configFile != "" {
 		supplementalCIImagesService := newSupplementalCIImagesServiceWithMirrorStore(mirrorStore, logrus.WithField("subcomponent", "supplementalCIImagesService"), quayIOImageHelper, ocImageInfoOptions)
 		interrupts.TickLiteral(func() {

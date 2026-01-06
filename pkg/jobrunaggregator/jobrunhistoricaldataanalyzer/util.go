@@ -183,3 +183,35 @@ func formatTestOutput(data []jobrunaggregatorapi.TestSummaryByPeriodRow) ([]byte
 	})
 	return json.MarshalIndent(data, "", "  ")
 }
+
+// readTestSummaryFile reads test summary data from a JSON file
+func readTestSummaryFile(filePath string) ([]jobrunaggregatorapi.TestSummaryByPeriodRow, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file at path (%s): %w", filePath, err)
+	}
+
+	var testSummaries []jobrunaggregatorapi.TestSummaryByPeriodRow
+	if err := json.Unmarshal(data, &testSummaries); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal test summary data: %w", err)
+	}
+
+	return testSummaries, nil
+}
+
+// hasSufficientDaysOfData checks if test summaries have at least minDays of data
+// Returns true if any row has DaysWithData >= minDays
+func hasSufficientDaysOfData(testSummaries []jobrunaggregatorapi.TestSummaryByPeriodRow, minDays int64) bool {
+	if len(testSummaries) == 0 {
+		return false
+	}
+
+	// Check if any test has sufficient days of data
+	for _, summary := range testSummaries {
+		if summary.DaysWithData >= minDays {
+			return true
+		}
+	}
+
+	return false
+}

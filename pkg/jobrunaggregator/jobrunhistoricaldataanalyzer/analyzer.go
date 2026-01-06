@@ -100,25 +100,65 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 func (o *JobRunHistoricalDataAnalyzerOptions) runTestsDataType(ctx context.Context, release string) error {
 	// Hardcoded parameters for test summary query
 	const (
-		suiteName    = "openshift-tests"
-		daysBack     = 30
-		minTestCount = 100
+		suiteName       = "openshift-tests"
+		daysBack        = 30
+		minTestCount    = 100
+		minDaysRequired = 10
 	)
 
 	fmt.Printf("Fetching test data for release %s, suite %s, last %d days, min %d test runs\n",
 		release, suiteName, daysBack, minTestCount)
 
+	// Try to read existing data if the output file exists
+	var existingTestSummaries []jobrunaggregatorapi.TestSummaryByPeriodRow
+	if _, err := os.Stat(o.outputFile); err == nil {
+		existingTestSummaries, err = readTestSummaryFile(o.outputFile)
+		if err != nil {
+			fmt.Printf("Warning: failed to read existing test summary file: %v\n", err)
+			existingTestSummaries = nil
+		} else {
+			fmt.Printf("Found existing test summary data with %d test results\n", len(existingTestSummaries))
+		}
+	}
+
+	// Fetch new test data from BigQuery
 	testSummaries, err := o.ciDataClient.ListTestSummaryByPeriod(ctx, suiteName, release, daysBack, minTestCount)
 	if err != nil {
 		return fmt.Errorf("failed to list test summary by period: %w", err)
 	}
 
+	// Validate the new data has sufficient days of data
+	hasSufficientData := hasSufficientDaysOfData(testSummaries, minDaysRequired)
+
+	// Determine which data to use
+	var finalTestSummaries []jobrunaggregatorapi.TestSummaryByPeriodRow
 	if len(testSummaries) == 0 {
-		return fmt.Errorf("no test data found for suite %s, release %s", suiteName, release)
+		// No new data available
+		if len(existingTestSummaries) > 0 {
+			fmt.Printf("Warning: no new test data found, keeping existing data with %d test results\n", len(existingTestSummaries))
+			finalTestSummaries = existingTestSummaries
+		} else {
+			return fmt.Errorf("no test data found for suite %s, release %s", suiteName, release)
+		}
+	} else if !hasSufficientData {
+		// New data exists but doesn't have enough days
+		if len(existingTestSummaries) > 0 {
+			fmt.Printf("Warning: new test data has insufficient days (< %d), keeping existing data with %d test results\n",
+				minDaysRequired, len(existingTestSummaries))
+			finalTestSummaries = existingTestSummaries
+		} else {
+			fmt.Printf("Warning: new test data has insufficient days (< %d) and no existing data available, using new data with %d test results\n",
+				minDaysRequired, len(testSummaries))
+			finalTestSummaries = testSummaries
+		}
+	} else {
+		// New data is sufficient
+		fmt.Printf("Using new test data with %d test results (sufficient days of data)\n", len(testSummaries))
+		finalTestSummaries = testSummaries
 	}
 
-	// Write the test summaries directly to the output file as JSON
-	out, err := formatTestOutput(testSummaries)
+	// Write the final test summaries to the output file as JSON
+	out, err := formatTestOutput(finalTestSummaries)
 	if err != nil {
 		return fmt.Errorf("error formatting test output: %w", err)
 	}
@@ -127,7 +167,7 @@ func (o *JobRunHistoricalDataAnalyzerOptions) runTestsDataType(ctx context.Conte
 		return fmt.Errorf("failed to write output file: %w", err)
 	}
 
-	fmt.Printf("Successfully fetched %d test results and wrote to %s\n", len(testSummaries), o.outputFile)
+	fmt.Printf("Successfully wrote %d test results to %s\n", len(finalTestSummaries), o.outputFile)
 	return nil
 }
 

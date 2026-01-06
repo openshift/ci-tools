@@ -67,6 +67,13 @@ type consumerOptions struct {
 	cpuCap                int64
 	memoryCap             string
 	cpuPriorityScheduling int64
+
+	// Measured pods options - when enabled, pods are classified as "normal" or "measured"
+	// Measured pods run on isolated nodes to get accurate CPU/memory utilization data
+	enableMeasuredPods      bool
+	bigQueryProjectID       string
+	bigQueryDatasetID       string
+	bigQueryCredentialsFile string
 }
 
 func bindOptions(fs *flag.FlagSet) *options {
@@ -89,6 +96,10 @@ func bindOptions(fs *flag.FlagSet) *options {
 	fs.Int64Var(&o.cpuCap, "cpu-cap", 10, "The maximum CPU request value, ex: 10")
 	fs.StringVar(&o.memoryCap, "memory-cap", "20Gi", "The maximum memory request value, ex: '20Gi'")
 	fs.Int64Var(&o.cpuPriorityScheduling, "cpu-priority-scheduling", 8, "Pods with CPU requests at, or above, this value will be admitted with priority scheduling")
+	fs.BoolVar(&o.enableMeasuredPods, "enable-measured-pods", false, "Enable measured pods feature. When enabled, pods are classified as 'normal' or 'measured' and measured pods run on isolated nodes to get accurate CPU/memory utilization data.")
+	fs.StringVar(&o.bigQueryProjectID, "bigquery-project-id", "", "Google Cloud project ID for BigQuery queries (required if enable-measured-pods is true)")
+	fs.StringVar(&o.bigQueryDatasetID, "bigquery-dataset-id", "", "BigQuery dataset ID for pod metrics (required if enable-measured-pods is true)")
+	fs.StringVar(&o.bigQueryCredentialsFile, "bigquery-credentials-file", "", "Path to Google Cloud credentials file for BigQuery access")
 	o.resultsOptions.Bind(fs)
 	return &o
 }
@@ -268,7 +279,7 @@ func mainAdmission(opts *options, cache Cache) {
 		logrus.WithError(err).Fatal("Failed to create pod-scaler reporter.")
 	}
 
-	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, reporter)
+	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, false, false, opts.enableMeasuredPods, opts.bigQueryProjectID, opts.bigQueryDatasetID, opts.bigQueryCredentialsFile, reporter)
 }
 
 func loaders(cache Cache) map[string][]*cacheReloader {

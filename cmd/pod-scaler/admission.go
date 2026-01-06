@@ -33,18 +33,32 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps"
 )
 
-func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool, cpuCap int64, memoryCap string, cpuPriorityScheduling int64, reporter results.PodScalerReporter) {
+func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool, cpuCap int64, memoryCap string, cpuPriorityScheduling int64, authoritativeCPURequests, authoritativeMemoryRequests bool, enableMeasuredPods bool, bigQueryProjectID, bigQueryDatasetID, bigQueryCredentialsFile string, reporter results.PodScalerReporter) {
 	logger := logrus.WithField("component", "pod-scaler admission")
 	logger.Infof("Initializing admission webhook server with %d loaders.", len(loaders))
 	health := pjutil.NewHealthOnPort(healthPort)
 	resources := newResourceServer(loaders, health)
 	decoder := admission.NewDecoder(scheme.Scheme)
 
+	var bqClient *BigQueryClient
+	if enableMeasuredPods {
+		if bigQueryProjectID == "" || bigQueryDatasetID == "" {
+			logrus.Fatal("bigquery-project-id and bigquery-dataset-id are required when enable-measured-pods is true")
+		}
+		cache := NewMeasuredPodCache(logger)
+		var err error
+		bqClient, err = NewBigQueryClient(bigQueryProjectID, bigQueryDatasetID, bigQueryCredentialsFile, cache, logger)
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to create BigQuery client for measured pods")
+		}
+		logger.Info("Measured pods feature enabled with BigQuery integration")
+	}
+
 	server := webhook.NewServer(webhook.Options{
 		Port:    port,
 		CertDir: certDir,
 	})
-	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources, mutateResourceLimits: mutateResourceLimits, cpuCap: cpuCap, memoryCap: memoryCap, cpuPriorityScheduling: cpuPriorityScheduling, reporter: reporter}})
+	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources, mutateResourceLimits: mutateResourceLimits, cpuCap: cpuCap, memoryCap: memoryCap, cpuPriorityScheduling: cpuPriorityScheduling, authoritativeCPURequests: authoritativeCPURequests, authoritativeMemoryRequests: authoritativeMemoryRequests, bqClient: bqClient, reporter: reporter}})
 	logger.Info("Serving admission webhooks.")
 	if err := server.Start(interrupts.Context()); err != nil {
 		logrus.WithError(err).Fatal("Failed to serve webhooks.")
@@ -52,15 +66,18 @@ func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Int
 }
 
 type podMutator struct {
-	logger                *logrus.Entry
-	client                buildclientv1.BuildV1Interface
-	resources             *resourceServer
-	mutateResourceLimits  bool
-	decoder               admission.Decoder
-	cpuCap                int64
-	memoryCap             string
-	cpuPriorityScheduling int64
-	reporter              results.PodScalerReporter
+	logger                      *logrus.Entry
+	client                      buildclientv1.BuildV1Interface
+	resources                   *resourceServer
+	mutateResourceLimits        bool
+	decoder                     admission.Decoder
+	cpuCap                      int64
+	memoryCap                   string
+	cpuPriorityScheduling       int64
+	authoritativeCPURequests    bool
+	authoritativeMemoryRequests bool
+	bqClient                    *BigQueryClient
+	reporter                    results.PodScalerReporter
 }
 
 func (m *podMutator) Handle(ctx context.Context, req admission.Request) admission.Response {
@@ -97,7 +114,16 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 		logger.WithError(err).Error("Failed to handle rehearsal Pod.")
 		return admission.Allowed("Failed to handle rehearsal Pod, ignoring.")
 	}
-	mutatePodResources(pod, m.resources, m.mutateResourceLimits, m.cpuCap, m.memoryCap, m.reporter, logger)
+
+	// Classify pod as normal or measured (if enabled)
+	if m.bqClient != nil {
+		ClassifyPod(pod, m.bqClient, logger)
+		AddPodAntiAffinity(pod, logger)
+		// Apply measured pod resources before regular resource mutation
+		ApplyMeasuredPodResources(pod, m.bqClient, logger)
+	}
+
+	mutatePodResources(pod, m.resources, m.mutateResourceLimits, m.cpuCap, m.memoryCap, m.authoritativeCPURequests, m.authoritativeMemoryRequests, m.reporter, logger)
 	m.addPriorityClass(pod)
 
 	marshaledPod, err := json.Marshal(pod)
@@ -292,7 +318,7 @@ func preventUnschedulable(resources *corev1.ResourceRequirements, cpuCap int64, 
 	}
 }
 
-func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool, cpuCap int64, memoryCap string, reporter results.PodScalerReporter, logger *logrus.Entry) {
+func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool, cpuCap int64, memoryCap string, authoritativeCPU, authoritativeMemory bool, reporter results.PodScalerReporter, logger *logrus.Entry) {
 	mutateResources := func(containers []corev1.Container) {
 		for i := range containers {
 			meta := podscaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, containers[i].Name)

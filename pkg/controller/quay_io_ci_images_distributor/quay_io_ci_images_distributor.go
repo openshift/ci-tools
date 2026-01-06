@@ -179,8 +179,20 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 		return fmt.Errorf("failed to get digest for image stream tag %s/%s for source %s in app.ci: %w", req.Namespace, req.Name, sourceImage, err)
 	}
 
+	// If source image doesn't exist in app.ci, skip mirroring
+	// This can happen if the ImageStreamTag was deleted but the event still triggered reconciliation
+	if sourceImageInfo.Digest == "" {
+		log.WithField("source", sourceImage).Debug("Source image does not exist in app.ci, skipping mirror")
+		return nil
+	}
+
 	if imageInfo.Digest != sourceImageInfo.Digest {
-		stale := imageInfo.Config.Created.Add(24 * time.Hour).Before(sourceImageStreamTag.Image.ObjectMeta.CreationTimestamp.Time)
+		// Calculate stale only if image exists in quay.io (has a digest)
+		// If image doesn't exist, imageInfo.Digest will be empty and Config.Created will be zero time
+		var stale bool
+		if imageInfo.Digest != "" {
+			stale = imageInfo.Config.Created.Add(24 * time.Hour).Before(sourceImageStreamTag.Image.ObjectMeta.CreationTimestamp.Time)
+		}
 		// TODO Use stale to handle errors from mirroring
 		log.WithField("currentQuayDigest", imageInfo.Digest).WithField("currentAppCIDigest", sourceImageInfo.Digest).WithField("stale", stale).WithField("source", sourceImage).WithField("target", quayImage).Info("Mirroring")
 

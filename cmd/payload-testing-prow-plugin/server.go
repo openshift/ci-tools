@@ -525,6 +525,41 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) (string, [
 	return strings.Join(messages, "\n"), includedAdditionalPRs.UnsortedList()
 }
 
+// abortJob aborts a single ProwJob and returns whether it was actually aborted and any error
+func (s *server) abortJob(job *prowapi.ProwJob, logger *logrus.Entry) (bool, error) {
+	if job.Complete() {
+		return false, nil
+	}
+	logger.Debugf("aborting prowjob")
+	job.Status.State = prowapi.AbortedState
+	if err := s.kubeClient.Update(s.ctx, job); err != nil {
+		logger.WithError(err).Errorf("failed to abort prowjob")
+		return false, err
+	}
+	logger.Debugf("aborted prowjob")
+	return true, nil
+}
+
+// isAggregatorJob checks if a ProwJob is an aggregator job and returns the aggregation ID
+func isAggregatorJob(job *prowapi.ProwJob) (string, bool) {
+	if job.Labels == nil {
+		return "", false
+	}
+	aggregationID, exists := job.Labels[api.AggregationIDLabel]
+	if !exists {
+		return "", false
+	}
+	// Also check that the job name (from annotation) is prefixed with "aggregator-"
+	if job.Annotations == nil {
+		return "", false
+	}
+	jobName, exists := job.Annotations[api.ProwJobJobNameAnnotation]
+	if !exists || !strings.HasPrefix(jobName, "aggregator-") {
+		return "", false
+	}
+	return aggregationID, true
+}
+
 func (s *server) abortAll(logger *logrus.Entry, ic github.IssueCommentEvent) string {
 	org := ic.Repo.Owner.Login
 	repo := ic.Repo.Name
@@ -539,6 +574,7 @@ func (s *server) abortAll(logger *logrus.Entry, ic github.IssueCommentEvent) str
 	}
 
 	var erroredJobs []string
+	var totalJobsAborted int
 	for _, jobName := range jobs {
 		jobLogger := logger.WithField("jobName", jobName)
 		job := &prowapi.ProwJob{}
@@ -547,29 +583,62 @@ func (s *server) abortAll(logger *logrus.Entry, ic github.IssueCommentEvent) str
 			erroredJobs = append(erroredJobs, jobName)
 			continue
 		}
-		// Do not abort jobs that already completed
-		if job.Complete() {
-			continue
-		}
-		jobLogger.Debugf("aborting prowjob")
-		job.Status.State = prowapi.AbortedState
-		// We use Update and not Patch here, because we are not the authority of the .Status.State field
-		// and must not overwrite changes made to it in the interim by the responsible agent.
-		// The accepted trade-off for now is that this leads to failure if unrelated fields where changed
-		// by another different actor.
-		if err = s.kubeClient.Update(s.ctx, job); err != nil {
-			jobLogger.WithError(err).Errorf("failed to abort prowjob")
+
+		wasAborted, err := s.abortJob(job, jobLogger)
+		if err != nil {
 			erroredJobs = append(erroredJobs, jobName)
+		} else if wasAborted {
+			totalJobsAborted++
 		} else {
-			jobLogger.Debugf("aborted prowjob")
+			jobLogger.Info("job was already complete")
+		}
+
+		// If this is an aggregator job, abort all job runs for the aggregator
+		if aggregationID, isAggregator := isAggregatorJob(job); isAggregator {
+			jobLogger.Info("Found aggregator job, aborting all jobs that the aggregator is tracking...")
+
+			var aggregatedJobs prowapi.ProwJobList
+			labelSelector := labels.Set{api.AggregationIDLabel: aggregationID}.AsSelector()
+			listOpts := ctrlruntimeclient.ListOptions{
+				Namespace:     s.namespace,
+				LabelSelector: labelSelector,
+			}
+
+			if err := s.kubeClient.List(s.ctx, &aggregatedJobs, &listOpts); err != nil {
+				jobLogger.WithError(err).Error("failed to list aggregated jobs")
+				erroredJobs = append(erroredJobs, fmt.Sprintf("%s-aggregated-jobs", jobName))
+				continue
+			}
+
+			for i := range aggregatedJobs.Items {
+				aggregatedJob := &aggregatedJobs.Items[i]
+				aggregatedJobLogger := jobLogger.WithFields(logrus.Fields{
+					"aggregatedJobName": aggregatedJob.Name,
+					"aggregatedJobSpec": aggregatedJob.Spec.Job,
+				})
+
+				// Skip the aggregator job itself to avoid double processing
+				if aggregatedJob.Name == job.Name {
+					continue
+				}
+
+				wasAborted, err = s.abortJob(aggregatedJob, aggregatedJobLogger)
+				if err != nil {
+					erroredJobs = append(erroredJobs, aggregatedJob.Name)
+				} else if wasAborted {
+					totalJobsAborted++
+				} else {
+					aggregatedJobLogger.Info("job was already complete")
+				}
+			}
 		}
 	}
 
 	if len(erroredJobs) > 0 {
-		return fmt.Sprintf("Failed to abort %d payload jobs out of %d. Failed jobs: %s", len(erroredJobs), len(jobs), strings.Join(erroredJobs, ", "))
+		return fmt.Sprintf("Failed to abort some payload jobs. Total jobs aborted: %d. Failed jobs: %s", totalJobsAborted, strings.Join(erroredJobs, ", "))
 	}
 
-	return fmt.Sprintf("aborted active payload jobs for pull request %s/%s#%d", org, repo, prNumber)
+	return fmt.Sprintf("aborted %d active payload job(s) for pull request %s/%s#%d", totalJobsAborted, org, repo, prNumber)
 }
 
 func (s *server) getPayloadJobsForPR(org, repo string, prNumber int, logger *logrus.Entry) ([]string, error) {

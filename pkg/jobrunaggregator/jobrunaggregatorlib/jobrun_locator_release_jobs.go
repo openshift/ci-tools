@@ -6,6 +6,8 @@ import (
 	"github.com/sirupsen/logrus"
 
 	prowjobv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 const (
@@ -21,7 +23,7 @@ func GetPayloadTagFromProwJob(prowJob *prowjobv1.ProwJob) string {
 func NewProwJobMatcherFuncForReleaseController(matchJobName, matchPayloadTag string) ProwJobMatcherFunc {
 	return func(prowJob *prowjobv1.ProwJob) bool {
 		payloadTag := GetPayloadTagFromProwJob(prowJob)
-		jobName := prowJob.Annotations[ProwJobJobNameAnnotation]
+		jobName := prowJob.Annotations[api.ProwJobJobNameAnnotation]
 		jobRunId := prowJob.Labels[prowJobJobRunIDLabel]
 		if jobName != matchJobName {
 			return false

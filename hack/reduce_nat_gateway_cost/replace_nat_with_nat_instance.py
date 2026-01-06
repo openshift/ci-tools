@@ -151,7 +151,7 @@ NAT_INSTANCES_INFO = [
 # The instance profile created by CloudFormation for NAT instances to use
 NAT_INSTANCE_PROFILE_NAME = 'use-nat-instance-profile'
 
-VERSION = 'v1.2'
+VERSION = 'v1.4'
 
 
 class RequestInfoFilter(logging.Filter):
@@ -374,7 +374,9 @@ def set_nat_instance_enabled(region: str, vpc_id: str, enabled: bool):
         nat_instance_id = get_tag(route_table_tags, TAG_KEY_NAT_INSTANCE_ID)
         route_table_id = route_table['RouteTableId']
 
-        if nat_instance_id:
+        # Validate that nat_instance_id is actually an instance ID (starts with 'i-')
+        # It could be a NAT Gateway ID if the userData script failed to update the route
+        if nat_instance_id and nat_instance_id.startswith('i-'):
             # Check if the route is already correctly set
             routes = route_table.get('Routes', [])
             needs_update = True
@@ -537,27 +539,62 @@ def set_tag(ec2_client, resource_id, key, value):
 def create_nat_security_group(ec2_client, nat_gateway_id: str, public_subnet: Dict, private_subnet: Dict) -> Optional[str]:
     """
     Attempts to create a security group for the forthcoming NAT VM instance. Returns
-    the security group ID.
+    the security group ID. If the security group already exists (e.g., from a retry),
+    returns the existing security group ID.
     """
     vpc_id = public_subnet["VpcId"]  # Both subnets belong to the same VPC
     private_cidr = private_subnet["CidrBlock"]  # Extract private subnet CIDR
     public_subnet_name = get_tag(public_subnet.get('Tags', []), 'Name')
+    sg_name = f"{public_subnet_name}-ci-nat-sg"
+
+    # Check if security group already exists (e.g., from a previous attempt or retry)
+    try:
+        existing_sgs = ec2_client.describe_security_groups(
+            Filters=[
+                {"Name": "group-name", "Values": [sg_name]},
+                {"Name": "vpc-id", "Values": [vpc_id]},
+            ]
+        )
+        if existing_sgs.get("SecurityGroups"):
+            nat_sg_id = existing_sgs["SecurityGroups"][0]["GroupId"]
+            logger.info(f"Using existing NAT Security Group: {nat_sg_id}")
+            return nat_sg_id
+    except botocore.exceptions.ClientError as e:
+        logger.warning(f"Error checking for existing security group: {e}")
 
     # Create Security Group for the instance
-    sg_response = ec2_client.create_security_group(
-        GroupName=f"{public_subnet_name}-ci-nat-sg",
-        Description="Security group for NAT instance",
-        VpcId=vpc_id,
-        TagSpecifications=[{
-            "ResourceType": "security-group",
-            "Tags": [
-                {"Key": TAG_KEY_NAT_GATEWAY_ID, "Value": nat_gateway_id},
-                {'Key': TAG_KEY_VPC_ID, "Value": vpc_id},
-            ]
-        }]
-    )
-    nat_sg_id = sg_response["GroupId"]
-    logger.info(f"Created NAT Security Group: {nat_sg_id}")
+    try:
+        sg_response = ec2_client.create_security_group(
+            GroupName=sg_name,
+            Description="Security group for NAT instance",
+            VpcId=vpc_id,
+            TagSpecifications=[{
+                "ResourceType": "security-group",
+                "Tags": [
+                    {"Key": TAG_KEY_NAT_GATEWAY_ID, "Value": nat_gateway_id},
+                    {'Key': TAG_KEY_VPC_ID, "Value": vpc_id},
+                ]
+            }]
+        )
+        nat_sg_id = sg_response["GroupId"]
+        logger.info(f"Created NAT Security Group: {nat_sg_id}")
+    except botocore.exceptions.ClientError as e:
+        if 'InvalidGroup.Duplicate' in str(e):
+            # Race condition - another invocation created it first, fetch the existing one
+            existing_sgs = ec2_client.describe_security_groups(
+                Filters=[
+                    {"Name": "group-name", "Values": [sg_name]},
+                    {"Name": "vpc-id", "Values": [vpc_id]},
+                ]
+            )
+            if existing_sgs.get("SecurityGroups"):
+                nat_sg_id = existing_sgs["SecurityGroups"][0]["GroupId"]
+                logger.info(f"Security group already exists, using: {nat_sg_id}")
+                return nat_sg_id
+            else:
+                raise
+        else:
+            raise
 
     # Allow inbound traffic from the private subnet
     ec2_client.authorize_security_group_ingress(
@@ -857,17 +894,35 @@ systemctl enable clear-route-tag.service
 # source/dest must be disabled for a NAT instance. This permission must be provided in the IAM instance profile.
 if aws ec2 modify-instance-attribute --region {region} --instance-id $INSTANCE_ID --no-source-dest-check; then
 
-    # Record the NAT gateway id to swich back to if the NAT instance needs to be shutdown 
+    # Record the NAT gateway id to switch back to if the NAT instance needs to be shutdown 
     # ungracefully. If shutdown gracefully, the NAT instance will restore the NAT automatically.
     aws ec2 create-tags --region {region} --resources {route_table_id} --tags Key={TAG_KEY_NAT_INSTANCE_ID},Value="{nat_gateway_id}"
 
-    # Set the routing table to begin routing traffic to this instance ID.
-    if aws ec2 replace-route --region {region} --route-table-id {route_table_id} --destination-cidr-block 0.0.0.0/0 --instance-id $INSTANCE_ID; then
-        # Indicate to subsequent lambda invocations that the NAT instance thinks it is ready to serve traffic
-        aws ec2 create-tags --region {region} --resources {route_table_id} --tags Key={TAG_KEY_NAT_INSTANCE_ID},Value=$INSTANCE_ID
-        echo "Routing table for private subnet updated to route 0.0.0.0/0 to NAT instance."
+    # Wait for the 0.0.0.0/0 route to exist in the route table before trying to replace it.
+    # The cluster installer may not have created it yet (race condition).
+    echo "Waiting for 0.0.0.0/0 route to exist in route table {route_table_id}..."
+    ROUTE_EXISTS=false
+    for attempt in $(seq 1 60); do
+        if aws ec2 describe-route-tables --region {region} --route-table-ids {route_table_id} --query 'RouteTables[0].Routes[?DestinationCidrBlock==`0.0.0.0/0`]' --output text | grep -q "0.0.0.0/0"; then
+            echo "Found 0.0.0.0/0 route after $attempt attempts"
+            ROUTE_EXISTS=true
+            break
+        fi
+        echo "Attempt $attempt: 0.0.0.0/0 route not found yet, waiting 5 seconds..."
+        sleep 5
+    done
+
+    if [ "$ROUTE_EXISTS" = "false" ]; then
+        echo "ERROR: Timeout waiting for 0.0.0.0/0 route to be created. NAT instance will not be used."
     else
-        echo "ERROR: Unable to set route table entry! NAT instance will not be used."
+        # Set the routing table to begin routing traffic to this instance ID.
+        if aws ec2 replace-route --region {region} --route-table-id {route_table_id} --destination-cidr-block 0.0.0.0/0 --instance-id $INSTANCE_ID; then
+            # Indicate to subsequent lambda invocations that the NAT instance thinks it is ready to serve traffic
+            aws ec2 create-tags --region {region} --resources {route_table_id} --tags Key={TAG_KEY_NAT_INSTANCE_ID},Value=$INSTANCE_ID
+            echo "Routing table for private subnet updated to route 0.0.0.0/0 to NAT instance."
+        else
+            echo "ERROR: Unable to set route table entry! NAT instance will not be used."
+        fi
     fi
 else
     echo "ERROR: Unable to disable source/dest check! NAT instance will not be used."

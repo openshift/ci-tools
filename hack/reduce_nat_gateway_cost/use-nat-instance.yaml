@@ -30,6 +30,7 @@ Resources:
           - Effect: Allow
             Action:
             - ec2:ReplaceRoute
+            - ec2:DescribeRouteTables
             Resource: "*"
           - Effect: Allow
             Action:

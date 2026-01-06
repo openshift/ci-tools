@@ -22,6 +22,7 @@ REGIONS = ["us-east-1", "us-east-2", "us-west-1", "us-west-2"]
 CHECK_INTERVAL_SECONDS = 300  # 5 minutes
 INSTANCE_PROFILE_THRESHOLD = 500
 NAT_INSTANCE_AGE_THRESHOLD_HOURS = 8
+NAT_INSTANCE_EFFECTIVENESS_MINUTES = 15  # Check effectiveness for instances older than this
 LAMBDA_FUNCTION_NAME = "use-nat-instance-function"
 LAMBDA_REGION = "us-east-1"
 
@@ -38,6 +39,18 @@ GREEN = "\033[0;32m"
 YELLOW = "\033[1;33m"
 CYAN = "\033[0;36m"
 NC = "\033[0m"  # No Color
+
+
+def format_duration(td: timedelta) -> str:
+    """Format a timedelta as a human-readable duration string like '2h3m' or '45m'."""
+    total_seconds = int(td.total_seconds())
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, _ = divmod(remainder, 60)
+    
+    if hours > 0:
+        return f"{hours}h{minutes}m"
+    else:
+        return f"{minutes}m"
 
 
 def play_alarm():
@@ -258,6 +271,89 @@ def get_lambda_error_count(profile: str, hours: int = 8) -> tuple[int, Optional[
         return 0, f"ERROR getting Lambda metrics: {e}"
 
 
+def get_lambda_last_modified(profile: str) -> tuple[Optional[datetime], Optional[str]]:
+    """
+    Get the last modified time of the Lambda function.
+    
+    Returns:
+        Tuple of (last_modified datetime in UTC, error message if any)
+    """
+    session = get_session(profile, LAMBDA_REGION)
+    lambda_client = session.client("lambda")
+    
+    try:
+        response = lambda_client.get_function(FunctionName=LAMBDA_FUNCTION_NAME)
+        last_modified_str = response.get("Configuration", {}).get("LastModified", "")
+        if last_modified_str:
+            # Parse ISO format: "2026-01-06T16:11:36.000+0000"
+            # Handle both formats with and without milliseconds
+            try:
+                last_modified = datetime.fromisoformat(last_modified_str.replace("+0000", "+00:00"))
+            except ValueError:
+                # Try parsing without timezone offset
+                last_modified = datetime.strptime(
+                    last_modified_str[:19], "%Y-%m-%dT%H:%M:%S"
+                ).replace(tzinfo=timezone.utc)
+            return last_modified, None
+        return None, "Lambda LastModified not found"
+    except ClientError as e:
+        return None, f"ERROR getting Lambda info: {e}"
+
+
+def get_lambda_errors_since_update(profile: str) -> tuple[int, str, Optional[str]]:
+    """
+    Get Lambda errors since the last update or last hour, whichever is more recent.
+    
+    This helps assess whether a recent deployment has introduced issues.
+    
+    Returns:
+        Tuple of (error_count, time_description, error_message if any)
+    """
+    session = get_session(profile, LAMBDA_REGION)
+    cloudwatch_client = session.client("cloudwatch")
+    
+    end_time = datetime.now(timezone.utc)
+    one_hour_ago = end_time - timedelta(hours=1)
+    
+    # Get last modified time
+    last_modified, err = get_lambda_last_modified(profile)
+    if err:
+        return 0, "unknown", err
+    
+    # Use the more recent of: last_modified or one_hour_ago
+    if last_modified and last_modified > one_hour_ago:
+        start_time = last_modified
+        time_desc = f"since update ({last_modified.strftime('%H:%M:%S')} UTC)"
+    else:
+        start_time = one_hour_ago
+        time_desc = "last hour"
+    
+    # Calculate period in seconds (must be a multiple of 60 for CloudWatch)
+    raw_seconds = int((end_time - start_time).total_seconds())
+    # Round up to nearest 60 seconds, minimum 60
+    period_seconds = max(60, ((raw_seconds + 59) // 60) * 60)
+    
+    try:
+        response = cloudwatch_client.get_metric_statistics(
+            Namespace="AWS/Lambda",
+            MetricName="Errors",
+            Dimensions=[
+                {"Name": "FunctionName", "Value": LAMBDA_FUNCTION_NAME},
+            ],
+            StartTime=start_time,
+            EndTime=end_time,
+            Period=period_seconds,
+            Statistics=["Sum"],
+        )
+        
+        datapoints = response.get("Datapoints", [])
+        if datapoints:
+            return int(datapoints[0].get("Sum", 0)), time_desc, None
+        return 0, time_desc, None
+    except ClientError as e:
+        return 0, time_desc, f"ERROR getting Lambda metrics: {e}"
+
+
 def count_nat_instances_by_region(nat_instances: list[dict]) -> dict[str, int]:
     """Count NAT instances by region."""
     counts = {region: 0 for region in REGIONS}
@@ -266,6 +362,168 @@ def count_nat_instances_by_region(nat_instances: list[dict]) -> dict[str, int]:
         if region in counts:
             counts[region] += 1
     return counts
+
+
+def get_nat_gateway_stats(profiles: list[str], regions: list[str]) -> dict:
+    """
+    Get NAT Gateway statistics across all profiles and regions.
+    
+    Returns:
+        Dictionary with:
+        - by_tag_value: dict mapping each ci-nat-replace value to its count
+        - untagged: count of NAT Gateways with no ci-nat-replace tag
+        - by_profile: breakdown by profile
+    """
+    stats = {
+        "by_tag_value": {},  # Maps tag value -> count
+        "untagged": 0,
+        "by_profile": {},
+    }
+    
+    for profile in profiles:
+        profile_stats = {"by_tag_value": {}, "untagged": 0}
+        
+        for region in regions:
+            try:
+                session = get_session(profile, region)
+                ec2_client = session.client("ec2")
+                
+                # Get all NAT Gateways that are available (not deleted/pending)
+                paginator = ec2_client.get_paginator("describe_nat_gateways")
+                for page in paginator.paginate(
+                    Filters=[{"Name": "state", "Values": ["available", "pending"]}]
+                ):
+                    for nat_gw in page.get("NatGateways", []):
+                        # Check for ci-nat-replace tag
+                        tags = {t["Key"]: t["Value"] for t in nat_gw.get("Tags", [])}
+                        
+                        if "ci-nat-replace" not in tags:
+                            profile_stats["untagged"] += 1
+                        else:
+                            tag_value = tags["ci-nat-replace"]
+                            profile_stats["by_tag_value"][tag_value] = profile_stats["by_tag_value"].get(tag_value, 0) + 1
+            except ClientError as e:
+                # Log but continue - don't fail the whole check
+                pass
+        
+        # Aggregate into global stats
+        for tag_value, count in profile_stats["by_tag_value"].items():
+            stats["by_tag_value"][tag_value] = stats["by_tag_value"].get(tag_value, 0) + count
+        stats["untagged"] += profile_stats["untagged"]
+        stats["by_profile"][profile] = profile_stats
+    
+    return stats
+
+
+def check_nat_instance_effectiveness(nat_instances: list[dict]) -> dict:
+    """
+    Check the effectiveness of NAT instances by verifying route table updates.
+    
+    For NAT instances older than NAT_INSTANCE_EFFECTIVENESS_MINUTES, checks whether
+    the route table has been updated to route traffic through the NAT instance
+    instead of a NAT Gateway.
+    
+    Returns:
+        Dictionary with effectiveness statistics and details
+    """
+    now = datetime.now(timezone.utc)
+    min_age = timedelta(minutes=NAT_INSTANCE_EFFECTIVENESS_MINUTES)
+    
+    # Filter to instances old enough to evaluate
+    eligible_instances = [
+        inst for inst in nat_instances
+        if inst.get("launch_time") and (now - inst["launch_time"]) > min_age
+    ]
+    
+    if not eligible_instances:
+        return {
+            "eligible_count": 0,
+            "effective_count": 0,
+            "ineffective_count": 0,
+            "percentage": 100.0,
+            "ineffective_instances": [],
+        }
+    
+    effective_count = 0
+    skipped_count = 0  # Terminated/shutting-down instances are skipped
+    ineffective_instances = []
+    
+    # Group instances by profile and region for efficient API calls
+    by_profile_region = {}
+    for inst in eligible_instances:
+        key = (inst["profile"], inst["region"])
+        if key not in by_profile_region:
+            by_profile_region[key] = []
+        by_profile_region[key].append(inst)
+    
+    for (profile, region), instances in by_profile_region.items():
+        session = get_session(profile, region)
+        ec2_client = session.client("ec2")
+        
+        for inst in instances:
+            instance_id = inst["instance_id"]
+            vpc_id = inst["vpc_id"]
+            
+            try:
+                # Get the instance state
+                instance_response = ec2_client.describe_instances(
+                    InstanceIds=[instance_id]
+                )
+                
+                if not instance_response.get("Reservations"):
+                    continue
+                    
+                instance_data = instance_response["Reservations"][0]["Instances"][0]
+                instance_state = instance_data.get("State", {}).get("Name", "")
+                
+                # Skip terminated instances - they restore the NAT gateway route on termination
+                if instance_state in ("terminated", "shutting-down"):
+                    skipped_count += 1
+                    continue
+                
+                # Get all route tables in the VPC
+                route_tables_response = ec2_client.describe_route_tables(
+                    Filters=[{"Name": "vpc-id", "Values": [vpc_id]}]
+                )
+                
+                # Check if any route table has a 0.0.0.0/0 route pointing to this instance
+                # Note: replace-route with --instance-id sets InstanceId, not NetworkInterfaceId
+                found_route = False
+                for rt in route_tables_response.get("RouteTables", []):
+                    for route in rt.get("Routes", []):
+                        if route.get("DestinationCidrBlock") == "0.0.0.0/0":
+                            # Check if this route points to our NAT instance
+                            if route.get("InstanceId") == instance_id:
+                                found_route = True
+                                break
+                    if found_route:
+                        break
+                
+                if found_route:
+                    effective_count += 1
+                else:
+                    ineffective_instances.append({
+                        **inst,
+                        "reason": "No route table updated to use this instance",
+                    })
+                    
+            except ClientError as e:
+                ineffective_instances.append({
+                    **inst,
+                    "reason": f"Error checking: {e}",
+                })
+    
+    eligible_count = len(eligible_instances) - skipped_count  # Exclude terminated instances
+    ineffective_count = len(ineffective_instances)
+    percentage = (effective_count / eligible_count * 100) if eligible_count > 0 else 100.0
+    
+    return {
+        "eligible_count": eligible_count,
+        "effective_count": effective_count,
+        "ineffective_count": ineffective_count,
+        "percentage": percentage,
+        "ineffective_instances": ineffective_instances,
+    }
 
 
 def check_expected_resources(profile: str) -> tuple[list[str], list[str]]:
@@ -425,6 +683,74 @@ def run_check(play_alarm_on_issues: bool = False) -> bool:
     print(f"  Total: {total_instances}")
     print()
     
+    # Display NAT Gateway replacement stats
+    print(f"{CYAN}NAT Gateway Replacement Status:{NC}")
+    nat_gw_stats = get_nat_gateway_stats(PROFILES, REGIONS)
+    by_tag_value = nat_gw_stats["by_tag_value"]
+    untagged = nat_gw_stats["untagged"]
+    total_tagged = sum(by_tag_value.values())
+    total_nat_gw = total_tagged + untagged
+    
+    # Sort tag values: "true" first, then alphabetically
+    sorted_values = sorted(by_tag_value.keys(), key=lambda x: (x.lower() != "true", x.lower()))
+    for tag_value in sorted_values:
+        count = by_tag_value[tag_value]
+        print(f"  NAT Gateways with ci-nat-replace={tag_value}: {count}")
+    print(f"  NAT Gateways with no ci-nat-replace tag: {untagged}")
+    print(f"  Total NAT Gateways: {total_nat_gw}")
+    print(f"  NAT Instances launched: {total_instances}")
+    
+    # Only "true" results in replacement
+    true_count = by_tag_value.get("true", 0)
+    if true_count > 0:
+        ratio = total_instances / true_count
+        print(f"  NAT Instance to Replaced Gateway ratio: {ratio:.2f}")
+    if total_nat_gw > 0:
+        all_ratio = total_instances / total_nat_gw
+        print(f"  NAT Instance to ALL Gateway ratio: {all_ratio:.2f}")
+    print()
+    
+    # Check NAT instance effectiveness
+    print(f"{CYAN}NAT Instance Effectiveness (instances > {NAT_INSTANCE_EFFECTIVENESS_MINUTES} min old):{NC}")
+    effectiveness = check_nat_instance_effectiveness(all_nat_instances)
+    if effectiveness["eligible_count"] == 0:
+        print(f"  No NAT instances old enough to evaluate")
+    else:
+        pct = effectiveness["percentage"]
+        if pct >= 95:
+            color = GREEN
+        elif pct >= 80:
+            color = YELLOW
+        else:
+            color = RED
+        print(f"  Eligible instances: {effectiveness['eligible_count']}")
+        print(f"  Effective (route updated): {effectiveness['effective_count']}")
+        print(f"  Ineffective: {effectiveness['ineffective_count']}")
+        print(f"  Effectiveness: {color}{pct:.1f}%{NC}")
+        
+        # Report ineffective instances as issues if any
+        if effectiveness["ineffective_instances"]:
+            now = datetime.now(timezone.utc)
+            print(f"\n  {RED}Ineffective NAT instances:{NC}")
+            for inst in effectiveness["ineffective_instances"]:
+                age_str = ""
+                if inst.get("launch_time"):
+                    age_str = f" [{format_duration(now - inst['launch_time'])}]"
+                print(f"    - {inst['instance_id']} ({inst['instance_name']}) in {inst['profile']}/{inst['region']}{age_str}")
+                print(f"      Reason: {inst['reason']}")
+            # Add to issues
+            all_issues.append("NAT Instance Effectiveness Issues:")
+            for inst in effectiveness["ineffective_instances"]:
+                age_str = ""
+                if inst.get("launch_time"):
+                    age_str = f" [{format_duration(now - inst['launch_time'])}]"
+                all_issues.append(
+                    f"  INEFFECTIVE: {inst['instance_id']} ({inst['instance_name']}) "
+                    f"in {inst['profile']}/{inst['region']}{age_str} - {inst['reason']}"
+                )
+            has_problems = True
+    print()
+    
     # Display Lambda error summary
     print(f"{CYAN}Lambda Error Summary (last {NAT_INSTANCE_AGE_THRESHOLD_HOURS} hours):{NC}")
     total_errors = 0
@@ -436,6 +762,21 @@ def run_check(play_alarm_on_issues: bool = False) -> bool:
         else:
             print(f"  {profile}: {GREEN}0 errors{NC}")
     print(f"  Total: {total_errors}")
+    print()
+    
+    # Display errors since last update (or last hour)
+    print(f"{CYAN}Lambda Errors Since Update (or last hour):{NC}")
+    total_recent_errors = 0
+    for profile in PROFILES:
+        error_count, time_desc, err = get_lambda_errors_since_update(profile)
+        total_recent_errors += error_count
+        if err:
+            print(f"  {profile}: {YELLOW}{err}{NC}")
+        elif error_count > 0:
+            print(f"  {profile}: {RED}{error_count} errors ({time_desc}){NC}")
+        else:
+            print(f"  {profile}: {GREEN}0 errors ({time_desc}){NC}")
+    print(f"  Total: {total_recent_errors}")
     print()
     
     # Display infrastructure health summary

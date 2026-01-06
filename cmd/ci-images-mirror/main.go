@@ -150,8 +150,10 @@ type supplementalCIImagesService interface {
 }
 
 type supplementalCIImagesServiceWithMirrorStore struct {
-	mirrorStore quayiociimagesdistributor.MirrorStore
-	logger      *logrus.Entry
+	mirrorStore        quayiociimagesdistributor.MirrorStore
+	logger             *logrus.Entry
+	quayIOImageHelper  quayiociimagesdistributor.QuayIOImageHelper
+	ocImageInfoOptions quayiociimagesdistributor.OCImageInfoOptions
 }
 
 func targetToQuayImage(target string) string {
@@ -165,10 +167,34 @@ func (s *supplementalCIImagesServiceWithMirrorStore) Mirror(m map[string]quayioc
 		if source == "" {
 			source = fmt.Sprintf("%s/%s", api.ServiceDomainAPPCIRegistry, v.ImageStreamTagReference.ISTagName())
 		}
+
+		// Get target (quay) image info
+		targetImage := targetToQuayImage(k)
+		targetInfo, err := s.quayIOImageHelper.ImageInfo(targetImage, s.ocImageInfoOptions)
+		if err != nil {
+			s.logger.WithError(err).WithField("target", targetImage).Warning("Failed to get target image info, will attempt mirror")
+		}
+
+		// Get source image info
+		sourceInfo, err := s.quayIOImageHelper.ImageInfo(source, s.ocImageInfoOptions)
+		if err != nil {
+			s.logger.WithError(err).WithField("source", source).Warning("Failed to get source image info, will attempt mirror")
+		}
+
+		// Skip if digests match
+		if targetInfo.Digest != "" && sourceInfo.Digest != "" && targetInfo.Digest == sourceInfo.Digest {
+			s.logger.WithField("target", targetImage).WithField("digest", targetInfo.Digest).Debug("Image already in sync, skipping")
+			continue
+		}
+
+		s.logger.WithField("source", source).WithField("target", targetImage).
+			WithField("sourceDigest", sourceInfo.Digest).WithField("targetDigest", targetInfo.Digest).
+			Info("Image needs sync")
+
 		timeStr := time.Now().Format("20060102150405")
 		if err := s.mirrorStore.Put(quayiociimagesdistributor.MirrorTask{
 			Source:      targetToQuayImage(k),
-			Destination: targetToQuayImage(timeStr + "_prune_" + k),
+			Destination: targetToQuayImage(timeStr + "_prune___ci_images_mirror__" + k),
 			Owner:       "supplementalCIImagesService",
 		}); err != nil {
 			return fmt.Errorf("failed to put mirror task: %w", err)
@@ -184,8 +210,13 @@ func (s *supplementalCIImagesServiceWithMirrorStore) Mirror(m map[string]quayioc
 	return nil
 }
 
-func newSupplementalCIImagesServiceWithMirrorStore(mirrorStore quayiociimagesdistributor.MirrorStore, logger *logrus.Entry) supplementalCIImagesService {
-	return &supplementalCIImagesServiceWithMirrorStore{mirrorStore: mirrorStore, logger: logger}
+func newSupplementalCIImagesServiceWithMirrorStore(mirrorStore quayiociimagesdistributor.MirrorStore, logger *logrus.Entry, quayIOImageHelper quayiociimagesdistributor.QuayIOImageHelper, ocImageInfoOptions quayiociimagesdistributor.OCImageInfoOptions) supplementalCIImagesService {
+	return &supplementalCIImagesServiceWithMirrorStore{
+		mirrorStore:        mirrorStore,
+		logger:             logger,
+		quayIOImageHelper:  quayIOImageHelper,
+		ocImageInfoOptions: ocImageInfoOptions,
+	}
 }
 
 func main() {
@@ -243,8 +274,20 @@ func main() {
 	}
 
 	mirrorStore := quayiociimagesdistributor.NewMirrorStore()
+
+	ocClientFactory := quayiociimagesdistributor.NewClientFactory()
+	quayIOImageHelper, err := ocClientFactory.NewClient()
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to create QuayIOImageHelper")
+	}
+	ocImageInfoOptions := quayiociimagesdistributor.OCImageInfoOptions{
+		RegistryConfig: opts.registryConfig,
+		// TODO: multi-arch support
+		FilterByOS: "linux/amd64",
+	}
+
 	if opts.configFile != "" {
-		supplementalCIImagesService := newSupplementalCIImagesServiceWithMirrorStore(mirrorStore, logrus.WithField("subcomponent", "supplementalCIImagesService"))
+		supplementalCIImagesService := newSupplementalCIImagesServiceWithMirrorStore(mirrorStore, logrus.WithField("subcomponent", "supplementalCIImagesService"), quayIOImageHelper, ocImageInfoOptions)
 		interrupts.TickLiteral(func() {
 			if err := opts.loadConfig("supplementalCIImagesService"); err != nil {
 				logrus.WithError(err).Error("Failed to reload config")
@@ -255,7 +298,7 @@ func main() {
 			}
 		}, time.Hour)
 
-		artImagesService := newSupplementalCIImagesServiceWithMirrorStore(mirrorStore, logrus.WithField("subcomponent", "artImagesService"))
+		artImagesService := newSupplementalCIImagesServiceWithMirrorStore(mirrorStore, logrus.WithField("subcomponent", "artImagesService"), quayIOImageHelper, ocImageInfoOptions)
 		interrupts.TickLiteral(func() {
 			if err := opts.loadConfig("artImagesService"); err != nil {
 				logrus.WithError(err).Error("Failed to reload config")
@@ -277,12 +320,6 @@ func main() {
 		Handler: getRouter(interrupts.Context(), mirrorStore),
 	}
 	interrupts.ListenAndServe(server, opts.gracePeriod)
-
-	ocClientFactory := quayiociimagesdistributor.NewClientFactory()
-	quayIOImageHelper, err := ocClientFactory.NewClient()
-	if err != nil {
-		logrus.WithError(err).Fatal("failed to create QuayIOImageHelper")
-	}
 
 	mirrorConsumerController := quayiociimagesdistributor.NewMirrorConsumer(mirrorStore, quayIOImageHelper, opts.registryConfig, opts.dryRun)
 	interrupts.Run(func(ctx context.Context) { execute(ctx, mirrorConsumerController) })

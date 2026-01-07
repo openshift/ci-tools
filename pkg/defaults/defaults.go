@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -259,7 +260,8 @@ func fromConfig(
 			step = steps.InputImageTagStep(&conf, client, jobSpec)
 			inputImages[conf.InputImage] = struct{}{}
 		} else if rawStep.PipelineImageCacheStepConfiguration != nil {
-			step = steps.PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, config.Resources, buildClient, podClient, jobSpec, pullSecret, metricsAgent, skippedImages)
+			skippedBinaries := filterRequiredBinariesFromSkipped(config.Images, skippedImages)
+			step = steps.PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, config.Resources, buildClient, podClient, jobSpec, pullSecret, metricsAgent, skippedBinaries)
 		} else if rawStep.SourceStepConfiguration != nil {
 			step = steps.SourceStep(*rawStep.SourceStepConfiguration, config.Resources, buildClient, podClient, jobSpec, cloneAuthConfig, pullSecret, metricsAgent)
 		} else if rawStep.BundleSourceStepConfiguration != nil {
@@ -1167,4 +1169,28 @@ func resolveCLIOverrideImage(architecture api.ReleaseArchitecture, version strin
 	}
 
 	return &coreapi.ObjectReference{Kind: "DockerImage", Name: api.QuayImageReference(isTagRef)}, nil
+}
+
+func filterRequiredBinariesFromSkipped(images []api.ProjectDirectoryImageBuildStepConfiguration, skippedImages sets.Set[string]) sets.Set[string] {
+	requiredBinaries := sets.New[string]()
+	for _, img := range images {
+		if skippedImages.Has(string(img.To)) {
+			continue
+		}
+		binInputs, hasBinInput := img.Inputs["bin"]
+		if !hasBinInput {
+			continue
+		}
+		for _, path := range binInputs.Paths {
+			requiredBinaries.Insert(filepath.Base(path.SourcePath))
+		}
+	}
+
+	skippedBinaries := sets.New[string]()
+	for binary := range skippedImages {
+		if !requiredBinaries.Has(binary) {
+			skippedBinaries.Insert(binary)
+		}
+	}
+	return skippedBinaries
 }

@@ -4,6 +4,10 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+if [[ -n "${SKIPPED_IMAGES:-}" ]] && echo "${SKIPPED_IMAGES}" | grep -q "vault-secret-collection-manager"; then
+	exit 0
+fi
+
 if ! command -V tsc >/dev/null 2>&1; then
 	if [[ -n "${CI:-}" ]]; then
 		echo "[FATAL] In the CI environment, the TypeScript compiler is required!"

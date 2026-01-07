@@ -2177,3 +2177,77 @@ func TestDeterminePrimaryRef(t *testing.T) {
 		})
 	}
 }
+
+func TestFilterRequiredBinariesFromSkipped(t *testing.T) {
+	testCases := []struct {
+		name            string
+		images          []api.ProjectDirectoryImageBuildStepConfiguration
+		skippedImages   sets.Set[string]
+		expectedSkipped sets.Set[string]
+	}{
+		{
+			name: "required binary is removed from skipped set",
+			images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				{
+					To: "composite-tool",
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						Inputs: map[string]api.ImageBuildInputs{
+							"bin": {
+								Paths: []api.ImageSourcePath{
+									{SourcePath: "/go/bin/composite-tool"},
+									{SourcePath: "/go/bin/dependency-tool"},
+								},
+							},
+						},
+					},
+				},
+				{To: "dependency-tool"},
+				{To: "unrelated-tool"},
+			},
+			skippedImages:   sets.New("dependency-tool", "unrelated-tool"),
+			expectedSkipped: sets.New("unrelated-tool"),
+		},
+		{
+			name: "multiple required binaries are removed",
+			images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				{
+					To: "composite-tool",
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						Inputs: map[string]api.ImageBuildInputs{
+							"bin": {
+								Paths: []api.ImageSourcePath{
+									{SourcePath: "/go/bin/dep1"},
+									{SourcePath: "/go/bin/dep2"},
+								},
+							},
+						},
+					},
+				},
+				{To: "dep1"},
+				{To: "dep2"},
+				{To: "other-tool"},
+			},
+			skippedImages:   sets.New("dep1", "dep2", "other-tool"),
+			expectedSkipped: sets.New("other-tool"),
+		},
+		{
+			name: "no bin dependencies - all skipped remain",
+			images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				{To: "tool1"},
+				{To: "tool2"},
+				{To: "tool3"},
+			},
+			skippedImages:   sets.New("tool2", "tool3"),
+			expectedSkipped: sets.New("tool2", "tool3"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := filterRequiredBinariesFromSkipped(tc.images, tc.skippedImages)
+			if diff := cmp.Diff(tc.expectedSkipped, result); diff != "" {
+				t.Errorf("skipped binaries differ:\n%s", diff)
+			}
+		})
+	}
+}

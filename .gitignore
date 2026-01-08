@@ -9,5 +9,6 @@ index.js
 
 # default working dir
 /job-aggregator-working-dir
-# go built binary
+# go built binaries
 /job-run-aggregator
+/pod-scaler

@@ -13,10 +13,15 @@
   					Limits: v1.ResourceList{
 - 						s"cpu":    {i: resource.int64Amount{value: 16}, Format: "DecimalSI"},
 - 						s"memory": {i: resource.int64Amount{value: 400000000}, Format: "BinarySI"},
-+ 						s"memory": {i: resource.int64Amount{value: 600000000}, Format: "BinarySI"},
++ 						s"memory": {i: resource.int64Amount{value: 480000000}, Format: "BinarySI"},
   					},
-  					Requests: {s"cpu": {i: {value: 8}, Format: "DecimalSI"}, s"memory": {i: {value: 300000000}, Format: "BinarySI"}},
-  					Claims:   nil,
+  					Requests: v1.ResourceList{
+- 						s"cpu":    {i: resource.int64Amount{value: 8}, Format: "DecimalSI"},
++ 						s"cpu":    {i: resource.int64Amount{value: 6}, s: "6", Format: "DecimalSI"},
+- 						s"memory": {i: resource.int64Amount{value: 300000000}, Format: "BinarySI"},
++ 						s"memory": {i: resource.int64Amount{value: 240000000}, s: "234375Ki", Format: "BinarySI"},
+  					},
+  					Claims: nil,
   				},
   				ResizePolicy:  nil,
   				RestartPolicy: nil,
@@ -29,7 +34,8 @@
   				Resources: v1.ResourceRequirements{
   					Limits: {},
   					Requests: v1.ResourceList{
-  						s"cpu":    {i: {value: 8}, Format: "DecimalSI"},
+- 						s"cpu":    {i: resource.int64Amount{value: 8}, Format: "DecimalSI"},
++ 						s"cpu":    {i: resource.int64Amount{value: 6}, s: "6", Format: "DecimalSI"},
 - 						s"memory": {i: resource.int64Amount{value: 100000000}, Format: "BinarySI"},
 + 						s"memory": {i: resource.int64Amount{value: 240000000}, s: "234375Ki", Format: "BinarySI"},
   					},
@@ -64,7 +70,8 @@
   				Resources: v1.ResourceRequirements{
   					Limits: {},
   					Requests: v1.ResourceList{
-  						s"cpu":    {i: {value: 10}, Format: "DecimalSI"},
+- 						s"cpu":    {i: resource.int64Amount{value: 10}, Format: "DecimalSI"},
++ 						s"cpu":    {i: resource.int64Amount{value: 7}, Format: "DecimalSI"},
 - 						s"memory": {i: resource.int64Amount{value: 100}, Format: "BinarySI"},
 + 						s"memory": {i: resource.int64Amount{value: 240000000}, s: "234375Ki", Format: "BinarySI"},
   					},

@@ -327,9 +327,17 @@ presubmits:
         - --target=optional-job
         command:
         - ci-operator
+        env:
+        - name: CI_OPERATOR_POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
+        ports:
+        - containerPort: 8082
+          name: lease-proxy
         resources:
           requests:
             cpu: 10m
@@ -447,9 +455,17 @@ presubmits:
         - --target=registry-with-profile
         command:
         - ci-operator
+        env:
+        - name: CI_OPERATOR_POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
+        ports:
+        - containerPort: 8082
+          name: lease-proxy
         resources:
           requests:
             cpu: 10m

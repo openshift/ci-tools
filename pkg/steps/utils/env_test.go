@@ -204,3 +204,60 @@ func TestGetOverriddenImages(t *testing.T) {
 		})
 	}
 }
+
+func TestGetOpenshiftInstallerEnvVars(t *testing.T) {
+	testCases := []struct {
+		name     string
+		env      map[string]string
+		expected map[string]string
+	}{
+		{
+			name: "OPENSHIFT_INSTALL_AWS_PUBLIC_ONLY is passed through",
+			env: map[string]string{
+				"OPENSHIFT_INSTALL_AWS_PUBLIC_ONLY": "true",
+			},
+			expected: map[string]string{
+				"OPENSHIFT_INSTALL_AWS_PUBLIC_ONLY": "true",
+			},
+		},
+		{
+			name:     "no OPENSHIFT_INSTALL_* vars configured",
+			expected: nil,
+		},
+		{
+			name: "multiple OPENSHIFT_INSTALL_* vars",
+			env: map[string]string{
+				"OPENSHIFT_INSTALL_AWS_PUBLIC_ONLY":        "true",
+				"OPENSHIFT_INSTALL_PRESERVE_BOOTSTRAP":     "true",
+				"OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE": "registry.example.com/ocp:4.22",
+			},
+			expected: map[string]string{
+				"OPENSHIFT_INSTALL_AWS_PUBLIC_ONLY":        "true",
+				"OPENSHIFT_INSTALL_PRESERVE_BOOTSTRAP":     "true",
+				"OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE": "registry.example.com/ocp:4.22",
+			},
+		},
+		{
+			name: "non-OPENSHIFT_INSTALL_* vars are ignored",
+			env: map[string]string{
+				"OPENSHIFT_INSTALL_AWS_PUBLIC_ONLY": "true",
+				"OTHER_VAR":                         "ignored",
+				"OPENSHIFT_OTHER":                   "also-ignored",
+			},
+			expected: map[string]string{
+				"OPENSHIFT_INSTALL_AWS_PUBLIC_ONLY": "true",
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			for k, v := range tc.env {
+				t.Setenv(k, v)
+			}
+			envVars := GetOpenshiftInstallerEnvVars()
+			if diff := cmp.Diff(envVars, tc.expected, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("returned env vars do not match expected, diff: %s", diff)
+			}
+		})
+	}
+}

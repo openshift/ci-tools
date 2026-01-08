@@ -177,3 +177,23 @@ func GetOverriddenImages() map[string]string {
 func OverrideImageEnv(name string) string {
 	return fmt.Sprintf("%s%s", OverrideImageEnvPrefix, escapedImageName(name))
 }
+
+const (
+	// OpenshiftInstallerEnvPrefix is the prefix for OpenShift installer configuration env vars
+	OpenshiftInstallerEnvPrefix = "OPENSHIFT_INSTALL_"
+)
+
+// GetOpenshiftInstallerEnvVars finds all occurrences of OPENSHIFT_INSTALL_* in env vars
+// and returns them as a map of name to value
+func GetOpenshiftInstallerEnvVars() map[string]string {
+	envVars := make(map[string]string)
+	for _, env := range os.Environ() {
+		if strings.HasPrefix(env, OpenshiftInstallerEnvPrefix) {
+			split := strings.SplitN(env, "=", 2)
+			if len(split) == 2 {
+				envVars[split[0]] = split[1]
+			}
+		}
+	}
+	return envVars
+}

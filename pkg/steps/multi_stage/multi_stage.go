@@ -417,6 +417,11 @@ func (s *multiStageTestStep) environment() ([]coreapi.EnvVar, error) {
 			}
 			ret = append(ret, coreapi.EnvVar{Name: api.DefaultIPPoolLeaseEnv, Value: val})
 		}
+		// Pass through any OPENSHIFT_INSTALL_* environment variables to the test pods.
+		// These are installer configuration variables that control cluster installation behavior.
+		for name, value := range utils.GetOpenshiftInstallerEnvVars() {
+			ret = append(ret, coreapi.EnvVar{Name: name, Value: value})
+		}
 	}
 	return ret, nil
 }

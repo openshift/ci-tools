@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -16,6 +17,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
+	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
 // the multiStageTestStep implements the subStepReporter interface
@@ -376,6 +378,87 @@ func TestEnvironment(t *testing.T) {
 			})
 			if diff := cmp.Diff(tc.expected, got); diff != "" {
 				t.Errorf("%s: result differs from expected:\n %s", tc.name, diff)
+			}
+		})
+	}
+}
+
+func TestEnvironmentWithInstallerEnvVars(t *testing.T) {
+	// This test verifies that OPENSHIFT_INSTALL_* environment variables
+	// are passed through to pods when a cluster profile is set.
+	tests := []struct {
+		name              string
+		profile           api.ClusterProfile
+		installerEnvVars  map[string]string
+		params            api.Parameters
+		expectedEnvVarSet map[string]string
+	}{
+		{
+			name:    "OPENSHIFT_INSTALL_* vars are passed with profile",
+			profile: api.ClusterProfileAWS,
+			installerEnvVars: map[string]string{
+				"OPENSHIFT_INSTALL_AWS_PUBLIC_ONLY":    "true",
+				"OPENSHIFT_INSTALL_PRESERVE_BOOTSTRAP": "true",
+			},
+			params: fakeStepParams{
+				"RELEASE_IMAGE_LATEST": "latest-image",
+				"IMAGE_FORMAT":         "image-format",
+			},
+			expectedEnvVarSet: map[string]string{
+				"OPENSHIFT_INSTALL_AWS_PUBLIC_ONLY":    "true",
+				"OPENSHIFT_INSTALL_PRESERVE_BOOTSTRAP": "true",
+			},
+		},
+		{
+			name:    "OPENSHIFT_INSTALL_* vars are not passed without profile",
+			profile: "",
+			installerEnvVars: map[string]string{
+				"OPENSHIFT_INSTALL_AWS_PUBLIC_ONLY": "true",
+			},
+			params:            fakeStepParams{},
+			expectedEnvVarSet: map[string]string{},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Set the installer env vars
+			for k, v := range tc.installerEnvVars {
+				t.Setenv(k, v)
+			}
+
+			s := &multiStageTestStep{
+				params:  tc.params,
+				profile: tc.profile,
+			}
+			got, err := s.environment()
+			if err != nil {
+				t.Errorf("environment() error = %v", err)
+				return
+			}
+
+			// Convert to map for easier comparison
+			gotMap := make(map[string]string)
+			for _, env := range got {
+				gotMap[env.Name] = env.Value
+			}
+
+			// Check that all expected OPENSHIFT_INSTALL_* vars are present
+			for name, value := range tc.expectedEnvVarSet {
+				if gotValue, ok := gotMap[name]; !ok {
+					t.Errorf("expected env var %s not found in result", name)
+				} else if gotValue != value {
+					t.Errorf("env var %s: got %q, expected %q", name, gotValue, value)
+				}
+			}
+
+			// If profile is empty, ensure no OPENSHIFT_INSTALL_* vars are in result
+			if tc.profile == "" {
+				for name := range gotMap {
+					if strings.HasPrefix(name, utils.OpenshiftInstallerEnvPrefix) {
+						t.Errorf("unexpected OPENSHIFT_INSTALL_* var %s found when profile is empty", name)
+					}
+				}
 			}
 		})
 	}

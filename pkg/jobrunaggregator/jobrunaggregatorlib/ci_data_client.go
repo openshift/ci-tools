@@ -1113,6 +1113,7 @@ func (c *ciDataClient) ListTestSummaryByPeriod(ctx context.Context, suiteName, r
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(`
 WITH earliest_test_dates AS (
   -- Pre-compute the earliest date each test was seen across all releases for this suite
+  -- Look back max(100, @days_back) days to ensure we capture historical context
   SELECT
     test_name,
     MIN(date) AS first_sample_date
@@ -1120,7 +1121,7 @@ WITH earliest_test_dates AS (
     DATA_SET_LOCATION.TestsSummaryByDate
   WHERE
     suite = @suite_name
-    AND date >= DATE_SUB(CURRENT_DATE(), INTERVAL 100 DAY)
+    AND date >= DATE_SUB(CURRENT_DATE(), INTERVAL GREATEST(100, @days_back) DAY)
     AND date <= CURRENT_DATE()
   GROUP BY
     test_name

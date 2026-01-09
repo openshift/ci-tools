@@ -17,4 +17,5 @@ type TestSummaryByPeriodRow struct {
 	PeriodStart       civil.Date `bigquery:"period_start"`
 	PeriodEnd         civil.Date `bigquery:"period_end"`
 	DaysWithData      int64      `bigquery:"days_with_data"`
+	FirstSampleDate   civil.Date `bigquery:"first_sample_date"` // First date this test_name was seen within the sample period across all releases for this suite
 }

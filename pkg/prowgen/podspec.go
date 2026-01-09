@@ -182,6 +182,12 @@ func addVolumeMount(container *corev1.Container, wantMount corev1.VolumeMount) e
 }
 
 func addPort(c *corev1.Container, name string, port int32) {
+	for i := range c.Ports {
+		p := &c.Ports[i]
+		if p.Name == name || p.ContainerPort == port {
+			return
+		}
+	}
 	c.Ports = append(c.Ports, corev1.ContainerPort{
 		Name:          name,
 		ContainerPort: port,

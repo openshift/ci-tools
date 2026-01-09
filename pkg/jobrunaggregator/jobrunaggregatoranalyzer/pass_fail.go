@@ -501,10 +501,15 @@ func (a *weeklyAverageFromTenDays) innerCheckPercentileDisruptionWithGrace(
 	numberOfPasses := len(successJobRunIDs)
 	numberOfFailures := len(failureJobRunIDs)
 	workingPercentage := thresholdPercentile // the percentile is our success percentage
-	requiredNumberOfPasses := requiredPassesByPassPercentageByNumberOfAttempts[numberOfAttempts][workingPercentage]
-	// TODO try to tighten this after we can keep the test in for about a week.
-	// We need to come back and revisit the possibility of removing this adjustment.
-	requiredNumberOfPasses = requiredNumberOfPasses - 1 // subtracting one because our current sample missed by one
+
+	strictRequiredNumberOfPasses := requiredPassesByPassPercentageByNumberOfAttempts[numberOfAttempts][workingPercentage]
+	requiredNumberOfPasses, pityFactorMsg := pityFactor(numberOfAttempts, strictRequiredNumberOfPasses)
+
+	if requiredNumberOfPasses == strictRequiredNumberOfPasses {
+		// TODO try to tighten this after we can keep the test in for about a week.
+		// We need to come back and revisit the possibility of removing this adjustment.
+		requiredNumberOfPasses = requiredNumberOfPasses - 1 // subtracting one because our current sample missed by one
+	}
 
 	if requiredNumberOfPasses <= 0 {
 		message := fmt.Sprintf("Current percentile is so low that we cannot latch, skipping (P%d=%.2fs successes=%v failures=%v)", thresholdPercentile, threshold, successRuns, failureRuns)
@@ -538,9 +543,16 @@ func (a *weeklyAverageFromTenDays) innerCheckPercentileDisruptionWithGrace(
 		return requiredNumberOfPasses, failureJobRunIDs, successJobRunIDs, testCaseFailed, summary
 	}
 
-	summary := fmt.Sprintf("Passed: Passed %d times, failed %d times.  (P%d=%.2fs %srequiredPasses=%d successes=%v failures=%v)",
+	if numberOfPasses < strictRequiredNumberOfPasses {
+		pityFactorMsg = fmt.Sprintf(" (%s)", pityFactorMsg)
+	} else {
+		pityFactorMsg = ""
+	}
+
+	summary := fmt.Sprintf("Passed: Passed %d times, failed %d times%s.  (P%d=%.2fs %srequiredPasses=%d successes=%v failures=%v)",
 		numberOfPasses,
 		numberOfFailures,
+		pityFactorMsg,
 		thresholdPercentile, threshold, graceAdded,
 		requiredNumberOfPasses,
 		successRuns, failureRuns,
@@ -614,7 +626,9 @@ func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, jobName stri
 		workingPercentage = int(averageTestResult.WorkingPercentage)
 	}
 
-	requiredNumberOfPasses := requiredPassesByPassPercentageByNumberOfAttempts[numberOfAttempts][workingPercentage]
+	strictRequiredNumberOfPasses := requiredPassesByPassPercentageByNumberOfAttempts[numberOfAttempts][workingPercentage]
+	requiredNumberOfPasses, pityFactorMsg := pityFactor(numberOfAttempts, strictRequiredNumberOfPasses)
+
 	if numberOfPasses < requiredNumberOfPasses {
 		summary := fmt.Sprintf("Failed: Passed %d times, failed %d times.  The historical pass rate is %d%%.  The required number of passes is %d.",
 			numberOfPasses,
@@ -625,12 +639,29 @@ func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, jobName stri
 		return testCaseFailed, summary, nil
 	}
 
-	return testCasePassed, fmt.Sprintf("Passed: Passed %d times, failed %d times.  The historical pass rate is %d%%.  The required number of passes is %d.",
+	if numberOfPasses < strictRequiredNumberOfPasses {
+		pityFactorMsg = fmt.Sprintf(" (%s)", pityFactorMsg)
+	} else {
+		pityFactorMsg = ""
+	}
+
+	return testCasePassed, fmt.Sprintf("Passed: Passed %d times, failed %d times.  The historical pass rate is %d%%.  The required number of passes is %d%s.",
 		numberOfPasses,
 		numberOfFailures,
 		workingPercentage,
 		requiredNumberOfPasses,
+		pityFactorMsg,
 	), nil
+}
+
+// pityFactor relaxes required success rate to always pass on 2 and fewer failures to reduce aggregation fails caused by
+// e.g. infrastructure noise. We can afford to relax because component readiness will find genuine regressions over
+// a larger sample size.
+func pityFactor(numberOfAttempts int, strictRequiredNumberOfPasses int) (int, string) {
+	const failurePityFactor = 2
+	maxRequiredNumberOfPasses := max(0, numberOfAttempts-failurePityFactor)
+	requiredNumberOfPasses := min(maxRequiredNumberOfPasses, strictRequiredNumberOfPasses)
+	return requiredNumberOfPasses, fmt.Sprintf("strict required number of passes is %d but %d failures are allowed as pity factor", strictRequiredNumberOfPasses, failurePityFactor)
 }
 
 var testsRequiringHistoryRewrite = make(map[testCoordinates]string)

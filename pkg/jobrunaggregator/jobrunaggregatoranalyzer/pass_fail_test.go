@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 )
 
@@ -57,33 +58,33 @@ func TestCheckPercentileDisruption(t *testing.T) {
 			supportsFuzziness:    true,
 		},
 		{
-			// Required Passes for 95th percentile is 6
+			// Required Passes for 95th percentile is 7
 			// 5 Natural Passes
 			// graceSeconds = 2
 			// The Disruption value that == 7 gets flipped to pass
 			name:                 "Test 95th Percentile Fuzzy Pass",
-			disruptions:          []int{5, 5, 5, 6, 6, 7, 9, 9, 9, 9},
+			disruptions:          []int{5, 5, 5, 6, 6, 7, 7, 9, 9, 9},
 			thresholdPercentile:  95,
 			graceSeconds:         2,
 			historicalDisruption: 6,
 			status:               testCasePassed,
-			failedCount:          4,
-			successCount:         6,
+			failedCount:          3,
+			successCount:         7,
 			supportsFuzziness:    true,
 		},
 		{
-			// Required Passes for 95th percentile is 6
+			// Required Passes for 95th percentile is 7
 			// 4 Natural Passes
 			// graceSeconds = 1
 			// The Disruption values that == 7 get flipped to passes
 			name:                 "Test 95th Percentile Multi Fuzzy Pass",
-			disruptions:          []int{5, 5, 5, 6, 7, 7, 8, 8, 8, 86},
+			disruptions:          []int{5, 5, 5, 6, 7, 7, 7, 8, 8, 86},
 			thresholdPercentile:  95,
 			graceSeconds:         1,
 			historicalDisruption: 6,
 			status:               testCasePassed,
-			failedCount:          4,
-			successCount:         6,
+			failedCount:          3,
+			successCount:         7,
 			supportsFuzziness:    true,
 		},
 		{
@@ -204,16 +205,16 @@ func TestCheckPercentileDisruption(t *testing.T) {
 			supportsFuzziness:    false,
 		},
 		{
-			// Required Passes for 80th percentile is 4
-			// 4 Natural Passes
+			// Required Passes for 80th percentile is 5
+			// 5 Natural Passes
 			name:                 "Test 80th Percentile Pass",
-			disruptions:          []int{0, 0, 1, 1, 2, 2, 2, 2, 2, 2},
+			disruptions:          []int{0, 0, 1, 1, 1, 2, 2, 2, 2, 2},
 			thresholdPercentile:  80,
 			graceSeconds:         0,
 			historicalDisruption: 1,
 			status:               testCasePassed,
-			failedCount:          6,
-			successCount:         4,
+			failedCount:          5,
+			successCount:         5,
 			supportsFuzziness:    true,
 		},
 		{
@@ -287,6 +288,285 @@ func TestCheckPercentileDisruption(t *testing.T) {
 			assert.Equal(t, test.failedCount, len(failureJobRunIDs), "Invalid failed test count for: %s", test.name)
 			assert.Equal(t, test.successCount, len(successJobRunIDs), "Invalid success test count for: %s", test.name)
 			assert.Equal(t, test.status, status, "Invalid success test count for: %s", test.name)
+		})
+	}
+}
+
+func TestCheckFailedWithPityFactor(t *testing.T) {
+	tests := []struct {
+		name              string
+		passes            int
+		failures          int
+		skips             int
+		workingPercentage int
+		expectedStatus    testCaseStatus
+		description       string
+	}{
+		// Tests with 95% working percentage (high reliability test)
+		{
+			name:              "10 attempts, 95% working: 7 passes, 3 failures - passes strict",
+			passes:            7,
+			failures:          3,
+			skips:             0,
+			workingPercentage: 95,
+			expectedStatus:    testCasePassed,
+			description:       "Strict=7, pity=min(10-2,7)=7. 7 passes meets requirement",
+		},
+		{
+			name:              "10 attempts, 95% working: 6 passes, 4 failures - fails",
+			passes:            6,
+			failures:          4,
+			skips:             0,
+			workingPercentage: 95,
+			expectedStatus:    testCaseFailed,
+			description:       "Strict=7, pity=min(10-2,7)=7. 6 passes fails to meet requirement of 7",
+		},
+		{
+			name:              "12 attempts, 95% working: 9 passes, 3 failures - should pass",
+			passes:            9,
+			failures:          3,
+			skips:             0,
+			workingPercentage: 95,
+			expectedStatus:    testCasePassed,
+			description:       "Strict=9, pity=min(12-2,9)=9. 9 passes meets requirement",
+		},
+		{
+			name:              "12 attempts, 95% working: 8 passes, 4 failures - should fail",
+			passes:            8,
+			failures:          4,
+			skips:             0,
+			workingPercentage: 95,
+			expectedStatus:    testCaseFailed,
+			description:       "Strict=9, pity=min(12-2,9)=9. 8 passes fails to meet requirement",
+		},
+
+		// Tests with 80% working percentage (moderate reliability test)
+		{
+			name:              "10 attempts, 80% working: 5 passes, 5 failures - passes strict",
+			passes:            5,
+			failures:          5,
+			skips:             0,
+			workingPercentage: 80,
+			expectedStatus:    testCasePassed,
+			description:       "Strict=5, pity=min(10-2,5)=5. 5 passes meets requirement",
+		},
+		{
+			name:              "10 attempts, 80% working: 4 passes, 6 failures - should fail",
+			passes:            4,
+			failures:          6,
+			skips:             0,
+			workingPercentage: 80,
+			expectedStatus:    testCaseFailed,
+			description:       "Strict=5, pity=min(10-2,5)=5. 4 passes fails to meet requirement",
+		},
+
+		// Tests with 70% working percentage (lower reliability test)
+		{
+			name:              "10 attempts, 70% working: 3 passes, 7 failures - passes strict",
+			passes:            3,
+			failures:          7,
+			skips:             0,
+			workingPercentage: 70,
+			expectedStatus:    testCasePassed,
+			description:       "Strict=3, pity=min(10-2,3)=3. 3 passes meets requirement",
+		},
+		{
+			name:              "10 attempts, 70% working: 2 passes, 8 failures - should fail",
+			passes:            2,
+			failures:          8,
+			skips:             0,
+			workingPercentage: 70,
+			expectedStatus:    testCaseFailed,
+			description:       "Strict=3, pity=min(10-2,3)=3. 2 passes fails to meet requirement",
+		},
+
+		// Tests where pity factor doesn't relax (strict requirement is already at or below pity limit)
+		{
+			name:              "5 attempts, 95% working: 3 passes, 2 failures - passes strict (no relaxation)",
+			passes:            3,
+			failures:          2,
+			skips:             0,
+			workingPercentage: 95,
+			expectedStatus:    testCasePassed,
+			description:       "Strict=3, pity=min(5-2,3)=3. No relaxation, 3 passes meets requirement",
+		},
+		{
+			name:              "5 attempts, 95% working: 1 pass, 4 failures - should fail",
+			passes:            1,
+			failures:          4,
+			skips:             0,
+			workingPercentage: 95,
+			expectedStatus:    testCaseFailed,
+			description:       "Strict=3, pity=min(5-2,3)=3. 1 pass fails requirement even with pity factor",
+		},
+
+		// More tests showing pity factor behavior
+		{
+			name:              "10 attempts, 90% working: 6 passes, 4 failures - passes strict (no relaxation)",
+			passes:            6,
+			failures:          4,
+			skips:             0,
+			workingPercentage: 90,
+			expectedStatus:    testCasePassed,
+			description:       "Strict=6, pity=min(10-2,6)=6. No relaxation, 6 passes meets requirement",
+		},
+
+		// Tests with 100% working percentage (perfect reliability expectation)
+		{
+			name:              "10 attempts, 100% working: 10 passes, 0 failures - passes naturally",
+			passes:            10,
+			failures:          0,
+			skips:             0,
+			workingPercentage: 100,
+			expectedStatus:    testCasePassed,
+			description:       "Strict=9, pity=min(10-2,9)=8. 10 passes exceeds strict requirement",
+		},
+		{
+			name:              "10 attempts, 100% working: 8 passes, 2 failures - passes with pity factor",
+			passes:            8,
+			failures:          2,
+			skips:             0,
+			workingPercentage: 100,
+			expectedStatus:    testCasePassed,
+			description:       "Strict=9, pity=min(10-2,9)=8. 8 passes meets pity requirement (relaxed from 9)",
+		},
+		{
+			name:              "10 attempts, 100% working: 7 passes, 3 failures - should fail",
+			passes:            7,
+			failures:          3,
+			skips:             0,
+			workingPercentage: 100,
+			expectedStatus:    testCaseFailed,
+			description:       "Strict=9, pity=min(10-2,9)=8. 7 passes fails to meet requirement of 8",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			aggregatedTestRuns := map[TestKey]jobrunaggregatorapi.AggregatedTestRunRow{
+				{TestCaseName: "test-case", CombinedTestSuiteName: "test-suite"}: {
+					WorkingPercentage: float64(test.workingPercentage),
+				},
+			}
+
+			baseline := &weeklyAverageFromTenDays{
+				aggregatedTestRunsByName: aggregatedTestRuns,
+			}
+			// Mark query as already done to avoid nil bigQueryClient access
+			baseline.queryTestRunsOnce.Do(func() {})
+
+			testCaseDetails := &jobrunaggregatorlib.TestCaseDetails{
+				Name:          "test-case",
+				TestSuiteName: "test-suite",
+				Passes:        make([]jobrunaggregatorlib.TestCasePass, test.passes),
+				Failures:      make([]jobrunaggregatorlib.TestCaseFailure, test.failures),
+				Skips:         make([]jobrunaggregatorlib.TestCaseSkip, test.skips),
+			}
+
+			// Create unique job run IDs for passes and failures
+			for i := 0; i < test.passes; i++ {
+				testCaseDetails.Passes[i] = jobrunaggregatorlib.TestCasePass{
+					JobRunID: fmt.Sprintf("pass-%d", i),
+				}
+			}
+			for i := 0; i < test.failures; i++ {
+				testCaseDetails.Failures[i] = jobrunaggregatorlib.TestCaseFailure{
+					JobRunID: fmt.Sprintf("fail-%d", i),
+				}
+			}
+
+			status, message, err := baseline.CheckFailed(nil, "test-job", []string{"suite"}, testCaseDetails)
+
+			assert.NoError(t, err, "Should not error for: %s", test.name)
+			assert.NotEmpty(t, message, "Should have a message for: %s", test.name)
+			assert.Equal(t, test.expectedStatus, status, "%s: %s", test.description, message)
+			t.Logf("Test: %s\nStatus: %s\nMessage: %s", test.name, status, message)
+		})
+	}
+}
+
+func TestInnerCheckPercentileDisruptionWithPityFactor(t *testing.T) {
+	weeklyAverage := &weeklyAverageFromTenDays{}
+
+	tests := []struct {
+		name                 string
+		disruptions          []int
+		thresholdPercentile  int // also used as workingPercentage in innerCheckPercentileDisruptionWithGrace
+		historicalDisruption float64
+		graceSeconds         int
+		expectedStatus       testCaseStatus
+		expectedMinPasses    int
+		description          string
+	}{
+		// Note: In innerCheckPercentileDisruptionWithGrace, workingPercentage = thresholdPercentile
+		// So a P95 test uses 95% as the working percentage for calculating required passes
+		// The code also has -1 adjustment when pity factor doesn't relax the requirement
+		{
+			name:                 "10 attempts, P95 (95% working): 8 passes, 2 failures - exceeds requirement",
+			disruptions:          []int{0, 0, 0, 1, 1, 1, 1, 1, 5, 5},
+			thresholdPercentile:  95,
+			historicalDisruption: 2.0,
+			graceSeconds:         0,
+			expectedStatus:       testCasePassed,
+			expectedMinPasses:    6, // strict=7, pity=min(10-2,7)=7, then 7-1=6 (no relaxation)
+			description:          "Strict=7, pity=min(10-2,7)=7, -1 adj=6. 8 passes exceeds requirement",
+		},
+		{
+			name:                 "10 attempts, P95 (95% working): 7 passes, 3 failures - meets requirement",
+			disruptions:          []int{0, 0, 0, 1, 1, 1, 1, 5, 5, 5},
+			thresholdPercentile:  95,
+			historicalDisruption: 2.0,
+			graceSeconds:         0,
+			expectedStatus:       testCasePassed,
+			expectedMinPasses:    6, // strict=7, pity=min(10-2,7)=7, then 7-1=6 (no relaxation)
+			description:          "Strict=7, pity=min(10-2,7)=7, -1 adj=6. 7 passes exceeds requirement",
+		},
+		{
+			name:                 "6 attempts, P80 (80% working): 4 passes, 2 failures - exceeds requirement",
+			disruptions:          []int{0, 0, 1, 1, 5, 5},
+			thresholdPercentile:  80,
+			historicalDisruption: 2.0,
+			graceSeconds:         0,
+			expectedStatus:       testCasePassed,
+			expectedMinPasses:    1, // strict=2, pity=min(6-2,2)=2, then 2-1=1 (no relaxation)
+			description:          "Strict=2, pity=min(6-2,2)=2, -1 adj=1. 4 passes exceeds requirement",
+		},
+		{
+			name:                 "12 attempts, P95 (95% working): 10 passes, 2 failures - exceeds requirement",
+			disruptions:          []int{0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 5, 5},
+			thresholdPercentile:  95,
+			historicalDisruption: 2.0,
+			graceSeconds:         0,
+			expectedStatus:       testCasePassed,
+			expectedMinPasses:    8, // strict=9, pity=min(12-2,9)=9, then 9-1=8 (no relaxation)
+			description:          "Strict=9, pity=min(12-2,9)=9, -1 adj=8. 10 passes exceeds requirement",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			jobRunIDToAvailabilityResultForBackend := createJobRunIDToAvailabilityResultForBackend(test.disruptions)
+			historicalDisruptionStatistic := backendDisruptionStats{
+				percentileByIndex: make([]float64, 100),
+			}
+			historicalDisruptionStatistic.percentileByIndex[test.thresholdPercentile] = test.historicalDisruption
+
+			requiredPasses, failureJobRunIDs, successJobRunIDs, status, summary :=
+				weeklyAverage.innerCheckPercentileDisruptionWithGrace(
+					jobRunIDToAvailabilityResultForBackend,
+					test.historicalDisruption,
+					test.thresholdPercentile,
+					test.graceSeconds,
+				)
+
+			t.Logf("Test: %s\nRequired: %d, Passes: %d, Failures: %d\nStatus: %s\nSummary: %s",
+				test.name, requiredPasses, len(successJobRunIDs), len(failureJobRunIDs), status, summary)
+
+			assert.Equal(t, test.expectedStatus, status, "%s: %s", test.description, summary)
+			assert.Equal(t, test.expectedMinPasses, requiredPasses,
+				"Required passes should match expected for: %s", test.name)
+			assert.Equal(t, len(test.disruptions), len(successJobRunIDs)+len(failureJobRunIDs),
+				"Total attempts should equal successes + failures")
 		})
 	}
 }

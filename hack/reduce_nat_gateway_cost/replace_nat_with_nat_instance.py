@@ -151,7 +151,7 @@ NAT_INSTANCES_INFO = [
 # The instance profile created by CloudFormation for NAT instances to use
 NAT_INSTANCE_PROFILE_NAME = 'use-nat-instance-profile'
 
-VERSION = 'v1.4'
+VERSION = 'v1.5'
 
 
 class RequestInfoFilter(logging.Filter):
@@ -262,22 +262,32 @@ def lambda_handler(event, context):
 
         nat_gateway_id = detail["requestParameters"]['DeleteNatGatewayRequest']["NatGatewayId"]
 
-        response = ec2_client.describe_nat_gateways(NatGatewayIds=[nat_gateway_id])
-        nat_gateway = response["NatGateways"][0]
-        nat_gateway_tags = nat_gateway.get('Tags')
+        # Find any NAT instance associated with this gateway by tag to get the VPC ID.
+        # If a NAT instance exists, we know we created it (ci-nat-replace was true).
+        # This avoids race conditions where the NAT gateway is already deleted.
+        response = ec2_client.describe_instances(
+            Filters=[
+                {"Name": f"tag:{TAG_KEY_NAT_GATEWAY_ID}", "Values": [nat_gateway_id]},
+                {"Name": "instance-state-name", "Values": ["running", "pending", "stopping", "stopped", "shutting-down"]},
+            ]
+        )
 
-        if not tags_has_tag(nat_gateway_tags, TAG_KEY_CI_NAT_REPLACE, "true"):
-            return  # Exit early if not a candidate
-
-        logger.info(f'NAT gateway {nat_gateway_id} has correct tags; cleaning up NAT instance')
-        # When we start a NAT instance for a gateway, we tag it with the VPC
-        # for this purpose. natgateway['VpcId'] may not return what we need
-        # because the gateway is in the process of being deleted and may no
-        # longer be associated with the VPC.
-        vpc_id = get_tag(nat_gateway_tags, TAG_KEY_VPC_ID)
-        if not vpc_id:
-            logger.warning(f'NAT gateway {nat_gateway_id} does not have VPC tag; skipping cleanup')
+        reservations = response.get("Reservations", [])
+        if not reservations or not reservations[0].get("Instances"):
+            # No NAT instance found - either we never created one (ci-nat-replace wasn't true)
+            # or it was already cleaned up
+            logger.info(f'No NAT instance found for gateway {nat_gateway_id}; nothing to clean up')
             return
+
+        instance = reservations[0]["Instances"][0]
+        instance_tags = instance.get('Tags', [])
+        vpc_id = get_tag(instance_tags, TAG_KEY_VPC_ID)
+
+        if not vpc_id:
+            logger.warning(f'NAT instance {instance["InstanceId"]} for gateway {nat_gateway_id} has no VPC tag; skipping cleanup')
+            return
+
+        logger.info(f'Found NAT instance {instance["InstanceId"]} for gateway {nat_gateway_id} in VPC {vpc_id}')
         cleanup(region, vpc_id)
 
     elif event_name == 'RunInstances':
@@ -335,9 +345,42 @@ def lambda_handler(event, context):
                         # being terminated.
                         return
 
-                    logger.info(f'Terminating instance {instance_id} was tagged with NAT instance information')
-                    # If this instance was tagged by RunInstances, then we also use it
-                    # trigger the shutdown of the NAT instance.
+                    # Check if this is a NAT instance or a cluster node (master/worker)
+                    if tags_has_tag(instance_tags, TAG_KEY_NAT_GATEWAY_ID):
+                        # This is a NAT instance - always trigger cleanup
+                        logger.info(f'NAT instance {instance_id} ({instance_name}) is being terminated; triggering cleanup')
+                        set_nat_instance_enabled(region, nat_instance_vpc_id, False)
+                        return
+
+                    # This is a cluster node (master/worker) with ci-nat-vpc tag.
+                    # Only trigger cleanup if no other masters are running in this VPC.
+                    # This distinguishes between:
+                    # - MachineHealthCheck replacement (other masters still running) -> skip cleanup
+                    # - Cluster teardown (all masters being terminated) -> trigger cleanup
+                    #
+                    # Race condition analysis: If multiple masters are terminated simultaneously,
+                    # each Lambda invocation checks for other running masters. By the time the
+                    # TerminateInstances CloudTrail event is generated, the instance state has
+                    # already changed to "shutting-down". So later Lambda invocations will see
+                    # earlier-terminated masters as non-running, ensuring at least one Lambda
+                    # correctly triggers cleanup.
+                    other_masters = ec2_client.describe_instances(
+                        Filters=[
+                            {"Name": "vpc-id", "Values": [nat_instance_vpc_id]},
+                            {"Name": "instance-state-name", "Values": ["running", "pending"]},
+                            {"Name": "tag:Name", "Values": ["*-master-*"]},
+                        ]
+                    )
+                    running_master_count = sum(
+                        len(res.get("Instances", []))
+                        for res in other_masters.get("Reservations", [])
+                    )
+
+                    if running_master_count > 0:
+                        logger.info(f'Master {instance_id} ({instance_name}) terminated but {running_master_count} other masters still running in VPC {nat_instance_vpc_id}; skipping cleanup (likely MachineHealthCheck replacement)')
+                        return
+
+                    logger.info(f'Master {instance_id} ({instance_name}) terminated and no other masters running in VPC {nat_instance_vpc_id}; triggering cleanup (likely cluster teardown)')
                     set_nat_instance_enabled(region, nat_instance_vpc_id, False)
                     return
 

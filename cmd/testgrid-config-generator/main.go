@@ -287,7 +287,7 @@ func addDashboardTab(p prowConfig.Periodic,
 			return
 		}
 
-		version := p.Labels["job-release"]
+		version := p.Labels[jc.JobReleaseKey]
 		if len(version) == 0 {
 			m := reVersion.FindStringSubmatch(prowName)
 			if len(m) == 0 {

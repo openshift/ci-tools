@@ -177,13 +177,32 @@ aws --profile <profile> lambda get-function \
    - Replaces the route to point to itself
    - Tags the route table with the instance ID
 
-### DeleteNatGateway / TerminateInstances Events
+### DeleteNatGateway Event
 
-1. Lambda identifies affected VPC
-2. Finds NAT instances tagged with `ci-nat-gateway`
+1. Lambda searches for NAT instances tagged with the NAT Gateway ID
+2. Extracts VPC ID from the NAT instance tags
 3. Restores route table to point back to NAT Gateway (if available)
 4. Terminates NAT instances
 5. Deletes associated security groups
+
+### TerminateInstances Event
+
+The Lambda handles different instance types differently:
+
+**Bootstrap instances:** Ignored (cleanup should not trigger on bootstrap termination)
+
+**NAT instances** (have `ci-nat-gateway` tag): Always trigger cleanup
+
+**Master/Worker nodes** (have `ci-nat-vpc` tag but not `ci-nat-gateway`):
+1. Lambda checks if other masters are still running in the VPC
+2. If other masters exist → **Skip cleanup** (likely MachineHealthCheck replacement)
+3. If no other masters → **Trigger cleanup** (likely cluster teardown)
+
+This logic distinguishes between:
+- **MachineHealthCheck (MHC) replacement:** A single master is replaced while the cluster continues running
+- **Cluster teardown:** All masters are terminated as the cluster is destroyed
+
+**Race condition handling:** When multiple masters are terminated simultaneously, each Lambda invocation checks for other running masters. By the time the CloudTrail event is generated, the terminated instance's state has already changed to "shutting-down". Later Lambda invocations will see earlier-terminated masters as non-running, ensuring at least one Lambda correctly triggers cleanup.
 
 ## Common Issues and Fixes
 
@@ -265,12 +284,22 @@ Also update `use-nat-instance.yaml` so future deployments include the fix.
 
 | Tag Key | Purpose |
 |---------|---------|
-| `ci-nat-gateway` | Marks NAT Gateway ID associated with a resource |
+| `ci-nat-gateway` | Marks NAT Gateway ID associated with a resource (NAT instances have this) |
 | `ci-nat-instance` | Instance ID that updated a route table |
-| `ci-nat-vpc` | VPC ID for the resource |
+| `ci-nat-vpc` | VPC ID for the resource (added to masters when they start) |
 | `ci-nat-public-subnet` | Public subnet ID |
 | `ci-nat-private-route-table` | Route table the instance is configured to update |
-| `ci-nat-replace` | Marker that route replacement is enabled |
+| `ci-nat-replace` | Marker that route replacement is enabled (set by CI infrastructure) |
+
+### ci-nat-replace Tag Values
+
+| Value | Meaning | Lambda Action |
+|-------|---------|---------------|
+| `true` | Standalone IPI cluster, eligible for NAT replacement | Creates NAT instances |
+| `false_job_uses_non_standalone_install_topology` | Non-standalone topology (HyperShift, SNO, etc.) | Ignored |
+| `false` or missing | Not eligible | Ignored |
+
+**Important:** The `ci-nat-replace` tag is set by CI infrastructure (prow jobs, cluster pools), not by the Lambda. The Lambda only reads this tag to decide whether to act.
 
 ## NAT Instance Details
 
@@ -320,6 +349,46 @@ aws --profile <profile> iam list-instance-profiles --no-paginate \
   --query 'InstanceProfiles[*].InstanceProfileName' --output text | wc -w
 ```
 
+### Check v1.5 MHC Detection in Logs
+
+```bash
+# Count MHC replacements detected (cleanup skipped)
+aws --profile <profile> logs filter-log-events \
+  --log-group-name use-nat-instance-log-group \
+  --filter-pattern '"other masters still running"' \
+  --start-time $(( $(date +%s) - 3600 ))000 \
+  --region us-east-1 \
+  --query 'events[*].message' --output text | grep -c "other masters"
+
+# Count cluster teardowns detected (cleanup triggered)
+aws --profile <profile> logs filter-log-events \
+  --log-group-name use-nat-instance-log-group \
+  --filter-pattern '"no other masters running"' \
+  --start-time $(( $(date +%s) - 3600 ))000 \
+  --region us-east-1 \
+  --query 'events[*].message' --output text | grep -c "no other masters"
+
+# Sample MHC detection messages
+aws --profile <profile> logs filter-log-events \
+  --log-group-name use-nat-instance-log-group \
+  --filter-pattern '"other masters still running"' \
+  --start-time $(( $(date +%s) - 3600 ))000 \
+  --region us-east-1 \
+  --query 'events[*].message' --output text | tr '\t' '\n' | head -5
+```
+
+### Verify Lambda Version
+
+```bash
+# Check version in recent logs
+aws --profile <profile> logs filter-log-events \
+  --log-group-name use-nat-instance-log-group \
+  --filter-pattern '"[v1."' \
+  --start-time $(( $(date +%s) - 3600 ))000 \
+  --region us-east-1 \
+  --query 'events[0].message' --output text | grep -o '\[v1\.[0-9]*\]'
+```
+
 ## Version History
 
 - **v1.0:** Initial implementation with dynamic instance profiles
@@ -327,6 +396,8 @@ aws --profile <profile> iam list-instance-profiles --no-paginate \
 - **v1.2:** Static instance profile via CloudFormation, improved cleanup
 - **v1.3:** Fixed race condition - wait for 0.0.0.0/0 route before replacing
 - **v1.3.1:** Added `ec2:DescribeRouteTables` to NAT instance role (required by v1.3 UserData script)
+- **v1.4:** Improved DeleteNatGateway handling - search for NAT instances by tag instead of describing the NAT gateway (avoids race condition when NAT gateway is already deleted)
+- **v1.5:** Fixed MachineHealthCheck false positive - master terminations now check if other masters are still running before triggering cleanup. This prevents NAT instances from being incorrectly terminated when MHC replaces a single master while the cluster is still running.
 
 ## Important Notes
 
@@ -353,4 +424,75 @@ aws --profile <profile> iam list-instance-profiles --no-paginate \
 **Fix:** Added `ec2:DescribeRouteTables` permission to the `use-nat-instance-role` policy in `use-nat-instance.yaml` and manually updated the policy in all accounts using `aws iam put-role-policy`.
 
 **Lesson:** When modifying the UserData script to call AWS APIs, always verify that the NAT instance's IAM role (`use-nat-instance-role`) has the required permissions. The role's policy is defined in `use-nat-instance.yaml` under `NatInstanceRole.Policies`.
+
+### MachineHealthCheck Causes False Positive Cleanup (v1.4 Bug, Fixed in v1.5)
+
+**Incident:** Approximately 7% of running clusters at any given time experience MachineHealthCheck (MHC) remediation, where a failing master node is replaced with a new one. The v1.4 Lambda incorrectly treated master terminations as cluster teardown signals.
+
+**Root Cause Analysis:**
+1. When a master is created, the Lambda adds a `ci-nat-vpc` tag to track which VPC it belongs to
+2. When any instance with `ci-nat-vpc` tag is terminated, v1.4 triggered cleanup
+3. MHC terminates the old master → Lambda sees the tag → triggers cleanup → terminates NAT instances
+4. The cluster continues running but now uses expensive NAT gateways instead of NAT instances
+
+**Detection:** 
+- Clusters with replacement masters (naming pattern `master-XXXXX-N` instead of `master-0/1/2`) had no NAT instances
+- CloudTrail showed machine-api-controller terminating masters (not cluster teardown)
+- NAT instance placement ratio dropped below expected levels
+
+**Investigation commands:**
+```bash
+# Find clusters with replacement masters
+aws --profile <profile> ec2 describe-instances \
+  --filters "Name=instance-state-name,Values=running" \
+  --query 'Reservations[*].Instances[*].Tags[?Key==`Name`].Value' \
+  --output text --region us-east-1 | tr '\t' '\n' | grep -E 'master-[a-z0-9]{5}-[0-9]'
+
+# Check who terminated an instance
+aws --profile <profile> cloudtrail lookup-events \
+  --lookup-attributes AttributeKey=ResourceName,AttributeValue=<instance-id> \
+  --region us-east-1 --query 'Events[*].[EventName,Username]' --output table
+```
+
+**Fix (v1.5):** Before triggering cleanup on master termination, check if other masters are still running in the VPC:
+- If other masters exist → Skip cleanup (MHC replacement)
+- If no other masters → Trigger cleanup (cluster teardown)
+
+**Race Condition Analysis:** When all masters are terminated simultaneously during cluster teardown, each Lambda invocation checks for other running masters. Since the TerminateInstances CloudTrail event is generated *after* the instance state changes to "shutting-down", later Lambda invocations will see earlier-terminated masters as non-running. At least one Lambda invocation will correctly see no other running masters and trigger cleanup.
+
+**Lesson:** Master node termination is not always cluster teardown. MachineHealthCheck, manual remediation, or other scenarios can terminate masters while the cluster continues running. Always verify the cluster state before triggering destructive cleanup operations.
+
+## Non-Standalone Topology Clusters
+
+Some clusters have the tag `ci-nat-replace=false_job_uses_non_standalone_install_topology` instead of `ci-nat-replace=true`. These clusters are NOT processed by the Lambda.
+
+### What "Non-Standalone" Means
+
+The tag value is set by CI infrastructure (prow jobs, cluster pools) based on the install topology. Non-standalone topologies may include:
+- Hosted Control Plane (HyperShift) management clusters
+- Compact/Single-Node OpenShift (SNO) clusters
+- Multi-cluster test scenarios
+- Other non-standard install configurations
+
+### Infrastructure Assessment
+
+**Key finding:** Non-standalone clusters have **identical AWS infrastructure** to standalone clusters:
+- Same subnet naming pattern: `{cluster}-subnet-{public|private}-{az}`
+- Same NAT gateway setup (one per AZ)
+- Same route table structure
+- Same instance tagging
+
+The Lambda's logic would work correctly for these clusters. The only reason they're excluded is the `ci-nat-replace` tag value set by CI infrastructure.
+
+### Statistics (typical snapshot)
+
+| Tag Value | Instances | % of Total |
+|-----------|-----------|------------|
+| `true` | ~85% | Eligible, NAT replaced |
+| `false_job_uses_non_standalone_install_topology` | ~10-15% | Not eligible |
+| No tag / other | ~5% | Not eligible |
+
+### Potential Expansion
+
+To enable NAT instance replacement for non-standalone clusters, the CI infrastructure would need to set `ci-nat-replace=true`. The Lambda itself requires no changes - it already handles the standard AWS networking topology these clusters use.
 

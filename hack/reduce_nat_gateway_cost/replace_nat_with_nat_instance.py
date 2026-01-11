@@ -5,7 +5,8 @@ import time
 from typing import Dict, List, Optional, NamedTuple
 
 # Important: Be aware of DPP/PCO resource pruning in the OCP CI ephemeral accounts. You must request
-# that resources created when installing this solution (e.g. the Lambda & policies) need to be preserved.
+# that resources created when installing this solution (e.g. the Lambda, IAM roles, instance profiles)
+# need to be preserved.
 #
 # This lambda is meant to be installed into an AWS account where you want to dynamically
 # replace the use of expensive NAT Gateway network traffic with inexpensive traffic
@@ -15,12 +16,12 @@ from typing import Dict, List, Optional, NamedTuple
 # Traffic through a NAT Gateway is charged several cents per GB. Traffic through a
 # NAT instance is nearly free (we just pay for the small EC2 instance and its public IP address).
 #
-# The solution works by listening to events in a AWS account where we install ephemeral OCP clusters
-# for testing. An AWS service called EventBridge can be used trigger this lambda function when
+# The solution works by listening to events in an AWS account where we install ephemeral OCP clusters
+# for testing. An AWS service called EventBridge can be used to trigger this lambda function when
 # certain events occur. We are interested in this lambda reacting to several events (more on why,
 # later):
 # 1. The creation of NAT Gateways.
-# 2. New EC2 instances starting in the account.
+# 2. New EC2 instances starting in the account (specifically master nodes).
 # 3. EC2 instances being terminated in the account.
 # 4. The deletion of NAT Gateways.
 #
@@ -43,22 +44,21 @@ from typing import Dict, List, Optional, NamedTuple
 #       A private subnet does not have an IGW. EC2 Instances attached to a private subnet, even
 #       if they had a public IP address cannot not communicate directly to the Internet with it.
 #       Instead, these instances have private IP addresses (e.g. 10.0.29.172) and use a NAT
-#       gateway to perform addresses translation to communicate on the Internet. If you curl a "what is my IP"
+#       gateway to perform address translation to communicate on the Internet. If you curl a "what is my IP"
 #       service from an OpenShift node, you will see the public IP address of the NAT gateway,
 #       in the AZ for the node and not the node itself (which does not have a public ipv4 in a standard installation).
-#    b. A NAT gateway attached to the private subnet.
-#    c. An IGW attached to the public network.
+#    b. A NAT gateway attached to the public subnet (providing NAT for instances in the private subnet).
+#    c. An IGW attached to the VPC (used by public subnets).
 #    d. Zero or more master or worker nodes attached to the private network.
 #    e. Two RouteTables. One for the public subnet and one for the private. The RouteTable
 #       tells AWS how to route network traffic from an instance attached to a subnet. The
 #       most important routes in this solution are those in the private subnet's RouteTable.
 #       An entry that routes traffic within the private subnet: e.g. 10.0.0.0/19 => local.
-#       And an entry that routes outbound traffic to the Internet: 0.0.0.0/0 => NAT Gateway instance Id.
+#       And an entry that routes outbound traffic to the Internet: 0.0.0.0/0 => NAT Gateway ID.
 #       This entry is used to route traffic for everything NOT in the private subnet's CIDR.
 #
 #  The goal of this lambda is to replace this 0.0.0.0/0 route in the private subnet with
-#  0.0.0.0/0 => EC2 NAT instance network interface (ENI) where the EC2 instance has been enabled
-#  to provide NAT services.
+#  0.0.0.0/0 => EC2 NAT instance where the EC2 instance has been enabled to provide NAT services.
 #
 # With the knowledge that ephemeral IPI clusters are being created in the AWS account, the
 # lambda takes action to provision a NAT instance in each public subnet being used by a cluster.
@@ -66,22 +66,40 @@ from typing import Dict, List, Optional, NamedTuple
 # the corresponding private subnet associated with the cluster & AZ to route 0.0.0.0/0 traffic
 # (i.e. traffic destined for the Internet) to itself. The NAT instance resides in the
 # public network and uses the IGW to communicate to the internet on behalf of other
-# instances in the cluster to the internet.
-# If the instance is shutdown gracefully, it will reverse this process (by way of a systemd unit
+# instances in the cluster.
+#
+# If the NAT instance is shutdown gracefully, it will reverse this process (by way of a systemd unit
 # installed by userData on startup) and restore the former route for the NAT gateway to handle
-# the traffic. As a backup for a graceful shutdown, the lambda itself will also listen for
-# TerminateInstances API calls and, if a master or the NAT instance is targeted, the lambda
-# will restore the NAT Gateway route.
+# the traffic. As a backup for ungraceful shutdown, the lambda listens for TerminateInstances API
+# calls and triggers cleanup when:
+#   - A NAT instance is terminated (always triggers cleanup), OR
+#   - A master node is terminated AND no other masters are running in the VPC (indicates cluster teardown)
+# The master node check prevents false positive cleanups during MachineHealthCheck (MHC) replacements,
+# where a single unhealthy master is replaced while the cluster continues running.
 #
 # The specific actions taken by the lambda are triggered by AWS API calls reported by the AWS
 # EventBridge and leading to invocations of the lambda. Those events are as follows:
-# 1. CreateNatGateway (the creation of NAT Gateways). We use this as a trigger to try to start the
-#    NAT instance that will run in the AZ of the NatGateway.
-# 2. New instances starting in the account.
-# 3. Instances being terminated in the account. We use this to detect if a master node or NAT instance is being
-#    shutdown -- implying the ephemeral cluster is being destroyed -- which we use to restore the NAT Gateway route
-#    and the deletion of resources created by the lambda (like the NAT instance).
-# 4. DeleteNatGateway - A final attempt is made to clean up in case masters aren't terminated.
+#
+# 1. CreateNatGateway: Triggers creation of a NAT instance in the same AZ as the NAT Gateway.
+#    The NAT instance is placed in the public subnet and configured to provide NAT for the
+#    private subnet. The instance's userData script waits for the 0.0.0.0/0 route to exist
+#    in the private route table (handling race conditions with the installer), then replaces
+#    it to route through itself instead of the NAT Gateway.
+#
+# 2. RunInstances (master nodes): When a master node starts with the ci-nat-replace=true tag,
+#    the lambda ensures the route table is updated to use the NAT instance. This handles race
+#    conditions where the installer might overwrite the route after the NAT instance set it.
+#
+# 3. TerminateInstances: Cleanup is triggered based on what's being terminated:
+#    - NAT instance termination: Always triggers cleanup (restore NAT Gateway route, delete resources).
+#    - Master node termination: Only triggers cleanup if no other masters are running in the VPC.
+#      This distinguishes between MHC replacement (other masters still running, skip cleanup)
+#      and cluster teardown (all masters being terminated, trigger cleanup).
+#    - Bootstrap instance termination: Ignored (cluster is still being installed).
+#
+# 4. DeleteNatGateway: Final cleanup opportunity. Finds any NAT instances associated with the
+#    deleted gateway (by tag) and triggers cleanup. This handles cases where other cleanup
+#    paths may have been missed.
 #
 #  Q: Why don't all installations use NAT instances instead of NAT Gateways? The AWS Gateway
 #     resource provides unique HA features that are complex to replicate. It does not require
@@ -91,17 +109,22 @@ from typing import Dict, List, Optional, NamedTuple
 #     long period of time, as software tends to do, that must be detected and a procedure
 #     must be in place to detect and recover from the problem.
 #     Our ephemeral clusters, however, are short-lived. In the extremely unlikely situation
-#     where a NAT instance fails over that short lifespan, we can tolerate a test failure .
+#     where a NAT instance fails over that short lifespan, we can tolerate a test failure.
 #
 #  Q: What if the NAT instance does not come up?
 #  A: The change to the RouteTable is performed by the startup script run by the instance
 #     (i.e. the AWS userData). If the NAT instance does not come up successfully, it will
 #     not change the route and the cluster will use the NAT Gateway.
 #
-#  Q: What if that NAT instance / other resources crated by the lambda fail to be cleaned up by
-#     the lambda?
-#  A: We should monitor this, but ultimately the DPP pruner should delete
-#     any stragglers.
+#  Q: What if the NAT instance / other resources created by the lambda fail to be cleaned up?
+#  A: We should monitor this, but ultimately the DPP pruner should delete any stragglers.
+#
+#  Q: What about race conditions during cluster teardown with multiple masters?
+#  A: When multiple masters are terminated simultaneously, each Lambda invocation checks for
+#     other running masters. By the time the TerminateInstances CloudTrail event is generated,
+#     the instance state has already changed to "shutting-down". So later Lambda invocations
+#     will see earlier-terminated masters as non-running, ensuring at least one Lambda
+#     correctly triggers cleanup.
 #
 # EventBridge trigger on:
 #   CloudTrail APIs:
@@ -111,11 +134,16 @@ from typing import Dict, List, Optional, NamedTuple
 #   - TerminateInstances
 #
 # Lambda
-# Timeout: 10minutes  (this is primarily to allow graceful cleanup of resources)
+# Timeout: 10 minutes (primarily to allow graceful cleanup of resources with retries)
+#
+# Infrastructure (managed by CloudFormation):
+# - IAM Role for NAT instances with permissions to modify route tables and source/dest check
+# - IAM Instance Profile (NAT_INSTANCE_PROFILE_NAME) attached to NAT instances
+#
 # Lambda Role policies required:
 # - AmazonEC2FullAccess
 # - AWSLambdaBasicExecutionRole
-# - ssm:GetParameter (to get the latest AMI)
+# - ssm:GetParameter (to get the latest Amazon Linux 2 AMI)
 # - iam:PassRole for the NAT instance role (created by CloudFormation)
 
 

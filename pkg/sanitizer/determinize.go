@@ -142,6 +142,12 @@ func isCIOperatorLatest(image string) bool {
 
 func determineCluster(jb prowconfig.JobBase, config *dispatcher.Config, pjs map[string]dispatcher.ProwJobData, path string, mostUsedCluster string, blocked sets.Set[string], cm dispatcher.ClusterMap) (string, error) {
 	if pjs == nil {
+		// If the job already has a cluster assigned, check if it's a valid build farm cluster
+		// that's not blocked. If so, preserve the existing assignment to avoid
+		// inconsistencies between what the dispatcher assigned and what this function would calculate.
+		if jb.Cluster != "" && !blocked.Has(jb.Cluster) && config.IsInBuildFarm(api.Cluster(jb.Cluster)) != "" {
+			return jb.Cluster, nil
+		}
 		c, canBeRelocated, err := config.DetermineClusterForJob(jb, path, cm)
 		if err != nil {
 			return "", err

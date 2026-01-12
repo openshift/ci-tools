@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -36,6 +37,9 @@ const (
 	// BigQueryRefreshInterval is how often we pull fresh data from BigQuery.
 	// We refresh once a day to keep our cache up to date with the latest measured pod metrics.
 	BigQueryRefreshInterval = 24 * time.Hour
+	// MeasuredPodResourceBuffer is the safety buffer we add to measured resource utilization.
+	// We apply 20% buffer (1.2x) to measured CPU and memory usage to account for variability.
+	MeasuredPodResourceBuffer = 1.2
 )
 
 // MeasuredPodData holds what we learned about a pod when it ran in isolation.
@@ -140,27 +144,27 @@ func NewBigQueryClient(projectID, datasetID, credentialsFile string, cache *Meas
 func (bq *BigQueryClient) Refresh(ctx context.Context) error {
 	bq.logger.Info("Refreshing measured pod data from BigQuery")
 
-	// TODO: Replace with actual BigQuery query based on ci-metrics structure.
-	// This is a placeholder query - the actual query will depend on the BigQuery schema
-	// for ci-metrics pod CPU utilization data. We need to query the table that stores
-	// max CPU/memory utilization for pods that ran with the "measured" label.
+	// Query ci_operator_metrics table for measured pod data
+	// This queries the table that stores max CPU/memory utilization for pods that ran with the "measured" label
 	query := bq.client.Query(fmt.Sprintf(`
 		SELECT
 			org,
 			repo,
 			branch,
+			target,
 			container,
-			MAX(cpu_utilization) as max_cpu,
-			MAX(memory_utilization) as max_memory,
-			MAX(timestamp) as last_measured,
+			pod_name,
+			MAX(max_cpu) as max_cpu,
+			MAX(max_memory) as max_memory,
+			MAX(created) as last_measured,
 			ANY_VALUE(container_durations) as container_durations
 		FROM
-			`+"`%s.%s.pod_metrics`"+`
+			`+"`%s.%s.ci_operator_metrics`"+`
 		WHERE
 			pod_scaler_label = 'measured'
-			AND timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL %d DAY)
+			AND created >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL %d DAY)
 		GROUP BY
-			org, repo, branch, container
+			org, repo, branch, target, container, pod_name
 	`, bq.projectID, bq.datasetID, MeasuredPodDataRetentionDays))
 
 	query.QueryConfig.Labels = map[string]string{
@@ -179,7 +183,9 @@ func (bq *BigQueryClient) Refresh(ctx context.Context) error {
 			Org                string    `bigquery:"org"`
 			Repo               string    `bigquery:"repo"`
 			Branch             string    `bigquery:"branch"`
+			Target             string    `bigquery:"target"`
 			Container          string    `bigquery:"container"`
+			PodName            string    `bigquery:"pod_name"`
 			MaxCPU             float64   `bigquery:"max_cpu"`
 			MaxMemory          int64     `bigquery:"max_memory"`
 			LastMeasured       time.Time `bigquery:"last_measured"`
@@ -199,11 +205,33 @@ func (bq *BigQueryClient) Refresh(ctx context.Context) error {
 				Repo:   row.Repo,
 				Branch: row.Branch,
 			},
+			Target:    row.Target,
+			Pod:       row.PodName,
 			Container: row.Container,
 		}
 
-		// TODO: Parse container_durations JSON string into map[string]time.Duration
+		// Parse container_durations JSON string into map[string]time.Duration
+		// BigQuery stores this as a JSON string. time.Duration serializes as int64 (nanoseconds)
+		// so the format is: {"container1": 3600000000000, "container2": 245000000000}
 		containerDurations := make(map[string]time.Duration)
+		if row.ContainerDurations != "" {
+			var durationsMap map[string]int64
+			if err := json.Unmarshal([]byte(row.ContainerDurations), &durationsMap); err == nil {
+				for container, nanoseconds := range durationsMap {
+					containerDurations[container] = time.Duration(nanoseconds)
+				}
+			} else {
+				// Fallback: try parsing as string format (for backwards compatibility)
+				var durationsMapStr map[string]string
+				if err := json.Unmarshal([]byte(row.ContainerDurations), &durationsMapStr); err == nil {
+					for container, durationStr := range durationsMapStr {
+						if duration, err := time.ParseDuration(durationStr); err == nil {
+							containerDurations[container] = duration
+						}
+					}
+				}
+			}
+		}
 
 		data[meta] = &MeasuredPodData{
 			Metadata:             meta,
@@ -248,30 +276,28 @@ func ClassifyPod(pod *corev1.Pod, bqClient *BigQueryClient, logger *logrus.Entry
 		pod.Labels = make(map[string]string)
 	}
 
-	// Check each container to see if we need fresh measurement data for it.
-	// If any container needs measuring, we mark the whole pod as "measured".
-	shouldBeMeasured := false
-	if bqClient != nil {
-		for _, container := range pod.Spec.Containers {
-			fullMeta := podscaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, container.Name)
-			if bqClient.ShouldBeMeasured(fullMeta) {
-				// This container needs fresh data, so mark the pod as measured.
-				shouldBeMeasured = true
-				break
-			}
-		}
-	} else {
-		// If BigQuery isn't configured, default to measuring new pods.
-		shouldBeMeasured = true
+	// If BigQuery client is not available, default to normal to avoid overwhelming isolated nodes.
+	if bqClient == nil {
+		pod.Labels[PodScalerLabelKey] = PodScalerLabelValueNormal
+		logger.Debugf("Classified pod as normal - BigQuery client not available")
+		return
 	}
 
-	if shouldBeMeasured {
-		pod.Labels[PodScalerLabelKey] = PodScalerLabelValueMeasured
-		logger.Debugf("Classified pod as measured - will run on isolated node")
-	} else {
-		pod.Labels[PodScalerLabelKey] = PodScalerLabelValueNormal
-		logger.Debugf("Classified pod as normal - can share node with other workloads")
+	// Check each container to see if we need fresh measurement data for it.
+	// If any container needs measuring, we mark the whole pod as "measured".
+	for _, container := range pod.Spec.Containers {
+		fullMeta := podscaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, container.Name)
+		if bqClient.ShouldBeMeasured(fullMeta) {
+			// This container needs fresh data, so mark the pod as measured.
+			pod.Labels[PodScalerLabelKey] = PodScalerLabelValueMeasured
+			logger.Debugf("Classified pod as measured - will run on isolated node")
+			return
+		}
 	}
+
+	// No container needs measuring, so mark as normal.
+	pod.Labels[PodScalerLabelKey] = PodScalerLabelValueNormal
+	logger.Debugf("Classified pod as normal - can share node with other workloads")
 }
 
 // AddPodAntiAffinity sets up scheduling rules so measured pods get isolated nodes.
@@ -294,7 +320,8 @@ func AddPodAntiAffinity(pod *corev1.Pod, logger *logrus.Entry) {
 
 	var requiredTerms []corev1.PodAffinityTerm
 
-	if podScalerLabel == PodScalerLabelValueMeasured {
+	switch podScalerLabel {
+	case PodScalerLabelValueMeasured:
 		// Measured pods need complete isolation - they can't share a node with ANY other pod-scaler pod.
 		// This ensures they get the full node resources for accurate measurement.
 		requiredTerms = append(requiredTerms, corev1.PodAffinityTerm{
@@ -309,7 +336,7 @@ func AddPodAntiAffinity(pod *corev1.Pod, logger *logrus.Entry) {
 			TopologyKey: "kubernetes.io/hostname",
 		})
 		logger.Debug("Added podAntiAffinity for measured pod - will avoid all pod-scaler labeled pods")
-	} else if podScalerLabel == PodScalerLabelValueNormal {
+	case PodScalerLabelValueNormal:
 		// Normal pods stay away from measured pods so measured pods can have their isolation.
 		requiredTerms = append(requiredTerms, corev1.PodAffinityTerm{
 			LabelSelector: &metav1.LabelSelector{
@@ -326,22 +353,27 @@ func AddPodAntiAffinity(pod *corev1.Pod, logger *logrus.Entry) {
 		logger.Debug("Added podAntiAffinity for normal pod - will avoid measured pods")
 	}
 
-	if len(requiredTerms) > 0 {
-		pod.Spec.Affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution = requiredTerms
+	// Merge with existing anti-affinity terms instead of overwriting
+	existingTerms := pod.Spec.Affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution
+	if existingTerms != nil {
+		requiredTerms = append(existingTerms, requiredTerms...)
 	}
+	pod.Spec.Affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution = requiredTerms
 }
 
 // ApplyMeasuredPodResources uses the real resource data we collected when this pod ran in isolation.
 // We only increase resources for the longest-running container (the main workload), not all containers.
 // This is based on actual measured usage, not Prometheus data that might be skewed by node contention.
+// This function applies resources to pods labeled "normal" (which have measured data), not "measured" (which need measurement).
 func ApplyMeasuredPodResources(pod *corev1.Pod, bqClient *BigQueryClient, logger *logrus.Entry) {
 	if bqClient == nil {
 		return
 	}
 
 	podScalerLabel, hasLabel := pod.Labels[PodScalerLabelKey]
-	if !hasLabel || podScalerLabel != PodScalerLabelValueMeasured {
-		// Only apply measured resources to pods that are actually being measured.
+	// Apply measured resources to pods labeled "normal" (which have fresh measured data)
+	// Pods labeled "measured" don't have data yet - they're being measured for the first time.
+	if !hasLabel || podScalerLabel != PodScalerLabelValueNormal {
 		return
 	}
 
@@ -349,41 +381,42 @@ func ApplyMeasuredPodResources(pod *corev1.Pod, bqClient *BigQueryClient, logger
 	// The other containers are usually sidecars or helpers that don't need as much.
 	var longestContainer *corev1.Container
 	var longestDuration time.Duration
+	var measuredData *MeasuredPodData
 
 	for i := range pod.Spec.Containers {
 		container := &pod.Spec.Containers[i]
 		fullMeta := podscaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, container.Name)
 
-		measuredData, exists := bqClient.GetMeasuredData(fullMeta)
+		containerMeasuredData, exists := bqClient.GetMeasuredData(fullMeta)
 		if !exists {
 			continue
 		}
 
 		// Track which container ran the longest - that's our main workload.
-		if duration, ok := measuredData.ContainerDurations[container.Name]; ok {
+		if duration, ok := containerMeasuredData.ContainerDurations[container.Name]; ok {
 			if duration > longestDuration {
 				longestDuration = duration
 				longestContainer = container
+				measuredData = containerMeasuredData
 			}
 		}
 	}
 
-	// If we don't have duration data, just use the first container as a fallback.
+	// If we don't have duration data, just use the first container with measured data as a fallback.
 	if longestContainer == nil && len(pod.Spec.Containers) > 0 {
-		longestContainer = &pod.Spec.Containers[0]
+		for i := range pod.Spec.Containers {
+			container := &pod.Spec.Containers[i]
+			fullMeta := podscaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, container.Name)
+			if containerMeasuredData, exists := bqClient.GetMeasuredData(fullMeta); exists {
+				longestContainer = container
+				measuredData = containerMeasuredData
+				break
+			}
+		}
 	}
 
-	if longestContainer == nil {
-		logger.Debug("No containers found for measured pod resource application")
-		return
-	}
-
-	// Get the measured data for the longest-running container.
-	fullMeta := podscaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, longestContainer.Name)
-
-	measuredData, exists := bqClient.GetMeasuredData(fullMeta)
-	if !exists {
-		logger.Debugf("No measured data for container %s", longestContainer.Name)
+	if longestContainer == nil || measuredData == nil {
+		logger.Debug("No containers with measured data found for measured pod resource application")
 		return
 	}
 
@@ -392,17 +425,17 @@ func ApplyMeasuredPodResources(pod *corev1.Pod, bqClient *BigQueryClient, logger
 		longestContainer.Resources.Requests = corev1.ResourceList{}
 	}
 
-	// Apply CPU request based on what we actually saw when it ran in isolation, plus 20% buffer for safety.
-	cpuRequest := measuredData.MaxCPUUtilization * 1.2
+	// Apply CPU request based on what we actually saw when it ran in isolation, with safety buffer.
+	cpuRequest := measuredData.MaxCPUUtilization * MeasuredPodResourceBuffer
 	if cpuRequest > 0 {
 		cpuQuantity := resource.NewMilliQuantity(int64(cpuRequest*1000), resource.DecimalSI)
 		longestContainer.Resources.Requests[corev1.ResourceCPU] = *cpuQuantity
 		logger.Debugf("Applied CPU request %v to container %s based on measured data", cpuQuantity, longestContainer.Name)
 	}
 
-	// Apply memory request based on what we actually saw, plus 20% buffer for safety.
+	// Apply memory request based on what we actually saw, with safety buffer.
 	if measuredData.MaxMemoryUtilization > 0 {
-		memoryRequest := int64(float64(measuredData.MaxMemoryUtilization) * 1.2)
+		memoryRequest := int64(float64(measuredData.MaxMemoryUtilization) * MeasuredPodResourceBuffer)
 		memoryQuantity := resource.NewQuantity(memoryRequest, resource.BinarySI)
 		longestContainer.Resources.Requests[corev1.ResourceMemory] = *memoryQuantity
 		logger.Debugf("Applied memory request %v to container %s based on measured data", memoryQuantity, longestContainer.Name)

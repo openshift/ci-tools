@@ -130,7 +130,7 @@ func TestClassifyPod(t *testing.T) {
 		t.Errorf("Expected pod to be classified as normal, got %s", pod2.Labels[PodScalerLabelKey])
 	}
 
-	// Test case 3: Pod with nil BigQuery client - should default to measured
+	// Test case 3: Pod with nil BigQuery client - should default to normal to avoid overwhelming isolated nodes
 	pod3 := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-pod-3",
@@ -143,8 +143,8 @@ func TestClassifyPod(t *testing.T) {
 	}
 
 	ClassifyPod(pod3, nil, logger)
-	if pod3.Labels[PodScalerLabelKey] != PodScalerLabelValueMeasured {
-		t.Errorf("Expected pod to be classified as measured when BigQuery client is nil, got %s", pod3.Labels[PodScalerLabelKey])
+	if pod3.Labels[PodScalerLabelKey] != PodScalerLabelValueNormal {
+		t.Errorf("Expected pod to be classified as normal when BigQuery client is nil (to avoid overwhelming isolated nodes), got %s", pod3.Labels[PodScalerLabelKey])
 	}
 }
 

@@ -19,6 +19,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
 	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
+	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
 	"github.com/openshift/ci-tools/pkg/prowconfigutils"
 	"github.com/openshift/ci-tools/pkg/secrets"
 )
@@ -213,9 +214,9 @@ func fmtExecCmdErr(action, cmd string, wrappedErr error, stdout, stderr []byte, 
 
 func updateSecrets(config secretgenerator.Config, client secrets.Client, disabledClusters sets.Set[string], GSMsyncEnabled bool) error {
 	var errs []error
+	var allSecretsList []string
 	for _, item := range config {
 		logger := logrus.WithField("item", item.ItemName)
-		var secretsList []string
 		for _, field := range item.Fields {
 			logger = logger.WithFields(logrus.Fields{
 				"field":   field.Name,
@@ -241,15 +242,9 @@ func updateSecrets(config secretgenerator.Config, client secrets.Client, disable
 				continue
 			}
 			if GSMsyncEnabled {
-				secretsList = append(secretsList, gsm.NormalizeSecretName(field.Name))
-			}
-		}
-
-		if GSMsyncEnabled {
-			indexPayload := gsm.ConstructIndexSecretContent(secretsList)
-			err := client.UpdateIndexSecret(gsm.GetIndexSecretName(item.ItemName), indexPayload)
-			if err != nil {
-				errs = append(errs, err)
+				normalizedGroup := gsmvalidation.NormalizeName(item.ItemName)
+				normalizedField := gsmvalidation.NormalizeName(field.Name)
+				allSecretsList = append(allSecretsList, fmt.Sprintf("%s__%s", normalizedGroup, normalizedField))
 			}
 		}
 
@@ -268,6 +263,13 @@ func updateSecrets(config secretgenerator.Config, client secrets.Client, disable
 			}
 		}
 	}
+	if GSMsyncEnabled {
+		err := client.UpdateIndexSecret(secrets.TestPlatformCollection, gsm.ConstructIndexSecretContent(allSecretsList))
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+
 	return utilerrors.NewAggregate(errs)
 }
 

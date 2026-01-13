@@ -12,6 +12,10 @@ import (
 	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
 )
 
+const (
+	TestPlatformCollection = "test-platform-infra"
+)
+
 type gsmSyncDecorator struct {
 	Client
 	gsmClient *secretmanager.Client
@@ -40,20 +44,24 @@ func NewGSMSyncDecorator(wrappedVaultClient Client, gcpProjectConfig gsm.Config,
 	}, nil
 }
 
+// SetFieldOnItem syncs a secret field to both Vault and GSM.
+// In the 3-level GSM hierarchy (collection__group__field):
+//   - collection: TestPlatformCollection constant ("test-platform-infra")
+//   - group: itemName parameter (e.g., "cluster-init", "build-farm")
+//   - field: fieldName parameter (e.g., "sa.ci-operator.app.ci.config")
+//
+// Example: SetFieldOnItem("build-farm", "token.txt", data)
+//
+//	-> GSM secret: test-platform-infra__build-farm__token--dot--txt
 func (g *gsmSyncDecorator) SetFieldOnItem(itemName, fieldName string, fieldValue []byte) error {
 	// Call the original client (Vault)
 	if err := g.Client.SetFieldOnItem(itemName, fieldName, fieldValue); err != nil {
 		return err
 	}
 
-	// replace forbidden characters:
-	// e.g., "sa.cluster-init.build01.config" -> "sa--dot--cluster-init--dot--build01--dot--config"
-	fieldNameNormalized := gsmvalidation.NormalizeName(fieldName)
-	secretName := fmt.Sprintf("%s__%s", "cluster-init", fieldNameNormalized)
-	fieldNameNormalized := gsm.NormalizeSecretName(fieldName)
-
-	// item name will become the collection name:
-	secretName := fmt.Sprintf("%s__%s", itemName, fieldNameNormalized)
+	group := gsmvalidation.NormalizeName(itemName)
+	field := gsmvalidation.NormalizeName(fieldName)
+	secretName := gsm.GetGSMSecretName(TestPlatformCollection, group, field)
 
 	labels := make(map[string]string)
 	labels["jira-project"] = "dptp"
@@ -71,6 +79,14 @@ func (g *gsmSyncDecorator) SetFieldOnItem(itemName, fieldName string, fieldValue
 	return nil
 }
 
+// UpdateIndexSecret creates or updates the index secret for a GSM collection.
+// The index secret tracks all field names within a collection.
+//
+// Parameters:
+//   - itemName: The GSM collection name (e.g., "test-platform-infra")
+//   - payload: a list of all field names in the collection
+//
+// Creates GSM secret named: {itemName}____index
 func (g *gsmSyncDecorator) UpdateIndexSecret(itemName string, payload []byte) error {
 	annotations := make(map[string]string)
 	annotations["request-information"] = "Created by periodic-ci-secret-generator."

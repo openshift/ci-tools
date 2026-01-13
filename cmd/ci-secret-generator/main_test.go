@@ -459,11 +459,10 @@ func TestUpdateSecretsWithGSMIndex(t *testing.T) {
 			GSMsyncEnabled:     true,
 			expectedIndexCalls: 1,
 			verifyIndexPayload: func(t *testing.T, itemName string, payload []byte) {
-				expectedItemName := gsm.GetIndexSecretName("test-item")
-				if itemName != expectedItemName {
-					t.Errorf("expected item name %q, got %q", expectedItemName, itemName)
+				if itemName != secrets.TestPlatformCollection {
+					t.Errorf("expected item name %q, got %q", secrets.TestPlatformCollection, itemName)
 				}
-				expectedPayload := string(gsm.ConstructIndexSecretContent([]string{"field1"}))
+				expectedPayload := string(gsm.ConstructIndexSecretContent([]string{"test-item__field1"}))
 				if string(payload) != expectedPayload {
 					t.Errorf("expected payload %q, got %q", expectedPayload, string(payload))
 				}
@@ -482,18 +481,17 @@ func TestUpdateSecretsWithGSMIndex(t *testing.T) {
 			GSMsyncEnabled:     true,
 			expectedIndexCalls: 1,
 			verifyIndexPayload: func(t *testing.T, itemName string, payload []byte) {
-				expectedItemName := gsm.GetIndexSecretName("multi-field-item")
-				if itemName != expectedItemName {
-					t.Errorf("expected item name %q, got %q", expectedItemName, itemName)
+				if itemName != secrets.TestPlatformCollection {
+					t.Errorf("expected item name %q, got %q", secrets.TestPlatformCollection, itemName)
 				}
-				expectedPayload := string(gsm.ConstructIndexSecretContent([]string{"field1", "field2", "field3"}))
+				expectedPayload := string(gsm.ConstructIndexSecretContent([]string{"multi-field-item__field1", "multi-field-item__field2", "multi-field-item__field3"}))
 				if string(payload) != expectedPayload {
 					t.Errorf("expected payload %q, got %q", expectedPayload, string(payload))
 				}
 			},
 		},
 		{
-			name: "GSM sync enabled - multiple items create multiple index secrets",
+			name: "GSM sync enabled - multiple items create single collection-level index",
 			config: secretgenerator.Config{
 				{
 					ItemName: "item1",
@@ -510,21 +508,15 @@ func TestUpdateSecretsWithGSMIndex(t *testing.T) {
 				},
 			},
 			GSMsyncEnabled:     true,
-			expectedIndexCalls: 2,
+			expectedIndexCalls: 1, // Only ONE index for entire collection
 			verifyIndexPayload: func(t *testing.T, itemName string, payload []byte) {
-				// This will be called twice, once for each item
-				if itemName == gsm.GetIndexSecretName("item1") {
-					expectedPayload := string(gsm.ConstructIndexSecretContent([]string{"field1"}))
-					if string(payload) != expectedPayload {
-						t.Errorf("expected payload for item1 %q, got %q", expectedPayload, string(payload))
-					}
-				} else if itemName == gsm.GetIndexSecretName("item2") {
-					expectedPayload := string(gsm.ConstructIndexSecretContent([]string{"fieldA", "fieldB"}))
-					if string(payload) != expectedPayload {
-						t.Errorf("expected payload for item2 %q, got %q", expectedPayload, string(payload))
-					}
-				} else {
-					t.Errorf("unexpected item name: %q", itemName)
+				if itemName != secrets.TestPlatformCollection {
+					t.Errorf("expected item name %q, got %q", secrets.TestPlatformCollection, itemName)
+				}
+				// Index contains ALL fields from ALL groups
+				expectedPayload := string(gsm.ConstructIndexSecretContent([]string{"item1__field1", "item2__fieldA", "item2__fieldB"}))
+				if string(payload) != expectedPayload {
+					t.Errorf("expected payload %q, got %q", expectedPayload, string(payload))
 				}
 			},
 		},
@@ -554,7 +546,7 @@ func TestUpdateSecretsWithGSMIndex(t *testing.T) {
 			expectedIndexCalls: 1,
 			verifyIndexPayload: func(t *testing.T, itemName string, payload []byte) {
 				// Only field1 and field3 should be in the index (field2 is from disabled cluster)
-				expectedPayload := string(gsm.ConstructIndexSecretContent([]string{"field1", "field3"}))
+				expectedPayload := string(gsm.ConstructIndexSecretContent([]string{"cluster-test-item__field1", "cluster-test-item__field3"}))
 				if string(payload) != expectedPayload {
 					t.Errorf("expected payload %q, got %q", expectedPayload, string(payload))
 				}
@@ -653,8 +645,8 @@ func TestUpdateSecretsWithGSMIndexErrors(t *testing.T) {
 				"field2": errors.New("field2 upload failed"), // fails
 				"field3": nil,                                // succeeds
 			},
-			expectedIndexFields: []string{"field1", "field3"}, // only successful fields
-			expectedErrorsLen:   1,                            // only field2 error
+			expectedIndexFields: []string{"test-item__field1", "test-item__field3"},
+			expectedErrorsLen:   1,
 		},
 		{
 			name: "Multiple items - index errors are aggregated",
@@ -673,7 +665,7 @@ func TestUpdateSecretsWithGSMIndexErrors(t *testing.T) {
 				},
 			},
 			updateIndexError:  errors.New("GSM update failed"),
-			expectedErrorsLen: 2, // One error for each item's index update
+			expectedErrorsLen: 1,
 		},
 	}
 

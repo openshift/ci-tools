@@ -268,6 +268,21 @@ func (mr *MockCIDataClientMockRecorder) ListReleases(ctx any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListReleases", reflect.TypeOf((*MockCIDataClient)(nil).ListReleases), ctx)
 }
 
+// ListTestSummaryByPeriod mocks base method.
+func (m *MockCIDataClient) ListTestSummaryByPeriod(ctx context.Context, suiteName, releaseName string, daysBack, minTestCount int) ([]jobrunaggregatorapi.TestSummaryByPeriodRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListTestSummaryByPeriod", ctx, suiteName, releaseName, daysBack, minTestCount)
+	ret0, _ := ret[0].([]jobrunaggregatorapi.TestSummaryByPeriodRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListTestSummaryByPeriod indicates an expected call of ListTestSummaryByPeriod.
+func (mr *MockCIDataClientMockRecorder) ListTestSummaryByPeriod(ctx, suiteName, releaseName, daysBack, minTestCount any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTestSummaryByPeriod", reflect.TypeOf((*MockCIDataClient)(nil).ListTestSummaryByPeriod), ctx, suiteName, releaseName, daysBack, minTestCount)
+}
+
 // ListUploadedJobRunIDsSinceFromTable mocks base method.
 func (m *MockCIDataClient) ListUploadedJobRunIDsSinceFromTable(ctx context.Context, table string, since *time.Time) (map[string]bool, error) {
 	m.ctrl.T.Helper()

@@ -26,7 +26,7 @@ type JobRunHistoricalDataAnalyzerFlags struct {
 	PreviousRelease string
 }
 
-var supportedDataTypes = sets.New[string]("alerts", "disruptions")
+var supportedDataTypes = sets.New[string]("alerts", "disruptions", "tests")
 
 func NewJobRunHistoricalDataAnalyzerFlags() *JobRunHistoricalDataAnalyzerFlags {
 	return &JobRunHistoricalDataAnalyzerFlags{
@@ -60,7 +60,8 @@ func (f *JobRunHistoricalDataAnalyzerFlags) Validate() error {
 		return fmt.Errorf("must provide supported datatype %v", sets.List(supportedDataTypes))
 	}
 
-	if f.CurrentFile == "" {
+	// For tests data type, we don't need --current since we don't do comparison
+	if f.DataType != "tests" && f.CurrentFile == "" {
 		return fmt.Errorf("must provide --current [file_path] flag to compare against")
 	}
 
@@ -68,7 +69,7 @@ func (f *JobRunHistoricalDataAnalyzerFlags) Validate() error {
 		return fmt.Errorf("leeway percent must be above 0")
 	}
 
-	if f.TargetRelease != "" && f.PreviousRelease == "" {
+	if f.TargetRelease != "" && f.PreviousRelease == "" && f.DataType != "tests" {
 		return fmt.Errorf("must specify --previous-release with --target-release")
 	}
 

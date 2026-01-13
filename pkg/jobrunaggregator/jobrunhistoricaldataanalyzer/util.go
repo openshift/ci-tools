@@ -166,3 +166,52 @@ func formatOutput(data []parsedJobData, format string) ([]byte, error) {
 		return nil, fmt.Errorf("invalid output format (%s)", format)
 	}
 }
+
+func formatTestOutput(data []jobrunaggregatorapi.TestSummaryByPeriodRow) ([]byte, error) {
+	if len(data) == 0 {
+		return nil, nil
+	}
+	// Sort by release, failure count desc, test name
+	sort.SliceStable(data, func(i, j int) bool {
+		if data[i].Release != data[j].Release {
+			return data[i].Release < data[j].Release
+		}
+		if data[i].TotalFailureCount != data[j].TotalFailureCount {
+			return data[i].TotalFailureCount > data[j].TotalFailureCount
+		}
+		return data[i].TestName < data[j].TestName
+	})
+	return json.MarshalIndent(data, "", "  ")
+}
+
+// readTestSummaryFile reads test summary data from a JSON file
+func readTestSummaryFile(filePath string) ([]jobrunaggregatorapi.TestSummaryByPeriodRow, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file at path (%s): %w", filePath, err)
+	}
+
+	var testSummaries []jobrunaggregatorapi.TestSummaryByPeriodRow
+	if err := json.Unmarshal(data, &testSummaries); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal test summary data: %w", err)
+	}
+
+	return testSummaries, nil
+}
+
+// hasSufficientDaysOfData checks if test summaries have at least minDays of data
+// Returns true if any row has DaysWithData >= minDays
+func hasSufficientDaysOfData(testSummaries []jobrunaggregatorapi.TestSummaryByPeriodRow, minDays int64) bool {
+	if len(testSummaries) == 0 {
+		return false
+	}
+
+	// Check if any test has sufficient days of data
+	for _, summary := range testSummaries {
+		if summary.DaysWithData >= minDays {
+			return true
+		}
+	}
+
+	return false
+}

@@ -51,6 +51,7 @@ const (
 	bigQueryLabelValueAllReleases              = "aggregator-all-releases"
 	bigQueryLabelValueReleaseTags              = "aggregator-release-tags"
 	bigQueryLabelValueJobRunIDsSinceTime       = "aggregator-job-run-ids-since-time"
+	bigQueryLabelValueTestSummaryByPeriod      = "aggregator-test-summary-by-period"
 )
 
 var (

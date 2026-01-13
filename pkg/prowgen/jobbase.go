@@ -19,7 +19,7 @@ type prowJobBaseBuilder struct {
 	testName string
 }
 
-// providesSignalForVersion returns a version (expected to be an "<MAJOR>.<MINOR>" OpenShift version) for which
+// ProvidesSignalForVersion returns a version (expected to be an "<MAJOR>.<MINOR>" OpenShift version) for which
 // the job will provide relevant continuous CI signal that can be consumed by downstream tooling like Sippy. Generally
 // jobs that test CI or Nightly payloads provide such relevant quality signal, so this method approximates identifying
 // these jobs by checking whether the source ci-operator configuration contains a `latest` release that is a candidate
@@ -27,7 +27,7 @@ type prowJobBaseBuilder struct {
 //
 // Jobs that test an ephemeral OCP payload built for a PR or install a named released version (EC/RC/GA) do not provide
 // relevant CI signal for a version.
-func providesSignalForVersion(configSpec *cioperatorapi.ReleaseBuildConfiguration) string {
+func ProvidesSignalForVersion(configSpec *cioperatorapi.ReleaseBuildConfiguration) string {
 	if release, found := configSpec.Releases[cioperatorapi.LatestReleaseName]; found && release.Candidate != nil {
 		return release.Candidate.Version
 	}
@@ -94,7 +94,7 @@ func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, 
 
 	// jobs generated from some configSpec shapes provide relevant CI signal about OCP version stream
 	// quality, so we label them as such for downstream tooling like Sippy to recognize them
-	if versionStream := providesSignalForVersion(configSpec); versionStream != "" {
+	if versionStream := ProvidesSignalForVersion(configSpec); versionStream != "" {
 		b.base.Labels[jc.JobReleaseKey] = versionStream
 	}
 

@@ -79,14 +79,6 @@ func (g *gsmSyncDecorator) SetFieldOnItem(itemName, fieldName string, fieldValue
 	return nil
 }
 
-// UpdateIndexSecret creates or updates the index secret for a GSM collection.
-// The index secret tracks all field names within a collection.
-//
-// Parameters:
-//   - itemName: The GSM collection name (e.g., "test-platform-infra")
-//   - payload: a list of all field names in the collection
-//
-// Creates GSM secret named: {itemName}____index
 func (g *gsmSyncDecorator) UpdateIndexSecret(itemName string, payload []byte) error {
 	annotations := make(map[string]string)
 	annotations["request-information"] = "Created by periodic-ci-secret-generator."

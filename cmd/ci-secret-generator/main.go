@@ -142,18 +142,18 @@ func cmdEmptyErr(itemIndex, entryIndex int, entry string) error {
 func (o *options) validateConfig() error {
 	for i, item := range o.config {
 		if item.ItemName == "" {
-			return fmt.Errorf("config[%d].itemName: empty key is not allowed", i)
+			return fmt.Errorf("config[%d].ItemName: empty key is not allowed", i)
 		}
 
 		for fieldIndex, field := range item.Fields {
 			if field.Name != "" && field.Cmd == "" {
-				return cmdEmptyErr(i, fieldIndex, "fields")
+				return cmdEmptyErr(i, fieldIndex, "Fields")
 			}
 		}
 		var hasCluster bool
 		for paramName, params := range item.Params {
 			if len(params) == 0 {
-				return fmt.Errorf("at least one argument required for param: %s, itemName: %s", paramName, item.ItemName)
+				return fmt.Errorf("at least one argument required for param: %s, ItemName: %s", paramName, item.ItemName)
 			}
 			if paramName == "cluster" {
 				hasCluster = true
@@ -214,9 +214,65 @@ func fmtExecCmdErr(action, cmd string, wrappedErr error, stdout, stderr []byte, 
 
 func updateSecrets(config secretgenerator.Config, client secrets.Client, disabledClusters sets.Set[string], GSMsyncEnabled bool) error {
 	var errs []error
-	var allSecretsList []string
+
+	secretsToUpdate, indexFields, err := buildSecretsToUpdate(config, disabledClusters, GSMsyncEnabled)
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	for _, item := range secretsToUpdate {
+		logger := logrus.WithField("item", item.ItemName)
+		for _, field := range item.Fields {
+			if err := client.SetFieldOnItem(item.ItemName, field.FieldName, field.Payload); err != nil {
+				errs = append(errs, fmt.Errorf("failed to upload field %s on item %s: %w", field.FieldName, item.ItemName, err))
+				continue
+			}
+		}
+
+		// Adding the Notes not empty check here since we don't want to overwrite any Notes that might already be present
+		// If Notes have to be deleted, it would have to be a manual operation where the user goes to the bw web UI and removes
+		// the Notes
+		if item.Notes != "" {
+			logger.Info("adding Notes")
+			if err := client.UpdateNotesOnItem(item.ItemName, item.Notes); err != nil {
+				errs = append(errs, fmt.Errorf("failed to update Notes on item %s: %w", item.ItemName, err))
+			}
+		}
+	}
+
+	if err := client.UpdateIndexSecret(secrets.TestPlatformCollection, gsm.ConstructIndexSecretContent(indexFields)); err != nil {
+		errs = append(errs, err)
+	}
+
+	return utilerrors.NewAggregate(errs)
+}
+
+type ItemUpdateInfo struct {
+	ItemName string
+	Notes    string
+	Fields   []FieldUpdateInfo
+}
+
+type FieldUpdateInfo struct {
+	FieldName string
+	Payload   []byte
+}
+
+func buildSecretsToUpdate(config secretgenerator.Config, disabledClusters sets.Set[string], GSMsyncEnabled bool) ([]ItemUpdateInfo, []string, error) {
+	var errs []error
+	allSecretsList := []string{}
+	var secretsToUpdate []ItemUpdateInfo
+
 	for _, item := range config {
 		logger := logrus.WithField("item", item.ItemName)
+		itemStruct := ItemUpdateInfo{
+			ItemName: item.ItemName,
+		}
+		if item.Notes != "" {
+			logger = logger.WithField("notes", item.Notes)
+			itemStruct.Notes = item.Notes
+		}
+
 		for _, field := range item.Fields {
 			logger = logger.WithFields(logrus.Fields{
 				"field":   field.Name,
@@ -227,6 +283,11 @@ func updateSecrets(config secretgenerator.Config, client secrets.Client, disable
 				logger.Info("ignored field for disabled cluster")
 				continue
 			}
+			if GSMsyncEnabled {
+				normalizedGroup := gsmvalidation.NormalizeName(item.ItemName)
+				normalizedField := gsmvalidation.NormalizeName(field.Name)
+				allSecretsList = append(allSecretsList, fmt.Sprintf("%s%s%s", normalizedGroup, gsmvalidation.CollectionSecretDelimiter, normalizedField))
+			}
 			logger.Info("processing field")
 			out, err := executeCommand(field.Cmd)
 			if err != nil {
@@ -235,42 +296,15 @@ func updateSecrets(config secretgenerator.Config, client secrets.Client, disable
 				errs = append(errs, errors.New(msg))
 				continue
 			}
-			if err := client.SetFieldOnItem(item.ItemName, field.Name, out); err != nil {
-				msg := "failed to upload field"
-				logger.WithError(err).Error(msg)
-				errs = append(errs, errors.New(msg))
-				continue
-			}
-			if GSMsyncEnabled {
-				normalizedGroup := gsmvalidation.NormalizeName(item.ItemName)
-				normalizedField := gsmvalidation.NormalizeName(field.Name)
-				allSecretsList = append(allSecretsList, fmt.Sprintf("%s__%s", normalizedGroup, normalizedField))
-			}
-		}
-
-		// Adding the notes not empty check here since we dont want to overwrite any notes that might already be present
-		// If notes have to be deleted, it would have to be a manual operation where the user goes to the bw web UI and removes
-		// the notes
-		if item.Notes != "" {
-			logger = logger.WithFields(logrus.Fields{
-				"notes": item.Notes,
+			itemStruct.Fields = append(itemStruct.Fields, FieldUpdateInfo{
+				FieldName: field.Name,
+				Payload:   out,
 			})
-			logger.Info("adding notes")
-			if err := client.UpdateNotesOnItem(item.ItemName, item.Notes); err != nil {
-				msg := "failed to update notes"
-				logger.WithError(err).Error(msg)
-				errs = append(errs, errors.New(msg))
-			}
 		}
-	}
-	if GSMsyncEnabled {
-		err := client.UpdateIndexSecret(secrets.TestPlatformCollection, gsm.ConstructIndexSecretContent(allSecretsList))
-		if err != nil {
-			errs = append(errs, err)
-		}
+		secretsToUpdate = append(secretsToUpdate, itemStruct)
 	}
 
-	return utilerrors.NewAggregate(errs)
+	return secretsToUpdate, allSecretsList, utilerrors.NewAggregate(errs)
 }
 
 func main() {

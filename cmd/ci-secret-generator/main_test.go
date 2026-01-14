@@ -7,13 +7,11 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"go.uber.org/mock/gomock"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
-	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
 	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 	"github.com/openshift/ci-tools/pkg/vaultclient"
@@ -438,90 +436,95 @@ func TestValidateConfig(t *testing.T) {
 	}
 }
 
-func TestUpdateSecretsWithGSMIndex(t *testing.T) {
-	t.Parallel()
-
+func TestBuildSecretsToUpdate(t *testing.T) {
 	testCases := []struct {
-		name               string
-		config             secretgenerator.Config
-		GSMsyncEnabled     bool
-		expectedIndexCalls int
-		verifyIndexPayload func(t *testing.T, itemName string, payload []byte)
+		name                string
+		config              secretgenerator.Config
+		GSMsyncEnabled      bool
+		disabledClusters    sets.Set[string]
+		expectedItems       map[string]ItemUpdateInfo
+		expectedIndexFields []string
+		expectError         bool
 	}{
 		{
-			name: "GSM sync enabled - single field creates index secret",
+			name: "GSM sync enabled - single item, single field",
 			config: secretgenerator.Config{{
 				ItemName: "test-item",
 				Fields: []secretgenerator.FieldGenerator{
 					{Name: "field1", Cmd: "printf 'value1'"},
 				},
 			}},
-			GSMsyncEnabled:     true,
-			expectedIndexCalls: 1,
-			verifyIndexPayload: func(t *testing.T, itemName string, payload []byte) {
-				if itemName != secrets.TestPlatformCollection {
-					t.Errorf("expected item name %q, got %q", secrets.TestPlatformCollection, itemName)
-				}
-				expectedPayload := string(gsm.ConstructIndexSecretContent([]string{"test-item__field1"}))
-				if string(payload) != expectedPayload {
-					t.Errorf("expected payload %q, got %q", expectedPayload, string(payload))
-				}
+			GSMsyncEnabled: true,
+			expectedItems: map[string]ItemUpdateInfo{
+				"test-item": {
+					ItemName: "test-item",
+					Fields: []FieldUpdateInfo{
+						{FieldName: "field1", Payload: []byte("value1")},
+					},
+				},
 			},
+			expectedIndexFields: []string{"test-item__field1"},
 		},
 		{
-			name: "GSM sync enabled - multiple fields create index with all fields",
+			name: "GSM sync enabled - single item, multiple fields",
 			config: secretgenerator.Config{{
-				ItemName: "multi-field-item",
+				ItemName: "aws",
 				Fields: []secretgenerator.FieldGenerator{
 					{Name: "field1", Cmd: "printf 'value1'"},
 					{Name: "field2", Cmd: "printf 'value2'"},
 					{Name: "field3", Cmd: "printf 'value3'"},
 				},
 			}},
-			GSMsyncEnabled:     true,
-			expectedIndexCalls: 1,
-			verifyIndexPayload: func(t *testing.T, itemName string, payload []byte) {
-				if itemName != secrets.TestPlatformCollection {
-					t.Errorf("expected item name %q, got %q", secrets.TestPlatformCollection, itemName)
-				}
-				expectedPayload := string(gsm.ConstructIndexSecretContent([]string{"multi-field-item__field1", "multi-field-item__field2", "multi-field-item__field3"}))
-				if string(payload) != expectedPayload {
-					t.Errorf("expected payload %q, got %q", expectedPayload, string(payload))
-				}
+			GSMsyncEnabled: true,
+			expectedItems: map[string]ItemUpdateInfo{
+				"aws": {
+					ItemName: "aws",
+					Fields: []FieldUpdateInfo{
+						{FieldName: "field1", Payload: []byte("value1")},
+						{FieldName: "field2", Payload: []byte("value2")},
+						{FieldName: "field3", Payload: []byte("value3")},
+					},
+				},
 			},
+			expectedIndexFields: []string{"aws__field1", "aws__field2", "aws__field3"},
 		},
 		{
-			name: "GSM sync enabled - multiple items create single collection-level index",
+			name: "GSM sync enabled - multiple items",
 			config: secretgenerator.Config{
 				{
-					ItemName: "item1",
+					ItemName: "group1",
 					Fields: []secretgenerator.FieldGenerator{
-						{Name: "field1", Cmd: "printf 'value1'"},
+						{Name: "fieldA", Cmd: "printf 'valueA'"},
 					},
 				},
 				{
-					ItemName: "item2",
+					ItemName: "group2",
 					Fields: []secretgenerator.FieldGenerator{
 						{Name: "fieldA", Cmd: "printf 'valueA'"},
 						{Name: "fieldB", Cmd: "printf 'valueB'"},
 					},
 				},
 			},
-			GSMsyncEnabled:     true,
-			expectedIndexCalls: 1, // Only ONE index for entire collection
-			verifyIndexPayload: func(t *testing.T, itemName string, payload []byte) {
-				if itemName != secrets.TestPlatformCollection {
-					t.Errorf("expected item name %q, got %q", secrets.TestPlatformCollection, itemName)
-				}
-				// Index contains ALL fields from ALL groups
-				expectedPayload := string(gsm.ConstructIndexSecretContent([]string{"item1__field1", "item2__fieldA", "item2__fieldB"}))
-				if string(payload) != expectedPayload {
-					t.Errorf("expected payload %q, got %q", expectedPayload, string(payload))
-				}
+			GSMsyncEnabled: true,
+			expectedItems: map[string]ItemUpdateInfo{
+				"group1": {
+					ItemName: "group1",
+					Fields: []FieldUpdateInfo{
+						{FieldName: "fieldA", Payload: []byte("valueA")},
+					},
+				},
+				"group2": {
+					ItemName: "group2",
+					Fields: []FieldUpdateInfo{
+						{FieldName: "fieldA", Payload: []byte("valueA")},
+						{FieldName: "fieldB", Payload: []byte("valueB")},
+					},
+				},
 			},
+			expectedIndexFields: []string{"group1__fieldA", "group2__fieldA", "group2__fieldB"},
 		},
 		{
-			name: "GSM sync disabled - no index secret created",
+			name: "GSM sync disabled - empty index",
 			config: secretgenerator.Config{{
 				ItemName: "test-item",
 				Fields: []secretgenerator.FieldGenerator{
@@ -529,219 +532,130 @@ func TestUpdateSecretsWithGSMIndex(t *testing.T) {
 					{Name: "field2", Cmd: "printf 'value2'"},
 				},
 			}},
-			GSMsyncEnabled:     false,
-			expectedIndexCalls: 0,
+			GSMsyncEnabled: false,
+			expectedItems: map[string]ItemUpdateInfo{
+				"test-item": {
+					ItemName: "test-item",
+					Fields: []FieldUpdateInfo{
+						{FieldName: "field1", Payload: []byte("value1")},
+						{FieldName: "field2", Payload: []byte("value2")},
+					},
+				},
+			},
+			expectedIndexFields: []string{}, // Empty when GSM sync disabled
 		},
 		{
-			name: "GSM sync enabled - disabled cluster field excluded from index",
+			name: "GSM sync enabled - disabled cluster fields are excluded",
 			config: secretgenerator.Config{{
-				ItemName: "cluster-test-item",
+				ItemName: "cluster-test",
 				Fields: []secretgenerator.FieldGenerator{
 					{Name: "field1", Cmd: "printf 'value1'", Cluster: "enabled-cluster"},
 					{Name: "field2", Cmd: "printf 'value2'", Cluster: "disabled-cluster"},
 					{Name: "field3", Cmd: "printf 'value3'", Cluster: "enabled-cluster"},
 				},
 			}},
-			GSMsyncEnabled:     true,
-			expectedIndexCalls: 1,
-			verifyIndexPayload: func(t *testing.T, itemName string, payload []byte) {
-				// Only field1 and field3 should be in the index (field2 is from disabled cluster)
-				expectedPayload := string(gsm.ConstructIndexSecretContent([]string{"cluster-test-item__field1", "cluster-test-item__field3"}))
-				if string(payload) != expectedPayload {
-					t.Errorf("expected payload %q, got %q", expectedPayload, string(payload))
-				}
+			GSMsyncEnabled:   true,
+			disabledClusters: sets.New[string]("disabled-cluster"),
+			expectedItems: map[string]ItemUpdateInfo{
+				"cluster-test": {
+					ItemName: "cluster-test",
+					Fields: []FieldUpdateInfo{
+						{FieldName: "field1", Payload: []byte("value1")},
+						{FieldName: "field3", Payload: []byte("value3")},
+					},
+				},
 			},
+			expectedIndexFields: []string{"cluster-test__field1", "cluster-test__field3"},
+		},
+		{
+			name: "GSM sync enabled - names with forbidden characters are normalized in index",
+			config: secretgenerator.Config{{
+				ItemName: "aws/config",
+				Fields: []secretgenerator.FieldGenerator{
+					{Name: "config.json", Cmd: "printf 'value1'"},
+					{Name: "auth_token", Cmd: "printf 'value2'"},
+				},
+			}},
+			GSMsyncEnabled: true,
+			expectedItems: map[string]ItemUpdateInfo{
+				"aws/config": {
+					ItemName: "aws/config",
+					Fields: []FieldUpdateInfo{
+						{FieldName: "config.json", Payload: []byte("value1")},
+						{FieldName: "auth_token", Payload: []byte("value2")},
+					},
+				},
+			},
+			expectedIndexFields: []string{"aws--slash--config__config--dot--json", "aws--slash--config__auth--u--token"},
+		},
+		{
+			name: "GSM sync enabled - item with notes",
+			config: secretgenerator.Config{{
+				ItemName: "test-item",
+				Notes:    "test notes content",
+				Fields: []secretgenerator.FieldGenerator{
+					{Name: "field1", Cmd: "printf 'value1'"},
+				},
+			}},
+			GSMsyncEnabled: true,
+			expectedItems: map[string]ItemUpdateInfo{
+				"test-item": {
+					ItemName: "test-item",
+					Notes:    "test notes content",
+					Fields: []FieldUpdateInfo{
+						{FieldName: "field1", Payload: []byte("value1")},
+					},
+				},
+			},
+			expectedIndexFields: []string{"test-item__field1"},
+		},
+		{
+			name: "GSM sync enabled - command execution failure",
+			config: secretgenerator.Config{{
+				ItemName: "test-item",
+				Fields: []secretgenerator.FieldGenerator{
+					{Name: "field1", Cmd: "false"},
+				},
+			}},
+			GSMsyncEnabled:      true,
+			expectedItems:       map[string]ItemUpdateInfo{},
+			expectedIndexFields: []string{},
+			expectError:         true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			mockCtrl := gomock.NewController(t)
-			defer mockCtrl.Finish()
+			itemsToUpdate, indexFields, err := buildSecretsToUpdate(tc.config, tc.disabledClusters, tc.GSMsyncEnabled)
 
-			mockClient := secrets.NewMockClient(mockCtrl)
-			mockClient.EXPECT().
-				SetFieldOnItem(gomock.Any(), gomock.Any(), gomock.Any()).
-				AnyTimes().
-				Return(nil)
-
-			// set expectations for UpdateIndexSecret based on test case
-			if tc.expectedIndexCalls > 0 {
-				mockClient.EXPECT().
-					UpdateIndexSecret(gomock.Any(), gomock.Any()).
-					Times(tc.expectedIndexCalls).
-					DoAndReturn(func(itemName string, payload []byte) error {
-						if tc.verifyIndexPayload != nil {
-							tc.verifyIndexPayload(t, itemName, payload)
-						}
-						return nil
-					})
-			}
-
-			// for the disabled cluster test case, pass the disabled clusters set
-			var disabledClusters sets.Set[string]
-			if tc.name == "GSM sync enabled - disabled cluster field excluded from index" {
-				disabledClusters = sets.New[string]("disabled-cluster")
-			}
-
-			err := updateSecrets(tc.config, mockClient, disabledClusters, tc.GSMsyncEnabled)
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-			}
-		})
-	}
-}
-
-func TestUpdateSecretsWithGSMIndexErrors(t *testing.T) {
-	t.Parallel()
-
-	testCases := []struct {
-		name                 string
-		config               secretgenerator.Config
-		setFieldError        error
-		updateIndexError     error
-		expectedErrorsLen    int
-		partialFailure       bool
-		partialFailureConfig map[string]error // field name -> error (nil = success)
-		expectedIndexFields  []string         // fields that should appear in index for partial failure
-	}{
-		{
-			name: "UpdateIndexSecret error is aggregated",
-			config: secretgenerator.Config{{
-				ItemName: "test-item",
-				Fields: []secretgenerator.FieldGenerator{
-					{Name: "field1", Cmd: "printf 'value1'"},
-				},
-			}},
-			updateIndexError:  errors.New("GSM update failed"),
-			expectedErrorsLen: 1,
-		},
-		{
-			name: "SetFieldOnItem error - all fields fail, index contains only updater-service-account",
-			config: secretgenerator.Config{{
-				ItemName: "test-item",
-				Fields: []secretgenerator.FieldGenerator{
-					{Name: "field1", Cmd: "printf 'value1'"},
-					{Name: "field2", Cmd: "printf 'value2'"},
-				},
-			}},
-			setFieldError:     errors.New("field upload failed"),
-			updateIndexError:  nil, // Index update should still be called
-			expectedErrorsLen: 2,   // Both field errors
-		},
-		{
-			name: "SetFieldOnItem partial failure - only successful fields in index",
-			config: secretgenerator.Config{{
-				ItemName: "test-item",
-				Fields: []secretgenerator.FieldGenerator{
-					{Name: "field1", Cmd: "printf 'value1'"},
-					{Name: "field2", Cmd: "printf 'value2'"},
-					{Name: "field3", Cmd: "printf 'value3'"},
-				},
-			}},
-			partialFailure: true,
-			partialFailureConfig: map[string]error{
-				"field1": nil,                                // succeeds
-				"field2": errors.New("field2 upload failed"), // fails
-				"field3": nil,                                // succeeds
-			},
-			expectedIndexFields: []string{"test-item__field1", "test-item__field3"},
-			expectedErrorsLen:   1,
-		},
-		{
-			name: "Multiple items - index errors are aggregated",
-			config: secretgenerator.Config{
-				{
-					ItemName: "item1",
-					Fields: []secretgenerator.FieldGenerator{
-						{Name: "field1", Cmd: "printf 'value1'"},
-					},
-				},
-				{
-					ItemName: "item2",
-					Fields: []secretgenerator.FieldGenerator{
-						{Name: "field2", Cmd: "printf 'value2'"},
-					},
-				},
-			},
-			updateIndexError:  errors.New("GSM update failed"),
-			expectedErrorsLen: 1,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			mockCtrl := gomock.NewController(t)
-			defer mockCtrl.Finish()
-
-			mockClient := secrets.NewMockClient(mockCtrl)
-
-			if tc.partialFailure {
-				// For partial failure, return different errors based on field name
-				mockClient.EXPECT().
-					SetFieldOnItem(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().
-					DoAndReturn(func(itemName, fieldName string, fieldValue []byte) error {
-						if err, exists := tc.partialFailureConfig[fieldName]; exists {
-							return err
-						}
-						return nil
-					})
-			} else if tc.setFieldError != nil {
-				mockClient.EXPECT().
-					SetFieldOnItem(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().
-					Return(tc.setFieldError)
-			} else {
-				mockClient.EXPECT().
-					SetFieldOnItem(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().
-					Return(nil)
-			}
-
-			// Set expectations for UpdateIndexSecret - it should always be called in these tests
-			if tc.updateIndexError != nil {
-				mockClient.EXPECT().
-					UpdateIndexSecret(gomock.Any(), gomock.Any()).
-					AnyTimes().
-					Return(tc.updateIndexError)
-			} else {
-				// Verify that when SetFieldOnItem fails, the index only contains successful fields
-				if tc.setFieldError != nil || tc.partialFailure {
-					mockClient.EXPECT().
-						UpdateIndexSecret(gomock.Any(), gomock.Any()).
-						AnyTimes().
-						DoAndReturn(func(itemName string, payload []byte) error {
-							var expectedPayload string
-							if tc.partialFailure {
-								// For partial failure, index should contain only successful fields
-								expectedPayload = string(gsm.ConstructIndexSecretContent(tc.expectedIndexFields))
-							} else {
-								// When all fields fail, index should only contain updater-service-account
-								expectedPayload = string(gsm.ConstructIndexSecretContent([]string{}))
-							}
-							if string(payload) != expectedPayload {
-								t.Errorf("expected index payload %q, got %q", expectedPayload, string(payload))
-							}
-							return nil
-						})
-				} else {
-					mockClient.EXPECT().
-						UpdateIndexSecret(gomock.Any(), gomock.Any()).
-						AnyTimes().
-						Return(nil)
-				}
-			}
-
-			err := updateSecrets(tc.config, mockClient, nil, true)
-			if err == nil {
+			if tc.expectError && err == nil {
 				t.Errorf("expected error but got nil")
 				return
 			}
-			errStr := err.Error()
-			if errStr == "" {
-				t.Errorf("expected non-empty error message")
+			if !tc.expectError && err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+			if tc.expectError {
+				return
+			}
+
+			if len(itemsToUpdate) != len(tc.expectedItems) {
+				t.Errorf("expected %d items, got %d", len(tc.expectedItems), len(itemsToUpdate))
+				return
+			}
+
+			actualItems := make(map[string]ItemUpdateInfo)
+			for _, item := range itemsToUpdate {
+				actualItems[item.ItemName] = item
+			}
+
+			if diff := cmp.Diff(tc.expectedItems, actualItems); diff != "" {
+				t.Errorf("%s: mismatch (-expected, +actual):\n%s", tc.name, diff)
+			}
+
+			if diff := cmp.Diff(tc.expectedIndexFields, indexFields); diff != "" {
+				t.Errorf("%s: mismatch (-expected, +actual):\n%s", tc.name, diff)
 			}
 		})
 	}

@@ -83,7 +83,7 @@ func VerifyIndexSecretContent(payload []byte) error {
 }
 
 // ConstructIndexSecretContent constructs the index secret content from the secretsList,
-// with UpdaterSASecretName included.
+// with UpdaterSASecretName automatically added in this function.
 func ConstructIndexSecretContent(secretsList []string) []byte {
 	secretsList = append(secretsList, UpdaterSASecretName)
 	sort.Strings(secretsList)

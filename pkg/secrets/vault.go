@@ -135,7 +135,6 @@ func (c *vaultClient) GetFieldOnItem(itemName, fieldName string) ([]byte, error)
 }
 
 func (c *vaultClient) UpdateIndexSecret(itemName string, payload []byte) error {
-	// No-op: index secrets are only relevant for GSM syncing
 	return nil
 }
 

@@ -708,10 +708,19 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  commands: ' '\n" +
 	"                  # Credentials defines the credentials we'll mount into this step.\n" +
 	"                  credentials:\n" +
-	"                    - # Collection is the name of the collection the secret belongs to.\n" +
-	"                      # In GCP, the secret is named <collection>__<secret-name> -- this represents\n" +
+	"                    - # Bundle is a named bundle reference from the GSM config mapping file.\n" +
+	"                      # Mutually exclusive with Collection/Group/Field.\n" +
+	"                      bundle: ' '\n" +
+	"                      # Collection is the name of the collection the secret belongs to.\n" +
+	"                      # In GCP, the secret is named <collection>__<group>__<field> -- this represents\n" +
 	"                      # the <collection> part.\n" +
 	"                      collection: ' '\n" +
+	"                      # Field is the specific field name (third level of 3-level <collection>__<group>__<field> hierarchy).\n" +
+	"                      # If omitted, all fields in the collection/group are auto-discovered.\n" +
+	"                      field: ' '\n" +
+	"                      # Group is the group name within the collection (second level of 3-level <collection>__<group>__<field> hierarchy).\n" +
+	"                      # Required when Collection is set, unless Bundle is used.\n" +
+	"                      group: ' '\n" +
 	"                      # MountPath is where the secret should be mounted.\n" +
 	"                      mount_path: ' '\n" +
 	"                      # Name is the name of the secret, without the collection prefix.\n" +
@@ -807,10 +816,19 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  commands: ' '\n" +
 	"                  # Credentials defines the credentials we'll mount into this step.\n" +
 	"                  credentials:\n" +
-	"                    - # Collection is the name of the collection the secret belongs to.\n" +
-	"                      # In GCP, the secret is named <collection>__<secret-name> -- this represents\n" +
+	"                    - # Bundle is a named bundle reference from the GSM config mapping file.\n" +
+	"                      # Mutually exclusive with Collection/Group/Field.\n" +
+	"                      bundle: ' '\n" +
+	"                      # Collection is the name of the collection the secret belongs to.\n" +
+	"                      # In GCP, the secret is named <collection>__<group>__<field> -- this represents\n" +
 	"                      # the <collection> part.\n" +
 	"                      collection: ' '\n" +
+	"                      # Field is the specific field name (third level of 3-level <collection>__<group>__<field> hierarchy).\n" +
+	"                      # If omitted, all fields in the collection/group are auto-discovered.\n" +
+	"                      field: ' '\n" +
+	"                      # Group is the group name within the collection (second level of 3-level <collection>__<group>__<field> hierarchy).\n" +
+	"                      # Required when Collection is set, unless Bundle is used.\n" +
+	"                      group: ' '\n" +
 	"                      # MountPath is where the secret should be mounted.\n" +
 	"                      mount_path: ' '\n" +
 	"                      # Name is the name of the secret, without the collection prefix.\n" +
@@ -906,10 +924,19 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  commands: ' '\n" +
 	"                  # Credentials defines the credentials we'll mount into this step.\n" +
 	"                  credentials:\n" +
-	"                    - # Collection is the name of the collection the secret belongs to.\n" +
-	"                      # In GCP, the secret is named <collection>__<secret-name> -- this represents\n" +
+	"                    - # Bundle is a named bundle reference from the GSM config mapping file.\n" +
+	"                      # Mutually exclusive with Collection/Group/Field.\n" +
+	"                      bundle: ' '\n" +
+	"                      # Collection is the name of the collection the secret belongs to.\n" +
+	"                      # In GCP, the secret is named <collection>__<group>__<field> -- this represents\n" +
 	"                      # the <collection> part.\n" +
 	"                      collection: ' '\n" +
+	"                      # Field is the specific field name (third level of 3-level <collection>__<group>__<field> hierarchy).\n" +
+	"                      # If omitted, all fields in the collection/group are auto-discovered.\n" +
+	"                      field: ' '\n" +
+	"                      # Group is the group name within the collection (second level of 3-level <collection>__<group>__<field> hierarchy).\n" +
+	"                      # Required when Collection is set, unless Bundle is used.\n" +
+	"                      group: ' '\n" +
 	"                      # MountPath is where the secret should be mounted.\n" +
 	"                      mount_path: ' '\n" +
 	"                      # Name is the name of the secret, without the collection prefix.\n" +
@@ -1142,7 +1169,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  commands: ' '\n" +
 	"                  credentials:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
-	"                    - collection: ' '\n" +
+	"                    - bundle: ' '\n" +
+	"                      collection: ' '\n" +
+	"                      field: ' '\n" +
+	"                      group: ' '\n" +
 	"                      mount_path: ' '\n" +
 	"                      name: ' '\n" +
 	"                      namespace: ' '\n" +
@@ -1209,7 +1239,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  commands: ' '\n" +
 	"                  credentials:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
-	"                    - collection: ' '\n" +
+	"                    - bundle: ' '\n" +
+	"                      collection: ' '\n" +
+	"                      field: ' '\n" +
+	"                      group: ' '\n" +
 	"                      mount_path: ' '\n" +
 	"                      name: ' '\n" +
 	"                      namespace: ' '\n" +
@@ -1276,7 +1309,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  commands: ' '\n" +
 	"                  credentials:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
-	"                    - collection: ' '\n" +
+	"                    - bundle: ' '\n" +
+	"                      collection: ' '\n" +
+	"                      field: ' '\n" +
+	"                      group: ' '\n" +
 	"                      mount_path: ' '\n" +
 	"                      name: ' '\n" +
 	"                      namespace: ' '\n" +
@@ -1609,10 +1645,19 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              commands: ' '\n" +
 	"              # Credentials defines the credentials we'll mount into this step.\n" +
 	"              credentials:\n" +
-	"                - # Collection is the name of the collection the secret belongs to.\n" +
-	"                  # In GCP, the secret is named <collection>__<secret-name> -- this represents\n" +
+	"                - # Bundle is a named bundle reference from the GSM config mapping file.\n" +
+	"                  # Mutually exclusive with Collection/Group/Field.\n" +
+	"                  bundle: ' '\n" +
+	"                  # Collection is the name of the collection the secret belongs to.\n" +
+	"                  # In GCP, the secret is named <collection>__<group>__<field> -- this represents\n" +
 	"                  # the <collection> part.\n" +
 	"                  collection: ' '\n" +
+	"                  # Field is the specific field name (third level of 3-level <collection>__<group>__<field> hierarchy).\n" +
+	"                  # If omitted, all fields in the collection/group are auto-discovered.\n" +
+	"                  field: ' '\n" +
+	"                  # Group is the group name within the collection (second level of 3-level <collection>__<group>__<field> hierarchy).\n" +
+	"                  # Required when Collection is set, unless Bundle is used.\n" +
+	"                  group: ' '\n" +
 	"                  # MountPath is where the secret should be mounted.\n" +
 	"                  mount_path: ' '\n" +
 	"                  # Name is the name of the secret, without the collection prefix.\n" +
@@ -1708,10 +1753,19 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              commands: ' '\n" +
 	"              # Credentials defines the credentials we'll mount into this step.\n" +
 	"              credentials:\n" +
-	"                - # Collection is the name of the collection the secret belongs to.\n" +
-	"                  # In GCP, the secret is named <collection>__<secret-name> -- this represents\n" +
+	"                - # Bundle is a named bundle reference from the GSM config mapping file.\n" +
+	"                  # Mutually exclusive with Collection/Group/Field.\n" +
+	"                  bundle: ' '\n" +
+	"                  # Collection is the name of the collection the secret belongs to.\n" +
+	"                  # In GCP, the secret is named <collection>__<group>__<field> -- this represents\n" +
 	"                  # the <collection> part.\n" +
 	"                  collection: ' '\n" +
+	"                  # Field is the specific field name (third level of 3-level <collection>__<group>__<field> hierarchy).\n" +
+	"                  # If omitted, all fields in the collection/group are auto-discovered.\n" +
+	"                  field: ' '\n" +
+	"                  # Group is the group name within the collection (second level of 3-level <collection>__<group>__<field> hierarchy).\n" +
+	"                  # Required when Collection is set, unless Bundle is used.\n" +
+	"                  group: ' '\n" +
 	"                  # MountPath is where the secret should be mounted.\n" +
 	"                  mount_path: ' '\n" +
 	"                  # Name is the name of the secret, without the collection prefix.\n" +
@@ -1807,10 +1861,19 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              commands: ' '\n" +
 	"              # Credentials defines the credentials we'll mount into this step.\n" +
 	"              credentials:\n" +
-	"                - # Collection is the name of the collection the secret belongs to.\n" +
-	"                  # In GCP, the secret is named <collection>__<secret-name> -- this represents\n" +
+	"                - # Bundle is a named bundle reference from the GSM config mapping file.\n" +
+	"                  # Mutually exclusive with Collection/Group/Field.\n" +
+	"                  bundle: ' '\n" +
+	"                  # Collection is the name of the collection the secret belongs to.\n" +
+	"                  # In GCP, the secret is named <collection>__<group>__<field> -- this represents\n" +
 	"                  # the <collection> part.\n" +
 	"                  collection: ' '\n" +
+	"                  # Field is the specific field name (third level of 3-level <collection>__<group>__<field> hierarchy).\n" +
+	"                  # If omitted, all fields in the collection/group are auto-discovered.\n" +
+	"                  field: ' '\n" +
+	"                  # Group is the group name within the collection (second level of 3-level <collection>__<group>__<field> hierarchy).\n" +
+	"                  # Required when Collection is set, unless Bundle is used.\n" +
+	"                  group: ' '\n" +
 	"                  # MountPath is where the secret should be mounted.\n" +
 	"                  mount_path: ' '\n" +
 	"                  # Name is the name of the secret, without the collection prefix.\n" +
@@ -2043,7 +2106,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              commands: ' '\n" +
 	"              credentials:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
-	"                - collection: ' '\n" +
+	"                - bundle: ' '\n" +
+	"                  collection: ' '\n" +
+	"                  field: ' '\n" +
+	"                  group: ' '\n" +
 	"                  mount_path: ' '\n" +
 	"                  name: ' '\n" +
 	"                  namespace: ' '\n" +
@@ -2110,7 +2176,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              commands: ' '\n" +
 	"              credentials:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
-	"                - collection: ' '\n" +
+	"                - bundle: ' '\n" +
+	"                  collection: ' '\n" +
+	"                  field: ' '\n" +
+	"                  group: ' '\n" +
 	"                  mount_path: ' '\n" +
 	"                  name: ' '\n" +
 	"                  namespace: ' '\n" +
@@ -2177,7 +2246,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              commands: ' '\n" +
 	"              credentials:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
-	"                - collection: ' '\n" +
+	"                - bundle: ' '\n" +
+	"                  collection: ' '\n" +
+	"                  field: ' '\n" +
+	"                  group: ' '\n" +
 	"                  mount_path: ' '\n" +
 	"                  name: ' '\n" +
 	"                  namespace: ' '\n" +

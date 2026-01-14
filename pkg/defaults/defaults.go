@@ -80,6 +80,8 @@ func FromConfig(
 	integratedStreams map[string]*configresolver.IntegratedStream,
 	injectedTest bool,
 	enableSecretsStoreCSIDriver bool,
+	gsmConfig *api.GSMConfig,
+	gsmCredentialsFile string,
 	metricsAgent *metrics.MetricsAgent,
 	skippedImages sets.Set[string],
 ) ([]api.Step, []api.Step, error) {
@@ -119,7 +121,7 @@ func FromConfig(
 	httpClient := retryablehttp.NewClient()
 	httpClient.Logger = nil
 
-	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, nodeName, targetAdditionalSuffix, nodeArchitectures, integratedStreams, injectedTest, enableSecretsStoreCSIDriver, metricsAgent, skippedImages)
+	return fromConfig(ctx, config, graphConf, jobSpec, templates, paramFile, promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient.StandardClient(), requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil), censor, nodeName, targetAdditionalSuffix, nodeArchitectures, integratedStreams, injectedTest, enableSecretsStoreCSIDriver, gsmConfig, gsmCredentialsFile, metricsAgent, skippedImages)
 }
 
 func fromConfig(
@@ -148,6 +150,8 @@ func fromConfig(
 	integratedStreams map[string]*configresolver.IntegratedStream,
 	injectedTest bool,
 	enableSecretsStoreCSIDriver bool,
+	gsmConfig *api.GSMConfig,
+	gsmCredentialsFile string,
 	metricsAgent *metrics.MetricsAgent,
 	skippedImages sets.Set[string],
 ) ([]api.Step, []api.Step, error) {
@@ -176,7 +180,7 @@ func fromConfig(
 
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
-			steps, err := stepForTest(config, params, podClient, leaseClient, templateClient, client, hiveClient, jobSpec, inputImages, testStep, &imageConfigs, pullSecret, censor, nodeName, targetAdditionalSuffix, enableSecretsStoreCSIDriver, metricsAgent)
+			steps, err := stepForTest(config, params, podClient, leaseClient, templateClient, client, hiveClient, jobSpec, inputImages, testStep, &imageConfigs, pullSecret, censor, nodeName, targetAdditionalSuffix, enableSecretsStoreCSIDriver, gsmConfig, gsmCredentialsFile, metricsAgent)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -457,6 +461,8 @@ func stepForTest(
 	nodeName string,
 	targetAdditionalSuffix string,
 	enableSecretsStoreCSIDriver bool,
+	gsmConfig *api.GSMConfig,
+	gsmCredentialsFile string,
 	metricsAgent *metrics.MetricsAgent,
 ) ([]api.Step, error) {
 	if test := c.MultiStageTestConfigurationLiteral; test != nil {
@@ -466,7 +472,7 @@ func stepForTest(
 			params = api.NewDeferredParameters(params)
 		}
 		var ret []api.Step
-		step := multi_stage.MultiStageTestStep(*c, config, params, podClient, jobSpec, leases, nodeName, targetAdditionalSuffix, nil, enableSecretsStoreCSIDriver)
+		step := multi_stage.MultiStageTestStep(*c, config, params, podClient, jobSpec, leases, nodeName, targetAdditionalSuffix, nil, enableSecretsStoreCSIDriver, gsmConfig, gsmCredentialsFile)
 		if ipPoolLease.ResourceType != "" {
 			step = steps.IPPoolStep(leaseClient, podClient, ipPoolLease, step, params, jobSpec.Namespace, metricsAgent)
 		}

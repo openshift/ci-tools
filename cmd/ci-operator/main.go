@@ -450,6 +450,9 @@ type options struct {
 
 	restrictNetworkAccess       bool
 	enableSecretsStoreCSIDriver bool
+	gsmConfigPath               string
+	gsmConfig                   api.GSMConfig
+	gsmCredentialsFile          string
 
 	metricsAgent *metrics.MetricsAgent
 
@@ -505,6 +508,8 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.impersonateUser, "as", "", "Username to impersonate")
 	flag.BoolVar(&opt.restrictNetworkAccess, "restrict-network-access", false, "Restrict network access to 10.0.0.0/8 (RedHat intranet).")
 	flag.BoolVar(&opt.enableSecretsStoreCSIDriver, "enable-secrets-store-csi-driver", false, "Use Secrets Store CSI driver for accessing multi-stage credentials.")
+	flag.StringVar(&opt.gsmConfigPath, "gsm-config", "", "Path to the gsm config file.")
+	flag.StringVar(&opt.gsmCredentialsFile, "gsm-credentials-file", "", "Path to GCP service account credentials.")
 
 	// flags needed for the configresolver
 	flag.StringVar(&opt.resolverAddress, "resolver-address", configResolverAddress, "Address of configresolver")
@@ -753,6 +758,11 @@ func (o *options) Complete() error {
 
 	handleTargetAdditionalSuffix(o)
 
+	if o.enableSecretsStoreCSIDriver {
+		//TODO: make sure the gsm config file is available on Pod's file system, cf config_updater plugin of prow
+		api.LoadGSMConfigFromFile(o.gsmConfigPath, &o.gsmConfig)
+	}
+
 	return overrideTestStepDependencyParams(o)
 }
 
@@ -960,7 +970,7 @@ func (o *options) Run() []error {
 	// load the graph from the configuration
 	buildSteps, promotionSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig,
 		o.podPendingTimeout, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig,
-		o.nodeName, nodeArchitectures, o.targetAdditionalSuffix, o.manifestToolDockerCfg, o.localRegistryDNS, streams, injectedTest, o.enableSecretsStoreCSIDriver, o.metricsAgent, o.skippedImages)
+		o.nodeName, nodeArchitectures, o.targetAdditionalSuffix, o.manifestToolDockerCfg, o.localRegistryDNS, streams, injectedTest, o.enableSecretsStoreCSIDriver, &o.gsmConfig, o.gsmCredentialsFile, o.metricsAgent, o.skippedImages)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}

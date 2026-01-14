@@ -201,3 +201,206 @@ func TestBumpObject(t *testing.T) {
 		})
 	}
 }
+
+func TestBumpStepEnvVars(t *testing.T) {
+	tests := []struct {
+		id      string
+		major   int
+		env     cioperatorapi.TestEnvironment
+		wantEnv cioperatorapi.TestEnvironment
+	}{
+		{
+			id:    "Bumps OCP_VERSION env var",
+			major: 4,
+			env: cioperatorapi.TestEnvironment{
+				"OCP_VERSION": "4.10",
+			},
+			wantEnv: cioperatorapi.TestEnvironment{
+				"OCP_VERSION": "4.11",
+			},
+		},
+		{
+			id:    "Bumps env var with matching major version",
+			major: 4,
+			env: cioperatorapi.TestEnvironment{
+				"SOME_VERSION": "4.10",
+			},
+			wantEnv: cioperatorapi.TestEnvironment{
+				"SOME_VERSION": "4.11",
+			},
+		},
+		{
+			id:    "Does not bump env var with different major version",
+			major: 4,
+			env: cioperatorapi.TestEnvironment{
+				"OTHER_VERSION": "5.10",
+			},
+			wantEnv: cioperatorapi.TestEnvironment{
+				"OTHER_VERSION": "5.10",
+			},
+		},
+		{
+			id:    "Does not bump non-version value",
+			major: 4,
+			env: cioperatorapi.TestEnvironment{
+				"SOME_VAR": "not-a-version",
+			},
+			wantEnv: cioperatorapi.TestEnvironment{
+				"SOME_VAR": "not-a-version",
+			},
+		},
+		{
+			id:    "Bumps multiple matching env vars",
+			major: 4,
+			env: cioperatorapi.TestEnvironment{
+				"OCP_VERSION":   "4.10",
+				"OTHER_VERSION": "4.9",
+				"UNRELATED":     "foobar",
+			},
+			wantEnv: cioperatorapi.TestEnvironment{
+				"OCP_VERSION":   "4.11",
+				"OTHER_VERSION": "4.10",
+				"UNRELATED":     "foobar",
+			},
+		},
+		{
+			id:      "Handles nil env",
+			major:   4,
+			env:     nil,
+			wantEnv: nil,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.id, func(t *testing.T) {
+			err := bumpStepEnvVars(test.env, test.major)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if diff := cmp.Diff(test.wantEnv, test.env); diff != "" {
+				t.Errorf("environments are different: %s", diff)
+			}
+		})
+	}
+}
+
+func TestBumpTestStepEnvVars(t *testing.T) {
+	strRef := func(i string) *string {
+		return &i
+	}
+	tests := []struct {
+		id       string
+		major    int
+		testStep cioperatorapi.TestStep
+		wantStep cioperatorapi.TestStep
+	}{
+		{
+			id:    "Bumps OCP_VERSION in step environment",
+			major: 4,
+			testStep: cioperatorapi.TestStep{
+				LiteralTestStep: &cioperatorapi.LiteralTestStep{
+					Environment: []cioperatorapi.StepParameter{
+						{Name: "OCP_VERSION", Default: strRef("4.10")},
+					},
+				},
+			},
+			wantStep: cioperatorapi.TestStep{
+				LiteralTestStep: &cioperatorapi.LiteralTestStep{
+					Environment: []cioperatorapi.StepParameter{
+						{Name: "OCP_VERSION", Default: strRef("4.11")},
+					},
+				},
+			},
+		},
+		{
+			id:    "Bumps any env var with matching major version",
+			major: 4,
+			testStep: cioperatorapi.TestStep{
+				LiteralTestStep: &cioperatorapi.LiteralTestStep{
+					Environment: []cioperatorapi.StepParameter{
+						{Name: "CUSTOM_VAR", Default: strRef("4.10")},
+					},
+				},
+			},
+			wantStep: cioperatorapi.TestStep{
+				LiteralTestStep: &cioperatorapi.LiteralTestStep{
+					Environment: []cioperatorapi.StepParameter{
+						{Name: "CUSTOM_VAR", Default: strRef("4.11")},
+					},
+				},
+			},
+		},
+		{
+			id:    "Does not bump env var with different major version",
+			major: 4,
+			testStep: cioperatorapi.TestStep{
+				LiteralTestStep: &cioperatorapi.LiteralTestStep{
+					Environment: []cioperatorapi.StepParameter{
+						{Name: "OTHER_VAR", Default: strRef("5.10")},
+					},
+				},
+			},
+			wantStep: cioperatorapi.TestStep{
+				LiteralTestStep: &cioperatorapi.LiteralTestStep{
+					Environment: []cioperatorapi.StepParameter{
+						{Name: "OTHER_VAR", Default: strRef("5.10")},
+					},
+				},
+			},
+		},
+		{
+			id:    "Does not bump non-version value",
+			major: 4,
+			testStep: cioperatorapi.TestStep{
+				LiteralTestStep: &cioperatorapi.LiteralTestStep{
+					Environment: []cioperatorapi.StepParameter{
+						{Name: "SOME_VAR", Default: strRef("not-a-version")},
+					},
+				},
+			},
+			wantStep: cioperatorapi.TestStep{
+				LiteralTestStep: &cioperatorapi.LiteralTestStep{
+					Environment: []cioperatorapi.StepParameter{
+						{Name: "SOME_VAR", Default: strRef("not-a-version")},
+					},
+				},
+			},
+		},
+		{
+			id:       "Handles nil LiteralTestStep",
+			major:    4,
+			testStep: cioperatorapi.TestStep{},
+			wantStep: cioperatorapi.TestStep{},
+		},
+		{
+			id:    "Handles nil Default field in StepParameter",
+			major: 4,
+			testStep: cioperatorapi.TestStep{
+				LiteralTestStep: &cioperatorapi.LiteralTestStep{
+					Environment: []cioperatorapi.StepParameter{
+						{Name: "OCP_VERSION", Default: nil},
+						{Name: "OTHER_VAR", Default: strRef("4.10")},
+					},
+				},
+			},
+			wantStep: cioperatorapi.TestStep{
+				LiteralTestStep: &cioperatorapi.LiteralTestStep{
+					Environment: []cioperatorapi.StepParameter{
+						{Name: "OCP_VERSION", Default: nil},
+						{Name: "OTHER_VAR", Default: strRef("4.11")},
+					},
+				},
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.id, func(t *testing.T) {
+			err := bumpTestStepEnvVars(test.testStep, test.major)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if diff := cmp.Diff(test.wantStep, test.testStep); diff != "" {
+				t.Errorf("test steps are different: %s", diff)
+			}
+		})
+	}
+}

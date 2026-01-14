@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/util/errors"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/ocplifecycle"
@@ -230,6 +231,10 @@ func bumpTests(config *cioperatorapi.ReleaseBuildConfiguration, major int) error
 			continue
 		}
 
+		if err := bumpStepEnvVars(test.MultiStageTestConfiguration.Environment, major); err != nil {
+			return err
+		}
+
 		if err := bumpTestSteps(test.MultiStageTestConfiguration.Pre, major); err != nil {
 			return err
 		}
@@ -252,6 +257,28 @@ func bumpTests(config *cioperatorapi.ReleaseBuildConfiguration, major int) error
 	return nil
 }
 
+func bumpStepEnvVars(env cioperatorapi.TestEnvironment, major int) error {
+	var errs []error
+
+	for k, v := range env {
+		mm, err := ocplifecycle.ParseMajorMinor(v)
+		// value does not look like a version => nothing to bump
+		if err != nil {
+			continue
+		}
+
+		if k == ocpReleaseEnvVarName || mm.Major == major {
+			if err := ReplaceWithNextVersionInPlace(&v, major); err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			env[k] = v
+		}
+	}
+
+	return errors.NewAggregate(errs)
+}
+
 func bumpTestSteps(tests []cioperatorapi.TestStep, major int) error {
 	if tests == nil {
 		return nil
@@ -272,7 +299,15 @@ func bumpTestStepEnvVars(multistageTest cioperatorapi.TestStep, major int) error
 	}
 	for i := 0; i < len(multistageTest.Environment); i++ {
 		env := multistageTest.Environment[i]
-		if env.Name == ocpReleaseEnvVarName {
+		if env.Default == nil {
+			continue
+		}
+		// value does not look like a version => nothing to bump
+		mm, err := ocplifecycle.ParseMajorMinor(*env.Default)
+		if err != nil {
+			continue
+		}
+		if env.Name == ocpReleaseEnvVarName || mm.Major == major {
 			if err := ReplaceWithNextVersionInPlace(env.Default, major); err != nil {
 				return err
 			}

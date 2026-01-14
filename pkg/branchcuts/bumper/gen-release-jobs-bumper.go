@@ -171,20 +171,29 @@ func (b *GeneratedReleaseGatingJobsBumper) BumpContent(dataWithInfo *cioperatorc
 }
 
 func bumpBaseImages(config *cioperatorapi.ReleaseBuildConfiguration, major int) error {
-	if config.BaseImages == nil {
-		return nil
+	var errs []error
+
+	for k, v := range config.BaseImages {
+		if err := ReplaceWithNextVersionInPlace(&v.Name, major); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+
+		// only bump tags that are plain versions (tag: 4.21) because stuff like
+		// rhel-9-golang-1.24-openshift-4.22 is more tricky and will be handled
+		// by other tooling
+		mm, err := ocplifecycle.ParseMajorMinor(v.Tag)
+		if err == nil && mm.Major == major {
+			if err := ReplaceWithNextVersionInPlace(&v.Tag, major); err != nil {
+				errs = append(errs, err)
+				continue
+			}
+		}
+
+		config.BaseImages[k] = v
 	}
 
-	bumpedImages := make(map[string]cioperatorapi.ImageStreamTagReference)
-	for k := range config.BaseImages {
-		image := config.BaseImages[k]
-		if err := ReplaceWithNextVersionInPlace(&image.Name, major); err != nil {
-			return err
-		}
-		bumpedImages[k] = image
-	}
-	config.BaseImages = bumpedImages
-	return nil
+	return errors.NewAggregate(errs)
 }
 
 func bumpReleases(config *cioperatorapi.ReleaseBuildConfiguration, major int) error {

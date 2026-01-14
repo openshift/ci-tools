@@ -404,3 +404,99 @@ func TestBumpTestStepEnvVars(t *testing.T) {
 		})
 	}
 }
+
+func TestBumpBaseImages(t *testing.T) {
+	tests := []struct {
+		id             string
+		major          int
+		baseImages     map[string]cioperatorapi.ImageStreamTagReference
+		wantBaseImages map[string]cioperatorapi.ImageStreamTagReference
+	}{
+		{
+			id:    "Bumps name and plain version tag",
+			major: 4,
+			baseImages: map[string]cioperatorapi.ImageStreamTagReference{
+				"tests-private": {
+					Name: "tests-private",
+					Tag:  "4.10",
+				},
+			},
+			wantBaseImages: map[string]cioperatorapi.ImageStreamTagReference{
+				"tests-private": {
+					Name: "tests-private",
+					Tag:  "4.11",
+				},
+			},
+		},
+		{
+			id:    "Bumps name with version, does not bump non-version tag",
+			major: 4,
+			baseImages: map[string]cioperatorapi.ImageStreamTagReference{
+				"image": {
+					Name: "image_4.10",
+					Tag:  "latest",
+				},
+			},
+			wantBaseImages: map[string]cioperatorapi.ImageStreamTagReference{
+				"image": {
+					Name: "image_4.11",
+					Tag:  "latest",
+				},
+			},
+		},
+		{
+			id:    "Does not bump tag with version as substring",
+			major: 4,
+			baseImages: map[string]cioperatorapi.ImageStreamTagReference{
+				"golang": {
+					Name: "golang",
+					Tag:  "rhel-9-golang-1.24-openshift-4.10",
+				},
+			},
+			wantBaseImages: map[string]cioperatorapi.ImageStreamTagReference{
+				"golang": {
+					Name: "golang",
+					Tag:  "rhel-9-golang-1.24-openshift-4.10",
+				},
+			},
+		},
+		{
+			id:    "Does not bump tag with different major version",
+			major: 4,
+			baseImages: map[string]cioperatorapi.ImageStreamTagReference{
+				"image": {
+					Name: "image",
+					Tag:  "5.10",
+				},
+			},
+			wantBaseImages: map[string]cioperatorapi.ImageStreamTagReference{
+				"image": {
+					Name: "image",
+					Tag:  "5.10",
+				},
+			},
+		},
+		{
+			id:         "Handles nil base images",
+			major:      4,
+			baseImages: nil,
+			wantBaseImages: nil,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.id, func(t *testing.T) {
+			config := &cioperatorapi.ReleaseBuildConfiguration{
+				InputConfiguration: cioperatorapi.InputConfiguration{
+					BaseImages: test.baseImages,
+				},
+			}
+			err := bumpBaseImages(config, test.major)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if diff := cmp.Diff(test.wantBaseImages, config.BaseImages); diff != "" {
+				t.Errorf("base images are different: %s", diff)
+			}
+		})
+	}
+}

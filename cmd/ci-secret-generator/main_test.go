@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"go.uber.org/mock/gomock"
 
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
@@ -18,6 +18,58 @@ import (
 	"github.com/openshift/ci-tools/pkg/testhelper"
 	"github.com/openshift/ci-tools/pkg/vaultclient"
 )
+
+// fakeClient is a test implementation of secrets.Client for testing
+type fakeClient struct {
+	setFieldErrors   map[string]error
+	updateIndexError error
+	indexCalls       []indexCall
+}
+
+type indexCall struct {
+	itemName string
+	payload  []byte
+}
+
+func newFakeClient() *fakeClient {
+	return &fakeClient{
+		setFieldErrors: make(map[string]error),
+		indexCalls:     []indexCall{},
+	}
+}
+
+func (f *fakeClient) SetFieldOnItem(itemName, fieldName string, fieldValue []byte) error {
+	if err, exists := f.setFieldErrors[fieldName]; exists {
+		return err
+	}
+	return nil
+}
+
+func (f *fakeClient) UpdateIndexSecret(itemName string, payload []byte) error {
+	f.indexCalls = append(f.indexCalls, indexCall{itemName: itemName, payload: payload})
+	return f.updateIndexError
+}
+
+func (f *fakeClient) UpdateNotesOnItem(itemName, notes string) error {
+	return nil
+}
+
+// ReadOnlyClient methods - not used in updateSecrets tests
+func (f *fakeClient) GetFieldOnItem(itemName, fieldName string) ([]byte, error) {
+	return nil, nil
+}
+
+func (f *fakeClient) GetInUseInformationForAllItems(optionalPrefix string) (map[string]secrets.SecretUsageComparer, error) {
+	return nil, nil
+}
+
+func (f *fakeClient) GetUserSecrets() (map[types.NamespacedName]map[string]string, error) {
+	return nil, nil
+}
+
+func (f *fakeClient) HasItem(itemname string) (bool, error) {
+	return false, nil
+}
 
 func TestItemContextsFromConfig(t *testing.T) {
 	var testCases = []struct {
@@ -442,11 +494,15 @@ func TestUpdateSecretsWithGSMIndex(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		name               string
-		config             secretgenerator.Config
-		GSMsyncEnabled     bool
-		expectedIndexCalls int
-		verifyIndexPayload func(t *testing.T, itemName string, payload []byte)
+		name                string
+		config              secretgenerator.Config
+		GSMsyncEnabled      bool
+		disabledClusters    sets.Set[string]
+		setFieldErrors      map[string]error
+		updateIndexError    error
+		expectedIndexCalls  int
+		expectedIndexFields []string
+		expectError         bool
 	}{
 		{
 			name: "GSM sync enabled - single field creates index secret",
@@ -456,20 +512,12 @@ func TestUpdateSecretsWithGSMIndex(t *testing.T) {
 					{Name: "field1", Cmd: "printf 'value1'"},
 				},
 			}},
-			GSMsyncEnabled:     true,
-			expectedIndexCalls: 1,
-			verifyIndexPayload: func(t *testing.T, itemName string, payload []byte) {
-				if itemName != secrets.TestPlatformCollection {
-					t.Errorf("expected item name %q, got %q", secrets.TestPlatformCollection, itemName)
-				}
-				expectedPayload := string(gsm.ConstructIndexSecretContent([]string{"test-item__field1"}))
-				if string(payload) != expectedPayload {
-					t.Errorf("expected payload %q, got %q", expectedPayload, string(payload))
-				}
-			},
+			GSMsyncEnabled:      true,
+			expectedIndexCalls:  1,
+			expectedIndexFields: []string{"test-item__field1"},
 		},
 		{
-			name: "GSM sync enabled - multiple fields create index with all fields",
+			name: "GSM sync enabled - one item with multiple fields",
 			config: secretgenerator.Config{{
 				ItemName: "multi-field-item",
 				Fields: []secretgenerator.FieldGenerator{
@@ -478,20 +526,12 @@ func TestUpdateSecretsWithGSMIndex(t *testing.T) {
 					{Name: "field3", Cmd: "printf 'value3'"},
 				},
 			}},
-			GSMsyncEnabled:     true,
-			expectedIndexCalls: 1,
-			verifyIndexPayload: func(t *testing.T, itemName string, payload []byte) {
-				if itemName != secrets.TestPlatformCollection {
-					t.Errorf("expected item name %q, got %q", secrets.TestPlatformCollection, itemName)
-				}
-				expectedPayload := string(gsm.ConstructIndexSecretContent([]string{"multi-field-item__field1", "multi-field-item__field2", "multi-field-item__field3"}))
-				if string(payload) != expectedPayload {
-					t.Errorf("expected payload %q, got %q", expectedPayload, string(payload))
-				}
-			},
+			GSMsyncEnabled:      true,
+			expectedIndexCalls:  1,
+			expectedIndexFields: []string{"multi-field-item__field1", "multi-field-item__field2", "multi-field-item__field3"},
 		},
 		{
-			name: "GSM sync enabled - multiple items create single collection-level index",
+			name: "GSM sync enabled - multiple items basic case",
 			config: secretgenerator.Config{
 				{
 					ItemName: "item1",
@@ -507,18 +547,9 @@ func TestUpdateSecretsWithGSMIndex(t *testing.T) {
 					},
 				},
 			},
-			GSMsyncEnabled:     true,
-			expectedIndexCalls: 1, // Only ONE index for entire collection
-			verifyIndexPayload: func(t *testing.T, itemName string, payload []byte) {
-				if itemName != secrets.TestPlatformCollection {
-					t.Errorf("expected item name %q, got %q", secrets.TestPlatformCollection, itemName)
-				}
-				// Index contains ALL fields from ALL groups
-				expectedPayload := string(gsm.ConstructIndexSecretContent([]string{"item1__field1", "item2__fieldA", "item2__fieldB"}))
-				if string(payload) != expectedPayload {
-					t.Errorf("expected payload %q, got %q", expectedPayload, string(payload))
-				}
-			},
+			GSMsyncEnabled:      true,
+			expectedIndexCalls:  1,
+			expectedIndexFields: []string{"item1__field1", "item2__fieldA", "item2__fieldB"},
 		},
 		{
 			name: "GSM sync disabled - no index secret created",
@@ -542,69 +573,11 @@ func TestUpdateSecretsWithGSMIndex(t *testing.T) {
 					{Name: "field3", Cmd: "printf 'value3'", Cluster: "enabled-cluster"},
 				},
 			}},
-			GSMsyncEnabled:     true,
-			expectedIndexCalls: 1,
-			verifyIndexPayload: func(t *testing.T, itemName string, payload []byte) {
-				// Only field1 and field3 should be in the index (field2 is from disabled cluster)
-				expectedPayload := string(gsm.ConstructIndexSecretContent([]string{"cluster-test-item__field1", "cluster-test-item__field3"}))
-				if string(payload) != expectedPayload {
-					t.Errorf("expected payload %q, got %q", expectedPayload, string(payload))
-				}
-			},
+			GSMsyncEnabled:      true,
+			disabledClusters:    sets.New[string]("disabled-cluster"),
+			expectedIndexCalls:  1,
+			expectedIndexFields: []string{"cluster-test-item__field1", "cluster-test-item__field3"},
 		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			mockCtrl := gomock.NewController(t)
-			defer mockCtrl.Finish()
-
-			mockClient := secrets.NewMockClient(mockCtrl)
-			mockClient.EXPECT().
-				SetFieldOnItem(gomock.Any(), gomock.Any(), gomock.Any()).
-				AnyTimes().
-				Return(nil)
-
-			// set expectations for UpdateIndexSecret based on test case
-			if tc.expectedIndexCalls > 0 {
-				mockClient.EXPECT().
-					UpdateIndexSecret(gomock.Any(), gomock.Any()).
-					Times(tc.expectedIndexCalls).
-					DoAndReturn(func(itemName string, payload []byte) error {
-						if tc.verifyIndexPayload != nil {
-							tc.verifyIndexPayload(t, itemName, payload)
-						}
-						return nil
-					})
-			}
-
-			// for the disabled cluster test case, pass the disabled clusters set
-			var disabledClusters sets.Set[string]
-			if tc.name == "GSM sync enabled - disabled cluster field excluded from index" {
-				disabledClusters = sets.New[string]("disabled-cluster")
-			}
-
-			err := updateSecrets(tc.config, mockClient, disabledClusters, tc.GSMsyncEnabled)
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-			}
-		})
-	}
-}
-
-func TestUpdateSecretsWithGSMIndexErrors(t *testing.T) {
-	t.Parallel()
-
-	testCases := []struct {
-		name                 string
-		config               secretgenerator.Config
-		setFieldError        error
-		updateIndexError     error
-		expectedErrorsLen    int
-		partialFailure       bool
-		partialFailureConfig map[string]error // field name -> error (nil = success)
-		expectedIndexFields  []string         // fields that should appear in index for partial failure
-	}{
 		{
 			name: "UpdateIndexSecret error is aggregated",
 			config: secretgenerator.Config{{
@@ -613,11 +586,14 @@ func TestUpdateSecretsWithGSMIndexErrors(t *testing.T) {
 					{Name: "field1", Cmd: "printf 'value1'"},
 				},
 			}},
-			updateIndexError:  errors.New("GSM update failed"),
-			expectedErrorsLen: 1,
+			GSMsyncEnabled:      true,
+			updateIndexError:    errors.New("GSM update failed"),
+			expectedIndexCalls:  1,
+			expectedIndexFields: []string{"test-item__field1"},
+			expectError:         true,
 		},
 		{
-			name: "SetFieldOnItem error - all fields fail, index contains only updater-service-account",
+			name: "SetFieldOnItem error - all fields fail, index contains no fields",
 			config: secretgenerator.Config{{
 				ItemName: "test-item",
 				Fields: []secretgenerator.FieldGenerator{
@@ -625,9 +601,14 @@ func TestUpdateSecretsWithGSMIndexErrors(t *testing.T) {
 					{Name: "field2", Cmd: "printf 'value2'"},
 				},
 			}},
-			setFieldError:     errors.New("field upload failed"),
-			updateIndexError:  nil, // Index update should still be called
-			expectedErrorsLen: 2,   // Both field errors
+			GSMsyncEnabled: true,
+			setFieldErrors: map[string]error{
+				"field1": errors.New("field upload failed"),
+				"field2": errors.New("field upload failed"),
+			},
+			expectedIndexCalls:  1,
+			expectedIndexFields: []string{},
+			expectError:         true,
 		},
 		{
 			name: "SetFieldOnItem partial failure - only successful fields in index",
@@ -639,14 +620,13 @@ func TestUpdateSecretsWithGSMIndexErrors(t *testing.T) {
 					{Name: "field3", Cmd: "printf 'value3'"},
 				},
 			}},
-			partialFailure: true,
-			partialFailureConfig: map[string]error{
-				"field1": nil,                                // succeeds
-				"field2": errors.New("field2 upload failed"), // fails
-				"field3": nil,                                // succeeds
+			GSMsyncEnabled: true,
+			setFieldErrors: map[string]error{
+				"field2": errors.New("field2 upload failed"),
 			},
+			expectedIndexCalls:  1,
 			expectedIndexFields: []string{"test-item__field1", "test-item__field3"},
-			expectedErrorsLen:   1,
+			expectError:         true,
 		},
 		{
 			name: "Multiple items - index errors are aggregated",
@@ -664,84 +644,45 @@ func TestUpdateSecretsWithGSMIndexErrors(t *testing.T) {
 					},
 				},
 			},
-			updateIndexError:  errors.New("GSM update failed"),
-			expectedErrorsLen: 1,
+			GSMsyncEnabled:      true,
+			updateIndexError:    errors.New("GSM update failed"),
+			expectedIndexCalls:  1,
+			expectedIndexFields: []string{"item1__field1", "item2__field2"},
+			expectError:         true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			mockCtrl := gomock.NewController(t)
-			defer mockCtrl.Finish()
+			client := newFakeClient()
+			client.setFieldErrors = tc.setFieldErrors
+			client.updateIndexError = tc.updateIndexError
 
-			mockClient := secrets.NewMockClient(mockCtrl)
+			err := updateSecrets(tc.config, client, tc.disabledClusters, tc.GSMsyncEnabled)
 
-			if tc.partialFailure {
-				// For partial failure, return different errors based on field name
-				mockClient.EXPECT().
-					SetFieldOnItem(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().
-					DoAndReturn(func(itemName, fieldName string, fieldValue []byte) error {
-						if err, exists := tc.partialFailureConfig[fieldName]; exists {
-							return err
-						}
-						return nil
-					})
-			} else if tc.setFieldError != nil {
-				mockClient.EXPECT().
-					SetFieldOnItem(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().
-					Return(tc.setFieldError)
-			} else {
-				mockClient.EXPECT().
-					SetFieldOnItem(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().
-					Return(nil)
-			}
-
-			// Set expectations for UpdateIndexSecret - it should always be called in these tests
-			if tc.updateIndexError != nil {
-				mockClient.EXPECT().
-					UpdateIndexSecret(gomock.Any(), gomock.Any()).
-					AnyTimes().
-					Return(tc.updateIndexError)
-			} else {
-				// Verify that when SetFieldOnItem fails, the index only contains successful fields
-				if tc.setFieldError != nil || tc.partialFailure {
-					mockClient.EXPECT().
-						UpdateIndexSecret(gomock.Any(), gomock.Any()).
-						AnyTimes().
-						DoAndReturn(func(itemName string, payload []byte) error {
-							var expectedPayload string
-							if tc.partialFailure {
-								// For partial failure, index should contain only successful fields
-								expectedPayload = string(gsm.ConstructIndexSecretContent(tc.expectedIndexFields))
-							} else {
-								// When all fields fail, index should only contain updater-service-account
-								expectedPayload = string(gsm.ConstructIndexSecretContent([]string{}))
-							}
-							if string(payload) != expectedPayload {
-								t.Errorf("expected index payload %q, got %q", expectedPayload, string(payload))
-							}
-							return nil
-						})
-				} else {
-					mockClient.EXPECT().
-						UpdateIndexSecret(gomock.Any(), gomock.Any()).
-						AnyTimes().
-						Return(nil)
-				}
-			}
-
-			err := updateSecrets(tc.config, mockClient, nil, true)
-			if err == nil {
+			if tc.expectError && err == nil {
 				t.Errorf("expected error but got nil")
 				return
 			}
-			errStr := err.Error()
-			if errStr == "" {
-				t.Errorf("expected non-empty error message")
+			if !tc.expectError && err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+
+			if len(client.indexCalls) != tc.expectedIndexCalls {
+				t.Errorf("expected %d index calls, got %d", tc.expectedIndexCalls, len(client.indexCalls))
+				return
+			}
+
+			if tc.expectedIndexCalls > 0 {
+				call := client.indexCalls[0]
+				if call.itemName != secrets.TestPlatformCollection {
+					t.Errorf("expected item name %q, got %q", secrets.TestPlatformCollection, call.itemName)
+				}
+				expectedPayload := string(gsm.ConstructIndexSecretContent(tc.expectedIndexFields))
+				if string(call.payload) != expectedPayload {
+					t.Errorf("expected index payload %q, got %q", expectedPayload, string(call.payload))
+				}
 			}
 		})
 	}

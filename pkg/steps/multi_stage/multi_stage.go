@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
@@ -17,6 +18,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
@@ -41,6 +43,19 @@ type vpnConf struct {
 	WaitTimeout *string `json:"wait_timeout"`
 	// Runtime data for the step, not present in the configuration.
 	namespaceUID int64
+}
+
+// GSMConfiguration contains all Google Secret Manager (GSM) related configuration
+// needed for multi-stage test execution.
+type GSMConfiguration struct {
+	// Config contains bundle and secret definitions from gsm-config.yaml file
+	Config *api.GSMConfig
+	// CredentialsFile is the path to the GSM service account credentials
+	CredentialsFile string
+	// Client is the initialized Google Secret Manager client
+	Client *secretmanager.Client
+	// ProjectConfig contains GSM project metadata (ID and number)
+	ProjectConfig gsm.Config
 }
 
 const (
@@ -106,6 +121,7 @@ type multiStageTestStep struct {
 	cancelObservers             func(context.CancelFunc)
 	nodeArchitecture            api.NodeArchitecture
 	enableSecretsStoreCSIDriver bool
+	gsm                         *GSMConfiguration
 	requireNestedPodman         bool
 }
 
@@ -120,8 +136,9 @@ func MultiStageTestStep(
 	targetAdditionalSuffix string,
 	cancelObservers func(context.CancelFunc),
 	enableSecretsStoreCSIDriver bool,
+	gsmConfig *GSMConfiguration,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, params, client, jobSpec, leases, nodeName, targetAdditionalSuffix, cancelObservers, enableSecretsStoreCSIDriver)
+	return newMultiStageTestStep(testConfig, config, params, client, jobSpec, leases, nodeName, targetAdditionalSuffix, cancelObservers, enableSecretsStoreCSIDriver, gsmConfig)
 }
 
 func newMultiStageTestStep(
@@ -135,6 +152,7 @@ func newMultiStageTestStep(
 	targetAdditionalSuffix string,
 	cancelObservers func(context.CancelFunc),
 	enableSecretsStoreCSIDriver bool,
+	gsmConfig *GSMConfiguration,
 ) *multiStageTestStep {
 	ms := testConfig.MultiStageTestConfigurationLiteral
 	var flags stepFlag
@@ -165,6 +183,7 @@ func newMultiStageTestStep(
 		cancelObservers:             cancelObservers,
 		nodeArchitecture:            testConfig.NodeArchitecture,
 		enableSecretsStoreCSIDriver: enableSecretsStoreCSIDriver,
+		gsm:                         gsmConfig,
 	}
 	s.requireNestedPodman = stepRequiresNestedPodman(s)
 
@@ -204,6 +223,9 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 		return fmt.Errorf("failed to create secret: %w", err)
 	}
 	if s.enableSecretsStoreCSIDriver {
+		if s.gsm == nil || s.gsm.Client == nil {
+			return fmt.Errorf("GSM client was not initialized - credentials file may be missing")
+		}
 		if err := s.createSPCs(ctx); err != nil {
 			return fmt.Errorf("failed to create SecretProviderClass objects: %w", err)
 		}

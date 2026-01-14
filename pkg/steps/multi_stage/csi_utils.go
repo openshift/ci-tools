@@ -14,18 +14,20 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
 	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
 )
 
 // GSMproject is the name of the GCP Secret Manager project where the secrets are stored.
-var GSMproject = "openshift-ci-secrets"
+const GSMproject = "openshift-ci-secrets"
+const KubernetesDNSLabelLimit = 63
 
-// groupCredentialsByCollectionAndMountPath groups credentials by (collection, mount_path)
-// to avoid duplicate mount paths.
-func groupCredentialsByCollectionAndMountPath(credentials []api.CredentialReference) map[string][]api.CredentialReference {
+// groupCredentialsByCollectionGroupAndMountPath groups credentials by (collection, group, mount_path)
+// to avoid duplicate mount paths, which causes Kubernetes errors.
+func groupCredentialsByCollectionGroupAndMountPath(credentials []api.CredentialReference) map[string][]api.CredentialReference {
 	mountGroups := make(map[string][]api.CredentialReference)
 	for _, credential := range credentials {
-		key := fmt.Sprintf("%s:%s", credential.Collection, credential.MountPath)
+		key := fmt.Sprintf("%s:%s:%s", credential.Collection, credential.Group, credential.MountPath)
 		mountGroups[key] = append(mountGroups[key], credential)
 	}
 	return mountGroups
@@ -34,13 +36,18 @@ func groupCredentialsByCollectionAndMountPath(credentials []api.CredentialRefere
 func buildGCPSecretsParameter(credentials []api.CredentialReference) (string, error) {
 	var secrets []config.Secret
 	for _, credential := range credentials {
-		fileName, err := replaceForbiddenSymbolsInCredentialName(credential.Name)
+		gsmSecretName := gsm.GetGSMSecretName(credential.Collection, credential.Group, credential.Field)
+		mountName := credential.Field
+		if credential.As != "" {
+			mountName = credential.As
+		}
+		mountName, err := restoreForbiddenSymbolsInSecretName(mountName)
 		if err != nil {
-			return "", fmt.Errorf("invalid credential name '%s': %w", credential.Name, err)
+			return "", fmt.Errorf("invalid mount name '%s': %w", mountName, err)
 		}
 		secrets = append(secrets, config.Secret{
-			ResourceName: fmt.Sprintf("projects/%s/secrets/%s__%s/versions/latest", GSMproject, credential.Collection, credential.Name),
-			FileName:     fileName, // we want to mount the secret as a file named without the collection prefix
+			ResourceName: fmt.Sprintf("projects/%s/secrets/%s/versions/latest", GSMproject, gsmSecretName),
+			FileName:     mountName,
 		})
 	}
 	secretsYaml, err := yaml.Marshal(secrets)
@@ -50,39 +57,50 @@ func buildGCPSecretsParameter(credentials []api.CredentialReference) (string, er
 	return string(secretsYaml), nil
 }
 
-// replaceForbiddenSymbolsInCredentialName replaces all DotReplacementString substrings in credentialName with dot (.) symbol.
-func replaceForbiddenSymbolsInCredentialName(credentialName string) (string, error) {
+// restoreForbiddenSymbolsInSecretName replaces all replacement substrings with the original symbols,
+// e.g. '--dot--awscreds' to '.awscreds'
+func restoreForbiddenSymbolsInSecretName(s string) (string, error) {
 	// This is an unfortunate workaround needed for the initial migration.
 	// Google Secret Manager doesn't support dots in Secret names. Due to migration from Vault,
-	// where we had to shard each (multi key-value) secret into multiple ones in GSM,
-	// some secret names or their keys contained forbidden symbols, '.' (dot) and '/' (slash) in their names.
-	// All credentials with these forbidden symbols in their names or keys have been renamed,
+	// where we had to shard each (multi key-value) Vault secret into multiple ones in GSM,
+	// some of secret names, or their keys, contained forbidden symbols, usually '.' (dot) and '/' (slash) in their names.
+	// Because all credentials with these forbidden symbols in their names or keys have been renamed,
 	// e.g. '.awscreds' to '--dot--awscreds', to preserve backwards compatibility,
-	// we need to mount the secret as the original '.awscreds' file to the Pod created by ci-operator.
+	// we now need to mount the secret as the original '.awscreds' file to the Pod that will be created by ci-operator.
 
-	replacedName := gsmvalidation.DenormalizeName(credentialName)
+	replacedName := gsmvalidation.DenormalizeName(s)
 
 	re := regexp.MustCompile(`[^a-zA-Z0-9\-._/]`)
 	invalidCharacters := re.FindAllString(replacedName, -1)
 	if invalidCharacters != nil {
-		return "", fmt.Errorf("credential name '%s' decodes to '%s' which contains forbidden characters (%s); decoded names must only contain letters, numbers, dashes (-), dots (.), underscores (_), and slashes (/)", credentialName, replacedName, strings.Join(invalidCharacters, ", "))
+		return "", fmt.Errorf("secret name '%s' decodes to '%s' which contains forbidden characters (%s); decoded names must only contain letters, numbers, dashes (-), dots (.), underscores (_), and slashes (/)", s, replacedName, strings.Join(invalidCharacters, ", "))
 	} else {
 		return replacedName, nil
 	}
 }
 
-// getSPCName gets the unique SPC name for a collection, mount path, and credential contents
-func getSPCName(namespace, collection, mountPath string, credentials []api.CredentialReference) string {
-	var parts []string
-	parts = append(parts, collection, mountPath)
-
-	// Sort credential names for deterministic hashing
-	var credNames []string
-	for _, cred := range credentials {
-		credNames = append(credNames, cred.Name)
+// getSPCName generates a unique SPC name for a set of credentials.
+// All credentials in the input slice must have the same collection, group, and mount path
+// (enforced by groupCredentialsByCollectionGroupAndMountPath and ValidateNoGroupCollisionsOnMountPath).
+// The hash includes collection, group, mount path, and sorted field names to ensure uniqueness.
+func getSPCName(namespace string, credentials []api.CredentialReference) string {
+	if len(credentials) == 0 {
+		return strings.ToLower(fmt.Sprintf("%s-empty-spc", namespace))
 	}
-	sort.Strings(credNames)
-	parts = append(parts, credNames...)
+	collection := credentials[0].Collection
+	group := credentials[0].Group
+	mountPath := credentials[0].MountPath
+
+	var parts []string
+	parts = append(parts, collection, group, mountPath)
+
+	// Sort credential field names for deterministic hashing
+	var credFields []string
+	for _, cred := range credentials {
+		credFields = append(credFields, cred.Field)
+	}
+	sort.Strings(credFields)
+	parts = append(parts, credFields...)
 
 	hash := sha256.Sum256([]byte(strings.Join(parts, "-")))
 	hashStr := fmt.Sprintf("%x", hash[:12])
@@ -92,18 +110,25 @@ func getSPCName(namespace, collection, mountPath string, credentials []api.Crede
 }
 
 // getCSIVolumeName generates a deterministic, DNS-compliant name for a CSI volume
-// based on the namespace, collection, and mountPath. The name is constructed as
-// "<namespace>-<hash>", where the hash is computed from the collection and mountPath.
-// If the resulting name exceeds 63 characters (the Kubernetes DNS label limit),
-// only the hash is used as the name.
-func getCSIVolumeName(ns, collection, mountPath string) string {
-	// Hash both collection and mountPath together for consistent length
-	hash := sha256.Sum256([]byte(strings.Join([]string{collection, mountPath}, "-")))
+// based on the namespace and credentials. All credentials in the slice must have
+// the same collection, group, and mount path.
+//
+// The name is constructed as "<namespace>-<hash>", where the hash is computed from
+// the collection, group and mountPath. If the resulting name exceeds 63 characters
+// (the Kubernetes DNS label limit), only the hash is used as the name.
+func getCSIVolumeName(ns string, credentials []api.CredentialReference) string {
+	if len(credentials) == 0 {
+		return strings.ToLower(fmt.Sprintf("%s-empty-vol", ns))
+	}
+	collection := credentials[0].Collection
+	group := credentials[0].Group
+	mountPath := credentials[0].MountPath
+
+	hash := sha256.Sum256([]byte(strings.Join([]string{collection, group, mountPath}, "-")))
 	hashStr := fmt.Sprintf("%x", hash[:8])
 	name := fmt.Sprintf("%s-%s", ns, hashStr)
 
-	// If namespace + hash is still too long, use just the hash
-	if len(name) > 63 {
+	if len(name) > KubernetesDNSLabelLimit {
 		hashStr := fmt.Sprintf("%x", hash[:16])
 		name = hashStr
 	}

@@ -126,7 +126,7 @@ func TestRun(t *testing.T) {
 					Observers:          tc.observers,
 					AllowSkipOnSuccess: &yes,
 				},
-			}, &api.ReleaseBuildConfiguration{}, nil, client, &jobSpec, nil, "node-name", "", func(cf context.CancelFunc) {}, false, false)
+			}, &api.ReleaseBuildConfiguration{}, nil, client, &jobSpec, nil, "node-name", "", func(cf context.CancelFunc) {}, false, nil, false)
 
 			// An Observer pod failure doesn't make the test fail
 			failures := tc.failures.Delete(observerPodNames.UnsortedList()...)
@@ -266,7 +266,7 @@ func TestJUnit(t *testing.T) {
 					Test: []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
 					Post: []api.LiteralTestStep{{As: "post0"}, {As: "post1"}},
 				},
-			}, &api.ReleaseBuildConfiguration{}, nil, client, &jobSpec, nil, "node-name", "", nil, false, false)
+			}, &api.ReleaseBuildConfiguration{}, nil, client, &jobSpec, nil, "node-name", "", nil, false, nil, false)
 			if err := step.Run(context.Background()); tc.failures == nil && err != nil {
 				t.Error(err)
 				return
@@ -341,7 +341,7 @@ func TestRunPodDeletesPendingPodsOnError(t *testing.T) {
 			Post:               []api.LiteralTestStep{{As: "post0"}},
 			AllowSkipOnSuccess: &yes,
 		},
-	}, &api.ReleaseBuildConfiguration{}, nil, client, &jobSpec, nil, "node-name", "", func(cf context.CancelFunc) {}, false, false)
+	}, &api.ReleaseBuildConfiguration{}, nil, client, &jobSpec, nil, "node-name", "", func(cf context.CancelFunc) {}, false, nil, false)
 
 	// Use a context with timeout to ensure the test doesn't hang
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

@@ -86,7 +86,7 @@ type TargetSpec struct {
 func LoadGSMConfigFromFile(file string, config *GSMConfig) error {
 	bytes, err := gzip.ReadFileMaybeGZIP(file)
 	if err != nil {
-		return err
+		return fmt.Errorf("couldn't read GSM config file: %w", err)
 	}
 	return yaml.UnmarshalStrict(bytes, config)
 }

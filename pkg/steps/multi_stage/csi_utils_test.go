@@ -28,60 +28,60 @@ func TestGroupCredentialsByCollectionAndMountPath(t *testing.T) {
 		{
 			name: "single credential",
 			credentials: []api.CredentialReference{
-				{Name: "cred1", Collection: "collection1", MountPath: "/tmp/cred1"},
+				{Collection: "collection1", Group: "group1", Field: "cred1", MountPath: "/tmp/cred1"},
 			},
 			expected: map[string][]api.CredentialReference{
 				"collection1:/tmp/cred1": {
-					{Name: "cred1", Collection: "collection1", MountPath: "/tmp/cred1"},
+					{Collection: "collection1", Group: "group1", Field: "cred1", MountPath: "/tmp/cred1"},
 				},
 			},
 		},
 		{
 			name: "multiple credentials different collections and paths",
 			credentials: []api.CredentialReference{
-				{Name: "cred1", Collection: "collection1", MountPath: "/tmp/cred1"},
-				{Name: "cred2", Collection: "collection2", MountPath: "/tmp/cred2"},
+				{Collection: "collection1", Group: "group1", Field: "cred1", MountPath: "/tmp/cred1"},
+				{Collection: "collection2", Group: "group2", Field: "cred2", MountPath: "/tmp/cred2"},
 			},
 			expected: map[string][]api.CredentialReference{
 				"collection1:/tmp/cred1": {
-					{Name: "cred1", Collection: "collection1", MountPath: "/tmp/cred1"},
+					{Collection: "collection1", Group: "group1", Field: "cred1", MountPath: "/tmp/cred1"},
 				},
 				"collection2:/tmp/cred2": {
-					{Name: "cred2", Collection: "collection2", MountPath: "/tmp/cred2"},
+					{Collection: "collection2", Group: "group2", Field: "cred2", MountPath: "/tmp/cred2"},
 				},
 			},
 		},
 		{
 			name: "multiple credentials same collection and path",
 			credentials: []api.CredentialReference{
-				{Name: "cred1", Collection: "collection1", MountPath: "/tmp/shared"},
-				{Name: "cred2", Collection: "collection1", MountPath: "/tmp/shared"},
+				{Collection: "collection1", Group: "group1", Field: "cred1", MountPath: "/tmp/shared"},
+				{Collection: "collection1", Group: "group1", Field: "cred2", MountPath: "/tmp/shared"},
 			},
 			expected: map[string][]api.CredentialReference{
 				"collection1:/tmp/shared": {
-					{Name: "cred1", Collection: "collection1", MountPath: "/tmp/shared"},
-					{Name: "cred2", Collection: "collection1", MountPath: "/tmp/shared"},
+					{Collection: "collection1", Group: "group1", Field: "cred1", MountPath: "/tmp/shared"},
+					{Collection: "collection1", Group: "group1", Field: "cred2", MountPath: "/tmp/shared"},
 				},
 			},
 		},
 		{
 			name: "mixed grouping - some grouped together, some separate",
 			credentials: []api.CredentialReference{
-				{Name: "red", Collection: "colours", MountPath: "/tmp/path"},
-				{Name: "blue", Collection: "colours", MountPath: "/tmp/path"},
-				{Name: "circle", Collection: "shapes", MountPath: "/tmp/path"},
-				{Name: "square", Collection: "shapes", MountPath: "/tmp/other"},
+				{Collection: "colours", Group: "primary", Field: "red", MountPath: "/tmp/path"},
+				{Collection: "colours", Group: "primary", Field: "blue", MountPath: "/tmp/path"},
+				{Collection: "shapes", Group: "round", Field: "circle", MountPath: "/tmp/path"},
+				{Collection: "shapes", Group: "angular", Field: "square", MountPath: "/tmp/other"},
 			},
 			expected: map[string][]api.CredentialReference{
 				"colours:/tmp/path": {
-					{Name: "red", Collection: "colours", MountPath: "/tmp/path"},
-					{Name: "blue", Collection: "colours", MountPath: "/tmp/path"},
+					{Collection: "colours", Group: "primary", Field: "red", MountPath: "/tmp/path"},
+					{Collection: "colours", Group: "primary", Field: "blue", MountPath: "/tmp/path"},
 				},
 				"shapes:/tmp/path": {
-					{Name: "circle", Collection: "shapes", MountPath: "/tmp/path"},
+					{Collection: "shapes", Group: "round", Field: "circle", MountPath: "/tmp/path"},
 				},
 				"shapes:/tmp/other": {
-					{Name: "square", Collection: "shapes", MountPath: "/tmp/other"},
+					{Collection: "shapes", Group: "angular", Field: "square", MountPath: "/tmp/other"},
 				},
 			},
 		},
@@ -111,11 +111,11 @@ func TestBuildGCPSecretsParameter(t *testing.T) {
 		{
 			name: "single credential",
 			credentials: []api.CredentialReference{
-				{Name: "cred1", Collection: "collection1"},
+				{Collection: "collection1", Group: "group1", Field: "cred1"},
 			},
 			expected: []config.Secret{
 				{
-					ResourceName: fmt.Sprintf("projects/%s/secrets/collection1__cred1/versions/latest", GSMproject),
+					ResourceName: fmt.Sprintf("projects/%s/secrets/collection1__group1__cred1/versions/latest", GSMproject),
 					FileName:     "cred1",
 				},
 			},
@@ -123,16 +123,16 @@ func TestBuildGCPSecretsParameter(t *testing.T) {
 		{
 			name: "multiple credentials",
 			credentials: []api.CredentialReference{
-				{Name: "cred1", Collection: "collection1"},
-				{Name: "cred2", Collection: "collection2"},
+				{Collection: "collection1", Group: "group1", Field: "cred1"},
+				{Collection: "collection2", Group: "group2", Field: "cred2"},
 			},
 			expected: []config.Secret{
 				{
-					ResourceName: fmt.Sprintf("projects/%s/secrets/collection1__cred1/versions/latest", GSMproject),
+					ResourceName: fmt.Sprintf("projects/%s/secrets/collection1__group1__cred1/versions/latest", GSMproject),
 					FileName:     "cred1",
 				},
 				{
-					ResourceName: fmt.Sprintf("projects/%s/secrets/collection2__cred2/versions/latest", GSMproject),
+					ResourceName: fmt.Sprintf("projects/%s/secrets/collection2__group2__cred2/versions/latest", GSMproject),
 					FileName:     "cred2",
 				},
 			},
@@ -173,7 +173,7 @@ func TestGetSPCName(t *testing.T) {
 			collection: "collection1",
 			mountPath:  "/tmp/cred1",
 			credentials: []api.CredentialReference{
-				{Name: "cred1", Collection: "collection1", MountPath: "/tmp/cred1"},
+				{Collection: "collection1", Group: "group1", Field: "cred1", MountPath: "/tmp/cred1"},
 			},
 		},
 		{
@@ -182,7 +182,7 @@ func TestGetSPCName(t *testing.T) {
 			collection: "collection1",
 			mountPath:  "/tmp/cred1",
 			credentials: []api.CredentialReference{
-				{Name: "cred1", Collection: "collection1", MountPath: "/tmp/cred1"},
+				{Collection: "collection1", Group: "group1", Field: "cred1", MountPath: "/tmp/cred1"},
 			},
 		},
 		{
@@ -191,8 +191,8 @@ func TestGetSPCName(t *testing.T) {
 			collection: "collection1",
 			mountPath:  "/tmp/shared",
 			credentials: []api.CredentialReference{
-				{Name: "cred1", Collection: "collection1", MountPath: "/tmp/shared"},
-				{Name: "cred2", Collection: "collection1", MountPath: "/tmp/shared"},
+				{Collection: "collection1", Group: "group1", Field: "cred1", MountPath: "/tmp/shared"},
+				{Collection: "collection1", Group: "group1", Field: "cred2", MountPath: "/tmp/shared"},
 			},
 		},
 		{
@@ -201,7 +201,7 @@ func TestGetSPCName(t *testing.T) {
 			collection: "collection1",
 			mountPath:  "/tmp/shared",
 			credentials: []api.CredentialReference{
-				{Name: "cred1", Collection: "collection1", MountPath: "/tmp/shared"},
+				{Collection: "collection1", Group: "group1", Field: "cred1", MountPath: "/tmp/shared"},
 			},
 		},
 	}
@@ -238,16 +238,16 @@ func TestGetSPCNameUniqueness(t *testing.T) {
 		credentials []api.CredentialReference
 	}{
 		{"collection1", "/tmp/cred1", []api.CredentialReference{
-			{Name: "secret1", Collection: "collection1", MountPath: "/tmp/cred1"},
+			{Collection: "collection1", Group: "group1", Field: "secret1", MountPath: "/tmp/cred1"},
 		}},
 		{"collection1", "/tmp/cred2", []api.CredentialReference{
-			{Name: "secret2", Collection: "collection1", MountPath: "/tmp/cred2"},
+			{Collection: "collection1", Group: "group1", Field: "secret2", MountPath: "/tmp/cred2"},
 		}},
 		{"collection2", "/tmp/cred1", []api.CredentialReference{
-			{Name: "secret1", Collection: "collection2", MountPath: "/tmp/cred1"},
+			{Collection: "collection2", Group: "group2", Field: "secret1", MountPath: "/tmp/cred1"},
 		}},
 		{"collection2", "/tmp/cred2", []api.CredentialReference{
-			{Name: "secret2", Collection: "collection2", MountPath: "/tmp/cred2"},
+			{Collection: "collection2", Group: "group2", Field: "secret2", MountPath: "/tmp/cred2"},
 		}},
 	}
 
@@ -280,12 +280,12 @@ func TestGetSPCNameCollisionPrevention(t *testing.T) {
 
 	// Two different sets of credentials with same collection and mountPath
 	credentials1 := []api.CredentialReference{
-		{Name: "red", Collection: collection, MountPath: mountPath},
-		{Name: "blue", Collection: collection, MountPath: mountPath},
+		{Collection: collection, Group: "primary", Field: "red", MountPath: mountPath},
+		{Collection: collection, Group: "primary", Field: "blue", MountPath: mountPath},
 	}
 
 	credentials2 := []api.CredentialReference{
-		{Name: "red", Collection: collection, MountPath: mountPath},
+		{Collection: collection, Group: "primary", Field: "red", MountPath: mountPath},
 	}
 
 	// They should get different SPC names
@@ -525,7 +525,7 @@ func TestReplaceForbiddenSymbolsInCredentialName(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := replaceForbiddenSymbolsInCredentialName(tc.secretName)
+			result, err := restoreForbiddenSymbolsInSecretName(tc.secretName)
 
 			if tc.expectError {
 				if err == nil {

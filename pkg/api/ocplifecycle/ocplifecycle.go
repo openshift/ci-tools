@@ -12,6 +12,8 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 )
 
 // LoadConfig loads the lifecycle configuration from a given localtion.
@@ -247,4 +249,19 @@ func ParseMajorMinor(version string) (*MajorMinor, error) {
 	}
 
 	return &MajorMinor{Major: int(parsedMajor), Minor: int(parsedMinor)}, nil
+}
+
+// ProvidesSignalForVersion returns a version (expected to be an "<MAJOR>.<MINOR>" OpenShift version) for which
+// the job will provide relevant continuous CI signal that can be consumed by downstream tooling like Sippy. Generally
+// jobs that test CI or Nightly payloads provide such relevant quality signal, so this method approximates identifying
+// these jobs by checking whether the source ci-operator configuration contains a `latest` release that is a candidate
+// version (which means one of the ci/nightly payloads will be fetched from release-controller).
+//
+// Jobs that test an ephemeral OCP payload built for a PR or install a named released version (EC/RC/GA) do not provide
+// relevant CI signal for a version.
+func ProvidesSignalForVersion(configSpec *cioperatorapi.ReleaseBuildConfiguration) string {
+	if release, found := configSpec.Releases[cioperatorapi.LatestReleaseName]; found && release.Candidate != nil {
+		return release.Candidate.Version
+	}
+	return ""
 }

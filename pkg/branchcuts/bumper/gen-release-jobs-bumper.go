@@ -11,49 +11,100 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"k8s.io/apimachinery/pkg/util/errors"
+
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/ocplifecycle"
 	cioperatorcfg "github.com/openshift/ci-tools/pkg/config"
 )
 
 const (
+	ciOperatorConfigDir           = "ci-operator/config"
 	releaseJobsRegexPatternFormat = `openshift-release-master__(okd|ci|nightly|okd-scos)-%s.*\.yaml`
-	ocpReleaseEnvVarName          = "OCP_VERSION"
+
+	ocpReleaseEnvVarName = "OCP_VERSION"
+
+	FileFinderRegexp = "regexp"
+	FileFinderSignal = "signal"
 )
 
+type getFilesFn func() ([]string, error)
 type GeneratedReleaseGatingJobsBumper struct {
 	mm               *ocplifecycle.MajorMinor
-	getFilesRegexp   *regexp.Regexp
-	jobsDir          string
+	getFiles         getFilesFn
 	newIntervalValue int
+}
+
+func makeGetFilesByRegexp(mm *ocplifecycle.MajorMinor, baseDir string) getFilesFn {
+	mmRegexp := fmt.Sprintf("%d\\.%d", mm.Major, mm.Minor)
+	getFilesRegexp := regexp.MustCompile(fmt.Sprintf(releaseJobsRegexPatternFormat, mmRegexp))
+
+	return func() ([]string, error) {
+		files := make([]string, 0)
+		err := filepath.Walk(baseDir, func(path string, info fs.FileInfo, err error) error {
+			if getFilesRegexp.Match([]byte(path)) {
+				files = append(files, path)
+			}
+			return nil
+		})
+		return files, err
+	}
+}
+
+func makeGetFilesProvidingSignal(currentVersionStream, baseDir string) getFilesFn {
+	return func() ([]string, error) {
+		var files []string
+		return files, cioperatorcfg.OperateOnCIOperatorConfigDir(baseDir, func(cfg *cioperatorapi.ReleaseBuildConfiguration, info *cioperatorcfg.Info) error {
+			// Ignore `openshift-priv`, it is handled by separate tooling
+			if info.Org == "openshift-priv" {
+				return nil
+			}
+
+			// Ignore non-variant configs; these contain configuration that applies
+			// on the branch directly and typically contains presubmits and postsubmits,
+			// not release gating periodics
+			if info.Variant == "" {
+				return nil
+			}
+
+			if versionStream := ocplifecycle.ProvidesSignalForVersion(cfg); versionStream == currentVersionStream {
+				files = append(files, filepath.Join(baseDir, info.RelativePath()))
+			}
+			return nil
+		})
+	}
 }
 
 var _ Bumper[*cioperatorcfg.DataWithInfo] = &GeneratedReleaseGatingJobsBumper{}
 
-func NewGeneratedReleaseGatingJobsBumper(ocpVer, jobsDir string, newIntervalValue int) (*GeneratedReleaseGatingJobsBumper, error) {
+func NewGeneratedReleaseGatingJobsBumper(ocpVer, openshiftReleaseDir string, newIntervalValue int, fileFinder string) (*GeneratedReleaseGatingJobsBumper, error) {
 	mm, err := ocplifecycle.ParseMajorMinor(ocpVer)
 	if err != nil {
 		return nil, fmt.Errorf("parse release: %w", err)
 	}
-	mmRegexp := fmt.Sprintf("%d\\.%d", mm.Major, mm.Minor)
-	getFilesRegexp := regexp.MustCompile(fmt.Sprintf(releaseJobsRegexPatternFormat, mmRegexp))
-	return &GeneratedReleaseGatingJobsBumper{
-		mm,
-		getFilesRegexp,
-		jobsDir,
-		newIntervalValue,
-	}, nil
+
+	bumper := &GeneratedReleaseGatingJobsBumper{
+		mm:               mm,
+		newIntervalValue: newIntervalValue,
+	}
+
+	allConfigs := filepath.Join(openshiftReleaseDir, ciOperatorConfigDir)
+	switch fileFinder {
+	case FileFinderRegexp:
+		// .../ci-operator/config/openshift/release
+		openshiftReleaseConfigs := filepath.Join(allConfigs, "openshift", "release")
+		bumper.getFiles = makeGetFilesByRegexp(mm, openshiftReleaseConfigs)
+	case FileFinderSignal:
+		bumper.getFiles = makeGetFilesProvidingSignal(ocpVer, allConfigs)
+	default:
+		return nil, fmt.Errorf("unknown file finder: %s", fileFinder)
+	}
+
+	return bumper, nil
 }
 
 func (b *GeneratedReleaseGatingJobsBumper) GetFiles() ([]string, error) {
-	files := make([]string, 0)
-	err := filepath.Walk(b.jobsDir, func(path string, info fs.FileInfo, err error) error {
-		if b.getFilesRegexp.Match([]byte(path)) {
-			files = append(files, path)
-		}
-		return nil
-	})
-	return files, err
+	return b.getFiles()
 }
 
 func (b *GeneratedReleaseGatingJobsBumper) Unmarshall(file string) (*cioperatorcfg.DataWithInfo, error) {
@@ -72,16 +123,25 @@ func (b *GeneratedReleaseGatingJobsBumper) Unmarshall(file string) (*cioperatorc
 }
 
 func (b *GeneratedReleaseGatingJobsBumper) BumpFilename(
-	filename string,
+	_ string,
 	dataWithInfo *cioperatorcfg.DataWithInfo) (string, error) {
 	newVariant, err := ReplaceWithNextVersion(dataWithInfo.Info.Metadata.Variant, b.mm.Major)
 	if err != nil {
 		return "", err
 	}
 	dataWithInfo.Info.Metadata.Variant = newVariant
+
+	newBranch, err := ReplaceWithNextVersion(dataWithInfo.Info.Metadata.Branch, b.mm.Major)
+	if err != nil {
+		return "", err
+	}
+	dataWithInfo.Info.Metadata.Branch = newBranch
+
 	return dataWithInfo.Info.Metadata.Basename(), nil
 }
 
+// BumpContent bumps OCP versions in the given ci-operator config
+//
 // Candidate bumping fields:
 // .base_images.*.name
 // .releases.*.{release,candidate}.version
@@ -101,8 +161,13 @@ func (b *GeneratedReleaseGatingJobsBumper) BumpContent(dataWithInfo *cioperatorc
 	if err := bumpTests(config, major); err != nil {
 		return nil, err
 	}
-
+	// Bump variant in zz_generated_metadata
 	if err := ReplaceWithNextVersionInPlace(&config.Metadata.Variant, major); err != nil {
+		return nil, err
+	}
+
+	// Bump branch in zz_generated_metadata (e.g., release-4.21 -> release-4.22)
+	if err := ReplaceWithNextVersionInPlace(&config.Metadata.Branch, major); err != nil {
 		return nil, err
 	}
 
@@ -118,20 +183,29 @@ func (b *GeneratedReleaseGatingJobsBumper) BumpContent(dataWithInfo *cioperatorc
 }
 
 func bumpBaseImages(config *cioperatorapi.ReleaseBuildConfiguration, major int) error {
-	if config.BaseImages == nil {
-		return nil
+	var errs []error
+
+	for k, v := range config.BaseImages {
+		if err := ReplaceWithNextVersionInPlace(&v.Name, major); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+
+		// only bump tags that are plain versions (tag: 4.21) because stuff like
+		// rhel-9-golang-1.24-openshift-4.22 is more tricky and will be handled
+		// by other tooling
+		mm, err := ocplifecycle.ParseMajorMinor(v.Tag)
+		if err == nil && mm.Major == major {
+			if err := ReplaceWithNextVersionInPlace(&v.Tag, major); err != nil {
+				errs = append(errs, err)
+				continue
+			}
+		}
+
+		config.BaseImages[k] = v
 	}
 
-	bumpedImages := make(map[string]cioperatorapi.ImageStreamTagReference)
-	for k := range config.BaseImages {
-		image := config.BaseImages[k]
-		if err := ReplaceWithNextVersionInPlace(&image.Name, major); err != nil {
-			return err
-		}
-		bumpedImages[k] = image
-	}
-	config.BaseImages = bumpedImages
-	return nil
+	return errors.NewAggregate(errs)
 }
 
 func bumpReleases(config *cioperatorapi.ReleaseBuildConfiguration, major int) error {
@@ -178,6 +252,10 @@ func bumpTests(config *cioperatorapi.ReleaseBuildConfiguration, major int) error
 			continue
 		}
 
+		if err := bumpStepEnvVars(test.MultiStageTestConfiguration.Environment, major); err != nil {
+			return err
+		}
+
 		if err := bumpTestSteps(test.MultiStageTestConfiguration.Pre, major); err != nil {
 			return err
 		}
@@ -188,14 +266,38 @@ func bumpTests(config *cioperatorapi.ReleaseBuildConfiguration, major int) error
 			return err
 		}
 
-		if err := ReplaceWithNextVersionInPlace(test.MultiStageTestConfiguration.Workflow, major); err != nil {
-			return err
+		if test.MultiStageTestConfiguration.Workflow != nil {
+			if err := ReplaceWithNextVersionInPlace(test.MultiStageTestConfiguration.Workflow, major); err != nil {
+				return err
+			}
 		}
 
 		config.Tests[i] = test
 	}
 
 	return nil
+}
+
+func bumpStepEnvVars(env cioperatorapi.TestEnvironment, major int) error {
+	var errs []error
+
+	for k, v := range env {
+		mm, err := ocplifecycle.ParseMajorMinor(v)
+		// value does not look like a version => nothing to bump
+		if err != nil {
+			continue
+		}
+
+		if k == ocpReleaseEnvVarName || mm.Major == major {
+			if err := ReplaceWithNextVersionInPlace(&v, major); err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			env[k] = v
+		}
+	}
+
+	return errors.NewAggregate(errs)
 }
 
 func bumpTestSteps(tests []cioperatorapi.TestStep, major int) error {
@@ -218,7 +320,15 @@ func bumpTestStepEnvVars(multistageTest cioperatorapi.TestStep, major int) error
 	}
 	for i := 0; i < len(multistageTest.Environment); i++ {
 		env := multistageTest.Environment[i]
-		if env.Name == ocpReleaseEnvVarName {
+		if env.Default == nil {
+			continue
+		}
+		// value does not look like a version => nothing to bump
+		mm, err := ocplifecycle.ParseMajorMinor(*env.Default)
+		if err != nil {
+			continue
+		}
+		if env.Name == ocpReleaseEnvVarName || mm.Major == major {
 			if err := ReplaceWithNextVersionInPlace(env.Default, major); err != nil {
 				return err
 			}

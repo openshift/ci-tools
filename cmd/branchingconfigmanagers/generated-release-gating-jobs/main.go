@@ -15,15 +15,13 @@ import (
 	cioperatorcfg "github.com/openshift/ci-tools/pkg/config"
 )
 
-const (
-	releaseJobsPath = "ci-operator/config/openshift/release"
-)
-
 type options struct {
 	curOCPVersion    string
 	releaseRepoDir   string
 	logLevel         int
 	newIntervalValue int
+
+	fileFinder string
 }
 
 func gatherOptions() (*options, error) {
@@ -33,6 +31,7 @@ func gatherOptions() (*options, error) {
 	flag.StringVar(&o.releaseRepoDir, "release-repo", "", "Path to 'openshift/release/ folder")
 	flag.IntVar(&o.newIntervalValue, "interval", 168, "New interval to set")
 	flag.IntVar(&o.logLevel, "log-level", int(logrus.DebugLevel), "Log level")
+	flag.StringVar(&o.fileFinder, "file-finder", "signal", "Method to find files with gating jobs. One of: regexp | signal")
 	flag.Parse()
 
 	if _, err := ocplifecycle.ParseMajorMinor(o.curOCPVersion); o.curOCPVersion != "" && err != nil {
@@ -71,8 +70,7 @@ func main() {
 
 func reconcile(o *options) error {
 	logrus.Debugf("using options %+v", o)
-	releaseJobsDir := path.Join(o.releaseRepoDir, releaseJobsPath)
-	b, err := bumper.NewGeneratedReleaseGatingJobsBumper(o.curOCPVersion, releaseJobsDir, o.newIntervalValue)
+	b, err := bumper.NewGeneratedReleaseGatingJobsBumper(o.curOCPVersion, o.releaseRepoDir, o.newIntervalValue, o.fileFinder)
 	if err != nil {
 		return fmt.Errorf("new bumper: %w", err)
 	}

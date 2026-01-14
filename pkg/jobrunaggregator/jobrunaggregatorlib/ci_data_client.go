@@ -66,6 +66,14 @@ type CIDataClient interface {
 
 	// ListReleases lists all releases from the new release table
 	ListReleases(ctx context.Context) ([]jobrunaggregatorapi.ReleaseRow, error)
+
+	// ListTestSummaryByPeriod retrieves aggregated test results for a specific suite and release over a time period.
+	// Parameters:
+	//   - suiteName: The test suite to query (e.g., 'conformance')
+	//   - releaseName: The release version (e.g., '4.15')
+	//   - daysBack: Number of days to look back from current date
+	//   - minTestCount: Minimum number of test executions required to include a test in results
+	ListTestSummaryByPeriod(ctx context.Context, suiteName, releaseName string, daysBack, minTestCount int) ([]jobrunaggregatorapi.TestSummaryByPeriodRow, error)
 }
 
 type ciDataClient struct {
@@ -1094,4 +1102,94 @@ func (c *ciDataClient) ListAllKnownAlerts(ctx context.Context) ([]*jobrunaggrega
 	}
 
 	return allKnownAlerts, nil
+}
+
+func (c *ciDataClient) ListTestSummaryByPeriod(ctx context.Context, suiteName, releaseName string, daysBack, minTestCount int) ([]jobrunaggregatorapi.TestSummaryByPeriodRow, error) {
+	// Query to summarize test results for a specific suite and release over a time period
+	// Groups by release and test_name only (no infrastructure dimensions)
+	// Calculates total test_count, failure_count, flake_count, failure_rate, and avg_duration_ms
+	// Filters results to only include tests with sufficient test runs
+	// Also includes first_seen_date: the earliest date each test_name appeared across all releases for this suite
+	queryString := c.dataCoordinates.SubstituteDataSetLocation(`
+WITH earliest_test_dates AS (
+  -- Pre-compute the earliest date each test was seen across all releases for this suite
+  -- Look back max(100, @days_back) days to ensure we capture historical context
+  SELECT
+    test_name,
+    MIN(date) AS first_sample_date
+  FROM
+    DATA_SET_LOCATION.TestsSummaryByDate
+  WHERE
+    suite = @suite_name
+    AND date >= DATE_SUB(CURRENT_DATE(), INTERVAL GREATEST(100, @days_back) DAY)
+    AND date <= CURRENT_DATE()
+  GROUP BY
+    test_name
+)
+SELECT
+  main.release,
+  main.test_name,
+  SUM(main.test_count) AS total_test_count,
+  SUM(main.failure_count) AS total_failure_count,
+  SUM(main.flake_count) AS total_flake_count,
+  SAFE_DIVIDE(SUM(main.failure_count), SUM(main.test_count)) AS failure_rate,
+  AVG(main.avg_duration_ms) AS avg_duration_ms,
+  MIN(main.date) AS period_start,
+  MAX(main.date) AS period_end,
+  COUNT(DISTINCT main.date) AS days_with_data,
+  earliest.first_sample_date
+FROM
+  DATA_SET_LOCATION.TestsSummaryByDate AS main
+LEFT JOIN
+  earliest_test_dates AS earliest
+ON
+  main.test_name = earliest.test_name
+WHERE
+  main.suite = @suite_name
+  AND main.release = @release_name
+  AND main.date >= DATE_SUB(CURRENT_DATE(), INTERVAL @days_back DAY)
+  AND main.date <= CURRENT_DATE()
+GROUP BY
+  main.release,
+  main.test_name,
+  earliest.first_sample_date
+HAVING
+  SUM(main.test_count) > @min_test_count
+ORDER BY
+  main.release,
+  total_failure_count DESC,
+  main.test_name
+`)
+
+	query := c.client.Query(queryString)
+	query.Labels = map[string]string{
+		bigQueryLabelKeyApp:   bigQueryLabelValueApp,
+		bigQueryLabelKeyQuery: bigQueryLabelValueTestSummaryByPeriod,
+	}
+	query.QueryConfig.Parameters = []bigquery.QueryParameter{
+		{Name: "suite_name", Value: suiteName},
+		{Name: "release_name", Value: releaseName},
+		{Name: "days_back", Value: daysBack},
+		{Name: "min_test_count", Value: minTestCount},
+	}
+
+	rows, err := query.Read(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query generic test summary by period with %q: %w", queryString, err)
+	}
+
+	results := []jobrunaggregatorapi.TestSummaryByPeriodRow{}
+	for {
+		row := &jobrunaggregatorapi.TestSummaryByPeriodRow{}
+		err = rows.Next(row)
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, *row)
+	}
+
+	return results, nil
 }

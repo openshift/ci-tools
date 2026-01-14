@@ -24,8 +24,6 @@ type JobRunHistoricalDataAnalyzerOptions struct {
 
 func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 
-	var newHistoricalData []jobrunaggregatorapi.HistoricalData
-
 	// targetRelease will either be what the caller specified on the CLI, or the most recent release.
 	// previousRelease will be the one prior to targetRelease.
 	var targetRelease, previousRelease string
@@ -43,6 +41,14 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 		}
 	}
 	fmt.Printf("Using target release: %s, previous release: %s\n", targetRelease, previousRelease)
+
+	// For tests data type, we don't do comparison - just fetch and write directly
+	if o.dataType == "tests" {
+		return o.runTestsDataType(ctx, targetRelease)
+	}
+
+	// For other data types (alerts, disruptions), continue with comparison logic
+	var newHistoricalData []jobrunaggregatorapi.HistoricalData
 
 	currentHistoricalData, err := readHistoricalDataFile(o.currentFile, o.dataType)
 	if err != nil {
@@ -88,6 +94,80 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 	}
 
 	fmt.Printf("successfully compared (%s) with specified leeway of %.2f%%\n", o.dataType, o.leeway)
+	return nil
+}
+
+func (o *JobRunHistoricalDataAnalyzerOptions) runTestsDataType(ctx context.Context, release string) error {
+	// Hardcoded parameters for test summary query
+	const (
+		suiteName       = "openshift-tests"
+		daysBack        = 30
+		minTestCount    = 100
+		minDaysRequired = 10
+	)
+
+	fmt.Printf("Fetching test data for release %s, suite %s, last %d days, min %d test runs\n",
+		release, suiteName, daysBack, minTestCount)
+
+	// Try to read existing data if the output file exists
+	var existingTestSummaries []jobrunaggregatorapi.TestSummaryByPeriodRow
+	if _, err := os.Stat(o.outputFile); err == nil {
+		existingTestSummaries, err = readTestSummaryFile(o.outputFile)
+		if err != nil {
+			fmt.Printf("Warning: failed to read existing test summary file: %v\n", err)
+			existingTestSummaries = nil
+		} else {
+			fmt.Printf("Found existing test summary data with %d test results\n", len(existingTestSummaries))
+		}
+	}
+
+	// Fetch new test data from BigQuery
+	testSummaries, err := o.ciDataClient.ListTestSummaryByPeriod(ctx, suiteName, release, daysBack, minTestCount)
+	if err != nil {
+		return fmt.Errorf("failed to list test summary by period: %w", err)
+	}
+
+	// Validate the new data has sufficient days of data
+	hasSufficientData := hasSufficientDaysOfData(testSummaries, minDaysRequired)
+
+	// Determine which data to use
+	var finalTestSummaries []jobrunaggregatorapi.TestSummaryByPeriodRow
+	if len(testSummaries) == 0 {
+		// No new data available
+		if len(existingTestSummaries) > 0 {
+			fmt.Printf("Warning: no new test data found, keeping existing data with %d test results\n", len(existingTestSummaries))
+			finalTestSummaries = existingTestSummaries
+		} else {
+			return fmt.Errorf("no test data found for suite %s, release %s", suiteName, release)
+		}
+	} else if !hasSufficientData {
+		// New data exists but doesn't have enough days
+		if len(existingTestSummaries) > 0 {
+			fmt.Printf("Warning: new test data has insufficient days (< %d), keeping existing data with %d test results\n",
+				minDaysRequired, len(existingTestSummaries))
+			finalTestSummaries = existingTestSummaries
+		} else {
+			fmt.Printf("Warning: new test data has insufficient days (< %d) and no existing data available, using new data with %d test results\n",
+				minDaysRequired, len(testSummaries))
+			finalTestSummaries = testSummaries
+		}
+	} else {
+		// New data is sufficient
+		fmt.Printf("Using new test data with %d test results (sufficient days of data)\n", len(testSummaries))
+		finalTestSummaries = testSummaries
+	}
+
+	// Write the final test summaries to the output file as JSON
+	out, err := formatTestOutput(finalTestSummaries)
+	if err != nil {
+		return fmt.Errorf("error formatting test output: %w", err)
+	}
+
+	if err := os.WriteFile(o.outputFile, out, 0644); err != nil {
+		return fmt.Errorf("failed to write output file: %w", err)
+	}
+
+	fmt.Printf("Successfully wrote %d test results to %s\n", len(finalTestSummaries), o.outputFile)
 	return nil
 }
 

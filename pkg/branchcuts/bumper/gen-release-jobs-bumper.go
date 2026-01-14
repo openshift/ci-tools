@@ -60,6 +60,13 @@ func makeGetFilesProvidingSignal(currentVersionStream, baseDir string) getFilesF
 				return nil
 			}
 
+			// Ignore non-variant configs; these contain configuration that applies
+			// on the branch directly and typically contains presubmits and postsubmits,
+			// not release gating periodics
+			if info.Variant == "" {
+				return nil
+			}
+
 			if versionStream := prowgen.ProvidesSignalForVersion(cfg); versionStream == currentVersionStream {
 				files = append(files, filepath.Join(baseDir, info.RelativePath()))
 			}

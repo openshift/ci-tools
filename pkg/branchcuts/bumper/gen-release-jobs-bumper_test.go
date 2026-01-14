@@ -41,7 +41,7 @@ func TestBumpFilename(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.id, func(t *testing.T) {
-			b, err := NewGeneratedReleaseGatingJobsBumper(test.ocpRelease, "", 1, FileFinderRegexp)
+			b, err := NewGeneratedReleaseGatingJobsBumper(test.ocpRelease, "", 1, FileFinderSignal)
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
@@ -184,7 +184,7 @@ func TestBumpObject(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.id, func(t *testing.T) {
-			b, err := NewGeneratedReleaseGatingJobsBumper(test.ocpRelease, "", test.interval, FileFinderRegexp)
+			b, err := NewGeneratedReleaseGatingJobsBumper(test.ocpRelease, "", test.interval, FileFinderSignal)
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
@@ -477,9 +477,9 @@ func TestBumpBaseImages(t *testing.T) {
 			},
 		},
 		{
-			id:         "Handles nil base images",
-			major:      4,
-			baseImages: nil,
+			id:             "Handles nil base images",
+			major:          4,
+			baseImages:     nil,
 			wantBaseImages: nil,
 		},
 	}

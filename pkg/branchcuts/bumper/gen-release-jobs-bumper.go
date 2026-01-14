@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
+
 	"k8s.io/apimachinery/pkg/util/errors"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"

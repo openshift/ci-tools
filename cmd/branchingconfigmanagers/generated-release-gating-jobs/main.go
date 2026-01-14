@@ -31,7 +31,7 @@ func gatherOptions() (*options, error) {
 	flag.StringVar(&o.releaseRepoDir, "release-repo", "", "Path to 'openshift/release/ folder")
 	flag.IntVar(&o.newIntervalValue, "interval", 168, "New interval to set")
 	flag.IntVar(&o.logLevel, "log-level", int(logrus.DebugLevel), "Log level")
-	flag.StringVar(&o.fileFinder, "file-finder", "regexp", "Method to find files with gating jobs. One of: regexp (default) | signal")
+	flag.StringVar(&o.fileFinder, "file-finder", "signal", "Method to find files with gating jobs. One of: regexp | signal")
 	flag.Parse()
 
 	if _, err := ocplifecycle.ParseMajorMinor(o.curOCPVersion); o.curOCPVersion != "" && err != nil {

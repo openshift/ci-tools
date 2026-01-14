@@ -55,6 +55,11 @@ func makeGetFilesProvidingSignal(currentVersionStream, baseDir string) getFilesF
 	return func() ([]string, error) {
 		var files []string
 		return files, cioperatorcfg.OperateOnCIOperatorConfigDir(baseDir, func(cfg *cioperatorapi.ReleaseBuildConfiguration, info *cioperatorcfg.Info) error {
+			// Ignore `openshift-priv`, it is handled by separate tooling
+			if info.Org == "openshift-priv" {
+				return nil
+			}
+
 			if versionStream := prowgen.ProvidesSignalForVersion(cfg); versionStream == currentVersionStream {
 				files = append(files, filepath.Join(baseDir, info.RelativePath()))
 			}

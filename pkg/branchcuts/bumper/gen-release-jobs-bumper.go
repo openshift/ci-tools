@@ -16,7 +16,6 @@ import (
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/ocplifecycle"
 	cioperatorcfg "github.com/openshift/ci-tools/pkg/config"
-	"github.com/openshift/ci-tools/pkg/prowgen"
 )
 
 const (
@@ -68,7 +67,7 @@ func makeGetFilesProvidingSignal(currentVersionStream, baseDir string) getFilesF
 				return nil
 			}
 
-			if versionStream := prowgen.ProvidesSignalForVersion(cfg); versionStream == currentVersionStream {
+			if versionStream := ocplifecycle.ProvidesSignalForVersion(cfg); versionStream == currentVersionStream {
 				files = append(files, filepath.Join(baseDir, info.RelativePath()))
 			}
 			return nil

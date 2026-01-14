@@ -8,6 +8,7 @@ import (
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/api/ocplifecycle"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
 )
 
@@ -17,21 +18,6 @@ type prowJobBaseBuilder struct {
 
 	info     *ProwgenInfo
 	testName string
-}
-
-// ProvidesSignalForVersion returns a version (expected to be an "<MAJOR>.<MINOR>" OpenShift version) for which
-// the job will provide relevant continuous CI signal that can be consumed by downstream tooling like Sippy. Generally
-// jobs that test CI or Nightly payloads provide such relevant quality signal, so this method approximates identifying
-// these jobs by checking whether the source ci-operator configuration contains a `latest` release that is a candidate
-// version (which means one of the ci/nightly payloads will be fetched from release-controller).
-//
-// Jobs that test an ephemeral OCP payload built for a PR or install a named released version (EC/RC/GA) do not provide
-// relevant CI signal for a version.
-func ProvidesSignalForVersion(configSpec *cioperatorapi.ReleaseBuildConfiguration) string {
-	if release, found := configSpec.Releases[cioperatorapi.LatestReleaseName]; found && release.Candidate != nil {
-		return release.Candidate.Version
-	}
-	return ""
 }
 
 // If any included buildRoot uses from_repository we must not skip cloning
@@ -94,7 +80,7 @@ func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, 
 
 	// jobs generated from some configSpec shapes provide relevant CI signal about OCP version stream
 	// quality, so we label them as such for downstream tooling like Sippy to recognize them
-	if versionStream := ProvidesSignalForVersion(configSpec); versionStream != "" {
+	if versionStream := ocplifecycle.ProvidesSignalForVersion(configSpec); versionStream != "" {
 		b.base.Labels[jc.JobReleaseKey] = versionStream
 	}
 

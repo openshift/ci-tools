@@ -595,3 +595,88 @@ func (b *alwaysFailBaseline) CheckDisruptionMeanWithinOneStandardDeviation(_ con
 func (b *alwaysFailBaseline) CheckPercentileDisruption(_ context.Context, _ map[string]jobrunaggregatorlib.AvailabilityResult, _ string, _ int, _ int, _ string) ([]string, []string, testCaseStatus, string, error) {
 	return []string{}, b.jobRunIDs, testCasePassed, "", nil
 }
+
+func TestCollectAllJobRunIDs(t *testing.T) {
+	tests := []struct {
+		name     string
+		suite    *junit.TestSuite
+		expected []string
+	}{
+		{
+			name: "collects from failures, passes, and skips",
+			suite: &junit.TestSuite{
+				TestCases: []*junit.TestCase{
+					{
+						SystemOut: "failures:\n- jobrunid: run-3\npasses:\n- jobrunid: run-1\nskips:\n- jobrunid: run-2\n",
+					},
+				},
+			},
+			expected: []string{"run-1", "run-2", "run-3"},
+		},
+		{
+			name: "deduplicates across test cases",
+			suite: &junit.TestSuite{
+				TestCases: []*junit.TestCase{
+					{
+						SystemOut: "failures:\n- jobrunid: run-1\n",
+					},
+					{
+						SystemOut: "failures:\n- jobrunid: run-1\npasses:\n- jobrunid: run-2\n",
+					},
+				},
+			},
+			expected: []string{"run-1", "run-2"},
+		},
+		{
+			name: "collects from child suites",
+			suite: &junit.TestSuite{
+				TestCases: []*junit.TestCase{
+					{
+						SystemOut: "passes:\n- jobrunid: run-1\n",
+					},
+				},
+				Children: []*junit.TestSuite{
+					{
+						TestCases: []*junit.TestCase{
+							{
+								SystemOut: "passes:\n- jobrunid: run-2\n",
+							},
+						},
+					},
+				},
+			},
+			expected: []string{"run-1", "run-2"},
+		},
+		{
+			name:     "empty suite",
+			suite:    &junit.TestSuite{},
+			expected: []string{},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := collectAllJobRunIDs(tc.suite)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+func TestHtmlForTestRunsContainsJobNumbers(t *testing.T) {
+	suite := &junit.TestSuite{
+		Name: "test-suite",
+		TestCases: []*junit.TestCase{
+			{
+				Name:          "failing-test",
+				FailureOutput: &junit.FailureOutput{Message: "failed"},
+				SystemOut:     "name: failing-test\nfailures:\n- jobrunid: run-b\n  humanurl: https://example.com/run-b\n- jobrunid: run-a\n  humanurl: https://example.com/run-a\n",
+			},
+		},
+	}
+
+	html, err := htmlForTestRuns("test-job", suite)
+	assert.NoError(t, err)
+	// run-a sorts before run-b, so run-a=1, run-b=2
+	assert.Contains(t, html, "<p>Number: 1</p>")
+	assert.Contains(t, html, "<p>Number: 2</p>")
+}

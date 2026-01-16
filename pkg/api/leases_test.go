@@ -84,6 +84,36 @@ func TestIPPoolLeaseForTest(t *testing.T) {
 			tests:    MultiStageTestConfigurationLiteral{ClusterProfile: ClusterProfileAWS},
 			metadata: Metadata{Branch: "release-4.10"},
 		},
+		{
+			name:     "aws, with 5.0 branch (should be valid)",
+			tests:    MultiStageTestConfigurationLiteral{ClusterProfile: ClusterProfileAWS},
+			metadata: Metadata{Branch: "release-5.0"},
+			expected: StepLease{
+				ResourceType: "aws-ip-pools",
+				Env:          DefaultIPPoolLeaseEnv,
+				Count:        13,
+			},
+		},
+		{
+			name:     "aws, with openshift-5.0 branch (should be valid)",
+			tests:    MultiStageTestConfigurationLiteral{ClusterProfile: ClusterProfileAWS},
+			metadata: Metadata{Branch: "openshift-5.0"},
+			expected: StepLease{
+				ResourceType: "aws-ip-pools",
+				Env:          DefaultIPPoolLeaseEnv,
+				Count:        13,
+			},
+		},
+		{
+			name:     "aws, with 5.1 branch (should be valid)",
+			tests:    MultiStageTestConfigurationLiteral{ClusterProfile: ClusterProfileAWS},
+			metadata: Metadata{Branch: "release-5.1"},
+			expected: StepLease{
+				ResourceType: "aws-ip-pools",
+				Env:          DefaultIPPoolLeaseEnv,
+				Count:        13,
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

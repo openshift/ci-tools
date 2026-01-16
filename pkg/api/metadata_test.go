@@ -186,6 +186,21 @@ func TestMetadata_ConfigMapName(t *testing.T) {
 			branch:   "release-4.2",
 			expected: "ci-operator-4.2-configs",
 		},
+		{
+			name:     "release 5.0 branch goes to 5.0 configmap",
+			branch:   "release-5.0",
+			expected: "ci-operator-5.0-configs",
+		},
+		{
+			name:     "openshift 5.0 branch goes to 5.0 configmap",
+			branch:   "openshift-5.0",
+			expected: "ci-operator-5.0-configs",
+		},
+		{
+			name:     "release 5.1 branch goes to 5.1 configmap",
+			branch:   "release-5.1",
+			expected: "ci-operator-5.1-configs",
+		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.expected, func(t *testing.T) {
@@ -363,6 +378,26 @@ func TestFlavorForBranch(t *testing.T) {
 			name:     "release 4.2 branch goes to 4.2 configmap",
 			branch:   "release-4.2",
 			expected: "4.2",
+		},
+		{
+			name:     "release 5.0 branch goes to 5.0 configmap",
+			branch:   "release-5.0",
+			expected: "5.0",
+		},
+		{
+			name:     "openshift 5.0 branch goes to 5.0 configmap",
+			branch:   "openshift-5.0",
+			expected: "5.0",
+		},
+		{
+			name:     "release 5.1 branch goes to 5.1 configmap",
+			branch:   "release-5.1",
+			expected: "5.1",
+		},
+		{
+			name:     "enterprise 5.0 branch goes to 5.0 configmap",
+			branch:   "enterprise-5.0",
+			expected: "5.0",
 		},
 	}
 	for _, testCase := range testCases {

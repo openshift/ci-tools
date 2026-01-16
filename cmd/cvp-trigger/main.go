@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -153,8 +154,9 @@ func (o options) validateOptions() error {
 	if o.ocpVersion == "" {
 		return fmt.Errorf("required parameter %s was not provided", ocpVersionOption)
 	}
-	if !strings.HasPrefix(o.ocpVersion, "4") {
-		return fmt.Errorf("ocp-version must be 4.x or higher")
+	// Validate ocp-version format (must be X.Y where X >= 4)
+	if !isValidOCPVersion(o.ocpVersion) {
+		return fmt.Errorf("ocp-version must be in format X.Y where X >= 4 (e.g., 4.15, 5.0)")
 	}
 
 	if o.operatorPackageName == "" {
@@ -177,6 +179,26 @@ func (o options) validateOptions() error {
 	}
 
 	return nil
+}
+
+// isValidOCPVersion validates that the version is in format X.Y where X >= 4
+func isValidOCPVersion(version string) bool {
+	parts := strings.Split(version, ".")
+	if len(parts) != 2 {
+		return false
+	}
+
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return false
+	}
+
+	_, err = strconv.Atoi(parts[1])
+	if err != nil {
+		return false
+	}
+
+	return major >= 4
 }
 
 // getPeriodicJob returns a Prow Job or an error if the provided

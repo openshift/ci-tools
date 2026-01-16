@@ -42,9 +42,10 @@ func IPPoolLeaseForTest(s *MultiStageTestConfigurationLiteral, metadata Metadata
 }
 
 const (
-	openshiftBranch = "openshift-4."
-	releaseBranch   = "release-4."
-	minimumVersion  = 16
+	// minimumIPPoolMajorVersion and minimumIPPoolMinorVersion define the minimum OCP version
+	// that supports IP pools (4.16+)
+	minimumIPPoolMajorVersion = 4
+	minimumIPPoolMinorVersion = 16
 )
 
 // Currently, we only have the ability to utilize IP pools in 4.16 and later, we want to make sure not to allocate them
@@ -53,17 +54,41 @@ func branchValidForIPPoolLease(branch string) bool {
 	if branch == "master" || branch == "main" {
 		return true
 	}
-	var version string
-	if strings.HasPrefix(branch, openshiftBranch) {
-		version = strings.TrimPrefix(branch, openshiftBranch)
-	}
-	if strings.HasPrefix(branch, releaseBranch) {
-		version = strings.TrimPrefix(branch, releaseBranch)
-	}
-	number, err := strconv.Atoi(version)
-	if err != nil {
+
+	major, minor, ok := parseVersionFromBranch(branch)
+	if !ok {
 		return false
 	}
 
-	return number >= minimumVersion
+	// Version 5.x and later is always valid
+	if major > minimumIPPoolMajorVersion {
+		return true
+	}
+	// For version 4.x, check if minor version meets minimum requirement
+	return major == minimumIPPoolMajorVersion && minor >= minimumIPPoolMinorVersion
+}
+
+// parseVersionFromBranch extracts major and minor version from branch names like
+// "openshift-4.16", "release-5.0", etc.
+func parseVersionFromBranch(branch string) (major, minor int, ok bool) {
+	prefixes := []string{"openshift-", "release-"}
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(branch, prefix) {
+			versionStr := strings.TrimPrefix(branch, prefix)
+			parts := strings.Split(versionStr, ".")
+			if len(parts) != 2 {
+				continue
+			}
+			majorNum, err := strconv.Atoi(parts[0])
+			if err != nil {
+				continue
+			}
+			minorNum, err := strconv.Atoi(parts[1])
+			if err != nil {
+				continue
+			}
+			return majorNum, minorNum, true
+		}
+	}
+	return 0, 0, false
 }

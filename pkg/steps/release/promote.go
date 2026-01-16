@@ -105,10 +105,10 @@ func (s *promotionStep) run(ctx context.Context) error {
 		logger.WithError(err).Warn("Failed to ensure namespaces to promote to in central registry.")
 	}
 
-	version, err := prerelease.Stable4LatestMajorMinor(&http.Client{})
+	version, err := getLatestStableCLIVersion(&http.Client{})
 	if err != nil {
-		logrus.WithError(err).Warn("Failed to determine the sable release version, using 4.14 instead")
-		version = "4.14"
+		logrus.WithError(err).Warn("Failed to determine the stable release version, using 4.20 instead")
+		version = "4.20"
 	}
 
 	if _, err := steps.RunPod(ctx, s.client, getPromotionPod(imageMirrorTarget, timeStr, s.jobSpec.Namespace(), s.name, version, s.nodeArchitectures), false); err != nil {
@@ -220,6 +220,16 @@ func getPublicImageReference(dockerImageReference, publicDockerImageRepository s
 		return dockerImageReference
 	}
 	return strings.Replace(dockerImageReference, splits[0], publicHost, 1)
+}
+
+func getLatestStableCLIVersion(client *http.Client) (string, error) {
+	for major := 9; major >= 4; major-- {
+		stream := fmt.Sprintf("%d-stable", major)
+		if version, err := prerelease.StableLatestMajorMinor(client, stream); err == nil {
+			return version, nil
+		}
+	}
+	return "", fmt.Errorf("no stable CLI version found in any stream (tried 9-stable through 4-stable)")
 }
 
 func getMirrorCommand(registryConfig string, images []string, loglevel int) string {

@@ -1,4 +1,4 @@
-package secretbootstrap
+package api
 
 import (
 	"os"
@@ -15,7 +15,7 @@ import (
 
 // sortBundlesByCluster sorts bundles by their first target's cluster name for deterministic comparison.
 // Uses multiple sort keys to ensure stable ordering: cluster, bundle name, then namespace.
-func sortBundlesByCluster(bundles []Bundle) {
+func sortBundlesByCluster(bundles []GSMBundle) {
 	sort.Slice(bundles, func(i, j int) bool {
 		clusterI := ""
 		if len(bundles[i].Targets) > 0 {
@@ -55,7 +55,7 @@ func TestGSMConfigResolve(t *testing.T) {
 				ClusterGroups: map[string][]string{
 					"build-clusters": {"build01", "build02"},
 				},
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -71,7 +71,7 @@ func TestGSMConfigResolve(t *testing.T) {
 				ClusterGroups: map[string][]string{
 					"build-clusters": {"build01", "build02"},
 				},
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -92,7 +92,7 @@ func TestGSMConfigResolve(t *testing.T) {
 					"build-clusters": {"build01"},
 					"app-clusters":   {"app01", "app02"},
 				},
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -109,7 +109,7 @@ func TestGSMConfigResolve(t *testing.T) {
 					"build-clusters": {"build01"},
 					"app-clusters":   {"app01", "app02"},
 				},
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -130,7 +130,7 @@ func TestGSMConfigResolve(t *testing.T) {
 				ClusterGroups: map[string][]string{
 					"build-clusters": {"build01"},
 				},
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -146,7 +146,7 @@ func TestGSMConfigResolve(t *testing.T) {
 				ClusterGroups: map[string][]string{
 					"build-clusters": {"build01"},
 				},
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -162,7 +162,7 @@ func TestGSMConfigResolve(t *testing.T) {
 		{
 			name: "direct cluster - not expanded",
 			config: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -175,7 +175,7 @@ func TestGSMConfigResolve(t *testing.T) {
 				},
 			},
 			expectedConfig: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -196,7 +196,7 @@ func TestGSMConfigResolve(t *testing.T) {
 						{Collection: "component-secrets", Group: "group1"},
 					},
 				},
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name:       "test-bundle",
 						Components: []string{"my-component"},
@@ -212,7 +212,7 @@ func TestGSMConfigResolve(t *testing.T) {
 						{Collection: "component-secrets", Group: "group1"},
 					},
 				},
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name:       "test-bundle",
 						Components: nil,
@@ -237,7 +237,7 @@ func TestGSMConfigResolve(t *testing.T) {
 						{Collection: "secrets-b", Group: "group2"},
 					},
 				},
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name:       "test-bundle",
 						Components: []string{"component-a", "component-b"},
@@ -256,7 +256,7 @@ func TestGSMConfigResolve(t *testing.T) {
 						{Collection: "secrets-b", Group: "group2"},
 					},
 				},
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name:       "test-bundle",
 						Components: nil,
@@ -279,7 +279,7 @@ func TestGSMConfigResolve(t *testing.T) {
 						{Collection: "component-secrets", Group: "group1"},
 					},
 				},
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name:       "test-bundle",
 						Components: []string{"my-component"},
@@ -298,7 +298,7 @@ func TestGSMConfigResolve(t *testing.T) {
 						{Collection: "component-secrets", Group: "group1"},
 					},
 				},
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name:       "test-bundle",
 						Components: nil,
@@ -316,7 +316,7 @@ func TestGSMConfigResolve(t *testing.T) {
 		{
 			name: "${CLUSTER} substitution - single cluster",
 			config: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -335,7 +335,7 @@ func TestGSMConfigResolve(t *testing.T) {
 				},
 			},
 			expectedConfig: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -357,7 +357,7 @@ func TestGSMConfigResolve(t *testing.T) {
 		{
 			name: "${CLUSTER} substitution - multiple clusters creates separate bundles",
 			config: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -377,7 +377,7 @@ func TestGSMConfigResolve(t *testing.T) {
 				},
 			},
 			expectedConfig: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -414,7 +414,7 @@ func TestGSMConfigResolve(t *testing.T) {
 		{
 			name: "${CLUSTER} substitution - preserves 'as' field",
 			config: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -433,7 +433,7 @@ func TestGSMConfigResolve(t *testing.T) {
 				},
 			},
 			expectedConfig: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -463,7 +463,7 @@ func TestGSMConfigResolve(t *testing.T) {
 						{Collection: "base-secrets", Group: "group1"},
 					},
 				},
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name:       "test-bundle",
 						Components: []string{"base-component"},
@@ -491,7 +491,7 @@ func TestGSMConfigResolve(t *testing.T) {
 						{Collection: "base-secrets", Group: "group1"},
 					},
 				},
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name:       "test-bundle",
 						Components: nil,
@@ -535,7 +535,7 @@ func TestGSMConfigResolve(t *testing.T) {
 				ClusterGroups: map[string][]string{
 					"build-clusters": {"build01"},
 				},
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -555,7 +555,7 @@ func TestGSMConfigResolve(t *testing.T) {
 				ClusterGroups: map[string][]string{
 					"build-clusters": {"build01"},
 				},
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -577,7 +577,7 @@ func TestGSMConfigResolve(t *testing.T) {
 						{Collection: "secrets", Group: "group1"},
 					},
 				},
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name:       "test-bundle",
 						Components: []string{"non-existent-component"},
@@ -595,7 +595,7 @@ func TestGSMConfigResolve(t *testing.T) {
 				ClusterGroups: map[string][]string{
 					"build-clusters": {"build01", "build02"},
 				},
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -612,7 +612,7 @@ func TestGSMConfigResolve(t *testing.T) {
 				ClusterGroups: map[string][]string{
 					"build-clusters": {"build01", "build02"},
 				},
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -630,7 +630,7 @@ func TestGSMConfigResolve(t *testing.T) {
 		{
 			name: "multiple ${CLUSTER} variables in same GSMSecretRef",
 			config: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -652,7 +652,7 @@ func TestGSMConfigResolve(t *testing.T) {
 				},
 			},
 			expectedConfig: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -696,7 +696,7 @@ func TestGSMConfigResolve(t *testing.T) {
 				ClusterGroups: map[string][]string{
 					"build-clusters": {"build01"},
 				},
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle-with-cluster-var",
 						GSMSecrets: []GSMSecretRef{
@@ -719,7 +719,7 @@ func TestGSMConfigResolve(t *testing.T) {
 		{
 			name: "error: ${CLUSTER} variable with empty targets",
 			config: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle-no-targets",
 						GSMSecrets: []GSMSecretRef{
@@ -924,7 +924,7 @@ func TestGSMConfigValidate(t *testing.T) {
 						{Collection: "test-secrets", Group: "group1"},
 					},
 				},
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -942,7 +942,7 @@ func TestGSMConfigValidate(t *testing.T) {
 		{
 			name: "valid config - auto discovery (no fields)",
 			config: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -965,7 +965,7 @@ func TestGSMConfigValidate(t *testing.T) {
 						{Collection: "test-secrets", Group: "group1"},
 					},
 				},
-				Bundles: []Bundle{},
+				Bundles: []GSMBundle{},
 			},
 			expectError:   true,
 			errorContains: "component has empty name",
@@ -976,7 +976,7 @@ func TestGSMConfigValidate(t *testing.T) {
 				Components: map[string][]GSMSecretRef{
 					"my-component": {},
 				},
-				Bundles: []Bundle{},
+				Bundles: []GSMBundle{},
 			},
 			expectError:   true,
 			errorContains: "component my-component has no GSM secret references",
@@ -989,7 +989,7 @@ func TestGSMConfigValidate(t *testing.T) {
 						{Collection: "", Group: "group1"},
 					},
 				},
-				Bundles: []Bundle{},
+				Bundles: []GSMBundle{},
 			},
 			expectError:   true,
 			errorContains: "component my-component[0] has empty collection",
@@ -1002,7 +1002,7 @@ func TestGSMConfigValidate(t *testing.T) {
 						{Collection: "some-malformed$(-collection name", Group: "group1"},
 					},
 				},
-				Bundles: []Bundle{},
+				Bundles: []GSMBundle{},
 			},
 			expectError:   true,
 			errorContains: "component my-component[0] has invalid collection string",
@@ -1015,7 +1015,7 @@ func TestGSMConfigValidate(t *testing.T) {
 						{Collection: "valid-collection", Group: "invalid$group!name"},
 					},
 				},
-				Bundles: []Bundle{},
+				Bundles: []GSMBundle{},
 			},
 			expectError:   true,
 			errorContains: "component my-component[0] has invalid group string",
@@ -1028,7 +1028,7 @@ func TestGSMConfigValidate(t *testing.T) {
 						{Collection: "valid-collection", Group: "group1", Fields: []FieldEntry{{Name: "bad$field!name"}}},
 					},
 				},
-				Bundles: []Bundle{},
+				Bundles: []GSMBundle{},
 			},
 			expectError:   true,
 			errorContains: "component my-component[0].secrets[0] has invalid name",
@@ -1041,7 +1041,7 @@ func TestGSMConfigValidate(t *testing.T) {
 						{Collection: "test-secrets", Group: "", Fields: []FieldEntry{}},
 					},
 				},
-				Bundles: []Bundle{},
+				Bundles: []GSMBundle{},
 			},
 			expectError:   true,
 			errorContains: "component my-component[0] has neither group nor any fields defined",
@@ -1049,7 +1049,7 @@ func TestGSMConfigValidate(t *testing.T) {
 		{
 			name: "error: bundle with empty name",
 			config: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "",
 						GSMSecrets: []GSMSecretRef{
@@ -1067,7 +1067,7 @@ func TestGSMConfigValidate(t *testing.T) {
 		{
 			name: "error: duplicate bundle by name+cluster+namespace",
 			config: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -1096,7 +1096,7 @@ func TestGSMConfigValidate(t *testing.T) {
 		{
 			name: "error: sync_to_cluster true but no targets",
 			config: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -1113,7 +1113,7 @@ func TestGSMConfigValidate(t *testing.T) {
 		{
 			name: "error: sync_to_cluster false but has targets",
 			config: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -1132,7 +1132,7 @@ func TestGSMConfigValidate(t *testing.T) {
 		{
 			name: "error: target with empty namespace",
 			config: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -1151,7 +1151,7 @@ func TestGSMConfigValidate(t *testing.T) {
 		{
 			name: "error: target with empty cluster",
 			config: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -1170,7 +1170,7 @@ func TestGSMConfigValidate(t *testing.T) {
 		{
 			name: "error: target with invalid type",
 			config: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -1189,7 +1189,7 @@ func TestGSMConfigValidate(t *testing.T) {
 		{
 			name: "error: GSMSecretRef with empty collection",
 			config: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -1208,7 +1208,7 @@ func TestGSMConfigValidate(t *testing.T) {
 		{
 			name: "error: GSMSecretRef with no secrets and no group",
 			config: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -1227,7 +1227,7 @@ func TestGSMConfigValidate(t *testing.T) {
 		{
 			name: "error: bundle GSMSecretRef with invalid group",
 			config: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -1246,7 +1246,7 @@ func TestGSMConfigValidate(t *testing.T) {
 		{
 			name: "error: field with empty name",
 			config: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -1265,7 +1265,7 @@ func TestGSMConfigValidate(t *testing.T) {
 		{
 			name: "error: bundle GSMSecretRef with invalid field name",
 			config: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						GSMSecrets: []GSMSecretRef{
@@ -1284,7 +1284,7 @@ func TestGSMConfigValidate(t *testing.T) {
 		{
 			name: "valid config - dockerconfig with empty 'as' field defaults to .dockerconfigjson",
 			config: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						DockerConfig: &DockerConfigSpec{
@@ -1305,7 +1305,7 @@ func TestGSMConfigValidate(t *testing.T) {
 		{
 			name: "error: dockerconfig with no registries",
 			config: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						DockerConfig: &DockerConfigSpec{
@@ -1325,7 +1325,7 @@ func TestGSMConfigValidate(t *testing.T) {
 		{
 			name: "error: dockerconfig registry with empty collection",
 			config: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						DockerConfig: &DockerConfigSpec{
@@ -1346,7 +1346,7 @@ func TestGSMConfigValidate(t *testing.T) {
 		{
 			name: "error: dockerconfig registry with empty registry_url",
 			config: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						DockerConfig: &DockerConfigSpec{
@@ -1368,7 +1368,7 @@ func TestGSMConfigValidate(t *testing.T) {
 		{
 			name: "error: dockerconfig registry with empty auth_field",
 			config: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name: "test-bundle",
 						DockerConfig: &DockerConfigSpec{
@@ -1390,7 +1390,7 @@ func TestGSMConfigValidate(t *testing.T) {
 		{
 			name: "error: bundle with neither gsm_secrets, dockerconfig, nor components",
 			config: GSMConfig{
-				Bundles: []Bundle{
+				Bundles: []GSMBundle{
 					{
 						Name:          "test-bundle",
 						SyncToCluster: true,

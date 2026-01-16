@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strings"
 	"sync"
 
 	"github.com/sirupsen/logrus"
@@ -30,6 +28,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/ocpbuilddata"
 	"github.com/openshift/ci-tools/pkg/config"
+	cidockerfile "github.com/openshift/ci-tools/pkg/dockerfile"
 	"github.com/openshift/ci-tools/pkg/github"
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/registry"
@@ -296,9 +295,9 @@ func replacer(
 						continue
 					}
 					config.BaseImages[foundTag.String()] = api.ImageStreamTagReference{
-						Namespace: foundTag.org,
-						Name:      foundTag.repo,
-						Tag:       foundTag.tag,
+						Namespace: foundTag.Org,
+						Name:      foundTag.Repo,
+						Tag:       foundTag.Tag,
 					}
 				}
 
@@ -356,37 +355,17 @@ func replacer(
 	}
 }
 
-var registryRegex = regexp.MustCompile(`registry\.(|svc\.)ci\.openshift\.org/\S+`)
-
-type orgRepoTag struct{ org, repo, tag string }
-
-func (ort orgRepoTag) String() string {
-	return ort.org + "_" + ort.repo + "_" + ort.tag
-}
-
-func ensureReplacement(image *api.ProjectDirectoryImageBuildStepConfiguration, dockerfile []byte) ([]orgRepoTag, error) {
-	var toReplace []string
-	for _, line := range bytes.Split(dockerfile, []byte("\n")) {
-		if !bytes.Contains(line, []byte("FROM")) && !bytes.Contains(line, []byte("COPY")) && !bytes.Contains(line, []byte("copy")) {
-			continue
-		}
-		match := registryRegex.Find(line)
-		if match == nil {
-			continue
-		}
-
-		toReplace = append(toReplace, string(match))
-	}
-
-	var result []orgRepoTag
+func ensureReplacement(image *api.ProjectDirectoryImageBuildStepConfiguration, dockerfile []byte) ([]cidockerfile.OrgRepoTag, error) {
+	toReplace := cidockerfile.ExtractRegistryReferences(dockerfile)
+	var result []cidockerfile.OrgRepoTag
 	for _, toReplace := range toReplace {
-		orgRepoTag, err := orgRepoTagFromPullString(toReplace)
+		orgRepoTag, err := cidockerfile.OrgRepoTagFromPullString(toReplace)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse string %s as pullspec: %w", toReplace, err)
 		}
 
 		// Assume ppl know what they are doing
-		if hasReplacementFor(image, toReplace) {
+		if cidockerfile.HasManualReplacementFor(image.Inputs, toReplace) {
 			continue
 		}
 
@@ -401,40 +380,6 @@ func ensureReplacement(image *api.ProjectDirectoryImageBuildStepConfiguration, d
 	}
 
 	return result, nil
-}
-
-func hasReplacementFor(image *api.ProjectDirectoryImageBuildStepConfiguration, target string) bool {
-	for _, input := range image.Inputs {
-		if sets.New[string](input.As...).Has(target) {
-			return true
-		}
-	}
-
-	return false
-}
-
-func orgRepoTagFromPullString(pullString string) (orgRepoTag, error) {
-	res := orgRepoTag{tag: "latest"}
-	slashSplit := strings.Split(pullString, "/")
-	n := len(slashSplit)
-
-	switch {
-	case n == 1:
-		res.org = "_"
-		res.repo = slashSplit[0]
-	case n >= 2:
-		res.org = slashSplit[n-2]
-		res.repo = slashSplit[n-1]
-	default:
-		return res, fmt.Errorf("pull string %q couldn't be parsed, got %d components", pullString, n)
-	}
-
-	if repoTag := strings.Split(res.repo, ":"); len(repoTag) == 2 {
-		res.repo = repoTag[0]
-		res.tag = repoTag[1]
-	}
-
-	return res, nil
 }
 
 func upsertPR(gc pgithub.Client, dir, githubUsername string, token []byte, selfApprove, pruneUnusedReplacements, ensureCorrectPromotionDockerfile bool) error {
@@ -584,11 +529,11 @@ func pruneUnusedReplacements(config *api.ReleaseBuildConfiguration, replacementC
 
 func pruneOCPBuilderReplacements(config *api.ReleaseBuildConfiguration) error {
 	return pruneReplacements(config, func(asDirective string, imageKey string) (bool, error) {
-		orgRepoTag, err := orgRepoTagFromPullString(asDirective)
+		orgRepoTag, err := cidockerfile.OrgRepoTagFromPullString(asDirective)
 		if err != nil {
 			return false, fmt.Errorf("failed to extract org and tag from pull spec %s: %w", asDirective, err)
 		}
-		if orgRepoTag.org != "ocp" || orgRepoTag.repo != "builder" {
+		if orgRepoTag.Org != "ocp" || orgRepoTag.Repo != "builder" {
 			return true, nil
 		}
 
@@ -612,7 +557,7 @@ func pruneOCPBuilderReplacements(config *api.ReleaseBuildConfiguration) error {
 		}
 
 		// Fun special case: We set up a replacement for this ourselves to prevent direct references to api.ci
-		if imagestreamTagReference.Namespace == orgRepoTag.org && imagestreamTagReference.Name == orgRepoTag.repo && imagestreamTagReference.Tag == orgRepoTag.tag {
+		if imagestreamTagReference.Namespace == orgRepoTag.Org && imagestreamTagReference.Name == orgRepoTag.Repo && imagestreamTagReference.Tag == orgRepoTag.Tag {
 			return true, nil
 		}
 
@@ -705,7 +650,7 @@ func pruneUnusedBaseImages(config *api.ReleaseBuildConfiguration, resolvedConfig
 	pruneImage := func(images *map[string]api.ImageStreamTagReference, sourceImage string) error {
 		var keep bool
 		for candidate := range usedBaseImages {
-			orgRepoTag, err := orgRepoTagFromPullString(candidate)
+			orgRepoTag, err := cidockerfile.OrgRepoTagFromPullString(candidate)
 			if err != nil {
 				return fmt.Errorf("failed to parse string %s as pullspec: %w", candidate, err)
 			}

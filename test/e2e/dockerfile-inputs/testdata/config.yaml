@@ -1,0 +1,80 @@
+base_images:
+  os:
+    name: ubi-minimal
+    namespace: ocp
+    tag: '9'
+  cli:
+    name: "4.15"
+    namespace: ocp
+    tag: cli
+build_root:
+  image_stream_tag:
+    name: release
+    namespace: openshift
+    tag: rhel-9-release-golang-1.24-openshift-4.20
+resources:
+  '*':
+    requests:
+      cpu: 10m
+images:
+- dockerfile_literal: |
+    FROM registry.ci.openshift.org/ocp/4.19:base
+    RUN echo "Hello, World!"
+  to: auto-detect-single
+- dockerfile_literal: |
+    FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.22-openshift-4.19 AS builder
+    FROM registry.ci.openshift.org/ocp/4.18:base
+    COPY --from=builder /bin/gcc /bin/gcc
+  to: auto-detect-multiple
+- dockerfile_literal: |
+    FROM registry.ci.openshift.org/ocp/4.17:base
+    FROM replaced-by-from
+    RUN echo "Hello, World!"
+  to: auto-detect-from-src
+  from: src
+- dockerfile_literal: |
+    FROM quay-proxy.ci.openshift.org/openshift/ci:ocp_builder_rhel-9-golang-1.23-openshift-4.20
+    RUN echo "Testing quay-proxy auto-detect"
+  to: auto-detect-quay-proxy
+- dockerfile_literal: |
+    FROM registry.ci.openshift.org/ocp/4.19:base
+    RUN echo "This has manual inputs.as defined, should skip auto-detect"
+  inputs:
+    os:
+      as:
+      - registry.ci.openshift.org/ocp/4.19:base
+  to: manual-inputs
+- dockerfile_literal: |
+    FROM registry.ci.openshift.org/ocp/4.16:base
+    COPY oc /usr/bin/oc
+    RUN echo "This has manual inputs.path defined, should still detect base image and keep the path input"
+  inputs:
+    cli:
+      paths:
+      - destination_dir: .
+        source_path: /usr/bin/oc
+  to: manual-inputs-path
+- dockerfile_literal: |
+    FROM registry.ci.openshift.org/ocp/ubi-minimal:8 AS builder
+    FROM replaced-by-from
+    COPY --from=builder /etc/os-release /tmp/
+    RUN echo "Testing COPY --from"
+  from: src
+  to: auto-detect-copy-from
+- dockerfile_literal: |
+    FROM alpine:latest
+    RUN echo "No registry.ci.openshift.org references here"
+  to: no-registry-refs
+- dockerfile_literal: |
+    FROM registry.ci.openshift.org/ocp/ubi-minimal:9
+    RUN echo "Using existing base image from config"
+  to: detect-existing-base-image
+tests:
+- as: e2e-test
+  commands: exit 0
+  container:
+    from: os
+zz_generated_metadata:
+  branch: master
+  org: openshift
+  repo: ci-tools

@@ -1,12 +1,12 @@
 import boto3
 import botocore.exceptions
-import json
 import logging
 import time
 from typing import Dict, List, Optional, NamedTuple
 
 # Important: Be aware of DPP/PCO resource pruning in the OCP CI ephemeral accounts. You must request
-# that resources created when installing this solution (e.g. the Lambda & policies) need to be preserved.
+# that resources created when installing this solution (e.g. the Lambda, IAM roles, instance profiles)
+# need to be preserved.
 #
 # This lambda is meant to be installed into an AWS account where you want to dynamically
 # replace the use of expensive NAT Gateway network traffic with inexpensive traffic
@@ -16,12 +16,12 @@ from typing import Dict, List, Optional, NamedTuple
 # Traffic through a NAT Gateway is charged several cents per GB. Traffic through a
 # NAT instance is nearly free (we just pay for the small EC2 instance and its public IP address).
 #
-# The solution works by listening to events in a AWS account where we install ephemeral OCP clusters
-# for testing. An AWS service called EventBridge can be used trigger this lambda function when
+# The solution works by listening to events in an AWS account where we install ephemeral OCP clusters
+# for testing. An AWS service called EventBridge can be used to trigger this lambda function when
 # certain events occur. We are interested in this lambda reacting to several events (more on why,
 # later):
 # 1. The creation of NAT Gateways.
-# 2. New EC2 instances starting in the account.
+# 2. New EC2 instances starting in the account (specifically master nodes).
 # 3. EC2 instances being terminated in the account.
 # 4. The deletion of NAT Gateways.
 #
@@ -44,22 +44,21 @@ from typing import Dict, List, Optional, NamedTuple
 #       A private subnet does not have an IGW. EC2 Instances attached to a private subnet, even
 #       if they had a public IP address cannot not communicate directly to the Internet with it.
 #       Instead, these instances have private IP addresses (e.g. 10.0.29.172) and use a NAT
-#       gateway to perform addresses translation to communicate on the Internet. If you curl a "what is my IP"
+#       gateway to perform address translation to communicate on the Internet. If you curl a "what is my IP"
 #       service from an OpenShift node, you will see the public IP address of the NAT gateway,
 #       in the AZ for the node and not the node itself (which does not have a public ipv4 in a standard installation).
-#    b. A NAT gateway attached to the private subnet.
-#    c. An IGW attached to the public network.
+#    b. A NAT gateway attached to the public subnet (providing NAT for instances in the private subnet).
+#    c. An IGW attached to the VPC (used by public subnets).
 #    d. Zero or more master or worker nodes attached to the private network.
 #    e. Two RouteTables. One for the public subnet and one for the private. The RouteTable
 #       tells AWS how to route network traffic from an instance attached to a subnet. The
 #       most important routes in this solution are those in the private subnet's RouteTable.
 #       An entry that routes traffic within the private subnet: e.g. 10.0.0.0/19 => local.
-#       And an entry that routes outbound traffic to the Internet: 0.0.0.0/0 => NAT Gateway instance Id.
+#       And an entry that routes outbound traffic to the Internet: 0.0.0.0/0 => NAT Gateway ID.
 #       This entry is used to route traffic for everything NOT in the private subnet's CIDR.
 #
 #  The goal of this lambda is to replace this 0.0.0.0/0 route in the private subnet with
-#  0.0.0.0/0 => EC2 NAT instance network interface (ENI) where the EC2 instance has been enabled
-#  to provide NAT services.
+#  0.0.0.0/0 => EC2 NAT instance where the EC2 instance has been enabled to provide NAT services.
 #
 # With the knowledge that ephemeral IPI clusters are being created in the AWS account, the
 # lambda takes action to provision a NAT instance in each public subnet being used by a cluster.
@@ -67,22 +66,40 @@ from typing import Dict, List, Optional, NamedTuple
 # the corresponding private subnet associated with the cluster & AZ to route 0.0.0.0/0 traffic
 # (i.e. traffic destined for the Internet) to itself. The NAT instance resides in the
 # public network and uses the IGW to communicate to the internet on behalf of other
-# instances in the cluster to the internet.
-# If the instance is shutdown gracefully, it will reverse this process (by way of a systemd unit
+# instances in the cluster.
+#
+# If the NAT instance is shutdown gracefully, it will reverse this process (by way of a systemd unit
 # installed by userData on startup) and restore the former route for the NAT gateway to handle
-# the traffic. As a backup for a graceful shutdown, the lambda itself will also listen for
-# TerminateInstances API calls and, if a master or the NAT instance is targeted, the lambda
-# will restore the NAT Gateway route.
+# the traffic. As a backup for ungraceful shutdown, the lambda listens for TerminateInstances API
+# calls and triggers cleanup when:
+#   - A NAT instance is terminated (always triggers cleanup), OR
+#   - A master node is terminated AND no other masters are running in the VPC (indicates cluster teardown)
+# The master node check prevents false positive cleanups during MachineHealthCheck (MHC) replacements,
+# where a single unhealthy master is replaced while the cluster continues running.
 #
 # The specific actions taken by the lambda are triggered by AWS API calls reported by the AWS
 # EventBridge and leading to invocations of the lambda. Those events are as follows:
-# 1. CreateNatGateway (the creation of NAT Gateways). We use this as a trigger to try to start the
-#    NAT instance that will run in the AZ of the NatGateway.
-# 2. New instances starting in the account.
-# 3. Instances being terminated in the account. We use this to detect if a master node or NAT instance is being
-#    shutdown -- implying the ephemeral cluster is being destroyed -- which we use to restore the NAT Gateway route
-#    and the deletion of resources created by the lambda (like the NAT instance).
-# 4. DeleteNatGateway - A final attempt is made to clean up in case masters aren't terminated.
+#
+# 1. CreateNatGateway: Triggers creation of a NAT instance in the same AZ as the NAT Gateway.
+#    The NAT instance is placed in the public subnet and configured to provide NAT for the
+#    private subnet. The instance's userData script waits for the 0.0.0.0/0 route to exist
+#    in the private route table (handling race conditions with the installer), then replaces
+#    it to route through itself instead of the NAT Gateway.
+#
+# 2. RunInstances (master nodes): When a master node starts with the ci-nat-replace=true tag,
+#    the lambda ensures the route table is updated to use the NAT instance. This handles race
+#    conditions where the installer might overwrite the route after the NAT instance set it.
+#
+# 3. TerminateInstances: Cleanup is triggered based on what's being terminated:
+#    - NAT instance termination: Always triggers cleanup (restore NAT Gateway route, delete resources).
+#    - Master node termination: Only triggers cleanup if no other masters are running in the VPC.
+#      This distinguishes between MHC replacement (other masters still running, skip cleanup)
+#      and cluster teardown (all masters being terminated, trigger cleanup).
+#    - Bootstrap instance termination: Ignored (cluster is still being installed).
+#
+# 4. DeleteNatGateway: Final cleanup opportunity. Finds any NAT instances associated with the
+#    deleted gateway (by tag) and triggers cleanup. This handles cases where other cleanup
+#    paths may have been missed.
 #
 #  Q: Why don't all installations use NAT instances instead of NAT Gateways? The AWS Gateway
 #     resource provides unique HA features that are complex to replicate. It does not require
@@ -92,17 +109,22 @@ from typing import Dict, List, Optional, NamedTuple
 #     long period of time, as software tends to do, that must be detected and a procedure
 #     must be in place to detect and recover from the problem.
 #     Our ephemeral clusters, however, are short-lived. In the extremely unlikely situation
-#     where a NAT instance fails over that short lifespan, we can tolerate a test failure .
+#     where a NAT instance fails over that short lifespan, we can tolerate a test failure.
 #
 #  Q: What if the NAT instance does not come up?
 #  A: The change to the RouteTable is performed by the startup script run by the instance
 #     (i.e. the AWS userData). If the NAT instance does not come up successfully, it will
 #     not change the route and the cluster will use the NAT Gateway.
 #
-#  Q: What if that NAT instance / other resources crated by the lambda fail to be cleaned up by
-#     the lambda?
-#  A: We should monitor this, but ultimately the DPP pruner should delete
-#     any stragglers.
+#  Q: What if the NAT instance / other resources created by the lambda fail to be cleaned up?
+#  A: We should monitor this, but ultimately the DPP pruner should delete any stragglers.
+#
+#  Q: What about race conditions during cluster teardown with multiple masters?
+#  A: When multiple masters are terminated simultaneously, each Lambda invocation checks for
+#     other running masters. By the time the TerminateInstances CloudTrail event is generated,
+#     the instance state has already changed to "shutting-down". So later Lambda invocations
+#     will see earlier-terminated masters as non-running, ensuring at least one Lambda
+#     correctly triggers cleanup.
 #
 # EventBridge trigger on:
 #   CloudTrail APIs:
@@ -112,53 +134,17 @@ from typing import Dict, List, Optional, NamedTuple
 #   - TerminateInstances
 #
 # Lambda
-# Timeout: 10minutes  (this is primarily to allow graceful cleanup of resources)
+# Timeout: 10 minutes (primarily to allow graceful cleanup of resources with retries)
+#
+# Infrastructure (managed by CloudFormation):
+# - IAM Role for NAT instances with permissions to modify route tables and source/dest check
+# - IAM Instance Profile (NAT_INSTANCE_PROFILE_NAME) attached to NAT instances
+#
 # Lambda Role policies required:
 # - AmazonEC2FullAccess
 # - AWSLambdaBasicExecutionRole
-# - And an inline:
-# {
-#   "Version": "2012-10-17",
-#   "Statement": [
-#     {
-#       "Effect": "Allow",
-#       "Action": [
-#         "iam:CreateInstanceProfile",   # To be able to create new EC2 instance profiles for the NAT instances
-#
-#         # To assign privileges to the instance profiles.
-#         "iam:AddRoleToInstanceProfile",
-#         "iam:GetInstanceProfile",
-#         "iam:CreateRole",
-#         "iam:AttachRolePolicy",
-#         "iam:PutRolePolicy",
-#         "iam:ListInstanceProfiles",
-#         "iam:ListInstanceProfilesForRole",
-#         "iam:ListRoles",
-#         "iam:GetRole",
-#         "iam:ListAttachedRolePolicies",
-#         "iam:ListRolePolicies",
-#
-#         # To clean up instance profile
-#         "iam:DeleteInstanceProfile",
-#         "iam:DeleteRole",
-#         "iam:DetachRolePolicy",
-#         "iam:RemoveRoleFromInstanceProfile",
-#         "iam:DeleteRolePolicy",
-#         "iam:TagInstanceProfile",
-#
-#         # To get information on the latest AMIs
-#         "ssm:GetParameter"
-#       ],
-#       "Resource": "*"
-#     },
-#     # Allow the lambda to pass a permission into a newly created instance profile.
-#     {
-#       "Effect": "Allow",
-#       "Action": "iam:PassRole",
-#       "Resource": "arn:aws:iam::892173657978:role/Created-*"
-#     }
-#   ]
-# }
+# - ssm:GetParameter (to get the latest Amazon Linux 2 AMI)
+# - iam:PassRole for the NAT instance role (created by CloudFormation)
 
 
 # Used on different resources to indicate the NAT instance
@@ -190,7 +176,10 @@ NAT_INSTANCES_INFO = [
 ]
 
 
-VERSION = 'v1.1'
+# The instance profile created by CloudFormation for NAT instances to use
+NAT_INSTANCE_PROFILE_NAME = 'use-nat-instance-profile'
+
+VERSION = 'v1.5'
 
 
 class RequestInfoFilter(logging.Filter):
@@ -248,14 +237,6 @@ def get_ec2_client(region):
     return client_cache[key]
 
 
-def get_iam_client(region):
-    global client_cache
-    key = f'{region}-iam'
-    if key not in client_cache:
-        client_cache[key] = boto3.client("iam", region_name=region)
-    return client_cache[key]
-
-
 def get_latest_amazon_linux2_ami(region, nat_instance_idx):
     global client_cache
     key = f'{region}-ami'
@@ -309,19 +290,32 @@ def lambda_handler(event, context):
 
         nat_gateway_id = detail["requestParameters"]['DeleteNatGatewayRequest']["NatGatewayId"]
 
-        response = ec2_client.describe_nat_gateways(NatGatewayIds=[nat_gateway_id])
-        nat_gateway = response["NatGateways"][0]
-        nat_gateway_tags = nat_gateway.get('Tags')
+        # Find any NAT instance associated with this gateway by tag to get the VPC ID.
+        # If a NAT instance exists, we know we created it (ci-nat-replace was true).
+        # This avoids race conditions where the NAT gateway is already deleted.
+        response = ec2_client.describe_instances(
+            Filters=[
+                {"Name": f"tag:{TAG_KEY_NAT_GATEWAY_ID}", "Values": [nat_gateway_id]},
+                {"Name": "instance-state-name", "Values": ["running", "pending", "stopping", "stopped", "shutting-down"]},
+            ]
+        )
 
-        if not tags_has_tag(nat_gateway_tags, TAG_KEY_CI_NAT_REPLACE, "true"):
-            return  # Exit early if not a candidate
+        reservations = response.get("Reservations", [])
+        if not reservations or not reservations[0].get("Instances"):
+            # No NAT instance found - either we never created one (ci-nat-replace wasn't true)
+            # or it was already cleaned up
+            logger.info(f'No NAT instance found for gateway {nat_gateway_id}; nothing to clean up')
+            return
 
-        logger.info(f'NAT gateway {nat_gateway_id} has correct tags; cleaning up NAT instance')
-        # When we start a NAT instance for a gateway, we tag it with the VPC
-        # for this purpose. natgateway['VpcId'] may not return what we need
-        # because the gateway is in the process of being deleted and may no
-        # longer be associated with the VPC.
-        vpc_id = get_tag(nat_gateway_tags, TAG_KEY_VPC_ID)
+        instance = reservations[0]["Instances"][0]
+        instance_tags = instance.get('Tags', [])
+        vpc_id = get_tag(instance_tags, TAG_KEY_VPC_ID)
+
+        if not vpc_id:
+            logger.warning(f'NAT instance {instance["InstanceId"]} for gateway {nat_gateway_id} has no VPC tag; skipping cleanup')
+            return
+
+        logger.info(f'Found NAT instance {instance["InstanceId"]} for gateway {nat_gateway_id} in VPC {vpc_id}')
         cleanup(region, vpc_id)
 
     elif event_name == 'RunInstances':
@@ -342,7 +336,7 @@ def lambda_handler(event, context):
             # be sufficient.
             instance_name = get_tag(tag_set, 'Name')
             cluster_role = get_tag(tag_set, 'sigs.k8s.io/cluster-api-provider-aws/role')
-            if (cluster_role and cluster_role not in ['master', 'control-plane']) or (not cluster_role and '-master' not in instance_name):
+            if (cluster_role and cluster_role not in ['master', 'control-plane']) or (not cluster_role and (not instance_name or '-master' not in instance_name)):
                 return
 
             logger.info(f'Running tagged instance {instance_id} since it is part of the control plane')
@@ -374,14 +368,47 @@ def lambda_handler(event, context):
                     if not nat_instance_vpc_id:
                         return
 
-                    if '-bootstrap' in instance_name:
+                    if instance_name and '-bootstrap' in instance_name:
                         # We should not terminate the NAT instance just because the bootstrap machine is
                         # being terminated.
                         return
 
-                    logger.info(f'Terminating instance {instance_id} was tagged with NAT instance information')
-                    # If this instance was tagged by RunInstances, then we also use it
-                    # trigger the shutdown of the NAT instance.
+                    # Check if this is a NAT instance or a cluster node (master/worker)
+                    if tags_has_tag(instance_tags, TAG_KEY_NAT_GATEWAY_ID):
+                        # This is a NAT instance - always trigger cleanup
+                        logger.info(f'NAT instance {instance_id} ({instance_name}) is being terminated; triggering cleanup')
+                        set_nat_instance_enabled(region, nat_instance_vpc_id, False)
+                        return
+
+                    # This is a cluster node (master/worker) with ci-nat-vpc tag.
+                    # Only trigger cleanup if no other masters are running in this VPC.
+                    # This distinguishes between:
+                    # - MachineHealthCheck replacement (other masters still running) -> skip cleanup
+                    # - Cluster teardown (all masters being terminated) -> trigger cleanup
+                    #
+                    # Race condition analysis: If multiple masters are terminated simultaneously,
+                    # each Lambda invocation checks for other running masters. By the time the
+                    # TerminateInstances CloudTrail event is generated, the instance state has
+                    # already changed to "shutting-down". So later Lambda invocations will see
+                    # earlier-terminated masters as non-running, ensuring at least one Lambda
+                    # correctly triggers cleanup.
+                    other_masters = ec2_client.describe_instances(
+                        Filters=[
+                            {"Name": "vpc-id", "Values": [nat_instance_vpc_id]},
+                            {"Name": "instance-state-name", "Values": ["running", "pending"]},
+                            {"Name": "tag:Name", "Values": ["*-master-*"]},
+                        ]
+                    )
+                    running_master_count = sum(
+                        len(res.get("Instances", []))
+                        for res in other_masters.get("Reservations", [])
+                    )
+
+                    if running_master_count > 0:
+                        logger.info(f'Master {instance_id} ({instance_name}) terminated but {running_master_count} other masters still running in VPC {nat_instance_vpc_id}; skipping cleanup (likely MachineHealthCheck replacement)')
+                        return
+
+                    logger.info(f'Master {instance_id} ({instance_name}) terminated and no other masters running in VPC {nat_instance_vpc_id}; triggering cleanup (likely cluster teardown)')
                     set_nat_instance_enabled(region, nat_instance_vpc_id, False)
                     return
 
@@ -418,7 +445,9 @@ def set_nat_instance_enabled(region: str, vpc_id: str, enabled: bool):
         nat_instance_id = get_tag(route_table_tags, TAG_KEY_NAT_INSTANCE_ID)
         route_table_id = route_table['RouteTableId']
 
-        if nat_instance_id:
+        # Validate that nat_instance_id is actually an instance ID (starts with 'i-')
+        # It could be a NAT Gateway ID if the userData script failed to update the route
+        if nat_instance_id and nat_instance_id.startswith('i-'):
             # Check if the route is already correctly set
             routes = route_table.get('Routes', [])
             needs_update = True
@@ -541,6 +570,10 @@ def handle_create_nat_gateway(region: str, nat_gateway_id: str, public_subnet_id
                                            private_subnet=private_subnet,
                                            key_name=key_name)
 
+    if not new_nat_instance:
+        logger.error(f'Failed to create NAT instance for NAT gateway {nat_gateway_id}')
+        return None
+
     new_nat_instance_id = new_nat_instance["InstanceId"]
     set_tag(ec2_client, nat_gateway_id, TAG_KEY_NAT_INSTANCE_ID, new_nat_instance_id)
     return new_nat_instance
@@ -577,27 +610,62 @@ def set_tag(ec2_client, resource_id, key, value):
 def create_nat_security_group(ec2_client, nat_gateway_id: str, public_subnet: Dict, private_subnet: Dict) -> Optional[str]:
     """
     Attempts to create a security group for the forthcoming NAT VM instance. Returns
-    the security group ID.
+    the security group ID. If the security group already exists (e.g., from a retry),
+    returns the existing security group ID.
     """
     vpc_id = public_subnet["VpcId"]  # Both subnets belong to the same VPC
     private_cidr = private_subnet["CidrBlock"]  # Extract private subnet CIDR
     public_subnet_name = get_tag(public_subnet.get('Tags', []), 'Name')
+    sg_name = f"{public_subnet_name}-ci-nat-sg"
+
+    # Check if security group already exists (e.g., from a previous attempt or retry)
+    try:
+        existing_sgs = ec2_client.describe_security_groups(
+            Filters=[
+                {"Name": "group-name", "Values": [sg_name]},
+                {"Name": "vpc-id", "Values": [vpc_id]},
+            ]
+        )
+        if existing_sgs.get("SecurityGroups"):
+            nat_sg_id = existing_sgs["SecurityGroups"][0]["GroupId"]
+            logger.info(f"Using existing NAT Security Group: {nat_sg_id}")
+            return nat_sg_id
+    except botocore.exceptions.ClientError as e:
+        logger.warning(f"Error checking for existing security group: {e}")
 
     # Create Security Group for the instance
-    sg_response = ec2_client.create_security_group(
-        GroupName=f"{public_subnet_name}-ci-nat-sg",
-        Description="Security group for NAT instance",
-        VpcId=vpc_id,
-        TagSpecifications=[{
-            "ResourceType": "security-group",
-            "Tags": [
-                {"Key": TAG_KEY_NAT_GATEWAY_ID, "Value": nat_gateway_id},
-                {'Key': TAG_KEY_VPC_ID, "Value": vpc_id},
-            ]
-        }]
-    )
-    nat_sg_id = sg_response["GroupId"]
-    logger.info(f"Created NAT Security Group: {nat_sg_id}")
+    try:
+        sg_response = ec2_client.create_security_group(
+            GroupName=sg_name,
+            Description="Security group for NAT instance",
+            VpcId=vpc_id,
+            TagSpecifications=[{
+                "ResourceType": "security-group",
+                "Tags": [
+                    {"Key": TAG_KEY_NAT_GATEWAY_ID, "Value": nat_gateway_id},
+                    {'Key': TAG_KEY_VPC_ID, "Value": vpc_id},
+                ]
+            }]
+        )
+        nat_sg_id = sg_response["GroupId"]
+        logger.info(f"Created NAT Security Group: {nat_sg_id}")
+    except botocore.exceptions.ClientError as e:
+        if 'InvalidGroup.Duplicate' in str(e):
+            # Race condition - another invocation created it first, fetch the existing one
+            existing_sgs = ec2_client.describe_security_groups(
+                Filters=[
+                    {"Name": "group-name", "Values": [sg_name]},
+                    {"Name": "vpc-id", "Values": [vpc_id]},
+                ]
+            )
+            if existing_sgs.get("SecurityGroups"):
+                nat_sg_id = existing_sgs["SecurityGroups"][0]["GroupId"]
+                logger.info(f"Security group already exists, using: {nat_sg_id}")
+                return nat_sg_id
+            else:
+                raise
+        else:
+            raise
 
     # Allow inbound traffic from the private subnet
     ec2_client.authorize_security_group_ingress(
@@ -636,126 +704,6 @@ def create_nat_security_group(ec2_client, nat_gateway_id: str, public_subnet: Di
     )
 
     return nat_sg_id
-
-
-def create_instance_profile(region, nat_gateway_id: str) -> str:
-    """
-    Creates a role for the NAT instance to use to manage the routing table
-    for the private subnet. Returns the instance profile name.
-    """
-
-    iam_client = get_iam_client(region)
-    instance_profile_name = f"Created-{nat_gateway_id}"
-
-    try:
-        iam_client.get_instance_profile(InstanceProfileName=instance_profile_name)
-        logger.warning(f'Desired instance profile already exists: {instance_profile_name}')
-    except:
-        iam_client.create_instance_profile(
-            InstanceProfileName=instance_profile_name,
-            # Tag these instances to make it easy to find for clean up
-            Tags=[
-                {
-                    'Key': TAG_KEY_NAT_GATEWAY_ID,
-                    'Value': nat_gateway_id
-                }
-            ]
-        )
-        logger.info(f'Created desired instance profile: {instance_profile_name}')
-
-    # Allow the ec2 instance to assume a role
-    trust_policy = {
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Effect": "Allow",
-                "Principal": {"Service": "ec2.amazonaws.com"},
-                "Action": "sts:AssumeRole"
-            }
-        ]
-    }
-
-    # What the EC2 instance can do with that role
-    policy_document = {
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Effect": "Allow",
-                "Action": [
-                    # Allow the instance to update route tables when it finishes booting.
-                    "ec2:ReplaceRoute",
-                ],
-                "Resource": "*"
-            },
-            {
-                # In order for the EC2 NAT instance to indicate that it has successfully
-                # run through its userData, it will tag the routetable with this it is
-                # associated at the end of userData script.
-                "Effect": "Allow",
-                "Action": [
-                    "ec2:CreateTags",
-                ],
-                "Resource": "arn:aws:ec2:*:*:route-table/*"
-            },
-            {
-                "Effect": "Allow",
-                "Action": [
-                    "ec2:ModifyInstanceAttribute",
-                ],
-                "Resource": "*",
-                "Condition": {
-                    "StringEquals": {
-                        # Only allow the instance to modify its own attributes
-                        # This is used by userData startup script to disable
-                        # source/dest check necessary to perform as a NAT.
-                        "ec2:InstanceID": "${ec2:InstanceID}"
-                    }
-                }
-            }
-        ]
-    }
-
-    try:
-        iam_client.get_role(RoleName=instance_profile_name)
-        logger.warning(f'Desired instance profile Role already exists: {instance_profile_name}')
-    except:
-        iam_client.create_role(
-            RoleName=instance_profile_name,
-            AssumeRolePolicyDocument=json.dumps(trust_policy)
-        )
-        logger.info(f'Created desired instance profile Role: {instance_profile_name}')
-
-    try:
-        # Attach the inline policy to the role
-        iam_client.put_role_policy(
-            RoleName=instance_profile_name,
-            PolicyName=instance_profile_name,
-            PolicyDocument=json.dumps(policy_document)
-        )
-        logger.info(f'Added policy to instance profile Role: {instance_profile_name}')
-    except Exception as e:
-        logger.error(f'Error adding policy to instance profile Role: {instance_profile_name}: {e}')
-
-    # IAM is slow in getting resources created and viable for use.
-    # Retry adding the role for several minutes before giving up
-    for attempt in reversed(range(24)):
-        try:
-            # Add the role to the instance profile
-            iam_client.add_role_to_instance_profile(
-                InstanceProfileName=instance_profile_name,
-                RoleName=instance_profile_name
-            )
-            logger.info(f'Added Role to instance profile: {instance_profile_name}')
-            break
-        except botocore.exceptions.ClientError as e:
-            if e.response["Error"]["Code"] == "NoSuchEntity" and attempt > 0:
-                logger.info(f"Role '{instance_profile_name}' not ready yet, retrying... {attempt}")
-                time.sleep(10)
-            else:
-                logger.error(f'Error adding role to instance profile to {instance_profile_name}: {e}')
-                raise
-
-    return instance_profile_name
 
 
 def create_nat_instance(ec2_client, vpc_id, nat_gateway_id, public_subnet: Dict, private_subnet: Dict, key_name: Optional[str] = None) -> Optional[Dict]:
@@ -801,14 +749,13 @@ def create_nat_instance(ec2_client, vpc_id, nat_gateway_id, public_subnet: Dict,
         time.sleep(10)
 
     if not private_route_table_id:
-        print(f'Timeout waiting for route table in private subnet: {private_subnet_id}')
+        logger.error(f'Timeout waiting for route table in private subnet: {private_subnet_id}')
+        return None
 
     nat_sg_id = create_nat_security_group(ec2_client,
                                           nat_gateway_id=nat_gateway_id,
                                           public_subnet=public_subnet,
                                           private_subnet=private_subnet)
-
-    instance_profile_name = create_instance_profile(region, nat_gateway_id)
 
     key_pair_info = {}
     if key_name:
@@ -817,75 +764,88 @@ def create_nat_instance(ec2_client, vpc_id, nat_gateway_id, public_subnet: Dict,
     nat_instance = None
     nat_instance_idx = 0
 
-    # In AWS instance profiles can take several minutes to be created.
-    # Keep trying over 4 minutes if the exception is instance profile related.
-    for attempt in reversed(range(24)):
-        try:
-            instance = ec2_client.run_instances(
-                ImageId=get_latest_amazon_linux2_ami(region, nat_instance_idx),
-                InstanceType=NAT_INSTANCES_INFO[nat_instance_idx].instance_type,
-                NetworkInterfaces=[
-                    {
-                        'AssociatePublicIpAddress': PERMIT_IPv4_ADDRESS_POOL_USE,
-                        'SubnetId': public_subnet_id,
-                        'DeviceIndex': 0,
-                        'Groups': [nat_sg_id],
+    # Try different instance types if one is not supported in the region
+    try:
+        while nat_instance_idx < len(NAT_INSTANCES_INFO):
+            try:
+                instance = ec2_client.run_instances(
+                    ImageId=get_latest_amazon_linux2_ami(region, nat_instance_idx),
+                    InstanceType=NAT_INSTANCES_INFO[nat_instance_idx].instance_type,
+                    NetworkInterfaces=[
+                        {
+                            'AssociatePublicIpAddress': PERMIT_IPv4_ADDRESS_POOL_USE,
+                            'SubnetId': public_subnet_id,
+                            'DeviceIndex': 0,
+                            'Groups': [nat_sg_id],
+                        },
+                    ],
+                    IamInstanceProfile={
+                        # As part of its userData, the EC2 instance will update the route table
+                        # for the private network to point to itself. It needs a role to have permission
+                        # to do this. The instance profile is created by CloudFormation.
+                        'Name': NAT_INSTANCE_PROFILE_NAME
                     },
-                ],
-                IamInstanceProfile={
-                    # As part of its userData, the EC2 instance will update the route table
-                    # for the private network to point to itself. It needs a role to have permission
-                    # to do this.
-                    'Name': instance_profile_name
-                },
-                UserData=get_nat_instance_user_data(
-                    region=region,
-                    nat_gateway_id=nat_gateway_id,
-                    route_table_id=private_route_table_id,
-                ),
-                MinCount=1,
-                MaxCount=1,
-                TagSpecifications=[{
-                    "ResourceType": "instance",
-                    "Tags": [
-                        {
-                            "Key": TAG_KEY_NAT_GATEWAY_ID,
-                            "Value": nat_gateway_id
-                        },
-                        {
-                            "Key": TAG_KEY_PUBLIC_SUBNET_ID,
-                            "Value": public_subnet_id
-                        },
-                        {
-                            "Key": TAG_KEY_PRIVATE_ROUTE_TABLE_ID,
-                            "Value": private_route_table_id
-                        },
-                        {
-                            "Key": TAG_KEY_VPC_ID,
-                            "Value": vpc_id,
-                        },
-                        {
-                            "Key": "Name",
-                            "Value": f"{public_subnet_name}-ci-nat",
-                        }
-                    ]
-                }],
-                **key_pair_info
-            )
-            nat_instance = instance["Instances"][0]
-            break
-        except botocore.exceptions.ClientError as e:
-            if e.response["Error"]["Code"] == "InvalidParameterValue" and attempt > 0:
-                error_message = e.response["Error"].get('Message', '')
-                error_message = error_message.lower()
-                if 'instanceprofile' in error_message or 'instance profile' in error_message:
-                    logger.info(f'Waiting for IAM instance profile to be available: {instance_profile_name}')
-            elif e.response["Error"]["Code"] == "Unsupported":
-                logger.info(f'{NAT_INSTANCES_INFO[nat_instance_idx].instance_type} is not supported on this region.')
-                nat_instance_idx += 1
-            else:
-                raise
-        time.sleep(10)
+                    UserData=get_nat_instance_user_data(
+                        region=region,
+                        nat_gateway_id=nat_gateway_id,
+                        route_table_id=private_route_table_id,
+                    ),
+                    MinCount=1,
+                    MaxCount=1,
+                    TagSpecifications=[{
+                        "ResourceType": "instance",
+                        "Tags": [
+                            {
+                                "Key": TAG_KEY_NAT_GATEWAY_ID,
+                                "Value": nat_gateway_id
+                            },
+                            {
+                                "Key": TAG_KEY_PUBLIC_SUBNET_ID,
+                                "Value": public_subnet_id
+                            },
+                            {
+                                "Key": TAG_KEY_PRIVATE_ROUTE_TABLE_ID,
+                                "Value": private_route_table_id
+                            },
+                            {
+                                "Key": TAG_KEY_VPC_ID,
+                                "Value": vpc_id,
+                            },
+                            {
+                                "Key": "Name",
+                                "Value": f"{public_subnet_name}-ci-nat",
+                            }
+                        ]
+                    }],
+                    **key_pair_info
+                )
+                nat_instance = instance["Instances"][0]
+                break
+            except botocore.exceptions.ClientError as e:
+                if e.response["Error"]["Code"] == "Unsupported":
+                    logger.info(f'{NAT_INSTANCES_INFO[nat_instance_idx].instance_type} is not supported in this region.')
+                    nat_instance_idx += 1
+                else:
+                    raise
+    except Exception as e:
+        # If instance creation fails, clean up the security group we created
+        logger.error(f'Failed to create NAT instance: {e}. Cleaning up security group {nat_sg_id}')
+        try:
+            ec2_client.delete_security_group(GroupId=nat_sg_id)
+            logger.info(f'Deleted orphaned security group {nat_sg_id}')
+        except Exception as cleanup_error:
+            logger.warning(f'Failed to clean up security group {nat_sg_id}: {cleanup_error}')
+        raise
+
+    if not nat_instance:
+        # All instance types failed - clean up the security group
+        logger.error(f'All instance types failed. Cleaning up security group {nat_sg_id}')
+        try:
+            ec2_client.delete_security_group(GroupId=nat_sg_id)
+            logger.info(f'Deleted orphaned security group {nat_sg_id}')
+        except Exception as cleanup_error:
+            logger.warning(f'Failed to clean up security group {nat_sg_id}: {cleanup_error}')
+        return None
 
     # Tag the route table with the nat gateway that we are
     # going to replace with the NAT instance once it starts.
@@ -1005,17 +965,35 @@ systemctl enable clear-route-tag.service
 # source/dest must be disabled for a NAT instance. This permission must be provided in the IAM instance profile.
 if aws ec2 modify-instance-attribute --region {region} --instance-id $INSTANCE_ID --no-source-dest-check; then
 
-    # Record the NAT gateway id to swich back to if the NAT instance needs to be shutdown 
+    # Record the NAT gateway id to switch back to if the NAT instance needs to be shutdown 
     # ungracefully. If shutdown gracefully, the NAT instance will restore the NAT automatically.
     aws ec2 create-tags --region {region} --resources {route_table_id} --tags Key={TAG_KEY_NAT_INSTANCE_ID},Value="{nat_gateway_id}"
 
-    # Set the routing table to begin routing traffic to this instance ID.
-    if aws ec2 replace-route --region {region} --route-table-id {route_table_id} --destination-cidr-block 0.0.0.0/0 --instance-id $INSTANCE_ID; then
-        # Indicate to subsequent lambda invocations that the NAT instance thinks it is ready to serve traffic
-        aws ec2 create-tags --region {region} --resources {route_table_id} --tags Key={TAG_KEY_NAT_INSTANCE_ID},Value=$INSTANCE_ID
-        echo "Routing table for private subnet updated to route 0.0.0.0/0 to NAT instance."
+    # Wait for the 0.0.0.0/0 route to exist in the route table before trying to replace it.
+    # The cluster installer may not have created it yet (race condition).
+    echo "Waiting for 0.0.0.0/0 route to exist in route table {route_table_id}..."
+    ROUTE_EXISTS=false
+    for attempt in $(seq 1 60); do
+        if aws ec2 describe-route-tables --region {region} --route-table-ids {route_table_id} --query 'RouteTables[0].Routes[?DestinationCidrBlock==`0.0.0.0/0`]' --output text | grep -q "0.0.0.0/0"; then
+            echo "Found 0.0.0.0/0 route after $attempt attempts"
+            ROUTE_EXISTS=true
+            break
+        fi
+        echo "Attempt $attempt: 0.0.0.0/0 route not found yet, waiting 5 seconds..."
+        sleep 5
+    done
+
+    if [ "$ROUTE_EXISTS" = "false" ]; then
+        echo "ERROR: Timeout waiting for 0.0.0.0/0 route to be created. NAT instance will not be used."
     else
-        echo "ERROR: Unable to set route table entry! NAT instance will not be used."
+        # Set the routing table to begin routing traffic to this instance ID.
+        if aws ec2 replace-route --region {region} --route-table-id {route_table_id} --destination-cidr-block 0.0.0.0/0 --instance-id $INSTANCE_ID; then
+            # Indicate to subsequent lambda invocations that the NAT instance thinks it is ready to serve traffic
+            aws ec2 create-tags --region {region} --resources {route_table_id} --tags Key={TAG_KEY_NAT_INSTANCE_ID},Value=$INSTANCE_ID
+            echo "Routing table for private subnet updated to route 0.0.0.0/0 to NAT instance."
+        else
+            echo "ERROR: Unable to set route table entry! NAT instance will not be used."
+        fi
     fi
 else
     echo "ERROR: Unable to disable source/dest check! NAT instance will not be used."
@@ -1041,9 +1019,7 @@ def cleanup(region: str, vpc_id: str):
     for each.
     """
     ec2_client = get_ec2_client(region)
-    iam_client = get_iam_client(region)
 
-    created_instance_profiles = set()
     while True:
 
         # Find instances that appear to have been set up as NAT instances.
@@ -1063,12 +1039,6 @@ def cleanup(region: str, vpc_id: str):
                 instances_to_terminate = []
                 for instance in all_instances:
                     instance_id = instance['InstanceId']
-                    instance_profile_name = instance.get('IamInstanceProfile', {}).get('Arn', '').split('/')[-1]
-
-                    if instance_profile_name and 'Created-' in instance_profile_name:
-                        # The role was created for the instance, so delete it as well.
-                        created_instance_profiles.add(instance_profile_name)
-
                     instance_state = instance['State']['Name']
                     logger.info(f'Found instance {instance_id} in state {instance_state}')
                     if instance_state == 'terminated':
@@ -1091,63 +1061,6 @@ def cleanup(region: str, vpc_id: str):
             # trigger clean up as well. Allow them to perform the remainder of the clean up
             # to prevent too many redundant threads performing the cleanup.
             return
-
-        if created_instance_profiles:
-            logger.info(f"Found {len(created_instance_profiles)} instance profiles to delete: {created_instance_profiles}")
-
-            # To delete an instance profile, you need to remove all roles from it.
-            # Until this is done, you can't delete the instance profile OR the roles.
-            for instance_profile_name in created_instance_profiles:
-                while True:
-                    try:
-                        response = iam_client.get_instance_profile(InstanceProfileName=instance_profile_name)
-                        roles = response["InstanceProfile"]["Roles"]
-
-                        try:
-                            for role in roles:
-                                role_name = role["RoleName"]
-                                policies = role.get("PolicyNames", [])
-
-                                if policies:
-                                    # Delete each inline policy
-                                    for policy_name in policies:
-                                        iam_client.delete_role_policy(RoleName=role_name, PolicyName=policy_name)
-                                        logger.info(f"Deleted inline policy: {policy_name} from role {role_name}")
-
-                                iam_client.remove_role_from_instance_profile(
-                                    InstanceProfileName=instance_profile_name,
-                                    RoleName=role_name
-                                )
-                                logger.info(f"Removed role {role_name} from instance profile {instance_profile_name}")
-                        except Exception as e:
-                            logger.info(f'Unable to remove roles from instance profile {instance_profile_name}: {e}')
-
-                        try:
-                            iam_client.delete_instance_profile(
-                                InstanceProfileName=instance_profile_name
-                            )
-                            logger.info(f'Deleted instance profile: {instance_profile_name}')
-                        except Exception as e:
-                            logger.info(f'Unable to delete instance profile {instance_profile_name}: {e}')
-
-                        try:
-                            # There is also a role with the same name created for
-                            # the profile.
-                            iam_client.delete_role(RoleName=instance_profile_name)
-                            logger.info(f'Deleted role: {instance_profile_name}')
-                        except Exception as e:
-                            logger.info(f'Unable to delete instance profile role: {instance_profile_name}: {e}')
-
-                    except botocore.exceptions.ClientError as e:
-                        if e.response["Error"]["Code"] == "NoSuchEntity":
-                            # get_instance_profile didn't find the instance profile. So we have finished
-                            # deleting it.
-                            logger.info(f'Instance profile no longer detected: {instance_profile_name}')
-                            break
-                        logger.info(f'Issue trying to remove instance profile: {instance_profile_name}: {e}')
-                        time.sleep(10)
-
-            created_instance_profiles.clear()
 
         eips = get_eips_by_tag(ec2_client, TAG_KEY_VPC_ID, vpc_id)
         if eips:
@@ -1173,7 +1086,7 @@ def cleanup(region: str, vpc_id: str):
                 try:
                     logger.info(f"Deleting security group {sg_id}...")
                     ec2_client.delete_security_group(GroupId=sg_id)
-                except ec2_client.exceptions.ClientError as e:
+                except botocore.exceptions.ClientError as e:
                     error_code = e.response.get('Error', {}).get('Code', '')
                     # Some security groups cannot be deleted if they're in use
                     if error_code == 'DependencyViolation':

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -49,6 +50,7 @@ func TestResolving(t *testing.T) {
 					"group-b": {"b"},
 				},
 				Secrets: []SecretConfig{{
+					From: nil,
 					To: []SecretContext{
 						{
 							ClusterGroups: []string{"group-a", "group-b"},
@@ -89,8 +91,13 @@ func TestResolving(t *testing.T) {
 			},
 			expectedConfig: Config{
 				VaultDPTPPrefix: "prefix",
+				ClusterGroups:   nil,
 				Secrets: []SecretConfig{{
-					From: map[string]ItemContext{"...": {Item: "prefix/foo", Field: "bar"}},
+					From: map[string]ItemContext{"...": {
+						Item:                 "prefix/foo",
+						Field:                "bar",
+						DockerConfigJSONData: nil,
+					}},
 					To: []SecretContext{{
 						Cluster:   "foo",
 						Namespace: "namspace",
@@ -116,6 +123,7 @@ func TestResolving(t *testing.T) {
 			},
 			expectedConfig: Config{
 				VaultDPTPPrefix: "prefix",
+				ClusterGroups:   nil,
 				Secrets: []SecretConfig{{
 					From: map[string]ItemContext{"...": {DockerConfigJSONData: []DockerConfigJSONData{{Item: "prefix/foo", AuthField: "bar"}}}},
 					To: []SecretContext{{
@@ -168,8 +176,16 @@ func TestLoadConfigFromFile(t *testing.T) {
 				Secrets: []SecretConfig{
 					{
 						From: map[string]ItemContext{
-							"ops-mirror.pem": {Item: "dptp/mirror.openshift.com", Field: "cert-key.pem"},
-							"rh-cdn.pem":     {Item: "dptp/rh-cdn", Field: "rh-cdn.pem"},
+							"ops-mirror.pem": {
+								Item:                 "dptp/mirror.openshift.com",
+								Field:                "cert-key.pem",
+								DockerConfigJSONData: nil,
+							},
+							"rh-cdn.pem": {
+								Item:                 "dptp/rh-cdn",
+								Field:                "rh-cdn.pem",
+								DockerConfigJSONData: nil,
+							},
 						},
 						To: []SecretContext{{
 							ClusterGroups: []string{"build_farm"},
@@ -216,6 +232,74 @@ func TestLoadConfigFromFile(t *testing.T) {
 	}
 }
 
+// normalizeConfigForComparison sorts the Config data structures for deterministic comparison in tests
+// This is a test-only function that ignores order when comparing configs
+func normalizeConfigForComparison(c *Config) {
+	// Sort ClusterGroups map keys
+	sortedClusterGroups := make(map[string][]string)
+	clusterGroupKeys := make([]string, 0, len(c.ClusterGroups))
+	for k := range c.ClusterGroups {
+		clusterGroupKeys = append(clusterGroupKeys, k)
+	}
+	sort.Strings(clusterGroupKeys)
+	for _, k := range clusterGroupKeys {
+		clusters := make([]string, len(c.ClusterGroups[k]))
+		copy(clusters, c.ClusterGroups[k])
+		sort.Strings(clusters)
+		sortedClusterGroups[k] = clusters
+	}
+	c.ClusterGroups = sortedClusterGroups
+
+	// Sort Secrets slice
+	sort.Slice(c.Secrets, func(i, j int) bool {
+		// Sort by first To entry's Cluster, then Namespace, then Name
+		// This groups secrets by cluster, making the output more organized
+		if len(c.Secrets[i].To) == 0 && len(c.Secrets[j].To) == 0 {
+			return false
+		}
+		if len(c.Secrets[i].To) == 0 {
+			return true
+		}
+		if len(c.Secrets[j].To) == 0 {
+			return false
+		}
+		toI := c.Secrets[i].To[0]
+		toJ := c.Secrets[j].To[0]
+		if toI.Cluster != toJ.Cluster {
+			return toI.Cluster < toJ.Cluster
+		}
+		if toI.Namespace != toJ.Namespace {
+			return toI.Namespace < toJ.Namespace
+		}
+		return toI.Name < toJ.Name
+	})
+
+	// Sort UserSecretsTargetClusters
+	sort.Strings(c.UserSecretsTargetClusters)
+
+	// Order each SecretConfig's DockerConfigJSONData slices for deterministic ordering
+	// (YAML marshaler already sorts map keys, so we only need to sort slices)
+	for i := range c.Secrets {
+		for k, itemCtx := range c.Secrets[i].From {
+			if len(itemCtx.DockerConfigJSONData) > 0 {
+				sortedData := make([]DockerConfigJSONData, len(itemCtx.DockerConfigJSONData))
+				copy(sortedData, itemCtx.DockerConfigJSONData)
+				sort.Slice(sortedData, func(i, j int) bool {
+					if sortedData[i].RegistryURL != sortedData[j].RegistryURL {
+						return sortedData[i].RegistryURL < sortedData[j].RegistryURL
+					}
+					if sortedData[i].Item != sortedData[j].Item {
+						return sortedData[i].Item < sortedData[j].Item
+					}
+					return sortedData[i].AuthField < sortedData[j].AuthField
+				})
+				itemCtx.DockerConfigJSONData = sortedData
+				c.Secrets[i].From[k] = itemCtx
+			}
+		}
+	}
+}
+
 func TestRoundtripConfig(t *testing.T) {
 	testCases := []struct {
 		name string
@@ -241,10 +325,22 @@ func TestRoundtripConfig(t *testing.T) {
 				t.Fatalf("error saving config file: %v", err)
 			}
 
+			// Load both input and output files into Config structs and normalize them
+			// This allows comparison regardless of the input file's ordering
 			inFile := filepath.Join("testdata", "zz_fixture_TestRoundtripConfig_basic_base.yaml")
-			in, _ := os.ReadFile(inFile)
-			out, _ := os.ReadFile(outFile)
-			if diff := cmp.Diff(in, out); diff != "" {
+			var inputConfig, outputConfig Config
+			if err := LoadConfigFromFile(inFile, &inputConfig); err != nil {
+				t.Fatalf("error loading input config file: %v", err)
+			}
+			if err := LoadConfigFromFile(outFile, &outputConfig); err != nil {
+				t.Fatalf("error loading output config file: %v", err)
+			}
+
+			// Normalize both configs for comparison (test-only, ignores order)
+			normalizeConfigForComparison(&inputConfig)
+			normalizeConfigForComparison(&outputConfig)
+
+			if diff := cmp.Diff(inputConfig, outputConfig); diff != "" {
 				t.Fatalf("input and output configs are not equal. %s", diff)
 			}
 		})

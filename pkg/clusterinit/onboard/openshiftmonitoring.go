@@ -135,7 +135,8 @@ thanosQuerier:
     effect: NoSchedule
   - key: node-role.kubernetes.io/infra
     value: reserved
-    effect: NoExecute`,
+    effect: NoExecute
+`,
 			},
 		},
 	}

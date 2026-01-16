@@ -1,5 +1,197 @@
 # Contributing to ci-tools
 
+Thank you for your interest in contributing to CI-Tools! This guide will help you understand how to contribute effectively.
+
+## How to Contribute
+
+### 1. Fork and Clone
+
+```bash
+# Fork the repository on GitHub, then clone your fork
+git clone https://github.com/YOUR_USERNAME/ci-tools.git
+cd ci-tools
+
+# Add upstream remote
+git remote add upstream https://github.com/openshift/ci-tools.git
+```
+
+### 2. Create a Branch
+
+```bash
+# Create a feature branch from main
+git checkout -b feature/my-feature
+
+# Or a bugfix branch
+git checkout -b fix/bug-description
+```
+
+### 3. Make Your Changes
+
+- Write clear, readable code
+- Follow Go conventions and style
+- Add tests for new functionality
+- Update documentation as needed
+
+### 4. Test Your Changes
+
+```bash
+# Run unit tests
+make test
+
+# Run linters
+make lint
+
+# Run integration tests (if applicable)
+make integration
+
+# Verify code generation
+make verify-gen
+```
+
+### 5. Commit Your Changes
+
+```bash
+# Stage changes
+git add .
+
+# Commit with descriptive message
+git commit -m "Add feature: description of changes"
+```
+
+**Commit Message Guidelines:**
+- Use imperative mood ("Add feature" not "Added feature")
+- Keep first line under 72 characters
+- Add detailed description if needed
+- Reference issues: "Fix #123: description"
+
+### 6. Push and Create Pull Request
+
+```bash
+# Push to your fork
+git push origin feature/my-feature
+```
+
+Then create a Pull Request on GitHub with:
+- Clear title and description
+- Reference to related issues
+- Screenshots/logs if applicable
+- Checklist of what was tested
+
+## Branching Model
+
+### Branch Naming
+
+- `feature/description` - New features
+- `fix/description` - Bug fixes
+- `docs/description` - Documentation updates
+- `refactor/description` - Code refactoring
+- `test/description` - Test improvements
+
+### Branch Strategy
+
+- **main** - Production-ready code
+- **Feature branches** - Created from main, merged back via PR
+- **Release branches** - For release-specific fixes (if needed)
+
+## Coding Standards
+
+### Go Style
+
+Follow [Effective Go](https://golang.org/doc/effective_go) and [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments).
+
+**Formatting:**
+```bash
+# Use gofmt
+make gofmt
+
+# Or goimports (handles imports)
+go run ./vendor/github.com/openshift-eng/openshift-goimports/ -m github.com/openshift/ci-tools
+```
+
+**Key Guidelines:**
+- Use `gofmt` for formatting
+- Run `goimports` to organize imports
+- Follow naming conventions (exported = Capital, unexported = lowercase)
+- Keep functions focused and small
+- Add comments for exported functions/types
+
+### Code Organization
+
+- **Packages**: Group related functionality
+- **Files**: Keep files focused (one main type per file when possible)
+- **Tests**: `*_test.go` files alongside source
+- **Test Data**: Use `testdata/` directories
+
+### Error Handling
+
+```go
+// Good: Wrap errors with context
+if err != nil {
+    return fmt.Errorf("failed to load config: %w", err)
+}
+
+// Good: Use errors.Is and errors.As for error checking
+if errors.Is(err, os.ErrNotExist) {
+    // handle
+}
+```
+
+### Logging
+
+```go
+// Use logrus for structured logging
+import "github.com/sirupsen/logrus"
+
+logrus.WithFields(logrus.Fields{
+    "config": configPath,
+    "error": err,
+}).Error("Failed to load config")
+```
+
+### Testing
+
+**Unit Tests:**
+```go
+func TestFunction(t *testing.T) {
+    // Arrange
+    input := "test"
+    
+    // Act
+    result := Function(input)
+    
+    // Assert
+    if result != expected {
+        t.Errorf("Expected %v, got %v", expected, result)
+    }
+}
+```
+
+**Table-Driven Tests:**
+```go
+func TestFunction(t *testing.T) {
+    tests := []struct {
+        name     string
+        input    string
+        expected string
+    }{
+        {
+            name:     "normal case",
+            input:    "test",
+            expected: "result",
+        },
+    }
+    
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            result := Function(tt.input)
+            if result != tt.expected {
+                t.Errorf("got %v, want %v", result, tt.expected)
+            }
+        })
+    }
+}
+```
+
 ## The Code Review Process
 ### Submit a PR
 
@@ -89,7 +281,145 @@ For the critical or complex changes, it is acceptable to review the code partial
 ### Good Things
 _If you see something nice in the CL, tell the developer, especially when they addressed one of your comments in a great way. Code reviews often just focus on mistakes, but they should offer encouragement and appreciation for good practices, as well. It’s sometimes even more valuable, in terms of mentoring, to tell a developer what they did right than to tell them what they did wrong._ [1]
 
+## FAQ
+
+### General Questions
+
+**What is CI-Tools?**
+CI-Tools is a collection of command-line utilities and services that power the OpenShift Continuous Integration system. It provides tools for managing CI configurations, orchestrating builds, running tests, and managing the CI infrastructure.
+
+**Who maintains CI-Tools?**
+The OpenShift Test Platform (TP) team maintains CI-Tools. See the [OWNERS](OWNERS) file for the list of maintainers.
+
+**How do I get started?**
+1. Read the [docs/README.md](docs/README.md) for overview
+2. Set up your environment ([docs/SETUP.md](docs/SETUP.md))
+3. Explore the codebase ([docs/ARCHITECTURE.md](docs/ARCHITECTURE.md))
+
+### Development Questions
+
+**How do I build the project?**
+```bash
+# Build all tools
+make build
+
+# Install to $GOPATH/bin
+make install
+
+# Build specific tool
+go build ./cmd/ci-operator
+```
+
+**How do I run tests?**
+```bash
+# Run all unit tests
+make test
+
+# Run specific package tests
+go test ./pkg/api/...
+
+# Run integration tests
+make integration
+```
+
+**What's the difference between unit tests, integration tests, and e2e tests?**
+- **Unit Tests**: Test individual functions/units in isolation
+- **Integration Tests**: Test components working together
+- **E2E Tests**: Test complete workflows end-to-end (require cluster access)
+
+### CI Operator Questions
+
+**What is CI Operator?**
+CI Operator is the core orchestration engine that reads YAML configurations and executes multi-stage image builds and tests on OpenShift clusters.
+
+**How do I test a CI Operator config locally?**
+```bash
+ci-operator \
+  --config=path/to/config.yaml \
+  --git-ref=org/repo@branch \
+  --target=test-name \
+  --namespace=my-namespace
+```
+
+**What's the difference between `--target` and running all steps?**
+`--target` runs only the specified target and its dependencies. Without `--target`, all steps are run.
+
+### Troubleshooting
+
+**My build is failing, how do I debug it?**
+1. Check the config: `ci-operator-checkconfig --config=config.yaml`
+2. Run locally: `ci-operator --config=config.yaml --git-ref=...`
+3. Check logs: `oc logs -n namespace pod-name`
+4. Check artifacts: `oc rsync -n namespace pod:/artifacts ./local`
+
+**I'm getting "permission denied" errors**
+1. Check kubeconfig: `kubectl config current-context`
+2. Verify cluster access: `kubectl get nodes`
+3. Check RBAC permissions
+4. Try logging in: `oc login <cluster-url>`
+
+**Config changes aren't taking effect**
+1. Verify config is in correct location
+2. Check if Prow jobs were regenerated
+3. Verify PR was merged
+4. Check if Prow picked up changes (may take a few minutes)
+
+## Onboarding for New Contributors
+
+### What to Learn Before Contributing
+
+**Essential Knowledge:**
+1. **Go Programming Language** - Go basics, concurrency, testing, modules
+2. **Kubernetes/OpenShift** - Kubernetes API, Pods, Services, Controllers
+3. **YAML** - YAML syntax and working with YAML in Go
+4. **Git and GitHub** - Git workflow, GitHub Pull Request process
+
+**Recommended Knowledge:**
+1. **CI/CD Concepts** - Continuous Integration principles, build pipelines
+2. **Prow** - Prow architecture, job types, plugins
+3. **Container Technology** - Docker basics, container images, ImageStreams
+4. **Distributed Systems** - Event-driven architecture, controller pattern
+
+### Important Concepts
+
+**CI Operator Configuration**: Declarative YAML configurations that define base images, images to build, tests to run, and image promotion rules. See `pkg/api/config.go` and `pkg/config/load.go`.
+
+**Dependency Graph**: CI Operator builds a dependency graph to determine execution order. Steps have inputs (Requires) and outputs (Creates). See `pkg/api/graph.go`.
+
+**Step Execution Framework**: Steps are composable building blocks that implement a common interface. See `pkg/steps/step.go`.
+
+**Controller Pattern**: Many tools use the Kubernetes controller pattern - watch resources, reconcile desired state, handle errors gracefully. See `pkg/controller/util/reconciler.go`.
+
+### Beginner Roadmap
+
+**Phase 1: Understanding the Basics (Week 1-2)**
+- Read [docs/README.md](docs/README.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Set up development environment ([docs/SETUP.md](docs/SETUP.md))
+- Build and run a simple tool locally
+- Read through `cmd/ci-operator/main.go`
+
+**Phase 2: Understanding CI Operator (Week 3-4)**
+- Study `pkg/api/config.go` to understand configuration structure
+- Study `pkg/api/graph.go` to understand dependency graphs
+- Study `pkg/steps/` to understand step execution
+- Create a simple test config and run it locally
+
+**Phase 3: Making Your First Contribution (Week 5+)**
+- Find a good first issue (labeled "good first issue" or "help wanted")
+- Understand the problem and proposed solution
+- Implement the fix or feature
+- Write tests
+- Create a Pull Request
+
+### Getting Help
+
+- **GitHub Issues**: Search existing issues or create new ones
+- **Pull Requests**: Ask questions in PR comments
+- **Slack**: #forum-testplatform (for OpenShift team members)
+- **Documentation**: Read the docs in `docs/` directory
+
 ## References
-1. [Google Engineering Practices Documentation](https://google.github.io/eng-practices/): [How to do a code review](https://google.github.io/eng-practices/review/reviewer/) and [The CL author’s guide to getting through code review](https://google.github.io/eng-practices/review/developer/)
+
+1. [Google Engineering Practices Documentation](https://google.github.io/eng-practices/): [How to do a code review](https://google.github.io/eng-practices/review/reviewer/) and [The CL author's guide to getting through code review](https://google.github.io/eng-practices/review/developer/)
 1. [The Code Review Process in Kubernetes community](https://github.com/kubernetes/community/blob/master/contributors/guide/owners.md#the-code-review-process)
 1. [Submitting patches: the essential guide to getting your code into the kernel](https://www.kernel.org/doc/html/latest/process/submitting-patches.html)

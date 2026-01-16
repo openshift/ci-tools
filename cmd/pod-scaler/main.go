@@ -52,9 +52,13 @@ type options struct {
 }
 
 type producerOptions struct {
-	kubernetesOptions prowflagutil.KubernetesOptions
-	once              bool
-	ignoreLatest      time.Duration
+	kubernetesOptions       prowflagutil.KubernetesOptions
+	once                    bool
+	ignoreLatest            time.Duration
+	enableMeasuredPods      bool
+	bigQueryProjectID       string
+	bigQueryDatasetID       string
+	bigQueryCredentialsFile string
 }
 
 type consumerOptions struct {
@@ -74,8 +78,12 @@ func bindOptions(fs *flag.FlagSet) *options {
 	o.instrumentationOptions.AddFlags(fs)
 	fs.StringVar(&o.mode, "mode", "", "Which mode to run in.")
 	o.producerOptions.kubernetesOptions.AddFlags(fs)
-	fs.DurationVar(&o.ignoreLatest, "ignore-latest", 0, "Duration of latest time series to ignore when querying Prometheus. For instance, 1h will ignore the latest hour of data.")
-	fs.BoolVar(&o.once, "produce-once", false, "Query Prometheus and refresh cached data only once before exiting.")
+	fs.DurationVar(&o.producerOptions.ignoreLatest, "ignore-latest", 0, "Duration of latest time series to ignore when querying Prometheus. For instance, 1h will ignore the latest hour of data.")
+	fs.BoolVar(&o.producerOptions.once, "produce-once", false, "Query Prometheus and refresh cached data only once before exiting.")
+	fs.BoolVar(&o.producerOptions.enableMeasuredPods, "enable-measured-pods", false, "Enable measured pods feature. When enabled, pods are classified as 'normal' or 'measured' and measured pods run on isolated nodes to get accurate CPU/memory utilization data.")
+	fs.StringVar(&o.producerOptions.bigQueryProjectID, "bigquery-project-id", "", "Google Cloud project ID for BigQuery (required if enable-measured-pods is true)")
+	fs.StringVar(&o.producerOptions.bigQueryDatasetID, "bigquery-dataset-id", "", "BigQuery dataset ID for pod metrics (required if enable-measured-pods is true)")
+	fs.StringVar(&o.producerOptions.bigQueryCredentialsFile, "bigquery-credentials-file", "", "Path to Google Cloud credentials file for BigQuery access")
 	fs.IntVar(&o.port, "port", 0, "Port to serve admission webhooks on.")
 	fs.IntVar(&o.uiPort, "ui-port", 0, "Port to serve frontend on.")
 	fs.StringVar(&o.certDir, "serving-cert-dir", "", "Path to directory with serving certificate and key for the admission webhook server.")
@@ -244,7 +252,21 @@ func mainProduce(opts *options, cache Cache) {
 		logger.Debugf("Loaded Prometheus client.")
 	}
 
-	produce(clients, cache, opts.ignoreLatest, opts.once)
+	var bqClient *BigQueryClient
+	if opts.producerOptions.enableMeasuredPods {
+		if opts.producerOptions.bigQueryProjectID == "" || opts.producerOptions.bigQueryDatasetID == "" {
+			logrus.Fatal("bigquery-project-id and bigquery-dataset-id are required when enable-measured-pods is true")
+		}
+		cache := NewMeasuredPodCache(logrus.WithField("component", "measured-pods-producer"))
+		var err error
+		bqClient, err = NewBigQueryClient(opts.producerOptions.bigQueryProjectID, opts.producerOptions.bigQueryDatasetID, opts.producerOptions.bigQueryCredentialsFile, cache, logrus.WithField("component", "measured-pods-producer"))
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to create BigQuery client for measured pods")
+		}
+		logrus.Info("Measured pods feature enabled with BigQuery integration")
+	}
+
+	produce(clients, cache, opts.producerOptions.ignoreLatest, opts.producerOptions.once, bqClient)
 
 }
 
@@ -268,7 +290,22 @@ func mainAdmission(opts *options, cache Cache) {
 		logrus.WithError(err).Fatal("Failed to create pod-scaler reporter.")
 	}
 
-	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, reporter)
+	// Use producerOptions for measured pods config (shared between producer and consumer modes)
+	var bqClient *BigQueryClient
+	if opts.producerOptions.enableMeasuredPods {
+		if opts.producerOptions.bigQueryProjectID == "" || opts.producerOptions.bigQueryDatasetID == "" {
+			logrus.Fatal("bigquery-project-id and bigquery-dataset-id are required when enable-measured-pods is true")
+		}
+		cache := NewMeasuredPodCache(logrus.WithField("component", "measured-pods-admission"))
+		var err error
+		bqClient, err = NewBigQueryClient(opts.producerOptions.bigQueryProjectID, opts.producerOptions.bigQueryDatasetID, opts.producerOptions.bigQueryCredentialsFile, cache, logrus.WithField("component", "measured-pods-admission"))
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to create BigQuery client for measured pods")
+		}
+		logrus.Info("Measured pods feature enabled with BigQuery integration")
+	}
+
+	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, bqClient, reporter)
 }
 
 func loaders(cache Cache) map[string][]*cacheReloader {

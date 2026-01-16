@@ -27,6 +27,7 @@ func TestReplacer(t *testing.T) {
 		pruneUnusedBaseImagesEnabled                 bool
 		ensureCorrectPromotionDockerfile             bool
 		ensureCorrectPromotionDockerfileIngoredRepos sets.Set[string]
+		ignoreRepos                                  sets.Set[string]
 		promotionTargetToDockerfileMapping           map[string]dockerfileLocation
 		files                                        map[string][]byte
 		credentials                                  *usernameToken
@@ -298,7 +299,7 @@ func TestReplacer(t *testing.T) {
 				Metadata:               api.Metadata{Branch: "master", Org: "org", Repo: "repo"},
 			},
 			ensureCorrectPromotionDockerfile:             true,
-			ensureCorrectPromotionDockerfileIngoredRepos: sets.New[string]("org/repo"),
+			ensureCorrectPromotionDockerfileIngoredRepos: sets.New("org/repo"),
 			promotionTargetToDockerfileMapping:           map[string]dockerfileLocation{fmt.Sprintf("registry.svc.ci.openshift.org/ocp/%s:promotionTarget", majorMinor.String()): {contextDir: "other_dir", dockerfile: "Dockerfile.rhel"}},
 		},
 		{
@@ -499,6 +500,23 @@ func TestReplacer(t *testing.T) {
 			pruneUnusedBaseImagesEnabled: true,
 			expectWrite:                  false,
 		},
+		{
+			name: "Repo in ignore-repos list is skipped",
+			config: &api.ReleaseBuildConfiguration{
+				Metadata: api.Metadata{
+					Org:  "openshift",
+					Repo: "cluster-api-operator",
+				},
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						DockerfilePath: "Dockerfile",
+					},
+				}},
+			},
+			files:       map[string][]byte{"Dockerfile": []byte("FROM registry.ci.openshift.org/ocp/4.19:base")},
+			ignoreRepos: sets.New("openshift/cluster-api-operator"),
+			expectWrite: false,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -517,13 +535,14 @@ func TestReplacer(t *testing.T) {
 				true,
 				tc.ensureCorrectPromotionDockerfile,
 				tc.ensureCorrectPromotionDockerfileIngoredRepos,
+				tc.ignoreRepos,
 				tc.promotionTargetToDockerfileMapping,
 				majorMinor,
 				nil,
 				func(config api.ReleaseBuildConfiguration) (api.ReleaseBuildConfiguration, error) {
 					return *tc.config, nil
 				},
-			)(tc.config, &config.Info{}); err != nil {
+			)(tc.config, &config.Info{Metadata: tc.config.Metadata}); err != nil {
 				t.Errorf("replacer failed: %v", err)
 			}
 			if (fakeWriter.data != nil) != tc.expectWrite {

@@ -29,7 +29,12 @@ type boskosClient interface {
 	Metric(rtype string) (common.Metric, error)
 }
 
-var ErrNotFound = boskos.ErrNotFound
+var (
+	// ErrNotFound is returned when no resources of the requested type are currently available.
+	ErrNotFound = boskos.ErrNotFound
+	// ErrTypeNotFound is returned when the requested resource type does not exist.
+	ErrTypeNotFound = boskos.ErrTypeNotFound
+)
 
 type Metrics struct {
 	Free, Leased int
@@ -68,6 +73,7 @@ func NewClient(owner, url, username string, passwordGetter func() []byte, retrie
 	if err != nil {
 		return nil, err
 	}
+	c.DistinguishNotFoundVsTypeNotFound = true
 	return newClient(c, retries, acquireTimeout), nil
 }
 

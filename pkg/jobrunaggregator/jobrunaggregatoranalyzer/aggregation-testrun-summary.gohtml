@@ -1,10 +1,12 @@
 {{define "printTable"}}
+    {{ $jobRunIDToNumber := .JobRunIDToNumber }}
+    {{ $data := .Data }}
     <table>
             <tr>
                 <th>Name</th>
                 <th>Job Runs</th>
             </tr>
-        {{ range . }}
+        {{ range $data }}
         {{ $jobRuns := .JobRuns }}
             {{ $formatedSummary := (.Summary | formatSummary)}}
             {{ $failedQuantileData := ( "" | parseQuantileValues) }}
@@ -49,12 +51,15 @@
                 {{ range $jobRuns }}
                     {{ $jobName := .JobName}}
                     {{ $jobID := .JobRunID}}
+                    {{ $jobNumber := getJobRunNumber $jobRunIDToNumber $jobID }}
                     <div class="job-item">
                     <a href="{{ .HumanURL }}" target="_blank" style="text-decoration:none;">
                         <div class="tooltip {{ toLower .Status }}">
+                            <span class="job-number">{{ $jobNumber }}</span>
                             <div class="tooltiptext">
                                 <p>{{ $jobName }}</p>
                                 <p>ID: {{ $jobID  }}</p>
+                                <p>Number: {{ $jobNumber }}</p>
                                 {{ with $failedQuantileData }}
                                 {{ if mapHasKey . $jobID }}
                                     <div>Quantile Value: {{ (index . $jobID) }}</div>
@@ -112,8 +117,8 @@
             position: relative;
             display: inline-block;
             background-color: #0c3;
-            min-width: 20px;
-            min-height: 20px;
+            min-width: 24px;
+            min-height: 24px;
             max-width: 500px;
             color: white;
             border-radius: 5px;
@@ -189,9 +194,22 @@
             display: inline-block;
             margin: 5px 0px;
         }
+        .job-number {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-weight: bold;
+            font-size: 11px;
+            text-shadow: 0 0 2px rgba(0, 0, 0, 0.8);
+            pointer-events: none;
+            user-select: none;
+        }
     </style>
 </head>
 <body>
+{{ $jobRunIDToNumber := .JobRunIDToNumber }}
 {{ $failedData := infoForTestSuite .JobName .InitialParents .Suite isFailed }}
 {{ $skippedData := infoForTestSuite .JobName .InitialParents .Suite isSkipped }}
 {{ $successData := infoForTestSuite .JobName .InitialParents .Suite isSuccess }}
@@ -208,7 +226,7 @@
 <div>
 <h2 id="failed-tests">Failed Tests</h2>
 </div>
-{{ template "printTable" .}}
+{{ template "printTable" (dict "Data" . "JobRunIDToNumber" $jobRunIDToNumber)}}
 </div>
 {{end}}
 
@@ -217,7 +235,7 @@
 <div>
 <h2 id="skipped-tests">Skipped Tests</h2>
 </div>
-{{ template "printTable" .}}
+{{ template "printTable" (dict "Data" . "JobRunIDToNumber" $jobRunIDToNumber)}}
 </div>
 {{end}}
 
@@ -227,7 +245,7 @@
 <h2 id="passed-tests">Passed Tests</h2>
 </div>
 <div style="padding: 10px;">
-{{ template "printTable" .}}
+{{ template "printTable" (dict "Data" . "JobRunIDToNumber" $jobRunIDToNumber)}}
 </div>
 {{end}}
 </body>

@@ -610,14 +610,14 @@ func TestIsVersionedBranch(t *testing.T) {
 			expected: true,
 		},
 		{
-			name:     "invalid release branch with version 0",
+			name:     "valid release-4.0 branch",
 			branch:   "release-4.0",
-			expected: false,
+			expected: true,
 		},
 		{
-			name:     "invalid openshift branch with version 0",
+			name:     "valid openshift-4.0 branch",
 			branch:   "openshift-4.0",
-			expected: false,
+			expected: true,
 		},
 		{
 			name:     "invalid release branch with non-numeric version",
@@ -673,6 +673,31 @@ func TestIsVersionedBranch(t *testing.T) {
 			name:     "openshift branch without version",
 			branch:   "openshift-4.",
 			expected: false,
+		},
+		{
+			name:     "valid release-5.0 branch",
+			branch:   "release-5.0",
+			expected: true,
+		},
+		{
+			name:     "valid openshift-5.0 branch",
+			branch:   "openshift-5.0",
+			expected: true,
+		},
+		{
+			name:     "valid release-5.1 branch",
+			branch:   "release-5.1",
+			expected: true,
+		},
+		{
+			name:     "valid openshift-5.1 branch",
+			branch:   "openshift-5.1",
+			expected: true,
+		},
+		{
+			name:     "valid release-5.10 branch",
+			branch:   "release-5.10",
+			expected: true,
 		},
 	}
 

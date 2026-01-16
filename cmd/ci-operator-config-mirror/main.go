@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -267,5 +266,13 @@ func strP(str string) *string {
 }
 
 func isIntegrationImageStream(name string) bool {
-	return strings.HasPrefix(name, "4.")
+	// Match version patterns like "4.x", "5.x", etc.
+	if len(name) < 2 {
+		return false
+	}
+	// Check for major version digit followed by dot (e.g., "4.", "5.")
+	if name[0] >= '4' && name[0] <= '9' && name[1] == '.' {
+		return true
+	}
+	return false
 }

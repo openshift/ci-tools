@@ -65,6 +65,7 @@ func gatherOptions() (*options, error) {
 	flag.Var(o.ensureCorrectPromotionDockerfileIngoredRepos, "ensure-correct-promotion-dockerfile-ignored-repos", "Repos that are being ignored when ensuring the correct promotion dockerfile in org/repo notation. Can be passed multiple times.")
 	flag.IntVar(&o.maxConcurrency, "concurrency", 500, "Maximum number of concurrent in-flight goroutines to handle files.")
 	flag.StringVar(&o.ocpBuildDataRepoDir, "ocp-build-data-repo-dir", "../ocp-build-data", "The directory in which the ocp-build-data repository is")
+	flag.StringVar(&o.currentRelease.Major, "current-release-major", "4", "The major version of the current release that is getting forwarded to from the master branch")
 	flag.StringVar(&o.currentRelease.Minor, "current-release-minor", "6", "The minor version of the current release that is getting forwarded to from the master branch")
 	flag.BoolVar(&o.pruneUnusedReplacements, "prune-unused-replacements", false, "If replacements that match nothing should get pruned from the config. Note that if --apply-replacements is set to false pruning will not take place.")
 	flag.BoolVar(&o.pruneUnusedBaseImages, "prune-unused-base-images", false, "If base images that match nothing should get pruned from the config")
@@ -90,9 +91,11 @@ func gatherOptions() (*options, error) {
 			errs = append(errs, errors.New("--ocp-build-data-repo-dir must be set when --ensure-correct-promotion-dockerfile is set"))
 		}
 		if o.currentRelease.Minor == "" {
-			errs = append(errs, errors.New("--current-release must be set when --ensure-correct-promotion-dockerfile is set"))
+			errs = append(errs, errors.New("--current-release-minor must be set when --ensure-correct-promotion-dockerfile is set"))
 		}
-		o.currentRelease.Major = "4"
+		if o.currentRelease.Major == "" {
+			errs = append(errs, errors.New("--current-release-major must be set when --ensure-correct-promotion-dockerfile is set"))
+		}
 	}
 
 	return o, utilerrors.NewAggregate(errs)

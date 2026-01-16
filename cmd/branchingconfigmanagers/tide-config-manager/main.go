@@ -484,26 +484,56 @@ func (ve *verifiedEvent) ModifyQuery(q *prowconfig.TideQuery, repo string) {
 	q.Labels = sets.List(reqLabels)
 }
 
-// isVersionedBranch checks if a branch name matches release-4.x or openshift-4.x pattern
+// isVersionedBranch checks if a branch name matches release-X.Y or openshift-X.Y pattern
+// where X is a major version (4 or higher) and Y is a minor version
 func isVersionedBranch(branch string) bool {
-	if strings.HasPrefix(branch, "release-4.") {
-		versionPart := strings.TrimPrefix(branch, "release-4.")
-		if isValidMinorVersion(versionPart) {
-			return true
+	prefixes := []string{"release-", "openshift-"}
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(branch, prefix) {
+			versionPart := strings.TrimPrefix(branch, prefix)
+			if isValidVersion(versionPart) {
+				return true
+			}
 		}
 	}
-
-	if strings.HasPrefix(branch, "openshift-4.") {
-		versionPart := strings.TrimPrefix(branch, "openshift-4.")
-		if isValidMinorVersion(versionPart) {
-			return true
-		}
-	}
-
 	return false
 }
 
-// isValidMinorVersion checks if a string represents a valid minor version (e.g., "9", "10", "15")
+// isValidVersion checks if a string represents a valid version like "4.15", "5.0", etc.
+func isValidVersion(version string) bool {
+	parts := strings.Split(version, ".")
+	if len(parts) != 2 {
+		return false
+	}
+
+	// Validate major version (must be 4 or higher)
+	major := parts[0]
+	if major == "" {
+		return false
+	}
+	for _, char := range major {
+		if char < '0' || char > '9' {
+			return false
+		}
+	}
+	majorNum := 0
+	for _, char := range major {
+		majorNum = majorNum*10 + int(char-'0')
+	}
+	if majorNum < 4 {
+		return false
+	}
+
+	// Validate minor version
+	minor := parts[1]
+	if !isValidMinorVersion(minor) {
+		return false
+	}
+
+	return true
+}
+
+// isValidMinorVersion checks if a string represents a valid minor version (e.g., "0", "9", "10", "15")
 func isValidMinorVersion(version string) bool {
 	if version == "" {
 		return false
@@ -515,7 +545,7 @@ func isValidMinorVersion(version string) bool {
 		}
 	}
 
-	return version != "0"
+	return true
 }
 
 func (ve *verifiedEvent) GetDataFromProwConfig(*prowconfig.ProwConfig) {

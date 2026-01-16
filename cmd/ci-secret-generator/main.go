@@ -19,6 +19,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
 	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
+	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
 	"github.com/openshift/ci-tools/pkg/prowconfigutils"
 	"github.com/openshift/ci-tools/pkg/secrets"
 )
@@ -211,8 +212,9 @@ func fmtExecCmdErr(action, cmd string, wrappedErr error, stdout, stderr []byte, 
 		stdout, stderrPreamble, stderr)
 }
 
-func updateSecrets(config secretgenerator.Config, client secrets.Client, disabledClusters sets.Set[string]) error {
+func updateSecrets(config secretgenerator.Config, client secrets.Client, disabledClusters sets.Set[string], GSMsyncEnabled bool) error {
 	var errs []error
+	var allSecretsList []string
 	for _, item := range config {
 		logger := logrus.WithField("item", item.ItemName)
 		for _, field := range item.Fields {
@@ -239,6 +241,11 @@ func updateSecrets(config secretgenerator.Config, client secrets.Client, disable
 				errs = append(errs, errors.New(msg))
 				continue
 			}
+			if GSMsyncEnabled {
+				normalizedGroup := gsmvalidation.NormalizeName(item.ItemName)
+				normalizedField := gsmvalidation.NormalizeName(field.Name)
+				allSecretsList = append(allSecretsList, fmt.Sprintf("%s__%s", normalizedGroup, normalizedField))
+			}
 		}
 
 		// Adding the notes not empty check here since we dont want to overwrite any notes that might already be present
@@ -256,6 +263,13 @@ func updateSecrets(config secretgenerator.Config, client secrets.Client, disable
 			}
 		}
 	}
+	if GSMsyncEnabled {
+		err := client.UpdateIndexSecret(secrets.TestPlatformCollection, gsm.ConstructIndexSecretContent(allSecretsList))
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+
 	return utilerrors.NewAggregate(errs)
 }
 
@@ -326,7 +340,7 @@ func generateSecrets(o options, censor *secrets.DynamicCensor) (errs []error) {
 		}
 	}
 
-	if err := updateSecrets(o.config, client, o.disabledClusters); err != nil {
+	if err := updateSecrets(o.config, client, o.disabledClusters, o.enableGsmSync); err != nil {
 		errs = append(errs, fmt.Errorf("failed to update secrets: %w", err))
 	}
 

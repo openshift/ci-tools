@@ -8,14 +8,68 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
+	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
 	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 	"github.com/openshift/ci-tools/pkg/vaultclient"
 )
+
+// fakeClient is a test implementation of secrets.Client for testing
+type fakeClient struct {
+	setFieldErrors   map[string]error
+	updateIndexError error
+	indexCalls       []indexCall
+}
+
+type indexCall struct {
+	itemName string
+	payload  []byte
+}
+
+func newFakeClient() *fakeClient {
+	return &fakeClient{
+		setFieldErrors: make(map[string]error),
+		indexCalls:     []indexCall{},
+	}
+}
+
+func (f *fakeClient) SetFieldOnItem(itemName, fieldName string, fieldValue []byte) error {
+	if err, exists := f.setFieldErrors[fieldName]; exists {
+		return err
+	}
+	return nil
+}
+
+func (f *fakeClient) UpdateIndexSecret(itemName string, payload []byte) error {
+	f.indexCalls = append(f.indexCalls, indexCall{itemName: itemName, payload: payload})
+	return f.updateIndexError
+}
+
+func (f *fakeClient) UpdateNotesOnItem(itemName, notes string) error {
+	return nil
+}
+
+// ReadOnlyClient methods - not used in updateSecrets tests
+func (f *fakeClient) GetFieldOnItem(itemName, fieldName string) ([]byte, error) {
+	return nil, nil
+}
+
+func (f *fakeClient) GetInUseInformationForAllItems(optionalPrefix string) (map[string]secrets.SecretUsageComparer, error) {
+	return nil, nil
+}
+
+func (f *fakeClient) GetUserSecrets() (map[types.NamespacedName]map[string]string, error) {
+	return nil, nil
+}
+
+func (f *fakeClient) HasItem(itemname string) (bool, error) {
+	return false, nil
+}
 
 func TestItemContextsFromConfig(t *testing.T) {
 	var testCases = []struct {
@@ -193,7 +247,7 @@ func TestVault(t *testing.T) {
 					}
 				}
 			}()
-			if err := updateSecrets(tc.config, client, tc.disabledClusters); err != nil {
+			if err := updateSecrets(tc.config, client, tc.disabledClusters, false); err != nil {
 				t.Errorf("failed to update secrets: %v", err)
 			}
 			list, err := vault.ListKV("secret")
@@ -430,6 +484,204 @@ func TestValidateConfig(t *testing.T) {
 			if tc.expected == nil {
 				if diff := cmp.Diff(tc.expectedConfig, config); diff != "" {
 					t.Errorf("Error differs from expected:\n%s", diff)
+				}
+			}
+		})
+	}
+}
+
+func TestUpdateSecretsWithGSMIndex(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name                string
+		config              secretgenerator.Config
+		GSMsyncEnabled      bool
+		disabledClusters    sets.Set[string]
+		setFieldErrors      map[string]error
+		updateIndexError    error
+		expectedIndexCalls  int
+		expectedIndexFields []string
+		expectError         bool
+	}{
+		{
+			name: "GSM sync enabled - single field creates index secret",
+			config: secretgenerator.Config{{
+				ItemName: "test-item",
+				Fields: []secretgenerator.FieldGenerator{
+					{Name: "field1", Cmd: "printf 'value1'"},
+				},
+			}},
+			GSMsyncEnabled:      true,
+			expectedIndexCalls:  1,
+			expectedIndexFields: []string{"test-item__field1"},
+		},
+		{
+			name: "GSM sync enabled - one item with multiple fields",
+			config: secretgenerator.Config{{
+				ItemName: "multi-field-item",
+				Fields: []secretgenerator.FieldGenerator{
+					{Name: "field1", Cmd: "printf 'value1'"},
+					{Name: "field2", Cmd: "printf 'value2'"},
+					{Name: "field3", Cmd: "printf 'value3'"},
+				},
+			}},
+			GSMsyncEnabled:      true,
+			expectedIndexCalls:  1,
+			expectedIndexFields: []string{"multi-field-item__field1", "multi-field-item__field2", "multi-field-item__field3"},
+		},
+		{
+			name: "GSM sync enabled - multiple items basic case",
+			config: secretgenerator.Config{
+				{
+					ItemName: "item1",
+					Fields: []secretgenerator.FieldGenerator{
+						{Name: "field1", Cmd: "printf 'value1'"},
+					},
+				},
+				{
+					ItemName: "item2",
+					Fields: []secretgenerator.FieldGenerator{
+						{Name: "fieldA", Cmd: "printf 'valueA'"},
+						{Name: "fieldB", Cmd: "printf 'valueB'"},
+					},
+				},
+			},
+			GSMsyncEnabled:      true,
+			expectedIndexCalls:  1,
+			expectedIndexFields: []string{"item1__field1", "item2__fieldA", "item2__fieldB"},
+		},
+		{
+			name: "GSM sync disabled - no index secret created",
+			config: secretgenerator.Config{{
+				ItemName: "test-item",
+				Fields: []secretgenerator.FieldGenerator{
+					{Name: "field1", Cmd: "printf 'value1'"},
+					{Name: "field2", Cmd: "printf 'value2'"},
+				},
+			}},
+			GSMsyncEnabled:     false,
+			expectedIndexCalls: 0,
+		},
+		{
+			name: "GSM sync enabled - disabled cluster field excluded from index",
+			config: secretgenerator.Config{{
+				ItemName: "cluster-test-item",
+				Fields: []secretgenerator.FieldGenerator{
+					{Name: "field1", Cmd: "printf 'value1'", Cluster: "enabled-cluster"},
+					{Name: "field2", Cmd: "printf 'value2'", Cluster: "disabled-cluster"},
+					{Name: "field3", Cmd: "printf 'value3'", Cluster: "enabled-cluster"},
+				},
+			}},
+			GSMsyncEnabled:      true,
+			disabledClusters:    sets.New[string]("disabled-cluster"),
+			expectedIndexCalls:  1,
+			expectedIndexFields: []string{"cluster-test-item__field1", "cluster-test-item__field3"},
+		},
+		{
+			name: "UpdateIndexSecret error is aggregated",
+			config: secretgenerator.Config{{
+				ItemName: "test-item",
+				Fields: []secretgenerator.FieldGenerator{
+					{Name: "field1", Cmd: "printf 'value1'"},
+				},
+			}},
+			GSMsyncEnabled:      true,
+			updateIndexError:    errors.New("GSM update failed"),
+			expectedIndexCalls:  1,
+			expectedIndexFields: []string{"test-item__field1"},
+			expectError:         true,
+		},
+		{
+			name: "SetFieldOnItem error - all fields fail, index contains no fields",
+			config: secretgenerator.Config{{
+				ItemName: "test-item",
+				Fields: []secretgenerator.FieldGenerator{
+					{Name: "field1", Cmd: "printf 'value1'"},
+					{Name: "field2", Cmd: "printf 'value2'"},
+				},
+			}},
+			GSMsyncEnabled: true,
+			setFieldErrors: map[string]error{
+				"field1": errors.New("field upload failed"),
+				"field2": errors.New("field upload failed"),
+			},
+			expectedIndexCalls:  1,
+			expectedIndexFields: []string{},
+			expectError:         true,
+		},
+		{
+			name: "SetFieldOnItem partial failure - only successful fields in index",
+			config: secretgenerator.Config{{
+				ItemName: "test-item",
+				Fields: []secretgenerator.FieldGenerator{
+					{Name: "field1", Cmd: "printf 'value1'"},
+					{Name: "field2", Cmd: "printf 'value2'"},
+					{Name: "field3", Cmd: "printf 'value3'"},
+				},
+			}},
+			GSMsyncEnabled: true,
+			setFieldErrors: map[string]error{
+				"field2": errors.New("field2 upload failed"),
+			},
+			expectedIndexCalls:  1,
+			expectedIndexFields: []string{"test-item__field1", "test-item__field3"},
+			expectError:         true,
+		},
+		{
+			name: "Multiple items - index errors are aggregated",
+			config: secretgenerator.Config{
+				{
+					ItemName: "item1",
+					Fields: []secretgenerator.FieldGenerator{
+						{Name: "field1", Cmd: "printf 'value1'"},
+					},
+				},
+				{
+					ItemName: "item2",
+					Fields: []secretgenerator.FieldGenerator{
+						{Name: "field2", Cmd: "printf 'value2'"},
+					},
+				},
+			},
+			GSMsyncEnabled:      true,
+			updateIndexError:    errors.New("GSM update failed"),
+			expectedIndexCalls:  1,
+			expectedIndexFields: []string{"item1__field1", "item2__field2"},
+			expectError:         true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := newFakeClient()
+			client.setFieldErrors = tc.setFieldErrors
+			client.updateIndexError = tc.updateIndexError
+
+			err := updateSecrets(tc.config, client, tc.disabledClusters, tc.GSMsyncEnabled)
+
+			if tc.expectError && err == nil {
+				t.Errorf("expected error but got nil")
+				return
+			}
+			if !tc.expectError && err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+
+			if len(client.indexCalls) != tc.expectedIndexCalls {
+				t.Errorf("expected %d index calls, got %d", tc.expectedIndexCalls, len(client.indexCalls))
+				return
+			}
+
+			if tc.expectedIndexCalls > 0 {
+				call := client.indexCalls[0]
+				if call.itemName != secrets.TestPlatformCollection {
+					t.Errorf("expected item name %q, got %q", secrets.TestPlatformCollection, call.itemName)
+				}
+				expectedPayload := string(gsm.ConstructIndexSecretContent(tc.expectedIndexFields))
+				if string(call.payload) != expectedPayload {
+					t.Errorf("expected index payload %q, got %q", expectedPayload, string(call.payload))
 				}
 			}
 		})

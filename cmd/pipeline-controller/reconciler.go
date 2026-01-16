@@ -213,7 +213,10 @@ func (r *reconciler) reportSuccessOnPR(ctx context.Context, pj *v1.ProwJob, pres
 
 	latestBatch := make(map[string]v1.ProwJob)
 	for _, pjob := range pjs.Items {
-		// All items are presubmits with Pulls (filtered by ProwJobTypeLabel)
+		// Skip jobs with missing refs or pulls to avoid nil pointer dereference
+		if pjob.Spec.Refs == nil || len(pjob.Spec.Refs.Pulls) == 0 {
+			continue
+		}
 		if pjob.Spec.Refs.Pulls[0].SHA == pj.Spec.Refs.Pulls[0].SHA {
 			if existing, ok := latestBatch[pjob.Spec.Job]; !ok {
 				latestBatch[pjob.Spec.Job] = pjob

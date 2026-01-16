@@ -1,0 +1,44 @@
+containers:
+- args:
+  - --gcs-upload-secret=/secrets/gcs/service-account.json
+  - --gsm-config=/etc/gsm-config/gsm-config.yaml
+  - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+  - --report-credentials-file=/etc/report/credentials
+  command:
+  - ci-operator
+  image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
+  imagePullPolicy: Always
+  name: ""
+  resources:
+    requests:
+      cpu: 10m
+  volumeMounts:
+  - mountPath: /secrets/gcs
+    name: gcs-credentials
+    readOnly: true
+  - mountPath: /etc/gsm-config
+    name: gsm-config
+    readOnly: true
+  - mountPath: /secrets/manifest-tool
+    name: manifest-tool-local-pusher
+    readOnly: true
+  - mountPath: /etc/pull-secret
+    name: pull-secret
+    readOnly: true
+  - mountPath: /etc/report
+    name: result-aggregator
+    readOnly: true
+serviceAccountName: ci-operator
+volumes:
+- configMap:
+    name: gsm-config
+  name: gsm-config
+- name: manifest-tool-local-pusher
+  secret:
+    secretName: manifest-tool-local-pusher
+- name: pull-secret
+  secret:
+    secretName: registry-pull-credentials
+- name: result-aggregator
+  secret:
+    secretName: result-aggregator

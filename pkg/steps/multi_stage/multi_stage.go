@@ -10,7 +10,6 @@ import (
 
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/api/option"
 
 	coreapi "k8s.io/api/core/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -44,6 +43,19 @@ type vpnConf struct {
 	WaitTimeout *string `json:"wait_timeout"`
 	// Runtime data for the step, not present in the configuration.
 	namespaceUID int64
+}
+
+// GSMConfiguration contains all Google Secret Manager (GSM) related configuration
+// needed for multi-stage test execution.
+type GSMConfiguration struct {
+	// Config contains bundle and secret definitions from gsm-config.yaml file
+	Config *api.GSMConfig
+	// CredentialsFile is the path to the GSM service account credentials
+	CredentialsFile string
+	// Client is the initialized Google Secret Manager client
+	Client *secretmanager.Client
+	// ProjectConfig contains GSM project metadata (ID and number)
+	ProjectConfig gsm.Config
 }
 
 const (
@@ -109,10 +121,7 @@ type multiStageTestStep struct {
 	cancelObservers             func(context.CancelFunc)
 	nodeArchitecture            api.NodeArchitecture
 	enableSecretsStoreCSIDriver bool
-	gsmClient                   *secretmanager.Client
-	gsmCredentialsFile          string
-	gsmConfig                   *api.GSMConfig
-	gsmProjectConfig            gsm.Config
+	gsm                         *GSMConfiguration
 	requireNestedPodman         bool
 }
 
@@ -127,10 +136,9 @@ func MultiStageTestStep(
 	targetAdditionalSuffix string,
 	cancelObservers func(context.CancelFunc),
 	enableSecretsStoreCSIDriver bool,
-	gsmConfig *api.GSMConfig,
-	gsmCredentialsFile string,
+	gsm *GSMConfiguration,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, params, client, jobSpec, leases, nodeName, targetAdditionalSuffix, cancelObservers, enableSecretsStoreCSIDriver, gsmConfig, gsmCredentialsFile)
+	return newMultiStageTestStep(testConfig, config, params, client, jobSpec, leases, nodeName, targetAdditionalSuffix, cancelObservers, enableSecretsStoreCSIDriver, gsm)
 }
 
 func newMultiStageTestStep(
@@ -144,8 +152,7 @@ func newMultiStageTestStep(
 	targetAdditionalSuffix string,
 	cancelObservers func(context.CancelFunc),
 	enableSecretsStoreCSIDriver bool,
-	gsmConfig *api.GSMConfig,
-	gsmCredentialsFile string,
+	gsm *GSMConfiguration,
 ) *multiStageTestStep {
 	ms := testConfig.MultiStageTestConfigurationLiteral
 	var flags stepFlag
@@ -176,36 +183,9 @@ func newMultiStageTestStep(
 		cancelObservers:             cancelObservers,
 		nodeArchitecture:            testConfig.NodeArchitecture,
 		enableSecretsStoreCSIDriver: enableSecretsStoreCSIDriver,
-		gsmConfig:                   gsmConfig,
-		gsmCredentialsFile:          gsmCredentialsFile,
+		gsm:                         gsm,
 	}
 	s.requireNestedPodman = stepRequiresNestedPodman(s)
-
-	// Initialize GSM client and config if enableSecretsStoreCSIDriver is enabled
-	if enableSecretsStoreCSIDriver {
-		ctx := context.Background()
-
-		// Get GSM project config from environment
-		gsmProjectConfig, err := gsm.GetConfigFromEnv()
-		if err != nil {
-			logrus.WithError(err).Error("Failed to get GSM project config from environment")
-			// Don't return error, let it fail later in Run()
-		} else {
-			s.gsmProjectConfig = gsmProjectConfig
-		}
-
-		// Initialize GSM client with credentials
-		var opts []option.ClientOption
-		if gsmCredentialsFile != "" {
-			opts = append(opts, option.WithCredentialsFile(gsmCredentialsFile))
-		}
-		gsmClient, err := secretmanager.NewClient(ctx, opts...)
-		if err != nil {
-			logrus.WithError(err).Error("Failed to initialize GSM client in constructor")
-		} else {
-			s.gsmClient = gsmClient
-		}
-	}
 
 	return s
 }
@@ -243,10 +223,10 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 		return fmt.Errorf("failed to create secret: %w", err)
 	}
 	if s.enableSecretsStoreCSIDriver {
-		if s.gsmClient == nil {
+		if s.gsm == nil || s.gsm.Client == nil {
 			return fmt.Errorf("GSM client was not initialized - credentials file may be missing")
 		}
-		defer s.gsmClient.Close()
+		defer s.gsm.Client.Close()
 		logrus.Info("Using initialized GSM client")
 		if err := s.createSPCs(ctx); err != nil {
 			return fmt.Errorf("failed to create SecretProviderClass objects: %w", err)

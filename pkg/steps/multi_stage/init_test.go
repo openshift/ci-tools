@@ -154,11 +154,19 @@ func TestCreateSPCs(t *testing.T) {
 				FakePodExecutor: crclient,
 			}
 			step := &multiStageTestStep{
-				pre:     tc.pre,
-				test:    tc.test,
-				post:    tc.post,
-				jobSpec: &api.JobSpec{},
-				client:  fakeClient,
+				pre:                         tc.pre,
+				test:                        tc.test,
+				post:                        tc.post,
+				jobSpec:                     &api.JobSpec{},
+				client:                      fakeClient,
+				enableSecretsStoreCSIDriver: true,
+				gsm: &GSMConfiguration{
+					Config: &api.GSMConfig{},
+					ProjectConfig: gsm.Config{
+						ProjectIdString: "test-project",
+						ProjectIdNumber: "123456",
+					},
+				},
 			}
 			step.jobSpec.SetNamespace("test-ns")
 			err := step.createSPCs(context.TODO())

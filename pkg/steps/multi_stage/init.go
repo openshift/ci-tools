@@ -96,9 +96,9 @@ func (s *multiStageTestStep) createSPCs(ctx context.Context) error {
 		resolvedCredentials, err := ResolveCredentialReferences(
 			ctx,
 			step.Credentials,
-			s.gsmConfig,
-			s.gsmClient,
-			s.gsmProjectConfig,
+			s.gsm.Config,
+			s.gsm.Client,
+			s.gsm.ProjectConfig,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to resolve credentials for step %s: %w", step.As, err)

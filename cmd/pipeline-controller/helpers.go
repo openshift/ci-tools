@@ -41,12 +41,13 @@ func sendCommentWithMode(presubmits presubmitTests, pj *v1.ProwJob, ghc minimalG
 
 	var comment string
 
+	repoBaseRef := pj.Spec.Refs.Repo + "-" + pj.Spec.Refs.BaseRef
+
 	// If it's an explicit /pipeline required command, ignore manual control message
 	// and proceed with scheduling tests
 	if manualControlMessage != "" && !isExplicitCommand {
 		comment = manualControlMessage
 	} else {
-		repoBaseRef := pj.Spec.Refs.Repo + "-" + pj.Spec.Refs.BaseRef
 		var protectedCommands string
 		for _, presubmit := range presubmits.protected {
 			if !strings.Contains(presubmit.Name, repoBaseRef) {
@@ -64,6 +65,11 @@ func sendCommentWithMode(presubmits presubmitTests, pj *v1.ProwJob, ghc minimalG
 			comment += "\nScheduling tests matching the `pipeline_run_if_changed` or not excluded by `pipeline_skip_if_only_changed` parameters:"
 			comment += testContexts
 		}
+	}
+
+	// If no tests matched, send an informative comment instead of staying silent
+	if comment == "" {
+		comment = fmt.Sprintf("**Pipeline controller notification**\n\nNo second-stage tests were triggered for this PR.\n\nThis can happen when:\n- The changed files don't match any `pipeline_run_if_changed` patterns\n- All files match `pipeline_skip_if_only_changed` patterns\n- No pipeline-controlled jobs are defined for the `%s` branch\n\nUse `/test ?` to see all available tests.", pj.Spec.Refs.BaseRef)
 	}
 
 	if err := ghc.CreateComment(pj.Spec.Refs.Org, pj.Spec.Refs.Repo, pj.Spec.Refs.Pulls[0].Number, comment); err != nil {

@@ -28,6 +28,7 @@ func TestPodLifecyclePlugin_Record(t *testing.T) {
 					Name:              "test-pod",
 					Namespace:         "test-ns",
 					CreationTimestamp: metav1.Time{Time: now.Add(-1 * time.Second)},
+					Labels:            map[string]string{"ci-workload": "test-workload"},
 				},
 				Status: corev1.PodStatus{
 					Phase:     corev1.PodRunning,
@@ -48,6 +49,7 @@ func TestPodLifecyclePlugin_Record(t *testing.T) {
 					Namespace:    "test-ns",
 					CreationTime: ptrTime(now.Add(-1 * time.Second)),
 					StartTime:    ptrTime(now),
+					CIWorkload:   "test-workload",
 					PodPhase:     corev1.PodRunning,
 					ConditionTransitionTimes: map[string]time.Time{
 						string(corev1.PodScheduled):              now.Add(1 * time.Second),
@@ -69,6 +71,7 @@ func TestPodLifecyclePlugin_Record(t *testing.T) {
 					Name:              "completed-pod",
 					Namespace:         "test-ns",
 					CreationTimestamp: metav1.Time{Time: now.Add(-10 * time.Second)},
+					Labels:            map[string]string{"ci-workload": "longtests"},
 				},
 				Status: corev1.PodStatus{
 					Phase:     corev1.PodSucceeded,
@@ -99,6 +102,7 @@ func TestPodLifecyclePlugin_Record(t *testing.T) {
 					CreationTime:   ptrTime(now.Add(-10 * time.Second)),
 					StartTime:      ptrTime(now.Add(-9 * time.Second)),
 					CompletionTime: ptrTime(now.Add(-2 * time.Second)),
+					CIWorkload:     "longtests",
 					PodPhase:       corev1.PodSucceeded,
 					ConditionTransitionTimes: map[string]time.Time{
 						string(corev1.PodScheduled):    now.Add(-8 * time.Second),

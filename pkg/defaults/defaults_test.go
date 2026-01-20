@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/utils/ptr"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	"sigs.k8s.io/prow/pkg/pod-utils/downwardapi"
@@ -2247,6 +2249,364 @@ func TestFilterRequiredBinariesFromSkipped(t *testing.T) {
 			result := filterRequiredBinariesFromSkipped(tc.images, tc.skippedImages)
 			if diff := cmp.Diff(tc.expectedSkipped, result); diff != "" {
 				t.Errorf("skipped binaries differ:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestReadDockerfileForImage(t *testing.T) {
+	testCases := []struct {
+		name            string
+		image           api.ProjectDirectoryImageBuildStepConfiguration
+		readFile        readFile
+		expectedContent string
+		expectedPath    string
+		expectError     bool
+	}{
+		{
+			name: "default Dockerfile path",
+			image: api.ProjectDirectoryImageBuildStepConfiguration{
+				To: "test-image",
+			},
+			readFile: func(path string) ([]byte, error) {
+				if path == "./Dockerfile" {
+					return []byte("FROM registry.ci.openshift.org/ocp/4.19:base"), nil
+				}
+				return nil, errors.New("file not found")
+			},
+			expectedContent: "FROM registry.ci.openshift.org/ocp/4.19:base",
+			expectedPath:    "./Dockerfile",
+			expectError:     false,
+		},
+		{
+			name: "custom Dockerfile path",
+			image: api.ProjectDirectoryImageBuildStepConfiguration{
+				To: "test-image",
+				ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+					DockerfilePath: "Dockerfile.rhel",
+				},
+			},
+			readFile: func(path string) ([]byte, error) {
+				if path == "./Dockerfile.rhel" {
+					return []byte("FROM registry.ci.openshift.org/ocp/builder:rhel-9"), nil
+				}
+				return nil, errors.New("file not found")
+			},
+			expectedContent: "FROM registry.ci.openshift.org/ocp/builder:rhel-9",
+			expectedPath:    "./Dockerfile.rhel",
+			expectError:     false,
+		},
+		{
+			name: "with context directory",
+			image: api.ProjectDirectoryImageBuildStepConfiguration{
+				To: "test-image",
+				ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+					ContextDir:     "images/myimage",
+					DockerfilePath: "Dockerfile.custom",
+				},
+			},
+			readFile: func(path string) ([]byte, error) {
+				if path == "images/myimage/Dockerfile.custom" {
+					return []byte("FROM registry.ci.openshift.org/ocp/4.19:tools"), nil
+				}
+				return nil, errors.New("file not found")
+			},
+			expectedContent: "FROM registry.ci.openshift.org/ocp/4.19:tools",
+			expectedPath:    "images/myimage/Dockerfile.custom",
+			expectError:     false,
+		},
+		{
+			name: "DockerfileLiteral",
+			image: api.ProjectDirectoryImageBuildStepConfiguration{
+				To: "test-image",
+				ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+					DockerfileLiteral: ptr.To("FROM registry.ci.openshift.org/ocp/4.19:literal"),
+				},
+			},
+			readFile: func(path string) ([]byte, error) {
+				return nil, errors.New("should not be called")
+			},
+			expectedContent: "FROM registry.ci.openshift.org/ocp/4.19:literal",
+			expectedPath:    "dockerfile_literal",
+			expectError:     false,
+		},
+		{
+			name: "file not found",
+			image: api.ProjectDirectoryImageBuildStepConfiguration{
+				To: "test-image",
+			},
+			readFile: func(path string) ([]byte, error) {
+				return nil, errors.New("no such file")
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			details, err := readDockerfileForImage(tc.image, tc.readFile)
+
+			if tc.expectError {
+				if err == nil {
+					t.Error("expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if string(details.content) != tc.expectedContent {
+				t.Errorf("expected content %q, got %q", tc.expectedContent, string(details.content))
+			}
+
+			if details.path != tc.expectedPath {
+				t.Errorf("expected path %q, got %q", tc.expectedPath, details.path)
+			}
+		})
+	}
+}
+
+func TestProcessDetectedBaseImages(t *testing.T) {
+	testCases := []struct {
+		name          string
+		baseImages    map[string]api.ImageStreamTagReference
+		image         api.ProjectDirectoryImageBuildStepConfiguration
+		details       dockerfileDetails
+		expectedSteps []api.StepConfiguration
+		expectedImage api.ProjectDirectoryImageBuildStepConfiguration
+	}{
+		{
+			name:       "single registry reference",
+			baseImages: map[string]api.ImageStreamTagReference{},
+			image: api.ProjectDirectoryImageBuildStepConfiguration{
+				To: "my-image",
+			},
+			details: dockerfileDetails{
+				content: []byte("FROM registry.ci.openshift.org/ocp/4.19:base\nRUN echo hello"),
+				path:    "Dockerfile",
+			},
+			expectedSteps: []api.StepConfiguration{
+				{
+					InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+						InputImage: api.InputImage{
+							BaseImage: api.ImageStreamTagReference{
+								Namespace: "ocp",
+								Name:      "4.19",
+								Tag:       "base",
+								As:        "registry.ci.openshift.org/ocp/4.19:base",
+							},
+							To: api.PipelineImageStreamTagReference("ocp_4.19_base"),
+						},
+						Sources: []api.ImageStreamSource{{SourceType: "base_image", Name: "ocp_4.19_base"}},
+					},
+				},
+			},
+			expectedImage: api.ProjectDirectoryImageBuildStepConfiguration{
+				To: "my-image",
+				ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+					Inputs: map[string]api.ImageBuildInputs{
+						"ocp_4.19_base": {
+							As: []string{"registry.ci.openshift.org/ocp/4.19:base"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:       "multiple registry references",
+			baseImages: map[string]api.ImageStreamTagReference{},
+			image: api.ProjectDirectoryImageBuildStepConfiguration{
+				To: "my-image",
+			},
+			details: dockerfileDetails{
+				content: []byte("FROM registry.ci.openshift.org/ocp/4.19:base AS builder\nCOPY --from=registry.ci.openshift.org/ocp/4.19:tools /bin/tool /bin/\nRUN echo hello"),
+				path:    "Dockerfile",
+			},
+			expectedSteps: []api.StepConfiguration{
+				{
+					InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+						InputImage: api.InputImage{
+							BaseImage: api.ImageStreamTagReference{
+								Namespace: "ocp",
+								Name:      "4.19",
+								Tag:       "base",
+								As:        "registry.ci.openshift.org/ocp/4.19:base",
+							},
+							To: api.PipelineImageStreamTagReference("ocp_4.19_base"),
+						},
+						Sources: []api.ImageStreamSource{{SourceType: "base_image", Name: "ocp_4.19_base"}},
+					},
+				},
+				{
+					InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+						InputImage: api.InputImage{
+							BaseImage: api.ImageStreamTagReference{
+								Namespace: "ocp",
+								Name:      "4.19",
+								Tag:       "tools",
+								As:        "registry.ci.openshift.org/ocp/4.19:tools",
+							},
+							To: api.PipelineImageStreamTagReference("ocp_4.19_tools"),
+						},
+						Sources: []api.ImageStreamSource{{SourceType: "base_image", Name: "ocp_4.19_tools"}},
+					},
+				},
+			},
+			expectedImage: api.ProjectDirectoryImageBuildStepConfiguration{
+				To: "my-image",
+				ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+					Inputs: map[string]api.ImageBuildInputs{
+						"ocp_4.19_base": {
+							As: []string{"registry.ci.openshift.org/ocp/4.19:base"},
+						},
+						"ocp_4.19_tools": {
+							As: []string{"registry.ci.openshift.org/ocp/4.19:tools"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:       "no registry references",
+			baseImages: map[string]api.ImageStreamTagReference{},
+			image: api.ProjectDirectoryImageBuildStepConfiguration{
+				To: "my-image",
+			},
+			details: dockerfileDetails{
+				content: []byte("FROM docker.io/library/golang:1.21\nRUN echo hello"),
+				path:    "Dockerfile",
+			},
+			expectedSteps: nil,
+			expectedImage: api.ProjectDirectoryImageBuildStepConfiguration{
+				To: "my-image",
+			},
+		},
+		{
+			name:       "skip when manual inputs exist",
+			baseImages: map[string]api.ImageStreamTagReference{},
+			image: api.ProjectDirectoryImageBuildStepConfiguration{
+				To: "my-image",
+				ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+					Inputs: map[string]api.ImageBuildInputs{
+						"custom": {
+							As: []string{"registry.ci.openshift.org/ocp/4.19:base"},
+						},
+					},
+				},
+			},
+			details: dockerfileDetails{
+				content: []byte("FROM registry.ci.openshift.org/ocp/4.19:base\nRUN echo hello"),
+				path:    "Dockerfile",
+			},
+			expectedSteps: nil,
+			expectedImage: api.ProjectDirectoryImageBuildStepConfiguration{
+				To: "my-image",
+				ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+					Inputs: map[string]api.ImageBuildInputs{
+						"custom": {
+							As: []string{"registry.ci.openshift.org/ocp/4.19:base"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:       "manual path exist",
+			baseImages: map[string]api.ImageStreamTagReference{},
+			image: api.ProjectDirectoryImageBuildStepConfiguration{
+				To: "my-image",
+				ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+					Inputs: map[string]api.ImageBuildInputs{
+						"custom": {
+							Paths: []api.ImageSourcePath{
+								{SourcePath: "/custom/path", DestinationDir: "."},
+							},
+						},
+					},
+				},
+			},
+			details: dockerfileDetails{
+				content: []byte("FROM registry.ci.openshift.org/ocp/4.19:base\nCOPY /custom/path /custom/path\nRUN echo hello"),
+				path:    "Dockerfile",
+			},
+			expectedSteps: []api.StepConfiguration{
+				{
+					InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+						InputImage: api.InputImage{
+							BaseImage: api.ImageStreamTagReference{
+								Namespace: "ocp",
+								Name:      "4.19",
+								Tag:       "base",
+								As:        "registry.ci.openshift.org/ocp/4.19:base",
+							},
+							To: api.PipelineImageStreamTagReference("ocp_4.19_base"),
+						},
+						Sources: []api.ImageStreamSource{{SourceType: "base_image", Name: "ocp_4.19_base"}},
+					},
+				},
+			},
+			expectedImage: api.ProjectDirectoryImageBuildStepConfiguration{
+				To: "my-image",
+				ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+					Inputs: map[string]api.ImageBuildInputs{
+						"custom": {
+							Paths: []api.ImageSourcePath{
+								{SourcePath: "/custom/path", DestinationDir: "."},
+							},
+						},
+						"ocp_4.19_base": {
+							As: []string{"registry.ci.openshift.org/ocp/4.19:base"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "use existing base_images",
+			baseImages: map[string]api.ImageStreamTagReference{
+				"existing": {
+					Namespace: "ocp",
+					Name:      "4.18",
+					Tag:       "base",
+				},
+			},
+			image: api.ProjectDirectoryImageBuildStepConfiguration{
+				To: "my-image",
+			},
+			details: dockerfileDetails{
+				content: []byte("FROM registry.ci.openshift.org/ocp/4.18:base\nRUN echo hello"),
+				path:    "Dockerfile",
+			},
+			expectedSteps: nil,
+			expectedImage: api.ProjectDirectoryImageBuildStepConfiguration{
+				To: "my-image",
+				ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+					Inputs: map[string]api.ImageBuildInputs{
+						"existing": {
+							As: []string{"registry.ci.openshift.org/ocp/4.18:base"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			steps, image := processDetectedBaseImages(tc.baseImages, tc.image, tc.details)
+			less := func(a, b api.StepConfiguration) bool {
+				return string(a.InputImageTagStepConfiguration.To) < string(b.InputImageTagStepConfiguration.To)
+			}
+			if diff := cmp.Diff(tc.expectedSteps, steps, cmpopts.SortSlices(less)); diff != "" {
+				t.Errorf("%s: result didn't match expected, diff: %v", tc.name, diff)
+			}
+			comparer := func(a, b api.ProjectDirectoryImageBuildStepConfiguration) bool {
+				return cmp.Equal(a.ProjectDirectoryImageBuildInputs, b.ProjectDirectoryImageBuildInputs)
+			}
+			if diff := cmp.Diff(tc.expectedImage, image, cmp.Comparer(comparer)); diff != "" {
+				t.Errorf("%s: result didn't match expected, diff: %v", tc.name, diff)
 			}
 		})
 	}

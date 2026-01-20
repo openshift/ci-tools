@@ -8,11 +8,12 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"k8s.io/apimachinery/pkg/util/sets"
-	utilpointer "k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/ocpbuilddata"
 	"github.com/openshift/ci-tools/pkg/config"
+	cidockerfile "github.com/openshift/ci-tools/pkg/dockerfile"
 	"github.com/openshift/ci-tools/pkg/github"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
@@ -50,7 +51,7 @@ func TestReplacer(t *testing.T) {
 		{
 			name: "Use dockerfile_literal if present",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{DockerfileLiteral: utilpointer.String("FROM registry.svc.ci.openshift.org/org/repo:tag")}}},
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{DockerfileLiteral: ptr.To("FROM registry.svc.ci.openshift.org/org/repo:tag")}}},
 			},
 			expectWrite: true,
 		},
@@ -947,101 +948,9 @@ func TestRegistryRegex(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := registryRegex.Find([]byte(tc.line))
+			actual := cidockerfile.RegistryRegex.Find([]byte(tc.line))
 			if diff := cmp.Diff(tc.expected, string(actual)); diff != "" {
 				t.Errorf("actual does not match expected, diff: %s", diff)
-			}
-		})
-	}
-}
-
-func TestOrgRepoTagFromPullString(t *testing.T) {
-	tests := []struct {
-		name       string
-		pullString string
-		expected   orgRepoTag
-		expectErr  bool
-	}{
-		{
-			name:       "single component (repo only)",
-			pullString: "redis",
-			expected:   orgRepoTag{org: "_", repo: "redis", tag: "latest"},
-		},
-		{
-			name:       "single component with tag",
-			pullString: "redis:6.0",
-			expected:   orgRepoTag{org: "_", repo: "redis", tag: "6.0"},
-		},
-		{
-			name:       "two components (org/repo)",
-			pullString: "library/redis",
-			expected:   orgRepoTag{org: "library", repo: "redis", tag: "latest"},
-		},
-		{
-			name:       "two components with tag",
-			pullString: "library/redis:6.0",
-			expected:   orgRepoTag{org: "library", repo: "redis", tag: "6.0"},
-		},
-		{
-			name:       "three components (registry/org/repo)",
-			pullString: "docker.io/library/redis",
-			expected:   orgRepoTag{org: "library", repo: "redis", tag: "latest"},
-		},
-		{
-			name:       "three components with tag",
-			pullString: "docker.io/library/redis:6.0",
-			expected:   orgRepoTag{org: "library", repo: "redis", tag: "6.0"},
-		},
-		{
-			name:       "four components (the failing case from the error)",
-			pullString: "quay.io/redhat-services-prod/openshift/boilerplate",
-			expected:   orgRepoTag{org: "openshift", repo: "boilerplate", tag: "latest"},
-		},
-		{
-			name:       "four components with tag",
-			pullString: "quay.io/redhat-services-prod/openshift/boilerplate:image-v7.4.0",
-			expected:   orgRepoTag{org: "openshift", repo: "boilerplate", tag: "image-v7.4.0"},
-		},
-		{
-			name:       "five components (deeply nested)",
-			pullString: "registry.com/team/project/subproject/service/image",
-			expected:   orgRepoTag{org: "service", repo: "image", tag: "latest"},
-		},
-		{
-			name:       "five components with tag",
-			pullString: "registry.com/team/project/subproject/service/image:v1.2.3",
-			expected:   orgRepoTag{org: "service", repo: "image", tag: "v1.2.3"},
-		},
-		{
-			name:       "registry.ci.openshift.org example",
-			pullString: "registry.ci.openshift.org/ocp/4.6:golang",
-			expected:   orgRepoTag{org: "ocp", repo: "4.6", tag: "golang"},
-		},
-		{
-			name:       "registry.svc.ci.openshift.org example",
-			pullString: "registry.svc.ci.openshift.org/ocp/builder:rhel-8-golang-1.15",
-			expected:   orgRepoTag{org: "ocp", repo: "builder", tag: "rhel-8-golang-1.15"},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			result, err := orgRepoTagFromPullString(tc.pullString)
-
-			if tc.expectErr {
-				if err == nil {
-					t.Errorf("expected error but got none")
-				}
-				return
-			}
-
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-				return
-			}
-
-			if diff := cmp.Diff(tc.expected, result, cmp.AllowUnexported(orgRepoTag{})); diff != "" {
-				t.Errorf("result does not match expected: %s", diff)
 			}
 		})
 	}

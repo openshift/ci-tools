@@ -81,7 +81,7 @@ func TestRequires(t *testing.T) {
 				As:                                 "some-e2e",
 				ClusterClaim:                       tc.clusterClaim,
 				MultiStageTestConfigurationLiteral: &tc.steps,
-			}, &tc.config, api.NewDeferredParameters(nil), nil, nil, nil, "node-name", "", nil, false)
+			}, &tc.config, api.NewDeferredParameters(nil), nil, nil, nil, "node-name", "", nil, false, nil)
 			ret := step.Requires()
 			if len(ret) == len(tc.req) {
 				matches := true

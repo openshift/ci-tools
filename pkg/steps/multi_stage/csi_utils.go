@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
 	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
 )
 
@@ -34,13 +35,14 @@ func groupCredentialsByCollectionAndMountPath(credentials []api.CredentialRefere
 func buildGCPSecretsParameter(credentials []api.CredentialReference) (string, error) {
 	var secrets []config.Secret
 	for _, credential := range credentials {
-		fileName, err := replaceForbiddenSymbolsInCredentialName(credential.Name)
+		fileName, err := restoreForbiddenSymbolsInSecretName(credential.Field)
 		if err != nil {
-			return "", fmt.Errorf("invalid credential name '%s': %w", credential.Name, err)
+			return "", fmt.Errorf("invalid field '%s': %w", credential.Field, err)
 		}
+		gsmSecretName := gsm.GetGSMSecretName(credential.Collection, credential.Group, credential.Field)
 		secrets = append(secrets, config.Secret{
-			ResourceName: fmt.Sprintf("projects/%s/secrets/%s__%s/versions/latest", GSMproject, credential.Collection, credential.Name),
-			FileName:     fileName, // we want to mount the secret as a file named without the collection prefix
+			ResourceName: fmt.Sprintf("projects/%s/secrets/%s/versions/latest", GSMproject, gsmSecretName),
+			FileName:     fileName, // we want to mount the secret as a file named without the collection__group prefix
 		})
 	}
 	secretsYaml, err := yaml.Marshal(secrets)
@@ -50,22 +52,23 @@ func buildGCPSecretsParameter(credentials []api.CredentialReference) (string, er
 	return string(secretsYaml), nil
 }
 
-// replaceForbiddenSymbolsInCredentialName replaces all DotReplacementString substrings in credentialName with dot (.) symbol.
-func replaceForbiddenSymbolsInCredentialName(credentialName string) (string, error) {
+// restoreForbiddenSymbolsInSecretName replaces all replacement substrings with the original symbols,
+// e.g. '--dot--awscreds' to '.awscreds'
+func restoreForbiddenSymbolsInSecretName(s string) (string, error) {
 	// This is an unfortunate workaround needed for the initial migration.
 	// Google Secret Manager doesn't support dots in Secret names. Due to migration from Vault,
-	// where we had to shard each (multi key-value) secret into multiple ones in GSM,
-	// some secret names or their keys contained forbidden symbols, '.' (dot) and '/' (slash) in their names.
-	// All credentials with these forbidden symbols in their names or keys have been renamed,
+	// where we had to shard each (multi key-value) Vault secret into multiple ones in GSM,
+	// some of secret names, or their keys, contained forbidden symbols, usually '.' (dot) and '/' (slash) in their names.
+	// Because all credentials with these forbidden symbols in their names or keys have been renamed,
 	// e.g. '.awscreds' to '--dot--awscreds', to preserve backwards compatibility,
-	// we need to mount the secret as the original '.awscreds' file to the Pod created by ci-operator.
+	// we now need to mount the secret as the original '.awscreds' file to the Pod that will be created by ci-operator.
 
-	replacedName := gsmvalidation.DenormalizeName(credentialName)
+	replacedName := gsmvalidation.DenormalizeName(s)
 
 	re := regexp.MustCompile(`[^a-zA-Z0-9\-._/]`)
 	invalidCharacters := re.FindAllString(replacedName, -1)
 	if invalidCharacters != nil {
-		return "", fmt.Errorf("credential name '%s' decodes to '%s' which contains forbidden characters (%s); decoded names must only contain letters, numbers, dashes (-), dots (.), underscores (_), and slashes (/)", credentialName, replacedName, strings.Join(invalidCharacters, ", "))
+		return "", fmt.Errorf("secret name '%s' decodes to '%s' which contains forbidden characters (%s); decoded names must only contain letters, numbers, dashes (-), dots (.), underscores (_), and slashes (/)", s, replacedName, strings.Join(invalidCharacters, ", "))
 	} else {
 		return replacedName, nil
 	}
@@ -76,13 +79,13 @@ func getSPCName(namespace, collection, mountPath string, credentials []api.Crede
 	var parts []string
 	parts = append(parts, collection, mountPath)
 
-	// Sort credential names for deterministic hashing
-	var credNames []string
+	// Sort credential field names for deterministic hashing
+	var credFields []string
 	for _, cred := range credentials {
-		credNames = append(credNames, cred.Name)
+		credFields = append(credFields, cred.Field)
 	}
-	sort.Strings(credNames)
-	parts = append(parts, credNames...)
+	sort.Strings(credFields)
+	parts = append(parts, credFields...)
 
 	hash := sha256.Sum256([]byte(strings.Join(parts, "-")))
 	hashStr := fmt.Sprintf("%x", hash[:12])

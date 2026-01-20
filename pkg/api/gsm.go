@@ -1,4 +1,4 @@
-package secretbootstrap
+package api
 
 import (
 	"encoding/json"
@@ -17,11 +17,11 @@ import (
 type GSMConfig struct {
 	ClusterGroups map[string][]string       `json:"cluster_groups,omitempty"`
 	Components    map[string][]GSMSecretRef `json:"components,omitempty"`
-	Bundles       []Bundle                  `json:"bundles"`
+	Bundles       []GSMBundle               `json:"bundles"`
 }
 
-// Bundle defines a logical group of GSM secrets
-type Bundle struct {
+// GSMBundle defines a logical group of GSM secrets
+type GSMBundle struct {
 	Name          string            `json:"name"`
 	Components    []string          `json:"components,omitempty"`
 	DockerConfig  *DockerConfigSpec `json:"dockerconfig,omitempty"`
@@ -86,7 +86,7 @@ type TargetSpec struct {
 func LoadGSMConfigFromFile(file string, config *GSMConfig) error {
 	bytes, err := gzip.ReadFileMaybeGZIP(file)
 	if err != nil {
-		return err
+		return fmt.Errorf("couldn't read GSM config file: %w", err)
 	}
 	return yaml.UnmarshalStrict(bytes, config)
 }
@@ -169,7 +169,7 @@ func (c *GSMConfig) resolve() error {
 	}
 
 	// Expand ${CLUSTER} variable substitution
-	var expandedBundles []Bundle
+	var expandedBundles []GSMBundle
 	for _, bundle := range c.Bundles {
 		// Check if bundle contains ${CLUSTER} in any secret names
 		hasClusterVar := false
@@ -205,7 +205,7 @@ func (c *GSMConfig) resolve() error {
 
 		// Create one bundle per unique cluster
 		for cluster, targets := range clusterTargets {
-			expandedBundle := Bundle{
+			expandedBundle := GSMBundle{
 				Name:          bundle.Name,
 				Components:    nil, // Already resolved in phase 2
 				DockerConfig:  bundle.DockerConfig,
@@ -319,7 +319,7 @@ func (c *GSMConfig) Validate() error {
 	return utilerrors.NewAggregate(errs)
 }
 
-func validateBundle(bundle *Bundle, idx int) error {
+func validateBundle(bundle *GSMBundle, idx int) error {
 	var errs []error
 
 	if bundle.SyncToCluster && len(bundle.Targets) == 0 {

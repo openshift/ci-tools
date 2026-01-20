@@ -711,9 +711,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    - # Bundle is a named bundle reference from the GSM config mapping file.\n" +
 	"                      # Mutually exclusive with Collection/Group/Field.\n" +
 	"                      bundle: ' '\n" +
-	"                      # Collection is the name of the collection the secret belongs to.\n" +
-	"                      # In GCP, the secret is named <collection>__<group>__<field> -- this represents\n" +
-	"                      # the <collection> part.\n" +
+	"                      # Collection is the name of the collection the secret belongs to (first level of 3-level <collection>__<group>__<field> hierarchy).\n" +
 	"                      collection: ' '\n" +
 	"                      # Field is the specific field name (third level of 3-level <collection>__<group>__<field> hierarchy).\n" +
 	"                      # If omitted, all fields in the collection/group are auto-discovered.\n" +
@@ -819,9 +817,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    - # Bundle is a named bundle reference from the GSM config mapping file.\n" +
 	"                      # Mutually exclusive with Collection/Group/Field.\n" +
 	"                      bundle: ' '\n" +
-	"                      # Collection is the name of the collection the secret belongs to.\n" +
-	"                      # In GCP, the secret is named <collection>__<group>__<field> -- this represents\n" +
-	"                      # the <collection> part.\n" +
+	"                      # Collection is the name of the collection the secret belongs to (first level of 3-level <collection>__<group>__<field> hierarchy).\n" +
 	"                      collection: ' '\n" +
 	"                      # Field is the specific field name (third level of 3-level <collection>__<group>__<field> hierarchy).\n" +
 	"                      # If omitted, all fields in the collection/group are auto-discovered.\n" +
@@ -927,9 +923,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    - # Bundle is a named bundle reference from the GSM config mapping file.\n" +
 	"                      # Mutually exclusive with Collection/Group/Field.\n" +
 	"                      bundle: ' '\n" +
-	"                      # Collection is the name of the collection the secret belongs to.\n" +
-	"                      # In GCP, the secret is named <collection>__<group>__<field> -- this represents\n" +
-	"                      # the <collection> part.\n" +
+	"                      # Collection is the name of the collection the secret belongs to (first level of 3-level <collection>__<group>__<field> hierarchy).\n" +
 	"                      collection: ' '\n" +
 	"                      # Field is the specific field name (third level of 3-level <collection>__<group>__<field> hierarchy).\n" +
 	"                      # If omitted, all fields in the collection/group are auto-discovered.\n" +
@@ -1648,9 +1642,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                - # Bundle is a named bundle reference from the GSM config mapping file.\n" +
 	"                  # Mutually exclusive with Collection/Group/Field.\n" +
 	"                  bundle: ' '\n" +
-	"                  # Collection is the name of the collection the secret belongs to.\n" +
-	"                  # In GCP, the secret is named <collection>__<group>__<field> -- this represents\n" +
-	"                  # the <collection> part.\n" +
+	"                  # Collection is the name of the collection the secret belongs to (first level of 3-level <collection>__<group>__<field> hierarchy).\n" +
 	"                  collection: ' '\n" +
 	"                  # Field is the specific field name (third level of 3-level <collection>__<group>__<field> hierarchy).\n" +
 	"                  # If omitted, all fields in the collection/group are auto-discovered.\n" +
@@ -1756,9 +1748,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                - # Bundle is a named bundle reference from the GSM config mapping file.\n" +
 	"                  # Mutually exclusive with Collection/Group/Field.\n" +
 	"                  bundle: ' '\n" +
-	"                  # Collection is the name of the collection the secret belongs to.\n" +
-	"                  # In GCP, the secret is named <collection>__<group>__<field> -- this represents\n" +
-	"                  # the <collection> part.\n" +
+	"                  # Collection is the name of the collection the secret belongs to (first level of 3-level <collection>__<group>__<field> hierarchy).\n" +
 	"                  collection: ' '\n" +
 	"                  # Field is the specific field name (third level of 3-level <collection>__<group>__<field> hierarchy).\n" +
 	"                  # If omitted, all fields in the collection/group are auto-discovered.\n" +
@@ -1864,9 +1854,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                - # Bundle is a named bundle reference from the GSM config mapping file.\n" +
 	"                  # Mutually exclusive with Collection/Group/Field.\n" +
 	"                  bundle: ' '\n" +
-	"                  # Collection is the name of the collection the secret belongs to.\n" +
-	"                  # In GCP, the secret is named <collection>__<group>__<field> -- this represents\n" +
-	"                  # the <collection> part.\n" +
+	"                  # Collection is the name of the collection the secret belongs to (first level of 3-level <collection>__<group>__<field> hierarchy).\n" +
 	"                  collection: ' '\n" +
 	"                  # Field is the specific field name (third level of 3-level <collection>__<group>__<field> hierarchy).\n" +
 	"                  # If omitted, all fields in the collection/group are auto-discovered.\n" +

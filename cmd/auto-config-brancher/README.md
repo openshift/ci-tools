@@ -1,14 +1,14 @@
-# autoconfigbrancher
+# auto-config-brancher
 
-`autoconfigbrancher` is a tool that reconciles various parts of CI config
+`auto-config-brancher` is a tool that reconciles various parts of CI config
 in [openshift/release](https://github.com/openshift/release/) repository.
 
 ## What it does
 
-`autoconfigbrancher` runs a sequence of other tools over a working copy of
+`auto-config-brancher` runs a sequence of other tools over a working copy of
 the [openshift/release](https://github.com/openshift/release/) repository. Each of these tools maintains some subset of
 the CI configuration and can change it to some desired state. If the whole sequence results in changes,
-`autoconfigbrancher` submits or updates a PR that propagates these changes to the repository. This PR is configured to
+`auto-config-brancher` submits or updates a PR that propagates these changes to the repository. This PR is configured to
 be automatically merged (does not need a human approval).
 
 ### List of tools
@@ -59,6 +59,6 @@ the [`bumper` package from test-infra](https://github.com/kubernetes/test-infra/
 
 The periodic
 job [periodic-prow-auto-config-brancher](https://prow.ci.openshift.org/?job=periodic-prow-auto-config-brancher) ([definition](https://github.com/openshift/release/blob/55cd2ebb8a00445fb06789433dfe98e2199b9a97/ci-operator/jobs/infra-periodics.yaml#L828-L875))
-uses `autoconfigbrancher` to
+uses `auto-config-brancher` to
 create [PRs in openshift/release](https://github.com/openshift/release/pulls?q=is%3Apr+%22Automate+config+brancher%22+is%3Aclosed+sort%3Acreated-desc)
 .

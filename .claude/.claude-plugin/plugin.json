@@ -1,0 +1,225 @@
+{
+  "name": "openshift-branching",
+  "version": "1.0.0",
+  "description": "Automates OpenShift release branching tasks",
+  "author": "TestPlatform Team",
+  "commands": [
+    {
+      "name": "branching-day",
+      "description": "Execute Branching Day tasks for OpenShift X.Y release",
+      "usage": "/branching-day",
+      "examples": [
+        "/branching-day"
+      ]
+    },
+    {
+      "name": "post-branching",
+      "description": "Execute Post-Branching tasks - bootstrap config and content for X.Y+2",
+      "usage": "/post-branching",
+      "examples": [
+        "/post-branching"
+      ]
+    }
+  ],
+  "skills": [
+    {
+      "name": "create-branch-from-master",
+      "description": "Fetch latest from master, rebase/reset master, and create a new branch",
+      "script": "skills/common/create-branch-from-master.sh"
+    },
+    {
+      "name": "build-branching-tooling",
+      "description": "Build all branching tools (config-brancher, tide-config-manager, rpm-repo-mirroring-service, ci-operator-config-mirror)",
+      "script": "skills/common/build-branching-tooling.sh"
+    },
+    {
+      "name": "get-current-release",
+      "description": "Verify branching readiness and get target release version (checks for 3+ accepted nightlies)",
+      "script": "skills/common/get-current-release.sh"
+    },
+    {
+      "name": "run-config-brancher",
+      "description": "Run config-brancher to bump CI operator configurations",
+      "script": "skills/branching-day/run-config-brancher.sh"
+    },
+    {
+      "name": "verify-config-brancher",
+      "description": "Verify config-brancher output (re-run after fixes)",
+      "script": "skills/branching-day/verify-config-brancher.sh"
+    },
+    {
+      "name": "update-infra-periodics",
+      "description": "Update infra-periodics.yaml and jira config for config-brancher PR",
+      "script": "skills/branching-day/update-infra-periodics.sh"
+    },
+    {
+      "name": "verify-infra-periodics",
+      "description": "Verify infra-periodics and jira config updates (re-run after fixes)",
+      "script": "skills/branching-day/verify-infra-periodics.sh"
+    },
+    {
+      "name": "commit-config-brancher-pr",
+      "description": "Create commits for config-brancher PR",
+      "script": "skills/branching-day/commit-config-brancher-pr.sh"
+    },
+    {
+      "name": "run-tide-config-manager",
+      "description": "Run tide-config-manager to update merge criteria for branching",
+      "script": "skills/branching-day/run-tide-config-manager.sh"
+    },
+    {
+      "name": "verify-tide-config-manager",
+      "description": "Verify tide-config-manager output (re-run after fixes)",
+      "script": "skills/branching-day/verify-tide-config-manager.sh"
+    },
+    {
+      "name": "update-tide-and-infra-jobs",
+      "description": "Update infrastructure periodic jobs for tide config PR",
+      "script": "skills/branching-day/update-tide-and-infra-jobs.sh"
+    },
+    {
+      "name": "verify-tide-and-infra-jobs",
+      "description": "Verify tide and infra jobs updates (re-run after fixes)",
+      "script": "skills/branching-day/verify-tide-and-infra-jobs.sh"
+    },
+    {
+      "name": "update-etcd-config",
+      "description": "Update etcd tide config for branching (etcd special case)",
+      "script": "skills/branching-day/update-etcd-config.sh"
+    },
+    {
+      "name": "verify-etcd-config",
+      "description": "Verify etcd config updates (re-run after fixes)",
+      "script": "skills/branching-day/verify-etcd-config.sh"
+    },
+    {
+      "name": "commit-tide-config-pr",
+      "description": "Create commits for tide config PR",
+      "script": "skills/branching-day/commit-tide-config-pr.sh"
+    },
+    {
+      "name": "update-image-mirroring",
+      "description": "Helper to update image mirroring configuration",
+      "script": "skills/branching-day/update-image-mirroring.sh"
+    },
+    {
+      "name": "commit-image-mirroring-pr",
+      "description": "Create commits for image mirroring PR",
+      "script": "skills/branching-day/commit-image-mirroring-pr.sh"
+    },
+    {
+      "name": "trigger-periodic-jobs",
+      "description": "Trigger periodic jobs via gangway with optional polling",
+      "script": "skills/common/trigger-periodic-jobs.sh"
+    },
+    {
+      "name": "update-jira-validation-post-branching",
+      "description": "Configure Jira validation criteria for X.Y+2 branches (post-branching)",
+      "script": "skills/post-branching/update-jira-validation-post-branching.sh"
+    },
+    {
+      "name": "verify-jira-validation",
+      "description": "Verify Jira validation config (re-run after fixes)",
+      "script": "skills/post-branching/verify-jira-validation.sh"
+    },
+    {
+      "name": "commit-jira-validation-pr",
+      "description": "Create commit and branch for Jira validation PR (post-branching)",
+      "script": "skills/post-branching/commit-jira-validation-pr.sh"
+    },
+    {
+      "name": "update-merge-blockers-job",
+      "description": "Update merge blockers job to track X.Y+2 (post-branching)",
+      "script": "skills/post-branching/update-merge-blockers-job.sh"
+    },
+    {
+      "name": "verify-merge-blockers-job",
+      "description": "Verify merge blockers job update (re-run after fixes)",
+      "script": "skills/post-branching/verify-merge-blockers-job.sh"
+    },
+    {
+      "name": "commit-merge-blockers-pr",
+      "description": "Create commit and branch for merge blockers PR (post-branching)",
+      "script": "skills/post-branching/commit-merge-blockers-pr.sh"
+    },
+    {
+      "name": "update-fast-forward-job",
+      "description": "Update fast-forward job for X.Y+2 (post-branching)",
+      "script": "skills/post-branching/update-fast-forward-job.sh"
+    },
+    {
+      "name": "verify-fast-forward-job",
+      "description": "Verify fast-forward job update (re-run after fixes)",
+      "script": "skills/post-branching/verify-fast-forward-job.sh"
+    },
+    {
+      "name": "commit-fast-forward-pr",
+      "description": "Create commit and branch for fast-forward PR (post-branching)",
+      "script": "skills/post-branching/commit-fast-forward-pr.sh"
+    },
+    {
+      "name": "create-config-jobs-x-y-plus-2",
+      "description": "Create CI operator configs and jobs for X.Y+2 (post-branching)",
+      "script": "skills/post-branching/create-config-jobs-x-y-plus-2.sh"
+    },
+    {
+      "name": "verify-config-jobs-x-y-plus-2",
+      "description": "Verify CI configs and jobs creation (re-run after fixes)",
+      "script": "skills/post-branching/verify-config-jobs-x-y-plus-2.sh"
+    },
+    {
+      "name": "commit-ci-configs-jobs-pr",
+      "description": "Create branch for CI configs and jobs PR (post-branching)",
+      "script": "skills/post-branching/commit-ci-configs-jobs-pr.sh"
+    },
+    {
+      "name": "update-auto-config-brancher-x-y-plus-2",
+      "description": "Update auto-config-brancher to maintain X.Y+2 (post-branching)",
+      "script": "skills/post-branching/update-auto-config-brancher-x-y-plus-2.sh"
+    },
+    {
+      "name": "verify-auto-config-brancher",
+      "description": "Verify auto-config-brancher job update (re-run after fixes)",
+      "script": "skills/post-branching/verify-auto-config-brancher.sh"
+    },
+    {
+      "name": "commit-auto-config-brancher-pr",
+      "description": "Create commit and branch for auto-config-brancher PR (post-branching)",
+      "script": "skills/post-branching/commit-auto-config-brancher-pr.sh"
+    },
+    {
+      "name": "update-image-mirroring-x-y-plus-2",
+      "description": "Update image mirroring config for X.Y+2 (post-branching)",
+      "script": "skills/post-branching/update-image-mirroring-x-y-plus-2.sh"
+    },
+    {
+      "name": "verify-image-mirroring-x-y-plus-2",
+      "description": "Verify image mirroring config update (re-run after fixes)",
+      "script": "skills/post-branching/verify-image-mirroring-x-y-plus-2.sh"
+    },
+    {
+      "name": "commit-image-mirroring-x-y-plus-2-pr",
+      "description": "Create commit and branch for image mirroring X.Y+2 PR (post-branching)",
+      "script": "skills/post-branching/commit-image-mirroring-x-y-plus-2-pr.sh"
+    },
+    {
+      "name": "verify-imagestream-tags",
+      "description": "Verify image stream tag counts match between versions (re-run after tagging)",
+      "script": "skills/post-branching/verify-imagestream-tags.sh"
+    },
+    {
+      "name": "tag-imagestreams",
+      "description": "Tag image streams from old version to new version",
+      "script": "skills/post-branching/tag-imagestreams.sh"
+    },
+    {
+      "name": "mirror-imagestreams-to-quay",
+      "description": "Mirror all image streams to Quay (7 streams: ocp, origin, ocp-private, and 4 variants)",
+      "script": "skills/post-branching/mirror-imagestreams-to-quay.sh"
+    }
+  ],
+  "config": {
+    "RELEASE_REPO": "../release",
+    "CI_TOOLS_REPO": "."
+  }
+}

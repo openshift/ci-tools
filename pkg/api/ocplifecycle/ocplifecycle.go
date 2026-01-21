@@ -211,24 +211,22 @@ func (m MajorMinor) Less(other MajorMinor) bool {
 }
 
 // GetPastVersion returns the previous version using VersionTransitionOverrides.
-func (m MajorMinor) GetPastVersion() string {
+// Returns an error if no previous version can be determined (e.g., missing override for X.0).
+func (m MajorMinor) GetPastVersion() (string, error) {
 	current := m.GetVersion()
-	prev, err := api.GetPreviousVersionSimple(current)
-	if err != nil {
-		return ""
-	}
-	return prev
+	return api.GetPreviousVersionSimple(current)
 }
 
 // GetPastPastVersion returns the version before the previous version.
-func (m MajorMinor) GetPastPastVersion() string {
-	pastVersion := m.GetPastVersion()
-	if pastVersion == "" {
-		return ""
+// Returns an error if any step in the chain fails.
+func (m MajorMinor) GetPastPastVersion() (string, error) {
+	pastVersion, err := m.GetPastVersion()
+	if err != nil {
+		return "", fmt.Errorf("failed to get past version: %w", err)
 	}
 	pastMM, err := ParseMajorMinor(pastVersion)
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("failed to parse past version %s: %w", pastVersion, err)
 	}
 	return pastMM.GetPastVersion()
 }

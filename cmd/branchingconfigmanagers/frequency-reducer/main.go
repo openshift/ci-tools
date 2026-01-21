@@ -79,6 +79,18 @@ func updateIntervalFieldsForMatchedSteps(
 	if err != nil {
 		return
 	}
+
+	pastVersion, err := version.GetPastVersion()
+	if err != nil {
+		logrus.Warningf("Can't get past version for %s: %v", version.GetVersion(), err)
+		pastVersion = ""
+	}
+	pastPastVersion, err := version.GetPastPastVersion()
+	if err != nil {
+		logrus.Debugf("Can't get past-past version for %s: %v", version.GetVersion(), err)
+		pastPastVersion = ""
+	}
+
 	if configuration.Info.Metadata.Org == "openshift" || configuration.Info.Metadata.Org == "openshift-priv" {
 		for _, test := range configuration.Configuration.Tests {
 			if !strings.Contains(test.As, "mirror-nightly-image") && !strings.Contains(test.As, "promote-") {
@@ -93,7 +105,7 @@ func updateIntervalFieldsForMatchedSteps(
 						if !correctCron {
 							*test.Cron = generateMonthlyCron()
 						}
-					} else if testVersion.GetVersion() == version.GetPastPastVersion() {
+					} else if pastPastVersion != "" && testVersion.GetVersion() == pastPastVersion {
 						correctCron, err := isExecutedAtMostXTimesAMonth(*test.Cron, 2)
 						if err != nil {
 							logrus.Warningf("Can't parse cron string %s", *test.Cron)
@@ -102,7 +114,7 @@ func updateIntervalFieldsForMatchedSteps(
 						if !correctCron {
 							*test.Cron = generateBiWeeklyCron()
 						}
-					} else if testVersion.GetVersion() == version.GetPastVersion() {
+					} else if pastVersion != "" && testVersion.GetVersion() == pastVersion {
 						correctCron, err := isExecutedAtMostXTimesAMonth(*test.Cron, 4)
 						if err != nil {
 							logrus.Warningf("Can't parse cron string %s", *test.Cron)
@@ -125,7 +137,7 @@ func updateIntervalFieldsForMatchedSteps(
 							test.Cron = &cronExpr
 							test.Interval = nil
 						}
-					} else if testVersion.GetVersion() == version.GetPastPastVersion() {
+					} else if pastPastVersion != "" && testVersion.GetVersion() == pastPastVersion {
 						duration, err := time.ParseDuration(*test.Interval)
 						if err != nil {
 							logrus.Warningf("Can't parse interval string %s", *test.Cron)
@@ -136,7 +148,7 @@ func updateIntervalFieldsForMatchedSteps(
 							test.Cron = &cronExpr
 							test.Interval = nil
 						}
-					} else if testVersion.GetVersion() == version.GetPastVersion() {
+					} else if pastVersion != "" && testVersion.GetVersion() == pastVersion {
 						duration, err := time.ParseDuration(*test.Interval)
 						if err != nil {
 							logrus.Warningf("Can't parse interval string %s", *test.Cron)

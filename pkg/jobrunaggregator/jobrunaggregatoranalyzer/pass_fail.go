@@ -231,78 +231,38 @@ func (a *weeklyAverageFromTenDays) getNormalizedFallBackJobName(ctx context.Cont
 		return jobName, nil
 	}
 
-	var fromReleaseCandidates []string
-	var toReleaseCandidates []string
+	var targetFromRelease, targetToRelease string
 
 	if len(job.FromRelease.StringVal) > 0 {
-		candidates, err := api.GetAllPreviousVersionsSimple(job.FromRelease.StringVal)
+		prev, err := api.GetPreviousVersionSimple(job.FromRelease.StringVal)
 		if err != nil {
-			fmt.Printf("Error determining previous versions for from release %s: %v. Will not fall back to previous release data.\n", job.FromRelease, err)
+			fmt.Printf("Error determining previous version for from release %s: %v. Will not fall back to previous release data.\n", job.FromRelease, err)
 			return jobName, nil
 		}
-		fromReleaseCandidates = candidates
+		targetFromRelease = prev
 	}
 
 	if len(job.Release) > 0 {
-		candidates, err := api.GetAllPreviousVersionsSimple(job.Release)
+		prev, err := api.GetPreviousVersionSimple(job.Release)
 		if err != nil {
-			fmt.Printf("Error determining previous versions for release %s: %v. Will not fall back to previous release data.\n", job.Release, err)
+			fmt.Printf("Error determining previous version for release %s: %v. Will not fall back to previous release data.\n", job.Release, err)
 			return jobName, nil
 		}
-		toReleaseCandidates = candidates
+		targetToRelease = prev
 	}
 
 	normalizedJobName := normalizeJobName(job.JobName, job.FromRelease.StringVal, job.Release)
 
-	for _, targetFromRelease := range fromReleaseCandidates {
-		for _, targetToRelease := range toReleaseCandidates {
-			for _, j := range allJobs {
-				if j.Architecture == job.Architecture &&
-					j.Topology == job.Topology &&
-					j.Network == job.Network &&
-					j.Platform == job.Platform &&
-					j.FromRelease.StringVal == targetFromRelease &&
-					j.Release == targetToRelease &&
-					j.IPMode == job.IPMode &&
-					normalizeJobName(j.JobName, j.FromRelease.StringVal, j.Release) == normalizedJobName {
-					return j.JobName, nil
-				}
-			}
-		}
-	}
-
-	// Handle case where only one of FromRelease or Release is set
-	if len(fromReleaseCandidates) == 0 && len(toReleaseCandidates) > 0 {
-		for _, targetToRelease := range toReleaseCandidates {
-			for _, j := range allJobs {
-				if j.Architecture == job.Architecture &&
-					j.Topology == job.Topology &&
-					j.Network == job.Network &&
-					j.Platform == job.Platform &&
-					j.FromRelease.StringVal == "" &&
-					j.Release == targetToRelease &&
-					j.IPMode == job.IPMode &&
-					normalizeJobName(j.JobName, j.FromRelease.StringVal, j.Release) == normalizedJobName {
-					return j.JobName, nil
-				}
-			}
-		}
-	}
-
-	if len(toReleaseCandidates) == 0 && len(fromReleaseCandidates) > 0 {
-		for _, targetFromRelease := range fromReleaseCandidates {
-			for _, j := range allJobs {
-				if j.Architecture == job.Architecture &&
-					j.Topology == job.Topology &&
-					j.Network == job.Network &&
-					j.Platform == job.Platform &&
-					j.FromRelease.StringVal == targetFromRelease &&
-					j.Release == "" &&
-					j.IPMode == job.IPMode &&
-					normalizeJobName(j.JobName, j.FromRelease.StringVal, j.Release) == normalizedJobName {
-					return j.JobName, nil
-				}
-			}
+	for _, j := range allJobs {
+		if j.Architecture == job.Architecture &&
+			j.Topology == job.Topology &&
+			j.Network == job.Network &&
+			j.Platform == job.Platform &&
+			j.FromRelease.StringVal == targetFromRelease &&
+			j.Release == targetToRelease &&
+			j.IPMode == job.IPMode &&
+			normalizeJobName(j.JobName, j.FromRelease.StringVal, j.Release) == normalizedJobName {
+			return j.JobName, nil
 		}
 	}
 

@@ -491,61 +491,12 @@ func isVersionedBranch(branch string) bool {
 	for _, prefix := range prefixes {
 		if strings.HasPrefix(branch, prefix) {
 			versionPart := strings.TrimPrefix(branch, prefix)
-			if isValidVersion(versionPart) {
+			if api.IsValidOCPVersion(versionPart) {
 				return true
 			}
 		}
 	}
 	return false
-}
-
-// isValidVersion checks if a string represents a valid version like "4.15", "5.0", etc.
-func isValidVersion(version string) bool {
-	parts := strings.Split(version, ".")
-	if len(parts) != 2 {
-		return false
-	}
-
-	// Validate major version (must be 4 or higher)
-	major := parts[0]
-	if major == "" {
-		return false
-	}
-	for _, char := range major {
-		if char < '0' || char > '9' {
-			return false
-		}
-	}
-	majorNum := 0
-	for _, char := range major {
-		majorNum = majorNum*10 + int(char-'0')
-	}
-	if majorNum < 4 {
-		return false
-	}
-
-	// Validate minor version
-	minor := parts[1]
-	if !isValidMinorVersion(minor) {
-		return false
-	}
-
-	return true
-}
-
-// isValidMinorVersion checks if a string represents a valid minor version (e.g., "0", "9", "10", "15")
-func isValidMinorVersion(version string) bool {
-	if version == "" {
-		return false
-	}
-
-	for _, char := range version {
-		if char < '0' || char > '9' {
-			return false
-		}
-	}
-
-	return true
 }
 
 func (ve *verifiedEvent) GetDataFromProwConfig(*prowconfig.ProwConfig) {
@@ -631,9 +582,13 @@ func reconcile(currentOCPVersion, lifecyclePhase string, config *prowconfig.Prow
 		)
 	}
 	if lifecyclePhase == GeneralAvailability {
+		pastVersion, pastErr := currentVersion.GetPastVersion()
+		if pastErr != nil {
+			return fmt.Errorf("failed to get past version for %s: %w", currentVersion.GetVersion(), pastErr)
+		}
 		_, err = shardprowconfig.ShardProwConfig(config, target,
 			newGeneralAvailabilityEvent(
-				currentVersion.GetPastVersion(),
+				pastVersion,
 				currentVersion.GetVersion(),
 				currentVersion.GetFutureVersion(),
 				repos),

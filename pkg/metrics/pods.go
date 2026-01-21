@@ -18,6 +18,7 @@ type PodLifecycleMetricsEvent struct {
 	CreationTime   *time.Time `json:"creation_time,omitempty"`
 	StartTime      *time.Time `json:"start_time,omitempty"`
 	CompletionTime *time.Time `json:"completion_time,omitempty"`
+	CIWorkload     string     `json:"ci_workload,omitempty"`
 
 	ConditionTransitionTimes map[string]time.Time `json:"condition_transition_times,omitempty"`
 
@@ -69,6 +70,7 @@ func (p *PodLifecyclePlugin) Record(ev MetricsEvent) {
 	e.CreationTime = &pod.CreationTimestamp.Time
 	e.StartTime = &pod.Status.StartTime.Time
 	e.CompletionTime = getPodCompletionTime(pod)
+	e.CIWorkload = pod.Labels["ci-workload"]
 
 	// Only set pod phase if not already set by caller (preserves success/failure determination)
 	if e.PodPhase == "" {

@@ -1517,10 +1517,11 @@ const (
 	ClusterProfileMetalRHgs               ClusterProfile = "metal-redhat-gs"
 	ClusterProfileAWSOSC                  ClusterProfile = "aws-sandboxed-containers-operator"
 
-	ClusterProfileAROHCPInt  ClusterProfile = "aro-hcp-int"
-	ClusterProfileAROHCPStg  ClusterProfile = "aro-hcp-stg"
-	ClusterProfileAROHCPProd ClusterProfile = "aro-hcp-prod"
-	ClusterProfileAROHCPDev  ClusterProfile = "aro-hcp-dev"
+	ClusterProfileAROHCPInt               ClusterProfile = "aro-hcp-int"
+	ClusterProfileAROHCPStg               ClusterProfile = "aro-hcp-stg"
+	ClusterProfileAROHCPProd              ClusterProfile = "aro-hcp-prod"
+	ClusterProfileAROHCPDev               ClusterProfile = "aro-hcp-dev"
+	ClusterProfileRosaRegionalPlatformInt ClusterProfile = "rosa-regional-platform-int"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -1713,6 +1714,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAROHCPStg,
 		ClusterProfileAROHCPProd,
 		ClusterProfileAROHCPDev,
+		ClusterProfileRosaRegionalPlatformInt,
 	}
 }
 
@@ -1998,7 +2000,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "aro-hcp-prod"
 	case ClusterProfileAROHCPDev:
 		return "aro-hcp-dev"
-
+	case ClusterProfileRosaRegionalPlatformInt:
+		return "rosa-regional-platform-int"
 	default:
 		return ""
 	}
@@ -2379,6 +2382,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aro-hcp-prod-quota-slice"
 	case ClusterProfileAROHCPDev:
 		return "aro-hcp-dev-quota-slice"
+	case ClusterProfileRosaRegionalPlatformInt:
+		return "rosa-regional-platform-int-quota-slice"
 	default:
 		return ""
 	}
@@ -2423,7 +2428,7 @@ func LeaseTypeFromClusterType(t string) (string, error) {
 		"kubevirt", "aws-cpaas", "osd-ephemeral", "gcp-virtualization", "aws-virtualization",
 		"azure-virtualization", "hypershift-powervs", "hypershift-powervs-cb", "aws-mco-qe",
 		"equinix-edge-enablement", "aws-oadp-qe", "azure-oadp-qe", "gcp-oadp-qe", "aws-lp-chaos",
-		"metal-redhat-gs", "aro-hcp-int", "aro-hcp-stg", "aro-hcp-prod", "aro-hcp-dev", "hyperfleet-e2e":
+		"metal-redhat-gs", "aro-hcp-int", "aro-hcp-stg", "aro-hcp-prod", "aro-hcp-dev", "rosa-regional-platform-int", "hyperfleet-e2e":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

@@ -50,7 +50,7 @@ that now matches the dev branch version.
 In the mirroring mode, the tool is executed regularly in
 the [`periodic-prow-auto-config-brancher`](https://prow.ci.openshift.org/?job=periodic-prow-auto-config-brancher)
 job ([definition](https://github.com/openshift/release/blob/b499e5ffbe38d07f43587b9100d774cb338a7127/ci-operator/jobs/infra-periodics.yaml#L877-L924))
-as a part of the [`autoconfigbrancher`](../autoconfigbrancher) tool.
+as a part of the [`auto-config-brancher`](../auto-config-brancher) tool.
 
 During the [code freeze event](https://docs.google.com/document/d/19kxmzXFnXrbLChZXBfxy68mCYg06j3qT93VF23wepog/edit#heading=h.gc58v1ksasfp), the tool is used manually in the bump mode,
 

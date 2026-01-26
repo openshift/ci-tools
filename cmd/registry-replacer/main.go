@@ -369,7 +369,7 @@ func replacer(
 }
 
 func ensureReplacement(image *api.ProjectDirectoryImageBuildStepConfiguration, dockerfile []byte) ([]cidockerfile.OrgRepoTag, error) {
-	toReplace := cidockerfile.ExtractRegistryReferences(dockerfile)
+	toReplace := cidockerfile.ExtractRegistryReferences(dockerfile, "")
 	var result []cidockerfile.OrgRepoTag
 	for _, toReplace := range toReplace {
 		orgRepoTag, err := cidockerfile.OrgRepoTagFromPullString(toReplace)

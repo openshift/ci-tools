@@ -9,8 +9,8 @@ import (
 // DetectInputsFromDockerfile parses a Dockerfile and detects registry references that need to be added as base images
 // Returns a map of base image names to ImageStreamTagReferences
 // The ImageStreamTagReference.As field contains the original registry reference from the Dockerfile
-func DetectInputsFromDockerfile(dockerfile []byte, existingInputs map[string]api.ImageBuildInputs) map[string]api.ImageStreamTagReference {
-	registryRefs := ExtractRegistryReferences(dockerfile)
+func DetectInputsFromDockerfile(dockerfile []byte, existingInputs map[string]api.ImageBuildInputs, from api.PipelineImageStreamTagReference) map[string]api.ImageStreamTagReference {
+	registryRefs := ExtractRegistryReferences(dockerfile, from)
 	baseImages := make(map[string]api.ImageStreamTagReference)
 
 	for _, ref := range registryRefs {

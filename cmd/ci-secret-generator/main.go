@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -10,7 +11,9 @@ import (
 	"reflect"
 	"strings"
 
+	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/api/option"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -212,10 +215,14 @@ func fmtExecCmdErr(action, cmd string, wrappedErr error, stdout, stderr []byte, 
 		stdout, stderrPreamble, stderr)
 }
 
-func updateSecrets(config secretgenerator.Config, client secrets.Client, disabledClusters sets.Set[string], GSMsyncEnabled bool) error {
+func parseIndexSecretContent(content []byte) sets.Set[string] {
+	return sets.New(gsm.ParseIndexSecretContent(content)...)
+}
+
+func updateSecrets(config secretgenerator.Config, client secrets.Client, disabledClusters sets.Set[string], existingIndexEntries sets.Set[string]) error {
 	var errs []error
 
-	secretsToUpdate, indexFields, err := buildSecretsToUpdate(config, disabledClusters, GSMsyncEnabled)
+	secretsToUpdate, indexFields, err := buildSecretsToUpdate(config, disabledClusters, existingIndexEntries)
 	if err != nil {
 		errs = append(errs, err)
 	}
@@ -258,9 +265,9 @@ type FieldUpdateInfo struct {
 	Payload   []byte
 }
 
-func buildSecretsToUpdate(config secretgenerator.Config, disabledClusters sets.Set[string], GSMsyncEnabled bool) ([]ItemUpdateInfo, []string, error) {
+func buildSecretsToUpdate(config secretgenerator.Config, disabledClusters sets.Set[string], previousIndexEntries sets.Set[string]) ([]ItemUpdateInfo, []string, error) {
 	var errs []error
-	allSecretsList := []string{}
+	var newIndexEntries []string
 	var secretsToUpdate []ItemUpdateInfo
 
 	for _, item := range config {
@@ -283,28 +290,31 @@ func buildSecretsToUpdate(config secretgenerator.Config, disabledClusters sets.S
 				logger.Info("ignored field for disabled cluster")
 				continue
 			}
-			if GSMsyncEnabled {
-				normalizedGroup := gsmvalidation.NormalizeName(item.ItemName)
-				normalizedField := gsmvalidation.NormalizeName(field.Name)
-				allSecretsList = append(allSecretsList, fmt.Sprintf("%s%s%s", normalizedGroup, gsmvalidation.CollectionSecretDelimiter, normalizedField))
-			}
+			normalizedGroup := gsmvalidation.NormalizeName(item.ItemName)
+			normalizedField := gsmvalidation.NormalizeName(field.Name)
+			gsmSecretName := fmt.Sprintf("%s%s%s", normalizedGroup, gsmvalidation.CollectionSecretDelimiter, normalizedField)
+
 			logger.Info("processing field")
 			out, err := executeCommand(field.Cmd)
 			if err != nil {
 				msg := "failed to generate field"
 				logger.WithError(err).Error(msg)
 				errs = append(errs, errors.New(msg))
+				if previousIndexEntries.Has(gsmSecretName) {
+					newIndexEntries = append(newIndexEntries, gsmSecretName)
+				}
 				continue
 			}
 			itemStruct.Fields = append(itemStruct.Fields, FieldUpdateInfo{
 				FieldName: field.Name,
 				Payload:   out,
 			})
+			newIndexEntries = append(newIndexEntries, gsmSecretName)
 		}
 		secretsToUpdate = append(secretsToUpdate, itemStruct)
 	}
 
-	return secretsToUpdate, allSecretsList, utilerrors.NewAggregate(errs)
+	return secretsToUpdate, newIndexEntries, utilerrors.NewAggregate(errs)
 }
 
 func main() {
@@ -341,6 +351,7 @@ func main() {
 
 func generateSecrets(o options, censor *secrets.DynamicCensor) (errs []error) {
 	var client secrets.Client
+	var existingIndexEntries sets.Set[string]
 
 	if o.dryRun {
 		var err error
@@ -371,14 +382,42 @@ func generateSecrets(o options, censor *secrets.DynamicCensor) (errs []error) {
 				return append(errs, fmt.Errorf("failed to enable GSM sync: %w", err))
 			}
 			logrus.Info("GSM sync enabled for cluster-init secret")
+			indexContent, err := readIndexSecret(o)
+			if err != nil {
+				return append(errs, fmt.Errorf("failed to read index secret for %s: %w", secrets.TestPlatformCollection, err))
+			}
+			existingIndexEntries = parseIndexSecretContent(indexContent)
 		}
 	}
 
-	if err := updateSecrets(o.config, client, o.disabledClusters, o.enableGsmSync); err != nil {
+	if err := updateSecrets(o.config, client, o.disabledClusters, existingIndexEntries); err != nil {
 		errs = append(errs, fmt.Errorf("failed to update secrets: %w", err))
 	}
 
 	return errs
+}
+
+func readIndexSecret(o options) ([]byte, error) {
+	ctx := context.Background()
+	var opts []option.ClientOption
+	if o.gsmCredentialsFile != "" {
+		opts = append(opts, option.WithCredentialsFile(o.gsmCredentialsFile))
+	}
+
+	gsmClient, err := secretmanager.NewClient(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+	defer gsmClient.Close()
+
+	indexSecretName := gsm.GetIndexSecretName(secrets.TestPlatformCollection)
+	secretResourceName := fmt.Sprintf("projects/%s/secrets/%s", o.gcpProjectConfig.ProjectIdNumber, indexSecretName)
+
+	indexContent, err := gsm.GetSecretPayload(ctx, gsmClient, secretResourceName)
+	if err != nil {
+		return nil, err
+	}
+	return indexContent, nil
 }
 
 func itemContextsFromConfig(items secretgenerator.Config) []secretbootstrap.ItemContext {

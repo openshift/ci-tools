@@ -193,7 +193,7 @@ func TestVault(t *testing.T) {
 					}
 				}
 			}()
-			if err := updateSecrets(tc.config, client, tc.disabledClusters, false); err != nil {
+			if err := updateSecrets(tc.config, client, tc.disabledClusters, sets.New[string]()); err != nil {
 				t.Errorf("failed to update secrets: %v", err)
 			}
 			list, err := vault.ListKV("secret")
@@ -440,8 +440,8 @@ func TestBuildSecretsToUpdate(t *testing.T) {
 	testCases := []struct {
 		name                string
 		config              secretgenerator.Config
-		GSMsyncEnabled      bool
 		disabledClusters    sets.Set[string]
+		existingIndexValues []string
 		expectedItems       map[string]ItemUpdateInfo
 		expectedIndexFields []string
 		expectError         bool
@@ -454,7 +454,6 @@ func TestBuildSecretsToUpdate(t *testing.T) {
 					{Name: "field1", Cmd: "printf 'value1'"},
 				},
 			}},
-			GSMsyncEnabled: true,
 			expectedItems: map[string]ItemUpdateInfo{
 				"test-item": {
 					ItemName: "test-item",
@@ -475,7 +474,6 @@ func TestBuildSecretsToUpdate(t *testing.T) {
 					{Name: "field3", Cmd: "printf 'value3'"},
 				},
 			}},
-			GSMsyncEnabled: true,
 			expectedItems: map[string]ItemUpdateInfo{
 				"aws": {
 					ItemName: "aws",
@@ -505,7 +503,6 @@ func TestBuildSecretsToUpdate(t *testing.T) {
 					},
 				},
 			},
-			GSMsyncEnabled: true,
 			expectedItems: map[string]ItemUpdateInfo{
 				"group1": {
 					ItemName: "group1",
@@ -524,7 +521,7 @@ func TestBuildSecretsToUpdate(t *testing.T) {
 			expectedIndexFields: []string{"group1__fieldA", "group2__fieldA", "group2__fieldB"},
 		},
 		{
-			name: "GSM sync disabled - empty index",
+			name: "index always populated regardless of client type",
 			config: secretgenerator.Config{{
 				ItemName: "test-item",
 				Fields: []secretgenerator.FieldGenerator{
@@ -532,7 +529,6 @@ func TestBuildSecretsToUpdate(t *testing.T) {
 					{Name: "field2", Cmd: "printf 'value2'"},
 				},
 			}},
-			GSMsyncEnabled: false,
 			expectedItems: map[string]ItemUpdateInfo{
 				"test-item": {
 					ItemName: "test-item",
@@ -542,7 +538,7 @@ func TestBuildSecretsToUpdate(t *testing.T) {
 					},
 				},
 			},
-			expectedIndexFields: []string{}, // Empty when GSM sync disabled
+			expectedIndexFields: []string{"test-item__field1", "test-item__field2"},
 		},
 		{
 			name: "GSM sync enabled - disabled cluster fields are excluded",
@@ -554,7 +550,6 @@ func TestBuildSecretsToUpdate(t *testing.T) {
 					{Name: "field3", Cmd: "printf 'value3'", Cluster: "enabled-cluster"},
 				},
 			}},
-			GSMsyncEnabled:   true,
 			disabledClusters: sets.New[string]("disabled-cluster"),
 			expectedItems: map[string]ItemUpdateInfo{
 				"cluster-test": {
@@ -576,7 +571,6 @@ func TestBuildSecretsToUpdate(t *testing.T) {
 					{Name: "auth_token", Cmd: "printf 'value2'"},
 				},
 			}},
-			GSMsyncEnabled: true,
 			expectedItems: map[string]ItemUpdateInfo{
 				"aws/config": {
 					ItemName: "aws/config",
@@ -597,7 +591,6 @@ func TestBuildSecretsToUpdate(t *testing.T) {
 					{Name: "field1", Cmd: "printf 'value1'"},
 				},
 			}},
-			GSMsyncEnabled: true,
 			expectedItems: map[string]ItemUpdateInfo{
 				"test-item": {
 					ItemName: "test-item",
@@ -617,16 +610,99 @@ func TestBuildSecretsToUpdate(t *testing.T) {
 					{Name: "field1", Cmd: "false"},
 				},
 			}},
-			GSMsyncEnabled:      true,
-			expectedItems:       map[string]ItemUpdateInfo{},
-			expectedIndexFields: []string{},
+			expectedItems: map[string]ItemUpdateInfo{
+				"test-item": {
+					ItemName: "test-item",
+					Fields:   nil,
+				},
+			},
+			expectedIndexFields: nil,
+			expectError:         true,
+		},
+		{
+			name: "existing secret that failed execution is kept in index",
+			config: secretgenerator.Config{{
+				ItemName: "test-item",
+				Fields: []secretgenerator.FieldGenerator{
+					{Name: "field1", Cmd: "false"},
+				},
+			}},
+			existingIndexValues: []string{"test-item__field1"},
+			expectedItems: map[string]ItemUpdateInfo{
+				"test-item": {
+					ItemName: "test-item",
+					Fields:   nil,
+				},
+			},
+			expectedIndexFields: []string{"test-item__field1"},
+			expectError:         true,
+		},
+		{
+			name: "new secret that failed execution is not added to index",
+			config: secretgenerator.Config{{
+				ItemName: "test-item",
+				Fields: []secretgenerator.FieldGenerator{
+					{Name: "field1", Cmd: "false"},
+				},
+			}},
+			existingIndexValues: []string{},
+			expectedItems: map[string]ItemUpdateInfo{
+				"test-item": {
+					ItemName: "test-item",
+					Fields:   nil,
+				},
+			},
+			expectedIndexFields: nil,
+			expectError:         true,
+		},
+		{
+			name: "secret removed from config is removed from index",
+			config: secretgenerator.Config{{
+				ItemName: "item1",
+				Fields: []secretgenerator.FieldGenerator{
+					{Name: "field1", Cmd: "printf 'value1'"},
+				},
+			}},
+			existingIndexValues: []string{"item1__field1", "item2__field2"},
+			expectedItems: map[string]ItemUpdateInfo{
+				"item1": {
+					ItemName: "item1",
+					Fields: []FieldUpdateInfo{
+						{FieldName: "field1", Payload: []byte("value1")},
+					},
+				},
+			},
+			expectedIndexFields: []string{"item1__field1"},
+		},
+		{
+			name: "mixed: existing succeeds, existing fails, new succeeds, new fails",
+			config: secretgenerator.Config{{
+				ItemName: "test",
+				Fields: []secretgenerator.FieldGenerator{
+					{Name: "existing-success", Cmd: "printf 'val'"},
+					{Name: "existing-fail", Cmd: "false"},
+					{Name: "new-success", Cmd: "printf 'val'"},
+					{Name: "new-fail", Cmd: "false"},
+				},
+			}},
+			existingIndexValues: []string{"test__existing-success", "test__existing-fail"},
+			expectedItems: map[string]ItemUpdateInfo{
+				"test": {
+					ItemName: "test",
+					Fields: []FieldUpdateInfo{
+						{FieldName: "existing-success", Payload: []byte("val")},
+						{FieldName: "new-success", Payload: []byte("val")},
+					},
+				},
+			},
+			expectedIndexFields: []string{"test__existing-success", "test__existing-fail", "test__new-success"},
 			expectError:         true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			itemsToUpdate, indexFields, err := buildSecretsToUpdate(tc.config, tc.disabledClusters, tc.GSMsyncEnabled)
+			itemsToUpdate, indexFields, err := buildSecretsToUpdate(tc.config, tc.disabledClusters, sets.New(tc.existingIndexValues...))
 
 			if tc.expectError && err == nil {
 				t.Errorf("expected error but got nil")
@@ -634,9 +710,6 @@ func TestBuildSecretsToUpdate(t *testing.T) {
 			}
 			if !tc.expectError && err != nil {
 				t.Errorf("unexpected error: %v", err)
-				return
-			}
-			if tc.expectError {
 				return
 			}
 

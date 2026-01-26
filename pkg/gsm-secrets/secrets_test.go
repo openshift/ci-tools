@@ -3,6 +3,8 @@ package gsmsecrets
 import (
 	"fmt"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestClassifySecret(t *testing.T) {
@@ -173,6 +175,54 @@ func TestExtractCollectionFromSecretName(t *testing.T) {
 			actualCollection := ExtractCollectionFromSecretName(tc.secretName)
 			if actualCollection != tc.expectedCollection {
 				t.Errorf("Expected collection %q, got %q", tc.expectedCollection, actualCollection)
+			}
+		})
+	}
+}
+
+func TestParseIndexSecretContent(t *testing.T) {
+	testCases := []struct {
+		name     string
+		content  []byte
+		expected []string
+	}{
+		{
+			name:     "empty content",
+			content:  []byte{},
+			expected: nil,
+		},
+		{
+			name:     "single entry",
+			content:  []byte("- secret1"),
+			expected: []string{"secret1"},
+		},
+		{
+			name:     "single entry with group",
+			content:  []byte("- group1__secret1"),
+			expected: []string{"group1__secret1"},
+		},
+		{
+			name:     "multiple entries",
+			content:  []byte("- secret1\n- group1__secret2\n- group1__secret3"),
+			expected: []string{"secret1", "group1__secret2", "group1__secret3"},
+		},
+		{
+			name:     "filters out updater service account",
+			content:  []byte("- secret1\n- updater-service-account\n- group1__secret2"),
+			expected: []string{"secret1", "group1__secret2"},
+		},
+		{
+			name:     "handles empty lines",
+			content:  []byte("- secret1\n\n- secret2\n\n"),
+			expected: []string{"secret1", "secret2"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := ParseIndexSecretContent(tc.content)
+			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+				t.Errorf("mismatch (-expected, +actual):\n%s", diff)
 			}
 		})
 	}

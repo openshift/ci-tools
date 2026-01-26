@@ -14,6 +14,7 @@ func TestDetectInputsFromDockerfile(t *testing.T) {
 		dockerfile     string
 		existingInputs map[string]api.ImageBuildInputs
 		expected       map[string]api.ImageStreamTagReference
+		from           api.PipelineImageStreamTagReference
 	}{
 		{
 			name: "single registry reference",
@@ -140,11 +141,58 @@ FROM registry.ci.openshift.org/ocp/4.19:base AS runtime
 				},
 			},
 		},
+		{
+			name: "from: is specified - should exclude the last and only detected FROM ref",
+			dockerfile: `FROM registry.ci.openshift.org/ocp/4.19:base
+RUN echo "hello"
+`,
+			from:     "src",
+			expected: map[string]api.ImageStreamTagReference{},
+		},
+		{
+			name: "from: is specified - should exclude the last detected FROM ref",
+			dockerfile: `FROM registry.ci.openshift.org/ocp/4.18:base AS builder
+FROM registry.ci.openshift.org/ocp/4.19:base
+RUN echo "hello"
+`,
+			from: "src",
+			expected: map[string]api.ImageStreamTagReference{
+				"ocp_4.18_base": {
+					Namespace: "ocp",
+					Name:      "4.18",
+					Tag:       "base",
+					As:        "registry.ci.openshift.org/ocp/4.18:base",
+				},
+			},
+		},
+		{
+			name: "from: is specified - should exclude the last detected FROM ref with COPY",
+			dockerfile: `FROM registry.ci.openshift.org/ocp/4.18:base AS builder
+FROM registry.ci.openshift.org/openshift/release:rhel-9-release-golang-1.24-openshift-4.21
+COPY --from=registry.ci.openshift.org/ocp/4.19:base /something /somewhere
+RUN echo "hello"
+`,
+			from: "src",
+			expected: map[string]api.ImageStreamTagReference{
+				"ocp_4.18_base": {
+					Namespace: "ocp",
+					Name:      "4.18",
+					Tag:       "base",
+					As:        "registry.ci.openshift.org/ocp/4.18:base",
+				},
+				"ocp_4.19_base": {
+					Namespace: "ocp",
+					Name:      "4.19",
+					Tag:       "base",
+					As:        "registry.ci.openshift.org/ocp/4.19:base",
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := DetectInputsFromDockerfile([]byte(tc.dockerfile), tc.existingInputs)
+			result := DetectInputsFromDockerfile([]byte(tc.dockerfile), tc.existingInputs, tc.from)
 
 			if diff := cmp.Diff(tc.expected, result); diff != "" {
 				t.Errorf("result differs from expected:\n%s", diff)

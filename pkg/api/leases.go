@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -42,28 +43,65 @@ func IPPoolLeaseForTest(s *MultiStageTestConfigurationLiteral, metadata Metadata
 }
 
 const (
-	openshiftBranch = "openshift-4."
-	releaseBranch   = "release-4."
-	minimumVersion  = 16
+	minimumMajorVersion = 4
+	minimumMinorVersion = 16
 )
 
 // Currently, we only have the ability to utilize IP pools in 4.16 and later, we want to make sure not to allocate them
-// on earlier versions
+// on earlier versions. 5.x and later versions are supported.
 func branchValidForIPPoolLease(branch string) bool {
 	if branch == "master" || branch == "main" {
 		return true
 	}
-	var version string
-	if strings.HasPrefix(branch, openshiftBranch) {
-		version = strings.TrimPrefix(branch, openshiftBranch)
-	}
-	if strings.HasPrefix(branch, releaseBranch) {
-		version = strings.TrimPrefix(branch, releaseBranch)
-	}
-	number, err := strconv.Atoi(version)
-	if err != nil {
+
+	// Check for openshift-X.Y or release-X.Y pattern
+	var majorVersion, minorVersion int
+	var err error
+
+	if strings.HasPrefix(branch, "openshift-") {
+		versionPart := strings.TrimPrefix(branch, "openshift-")
+		if majorVersion, minorVersion, err = parseMajorMinorVersion(versionPart); err != nil {
+			return false
+		}
+	} else if strings.HasPrefix(branch, "release-") {
+		versionPart := strings.TrimPrefix(branch, "release-")
+		if majorVersion, minorVersion, err = parseMajorMinorVersion(versionPart); err != nil {
+			return false
+		}
+	} else {
 		return false
 	}
 
-	return number >= minimumVersion
+	// 5.x and later are supported
+	if majorVersion >= 5 {
+		return true
+	}
+
+	// For 4.x, check minimum minor version
+	if majorVersion == 4 {
+		return minorVersion >= minimumMinorVersion
+	}
+
+	// Earlier major versions not supported
+	return false
+}
+
+// parseMajorMinorVersion parses a version string like "4.16" or "5.1" into major and minor components
+func parseMajorMinorVersion(version string) (int, int, error) {
+	parts := strings.Split(version, ".")
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("invalid version format: %s", version)
+	}
+
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid major version: %s", parts[0])
+	}
+
+	minor, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid minor version: %s", parts[1])
+	}
+
+	return major, minor, nil
 }

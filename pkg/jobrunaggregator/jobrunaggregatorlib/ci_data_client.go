@@ -1125,6 +1125,19 @@ WITH earliest_test_dates AS (
     AND date <= CURRENT_DATE()
   GROUP BY
     test_name
+),
+high_cpu_test_counts AS (
+  -- Count how many times each test appears in high_cpu_e2e_tests during the period
+  SELECT
+    TestName AS test_name,
+    COUNT(*) AS high_cpu_count
+  FROM
+    CI_DATA_AUTODL_LOCATION.high_cpu_e2e_tests
+  WHERE
+    PartitionTime >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL GREATEST(100, @days_back) DAY)
+    AND PartitionTime <= CURRENT_TIMESTAMP()
+  GROUP BY
+    TestName
 )
 SELECT
   main.release,
@@ -1137,13 +1150,18 @@ SELECT
   MIN(main.date) AS period_start,
   MAX(main.date) AS period_end,
   COUNT(DISTINCT main.date) AS days_with_data,
-  earliest.first_sample_date
+  earliest.first_sample_date,
+  IFNULL(high_cpu.high_cpu_count, 0) AS high_cpu_count
 FROM
   DATA_SET_LOCATION.TestsSummaryByDate AS main
 LEFT JOIN
   earliest_test_dates AS earliest
 ON
   main.test_name = earliest.test_name
+LEFT JOIN
+  high_cpu_test_counts AS high_cpu
+ON
+  main.test_name = high_cpu.test_name
 WHERE
   main.suite = @suite_name
   AND main.release = @release_name
@@ -1152,7 +1170,8 @@ WHERE
 GROUP BY
   main.release,
   main.test_name,
-  earliest.first_sample_date
+  earliest.first_sample_date,
+  high_cpu.high_cpu_count
 HAVING
   SUM(main.test_count) > @min_test_count
 ORDER BY

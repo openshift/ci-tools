@@ -17,6 +17,7 @@ import (
 const (
 	BigQueryProjectID = "openshift-ci-data-analysis"
 	CIDataSetID       = "ci_data"
+	CIAutodlDataSetID = "ci_data_autodl"
 
 	ReleaseTableName             = "ReleaseTags"
 	ReleaseRepositoryTableName   = "ReleaseRepositories"
@@ -25,20 +26,23 @@ const (
 )
 
 type BigQueryDataCoordinates struct {
-	ProjectID string
-	DataSetID string
+	ProjectID       string
+	DataSetID       string
+	AutodlDataSetID string
 }
 
 func NewBigQueryDataCoordinates() *BigQueryDataCoordinates {
 	return &BigQueryDataCoordinates{
-		ProjectID: BigQueryProjectID,
-		DataSetID: CIDataSetID,
+		ProjectID:       BigQueryProjectID,
+		DataSetID:       CIDataSetID,
+		AutodlDataSetID: CIAutodlDataSetID,
 	}
 }
 
 func (f *BigQueryDataCoordinates) BindFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&f.ProjectID, "google-project-id", f.ProjectID, "project ID where data is stored")
 	fs.StringVar(&f.DataSetID, "bigquery-dataset", f.DataSetID, "bigquery dataset where data is stored")
+	fs.StringVar(&f.AutodlDataSetID, "bigquery-autodl-dataset", f.AutodlDataSetID, "bigquery autodl dataset where autodl data is stored")
 }
 
 func (f *BigQueryDataCoordinates) Validate() error {
@@ -48,16 +52,25 @@ func (f *BigQueryDataCoordinates) Validate() error {
 	if len(f.DataSetID) == 0 {
 		return fmt.Errorf("one of --google-service-account-credential-file or --google-oauth-credential-file must be specified")
 	}
+	if len(f.AutodlDataSetID) == 0 {
+		return fmt.Errorf("--bigquery-autodl-dataset must be specified")
+	}
 
 	return nil
 }
 
 func (f *BigQueryDataCoordinates) SubstituteDataSetLocation(query string) string {
-	return strings.Replace(
+	query = strings.Replace(
 		query,
 		"DATA_SET_LOCATION",
 		f.ProjectID+"."+f.DataSetID,
 		-1)
+	query = strings.Replace(
+		query,
+		"CI_DATA_AUTODL_LOCATION",
+		f.ProjectID+"."+f.AutodlDataSetID,
+		-1)
+	return query
 }
 
 type BigQueryInserter interface {

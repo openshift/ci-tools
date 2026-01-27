@@ -5,6 +5,7 @@ package run
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"time"
 
@@ -27,6 +28,7 @@ func Producer(t testhelper.TestingTInterface, dataDir, kubeconfigFile string, ig
 	start := time.Now()
 	t.Logf("Running pod-scaler %v", podScalerFlags)
 	podScaler := exec.CommandContext(interrupts.Context(), "pod-scaler", podScalerFlags...)
+	podScaler.Env = append(os.Environ(), "POD_SCALER_MIN_SAMPLES=1") // Set env var for e2e tests
 	out, err := podScaler.CombinedOutput()
 	if err != nil {
 		t.Fatalf("Failed to run pod-scaler: %v: %s", err, string(out))

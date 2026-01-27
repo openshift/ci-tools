@@ -33,7 +33,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps"
 )
 
-func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool, cpuCap int64, memoryCap string, cpuPriorityScheduling int64, reporter results.PodScalerReporter) {
+func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool, cpuCap int64, memoryCap string, cpuPriorityScheduling int64, authoritativeCPU, authoritativeMemory bool, reporter results.PodScalerReporter) {
 	logger := logrus.WithField("component", "pod-scaler admission")
 	logger.Infof("Initializing admission webhook server with %d loaders.", len(loaders))
 	health := pjutil.NewHealthOnPort(healthPort)
@@ -44,7 +44,7 @@ func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Int
 		Port:    port,
 		CertDir: certDir,
 	})
-	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources, mutateResourceLimits: mutateResourceLimits, cpuCap: cpuCap, memoryCap: memoryCap, cpuPriorityScheduling: cpuPriorityScheduling, reporter: reporter}})
+	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources, mutateResourceLimits: mutateResourceLimits, cpuCap: cpuCap, memoryCap: memoryCap, cpuPriorityScheduling: cpuPriorityScheduling, authoritativeCPU: authoritativeCPU, authoritativeMemory: authoritativeMemory, reporter: reporter}})
 	logger.Info("Serving admission webhooks.")
 	if err := server.Start(interrupts.Context()); err != nil {
 		logrus.WithError(err).Fatal("Failed to serve webhooks.")
@@ -60,6 +60,8 @@ type podMutator struct {
 	cpuCap                int64
 	memoryCap             string
 	cpuPriorityScheduling int64
+	authoritativeCPU      bool
+	authoritativeMemory   bool
 	reporter              results.PodScalerReporter
 }
 
@@ -97,7 +99,7 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 		logger.WithError(err).Error("Failed to handle rehearsal Pod.")
 		return admission.Allowed("Failed to handle rehearsal Pod, ignoring.")
 	}
-	mutatePodResources(pod, m.resources, m.mutateResourceLimits, m.cpuCap, m.memoryCap, m.reporter, logger)
+	mutatePodResources(pod, m.resources, m.mutateResourceLimits, m.cpuCap, m.memoryCap, m.authoritativeCPU, m.authoritativeMemory, m.reporter, logger)
 	m.addPriorityClass(pod)
 
 	marshaledPod, err := json.Marshal(pod)
@@ -196,8 +198,14 @@ func mutatePodLabels(pod *corev1.Pod, build *buildv1.Build) {
 	}
 }
 
-// useOursIfLarger updates fields in theirs when ours are larger
-func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, workloadName, workloadType string, reporter results.PodScalerReporter, logger *logrus.Entry) {
+// applyRecommendationsBasedOnRecentData applies resource recommendations based on recent usage data
+// (see resourceRecommendationWindow). If they used more, we increase resources. If they used less,
+// we decrease them if authoritative mode is enabled for that resource type.
+//
+// TestApplyRecommendationsBasedOnRecentData_ReducesResources is tested in admission_test.go
+// as part of TestUseOursIfLarger. The reduction functionality is verified there with proper
+// test cases that handle ResourceQuantity comparison correctly.
+func applyRecommendationsBasedOnRecentData(allOfOurs, allOfTheirs *corev1.ResourceRequirements, workloadName, workloadType string, authoritativeCPU, authoritativeMemory bool, reporter results.PodScalerReporter, logger *logrus.Entry) {
 	for _, item := range []*corev1.ResourceRequirements{allOfOurs, allOfTheirs} {
 		if item.Requests == nil {
 			item.Requests = corev1.ResourceList{}
@@ -215,6 +223,10 @@ func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, worklo
 	} {
 		for _, field := range []corev1.ResourceName{corev1.ResourceCPU, corev1.ResourceMemory} {
 			our := (*pair.ours)[field]
+			// If we have no recommendation for this resource, skip it
+			if our.IsZero() {
+				continue
+			}
 			//TODO(sgoeddel): this is a temporary experiment to see what effect setting values that are 120% of what has
 			// been determined has on the rate of OOMKilled and similar termination of workloads
 			increased := our.AsApproximateFloat64() * 1.2
@@ -231,13 +243,49 @@ func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, worklo
 			})
 			cmp := our.Cmp(their)
 			if cmp == 1 {
-				fieldLogger.Debug("determined amount larger than configured")
+				fieldLogger.Debug("determined amount larger than configured, increasing resources")
 				(*pair.theirs)[field] = our
 				if their.Value() > 0 && our.Value() > (their.Value()*10) {
 					reporter.ReportResourceConfigurationWarning(workloadName, workloadType, their.String(), our.String(), field.String())
 				}
 			} else if cmp < 0 {
-				fieldLogger.Debug("determined amount smaller than configured")
+				// Check if authoritative mode is enabled for this resource type
+				isAuthoritative := false
+				if field == corev1.ResourceCPU {
+					isAuthoritative = authoritativeCPU
+				} else if field == corev1.ResourceMemory {
+					isAuthoritative = authoritativeMemory
+				}
+
+				if !isAuthoritative {
+					fieldLogger.Debug("authoritative mode disabled for this resource, skipping reduction")
+					continue
+				}
+
+				// Apply gradual reduction with safety limits: max 25% reduction per cycle, minimum 5% difference
+				ourValue := our.AsApproximateFloat64()
+				theirValue := their.AsApproximateFloat64()
+				if theirValue == 0 {
+					fieldLogger.Debug("theirs is zero, applying recommendation")
+					(*pair.theirs)[field] = our
+					continue
+				}
+
+				reductionPercent := 1.0 - (ourValue / theirValue)
+				if reductionPercent < 0.05 {
+					fieldLogger.Debug("difference less than 5%, skipping micro-adjustment")
+					continue
+				}
+
+				maxReductionPercent := 0.25
+				if reductionPercent > maxReductionPercent {
+					maxAllowed := theirValue * (1.0 - maxReductionPercent)
+					our.Set(int64(maxAllowed))
+					fieldLogger.Debugf("applying gradual reduction (limited to 25%% per cycle)")
+				} else {
+					fieldLogger.Debug("reducing resources based on recent usage")
+				}
+				(*pair.theirs)[field] = our
 			} else {
 				fieldLogger.Debug("determined amount equal to configured")
 			}
@@ -292,7 +340,7 @@ func preventUnschedulable(resources *corev1.ResourceRequirements, cpuCap int64, 
 	}
 }
 
-func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool, cpuCap int64, memoryCap string, reporter results.PodScalerReporter, logger *logrus.Entry) {
+func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool, cpuCap int64, memoryCap string, authoritativeCPU, authoritativeMemory bool, reporter results.PodScalerReporter, logger *logrus.Entry) {
 	mutateResources := func(containers []corev1.Container) {
 		for i := range containers {
 			meta := podscaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, containers[i].Name)
@@ -301,7 +349,7 @@ func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceL
 				logger.Debugf("recommendation exists for: %s", containers[i].Name)
 				workloadType := determineWorkloadType(pod.Annotations, pod.Labels)
 				workloadName := determineWorkloadName(pod.Name, containers[i].Name, workloadType, pod.Labels)
-				useOursIfLarger(&resources, &containers[i].Resources, workloadName, workloadType, reporter, logger)
+				applyRecommendationsBasedOnRecentData(&resources, &containers[i].Resources, workloadName, workloadType, authoritativeCPU, authoritativeMemory, reporter, logger)
 				if mutateResourceLimits {
 					reconcileLimits(&containers[i].Resources)
 				}

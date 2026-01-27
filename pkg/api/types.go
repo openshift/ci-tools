@@ -1483,6 +1483,8 @@ const (
 	ClusterProfileAzureVirtualization     ClusterProfile = "azure-virtualization"
 	ClusterProfileOCIAgent                ClusterProfile = "oci-agent-qe"
 	ClusterProfileOCIAssisted             ClusterProfile = "oci-assisted"
+	ClusterProfileHypershiftAWS           ClusterProfile = "hypershift-aws"
+	ClusterProfileHypershiftAKS           ClusterProfile = "hypershift-aks"
 	ClusterProfileHypershiftPowerVS       ClusterProfile = "hypershift-powervs"
 	ClusterProfileHypershiftPowerVSCB     ClusterProfile = "hypershift-powervs-cb"
 	ClusterProfileOSSM                    ClusterProfile = "ossm-aws"
@@ -1678,6 +1680,8 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileVSphereElasticPoc,
 		ClusterProfileOCIAgent,
 		ClusterProfileOCIAssisted,
+		ClusterProfileHypershiftAWS,
+		ClusterProfileHypershiftAKS,
 		ClusterProfileHypershiftPowerVS,
 		ClusterProfileHypershiftPowerVSCB,
 		ClusterProfileOSSM,
@@ -1981,6 +1985,10 @@ func (p ClusterProfile) ClusterType() string {
 		return "oci-agent-qe"
 	case ClusterProfileOCIAssisted:
 		return "oci-edge"
+	case ClusterProfileHypershiftAWS:
+		return "hypershift-aws"
+	case ClusterProfileHypershiftAKS:
+		return "hypershift-aks"
 	case ClusterProfileHypershiftPowerVS:
 		return "hypershift-powervs"
 	case ClusterProfileHypershiftPowerVSCB:
@@ -2308,6 +2316,10 @@ func (p ClusterProfile) LeaseType() string {
 		return "oci-agent-qe-quota-slice"
 	case ClusterProfileOCIAssisted:
 		return "oci-edge-quota-slice"
+	case ClusterProfileHypershiftAWS:
+		return "hypershift-aws-quota-slice"
+	case ClusterProfileHypershiftAKS:
+		return "hypershift-aks-quota-slice"
 	case ClusterProfileHypershiftPowerVS:
 		return "hypershift-powervs-quota-slice"
 	case ClusterProfileHypershiftPowerVSCB:
@@ -2426,7 +2438,7 @@ func LeaseTypeFromClusterType(t string) (string, error) {
 		"openstack-nerc-dev", "vsphere", "ovirt", "packet", "packet-edge", "powervc-1", "powervs-multi-1",
 		"powervs-1", "powervs-2", "powervs-3", "powervs-4", "powervs-5", "powervs-6", "powervs-7", "powervs-8",
 		"kubevirt", "aws-cpaas", "osd-ephemeral", "gcp-virtualization", "aws-virtualization",
-		"azure-virtualization", "hypershift-powervs", "hypershift-powervs-cb", "aws-mco-qe",
+		"azure-virtualization", "hypershift-aws", "hypershift-aks", "hypershift-powervs", "hypershift-powervs-cb", "aws-mco-qe",
 		"equinix-edge-enablement", "aws-oadp-qe", "azure-oadp-qe", "gcp-oadp-qe", "aws-lp-chaos",
 		"metal-redhat-gs", "aro-hcp-int", "aro-hcp-stg", "aro-hcp-prod", "aro-hcp-dev", "rosa-regional-platform-int", "hyperfleet-e2e":
 		return t + "-quota-slice", nil

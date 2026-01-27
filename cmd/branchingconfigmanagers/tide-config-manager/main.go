@@ -484,38 +484,19 @@ func (ve *verifiedEvent) ModifyQuery(q *prowconfig.TideQuery, repo string) {
 	q.Labels = sets.List(reqLabels)
 }
 
-// isVersionedBranch checks if a branch name matches release-4.x or openshift-4.x pattern
+// isVersionedBranch checks if a branch name matches release-X.Y or openshift-X.Y pattern
+// where X is a major version (4 or higher) and Y is a minor version
 func isVersionedBranch(branch string) bool {
-	if strings.HasPrefix(branch, "release-4.") {
-		versionPart := strings.TrimPrefix(branch, "release-4.")
-		if isValidMinorVersion(versionPart) {
-			return true
+	prefixes := []string{"release-", "openshift-"}
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(branch, prefix) {
+			versionPart := strings.TrimPrefix(branch, prefix)
+			if api.IsValidOCPVersion(versionPart) {
+				return true
+			}
 		}
 	}
-
-	if strings.HasPrefix(branch, "openshift-4.") {
-		versionPart := strings.TrimPrefix(branch, "openshift-4.")
-		if isValidMinorVersion(versionPart) {
-			return true
-		}
-	}
-
 	return false
-}
-
-// isValidMinorVersion checks if a string represents a valid minor version (e.g., "9", "10", "15")
-func isValidMinorVersion(version string) bool {
-	if version == "" {
-		return false
-	}
-
-	for _, char := range version {
-		if char < '0' || char > '9' {
-			return false
-		}
-	}
-
-	return version != "0"
 }
 
 func (ve *verifiedEvent) GetDataFromProwConfig(*prowconfig.ProwConfig) {
@@ -601,9 +582,13 @@ func reconcile(currentOCPVersion, lifecyclePhase string, config *prowconfig.Prow
 		)
 	}
 	if lifecyclePhase == GeneralAvailability {
+		pastVersion, pastErr := currentVersion.GetPastVersion()
+		if pastErr != nil {
+			return fmt.Errorf("failed to get past version for %s: %w", currentVersion.GetVersion(), pastErr)
+		}
 		_, err = shardprowconfig.ShardProwConfig(config, target,
 			newGeneralAvailabilityEvent(
-				currentVersion.GetPastVersion(),
+				pastVersion,
 				currentVersion.GetVersion(),
 				currentVersion.GetFutureVersion(),
 				repos),

@@ -13,7 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 // LoadConfig loads the lifecycle configuration from a given localtion.
@@ -210,12 +210,25 @@ func (m MajorMinor) Less(other MajorMinor) bool {
 	return m.Minor < other.Minor
 }
 
-func (m MajorMinor) GetPastVersion() string {
-	return fmt.Sprintf("%d.%d", m.Major, m.Minor-1)
+// GetPastVersion returns the previous version using VersionTransitionOverrides.
+// Returns an error if no previous version can be determined (e.g., missing override for X.0).
+func (m MajorMinor) GetPastVersion() (string, error) {
+	current := m.GetVersion()
+	return api.GetPreviousVersionSimple(current)
 }
 
-func (m MajorMinor) GetPastPastVersion() string {
-	return fmt.Sprintf("%d.%d", m.Major, m.Minor-1)
+// GetPastPastVersion returns the version before the previous version.
+// Returns an error if any step in the chain fails.
+func (m MajorMinor) GetPastPastVersion() (string, error) {
+	pastVersion, err := m.GetPastVersion()
+	if err != nil {
+		return "", fmt.Errorf("failed to get past version: %w", err)
+	}
+	pastMM, err := ParseMajorMinor(pastVersion)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse past version %s: %w", pastVersion, err)
+	}
+	return pastMM.GetPastVersion()
 }
 
 func (m MajorMinor) GetVersion() string {
@@ -251,16 +264,12 @@ func ParseMajorMinor(version string) (*MajorMinor, error) {
 	return &MajorMinor{Major: int(parsedMajor), Minor: int(parsedMinor)}, nil
 }
 
-// ProvidesSignalForVersion returns a version (expected to be an "<MAJOR>.<MINOR>" OpenShift version) for which
-// the job will provide relevant continuous CI signal that can be consumed by downstream tooling like Sippy. Generally
+// ProvidesSignalForVersion returns the OCP version for which a job provides meaningful CI quality signal. Only
 // jobs that test CI or Nightly payloads provide such relevant quality signal, so this method approximates identifying
 // these jobs by checking whether the source ci-operator configuration contains a `latest` release that is a candidate
 // version (which means one of the ci/nightly payloads will be fetched from release-controller).
-//
-// Jobs that test an ephemeral OCP payload built for a PR or install a named released version (EC/RC/GA) do not provide
-// relevant CI signal for a version.
-func ProvidesSignalForVersion(configSpec *cioperatorapi.ReleaseBuildConfiguration) string {
-	if release, found := configSpec.Releases[cioperatorapi.LatestReleaseName]; found && release.Candidate != nil {
+func ProvidesSignalForVersion(configSpec *api.ReleaseBuildConfiguration) string {
+	if release, found := configSpec.Releases[api.LatestReleaseName]; found && release.Candidate != nil {
 		return release.Candidate.Version
 	}
 	return ""

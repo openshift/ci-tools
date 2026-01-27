@@ -53,19 +53,28 @@ const (
 	pjRehearse         = "pj-rehearse"
 )
 
-// Number of openshift versions
-var numVersion = 50
+// Number of minor versions per major version
+var numMinorVersions = 50
 
-// Global map that contains relevance of known branches
+// Supported major versions (4 through 9)
+const (
+	minMajorVersion = 4
+	maxMajorVersion = 9
+)
+
 var relevancy = map[string]int{
-	"master": numVersion + 1,
-	"main":   numVersion + 1,
+	"master": 10000,
+	"main":   10000,
 }
 
 func init() {
-	for i := 1; i < numVersion; i++ {
-		relevancy[fmt.Sprintf("release-4.%d", i)] = i
-		relevancy[fmt.Sprintf("openshift-4.%d", i)] = i
+	for major := minMajorVersion; major <= maxMajorVersion; major++ {
+		baseRelevancy := (major - minMajorVersion) * 100
+		for minor := 0; minor < numMinorVersions; minor++ {
+			rel := baseRelevancy + minor
+			relevancy[fmt.Sprintf("release-%d.%d", major, minor)] = rel
+			relevancy[fmt.Sprintf("openshift-%d.%d", major, minor)] = rel
+		}
 	}
 }
 

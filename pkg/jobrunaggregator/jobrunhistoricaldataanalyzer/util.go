@@ -9,9 +9,9 @@ import (
 	"os"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 )
 
@@ -97,24 +97,37 @@ func fetchCurrentRelease() (current string, previous string, err error) {
 	if err := json.Unmarshal(data, &sippyRelease); err != nil {
 		return "", "", err
 	}
-	sorted := []int{}
+
+	var validVersions []string
+	var parsedVersions []api.ParsedVersion
+
 	for _, d := range sippyRelease.Releases {
-		if !strings.Contains(d, "4.") {
+		pv, err := api.ParseVersion(d)
+		if err != nil || pv.Major < 4 {
 			continue
 		}
-		minorVersionString := strings.TrimPrefix(d, "4.")
-		minorVersion, err := strconv.Atoi(minorVersionString)
-		if err != nil {
-			continue
-		}
-		sorted = append(sorted, minorVersion)
+		validVersions = append(validVersions, d)
+		parsedVersions = append(parsedVersions, pv)
 	}
-	sort.SliceStable(sorted, func(i, j int) bool {
-		return sorted[i] > sorted[j]
+
+	if len(parsedVersions) < 1 {
+		return "", "", fmt.Errorf("no releases found")
+	}
+
+	sort.SliceStable(parsedVersions, func(i, j int) bool {
+		if parsedVersions[i].Major != parsedVersions[j].Major {
+			return parsedVersions[i].Major > parsedVersions[j].Major
+		}
+		return parsedVersions[i].Minor > parsedVersions[j].Minor
 	})
-	current = fmt.Sprintf("4.%d", sorted[0])
-	previous = fmt.Sprintf("4.%d", sorted[1])
-	return
+
+	current = parsedVersions[0].String()
+	previous, err = api.GetPreviousVersion(current, validVersions)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to determine previous version for %s: %w", current, err)
+	}
+
+	return current, previous, nil
 }
 
 func formatTableOutput(data []parsedJobData, filter bool) string {

@@ -153,8 +153,8 @@ func (o options) validateOptions() error {
 	if o.ocpVersion == "" {
 		return fmt.Errorf("required parameter %s was not provided", ocpVersionOption)
 	}
-	if !strings.HasPrefix(o.ocpVersion, "4") {
-		return fmt.Errorf("ocp-version must be 4.x or higher")
+	if !api.IsValidOCPVersion(o.ocpVersion) {
+		return fmt.Errorf("ocp-version must be in format X.Y where X >= 4 (e.g., 4.15, 5.0)")
 	}
 
 	if o.operatorPackageName == "" {

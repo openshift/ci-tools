@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -237,7 +236,7 @@ func privateBuildRoot(buildRoot *api.BuildRootImageConfiguration) {
 
 func privateBaseImages(baseImages map[string]api.ImageStreamTagReference) {
 	for name, reference := range baseImages {
-		if reference.Namespace == ocpNamespace && isIntegrationImageStream(reference.Name) {
+		if reference.Namespace == ocpNamespace && api.IsValidOCPVersion(reference.Name) {
 			reference.Name = fmt.Sprintf("%s-priv", reference.Name)
 			reference.Namespace = privatePromotionNamespace
 			baseImages[name] = reference
@@ -264,8 +263,4 @@ func privatePromotionConfiguration(promotion *api.PromotionConfiguration) {
 
 func strP(str string) *string {
 	return &str
-}
-
-func isIntegrationImageStream(name string) bool {
-	return strings.HasPrefix(name, "4.")
 }

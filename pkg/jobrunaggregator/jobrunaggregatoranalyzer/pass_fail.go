@@ -3,7 +3,6 @@ package jobrunaggregatoranalyzer
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -12,6 +11,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 	"github.com/openshift/ci-tools/pkg/junit"
@@ -208,27 +208,6 @@ func (a *weeklyAverageFromTenDays) getAggregatedTestRuns(ctx context.Context) (m
 	return a.aggregatedTestRunsByName, a.queryTestRunsErr
 }
 
-func getMajor(in string) (int, error) {
-	major, err := strconv.ParseInt(strings.Split(in, ".")[0], 10, 32)
-	if err != nil {
-		return 0, err
-	}
-	return int(major), err
-}
-
-func getMinor(in string) (int, error) {
-	parts := strings.Split(in, ".")
-	if len(parts) >= 2 {
-		minor, err := strconv.ParseInt(strings.Split(in, ".")[1], 10, 32)
-		if err != nil {
-			return 0, err
-		}
-		return int(minor), err
-	}
-
-	return 0, fmt.Errorf("unable to get minor from version %s", in)
-}
-
 func normalizeJobName(jobName, fromRelease, toRelease string) string {
 	newJobName := strings.Replace(jobName, toRelease, "", -1)
 	return strings.Replace(newJobName, fromRelease, "", -1)
@@ -239,7 +218,7 @@ func (a *weeklyAverageFromTenDays) getNormalizedFallBackJobName(ctx context.Cont
 	if err != nil {
 		return jobName, err
 	}
-	var targetFromRelease, targetToRelease string
+
 	var job *jobrunaggregatorapi.JobRowWithVariants
 	for _, j := range allJobs {
 		if j.JobName == jobName {
@@ -247,40 +226,46 @@ func (a *weeklyAverageFromTenDays) getNormalizedFallBackJobName(ctx context.Cont
 			break
 		}
 	}
-	if job != nil {
-		if len(job.FromRelease.StringVal) > 0 {
-			fromReleaseMajor, err1 := getMajor(job.FromRelease.StringVal)
-			fromReleaseMinor, err2 := getMinor(job.FromRelease.StringVal)
-			if err1 != nil || err2 != nil {
-				fmt.Printf("Error parsing from release %s. Will not fall back to previous release data.\n", job.FromRelease)
-				return jobName, nil
-			}
-			targetFromRelease = fmt.Sprintf("%d.%d", fromReleaseMajor, fromReleaseMinor-1)
-		}
-		if len(job.Release) > 0 {
-			toReleaseMajor, err1 := getMajor(job.Release)
-			toReleaseMinor, err2 := getMinor(job.Release)
-			if err1 != nil || err2 != nil {
-				fmt.Printf("Error parsing release %s. Will not fall back to previous release data.\n", job.Release)
-				return jobName, nil
-			}
-			targetToRelease = fmt.Sprintf("%d.%d", toReleaseMajor, toReleaseMinor-1)
-		}
 
-		normalizedJobName := normalizeJobName(job.JobName, job.FromRelease.StringVal, job.Release)
-		for _, j := range allJobs {
-			if j.Architecture == job.Architecture &&
-				j.Topology == job.Topology &&
-				j.Network == job.Network &&
-				j.Platform == job.Platform &&
-				j.FromRelease.StringVal == targetFromRelease &&
-				j.Release == targetToRelease &&
-				j.IPMode == job.IPMode &&
-				normalizeJobName(j.JobName, j.FromRelease.StringVal, j.Release) == normalizedJobName {
-				return j.JobName, nil
-			}
+	if job == nil {
+		return jobName, nil
+	}
+
+	var targetFromRelease, targetToRelease string
+
+	if len(job.FromRelease.StringVal) > 0 {
+		prev, err := api.GetPreviousVersionSimple(job.FromRelease.StringVal)
+		if err != nil {
+			fmt.Printf("Error determining previous version for from release %s: %v. Will not fall back to previous release data.\n", job.FromRelease, err)
+			return jobName, nil
+		}
+		targetFromRelease = prev
+	}
+
+	if len(job.Release) > 0 {
+		prev, err := api.GetPreviousVersionSimple(job.Release)
+		if err != nil {
+			fmt.Printf("Error determining previous version for release %s: %v. Will not fall back to previous release data.\n", job.Release, err)
+			return jobName, nil
+		}
+		targetToRelease = prev
+	}
+
+	normalizedJobName := normalizeJobName(job.JobName, job.FromRelease.StringVal, job.Release)
+
+	for _, j := range allJobs {
+		if j.Architecture == job.Architecture &&
+			j.Topology == job.Topology &&
+			j.Network == job.Network &&
+			j.Platform == job.Platform &&
+			j.FromRelease.StringVal == targetFromRelease &&
+			j.Release == targetToRelease &&
+			j.IPMode == job.IPMode &&
+			normalizeJobName(j.JobName, j.FromRelease.StringVal, j.Release) == normalizedJobName {
+			return j.JobName, nil
 		}
 	}
+
 	return jobName, nil
 }
 

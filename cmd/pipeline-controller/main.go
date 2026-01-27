@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -535,8 +536,14 @@ func (cw *clientWrapper) handlePipelineContextCreation(l *logrus.Entry, event gi
 		filenames = append(filenames, change.Filename)
 	}
 
+	// Filter tests by branch - only process tests that match the target branch
+	repoBaseRef := repo + "-" + baseBranch
+
 	// Evaluate pipeline_run_if_changed tests
 	for _, presubmit := range presubmits.pipelineConditionallyRequired {
+		if !strings.Contains(presubmit.Name, repoBaseRef) {
+			continue
+		}
 		if pattern, ok := presubmit.Annotations["pipeline_run_if_changed"]; ok && pattern != "" {
 			if shouldRun, err := matchesPattern(pattern, filenames); err != nil {
 				logger.WithError(err).WithField("test", presubmit.Name).WithField("pattern", pattern).Error("failed to evaluate pattern")
@@ -553,6 +560,9 @@ func (cw *clientWrapper) handlePipelineContextCreation(l *logrus.Entry, event gi
 
 	// Evaluate pipeline_skip_if_only_changed tests
 	for _, presubmit := range presubmits.pipelineSkipOnlyRequired {
+		if !strings.Contains(presubmit.Name, repoBaseRef) {
+			continue
+		}
 		if pattern, ok := presubmit.Annotations["pipeline_skip_if_only_changed"]; ok && pattern != "" {
 			if shouldSkip, err := allFilesMatchPattern(pattern, filenames); err != nil {
 				logger.WithError(err).WithField("test", presubmit.Name).WithField("pattern", pattern).Error("failed to evaluate skip pattern")
@@ -570,6 +580,9 @@ func (cw *clientWrapper) handlePipelineContextCreation(l *logrus.Entry, event gi
 
 	// Create contexts for protected jobs (always_run: false, optional: false, no run conditions)
 	for _, presubmit := range presubmits.protected {
+		if !strings.Contains(presubmit.Name, repoBaseRef) {
+			continue
+		}
 		if err := cw.createContext(org, repo, sha, presubmit.Context, "pending", PipelinePendingMessage); err != nil {
 			logger.WithError(err).WithField("test", presubmit.Name).Error("failed to create context")
 		} else {

@@ -141,13 +141,13 @@ func TestHandlePipelineContextCreation(t *testing.T) {
 				pipelineConditionallyRequired: func() []config.Presubmit {
 					p := config.Presubmit{
 						JobBase: config.JobBase{
-							Name: "test-go",
+							Name: "pull-ci-test-org-test-repo-main-test-go",
 							Annotations: map[string]string{
 								"pipeline_run_if_changed": ".*\\.go$",
 							},
 						},
 					}
-					p.Context = "test-go"
+					p.Context = "ci/prow/test-go"
 					return []config.Presubmit{p}
 				}(),
 			},
@@ -164,13 +164,13 @@ func TestHandlePipelineContextCreation(t *testing.T) {
 				pipelineConditionallyRequired: func() []config.Presubmit {
 					p := config.Presubmit{
 						JobBase: config.JobBase{
-							Name: "test-go",
+							Name: "pull-ci-test-org-test-repo-main-test-go",
 							Annotations: map[string]string{
 								"pipeline_run_if_changed": ".*\\.go$",
 							},
 						},
 					}
-					p.Context = "test-go"
+					p.Context = "ci/prow/test-go"
 					return []config.Presubmit{p}
 				}(),
 			},
@@ -187,13 +187,13 @@ func TestHandlePipelineContextCreation(t *testing.T) {
 				pipelineSkipOnlyRequired: func() []config.Presubmit {
 					p := config.Presubmit{
 						JobBase: config.JobBase{
-							Name: "test-important",
+							Name: "pull-ci-test-org-test-repo-main-test-important",
 							Annotations: map[string]string{
 								"pipeline_skip_if_only_changed": ".*\\.md$",
 							},
 						},
 					}
-					p.Context = "test-important"
+					p.Context = "ci/prow/test-important"
 					return []config.Presubmit{p}
 				}(),
 			},
@@ -210,13 +210,13 @@ func TestHandlePipelineContextCreation(t *testing.T) {
 				pipelineSkipOnlyRequired: func() []config.Presubmit {
 					p := config.Presubmit{
 						JobBase: config.JobBase{
-							Name: "test-important",
+							Name: "pull-ci-test-org-test-repo-main-test-important",
 							Annotations: map[string]string{
 								"pipeline_skip_if_only_changed": ".*\\.md$",
 							},
 						},
 					}
-					p.Context = "test-important"
+					p.Context = "ci/prow/test-important"
 					return []config.Presubmit{p}
 				}(),
 			},
@@ -233,7 +233,7 @@ func TestHandlePipelineContextCreation(t *testing.T) {
 				pipelineConditionallyRequired: []config.Presubmit{
 					{
 						JobBase: config.JobBase{
-							Name: "test-go",
+							Name: "pull-ci-test-org-test-repo-main-test-go",
 							Annotations: map[string]string{
 								"pipeline_run_if_changed": ".*",
 							},
@@ -251,10 +251,10 @@ func TestHandlePipelineContextCreation(t *testing.T) {
 			action: github.PullRequestActionOpened,
 			presubmits: presubmitTests{
 				protected: func() []config.Presubmit {
-					p1 := config.Presubmit{JobBase: config.JobBase{Name: "test-protected-1"}}
-					p1.Context = "test-protected-1"
-					p2 := config.Presubmit{JobBase: config.JobBase{Name: "test-protected-2"}}
-					p2.Context = "test-protected-2"
+					p1 := config.Presubmit{JobBase: config.JobBase{Name: "pull-ci-test-org-test-repo-main-protected-1"}}
+					p1.Context = "ci/prow/protected-1"
+					p2 := config.Presubmit{JobBase: config.JobBase{Name: "pull-ci-test-org-test-repo-main-protected-2"}}
+					p2.Context = "ci/prow/protected-2"
 					return []config.Presubmit{p1, p2}
 				}(),
 			},
@@ -268,32 +268,32 @@ func TestHandlePipelineContextCreation(t *testing.T) {
 			action: github.PullRequestActionOpened,
 			presubmits: presubmitTests{
 				protected: func() []config.Presubmit {
-					p := config.Presubmit{JobBase: config.JobBase{Name: "test-protected"}}
-					p.Context = "test-protected"
+					p := config.Presubmit{JobBase: config.JobBase{Name: "pull-ci-test-org-test-repo-main-protected"}}
+					p.Context = "ci/prow/protected"
 					return []config.Presubmit{p}
 				}(),
 				pipelineConditionallyRequired: func() []config.Presubmit {
 					p := config.Presubmit{
 						JobBase: config.JobBase{
-							Name: "test-pipeline",
+							Name: "pull-ci-test-org-test-repo-main-pipeline",
 							Annotations: map[string]string{
 								"pipeline_run_if_changed": ".*\\.go$",
 							},
 						},
 					}
-					p.Context = "test-pipeline"
+					p.Context = "ci/prow/pipeline"
 					return []config.Presubmit{p}
 				}(),
 				pipelineSkipOnlyRequired: func() []config.Presubmit {
 					p := config.Presubmit{
 						JobBase: config.JobBase{
-							Name: "test-skip-docs",
+							Name: "pull-ci-test-org-test-repo-main-skip-docs",
 							Annotations: map[string]string{
 								"pipeline_skip_if_only_changed": ".*\\.md$",
 							},
 						},
 					}
-					p.Context = "test-skip-docs"
+					p.Context = "ci/prow/skip-docs"
 					return []config.Presubmit{p}
 				}(),
 			},
@@ -308,8 +308,8 @@ func TestHandlePipelineContextCreation(t *testing.T) {
 			action: github.PullRequestActionSynchronize,
 			presubmits: presubmitTests{
 				protected: func() []config.Presubmit {
-					p := config.Presubmit{JobBase: config.JobBase{Name: "test-always-required"}}
-					p.Context = "test-always-required"
+					p := config.Presubmit{JobBase: config.JobBase{Name: "pull-ci-test-org-test-repo-main-always-required"}}
+					p.Context = "ci/prow/always-required"
 					return []config.Presubmit{p}
 				}(),
 			},
@@ -317,6 +317,22 @@ func TestHandlePipelineContextCreation(t *testing.T) {
 				{Filename: "config.yaml"},
 			},
 			expectedContexts: 1,
+		},
+		{
+			name:   "PR opened with job from different branch - should not create context",
+			action: github.PullRequestActionOpened,
+			presubmits: presubmitTests{
+				protected: func() []config.Presubmit {
+					// This job is for release-4.16 branch, but PR is targeting main
+					p := config.Presubmit{JobBase: config.JobBase{Name: "pull-ci-test-org-test-repo-release-4.16-e2e-aws"}}
+					p.Context = "ci/prow/e2e-aws"
+					return []config.Presubmit{p}
+				}(),
+			},
+			changedFiles: []github.PullRequestChange{
+				{Filename: "main.go"},
+			},
+			expectedContexts: 0, // Job doesn't match branch
 		},
 	}
 
@@ -490,13 +506,13 @@ func TestHandlePipelineContextCreationEdgeCases(t *testing.T) {
 				pipelineConditionallyRequired: func() []config.Presubmit {
 					p := config.Presubmit{
 						JobBase: config.JobBase{
-							Name: "test-go",
+							Name: "pull-ci-test-org-test-repo-main-test-go",
 							Annotations: map[string]string{
 								"pipeline_run_if_changed": ".*\\.go$",
 							},
 						},
 					}
-					p.Context = "test-go"
+					p.Context = "ci/prow/test-go"
 					return []config.Presubmit{p}
 				}(),
 			},
@@ -508,8 +524,8 @@ func TestHandlePipelineContextCreationEdgeCases(t *testing.T) {
 			action: github.PullRequestActionOpened,
 			presubmits: presubmitTests{
 				protected: func() []config.Presubmit {
-					p := config.Presubmit{JobBase: config.JobBase{Name: "test-protected"}}
-					p.Context = "test-protected"
+					p := config.Presubmit{JobBase: config.JobBase{Name: "pull-ci-test-org-test-repo-main-protected"}}
+					p.Context = "ci/prow/protected"
 					return []config.Presubmit{p}
 				}(),
 			},
@@ -525,13 +541,13 @@ func TestHandlePipelineContextCreationEdgeCases(t *testing.T) {
 				pipelineConditionallyRequired: func() []config.Presubmit {
 					p := config.Presubmit{
 						JobBase: config.JobBase{
-							Name: "test-invalid-pattern",
+							Name: "pull-ci-test-org-test-repo-main-invalid-pattern",
 							Annotations: map[string]string{
 								"pipeline_run_if_changed": "[invalid-regex",
 							},
 						},
 					}
-					p.Context = "test-invalid-pattern"
+					p.Context = "ci/prow/invalid-pattern"
 					return []config.Presubmit{p}
 				}(),
 			},
@@ -545,13 +561,13 @@ func TestHandlePipelineContextCreationEdgeCases(t *testing.T) {
 				pipelineSkipOnlyRequired: func() []config.Presubmit {
 					p := config.Presubmit{
 						JobBase: config.JobBase{
-							Name: "test-invalid-skip-pattern",
+							Name: "pull-ci-test-org-test-repo-main-invalid-skip-pattern",
 							Annotations: map[string]string{
 								"pipeline_skip_if_only_changed": "[invalid-regex",
 							},
 						},
 					}
-					p.Context = "test-invalid-skip-pattern"
+					p.Context = "ci/prow/invalid-skip-pattern"
 					return []config.Presubmit{p}
 				}(),
 			},
@@ -565,13 +581,13 @@ func TestHandlePipelineContextCreationEdgeCases(t *testing.T) {
 				pipelineConditionallyRequired: func() []config.Presubmit {
 					p := config.Presubmit{
 						JobBase: config.JobBase{
-							Name: "test-complex-go-pattern",
+							Name: "pull-ci-test-org-test-repo-main-complex-go-pattern",
 							Annotations: map[string]string{
 								"pipeline_run_if_changed": "^(cmd|pkg)/.*\\.go$|^go\\.(mod|sum)$",
 							},
 						},
 					}
-					p.Context = "test-complex-go-pattern"
+					p.Context = "ci/prow/complex-go-pattern"
 					return []config.Presubmit{p}
 				}(),
 			},
@@ -580,17 +596,17 @@ func TestHandlePipelineContextCreationEdgeCases(t *testing.T) {
 				{Filename: "docs/readme.md"},
 			},
 			expectedContexts: 1,
-			expectedNames:    []string{"test-complex-go-pattern"},
+			expectedNames:    []string{"ci/prow/complex-go-pattern"},
 		},
 		{
 			name:   "protected jobs with specific names verification",
 			action: github.PullRequestActionOpened,
 			presubmits: presubmitTests{
 				protected: func() []config.Presubmit {
-					p1 := config.Presubmit{JobBase: config.JobBase{Name: "ci-openshift-org-test-1"}}
-					p1.Context = "ci-openshift-org-test-1"
-					p2 := config.Presubmit{JobBase: config.JobBase{Name: "ci-openshift-org-test-2"}}
-					p2.Context = "ci-openshift-org-test-2"
+					p1 := config.Presubmit{JobBase: config.JobBase{Name: "pull-ci-test-org-test-repo-main-test-1"}}
+					p1.Context = "ci/prow/test-1"
+					p2 := config.Presubmit{JobBase: config.JobBase{Name: "pull-ci-test-org-test-repo-main-test-2"}}
+					p2.Context = "ci/prow/test-2"
 					return []config.Presubmit{p1, p2}
 				}(),
 			},
@@ -598,7 +614,7 @@ func TestHandlePipelineContextCreationEdgeCases(t *testing.T) {
 				{Filename: "config.yaml"},
 			},
 			expectedContexts: 2,
-			expectedNames:    []string{"ci-openshift-org-test-1", "ci-openshift-org-test-2"},
+			expectedNames:    []string{"ci/prow/test-1", "ci/prow/test-2"},
 		},
 	}
 

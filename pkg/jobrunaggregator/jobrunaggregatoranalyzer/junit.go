@@ -193,6 +193,12 @@ func aggregateTestCase(testSuiteName string, combined *junit.TestCase, jobGCSBuc
 		}
 	}
 
+	// Store lifecycle from the test case - informing tests will be treated as always passing
+	// in the pass/fail calculation
+	if toAdd.Lifecycle != "" {
+		currDetails.Lifecycle = toAdd.Lifecycle
+	}
+
 	switch {
 	case toAdd.FailureOutput != nil:
 		humanURL := jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID), "test-platform-results")

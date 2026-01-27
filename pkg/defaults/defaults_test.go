@@ -1735,7 +1735,7 @@ func TestFromConfig(t *testing.T) {
 		},
 		promote:       true,
 		expectedSteps: []string{"[output-images]", "[images]"},
-		expectedPost:  []string{"[promotion]", "[promotion-quay]"},
+		expectedPost:  []string{"[promotion-quay]"},
 	}, {
 		name: "duplicate input images",
 		config: api.ReleaseBuildConfiguration{

@@ -187,11 +187,19 @@ func (s *supplementalCIImagesServiceWithMirrorStore) Mirror(m map[string]quayioc
 			continue
 		}
 
-		// Skip if digests match
+		// Skip if digests match (both must be non-empty to compare)
+		// If target doesn't exist (empty digest), we need to sync
 		if targetInfo.Digest != "" && sourceInfo.Digest != "" && targetInfo.Digest == sourceInfo.Digest {
-			s.logger.WithField("target", targetImage).WithField("digest", targetInfo.Digest).Debug("Image already in sync, skipping")
+			s.logger.WithField("target", targetImage).WithField("source", source).
+				WithField("sourceDigest", sourceInfo.Digest).WithField("targetDigest", targetInfo.Digest).
+				Debug("Image already in sync, skipping")
 			continue
 		}
+
+		// Log sync needed with digest details for debugging
+		s.logger.WithField("source", source).WithField("target", targetImage).
+			WithField("sourceDigest", sourceInfo.Digest).WithField("targetDigest", targetInfo.Digest).
+			Info("Image needs sync")
 
 		s.logger.WithField("source", source).WithField("target", targetImage).
 			WithField("sourceDigest", sourceInfo.Digest).WithField("targetDigest", targetInfo.Digest).

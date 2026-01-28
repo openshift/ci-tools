@@ -38,7 +38,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/util"
 )
 
-func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool, cpuCap int64, memoryCap string, cpuPriorityScheduling int64, percentageMeasured float64, reporter results.PodScalerReporter) {
+func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool, cpuCap int64, memoryCap string, cpuPriorityScheduling int64, percentageMeasured float64, measuredPodCPUIncrease float64, reporter results.PodScalerReporter) {
 	logger := logrus.WithField("component", "pod-scaler admission")
 	logger.Infof("Initializing admission webhook server with %d loaders.", len(loaders))
 	health := pjutil.NewHealthOnPort(healthPort)
@@ -60,7 +60,7 @@ func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Int
 		Port:    port,
 		CertDir: certDir,
 	})
-	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources, mutateResourceLimits: mutateResourceLimits, cpuCap: cpuCap, memoryCap: memoryCap, cpuPriorityScheduling: cpuPriorityScheduling, percentageMeasured: percentageMeasured, nodeCache: nodeCache, reporter: reporter}})
+	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources, mutateResourceLimits: mutateResourceLimits, cpuCap: cpuCap, memoryCap: memoryCap, cpuPriorityScheduling: cpuPriorityScheduling, percentageMeasured: percentageMeasured, measuredPodCPUIncrease: measuredPodCPUIncrease, nodeCache: nodeCache, reporter: reporter}})
 	logger.Info("Serving admission webhooks.")
 	if err := server.Start(interrupts.Context()); err != nil {
 		logrus.WithError(err).Fatal("Failed to serve webhooks.")
@@ -68,17 +68,18 @@ func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Int
 }
 
 type podMutator struct {
-	logger                *logrus.Entry
-	client                buildclientv1.BuildV1Interface
-	resources             *resourceServer
-	mutateResourceLimits  bool
-	decoder               admission.Decoder
-	cpuCap                int64
-	memoryCap             string
-	cpuPriorityScheduling int64
-	percentageMeasured    float64
-	nodeCache             *nodeAllocatableCache
-	reporter              results.PodScalerReporter
+	logger                 *logrus.Entry
+	client                 buildclientv1.BuildV1Interface
+	resources              *resourceServer
+	mutateResourceLimits   bool
+	decoder                admission.Decoder
+	cpuCap                 int64
+	memoryCap              string
+	cpuPriorityScheduling  int64
+	percentageMeasured     float64
+	measuredPodCPUIncrease float64
+	nodeCache              *nodeAllocatableCache
+	reporter               results.PodScalerReporter
 }
 
 func (m *podMutator) Handle(ctx context.Context, req admission.Request) admission.Response {
@@ -120,14 +121,11 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 	isMeasured := m.shouldBeMeasured(pod)
 	if isMeasured {
 		m.markPodAsMeasured(pod, logger)
-	}
-
-	mutatePodResources(pod, m.resources, m.mutateResourceLimits, m.cpuCap, m.memoryCap, isMeasured, m.nodeCache, m.reporter, logger)
-	m.addPriorityClass(pod)
-
-	if isMeasured {
 		m.addMeasuredPodAntiaffinity(pod, logger)
 	}
+
+	mutatePodResources(pod, m.resources, m.mutateResourceLimits, m.cpuCap, m.memoryCap, isMeasured, m.nodeCache, m.measuredPodCPUIncrease, m.reporter, logger)
+	m.addPriorityClass(pod)
 
 	marshaledPod, err := json.Marshal(pod)
 	if err != nil {
@@ -321,7 +319,7 @@ func preventUnschedulable(resources *corev1.ResourceRequirements, cpuCap int64, 
 	}
 }
 
-func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool, cpuCap int64, memoryCap string, isMeasured bool, nodeCache *nodeAllocatableCache, reporter results.PodScalerReporter, logger *logrus.Entry) {
+func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool, cpuCap int64, memoryCap string, isMeasured bool, nodeCache *nodeAllocatableCache, measuredPodCPUIncrease float64, reporter results.PodScalerReporter, logger *logrus.Entry) {
 	mutateResources := func(containers []corev1.Container) {
 		for i := range containers {
 			meta := podscaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, containers[i].Name)
@@ -339,9 +337,9 @@ func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceL
 					reconcileLimits(&containers[i].Resources)
 				}
 			}
-			// For measured pods, increase CPU requests by 50%
+			// For measured pods, increase CPU requests by configured percentage
 			if isMeasured {
-				increaseCPUForMeasuredPod(&containers[i].Resources, pod.Labels, nodeCache, logger)
+				increaseCPUForMeasuredPod(&containers[i].Resources, pod.Labels, nodeCache, measuredPodCPUIncrease, logger)
 			}
 			preventUnschedulable(&containers[i].Resources, cpuCap, memoryCap, logger)
 		}
@@ -426,11 +424,11 @@ func (m *podMutator) markPodAsMeasured(pod *corev1.Pod, logger *logrus.Entry) {
 		pod.Labels = make(map[string]string)
 	}
 	pod.Labels[measuredPodLabel] = "true"
-	logger.Debugf("Marked pod as measured")
+	logger.WithField("pod", pod.Name).Debugf("Marked pod as measured")
 }
 
-// increaseCPUForMeasuredPod increases CPU requests by 50% for measured pods, with proper capping
-func increaseCPUForMeasuredPod(resources *corev1.ResourceRequirements, podLabels map[string]string, nodeCache *nodeAllocatableCache, logger *logrus.Entry) {
+// increaseCPUForMeasuredPod increases CPU requests by the configured percentage for measured pods, with proper capping
+func increaseCPUForMeasuredPod(resources *corev1.ResourceRequirements, podLabels map[string]string, nodeCache *nodeAllocatableCache, cpuIncreasePercent float64, logger *logrus.Entry) {
 	if resources.Requests == nil {
 		return
 	}
@@ -439,9 +437,10 @@ func increaseCPUForMeasuredPod(resources *corev1.ResourceRequirements, podLabels
 		return
 	}
 
-	// Increase by 50%
+	// Increase by configured percentage (default 50% to provide headroom for accurate measurement)
+	multiplier := 1.0 + (cpuIncreasePercent / 100.0)
 	cpuValue := cpuRequest.AsApproximateFloat64()
-	increasedValue := cpuValue * 1.5
+	increasedValue := cpuValue * multiplier
 
 	// Get workload type from pod labels to determine max CPU
 	workloadType := podLabels[ciWorkloadLabel]
@@ -568,7 +567,7 @@ func (c *nodeAllocatableCache) refresh() {
 
 		if minAllocatable > 0 {
 			newCache[workloadType] = minAllocatable
-			logger.Debugf("Workload type %s: max allocatable CPU = %d cores", workloadType, minAllocatable)
+			logger.Debugf("Workload type %s: min allocatable CPU = %d cores", workloadType, minAllocatable)
 		}
 	}
 

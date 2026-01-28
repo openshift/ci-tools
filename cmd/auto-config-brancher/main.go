@@ -169,7 +169,7 @@ func main() {
 				"--ensure-correct-promotion-dockerfile-ignored-repos", "openshift/origin-aggregated-logging",
 				"--ensure-correct-promotion-dockerfile-ignored-repos", "openshift/console",
 				"--ensure-correct-promotion-dockerfile-ignored-repos", "openshift/linuxptp-daemon",
-				"--ignore-repos", "openshift/origin",
+				"--ignore-orgs", "openshift",
 			},
 		},
 		{
